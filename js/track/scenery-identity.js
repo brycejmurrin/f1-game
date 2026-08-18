@@ -43,7 +43,7 @@ const SceneryIdentity = (function () {
         const a = anchor(k, side, pierGap + pierW / 2);
         const pierSz = [pierW, clearH + thick * 0.5, depth * 0.55];
         if (rejBox(a.c, pierSz, [a.r, a.u, a.t])) {
-          Log.warn("scenery", `underpassPortal pier SUPPRESSED at s=${s} side=${side}`);
+          ctx.noteSuppressed("underpassPortal", `underpassPortal pier SUPPRESSED at s=${s} side=${side}`);
           continue;
         }
         addBox(out, vadd(a.c, a.u, pierSz[1] / 2), pierSz, col, [a.r, a.u, a.t]);
@@ -84,7 +84,7 @@ const SceneryIdentity = (function () {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       const foot = [2.8, h, 2.8];
       if (rejBox(a.c, foot, b)) {
-        Log.warn("scenery", `floodMast SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        ctx.noteSuppressed("floodMast", `floodMast SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       addCyl(out, a.c, 0.45, h, poleCol, 6, b);
@@ -160,7 +160,7 @@ const SceneryIdentity = (function () {
       const bh = h / bands;
       // Guard widest frustum footprint once — if base covers track, skip all bands.
       if (rejRad(c, r0, h, basis)) {
-        Log.warn("scenery", `ledFacadeBands SUPPRESSED at [${c[0]|0},${c[2]|0}]`);
+        ctx.noteSuppressed("ledFacadeBands", `ledFacadeBands SUPPRESSED at [${c[0]|0},${c[2]|0}]`);
         return;
       }
       for (let i = 0; i < bands; i++) {
@@ -189,7 +189,7 @@ const SceneryIdentity = (function () {
         const p = anchor(k, side, gap);
         const sz = [thick, h, spacing];
         if (rejBox(p.c, sz, [p.r, p.u, p.t])) {
-          Log.warn("scenery", `concreteCanyon SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+          ctx.noteSuppressed("concreteCanyon", `concreteCanyon SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
         addBox(out, vadd(p.c, p.u, h / 2), sz, col, [p.r, p.u, p.t]);
@@ -213,7 +213,7 @@ const SceneryIdentity = (function () {
       // Mast / hub under sail — guard footprint so the support never sits on tarmac.
       const hub = [c[0], c[1], c[2]];
       if (rejBox(hub, [3.5, lift, 3.5], b)) {
-        Log.warn("scenery", `sailCanopy SUPPRESSED at [${c[0]|0},${c[2]|0}]`);
+        ctx.noteSuppressed("sailCanopy", `sailCanopy SUPPRESSED at [${c[0]|0},${c[2]|0}]`);
         return;
       }
       addCyl(out, hub, 0.55, lift, [0.28, 0.28, 0.32], 6, b);
@@ -254,7 +254,7 @@ const SceneryIdentity = (function () {
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
         const foot = vadd(vadd(c, r, sx * w * 0.42), f, sz * depth * 0.42);
         if (rejBox(foot, [2.2, peakH * 0.4, 2.2], b)) {
-          Log.warn("scenery", `gridshellCanopy foot SUPPRESSED`);
+          ctx.noteSuppressed("gridshellCanopy", `gridshellCanopy foot SUPPRESSED`);
           return;
         }
         addCyl(out, foot, 0.5, peakH * 0.45, strutCol, 5, b);
@@ -292,7 +292,7 @@ const SceneryIdentity = (function () {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       const box = [depth, thick, len];
       if (rejBox(a.c, box, b)) {
-        Log.warn("scenery", `runoffApron SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+        ctx.noteSuppressed("runoffApron", `runoffApron SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
         return;
       }
       addBox(out, vadd(a.c, a.u, thick / 2), box, col || [0.42, 0.40, 0.38], b);
@@ -386,7 +386,7 @@ const SceneryIdentity = (function () {
       const span = vans * spacing + dishes * 3.4 + 2;
       const mastH = opts.mastH != null ? opts.mastH : 9;
       if (rejBox(vadd(p.c, p.u, mastH / 2), [9, mastH, span], b)) {
-        Log.warn("scenery", `broadcastCompound SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+        ctx.noteSuppressed("broadcastCompound", `broadcastCompound SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
         return;
       }
       // OB truck row — box body on a darker chassis band, parked nose-in.

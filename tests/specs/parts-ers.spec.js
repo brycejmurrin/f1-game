@@ -10,9 +10,9 @@ import { test, expect } from "@playwright/test";
 
 async function load(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
   await page.evaluate(() => window.__apex.race("monza"));
-  await page.waitForFunction(() => window.__apex.info().track === "monza", { timeout: 20_000 });
+  await page.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 20_000 });
   await page.evaluate(() => { window.__apex.go(); });
 }
 

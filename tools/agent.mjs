@@ -138,7 +138,7 @@ const opts = {
     });
     const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
     await page.goto(srv.url);
-    await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
+    await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
 
     if (opts.cmd === "help") {
       console.log(JSON.stringify(await page.evaluate(() => window.__apex.agentHelp()), null, 2));
@@ -147,7 +147,7 @@ const opts = {
 
     await page.evaluate(([t, w, tod]) => window.__apex.race(t, tod || undefined, w || undefined),
                         [track, opts.weather, opts.tod]);
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 20000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 20000 });
     await sleep(1600);                       // mesh build
 
     // Stage the car, then let frames actually draw. visible() reads the LAST

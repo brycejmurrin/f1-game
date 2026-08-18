@@ -34,6 +34,15 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // failure reports promptly while smoke retains the retry used for deploy safety.
 export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 120 };
 
+// These specs already have independent blocking jobs with runner-measured
+// timeout policies. Re-running them in the selected job used its generic 120 s
+// cap and turned a green 420 s smoke shard into a deterministic false red.
+// Keep them named in the selector report, but never put them on its command.
+export const FIXED_GATE_SPECS = new Set([
+  "tests/specs/smoke.spec.js",
+  "tests/specs/physics-characterization.spec.js",
+]);
+
 /** Largest test.setTimeout(N) a spec declares, in ms — 0 when none.
  *  THE COST MODEL'S BLIND SPOT, measured on CI run 31233088772: the selector
  *  billed every test at ~80 s, but 8 of the 10 specs it picked declare their
@@ -82,10 +91,14 @@ export function specsOf(scriptNames, scripts) {
 export function fit(specs, budgetMin) {
   const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
-  const counted = [], overBudgetSpecs = [];
+  const counted = [], overBudgetSpecs = [], coveredByFixedGates = [];
   for (const file of specs) {
     const tests = declaredTests(file);
     if (tests == null) continue;
+    if (FIXED_GATE_SPECS.has(file)) {
+      coveredByFixedGates.push({ file, tests });
+      continue;
+    }
     const own = maxDeclaredTimeout(file);
     if (own > SELECTED_GATE.perTestTimeoutSec * 1000) {
       overBudgetSpecs.push({ file, tests, ownTimeoutSec: own / 1000 });
@@ -100,7 +113,8 @@ export function fit(specs, budgetMin) {
     if (used + r.tests <= cap.tests) { selected.push(r); used += r.tests; }
     else skipped.push(r);
   }
-  return { selected, skipped, overBudgetSpecs, testsSelected: used, testsFit: cap.tests, cap };
+  return { selected, skipped, overBudgetSpecs, coveredByFixedGates,
+    testsSelected: used, testsFit: cap.tests, cap };
 }
 
 // TRACKED (infra) PATHS — a change here makes the SELECTION ITSELF untrustworthy,
@@ -231,6 +245,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `${SELECTED_GATE.perTestTimeoutSec}s/test, surviving 1 timeout); selected ${r.testsSelected}`);
   for (const s of r.overBudgetSpecs) console.error(
     `EXCLUDED (declares ${s.ownTimeoutSec}s test budget > gate ${SELECTED_GATE.perTestTimeoutSec}s): ${s.file}`);
+  for (const s of r.coveredByFixedGates) console.error(
+    `COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
   for (const s of r.skipped) console.error(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
   for (const s of r.selected) console.log(s.file);
 }

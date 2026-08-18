@@ -1171,18 +1171,14 @@ void main() {
   // so sample it at uSunUV and fade the flare when the sun is hidden. (The
   // god-ray shaft above self-occludes: it samples the dark-behind-geometry
   // bright-pass.) uDepth is bound to the scene depth every frame (SSR inputs).
-#ifdef OPT_FLAREGATE
-  // PerfTry.flareGate: sunVis's only consumers are the test below and the
-  // multiply inside it, so on any frame with the flare off (uFlareStr is
-  // multiplied by a sun gate that is 0 at night) or the sun off-screen
-  // (uSunUV is (-2,-2) behind the camera) this depth fetch is thrown away on
-  // every full-res composite pixel. Testing the uniform and the bounds FIRST
-  // is exactly equivalent — sunVis > 0.0 still guards the body.
+  // sunVis's only consumers are the test below and the multiply inside it,
+  // so on any frame with the flare off (uFlareStr is multiplied by a sun
+  // gate that is 0 at night) or the sun off-screen (uSunUV is (-2,-2)
+  // behind the camera) this depth fetch is thrown away on every full-res
+  // composite pixel. Testing the uniform and the bounds FIRST is exactly
+  // equivalent — sunVis > 0.0 still guards the body.
   float sunVis = (uFlareStr > 0.0 && uSunUV.x >= 0.0 && uSunUV.x <= 1.0 && uSunUV.y >= 0.0 && uSunUV.y <= 1.0)
                ? smoothstep(0.9990, 0.9999, texture(uDepth, uSunUV).r) : 0.0;
-#else
-  float sunVis = smoothstep(0.9990, 0.9999, texture(uDepth, uSunUV).r);
-#endif
   if (uFlareStr > 0.0 && sunVis > 0.0 && uSunUV.x >= 0.0 && uSunUV.x <= 1.0 &&
       uSunUV.y >= 0.0 && uSunUV.y <= 1.0) {
     // Anamorphic horizontal streak — warm and wide, the iconic "sun bleeding

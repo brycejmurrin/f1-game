@@ -36,6 +36,8 @@ function audioPanelHarness() {
     setMusicVolume(v) { return v; }, setSfxVolume(v) { return v; },
     startMusic(v) { calls.push(`start:${v}`); },
     stopMusic() { calls.push("stopMusic"); }, stopEngine() { calls.push("stopEngine"); },
+    stopRain() { calls.push("stopRain"); }, startEngine() { calls.push("startEngine"); },
+    startRain() { calls.push("startRain"); },
     sourceCounts() { return { builtin: 3, user: 0 }; }, musicSource() { return "all"; },
     setMusicSource(v) { return v; }, trackName() { return ""; },
     uiTick() {}, skipTrack() {}, prevTrack() {},

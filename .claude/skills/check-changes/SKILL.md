@@ -21,6 +21,7 @@ node tools/verify-change.mjs --wait       # every batch — ONLY when the parent
 `--fast` or a single started batch, then read
 `artifacts/logs/*.log` for `= run (passed|failed|timedout|interrupted)`.
 
+Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
 
 ```sh
@@ -35,6 +36,7 @@ Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
 ./tools/apex-tools-mcp.sh call apex_select_recall '{}'
 ./tools/apex-tools-mcp.sh call apex_cache_bump_only '{"since":"HEAD~1"}'
 ./tools/apex-tools-mcp.sh call apex_graph_parity '{"base":"HEAD~1","id":"monza"}'
+./tools/apex-tools-mcp.sh smoke                 # five repo wrappers; no Chromium
 ```
 
 Browser wraps (`apex_eval` / `apex_shot` / `apex_carshot` / …) take the lock —

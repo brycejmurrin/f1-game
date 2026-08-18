@@ -88,11 +88,9 @@ const GLX = (function () {
   // reflections of the surrounding world. 64px RGBA8 faces + mips: reflections
   // are blurred by paint roughness anyway, so tiny faces read perfectly.
   const ENV_SIZE = 64;
-  // Probe draw-distance cull, metres — used ONLY when PerfTry.envCull is on
-  // (default ON; counted reach in docs/PERF-FINDINGS.md / tools/chunk-reach.cjs,
-  // switch entry in js/game/perf-try.js). A face is
-  // 90 deg across ENV_SIZE pixels = 1.41 deg/px, so a 20 m building subtends
-  // ~2.7 px here and 0.9 px at the 900 m far plane.
+  // Probe draw-distance cull, metres. Counted reach in docs/PERF-FINDINGS.md /
+  // tools/chunk-reach.cjs. A face is 90 deg across ENV_SIZE pixels = 1.41 deg/px,
+  // so a 20 m building subtends ~2.7 px here and 0.9 px at the 900 m far plane.
   const ENV_CULL_M = 300;
   let envTex = null, envFBO = null, envDepthRB = null, envDummyTex = null;
   let envFacesMask = 0, envReady = false, _envActive = false;
@@ -163,6 +161,18 @@ const GLX = (function () {
   // frame's matrix so the upload happens at most once per program per frame.
   let _frameToken = 0;
   let _shadowVPToken = -1, _markVPToken = -1;
+  // Tuner-knob upload cache (PERF-FINDINGS §3). envFaceBegin() calls begin()
+  // and the main camera calls begin() again in the same game frame with the
+  // same LIGHTING TUNER scalars; WebGL uniforms persist on the program, so
+  // equal values are skipped. View / eye / env / lights / time still upload
+  // every begin(). Honest cost is ~0.05 ms — hygiene, not a GPU win.
+  // Cleared when lit/sky programs are (re)linked.
+  const _litUf = Object.create(null), _skyUf = Object.create(null);
+  function _clearUf(o) { for (const k in o) delete o[k]; }
+  function uf1(loc, cache, key, v) {
+    if (!loc) return;
+    if (cache[key] !== v) { gl.uniform1f(loc, v); cache[key] = v; }
+  }
 
   // VAO bind cache — drawElements requires the right VAO, but consecutive draws
   // of the same mesh (or repeated skid/shadow quads sharing shadowVAO) would
@@ -218,16 +228,6 @@ const GLX = (function () {
 
   function compile(type, src) {
     const sh = gl.createShader(type);
-    // PerfTry #defines (js/game/perf-try.js) — GLSL-side optimisations. Counted /
-    // bit-identical gates default ON (`def: true`); others stay OFF. Injected
-    // AFTER the #version line, because GLSL
-    // requires #version to be the first non-comment token; prepending would
-    // fail every compile. This is the single chokepoint for all GLX shaders,
-    // so one insertion covers lit/sky/post/shadow/decal/glow/particle.
-    try {
-      const defs = typeof PerfTry !== "undefined" ? PerfTry.defines() : "";
-      if (defs) src = src.replace(/^(\s*#version[^\n]*\n)/, "$1" + defs);
-    } catch (_) { /* PerfTry absent (standalone shader harness) or storage refused: compile the shader exactly as authored, with no #defines. */ }
     gl.shaderSource(sh, src);
     gl.compileShader(sh);
     if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
@@ -359,6 +359,7 @@ const GLX = (function () {
     decalProg = link(DECAL_VS, DECAL_FS);
     decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex"]);
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
+    _clearUf(_litUf); _clearUf(_skyUf);
 
     // ── GLXCore: the ctx façade handed to the split subsystem modules
     // (js/render/glx/{post,shadow,chunked}.js). Live getters close over this
@@ -924,19 +925,17 @@ const GLX = (function () {
     _envFrame = frame;
     _envSvVP = frame.viewProj; _envSvEye = frame.eye; _envSvCull = frame.cullDist;
     frame.viewProj = _envVP; frame.eye = eye;
-    // PerfTry.envCull (default ON; counted reach in docs/PERF-FINDINGS.md): the
-    // probe inherits the MAIN camera's
-    // cullDist, which game.js sets to 0 — no radial cull at all — below PerfGov
-    // tier 3. So a 64x64 reflection target re-draws the city through the 900 m
-    // frustum above. Counted with tools/chunk-reach.cjs: 238.3 chunks /
-    // 1,256,344 indices per cube on vegas at 900 m, 45.3 / 376,791 at 300 m.
+    // Env-probe radial cull (counted reach in docs/PERF-FINDINGS.md): the
+    // probe inherits the MAIN camera's cullDist, which game.js sets to 0 —
+    // no radial cull at all — below PerfGov tier 3. A 64x64 reflection
+    // target would otherwise re-draw the city through the 900 m frustum.
+    // Counted with tools/chunk-reach.cjs: 238.3 chunks / 1,256,344 indices
+    // per cube on vegas at 900 m, 45.3 / 376,791 at 300 m.
     //
     // MIN, never an override: where the main camera is already culling tighter
     // (the tier-3 fog cull), the probe keeps that tighter value. A cullDist of
     // 0 means "no cull", so it is treated as unbounded rather than as zero.
-    if (typeof PerfTry !== "undefined" && PerfTry.on("envCull")) {
-      frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
-    }
+    frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
     begin(frame);
     return _envInvVP;
   }
@@ -1105,17 +1104,17 @@ const GLX = (function () {
     } else {
       frameDecalSun = frameSunColor;
     }
-    gl.uniform1f(litU.uBounceK,     T && T.bounceK     != null ? T.bounceK     : 0.04);
-    gl.uniform1f(litU.uMistShare,   T && T.mistShare   != null ? T.mistShare   : 1.5);
-    gl.uniform1f(litU.uLampFogClip, T && T.fogClip     != null ? T.fogClip     : 0.7);
-    gl.uniform1f(litU.uGlowAmp,     T && T.glowAmp     != null ? T.glowAmp     : 2.3);
-    gl.uniform1f(litU.uBloomBoost,  T && T.neonBoost   != null ? T.neonBoost   : 0.6);
-    gl.uniform1f(litU.uPcssPen,     T && T.pcssPen     != null ? T.pcssPen     : 80.0);
-    gl.uniform1f(litU.uKeyMul,      T && T.keyMul      != null ? T.keyMul      : 1.0);
-    gl.uniform1f(litU.uFogTint,     T && T.fogTint     != null ? T.fogTint     : 0.0);
-    gl.uniform1f(litU.uMistHeight,  T && T.mistHeight  != null ? T.mistHeight  : 0.30);
-    gl.uniform1f(litU.uShadowTintAmt, T && T.shadowTintAmt != null ? T.shadowTintAmt : 0.0);
-    gl.uniform1f(litU.uWetDark,     T && T.wetDark     != null ? T.wetDark     : 1.0);
+    uf1(litU.uBounceK,     _litUf, "bounceK",     T && T.bounceK     != null ? T.bounceK     : 0.04);
+    uf1(litU.uMistShare,   _litUf, "mistShare",   T && T.mistShare   != null ? T.mistShare   : 1.5);
+    uf1(litU.uLampFogClip, _litUf, "fogClip",     T && T.fogClip     != null ? T.fogClip     : 0.7);
+    uf1(litU.uGlowAmp,     _litUf, "glowAmp",     T && T.glowAmp     != null ? T.glowAmp     : 2.3);
+    uf1(litU.uBloomBoost,  _litUf, "neonBoost",   T && T.neonBoost   != null ? T.neonBoost   : 0.6);
+    uf1(litU.uPcssPen,     _litUf, "pcssPen",     T && T.pcssPen     != null ? T.pcssPen     : 80.0);
+    uf1(litU.uKeyMul,      _litUf, "keyMul",      T && T.keyMul      != null ? T.keyMul      : 1.0);
+    uf1(litU.uFogTint,     _litUf, "fogTint",     T && T.fogTint     != null ? T.fogTint     : 0.0);
+    uf1(litU.uMistHeight,  _litUf, "mistHeight",  T && T.mistHeight  != null ? T.mistHeight  : 0.30);
+    uf1(litU.uShadowTintAmt, _litUf, "shadowTintAmt", T && T.shadowTintAmt != null ? T.shadowTintAmt : 0.0);
+    uf1(litU.uWetDark,     _litUf, "wetDark",     T && T.wetDark     != null ? T.wetDark     : 1.0);
     // BAKED MATERIALS knob. Ships at 1.0 (mirrors TUNE_DEFS matTexMix def);
     // __apex.matTex(0) is the A/B off-switch back to pure procedural. A missing
     // pack still renders procedural — bindMaterialMaps forces uMatTexMix to 0
@@ -1152,7 +1151,7 @@ const GLX = (function () {
       gl.uniform1f(litU.uPcss, SHD.pcssEnabled ? 1.0 : 0.0);
       gl.uniformMatrix4fv(litU.uLightVP, false, SHD.lightVP);
       // SHADOW BIAS / DARKNESS knobs (repair + artistic; defaults mirror TUNE_DEFS).
-      gl.uniform1f(litU.uShadowBias, T && T.shadowBias != null ? T.shadowBias : 0.001);
+      uf1(litU.uShadowBias, _litUf, "shadowBias", T && T.shadowBias != null ? T.shadowBias : 0.001);
       // Fade the cast shadow out as the KEY light dims toward moonlight: props stop
       // casting into the map once the key is dim (game.js shadow-pass perf skip is
       // now gated on key brightness, not sunDir.y — the night moon-key is held high
@@ -1174,7 +1173,7 @@ const GLX = (function () {
       if (_mSh > _hf) _hf = _mSh;
       gl.uniform1f(litU.uShadowStr, (T && T.shadowStr != null ? T.shadowStr : 1.15) * _hf);
       // SHADOW DISTANCE knob: box half-size, drives the receiver-distance fade.
-      gl.uniform1f(litU.uShadowRange, T && T.shadowRange != null ? T.shadowRange : 80.0);
+      uf1(litU.uShadowRange, _litUf, "shadowRange", T && T.shadowRange != null ? T.shadowRange : 80.0);
       // Fade anchor: the UNSNAPPED forward-biased ground point the shadow box is
       // snapped around (game.js shadow pass). It glides continuously with the
       // camera, so the fade front never jumps on a box recentre.
@@ -1218,25 +1217,25 @@ const GLX = (function () {
     gl.uniform3fv(litU.uSkyZenith,  frame.skyZenith  || [0.18, 0.40, 0.78]);
     gl.uniform3fv(litU.uSkyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
     // FOG HEIGHT FALLOFF knob (absolute; def 0.018 matches the shipped palette).
-    gl.uniform1f(litU.uFogHeight,   T && T.fogHeight != null ? T.fogHeight : (frame.fogHeight != null ? frame.fogHeight : 0.0));
+    uf1(litU.uFogHeight, _litUf, "fogHeight", T && T.fogHeight != null ? T.fogHeight : (frame.fogHeight != null ? frame.fogHeight : 0.0));
     // GROUND MIST knob: scale the per-condition mist amount (multiplier, def 1).
     gl.uniform1f(litU.uGroundMist,  (frame.groundMist != null ? frame.groundMist : 0.0) * (T && T.mistDensity != null ? T.mistDensity : 1));
     gl.uniform1f(litU.uLampFog,     frame.lampFog != null ? frame.lampFog : 0.0);
     gl.uniform1f(litU.uTime,        frame.time  != null ? frame.time  : 0.0);
     gl.uniform1f(litU.uCloudCover,  frame.cloud != null ? frame.cloud : 0.0);
     gl.uniform1f(litU.uCloudSpeed,  frame.cloudSpeed != null ? frame.cloudSpeed : 1.0);
-    gl.uniform1f(litU.uCloudShadowDim, T && T.cloudShadowDim != null ? T.cloudShadowDim : 0.80);
+    uf1(litU.uCloudShadowDim, _litUf, "cloudShadowDim", T && T.cloudShadowDim != null ? T.cloudShadowDim : 0.80);
     // CAR SUN GLINT / CAR SPARKLE / FOG SUN CORE knobs (defaults = shipped look).
-    gl.uniform1f(litU.uCarSunGlint, T && T.carSunGlint != null ? T.carSunGlint : 12.0);
-    gl.uniform1f(litU.uCarSparkle,  T && T.carSparkle  != null ? T.carSparkle  : 1.6);
-    gl.uniform1f(litU.uFogSunCore,  T && T.fogSunCore  != null ? T.fogSunCore  : 0.6);
+    uf1(litU.uCarSunGlint, _litUf, "carSunGlint", T && T.carSunGlint != null ? T.carSunGlint : 12.0);
+    uf1(litU.uCarSparkle,  _litUf, "carSparkle",  T && T.carSparkle  != null ? T.carSparkle  : 1.6);
+    uf1(litU.uFogSunCore,  _litUf, "fogSunCore",  T && T.fogSunCore  != null ? T.fogSunCore  : 0.6);
     // LAMP NEAR CLAMP / WINDOW SUN FLASH / SKY RIM GLOW / AMBIENT CONTACT DARK /
     // LAMP WALL SPILL knobs (defaults = shipped look).
-    gl.uniform1f(litU.uLampNearClamp,  T && T.lampNearClamp  != null ? T.lampNearClamp  : 4.0);
-    gl.uniform1f(litU.uWindowSunFlash, T && T.windowSunFlash != null ? T.windowSunFlash : 1.0);
-    gl.uniform1f(litU.uSkyRimGlow,     T && T.skyRimGlow     != null ? T.skyRimGlow     : 1.0);
-    gl.uniform1f(litU.uAmbContactDark, T && T.ambContactDark != null ? T.ambContactDark : 1.0);
-    gl.uniform1f(litU.uLampWallSpill,  T && T.lampWallSpill  != null ? T.lampWallSpill  : 1.0);
+    uf1(litU.uLampNearClamp,  _litUf, "lampNearClamp",  T && T.lampNearClamp  != null ? T.lampNearClamp  : 4.0);
+    uf1(litU.uWindowSunFlash, _litUf, "windowSunFlash", T && T.windowSunFlash != null ? T.windowSunFlash : 1.0);
+    uf1(litU.uSkyRimGlow,     _litUf, "skyRimGlow",     T && T.skyRimGlow     != null ? T.skyRimGlow     : 1.0);
+    uf1(litU.uAmbContactDark, _litUf, "ambContactDark", T && T.ambContactDark != null ? T.ambContactDark : 1.0);
+    uf1(litU.uLampWallSpill,  _litUf, "lampWallSpill",  T && T.lampWallSpill  != null ? T.lampWallSpill  : 1.0);
     gl.uniform1f(litU.uWetness,     frame.wetness != null ? frame.wetness : 0.0);
     // Env probe: dedicated unit 6 (0 shadow / 5 decal / 7 blocker). A COMPLETE
     // cube must ALWAYS be bound here with uEnvCube pointed at it — even with no
@@ -1463,15 +1462,19 @@ const GLX = (function () {
   // unchanged from the previous cull — static prop batches often match.
   function cullInstances(batch, planes) {
     if (!batch || !batch.cells) return batch ? batch.instances : 0;
-    // Dual-sig cache: main + env-probe VPs alternate; skip repack/upload when
-    // the plane set matches a recent cull (static props, same camera cell).
-    let sig = 0;
-    for (let pi = 0; pi < 6; pi++) {
-      const p = planes[pi];
-      sig = (Math.imul(sig, 31) + (p[0] * 1024 | 0) + (p[3] * 64 | 0)) | 0;
+    // There is one GPU instance buffer, so only its resident pack can be a hit.
+    // A two-frustum count cache returned the right N with the wrong transforms.
+    let samePack = !!batch._cullPlanes;
+    if (samePack) {
+      let po = 0;
+      for (let pi = 0; pi < 6 && samePack; pi++) {
+        const p = planes[pi];
+        for (let k = 0; k < 4; k++, po++) {
+          if (batch._cullPlanes[po] !== p[k]) { samePack = false; break; }
+        }
+      }
     }
-    if (sig === batch._cullSig0) { batch.visible = batch._cullN0; return batch._cullN0; }
-    if (sig === batch._cullSig1) { batch.visible = batch._cullN1; return batch._cullN1; }
+    if (samePack) { batch.visible = batch._cullN; return batch._cullN; }
     const src = batch.srcMatrices, dst = batch.packMatrices;
     const sc = batch.srcColors, dc = batch.packColors;
     let n = 0;
@@ -1499,8 +1502,12 @@ const GLX = (function () {
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, dc, 0, n * 3);
       }
     }
-    batch._cullSig1 = batch._cullSig0; batch._cullN1 = batch._cullN0;
-    batch._cullSig0 = sig; batch._cullN0 = n;
+    const snap = batch._cullPlanes || (batch._cullPlanes = new Float64Array(24));
+    for (let pi = 0, po = 0; pi < 6; pi++) {
+      const p = planes[pi];
+      for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
+    }
+    batch._cullN = n;
     return n;
   }
 
@@ -1592,23 +1599,23 @@ const GLX = (function () {
     gl.uniform1f(skyU.uTime,  sky.time  !== undefined ? sky.time  : 0);
     gl.uniform1f(skyU.uMoon,  sky.moon  !== undefined ? sky.moon  : 0);
     gl.uniform3fv(skyU.uCityGlow, sky.cityGlow || [0, 0, 0]);
-    gl.uniform1f(skyU.uStarBright, sky.starBright !== undefined ? sky.starBright : 1);
-    gl.uniform1f(skyU.uCloudSpeed, sky.cloudSpeed !== undefined ? sky.cloudSpeed : 1);
-    gl.uniform1f(skyU.uSkyGrad,     sky.skyGrad     !== undefined ? sky.skyGrad     : 0.35);
-    gl.uniform1f(skyU.uStarDensity, sky.starDensity !== undefined ? sky.starDensity : 1);
-    gl.uniform1f(skyU.uDaySkyBlue,  sky.daySkyBlue  !== undefined ? sky.daySkyBlue  : 1);
-    gl.uniform1f(skyU.uMieScatter,  sky.mieScatter  !== undefined ? sky.mieScatter  : 1);
-    gl.uniform1f(skyU.uCloudSilver, sky.cloudSilver !== undefined ? sky.cloudSilver : 1);
-    gl.uniform1f(skyU.uCoronaAureole, sky.coronaAureole !== undefined ? sky.coronaAureole : 1);
-    gl.uniform1f(skyU.uSunDiscSize, sky.sunDiscSize !== undefined ? sky.sunDiscSize : 1);
-    gl.uniform1f(skyU.uStarSize,     sky.starSize     !== undefined ? sky.starSize     : 1);
-    gl.uniform1f(skyU.uStarTwinkle,  sky.starTwinkle  !== undefined ? sky.starTwinkle  : 1);
-    gl.uniform1f(skyU.uMoonDiscSize, sky.moonDiscSize !== undefined ? sky.moonDiscSize : 1);
-    gl.uniform1f(skyU.uMoonHalo,     sky.moonHalo     !== undefined ? sky.moonHalo     : 1);
-    gl.uniform1f(skyU.uSunCorona,    sky.sunCorona    !== undefined ? sky.sunCorona    : 1);
-    gl.uniform1f(skyU.uSunSquash,    sky.sunSquash    !== undefined ? sky.sunSquash    : 1);
-    gl.uniform1f(skyU.uCityGlowReach, sky.cityGlowReach !== undefined ? sky.cityGlowReach : 1);
-    gl.uniform1f(skyU.uCloudDef,     sky.cloudDef     !== undefined ? sky.cloudDef     : 1);
+    uf1(skyU.uStarBright, _skyUf, "starBright", sky.starBright !== undefined ? sky.starBright : 1);
+    uf1(skyU.uCloudSpeed, _skyUf, "cloudSpeed", sky.cloudSpeed !== undefined ? sky.cloudSpeed : 1);
+    uf1(skyU.uSkyGrad,     _skyUf, "skyGrad",     sky.skyGrad     !== undefined ? sky.skyGrad     : 0.35);
+    uf1(skyU.uStarDensity, _skyUf, "starDensity", sky.starDensity !== undefined ? sky.starDensity : 1);
+    uf1(skyU.uDaySkyBlue,  _skyUf, "daySkyBlue",  sky.daySkyBlue  !== undefined ? sky.daySkyBlue  : 1);
+    uf1(skyU.uMieScatter,  _skyUf, "mieScatter",  sky.mieScatter  !== undefined ? sky.mieScatter  : 1);
+    uf1(skyU.uCloudSilver, _skyUf, "cloudSilver", sky.cloudSilver !== undefined ? sky.cloudSilver : 1);
+    uf1(skyU.uCoronaAureole, _skyUf, "coronaAureole", sky.coronaAureole !== undefined ? sky.coronaAureole : 1);
+    uf1(skyU.uSunDiscSize, _skyUf, "sunDiscSize", sky.sunDiscSize !== undefined ? sky.sunDiscSize : 1);
+    uf1(skyU.uStarSize,     _skyUf, "starSize",     sky.starSize     !== undefined ? sky.starSize     : 1);
+    uf1(skyU.uStarTwinkle,  _skyUf, "starTwinkle",  sky.starTwinkle  !== undefined ? sky.starTwinkle  : 1);
+    uf1(skyU.uMoonDiscSize, _skyUf, "moonDiscSize", sky.moonDiscSize !== undefined ? sky.moonDiscSize : 1);
+    uf1(skyU.uMoonHalo,     _skyUf, "moonHalo",     sky.moonHalo     !== undefined ? sky.moonHalo     : 1);
+    uf1(skyU.uSunCorona,    _skyUf, "sunCorona",    sky.sunCorona    !== undefined ? sky.sunCorona    : 1);
+    uf1(skyU.uSunSquash,    _skyUf, "sunSquash",    sky.sunSquash    !== undefined ? sky.sunSquash    : 1);
+    uf1(skyU.uCityGlowReach, _skyUf, "cityGlowReach", sky.cityGlowReach !== undefined ? sky.cityGlowReach : 1);
+    uf1(skyU.uCloudDef,     _skyUf, "cloudDef",     sky.cloudDef     !== undefined ? sky.cloudDef     : 1);
     gl.uniform1f(skyU.uLightning,   sky.lightning   !== undefined ? sky.lightning   : 0);
     setBlend(false);
     setDepthMask(false);

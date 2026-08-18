@@ -28,6 +28,16 @@
 (function () {
   const REPORT_VERSION = 1;
   const CANVAS_SEL = "canvas#game";
+  // Diagnostic preferences only. Never enumerate the apex26.* namespace: it
+  // also contains OAuth refresh tokens and user-supplied TURN credentials.
+  // An allowlist keeps a newly-added credential out of reports by default.
+  const STORAGE_KEYS = [
+    "apex26.gfxBackend", "apex26.gfxBackendProbe", "apex26.gfxHigh",
+    "apex26.gfxTlxFail", "apex26.gfxWgxFail", "apex26.gfxWgxLevel",
+    "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.envProbeOff",
+    "apex26.perChunkOff", "apex26.forceMobileTier", "apex26.tlxAutoGL",
+    "apex26.tlxForceGL", "apex26.tlxViz",
+  ];
 
   const safe = function (fn, fallback) {
     try {
@@ -156,8 +166,9 @@
   const storage = function () {
     const out = {};
     try {
-      Object.keys(localStorage).forEach(function (k) {
-        if (k.indexOf("apex26.") === 0) out[k] = localStorage.getItem(k);
+      STORAGE_KEYS.forEach(function (k) {
+        const v = localStorage.getItem(k);
+        if (v !== null) out[k] = v;
       });
     } catch (e) { return { error: String((e && e.message) || e) }; }
     return out;
@@ -218,7 +229,10 @@
     const rep = {
       reportVersion: REPORT_VERSION,
       when: new Date().toISOString(),
-      href: location.href,
+      // Query and fragment may contain a report-server capability, an OAuth
+      // callback code, or an invite. Origin + pathname is enough to identify the
+      // deployment without copying any of those into a long-lived artifact.
+      href: safe(function () { return location.origin + location.pathname; }, null),
       agent: {
         ua: navigator.userAgent,
         platform: safe(function () { return navigator.platform; }, null),

@@ -262,10 +262,16 @@ self.addEventListener("fetch", (event) => {
     event.waitUntil(network.then(() => undefined, () => undefined));
     event.respondWith((async () => {
       const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 3000));
+      const online = typeof navigator !== "undefined" && navigator.onLine;
       try {
         const res = await Promise.race([network, timeout]);
         if (res && res.ok) return res;
-      } catch (_) { /* network rejected — fall through to cache */ }
+        // A timeout (null) or a thrown fetch while online must not advertise a
+        // stale version.json as network truth — the shell guard then skips reload.
+        if (res == null && online && (isVersion || req.mode === "navigate")) return Response.error();
+      } catch (_) {
+        if (online && (isVersion || req.mode === "navigate")) return Response.error();
+      }
       // Offline: the version request reads the PRECACHED bare key. Without this
       // it fell through to the index.html fallback below and answered a JSON
       // request with the shell's HTML (survivable only because the version
@@ -283,15 +289,19 @@ self.addEventListener("fetch", (event) => {
   event.respondWith((async () => {
     const cached = await caches.match(req);
     if (cached) return cached;
+    const network = fetch(req);
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 4000));
     try {
-      const res = await fetch(req);
+      const res = await Promise.race([network, timeout]);
       if (res && res.ok) {
         const cache = await caches.open(await currentCacheName());
         await cache.put(req, res.clone());
+        return res;
       }
-      return res;
-    } catch (_) {
-      return Response.error();
-    }
+      const online = typeof navigator !== "undefined" && navigator.onLine;
+      if (res == null && online) return Response.error();
+      if (res) return res;
+    } catch (_) { /* network rejected */ }
+    return Response.error();
   })());
 });

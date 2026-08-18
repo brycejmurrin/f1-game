@@ -1,5 +1,12 @@
 # Parallel survey — bugs & performance (2026-08-17)
 
+**Status (2026-08-18, cache 1421):** Leftover-hunt sessions on deploy took
+TLX shadow `count`, content-hash cache busting, typed accumulators, and
+the build-time §3 items. Live leftover list:
+[PERF-HUNT-2026-08-18.md](PERF-HUNT-2026-08-18.md) (union banner) and
+[PERF-FINDINGS.md](../PERF-FINDINGS.md) §3. Pine unit-Y reuse stays
+**reverted**. Do not treat this 08-17 board as current.
+
 **Status (2026-08-17 deferred pass):** Remaining survey items landed on
 `cursor/survey-deferred-tests-8ee4` — collision arc-bucket broadphase, marble
 cap/rest/far trim, WGX draw-UBO flush (already on tip) + god-ray top-6 partial

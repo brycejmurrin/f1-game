@@ -96,7 +96,7 @@ const CEILING = {
   // a hairline should stay a hairline when the density ladder tightens.
   // 2026-08-14: 475 -> 474. `.hud-gaps` lost an inert `gap: 4px` (it was never
   // a flex container) when the widget was resized in the HUD SIZE pass.
-  rawSpacing: 474,
+  rawSpacing: 471,
 };
 
 test("no new font-size below the --fs-micro floor", () => {

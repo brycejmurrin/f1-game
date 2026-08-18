@@ -1,26 +1,30 @@
 #!/usr/bin/env node
-// wait-polling-lint — a `waitForFunction` timeout that cannot fire is not a bound.
+// wait-polling-lint — validate both the position and polling of waitForFunction options.
 //
-// MEASURED (tests/manual/timeout-probe.spec.js): `{ timeout: 3000 }` against a
+// MEASURED (tests/manual/timeout-probe.spec.js): `null, { timeout: 3000 }` against a
 // predicate that can never be true ran **109,665 ms** on a parked Monza and
 // died on the TEST budget instead — 36x its declared bound. It overran on a
 // menu page too. Only a predicate that THROWS terminates promptly (11 ms),
 // because the exception propagates without polling.
 //
-// The cause is Playwright's default `polling: 'raf'`: the predicate is
+// Playwright's signature is `(pageFunction, arg?, options?)`. An options-looking
+// object in argument two is only predicate data, so neither its timeout nor its
+// polling setting applies. For a predicate with no argument, the valid spelling
+// is `(pageFunction, null, { timeout, polling })`.
+//
+// Once the object is in the right position, the other failure mode is
+// Playwright's default `polling: 'raf'`: the predicate is
 // re-evaluated once per animation frame, and a page running the game loop under
 // SwiftShader starves that so badly the declared timeout never gets a turn. The
-// fix is `{ polling: 100, timeout: N }`, which polls on a timer instead.
+// fix is `null, { polling: 100, timeout: N }`, which polls on a timer instead.
 //
-// WHY A RATCHET AND NOT A FIX. There are 382 such call sites — 312 under
-// tests/ and 70 more under tools/, which this lint claimed to scan for months
-// while its file filter admitted only `.js` and every tool is `.mjs`/`.cjs`.
-// Rewriting them all in one commit would be a
-// 300-site behavioural change landing without a run to back it — the exact
-// shape of mistake this session has already made once (58614db2). So: freeze
-// the population, require `polling` on anything NEW, and let the existing sites
-// be fixed where they can be verified. Same pattern as tests/silent-catch and
-// the module-size ceiling.
+// WHY POLLING IS STILL A RATCHET. Moving an option-shaped object from argument
+// two to argument three is an unambiguous API correction when the predicate has
+// no parameters, and that mechanical repair has been applied repo-wide. Adding
+// timer polling to every correctly-positioned timeout is a separate behavioural
+// change across hundreds of sites, so that population remains frozen and each
+// site gets converted where its timing can be verified. Same pattern as
+// tests/silent-catch and the module-size ceiling.
 //
 // The visible symptom this prevents: a test reporting `Test timeout of Nms
 // exceeded` while pointing at a line that claims to wait 30 s. `tlx-probes`'
@@ -64,13 +68,27 @@ export function lintSource(src, file = "<src>") {
     if (n.type !== "CallExpression") return;
     if (n.callee.type !== "MemberExpression" || n.callee.property?.type !== "Identifier") return;
     if (!RAF_WAITS.has(n.callee.property.name)) return;
-    // The options object is the last object-literal argument.
-    const opts = [...n.arguments].reverse().find((a) => a.type === "ObjectExpression");
+    // Signature: waitForFunction(pageFunction, arg?, options?). Never infer the
+    // options object by searching backwards: a two-argument call's object is the
+    // predicate argument, even when it happens to contain timeout/polling keys.
+    const arg = n.arguments[1];
+    const opts = n.arguments[2];
+    const predicate = n.arguments[0];
+    const misplaced = n.arguments.length === 2 &&
+      (hasKey(arg, "timeout") || hasKey(arg, "polling")) &&
+      (predicate?.type === "ArrowFunctionExpression" || predicate?.type === "FunctionExpression") &&
+      predicate.params.length === 0;
+    if (misplaced) {
+      sites.push({ line: n.loc.start.line, method: n.callee.property.name, kind: "misplaced-options" });
+      return;
+    }
     const timeout = hasKey(opts, "timeout");
     const polling = hasKey(opts, "polling");
     // A wait with NO declared timeout inherits the test budget and is honest
     // about it. The defect is a declared bound that cannot fire.
-    if (timeout && !polling) sites.push({ line: n.loc.start.line, method: n.callee.property.name });
+    if (timeout && !polling) {
+      sites.push({ line: n.loc.start.line, method: n.callee.property.name, kind: "missing-polling" });
+    }
   });
   return { file, sites };
 }
@@ -116,13 +134,13 @@ export function count(root = ROOT) {
 function main() {
   const rows = lintAll();
   const n = rows.reduce((a, r) => a + r.sites.length, 0);
-  console.log(`waitForFunction calls with a declared timeout but no polling: ${n}`);
+  console.log(`waitForFunction calls with misplaced options or timeout without polling: ${n}`);
   for (const r of rows.sort((a, b) => b.sites.length - a.sites.length)) {
     if (r.parseError) { console.log(`  PARSE ${r.file}: ${r.parseError}`); continue; }
     console.log(`  ${String(r.sites.length).padStart(3)}  ${r.file}`);
   }
-  console.log("\nFix: pass { polling: 100, timeout: N } — the default 'raf' polling is");
-  console.log("starved by the game's render loop, so the declared timeout never fires.");
+  console.log("\nFix: pass null before { polling: 100, timeout: N }. Options belong in");
+  console.log("argument three; timer polling avoids render-loop rAF starvation.");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

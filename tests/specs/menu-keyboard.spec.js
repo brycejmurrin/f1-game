@@ -19,7 +19,7 @@ import { test, expect } from "../helpers/fixtures.js";
 const DESKTOP = { width: 1440, height: 760 };
 
 async function waitReady(page) {
-  await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 15_000 });
 }
 
 async function openSelect(page) {
@@ -302,7 +302,7 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
        it is stopped. See docs/TESTING.md. */
     await page.waitForFunction(
       () => document.getElementById("track-detail")?.matches(":modal") === true,
-      { polling: 100, timeout: 5_000 });
+      null, { polling: 100, timeout: 5_000 });
 
     expect(await page.evaluate(() =>
       document.getElementById("track-detail").matches(":modal")), "real top-layer dialog").toBe(true);

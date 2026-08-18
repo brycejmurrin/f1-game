@@ -112,7 +112,7 @@ async function launchBrowser() {
 async function openPage(browser, baseUrl, viewport = LAND) {
   const page = await browser.newPage({ viewport });
   await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-  await page.waitForFunction(() => window.__apex != null, { timeout: 20000 });
+  await page.waitForFunction(() => window.__apex != null, null, { timeout: 20000 });
   return page;
 }
 
@@ -405,7 +405,7 @@ async function main() {
         }, viewport: { width: 1100, height: 600 } },
         { name: "tt", fn: async (pg) => {
           await pg.evaluate(() => window.__apex.tt && window.__apex.tt("suzuka"));
-          await pg.waitForFunction(() => window.__apex.info().track != null, { timeout: 15000 }); await sleep(1600);
+          await pg.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15000 }); await sleep(1600);
           await pg.evaluate(() => { window.__apex.go && window.__apex.go(); window.__apex.jump(0.25, 60, 0); window.__apex.hud(true); });
           await sleep(400); return [await shotPng(pg, dir, "mode-timetrial")];
         } },

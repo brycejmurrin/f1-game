@@ -8,7 +8,49 @@ How to close the live gaps between the shipped WebGL2 renderer (`js/render/glx.j
 `js/render/webgpu/wgx.js` + `wgsl-*.js`, including lacquer ENV absorb,
 screen sun-shaft, flare depth occlusion, car SSR, bilateral AO upsample,
 MAT anisotropy, lit `depthBias`, and sky overcast/bank/azimuth/lightning.
-Remaining honest look deltas: TAA still off; some FX/noise LOD details.
+Remaining honest look deltas (audited 2026-08-18 against source):
+
+- **TAA** still off (no history resolve — do not enable Halton jitter alone).
+  GLX has no TAA either; this is not a live GLX↔WGX mismatch.
+- **TLX MSAA** stays off (no resolved depth for post).
+- **TLX car SSR tag** cannot write 0.35 into scene alpha (r185 `isOpaque()`
+  is false for `NoBlending`, so `output.a` is coverage). The tag now lives
+  on a second HDR attachment (`ssrTag` / `mrtNode`), armed only for the
+  main scene pass — env cube and canvas fallback stay single-target.
+- **TLX FS `mat` stays smooth** and baked wall UVs still key off the
+  shading N. A TSL `varying().setInterpolation(FLAT)` compiled on three
+  r185 / software GL but the garage turntable drew nothing. Garage frames
+  (no `proj`) also must paint the canvas, not the HDR scene target.
+  GLX remains `flat out float vMat`.
+- **WGX FLAG VS wave** has no 4th vertex attribute (Dawn zeroed it on large
+  ribbon VBOs). Not portable without reopening that defect.
+- **WGX `wp.y += 0.08`** on road draws is a software-GPU fallback on top of
+  `depthBias`; GLX uses `polygonOffset` only. Leave the lift — dropping it
+  reopens terrain-over-road on SwiftShader.
+- **Tuner sliders (183 / 73 `u:`)** — every uniform knob is named on GLX,
+  WGX, and TLX (`tests/unit/light-grid.test.mjs`). CPU knobs bake through
+  `frame.*` / `present()` opts. Honest no-ops: `perChunkLights` +
+  `roadChunkLamps` (WebGL2 only); `pcssPen` on three.js phones / software GL.
+
+Portable look deltas closed in this pass: WGX composite consumes SSR `.a`
+(no wetness remul; `aoV²` + `min(gateSrc/0.20)` once); WGX SSR `sinT` Nv
+fallback + GLX march `0.55`/`1.16`/refine 4; WGX SAA before wet; TLX
+corrugation AA is `hc*7.5`; TLX SSAO no longer flips `N.z`; road-marking
+mip uses unclamped `fwX` on GLX/TLX (WGX already did). SAA / MAT-aniso /
+desktop GLX 4× MSAA / peel-then-bump stay matched. TLX flat-`mat` and
+geometric baked UVs were reverted — they blanked the garage car.
+
+SAA mixes geometric N with a uniform-CF peel hoist on all three backends
+(material/wall bump stays out of SAA). Every baked MAT layer (walls
+included) is hoisted to `textureSample` so pack aniso matches GLX
+`texture()`.
+Car-paint flake keys to `objPos`; SSAO uses the GLX/TLX `K[0..7]` fan and
+skips taps at strength 0; `applyHdrGrade` is gated; SSR is consumed in
+COMPOSITE same-frame and the SSR pass smears hits with the GLX/TLX
+`carGloss` streak; TLX desktop WebGL2 has a color-depth PCSS blocker.
+2026-08-18: the old pause-menu PerfTry GLSL flags (`flareGate`, `lampFogGate`)
+and the 300 m `envCull` are now the baked product path on GLX/WGX/TLX — no
+toggle, no `OPT_*` overlay. Late sky (opaque → sky → glow) is unconditional.
 WGX stays opt-in (`apex26.gfxBackend=webgpu`); GLX stays the default.
 Road surface: Block 1b sparse crack lines and baked-MAT footprint LOD
 (`matTexLod`) are ported to match GLX `lit.js`. 2026-08-17: WGX `_generateMips`
@@ -158,7 +200,7 @@ The gaps fall into three kinds:
 |---|---|---|
 | **API missing in WGX** | (was: `gpuTimer`, arrays, `lampShadowBegin`, instancing, `drawParticles`) | Those names are real on WGX now. FrameU `params9` carries `uAmbContactDark` / `uLampWallSpill` / `uWindowSunFlash` / `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`, `p5.y` lightning. Sky overcast grey-shift, twilight horizon bank, and azimuthal gradient are ported. Remaining honest gap: TAA (still off). |
 | **Reduced shader** | (was: PCSS 3×3, screen-radial god-ray, lamp-fog `× 0.6`, env LOD 0, no `applyMaterial*`) | Poisson-8 PCSS, world-space god-ray + screen shaft, `params8.x` lamp-fog, roughness env LOD, `applyMaterial*`, lacquer ENV absorb, car SSR, bilateral AO, MAT aniso are in. |
-| **Plumbing constraint** | MSAA is 4 or 1, never 2 | WebGPU permits `sampleCount` 1 or 4 and nothing else, so WGX cannot mirror GLX's 2×. Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
+| **Plumbing constraint** | MSAA is 4 or 1, never 2 | WebGPU permits `sampleCount` 1 or 4 and nothing else. Desktop GLX now picks 4× to match. Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
 
 `WGX.create()` requests `"timestamp-query"` when the adapter exposes it
 (`requiredFeatures`). Everything else in the §3 inventory is core.
@@ -197,7 +239,7 @@ surface is larger — several GLX features landed after the first WGX cut.
 
 | Gap | GLX today | WGX today | Kind | WebGPU primitive |
 |---|---|---|---|---|
-| **MSAA** | 2× on RGBA16F + `blitFramebuffer` resolve (`js/render/glx/post.js`) | `msaa() → 4` (1 on lite); color `resolveTarget` + manual MS-depth resolve. WebGPU sampleCount is 1 or 4 only — never 2 | Plumbing | Color: `resolveTarget`. Depth: `textureLoad` of `texture_depth_multisampled_2d` |
+| **MSAA** | 4× on RGBA16F + `blitFramebuffer` resolve (`js/render/glx/post.js`; 2 then 0 if the format cannot) | `msaa() → 4` (1 on lite); color `resolveTarget` + manual MS-depth resolve. WebGPU sampleCount is 1 or 4 only — never 2 | Plumbing | Color: `resolveTarget`. Depth: `textureLoad` of `texture_depth_multisampled_2d` |
 | **PCSS quality** | 8-tap Poisson + dither; 4-tap far LOD; `uPcss` gate (`js/render/shaders/lit.js`) | Poisson-8 + far 4-tap; `pcss()` `true` | Shader | `textureSampleCompareLevel` + `blockerTex` |
 | **Lamp-fog** | Tunable `uLampFog` | `F.params8.x` scales lampFog (no hard `× 0.6`) | Shader + uniform | FRAME lane |
 | **Ground mist** | Lit FBM + `uGroundMist` | **Ported** in LIT | Done | — |

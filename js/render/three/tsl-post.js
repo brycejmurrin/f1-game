@@ -32,7 +32,7 @@
  *         upAdd, upFinal, spread, ssao, godray, composite, fxaa, blit })
  * (spread is the shared blur-step uniform — tlx-post.js drives it every
  * present() from the BLOOM SPREAD knob: `P.spread.value = gk("bloomSpread")`.)
- * ctx = { chunks, shadow, sceneTex, sceneDepthTex, dirtTex, whiteTex,
+ * ctx = { chunks, shadow, sceneTex, sceneTagTex, sceneDepthTex, dirtTex, whiteTex,
  *         blackTex } — REAL texture objects (tlx-post.js creates the targets
  * first). NEVER touches THREE/TSL at script eval — three exists only inside
  * TLX.create().
@@ -66,14 +66,19 @@
     // Fixed input textures (real objects — the scene HDR target + its depth
     // exist before this factory runs; dirt/white/black are 1x1-or-canvas).
     const sceneT = texture(ctx.sceneTex);
+    // Second HDR attachment: 0.35 on car paint, 1 elsewhere. Scene alpha
+    // cannot hold the tag (r185 isOpaque + NoBlending = coverage).
+    const tagT = texture(ctx.sceneTagTex || ctx.sceneTex);
     const depthT = texture(ctx.sceneDepthTex);
     const dirtT = texture(ctx.dirtTex || ctx.blackTex);
     const depthAt = (uvGl) => float(depthT.sample(TL(uvGl)));
-
     /** Fullscreen overwrite pass material (POST_VS role is three's QuadMesh). */
     const _pinKeys = Object.create(null);
     function passMaterial(fragNode, key) {
       const m = new THREE.NodeMaterial();
+      // tlx-post owns the pass family. Register immediately so an exception
+      // during later material setup/factory construction can unwind it.
+      if (typeof ctx.trackMaterial === "function") ctx.trackMaterial(m);
       m.fragmentNode = fragNode;
       m.depthTest = false;
       m.depthWrite = false;
@@ -108,7 +113,7 @@
     /* ── BLUR (BLUR_FS in js/render/shaders/post.js): 5-tap separable gaussian ─────────── */
     // Two instances (SSAO r8 target family / godray HDR family) so a material
     // never renders into two different target formats (pipeline-per-format).
-    function makeBlur() {
+    function makeBlur(key) {
       const tex = texture(ctx.blackTex);
       const U = { dir: uniform(new THREE.Vector2()) };
       const mat = passMaterial(Fn(() => {
@@ -122,11 +127,15 @@
         s.addAssign(tex.sample(TL(vUV.add(o2))).rgb.mul(0.0702702703));
         s.addAssign(tex.sample(TL(vUV.sub(o2))).rgb.mul(0.0702702703));
         return vec4(s, 1.0);
-      })(), "tlx-post-blur");
+      })(), key);
       return { mat, tex, U };
     }
-    const blurAO = makeBlur();
-    const blurGR = makeBlur();
+    // These are the same graph shape but NOT the same bindings. Reusing one
+    // customProgramCacheKey makes three retain blurAO's texture-node binding
+    // when blurGR compiles, so the god-ray chain blurs the near-white AO buffer
+    // and the composite adds it across the whole frame.
+    const blurAO = makeBlur("tlx-post-blur-ao");
+    const blurGR = makeBlur("tlx-post-blur-godray");
 
     /* ── DOWN (DOWN_FS in js/render/shaders/post.js): 13-tap Jimenez + Karis ──────────── */
     const downTex = texture(ctx.blackTex);
@@ -241,22 +250,26 @@
           const crN = crN0;
           const crL = length(crN).toVar();
           const N = select(crL.greaterThan(1e-6), crN.div(crL), vec3(0.0, 0.0, 1.0)).toVar();
-          If(N.z.lessThan(0.0), () => { N.assign(N.negate()); });
+          // GLX SSAO does not flip N.z — a view-space coin toss darkens walls.
           const radius = float(ssaoU.radius).toVar();
-          const scr = clamp(radius.div(max(P.z.negate(), 1.0)).mul(0.9), 0.004, 0.05).toVar();
-          const ang = fract(sin(dot(screenCoordinate.xy, vec2(12.9898, 78.233))).mul(43758.5453)).mul(6.2832).toVar();
-          const ca = cos(ang).toVar(), sa = sin(ang).toVar();
           const occ = float(0.0).toVar();
-          for (let ki = 0; ki < 8; ki++) {         // 12→8 taps (half-res + blurred)
-            const kx = SSAO_K[ki][0], ky = SSAO_K[ki][1];
-            const k = vec2(ca.mul(kx).sub(sa.mul(ky)), sa.mul(kx).add(ca.mul(ky)));
-            const S = ssaoViewPos(clamp(vUV.add(k.mul(scr)), vec2(0.001), vec2(0.999))).toVar();
-            const V = S.sub(P).toVar();
-            const len = length(V).toVar();
-            const ndv = max(dot(N, V.div(max(len, 1e-4))).sub(0.10), 0.0);
-            const range = smoothstep(radius, radius.mul(0.4), len);
-            occ.addAssign(ndv.mul(range));
-          }
+          // GLX/WGX: skip the 8 dependent depth taps when AO strength is 0
+          // (contact shadows still run). strength is a uniform.
+          If(ssaoU.strength.greaterThan(0.0), () => {
+            const scr = clamp(radius.div(max(P.z.negate(), 1.0)).mul(0.9), 0.004, 0.05).toVar();
+            const ang = fract(sin(dot(screenCoordinate.xy, vec2(12.9898, 78.233))).mul(43758.5453)).mul(6.2832).toVar();
+            const ca = cos(ang).toVar(), sa = sin(ang).toVar();
+            for (let ki = 0; ki < 8; ki++) {         // 12→8 taps (half-res + blurred)
+              const kx = SSAO_K[ki][0], ky = SSAO_K[ki][1];
+              const k = vec2(ca.mul(kx).sub(sa.mul(ky)), sa.mul(kx).add(ca.mul(ky)));
+              const S = ssaoViewPos(clamp(vUV.add(k.mul(scr)), vec2(0.001), vec2(0.999))).toVar();
+              const V = S.sub(P).toVar();
+              const len = length(V).toVar();
+              const ndv = max(dot(N, V.div(max(len, 1e-4))).sub(0.10), 0.0);
+              const range = smoothstep(radius, radius.mul(0.4), len);
+              occ.addAssign(ndv.mul(range));
+            }
+          });
           const ao = clamp(occ.div(8.0).mul(2.4), 0.0, 1.0).mul(ssaoU.strength).oneMinus().toVar();
           // Contact shadows: short view-space march toward the sun (SSAO_FS).
           If(ssaoU.contact.greaterThan(0.0).and(ssaoU.sunVS.z.lessThan(0.05)), () => {
@@ -532,7 +545,7 @@
         // tailpipe; SKIPS car pixels (SSR alpha tag) so the body doesn't waver.
         const hazeUV = vec2(vUV).toVar();
         If(C.hazeStr.greaterThan(0.002), () => {
-          const carHere = smoothstep(0.42, 0.55, sceneT.sample(TL(vUV)).a).oneMinus();
+          const carHere = smoothstep(0.42, 0.55, tagT.sample(TL(vUV)).r).oneMinus();
           If(carHere.lessThan(0.25), () => {
             const hd = vUV.sub(C.hazeUV).sub(vec2(0.0, 0.08)).mul(vec2(3.2, 1.0)).toVar();
             const hm = exp(dot(hd, hd).mul(-70.0)).mul(C.hazeStr).toVar();
@@ -543,8 +556,9 @@
             });
           });
         });
-        const scn = vec4(sceneT.sample(TL(hazeUV))).toVar();  // .rgb colour + .a SSR tag
+        const scn = vec4(sceneT.sample(TL(hazeUV))).toVar();  // .rgb colour; tag is tagT
         const c = vec3(scn.rgb).toVar();
+        const tagA = float(tagT.sample(TL(hazeUV)).r).toVar();
         const caDir = vec2(vUV.sub(0.5)).toVar();
 
         // CHROMATIC ABERRATION js/render/shaders/post.js — stays in the hazeUV domain.
@@ -606,7 +620,7 @@
         c.addAssign(godrayTexN.sample(TL(vUV)).rgb);
 
         // ── Wet-road + car-paint screen-space reflection js/render/shaders/post.js ──
-        const carPx = smoothstep(0.42, 0.55, scn.a).oneMinus().toVar();
+        const carPx = smoothstep(0.42, 0.55, tagA).oneMinus().toVar();
         If(C.ssrOk.greaterThan(0.5)
           .and(C.reflect.greaterThan(0.001).or(carPx.greaterThan(0.3)))
           .and(depthAt(vUV).lessThan(0.9999))
@@ -868,7 +882,14 @@
 
         // Lens flare js/render/shaders/post.js: DEPTH-OCCLUDED procedural streaks +
         // ghosts — fades when geometry covers the sun's screen point.
-        const sunVis = smoothstep(0.9990, 0.9999, depthAt(C.sunUV)).toVar();
+        // Skip the depth fetch when the flare is off or the sun is off-screen
+        // (uniform CF). Matches GLX post.js / WGSL composite.
+        const sunVis = float(0.0).toVar();
+        If(C.flareStr.greaterThan(0.0)
+          .and(C.sunUV.x.greaterThanEqual(0.0)).and(C.sunUV.x.lessThanEqual(1.0))
+          .and(C.sunUV.y.greaterThanEqual(0.0)).and(C.sunUV.y.lessThanEqual(1.0)), () => {
+          sunVis.assign(smoothstep(0.9990, 0.9999, depthAt(C.sunUV)));
+        });
         const flare = vec3(0.0).toVar();
         If(C.flareStr.greaterThan(0.0).and(sunVis.greaterThan(0.0))
           .and(C.sunUV.x.greaterThanEqual(0.0)).and(C.sunUV.x.lessThanEqual(1.0))

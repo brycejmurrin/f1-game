@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1393">
+<meta name="apex-build" content="1422">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -20,8 +20,8 @@
      Measured chrome-devtools LCPBreakdown: almost all element render delay
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
-<link rel="preload" href="css/tokens.css?v=d65299656c01" as="style">
-<link rel="preload" href="css/components.css?v=5455917d4a75" as="style">
+<link rel="preload" href="css/tokens.css?v=2ffb3614f3ec" as="style">
+<link rel="preload" href="css/components.css?v=3837f8949c66" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -39,17 +39,17 @@
 <!-- MANIFEST.CSS order preserved (cascade). Title-critical sheets stay
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
-<link rel="stylesheet" href="css/tokens.css?v=d65299656c01">
-<link rel="stylesheet" href="css/components.css?v=5455917d4a75">
-<link rel="stylesheet" href="css/tuner.css?v=c2105f72f07a" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=fa8c0129335b">
-<link rel="stylesheet" href="css/carsetup.css?v=3805ca35dc15" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/hud.css?v=ed56d72144a6" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=1addc5604b1c" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/tokens.css?v=2ffb3614f3ec">
+<link rel="stylesheet" href="css/components.css?v=3837f8949c66">
+<link rel="stylesheet" href="css/tuner.css?v=3a059b0920b2" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/menus.css?v=26f56b5dc0e3">
+<link rel="stylesheet" href="css/carsetup.css?v=7e02d2ec63d3" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/hud.css?v=23d39e8a5b44" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/overlays.css?v=37367486eb05" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=ef0a7a9b028d">
-<link rel="stylesheet" href="css/track-detail.css?v=b697169cdb3d" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/career.css?v=20193ca1d064" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/data.css?v=8db2d90ea4d4" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/track-detail.css?v=df4d8c68a8cc" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/career.css?v=8dac21ae655f" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/data.css?v=91f2e42053f4" media="print" onload="this.media='all'">
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
      parsers that scan every rel=stylesheet. -->
@@ -352,13 +352,11 @@
   <div id="pmsettings-inner" class="sheet">
     <div class="sheet-head"><h2 id="dlg-settings">SETTINGS</h2></div>
     <div id="pm-settings-body" class="sheet-body pane">
-      <div id="pm-category-tabs" role="tablist" aria-label="Settings categories">
+      <div id="pm-category-tabs" class="balanced-row" role="tablist" aria-label="Settings categories">
         <button id="pm-tab-controls" class="active" type="button" role="tab" aria-label="Controls"
           aria-selected="true" aria-controls="pm-panel-controls" tabindex="0">CONTROLS</button>
         <button id="pm-tab-display" type="button" role="tab" aria-label="Display"
           aria-selected="false" aria-controls="pm-panel-display" tabindex="-1">DISPLAY</button>
-        <button id="pm-tab-performance" type="button" role="tab" aria-label="Performance"
-          aria-selected="false" aria-controls="pm-panel-performance" tabindex="-1">PERF</button>
         <button id="pm-tab-more" type="button" role="tab"
           aria-selected="false" aria-controls="pm-panel-more" tabindex="-1">MORE</button>
       </div>
@@ -400,10 +398,8 @@
           <button id="pm-renderer">RENDERER: WEBGL2</button>
           <!-- THREE PATH / SCREENSHOTS / SAVE SCREENSHOT / status are injected
                by js/game/gfx-quality.js (same body-node reason as RESET RENDERER). -->
-          <button id="pm-gfx" hidden>GRAPHICS: STANDARD</button>
+          <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
         </section>
-        <section id="pm-panel-performance" class="pm-group" role="tabpanel"
-          aria-labelledby="pm-tab-performance" tabindex="0" hidden></section>
         <nav id="pm-panel-more" class="pm-doors" role="tabpanel"
           aria-labelledby="pm-tab-more" tabindex="0" hidden>
           <h3 class="pm-group-h">TOOLS &amp; HELP</h3>
@@ -457,7 +453,7 @@
     </div>
     <!-- PLAY NOW: the four one-sitting modes, 2x2 so four entries cost two rows
          rather than four. Same red family as the hero, one step down in size. -->
-    <div id="menu-primary">
+    <div id="menu-primary" class="balanced-row">
     <button id="mb-race" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></svg>RACE</button>
     <button id="mb-tt" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></svg>TIME TRIAL</button>
     <button id="mb-vs" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>RACE A FRIEND</button>
@@ -465,7 +461,7 @@
     </div>
     <!-- SECONDARY: everything that is not a way to play. Half-height,
          two across, so the rooms never compete with the modes for the eye. -->
-    <div id="menu-secondary">
+    <div id="menu-secondary" class="balanced-row">
     <button id="mb-standings" class="bigbtn alt minibtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/></svg>STANDINGS</button>
     <button id="mb-data" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>F1 DATA HUB</button>
     <button id="mb-garage" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>GARAGE</button>
@@ -566,9 +562,8 @@
            so the two-column layout can make it a grid item of the sheet itself
            and span it down through the action-bar row (css/menus.css). A nested
            grid cannot span a row of its parent, and the action bar only ever
-           holds BACK and START — both under the preview column. Stacked
-           (portrait) this is the same document order as before: label, preview,
-           list, one column. -->
+           holds BACK and START — both under the preview column. Stacked: label,
+           compact preview band, then the list — one column, list scrolls. -->
       <div id="sel-tracks" class="pane pair-main" role="group" aria-labelledby="sel-circuit-label"></div>
     </div>
 
@@ -619,7 +614,7 @@
      SDP, compressed — hence copy buttons rather than an expectation of typing. -->
 <dialog id="vsfriend" class="screen dim" data-esc-close="vs-close" aria-labelledby="dlg-vsfriend" hidden>
   <div class="sheet">
-    <div class="sheet-head"><h2 id="dlg-vsfriend">RACE A FRIEND</h2></div>
+    <div id="vs-head" class="sheet-head"><h2 id="dlg-vsfriend">RACE A FRIEND</h2></div>
     <div class="sheet-body pane" id="vs-body">
 
       <div id="vs-pick" class="vs-step">
@@ -696,7 +691,7 @@
             <button id="vs-scan-answer" class="bigbtn minibtn">SCAN</button>
             <button id="vs-paste-answer" class="bigbtn alt minibtn">PASTE</button>
           </div>
-          <textarea id="vs-answer-in" class="vs-code" rows="3" placeholder="…or paste their answer code here" aria-label="Answer code"></textarea>
+          <textarea id="vs-answer-in" class="vs-code" rows="3" maxlength="524288" placeholder="…or paste their answer code here" aria-label="Answer code"></textarea>
           <button id="vs-accept" class="bigbtn">CONNECT</button>
         </section>
       </div>
@@ -709,7 +704,7 @@
             <button id="vs-scan-invite" class="bigbtn minibtn">SCAN</button>
             <button id="vs-paste-invite" class="bigbtn alt minibtn">PASTE</button>
           </div>
-          <textarea id="vs-invite-in" class="vs-code" rows="3" placeholder="…or paste their invite code here" aria-label="Invite code"></textarea>
+          <textarea id="vs-invite-in" class="vs-code" rows="3" maxlength="524288" placeholder="…or paste their invite code here" aria-label="Invite code"></textarea>
           <button id="vs-make-answer" class="bigbtn">GENERATE ANSWER</button>
         </section>
         <section class="vs-col">
@@ -834,22 +829,22 @@
     <div class="sheet-body pane" id="rs-body">
       <div class="rs-row">
         <h3 class="sel-label" id="rs-laps-label">LAPS</h3>
-        <div id="rs-laps" class="chip-row no-orphan-3" role="group" aria-labelledby="rs-laps-label"></div>
+        <div id="rs-laps" class="chip-row balanced-row" role="group" aria-labelledby="rs-laps-label"></div>
       </div>
       <div class="rs-row">
         <h3 class="sel-label" id="rs-weather-label">WEATHER</h3>
-        <div id="rs-weather" class="chip-row no-orphan-3" role="group" aria-labelledby="rs-weather-label"></div>
+        <div id="rs-weather" class="chip-row balanced-row" role="group" aria-labelledby="rs-weather-label"></div>
       </div>
       <div class="rs-row" id="rs-time-section">
         <h3 class="sel-label" id="rs-time-label">TIME OF DAY</h3>
-        <div id="rs-time" class="chip-row no-orphan-5" role="group" aria-labelledby="rs-time-label"></div>
+        <div id="rs-time" class="chip-row balanced-row" role="group" aria-labelledby="rs-time-label"></div>
       </div>
       <!-- DIFFICULTY lives here with the other race settings, not on the select
            screen: it is a property of the race you are about to start, the same
            as laps and weather. Hidden in a time trial — there is no AI to rate. -->
       <div class="rs-row" id="rs-diff-section">
         <h3 class="sel-label" id="rs-diff-label">DIFFICULTY</h3>
-        <div id="rs-diff" class="chip-row no-orphan-3" role="group" aria-labelledby="rs-diff-label"></div>
+        <div id="rs-diff" class="chip-row balanced-row" role="group" aria-labelledby="rs-diff-label"></div>
       </div>
       <!-- RELIABILITY — whether cars can retire. A standing preference like
            DIFFICULTY, and OFF by default so no existing save starts losing cars.
@@ -865,7 +860,7 @@
            is no grid to set. -->
       <div class="rs-row" id="rs-quali-section">
         <h3 class="sel-label" id="rs-quali-label">QUALIFYING LAP</h3>
-        <div id="rs-quali" class="chip-row no-orphan-3" role="group" aria-labelledby="rs-quali-label"></div>
+        <div id="rs-quali" class="chip-row balanced-row" role="group" aria-labelledby="rs-quali-label"></div>
       </div>
       <!-- CAUTIONS — race control's flags: local yellow, VSC, safety car, raised
            when enough debris settles on the racing surface. Genuinely a property
@@ -876,11 +871,11 @@
            alone on track there is nothing to be cautioned about. -->
       <div class="rs-row" id="rs-caution-section">
         <h3 class="sel-label" id="rs-caution-label">CAUTIONS</h3>
-        <div id="rs-caution" class="chip-row no-orphan-3" role="group" aria-labelledby="rs-caution-label"></div>
+        <div id="rs-caution" class="chip-row balanced-row" role="group" aria-labelledby="rs-caution-label"></div>
       </div>
       <div class="rs-row" id="rs-reliab-section">
         <h3 class="sel-label" id="rs-reliab-label">RELIABILITY</h3>
-        <div id="rs-reliab" class="chip-row no-orphan-3" role="group" aria-labelledby="rs-reliab-label"></div>
+        <div id="rs-reliab" class="chip-row balanced-row" role="group" aria-labelledby="rs-reliab-label"></div>
       </div>
     </div>
     <div class="sheet-foot">
@@ -1131,9 +1126,18 @@
 <!-- how to play -->
 <dialog id="howtoplay" class="screen dim" data-esc-close="htp-close" aria-labelledby="dlg-howtoplay" hidden>
   <div id="howtoplay-inner" class="sheet">
-    <div class="sheet-head"><h2 id="dlg-howtoplay">HOW TO PLAY</h2></div>
+    <div class="sheet-head">
+      <h2 id="dlg-howtoplay">HOW TO PLAY</h2>
+      <nav id="htp-contents" aria-label="How to play sections">
+        <a href="#htp-controls">CONTROLS</a>
+        <a href="#htp-racing">RACING</a>
+        <a href="#htp-setup">SETUP</a>
+        <a href="#htp-modes">MODES</a>
+        <a href="#htp-friends">FRIENDS</a>
+      </nav>
+    </div>
     <dl class="sheet-body pane">
-      <dt>PC / KEYBOARD</dt>
+      <dt id="htp-controls">PC / KEYBOARD</dt>
       <dd>
         Steer <span class="key">A</span><span class="key">D</span> or <span class="key">&larr;</span><span class="key">&rarr;</span> &nbsp;
         Gas <span class="key">W</span> / <span class="key">&uarr;</span> &nbsp;
@@ -1147,7 +1151,7 @@
       </dd>
       <dt>TOUCH / MOBILE</dt>
       <dd>Pick <span class="key">STEER</span> in <span class="key">SETTINGS</span> (pause &rarr; SETTINGS): TILT your phone (auto-calibrates at the lights), on-screen BUTTONS, or tap left/right screen HALVES. In touch mode the car accelerates for you &mdash; just steer and brake; BUTTONS mode has its own <span class="key">GAS</span> pedal</dd>
-      <dt>&#9889; BOOST</dt>
+      <dt id="htp-racing">&#9889; BOOST</dt>
       <dd>Toggle electric deploy on/off. Drains the energy bar; recharges when you lift or brake. Tapers off at very high speed &mdash; 2026 rules</dd>
       <dt>&#8646; ACTIVE AERO</dt>
       <dd>The 2026 moveable wings. <span class="key">Z-MODE</span> is the default: flaps shut, maximum downforce. Press <span class="key">Z</span> (or tap <span class="key">AERO</span>) in an <span class="key">ACTIVATION ZONE</span> for <span class="key">X-MODE</span> &mdash; the top elements of both wings rotate flat, cutting drag for a higher top speed but giving up grip. It slams shut the moment you brake or leave the zone. Costs no energy: unlike BOOST and OVERTAKE you pay for it in cornering, not charge.
@@ -1157,7 +1161,7 @@
       <dd>Within 1 s of the car ahead the OT light arms. Activate for 4 s of full-power deploy with no taper &mdash; the 2026 electrical overtaking aid that replaced DRS. Because it IS the overtaking aid it carries DRS's safety rules: nothing on the opening lap (it wakes when the leader starts lap 2) and nothing under a caution. The chip reads <span class="key">NO OVERTAKE</span> when it is switched off rather than merely unarmed</dd>
       <dt>GEARS</dt>
       <dd>Toggle <span class="key">GEARS: MANUAL</span> in <span class="key">SETTINGS</span>. Shift up near the redline, down for corner exits. The tachometer + gear indicator sit bottom-centre</dd>
-      <dt>&#127909; CAMERA</dt>
+      <dt id="htp-setup">&#127909; CAMERA</dt>
       <dd>Tap the <span class="key">CAM</span> button (top-right) to open the picker &mdash; 13 modes from CHASE and COCKPIT to HELI, TRACKSIDE and CINEMATIC &mdash; or press <span class="key">C</span> to cycle them. Your choice is remembered</dd>
       <dt>&#9881; SETTINGS</dt>
       <dd>Pause (<span class="key">P</span> / <span class="key">Esc</span> or the <span class="key">&#10074;&#10074;</span> button) then <span class="key">SETTINGS</span> for everything below &mdash; steering, gears, lighting, sound, music and HUD. <span class="key">BACK</span> returns to the pause screen</dd>
@@ -1169,7 +1173,7 @@
       <dd>In <span class="key">SETTINGS</span> open <span class="key">MUSIC &amp; SOUND</span> for the music and effects switches, their volumes, and what is playing &mdash; or <span class="key">HIDE HUD</span> for a clean cinematic view (the small eye icon brings it back)</dd>
       <dt>TRACK LIMITS</dt>
       <dd>Grass is slow. Cutting the track repeatedly earns a +5 s penalty</dd>
-      <dt>RACE</dt>
+      <dt id="htp-modes">RACE</dt>
       <dd>22 cars, five red lights, lights out. Points 25-18-15-12-10-8-6-4-2-1</dd>
       <dt>SEASON</dt>
       <dd>All 24 circuits in calendar order &mdash; championship standings saved between visits</dd>
@@ -1188,7 +1192,7 @@
       <dd>Championship weekends start with one flying lap. DRIVE MY LAP to set
         your own time, or SIMULATE to take the modelled one &mdash; either way the
         sheet is the grid you start from. You cannot do both</dd>
-      <dt>&#128101; RACE A FRIEND</dt>
+      <dt id="htp-friends">&#128101; RACE A FRIEND</dt>
       <dd>Two players, one race, no server. The host makes an invite code, the
         guest sends one back, and those two pastes ARE the connection &mdash; so
         anything you can send a message on will do. In the same room, scan the QR
@@ -1535,12 +1539,12 @@
            generated by js/game/tuner.js; the store operation is
            LightStore.copyToTracks (js/game/light-store.js). -->
       <div id="lt-spread"></div>
-      <label class="lt-help-toggle"><input id="lt-help-on" type="checkbox" checked> Show explanations</label>
-      <div id="lt-tabs" class="lt-tabs no-orphan-2" role="tablist" aria-label="Lighting categories"></div>
+      <label class="lt-help-toggle"><input id="lt-help-on" type="checkbox"> Show explanations</label>
+      <div id="lt-tabs" class="lt-tabs balanced-row" role="tablist" aria-label="Lighting categories"></div>
     </div>
     <div id="lt-rows" class="pane"></div>
     <textarea id="lt-json" readonly hidden aria-label="Exported tuning values"></textarea>
-    <div class="sheet-foot">
+    <div class="sheet-foot balanced-row">
       <!-- "RESET", not "RESET ALL": the handler drops the LOCAL edits for the
            current track|time-of-day|weather only, and deliberately leaves the
            other conditions and the shipped file untouched. The old label
@@ -1576,11 +1580,11 @@
         <h2>CAMERA TUNER</h2>
       </div>
       <div id="ct-profile"></div>
-      <div id="ct-modes" class="lt-tabs no-orphan-2" role="tablist" aria-label="Camera modes"></div>
-      <label class="lt-help-toggle"><input id="ct-help-on" type="checkbox" checked> Show explanations</label>
+      <div id="ct-modes" class="lt-tabs balanced-row" role="tablist" aria-label="Camera modes"></div>
+      <label class="lt-help-toggle"><input id="ct-help-on" type="checkbox"> Show explanations</label>
     </div>
     <div id="ct-rows" class="pane" role="tabpanel"></div>
-    <div class="sheet-foot">
+    <div class="sheet-foot balanced-row">
       <button id="ct-reset">RESET CAM</button>
       <button id="ct-reset-all">RESET ALL</button>
       <button id="ct-close" class="bigbtn">DONE</button>
@@ -1645,14 +1649,14 @@
 <script crossorigin="anonymous" src="js/log.js?v=747fd54ee135"></script>
 <script crossorigin="anonymous" src="js/mat4.js?v=b23181bec2d9"></script>
 <script crossorigin="anonymous" src="js/render/shaders/chunks.js?v=c1ba6bde9659"></script>
-<script crossorigin="anonymous" src="js/render/shaders/lit.js?v=683630ef1e4e"></script>
-<script crossorigin="anonymous" src="js/render/shaders/sky.js?v=79a121bf5033"></script>
+<script crossorigin="anonymous" src="js/render/shaders/lit.js?v=92200b4e3ea2"></script>
+<script crossorigin="anonymous" src="js/render/shaders/sky.js?v=cfc01f7896cc"></script>
 <script crossorigin="anonymous" src="js/render/shaders/fx.js?v=6b8cf3c8af2b"></script>
-<script crossorigin="anonymous" src="js/render/shaders/post.js?v=b0faebec2527"></script>
-<script crossorigin="anonymous" src="js/render/glx/post.js?v=e9ce3c42b62d"></script>
-<script crossorigin="anonymous" src="js/render/glx/shadow.js?v=6f69c6b3afe0"></script>
+<script crossorigin="anonymous" src="js/render/shaders/post.js?v=c6eed5f2c3ab"></script>
+<script crossorigin="anonymous" src="js/render/glx/post.js?v=cb6d6c9bb806"></script>
+<script crossorigin="anonymous" src="js/render/glx/shadow.js?v=547889e83602"></script>
 <script crossorigin="anonymous" src="js/render/glx/chunked.js?v=9460f26a728e"></script>
-<script crossorigin="anonymous" src="js/render/glx.js?v=53022943f9ef"></script>
+<script crossorigin="anonymous" src="js/render/glx.js?v=67cfbd1db497"></script>
 <!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
      two OPT-IN renderer backends and are injected by js/game.js only when
      apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that
@@ -1671,17 +1675,17 @@
 <script crossorigin="anonymous" src="js/track/markings.js?v=c41b906d997a"></script>
 <script crossorigin="anonymous" src="js/track/space.js?v=e5906678959b"></script>
 <script crossorigin="anonymous" src="js/track/surface.js?v=68afadb5578d"></script>
-<script crossorigin="anonymous" src="js/track/models.js?v=f1f3c3474532"></script>
+<script crossorigin="anonymous" src="js/track/models.js?v=afda3464d4ee"></script>
 <script crossorigin="anonymous" src="js/track/graph.js?v=8e79b6363b9c"></script>
 <script crossorigin="anonymous" src="js/track/themes.js?v=4f3c7079f967"></script>
 <script crossorigin="anonymous" src="js/track/landmark-kit.js?v=55e935cf433a"></script>
 <script crossorigin="anonymous" src="js/track/circuit-kit.js?v=531fbdebf053"></script>
 <script crossorigin="anonymous" src="js/track/spline.js?v=a17ce672324b"></script>
 <script crossorigin="anonymous" src="js/track/mesh.js?v=f7e26bb783bd"></script>
-<script crossorigin="anonymous" src="js/track/scenery-nature.js?v=aecd68162806"></script>
-<script crossorigin="anonymous" src="js/track/scenery-structures.js?v=ea23d1527167"></script>
-<script crossorigin="anonymous" src="js/track/scenery-city.js?v=cef1fc51ae07"></script>
-<script crossorigin="anonymous" src="js/track/scenery-identity.js?v=f2c108024d07"></script>
+<script crossorigin="anonymous" src="js/track/scenery-nature.js?v=15970b117632"></script>
+<script crossorigin="anonymous" src="js/track/scenery-structures.js?v=65e7c640a0bf"></script>
+<script crossorigin="anonymous" src="js/track/scenery-city.js?v=98babe99c88d"></script>
+<script crossorigin="anonymous" src="js/track/scenery-identity.js?v=1a46337d6c8d"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
 <script crossorigin="anonymous" src="js/circuits/bahrain.js?v=d1152c6b363a"></script>
 <script crossorigin="anonymous" src="js/circuits/monaco.js?v=f9845707fd2d"></script>
@@ -1723,85 +1727,84 @@
 <script crossorigin="anonymous" src="js/circuits/indianapolis.js?v=588a27de5052"></script>
 <script crossorigin="anonymous" src="js/circuits/buenos_aires.js?v=bdc60bbaf3ec"></script>
 <script crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=9683e074607c"></script>
-<script crossorigin="anonymous" src="js/track/tracks.js?v=57d0da4192d5"></script>
-<script crossorigin="anonymous" src="js/track/maps.js?v=6325038dba7c"></script>
+<script crossorigin="anonymous" src="js/track/tracks.js?v=98bee03ac52a"></script>
+<script crossorigin="anonymous" src="js/track/maps.js?v=f2e4a159a971"></script>
 <script crossorigin="anonymous" src="js/car/car3d.js?v=e7f55b9a1b43"></script>
-<script crossorigin="anonymous" src="js/game/input.js?v=bf94c2b9ac87"></script>
-<script crossorigin="anonymous" src="js/game/audio.js?v=62b34f37828e"></script>
+<script crossorigin="anonymous" src="js/game/input.js?v=a46edadea4cb"></script>
+<script crossorigin="anonymous" src="js/game/audio.js?v=0dbf0fd9ae15"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=c215033b4fb4"></script>
-<script crossorigin="anonymous" src="js/game/spotify.js?v=ca27755313c8"></script>
-<script crossorigin="anonymous" src="js/game/audio-panel.js?v=efb76c5f94a8"></script>
-<script crossorigin="anonymous" src="js/data/api.js?v=0ae8ad9a200d"></script>
-<script crossorigin="anonymous" src="js/data/telemetry.js?v=b07960e0ac73"></script>
+<script crossorigin="anonymous" src="js/game/spotify.js?v=9f17baa46dab"></script>
+<script crossorigin="anonymous" src="js/game/audio-panel.js?v=18e142b1a237"></script>
+<script crossorigin="anonymous" src="js/data/api.js?v=f9392d7c9c6c"></script>
+<script crossorigin="anonymous" src="js/data/telemetry.js?v=20b1e1753cf7"></script>
 <script crossorigin="anonymous" src="js/data/export.js?v=97093360fa39"></script>
 <script crossorigin="anonymous" src="js/data/schedule.js?v=755234e3b02f"></script>
 <script crossorigin="anonymous" src="js/data/standings.js?v=088d07f176d7"></script>
-<script crossorigin="anonymous" src="js/data/lastrace.js?v=3b5786236354"></script>
-<script crossorigin="anonymous" src="js/data/live.js?v=7b66811262ac"></script>
-<script crossorigin="anonymous" src="js/data/hub.js?v=89e2461d15b2"></script>
+<script crossorigin="anonymous" src="js/data/lastrace.js?v=b7d043cba6a1"></script>
+<script crossorigin="anonymous" src="js/data/live.js?v=3183e9e1aaac"></script>
+<script crossorigin="anonymous" src="js/data/hub.js?v=b1914b62a3fc"></script>
 <script crossorigin="anonymous" src="js/car/parts.js?v=ee93f741b785"></script>
 <script crossorigin="anonymous" src="js/car/liveries.js?v=62ed3d578b13"></script>
 <script crossorigin="anonymous" src="js/car/liverytex.js?v=6ceeacc3872f"></script>
-<script crossorigin="anonymous" src="js/car/ghost.js?v=bf65b002eda1"></script>
+<script crossorigin="anonymous" src="js/car/ghost.js?v=0f7d7fef9e94"></script>
 <script crossorigin="anonymous" src="js/game/light-presets.js?v=01d5395a846a"></script>
 <script crossorigin="anonymous" src="js/game/physics-consts.js?v=fcc0717fa3cd"></script>
 <script crossorigin="anonymous" src="js/game/tables.js?v=2293aaaf19e1"></script>
-<script crossorigin="anonymous" src="js/game/lighting.js?v=74c75aabd309"></script>
+<script crossorigin="anonymous" src="js/game/lighting.js?v=5617a732481e"></script>
 <script crossorigin="anonymous" src="js/game/light-store.js?v=0bb4bffb5e43"></script>
 <script crossorigin="anonymous" src="js/game/carmesh.js?v=4a6660e10524"></script>
 <script crossorigin="anonymous" src="js/game/bodyattitude.js?v=517a947361fb"></script>
 <script crossorigin="anonymous" src="js/game/particles.js?v=90aaaca0f4d8"></script>
 <script crossorigin="anonymous" src="js/game/atmosphere.js?v=cce133b55ea5"></script>
-<script crossorigin="anonymous" src="js/game/store.js?v=0f55b200ad29"></script>
-<script crossorigin="anonymous" src="js/game/career.js?v=ce2d77c828a6"></script>
-<script crossorigin="anonymous" src="js/game/season-cal.js?v=86edb3762e23"></script>
+<script crossorigin="anonymous" src="js/game/store.js?v=f7d9107b2000"></script>
+<script crossorigin="anonymous" src="js/game/career.js?v=3b09a418d6be"></script>
+<script crossorigin="anonymous" src="js/game/season-cal.js?v=7f26f695d31e"></script>
 <script crossorigin="anonymous" src="js/game/reliability.js?v=483552b62ac9"></script>
 <script crossorigin="anonymous" src="js/game/ai-drive.js?v=b5d98ad9f09f"></script>
 <script crossorigin="anonymous" src="js/game/cam-tune.js?v=d4a685a106a4"></script>
-<script crossorigin="anonymous" src="js/game/setup-ui.js?v=02a68dc3d54e"></script>
-<script crossorigin="anonymous" src="js/game/career-ui.js?v=2d288d0b996f"></script>
+<script crossorigin="anonymous" src="js/game/setup-ui.js?v=7274b0b69237"></script>
+<script crossorigin="anonymous" src="js/game/career-ui.js?v=987588b2c761"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=e166b6150125"></script>
-<script crossorigin="anonymous" src="js/game/menus.js?v=e07c8efaf421"></script>
-<script crossorigin="anonymous" src="js/game/scrollfade.js?v=a43897c62e71"></script>
+<script crossorigin="anonymous" src="js/game/menus.js?v=7f8aebf0e917"></script>
+<script crossorigin="anonymous" src="js/game/scrollfade.js?v=c468f3706d17"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
-<script crossorigin="anonymous" src="js/game/sheetshape.js?v=aee58f08138d"></script>
+<script crossorigin="anonymous" src="js/game/sheetshape.js?v=e7668ee033b3"></script>
 <script crossorigin="anonymous" src="js/game/uilayers.js?v=881301c993bc"></script>
-<script crossorigin="anonymous" src="js/game/topmodal.js?v=22e73035078f"></script>
-<script crossorigin="anonymous" src="js/game/menunav.js?v=719e5b9cf4e9"></script>
+<script crossorigin="anonymous" src="js/game/topmodal.js?v=d22910fec314"></script>
+<script crossorigin="anonymous" src="js/game/menunav.js?v=eaf9b3f6f824"></script>
 <script crossorigin="anonymous" src="js/game/ariastate.js?v=1a795e030767"></script>
-<script crossorigin="anonymous" src="js/game/settings-nav.js?v=c29e4bba6e7d"></script>
+<script crossorigin="anonymous" src="js/game/settings-nav.js?v=2eb1b95e2b55"></script>
 <script crossorigin="anonymous" src="js/game/aerozones.js?v=1f77f601ce84"></script>
 <script crossorigin="anonymous" src="js/game/skidmarks.js?v=d7604789daaa"></script>
-<script crossorigin="anonymous" src="js/game/racecontrol.js?v=38cc261f2b96"></script>
+<script crossorigin="anonymous" src="js/game/racecontrol.js?v=a978b7ab5795"></script>
 <script crossorigin="anonymous" src="js/game/photomode.js?v=52e5f7950e04"></script>
 <script crossorigin="anonymous" src="js/game/tuner.js?v=6218d97c1559"></script>
 <script crossorigin="anonymous" src="js/game/cam-tuner.js?v=2e3deae9bdd9"></script>
-<script crossorigin="anonymous" src="js/game/steer-tuning.js?v=a11315c314a1"></script>
+<script crossorigin="anonymous" src="js/game/steer-tuning.js?v=80438bfb565e"></script>
 <script crossorigin="anonymous" src="js/game/perf.js?v=534904265164"></script>
-<script crossorigin="anonymous" src="js/game/gfx-quality.js?v=35542784f968"></script>
-<script crossorigin="anonymous" src="js/game/cockpit-opts.js?v=2257ce9e488d"></script>
-<script crossorigin="anonymous" src="js/game/perf-try.js?v=72a88f707a2f"></script>
-<script crossorigin="anonymous" src="js/game/metrics.js?v=b663fc716ba2"></script>
+<script crossorigin="anonymous" src="js/game/gfx-quality.js?v=56df3cedd95b"></script>
+<script crossorigin="anonymous" src="js/game/cockpit-opts.js?v=9c423fbdc9ba"></script>
+<script crossorigin="anonymous" src="js/game/metrics.js?v=e9c1bf787c95"></script>
 <script crossorigin="anonymous" src="js/game/cameras.js?v=577b77b3b7e7"></script>
-<script crossorigin="anonymous" src="js/game/cam-modes.js?v=1765e0cbdc83"></script>
-<script crossorigin="anonymous" src="js/game/hud.js?v=a8360eea31c1"></script>
+<script crossorigin="anonymous" src="js/game/cam-modes.js?v=94d3266248e8"></script>
+<script crossorigin="anonymous" src="js/game/hud.js?v=3d3fc4f75f28"></script>
 <script crossorigin="anonymous" src="js/game/results.js?v=c4dafcdffad5"></script>
-<script crossorigin="anonymous" src="js/game/quali.js?v=f10ded14a598"></script>
+<script crossorigin="anonymous" src="js/game/quali.js?v=eb08e041b1ea"></script>
 <script crossorigin="anonymous" src="js/game/debrisworld.js?v=0bcb3d87a3d0"></script>
-<script crossorigin="anonymous" src="js/game/incidentsim.js?v=4cdbea9e7169"></script>
+<script crossorigin="anonymous" src="js/game/incidentsim.js?v=3ae2fe90b769"></script>
 <script crossorigin="anonymous" src="js/game/agentview-raster.js?v=16273e78276f"></script>
 <script crossorigin="anonymous" src="js/game/agentview.js?v=95cfa3552b50"></script>
-<script crossorigin="anonymous" src="js/game/apex.js?v=aa9694908c64"></script>
-<script crossorigin="anonymous" src="js/net/nostr.js?v=73c7c8b4ee6d"></script>
+<script crossorigin="anonymous" src="js/game/apex.js?v=d6b36573d546"></script>
+<script crossorigin="anonymous" src="js/net/nostr.js?v=8f6fcefd27aa"></script>
 <script crossorigin="anonymous" src="js/net/rendezvous.js?v=264a9657f294"></script>
 <script crossorigin="anonymous" src="js/net/sdp.js?v=efc8fb13f42f"></script>
 <script crossorigin="anonymous" src="js/net/qr.js?v=9c6a338de43f"></script>
 <script crossorigin="anonymous" src="js/net/scan.js?v=cff79f611da8"></script>
-<script crossorigin="anonymous" src="js/net/transport.js?v=b535a789888f"></script>
-<script crossorigin="anonymous" src="js/net/handshake.js?v=91595eb882cf"></script>
-<script crossorigin="anonymous" src="js/net/snapshot.js?v=1860fa808033"></script>
-<script crossorigin="anonymous" src="js/net/session.js?v=97852ab04e82"></script>
-<script crossorigin="anonymous" src="js/net/netplay.js?v=d20b31729b7d"></script>
-<script crossorigin="anonymous" src="js/net/lobby.js?v=db35d92a7c80"></script>
-<script crossorigin="anonymous" src="js/game.js?v=f33f539a341e"></script>
+<script crossorigin="anonymous" src="js/net/transport.js?v=1514d6c5adea"></script>
+<script crossorigin="anonymous" src="js/net/handshake.js?v=b4a70cde7387"></script>
+<script crossorigin="anonymous" src="js/net/snapshot.js?v=ddaf53d859a6"></script>
+<script crossorigin="anonymous" src="js/net/session.js?v=f0bfb2817114"></script>
+<script crossorigin="anonymous" src="js/net/netplay.js?v=2891c595f0f0"></script>
+<script crossorigin="anonymous" src="js/net/lobby.js?v=aced6d5696d5"></script>
+<script crossorigin="anonymous" src="js/game.js?v=bea1f6bd97bb"></script>
 </body></html>

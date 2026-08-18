@@ -673,6 +673,14 @@ function create(G) {
       " · " + (team ? team.name.toUpperCase() : c.team.toUpperCase());
     if (team) $("cr-sub").style.color = G.cssCol(team.color2 || team.color);
 
+    if (Career.conflicted()) {
+      const warn = el("div", "cr-card");
+      warn.appendChild(el("div", "cr-obj-line", "SAVE CONFLICT"));
+      warn.appendChild(el("p", "cr-note",
+        "Another tab wrote this career. Garage and R&D will not save here until you reload."));
+      left.appendChild(warn);
+    }
+
     const meters = $("cr-meters");
     meters.textContent = "";
     meters.append(
@@ -1007,7 +1015,7 @@ function create(G) {
     // hides it, so the reset overwrote the rule on the very next line and the
     // seat never blocked anything. The rule was right, the button just never
     // heard about it. Set the reset first and let the rule have the last word.
-    $("cr-go").disabled = !!st.hire;
+    $("cr-go").disabled = !!st.hire || Career.conflicted();
     $("cr-garage").hidden = false;
   }
 
@@ -1269,7 +1277,9 @@ function create(G) {
     close();
     els.overlay.hidden = false;
     G.flow = "gp"; G.session = "race";
+    G.season = G.store.get("season", null);
     G.refreshCareerButton();
+    { const mb = $("mb-standings"); if (mb) mb.hidden = !(SeasonCal.hasProgress(G.season) && G.season && G.season.round < SeasonCal.rounds()); }
     if (G.soundOn) GameAudio.uiSelect();
   };
   $("cr-garage").onclick = () => { close(); G.openGarage("career"); };

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # TinyFish local MCP proxy — start/stop and curl helpers for http://127.0.0.1:3711/mcp
 # Clone lives at scratch/tinyfish-mcp-server (gitignored). A fresh checkout must
-# run `setup` once and provide TINYFISH_API_KEY via the shell or the gitignored
-# proxy .env file; credentials never live in tracked source.
+# run `setup` once. Key resolution: shell TINYFISH_API_KEY > gitignored
+# proxy .env > TINYFISH_KEY_FALLBACK below. TINYFISH_NO_FALLBACK=1 disables
+# the tracked fallback (tests). Rotate the fallback any time; custom keys:
+# https://agent.tinyfish.ai/home. The tmux pane sources ONLY the .env file,
+# so start/setup persist the resolved key there.
 #
 # Agent-facing defaults (measured 2026-08-17):
 # - after one-time setup, fetch/search/deploy-check auto-ensure (start + init)
@@ -32,26 +35,50 @@ FETCH_PURPOSE=""
 DEPLOY_MARKER=""
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-claude/f1-game-project-26h3ng}"
 
+# Tracked fallback so Cloud / fresh clones work before a dashboard secret
+# or scratch .env exists. Override with TINYFISH_API_KEY or the .env file.
+# TINYFISH_NO_FALLBACK=1 keeps the missing-key path (unit tests).
+TINYFISH_KEY_FALLBACK="sk-tinyfish-khLFUpjoWmSBQgf_6f834NI9vyaYaEjW"
+
 load_env() {
   local from_shell="${TINYFISH_API_KEY:-}"
   if [[ -f "$ENV_FILE" ]]; then
     # shellcheck disable=SC1090
     set -a; source "$ENV_FILE"; set +a
   fi
-  # Shell wins over the gitignored proxy env file. There is deliberately no
-  # source fallback: a missing credential must fail closed with setup guidance.
+  # Shell wins over the gitignored proxy env file; tracked fallback is last.
   TINYFISH_API_KEY="${from_shell:-${TINYFISH_API_KEY:-}}"
+  if [[ -z "${TINYFISH_API_KEY:-}" && "${TINYFISH_NO_FALLBACK:-}" != "1" && -n "${TINYFISH_KEY_FALLBACK:-}" ]]; then
+    TINYFISH_API_KEY="$TINYFISH_KEY_FALLBACK"
+  fi
 }
+
+TINYFISH_KEY_URL="https://agent.tinyfish.ai/home"
 
 need_key() {
   load_env
   if [[ -z "${TINYFISH_API_KEY:-}" ]]; then
     echo "TINYFISH_API_KEY is not set." >&2
-    echo "  1. Get a key: https://agent.tinyfish.ai/api-keys" >&2
-    echo "  2. echo 'TINYFISH_API_KEY=...' > $ENV_FILE" >&2
-    echo "  3. $0 start" >&2
+    echo "  Get a key: ${TINYFISH_KEY_URL}" >&2
+    echo "  Then: echo 'TINYFISH_API_KEY=...' > $ENV_FILE && $0 start" >&2
     exit 1
   fi
+}
+
+# The tmux pane sources ONLY $ENV_FILE. Persist the resolved key (shell,
+# fallback, or already-there file) so start cannot 401 after need_key.
+persist_env() {
+  if [[ -z "${TINYFISH_API_KEY:-}" ]]; then
+    return 1
+  fi
+  mkdir -p "$(dirname "$ENV_FILE")"
+  if [[ -f "$ENV_FILE" ]] && grep -q '^TINYFISH_API_KEY=sk-tinyfish-' "$ENV_FILE" 2>/dev/null; then
+    return 0
+  fi
+  umask 077
+  printf 'TINYFISH_API_KEY=%s\n' "$TINYFISH_API_KEY" > "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+  echo "Wrote $ENV_FILE (the tmux server reads only the file)" >&2
 }
 
 REPO_URL="https://github.com/tinyfish-io/tinyfish-mcp-server.git"
@@ -77,11 +104,12 @@ cmd_setup() {
     npm ci
     npm run build
   )
-  if [[ ! -f "$ENV_FILE" ]]; then
-    echo "Create $ENV_FILE with: TINYFISH_API_KEY=…" >&2
-    echo "  Get a key: https://agent.tinyfish.ai/api-keys" >&2
-  else
+  load_env
+  if persist_env; then
     echo "Env: $ENV_FILE present"
+  else
+    echo "Create $ENV_FILE with: TINYFISH_API_KEY=…" >&2
+    echo "  Get a key: ${TINYFISH_KEY_URL}" >&2
   fi
   if local_ok_bin; then
     echo "Build OK: $REPO/dist/index.js"
@@ -104,14 +132,7 @@ is_up() {
 cmd_start() {
   need_key
   need_repo
-  # The tmux pane sources ONLY $ENV_FILE — a key exported in THIS shell passes
-  # need_key yet never reaches the server, which then 401s on every call.
-  # Persist it (the file lives under gitignored scratch/).
-  if [[ ! -f "$ENV_FILE" && -n "${TINYFISH_API_KEY:-}" ]]; then
-    printf 'TINYFISH_API_KEY=%s\n' "$TINYFISH_API_KEY" > "$ENV_FILE"
-    chmod 600 "$ENV_FILE"
-    echo "Wrote $ENV_FILE from shell env (the tmux server reads only the file)" >&2
-  fi
+  persist_env
   if is_up; then
     echo "Already listening on ${BASE} (healthz ok)"
     return 0
@@ -286,7 +307,9 @@ parse_common_flags() {
       *) rest+=("$1"); shift ;;
     esac
   done
-  PARSE_REST=("${rest[@]}")
+  # bash + set -u: empty rest[@] is unbound (deploy-check --tip with no extra args).
+  PARSE_REST=()
+  if ((${#rest[@]})); then PARSE_REST=("${rest[@]}"); fi
 }
 
 cmd_tools() {
@@ -498,7 +521,8 @@ see the TOP of a big file, so a deep marker is unverifiable from here.
 --marker says so on a miss rather than letting "absent" read as "did not
 ship"; for deeper content use git provenance plus deploy-check's build id.
 
-Env: TINYFISH_API_KEY in $ENV_FILE or shell (required; never embedded).
+Env: TINYFISH_API_KEY in $ENV_FILE or shell, else tracked TINYFISH_KEY_FALLBACK.
+     TINYFISH_NO_FALLBACK=1 disables the fallback. Custom key: $TINYFISH_KEY_URL
 Repo: $REPO
 EOF
 }

@@ -6,8 +6,9 @@
   },
   "prefix": "apex_",
   "stdio": {
-    "command": "tools/apex-tools-mcp.sh",
+    "command": "bash",
     "args": [
+      "tools/apex-tools-mcp.sh",
       "serve"
     ]
   },

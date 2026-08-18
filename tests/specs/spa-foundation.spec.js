@@ -3,9 +3,9 @@ import { test, expect } from "@playwright/test";
 
 async function loadSpa(page, time = "day") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15000 });
   await page.evaluate((tod) => window.__apex.race("spa", tod, "dry"), time);
-  await page.waitForFunction(() => window.__apex.info().track === "spa", { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex.info().track === "spa", null, { timeout: 15000 });
 }
 
 test.describe("Spa track-owned foundation migration", () => {

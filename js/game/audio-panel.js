@@ -33,10 +33,14 @@ const AudioPanel = (() => {
       // Mirror the state for assistive tech — it is a real toggle button now
       // that AriaState does not own (it is not in an option group).
       els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
-      if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); }
+      if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); GameAudio.stopRain(); }
       else {
         if (G.state === "menu") GameAudio.startMusic(-1);
-        else if (G.state === "race") GameAudio.startMusic(G.trackIdx);
+        else if (G.state === "race") {
+          GameAudio.startMusic(G.trackIdx);
+          GameAudio.startEngine();
+          if (G.raceWeather === "rain") GameAudio.startRain();
+        }
       }
       // SOUND is the master, so the panel's music controls follow it.
       syncAudioPanel();
@@ -154,7 +158,9 @@ const AudioPanel = (() => {
       $("as-mvol-v").textContent = String(Math.round(musicVol * 10));
       $("as-svol").value = String(Math.round(sfxVol * 10));
       $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
-      $("as-now").textContent = musicLive ? (GameAudio.trackName() || "—") : "Music off";
+      const nowText = musicLive ? (GameAudio.trackName() || "—") : "Music off";
+      $("as-now").textContent = nowText;
+      $("as-now").title = nowText;
       // The caption says WHERE the track came from, which is the question the
       // old single line could not answer — "Now playing X" with four sources.
       const SRC_LABEL = { all: "All music", builtin: "Built-in", user: "My tracks", spotify: "Spotify" };
@@ -210,7 +216,7 @@ const AudioPanel = (() => {
     // now-playing card and the uploaded-track list's "playing" marker.
     function audioTransport(fn) {
       const name = fn();
-      if (name) $("as-now").textContent = name;
+      if (name) { $("as-now").textContent = name; $("as-now").title = name; }
       if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
       syncAudioPanel();
       if (G.soundOn) GameAudio.uiTick();

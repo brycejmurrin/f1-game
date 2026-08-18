@@ -426,8 +426,13 @@ reload, and why RESET is per-condition rather than global.
 - **uniform** — the GLSL uniform when the knob is a direct shader upload.
   Knobs without one are consumed in JS: light building, per-frame scene state.
 - **consumed in** — files on the SHIPPING path. `light-presets.js` is excluded
-  because it is preset DATA keyed by knob id, not a consumer; the deferred TLX /
-  WGX backends are excluded for the same reason they are deferred.
+  because it is preset DATA keyed by knob id, not a consumer.
+- **three backends** — every `u:` knob is named on GLX, WGX, and TLX
+  (`tests/unit/light-grid.test.mjs`). CPU knobs bake into `frame.*` /
+  `frameSky.*` / `present()` opts in `js/game.js` and reach all three.
+  Honest gaps (help text already says so): `perChunkLights` and
+  `roadChunkLamps` are WebGL2-only; `pcssPen` is a no-op on three.js
+  phones / software GL.
 - **preset** — ✓ when shipped presets override this knob for some condition.
 
 ## Every shipped value is reachable on its own slider

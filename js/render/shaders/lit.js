@@ -533,9 +533,12 @@ void roadMarkings(inout vec3 albedo, inout float rough) {
   float s = vTrk.x, x = vTrk.y;
   const vec3 paint = vec3(0.95, 0.95, 0.97);
 
-  // Lateral filter width. Clamped: at a grazing angle fwidth explodes and an
-  // unclamped band would smear the line into a wide grey wash.
-  float aaX = clamp(fwidth(x), 1e-4, 0.30);
+  // Lateral filter width. Clamped for the SDF band: at a grazing angle
+  // fwidth explodes and an unclamped band would smear the line into a
+  // wide grey wash. MIP uses the RAW footprint (WGX roadMarkings) so a
+  // saturated 0.30 AA ceiling keeps ~64% paint instead of erasing it.
+  float fwX = max(fwidth(x), 1e-4);
+  float aaX = min(fwX, 0.30);
 
   // Edge lines — a 0.20 m band just inside each tarmac edge (matches the old
   // -w .. -w+0.2 vertex columns).
@@ -551,8 +554,9 @@ void roadMarkings(inout vec3 albedo, inout float rough) {
   float dash = 1.0 - smoothstep(0.25 - aaS, 0.25 + aaS, abs(ph - 0.25));
 
   // As a marking goes sub-pixel, fade its amplitude rather than let a
-  // half-covered band strobe — the standard minification response.
-  float mip = clamp(1.0 - (aaX - 0.06) / 0.24, 0.0, 1.0);
+  // half-covered band strobe — the standard minification response. Soft
+  // knee on the RAW footprint (same 0.10/0.55 as WGX).
+  float mip = clamp(1.0 - (fwX - 0.10) / 0.55, 0.0, 1.0);
   float m = max(edge, band * dash) * mip;
 
   albedo = mix(albedo, paint, m);
@@ -842,6 +846,12 @@ void main() {
       N = normalize(N + (pT * pbx + pB * pby) * (0.22 * carPaint * pFade));
     }
   }
+  // SAA source: geometric N + peel, BEFORE wall/MAT bump. WGX cannot take
+  // dpdx after the non-uniform matId branch (lifecycle ratchet), so it mixes
+  // saaVarGeo with a hoisted peel. Feeding dFdx of the bumped wall N here
+  // widened roughness on every brick/concrete/corrugation seam and made
+  // WebGL2 walls read duller than WebGPU. Lighting still uses the bumped N.
+  vec3 Nsaa = N;
   // Per-material procedural bump: MUST run before V/L/H/NoL below so brick
   // mortar/plank seams/corrugation ridges etc. actually affect the lighting
   // response, not just an albedo tint applied after the fact.
@@ -920,9 +930,9 @@ void main() {
   // After the material's grain/tint so the paint sits ON the tarmac, not under it.
   roadMarkings(albedo, rough);
   // Specular anti-aliasing: widen roughness where the normal changes fast in
-  // screen space (geometry edges, micro-normal at distance) so thin bright
-  // highlights sheen smoothly instead of shimmering pixel-to-pixel.
-  vec3 saaDx = dFdx(N), saaDy = dFdy(N);
+  // screen space (geometry edges, peel on paint). Nsaa is the pre-material
+  // snapshot — same mix WGX uses (geo vs peel). Do not dFdx the bumped N.
+  vec3 saaDx = dFdx(Nsaa), saaDy = dFdy(Nsaa);
   float saaVar = dot(saaDx, saaDx) + dot(saaDy, saaDy);
   rough = min(1.0, sqrt(rough * rough + saaVar * 0.35));
   float a = rough * rough;
@@ -1094,13 +1104,10 @@ void main() {
     // Windowed 1/d2 falloff (att) with a partial out-of-beam floor so the lens
     // glows the fog all around, brightest down the throw. Consumed by the fog
     // and ground-mist tints below - everything here is already computed.
-#ifdef OPT_LAMPFOGGATE
-    // PerfTry.lampFogGate: lampFog's only consumer is gated on uLampFog > 0.0
-    // (game.js drives it to exactly 0 in daylight), so accumulating it here for
-    // every lit fragment of every one of the 32 lights is thrown away on every
-    // day frame. uLampFog is a uniform, so this stays uniform control flow.
+    // lampFog's only consumer is gated on uLampFog > 0.0 (game.js drives it
+    // to exactly 0 in daylight), so skip the accumulate on day frames.
+    // uLampFog is a uniform, so this stays uniform control flow.
     if (uLampFog > 0.0)
-#endif
     lampFog += lb.xyz * (att * mix(0.35, 1.0, beam));
     float NoLl = max(dot(N, Ld), 0.0);
     // Per-lamp SHADOW for the one mapped floodlight: cars/walls between this

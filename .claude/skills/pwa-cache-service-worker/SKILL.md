@@ -7,7 +7,7 @@ description: Use when editing sw.js, version.json, PWA offline install, cache in
 
 Hand-written `sw.js`, no build step. Discover essentials from `index.html`,
 embed the build number in the cache name, network-first for the shell guard,
-cache-first for immutable `?v=N` assets.
+cache-first for immutable `?v=<sha256>` assets.
 
 **Precache.** Install fetches `index.html` and parses every `<script src>` and
 `<link rel="stylesheet">` into the **essential** set (plus `./`,
@@ -21,9 +21,9 @@ vendors, self-hosted fonts.
 swallowed.
 
 **Fetch.** Navigation + `version.json` = network-first (3 s → cache).
-Everything else = cache-first. Always bump **`?v=N` AND `version.json`
-together** (**bump-cache**). Never bump `version.json` during a Playwright
-run.
+Everything else = cache-first. Always refresh **content hashes AND the
+shell generation** together (**bump-cache**). Never bump `version.json`
+during a Playwright run.
 
 ## When to Use
 
@@ -42,7 +42,7 @@ run.
 |---|---|---|
 | Shell + tagged js/css | Essential (404 = fail) | Network-first |
 | `version.json` | Essential | Network-first (no-store) |
-| `?v=N` assets | Essential if tagged | Cache-first |
+| `?v=<sha256>` assets | Essential if tagged | Cache-first |
 | DEFERRED / vendor / fonts | Optional (fail OK) | Cache-first on first use |
 
 ```sh

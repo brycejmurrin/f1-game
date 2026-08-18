@@ -165,10 +165,10 @@ try {
   });
   page.on("pageerror", (e) => console.log(`  ! pageerror: ${e.message}`));
   await page.goto(srv.url);
-  await page.waitForFunction(() => window.__apex != null, { timeout: 60_000 });
+  await page.waitForFunction(() => window.__apex != null, null, { timeout: 60_000 });
   await page.evaluate(installCounter);
   await page.evaluate(({ t, d, w }) => window.__apex.race(t, d, w), { t: TRACK, d: TOD, w: WEATHER });
-  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 120_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 120_000 });
   await page.evaluate(({ d, w, cam, wet }) => {
     const a = window.__apex;
     a.go(); a.camera(cam); a.hud(false);

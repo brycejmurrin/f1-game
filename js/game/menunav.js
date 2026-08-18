@@ -32,7 +32,7 @@ window.MenuNav = (function () {
 
   // Scroll regions, same list ScrollFade watches — `.pane` first and by class,
   // because that is the design system's own name for "a scroll region".
-  const SCROLLERS = ".pane,#sel-body,.panel-scroll,.scroll-y,.dh-content,#track-detail-body";
+  const SCROLLERS = ".pane,.panel-scroll,.scroll-y,.dh-content,#track-detail-body";
 
   const FOCUSABLE = "button:not([disabled]),a[href],input:not([disabled])," +
     "select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
@@ -71,8 +71,10 @@ window.MenuNav = (function () {
   // `canScroll` answers "can this move right now"; this answers "is this a pane
   // that owns the gesture", which is the question containment turns on.
   function isRegion(el) {
-    return !!(el && el.nodeType === 1 && el.matches && el.matches(SCROLLERS) &&
-      el.scrollHeight - el.clientHeight > 1);
+    if (!el || el.nodeType !== 1 || !el.matches || !el.matches(SCROLLERS)) return false;
+    const oy = getComputedStyle(el).overflowY;
+    if (oy !== "auto" && oy !== "scroll" && oy !== "overlay") return false;
+    return el.scrollHeight - el.clientHeight > 1;
   }
 
   function panes(layer, dy) {
@@ -84,10 +86,11 @@ window.MenuNav = (function () {
     return out;
   }
 
-  // Which pane a gesture at (x, y) meant. The select screen is two columns with
-  // a scroll region in each, so "nearest" has to weigh the horizontal axis
-  // hardest: a swipe over the left column is about the left column even when the
-  // right one is the taller, more obvious target.
+  // Which pane a gesture at (x, y) meant. Pair-on garage still has a rail and
+  // an options list, so "nearest" weighs the horizontal axis hardest: a swipe
+  // over the left column is about the left column even when the right one is
+  // the taller, more obvious target. Circuit Select's preview column is not a
+  // scroller; the wheel redirects to #sel-tracks.
   function nearestPane(layer, x, y, dy) {
     const list = panes(layer, dy);
     if (list.length < 2) return list[0] || null;
@@ -305,6 +308,7 @@ window.MenuNav = (function () {
       return ty !== "checkbox" && ty !== "radio" && ty !== "button" &&
              ty !== "submit" && ty !== "reset";
     }
+    if (el.getAttribute && el.getAttribute("role") === "tab") return true;
     return !!el.isContentEditable;
   }
 

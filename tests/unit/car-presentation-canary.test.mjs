@@ -65,8 +65,9 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   const game = read("js/game.js");
   assert.match(game, /function teamBodyMesh\(team\)/);
   assert.match(game, /buildCarData\(team, \{ noWheels: true \}\)/);
-  assert.match(game, /function getFieldWheelMeshes\(\)/);
-  assert.match(game, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(\) : getFieldWheelMeshes\(\);/);
+  assert.match(game, /function getFieldWheelMeshes\(team\)/);
+  assert.match(game, /Parts\.getVisualTiers\(Parts\.getFactorySetup\(team\), team\)/);
+  assert.match(game, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(\) : getFieldWheelMeshes\(c\.team\);/);
   const draw = game.match(
     /const body = carModelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team\) : teamBodyMesh\(c\.team\)\);[\s\S]{0,400}drawPlayerWheels\(c, _groundMat/
   );

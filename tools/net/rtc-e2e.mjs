@@ -65,7 +65,7 @@ const mk = async () => {
   // "load" waits for every asset (5 MB of JS + WebGL init); __apex being
   // present is the real readiness signal, same as the Playwright specs use.
   await p.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "domcontentloaded", timeout: 90000 });
-  await p.waitForFunction(() => window.__apex != null, { timeout: 90000 });
+  await p.waitForFunction(() => window.__apex != null, null, { timeout: 90000 });
   // Two software-rendered (SwiftShader) racing games on one box starve each
   // other's game loop down to well under 1 Hz — and the game loop is what pumps
   // the transport, so the session times out after 2.5 s of not being pumped and

@@ -191,20 +191,27 @@ function slot() { return { flavour: slotFlavour, i: slotIdx }; }
 function migrateSlots() {
   const found = [];
   const legacy = store.get("career", null);
-  if (legacy) { found.push(legacy); store.set("career", null); }
+  if (legacy) found.push({ source: "career", value: legacy });
   for (let i = 0; i < SLOTS; i++) {
     const c = store.get("career." + i, null);
-    if (c) { found.push(c); store.set("career." + i, null); }
+    if (c) found.push({ source: "career." + i, value: c });
   }
   if (!found.length) return;
   const next = { driver: 0, myteam: 0 };
-  for (const c of found) {
+  for (const item of found) {
+    const c = item.value;
     const f = flavourIn(c && c.flavour);
     // Never overwrite: a set that already holds saves is the current layout, and
     // a stale key left behind by a half-finished migration must not clobber it.
     while (next[f] < SLOTS && store.get(slotKey(f, next[f]), null)) next[f]++;
-    if (next[f] >= SLOTS) continue;             // full — the old save is dropped
-    store.set(slotKey(f, next[f]), c);
+    // A full destination is not permission to destroy an otherwise valid save.
+    // Leave the legacy key in place so a later free slot can recover it.
+    if (next[f] >= SLOTS) continue;
+    // COPY, CONFIRM, THEN CLEAR. GameStore keeps a session cache even when
+    // localStorage rejects a write, so observing the value through get() is not
+    // proof it will survive reload. set()'s boolean is the durable-write signal.
+    if (!store.set(slotKey(f, next[f]), c)) continue;
+    store.set(item.source, null);
     next[f]++;
   }
 }
@@ -589,7 +596,7 @@ function freeMoney(on) {
 }
 // Hand yourself credits. Returns the new balance, or null with no career loaded.
 function grant(n) {
-  if (!career) return null;
+  if (!career || careerConflict) return null;
   career.money += Math.max(0, Math.round(Number(n) || GRANT));
   save();
   return career.money;
@@ -602,7 +609,7 @@ const charge = (cost) => (freeMoney() ? 0 : cost);
 // Buy an option outright. Returns false when it cannot be afforded or is already
 // owned, so the caller can play the existing budget-reject animation.
 function research(opt) {
-  if (!career || !opt) return false;
+  if (!career || !opt || careerConflict) return false;
   if (career.owned.indexOf(opt.id) >= 0) return false;
   const cost = charge(researchCost(opt));
   if (cost > career.money) return false;
@@ -621,7 +628,7 @@ function research(opt) {
 // converts into lap time). Spending on one is genuinely giving up the other.
 function upgradeBudget() {
   const cost = charge(budgetUpgradeCost());
-  if (!career || budgetUpgradeCost() == null || cost > career.money) return false;
+  if (!career || careerConflict || budgetUpgradeCost() == null || cost > career.money) return false;
   career.money -= cost;
   career.budgetLvl++;
   save();
@@ -752,7 +759,7 @@ function facilityDiscount() {
 }
 function upgradeFacility() {
   const raw = facilityCost();
-  if (!career || raw == null) return false;
+  if (!career || careerConflict || raw == null) return false;
   const cost = charge(raw);
   if (cost > career.money) return false;
   career.money -= cost;
@@ -810,7 +817,10 @@ function objective() {
   // objective into the save and show it on a finished season's hub.
   if (seasonDone()) return null;
   const r = career.season.round;
-  if (!career.obj || career.obj.round !== r) { career.obj = objectiveFor(r); save(); }
+  if (!career.obj || career.obj.round !== r) {
+    if (careerConflict) return career.obj || null;
+    career.obj = objectiveFor(r); save();
+  }
   return career.obj;
 }
 // `ctx` carries everything a check can need: finishing position, points, the
@@ -841,7 +851,7 @@ function prizeFor(pos) {
 // Called from endRace() once the classification is known and championship points
 // have been awarded. `order` is the finishing order; `player` is the player's car.
 function settleRound(order, player) {
-  if (!inCareer() || !player) return null;
+  if (!inCareer() || !player || careerConflict) return null;
   // The calendar has already moved on, so the brief that was live for this race is
   // the PREVIOUS round's. Idempotent: a second call for the same raced round must
   // not re-pay prize/salary/wages (half-written saves + re-entry used to double it).
@@ -1105,6 +1115,7 @@ function rolloverHire(dStand) {
 
 // Take the pending offer: pay the new figure and re-sign for a year.
 function renewHire(years) {
+  if (!career || careerConflict) return false;
   const hire = career.roster && career.roster[0];
   if (!hire || !hire.pending || hire.pending.kind !== "renew") return false;
   hire.salary = hire.pending.ask;
@@ -1116,7 +1127,7 @@ function renewHire(years) {
 // Sign somebody else from the market. The seat is empty either way once a
 // contract has expired, so this is also how a "left" is resolved.
 function hireDriver(code, years) {
-  if (career.flavour !== "myteam") return false;
+  if (!career || careerConflict || career.flavour !== "myteam") return false;
   const a = FREE_AGENTS.find((x) => x.code === code);
   if (!a) return false;
   career.roster = [{ name: a.name, code: a.code, num: a.num, tier: a.tier,
@@ -1199,7 +1210,8 @@ function weakerSeat(team) {
 // economy for a second season instead of arriving with a car already maxed out.
 // RENEWING does not touch the garage — a career should not be punished for loyalty.
 function acceptOffer(i) {
-  const o = career && career.offers ? career.offers[i | 0] : null;
+  if (!career || careerConflict) return null;
+  const o = career.offers ? career.offers[i | 0] : null;
   const team = o && Teams.LIST.find((t) => t.id === o.teamId);
   if (!team) return null;
   if (team.id !== career.team) {
@@ -1234,7 +1246,7 @@ function codeOf(id) {
 // market are drawn against the season that just finished (and hash on the year
 // that just finished), so `year++` and the standings reset come last.
 function rollover() {
-  if (!career) return null;
+  if (!career || careerConflict) return null;
   const dStand = driverStandings(), tStand = teamStandings();
   const me = seasonDriverId(career.team, career.seat);
   const myRow = dStand.find((r) => r.id === me);

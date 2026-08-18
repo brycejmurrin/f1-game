@@ -235,7 +235,7 @@ const NetLobby = (function () {
         } else {
           say("A player left. The rest of you are still in.");
         }
-        renderRoom();
+        renderRoom(); if (G.refreshQualiGate) G.refreshQualiGate();
       });
       return transport;
     }
@@ -1065,6 +1065,7 @@ const NetLobby = (function () {
         G.flow = "gp";
         G.session = "race";
         G.startRace();
+        if (!sessions.size) { clearInterval(pumpTimer); pumpTimer = null; close(); return; }
       } catch (e) {
         say("Could not start the race: " + (e && e.message), true);
         return;
@@ -1107,7 +1108,13 @@ const NetLobby = (function () {
       // `transports` is deliberately KEPT: the raw connections are still the
       // lobby's to report (status()/sdp()) and to close in teardown().
       sessions.clear();
-      if (!started.ok) { say(started.message || "Could not start the session.", true); return; }
+      if (!started.ok) {
+        say(started.message || "Could not start the session.", true);
+        // q-go already cleared qualiNetDone, so quitToMenu would not cancel.
+        cancel();
+        if (G.quitToMenu) G.quitToMenu();
+        return;
+      }
       // Host names the instant of lights-out; the guest receives it as an
       // event and both drive their countdown to the same moment. Without this
       // each side counts down on its own clock and the grids are released
@@ -1789,6 +1796,22 @@ const NetLobby = (function () {
       return true;
     }
 
+    // BACK from the qualifying sheet: the session is still ours (NetPlay has
+    // not adopted it) and the peers are still in the room. Do NOT open() —
+    // that wipes _peers — and do NOT cancel() — that tears the RTC down.
+    // Just put the waiting room back on screen and mark netRoom so garage /
+    // race-settings return here instead of starting a solo GP.
+    function abortQuali() {
+      if (G.setNetRoom) G.setNetRoom(true);
+      const e = els();
+      if (e.screen) e.screen.hidden = false;
+      show("room");
+      renderRoom();
+      say("Qualifying cancelled.");
+      Log.info("net", "lobby abortQuali");
+      return true;
+    }
+
     function close() {
       invalidateOperations();
       clearInterval(pollTimer);
@@ -1928,7 +1951,7 @@ const NetLobby = (function () {
     }
 
     return {
-      wire, open, close, cancel, host, join, makeAnswer, acceptAnswer,
+      wire, open, close, cancel, abortQuali, host, join, makeAnswer, acceptAnswer,
       shareInvite, shareAnswer, canShare,
       scan, stopScan, pasteInto, deliver,
       codeHost, codeJoin, stopCodeWait,

@@ -74,14 +74,14 @@ const mk = async (name, teamIdx) => {
     if (/relay failure|rate-limited|WebSocket|NETDBG/i.test(t)) log(`  [${name}]`, t.slice(0, 160));
   });
   await p.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "domcontentloaded", timeout: 90000 });
-  await p.waitForFunction(() => window.__apex != null, { timeout: 90000 });
+  await p.waitForFunction(() => window.__apex != null, null, { timeout: 90000 });
   await p.evaluate(([relay, ti]) => {
     localStorage.setItem("apex26.nostrRelays", JSON.stringify(relay.split(",")));
     localStorage.setItem("apex26.team", JSON.stringify(ti));
     localStorage.setItem("apex26.driver", "0");
     location.reload();
   }, [RELAY, teamIdx]);
-  await p.waitForFunction(() => window.__apex != null, { timeout: 90000 });
+  await p.waitForFunction(() => window.__apex != null, null, { timeout: 90000 });
   await p.evaluate(() => window.__apex.headless(true));
   return p;
 };

@@ -107,6 +107,10 @@ const SOURCE_EXEMPT = new Map([
   // the assertion. If someone ever creates the file, the test stops proving
   // anything and should fail; keeping the name absurd is what prevents that.
   ["tests/specs/there-is-no-such.spec.js", /ci-coverage\.test\.mjs|select-budget\.test\.mjs|docs-integrity/],
+  // A path that MUST NOT EXIST. perf-try.test.mjs asserts the PerfTry module
+  // was deleted after the ON paths baked in. Naming the old path is the
+  // assertion; if someone recreates the file, this exemption should go too.
+  ["js/game/perf-try.js", /perf-try\.test\.mjs|docs-integrity/],
   // tools/tests-split.mjs documents the PRE-SPLIT tree it migrated (its header
   // and mapping rules name flat tests/ from-paths by design), and its guard
   // builds scratch trees out of synthetic tests/ names. Rewriting either would

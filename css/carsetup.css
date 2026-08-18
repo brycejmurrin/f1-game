@@ -10,16 +10,16 @@
 
      #carsetup  .screen      — full-viewport overlay, padded by the OS safe area
      #cs-inner  .sheet       — head / body / foot; also the `sheet` query container
-     #cs-body   .sheet-body  — holds the two scroll regions
-     #cs-tabs   .pane        — category rail  (scrolls, gets the scroll fade)
-     #cs-options .pane       — option list    (scrolls, gets the scroll fade)
+     #cs-body   .sheet-body  — stacked: strip + options; pair: rail + options
+     #cs-tabs   .pane        — pair-on: vertical rail (may scroll); stacked: horizontal strip
+     #cs-options .pane       — the dominant options scroller
 
    DENSITY comes from the tokens (--pad/--gap/--tap/--chip-h/--label); this file
    hard-codes no paddings that a short phone needs to change. LAYOUT — whether
-   the categories are a wrapping grid above the options or a vertical rail beside
-   them, and whether the stat bars are one column or two — is decided by
-   @container queries on the sheet, so the panel reacts to the width it actually
-   got rather than to a guess about the device. */
+   the categories are a horizontal strip above the options or a vertical rail
+   beside them, and whether the stat bars are one column or two — keys on
+   SheetShape's `data-pair`, so the panel reacts to the width it actually got
+   rather than to a guess about the device. */
 
 .sel-edit-row { display: flex; gap: var(--gap); margin-top: 10px; flex-wrap: wrap; }
 .sel-edit-row .sel-edit { margin-top: 0; }
@@ -95,11 +95,9 @@
    grid track and clipped DONE. The head, the category grid and the foot have
    already spent the height.
 
-   What would pay for it: the category grid is four rows of three in portrait,
-   and the lighting tuner solves the same problem by running its chips as one
-   horizontally-scrolling strip (~110px back, see css/tuner.css). Do that first,
-   then the band is affordable. renderSetupPreview already shifts the frustum
-   down when the panel leaves room below, so the engine half is done and waiting.
+   What paid for it: stacked categories are one horizontal strip (see #cs-tabs),
+   the same answer the lighting tuner uses. renderSetupPreview already shifts
+   the frustum down when the panel leaves room below.
 
    Kept from the attempt, because it stands on its own: the stat block goes to
    two columns in portrait. Four label+bar+number groups each need barely half
@@ -226,31 +224,36 @@
 .cs-stat-val.down { color: #f90; }
 
 /* ---------- body: category pane + option pane ---------- */
-/* Narrow (stacked): categories wrap above the list. The categories used to be a
-   horizontally-scrolling strip, which is the one scroll direction the scroll-fade
-   affordance cannot mark — half the tabs were simply invisible with nothing to
-   say so. A wrapping grid shows all of them, and if it ever runs out of room it
-   scrolls VERTICALLY, which does get the fade. */
-/* Gated on `:not([data-pair="on"])` because this is the STACKED layout, and an
+/* STACKED: one horizontal category strip + one options scroller.
+   A wrapping grid with max-height: 48% plus .pane overflow-y:auto made the
+   tabs a second vertical catalogue next to #cs-options — two nested
+   scrollers on every stacked sheet. The strip used to live only inside
+   `@media (orientation: portrait)`, so a landscape stacked phone kept the
+   grid. Keyed on `data-pair`, not orientation or viewport height.
+   Gated on `:not([data-pair="on"])` because this is the STACKED layout, and an
    ID rule (1,0,0) would otherwise beat `.pane-pair[data-pair="on"] > .sheet-body`
    (0,3,0) and keep the body a flex column while the sheet was already laid out
    as two grid columns — measured: the rail rendered 402px wide inside a 115px
    track and the option list came out 10px tall. `:not(... "on")` rather than
-   `[data-pair="off"]` so the stack is also what an unmeasured sheet gets, in the
-   first frame before the observer runs or if the script never loads at all. */
+   `[data-pair="off"]` so the stack is also what an unmeasured sheet gets. */
 #cs-inner:not([data-pair="on"]) > #cs-body {
   display: flex; flex-direction: column;
   gap: var(--gap); min-height: 0;
+  overflow: hidden;
 }
 #cs-tabs {
-  /* Don't shrink: showing every category at once is the point of the wrapping
-     grid. The cap is what stops a long catalogue from starving the list. */
-  flex: 0 0 auto; min-height: 0;
-  max-height: 48%;
-  /* min(...) floor — see #sel-teams in css/menus.css: a bare px floor cannot
-     shrink below itself, so a narrow strip overflows instead of re-flowing. */
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(88px, 100%), 1fr));
-  gap: calc(var(--gap) * 0.5); align-content: start;
+  /* Horizontal strip, not a wrapping vertical catalogue. Overrides .pane's
+     overflow-y:auto — this axis pans sideways; #cs-options owns vertical. */
+  flex: 0 0 auto; min-height: 0; max-height: none;
+  display: flex; flex-wrap: nowrap; align-items: stretch; align-content: normal;
+  gap: calc(var(--gap) * 0.5);
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; touch-action: pan-x;
+  scrollbar-width: none; scrollbar-gutter: auto;
+}
+#cs-tabs::-webkit-scrollbar { display: none; }
+#cs-inner:not([data-pair="on"]) #cs-tabs .cs-tab {
+  flex: 0 0 auto; white-space: nowrap;
 }
 #cs-options {
   flex: 1 1 auto; min-height: 0;
@@ -453,14 +456,16 @@
   align-self: stretch;
 }
 #cs-options.cs-liv-grid .cs-opt-name {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   font-size: var(--fs-micro);
   line-height: 1.15;
   text-align: center;
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   max-width: 100%;
+  /* Wrap, do not ellipsis on one line: the name IS the information
+     (measured 2026-08-18: "Stealth Papaya" needed 91px in a 69px cell). */
 }
 #cs-options.cs-liv-grid .cs-opt-tag { display: none; }
 #cs-options.cs-liv-grid .cs-liv-edit,
@@ -611,13 +616,9 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
    400, not 440. The sheet has a 430px FLOOR (--cs-sheet-w), which after its
    border leaves 428px of container — four pixels under the old threshold. So the
    one width the panel is guaranteed to have was the one width that missed the
-   two-pane layout, and a landscape phone got the stacked one in a 343px-tall
-   window: the wrapping category grid took its 48%, the compact header never
-   engaged, and the option list was left showing a SINGLE row clipped through its
-   own description. A desktop window under ~815px wide (or a zoomed one) lands on
-   the same floor and got the same thing. Everything from the floor up now gets
-   the rail; a portrait phone (~367px of container) still gets the grid, which is
-   the right answer there — it has the height to spend and no width. */
+   two-pane layout. Everything from the floor up now gets the rail; a stacked
+   sheet (portrait phone, ~367px of container) gets the horizontal category
+   strip and one options scroller. */
 #cs-inner {
   --pair-at: 400px;
   /* 480, NOT THE 380 EVERY OTHER SHEET USES. `--compact-at` asks "is this sheet
@@ -657,6 +658,15 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   --pair-split: minmax(140px, 34%);
   --pair-gap: var(--gap);
 }
+/* Minimum LOCAL height for title/budget, one category row, one usable option
+   row and the action bar. SheetShape converts this to a per-panel zoom cap only
+   when the safe viewport cannot afford the user's requested UI size. */
+@media (orientation: portrait) { #cs-inner { --fit-at: 340px; } }
+@media (orientation: landscape) { #cs-inner { --fit-at: 240px; } }
+/* SHORT SHEET: stack even when clientWidth stays above 400. A 852×393 phone is
+   compact (--compact-at 480) and still wide enough for pair-on, which keeps the
+   vertical tab rail and starves #cs-options. Density is classified first. */
+#cs-inner[data-density="compact"] { --pair-at: 2000px; }
 
 /* ================= LAYOUT: container queries on the sheet =================
    Not media queries. What the panel can afford is a function of the width it
@@ -701,15 +711,22 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
    above, which was the same threshold expressed a second way — and the two can
    disagree for a frame, because the container query applies the instant the
    screen is shown while `data-pair` waits on a ResizeObserver callback. In that
-   window the rail had its `max-height: 48%` cap removed (a pair rule) while the
+   window the rail had its stacked-strip rules removed (a pair rule) while the
    body was still a stacked flex column (no pair), so fourteen categories grew to
    their full 658px inside a 544px sheet and five of them ended up unreachable
    below its bottom edge. Measured, on desktop-narrow-860x560.
-   Anything that is only true WHEN THE PANES SPLIT belongs here. */
+   Anything that is only true WHEN THE PANES SPLIT belongs here. The rail may
+   scroll vertically if categories overflow — that is a side rail, allowed.
+   Options remain the main catalogue. */
 #cs-inner[data-pair="on"] #cs-tabs {
   max-height: none;
+  display: grid;
   grid-template-columns: minmax(0, 1fr);
   padding: calc(var(--pad) * 0.25) 0 0 var(--pad);
+  /* Restore the vertical .pane scroller the stacked strip overrides. */
+  overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior-y: contain; touch-action: pan-y;
+  scrollbar-width: auto; scrollbar-gutter: stable;
   /* Rows exactly as tall as a tab, packed from the top. Left to stretch, the
      nine categories divided up whatever height the rail had and each tab came
      out a couple of px shorter than its own two lines of text. The rail is a
@@ -717,6 +734,9 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
      and it now has an indicator saying so. */
   grid-auto-rows: min-content;
   align-content: start;
+}
+#cs-inner[data-pair="on"] #cs-tabs .cs-tab {
+  flex: initial; white-space: normal;
 }
 #cs-inner[data-pair="on"] #cs-options {
   padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5) 0;
@@ -1113,6 +1133,23 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
 #cs-inner[data-density="compact"] #cs-budget { flex: 1 1 200px; }
 #cs-inner[data-density="compact"] #cs-stats-inner { padding: 1px calc(var(--gap) * 1.1); }
 #cs-inner[data-density="compact"] .cs-stat-row { min-height: 15px; }
+/* CRITICAL LOCAL WIDTH — at high UI size the stat summary can consume the
+   entire short sheet before the selectable parts appear. This is deliberately
+   a container threshold, not a phone breakpoint: the Garage keeps stats at its
+   normal local width and yields them only when zoom/orientation leaves less
+   than the measured room required by header + tabs + one option + actions.
+   Portrait and landscape have different budgets because portrait owns a tall
+   bottom band while landscape shares the frame with the car. */
+@media (orientation: portrait) {
+  @container sheet (max-width: 300px) {
+    #cs-inner[data-density="compact"] #cs-stats-inner { display: none; }
+  }
+}
+@media (orientation: landscape) {
+  @container sheet (max-width: 420px) {
+    #cs-inner[data-density="compact"] #cs-stats-inner { display: none; }
+  }
+}
 /* THE FOOT IS THE LAST THING THAT MAY PUSH CONTENT OFF. On a landscape phone at
    UI SIZE 150% the head and the foot together came to 2px more than the panel,
    so the grid's 1fr body row collapsed to zero and the 2px landed on .sheet-foot
@@ -1141,25 +1178,6 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
   min-width: 0; margin: 0;
 }
 
-/* ---------- portrait: categories as one scrolling strip ---------- */
-/* The stacked category grid is the biggest single item in a portrait garage —
-   MEASURED on a 393x852 phone at UI SIZE 115%: 211px of an 828px panel, four
-   rows of three, more than the option list it sits above. The lighting tuner
-   already solved exactly this and the pattern is worth copying rather than
-   reinventing: one row that pans sideways can never orphan a tile, where a
-   wrapping grid must either show every row or clip one (css/tuner.css, the
-   .lt-tabs strip, which buys ~110px there).
-
-   Scoped to `[data-pair="off"]` because the PAIR layout uses #cs-tabs as a
-   vertical rail beside the options, which is the right answer whenever there is
-   width for it — this is only for the stacked portrait case. Written with
-   #cs-inner in front so it outranks both the base `#cs-tabs` grid and the
-   `#cs-inner[data-pair="on"]` rail rules.
-
-   TRADE, stated because it is a real one: every category is no longer visible at
-   a glance — you pan to reach WHEELS or LIVERY. That is the same trade the tuner
-   made with twelve, and on a screen this tall the option list is what the player
-   is actually reading. */
 /* ---------- portrait: the car gets the bottom band ---------- */
 /* Now affordable, and only because the strip above paid for it. The budget on a
    393x852 phone at UI SIZE 115%, panel 828: head 226 + categories 60 + foot 87
@@ -1190,16 +1208,10 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
      its own pixels to hold its content, and the car band is whatever is left —
      which at 150% is very little, and that is the correct trade. A band nobody
      can read a car in is not worth an option list nobody can reach. */
-  #cs-inner { width: 100%; height: 70%; min-height: 340px; }
-}
-@media (orientation: portrait) {
-  #cs-inner[data-pair="off"] #cs-tabs {
-    display: flex; flex-wrap: nowrap; align-content: normal;
-    overflow-x: auto; overflow-y: hidden;
-    overscroll-behavior-x: contain; touch-action: pan-x;
-    max-height: none; scrollbar-width: none;
-  }
-  #cs-inner[data-pair="off"] #cs-tabs::-webkit-scrollbar { display: none; }
-  #cs-inner[data-pair="off"] #cs-tabs .cs-tab { flex: 0 0 auto; white-space: nowrap; }
+  /* Never let the content floor defeat the screen cap. `100%` resolves in the
+     sheet's local zoomed coordinate space, so the panel keeps 340 own pixels
+     when the viewport can pay for them and otherwise yields at the safe-area
+     edge instead of extending under the home indicator. */
+  #cs-inner { width: 100%; height: 70%; min-height: min(340px, 100%); }
 }
 } /* @layer components */

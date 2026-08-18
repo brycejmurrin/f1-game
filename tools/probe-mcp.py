@@ -402,20 +402,22 @@ class Bridge:
         self.tinyfish = TinyfishBackend()
 
     def all_tools(self) -> list[dict[str, Any]]:
-        # NEVER let one backend's ensure() empty the whole catalog — see
-        # _static_catalog. A throw here is how apex-wrap shipped 0 tools.
+        # Hosts call tools/list ONCE at session start. Never spawn Chromium
+        # or `tinyfish ensure` here — Cursor times out live discovery and
+        # caches an empty catalog (measured 2026-08-18: project-0-f1-game-probe
+        # serverStatus error). Mock still lists via ensure(); call() still
+        # ensure()s the live backend. FAIL_BACKENDS keeps the throw-fallback
+        # path covered by tests.
         out: list[dict[str, Any]] = []
         fail_all = os.environ.get("PROBE_MCP_FAIL_BACKENDS", "").strip() not in ("", "0", "false", "no")
-        for backend, getter in (("chrome", self.chrome.tools), ("tinyfish", self.tinyfish.tools)):
+        if _mock() and not fail_all:
+            for backend, getter in (("chrome", self.chrome.tools), ("tinyfish", self.tinyfish.tools)):
+                out.extend(prefix_tools(backend, getter()))
+            return out
+        for backend in ("chrome", "tinyfish"):
             if fail_all:
                 print(f"# {backend} tools() skipped (PROBE_MCP_FAIL_BACKENDS)", file=sys.stderr)
-                out.extend(prefix_tools(backend, _static_catalog(backend)))
-                continue
-            try:
-                out.extend(prefix_tools(backend, getter()))
-            except Exception as e:
-                print(f"# {backend} tools() failed, using static catalog: {e}", file=sys.stderr)
-                out.extend(prefix_tools(backend, _static_catalog(backend)))
+            out.extend(prefix_tools(backend, _static_catalog(backend)))
         return out
 
     def call(self, name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -482,7 +484,11 @@ def cmd_status(_: argparse.Namespace) -> int:
         text=True,
     )
     print((t.stdout or t.stderr).rstrip() or f"exit {t.returncode}")
-    return 0 if r.returncode == 0 and t.returncode == 0 else 1
+    if t.returncode != 0:
+        print("WARN: tinyfish DOWN — run tools/tinyfish-mcp.sh ensure", file=sys.stderr)
+    # Chrome wrapper status is enough for Cloud `probe status` to be usable
+    # before tinyfish setup. TinyFish DOWN is a warning, not a hard fail.
+    return 0 if r.returncode == 0 else 1
 
 
 def cmd_list_tools(_: argparse.Namespace) -> int:

@@ -242,7 +242,7 @@ test("tools/layout-audit.mjs knows about every screen in the shell", () => {
 
 test("Settings uses labelled category tabs with matching panels", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  for (const id of ["controls", "display", "performance", "more"]) {
+  for (const id of ["controls", "display", "more"]) {
     assert.match(html, new RegExp(`id="pm-tab-${id}"[^>]*role="tab"[\\s\\S]{0,180}aria-controls="pm-panel-${id}"`));
     assert.match(html, new RegExp(`id="pm-panel-${id}"[^>]*role="tabpanel"[\\s\\S]{0,180}aria-labelledby="pm-tab-${id}"`));
   }
@@ -256,4 +256,24 @@ test("Circuit filters are not nested in a listbox and circuits expose button sta
   assert.doesNotMatch(html, /id="sel-tracks"[^>]*role="listbox"/);
   assert.match(menus, /row\.setAttribute\("aria-pressed"/);
   assert.doesNotMatch(menus, /row\.setAttribute\("role", "option"\)/);
+});
+
+test("scenery SUPPRESSED is coalesced, not a per-prop Log.warn", () => {
+  const files = [
+    "js/track/tracks.js",
+    "js/track/scenery-structures.js",
+    "js/track/scenery-nature.js",
+    "js/track/scenery-city.js",
+    "js/track/scenery-identity.js",
+  ];
+  for (const rel of files) {
+    const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    assert.doesNotMatch(src, /Log\.warn\("scenery", `[^`]*SUPPRESSED/,
+      rel + " still warns per suppressed prop");
+    assert.doesNotMatch(src, /Log\.warn\("track", `place SUPPRESSED/,
+      rel + " still warns per suppressed place()");
+  }
+  const tracks = fs.readFileSync(path.join(ROOT, "js/track/tracks.js"), "utf8");
+  assert.match(tracks, /const noteSuppressed = /);
+  assert.match(tracks, /: suppressed /);
 });

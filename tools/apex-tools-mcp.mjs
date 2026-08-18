@@ -2,14 +2,15 @@
 /**
  * apex-tools-mcp — wrap committed tools/ CLIs as MCP tools (apex_* only).
  *
- * Fourth .mcp.json server (beside tinyfish / chrome-devtools / probe). Never
- * chrome_* / tinyfish_*. Local working tree only; no github.io.
+ * Fifth .mcp.json server (beside tinyfish / chrome-devtools / probe /
+ * playwright). Never chrome_* / tinyfish_*. Local working tree only; no github.io.
  * Design: docs/research/APEX-TOOLS-MCP.md
  *
- *   node tools/apex-tools-mcp.mjs help | status | list-tools | serve
+ *   node tools/apex-tools-mcp.mjs help | status | list-tools | serve | smoke
  *   node tools/apex-tools-mcp.mjs call apex_pick_tests '{"dryRun":true}'
  *   ./tools/apex-tools-mcp.sh call apex_status '{}'
  *   ./tools/apex-tools-mcp.sh call apex_select_specs '{"since":"HEAD~1"}'
+ *   ./tools/apex-tools-mcp.sh smoke
  *
  * APEX_MCP_MOCK=1 freezes the catalog and returns fake results (no spawn).
  */
@@ -20,12 +21,13 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { emptyPlaywright, scanPlaywrightLines } from "./playwright-occupancy.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.4.1";
+const SERVER_VERSION = "1.4.2";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -40,11 +42,15 @@ const UI_VIEWPORTS = "ios-iphone-landscape";
 const UI_JOBS = 1;
 
 // Design §Locking known gap — v1 mutex is MCP-owned. chrome-devtools stdio
-// does not answer :3712/healthz. apex_status reports it; it does not close it.
+// and playwright MCP do not answer :3712/healthz. apex_status reports them.
 const KNOWN_GAP = {
   chromeDevtoolsStdio:
     "Cursor .mcp.json chrome-devtools is a third browser and does not answer :3712/healthz",
-  outsideLock: ["layout-audit", "cdmcp-*", "raw node tools/apex-eval.mjs"],
+  playwrightMcpStdio:
+    "Cursor .mcp.json playwright (@playwright/mcp via tools/playwright-mcp.sh) is a fifth browser and does not answer :3712/healthz",
+  hostPlaywrightMcp:
+    "Playwright MCP browser_* / @playwright/mcp Chromium does not take apex-browser.lock; occupancy matches @playwright/mcp argv and a playwright-mcp user-data-dir. Cursor --mcp-config JSON is ignored.",
+  outsideLock: ["layout-audit", "cdmcp-*", "raw node tools/apex-eval.mjs", "playwright-mcp"],
 };
 
 function toolKind(entry) {
@@ -187,18 +193,14 @@ function daemonPort() {
 }
 
 function playwrightLive() {
-  // Process-table check for orphans invisible to test-bg --status.
-  // Token match only: `playwright test` — NOT a substring that hits Cursor's
-  // exec-daemon --mcp-config {"playwright":...} line.
-  const r = spawnSync("ps", ["-eo", "pid,args"], { encoding: "utf8", timeout: 5000 });
-  if (r.status !== 0) return { live: false, pids: [] };
-  const pids = [];
-  for (const line of r.stdout.split("\n")) {
-    if (!/(?:^|[\s/])playwright\s+test(?:\s|$)/.test(line)) continue;
-    const m = line.trim().match(/^(\d+)\s/);
-    if (m) pids.push(Number(m[1]));
+  // APEX_MCP_PS: canned `ps -eo pid,args` for occupancy unit tests so a live
+  // host Playwright MCP on Cloud does not poison lock/daemon cases.
+  if (process.env.APEX_MCP_PS != null) {
+    return scanPlaywrightLines(process.env.APEX_MCP_PS);
   }
-  return { live: pids.length > 0, pids };
+  const r = spawnSync("ps", ["-eo", "pid,args"], { encoding: "utf8", timeout: 5000 });
+  if (r.status !== 0) return emptyPlaywright();
+  return scanPlaywrightLines(r.stdout);
 }
 
 function testBgStatus() {
@@ -262,10 +264,15 @@ function occupancyRefuse() {
   const bg = testBgStatus();
   const pw = playwrightLive();
   if (bg.browserRunning.length || pw.live) {
+    const who = [
+      bg.browserRunning.length ? "test-bg" : null,
+      pw.suite ? "`playwright test`" : null,
+      pw.hostMcp || pw.hostBrowser ? "Playwright MCP (`browser_*`)" : null,
+    ].filter(Boolean).join(" + ");
     return refuse(
       "playwright_live",
-      "A Playwright group or `playwright test` process is live.",
-      "Wait for test-bg to finish (`node tools/test-bg.mjs --status`). Do not share Chromium with apex_* browser tools.",
+      `${who || "A Playwright process"} is live.`,
+      "Wait for test-bg (`node tools/test-bg.mjs --status`) or close the host MCP browser (`browser_close`) before apex_* browser tools.",
     );
   }
   return null;
@@ -304,7 +311,7 @@ const CATALOG = [
   {
     name: "apex_verify_track",
     week: 1,
-    description: "Headless TRACK_VM build check for one circuit id or --all. Working tree only.",
+    description: "Tree — headless TRACK_VM build check for one circuit id or --all. No Chromium. Working tree only. Skill: debug-tracks.",
     inputSchema: {
       type: "object",
       properties: {
@@ -319,7 +326,7 @@ const CATALOG = [
   {
     name: "apex_verify_change_fast",
     week: 1,
-    description: "verify-change.mjs --fast --json only (no browser groups, never --wait).",
+    description: "Tree — verify-change --fast --json (no browser groups). Never --wait. Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -334,7 +341,7 @@ const CATALOG = [
   {
     name: "apex_wgx_validate_static",
     week: 1,
-    description: "wgx-validate.mjs --static — source invariants, no Chromium.",
+    description: "Tree — WGSL source invariants (--static). No Chromium; live Dawn is apex_wgx_validate. Skill: webgpu-debug.",
     inputSchema: {
       type: "object",
       properties: {
@@ -347,7 +354,7 @@ const CATALOG = [
   {
     name: "apex_pick_tests",
     week: 1,
-    description: "pick-tests.mjs --json. Never --bg (that prints test-bg start lines).",
+    description: "Tree — which test GROUPS this change needs (--json). Never --bg (that would start test-bg). Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -363,7 +370,7 @@ const CATALOG = [
   {
     name: "apex_bump_cache_check",
     week: 1,
-    description: "bump-cache.mjs --check --json. Never --apply / --at / --merge.",
+    description: "Tree — are ?v= hashes and version.json consistent? --check --json only. Never --apply. Skill: bump-cache.",
     inputSchema: {
       type: "object",
       properties: {
@@ -377,14 +384,13 @@ const CATALOG = [
   {
     name: "apex_status",
     week: 1,
-    description:
-      "Read-only: browser lock, probe chrome /healthz, test-bg, playwright test PIDs, loadavg. Does not take the lock.",
+    description: "Tree — read-only occupancy: lock, chrome /healthz, test-bg, playwright PIDs, loadavg. Does not take the lock. Call before any browser apex_*.",
     inputSchema: { type: "object", properties: { dryRun: { type: "boolean" } } },
   },
   {
     name: "apex_eval",
     week: 2,
-    description: "apex-eval.mjs — boot harness and evaluate an __apex expression. Local only.",
+    description: "Browser (lock first) — boot harness Chromium and evaluate one __apex expression. Local only, no --url. Skill: playwright-probe.",
     inputSchema: {
       type: "object",
       properties: {
@@ -400,7 +406,7 @@ const CATALOG = [
   {
     name: "apex_shot",
     week: 2,
-    description: "capture/shot.mjs — deterministic scene screenshot via harness Chromium.",
+    description: "Browser (lock first) — deterministic scene screenshot (track/frac/cam). Local harness only. Skill: playwright-probe.",
     inputSchema: {
       type: "object",
       properties: {
@@ -423,7 +429,7 @@ const CATALOG = [
   {
     name: "apex_survey_track",
     week: 2,
-    description: "survey-track.mjs <id> [label] [fracs] [--oblique]. Harness Chromium.",
+    description: "Browser (lock first) — circuit survey shots + ground-profile probe. Requires id. Skill: survey-track.",
     inputSchema: {
       type: "object",
       properties: {
@@ -440,7 +446,7 @@ const CATALOG = [
   {
     name: "apex_gfx_probe",
     week: 2,
-    description: "gfx-probe.mjs — visible #game probe. No --url.",
+    description: "Browser (lock first) — visible #game pixels for webgpu or three. No --url. Skill: webgpu-debug.",
     inputSchema: {
       type: "object",
       properties: {
@@ -459,7 +465,7 @@ const CATALOG = [
   {
     name: "apex_wgx_validate",
     week: 2,
-    description: "wgx-validate.mjs live Dawn (not --static). Harness Chromium.",
+    description: "Browser (lock first) — live Dawn WGSL + pipeline validation. Not --static. Skill: webgpu-debug.",
     inputSchema: {
       type: "object",
       properties: {
@@ -476,7 +482,7 @@ const CATALOG = [
   {
     name: "apex_wgx_capture",
     week: 2,
-    description: "wgx-capture.mjs — WGX readback oracle. Harness Chromium.",
+    description: "Browser (lock first) — WGX GPU readback oracle → frame.png. Skill: webgpu-debug.",
     inputSchema: {
       type: "object",
       properties: {
@@ -493,8 +499,7 @@ const CATALOG = [
   {
     name: "apex_ui_survey",
     week: 2,
-    description:
-      "ui-survey.mjs with frozen alias defaults (six screens, iPhone landscape, jobs=1). Widening refused.",
+    description: "Browser (lock first) — six-screen iPhone-landscape UI survey (jobs=1). Widening screens/viewports/jobs refused. Skill: survey-ui-matrix.",
     inputSchema: {
       type: "object",
       properties: {
@@ -510,7 +515,7 @@ const CATALOG = [
   {
     name: "apex_agent",
     week: 2,
-    description: "agent.mjs <track> <command> — world-view CLI via harness.",
+    description: "Browser (lock first) — agent.mjs world/track/scene/rollout via harness. Skill: agent-view.",
     inputSchema: {
       type: "object",
       properties: {
@@ -535,7 +540,7 @@ const CATALOG = [
   {
     name: "apex_select_specs",
     week: 3,
-    description: "select-specs.mjs --since <ref> --json. Never starts test-bg.",
+    description: "Tree — which SPECS fit the budget since a git ref (--json). Requires since. Never starts tests. Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -550,7 +555,7 @@ const CATALOG = [
   {
     name: "apex_assets_verify",
     week: 3,
-    description: "assets.mjs verify — licence / md5 / budget. Never bake* / fetch / import.",
+    description: "Tree — assets.mjs verify (licence / md5 / 8 MB budget). Never bake / fetch / import. Skill: asset-pack.",
     inputSchema: {
       type: "object",
       properties: {
@@ -563,7 +568,7 @@ const CATALOG = [
   {
     name: "apex_float_audit",
     week: 3,
-    description: "float-audit.cjs <id>|--all --json. TRACK_VM only; never --clip / --foliage.",
+    description: "Tree — floating-prop audit for one circuit or --all (--json). Never --clip / --foliage. Skill: survey-track.",
     inputSchema: {
       type: "object",
       properties: {
@@ -581,7 +586,7 @@ const CATALOG = [
   {
     name: "apex_clip_audit",
     week: 3,
-    description: "clip-audit.cjs <id>|--all --json. Depth/adj stay at CLI defaults.",
+    description: "Tree — prop-vs-prop clip audit (--json). Depth/adj stay at CLI defaults. Skill: scenery-dress.",
     inputSchema: {
       type: "object",
       properties: {
@@ -598,7 +603,7 @@ const CATALOG = [
   {
     name: "apex_coplanar_audit",
     week: 3,
-    description: "coplanar-audit.cjs <id>|--all --json. Gap/area/fight stay at CLI defaults.",
+    description: "Tree — same-facing z-fight / coplanar audit (--json). Tunables stay at CLI defaults. Skill: scenery-dress.",
     inputSchema: {
       type: "object",
       properties: {
@@ -615,7 +620,7 @@ const CATALOG = [
   {
     name: "apex_track_verts",
     week: 3,
-    description: "track-verts.cjs fleet dump, or --diff a file under artifacts/ or scratch/.",
+    description: "Tree — fleet vertex dump, or --diff a JSON under artifacts/ or scratch/.",
     inputSchema: {
       type: "object",
       properties: {
@@ -630,7 +635,7 @@ const CATALOG = [
     name: "apex_carshot",
     week: 3,
     kind: "browser",
-    description: "car/carshot.mjs — cropped studio JPEG. Harness Chromium; lock first.",
+    description: "Browser (lock first) — cropped studio car JPEG (az/tod/team). Skill: car-viewer.",
     inputSchema: {
       type: "object",
       properties: {
@@ -648,7 +653,7 @@ const CATALOG = [
     name: "apex_wgx_shot",
     week: 3,
     kind: "browser",
-    description: "wgx-shot.mjs — WGX #game shot. Harness Chromium; lock first.",
+    description: "Browser (lock first) — WGX #game screenshot after soft-present. Skill: webgpu-debug.",
     inputSchema: {
       type: "object",
       properties: {
@@ -666,7 +671,7 @@ const CATALOG = [
     name: "apex_quick_validate",
     week: 3,
     kind: "browser",
-    description: "quick-validate.mjs self-boot (no port). Harness Chromium; lock first.",
+    description: "Browser (lock first) — self-booting boot/smoke check. No port (harness binds its own). Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -680,7 +685,7 @@ const CATALOG = [
   {
     name: "apex_select_recall",
     week: 4,
-    description: "select-recall.mjs --json — replay the selector against recorded regressions.",
+    description: "Tree — replay select-specs against recorded regressions (--json). Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -693,7 +698,7 @@ const CATALOG = [
   {
     name: "apex_cache_bump_only",
     week: 4,
-    description: "cache-bump-only.mjs <since> --json. Exit 1 (not a pure bump) is a classified result, not a crash.",
+    description: "Tree — is this commit only a cache bump? Requires since. Exit 1 = not pure, still ok. Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -707,7 +712,7 @@ const CATALOG = [
   {
     name: "apex_rotate_markings_check",
     week: 4,
-    description: "rotate-markings.cjs --check only. Never --write.",
+    description: "Tree — would rotating start-line markings move circuit blocks? --check only. Never --write.",
     inputSchema: {
       type: "object",
       properties: {
@@ -720,7 +725,7 @@ const CATALOG = [
   {
     name: "apex_startline_snap",
     week: 4,
-    description: "startline-snap.cjs --json. Optional circuit ids.",
+    description: "Tree — start-line snapshot from researched coordinates (--json). Optional circuit ids.",
     inputSchema: {
       type: "object",
       properties: {
@@ -734,7 +739,7 @@ const CATALOG = [
   {
     name: "apex_startline_probe",
     week: 4,
-    description: "startline-probe.cjs --json. Optional --calibrate / --snap / --frac id=v.",
+    description: "Tree — start-line curvature/hand probe (--json). Optional --calibrate / --snap / --frac.",
     inputSchema: {
       type: "object",
       properties: {
@@ -750,7 +755,7 @@ const CATALOG = [
   {
     name: "apex_aero_zone_turns",
     week: 4,
-    description: "aero-zone-turns.cjs <id>|--all. TRACK_VM geometry pairing.",
+    description: "Tree — pair aero zones to turns for one circuit or --all. TRACK_VM.",
     inputSchema: {
       type: "object",
       properties: {
@@ -765,7 +770,7 @@ const CATALOG = [
   {
     name: "apex_graph_parity",
     week: 4,
-    description: "graph-parity.cjs <id>|--all with required BASE=<ref>. Never vacuous HEAD-vs-clean.",
+    description: "Tree — TrackGraph vertex parity vs required git base. Never omit base. Skill: scenery-dress.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1178,7 +1183,7 @@ function handleStatus(args = {}) {
       lock: { held: false },
       chromeDaemon: { up: false, port: null },
       testBg: { recorded: false, running: [] },
-      playwright: { live: false, pids: [] },
+      playwright: emptyPlaywright(),
       loadavg: os.loadavg(),
       knownGap: KNOWN_GAP,
     });
@@ -1435,6 +1440,7 @@ Commands:
   status
   list-tools
   call <apex_name> '<json>'
+  smoke                 # five-server shell probe (tools/mcp-smoke.mjs; no Chromium)
   serve                 # stdio MCP (.mcp.json → tools/apex-tools-mcp.sh serve)
   serve-http            # 127.0.0.1:3713 /mcp + /healthz (never 0.0.0.0)
 
@@ -1499,11 +1505,11 @@ function handleRpc(msg) {
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
         instructions:
-          "Apex tools MCP (apex_*). Tree tools are TRACK_VM / static gates. " +
-          "Browser tools boot harness Chromium after the browser lock. " +
-          "Never github.io — use TinyFish / deploy-research for Pages. " +
-          "chrome_* / tinyfish_* belong to probe-mcp. " +
-          "HTTP is 127.0.0.1:3713 only.",
+          "Local CLI wrap (apex_*). Skills say when; tools/ CLIs do the work; " +
+          "this server pins safe flags. Map: docs/AGENT-SURFACE.md. " +
+          "Tree = TRACK_VM / static, no lock. Browser = harness Chromium after " +
+          "apex_status + lock. Never github.io (TinyFish / deploy-research). " +
+          "chrome_* / tinyfish_* belong to probe. HTTP 127.0.0.1:3713 only.",
       },
     };
   }
@@ -1615,6 +1621,13 @@ function main(argv) {
   if (cmd === "status") return cmdStatus();
   if (cmd === "list-tools") return cmdListTools();
   if (cmd === "call") return cmdCall(argv[1], argv[2] || "{}");
+  if (cmd === "smoke") {
+    const r = spawnSync(process.execPath, [path.join(ROOT, "tools/mcp-smoke.mjs"), ...argv.slice(1)], {
+      stdio: "inherit",
+      cwd: ROOT,
+    });
+    return r.status ?? 2;
+  }
   if (cmd === "serve") return cmdServe();
   if (cmd === "serve-http") return cmdServeHttp();
   log(`unknown command: ${cmd}`);

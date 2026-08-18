@@ -8,7 +8,8 @@
 // lie the coverage reporter exists to catch from the other side.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED, SELECTED_GATE } from "../../tools/select-specs.mjs";
+import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
+  SELECTED_GATE, FIXED_GATE_SPECS } from "../../tools/select-specs.mjs";
 import { recall } from "../../tools/select-recall.mjs";
 import { MEASURED, capacity } from "../../tools/select-budget.mjs";
 
@@ -36,7 +37,8 @@ test("fit cuts at the budget and names every skipped spec", () => {
   // so the cut provably happens.
   const specs = ["tests/specs/smoke.spec.js", "tests/specs/logging.spec.js"];
   const r = fit(specs, 5);
-  assert.equal(r.selected.length + r.skipped.length, 2, "every spec lands in selected or skipped");
+  assert.equal(r.selected.length + r.skipped.length + r.coveredByFixedGates.length, 2,
+    "every spec lands in selected, skipped, or an independent fixed gate");
   assert.ok(r.testsSelected <= r.testsFit, `${r.testsSelected} selected into ${r.testsFit}`);
   for (const s of r.skipped) assert.ok(s.tests > 0, "a skipped spec carries its cost");
 });
@@ -51,10 +53,18 @@ test("a spec that reserves more than the selected-gate timeout is EXCLUDED by na
   const own = maxDeclaredTimeout("tests/specs/imola-foundation.spec.js");
   assert.ok(own > SELECTED_GATE.perTestTimeoutSec * 1000,
     `imola-foundation now declares ${own} ms — find a new worst example for this pin`);
-  const r = fit(["tests/specs/imola-foundation.spec.js", "tests/specs/smoke.spec.js"], 15);
+  const r = fit(["tests/specs/imola-foundation.spec.js", "tests/specs/boot-guard.spec.js"], 15);
   assert.deepEqual(r.overBudgetSpecs.map((s) => s.file), ["tests/specs/imola-foundation.spec.js"]);
-  assert.deepEqual(r.selected.map((s) => s.file), ["tests/specs/smoke.spec.js"],
+  assert.deepEqual(r.selected.map((s) => s.file), ["tests/specs/boot-guard.spec.js"],
     "the spec that fits the selected-gate budget must still be selected");
+});
+
+test("fixed blocking specs can never run under the selected gate's 120 s timeout", () => {
+  assert.ok(FIXED_GATE_SPECS.has("tests/specs/smoke.spec.js"));
+  assert.ok(FIXED_GATE_SPECS.has("tests/specs/physics-characterization.spec.js"));
+  const r = fit([...FIXED_GATE_SPECS], 60);
+  assert.deepEqual(r.selected, [], "even a huge selected budget must not duplicate fixed specs");
+  assert.deepEqual(r.coveredByFixedGates.map((s) => s.file).sort(), [...FIXED_GATE_SPECS].sort());
 });
 
 test("TRACKED covers the paths that make a selection meaningless", () => {

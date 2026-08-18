@@ -54,10 +54,10 @@ const SHAPE = function () {
     });
     const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
     await page.goto(srv.url);
-    await page.waitForFunction(() => window.__apex != null, { timeout: 15000 });
+    await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
     await page.evaluate(SHAPE);
     await page.evaluate((t) => window.__apex.race(t), track);
-    await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15000 });
     await sleep(1600); // mesh build
 
     const result = await page.evaluate(async ({ expr, raw }) => {

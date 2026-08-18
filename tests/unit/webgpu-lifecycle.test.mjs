@@ -475,6 +475,8 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.match(CHUNKS_SOURCE, /params9\s*:\s*vec4<f32>.*ambContactDark/);
   assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*560/);
   assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*256/);
+  assert.match(POST_SOURCE, /SSR_UNIFORM_BYTES:\s*208/,
+    "SsrU must keep the carGloss vec4 (192 was the pre-streak layout)");
   assert.match(POST_SOURCE, /dirtFx\s*:\s*vec4<f32>.*off 240/);
 
   const h = makeGpuHarness();
@@ -517,9 +519,11 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.ok(Math.abs(composite[34] - 0.14) < 1e-6, "acesE default in tuneFx.z (float 34)");
   assert.ok(Math.abs(composite[35] - 7.0) < 1e-6, "flareStreak default in tuneFx.w (float 35)");
   assert.deepEqual(composite.slice(36, 44), [0, 0, 0, 0, 0, 0, 0, 0]);
-  assert.deepEqual(composite.slice(44, 48), [0, 0, 0, 0]);
-  assert.deepEqual(composite.slice(48, 52), [1, 1, 1, 0]);
-  assert.deepEqual(composite.slice(52, 56), [1, 1, 1, 0]);
+  assert.deepEqual(composite.slice(44, 48), [0, 0, 0, 0], "lift RGB + wetness pad");
+  assert.deepEqual(composite.slice(48, 52), [1, 1, 1, 0], "gamma RGB + reflect pad");
+  assert.ok(Math.abs(composite[52] - 1) < 1e-6 && Math.abs(composite[53] - 1) < 1e-6 &&
+            Math.abs(composite[54] - 1) < 1e-6 && Math.abs(composite[55] - 0.05) < 1e-6,
+    "gain RGB + carReflect default 0.05 in gain.w");
   // aces vec4 (floats 56..59) = shipped Narkowicz coefficients a,b,c,d.
   // (f32 rounding: none of these are exactly representable, so compare with a tol.)
   const ACES_DEF = [2.51, 0.03, 2.43, 0.59];
@@ -575,10 +579,14 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.equal(composite[62], 0.75, "haze.v must occupy dirtFx.z (float 62)");
   assert.equal(composite[63], 0.5, "haze.str must occupy dirtFx.w (float 63)");
   assert.deepEqual(composite.slice(36, 40), [1, 2, 3, 4], "tone0 must occupy floats 36..39");
-  assert.deepEqual(composite.slice(40, 44), [5, 6, 7, 0], "tone1 must occupy floats 40..43");
-  assert.deepEqual(composite.slice(44, 48), [8, 9, 10, 0], "lift must occupy floats 44..47");
-  assert.deepEqual(composite.slice(48, 52), [11, 12, 13, 0], "gamma must occupy floats 48..51");
-  assert.deepEqual(composite.slice(52, 56), [14, 15, 16, 0], "gain must occupy floats 52..55");
+  assert.deepEqual(composite.slice(40, 44), [5, 6, 7, 1],
+    "tone1 is whites/toe/shoulder/hdrGradeOn — off-neutral knobs must arm the gate");
+  assert.deepEqual(composite.slice(44, 47), [8, 9, 10], "lift RGB must occupy floats 44..46");
+  assert.equal(composite[47], 0, "lift.w is wetness — harness begin() has no wetness");
+  assert.deepEqual(composite.slice(48, 51), [11, 12, 13], "gamma RGB must occupy floats 48..50");
+  assert.equal(composite[51], 0, "gamma.w is opts.reflect — harness present() has none");
+  assert.deepEqual(composite.slice(52, 55), [14, 15, 16], "gain RGB must occupy floats 52..54");
+  assert.ok(Math.abs(composite[55] - 0.05) < 1e-6, "gain.w is carReflect (TUNE default 0.05)");
 });
 
 test("WebGPU SkyU packs GLX-parity sky knobs at the expected lanes", async () => {
@@ -807,9 +815,11 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
   // Road micro-normal footprint fade (grazing crawl guard).
   assert.match(CHUNKS_SOURCE, /mnFpAbs/);
   // Detail grain before roadMarkings so paint stays crisp.
-  const grain = CHUNKS_SOURCE.indexOf("patchM = vnoise(wp * 0.055");
+  const grain = CHUNKS_SOURCE.indexOf("patchM = svnoise(wp * 0.055");
   const marks = CHUNKS_SOURCE.indexOf("roadMarkings(&albedo");
   assert.ok(grain > 0 && marks > grain, "grain must precede roadMarkings");
+  assert.match(CHUNKS_SOURCE, /patchM = svnoise\(wp \* 0\.055/,
+    "LIT grain must use surface-family svnoise (GLX surfaceNoise), not sky vnoise");
   // Sparse asphalt cracks ported from GLX lit.js (were dropped in WGX Block 1b).
   assert.match(CHUNKS_SOURCE, /Sparse cracks \(GLX lit\.js\)/);
   assert.match(CHUNKS_SOURCE, /crAA = max\(0\.075, 0\.015 \+ max\(fwWpos\.x, fwWpos\.z\) \* 0\.9\)/);
@@ -833,8 +843,12 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
   const ffBranch = CHUNKS_SOURCE.indexOf("if (!ff && !isRoadDraw) { N = -N; }");
   assert.ok(roadSample > 0 && ffBranch > roadSample,
     "asphalt textureSample must be hoisted before the front_facing branch");
-  assert.match(CHUNKS_SOURCE, /if \(mid == 16 && roadPackOn\)/);
-  assert.match(CHUNKS_SOURCE, /albedo \* roadPack\.rgb \* 2\.0/);
+  assert.match(CHUNKS_SOURCE, /albedo \* litPack\.rgb \* 2\.0/);
+  assert.match(CHUNKS_SOURCE, /textureSample\(matAlbedoTex, matSamp, uv1, 1\)/,
+    "CONCRETE (wall) pack must hoist textureSample like asphalt");
+  const wallSample = CHUNKS_SOURCE.indexOf("textureSample(matAlbedoTex, matSamp, uv1, 1)");
+  assert.ok(wallSample > 0 && ffBranch > wallSample,
+    "wall textureSample must be hoisted before the front_facing branch");
   assert.doesNotMatch(
     CHUNKS_SOURCE,
     /let aaX = clamp\(fwTrk\.y, 1e-4, 0\.30\);\s*[\s\S]{0,400}?let mip = clamp\(1\.0 - \(aaX/,
@@ -847,9 +861,13 @@ test("WGX god-ray and env probe match GLX gates", () => {
   assert.doesNotMatch(WGX_SOURCE, /grStr > 0 && sun && sun\.onScreen && sun\.shaft/);
   assert.match(WGX_SOURCE, /const sunGR = !!shadowView && grStr > 0/);
   assert.match(WGX_SOURCE, /!f\.noEnv/);
-  // Env probe respects PerfTry.envCull (300 m cap).
-  assert.match(WGX_SOURCE, /PerfTry\.on\("envCull"\)/);
+  // Env probe always applies the 300 m radial cap (baked ON).
   assert.match(WGX_SOURCE, /Math\.min\(svCull, 300\)/);
+  assert.doesNotMatch(WGX_SOURCE, /_perfWgsl|typeof PerfTry|PerfTry\./);
+  assert.doesNotMatch(CHUNKS_SOURCE, /OPT_LAMPFOGGATE/);
+  assert.match(CHUNKS_SOURCE, /if \(F\.params8\.x > 0\.0\)/);
+  assert.doesNotMatch(POST_SOURCE, /OPT_FLAREGATE/);
+  assert.match(POST_SOURCE, /flareStr > 0\.0 && sunUV\.x >= 0\.0 && sunUV\.x <= 1\.0/);
 });
 
 test("WGX sky pipelines use less-equal depth (skyLate-safe)", () => {
@@ -931,7 +949,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /if \(bury && !isRoadDraw && fromWorld\.w > 0\.5\) \{\s*discard;/);
   assert.doesNotMatch(CHUNKS_SOURCE, /let slab = max\(fwWpos/);
   assert.match(WGX_SOURCE, /data\.trk && data\.trk\.length >= vCount \* 3/);
-  assert.match(WGX_SOURCE, /o\.buryRibbon/);
+  assert.match(WGX_SOURCE, /d\[base \+ 27\] = o\.buryRibbon \? 1 : 0;/);
   assert.match(WGX_SOURCE, /m3\+m2, m7\+m6, m11\+m10, m15\+m14\); \/\/ near \(GL clip w\+z >= 0\)/);
   assert.doesNotMatch(CHUNKS_SOURCE, /1\.0, 0\.0, 1\.0/);
   assert.doesNotMatch(WGX_SOURCE, /__wgxDbg/);
@@ -1054,8 +1072,9 @@ test("soft-present uses ephemeral staging buffers for visible 2D blit", () => {
   assert.match(WGX_SOURCE, /function _softDisplayFinish\(/);
   assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(finish/);
   assert.match(WGX_SOURCE, /maxPx >= 8[\s\S]{0,200}_softBlitNotify\(/);
-  assert.match(WGX_SOURCE, /if \(_softBlitInFlight\) return null/,
+  assert.match(WGX_SOURCE, /if \(_softDisplayPending\) return null/,
     "only one soft-present mapAsync in flight — late pits readbacks must not overwrite #game");
+  assert.match(WGX_SOURCE, /function _softDisplayAbort\(/);
   assert.match(WGX_SOURCE, /seq: _softBlitSeq/);
   assert.match(WGX_SOURCE, /const after = _softBlitSeq/,
     "awaitSoftPresent waits for an encode issued after the call, not the in-flight blit");
@@ -1210,7 +1229,7 @@ test("clean sessions heal the ladder: minimal steps back to lite after a streak"
 });
 
 test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async () => {
-  // GLX: msaaSamples = IS_MOBILE ? 0 : 2 (js/render/glx/post.js). WGX used to
+  // GLX: msaaSamples = IS_MOBILE ? 0 : min(4, …) (js/render/glx/post.js). WGX used to
   // key MSAA on MOBILE_TIER, so GRAPHICS: ULTRA on a phone took multisampled
   // rgba16float and lost the device after one frame.
   const h = makeGpuHarness({ glx: { isMobile: true, mobileTier: false } });
@@ -1383,7 +1402,7 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   // …and the footprint must reach every consumer as a parameter.
   for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
                     /let fwTrkAttr = abs\(dpdx\(in\.matTrk\.xyz\)\) \+ abs\(dpdy\(in\.matTrk\.xyz\)\);/,
-                    /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, roadNrmPack, roadPackOn\);/,
+                    /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, litNrm, packOn\);/,
                     /roadMarkings\(&albedo, &rough, vTrk, fwTrk\);/,
                     // The one the first fix missed: this sits behind `if (detail
                     // > 0.001)`, so it must READ the hoisted footprint.

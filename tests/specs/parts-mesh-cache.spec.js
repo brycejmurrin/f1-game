@@ -7,7 +7,7 @@ import { test, expect } from "@playwright/test";
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function waitReady(page) {
-  await page.waitForFunction(() => window.__apex && window.__apex.race, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
 }
 
 async function installMeshProbe(page) {
@@ -119,7 +119,7 @@ async function applyPartsAndPark(page) {
     window.__apex.park(0.1);
     window.__apex.camera("chase");
   });
-  await page.waitForFunction(() => window.__apex.info().track != null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15_000 });
 }
 
 async function quitRace(page) {
@@ -385,7 +385,7 @@ test.describe("Parts mesh caches — eviction bounds", () => {
     });
 
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track === "monza", { timeout: 15_000 });
+    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 15_000 });
     await page.evaluate(() => {
       window.__apex.go();
       window.__apex.jump(0.10, 35, 0);
@@ -400,7 +400,7 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       window.__wheelGroundProbe.length = 0;
     });
     await page.waitForFunction(() => window.__wheelGroundProbe.length >= 4,
-      { polling: 100, timeout: 20_000 });
+      null, { polling: 100, timeout: 20_000 });
 
     const probe = await page.evaluate(() => {
       const st = window.__apex.physState();

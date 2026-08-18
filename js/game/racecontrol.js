@@ -104,7 +104,7 @@ const RaceControl = (() => {
 
     function update(dt) {
       if (!G.netPlay.ownsRaceControl()) return;
-      if (!enabled || !DebrisWorld.active() || G.state !== "race") {
+      if (G.state !== "race") {
         // `|| capHoldT` matters: a cap-forced drop leaves level 0 with the
         // re-arm hold still armed, and this is the ONLY path that clears state
         // when a race ends. Without it the hold leaked into the NEXT race and
@@ -112,6 +112,10 @@ const RaceControl = (() => {
         if (caution.level !== 0 || capHoldT) reset();
         return;
       }
+      // Debris off (or the layer disabled without setEnabled) mid-race used
+      // to reset() here and flash GREEN under a still-valid flag. Freeze the
+      // last caution; setEnabled(false) is what DROPS a flying flag.
+      if (!enabled || !DebrisWorld.active()) return;
       if (caution.level !== 0) caution.sinceT += dt;
       queryT += dt;
       if (queryT < QUERY_EVERY) return;

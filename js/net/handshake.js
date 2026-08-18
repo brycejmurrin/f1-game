@@ -52,6 +52,11 @@ const NetHandshake = (function () {
   const NO_TRANSPORT = { ok: false, error: "no_transport",
     message: "WebRTC is unavailable in this browser." };
   const GATHER_TIMEOUT_MS = 8000; // stop waiting for stragglers; what we have is usually enough
+  // Real codes are a few hundred characters. These generous ceilings prevent a
+  // pasted/link-supplied code from multiplying into several unbounded strings,
+  // ArrayBuffers and JSON objects on a memory-constrained phone.
+  const MAX_CODE_CHARS = 512 * 1024;
+  const MAX_DECODED_BYTES = 256 * 1024;
 
   function hsLog(action, res) {
     if (res && res.ok) {
@@ -93,7 +98,6 @@ const NetHandshake = (function () {
     // deflate can expand to gigabytes. Read the stream chunk-wise against a
     // hard cap instead of buffering blind — real codes inflate to ~2-6 KB,
     // so 256 KB is generous headroom, and past it we stop pulling entirely.
-    const CAP = 256 * 1024;
     const reader = new Blob([bytes]).stream()
       .pipeThrough(new DecompressionStream("deflate-raw")).getReader();
     const chunks = []; let total = 0;
@@ -101,7 +105,7 @@ const NetHandshake = (function () {
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > CAP) { await reader.cancel(); throw new Error("inflate cap exceeded"); }
+      if (total > MAX_DECODED_BYTES) { await reader.cancel(); throw new Error("inflate cap exceeded"); }
       chunks.push(value);
     }
     const out = new Uint8Array(total); let o = 0;
@@ -163,12 +167,16 @@ const NetHandshake = (function () {
     return MAGIC + ".p." + bytesToB64url(enc().encode(JSON.stringify(payload)));
   }
   async function decodeCode(code) {
-    const trimmed = String(code || "").trim().replace(/\s+/g, "");
+    const input = String(code || "");
+    if (input.length > MAX_CODE_CHARS) return CORRUPT;
+    const trimmed = input.trim().replace(/\s+/g, "");
+    if (trimmed.length > MAX_CODE_CHARS) return CORRUPT;
     const parts = trimmed.split(".");
     if (parts.length !== 3 || parts[0] !== MAGIC) {
       return { ok: false, error: "bad_code", message: "That does not look like an Apex invite code." };
     }
     const [, mode, body] = parts;
+    if (mode !== "s" && mode !== "z" && mode !== "p") return CORRUPT;
     try {
       const bytes = b64urlToBytes(body);
       if (mode === "s") {
@@ -180,6 +188,7 @@ const NetHandshake = (function () {
         payload.s = sdp;
         return { ok: true, payload };
       }
+      if (mode === "p" && bytes.byteLength > MAX_DECODED_BYTES) return CORRUPT;
       const json = mode === "z" ? await inflate(bytes) : dec().decode(bytes);
       const payload = JSON.parse(json);
       // JSON.parse happily returns null / a number / a string — and every

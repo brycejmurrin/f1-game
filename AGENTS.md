@@ -21,6 +21,7 @@ node tools/select-specs.mjs --since <ref>   # finer: per-SPEC selection, budgete
 node tools/test-bg.mjs <groups>     # run browser groups in the background
 node tools/assets.mjs verify        # asset-pack licence + md5 + budget check
 tools/README.md                     # test-asserted index of all 60+ tools
+docs/AGENT-SURFACE.md               # skills / MCP / tools / wrap map
 ```
 
 ## Verification — scale it to the change
@@ -82,8 +83,8 @@ Session shape — this is what controls both wall time and waiting:
 7. Never hand a subagent a browser run — give a flat prohibition ("report it
    unverified"). Subagent worktrees default to a STALE base: first step in any
    worktree is `git checkout -B <branch> <the session branch or its SHA>`.
-8. Never bump `?v=N`/`version.json` mid-run — the bump is the LAST edit
-   before commit.
+8. Never bump content hashes / `version.json` mid-run — the bump is the LAST
+   edit before commit.
 
 ## Seeing the game (cheapest first)
 
@@ -92,8 +93,8 @@ Session shape — this is what controls both wall time and waiting:
 2. `render({what:"view"|"map"|"circuit"|"car"})` — the character raster of the
    3D scene. Stale under `headless(true)`; `snapCam()` REQUIRED after
    `park()`/`jump()`.
-3. DOM/a11y snapshot (chrome-devtools MCP) — menu/HUD work only; the canvas is
-   invisible to it.
+3. DOM/a11y snapshot (Playwright MCP `browser_snapshot` / `browser_resize` /
+   `browser_evaluate`, or chrome-devtools) — menu/HUD work only; hide `#game`.
 4. Pixel screenshot — visual sign-off only, never an assertion source. For
    live poking use the `mcp-probe` skill; the Playwright suite itself always
    runs script-driven, never through an MCP.
@@ -178,15 +179,12 @@ full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
 `mesa-vulkan-drivers` or re-Save the env snapshot. Measurement table and MCP
 flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
 
-**MCP.** Keep **`apex-tools` in repo-root `.mcp.json`** (stdio `tools/apex-tools-mcp.sh
-serve`) so Cloud / Claude / this agent can load the catalog from the repo root.
-Cursor desktop and `agent` CLI also read **`.cursor/mcp.json`** — same four
-servers, lockstepped. `agent mcp enable apex-tools` then `list-tools`. If the
-host catalog is empty (this Cloud dashboard often is), fall back to
-`./tools/apex-tools-mcp.sh call`. TinyFish: `./tools/tinyfish-mcp.sh
-deploy-check --tip`. Probe: `python3 tools/probe-mcp.py`. Do not attach
-`mcp-probe` for a `version.json` check. Never run Chrome MCP while Playwright
-is running.
+**MCP.** Seven-server map: [`docs/AGENT-SURFACE.md`](docs/AGENT-SURFACE.md).
+Keep **`apex-tools` in repo-root `.mcp.json`** (and `.cursor/mcp.json`). Cloud
+host catalog is often empty — then `./tools/apex-tools-mcp.sh call`,
+`./tools/playwright-mcp.sh`, `./tools/tinyfish-mcp.sh`,
+`python3 tools/probe-mcp.py`. Do not attach `mcp-probe` for a `version.json`
+check. Never run Chrome MCP while Playwright is running.
 
 ## Layout
 
@@ -212,8 +210,8 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 - `js/data/` — F1API + DataHub tabs; `js/net/` — 2-4 player WebRTC, no backend
 - `css/` — tokens + component files; `docs/COMPONENTS.md` is test-asserted;
   class-count + body-node ratchets apply
-- `index.html` — shell: script tags, all static DOM, `?v=N` cache busting;
-  `sw.js` precache derives from the shell's tags
+- `index.html` — shell: script tags, all static DOM, per-file `?v=<sha256>`
+  plus `<meta name="apex-build">`; `sw.js` precache derives from the shell's tags
 - `types/game-ctx.d.ts` — the `G` façade contract, held by `tools/check-gctx.mjs`
 - `.claude/skills/` — the workflow references (`.claude/skills/README.md`);
   `.claude/agents/` — scoped subagent definitions (verify-agent, track-surveyor)
@@ -221,9 +219,11 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 
 ## Critical conventions
 
-- **Cache busting**: after ANY js/css change, bump every `?v=N` in
-  `index.html` to max+1 AND set `version.json` to the same N
-  (`.claude/skills/bump-cache`). Last edit before commit, never mid-run.
+- **Cache busting**: after ANY js/css change, run
+  `node tools/bump-cache.mjs --apply` (`.claude/skills/bump-cache`). Each
+  asset URL carries a 12-char content hash; `version.json` and
+  `<meta name="apex-build">` advance together as the shell/SW generation.
+  Last edit before commit, never mid-run. Docs/tools-only deltas need no bump.
 - **No ES modules** — every file is a `"use strict"` IIFE assigning one global
   (sole exception: the vendored three.js island).
   `tests/unit/global-registry.test.mjs` enforces the registry.
@@ -287,7 +287,8 @@ same surface from a shell.
 ## Agent extensions (skills / subagents)
 
 - **Skills** (on-demand workflows): `.claude/skills/` — index in
-  `.claude/skills/README.md`. Live canvas: `mcp-probe`. Deploy/`version.json`:
+  `.claude/skills/README.md`. Which CLIs are wrapped as `apex_*`:
+  `docs/AGENT-SURFACE.md`. Live canvas: `mcp-probe`. Deploy/`version.json`:
   `deploy-research` (do not attach `mcp-probe` for a version.json check).
   Pre-push: `verify-agent`.
 - **Subagents** (isolated context): `.claude/agents/` — index in
@@ -301,7 +302,8 @@ same surface from a shell.
 
 ## Area references (load on demand)
 
-Lighting/sky: `docs/LIGHTING-REF.md`, `-KNOBS.md`, `-PRESETS.md`
+Skills / MCP / wrap: `docs/AGENT-SURFACE.md`. Lighting/sky:
+`docs/LIGHTING-REF.md`, `-KNOBS.md`, `-PRESETS.md`
 (`.claude/skills/bake-lighting` lands a COPY VALUES export). Renderers
 (GLX/WGX/TLX): `docs/RENDERERS.md`. Career: `docs/CAREER.md`. Multiplayer:
 `docs/MULTIPLAYER.md`. Scenery: `docs/SCENERY-API.md`. Testing:

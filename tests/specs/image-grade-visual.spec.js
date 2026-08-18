@@ -66,7 +66,7 @@ async function boot(page, {
 } = {}) {
   await page.setViewportSize({ width: 640, height: 360 });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15_000 });
   await page.evaluate(({ track, tod, weather }) =>
     window.__apex.race(track, tod, weather), { track, tod, weather });
   await page.waitForFunction((id) => {

@@ -62,7 +62,7 @@ let page;
 test.beforeAll(async ({ browser }) => {
   page = await browser.newPage({ viewport: VIEWPORT });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex, { timeout: 30000 });
+  await page.waitForFunction(() => window.__apex, null, { timeout: 30000 });
 });
 test.afterAll(async () => { await page?.close(); });
 

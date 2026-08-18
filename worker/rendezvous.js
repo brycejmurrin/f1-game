@@ -66,11 +66,18 @@ function rateAllowed(request) {
   let rec = rateBuckets.get(key);
   if (!rec || now - rec.start >= RATE_WINDOW_MS) rec = { start: now, n: 0 };
   rec.n++;
+  // Reinsert so Map order is recency order. That makes the hard-cap eviction
+  // below deterministic and preserves buckets that are still actively used.
+  rateBuckets.delete(key);
   rateBuckets.set(key, rec);
   if (rateBuckets.size > RATE_BUCKET_CAP) {
-    for (const [k, v] of rateBuckets) {
-      if (now - v.start >= RATE_WINDOW_MS) rateBuckets.delete(k);
-      if (rateBuckets.size <= RATE_BUCKET_CAP) break;
+    // A cap that only deletes expired entries is not a cap: a burst of fresh
+    // IPv6 addresses can grow the map forever and make every cleanup O(n).
+    // Drop least-recently-used buckets until the invariant is restored.
+    while (rateBuckets.size > RATE_BUCKET_CAP) {
+      const oldest = rateBuckets.keys().next().value;
+      if (oldest == null) break;
+      rateBuckets.delete(oldest);
     }
   }
   return rec.n <= limit;

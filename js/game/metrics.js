@@ -2,13 +2,13 @@
 
    SETTINGS > DISPLAY > METRICS, or ` (backtick) / F9. Persists as
    apex26.metrics. URL `?metrics=1` overrides for the session without writing
-   storage, same shape as CockpitOpts / PerfTry.
+   storage, same shape as CockpitOpts.
 
-   WHY ITS OWN FILE. This is not a perf experiment (those reload) and not a
-   quality tier. The overlay is DOM the player asked for, so it lives next to
-   the other injected SETTINGS buttons (CockpitOpts, PerfTry) rather than
-   growing js/game.js. The panel is created at runtime — no index.html node,
-   no new CSS class (inline styles on a <pre id="game-metrics">).
+   WHY ITS OWN FILE. This is not a quality tier. The overlay is DOM the
+   player asked for, so it lives next to the other injected SETTINGS buttons
+   (CockpitOpts) rather than growing js/game.js. The panel is created at
+   runtime — no index.html node, no new CSS class (inline styles on a
+   <pre id="game-metrics">).
 
    Tick is its own rAF at ~4 Hz. It never runs when OFF, and it never logs
    per frame. Turning ON raises the Log BUFFER to debug for the session so
@@ -51,7 +51,7 @@ const PANEL_STYLE = "position:fixed;right:8px;" +
   "border-radius:6px;pointer-events:none;white-space:pre;text-align:left;" +
   "max-width:min(46ch,calc(100vw - 16px));" +
   "max-height:min(28em,calc(100dvh - 12px - var(--tap, 44px) - var(--sat, 0px) - 80px * var(--hud-scale, 1) - 96px));" +
-  "overflow:hidden;text-shadow:0 1px 0 #000";
+  "overflow-y:auto;pointer-events:auto;text-shadow:0 1px 0 #000";
 
 function qFlag(re) {
   try { return re.exec(location.search); } catch (_) { return null; }
@@ -124,6 +124,11 @@ function store(key, val, pinRe) {
 }
 
 function snapshot() {
+  const pg = page();
+  const wantGov = pg === "gov";
+  const wantCar = pg === "car";
+  const wantPhys = pg === "phys";
+  const wantLog = pg === "log";
   const out = {
     on: on(),
     page: page(),
@@ -170,7 +175,7 @@ function snapshot() {
     }
   } catch (_) { /* apex not live / player not spawned */ }
   try {
-    if (typeof __apex !== "undefined" && __apex.gpuTimer) {
+    if (wantGov && typeof __apex !== "undefined" && __apex.gpuTimer) {
       const g = __apex.gpuTimer();
       if (g && g.ms != null && g.ms >= 0) out.gpuMs = +g.ms.toFixed(2);
     }
@@ -198,7 +203,7 @@ function snapshot() {
     }
   } catch (_) { /* info needs a live G */ }
   try {
-    if (typeof __apex !== "undefined" && __apex.timing) {
+    if (wantCar && typeof __apex !== "undefined" && __apex.timing) {
       const t = __apex.timing();
       if (t) {
         out.lap = t.lap;
@@ -220,7 +225,7 @@ function snapshot() {
   // HUD km/h is dashKph (vStd*3.6), not raw ground*3.6. Keep both: a painted
   // 0 is a real parked reading, and headless leaves the digit at 0.
   try {
-    if (typeof document !== "undefined") {
+    if (wantCar && typeof document !== "undefined") {
       const n = document.getElementById("hud-speed-n");
       const v = n && parseFloat(n.textContent);
       if (isFinite(v)) { out.dashKph = v; out.speedKph = v; out.speedIsDash = true; }
@@ -229,7 +234,7 @@ function snapshot() {
   // probe() is one Tracks.sample. obs() adds walls, a 3-point lookahead,
   // field sort, and reward terms — too much for a 4 Hz overlay.
   try {
-    if (typeof __apex !== "undefined" && __apex.probe) {
+    if (wantCar && typeof __apex !== "undefined" && __apex.probe) {
       const o = __apex.probe();
       if (o) {
         if (o.speed != null) out.gndKph = +(o.speed * 3.6).toFixed(1);
@@ -243,7 +248,7 @@ function snapshot() {
     }
   } catch (_) { /* probe needs player + track */ }
   try {
-    if (typeof __apex !== "undefined" && __apex.physState) {
+    if (wantPhys && typeof __apex !== "undefined" && __apex.physState) {
       const p = __apex.physState();
       if (p && p.ok !== false) {
         if (p.slipDeg != null) out.slipDeg = p.slipDeg;
@@ -283,15 +288,17 @@ function snapshot() {
       const lv = Log.level();
       out.logConsole = lv.console || "";
       out.logBuffer = lv.buffer || "";
-      const rec = Log.records();
-      out.logN = rec.length;
-      const ns = logNs();
-      const filt = { level: logLvl(), limit: 12 };
-      if (ns && ns !== "*") filt.ns = ns;
-      const shown = Log.records(filt);
-      out.logShown = shown.length;
-      out.logs = shown.map((r) => r.level[0] + " " + r.ns + " " + r.msg);
-      if (out.track) {
+      if (wantLog) {
+        const rec = Log.records();
+        out.logN = rec.length;
+        const ns = logNs();
+        const filt = { level: logLvl(), limit: 12 };
+        if (ns && ns !== "*") filt.ns = ns;
+        const shown = Log.records(filt);
+        out.logShown = shown.length;
+        out.logs = shown.map((r) => r.level[0] + " " + r.ns + " " + r.msg);
+      }
+      if (wantGov && out.track) {
         const tr = Log.records({ ns: "track", level: "info" });
         for (let i = tr.length - 1; i >= 0; i--) {
           if (/^build done /.test(tr[i].msg) && tr[i].msg.indexOf(out.track) >= 0) {
@@ -444,7 +451,7 @@ function restoreBuffer() {
 function set(v) {
   const next = !!v;
   _on = next;
-  try { localStorage.setItem(KEY, next ? "1" : "0"); } catch (_) { /* private mode: session-only */ }
+  store(KEY, next ? "1" : "0", /[?&]metrics=/i);
   try { Log.info("game", "metrics " + (next ? "on " + page() : "off")); } catch (_) { /* Log not loaded */ }
   if (next) {
     raiseBuffer();
@@ -508,7 +515,8 @@ function nextLogLvl(dir) {
 }
 
 function typingTarget(t) {
-  return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+  return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" ||
+    t.tagName === "SELECT" || t.tagName === "BUTTON" || t.isContentEditable);
 }
 
 function initUI() {
@@ -520,7 +528,7 @@ function initUI() {
     const b = document.createElement("button");
     b.id = "pm-metrics";
     b.type = "button";
-    b.title = "Live FPS / car / phys / log overlay. ` or F9 toggle. [ ] pages, 1–4 jump, - = log ns, ; log level.";
+    b.title = "Live FPS / car / phys / log overlay. ` or F9 toggle. Click cycles pages; LOG again turns off. [ ] pages, 1–4 jump, - = log ns, ; log level.";
     paintBtn(b);
     b.onclick = () => {
       if (!on()) set(true);
@@ -545,6 +553,9 @@ function initUI() {
         return;
       }
       if (!on()) return;
+      try {
+        if (typeof UiLayers !== "undefined" && UiLayers.anyOpen && UiLayers.anyOpen()) return;
+      } catch (_) { /* menus not booted */ }
       if (e.key === "]" || e.key === "[") {
         e.preventDefault();
         nextPage(e.key === "]" ? 1 : -1);
