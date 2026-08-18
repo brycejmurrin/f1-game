@@ -858,7 +858,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   aspect-ratio: 520 / 300;
   object-fit: contain;
   border-radius: var(--r-md);
-  background: rgba(0, 0, 0, 0.25);
+  background: transparent;
 }
 #sel-preview-info { flex: 1 1 auto; min-width: 0; overflow: hidden; }
 

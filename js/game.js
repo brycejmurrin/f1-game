@@ -5661,13 +5661,11 @@ function render(dt) {
   // camera
   let eyeT, tgtT, fovT, roadCamRoll = 0;
   if (state === "menu") {
-    // slow flyby
     _plOk = false; _plBodyOk = false;
     const s = wrapS((performance.now() * 0.012) % track.total);
-    Tracks.sample(track, s, smp);
-    eyeT = [smp.p[0] + smp.r[0] * 26 , smp.p[1] + 17, smp.p[2] + smp.r[2] * 26];
-    tgtT = [smp.p[0] + smp.t[0] * 40, smp.p[1] + 2, smp.p[2] + smp.t[2] * 40];
-    fovT = 58; camAncNX = null;   // no car anchor on the attract/menu rig — world-frame damping
+    const bankCam = Tracks.banking(track, s, 0, _bankScratchCam, true);
+    const vant = camVantage("cinematic", s, 0, vStd(40), performance.now(), { bankDy: bankCam ? bankCam.dy : 0 });
+    eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov; camAncNX = null;
   } else {
     if (!player) return;
     // Anchor the camera to the SAME (s, x) the car body samples — playerAnchor
