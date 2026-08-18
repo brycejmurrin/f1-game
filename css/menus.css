@@ -1027,7 +1027,8 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    same threshold. `data-pair="on"` is what puts both panes in a
    `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
    scroll region needs. */
-#ss-inner { --sheet-w: 1020px; --pair-at: 620px; }
+#ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; }
+@media (orientation: landscape) { #ss-inner { --fit-at: 220px; } }
 /* SHORT SHEET: stack even when clientWidth stays above 620 (landscape phone at
    a raised UI SIZE). Same compact --pair-at raise as career / select / garage. */
 #ss-inner[data-density="compact"] { --pair-at: 2000px; }

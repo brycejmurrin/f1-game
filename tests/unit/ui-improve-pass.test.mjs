@@ -353,6 +353,10 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
   assert.match(components, /#pmsettings-inner \{\s*--fit-at:\s*300px/);
   assert.match(components, /#pmsettings-inner \{\s*--fit-at:\s*220px/);
   assert.match(components, /#vsfriend-inner \{\s*--fit-at:\s*280px/);
+  assert.match(read("css/career.css"), /#cr-inner \{[^}]*--fit-at:\s*300px/);
+  assert.match(read("css/career.css"), /#cr-inner \{[^}]*--fit-at:\s*220px/);
+  assert.match(menus, /#ss-inner \{[^}]*--fit-at:\s*300px/);
+  assert.match(menus, /#ss-inner \{[^}]*--fit-at:\s*220px/);
   assert.match(read("css/overlays.css"), /@container sheet \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
   assert.doesNotMatch(read("css/overlays.css"), /@media \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
   assert.match(menus, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/);

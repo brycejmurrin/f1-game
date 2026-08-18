@@ -285,7 +285,9 @@ one obvious scroll region.
    `#vsfriend-inner` with `--fit-at`; host/join columns are an `@container sheet`
    split. Settings declares `--fit-at` and compact+narrow category tabs are one
    pan-x row. How to Play contents is a left rail on `data-shape=wide` sheets and
-   a horizontal strip when compact.
+   a horizontal strip when compact. Compact stacked Circuit Select pans the
+   filter on density (not a local max-width query); search keeps a 12rem floor.
+   Career and Season setup declare `--fit-at` like Settings.
 5. Race layer: HUD, pause, camera picker, photo mode, orientation and zoom.
 6. Final matrix: all screens, scales, inputs, screenshots, performance and
    accessibility checks; then cache/version bump as the final production edit.
