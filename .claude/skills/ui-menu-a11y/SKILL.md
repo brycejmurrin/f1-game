@@ -19,7 +19,8 @@ on top, and route Escape/back through the same button path a player would use.
 Do **not** use for in-race driving input (unless a menu leaks keys) —
 **input-controls**. Data-hub tab logic → **data-hub**. Renderer/canvas
 visuals outside menu/HUD layout are out. Whole-matrix review →
-**survey-ui-matrix**. Restructure decisions → **restructure-screens-css**.
+**survey-ui-matrix**. One-screen CSS try-on → **css-play**. Restructure
+decisions → **restructure-screens-css**.
 
 ## Quick Reference
 

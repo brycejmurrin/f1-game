@@ -326,6 +326,7 @@ const CEILINGS = {
   // 8605 -> 8599: extract street OT/defend/tow/queue-brake/sep/wall into AiDrive.
   // 8599 -> 8601: union with leftover hunt (skip finished neighbours + idle re-buckets).
   // 8601 -> 8600: factory aero/ERS on AI + houseStyle call sites (net −1).
+  // Union with snapGameCam soft-present invalidate measured 8600.
   "js/game.js": 8600,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
@@ -374,7 +375,14 @@ const CEILINGS = {
   // 2734 -> 2739: the cockpit wing's placement is now a recorded measurement
   // (screen rect at canvas res + what ate the other 13k px), not a guess.
   // 2739 -> 2741: lifecycle Log.info at car mesh build (ns "car").
-  "js/car/car3d.js": 2741,
+  // 2741 -> 2757: sharper wing foil (knife-TE sample + outboard span split) and
+  // beveled endplates/canards — same mesh for GLX/WGX/TLX, paid from the 2.4k
+  // default-body headroom. Raised deliberately.
+  // 2757 -> 2766: thinner foil sections (~25%) + foil T-wing + beveled vanes.
+  // 2766 -> 2800: 2026 realism — extra sidepod stations, floor LE teeth,
+  // underwing fences, reverse-P inlet, beveled halo. Still under 2400/1500.
+  // 2800 -> 2851: recipe-gated duct / wakeboard / floor-slot kits.
+  "js/car/car3d.js": 2851,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

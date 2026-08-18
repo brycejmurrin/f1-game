@@ -14,8 +14,8 @@ Title-path recipe (six screens at iPhone landscape, with shots):
 `browser_snapshot`, `browser_evaluate`), Chrome DevTools MCP for emulate +
 heap when needed. Canvas hidden either way.
 
-Single known bug → **ui-menu-a11y**. Restructure decisions →
-**restructure-screens-css**.
+Single known bug → **ui-menu-a11y**. One-screen CSS edit loop → **css-play**.
+Restructure decisions → **restructure-screens-css**.
 
 **Measure with the MCP; capture with either — but read the traps first.**
 

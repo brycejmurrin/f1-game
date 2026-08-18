@@ -2368,6 +2368,7 @@ function snapGameCam() {
   camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
   camFov = v.fov;
   camRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
+  try { if (gfx && gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* GLX */ }
 }
 
 // Races started this session. It is the round number a one-off Grand Prix hashes

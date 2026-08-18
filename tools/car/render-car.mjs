@@ -250,7 +250,11 @@ if (FLAP != null) qs.set('flap', FLAP);
 if (LOOKY != null) qs.set('looky', LOOKY);
 for (const pl of PLIGHTS) qs.append('plight', pl);
 for (const [k, v] of Object.entries(parts)) qs.set(k, v);
-const pageUrl = `${URL}/tools/carview.html?${qs.toString()}`;
+// `npx serve` 301s `carview.html?…` to `/tools/carview` and DROPS the query,
+// so every team/aero flag used to boot the default McLaren. The extensionless
+// path keeps the search string (200). CARVIEW.set after ready is the backup
+// for hosts that still rewrite.
+const pageUrl = `${URL}/tools/carview?${qs.toString()}`;
 
 const shots = [];
 const browser = await chromium.launch({ ...(EXE ? { executablePath: EXE } : {}), args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
@@ -260,6 +264,18 @@ try {
   await page.goto(pageUrl, { waitUntil: 'load' });
   const ok = await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { timeout: WAIT_MS }).then(() => true).catch(() => false);
   if (!ok) { console.error(`carview did not become ready in ${WAIT_MS / 1000}s — is the server running and the car building? (--wait=SECONDS to allow longer)`); process.exit(2); }
+
+  const boot = { team: TEAM, parts };
+  if (LIVERY) boot.livery = LIVERY;
+  if (NUM != null) boot.num = NUM;
+  if (REFL != null) boot.refl = parseFloat(REFL);
+  const bootFrame = await page.evaluate((p) => {
+    const before = window.CARVIEW.frame;
+    window.CARVIEW.set(p);
+    return before;
+  }, boot);
+  await page.waitForFunction((before) => window.CARVIEW.frame >= before + 8, bootFrame, { timeout: WAIT_MS })
+    .catch(async () => { await page.waitForTimeout(2_000); });
 
   let renderedTod = TOD, firstShot = true;
   for (const s of shotDefs) {

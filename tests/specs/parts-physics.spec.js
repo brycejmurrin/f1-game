@@ -777,10 +777,10 @@ test.describe("Parts module — visual recipes", () => {
       // and 30 mm lower than they first shipped — the stack used to climb INTO
       // the nose overhang (21 mm through it at max downforce).
       const elements = [
-        [2.50, 0.092, 2.24, 0.146, 0.98, 0.028],
-        [2.34, 0.148, 2.10, 0.212, 0.95, 0.026],
-        [2.20, 0.200, 1.98, 0.272, 0.92, 0.024],
-        [2.08, 0.256, 1.88, 0.328, 0.88, 0.022],
+        [2.50, 0.092, 2.24, 0.146, 0.98, 0.020],
+        [2.34, 0.148, 2.10, 0.212, 0.95, 0.018],
+        [2.20, 0.200, 1.98, 0.272, 0.92, 0.016],
+        [2.08, 0.256, 1.88, 0.328, 0.88, 0.014],
       ];
       return aero.options.flatMap((option) => {
         const style = option.visual, level = style.lvl;
@@ -1253,6 +1253,7 @@ test.describe("Parts module — visual recipes", () => {
       const out = { inert: {}, active: {} };
       const KNOBS = [
         ["aero", "plate", 2], ["aero", "casc", 3], ["aero", "swan", 1], ["aero", "tvane", 1],
+        ["aero", "duct", 2], ["aero", "board", 2], ["aero", "slot", 1],
         ["engine", "chimney", 3], ["brakes", "scoop", 2], ["ers", "conduit", 2], ["fuel", "filler", 2],
         ["exhaust", "pipes", 3], ["exhaust", "bore", 1.3], ["exhaust", "flare", 1],
         ["exhaust", "wastegate", 2], ["exhaust", "wrap", 1],

@@ -578,9 +578,11 @@ const WGX = (function () {
     // breaks mapAsync device-wide. ONE mapAsync in flight (mirror capturePixels):
     // a later present() skips the 2D copy so SwiftShader cannot complete an older
     // readback after a newer one and leave #game on a pits/gantry frame.
-    // awaitSoftPresent() resolves only after a blit with maxPx >= 8 that was
-    // encoded AFTER the wait started. WebGPU renders on a hidden canvas swapped
-    // in at boot.
+    // snapCam()/invalidateSoftPresent() bumps _softSceneGen so an in-flight pits
+    // readback cannot satisfy awaitSoftPresent(); the waiter accepts the first
+    // non-blank blit encoded at that generation (not a second encode after it).
+    // Never destroy a MAP_READ buffer to "skip" a blit — that hangs later maps.
+    // WebGPU renders on a hidden canvas swapped in at boot.
     let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
     let softPresentTex = null, softPresentView = null;
     let _softW = 0, _softH = 0;
@@ -589,6 +591,17 @@ const WGX = (function () {
     let _softBlitSeq = 0;
     let _softBlitShown = 0;
     let _softDisplayPending = false, _softDisplayEpoch = 0;
+    let _softSceneGen = 0, _softShownGen = 0;
+    let _softLastMaxPx = 0, _softLastSkip = "";
+    // sessionStorage apex26.wgxHoldPresent=1 (set before reload) skips copy+map
+    // until holdSoftPresent(false). The first SwiftShader mapAsync is the only
+    // one that reliably completes; a menu/pits blit first leaves #game on that
+    // frame and hangs the chase map (measured, Chrome MCP evaluate).
+    let _softHold = false;
+    try {
+      _softHold = typeof sessionStorage !== "undefined" &&
+        sessionStorage.getItem("apex26.wgxHoldPresent") === "1";
+    } catch (_) { /* private mode */ }
     const _softPresentWaiters = [];
     if (_softGpu && typeof document !== "undefined") {
       _displayCanvas = canvas;
@@ -606,7 +619,11 @@ const WGX = (function () {
     // box or viewport changes, then reuse the last real size between events.
     const _layoutCanvas = (_softGpu && _displayCanvas) ? _displayCanvas : canvas;
     let _cssW = 0, _cssH = 0, _cssDirty = true;
-    const _markCssDirty = function () { _cssDirty = true; };
+    // Setting canvas.width fires ResizeObserver on this same node. Ignore
+    // those callbacks or a 1px layout loop reconfigures the swapchain every
+    // frame (white page / black clear flash — measured on the deploy tip).
+    let _cssApplying = false;
+    const _markCssDirty = function () { if (!_cssApplying) _cssDirty = true; };
     let _canWatchCss = false;
     if (typeof window !== "undefined" && window.addEventListener) {
       window.addEventListener("resize", _markCssDirty);
@@ -1714,10 +1731,11 @@ const WGX = (function () {
       // A software map can lag many frames. Never allocate another full-frame
       // staging buffer until the current one has mapped or failed; the next
       // rendered frame will naturally become the newest readback.
-      if (_softDisplayPending) return null;
+      if (_softHold || _softDisplayPending) return null;
       let buf = null;
       try {
-        const w = width, h = height;
+        const w = _softW || width, h = _softH || height;
+        if (w < 2 || h < 2) return null;
         const bpr = (w * 4 + 255) & ~255;
         buf = device.createBuffer({
           size: bpr * h, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
@@ -1729,7 +1747,7 @@ const WGX = (function () {
         );
         _softBlitSeq++;
         _softDisplayPending = true;
-        return { buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch };
+        return { buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch, sceneGen: _softSceneGen };
       } catch (_) {
         try { if (buf) buf.destroy(); } catch (_) { /* partial encode */ }
         return null;
@@ -1737,7 +1755,7 @@ const WGX = (function () {
     }
     function _softDisplayFinish(cap) {
       if (!cap) return;
-      const { buf, bpr, w, h, seq, epoch } = cap;
+      const { buf, bpr, w, h, seq, epoch, sceneGen } = cap;
       const release = function () { _softDisplayPending = false; };
       if (!_displayCtx) {
         try { buf.destroy(); } catch (_) { /* device dying */ }
@@ -1767,10 +1785,18 @@ const WGX = (function () {
                     if ((r + g + b) > maxPx) maxPx = r + g + b;
                   }
                 }
+                _softLastMaxPx = maxPx;
                 if (maxPx >= 8) {
                   _displayCtx.putImageData(img, 0, 0);
+                  _softShownGen = sceneGen;
+                  _softLastSkip = "";
                   _softBlitNotify(seq);
+                } else {
+                  _softLastSkip = "dim";
                 }
+              } else {
+                _softLastSkip = epoch !== _softDisplayEpoch ? "epoch"
+                  : (seq !== _softBlitSeq ? "seq" : "size");
               }
             } catch (_) { /* 2D blit failed */ }
             try { buf.unmap(); buf.destroy(); } catch (_) { /* device dying */ }
@@ -1805,13 +1831,42 @@ const WGX = (function () {
       }
       for (let j = 0; j < keep.length; j++) _softPresentWaiters.push(keep[j]);
     }
+    function holdSoftPresent(on) {
+      if (on === undefined) return _softHold;
+      _softHold = !!on;
+      try {
+        if (typeof sessionStorage === "undefined") return _softHold;
+        if (_softHold) sessionStorage.setItem("apex26.wgxHoldPresent", "1");
+        else sessionStorage.removeItem("apex26.wgxHoldPresent");
+      } catch (_) { /* private mode */ }
+      return _softHold;
+    }
+    function invalidateSoftPresent() {
+      if (!_softGpu) return;
+      // Bump generation only. Do NOT destroy the in-flight MAP_READ buffer —
+      // that hangs the next mapAsync on SwiftShader (measured). Do NOT bump
+      // epoch either: the in-flight copy must be allowed to land so pending
+      // can clear; awaitSoftPresent ignores it when shownGen < needGen.
+      _softSceneGen++;
+    }
+    function softPresentState() {
+      return {
+        seq: _softBlitSeq, shown: _softBlitShown, pending: _softDisplayPending,
+        hold: _softHold,
+        epoch: _softDisplayEpoch, sceneGen: _softSceneGen, shownGen: _softShownGen,
+        lastMaxPx: _softLastMaxPx, lastSkip: _softLastSkip,
+        display: _displayCanvas ? [_displayCanvas.width, _displayCanvas.height] : null,
+        tex: [_softW, _softH],
+      };
+    }
     function awaitSoftPresent(timeoutMs) {
       if (!_softGpu || !_displayCtx) return Promise.resolve(_softBlitGen);
-      // Snapshot the last *issued* encode. A waiter must see a later encode
-      // complete — otherwise park()+snapCam() resolves on the in-flight pits
-      // blit that was submitted before the camera moved.
-      const after = _softBlitSeq;
-      if (_softBlitShown > after) return Promise.resolve(_softBlitShown);
+      // A waiter needs a blit encoded at/after the current scene generation
+      // (bumped by snapCam), not a second encode after that blit. Requiring
+      // seq > _softBlitSeq timed out when the chase map was already in flight.
+      const needGen = _softSceneGen;
+      const shown0 = _softBlitShown;
+      if (shown0 > 0 && _softShownGen >= needGen) return Promise.resolve(shown0);
       const ms = timeoutMs != null ? timeoutMs : 15000;
       return new Promise(function (resolve, reject) {
         let waiter = null;
@@ -1821,7 +1876,7 @@ const WGX = (function () {
           reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
         }, ms);
         waiter = function (seq) {
-          if (seq > after) {
+          if (_softShownGen >= needGen || (shown0 === 0 && seq > 0)) {
             try { clearTimeout(timer); } catch (_) { /* harness */ }
             resolve(seq);
             return true;
@@ -1838,23 +1893,33 @@ const WGX = (function () {
       // swapchain itself) then fails into a silent per-frame retry loop.
       const maxDim = (device.limits && device.limits.maxTextureDimension2D) || 8192;
       _cssSize();
-      const w = Math.min(maxDim, Math.max(1, Math.round(_cssW * dpr * renderScale)));
-      const h = Math.min(maxDim, Math.max(1, Math.round(_cssH * dpr * renderScale)));
+      let w = Math.min(maxDim, Math.max(1, Math.round(_cssW * dpr * renderScale)));
+      let h = Math.min(maxDim, Math.max(1, Math.round(_cssH * dpr * renderScale)));
+      // 1px CSS/DPR jitter must not rebuild the swapchain. Reconfigure wipes
+      // to black and the 2D #game to transparent (white shell flashing through).
+      if (width > 1 && height > 1 && Math.abs(w - width) <= 1 && Math.abs(h - height) <= 1) {
+        w = width; h = height;
+      }
       const sizeChanged = canvas.width !== w || canvas.height !== h ||
         (_displayCanvas && (_displayCanvas.width !== w || _displayCanvas.height !== h));
       if (sizeChanged) {
-        _softDisplayEpoch++;
-        canvas.width = w; canvas.height = h;
-        // WebGPU: changing the canvas drawing-buffer size INVALIDATES the
-        // configured swapchain. Reconfigure on every buffer-size change.
-        if (ctx) {
-          const _cfgErr = _configureCanvas();
-          if (_cfgErr) try { if (!_cfgWarned) { _cfgWarned = true; Log.warn("gfx", "WGX canvas configure failed —", _cfgErr); } } catch (_) { /* harness */ }
-          else _cfgWarned = false;
-        }
-        if (_softGpu && _displayCanvas) {
-          _displayCanvas.width = w;
-          _displayCanvas.height = h;
+        _cssApplying = true;
+        try {
+          _softDisplayEpoch++;
+          canvas.width = w; canvas.height = h;
+          // WebGPU: changing the canvas drawing-buffer size INVALIDATES the
+          // configured swapchain. Reconfigure on every buffer-size change.
+          if (ctx) {
+            const _cfgErr = _configureCanvas();
+            if (_cfgErr) try { if (!_cfgWarned) { _cfgWarned = true; Log.warn("gfx", "WGX canvas configure failed —", _cfgErr); } } catch (_) { /* harness */ }
+            else _cfgWarned = false;
+          }
+          if (_softGpu && _displayCanvas) {
+            _displayCanvas.width = w;
+            _displayCanvas.height = h;
+          }
+        } finally {
+          _cssApplying = false;
         }
       }
       width = w; height = h; aspect = w / h;
@@ -3142,6 +3207,8 @@ const WGX = (function () {
     function _bindLitVerts(pass, vbuf, instBuf, attrBG, authored) {
       pass.setVertexBuffer(0, vbuf);
       pass.setVertexBuffer(1, instBuf || identInstanceBuf);
+      // Road pieces keep their authored (mat,s,x,hw) buffer so dashes follow
+      // interpolated vertex s. Floor/terrain keep the world LUT (magic 12345).
       pass.setBindGroup(2, (authored && attrBG) ? attrBG : (_roadLutBG || attrBG || zeroAttrBG));
     }
 
@@ -4967,8 +5034,9 @@ const WGX = (function () {
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
       awaitSoftPresent,
-      capturePixels,
-      awaitSoftPresent,
+      invalidateSoftPresent,
+      holdSoftPresent,
+      softPresentState,
       roadLutReady: () => _roadLutReady,
       softPresent: () => !!_softGpu,
 
