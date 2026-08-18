@@ -2655,6 +2655,41 @@ const Tracks = (function () {
     }
   }
 
+  // Arcade road-feel. Authored `baseHW` / `hwZones` stay survey-relative so
+  // Loews still pinches and Monza stays a wide park circuit — but length is
+  // already scaled ~1.45× while cars stay ~2 m, and the street canyons are
+  // where a 22-car field actually bunches. A class-based lift (narrower city
+  // streets get more) opens the racing corridor without making every circuit
+  // the same width. Optional authored `hwFeel` overrides the class default
+  // and is consumed here off the raw def (ENGINE_ONLY — not copied to LIST).
+  function roadHwFeel(raw) {
+    if (!raw) return 1;
+    const authored = raw.hwFeel;
+    if (authored != null && isFinite(authored) && authored > 0) return +authored;
+    const street = !!raw.street;
+    const base = +raw.baseHW || 7;
+    const id = raw.id;
+    if (street) {
+      if (base <= 5.25) return 1.22;   // Monaco — tightest canyon, needs the most room
+      if (base <= 6.25) return 1.16;   // Singapore / Baku / Jeddah
+      return 1.10;                     // Vegas — already a boulevard
+    }
+    // City walls without the street-barrier envelope (Hard Rock / IFEMA).
+    if (id === "miami" || id === "madrid") return 1.12;
+    // Permanents already differ by authored baseHW (7 / 7.5 / 8); lift the
+    // narrower ones a little more so Sepang does not grow as much as Imola.
+    if (base >= 8) return 1.03;
+    if (base >= 7.5) return 1.05;
+    return 1.06;
+  }
+
+  function applyRoadHwFeel(pts, raw) {
+    if (!pts || !pts.length) return;
+    const feel = roadHwFeel(raw);
+    if (!(feel > 0) || feel === 1) return;
+    for (let i = 0; i < pts.length; i++) pts[i][3] *= feel;
+  }
+
   const LIST = DEFS.map((d) => {
     const def = {
       id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3,
@@ -2812,6 +2847,8 @@ const Tracks = (function () {
     }
     // Apply after startFrac remap so authored s0/s1 stay in racing-lap space.
     if (def.hwZones) applyHwZones(pts, def.hwZones, d.baseHW);
+    // Feel scale LAST so pinches still pinch (they scale with the same factor).
+    applyRoadHwFeel(pts, d);
     Object.defineProperty(def, "points", {
       value: pts, writable: true, configurable: true, enumerable: true
     });
@@ -2928,5 +2965,5 @@ const Tracks = (function () {
     return keepGeometry;
   }
 
-  return { LIST, SEASON, seasonIndex, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY, setKeepGeometry };
+  return { LIST, SEASON, seasonIndex, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY, setKeepGeometry, roadHwFeel };
 })();

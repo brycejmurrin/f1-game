@@ -36,6 +36,12 @@ hwZones: [{ s0: 0.42, s1: 0.50, hw: 3.8, ease: 0.02 }]
 `hw` is half-width in metres; `ease` is a soft blend shoulder in lap fraction
 (default `0.025`). Zones remapped with `startFrac`/`reverse` like elevations.
 
+After zones land, `Tracks.roadHwFeel()` applies a **class-based arcade lift**
+so city streets gain more corridor than already-wide permanents (Monaco more
+than Vegas; Imola more than Sepang). Pinches still pinch — they scale with
+the same factor. An authored `hwFeel` on the raw def overrides the class
+default and is not copied onto `Tracks.LIST`.
+
 ---
 
 ## Positioning model

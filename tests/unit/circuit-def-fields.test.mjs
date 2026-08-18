@@ -43,6 +43,7 @@ const { buildContext } = require(path.join(ROOT, "tools/verify-track.cjs"));
 const ENGINE_ONLY = {
   segs: "the authored centreline; consumed by centerline() into def.points",
   baseHW: "half-width input to centerline()/applyHwZones, not read after build",
+  hwFeel: "optional arcade half-width feel scale; consumed by applyRoadHwFeel off the raw def",
   pal: "raw palette input; built into def.palette by dayPal/nightPal",
 };
 

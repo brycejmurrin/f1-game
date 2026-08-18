@@ -373,3 +373,43 @@ test("game keeps the sole prebuilt ribbon usable across envCull and tier changes
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
   assert.match(tlx, /chunkedTrackCoords:\s*false/);
 });
+
+test("roadHwFeel lifts city streets more than wide permanents and keeps pinches", () => {
+  const Tracks = buildContext().Tracks;
+  const feel = Tracks.roadHwFeel;
+  assert.equal(typeof feel, "function");
+  // Class defaults are NOT uniform — that is the whole point.
+  const monacoFeel = feel({ id: "monaco", street: true, baseHW: 5 });
+  const marinaFeel = feel({ id: "singapore", street: true, baseHW: 6 });
+  const vegasFeel = feel({ id: "vegas", street: true, baseHW: 7 });
+  const miamiFeel = feel({ id: "miami", street: false, baseHW: 7 });
+  const imolaFeel = feel({ id: "imola", street: false, baseHW: 7 });
+  const sepangFeel = feel({ id: "sepang", street: false, baseHW: 8 });
+  assert.ok(monacoFeel > marinaFeel, "tightest street gets the biggest lift");
+  assert.ok(marinaFeel > vegasFeel, "mid street gets more than a boulevard");
+  assert.ok(vegasFeel > imolaFeel, "street canyon still outlifts a park circuit");
+  assert.ok(miamiFeel > imolaFeel, "urban hybrid outlifts a same-width permanent");
+  assert.ok(imolaFeel > sepangFeel, "narrower permanents grow more than already-wide ones");
+  assert.equal(feel({ id: "monaco", street: true, baseHW: 5, hwFeel: 1.3 }), 1.3,
+    "authored hwFeel overrides the class default");
+
+  const hwOf = (id) => {
+    const def = Tracks.LIST.find((t) => t.id === id);
+    assert.ok(def && def.points && def.points.length, `${id} must materialize points`);
+    let min = Infinity, max = -Infinity;
+    for (const p of def.points) {
+      const h = p[3];
+      if (h < min) min = h;
+      if (h > max) max = h;
+    }
+    return { min, max };
+  };
+  const monaco = hwOf("monaco");
+  const singapore = hwOf("singapore");
+  const spa = hwOf("spa");
+  // Wide sections land on baseHW * feel; pinches stay below that.
+  assert.ok(Math.abs(monaco.max - 5 * monacoFeel) < 0.05, `monaco max ${monaco.max}`);
+  assert.ok(monaco.min < monaco.max - 0.4, "Monaco Loews/pool pinches must survive the lift");
+  assert.ok(monaco.max < singapore.max, "Monaco stays the tightest street after the lift");
+  assert.ok(singapore.max < spa.max, "Marina Bay stays narrower than Spa");
+});
