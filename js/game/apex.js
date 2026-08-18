@@ -1457,7 +1457,7 @@ const api = {
       // "why is this car quick?" is answerable without reading the source.
       // tierV folds the team's TIER_V together with career team development;
       // skill is the driver. Both are 1-ish multipliers on vmax.
-      tierV: +(c.tierV || 0).toFixed(6), skill: +(c.skill || 0).toFixed(6),
+      tierV: +(c.tierV || 0).toFixed(6), skill: +(c.skill || 0).toFixed(6), aeroLoad: +(c.aeroLoad != null ? c.aeroLoad : 0.5).toFixed(3), ersDeploy: +(c.ersDeploy != null ? c.ersDeploy : 0.5).toFixed(3),
       // Racecraft axes the AI loop actually reads (0..1). Exposed so a probe can
       // tell VER-from-LIN without opening driver-ratings.js.
       // Defaults match AiDrive.traits mid-grid fallback (0.75), not 0.
