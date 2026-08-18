@@ -112,6 +112,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/terrain-normals.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
+  "tests/unit/menu-nav-spatial.test.mjs",
   "tests/unit/pause-hud-layout.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
   "tests/unit/metrics.test.mjs",
