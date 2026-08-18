@@ -13,6 +13,11 @@ cover most needs; drop to a custom harness for bespoke sweeps.
 ## Committed tools (use these first)
 
 ```sh
+# Same CLIs via MCP (takes scratch/apex-browser.lock; apex_status first):
+#   ./tools/apex-tools-mcp.sh call apex_eval '{"track":"monza","expr":"a.info()"}'
+#   ./tools/apex-tools-mcp.sh call apex_shot '{"track":"monza","frac":0.1}'
+#   ./tools/apex-tools-mcp.sh call apex_carshot '{"tod":"day"}'
+#   ./tools/apex-tools-mcp.sh call apex_quick_validate '{}'
 # One-off: boot the game, evaluate an __apex expression, print JSON.
 node tools/apex-eval.mjs <track> "<expr>"        # `a` = __apex; async ok; --raw for full JSON
 node tools/apex-eval.mjs monaco "a.camera()"

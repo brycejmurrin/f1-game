@@ -5,7 +5,7 @@ description: Use when the user wants to see or drive Apex 26 without screenshots
 
 # Agent view — perceive and drive the game as text
 
-Prefer `node tools/agent.mjs <track> help` / `__apex.agentHelp()` over this skill when you only need one tool. Per-tool catalog, policy, staging: [references/surface.md](references/surface.md). Full surface: `docs/AGENT-WORLD-API.md` + `docs/DEBUG-HOOKS.md`.
+Prefer `node tools/agent.mjs <track> help` / `__apex.agentHelp()` over this skill when you only need one tool. MCP wrap (week-2 lock): `./tools/apex-tools-mcp.sh call apex_agent '{"track":"monza","command":"world"}'`. Per-tool catalog, policy, staging: [references/surface.md](references/surface.md). Full surface: `docs/AGENT-WORLD-API.md` + `docs/DEBUG-HOOKS.md`.
 
 **TL;DR** — Perceive and drive Apex 26 as text, no screenshots. From a shell:
 `node tools/agent.mjs <track> <tool> [flags]` (it stages `race`/`go`/`jump` +

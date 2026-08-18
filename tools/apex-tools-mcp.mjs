@@ -1,0 +1,1617 @@
+#!/usr/bin/env node
+/**
+ * apex-tools-mcp — wrap committed tools/ CLIs as MCP tools (apex_* only).
+ *
+ * Fourth .mcp.json server (beside tinyfish / chrome-devtools / probe). Never
+ * chrome_* / tinyfish_*. Local working tree only; no github.io.
+ * Design: docs/research/APEX-TOOLS-MCP.md
+ *
+ *   node tools/apex-tools-mcp.mjs help | status | list-tools | serve
+ *   node tools/apex-tools-mcp.mjs call apex_pick_tests '{"dryRun":true}'
+ *   ./tools/apex-tools-mcp.sh call apex_status '{}'
+ *   ./tools/apex-tools-mcp.sh call apex_select_specs '{"since":"HEAD~1"}'
+ *
+ * APEX_MCP_MOCK=1 freezes the catalog and returns fake results (no spawn).
+ */
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import http from "node:http";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const PROTOCOL = "2025-06-18";
+const SERVER_NAME = "apex-tools-mcp";
+const SERVER_VERSION = "1.4.0";
+const HTTP_HOST = "127.0.0.1";
+const HTTP_PORT_DEFAULT = 3713;
+const PREFIX = "apex_";
+const LOCK_PATH = path.join(ROOT, "scratch", "apex-browser.lock");
+const TEST_BG_STATE = path.join(ROOT, "artifacts", "logs", "test-bg.json");
+const CHROME_DAEMON_STATE = path.join(ROOT, "scratch", "probe-chrome-daemon.port");
+const ARTIFACTS_DIR = path.join(ROOT, "artifacts");
+const SCRATCH_DIR = path.join(ROOT, "scratch");
+
+const UI_SCREENS = "title,select,garage,settings,career,datahub";
+const UI_VIEWPORTS = "ios-iphone-landscape";
+const UI_JOBS = 1;
+
+// Design §Locking known gap — v1 mutex is MCP-owned. chrome-devtools stdio
+// does not answer :3712/healthz. apex_status reports it; it does not close it.
+const KNOWN_GAP = {
+  chromeDevtoolsStdio:
+    "Cursor .mcp.json chrome-devtools is a third browser and does not answer :3712/healthz",
+  outsideLock: ["layout-audit", "cdmcp-*", "raw node tools/apex-eval.mjs"],
+};
+
+function toolKind(entry) {
+  if (entry.kind === "browser" || entry.kind === "tree") return entry.kind;
+  return entry.week === 2 ? "browser" : "tree";
+}
+
+function mockMode() {
+  const v = (process.env.APEX_MCP_MOCK || "").trim().toLowerCase();
+  return v !== "" && v !== "0" && v !== "false" && v !== "no";
+}
+
+function log(...args) {
+  console.error(...args);
+}
+
+function toolResult(body, { isError = false } = {}) {
+  const result = {
+    content: [{ type: "text", text: JSON.stringify(body) }],
+  };
+  if (isError || body.ok === false) result.isError = true;
+  return result;
+}
+
+function refuse(error, message, fix) {
+  return toolResult({ ok: false, error, message, fix }, { isError: true });
+}
+
+function isLoopbackHost(hostname) {
+  const h = String(hostname || "").toLowerCase().replace(/^\[|\]$/g, "");
+  return h === "127.0.0.1" || h === "localhost" || h === "::1";
+}
+
+function classifyUrl(raw) {
+  if (raw == null || raw === "") return null;
+  let u;
+  try {
+    u = new URL(String(raw));
+  } catch {
+    return {
+      error: "ssrf_blocked",
+      message: `invalid url: ${raw}`,
+      fix: "Pass a loopback http(s) URL (127.0.0.1 / localhost / [::1]) or omit url.",
+    };
+  }
+  const host = u.hostname.toLowerCase();
+  if (host === "github.io" || host.endsWith(".github.io")) {
+    return {
+      error: "github_io_blocked",
+      message: "apex_* tools never hit github.io / Pages.",
+      fix: "Use TinyFish / deploy-research / tools/tinyfish-mcp.sh deploy-check --tip for live deploy checks.",
+    };
+  }
+  if (!isLoopbackHost(host)) {
+    return {
+      error: "ssrf_blocked",
+      message: `non-loopback host refused: ${host}`,
+      fix: "SSRF allowlist is loopback only. Deployed-site checks belong to TinyFish.",
+    };
+  }
+  return null;
+}
+
+function resolveTarget(args) {
+  if (args.url != null && args.url !== "") return "url";
+  if (args.target != null && args.target !== "") return String(args.target);
+  if (process.env.APEX_MCP_TARGET) return String(process.env.APEX_MCP_TARGET);
+  return "local";
+}
+
+function gateTreeArgs(args) {
+  const urlGate = classifyUrl(args.url);
+  if (urlGate) return refuse(urlGate.error, urlGate.message, urlGate.fix);
+  if (resolveTarget(args) === "deploy") {
+    return refuse(
+      "tree_only",
+      "Tree tools operate on the working tree only.",
+      "Omit target / use target=local. Deployed Pages checks: TinyFish deploy-check --tip.",
+    );
+  }
+  return null;
+}
+
+function gateBrowserArgs(args) {
+  const urlGate = classifyUrl(args.url);
+  if (urlGate) return refuse(urlGate.error, urlGate.message, urlGate.fix);
+  if (args.url != null && args.url !== "") {
+    return refuse(
+      "url_not_supported",
+      "v1 browser tools boot harness.mjs on loopback; they do not take --url.",
+      "Omit url. Attaching to an already-running npx serve is a later feature.",
+    );
+  }
+  if (resolveTarget(args) === "deploy") {
+    return refuse(
+      "local_only",
+      "Browser apex_* tools are local harness only.",
+      "Omit target / use target=local. Deployed Pages checks: TinyFish / deploy-research.",
+    );
+  }
+  return null;
+}
+
+function alive(pid) {
+  if (!pid || !Number.isFinite(pid)) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function daemonPort() {
+  // Same discovery as probe-mcp.py daemon_port(): env → state file → 3712.
+  const candidates = [];
+  const env = (process.env.PROBE_CHROME_PORT || "").trim();
+  if (/^\d+$/.test(env)) candidates.push(Number(env));
+  try {
+    if (fs.existsSync(CHROME_DAEMON_STATE)) {
+      const text = fs.readFileSync(CHROME_DAEMON_STATE, "utf8").trim();
+      if (/^\d+$/.test(text)) candidates.push(Number(text));
+    }
+  } catch { /* ignore */ }
+  candidates.push(3712);
+  for (const port of [...new Set(candidates)]) {
+    // Raw TCP + HTTP/1.0 — Node http.get from a spawnSync child hangs on
+    // loopback in this environment (TCP connect succeeds; GET never completes).
+    const r = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        `const s=require("net").connect(${port},"127.0.0.1",()=>{s.write("GET /healthz HTTP/1.0\\r\\nHost:127.0.0.1\\r\\n\\r\\n")});let b="";s.on("data",d=>{b+=d;if(/HTTP\\/1.[01] 200/.test(b)){s.end();process.exit(0)}});s.on("error",()=>process.exit(1));s.setTimeout(800,()=>{s.destroy();process.exit(1)})`,
+      ],
+      { encoding: "utf8", timeout: 1500 },
+    );
+    if (r.status === 0) return port;
+  }
+  return null;
+}
+
+function playwrightLive() {
+  // Process-table check for orphans invisible to test-bg --status.
+  // Token match only: `playwright test` — NOT a substring that hits Cursor's
+  // exec-daemon --mcp-config {"playwright":...} line.
+  const r = spawnSync("ps", ["-eo", "pid,args"], { encoding: "utf8", timeout: 5000 });
+  if (r.status !== 0) return { live: false, pids: [] };
+  const pids = [];
+  for (const line of r.stdout.split("\n")) {
+    if (!/(?:^|[\s/])playwright\s+test(?:\s|$)/.test(line)) continue;
+    const m = line.trim().match(/^(\d+)\s/);
+    if (m) pids.push(Number(m[1]));
+  }
+  return { live: pids.length > 0, pids };
+}
+
+function testBgStatus() {
+  if (!fs.existsSync(TEST_BG_STATE)) {
+    return { recorded: false, running: [], runs: [] };
+  }
+  let state;
+  try {
+    state = JSON.parse(fs.readFileSync(TEST_BG_STATE, "utf8"));
+  } catch {
+    return { recorded: true, running: [], runs: [], error: "unreadable" };
+  }
+  const runs = Array.isArray(state.runs) ? state.runs : [];
+  const running = runs.filter((run) => alive(run.pid));
+  return { recorded: true, mode: state.mode, running, runs };
+}
+
+function lockInfo() {
+  if (!fs.existsSync(LOCK_PATH)) return { held: false };
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(LOCK_PATH, "utf8"));
+  } catch {
+    return { held: true, stale: true, error: "unreadable" };
+  }
+  const pid = Number(raw.pid);
+  if (!alive(pid)) return { held: false, stale: true, pid };
+  return { held: true, pid, since: raw.since || null, tool: raw.tool || null };
+}
+
+function reapStaleLock() {
+  const info = lockInfo();
+  if (info.stale && fs.existsSync(LOCK_PATH)) {
+    try { fs.unlinkSync(LOCK_PATH); } catch { /* ignore */ }
+  }
+}
+
+function occupancyRefuse() {
+  reapStaleLock();
+  const lock = lockInfo();
+  if (lock.held) {
+    return refuse(
+      "lock_held",
+      `scratch/apex-browser.lock is held by live pid ${lock.pid}` +
+        (lock.tool ? ` (${lock.tool})` : ""),
+      "Wait for the other apex_* browser tool to finish, or remove the lock if that PID is gone.",
+    );
+  }
+  const port = daemonPort();
+  if (port != null) {
+    return refuse(
+      "chrome_daemon_up",
+      `probe chrome daemon /healthz is up on 127.0.0.1:${port}`,
+      "python3 tools/probe-mcp.py chrome-stop before week-2 apex_* browser tools.",
+    );
+  }
+  const bg = testBgStatus();
+  const pw = playwrightLive();
+  if (bg.running.length || pw.live) {
+    return refuse(
+      "playwright_live",
+      "A Playwright group or `playwright test` process is live.",
+      "Wait for test-bg to finish (`node tools/test-bg.mjs --status`). Do not share Chromium with apex_* browser tools.",
+    );
+  }
+  return null;
+}
+
+function acquireLock(tool) {
+  const busy = occupancyRefuse();
+  if (busy) return busy;
+  fs.mkdirSync(path.dirname(LOCK_PATH), { recursive: true });
+  const payload = { pid: process.pid, since: Date.now(), tool };
+  fs.writeFileSync(LOCK_PATH, JSON.stringify(payload));
+  const again = lockInfo();
+  if (!again.held || again.pid !== process.pid) {
+    return refuse(
+      "lock_held",
+      "lost the browser-lock race",
+      "Retry once; another apex_* browser tool took scratch/apex-browser.lock.",
+    );
+  }
+  return null;
+}
+
+function releaseLock() {
+  try {
+    if (!fs.existsSync(LOCK_PATH)) return;
+    const raw = JSON.parse(fs.readFileSync(LOCK_PATH, "utf8"));
+    if (Number(raw.pid) === process.pid) fs.unlinkSync(LOCK_PATH);
+  } catch { /* ignore */ }
+}
+
+function nodeTool(rel) {
+  return [process.execPath, path.join(ROOT, "tools", rel)];
+}
+
+const CATALOG = [
+  {
+    name: "apex_verify_track",
+    week: 1,
+    description: "Headless TRACK_VM build check for one circuit id or --all. Working tree only.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Circuit id (e.g. monza). Omit with all=true." },
+        all: { type: "boolean" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_verify_change_fast",
+    week: 1,
+    description: "verify-change.mjs --fast --json only (no browser groups, never --wait).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        since: { type: "string" },
+        staged: { type: "boolean" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_wgx_validate_static",
+    week: 1,
+    description: "wgx-validate.mjs --static — source invariants, no Chromium.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_pick_tests",
+    week: 1,
+    description: "pick-tests.mjs --json. Never --bg (that prints test-bg start lines).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        since: { type: "string" },
+        staged: { type: "boolean" },
+        files: { type: "array", items: { type: "string" } },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_bump_cache_check",
+    week: 1,
+    description: "bump-cache.mjs --check --json. Never --apply / --at / --merge.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        since: { type: "string" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_status",
+    week: 1,
+    description:
+      "Read-only: browser lock, probe chrome /healthz, test-bg, playwright test PIDs, loadavg. Does not take the lock.",
+    inputSchema: { type: "object", properties: { dryRun: { type: "boolean" } } },
+  },
+  {
+    name: "apex_eval",
+    week: 2,
+    description: "apex-eval.mjs — boot harness and evaluate an __apex expression. Local only.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        track: { type: "string" },
+        expr: { type: "string" },
+        raw: { type: "boolean" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_shot",
+    week: 2,
+    description: "capture/shot.mjs — deterministic scene screenshot via harness Chromium.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        track: { type: "string" },
+        frac: { type: "number" },
+        cam: { type: "string" },
+        out: { type: "string" },
+        az: { type: "number" },
+        el: { type: "number" },
+        dist: { type: "number" },
+        side: { type: "number" },
+        hud: { type: "boolean" },
+        tod: { type: "string" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_survey_track",
+    week: 2,
+    description: "survey-track.mjs <id> [label] [fracs] [--oblique]. Harness Chromium.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        label: { type: "string" },
+        fracs: { type: "string", description: "Comma list, e.g. 0,0.25,0.5,0.75" },
+        oblique: { type: "boolean" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_gfx_probe",
+    week: 2,
+    description: "gfx-probe.mjs — visible #game probe. No --url.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        backend: { type: "string", enum: ["webgpu", "three"] },
+        track: { type: "string" },
+        lite: { type: "boolean" },
+        iphone: { type: "boolean" },
+        cam: { type: "string" },
+        out: { type: "string" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_wgx_validate",
+    week: 2,
+    description: "wgx-validate.mjs live Dawn (not --static). Harness Chromium.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        track: { type: "string" },
+        lite: { type: "boolean" },
+        frames: { type: "number" },
+        noRg11b10: { type: "boolean" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_wgx_capture",
+    week: 2,
+    description: "wgx-capture.mjs — WGX readback oracle. Harness Chromium.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        track: { type: "string" },
+        lite: { type: "boolean" },
+        frames: { type: "number" },
+        out: { type: "string" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_ui_survey",
+    week: 2,
+    description:
+      "ui-survey.mjs with frozen alias defaults (six screens, iPhone landscape, jobs=1). Widening refused.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        screens: { type: "string" },
+        viewports: { type: "string" },
+        jobs: { type: "number" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_agent",
+    week: 2,
+    description: "agent.mjs <track> <command> — world-view CLI via harness.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        track: { type: "string" },
+        command: { type: "string" },
+        detail: { type: "string" },
+        at: { type: "number" },
+        speed: { type: "number" },
+        lateral: { type: "number" },
+        what: { type: "string" },
+        radius: { type: "number" },
+        limit: { type: "number" },
+        seconds: { type: "number" },
+        weather: { type: "string" },
+        tod: { type: "string" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_select_specs",
+    week: 3,
+    description: "select-specs.mjs --since <ref> --json. Never starts test-bg.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        since: { type: "string" },
+        budgetMin: { type: "number" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_assets_verify",
+    week: 3,
+    description: "assets.mjs verify — licence / md5 / budget. Never bake* / fetch / import.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_float_audit",
+    week: 3,
+    description: "float-audit.cjs <id>|--all --json. TRACK_VM only; never --clip / --foliage.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        all: { type: "boolean" },
+        allClusters: { type: "boolean" },
+        top: { type: "number" },
+        why: { type: "boolean" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_clip_audit",
+    week: 3,
+    description: "clip-audit.cjs <id>|--all --json. Depth/adj stay at CLI defaults.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        all: { type: "boolean" },
+        gate: { type: "boolean" },
+        why: { type: "boolean" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_coplanar_audit",
+    week: 3,
+    description: "coplanar-audit.cjs <id>|--all --json. Gap/area/fight stay at CLI defaults.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        all: { type: "boolean" },
+        gate: { type: "boolean" },
+        why: { type: "boolean" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_track_verts",
+    week: 3,
+    description: "track-verts.cjs fleet dump, or --diff a file under artifacts/ or scratch/.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        diff: { type: "string", description: "Contained JSON path under artifacts/ or scratch/." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_carshot",
+    week: 3,
+    kind: "browser",
+    description: "car/carshot.mjs — cropped studio JPEG. Harness Chromium; lock first.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        az: { type: "number" },
+        tod: { type: "string" },
+        teamIdx: { type: "number" },
+        out: { type: "string" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_wgx_shot",
+    week: 3,
+    kind: "browser",
+    description: "wgx-shot.mjs — WGX #game shot. Harness Chromium; lock first.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        track: { type: "string" },
+        lite: { type: "boolean" },
+        cam: { type: "string" },
+        out: { type: "string" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_quick_validate",
+    week: 3,
+    kind: "browser",
+    description: "quick-validate.mjs self-boot (no port). Harness Chromium; lock first.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        port: { type: "number", description: "Refused — tool self-boots." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_select_recall",
+    week: 4,
+    description: "select-recall.mjs --json — replay the selector against recorded regressions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_cache_bump_only",
+    week: 4,
+    description: "cache-bump-only.mjs <since> --json. Exit 1 (not a pure bump) is a classified result, not a crash.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        since: { type: "string" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_rotate_markings_check",
+    week: 4,
+    description: "rotate-markings.cjs --check only. Never --write.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_startline_snap",
+    week: 4,
+    description: "startline-snap.cjs --json. Optional circuit ids.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ids: { type: "array", items: { type: "string" } },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_startline_probe",
+    week: 4,
+    description: "startline-probe.cjs --json. Optional --calibrate / --snap / --frac id=v.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        calibrate: { type: "boolean" },
+        snap: { type: "boolean" },
+        frac: { type: "string", description: "e.g. monza=0" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_aero_zone_turns",
+    week: 4,
+    description: "aero-zone-turns.cjs <id>|--all. TRACK_VM geometry pairing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        all: { type: "boolean" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_graph_parity",
+    week: 4,
+    description: "graph-parity.cjs <id>|--all with required BASE=<ref>. Never vacuous HEAD-vs-clean.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        base: { type: "string", description: "Git ref for BASE= (required)." },
+        id: { type: "string" },
+        all: { type: "boolean" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+];
+
+function badArgs(message, fix) {
+  throw Object.assign(new Error(message), {
+    refuse: refuse("bad_args", message, fix || "See the tool inputSchema."),
+  });
+}
+
+function assertSafeOut(raw) {
+  const s = String(raw || "");
+  if (!s) badArgs("empty output path", "Pass a path under artifacts/ or scratch/.");
+  const resolved = path.resolve(ROOT, s);
+  const ok = [ARTIFACTS_DIR, SCRATCH_DIR].some((base) => {
+    const rel = path.relative(base, resolved);
+    return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+  });
+  if (!ok) {
+    throw Object.assign(new Error("path_escaped"), {
+      refuse: refuse(
+        "path_escaped",
+        `output path must stay under artifacts/ or scratch/ (got ${s})`,
+        "Pass a repo-relative path under artifacts/ or scratch/.",
+      ),
+    });
+  }
+  return resolved;
+}
+
+function buildArgv(name, args) {
+  switch (name) {
+    case "apex_verify_track": {
+      const base = nodeTool("verify-track.cjs");
+      if (args.all) return [...base, "--all"];
+      if (!args.id) badArgs("apex_verify_track needs id or all=true", 'Pass {"id":"monza"} or {"all":true}.');
+      return [...base, String(args.id)];
+    }
+    case "apex_verify_change_fast": {
+      const argv = [...nodeTool("verify-change.mjs"), "--fast", "--json"];
+      if (args.since) argv.push("--since", String(args.since));
+      if (args.staged) argv.push("--staged");
+      return argv;
+    }
+    case "apex_wgx_validate_static":
+      return [...nodeTool("wgx-validate.mjs"), "--static"];
+    case "apex_pick_tests": {
+      const argv = [...nodeTool("pick-tests.mjs"), "--json"];
+      if (args.since) argv.push("--since", String(args.since));
+      if (args.staged) argv.push("--staged");
+      if (Array.isArray(args.files)) {
+        for (const f of args.files) argv.push(String(f));
+      }
+      return argv;
+    }
+    case "apex_bump_cache_check": {
+      const argv = [...nodeTool("bump-cache.mjs"), "--check", "--json"];
+      if (args.since) argv.push("--since", String(args.since));
+      return argv;
+    }
+    case "apex_eval": {
+      const argv = [...nodeTool("apex-eval.mjs"), String(args.track || "monza"), String(args.expr || "a.info()")];
+      if (args.raw) argv.push("--raw");
+      return argv;
+    }
+    case "apex_shot": {
+      const argv = [
+        ...nodeTool("capture/shot.mjs"),
+        String(args.track || "monza"),
+        String(args.frac ?? 0.1),
+        String(args.cam || "orbit"),
+      ];
+      if (args.out) argv.push(assertSafeOut(args.out));
+      if (args.az != null) argv.push("--az", String(args.az));
+      if (args.el != null) argv.push("--el", String(args.el));
+      if (args.dist != null) argv.push("--dist", String(args.dist));
+      if (args.side != null) argv.push("--side", String(args.side));
+      if (args.tod) argv.push("--tod", String(args.tod));
+      if (args.hud) argv.push("--hud");
+      return argv;
+    }
+    case "apex_survey_track": {
+      if (!args.id) badArgs("apex_survey_track needs id", 'Pass {"id":"montreal"}.');
+      const argv = [...nodeTool("survey-track.mjs"), String(args.id)];
+      // Lone non-comma token is a label; always emit the default when fracs is set.
+      if (args.fracs && !args.label) argv.push("survey");
+      if (args.label) argv.push(String(args.label));
+      if (args.fracs) argv.push(String(args.fracs));
+      if (args.oblique) argv.push("--oblique");
+      return argv;
+    }
+    case "apex_gfx_probe": {
+      const argv = [...nodeTool("gfx-probe.mjs")];
+      argv.push("--backend", String(args.backend || "webgpu"));
+      if (args.lite) argv.push("--lite");
+      if (args.iphone) argv.push("--iphone");
+      if (args.cam) argv.push("--cam", String(args.cam));
+      if (args.out) argv.push("--out", assertSafeOut(args.out));
+      argv.push(String(args.track || "montreal"));
+      return argv;
+    }
+    case "apex_wgx_validate": {
+      const argv = [...nodeTool("wgx-validate.mjs"), String(args.track || "montreal")];
+      if (args.lite) argv.push("--lite");
+      if (args.frames != null) argv.push("--frames", String(args.frames));
+      if (args.noRg11b10) argv.push("--no-rg11b10");
+      return argv;
+    }
+    case "apex_wgx_capture": {
+      const argv = [...nodeTool("wgx-capture.mjs"), String(args.track || "singapore")];
+      if (args.lite) argv.push("--lite");
+      if (args.frames != null) argv.push("--frames", String(args.frames));
+      if (args.out) argv.push("--out", assertSafeOut(args.out));
+      return argv;
+    }
+    case "apex_ui_survey": {
+      if (args.screens != null && String(args.screens) !== UI_SCREENS) {
+        throw Object.assign(new Error("widen"), {
+          refuse: refuse(
+            "recipe_frozen",
+            `apex_ui_survey screens are frozen at ${UI_SCREENS}`,
+            "Omit screens. Widening becomes a full layout-audit; run that CLI yourself.",
+          ),
+        });
+      }
+      if (args.viewports != null && String(args.viewports) !== UI_VIEWPORTS) {
+        throw Object.assign(new Error("widen"), {
+          refuse: refuse(
+            "recipe_frozen",
+            `apex_ui_survey viewports are frozen at ${UI_VIEWPORTS}`,
+            "Omit viewports.",
+          ),
+        });
+      }
+      if (args.jobs != null && Number(args.jobs) !== UI_JOBS) {
+        throw Object.assign(new Error("widen"), {
+          refuse: refuse(
+            "recipe_frozen",
+            "apex_ui_survey jobs are frozen at 1",
+            "Omit jobs. Parallel layout-audit is not an MCP one-shot.",
+          ),
+        });
+      }
+      return [
+        ...nodeTool("ui-survey.mjs"),
+        `--screens=${UI_SCREENS}`,
+        `--viewports=${UI_VIEWPORTS}`,
+        `--jobs=${UI_JOBS}`,
+        "--shots",
+      ];
+    }
+    case "apex_agent": {
+      const argv = [
+        ...nodeTool("agent.mjs"),
+        String(args.track || "monza"),
+        String(args.command || "world"),
+      ];
+      const flags = [
+        ["detail", args.detail],
+        ["at", args.at],
+        ["speed", args.speed],
+        ["lateral", args.lateral],
+        ["what", args.what],
+        ["radius", args.radius],
+        ["limit", args.limit],
+        ["seconds", args.seconds],
+        ["weather", args.weather],
+        ["tod", args.tod],
+      ];
+      for (const [k, v] of flags) {
+        if (v != null && v !== "") argv.push(`--${k}`, String(v));
+      }
+      return argv;
+    }
+    case "apex_select_specs": {
+      if (!args.since) {
+        badArgs("apex_select_specs needs since", 'Pass {"since":"HEAD~1"} or a git ref.');
+      }
+      const argv = [...nodeTool("select-specs.mjs"), "--since", String(args.since), "--json"];
+      if (args.budgetMin != null) argv.push("--budget-min", String(args.budgetMin));
+      return argv;
+    }
+    case "apex_assets_verify":
+      return [...nodeTool("assets.mjs"), "verify"];
+    case "apex_float_audit": {
+      const argv = [...nodeTool("float-audit.cjs")];
+      if (args.all) argv.push("--all");
+      else {
+        if (!args.id) badArgs("apex_float_audit needs id or all=true", 'Pass {"id":"monza"} or {"all":true}.');
+        argv.push(String(args.id));
+      }
+      argv.push("--json");
+      if (args.allClusters) argv.push("--all-clusters");
+      if (args.top != null) argv.push("--top", String(args.top));
+      if (args.why) argv.push("--why");
+      return argv;
+    }
+    case "apex_clip_audit": {
+      const argv = [...nodeTool("clip-audit.cjs")];
+      if (args.all) argv.push("--all");
+      else {
+        if (!args.id) badArgs("apex_clip_audit needs id or all=true", 'Pass {"id":"monza"} or {"all":true}.');
+        argv.push(String(args.id));
+      }
+      argv.push("--json");
+      if (args.gate) argv.push("--gate");
+      if (args.why) argv.push("--why");
+      return argv;
+    }
+    case "apex_coplanar_audit": {
+      const argv = [...nodeTool("coplanar-audit.cjs")];
+      if (args.all) argv.push("--all");
+      else {
+        if (!args.id) {
+          badArgs("apex_coplanar_audit needs id or all=true", 'Pass {"id":"monza"} or {"all":true}.');
+        }
+        argv.push(String(args.id));
+      }
+      argv.push("--json");
+      if (args.gate) argv.push("--gate");
+      if (args.why) argv.push("--why");
+      return argv;
+    }
+    case "apex_track_verts": {
+      const argv = [...nodeTool("track-verts.cjs")];
+      if (args.diff) argv.push("--diff", assertSafeOut(args.diff));
+      return argv;
+    }
+    case "apex_carshot": {
+      const argv = [
+        ...nodeTool("car/carshot.mjs"),
+        String(args.az ?? 40),
+        String(args.tod || "day"),
+        String(args.teamIdx ?? 2),
+      ];
+      if (args.out) argv.push(assertSafeOut(args.out));
+      return argv;
+    }
+    case "apex_wgx_shot": {
+      const argv = [...nodeTool("wgx-shot.mjs"), String(args.track || "montreal")];
+      if (args.lite) argv.push("--lite");
+      if (args.cam) argv.push("--cam", String(args.cam));
+      if (args.out) argv.push("--out", assertSafeOut(args.out));
+      return argv;
+    }
+    case "apex_quick_validate": {
+      if (args.port != null) {
+        throw Object.assign(new Error("port"), {
+          refuse: refuse(
+            "port_not_supported",
+            "apex_quick_validate self-boots; it does not take a port.",
+            "Omit port. Attaching to an already-running server is a later feature.",
+          ),
+        });
+      }
+      return [...nodeTool("quick-validate.mjs")];
+    }
+    case "apex_select_recall":
+      return [...nodeTool("select-recall.mjs"), "--json"];
+    case "apex_cache_bump_only": {
+      if (!args.since) {
+        badArgs("apex_cache_bump_only needs since", 'Pass {"since":"HEAD~1"} or a git ref.');
+      }
+      return [...nodeTool("cache-bump-only.mjs"), String(args.since), "--json"];
+    }
+    case "apex_rotate_markings_check":
+      return [...nodeTool("rotate-markings.cjs"), "--check"];
+    case "apex_startline_snap": {
+      const argv = [...nodeTool("startline-snap.cjs"), "--json"];
+      if (Array.isArray(args.ids)) {
+        for (const id of args.ids) argv.push(String(id));
+      }
+      return argv;
+    }
+    case "apex_startline_probe": {
+      const argv = [...nodeTool("startline-probe.cjs"), "--json"];
+      if (args.calibrate) argv.push("--calibrate");
+      if (args.snap) argv.push("--snap");
+      if (args.frac) argv.push("--frac", String(args.frac));
+      return argv;
+    }
+    case "apex_aero_zone_turns": {
+      const argv = [...nodeTool("aero-zone-turns.cjs")];
+      if (args.all) argv.push("--all");
+      else {
+        if (!args.id) {
+          badArgs("apex_aero_zone_turns needs id or all=true", 'Pass {"id":"monza"} or {"all":true}.');
+        }
+        argv.push(String(args.id));
+      }
+      return argv;
+    }
+    case "apex_graph_parity": {
+      if (!args.base) {
+        badArgs(
+          "apex_graph_parity needs base",
+          'Pass {"base":"HEAD~1","id":"monza"}. Never omit BASE — a clean tree would pass vacuously.',
+        );
+      }
+      const argv = [...nodeTool("graph-parity.cjs")];
+      if (args.all) argv.push("--all");
+      else {
+        if (!args.id) {
+          badArgs("apex_graph_parity needs id or all=true", 'Pass {"base":"HEAD~1","id":"monza"}.');
+        }
+        argv.push(String(args.id));
+      }
+      return argv;
+    }
+    default:
+      throw new Error(`no argv builder for ${name}`);
+  }
+}
+
+function extraEnv(name, args) {
+  if (name === "apex_graph_parity") return { BASE: String(args.base) };
+  return {};
+}
+
+function parseOut(stdout) {
+  const text = String(stdout || "").trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    const lines = text.split("\n").filter(Boolean);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        return JSON.parse(lines[i]);
+      } catch { /* continue */ }
+    }
+    return null;
+  }
+}
+
+function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {} } = {}) {
+  const started = Date.now();
+  const [cmd, ...args] = argv;
+  const r = spawnSync(cmd, args, {
+    encoding: "utf8",
+    cwd: ROOT,
+    env: { ...process.env, ...env },
+    timeout: timeoutMs,
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  const durationMs = Date.now() - started;
+  const stdout = r.stdout || "";
+  const stderr = r.stderr || "";
+  const exit = r.status == null ? (r.signal ? 1 : 0) : r.status;
+  const body = {
+    ok: exit === 0,
+    exit,
+    argv,
+    env: Object.keys(env).length ? env : undefined,
+    stdout,
+    stderr,
+    out: parseOut(stdout),
+    durationMs,
+  };
+  if (r.error) {
+    body.ok = false;
+    body.error = "spawn_failed";
+    body.message = String(r.error.message || r.error);
+    body.fix = "Check node and that the CLI path exists under tools/.";
+  } else if (allowExit && allowExit.has(exit)) {
+    body.ok = true;
+  }
+  return toolResult(body, { isError: !body.ok });
+}
+
+function mockSuccess(name, argv, env = {}) {
+  return toolResult({
+    ok: true,
+    mock: true,
+    tool: name,
+    exit: 0,
+    argv,
+    env: Object.keys(env).length ? env : undefined,
+    stdout: JSON.stringify({ ok: true, mock: true, tool: name }),
+    stderr: "",
+    out: { ok: true, mock: true, tool: name },
+    durationMs: 0,
+  });
+}
+
+function handleStatus(args = {}) {
+  if (args.dryRun) {
+    return toolResult({
+      ok: true,
+      dryRun: true,
+      argv: ["apex_status"],
+      note: "read-only; does not take scratch/apex-browser.lock",
+      knownGap: KNOWN_GAP,
+    });
+  }
+  if (mockMode()) {
+    return toolResult({
+      ok: true,
+      mock: true,
+      lock: { held: false },
+      chromeDaemon: { up: false, port: null },
+      testBg: { recorded: false, running: [] },
+      playwright: { live: false, pids: [] },
+      loadavg: os.loadavg(),
+      knownGap: KNOWN_GAP,
+    });
+  }
+  const chromePort = daemonPort();
+  return toolResult({
+    ok: true,
+    lock: lockInfo(),
+    chromeDaemon: { up: chromePort != null, port: chromePort },
+    testBg: testBgStatus(),
+    playwright: playwrightLive(),
+    loadavg: os.loadavg(),
+    knownGap: KNOWN_GAP,
+  });
+}
+
+function pinOk(name, argv) {
+  if (name === "apex_verify_change_fast") {
+    if (!argv.includes("--fast") || !argv.includes("--json") || argv.includes("--wait")) {
+      return refuse(
+        "pin_violated",
+        "apex_verify_change_fast must be --fast --json and never --wait",
+        "Do not pass wait; use dryRun to inspect argv.",
+      );
+    }
+  }
+  if (name === "apex_bump_cache_check") {
+    if (argv.includes("--apply") || argv.includes("--at") || argv.includes("--merge")) {
+      return refuse(
+        "pin_violated",
+        "apex_bump_cache_check never writes cache versions",
+        "Use the bump-cache CLI directly when you intend --apply (last edit before commit).",
+      );
+    }
+  }
+  if (name === "apex_pick_tests" && argv.includes("--bg")) {
+    return refuse(
+      "pin_violated",
+      "apex_pick_tests never passes --bg",
+      "Run test-bg yourself from a shell after reading pick-tests JSON.",
+    );
+  }
+  if (name === "apex_wgx_validate" && argv.includes("--static")) {
+    return refuse(
+      "pin_violated",
+      "apex_wgx_validate is the live Dawn path; --static is apex_wgx_validate_static",
+      "Use apex_wgx_validate_static for the no-browser gate.",
+    );
+  }
+  if (name === "apex_select_specs") {
+    if (!argv.includes("--json") || !argv.includes("--since") || argv.includes("--bg")) {
+      return refuse(
+        "pin_violated",
+        "apex_select_specs must be --since <ref> --json and never --bg",
+        "Pass since. Run test-bg yourself after reading the selected spec list.",
+      );
+    }
+  }
+  if (name === "apex_assets_verify") {
+    const blob = argv.join(" ");
+    if (!argv.includes("verify") || /bake|fetch|import-pack|import-models/.test(blob)) {
+      return refuse(
+        "pin_violated",
+        "apex_assets_verify is verify only — never bake* / fetch / import",
+        "Use the assets.mjs CLI directly when you intend a write.",
+      );
+    }
+  }
+  if (name === "apex_float_audit") {
+    if (!argv.includes("--json") || argv.includes("--clip") || argv.includes("--foliage")) {
+      return refuse(
+        "pin_violated",
+        "apex_float_audit is --json only; --clip / --foliage stay off",
+        "Use apex_clip_audit for prop-vs-prop. Do not pass clip/foliage.",
+      );
+    }
+  }
+  if (name === "apex_clip_audit" || name === "apex_coplanar_audit") {
+    if (!argv.includes("--json") || argv.includes("--depth") || argv.includes("--adj")
+        || argv.includes("--gap") || argv.includes("--area") || argv.includes("--fight")) {
+      return refuse(
+        "pin_violated",
+        `${name} pins --json and the CLI default detector tunables`,
+        "Omit depth/adj/gap/area/fight. Defaults are the measured recipe.",
+      );
+    }
+  }
+  if (name === "apex_quick_validate" && argv.some((a) => /^\d+$/.test(String(a)))) {
+    return refuse(
+      "pin_violated",
+      "apex_quick_validate must not pass a port",
+      "Omit port.",
+    );
+  }
+  if (name === "apex_select_recall" && !argv.includes("--json")) {
+    return refuse(
+      "pin_violated",
+      "apex_select_recall must pass --json",
+      "Omit extra flags; the wrap always requests JSON.",
+    );
+  }
+  if (name === "apex_cache_bump_only") {
+    if (!argv.includes("--json") || argv.includes("--apply") || argv.includes("--write")) {
+      return refuse(
+        "pin_violated",
+        "apex_cache_bump_only is --json classify-only",
+        "Pass since. It never writes index.html.",
+      );
+    }
+  }
+  if (name === "apex_rotate_markings_check") {
+    if (!argv.includes("--check") || argv.includes("--write")) {
+      return refuse(
+        "pin_violated",
+        "apex_rotate_markings_check is --check only — never --write",
+        "Use the rotate-markings CLI directly when you intend --write (once per circuit).",
+      );
+    }
+  }
+  if ((name === "apex_startline_snap" || name === "apex_startline_probe") && !argv.includes("--json")) {
+    return refuse(
+      "pin_violated",
+      `${name} must pass --json`,
+      "Omit extra flags; the wrap always requests JSON.",
+    );
+  }
+  if (name === "apex_graph_parity") {
+    if (argv.includes("--url") || !argv.some((a) => a.endsWith("graph-parity.cjs"))) {
+      return refuse(
+        "pin_violated",
+        "apex_graph_parity must spawn graph-parity.cjs",
+        "Pass base plus id or all=true.",
+      );
+    }
+  }
+  if (argv.includes("--url")) {
+    return refuse(
+      "pin_violated",
+      "apex_* browser tools must not pass --url",
+      "Omit url. Harness binds its own loopback port.",
+    );
+  }
+  return null;
+}
+
+function dryRunBody(name, argv, env = {}) {
+  return toolResult({
+    ok: true,
+    dryRun: true,
+    exit: 0,
+    argv,
+    env: Object.keys(env).length ? env : undefined,
+    stdout: "",
+    stderr: "",
+    out: name === "apex_verify_change_fast"
+      ? { plan: true, note: "dryRun — no spawn; --fast --json only" }
+      : null,
+    durationMs: 0,
+  });
+}
+
+function dispatch(name, args = {}) {
+  if (!name.startsWith(PREFIX)) {
+    return refuse(
+      "bad_prefix",
+      `tool name must start with ${PREFIX} (got ${name})`,
+      "Use apex_* tools only. chrome_* / tinyfish_* belong to probe-mcp.",
+    );
+  }
+  const known = CATALOG.find((t) => t.name === name);
+  if (!known) {
+    return refuse(
+      "unknown_tool",
+      `unknown tool ${name}`,
+      "list-tools for the apex_* catalog.",
+    );
+  }
+
+  if (name === "apex_status") return handleStatus(args);
+
+  const kind = toolKind(known);
+  const gated = kind === "tree" ? gateTreeArgs(args) : gateBrowserArgs(args);
+  if (gated) return gated;
+
+  let argv;
+  try {
+    argv = buildArgv(name, args);
+  } catch (e) {
+    if (e.refuse) return e.refuse;
+    return refuse("bad_args", String(e.message || e), "See the tool inputSchema.");
+  }
+
+  const pinned = pinOk(name, argv);
+  if (pinned) return pinned;
+  const env = extraEnv(name, args);
+
+  if (args.dryRun) {
+    if (kind === "browser" && !mockMode()) {
+      const busy = occupancyRefuse();
+      if (busy) return busy;
+    }
+    return dryRunBody(name, argv, env);
+  }
+
+  if (mockMode()) return mockSuccess(name, argv, env);
+
+  if (kind === "browser") {
+    const took = acquireLock(name);
+    if (took) return took;
+    try {
+      return runSpawn(argv, { timeoutMs: 180000, env });
+    } finally {
+      releaseLock();
+    }
+  }
+
+  const allAudit = /_audit$/.test(name) && args.all;
+  const longTree = name === "apex_verify_change_fast" || name === "apex_track_verts"
+    || name === "apex_startline_snap" || name === "apex_startline_probe"
+    || name === "apex_rotate_markings_check" || name === "apex_graph_parity"
+    || allAudit || (name === "apex_aero_zone_turns" && args.all);
+  const timeoutMs = longTree ? 180000 : 60000;
+  const allowExit = name === "apex_cache_bump_only" ? new Set([0, 1]) : null;
+  return runSpawn(argv, { timeoutMs, allowExit, env });
+}
+
+function listTools() {
+  return CATALOG.map((t) => ({
+    name: t.name,
+    description: t.description,
+    inputSchema: t.inputSchema,
+  }));
+}
+
+function writeRpc(msg) {
+  process.stdout.write(JSON.stringify(msg) + "\n");
+}
+
+function cmdHelp() {
+  const w1 = CATALOG.filter((t) => t.week === 1).map((t) => `  ${t.name}`).join("\n");
+  const w2 = CATALOG.filter((t) => t.week === 2).map((t) => `  ${t.name}`).join("\n");
+  const w3t = CATALOG.filter((t) => t.week === 3 && toolKind(t) === "tree").map((t) => `  ${t.name}`).join("\n");
+  const w3b = CATALOG.filter((t) => t.week === 3 && toolKind(t) === "browser").map((t) => `  ${t.name}`).join("\n");
+  const w4 = CATALOG.filter((t) => t.week === 4).map((t) => `  ${t.name}`).join("\n");
+  process.stdout.write(`apex-tools-mcp — wrap tools/ CLIs as apex_* MCP tools
+
+Commands:
+  help
+  status
+  list-tools
+  call <apex_name> '<json>'
+  serve                 # stdio MCP (.mcp.json → tools/apex-tools-mcp.sh serve)
+  serve-http            # 127.0.0.1:3713 /mcp + /healthz (never 0.0.0.0)
+
+Week-1 (no browser lock):
+${w1}
+
+Week-2 (harness Chromium; lock + occupancy first):
+${w2}
+
+Week-3 tree (no lock):
+${w3t}
+
+Week-3 browser (lock + occupancy first):
+${w3b}
+
+Week-4 tree (no lock):
+${w4}
+
+Local working tree only — no github.io. Deploy checks stay on TinyFish.
+Mock: APEX_MCP_MOCK=1  Design: docs/research/APEX-TOOLS-MCP.md
+`);
+  return 0;
+}
+
+function cmdStatus() {
+  const result = handleStatus({});
+  const body = JSON.parse(result.content[0].text);
+  process.stdout.write(JSON.stringify(body, null, 2) + "\n");
+  return body.ok === false ? 1 : 0;
+}
+
+function cmdListTools() {
+  process.stdout.write(JSON.stringify(listTools(), null, 2) + "\n");
+  return 0;
+}
+
+function cmdCall(name, argsJson) {
+  let args = {};
+  try {
+    args = argsJson ? JSON.parse(argsJson) : {};
+  } catch (e) {
+    log(`args must be JSON: ${e.message}`);
+    return 2;
+  }
+  const result = dispatch(name, args);
+  const body = JSON.parse(result.content[0].text);
+  process.stdout.write(JSON.stringify(body, null, 2) + "\n");
+  return result.isError ? 1 : 0;
+}
+
+function handleRpc(msg) {
+  const mid = msg.id;
+  const method = msg.method;
+  if (method == null || mid == null) return null;
+
+  if (method === "initialize") {
+    return {
+      jsonrpc: "2.0",
+      id: mid,
+      result: {
+        protocolVersion: PROTOCOL,
+        capabilities: { tools: { listChanged: false } },
+        serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
+        instructions:
+          "Apex tools MCP (apex_*). Tree tools are TRACK_VM / static gates. " +
+          "Browser tools boot harness Chromium after the browser lock. " +
+          "Never github.io — use TinyFish / deploy-research for Pages. " +
+          "chrome_* / tinyfish_* belong to probe-mcp. " +
+          "HTTP is 127.0.0.1:3713 only.",
+      },
+    };
+  }
+  if (method === "tools/list") {
+    return { jsonrpc: "2.0", id: mid, result: { tools: listTools() } };
+  }
+  if (method === "tools/call") {
+    const params = msg.params || {};
+    try {
+      return { jsonrpc: "2.0", id: mid, result: dispatch(params.name || "", params.arguments || {}) };
+    } catch (e) {
+      return {
+        jsonrpc: "2.0",
+        id: mid,
+        error: { code: -32000, message: String(e.message || e).slice(0, 2000) },
+      };
+    }
+  }
+  if (method === "ping") {
+    return { jsonrpc: "2.0", id: mid, result: {} };
+  }
+  return { jsonrpc: "2.0", id: mid, error: { code: -32601, message: `Method not found: ${method}` } };
+}
+
+function cmdServe() {
+  const rl = require("readline").createInterface({
+    input: process.stdin,
+    crlfDelay: Infinity,
+  });
+  rl.on("line", (line) => {
+    line = line.trim();
+    if (!line) return;
+    let msg;
+    try {
+      msg = JSON.parse(line);
+    } catch {
+      return;
+    }
+    const out = handleRpc(msg);
+    if (out) writeRpc(out);
+  });
+  rl.on("close", () => process.exit(0));
+  return 0;
+}
+
+function sendHttpJson(res, code, obj) {
+  const data = JSON.stringify(obj);
+  res.writeHead(code, {
+    "Content-Type": "application/json",
+    "Content-Length": Buffer.byteLength(data),
+  });
+  res.end(data);
+}
+
+function cmdServeHttp() {
+  const port = /^\d+$/.test(String(process.env.APEX_MCP_HTTP_PORT || ""))
+    ? Number(process.env.APEX_MCP_HTTP_PORT)
+    : HTTP_PORT_DEFAULT;
+  const srv = http.createServer((req, res) => {
+    const url = req.url || "/";
+    if (req.method === "GET" && (url === "/healthz" || url.startsWith("/healthz?"))) {
+      sendHttpJson(res, 200, {
+        ok: true,
+        name: SERVER_NAME,
+        version: SERVER_VERSION,
+        tools: CATALOG.length,
+        bind: HTTP_HOST,
+      });
+      return;
+    }
+    if (req.method === "GET" && (url === "/tools" || url === "/mcp/tools")) {
+      sendHttpJson(res, 200, { tools: listTools() });
+      return;
+    }
+    if (req.method === "POST" && (url === "/mcp" || url === "/")) {
+      const chunks = [];
+      req.on("data", (c) => chunks.push(c));
+      req.on("end", () => {
+        let msg;
+        try {
+          msg = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+        } catch {
+          sendHttpJson(res, 400, { error: "body must be JSON-RPC" });
+          return;
+        }
+        const out = handleRpc(msg);
+        if (!out) {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+        sendHttpJson(res, 200, out);
+      });
+      return;
+    }
+    sendHttpJson(res, 404, { error: `no route ${req.method} ${url}` });
+  });
+  srv.listen(port, HTTP_HOST, () => {
+    const addr = srv.address();
+    const p = addr && typeof addr === "object" ? addr.port : port;
+    log(`apex-tools-mcp http ${HTTP_HOST}:${p}`);
+  });
+  return 0;
+}
+
+function main(argv) {
+  const cmd = argv[0] || "help";
+  if (cmd === "help" || cmd === "--help" || cmd === "-h") return cmdHelp();
+  if (cmd === "status") return cmdStatus();
+  if (cmd === "list-tools") return cmdListTools();
+  if (cmd === "call") return cmdCall(argv[1], argv[2] || "{}");
+  if (cmd === "serve") return cmdServe();
+  if (cmd === "serve-http") return cmdServeHttp();
+  log(`unknown command: ${cmd}`);
+  cmdHelp();
+  return 2;
+}
+
+const code = main(process.argv.slice(2));
+if (process.argv[2] !== "serve" && process.argv[2] !== "serve-http") process.exitCode = code;
