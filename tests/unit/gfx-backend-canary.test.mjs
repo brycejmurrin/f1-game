@@ -54,8 +54,52 @@ test("RENDERER picker lives in gfx-quality.js and always names WEBGPU", () => {
 test("TLX pins WebKit (Safari Mac + iOS) to three's WebGL2 backend", () => {
   const src = read("js/render/three/tlx.js");
   assert.match(src, /isWebKit/);
-  assert.match(src, /forceWebGL = _glPin === "1" \? true : _glPin === "0" \? false : !!\(isMobile \|\| isWebKit\)/);
+  assert.match(src, /forceWebGL = _glPin === "1" \? true : _glPin === "0" \? false\s*: !!\(isMobile \|\| isWebKit \|\| _softAdapter\)/);
+  assert.match(src, /infoBlob = \[dev, ven, arch, desc\]/);
   assert.match(read("js/render/three/tsl-lit.js"), /cubeTexture\(envCubeNode, Rg, rough\.mul\(2\.5\)\)/);
+});
+
+test("GLX createTexMesh / createTexture / draws fail closed when the context is lost", () => {
+  const glx = read("js/render/glx.js");
+  const chunked = read("js/render/glx/chunked.js");
+  const shadow = read("js/render/glx/shadow.js");
+  assert.match(glx, /function createMesh\(data\) \{\n\s+if \(ctxGone\(\)\) return null;/);
+  assert.match(glx, /function createTexMesh\(data\) \{\n\s+if \(ctxGone\(\)\) return null;/);
+  assert.match(glx, /function createTexture\(src\) \{\n\s+if \(ctxGone\(\)\) return null;/);
+  assert.match(glx, /function createTextureArray\(size, images, layers\) \{\n\s+if \(ctxGone\(\) \|\| !size \|\| !images\) return null;/);
+  assert.match(glx, /function drawDecal\([\s\S]{0,80}if \(ctxGone\(\)/);
+  assert.match(glx, /function drawInstanced\([\s\S]{0,80}if \(ctxGone\(\)/);
+  assert.match(glx, /function drawShadow\([\s\S]{0,40}if \(ctxGone\(\)/);
+  assert.match(glx, /function drawMark\([\s\S]{0,40}if \(ctxGone\(\)/);
+  assert.match(glx, /function drawSkidBatch\([\s\S]{0,40}if \(ctxGone\(\)/);
+  assert.match(glx, /function drawGlow\([\s\S]{0,60}if \(ctxGone\(\)/);
+  assert.match(glx, /function drawParticles\([\s\S]{0,80}if \(ctxGone\(\)/);
+  assert.match(glx, /core = \{[\s\S]{0,80}ctxGone,/);
+  assert.match(chunked, /core\.ctxGone\(\)\) \|\| !mesh/);
+  assert.match(shadow, /core\.ctxGone\(\)\) \|\| !S\.depthPassOn \|\| !mesh/);
+});
+
+test("TLX hoists crack fwidth and MAT samples before the detail/live If (WGSL derivative_uniformity)", () => {
+  const lit = read("js/render/three/tsl-lit.js");
+  const at = lit.indexOf("const cr = abs(vnoise(wp.xz");
+  const gate = lit.indexOf("If(matU.detail.greaterThan(0.0)", at);
+  assert.ok(at > 0 && gate > at, "fwidth(cr) must be taken before the detail If");
+  assert.match(lit.slice(at, gate + 40), /fwidth\(cr\)/);
+  const nSamp = lit.indexOf("const nt = matNormalNode.sample(uv)");
+  const nAfter = lit.indexOf("If(live.and(fade.greaterThan(0.005))", nSamp);
+  assert.ok(nSamp > 0 && nAfter > nSamp, "MAT normal sample must sit before the live/fade If");
+  const aSamp = lit.indexOf("const t = matAlbedoNode.sample(uv)");
+  const aAfter = lit.indexOf("If(live.and(far.greaterThan(0.001))", aSamp);
+  assert.ok(aSamp > 0 && aAfter > aSamp, "MAT albedo sample must sit before the live/far If");
+});
+
+test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
+  const fx = read("js/render/three/tsl-fx.js");
+  const start = fx.indexOf("if (decalCache.size >= DECAL_CACHE_CAP)");
+  const evict = fx.slice(start, fx.indexOf("m = fxMaterial({ doubleSided: true, key: \"tlx-fx-decal-\"", start));
+  assert.match(evict, /decalCache\.delete\(k\)/);
+  const code = evict.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  assert.doesNotMatch(code, /\.dispose\s*\(/);
 });
 
 test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", () => {

@@ -323,7 +323,7 @@ function presentStatus() {
     if (path === "webgpu") {
       return "THREE.JS is pinned to WebGPU. Software GPUs paint black (no 2D blit). Switch THREE PATH to WEBGL2 for screenshots.";
     }
-    return "THREE.JS AUTO: phones and Safari use WebGL2 (screenshots work). Desktop Chrome may pick WebGPU.";
+    return "THREE.JS AUTO: phones, Safari, and software GPUs use WebGL2 (screenshots work). Desktop Chrome on a real GPU may pick WebGPU.";
   }
   return "WEBGL2 paints the canvas directly. Screenshots just work.";
 }
@@ -399,7 +399,7 @@ function initPresentControls() {
   }
 
   const pathBtn = addBtn("pm-three-path",
-    "three.js GPU path. AUTO = phones/Safari WebGL2, desktop may pick WebGPU. WEBGL2 = screenshots work (the CI pin). WEBGPU = three's own WebGPU; software GPUs stay black.");
+    "three.js GPU path. AUTO = phones/Safari/software WebGL2. WEBGL2 = screenshots work (the CI pin). WEBGPU = three's own WebGPU; software GPUs stay black.");
   const shotBtn = addBtn("pm-screenshots",
     "WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = always copy frames onto the canvas (screenshots work; native swapchain unused). NATIVE = swapchain only — black on software GPUs.");
   const saveBtn = addBtn("pm-save-shot",

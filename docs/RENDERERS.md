@@ -106,7 +106,7 @@ whole device.
 |---|---|---|
 | **WEBGL2** | Native canvas. Screenshots just work. | `canvas.toDataURL` |
 | **WEBGPU** | Soft-present: final pass → `COPY_SRC` texture → ephemeral readback → `putImageData` on `#game`. Forced by SCREENSHOTS: 2D BLIT or a software adapter. SCREENSHOTS: NATIVE leaves the swapchain black. | `GLX.awaitSoftPresent()` then `#game`; optional `GLX.capturePixels()` |
-| **THREE.JS** | Pin THREE PATH to WEBGL2 (the CI pin). three's own WebGPU has no 2D blit here and stays black on software. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 reads pixels; WebGPU rejects with the THREE PATH hint |
+| **THREE.JS** | AUTO pins WebGL2 on phones, Safari, and software GPUs (SwiftShader/Lavapipe — three's WebGPU dies on `mappedAtCreation` and has no 2D blit). THREE PATH: WEBGL2 is the CI pin. THREE PATH: WEBGPU leaves the black swapchain so SETTINGS can show it. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 reads pixels; WebGPU rejects with the THREE PATH hint |
 
 Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 

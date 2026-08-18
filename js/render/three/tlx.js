@@ -192,7 +192,32 @@ const TLX = (function () {
       const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
       const isWebKit = /CriOS|FxiOS|EdgiOS/.test(ua) ||
         (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua));
-      const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : !!(isMobile || isWebKit);
+      // Software WebGPU (SwiftShader / Lavapipe) never composites a visible
+      // swapchain and three's own mappedAtCreation uploads die there. AUTO
+      // therefore pins WebGL2 — same fields WGX reads (non-enumerable
+      // GPUAdapterInfo). THREE PATH: WEBGPU (`tlxForceGL=0`) still allows
+      // the black path so SETTINGS can demonstrate it.
+      let _softAdapter = false;
+      try {
+        if (navigator.gpu && navigator.gpu.requestAdapter) {
+          const ad = await navigator.gpu.requestAdapter();
+          if (ad) {
+            const info = ad.info || null;
+            const dev = info && info.device;
+            const ven = info && info.vendor;
+            const arch = info && info.architecture;
+            const desc = info && info.description;
+            const infoBlob = [dev, ven, arch, desc].filter(Boolean).join(" ").toLowerCase();
+            const infoEmpty = !info || !(dev || ven || arch);
+            _softAdapter = !!(ad.isFallbackAdapter
+              || infoEmpty
+              || /HeadlessChrome/i.test(ua)
+              || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob));
+          }
+        }
+      } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO stays phone/WebKit only */ }
+      const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false
+        : !!(isMobile || isWebKit || _softAdapter);
 
       // ── OPAQUE CANVAS (js/render/glx.js: `alpha: false`) ────────────────────
       // Not cosmetic, and not a memory tweak: the lit fragment writes the SSR
@@ -1927,7 +1952,7 @@ const TLX = (function () {
           backendState() {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
-              forceWebGL, pin: _glPin, isMobile, mobileTier, softwareGL,
+              forceWebGL, pin: _glPin, isMobile, mobileTier, softwareGL, softAdapter: _softAdapter,
             };
           },
           materialCacheSize() { return matCache.size; },

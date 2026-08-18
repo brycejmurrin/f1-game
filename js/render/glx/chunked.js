@@ -201,7 +201,7 @@ const GLXChunked = (function () {
     // alpha 1 (game.js props/glass materials carry no alpha field); route
     // translucent work through draw() instead.
     function drawChunked(mesh, modelMat, opts) {
-      if (!mesh) return;
+      if ((core.ctxGone && core.ctxGone()) || !mesh) return;
       const alpha = litMaterial(modelMat, opts);
       setDepthMask(true);
       setBlend(alpha < 1);
@@ -296,7 +296,7 @@ const GLXChunked = (function () {
     // the camera). Runs under the depth program (bound by GLXShadow.shadowBegin).
     function castShadowChunked(mesh, model) {
       const SH = core.shadow;
-      if (!SH.depthPassOn || !mesh) return;
+      if ((core.ctxGone && core.ctxGone()) || !SH.depthPassOn || !mesh) return;
       bindVAO(mesh.vao);
       gl.uniformMatrix4fv(SH.depthU.uModel, false, model);
       if (!mesh.chunks) { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib); gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0); return; }
