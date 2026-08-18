@@ -345,7 +345,7 @@ test.describe("Apex 26 — HUD", () => {
         for (let i = 3; i < d.length; i += 4) if (d[i] > 0) return true;
       }
       return false;
-    }, null, { timeout: 5000 });
+    }, null, { polling: 100, timeout: 5000 });
 
     // A drawn outline is a 2px stroke around the whole lap, so a painted map
     // has hundreds of non-transparent pixels; a blank canvas has zero. Count
