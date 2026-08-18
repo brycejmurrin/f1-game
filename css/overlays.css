@@ -665,7 +665,7 @@ body.hud-hidden #hud-restore { display: block; }
 #vsfriend .vs-step { display: flex; flex-direction: column; gap: 10px; }
 #vsfriend .vs-hint {
   margin: 4px 0 0;
-  font-size: 0.82rem;
+  font-size: var(--fs-micro);
   line-height: 1.35;
   opacity: 0.75;
 }
@@ -674,7 +674,7 @@ body.hud-hidden #hud-restore { display: block; }
   box-sizing: border-box;
   resize: vertical;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.72rem;
+  font-size: var(--fs-micro);
   line-height: 1.3;
   /* Codes have no spaces, so without this they force the sheet wide. */
   word-break: break-all;
@@ -755,7 +755,7 @@ body.hud-hidden #hud-restore { display: block; }
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 0.82rem;
+  font-size: var(--fs-micro);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   opacity: 0.9;
@@ -769,7 +769,7 @@ body.hud-hidden #hud-restore { display: block; }
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 0.78rem;
+  font-size: var(--fs-micro);
   background: rgba(255, 255, 255, 0.14);
 }
 /* ---- the waiting room ---- */
@@ -784,12 +784,12 @@ body.hud-hidden #hud-restore { display: block; }
   align-items: baseline;
 }
 #vsfriend .vs-summary dt {
-  font-size: 0.72rem;
+  font-size: var(--fs-micro);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   opacity: 0.6;
 }
-#vsfriend .vs-summary dd { margin: 0; font-size: 0.86rem; }
+#vsfriend .vs-summary dd { margin: 0; font-size: var(--fs-2); }
 
 #vsfriend .vs-driver {
   display: flex;
@@ -798,7 +798,7 @@ body.hud-hidden #hud-restore { display: block; }
   padding: calc(var(--gap) * 0.5) 8px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.05);
-  font-size: 0.8rem;
+  font-size: var(--fs-micro);
 }
 /* The other players, one row each. A column rather than more fixed elements,
    because how many there are is not known until people join. Your row plus
@@ -821,7 +821,7 @@ body.hud-hidden #hud-restore { display: block; }
   flex: 0 0 auto;
   width: 5.2em;
   text-align: right;
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   opacity: 0.5;
@@ -876,7 +876,7 @@ body.hud-hidden #hud-restore { display: block; }
 #vsfriend .vs-scan > .bigbtn { width: auto; margin: 0; }
 #vsfriend .vs-raw > summary {
   cursor: pointer;
-  font-size: 0.76rem;
+  font-size: var(--fs-micro);
   opacity: 0.7;
   padding: 2px 0;
 }
@@ -899,7 +899,7 @@ body.hud-hidden #hud-restore { display: block; }
 #vsfriend .vs-status {
   margin: var(--gap) 0 0;
   min-height: 1.2em;          /* reserve the line so the sheet doesn't jump */
-  font-size: 0.82rem;
+  font-size: var(--fs-micro);
   line-height: 1.35;
   opacity: 0.9;
 }

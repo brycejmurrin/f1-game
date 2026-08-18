@@ -31,8 +31,9 @@
  *   LightTune.TUNE_DEFS, same as GLX (js/render/gfx.js contract note).
  *
  * M1 STATUS: renderer lifecycle is real (dynamic import, WebGPURenderer with
- * WebGL2 fallback, resize/renderScale, clear-to-fogColor begin/present so the
- * no-track menu path at js/game.js works); every other contract member is
+ * WebGL2 fallback, resize/renderScale, Color-clear begin/present — skyZenith
+ * when the frame has one, else fogColor for the no-track menu path at
+ * js/game.js); every other contract member is
  * present as a SAFE no-op so game.js can issue the full frame protocol without
  * crashing. M2+ replace the no-ops subsystem by subsystem.
  *
@@ -68,9 +69,12 @@
  * the node reconstructs the per-pixel view ray from frameSky.invViewProj
  * (screenUV -> NDC -> both z planes), identical to SKY_VS. begin() clears
  * backgroundNode each frame; drawSky() re-arms it — so the no-track/menu
- * path keeps the flat fogColor clear, and the env-probe double-call (M9)
- * just overwrites uniforms (last drawSky before render wins). Post chain
- * is live (M8, tlx-post.js).
+ * path keeps the flat Color clear (skyZenith when the frame has one, else
+ * fogColor). A missed TSL sky (software-GL compile miss, HDR-target skip)
+ * must not fall through to dusk fog (~beige [0.68,0.64,0.54]) or the whole
+ * frame reads as a washed void. The env-probe double-call (M9) just
+ * overwrites uniforms (last drawSky before render wins). Post chain is
+ * live (M8, tlx-post.js).
  *
  * M6 STATUS: the FX draw paths are live (tsl-fx.js, TLXShaders.fx): blob
  * shadows + per-mark skid stamps (shared unit quad, per-draw w/l baked into
@@ -240,6 +244,12 @@ const TLX = (function () {
       // 2D overlay — never getContext("2d") on #game (one context type per
       // canvas for life; three's WebGPU configure is lazy on first present).
       let _layoutCanvas = canvas;
+      // Software WebGPU: keep #game as three's GPU canvas. Soft-present is the
+      // #game-soft sibling overlay below (never getContext("2d") on #game —
+      // one context type per canvas for life). softGpu() aliases the overlay
+      // path so instanced draws / sky fallback / env restore stay off the
+      // native swapchain. Do not steal #game as 2D — that hides the overlay
+      // next to a detached canvas and leaves the page on an empty 2D #game.
 
       // ── OPAQUE CANVAS (js/render/glx.js: `alpha: false`) ────────────────────
       // Not cosmetic, and not a memory tweak: the lit fragment writes the SSR
@@ -400,9 +410,16 @@ const TLX = (function () {
           _displayCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1";
         }
         canvas.parentNode.insertBefore(_displayCanvas, canvas.nextSibling);
-        try { _displayCtx = _displayCanvas.getContext("2d", { willReadFrequently: true }); }
+        // Opaque overlay — the lit fragment writes the SSR car-paint TAG
+        // (0.35) into ALPHA. That is a post-chain mask, not opacity. A
+        // default 2D context is alpha-composited, so bodywork ghosts at 35%
+        // over #game / the page (tyres/wings stay solid). GLX asked for
+        // `alpha: false`; the overlay must say the same.
+        try { _displayCtx = _displayCanvas.getContext("2d", { alpha: false, willReadFrequently: true }); }
         catch (_) { _displayCtx = null; /* capturePixels can still read the RT */ }
       }
+      function softGpu() { return !!(_softAdapter || _softBlit); }
+      function softOutRT() { return softGpu() ? _ensureBlitRT(W, H) : null; }
       // r185.1 keys the TSL node-builder cache on RenderObject.initialCacheKey,
       // which folds in renderer.contextNode.version + the scene lights hash.
       // Both change across the many renderer.render() calls of a track load
@@ -555,9 +572,10 @@ const TLX = (function () {
       // per batch, frustum-repacked by cullInstances).
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0.04, 0.04, 0.06);
-      // Game code writes matrixWorld on every pooled mesh. Auto-update would
-      // walk the whole graph on each renderer.render() (shadow primes + env
-      // faces + present) for no result.
+      // Pooled meshes write matrixWorld themselves in acquireMesh (the scene
+      // root is identity, so world = local). Auto-update would walk the whole
+      // graph on each renderer.render() (shadow primes + env faces + present)
+      // for no result — and a missed write leaves cars at the origin.
       scene.matrixAutoUpdate = false;
       scene.matrixWorldAutoUpdate = false;
       const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 4000);
@@ -616,7 +634,11 @@ const TLX = (function () {
       let shadowSys = null;
       try {
         if (window.TLXShaders && TLXShaders.shadowSys) {
-          shadowSys = TLXShaders.shadowSys(THREE, TSL, { renderer, mobileTier, isMobile, softwareGL });
+          // Shrink maps on software WebGPU too (detectSoftwareGL is WebGL-only
+          // and returns false once the hidden canvas is a WebGPU context).
+          shadowSys = TLXShaders.shadowSys(THREE, TSL, {
+            renderer, mobileTier, isMobile, softwareGL: softwareGL || softGpu(),
+          });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: shadow factory failed, shadows off —", e); } catch (_) {}
@@ -637,11 +659,15 @@ const TLX = (function () {
       try {
         if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
           post = TLXShaders.postChain(THREE, TSL,
-            { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode });
+            { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode,
+              softDest: function () { return softOutRT(); } });
           if (post && !post.enabled()) post = null;
-          // Phone + no renderable float target: ACES/FXAA on 8-bit is the
-          // pale-ground look. Direct-to-canvas (M7) is the working picture.
-          if (post && isMobile && !post.hdrOk()) post = null;
+          // GLX keeps the post chain on an RGBA8 scene when half-float is not
+          // renderable (js/render/glx/post.js). Killing it here dropped ACES,
+          // bloom, SSAO, god-ray, FXAA and SSR on phones that missed the float
+          // target — a bigger look delta than 8-bit ACES. hdrOk() already
+          // accepts EXT_color_buffer_half_float (iOS). The pale-ground look
+          // was fog-as-clear + a missed TSL sky, not this gate.
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: post factory failed, direct to canvas —", e); } catch (_) {}
@@ -673,11 +699,13 @@ const TLX = (function () {
         };
         envRT = new THREE.CubeRenderTarget(ENV_SIZE, envOpts);
         envRT.texture.colorSpace = THREE.NoColorSpace;   // no-sRGB invariant (probe target too)
+        envRT.texture.anisotropy = 4;                    // GLX env cube 4× (grazing clearcoat)
         // A COMPLETE black cube bound whenever the live probe must NOT be
         // sampled: while rendering INTO envRT (feedback-loop guard) and before
         // the first full capture. Cleared black once so it reads as no-mirror.
         envDummy = new THREE.CubeRenderTarget(1, envOpts);
         envDummy.texture.colorSpace = THREE.NoColorSpace;
+        envDummy.texture.anisotropy = 4;
         const _prevTgt = renderer.getRenderTarget();
         const _prevA = renderer.getClearAlpha ? renderer.getClearAlpha() : 1;
         renderer.setClearColor(0x000000, 1);
@@ -1002,6 +1030,12 @@ const TLX = (function () {
       }
 
       function drawInstanced(batch, opts) {
+        // Software WebGPU: InstancedMesh + per-vertex color/trk makes Dawn
+        // bind a 16-vertex vec3 as instance-rate (slot 2, 192 B vs count*12)
+        // and a 1-instance dummy at slot 5. One failed draw invalidates the
+        // whole encoder — car/road/sky never land in softOutRT. Skip the
+        // instanced scenery on that path; real GPUs keep the batches.
+        if (softGpu()) return;
         if (!batch || !batch.imesh || !batch.instances) return;
         const n = batch.visible === undefined ? batch.instances : batch.visible;
         if (n <= 0) return;
@@ -1024,6 +1058,7 @@ const TLX = (function () {
       }
 
       function castShadowInstanced(batch) {
+        if (softGpu()) return;
         if (shadowSys && shadowSys.castInstanced) shadowSys.castInstanced(batch);
       }
 
@@ -1205,7 +1240,18 @@ const TLX = (function () {
         if (!m) { m = new THREE.Mesh(geo, unlitMat); m.matrixAutoUpdate = false; m.frustumCulled = false; meshPool[poolUsed] = m; }
         m.geometry = geo;
         m.material = material || fallbackMat();
+        // scene.matrixWorldAutoUpdate is false (see create() above), so three
+        // will NEVER promote m.matrix → matrixWorld. The renderer uploads
+        // matrixWorld as the model matrix: writing only `.matrix` left every
+        // pooled mesh at identity forever. World-baked track/terrain still
+        // looked right (identity IS their model matrix); cars, flaps, blob
+        // shadows, and any draw() with a non-identity model sat at the origin
+        // — invisible from a chase cam on track, but correct in the garage
+        // where the car IS near the origin. Same symptom the material-cache
+        // dispose used to cause; this is the remaining half.
         if (matrixArr) m.matrix.fromArray(matrixArr); else m.matrix.identity();
+        m.matrixWorld.copy(m.matrix);
+        m.matrixWorldNeedsUpdate = false;
         m.visible = true;
         poolUsed++;
         if (!m.parent) scene.add(m);
@@ -1318,6 +1364,7 @@ const TLX = (function () {
         // size into the DPR multiply: a hidden/detached canvas (clientWidth 0) then
         // doubled its render target every begin() until allocation failed. GLX and
         // WGX both read clientWidth with a floor of 1 for the same reason.
+        // Soft-present: the hidden GPU canvas is 1×1 CSS — layout is #game.
         if (cssDirty || cssW <= 0 || cssH <= 0) {
           cssW = _layoutCanvas.clientWidth;
           cssH = _layoutCanvas.clientHeight;
@@ -1367,11 +1414,14 @@ const TLX = (function () {
         if (src.length < (h - 1) * bpr + row) {
           // tight pack fallback (WebGL backend copy)
           if (src.length >= w * h * 4) data.set(src.subarray(0, w * h * 4));
-          return data;
+        } else {
+          for (let y = 0; y < h; y++) {
+            data.set(src.subarray(y * bpr, y * bpr + row), y * row);
+          }
         }
-        for (let y = 0; y < h; y++) {
-          data.set(src.subarray(y * bpr, y * bpr + row), y * row);
-        }
+        // SSR car-paint tag is 0.35 in ALPHA — a channel, not opacity.
+        // Screenshots and the 2D overlay must not treat it as compositor a.
+        for (let i = 3; i < data.length; i += 4) data[i] = 255;
         return data;
       }
       function _readLdr(rt) {
@@ -1666,13 +1716,13 @@ const TLX = (function () {
           // each waitForFunction poll sat behind a SwiftShader frame).
           // Clear the face and count it; the main present still paints the
           // canvas. Real GPUs keep the full world capture.
-          if (softwareGL) {
+          if (softwareGL || softGpu()) {
             try {
               renderer.setRenderTarget(envRT, face & 7);
               renderer.setClearColor(0x000000, 1);
               renderer.clear();
             } catch (_) { /* a probe face must never strand the frame */ }
-            renderer.setRenderTarget(null);
+            renderer.setRenderTarget(softOutRT());
             drawList.length = 0;
             _dMatUsed = 0;
             poolUsed = 0;
@@ -1717,7 +1767,7 @@ const TLX = (function () {
             renderer.render(scene, faceCam);
           } catch (_) { /* a probe face must never strand the frame */ }
           if (softwareGL) scene.backgroundNode = prevSky;
-          renderer.setRenderTarget(null);
+          renderer.setRenderTarget(softOutRT());
           if (lit && lit.setEnvCube) lit.setEnvCube(envRT.texture);
           drawList.length = 0;   // the main pass re-issues its own draws
           _dMatUsed = 0;
@@ -1820,7 +1870,13 @@ const TLX = (function () {
           _matFrame++;   // new frame: last frame's materials are evictable again
           resize();
           _instAlive.clear();
-          const f = (frame && frame.fogColor) || [0.04, 0.04, 0.06];
+          // Color fallback when TSL backgroundNode misses. Fog at dusk is a
+          // beige (~0.68,0.64,0.54) that filled every software-GL probe as a
+          // washed void; zenith is the sky the node would have drawn. Menu
+          // frames without skyZenith still clear to fogColor.
+          const z = frame && frame.skyZenith;
+          const f = (z && z.length >= 3) ? z
+            : ((frame && frame.fogColor) || [0.04, 0.04, 0.06]);
           scene.background.setRGB(f[0], f[1], f[2]);
           // Camera from the game's column-major matrices. Main path supplies
           // proj + invProj + viewProj (view = invProj * viewProj); the
@@ -1884,7 +1940,7 @@ const TLX = (function () {
           _fxFrame.shadows = 0; _fxFrame.marks = 0; _fxFrame.skidVerts = 0;
           _fxFrame.glow = 0; _fxFrame.particles = 0; _fxFrame.decals = 0;
           // M5: sky is opt-in PER FRAME — a frame that issues no drawSky
-          // (menus, no-track) keeps the flat fogColor clear above.
+          // (menus, no-track) keeps the flat Color clear above (zenith/fog).
           scene.backgroundNode = null;
           drawList.length = 0;
           _dMatUsed = 0;
@@ -1899,7 +1955,18 @@ const TLX = (function () {
         drawSky(frameSky) {
           if (!sky || !frameSky) return;
           sky.update(frameSky);
-          scene.backgroundNode = sky.node;
+          // Keep the Color fallback in lockstep with the node: if this
+          // frame's TSL sky fails to compile into the HDR target, the clear
+          // is still zenith, not leftover fog from a previous menu frame.
+          const z = frameSky.zenith || frameSky.skyZenith;
+          if (z && z.length >= 3) scene.background.setRGB(z[0], z[1], z[2]);
+          // Software GL: the full SKY_FS node is a second TSL compile that
+          // either misses (Color fog → beige void) or reconstructs rays
+          // against the HDR target so every pixel is horizon beige. Arm the
+          // zenith-only fallback; real GPUs keep the procedural dome.
+          // skyState().on stays true (M5) because a backgroundNode is set.
+          scene.backgroundNode = ((softwareGL || softGpu()) && sky.fallbackNode)
+            ? sky.fallbackNode : sky.node;
           // three lazily builds a NodeMaterial around backgroundNode. Pin it
           // so getForRenderCacheKey does not hash child-node ids (the same
           // compile-storm the mesh materials hit). Harmless if the mesh is
@@ -2076,7 +2143,8 @@ const TLX = (function () {
               const rt = _ensureBlitRT(W, H);
               renderer.setRenderTarget(rt);
               renderer.render(scene, camera);
-              renderer.setRenderTarget(null);
+              // Stay on the RT — setRenderTarget(null) is getCurrentTexture()
+              // and breaks mapAsync on software Dawn.
               _queueSoftBlit(rt);
               return;
             }
@@ -2106,6 +2174,11 @@ const TLX = (function () {
           let painted = false;
           try {
             if (post) {
+              // Same pin as paintCanvas(): three lazily builds the
+              // backgroundNode material on first render. Pinning only the
+              // canvas fallback left the HDR scene target on the Color
+              // clear whenever the lazy compile missed (software GL).
+              pinSkyMaterial();
               renderer.setRenderTarget(post.sceneTarget());
               renderer.render(scene, camera);
               post.present(opts, _postF);

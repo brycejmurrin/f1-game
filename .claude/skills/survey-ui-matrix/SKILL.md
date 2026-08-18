@@ -10,7 +10,9 @@ viewport × scale × pointer. Batch instrument: `tools/layout-audit.mjs`.
 Title-path recipe (six screens at iPhone landscape, with shots):
 `node tools/ui-survey.mjs` / `npm run ui:survey` — a layout-audit alias;
 `tools/ui-mcp-survey.mjs` is a forwarder to that file. This skill is the
-**interactive** one (Chrome DevTools MCP, canvas hidden).
+**interactive** one: Playwright MCP for resize / DOM / CSS (`browser_resize`,
+`browser_snapshot`, `browser_evaluate`), Chrome DevTools MCP for emulate +
+heap when needed. Canvas hidden either way.
 
 Single known bug → **ui-menu-a11y**. Restructure decisions →
 **restructure-screens-css**.
@@ -38,3 +40,4 @@ at 100%. Default is 1.0 on every pointer now (`css/tokens.css`).
 - Probe JS (clip/trunc/tap/overflow) + routes + CSS-cache diagnosis +
   measured mistakes → [references/probes.md](references/probes.md).
 - Chrome park-before-Playwright → [.claude/skills/mcp-probe/references/traps.md](../mcp-probe/references/traps.md) §1.
+- Playwright MCP wrapper → `tools/playwright-mcp.sh` (`.mcp.json` `playwright`).

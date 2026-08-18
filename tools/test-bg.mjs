@@ -257,7 +257,10 @@ function spawnGroup(group, pkg) {
   child.unref();
   fs.closeSync(fd);
   say(`START ${group.padEnd(14)} pid=${child.pid} at=${started} ${loadavgLine()} log=${path.relative(ROOT, log)}`);
-  return { group, pid: child.pid, log, started };
+  // Persist whether this group actually owns Chromium. Consumers that guard
+  // browser automation must not mistake Node-only groups (tooling-fast,
+  // sweeps) for Playwright merely because test-bg launched them.
+  return { group, pid: child.pid, log, started, browser: forward.length > 0 };
 }
 
 function start(groups, { force = false, parallel = false } = {}) {

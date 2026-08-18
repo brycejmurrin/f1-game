@@ -33,7 +33,7 @@ each. HTTP `127.0.0.1:3713/healthz` → `{ok:true, tools:30, bind:127.0.0.1}`.
 `apex_graph_parity` monza `BASE=HEAD~1` 1552 ms exact.
 
 Keep **root `.mcp.json`** (Cloud / Claude / this agent) and **`.cursor/mcp.json`**
-(Cursor `agent mcp`) in lockstep — same four servers, `type: "stdio"` on the
+(Cursor `agent mcp`) in lockstep — same five servers, `type: "stdio"` on the
 local ones. `agent mcp` (2026.08.11) reads `.cursor/mcp.json`;
 `${workspaceFolder}` in `command` spawned as a literal path (`ENOENT`);
 relative `tools/apex-tools-mcp.sh` works. After `agent mcp enable apex-tools`:
@@ -51,13 +51,13 @@ JSON-RPC on stdin/stdout; log only on stderr.
 catalog into that process is how an earlier wrap shipped **0 tools** when
 TinyFish `ensure()` threw. Every wrap target is Node. Name collision
 (`chrome_*` / `tinyfish_*`) stays a structural invariant if this is a
-**fourth** `.mcp.json` entry: `apex-tools`.
+**fifth** `.mcp.json` entry next to `playwright`: `apex-tools`.
 
 | | |
 |---|---|
 | **Name** | `apex-tools` (`serverInfo.name`: `apex-tools-mcp`) |
 | **Lives** | `tools/apex-tools-mcp.mjs` + `tools/apex-tools-mcp.sh` |
-| **Transport** | stdio. **Root `.mcp.json` stays** (Cloud / Claude / this agent). Cursor CLI/IDE also loads **`.cursor/mcp.json`**. Same four servers, lockstepped. HTTP `127.0.0.1:3713` via `serve-http`. If the host catalog is empty: `./tools/apex-tools-mcp.sh call`. Lockstep names: `tools/apex-tools-mcp.json`. |
+| **Transport** | stdio. **Root `.mcp.json` stays** (Cloud / Claude / this agent). Cursor CLI/IDE also loads **`.cursor/mcp.json`**. Same five servers, lockstepped (`playwright` is `tools/playwright-mcp.sh run`). HTTP `127.0.0.1:3713` via `serve-http`. If the host catalog is empty: `./tools/apex-tools-mcp.sh call`. Lockstep names: `tools/apex-tools-mcp.json`. |
 | **SDK** | Hand-rolled JSON-RPC like `probe-mcp.py` — **no npm MCP SDK**, no build step |
 | **Prefix** | `apex_*` only |
 | **CLI** | `help` / `status` / `list-tools` / `call <name> '<json>'` / `serve` |
@@ -197,10 +197,12 @@ Refuse (typed `{ok:false, error, message, fix}`) if any of:
 
 **Known gap (document, do not pretend to close):** Cursor’s `.mcp.json`
 `chrome-devtools` stdio server is a **third** browser and does **not** answer
-`:3712/healthz`. `layout-audit` / `cdmcp-*` / a raw `node tools/apex-eval.mjs`
-from a shell also sit outside the lock unless they take it. v1 mutex is
-MCP-owned; `/healthz` + test-bg + `playwright test` are the known other
-occupants. One-sided is acceptable if `apex_status` reports all three.
+`:3712/healthz`. Official `@playwright/mcp` (`playwright` in the same catalogs)
+is a **fifth** browser with the same gap. `layout-audit` / `cdmcp-*` / a raw
+`node tools/apex-eval.mjs` from a shell also sit outside the lock unless they
+take it. v1 mutex is MCP-owned; `/healthz` + test-bg + `playwright test` are
+the known other occupants. One-sided is acceptable if `apex_status` reports
+chrome-devtools, playwright-mcp, and the outside-lock list.
 
 ---
 
@@ -220,6 +222,7 @@ occupants. One-sided is acceptable if `apex_status` reports all three.
 | `lighting-tuner-sweep`, `lighting-campaign/`, `ab-lighting`, `physics-tune-sweep` | Long, sharded, resumable; not a one-shot MCP call |
 | `report-server.mjs` | Binds `0.0.0.0`, LAN URLs |
 | `cdmcp-*`, `mcp-cli.mjs`, `chrome-devtools-mcp.sh` | Probe / chrome-devtools |
+| `playwright-mcp.sh` / `@playwright/mcp` | Interactive UI survey; not an apex_* wrap |
 | `assets.mjs bake*`, `tests-split --apply`, `rotate-markings --write` | Writers |
 | `graph-parity` without `BASE=` | Vacuous-refuse on a clean tree (exit 2). Wrapped only as `apex_graph_parity` with required `base`. |
 
@@ -227,17 +230,17 @@ occupants. One-sided is acceptable if `apex_status` reports all three.
 
 ## Registration
 
-Fourth server in both catalogs: root `.mcp.json` (Claude Code) and
-`.cursor/mcp.json` (Cursor CLI/IDE, `type: "stdio"`). `command` →
-`tools/apex-tools-mcp.sh`, `args` → `["serve"]`. Same-commit updates:
+Fifth catalog name in both files: `playwright` → `tools/playwright-mcp.sh`
+`["run"]`. `apex-tools` stays `tools/apex-tools-mcp.sh` `["serve"]`.
+Same-commit updates:
 
-- 3-key lists in `tests/unit/probe-mcp.test.mjs` and
-  `tests/unit/tinyfish-mcp.test.mjs` become
-  `["apex-tools", "chrome-devtools", "probe", "tinyfish"]`
-- `.cursor/mcp.json` locksteps those four names + apex-tools argv (`type: stdio`)
-- `apex-tools-mcp.sh help` in `tests/unit/tools-runnable.test.mjs`
-- AGENTS Cloud path lists `./tools/apex-tools-mcp.sh` next to
-  `tinyfish-mcp.sh` / `probe-mcp.py`
+- key lists in `tests/unit/probe-mcp.test.mjs` and
+  `tests/unit/tinyfish-mcp.test.mjs` include
+  `["apex-tools", "chrome-devtools", "playwright", "probe", "tinyfish"]`
+- `.cursor/mcp.json` locksteps those five names + apex-tools argv (`type: stdio`)
+- `apex-tools-mcp.sh` / `playwright-mcp.sh` help in `tests/unit/tools-runnable.test.mjs`
+- AGENTS Cloud path lists `./tools/apex-tools-mcp.sh` and
+  `./tools/playwright-mcp.sh` next to `tinyfish-mcp.sh` / `probe-mcp.py`
 
 ---
 

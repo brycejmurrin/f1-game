@@ -54,15 +54,18 @@ test("apex-tools-mcp.mjs and shell entry exist", () => {
   assert.doesNotMatch(src, /name:\s*"tinyfish_/);
 });
 
-test(".mcp.json registers apex-tools as the fourth stdio server", () => {
+test(".mcp.json registers apex-tools and playwright in the five-server catalog", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/apex-tools-mcp.json"), "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "playwright",
     "probe",
     "tinyfish",
   ]);
+  assert.equal(cfg.mcpServers.playwright.command, "tools/playwright-mcp.sh");
+  assert.deepEqual(cfg.mcpServers.playwright.args, ["run"]);
   assert.equal(cfg.mcpServers["apex-tools"].type, "stdio");
   assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
   assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
@@ -106,7 +109,9 @@ test("apex_status reports the chrome-devtools stdio known gap", () => {
   const body = JSON.parse(r.stdout);
   assert.equal(body.ok, true);
   assert.match(body.knownGap.chromeDevtoolsStdio, /3712/);
+  assert.match(body.knownGap.playwrightMcpStdio, /playwright/);
   assert.ok(body.knownGap.outsideLock.includes("layout-audit"));
+  assert.ok(body.knownGap.outsideLock.includes("playwright-mcp"));
 });
 
 test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only", () => {
@@ -633,6 +638,27 @@ test("week-2 dryRun refuses playwright_live from test-bg.json (no Chromium)", ()
     assert.equal(r.status, 1, r.stderr);
     const body = JSON.parse(r.stdout);
     assert.equal(body.error, "playwright_live");
+  } finally {
+    if (prev == null) {
+      try { fs.unlinkSync(TEST_BG); } catch { /* ignore */ }
+    } else {
+      fs.writeFileSync(TEST_BG, prev);
+    }
+  }
+});
+
+test("a live Node-only test-bg group does not impersonate Playwright", () => {
+  fs.mkdirSync(path.dirname(TEST_BG), { recursive: true });
+  let prev = null;
+  if (fs.existsSync(TEST_BG)) prev = fs.readFileSync(TEST_BG, "utf8");
+  fs.writeFileSync(TEST_BG, JSON.stringify({
+    mode: "sequential",
+    runs: [{ pid: process.pid, group: "tooling-fast", browser: false }],
+  }));
+  try {
+    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0" });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.equal(JSON.parse(r.stdout).ok, true);
   } finally {
     if (prev == null) {
       try { fs.unlinkSync(TEST_BG); } catch { /* ignore */ }

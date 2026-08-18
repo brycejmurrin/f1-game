@@ -273,6 +273,12 @@ struct SsaoU {
 ${fullscreenTri}
 ${POST_VS}
 
+// First 8 of GLX/TLX K[12] (js/render/shaders/post.js, js/render/three/tsl-post.js).
+const SSAO_K = array<vec2<f32>, 8>(
+  vec2<f32>(0.0, 1.0), vec2<f32>(0.5, 0.866), vec2<f32>(0.866, 0.5), vec2<f32>(1.0, 0.0),
+  vec2<f32>(0.866, -0.5), vec2<f32>(0.5, -0.866), vec2<f32>(0.0, -1.0), vec2<f32>(-0.5, -0.866)
+);
+
 fn ssaoDepth(uv : vec2<f32>) -> f32 {
   let dims = vec2<i32>(textureDimensions(depthTex));
   let px = clamp(vec2<i32>(uv * vec2<f32>(dims)), vec2<i32>(0), max(dims - vec2<i32>(1), vec2<i32>(0)));
@@ -305,26 +311,28 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let N = select(vec3<f32>(0.0, 0.0, 1.0), crN / crL, crL > 1e-6);
   let dCentre = ssaoDepth(in.uv);
   if (dCentre >= 0.99999) { return vec4<f32>(1.0); }   // sky: unoccluded
-  // Screen-space radius shrinks with distance so world reach stays ~constant.
-  let scr = clamp(radius / max(-P.z, 1.0) * 0.9, 0.004, 0.05);
-  // Per-pixel rotation turns banding into noise (uses the frag coord).
-  let ang = fract(sin(dot(in.pos.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453) * 6.2832;
-  let ca = cos(ang);
-  let sa = sin(ang);
-
+  // uStrength == 0 is supported: the pass still runs contact shadows
+  // (haveAO arms on aoStr > 0 || contactStr > 0). Skip the 8 dependent
+  // depth taps + the sin/cos rotation when AO itself is off — same as
+  // GLX SSAO_FS (js/render/shaders/post.js). strength is a uniform.
   var occ = 0.0;
-  for (var i = 0; i < 8; i = i + 1) {
-    // Even angular spread; the per-pixel rotation decorrelates neighbours.
-    let ka = (f32(i) + 0.5) / 8.0 * 6.2832;
-    let kb = vec2<f32>(cos(ka), sin(ka));
-    let k  = vec2<f32>(kb.x * ca - kb.y * sa, kb.x * sa + kb.y * ca);
-    let suv = clamp(in.uv + k * scr, vec2<f32>(0.001), vec2<f32>(0.999));
-    let S = ssaoViewPos(suv);
-    let V = S - P;
-    let len = length(V);
-    let ndv = max(dot(N, V / max(len, 1e-4)) - 0.10, 0.0);
-    let range = smoothstep(radius, radius * 0.4, len);
-    occ = occ + ndv * range;
+  if (strength > 0.0) {
+    let scr = clamp(radius / max(-P.z, 1.0) * 0.9, 0.004, 0.05);
+    let ang = fract(sin(dot(in.pos.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453) * 6.2832;
+    let ca = cos(ang);
+    let sa = sin(ang);
+    for (var i = 0; i < 8; i = i + 1) {
+      // GLX/TLX fan (not an even 2π ring) + the same per-pixel rotation.
+      let kb = SSAO_K[i];
+      let k  = vec2<f32>(kb.x * ca - kb.y * sa, kb.x * sa + kb.y * ca);
+      let suv = clamp(in.uv + k * scr, vec2<f32>(0.001), vec2<f32>(0.999));
+      let S = ssaoViewPos(suv);
+      let V = S - P;
+      let len = length(V);
+      let ndv = max(dot(N, V / max(len, 1e-4)) - 0.10, 0.0);
+      let range = smoothstep(radius, radius * 0.4, len);
+      occ = occ + ndv * range;
+    }
   }
   var ao = 1.0 - clamp(occ / 8.0 * 2.4, 0.0, 1.0) * strength;
 
@@ -560,6 +568,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      @binding(5) U         : uniform  CompositeU
   //      @binding(6) dirtTex   : texture_2d<f32>   LENS DIRT grime map
   //      @binding(7) depthTex  : texture_depth_2d  scene depth (bilateral AO + flare occ)
+  //      @binding(8) ssrPostTex: texture_2d<f32>   this-frame SSR (same-present consume)
   //    UNIFORM CompositeU (256 B):
   //      p0          : vec4<f32>  off   0   (exposure, bloomAmt, sunShaft, flareStr)
   //      sunUV       : vec4<f32>  off  16   (sunUV.x, sunUV.y, whitePoint, blackLift)
@@ -581,10 +590,12 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //                                                     (GLX folds car speed in)
   //      tuneFx      : vec4<f32>  off 128   (vignetteSoft, flareStreak2, acesE, flareStreak)
   //      tone0       : vec4<f32>  off 144   (blacks, shadows, midtones, highlights)
-  //      tone1       : vec4<f32>  off 160   (whites, toe, shoulder, _pad)
-  //      lift        : vec4<f32>  off 176   (RGB lift, _pad)
-  //      gamma       : vec4<f32>  off 192   (RGB gamma, _pad)
-  //      gain        : vec4<f32>  off 208   (RGB gain, _pad)
+  //      tone1       : vec4<f32>  off 160   (whites, toe, shoulder, hdrGradeOn)
+  //                                          w = GLX uHdrGradeOn: 1 only when an
+  //                                          HDR-grade knob is off-neutral
+  //      lift        : vec4<f32>  off 176   (RGB lift, wetness)
+  //      gamma       : vec4<f32>  off 192   (RGB gamma, reflect / wet-road SSR)
+  //      gain        : vec4<f32>  off 208   (RGB gain, carReflect)
   //      aces        : vec4<f32>  off 224   (acesA, acesB, acesC, acesD) — ACES
   //                                          TONE CURVE knobs; defaults 2.51/0.03/
   //                                          2.43/0.59 (+ acesE 0.14 in tuneFx.z)
@@ -622,6 +633,7 @@ struct CompositeU {
 @group(0) @binding(5) var<uniform> U : CompositeU;
 @group(0) @binding(6) var dirtTex   : texture_2d<f32>;   // LENS DIRT grime map (linear clamp via samp)
 @group(0) @binding(7) var depthTex  : texture_depth_2d;
+@group(0) @binding(8) var ssrPostTex : texture_2d<f32>;  // this-frame SSR (GLX composite consume)
 ${fullscreenTri}
 ${tonemap}
 ${POST_VS}
@@ -762,7 +774,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
       }
     }
   }
-  var c = textureSampleLevel(sceneTex, samp, sceneUV, 0.0).rgb;
+  let sceneS = textureSampleLevel(sceneTex, samp, sceneUV, 0.0);
+  var c = sceneS.rgb;
+  let sceneA = sceneS.a;
   let caDir = in.uv - vec2<f32>(0.5);
 
   // CHROMATIC ABERRATION (GLX js/render/shaders/post.js COMPOSITE_FS): split R/B channels radially, the
@@ -829,6 +843,27 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   }
   c = c * aoV;
 
+  // Same-frame SSR consume (GLX COMPOSITE_FS). present() wrote ssrPostTex
+  // from this frame's HDR+depth; LIT no longer samples last frame. Road
+  // uses wetness * reflect; lacquer uses the 0.35 car-paint alpha tag.
+  let ssrWet = U.lift.w;
+  let ssrRefl = U.gamma.w;
+  let ssrCar = U.gain.w;
+  if (ssrRefl > 0.001 || ssrCar > 0.001) {
+    let ssr = textureSampleLevel(ssrPostTex, samp, in.uv, 0.0);
+    if (ssr.a > 0.001) {
+      let carPx = select(0.0, 1.0, abs(sceneA - 0.35) < 0.08);
+      let roadK = (1.0 - carPx) * ssrWet * ssrRefl;
+      let carK = carPx * ssrCar;
+      let ssrK = ssr.a * max(roadK, carK);
+      if (ssrK > 0.001) {
+        let dark = select(0.10, 0.22, carPx > 0.5);
+        let sat = select(0.92, 0.88, carPx > 0.5);
+        c = mix(c, c * dark + ssr.rgb * sat, clamp(ssrK, 0.0, 0.85));
+      }
+    }
+  }
+
   // Volumetric shafts (additive, unscaled — strength is in the GODRAY pass).
   c = c + textureSampleLevel(godrayTex, samp, in.uv, 0.0).rgb;
 
@@ -882,7 +917,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   }
 
   // Professional HDR grade runs after linear-light composition and before ACES.
-  c = applyHdrGrade(c);
+  // Gated: at neutral knobs the block is an identity that still cost ~20 ALU.
+  // tone1.w is GLX uHdrGradeOn (1 only when a knob is off-neutral).
+  if (U.tone1.w > 0.5) { c = applyHdrGrade(c); }
 
   // Filmic tonemap (shared leaf) + colour grade. White point scales the knee.
   // ACES TONE CURVE knobs (aces.xyzw = a,b,c,d; tuneFx.z = e). Defaults reproduce

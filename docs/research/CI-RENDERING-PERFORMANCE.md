@@ -103,7 +103,8 @@ agent loses Lavapipe again.
 | WGX visible `#game` | `node tools/gfx-probe.mjs --backend webgpu --lite montreal` |
 | WGX readback oracle | `node tools/wgx-capture.mjs montreal --lite` → `frame.png` (optional; can flake on SwiftShader) |
 | WGX on Lavapipe | `node tools/wgx-lavapipe-probe.mjs montreal --lite` |
-| TLX pixels | `node tools/gfx-probe.mjs --backend three --lite montreal` |
+| TLX pixels (ForceGL / SwiftShader WebGL2) | `node tools/gfx-probe.mjs --backend three --lite montreal` |
+| TLX WebGPU pixels (Lavapipe soft-present) | `node tools/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe --lite montreal` |
 | Prove ICD | `test -f /usr/share/vulkan/icd.d/lvp_icd.json && vulkaninfo --summary \| head` |
 
 Agent index: `AGENTS.md` §Seeing the game / §Cursor Cloud. Tool rows:

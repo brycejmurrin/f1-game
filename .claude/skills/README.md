@@ -18,7 +18,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **test-timeout-triage** | A Playwright test timed out or hangs — machine vs wait vs budget vs bug, `test-solo.mjs` re-runs, the load-inversion case. |
 | **cross-backend-parity** | A look/knob/feature differs between GLX, WGX and TLX — the parity audit loop, drift hotspots, gap recording. |
 | **deploy-merge** | Merging with / pushing to the deploy branch — cross-lineage cache max+1, union sweeps, baseline re-measure. Live version.json → deploy-research. |
-| **survey-ui-matrix** | Reviewing the whole UI across orientations, viewport shapes, UI/HUD scale and pointer type with the Chrome DevTools MCP — enumerate screens from source, measure each cell, capture. |
+| **survey-ui-matrix** | Reviewing the whole UI across orientations, viewport shapes, UI/HUD scale and pointer type — Playwright MCP resize/DOM/CSS (`tools/playwright-mcp.sh`) or Chrome DevTools MCP; enumerate screens from source, measure each cell, capture. |
 | **restructure-screens-css** | Restructuring/consolidating screens, menus, dialogs, the DOM or the CSS class/token system — collapsing duplicate families, adding/removing a layer, the split-index.html question, height-responsive design. |
 | **ui-menu-a11y** | Menus/dialogs, Escape/back, keyboard nav, UI scale, AriaState, layout tests. |
 | **multiplayer-debug** | VS FRIEND / WebRTC — loopback, invite SDP, room codes, ICE/TURN, authority. |
@@ -33,7 +33,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **debug-state** | Live race/physics/lighting telemetry + headless `act`/`obs`/`reset`. |
 | **agent-view** | Perceive and drive the game as text — `__apex` agent-view + `tools/agent.mjs`. |
 | **playwright-probe** | Headless screenshots/evals — `shot.mjs`, `apex-eval.mjs`, `apex-capture.mjs`. |
-| **mcp-probe** | Driving the LIVE game or DEPLOYED site interactively — Chrome DevTools MCP + tinyfish, unified via `tools/probe-mcp.py` (`chrome_*` / `tinyfish_*`; `chrome-start` daemon for multi-call state; TinyFish requires one-time setup plus an injected key). Local CLI pins → `apex-tools` / `./tools/apex-tools-mcp.sh`, not this skill. |
+| **mcp-probe** | Driving the LIVE game or DEPLOYED site interactively — Chrome DevTools MCP + tinyfish, unified via `tools/probe-mcp.py` (`chrome_*` / `tinyfish_*`; `chrome-start` daemon for multi-call state; TinyFish requires one-time setup plus an injected key). Local CLI pins → `apex-tools` / `./tools/apex-tools-mcp.sh`. Interactive UI resize/DOM → `survey-ui-matrix` / `playwright-mcp.sh`. |
 | **motion-capture** | Temporal artifacts while driving (flicker/shimmer/crawl) — `tools/capture/motion-capture.mjs`. |
 | **audio-debug** | WebAudio synth — engine pitch, sfx, music layers, mute/volume. |
 | **perf-profile** | Headless V8 CPU flame chart of the game loop (Playwright CDP). |

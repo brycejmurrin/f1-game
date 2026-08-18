@@ -21,9 +21,14 @@ const AudioPanel = (() => {
     // its visibility is the title screen's, not this module's. It carried a
     // `hidden` attribute purely so it would not flash before boot, and it no
     // longer needs one.)
-    function setSound(b) {
+    function setSound(b, fromGesture) {
       G.soundOn = b; store.set("sound", b);
       GameAudio.setEnabled(b);
+      // AudioContext creation/resume must stay in the trusted click that turns
+      // sound back on (not in a promise or the boot restore below), otherwise
+      // iOS/Safari may leave it suspended. Setting the master first also makes
+      // createCtx() build the gain graph at the right level immediately.
+      if (b && fromGesture) GameAudio.init();
       els.soundbtn.textContent = b ? "♪ ON" : "♪ OFF";
       // Mirror the state for assistive tech — it is a real toggle button now
       // that AriaState does not own (it is not in an option group).
@@ -40,16 +45,19 @@ const AudioPanel = (() => {
       // SOUND is the master, so the panel's music controls follow it.
       syncAudioPanel();
     }
-    els.soundbtn.onclick = () => setSound(!G.soundOn);
+    els.soundbtn.onclick = () => setSound(!G.soundOn, true);
 
     // Music on/off, independent of the master sound toggle: engine + SFX keep
     // playing with music off.
-    function setMusic(b) {
+    function setMusic(b, fromGesture = true) {
       // The master gates both buses and its only button lives on the title
       // screen, so asking for music mid-race has to lift it — otherwise the
       // switch reads ON and nothing plays, which is exactly the confusion the
       // duplicated pause-menu toggle used to cause.
-      if (b && !G.soundOn) { setSound(true); }
+      // During boot, MUSIC ON is only the saved state of that bus; it must not
+      // override a separately saved master SOUND OFF. A real user click still
+      // lifts the master and unlocks WebAudio synchronously.
+      if (b && !G.soundOn && fromGesture) { setSound(true, true); }
       G.musicEnabled = b; store.set("music", b);
       GameAudio.setMusicEnabled(b);
       syncAudioPanel();
@@ -70,7 +78,7 @@ const AudioPanel = (() => {
     // playing — the sources stay alive at zero gain rather than being torn
     // down, so there is nothing to rebuild when it comes back on.
     function setSfx(b) {
-      if (b && !G.soundOn) { setSound(true); }
+      if (b && !G.soundOn) { setSound(true, true); }
       sfxOn = b; store.set("sfx", b);
       GameAudio.setSfxEnabled(b);
       syncAudioPanel();
@@ -222,8 +230,8 @@ const AudioPanel = (() => {
     // saved settings load and before the first frame.
     function init() {
       Log.info("audio", "AudioPanel.init sound=" + !!G.soundOn);
-      setSound(G.soundOn);
-      setMusic(G.musicEnabled);
+      setSound(G.soundOn, false);
+      setMusic(G.musicEnabled, false);
       // A STORED "spotify" IS NOT WHAT IS PLAYING. Spotify never auto-connects,
       // so the restore below deliberately skips it — but `musicSrc` was left
       // holding the stored word, and the now-playing caption reads it: after a

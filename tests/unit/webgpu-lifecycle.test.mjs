@@ -517,9 +517,11 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.ok(Math.abs(composite[34] - 0.14) < 1e-6, "acesE default in tuneFx.z (float 34)");
   assert.ok(Math.abs(composite[35] - 7.0) < 1e-6, "flareStreak default in tuneFx.w (float 35)");
   assert.deepEqual(composite.slice(36, 44), [0, 0, 0, 0, 0, 0, 0, 0]);
-  assert.deepEqual(composite.slice(44, 48), [0, 0, 0, 0]);
-  assert.deepEqual(composite.slice(48, 52), [1, 1, 1, 0]);
-  assert.deepEqual(composite.slice(52, 56), [1, 1, 1, 0]);
+  assert.deepEqual(composite.slice(44, 48), [0, 0, 0, 0], "lift RGB + wetness pad");
+  assert.deepEqual(composite.slice(48, 52), [1, 1, 1, 0], "gamma RGB + reflect pad");
+  assert.ok(Math.abs(composite[52] - 1) < 1e-6 && Math.abs(composite[53] - 1) < 1e-6 &&
+            Math.abs(composite[54] - 1) < 1e-6 && Math.abs(composite[55] - 0.05) < 1e-6,
+    "gain RGB + carReflect default 0.05 in gain.w");
   // aces vec4 (floats 56..59) = shipped Narkowicz coefficients a,b,c,d.
   // (f32 rounding: none of these are exactly representable, so compare with a tol.)
   const ACES_DEF = [2.51, 0.03, 2.43, 0.59];
@@ -575,10 +577,14 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.equal(composite[62], 0.75, "haze.v must occupy dirtFx.z (float 62)");
   assert.equal(composite[63], 0.5, "haze.str must occupy dirtFx.w (float 63)");
   assert.deepEqual(composite.slice(36, 40), [1, 2, 3, 4], "tone0 must occupy floats 36..39");
-  assert.deepEqual(composite.slice(40, 44), [5, 6, 7, 0], "tone1 must occupy floats 40..43");
-  assert.deepEqual(composite.slice(44, 48), [8, 9, 10, 0], "lift must occupy floats 44..47");
-  assert.deepEqual(composite.slice(48, 52), [11, 12, 13, 0], "gamma must occupy floats 48..51");
-  assert.deepEqual(composite.slice(52, 56), [14, 15, 16, 0], "gain must occupy floats 52..55");
+  assert.deepEqual(composite.slice(40, 44), [5, 6, 7, 1],
+    "tone1 is whites/toe/shoulder/hdrGradeOn — off-neutral knobs must arm the gate");
+  assert.deepEqual(composite.slice(44, 47), [8, 9, 10], "lift RGB must occupy floats 44..46");
+  assert.equal(composite[47], 0, "lift.w is wetness — harness begin() has no wetness");
+  assert.deepEqual(composite.slice(48, 51), [11, 12, 13], "gamma RGB must occupy floats 48..50");
+  assert.equal(composite[51], 0, "gamma.w is opts.reflect — harness present() has none");
+  assert.deepEqual(composite.slice(52, 55), [14, 15, 16], "gain RGB must occupy floats 52..54");
+  assert.ok(Math.abs(composite[55] - 0.05) < 1e-6, "gain.w is carReflect (TUNE default 0.05)");
 });
 
 test("WebGPU SkyU packs GLX-parity sky knobs at the expected lanes", async () => {
@@ -816,9 +822,25 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
   // Baked MAT samples use footprint LOD — locked LOD 0 made distant tarmac bare.
   assert.match(CHUNKS_SOURCE, /fn matTexLod\(/);
   assert.match(CHUNKS_SOURCE, /textureSampleLevel\(matAlbedoTex, matSamp, tuv, mid, matTexLod/);
+  // max(ddx,ddy) LOD is the grazing smear; GLX aniso needs a geometric mean.
+  assert.match(CHUNKS_SOURCE, /log2\(sqrt\(sx \* sy\)\)/);
+  assert.doesNotMatch(
+    CHUNKS_SOURCE,
+    /fn matTexLod\([\s\S]{0,200}?let fp = max\(fwUv\.x, fwUv\.y\)/,
+    "matTexLod must not key off max(fwUv) alone (grazing mip mush)",
+  );
   // Phone WGX: markings mip must NOT key off the clamped AA width (mip→0 at 0.30).
   assert.match(CHUNKS_SOURCE, /let fwX = max\(fwTrk\.y, 1e-4\);/);
   assert.match(CHUNKS_SOURCE, /let mip = clamp\(1\.0 - \(fwX - 0\.10\) \/ 0\.55, 0\.0, 1\.0\);/);
+  // ASPHALT pack is hoisted to fs_main (uniform CF) so textureSample can use
+  // implicit LOD + anisotropy — GLX texture() parity. Must sit BEFORE the
+  // front_facing branch (that is already non-uniform).
+  const roadSample = CHUNKS_SOURCE.indexOf("textureSample(matAlbedoTex, matSamp, roadUv, 16)");
+  const ffBranch = CHUNKS_SOURCE.indexOf("if (!ff && !isRoadDraw) { N = -N; }");
+  assert.ok(roadSample > 0 && ffBranch > roadSample,
+    "asphalt textureSample must be hoisted before the front_facing branch");
+  assert.match(CHUNKS_SOURCE, /if \(mid == 16 && roadPackOn\)/);
+  assert.match(CHUNKS_SOURCE, /albedo \* roadPack\.rgb \* 2\.0/);
   assert.doesNotMatch(
     CHUNKS_SOURCE,
     /let aaX = clamp\(fwTrk\.y, 1e-4, 0\.30\);\s*[\s\S]{0,400}?let mip = clamp\(1\.0 - \(aaX/,
@@ -864,7 +886,46 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /-0\.94201624/);
   assert.match(CHUNKS_SOURCE, /lampShadowTex/);
   assert.match(CHUNKS_SOURCE, /aInst0/);
-  assert.match(CHUNKS_SOURCE, /aTrk/);
+  assert.match(CHUNKS_SOURCE, /matTrkArr/);
+  assert.match(CHUNKS_SOURCE, /@builtin\(vertex_index\) vid/);
+  assert.match(CHUNKS_SOURCE, /packedRoad/);
+  assert.match(CHUNKS_SOURCE, /D\.mat2\.z/);
+  assert.match(WGX_SOURCE, /o\.surfaceId/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /@location\(3\) aMatTrk/);
+  assert.match(CHUNKS_SOURCE, /No 4th vertex attribute/);
+  assert.match(CHUNKS_SOURCE, /fn trkFromWorld/);
+  assert.match(CHUNKS_SOURCE, /12345/);
+  assert.match(WGX_SOURCE, /_makeRoadLUT/);
+  assert.match(WGX_SOURCE, /_roadLutBG/);
+  assert.match(WGX_SOURCE, /out\[0\] = 12345/);
+  assert.match(WGX_SOURCE, /VERTEX_STRIDE = 36/);
+  assert.match(WGX_SOURCE, /shaderLocation: 0/);
+  assert.doesNotMatch(WGX_SOURCE, /shaderLocation: 3, offset: 36/);
+  assert.match(WGX_SOURCE, /_expandPull/);
+  assert.match(WGX_SOURCE, /hasTrk/);
+  assert.match(WGX_SOURCE, /const PIECE = 4095/);
+  assert.match(WGX_SOURCE, /g2Layout/);
+  assert.match(WGX_SOURCE, /read-only-storage/);
+  assert.match(WGX_SOURCE, /setBindGroup\(2, _roadLutBG \|\| attrBG/);
+  assert.match(WGX_SOURCE, /roadLutReady/);
+  assert.match(WGX_SOURCE, /function _litOpts/);
+  assert.match(WGX_SOURCE, /o\.surfaceId === 16/);
+  assert.match(WGX_SOURCE, /extra\.decal = true/);
+  assert.match(WGX_SOURCE, /depthCompare: decal \? "always"/);
+  assert.match(WGX_SOURCE, /o\.surfaceId !== 16/);
+  assert.doesNotMatch(WGX_SOURCE, /if \(o\.buryRibbon\) return;/);
+  assert.match(CHUNKS_SOURCE, /if \(!ff && !isRoadDraw\) \{ N = -N; \}/);
+  assert.match(CHUNKS_SOURCE, /if \(isRoadDraw && N\.y < 0\.0\) \{ N = -N; \}/);
+  assert.match(WGX_SOURCE, /const flip = \(i % 3 === 1\) \? 1 : \(i % 3 === 2\) \? -1 : 0;/);
+  assert.match(CHUNKS_SOURCE, /if \(i32\(vMatId \+ 0\.5\) == 16\) \{\s*roadMarkings/);
+  assert.match(CHUNKS_SOURCE, /let onRibbon = select\(dCenter <= hw \+ 8\.0, abs\(x\) <= hw \+ 2\.4, tangOk\)/);
+  assert.match(CHUNKS_SOURCE, /if \(\(bury \|\| slab\) && !isRoadDraw && fromWorld\.w > 0\.5\) \{\s*discard;/);
+  assert.match(WGX_SOURCE, /data\.trk && data\.trk\.length >= vCount \* 3/);
+  assert.match(WGX_SOURCE, /o\.buryRibbon/);
+  assert.match(WGX_SOURCE, /m3\+m2, m7\+m6, m11\+m10, m15\+m14\); \/\/ near \(GL clip w\+z >= 0\)/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /1\.0, 0\.0, 1\.0/);
+  assert.doesNotMatch(WGX_SOURCE, /__wgxDbg/);
+  assert.match(CHUNKS_SOURCE, /trkFromWorld\(wp\.xyz\)/);
   assert.match(CHUNKS_SOURCE, /0\.12 \* F\.params9\.x/, "AMBIENT CONTACT DARK");
   assert.match(CHUNKS_SOURCE, /0\.16, 0\.30, wetSheen\) \* F\.params9\.y/, "LAMP WALL SPILL");
   assert.match(CHUNKS_SOURCE, /0\.6 \* F\.params9\.z/, "WINDOW SUN FLASH");
@@ -1304,14 +1365,39 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
 
   // …and the footprint must reach every consumer as a parameter.
   for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
-                    /let fwTrk = abs\(dpdx\(in\.trk\)\) \+ abs\(dpdy\(in\.trk\)\);/,
-                    /applyMaterialNormal\(i32\(in\.matId \+ 0\.5\), &N, in\.dist, in\.wpos, fwWpos\);/,
-                    /roadMarkings\(&albedo, &rough, in\.trk, fwTrk\);/,
+                    /let fwTrkAttr = abs\(dpdx\(in\.matTrk\.yzw\)\) \+ abs\(dpdy\(in\.matTrk\.yzw\)\);/,
+                    /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, roadNrmPack, roadPackOn\);/,
+                    /roadMarkings\(&albedo, &rough, vTrk, fwTrk\);/,
                     // The one the first fix missed: this sits behind `if (detail
                     // > 0.001)`, so it must READ the hoisted footprint.
                     /let mnFpAbs = max\(fwWpos\.x, fwWpos\.z\);/]) {
     assert.match(CHUNKS_SOURCE, re, `footprint plumbing changed: ${re}`);
   }
+});
+
+test("MAT array upload is byte-exact like GLX texSubImage3D, not sRGB-converted", () => {
+  // copyExternalImageToTexture into rgba8unorm linearises sRGB. The pack is
+  // mean-normalised to 128 so albedo*tex*2 is a no-op — a linearised 128
+  // (~0.22) crushes tarmac vs WebGL2. writeTexture of 2D-canvas bytes matches
+  // GLX's raw RGBA8 upload.
+  assert.match(WGX_SOURCE, /function _matLayerBytes\(/);
+  assert.match(WGX_SOURCE, /device\.queue\.writeTexture\(\{ texture: tex, origin: \[0, 0, i\] \}/);
+  assert.match(WGX_SOURCE, /placePx\[i \* bpr\] = placePx\[i \* bpr \+ 1\] = placePx\[i \* bpr \+ 2\] = 128/);
+  assert.match(WGX_SOURCE, /const _presentFormat = _softGpu \? LDR_FORMAT : format/);
+  assert.match(WGX_SOURCE, /pFXAA\s*=\s*fsPipe\(_Post\.FXAA,\s*_presentFormat/);
+});
+
+test("MAT/env mip blit UVs cover the full parent mip, not the top-left quadrant", () => {
+  // _generateMips used pos.xy / textureDimensions(src). pos is DEST pixels;
+  // src dim is the parent mip — that UV range is 0..0.5 and every generated
+  // mip was a zoomed corner. GLX generateMipmap box-filters the whole image.
+  assert.match(WGX_SOURCE, /let dstSize = max\(floor\(srcSize \* 0\.5\), vec2<f32>\(1\.0\)\)/);
+  assert.match(WGX_SOURCE, /textureSampleLevel\(src, samp, pos\.xy \/ dstSize, 0\.0\)/);
+  assert.doesNotMatch(
+    WGX_SOURCE,
+    /let dim = vec2<f32>\(textureDimensions\(src\)\);\s*return textureSampleLevel\(src, samp, pos\.xy \/ dim/,
+    "mip blit must not divide dest pixels by the parent mip size",
+  );
 });
 
 test("the MAT array sampler asks for anisotropy, like GLX and TLX", () => {
