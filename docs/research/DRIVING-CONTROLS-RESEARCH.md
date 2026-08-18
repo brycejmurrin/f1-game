@@ -20,17 +20,17 @@ Sections are unnumbered on purpose: numbering rots the moment one is inserted.
 | Decision | Status |
 |---|---|
 | **Never ship traction control or ABS** — no longitudinal slip model exists for either to act on | Settled. Reopening needs a slip model first, not a menu entry |
-| **Braking assist is OFF / CUE / LIGHT / FULL** — starts with information, not intervention | Designed, not yet built |
+| **Braking assist is OFF / CUE / LIGHT / FULL** — starts with information, not intervention | **CUE shipped** (2026-08-18). LIGHT/FULL takeover is still not built |
 | **The braking cue is a pulse RATE, not a pitch ramp**, with a player-set lookahead | Designed. Corrects my first instinct |
 | **A FULL braking level brakes for corners only**, never to avoid rear-ending | Designed |
-| **RACE PACE becomes geometric** — `pace(n) = 1.06^(n-14)`, 19 notches, 6.0 %/notch, default down to 0.84 | **Specified with the full table** in `PHASE-C-SLIDER-DESIGN.md`; the default NOTCH still wants `tools/tune-sweep.mjs` |
+| **RACE PACE becomes geometric** — `pace(n) = 1.06^(n-14)`, 19 notches, 6.0 %/notch, default down to 0.84 | **Shipped.** Live boot 2026-08-18: `tuning().pace === 0.84` |
 | **Its readout must not be km/h** — `dashKph` divides pace out, so the dial reads ~259 km/h at every setting | Settled |
 | **Value-preserving migration is honest** — worst case **2.89 %**, under half a new notch | Verified by calculation, per-notch table in `PHASE-C-SLIDER-DESIGN.md`. Old 9 and old 10 both land on new 18: the one lossy pair, and it must be LOGGED rather than silent |
 | **Do not rename the racing-line assist** — already matches the industry's Off/Corners/Full | Settled |
-| **Speed-sensitive steering is two halves and we ship one** — the rate half belongs in the SPEED STEER retune | Designed |
-| **SPEED STEER is inert at speed** — **1.9-point** spread across all ten notches at 72 m/s (1-9 are bit-for-bit identical); `1/(1+v/ref)` over ref 15..75 gives **33.8** | Measured; fix specified. NOT default-preserving — the two curves have different shapes, and no reference makes a hyperbola equal a clamped line. Needs a drive |
-| **RESPONSE spends its top half below any real wheelbase** — 3.6 m lands at notch 3.6; notches 6-10 run 2.97 → 1.90 m | Measured; proposed 4.4 → 2.6 m with 3.60 m at the default. Moves the shipped feel, so it is the one Phase C number not to ship on arithmetic alone |
-| **SMOOTHING should map linearly in LAG, not in Hz** — steps run 7.2 ms at one end to 132.6 ms at the other, and the top is 398 ms | Measured; proposed 55 → 195 ms, uniform 15.6 ms/notch, default preserved to a rounding error. Safe on arithmetic |
+| **Speed-sensitive steering is two halves** — lock taper on SPEED STEER; rate half is Adaptive Buttons, default OFF, not the same knob | **Split-shipped; default now ON (notch 6)** so keys/arrows get the rate half without opening Advanced |
+| **SPEED STEER is inert at speed** — was a 1.9-point spread under `max(0.4, 1 − v/ref)` | **Fixed** (hyperbola, ref 15..75). Live 2026-08-18: lock kept @72 dial is 17.2 / 36.7 / 51.0 % (n1/n5/n10) = **33.8 points**. On-tarmac yawRate n10/n1 = **2.94×** |
+| **RESPONSE spends its top half below any real wheelbase** — 3.6 m lands at notch 3.6; notches 6-10 run 2.97 → 1.90 m | **Shipped** 4.4 → 2.6 m. Live boot: `tuning().wheelbase === 3.6` |
+| **SMOOTHING should map linearly in LAG, not in Hz** — steps run 7.2 ms at one end to 132.6 ms at the other, and the top is 398 ms | **Shipped** 55 → 195 ms |
 | **Setup sheet: wing trim / brake bias / suspension**; gears and diff cut | Designed |
 | **Brake bias belongs in the friction ellipse**, which currently charges both axles for grip one spends | Designed — highest-risk item |
 | **Understeer cue is signalling, not simulating** | **Built** |
@@ -537,3 +537,134 @@ This pairs with the parts/setup split the game already has: **parts decide what
 the car is, setup decides where in that envelope you sit at this circuit,
 assists decide how much of the driving you do yourself.** None of the three
 should quietly do another's job.
+
+---
+
+## Live mcp-probe, 2026-08-18 — what the car actually does
+
+Working-tree canvas at `http://127.0.0.1:3456/` (shell `?v=` hash `7eb65822effc`),
+`node tools/mcp-cli.mjs probe --eval artifacts/driving-controls-probe.js` then
+`…-v2.js`. Track: Monza. `__apex.headless(true)` + `act()` — JSON, no pixels.
+v1 closed-loop trials at full lock ran into the barrier (`x≈7.9`, `wall=0`);
+those yaw numbers are discarded. v2 uses 18-frame / 0.35-stick pulses on the
+start/finish straight and a 33 m/s entry to T4 (Lesmo 1, r = 43 m). Every v2
+row below has `off === 0` and `wall > 1` unless noted.
+
+### Boot identity (STANDARD, Adaptive Buttons OFF)
+
+`tuning()` after `race("monza")`: pace **0.840**, SPEED STEER ref **41.67**,
+wheelbase **3.60 m**, expo **2.389**, maxSlip **0.287**, ROAD_FOLLOW **0**,
+racing line **0**, DRIFT **0**, `inputState().adaptiveMix === 0`.
+`game.js`'s leftover `let STEER_SPEED_REF = 60` is dead; `applySteerTuning()`
+wins.
+
+### SPEED STEER — the hyperbola is the operating point
+
+`lockTaper = 1 / (1 + vStd / ref)` with `vStd(v) = v / max(PACE, 0.05)`.
+The slider is a point on the *dial*, not a ground-speed constant. At default
+pace 0.84, 72 m/s on the dial is 60.5 m/s on the ground.
+
+Lock kept at 72 dial (formula, matches `PHASE-C-SLIDER-DESIGN.md` §2):
+
+| notch | ref | @30 | @50 | @72 |
+|---|---|---|---|---|
+| 1 | 15 | 33.3 % | 23.1 % | **17.2 %** |
+| 5 (default) | 41.7 | 58.2 % | 45.5 % | **36.7 %** |
+| 10 | 75 | 71.4 % | 60.0 % | **51.0 %** |
+
+Spread at 72 dial: **33.8 points** (was 1.9 under the old floor).
+
+Same pulse on tarmac, 18 frames, steer 0.35, ground = 72 × 0.84, wall ≥ 9.8 m:
+
+| notch | yawRate | heading error | vLat |
+|---|---|---|---|
+| 1 | 0.0439 | 0.0105 | −0.264 |
+| 5 | 0.0931 | 0.0221 | −0.562 |
+| 10 | 0.1292 | 0.0306 | −0.782 |
+
+yawRate n10 / n1 = **2.94×**; lockTaper n10 / n1 = 0.510 / 0.172 = **2.97×**.
+The slider now moves the car at racing speed, not just the label.
+
+Pace check, same 55 m/s *ground*, ref 41.7: yawRate 0.0937 at pace 0.84 vs
+0.1037 at pace 1.0 (**1.11×**). Predicted from `vStd` alone: lockTaper
+0.389 vs 0.431 = **1.11×**. Same ground speed is a higher fraction of a
+slower envelope, so more taper — that is the dial contract, not a bug.
+
+### Adaptive Buttons — the rate half is opt-in
+
+`digitalRateIn()` is the same hyperbola, mixed by the Adaptive Buttons
+slider (v1 = OFF = mix 0). Live `Input.setSpeedStd` / `debugState().rateIn`:
+
+| mix | 0 dial | 72 dial | ms to 95 % lock @72 |
+|---|---|---|---|
+| OFF (shipped default) | 6.000 | **6.000** | **158** |
+| mid (notch 6, old ON) | 6.000 | 3.889 | 244 |
+| full (notch 10) | 6.000 | **2.199** | **432** |
+
+Keyboard and on-screen arrows still reach 95 % lock in **158 ms at 259 km/h**
+unless the player finds Advanced → Adaptive Buttons. SPEED STEER only limits
+*how far* the wheels go; Adaptive Buttons limits *how fast* a digital hold
+gets there. The 2026-08 research said those halves belong on **one** knob.
+They shipped as two, and the rate half defaults off — which is why digital
+steer can still feel twitchy after the lock-taper fix.
+
+Analog sources (pad stick, tilt, canvas drag) never see `digitalRateIn()`.
+That is correct: they already have travel.
+
+### The arc does not steer the player
+
+Hands-off 50 frames at T4, 33 m/s, ROAD_FOLLOW 0: `yawRate === 0`, heading
+error 0.98 rad (the road rotated under a car that kept world heading),
+`wall === 0`, `off === 0.25`. The bicycle model does not read curvature
+for the driver.
+
+Same input, ROAD_FOLLOW 0.70: `yawRate === -0.2335` (into the left-hander),
+heading error 0.58, `wall === 3.31`, `off === 0.08`. Driving Help is a
+real takeover, not a label. It stays opt-in (notch 1 = 0).
+
+### Combined slip is one-sided, on purpose
+
+T4, 0.35 left stick, 28 frames, start x = −1.5 (all `off === 0`):
+
+| input | axFrac | slipFactor | x | wall |
+|---|---|---|---|---|
+| brake | **0.641** | **0.768** | 5.01 | 3.09 |
+| coast | 0.175 | 0.985 | 6.35 | 1.75 |
+| throttle | 0.050 | 0.999 | 7.02 | 1.08 |
+
+Braking spends ~23 % of the lateral budget (`1 − 0.768`). Throttle spends
+none that a player can feel. That *is* the arcade traction-control we must
+not also ship as a switch. Trail-brake stays tighter and more rotated into
+the road (heading error 0.79 vs 0.84 on throttle). A braking *cue* still
+earns its keep: the model will rotate the car if you brake, but nothing
+tells a thumb when to start.
+
+### Presets are different cars
+
+Same T4 pulse, steer −0.40, 30 frames:
+
+| preset | ROAD_FOLLOW | yawRate | x | slipDeg | wall |
+|---|---|---|---|---|---|
+| RELAX | 0.544 | −0.634 | 3.55 | 2.76 | 4.56 |
+| STANDARD | 0 | −0.122 | 5.31 | 0.36 | 2.79 |
+| PRO | 0 | −0.230 | 4.98 | 0.78 | 3.12 |
+
+RELAX's extra yaw is the assist, not the wheelbase. PRO vs STANDARD is
+**1.89×** yawRate from the RESPONSE / LOCK / SPEED STEER bundle with
+helps still off — presets-first still matches the industry table in
+`steering-research.md`.
+
+### What is still worth building (unchanged, now with live reasons)
+
+1. **Braking CUE — shipped 2026-08-18** (`js/game/brake-cue.js`). Pulse rate
+   + lookahead slider (1 = OFF). LIGHT/FULL takeover is still not built.
+2. **Rate half on the simple sheet — shipped.** Adaptive Buttons defaults to
+   notch 6 and sits next to Racing Line, not inside Advanced.
+3. **Do not ship TC / ABS.** `slipFactor` under throttle is already ~1.0.
+4. **Do not raise ROAD_FOLLOW's default.** Hands-off with help on is a
+   different driver.
+5. Setup-sheet brake bias still belongs in this ellipse (highest-risk
+   designed item; not re-probed here).
+
+Raw JSON: `artifacts/logs/driving-controls-probe-v1.json`,
+`artifacts/logs/driving-controls-probe-v2.json`.

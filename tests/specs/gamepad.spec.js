@@ -185,10 +185,13 @@ test("document becoming hidden releases held keyboard, pointer, and touch input"
 /* ---------------------------------------------------------------------------
  * GAMEPAD MENU NAVIGATION — the UWP gamepad/keyboard-parity mapping settled in
  * docs/research/PLATFORM-INPUT-NOTES.md §8, shipped in js/game/input.js
- * (padNavPoll / padActivate / padEscape). pollGamepad() dispatches REAL
+ * (padNavPoll / padActivate / padEscape / padSeedFocus). pollGamepad() dispatches REAL
  * synthetic KeyboardEvents at `document` when UiLayers.anyOpen() is true, so
  * these tests exercise the same seam a keyboard uses — js/game/menunav.js and
- * js/game/topmodal.js — rather than a second focus-mover.
+ * js/game/topmodal.js — rather than a second focus-mover. A newly-open menu
+ * seeds one ArrowDown without waiting for a D-pad press (UWP "one focus visual
+ * should always be visible"); menu sticks use PAD_NAV_DEADZONE (0.22), larger
+ * than driving's PAD_DEADZONE (0.14).
  * ------------------------------------------------------------------------- */
 
 async function openSelectForPad(page) {
@@ -380,5 +383,46 @@ test.describe("Gamepad menu navigation", () => {
 
     // Releasing the direction (neutral) clears the repeat state instantly.
     await poll(page, { buttons: {} }, () => true);
+  });
+
+  test("an idle pad seeds focus when a menu opens, without a D-pad press", async ({ page }) => {
+    await openSelectForPad(page);
+    await page.evaluate(() => document.activeElement.blur());
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+
+    await poll(page, { buttons: {} }, () => true);
+    expect(await page.evaluate(() =>
+      document.getElementById("select").contains(document.activeElement))).toBe(true);
+  });
+
+  test("a later idle poll does not re-seed after focus is cleared", async ({ page }) => {
+    await openSelectForPad(page);
+    await page.evaluate(() => document.activeElement.blur());
+    await poll(page, { buttons: {} }, () => true);
+    expect(await page.evaluate(() =>
+      document.getElementById("select").contains(document.activeElement))).toBe(true);
+
+    await page.evaluate(() => document.activeElement.blur());
+    await poll(page, { buttons: {} }, () => true);
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  });
+
+  test("menu stick nav uses a larger deadzone than driving; right stick still falls back", async ({ page }) => {
+    // 0.18 is past PAD_DEADZONE (0.14) but inside PAD_NAV_DEADZONE (0.22).
+    const drive = await poll(page, { axisX: 0.18 }, () => Input.steer());
+    expect(Math.abs(drive)).toBeGreaterThan(0.001);
+
+    await openSelectForPad(page);
+    await poll(page, { buttons: {} }, () => true);   // seed once
+    const seeded = await page.evaluate(() => document.activeElement && document.activeElement.textContent);
+    expect(seeded).toBeTruthy();
+
+    await poll(page, { axisY: 0.18 }, () => true);
+    expect(await page.evaluate(() => document.activeElement && document.activeElement.textContent)).toBe(seeded);
+
+    await page.evaluate(() => document.activeElement.blur());
+    await poll(page, { axisX: 0.18, axisY: 0, axisRY: 1 }, () => true);
+    expect(await page.evaluate(() =>
+      document.getElementById("select").contains(document.activeElement))).toBe(true);
   });
 });

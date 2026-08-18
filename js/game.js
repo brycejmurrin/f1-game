@@ -2368,6 +2368,7 @@ function snapGameCam() {
   camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
   camFov = v.fov;
   camRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
+  try { if (gfx && gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* GLX */ }
 }
 
 // Races started this session. It is the round number a one-off Grand Prix hashes
@@ -3784,7 +3785,7 @@ function updateCar(c, dt, ranked) {
         traits: aiT, energy: c.energy, otActive: c.otT > 0,
         kAhead60: Tracks.curvature(track, wrapS(c.s + 60)),
         towCar: !!towCar, towGap, towSpeed: towCar ? towCar.speed : 0, speed: c.speed,
-        chaser: !!chaser, chaserGap, chaserSpeed: chaser ? chaser.speed : 0, team: c.team, seat: c.seat, stats: c.houseStats,
+        chaser: !!chaser, chaserGap, chaserSpeed: chaser ? chaser.speed : 0, team: c.team, seat: c.seat, stats: c.houseStats, ersDeploy: c.ersDeploy, ersRegen: c.ersRegen,
       })))
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
@@ -3879,7 +3880,7 @@ function updateCar(c, dt, ranked) {
       AiDrive.pushLook(d, kk, Tracks.bankAngle(track, ss));
     }
     const br = AiDrive.brakeDecision({
-      traits: aiT, samples: AiDrive.endLook(), latMax: LAT_MAX, brake: BRAKE, grip: gripMult(),
+      traits: aiT, samples: AiDrive.endLook(), latMax: LAT_MAX, aeroLoad: c.aeroLoad, brake: BRAKE, grip: gripMult(),
       speed: c.speed, blocker: !!blocker, blockerGap,
       blockerSpeed: blocker ? blocker.speed : 0,
       roomL, roomR, team: c.team, seat: c.seat, stats: c.houseStats,
@@ -3925,9 +3926,9 @@ function updateCar(c, dt, ranked) {
     if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
     else c.xOn = !!(inp && inp.aero);
   } else {
-    // AI runs X-mode whenever it is available — a real driver leaves nothing on
-    // the table down a straight, and the arming window already keeps it honest.
-    c.xOn = c.xArmed;
+    // AI takes X when armed unless wantX banks Z (hold/empty battery). Catch
+    // and OT still force the open wing so a pass does not sit in high drag.
+    c.xOn = c.xArmed && AiDrive.wantX({ armed: true, team: c.team, seat: c.seat, stats: c.houseStats, energy: c.energy, catching: !!(towCar && towGap < 28), otActive: c.otT > 0 });
   }
   {
     // The flap POSITION, not the switch, is what the physics reads: the mode
@@ -4120,7 +4121,7 @@ function updateCar(c, dt, ranked) {
     // Apex is on the INSIDE = -sign(k) (k>0 curves toward screen-left, so the
     // inside is -x); the racing line aims there.
     const racingLine = clamp(-kA * 130, -0.62, 0.62) * hw;
-    const targetX = clamp(racingLine * AiDrive.racingLineMix(!!track.street) + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
+    const targetX = clamp(racingLine * AiDrive.racingLineMix(!!track.street, AiDrive.houseStyle(c.team, c.seat, c.houseStats).hold) + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
     // Overtake: if a slower car is blocking our lane ahead, ease toward the side
     // with more room to pass. Collision-aware — the move is scaled down if that
     // side is also tight (a car alongside or a wall), so we don't dive into a
@@ -4343,7 +4344,7 @@ function updateCar(c, dt, ranked) {
     // speed-limited the throttle is still held but real accel ≈ 0, so without
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
-    const axEstTarget = braking ? -BRAKE * brakeLvl
+    const axEstTarget = braking ? -BRAKE * brakeLvl * (c.human ? (mods.braking || 1) : 1)
       : (onThrottle
           ? ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);
@@ -7248,8 +7249,7 @@ function tickBody(now) {
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race.
   if (!paused && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
-  Input.poll();   // refresh gamepad state once per frame (before the paused gate
-                  // so the Start/Menu button can also un-pause)
+  Input.poll(); BrakeCue.tick();   // pad + brake-cue; before pause so Start can un-pause
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.

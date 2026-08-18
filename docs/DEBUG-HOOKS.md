@@ -1154,7 +1154,7 @@ plus `holdPointers` — the pressed-pointer count each on-screen hold button is
 tracking (all zeros when nothing is held; a non-zero entry with no finger down
 means a stuck/ghost pointer). The one-call diagnosis for any "input seems stuck
 on" report. `adaptiveButtons` / `adaptiveMix` (0..1) / `speedStd` / `rateIn` are the
-Advanced ADAPTIVE BUTTONS path (digital steer rate blended toward the
+STEERING & ASSISTS ADAPTIVE BUTTONS path (digital steer rate blended toward the
 SPEED STEER hyperbola; the slider is how much).
 
 **On-screen variant for a phone with no console:** load the game with
@@ -2609,11 +2609,12 @@ __apex.qualiSim()[0];   // → { pos:1, code:"VER", t:100.958, gap:0, … }
 ```
 
 ### `carAt(i)` — additions
-`code`, `seat`, `tierV`, `skill` and `ratings`. `tierV` and `skill` are the two
+`code`, `seat`, `tierV`, `skill`, `aeroLoad`, `ersDeploy` and `ratings`. `tierV` and `skill` are the two
 multipliers that decide how fast an AI car is allowed to be (`vmax = VMAX · PACE ·
 tierV · skill · difficulty`), so "why is this car quick?" is answerable without
 reading the source. `tierV` folds the team's `TIER_V` together with career team
-development; `skill` is the driver.
+development; `skill` is the driver. `aeroLoad` / `ersDeploy` are the works-car
+wing and ERS map the AI now actually runs (0.5 if unset).
 
 ## Reliability & retirements
 

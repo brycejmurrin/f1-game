@@ -44,7 +44,8 @@ each recipe field, and `tests/specs/parts-physics.spec.js` fails on an unregiste
 stale field, a duplicate recipe within a category, or an engine that repeats
 another's six-field bodywork shape. The newer STRUCTURE knobs are
 `aero.plate/casc/swan/tvane` (endplate profile, cascade count, swan-neck mount,
-T-wing), `engine.chimney`, `brakes.scoop`, `ers.conduit`, `fuel.filler`,
+T-wing), `aero.duct/board/slot` (2026 upper pod ram, in-wash wakeboard, floor
+mouse-hole), `engine.chimney`, `brakes.scoop`, `ers.conduit`, `fuel.filler`,
 `exhaust.pipes/bore/flare/wastegate/wrap` and `floor.fences/fenceH/skid/edgeLip`
 — each defaults to the shipped geometry, so an option written before them is
 unchanged. EXHAUST and FLOOR took over geometry that used to be hardcoded (the

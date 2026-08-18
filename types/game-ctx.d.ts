@@ -590,6 +590,7 @@ declare const ApexApi: GameModuleFactory;
 declare const Atmosphere: GameModuleFactory;
 declare const AudioPanel: GameModuleFactory;
 declare const BodyAttitude: GameModuleFactory;
+declare const BrakeCue: GameModuleFactory;
 declare const CamModes: GameModuleFactory;
 declare const CamTunerPanel: GameModuleFactory;
 declare const CareerUI: GameModuleFactory;

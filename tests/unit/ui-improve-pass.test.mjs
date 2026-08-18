@@ -296,6 +296,10 @@ test("How to Play names every input and drops the retired screen-half lie", () =
   assert.match(htp, /<dt>CONTROLLER<\/dt>/);
   assert.match(htp, /<dt>TOUCH \/ MOBILE<\/dt>/);
   assert.match(htp, /ADAPTIVE BUTTONS/);
+  assert.match(htp, /BRAKE CUE/);
+  assert.match(htp, /default ON/);
+  assert.match(htp, /STEERING &amp; ASSISTS/);
+  assert.match(htp, /ADVANCED disclosure/);
   assert.match(htp, /TV SIDE/);
   assert.match(htp, /tap to toggle/);
   assert.match(htp, /pauses only if nothing is open/);
@@ -305,6 +309,8 @@ test("How to Play names every input and drops the retired screen-half lie", () =
   assert.match(htp, /GEARS: MANUAL<\/span> \(tilt only/);
   assert.match(htp, /shifter left and the pedals right/);
   assert.match(htp, /triggers are analog/);
+  assert.match(htp, /leave a list for the header or column beside it/);
+  assert.match(htp, /hold to repeat/);
   assert.doesNotMatch(htp, /HALVES|TRACKSIDE|screen halves|tap left\/right/);
   const game = read("js/game.js");
   assert.match(game, /autoThrottle\(\) \? 1 : Math\.max\(0, Input\.throttleLevel\(\)\)/,
@@ -316,6 +322,8 @@ test("How to Play names every input and drops the retired screen-half lie", () =
   const nav = read("js/game/menunav.js");
   assert.match(nav, /return n \? list\[\(\(j % n\) \+ n\) % n\] : null/,
     "menu arrows wrap in every direction so a pad press is never a no-op");
+  assert.match(nav, /function pickSideways\(/,
+    "ArrowLeft/Right from a column must have an out-of-band pass to the side header");
 });
 
 test("How to Play exposes pinned semantic jump landmarks", () => {
@@ -367,6 +375,70 @@ test("overflowing Help navigation keeps its first landmark reachable", () => {
   const css = read("css/overlays.css");
   assert.match(css, /#htp-contents\s*\{[^}]*justify-content:\s*flex-start/);
   assert.match(css, /#htp-contents > :first-child\s*\{[^}]*margin-inline-start:\s*auto/);
+});
+
+function inputFn(src, name) {
+  const re = new RegExp(`function ${name}\\([^)]*\\) \\{`);
+  const m = src.match(re);
+  assert.ok(m, `${name}() must exist in js/game/input.js`);
+  let depth = 1;
+  const start = m.index + m[0].length;
+  let i = start;
+  for (; i < src.length && depth; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") depth--;
+  }
+  return src.slice(start, i - 1);
+}
+
+test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than driving", () => {
+  const src = read("js/game/input.js");
+  assert.match(src, /const PAD_DEADZONE = 0\.14/, "driving deadzone stays 0.14");
+  const navDz = src.match(/const PAD_NAV_DEADZONE = ([0-9.]+)/);
+  assert.ok(navDz, "PAD_NAV_DEADZONE must exist for menu stick nav");
+  const menuDz = Number(navDz[1]);
+  assert.ok(menuDz > 0.14, "menu stick deadzone must be larger than PAD_DEADZONE");
+  assert.ok(menuDz >= 0.20 && menuDz <= 0.28, `menu deadzone should sit near 0.22, got ${menuDz}`);
+
+  const driveAx = src.match(/let ax = \(pad\.axes[\s\S]*?padSteer = clamp\(ax/);
+  assert.ok(driveAx, "driving stick rescale must still live in pollGamepad");
+  assert.match(driveAx[0], /PAD_DEADZONE/);
+  assert.doesNotMatch(driveAx[0], /PAD_NAV_DEADZONE/,
+    "driving stick must not pick up the menu deadzone");
+
+  const dirOf = inputFn(src, "padNavDirOf");
+  assert.match(dirOf, /PAD_NAV_DEADZONE/, "menu stick nav uses PAD_NAV_DEADZONE");
+  assert.doesNotMatch(dirOf, /PAD_DEADZONE/,
+    "menu stick nav must not reuse the driving deadzone");
+  assert.match(dirOf, /stick\(ax\[0\][^\n]*\)\s*\|\|\s*stick\(ax\[2\]/,
+    "right stick remains the fallback when the left stick is centred");
+
+  assert.match(src, /let padNavSeeded = false/,
+    "one seed-per-open-menu flag so we do not re-seed every frame");
+  assert.match(src, /let padNavSeedLayer = null/,
+    "a new UiLayers.top() re-arms the seed (title→select, Start→pause)");
+  const seed = inputFn(src, "padSeedFocus");
+  assert.match(seed, /padDispatchKey\("ArrowDown"\)/,
+    "seed is MenuNav's first-arrow path, not a second focus-mover");
+  assert.doesNotMatch(seed, /\.focus\(/);
+  assert.doesNotMatch(seed, /querySelector/);
+
+  const activate = inputFn(src, "padActivate");
+  assert.match(activate, /padSeedFocus\(\)/,
+    "A's empty path must reuse padSeedFocus — not a second mover");
+
+  const poll = inputFn(src, "padNavPoll");
+  assert.match(poll, /padNavSeeded/, "first padNavPoll of a newly-open menu seeds once");
+  assert.match(poll, /UiLayers\.top\(\)/, "seed re-arms when the top layer changes");
+  assert.match(poll, /if \(!dir && !btnEdge\(pad,\s*0\)\) padSeedFocus\(\)/,
+    "do not auto-seed on the same frame as a direction or A — those already seed");
+
+  assert.match(src, /padNavSeeded = false/,
+    "closing the menu / reset / disconnect must clear the seed flag");
+  assert.match(src, /const PAD_NAV_DELAY_MS = 450/,
+    "held D-pad/stick must wait before the first synthesized repeat");
+  assert.match(src, /const PAD_NAV_REPEAT_MS = 130/,
+    "held D-pad/stick must then repeat at a keyboard-like cadence");
 });
 
 test("dense sheets preserve a functional content height at extreme UI size", () => {

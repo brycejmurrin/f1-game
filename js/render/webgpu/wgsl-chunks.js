@@ -590,6 +590,8 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   let right = vec2<f32>(tangFwd.y, -tangFwd.x);
   let x = select(0.0, dot(wp.xz - best.xy, right), tangOk);
   let ds = select(0.0, dot(wp.xz - best.xy, tangFwd), tangOk);
+  // Two-sample s-blend warped the near dash (measured). Nearest + ds
+  // stair-steps at cell swaps but keeps rectangular paint.
   let s = best.z + ds;
   let hw = best.w;
   let dCenter = sqrt(bestD);
@@ -646,11 +648,12 @@ struct VSOut {
   @location(0)       nrm   : vec3<f32>,
   @location(1)       col   : vec3<f32>,
   @location(2)       wpos  : vec3<f32>,
-  @location(3)       matTrk : vec4<f32>,
+  // vec3, not vec4: Dawn drops location-3 .w and that poisoned interpolated s.
+  // Default perspective — @interpolate(linear) shattered dashes at chase
+  // angle (measured).
+  @location(3)       trk : vec3<f32>,
   @location(4) @interpolate(flat) matId : f32,
-  @location(5)       trk   : vec3<f32>,
-  @location(6) @interpolate(flat) vid : f32,
-  @location(7)       objPos : vec3<f32>,
+  @location(5)       objPos : vec3<f32>,
 };
 
 @vertex
@@ -691,10 +694,8 @@ fn vs_main(
   }
   // Do not lift the ribbon. An 8 cm Y bump won the floor/terrain depth
   // fight and then buried cars, AI, and fence feet in the tarmac.
-  o.matTrk = vec4<f32>(pulled.y, pulled.z, pulled.w, pulled.x); // s, x, hw, mat
+  o.trk = pulled.yzw;           // s, x, hw — vec3 at location 3
   o.matId = pulled.x;
-  o.trk = pulled.yzw;
-  o.vid = f32(vid);
   o.nrm  = nm * aNrm;
   o.col  = col;
   o.wpos = wp.xyz;
@@ -708,21 +709,25 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Screen-space derivatives MUST be computed in uniform control flow at the top level
   // before any branching or early exit.
   let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
-  let fwTrkAttr = abs(dpdx(in.matTrk.xyz)) + abs(dpdy(in.matTrk.xyz));
+  let fwTrkAttr = abs(dpdx(in.trk)) + abs(dpdy(in.trk));
   let fromWorld = trkFromWorld(in.wpos);
   // fromWorld.xyz is (s, x, hw) — not .yzw (that was x/hw/valid and smashed dash AA).
   let fwWorld = abs(dpdx(fromWorld.xyz)) + abs(dpdy(fromWorld.xyz));
   let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
-  // (s,x,hw) live in interpolator .xyz — Dawn has dropped .w of location 3
-  // (useVsTrk gated on hw and fell back to per-fragment nearest-bin).
-  let vTrk = select(fromWorld.xyz, in.matTrk.xyz, isRoadDraw);
+  // Location-3 in.trk shards dashes on Dawn (loc5 / linear / perspective
+  // all measured). Road markings reconstruct (s,x,hw) per fragment from
+  // interpolated wpos + the world LUT — bind group 2 is the LUT, not
+  // authored storage[vid]. LUT miss on a road draw zeros trk so we do
+  // not fall back to the shattered interpolator.
+  let useWorldTrk = fromWorld.w > 0.5;
+  let vTrk = select(select(vec3<f32>(0.0), in.trk, !isRoadDraw), fromWorld.xyz, useWorldTrk);
   let lutAsphalt = abs(fromWorld.y) < fromWorld.z - 0.45;
-  let vsMat = in.matTrk.w;
+  let vsMat = in.matId;
   let classified = select(select(0.0, 16.0, lutAsphalt), vsMat, vsMat > 0.5);
   // surfaceId 16 is the isRoadDraw flag, not a material stamp. Forcing 16
   // on every fragment painted kerbs, grass shoulders, and skirts as asphalt.
   let vMatId = select(D.mat2.z, classified, isRoadDraw || classified > 0.5);
-  let fwTrk = select(fwWorld, fwTrkAttr, isRoadDraw);
+  let fwTrk = select(fwTrkAttr, fwWorld, useWorldTrk);
   let vDist = length(in.wpos - F.eye.xyz);
   // Every baked MAT layer is sampled here in uniform CF with a CONSTANT
   // array index so textureSample can use implicit LOD + anisotropy — the

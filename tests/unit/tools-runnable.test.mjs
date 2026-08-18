@@ -119,6 +119,8 @@ test("the MCP-facing entry points answer without touching a browser or a network
     { cmd: "bash", args: [path.join(TOOLS, "apex-tools-mcp.sh"), "help"], want: /smoke/ },
     { cmd: process.execPath, args: [path.join(TOOLS, "mcp-smoke.mjs"), "--help"], want: /Never wraps test-bg/ },
     { cmd: "bash", args: [path.join(TOOLS, "playwright-mcp.sh"), "help"], want: /browser_resize/ },
+    { cmd: "bash", args: [path.join(TOOLS, "playwright-mcp.sh"), "help"], want: /css-play\.mjs/ },
+    { cmd: process.execPath, args: [path.join(TOOLS, "css-play.mjs"), "--help"], want: /hot-swap|hot swap/i },
     // Prefer an explicit path so the assertion is independent of a clean vs
     // dirty checkout. `--help` also answers without git (see pick-tests.mjs);
     // either shape is fine — the path form also exercises RULES → test:tlx.
@@ -155,6 +157,8 @@ test("playwright-mcp.sh help and status exit 0 without launching Chromium", () =
   assert.equal(help.status, 0, help.stderr);
   assert.match(help.stdout, /@playwright\/mcp@0\.0\.79/);
   assert.match(help.stdout, /browser_evaluate/);
+  assert.match(help.stdout, /css-play\.mjs/);
+  assert.match(help.stdout, /\bdom\b/);
   const st = spawnSync("bash", [path.join(TOOLS, "playwright-mcp.sh"), "status"],
     { encoding: "utf8", cwd: ROOT, timeout: 15000 });
   assert.equal(st.status, 0, st.stderr);
@@ -192,6 +196,7 @@ test("self-booting capture/physics tools use harness.mjs, not a subprocess serve
     "capture/motion-capture.mjs",
     "lighting/ab-lighting.mjs",
     "quick-validate.mjs",
+    "css-play.mjs",
   ];
   const bad = [];
   for (const rel of files) {

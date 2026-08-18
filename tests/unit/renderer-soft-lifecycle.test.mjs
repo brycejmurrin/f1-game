@@ -142,11 +142,15 @@ test("TLX and WGX remove timed-out software-present waiters", () => {
 
 test("WGX soft present permits one staging read and drops pre-resize pixels", () => {
   const src = read("js/render/webgpu/wgx.js");
+  assert.match(src, /let _softBlitSeq = 0/);
   assert.match(src, /let _softDisplayPending = false, _softDisplayEpoch = 0/);
-  assert.match(src, /if \(_softDisplayPending\) return null/);
-  assert.match(src, /_softDisplayPending = true;\s*return \{ buf, bpr, w, h, epoch: _softDisplayEpoch \}/);
-  assert.match(src, /epoch === _softDisplayEpoch && _displayCanvas[^]*?_displayCanvas\.width === w[^]*?_displayCanvas\.height === h/);
+  assert.match(src, /if \(_softHold \|\| _softDisplayPending\) return null/);
+  assert.match(src, /_softDisplayPending = true;\s*return \{ buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch, sceneGen: _softSceneGen \}/);
+  assert.match(src, /epoch === _softDisplayEpoch && seq === _softBlitSeq &&[^]*?_displayCanvas\.width === w[^]*?_displayCanvas\.height === h/);
   assert.match(src, /const release = function \(\) \{ _softDisplayPending = false; \}/);
   const resize = src.slice(src.indexOf("function resize()"), src.indexOf("function setRenderScale"));
-  assert.match(resize, /if \(sizeChanged\) \{\s*_softDisplayEpoch\+\+/);
+  assert.match(resize, /if \(sizeChanged\) \{\s*_cssApplying = true;/);
+  assert.match(resize, /_softDisplayEpoch\+\+/);
+  assert.match(src, /if \(!_cssApplying\) _cssDirty = true/);
+  assert.match(resize, /Math\.abs\(w - width\) <= 1 && Math\.abs\(h - height\) <= 1/);
 });

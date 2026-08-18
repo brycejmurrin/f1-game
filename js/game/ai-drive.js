@@ -228,14 +228,29 @@ const AiDrive = (function () {
     const catching = !!(ctx.towCar && ctx.towGap < 28 && (ctx.speed || 0) >= (ctx.towSpeed || 0) - 1);
     const defending = !!(ctx.chaser && ctx.chaserGap < 14 && (ctx.chaserSpeed || 0) > (ctx.speed || 0) - 2);
     const hs = houseStyle(ctx.team, ctx.seat, ctx.stats);
-    const rich = energy > (0.55 - hs.attack * 0.08);  // attack teams spend earlier
+    const dep = ctx.ersDeploy != null ? ctx.ersDeploy : 0.5;
+    const regen = ctx.ersRegen != null ? ctx.ersRegen : 0.5;
+    const rich = energy > (0.55 - hs.attack * 0.08 - (dep - 0.5) * 0.10);
     const desperate = energy > 0.25 && catching;
     // Awareness banks charge: low-awareness drivers still dump early (old feel).
-    // Hold-car teams (high corner/brake stats) bank a little sooner.
+    // Hold-car teams and harvest maps bank a little sooner. Midpoint 0.5
+    // keeps existing wantBoost tests bit-identical when ERS is omitted.
     const bank = ctx.traits.awareness > (0.8 - hs.hold * 0.08)
-      && energy < (0.4 - hs.hold * 0.05) && !catching && !defending;
+      && energy < (0.4 - hs.hold * 0.05 + (regen - 0.5) * 0.08) && !catching && !defending;
     if (bank) return false;
     return desperate || defending || rich || (energy > 0.25 && straight && ctx.traits.awareness < 0.55);
+  }
+
+  // Hold / empty-battery cars keep Z-mode; attack / catch / OT always take X
+  // when the zone is armed. Missing energy → true so callers that only pass
+  // armed stay on the old "X whenever armed" path.
+  function wantX(ctx) {
+    if (ctx && ctx.armed === false) return false;
+    if (ctx && (ctx.catching || ctx.otActive)) return true;
+    const hs = houseStyle(ctx && ctx.team, ctx && ctx.seat, ctx && ctx.stats);
+    const energy = ctx && ctx.energy;
+    if (energy == null) return true;
+    return energy > (0.20 - hs.attack * 0.08);
   }
 
   // ── BRAKING ───────────────────────────────────────────────────────────────
@@ -245,7 +260,8 @@ const AiDrive = (function () {
   function brakeTarget(ctx) {
     const t = ctx.traits;
     const samples = ctx.samples || [];
-    const latMax = ctx.latMax || 22;
+    const load = ctx.aeroLoad != null ? ctx.aeroLoad : 0.5;
+    const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * 0.16);
     const brake = ctx.brake || 22;
     const grip = ctx.grip || 1;
     const skill = t.skill;
@@ -261,6 +277,8 @@ const AiDrive = (function () {
       if (vEntry < vLim) vLim = vEntry;
     }
     if (!Number.isFinite(vLim)) vLim = 1e6;
+    const hold = houseStyle(ctx.team, ctx.seat, ctx.stats).hold;
+    if (hold) vLim *= 1 - hold * 0.025;
     // Craft late-brake when attacking with room: allow a few % over the limit.
     const attacking = !!(ctx.blocker && ctx.blockerGap < 16 && (ctx.speed || 0) > (ctx.blockerSpeed || 0) - 1);
     const room = Math.max(ctx.roomL || 0, ctx.roomR || 0);
@@ -392,15 +410,16 @@ const AiDrive = (function () {
 
   // Fraction of the racing-line offset mixed into targetX. Streets hold the
   // grid home seat more so the field does not collapse onto one line.
-  function racingLineMix(street) {
-    return street ? 0.32 : 0.55;
+  function racingLineMix(street, hold) {
+    const base = street ? 0.32 : 0.55;
+    return hold ? clamp(base - hold * 0.08, 0.22, 0.62) : base;
   }
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
     traits, houseStyle, isMate, ordersMul, stuckThreshold, followPad, followBase, towGain, queueBrake, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
-    otShouldFire, wantBoost, brakeTarget, brakeDecision, adaptLane, otPull,
+    otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     defendPull, isBoxed, minLatGap, racingLineMix, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook,
   };

@@ -65,10 +65,11 @@ angle and saturates at a friction limit, so cornering is grip-limited — overco
 a corner and the front washes wide (understeer); loosen the rear and it steps out
 (oversteer). Brake for the corners; the car rewards a tidy line.
 
-**ADVANCED STEERING…** in the pause menu opens plain-language controls —
+**ADVANCED STEERING…** in the pause menu opens **STEERING & ASSISTS** —
 **RELAX / STANDARD / PRO** presets, **STEERING** feel, **TILT SENSITIVITY**,
-**DRIVING HELP** and **RACING LINE** — with the full set of per-parameter knobs
-tucked behind an **ADVANCED** disclosure for anyone who wants them.
+**DRIVING HELP**, **RACING LINE**, **ADAPTIVE BUTTONS** (keys / on-screen
+arrows; default ON) and **BRAKE CUE** (a tick, never a takeover) — with lock,
+speed steer and the rest tucked behind an **ADVANCED** disclosure.
 
 ### Car Setup
 
@@ -143,7 +144,7 @@ logic). Load order is defined in `tools/manifest.cjs`.
 ## Testing & development
 
 The project ships a **Playwright test suite** — 113 Playwright specs — plus
-118 `node --test` unit suites, covering rendering, physics, UI across screens,
+123 `node --test` unit suites, covering rendering, physics, UI across screens,
 multiplayer, career and visual regression. The whole thing is ~40
 minutes of software rendering, so the workflow is: ask which groups a change
 needs, run those in the background, tail the log.

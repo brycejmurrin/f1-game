@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1434">
+<meta name="apex-build" content="1452">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -21,7 +21,7 @@
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
 <link rel="preload" href="css/tokens.css?v=2ffb3614f3ec" as="style">
-<link rel="preload" href="css/components.css?v=e27e84885c69" as="style">
+<link rel="preload" href="css/components.css?v=e02c9a943064" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -40,13 +40,13 @@
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=2ffb3614f3ec">
-<link rel="stylesheet" href="css/components.css?v=e27e84885c69">
+<link rel="stylesheet" href="css/components.css?v=e02c9a943064">
 <link rel="stylesheet" href="css/tuner.css?v=a1172b2c2801" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=5613cb26584d">
-<link rel="stylesheet" href="css/carsetup.css?v=7e02d2ec63d3" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/hud.css?v=8d2242babbff" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/menus.css?v=d7fb8317fcae">
+<link rel="stylesheet" href="css/carsetup.css?v=727b355fd1bf" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/hud.css?v=ce419d9bb73a" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=3a107477654a" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/responsive.css?v=74c72643de7d">
+<link rel="stylesheet" href="css/responsive.css?v=92a9da5137c0">
 <link rel="stylesheet" href="css/track-detail.css?v=6105e0e4ffad" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=920e853fb9f8" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=0fdfe263e6cb" media="print" onload="this.media='all'">
@@ -330,11 +330,11 @@
   <div class="sheet">
     <div class="sheet-head"><h2 id="dlg-pause">PAUSED</h2></div>
     <div class="sheet-body pane stack">
-      <button id="pm-resume" type="button" autofocus>RESUME</button>
-      <button id="pm-restart" type="button">RESTART RACE</button>
-      <button id="pm-settings" type="button">SETTINGS&hellip;</button>
-      <button id="pm-standings" type="button" hidden>STANDINGS</button>
-      <button id="pm-quit" type="button">QUIT TO MENU</button>
+      <button id="pm-resume" autofocus>RESUME</button>
+      <button id="pm-restart">RESTART RACE</button>
+      <button id="pm-settings">SETTINGS&hellip;</button>
+      <button id="pm-standings" hidden>STANDINGS</button>
+      <button id="pm-quit">QUIT TO MENU</button>
       <!-- Which build am I actually running? index.html carries no ?v= of its
            own, so a stale shell or service-worker cache can serve old JS with no
            visible sign — a bug report and a fix can then disagree for hours with
@@ -364,9 +364,9 @@
         <section id="pm-panel-controls" class="pm-group" role="tabpanel"
           aria-labelledby="pm-tab-controls" tabindex="0">
           <h3 class="pm-group-h">DRIVING CONTROLS</h3>
-          <button id="pm-steer" type="button">STEER: TILT</button>
-          <button id="pm-calib" type="button">RECALIBRATE TILT</button>
-          <button id="pm-gears" type="button">GEARS: AUTO</button>
+          <button id="pm-steer">STEER: TILT</button>
+          <button id="pm-calib">RECALIBRATE TILT</button>
+          <button id="pm-gears">GEARS: AUTO</button>
           <!-- ACTIVE AERO — whether the 2026 moveable wing switches itself inside
                an activation zone. It sits with GEARS because it is the same kind
                of choice: how much of the car you operate yourself. It was in RACE
@@ -377,12 +377,12 @@
                MANUAL by default: the button IS the mechanic. AUTO exists because
                inside a zone X-mode is never the wrong choice, so a player who
                forgets it is simply slower than the AI, which takes every zone. -->
-          <button id="pm-aero" type="button">ACTIVE AERO: MANUAL</button>
+          <button id="pm-aero">ACTIVE AERO: MANUAL</button>
         </section>
         <section id="pm-panel-display" class="pm-group" role="tabpanel"
           aria-labelledby="pm-tab-display" tabindex="0" hidden>
           <h3 class="pm-group-h">DISPLAY</h3>
-          <button id="pm-hidehud" type="button">HIDE HUD</button>
+          <button id="pm-hidehud">HIDE HUD</button>
           <!-- step 0.5 — layout tiers (`--pair-at` / `--compact-at` via
                SheetShape) sit INSIDE this range, so a notch can flip arrangement
                not just size. MEASURED garage portrait: two columns at 80%,
@@ -394,11 +394,11 @@
             <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size"></label>
           <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
             <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
-          <button id="pm-res" type="button">RESOLUTION: AUTO</button>
-          <button id="pm-renderer" type="button">RENDERER: WEBGL2</button>
+          <button id="pm-res">RESOLUTION: AUTO</button>
+          <button id="pm-renderer">RENDERER: WEBGL2</button>
           <!-- THREE PATH / SCREENSHOTS / SAVE SCREENSHOT / status are injected
                by js/game/gfx-quality.js (same body-node reason as RESET RENDERER). -->
-          <button id="pm-gfx" type="button" hidden>GRAPHICS: HIGH</button>
+          <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
         </section>
         <nav id="pm-panel-more" class="pm-doors" role="tabpanel"
           aria-labelledby="pm-tab-more" tabindex="0" hidden>
@@ -411,12 +411,12 @@
         </nav>
       </div>
     </div>
-    <div class="sheet-foot"><button id="pm-settings-close" type="button" autofocus class="bigbtn alt">BACK</button></div>
+    <div class="sheet-foot"><button id="pm-settings-close" autofocus class="bigbtn alt">BACK</button></div>
   </div>
 </dialog>
 
 <!-- main menu -->
-<nav id="overlay" class="grain" aria-label="Apex 26 main menu">
+<div id="overlay" class="grain">
   <!-- Branding and small print are ONE block, in ONE grid row.
        They used to be two blocks stacked in two rows with the button column
        beside them. A grid distributes a row's spare height across its rows, and
@@ -425,7 +425,7 @@
        them ~90px apart. Nested, there is no second row for the gap to open in. -->
   <div id="menu-brand">
     <h1 id="title">APEX&nbsp;26</h1>
-    <p id="subtitle">2026 grid &middot; 24-round season + 16 classics</p>
+    <p id="subtitle">2026 grid &middot; 24-round season + 16 classics &middot; tilt to steer</p>
     <div id="menu-meta">
       <!-- The master sound toggle lives IN the title composition, not floating
            over the app. It used to be `position: fixed` at the top-right corner
@@ -440,7 +440,7 @@
       <p id="disclaimer">Unofficial fan project &mdash; not affiliated with FIA or Formula 1</p>
     </div>
   </div>
-  <div id="menu-buttons" aria-label="Game modes and tools">
+  <div id="menu-buttons">
     <!-- Inline Lucide icons (ISC — assets/icons/lucide-LICENSE.txt). stroke=currentColor
          so they inherit the button's text colour; sized via .btn-ico in css/menus.css. -->
     <!-- HERO: the long game, on its own and taller than everything under it.
@@ -448,12 +448,12 @@
          a 24-round career the same weight as a single time trial. #mb-career-sub
          carries the live save (team, year, round) so CONTINUE says what it is
          continuing; refreshCareerButton() fills both it and the label. -->
-    <div id="menu-hero" role="group" aria-label="Career mode">
+    <div id="menu-hero">
     <button id="mb-career" class="bigbtn" data-menu-default><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub"></span></span></button>
     </div>
     <!-- PLAY NOW: the four one-sitting modes, 2x2 so four entries cost two rows
          rather than four. Same red family as the hero, one step down in size. -->
-    <div id="menu-primary" class="balanced-row" role="group" aria-label="Quick race modes">
+    <div id="menu-primary" class="balanced-row">
     <button id="mb-race" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></svg>RACE</button>
     <button id="mb-tt" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></svg>TIME TRIAL</button>
     <button id="mb-vs" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>RACE A FRIEND</button>
@@ -461,7 +461,7 @@
     </div>
     <!-- SECONDARY: everything that is not a way to play. Half-height,
          two across, so the rooms never compete with the modes for the eye. -->
-    <div id="menu-secondary" class="balanced-row" role="group" aria-label="Game tools">
+    <div id="menu-secondary" class="balanced-row">
     <button id="mb-standings" class="bigbtn alt minibtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/></svg>STANDINGS</button>
     <button id="mb-data" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>F1 DATA HUB</button>
     <button id="mb-garage" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>GARAGE</button>
@@ -469,7 +469,7 @@
     <button id="mb-help" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>HOW TO PLAY</button>
     </div>
   </div>
-</nav>
+</div>
 
 <!-- select screen — two panes: WHO you are on the left, WHERE you race on the
      right. The circuit preview is PINNED at the top of the right pane and only
@@ -1148,19 +1148,19 @@
         Camera <span class="key">C</span> cycles<br>
         Shift Up <span class="key">E</span> &nbsp; Shift Down <span class="key">Q</span> / <span class="key">Shift</span> when <span class="key">GEARS: MANUAL</span><br>
         Pause <span class="key">P</span> &nbsp; Back <span class="key">Esc</span> (pauses only if nothing is open)<br>
-        Menus: arrows move, <span class="key">Enter</span> confirms. Keys always steer on a desktop. <span class="key">ADAPTIVE BUTTONS</span> in ADVANCED slows the keys at speed
+        Menus: arrows move in every direction — Left/Right leave a list for the header or column beside it. <span class="key">Enter</span> confirms. Keys always steer on a desktop. <span class="key">ADAPTIVE BUTTONS</span> (default ON) slows the keys at speed. <span class="key">BRAKE CUE</span> ticks faster when a corner needs the anchors — it never brakes for you
       </dd>
       <dt>CONTROLLER</dt>
       <dd>
         Left stick / D-pad steer. <span class="key">RT</span> / <span class="key">A</span> gas. <span class="key">LT</span> / <span class="key">B</span> brake (triggers are analog). <span class="key">X</span> boost toggle. <span class="key">Y</span> overtake. D-pad up aero. <span class="key">LB</span> / <span class="key">RB</span> gears. View cycles camera. Start pauses.
         <br>PlayStation: Cross / Circle / Square / Triangle and L2 / R2 are the same slots. Adaptive Buttons does not change the stick.
-        <br>Menus: either stick / D-pad move in every direction, <span class="key">A</span> confirms, <span class="key">B</span> backs, triggers page. Start still pauses
+        <br>Menus: either stick / D-pad move in every direction (hold to repeat) — Left/Right leave a list for the header or column beside it. <span class="key">A</span> confirms, <span class="key">B</span> backs, triggers page. Start still pauses
       </dd>
       <dt>TOUCH / MOBILE</dt>
       <dd>
         Pause &rarr; <span class="key">SETTINGS</span> &rarr; <span class="key">STEER</span> cycles TILT / BUTTONS / TOUCH.
         <br><span class="key">TILT</span> &mdash; roll the phone; <span class="key">GAS</span> + <span class="key">BRAKE</span> sit left. <span class="key">GEARS: MANUAL</span> (tilt only — BUTTONS already uses both thumbs) puts the shifter left and the pedals right. Calibrates at the lights. Allow motion when asked; deny switches to BUTTONS.
-        <br><span class="key">BUTTONS</span> &mdash; on-screen arrows left, pedals right. Hold an arrow; slide the thumb back to ease. <span class="key">ADAPTIVE BUTTONS</span> in ADVANCED (1 is OFF) makes that heavier at speed.
+        <br><span class="key">BUTTONS</span> &mdash; on-screen arrows left, pedals right. Hold an arrow; slide the thumb back to ease. <span class="key">ADAPTIVE BUTTONS</span> (default ON; 1 is OFF) makes that heavier at speed. <span class="key">BRAKE CUE</span> is the tick that says when to brake.
         <br><span class="key">TOUCH</span> &mdash; drag on the track from where you put your finger (a tap does not steer). The car accelerates on its own; <span class="key">BRAKE</span> stays left. No GAS pedal
       </dd>
       <dt id="htp-racing">&#9889; BOOST</dt>
@@ -1178,7 +1178,7 @@
       <dt>&#9881; SETTINGS</dt>
       <dd>Pause (<span class="key">P</span> or the <span class="key">&#10074;&#10074;</span> button; <span class="key">Esc</span> only if nothing is open) then <span class="key">SETTINGS</span> for everything below &mdash; steering, gears, lighting, sound, music and HUD. <span class="key">BACK</span> returns to the pause screen</dd>
       <dt>&#127918; CHANGE STEERING</dt>
-      <dd>In <span class="key">SETTINGS</span>: <span class="key">STEER</span> cycles tilt / buttons / touch on a phone. A keyboard and a plugged-in pad always work on desktop. <span class="key">ADVANCED STEERING</span> opens presets (RELAX / STANDARD / PRO) plus sliders for sensitivity, driving help, steer lock, the racing line, and <span class="key">ADAPTIVE BUTTONS</span> (keys and on-screen arrows only; 1 is OFF). Everything applies instantly and is saved</dd>
+      <dd>In <span class="key">SETTINGS</span>: <span class="key">STEER</span> cycles tilt / buttons / touch on a phone. A keyboard and a plugged-in pad always work on desktop. <span class="key">ADVANCED STEERING</span> opens STEERING &amp; ASSISTS — presets, driving help, the racing line, <span class="key">ADAPTIVE BUTTONS</span> (keys and on-screen arrows only; 1 is OFF, default ON) and <span class="key">BRAKE CUE</span> (1 is OFF — a tick, never a takeover). The ADVANCED disclosure is lock, speed steer and the rest. Everything applies instantly and is saved</dd>
       <dt>&#128161; LIGHTING</dt>
       <dd>In <span class="key">SETTINGS</span> tap <span class="key">LIGHTING TUNER</span> for a live tuner &mdash; time of day, exposure, colour grade and more, with a real-time preview. Values are saved per track / time / weather</dd>
       <dt>&#128266; SOUND &amp; HUD</dt>
@@ -1264,6 +1264,16 @@
       <p class="adv-help">Optional gentle pull toward the ideal line. Never overrides your steering.</p>
     </div>
     <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">ADAPTIVE BUTTONS <b id="pm-adaptbtn-v">6</b></span>
+        <input id="pm-adaptbtn" type="range" min="1" max="10" step="1" value="6" aria-label="Adaptive buttons"></label>
+      <p class="adv-help">Slows the keys and on-screen arrows at speed so a tap is a smaller correction. OFF (1) is the old snap. Does not change the stick, tilt, or a drag on the track. SPEED STEER still picks the speed that feels heavy.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">BRAKE CUE <b id="pm-brakecue-v">CUE 6</b></span>
+        <input id="pm-brakecue" type="range" min="1" max="10" step="1" value="6" aria-label="Brake cue"></label>
+      <p class="adv-help">A tick that speeds up when you need to brake for a corner. 1 is OFF. Higher = earlier warning (more lookahead). Takes over nothing.</p>
+    </div>
+    <div class="adv-item">
       <label class="tune-row"><span class="tune-label">OVERALL SPEED <b id="pm-pace-v">84%</b></span>
         <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed"></label>
       <p class="adv-help">How fast the whole field actually covers the track &mdash; you and the AI together. Shown as a share of reference pace: 100% is full speed, and every notch is 6% either way. Your dash and gearbox keep their full range at every setting; higher just means everyone laps quicker.</p>
@@ -1286,13 +1296,6 @@
       <label class="tune-row"><span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">6</b></span>
         <input id="pm-smooth" type="range" min="1" max="10" step="1" value="6" aria-label="Steer smoothing"></label>
       <p class="adv-help">How steady the tilt filter holds the wheel. Higher = smoother and calmer at rest (kills hand jitter) with a touch more lag; lower = more immediate.</p>
-    </div>
-
-    <h3 class="adv-sec">BUTTON INPUT <span>on-screen arrows and keys</span></h3>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">ADAPTIVE BUTTONS <b id="pm-adaptbtn-v">OFF</b></span>
-        <input id="pm-adaptbtn" type="range" min="1" max="10" step="1" value="1" aria-label="Adaptive buttons"></label>
-      <p class="adv-help">How much the steer buttons act like analog triggers. OFF = the current fixed snap. Higher = heavier at speed (a tap is a smaller correction) and more ease from sliding the thumb back. SPEED STEER still picks the speed that feels heavy.</p>
     </div>
 
     <h3 class="adv-sec">CAR HANDLING <span>how steering becomes motion (all inputs)</span></h3>
@@ -1748,9 +1751,9 @@
 <script crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=9683e074607c"></script>
 <script crossorigin="anonymous" src="js/track/tracks.js?v=15868f81b11c"></script>
 <script crossorigin="anonymous" src="js/track/maps.js?v=f2e4a159a971"></script>
-<script crossorigin="anonymous" src="js/car/car3d.js?v=e7f55b9a1b43"></script>
-<script crossorigin="anonymous" src="js/game/input.js?v=8967c3f301a3"></script>
-<script crossorigin="anonymous" src="js/game/audio.js?v=0dbf0fd9ae15"></script>
+<script crossorigin="anonymous" src="js/car/car3d.js?v=017bb9d8c475"></script>
+<script crossorigin="anonymous" src="js/game/input.js?v=db727f63e954"></script>
+<script crossorigin="anonymous" src="js/game/audio.js?v=3e1623c9eca0"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=c215033b4fb4"></script>
 <script crossorigin="anonymous" src="js/game/spotify.js?v=9f17baa46dab"></script>
 <script crossorigin="anonymous" src="js/game/audio-panel.js?v=18e142b1a237"></script>
@@ -1762,7 +1765,7 @@
 <script crossorigin="anonymous" src="js/data/lastrace.js?v=b7d043cba6a1"></script>
 <script crossorigin="anonymous" src="js/data/live.js?v=3183e9e1aaac"></script>
 <script crossorigin="anonymous" src="js/data/hub.js?v=b1914b62a3fc"></script>
-<script crossorigin="anonymous" src="js/car/parts.js?v=ee93f741b785"></script>
+<script crossorigin="anonymous" src="js/car/parts.js?v=61a189f246d7"></script>
 <script crossorigin="anonymous" src="js/car/liveries.js?v=62ed3d578b13"></script>
 <script crossorigin="anonymous" src="js/car/liverytex.js?v=6ceeacc3872f"></script>
 <script crossorigin="anonymous" src="js/car/ghost.js?v=0f7d7fef9e94"></script>
@@ -1779,18 +1782,18 @@
 <script crossorigin="anonymous" src="js/game/career.js?v=3b09a418d6be"></script>
 <script crossorigin="anonymous" src="js/game/season-cal.js?v=7f26f695d31e"></script>
 <script crossorigin="anonymous" src="js/game/reliability.js?v=483552b62ac9"></script>
-<script crossorigin="anonymous" src="js/game/ai-drive.js?v=d8db402eeb11"></script>
+<script crossorigin="anonymous" src="js/game/ai-drive.js?v=8f08a841957c"></script>
 <script crossorigin="anonymous" src="js/game/cam-tune.js?v=d4a685a106a4"></script>
 <script crossorigin="anonymous" src="js/game/setup-ui.js?v=7274b0b69237"></script>
 <script crossorigin="anonymous" src="js/game/career-ui.js?v=dab232f3d43e"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=e166b6150125"></script>
-<script crossorigin="anonymous" src="js/game/menus.js?v=f3db3f122db8"></script>
+<script crossorigin="anonymous" src="js/game/menus.js?v=7f8aebf0e917"></script>
 <script crossorigin="anonymous" src="js/game/scrollfade.js?v=c468f3706d17"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
 <script crossorigin="anonymous" src="js/game/sheetshape.js?v=931be6f5d0c9"></script>
 <script crossorigin="anonymous" src="js/game/uilayers.js?v=881301c993bc"></script>
 <script crossorigin="anonymous" src="js/game/topmodal.js?v=d22910fec314"></script>
-<script crossorigin="anonymous" src="js/game/menunav.js?v=4c26e346e45a"></script>
+<script crossorigin="anonymous" src="js/game/menunav.js?v=12d9bca64754"></script>
 <script crossorigin="anonymous" src="js/game/ariastate.js?v=1a795e030767"></script>
 <script crossorigin="anonymous" src="js/game/settings-nav.js?v=2eb1b95e2b55"></script>
 <script crossorigin="anonymous" src="js/game/aerozones.js?v=1f77f601ce84"></script>
@@ -1799,7 +1802,8 @@
 <script crossorigin="anonymous" src="js/game/photomode.js?v=52e5f7950e04"></script>
 <script crossorigin="anonymous" src="js/game/tuner.js?v=647bc13307be"></script>
 <script crossorigin="anonymous" src="js/game/cam-tuner.js?v=1ac37b5b0651"></script>
-<script crossorigin="anonymous" src="js/game/steer-tuning.js?v=64dd8a16a603"></script>
+<script crossorigin="anonymous" src="js/game/brake-cue.js?v=8f7e053da8f9"></script>
+<script crossorigin="anonymous" src="js/game/steer-tuning.js?v=e22cf1cbbe08"></script>
 <script crossorigin="anonymous" src="js/game/perf.js?v=534904265164"></script>
 <script crossorigin="anonymous" src="js/game/gfx-quality.js?v=56df3cedd95b"></script>
 <script crossorigin="anonymous" src="js/game/cockpit-opts.js?v=9c423fbdc9ba"></script>
@@ -1813,7 +1817,7 @@
 <script crossorigin="anonymous" src="js/game/incidentsim.js?v=887687a6a634"></script>
 <script crossorigin="anonymous" src="js/game/agentview-raster.js?v=16273e78276f"></script>
 <script crossorigin="anonymous" src="js/game/agentview.js?v=7a0b4e06a261"></script>
-<script crossorigin="anonymous" src="js/game/apex.js?v=cc8b0b57c365"></script>
+<script crossorigin="anonymous" src="js/game/apex.js?v=485df649b7c0"></script>
 <script crossorigin="anonymous" src="js/net/nostr.js?v=8f6fcefd27aa"></script>
 <script crossorigin="anonymous" src="js/net/rendezvous.js?v=264a9657f294"></script>
 <script crossorigin="anonymous" src="js/net/sdp.js?v=efc8fb13f42f"></script>
@@ -1825,5 +1829,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=f0bfb2817114"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=2891c595f0f0"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=aced6d5696d5"></script>
-<script crossorigin="anonymous" src="js/game.js?v=7eb65822effc"></script>
+<script crossorigin="anonymous" src="js/game.js?v=f5f97d214fa0"></script>
 </body></html>
