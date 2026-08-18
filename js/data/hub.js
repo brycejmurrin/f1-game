@@ -275,7 +275,7 @@ const DataHub = (function () {
     const maxAge = MAX_AGE[id] || 60 * MINUTE;
     if (st && st.node && (Date.now() - st.at) < maxAge) {
       // loadTab calls showTab to paint the fresh node; only log reuse on a later visit.
-      if (Date.now() - st.at > 1000) Log.info("data", "tab " + id + " stale");
+      if (Date.now() - st.at > 1000) Log.info("data", "tab " + id + " cached");
       clear(contentEl);
       contentEl.appendChild(st.node);
       contentEl.appendChild(footnote(st.at));
