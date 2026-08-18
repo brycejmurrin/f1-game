@@ -929,9 +929,17 @@ GC is not: every AI car built a fresh `samples[]` of `{d,k,bank}` rows
 > `pushLook` / `endLook` recycle the look-ahead rows. Values are
 > bit-identical; do not re-allocate those three. Left on the table:
 > `wantBoost` / `otShouldFire` / `adaptLane` call-site ctx literals in
-> `updateCar` (3–4 small objects/car, not the sample fan-out), WGX/TLX
-> whole-UBO write per `begin()` (hygiene, ~0.05 ms), WGX/TLX per-chunk
-> draws with no GLX run-merge (`glx/chunked.js` adjacent-visible merge).
+> `updateCar` (3–4 small objects/car, not the sample fan-out).
+>
+> **TAKEN 2026-08-18 (leftover sweep).** WGX road `createChunkedMesh` now
+> expand-once + spatial bins (camera still skips frustum cull on
+> `surfaceId === 16`; shadow `castShadowChunked` culls AABBs). Props/glass
+> share one IBO with `firstIndex` run-merge. TLX `uf1` skips unchanged
+> tuner scalars. `resolveCollisions` rebuilds buckets only after
+> `shiftLong`. AI scans skip `finished` rivals. SW install no longer
+> precaches `apex.js` / `agentview*` (fetch-miss still caches them).
+> Still open: lazy circuit tags, script-tag `defer`, WGX whole-UBO skip
+> (view/eye/time change every driving frame).
 
 **`uCarReflect` is not shed with `po.reflect`.** Tier 2 sets `po.reflect = 0`
 and the source says "Tier 2 drops the wet-road SSR march" — but the SSR gate is
