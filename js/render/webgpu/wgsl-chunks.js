@@ -541,19 +541,30 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
     bestD2 = select(bestD2, bestD, take);
     best = select(best, p, take);
     bestD = select(bestD, d, take);
-    let take2 = (d < bestD2) && !take;
+    // Require a spatially distinct second sample — a lone centerline point
+    // left best2 at the origin and produced a garbage tangent, so lateral x
+    // blew past hw and terrain discard never punched the ribbon footprint.
+    let sep = dot(p.xy - best.xy, p.xy - best.xy);
+    let take2 = (d < bestD2) && !take && sep > 0.25;
     best2 = select(best2, p, take2);
     bestD2 = select(bestD2, d, take2);
   }
   let tangRaw = best2.xy - best.xy;
-  let tang = normalize(select(vec2<f32>(1.0, 0.0), tangRaw, dot(tangRaw, tangRaw) > 1e-6));
+  // best2.w carries sample hw — origin placeholder (w=0) must not invent a tangent.
+  let tangOk = best2.w > 0.5 && dot(tangRaw, tangRaw) > 1e-4;
+  let tang = normalize(select(vec2<f32>(1.0, 0.0), tangRaw, tangOk));
   let right = vec2<f32>(tang.y, -tang.x);
-  let x = dot(wp.xz - best.xy, right);
+  let x = select(0.0, dot(wp.xz - best.xy, right), tangOk);
   let hw = best.w;
-  let valid = gated && hw > 0.5;
+  // Distance-to-centerline (not reconstructed lateral) gates validity: a bad
+  // tangent must not mark an on-ribbon fragment as a miss.
+  let dCenter = sqrt(bestD);
+  let valid = gated && hw > 0.5 && dCenter <= hw + 2.4;
   // xyz = track (s, lateral x, half-width); w = 1 when the LUT hit is valid.
   // Material id comes from DrawU.mat2.z on road draws — do not classify MAT
   // here (a bad tangent used to tag the ribbon MAT 9 / grass).
+  // When tangent is unknown, keep hw for discard-sized footprint but zero
+  // lateral so roadMarkings does not paint a false centre line.
   return select(vec4<f32>(0.0), vec4<f32>(best.z, x, hw, 1.0), valid);
 }
 ${hash}
@@ -634,7 +645,9 @@ fn vs_main(
   if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
     let wt = trkFromWorld(wp.xyz);
     if (wt.w > 0.5) { pulled = vec4<f32>(16.0, wt.x, wt.y, wt.z); }
-    wp.y = wp.y + 0.08;
+    // Near-camera SwiftShader depth precision: coplanar terrain still wins
+    // with a smaller lift; 0.20 m clears the ribbon before discard helps.
+    wp.y = wp.y + 0.20;
   }
   o.matTrk = pulled;
   o.matId = pulled.x;
@@ -687,7 +700,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let saaDy = dpdy(topNgeo);
   // SwiftShader-Dawn: coplanar terrain wins depth over the road ribbon. Punch
   // holes where the centerline LUT says the ribbon runs (global _roadLutBG).
-  if (D.mat2.z < 0.5 && D.mat1.y > 0.1 && fromWorld.w > 0.5 && abs(fromWorld.y) <= fromWorld.z + 2.4) {
+  // fromWorld.w already encodes distance-to-centerline <= hw+2.4 — do not
+  // re-test reconstructed lateral (degenerate tangents used to skip discard).
+  if (D.mat2.z < 0.5 && D.mat1.y > 0.1 && fromWorld.w > 0.5) {
     discard;
   }
   // #region agent log

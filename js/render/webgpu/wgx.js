@@ -2305,16 +2305,21 @@ const WGX = (function () {
       for (let gz = 0; gz < GH; gz++) {
         for (let gx = 0; gx < GW; gx++) {
           const list = cells[gx + gz * GW];
-          if (list.length) continue;
           const cx = minX + (gx + 0.5) * extX / GW;
           const cz = minZ + (gz + 0.5) * extZ / GH;
-          let best = samples[0], bestD = Infinity;
-          for (let i = 0; i < samples.length; i++) {
-            const s = samples[i];
-            const d = (s.px - cx) * (s.px - cx) + (s.pz - cz) * (s.pz - cz);
-            if (d < bestD) { bestD = d; best = s; }
+          // Ensure every cell has ≥2 spatially distinct samples so the shader
+          // can form a track tangent (a lone sample left best2 at the origin).
+          while (list.length < 2) {
+            let best = null, bestD = Infinity, avoid = list[0] || null;
+            for (let i = 0; i < samples.length; i++) {
+              const s = samples[i];
+              if (avoid && (s.px - avoid.px) * (s.px - avoid.px) + (s.pz - avoid.pz) * (s.pz - avoid.pz) < 0.25) continue;
+              const d = (s.px - cx) * (s.px - cx) + (s.pz - cz) * (s.pz - cz);
+              if (d < bestD) { bestD = d; best = s; }
+            }
+            if (!best) break;
+            list.push(best);
           }
-          list.push(best);
         }
       }
       const out = new Float32Array(8 + GW * GH * SLOT * 4);
@@ -2339,7 +2344,9 @@ const WGX = (function () {
       // #region agent log
       try { (window.__wgxDbg = window.__wgxDbg || []).push({hypothesisId:"F",location:"wgx.js:_rememberRoadLut",message:"remember",data:{hasLut:!!lut,hasBG:!!(lut&&lut.attrBG),prevReady:_roadLutReady},timestamp:Date.now()}); } catch(_){}
       // #endregion
-      if (lut && lut.attrBG) { _roadLutBG = lut.attrBG; _roadLutReady = true; }
+      // Only promote a real centerline LUT (magic 12345). Dummy attr bind groups
+      // from empty raw[] must not clobber a good ribbon LUT or trip roadLutReady.
+      if (lut && lut.attrBG && lut.sbuf) { _roadLutBG = lut.attrBG; _roadLutReady = true; }
     }
     function _drawGeom(pass, mesh, instCount) {
       if (mesh.ibuf) {
