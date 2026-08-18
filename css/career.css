@@ -248,7 +248,7 @@
    like #results/#standings, the other "the session is over" sheets).
    The summary card is a plain .cr-card and the headings are .sel-label: nothing
    here needs a vocabulary of its own, only the offer rows are new. */
-#career-offers { --sheet-w: 620px; }
+#career-offers { --sheet-w: 620px; --fit-at: 300px; }
 
 /* An offer is a TILE, not a list row: it is a commitment of one to three seasons
    and the tap target has to say so. Same grid as .cr-teamtile — colour bar, name,
@@ -286,7 +286,7 @@
    the same z-index because only one of the two is ever open. Narrower than the
    offers sheet — a totals card and a column of season rows are both short lines,
    and a wide sheet would strand the points column half a screen from the year. */
-#career-history { --sheet-w: 520px; }
+#career-history { --sheet-w: 520px; --fit-at: 300px; }
 
 /* The way in, at the foot of the hub's left column. A .cr-card that happens to be
    a button, so it inherits the card's surface and rhythm and only has to undo the
@@ -319,7 +319,7 @@
    .res-row vocabulary from css/components.css; the only new part is the time
    column, which needs tabular figures so the gaps line up as a column of
    numbers rather than drifting with the glyph widths. */
-#quali { --sheet-w: 560px; }
+#quali { --sheet-w: 560px; --fit-at: 300px; }
 #q-body { min-height: 0; }
 .q-time { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
 /* Pole gets the absolute lap time and everyone else a gap, so the two read
@@ -413,7 +413,10 @@
    measure rather than the full 1020px the career page runs at. A top-layer
    <dialog> over #career, like the history sheet — both are read-only modals
    opened FROM the hub, and neither can be open at once. */
-#career-guide { --sheet-w: 560px; }
+#career-guide { --sheet-w: 560px; --fit-at: 300px; }
+@media (orientation: landscape) {
+  #career-offers, #career-history, #career-guide, #quali { --fit-at: 220px; }
+}
 #cg-body { display: flex; flex-direction: column; gap: 4px; }
 /* Sections are a heading plus one card, and the heading owns the space above it
    — so the gap between a card and the NEXT heading is set once here rather than
@@ -484,4 +487,138 @@
 /* ---------- extra funds ---------- */
 .cr-cheats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .cr-cheats .sel-chip { flex: 1 1 auto; min-width: 120px; }
+
+/* Overlay leftover sheets: inherit --fit-at from the dialog. Compact packs
+   rows and wraps names; #co-body / #ch-body / #cg-body / #q-body stay the
+   only vertical scrollers. Guide/history contents rail is wide-only. */
+#career-guide .sheet:has(> #cg-contents),
+#career-history .sheet:has(> #ch-contents) {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+#cg-contents, #ch-contents {
+  display: flex; align-items: center; justify-content: flex-start;
+  gap: calc(var(--gap) * 0.4); min-width: 0;
+  padding: 0 var(--pad) calc(var(--gap) * 0.35);
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; touch-action: pan-x;
+  scrollbar-width: none;
+}
+#cg-contents > :first-child, #ch-contents > :first-child { margin-inline-start: auto; }
+#cg-contents::-webkit-scrollbar, #ch-contents::-webkit-scrollbar { display: none; }
+#cg-contents a, #ch-contents a {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; min-height: var(--chip-h);
+  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.65);
+  border: 1px solid rgba(255,255,255,0.14); border-radius: var(--r-pill);
+  background: rgba(255,255,255,0.05); color: var(--text);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.05em;
+  text-decoration: none;
+}
+@media (hover: hover) {
+  #cg-contents a:hover, #ch-contents a:hover { background: rgba(255,255,255,0.12); }
+}
+#cg-contents a:active, #ch-contents a:active { background: rgba(255,255,255,0.16); }
+#cg-contents a:focus-visible, #ch-contents a:focus-visible {
+  outline: 2px solid var(--focus); outline-offset: -2px;
+}
+#cg-body .sel-label[id], #ch-body .sel-label[id] { scroll-margin-block-start: var(--gap); }
+
+#career-guide .sheet[data-shape="wide"],
+#career-history .sheet[data-shape="wide"] {
+  grid-template-columns: minmax(7.5rem, 11rem) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+#career-guide .sheet[data-shape="wide"] > .sheet-head,
+#career-history .sheet[data-shape="wide"] > .sheet-head {
+  grid-column: 1 / -1; grid-row: 1;
+}
+#career-guide .sheet[data-shape="wide"] > #cg-contents,
+#career-history .sheet[data-shape="wide"] > #ch-contents {
+  grid-column: 1; grid-row: 2;
+  flex-direction: column; align-items: stretch; justify-content: flex-start;
+  overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior-x: auto; overscroll-behavior-y: contain; touch-action: pan-y;
+  padding: 0 calc(var(--gap) * 0.5) calc(var(--gap) * 0.5) var(--pad);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+#career-guide .sheet[data-shape="wide"] > #cg-contents > :first-child,
+#career-history .sheet[data-shape="wide"] > #ch-contents > :first-child {
+  margin-inline-start: 0;
+}
+#career-guide .sheet[data-shape="wide"] > #cg-contents a,
+#career-history .sheet[data-shape="wide"] > #ch-contents a {
+  white-space: normal; text-align: left; justify-content: flex-start;
+}
+#career-guide .sheet[data-shape="wide"] > .sheet-body,
+#career-history .sheet[data-shape="wide"] > .sheet-body {
+  grid-column: 2; grid-row: 2; min-width: 0;
+}
+#career-guide .sheet[data-shape="wide"] > .sheet-foot,
+#career-history .sheet[data-shape="wide"] > .sheet-foot {
+  grid-column: 1 / -1; grid-row: 3;
+}
+
+/* Compact keeps a stacked strip: a side rail spends the scarce axis on chrome. */
+#career-guide .sheet[data-density="compact"],
+#career-history .sheet[data-density="compact"] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+#career-guide .sheet[data-density="compact"] > #cg-contents,
+#career-history .sheet[data-density="compact"] > #ch-contents {
+  grid-column: auto; grid-row: auto;
+  flex-direction: row; align-items: center;
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; overscroll-behavior-y: auto; touch-action: pan-x;
+  padding: 0 var(--pad) calc(var(--gap) * 0.35);
+  border-right: none;
+}
+#career-guide .sheet[data-density="compact"] > .sheet-head,
+#career-guide .sheet[data-density="compact"] > .sheet-body,
+#career-guide .sheet[data-density="compact"] > .sheet-foot {
+  grid-column: auto; grid-row: auto;
+}
+#career-history .sheet[data-density="compact"] > .sheet-head,
+#career-history .sheet[data-density="compact"] > .sheet-body,
+#career-history .sheet[data-density="compact"] > .sheet-foot {
+  grid-column: auto; grid-row: auto;
+}
+
+#career-offers .sheet[data-density="compact"] .co-offer {
+  margin-bottom: 4px; padding: calc(var(--pad) * 0.45); min-height: var(--tap-min);
+}
+#career-offers .sheet[data-density="compact"] .co-offer-team {
+  white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
+}
+#career-offers .sheet[data-density="compact"] .cr-card,
+#career-history .sheet[data-density="compact"] .cr-card,
+#career-guide .sheet[data-density="compact"] .cr-card {
+  padding: calc(var(--pad) * 0.45); gap: 2px;
+}
+#career-offers .sheet[data-density="compact"] .cr-row,
+#career-history .sheet[data-density="compact"] .cr-row,
+#career-guide .sheet[data-density="compact"] .cr-row {
+  font-size: var(--fs-micro);
+}
+#career-history .sheet[data-density="compact"] .res-row,
+#quali .sheet[data-density="compact"] .res-row {
+  padding: 4px 6px; gap: 6px; flex-wrap: wrap; align-items: flex-start;
+}
+#career-history .sheet[data-density="compact"] .res-name,
+#career-history .sheet[data-density="compact"] .res-pts {
+  white-space: normal; overflow-wrap: anywhere; width: auto; min-width: 0;
+}
+#quali .sheet[data-density="compact"] .res-name,
+#quali .sheet[data-density="compact"] .res-pts {
+  white-space: normal; overflow-wrap: anywhere; width: auto; min-width: 0;
+}
+#career-guide .sheet[data-density="compact"] #cg-body { gap: 2px; }
+#career-guide .sheet[data-density="compact"] #cg-body .sel-label { margin-top: 8px; }
+#career-guide .sheet[data-density="compact"] .cg-card { gap: 4px; }
+#career-guide .sheet[data-density="compact"] .cg-p { line-height: 1.35; }
+#quali .sheet[data-density="compact"] #q-foot .bigbtn {
+  min-height: var(--tap-min); padding-block: 0; font-size: var(--fs-micro);
+}
+#quali .sheet[data-density="compact"] #q-foot #q-drive,
+#quali .sheet[data-density="compact"] #q-foot #q-go { flex: 1 1 auto; }
 } /* @layer components */
