@@ -234,6 +234,7 @@ Fourth server in both catalogs: root `.mcp.json` (Claude Code) and
 - 3-key lists in `tests/unit/probe-mcp.test.mjs` and
   `tests/unit/tinyfish-mcp.test.mjs` become
   `["apex-tools", "chrome-devtools", "probe", "tinyfish"]`
+- `.cursor/mcp.json` locksteps those four names + apex-tools argv (`type: stdio`)
 - `apex-tools-mcp.sh help` in `tests/unit/tools-runnable.test.mjs`
 - AGENTS Cloud path lists `./tools/apex-tools-mcp.sh` next to
   `tinyfish-mcp.sh` / `probe-mcp.py`
