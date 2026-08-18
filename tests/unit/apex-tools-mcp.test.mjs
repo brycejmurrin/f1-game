@@ -1,4 +1,4 @@
-// apex-tools-mcp.test.mjs — week-1 apex-tools MCP (local CLI wrap).
+// apex-tools-mcp.test.mjs — apex-tools MCP (local CLI wrap).
 // APEX_MCP_MOCK=1 / dryRun only — no Chromium, no network.
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -74,6 +74,8 @@ test("help lists serve / list-tools / call / status", () => {
   assert.match(r.stdout, /call/);
   assert.match(r.stdout, /status/);
   assert.match(r.stdout, /apex_/);
+  assert.match(r.stdout, /apex_select_specs/);
+  assert.match(r.stdout, /apex_carshot/);
 });
 
 test("shell help exits 0", () => {
@@ -108,7 +110,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
   assert.equal(out[0].result.serverInfo.name, "apex-tools-mcp");
   assert.ok(out[0].result.capabilities.tools);
   const names = (out[1].result.tools || []).map((t) => t.name);
-  assert.ok(names.length >= 14, names);
+  assert.ok(names.length >= 23, names);
   for (const n of names) {
     assert.match(n, /^apex_/);
     assert.doesNotMatch(n, /^chrome_/);
@@ -129,8 +131,26 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_wgx_capture",
     "apex_ui_survey",
     "apex_agent",
+    "apex_select_specs",
+    "apex_assets_verify",
+    "apex_float_audit",
+    "apex_clip_audit",
+    "apex_coplanar_audit",
+    "apex_track_verts",
+    "apex_carshot",
+    "apex_wgx_shot",
+    "apex_quick_validate",
   ]) {
     assert.ok(names.includes(need), `missing ${need} in ${names}`);
+  }
+  for (const never of [
+    "apex_test_bg",
+    "apex_graph_parity",
+    "apex_bump_cache_apply",
+    "tinyfish_deploy_check",
+    "chrome_evaluate_script",
+  ]) {
+    assert.ok(!names.includes(never), `must not wrap ${never}`);
   }
 });
 
@@ -300,6 +320,100 @@ test("browser tool github.io url → github_io_blocked (no fetch)", () => {
   assert.equal(body.error, "github_io_blocked");
 });
 
+test("apex_select_specs dryRun pins --since --json, never --bg", () => {
+  const r = callCli("apex_select_specs", { dryRun: true, since: "HEAD~1" });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.ok(body.argv.includes("--since"), body.argv);
+  assert.ok(body.argv.includes("HEAD~1"), body.argv);
+  assert.ok(body.argv.includes("--json"), body.argv);
+  assert.ok(!body.argv.includes("--bg"), body.argv);
+});
+
+test("apex_select_specs without since → bad_args", () => {
+  const r = callCli("apex_select_specs", { dryRun: true });
+  assert.equal(r.status, 1, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.error, "bad_args");
+});
+
+test("apex_assets_verify argv is verify only (never bake)", () => {
+  const r = callCli("apex_assets_verify", { dryRun: true });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.ok(body.argv.includes("verify"), body.argv);
+  const blob = body.argv.join(" ");
+  assert.doesNotMatch(blob, /bake|fetch|import-pack/);
+});
+
+test("apex_float_audit pins --json and never --clip / --foliage", () => {
+  const r = callCli("apex_float_audit", { dryRun: true, id: "monza" });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.ok(body.argv.includes("monza"), body.argv);
+  assert.ok(body.argv.includes("--json"), body.argv);
+  assert.ok(!body.argv.includes("--clip"), body.argv);
+  assert.ok(!body.argv.includes("--foliage"), body.argv);
+});
+
+test("apex_clip_audit / apex_coplanar_audit pin --json and default tunables", () => {
+  for (const name of ["apex_clip_audit", "apex_coplanar_audit"]) {
+    const r = callCli(name, { dryRun: true, id: "monza", gate: true });
+    assert.equal(r.status, 0, r.stderr);
+    const body = JSON.parse(r.stdout);
+    assert.ok(body.argv.includes("--json"), body.argv);
+    assert.ok(body.argv.includes("--gate"), body.argv);
+    assert.ok(!body.argv.includes("--depth"), body.argv);
+    assert.ok(!body.argv.includes("--adj"), body.argv);
+    assert.ok(!body.argv.includes("--gap"), body.argv);
+  }
+});
+
+test("apex_survey_track fracs without label emits default survey label", () => {
+  const r = callCli("apex_survey_track", { dryRun: true, id: "montreal", fracs: "0.25" });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  const i = body.argv.indexOf("montreal");
+  assert.ok(i >= 0, body.argv);
+  assert.equal(body.argv[i + 1], "survey");
+  assert.equal(body.argv[i + 2], "0.25");
+});
+
+test("apex_shot out outside artifacts/scratch → path_escaped", () => {
+  const r = callCli("apex_shot", { dryRun: true, track: "monza", out: "/tmp/apex-shot.png" });
+  assert.equal(r.status, 1, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.error, "path_escaped");
+});
+
+test("apex_carshot / apex_wgx_shot / apex_quick_validate dryRun pins", () => {
+  const car = callCli("apex_carshot", { dryRun: true, az: 40, tod: "night" });
+  assert.equal(car.status, 0, car.stderr);
+  const carBody = JSON.parse(car.stdout);
+  assert.match(carBody.argv.join(" "), /car\/carshot\.mjs/);
+  assert.ok(!carBody.argv.includes("--url"), carBody.argv);
+
+  const shot = callCli("apex_wgx_shot", { dryRun: true, track: "singapore", lite: true });
+  assert.equal(shot.status, 0, shot.stderr);
+  const shotBody = JSON.parse(shot.stdout);
+  assert.match(shotBody.argv.join(" "), /wgx-shot\.mjs/);
+  assert.ok(shotBody.argv.includes("singapore"), shotBody.argv);
+  assert.ok(shotBody.argv.includes("--lite"), shotBody.argv);
+
+  const qv = callCli("apex_quick_validate", { dryRun: true });
+  assert.equal(qv.status, 0, qv.stderr);
+  const qvBody = JSON.parse(qv.stdout);
+  assert.match(qvBody.argv.join(" "), /quick-validate\.mjs/);
+  assert.ok(!qvBody.argv.some((a) => /^\d+$/.test(String(a))), qvBody.argv);
+});
+
+test("apex_quick_validate port → port_not_supported", () => {
+  const r = callCli("apex_quick_validate", { dryRun: true, port: 3477 });
+  assert.equal(r.status, 1, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.error, "port_not_supported");
+});
+
 test("browser tool loopback url → url_not_supported in v1", () => {
   const r = callCli("apex_eval", {
     track: "monza",
@@ -312,6 +426,19 @@ test("browser tool loopback url → url_not_supported in v1", () => {
 });
 
 describe("occupancy", { concurrency: 1 }, () => {
+test("week-3 tree tools do not take or refuse the browser lock", () => {
+  fs.mkdirSync(path.dirname(LOCK), { recursive: true });
+  fs.writeFileSync(LOCK, JSON.stringify({ pid: process.pid, tool: "test", since: Date.now() }));
+  try {
+    const r = callCli("apex_float_audit", { dryRun: true, id: "monza" });
+    assert.equal(r.status, 0, r.stderr);
+    const body = JSON.parse(r.stdout);
+    assert.equal(body.ok, true);
+  } finally {
+    try { fs.unlinkSync(LOCK); } catch { /* ignore */ }
+  }
+});
+
 test("week-1 tools do not take or refuse the browser lock", () => {
   fs.mkdirSync(path.dirname(LOCK), { recursive: true });
   fs.writeFileSync(LOCK, JSON.stringify({ pid: process.pid, tool: "test", since: Date.now() }));
