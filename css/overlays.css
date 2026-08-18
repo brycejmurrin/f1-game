@@ -507,7 +507,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 body.hud-hidden #hud,
 body.hud-hidden #btn-cam,
 body.hud-hidden #pausebtn,
-body.hud-hidden .touchbtn { display: none !important; }
+body.hud-hidden .touchbtn,
+body.hud-hidden #game-metrics { display: none !important; }
 #hud-restore {
   position: fixed;
   top: calc(8px + var(--sat));

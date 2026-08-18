@@ -183,6 +183,7 @@ const AiDrive = (function () {
     return damp(lane, target, 0.35, dt);
   }
 
+  try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
     traits, stuckThreshold, followPad, contactGive, steerDamp, unstuckPull,
     streetOtScale, otFireRate, otShouldFire, wantBoost, brakeTarget, brakeDecision,

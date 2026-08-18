@@ -145,23 +145,34 @@ const Gfx = (function () {
       // "three" -> TLX (three.js/TSL backend; WebGPU with automatic WebGL2
       // fallback inside three, so no navigator.gpu requirement here).
       if (pref === "three") {
-        if (typeof TLX === "undefined" || !TLX || typeof TLX.create !== "function") return null;
+        if (typeof TLX === "undefined" || !TLX || typeof TLX.create !== "function") {
+          Log.info("gfx", "Gfx.bind fallback webgl2");
+          return null;
+        }
         const backend = await TLX.create(canvas, opts || {});
-        return backend || null;   // TLX.create returns null on any failure
+        if (backend) { Log.info("gfx", "Gfx.bind backend=three"); return backend; }
+        Log.info("gfx", "Gfx.bind fallback webgl2");
+        return null;   // TLX.create returns null on any failure
       }
 
       // Anything else follows the original WebGPU/WGX rules verbatim:
       if (typeof navigator === "undefined" || !navigator.gpu) return null;
 
       // User / test opt-out: force the WebGL2 path.
-      if (pref === "webgl2") return null;
+      if (pref === "webgl2") {
+        Log.info("gfx", "Gfx.bind backend=webgl2");
+        return null;
+      }
 
       // WGX must be loaded (script order). If not, fall back silently.
       if (typeof WGX === "undefined" || !WGX || typeof WGX.create !== "function") return null;
 
       const backend = await WGX.create(canvas, opts || {});
-      return backend || null;   // WGX.create returns null on any failure
+      if (backend) { Log.info("gfx", "Gfx.bind backend=webgpu"); return backend; }
+      Log.info("gfx", "Gfx.bind fallback webgl2");
+      return null;   // WGX.create returns null on any failure
     } catch (_) {
+      Log.info("gfx", "Gfx.bind fallback webgl2");
       return null;              // any surprise -> WebGL2 fallback
     }
   }

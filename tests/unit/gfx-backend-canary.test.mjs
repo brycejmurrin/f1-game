@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -203,6 +204,7 @@ test("TLX material-map ownership keeps placeholders and reports pack state", () 
 test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgpu", () => {
   const src = read("js/game/gfx-quality.js");
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });
+  seedLog(ctx);
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
   assert.equal(G.nextBackend("webgl2"), "three");
@@ -261,6 +263,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.tlxAutoGL": "1",
   });
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: ls, sessionStorage: ss });
+  seedLog(ctx);
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
   assert.ok(G.RENDERER_LS_KEYS.includes("apex26.gfxBackend"));
@@ -339,6 +342,7 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
     GameStore: { store: { get() { return null; }, set() {} } },
     GLX: { isMobile: true },
   });
+  seedLog(ctx);
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
   G.init();
@@ -490,6 +494,7 @@ function bootPicker(opts) {
     GameStore: { store: { get() { return null; }, set() {} } },
     GLX: { isMobile: true },
   });
+  seedLog(ctx);
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
   // readyState is "complete", so the IIFE already called init().

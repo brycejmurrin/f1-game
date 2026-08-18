@@ -149,6 +149,7 @@ const NetTransport = (function () {
 
     a.status = b.status = "open";
     a._emit("open"); b._emit("open");
+    Log.info("net", "loopback create");
     return [a, b];
   }
 
@@ -442,7 +443,11 @@ const NetTransport = (function () {
       const policy = opts.iceTransportPolicy || (relayOnly() ? "relay" : null);
       if (policy) cfg.iceTransportPolicy = policy;
       pc = new PC(cfg);
-    } catch (e) { return null; }
+    } catch (e) {
+      Log.warn("net", "rtc create fail");
+      return null;
+    }
+    Log.info("net", "rtc create");
     const chans = {};
     // Cap only queued STATE snapshots until pump() drains them. EVENT is the
     // reliable protocol stream: dropping START/LAP/RESULT locally after WebRTC
@@ -476,7 +481,11 @@ const NetTransport = (function () {
       chans[kind] = ch;
       ch.binaryType = "arraybuffer";
       ch.onopen = () => {
-        if (++openCount === CHANNELS.length) { ep.status = "open"; ep._emit("open"); }
+        if (++openCount === CHANNELS.length) {
+          ep.status = "open";
+          Log.info("net", "rtc open");
+          ep._emit("open");
+        }
       };
       ch.onclose = () => {
         if (ep.status === "closed") return;

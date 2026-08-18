@@ -563,6 +563,7 @@
       }
     }
 
+    try { Log.info("gfx", "TLX post init"); } catch (_) { /* harness */ }
     return {
       enabled: () => true,
       hdrOk: () => hdr,

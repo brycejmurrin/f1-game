@@ -157,6 +157,7 @@ function markReloading(rb, next) {
   if (rb) rb.textContent = "RENDERER: " + msg;
 }
 function applyBackend(next, rb) {
+  Log.info("game", "GfxQuality.applyBackend " + next);
   try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
   if (next === "webgpu" && !hasWebGPU()) {
     if (isSelect(rb) && rb.options) {
@@ -571,6 +572,7 @@ function set(id, opts) {
   const p = byId(id);
   if (!p) return false;
   _cur = p.id;
+  Log.info("game", "GfxQuality.set " + _cur);
   const st = gstore(); if (st) st.set("gfxPreset", _cur);
   applyLive();
   const needsReload = syncBootTier();
@@ -594,6 +596,7 @@ function cycle() {
 }
 
 function init() {
+  Log.info("game", "GfxQuality.init");
   // GLX.isMobile is the device class, NOT GLX.mobileTier — the tier is already
   // downstream of apex26.gfxHigh (glx.js: MOBILE_TIER = IS_MOBILE && !_gfxHigh),
   // so reading it here would make the control's default depend on its own last

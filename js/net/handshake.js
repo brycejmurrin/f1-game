@@ -53,6 +53,16 @@ const NetHandshake = (function () {
     message: "WebRTC is unavailable in this browser." };
   const GATHER_TIMEOUT_MS = 8000; // stop waiting for stragglers; what we have is usually enough
 
+  function hsLog(action, res) {
+    if (res && res.ok) {
+      const n = res.code != null ? String(res.code).length : 0;
+      Log.info("net", "handshake " + action + " ok" + (n ? " len=" + n : ""));
+    } else {
+      Log.warn("net", "handshake " + action + " fail " + ((res && res.error) || "error"));
+    }
+    return res;
+  }
+
   // ---- base64url (no padding) — safe in a URL fragment and in a chat message
   function bytesToB64url(bytes) {
     let s = "";
@@ -282,10 +292,15 @@ const NetHandshake = (function () {
 
   async function createInvite(transport, profile, opts) {
     const pc = transport && transport.pc;
-    if (!pc) return NO_TRANSPORT;
-    await pc.setLocalDescription(await pc.createOffer());
-    const code = await makeCode(pc, "offer", profile, opts);
-    return { ok: true, code, url: inviteUrl(code) };
+    if (!pc) return hsLog("invite", NO_TRANSPORT);
+    try {
+      await pc.setLocalDescription(await pc.createOffer());
+      const code = await makeCode(pc, "offer", profile, opts);
+      return hsLog("invite", { ok: true, code, url: inviteUrl(code) });
+    } catch (e) {
+      Log.warn("net", "handshake invite fail");
+      throw e;
+    }
   }
 
   // Hand a decoded SDP to the peer connection, and answer TRUE/FALSE rather
@@ -306,14 +321,14 @@ const NetHandshake = (function () {
     // connection, and "that code is incomplete" is a far more actionable thing
     // to tell someone than a generic transport error they cannot act on.
     const parsed = await decodeCode(code);
-    if (!parsed.ok) return parsed;
+    if (!parsed.ok) return hsLog("accept", parsed);
     if (parsed.payload.k !== "offer") {
-      return { ok: false, error: "wrong_code_kind", message: "That is an answer code, not an invite code." };
+      return hsLog("accept", { ok: false, error: "wrong_code_kind", message: "That is an answer code, not an invite code." });
     }
     const build = checkBuild(await localBuild(), parsed.payload.b);
-    if (!build.ok) return build;
+    if (!build.ok) return hsLog("accept", build);
     const pc = transport && transport.pc;
-    if (!pc) return NO_TRANSPORT;
+    if (!pc) return hsLog("accept", NO_TRANSPORT);
 
     // THE SDP IS ATTACKER-CONTROLLED and this module's whole job is to turn a
     // bad code into a typed, actionable message. Unguarded, a payload that
@@ -322,22 +337,22 @@ const NetHandshake = (function () {
     // index.html's unhandledrejection handler turned into a full-screen raw
     // stack overlay on top of a lobby stuck on "Reading invite…".
     const took = await setRemote(pc, "offer", parsed.payload.s);
-    if (!took) return CORRUPT;
+    if (!took) return hsLog("accept", CORRUPT);
     await pc.setLocalDescription(await pc.createAnswer());
     const out = await makeCode(pc, "answer", profile, opts);
-    return { ok: true, code: out, peer: parsed.payload.p || null };
+    return hsLog("accept", { ok: true, code: out, peer: parsed.payload.p || null });
   }
 
   async function acceptAnswer(transport, code) {
     const parsed = await decodeCode(code);          // code first — see acceptInvite
-    if (!parsed.ok) return parsed;
+    if (!parsed.ok) return hsLog("answer", parsed);
     if (parsed.payload.k !== "answer") {
-      return { ok: false, error: "wrong_code_kind", message: "That is an invite code, not an answer code." };
+      return hsLog("answer", { ok: false, error: "wrong_code_kind", message: "That is an invite code, not an answer code." });
     }
     const build = checkBuild(await localBuild(), parsed.payload.b);
-    if (!build.ok) return build;
+    if (!build.ok) return hsLog("answer", build);
     const pc = transport && transport.pc;
-    if (!pc) return NO_TRANSPORT;
+    if (!pc) return hsLog("answer", NO_TRANSPORT);
     // ONLY while an answer is awaited. setRemoteDescription(answer) on a PC
     // in "stable" throws InvalidStateError — seen UNCAUGHT in a real console.
     // Two real ways to get here: the same answer handled twice, or an answer
@@ -345,12 +360,12 @@ const NetHandshake = (function () {
     // having no local offer yet). Neither is an exception-worthy surprise;
     // both are "this answer is not for this connection", said typed.
     if (pc.signalingState !== "have-local-offer") {
-      return { ok: false, error: "already_answered",
-               message: "That answer was already used, or arrived too late." };
+      return hsLog("answer", { ok: false, error: "already_answered",
+               message: "That answer was already used, or arrived too late." });
     }
     const took = await setRemote(pc, "answer", parsed.payload.s);
-    if (!took) return CORRUPT;                       // same rule as acceptInvite
-    return { ok: true, peer: parsed.payload.p || null };
+    if (!took) return hsLog("answer", CORRUPT);       // same rule as acceptInvite
+    return hsLog("answer", { ok: true, peer: parsed.payload.p || null });
   }
 
   // A code is long; a link is not something you have to explain. The code

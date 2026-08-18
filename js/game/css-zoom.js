@@ -14,6 +14,7 @@
  * deltas onto `scrollTop`.
  */
 window.CssZoom = (function () {
+  try { Log.info("ui", "CssZoom ready"); } catch (_) { /* Log absent in isolated VM */ }
   let visualCached = null;
 
   /* Probe once: does gBCR already include zoom? A 100×50 box at zoom 2 paints

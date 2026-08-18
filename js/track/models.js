@@ -141,6 +141,7 @@ const TrackModels = (function () {
   }
 
   function create(ctx) {
+    Log.info("track", "models create");
     ctx = ctx || {};
     const out = ctx.out || emptyBuffer();
     const water = ctx.water || emptyBuffer();

@@ -524,6 +524,7 @@ const GLX = (function () {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     resize();
+    Log.info("gfx", "GLX context ready");
     return true;
   }
 

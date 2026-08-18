@@ -250,6 +250,7 @@ function paint(btn, k) {
 }
 
 function initUI() {
+  Log.info("game", "PerfTry.initUI");
   if (typeof document === "undefined") return;
   // Performance experiments have their own Settings category. Keeping them
   // out of DISPLAY means the ordinary rendering controls stay short and the

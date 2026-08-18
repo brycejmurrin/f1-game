@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = new URL("../..", import.meta.url);
 const P = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs").PATHS;
@@ -257,6 +258,7 @@ function makeGpuHarness(opts = {}) {
     GPUMapMode: { READ: 1 },
   });
   context.window.window = context.window;
+  seedLog(context);
   vm.runInContext(`${CHUNKS_SOURCE}\nwindow.WGSLChunks = WGSLChunks;`, context);
   vm.runInContext(`${POST_SOURCE}\nwindow.WGSLPost = WGSLPost;`, context);
   vm.runInContext(`${FX_SOURCE}\nwindow.WGSLFx = WGSLFx;`, context);

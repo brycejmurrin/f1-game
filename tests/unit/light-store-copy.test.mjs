@@ -28,6 +28,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -75,6 +76,7 @@ function loadStore({ presets = {}, saved = null, track = "bahrain", tod = "dusk"
     Tracks: { LIST: TRACKS },
     Math, JSON, Object, Array, Number, isFinite, console,
   });
+  seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/game/light-store.js"), "utf8"), ctx,
     { filename: "js/game/light-store.js" });
   const store = vm.runInContext("LightStore", ctx).create(G);

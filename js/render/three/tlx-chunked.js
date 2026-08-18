@@ -291,6 +291,7 @@
       if (mesh.geo) { mesh.geo.dispose(); mesh.geo = null; }
     }
 
+    try { Log.info("gfx", "TLX chunked init"); } catch (_) { /* harness */ }
     return { build, cull, visList: _visList, releaseMirrors, free };
   }
 

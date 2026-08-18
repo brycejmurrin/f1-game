@@ -21,6 +21,7 @@ const TrackSpline = (function () {
   // curvature across the whole lap so corner character is preserved and the
   // loop closes without squashing.
   function centerline(segs, baseHW) {
+    Log.info("track", "centerline segs=" + (segs && segs.length));
     // pass 1: break into fine steps (cap degrees-per-step to avoid Catmull overshoot)
     const steps = [];
     let totalDeg = 0;

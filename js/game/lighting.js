@@ -424,6 +424,7 @@ function buildTrackLights(track, onlyAlways) {
   // empty so the caller's rebuild-if-empty retries next frame rather than caching
   // a bad empty result.
   if (!n || !total || !track.px || !track.rx) return lights;
+  Log.info("game", "LightTune.buildTrackLights track=" + ((track.def && track.def.id) || "?"));
   const ds = total / n;
   const stride = lampStrideNodes(ds);   // matches buildProps mast stride (+ LAMP DENSITY)
   const { tint, intensity, radius, street } = floodColor(track.def.theme, track.def.id);

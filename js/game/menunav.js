@@ -359,6 +359,7 @@ window.MenuNav = (function () {
   }
 
   function init() {
+    Log.info("ui", "MenuNav.init");
     // passive:false — a redirected wheel must be able to preventDefault, or the
     // page keeps its own (no-op) scroll and the gesture double-counts on the
     // platforms that do rubber-band.

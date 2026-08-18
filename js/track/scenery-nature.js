@@ -17,6 +17,7 @@ const SceneryNature = (function () {
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
             addMountain, emit, rejBox, recordBarrier, groundYAt,
             terrainYAt, onTrack, hash, upOf, norm, vadd, bankOffsetAt } = ctx;
+    Log.info("scenery", "scenery-nature dress " + (def && def.id));
     const { CROWD_DAY } = TrackSceneryData;
 
     // Ground height under an ARBITRARY world x/z, for geometry whose footing

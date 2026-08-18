@@ -16,6 +16,7 @@ const SetupUI = (function () {
   "use strict";
 
 function create(G) {
+Log.info("ui", "SetupUI.create");
 // Stable helpers from the game.js closure.
 const { $, els, cssCol, store, arrToHex, hexToArr,
         getTeamParts, saveTeamParts, getLiveryId, saveLiveryId,
@@ -742,6 +743,7 @@ function endLivPreview(team) {
 }
 
 function openSetup() {
+  Log.info("ui", "SetupUI.openSetup");
   buildSetup();
   // Hide every screen the garage can be opened FROM. They sit under #carsetup
   // and are nearly opaque, so they block the live 3D preview behind the

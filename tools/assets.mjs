@@ -469,6 +469,11 @@ async function loadGLTFModule() {
     Float32Array, DataView, ArrayBuffer, TextDecoder, Promise, Error, console, fetch,
   };
   ctx.window = ctx;
+  ctx.Log = {
+    info() {}, warn() {}, error() {}, debug() {},
+    enabled() { return false; },
+    time() { return function () {}; },
+  };
   vm.createContext(ctx);
   // Top-level `const` is block-scoped inside a VM and never becomes a property
   // of the sandbox — the same rewrite tools/verify-track.cjs applies.

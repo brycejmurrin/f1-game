@@ -21,6 +21,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -55,6 +56,7 @@ function load(stored0) {
     Tracks: tracks,
     Teams: { POINTS },
   });
+  seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/game/season-cal.js"), "utf8"), ctx);
   return {
     S: vm.runInContext("SeasonCal", ctx), stored, tracks,

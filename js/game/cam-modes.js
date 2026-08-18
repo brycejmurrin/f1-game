@@ -11,6 +11,7 @@ window.CamModes = (function () {
   const { CAM_MODES } = GameTables;
 
   function create(G) {
+    Log.info("game", "CamModes.create");
     const $ = G.$;
 
     function refreshCamBtn() {
@@ -24,7 +25,10 @@ window.CamModes = (function () {
       const prev = G.camMode;
       G.camMode = ((m % CAM_MODES.length) + CAM_MODES.length) % CAM_MODES.length;
       G.store.set("camMode", G.camMode);
-      if (G.camMode !== prev) G.camCutT = 0.35;   // brief eased glide into the new angle
+      if (G.camMode !== prev) {
+        G.camCutT = 0.35;   // brief eased glide into the new angle
+        Log.info("game", "CamModes.setCamMode " + CAM_MODES[prev].id + " -> " + CAM_MODES[G.camMode].id);
+      }
       refreshCamBtn();   // the CAM button label is the only mode indicator (no big announce)
       // The CAMERA TUNER edits whichever mode you are looking through, so a mode
       // change from anywhere (C key, CAM picker, __apex.camera) must re-point its

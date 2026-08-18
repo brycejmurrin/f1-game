@@ -331,6 +331,7 @@ const GLXShadow = (function () {
     }
 
     S.enabled = setup();
+    Log.info("gfx", "GLX shadow init on=" + (S.enabled ? 1 : 0));
     return S;
   }
 

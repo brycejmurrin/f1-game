@@ -37,6 +37,7 @@ const TrackSurface = (function () {
 
   function profile(def, track) {
     def = def || {};
+    Log.info("track", "surface profile " + def.id);
     const street = !!def.street;
     const flat = !!def.flatTerrain;
     const outerW = Math.max(0.5, Number(def.terrainOuter) || (street ? 28 : 120));
