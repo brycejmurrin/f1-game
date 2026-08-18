@@ -660,7 +660,7 @@ fn vs_main(
   }
   // Do not lift the ribbon. An 8 cm Y bump won the floor/terrain depth
   // fight and then buried cars, AI, and fence feet in the tarmac.
-  o.matTrk = pulled;
+  o.matTrk = vec4<f32>(pulled.y, pulled.z, pulled.w, pulled.x); // s, x, hw, mat
   o.matId = pulled.x;
   o.trk = pulled.yzw;
   o.vid = f32(vid);
@@ -676,21 +676,21 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Screen-space derivatives MUST be computed in uniform control flow at the top level
   // before any branching or early exit.
   let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
-  let fwTrkAttr = abs(dpdx(in.matTrk.yzw)) + abs(dpdy(in.matTrk.yzw));
+  let fwTrkAttr = abs(dpdx(in.matTrk.xyz)) + abs(dpdy(in.matTrk.xyz));
   let fromWorld = trkFromWorld(in.wpos);
   // fromWorld.xyz is (s, x, hw) — not .yzw (that was x/hw/valid and smashed dash AA).
   let fwWorld = abs(dpdx(fromWorld.xyz)) + abs(dpdy(fromWorld.xyz));
   let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
-  // Interpolated VS trk (LUT-at-vertex). Per-fragment LUT overwrite
-  // nearest-bins s and chops the dashed paint vs GLX.
-  let useVsTrk = isRoadDraw && in.matTrk.w > 0.5;
-  let vTrk = select(fromWorld.xyz, in.matTrk.yzw, useVsTrk);
+  // (s,x,hw) live in interpolator .xyz — Dawn has dropped .w of location 3
+  // (useVsTrk gated on hw and fell back to per-fragment nearest-bin).
+  let vTrk = select(fromWorld.xyz, in.matTrk.xyz, isRoadDraw);
   let lutAsphalt = abs(fromWorld.y) < fromWorld.z - 0.45;
-  let classified = select(select(0.0, 16.0, lutAsphalt), in.matTrk.x, useVsTrk);
+  let vsMat = in.matTrk.w;
+  let classified = select(select(0.0, 16.0, lutAsphalt), vsMat, vsMat > 0.5);
   // surfaceId 16 is the isRoadDraw flag, not a material stamp. Forcing 16
   // on every fragment painted kerbs, grass shoulders, and skirts as asphalt.
   let vMatId = select(D.mat2.z, classified, isRoadDraw || classified > 0.5);
-  let fwTrk = select(fwWorld, fwTrkAttr, useVsTrk);
+  let fwTrk = select(fwWorld, fwTrkAttr, isRoadDraw);
   let vDist = length(in.wpos - F.eye.xyz);
   // ASPHALT pack sample MUST sit in uniform CF, before front_facing / matId
   // branches. textureSample gets implicit LOD + anisotropy — the GLX
