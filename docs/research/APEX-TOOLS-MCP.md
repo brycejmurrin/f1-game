@@ -9,6 +9,10 @@ Does **not** replace Chrome DevTools or TinyFish. Does **not** extend
 (`tools/apex-tools-mcp.mjs` + `.sh`). Live Chromium is occupancy-gated;
 CI covers mock/`dryRun` only.
 
+Measured 2026-08-18 (this container, loadavg ~0.1): `apex_eval` monza
+`a.info()` via `./tools/apex-tools-mcp.sh call` — `ok`, 12061 ms, lock
+released after. `apex_status` then `playwright.live === false`.
+
 Sources: this session’s tool inventory and MCP wrap design. Stdio MCP is
 JSON-RPC on stdin/stdout; log only on stderr.
 
