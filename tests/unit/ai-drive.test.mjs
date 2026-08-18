@@ -159,3 +159,30 @@ test("adaptLane nudges toward the freer side under density", () => {
   }
   assert.ok(Math.abs(lane) < 0.5, `lane crept too far: ${lane}`);
 });
+
+test("isBoxed: a street follow-train is not a wedge", () => {
+  // Permanent: in-lane car within 6 m still counts as boxed (old rule).
+  assert.equal(A.isBoxed({
+    contactT: 0, roomL: 4, roomR: 4, blocker: true, blockerGap: 5, street: false,
+  }), true);
+  // Street: same train with open sides is just following, not stuck.
+  assert.equal(A.isBoxed({
+    contactT: 0, roomL: 4, roomR: 4, blocker: true, blockerGap: 5, street: true,
+  }), false);
+  // Street: train PLUS tight sides is a real wedge.
+  assert.equal(A.isBoxed({
+    contactT: 0, roomL: 1.2, roomR: 1.1, blocker: true, blockerGap: 4, street: true,
+  }), true);
+  // Sandwich or contact still boxes anywhere.
+  assert.equal(A.isBoxed({ contactT: 0.2, roomL: 4, roomR: 4, street: true }), true);
+  assert.equal(A.isBoxed({ contactT: 0, roomL: 1.0, roomR: 1.0, street: false }), true);
+});
+
+test("minLatGap and racingLineMix keep street home seats", () => {
+  assert.equal(A.minLatGap(8, false), 2.8);
+  const monaco = A.minLatGap(5, true);
+  assert.ok(monaco >= 2.12 && monaco <= 2.3, `monaco gap ${monaco}`);
+  assert.ok(monaco < 2.8, "street gap must be tighter than the permanent 2.8");
+  assert.equal(A.racingLineMix(false), 0.55);
+  assert.ok(A.racingLineMix(true) < 0.55, "streets must hold the grid seat more");
+});

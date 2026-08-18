@@ -3765,7 +3765,7 @@ function updateCar(c, dt, ranked) {
       if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < 3) { chaser = o; chaserGap = -dprog; }  // attacker behind
     }
     roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
-    const boxed = (c.contactT || 0) > 0 || (roomL < 1.3 && roomR < 1.3) || (blocker && blockerGap < 6);
+    const boxed = AiDrive.isBoxed({ contactT: c.contactT, roomL, roomR, blocker, blockerGap, street: !!track.street });
     if (state === "race" && c.speed < 7 && boxed) c.stuckT = (c.stuckT || 0) + dt;
     else c.stuckT = Math.max(0, (c.stuckT || 0) - dt * 1.5);
     unstuckActive = c.stuckT > AiDrive.stuckThreshold(aiT);
@@ -4118,7 +4118,7 @@ function updateCar(c, dt, ranked) {
     // Apex is on the INSIDE = -sign(k) (k>0 curves toward screen-left, so the
     // inside is -x); the racing line aims there.
     const racingLine = clamp(-kA * 130, -0.62, 0.62) * hw;
-    const targetX = clamp(racingLine * 0.55 + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
+    const targetX = clamp(racingLine * AiDrive.racingLineMix(!!track.street) + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
     // Overtake: if a slower car is blocking our lane ahead, ease toward the side
     // with more room to pass. Collision-aware — the move is scaled down if that
     // side is also tight (a car alongside or a wall), so we don't dive into a
@@ -4160,7 +4160,7 @@ function updateCar(c, dt, ranked) {
     // Push is proportional to how far INSIDE the min gap a neighbour is, so it
     // ramps up only when too close and fades to nothing once spaced — stable, no
     // oscillation, and it doesn't fight the collision push (same direction).
-    const MIN_GAP = 2.8;
+    const MIN_GAP = AiDrive.minLatGap(hw, !!track.street);
     let sep = 0;
     // Full field with wrapped Δprog — rank-neighbour walks miss lapped cars
     // that share the same stretch of track.

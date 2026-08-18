@@ -14,6 +14,7 @@
      • ERS deploy want (catch / defend / clear-straight, not greedy always)
      • multi-sample brake target + soft pedal level + craft late-brake
      • slow adaptive preferred-lane nudge from traffic density
+     • street vs permanent boxed/min-gap/racing-line mix (pack seating)
 
    WHAT STAYS IN game.js
      • the O(n) traffic scan (roomL/R, blocker, tow, chaser)
@@ -183,10 +184,37 @@ const AiDrive = (function () {
     return damp(lane, target, 0.35, dt);
   }
 
+  // Street trains follow at ~12 m. The old boxed rule treated ANY in-lane
+  // car within 6 m as a wedge, so every slow street corner armed unstuck
+  // and the field yanked sideways into each other (the bounce). A follow
+  // stack is not a wedge unless the sides are tight too.
+  function isBoxed(ctx) {
+    if ((ctx.contactT || 0) > 0) return true;
+    const roomL = ctx.roomL || 0, roomR = ctx.roomR || 0;
+    if (roomL < 1.3 && roomR < 1.3) return true;
+    if (!(ctx.blocker && ctx.blockerGap < 6)) return false;
+    if (ctx.street) return roomL < 1.8 && roomR < 1.8;
+    return true;
+  }
+
+  // Centres, not body edges. Combined car width is 2.0 m — below that is
+  // overlap. Permanents keep 2.8. Streets scale with half-width so a 2-wide
+  // canyon train does not steer at an impossible 3-wide gap.
+  function minLatGap(hw, street) {
+    if (!street) return 2.8;
+    return clamp((hw || 5) * 0.44, 2.12, 2.45);
+  }
+
+  // Fraction of the racing-line offset mixed into targetX. Streets hold the
+  // grid home seat more so the field does not collapse onto one line.
+  function racingLineMix(street) {
+    return street ? 0.32 : 0.55;
+  }
+
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
     traits, stuckThreshold, followPad, contactGive, steerDamp, unstuckPull,
     streetOtScale, otFireRate, otShouldFire, wantBoost, brakeTarget, brakeDecision,
-    adaptLane,
+    adaptLane, isBoxed, minLatGap, racingLineMix,
   };
 })();
