@@ -42,15 +42,25 @@ const AiDrive = (function () {
     return lerp(1.15, 0.45, t.awareness);
   }
 
-  // Following gap added to the street/permanent base. Aware drivers leave space.
-  function followPad(t) {
-    return lerp(-0.8, 2.2, t.awareness);
+  // Following gap added to followBase(). Aware drivers leave space. Streets
+  // use a smaller pad so a 22-car train does not accordion 14 m deep.
+  function followPad(t, street) {
+    const pad = lerp(-0.8, 2.2, t.awareness);
+    return street ? pad * 0.5 : pad;
+  }
+
+  // Queue distance (m) before the follow pad. Streets used to sit at 12 m
+  // and stack into a parking lot; 8 m still tucks more than a permanent.
+  function followBase(street) {
+    return street ? 8 : 6;
   }
 
   // Contact compliance: aware drivers yield more so a lean-on pass sticks.
-  function contactGive(contacting, t) {
+  // Streets yield extra so the player can move an AI instead of bouncing.
+  function contactGive(contacting, t, street) {
     if (!contacting) return 1;
-    return lerp(0.55, 0.25, t.awareness);
+    const give = lerp(0.55, 0.25, t.awareness);
+    return street ? give * 0.72 : give;
   }
 
   // Steer command low-pass. Experience = smoother; rookies twitch.
@@ -59,13 +69,16 @@ const AiDrive = (function () {
   }
 
   // Unstuck lateral pull (metres of target bias). Rookies panic harder.
-  function unstuckPull(t) {
-    return lerp(3.4, 2.0, t.experience);
+  // Streets scale it down — 3 m of yank is a wall on Monaco.
+  function unstuckPull(t, street) {
+    const pull = lerp(3.4, 2.0, t.experience);
+    return street ? pull * 0.55 : pull;
   }
 
   // Street circuits: awareness shrinks the overtake pull so they don't wall.
+  // Floor 0.72 (was 0.55) so a clean gap still gets used after the seating fix.
   function streetOtScale(t) {
-    return lerp(0.55, 1.0, t.awareness);
+    return lerp(0.72, 1.0, t.awareness);
   }
 
   // ── OVERTAKE FIRE ─────────────────────────────────────────────────────────
@@ -213,7 +226,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    traits, stuckThreshold, followPad, contactGive, steerDamp, unstuckPull,
+    traits, stuckThreshold, followPad, followBase, contactGive, steerDamp, unstuckPull,
     streetOtScale, otFireRate, otShouldFire, wantBoost, brakeTarget, brakeDecision,
     adaptLane, isBoxed, minLatGap, racingLineMix,
   };

@@ -3898,7 +3898,7 @@ function updateCar(c, dt, ranked) {
     // STREET circuits tuck ~12 m not ~6 m — slow corners + narrow width stacked it.
     // Awareness pads the follow gap (AiDrive.followPad).
     if (blocker && blockerGap < 16) {
-      const follow = (track.street ? 12 : 6) + AiDrive.followPad(aiT);
+      const follow = AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street);
       vmax = Math.min(vmax, blocker.speed + clamp(blockerGap - follow, -6, 8));
       if (c.speed > blocker.speed + 3) { braking = true; brakeLvl = 1; }
     }
@@ -4153,7 +4153,7 @@ function updateCar(c, dt, ranked) {
     // the same direction (and off the track). Experience softens the panic pull.
     const freer = roomR - roomL;
     const unstuckSide = Math.abs(freer) > 1 ? (freer > 0 ? 1 : -1) : (c.lane >= 0 ? 1 : -1);
-    const unstuck = unstuckActive ? unstuckSide * AiDrive.unstuckPull(aiT) : 0;
+    const unstuck = unstuckActive ? unstuckSide * AiDrive.unstuckPull(aiT, !!track.street) : 0;
     // Proactive lateral separation: drive toward a minimum side-by-side gap so
     // the field settles into clean, non-overlapping spacing instead of pulling
     // onto one line, overlapping, and bouncing (the side-to-side vibration).
@@ -4511,7 +4511,7 @@ function updateCar(c, dt, ranked) {
     // driving hard back to its racing line, so a player leaning on it can
     // actually move it sideways instead of bouncing off a rigid, on-rails line.
     // Awareness scales how much they yield (AiDrive.contactGive).
-    const give = AiDrive.contactGive((c.contactT || 0) > 0, aiT);
+    const give = AiDrive.contactGive((c.contactT || 0) > 0, aiT, !!track.street);
     // Same off-track lateral fade the player gets via surfMu — AI used to keep
     // full STEER_VMAX authority on grass, skating wide while the human path
     // was already grip-thinned. Continuous in |x| past the edge (player idiom).
@@ -4611,7 +4611,7 @@ function updateCar(c, dt, ranked) {
       if (noseIn) {
         // first-frame impact: lose only the normal component — a graze is nearly
         // free, a head-on hit bites hard.
-        if (!c.wasOnWall) c.speed *= 1 - incidence * (track.street ? 0.5 : 0.28);
+        if (!c.wasOnWall) c.speed *= 1 - incidence * (track.street ? 0.36 : 0.28);
         // straighten the nose toward the wall tangent so the car slides along it
         // Exponential, not a raw rate*dt: Math.min(1, ...) SNAPPED the heading
         // exactly onto the tangent in a single step at any dt >= 0.083 s (a 12 fps
@@ -4634,7 +4634,7 @@ function updateCar(c, dt, ranked) {
       // driver input (sign = turn direction); `into` is ±1 for the wall side.
       const pushIn = Math.max(0, into * steer);
       if (pushIn > 0.02) {
-        const scrub = pushIn * (track.street ? 40 : 16) * dt;
+        const scrub = pushIn * (track.street ? 26 : 16) * dt;
         if (c.speed > 0) c.speed = Math.max(0, c.speed - scrub);
         else if (c.speed < 0) c.speed = Math.min(0, c.speed + scrub);
         c.wallT = 0.35;     // brief auto-throttle suppress
@@ -4643,7 +4643,7 @@ function updateCar(c, dt, ranked) {
       // the player just drives off the barrier — no sticky pin, no auto-rescue.
     } else {
       // AI has no world-space heading to slide; clamp + gentle scrub.
-      c.speed = Math.max(0, c.speed - (track.street ? 24 : 12) * dt);
+      c.speed = Math.max(0, c.speed - (track.street ? 16 : 12) * dt);
     }
     c.wasOnWall = true;
   } else {

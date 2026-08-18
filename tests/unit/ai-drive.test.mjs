@@ -41,16 +41,23 @@ test("awareness shortens the stuck dig-out threshold", () => {
 
 test("awareness widens the following pad", () => {
   assert.ok(A.followPad(ace) > A.followPad(rook));
+  assert.ok(A.followPad(ace, true) < A.followPad(ace, false));
+  assert.equal(A.followBase(false), 6);
+  assert.equal(A.followBase(true), 8);
 });
 
 test("aware drivers yield more on contact", () => {
   assert.ok(A.contactGive(true, ace) < A.contactGive(true, rook));
   assert.equal(A.contactGive(false, ace), 1);
+  assert.ok(A.contactGive(true, mid, true) < A.contactGive(true, mid, false),
+    "streets yield more so a player lean-on pass sticks");
 });
 
 test("experience smooths steer and softens panic unstuck", () => {
   assert.ok(A.steerDamp(ace) > A.steerDamp(rook));
   assert.ok(A.unstuckPull(ace) < A.unstuckPull(rook));
+  assert.ok(A.unstuckPull(rook, true) < A.unstuckPull(rook, false),
+    "street unstuck must not yank a car into the Armco");
 });
 
 test("OT fire rate rises with craft and a clean window", () => {
@@ -185,4 +192,9 @@ test("minLatGap and racingLineMix keep street home seats", () => {
   assert.ok(monaco < 2.8, "street gap must be tighter than the permanent 2.8");
   assert.equal(A.racingLineMix(false), 0.55);
   assert.ok(A.racingLineMix(true) < 0.55, "streets must hold the grid seat more");
+});
+
+test("street OT scale still uses a clean gap after the seating fix", () => {
+  assert.ok(A.streetOtScale(rook) >= 0.72);
+  assert.ok(A.streetOtScale(ace) > A.streetOtScale(rook));
 });
