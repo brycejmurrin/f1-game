@@ -1599,23 +1599,23 @@ body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
 /* Short landscape is height-constrained, not width-constrained. Compress the
    context layer first so the actionable panels keep their touch floor. */
 @media (orientation: landscape) and (max-height: 620px) {
-  #overlay { gap: 10px; align-content: safe center; }
-  #menu-brand { padding-block: 12px; }
-  #menu-status { margin-top: 10px; }
-  .menu-status-item { padding-block: 6px; }
-  #menu-meta { margin-top: 8px; }
+  #overlay { gap: var(--gap); align-content: safe center; }
+  #menu-brand { padding-block: var(--pad); }
+  #menu-status { margin-top: var(--gap); }
+  .menu-status-item { padding-block: calc(var(--gap) * 0.75); }
+  #menu-meta { margin-top: var(--gap); }
   #menu-hero .bigbtn { min-height: 48px; }
   #menu-primary .bigbtn, #menu-secondary .bigbtn { min-height: 40px; }
 }
 
 @media (orientation: landscape) and (max-height: 480px) {
   #menu-status { display: none; }
-  #menu-brand { padding-block: 9px; }
-  #subtitle { margin-top: 3px; }
-  #menu-meta { margin-top: 5px; }
-  #menu-buttons { row-gap: 6px; }
-  #menu-primary, #menu-secondary { padding: 7px; }
-  #menu-primary::before, #menu-secondary::before { margin-bottom: 4px; }
+  #menu-brand { padding-block: calc(var(--gap) * 1.1); }
+  #subtitle { margin-top: calc(var(--gap) * 0.4); }
+  #menu-meta { margin-top: calc(var(--gap) * 0.6); }
+  #menu-buttons { row-gap: calc(var(--gap) * 0.75); }
+  #menu-primary, #menu-secondary { padding: calc(var(--gap) * 0.85); }
+  #menu-primary::before, #menu-secondary::before { margin-bottom: calc(var(--gap) * 0.5); }
 }
 
 /* Medium landscape has two columns, but neither column may retain the desktop
@@ -1624,8 +1624,8 @@ body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
 @media (orientation: landscape) and (max-width: 1100px) {
   #menu-brand,
   #menu-buttons { width: min(calc(46 * var(--vwz)), 100%); }
-  #menu-brand { padding-inline: clamp(14px, 2.5vw, 30px); }
-  #menu-status { gap: 5px; }
-  .menu-status-item { min-width: 0; flex: 1 1 0; padding-inline: 8px; }
+  #menu-brand { padding-inline: clamp(var(--pad), 2.5vw, calc(var(--pad) * 2)); }
+  #menu-status { gap: calc(var(--gap) * 0.6); }
+  .menu-status-item { min-width: 0; flex: 1 1 0; padding-inline: var(--gap); }
 }
 } /* @layer components */
