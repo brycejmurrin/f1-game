@@ -1197,7 +1197,7 @@ test("clean sessions heal the ladder: minimal steps back to lite after a streak"
 });
 
 test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async () => {
-  // GLX: msaaSamples = IS_MOBILE ? 0 : 2 (js/render/glx/post.js). WGX used to
+  // GLX: msaaSamples = IS_MOBILE ? 0 : min(4, …) (js/render/glx/post.js). WGX used to
   // key MSAA on MOBILE_TIER, so GRAPHICS: ULTRA on a phone took multisampled
   // rgba16float and lost the device after one frame.
   const h = makeGpuHarness({ glx: { isMobile: true, mobileTier: false } });

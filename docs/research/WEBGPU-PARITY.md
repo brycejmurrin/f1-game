@@ -10,8 +10,10 @@ screen sun-shaft, flare depth occlusion, car SSR, bilateral AO upsample,
 MAT anisotropy, lit `depthBias`, and sky overcast/bank/azimuth/lightning.
 Remaining honest look deltas: TAA still off (no history resolve — do not
 enable the Halton jitter alone); SAA mixes geometric N with a uniform-CF
-object-space peel hoist (terrain bump still cannot enter SAA — WGSL
-uniform-CF); TLX MSAA stays off (no resolved depth for post).
+object-space peel hoist on all three backends (material/wall bump stays
+out of SAA — WGSL uniform-CF on WGX, `Nsaa` snapshot on GLX/TLX); TLX
+MSAA stays off (no resolved depth for post). Desktop GLX MSAA is 4×
+like WGX (WebGPU forbids 2).
 Car-paint flake keys to `objPos`; SSAO uses the GLX/TLX `K[0..7]` fan and
 skips taps at strength 0; `applyHdrGrade` is gated; SSR is consumed in
 COMPOSITE same-frame and the SSR pass smears hits with the GLX/TLX
@@ -159,7 +161,7 @@ The gaps fall into three kinds:
 |---|---|---|
 | **API missing in WGX** | (was: `gpuTimer`, arrays, `lampShadowBegin`, instancing, `drawParticles`) | Those names are real on WGX now. FrameU `params9` carries `uAmbContactDark` / `uLampWallSpill` / `uWindowSunFlash` / `uSkyRimGlow`; SkyU `p5.x` is `uCloudDef`, `p5.y` lightning. Sky overcast grey-shift, twilight horizon bank, and azimuthal gradient are ported. Remaining honest gap: TAA (still off). |
 | **Reduced shader** | (was: PCSS 3×3, screen-radial god-ray, lamp-fog `× 0.6`, env LOD 0, no `applyMaterial*`) | Poisson-8 PCSS, world-space god-ray + screen shaft, `params8.x` lamp-fog, roughness env LOD, `applyMaterial*`, lacquer ENV absorb, car SSR, bilateral AO, MAT aniso are in. |
-| **Plumbing constraint** | MSAA is 4 or 1, never 2 | WebGPU permits `sampleCount` 1 or 4 and nothing else, so WGX cannot mirror GLX's 2×. Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
+| **Plumbing constraint** | MSAA is 4 or 1, never 2 | WebGPU permits `sampleCount` 1 or 4 and nothing else. Desktop GLX now picks 4× to match. Color resolve is first-class (`resolveTarget`). Depth resolve is **not** in core; WGX does a manual MS-depth `textureLoad` so SSAO can sample. |
 
 `WGX.create()` requests `"timestamp-query"` when the adapter exposes it
 (`requiredFeatures`). Everything else in the §3 inventory is core.
@@ -198,7 +200,7 @@ surface is larger — several GLX features landed after the first WGX cut.
 
 | Gap | GLX today | WGX today | Kind | WebGPU primitive |
 |---|---|---|---|---|
-| **MSAA** | 2× on RGBA16F + `blitFramebuffer` resolve (`js/render/glx/post.js`) | `msaa() → 4` (1 on lite); color `resolveTarget` + manual MS-depth resolve. WebGPU sampleCount is 1 or 4 only — never 2 | Plumbing | Color: `resolveTarget`. Depth: `textureLoad` of `texture_depth_multisampled_2d` |
+| **MSAA** | 4× on RGBA16F + `blitFramebuffer` resolve (`js/render/glx/post.js`; 2 then 0 if the format cannot) | `msaa() → 4` (1 on lite); color `resolveTarget` + manual MS-depth resolve. WebGPU sampleCount is 1 or 4 only — never 2 | Plumbing | Color: `resolveTarget`. Depth: `textureLoad` of `texture_depth_multisampled_2d` |
 | **PCSS quality** | 8-tap Poisson + dither; 4-tap far LOD; `uPcss` gate (`js/render/shaders/lit.js`) | Poisson-8 + far 4-tap; `pcss()` `true` | Shader | `textureSampleCompareLevel` + `blockerTex` |
 | **Lamp-fog** | Tunable `uLampFog` | `F.params8.x` scales lampFog (no hard `× 0.6`) | Shader + uniform | FRAME lane |
 | **Ground mist** | Lit FBM + `uGroundMist` | **Ported** in LIT | Done | — |
