@@ -702,11 +702,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // holes where the centerline LUT says the ribbon runs (global _roadLutBG).
   // fromWorld.w already encodes distance-to-centerline <= hw+2.4 — do not
   // re-test reconstructed lateral (degenerate tangents used to skip discard).
-  if (D.mat2.z < 0.5 && D.mat1.y > 0.1 && fromWorld.w > 0.5) {
-    discard;
-  }
   // #region agent log
-  // Hot-pink road marker: proves isRoadDraw + fragments surviving depth.
+  // Cyan = ground competitor over LUT footprint (would-discard). Pink = road.
+  let groundComp = D.mat1.y > 0.1 || D.mat0.z > 0.9;
+  if (D.mat2.z < 0.5 && groundComp && fromWorld.w > 0.5) {
+    return vec4<f32>(0.0, 1.0, 1.0, 1.0);
+  }
   if (isRoadDraw) {
     return vec4<f32>(1.0, 0.0, 1.0, 1.0);
   }

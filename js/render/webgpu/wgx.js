@@ -2338,15 +2338,15 @@ const WGX = (function () {
       // #region agent log
       try { (window.__wgxDbg = window.__wgxDbg || []).push({hypothesisId:"A",location:"wgx.js:_makeRoadLUT",message:"lut built",data:{vCount,raw:raw.length,samples:samples.length,skipHw,skipLat,skipMat,magic:out[0],minX,maxX,minZ,maxZ,extX,extZ},timestamp:Date.now()}); } catch(_){}
       // #endregion
-      return _makeAttrBG(out);
+      const bg = _makeAttrBG(out);
+      bg.isRoadLut = true;
+      return bg;
     }
     function _rememberRoadLut(lut) {
       // #region agent log
-      try { (window.__wgxDbg = window.__wgxDbg || []).push({hypothesisId:"F",location:"wgx.js:_rememberRoadLut",message:"remember",data:{hasLut:!!lut,hasBG:!!(lut&&lut.attrBG),prevReady:_roadLutReady},timestamp:Date.now()}); } catch(_){}
+      try { (window.__wgxDbg = window.__wgxDbg || []).push({hypothesisId:"F",location:"wgx.js:_rememberRoadLut",message:"remember",data:{hasLut:!!lut,hasBG:!!(lut&&lut.attrBG),isRoadLut:!!(lut&&lut.isRoadLut),prevReady:_roadLutReady},timestamp:Date.now()}); } catch(_){}
       // #endregion
-      // Only promote a real centerline LUT (magic 12345). Dummy attr bind groups
-      // from empty raw[] must not clobber a good ribbon LUT or trip roadLutReady.
-      if (lut && lut.attrBG && lut.sbuf) { _roadLutBG = lut.attrBG; _roadLutReady = true; }
+      if (lut && lut.isRoadLut && lut.attrBG) { _roadLutBG = lut.attrBG; _roadLutReady = true; }
     }
     function _drawGeom(pass, mesh, instCount) {
       if (mesh.ibuf) {
