@@ -219,6 +219,40 @@ const TLX = (function () {
       const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false
         : !!(isMobile || isWebKit || _softAdapter);
 
+      // SCREENSHOTS (`apex26.wgxCapture`, same key as WGX): session then local.
+      // NATIVE ("0") keeps three's swapchain so SETTINGS can show why software
+      // shots are black. AUTO/2D BLIT on a software adapter (or an explicit
+      // blit) copies the LDR target onto visible #game — never getCurrentTexture
+      // (first call breaks mapAsync device-wide; WGX header + WebGPU Explainer).
+      const _capPref = (function () {
+        try {
+          const s = sessionStorage.getItem("apex26.wgxCapture");
+          if (s === "1" || s === "0") return s;
+        } catch (_) { /* fall through */ }
+        try {
+          const s = localStorage.getItem("apex26.wgxCapture");
+          if (s === "1" || s === "0") return s;
+        } catch (_) { /* AUTO */ }
+        return null;
+      })();
+      const _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _capPref === "1");
+      let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
+      let _blitRT = null, _softImg = null, _softBlitGen = 0;
+      const _softPresentWaiters = [];
+      if (_softBlit && typeof document !== "undefined") {
+        _displayCanvas = canvas;
+        _gpuCanvas = document.createElement("canvas");
+        _gpuCanvas.setAttribute("aria-hidden", "true");
+        if (_gpuCanvas.style) {
+          _gpuCanvas.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none";
+        }
+        if (document.body) document.body.appendChild(_gpuCanvas);
+        try { _displayCtx = _displayCanvas.getContext("2d", { willReadFrequently: true }); }
+        catch (_) { _displayCtx = null; /* 2D claim failed; capturePixels can still read the RT */ }
+        canvas = _gpuCanvas;
+      }
+      const _layoutCanvas = _displayCanvas || canvas;
+
       // ── OPAQUE CANVAS (js/render/glx.js: `alpha: false`) ────────────────────
       // Not cosmetic, and not a memory tweak: the lit fragment writes the SSR
       // car-paint TAG — 0.35 — into ALPHA (tsl-lit.js, ctx.ssrTag), and the
@@ -1145,8 +1179,8 @@ const TLX = (function () {
       if (typeof window !== "undefined" && window.addEventListener) {
         window.addEventListener("resize", markCssDirty);
         window.addEventListener("orientationchange", markCssDirty);
-        if (typeof ResizeObserver === "function" && canvas) {
-          try { new ResizeObserver(markCssDirty).observe(canvas); } catch (_) {}
+        if (typeof ResizeObserver === "function" && _layoutCanvas) {
+          try { new ResizeObserver(markCssDirty).observe(_layoutCanvas); } catch (_) {}
         }
       }
       function resize() {
@@ -1156,8 +1190,8 @@ const TLX = (function () {
         // doubled its render target every begin() until allocation failed. GLX and
         // WGX both read clientWidth with a floor of 1 for the same reason.
         if (cssDirty || cssW <= 0 || cssH <= 0) {
-          cssW = canvas.clientWidth;
-          cssH = canvas.clientHeight;
+          cssW = _layoutCanvas.clientWidth;
+          cssH = _layoutCanvas.clientHeight;
           cssDirty = false;
         }
         const cw = cssW || 1;
@@ -1168,6 +1202,10 @@ const TLX = (function () {
         if (w !== W || h !== H) {
           W = w; H = h;
           renderer.setSize(w, h, false);    // false: CSS keeps sizing the canvas
+          if (_displayCanvas && (_displayCanvas.width !== w || _displayCanvas.height !== h)) {
+            _displayCanvas.width = w;
+            _displayCanvas.height = h;
+          }
           // M8: the post targets track the scaled backing size (PerfGov
           // renderScale changes land here through setRenderScale -> resize).
           if (post) post.resize(w, h);
@@ -1175,6 +1213,76 @@ const TLX = (function () {
       }
 
       const noopMesh = () => ({ __tlx: true, count: 0 });
+
+      function _captureRT() {
+        if (post && typeof post.ldrTarget === "function") return post.ldrTarget();
+        return _blitRT;
+      }
+      function _ensureBlitRT(w, h) {
+        if (!_blitRT) {
+          _blitRT = new THREE.RenderTarget(w, h, {
+            type: THREE.UnsignedByteType, depthBuffer: true,
+          });
+          _blitRT.texture.generateMipmaps = false;
+          _blitRT.texture.colorSpace = THREE.NoColorSpace;
+        } else if (_blitRT.width !== w || _blitRT.height !== h) {
+          _blitRT.setSize(w, h);
+        }
+        return _blitRT;
+      }
+      // three pads copyTextureToBuffer rows to 256 bytes (WebGPU rule).
+      function _unstrideRgba(src, w, h) {
+        const bpr = 256 * Math.ceil((w * 4) / 256);
+        const data = new Uint8ClampedArray(w * h * 4);
+        const row = w * 4;
+        if (src.length < (h - 1) * bpr + row) {
+          // tight pack fallback (WebGL backend copy)
+          if (src.length >= w * h * 4) data.set(src.subarray(0, w * h * 4));
+          return data;
+        }
+        for (let y = 0; y < h; y++) {
+          data.set(src.subarray(y * bpr, y * bpr + row), y * row);
+        }
+        return data;
+      }
+      function _readLdr(rt) {
+        const w = (rt && rt.width) || W, h = (rt && rt.height) || H;
+        return renderer.readRenderTargetPixelsAsync(rt, 0, 0, w, h).then(function (src) {
+          return { w, h, data: _unstrideRgba(src, w, h) };
+        });
+      }
+      function _softBlitNotify() {
+        _softBlitGen++;
+        const ws = _softPresentWaiters.splice(0);
+        for (let i = 0; i < ws.length; i++) {
+          try { ws[i](_softBlitGen); } catch (_) { /* harness waiter */ }
+        }
+      }
+      function _queueSoftBlit(rt) {
+        if (!_softBlit || !_displayCtx || !rt || typeof renderer.readRenderTargetPixelsAsync !== "function") return;
+        _readLdr(rt).then(function (pack) {
+          try {
+            const w = pack.w, h = pack.h, src = pack.data;
+            if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
+              _softImg = _displayCtx.createImageData(w, h);
+            }
+            const img = _softImg;
+            let maxPx = 0;
+            for (let i = 0; i < src.length; i += 4) {
+              img.data[i] = src[i];
+              img.data[i + 1] = src[i + 1];
+              img.data[i + 2] = src[i + 2];
+              img.data[i + 3] = 255;
+              const s = src[i] + src[i + 1] + src[i + 2];
+              if (s > maxPx) maxPx = s;
+            }
+            if (maxPx >= 8) {
+              _displayCtx.putImageData(img, 0, 0);
+              _softBlitNotify();
+            }
+          } catch (_) { /* 2D blit failed */ }
+        }).catch(function () { /* RT not GPU-ready this frame */ });
+      }
 
       // ── the backend object (the ~40-member seam contract) ────────────────
       const backend = {
@@ -1521,31 +1629,53 @@ const TLX = (function () {
           return TLXShaders.makeFrustumPlanes(viewProj);
         },
         // Screenshot counterparts of WGX capturePixels / awaitSoftPresent.
-        // WebGL2 (THREE PATH: WEBGL2, the CI pin): readPixels from the canvas.
-        // WebGPU: no software blit — reject so Settings / gfx-probe can say so.
+        // WebGL2: readPixels from the canvas (Y-flip). WebGPU: three's
+        // readRenderTargetPixelsAsync → copyTextureToBuffer + mapAsync on the
+        // LDR target (WebGPU Fundamentals). Never getCurrentTexture().
         capturePixels() {
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
-          if (!gl || typeof gl.readPixels !== "function") {
-            return Promise.reject(new Error(
-              "three.js WebGPU has no screenshot blit — set THREE PATH to WEBGL2"));
+          if (gl && typeof gl.readPixels === "function") {
+            return new Promise((resolve, reject) => {
+              try {
+                const w = W, h = H;
+                if (!(w > 0 && h > 0)) throw new Error("no frame size");
+                const raw = new Uint8Array(w * h * 4);
+                gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+                const data = new Uint8ClampedArray(w * h * 4);
+                for (let y = 0; y < h; y++) {
+                  const src = (h - 1 - y) * w * 4;
+                  data.set(raw.subarray(src, src + w * 4), y * w * 4);
+                }
+                resolve({ width: w, height: h, data });
+              } catch (e) { reject(e); }
+            });
           }
-          return new Promise((resolve, reject) => {
-            try {
-              const w = W, h = H;
-              if (!(w > 0 && h > 0)) throw new Error("no frame size");
-              const raw = new Uint8Array(w * h * 4);
-              gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
-              const data = new Uint8ClampedArray(w * h * 4);
-              for (let y = 0; y < h; y++) {
-                const src = (h - 1 - y) * w * 4;
-                data.set(raw.subarray(src, src + w * 4), y * w * 4);
-              }
-              resolve({ width: w, height: h, data });
-            } catch (e) { reject(e); }
+          const rt = _captureRT();
+          if (!rt || typeof renderer.readRenderTargetPixelsAsync !== "function") {
+            return Promise.reject(new Error(
+              "three.js WebGPU screenshot needs SCREENSHOTS: 2D BLIT (or AUTO on software)"));
+          }
+          return _readLdr(rt).then(function (pack) {
+            return { width: pack.w, height: pack.h, data: pack.data };
           });
         },
-        awaitSoftPresent() { return Promise.resolve(0); },
-        softPresent() { return false; },
+        awaitSoftPresent(timeoutMs) {
+          if (!_softBlit || !_displayCtx) return Promise.resolve(_softBlitGen);
+          const start = _softBlitGen;
+          const ms = timeoutMs != null ? timeoutMs : 15000;
+          return new Promise(function (resolve, reject) {
+            const timer = setTimeout(function () {
+              reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
+            }, ms);
+            _softPresentWaiters.push(function (gen) {
+              if (gen > start) {
+                try { clearTimeout(timer); } catch (_) { /* harness */ }
+                resolve(gen);
+              }
+            });
+          });
+        },
+        softPresent() { return !!_softBlit; },
         aabbInFrustum: (planes, mn, mx) => TLXShaders.aabbInFrustum(planes, mn, mx),
         aabbDist2: (mn, mx, ex, ey, ez) => TLXShaders.aabbDist2(mn, mx, ex, ey, ez),
 
@@ -1813,6 +1943,14 @@ const TLX = (function () {
           };
           const paintCanvas = () => {
             pinSkyMaterial();
+            if (_softBlit) {
+              const rt = _ensureBlitRT(W, H);
+              renderer.setRenderTarget(rt);
+              renderer.render(scene, camera);
+              renderer.setRenderTarget(null);
+              _queueSoftBlit(rt);
+              return;
+            }
             renderer.setRenderTarget(null);
             renderer.render(scene, camera);
           };
@@ -1838,6 +1976,7 @@ const TLX = (function () {
               renderer.setRenderTarget(post.sceneTarget());
               renderer.render(scene, camera);
               post.present(opts, _postF);
+              if (_softBlit && post.ldrTarget) _queueSoftBlit(post.ldrTarget());
             } else {
               paintCanvas();
             }
@@ -1953,6 +2092,7 @@ const TLX = (function () {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
               forceWebGL, pin: _glPin, isMobile, mobileTier, softwareGL, softAdapter: _softAdapter,
+              softBlit: _softBlit, capPref: _capPref,
             };
           },
           materialCacheSize() { return matCache.size; },

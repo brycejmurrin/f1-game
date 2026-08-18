@@ -1096,8 +1096,9 @@ visible `#game` via a 2D blit (auto on software adapters +
 `awaitSoftPresent`). Readback oracle: `node tools/wgx-capture.mjs`. Lavapipe
 needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
 `/usr/share/vulkan/icd.d/` until that package was installed and the env
-snapshot Saved. TLX must stay on WebGL2 (`--backend three` / `tlxForceGL`) —
-three's WebGPU path dies on SwiftShader `mappedAtCreation`. Index:
+snapshot Saved. TLX CI stays on WebGL2 (`--backend three` / `tlxForceGL`);
+THREE PATH: WEBGPU can 2D-blit the LDR target (`readRenderTargetPixelsAsync`)
+but large `mappedAtCreation` uploads can still refuse on SwiftShader. Index:
 `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
 

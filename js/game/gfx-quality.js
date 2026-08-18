@@ -287,10 +287,16 @@ function writeShotMode(next) {
     else sessionStorage.removeItem("apex26.wgxCapture");
   } catch (_) { /* localStorage above still persists across tabs */ }
 }
+function shotReloadLive() {
+  const be = readBackend();
+  if (be === "webgpu") return true;
+  // THREE PATH: WEBGPU uses the same SCREENSHOTS key for the LDR 2D blit.
+  return be === "three" && readThreePath() === "webgpu";
+}
 function applyShotMode(next, opts) {
   writeShotMode(next);
   paintPresent();
-  if (readBackend() === "webgpu" && !(opts && opts.noReload)) {
+  if (shotReloadLive() && !(opts && opts.noReload)) {
     const btn = typeof document !== "undefined" ? document.getElementById("pm-screenshots") : null;
     if (btn) btn.textContent = "SCREENSHOTS: " + shotModeLabel(next) + " — RELOADING…";
     try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) { /* no governor in unit harness */ }
@@ -321,7 +327,13 @@ function presentStatus() {
   if (be === "three") {
     if (path === "webgl2") return "THREE.JS is pinned to WebGL2 — the canvas is visible and screenshots just work.";
     if (path === "webgpu") {
-      return "THREE.JS is pinned to WebGPU. Software GPUs paint black (no 2D blit). Switch THREE PATH to WEBGL2 for screenshots.";
+      if (shot === "native") {
+        return "THREE.JS is pinned to WebGPU, native swapchain. Software GPUs stay black — SCREENSHOTS: 2D BLIT copies the LDR target onto #game." + live;
+      }
+      if (shot === "blit") {
+        return "THREE.JS is pinned to WebGPU, 2D BLIT: the LDR target is copied onto #game (copyTextureToBuffer, never getCurrentTexture)." + live;
+      }
+      return "THREE.JS is pinned to WebGPU. AUTO 2D-blits the LDR target on software GPUs so screenshots work. SCREENSHOTS: NATIVE leaves the swapchain black." + live;
     }
     return "THREE.JS AUTO: phones, Safari, and software GPUs use WebGL2 (screenshots work). Desktop Chrome on a real GPU may pick WebGPU.";
   }
@@ -399,11 +411,11 @@ function initPresentControls() {
   }
 
   const pathBtn = addBtn("pm-three-path",
-    "three.js GPU path. AUTO = phones/Safari/software WebGL2. WEBGL2 = screenshots work (the CI pin). WEBGPU = three's own WebGPU; software GPUs stay black.");
+    "three.js GPU path. AUTO = phones/Safari/software WebGL2. WEBGL2 = screenshots work (the CI pin). WEBGPU = three's own WebGPU; SCREENSHOTS: 2D BLIT (or AUTO on software) copies the LDR target onto #game.");
   const shotBtn = addBtn("pm-screenshots",
-    "WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = always copy frames onto the canvas (screenshots work; native swapchain unused). NATIVE = swapchain only — black on software GPUs.");
+    "WebGPU / three-WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = copy the frame onto #game (WGX soft-present / TLX readRenderTargetPixelsAsync). NATIVE = swapchain only — black on software GPUs.");
   const saveBtn = addBtn("pm-save-shot",
-    "Download the visible #game canvas as a PNG. Waits for the WebGPU 2D blit first. On three.js WebGPU (black canvas) switch THREE PATH to WEBGL2.");
+    "Download the visible #game canvas as a PNG. Waits for the 2D blit first (WGX or TLX-WebGPU).");
   const status = document.createElement("p");
   status.id = "pm-gfx-status";
   add(status);

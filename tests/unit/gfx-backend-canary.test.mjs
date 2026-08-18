@@ -577,6 +577,15 @@ test("THREE PATH and SCREENSHOTS are injected, and only reload when live", () =>
   assert.match(c.byId["pm-screenshots"].textContent, /RELOADING/);
   c.timers.forEach((fn) => fn());
   assert.equal(c.reloaded(), 1, "SCREENSHOTS reloads when WEBGPU is live");
+
+  const d = bootPicker({
+    ls: { "apex26.gfxBackend": "three", "apex26.tlxForceGL": "0" },
+  });
+  d.byId["pm-screenshots"].onclick();
+  assert.equal(d.G.readShotMode(), "blit");
+  assert.match(d.byId["pm-screenshots"].textContent, /RELOADING/);
+  d.timers.forEach((fn) => fn());
+  assert.equal(d.reloaded(), 1, "SCREENSHOTS reloads when THREE.JS WebGPU is live");
 });
 
 test("presentStatus names the three screenshot paths in plain language", () => {
@@ -600,10 +609,15 @@ test("presentStatus names the three screenshot paths in plain language", () => {
 
 test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot API", () => {
   const tlx = read("js/render/three/tlx.js");
+  const post = read("js/render/three/tlx-post.js");
   assert.match(tlx, /capturePixels\(\) \{/);
-  assert.match(tlx, /awaitSoftPresent\(\) \{ return Promise\.resolve\(0\); \}/);
-  assert.match(tlx, /THREE PATH to WEBGL2/);
-  assert.match(tlx, /softPresent\(\) \{ return false; \}/);
+  assert.match(tlx, /readRenderTargetPixelsAsync/);
+  assert.match(tlx, /copyTextureToBuffer/);
+  assert.match(tlx, /softPresent\(\) \{ return !!_softBlit; \}/);
+  assert.match(tlx, /_softBlit = !forceWebGL && _capPref !== "0"/);
+  assert.match(tlx, /never getCurrentTexture/);
+  assert.doesNotMatch(tlx, /[\.]\s*getCurrentTexture\s*\(/);
+  assert.match(post, /ldrTarget: \(\) => ldrRT/);
 });
 
 /* ── TLX canvas opacity — the "transparent cars on iPhone" guard ─────────
