@@ -156,7 +156,7 @@ tail -f artifacts/logs/smoke.log             # watch one live
 node tools/test-bg.mjs --status              # running / how each ended
 
 npm run test:tiny                            # start here: page loads, __apex responds
-npm run test:fast                            # quick subset (~3 min)
+npm run test:fast                            # smoke + collisions + steering (browser; minutes on SwiftShader)
 npm test -- tests/specs/autopilot.spec.js          # single file
 node tools/verify-track.cjs --all            # headless build check, all 40 circuits (no browser)
 ```

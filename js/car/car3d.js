@@ -334,6 +334,44 @@ const Car3D = (function () {
     addBlock(out, station(p0).concat(station(p1)), col, null, surface);
   }
 
+  // Diamond-section wishbone (chord along +Z airflow, thin in the load axis).
+  // Same 12-tri addBlock as addBeamBetween; stock cars keep the square tube.
+  function addFairedArm(out, p0, p1, th, col, surface) {
+    let dx = p1[0] - p0[0], dy = p1[1] - p0[1], dz = p1[2] - p0[2];
+    const len = Math.hypot(dx, dy, dz) || 1;
+    dx /= len; dy /= len; dz /= len;
+    const chord = th * 2.5, thick = th * 0.58;
+    let ax = -dx * dz, ay = -dy * dz, az = 1 - dz * dz;
+    let al = Math.hypot(ax, ay, az);
+    if (al < 1e-5) { ax = 1; ay = 0; az = 0; al = 1; }
+    ax = ax / al * chord * 0.5;
+    ay = ay / al * chord * 0.5;
+    az = az / al * chord * 0.5;
+    let lx = dy * az - dz * ay, ly = dz * ax - dx * az, lz = dx * ay - dy * ax;
+    const ll = Math.hypot(lx, ly, lz) || 1;
+    lx = lx / ll * thick * 0.5;
+    ly = ly / ll * thick * 0.5;
+    lz = lz / ll * thick * 0.5;
+    const station = (p) => [
+      [p[0] - ax, p[1] - ay, p[2] - az],
+      [p[0] - lx, p[1] - ly, p[2] - lz],
+      [p[0] + ax, p[1] + ay, p[2] + az],
+      [p[0] + lx, p[1] + ly, p[2] + lz],
+    ];
+    addBlock(out, station(p0).concat(station(p1)), col, null, surface);
+  }
+
+  // Carbon plate filling the V of a wishbone (leading + trailing legs → upright).
+  function addWishboneWeb(out, inLead, inTrail, outer, col, surface) {
+    const p = (a, b, t) => [
+      a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t,
+    ];
+    const a = p(inLead, outer, 0.40), b = p(inTrail, outer, 0.40);
+    const c = p(inTrail, outer, 0.70), d = p(inLead, outer, 0.70);
+    addQuad(out, a, b, c, d, col, surface);
+    addQuad(out, a, d, c, b, col, surface);
+  }
+
   // Smooth dome (helmet): partial lat-long sphere, analytic normals.
   function addDome(out, cx, cy, cz, r, col, surface) {
     const STACKS = 5, SLICES = 12;
@@ -380,15 +418,33 @@ const Car3D = (function () {
     // `grooved` profile dips the radius at three bands to cut real circumferential
     // tread grooves (the actual construction difference a wet tyre has, not just
     // a different sidewall colour).
+    // `shoulder` 1/2 adds 18" Pirelli fillets at BOTH ends of that loft so the
+    // carcass is no longer a 90° cylinder. Computed here so PROFILE and the
+    // sidewall outer radius share one edgeRm. `|| 0` keeps missing / 0 identical.
+    const tyreShoulder = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.shoulder) || 0)));
+    const edgeRm = tyreShoulder === 2 ? 0.90 : tyreShoulder === 1 ? 0.945 : 1;
     const grooveCount = tyreStyle && tyreStyle.grooves != null
       ? tyreStyle.grooves : grooved ? 3 : 0;
     const grooveDepth = tyreStyle && tyreStyle.grooveDepth || 0.045;
-    const PROFILE = [[0, 1]];
+    const PROFILE = [];
+    if (tyreShoulder === 1) {
+      PROFILE.push([0, 0.945], [0.05, 1]);
+    } else if (tyreShoulder === 2) {
+      PROFILE.push([0, 0.90], [0.075, 1]);
+    } else {
+      PROFILE.push([0, 1]);
+    }
     for (let g = 0; g < grooveCount; g++) {
       const mid = (g + 1) / (grooveCount + 1);
       PROFILE.push([mid - 0.025, 1], [mid, 1 - grooveDepth], [mid + 0.025, 1]);
     }
-    PROFILE.push([1, 1]);
+    if (tyreShoulder === 1) {
+      PROFILE.push([0.95, 1], [1, 0.945]);
+    } else if (tyreShoulder === 2) {
+      PROFILE.push([0.925, 1], [1, 0.90]);
+    } else {
+      PROFILE.push([1, 1]);
+    }
     const i0 = out.pos.length / 3;
     for (const [xf, rm] of PROFILE) {
       const x = x0 + (x1 - x0) * xf, rr = r * rm;
@@ -412,10 +468,11 @@ const Car3D = (function () {
     // a distinct metal/carbon cover fan. Keeping the outer annulus rubber avoids
     // the old full-wheel silver dinner-plate look.
     const hub0 = [x0-0.012, cy, cz], hub1 = [x1+0.012, cy, cz];
+    const outerR = r * edgeRm;
     for (let i = 0; i < SEG; i++) {
       const a0 = (i / SEG) * Math.PI * 2, a1 = ((i+1) / SEG) * Math.PI * 2;
-      const ya0 = cy + r*Math.cos(a0), za0 = cz + r*Math.sin(a0);
-      const ya1 = cy + r*Math.cos(a1), za1 = cz + r*Math.sin(a1);
+      const ya0 = cy + outerR*Math.cos(a0), za0 = cz + outerR*Math.sin(a0);
+      const ya1 = cy + outerR*Math.cos(a1), za1 = cz + outerR*Math.sin(a1);
       const rya0 = cy + rimR*Math.cos(a0), rza0 = cz + rimR*Math.sin(a0);
       const rya1 = cy + rimR*Math.cos(a1), rza1 = cz + rimR*Math.sin(a1);
       const A0=[x0,ya0,za0], A1=[x0,ya1,za1], B0=[x1,ya0,za0], B1=[x1,ya1,za1];
@@ -438,18 +495,47 @@ const Car3D = (function () {
     // sectors while closed covers retain only a subtle metallic edge.
     const rotorOuter = r * Math.min(0.40, 0.32 * rotorScale);
     const rotorInner = r * 0.17;
+    const rotorDetail = brakeStyle && brakeStyle.rotor || 0;
+    const discFaceRotor = Math.max(0, Math.min(2, Math.round((brakeStyle && brakeStyle.discFace) || 0)));
+    const carbonDisc = rotorDetail >= 2 || discFaceRotor > 0;
+    const rotorCol = carbonDisc ? [0.12, 0.12, 0.13] : [0.24, 0.24, 0.26];
+    const rotorSurf = carbonDisc ? SURFACES.carbon : SURFACES.metal;
     for (const face of [[x0 + 0.008, -1], [x1 - 0.008, 1]]) {
       for (let i = 0; i < SEG; i++) {
         const a0 = i / SEG * Math.PI * 2, a1 = (i + 1) / SEG * Math.PI * 2;
         const P = (rad, a) => [face[0], cy + rad*Math.cos(a), cz + rad*Math.sin(a)];
         addQuad(out, P(rotorOuter,a0), P(rotorOuter,a1), P(rotorInner,a1), P(rotorInner,a0),
-          [0.24,0.24,0.26], SURFACES.metal);
+          rotorCol, rotorSurf);
       }
-      const rotorDetail = brakeStyle && brakeStyle.rotor || 0;
       for (let i = 0; i < rotorDetail * 3; i++) {
         const a = i / (rotorDetail * 3) * Math.PI * 2, rr = (rotorInner + rotorOuter) * 0.5;
         addBox(out, face[0], cy + rr*Math.cos(a), cz + rr*Math.sin(a),
           0.012, 0.018, 0.018, [0.07,0.07,0.08], SURFACES.carbon);
+      }
+      if (rotorDetail >= 2) {
+        const hatOuter = rotorInner * 1.08, hatInner = rotorInner * 0.52;
+        const HAT_SEG = 8;
+        for (let i = 0; i < HAT_SEG; i++) {
+          const a0 = i / HAT_SEG * Math.PI * 2, a1 = (i + 1) / HAT_SEG * Math.PI * 2;
+          const P = (rad, a) => [face[0], cy + rad*Math.cos(a), cz + rad*Math.sin(a)];
+          addQuad(out, P(hatOuter,a0), P(hatOuter,a1), P(hatInner,a1), P(hatInner,a0),
+            [0.34, 0.34, 0.37], SURFACES.metal);
+        }
+      }
+      if (discFaceRotor > 0) {
+        const marks = discFaceRotor === 1 ? 6 : 4;
+        const rad = (rotorInner + rotorOuter) * 0.55;
+        const sz = discFaceRotor === 1 ? 0.012 : 0.022;
+        const slot = discFaceRotor === 1 ? 1 : 0.40;
+        for (let k = 0; k < marks; k++) {
+          const a = (k / marks) * Math.PI * 2 + 0.14;
+          const my = cy + rad * Math.cos(a), mz = cz + rad * Math.sin(a);
+          const hy = sz * 0.5, hz = sz * slot * 0.5;
+          addQuad(out,
+            [face[0], my - hy, mz - hz], [face[0], my - hy, mz + hz],
+            [face[0], my + hy, mz + hz], [face[0], my + hy, mz - hz],
+            INTAKE, SURFACES.carbon);
+        }
       }
     }
     // Pirelli-style compound band: a bright ring on both sidewalls just inside
@@ -462,7 +548,7 @@ const Car3D = (function () {
       for (let i = 0; i < SEG; i++) {
         const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
         const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
-        const outer = 0.96, inner = Math.max(0.76, outer - bandWidth);
+        const outer = 0.96 * edgeRm, inner = Math.max(0.76 * edgeRm, outer - bandWidth);
         const A = P(r * outer, a0), B = P(r * outer, a1), C = P(r * inner, a1), D = P(r * inner, a0);
         addQuad(out, A, B, C, D, BAND, SURFACES.rubber);   // single face (wheel drawn cull-off → shows both sides, no z-fight)
       }
@@ -476,22 +562,8 @@ const Car3D = (function () {
     // Cover vanes: six slim recessed-look blades sweeping out from the hub — subtle
     // but enough to read the wheel ROTATION (tread/cover are rotationally uniform).
     const VANE = [0.26, 0.26, 0.30];
-    // Sidewall SHOULDER profile — a proud ring just inside the tread that changes
-    // the tyre's outline: 1 rounds it off, 2 steps it in. Purely additive.
-    const tyreShoulder = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.shoulder) || 0)));
-    if (tyreShoulder > 0) {
-      const shR = r * (tyreShoulder === 2 ? 0.90 : 0.945);
-      const shW = tyreShoulder === 2 ? 0.020 : 0.012;
-      for (const ss of [[x0, -1], [x1, 1]]) {
-        const xs = ss[0] + ss[1] * 0.004;
-        for (let k = 0; k < 18; k++) {
-          const a0 = (k / 18) * Math.PI * 2, a1 = ((k + 1) / 18) * Math.PI * 2;
-          const A = (rad, a) => [xs, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
-          addQuad(out, A(shR, a0), A(shR + shW, a0), A(shR + shW, a1), A(shR, a1),
-                  TYRE, SURFACES.rubber);
-        }
-      }
-    }
+    // Sidewall SHOULDER is now the PROFILE + edgeRm path above. The old
+    // coplanar stamp is gone — it did not change the silhouette.
     const coverVanes = tyreStyle && tyreStyle.coverVanes || 6;
     for (const ss of [[x0, -1], [x1, 1]]) {
       const xs = ss[0] + ss[1] * 0.014;
@@ -530,21 +602,51 @@ const Car3D = (function () {
         addTri(out, ctr, [xc0, cy + hcR*Math.cos(a0), cz + hcR*Math.sin(a0)],
                          [xc0, cy + hcR*Math.cos(a1), cz + hcR*Math.sin(a1)], HUBCAP, SURFACES.metal);   // single face (cull-off → opaque both sides)
       }
-      // rim of the hub cap (thin bright ring), then the proud wheel-nut cap.
+      // Centre-lock: shipped path is a square box. gunNut:1 draws a hex gun-nut
+      // (drive faces + collar) so the wheel-gun read is real; colour still from nut.
       const nutCol = (wheelStyle && wheelStyle.nut) || NUT;
-      addBox(out, ss[0] + dir * 0.032, cy, cz, 0.026, hcR * 0.42, hcR * 0.42, nutCol, SURFACES.metal);
-      // Rim SPOKES: straight blades from the hub out to the rim, proud of the
-      // cover so they read whether or not the cover is cut open.
+      const gunNut = wheelStyle && wheelStyle.gunNut ? 1 : 0;
+      if (!gunNut) {
+        addBox(out, ss[0] + dir * 0.032, cy, cz, 0.026, hcR * 0.42, hcR * 0.42, nutCol, SURFACES.metal);
+      } else {
+        const nx = ss[0] + dir * 0.034;
+        const nR = hcR * 0.38;
+        const nDeep = 0.018;
+        const HEX = 6;
+        for (let h = 0; h < HEX; h++) {
+          const a0 = (h / HEX) * Math.PI * 2 + Math.PI / HEX;
+          const a1 = ((h + 1) / HEX) * Math.PI * 2 + Math.PI / HEX;
+          const y0 = cy + nR * Math.cos(a0), z0 = cz + nR * Math.sin(a0);
+          const y1 = cy + nR * Math.cos(a1), z1 = cz + nR * Math.sin(a1);
+          const xOut = nx + dir * nDeep * 0.5, xIn = nx - dir * nDeep * 0.5;
+          addQuad(out,
+            [xOut, y0, z0], [xOut, y1, z1], [xIn, y1, z1], [xIn, y0, z0],
+            nutCol, SURFACES.metal);
+          addTri(out, [xOut, cy, cz], [xOut, y0, z0], [xOut, y1, z1], nutCol, SURFACES.metal);
+        }
+        const cR0 = nR * 1.15, cR1 = nR * 1.55, cxCol = nx - dir * nDeep * 0.55;
+        for (let h = 0; h < 12; h++) {
+          const a0 = (h / 12) * Math.PI * 2, a1 = ((h + 1) / 12) * Math.PI * 2;
+          const P = (rad, a) => [cxCol, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+          addQuad(out, P(cR0, a0), P(cR0, a1), P(cR1, a1), P(cR1, a0),
+                  [nutCol[0] * 0.75, nutCol[1] * 0.75, nutCol[2] * 0.75], SURFACES.metal);
+        }
+      }
+      // Rim SPOKES: extruded blades (front + back + long edges) from hub to rim.
       const spokeN = Math.max(0, Math.min(8, Math.round((wheelStyle && wheelStyle.spokes) || 0)));
       for (let k = 0; k < spokeN; k++) {
         const a = (k / spokeN) * Math.PI * 2 + 0.4;
         const uy = Math.cos(a), uz = Math.sin(a), py = -Math.sin(a), pz = Math.cos(a);
-        const hw = 0.018, ri = hcR * 1.05, ro = rimR * 0.92, xs2 = ss[0] + dir * 0.024;
-        const P = (rad, sgn) => [xs2, cy + uy * rad + py * hw * sgn, cz + uz * rad + pz * hw * sgn];
-        addQuad(out, P(ri, 1), P(ro, 1), P(ro, -1), P(ri, -1), HUBCAP, SURFACES.metal);
+        const hw = 0.014, thick = 0.008;
+        const ri = hcR * 1.08, ro = rimR * 0.90;
+        const xsF = ss[0] + dir * 0.026, xsB = ss[0] + dir * (0.026 - dir * thick);
+        const P = (xs, rad, sgn) => [xs, cy + uy * rad + py * hw * sgn, cz + uz * rad + pz * hw * sgn];
+        addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsF, ro, -1), P(xsF, ri, -1), HUBCAP, SURFACES.metal);
+        addQuad(out, P(xsB, ri, -1), P(xsB, ro, -1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, SURFACES.metal);
+        addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, SURFACES.metal);
+        addQuad(out, P(xsF, ri, -1), P(xsB, ri, -1), P(xsB, ro, -1), P(xsF, ro, -1), HUBCAP, SURFACES.metal);
       }
-      // Rim TAPE: a coloured band around the rim shoulder — the cheapest way to
-      // tell two otherwise identical wheels apart at racing speed.
+      // Rim TAPE: face band + short OD bead so the set marks read from a ¾ view.
       if (wheelStyle && wheelStyle.tape) {
         const tr = rimR * 1.02, tc = (wheelStyle.nut) || bandColor;
         for (let k = 0; k < 20; k++) {
@@ -552,17 +654,38 @@ const Car3D = (function () {
           const A = (rad, a) => [ss[0] + dir * 0.010, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
           addQuad(out, A(tr, a0), A(tr + 0.022, a0), A(tr + 0.022, a1), A(tr, a1), tc, SURFACES.metal);
         }
-      }
-      // Cover DISH: a recessed inner face, so the wheel reads concave or flat
-      // from the side rather than always being a flat disc.
-      const dish = Math.max(0, Math.min(2, Math.round((wheelStyle && wheelStyle.dish) || 0)));
-      if (dish > 0) {
-        const dr = rimR * (dish === 2 ? 0.80 : 0.88), dx = ss[0] + dir * (0.012 * dish);
+        const beadR = rimR * 1.01;
+        const bx0 = ss[0] + dir * 0.002, bx1 = ss[0] + dir * 0.016;
         for (let k = 0; k < 16; k++) {
           const a0 = (k / 16) * Math.PI * 2, a1 = ((k + 1) / 16) * Math.PI * 2;
-          addTri(out, [dx, cy, cz],
-                 [dx, cy + dr * Math.cos(a0), cz + dr * Math.sin(a0)],
-                 [dx, cy + dr * Math.cos(a1), cz + dr * Math.sin(a1)], HUBCAP, SURFACES.metal);
+          const y0 = cy + beadR * Math.cos(a0), z0 = cz + beadR * Math.sin(a0);
+          const y1 = cy + beadR * Math.cos(a1), z1 = cz + beadR * Math.sin(a1);
+          addQuad(out, [bx0, y0, z0], [bx1, y0, z0], [bx1, y1, z1], [bx0, y1, z1], tc, SURFACES.metal);
+        }
+      }
+      // Cover DISH: stepped recess — outer annulus at cover depth, inner fan
+      // pushed inboard, radial wall between them so the face reads concave.
+      const dish = Math.max(0, Math.min(2, Math.round((wheelStyle && wheelStyle.dish) || 0)));
+      if (dish > 0) {
+        const dr = rimR * (dish === 2 ? 0.80 : 0.88);
+        const dxOut = ss[0] + dir * 0.014;
+        const dxIn = ss[0] + dir * (0.014 - 0.012 * dish);
+        const DISH_SEG = 16;
+        for (let k = 0; k < DISH_SEG; k++) {
+          const a0 = (k / DISH_SEG) * Math.PI * 2, a1 = ((k + 1) / DISH_SEG) * Math.PI * 2;
+          const oy0 = cy + rimR * 0.98 * Math.cos(a0), oz0 = cz + rimR * 0.98 * Math.sin(a0);
+          const oy1 = cy + rimR * 0.98 * Math.cos(a1), oz1 = cz + rimR * 0.98 * Math.sin(a1);
+          const iy0 = cy + dr * Math.cos(a0), iz0 = cz + dr * Math.sin(a0);
+          const iy1 = cy + dr * Math.cos(a1), iz1 = cz + dr * Math.sin(a1);
+          addQuad(out,
+            [dxOut, oy0, oz0], [dxOut, oy1, oz1], [dxOut, iy1, iz1], [dxOut, iy0, iz0],
+            HUBCAP, SURFACES.metal);
+          addQuad(out,
+            [dxOut, iy0, iz0], [dxOut, iy1, iz1], [dxIn, iy1, iz1], [dxIn, iy0, iz0],
+            [0.12, 0.12, 0.14], SURFACES.metal);
+          addTri(out, [dxIn, cy, cz],
+                 [dxIn, iy0, iz0],
+                 [dxIn, iy1, iz1], HUBCAP, SURFACES.metal);
         }
       }
     }
@@ -575,15 +698,41 @@ const Car3D = (function () {
       const cr = r * 0.78;                     // top edge, just inside the tread band
       const calA = brakeStyle && brakeStyle.caliperPos || 0;
       const padCol = [caliperColor[0]*0.30, caliperColor[1]*0.30, caliperColor[2]*0.30];
-      for (let i = 0; i < 3; i++) {
-        const a = calA + (i - 1) * 0.17;       // ~±10° arc around selected clock position
-        addBox(calOut, cx, cy + Math.cos(a) * cr, cz + Math.sin(a) * cr,
-               w * 1.06, 0.052, 0.055, caliperColor, SURFACES.metal);   // spans the width, proud past both faces
+      const calLvl = Math.max(0, Math.min(2, Math.round((brakeStyle && brakeStyle.caliper) || 0)));
+      if (calLvl === 0) {
+        for (let i = 0; i < 3; i++) {
+          const a = calA + (i - 1) * 0.17;       // ~±10° arc around selected clock position
+          addBox(calOut, cx, cy + Math.cos(a) * cr, cz + Math.sin(a) * cr,
+                 w * 1.06, 0.052, 0.055, caliperColor, SURFACES.metal);
+        }
+        for (const sgn of [-1, 1])
+          addBox(calOut, cx + sgn * (w * 0.52 + 0.006), cy + cr, cz, 0.02, 0.05, 0.11, padCol, SURFACES.metal);
+        addBox(calOut, cx, cy + cr + 0.04, cz, w * 1.0, 0.02, 0.10, caliperColor, SURFACES.metal);
+      } else {
+        const cY = cy + Math.cos(calA) * cr, cZ = cz + Math.sin(calA) * cr;
+        const pistons = calLvl === 2 ? 6 : 4;
+        const bodyW = w * (calLvl === 2 ? 1.14 : 1.08);
+        const bodyH = calLvl === 2 ? 0.078 : 0.068;
+        const bodyD = calLvl === 2 ? 0.118 : 0.100;
+        addBox(calOut, cx, cY, cZ, bodyW, bodyH, bodyD, caliperColor, SURFACES.metal);
+        addBox(calOut, cx, cY, cZ, bodyW * 0.42, bodyH * 0.45, bodyD * 0.55,
+               [0.04, 0.04, 0.05], SURFACES.metal);
+        const ty = -Math.sin(calA), tz = Math.cos(calA);
+        const span = bodyD * 0.62;
+        for (const sgn of [-1, 1]) {
+          for (let p = 0; p < pistons; p++) {
+            const t = (p / (pistons - 1) - 0.5) * span;
+            addBox(calOut, cx + sgn * (w * 0.50 + 0.012), cY + ty * t, cZ + tz * t,
+                   0.018, 0.028, 0.028, padCol, SURFACES.metal);
+          }
+        }
+        for (const sgn of [-1, 1])
+          addBox(calOut, cx + sgn * (w * 0.52 + 0.006), cY, cZ, 0.016, 0.042, 0.090, padCol, SURFACES.metal);
+        const earR = cr - 0.055;
+        addBox(calOut, cx, cy + Math.cos(calA) * earR, cz + Math.sin(calA) * earR,
+               w * 0.55, 0.024, 0.040, caliperColor, SURFACES.metal);
+        addBox(calOut, cx, cY + 0.048, cZ, 0.014, 0.016, 0.016, [0.55, 0.55, 0.58], SURFACES.metal);
       }
-      // pad plates hugging each disc face + the machined bridge over the crown
-      for (const sgn of [-1, 1])
-        addBox(calOut, cx + sgn * (w * 0.52 + 0.006), cy + cr, cz, 0.02, 0.05, 0.11, padCol, SURFACES.metal);
-      addBox(calOut, cx, cy + cr + 0.04, cz, w * 1.0, 0.02, 0.10, caliperColor, SURFACES.metal);   // bridge rib
     }
   }
 
@@ -1170,6 +1319,8 @@ const Car3D = (function () {
       coke: 1, tailWidth: 1, coverHeight: 1,
       servicePanel: tier === 2 ? 3 : 1, heatShield: 1,
       chimney: 0,
+      // 2026 intake lip. 0 none (shipped) · 1 thin mouth ring · 2 ring + cheeks.
+      scoopLip: 0,
     }, recipe);
   }
   function buildAeroParts(recipe, tier) {
@@ -1198,8 +1349,10 @@ const Car3D = (function () {
       arm: tier === 0 ? 0.85 : tier === 2 ? 1.3 : 1,
       push: tier === 2 ? 1 : 0, pull: 0,
       wishbone: 1, toe: 1,
-      // Visible inboard rocker fairing on the tub top: 0 none / 1 blister / 2 full cover.
+      // Visible inboard rocker fairing on the tub top: 0 none / 1 split blister / 2 full cover.
       rocker: 0,
+      // Transverse third (heave) element: 0 none / 1 damper + spring pack + links.
+      heave: 0,
     }, recipe);
   }
   function buildBrakeParts(recipe, tier) {
@@ -1211,6 +1364,8 @@ const Car3D = (function () {
       scoop: null,
       // Disc face pattern seen through an open cover: 0 plain / 1 drilled / 2 slotted.
       discFace: 0,
+      // Caliper hardware: 0 shipped 3-box peek / 1 Brembo monobloc / 2 six-piston radial.
+      caliper: 0,
     }, recipe);
   }
   function buildTyreParts(recipe, tier) {
@@ -1220,7 +1375,7 @@ const Car3D = (function () {
   }
   function buildErsParts(recipe, tier, accent) {
     return mergeRecipe({ led: tier === 2 ? accent : null, pack: 1,
-      cells: tier === 2 ? 6 : 3, conduit: 0 }, recipe);
+      cells: tier === 2 ? 6 : 3, conduit: 0, blister: 0 }, recipe);
   }
   function buildGearboxParts(recipe, tier) {
     return mergeRecipe({
@@ -1228,6 +1383,7 @@ const Car3D = (function () {
       strakeH: 0.13, finSY: 0.14, finSZ: 0.28,
       casing: tier === 2 ? 3 : 0, louvres: 0, heat: 0,
       caseWidth: 1,
+      heatFins: 0, ribs: 0,
     }, recipe);
   }
   function buildFuelParts(recipe, tier) {
@@ -1235,18 +1391,23 @@ const Car3D = (function () {
       cap: tier === 2 ? [0.95, 0.28, 1.5] : [0.55, 0.52, 0.60],
       flame: [1.15, 0.42, 0.14],
       line: 1, filler: 0,
+      hatch: 0, vent: 0,
     }, recipe);
   }
   // EXHAUST: `pipes` null = derive the tip count from the engine's own plumbing
   // (the shipped behaviour); a recipe may state it outright. bore/flare/wastegate/
   // wrap default to the values that reproduce today's tailpipe exactly.
   function buildExhaustParts(recipe) {
-    return mergeRecipe({ pipes: null, bore: 1, flare: 0, wastegate: 0, wrap: 0 }, recipe);
+    return mergeRecipe({
+      pipes: null, bore: 1, flare: 0, wastegate: 0, wrap: 0,
+      lip: 0, shield: 0,
+    }, recipe);
   }
   // FLOOR: the five evenly-spaced edge fences that used to be hardcoded, plus
   // skid blocks and an edge lip. fences 5 / fenceH 1 is the shipped array.
   function buildFloorParts(recipe) {
-    return mergeRecipe({ fences: 5, fenceH: 1, skid: 0, edgeLip: 0 }, recipe);
+    return mergeRecipe({ fences: 5, fenceH: 1, skid: 0, edgeLip: 0,
+      plank: 0, gurney: 0, scroll: 0 }, recipe);
   }
   // COCKPIT: the halo and its furniture. haloBlade thickens the hoop into an
   // aero section, haloWing adds the upper flap many cars carry, camPods sets the
@@ -1255,7 +1416,7 @@ const Car3D = (function () {
   // coloured band around the rim, dish sets how far the cover face is recessed,
   // nut recolours the centre-lock. All default to the shipped wheel.
   function buildWheelParts(recipe) {
-    return mergeRecipe({ spokes: 0, tape: 0, dish: 0, nut: null }, recipe);
+    return mergeRecipe({ spokes: 0, tape: 0, dish: 0, nut: null, gunNut: 0 }, recipe);
   }
   function buildCockpitParts(recipe) {
     return mergeRecipe({ haloBlade: 0, haloWing: 0, camPods: 0, screen: 0 }, recipe);
@@ -1745,13 +1906,33 @@ const Car3D = (function () {
       addSpan(out, { z: -0.28, y: 0.76, w: 0.30 * inScale, h: 0.20 * inScale, t: 0.55 },
                    { z: -0.75, y: 0.74, w: 0.26 * inScale, h: 0.18 * inScale, t: 0.55 }, c1, INTAKE);
       coverGeom = buildEngineCoverBodywork(out, c1, accentC, engStyle, anchors);
+      // Optional scoop lip on the roll-hoop mouth (recipe-gated; default 0).
+      const scoopLip = Math.max(0, Math.min(2, Math.round((engStyle && engStyle.scoopLip) || 0)));
+      if (scoopLip >= 1) {
+        addBox(out, 0, 0.855, -0.265,
+               0.27 * inScale, 0.032, 0.030, INTAKE);
+      }
+      if (scoopLip >= 2) {
+        for (const s of [-1, 1]) {
+          addBox(out, s * (0.115 * inScale), 0.835, -0.295,
+                 0.045, 0.055, 0.055, CARBON);
+        }
+      }
       if (engSnork) {
-        // Big-spec power unit tells: a raised airbox snorkel cresting behind the
-        // roll hoop + cooling-louvre strips on the engine-cover flanks. Snorkel
-        // scale tracks the intake size so a quali PU snorkel dwarfs a turbo's.
+        // 2026 roll-hoop snorkel: lofted throat → crest → cover merge (was one
+        // boxy span). Scale tracks intake size so a quali PU dwarfs a turbo.
         const sk = 0.78 + inScale * 0.32;
-        addSpan(out, { z: -0.18, y: 0.94, w: 0.13 * sk, h: 0.11 * sk, t: 0.5 },
-                     { z: -0.62, y: 0.86, w: 0.11 * sk, h: 0.09 * sk, t: 0.5 }, c1, INTAKE);
+        const mouth = { z: -0.12, y: 0.96, w: 0.15 * sk, h: 0.10 * sk, t: 0.62 };
+        const crest = { z: -0.38, y: 1.02, w: 0.12 * sk, h: 0.13 * sk, t: 0.55 };
+        const merge = { z: -0.68, y: 0.88, w: 0.10 * sk, h: 0.09 * sk, t: 0.50 };
+        addSpan(out, mouth, crest, c1, INTAKE);
+        addBeveledSpan(out, crest, merge, 0.010, c1, null);
+        addBox(out, 0, mouth.y + 0.01, mouth.z + 0.01,
+               mouth.w * 0.72, mouth.h * 0.55, 0.04, INTAKE);
+        if (scoopLip >= 1) {
+          addBox(out, 0, mouth.y + mouth.h * 0.35, mouth.z + 0.02,
+                 mouth.w * 0.88, 0.022, 0.028, CARBON);
+        }
         const lf = anchors.coverAt(-0.80), lr = anchors.coverAt(-1.40);
         for (const s of [-1, 1])
           addSpan(out,
@@ -1768,8 +1949,12 @@ const Car3D = (function () {
         for (const s of [-1, 1]) {
           if (engOutlet === 3) {
             const cp = anchors.coverAt(-1.42);
-            addBox(out, s*(cp.x*0.78), cp.top - 0.04, -1.42, 0.07, 0.11, 0.15, INTAKE);
-            addBox(out, s*(cp.x*0.78), cp.top + 0.025, -1.42, 0.05, 0.02, 0.11, CARBON);
+            const cx = s * (cp.x * 0.78);
+            addSpan(out,
+              { z: -1.34, x: cx, y: cp.top - 0.02, w: 0.085, h: 0.040, t: 0.80 },
+              { z: -1.50, x: cx, y: cp.top + 0.04, w: 0.055, h: 0.095, t: 0.65 },
+              CARBON);
+            addBox(out, cx, cp.top + 0.095, -1.44, 0.042, 0.016, 0.070, INTAKE);
           } else {
             const n = engOutlet === 2 ? 4 : 2;
             for (let i = 0; i < n; i++) {
@@ -1826,18 +2011,59 @@ const Car3D = (function () {
       const fuelSurface = SURFACES.metal;
       addBox(out, 0.12, 0.828, -0.50, 0.10,  0.02, 0.15, fuelDisplay, fuelSurface);            // collar ring (proud)
       addBox(out, 0.12, 0.85,  -0.50, 0.035, 0.03, 0.05, fuelDisplay, fuelSurface);            // cap dot
-      // Filler HARDWARE (`filler`, 0..2): 1 adds a quick-fill coupling stub beside
-      // the cap, 2 adds a second coupling and a breather standpipe — the pit-lane
-      // rig fitting that tells a race blend apart from a qualifying brew from above.
+      // Filler HARDWARE (`filler`, 0..2): 0 is the three boxes above, byte-identical
+      // to the shipped cap. 1 grows a 2026 garage dry-break blister around that
+      // cap. 2 adds a second blister aft and an inboard breather standpipe.
       const fuelFiller = Math.max(0, Math.min(2, Math.round(fuelStyle.filler || 0)));
       if (fuelFiller >= 1) {
-        addBox(out, -0.02, 0.815, -0.50, 0.055, 0.045, 0.09, [0.12, 0.12, 0.14], SURFACES.carbon);
-        addBox(out, -0.02, 0.848, -0.50, 0.038, 0.024, 0.06, fuelDisplay, fuelSurface);
+        const fuelPorts = [{ x: 0.12, z: -0.50, s: 1 }];
+        if (fuelFiller >= 2) fuelPorts.push({ x: 0.12, z: -0.66, s: 0.85 });
+        for (const p of fuelPorts) {
+          const s = p.s;
+          addBeveledSpan(out,
+            { z: p.z + 0.082 * s, x: p.x, y: 0.812, w: 0.108 * s, h: 0.036 * s, t: 0.88 },
+            { z: p.z - 0.086 * s, x: p.x, y: 0.798, w: 0.060 * s, h: 0.022 * s, t: 0.70 },
+            0.007 * s, [0.10, 0.10, 0.12], null, SURFACES.carbon);
+          addBox(out, p.x, 0.868, p.z, 0.042 * s, 0.028 * s, 0.042 * s,
+                 [0.22, 0.22, 0.24], fuelSurface);
+          addBox(out, p.x, 0.886, p.z, 0.050 * s, 0.010 * s, 0.050 * s,
+                 fuelDisplay, fuelSurface);
+          const r = 0.016 * s, fy = 0.894, n = 6;
+          const ctr = [p.x, fy, p.z];
+          for (let i = 0; i < n; i++) {
+            const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
+            addTri(out, ctr,
+              [p.x + Math.cos(a1) * r, fy, p.z + Math.sin(a1) * r],
+              [p.x + Math.cos(a0) * r, fy, p.z + Math.sin(a0) * r],
+              [0.06, 0.06, 0.07], SURFACES.carbon);
+          }
+        }
+        if (fuelFiller >= 2) {
+          addSpan(out,
+            { z: -0.50, x: 0.02, y: 0.845, w: 0.018, h: 0.018 },
+            { z: -0.50, x: 0.02, y: 0.945, w: 0.014, h: 0.014 },
+            fuelDisplay, null, fuelSurface);
+          addBox(out, 0.02, 0.956, -0.50, 0.016, 0.012, 0.016, fuelDisplay, fuelSurface);
+        }
       }
-      if (fuelFiller >= 2) {
-        addBox(out, 0.12, 0.815, -0.66, 0.050, 0.042, 0.085, [0.12, 0.12, 0.14], SURFACES.carbon);
-        addBox(out, 0.12, 0.845, -0.66, 0.034, 0.022, 0.055, fuelDisplay, fuelSurface);
-        addBox(out, -0.02, 0.895, -0.50, 0.020, 0.075, 0.020, fuelDisplay, fuelSurface);   // breather standpipe
+      const fuelHatch = Math.max(0, Math.min(1, Math.round(fuelStyle.hatch || 0)));
+      if (fuelHatch) {
+        const lift = fuelFiller >= 1 ? 0.055 : 0.028;
+        addSpan(out,
+          { z: -0.40, x: 0.12, y: 0.872, w: 0.108, h: 0.012, t: 0.92 },
+          { z: -0.58, x: 0.12, y: 0.872 + lift, w: 0.096, h: 0.010, t: 0.88 },
+          [0.08, 0.08, 0.09], null, SURFACES.carbon);
+        addBox(out, 0.12, 0.870, -0.405, 0.092, 0.010, 0.016,
+               [0.24, 0.24, 0.26], SURFACES.metal);
+      }
+      const fuelVent = Math.max(0, Math.min(1, Math.round(fuelStyle.vent || 0)));
+      if (fuelVent) {
+        addSpan(out,
+          { z: -0.50, x: 0.205, y: 0.845, w: 0.016, h: 0.016 },
+          { z: -0.50, x: 0.205, y: 0.930, w: 0.012, h: 0.012 },
+          fuelDisplay, null, fuelSurface);
+        addBox(out, 0.205, 0.940, -0.50, 0.014, 0.012, 0.014,
+               [0.10, 0.10, 0.12], SURFACES.carbon);
       }
       if (fuelStyle.line) {
         const lineRear = anchors.coverAt(-1.30);
@@ -1865,16 +2091,16 @@ const Car3D = (function () {
     // liverytex counts c2 among that region's backgrounds.
     addPodFlankSpan(0.46, -0.34, 0.19, 0.22, c2, null, 0.008, true);
 
-    // ERS: a color-coded ENERGY-CELL CONDUIT sweeping up from the sidepod shoulder
-    // onto the engine-cover flank. The number of cells + a battery-pack bulge grow with the pack spec, so every
-    // ERS choice reads distinctly at a glance (the old thin strip was too subtle).
+    // ERS: a color-coded ENERGY-CELL strip on the coke-bottle shoulder, plus a
+    // recipe-gated 2026 hybrid tell: pack blister and/or HV conduit run.
     // Runs ABOVE the sponsor band (titleA y 0.19–0.45) so it never washes the wordmark.
     const ersLed = ersStyle ? ersStyle.led : (tier("ers") === 2 ? ersC2 : null);
     const ersPack = ersStyle ? ersStyle.pack : 1.0;
+    const ersGlow = ersLed
+      ? ersLed.map((value) => Math.min(value, 1))
+      : [1.00, 0.42, 0.08];
     if (ersLed) {
-      // ERS conduit tucked into the coke-bottle shoulder at the sidepod rear.
       const half = 0.16 + (ersPack - 0.9) * 0.09;
-      const ersGlow = ersLed.map((value) => Math.min(value, 1));
       addPodFlankSpan(podGeom.conduit.z + half + 0.025, podGeom.conduit.z - half - 0.025,
                       0.91, 0.06, [0.03, 0.03, 0.04], SURFACES.carbon, 0.018);
       addPodFlankSpan(podGeom.conduit.z + half, podGeom.conduit.z - half,
@@ -1887,22 +2113,63 @@ const Car3D = (function () {
           0.016, 0.032, Math.max(0.025, half * 1.5 / cells),
           ersGlow, SURFACES.metal);
       }
-      // External high-voltage CONDUIT (`conduit`, 0..2): a glowing run carried on
-      // the engine-cover flank from the pack back to the MGU-K, with junction
-      // nodes at 2. Reads as visible hybrid plumbing from the chase camera and
-      // glows through the night emissive path like the cell strip above.
-      const ersConduit = Math.max(0, Math.min(2, Math.round(ersStyle.conduit || 0)));
-      if (ersConduit > 0 && !ckpt) {
-        const cf = anchors.coverAt(-0.72), cr = anchors.coverAt(-1.66);
-        for (const side of [-1, 1]) {
-          addSpan(out,
-            { z: cf.z, x: side*(cf.x + 0.014), y: cf.top - 0.07, w: 0.016, h: 0.022 },
-            { z: cr.z, x: side*(cr.x + 0.014), y: cr.top - 0.05, w: 0.014, h: 0.018 },
-            ersGlow, null, SURFACES.metal);
-          if (ersConduit >= 2) for (let i = 0; i < 3; i++) {
-            const z = -0.86 - i * 0.30, p = anchors.coverAt(z);
-            addBox(out, side*(p.x + 0.020), p.top - 0.062, z, 0.026, 0.038, 0.048,
-              [0.10, 0.10, 0.12], SURFACES.carbon);
+    }
+    const ersBlister = Math.max(0, Math.min(2, Math.round((ersStyle && ersStyle.blister) || 0)));
+    if (ersBlister > 0 && !ckpt) {
+      const bS = 0.92 + 0.18 * Math.max(0, ersPack - 1);
+      for (const side of [-1, 1]) {
+        const z0 = ersBlister >= 2 ? -0.78 : -0.84;
+        const z1 = ersBlister >= 2 ? -1.28 : -1.12;
+        const pf = anchors.coverAt(z0), pr = anchors.coverAt(z1);
+        addBeveledSpan(out,
+          { z: z0, x: side * (pf.x * 0.52), y: pf.top + 0.010 * bS,
+            w: 0.090 * bS, h: 0.032 * bS, t: 0.78 },
+          { z: z1, x: side * (pr.x * 0.52), y: pr.top + 0.006 * bS,
+            w: 0.068 * bS, h: 0.022 * bS, t: 0.70 },
+          0.007, CARBON);
+        const nSlot = ersBlister >= 2 ? 2 : 1;
+        for (let i = 0; i < nSlot; i++) {
+          const z = z0 - 0.06 - i * 0.14;
+          const p = anchors.coverAt(z);
+          addBox(out, side * (p.x * 0.52), p.top + 0.026 * bS, z,
+            0.055 * bS, 0.010, 0.036, INTAKE);
+        }
+        if (ersBlister >= 2) {
+          const p = anchors.coverAt(z1 + 0.04);
+          addBox(out, side * (p.x * 0.50), p.top + 0.018 * bS, z1 + 0.02,
+            0.040 * bS, 0.016, 0.028, INTAKE);
+        }
+      }
+    }
+    const ersConduit = Math.max(0, Math.min(2, Math.round((ersStyle && ersStyle.conduit) || 0)));
+    if (ersConduit > 0 && !ckpt) {
+      const cables = ersConduit >= 2 ? 2 : 1;
+      for (const side of [-1, 1]) {
+        const pod = anchors.podAt(-0.62);
+        const c0 = anchors.coverAt(-0.82);
+        const cMid = anchors.coverAt(-1.22);
+        const c2e = anchors.coverAt(-1.68);
+        for (let k = 0; k < cables; k++) {
+          const yo = k * -0.028;
+          const xo = k * 0.010 * side;
+          const pPack = [side * (pod.x + 0.022 + xo), pod.top + 0.018 + yo, -0.62];
+          const pEnter = [side * (c0.x + 0.016 + xo), c0.top - 0.055 + yo, c0.z];
+          const pMid = [side * (cMid.x + 0.016 + xo), cMid.top - 0.048 + yo, cMid.z];
+          const pK = [side * (c2e.x + 0.014 + xo), c2e.top - 0.040 + yo, c2e.z];
+          addBeamBetween(out, pPack, pEnter, 0.022, ersGlow, SURFACES.metal);
+          addBeamBetween(out, pEnter, pMid, 0.020, ersGlow, SURFACES.metal);
+          addBeamBetween(out, pMid, pK, 0.018, ersGlow, SURFACES.metal);
+        }
+        addBox(out, side * (pod.x + 0.028), pod.top + 0.014, -0.62,
+          0.030, 0.028, 0.038, [0.10, 0.10, 0.12], SURFACES.carbon);
+        addBox(out, side * (c2e.x + 0.018), c2e.top - 0.038, c2e.z,
+          0.026, 0.032, 0.040, [0.10, 0.10, 0.12], SURFACES.carbon);
+        if (ersConduit >= 2) {
+          for (let i = 0; i < 2; i++) {
+            const z = -0.96 - i * 0.28;
+            const p = anchors.coverAt(z);
+            addBox(out, side * (p.x + 0.022), p.top - 0.050, z,
+              0.028, 0.036, 0.044, [0.10, 0.10, 0.12], SURFACES.carbon);
           }
         }
       }
@@ -1951,28 +2218,62 @@ const Car3D = (function () {
             w: 0.013, h: 0.105 * fenceH },
           CARBON);
       }
-      // Floor EDGE WING: a chord extending past the floor edge, so the package
-      // changes the car's silhouette in plan view. Painted in the livery accent
-      // — the shape only reads if it is not another black-on-black detail.
+      // Floor EDGE WING + downturned seal. The painted chord still extends past
+      // the floor edge (silhouette in plan) but it is a thin beveled plate, not
+      // a fat slab; a carbon seal hangs below so "sealed edge" reads as hardware.
       const edgeLip = Math.max(0, Math.min(1, floorStyle.edgeLip || 0));
       if (edgeLip > 0) {
         const ef = floorEdgeAt(0.50), er = floorEdgeAt(-1.10);
         addSpan(out,
-          { z: 0.50, x: s * (ef + 0.028 + 0.050 * edgeLip), y: 0.122 + rideDY,
-            w: 0.050 + 0.070 * edgeLip, h: 0.016 },
-          { z: -1.10, x: s * (er + 0.028 + 0.050 * edgeLip), y: 0.148 + rideDY,
-            w: 0.040 + 0.060 * edgeLip, h: 0.014 },
-          accentC, null, SURFACES.paint);
+          { z: 0.50, x: s * (ef + 0.006), y: 0.080 + rideDY,
+            w: 0.014, h: 0.038 + 0.022 * edgeLip },
+          { z: -1.10, x: s * (er + 0.006), y: 0.094 + rideDY,
+            w: 0.012, h: 0.034 + 0.020 * edgeLip },
+          CARBON, null, SURFACES.carbon);
+        addBeveledSpan(out,
+          { z: 0.50, x: s * (ef + 0.030 + 0.048 * edgeLip), y: 0.118 + rideDY,
+            w: 0.038 + 0.055 * edgeLip, h: 0.012 },
+          { z: -1.10, x: s * (er + 0.028 + 0.042 * edgeLip), y: 0.138 + rideDY,
+            w: 0.032 + 0.048 * edgeLip, h: 0.010 },
+          0.004, accentC, null, SURFACES.paint);
       }
-      // Titanium skid blocks, moved OUTBOARD onto the floor edge underside: a
-      // bright metal strip under the dark floor, which is what actually catches
-      // the light (and the sparks) at a low camera angle.
+      if (Math.round(floorStyle.gurney || 0) > 0) {
+        const er = floorEdgeAt(-1.10);
+        addBox(out, s * (er + 0.028 + 0.042 * Math.max(0, edgeLip)), 0.154 + rideDY, -1.12,
+               0.026, 0.024, 0.014, CARBON, SURFACES.carbon);
+      }
+      if (Math.round(floorStyle.scroll || 0) > 0) {
+        const es = floorEdgeAt(-1.12), et = floorEdgeAt(-1.38);
+        addSpan(out,
+          { z: -1.08, x: s * (es + 0.010), y: 0.128 + rideDY, w: 0.022, h: 0.028 },
+          { z: -1.38, x: s * (et + 0.016), y: 0.172 + rideDY, w: 0.018, h: 0.050 },
+          CARBON, null, SURFACES.carbon);
+      }
+      const TI = [0.62, 0.60, 0.56];
       const skids = Math.max(0, Math.min(2, Math.round(floorStyle.skid || 0)));
       for (let i = 0; i < skids; i++) {
         const sz = 0.30 - i * 1.10;
-        addBox(out, s * (floorEdgeAt(sz) - 0.11), 0.056 + rideDY, sz, 0.17, 0.018, 0.30,
-               [0.62, 0.60, 0.56], SURFACES.metal);
+        const z0 = sz + 0.16, z1 = sz - 0.16;
+        addSpan(out,
+          { z: z0, x: s * (floorEdgeAt(z0) - 0.09), y: 0.062 + rideDY, w: 0.20, h: 0.010 },
+          { z: z1, x: s * (floorEdgeAt(z1) - 0.09), y: 0.062 + rideDY, w: 0.20, h: 0.010 },
+          CARBON, null, SURFACES.carbon);
+        addBox(out, s * (floorEdgeAt(sz) - 0.09), 0.050 + rideDY, sz, 0.145, 0.014, 0.22,
+               TI, SURFACES.metal);
+        for (const bz of [sz + 0.09, sz - 0.09]) {
+          addBox(out, s * (floorEdgeAt(bz) - 0.012), 0.070 + rideDY, bz, 0.014, 0.008, 0.014,
+                 [0.50, 0.48, 0.44], SURFACES.metal);
+        }
       }
+    }
+    if (Math.round(floorStyle.plank || 0) > 0 && !ckpt) {
+      const PLANK = [0.52, 0.40, 0.22];
+      addSpan(out,
+        { z: 0.58, x: 0, y: 0.038 + rideDY, w: 0.30, h: 0.012 },
+        { z: -1.36, x: 0, y: 0.038 + rideDY, w: 0.28, h: 0.012 },
+        PLANK, null, SURFACES.panel);
+      addBox(out, 0, 0.036 + rideDY,  0.55, 0.30, 0.010, 0.08, [0.62, 0.60, 0.56], SURFACES.metal);
+      addBox(out, 0, 0.036 + rideDY, -1.32, 0.28, 0.010, 0.08, [0.62, 0.60, 0.56], SURFACES.metal);
     }
     // --- Sidepod cooling CHIMNEYS (engine recipe `chimney`, 0..3): squat stacks
     // standing proud of the pod shoulder, each capped by a dark exit slot. The
@@ -1983,8 +2284,11 @@ const Car3D = (function () {
     for (const s of [-1, 1]) for (let i = 0; i < engChimney; i++) {
       const z = -0.16 - i * 0.30, p = anchors.podAt(z);
       const cx = s * Math.max(0.16, p.x - 0.055);
-      addBox(out, cx, p.top + 0.040, z, 0.060, 0.080, 0.105, CARBON);            // stack
-      addBox(out, cx, p.top + 0.084, z - 0.010, 0.048, 0.014, 0.078, INTAKE);    // exit slot
+      addSpan(out,
+        { z: z + 0.048, x: cx, y: p.top + 0.016, w: 0.078, h: 0.028, t: 0.85 },
+        { z: z - 0.048, x: cx, y: p.top + 0.068, w: 0.050, h: 0.078, t: 0.70 },
+        CARBON);
+      addBox(out, cx, p.top + 0.112, z - 0.012, 0.040, 0.014, 0.060, INTAKE);
     }
     // 2026 optional UPPER SIDEPOD DUCT (`duct`). The regs allow a ram on top
     // of the pod — the Benetton-like tell that reads as a 2026 concept vs a
@@ -2135,18 +2439,43 @@ const Car3D = (function () {
       addBox(out, 0, 0.79, 0.62, 0.045, 0.38, 0.045, HALO, SURFACES.metal); // front pillar
     }
     // COCKPIT recipe. haloBlade fairs the hoop into an aero section, haloWing
-    // adds the upper flap, camPods sets the T-cam count, screen adds the
-    // deflector ahead of the opening. All zero = the shipped cockpit.
+    // adds the upper winglet, camPods sets the T-cam count, screen adds the
+    // windscreen fairing ahead of the opening. All zero = the shipped cockpit.
+    // First-person build zeroes every knob (furniture lives around the head).
     const haloBlade = Math.max(0, Math.min(2, Math.round(ckpt ? 0 : cockpitStyle.haloBlade || 0)));
     if (haloBlade > 0) {
-      const bw = haloBlade === 2 ? 0.055 : 0.034;
+      // Aero-section sleeves on the SAME arcs as the beveled titanium halo.
+      // Sit proud of the tube so the metal bevel still catches light; knob 2
+      // thickens and adds a centre crown fairing. FIA C3.13.3: y ≥ 0.695.
+      const bw = haloBlade === 2 ? 0.072 : 0.048;
+      const bh = haloBlade === 2 ? 0.038 : 0.028;
+      const bladeC = haloTint || HALO;
       for (const s of [-1, 1]) {
-        addLoft(out, -0.15, s * 0.27, 0.775, bw, 0.016,
-                 0.62, 0, 0.735, bw * 0.7, 0.014, haloTint || HALO, SURFACES.metal);
+        addBeveledSpan(out,
+          { z: 0.49, x: 0, y: 0.828, w: bw, h: bh, t: 0.62 },
+          { z: 0.02, x: s * 0.30, y: 0.858, w: bw * 0.92, h: bh * 0.92, t: 0.62 },
+          0.010, bladeC, null, SURFACES.metal);
+        addBeveledSpan(out,
+          { z: 0.02, x: s * 0.30, y: 0.858, w: bw * 0.92, h: bh * 0.92, t: 0.62 },
+          { z: -0.44, x: s * 0.235, y: 0.530, w: bw * 0.85, h: bh * 0.80, t: 0.55 },
+          0.010, bladeC, null, SURFACES.metal);
+      }
+      if (haloBlade === 2) {
+        addBeveledSpan(out,
+          { z: 0.50, x: 0, y: 0.835, w: bw * 1.15, h: bh * 0.85, t: 0.50 },
+          { z: 0.30, x: 0, y: 0.850, w: bw * 0.70, h: bh * 0.70, t: 0.55 },
+          0.008, bladeC, null, SURFACES.metal);
       }
     }
     if (cockpitStyle.haloWing && !ckpt) {
-      addBox(out, 0, 0.805, 0.10, 0.30, 0.014, 0.11, haloTint || HALO, SURFACES.metal);
+      const wingC = haloTint || HALO;
+      addBeveledSpan(out,
+        { z: 0.18, x: 0, y: 0.875, w: 0.32, h: 0.016, t: 0.50 },
+        { z: -0.02, x: 0, y: 0.868, w: 0.24, h: 0.012, t: 0.42 },
+        0.005, wingC, null, SURFACES.metal);
+      for (const s of [-1, 1]) {
+        addBox(out, s * 0.155, 0.872, 0.08, 0.010, 0.028, 0.10, wingC, SURFACES.metal);
+      }
     }
     // Halo furniture, T-cam pods and the deflector all live around the driver's
     // head too — same reasoning as the hoop above, so the first-person build
@@ -2154,11 +2483,22 @@ const Car3D = (function () {
     const camPods = Math.max(0, Math.min(2, Math.round(ckpt ? 0 : cockpitStyle.camPods || 0)));
     for (let i = 0; i < camPods; i++) {
       const s = i === 0 ? -1 : 1;
-      addBox(out, s * 0.13, 0.795, -0.16, 0.045, 0.038, 0.075, DARK);
-      addBox(out, s * 0.13, 0.795, -0.125, 0.026, 0.022, 0.012, VISOR, SURFACES.glass);
+      addBeamBetween(out,
+        [s * 0.11, 0.760, -0.20],
+        [s * 0.12, 0.812, -0.14],
+        0.014, DARK);
+      addBox(out, s * 0.12, 0.818, -0.118, 0.030, 0.026, 0.042, DARK);
+      addBox(out, s * 0.12, 0.818, -0.094, 0.016, 0.014, 0.008, VISOR, SURFACES.glass);
     }
     if (cockpitStyle.screen && !ckpt) {
-      addLoft(out, 0.50, 0, 0.665, 0.34, 0.030, 0.66, 0, 0.700, 0.24, 0.026, DARK);
+      addLoft(out, 0.48, 0, 0.655, 0.40, 0.028,
+                   0.62, 0, 0.720, 0.20, 0.022, DARK);
+      addLoft(out, 0.495, 0, 0.668, 0.34, 0.018,
+                   0.605, 0, 0.710, 0.16, 0.014, VISOR, SURFACES.glass);
+      for (const s of [-1, 1]) {
+        addLoft(out, 0.50, s * 0.16, 0.690, 0.10, 0.020,
+                     0.58, s * 0.06, 0.730, 0.06, 0.016, DARK);
+      }
     }
 
     part("mirrors");
@@ -2264,40 +2604,83 @@ const Car3D = (function () {
     const exhBore = Math.max(0.7, Math.min(1.5, exhStyle.bore));
     const exhR = (engStyle ? (engStyle.twin ? 0.09 : (engStyle.in < 0.9 ? 0.05 : 0.07))
                           : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07)) * exhBore;
-    addBox(out, 0, 0.40, -2.12, exhR, exhR, 0.16, [0.16, 0.16, 0.17], SURFACES.metal);
-    // Megaphone flare: the bore opens out over the last few centimetres.
+    const fuelFlame = fuelStyle && fuelStyle.flame || [1.15, 0.42, 0.14];
+    const fTwin = [fuelFlame[0]*0.9, fuelFlame[1]*0.9, fuelFlame[2]*0.9];
+    const exhMetal = [0.16, 0.16, 0.17];
+    const exhFlareC = [0.18, 0.18, 0.19];
+    const glazeOf = (rgb) => rgb.map((value) => Math.min(value * 0.45, 0.65));
+    const exhDia = (cx, cy, z, r) => [
+      [cx, cy - r, z], [cx + r, cy, z], [cx, cy + r, z], [cx - r, cy, z],
+    ];
+    addBox(out, 0, 0.40, -2.12, exhR, exhR, 0.16, exhMetal, SURFACES.metal);
     const exhFlare = Math.max(0, Math.min(1, exhStyle.flare || 0));
     if (exhFlare > 0) {
+      const tip = exhR * (1 + 0.55 * exhFlare);
       addLoft(out, -2.16, 0, 0.40, exhR * 2, exhR * 2,
-              -2.23, 0, 0.40, exhR * 2 * (1 + 0.55 * exhFlare), exhR * 2 * (1 + 0.55 * exhFlare),
-              [0.18, 0.18, 0.19], SURFACES.metal);
+              -2.23, 0, 0.40, tip * 2, tip * 2,
+              exhFlareC, SURFACES.metal);
+      addStationLoft(out, [
+        exhDia(0, 0.40, -2.16, exhR),
+        exhDia(0, 0.40, -2.23, tip),
+      ], exhFlareC, null, SURFACES.metal);
+      addBox(out, 0, 0.40, -2.245, tip * 2.18, tip * 2.18, 0.018,
+             [0.22, 0.22, 0.24], SURFACES.metal);
+      addBox(out, 0, 0.40, -2.250, tip * 1.45, tip * 1.45, 0.016,
+             [0.05, 0.04, 0.04], SURFACES.carbon);
     }
-    // Heat wrap: a pale bandage band around the primary, just ahead of the tip.
     if (exhStyle.wrap) {
       addBox(out, 0, 0.40, -2.04, exhR * 1.18, exhR * 1.18, 0.06,
              [0.72, 0.70, 0.66], SURFACES.panel);
+      addBox(out, 0, 0.40, -2.00, exhR * 1.24, exhR * 1.12, 0.045,
+             [0.68, 0.66, 0.62], SURFACES.panel);
+      addBox(out, 0, 0.40, -1.96, exhR * 1.14, exhR * 1.22, 0.045,
+             [0.74, 0.72, 0.67], SURFACES.panel);
+      addBox(out, 0, 0.40, -2.02, exhR * 1.30, 0.012, 0.012,
+             [0.22, 0.22, 0.24], SURFACES.metal);
     }
-    // Wastegate stacks: short pipes venting up and out above the primary.
     const exhGates = Math.max(0, Math.min(2, Math.round(exhStyle.wastegate || 0)));
     for (let i = 0; i < exhGates; i++) {
       const s = i === 0 ? -1 : 1;
       addSpan(out, { z: -2.02, x: s * 0.075, y: 0.47, w: 0.036, h: 0.036 },
                    { z: -2.16, x: s * 0.095, y: 0.53, w: 0.030, h: 0.030 },
               [0.20, 0.20, 0.22], null, SURFACES.metal);
+      addBox(out, s * 0.098, 0.535, -2.175, 0.034, 0.034, 0.028,
+             [0.22, 0.22, 0.24], SURFACES.metal);
+      addBox(out, s * 0.098, 0.535, -2.192, 0.020, 0.020, 0.012,
+             glazeOf(fTwin), SURFACES.metal);
     }
-    // Heat-glazed tailpipe mouth: a dark bore tinted by the fuel blend; transient
-    // after-fire is rendered separately from live throttle state.
-    // signature colour (green biofuel, violet quali mix, …), read racing behind it.
-    const fuelFlame = fuelStyle && fuelStyle.flame || [1.15, 0.42, 0.14];
-    const fTwin = [fuelFlame[0]*0.9, fuelFlame[1]*0.9, fuelFlame[2]*0.9];
     addBox(out, 0, 0.40, -2.185, exhR*0.72, exhR*0.72, 0.03, [0.05, 0.04, 0.04], SURFACES.carbon);
     addBox(out, 0, 0.40, -2.198, exhR*0.55, exhR*0.55, 0.012,
-           fuelFlame.map((value) => Math.min(value * 0.45, 0.65)), SURFACES.metal);
+           glazeOf(fuelFlame), SURFACES.metal);
     if (exhTwin) {
       for (const s of [-1, 1]) {
-        addBox(out, s*0.15, 0.40, -2.10, 0.045, 0.045, 0.14, [0.16, 0.16, 0.17], SURFACES.metal);
+        addBox(out, s*0.15, 0.40, -2.10, 0.045, 0.045, 0.14, exhMetal, SURFACES.metal);
         addBox(out, s*0.15, 0.40, -2.172, 0.026, 0.026, 0.012,
-               fTwin.map((value) => Math.min(value * 0.45, 0.65)), SURFACES.metal);
+               glazeOf(fTwin), SURFACES.metal);
+        addStationLoft(out, [
+          exhDia(s * 0.15, 0.40, -2.03, 0.045),
+          exhDia(s * 0.15, 0.40, -2.17, 0.045),
+        ], exhMetal, null, SURFACES.metal);
+      }
+      addBox(out, 0, 0.40, -2.05, 0.32, 0.018, 0.040, exhMetal, SURFACES.metal);
+    }
+    const exhLip = Math.max(0, Math.min(2, Math.round(exhStyle.lip || 0)));
+    if (exhLip >= 1) {
+      const colR = exhR * (1 + 0.22 * exhLip);
+      addBox(out, 0, 0.40, -2.08, colR * 2.15, colR * 2.15, 0.09, CARBON, SURFACES.carbon);
+      addBox(out, 0, 0.40, -2.125, colR * 1.95, colR * 1.95, 0.03,
+             [0.20, 0.20, 0.22], SURFACES.metal);
+    }
+    if (exhLip >= 2) {
+      const colR = exhR * 1.44;
+      addBox(out, 0, 0.40, -2.02, colR * 2.35, colR * 2.35, 0.06, CARBON, SURFACES.carbon);
+    }
+    if (exhStyle.shield) {
+      addBox(out, 0, 0.40 + exhR + 0.028, -2.05, Math.max(0.12, exhR * 2.6), 0.010, 0.16,
+             [0.32, 0.30, 0.28], SURFACES.metal);
+      for (const s of [-1, 1]) {
+        addBox(out, s * (exhR + 0.022), 0.40 + exhR * 0.45, -2.05, 0.010, exhR * 1.05, 0.13,
+               [0.28, 0.26, 0.24], SURFACES.metal);
       }
     }
 
@@ -2645,31 +3028,68 @@ const Car3D = (function () {
       const gbHeat    = gbStyle ? (gbStyle.heat    || 0) : 0;
       const gbFinSY   = gbStyle && gbStyle.finSY ? gbStyle.finSY : 0.14;
       const gbFinSZ   = gbStyle && gbStyle.finSZ ? gbStyle.finSZ : 0.28;
+      const gbHeatFins = gbStyle ? Math.max(0, Math.min(5, Math.round(gbStyle.heatFins || 0))) : 0;
+      const gbRibs     = gbStyle ? Math.max(0, Math.min(3, Math.round(gbStyle.ribs || 0))) : 0;
+      const gbCaseWmul = Math.max(0.75, Math.min(1.35, (gbStyle && gbStyle.caseWidth) || 1));
       if (gbStrakes > 0) {
-        // Diffuser strakes — count AND height vary per spec (taller = higher-DF 'box).
         const half = (gbStrakes - 1) / 2;
         for (let i = 0; i < gbStrakes; i++) {
           addBox(out, (i - half) * 0.24, 0.13 + gbStrakeH / 2, -2.20, 0.015, gbStrakeH, 0.42, CARBON);
         }
       }
-      // Gearbox casing bulge behind the engine cover — a bellhousing form that
-      // grows and gains structure with the spec (slim → ribbed tail case → broad
-      // carbon case with side plates), so each 'box shows a distinct rear mass.
+      let gbCw = 0, gbCh = 0;
       if (gbCasing > 0) {
-        const cw = (0.15 + gbCasing * 0.05) *
-          Math.max(0.75, Math.min(1.35, gbStyle.caseWidth || 1));
-        const ch = 0.13 + gbCasing * 0.03;
-        addBox(out, 0, 0.44, -2.02, cw, ch, 0.26, CARBON);                    // bellhousing bulge
-        if (gbCasing >= 2) addBox(out, 0, 0.42, -2.17, cw * 0.78, ch * 0.78, 0.11, DARK); // tapered tail case
-        if (gbCasing >= 3) for (const s of [-1, 1])
-          addBox(out, s * (cw * 0.5 + 0.012), 0.44, -2.02, 0.02, ch * 0.9, 0.24, [0.09, 0.09, 0.10], SURFACES.carbon); // carbon side plate
+        gbCw = (0.15 + gbCasing * 0.05) * gbCaseWmul;
+        gbCh = 0.13 + gbCasing * 0.03;
+        addBox(out, 0, 0.44, -1.92, gbCw * 1.08, gbCh * 1.12, 0.04, CARBON, SURFACES.carbon);
+        addSpan(out,
+          { z: -1.94, y: 0.44, w: gbCw * 1.02, h: gbCh, t: 0.90 },
+          { z: -2.12, y: 0.435, w: gbCw, h: gbCh * 0.96, t: 0.88 },
+          CARBON, null, SURFACES.carbon);
+        if (gbCasing >= 2) {
+          addSpan(out,
+            { z: -2.12, y: 0.42, w: gbCw * 0.92, h: gbCh * 0.82, t: 0.88 },
+            { z: -2.26, y: 0.40, w: gbCw * 0.58, h: gbCh * 0.62, t: 0.85 },
+            DARK, null, SURFACES.carbon);
+        }
+        if (gbCasing >= 3) {
+          for (const s of [-1, 1]) {
+            addBox(out, s * (gbCw * 0.5 + 0.012), 0.44, -2.04, 0.02, gbCh * 0.9, 0.22,
+                   [0.09, 0.09, 0.10], SURFACES.carbon);
+            addBox(out, s * (gbCw * 0.42), 0.32, -2.00, 0.04, 0.05, 0.10, DARK);
+          }
+        }
       }
-      // Cooling-louvre bank on the casing flanks — count varies per spec.
-      if (gbLouvres > 0) for (const s of [-1, 1]) for (let i = 0; i < gbLouvres; i++)
-        addBox(out, s * 0.135, 0.50 - i * 0.042, -2.02, 0.03, 0.013, 0.20, INTAKE);
-      // Titanium heat-shield plate over the top of the 'box (higher specs).
-      if (gbHeat) addBox(out, 0, 0.55, -2.06, 0.19, 0.014, 0.28, [0.30, 0.30, 0.34], SURFACES.metal);
-      if (gbFin) addBox(out, 0, 0.27 + gbFinSY / 2, -2.30, 0.02, gbFinSY, gbFinSZ, CARBON);   // crash-structure fin
+      if (gbRibs > 0) {
+        const ribW = gbCasing > 0 ? gbCw * 0.48 : 0.16;
+        const ribH = gbCasing > 0 ? gbCh * 0.72 : 0.10;
+        for (const s of [-1, 1]) for (let i = 0; i < gbRibs; i++) {
+          addBox(out, s * ribW, 0.44, -1.96 - i * 0.07,
+                 0.012, ribH, 0.04, CARBON, SURFACES.carbon);
+        }
+      }
+      if (gbLouvres > 0) {
+        const hx = gbCasing > 0 ? (gbCw * 0.5 + 0.018) : 0.135;
+        for (const s of [-1, 1]) for (let i = 0; i < gbLouvres; i++) {
+          const y = 0.52 - i * 0.038;
+          addBox(out, s * hx, y, -2.02, 0.028, 0.012, 0.18, INTAKE);
+          addBox(out, s * (hx + 0.012), y + 0.008, -2.00, 0.012, 0.008, 0.16, CARBON);
+        }
+      }
+      if (gbHeat) {
+        const hw = gbCasing > 0 ? Math.max(0.16, gbCw * 0.88) : 0.19;
+        addBox(out, 0, 0.55, -2.06, hw, 0.014, 0.28, [0.30, 0.30, 0.34], SURFACES.metal);
+      }
+      if (gbHeatFins > 0) {
+        const half = (gbHeatFins - 1) / 2;
+        const span = gbCasing > 0 ? Math.max(0.12, gbCw * 0.70) : 0.14;
+        const step = gbHeatFins > 1 ? span / (gbHeatFins - 1) : 0;
+        for (let i = 0; i < gbHeatFins; i++) {
+          addBox(out, (i - half) * step, 0.575, -2.06, 0.010, 0.045, 0.22,
+                 [0.30, 0.30, 0.34], SURFACES.metal);
+        }
+      }
+      if (gbFin) addBox(out, 0, 0.27 + gbFinSY / 2, -2.30, 0.02, gbFinSY, gbFinSZ, CARBON);
     }
 
     part("brakeDucts");
@@ -2690,11 +3110,21 @@ const Car3D = (function () {
       addBox(out, s*0.60, 0.28, AXLES.frontZ + 0.19, 0.06, 0.20 * ductMul, 0.13 * ductMul, DARK);
       // Big-brake spec: a horizontal duct winglet scooping over each front wheel.
       if (brakeScoop >= 1) addBox(out, s*0.65, 0.42, AXLES.frontZ + 0.16, 0.11, 0.02, 0.15, CARBON);
+      if (brakeScoop >= 1) {
+        addBox(out, s*0.65, 0.355, AXLES.frontZ + 0.22, 0.08, 0.055, 0.04, INTAKE);
+        addBox(out, s*0.65, 0.395, AXLES.frontZ + 0.245, 0.09, 0.012, 0.03, CARBON);
+        addBox(out, s*0.65, 0.315, AXLES.frontZ + 0.245, 0.09, 0.012, 0.03, CARBON);
+      }
       if (brakeScoop >= 2) {
-        addBox(out, s*0.705, 0.38, AXLES.frontZ + 0.15, 0.014, 0.12, 0.17, CARBON);   // outboard fence
-        addBox(out, s*0.655, 0.20, AXLES.frontZ + 0.11, 0.10, 0.016, 0.20, CARBON);   // lower deflector
+        addBox(out, s*0.705, 0.38, AXLES.frontZ + 0.15, 0.014, 0.12, 0.17, CARBON);
+        addBox(out, s*0.655, 0.20, AXLES.frontZ + 0.11, 0.10, 0.016, 0.20, CARBON);
+        addBox(out, s*0.595, 0.32, AXLES.frontZ + 0.14, 0.014, 0.10, 0.16, CARBON);
       }
       if (!ckpt) addBox(out, s*0.58, 0.30, AXLES.rearZ - 0.20, 0.06, 0.18 * ductMul, 0.12 * ductMul, DARK);
+      if (brakeScoop >= 1 && !ckpt) {
+        addBox(out, s*0.58, 0.355, AXLES.rearZ - 0.275, 0.07, 0.040, 0.045, INTAKE);
+        addBox(out, s*0.58, 0.385, AXLES.rearZ - 0.295, 0.08, 0.010, 0.028, CARBON);
+      }
     }
 
     part("suspension");
@@ -2710,15 +3140,42 @@ const Car3D = (function () {
     // Inboard ROCKER fairing on the tub top ahead of the dash — the blister that
     // covers the heave/rocker assembly. A silhouette tell no arm scaling gives.
     const rockerLvl = Math.max(0, Math.min(2, Math.round(suspStyle.rocker || 0)));
-    if (rockerLvl > 0) {
-      const rh = rockerLvl === 2 ? 0.055 : 0.032;
-      addLoft(out, 0.78, 0, 0.545 + rideDY + rh * 0.5, 0.20, rh,
-              1.16, 0, 0.500 + rideDY + rh * 0.4, 0.15, rh * 0.8, CARBON);
-      if (rockerLvl === 2) {
-        for (const s of [-1, 1]) {
-          addBox(out, s * 0.085, 0.575 + rideDY, 0.95, 0.020, 0.030, 0.16,
-                 [0.24, 0.24, 0.27], SURFACES.metal);
-        }
+    const heaveOn = Math.max(0, Math.min(1, Math.round(suspStyle.heave || 0)));
+    const fairArms = !!(wbPush || wbPull || rockerLvl || heaveOn);
+    const drawArm = fairArms ? addFairedArm : addBeamBetween;
+    if (rockerLvl === 1) {
+      for (const s of [-1, 1]) {
+        addLoft(out, 0.88, s * 0.11, 0.545 + rideDY, 0.10, 0.036,
+                1.12, s * 0.09, 0.530 + rideDY, 0.08, 0.028, CARBON);
+      }
+      addBeamBetween(out, [-0.10, 0.545 + rideDY, 0.98],
+        [0.10, 0.545 + rideDY, 0.98], 0.016, suspC, SURFACES.carbon);
+    } else if (rockerLvl === 2) {
+      addLoft(out, 0.72, 0, 0.555 + rideDY, 0.28, 0.050,
+              1.18, 0, 0.515 + rideDY, 0.22, 0.038, CARBON);
+      for (const s of [-1, 1]) {
+        addBox(out, s * 0.075, 0.590 + rideDY, 0.94, 0.028, 0.055, 0.055,
+               [0.24, 0.24, 0.27], SURFACES.metal);
+        addBox(out, s * 0.12, 0.568 + rideDY, 0.96, 0.055, 0.012, 0.08,
+               CARBON, SURFACES.carbon);
+      }
+      if (!ckpt) {
+        addLoft(out, -1.38, 0, 0.520 + rideDY, 0.18, 0.042,
+                -1.14, 0, 0.500 + rideDY, 0.14, 0.032, CARBON);
+      }
+    }
+    if (heaveOn) {
+      const hy = 0.562 + rideDY, hz = 0.99;
+      addBox(out, 0, hy, hz, 0.20, 0.030, 0.030,
+             [0.26, 0.26, 0.29], SURFACES.metal);
+      addBox(out, 0, hy + 0.020, hz - 0.038, 0.09, 0.024, 0.050,
+             CARBON, SURFACES.carbon);
+      for (const s of [-1, 1]) {
+        const px = rockerLvl === 2 ? 0.075 : rockerLvl === 1 ? 0.11 : 0.18;
+        const py = (rockerLvl === 2 ? 0.575 : rockerLvl === 1 ? 0.545 : 0.505) + rideDY;
+        const pz = rockerLvl === 2 ? 0.94 : 0.98;
+        addBeamBetween(out, [s * 0.09, hy, hz], [s * px, py, pz],
+                       armTh * 0.5, suspC, SURFACES.carbon);
       }
     }
     const wishboneSpread = 0.20 * Math.max(0.72, Math.min(1.3, suspStyle.wishbone));
@@ -2726,11 +3183,18 @@ const Car3D = (function () {
     for (const s of [-1, 1]) {
       const fLower = [s*0.69, 0.27 + rideDY, AXLES.frontZ];
       const fUpper = [s*0.69, 0.43 + rideDY, AXLES.frontZ];
-      for (const z of [AXLES.frontZ - wishboneSpread, AXLES.frontZ + wishboneSpread]) {
-        addBeamBetween(out, [s*0.31, 0.23 + rideDY, z], fLower, armTh, suspC, SURFACES.carbon);
-        addBeamBetween(out, [s*0.32, 0.44 + rideDY, z], fUpper, armTh, suspC, SURFACES.carbon);
+      const fLowZ = [AXLES.frontZ - wishboneSpread, AXLES.frontZ + wishboneSpread];
+      for (const z of fLowZ) {
+        drawArm(out, [s*0.31, 0.23 + rideDY, z], fLower, armTh, suspC, SURFACES.carbon);
+        drawArm(out, [s*0.32, 0.44 + rideDY, z], fUpper, armTh, suspC, SURFACES.carbon);
       }
-      addBeamBetween(out, [s*0.33, 0.34 + rideDY, AXLES.frontZ - 0.16],
+      if (fairArms) {
+        addWishboneWeb(out, [s*0.31, 0.23 + rideDY, fLowZ[0]],
+          [s*0.31, 0.23 + rideDY, fLowZ[1]], fLower, suspC, SURFACES.carbon);
+        addWishboneWeb(out, [s*0.32, 0.44 + rideDY, fLowZ[0]],
+          [s*0.32, 0.44 + rideDY, fLowZ[1]], fUpper, suspC, SURFACES.carbon);
+      }
+      drawArm(out, [s*0.33, 0.34 + rideDY, AXLES.frontZ - 0.16],
         [s*0.69, 0.35 + rideDY, AXLES.frontZ - 0.04*toeScale],
         armTh*0.72*toeScale, suspC, SURFACES.carbon);
       addBox(out, s*0.69, 0.35 + rideDY, AXLES.frontZ, 0.055, 0.23, 0.10,
@@ -2739,16 +3203,23 @@ const Car3D = (function () {
         const outer = wbPull ? fUpper : fLower;
         const inner = wbPull ? [s*0.30,0.20+rideDY,AXLES.frontZ-0.05]
           : [s*0.30,0.51+rideDY,AXLES.frontZ-0.05];
-        addBeamBetween(out, outer, inner, armTh*0.82, suspC, SURFACES.carbon);
+        drawArm(out, outer, inner, armTh*0.82, suspC, SURFACES.carbon);
       }
       if (!ckpt) {
         const rLower = [s*0.67, 0.28 + rideDY, AXLES.rearZ];
         const rUpper = [s*0.67, 0.45 + rideDY, AXLES.rearZ];
-        for (const z of [AXLES.rearZ - wishboneSpread*0.9, AXLES.rearZ + wishboneSpread*0.9]) {
-          addBeamBetween(out, [s*0.31, 0.25 + rideDY, z], rLower, armTh, suspC, SURFACES.carbon);
-          addBeamBetween(out, [s*0.32, 0.46 + rideDY, z], rUpper, armTh, suspC, SURFACES.carbon);
+        const rLowZ = [AXLES.rearZ - wishboneSpread*0.9, AXLES.rearZ + wishboneSpread*0.9];
+        for (const z of rLowZ) {
+          drawArm(out, [s*0.31, 0.25 + rideDY, z], rLower, armTh, suspC, SURFACES.carbon);
+          drawArm(out, [s*0.32, 0.46 + rideDY, z], rUpper, armTh, suspC, SURFACES.carbon);
         }
-        addBeamBetween(out, [s*0.31, 0.36 + rideDY, AXLES.rearZ + 0.16],
+        if (fairArms) {
+          addWishboneWeb(out, [s*0.31, 0.25 + rideDY, rLowZ[0]],
+            [s*0.31, 0.25 + rideDY, rLowZ[1]], rLower, suspC, SURFACES.carbon);
+          addWishboneWeb(out, [s*0.32, 0.46 + rideDY, rLowZ[0]],
+            [s*0.32, 0.46 + rideDY, rLowZ[1]], rUpper, suspC, SURFACES.carbon);
+        }
+        drawArm(out, [s*0.31, 0.36 + rideDY, AXLES.rearZ + 0.16],
           [s*0.67, 0.36 + rideDY, AXLES.rearZ + 0.04*toeScale],
           armTh*0.72*toeScale, suspC, SURFACES.carbon);
         addBox(out, s*0.67, 0.36 + rideDY, AXLES.rearZ, 0.055, 0.23, 0.10,
@@ -2757,7 +3228,7 @@ const Car3D = (function () {
           const outer = wbPull ? rUpper : rLower;
           const inner = wbPull ? [s*0.29,0.22+rideDY,AXLES.rearZ+0.04]
             : [s*0.29,0.53+rideDY,AXLES.rearZ+0.04];
-          addBeamBetween(out, outer, inner, armTh*0.82, suspC, SURFACES.carbon);
+          drawArm(out, outer, inner, armTh*0.82, suspC, SURFACES.carbon);
         }
       }
     }

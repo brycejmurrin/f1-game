@@ -111,7 +111,7 @@
       // class coplanar-faces.test.mjs ratchets. Ending each bay ~1 m short of
       // the next removes the shared plane rather than papering over it; the seam
       // sits behind the terrace colour bands, which run continuously past it.
-      const OUTER_BAYS = 30, OUTER_SPAN = 0.3396;   // 12 x 0.0283 — unchanged run
+      const OUTER_BAYS = 40, OUTER_SPAN = 0.3396;   // 12 x 0.0283 — unchanged run
       const OUTER_RUN = 1384;                       // metres of wall the span covers
       for (let i = 0; i < OUTER_BAYS; i++) {
         const s = 0.86 + i * (OUTER_SPAN / OUTER_BAYS);  // wraps through 0 across the front straight
@@ -123,20 +123,25 @@
         });
       }
       // Inner (infield) stands facing back across the front straight.
-      for (let i = 0; i < 6; i++) {
-        grandstandEx((0.90 + i * 0.030) % 1, -1, 13, 96, null, null, {
+      for (let i = 0; i < 12; i++) {
+        grandstandEx((0.90 + i * 0.015) % 1, -1, 13, 46, null, null, {
           livery: i % 2 ? "alu" : "concrete", tiers: 2, endWalls: false,
         });
       }
       // Terraced seating colour bands — blue/white/red bucket seats are what
-      // makes an empty Speedway stand read as a Speedway stand.
-      for (let i = 0; i < 22; i++) {
-        const s = (0.86 + i * 0.0155) % 1;
-        const a = anchor(K(s), 1, 15);
+      // makes an empty Speedway stand read as a Speedway stand. Same bay
+      // cadence as the shells: a 62 m colour slab on the oval turn was a
+      // longer chord than the stand it dressed, and that is what
+      // props-over-road still read at racing 0.33 after the shell split.
+      const SEAT_BAYS = 44;
+      for (let i = 0; i < SEAT_BAYS; i++) {
+        const s = (0.86 + i * (OUTER_SPAN / SEAT_BAYS)) % 1;
+        const a = anchor(K(s), 1, 16);
+        const len = OUTER_RUN / SEAT_BAYS * 0.88;
         out._mat = MAT.FABRIC;
         for (let t = 0; t < 3; t++) {
           addBox(out, vadd(vadd(a.c, a.r, t * 2.2), a.u, 4 + t * 2.6),
-            [2.0, 0.9, 62], SEAT[(i + t) % 3], [a.r, a.u, a.t]);
+            [2.0, 0.9, len], SEAT[(i + t) % 3], [a.r, a.u, a.t]);
         }
         out._mat = 0;
       }
@@ -335,7 +340,7 @@
       // the oval. grandstandEx would give all three the same roofed shell as
       // the main straight and erase exactly that contrast, which is the whole
       // reason the road course looks like a different venue from the oval.
-      bleacher(0.292, 0.309, -1, 22, {
+      bleacher(0.292, 0.309, -1, 28, {
         rows: 8, step: 8, density: 0.44,
         plankCol: [0.66, 0.67, 0.70], frameCol: [0.58, 0.59, 0.62],
         crowd: [[0.30, 0.42, 0.66], [0.86, 0.86, 0.84], [0.72, 0.20, 0.18]],
@@ -459,13 +464,13 @@
       }
       // Carry the blue/white/red bucket-seat bands over those two segments so
       // the added stands read as Speedway seating, not a grey terrace.
-      for (let i = 0; i < 5; i++) {
-        const s = (0.188 + i * 0.011) % 1;
-        const a = anchor(K(s), 1, 15);
+      for (let i = 0; i < 10; i++) {
+        const s = (0.188 + i * 0.0055) % 1;
+        const a = anchor(K(s), 1, 16);
         out._mat = MAT.FABRIC;
         for (let t = 0; t < 3; t++) {
           addBox(out, vadd(vadd(a.c, a.r, t * 2.2), a.u, 4 + t * 2.6),
-            [2.0, 0.9, 60], SEAT[(i + t) % 3], [a.r, a.u, a.t]);
+            [2.0, 0.9, 28], SEAT[(i + t) % 3], [a.r, a.u, a.t]);
         }
         out._mat = 0;
       }

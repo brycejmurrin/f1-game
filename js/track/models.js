@@ -169,6 +169,36 @@ const TrackModels = (function () {
   // blame for what two property loads were doing. 1/0 === Infinity, so the
   // comparison is unchanged.
   const POSINF = 1 / 0, NEGINF = -1 / 0;
+
+  // Tight oriented box of the vertices actually emitted, in `bounds.basis`.
+  // Used to re-run the road-footprint preflight on the real geometry rather
+  // than the box the author declared (see modelGroup).
+  function emittedBox(stage, bounds) {
+    const b = bounds && bounds.basis;
+    const r = b ? b[0] : [1, 0, 0], u = b ? b[1] : [0, 1, 0], f = b ? b[2] : [0, 0, 1];
+    const p = stage.pos;
+    let minR = POSINF, maxR = NEGINF, minU = POSINF, maxU = NEGINF, minF = POSINF, maxF = NEGINF;
+    for (let i = 0; i < p.length; i += 3) {
+      const pr = p[i] * r[0] + p[i + 1] * r[1] + p[i + 2] * r[2];
+      const pu = p[i] * u[0] + p[i + 1] * u[1] + p[i + 2] * u[2];
+      const pf = p[i] * f[0] + p[i + 1] * f[1] + p[i + 2] * f[2];
+      if (pr < minR) minR = pr; if (pr > maxR) maxR = pr;
+      if (pu < minU) minU = pu; if (pu > maxU) maxU = pu;
+      if (pf < minF) minF = pf; if (pf > maxF) maxF = pf;
+    }
+    if (!(maxR > minR) || !(maxU > minU) || !(maxF > minF)) return null;
+    const midR = (minR + maxR) / 2, midU = (minU + maxU) / 2, midF = (minF + maxF) / 2;
+    return {
+      center: [
+        r[0] * midR + u[0] * midU + f[0] * midF,
+        r[1] * midR + u[1] * midU + f[1] * midF,
+        r[2] * midR + u[2] * midU + f[2] * midF,
+      ],
+      size: [maxR - minR, maxU - minU, maxF - minF],
+      basis: b || [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+    };
+  }
+
   function firstNonFinite(a) {
     for (let i = 0; i < a.length; i++) {
       const v = a[i];
@@ -266,16 +296,21 @@ const TrackModels = (function () {
       // is what tests/specs/props-over-road.spec.js has been failing on for
       // COTA and Indianapolis.
       //
-      // REPORTED, NOT REJECTED, and deliberately so: rejecting here would
-      // silently delete authored scenery across 40 circuits on a rule whose
-      // blast radius nobody has measured. The count this produces is the input
-      // to that decision — read it with __apex.modelDiagnostics(). Promote to a
-      // suppression (or re-run preflight on the real AABB) once the population
-      // is known and the offenders' bounds are corrected.
+      // Declared-box mismatch is still reported (vertical apron slack is
+      // common and harmless). The ROAD test now runs on the emitted box:
+      // COTA's amphitheater declared 8 m further out than it built, passed
+      // preflight, and put 4.79 m of stage over the racing line. Lateral-only
+      // — rejBox is an XZ footprint, so a taller-than-declared apron does not
+      // fail 40 circuits.
       const escaped = boundsEscape(stage, bounds);
       if (escaped) {
         (diagnostics.escaped || (diagnostics.escaped = []))
           .push(Object.assign({ id, required, kind, vertices }, escaped));
+      }
+      const actual = emittedBox(stage, bounds);
+      if (actual && !preflight(Object.assign({ id }, actual))) {
+        diagnostics.suppressed.push({ id, required, reason: "emitted footprint rejected" });
+        return false;
       }
       appendBuffer(out, stage, id);
       diagnostics.emitted.push({ id, required, vertices, kind });

@@ -35,9 +35,14 @@ function load(over = {}) {
     demoteCarKinematic: () => {},
     carBodyPose: () => pose,
   };
+  const wall = over.wallAt != null ? over.wallAt : 8;
   const ctx = vm.createContext({
     Math, JSON, Object, Array, String, Number, Map, Set, Uint8Array,
     isNaN, isFinite, console, DebrisWorld,
+    Tracks: {
+      sample: () => {},
+      wallAt: () => wall,
+    },
   });
   seedLog(ctx);
   // js/mat4.js first — the shared scalar helpers (M4.clamp) incidentsim.js binds at eval.
@@ -48,11 +53,11 @@ function load(over = {}) {
                           yawRateCur: 0, prog: s, finished: false, retired: false, human: false });
   const cars = [mkCar(100), mkCar(103)];
   const G = { cars, player: cars[0], track: { total: 5000 },
-              trackFrom: () => ({ s: 100, x: 0 }),
-              worldFromTrack: () => ({ x: 0, z: 0 }),
+              trackFrom: over.trackFrom || (() => ({ s: 100, x: 0 })),
+              worldFromTrack: over.worldFromTrack || (() => ({ x: 0, z: 0 })),
               rescuePlayer: () => {}, smp: {} };
   const sim = IncidentSim.create(G);
-  return { sim, cars, promoted };
+  return { sim, cars, promoted, G };
 }
 
 test("r2-only config: a car-car launch at relV >= R2_CAR_V queues AND promotes as r2", () => {
@@ -113,6 +118,28 @@ test("incident window scales with time, not car count", () => {
   assert.equal(sim.status().owned, 2);
   for (let i = 0; i < 120; i++) sim.postStep(1 / 60);
   assert.equal(sim.status().owned, 2, "two-car window still open at 2 s");
+});
+
+test("postStep clamps lateral x to wallAt during takeover", () => {
+  // Rapier pose is 20 m off the centreline; the barrier is at 5 m. The
+  // write-back must keep the bicycle-model x inside the wall — updateCar
+  // skips its own clamp while owns() is set.
+  const pose = { x: 20, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 4, vz: 0 };
+  const { sim, cars } = load({
+    pose,
+    wallAt: 5,
+    trackFrom: () => ({ s: 100, x: 12 }),
+    worldFromTrack: (s, x) => ({ x, z: 0 }),
+  });
+  // Last-good snap is taken at promote. A 20 m Rapier jump from px=0 trips
+  // the teleport bound and hands back before the wall clamp runs.
+  cars[0].px = 18; cars[1].px = 18;
+  sim.notifyCar(cars[0], cars[1], 30);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().owned, 2);
+  sim.postStep(1 / 60);
+  assert.equal(cars[0].x, 5, "owned car cannot write back past wallAt");
+  assert.equal(cars[0].px, 5, "world pose follows the clamped (s,x)");
 });
 
 test("postStep hands a finished car back instead of tracking it", () => {

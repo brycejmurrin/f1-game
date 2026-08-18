@@ -184,12 +184,10 @@ test("the zero-spacing-token sheet list only shrinks", () => {
   /* data.css, hud.css, overlays.css and track-detail.css came OFF this list on
      2026-08-13 — they now read --pad / --gap and so move with the density
      ladder, which is what "things do not resize" actually meant.
-     responsive.css stays, and is a different case that should be judged
-     differently rather than queued for the same migration: it is the
-     media-query sheet, so its raw values are deliberately viewport-absolute
-     (safe-area insets, the landscape-phone caps). It is listed because the
-     measurement is the measurement. */
-  const KNOWN_ZERO = ["responsive.css"];
+     2026-08-18: responsive.css left too — the desktop title column now reads
+     --gap for the skew gutter (CAREER hang). Remaining raw px there are
+     viewport-absolute caps, not a density-blind sheet. */
+  const KNOWN_ZERO = [];
   const zero = sheets()
     .filter(({ name }) => name !== "tokens.css")
     .filter(({ src }) => /(?:padding|margin|gap)[a-z-]*:[^;{}]*[0-9.]+px/.test(src))

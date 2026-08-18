@@ -2091,7 +2091,8 @@ Three things to know:
 - **`screenPct` is null unless `inFrame`.** A point on the eye plane has `w→0`
   and projects to coordinates like `27629%`. That is correct projective maths
   and useless, so it isn't shipped. Corners behind you are still listed, with
-  `behindCamera: true` and a bearing near ±180° — "T2 is 80 m behind you" is
+  `behindCamera: true` when `|bearingDeg| > 90` (behind the look direction,
+  not merely behind the near plane) — "T2 is 80 m behind you" is
   exactly what an agent needs after a spin.
 
 

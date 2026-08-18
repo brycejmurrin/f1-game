@@ -1036,7 +1036,14 @@ const Tracks = (function () {
       for (const sx of [-0.5, 0, 0.5]) for (const sf of [-0.5, 0, 0.5]) {
         const x = c[0] + r[0] * sx * size[0] + f[0] * sf * size[1];
         const z = c[2] + r[2] * sx * size[0] + f[2] * sf * size[1];
-        const y = terrainYAt(x, z);
+        // terrainYAt skips triangles wider than 30 m when it bins the ribbon.
+        // flatTerrain shelves (Montreal's 70 m island) are exactly that size,
+        // so the build-time lookup returns null and the caller fallback sits
+        // on the anchor — 2.7 m above the same mesh Tracks.terrainY / the
+        // foundation spec then samples. Prefer the public sampler when the
+        // coarse grid misses.
+        let y = terrainYAt(x, z);
+        if (y == null) y = terrainY(track, x, z);
         if (y != null && y < lo) lo = y;
       }
       if (!Number.isFinite(lo)) lo = Number.isFinite(spec.ground) ? spec.ground : NaN;

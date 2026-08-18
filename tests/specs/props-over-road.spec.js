@@ -32,13 +32,13 @@ const CEIL = 5.0;
 //
 // After the systemic guard fixes (neonTower + building() now use the full
 // footprint Minkowski test, not a single inner-face point) plus per-circuit
-// scenery passes, 15 circuits are fully clean (max=0): bahrain, cota, imola,
-// interlagos, montreal, monza, qatar, redbull, shanghai, silverstone, singapore,
-// spa, suzuka, vegas, zandvoort. The remaining caps are small residuals; miami
-// is a verified design-intent overhead (beach-club parasol canopy ~7.5 m up,
-// car passes safely under). Mexico's Foro Sol stands are now segmented around
-// the route and fully clean. The rest are minor edge-proximity readings (< ~1.1 m) from props
-// hugging the runoff on curves — safe to drive but tracked so they can't grow.
+// scenery passes, most of the original 15-circuit "max=0" set still hugs the
+// 0.20 m TOL. Do not treat that list as current: COTA and Indianapolis have
+// since measured over TOL (see docs/ARCHITECTURE-REVIEW.md §7). Miami is a
+// verified design-intent overhead (beach-club parasol canopy ~7.5 m up, car
+// passes safely under). Mexico's Foro Sol stands are segmented around the
+// route. Other residuals are edge-proximity readings from props hugging the
+// runoff — safe to drive but tracked so they cannot grow.
 // Cap = measured max + small margin. A track NOT in this map must read <= TOL.
 const BASELINE = {
   // Shared TrackSurface grounding raises these previously floating props onto
