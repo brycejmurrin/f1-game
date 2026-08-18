@@ -59,7 +59,7 @@ function buildContext(opts) {
   };
 
   const sandbox = {
-    Math, Array, Float32Array, Uint16Array, Uint32Array, Object, JSON,
+    Math, Array, Float32Array, Float64Array, Uint16Array, Uint32Array, Object, JSON,
     isNaN, isFinite, parseInt, parseFloat,
     GLX,
     console: { log: () => {}, warn: () => {}, error: () => {}, info: () => {},

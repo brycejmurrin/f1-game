@@ -101,7 +101,7 @@ function buildContext(rootOverride) {
 
   const sandbox = {
     // Browser globals the scripts reference
-    Math, Array, Float32Array, Uint16Array, Uint32Array, Object, JSON,
+    Math, Array, Float32Array, Float64Array, Uint16Array, Uint32Array, Object, JSON,
     isNaN, isFinite, parseInt, parseFloat,
     GLX,
     // console silenced — a track's scenery() may log; stub every method it might call.

@@ -22,10 +22,65 @@ const TrackModels = (function () {
   // bit-identical geometry before and after (tools/graph-parity.cjs --all).
   const __M = Math, __isFinite = Number.isFinite, __isInteger = Number.isInteger;
 
+  const isNumList = (a) => Array.isArray(a) || !!(a && a.BYTES_PER_ELEMENT && typeof a.length === "number");
   const finiteArray = (v, length) =>
     Array.isArray(v) && (!length || v.length === length) && v.every(__isFinite);
   const validSize = (v) => finiteArray(v, 3) && v.every((n) => n > 0);
   const emptyBuffer = () => ({ pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 });
+
+  // Growable typed accumulators for the props/glass/water fuse (PERF-FINDINGS).
+  // Named-arity push — a rest/arguments shim measured slower than Array.push.
+  // seal() copies to an exact-length TypedArray so createMesh/toF32 does not
+  // upload spare capacity. Stages from emptyBuffer() stay plain arrays.
+  function makeAccum(Type, est) {
+    let data = new Type(est > 0 ? est : 256);
+    let n = 0;
+    function grow(need) {
+      if (n + need <= data.length) return;
+      let cap = data.length || 256;
+      while (cap < n + need) cap *= 2;
+      const next = new Type(cap);
+      next.set(data.subarray(0, n));
+      data = next;
+    }
+    return {
+      get length() { return n; },
+      push(a, b, c, d, e, f) {
+        const add = f !== undefined ? 6 : e !== undefined ? 5 : d !== undefined ? 4
+                  : c !== undefined ? 3 : b !== undefined ? 2 : 1;
+        grow(add);
+        data[n++] = a;
+        if (add > 1) data[n++] = b;
+        if (add > 2) data[n++] = c;
+        if (add > 3) data[n++] = d;
+        if (add > 4) data[n++] = e;
+        if (add > 5) data[n++] = f;
+      },
+      seal() { return n === data.length ? data : data.slice(0, n); },
+    };
+  }
+  function scratch(verts) {
+    const v = verts > 0 ? verts : 8192;
+    // pos/nrm/col/mat stay f64 so CPU audits match the previous Array fuse
+    // (GPU upload already goes through toF32). idx is Uint32 as required.
+    return {
+      pos: makeAccum(Float64Array, v * 3),
+      nrm: makeAccum(Float64Array, v * 3),
+      col: makeAccum(Float64Array, v * 3),
+      mat: makeAccum(Float64Array, v),
+      idx: makeAccum(Uint32Array, v * 3),
+      _mat: 0,
+    };
+  }
+  function sealGeometry(geo) {
+    if (!geo) return geo;
+    if (geo.pos && typeof geo.pos.seal === "function") geo.pos = geo.pos.seal();
+    if (geo.nrm && typeof geo.nrm.seal === "function") geo.nrm = geo.nrm.seal();
+    if (geo.col && typeof geo.col.seal === "function") geo.col = geo.col.seal();
+    if (geo.mat && typeof geo.mat.seal === "function") geo.mat = geo.mat.seal();
+    if (geo.idx && typeof geo.idx.seal === "function") geo.idx = geo.idx.seal();
+    return geo;
+  }
 
   function appendBuffer(target, source, id) {
     const base = target.pos.length / 3;
@@ -122,7 +177,7 @@ const TrackModels = (function () {
   }
 
   function validateGeometry(geo) {
-    if (!geo || !Array.isArray(geo.pos) || geo.pos.length % 3)
+    if (!geo || !isNumList(geo.pos) || geo.pos.length % 3)
       return { ok: false, reason: "invalid position layout" };
     if (firstNonFinite(geo.pos))
       return { ok: false, reason: "non-finite position" };
@@ -131,7 +186,7 @@ const TrackModels = (function () {
     if (geo.col && (geo.col.length !== geo.pos.length || firstNonFinite(geo.col)))
       return { ok: false, reason: "invalid or non-finite color" };
     const count = geo.pos.length / 3;
-    if (!Array.isArray(geo.idx)) return { ok: false, reason: "invalid index" };
+    if (!isNumList(geo.idx)) return { ok: false, reason: "invalid index" };
     for (let i = 0; i < geo.idx.length; i++) {
       const v = geo.idx[i];
       if (!__isInteger(v) || v < 0 || v >= count)
@@ -440,5 +495,5 @@ const TrackModels = (function () {
     };
   }
 
-  return { create, validateGeometry };
+  return { create, validateGeometry, scratch, sealGeometry };
 })();

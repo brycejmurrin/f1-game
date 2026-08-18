@@ -459,16 +459,16 @@ const Tracks = (function () {
     // CURRENT material register: emitters (addBox/emit) stamp it onto every vertex,
     // so a model sets `out._mat = MAT.BRICK` around a block instead of threading a
     // param through every call. Untagged geometry stays FLAT (unchanged look).
-    const out = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
+    const out = TrackModels.scratch();
     // Separate GLASS buffer: reflective window panes are emitted here and drawn
     // with a low-roughness material so the lit shader's env term mirrors the sky
     // (real view-dependent reflection, not a faked colour). Day windows only.
-    const glassBuf = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
+    const glassBuf = TrackModels.scratch();
     // Separate WATER buffer: lake/sea/marina surfaces emit here and draw with a
     // low-roughness material so the lit shader's env term mirrors the live sky
     // (real time-of-day reflection + sun glint), turning flat blue slabs into
     // reflective water. Flagged via groundPlane(..., water=true).
-    const waterBuf = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
+    const waterBuf = TrackModels.scratch();
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
     // Session darkness (set by Tracks.build from the chosen time of day) drives
     // window/skyline lighting — so buildings respond to dusk/night even on a
@@ -2450,7 +2450,7 @@ const Tracks = (function () {
       delete rec._m;
     }
     Log.info("track", "buildProps done " + def.id + " verts=" + (out.pos.length / 3));
-    return { out, glass: glassBuf, water: waterBuf };
+    return { out: TrackModels.sealGeometry(out), glass: TrackModels.sealGeometry(glassBuf), water: TrackModels.sealGeometry(waterBuf) };
   }
 
   function buildGate(track) {
