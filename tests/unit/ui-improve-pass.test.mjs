@@ -34,6 +34,10 @@ test("garage livery grid class is wired", () => {
   const css = fs.readFileSync(path.join(ROOT, "css/carsetup.css"), "utf8");
   assert.match(js, /cs-liv-grid/);
   assert.match(css, /#cs-options\.cs-liv-grid/);
+  const clear = js.indexOf('optsEl.classList.remove("cs-liv-grid")');
+  const team = js.indexOf('csActiveCat === "team"');
+  assert.ok(clear > 0 && clear < team,
+    "cs-liv-grid must be cleared before the TEAM branch, or the team card inherits the swatch grid");
 });
 
 test("select track filter persists via store", () => {
@@ -49,6 +53,7 @@ test("compact title column scrolls instead of clipping at high UI SIZE", () => {
   assert.match(css, /body\[data-density="compact"\]\)\s*#menu-buttons/);
   assert.match(css, /max-height:\s*calc\(100 \* var\(--svhz\)/);
   assert.match(css, /align-content:\s*safe center/);
+  assert.match(css, /padding-inline:\s*8px/);
   // Portrait hands the leftover row to the button column (overlay scrollHeight
   // is a dead letter under zoom — see menus.css comment).
   assert.match(css, /orientation:\s*portrait[\s\S]*?minmax\(0,\s*1fr\)/);

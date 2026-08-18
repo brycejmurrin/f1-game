@@ -237,6 +237,12 @@ body { --compact-at: 600px; }
   overscroll-behavior: contain;
   align-content: center;
   align-content: safe center;
+  /* .bigbtn skewX(-6deg) hangs past the column AABB. overflow-x:hidden then
+     clips the parallelogram tips — measured 2026-08-18 Playwright MCP at
+     852x393 compact: #mb-career hangL=-6.3 hangR=-2.3. Padding keeps the
+     tips inside the clipper. Cannot use overflow-x:visible here: with
+     overflow-y:auto the other axis computes to auto (same trap as .pane). */
+  padding-inline: 8px;
 }
 /* Portrait: give the button column the leftover row under the brand so the
    max-height above is not "full viewport on top of the brand" (which would
