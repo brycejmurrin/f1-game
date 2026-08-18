@@ -17,6 +17,22 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
+test("gfx-probe cannot report a stale optional frame as fresh", () => {
+  const probe = read("tools/gfx-probe.mjs");
+  assert.match(probe, /ATTEMPT_ARTIFACTS\s*=\s*\[[^\]]*"frame\.png"/,
+    "frame.png must be one of the owned artifacts cleared before every attempt");
+  assert.match(probe, /for \(let attempt[^]*?clearAttemptArtifacts\(\);[^]*?runProbeAttempt\(attempt\)/,
+    "retry attempts must clear files before launching the browser");
+  assert.match(probe, /files:\s*artifactFiles\(\)/,
+    "the JSON result must list files that actually exist, not a static wish list");
+  assert.doesNotMatch(probe, /files:\s*opts\.backend\s*===/,
+    "backend selection alone cannot prove optional frame.png was written");
+  assert.equal((probe.match(/\blite:\s*false\b/g) || []).length, 1,
+    "probe defaults should not carry duplicate lite entries");
+  assert.equal((probe.match(/\biphone:\s*false\b/g) || []).length, 1,
+    "probe defaults should not carry duplicate iphone entries");
+});
+
 test("#pm-renderer is visible in the SETTINGS markup (not hidden)", () => {
   const html = read("index.html");
   const m = html.match(/<button id="pm-renderer"[^>]*>/);
@@ -184,6 +200,14 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
   assert.ok(present > 0 && presentEnd > present, "present() body found");
   assert.doesNotMatch(body, /post = null;\s*renderer\.setRenderTarget\(null\);\s*renderer\.render/);
   assert.match(read("js/render/three/tlx-shadow.js"), /TLX: shadow pass failed/);
+});
+
+test("TLX AO and god-ray blurs cannot share a node-program cache key", () => {
+  const post = read("js/render/three/tsl-post.js");
+  assert.match(post, /const blurAO = makeBlur\("tlx-post-blur-ao"\)/);
+  assert.match(post, /const blurGR = makeBlur\("tlx-post-blur-godray"\)/);
+  assert.doesNotMatch(post, /const blur(?:AO|GR) = makeBlur\(\)/,
+    "same-shaped node materials still carry distinct texture-node bindings");
 });
 
 test("TLX material-map ownership keeps placeholders and reports pack state", () => {

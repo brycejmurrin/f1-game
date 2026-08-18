@@ -21,7 +21,7 @@
 //
 // Logs go to stderr (live) and <out>/probe.log (always). Final JSON on stdout.
 
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -40,8 +40,6 @@ function parseArgs(argv) {
     backend: "webgpu",
     track: "montreal",
     cam: "park",
-    lite: false,
-    iphone: false,
     lite: false,
     iphone: false,
     tod: null,
@@ -100,6 +98,20 @@ if (opts.backend !== "webgpu" && opts.backend !== "three") {
 mkdirSync(opts.outDir, { recursive: true });
 const logPath = join(opts.outDir, "probe.log");
 writeFileSync(logPath, "", "utf8");
+
+const ATTEMPT_ARTIFACTS = ["canvas.png", "frame.png", "page-hud.png", "state.json", "console.txt"];
+
+function clearAttemptArtifacts() {
+  // The default output directory is stable across runs. Remove only files this
+  // tool owns so a failed optional readback cannot masquerade as a fresh frame.
+  for (const name of ATTEMPT_ARTIFACTS) rmSync(join(opts.outDir, name), { force: true });
+}
+
+function artifactFiles() {
+  // state.json is written immediately after the result object is assembled.
+  return [...ATTEMPT_ARTIFACTS, "probe.log"]
+    .filter((name) => name === "state.json" || existsSync(join(opts.outDir, name)));
+}
 
 function log(phase, msg, extra) {
   const ts = new Date().toISOString().slice(11, 23);
@@ -412,6 +424,7 @@ log("start", JSON.stringify({
 }));
 
 for (let attempt = 1; attempt <= opts.retries; attempt++) {
+  clearAttemptArtifacts();
   try {
     const payload = await runProbeAttempt(attempt);
     result = {
@@ -427,9 +440,7 @@ for (let attempt = 1; attempt <= opts.retries; attempt++) {
       cam: opts.cam,
       logPath,
       ...payload,
-      files: opts.backend === "webgpu"
-        ? ["canvas.png", "frame.png", "page-hud.png", "state.json", "probe.log"]
-        : ["canvas.png", "page-hud.png", "state.json", "probe.log"],
+      files: artifactFiles(),
     };
     writeFileSync(join(opts.outDir, "state.json"), JSON.stringify(result, null, 2));
     log("done", "PASS", { attempt, backend: payload.backend });
@@ -457,7 +468,7 @@ for (let attempt = 1; attempt <= opts.retries; attempt++) {
       cam: opts.cam,
       logPath,
       error: String(e.message || e),
-      files: ["probe.log"],
+      files: artifactFiles(),
     };
     writeFileSync(join(opts.outDir, "state.json"), JSON.stringify(result, null, 2));
     log("done", "FAIL", { error: result.error });
