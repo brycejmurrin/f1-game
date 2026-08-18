@@ -71,6 +71,16 @@ test(".mcp.json registers apex-tools as the fourth stdio server", () => {
   assert.deepEqual(catalog.http.args, ["serve-http"]);
 });
 
+test(".cursor/mcp.json is the Cursor CLI/IDE catalog and locksteps apex-tools", () => {
+  const cursorCfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".cursor/mcp.json"), "utf8"));
+  const rootCfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
+  assert.deepEqual(Object.keys(cursorCfg.mcpServers).sort(), Object.keys(rootCfg.mcpServers).sort());
+  const apex = cursorCfg.mcpServers["apex-tools"];
+  assert.equal(apex.type, "stdio");
+  assert.equal(apex.command, rootCfg.mcpServers["apex-tools"].command);
+  assert.deepEqual(apex.args, rootCfg.mcpServers["apex-tools"].args);
+});
+
 test("help lists serve / list-tools / call / status", () => {
   const r = spawnSync(process.execPath, [MCP, "help"], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);

@@ -32,6 +32,14 @@ lock released. `apex_agent` monza `world` 33020 ms `ok` (apiVersion 1);
 each. HTTP `127.0.0.1:3713/healthz` → `{ok:true, tools:30, bind:127.0.0.1}`.
 `apex_graph_parity` monza `BASE=HEAD~1` 1552 ms exact.
 
+Cursor CLI (`agent` 2026.08.11, this container): `.cursor/mcp.json` is the
+file `agent mcp` reads (root `.mcp.json` is invisible to it).
+`${workspaceFolder}` in `command` spawned as a literal path (`ENOENT`);
+relative `tools/apex-tools-mcp.sh` works. After `agent mcp enable apex-tools`:
+`agent mcp list` → `apex-tools: ready`; `agent mcp list-tools apex-tools` →
+**30** `apex_*` tools (host `initialize` + `tools/list`). `agent -p` tool
+calls need `agent login` / `CURSOR_API_KEY` — this VM has neither.
+
 Sources: this session’s tool inventory and MCP wrap design. Stdio MCP is
 JSON-RPC on stdin/stdout; log only on stderr.
 
@@ -49,7 +57,7 @@ TinyFish `ensure()` threw. Every wrap target is Node. Name collision
 |---|---|
 | **Name** | `apex-tools` (`serverInfo.name`: `apex-tools-mcp`) |
 | **Lives** | `tools/apex-tools-mcp.mjs` + `tools/apex-tools-mcp.sh` |
-| **Transport** | stdio (Cursor `.mcp.json` → `serve`). HTTP `127.0.0.1:3713` via `serve-http` (`/mcp`, `/healthz`). Cloud default is `./tools/apex-tools-mcp.sh call` (repo `.mcp.json` is not auto-loaded). Lockstep catalog: `tools/apex-tools-mcp.json`. |
+| **Transport** | stdio. Cursor CLI/IDE loads **`.cursor/mcp.json`** (`agent mcp list` / `list-tools`). Claude Code / root catalog stays **`.mcp.json`**. HTTP `127.0.0.1:3713` via `serve-http` (`/mcp`, `/healthz`). Cloud Agents still do not auto-load either file — `./tools/apex-tools-mcp.sh call` remains the Cloud fallback. Lockstep catalog: `tools/apex-tools-mcp.json`. |
 | **SDK** | Hand-rolled JSON-RPC like `probe-mcp.py` — **no npm MCP SDK**, no build step |
 | **Prefix** | `apex_*` only |
 | **CLI** | `help` / `status` / `list-tools` / `call <name> '<json>'` / `serve` |
@@ -219,8 +227,9 @@ occupants. One-sided is acceptable if `apex_status` reports all three.
 
 ## Registration
 
-Fourth `.mcp.json` server: `command` → `tools/apex-tools-mcp.sh`,
-`args` → `["serve"]`. Same-commit updates:
+Fourth server in both catalogs: root `.mcp.json` (Claude Code) and
+`.cursor/mcp.json` (Cursor CLI/IDE, `type: "stdio"`). `command` →
+`tools/apex-tools-mcp.sh`, `args` → `["serve"]`. Same-commit updates:
 
 - 3-key lists in `tests/unit/probe-mcp.test.mjs` and
   `tests/unit/tinyfish-mcp.test.mjs` become
