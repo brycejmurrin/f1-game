@@ -53,7 +53,7 @@ if ! bash "$ROOT/tools/install-browsers.sh"; then
   exit 1
 fi
 
-# TinyFish is never baked. Cloud: dashboard secret TINYFISH_API_KEY, or
+# TinyFish key is never embedded. Cloud: dashboard secret TINYFISH_API_KEY, or
 # gitignored scratch/tinyfish-mcp-server/.env. deploy-check --tip fails without it.
 if [[ -z "${TINYFISH_API_KEY:-}" && ! -f "$ROOT/scratch/tinyfish-mcp-server/.env" ]]; then
   echo "NOTE: TINYFISH_API_KEY unset — TinyFish deploy-check --tip will fail until the Cloud secret or scratch .env is set"

@@ -19,11 +19,13 @@ export function classifyPlaywrightLine(line) {
   if (/(?:^|[\s/])playwright\s+test(?:\s|$)/.test(text)) {
     return { kind: "suite", pid };
   }
-  if (/@playwright\/mcp/.test(text) || /\bplaywright-mcp\b/.test(text)) {
-    return { kind: "hostMcp", pid };
-  }
+  // Chromium with a playwright-mcp profile is the host *browser*, not the
+  // MCP server. Check before the generic playwright-mcp token.
   if (/chrom(?:e|ium)/i.test(text) && /[./]playwright-mcp/.test(text)) {
     return { kind: "hostBrowser", pid };
+  }
+  if (/@playwright\/mcp/.test(text) || /\bplaywright-mcp\b/.test(text)) {
+    return { kind: "hostMcp", pid };
   }
   return null;
 }

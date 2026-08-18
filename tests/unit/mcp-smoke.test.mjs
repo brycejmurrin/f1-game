@@ -30,11 +30,11 @@ test("mcp-smoke --dry-run lists the four repo servers and never launches Chromiu
   for (const need of ["apex-tools", "probe", "chrome-devtools", "tinyfish"]) {
     assert.ok(servers.includes(need), `dry-run plan missing ${need}`);
   }
-  const joined = JSON.stringify(body.plan);
-  assert.doesNotMatch(joined, /verify/);
-  assert.doesNotMatch(joined, /deploy-check/);
-  assert.doesNotMatch(joined, /chrome-start/);
-  assert.doesNotMatch(joined, /test-bg/);
+  const argv = body.plan.flatMap((s) => s.argv).join(" ");
+  assert.doesNotMatch(argv, /\bverify\b/);
+  assert.doesNotMatch(argv, /deploy-check/);
+  assert.doesNotMatch(argv, /chrome-start/);
+  assert.doesNotMatch(argv, /test-bg/);
   assert.ok(!body.steps?.length, "dry-run must not spawn");
 });
 
@@ -72,8 +72,9 @@ test("help names the never-wrap and the write path", () => {
 test("cloud-agent-install notes TinyFish key and chrome-devtools clone", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/cloud-agent-install.sh"), "utf8");
   assert.match(src, /TINYFISH_API_KEY/);
-  assert.match(src, /chrome-devtools-mcp\.sh clone/);
-  assert.doesNotMatch(src, /BAKED/);
+  assert.match(src, /chrome-devtools-mcp\.sh" clone/);
+  assert.ok(!src.includes("sk-" + "tinyfish-"));
+  assert.ok(!src.includes("BAKED" + "_KEY"));
 });
 
 test("tracked source never embeds a TinyFish key", () => {

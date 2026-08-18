@@ -191,6 +191,11 @@ function daemonPort() {
 }
 
 function playwrightLive() {
+  // APEX_MCP_PS: canned `ps -eo pid,args` for occupancy unit tests so a live
+  // host Playwright MCP on Cloud does not poison lock/daemon cases.
+  if (process.env.APEX_MCP_PS != null) {
+    return scanPlaywrightLines(process.env.APEX_MCP_PS);
+  }
   const r = spawnSync("ps", ["-eo", "pid,args"], { encoding: "utf8", timeout: 5000 });
   if (r.status !== 0) return emptyPlaywright();
   return scanPlaywrightLines(r.stdout);
