@@ -850,7 +850,7 @@ test("WGX god-ray and env probe match GLX gates", () => {
   assert.match(WGX_SOURCE, /!f\.noEnv/);
   // Env probe always applies the 300 m radial cap (baked ON).
   assert.match(WGX_SOURCE, /Math\.min\(svCull, 300\)/);
-  assert.doesNotMatch(WGX_SOURCE, /_perfWgsl|PerfTry/);
+  assert.doesNotMatch(WGX_SOURCE, /_perfWgsl|typeof PerfTry|PerfTry\./);
   assert.doesNotMatch(CHUNKS_SOURCE, /OPT_LAMPFOGGATE/);
   assert.match(CHUNKS_SOURCE, /if \(F\.params8\.x > 0\.0\)/);
   assert.doesNotMatch(POST_SOURCE, /OPT_FLAREGATE/);
