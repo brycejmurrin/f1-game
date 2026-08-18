@@ -48,6 +48,41 @@ test("select track filter persists via store", () => {
   assert.match(js, /\["classic", "CLASSICS"\]/);
 });
 
+test("circuit catalogue has a searchable filter toolbar", () => {
+  const js = read("js/game/menus.js");
+  const css = read("css/menus.css");
+  assert.match(js, /search\.type = "search"/);
+  assert.match(js, /search\.setAttribute\("aria-label", "Search circuits"\)/);
+  assert.match(js, /row\.dataset\.search =/);
+  assert.match(js, /function applyTrackSearch\(value\)/);
+  assert.match(js, /bar\.setAttribute\("role", "group"\)/,
+    "filters plus search are controls for one list, not a tablist");
+  assert.match(js, /b\.tabIndex = trackFilter === id \? 0 : -1/,
+    "filter chips keep a roving tab stop; search is its own");
+  assert.match(css, /#sel-track-search\s*\{[\s\S]*?min-height:\s*var\(--chip-h\)/);
+});
+
+test("garage categories implement one roving tab system", () => {
+  const js = read("js/game/setup-ui.js");
+  assert.match(js, /tabs\.setAttribute\("role", "tablist"\)/);
+  assert.match(js, /tab\.setAttribute\("role", "tab"\)/);
+  assert.match(js, /tab\.setAttribute\("aria-controls", "cs-options"\)/);
+  assert.match(js, /tab\.tabIndex = csActiveCat === id \? 0 : -1/);
+  assert.match(js, /optsEl\.setAttribute\("role", "tabpanel"\)/);
+  assert.match(js, /optsEl\.setAttribute\("aria-labelledby", csTabId\(csActiveCat\)\)/);
+  for (const key of ["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp", "Home", "End"])
+    assert.match(js, new RegExp(`e\\.key === "${key}"`));
+});
+
+test("high-scale settings and Last Race retain useful local width", () => {
+  const components = read("css/components.css");
+  const data = read("css/data.css");
+  assert.match(components, /@container sheet \(min-width: 380px\) and \(max-width: 519px\)[\s\S]*?repeat\(3/);
+  assert.match(data, /\.dh-table\s*\{[\s\S]*?max-width:\s*100%;[\s\S]*?table-layout:\s*fixed/);
+  assert.doesNotMatch(data, /\.dh-td-driver\s*\{[^}]*display:\s*flex/,
+    "a table cell must not opt out of the fixed table layout");
+});
+
 test("compact title column scrolls instead of clipping at high UI SIZE", () => {
   const css = fs.readFileSync(path.join(ROOT, "css/menus.css"), "utf8");
   // Cap + scroll on #menu-buttons under body[data-density=compact] (layout only).
@@ -120,4 +155,46 @@ test("closing track detail disconnects its observer and blocks queued hidden red
   assert.match(menus, /function closeTrackDetail\(\) \{[\s\S]*?detailRO\.disconnect\(\);[\s\S]*?detailRO = null;/);
   assert.match(menus, /return \{[^}]*openTrackDetail, closeTrackDetail,/);
   assert.match(game, /\$\("track-detail-close"\)\.onclick = closeTrackDetail;/);
+});
+
+test("extreme-scale journeys use local-width and compact-chrome contracts", () => {
+  const shape = read("js/game/sheetshape.js");
+  const tuner = read("css/tuner.css");
+  const career = read("css/career.css");
+  const data = read("css/data.css");
+  const menus = read("css/menus.css");
+  assert.match(shape, /function classifyFlag\(el, w, cssVar, attr, hyst/);
+  assert.match(shape, /classifyRail\(el, wOwn\)/);
+  assert.match(shape, /classifyFlag\(b, window\.innerWidth \/ scale, "--wide-at"/);
+  assert.match(menus, /--wide-at:\s*620px/);
+  assert.match(tuner, /--rail-at:\s*500px/);
+  assert.match(tuner, /\[data-density="compact"\]\[data-rail="on"\]/);
+  assert.doesNotMatch(tuner, /@media \(max-height: 430px\)/);
+  assert.match(career, /#cr-inner\[data-density="compact"\] #cr-foot[\s\S]*?grid-template-columns/);
+  assert.match(data, /body\[data-density="compact"\] \.dh-tab[\s\S]*?min-height:\s*var\(--tap-min\)/);
+  assert.match(menus, /#ss-inner\[data-density="compact"\] #ss-cal \.season-upcoming-row[^{]*\{[^}]*flex-wrap:\s*wrap/);
+});
+
+test("an active career locks team and seat selection in the garage", () => {
+  const setup = read("js/game/setup-ui.js");
+  assert.match(setup, /const careerLocked = typeof Career !== "undefined" && Career\.inCareer && Career\.inCareer\(\)/);
+  assert.match(setup, /card\.disabled = !!careerLocked/);
+  assert.match(setup, /b\.disabled = taken \|\| careerLocked/);
+  const game = read("js/game.js");
+  assert.doesNotMatch(game, /careerActive:/);
+});
+
+test("camera picker is a keyboard radio menu and cannot outlive the race layer", () => {
+  const camera = read("js/game/cam-modes.js");
+  const game = read("js/game.js");
+  assert.match(camera, /el\.setAttribute\("role", "menu"\)/);
+  assert.match(camera, /b\.setAttribute\("role", "menuitemradio"\)/);
+  assert.match(camera, /b\.setAttribute\("aria-checked", on \? "true" : "false"\)/);
+  assert.match(camera, /setAttribute\("aria-haspopup", "menu"\)/);
+  assert.match(camera, /setAttribute\("aria-expanded", "true"\)/);
+  for (const key of ["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp", "Home", "End", "Escape"])
+    assert.match(camera, new RegExp(`e\\.key === "${key}"`));
+  assert.match(camera, /return \{ refreshCamBtn, setCamMode, cycleCam, hideCamPicker: camPicker\.hide \}/);
+  assert.match(game, /function quitToMenu\(\) \{[\s\S]*?hideCamPicker\(\)/);
+  assert.match(game, /function setPaused\(p\) \{[\s\S]*?hideCamPicker\(\)/);
 });

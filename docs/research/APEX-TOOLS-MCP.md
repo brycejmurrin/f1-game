@@ -237,8 +237,10 @@ other occupants. One-sided is acceptable if `apex_status` reports them
 
 ## Registration
 
-Fifth catalog name in both files: `playwright` → `tools/playwright-mcp.sh`
-`["run"]`. `apex-tools` stays `tools/apex-tools-mcp.sh` `["serve"]`.
+Fifth catalog name in both files: `playwright` → `bash`
+`["tools/playwright-mcp.sh", "run"]`. `apex-tools` stays `bash`
+`["tools/apex-tools-mcp.sh", "serve"]` (Cursor PATH-lookup: a bare
+`tools/*.sh` command never starts).
 Same-commit updates:
 
 - key lists in `tests/unit/probe-mcp.test.mjs` and

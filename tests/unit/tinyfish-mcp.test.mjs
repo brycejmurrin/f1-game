@@ -54,14 +54,14 @@ test(".mcp.json wires tinyfish HTTP + chrome-devtools wrapper + probe bridge", (
     "tinyfish",
   ]);
   assert.equal(cfg.mcpServers.tinyfish.url, "http://127.0.0.1:3711/mcp");
-  assert.match(cfg.mcpServers["chrome-devtools"].command, /chrome-devtools-mcp\.sh$/);
-  assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["run"]);
+  assert.equal(cfg.mcpServers["chrome-devtools"].command, "bash");
+  assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["tools/chrome-devtools-mcp.sh", "run"]);
   assert.equal(cfg.mcpServers.probe.command, "python3");
   assert.deepEqual(cfg.mcpServers.probe.args, ["tools/probe-mcp.py", "serve"]);
-  assert.match(cfg.mcpServers["apex-tools"].command, /apex-tools-mcp\.sh$/);
-  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["serve"]);
-  assert.equal(cfg.mcpServers.playwright.command, "tools/playwright-mcp.sh");
-  assert.deepEqual(cfg.mcpServers.playwright.args, ["run"]);
+  assert.equal(cfg.mcpServers["apex-tools"].command, "bash");
+  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["tools/apex-tools-mcp.sh", "serve"]);
+  assert.equal(cfg.mcpServers.playwright.command, "bash");
+  assert.deepEqual(cfg.mcpServers.playwright.args, ["tools/playwright-mcp.sh", "run"]);
 });
 
 test("tinyfish-mcp.sh help lists setup / ensure / deploy-js / format", () => {

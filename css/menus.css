@@ -202,7 +202,7 @@
    used — 599 here, 600 in css/responsive.css, one pixel apart, the same question.
    It is registered `inherits: false` in css/tokens.css: declared plainly it cascaded
    into every .sheet and moved their thresholds from 380 to 600. */
-body { --compact-at: 600px; }
+body { --compact-at: 600px; --wide-at: 620px; }
 
 /* The height half of this condition now comes from data-density, measured in the
    units the content is actually laid out in (js/game/sheetshape.js). Orientation
@@ -704,7 +704,7 @@ body { --compact-at: 600px; }
   /* on the height ladder (css/tokens.css) rather than sized by padding alone */
   min-height: var(--chip-h);
   display: inline-flex; align-items: center;
-  padding: 6px 10px;
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.85);
   font-size: var(--fs-micro);
   border-radius: var(--r-sm);
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -1009,6 +1009,10 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    .season-upcoming-row's default cursor — but they need centred alignment so a
    chip and a baseline-aligned label sit on the same line. */
 #ss-cal .season-upcoming-row { align-items: center; gap: calc(var(--gap) * 0.5); }
+#ss-inner[data-density="compact"] #ss-cal .season-upcoming-row { flex-wrap: wrap; }
+#ss-inner[data-density="compact"] #ss-cal .sur-name {
+  flex: 1 1 calc(100% - 34px); min-width: 0; overflow-wrap: anywhere;
+}
 #ss-note { display: block; margin-block: calc(var(--gap) * 0.5); line-height: 1.4; }
 
 /* ---------- track picker rows ---------- */
@@ -1021,8 +1025,8 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    list scrolls. Reuses .sel-chip chrome already shared with race-settings. */
 #sel-track-filter {
   position: sticky; top: 0; z-index: 2;
-  display: flex; flex-wrap: wrap; gap: 6px;
-  padding: 8px 10px;
+  display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.5);
+  padding: calc(var(--gap) * 0.66) calc(var(--gap) * 0.83);
   background: color-mix(in oklab, var(--panel) 92%, #000);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -1031,9 +1035,24 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   min-width: 0;
   justify-content: center;
   font-size: var(--fs-micro);
-  padding: 6px 10px;
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.83);
   letter-spacing: 0.06em;
 }
+#sel-track-search {
+  flex: 1 0 100%;
+  min-width: 0;
+  min-height: var(--chip-h);
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-2);
+}
+#sel-track-search::placeholder { color: var(--dim); opacity: 1; }
+#sel-track-empty { padding: var(--pad); text-align: center; }
 /* In the single-column layout the list is capped so it cannot push the sheet's
    own body into a long scroll — the list scrolls, the screen does not. */
 @container sheet (max-width: 619px) {

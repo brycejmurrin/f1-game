@@ -47,17 +47,24 @@ window.SheetShape = (function () {
    * Hysteresis again, and for a sharper reason than the shape: a sheet sitting
    * exactly on its threshold would otherwise toggle between one and two columns
    * on every observer callback. */
-  const PAIR_HYST = 8;
+  const PAIR_HYST = 8, RAIL_HYST = 12, WIDE_HYST = 16;
 
-  function classifyPair(el, w) {
-    const raw = getComputedStyle(el).getPropertyValue("--pair-at");
+  function classifyFlag(el, w, cssVar, attr, hyst, onVal, offVal) {
+    onVal = onVal || "on";
+    offVal = offVal || "off";
+    const raw = getComputedStyle(el).getPropertyValue(cssVar);
     const at = parseFloat(raw);
-    if (!at) { if (el.dataset.pair) delete el.dataset.pair; return; }
-    const was = el.dataset.pair === "on";
-    const now = was ? w >= at - PAIR_HYST : w >= at;
-    const next = now ? "on" : "off";
-    if (el.dataset.pair !== next) el.dataset.pair = next;
+    if (!at) { if (el.dataset[attr]) delete el.dataset[attr]; return; }
+    const was = el.dataset[attr] === onVal;
+    const now = was ? w >= at - hyst : w >= at;
+    const next = now ? onVal : offVal;
+    if (el.dataset[attr] !== next) el.dataset[attr] = next;
   }
+
+  function classifyPair(el, w) { classifyFlag(el, w, "--pair-at", "pair", PAIR_HYST); }
+  /* Tuners: viewport media cannot see zoom. 734 physical px at UI SIZE 200%
+   * is ~257 local px — too narrow for a 210px rail plus slider values. */
+  function classifyRail(el, w) { classifyFlag(el, w, "--rail-at", "rail", RAIL_HYST); }
 
   /* THE THIRD ANSWER: is the sheet SHORT — and short in the units its own CSS
    * is written in, which is not the same question as "is the viewport short".
@@ -116,6 +123,7 @@ window.SheetShape = (function () {
        rule was meant to make scrollable. MEASURED 852×393 @115%: career guides
        sat ~39px past the sheet until this order flipped. */
     classifyDensity(el, hOwn);
+    classifyRail(el, wOwn);
     classifyPair(el, wOwn);
   }
 
@@ -203,6 +211,7 @@ window.SheetShape = (function () {
     const scale = parseFloat(
       getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
     classifyDensity(b, window.innerHeight / scale);
+    classifyFlag(b, window.innerWidth / scale, "--wide-at", "width", WIDE_HYST, "wide", "narrow");
   }
 
   function reclassify() {

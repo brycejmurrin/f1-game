@@ -1440,7 +1440,7 @@ Commands:
   status
   list-tools
   call <apex_name> '<json>'
-  smoke                 # four-server shell probe (tools/mcp-smoke.mjs; no Chromium)
+  smoke                 # five-server shell probe (tools/mcp-smoke.mjs; no Chromium)
   serve                 # stdio MCP (.mcp.json → tools/apex-tools-mcp.sh serve)
   serve-http            # 127.0.0.1:3713 /mcp + /healthz (never 0.0.0.0)
 

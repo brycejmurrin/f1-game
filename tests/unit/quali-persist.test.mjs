@@ -170,6 +170,14 @@ test("friend-race BACK aborts to the lobby; a null quali grid does not P12-shuff
   assert.match(GAME, /if \(!isQuali\(\) && gridFromQuali\(\) && !quali\.order\(cars\)\) \{ openQuali\(\); return false; \}/);
 });
 
+test("friend-race title quit cancels the lobby instead of aborting back into it", () => {
+  const i = GAME.indexOf("function quitToMenu()");
+  assert.ok(i >= 0);
+  const quit = GAME.slice(i, i + 2200);
+  assert.match(quit, /netLobby\.cancel\(\)/);
+  assert.doesNotMatch(quit, /netLobby\.abortQuali\(\)/);
+});
+
 test("order() is null when a live car is missing from the persist", () => {
   const { q, G } = loadQuali({
     season: {

@@ -762,69 +762,8 @@ eye than `farPlane` (`far / cos(halfFov)`).
 
 Ranked by how much I would trust the estimate, most first.
 
-**Env probe inherits the main camera's `cullDist`** (`js/render/glx.js`,
-`envFaceBegin`). It swaps `viewProj` and `eye` but not `cullDist`, which
-`js/game.js` sets to 0 (no radial cull) below PerfGov tier 3 — so a 64×64
-reflection target re-draws the city through a 900 m frustum, potentially
-hundreds of chunk draw calls for 4096 pixels of blurred reflection. This is the
-only finding where the win is draw-call submission rather than a shaved
-constant, and game.js already calls this pass "the biggest per-frame load
-multiplier" — the mitigation that shipped halved its *rate*, not its *reach*.
-
-**NO LONGER AN ESTIMATE (2026-08-14).** "Potentially hundreds of chunk draws"
-was a guess; the reach is now COUNTED by `tools/chunk-reach.cjs`, which is the
-method this document argues for made repeatable —
-replicate `createChunkedMesh`'s 72 m centroid binning in the Node VM build
-harness (`tools/track-build-vm.cjs`) and count what survives, at 12 stations a
-lap. Over a full 6-face cube the probe sees every direction, so its coverage is
-exactly a SPHERE of the far radius and the count is orientation-independent —
-which is what makes this measurable without a GPU at all:
-
-| probe far | vegas chunks / indices | spa | monza |
-|---|---|---|---|
-| **900 m (shipped)** | **238.3 / 1,256,344** | **373.6 / 344,888** | **195.1 / 516,647** |
-| 400 m | 63.2 / 492,715 | 98.4 / 141,175 | 64.4 / 204,214 |
-| 300 m | 45.3 / 376,791 | 64.6 / 110,233 | 43.8 / 141,843 |
-| 200 m | 29.8 / 267,784 | 33.5 / 67,938 | 26.8 / 85,366 |
-
-A 300 m probe cull removes **68-72% of the indices and 78-83% of the chunks**,
-and the three circuits agree closely despite very different scenery (spa is
-1594 small tree chunks over 207 k tris; vegas is 914 large building chunks over
-885 k tris). That consistency is the useful part — it is a property of the
-radius, not of a circuit.
-
-The sub-pixel argument for why 300 m is defensible: a face is 90 deg across 64
-pixels = 1.41 deg per pixel. A 20 m building subtends atan(20/300) = 3.8 deg
-(~2.7 px) at 300 m, and atan(20/900) = 1.27 deg (**0.9 px**) at 900 m — under
-one pixel, in a target that is then mipmapped and blurred for a car-paint
-reflection. Everything between 300 m and 900 m is paying full vertex cost to
-move less than a pixel.
-
-**This is NOT bit-identical**, unlike everything else taken today, so it does
-not get taken the same way: it belongs behind a counted A/B on real hardware,
-which is the
-mechanism that already exists for exactly this class of change.
-
-Everything below was the original note on why this box could not settle it, and
-stays because the negative results are still true of frame TIMING here:
-
-- Counting `drawChunked` CALLS separates the passes (1 env / 2 main per frame)
-  but not the chunks inside them, which is where the cost is. Useless.
-- Frame timing under SwiftShader is worse than useless — it is **misleading in
-  the optimistic direction**. Measured baseline on vegas parked, 640x360:
-  **2872 ms median frame** (p25 2751, p75 3216). At 0.35 fps the frame is
-  dominated by SOFTWARE RASTERISATION of ~1.8 M verts, so any change that
-  removes geometry posts a large win that a real GPU — where the bottleneck is
-  submission, not fill — would not repeat. A number from that harness would
-  have looked like strong evidence and been worth nothing.
-
-A patch was written and reverted unmeasured: save/restore `frame.cullDist`
-alongside `viewProj` and `eye`, with a 220 m probe cull. It is defensible on its
-face — the save/restore triple is plainly incomplete — but it is not purely a
-correctness fix, because narrowing the cull CHANGES what the reflection
-contains. Shipping a visible behaviour change whose benefit cannot be measured
-here is the trade this document exists to warn against, so it was reverted
-rather than shipped on plausibility. It needs a real GPU and a frame capture.
+The env-probe 300 m cull and world-then-sky order already shipped — see
+**Stale entry corrected** above. Do not re-open that item from this list.
 
 **Two full-field O(n²) AI scans** at `js/game.js` — traffic awareness and
 lateral separation, ~370 lines apart. The second loop's window (`|Δp| ≤ 6.5`)

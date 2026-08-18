@@ -16,8 +16,10 @@ need → skill (when / don'ts)
 ## MCP servers
 
 **Repo catalog** (root `.mcp.json` + `.cursor/mcp.json`, lockstepped five
-names). Cloud often does **not** auto-load them — then use the Fallback
-column.
+names). Stdio wrappers use `command: bash` + `args: ["tools/apex-tools-mcp.sh", …]`
+because Cursor looks up `command` on `PATH` — a bare `tools/apex-tools-mcp.sh`
+as `command` never starts (measured: only `probe` via `python3` loaded). Cloud
+often does **not** auto-load them — then use the Fallback column.
 
 | Server | Prefix | Job | Fallback |
 |---|---|---|---|
