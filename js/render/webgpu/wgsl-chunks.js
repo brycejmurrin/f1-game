@@ -676,11 +676,13 @@ fn vs_main(
   // Upper-left 3x3 of the (column-major) model matrix — GLX mat3(uModel).
   let nm = mat3x3<f32>(model[0].xyz, model[1].xyz, model[2].xyz);
   // No 4th vertex attribute — Dawn zeros it (and pos fetch) even in a
-  // separate stride-16 slot (dark gantry blit, sky ~31,18,38). Rebuild
-  // mat+trk from the centerline LUT at the vertex; fs_main interpolates.
+  // separate stride-16 slot. Road pieces bind authored storage[vid]
+  // (mat,s,x,hw). The LUT (magic 12345) is only a fallback when group 2
+  // is the world grid — using it at every road vertex stair-steps dashes.
   var pulled = vec4<f32>(0.0);
-  if (matTrkArr[0].x != 12345.0) { pulled = matTrkArr[vid]; }
-  if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
+  if (matTrkArr[0].x != 12345.0) {
+    pulled = matTrkArr[vid];
+  } else if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
     let wt = trkFromWorld(wp.xyz);
     if (wt.w > 0.5) {
       let mid = select(0.0, 16.0, abs(wt.y) < wt.z - 0.45);

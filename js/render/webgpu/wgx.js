@@ -2489,7 +2489,10 @@ const WGX = (function () {
               if (n <= 0) continue;
               const vert = pulled.vert.slice(off * VERTEX_FLOATS, (off + n) * VERTEX_FLOATS);
               const attr = pulled.attr.slice(off * 4, (off + n) * 4);
-              pieces.push(_meshFromPull(vert, attr, n, b.indexFormat, lut));
+              // Own authored (mat,s,x,hw) — do not share the LUT bind group.
+              // vertex_index is 0..n-1 on the expanded piece; dashes need
+              // those values interpolated, not 32×32 nearest-bin.
+              pieces.push(_meshFromPull(vert, attr, n, b.indexFormat));
             }
             const head = pieces[0] || { vbuf: null, sbuf: null, attrBG: null, count: 0 };
             return {
@@ -2497,7 +2500,7 @@ const WGX = (function () {
               count: head.count, indexFormat: b.indexFormat, chunks: null, pieces,
             };
           }
-          const m = _meshFromPull(pulled.vert, pulled.attr, pulled.count, b.indexFormat, lut);
+          const m = _meshFromPull(pulled.vert, pulled.attr, pulled.count, b.indexFormat);
           return Object.assign({ _wgx: "mesh" }, m);
         }
         vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
@@ -3068,11 +3071,12 @@ const WGX = (function () {
       device.queue.writeBuffer(drawUBO, 0, drawRing, 0, _drawSlot * DRAW_F32_STRIDE);
     }
     // Slot 0 = pos/nrm/col (stride 36), slot 1 = instance.
-    // Group 2 = mat+trk storage (vertex_index).
-    function _bindLitVerts(pass, vbuf, instBuf, attrBG) {
+    // Group 2 = mat+trk storage (vertex_index). Road draws bind the piece's
+    // authored buffer; bury/floor keep the world LUT (magic 12345).
+    function _bindLitVerts(pass, vbuf, instBuf, attrBG, authored) {
       pass.setVertexBuffer(0, vbuf);
       pass.setVertexBuffer(1, instBuf || identInstanceBuf);
-      pass.setBindGroup(2, _roadLutBG || attrBG || zeroAttrBG);
+      pass.setBindGroup(2, (authored && attrBG) ? attrBG : (_roadLutBG || attrBG || zeroAttrBG));
     }
 
     // Coplanar terrain wins depth on SwiftShader-Dawn even when the road ribbon
@@ -3108,12 +3112,12 @@ const WGX = (function () {
       if (mesh.pieces) {
         for (let i = 0; i < mesh.pieces.length; i++) {
           const p = mesh.pieces[i];
-          _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG);
+          _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG, o.surfaceId === 16);
           _drawGeom(litPass, p);
         }
         return;
       }
-      _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG);
+      _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG, o.surfaceId === 16);
       _drawGeom(litPass, mesh);
     }
 
@@ -3134,12 +3138,12 @@ const WGX = (function () {
         if (mesh.pieces) {
           for (let i = 0; i < mesh.pieces.length; i++) {
             const p = mesh.pieces[i];
-            _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG);
+            _bindLitVerts(litPass, p.vbuf, identInstanceBuf, p.attrBG, o.surfaceId === 16);
             _drawGeom(litPass, p);
           }
           return;
         }
-        _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG);
+        _bindLitVerts(litPass, mesh.vbuf, identInstanceBuf, mesh.attrBG, o.surfaceId === 16);
         _drawGeom(litPass, mesh);
         return;
       }
@@ -3163,7 +3167,7 @@ const WGX = (function () {
           continue;
         }
         if (cull && cd > 0 && dist2 > cd2) { culled++; if (isNear) nearCull++; continue; }
-        _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG);
+        _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG, o.surfaceId === 16);
         _drawGeom(litPass, ch);
         drew++;
         if (isNear) nearDraw++;
