@@ -570,6 +570,13 @@ body.hud-hidden #hud-restore { display: block; }
   background: rgba(225, 6, 0, 0.75);
   border-color: rgba(255, 255, 255, 0.35);
 }
+/* Compact: keep the grid in the CAM/pause corner. Density, not a viewport
+   max-height gate — 852×393 is already body compact (body --compact-at 600). */
+body[data-density="compact"] #campicker {
+  gap: 4px;
+  padding: 6px;
+  width: min(280px, calc(100vw - var(--sal) - var(--sar) - 20px));
+}
 /* #soundbtn WAS `position: fixed; top; right; z-index: 22` here, and game.js
    un-hid it on every NON-RACE screen — so a title-screen control floated over
    the top-right corner of the garage, the circuit picker, career and the data
