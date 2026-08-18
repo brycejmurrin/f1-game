@@ -26,7 +26,9 @@ const out = process.argv[5] || defaultOut;
 
 const srv = await startStaticServer(ROOT);
 try {
-  const browser = await launchChromium({ args: ["--use-gl=angle"] });
+  const browser = await launchChromium({
+    args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--disable-background-timer-throttling"],
+  });
   const page = await browser.newPage({ viewport: { width: 480, height: 270 } });
   await page.addInitScript((i) => localStorage.setItem("apex26.team", String(i)), teamIdx);
   page.on("pageerror", (e) => console.error("PAGEERROR", String(e).slice(0, 150)));
