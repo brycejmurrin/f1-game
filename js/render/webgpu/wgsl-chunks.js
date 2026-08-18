@@ -487,7 +487,7 @@ struct DrawU {
   model : mat4x4<f32>,        // off  0
   mat0  : vec4<f32>,          // off 64  (emissive, alpha, roughness, metalness)
   mat1  : vec4<f32>,          // off 80  (specular, detail, clearcoat, carPaint)
-  mat2  : vec4<f32>,          // off 96  (sparkle, instanced, _, _)
+  mat2  : vec4<f32>,          // off 96  (sparkle, instanced, surfaceId, _)
 };                            // size 112
 struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(0) var<uniform> F : FrameU;
@@ -556,15 +556,15 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   let right = vec2<f32>(tang.y, -tang.x);
   let x = select(0.0, dot(wp.xz - best.xy, right), tangOk);
   let hw = best.w;
-  // Distance-to-centerline (not reconstructed lateral) gates validity: a bad
-  // tangent must not mark an on-ribbon fragment as a miss.
   let dCenter = sqrt(bestD);
-  let valid = gated && hw > 0.5 && dCenter <= hw + 2.4;
+  // Prefer perpendicular distance when a real tangent exists. Point-distance
+  // alone rejects on-ribbon fragments: 32×32 cells are tens of metres across,
+  // so the nearest centerline sample can be > hw+2.4 away along-track.
+  let onRibbon = select(dCenter <= hw + 2.4, abs(x) <= hw + 2.4, tangOk);
+  let valid = gated && hw > 0.5 && onRibbon;
   // xyz = track (s, lateral x, half-width); w = 1 when the LUT hit is valid.
   // Material id comes from DrawU.mat2.z on road draws — do not classify MAT
   // here (a bad tangent used to tag the ribbon MAT 9 / grass).
-  // When tangent is unknown, keep hw for discard-sized footprint but zero
-  // lateral so roadMarkings does not paint a false centre line.
   return select(vec4<f32>(0.0), vec4<f32>(best.z, x, hw, 1.0), valid);
 }
 ${hash}
@@ -643,9 +643,7 @@ fn vs_main(
   if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
     let wt = trkFromWorld(wp.xyz);
     if (wt.w > 0.5) { pulled = vec4<f32>(16.0, wt.x, wt.y, wt.z); }
-    // Near-camera SwiftShader depth precision: coplanar terrain still wins
-    // with a smaller lift; 0.20 m clears the ribbon before discard helps.
-    wp.y = wp.y + 0.45;
+    wp.y = wp.y + 0.08;
   }
   o.matTrk = pulled;
   o.matId = pulled.x;
@@ -698,17 +696,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let saaDy = dpdy(topNgeo);
   // SwiftShader-Dawn: coplanar terrain wins depth over the road ribbon. Punch
   // holes where the centerline LUT says the ribbon runs (global _roadLutBG).
-  // fromWorld.w already encodes distance-to-centerline <= hw+2.4 — do not
-  // re-test reconstructed lateral (degenerate tangents used to skip discard).
-  // #region agent log
-  // Pink = road. Cyan = ground footprint that should be discarded (LUT hit).
-  if (isRoadDraw) {
-    return vec4<f32>(1.0, 0.0, 1.0, 1.0);
+  if (D.mat2.z < 0.5 && D.mat1.y > 0.1 && fromWorld.w > 0.5) {
+    discard;
   }
-  if (D.mat2.z < 0.5 && (D.mat1.y > 0.1 || D.mat0.z > 0.9) && fromWorld.w > 0.5) {
-    return vec4<f32>(0.0, 1.0, 1.0, 1.0);
-  }
-  // #endregion
 
   var N = topNgeo;
   // Two-sided lighting: flip N to face the viewer on back faces (double-sided

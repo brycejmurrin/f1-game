@@ -281,41 +281,8 @@ async function runProbeAttempt(attemptNum) {
       const diag = __apex.diag({ download: false });
       const env = diag.env || {};
       const view = __apex.render({ what: "view", cols: 80, rows: 24 });
-      const roadDbg = (typeof GLX !== "undefined" && GLX.roadLutDebug) ? GLX.roadLutDebug()
-        : ((typeof WGX !== "undefined" && WGX.roadLutDebug) ? null : null);
-      // Live backend is on GLX façade after WGX create() — also try gfx hooks.
-      let lutInfo = null;
-      try {
-        const g = (typeof GLX !== "undefined") ? GLX : null;
-        lutInfo = {
-          roadLutReady: g && g.roadLutReady ? g.roadLutReady() : null,
-          roadLutDebug: g && g.roadLutDebug ? g.roadLutDebug() : null,
-          meshRoad: (() => {
-            try {
-              const t = __apex.info && __apex.info();
-              return null;
-            } catch (_) { return null; }
-          })(),
-          trackMeshes: (() => {
-            try {
-              const geo = __apex.trackGeometry ? __apex.trackGeometry() : null;
-              const road = geo && geo.road;
-              if (!road) return { road: null };
-              const mat = road.mat;
-              let mat16 = 0;
-              if (mat) for (let i = 0; i < mat.length; i++) if (mat[i] === 16) mat16++;
-              return {
-                roadVerts: road.pos ? (road.pos.length / 3) : null,
-                roadTrk: road.trk ? (road.trk.length / 3) : null,
-                roadMat16: mat16,
-                roadMatSample: mat ? Array.from(mat.slice(0, 16)) : null,
-                roadTrkSample: road.trk ? Array.from(road.trk.slice(0, 12)) : null,
-              };
-            } catch (e) { return { err: String(e.message || e) }; }
-          })(),
-          wgxDbg: (typeof window !== "undefined" && window.__wgxDbg) ? window.__wgxDbg.slice() : [],
-        };
-      } catch (e) { lutInfo = { err: String(e.message || e) }; }
+      const lutSrc = (typeof WGX !== "undefined" && WGX.roadLutReady) ? WGX
+        : ((typeof GLX !== "undefined" && GLX.roadLutReady) ? GLX : null);
       return {
         backend: env.backend,
         pick: (() => { try { return localStorage.getItem("apex26.gfxBackend"); } catch { return null; } })(),
@@ -328,32 +295,9 @@ async function runProbeAttempt(attemptNum) {
         hasTLX: typeof TLX !== "undefined",
         hasGpu: !!navigator.gpu,
         coveragePct: view && view.coveragePct,
-        lutInfo,
+        roadLutReady: lutSrc ? lutSrc.roadLutReady() : null,
       };
     });
-
-    // Harvest browser debug ring into NDJSON for the debug agent.
-    try {
-      const mkdirSync2 = mkdirSync;
-      mkdirSync2("artifacts/debug", { recursive: true });
-      const lines = [];
-      const dbg = (payload.lutInfo && payload.lutInfo.wgxDbg) || [];
-      for (const e of dbg) lines.push(JSON.stringify(e));
-      lines.push(JSON.stringify({ hypothesisId: "SUMMARY", location: "gfx-probe", message: "lutInfo", data: {
-        roadLutReady: payload.lutInfo && payload.lutInfo.roadLutReady,
-        roadLutDebug: payload.lutInfo && payload.lutInfo.roadLutDebug,
-        trackMeshes: payload.lutInfo && payload.lutInfo.trackMeshes,
-        backend: payload.backend,
-        gpuErrors: payload.gpuErrors,
-        coveragePct: payload.coveragePct,
-      }, timestamp: Date.now() }));
-      writeFileSync(join(opts.outDir, "wgx-road-debug.ndjson"), lines.join("\n") + "\n");
-      writeFileSync("/opt/cursor/logs/debug.log", lines.join("\n") + "\n");
-      writeFileSync("artifacts/debug/wgx-road.ndjson", lines.join("\n") + "\n");
-      log("debug", `harvested ${dbg.length} wgxDbg lines`);
-    } catch (e) {
-      log("debug", "harvest failed", { error: String(e.message || e) });
-    }
 
     const expectBackend = opts.backend === "webgpu" ? "webgpu" : "three";
     const boundOk = payload.backend === expectBackend ||

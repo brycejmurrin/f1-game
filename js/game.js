@@ -5523,7 +5523,6 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // on (frustum + radial cull of the ribbon — counted ~70% index drop at 300 m
     // for chunked scenery). Lamp path still needs tier < 1; envCull-only path
     // keeps chunking through tier 2 so SSR/shadow sheds do not re-fuse the road.
-    // DEBUG: force non-chunked road mesh so we can isolate chunk expand/cull bugs.
     const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && !_perChunkOff && PerfGov.tier() < 1)
       || (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3));
     if (_wantRoadChunk) {

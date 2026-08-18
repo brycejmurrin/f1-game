@@ -369,8 +369,11 @@ const WGX = (function () {
     _setPlane(planes[1], m3-m0, m7-m4, m11-m8,  m15-m12); // right (w - x >= 0)
     _setPlane(planes[2], m3+m1, m7+m5, m11+m9,  m15+m13); // bottom (w + y >= 0)
     _setPlane(planes[3], m3-m1, m7-m5, m11-m9,  m15-m13); // top    (w - y >= 0)
-    _setPlane(planes[4], m2,    m6,    m10,     m14);     // near   (WebGPU clip space z >= 0)
-    _setPlane(planes[5], m3-m2, m7-m6, m11-m10, m15-m14); // far    (WebGPU clip space w - z >= 0)
+    // frameViewProj is the RAW GL matrix (Z01 is applied only on GPU upload).
+    // Near must be w+z>=0 like GLX/TLX — a WebGPU z>=0 extract on a GL VP
+    // culls the near ribbon (chase/park) and leaves terrain covering the holes.
+    _setPlane(planes[4], m3+m2, m7+m6, m11+m10, m15+m14); // near (GL clip w+z >= 0)
+    _setPlane(planes[5], m3-m2, m7-m6, m11-m10, m15-m14); // far  (GL clip w-z >= 0)
   }
   function _aabbInFrustum(planes, mn, mx) {
     for (let i = 0; i < 6; i++) {
@@ -2253,9 +2256,6 @@ const WGX = (function () {
       const posA = toF32(pos), trkA = toF32(trk);
       const vCount = (posA.length / 3) | 0;
       if (!vCount || trkA.length < vCount * 3) {
-        // #region agent log
-        try { (window.__wgxDbg = window.__wgxDbg || []).push({hypothesisId:"A",location:"wgx.js:_makeRoadLUT",message:"lut early fail len",data:{vCount,trkLen:trkA.length},timestamp:Date.now()}); } catch(_){}
-        // #endregion
         return _makeAttrBG(null);
       }
       const mat = matArr && matArr.length === vCount ? toF32(matArr) : null;
@@ -2273,9 +2273,6 @@ const WGX = (function () {
         if (pz < minZ) minZ = pz; if (pz > maxZ) maxZ = pz;
       }
       if (!raw.length) {
-        // #region agent log
-        try { (window.__wgxDbg = window.__wgxDbg || []).push({hypothesisId:"A",location:"wgx.js:_makeRoadLUT",message:"lut empty raw",data:{vCount,skipHw,skipLat,skipMat,hasMat:!!mat,latSample:[trkA[1],trkA[4],trkA[7],trkA[10]],hwSample:[trkA[2],trkA[5],trkA[8],trkA[11]],matSample:mat?[mat[0],mat[1],mat[2],mat[3],mat[4],mat[5]]:null},timestamp:Date.now()}); } catch(_){}
-        // #endregion
         return _makeAttrBG(null);
       }
       raw.sort((a, b) => a.s - b.s);
@@ -2339,17 +2336,11 @@ const WGX = (function () {
           o += 4;
         }
       }
-      // #region agent log
-      try { (window.__wgxDbg = window.__wgxDbg || []).push({hypothesisId:"A",location:"wgx.js:_makeRoadLUT",message:"lut built",data:{vCount,raw:raw.length,samples:samples.length,skipHw,skipLat,skipMat,magic:out[0],minX,maxX,minZ,maxZ,extX,extZ},timestamp:Date.now()}); } catch(_){}
-      // #endregion
       const bg = _makeAttrBG(out);
       bg.isRoadLut = true;
       return bg;
     }
     function _rememberRoadLut(lut) {
-      // #region agent log
-      try { (window.__wgxDbg = window.__wgxDbg || []).push({hypothesisId:"F",location:"wgx.js:_rememberRoadLut",message:"remember",data:{hasLut:!!lut,hasBG:!!(lut&&lut.attrBG),isRoadLut:!!(lut&&lut.isRoadLut),prevReady:_roadLutReady},timestamp:Date.now()}); } catch(_){}
-      // #endregion
       if (lut && lut.isRoadLut && lut.attrBG) { _roadLutBG = lut.attrBG; _roadLutReady = true; }
     }
     function _drawGeom(pass, mesh, instCount) {
@@ -2370,11 +2361,6 @@ const WGX = (function () {
       const pulled = b.hasTrk ? _expandPull(b.vert, b.attr, b.idx) : null;
       const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk, data.mat) : null;
       if (lut) _rememberRoadLut(lut);
-      // #region agent log
-      if (b.hasTrk) {
-        try { (window.__wgxDbg = window.__wgxDbg || []).push({ hypothesisId: "A", location: "wgx.js:createMesh", message: "hasTrk mesh", data: { hasLut: !!lut, pulled: !!(pulled && pulled.count), pulledCount: pulled && pulled.count, idxCount: b.count, vertStride: 13, attrLen: b.attr && b.attr.length, mat0: b.attr && b.attr[0], ready: _roadLutReady }, timestamp: Date.now() }); } catch (_) {}
-      }
-      // #endregion
       let vbuf = null, ibuf = null, sbuf = null, attrBG = null;
       try {
         if (pulled) {
@@ -2392,25 +2378,6 @@ const WGX = (function () {
               pieces.push(_meshFromPull(vert, attr, n, b.indexFormat, lut));
             }
             const head = pieces[0] || { vbuf: null, sbuf: null, attrBG: null, count: 0 };
-            // #region agent log
-            try {
-              let nOk = 0, nNull = 0;
-              for (let i = 0; i < pieces.length; i++) {
-                if (!pieces[i].vbuf) nNull++; else nOk++;
-              }
-              let ymin = Infinity, ymax = -Infinity;
-              const v0 = pulled.vert;
-              for (let i = 0; i < Math.min(pulled.count, 2000); i++) {
-                const y = v0[i * VERTEX_FLOATS + 1];
-                if (y < ymin) ymin = y; if (y > ymax) ymax = y;
-              }
-              (window.__wgxDbg = window.__wgxDbg || []).push({
-                hypothesisId: "E", location: "wgx.js:createMesh", message: "road pieces",
-                data: { pulledCount: pulled.count, pieces: pieces.length, nOk, nNull, headCount: head.count, ymin, ymax, idxCount: b.count, stride: VERTEX_FLOATS },
-                timestamp: Date.now(),
-              });
-            } catch (_) {}
-            // #endregion
             return {
               _wgx: "mesh", vbuf: head.vbuf, ibuf: null, sbuf: head.sbuf, attrBG: head.attrBG,
               count: head.count, indexFormat: b.indexFormat, chunks: null, pieces,
@@ -2966,18 +2933,6 @@ const WGX = (function () {
       d[base + 25] = o._instanced ? 1 : 0;
       d[base + 26] = o.surfaceId != null ? o.surfaceId : 0;
       d[base + 27] = 0;
-      // #region agent log
-      if (o.surfaceId === 16 || (o.detail || 0) > 0.35) {
-        try {
-          window.__wgxDrawDbg = window.__wgxDrawDbg || { n: 0, last: null };
-          if (window.__wgxDrawDbg.n < 12 || o.surfaceId === 16) {
-            window.__wgxDrawDbg.n++;
-            window.__wgxDrawDbg.last = { slot, surfaceId: d[base + 26], detail: d[base + 21], sparkle: d[base + 24], inst: d[base + 25], depthBias: o.depthBias || null, litPass: !!litPass };
-            (window.__wgxDbg = window.__wgxDbg || []).push({ hypothesisId: "B", location: "wgx.js:_writeDraw", message: "drawU", data: window.__wgxDrawDbg.last, timestamp: Date.now() });
-          }
-        } catch (_) {}
-      }
-      // #endregion
     }
     // One (or ranged) writeBuffer for every slot filled this pass — call before
     // litPass.end(). writeBuffer is queue-ordered before submit, so draws
@@ -3004,11 +2959,6 @@ const WGX = (function () {
     }
 
     function draw(mesh, model, opts) {
-      // #region agent log
-      if (opts && opts.surfaceId === 16) {
-        try { (window.__wgxDbg = window.__wgxDbg || []).push({ hypothesisId: "D", location: "wgx.js:draw", message: "road draw enter", data: { hasPass: !!litPass, hasMesh: !!mesh, hasVbuf: !!(mesh && mesh.vbuf), count: mesh && mesh.count, pieces: mesh && mesh.pieces && mesh.pieces.length, lutReady: _roadLutReady, hasLutBG: !!_roadLutBG }, timestamp: Date.now() }); } catch (_) {}
-      }
-      // #endregion
       if (!litPass || !mesh || !mesh.vbuf) return;
       const o = _litOpts(opts);
       const slot = _drawSlot++;
@@ -3031,11 +2981,6 @@ const WGX = (function () {
     }
 
     function drawChunked(mesh, model, opts) {
-      // #region agent log
-      if (opts && opts.surfaceId === 16) {
-        try { (window.__wgxDbg = window.__wgxDbg || []).push({ hypothesisId: "D", location: "wgx.js:drawChunked", message: "road drawChunked enter", data: { hasPass: !!litPass, hasMesh: !!mesh, hasVbuf: !!(mesh && mesh.vbuf), chunks: mesh && mesh.chunks && mesh.chunks.length, lutReady: _roadLutReady, hasLutBG: !!_roadLutBG }, timestamp: Date.now() }); } catch (_) {}
-      }
-      // #endregion
       if (!litPass || !mesh || !mesh.vbuf) return;
       const o = _litOpts(opts);
       const slot = _drawSlot++;
@@ -3073,34 +3018,6 @@ const WGX = (function () {
         drew++;
         if (isNear) nearDraw++;
       }
-      // #region agent log
-      if (opts && opts.surfaceId === 16) {
-        try {
-          const sample = [];
-          for (let i = 0; i < Math.min(3, chunks.length); i++) {
-            const ch = chunks[i];
-            sample.push({ min: ch.min && ch.min.slice(0, 3), max: ch.max && ch.max.slice(0, 3), count: ch.count, hasVbuf: !!ch.vbuf });
-          }
-          // find chunk nearest eye
-          let bestI = 0, bestD = Infinity;
-          for (let i = 0; i < chunks.length; i++) {
-            const d = _aabbDist2(chunks[i].min, chunks[i].max, ex, ey, ez);
-            if (d < bestD) { bestD = d; bestI = i; }
-          }
-          const nb = chunks[bestI];
-          (window.__wgxDbg = window.__wgxDbg || []).push({
-            hypothesisId: "D", location: "wgx.js:drawChunked", message: "road chunks drawn",
-            data: {
-              drew, culled, total: chunks.length, cd, nearDraw, nearCull,
-              eye: [ex, ey, ez], nearestDist: Math.sqrt(bestD),
-              nearest: nb && { min: nb.min && nb.min.slice(0, 3), max: nb.max && nb.max.slice(0, 3), count: nb.count, inFrustum: !cull || _aabbInFrustum(_fcPlanes, nb.min, nb.max) },
-              sample,
-            },
-            timestamp: Date.now(),
-          });
-        } catch (_) {}
-      }
-      // #endregion
     }
 
     // Fallback path: the Phase-2 tonemap blit (HDR scene -> swapchain). Used when
@@ -4743,16 +4660,6 @@ const WGX = (function () {
       capturePixels,
       awaitSoftPresent,
       roadLutReady: () => _roadLutReady,
-      // #region agent log
-      roadLutDebug: () => ({
-        ready: _roadLutReady,
-        hasBG: !!_roadLutBG,
-        gpuErrors: _gpuErrors,
-        lastFailure: _lastFailure,
-        dbg: (typeof window !== "undefined" && window.__wgxDbg) ? window.__wgxDbg.slice(-40) : [],
-        drawDbg: (typeof window !== "undefined") ? window.__wgxDrawDbg : null,
-      }),
-      // #endregion
 
       // extension: lets a future __apex.gfxBackend() report the active path.
       backend: "webgpu",

@@ -866,6 +866,11 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /roadLutReady/);
   assert.match(WGX_SOURCE, /function _litOpts/);
   assert.match(CHUNKS_SOURCE, /if \(i32\(vMatId \+ 0\.5\) == 16\) \{\s*roadMarkings/);
+  assert.match(CHUNKS_SOURCE, /let onRibbon = select\(dCenter <= hw \+ 2\.4, abs\(x\) <= hw \+ 2\.4, tangOk\)/);
+  assert.match(CHUNKS_SOURCE, /if \(D\.mat2\.z < 0\.5 && D\.mat1\.y > 0\.1 && fromWorld\.w > 0\.5\) \{\s*discard;/);
+  assert.match(WGX_SOURCE, /m3\+m2, m7\+m6, m11\+m10, m15\+m14\); \/\/ near \(GL clip w\+z >= 0\)/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /1\.0, 0\.0, 1\.0/);
+  assert.doesNotMatch(WGX_SOURCE, /__wgxDbg/);
   assert.match(CHUNKS_SOURCE, /trkFromWorld\(wp\.xyz\)/);
   assert.match(CHUNKS_SOURCE, /0\.12 \* F\.params9\.x/, "AMBIENT CONTACT DARK");
   assert.match(CHUNKS_SOURCE, /0\.16, 0\.30, wetSheen\) \* F\.params9\.y/, "LAMP WALL SPILL");
