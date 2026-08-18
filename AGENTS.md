@@ -142,7 +142,7 @@ both ABSENCE signals, so confirm with one positive: drive a race and assert
 the canvas. SwiftShader is a validation oracle; for WGX **visible** pixels use
 `gfx-probe.mjs` (`#game` after `awaitSoftPresent`); for readback oracle use
 `wgx-capture.mjs` → `frame.png`. Full trap list:
-`.claude/skills/mcp-probe/SKILL.md` §Probing a specific renderer.
+`.claude/skills/mcp-probe/references/recipes.md` §Probing a specific renderer.
 
 ## Cursor Cloud specific instructions
 
