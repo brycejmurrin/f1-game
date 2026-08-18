@@ -396,7 +396,7 @@ function drawMinimap() {
   // ghost replay marker (time trial): where your best lap is right now
   if (timeTrial && Ghost.hasGhost()) {
     const gh = Ghost.at(player.lapTime);
-    if (gh && !gh.done) {
+    if (gh) {
       const gp = map[Math.floor((gh.s / track.total) * n) % n];
       mm.fillStyle = "rgba(120, 220, 255, 0.95)";
       mm.beginPath();

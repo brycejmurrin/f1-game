@@ -847,7 +847,7 @@ function qualiNetWaiting() {
   // guesses. rivalDriverIds() is the roster NetPlay actually holds slots for,
   // so somebody who dropped during qualifying stops being waited on.
   const rivals = qualiRivalDriverIds();
-  if (!rivals.length) return !(qualiPeers.size > 0);
+  if (!rivals.length) return false;
   return rivals.some((id) => !(qualiPeers.get(id) > 0));
 }
 
@@ -894,7 +894,7 @@ function refreshQualiGate() {
 // build the race and hand its connection to NetPlay, and it cannot do that
 // until the players leave the sheet.
 function openQualiForNet(done) {
-  openQuali();                    // clears the gate FIRST, so arm it after
+  openQuali(true);                // fresh sim — do not restore a career grid
   qualiNetDone = done || null;
   refreshQualiGate();
 }
@@ -915,7 +915,7 @@ function onPeerQuali(d) {
   if (d && d.driverId != null) qualiLive.delete(d.driverId);
   if (d && d.driverId != null && d.t > 0) qualiPeers.set(d.driverId, d.t);
   if (!isQuali()) return;
-  const mine = player && player.best < Infinity ? player.best : 0;
+  const mine = player && player.lastLap > 0 ? player.lastLap : (player && player.best < Infinity ? player.best : 0);
   quali.simulate(qualiDriven(mine));
   if (!$("quali").hidden) quali.build();
   refreshQualiGate();
@@ -1266,7 +1266,7 @@ function getTeamParts(teamId) {
 }
 function saveTeamParts(teamId, parts) {
   const c = careerFitted(teamId);
-  if (c) { c.fitted = parts; Career.save(); return; }
+  if (c) { if (Career.conflicted && Career.conflicted()) return; c.fitted = parts; Career.save(); return; }
   store.set("parts." + teamId, parts);
 }
 
@@ -1784,7 +1784,7 @@ function getCarDecalTexture(team, num, isPlayer) {
       // team's numbers/sponsors for the session, unlogged. Log and retry — but
       // this runs per drawn car per FRAME, so cache the null after 3 tries.
       const n = _decalTexFail[key] = (_decalTexFail[key] || 0) + 1;
-      Log.warn("gfx", "decal atlas build failed for " + key + " (attempt " + n + ")", e);
+      if (n === 1) Log.warn("gfx", "decal atlas build failed for " + key, e);
       if (n < 3) return null;
     }
     _decalTexCache[key] = t;
@@ -2496,6 +2496,7 @@ function startRace() {
   } else {                     // isRaining() made the whole shipped tier (three
     Particles.rainShow(false); // sliders + rainSeed(drizzle)) unreachable.
   }
+  if (!isQuali() && gridFromQuali() && !quali.order(cars)) { openQuali(); return false; }
   gridUp(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season));
   recomputePlayerMods();
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
@@ -2694,7 +2695,7 @@ function endRace(forcedOrder) {
   // below — first branch out, before any race classification is built.
   if (isQuali()) {
     cars = qualiField || cars;
-    const myLap = player.best < Infinity ? player.best : 0;
+    const myLap = player.lastLap > 0 ? player.lastLap : (player.best < Infinity ? player.best : 0);
     // Tell the other player what we set BEFORE building the sheet: their side
     // needs it to draw the same classification ours will.
     if (myLap > 0) netReportQuali(player.driverId, myLap);
@@ -3113,7 +3114,7 @@ function quitToMenu() {
   // next thing the player presses. The championship SAVES are untouched — what
   // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
   setFlow("gp"); session = "race";
-  quali.clear();   // last weekend's classification is not this one's grid
+  quali.clear(true);   // leave the title without this weekend's grid
   qualiPeers.clear();
   qualiNetDone = null; qualiLive.clear();   // and the friend-race gate: a stale one locks every later quali
   // …and drop the career championship alias with it, so STANDINGS on the title
@@ -3514,13 +3515,12 @@ function _colResolvePair(a, b, last, rubScrub) {
     shiftLong(b, -sgn * corr * sB);
     const relV = sgn >= 0 ? bSp - aSp : aSp - bSp;   // >0 means the rear car is closing
     if (relV > 0) {
-      // Soft momentum exchange (was 1.15). Skip when IncidentSim will take
-      // the pair: notifyCar queues at relV ≥ R3_CAR_V (15) when active, and
-      // Rapier resolves in preStep — applying jImp here then promoting is a
-      // double resolve. Safe: owns() cars are already skipped above; below
-      // threshold / inactive, notifyCar no-ops and this exchange stays the
-      // resolver (C3 event-scoping).
-      if (!(incidentSim.active() && relV >= 15)) {
+      // Soft momentum exchange (was 1.15). Skip only cars Rapier already
+      // owns — a relV≥15 skip used to drop jImp even when promoteCarDynamic
+      // failed later, leaving the pair with no resolver. owns() cars are
+      // also skipped in _colSepPair; this is the same rule at the impulse.
+      // notifyCar still queues a shunt; below threshold it no-ops (C3).
+      if (!(incidentSim.owns(a) || incidentSim.owns(b))) {
         const jImp = 0.5 * relV / iSum;
         if (sgn >= 0) {
           b.speed = Math.max(0, b.speed - iB * jImp);
@@ -4806,13 +4806,13 @@ function updateCar(c, dt, ranked) {
     const lapValid = !c.incidentInvalidLap;
     if (c.lap > 1) {
       const lapDone = c.lapTime;
-      c.lastLap = lapDone;
+      if (lapValid) c.lastLap = lapDone;
       if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
       // Tell the rival about our lap. Times are authored by whoever OWNS the
       // car — nobody else can time it — and go over the reliable channel,
       // because a dropped lap time is a wrong RESULT, not a momentary glitch.
-      if (c.local && netPlay.active()) {
+      if (lapValid && c.local && netPlay.active()) {
         netPlay.reportLap({ lap: c.lap, time: lapDone, best: isFinite(c.best) ? c.best : null, code: c.code });
       }
       if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else Ghost.startLap(); }
@@ -4855,7 +4855,7 @@ function updateCar(c, dt, ranked) {
   if (c.human && state === "race" && !c.finished) {
     // Moving backwards along the track at speed = going the wrong way. (A slow
     // reverse crawl to recover off a wall is fine and does NOT trip this.)
-    if (ds < -0.03 && c.speed > 15) c.wrongT = Math.min(2, (c.wrongT || 0) + dt);
+    if (ds < -0.03 && c.speed > vStd(15)) c.wrongT = Math.min(2, (c.wrongT || 0) + dt);
     else c.wrongT = Math.max(0, (c.wrongT || 0) - dt * 2);
     c.wrongWay = c.wrongWay ? c.wrongT > 0.15 : c.wrongT > 0.4;
     if (c.wrongWay && (c.wrongCueT = (c.wrongCueT || 0) - dt) <= 0) {
@@ -4970,6 +4970,7 @@ function rescuePlayer(c) {
 // stopped car is not a new kind of physics, it is the existing placement with the
 // speed taken out.
 function retireCar(c, reason) {
+  incidentSim.release(c);   // same as rescuePlayer — drop a live Rapier takeover
   c.retired = true;
   c.dnf = reason || "mechanical";
   c.dnfAt = null;
@@ -5031,7 +5032,7 @@ function coast(c, dt) {
   // pace ~0.55. Pace-scale the floor, and never speed the car up. If already
   // below the floor (finished crawling), keep scrubbing toward 0 — the old
   // Math.min(speed, max(floor, …)) left cars stuck at their finish speed.
-  const floor = 24 * Math.max(PACE, 0.05);
+  const floor = GRASS_V * 0.6 * Math.max(PACE, 0.05);
   const next = c.speed - 20 * dt;
   c.speed = c.speed > floor ? Math.max(floor, next) : Math.max(0, next);
   c.s = wrapS(c.s + c.speed * dt);
@@ -6980,8 +6981,8 @@ function render(dt) {
     // fills the camera as a black box until you pull away ("starts dark, clears
     // after throttle"). Once there's real separation it draws normally.
     let gDs = Infinity;
-    if (g && !g.done) { const d = Math.abs(g.s - player.s); gDs = Math.min(d, track.total - d); }
-    if (g && !g.done && gDs > 3.0) {
+    if (g) { const d = Math.abs(g.s - player.s); gDs = Math.min(d, track.total - d); }
+    if (g && gDs > 3.0) {
       Tracks.sample(track, g.s, smp2);
       // Normalize the lerped basis — same node-rate scale-pulse fix as the cars.
       { const t = smp2.t, r = smp2.r;
@@ -7757,7 +7758,7 @@ function buildRaceSettings() {
   const qEl = $("rs-quali");
   qEl.innerHTML = "";
   for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
-    const active = champ ? on : raceQuali === on;
+    const active = champ ? (SeasonCal.quali() === on) : (raceQuali === on);
     const b = document.createElement("button");
     b.className = "sel-chip" + (active ? " active" : "");
     b.setAttribute("aria-pressed", active ? "true" : "false");
@@ -7865,17 +7866,17 @@ $("rs-go").onclick = () => {
     return;
   }
   if (steerMode === "tilt") enableTilt();
-  // A championship weekend always starts with qualifying, and a one-off does
-  // when GRID is set to QUALIFYING. Otherwise it is straight to the lights from
-  // P12 — a quick blast, which is the point of that mode.
-  if (gridFromQuali()) openQuali(); else startRace();
+  // Championship GO follows qualiNext (sprint GP legs skip a second quali).
+  // One-off GO still follows gridFromQuali / the QUALIFYING chip.
+  if ((isChampionship() && SeasonCal.qualiNext(season) && !quali.results()) || (!isChampionship() && gridFromQuali() && !quali.results())) openQuali();
+  else startRace();
 };
 
 // ── qualifying ───────────────────────────────────────────────────────────────
 // The sheet opens BEFORE the session with the field already simulated, so the
 // player can see what they have to beat and choose whether to drive it or take
 // the simulated time. `q-done` flips the foot from DRIVE/SIMULATE to TO THE GRID.
-function openQuali() {
+function openQuali(fresh) {
   session = "quali";
   // Reached from race settings this is already "menu"; reached from the results
   // screen it would still say "results". No race is running while the sheet is
@@ -7886,7 +7887,7 @@ function openQuali() {
   qualiNetDone = null; qualiLive.clear();   // abandoned friend-race gate — openQualiForNet re-arms it AFTER this
   loadTrack(trackIdx);
   makeCars();
-  quali.simulate(0);              // provisional: everyone simulated, including you
+  if (fresh) quali.simulate(0); else quali.begin();
   $("quali").classList.remove("q-done");
   quali.open();
 }
@@ -7943,7 +7944,7 @@ $("q-back").onclick = () => {
   quali.close();
   quali.clear();          // nothing was run; the next visit draws its own sheet
   session = "race";
-  $("race-settings").hidden = false;
+  qualiNetDone ? (qualiNetDone = null, qualiPeers.clear(), qualiLive.clear(), netLobby.abortQuali()) : ($("race-settings").hidden = false);
 };
 
 // ---- customize my team ----
@@ -8305,7 +8306,7 @@ function setPaused(p) {
   if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season));
   // never leave an overlay up after resume
-  if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; }
+  if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
   else if (soundOn) GameAudio.startEngine();
   lastFrame = performance.now();
@@ -8320,6 +8321,7 @@ function setHudUserHidden(v) {
   document.body.classList.toggle("hud-hidden", !!v);
   const btn = $("pm-hidehud");
   if (btn) btn.textContent = v ? "SHOW HUD" : "HIDE HUD";
+  if (v) { const p = $("campicker"); if (p) p.hidden = true; }
 }
 $("pm-hidehud").onclick = () => {
   const willHide = !document.body.classList.contains("hud-hidden");

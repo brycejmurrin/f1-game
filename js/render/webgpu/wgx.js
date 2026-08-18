@@ -713,7 +713,7 @@ const WGX = (function () {
     }
     function _jsStrike(where, e) {
       litPass = null; encoder = null; currentView = null;
-      try { Log.warn("gfx", "WGX " + where + " failed —", e); } catch (_) { /* harness */ }
+      try { if (!_jsStrikes) Log.warn("gfx", "WGX " + where + " failed —", e); } catch (_) { /* harness */ }
       _jsStrikes++;
       if (_jsStrikes < JS_STRIKE_CAP) return;
       _lost = true;
@@ -919,7 +919,7 @@ const WGX = (function () {
     // ── Phase-4 post targets/pipelines (size-independent pipelines built once in
     //    _buildPost; size-dependent targets + bind groups (re)built in
     //    ensureTargets). _postReady/_fxReady gate a safe fallback to the blit. ──
-    let _postReady = false, _fxReady = false;
+    let _postReady = false, _fxReady = false, _cfgWarned = false;
     let ssaoTex = null, ssaoView = null, godrayTex = null, godrayView = null,
         ssaoBlurTex = null, ssaoBlurView = null, godrayBlurTex = null, godrayBlurView = null,
         ldrTex = null, ldrView = null, ssrTex = null;
@@ -1805,7 +1805,8 @@ const WGX = (function () {
         // configured swapchain. Reconfigure on every buffer-size change.
         if (ctx) {
           const _cfgErr = _configureCanvas();
-          if (_cfgErr) try { Log.warn("gfx", "WGX canvas configure failed —", _cfgErr); } catch (_) { /* harness */ }
+          if (_cfgErr) try { if (!_cfgWarned) { _cfgWarned = true; Log.warn("gfx", "WGX canvas configure failed —", _cfgErr); } } catch (_) { /* harness */ }
+          else _cfgWarned = false;
         }
         if (_softGpu && _displayCanvas) {
           _displayCanvas.width = w;
@@ -3010,7 +3011,7 @@ const WGX = (function () {
       d[base + 26] = o.surfaceId != null ? o.surfaceId : 0;
       // Floor/terrain over the ribbon: WGX depth loses the road, so fs_main
       // discards the LUT footprint. Never set this on cars/props (mat2.w).
-      d[base + 27] = (o.buryRibbon || (o.detail || 0) > 0.1) ? 1 : 0;
+      d[base + 27] = o.buryRibbon ? 1 : 0;
     }
     // One (or ranged) writeBuffer for every slot filled this pass — call before
     // litPass.end(). writeBuffer is queue-ordered before submit, so draws
@@ -3461,7 +3462,8 @@ const WGX = (function () {
       // params4.w of 0, and the whole cost was thrown away. That is the shed the
       // player asked for not actually being taken.
       const _ssrStr = o.reflect != null ? o.reflect : 0;
-      const _carRefl = (T && T.carReflect != null) ? T.carReflect : 0.05;
+      const _carRefl = o.carReflect != null ? o.carReflect
+        : ((T && T.carReflect != null) ? T.carReflect : 0.05);
       // Run when wet-road SSR is live OR car lacquer needs a mirror (GLX composite
       // gates on either path). Dry days still get car-paint SSR.
       if (_ssrReady && ssrBG && frameHaveProj &&
@@ -3695,7 +3697,8 @@ const WGX = (function () {
         s[52] = (T && T.gainR      != null) ? T.gainR      : 1;
         s[53] = (T && T.gainG      != null) ? T.gainG      : 1;
         s[54] = (T && T.gainB      != null) ? T.gainB      : 1;
-        s[55] = (T && T.carReflect != null) ? T.carReflect : 0.05;                        // gain.w = carReflect
+        s[55] = o.carReflect != null ? o.carReflect
+          : ((T && T.carReflect != null) ? T.carReflect : 0.05);                           // gain.w = carReflect
         // aces (off 224): TONE CURVE coeffs a,b,c,d (GLX parity). Always packed —
         // defaults reproduce the shipped Narkowicz curve byte-for-byte.
         s[56] = (T && T.acesA != null) ? T.acesA : 2.51;

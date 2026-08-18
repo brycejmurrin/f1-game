@@ -64,6 +64,45 @@ test("an active career refuses to overwrite a newer foreign save", () => {
   assert.equal(winner.money, 900);
 });
 
+test("a conflicted career refuses grant/research so RAM does not drift from disk", () => {
+  const { Career, disk, foreign } = load();
+  Career.load();
+  Career.engage(true);
+  const key = "apex26.career.driver.0";
+  const money = Career.data().money;
+  disk.set(key, JSON.stringify(save(9, 900)));
+  foreign(key);
+  assert.equal(Career.conflicted(), true);
+  assert.equal(Career.grant(50), null);
+  assert.equal(Career.research({ id: "wing", cost: 1 }), false);
+  assert.equal(Career.acceptOffer(0), null);
+  assert.equal(Career.rollover(), null);
+  assert.equal(Career.renewHire(1), false);
+  assert.equal(Career.hireDriver("VER", 1), false);
+  assert.equal(Career.data().money, money);
+  assert.equal(Career.data().owned.indexOf("wing"), -1);
+});
+
+test("settleRound refuses a conflicted save before mutating results", () => {
+  const { Career, disk, foreign } = load();
+  Career.load();
+  Career.engage(true);
+  const career = Career.data();
+  career.season.round = 1;
+  const before = career.results.length;
+  const money = career.money;
+  const key = "apex26.career.driver.0";
+  disk.set(key, JSON.stringify(save(9, 900)));
+  foreign(key);
+  assert.equal(Career.conflicted(), true);
+  const player = { team: { id: "haas" }, retired: false, cuts: 0, penalty: 0, gridPos: 3 };
+  const order = [player];
+  assert.equal(Career.settleRound(order, player), null);
+  assert.equal(career.results.length, before, "RAM must not record a round the disk will not keep");
+  assert.equal(career.money, money);
+  assert.equal(JSON.parse(disk.get(key)).season.round, 9);
+});
+
 test("outside active play a foreign live-slot save refreshes Career's object", () => {
   const { Career, disk, foreign } = load();
   Career.load();

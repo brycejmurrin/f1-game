@@ -33,10 +33,14 @@ const AudioPanel = (() => {
       // Mirror the state for assistive tech — it is a real toggle button now
       // that AriaState does not own (it is not in an option group).
       els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
-      if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); }
+      if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); GameAudio.stopRain(); }
       else {
         if (G.state === "menu") GameAudio.startMusic(-1);
-        else if (G.state === "race") GameAudio.startMusic(G.trackIdx);
+        else if (G.state === "race") {
+          GameAudio.startMusic(G.trackIdx);
+          GameAudio.startEngine();
+          if (G.raceWeather === "rain") GameAudio.startRain();
+        }
       }
       // SOUND is the master, so the panel's music controls follow it.
       syncAudioPanel();

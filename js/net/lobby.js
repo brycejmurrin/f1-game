@@ -1789,6 +1789,22 @@ const NetLobby = (function () {
       return true;
     }
 
+    // BACK from the qualifying sheet: the session is still ours (NetPlay has
+    // not adopted it) and the peers are still in the room. Do NOT open() —
+    // that wipes _peers — and do NOT cancel() — that tears the RTC down.
+    // Just put the waiting room back on screen and mark netRoom so garage /
+    // race-settings return here instead of starting a solo GP.
+    function abortQuali() {
+      if (G.setNetRoom) G.setNetRoom(true);
+      const e = els();
+      if (e.screen) e.screen.hidden = false;
+      show("room");
+      renderRoom();
+      say("Qualifying cancelled.");
+      Log.info("net", "lobby abortQuali");
+      return true;
+    }
+
     function close() {
       invalidateOperations();
       clearInterval(pollTimer);
@@ -1928,7 +1944,7 @@ const NetLobby = (function () {
     }
 
     return {
-      wire, open, close, cancel, host, join, makeAnswer, acceptAnswer,
+      wire, open, close, cancel, abortQuali, host, join, makeAnswer, acceptAnswer,
       shareInvite, shareAnswer, canShare,
       scan, stopScan, pasteInto, deliver,
       codeHost, codeJoin, stopCodeWait,

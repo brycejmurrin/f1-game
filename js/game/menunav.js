@@ -305,6 +305,7 @@ window.MenuNav = (function () {
       return ty !== "checkbox" && ty !== "radio" && ty !== "button" &&
              ty !== "submit" && ty !== "reset";
     }
+    if (el.getAttribute && el.getAttribute("role") === "tab") return true;
     return !!el.isContentEditable;
   }
 

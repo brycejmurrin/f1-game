@@ -94,9 +94,10 @@ const GameAudio = (function () {
   let lastFailedResume = 0;
   let resumeMusic = false;
   let resumeEngine = false;
+  let resumeRain = false;
 
   function clamp01(v) {
-    return M4.clamp(v, 0, 1);
+    return M4.clamp(Number.isFinite(v) ? v : 0, 0, 1);
   }
 
   /* ---------------- iOS audio session ----------------
@@ -293,19 +294,23 @@ const GameAudio = (function () {
     if (!createCtx()) return;
     if (wasMusic) startMusic(wasTrack);
     if (wasEngine) startEngine();
+    if (rainWanted) startRain();
   }
 
   function onVisibility() {
     if (document.hidden) {
       resumeMusic = musicOn;
       resumeEngine = engineOn;
+      resumeRain = rainWanted;
       if (musicOn) stopMusic();
       if (engineOn) stopEngine();
+      if (rainWanted) stopRain(true);
     } else {
       resumeIfNeeded();
       if (resumeMusic) startMusic(lastTrackIdx); // restarts re-synced to the clock
       if (resumeEngine) startEngine();
-      resumeMusic = resumeEngine = false;
+      if (resumeRain) startRain();
+      resumeMusic = resumeEngine = resumeRain = false;
     }
   }
 
@@ -694,12 +699,14 @@ const GameAudio = (function () {
 
   let rainSrc = null, rainGain = null, rainHp = null, rainLp = null, rainStopping = false;
   let rainPending = null;   // gain a start asked for while stopRain's teardown was running
+  let rainWanted = false;   // wanted even when nodes are torn down (rebuildCtx / tab hide)
 
   function startRain(gain) {
     // Optional gain for a softer tier (no live caller passes one today — both
     // call sites use the full 0.065). Re-targets live if already
     // running, so a mid-race wet↔rain flip fades the loop instead of sticking.
     const g = gain == null ? 0.065 : gain;
+    rainWanted = true;
     if (rainSrc) { if (rainGain) rainGain.gain.setTargetAtTime(g, now(), 0.8); return; }
     if (!sfxOk()) return;
     // A start landing inside stopRain's 1.2 s teardown used to be dropped on the
@@ -727,7 +734,8 @@ const GameAudio = (function () {
     rainGain.gain.setTargetAtTime(g, now(), 1.2);
   }
 
-  function stopRain() {
+  function stopRain(keepWant) {
+    if (!keepWant) rainWanted = false;
     rainPending = null;   // a newer stop cancels a queued restart, wet or dry
     if (!rainSrc) return;
     rainStopping = true;

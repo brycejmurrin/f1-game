@@ -88,6 +88,7 @@ const Ghost = (function () {
   // Call when a lap completes. Stores it as the new best for this circuit if it
   // beats the stored time. Returns true on a new record.
   function finishLap(lapTime) {
+    if (!Number.isFinite(lapTime) || lapTime <= 0) { rec = null; return false; }
     if (!rec || rec.t.length < MIN_SAMPLES) { rec = null; return false; }
     const done = rec;
     rec = null;

@@ -115,14 +115,23 @@ const NetSnapshot = (function () {
   // entries: [{id, car}] — an explicit id rather than the array index, so a
   // peer can send a subset (its own car) without the receiver having to guess.
   function encodeSnapshot(tick, entries) {
-    const n = Math.min(entries.length, 255);
+    // Filter before counting: writeCar does `id & 0xff`, so -1 becomes 255
+    // and the count byte would still advertise the omitted slots.
+    const list = [];
+    const src = entries || [];
+    for (let i = 0; i < src.length && list.length < 255; i++) {
+      const e = src[i];
+      if (!e || !(e.id >= 0)) continue;
+      list.push(e);
+    }
+    const n = list.length;
     const buf = new ArrayBuffer(SNAP_HEADER + n * CAR_BYTES);
     const dv = new DataView(buf);
     dv.setUint8(0, TYPE_SNAPSHOT);
     dv.setUint32(1, tick >>> 0);
     dv.setUint8(5, n);
     let off = SNAP_HEADER;
-    for (let i = 0; i < n; i++) off = writeCar(dv, off, entries[i].id, entries[i].car);
+    for (let i = 0; i < n; i++) off = writeCar(dv, off, list[i].id, list[i].car);
     return new Uint8Array(buf);
   }
 

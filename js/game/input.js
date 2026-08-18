@@ -391,7 +391,7 @@ const Input = (function () {
     const interactive = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" ||
       tag === "BUTTON" || tag === "A" || (active && active.isContentEditable);
     const hudControl = active && active.matches &&
-      active.matches("#btn-cam, #pausebtn, #hud-restore, .touchbtn");
+      active.matches("#btn-cam, #pausebtn, #hud-restore, #pc-restore, .touchbtn");
     // Guard key PRESSES only: typing in a field or activating a control must not
     // also drive the car. RELEASES are still processed — if a movement key went
     // down with the game focused and focus then moved to a button (e.g. a control
@@ -754,6 +754,10 @@ const Input = (function () {
   }
   function btnEdge(pad, i) {            // rising edge since last poll
     return btnDown(pad, i) && !padPrevButtons[i];
+  }
+  function padLogId(e) {
+    const raw = (e && e.gamepad && e.gamepad.id) || "";
+    return String(raw).replace(/[\x00-\x1f\x7f]/g, "").slice(0, 80);
   }
 
   // Poll the active gamepad once per frame. The Gamepad API has no events for
@@ -1242,7 +1246,7 @@ const Input = (function () {
 
     window.addEventListener("gamepadconnected", function (e) {
       padConnected = true;
-      try { Log.info("input", "gamepad connected " + ((e && e.gamepad && e.gamepad.id) || "")); }
+      try { Log.info("input", "gamepad connected " + padLogId(e)); }
       catch (_) { /* Log absent */ }
     });
     window.addEventListener("gamepaddisconnected", function (e) {
@@ -1250,7 +1254,7 @@ const Input = (function () {
       padThrottleVal = padBrakeVal = 0;
       padPrevButtons.length = 0;
       padNavDir = null;
-      try { Log.info("input", "gamepad disconnected " + ((e && e.gamepad && e.gamepad.id) || "")); }
+      try { Log.info("input", "gamepad disconnected " + padLogId(e)); }
       catch (_) { /* Log absent */ }
     });
   }

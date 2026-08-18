@@ -434,7 +434,8 @@ const DataTelemetry = (function () {
     };
     document.addEventListener("keydown", telemKeyHandler);
 
-    document.body.appendChild(overlay);
+    const host = document.getElementById("datahub") || document.body;
+    host.appendChild(overlay);
     telemPopup = overlay;
     closeBtn.focus();
 

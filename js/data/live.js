@@ -104,7 +104,7 @@ const DataLive = (function () {
     }
 
     function loadLive() {
-      return ensureSession().then(function () {
+      return ensureSession(true).then(function () {
         const wrap = el("div", "dh-tabbody dh-split");
         if (sel.sessionKey === null) { wrap.appendChild(emptyMsg(NO_LIVE_MSG)); return wrap; }
         const leftPane = el("div", "dh-split-L");
@@ -172,7 +172,15 @@ const DataLive = (function () {
         dataEl.appendChild(spinner());
         let gateErr = null;
         function catchLive(err) {
-          if (err && err.message && err.message.indexOf("Live F1 session") !== -1) gateErr = err;
+          if (!err) return null;
+          const msg = err.message || "";
+          const status = err.status;
+          if (status === 401 || status === 403 ||
+              msg.indexOf("Live F1 session") !== -1 ||
+              msg.indexOf("HTTP 401") !== -1 ||
+              msg.indexOf("HTTP 403") !== -1) {
+            gateErr = err;
+          }
           return null;
         }
         // AUTO (and manual refresh) must not hit the 10 min TTL_LATEST cache —
@@ -197,6 +205,10 @@ const DataLive = (function () {
           clear(dataEl);
           if (gateErr) {
             dataEl.appendChild(emptyMsg(gateErr.message));
+            liveOpts.auto = false;
+            autoBtn.classList.remove("dh-active");
+            autoBtn.setAttribute("aria-pressed", "false");
+            stopLiveAuto();
             return;
           }
           const positions = mergePositionBatch(liveState, res[1]);
@@ -315,7 +327,11 @@ const DataLive = (function () {
       function posOf(p) { return (p.pos === null || p.pos === undefined) ? 999 : p.pos; }
 
       function renderRows() {
-        for (const k in sortBtns) sortBtns[k].classList.toggle("dh-active", k === liveOpts.sort);
+        for (const k in sortBtns) {
+          const on = k === liveOpts.sort;
+          sortBtns[k].classList.toggle("dh-active", on);
+          sortBtns[k].setAttribute("aria-pressed", on ? "true" : "false");
+        }
         clear(rows);
         const list = positions.slice();
         if (liveOpts.sort === "team") {
