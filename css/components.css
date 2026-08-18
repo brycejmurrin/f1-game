@@ -756,6 +756,19 @@ body:has(#teampicker:not([hidden])) #career {
   opacity: 0;
   pointer-events: none;
 }
+body:has(#datahub:not([hidden])) #overlay {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(#advanced:not([hidden])) #pmsettings,
+body:has(#audioset:not([hidden])) #pmsettings {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(#howtoplay:not([hidden])) #pmsettings {
+  opacity: 0;
+  pointer-events: none;
+}
 
 /* Z-INDEX IS ONLY FOR THE SCREENS STILL IN NORMAL FLOW.
    A screen migrated to `<dialog>.showModal()` (js/game/topmodal.js) renders in

@@ -5,7 +5,9 @@
   position: fixed; inset: 0; z-index: 50;
   height: 100vh; height: 100svh;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(4, 4, 8, 0.82);
+  background:
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
+    rgba(6, 6, 10, 0.42);
   /* Shared safe-area tokens, same as every other full-screen overlay — so the
      card clears the notch and home indicator identically (and the menu-fit
      notch simulation, which overrides --sa*, actually reaches this screen).
@@ -13,6 +15,9 @@
      rest of the app. */
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
   font-variant-numeric: tabular-nums;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .dh-overlay { background: rgba(4, 4, 8, 0.82); }
 }
 
 /* Short local viewport (UI SIZE included): stretch to fill. Viewport
@@ -42,8 +47,8 @@ body[data-density="compact"] .dh-overlay { align-items: stretch; }
   min-height: clamp(300px, calc(100 * var(--svhz) - 60px / var(--ui-scale)), min(900px, var(--dh-safe-h)));
   max-height: var(--dh-safe-h);
   display: flex; flex-direction: column;
-  /* same elevation ladder as the menu sheets (see css/tokens.css) */
-  background: var(--surf-1);
+  /* same --panel as .sheet so the live circuit reads through the card */
+  background: var(--panel);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--r-lg);
   overflow: hidden;
