@@ -592,6 +592,7 @@ const WGX = (function () {
     let _softDisplayPending = false, _softDisplayEpoch = 0;
     let _softSceneGen = 0, _softShownGen = 0;
     let _softLastMaxPx = 0, _softLastSkip = "";
+    let _softDisplayCap = null;
     const _softPresentWaiters = [];
     if (_softGpu && typeof document !== "undefined") {
       _displayCanvas = canvas;
@@ -1733,7 +1734,10 @@ const WGX = (function () {
         );
         _softBlitSeq++;
         _softDisplayPending = true;
-        return { buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch, sceneGen: _softSceneGen };
+        const cap = { buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch,
+          sceneGen: _softSceneGen, at: (typeof performance !== "undefined" && performance.now) ? performance.now() : 0 };
+        _softDisplayCap = cap;
+        return cap;
       } catch (_) {
         try { if (buf) buf.destroy(); } catch (_) { /* partial encode */ }
         return null;
@@ -1742,7 +1746,9 @@ const WGX = (function () {
     function _softDisplayFinish(cap) {
       if (!cap) return;
       const { buf, bpr, w, h, seq, epoch, sceneGen } = cap;
-      const release = function () { _softDisplayPending = false; };
+      const release = function () {
+        if (_softDisplayCap === cap) { _softDisplayPending = false; _softDisplayCap = null; }
+      };
       if (!_displayCtx) {
         try { buf.destroy(); } catch (_) { /* device dying */ }
         release();
@@ -1803,7 +1809,8 @@ const WGX = (function () {
     function _softDisplayAbort(cap) {
       if (!cap) return;
       try { cap.buf.destroy(); } catch (_) { /* submit rejected / device dying */ }
-      _softDisplayPending = false;
+      if (_softDisplayCap === cap) { _softDisplayPending = false; _softDisplayCap = null; }
+      _softLastSkip = "abort";
     }
     function _softBlitNotify(seq) {
       _softBlitShown = seq;
@@ -1820,8 +1827,11 @@ const WGX = (function () {
     function invalidateSoftPresent() {
       if (!_softGpu) return;
       _softSceneGen++;
-      // Drop an in-flight pits/gantry readback so it cannot paint after snapCam.
+      // Drop an in-flight pits/gantry readback so it cannot paint after snapCam
+      // and so the next present() can encode the live camera without waiting
+      // for a multi-second SwiftShader mapAsync to settle.
       _softDisplayEpoch++;
+      if (_softDisplayCap) _softDisplayAbort(_softDisplayCap);
     }
     function softPresentState() {
       return {
