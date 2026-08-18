@@ -642,6 +642,27 @@ test("week-2 dryRun refuses playwright_live from test-bg.json (no Chromium)", ()
   }
 });
 
+test("a live Node-only test-bg group does not impersonate Playwright", () => {
+  fs.mkdirSync(path.dirname(TEST_BG), { recursive: true });
+  let prev = null;
+  if (fs.existsSync(TEST_BG)) prev = fs.readFileSync(TEST_BG, "utf8");
+  fs.writeFileSync(TEST_BG, JSON.stringify({
+    mode: "sequential",
+    runs: [{ pid: process.pid, group: "tooling-fast", browser: false }],
+  }));
+  try {
+    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0" });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.equal(JSON.parse(r.stdout).ok, true);
+  } finally {
+    if (prev == null) {
+      try { fs.unlinkSync(TEST_BG); } catch { /* ignore */ }
+    } else {
+      fs.writeFileSync(TEST_BG, prev);
+    }
+  }
+});
+
 test("week-2 dryRun refuses chrome_daemon_up when /healthz answers", async () => {
   // Server MUST be a sibling process. spawnSync(MCP) blocks this event loop,
   // so an in-process http.Server cannot answer the occupancy probe.

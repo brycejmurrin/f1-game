@@ -441,14 +441,6 @@ const NetPlay = (function () {
       const incoming = opts.sessions
         || (opts.session ? [{ id: PEER_ONE, session: opts.session }] : null)
         || [{ id: PEER_ONE, session: NetSession.create({ transport: opts.transport }) }];
-      for (const entry of incoming) {
-        const id = entry.id != null ? entry.id : PEER_ONE;
-        const s = entry.session || entry;
-        sessions.set(id, s);
-        bindSession(id, s);
-      }
-      session = sessionList()[0] || null;
-
       localCar = (G.cars || []).find((c) => c.local) || G.player || null;
       remotes.clear();
       // One profile today, an array when the room grows. Written as a list here
@@ -485,10 +477,36 @@ const NetPlay = (function () {
         });
       }
       if (!localCar || !remotes.size) {
+        // start() adopts the lobby's sessions, but a failed adoption must not
+        // leave their handlers/socket alive behind a race that never started.
+        // Slot selection has already marked any partial rival as human, so
+        // hand it back before discarding the wire.
+        handBackToAI(null);
+        peerCar.clear();
+        const closed = new Set();
+        for (const entry of incoming) {
+          const s = entry.session || entry;
+          if (!s || closed.has(s)) continue;
+          closed.add(s);
+          try { s.clearHandlers(); } catch (e) {}
+          try { s.close(); } catch (e) {}
+        }
+        localCar = null;
         session = null;
         Log.warn("net", "play start fail no_slot");
         return { ok: false, error: "no_slot", message: "Could not find a grid slot for both drivers." };
       }
+
+      // Bind only after the grid transaction succeeds. Binding first made a
+      // no_slot result look inert while retaining every event callback on an
+      // abandoned peer connection.
+      for (const entry of incoming) {
+        const id = entry.id != null ? entry.id : PEER_ONE;
+        const s = entry.session || entry;
+        sessions.set(id, s);
+        bindSession(id, s);
+      }
+      session = sessionList()[0] || null;
       separateGrid();
 
       lastPublish = -Infinity;

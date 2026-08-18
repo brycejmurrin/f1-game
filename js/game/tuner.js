@@ -201,16 +201,32 @@ let _ltActiveGroup = null;   // currently-shown tuner category (tab)
 // Show one tuner category at a time (tab click). Toggles the .active class on the
 // matching group wrapper + its tab chip so only that group's sliders render —
 // the panel was an 82-slider scroll before this split it into 12 tabs.
-function setLtTab(group) {
+function setLtTab(group, focus) {
   _ltActiveGroup = group;
   const rows = $("lt-rows"), tabs = $("lt-tabs");
-  if (rows) for (const g of rows.children) g.classList.toggle("active", g.dataset.group === group);
+  if (rows) for (const g of rows.children) {
+    const on = g.dataset.group === group;
+    g.classList.toggle("active", on);
+    g.hidden = !on;
+  }
   if (tabs) for (const t of tabs.children) {
     const on = t.dataset.group === group;
     t.classList.toggle("on", on);
     t.setAttribute("aria-selected", on ? "true" : "false");
+    t.tabIndex = on ? 0 : -1;
+    if (on && focus) t.focus();
   }
   if (rows) rows.scrollTop = 0;
+}
+function ltTabKey(index, groups, e) {
+  let next = null;
+  if (e.key === "ArrowRight") next = (index + 1) % groups.length;
+  else if (e.key === "ArrowLeft") next = (index - 1 + groups.length) % groups.length;
+  else if (e.key === "Home") next = 0;
+  else if (e.key === "End") next = groups.length - 1;
+  if (next == null) return;
+  e.preventDefault(); e.stopPropagation();
+  setLtTab(groups[next], true);
 }
 function buildLightTunePanel() {
   buildLtPreview();
@@ -226,6 +242,10 @@ function buildLightTunePanel() {
         section = null;
         wrap = document.createElement("div");
         wrap.className = "lt-group"; wrap.dataset.group = group;
+        const slug = group.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        wrap.id = "lt-panel-" + slug;
+        wrap.setAttribute("role", "tabpanel");
+        wrap.setAttribute("aria-labelledby", "lt-tab-" + slug);
         const h = document.createElement("h3");
         h.className = "adv-sec"; h.textContent = group;
         wrap.appendChild(h);
@@ -262,13 +282,17 @@ function buildLightTunePanel() {
     // Build one tab chip per group.
     if (tabs) {
       tabs.textContent = "";
-      for (const g of groups) {
+      groups.forEach((g, index) => {
+        const slug = g.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
         const t = document.createElement("button");
         t.type = "button"; t.className = "lt-tab"; t.dataset.group = g;
+        t.id = "lt-tab-" + slug;
         t.textContent = g; t.setAttribute("role", "tab");
+        t.setAttribute("aria-controls", "lt-panel-" + slug);
         t.onclick = () => setLtTab(g);
+        t.onkeydown = (e) => ltTabKey(index, groups, e);
         tabs.appendChild(t);
-      }
+      });
     }
     _ltActiveGroup = groups[0];
   }
