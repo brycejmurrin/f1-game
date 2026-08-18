@@ -2211,7 +2211,7 @@ function loadTrack(idx) {
     // (opts.gfx) instead of reaching the GLX global directly. On the default
     // path gfx===GLX; on a TLX/WGX opt-in it's that backend (descriptor-copied
     // onto GLX, so object identity is preserved either way).
-    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: false });
+    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3 });
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.
@@ -5429,14 +5429,14 @@ try { _perChunkOff = localStorage.getItem("apex26.perChunkOff") === "1"; } catch
 // Pure night/wet variants are constants; the few with live-tunable fields (detail
 // from LT.surfDetail, roughness from LT.roadRough, emissive from floodEmit) are
 // per-variant reused objects mutated in place each call (never a stale key).
-const _wmFloorN = { emissive: 0.14, roughness: 0.98, specular: 0.05 };
-const _wmFloorD = { roughness: 0.98, specular: 0.05 };
+const _wmFloorN = { emissive: 0.14, roughness: 0.98, specular: 0.05, depthBias: [4, 8] };
+const _wmFloorD = { roughness: 0.98, specular: 0.05, depthBias: [4, 8] };
 const _wmTerrainN = { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0 };
 const _wmTerrainD = { roughness: 0.97, specular: 0.06, detail: 0 };
-const _wmRoadWetN = { emissive: 77, roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true, _dbgDepthAlways: true };
-const _wmRoadWetD = { emissive: 77, roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true, _dbgDepthAlways: true };
-const _wmRoadDryN = { emissive: 77, roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true, _dbgDepthAlways: true };
-const _wmRoadDryD = { emissive: 77, roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true, _dbgDepthAlways: true };
+const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-8, -16] };
+const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-8, -16] };
+const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16] };
+const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16] };
 // depthBias [factor, units]: the start line is a DECAL laid on the asphalt, so
 // bias its depth toward the camera rather than relying on the small geometric
 // lift alone — that lift is fixed in metres and loses to depth quantisation at
@@ -5524,7 +5524,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // for chunked scenery). Lamp path still needs tier < 1; envCull-only path
     // keeps chunking through tier 2 so SSR/shadow sheds do not re-fuse the road.
     // DEBUG: force non-chunked road mesh so we can isolate chunk expand/cull bugs.
-    const _wantRoadChunk = false && gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && !_perChunkOff && PerfGov.tier() < 1)
+    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && !_perChunkOff && PerfGov.tier() < 1)
       || (typeof PerfTry !== "undefined" && PerfTry.on("envCull") && PerfGov.tier() < 3));
     if (_wantRoadChunk) {
       if (track.meshes.roadChunked === undefined) {

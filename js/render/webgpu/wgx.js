@@ -252,14 +252,17 @@ const WGX = (function () {
   // (mat, s, x, hw) from wpos so markings and asphalt do not depend on
   // the broken attribute. Shared-index ribbons still expand so the
   // storage[vid] fallback stays 1:1 on adapters where vertex_index works.
-  const VERTEX_STRIDE = 52;
+  // CRITICAL: keeping a float32x4 @location(3) on large ribbon VBOs also
+  // broke position fetch on SwiftShader-Dawn (road rasterized to a thin
+  // depth band only). Stride must stay 36 with three attributes.
+  const VERTEX_STRIDE = 36;
+  const VERTEX_FLOATS = 9;
   const VERTEX_POS_LAYOUT = {
     arrayStride: VERTEX_STRIDE,
     attributes: [
       { shaderLocation: 0, offset: 0,  format: "float32x3" },
       { shaderLocation: 1, offset: 12, format: "float32x3" },
       { shaderLocation: 2, offset: 24, format: "float32x3" },
-      { shaderLocation: 3, offset: 36, format: "float32x4" },
     ],
   };
   const INSTANCE_STRIDE = 80;   // mat4 + color3 + pad
@@ -2175,18 +2178,18 @@ const WGX = (function () {
       }
       const mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
       const trk = data.trk && data.trk.length === vCount * 3 ? toF32(data.trk) : null;
-      const inter = new Float32Array(vCount * 13);
+      const inter = new Float32Array(vCount * VERTEX_FLOATS);
       const attr = new Float32Array(vCount * 4);
       for (let i = 0; i < vCount; i++) {
-        const o = i * 13;
+        const o = i * VERTEX_FLOATS;
         inter[o]   = pos[i*3];   inter[o+1] = pos[i*3+1]; inter[o+2] = pos[i*3+2];
         inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
-        inter[o + 6] = col[i * 3]; inter[o + 7] = col[i * 3 + 1]; inter[o + 8] = col[i * 3 + 2];
-        attr[i * 4] = inter[o + 9] = mat ? mat[i] : 0;
+        inter[o+6] = col[i*3];   inter[o+7] = col[i*3+1]; inter[o+8] = col[i*3+2];
+        attr[i * 4] = mat ? mat[i] : 0;
         if (trk) {
-          attr[i * 4 + 1] = inter[o + 10] = trk[i * 3];
-          attr[i * 4 + 2] = inter[o + 11] = trk[i * 3 + 1];
-          attr[i * 4 + 3] = inter[o + 12] = trk[i * 3 + 2];
+          attr[i * 4 + 1] = trk[i * 3];
+          attr[i * 4 + 2] = trk[i * 3 + 1];
+          attr[i * 4 + 3] = trk[i * 3 + 2];
         }
       }
       return {
@@ -2220,11 +2223,11 @@ const WGX = (function () {
     // matches the storage buffer 1:1.
     function _expandPull(vert, attr, idx) {
       const n = idx.length;
-      const ev = new Float32Array(n * 13);
+      const ev = new Float32Array(n * VERTEX_FLOATS);
       const ea = new Float32Array(n * 4);
       for (let i = 0; i < n; i++) {
-        const v = idx[i], so = v * 13, sao = v * 4, o = i * 13, ao = i * 4;
-        for (let k = 0; k < 13; k++) ev[o + k] = vert[so + k];
+        const v = idx[i], so = v * VERTEX_FLOATS, sao = v * 4, o = i * VERTEX_FLOATS, ao = i * 4;
+        for (let k = 0; k < VERTEX_FLOATS; k++) ev[o + k] = vert[so + k];
         ea[ao] = attr[sao]; ea[ao + 1] = attr[sao + 1];
         ea[ao + 2] = attr[sao + 2]; ea[ao + 3] = attr[sao + 3];
       }
@@ -2388,11 +2391,30 @@ const WGX = (function () {
               let n = Math.min(PIECE, pulled.count - off);
               n -= n % 3;
               if (n <= 0) continue;
-              const vert = pulled.vert.slice(off * 13, (off + n) * 13);
+              const vert = pulled.vert.slice(off * VERTEX_FLOATS, (off + n) * VERTEX_FLOATS);
               const attr = pulled.attr.slice(off * 4, (off + n) * 4);
               pieces.push(_meshFromPull(vert, attr, n, b.indexFormat, lut));
             }
             const head = pieces[0] || { vbuf: null, sbuf: null, attrBG: null, count: 0 };
+            // #region agent log
+            try {
+              let nOk = 0, nNull = 0;
+              for (let i = 0; i < pieces.length; i++) {
+                if (!pieces[i].vbuf) nNull++; else nOk++;
+              }
+              let ymin = Infinity, ymax = -Infinity;
+              const v0 = pulled.vert;
+              for (let i = 0; i < Math.min(pulled.count, 2000); i++) {
+                const y = v0[i * VERTEX_FLOATS + 1];
+                if (y < ymin) ymin = y; if (y > ymax) ymax = y;
+              }
+              (window.__wgxDbg = window.__wgxDbg || []).push({
+                hypothesisId: "E", location: "wgx.js:createMesh", message: "road pieces",
+                data: { pulledCount: pulled.count, pieces: pieces.length, nOk, nNull, headCount: head.count, ymin, ymax, idxCount: b.count, stride: VERTEX_FLOATS },
+                timestamp: Date.now(),
+              });
+            } catch (_) {}
+            // #endregion
             return {
               _wgx: "mesh", vbuf: head.vbuf, ibuf: null, sbuf: head.sbuf, attrBG: head.attrBG,
               count: head.count, indexFormat: b.indexFormat, chunks: null, pieces,

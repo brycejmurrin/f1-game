@@ -620,7 +620,6 @@ fn vs_main(
   @location(0) aPos : vec3<f32>,
   @location(1) aNrm : vec3<f32>,
   @location(2) aCol : vec3<f32>,
-  @location(3) aMatTrk : vec4<f32>,
   @location(5) aInst0 : vec4<f32>,
   @location(6) aInst1 : vec4<f32>,
   @location(7) aInst2 : vec4<f32>,
@@ -637,11 +636,10 @@ fn vs_main(
   var wp = model * vec4<f32>(aPos, 1.0);
   // Upper-left 3x3 of the (column-major) model matrix — GLX mat3(uModel).
   let nm = mat3x3<f32>(model[0].xyz, model[1].xyz, model[2].xyz);
-  // Location 3 is the only mat+trk path that survives on the road ribbon.
-  // Per-vertex attrs read 0 on large VBOs; for road draws (mat2.z = 16)
-  // reconstruct (s, x, hw) from the centerline LUT in the vertex shader.
-  var pulled = aMatTrk;
-  if (matTrkArr[0].x != 12345.0 && pulled.x == 0.0 && pulled.z == 0.0) { pulled = matTrkArr[vid]; }
+  // No 4th vertex attribute — Dawn zeroed it (and broke pos fetch) on large
+  // ribbon VBOs. Rebuild mat+trk from the centerline LUT / storage[vid].
+  var pulled = vec4<f32>(0.0);
+  if (matTrkArr[0].x != 12345.0) { pulled = matTrkArr[vid]; }
   if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
     let wt = trkFromWorld(wp.xyz);
     if (wt.w > 0.5) { pulled = vec4<f32>(16.0, wt.x, wt.y, wt.z); }
@@ -703,15 +701,17 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // fromWorld.w already encodes distance-to-centerline <= hw+2.4 — do not
   // re-test reconstructed lateral (degenerate tangents used to skip discard).
   // #region agent log
-  // Pink if DrawU canary emissive>50 OR isRoadDraw — tests whether DrawU reaches FS.
-  if (D.mat0.x > 50.0 || isRoadDraw) {
+  // Restore selective pink: isRoadDraw only (force-all confirmed shader is live).
+  if (isRoadDraw) {
     return vec4<f32>(1.0, 0.0, 1.0, 1.0);
   }
-  let groundComp = D.mat1.y > 0.1 || D.mat0.z > 0.9;
-  if (D.mat2.z < 0.5 && groundComp && fromWorld.w > 0.5) {
-    return vec4<f32>(0.0, 1.0, 1.0, 1.0);
-  }
   // #endregion
+
+  // SwiftShader-Dawn: coplanar terrain wins depth over the road ribbon. Punch
+  // holes where the centerline LUT says the ribbon runs (global _roadLutBG).
+  if (D.mat2.z < 0.5 && (D.mat1.y > 0.1 || D.mat0.z > 0.9) && fromWorld.w > 0.5) {
+    discard;
+  }
 
   var N = topNgeo;
   // Two-sided lighting: flip N to face the viewer on back faces (double-sided
