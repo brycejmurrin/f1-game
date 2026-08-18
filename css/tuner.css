@@ -107,10 +107,10 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
    is 181, and at UI SIZE 150% the panel's own width comes out at 120 units — a
    third of what the cap suggests, and narrower than several of the controls
    inside it. Measured: 137.5 units at 130%, 120.5 at 150%.
-   These are the rules that survive that. They are deliberately OUTSIDE the
-   `@media (min-width: 720px)` rail block below: a portrait phone never reaches
-   it, which is exactly why the free-camera layout restored there does not help
-   here. */
+   These are the rules that survive that. They sit with the other flying
+   overrides at the top of this file so a portrait phone (which never used to
+   reach the old viewport-gated rail block) still gets a usable free-camera
+   panel. */
 /* The head wraps HERE and only here. Title (66.3 own units) plus the FREE CAMERA
    button (77.6) want 144, and `space-between` has no answer when they do not both
    fit — it pushes the second one out of a panel that is `overflow: hidden`, so it
@@ -300,8 +300,10 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 #lt-json {
   /* field-sizing lets the export box grow to whatever COPY VALUES produced
      instead of scrolling inside a fixed 72px; the height stays as the fallback
-     where it is unsupported, and the max keeps it from swallowing the panel. */
-  field-sizing: content; max-height: 40svh;
+     where it is unsupported, and the max keeps it from swallowing the panel.
+     Local `--svhz`, not `svh`: this box lives inside `zoom: var(--ui-scale)`,
+     so a viewport max at UI SIZE 200% ate slider rows. */
+  field-sizing: content; max-height: min(calc(28 * var(--svhz)), 120px);
   width: 100%; height: 72px; margin-top: 10px; resize: none;
   font: 10px/1.5 ui-monospace, monospace; color: #cfe0ff;
   background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.14);
@@ -498,7 +500,13 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
    the rail block overrides several of these rules and only wins by being later,
    which requires equal specificity. Scoping one and not the other would have
    silently broken the rail layout. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] { padding: 10px 14px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] {
+    padding: 10px 14px;
+    overflow: hidden; /* #lt-rows / #ct-rows is the only vertical scroller */
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rows, #ct-rows) {
+    min-height: 0;
+  }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head,
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-head { margin-bottom: 2px; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head h2,
@@ -515,7 +523,8 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row .opt-btn {
     padding: 3px 2px; font-size: var(--fs-micro); min-width: 34px; min-height: var(--tap-min);
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-help-toggle { margin: 4px 0 2px; font-size: var(--fs-micro); }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-help-toggle { display: none; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .adv-help { display: none; }
   /* Short panel: one scrolling STRIP, so back to flex — a single row that pans
      sideways can never orphan anything, and the grid above is for the layouts
      that wrap. */
@@ -599,8 +608,10 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
    the scene it exists to preview keeps the rest of the screen. The category
    chips become a vertical list here — the horizontal strip above is a
    short-panel compromise, and this layout has the room to show them all. */
-@media (min-width: 720px) {
   /* THE RAIL LAYOUT IS WIDER — AND --dock-w IS HOW EVERYTHING ELSE FINDS OUT.
+     Gated on SheetShape `data-rail`, not viewport `min-width: 720px`: at UI
+     SIZE 200% a 734px landscape viewport is ~257 local px and must stay a
+     strip, while a 852×393 phone at 100% is locally wide enough for the rail.
      `body:has(#lighting > #lighting-inner[data-density="compact"])`, because the
      condition is about a DESCENDANT and the declaration has to land on body.
      This rule and the six below it were, until 2026-08-12, written as
@@ -755,7 +766,6 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-tabs, #ct-modes) .lt-tab {
     white-space: nowrap; flex: 0 0 auto;
   }
-}
 
 /* At extreme UI sizes the dock can be locally narrower than its header even in
    a wide physical viewport. Keep the action inside and let the slider pane own

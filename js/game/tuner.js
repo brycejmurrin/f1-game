@@ -214,7 +214,10 @@ function setLtTab(group, focus) {
     t.classList.toggle("on", on);
     t.setAttribute("aria-selected", on ? "true" : "false");
     t.tabIndex = on ? 0 : -1;
-    if (on && focus) t.focus();
+    if (on) {
+      t.scrollIntoView({ block: "nearest", inline: "center" });
+      if (focus) t.focus();
+    }
   }
   if (rows) rows.scrollTop = 0;
 }

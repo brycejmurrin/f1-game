@@ -126,7 +126,10 @@ function updateCtProfileLabel() {
     // already sets aria-selected; this matches it).
     b.setAttribute("aria-selected", on ? "true" : "false");
     b.tabIndex = on ? 0 : -1;
-    if (on) $("ct-rows").setAttribute("aria-labelledby", b.id);
+    if (on) {
+      b.scrollIntoView({ block: "nearest", inline: "center" });
+      $("ct-rows").setAttribute("aria-labelledby", b.id);
+    }
   }
 }
 function refreshCamTunePanel() {

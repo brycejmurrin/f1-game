@@ -20,8 +20,9 @@
  * PCSS blocker search HAS landed on WebGPU (textureLoad depth) and desktop
  * WebGL2 (R16F TSL.depth color — texelFetch is legal on a color texture).
  * The sun branch scales R = mix(1.5, 6.0, pen) from the receiver-blocker
- * gap. Phones and software GL keep the fixed R=3 — GLX's own blocker-off
- * radius.
+ * gap. Phones and software WebGL2 have no blocker — they scale that same
+ * R=3 by pcssPen/80 (identity at the shipped def) so SHADOW SOFTEN stays
+ * live. Not distance-based PCSS on that path.
  *
  * M9 (the live env CUBE probe) HAS landed and is no longer stubbed: tlx.js
  * builds the cube target and drives setEnvStr() from the probe-ready state,
@@ -421,7 +422,17 @@
                                min(btap(-1.0, -1.0), btap(1.0, -1.0)));
                 const pen = clamp(z.sub(zb).mul(U.pcssPen), 0.0, 1.0);
                 R.assign(mix(float(1.5), float(6.0), pen));
+              }).Else(() => {
+                // Desktop WebGL2 / WebGPU: blocker exists but PCSS is off
+                // (far LOD, or S.pcssEnabled flipped false). Keep SHADOW
+                // SOFTEN live — same R-scale as the no-blocker path.
+                R.assign(float(3.0).mul(U.pcssPen.div(80.0)));
               });
+            } else {
+              // Phones / software WebGL2: no blocker (no TSL.depth sun RT).
+              // Keep SHADOW SOFTEN live by scaling the fixed Poisson R.
+              // Identity at TUNE_DEFS def 80. Same tap count — not PCSS.
+              R.assign(float(3.0).mul(U.pcssPen.div(80.0)));
             }
             // Texel-grid-anchored IGN dither (js/render/shaders/lit.js): glued to the
             // ground, not screen-keyed — no penumbra boil while driving.
@@ -1227,9 +1238,11 @@
                 .mul(att.mul(spotD).mul(lampSh)).mul(NoLl)
                 .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
               // bounce fill (uBounceK, def 0.04 — js/render/shaders/lit.js)
-              color.addAssign(albedo.mul(U.lampCol.element(i))
-                .mul(att.mul(U.bounceK).mul(NoLl.mul(0.45).add(0.55)))
-                .mul(metalness.oneMinus()));
+              If(U.bounceK.greaterThan(0.0), () => {
+                color.addAssign(albedo.mul(U.lampCol.element(i))
+                  .mul(att.mul(U.bounceK).mul(NoLl.mul(0.45).add(0.55)))
+                  .mul(metalness.oneMinus()));
+              });
               // GGX + clearcoat lamp speculars, NoLl-gated (js/render/shaders/lit.js)
               If(NoLl.greaterThan(0.0), () => {
                 const Hl = normalize(Ld.add(V));

@@ -13,16 +13,16 @@ import { test, expect } from "../helpers/fixtures.js";
 // Build a standard-mapping gamepad with the given left-stick X/Y (axes 0/1)
 // and a sparse {index: value} button map, install it as the sole connected
 // pad, then poll. Returns whatever `read` extracts from the page afterwards.
-async function poll(page, { axisX = 0, axisY = 0, buttons = {}, connected = true } = {}, read) {
+async function poll(page, { axisX = 0, axisY = 0, axisRX = 0, axisRY = 0, buttons = {}, connected = true } = {}, read) {
   return page.evaluate(
-    ({ axisX, axisY, buttons, connected, readSrc }) => {
+    ({ axisX, axisY, axisRX, axisRY, buttons, connected, readSrc }) => {
       const btns = [];
       for (let i = 0; i < 17; i++) {
         const v = buttons[i] || 0;
         btns.push({ pressed: v >= 0.5, value: v, touched: v > 0 });
       }
       const pad = connected
-        ? { connected: true, mapping: "standard", axes: [axisX, axisY, 0, 0], buttons: btns }
+        ? { connected: true, mapping: "standard", axes: [axisX, axisY, axisRX, axisRY], buttons: btns }
         : null;
       navigator.getGamepads = () => [pad, null, null, null];
       window.dispatchEvent(new Event(connected ? "gamepadconnected" : "gamepaddisconnected"));
@@ -30,7 +30,7 @@ async function poll(page, { axisX = 0, axisY = 0, buttons = {}, connected = true
       // eslint-disable-next-line no-eval
       return (0, eval)("(" + readSrc + ")")();
     },
-    { axisX, axisY, buttons, connected, readSrc: read.toString() }
+    { axisX, axisY, axisRX, axisRY, buttons, connected, readSrc: read.toString() }
   );
 }
 
@@ -185,10 +185,13 @@ test("document becoming hidden releases held keyboard, pointer, and touch input"
 /* ---------------------------------------------------------------------------
  * GAMEPAD MENU NAVIGATION — the UWP gamepad/keyboard-parity mapping settled in
  * docs/research/PLATFORM-INPUT-NOTES.md §8, shipped in js/game/input.js
- * (padNavPoll / padActivate / padEscape). pollGamepad() dispatches REAL
+ * (padNavPoll / padActivate / padEscape / padSeedFocus). pollGamepad() dispatches REAL
  * synthetic KeyboardEvents at `document` when UiLayers.anyOpen() is true, so
  * these tests exercise the same seam a keyboard uses — js/game/menunav.js and
- * js/game/topmodal.js — rather than a second focus-mover.
+ * js/game/topmodal.js — rather than a second focus-mover. A newly-open menu
+ * seeds one ArrowDown without waiting for a D-pad press (UWP "one focus visual
+ * should always be visible"); menu sticks use PAD_NAV_DEADZONE (0.22), larger
+ * than driving's PAD_DEADZONE (0.14).
  * ------------------------------------------------------------------------- */
 
 async function openSelectForPad(page) {
@@ -218,6 +221,31 @@ test.describe("Gamepad menu navigation", () => {
     await poll(page, { axisY: 1 }, () => true);
     expect(await page.evaluate(() =>
       document.getElementById("select").contains(document.activeElement))).toBe(true);
+  });
+
+  test("D-pad left, right and up also seed focus", async ({ page }) => {
+    await openSelectForPad(page);
+    for (const btn of [14, 15, 12]) {
+      await page.evaluate(() => document.activeElement.blur());
+      await poll(page, { buttons: { [btn]: 1 } }, () => true);
+      expect(await page.evaluate(() =>
+        document.getElementById("select").contains(document.activeElement))).toBe(true);
+    }
+  });
+
+  test("the right stick navigates when the left stick is centred", async ({ page }) => {
+    await openSelectForPad(page);
+    await page.evaluate(() => document.activeElement.blur());
+    await poll(page, { axisRY: 1 }, () => true);
+    expect(await page.evaluate(() =>
+      document.getElementById("select").contains(document.activeElement))).toBe(true);
+  });
+
+  test("trigger travel is analog", async ({ page }) => {
+    const rt = await poll(page, { buttons: { 7: 0.4 } }, () => Input.throttleLevel());
+    expect(rt).toBeCloseTo(0.4, 2);
+    const lt = await poll(page, { buttons: { 6: 0.55 } }, () => Input.brakeLevel());
+    expect(lt).toBeCloseTo(0.55, 2);
   });
 
   test("A activates the focused control", async ({ page }) => {
@@ -355,5 +383,46 @@ test.describe("Gamepad menu navigation", () => {
 
     // Releasing the direction (neutral) clears the repeat state instantly.
     await poll(page, { buttons: {} }, () => true);
+  });
+
+  test("an idle pad seeds focus when a menu opens, without a D-pad press", async ({ page }) => {
+    await openSelectForPad(page);
+    await page.evaluate(() => document.activeElement.blur());
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+
+    await poll(page, { buttons: {} }, () => true);
+    expect(await page.evaluate(() =>
+      document.getElementById("select").contains(document.activeElement))).toBe(true);
+  });
+
+  test("a later idle poll does not re-seed after focus is cleared", async ({ page }) => {
+    await openSelectForPad(page);
+    await page.evaluate(() => document.activeElement.blur());
+    await poll(page, { buttons: {} }, () => true);
+    expect(await page.evaluate(() =>
+      document.getElementById("select").contains(document.activeElement))).toBe(true);
+
+    await page.evaluate(() => document.activeElement.blur());
+    await poll(page, { buttons: {} }, () => true);
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  });
+
+  test("menu stick nav uses a larger deadzone than driving; right stick still falls back", async ({ page }) => {
+    // 0.18 is past PAD_DEADZONE (0.14) but inside PAD_NAV_DEADZONE (0.22).
+    const drive = await poll(page, { axisX: 0.18 }, () => Input.steer());
+    expect(Math.abs(drive)).toBeGreaterThan(0.001);
+
+    await openSelectForPad(page);
+    await poll(page, { buttons: {} }, () => true);   // seed once
+    const seeded = await page.evaluate(() => document.activeElement && document.activeElement.textContent);
+    expect(seeded).toBeTruthy();
+
+    await poll(page, { axisY: 0.18 }, () => true);
+    expect(await page.evaluate(() => document.activeElement && document.activeElement.textContent)).toBe(seeded);
+
+    await page.evaluate(() => document.activeElement.blur());
+    await poll(page, { axisX: 0.18, axisY: 0, axisRY: 1 }, () => true);
+    expect(await page.evaluate(() =>
+      document.getElementById("select").contains(document.activeElement))).toBe(true);
   });
 });

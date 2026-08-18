@@ -342,13 +342,13 @@ let manualMode = store.get("manual", false);   // manual gearbox preference (pla
 let unlimitedBudget = store.get("unlimitedBudget", false); // removes credit cap in car setup
 // how the player steers: "tilt" | "buttons" | "touch" (migrates the old buttonSteer flag)
 let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "buttons" : "tilt");
-// Manual gears: available in tilt mode (thumbs free) or on desktop keyboard
-// (no thumbs involved). Touch/button modes on mobile force auto to free thumbs.
+// Manual gears: tilt (thumbs free) or desktop keyboard. BUTTONS already owns
+// both thumbs (arrows + pedals); TOUCH auto-throttles — neither has a free
+// hand for a shifter.
 function gearsManual() {
   return manualMode && (steerMode === "tilt" || !Input.touchControlsNeeded());
 }
-// Auto-throttle: enabled only in touch steering mode (screen-half taps occupy
-// the thumb). Button mode now exposes an explicit GAS button so the thumb is free.
+// Auto-throttle: TOUCH mode only (the canvas drag occupies the thumb).
 function autoThrottle() { return Input.touchControlsNeeded() && steerMode === "touch"; }
 let season = store.get("season", null);      // {round, pts:{driverId:n}, teamPts:{id:n}, driverCodes:{driverId:code}}
 function migrateSeasonPoints() { season = GameStore.migrateSeasonPoints(season); }
@@ -1533,9 +1533,8 @@ function driverSkill(team, d, di) {
   // career.spec.js depend on.
   return {
     skill: DriverRatings.skill(r, roll),
-    craft: (r.craft || 75) / 100,
-    awareness: (r.awareness || 75) / 100,
-    experience: (r.experience || 75) / 100,
+    craft: (r.craft || 75) / 100, awareness: (r.awareness || 75) / 100,
+    experience: (r.experience || 75) / 100, consistency: (r.consistency || 75) / 100,
   };
 }
 
@@ -1600,12 +1599,12 @@ function makeCars() {
         // Per-car performance multipliers (human cars only — see modsFor).
         // startRace()'s recomputePlayerMods() refreshes the local player's.
         mods: isP ? modsFor(team, getTeamParts(team.id)) : null,
-        // Only a human car carries parts, so only a human car has a wing size;
-        // an AI stays at the midpoint of every active-aero span (aeroLoadOf).
-        aeroLoad: isP ? Parts.aeroLoad(getTeamParts(team.id), team) : null,
-        ersDeploy: isP ? Parts.ersProfile(getTeamParts(team.id), team).deploy : null,
-        ersRegen: isP ? Parts.ersProfile(getTeamParts(team.id), team).regen : null,
-        color: team.color, tier: team.tier, seat: di,
+        // AI runs the works wing/ERS (SIGNATURE equivalents already differ).
+        // MY TEAM + hire share the saved build; everyone else uses factory.
+        aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team) : Parts.aeroLoad(factoryParts.setup, team),
+        ersDeploy: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).deploy : Parts.ersProfile(factoryParts.setup, team).deploy,
+        ersRegen: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).regen : Parts.ersProfile(factoryParts.setup, team).regen,
+        color: team.color, tier: team.tier, seat: di, houseStats: Career.teamStats(team),
         // Baked once here rather than looked up per physics step. Career team
         // development rides along in the same number the tier always contributed,
         // so the per-car update below is unchanged in shape. paceMult() is exactly
@@ -2569,7 +2568,7 @@ function startRace() {
 
 function showTouchControls(show) {
   const t = show && Input.touchControlsNeeded();
-  const manual = gearsManual();   // only ever true in tilt mode
+  const manual = gearsManual();
   // GAS pedal whenever throttle is manual (tilt/button); touch auto-throttle hides it
   els.btnThrottle.hidden = !(t && !autoThrottle());
   els.btnBrake.hidden = !t;
@@ -2598,9 +2597,9 @@ function showTouchControls(show) {
 }
 
 // Fill the two thumb docks. This is the ONE thing the flex bar cannot express
-// on its own: a control genuinely changes SIDE between modes — the throttle is
-// a left-thumb pedal in tilt mode and a right-thumb one in buttons mode, where
-// the arrows own the left — and CSS cannot move an element to a different
+// on its own: a control genuinely changes SIDE between modes — pedals are
+// left-thumb in tilt AUTO, right-thumb in tilt MANUAL and in buttons (arrows
+// own the left) — and CSS cannot move an element to a different
 // parent. Everything else (spacing, wrapping, centring, never overlapping) is
 // the flex row's job, and there is deliberately not one coordinate here.
 //
@@ -2622,12 +2621,12 @@ function layoutDocks(steerBtns, manual) {
         steer = $("grp-steer"), taps = $("grp-taps");
   const L = [], R = [];
   if (steerBtns) {
-    L.push(steer);            // arrows own the left thumb...
-    R.push(taps, pedals);     // ...so the pedals come right, GAS at the corner
+    L.push(steer);                                // arrows own the left thumb
+    R.push(taps, pedals);                         // pedals stay right
+  } else if (manual) {
+    L.push(shifts, taps); R.push(pedals);         // tilt+manual: gears L, pedals R
   } else {
-    L.push(pedals);           // tilt/touch: the pedal column is the left thumb
-    R.push(taps);             // the three taps sit inboard...
-    if (manual) R.push(shifts);   // ...of the shift column at the corner
+    L.push(pedals); R.push(taps);                 // auto tilt/touch: pedals left
   }
   // An empty group must not hold a gap in the dock. Hiding it is the whole
   // reason `hidden` on every child is not enough: a flex parent of hidden
@@ -3786,7 +3785,7 @@ function updateCar(c, dt, ranked) {
         traits: aiT, energy: c.energy, otActive: c.otT > 0,
         kAhead60: Tracks.curvature(track, wrapS(c.s + 60)),
         towCar: !!towCar, towGap, towSpeed: towCar ? towCar.speed : 0, speed: c.speed,
-        chaser: !!chaser, chaserGap, chaserSpeed: chaser ? chaser.speed : 0,
+        chaser: !!chaser, chaserGap, chaserSpeed: chaser ? chaser.speed : 0, team: c.team, seat: c.seat, stats: c.houseStats, ersDeploy: c.ersDeploy, ersRegen: c.ersRegen,
       })))
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
@@ -3833,7 +3832,7 @@ function updateCar(c, dt, ranked) {
                           roomL, roomR, speed: c.speed,
                           aheadSpeed: blocker ? blocker.speed : (ahead ? ahead.speed : c.speed),
                           kAhead: Tracks.curvature(track, wrapS(c.s + 40)),
-                          street: !!track.street,
+                          street: !!track.street, team: c.team, seat: c.seat, stats: c.houseStats, other: blocker,
                         }));
   if (fire && c.otArmed) {
     c.otT = otTimeFor(c); c.otCool = otCoolFor(c) + c.otT;
@@ -3866,7 +3865,7 @@ function updateCar(c, dt, ranked) {
     // A replicated or scripted input is a boolean by construction, so it means
     // FULL travel unless it says otherwise — which keeps every __apex.setInput
     // caller (and every physics spec built on one) exactly as it was.
-    throttleLvl = inp ? (inp.throttleLevel ?? 1) : Math.max(0, Input.throttleLevel());
+    throttleLvl = inp ? (inp.throttleLevel ?? 1) : (autoThrottle() ? 1 : Math.max(0, Input.throttleLevel()));
   } else {
     // AI: multi-sample brake target (compound corners) + soft pedal + craft
     // late-brake when a pass is on — see js/game/ai-drive.js.
@@ -3881,10 +3880,10 @@ function updateCar(c, dt, ranked) {
       AiDrive.pushLook(d, kk, Tracks.bankAngle(track, ss));
     }
     const br = AiDrive.brakeDecision({
-      traits: aiT, samples: AiDrive.endLook(), latMax: LAT_MAX, brake: BRAKE, grip: gripMult(),
+      traits: aiT, samples: AiDrive.endLook(), latMax: LAT_MAX, aeroLoad: c.aeroLoad, brake: BRAKE, grip: gripMult(),
       speed: c.speed, blocker: !!blocker, blockerGap,
       blockerSpeed: blocker ? blocker.speed : 0,
-      roomL, roomR,
+      roomL, roomR, team: c.team, seat: c.seat, stats: c.houseStats,
     });
     braking = br.braking;
     brakeLvl = br.brakeLvl;
@@ -3901,7 +3900,7 @@ function updateCar(c, dt, ranked) {
     // cap our pace to it, braking if closing fast, so we tuck behind not ram.
     // Streets tuck at followBase 8 m (was 12). Awareness pads (AiDrive.followPad).
     if (blocker && blockerGap < 16) {
-      const follow = AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street);
+      const follow = AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street, c.team, c.seat, blocker, c.houseStats);
       vmax = Math.min(vmax, blocker.speed + clamp(blockerGap - follow, -6, 8));
       const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street);
       if (qb) { braking = true; brakeLvl = qb; }
@@ -3927,9 +3926,9 @@ function updateCar(c, dt, ranked) {
     if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
     else c.xOn = !!(inp && inp.aero);
   } else {
-    // AI runs X-mode whenever it is available — a real driver leaves nothing on
-    // the table down a straight, and the arming window already keeps it honest.
-    c.xOn = c.xArmed;
+    // AI takes X when armed unless wantX banks Z (hold/empty battery). Catch
+    // and OT still force the open wing so a pass does not sit in high drag.
+    c.xOn = c.xArmed && AiDrive.wantX({ armed: true, team: c.team, seat: c.seat, stats: c.houseStats, energy: c.energy, catching: !!(towCar && towGap < 28), otActive: c.otT > 0 });
   }
   {
     // The flap POSITION, not the switch, is what the physics reads: the mode
@@ -4122,7 +4121,7 @@ function updateCar(c, dt, ranked) {
     // Apex is on the INSIDE = -sign(k) (k>0 curves toward screen-left, so the
     // inside is -x); the racing line aims there.
     const racingLine = clamp(-kA * 130, -0.62, 0.62) * hw;
-    const targetX = clamp(racingLine * AiDrive.racingLineMix(!!track.street) + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
+    const targetX = clamp(racingLine * AiDrive.racingLineMix(!!track.street, AiDrive.houseStyle(c.team, c.seat, c.houseStats).hold) + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
     // Overtake: if a slower car is blocking our lane ahead, ease toward the side
     // with more room to pass. Collision-aware — the move is scaled down if that
     // side is also tight (a car alongside or a wall), so we don't dive into a
@@ -4132,15 +4131,15 @@ function updateCar(c, dt, ranked) {
     // inside-room on streets). Tow is no longer permanent-only.
     if (blocker) {
       overtake = AiDrive.otPull({
-        street: !!track.street, traits: aiT, speed: c.speed,
-        blockerSpeed: blocker.speed, blockerGap, roomL, roomR,
+        street: !!track.street, traits: aiT, speed: c.speed, team: c.team, seat: c.seat, stats: c.houseStats,
+        blockerSpeed: blocker.speed, blockerGap, roomL, roomR, other: blocker,
       });
     }
     let defend = 0;
     if (chaser && !blocker) {
       defend = AiDrive.defendPull({
-        street: !!track.street, traits: aiT, speed: c.speed, chaser: true,
-        chaserGap, chaserSpeed: chaser.speed, kA, roomL, roomR,
+        street: !!track.street, traits: aiT, speed: c.speed, team: c.team, seat: c.seat, stats: c.houseStats,
+        chaser: true, chaserGap, chaserSpeed: chaser.speed, kA, roomL, roomR, other: chaser,
       });
     }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
@@ -4345,7 +4344,7 @@ function updateCar(c, dt, ranked) {
     // speed-limited the throttle is still held but real accel ≈ 0, so without
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
-    const axEstTarget = braking ? -BRAKE * brakeLvl
+    const axEstTarget = braking ? -BRAKE * brakeLvl * (c.human ? (mods.braking || 1) : 1)
       : (onThrottle
           ? ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);
@@ -7250,8 +7249,7 @@ function tickBody(now) {
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race.
   if (!paused && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
-  Input.poll();   // refresh gamepad state once per frame (before the paused gate
-                  // so the Start/Menu button can also un-pause)
+  Input.poll(); BrakeCue.tick();   // pad + brake-cue; before pause so Start can un-pause
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.
@@ -8380,7 +8378,7 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 // js/game/steer-tuning.js (SteerTuning.create(G) — wired after the G façade).
 
 // GEARS toggle: usable when thumbs are free (tilt or desktop keyboard).
-// Disabled — not hidden — otherwise (see the pm-calib note in setSteerMode).
+// Disabled — not hidden — on BUTTONS/TOUCH (see the pm-calib note in setSteerMode).
 function refreshGearsBtn() {
   $("pm-gears").disabled = Input.touchControlsNeeded() && steerMode !== "tilt";
   $("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
@@ -8562,7 +8560,7 @@ Input.onPointerKindChange(syncPointerKind);
 {
   const rounds = Tracks.SEASON.length, classics = Tracks.LIST.length - rounds;
   els.subtitle.textContent = "2026 grid · " + rounds + " real circuits · "
-    + (Input.touchControlsNeeded() ? "tilt to steer" : classics + " classics");
+    + (Input.touchControlsNeeded() ? ({buttons:"tap arrows to steer",touch:"drag to steer"}[steerMode] || "tilt to steer") : classics + " classics");
 }
 Input.setSteerMode(steerMode);
 DataHub.init(els.datahub);

@@ -619,7 +619,11 @@ const WGX = (function () {
     // box or viewport changes, then reuse the last real size between events.
     const _layoutCanvas = (_softGpu && _displayCanvas) ? _displayCanvas : canvas;
     let _cssW = 0, _cssH = 0, _cssDirty = true;
-    const _markCssDirty = function () { _cssDirty = true; };
+    // Setting canvas.width fires ResizeObserver on this same node. Ignore
+    // those callbacks or a 1px layout loop reconfigures the swapchain every
+    // frame (white page / black clear flash — measured on the deploy tip).
+    let _cssApplying = false;
+    const _markCssDirty = function () { if (!_cssApplying) _cssDirty = true; };
     let _canWatchCss = false;
     if (typeof window !== "undefined" && window.addEventListener) {
       window.addEventListener("resize", _markCssDirty);
@@ -1889,23 +1893,33 @@ const WGX = (function () {
       // swapchain itself) then fails into a silent per-frame retry loop.
       const maxDim = (device.limits && device.limits.maxTextureDimension2D) || 8192;
       _cssSize();
-      const w = Math.min(maxDim, Math.max(1, Math.round(_cssW * dpr * renderScale)));
-      const h = Math.min(maxDim, Math.max(1, Math.round(_cssH * dpr * renderScale)));
+      let w = Math.min(maxDim, Math.max(1, Math.round(_cssW * dpr * renderScale)));
+      let h = Math.min(maxDim, Math.max(1, Math.round(_cssH * dpr * renderScale)));
+      // 1px CSS/DPR jitter must not rebuild the swapchain. Reconfigure wipes
+      // to black and the 2D #game to transparent (white shell flashing through).
+      if (width > 1 && height > 1 && Math.abs(w - width) <= 1 && Math.abs(h - height) <= 1) {
+        w = width; h = height;
+      }
       const sizeChanged = canvas.width !== w || canvas.height !== h ||
         (_displayCanvas && (_displayCanvas.width !== w || _displayCanvas.height !== h));
       if (sizeChanged) {
-        _softDisplayEpoch++;
-        canvas.width = w; canvas.height = h;
-        // WebGPU: changing the canvas drawing-buffer size INVALIDATES the
-        // configured swapchain. Reconfigure on every buffer-size change.
-        if (ctx) {
-          const _cfgErr = _configureCanvas();
-          if (_cfgErr) try { if (!_cfgWarned) { _cfgWarned = true; Log.warn("gfx", "WGX canvas configure failed —", _cfgErr); } } catch (_) { /* harness */ }
-          else _cfgWarned = false;
-        }
-        if (_softGpu && _displayCanvas) {
-          _displayCanvas.width = w;
-          _displayCanvas.height = h;
+        _cssApplying = true;
+        try {
+          _softDisplayEpoch++;
+          canvas.width = w; canvas.height = h;
+          // WebGPU: changing the canvas drawing-buffer size INVALIDATES the
+          // configured swapchain. Reconfigure on every buffer-size change.
+          if (ctx) {
+            const _cfgErr = _configureCanvas();
+            if (_cfgErr) try { if (!_cfgWarned) { _cfgWarned = true; Log.warn("gfx", "WGX canvas configure failed —", _cfgErr); } } catch (_) { /* harness */ }
+            else _cfgWarned = false;
+          }
+          if (_softGpu && _displayCanvas) {
+            _displayCanvas.width = w;
+            _displayCanvas.height = h;
+          }
+        } finally {
+          _cssApplying = false;
         }
       }
       width = w; height = h; aspect = w / h;
@@ -3722,7 +3736,10 @@ const WGX = (function () {
       const grStr = o.godray != null ? o.godray : 0;
       const lampVol = o.lampVol != null ? o.lampVol : 0;
       const sunGR = !!shadowView && grStr > 0;
-      const haveGR = godrayBG && (sunGR || lampVol > 0);
+      // GLX/TLX require invViewProj — without it the march uses IDENT and
+      // paints garbage shafts on the first / odd present.
+      const haveGR = godrayBG && lastFrame && lastFrame.invViewProj
+        && (sunGR || lampVol > 0);
       if (haveGR) {
         const s = postScratch;
         const invVP = lastFrame && lastFrame.invViewProj;
@@ -3810,13 +3827,19 @@ const WGX = (function () {
             loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
           p.setPipeline(pBloomDown); p.setBindGroup(0, bloomDownBG[i]); p.draw(3, 1, 0, 0); p.end();
         }
-        // Upsample: from the smallest level down to mip0, additive (load) blend.
+        // Upsample: intermediate mips accumulate (load); the FINAL write into
+        // mip0 OVERWRITES (clear) — mip0 still holds the sharp bright-pass,
+        // and adding onto it re-injects lamp-lit surfaces at full sharpness
+        // (GLX glx/post.js last===overwrite, TLX upFinal).
         for (let i = nLv - 2; i >= 0; i--) {
           const s = postScratch;
           s[0] = 1 / bloomLv[i + 1].w; s[1] = 1 / bloomLv[i + 1].h; s[2] = spread; s[3] = 0;
           device.queue.writeBuffer(bloomUpUBO[i], 0, s, 0, _Post.BLOOM_UP_UNIFORM_BYTES / 4);
+          const last = i === 0;
           const p = encoder.beginRenderPass({ colorAttachments: [{ view: bloomLv[i].view,
-            loadOp: "load", storeOp: "store" }] });
+            loadOp: last ? "clear" : "load",
+            clearValue: { r: 0, g: 0, b: 0, a: 1 },
+            storeOp: "store" }] });
           p.setPipeline(pBloomUp); p.setBindGroup(0, bloomUpBG[i]); p.draw(3, 1, 0, 0); p.end();
         }
       } else {
@@ -3831,7 +3854,11 @@ const WGX = (function () {
         const flareStr = sun ? sun.flare * (o.flareMul != null ? o.flareMul : 1) : 0;
         // SCREEN SUN-SHAFT: p0.z scales ONLY the composite radial bloom shaft
         // (GLX uSunShaft). Volumetric god-ray is added unscaled in WGSL.
-        const shaftMul = (sun && sun.shaft > 0)
+        // GATED ON bloomAmt: the shaft pass READS THE BLOOM CHAIN (GLX
+        // uSunShaft / TLX C.sunShaft). When bloom is shed we still clear
+        // mip0 to black, so 8 dependent taps accumulate vec3(0) unless
+        // the producer says zero here.
+        const shaftMul = (bloomAmt > 0 && sun && sun.shaft > 0)
           ? ((T && T.sunShaftMul != null) ? T.sunShaftMul : 1.0) * sun.shaft
           : 0.0;
         s[0] = exposure; s[1] = bloomNorm; s[2] = shaftMul; s[3] = flareStr;   // p0

@@ -20,9 +20,9 @@
      awareness    incidents/penalties PLUS follow gap, yield, stuck, ERS bank,
                   street OT scale (see js/game/ai-drive.js).
      consistency  NOT a level, a VARIANCE: it narrows the random band around a
-                  driver's pace, so a low-consistency driver is not slower on
-                  average, just less predictable. That is what makes a rookie
-                  feel different from a veteran of the same raw speed.
+                  driver's pace AND widens the AI brake soft-band (see
+                  AiDrive.brakeDecision). A rookie is not slower on average,
+                  just less repeatable.
      experience   races started; damps development; also steers smoothing /
                   unstuck panic / OT hesitation in the AI loop.
 

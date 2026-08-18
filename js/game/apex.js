@@ -558,7 +558,7 @@ const api = {
     o = o || {};
     if (o.drift != null) G.DRIFT = o.drift;
     if (o.pace != null) G.PACE = o.pace;
-    if (o.speedRef != null) G.STEER_SPEED_REF = o.speedRef;
+    if (o.speedRef != null) { G.STEER_SPEED_REF = o.speedRef; Input.setSteerSpeedRef(o.speedRef); }
     if (o.wheelbase != null) G.WHEELBASE = o.wheelbase;
     if (o.expo != null) G.STEER_EXPO = o.expo;
     if (o.maxSlip != null) G.STEER_MAX_SLIP = o.maxSlip;
@@ -1457,13 +1457,13 @@ const api = {
       // "why is this car quick?" is answerable without reading the source.
       // tierV folds the team's TIER_V together with career team development;
       // skill is the driver. Both are 1-ish multipliers on vmax.
-      tierV: +(c.tierV || 0).toFixed(6), skill: +(c.skill || 0).toFixed(6),
+      tierV: +(c.tierV || 0).toFixed(6), skill: +(c.skill || 0).toFixed(6), aeroLoad: +(c.aeroLoad != null ? c.aeroLoad : 0.5).toFixed(3), ersDeploy: +(c.ersDeploy != null ? c.ersDeploy : 0.5).toFixed(3),
       // Racecraft axes the AI loop actually reads (0..1). Exposed so a probe can
       // tell VER-from-LIN without opening driver-ratings.js.
       // Defaults match AiDrive.traits mid-grid fallback (0.75), not 0.
       craft: +(c.craft != null ? c.craft : 0.75).toFixed(3),
       awareness: +(c.awareness != null ? c.awareness : 0.75).toFixed(3),
-      experience: +(c.experience != null ? c.experience : 0.75).toFixed(3),
+      experience: +(c.experience != null ? c.experience : 0.75).toFixed(3), consistency: +(c.consistency != null ? c.consistency : 0.75).toFixed(3),
       lane: +(c.lane != null ? c.lane : 0).toFixed(3),
       // AI intent peek — kinematic cars only. stuckT > AiDrive.stuckThreshold
       // is what flips unstuck; deploying is the live ERS/OT thrust flag.

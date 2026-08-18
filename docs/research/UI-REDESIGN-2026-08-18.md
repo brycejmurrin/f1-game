@@ -271,8 +271,38 @@ one obvious scroll region.
    horizontal `#cs-tabs` strip (all stacked sheets, not only portrait),
    `#cs-options` is the only dominant vertical scroller. Pair-on rails kept.
 3. Tuners: Lighting/camera rail/strip behaviour and progressive help.
+   **Done (2026-08-18).** Compact tuners: one `#lt-rows`/`#ct-rows` scroller
+   (`overflow: hidden` on the panel). Rail CSS is keyed on `data-rail` from
+   local width **and** a three-slider-row budget, not viewport `min-width:
+   720px`. Compact density forces explanations off (toggle hidden). Selected
+   category/mode chips `scrollIntoView`. Camera RESET titles name their scope.
+   COPY VALUES uses local `--svhz`, not `40svh`.
 4. Journeys: Career, Season, Race-a-friend, Data Hub, results/help/history.
+   **Done (2026-08-18).** Data Hub short-height chrome keys on
+   `body[data-density]` / `body[data-width]` (zoom-aware), not
+   `orientation + max-height`. Portrait 2×3 destinations keep orientation as a
+   viewport fact and use `data-width=narrow`. VS Friend sheet is
+   `#vsfriend-inner` with `--fit-at`; host/join columns are an `@container sheet`
+   split. Settings declares `--fit-at` and compact+narrow category tabs are one
+   pan-x row. How to Play contents is a left rail on `data-shape=wide` sheets and
+   a horizontal strip when compact. Compact stacked Circuit Select pans the
+   filter on density (not a local max-width query); search keeps a 12rem floor.
+   Career and Season setup declare `--fit-at` like Settings. Leftover overlays
+   (`#career-offers`, `#career-history`, `#career-guide`, `#quali`) inherit
+   `--fit-at` onto the anonymous `.sheet`. Guide/history contents is the How to
+   Play twin (`#cg-contents` / `#ch-contents`). Session sheets (`#results`,
+   `#standings`, `#race-settings`, `#audioset`, `#pausemenu`) declare `--fit-at`;
+   `#standings-body` uses leftover sheet-grid height (`min-height: 0`, no `55svh`).
 5. Race layer: HUD, pause, camera picker, photo mode, orientation and zoom.
+   **Done (2026-08-18).** Compact HUD keys on `body[data-density]`
+   (`#minimap` 96px, tighter gaps) and still zooms with `--hud-z`, never
+   `--ui-scale`. `#campicker` stands down while a dim sheet is open. Photo-mode
+   restore remains `#pc-restore`. `prefers-reduced-motion` also kills tach/OT
+   pulses. Advanced steering and My Team declare `--fit-at` like the other
+   session sheets. The leftover short-landscape HUD shrink in
+   `css/responsive.css` is gone — density in `css/hud.css` owns it.
+   `css/tokens.css` still tightens `--pad/--gap/--gut` on that viewport query
+   for `#overlay`, which is not a `.sheet`.
 6. Final matrix: all screens, scales, inputs, screenshots, performance and
    accessibility checks; then cache/version bump as the final production edit.
 

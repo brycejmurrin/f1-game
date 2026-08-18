@@ -1151,7 +1151,9 @@ void main() {
     // (walls, kerbs, car flanks) with the lamp tint even outside the beam -
     // a near-free stand-in for local ambient probes. Soft NoL floor so
     // surfaces facing away from the lamp still catch a little.
-    color += albedo * lb.xyz * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
+    if (uBounceK > 0.0) {
+      color += albedo * lb.xyz * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
+    }
     // GGX specular from the lamp — the same microfacet BRDF as the sun. On the
     // wet low-roughness road this physically elongates at grazing angles (the
     // real wet-night streak); on glass/car paint it's the city-light glint.

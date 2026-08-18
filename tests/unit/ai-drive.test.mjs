@@ -32,6 +32,7 @@ test("traits defaults match the mid-grid fallback", () => {
   assert.equal(t.craft, 0.75);
   assert.equal(t.awareness, 0.75);
   assert.equal(t.experience, 0.75);
+  assert.equal(t.consistency, 0.75);
 });
 
 test("traits writes a reused scratch (read before the next call)", () => {
@@ -267,6 +268,134 @@ test("otPull and defendPull: streets use an open gap, not an Armco dive", () => 
   assert.ok(dPerm < 0, `permanent cover inside (k>0 → -x), got ${dPerm}`);
   assert.ok(Math.abs(dStreet) < Math.abs(dPerm));
   assert.equal(A.defendPull({ ...cover, street: true, roomL: 1.5 }), 0);
+});
+
+test("houseStyle: Mercedes attacks more than Cadillac; missing stats are neutral", () => {
+  const mer = { stats: { speed: 96, accel: 91, cornering: 93, braking: 90 } };
+  const cad = { stats: { speed: 73, accel: 73, cornering: 73, braking: 72 } };
+  const mcl = { stats: { speed: 93, accel: 94, cornering: 96, braking: 91 } };
+  assert.equal(A.houseStyle({}).attack, 0);
+  assert.equal(A.houseStyle({}).hold, 0);
+  const merH = Object.assign({}, A.houseStyle(mer));
+  const cadH = Object.assign({}, A.houseStyle(cad));
+  const mclH = Object.assign({}, A.houseStyle(mcl));
+  assert.ok(merH.attack > cadH.attack, `mercedes attack ${merH.attack} vs cadillac ${cadH.attack}`);
+  assert.ok(mclH.hold > cadH.hold, "McLaren cornering/braking should hold more");
+  const midOpen = {
+    traits: mid, blockerGap: 5, gapAhead: 5, roomL: 3, roomR: 2,
+    speed: 58, aheadSpeed: 54, kAhead: 0.002, street: false,
+  };
+  const rMer = A.otFireRate({ ...midOpen, team: mer });
+  const rCad = A.otFireRate({ ...midOpen, team: cad });
+  const rNone = A.otFireRate(midOpen);
+  assert.ok(rMer > rNone && rNone > rCad, `OT mer ${rMer} none ${rNone} cad ${rCad}`);
+  const openOt = {
+    traits: ace, speed: 58, blockerSpeed: 52, blockerGap: 8,
+    roomL: 1.2, roomR: 3.4, street: false,
+  };
+  assert.ok(A.otPull({ ...openOt, team: mer }) > A.otPull(openOt));
+  assert.ok(A.followPad(ace, false, mcl) > A.followPad(ace, false),
+    "hold-car teams leave a wider follow pad");
+});
+
+test("seat 0 attacks more than seat 1; omitted seat stays the factory card", () => {
+  const mer = { stats: { speed: 96, accel: 91, cornering: 93, braking: 90 } };
+  const base = Object.assign({}, A.houseStyle(mer));
+  const lead = Object.assign({}, A.houseStyle(mer, 0));
+  const second = Object.assign({}, A.houseStyle(mer, 1));
+  assert.equal(A.houseStyle(mer).attack, base.attack);
+  assert.ok(lead.attack > base.attack, "lead seat should attack more");
+  assert.ok(second.attack < base.attack, "second seat should hold more");
+  assert.ok(second.hold > lead.hold);
+});
+
+test("career tdev stats shift houseStyle without a new team card", () => {
+  const stock = { stats: { speed: 80, accel: 80, cornering: 80, braking: 80 } };
+  const developed = { speed: 90, accel: 90, cornering: 90, braking: 90 };
+  const a = Object.assign({}, A.houseStyle(stock));
+  const b = Object.assign({}, A.houseStyle(stock, undefined, developed));
+  assert.ok(b.attack > a.attack);
+  assert.ok(b.hold > a.hold);
+});
+
+test("team orders: #2 holds vs #1; #1 may pass #2", () => {
+  const team = { id: "mercedes", stats: { speed: 96, accel: 91, cornering: 93, braking: 90 } };
+  const lead = { team, seat: 0 };
+  const second = { team, seat: 1 };
+  const rival = { team: { id: "ferrari" }, seat: 0 };
+  assert.equal(A.isMate(team, lead), true);
+  assert.equal(A.isMate(team, rival), false);
+  assert.equal(A.ordersMul(team, 1, lead, "ot"), 0.22);
+  assert.equal(A.ordersMul(team, 0, second, "ot"), 1.18);
+  assert.equal(A.ordersMul(team, 1, rival, "ot"), 1);
+  const midOpen = {
+    traits: mid, blockerGap: 5, gapAhead: 5, roomL: 3, roomR: 2,
+    speed: 58, aheadSpeed: 54, kAhead: 0.002, street: false, team,
+  };
+  const vsLead = A.otFireRate({ ...midOpen, seat: 1, other: lead });
+  const vsSecond = A.otFireRate({ ...midOpen, seat: 0, other: second });
+  const vsRival = A.otFireRate({ ...midOpen, seat: 1, other: rival });
+  assert.ok(vsLead < vsRival, `#2 vs #1 ${vsLead} should be colder than vs rival ${vsRival}`);
+  assert.ok(vsSecond > vsRival, `#1 vs #2 ${vsSecond} should be hotter than vs rival ${vsRival}`);
+  assert.ok(A.followPad(mid, false, team, 1, lead) > A.followPad(mid, false, team, 0, second),
+    "#2 leaves #1 more space than #1 leaves #2");
+  const cover = {
+    traits: ace, chaser: true, chaserGap: 6, chaserSpeed: 58, speed: 54,
+    kA: 0.01, roomL: 3, roomR: 3, street: false, team, seat: 1, other: lead,
+  };
+  assert.ok(Math.abs(A.defendPull(cover)) < Math.abs(A.defendPull({ ...cover, other: rival })),
+    "#2 should not cover against #1");
+});
+
+test("consistency widens the brake band without moving the mid default", () => {
+  const samples = [{ d: 40, k: 0.02, bank: 0 }];
+  const base = { traits: mid, samples, latMax: 22, brake: 22, grip: 1 };
+  const lim = A.brakeTarget(base);
+  const midDec = Object.assign({}, A.brakeDecision({ ...base, speed: lim + 4 }));
+  const rookDec = Object.assign({}, A.brakeDecision({
+    ...base, traits: { ...mid, consistency: 0.2 }, speed: lim + 4,
+  }));
+  const aceDec = Object.assign({}, A.brakeDecision({
+    ...base, traits: { ...mid, consistency: 1 }, speed: lim + 4,
+  }));
+  assert.equal(midDec.braking, true);
+  assert.ok(rookDec.brakeLvl < midDec.brakeLvl, "rookie eases in later");
+  assert.ok(aceDec.brakeLvl > midDec.brakeLvl, "ace commits sooner");
+});
+
+test("factory wing and hold change the AI corner limit; midpoint stays put", () => {
+  const samples = [{ d: 40, k: 0.02, bank: 0 }];
+  const base = { traits: mid, samples, latMax: 22, brake: 22, grip: 1 };
+  const midLim = A.brakeTarget(base);
+  assert.equal(A.brakeTarget({ ...base, aeroLoad: 0.5 }), midLim);
+  assert.ok(A.brakeTarget({ ...base, aeroLoad: 1 }) > midLim, "ground-effect carries more");
+  assert.ok(A.brakeTarget({ ...base, aeroLoad: 0 }) < midLim, "low-drag brakes earlier");
+  const holdTeam = { stats: { speed: 80, accel: 80, cornering: 96, braking: 94 } };
+  assert.ok(A.brakeTarget({ ...base, team: holdTeam }) < midLim, "hold cars brake earlier");
+});
+
+test("ERS map and wantX: harvest banks, attack opens X", () => {
+  const bankish = {
+    traits: ace, energy: 0.3, kAhead60: 0.001, otActive: false, towCar: false, chaser: false,
+  };
+  const fringe = { ...bankish, energy: 0.51 };
+  assert.equal(A.wantBoost(bankish), false);
+  assert.equal(A.wantBoost(fringe), false, "midpoint still banks at 0.51");
+  assert.equal(A.wantBoost({ ...fringe, ersDeploy: 1 }), true, "overcharge spends at 0.51");
+  assert.equal(A.wantBoost({ ...bankish, ersRegen: 1 }), false, "harvest still banks");
+  assert.equal(A.wantX({}), true);
+  assert.equal(A.wantX({ armed: false }), false);
+  assert.equal(A.wantX({ energy: 0.12 }), false);
+  assert.equal(A.wantX({ energy: 0.12, catching: true }), true);
+  const att = { stats: { speed: 96, accel: 96, cornering: 80, braking: 80 } };
+  assert.equal(A.wantX({ energy: 0.18, team: att }), true);
+});
+
+test("hold cars mix less racing line; omitted hold keeps the street/permanent defaults", () => {
+  assert.equal(A.racingLineMix(false), 0.55);
+  assert.equal(A.racingLineMix(true), 0.32);
+  assert.ok(A.racingLineMix(false, 0.6) < 0.55);
+  assert.ok(A.racingLineMix(true, 0.6) < 0.32);
 });
 
 test("adaptLane on streets will not crawl toward a tight wall", () => {

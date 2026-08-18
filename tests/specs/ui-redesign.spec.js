@@ -21,19 +21,30 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => new Promise((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  const initialMap = await page.evaluate(() => {
+  await page.evaluate(() => window.SheetShape?.reclassify());
+  const initialSelect = await page.evaluate(() => {
+    const sel = document.getElementById("sel-inner");
     const map = /** @type {HTMLCanvasElement} */ (document.getElementById("sel-preview-map"));
     const r = map.getBoundingClientRect();
     const zoom = map.currentCSSZoom || 1;
     const bufferAspect = map.width / Math.max(1, map.height);
-    const boxAspect = (r.width / zoom) / Math.max(1, r.height / zoom);
+    const boxH = r.height / zoom;
+    const boxW = r.width / zoom;
+    const boxAspect = boxW / Math.max(1, boxH);
     return {
+      pair: sel.dataset.pair,
+      density: sel.dataset.density,
       buffer: [map.width, map.height],
+      box: [boxW, boxH],
+      display: getComputedStyle(map).display,
       skew: Math.abs(bufferAspect - boxAspect) / Math.max(bufferAspect, boxAspect, 0.001),
     };
   });
-  expect(Math.min(...initialMap.buffer)).toBeGreaterThan(8);
-  expect(initialMap.skew).toBeLessThan(0.03);
+  // 852×393 is under #sel-inner --compact-at 480, so density stacks the
+  // catalogue (pair-at raised to 2000) even at UI SIZE 100%. The pair-on map
+  // aspect check belongs to a roomy sheet, not this viewport.
+  expect(initialSelect.density, JSON.stringify(initialSelect)).toBe("compact");
+  expect(initialSelect.pair).toBe("off");
   // Match a landscape iPhone's notched safe area at a larger user-selected UI
   // size. That reproducibly enters the compact single-column layout; at the
   // default size this viewport correctly retains the roomy paired catalogue.
@@ -67,7 +78,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       },
     };
   });
-  expect(compactCatalogue.oneRow).toBe(true);
+  expect(compactCatalogue.oneRow, "compact filter oneRow").toBe(true);
   expect(compactCatalogue.firstVisible, JSON.stringify(compactCatalogue.geometry)).toBeGreaterThanOrEqual(24);
   // At the slider maximum the toolbar becomes horizontally pannable and stops
   // being sticky, so vertical scrolling can still reveal real circuit rows.
@@ -79,17 +90,29 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const maxScaleCatalogue = await page.evaluate(() => {
     window.SheetShape?.reclassify();
+    const sel = document.getElementById("sel-inner");
     const list = document.getElementById("sel-tracks");
     const filter = document.getElementById("sel-track-filter");
     list.scrollTop = filter.scrollHeight;
     const lr = list.getBoundingClientRect();
     const rr = document.querySelector("#sel-tracks .track-row:not([hidden])").getBoundingClientRect();
+    const cs = getComputedStyle(filter);
     return {
       horizontalToolbar: filter.scrollWidth > filter.clientWidth,
       firstVisible: Math.max(0, Math.min(lr.bottom, rr.bottom) - Math.max(lr.top, rr.top)),
+      dump: {
+        localW: sel.clientWidth,
+        zoom: getComputedStyle(sel).zoom,
+        sheetScale: sel.style.getPropertyValue("--sheet-scale"),
+        fit: sel.dataset.fit,
+        scrollW: filter.scrollWidth,
+        clientW: filter.clientWidth,
+        wrap: cs.flexWrap,
+        overflowX: cs.overflowX,
+      },
     };
   });
-  expect(maxScaleCatalogue.horizontalToolbar).toBe(true);
+  expect(maxScaleCatalogue.horizontalToolbar, "200% pan-x toolbar " + JSON.stringify(maxScaleCatalogue.dump)).toBe(true);
   expect(maxScaleCatalogue.firstVisible).toBeGreaterThanOrEqual(24);
   await page.evaluate(() => {
     const root = document.documentElement.style;
@@ -108,11 +131,11 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       emptyHidden: document.getElementById("sel-track-empty").hidden,
     };
   });
-  expect(searched.active).toBe(true);
+  expect(searched.active, "search focused").toBe(true);
   expect(searched.shown.length).toBeGreaterThan(0);
-  expect(searched.shown.every((name) => /monaco/i.test(name))).toBe(true);
+  expect(searched.shown.every((name) => /monaco/i.test(name)), "all monaco").toBe(true);
   expect(searched.hidden).toBeGreaterThan(20);
-  expect(searched.emptyHidden).toBe(true);
+  expect(searched.emptyHidden, "empty hidden").toBe(true);
 
   // Stacked/short select: body is not a scroller; the track list fills it.
   // 568×320 is under #sel-inner --pair-at 620, so SheetShape writes pair=off.
@@ -288,6 +311,22 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(settings.panelPainted).toBe(true);
   expect(settings.navH).toBeLessThan(settings.bodyH);
   expect(settings.overflowX).toBeLessThanOrEqual(1);
+  await page.evaluate(() => {
+    document.getElementById("pm-tab-more").click();
+    document.getElementById("pm-advanced").click();
+  });
+  await page.waitForSelector("#advanced:not([hidden])");
+  await page.evaluate(() => window.SheetShape?.reclassify());
+  const advanced = await page.evaluate(() => {
+    const inner = document.getElementById("advanced-inner");
+    return { fit: inner.dataset.fit, h: inner.getBoundingClientRect().height };
+  });
+  expect(advanced.fit, "advanced 200% short landscape").toBe("on");
+  expect(advanced.h).toBeGreaterThan(80);
+  await page.evaluate(() => {
+    document.getElementById("adv-close").click();
+    document.getElementById("pm-settings-close").click();
+  });
 
   // Last Race: reproduce the production table shape at phone portrait width.
   await page.setViewportSize({ width: 393, height: 844 });
@@ -346,6 +385,58 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   await page.waitForFunction(() => window.__apex.info().track === "monza",
     null, { polling: 100, timeout: 40_000 });
   await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
+  // Lighting tuner is race-only (`pm-lighting` is disabled on the title). Open
+  // it from pause → settings → MORE at 200% on the short landscape sheet.
+  await page.waitForSelector("#pausebtn:not([hidden])", { timeout: 10_000 });
+  await page.setViewportSize({ width: 852, height: 393 });
+  const compactHud = await page.evaluate(() => {
+    const mm = document.getElementById("minimap");
+    return {
+      density: document.body.dataset.density,
+      mmCss: mm ? getComputedStyle(mm).width : "",
+    };
+  });
+  expect(compactHud.density, "short landscape body density").toBe("compact");
+  expect(compactHud.mmCss).toBe("96px");
+  await page.evaluate(() => {
+    window.__apex.uiScale(200);
+    document.getElementById("pausebtn").click();
+    document.getElementById("pm-settings").click();
+    document.getElementById("pm-tab-more").click();
+    document.getElementById("pm-lighting").click();
+    window.SheetShape?.reclassify();
+  });
+  await page.waitForFunction(() => {
+    const el = document.getElementById("lighting-inner");
+    return el && !document.getElementById("lighting").hidden && el.dataset.density === "compact";
+  }, null, { polling: 100, timeout: 10_000 });
+  const lighting = await page.evaluate(() => {
+    const el = document.getElementById("lighting-inner");
+    const tabs = document.getElementById("lt-tabs");
+    const rows = document.getElementById("lt-rows");
+    const toggle = el.querySelector(".lt-help-toggle");
+    return {
+      density: el.dataset.density,
+      rail: el.dataset.rail,
+      wrap: getComputedStyle(tabs).flexWrap,
+      panelOY: getComputedStyle(el).overflowY,
+      rowsOY: getComputedStyle(rows).overflowY,
+      rowsH: rows.getBoundingClientRect().height,
+      helpOff: !toggle || getComputedStyle(toggle).display === "none",
+    };
+  });
+  expect(lighting.density, "lighting compact").toBe("compact");
+  expect(lighting.rail).not.toBe("on");
+  expect(lighting.wrap).toBe("nowrap");
+  expect(["hidden", "clip"]).toContain(lighting.panelOY);
+  expect(["auto", "scroll", "overlay"]).toContain(lighting.rowsOY);
+  expect(lighting.rowsH).toBeGreaterThanOrEqual(24);
+  expect(lighting.helpOff).toBe(true);
+  await page.evaluate(() => {
+    document.getElementById("lt-close").click();
+    document.getElementById("pm-settings-close").click();
+    document.getElementById("pm-resume").click();
+  });
   await page.waitForSelector("#btn-cam:not([hidden])", { timeout: 10_000 });
   await page.evaluate(() => document.getElementById("btn-cam")
     .dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })));
@@ -420,6 +511,109 @@ test("How to Play contents rail jumps within its single scroller", async ({ page
     };
   });
   expect(after.heading).toContain("RACE A FRIEND");
+
+  await page.evaluate(() => document.getElementById("htp-close").click());
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.click("#mb-help");
+  await page.waitForSelector("#howtoplay:not([hidden])");
+  await page.evaluate(() => window.SheetShape?.reclassify());
+  const wideHelp = await page.evaluate(() => {
+    const sheet = document.getElementById("howtoplay-inner");
+    const nav = document.getElementById("htp-contents").getBoundingClientRect();
+    const body = document.querySelector("#howtoplay .sheet-body").getBoundingClientRect();
+    return {
+      shape: sheet.dataset.shape,
+      density: sheet.dataset.density,
+      navLeftOfBody: nav.right <= body.left + 2,
+      sameBand: Math.abs(nav.top - body.top) < 80,
+    };
+  });
+  expect(wideHelp.shape).toBe("wide");
+  expect(wideHelp.density).not.toBe("compact");
+  expect(wideHelp.navLeftOfBody).toBe(true);
+  expect(wideHelp.sameBand).toBe(true);
+});
+
+test("Career guide contents rail and standings leftover height", async ({ page }) => {
+  await waitReady(page);
+
+  // Standings is season-gated on the title. Unhide and open: the body is the
+  // one pane scroller and must not carry a zoom-blind 55svh cap.
+  await page.setViewportSize({ width: 852, height: 393 });
+  await page.evaluate(() => {
+    document.getElementById("mb-standings").hidden = false;
+    document.getElementById("mb-standings").click();
+    window.SheetShape?.reclassify();
+  });
+  await page.waitForSelector("#standings:not([hidden])");
+  const standings = await page.evaluate(() => {
+    const body = document.getElementById("standings-body");
+    return {
+      maxH: getComputedStyle(body).maxHeight,
+      minH: getComputedStyle(body).minHeight,
+      bodyOY: getComputedStyle(body).overflowY,
+    };
+  });
+  expect(standings.maxH).toBe("none");
+  expect(standings.minH).toBe("0px");
+  expect(["auto", "scroll", "overlay"]).toContain(standings.bodyOY);
+  await page.evaluate(() => document.getElementById("standings-close").click());
+
+  // Modes screen → HOW CAREER WORKS. The 560px guide is landscape-shaped on a
+  // mid desktop (wide rail) and tall on phone portrait (strip above the body).
+  await page.click("#mb-career");
+  await page.waitForSelector("#cr-guide-driver");
+  await page.setViewportSize({ width: 1100, height: 580 });
+  await page.click("#cr-guide-driver");
+  await page.waitForSelector("#career-guide:not([hidden])");
+  await page.evaluate(() => window.SheetShape?.reclassify());
+  const wideGuide = await page.evaluate(() => {
+    const sheet = document.querySelector("#career-guide .sheet");
+    const nav = document.getElementById("cg-contents").getBoundingClientRect();
+    const body = document.getElementById("cg-body").getBoundingClientRect();
+    return {
+      shape: sheet.dataset.shape,
+      density: sheet.dataset.density,
+      links: document.querySelectorAll("#cg-contents a").length,
+      navLeftOfBody: nav.right <= body.left + 2,
+      sameBand: Math.abs(nav.top - body.top) < 80,
+    };
+  });
+  expect(wideGuide.links).toBeGreaterThan(4);
+  expect(wideGuide.shape, JSON.stringify(wideGuide)).toBe("wide");
+  expect(wideGuide.density).not.toBe("compact");
+  expect(wideGuide.navLeftOfBody).toBe(true);
+  expect(wideGuide.sameBand).toBe(true);
+
+  await page.click('#cg-contents a[href="#cg-qualifying"]');
+  await page.waitForFunction(() => {
+    const body = document.getElementById("cg-body");
+    const target = document.getElementById("cg-qualifying");
+    if (!body || !target) return false;
+    const br = body.getBoundingClientRect();
+    const tr = target.getBoundingClientRect();
+    return body.scrollTop > 0 && tr.top >= br.top - 1 && tr.bottom <= br.bottom + 1;
+  }, null, { polling: 100, timeout: 5_000 });
+
+  await page.evaluate(() => document.getElementById("cg-back").click());
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.click("#cr-guide-driver");
+  await page.waitForSelector("#career-guide:not([hidden])");
+  await page.evaluate(() => window.SheetShape?.reclassify());
+  const tallGuide = await page.evaluate(() => {
+    const sheet = document.querySelector("#career-guide .sheet");
+    const nav = document.getElementById("cg-contents").getBoundingClientRect();
+    const body = document.getElementById("cg-body").getBoundingClientRect();
+    const first = document.querySelector("#cg-contents a")?.getBoundingClientRect();
+    return {
+      shape: sheet.dataset.shape,
+      navAboveBody: nav.bottom <= body.top + 1,
+      firstReachable: !!(first && first.left >= nav.left - 1 && first.right <= nav.right + 1),
+    };
+  });
+  expect(tallGuide.shape).not.toBe("wide");
+  expect(tallGuide.navAboveBody).toBe(true);
+  expect(tallGuide.firstReachable).toBe(true);
 });
 
 test("balanced control rows derive their shape from local room", async ({ page }) => {

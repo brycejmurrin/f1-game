@@ -407,7 +407,7 @@ test("post resize destroys replaced bloom buffers and cleans partial buffer allo
   assert.ok(h.buffers.slice(failedBufferStart).every((resource) => resource.destroyed));
 
   h.clearFailures();
-  h.canvas.clientWidth = 481;
+  h.canvas.clientWidth = 640;
   gfx.resize();
   assert.equal(gfx.begin({}), true);
   assert.ok(oldTextures.every((resource) => resource.destroyed), "replaced textures must be destroyed");
@@ -443,7 +443,7 @@ test("a different target size bypasses the allocation retry cooldown", async () 
   const callsAfterFailure = h.textureCount();
 
   h.clearFailures();
-  h.canvas.clientWidth = 513;
+  h.canvas.clientWidth = 640;
   gfx.resize();
   assert.equal(gfx.begin({}), true);
   assert.ok(h.textureCount() > callsAfterFailure, "new dimensions must retry immediately");
