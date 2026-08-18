@@ -300,6 +300,7 @@ function syncCustomTeam() {
   Teams.LIST.push(loadCustomTeam());
   invalidateDecalTextures("custom");
   invalidateCustomMeshCache(teamMeshes);
+  invalidateCustomMeshCache(teamBodies);
   invalidateCustomMeshCache(playerBodies, playerBodyOrder);
   invalidateCustomMeshCache(cockpitBodies, cockpitBodyOrder);
 }
@@ -949,7 +950,8 @@ let _thunderT = -1;          // seconds until queued thunder fires (<0 = none)
 // Cloud cover target for the current session: set once in applyRaceSettings()
 // and held constant so the sky doesn't shift mid-race (only the shader animates).
 let _cloudBase = 0.4;
-const teamMeshes = {};   // teamId -> renderer mesh handle
+const teamMeshes = {};   // factory full mesh (shadows / ghost / glb)
+const teamBodies = {};   // factory body-only (visible AI — wheels drawn planted)
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60 Hz-stepped)
@@ -1111,50 +1113,42 @@ function lerpS(prev, cur, a) {
   const d = M4.wrapDelta(cur - prev, L);   // shortest way round (js/mat4.js)
   return wrapS(prev + d * a);
 }
-// The PLAYER is drawn where it actually is. Its world position is exact and
-// already smooth (world-space integration), so render interpolates px/pz
-// directly and never round-trips through the road frame.
-//
-// Every one of these call sites used to rebuild the drawn position from a lerped
-// (s, x) PLUS a 30 Hz low-pass on the lateral coordinate. That damping was a
-// workaround for Frenet-projection noise back when (s, x) was the authority —
-// its own comment said so. Against a car that is now exact in world space it
-// only adds a first-order lag TOWARD THE ROAD FRAME: steer, and the mesh trails
-// sideways then catches up. That is a "pulled and oscillating about the centre
-// line" feel baked into the presentation, and it would survive any amount of
-// physics work. AI cars keep the old path — they have no world position, their
-// motion IS road-frame by construction.
+// Every car is drawn from interpolated world px/pz when that mirror exists.
+// The player integrates px/pz; AI and remotes derive it from (s, x) at the
+// end of the step. A leftover xVis low-pass used to lag the field toward
+// the road frame (16/s on AI, 30/s on the player) — gone. Render interpolates
+// the last two physics poses only (renderAlpha).
 // Writes world X/Z into _rp; the caller still samples the road for HEIGHT.
 const _rp = { x: 0, z: 0, world: false };
 function renderPosOf(c, cS, renderX) {
-  if (c.human && c.px != null && c.rPrevPx !== undefined) {
+  if (c.px != null && c.rPrevPx !== undefined) {
     _rp.x = c.rPrevPx + (c.px - c.rPrevPx) * renderAlpha;
     _rp.z = c.rPrevPz + (c.pz - c.rPrevPz) * renderAlpha;
     _rp.world = true;
-  } else if (c.human && c.px != null) {
+  } else if (c.px != null) {
     _rp.x = c.px; _rp.z = c.pz; _rp.world = true;
   } else {
     _rp.world = false;
   }
   return _rp;
 }
-// Unified player render anchor. Returns the (s, x) the camera, the car body's
-// height/orientation, and banking should all sample — derived, for the player,
-// from the SAME interpolated WORLD position the body is drawn at (renderPosOf):
-// project that world point ONCE via trackFrom. World interpolation is smooth,
-// so this s is smooth AND identical across all three consumers. Deriving each
-// consumer independently from the arc read-back lerpS(rPrevS, s) diverged —
-// that read-back is non-monotonic (js/game.js), which showed as a backwards
-// jolt (camera), a speed-dependent fore/aft slide (car vs camera), and
-// residual height/orientation jitter at speed. AI cars (no world position)
-// fall back to the arc interpolation unchanged.
+// Unified render anchor. Returns the (s, x) the camera, the car body's
+// height/orientation, and banking should all sample — derived from the SAME
+// interpolated WORLD position the body is drawn at (renderPosOf): project that
+// world point ONCE via trackFrom. World interpolation is smooth, so this s is
+// smooth AND identical across all three consumers. Deriving each consumer
+// independently from the arc read-back lerpS(rPrevS, s) diverged — that
+// read-back is non-monotonic (js/game.js), which showed as a backwards jolt
+// (camera), a speed-dependent fore/aft slide (car vs camera), and residual
+// height/orientation jitter at speed. Cars with no world pose yet fall back to
+// the arc interpolation.
 const _pa = { world: false, cS: 0, cX: 0 };
 // Per-render player (s,x) + body sample/bank — trackFrom/sample/banking once for cam/shadow/body.
 let _plCS = 0, _plCX = 0, _plOk = false, _plBodyOk = false;
 const _smpPlayer = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const _bankPlayer = { dy: 0, roll: 0 };
 function playerAnchor(c) {
-  if (c.human && c.px != null) {
+  if (c.px != null) {
     const wx = (c.rPrevPx === undefined) ? c.px : c.rPrevPx + (c.px - c.rPrevPx) * renderAlpha;
     const wz = (c.rPrevPz === undefined) ? c.pz : c.rPrevPz + (c.pz - c.rPrevPz) * renderAlpha;
     const tf = trackFrom(wx, wz, c.s);   // read-only; never writes c.s
@@ -1664,7 +1658,13 @@ function gridUp(preOrder) {
     c.gridPos = i + 1;
     c.s = wrapS(track.total - 14 - i * 8);
     c.x = (i % 2 === 0 ? -1 : 1) * Math.min(smpHw(c.s) * 0.4, 3);
-    c.xVis = c.x;   // reset smoothed render position so the grid doesn't slide
+    c.xVis = c.x;   // dump/net field; render no longer damps this
+    {
+      const w = worldFromTrack(c.s, c.x, smp);
+      c.px = w.x; c.pz = w.z;
+      c.rPrevPx = c.px; c.rPrevPz = c.pz;
+      c.rPrevS = c.s; c.rPrevX = c.x;
+    }
     c.head = 0; c.yawVis = 0;   // straight ahead on the grid (heading model)
     c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1;
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
@@ -1707,7 +1707,7 @@ function smpHw(s) { Tracks.sample(track, s, smp); return smp.hw; }
 let carModelBuf = null;
 const CAR_MODEL_SCALE = 1;
 
-function buildCarData(team) {
+function buildCarData(team, extra) {
   const liv = resolveLivery(team);   // chosen paint job (else team colours)
   if (carModelBuf) {
     try { return GLTF.toMesh(carModelBuf, { scale: CAR_MODEL_SCALE, tint: liv.c1 }); }
@@ -1719,6 +1719,8 @@ function buildCarData(team) {
     teamId: team.id,   // per-team chassis style (nose/airbox/fin/mirrors/inlet)
     num: team.drivers && team.drivers[0] && team.drivers[0].num,
     parts: Parts.getVisualTiers(factorySetup, team),
+    noWheels: !!(extra && extra.noWheels),
+    field: !!(extra && extra.noWheels),   // factory body — probe vs playerBodies
   });
 }
 
@@ -1741,6 +1743,11 @@ function teamMesh(team) {
   const key = teamMeshKey(team);
   if (!teamMeshes[key]) teamMeshes[key] = gfx.createMesh(buildCarData(team));
   return teamMeshes[key];
+}
+function teamBodyMesh(team) {
+  const key = teamMeshKey(team);
+  if (!teamBodies[key]) teamBodies[key] = gfx.createMesh(buildCarData(team, { noWheels: true }));
+  return teamBodies[key];
 }
 
 // Car decal / effect-quad / cockpit-instrument geometry lives in
@@ -1910,9 +1917,8 @@ function currentCarGroundMat(c, out, dt) {
   let cS, cX;
   if (_plOk && c.isPlayer) { cS = _plCS; cX = _plCX; }
   else { const pa = playerAnchor(c); cS = pa.cS; cX = pa.cX; }
-  // Predict the same damping step the later body loop will apply, without
-  // mutating xVis twice. Shadow and body therefore share one lateral position.
-  const renderX = c.xVis === undefined ? cX : damp(c.xVis, cX, 30, dt);
+  // Same interpolated lateral as the body pass — no extra xVis damp.
+  const renderX = cX;
   Tracks.sample(track, cS, smp2);
   // Normalize the lerped tangent/right — same fix as the body loop: raw they
   // scale the shadow-caster basis at the 4 m node rate (see the note there).
@@ -2101,8 +2107,22 @@ function getPlayerWheelMeshes() {
 // Spin each wheel about its axle ∝ speed and steer the fronts by the smoothed
 // driver input. local = translate(corner) ∘ rotY(steer) ∘ rotX(spin), composed
 // straight into a scratch matrix (no per-frame allocation), then into world.
+function getFieldWheelMeshes() {
+  return putBoundedMesh(wheelMeshCache, wheelMeshOrder, "field:1:1:1", () => {
+    const band = Car3D.TYRE_BAND[1];
+    const caliper = Car3D.BRAKE_CALIPER[1];
+    const front = Car3D.buildWheelLayers(0.32, band, caliper, undefined, false);
+    const rear = Car3D.buildWheelLayers(0.38, band, caliper, undefined, false);
+    return {
+      F: gfx.createMesh(front.rotating),
+      R: gfx.createMesh(rear.rotating),
+      FFixed: gfx.createMesh(front.fixed),
+      RFixed: gfx.createMesh(rear.fixed),
+    };
+  }, WHEEL_MESH_CACHE_MAX, freeWheelPair);
+}
 function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
-  const wm = getPlayerWheelMeshes();
+  const wm = c.isPlayer ? getPlayerWheelMeshes() : getFieldWheelMeshes();
   c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / WHEEL_R) * dt) % (Math.PI * 2);
   const sp = Math.sin(c.wheelSpin), cp = Math.cos(c.wheelSpin);
   const steerA = clamp(c.steerVis || 0, -1, 1) * WHEEL_STEER_VIS;
@@ -2131,7 +2151,12 @@ function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
     // Hot brake discs: an emissive ring floating just off the outer wheel face,
     // ramping with the render-only brakeHeat (bright orange → blooms when hot).
     const heat = c.brakeHeat || 0;
-    if (heat > 0.05) {
+    let ringOk = heat > 0.05;
+    if (ringOk && !c.isPlayer) {
+      const dx = base[12] - camEye[0], dy = base[13] - camEye[1], dz = base[14] - camEye[2];
+      ringOk = dx * dx + dy * dy + dz * dz < 40 * 40;
+    }
+    if (ringOk) {
       const tx = (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.025);
       const W = _ringWorld;
       W.set(_wheelWorld);
@@ -2157,6 +2182,7 @@ async function loadCarModel(url) {
     GLTF.toMesh(buf, { scale: CAR_MODEL_SCALE });   // validate before adopting
     carModelBuf = buf;
     for (const k in teamMeshes) { if (gfx.freeMesh) gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }  // free old GPU buffers, then rebuild from model
+    for (const k in teamBodies) { if (gfx.freeMesh) gfx.freeMesh(teamBodies[k]); delete teamBodies[k]; }
     for (const k in playerBodies) { if (gfx.freeMesh) gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
     playerBodyOrder.length = 0;
     for (const k in cockpitBodies) { if (gfx.freeMesh) gfx.freeMesh(cockpitBodies[k]); delete cockpitBodies[k]; }
@@ -2975,7 +3001,7 @@ const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
 // CAR SETUP panel UI (js/game/setup-ui.js).
 const { buildSetup, openSetup } = SetupUI.create(G);
 // Select-screen UI (js/game/menus.js).
-const { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
+const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
 // CAREER screen — new-career setup + season hub (js/game/career-ui.js). The rules
 // and the save live in js/game/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -4624,6 +4650,8 @@ function updateCar(c, dt, ranked) {
     } else {
       Tracks.sample(track, c.s, smp);            // yawVis below needs the tangent
     }
+  } else {
+    Tracks.sample(track, c.s, smp);              // yawVis below needs the tangent
   }
   c.steerVis = damp(c.steerVis, steer, 10, dt);
   // Visual nose yaw. The player uses its REAL heading relative to the track
@@ -4879,6 +4907,13 @@ function updateCar(c, dt, ranked) {
       c.rescueT = 0; c.offT = 0; c.stuckT = 0;
     }
   }
+  // AI authority is (s, x). Mirror world metres AFTER this step's s/x writes
+  // (advance, walls, rescue) so render interpolates the pose the step produced.
+  if (!c.human) {
+    const w = worldFromTrack(c.s, c.x, smp);
+    c.px = w.x;
+    c.pz = w.z;
+  }
   c._prevS = c.s;
 }
 
@@ -4991,13 +5026,10 @@ function coast(c, dt) {
   const kA = Tracks.curvature(track, wrapS(c.s + 30));
   // Finished cars cruise the inside line (-sign(k)), same convention as the AI.
   c.x = damp(c.x, clamp(-kA * 130, -0.5, 0.5) * smp.hw, 2, dt);
-  // A finished car is driven kinematically in (s, x) — so the PLAYER's world
-  // position has to be carried along with it. Without this the car is rendered
-  // from a px/pz that stopped updating at the finish line (renderPosOf) while the
-  // camera, anchored to s/x, drives away down the track: the car sits frozen on
-  // the line for the ~2 s until the results screen. Heading follows the road
-  // because nothing is steering any more.
-  if (c.human && c.px != null) {
+  // Finished cars are kinematic in (s, x). Mirror world metres or renderPosOf
+  // keeps the last racing px/pz and the mesh freezes on the line while s walks
+  // away (~2 s until results). Heading follows the road — nothing steers.
+  {
     const w = worldFromTrack(c.s, c.x, smp);
     c.px = w.x; c.pz = w.z;
     c.head = Math.atan2(smp.t[0], smp.t[2]);
@@ -5429,14 +5461,14 @@ try { _perChunkOff = localStorage.getItem("apex26.perChunkOff") === "1"; } catch
 // Pure night/wet variants are constants; the few with live-tunable fields (detail
 // from LT.surfDetail, roughness from LT.roadRough, emissive from floodEmit) are
 // per-variant reused objects mutated in place each call (never a stale key).
-const _wmFloorN = { emissive: 0.14, roughness: 0.98, specular: 0.05 };
-const _wmFloorD = { roughness: 0.98, specular: 0.05 };
-const _wmTerrainN = { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0 };
-const _wmTerrainD = { roughness: 0.97, specular: 0.06, detail: 0 };
-const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0 };
-const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0 };
-const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0 };
-const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0 };
+const _wmFloorN = { emissive: 0.14, roughness: 0.98, specular: 0.05, depthBias: [4, 8], buryRibbon: true };
+const _wmFloorD = { roughness: 0.98, specular: 0.05, depthBias: [4, 8], buryRibbon: true };
+const _wmTerrainN = { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0, buryRibbon: true };
+const _wmTerrainD = { roughness: 0.97, specular: 0.06, detail: 0, buryRibbon: true };
+const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
+const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
+const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
+const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
 // depthBias [factor, units]: the start line is a DECAL laid on the asphalt, so
 // bias its depth toward the camera rather than relying on the small geometric
 // lift alone — that lift is fixed in metres and loses to depth quantisation at
@@ -6566,13 +6598,12 @@ function render(dt) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
     }
-    // Player: reuse frame-cached (s,x). AI: arc interp. Cull before banking when possible.
+    // Player: reuse frame-cached (s,x). Field: playerAnchor (world px). Cull first.
     let cS, cX;
     if (c.isPlayer && _plOk) { cS = _plCS; cX = _plCX; }
     else { const pa = playerAnchor(c); cS = pa.cS; cX = pa.cX; }
-    if (c.xVis === undefined) c.xVis = cX;
-    else c.xVis = damp(c.xVis, cX, c.isPlayer ? 30 : 16, dt);
-    let renderX = c.xVis;
+    c.xVis = cX;   // dump/net field only — pose comes from interpolated px/pz
+    const renderX = cX;
     const rp = renderPosOf(c, cS, renderX);
     let bankC;
     if (c.isPlayer && _plBodyOk) {
@@ -6715,40 +6746,18 @@ function render(dt) {
       drawCockpitRig(c, _cockMat, dt, paint);
       continue;
     }
-    // Player: body-only mesh + animated (spinning/steering) wheels. Others (and
-    // the player when a glb model is loaded) draw the full mesh with baked wheels.
-    const body = c.isPlayer ? playerBodyMesh(c.team) : null;
+    // Body-only mesh + planted wheels for every procedural car. Attitude
+    // (tmpMat) is chassis-only; wheels stay on _groundMat. A glb is one piece.
+    const body = carModelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team) : teamBodyMesh(c.team));
     if (body) {
       gfx.draw(body, tmpMat, paint);
-      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, true);
+      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer);
       _wheelOpts.emissive = night ? 0.12 : 0;
       drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
     } else {
       const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
       gfx.draw(teamMesh(c.team), wholeCarMat, paint);
       queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer);
-      // AI brake glow: rings at the four baked wheel positions (outer face).
-      // Sub-pixel past ~40 m, so distance-gate — a pack braking into a corner
-      // was 10 cars × 4 = ~40 ring draws, most of them off in the distance.
-      const aiHeat = c.brakeHeat || 0;
-      if (aiHeat > 0.08) {
-        const rdx = tmpP[0] - camEye[0], rdy = tmpP[1] - camEye[1], rdz = tmpP[2] - camEye[2];
-        if (rdx * rdx + rdy * rdy + rdz * rdz < 40 * 40) {
-          const ro = _ringOpts;
-          ro.emissive = 0.30 + 0.70 * aiHeat;
-          ro.alpha = Math.min(1, 0.25 + aiHeat * 0.9);
-          for (let w = 0; w < WHEELS.length; w++) {
-            const wd = WHEELS[w];
-            const tx = wd.x + (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.025);
-            const W = _ringWorld;
-            W.set(wholeCarMat);
-            W[12] += W[0] * tx + W[4] * wd.y + W[8] * wd.z;
-            W[13] += W[1] * tx + W[5] * wd.y + W[9] * wd.z;
-            W[14] += W[2] * tx + W[6] * wd.y + W[10] * wd.z;
-            gfx.draw(getBrakeRing(), W, ro);
-          }
-        }
-      }
     }
     // ACTIVE AERO: the moveable upper wing elements, FRONT and REAR, swung
     // between their Z-mode and X-mode angles by this car's live `aeroX`. The
@@ -7285,7 +7294,7 @@ function tickBody(now) {
       // holding the state just before the final step taken this frame).
       for (let i = 0; i < cars.length; i++) {
         const c = cars[i]; c.rPrevS = c.s; c.rPrevX = c.x;
-        c.rPrevPx = c.px; c.rPrevPz = c.pz;   // player renders from WORLD space
+        c.rPrevPx = c.px; c.rPrevPz = c.pz;   // every car interpolates world px/pz
         c.rPrevYawVis = c.yawVis;             // orientation interpolates like position
         c.rPrevHead = c.head;                 // world heading interpolates like position too
       }
@@ -7335,12 +7344,11 @@ function enableTilt() {
 }
 
 function firstGesture() {
-  GameAudio.init();
   GameAudio.setEnabled(soundOn);
   GameAudio.setMusicEnabled(musicEnabled);
   // Tilt permission is requested at race start (rs-go click), not here — so the
   // gyro prompt and button fallback don't appear on the title screen.
-  if (soundOn) GameAudio.startMusic(-1);
+  if (soundOn) { GameAudio.init(); GameAudio.startMusic(-1); }
 }
 let gestured = false;
 document.addEventListener("pointerdown", () => {
@@ -7604,7 +7612,7 @@ els.selBack.onclick = () => {
   if (soundOn) GameAudio.uiSelect();
 };
 els.selPreviewMap.onclick = openTrackDetail;
-$("track-detail-close").onclick = () => { $("track-detail").hidden = true; };
+$("track-detail-close").onclick = closeTrackDetail;
 // ── SETTINGS sub-menu ── keeps the pause screen down to RESUME/RESTART/QUIT;
 // every tuning + toggle control lives on this page. Opening it hides the pause
 // menu (one panel at a time); BACK (or resume) returns to it.
@@ -7632,7 +7640,7 @@ $("pm-settings-close").onclick = closeSettings;
 // tuners are reachable without starting a race first. closeSettings() already
 // only returns to the pause menu when actually paused, so from here it just
 // closes back to the title.
-$("mb-settings").onclick = () => { GameAudio.init(); openSettings(); };
+$("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings(); };
 // Advanced steering: opened from the settings menu, closes back to it.
 $("pm-advanced").onclick = () => { $("advanced").hidden = false; };
 $("adv-close").onclick = () => { $("advanced").hidden = true; };
@@ -8135,7 +8143,7 @@ let garageReturn = "select";
 // The one way in. Everything that opens the garage goes through here so the
 // return path can never be left stale — including menus.js, via G.openGarage.
 function openGarage(from) {
-  if (from === "menu") GameAudio.init();
+  if (from === "menu" && soundOn) GameAudio.init();
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;
   // Fresh camera every visit: a garage that reopened on the last angle someone

@@ -33,7 +33,12 @@
  * consumer. ignoise is shared from ctx.chunks (the one genuinely common leaf).
  *
  * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
- *     TLXShaders.sky = (THREE, TSL, ctx) => ({ node, uniforms, update })
+ *     TLXShaders.sky = (THREE, TSL, ctx) =>
+ *         ({ node, fallbackNode, uniforms, update })
+ * fallbackNode is zenith-only (no ray reconstruction). tlx.js arms it on
+ * software GL: the full SKY_FS node either misses (fog Color → beige void)
+ * or reconstructs rays badly against the HDR target (horizon fill). Real
+ * GPUs keep `node`.
  * ctx = { chunks } (TLXShaders.chunks(THREE, TSL); optional — ignoise falls
  * back to a local copy). NEVER touches THREE/TSL at script eval — three
  * exists only inside TLX.create().
@@ -428,7 +433,12 @@
       return vec4(c, 1.0);
     })();
 
-    return { node, uniforms: U, update };
+    // Cheap miss-path for software GL (tlx.js drawSky). Same zenith uniform
+    // the full node reads — no screenUV / invViewProj, so a SwiftShader HDR
+    // target cannot collapse the dome to the horizon colour.
+    const fallbackNode = Fn(() => vec4(U.zenith, 1.0))();
+
+    return { node, fallbackNode, uniforms: U, update };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { sky });

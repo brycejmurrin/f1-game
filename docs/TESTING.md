@@ -1,6 +1,6 @@
 # Testing reference
 
-112 root Playwright spec files (`tests/specs/*.spec.js`) + 107 `node --test` unit suites
+112 root Playwright spec files (`tests/specs/*.spec.js`) + 108 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -857,6 +857,7 @@ what it covers.
 | `game-ctx-surface.test.mjs` | a TYPE CHECK for the `G` ctx façade (Bedrock Phase 1) via `tools/check-gctx.mjs`: `types/game-ctx.d.ts` must declare exactly the members of `const G = {…}` in `js/game.js`, with matching writability (`readonly` ⇔ getter-with-no-setter), and the `GameModuleFactory` roster must match the real `X.create(ctx)` call sites. Second leg, skipped when no `tsc` is resolvable: every `G.member` read/write and `const {…} = ctx` destructure in `js/game|net` is emitted as a typed shadow and compiled — reading a member that does not exist, or writing one with no setter, is an error reported at the real `js/` file:line. Third leg: a member **no module reads** (the `countT` defect reversed) is baselined, so a new one fails |
 | `vstd-invariant.test.mjs` | the PACE invariant as a lint (`tools/vstd-lint.mjs`): no speed in `js/game.js` is divided by `VMAX` or compared against a bare literal outside the reviewed allow-list, so the OVERALL SPEED slider cannot silently shrink the player's envelope again |
 | `module-size.test.mjs` | RATCHET on the big modules' line counts — lower a ceiling when you extract; raising one is a deliberate edit with a reason in the commit |
+| `car-presentation-canary.test.mjs` | Field cars share the player's presentation path: `renderPosOf` / `playerAnchor` interpolate world `px`/`pz` for every car (not only `c.human`), `xVis` is dump-only (no 16/s or 30/s damp, shadows use the same `cX`), AI mirrors `px`/`pz` *after* the `(s, x)` advance, visible procedural cars draw `teamBodyMesh`/`playerBodyMesh` + planted wheels on `_groundMat`, and `carOrbit` / agent-view `carWorld` read the mirrored pose. Locks the two leftover bugs that made the pack feel delayed and "a different car" |
 | `gfx-backend-canary.test.mjs` | RENDERER pick survives the title menu: `#pm-renderer` is not `hidden`, the boot canary disarms after bind (not only after `present()`), first world present re-arms for jetsam, the picker names WEBGPU both ways, a `<select>` + ‹ › jumps without cycling through THREE, and RESET RENDERER drops backend crash flags plus context-loss latches without touching GRAPHICS quality. Also **TLX's canvas must be OPAQUE**: the lit fragment writes the SSR car-paint tag (0.35) into ALPHA, and `present()`'s post-only-death path keeps those materials while painting straight to the canvas — on an alpha-composited canvas the browser reads that tag as opacity and every car's painted bodywork goes 35% see-through for the rest of the session (reported from an iPhone). three needs telling twice: its WebGPU backend honours `alpha:false`, its WebGL backend hardcodes `alpha:true` and only honours a caller-supplied `context`. **Both vendor behaviours are asserted against the bundled three**, so the upgrade that makes half the workaround unnecessary — or the other half insufficient — fails here, next to the reason, rather than becoming another bug report from a phone. Source can prove TLX ASKS for an opaque canvas but never that it GOT one, so the live half is in `tlx-probes.spec.js` |
 | `ui-improve-pass.test.mjs` | CssZoom load order + API surface; data-hub UI SIZE zoom; garage livery grid wiring; select track filter persistence |
 | `css-comments.test.mjs` | a CSS comment that ends early (or never opens) turns prose into a selector and DROPS the rule after it, silently — caught by measuring prelude length (real max 173, the two live failures were 275 and 759) |
@@ -910,7 +911,7 @@ what it covers.
 | `service-worker.test.mjs` | the SW's install/fetch/version-guard behaviour |
 | `perf-sentinel.test.mjs` | the crash sentinel's memory must not outlive the crash |
 | `perf-governor.test.mjs` | the adaptive-resolution governor: the budget derives from the observed floor of frame intervals rather than a hardcoded 60 fps, so a device capped externally (iOS Low Power Mode's 30 fps throttle) settles at full quality instead of the resolution floor with every feature shed; a genuinely GPU-bound device still downscales and holds; a reverted step does not repeat forever |
-| `metrics.test.mjs` | GameMetrics SETTINGS toggle: default off, persists `apex26.metrics`, `?metrics=1` is session-only, snapshot() never throws without `__apex`, and ON raises the log buffer to debug while leaving the console at warn |
+| `metrics.test.mjs` | GameMetrics SETTINGS toggle: default off, persists `apex26.metrics`, `?metrics=1` is session-only, snapshot() never throws without `__apex`, ON raises the log buffer to debug while leaving the console at warn, pages persist (`gov`/`car`/`phys`/`log`), HUD digit and probe ground speed are both kept, and `physState()` is read without calling `obs()` |
 | `output-paths.spec.js` | gallery paths are port-scoped and create their parents |
 | `cdmcp-measure.test.mjs` | the Chromium MCP background measure harness — CLI surface, log terminal-marker contract, bg launcher existence, without launching Chromium |
 | `tinyfish-mcp.test.mjs` | TinyFish + Chrome + Playwright MCP wrappers — `.mcp.json` has apex-tools + playwright + tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build (search rows render title+url+snippet), every `mcp_post` body must parse as JSON once shell splices are stubbed (the guard that catches the stray-quote class), tracked source has no reusable key and `ensure` names its setup prerequisite, a transient upstream timeout is exit 3 (retried) while a genuine parse failure stays exit 2, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` with an exact fallback version (no live API), `playwright-mcp.sh` pins `@playwright/mcp@0.0.79` |
@@ -1106,19 +1107,32 @@ those backends (phones and Safari included — lite stack, 8-bit swapchain);
 they must not silently bind GLX. THREE PATH AUTO may land on three
 WebGL2 (`--tlx-auto-gl` / `apex26.tlxAutoGL`) after WebGPU dies in this
 tab — still TLX, not game WEBGL2. THREE PATH: WEBGL2 remains the CI pin.
+`--backend three --tlx-webgpu --lavapipe` waits on `GLX.awaitSoftPresent`.
 
 **TLX WebGPU `configure` null was a self-poison (2026-08-18).**
 `detectSoftwareGL()` called `#game.getContext("webgl2")` after
 `renderer.init()`. three r185.1 does not claim the canvas in `init()` —
 `getContext("webgpu")+configure()` is lazy on first present(). MDN: one
-context type per canvas for life. Live probe: `data-engine=three.js r185
-webgpu` AND `getContext("webgpu")===null` AND a live WebGL2 context on
-`#game`. Fix: sniff GL only when `forceWebGL`; the WebGPU path uses
-`_softAdapter`. Instanced prop colour is a geometry
-`InstancedBufferAttribute` named `color` (not `imesh.instanceColor`) so
-Dawn slots 2/5 match the instance count. Index:
-`AGENTS.md` §Seeing the game / §Cursor Cloud;
+context type per canvas for life. Fix: sniff GL only when `forceWebGL`;
+the WebGPU path uses `_softAdapter`. Instanced prop colour is a geometry
+`InstancedBufferAttribute` named `color` (not `imesh.instanceColor`).
+The 2D overlay must be opaque and force blit alpha to 255 — the SSR
+car-paint tag (0.35) in HDR alpha is not compositor opacity.
+Index: `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
+
+**TLX software-GL washout was fog-as-clear + a broken TSL sky (2026-08-18).**
+Dusk `fogColor` is beige `~[0.68,0.64,0.54]`. `begin()` used that as
+`scene.background`; when the TSL `backgroundNode` missed the whole frame
+was that beige. When the node *did* compile against the HDR target on
+SwiftShader, `screenUV`/`invViewProj` reconstruction collapsed the dome
+to horizon beige (`~[0.76,0.68,0.52]`) — kill-fog did not help because
+density was never the path. World frames now clear to `skyZenith`, and
+software GL arms `tsl-sky.js`'s zenith-only `fallbackNode` (M5
+`skyState().on` stays true). Real GPUs keep the full SKY_FS node. Same
+box, GLX was never this washed: it draws the sky as a real fullscreen
+mesh. Real-GPU TLX (user device) already looked correct; this is not a
+color-management change.
 
 **Cloud-agent `npm install` "Exit handler never called!" (2026-08-17).**
 `bld-20260817-e70b375f` failed `INSTALL` after `npm install --ignore-scripts`

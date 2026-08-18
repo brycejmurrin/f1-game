@@ -617,6 +617,9 @@ function openTrackDetail() {
   modal.setAttribute("data-map-tall", TrackMaps.aspect(t) < 1 ? "1" : "0");
   let lastFit = "";
   const drawDetail = function () {
+    // A queued rAF/ResizeObserver delivery may arrive after CLOSE. Never
+    // measure and redraw a hidden modal, and never retain its circuit closure.
+    if (modal.hidden) return;
     // Fit the canvas to the wrap in local (pre-zoom) CSS pixels. clientWidth
     // is correct inside `zoom: var(--ui-scale)` sheets; gBCR would mix visual
     // pixels and re-introduce stretch at UI SIZE ≠ 100%.
@@ -652,7 +655,13 @@ function openTrackDetail() {
     detailRO.observe(wrap);
   }
 }
-return { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwatch };
+function closeTrackDetail() {
+  const modal = document.getElementById("track-detail");
+  if (modal) modal.hidden = true;
+  if (detailRO) detailRO.disconnect();
+  detailRO = null;
+}
+return { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch };
 }
 
 return { create };

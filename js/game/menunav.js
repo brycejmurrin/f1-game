@@ -245,6 +245,13 @@ window.MenuNav = (function () {
   // showing as chosen, so the first press moves off the current team / circuit
   // rather than jumping to the top of the sheet.
   function currentItem(layer, list) {
+    // A screen may name a primary starting action independently of its stateful
+    // controls. Keep this as a separate lookup: querySelector returns document
+    // order across a combined selector, so title-screen Sound (aria-pressed)
+    // would otherwise beat the later Career action even if Career were included
+    // in the same selector.
+    const preferred = layer.querySelector("[data-menu-default]");
+    if (preferred && list.indexOf(preferred) >= 0) return preferred;
     const sel = layer.querySelector("[aria-selected='true'],[aria-pressed='true'],.active");
     if (sel && list.indexOf(sel) >= 0) return sel;
     return list[0] || null;
