@@ -24,7 +24,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.2.0";
+const SERVER_VERSION = "1.3.0";
 const PREFIX = "apex_";
 const LOCK_PATH = path.join(ROOT, "scratch", "apex-browser.lock");
 const TEST_BG_STATE = path.join(ROOT, "artifacts", "logs", "test-bg.json");
@@ -670,6 +670,91 @@ const CATALOG = [
       },
     },
   },
+  {
+    name: "apex_select_recall",
+    week: 4,
+    description: "select-recall.mjs --json — replay the selector against recorded regressions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_cache_bump_only",
+    week: 4,
+    description: "cache-bump-only.mjs <since> --json. Exit 1 (not a pure bump) is a classified result, not a crash.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        since: { type: "string" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_rotate_markings_check",
+    week: 4,
+    description: "rotate-markings.cjs --check only. Never --write.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_startline_snap",
+    week: 4,
+    description: "startline-snap.cjs --json. Optional circuit ids.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ids: { type: "array", items: { type: "string" } },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_startline_probe",
+    week: 4,
+    description: "startline-probe.cjs --json. Optional --calibrate / --snap / --frac id=v.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        calibrate: { type: "boolean" },
+        snap: { type: "boolean" },
+        frac: { type: "string", description: "e.g. monza=0" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_aero_zone_turns",
+    week: 4,
+    description: "aero-zone-turns.cjs <id>|--all. TRACK_VM geometry pairing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        all: { type: "boolean" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
 ];
 
 function badArgs(message, fix) {
@@ -925,6 +1010,41 @@ function buildArgv(name, args) {
       }
       return [...nodeTool("quick-validate.mjs")];
     }
+    case "apex_select_recall":
+      return [...nodeTool("select-recall.mjs"), "--json"];
+    case "apex_cache_bump_only": {
+      if (!args.since) {
+        badArgs("apex_cache_bump_only needs since", 'Pass {"since":"HEAD~1"} or a git ref.');
+      }
+      return [...nodeTool("cache-bump-only.mjs"), String(args.since), "--json"];
+    }
+    case "apex_rotate_markings_check":
+      return [...nodeTool("rotate-markings.cjs"), "--check"];
+    case "apex_startline_snap": {
+      const argv = [...nodeTool("startline-snap.cjs"), "--json"];
+      if (Array.isArray(args.ids)) {
+        for (const id of args.ids) argv.push(String(id));
+      }
+      return argv;
+    }
+    case "apex_startline_probe": {
+      const argv = [...nodeTool("startline-probe.cjs"), "--json"];
+      if (args.calibrate) argv.push("--calibrate");
+      if (args.snap) argv.push("--snap");
+      if (args.frac) argv.push("--frac", String(args.frac));
+      return argv;
+    }
+    case "apex_aero_zone_turns": {
+      const argv = [...nodeTool("aero-zone-turns.cjs")];
+      if (args.all) argv.push("--all");
+      else {
+        if (!args.id) {
+          badArgs("apex_aero_zone_turns needs id or all=true", 'Pass {"id":"monza"} or {"all":true}.');
+        }
+        argv.push(String(args.id));
+      }
+      return argv;
+    }
     default:
       throw new Error(`no argv builder for ${name}`);
   }
@@ -946,7 +1066,7 @@ function parseOut(stdout) {
   }
 }
 
-function runSpawn(argv, { timeoutMs = 90000 } = {}) {
+function runSpawn(argv, { timeoutMs = 90000, allowExit = null } = {}) {
   const started = Date.now();
   const [cmd, ...args] = argv;
   const r = spawnSync(cmd, args, {
@@ -974,6 +1094,8 @@ function runSpawn(argv, { timeoutMs = 90000 } = {}) {
     body.error = "spawn_failed";
     body.message = String(r.error.message || r.error);
     body.fix = "Check node and that the CLI path exists under tools/.";
+  } else if (allowExit && allowExit.has(exit)) {
+    body.ok = true;
   }
   return toolResult(body, { isError: !body.ok });
 }
@@ -1104,6 +1226,38 @@ function pinOk(name, argv) {
       "Omit port.",
     );
   }
+  if (name === "apex_select_recall" && !argv.includes("--json")) {
+    return refuse(
+      "pin_violated",
+      "apex_select_recall must pass --json",
+      "Omit extra flags; the wrap always requests JSON.",
+    );
+  }
+  if (name === "apex_cache_bump_only") {
+    if (!argv.includes("--json") || argv.includes("--apply") || argv.includes("--write")) {
+      return refuse(
+        "pin_violated",
+        "apex_cache_bump_only is --json classify-only",
+        "Pass since. It never writes index.html.",
+      );
+    }
+  }
+  if (name === "apex_rotate_markings_check") {
+    if (!argv.includes("--check") || argv.includes("--write")) {
+      return refuse(
+        "pin_violated",
+        "apex_rotate_markings_check is --check only — never --write",
+        "Use the rotate-markings CLI directly when you intend --write (once per circuit).",
+      );
+    }
+  }
+  if ((name === "apex_startline_snap" || name === "apex_startline_probe") && !argv.includes("--json")) {
+    return refuse(
+      "pin_violated",
+      `${name} must pass --json`,
+      "Omit extra flags; the wrap always requests JSON.",
+    );
+  }
   if (argv.includes("--url")) {
     return refuse(
       "pin_violated",
@@ -1184,10 +1338,12 @@ function dispatch(name, args = {}) {
   }
 
   const allAudit = /_audit$/.test(name) && args.all;
-  const timeoutMs = name === "apex_verify_change_fast" || name === "apex_track_verts" || allAudit
-    ? 120000
-    : 60000;
-  return runSpawn(argv, { timeoutMs });
+  const longTree = name === "apex_verify_change_fast" || name === "apex_track_verts"
+    || name === "apex_startline_snap" || name === "apex_startline_probe"
+    || name === "apex_rotate_markings_check" || allAudit || (name === "apex_aero_zone_turns" && args.all);
+  const timeoutMs = longTree ? 120000 : 60000;
+  const allowExit = name === "apex_cache_bump_only" ? new Set([0, 1]) : null;
+  return runSpawn(argv, { timeoutMs, allowExit });
 }
 
 function listTools() {
@@ -1207,6 +1363,7 @@ function cmdHelp() {
   const w2 = CATALOG.filter((t) => t.week === 2).map((t) => `  ${t.name}`).join("\n");
   const w3t = CATALOG.filter((t) => t.week === 3 && toolKind(t) === "tree").map((t) => `  ${t.name}`).join("\n");
   const w3b = CATALOG.filter((t) => t.week === 3 && toolKind(t) === "browser").map((t) => `  ${t.name}`).join("\n");
+  const w4 = CATALOG.filter((t) => t.week === 4).map((t) => `  ${t.name}`).join("\n");
   process.stdout.write(`apex-tools-mcp — wrap tools/ CLIs as apex_* MCP tools
 
 Commands:
@@ -1227,6 +1384,9 @@ ${w3t}
 
 Week-3 browser (lock + occupancy first):
 ${w3b}
+
+Week-4 tree (no lock):
+${w4}
 
 Local working tree only — no github.io. Deploy checks stay on TinyFish.
 Mock: APEX_MCP_MOCK=1  Design: docs/research/APEX-TOOLS-MCP.md

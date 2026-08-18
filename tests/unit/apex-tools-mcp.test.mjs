@@ -76,6 +76,7 @@ test("help lists serve / list-tools / call / status", () => {
   assert.match(r.stdout, /apex_/);
   assert.match(r.stdout, /apex_select_specs/);
   assert.match(r.stdout, /apex_carshot/);
+  assert.match(r.stdout, /apex_select_recall/);
 });
 
 test("shell help exits 0", () => {
@@ -110,7 +111,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
   assert.equal(out[0].result.serverInfo.name, "apex-tools-mcp");
   assert.ok(out[0].result.capabilities.tools);
   const names = (out[1].result.tools || []).map((t) => t.name);
-  assert.ok(names.length >= 23, names);
+  assert.ok(names.length >= 29, names);
   for (const n of names) {
     assert.match(n, /^apex_/);
     assert.doesNotMatch(n, /^chrome_/);
@@ -140,6 +141,12 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_carshot",
     "apex_wgx_shot",
     "apex_quick_validate",
+    "apex_select_recall",
+    "apex_cache_bump_only",
+    "apex_rotate_markings_check",
+    "apex_startline_snap",
+    "apex_startline_probe",
+    "apex_aero_zone_turns",
   ]) {
     assert.ok(names.includes(need), `missing ${need} in ${names}`);
   }
@@ -405,6 +412,47 @@ test("apex_carshot / apex_wgx_shot / apex_quick_validate dryRun pins", () => {
   const qvBody = JSON.parse(qv.stdout);
   assert.match(qvBody.argv.join(" "), /quick-validate\.mjs/);
   assert.ok(!qvBody.argv.some((a) => /^\d+$/.test(String(a))), qvBody.argv);
+});
+
+test("week-4 tree pins: recall / bump-only / markings / startline / aero", () => {
+  const recall = callCli("apex_select_recall", { dryRun: true });
+  assert.equal(recall.status, 0, recall.stderr);
+  assert.ok(JSON.parse(recall.stdout).argv.includes("--json"));
+
+  const bump = callCli("apex_cache_bump_only", { dryRun: true, since: "HEAD~1" });
+  assert.equal(bump.status, 0, bump.stderr);
+  const bumpBody = JSON.parse(bump.stdout);
+  assert.ok(bumpBody.argv.includes("HEAD~1"), bumpBody.argv);
+  assert.ok(bumpBody.argv.includes("--json"), bumpBody.argv);
+
+  const miss = callCli("apex_cache_bump_only", { dryRun: true });
+  assert.equal(miss.status, 1, miss.stderr);
+  assert.equal(JSON.parse(miss.stdout).error, "bad_args");
+
+  const rot = callCli("apex_rotate_markings_check", { dryRun: true });
+  assert.equal(rot.status, 0, rot.stderr);
+  const rotBody = JSON.parse(rot.stdout);
+  assert.ok(rotBody.argv.includes("--check"), rotBody.argv);
+  assert.ok(!rotBody.argv.includes("--write"), rotBody.argv);
+
+  const snap = callCli("apex_startline_snap", { dryRun: true, ids: ["monza"] });
+  assert.equal(snap.status, 0, snap.stderr);
+  const snapBody = JSON.parse(snap.stdout);
+  assert.ok(snapBody.argv.includes("--json"), snapBody.argv);
+  assert.ok(snapBody.argv.includes("monza"), snapBody.argv);
+
+  const aero = callCli("apex_aero_zone_turns", { dryRun: true, id: "monza" });
+  assert.equal(aero.status, 0, aero.stderr);
+  assert.ok(JSON.parse(aero.stdout).argv.includes("monza"));
+});
+
+test("apex_cache_bump_only live classify stays ok when the CLI exits 1", () => {
+  const r = callCli("apex_cache_bump_only", { since: "HEAD~1" }, { APEX_MCP_MOCK: "0" });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.ok, true);
+  assert.ok(body.exit === 0 || body.exit === 1, body);
+  assert.equal(typeof body.out?.pure, "boolean");
 });
 
 test("apex_quick_validate port → port_not_supported", () => {
