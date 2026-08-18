@@ -3001,7 +3001,7 @@ const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
 // CAR SETUP panel UI (js/game/setup-ui.js).
 const { buildSetup, openSetup } = SetupUI.create(G);
 // Select-screen UI (js/game/menus.js).
-const { buildSelect, updateTrackPreview, openTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
+const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
 // CAREER screen — new-career setup + season hub (js/game/career-ui.js). The rules
 // and the save live in js/game/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -7344,12 +7344,11 @@ function enableTilt() {
 }
 
 function firstGesture() {
-  GameAudio.init();
   GameAudio.setEnabled(soundOn);
   GameAudio.setMusicEnabled(musicEnabled);
   // Tilt permission is requested at race start (rs-go click), not here — so the
   // gyro prompt and button fallback don't appear on the title screen.
-  if (soundOn) GameAudio.startMusic(-1);
+  if (soundOn) { GameAudio.init(); GameAudio.startMusic(-1); }
 }
 let gestured = false;
 document.addEventListener("pointerdown", () => {
@@ -7613,7 +7612,7 @@ els.selBack.onclick = () => {
   if (soundOn) GameAudio.uiSelect();
 };
 els.selPreviewMap.onclick = openTrackDetail;
-$("track-detail-close").onclick = () => { $("track-detail").hidden = true; };
+$("track-detail-close").onclick = closeTrackDetail;
 // ── SETTINGS sub-menu ── keeps the pause screen down to RESUME/RESTART/QUIT;
 // every tuning + toggle control lives on this page. Opening it hides the pause
 // menu (one panel at a time); BACK (or resume) returns to it.
@@ -7641,7 +7640,7 @@ $("pm-settings-close").onclick = closeSettings;
 // tuners are reachable without starting a race first. closeSettings() already
 // only returns to the pause menu when actually paused, so from here it just
 // closes back to the title.
-$("mb-settings").onclick = () => { GameAudio.init(); openSettings(); };
+$("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings(); };
 // Advanced steering: opened from the settings menu, closes back to it.
 $("pm-advanced").onclick = () => { $("advanced").hidden = false; };
 $("adv-close").onclick = () => { $("advanced").hidden = true; };
@@ -8144,7 +8143,7 @@ let garageReturn = "select";
 // The one way in. Everything that opens the garage goes through here so the
 // return path can never be left stale — including menus.js, via G.openGarage.
 function openGarage(from) {
-  if (from === "menu") GameAudio.init();
+  if (from === "menu" && soundOn) GameAudio.init();
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;
   // Fresh camera every visit: a garage that reopened on the last angle someone
