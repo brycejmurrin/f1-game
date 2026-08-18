@@ -1085,6 +1085,14 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
    aero chips on touch; full --tap stays off here so the header does not reclaim
    the third of the panel the comment above documented. */
 #cs-inner[data-density="compact"] #cs-unlimited { min-height: var(--chip-h); }
+/* One-line tabs on a short sheet. The current-part line doubled the strip
+   (measured 54px / scrollWidth 1110 on 852×393) and hid half the catalogue
+   behind a sideways pan. The option list already names the fitted part. */
+#cs-inner[data-density="compact"] .cs-tab-cur { display: none; }
+#cs-inner[data-density="compact"] .cs-tab {
+  padding: calc(var(--gap) * 0.45) calc(var(--gap) * 0.8);
+  justify-content: center;
+}
 /* AND THE BUDGET BAR GOES, because it is the one thing in this header that says
    nothing the line beside it does not. "BUDGET: 600 / 600 cr remaining" is the
    same fact, exactly, in text — the bar is a glanceable for a number that is

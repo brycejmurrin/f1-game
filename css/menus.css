@@ -1462,4 +1462,17 @@ body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
   #overlay { background: var(--bg); }
   .screen.dim { background: rgba(0, 0, 0, 0.92); }
 }
+/* Pause: an opaque scrim so leftover HUD cannot read through the card. */
+#pausemenu.screen.dim {
+  background:
+    radial-gradient(80% 70% at 50% 35% in oklab,
+      color-mix(in oklab, var(--zine-magenta) 12%, transparent),
+      rgba(6, 6, 10, 0.88));
+}
+/* Docked garage: no sticker offset — the 5px magenta ate the car gap. */
+#cs-inner.sheet {
+  border-width: 1px;
+  box-shadow: var(--edge);
+}
+#cs-inner .sheet-head h2 { text-shadow: none; }
 } /* @layer components */

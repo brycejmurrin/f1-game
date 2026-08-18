@@ -776,6 +776,18 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 #pausemenu .sheet[data-density="compact"] .build-tag {
   margin: 2px 0 0;
 }
+/* Two-up secondary doors. A 420×232 card on 852×393 spent its height on four
+   full-width --tap rows; RESTART | SETTINGS share a row so RESUME stays the
+   one full-width primary and QUIT stays the one full-width destructive. */
+#pausemenu .sheet-body.stack {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--gap) * 0.6);
+}
+#pm-resume,
+#pm-quit,
+#pm-standings,
+#pm-build { grid-column: 1 / -1; }
 
 /* ---------- settings sub-menu ----------
    One category at a time. The old responsive column count made every setting
