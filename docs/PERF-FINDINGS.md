@@ -916,6 +916,23 @@ estimated.
 > **SUPERSEDED 2026-08-18.** Both scans now pre-reject before wrap (windows
 > 34.1 m and 6.5 m), same form as `pairContact`. Do not re-implement.
 
+**AI brake-look + traits allocate every physics step.** vegas
+`profile-gameloop … physics` (2026-08-18) still has `update` 24.6 %,
+`updateCar` 13.3 %, `brakeTarget` 1.4 %. The math is the look-ahead; the
+GC is not: every AI car built a fresh `samples[]` of `{d,k,bank}` rows
+(~10), plus `AiDrive.traits()` and `brakeDecision()` object literals.
+~20 cars × ~12 objects × 60 Hz ≈ 14 k short-lived objects/s, same class
+`pairContact` already left (`_ct` / `_sep`).
+
+> **TAKEN 2026-08-18.** `AiDrive.traits` / `brakeDecision` write reused
+> scratches (read-before-next-call, same as `_ct`). `beginLook` /
+> `pushLook` / `endLook` recycle the look-ahead rows. Values are
+> bit-identical; do not re-allocate those three. Left on the table:
+> `wantBoost` / `otShouldFire` / `adaptLane` call-site ctx literals in
+> `updateCar` (3–4 small objects/car, not the sample fan-out), WGX/TLX
+> whole-UBO write per `begin()` (hygiene, ~0.05 ms), WGX/TLX per-chunk
+> draws with no GLX run-merge (`glx/chunked.js` adjacent-visible merge).
+
 **`uCarReflect` is not shed with `po.reflect`.** Tier 2 sets `po.reflect = 0`
 and the source says "Tier 2 drops the wet-road SSR march" — but the SSR gate is
 `(uReflect > 0.001 || carPx > 0.3)` and `uCarReflect` keeps its 0.05 default,

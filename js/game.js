@@ -3867,17 +3867,17 @@ function updateCar(c, dt, ranked) {
     // AI: multi-sample brake target (compound corners) + soft pedal + craft
     // late-brake when a pass is on — see js/game/ai-drive.js.
     const look = clamp(c.speed * 1.7, 30, 160);
-    const samples = [];
+    AiDrive.beginLook();
     let kMax = 0;
     for (let d = 12; d < look; d += 14) {
       const ss = wrapS(c.s + d);
       const kk = Tracks.curvature(track, ss);
       const ak = Math.abs(kk);
       if (ak > kMax) kMax = ak;
-      samples.push({ d, k: kk, bank: Tracks.bankAngle(track, ss) });
+      AiDrive.pushLook(d, kk, Tracks.bankAngle(track, ss));
     }
     const br = AiDrive.brakeDecision({
-      traits: aiT, samples, latMax: LAT_MAX, brake: BRAKE, grip: gripMult(),
+      traits: aiT, samples: AiDrive.endLook(), latMax: LAT_MAX, brake: BRAKE, grip: gripMult(),
       speed: c.speed, blocker: !!blocker, blockerGap,
       blockerSpeed: blocker ? blocker.speed : 0,
       roomL, roomR,
