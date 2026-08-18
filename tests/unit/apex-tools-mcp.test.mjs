@@ -1,6 +1,6 @@
 // apex-tools-mcp.test.mjs — week-1 apex-tools MCP (local CLI wrap).
 // APEX_MCP_MOCK=1 / dryRun only — no Chromium, no network.
-import { test } from "node:test";
+import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -99,7 +99,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
   assert.equal(out[0].result.serverInfo.name, "apex-tools-mcp");
   assert.ok(out[0].result.capabilities.tools);
   const names = (out[1].result.tools || []).map((t) => t.name);
-  assert.ok(names.length >= 6, names);
+  assert.ok(names.length >= 14, names);
   for (const n of names) {
     assert.match(n, /^apex_/);
     assert.doesNotMatch(n, /^chrome_/);
@@ -112,6 +112,14 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_pick_tests",
     "apex_bump_cache_check",
     "apex_status",
+    "apex_eval",
+    "apex_shot",
+    "apex_survey_track",
+    "apex_gfx_probe",
+    "apex_wgx_validate",
+    "apex_wgx_capture",
+    "apex_ui_survey",
+    "apex_agent",
   ]) {
     assert.ok(names.includes(need), `missing ${need} in ${names}`);
   }
@@ -221,4 +229,176 @@ test("serve stdout is JSON-RPC only (no log lines)", () => {
   for (const line of r.stdout.split("\n").filter(Boolean)) {
     assert.doesNotThrow(() => JSON.parse(line), `non-JSON stdout: ${line.slice(0, 120)}`);
   }
+});
+
+const UI_SCREENS = "title,select,garage,settings,career,datahub";
+const UI_VIEWPORTS = "ios-iphone-landscape";
+const LOCK = path.join(ROOT, "scratch", "apex-browser.lock");
+const TEST_BG = path.join(ROOT, "artifacts", "logs", "test-bg.json");
+
+test("playwright occupancy matches `playwright test` tokens, not MCP JSON", () => {
+  const src = fs.readFileSync(MCP, "utf8");
+  assert.doesNotMatch(src, /playwright\.\*test/);
+  assert.match(src, /playwright\\s\+test/);
+});
+
+test("apex_ui_survey dryRun freezes the alias recipe and never --url", () => {
+  const r = callCli("apex_ui_survey", { dryRun: true });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.ok, true);
+  const argv = body.argv.join(" ");
+  assert.match(argv, /ui-survey\.mjs/);
+  assert.ok(body.argv.includes(`--screens=${UI_SCREENS}`), body.argv);
+  assert.ok(body.argv.includes(`--viewports=${UI_VIEWPORTS}`), body.argv);
+  assert.ok(body.argv.includes("--jobs=1"), body.argv);
+  assert.ok(!body.argv.includes("--url"), body.argv);
+});
+
+test("apex_ui_survey refuses caller flags that widen the matrix", () => {
+  const r = callCli("apex_ui_survey", { dryRun: true, jobs: 4 });
+  assert.equal(r.status, 1, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "recipe_frozen");
+});
+
+test("apex_wgx_validate dryRun is live Dawn argv, never --static", () => {
+  const r = callCli("apex_wgx_validate", { dryRun: true, track: "montreal", lite: true });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.ok(body.argv.includes("montreal"), body.argv);
+  assert.ok(body.argv.includes("--lite"), body.argv);
+  assert.ok(!body.argv.includes("--static"), body.argv);
+  assert.ok(!body.argv.includes("--url"), body.argv);
+});
+
+test("browser tool target=deploy → local_only", () => {
+  const r = callCli("apex_eval", { track: "monza", expr: "a.info()", target: "deploy", dryRun: true });
+  assert.equal(r.status, 1, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.error, "local_only");
+});
+
+test("browser tool github.io url → github_io_blocked (no fetch)", () => {
+  const r = callCli("apex_shot", {
+    track: "monza",
+    url: "https://brycejmurrin.github.io/f1-game/",
+    dryRun: true,
+  });
+  assert.equal(r.status, 1, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.error, "github_io_blocked");
+});
+
+test("browser tool loopback url → url_not_supported in v1", () => {
+  const r = callCli("apex_eval", {
+    track: "monza",
+    url: "http://127.0.0.1:3456/",
+    dryRun: true,
+  });
+  assert.equal(r.status, 1, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.error, "url_not_supported");
+});
+
+describe("occupancy", { concurrency: 1 }, () => {
+test("week-1 tools do not take or refuse the browser lock", () => {
+  fs.mkdirSync(path.dirname(LOCK), { recursive: true });
+  fs.writeFileSync(LOCK, JSON.stringify({ pid: process.pid, tool: "test", since: Date.now() }));
+  try {
+    const r = callCli("apex_pick_tests", { dryRun: true });
+    assert.equal(r.status, 0, r.stderr);
+    const body = JSON.parse(r.stdout);
+    assert.equal(body.ok, true);
+  } finally {
+    try { fs.unlinkSync(LOCK); } catch { /* ignore */ }
+  }
+});
+
+test("week-2 dryRun refuses lock_held by a live PID (no Chromium)", () => {
+  fs.mkdirSync(path.dirname(LOCK), { recursive: true });
+  fs.writeFileSync(LOCK, JSON.stringify({ pid: process.pid, tool: "test", since: Date.now() }));
+  try {
+    const r = callCli("apex_eval", { track: "monza", expr: "1", dryRun: true }, { APEX_MCP_MOCK: "0" });
+    assert.equal(r.status, 1, r.stderr);
+    const body = JSON.parse(r.stdout);
+    assert.equal(body.error, "lock_held");
+    assert.ok(body.fix);
+  } finally {
+    try { fs.unlinkSync(LOCK); } catch { /* ignore */ }
+  }
+});
+
+test("week-2 dryRun steals a stale lock (dead PID)", () => {
+  fs.mkdirSync(path.dirname(LOCK), { recursive: true });
+  fs.writeFileSync(LOCK, JSON.stringify({ pid: 999999999, tool: "dead", since: 1 }));
+  try {
+    const r = callCli("apex_eval", { track: "monza", expr: "1", dryRun: true }, { APEX_MCP_MOCK: "0" });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const body = JSON.parse(r.stdout);
+    assert.equal(body.ok, true);
+    assert.ok(!fs.existsSync(LOCK), "stale lock must be reaped");
+  } finally {
+    try { fs.unlinkSync(LOCK); } catch { /* ignore */ }
+  }
+});
+
+test("week-2 dryRun refuses playwright_live from test-bg.json (no Chromium)", () => {
+  fs.mkdirSync(path.dirname(TEST_BG), { recursive: true });
+  let prev = null;
+  if (fs.existsSync(TEST_BG)) prev = fs.readFileSync(TEST_BG, "utf8");
+  fs.writeFileSync(TEST_BG, JSON.stringify({ mode: "test", runs: [{ pid: process.pid, group: "tiny" }] }));
+  try {
+    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0" });
+    assert.equal(r.status, 1, r.stderr);
+    const body = JSON.parse(r.stdout);
+    assert.equal(body.error, "playwright_live");
+  } finally {
+    if (prev == null) {
+      try { fs.unlinkSync(TEST_BG); } catch { /* ignore */ }
+    } else {
+      fs.writeFileSync(TEST_BG, prev);
+    }
+  }
+});
+
+test("week-2 dryRun refuses chrome_daemon_up when /healthz answers", async () => {
+  // Server MUST be a sibling process. spawnSync(MCP) blocks this event loop,
+  // so an in-process http.Server cannot answer the occupancy probe.
+  const { spawn } = await import("node:child_process");
+  const child = spawn(
+    process.execPath,
+    [
+      "-e",
+      `require("http").createServer((req,res)=>{if(req.url==="/healthz"){res.writeHead(200);res.end("ok")}else{res.writeHead(404);res.end()}}).listen(0,"127.0.0.1",function(){process.stdout.write(String(this.address().port))})`,
+    ],
+    { stdio: ["ignore", "pipe", "pipe"] },
+  );
+  const port = await new Promise((resolve, reject) => {
+    let buf = "";
+    const t = setTimeout(() => reject(new Error(`no port: ${buf}`)), 5000);
+    child.stdout.on("data", (chunk) => {
+      buf += chunk;
+      if (/^\d+$/.test(buf.trim())) {
+        clearTimeout(t);
+        resolve(Number(buf.trim()));
+      }
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => reject(new Error(`healthz child exited ${code}`)));
+  });
+  try {
+    const r = callCli(
+      "apex_eval",
+      { track: "monza", expr: "1", dryRun: true },
+      { APEX_MCP_MOCK: "0", PROBE_CHROME_PORT: String(port) },
+    );
+    assert.equal(r.status, 1, r.stderr + r.stdout);
+    const body = JSON.parse(r.stdout);
+    assert.equal(body.error, "chrome_daemon_up");
+  } finally {
+    child.kill();
+  }
+});
 });

@@ -5,8 +5,9 @@ working tree**. Skills stay in `.claude/skills/`. This is the machine
 interface so agents stop re-learning flags.
 
 Does **not** replace Chrome DevTools or TinyFish. Does **not** extend
-`tools/probe-mcp.py`. **Week-1 implemented** (`tools/apex-tools-mcp.mjs` +
-`.sh`); week-2 browser tools + lock still open.
+`tools/probe-mcp.py`. **Week-1 + week-2 catalog implemented**
+(`tools/apex-tools-mcp.mjs` + `.sh`). Live Chromium is occupancy-gated;
+CI covers mock/`dryRun` only.
 
 Sources: this session’s tool inventory and MCP wrap design. Stdio MCP is
 JSON-RPC on stdin/stdout; log only on stderr.
