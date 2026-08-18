@@ -1463,7 +1463,7 @@ const api = {
       // Defaults match AiDrive.traits mid-grid fallback (0.75), not 0.
       craft: +(c.craft != null ? c.craft : 0.75).toFixed(3),
       awareness: +(c.awareness != null ? c.awareness : 0.75).toFixed(3),
-      experience: +(c.experience != null ? c.experience : 0.75).toFixed(3),
+      experience: +(c.experience != null ? c.experience : 0.75).toFixed(3), consistency: +(c.consistency != null ? c.consistency : 0.75).toFixed(3),
       lane: +(c.lane != null ? c.lane : 0).toFixed(3),
       // AI intent peek — kinematic cars only. stuckT > AiDrive.stuckThreshold
       // is what flips unstuck; deploying is the live ERS/OT thrust flag.

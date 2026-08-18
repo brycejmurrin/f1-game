@@ -69,9 +69,9 @@ lose. `Parts.aeroLoad(setup, team)` reads the resolved aero option's own
 `cornering` and normalises it against the catalog's span (0 = `minimal`,
 1 = `ground_effect`; derived from the catalog, so a new option re-scales the axis
 rather than clipping). The car carries it as `c.aeroLoad`, and each constant
-became a `_LO`/`_HI` pair interpolated by it. **A car with no parts — every AI —
-sits at the midpoint**, so the grid is one well-defined thing rather than
-whatever the catalog default is this month. Measured end to end:
+became a `_LO`/`_HI` pair interpolated by it. AI cars now carry their works
+`FACTORY_PRESETS` load (Williams low-drag vs McLaren flex). A car that still
+has no resolved setup falls back to 0.5 via `aeroLoadOf`. Measured end to end:
 
 | aero part | load | top speed | downforce given up | net grip at 70 m/s |
 |---|---|---|---|---|

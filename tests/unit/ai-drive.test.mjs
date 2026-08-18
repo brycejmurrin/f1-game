@@ -32,6 +32,7 @@ test("traits defaults match the mid-grid fallback", () => {
   assert.equal(t.craft, 0.75);
   assert.equal(t.awareness, 0.75);
   assert.equal(t.experience, 0.75);
+  assert.equal(t.consistency, 0.75);
 });
 
 test("traits writes a reused scratch (read before the next call)", () => {
@@ -267,6 +268,50 @@ test("otPull and defendPull: streets use an open gap, not an Armco dive", () => 
   assert.ok(dPerm < 0, `permanent cover inside (k>0 → -x), got ${dPerm}`);
   assert.ok(Math.abs(dStreet) < Math.abs(dPerm));
   assert.equal(A.defendPull({ ...cover, street: true, roomL: 1.5 }), 0);
+});
+
+test("houseStyle: Mercedes attacks more than Cadillac; missing stats are neutral", () => {
+  const mer = { stats: { speed: 96, accel: 91, cornering: 93, braking: 90 } };
+  const cad = { stats: { speed: 73, accel: 73, cornering: 73, braking: 72 } };
+  const mcl = { stats: { speed: 93, accel: 94, cornering: 96, braking: 91 } };
+  assert.equal(A.houseStyle({}).attack, 0);
+  assert.equal(A.houseStyle({}).hold, 0);
+  const merH = Object.assign({}, A.houseStyle(mer));
+  const cadH = Object.assign({}, A.houseStyle(cad));
+  const mclH = Object.assign({}, A.houseStyle(mcl));
+  assert.ok(merH.attack > cadH.attack, `mercedes attack ${merH.attack} vs cadillac ${cadH.attack}`);
+  assert.ok(mclH.hold > cadH.hold, "McLaren cornering/braking should hold more");
+  const midOpen = {
+    traits: mid, blockerGap: 5, gapAhead: 5, roomL: 3, roomR: 2,
+    speed: 58, aheadSpeed: 54, kAhead: 0.002, street: false,
+  };
+  const rMer = A.otFireRate({ ...midOpen, team: mer });
+  const rCad = A.otFireRate({ ...midOpen, team: cad });
+  const rNone = A.otFireRate(midOpen);
+  assert.ok(rMer > rNone && rNone > rCad, `OT mer ${rMer} none ${rNone} cad ${rCad}`);
+  const openOt = {
+    traits: ace, speed: 58, blockerSpeed: 52, blockerGap: 8,
+    roomL: 1.2, roomR: 3.4, street: false,
+  };
+  assert.ok(A.otPull({ ...openOt, team: mer }) > A.otPull(openOt));
+  assert.ok(A.followPad(ace, false, mcl) > A.followPad(ace, false),
+    "hold-car teams leave a wider follow pad");
+});
+
+test("consistency widens the brake band without moving the mid default", () => {
+  const samples = [{ d: 40, k: 0.02, bank: 0 }];
+  const base = { traits: mid, samples, latMax: 22, brake: 22, grip: 1 };
+  const lim = A.brakeTarget(base);
+  const midDec = Object.assign({}, A.brakeDecision({ ...base, speed: lim + 4 }));
+  const rookDec = Object.assign({}, A.brakeDecision({
+    ...base, traits: { ...mid, consistency: 0.2 }, speed: lim + 4,
+  }));
+  const aceDec = Object.assign({}, A.brakeDecision({
+    ...base, traits: { ...mid, consistency: 1 }, speed: lim + 4,
+  }));
+  assert.equal(midDec.braking, true);
+  assert.ok(rookDec.brakeLvl < midDec.brakeLvl, "rookie eases in later");
+  assert.ok(aceDec.brakeLvl > midDec.brakeLvl, "ace commits sooner");
 });
 
 test("adaptLane on streets will not crawl toward a tight wall", () => {

@@ -23,7 +23,8 @@ copy those stats. Measured:
 | `standard` | 0.22 / 0.29 | 4.3 s | 5.9 s | 3.6 s / 12.9 s |
 | `overcharge` | 1.00 / 1.00 | 7.1 s | 4.0 s | 5.2 s / 9.0 s |
 
-A car with no parts — every AI — sits at the midpoint of both axes.
+AI cars use the team's `FACTORY_PRESETS` aero/ERS (SIGNATURE equivalents
+already differ). A car with no resolved setup still sits at the midpoint.
 `physState()` reports `ersDeploy`, `ersRegen`, `drain`, `regen`, `otTime`,
 `otCool`.
 

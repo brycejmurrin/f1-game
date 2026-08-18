@@ -16,6 +16,7 @@
      • slow adaptive preferred-lane nudge from traffic density
      • street vs permanent boxed/min-gap/racing-line mix (pack seating)
      • street tow / queue-brake / OT+defend pull / sep clamp / player mass
+     • team houseStyle (from team.stats) + consistency brake band
 
    WHAT STAYS IN game.js
      • the O(n) traffic scan (roomL/R, blocker, tow, chaser)
@@ -31,13 +32,31 @@ const AiDrive = (function () {
   // ── ratings on the car (0..1), with the mid-grid default the old code used ──
   // Reused scratch — same contract as game.js pairContact/_ct. Callers must
   // read fields before the next traits() call (updateCar does; tests do).
-  const _traits = { craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97 };
+  const _traits = { craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97, consistency: 0.75 };
   function traits(c) {
     _traits.craft = c.craft != null ? c.craft : 0.75;
     _traits.awareness = c.awareness != null ? c.awareness : 0.75;
     _traits.experience = c.experience != null ? c.experience : 0.75;
     _traits.skill = c.skill != null ? c.skill : 0.97;
+    _traits.consistency = c.consistency != null ? c.consistency : 0.75;
     return _traits;
+  }
+
+  // Team house style from the already-authored team.stats (garage 0..100).
+  // Midfield mean is ~85; ±25 covers Mercedes..Cadillac. attack = straight-line
+  // hunger (OT / ERS / dive); hold = park-the-car (follow / defend / bank).
+  // Missing stats → 0,0 so existing unit tests that omit `team` stay bit-identical.
+  const _house = { attack: 0, hold: 0 };
+  function houseStyle(team) {
+    const s = team && team.stats;
+    if (!s) { _house.attack = 0; _house.hold = 0; return _house; }
+    _house.attack = clamp(((s.speed + s.accel) * 0.5 - 85) / 25, -1, 1);
+    _house.hold = clamp(((s.cornering + s.braking) * 0.5 - 85) / 25, -1, 1);
+    return _house;
+  }
+  function houseMul(team, lo, hi, axis) {
+    const h = houseStyle(team);
+    return lerp(lo, hi, ((axis === "hold" ? h.hold : h.attack) + 1) * 0.5);
   }
 
   // Look-ahead sample pool for updateCar's brake scan. beginLook/pushLook/endLook
@@ -61,8 +80,8 @@ const AiDrive = (function () {
 
   // Following gap added to followBase(). Aware drivers leave space. Streets
   // use a smaller pad so a 22-car train does not accordion 14 m deep.
-  function followPad(t, street) {
-    const pad = lerp(-0.8, 2.2, t.awareness);
+  function followPad(t, street, team) {
+    const pad = lerp(-0.8, 2.2, t.awareness) * houseMul(team, 0.92, 1.08, "hold");
     return street ? pad * 0.5 : pad;
   }
 
@@ -145,7 +164,8 @@ const AiDrive = (function () {
     const craftMul = lerp(0.45, 1.55, t.craft);
     const awareMul = lerp(1.25, 0.7, t.awareness);     // careful = slower to pull the trigger
     const expMul = lerp(0.75, 1.15, t.experience);      // rookies hesitate
-    return clamp(0.55 * situ * craftMul * awareMul * expMul, 0.08, 2.4);
+    const house = houseMul(ctx.team, 0.88, 1.12, "attack");
+    return clamp(0.55 * situ * craftMul * awareMul * expMul * house, 0.08, 2.4);
   }
 
   // roll is the caller's simRnd() — only invoke when otArmed (short-circuit).
@@ -167,10 +187,13 @@ const AiDrive = (function () {
     if (!straight) return false;
     const catching = !!(ctx.towCar && ctx.towGap < 28 && (ctx.speed || 0) >= (ctx.towSpeed || 0) - 1);
     const defending = !!(ctx.chaser && ctx.chaserGap < 14 && (ctx.chaserSpeed || 0) > (ctx.speed || 0) - 2);
-    const rich = energy > 0.55;  // straight already required above
+    const hs = houseStyle(ctx.team);
+    const rich = energy > (0.55 - hs.attack * 0.08);  // attack teams spend earlier
     const desperate = energy > 0.25 && catching;
     // Awareness banks charge: low-awareness drivers still dump early (old feel).
-    const bank = ctx.traits.awareness > 0.8 && energy < 0.4 && !catching && !defending;
+    // Hold-car teams (high corner/brake stats) bank a little sooner.
+    const bank = ctx.traits.awareness > (0.8 - hs.hold * 0.08)
+      && energy < (0.4 - hs.hold * 0.05) && !catching && !defending;
     if (bank) return false;
     return desperate || defending || rich || (energy > 0.25 && straight && ctx.traits.awareness < 0.55);
   }
@@ -202,7 +225,7 @@ const AiDrive = (function () {
     const attacking = !!(ctx.blocker && ctx.blockerGap < 16 && (ctx.speed || 0) > (ctx.blockerSpeed || 0) - 1);
     const room = Math.max(ctx.roomL || 0, ctx.roomR || 0);
     if (attacking && room > 1.6) {
-      vLim *= lerp(1.0, 1.07, t.craft);
+      vLim *= lerp(1.0, 1.07, t.craft) * houseMul(ctx.team, 0.99, 1.03, "attack");
     }
     return vLim;
   }
@@ -212,8 +235,11 @@ const AiDrive = (function () {
     const vLim = brakeTarget(ctx);
     const speed = ctx.speed || 0;
     const excess = speed - vLim;
-    // Soft band: start easing at +1 m/s, full pedal by +7 m/s (was binary at +2).
-    const soft = 1, full = 7;
+    // Soft band: start easing at +1 m/s, full pedal by +7 m/s at mid consistency.
+    // Low consistency widens the band (messy); high snaps onto the mark. d=0
+    // at the 0.75 default so existing brakeDecision tests stay bit-identical.
+    const d = (ctx.traits.consistency != null ? ctx.traits.consistency : 0.75) - 0.75;
+    const soft = 1 - d * 0.8, full = 7 - d * 2;
     let brakeLvl = 0;
     let braking = false;
     if (excess > soft) {
@@ -260,12 +286,13 @@ const AiDrive = (function () {
     if (gap >= (street ? 14 : 16)) return 0;
     const side = (ctx.roomR || 0) >= (ctx.roomL || 0) ? 1 : -1;
     const need = side > 0 ? (ctx.roomR || 0) : (ctx.roomL || 0);
+    const house = houseMul(ctx.team, 0.90, 1.12, "attack");
     if (street) {
       return side * lerp(0.7, 2.35, clamp(1 - gap / 14, 0, 1))
-        * clamp(need / 2.3, 0, 1) * streetOtScale(t);
+        * clamp(need / 2.3, 0, 1) * streetOtScale(t) * house;
     }
     return side * lerp(0.8, 2.6, clamp(1 - gap / 16, 0, 1))
-      * clamp(need / 2.2, 0, 1) * lerp(0.75, 1.3, t.craft);
+      * clamp(need / 2.2, 0, 1) * lerp(0.75, 1.3, t.craft) * house;
   }
 
   // Inside-line cover when a chaser is close and a corner is coming.
@@ -279,7 +306,8 @@ const AiDrive = (function () {
     const coverRoom = coverSide > 0 ? (ctx.roomR || 0) : (ctx.roomL || 0);
     if (ctx.street && coverRoom < 2.2) return 0;
     const mag = lerp(0.2, 1.1, ctx.traits.craft)
-      * clamp(1 - ctx.chaserGap / 12, 0, 1) * clamp(coverRoom / 2, 0, 1);
+      * clamp(1 - ctx.chaserGap / 12, 0, 1) * clamp(coverRoom / 2, 0, 1)
+      * houseMul(ctx.team, 0.90, 1.12, "hold");
     return coverSide * (ctx.street ? mag * 0.45 : mag);
   }
 
@@ -328,7 +356,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    traits, stuckThreshold, followPad, followBase, towGain, queueBrake, sepClamp,
+    traits, houseStyle, stuckThreshold, followPad, followBase, towGain, queueBrake, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, brakeTarget, brakeDecision, adaptLane, otPull,
     defendPull, isBoxed, minLatGap, racingLineMix, wallHitLoss, wallSteerScrub,

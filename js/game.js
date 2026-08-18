@@ -1533,9 +1533,8 @@ function driverSkill(team, d, di) {
   // career.spec.js depend on.
   return {
     skill: DriverRatings.skill(r, roll),
-    craft: (r.craft || 75) / 100,
-    awareness: (r.awareness || 75) / 100,
-    experience: (r.experience || 75) / 100,
+    craft: (r.craft || 75) / 100, awareness: (r.awareness || 75) / 100,
+    experience: (r.experience || 75) / 100, consistency: (r.consistency || 75) / 100,
   };
 }
 
@@ -1600,11 +1599,11 @@ function makeCars() {
         // Per-car performance multipliers (human cars only — see modsFor).
         // startRace()'s recomputePlayerMods() refreshes the local player's.
         mods: isP ? modsFor(team, getTeamParts(team.id)) : null,
-        // Only a human car carries parts, so only a human car has a wing size;
-        // an AI stays at the midpoint of every active-aero span (aeroLoadOf).
-        aeroLoad: isP ? Parts.aeroLoad(getTeamParts(team.id), team) : null,
-        ersDeploy: isP ? Parts.ersProfile(getTeamParts(team.id), team).deploy : null,
-        ersRegen: isP ? Parts.ersProfile(getTeamParts(team.id), team).regen : null,
+        // AI runs the works wing/ERS (SIGNATURE equivalents already differ).
+        // MY TEAM + hire share the saved build; everyone else uses factory.
+        aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team) : Parts.aeroLoad(factoryParts.setup, team),
+        ersDeploy: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).deploy : Parts.ersProfile(factoryParts.setup, team).deploy,
+        ersRegen: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).regen : Parts.ersProfile(factoryParts.setup, team).regen,
         color: team.color, tier: team.tier, seat: di,
         // Baked once here rather than looked up per physics step. Career team
         // development rides along in the same number the tier always contributed,
@@ -3785,7 +3784,7 @@ function updateCar(c, dt, ranked) {
         traits: aiT, energy: c.energy, otActive: c.otT > 0,
         kAhead60: Tracks.curvature(track, wrapS(c.s + 60)),
         towCar: !!towCar, towGap, towSpeed: towCar ? towCar.speed : 0, speed: c.speed,
-        chaser: !!chaser, chaserGap, chaserSpeed: chaser ? chaser.speed : 0,
+        chaser: !!chaser, chaserGap, chaserSpeed: chaser ? chaser.speed : 0, team: c.team,
       })))
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
@@ -3832,7 +3831,7 @@ function updateCar(c, dt, ranked) {
                           roomL, roomR, speed: c.speed,
                           aheadSpeed: blocker ? blocker.speed : (ahead ? ahead.speed : c.speed),
                           kAhead: Tracks.curvature(track, wrapS(c.s + 40)),
-                          street: !!track.street,
+                          street: !!track.street, team: c.team,
                         }));
   if (fire && c.otArmed) {
     c.otT = otTimeFor(c); c.otCool = otCoolFor(c) + c.otT;
@@ -3883,7 +3882,7 @@ function updateCar(c, dt, ranked) {
       traits: aiT, samples: AiDrive.endLook(), latMax: LAT_MAX, brake: BRAKE, grip: gripMult(),
       speed: c.speed, blocker: !!blocker, blockerGap,
       blockerSpeed: blocker ? blocker.speed : 0,
-      roomL, roomR,
+      roomL, roomR, team: c.team,
     });
     braking = br.braking;
     brakeLvl = br.brakeLvl;
@@ -3900,7 +3899,7 @@ function updateCar(c, dt, ranked) {
     // cap our pace to it, braking if closing fast, so we tuck behind not ram.
     // Streets tuck at followBase 8 m (was 12). Awareness pads (AiDrive.followPad).
     if (blocker && blockerGap < 16) {
-      const follow = AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street);
+      const follow = AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street, c.team);
       vmax = Math.min(vmax, blocker.speed + clamp(blockerGap - follow, -6, 8));
       const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street);
       if (qb) { braking = true; brakeLvl = qb; }
@@ -4131,14 +4130,14 @@ function updateCar(c, dt, ranked) {
     // inside-room on streets). Tow is no longer permanent-only.
     if (blocker) {
       overtake = AiDrive.otPull({
-        street: !!track.street, traits: aiT, speed: c.speed,
+        street: !!track.street, traits: aiT, speed: c.speed, team: c.team,
         blockerSpeed: blocker.speed, blockerGap, roomL, roomR,
       });
     }
     let defend = 0;
     if (chaser && !blocker) {
       defend = AiDrive.defendPull({
-        street: !!track.street, traits: aiT, speed: c.speed, chaser: true,
+        street: !!track.street, traits: aiT, speed: c.speed, team: c.team, chaser: true,
         chaserGap, chaserSpeed: chaser.speed, kA, roomL, roomR,
       });
     }
