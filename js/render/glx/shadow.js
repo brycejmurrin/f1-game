@@ -208,7 +208,7 @@ const GLXShadow = (function () {
     }
 
     function castShadow(mesh, model) {
-      if (!S.depthPassOn || !mesh) return;
+      if ((core.ctxGone && core.ctxGone()) || !S.depthPassOn || !mesh) return;
       bindVAO(mesh.vao);
       gl.uniformMatrix4fv(S.depthU.uModel, false, model);
       gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
@@ -331,6 +331,7 @@ const GLXShadow = (function () {
     }
 
     S.enabled = setup();
+    Log.info("gfx", "GLX shadow init on=" + (S.enabled ? 1 : 0));
     return S;
   }
 

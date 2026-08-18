@@ -94,7 +94,7 @@ const CLASS_CEILING = 537;
 // numbers are stale the moment they meet.
 // 1160 = category-based Settings navigation: four tab buttons, a dedicated
 // performance panel, and its small semantic wrappers. Still well below 1,400.
-const NODE_CEILING = 1160;
+const NODE_CEILING = 1161;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for js/game/perf-try.js (renderer
@@ -117,6 +117,8 @@ const NODE_CEILING = 1160;
 // id scoping a class that already existed.
 // 1140 (deploy) + 12 = 1152, still far under the ~1,400 error band the
 // keep-the-monolith ruling rests on.
+// +1 2026-08-18: <script> for js/game/metrics.js (SETTINGS METRICS overlay).
+// The button and <pre> are injected at runtime — the tag is the whole +1.
 
 test("the distinct CSS class count is not growing unnoticed", () => {
   const n = classTokens().size;

@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -51,11 +52,62 @@ test("RENDERER picker lives in gfx-quality.js and always names WEBGPU", () => {
   assert.doesNotMatch(read("js/game.js"), /getElementById\("pm-renderer"\)|\$\("pm-renderer"\)/);
 });
 
-test("TLX pins WebKit (Safari Mac + iOS) to three's WebGL2 backend", () => {
+test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", () => {
   const src = read("js/render/three/tlx.js");
   assert.match(src, /isWebKit/);
-  assert.match(src, /forceWebGL = _glPin === "1" \? true : _glPin === "0" \? false : !!\(isMobile \|\| isWebKit\)/);
+  assert.match(src, /apex26\.tlxAutoGL/);
+  assert.match(src, /_autoStayGL/);
+  assert.match(src, /forceWebGL = _glPin === "1" \|\| \(_glPin !== "0" && \(!_hasGpu \|\| _autoStayGL\)\)/);
+  assert.match(src, /async function bootRenderer/);
+  assert.match(src, /AUTO WebGPU init failed — three WebGL2/);
+  assert.match(src, /AUTO stayed on three WebGL2/);
+  assert.match(src, /outputType:\s*THREE\.UnsignedByteType/);
+  assert.match(src, /powerPreference:\s*"low-power"/);
+  assert.match(src, /infoBlob = \[dev, ven, arch, desc\]/);
   assert.match(read("js/render/three/tsl-lit.js"), /cubeTexture\(envCubeNode, Rg, rough\.mul\(2\.5\)\)/);
+});
+
+test("GLX createTexMesh / createTexture / draws fail closed when the context is lost", () => {
+  const glx = read("js/render/glx.js");
+  const chunked = read("js/render/glx/chunked.js");
+  const shadow = read("js/render/glx/shadow.js");
+  assert.match(glx, /function createMesh\(data\) \{\n\s+if \(ctxGone\(\)\) return null;/);
+  assert.match(glx, /function createTexMesh\(data\) \{\n\s+if \(ctxGone\(\)\) return null;/);
+  assert.match(glx, /function createTexture\(src\) \{\n\s+if \(ctxGone\(\)\) return null;/);
+  assert.match(glx, /function createTextureArray\(size, images, layers\) \{\n\s+if \(ctxGone\(\) \|\| !size \|\| !images\) return null;/);
+  assert.match(glx, /function drawDecal\([\s\S]{0,80}if \(ctxGone\(\)/);
+  assert.match(glx, /function drawInstanced\([\s\S]{0,80}if \(ctxGone\(\)/);
+  assert.match(glx, /function drawShadow\([\s\S]{0,40}if \(ctxGone\(\)/);
+  assert.match(glx, /function drawMark\([\s\S]{0,40}if \(ctxGone\(\)/);
+  assert.match(glx, /function drawSkidBatch\([\s\S]{0,40}if \(ctxGone\(\)/);
+  assert.match(glx, /function drawGlow\([\s\S]{0,60}if \(ctxGone\(\)/);
+  assert.match(glx, /function drawParticles\([\s\S]{0,80}if \(ctxGone\(\)/);
+  assert.match(glx, /core = \{[\s\S]{0,80}ctxGone,/);
+  assert.match(chunked, /core\.ctxGone\(\)\) \|\| !mesh/);
+  assert.match(shadow, /core\.ctxGone\(\)\) \|\| !S\.depthPassOn \|\| !mesh/);
+});
+
+test("TLX hoists crack fwidth and MAT samples before the detail/live If (WGSL derivative_uniformity)", () => {
+  const lit = read("js/render/three/tsl-lit.js");
+  const at = lit.indexOf("const cr = abs(vnoise(wp.xz");
+  const gate = lit.indexOf("If(matU.detail.greaterThan(0.0)", at);
+  assert.ok(at > 0 && gate > at, "fwidth(cr) must be taken before the detail If");
+  assert.match(lit.slice(at, gate + 40), /fwidth\(cr\)/);
+  const nSamp = lit.indexOf("const nt = matNormalNode.sample(uv)");
+  const nAfter = lit.indexOf("If(live.and(fade.greaterThan(0.005))", nSamp);
+  assert.ok(nSamp > 0 && nAfter > nSamp, "MAT normal sample must sit before the live/fade If");
+  const aSamp = lit.indexOf("const t = matAlbedoNode.sample(uv)");
+  const aAfter = lit.indexOf("If(live.and(far.greaterThan(0.001))", aSamp);
+  assert.ok(aSamp > 0 && aAfter > aSamp, "MAT albedo sample must sit before the live/far If");
+});
+
+test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
+  const fx = read("js/render/three/tsl-fx.js");
+  const start = fx.indexOf("if (decalCache.size >= DECAL_CACHE_CAP)");
+  const evict = fx.slice(start, fx.indexOf("m = fxMaterial({ doubleSided: true, key: \"tlx-fx-decal-\"", start));
+  assert.match(evict, /decalCache\.delete\(k\)/);
+  const code = evict.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  assert.doesNotMatch(code, /\.dispose\s*\(/);
 });
 
 test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", () => {
@@ -152,6 +204,7 @@ test("TLX material-map ownership keeps placeholders and reports pack state", () 
 test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgpu", () => {
   const src = read("js/game/gfx-quality.js");
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });
+  seedLog(ctx);
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
   assert.equal(G.nextBackend("webgl2"), "three");
@@ -160,7 +213,7 @@ test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgp
   assert.equal(G.prevBackend("webgl2"), "webgpu");
   assert.equal(G.prevBackend("webgpu"), "three");
   assert.equal(G.prevBackend("three"), "webgl2");
-  assert.equal(G.backendLabel("three"), "THREE");
+  assert.equal(G.backendLabel("three"), "THREE.JS");
   assert.equal(G.backendLabel("webgpu"), "WEBGPU");
 });
 
@@ -198,6 +251,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.perChunkOff": "1",
     "apex26.tlxForceGL": "0",
     "apex26.tlxViz": "lit",
+    "apex26.wgxCapture": "1",
     "apex26.gfxHigh": "1",
     "apex26.uiScale": "110",
   });
@@ -205,8 +259,11 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxClaimFail": "1",
     "apex26.gfxBound": "webgl2",
     "apex26.ctxLostReloads": "2",
+    "apex26.wgxCapture": "0",
+    "apex26.tlxAutoGL": "1",
   });
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: ls, sessionStorage: ss });
+  seedLog(ctx);
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
   assert.ok(G.RENDERER_LS_KEYS.includes("apex26.gfxBackend"));
@@ -214,6 +271,9 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   assert.ok(G.RENDERER_LS_KEYS.includes("apex26.envProbeOff"), "context-loss latches are renderer crash state");
   assert.ok(G.RENDERER_LS_KEYS.includes("apex26.perChunkOff"));
   assert.ok(G.RENDERER_SS_KEYS.includes("apex26.ctxLostReloads"));
+  assert.ok(G.RENDERER_LS_KEYS.includes("apex26.wgxCapture"), "SCREENSHOTS pref is renderer state");
+  assert.ok(G.RENDERER_SS_KEYS.includes("apex26.wgxCapture"));
+  assert.ok(G.RENDERER_SS_KEYS.includes("apex26.tlxAutoGL"), "AUTO stay-GL latch is renderer state");
   assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
   const removed = G.clearRendererStorage();
   assert.ok(removed.includes("apex26.gfxBackend"));
@@ -225,11 +285,14 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   assert.equal(ls.getItem("apex26.perChunkOff"), null);
   assert.equal(ls.getItem("apex26.tlxForceGL"), null);
   assert.equal(ls.getItem("apex26.tlxViz"), null);
+  assert.equal(ls.getItem("apex26.wgxCapture"), null);
+  assert.equal(ss.getItem("apex26.wgxCapture"), null);
   assert.equal(ls.getItem("apex26.gfxHigh"), "1", "mobile GRAPHICS: ULTRA bit must survive");
   assert.equal(ls.getItem("apex26.uiScale"), "110", "unrelated settings must survive");
   assert.equal(ss.getItem("apex26.gfxClaimFail"), null);
   assert.equal(ss.getItem("apex26.gfxBound"), null);
   assert.equal(ss.getItem("apex26.ctxLostReloads"), null);
+  assert.equal(ss.getItem("apex26.tlxAutoGL"), null);
   assert.equal(G.readBackend(), "webgl2");
 });
 
@@ -279,6 +342,7 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
     GameStore: { store: { get() { return null; }, set() {} } },
     GLX: { isMobile: true },
   });
+  seedLog(ctx);
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
   G.init();
@@ -430,6 +494,7 @@ function bootPicker(opts) {
     GameStore: { store: { get() { return null; }, set() {} } },
     GLX: { isMobile: true },
   });
+  seedLog(ctx);
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
   // readyState is "complete", so the IIFE already called init().
@@ -480,6 +545,135 @@ test("‹ from WEBGL2 jumps to WEBGPU without opening THREE", () => {
   assert.equal(ls.getItem("apex26.gfxWgxFail"), null);
   timers.forEach((fn) => fn());
   assert.equal(reloaded(), 1);
+});
+
+test("THREE PATH and SCREENSHOTS are injected, and only reload when live", () => {
+  const a = bootPicker({
+    ls: { "apex26.gfxBackend": "webgl2" },
+    ss: { "apex26.tlxAutoGL": "1" },
+  });
+  assert.ok(a.byId["pm-three-path"], "THREE PATH button");
+  assert.ok(a.byId["pm-screenshots"], "SCREENSHOTS button");
+  assert.ok(a.byId["pm-save-shot"], "SAVE SCREENSHOT button");
+  assert.ok(a.byId["pm-gfx-status"], "status line");
+  assert.match(a.byId["pm-three-path"].textContent, /THREE PATH: AUTO/);
+  assert.match(a.byId["pm-screenshots"].textContent, /SCREENSHOTS: AUTO/);
+  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints the canvas/);
+
+  a.byId["pm-three-path"].onclick();
+  assert.equal(a.G.readThreePath(), "webgl2");
+  assert.equal(a.ls.getItem("apex26.tlxForceGL"), "1");
+  assert.equal(a.ss.getItem("apex26.tlxAutoGL"), null, "THREE PATH cycle drops the AUTO stay-GL latch");
+  assert.equal(a.reloaded(), 0, "THREE PATH must not reload on WEBGL2");
+  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints the canvas/);
+
+  a.byId["pm-screenshots"].onclick();
+  assert.equal(a.G.readShotMode(), "blit");
+  assert.equal(a.ls.getItem("apex26.wgxCapture"), "1");
+  assert.equal(a.ss.getItem("apex26.wgxCapture"), "1");
+  assert.equal(a.reloaded(), 0, "SCREENSHOTS must not reload on WEBGL2");
+
+  const b = bootPicker({ ls: { "apex26.gfxBackend": "three", "apex26.tlxForceGL": "1" } });
+  assert.match(b.byId["pm-three-path"].textContent, /WEBGL2/);
+  assert.match(b.byId["pm-gfx-status"].textContent, /pinned to WebGL2/);
+  b.byId["pm-three-path"].onclick();
+  assert.equal(b.G.readThreePath(), "webgpu");
+  assert.equal(b.ls.getItem("apex26.tlxForceGL"), "0");
+  assert.match(b.byId["pm-three-path"].textContent, /RELOADING/);
+  b.timers.forEach((fn) => fn());
+  assert.equal(b.reloaded(), 1, "THREE PATH reloads when THREE.JS is live");
+
+  const c = bootPicker({
+    ls: { "apex26.gfxBackend": "webgpu" },
+    ss: { "apex26.wgxCapture": "1" },
+    gpu: {},
+  });
+  assert.equal(c.G.readShotMode(), "blit");
+  assert.match(c.byId["pm-screenshots"].textContent, /2D BLIT/);
+  assert.match(c.byId["pm-gfx-status"].textContent, /2D BLIT/);
+  c.byId["pm-screenshots"].onclick();
+  assert.equal(c.G.readShotMode(), "native");
+  assert.match(c.byId["pm-screenshots"].textContent, /RELOADING/);
+  c.timers.forEach((fn) => fn());
+  assert.equal(c.reloaded(), 1, "SCREENSHOTS reloads when WEBGPU is live");
+
+  const d = bootPicker({
+    ls: { "apex26.gfxBackend": "three", "apex26.tlxForceGL": "0" },
+  });
+  d.byId["pm-screenshots"].onclick();
+  assert.equal(d.G.readShotMode(), "blit");
+  assert.match(d.byId["pm-screenshots"].textContent, /RELOADING/);
+  d.timers.forEach((fn) => fn());
+  assert.equal(d.reloaded(), 1, "SCREENSHOTS reloads when THREE.JS WebGPU is live");
+});
+
+test("presentStatus names the three screenshot paths in plain language", () => {
+  const src = read("js/game/gfx-quality.js");
+  const ctx = vm.createContext({
+    window: {}, document: undefined,
+    localStorage: makeStorage({ "apex26.gfxBackend": "webgpu", "apex26.wgxCapture": "0" }),
+    sessionStorage: makeStorage(),
+  });
+  vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
+  const G = vm.runInContext("GfxQuality", ctx);
+  assert.match(G.presentStatus(), /native swapchain/);
+  G.applyShotMode("blit", { noReload: true });
+  assert.match(G.presentStatus(), /copied onto the canvas/);
+  ctx.localStorage.setItem("apex26.gfxBackend", "three");
+  ctx.localStorage.setItem("apex26.tlxForceGL", "0");
+  assert.match(G.presentStatus(), /pinned to WebGPU/);
+  G.applyThreePath("webgl2", { noReload: true });
+  assert.match(G.presentStatus(), /pinned to WebGL2/);
+  G.applyThreePath("auto", { noReload: true });
+  assert.match(G.presentStatus(), /can be WebGPU or three WebGL2/);
+  assert.equal(G.threePathLabel("auto"), "AUTO");
+  assert.equal(G.liveThreeApi(), null);
+
+  ctx.GLX = {
+    __tlx: { backendState() { return { api: "webgpu" }; } },
+    softPresent() { return true; },
+  };
+  assert.equal(G.liveThreeApi(), "webgpu");
+  assert.equal(G.threePathLabel("auto"), "AUTO (WEBGPU)");
+  assert.match(G.presentStatus(), /AUTO is WebGPU/);
+
+  ctx.GLX.__tlx.backendState = () => ({ api: "webgl2" });
+  ctx.GLX.softPresent = () => false;
+  assert.equal(G.liveThreeApi(), "webgl2");
+  assert.equal(G.threePathLabel("auto"), "AUTO (WEBGL2)");
+  assert.match(G.presentStatus(), /AUTO is three WebGL2/);
+});
+
+test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot API", () => {
+  const tlx = read("js/render/three/tlx.js");
+  const post = read("js/render/three/tlx-post.js");
+  assert.match(tlx, /capturePixels\(\) \{/);
+  assert.match(tlx, /readRenderTargetPixelsAsync/);
+  assert.match(tlx, /copyTextureToBuffer/);
+  assert.match(tlx, /softPresent\(\) \{ return !!_softBlit; \}/);
+  assert.match(tlx, /_softBlit = !forceWebGL && _capPref !== "0"/);
+  assert.match(tlx, /never getCurrentTexture/);
+  assert.doesNotMatch(tlx, /[\.]\s*getCurrentTexture\s*\(/);
+  assert.match(tlx, /await renderer\.init\(\);/);
+  assert.match(tlx, /game-soft/);
+  assert.match(tlx, /__apexWriteBuf/);
+  assert.match(tlx, /queue\.writeBuffer\(buf, 0, staging\)/);
+  assert.match(tlx, /function _instColorAttr/);
+  assert.match(tlx, /isInstancedBufferAttribute/);
+  assert.match(tlx, /do NOT[\s\S]{0,40}also set imesh\.instanceColor/);
+  assert.match(post, /ldrTarget: \(\) => ldrRT/);
+});
+
+test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () => {
+  const tlx = read("js/render/three/tlx.js");
+  // MDN: one context type per canvas for life. three r185.1 configure() is
+  // lazy on first present(); sniffing WebGL2 on #game after init() made
+  // getContext("webgpu") return null (mcp-probe 2026-08-18).
+  assert.match(tlx, /const softwareGL = forceWebGL \? detectSoftwareGL\(\) : !!_softAdapter;/);
+  const initAt = tlx.indexOf("await renderer.init();");
+  const sniffAt = tlx.indexOf("const softwareGL = forceWebGL ? detectSoftwareGL()");
+  assert.ok(initAt > 0 && sniffAt > initAt, "software sniff stays after init");
+  assert.match(tlx, /getContext\("webgpu"\)===null/);
 });
 
 /* ── TLX canvas opacity — the "transparent cars on iPhone" guard ─────────
@@ -599,8 +793,9 @@ test("the hand-made WebGL2 context still matches three's own attribute set", () 
   // Not cosmetic either: three's antialias becomes samples>0 on the DEFAULT
   // canvas target, so a context that disagrees with the renderer gets a
   // multisample resolve mismatch on the very path this fix exists to protect.
-  assert.match(ctx[1], /antialias:\s*!isMobile/, "context AA must track the renderer's");
-  assert.match(tlx, /antialias:\s*!isMobile,\s*forceWebGL/, "renderer AA must track the context's");
+  assert.match(ctx[1], /antialias:\s*!isMobile/, "context AA must track the renderer's forceWebGL path");
+  assert.match(tlx, /antialias:\s*forceWebGL \? !isMobile : !_liteGpu/,
+    "lite WebGPU (phone / WebKit / software) must not ask for canvas MSAA 4");
 });
 
 test("WGX's canvas is opaque too — it writes the same tag with NO gate", () => {

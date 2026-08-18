@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const SOURCE = await readFile(new URL("../../js/net/lobby.js", import.meta.url), "utf8");
 
@@ -60,6 +61,7 @@ function harness({ wakeLock, prefetchIce, scanFactory } = {}) {
     Teams: { LIST: [{ id: "alpha", short: "ALP", name: "Alpha", color: [1, 0, 0], drivers: [] }] },
     Tracks: { LIST: [{ id: "track" }] },
   });
+  seedLog(context);
   const NetLobby = vm.runInContext(SOURCE + ";NetLobby", context, { filename: "lobby.js" });
   const G = {
     teamIdx: 0, driverIdx: 0, trackIdx: 0, raceLaps: 3,

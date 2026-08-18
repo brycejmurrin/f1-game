@@ -92,6 +92,7 @@ const TrackGraph = (function () {
   const upScale = (s) => (s ? __M.abs(s[1]) : 1);
 
   function create(ctx) {
+    Log.info("track", "graph create");
     ctx = ctx || {};
     const raw = ctx.raw || null;
 

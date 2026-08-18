@@ -118,6 +118,7 @@ const IncidentSim = (function () {
   const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
 
   function create(ctx) {
+    Log.info("game", "IncidentSim.create");
     G = ctx;
     try { _r2 = (localStorage.getItem("apex26.r2Airborne") || "1") !== "0"; } catch (e) {}
     try { _r3 = (localStorage.getItem("apex26.r3Contact") || "1") !== "0"; } catch (e) {}
@@ -329,6 +330,7 @@ const IncidentSim = (function () {
     if (!promoted.length) return;
     _incidents.push({ kind, cars: promoted, tick0: _tick, seq: _seq, snap, good, settle, gen });
     _seq++; _promoted += promoted.length; _lastKind = kind;
+    Log.info("game", "IncidentSim start " + kind + " cars=" + promoted.length);
   }
 
   // ── postStep: read the 6-DoF pose back into each owned car, detect settle /
@@ -477,6 +479,7 @@ const IncidentSim = (function () {
       // c._prevS, so anchor it to the handed-back s (no spurious wrong-way/lap).
       if (fin(c.s)) c._prevS = c.s;
     }
+    Log.info("game", "IncidentSim end idx=" + i + (anomaly ? " anomaly" : ""));
     finishCar(inc, i);
   }
 

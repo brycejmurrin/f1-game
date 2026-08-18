@@ -110,6 +110,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/pause-hud-layout.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
+  "tests/unit/metrics.test.mjs",
 ]);
 
 const loadavgLine = () => {

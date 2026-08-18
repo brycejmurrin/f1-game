@@ -202,6 +202,7 @@ const Tracks = (function () {
   // Full build: centreline + 3D meshes (road/terrain/props/gate) uploaded to the
   // GPU. This is the heavy one — only needed to actually render/drive a circuit.
   function build(def, opts) {
+    Log.info("track", "build start " + def.id + (opts && opts.night != null ? " night=" + !!opts.night : ""));
     const track = buildCenterline(def);
     // One profile drives terrain generation, floor blending, and scenery
     // grounding. Keeping it on the track also makes diagnostics deterministic.
@@ -284,6 +285,7 @@ const Tracks = (function () {
       track.meshes.gate = G.createMesh(safe("gate", buildGate(track)));
       track.meshes.startline = G.createMesh(safe("startline", buildStartLine(track)));
     }
+    Log.info("track", "build done " + def.id + " total=" + (track && track.total && +track.total.toFixed(1)) + " n=" + (track && track.n) + " night=" + !!(track && track._night));
     return track;
   }
 
@@ -434,6 +436,7 @@ const Tracks = (function () {
   }
 
   function buildProps(track) {
+    Log.info("track", "buildProps start " + (track.def && track.def.id));
     // Static dressing tables (barrier liveries, furniture, crowd/sign/city
     // palettes, building styles) live in js/track/scenery-data.js.
     const { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS,
@@ -2444,6 +2447,7 @@ const Tracks = (function () {
       rec.measured = true;
       delete rec._m;
     }
+    Log.info("track", "buildProps done " + def.id + " verts=" + (out.pos.length / 3));
     return { out, glass: glassBuf, water: waterBuf };
   }
 

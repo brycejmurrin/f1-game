@@ -65,6 +65,7 @@ const Input = (function () {
   // paired PS5 / Xbox / MFi controller — no secure-context or permission gate,
   // so it runs anywhere the game is served (GitHub Pages included).
   let padConnected = false;
+  let padPollWarned = false;
   let padSteer = 0;            // -1..1 from left stick / d-pad
   let padThrottle = false;
   let padBrake = false;
@@ -726,7 +727,13 @@ const Input = (function () {
   function activePad() {
     if (typeof navigator === "undefined" || !navigator.getGamepads) return null;
     let pads;
-    try { pads = navigator.getGamepads(); } catch (e) { return null; }
+    try { pads = navigator.getGamepads(); } catch (e) {
+      if (!padPollWarned) {
+        padPollWarned = true;
+        Log.warn("input", "gamepad poll failed: " + ((e && e.message) || e));
+      }
+      return null;
+    }
     if (!pads) return null;
     for (let i = 0; i < pads.length; i++) {
       if (pads[i] && pads[i].connected) return pads[i];
@@ -1045,6 +1052,7 @@ const Input = (function () {
 
   function setSteerMode(m) {
     steerMode = (m === "buttons" || m === "touch") ? m : "tilt";
+    try { Log.info("input", "steerMode " + steerMode); } catch (_) { /* Log absent in isolated VM */ }
     if (steerMode !== "buttons") {
       btnSteerLeft = btnSteerRight = false;   // drop held buttons
       btnSteerVal = 0; btnSteerT = 0;
@@ -1116,6 +1124,7 @@ const Input = (function () {
   }
 
   function init(canvas, opts) {
+    Log.info("input", "Input.init");
     onPauseCb = (opts && opts.onPause) || null;
 
     window.addEventListener("keydown", function (e) { onKey(e, true); });
@@ -1231,12 +1240,18 @@ const Input = (function () {
       window.addEventListener("orientationchange", onScreenRotate);
     }
 
-    window.addEventListener("gamepadconnected", function () { padConnected = true; });
-    window.addEventListener("gamepaddisconnected", function () {
+    window.addEventListener("gamepadconnected", function (e) {
+      padConnected = true;
+      try { Log.info("input", "gamepad connected " + ((e && e.gamepad && e.gamepad.id) || "")); }
+      catch (_) { /* Log absent */ }
+    });
+    window.addEventListener("gamepaddisconnected", function (e) {
       padConnected = false; padSteer = 0; padThrottle = padBrake = false;
       padThrottleVal = padBrakeVal = 0;
       padPrevButtons.length = 0;
       padNavDir = null;
+      try { Log.info("input", "gamepad disconnected " + ((e && e.gamepad && e.gamepad.id) || "")); }
+      catch (_) { /* Log absent */ }
     });
   }
 

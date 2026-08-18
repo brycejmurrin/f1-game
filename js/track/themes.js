@@ -71,6 +71,7 @@ const SceneryThemes = (function () {
   }
 
   function resolve(name, overrides, context) {
+    Log.info("track", "theme resolve " + (name || "neutral"));
     const theme = THEMES[name] || {};
     const result = merge(merge(BASE, theme), overrides || {});
     result.name = THEMES[name] ? name : "neutral";

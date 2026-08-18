@@ -406,12 +406,10 @@ const WGX = (function () {
       adapter = await navigator.gpu.requestAdapter({ powerPreference: _pref });
       if (!adapter) adapter = await navigator.gpu.requestAdapter();
       if (!adapter) return _fail("no adapter");
-      // Software / headless adapters: Dawn SwiftShader can compile WGSL and
-      // run present() with gpuErrors=0 while the GPUCanvasContext composites a
-      // blank/white page (measured 2026-08-17: hundreds of presents/sec,
-      // healthy agentview coverage, CDP/ImageBitmap both empty). Prefer GLX
-      // there so SETTINGS ▸ WEBGPU does not strand the player on a white world.
-      // Escape hatch: localStorage apex26.gfxWgxAllowSoftware=1 (shader CI).
+      // Software / headless adapters: the native swapchain never composites
+      // (black #game) but the 2D soft-present blit does. SETTINGS ▸ WEBGPU
+      // must stay on WGX here — refusing used to silently bind GLX.
+      // `apex26.gfxWgxAllowSoftware` is a legacy no-op (tools still set it).
       // Sync signals only — never await requestAdapterInfo() (has hung create()
       // with no timeout on Dawn/SwiftShader).
       let _softAdapterLocal = false;
@@ -433,13 +431,8 @@ const WGX = (function () {
             || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob));
       } catch (_) { /* treat as hardware */ }
       _softAdapter = _softAdapterLocal;
-      let _allowSoft = false;
-      try { _allowSoft = localStorage.getItem("apex26.gfxWgxAllowSoftware") === "1"; } catch (_) {}
-      if (_softAdapter && !_allowSoft) {
-        return _fail("software WebGPU adapter (SwiftShader/headless canvas present unsupported)");
-      }
-      // sampleCount 4 resolveTarget frames have also come back blank on
-      // software when the escape hatch is set — force MSAA 1.
+      // sampleCount 4 resolveTarget frames come back blank on software —
+      // force MSAA 1. Soft-present (not a GLX fallback) is the visible path.
       if (!WGX_LITE && _softAdapter) MSAA_COUNT = 1;
       // timestamp-query on WebKit/iOS has been advertised then lost the device
       // on the first real frame (the "worked for a second" crash). GLX already
@@ -546,10 +539,26 @@ const WGX = (function () {
     let _outProbeBuf = null, _outProbePending = false, _outProbeN = 0, _outBlack = 0;
     const OUT_PROBE_MAX = 12, OUT_BLACK_CAP = 3, OUT_BLACK_EPS = 0.02;
     let _outProbeOff = false;
-    try { _outProbeOff = sessionStorage.getItem("apex26.wgxCapture") === "1"; } catch (_) { /* harness */ }
+    // SCREENSHOTS setting (SETTINGS ▸ SCREENSHOTS) + probe flag. Session wins
+    // so gfx-probe can override a saved local pref for one tab; local persists
+    // the player's tap. "1" = force 2D blit, "0" = force native swapchain.
+    const _capPref = (function readCapturePref() {
+      try {
+        const s = sessionStorage.getItem("apex26.wgxCapture");
+        if (s === "1" || s === "0") return s;
+      } catch (_) { /* fall through */ }
+      try {
+        const s = localStorage.getItem("apex26.wgxCapture");
+        if (s === "1" || s === "0") return s;
+      } catch (_) { /* AUTO */ }
+      return null;
+    })();
+    _outProbeOff = _capPref === "1" || _capPref === "0";
     // wgxCapture probes must soft-present even when adapter sniffing misses (headed
     // Lavapipe reports non-enumerable vendor/arch that stringify hid until 2026-08-17).
-    const _softGpu = _softAdapter || _outProbeOff;
+    // NATIVE ("0") keeps the swapchain so you can see why software screenshots
+    // are black — and turns the output-probe ladder off so black is not a refuse.
+    const _softGpu = _capPref === "0" ? false : (_softAdapter || _capPref === "1");
     if (_softGpu) _outProbeOff = true;
     // Software-present renders into an rgba8unorm texture, not the preferred
     // (usually bgra8unorm) swapchain. Every pipeline targeting currentView must
@@ -582,6 +591,7 @@ const WGX = (function () {
       }
       if (document.body) document.body.appendChild(_gpuCanvas);
       canvas = _gpuCanvas;
+      try { Log.info("gfx", "WGX soft-present on"); } catch (_) { /* harness */ }
     }
     // CACHED CSS SIZE. resize() runs every frame, but clientWidth/clientHeight
     // are layout reads. Mirror GLX/TLX: invalidate only when the visible canvas
@@ -3360,7 +3370,10 @@ const WGX = (function () {
       }
 
       } catch (postE) {
-        try { Log.warn("gfx", "WGX post chain failed — tonemap blit fallback", postE); } catch (_) { /* harness */ }
+        if (_postReady) {
+          try { Log.warn("gfx", "WGX post chain failed — tonemap blit fallback", postE); } catch (_) { /* harness */ }
+          _postReady = false;
+        }
         _tonemapBlit(exposure);
       }
 
@@ -4261,6 +4274,7 @@ const WGX = (function () {
 
     const noop = function () {};
     _runtimeReady = true;
+    try { Log.info("gfx", "WGX bind ok"); } catch (_) { /* harness */ }
 
     return {
       // ── Lifecycle / capability ──
@@ -4364,6 +4378,7 @@ const WGX = (function () {
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
       awaitSoftPresent,
+      softPresent: () => !!_softGpu,
 
       // extension: lets a future __apex.gfxBackend() report the active path.
       backend: "webgpu",

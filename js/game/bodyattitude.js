@@ -188,6 +188,7 @@ function active() { return enabled; }
 function status() { return { enabled, offsets: offsets() }; }
 
 function create(ctx) {
+  Log.info("game", "BodyAttitude.create");
   G = ctx;
   try { enabled = localStorage.getItem(LS_KEY) !== "0"; } catch (e) { enabled = true; }
   return { update, reset, offsets, setEnabled, active, status };

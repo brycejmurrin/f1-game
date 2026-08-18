@@ -912,6 +912,14 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   border-radius: var(--r-sm);
   padding: 0 calc(var(--gap) * 0.75);
 }
+/* Injected SCREENSHOTS / THREE PATH status — ID-scoped, no new class. */
+#pmsettings-inner .pm-group #pm-gfx-status {
+  margin: calc(var(--gap) * 0.25) 0 0;
+  padding: 0 calc(var(--gap) * 0.4);
+  font-size: var(--fs-2);
+  line-height: 1.35;
+  color: var(--dim);
+}
 .pm-doors {
   display: flex;
   flex-direction: column;

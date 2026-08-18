@@ -311,9 +311,11 @@ const NetRendezvous = (function () {
   // still hosts ONE guest, and says so rather than silently taking one player.
   function hostRoom(o) {
     if (usingPrivateRelay()) {
+      Log.warn("net", "room host fail not_supported");
       return Promise.resolve({ ok: false, error: "not_supported",
         message: "Room codes on a private relay take one guest. Use the invite link for the others." });
     }
+    Log.info("net", "room host");
     return NetNostr.exchange({
       code: o.code, send: o.mine, mintOffer: o.mintOffer, onJoiner: o.onJoiner,
       token: o.token, onTick: o.onTick,
@@ -352,6 +354,13 @@ const NetRendezvous = (function () {
 
   // Give `mine` to the other side and get theirs back, whichever backend is in
   // play. `slot`/`want` only mean anything to the mailbox backend.
+  function rvLog(action, res) {
+    if (res && res.ok) Log.info("net", action + " ok");
+    else if (res && (res.error === "cancelled")) Log.info("net", action + " cancelled");
+    else Log.warn("net", action + " fail " + ((res && res.error) || "error"));
+    return res;
+  }
+
   async function swap(o) {
     const { code, mine, reply, slot, want, token, onTick } = o;
     if (!usingPrivateRelay()) return nostrExchange(o);
@@ -359,22 +368,22 @@ const NetRendezvous = (function () {
     // for the other side FIRST, then posts what it produced.
     if (reply) {
       const got = await waitFor(code, want, token, onTick);
-      if (!got.ok) return got;
+      if (!got.ok) return rvLog("swap", got);
       let out = null;
       try { out = await reply(got.payload); } catch (e) { out = null; }
-      if (!out) return ERR("reply_failed", "Could not answer that invite.");
+      if (!out) return rvLog("swap", ERR("reply_failed", "Could not answer that invite."));
       const posted = await httpPut(code, slot, out, null);
-      return posted.ok ? { ok: true, payload: got.payload } : posted;
+      return rvLog("swap", posted.ok ? { ok: true, payload: got.payload } : posted);
     }
     // Stable across a repeated host attempt with the same code+offer; never
     // derived from the ciphertext, whose random IV makes repeat seals differ.
     let owner = null;
     try { owner = slot === "offer" ? ownerFor(code, mine) : null; }
-    catch (e) { return ERR("crypto", "This browser could not protect the room code. Use the invite link instead."); }
+    catch (e) { return rvLog("swap", ERR("crypto", "This browser could not protect the room code. Use the invite link instead.")); }
     const posted = await httpPut(code, slot, mine, owner);
-    if (!posted.ok) return posted;
+    if (!posted.ok) return rvLog("swap", posted);
     const got = await waitFor(code, want, token, onTick);
-    return got.ok ? { ok: true, payload: got.payload } : got;
+    return rvLog("swap", got.ok ? { ok: true, payload: got.payload } : got);
   }
 
   // Poll until the other side posts, the caller cancels, or we give up. The

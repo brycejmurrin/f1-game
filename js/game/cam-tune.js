@@ -122,8 +122,8 @@ function set(mode, id, v) {
   refreshAny();
   return true;
 }
-function reset(mode) { delete _store[mode]; refreshAny(); }
-function resetAll() { _store = {}; refreshAny(); }
+function reset(mode) { Log.info("game", "CamTune.reset " + mode); delete _store[mode]; refreshAny(); }
+function resetAll() { Log.info("game", "CamTune.resetAll"); _store = {}; refreshAny(); }
 function all() { return _store; }
 
 // Nudge a solved vantage in place. eye/tgt are mutated; the (possibly clamped)

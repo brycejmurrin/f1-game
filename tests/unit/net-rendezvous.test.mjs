@@ -19,8 +19,10 @@ import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
+import { seedLogGlobal } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+seedLogGlobal();
 
 // The module reads localStorage; node has none. A two-line stand-in is enough
 // and keeps the module itself free of test-only branches.

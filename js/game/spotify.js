@@ -236,7 +236,10 @@ window.SpotifyMusic = (function () {
         code_challenge_method: "S256", code_challenge: challenge,
         state: st, scope: SCOPES,
       }).toString());
-    }).catch(() => setStatus("error", "Could not start the Spotify sign-in on this browser."));
+    }).catch((e) => {
+      Log.warn("audio", "Spotify sign-in failed: " + ((e && e.message) || e));
+      setStatus("error", "Could not start the Spotify sign-in on this browser.");
+    });
   }
 
   // Strip only OUR params, so any other query the game was launched with
@@ -1181,6 +1184,7 @@ window.SpotifyMusic = (function () {
   }
 
   function init() {
+    Log.info("audio", "SpotifyMusic.init");
     // Adopt the stored config FIRST, so the redirect handler and the first
     // render agree about whether the feature exists at all. Note we never
     // auto-connect here even with a live token: booting the SDK is exactly the
@@ -1217,6 +1221,7 @@ window.SpotifyMusic = (function () {
     openPanel() {
       const p = el("spotifypanel");
       if (p) p.hidden = false;
+      Log.info("audio", "SpotifyMusic.openPanel");
       render();
       if (BACKEND.active()) { pollNowPlaying(); loadDevices(); }
     },

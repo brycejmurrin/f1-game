@@ -10,8 +10,13 @@ const P = (await import("node:module")).createRequire(import.meta.url)("../../to
 function load(file, name, globals = {}) {
   const sandbox = { console, Math, Array, Object, Number, Map, Set, ...globals };
   sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(
+    fs.readFileSync(path.join(ROOT, "js/log.js"), "utf8").replace(/^const\b/gm, "var"),
+    ctx, { filename: "js/log.js" },
+  );
   const source = fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var");
-  vm.runInContext(source, vm.createContext(sandbox), { filename: file });
+  vm.runInContext(source, ctx, { filename: file });
   return sandbox[name];
 }
 

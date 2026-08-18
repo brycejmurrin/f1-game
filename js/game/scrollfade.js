@@ -148,6 +148,7 @@ window.ScrollFade = (function () {
   }
 
   function init() {
+    Log.info("ui", "ScrollFade.init");
     // scroll does not bubble — capture catches every region with one listener
     document.addEventListener("scroll", (e) => {
       const t = e.target;

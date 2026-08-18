@@ -27,6 +27,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -38,6 +39,7 @@ function load(debris) {
     Math, JSON, Object, Array, String, Number, isNaN, isFinite, console,
     DebrisWorld: debris,
   });
+  seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/game/racecontrol.js"), "utf8"), ctx,
     { filename: "js/game/racecontrol.js" });
   return vm.runInContext("RaceControl", ctx);

@@ -1,6 +1,6 @@
 # Testing reference
 
-112 root Playwright spec files (`tests/specs/*.spec.js`) + 105 `node --test` unit suites
+112 root Playwright spec files (`tests/specs/*.spec.js`) + 106 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -910,6 +910,7 @@ what it covers.
 | `service-worker.test.mjs` | the SW's install/fetch/version-guard behaviour |
 | `perf-sentinel.test.mjs` | the crash sentinel's memory must not outlive the crash |
 | `perf-governor.test.mjs` | the adaptive-resolution governor: the budget derives from the observed floor of frame intervals rather than a hardcoded 60 fps, so a device capped externally (iOS Low Power Mode's 30 fps throttle) settles at full quality instead of the resolution floor with every feature shed; a genuinely GPU-bound device still downscales and holds; a reverted step does not repeat forever |
+| `metrics.test.mjs` | GameMetrics SETTINGS toggle: default off, persists `apex26.metrics`, `?metrics=1` is session-only, snapshot() never throws without `__apex`, and ON raises the log buffer to debug while leaving the console at warn |
 | `output-paths.spec.js` | gallery paths are port-scoped and create their parents |
 | `cdmcp-measure.test.mjs` | the Chromium MCP background measure harness — CLI surface, log terminal-marker contract, bg launcher existence, without launching Chromium |
 | `tinyfish-mcp.test.mjs` | TinyFish + Chrome MCP wrappers — `.mcp.json` has tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build (search rows render title+url+snippet), every `mcp_post` body must parse as JSON once shell splices are stubbed (the guard that catches the stray-quote class), tracked source has no reusable key and `ensure` names its setup prerequisite, a transient upstream timeout is exit 3 (retried) while a genuine parse failure stays exit 2, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` with an exact fallback version (no live API) |
@@ -1060,6 +1061,8 @@ returns real rendered pixels (offscreen mode; see
 `docs/research/WEBGPU-PARITY.md` §1a for the four bugs the first capture
 found). **Software compositor (2026-08-17, cache 1342+):** WGX soft-presents
 the final pass into a `COPY_SRC` texture and 2D-blits onto visible `#game` —
+play with this in SETTINGS ▸ SCREENSHOTS (AUTO / 2D BLIT / NATIVE) and the
+three.js counterpart SETTINGS ▸ THREE PATH (AUTO / WEBGL2 / WEBGPU).
 `node tools/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
 gate; native swapchain screenshots stay black. `GLX.capturePixels()` readback
 (`wgx-capture.mjs` → `frame.png`) is a secondary oracle and can still flake on
@@ -1094,8 +1097,25 @@ visible `#game` via a 2D blit (auto on software adapters +
 `awaitSoftPresent`). Readback oracle: `node tools/wgx-capture.mjs`. Lavapipe
 needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
 `/usr/share/vulkan/icd.d/` until that package was installed and the env
-snapshot Saved. TLX must stay on WebGL2 (`--backend three` / `tlxForceGL`) —
-three's WebGPU path dies on SwiftShader `mappedAtCreation`. Index:
+snapshot Saved. TLX CI stays on WebGL2 (`--backend three` / `tlxForceGL`);
+THREE PATH: WEBGPU 2D-blits the LDR target (`readRenderTargetPixelsAsync`).
+`mappedAtCreation` uploads are shimmed to `queue.writeBuffer` so SwiftShader
+does not exhaust Dawn's mappable pool. SETTINGS ▸ WEBGPU / THREE.JS stay on
+those backends (phones and Safari included — lite stack, 8-bit swapchain);
+they must not silently bind GLX. THREE PATH AUTO may land on three
+WebGL2 (`--tlx-auto-gl` / `apex26.tlxAutoGL`) after WebGPU dies in this
+tab — still TLX, not game WEBGL2. THREE PATH: WEBGL2 remains the CI pin.
+
+**TLX WebGPU `configure` null was a self-poison (2026-08-18).**
+`detectSoftwareGL()` called `#game.getContext("webgl2")` after
+`renderer.init()`. three r185.1 does not claim the canvas in `init()` —
+`getContext("webgpu")+configure()` is lazy on first present(). MDN: one
+context type per canvas for life. Live probe: `data-engine=three.js r185
+webgpu` AND `getContext("webgpu")===null` AND a live WebGL2 context on
+`#game`. Fix: sniff GL only when `forceWebGL`; the WebGPU path uses
+`_softAdapter`. Instanced prop colour is a geometry
+`InstancedBufferAttribute` named `color` (not `imesh.instanceColor`) so
+Dawn slots 2/5 match the instance count. Index:
 `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
 

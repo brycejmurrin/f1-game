@@ -12,8 +12,10 @@ const GameResults = (function () {
   "use strict";
 
 function create(G) {
+Log.info("ui", "GameResults.create");
 
 function buildResults(order) {
+  Log.info("ui", "GameResults.buildResults n=" + (order && order.length));
   const els = G.els, season = G.season, track = G.track, cars = G.cars;
   els.resultsTable.textContent = "";
   // A SPRINT is scored on a round that has not closed yet, so `season.round` is

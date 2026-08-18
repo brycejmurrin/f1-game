@@ -24,6 +24,7 @@ function loadGlobal(file, name) {
   const sandbox = { console, Math, Array, Object, Number, Float32Array, Map, Set };
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
+  runInto(ctx, "js/log.js");
   runInto(ctx, "js/mat4.js");
   runInto(ctx, file);
   return sandbox[name];
