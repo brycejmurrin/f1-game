@@ -107,7 +107,7 @@ test("state packets are delivered to the game; ping/pong never are", () => {
   const p = pair({ latency: 20 });
   const got = [];
   p.b.onState((bytes) => got.push(new Uint8Array(bytes.buffer || bytes).slice()));
-  // Sync first: unreliable STATE is dropped until synced() so a pre-PONG
+  // Sync first: unreliable STATE is held until synced() so a pre-PONG
   // snapshot cannot land at offset 0 and warp the rival when the clock lands.
   p.advance(1000);
   assert.ok(p.b.synced(), "clock must sync before game state is accepted");
@@ -115,6 +115,21 @@ test("state packets are delivered to the game; ping/pong never are", () => {
   p.advance(200);
 
   assert.equal(got.length, 1, `exactly one game packet expected, got ${got.length}`);
+  assert.deepEqual(Array.from(got[0]), [1, 2, 3, 4]);
+});
+
+test("a pre-sync snapshot is held and delivered once the clock lands", () => {
+  const p = pair({ latency: 20 });
+  const got = [];
+  p.b.onState((bytes) => got.push(new Uint8Array(bytes.buffer || bytes).slice()));
+  assert.equal(p.b.synced(), false);
+  p.a.sendState(new Uint8Array([1, 2, 3, 4]));
+  // Snapshot one-way is 20 ms; the answering PONG needs the ping's 20+20.
+  p.advance(30);
+  assert.equal(got.length, 0, "unreliable STATE is held until the first PONG");
+  p.advance(1000);
+  assert.ok(p.b.synced(), "clock must sync");
+  assert.equal(got.length, 1, "the held snapshot is flushed on PONG");
   assert.deepEqual(Array.from(got[0]), [1, 2, 3, 4]);
 });
 

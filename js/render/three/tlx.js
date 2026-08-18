@@ -137,7 +137,7 @@
 "use strict";
 
 const TLX = (function () {
-  let _lastFailure = null;
+  let _lastFailure = null, _presentWarned = false;
   function _fail(reason) {
     _lastFailure = { reason: String(reason), at: Date.now() };
     try { localStorage.setItem("apex26.gfxTlxFail", _lastFailure.reason); } catch (_) { /* blocked storage */ }
@@ -2190,7 +2190,7 @@ const TLX = (function () {
             _lastFailure = { reason, at: Date.now() };
             try { localStorage.setItem("apex26.gfxTlxFail", reason); } catch (_) { /* blocked storage */ }
             try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
-            try { Log.warn("gfx", "TLX: present failed —", e); } catch (_) { /* Log absent in the node harness */ }
+            try { if (!_presentWarned) { _presentWarned = true; Log.warn("gfx", "TLX: present failed —", e); } } catch (_) { /* Log absent in the node harness */ }
           };
           const paintCanvas = () => {
             pinSkyMaterial();

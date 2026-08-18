@@ -241,9 +241,53 @@ function create(G) {
 
   // Run the session for real: compute and keep the result as THE classification.
   // `driven` is a time, or a driverId->time map when more than one human drove.
+  function persistOrder() {
+    const s = G.season;
+    if (!s || !classification) return;
+    // A provisional all-AI sheet is not a weekend result — writing it here is
+    // what made every openQuali() throw away a driven grid. Friend races must
+    // not stamp Career/season either: the lobby can sit on an active career
+    // save, and NetPlay.isOn() is the "this is a room, not a championship" bit.
+    if (!classification.some((r) => r.human)) return;
+    if (typeof NetPlay !== "undefined" && NetPlay.isOn && NetPlay.isOn()) return;
+    s.qualiOrder = classification.map((r) => ({
+      id: r.driverId, t: r.t, human: !!r.human,
+    }));
+    try {
+      if (typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) Career.save();
+      else if (G.store) G.store.set("season", s);
+    } catch (_) { /* persist is best-effort */ }
+  }
+
+  function restoreFromSeason() {
+    const raw = G.season && G.season.qualiOrder;
+    if (classification || !Array.isArray(raw) || !raw.length) return !!classification;
+    const byId = new Map();
+    if (G.cars) for (const c of G.cars) byId.set(c.driverId, c);
+    classification = raw.map((entry, i) => {
+      const obj = entry && typeof entry === "object";
+      const driverId = obj ? entry.id : entry;
+      const car = byId.get(driverId);
+      return {
+        driverId,
+        pos: i + 1,
+        t: obj && entry.t > 0 ? entry.t : 0,
+        gap: 0,
+        code: car ? car.code : "",
+        name: car ? car.name : "",
+        team: car && car.team ? (car.team.id || car.team) : null,
+        isPlayer: !!(car && car.isPlayer),
+        human: !!(obj && entry.human),
+      };
+    });
+    const pole = classification[0] && classification[0].t > 0 ? classification[0].t : 0;
+    for (const r of classification) r.gap = pole && r.t > 0 ? +(r.t - pole).toFixed(3) : 0;
+    return true;
+  }
+
   function simulate(driven) {
     const rows = compute(driven);
-    if (rows) classification = rows;
+    if (rows) { classification = rows; persistOrder(); }
     Log.info("game", "Quali.simulate n=" + (rows ? rows.length : 0));
     return rows;
   }
@@ -265,6 +309,7 @@ function create(G) {
   // Returns null unless every live car is accounted for, so a partial map falls
   // back to the normal grid instead of placing half a field.
   function order(live) {
+    restoreFromSeason();
     if (!classification || !live || !live.length) return null;
     const byId = new Map(live.map((c) => [c.driverId, c]));
     const out = [];
@@ -275,11 +320,34 @@ function create(G) {
     return out.length === live.length ? out : null;
   }
   function results() {
-    return classification
-      ? classification.map(({ car, ...row }) => row)   // drop the live car ref
-      : null;
+    restoreFromSeason();
+    if (!classification || !classification.some((r) => r.t > 0)) return null;
+    return classification.map(({ car, ...row }) => row);   // drop the live car ref
   }
-  function clear() { classification = null; }
+  // In-memory only. openQuali() used to call this and wipe a driven grid
+  // every time the sheet reopened. Pass true (quit-to-menu, post-GP award
+  // already deletes) when THIS weekend's order must not come back.
+  function forgetOrder() {
+    const s = G.season;
+    if (!s || !s.qualiOrder) return;
+    delete s.qualiOrder;
+    try {
+      if (typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) Career.save();
+      else if (G.store) G.store.set("season", s);
+    } catch (_) { /* persist is best-effort */ }
+  }
+  function clear(forget) {
+    classification = null;
+    if (forget) forgetOrder();
+  }
+
+  // Restore a driven persist, or draw a fresh provisional. Does not wipe
+  // qualiOrder — that was the sheet-reopen bug.
+  function begin() {
+    restoreFromSeason();
+    if (classification) return classification;
+    return simulate(0);
+  }
 
   // ---------- the sheet ----------
 
@@ -330,7 +398,7 @@ function create(G) {
   function open() { Log.info("game", "Quali.open"); build(); $("quali").hidden = false; ScrollFade.refresh(); }
   function close() { Log.info("game", "Quali.close"); $("quali").hidden = true; }
 
-  return { simulate, preview, order, results, clear, build, open, close, lapTime, capFor };
+  return { simulate, preview, order, results, clear, begin, forgetOrder, build, open, close, lapTime, capFor };
 }
 
 return { create, STEP, QUALI_TRIM, EXEC_SPREAD };

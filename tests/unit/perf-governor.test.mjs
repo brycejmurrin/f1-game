@@ -389,10 +389,12 @@ test("tier 2 sheds car-paint SSR with the wet-road march, not via po.reflect", (
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   const post = fs.readFileSync(path.join(ROOT, "js/render/glx/post.js"), "utf8");
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-post.js"), "utf8");
+  const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
   assert.match(game, /po\.reflect = PerfGov\.tier\(\) >= 2 \? 0 : _ssr/);
   assert.match(game, /po\.carReflect = PerfGov\.tier\(\) >= 2 \? 0 : undefined/);
   assert.match(post, /opts && opts\.carReflect != null \? opts\.carReflect/);
   assert.match(tlx, /o\.carReflect != null \? o\.carReflect/);
+  assert.match(wgx, /o\.carReflect != null \? o\.carReflect/);
   assert.match(SRC, /SSR march off \(wet-road \+ car-paint\)/);
 });
 

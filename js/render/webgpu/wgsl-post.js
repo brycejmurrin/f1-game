@@ -849,7 +849,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // double-counts wet (po.reflect is already wetness * ssrWetMul).
   let ssrRefl = U.gamma.w;
   let ssrCar = U.gain.w;
-  if (ssrRefl > 0.001 || ssrCar > 0.001) {
+  if (ssrWet > 0.001 || ssrRefl > 0.001 || ssrCar > 0.001) {
     let ssr = textureSampleLevel(ssrPostTex, samp, in.uv, 0.0);
     if (ssr.a > 0.001) {
       let carPx = select(0.0, 1.0, abs(sceneA - 0.35) < 0.08);
@@ -1312,6 +1312,10 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // Seam fade at the cutoff, in the same flipped y-UP coordinate as the gate.
   amt = amt * (1.0 - smoothstep(yCut - 0.06, yCut, 1.0 - in.uv.y));
   amt = clamp(amt * cover, 0.0, select(0.80, 0.85, carDom));
+  // Dry-session damp (GLX/TLX gateSrc): faint uReflect stays a sheen, not a
+  // full dark mirror. Car-paint damps by carReflect, not the road's strength.
+  let gateSrc = select(strength, carReflect, carDom);
+  amt = amt * min(gateSrc / 0.20, 1.0);
   return vec4<f32>(reflCol, amt);
 }`;
 

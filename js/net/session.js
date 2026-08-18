@@ -97,6 +97,11 @@ const NetSession = (function () {
     // `now` the caller passed in, rather than each reading a slightly
     // different Date.now() and smearing the timeline.
     let lastNow = 0;
+    // Last unreliable game STATE seen before the first PONG. Dropping those
+    // bytes left the rival at the default pose until sync, then it warped
+    // onto the held timeline in one frame. Replay the newest once offset
+    // exists; ping/pong still never reach the game.
+    let heldState = null;
 
     // ---- clock ------------------------------------------------------------
     // offset = theirClock - ourClock. peerToLocal() is what lets a snapshot
@@ -145,15 +150,27 @@ const NetSession = (function () {
           // Assume a symmetric path: their t1 lines up with our midpoint.
           addSample(roundTrip, t1 - (t0 + roundTrip / 2));
         }
+        if (synced() && heldState) {
+          const held = heldState;
+          heldState = null;
+          deliverState(held.data, held.now);
+        }
         return;
       }
       // Anything else is the game's: hand over the bytes plus the sender's
       // clock translated onto ours, which is what the interp buffer wants.
       // Until the first good PONG, offset is 0 and peerToLocal is a no-op —
       // snapshots land on the wrong timeline and the rival warps once sync
-      // arrives. Drop unreliable STATE until then (events stay on the
-      // reliable channel and are not clock-stamped the same way).
-      if (!synced()) return;
+      // arrives. Hold the newest unreliable STATE and flush it on that PONG
+      // (events stay on the reliable channel and are not clock-stamped).
+      if (!synced()) {
+        heldState = { data: data, now: now };
+        return;
+      }
+      deliverState(data, now);
+    }
+
+    function deliverState(data, now) {
       for (const fn of stateHandlers) {
         try { fn(data, now); } catch (e) { /* a consumer bug is not a disconnect */ }
       }

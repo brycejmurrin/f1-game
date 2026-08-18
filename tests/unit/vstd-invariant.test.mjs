@@ -141,20 +141,6 @@ const ALLOWED = [
     code: "(c.speed < 5 && raceT > 2 && (c.contactT || 0) === 0 && !unstuckActive);",
     why: "AI standstill detector — exactly |REVERSE_MAX|, the absolute crawl bound",
   },
-  {
-    file: "js/game.js", expr: "c.speed > 15",
-    code: "if (ds < -0.03 && c.speed > 15) c.wrongT = Math.min(2, (c.wrongT || 0) + dt);",
-    // ds < -0.03 already says "moving backwards along the track". The only thing
-    // this number has to separate is a legitimate reverse crawl (capped at
-    // |REVERSE_MAX| = 5 m/s, absolute) from a car actually spun round and
-    // driving the wrong way — so it is keyed to an absolute constant, at 3x it,
-    // and not to the envelope. BORDERLINE: 15 is the same magnitude as
-    // OT_MIN_SPEED, which the file documents as "a vStd() threshold". If this
-    // gate ever grows a second job beyond excluding the crawl, it belongs on
-    // vStd().
-    why: "discriminates the absolute reverse crawl (REVERSE_MAX = -5 m/s) from a spun car, at 3x it",
-  },
-
   // ── world-space visual emission ──
   // These gate PARTICLES and MARKS that live in world metres, and each one's own
   // emission velocity is real ground speed (c.speed * 0.35, 4 + c.speed * 0.22,

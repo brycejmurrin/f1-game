@@ -186,7 +186,7 @@ function refreshMacros() {
     const b = $("pm-help-" + n); if (b) b.classList.toggle("active", n === hb);
   }
   const rl = clamp(store.get("raceLine", 0), LINE_MIN, LINE_MAX);
-  const lb = rl <= 0 ? "off" : rl >= 5 ? "full" : "corner";
+  const lb = rl === 0 ? "off" : rl >= 5 ? "full" : "corner";
   for (const n of ["off", "corner", "full"]) {
     const b = $("pm-line-" + n); if (b) b.classList.toggle("active", n === lb);
   }
