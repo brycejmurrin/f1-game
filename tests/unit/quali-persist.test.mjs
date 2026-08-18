@@ -159,6 +159,8 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   assert.match(GAME, /closeCamTuner\(false\); exitPhotoMode\(\);/);
   assert.match(GAME, /isCareer\(\) && Career\.conflicted\(\)/);
   assert.match(GAME, /vTop\(\) \* \(lvl === 3 \? 0\.45 : 0\.6\)/);
+  assert.match(GAME, /if \(netPlay\.active\(\)\) netPlay\.stop\("local"\)/);
+  assert.match(GAME, /if \(netPlay\.active\(\) \|\| qualiNetDone\) return/);
   assert.match(SRC, /if \(!classification\.some\(\(r\) => r\.human\)\) return/);
 });
 
