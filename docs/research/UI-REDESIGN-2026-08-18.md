@@ -278,6 +278,14 @@ one obvious scroll region.
    category/mode chips `scrollIntoView`. Camera RESET titles name their scope.
    COPY VALUES uses local `--svhz`, not `40svh`.
 4. Journeys: Career, Season, Race-a-friend, Data Hub, results/help/history.
+   **In progress (2026-08-18).** Data Hub short-height chrome keys on
+   `body[data-density]` / `body[data-width]` (zoom-aware), not
+   `orientation + max-height`. Portrait 2×3 destinations keep orientation as a
+   viewport fact and use `data-width=narrow`. VS Friend sheet is
+   `#vsfriend-inner` with `--fit-at`; host/join columns are an `@container sheet`
+   split. Settings declares `--fit-at` and compact+narrow category tabs are one
+   pan-x row. How to Play contents is a left rail on `data-shape=wide` sheets and
+   a horizontal strip when compact.
 5. Race layer: HUD, pause, camera picker, photo mode, orientation and zoom.
 6. Final matrix: all screens, scales, inputs, screenshots, performance and
    accessibility checks; then cache/version bump as the final production edit.

@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1423">
+<meta name="apex-build" content="1424">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -21,7 +21,7 @@
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
 <link rel="preload" href="css/tokens.css?v=2ffb3614f3ec" as="style">
-<link rel="preload" href="css/components.css?v=3837f8949c66" as="style">
+<link rel="preload" href="css/components.css?v=1dcb92efc344" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -40,16 +40,16 @@
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=2ffb3614f3ec">
-<link rel="stylesheet" href="css/components.css?v=3837f8949c66">
+<link rel="stylesheet" href="css/components.css?v=1dcb92efc344">
 <link rel="stylesheet" href="css/tuner.css?v=a1172b2c2801" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/menus.css?v=26f56b5dc0e3">
 <link rel="stylesheet" href="css/carsetup.css?v=7e02d2ec63d3" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=23d39e8a5b44" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=37367486eb05" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/overlays.css?v=83f87cc30d69" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=ef0a7a9b028d">
 <link rel="stylesheet" href="css/track-detail.css?v=df4d8c68a8cc" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=8dac21ae655f" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/data.css?v=91f2e42053f4" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/data.css?v=4d28f6d8b6b4" media="print" onload="this.media='all'">
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
      parsers that scan every rel=stylesheet. -->
@@ -613,7 +613,7 @@
      no infrastructure. The codes are long because they carry a full ICE-gathered
      SDP, compressed — hence copy buttons rather than an expectation of typing. -->
 <dialog id="vsfriend" class="screen dim" data-esc-close="vs-close" aria-labelledby="dlg-vsfriend" hidden>
-  <div class="sheet">
+  <div id="vsfriend-inner" class="sheet">
     <div id="vs-head" class="sheet-head"><h2 id="dlg-vsfriend">RACE A FRIEND</h2></div>
     <div class="sheet-body pane" id="vs-body">
 
@@ -1128,14 +1128,14 @@
   <div id="howtoplay-inner" class="sheet">
     <div class="sheet-head">
       <h2 id="dlg-howtoplay">HOW TO PLAY</h2>
-      <nav id="htp-contents" aria-label="How to play sections">
-        <a href="#htp-controls">CONTROLS</a>
-        <a href="#htp-racing">RACING</a>
-        <a href="#htp-setup">SETUP</a>
-        <a href="#htp-modes">MODES</a>
-        <a href="#htp-friends">FRIENDS</a>
-      </nav>
     </div>
+    <nav id="htp-contents" aria-label="How to play sections">
+      <a href="#htp-controls">CONTROLS</a>
+      <a href="#htp-racing">RACING</a>
+      <a href="#htp-setup">SETUP</a>
+      <a href="#htp-modes">MODES</a>
+      <a href="#htp-friends">FRIENDS</a>
+    </nav>
     <dl class="sheet-body pane">
       <dt id="htp-controls">PC / KEYBOARD</dt>
       <dd>

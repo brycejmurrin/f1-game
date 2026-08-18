@@ -246,6 +246,11 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
   assert.match(tuner, /#lt-head h2, #ct-head/);
   assert.match(career, /#cr-inner\[data-density="compact"\] #cr-foot[\s\S]*?grid-template-columns/);
   assert.match(data, /body\[data-density="compact"\] \.dh-tab[\s\S]*?min-height:\s*var\(--tap-min\)/);
+  assert.match(data, /body\[data-density="compact"\] \.dh-overlay/);
+  assert.doesNotMatch(data, /orientation:\s*landscape\) and \(max-height:/,
+    "data hub short-height chrome must use body[data-density], not viewport max-height");
+  assert.match(data, /@media \(orientation:\s*portrait\)[\s\S]*?body\[data-width="narrow"\] \.dh-tabs/,
+    "portrait 2×3 destinations use the zoom-aware width flag");
   assert.match(menus, /#ss-inner\[data-density="compact"\] #ss-cal \.season-upcoming-row[^{]*\{[^}]*flex-wrap:\s*wrap/);
 });
 
@@ -284,6 +289,9 @@ test("How to Play exposes pinned semantic jump landmarks", () => {
   }
   assert.match(css, /#htp-contents\s*\{[\s\S]*?overflow-x:\s*auto/);
   assert.match(css, /#htp-contents a\s*\{[\s\S]*?min-height:\s*var\(--chip-h\)/);
+  assert.match(css, /#howtoplay-inner\[data-shape="wide"\] > #htp-contents/);
+  assert.match(css, /#howtoplay-inner\[data-density="compact"\] > #htp-contents/);
+  assert.match(read("index.html"), /id="vsfriend-inner"/);
   assert.match(css, /#howtoplay:has\(#htp-friends:target\)[\s\S]*?background:\s*var\(--red\)/);
   assert.match(css, /#howtoplay dt\[id\]\s*\{[^}]*scroll-margin-block-start/);
   assert.doesNotMatch(css, /#howtoplay dl\s*\{[^}]*max-content minmax\(0, 1fr\) max-content/,
@@ -334,5 +342,10 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
   assert.match(components, /\.sheet > :where\(\.sheet-head, \.sheet-body, \.sheet-foot\)\s*\{\s*min-width:\s*0/);
   assert.match(garage, /#cs-inner\s*\{\s*--fit-at:\s*340px/);
   assert.match(garage, /#cs-inner\s*\{\s*--fit-at:\s*240px/);
+  assert.match(components, /#pmsettings-inner \{\s*--fit-at:\s*300px/);
+  assert.match(components, /#pmsettings-inner \{\s*--fit-at:\s*220px/);
+  assert.match(components, /#vsfriend-inner \{\s*--fit-at:\s*280px/);
+  assert.match(read("css/overlays.css"), /@container sheet \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
+  assert.doesNotMatch(read("css/overlays.css"), /@media \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
   assert.match(menus, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/);
 });

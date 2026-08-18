@@ -712,6 +712,8 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    phone, with the rest black. 760px matches #pmsettings and #customize, which
    are the other two that carry a form in two columns. */
 #vsfriend    { --sheet-w: 760px; }
+#vsfriend-inner { --fit-at: 280px; }
+@media (orientation: landscape) { #vsfriend-inner { --fit-at: 200px; } }
 
 /* Dialogs stack over a full screen (the team picker sits on the select screen),
    so the scrim has to actually separate them — 0.6 left the sheet looking
@@ -784,7 +786,10 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    to other screens. A persistent category rail gives the screen one stable
    hierarchy at every size. On narrow sheets it wraps as a compact 2-col
    grid (CONTROLS | DISPLAY / MORE); once there is room it sits beside the
-   active panel. */
+   active panel. High UI sizes must not spend more than one primary control
+   row on that navigation (redesign contract). */
+#pmsettings-inner { --fit-at: 300px; }
+@media (orientation: landscape) { #pmsettings-inner { --fit-at: 220px; } }
 #pm-settings-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -836,6 +841,21 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   #pm-tab-display::after { font-size: var(--fs-1); }
   #pm-tab-controls::after { content: "CTRL"; }
   #pm-tab-display::after { content: "DISP"; }
+}
+/* Compact + locally narrow: one pan-x category row, not a 2+1 wrap that
+   spends the whole body before any setting appears. The 520px rail below
+   still wins when the sheet is wide enough. */
+@container sheet (max-width: 519px) {
+  #pmsettings-inner[data-density="compact"] #pm-category-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto; overflow-y: hidden;
+    overscroll-behavior-x: contain; touch-action: pan-x;
+    scrollbar-width: none;
+  }
+  #pmsettings-inner[data-density="compact"] #pm-category-tabs::-webkit-scrollbar { display: none; }
+  #pmsettings-inner[data-density="compact"] #pm-category-tabs > button {
+    flex: 0 0 auto; min-width: auto;
+  }
 }
 .pm-groups { min-width: 0; }
 .pm-groups > [role="tabpanel"] { min-width: 0; }

@@ -451,6 +451,27 @@ test("How to Play contents rail jumps within its single scroller", async ({ page
     };
   });
   expect(after.heading).toContain("RACE A FRIEND");
+
+  await page.evaluate(() => document.getElementById("htp-close").click());
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.click("#mb-help");
+  await page.waitForSelector("#howtoplay:not([hidden])");
+  await page.evaluate(() => window.SheetShape?.reclassify());
+  const wideHelp = await page.evaluate(() => {
+    const sheet = document.getElementById("howtoplay-inner");
+    const nav = document.getElementById("htp-contents").getBoundingClientRect();
+    const body = document.querySelector("#howtoplay .sheet-body").getBoundingClientRect();
+    return {
+      shape: sheet.dataset.shape,
+      density: sheet.dataset.density,
+      navLeftOfBody: nav.right <= body.left + 2,
+      sameBand: Math.abs(nav.top - body.top) < 80,
+    };
+  });
+  expect(wideHelp.shape).toBe("wide");
+  expect(wideHelp.density).not.toBe("compact");
+  expect(wideHelp.navLeftOfBody).toBe(true);
+  expect(wideHelp.sameBand).toBe(true);
 });
 
 test("balanced control rows derive their shape from local room", async ({ page }) => {
