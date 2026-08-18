@@ -444,6 +444,14 @@ test("Chrome MCP network fallback is pinned to the audited release", () => {
   assert.doesNotMatch(src, /chrome-devtools-mcp@latest/);
 });
 
+test("deploy-check --tip does not trip set -u on an empty rest array", () => {
+  const src = fs.readFileSync(SH, "utf8");
+  assert.match(src, /# bash \+ set -u: empty rest\[@\] is unbound/);
+  assert.match(src, /if \(\(\$\{#rest\[@\]\}\)\)/);
+  const r = spawnSync("bash", [SH, "help"], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+});
+
 test("Playwright MCP network fallback is pinned to the audited release", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/playwright-mcp.sh"), "utf8");
   assert.match(src, /MCP_NPM_PACKAGE="@playwright\/mcp@0\.0\.79"/);
