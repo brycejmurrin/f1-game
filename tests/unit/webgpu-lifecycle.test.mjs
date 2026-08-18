@@ -936,7 +936,8 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /apex26\.wgxHoldPresent/);
   assert.match(CHUNKS_SOURCE, /o\.matTrk = vec4<f32>\(pulled\.y, pulled\.z, pulled\.w, pulled\.x\)/);
   assert.match(CHUNKS_SOURCE, /let useWorldTrk = fromWorld\.w > 0\.5 && !isRoadDraw/);
-  assert.match(CHUNKS_SOURCE, /vTrk = select\(in\.trk, fromWorld\.xyz, useWorldTrk\)/);
+  assert.match(CHUNKS_SOURCE, /vTrk = select\(in\.matTrk\.xyz, fromWorld\.xyz, useWorldTrk\)/);
+  assert.match(CHUNKS_SOURCE, /dpdx\(in\.matTrk\.xyz\)/);
   assert.doesNotMatch(CHUNKS_SOURCE, /useVsTrk = isRoadDraw && in\.matTrk\.w > 0\.5/);
   assert.match(CHUNKS_SOURCE, /dpdx\(fromWorld\.xyz\)/);
   assert.match(CHUNKS_SOURCE, /isRoadDraw \|\| classified > 0\.5/);
@@ -1408,7 +1409,7 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
 
   // …and the footprint must reach every consumer as a parameter.
   for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
-                    /let fwTrkAttr = abs\(dpdx\(in\.trk\)\) \+ abs\(dpdy\(in\.trk\)\);/,
+                    /let fwTrkAttr = abs\(dpdx\(in\.matTrk\.xyz\)\) \+ abs\(dpdy\(in\.matTrk\.xyz\)\);/,
                     /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, litNrm, packOn\);/,
                     /roadMarkings\(&albedo, &rough, vTrk, fwTrk\);/,
                     // The one the first fix missed: this sits behind `if (detail

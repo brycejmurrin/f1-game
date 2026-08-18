@@ -708,16 +708,16 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Screen-space derivatives MUST be computed in uniform control flow at the top level
   // before any branching or early exit.
   let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
-  let fwTrkAttr = abs(dpdx(in.trk)) + abs(dpdy(in.trk));
+  let fwTrkAttr = abs(dpdx(in.matTrk.xyz)) + abs(dpdy(in.matTrk.xyz));
   let fromWorld = trkFromWorld(in.wpos);
   // fromWorld.xyz is (s, x, hw) — not .yzw (that was x/hw/valid and smashed dash AA).
   let fwWorld = abs(dpdx(fromWorld.xyz)) + abs(dpdy(fromWorld.xyz));
   let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
-  // Road draws bind authored storage[vid] (s,x,hw) and interpolate in.trk.
-  // The world LUT is for buryRibbon / terrain only — using it on the ribbon
-  // stair-steps dashes and swirls asphalt (measured, 3×3 blend still wonky).
+  // Road draws bind authored storage[vid]. Dawn drops interpolators after
+  // location 3 (in.trk at 5 painted shattered shards — measured). Use
+  // location-3 matTrk.xyz (s,x,hw). LUT stays on floor/terrain only.
   let useWorldTrk = fromWorld.w > 0.5 && !isRoadDraw;
-  let vTrk = select(in.trk, fromWorld.xyz, useWorldTrk);
+  let vTrk = select(in.matTrk.xyz, fromWorld.xyz, useWorldTrk);
   let lutAsphalt = abs(fromWorld.y) < fromWorld.z - 0.45;
   let vsMat = in.matTrk.w;
   let classified = select(select(0.0, 16.0, lutAsphalt), vsMat, vsMat > 0.5);
