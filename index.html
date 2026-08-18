@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1362">
+<meta name="apex-build" content="1367">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -21,7 +21,7 @@
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
 <link rel="preload" href="css/tokens.css?v=561c2b49ddba" as="style">
-<link rel="preload" href="css/components.css?v=f95fe5fc30f7" as="style">
+<link rel="preload" href="css/components.css?v=6d48f213dfbc" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -40,7 +40,7 @@
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=561c2b49ddba">
-<link rel="stylesheet" href="css/components.css?v=f95fe5fc30f7">
+<link rel="stylesheet" href="css/components.css?v=6d48f213dfbc">
 <link rel="stylesheet" href="css/tuner.css?v=c2105f72f07a" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/menus.css?v=fa8c0129335b">
 <link rel="stylesheet" href="css/carsetup.css?v=3805ca35dc15" media="print" onload="this.media='all'">
@@ -398,6 +398,8 @@
             <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
           <button id="pm-res">RESOLUTION: AUTO</button>
           <button id="pm-renderer">RENDERER: WEBGL2</button>
+          <!-- THREE PATH / SCREENSHOTS / SAVE SCREENSHOT / status are injected
+               by js/game/gfx-quality.js (same body-node reason as RESET RENDERER). -->
           <button id="pm-gfx" hidden>GRAPHICS: STANDARD</button>
         </section>
         <section id="pm-panel-performance" class="pm-group" role="tabpanel"
@@ -1648,9 +1650,9 @@
 <script crossorigin="anonymous" src="js/render/shaders/fx.js?v=6b8cf3c8af2b"></script>
 <script crossorigin="anonymous" src="js/render/shaders/post.js?v=b0faebec2527"></script>
 <script crossorigin="anonymous" src="js/render/glx/post.js?v=e9ce3c42b62d"></script>
-<script crossorigin="anonymous" src="js/render/glx/shadow.js?v=e19ecb6d569d"></script>
-<script crossorigin="anonymous" src="js/render/glx/chunked.js?v=3532e3959c30"></script>
-<script crossorigin="anonymous" src="js/render/glx.js?v=8e78ea914c20"></script>
+<script crossorigin="anonymous" src="js/render/glx/shadow.js?v=6f69c6b3afe0"></script>
+<script crossorigin="anonymous" src="js/render/glx/chunked.js?v=9460f26a728e"></script>
+<script crossorigin="anonymous" src="js/render/glx.js?v=53022943f9ef"></script>
 <!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
      two OPT-IN renderer backends and are injected by js/game.js only when
      apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that
@@ -1776,7 +1778,7 @@
 <script crossorigin="anonymous" src="js/game/cam-tuner.js?v=122e6bf14087"></script>
 <script crossorigin="anonymous" src="js/game/steer-tuning.js?v=a11315c314a1"></script>
 <script crossorigin="anonymous" src="js/game/perf.js?v=534904265164"></script>
-<script crossorigin="anonymous" src="js/game/gfx-quality.js?v=169f3ef0bb71"></script>
+<script crossorigin="anonymous" src="js/game/gfx-quality.js?v=35542784f968"></script>
 <script crossorigin="anonymous" src="js/game/cockpit-opts.js?v=2257ce9e488d"></script>
 <script crossorigin="anonymous" src="js/game/perf-try.js?v=72a88f707a2f"></script>
 <script crossorigin="anonymous" src="js/game/metrics.js?v=0e0824a0f9f9"></script>

@@ -1062,6 +1062,8 @@ returns real rendered pixels (offscreen mode; see
 `docs/research/WEBGPU-PARITY.md` §1a for the four bugs the first capture
 found). **Software compositor (2026-08-17, cache 1342+):** WGX soft-presents
 the final pass into a `COPY_SRC` texture and 2D-blits onto visible `#game` —
+play with this in SETTINGS ▸ SCREENSHOTS (AUTO / 2D BLIT / NATIVE) and the
+three.js counterpart SETTINGS ▸ THREE PATH (AUTO / WEBGL2 / WEBGPU).
 `node tools/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
 gate; native swapchain screenshots stay black. `GLX.capturePixels()` readback
 (`wgx-capture.mjs` → `frame.png`) is a secondary oracle and can still flake on
@@ -1096,8 +1098,25 @@ visible `#game` via a 2D blit (auto on software adapters +
 `awaitSoftPresent`). Readback oracle: `node tools/wgx-capture.mjs`. Lavapipe
 needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
 `/usr/share/vulkan/icd.d/` until that package was installed and the env
-snapshot Saved. TLX must stay on WebGL2 (`--backend three` / `tlxForceGL`) —
-three's WebGPU path dies on SwiftShader `mappedAtCreation`. Index:
+snapshot Saved. TLX CI stays on WebGL2 (`--backend three` / `tlxForceGL`);
+THREE PATH: WEBGPU 2D-blits the LDR target (`readRenderTargetPixelsAsync`).
+`mappedAtCreation` uploads are shimmed to `queue.writeBuffer` so SwiftShader
+does not exhaust Dawn's mappable pool. SETTINGS ▸ WEBGPU / THREE.JS stay on
+those backends (phones and Safari included — lite stack, 8-bit swapchain);
+they must not silently bind GLX. THREE PATH AUTO may land on three
+WebGL2 (`--tlx-auto-gl` / `apex26.tlxAutoGL`) after WebGPU dies in this
+tab — still TLX, not game WEBGL2. THREE PATH: WEBGL2 remains the CI pin.
+
+**TLX WebGPU `configure` null was a self-poison (2026-08-18).**
+`detectSoftwareGL()` called `#game.getContext("webgl2")` after
+`renderer.init()`. three r185.1 does not claim the canvas in `init()` —
+`getContext("webgpu")+configure()` is lazy on first present(). MDN: one
+context type per canvas for life. Live probe: `data-engine=three.js r185
+webgpu` AND `getContext("webgpu")===null` AND a live WebGL2 context on
+`#game`. Fix: sniff GL only when `forceWebGL`; the WebGPU path uses
+`_softAdapter`. Instanced prop colour is a geometry
+`InstancedBufferAttribute` named `color` (not `imesh.instanceColor`) so
+Dawn slots 2/5 match the instance count. Index:
 `AGENTS.md` §Seeing the game / §Cursor Cloud;
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
 

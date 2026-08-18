@@ -162,37 +162,84 @@ const TLX = (function () {
       // encode anywhere (js/render/shaders/chunks.js).
       THREE.ColorManagement.enabled = false;
 
-      // ── WHICH three BACKEND: apex26.tlxForceGL "1" = pin WebGL2, "0" = allow
-      // WebGPU, UNSET = the phone/desktop split below. ─────────────────────────
-      //
-      // PHONES DEFAULT TO WebGL2, and that default is the point of this block.
-      // iOS 26+ Safari ships navigator.gpu, so on an iPhone three picks its
-      // WebGPU backend — and WebKit's WebGPU is documented-unstable through
-      // 26.x (black frames, crashes, throughput below its own WebGL2; still
-      // being patched in the 27 beta). three's automatic fallback does NOT
-      // cover that: getFallback fires only when WebGPU is ABSENT, never when it
-      // is present and broken, so "three falls back by itself" is true for an
-      // old Android and false for exactly the device this shipped for.
-      // The WebGL2 half is also the better-tested half of TLX — every milestone
-      // was developed and CI-gated through this same pin, and tsl-lit.js's
-      // STANDING RULE (the toVar anchors) was measured against GLSL codegen,
-      // not WGSL. Desktop keeps auto-pick: Chrome/Edge WebGPU is where the
-      // backend wins, and a desktop that renders garbage is one tap from the
-      // RENDERER button, which a phone under a jetsam kill is not.
-      // "1" is still the CI/SwiftShader repro pin the specs set
-      // (tests/specs/tlx-probes.spec.js) and behaves exactly as before; "0" is
-      // the escape hatch for deliberately exercising WebGPU on a real phone.
+      // ── WHICH three BACKEND: apex26.tlxForceGL "1" = pin WebGL2, "0" =
+      // pin WebGPU, UNSET = AUTO. AUTO may land on three's WebGL2 — that
+      // is success, not a silent fall to game GLX. Decision:
+      //   pin "1"                         → three WebGL2 (CI / escape hatch)
+      //   pin "0"                         → three WebGPU only
+      //   AUTO + no navigator.gpu         → three WebGL2
+      //   AUTO + session tlxAutoGL="1"    → three WebGL2 (this tab already
+      //                                     lost WebGPU; stay on TLX)
+      //   AUTO + gpu present              → try WebGPU (lite caps on phone /
+      //                                     WebKit / software). If init()
+      //                                     throws before #game is claimed,
+      //                                     retry three WebGL2 on the same
+      //                                     canvas. Third device.lost sets
+      //                                     tlxAutoGL and reloads — never
+      //                                     gfxClaimFail (that binds GLX).
       const _glPin = (function () {
         try { return localStorage.getItem("apex26.tlxForceGL"); } catch (_) { return null; }
       })();
-      // Unset pin: WebKit (Safari Mac + every iOS browser) → WebGL2. three's
-      // getFallback fires only when navigator.gpu is ABSENT; Safari 26 exposes
-      // it (user-enabled) and then WebGPURenderer paints black / throws.
-      // Chromium desktop keeps auto-pick. `apex26.tlxForceGL` "1"/"0" overrides.
+      const _autoStayGL = (function () {
+        try { return sessionStorage.getItem("apex26.tlxAutoGL") === "1"; } catch (_) { return false; }
+      })();
+      const _hasGpu = !!(typeof navigator !== "undefined" && navigator.gpu);
       const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
       const isWebKit = /CriOS|FxiOS|EdgiOS/.test(ua) ||
         (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua));
-      const forceWebGL = _glPin === "1" ? true : _glPin === "0" ? false : !!(isMobile || isWebKit);
+      // Software WebGPU never composites a visible swapchain — AUTO keeps
+      // three's WebGPU backend and 2D-blits the LDR target (same as WGX)
+      // until this tab proves WebGPU cannot stay up. mappedAtCreation
+      // uploads are shimmed to queue.writeBuffer after init (Dawn's
+      // mappable pool dies on the first large mesh; PlayCanvas #6676).
+      // Phones / WebKit take the same WebGPU path with WGX-lite caps
+      // (8-bit canvas, no MSAA 4, low-power) when AUTO tries WebGPU.
+      let _softAdapter = false;
+      try {
+        if (navigator.gpu && navigator.gpu.requestAdapter) {
+          const ad = await navigator.gpu.requestAdapter();
+          if (ad) {
+            const info = ad.info || null;
+            const dev = info && info.device;
+            const ven = info && info.vendor;
+            const arch = info && info.architecture;
+            const desc = info && info.description;
+            const infoBlob = [dev, ven, arch, desc].filter(Boolean).join(" ").toLowerCase();
+            const infoEmpty = !info || !(dev || ven || arch);
+            _softAdapter = !!(ad.isFallbackAdapter
+              || infoEmpty
+              || /HeadlessChrome/i.test(ua)
+              || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob));
+          }
+        }
+      } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still tries WebGPU when gpu exists */ }
+      let forceWebGL = _glPin === "1" || (_glPin !== "0" && (!_hasGpu || _autoStayGL));
+      const _liteGpu = !!(isMobile || isWebKit || _softAdapter);
+
+      // SCREENSHOTS (`apex26.wgxCapture`, same key as WGX): session then local.
+      // NATIVE ("0") keeps three's swapchain so SETTINGS can show why software
+      // shots are black. AUTO/2D BLIT on a software adapter (or an explicit
+      // blit) copies the LDR target onto visible #game — never getCurrentTexture
+      // (first call breaks mapAsync device-wide; WGX header + WebGPU Explainer).
+      const _capPref = (function () {
+        try {
+          const s = sessionStorage.getItem("apex26.wgxCapture");
+          if (s === "1" || s === "0") return s;
+        } catch (_) { /* fall through */ }
+        try {
+          const s = localStorage.getItem("apex26.wgxCapture");
+          if (s === "1" || s === "0") return s;
+        } catch (_) { /* AUTO */ }
+        return null;
+      })();
+      let _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _capPref === "1");
+      let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
+      let _blitRT = null, _softImg = null, _softBlitGen = 0;
+      const _softPresentWaiters = [];
+      // Layout/CSS size follows the VISIBLE canvas. Soft-present is a sibling
+      // 2D overlay — never getContext("2d") on #game (one context type per
+      // canvas for life; three's WebGPU configure is lazy on first present).
+      let _layoutCanvas = canvas;
 
       // ── OPAQUE CANVAS (js/render/glx.js: `alpha: false`) ────────────────────
       // Not cosmetic, and not a memory tweak: the lit fragment writes the SSR
@@ -222,41 +269,140 @@ const TLX = (function () {
       // second getContext returns the existing context and silently drops
       // them).
       let ownGL = null;
-      if (forceWebGL) {
-        try {
-          ownGL = canvas.getContext("webgl2", {
-            antialias: !isMobile,        // must agree with the renderer's own antialias
-            alpha: false,
-            depth: true,
-            stencil: false,
-            powerPreference: "high-performance",
-          });
-        } catch (_) { ownGL = null; }    // null -> three makes its own, as before
+      async function bootRenderer(forceWebGL) {
+        let glCtx = null;
+        if (forceWebGL) {
+          try {
+            glCtx = canvas.getContext("webgl2", {
+              antialias: !isMobile,        // must agree with the renderer's own antialias
+              alpha: false,
+              depth: true,
+              stencil: false,
+              powerPreference: "high-performance",
+            });
+          } catch (_) { glCtx = null; }    // null -> three makes its own, as before
+        }
+        const renderer = new THREE.WebGPURenderer({
+          canvas,
+          alpha: false,
+          ...(glCtx ? { context: glCtx } : {}),
+          // js/render/glx.js's `antialias: !IS_MOBILE` 1:1 — "phones never take
+          // the context-level AA path". This is NOT the scene target's MSAA
+          // (msaa() below is honestly 1: the post chain deliberately has no
+          // multisampled scene target — see the DEVIATION note in tlx-post.js).
+          // three turns antialias:true into renderer.samples = 4, and samples
+          // applies to the DEFAULT CANVAS target: a 4x multisampled colour+depth
+          // store at the full backing-store size, resolved every frame. With the
+          // post chain up the canvas receives exactly one fullscreen FXAA quad,
+          // which has no interior edges for MSAA to find — so on a phone that is
+          // ~20 MB and a full-res resolve per frame bought for nothing, against
+          // the jetsam budget that made GLX write the same line. Desktop keeps it
+          // for the post-less fallback path (a broken post factory renders the
+          // world straight to the canvas, where the samples do work).
+          // Lite WebGPU (phone / WebKit / software): MSAA-4 resolve has come
+          // back blank (WGX forces 1).
+          antialias: forceWebGL ? !isMobile : !_liteGpu,
+          // WebKit #269582: a float swapchain crashed / painted black through
+          // iOS 26.x. HDR stays in offscreen targets (tlx-post); only the
+          // canvas format downgrades. Same as WGX_LITE → bgra8unorm.
+          ...(!forceWebGL && (isMobile || isWebKit)
+            ? { outputType: THREE.UnsignedByteType, powerPreference: "low-power" }
+            : {}),
+          forceWebGL,
+        });
+        renderer.setPixelRatio(1);            // we manage DPR/renderScale ourselves
+        renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+        renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
+        await renderer.init();
+        // three r185.1 WebGPUAttributeUtils creates every GPUBuffer with
+        // mappedAtCreation:true, then getMappedRange()+unmap(). Dawn's
+        // client-visible mapping pool is tiny on SwiftShader — a 35 MB scenery
+        // upload exhausts it and EVERY later createBuffer (even 24 B) throws
+        // (mcp-probe 2026-08-18; same class as WGX _mkBuffer / PlayCanvas #6676).
+        // Rewrite those creates to unmapped + queue.writeBuffer. Readback
+        // (mapAsync) is unchanged — those buffers are not mappedAtCreation.
+        if (renderer.backend && renderer.backend.isWebGPUBackend && renderer.backend.device) {
+          const _dev = renderer.backend.device;
+          if (!_dev.__apexWriteBuf && typeof _dev.createBuffer === "function") {
+            const _origCreate = _dev.createBuffer.bind(_dev);
+            const COPY_DST = (typeof GPUBufferUsage !== "undefined" && GPUBufferUsage.COPY_DST)
+              ? GPUBufferUsage.COPY_DST : 0x0008;
+            _dev.createBuffer = function (desc) {
+              if (!desc || !desc.mappedAtCreation) return _origCreate(desc);
+              const size = desc.size | 0;
+              const buf = _origCreate({
+                size,
+                usage: (desc.usage | COPY_DST),
+                label: desc.label,
+              });
+              let staging = new ArrayBuffer(size);
+              const parts = [];
+              buf.getMappedRange = function (offset, mapSize) {
+                const o = offset | 0;
+                const n = mapSize == null ? (size - o) : (mapSize | 0);
+                if (o === 0 && n === size) return staging;
+                const part = new ArrayBuffer(n);
+                parts.push({ o, part });
+                return part;
+              };
+              buf.unmap = function () {
+                try {
+                  for (let i = 0; i < parts.length; i++) {
+                    const p = parts[i];
+                    new Uint8Array(staging, p.o, p.part.byteLength).set(new Uint8Array(p.part));
+                  }
+                  if (staging && size) _dev.queue.writeBuffer(buf, 0, staging);
+                } catch (_) { /* one failed upload must not take down present() */ }
+                staging = null;
+                parts.length = 0;
+              };
+              return buf;
+            };
+            _dev.__apexWriteBuf = true;
+          }
+          if (_liteGpu) {
+            try { renderer.samples = 1; } catch (_) { /* samples is a three setter; ignore a frozen build */ }
+          }
+        }
+        return { renderer: renderer, ownGL: glCtx };
       }
-      const renderer = new THREE.WebGPURenderer({
-        canvas,
-        alpha: false,
-        ...(ownGL ? { context: ownGL } : {}),
-        // js/render/glx.js's `antialias: !IS_MOBILE` 1:1 — "phones never take
-        // the context-level AA path". This is NOT the scene target's MSAA
-        // (msaa() below is honestly 1: the post chain deliberately has no
-        // multisampled scene target — see the DEVIATION note in tlx-post.js).
-        // three turns antialias:true into renderer.samples = 4, and samples
-        // applies to the DEFAULT CANVAS target: a 4x multisampled colour+depth
-        // store at the full backing-store size, resolved every frame. With the
-        // post chain up the canvas receives exactly one fullscreen FXAA quad,
-        // which has no interior edges for MSAA to find — so on a phone that is
-        // ~20 MB and a full-res resolve per frame bought for nothing, against
-        // the jetsam budget that made GLX write the same line. Desktop keeps it
-        // for the post-less fallback path (a broken post factory renders the
-        // world straight to the canvas, where the samples do work).
-        antialias: !isMobile,
-        forceWebGL,
-      });
-      renderer.setPixelRatio(1);            // we manage DPR/renderScale ourselves
-      renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
-      renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
-      await renderer.init();
+      let renderer;
+      try {
+        const boot = await bootRenderer(forceWebGL);
+        renderer = boot.renderer;
+        ownGL = boot.ownGL;
+      } catch (e) {
+        // init() does not getContext("webgpu") — configure is lazy on first
+        // present() — so #game is still unbound and AUTO can retry WebGL2.
+        if (_glPin !== "0" && _glPin !== "1" && !forceWebGL) {
+          try { Log.warn("gfx", "[TLX] AUTO WebGPU init failed — three WebGL2", e); } catch (_) { /* Log optional */ }
+          forceWebGL = true;
+          const boot = await bootRenderer(true);
+          renderer = boot.renderer;
+          ownGL = boot.ownGL;
+        } else {
+          throw e;
+        }
+      }
+      // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
+      _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _capPref === "1");
+      // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
+      // or call getContext("2d"|"webgl2") on three's node — init() has not
+      // claimed #game yet (see detectSoftwareGL). SAVE SCREENSHOT reads
+      // capturePixels() when softPresent() is true, so a black native #game
+      // is fine.
+      if (_softBlit && typeof document !== "undefined" && canvas && canvas.parentNode) {
+        _gpuCanvas = canvas;
+        _displayCanvas = document.createElement("canvas");
+        _displayCanvas.id = "game-soft";
+        _displayCanvas.setAttribute("aria-hidden", "true");
+        if (_displayCanvas.style) {
+          _displayCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1";
+        }
+        canvas.parentNode.insertBefore(_displayCanvas, canvas.nextSibling);
+        try { _displayCtx = _displayCanvas.getContext("2d", { willReadFrequently: true }); }
+        catch (_) { _displayCtx = null; /* capturePixels can still read the RT */ }
+      }
       // r185.1 keys the TSL node-builder cache on RenderObject.initialCacheKey,
       // which folds in renderer.contextNode.version + the scene lights hash.
       // Both change across the many renderer.render() calls of a track load
@@ -280,9 +426,19 @@ const TLX = (function () {
           return fam + "|" + attrs + "|" + idx + "|" + inst;
         };
       }
-      // SwiftShader / llvmpipe / WARP: the WebGL2 context already exists
-      // after init() (three claimed the canvas). Used to shrink shadow maps
-      // — see tlx-shadow.js. Real GPUs keep the authored 2048/1024/512.
+      // SwiftShader / llvmpipe / WARP: shrink shadow maps (tlx-shadow.js).
+      // Real GPUs keep the authored 2048/1024/512.
+      //
+      // CRITICAL: renderer.init() does NOT claim #game. r185.1 WebGPUBackend
+      // init() requests the device, then updateSize() only deletes the
+      // canvas-target cache. getContext("webgpu")+configure() is lazy — first
+      // present() / setRenderTarget(null). A canvas is bound to one context
+      // type for LIFE (MDN HTMLCanvasElement.getContext). Sniffing WebGL2 on
+      // #game here is what made configure() throw on null (mcp-probe
+      // 2026-08-18: data-engine already "three.js r185 webgpu",
+      // getContext("webgpu")===null, getContext("webgl2") a live context).
+      // Adapter.info already classified SwiftShader (_softAdapter). The
+      // forceWebGL path already owns #game as WebGL2 (ownGL above).
       function detectSoftwareGL() {
         try {
           const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
@@ -293,7 +449,13 @@ const TLX = (function () {
           return /swiftshader|llvmpipe|softpipe|microsoft basic render|gdi generic/i.test(name);
         } catch (_) { return false; }
       }
-      const softwareGL = detectSoftwareGL();
+      const softwareGL = forceWebGL ? detectSoftwareGL() : !!_softAdapter;
+      try {
+        if (canvas && typeof canvas.setAttribute === "function") {
+          const api = (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2";
+          canvas.setAttribute("data-engine", "three.js r185 " + api);
+        }
+      } catch (_) { /* three already stamped a label; ours is best-effort */ }
       try {
         Log.info("gfx", "[TLX] three backend:",
           (renderer.backend && renderer.backend.isWebGPUBackend) ? "WebGPU" : "WebGL2",
@@ -341,12 +503,20 @@ const TLX = (function () {
           if (n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
           else {
             // Third loss in one tab. GLX's identical 2-cap ends in a frozen
-            // frame because GLX has nothing beneath it — TLX DOES: surrender
-            // the tab to WebGL2 (the WGX device-lost idiom) and record why,
-            // instead of freezing on the last frame with the label lying.
-            try { localStorage.setItem("apex26.gfxTlxFail", "context lost x" + n + " — tab fell back to WebGL2"); } catch (_) { /* blocked storage: the label still flips via gfxBound */ }
-            try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
-            sessionStorage.setItem("apex26.gfxClaimFail", "1");
+            // frame because GLX has nothing beneath it. AUTO stays on TLX
+            // by taking three WebGL2 next boot (mcp-probe 2026-08-18: pin
+            // "1" already binds WebGL2RenderingContext on #game). gfxClaimFail
+            // skips the three opt-in and binds game GLX — do not write it
+            // on AUTO. Pin "0" (force WebGPU) still surrenders to GLX.
+            const autoPath = _glPin !== "0" && _glPin !== "1";
+            if (autoPath) {
+              try { sessionStorage.setItem("apex26.tlxAutoGL", "1"); } catch (_) { /* next boot still tries WebGPU */ }
+              try { localStorage.setItem("apex26.gfxTlxFail", "context lost x" + n + " — AUTO stayed on three WebGL2"); } catch (_) { /* backendState still names the path */ }
+            } else {
+              try { localStorage.setItem("apex26.gfxTlxFail", "context lost x" + n + " — tab fell back to WebGL2"); } catch (_) { /* blocked storage: the label still flips via gfxBound */ }
+              try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
+              sessionStorage.setItem("apex26.gfxClaimFail", "1");
+            }
             setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
           }
         } catch (_) { /* no sessionStorage -> skip the auto-recovery rather than loop uncounted */ }
@@ -702,22 +872,43 @@ const TLX = (function () {
         return m;
       }
       const _instMat = new THREE.Matrix4();
-      const _instColor = new THREE.Color();
       const _instAlive = new Set();   // InstancedMesh objects shown this frame
       const _instRegistry = [];       // all live InstancedMeshes (hide undrawn)
 
+      function _instColorAttr(imesh, cap) {
+        const need = Math.max(1, cap | 0);
+        const geo = imesh.geometry;
+        if (!geo) return null;
+        const attr = geo.getAttribute("color");
+        if (attr && attr.isInstancedBufferAttribute && attr.count >= need) return attr;
+        // Per-vertex `color` (buildGeometry) is ~16×vec3 = 192 B on a typical
+        // prop. TSL attribute("color") + InstancedMesh is uploaded with
+        // instance stepMode on WebGPU — Dawn then wants count*12 bytes
+        // (mcp-probe: 566 instances → 6792 vs 192 at slot 2). Put an
+        // InstancedBufferAttribute of size `cap` on the geometry and do NOT
+        // also set imesh.instanceColor: NodeMaterial multiplies instanceColor
+        // into colorNode (three NodeMaterial.js), which bound a second
+        // instance-rate slot (slot 5, 12 B when setColorAt lazily allocated 1).
+        const next = new THREE.InstancedBufferAttribute(new Float32Array(need * 3), 3);
+        next.setUsage(THREE.DynamicDrawUsage);
+        next.array.fill(1);
+        geo.setAttribute("color", next);
+        return next;
+      }
       function _writeInstanceMatrices(imesh, matrices, colors, n) {
-        for (let i = 0; i < n; i++) {
+        const cap = imesh.userData.tlxInstCap || n;
+        const drawN = Math.min(n, cap);
+        const col = _instColorAttr(imesh, cap);
+        for (let i = 0; i < drawN; i++) {
           _instMat.fromArray(matrices, i * 16);
           imesh.setMatrixAt(i, _instMat);
-          if (colors && colors.length && imesh.setColorAt) {
-            _instColor.setRGB(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
-            imesh.setColorAt(i, _instColor);
+          if (colors && colors.length && col) {
+            col.setXYZ(i, colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
           }
         }
         imesh.instanceMatrix.needsUpdate = true;
-        if (imesh.instanceColor) imesh.instanceColor.needsUpdate = true;
-        imesh.count = n;
+        if (col) col.needsUpdate = true;
+        imesh.count = drawN;
       }
 
       function createInstancedBatch(data, matrices, colors, opts) {
@@ -731,10 +922,7 @@ const TLX = (function () {
         imesh.frustumCulled = false;
         imesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         imesh.userData.tlxInstCap = n;
-        if (colors && colors.length) {
-          imesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
-          imesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
-        }
+        _instColorAttr(imesh, n);
         _writeInstanceMatrices(imesh, matrices, colors, n);
         imesh.visible = false;
         scene.add(imesh);
@@ -1120,8 +1308,8 @@ const TLX = (function () {
       if (typeof window !== "undefined" && window.addEventListener) {
         window.addEventListener("resize", markCssDirty);
         window.addEventListener("orientationchange", markCssDirty);
-        if (typeof ResizeObserver === "function" && canvas) {
-          try { new ResizeObserver(markCssDirty).observe(canvas); } catch (_) {}
+        if (typeof ResizeObserver === "function" && _layoutCanvas) {
+          try { new ResizeObserver(markCssDirty).observe(_layoutCanvas); } catch (_) {}
         }
       }
       function resize() {
@@ -1131,8 +1319,8 @@ const TLX = (function () {
         // doubled its render target every begin() until allocation failed. GLX and
         // WGX both read clientWidth with a floor of 1 for the same reason.
         if (cssDirty || cssW <= 0 || cssH <= 0) {
-          cssW = canvas.clientWidth;
-          cssH = canvas.clientHeight;
+          cssW = _layoutCanvas.clientWidth;
+          cssH = _layoutCanvas.clientHeight;
           cssDirty = false;
         }
         const cw = cssW || 1;
@@ -1143,6 +1331,10 @@ const TLX = (function () {
         if (w !== W || h !== H) {
           W = w; H = h;
           renderer.setSize(w, h, false);    // false: CSS keeps sizing the canvas
+          if (_displayCanvas && (_displayCanvas.width !== w || _displayCanvas.height !== h)) {
+            _displayCanvas.width = w;
+            _displayCanvas.height = h;
+          }
           // M8: the post targets track the scaled backing size (PerfGov
           // renderScale changes land here through setRenderScale -> resize).
           if (post) post.resize(w, h);
@@ -1150,6 +1342,76 @@ const TLX = (function () {
       }
 
       const noopMesh = () => ({ __tlx: true, count: 0 });
+
+      function _captureRT() {
+        if (post && typeof post.ldrTarget === "function") return post.ldrTarget();
+        return _blitRT;
+      }
+      function _ensureBlitRT(w, h) {
+        if (!_blitRT) {
+          _blitRT = new THREE.RenderTarget(w, h, {
+            type: THREE.UnsignedByteType, depthBuffer: true,
+          });
+          _blitRT.texture.generateMipmaps = false;
+          _blitRT.texture.colorSpace = THREE.NoColorSpace;
+        } else if (_blitRT.width !== w || _blitRT.height !== h) {
+          _blitRT.setSize(w, h);
+        }
+        return _blitRT;
+      }
+      // three pads copyTextureToBuffer rows to 256 bytes (WebGPU rule).
+      function _unstrideRgba(src, w, h) {
+        const bpr = 256 * Math.ceil((w * 4) / 256);
+        const data = new Uint8ClampedArray(w * h * 4);
+        const row = w * 4;
+        if (src.length < (h - 1) * bpr + row) {
+          // tight pack fallback (WebGL backend copy)
+          if (src.length >= w * h * 4) data.set(src.subarray(0, w * h * 4));
+          return data;
+        }
+        for (let y = 0; y < h; y++) {
+          data.set(src.subarray(y * bpr, y * bpr + row), y * row);
+        }
+        return data;
+      }
+      function _readLdr(rt) {
+        const w = (rt && rt.width) || W, h = (rt && rt.height) || H;
+        return renderer.readRenderTargetPixelsAsync(rt, 0, 0, w, h).then(function (src) {
+          return { w, h, data: _unstrideRgba(src, w, h) };
+        });
+      }
+      function _softBlitNotify() {
+        _softBlitGen++;
+        const ws = _softPresentWaiters.splice(0);
+        for (let i = 0; i < ws.length; i++) {
+          try { ws[i](_softBlitGen); } catch (_) { /* harness waiter */ }
+        }
+      }
+      function _queueSoftBlit(rt) {
+        if (!_softBlit || !_displayCtx || !rt || typeof renderer.readRenderTargetPixelsAsync !== "function") return;
+        _readLdr(rt).then(function (pack) {
+          try {
+            const w = pack.w, h = pack.h, src = pack.data;
+            if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
+              _softImg = _displayCtx.createImageData(w, h);
+            }
+            const img = _softImg;
+            let maxPx = 0;
+            for (let i = 0; i < src.length; i += 4) {
+              img.data[i] = src[i];
+              img.data[i + 1] = src[i + 1];
+              img.data[i + 2] = src[i + 2];
+              img.data[i + 3] = 255;
+              const s = src[i] + src[i + 1] + src[i + 2];
+              if (s > maxPx) maxPx = s;
+            }
+            if (maxPx >= 8) {
+              _displayCtx.putImageData(img, 0, 0);
+              _softBlitNotify();
+            }
+          } catch (_) { /* 2D blit failed */ }
+        }).catch(function () { /* RT not GPU-ready this frame */ });
+      }
 
       // ── the backend object (the ~40-member seam contract) ────────────────
       const backend = {
@@ -1495,6 +1757,54 @@ const TLX = (function () {
         makeFrustumPlanes(viewProj) {
           return TLXShaders.makeFrustumPlanes(viewProj);
         },
+        // Screenshot counterparts of WGX capturePixels / awaitSoftPresent.
+        // WebGL2: readPixels from the canvas (Y-flip). WebGPU: three's
+        // readRenderTargetPixelsAsync → copyTextureToBuffer + mapAsync on the
+        // LDR target (WebGPU Fundamentals). Never getCurrentTexture().
+        capturePixels() {
+          const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
+          if (gl && typeof gl.readPixels === "function") {
+            return new Promise((resolve, reject) => {
+              try {
+                const w = W, h = H;
+                if (!(w > 0 && h > 0)) throw new Error("no frame size");
+                const raw = new Uint8Array(w * h * 4);
+                gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+                const data = new Uint8ClampedArray(w * h * 4);
+                for (let y = 0; y < h; y++) {
+                  const src = (h - 1 - y) * w * 4;
+                  data.set(raw.subarray(src, src + w * 4), y * w * 4);
+                }
+                resolve({ width: w, height: h, data });
+              } catch (e) { reject(e); }
+            });
+          }
+          const rt = _captureRT();
+          if (!rt || typeof renderer.readRenderTargetPixelsAsync !== "function") {
+            return Promise.reject(new Error(
+              "three.js WebGPU screenshot needs SCREENSHOTS: 2D BLIT (or AUTO on software)"));
+          }
+          return _readLdr(rt).then(function (pack) {
+            return { width: pack.w, height: pack.h, data: pack.data };
+          });
+        },
+        awaitSoftPresent(timeoutMs) {
+          if (!_softBlit || !_displayCtx) return Promise.resolve(_softBlitGen);
+          const start = _softBlitGen;
+          const ms = timeoutMs != null ? timeoutMs : 15000;
+          return new Promise(function (resolve, reject) {
+            const timer = setTimeout(function () {
+              reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
+            }, ms);
+            _softPresentWaiters.push(function (gen) {
+              if (gen > start) {
+                try { clearTimeout(timer); } catch (_) { /* harness */ }
+                resolve(gen);
+              }
+            });
+          });
+        },
+        softPresent() { return !!_softBlit; },
         aabbInFrustum: (planes, mn, mx) => TLXShaders.aabbInFrustum(planes, mn, mx),
         aabbDist2: (mn, mx, ex, ey, ez) => TLXShaders.aabbDist2(mn, mx, ex, ey, ez),
 
@@ -1762,6 +2072,14 @@ const TLX = (function () {
           };
           const paintCanvas = () => {
             pinSkyMaterial();
+            if (_softBlit) {
+              const rt = _ensureBlitRT(W, H);
+              renderer.setRenderTarget(rt);
+              renderer.render(scene, camera);
+              renderer.setRenderTarget(null);
+              _queueSoftBlit(rt);
+              return;
+            }
             renderer.setRenderTarget(null);
             renderer.render(scene, camera);
           };
@@ -1777,7 +2095,11 @@ const TLX = (function () {
             }
           };
           const refuseTab = () => {
-            try { sessionStorage.setItem("apex26.gfxClaimFail", "1"); } catch (_) { /* this tab keeps trying */ }
+            if (_glPin !== "0" && _glPin !== "1") {
+              try { sessionStorage.setItem("apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps trying WebGPU */ }
+            } else {
+              try { sessionStorage.setItem("apex26.gfxClaimFail", "1"); } catch (_) { /* this tab keeps trying */ }
+            }
             try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* skipClaim still blocks revert */ }
             try { location.reload(); } catch (_) { /* harness: GLX attaches next real boot */ }
           };
@@ -1787,6 +2109,7 @@ const TLX = (function () {
               renderer.setRenderTarget(post.sceneTarget());
               renderer.render(scene, camera);
               post.present(opts, _postF);
+              if (_softBlit && post.ldrTarget) _queueSoftBlit(post.ldrTarget());
             } else {
               paintCanvas();
             }
@@ -1901,7 +2224,10 @@ const TLX = (function () {
           backendState() {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
-              forceWebGL, pin: _glPin, isMobile, mobileTier, softwareGL,
+              forceWebGL, pin: _glPin, autoStayGL: _autoStayGL, hasGpu: _hasGpu,
+              isMobile, mobileTier, isWebKit, liteGpu: _liteGpu,
+              softwareGL, softAdapter: _softAdapter,
+              softBlit: _softBlit, capPref: _capPref,
             };
           },
           materialCacheSize() { return matCache.size; },

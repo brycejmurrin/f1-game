@@ -203,10 +203,14 @@
       let m = decalCache.get(key);
       if (!m) {
         if (decalCache.size >= DECAL_CACHE_CAP) {
+          // Same eviction as tlx.js materialFor: drop the Map entry, do NOT
+          // dispose(). three r185.1 leaks shared texture bindGroups on
+          // Material.dispose() (#33952; fixed unpublished r186), and
+          // drawList still holds this material until present() flushes.
+          // The texture itself is game-owned either way.
           for (const [k, v] of decalCache) {
             if (v && v.__tlxFrame === _decalFrame) continue;
             decalCache.delete(k);
-            if (v) v.dispose();        // material only — the texture is game-owned
             break;
           }
         }
