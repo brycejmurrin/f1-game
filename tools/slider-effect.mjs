@@ -18,6 +18,8 @@
  *   node tools/slider-effect.mjs --risk inert|conditional|reapply|rebuild
  *   node tools/slider-effect.mjs --tag saturate|glx-only|sparse-pixels
  *   node tools/slider-effect.mjs --live lampLevel --from 0 --to 0.55
+ *   node tools/slider-effect.mjs --live lampLevel --shots 5
+ *   node tools/slider-effect.mjs --live lampLevel --levels 0,0.13,0.26,0.55,0.687
  *   node tools/slider-effect.mjs --filter --a a.png --b b.png --out dir
  *   node tools/slider-effect.mjs --json
  */
@@ -48,6 +50,8 @@ Usage:
   node tools/slider-effect.mjs --risk inert|conditional|reapply|rebuild
   node tools/slider-effect.mjs --tag saturate|glx-only|sparse-pixels
   node tools/slider-effect.mjs --live lampLevel --from 0 --to 0.55
+  node tools/slider-effect.mjs --live lampLevel --shots 5
+  node tools/slider-effect.mjs --live lampLevel --levels 0,0.13,0.26,0.55,0.687
   node tools/slider-effect.mjs --live lampLevel --dry-run
   node tools/slider-effect.mjs --live --all --dry-run
   node tools/slider-effect.mjs --live --group LAMPS --dry-run
@@ -66,14 +70,18 @@ Filters (no browser):
   --json         JSON on stdout (knobs + counts)
 
 Visual A/B (Playwright via tools/harness.mjs — not Chrome MCP):
-  --live ID      boot chase+park, set ID to --from then --to, write
-                 a.png / b.png / filter.png / heat.png / sheet.png
-                 filter.png keeps B only where pixels moved; the rest is crushed
-                 so you can see what the slider changed (lamp pools, fog, …)
+  --live ID      boot chase+park, set ID across --shots / --levels, write
+                 v0.png… / a.png / b.png / filter.png / heat.png / sheet.png
+                 (and ramp.png when N>2). filter.png keeps B only where
+                 pixels moved; the rest is crushed so you can see what
+                 the slider changed (lamp pools, fog, …)
   --live --all   every TUNE_DEFS knob; park ONCE per track|tod|wx|camera
   --live --group NAME   same, but only that TUNE_DEFS group
   --live --ids a,b,c    same batch, but only those ids
-  --from N --to N   slider values (default: shipped def → farther extreme)
+  --shots N      how many frames (default 2). N>2 without --from/--to
+                 linspaces TUNE_DEFS min→max; with ends, linspaces those
+  --levels v,v,v explicit slider values (wins over --shots / --from / --to)
+  --from N --to N   slider values (default 2-shot: shipped def → farther extreme)
   --track --tod --weather --frac   capture recipe (defaults from the knob's gates
                  plus the documented specials: fogWxMul→fog, moonShadow→night+wet,
                  renderDistMul→spa day 0.50, starBright→bahrain sky, …)
@@ -476,7 +484,8 @@ export function parseArgs(argv) {
     }
     else if (eq("group") || eq("class") || eq("gate") || eq("risk") || eq("tag")
       || eq("id") || eq("ids") || eq("track") || eq("tod") || eq("weather") || eq("out")
-      || eq("a") || eq("b") || eq("from") || eq("to") || eq("frac") || eq("hud-crop"))
+      || eq("a") || eq("b") || eq("from") || eq("to") || eq("frac") || eq("hud-crop")
+      || eq("shots") || eq("levels"))
       continue;
     else if (a.startsWith("-")) throw new Error(`unknown flag: ${a}\n${HELP}`);
   }
@@ -484,6 +493,7 @@ export function parseArgs(argv) {
   if (opts.from != null) opts.from = Number(opts.from);
   if (opts.to != null) opts.to = Number(opts.to);
   if (opts.frac != null) opts.frac = Number(opts.frac);
+  if (opts.shots != null) opts.shots = Number(opts.shots);
   if (opts.class && !CLASSES.has(opts.class))
     throw new Error(`--class must be one of ${[...CLASSES].join("|")}`);
   if (opts.risk && !RISKS.has(opts.risk))

@@ -38,6 +38,8 @@ test("--help exits 0 and documents --live visual filter plus the failure-mode ta
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /--live/);
   assert.match(r.stdout, /--all/);
+  assert.match(r.stdout, /--shots/);
+  assert.match(r.stdout, /--levels/);
   assert.match(r.stdout, /lampLevel/);
   assert.match(r.stdout, /filter\.png/);
   assert.match(r.stdout, /APPLY_RACE_IDS/);
@@ -165,6 +167,8 @@ test("every TUNE_DEFS knob has a valid live recipe (no browser)", async () => {
     assert.ok(Number.isFinite(plan.frac) && plan.frac >= 0 && plan.frac < 1, `${knob.id} frac`);
     assert.ok(Number.isFinite(plan.from), `${knob.id} from`);
     assert.ok(Number.isFinite(plan.to) && plan.to !== plan.from, `${knob.id} to==from`);
+    assert.equal(plan.shots, 2, `${knob.id} default shots`);
+    assert.deepEqual(plan.levels, [plan.from, plan.to], `${knob.id} default levels`);
     assert.match(plan.camera, /^(chase|sky|horizon)$/, `${knob.id} camera`);
     assert.ok(plan.bucket.includes(plan.track), `${knob.id} bucket`);
   }
@@ -251,4 +255,44 @@ test("inventory tags: glx-only / saturate / sparse-pixels / wet-drizzle", () => 
   assert.ok(drizzle.tags.includes("wet-drizzle"), drizzle.id);
   const glx = json(["--tag", "glx-only", "--json"]);
   assert.deepEqual(glx.knobs.map((k) => k.id).sort(), ["perChunkLights", "roadChunkLamps"]);
+});
+
+test("--shots 5 --dry-run linspaces TUNE_DEFS min→max", () => {
+  const r = run(["--live", "lampLevel", "--shots", "5", "--dry-run"]);
+  assert.equal(r.status, 0, r.stderr);
+  const plan = JSON.parse(r.stdout);
+  assert.equal(plan.id, "lampLevel");
+  assert.equal(plan.shots, 5);
+  assert.equal(plan.levels.length, 5);
+  assert.equal(plan.levels[0], 0);
+  assert.equal(plan.levels[4], 0.687);
+  assert.equal(plan.from, plan.levels[0]);
+  assert.equal(plan.to, plan.levels[4]);
+  assert.ok(plan.levels[2] > plan.levels[1]);
+});
+
+test("--levels sets explicit values and wins over --shots", () => {
+  const r = run(["--live", "lampLevel", "--shots", "5", "--levels", "0,0.26,0.55", "--dry-run"]);
+  assert.equal(r.status, 0, r.stderr);
+  const plan = JSON.parse(r.stdout);
+  assert.deepEqual(plan.levels, [0, 0.26, 0.55]);
+  assert.equal(plan.shots, 3);
+  assert.equal(plan.from, 0);
+  assert.equal(plan.to, 0.55);
+});
+
+test("--from/--to without --shots stays a 2-shot A/B", () => {
+  const r = run(["--live", "lampLevel", "--from", "0", "--to", "0.55", "--dry-run"]);
+  assert.equal(r.status, 0, r.stderr);
+  const plan = JSON.parse(r.stdout);
+  assert.deepEqual(plan.levels, [0, 0.55]);
+  assert.equal(plan.shots, 2);
+});
+
+test("sampleLevels rejects shots < 2 and a single --levels value", async () => {
+  const { loadTuneDefs } = await import("../../tools/slider-effect.mjs");
+  const { sampleLevels } = await import("../../tools/slider-effect-live.mjs");
+  const def = loadTuneDefs(ROOT).find((d) => d.id === "lampLevel");
+  assert.throws(() => sampleLevels(def, { shots: 1 }), /shots/);
+  assert.throws(() => sampleLevels(def, { levels: "0.26" }), /levels/);
 });

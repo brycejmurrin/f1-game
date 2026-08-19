@@ -1,7 +1,11 @@
 /**
- * slider-effect --live — A/B LIGHTING TUNER knobs and visually filter
- * the pixels that moved. Chase + park once per condition (never orbit).
- * Restore the pre-push live value, never TUNE_DEFS.def.
+ * slider-effect --live — A/B (or N-shot ramp) LIGHTING TUNER knobs and
+ * visually filter the pixels that moved. Chase + park once per condition
+ * (never orbit). Restore the pre-push live value, never TUNE_DEFS.def.
+ *
+ * --shots N   linspace from→to (default 2). Without --from/--to, N>2
+ *             samples the full TUNE_DEFS min→max.
+ * --levels v,v,v   explicit values (wins over --shots / --from / --to).
  *
  * One global recipe false-deads many knobs (docs/LIGHTING-TUNER-SLIDERS.md).
  * recipeForKnob() picks track|tod|wx + camera + companions per id so
@@ -9,7 +13,7 @@
  *
  * Do not run while Chrome DevTools MCP is driving the look-survey.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
@@ -197,6 +201,46 @@ export function pickPush(def, fromVal) {
   return spanHi >= spanLo ? hi : lo;
 }
 
+function parseLevelList(raw) {
+  const parts = Array.isArray(raw)
+    ? raw
+    : String(raw).split(",").map((s) => s.trim()).filter(Boolean);
+  const levels = parts.map(Number);
+  if (levels.length < 2 || levels.some((v) => !Number.isFinite(v))) {
+    throw new Error(`--levels needs two or more comma-separated numbers, got ${raw}`);
+  }
+  return levels;
+}
+
+function linspace(from, to, n) {
+  if (n === 2) return [from, to];
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) out[i] = from + (to - from) * (i / (n - 1));
+  return out;
+}
+
+/**
+ * Which slider values to shoot. --levels wins. --shots N (default 2)
+ * linspaces from→to. A 2-shot without --from/--to stays def→extreme
+ * (the old A/B). --shots N>2 without ends samples the full min→max.
+ */
+export function sampleLevels(def, opts = {}) {
+  if (opts.levels != null && opts.levels !== "") return parseLevelList(opts.levels);
+  const n = opts.shots == null || opts.shots === "" ? 2 : Math.round(Number(opts.shots));
+  if (!Number.isFinite(n) || n < 2) {
+    throw new Error(`--shots must be an integer >= 2, got ${opts.shots}`);
+  }
+  const explicitEnds = opts.from != null || opts.to != null;
+  const from = opts.from != null ? Number(opts.from)
+    : (n > 2 && !explicitEnds ? Number(def.min) : Number(def.def));
+  const to = opts.to != null ? Number(opts.to)
+    : (n > 2 && !explicitEnds ? Number(def.max) : pickPush(def));
+  if (!Number.isFinite(from) || !Number.isFinite(to)) {
+    throw new Error(`bad from/to for ${def.id}: ${from} → ${to}`);
+  }
+  return linspace(from, to, n);
+}
+
 function stateDelta(a, b) {
   const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
   const out = {};
@@ -228,14 +272,16 @@ export function livePlan(opts, knob, def, root) {
     : (opts.track && TRACK_FRAC[track] != null && opts.track !== recipe.track
       ? TRACK_FRAC[track]
       : recipe.frac);
-  const from = opts.from != null ? Number(opts.from) : def.def;
-  const to = opts.to != null ? Number(opts.to) : pickPush(def);
+  const levels = sampleLevels(def, opts);
+  const from = levels[0];
+  const to = levels[levels.length - 1];
   const out = opts.out || path.join(
     root, "artifacts/lighting/slider-effect",
     `${track}-${tod}-${weather}-${opts.id || knob.id}`,
   );
   const plan = {
-    knob, def, track, tod, weather, frac, from, to, out,
+    knob, def, track, tod, weather, frac, from, to,
+    levels, shots: levels.length, out,
     camera: recipe.camera,
     traffic: !!recipe.traffic,
     minDelta: recipe.minDelta,
@@ -267,6 +313,8 @@ export function summarizePlan(plan) {
     traffic: plan.traffic,
     from: plan.from,
     to: plan.to,
+    shots: plan.shots,
+    levels: plan.levels,
     minDelta: plan.minDelta,
     companions: plan.companions,
     settle: plan.settle,
@@ -403,22 +451,63 @@ async function applyValue(page, plan, v) {
   });
 }
 
+function viewArgs(plan, hudCrop) {
+  return [
+    "--hud-crop", String(hudCrop ?? 0.10),
+    "--min-delta", String(plan.minDelta ?? 10),
+  ];
+}
+
+function parseViewJson(stdout) {
+  try { return JSON.parse(stdout.trim().split("\n")[0]); } catch { return {}; }
+}
+
 function writeView(plan, aPng, bPng, hudCrop) {
   const view = spawnSync("python3", [
     VIEW, aPng, bPng,
     "--out", plan.out,
-    "--hud-crop", String(hudCrop ?? 0.10),
-    "--min-delta", String(plan.minDelta ?? 10),
-    "--label-a", `${plan.knob.id}=${plan.from}`,
-    "--label-b", `${plan.knob.id}=${plan.to}`,
+    ...viewArgs(plan, hudCrop),
+    "--label-a", `${plan.knob.id}=${fmtLevel(plan.from)}`,
+    "--label-b", `${plan.knob.id}=${fmtLevel(plan.to)}`,
   ], { encoding: "utf8" });
   if (view.status !== 0) {
     throw new Error(`slider-effect-view.py failed:\n${view.stderr || view.stdout}`);
   }
-  try { return JSON.parse(view.stdout.trim().split("\n")[0]); } catch { return {}; }
+  return parseViewJson(view.stdout);
 }
 
-function packResult(plan, shotA, shotB, pixels, restoreTo, files) {
+function writeViewStats(plan, aPng, bPng, hudCrop) {
+  const view = spawnSync("python3", [
+    VIEW, aPng, bPng, "--stats-only",
+    ...viewArgs(plan, hudCrop),
+  ], { encoding: "utf8" });
+  if (view.status !== 0) {
+    throw new Error(`slider-effect-view.py --stats-only failed:\n${view.stderr || view.stdout}`);
+  }
+  return parseViewJson(view.stdout);
+}
+
+function writeRamp(plan, pngs, hudCrop) {
+  const labels = plan.levels.map((v) => `${plan.knob.id}=${fmtLevel(v)}`);
+  const view = spawnSync("python3", [
+    VIEW, "--ramp", ...pngs,
+    "--out", plan.out,
+    "--labels", labels.join(","),
+    ...viewArgs(plan, hudCrop),
+  ], { encoding: "utf8" });
+  if (view.status !== 0) {
+    throw new Error(`slider-effect-view.py --ramp failed:\n${view.stderr || view.stdout}`);
+  }
+  return parseViewJson(view.stdout);
+}
+
+function fmtLevel(v) {
+  if (!Number.isFinite(v)) return String(v);
+  const t = Math.abs(v) >= 10 ? v.toFixed(2) : v.toFixed(3);
+  return t.replace(/\.?0+$/, "") || "0";
+}
+
+function packResult(plan, shotA, shotB, pixels, restoreTo, files, samples) {
   const stored = Number.isFinite(shotA.stored) && Number.isFinite(shotB.stored)
     && shotA.stored !== shotB.stored;
   const delta = stateDelta(shotA.state, shotB.state);
@@ -432,13 +521,14 @@ function packResult(plan, shotA, shotB, pixels, restoreTo, files) {
     class: plan.knob.class,
     track: plan.track, tod: plan.tod, weather: plan.weather, frac: plan.frac,
     camera: plan.camera, traffic: plan.traffic, why: plan.why, verdict: plan.verdict,
-    from: plan.from, to: plan.to,
+    from: plan.from, to: plan.to, shots: plan.shots, levels: plan.levels,
     stored: { a: shotA.stored, b: shotB.stored, ok: !!stored },
+    samples,
     restored: restoreTo,
     state: delta,
     movedFields: moved,
     pixels,
-    camera: {
+    cam: {
       delta: camDelta,
       stable: plan.snapCam === false || camDelta <= 1e-3,
       dbgCamActive: shotA.dbgCamActive,
@@ -448,15 +538,18 @@ function packResult(plan, shotA, shotB, pixels, restoreTo, files) {
 }
 
 function printResult(result) {
+  const levels = (result.levels || [result.from, result.to]).map(fmtLevel).join(", ");
+  const n = result.shots || (result.levels ? result.levels.length : 2);
   process.stdout.write(
-    `${result.id}  ${result.track} ${result.tod}|${result.weather}  ${result.from} → ${result.to}`
+    `${result.id}  ${result.track} ${result.tod}|${result.weather}  ${n} shots  [${levels}]`
     + `  [${result.camera}${result.traffic ? "+traffic" : ""}]\n`
     + `store  ${result.stored.a} → ${result.stored.b}  ${result.stored.ok ? "ok" : "CLAMP/MISS"}\n`
     + `state  ${result.movedFields.length ? result.movedFields.join(", ") : "(no lightState field moved)"}\n`
-    + `pixels changed ${result.pixels.changedPct != null ? result.pixels.changedPct.toFixed(2) : "?"} %`
+    + `pixels (first→last) changed ${result.pixels.changedPct != null ? result.pixels.changedPct.toFixed(2) : "?"} %`
     + `  MAD ${result.pixels.mad != null ? Number(result.pixels.mad).toFixed(2) : "?"}`
     + `  p99 ${result.pixels.p99 != null ? Number(result.pixels.p99).toFixed(1) : "?"}`
     + `  max ${result.pixels.max != null ? result.pixels.max : "?"}\n`
+    + (result.files.ramp ? `ramp   ${result.files.ramp}\n` : "")
     + `sheet  ${result.files.sheet}\n`
     + `filter ${result.files.filter}\n`,
   );
@@ -464,8 +557,7 @@ function printResult(result) {
 
 async function capturePair(page, plan, opts) {
   mkdirSync(plan.out, { recursive: true });
-  const aPng = path.join(plan.out, "a.png");
-  const bPng = path.join(plan.out, "b.png");
+  const levels = plan.levels && plan.levels.length >= 2 ? plan.levels : [plan.from, plan.to];
   const liveBefore = await page.evaluate((id) => window.__apex.lightTune()[id], plan.knob.id);
   const companionLive = await page.evaluate((ids) => {
     const live = window.__apex.lightTune();
@@ -474,10 +566,20 @@ async function capturePair(page, plan, opts) {
     return out;
   }, Object.keys(plan.companions || {}));
 
-  const shotA = await applyValue(page, plan, plan.from);
-  writeFileSync(aPng, await shotPng(page, { snapCam: plan.snapCam }));
-  const shotB = await applyValue(page, plan, plan.to);
-  writeFileSync(bPng, await shotPng(page, { snapCam: plan.snapCam }));
+  const pngs = [];
+  const raw = [];
+  for (let i = 0; i < levels.length; i++) {
+    const shot = await applyValue(page, plan, levels[i]);
+    const png = path.join(plan.out, `v${i}.png`);
+    writeFileSync(png, await shotPng(page, { snapCam: plan.snapCam }));
+    pngs.push(png);
+    raw.push({ i, value: levels[i], shot, png });
+  }
+
+  const aPng = path.join(plan.out, "a.png");
+  const bPng = path.join(plan.out, "b.png");
+  copyFileSync(pngs[0], aPng);
+  copyFileSync(pngs[pngs.length - 1], bPng);
 
   const restoreTo = liveBefore;
   if (restoreTo != null) await applyValue(page, { ...plan, companions: companionLive }, restoreTo);
@@ -485,11 +587,28 @@ async function capturePair(page, plan, opts) {
   const pixels = writeView(plan, aPng, bPng, opts.hudCrop);
   const files = {
     a: aPng, b: bPng,
+    frames: pngs,
     filter: path.join(plan.out, "filter.png"),
     heat: path.join(plan.out, "heat.png"),
     sheet: path.join(plan.out, "sheet.png"),
   };
-  const result = packResult(plan, shotA, shotB, pixels, restoreTo, files);
+  if (levels.length > 2) {
+    writeRamp(plan, pngs, opts.hudCrop);
+    files.ramp = path.join(plan.out, "ramp.png");
+  }
+
+  const samples = raw.map((row, i) => {
+    const vsPrev = i === 0 ? null : writeViewStats(plan, pngs[i - 1], pngs[i], opts.hudCrop);
+    return {
+      i: row.i,
+      value: row.value,
+      stored: row.shot.stored,
+      png: row.png,
+      vsPrev,
+    };
+  });
+
+  const result = packResult(plan, raw[0].shot, raw[raw.length - 1].shot, pixels, restoreTo, files, samples);
   writeFileSync(path.join(plan.out, "result.json"), JSON.stringify(result, null, 2) + "\n");
   return result;
 }
