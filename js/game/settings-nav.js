@@ -79,7 +79,7 @@ const SettingsNav = (function () {
     });
     syncOrientation();
     show(current, false);
-    return { showCurrent: () => show(current, false) };
+    return { showCurrent: () => show(current, false), show };
   }
 
   return { create };
