@@ -654,12 +654,14 @@ const Input = (function () {
   /* ---------------- on-screen buttons ---------------- */
 
   // Every wireHold button registers here so its private pressed-pointer set can
-  // be cleared from OUTSIDE the closure. Two nets hang off this list:
+  // be cleared from OUTSIDE the closure. Nets that hang off this list:
   //   1. window-level capture-phase pointerup/pointercancel (init) release that
   //      pointerId from EVERY hold button — a pointer that lifted anywhere is by
   //      definition no longer holding anything, even when the button itself never
   //      received the event (retargeted lift, missed lostpointercapture).
-  //   2. reset() (blur / tab-hidden) clears every set outright, covering OS
+  //   2. lostpointercapture, but ONLY when holdTargetGone — a capture steal
+  //      from a second hold button is not a lift (GAS + a turn arrow).
+  //   3. reset() (blur / tab-hidden) clears every set outright, covering OS
   //      interruptions where NO pointer event is delivered at all.
   // Without these, an interruption mid-hold left a ghost pointerId in the set:
   // reset() zeroed btnThrottle but couldn't reach the closure, so after the next
@@ -682,6 +684,27 @@ const Input = (function () {
       h.apply(false);
       h.level && h.level(0);
     }
+  }
+
+  // lostpointercapture is a TEARDOWN signal, not a lift. It fires when the
+  // capture target is hidden/removed (the stuck-GAS case) AND when a second
+  // hold button calls setPointerCapture — WebKit keeps one capture slot, so
+  // tapping LEFT while GAS is down steals capture from GAS and used to drop
+  // the throttle with the thumb still on it. Only honour the event when the
+  // button is actually gone. A still-visible target keeps the hold; the
+  // window pointerup / empty-touches nets clear it when the finger really
+  // leaves. Target === document is PE3 §9.5 (capture target disconnected).
+  function holdTargetGone(el) {
+    if (!el || el === document) return true;
+    if (!el.isConnected) return true;
+    if (el.hidden) return true;
+    const parent = el.parentElement;
+    if (parent && parent.hidden) return true;
+    try {
+      const s = getComputedStyle(el);
+      if (s.display === "none" || s.visibility === "hidden") return true;
+    } catch (_) { /* getComputedStyle can throw on a detached node */ }
+    return false;
   }
 
   // PEDAL TRAVEL ON A TOUCHSCREEN. The analog-trigger note above says the
@@ -743,23 +766,18 @@ const Input = (function () {
     }
     el.addEventListener("pointerup", release);
     el.addEventListener("pointercancel", release);
-    // With pointer capture, pointerleave no longer fires mid-hold; it stays as a
-    // fallback for the (rare) case where capture couldn't be acquired.
-    el.addEventListener("pointerleave", release);
-    // Catch-all release: lostpointercapture fires whenever the element's pointer
-    // capture ends for ANY reason. Critically it fires when the button is HIDDEN
-    // or removed mid-hold (a HUD/pause/tuner state change sets the pedal to
-    // display:none) — an IMPLICIT capture release where pointerup/pointercancel
-    // may never be dispatched to the element, so the finger's eventual lift lands
-    // on some other element and this button would otherwise stay "held" forever.
-    // That is the "throttle stuck on after an off-track recovery" bug: a latched
-    // GAS button keeps satisfying the auto-rescue trigger (throttle held but the
-    // car isn't moving), so the car floors itself off the track and is reset over
-    // and over. Because capture is retained on a normal press-and-release, the
-    // pointerup path already covers the non-hidden case; whenever capture is lost
-    // instead, this fires and releases. Together they make a stuck-on hold
-    // impossible. A duplicate release for an already-cleared id is a no-op.
-    el.addEventListener("lostpointercapture", release);
+    // NOT pointerleave. setPointerCapture fires a boundary pointerleave as it
+    // retargets (holdSetupCtl in js/game.js documents the same trap). A second
+    // finger on a turn arrow does the same to a held GAS. Window-level
+    // pointerup already covers a lift that lands off the button; capture is
+    // what keeps a slide-off from dropping the pedal.
+    // lostpointercapture is only a release when the button was taken away —
+    // see holdTargetGone. A capture steal from another hold button must not
+    // drop a thumb that is still down.
+    el.addEventListener("lostpointercapture", function (e) {
+      if (!holdTargetGone(el)) return;
+      release(e);
+    });
   }
 
   function wireTap(id, fire) {
@@ -1257,6 +1275,7 @@ const Input = (function () {
     // That matters here specifically: js/game.js hides #btn-throttle whenever
     // auto-throttle turns on, which is exactly the hidden-mid-hold shape.
     document.addEventListener("lostpointercapture", function (e) {
+      if (e.target && e.target !== document && !holdTargetGone(e.target)) return;
       holdReleasePointer(e.pointerId);
     }, true);
     // Net #4, and the only one that is not built on pointer events: WebKit
