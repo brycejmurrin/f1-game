@@ -66,8 +66,9 @@ test("circuit select stacked uses one list scroller", () => {
     "the track list fills leftover body height from a zero basis");
   assert.match(css, /#sel-inner\[data-pair="on"\]:not\(\[data-shape="tall"\]\) #sel-track-section \{[\s\S]*?overflow:\s*hidden/,
     "wide preview column fits instead of scrolling as a second document");
-  assert.match(css, /#sel-inner\[data-density="compact"\]\s*\{\s*--pair-at:\s*2000px/,
-    "compact select stacks via --pair-at, same as career");
+  assert.match(read("css/menus.css"), /#sel-inner\s*\{[^}]*--pair-compact\s*:\s*wide/,
+    "compact wide SELECT pairs so the catalogue sits in the right column");
+  assert.match(read("js/game/sheetshape.js"), /mode === "wide"/);
   assert.doesNotMatch(read("js/game/scrollfade.js"), /"\.pane", "#sel-body"/);
   assert.doesNotMatch(read("js/game/menunav.js"), /\.pane,#sel-body/);
   assert.doesNotMatch(read("tools/layout-audit.mjs"), /\.pane,#sel-body/);
@@ -85,12 +86,16 @@ test("garage stacked categories are a horizontal strip", () => {
     "stacked tabs pan sideways and override .pane overflow-y");
   assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs \{[\s\S]*?overflow-y:\s*auto/,
     "pair-on rail may still scroll vertically");
-  assert.match(css, /#cs-inner\[data-density="compact"\]\s*\{\s*--pair-at:\s*2000px/,
-    "compact garage stacks to the horizontal strip");
-  assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\):is\(\[data-shape="tall"\], \[data-density="compact"\]\) #cs-tabs \{[\s\S]*?flex-wrap:\s*wrap/,
-    "tall or compact stacked garage wraps the catalogue instead of hiding AERO behind a pan");
-  assert.match(read("css/menus.css"), /#ss-inner\[data-density="compact"\]\s*\{\s*--pair-at:\s*2000px/,
-    "compact season stacks via --pair-at, same as career");
+  assert.match(read("css/components.css"), /\.pane-pair\s*\{[^}]*--pair-compact\s*:\s*off/,
+    "compact garage stacks to the horizontal strip via --pair-compact");
+  assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #cs-tabs \{[\s\S]*?grid-template-columns:\s*repeat\(7,\s*minmax\(0,\s*1fr\)\)/,
+    "short wide stacked garage packs fourteen tabs as two rows of seven");
+  assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #cs-tabs \{[\s\S]*?max-height:\s*calc\(var\(--chip-h\) \* 2/,
+    "wrapped play-shape tabs cap at two rows so #cs-options keeps a list");
+  assert.doesNotMatch(css, /#cs-inner:not\(\[data-pair="on"\]\):is\(\[data-shape="tall"\], \[data-density="compact"\]\) #cs-tabs \{[\s\S]*?flex-wrap:\s*wrap/,
+    "tall stacked garage must keep the horizontal strip — wrapping 14 tabs starved options");
+  assert.match(read("css/components.css"), /\.pane-pair\s*\{[^}]*--pair-compact\s*:\s*off/,
+    "compact season stacks via --pair-compact, same as career");
   const js = read("js/game/setup-ui.js");
   assert.match(js, /scrollIntoView\(\{ block: "nearest", inline: "center" \}\)/);
 });
@@ -112,12 +117,12 @@ test("circuit catalogue has a searchable filter toolbar", () => {
 test("compact landscape catalogue spends its first viewport on a circuit", () => {
   const css = read("css/menus.css");
   assert.match(css,
-    /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\) \.track-group-head\s*\{[^}]*display:\s*none/);
+    /#sel-inner\[data-density="compact"\]:not\(\[data-shape="tall"\]\) \.track-group-head\s*\{[^}]*display:\s*none/);
   assert.match(css,
-    /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\) #sel-track-filter \{[\s\S]*?overflow-x:\s*auto/,
-    "compact stacked filter pans; do not re-gate this on a local max-width query");
+    /#sel-inner\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #sel-track-filter \{[\s\S]*?overflow-x:\s*auto/,
+    "compact landscape filter pans in both stacked and paired columns");
   assert.match(css,
-    /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\) #sel-track-search \{[\s\S]*?min-width:\s*12rem/,
+    /#sel-inner\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #sel-track-search \{[\s\S]*?min-width:\s*12rem/,
     "search keeps a readable floor so the row actually overflows at 200%");
   assert.doesNotMatch(css, /@container sheet \(max-width: 360px\)/);
   assert.doesNotMatch(css, /@container sheet \(max-width: 440px\)/);
@@ -125,12 +130,17 @@ test("compact landscape catalogue spends its first viewport on a circuit", () =>
     /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\)\s*>\s*#sel-body\s*>\s*#sel-track-section\s*\{[^}]*display:\s*none/,
     "compact stacked landscape must keep the thumbnail band; hiding the section dropped the map");
   const menusJs = read("js/game/menus.js");
-  assert.match(css, /max-height:\s*min\(calc\(var\(--chip-h\) \* 2\.6\), 100%\)/);
-  assert.match(css, /max-width:\s*min\(38%, calc\(var\(--chip-h\) \* 3\.4\)\)/);
-  assert.match(menusJs, /cardInnerW \* \(compact \? 0\.38 : 0\.42\)/);
-  assert.match(menusJs, /chipH \* \(compact \? 3\.4 : 3\)/);
-  assert.match(menusJs, /slotH: chipH \* 2\.6/,
-    "every stacked SELECT map uses the readable thumbnail height — fitCanvas pins inline");
+  assert.match(css, /max-height:\s*min\(calc\(var\(--chip-h\) \* 3\.5\), 100%\)/);
+  assert.match(css, /max-width:\s*min\(48%, calc\(var\(--chip-h\) \* 5\.2\)\)/);
+  assert.match(css,
+    /#sel-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] > #sel-body > #sel-track-section \{[\s\S]*?max-height:\s*58%/,
+    "compact stacked band spends more of the body on the map without eating the list");
+  assert.doesNotMatch(css, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/);
+  assert.doesNotMatch(css, /@container sheet \(max-width: 420px\)/);
+  assert.match(menusJs, /cardInnerW \* \(compact \? 0\.48 : 0\.42\)/);
+  assert.match(menusJs, /chipH \* \(compact \? 5\.2 : 3\.5\)/);
+  assert.match(menusJs, /slotH: chipH \* 3\.5/,
+    "CSS and JS stay in lockstep — fitCanvas pins max-height inline");
 });
 
 test("garage categories implement one roving tab system", () => {
@@ -352,7 +362,7 @@ test("How to Play exposes pinned semantic jump landmarks", () => {
   assert.match(css, /#howtoplay-inner\[data-shape="wide"\] > #htp-contents/);
   assert.match(css, /#howtoplay-inner\[data-density="compact"\] > #htp-contents/);
   assert.match(read("index.html"), /id="vsfriend-inner"/);
-  assert.match(css, /#howtoplay:has\(#htp-friends:target\)[\s\S]*?background:\s*var\(--red\)/);
+  assert.match(css, /#howtoplay:has\(#htp-friends:target\)[\s\S]*?background:\s*var\(--plate-on\)/);
   assert.match(css, /#howtoplay dt\[id\]\s*\{[^}]*scroll-margin-block-start/);
   assert.doesNotMatch(css, /#howtoplay dl\s*\{[^}]*max-content minmax\(0, 1fr\) max-content/,
     "help rows must not synchronize two unrelated answers");
@@ -373,7 +383,7 @@ test("variable control clusters use one content-driven balanced-row primitive", 
   const camera = read("js/game/cam-modes.js");
   assert.match(components, /\.balanced-row\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*wrap/);
   assert.match(components, /\.balanced-row > :not\(\[hidden\]\)\s*\{[^}]*flex:\s*1 1 var\(--balance-basis/);
-  for (const id of ["pm-category-tabs", "menu-secondary", "rs-laps", "rs-weather",
+  for (const id of ["pm-category-tabs", "menu-secondary", "pm-panel-more", "rs-laps", "rs-weather",
     "rs-time", "rs-diff", "rs-quali", "rs-caution", "rs-reliab", "lt-tabs", "ct-modes"]) {
     assert.match(html, new RegExp(`id="${id}"[^>]*class="[^"]*balanced-row`), `${id} must balance from local space`);
   }
@@ -438,6 +448,20 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   const activate = inputFn(src, "padActivate");
   assert.match(activate, /padSeedFocus\(\)/,
     "A's empty path must reuse padSeedFocus — not a second mover");
+  assert.match(activate, /ty === "range" \|\| ty === "number"/,
+    "A on a focused range/number must not click-to-jump the thumb");
+
+  assert.match(src, /UiLayers\.navOpen\(\)/,
+    "title #overlay is pad-navigable; anyOpen() stays false there");
+  assert.match(read("js/game/uilayers.js"), /function navOpen\(\)/);
+  assert.match(read("js/game/menunav.js"), /ty === "range" \|\| ty === "number"/,
+    "range/number own only Left/Right so Up/Down leave the row");
+  assert.match(read("js/game/ariastate.js"), /#vsfriend,#season-setup/,
+    "AriaState watches the two DOM-built overlays UiLayers already lists");
+  assert.match(read("js/game/scrollfade.js"), /"#menu-buttons"/,
+    "title chrome fade watches the zoomed #menu-buttons scroller");
+  assert.match(read("js/game/scrollfade.js"), /overflowX/,
+    "sideways strips get .sf-l / .sf-r, not only overflow-y thumbs");
 
   const poll = inputFn(src, "padNavPoll");
   assert.match(poll, /padNavSeeded/, "first padNavPoll of a newly-open menu seeds once");
@@ -475,7 +499,8 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
   assert.match(menus, /#ss-inner \{[^}]*--fit-at:\s*220px/);
   assert.match(read("css/overlays.css"), /@container sheet \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
   assert.doesNotMatch(read("css/overlays.css"), /@media \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
-  assert.match(menus, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/);
+  assert.doesNotMatch(menus, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/,
+    "zoomed / data-fit SELECT keeps the map; caps bind instead of hiding it");
 });
 
 test("garage preview chips hug the sheet and season quali is a label", () => {
@@ -491,6 +516,11 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   assert.match(menus, /#rs-quali-section:has\(#rs-quali\[hidden\]\) \{\s*grid-column:\s*1 \/ -1;\s*grid-row:\s*1/);
   assert.match(menus, /:is\(#rs-diff-section, #rs-caution-section, #rs-reliab-section\) \{\s*grid-row:\s*3/);
   assert.match(menus, /#rs-body \{ overflow-y:\s*auto/);
+  assert.match(menus, /#rs-reliab,[\s\S]*?#rs-diff \{[\s\S]*?flex-wrap:\s*nowrap/);
+  assert.match(menus, /#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) > :is\(#rs-diff-section, #rs-caution-section, #rs-reliab-section\) \{\s*grid-row:\s*3/);
+  assert.match(menus, /#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) :is\(#rs-laps, #rs-weather\) \{\s*flex-wrap:\s*nowrap/);
+  assert.match(menus, /@media \(orientation: portrait\) \{[\s\S]*?#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) #rs-reliab-section \{ grid-row:\s*4/);
+  assert.match(read("css/components.css"), /#race-settings \.sheet \{ --compact-at:\s*760px/);
   assert.match(spotify, /if \(audio\) audio\.hidden = true/);
   assert.match(spotify, /if \(audio\) audio\.hidden = false/);
 });
@@ -511,4 +541,34 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(career,
     /#cr-inner:not\(\[data-pair="on"\]\):has\(#cr-left \.cr-slot\):has\(#cr-right \.cr-slot\) > #cr-body \{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/,
     "any stacked modes picker puts DRIVER and MY TEAM in one row");
+});
+
+test("neutral buttons share the settings tab-header plate", () => {
+  const tokens = read("css/tokens.css");
+  const components = read("css/components.css");
+  const menus = read("css/menus.css");
+  const carsetup = read("css/carsetup.css");
+  assert.match(tokens, /--plate:\s*rgba\(255,\s*255,\s*255,\s*0\.045\)/);
+  assert.match(tokens, /--plate-line:\s*rgba\(255,\s*255,\s*255,\s*0\.16\)/);
+  assert.match(tokens, /--plate-on:\s*color-mix\(in oklab, var\(--red\) 18%/);
+  assert.match(components, /#pm-category-tabs > button \{[\s\S]*?background:\s*var\(--plate\)/);
+  assert.match(components, /#pm-category-tabs > button\.active,[\s\S]*?background:\s*var\(--plate-on\)/);
+  assert.match(components, /\.bigbtn\.alt \{[\s\S]*?background:\s*var\(--plate\)/);
+  assert.match(menus, /\.sel-chip \{[\s\S]*?background:\s*var\(--plate\)/);
+  assert.match(menus, /\.sel-chip\.active \{[\s\S]*?background:\s*var\(--plate-on\)/);
+  assert.match(menus, /#race-settings \.sel-chip\.active \{[\s\S]*?background:\s*var\(--plate-on\)/);
+  assert.match(carsetup, /\.cs-tab \{[\s\S]*?background:\s*var\(--plate\)/);
+  assert.match(carsetup, /\.cs-tab\.active \{[\s\S]*?background:\s*var\(--plate-on\)/);
+  assert.match(read("css/data.css"), /\.dh-pill\.dh-active \{[\s\S]*?background:\s*var\(--plate-on\)/);
+  assert.match(read("css/data.css"), /\.dh-livebtn\.dh-active \{[\s\S]*?background:\s*var\(--plate-on\)/);
+});
+
+test("tool doors and lone foot actions do not stretch into banners", () => {
+  const components = read("css/components.css");
+  assert.match(components, /\.pm-doors\s*\{[\s\S]*?--balance-basis:\s*12rem/);
+  assert.match(components, /\.sheet-foot \.bigbtn:only-child\s*\{[\s\S]*?flex:\s*0 1 auto/);
+  assert.match(components, /\.pm-group \.tune-row \.tune-label \{[\s\S]*?position:\s*static/);
+  assert.match(components, /#pmsettings-inner \.pm-groups > \[role="tabpanel"\] button \{[\s\S]*?white-space:\s*normal/);
+  assert.match(read("css/overlays.css"), /@container sheet \(max-width: 360px\) \{\s*#howtoplay dl/);
+  assert.match(read("css/career.css"), /\.cr-cheats \.sel-chip \{[\s\S]*?min-width:\s*0/);
 });

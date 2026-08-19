@@ -174,6 +174,16 @@ window.UiLayers = (function () {
     return false;
   }
 
+  /* Pad/keyboard chrome on the TITLE screen. anyOpen() stays false there
+     (`gate: false` on #overlay — tests/specs/gamepad.spec.js asserts that)
+     so driving keys are not swallowed on a freshly-loaded page. The pad
+     still needs to move the title doors; overlay is hidden in-race. */
+  function navOpen() {
+    if (anyOpen()) return true;
+    const t = top();
+    return !!(t && t.id === "overlay");
+  }
+
   /* IN A RACE means the game loop is simulating — `state === "race" || "count"`,
      the same pair setPaused() gates on. `state` is closure-local to js/game.js,
      so game.js hands us a getter at boot rather than anyone re-deriving it from
@@ -187,5 +197,5 @@ window.UiLayers = (function () {
   }
   function inRace() { return !!(raceGetter && raceGetter()); }
 
-  return { LAYER_IDS, top, anyOpen, shown, inRace, setRaceGetter };
+  return { LAYER_IDS, top, anyOpen, navOpen, shown, inRace, setRaceGetter };
 })();

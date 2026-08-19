@@ -651,30 +651,35 @@ body[data-density="compact"] #campicker {
   display: inline-flex; align-items: center; justify-content: center;
   flex: 0 0 auto; min-height: var(--chip-h);
   padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.65);
-  border: 1px solid rgba(255,255,255,0.14); border-radius: var(--r-pill);
-  background: rgba(255,255,255,0.05); color: var(--text);
+  border: 1px solid var(--plate-line); border-radius: var(--r-pill);
+  background: var(--plate); color: var(--dim);
   font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.05em;
   text-decoration: none;
 }
 @media (hover: hover) {
-  #htp-contents a:hover { background: rgba(255,255,255,0.12); }
+  #htp-contents a:hover { background: var(--plate-hover); color: var(--text); }
 }
-#htp-contents a:active { background: rgba(255,255,255,0.16); }
+#htp-contents a:active { background: var(--plate-press); color: var(--text); }
 #htp-contents a:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 #howtoplay:has(#htp-controls:target) #htp-contents a[href="#htp-controls"] {
-  background: var(--red); border-color: var(--red); color: #fff;
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+  box-shadow: var(--plate-on-glow);
 }
 #howtoplay:has(#htp-racing:target) #htp-contents a[href="#htp-racing"] {
-  background: var(--red); border-color: var(--red); color: #fff;
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+  box-shadow: var(--plate-on-glow);
 }
 #howtoplay:has(#htp-setup:target) #htp-contents a[href="#htp-setup"] {
-  background: var(--red); border-color: var(--red); color: #fff;
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+  box-shadow: var(--plate-on-glow);
 }
 #howtoplay:has(#htp-modes:target) #htp-contents a[href="#htp-modes"] {
-  background: var(--red); border-color: var(--red); color: #fff;
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+  box-shadow: var(--plate-on-glow);
 }
 #howtoplay:has(#htp-friends:target) #htp-contents a[href="#htp-friends"] {
-  background: var(--red); border-color: var(--red); color: #fff;
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+  box-shadow: var(--plate-on-glow);
 }
 /* Wide sheets: contents as a left rail, body is still the only vertical scroller
    for the reference itself. data-shape is the sheet's own aspect, not viewport
@@ -725,7 +730,7 @@ body[data-density="compact"] #campicker {
   color: var(--red); font-weight: 700; font-size: var(--fs-micro);
   letter-spacing: 0.08em; padding: calc(var(--gap) * 0.5) 0 2px;
   border-top: 1px solid rgba(255,255,255,0.06);
-  white-space: nowrap;
+  white-space: normal; overflow-wrap: anywhere;
 }
 #howtoplay dt:first-child { border-top: none; }
 #howtoplay dt[id] { scroll-margin-block-start: var(--gap); }
@@ -748,10 +753,9 @@ body[data-density="compact"] #campicker {
    wanted 367px inside a 235px scroller and took 31 `.key` chips off the right
    edge with it, the worst by 38px. Floors on the tracks cannot help once the
    content's own minimum exceeds the box; the SHAPE has to change.
-   300px, not 400: the same sheet at 100% is 369px and fits two columns with
-   nothing clipped (measured), so the threshold sits between the shape that
-   works and the one that does not, and costs the working case nothing. */
-@container sheet (max-width: 300px) {
+   360px, not 400: portrait @115 is ~342 local px and still two-col with
+   clipped `.key` chips; 100% portrait is 369px and stays two-col. */
+@container sheet (max-width: 360px) {
   #howtoplay dl { grid-template-columns: minmax(0, 1fr); }
   /* Stacked, a rule on BOTH halves draws a line through the middle of an entry;
      the divider belongs to the term that starts it. */

@@ -106,16 +106,25 @@
    `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
 #menu-hero, #menu-primary, #menu-secondary { width: min(calc(78 * var(--vwz)), 100%); }
 #menu-hero { display: grid; }
-/* Equal 2-up cells that still wrap. 50% minus a sliver of the row gap keeps two
-   doors on one line; a lone last child (STANDINGS season) still fills the row
-   via flex-grow. 45/40 let a long label steal width and the gutter drifted. */
+/* Shared gap / stretch. Column count lives on each row: primary is a
+   forced 2x2, secondary wraps from local space (see the two rules below). */
 #menu-primary, #menu-secondary {
-  --balance-basis: calc(50% - 0.5em);
-  --balance-min: calc(50% - 0.5em);
-  /* Same track gap so the 2-up play doors and the rooms share one lattice.
+  /* Same track gap so the play doors and the rooms share one lattice.
      0.55 on secondary only made that tier ~2–5px narrower on desktop. */
   gap: calc(var(--gap) * 0.7);
   align-items: stretch;
+}
+/* Play modes stay a forced 2x2 — four equal cells, never a 3+1 leftover. */
+#menu-primary {
+  --balance-basis: calc(50% - 0.5em);
+  --balance-min: calc(50% - 0.5em);
+}
+/* Rooms wrap from local space. Three visible doors (DATA / GARAGE /
+   SETTINGS) sit on one row when the column holds them, instead of
+   stretching SETTINGS into a banner because HOW TO PLAY is hidden. */
+#menu-secondary {
+  --balance-basis: 5.5rem;
+  --balance-min: 5.5rem;
 }
 /* The hero is the one button on the screen with two lines of text, so it centres
    its own stack rather than inheriting the single-line baseline the others use. */
@@ -146,10 +155,9 @@
   display: flex;
   flex-wrap: wrap;
 }
-/* STANDINGS appears only mid-season. `.balanced-row` ignores the hidden button,
-   keeps the normal four controls as two pairs, and lets a visible fifth action
-   fill its final line without a state-specific selector. width:100% (not auto)
-   so a long label wraps inside its half instead of widening its cell. */
+/* STANDINGS / HOW TO PLAY are hidden until they have a reason to show.
+   `.balanced-row` ignores [hidden], so the usual three rooms sit on one
+   row. width:100% keeps a long label wrapping inside its cell. */
 #menu-buttons .bigbtn { margin: 0; width: 100%; border-width: 1px; border-style: solid; }
 /* Primary has `border: none`; rooms have a 1px .alt hairline. Matching width
    keeps the two 2-up columns on the same vertical tracks (measured 205 vs 203
@@ -430,6 +438,12 @@ body { --compact-at: 600px; --wide-at: 620px; }
   flex: 0 1 auto; min-height: 0; max-height: 42%;
   overflow: hidden;
 }
+#sel-inner:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section {
+  /* Compact / high UI SIZE used to hide the map or stamp it at 2.6 chips.
+     Spend more of the stacked body on the outline so lower-res and zoomed
+     sheets still read the circuit, not a postage stamp. */
+  max-height: 58%;
+}
 #sel-inner:not([data-pair="on"]) > #sel-body > #sel-track-section > #sel-track-preview {
   flex: 0 1 auto; min-height: 0;
   /* The preview is a band in every stacked sheet: thumbnail beside caption.
@@ -442,7 +456,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
 /* Token-based map cap so the band stays a band. --chip-h answers density;
    object-fit keeps the outline true when the cap binds. */
 #sel-inner:not([data-pair="on"]) #sel-preview-map {
-  max-height: calc(var(--chip-h) * 3);
+  max-height: calc(var(--chip-h) * 3.5);
   object-fit: contain;
 }
 /* Compact stacked: the band is a thumbnail + name. Rec / GP / meta / facts /
@@ -458,22 +472,16 @@ body { --compact-at: 600px; --wide-at: 620px; }
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-map {
   /* Compact stacked landscape used to hide this whole section. Keep it a
      band (name beside map, extras still display:none) but size the outline
-     as a readable thumbnail — chip-h alone painted a 27×40 stamp. */
-  max-height: min(calc(var(--chip-h) * 2.6), 100%);
-  max-width: min(38%, calc(var(--chip-h) * 3.4));
+     as a readable preview — chip-h * 2.6 painted a stamp at 115%.
+     3.5 chips fits the 58% band so one catalogue row stays on screen. */
+  max-height: min(calc(var(--chip-h) * 3.5), 100%);
+  max-width: min(48%, calc(var(--chip-h) * 5.2));
 }
-/* When the shared functional-height cap is active, or the sheet itself is too
-   narrow to seat a thumbnail beside the name, the name is the useful preview.
-   Dropping the decorative map returns a complete control row to the catalogue
-   and avoids clipping an inline aspect-ratio size inside a sub-60px band. */
-#sel-inner[data-fit="on"] #sel-preview-map { display: none; }
+/* Truly tiny sheets cannot seat a thumbnail beside the name. data-fit and
+   landscape-narrow used to hide the map on every zoomed / low-res phone;
+   those keep the outline and let the caps above bind. */
 @container sheet (max-width: 300px) {
   #sel-inner[data-density="compact"] #sel-preview-map { display: none; }
-}
-@media (orientation: landscape) {
-  @container sheet (max-width: 420px) {
-    #sel-inner[data-density="compact"] #sel-preview-map { display: none; }
-  }
 }
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-track-preview {
   /* A short/high-scale sheet cannot afford a map row followed by a caption
@@ -554,15 +562,11 @@ body { --compact-at: 600px; --wide-at: 620px; }
   /* Preview facts start wrapping out of their capped band before the generic
      380px sheet threshold (measured: phone portrait @125%, 432 own px). */
   --compact-at: 480px;
+  /* Compact+horizontal keeps the list in the right column. Stacking a wide
+     short sheet left the map as a left stamp and wasted the rest of the row. */
+  --pair-compact: wide;
 }
 @media (orientation: landscape) { #sel-inner { --fit-at: 210px; } }
-/* SHORT SHEET: stack even when the box is still wide in CSS px. Career already
-   does this (`#cr-inner[data-density="compact"] { --pair-at: 2000px }`). A
-   landscape phone at UI SIZE 150% keeps a ~700px clientWidth, so the 620px
-   pair threshold stays on and the compact preview-band / one-list rules never
-   fire. Density is classified first (sheetshape.js), then pair reads the
-   raised threshold. */
-#sel-inner[data-density="compact"] { --pair-at: 2000px; }
 
 /* COLUMNS ARE FOR A WIDE SHEET; A TALL ONE GETS BANDS. Gating the two-column
    split on width alone put an upright iPad (810px sheet, 1170px tall) into
@@ -609,6 +613,10 @@ body { --compact-at: 600px; --wide-at: 620px; }
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview #sel-preview-map {
   max-height: 50%;
   object-fit: contain;
+}
+#sel-inner[data-pair="on"]:not([data-shape="tall"])[data-density="compact"] #sel-track-preview #sel-preview-map {
+  /* Compact pair hides the caption, so the 50% facts reserve is empty column. */
+  max-height: 100%;
 }
 /* FIT THE PREVIEW, DO NOT SCROLL IT. Pair-on already gives this column a
    definite height (sheet grid row 2 is minmax(0, 1fr); body is display:contents).
@@ -780,32 +788,25 @@ body { --compact-at: 600px; --wide-at: 620px; }
   padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.85);
   font-size: var(--fs-micro);
   border-radius: var(--r-sm);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  /* a shallow top-lit fill rather than one flat tint: the same physical
-     language as the buttons, one step quieter, so a row of chips reads as a
-     row of keys instead of a row of rectangles */
-  background: linear-gradient(180deg in oklab, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.035));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  border: 1px solid var(--plate-line);
+  /* Same dark plate as the settings tab headers — one family of keys. */
+  background: var(--plate);
+  box-shadow: none;
   transition: background 0.12s, box-shadow 0.12s;
   cursor: pointer;
 }
 @media (hover: hover) {
-  .sel-chip:hover { background: rgba(255,255,255,0.10); }
+  .sel-chip:hover { background: var(--plate-hover); }
 }
-.sel-chip:active { background: rgba(255,255,255,0.14); }
-/* The selection ring is drawn INSIDE the box (inset shadow), never as an
+.sel-chip:active { background: var(--plate-press); }
+/* Selected mark is the settings-tab recipe (left inset bar + glow), never an
    `outline`. An outline paints outside the border box, and these chips sit
-   flush against the inline-start edge of their scroll container, whose
-   overflow-x is hidden — so the leftmost chip (the selected driver, and the
-   selected difficulty) had the left side of its red ring sliced clean off.
-   An inset ring cannot be clipped by any ancestor, in any layout.
-   (The container used to be #sel-left; the identity column is gone, and the
-   chips now sit in #cs-options on the garage screen. The RULE is unchanged —
-   it is the reason it is inset that matters, and that survives the move.) */
+   flush against the inline-start edge of a hidden-overflow scroller — so an
+   outset ring on the leftmost chip gets sliced. The inset bar cannot. */
 .sel-chip.active {
   border-color: var(--red);
-  background: color-mix(in oklab, var(--red) 24%, transparent);
-  box-shadow: inset 0 0 0 2px var(--red), 0 0 14px color-mix(in oklab, var(--red) 38%, transparent);
+  background: var(--plate-on);
+  box-shadow: var(--plate-on-glow);
 }
 .sel-chip .swatch { display: inline-block; width: 12px; height: 12px; border-radius: var(--r-xs); margin-right: 6px; flex: none; }
 .sel-edit {
@@ -1001,6 +1002,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* Compact pair-on: the active row already names the circuit. At 175–200% the
    map needs the whole preview column; retaining even name + record put a
    partially clipped caption under it. */
+#sel-inner[data-pair="on"][data-density="compact"] #sel-circuit-label,
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-info { display: none; }
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-gp,
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-meta { display: none; }
@@ -1040,9 +1042,8 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    scroll region needs. */
 #ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; }
 @media (orientation: landscape) { #ss-inner { --fit-at: 220px; } }
-/* SHORT SHEET: stack even when clientWidth stays above 620 (landscape phone at
-   a raised UI SIZE). Same compact --pair-at raise as career / select / garage. */
-#ss-inner[data-density="compact"] { --pair-at: 2000px; }
+/* SHORT SHEET: `--pair-compact: off` on `.pane-pair` stacks this sheet when
+   compact even if clientWidth stays above 620. Same as select / career / garage. */
 /* Stacked season setup owns ONE vertical scroll region. Without this branch the
    two `.pane` children take their full natural height, #ss-body overflows while
    remaining `overflow: visible`, and #ss-inner clips the result. On a 390x844
@@ -1123,10 +1124,10 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 }
 #sel-track-search::placeholder { color: var(--dim); opacity: 1; }
 #sel-track-empty { padding: var(--pad); text-align: center; }
-/* Compact stacked landscape: one pan-x toolbar. --fit-at can inflate local
-   width past a px query while the row is still starving, so this keys on
-   density. Chips keep intrinsic width; search will not shrink below 12rem. */
-#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter {
+/* Compact landscape toolbar: one pan-x row, stacked or paired. --fit-at can
+   inflate local width past a px query while the row is still starving, so
+   this keys on density. Chips keep intrinsic width; search stays ≥ 12rem. */
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-filter {
   flex-wrap: nowrap;
   align-items: center;
   position: static;
@@ -1137,22 +1138,22 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   touch-action: pan-x;
   scrollbar-width: none;
 }
-#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
   display: none;
 }
-#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter .sel-chip {
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-filter .sel-chip {
   flex: 0 0 auto;
   min-width: max-content;
   padding-inline: calc(var(--gap) * 0.55);
 }
-#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-search {
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-search {
   flex: 1 0 12rem;
   min-width: 12rem;
 }
 /* The sticky filter already names SEASON and CLASSICS. Repeating that group
    heading directly below it costs the only circuit row on a short landscape
    sheet (measured 852×393, notched, UI SIZE 150%: 0px of the first row). */
-#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) .track-group-head {
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) .track-group-head {
   display: none;
 }
 /* Compact: hide the meta line so rows pack tighter without losing the name. */
@@ -1209,7 +1210,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* ---------- race settings ---------- */
 .rs-row { margin-bottom: var(--gap); }
 #race-settings .sel-chip { font-size: clamp(var(--fs-micro), calc(1.6 * var(--vwz)), var(--fs-3)); padding: 8px 14px; }
-#race-settings .sel-chip.active { background: color-mix(in oklab, var(--red) 26%, transparent); border-color: var(--red); color: #fff; font-weight: 700; }
+#race-settings .sel-chip.active { background: var(--plate-on); box-shadow: var(--plate-on-glow); color: #fff; font-weight: 700; }
 /* LAPS + WEATHER pair up once there is room; TIME OF DAY always spans. */
 @container sheet (min-width: 440px) {
   #rs-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); align-content: start; }
@@ -1221,6 +1222,18 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    2/3/5-column count. Wide groups stay on one line; a locally narrow section
    wraps and balances its own remaining controls. */
 #race-settings .balanced-row { --balance-basis: 4.25rem; --balance-min: 3.75rem; }
+/* OFF/LOW/REAL are three short words. Wrapping REAL onto a second line
+   parked it under BACK/RACE at UI SIZE 115% (852×393 champ: 192px column,
+   OFF+LOW 93px each, REAL 46px into the foot). Keep them on one track. */
+#rs-reliab,
+#rs-diff {
+  flex-wrap: nowrap;
+  --balance-basis: 0rem;
+  --balance-min: 0rem;
+}
+#rs-reliab > .sel-chip,
+#rs-diff > .sel-chip { flex: 1 1 0; min-width: 0; }
+#rs-reliab > .sel-chip { white-space: nowrap; }
 
 /* SHORT AND WIDE: fit the whole thing, because scrolling a settings screen is
    how you miss a setting. A landscape phone gives ~285px of body between the
@@ -1272,6 +1285,56 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
     grid-row: 1;
     margin-bottom: 0;
   }
+  /* ONE-OFF play-shape: keep the 3-col compact grid. QUALI sits with
+     LAPS/WEATHER; TIME spans. LAPS/WEATHER wrapping to two chip-rows
+     ate the last row (play @115: labels on the foot, chips 46px into
+     BACK/RACE). Pack those groups on one line like #rs-reliab. */
+  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) {
+    align-content: start;
+  }
+  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) > :is(.rs-row:nth-child(1), .rs-row:nth-child(2), #rs-quali-section) {
+    grid-row: 1;
+  }
+  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) #rs-time-section {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) > :is(#rs-diff-section, #rs-caution-section, #rs-reliab-section) {
+    grid-row: 3;
+  }
+  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) :is(#rs-laps, #rs-weather) {
+    flex-wrap: nowrap;
+    --balance-basis: 0rem;
+    --balance-min: 0rem;
+  }
+  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) :is(#rs-laps, #rs-weather) > .sel-chip {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+/* ONE-OFF portrait: two columns. TIME spans; DIFF/QUALI then
+   CAUTION/RELIAB share the last two rows (port @115 was 22px into the
+   foot before this pin). Compact landscape keeps three columns above. */
+@media (orientation: portrait) {
+  #rs-body:not(:has(#rs-quali[hidden])) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--pad);
+    align-content: start;
+  }
+  #rs-body:not(:has(#rs-quali[hidden])) > .rs-row:nth-child(1),
+  #rs-body:not(:has(#rs-quali[hidden])) > .rs-row:nth-child(2) { grid-row: 1; }
+  #rs-body:not(:has(#rs-quali[hidden])) #rs-time-section {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  #rs-body:not(:has(#rs-quali[hidden])) #rs-diff-section,
+  #rs-body:not(:has(#rs-quali[hidden])) #rs-quali-section {
+    grid-column: auto;
+    grid-row: 3;
+  }
+  #rs-body:not(:has(#rs-quali[hidden])) #rs-caution-section,
+  #rs-body:not(:has(#rs-quali[hidden])) #rs-reliab-section { grid-row: 4; }
 }
 #race-settings .sel-chip {
   display: flex; align-items: center; justify-content: center; gap: 4px;

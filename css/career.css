@@ -104,13 +104,9 @@
   border-right: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-/* SHORT SHEET: tighten the slot picker so guide CTAs stay reachable.
-   Measured 852×393 @115%: with pair on, SLOT 3 and #cr-guide-* sat ~83px past
-   #cr-inner. Compacting padding helps; forcing the stack (high --pair-at) makes
-   #cr-body the scroller so both modes + guides are one finger-flick away. */
-#cr-inner[data-density="compact"] {
-  --pair-at: 2000px;
-}
+/* SHORT SHEET: `--pair-compact: off` stacks this sheet so #cr-body is the
+   scroller. Measured 852×393 @115%: pair-on left SLOT 3 and the guide CTAs
+   ~83px past #cr-inner. */
 /* Modes picker: DRIVER | MY TEAM side by side on any stacked sheet so
    MY TEAM is not below the fold. Hub (no .cr-slot in both panes) stays one
    column and keeps #cr-body as the scroller. Compact was the first cut;
@@ -508,7 +504,7 @@
 
 /* ---------- extra funds ---------- */
 .cr-cheats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-.cr-cheats .sel-chip { flex: 1 1 auto; min-width: 120px; }
+.cr-cheats .sel-chip { flex: 1 1 4.5rem; min-width: 0; }
 
 /* Overlay leftover sheets: inherit --fit-at from the dialog. Compact packs
    rows and wraps names; #co-body / #ch-body / #cg-body / #q-body stay the
@@ -531,24 +527,30 @@
   display: inline-flex; align-items: center; justify-content: center;
   flex: 0 0 auto; min-height: var(--chip-h);
   padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.65);
-  border: 1px solid rgba(255,255,255,0.14); border-radius: var(--r-pill);
-  background: rgba(255,255,255,0.05); color: var(--text);
+  border: 1px solid var(--plate-line); border-radius: var(--r-pill);
+  background: var(--plate); color: var(--dim);
   font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.05em;
   text-decoration: none;
 }
 @media (hover: hover) {
-  #cg-contents a:hover, #ch-contents a:hover { background: rgba(255,255,255,0.12); }
+  #cg-contents a:hover, #ch-contents a:hover { background: var(--plate-hover); color: var(--text); }
 }
-#cg-contents a:active, #ch-contents a:active { background: rgba(255,255,255,0.16); }
+#cg-contents a:active, #ch-contents a:active { background: var(--plate-press); color: var(--text); }
 #cg-contents a:focus-visible, #ch-contents a:focus-visible {
   outline: 2px solid var(--focus); outline-offset: -2px;
 }
 #cg-body .sel-label[id], #ch-body .sel-label[id] { scroll-margin-block-start: var(--gap); }
 
-#career-guide .sheet[data-shape="wide"],
-#career-history .sheet[data-shape="wide"] {
+/* :has(> #cg-contents) carries that ID's specificity, so the 4-row
+   stacked template above beats a plain [data-shape=wide] 3-row rule
+   (measured 860×560 @115%: rows 39 / 432 / 0 / 0, head at y=-52,
+   foot 10px). Restate wide with :has so the rail+body share one 1fr
+   row and the foot keeps an auto track. */
+#career-guide .sheet[data-shape="wide"]:not([data-density="compact"]):has(> #cg-contents),
+#career-history .sheet[data-shape="wide"]:not([data-density="compact"]):has(> #ch-contents) {
   grid-template-columns: minmax(7.5rem, 11rem) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: start;
 }
 #career-guide .sheet[data-shape="wide"] > .sheet-head,
 #career-history .sheet[data-shape="wide"] > .sheet-head {
@@ -562,6 +564,11 @@
   overscroll-behavior-x: auto; overscroll-behavior-y: contain; touch-action: pan-y;
   padding: 0 calc(var(--gap) * 0.5) calc(var(--gap) * 0.5) var(--pad);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
+  /* Grid items default min-height:auto = min-content. The rail's chip
+     stack is taller than a short wide sheet, so the 1fr row refused to
+     shrink and the head painted 60px above the card (measured 860×560
+     @115%: head y=-52, foot crushed to 10px). */
+  min-width: 0; min-height: 0;
 }
 #career-guide .sheet[data-shape="wide"] > #cg-contents > :first-child,
 #career-history .sheet[data-shape="wide"] > #ch-contents > :first-child {
@@ -573,7 +580,7 @@
 }
 #career-guide .sheet[data-shape="wide"] > .sheet-body,
 #career-history .sheet[data-shape="wide"] > .sheet-body {
-  grid-column: 2; grid-row: 2; min-width: 0;
+  grid-column: 2; grid-row: 2; min-width: 0; min-height: 0;
 }
 #career-guide .sheet[data-shape="wide"] > .sheet-foot,
 #career-history .sheet[data-shape="wide"] > .sheet-foot {

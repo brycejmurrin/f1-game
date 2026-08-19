@@ -255,13 +255,27 @@
 #cs-inner:not([data-pair="on"]) #cs-tabs .cs-tab {
   flex: 0 0 auto; white-space: nowrap;
 }
-/* A tall stacked sheet has height to show the catalogue. Compact
-   landscape (play-shape) hid CAMERA-adjacent cats behind a sideways
-   pan too — wrapping two one-line rows beats that (compact already
-   drops .cs-tab-cur). */
-#cs-inner:not([data-pair="on"]):is([data-shape="tall"], [data-density="compact"]) #cs-tabs {
+/* Wrap only on a short WIDE stack (play-shape). Tall sheets have
+   height for the option list — wrapping all 14 tabs there ate
+   #cs-options (measured 393×852 @115%: five tab rows, options
+   height 0). Two wrapped rows beat a sideways pan on play-shape
+   (compact already drops .cs-tab-cur). */
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   flex-wrap: wrap;
   overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  max-height: calc(var(--chip-h) * 2 + var(--gap));
+  align-content: flex-start;
+}
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab {
+  /* 14 tabs (TEAM + 12 parts + LIVERY). Flex wrap stayed content-sized
+     (play @115: 6+7+1, LIVERY on a clipped third Y). Seven equal grid
+     tracks put every tab on two rows inside the cap. */
+  min-width: 0;
+  padding: calc(var(--gap) * 0.22) calc(var(--gap) * 0.42);
 }
 #cs-options {
   flex: 1 1 auto; min-height: 0;
@@ -288,7 +302,7 @@
 .cs-tab {
   display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px;
   padding: 6px 10px; border-radius: var(--r-md); min-width: 0; overflow: hidden;
-  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
+  background: var(--plate); border: 1px solid var(--plate-line);
   cursor: pointer; text-align: left;
 }
 .cs-tab-lbl, .cs-tab-cur {
@@ -310,7 +324,7 @@
 .cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: rgba(255,255,255,0.4); }
 .cs-tab.upgraded .cs-tab-lbl { color: #4df; }
 .cs-tab.upgraded .cs-tab-cur { color: rgba(80,210,255,0.7); }
-.cs-tab.active { background: color-mix(in oklab, var(--red) 20%, transparent); border-color: var(--red); }
+.cs-tab.active { background: var(--plate-on); border-color: var(--red); box-shadow: var(--plate-on-glow); }
 .cs-tab.active .cs-tab-lbl { color: #fff; }
 .cs-tab.active .cs-tab-cur { color: rgba(255,255,255,0.72); }
 
@@ -318,7 +332,7 @@
 .cs-opt {
   display: flex; align-items: flex-start; gap: calc(var(--gap) * 0.8); text-align: left; width: 100%;
   padding: 8px 11px; border-radius: var(--r-md);
-  background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08);
+  background: var(--plate); border: 1px solid var(--plate-line);
   cursor: pointer;
 }
 .cs-opt-dot {
@@ -345,8 +359,8 @@
 }
 .cs-opt-cost.free { color: rgba(255,255,255,0.3); font-weight: 600; }
 .cs-opt.active {
-  background: color-mix(in oklab, var(--red) 20%, transparent); border-color: var(--red);
-  box-shadow: 0 2px 18px color-mix(in oklab, var(--red) 32%, transparent);
+  background: var(--plate-on); border-color: var(--red);
+  box-shadow: var(--plate-on-glow);
 }
 .cs-opt.active .cs-opt-dot { border-color: var(--red); background: radial-gradient(circle, #fff 0 3px, var(--red) 4px); }
 .cs-opt.active .cs-opt-cost { color: #fff; }
@@ -671,10 +685,9 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
    when the safe viewport cannot afford the user's requested UI size. */
 @media (orientation: portrait) { #cs-inner { --fit-at: 340px; } }
 @media (orientation: landscape) { #cs-inner { --fit-at: 240px; } }
-/* SHORT SHEET: stack even when clientWidth stays above 400. A 852×393 phone is
-   compact (--compact-at 480) and still wide enough for pair-on, which keeps the
-   vertical tab rail and starves #cs-options. Density is classified first. */
-#cs-inner[data-density="compact"] { --pair-at: 2000px; }
+/* SHORT SHEET: `--pair-compact: off` stacks this sheet so the tab strip
+   stays horizontal. A 852×393 phone is compact and still wide enough for
+   pair-on, which kept the vertical rail and starved #cs-options. */
 
 /* ================= LAYOUT: container queries on the sheet =================
    Not media queries. What the panel can afford is a function of the width it

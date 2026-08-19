@@ -61,7 +61,25 @@ window.SheetShape = (function () {
     if (el.dataset[attr] !== next) el.dataset[attr] = next;
   }
 
-  function classifyPair(el, w) { classifyFlag(el, w, "--pair-at", "pair", PAIR_HYST); }
+  function classifyPair(el, w) {
+    /* Compact list/detail sheets stack even when clientWidth is still above
+       --pair-at (a landscape phone at a raised UI SIZE). `--pair-compact: off`
+       on `.pane-pair` is that answer; empty/on keeps reading --pair-at.
+       `wide` is SELECT's answer: a short HORIZONTAL sheet still has a right
+       column to give the catalogue — stacking it wasted that half. A tall
+       compact sheet still stacks. */
+    const mode = getComputedStyle(el).getPropertyValue("--pair-compact").trim();
+    if (el.dataset.density === "compact" && mode === "off") {
+      if (el.dataset.pair !== "off") el.dataset.pair = "off";
+      return;
+    }
+    if (el.dataset.density === "compact" && mode === "wide") {
+      const next = el.dataset.shape === "tall" ? "off" : "on";
+      if (el.dataset.pair !== next) el.dataset.pair = next;
+      return;
+    }
+    classifyFlag(el, w, "--pair-at", "pair", PAIR_HYST);
+  }
   /* Tuners: viewport media cannot see zoom. 734 physical px at UI SIZE 200%
    * is ~257 local px — too narrow for a 210px rail plus slider values.
    * Compact rail also needs three visible slider rows (redesign contract);
@@ -180,12 +198,13 @@ window.SheetShape = (function () {
     const box = (window.CssZoom && CssZoom.localBox(el)) || { w: 0, h: 0 };
     const wOwn = box.w || w;
     const hOwn = box.h || h;
-    /* DENSITY BEFORE PAIR. Compact rules may raise `--pair-at` (career forces a
-       stack at 2000px) so the pair answer must be read AFTER `data-density` is
-       written — otherwise the first paint of a short sheet keeps the wide
-       threshold, stays `pair=on`, and clips the stacked content the compact
-       rule was meant to make scrollable. MEASURED 852×393 @115%: career guides
-       sat ~39px past the sheet until this order flipped. */
+    /* DENSITY BEFORE PAIR. `--pair-compact: off` (and the old per-sheet
+       `--pair-at: 2000px` raise) is a function of `data-density`, so the pair
+       answer must be read AFTER density is written — otherwise the first paint
+       of a short sheet keeps the wide threshold, stays `pair=on`, and clips
+       the stacked content the compact rule was meant to make scrollable.
+       MEASURED 852×393 @115%: career guides sat ~39px past the sheet until
+       this order flipped. */
     classifyDensity(el, hOwn);
     classifyRail(el, wOwn, hOwn);
     classifyPair(el, wOwn);
