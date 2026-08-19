@@ -1221,6 +1221,11 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    2/3/5-column count. Wide groups stay on one line; a locally narrow section
    wraps and balances its own remaining controls. */
 #race-settings .balanced-row { --balance-basis: 4.25rem; --balance-min: 3.75rem; }
+/* OFF/LOW/REAL are three short words. Wrapping REAL onto a second line
+   parked it under BACK/RACE at UI SIZE 115% (852×393 champ: 192px column,
+   OFF+LOW 93px each, REAL 46px into the foot). Keep them on one track. */
+#rs-reliab { flex-wrap: nowrap; --balance-basis: 0rem; --balance-min: 0rem; }
+#rs-reliab > .sel-chip { flex: 1 1 0; white-space: nowrap; }
 
 /* SHORT AND WIDE: fit the whole thing, because scrolling a settings screen is
    how you miss a setting. A landscape phone gives ~285px of body between the

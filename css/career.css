@@ -562,6 +562,11 @@
   overscroll-behavior-x: auto; overscroll-behavior-y: contain; touch-action: pan-y;
   padding: 0 calc(var(--gap) * 0.5) calc(var(--gap) * 0.5) var(--pad);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
+  /* Grid items default min-height:auto = min-content. The rail's chip
+     stack is taller than a short wide sheet, so the 1fr row refused to
+     shrink and the head painted 60px above the card (measured 860×560
+     @115%: head y=-52, foot crushed to 10px). */
+  min-width: 0; min-height: 0;
 }
 #career-guide .sheet[data-shape="wide"] > #cg-contents > :first-child,
 #career-history .sheet[data-shape="wide"] > #ch-contents > :first-child {
@@ -573,7 +578,7 @@
 }
 #career-guide .sheet[data-shape="wide"] > .sheet-body,
 #career-history .sheet[data-shape="wide"] > .sheet-body {
-  grid-column: 2; grid-row: 2; min-width: 0;
+  grid-column: 2; grid-row: 2; min-width: 0; min-height: 0;
 }
 #career-guide .sheet[data-shape="wide"] > .sheet-foot,
 #career-history .sheet[data-shape="wide"] > .sheet-foot {

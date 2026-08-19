@@ -704,6 +704,12 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 #advanced    { --sheet-w: 820px; --fit-at: 300px; }
 #audioset    { --sheet-w: 460px; --fit-at: 300px; }
 #race-settings { --sheet-w: 560px; --fit-at: 300px; }
+/* 760, not the 380 default. Seven chip rows at normal density overflow a
+   720-local portrait sheet and a 473-local 860×560 @115% window — REAL
+   sat under BACK/RACE (measured). Compact chrome + the 3-col pin need
+   to fire on those short-in-own-units sheets. inherits:false, so the
+   sheet node, not the dialog. */
+#race-settings .sheet { --compact-at: 760px; }
 @media (orientation: landscape) {
   #results, #standings, #race-settings, #audioset, #advanced, #customize { --fit-at: 220px; }
   #pausemenu { --fit-at: 180px; }
