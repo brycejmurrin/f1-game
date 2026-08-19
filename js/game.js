@@ -576,7 +576,7 @@ let aeroZ = null;   // AeroZones.create(G), assigned once G exists (below)
 function xStraightAhead(c) { return !!aeroZ.at(wrapS(c.s)); }
 function aeroDfMult(c) { return 1 - xDfLoss(c) * (c && c.aeroX || 0); }
 
-// ── seeded simulation randomness ────────────────────────────────────────────
+// seeded simulation randomness
 // Everything that FEEDS THE SIMULATION draws from here, never Math.random(), so
 // a run can be reproduced: same seed + same inputs => same result. Without this
 // two runs of one scenario diverge immediately (the AI overtake roll below is
@@ -4745,7 +4745,7 @@ function render(dt) {
     frameSky.moon = 0.85 * LT.moonBright;
   }
 
-  // ── Lightning (active rain only) ─────────────────────────────────────────
+  // Lightning (active rain only)
   const wet = isWetRoad();      // wet-road material applies to "wet" AND "rain"
   const raining = isRaining();  // falling rain, lightning + thunder only in "rain"
   if (raining && _ltBase && LT.lightning > 0) {
@@ -4869,7 +4869,7 @@ function render(dt) {
     const rig = buildStudioRig();
     if (rig) frame.lights = rig;
   }
-  // ── Nearest-floodlight SPOT shadow pass ─────────────────────────────────
+  // Nearest-floodlight SPOT shadow pass
   // Night only: ONE lamp — the nearest/strongest to the camera — gets a real
   // per-frame 512² depth map (perspective, looking down its beam) so the car
   // driving under it throws a radial shadow away from the mast and walls carve
@@ -5974,15 +5974,8 @@ for (const btn of document.querySelectorAll("#cz-finish [data-cz-finish]")) {
   btn.onclick = () => { czSetFinish(btn.dataset.czFinish); if (soundOn) GameAudio.uiTick(); };
 }
 
-// The chips in #cs-view, plus orbit-by-drag and zoom on the canvas itself. All
-// of it is gated on setupPreviewOn, so none of these listeners can touch the
-// camera during a race — the canvas is shared with the track render and, on
-// touch, with the steering.
-// ---- the CAMERA disclosure ----
-// The panel holds the whole camera set; only CAMERA and ACTIVE AERO show at
-// rest. Closing is driven by INTENT, not by "a click happened": a preset is an
-// aim-and-leave choice so it closes, while MOVE/zoom/SPIN repeat and must not
-// pull the panel out from under the finger mid-adjustment.
+// GARAGE camera panel: preset picks close on intent; MOVE/zoom/SPIN repeat and
+// must not pull the panel out mid-adjustment.
 function setSetupCamPanel(open) {
   const b = $("cs-cam"), p = $("cs-cam-panel");
   if (!b || !p) return;
@@ -6232,11 +6225,6 @@ $("pm-hidehud").onclick = () => {
 };
 $("hud-restore").onclick = () => setHudUserHidden(false);
 
-// The CAM button + picker grid + mode-cycle wiring live in js/game/cam-modes.js
-// (broadcast-only — no physics). game.js keeps `camMode`/`camCutT` as closure
-// state (the render loop reads them); the module mutates them through G. The
-// façade exposes setCamMode as a deferred arrow (const initialised here), and
-// the update loop's `cycleCam()` closes over this const.
 const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false);

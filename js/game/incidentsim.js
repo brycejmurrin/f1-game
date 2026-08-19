@@ -4,12 +4,11 @@ const IncidentSim = (function () {
 
   let G = null;             // game.js ctx façade (live getters + trackFrom/worldFromTrack helpers)
 
-  // ── flags (all DEFAULT ON, each its own disable flag) ─────────────────────
+  // flags (all DEFAULT ON, each its own disable flag)
   let _r2 = true;           // apex26.r2Airborne — R2 airborne / rollover
   let _r3 = true;           // apex26.r3Contact — R3/C3 car-car contact resolution
   let _c1 = true;           // apex26.c1Pileup  — C1 multi-car pile-ups
 
-  // ── takeover state ────────────────────────────────────────────────────────
   const _owned = new Set(); // cars[] indices currently under takeover (owns())
   let _incidents = [];      // [{ kind, cars:[idx], tick0, seq, snap:Map, good:Map, settle:Map, gen }]
   const _cand = [];         // candidate contacts queued this tick by notify*(): {a,b,sev,kind}

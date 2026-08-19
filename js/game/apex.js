@@ -958,7 +958,7 @@ const api = {
     return out;
   },
   loadCarModel: (url) => loadCarModel(url),
-  // ── Baked asset pack (js/render/assets.js, built by tools/assets.mjs) ──────
+  // Baked asset pack (js/render/assets.js, built by tools/assets.mjs)
   // assets() — {supported, pack, uploaded, tier, layers, normal, bytes, models,
   //   error}. `supported:false` means the active renderer has no texture-array
   //   path (WGX/WebGPU); `pack:false` means no pack is installed. Both are
@@ -1048,7 +1048,7 @@ const api = {
     steerToAngle: (cmd) => Input.steerToTilt(cmd),
   },
 
-  // ── New dev / test helpers ─────────────────────────────────────────────────
+  // New dev / test helpers
 
   // Trigger the race-results screen cleanly, as if all cars crossed the line.
   finishRace() {
@@ -1251,7 +1251,7 @@ const api = {
     };
   },
 
-  // ── Headless / RL control loop ─────────────────────────────────────────────
+  // Headless / RL control loop
 
   headless(on) {
     if (on === undefined) return G.headlessMode;
@@ -1391,14 +1391,13 @@ const api = {
       (G.player.rescueLastT != null && (G.raceT - G.player.rescueLastT) < 0.5);
 
     return {
-      // ── position & progress ──
+      // position & progress
       s:       +G.player.s.toFixed(3),
       x:       +G.player.x.toFixed(3),
       prog:    +(G.player.prog || 0).toFixed(4),
       lap:      G.player.lap || 0,
       raceT:   +G.raceT.toFixed(3),
 
-      // ── motion ──
       speed:     +(G.player.speed || 0).toFixed(2),
       speedKph:  +((G.player.speed || 0) * 3.6).toFixed(1),   // TRUE ground speed
       // What the HUD/cockpit LCD actually shows: km/h on the pace-5 scale, so the
@@ -1408,26 +1407,25 @@ const api = {
       head:      +(G.player.head || 0).toFixed(4),
       vLat:      +(G.player.vLat || 0).toFixed(3),
 
-      // ── combined-slip physics ──
+      // combined-slip physics
       axEstSm:    +(G.player.axEstSm ?? 0).toFixed(2),
       axFrac:     +axFrac.toFixed(3),
       slipFactor: +slipFactor.toFixed(3),
       slipDeg:    +(slip * 180 / Math.PI).toFixed(2),
 
-      // ── track context at player position ──
+      // track context at player position
       k:     +kNow.toFixed(5),
       hw:    +hwNow.toFixed(2),
       slope: +slopeNow.toFixed(4),
       gripMult: gripMult(),
       weather: G.raceWeather,
 
-      // ── barrier clearances (both in metres, positive = clear) ──
+      // barrier clearances (both in metres, positive = clear)
       wallR:  +wallR.toFixed(2),
       wallL:  +wallL.toFixed(2),
       clearR: +(wallR - G.player.x).toFixed(2),
       clearL: +(G.player.x - wallL).toFixed(2),
 
-      // ── energy / ERS ──
       energy: +(G.player.energy || 0).toFixed(3),
       gear: G.player.gear || 1,
 
@@ -1435,28 +1433,26 @@ const api = {
       xOn:    !!G.player.xOn,
       xArmed: !!G.player.xArmed,
 
-      // ── episode state flags ──
+      // episode state flags
       wrongWay: !!G.player.wrongWay,
       offT:     +(G.player.offT || 0).toFixed(2),
       rescueT:  +(G.player.rescueT || 0).toFixed(2),
       done,
 
-      // ── currently applied input (null fields = real device input) ──
+      // currently applied input (null fields = real device input)
       input: {
         steer:    inp.steer    !== undefined ? inp.steer    : null,
         throttle: inp.throttle !== undefined ? !!inp.throttle : null,
         brake:    inp.brake    !== undefined ? !!inp.brake    : null,
       },
 
-      // ── rival proximity ──
       posInField: pi + 1,
       gapAhead:  rivalAhead  ? +(rivalAhead.prog  - (G.player.prog || 0)).toFixed(2) : null,
       gapBehind: rivalBehind ? +((G.player.prog || 0) - rivalBehind.prog).toFixed(2) : null,
 
-      // ── lookahead ──
       scan: scanAhead,
 
-      // ── reward components (combine as you see fit) ──
+      // reward components (combine as you see fit)
       reward: {
         speed:    +(G.player.speed || 0).toFixed(2),          // m/s forward — maximise
         offTrack: +(G.player.offT  || 0).toFixed(2),          // seconds off-track
@@ -1483,7 +1479,7 @@ const api = {
     return this.obs();
   },
 
-  // ── Timing & field hooks ──────────────────────────────────────────────────
+  // Timing & field hooks
 
   sectorState() {
     if (!G.player || !G.track) return null;
@@ -2121,7 +2117,7 @@ const api = {
     return this.obs();
   },
 
-  // ── agent-facing view ─────────────────────────────────────────────────────
+  // agent-facing view
   // world(opts) — one egocentric JSON snapshot per decision, with semantics
   // beside the numbers. opts: { detail: "brief"|"drive"|"full" (def "drive"),
   // horizonS: lookahead seconds (def 4), points: lookahead samples (def 5),

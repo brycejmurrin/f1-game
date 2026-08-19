@@ -1,29 +1,7 @@
 "use strict";
-/* UI LAYERS — the one answer to "which screen is on top, and are we racing?"
- *
- * WHY. Three modules used to ask that question and none of them agreed:
- *
- *   js/game/input.js   menuOverlayOpen()  — should a key drive the car?
- *   js/game/menunav.js LAYER_IDS          — which pane do the arrows move?
- *   js/game/topmodal.js `dialog.screen`   — which screens does Escape close?
- *
- * Each carried its own hand-maintained list, menunav.js's header asserted that
- * input.js "asks the same question", and by the time this was written the two
- * lists differed by five screens: #career and its three sub-sheets and #quali
- * were absent from the input gate, so arrow keys inside the career hub fell
- * through and latched the car's steering, and neither list had heard of
- * #lighting, #camtune, #vsfriend or #spotifypanel at all. A list that must be
- * edited in three files whenever a screen is added is a list that will drift
- * again; this is that list, once.
- *
- * THE TOP LAYER IS NOT ORDERABLE BY z-index, which is the other bug this fixes.
- * Every `.screen.dim` is a real <dialog> opened with showModal() (see
- * js/game/topmodal.js), and a top-layer dialog computes `z-index: auto` — so
- * ranking candidates by parseInt(zIndex) scored the modal as 0 and handed the
- * arrow keys and the wheel to whatever visible screen sat behind it. Measured:
- * with #standings open over the pause menu, the old activeLayer() returned
- * #overlay. `:modal` outranks every z-index here, because the platform says so.
- */
+/* UI LAYERS — which screen is on top, and are we racing?
+ * Canonical layer list (LAYER_IDS) for input.js, menunav.js, topmodal.js.
+ * showModal() dialogs outrank z-index (`:modal` beats parseInt(zIndex)). */
 window.UiLayers = (function () {
 
   /* Every screen-sized layer in the app, in no particular order — the ranking

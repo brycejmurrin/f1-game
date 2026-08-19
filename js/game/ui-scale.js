@@ -38,16 +38,6 @@ const UiScale = (() => {
     // NOTHING STORED => NO INLINE STYLE, so the `@media (pointer: coarse)` default
     // in the stylesheet stands and a phone is correct on its FIRST paint rather
     // than from whenever this module runs.
-    //
-    // SCALE_MIN was 90 (readability floor), then 80 — phones still wanted more
-    // headroom to "zoom way out"; 50%, then 40% is the floor now and the default
-    // stays 100%.
-    // SCALE_MAX went 150 -> 175 (tools/ui-scale-axis.mjs already validated to 200).
-    // Tap floors divide by --ui-scale (--tap-min), so WCAG 24px holds before zoom.
-    // (A concurrent branch pinned MAX back to 150 while doing clamp-path fixes;
-    // resolved in favour of the wider range on the owner's explicit ask — the
-    // clamp fixes themselves are kept, and ui-scale.spec.js now derives its
-    // expectations from __apex.uiScale() so either choice tests true.)
     const SCALE_MIN = 40, SCALE_MAX = 200, SCALE_STEP = 0.25;
     const scaleDefault = () => 100;
     const scaleSnap = (v) => {

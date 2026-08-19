@@ -143,7 +143,6 @@ const AgentRaster = (function () {
         prev = cur || prev;
       }
 
-      // ── scenery ──
       const reg = G.track.props;
       if (reg) {
         for (const p of reg.list) {
@@ -165,7 +164,7 @@ const AgentRaster = (function () {
         }
       }
 
-      // ── cars (painted last so they win ties against scenery at equal depth) ──
+      // cars (painted last so they win ties against scenery at equal depth)
       for (const c of G.cars) {
         const [wx, wz] = carWorld(c);
         const dist = Math.hypot(wx - eye[0], wz - eye[2]);
@@ -307,7 +306,7 @@ const AgentRaster = (function () {
       };
     }
 
-    // ── the high-detail rasterizer — edge + shade, from real triangles ──────
+    // the high-detail rasterizer — edge + shade, from real triangles
     // The Acerola / Kang pipeline (https://www.youtube.com/watch?v=gg40RWiaHRY),
     // geometry-native: instead of a screen-space Difference-of-Gaussians + Sobel
     // on luminance, edges come straight from the DEPTH buffer (silhouettes and
@@ -514,7 +513,6 @@ const AgentRaster = (function () {
         }
       }
 
-      // ── named scenery ──
       const reg = G.track.props;
       const counts = {};
       if (reg) {
@@ -525,7 +523,6 @@ const AgentRaster = (function () {
         }
       }
 
-      // ── cars ──
       const cars = [];
       for (const car of G.cars) {
         const [wx, wz] = carWorld(car);

@@ -116,7 +116,7 @@ const AgentView = (function () {
 
     const scr = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
 
-    // ── curvature, smoothed ─────────────────────────────────────────────────
+    // curvature, smoothed
     // Tracks.curvature differentiates the tangent over a 12 m window, which is
     // fine for physics but too sharp to describe a corner: the OSM-derived
     // centrelines carry local zigzags, so at Monza the point curvature through
@@ -187,7 +187,7 @@ const AgentView = (function () {
       return null;
     }
 
-    // ── corner table (static per track, built once) ──────────────────────────
+    // corner table (static per track, built once)
     // def.turns is the curated FIA apex list from CircuitMarkings — real turn
     // numbering, in driving order. info().turns exposes only its LENGTH today,
     // which is the least useful projection of it available. Circuits without
@@ -394,7 +394,6 @@ const AgentView = (function () {
       return cornerCache.corners;
     }
 
-    // ── next corner ─────────────────────────────────────────────────────────
     // The single field an agent cannot derive from k and hw but can act on
     // immediately. Distance is measured to the corner's ENTRY, not its apex —
     // by the apex the decision has already been made.
@@ -490,7 +489,6 @@ const AgentView = (function () {
       }).join(", ");
     }
 
-    // ── look-ahead ──────────────────────────────────────────────────────────
     // Time-scaled, not distance-scaled. obs().scan is fixed at [10,30,60] m,
     // which is 1.2 s of warning at 50 m/s and 6 s at 10 m/s — backwards. GT
     // Sophy previews ~6 s of travel; the span follows velocity.
@@ -515,7 +513,6 @@ const AgentView = (function () {
       return { horizonS, horizonM: r1(horizon), pts: out };
     }
 
-    // ── rivals ──────────────────────────────────────────────────────────────
     // Per-rival rows, relative to the player. obs() today gives only aggregate
     // gapAhead/gapBehind in metres — correct, but an agent cannot decide which
     // side to attack from a scalar. GT Sophy encodes rivals as relative
@@ -733,7 +730,6 @@ const AgentView = (function () {
       return out;
     }
 
-    // ── world() ─────────────────────────────────────────────────────────────
     function world(opts) {
       const bad = notReady();
       if (bad) return bad;
@@ -923,7 +919,7 @@ const AgentView = (function () {
       clamp, r1, r2, API_VERSION, CONVENTIONS, wrapS,
     });
     const frame = _raster.frame, plan = _raster.plan, carRender = _raster.carRender;
-    // ── carView() — the car, without rendering it ───────────────────────────
+    // carView() — the car, without rendering it
     // Replaces tools/car/render-car.mjs for everything except "does it LOOK right":
     // team identity, livery, the full parts spec and what it does to the car,
     // the chassis silhouette knobs, and measured geometry from a real build.
@@ -1039,7 +1035,7 @@ const AgentView = (function () {
       };
     }
 
-    // ── survey() — geometry defects, as a report ────────────────────────────
+    // survey() — geometry defects, as a report
     // The survey-track workflow currently says "assert with screenshots + the
     // probe, not by reasoning about coordinates" — because the coordinates were
     // not trustworthy enough to reason about. With measured prop bounds they
@@ -1074,7 +1070,7 @@ const AgentView = (function () {
       const nLat = clamp(o.lats | 0 || 13, 3, 41);
       const cap = clamp(o.limit | 0 || 20, 1, 200);
 
-      // ── lateral ground profile ──
+      // lateral ground profile
       const profile = [], holes = [], cliffs = [], overRoad = [];
       for (let i = 0; i < nAt; i++) {
         const frac = i / nAt;
@@ -1115,7 +1111,6 @@ const AgentView = (function () {
                        halfWidthM: r1(scr.hw), samples: row });
       }
 
-      // ── prop grounding ──
       const reg = track.props;
       const floating = [], buried = [], voidProps = [], propsOverRoad = [];
       let checked = 0;
@@ -1451,7 +1446,7 @@ const AgentView = (function () {
                   'ids are "prop:<n>", "corner:<turn>", "car:<n>" or "span:<n>"');
     }
 
-    // ── atmosphere() — the light, as text ────────────────────────────────────
+    // atmosphere() — the light, as text
     // The largest reservoir of world state that never reached the agent.
     // __apex.lightState() is rich but raw: RGB triples, a sun vector, a fog
     // density. An agent cannot do anything with [0.31, 0.44, 0.68]. So this
@@ -1944,26 +1939,7 @@ const AgentView = (function () {
       return out;
     }
 
-    // ── agentHelp() — discovery ─────────────────────────────────────────────
-    // Progressive disclosure: ~200 tokens naming the surface and the loop, so an
-    // agent can find its way without loading docs/DEBUG-HOOKS.md.
-    // ── objective() — what the game IS, not how the API works ───────────────
-    // agentHelp() documents the surface; nothing said what the agent is trying
-    // to DO. The evidence for adding exactly this, and no more: attaching domain
-    // meaning to the identifiers an agent already reads is the single best token
-    // spend measured (BIRD text-to-SQL, 34.9% -> 54.9% from one "evidence"
-    // sentence per question), and reading a game's rules can beat a lot of
-    // experience (SPRING, NeurIPS 2023: GPT-4 given the Crafter paper outscored
-    // RL baselines trained for 1M steps).
-    //
-    // Deliberately STATIC facts only — the win condition, the trade-offs, the
-    // hard limits. It does NOT try to describe how the car behaves: one-shot
-    // dynamics rules are shown to improve then DEGRADE an agent (Cogito Ergo
-    // Ludo ablation), because a fixed description cannot be revised when it is
-    // wrong. Dynamics are for the agent to learn by calling rollout()/act().
-    //
-    // And it is one small call, not a doc: repository context files measurably
-    // fail to help while costing >20% more tokens (ETH Zurich, arXiv 2602.11988).
+    // Static win condition / trade-offs only — learn car dynamics via rollout()/act().
     function objective() {
       return {
         apiVersion: API_VERSION,
@@ -2122,7 +2098,7 @@ const AgentView = (function () {
       };
     }
 
-    // ── scene() — named scenery near you ────────────────────────────────────
+    // scene() — named scenery near you
     // visible() locates scenery MASS (72 m anonymous cells). This names it. The
     // data comes from track.props, the registry buildProps now fills at each
     // semantic emitter (js/track/tracks.js note()); before that existed the only
@@ -2233,7 +2209,7 @@ const AgentView = (function () {
       };
     }
 
-    // ── visible() — what is actually on screen ──────────────────────────────
+    // visible() — what is actually on screen
     // The renderer already answers this every frame: it extracts frustum planes
     // from frame.viewProj and tests them against per-chunk AABBs. Nothing was
     // retained, so the answer was thrown away 60 times a second. This runs the
@@ -2310,7 +2286,6 @@ const AgentView = (function () {
                     + "let a frame draw for a live answer";
       }
 
-      // ── scenery chunks ──
       const mesh = G.track.meshes && G.track.meshes.props;
       const chunks = mesh && mesh.chunks;
       if (!chunks) {
@@ -2350,7 +2325,6 @@ const AgentView = (function () {
         };
       }
 
-      // ── cars ──
       out.cars = [];
       for (const c of G.cars) {
         const [wx, wz] = carWorld(c);
@@ -2368,7 +2342,6 @@ const AgentView = (function () {
       out.cars.sort((a, b) => a.distM - b.distM);
       out.carsInFrame = out.cars.filter((c) => c.inFrame).length;
 
-      // ── corners ──
       out.corners = [];
       for (const c of corners()) {
         Tracks.sample(G.track, c.s, scr);
@@ -2388,7 +2361,7 @@ const AgentView = (function () {
       return out;
     }
 
-    // ── trackInfo() — static, fetch once per session ─────────────────────────
+    // trackInfo() — static, fetch once per session
     // Constant for the whole session, so it must never ride in the per-tick
     // payload. Progressive disclosure: hand the agent a pointer, not the data.
     function trackInfo(opts) {

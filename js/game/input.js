@@ -313,11 +313,7 @@ const Input = (function () {
   // move through the menu and must not also be steering and braking the car
   // underneath it. Asked per key event, never per tick — keys are rare and the
   // set of open overlays changes without notice.
-  // THE LIST LIVES IN js/game/uilayers.js. This used to be a hand-maintained
-  // selector here and a second one in js/game/menunav.js, and they drifted: the
-  // career hub and its three sub-sheets and #quali were missing from this one,
-  // so an arrow press inside the career screen fell through and latched the
-  // car's steering. One list, asked by everyone.
+  // THE LIST LIVES IN js/game/uilayers.js.
   function menuOverlayOpen() {
     return !!(window.UiLayers && window.UiLayers.anyOpen());
   }

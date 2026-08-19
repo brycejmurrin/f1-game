@@ -122,8 +122,6 @@ window.SpotifyMusic = (function () {
   function writeToken(t) { lsSet(K_TOKEN, JSON.stringify(t)); }
   function clearToken() { lsDel(K_TOKEN); }
 
-  /* ---------------- status ---------------- */
-
   function status() { return { state, message, deviceId, track }; }
   function setStatus(s, msg) { state = s; message = msg || ""; emit(); }
   function emit() {
@@ -134,8 +132,6 @@ window.SpotifyMusic = (function () {
     if (typeof fn === "function") subs.push(fn);
     return function off() { const i = subs.indexOf(fn); if (i >= 0) subs.splice(i, 1); };
   }
-
-  /* ---------------- PKCE ---------------- */
 
   function b64url(bytes) {
     const a = new Uint8Array(bytes);
@@ -161,8 +157,6 @@ window.SpotifyMusic = (function () {
   // localhost, and this string comes out right).
   function redirectUri() { return location.origin + location.pathname; }
   function onLocalhost() { return location.hostname === "localhost"; }
-
-  /* ---------------- token lifecycle ---------------- */
 
   function validToken() {
     const t = readToken();
@@ -230,8 +224,6 @@ window.SpotifyMusic = (function () {
     }).then((r) => r.json().catch(() => ({ error: "bad_response" })))
       .catch(() => ({ error: "network" }));
   }
-
-  /* ---------------- authorise / redirect ---------------- */
 
   function beginAuth() {
     const cid = clientId();
@@ -339,8 +331,6 @@ window.SpotifyMusic = (function () {
       return mode() === "remote" ? connectRemote() : bootPlayer();
     });
   }
-
-  /* ---------------- Web Playback SDK ---------------- */
 
   function loadSdk() {
     if (window.Spotify && window.Spotify.Player) return Promise.resolve();
@@ -460,8 +450,6 @@ window.SpotifyMusic = (function () {
     player = null;
     removeBackend();
   }
-
-  /* ---------------- Spotify Web API ---------------- */
 
   function api(path, opts) {
     return validToken().then((t) => {
@@ -799,8 +787,6 @@ window.SpotifyMusic = (function () {
   }
   function removeBackend() { setBackend(null); syncSession(); }
 
-  /* ---------------- public control ---------------- */
-
   function available() { return !!clientId(); }
   function configured() { const c = clientId(); return c ? { clientId: c } : null; }
 
@@ -919,8 +905,6 @@ window.SpotifyMusic = (function () {
     setStatus(available() ? "configured" : "off",
       available() ? "Signed out of Spotify on this device." : copyOff());
   }
-
-  /* ---------------- panel ---------------- */
 
   function copyOff() {
     return "off — paste a Client ID above to enable it.";

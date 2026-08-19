@@ -265,8 +265,6 @@ const GameAudio = (function () {
 
   function now() { return ctx ? ctx.currentTime : 0; }
 
-  /* ---------------- one-shot helpers ---------------- */
-
   function env(gainNode, t0, peak, attack, decay) {
     const g = gainNode.gain;
     g.cancelScheduledValues(t0);
@@ -340,8 +338,6 @@ const GameAudio = (function () {
     src.stop(t0 + decay + 0.1);
     src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
   }
-
-  /* ---------------- engine ---------------- */
 
   function startEngine() {
     if (!ctx || engineOn) return;
@@ -584,8 +580,6 @@ const GameAudio = (function () {
     }
   }
 
-  /* ---------------- rain ---------------- */
-
   let rainSrc = null, rainGain = null, rainHp = null, rainLp = null, rainStopping = false;
   let rainPending = null;   // gain a start asked for while stopRain's teardown was running
   let rainWanted = false;   // wanted even when nodes are torn down (rebuildCtx / tab hide)
@@ -686,8 +680,6 @@ const GameAudio = (function () {
     noise(isUp ? 0.05 : 0.045, 0.05, isUp ? 2600 : 1800);
   }
 
-  /* ---------------- sfx ---------------- */
-
   // i 0..4 — each start light a touch higher than the last
   function lightOn(i) {
     const n = Math.max(0, Math.min(4, i | 0));
@@ -776,8 +768,6 @@ const GameAudio = (function () {
     blip(330, "sawtooth", 0.22, 0.01, 0.45, 116);
     blip(165, "square", 0.14, 0.01, 0.45, 58);
   }
-
-  /* ---------------- music ---------------- */
 
   /*
    * Music is now real, downloaded CC0 tracks (see assets/music/CREDITS.txt),

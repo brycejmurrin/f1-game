@@ -335,7 +335,7 @@ function applyRaceSettings() {
     gm *= 1.0 + clamp(_mb, -0.6, 0.6) * 0.5;
     G.frame.groundMist = clamp(gm, 0, 0.7);
   }
-  // ── Live lighting-tuner overrides on the CONDITION-derived values ──
+  // Live lighting-tuner overrides on the CONDITION-derived values
   // Re-derived fresh from the branch values every call (applyRaceSettings re-runs
   // whenever one of these knobs changes — see _APPLY_RACE_IDS), so they never
   // compound. All default to a no-op.
@@ -399,7 +399,7 @@ function applyRaceSettings() {
   if (!(G._ltNextT > 0)) { G._ltFlash = 0; G._ltNextT = 3 + Math.random() * 5; }
 }
 
-// ── Per-track sun AZIMUTH bias ────────────────────────────────────────────────
+// Per-track sun AZIMUTH bias
 // Apply a per-track azimuth (compass) bias to an authored sun direction as a TRUE
 // XZ ROTATION — the same idiom the default-mode block below uses on _pal.sunDir.
 // The three explicit-TOD branches used to fold the bias straight into x and then

@@ -101,8 +101,6 @@ window.MenuNav = (function () {
     if (pane && scrollPane(pane, dy)) e.preventDefault();
   }
 
-  /* ---------------- arrow-key navigation ---------------- */
-
   function items(layer) {
     const out = [];
     for (const el of layer.querySelectorAll(FOCUSABLE)) {

@@ -392,26 +392,9 @@ function drawElevProfile(cv, t, showEl) {
   return true;
 }
 
-/* THE PREVIEW CARD'S BOX IS NOT KNOWN WHEN THE SCREEN OPENS.
- * Same shape as js/game/sheetshape.js's own note: a hidden element measures
- * 0x0, so the first useful measurement is the ResizeObserver callback when its
- * screen is shown, not the call that showed it. updateTrackPreview() runs on
- * that first (unmeasurable) pass and deliberately does not pin; this refits
- * once the card has a box, and again whenever it changes — a UI SIZE change, an
- * orientation flip, or sheetshape.js flipping data-pair / data-shape, all of
- * which move the budget without changing the selected circuit.
- *
- * BOTH AXES. The budget in updateTrackPreview is driven by the card's WIDTH
- * (cardInnerW, and the `beside` switch that keys off it) as much as by the
- * section's height, so a width-only or height-only guard would sit out the
- * pair flip that changes the layout most.
- *
- * TERMINATION: refit only when the card's box actually differs from the one we
- * last fitted against. Without that guard this is a classic RO feedback loop —
- * the refit clears the map's pins and may set data-map-shape, either of which
- * can resize the card and fire the observer again. Sibling precedent: the
- * track-detail modal's own observer guards on a `lastFit` key for exactly this
- * reason. */
+/* Refit the preview card once ResizeObserver reports a real box (hidden = 0×0
+ * on first paint). Guard on last fitted dimensions — refit clears map pins and
+ * can re-fire the observer without termination. */
 let previewRo = null, previewCardBox = "";
 function watchPreviewCard(card) {
   if (!card || typeof ResizeObserver !== "function") return;

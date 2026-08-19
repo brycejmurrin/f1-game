@@ -6,7 +6,7 @@ const AiDrive = (function () {
   const lerp = M4.lerp;
   const damp = (c, t, l, dt) => lerp(c, t, 1 - Math.exp(-l * dt));
 
-  // ── ratings on the car (0..1), with the mid-grid default the old code used ──
+  // ratings on the car (0..1), with the mid-grid default the old code used
   // Reused scratch — same contract as game.js pairContact/_ct. Callers must
   // read fields before the next traits() call (updateCar does; tests do).
   const _traits = { craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97, consistency: 0.75 };
@@ -136,7 +136,6 @@ const AiDrive = (function () {
     return lerp(0.72, 1.0, t.awareness);
   }
 
-  // ── OVERTAKE FIRE ─────────────────────────────────────────────────────────
   // Old behaviour: Poisson with fixed λ=0.7 whenever armed. That ignored craft
   // (who should commit) and awareness (who should wait for a cleaner window).
   // Situation score folds gap, closing speed, side room, and a mild straight
@@ -248,7 +247,6 @@ const AiDrive = (function () {
     return _br;
   }
 
-  // ── ADAPTIVE LANE ─────────────────────────────────────────────────────────
   // Nudge the preferred lane toward the freer side when traffic is dense, so
   // midfield trains slowly fan out. Slow on purpose — must not fight overtake.
   function adaptLane(lane, ctx, dt) {

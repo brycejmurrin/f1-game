@@ -6,7 +6,7 @@ let G = null;                          // game.js ctx façade (live getters: car
 const LS_KEY = "apex26.bodyAttitude";
 let enabled = true;                    // resolved from localStorage in create()
 
-// ── tunables (stiff-suspension feel: small travel, fast settle) ──────────────
+// tunables (stiff-suspension feel: small travel, fast settle)
 const PITCH_OMEGA = 9;                 // rad/s spring rate — brake dive / squat
 const PITCH_GAIN  = 0.00095;           // rad per (m/s²) of longitudinal accel
 const PITCH_MAX   = 0.024;             // ≈1.4° cap

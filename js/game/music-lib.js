@@ -47,8 +47,6 @@ window.MusicLib = (function () {
 
   const $ = (id) => document.getElementById(id);
 
-  /* ---------------- IndexedDB plumbing ---------------- */
-
   function openDb() {
     if (dbPromise) return dbPromise;
     dbPromise = new Promise((res) => {
@@ -122,8 +120,6 @@ window.MusicLib = (function () {
     }));
   }
 
-  /* ---------------- GameAudio bridge ---------------- */
-
   // The playlist id namespace is a contract with js/game/audio.js: user uploads
   // are "user:<db id>", shipped tracks are "builtin:<name>". Never mint or
   // remove an id outside our own prefix.
@@ -149,8 +145,6 @@ window.MusicLib = (function () {
     try { URL.revokeObjectURL(url); } catch (e) {}
     urls.delete(id);
   }
-
-  /* ---------------- rendering ---------------- */
 
   function mb(bytes) {
     return bytes < 1048576 ? Math.max(1, Math.round(bytes / 1024)) + " KB"
@@ -206,8 +200,6 @@ window.MusicLib = (function () {
       el.classList.toggle("playing", !!playingId && playingId === pid(+el.dataset.id));
     });
   }
-
-  /* ---------------- public API ---------------- */
 
   function init() {
     if (readyPromise) return readyPromise;
@@ -310,8 +302,6 @@ window.MusicLib = (function () {
   }
 
   function list() { return init().then(() => cache.map((m) => ({ id: m.id, name: m.name, size: m.size, added: m.added }))); }
-
-  /* ---------------- DOM wiring ---------------- */
 
   function wire() {
     // Guard every id: specs and tools load partial DOM, and a missing element

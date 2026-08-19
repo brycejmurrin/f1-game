@@ -338,7 +338,7 @@ const CEILINGS = {
   // beside buildSelect. Comments moved with the block.
   // 8512 -> 6478: comment-bloat pass (trim-comments.mjs — section dividers,
   // narrative blocks, shortened headers; kept bug/physics/port/silent-catch notes).
-  "js/game.js": 6479,
+  "js/game.js": 6467,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -369,9 +369,9 @@ const CEILINGS = {
   // of fetching a garbage URL / throwing on HTML 404) + fetchTrackOutline
   // comment moved onto the function it describes.
   // 3132 -> 2428: comment-bloat pass (trim-comments.mjs).
-  "js/game/apex.js": 2429,
+  "js/game/apex.js": 2425,
   // 2900 -> 2459: comment-bloat pass (trim-comments.mjs).
-  "js/game/agentview.js": 2460,
+  "js/game/agentview.js": 2433,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
   // covered 55% of the steering wheel (depth-raster measured); ckpt now ends the

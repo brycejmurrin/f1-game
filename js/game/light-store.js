@@ -121,7 +121,6 @@ const LightStore = (() => {
       return true;
     }
 
-    // ── SPREAD ONE CONDITION ACROSS THE GRID ──────────────────────────────────
     // The tuner edits ONE (track, time, weather) profile at a time. That is right
     // for dialling a circuit in and wrong for the other thing people do with it:
     // settle a look for "dusk in the wet" and want it on all 40 circuits. By hand
