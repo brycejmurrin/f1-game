@@ -411,7 +411,29 @@ test("WGX sky ports GLX overcast grey-shift, horizon bank, and azimuthal variati
   assert.match(sky, /greyZ/);
   assert.match(sky, /bankThresh/);
   assert.match(sky, /atan2\(dir\.z,\s*dir\.x\)/);
+  assert.match(sky, /if \(nightSky < 0\.5\)/,
+    "night corona/disc must skip (GLX SKY_FS) — do not mul-to-zero");
   assert.doesNotMatch(sky, /Deliberately reduced vs GLX SKY_FS/);
+});
+
+test("TLX sky gates night corona and the day-band atan like GLX", () => {
+  const sky = read("js/render/three/tsl-sky.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(sky, /If\(nightSky\.lessThan\(0\.5\)/,
+    "night corona/disc must skip (GLX SKY_FS) — do not mul-to-zero");
+  assert.match(sky, /If\(daytime\.greaterThan\(0\.0\)/,
+    "day-band atan+vnoise must skip when daytime is 0");
+});
+
+test("TLX shadow cull packs CPU-side without uploading the lit InstancedMesh", () => {
+  const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const at = tlx.indexOf("function cullInstances");
+  assert.notEqual(at, -1, "cullInstances moved");
+  const body = tlx.slice(at, at + 3600);
+  assert.match(body, /opts && opts\.upload === false/,
+    "shadow path must be able to skip the lit imesh setMatrixAt walk");
+  const game = read("js/game.js");
+  assert.match(game, /cullInstances\([^)]*planes,\s*\{\s*upload:\s*false\s*\}\)/,
+    "sun/lamp prop-shadow must pass upload:false");
 });
 
 test("WGX phone post targets use the slim GLX-equivalent formats", () => {
@@ -1316,7 +1338,7 @@ test("WGX SSR consume/march/sinT match GLX (no wetness remul, dry sheen lives)",
   assert.match(post, /min\(gateSrc \/ 0\.20, 1\.0\)/,
     "SSR pass must apply the dry-sheen fade once so COMPOSITE can trust .a");
   assert.match(post, /let ssrWet = U\.lift\.w/,
-    "COMPOSITE must declare wetness (U.lift.w) before the SSR consume gate");
+    "COMPOSITE must declare ssrWet = U.lift.w so Dawn does not reject a leftover use");
   assert.equal((post.match(/let gateSrc/g) || []).length, 1,
     "do not redeclare gateSrc — Dawn refuses SSR and sheds the whole post chain");
   assert.equal((post.match(/min\(gateSrc \/ 0\.20, 1\.0\)/g) || []).length, 1,

@@ -5560,7 +5560,8 @@ function _castPropBatchesShadow() {
     ? gfx.makeFrustumPlanes(gfx.shadowCullVP) : null;
   for (let i = 0; i < _pb.length; i++) {
     if (planes && gfx.cullInstances) {
-      gfx.castShadowInstanced(_pb[i], gfx.cullInstances(_pb[i], planes));
+      // TLX: CPU-pack only (own shadow mesh). GLX/WGX ignore the 3rd arg.
+      gfx.castShadowInstanced(_pb[i], gfx.cullInstances(_pb[i], planes, { upload: false }));
     } else gfx.castShadowInstanced(_pb[i]);
   }
 }
@@ -6636,6 +6637,8 @@ function render(dt) {
   // Camera forward (horizontal) for the behind-camera AI cull below.
   let _camFwdX = camTgt[0] - camEye[0], _camFwdZ = camTgt[2] - camEye[2];
   { const l = Math.hypot(_camFwdX, _camFwdZ) || 1; _camFwdX /= l; _camFwdZ /= l; }
+  const _carCullPlanes = (gfx.makeFrustumPlanes && frame.viewProj)
+    ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
   // Glossy automotive paint is identical for every car this frame (depends only
   // on wet/night), and carPaintMat returns a shared scratch — so compute it ONCE
   // instead of 22× per frame. Wet adds a water film (sharper highlights).
@@ -6683,6 +6686,9 @@ function render(dt) {
       // Behind-camera cull: AI cars strictly behind the view are never visible
       // (no mirrors). Near-eye: origin within ~3.4 m fills the near plane — skip.
       // Local player is never culled. Y without bank is fine for the near-eye test.
+      // Side frustum is applied AFTER the car is queued for the shadow map —
+      // a rival just off a ~60° chase FOV can still throw a sun/car shadow
+      // onto the visible road (the car map is a ±42 m ortho around the player).
       if (!c.isPlayer) {
         const dx = tmpP[0] - camEye[0], dz = tmpP[2] - camEye[2];
         if (dx * _camFwdX + dz * _camFwdZ < -6) continue;   // 6 m grace behind the eye
@@ -6761,6 +6767,17 @@ function render(dt) {
     _shadowTeams[_shadowCount] = c.team;   // for next frame's AI car-shadow caster pass
     _shadowCars[_shadowCount] = c;
     _shadowCount++;
+    // Side frustum: 8 m sphere, same planes as propBatches. After the
+    // shadow enqueue so an off-camera rival still casts. Player never culled.
+    if (!c.isPlayer && _carCullPlanes) {
+      const x = tmpP[0], y = tmpP[1], z = tmpP[2], r = 8;
+      let _out = false;
+      for (let i = 0; i < 6; i++) {
+        const p = _carCullPlanes[i];
+        if (p[0] * x + p[1] * y + p[2] * z + p[3] < -r) { _out = true; break; }
+      }
+      if (_out) continue;
+    }
     // Cockpit view: the interior is a VIEWMODEL — anchored to the CAMERA, not to
     // the car's rendered position. Orientation is the stabilized track basis
     // (plain tangent/right at the car, no visual yaw/pitch/roll/lean), but the

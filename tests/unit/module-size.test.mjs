@@ -343,7 +343,13 @@ const CEILINGS = {
   // is the pooled declarations plus the field-fills that replace the literals
   // — the ratchet-tolerated kind, since the alternative is a reader re-deriving
   // that the callee is read-only.
-  "js/game.js": 8533,
+  // 8533 -> 8548: AI car 8 m frustum-sphere cull after the behind-camera /
+  // near-eye tests. Player never culled. Same planes as propBatches.
+  // 8548 -> 8550: side-frustum continue moved AFTER _shadowCount++ so an
+  // off-FOV rival still casts into the ±42 m car map (look-wrong the first
+  // hoist introduced). Growth is the relocated block plus the shadow-keep
+  // comment — bug-explaining, the ratchet-tolerated kind.
+  "js/game.js": 8550,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

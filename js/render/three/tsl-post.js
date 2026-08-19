@@ -223,12 +223,12 @@
       contact: uniform(0),
       radius: uniform(0.6),
     };
-    const ssaoViewPos = (uvGl) => {
-      const d = depthAt(uvGl);
+    const ssaoViewPosFromD = (uvGl, d) => {
       const c = vec4(uvGl.mul(2.0).sub(1.0), d.mul(2.0).sub(1.0), 1.0);
       const v = ssaoU.invProj.mul(c);
       return v.xyz.div(v.w);
     };
+    const ssaoViewPos = (uvGl) => ssaoViewPosFromD(uvGl, depthAt(uvGl));
     // 12-vector kernel, first 8 used (js/render/shaders/post.js, 190).
     const SSAO_K = [
       [0.0, 1.0], [0.5, 0.866], [0.866, 0.5], [1.0, 0.0],
@@ -243,7 +243,7 @@
         const d = depthAt(vUV).toVar();
         // Derivatives BEFORE the sky depth gate — non-uniform If around dFdx/dFdy
         // is a hard WGSL compile error on TLX-WebGPU (same class as WGX fwidth).
-        const P0 = vec3(ssaoViewPos(vUV)).toVar();
+        const P0 = vec3(ssaoViewPosFromD(vUV, d)).toVar();
         const crN0 = cross(dFdx(P0), dFdy(P0)).toVar();
         If(d.lessThan(0.99999), () => {          // sky -> 1.0
           const P = P0;
@@ -389,8 +389,11 @@
             const td = t0.add(stepLen.mul(float(i))).toVar();
             const p = ro.add(rd.mul(td)).toVar();
             trans.mulAssign(exp(stepLen.mul(-0.010)));
+            // SUN half: GLX/WGSL gate on uStr. Night haveGR is lampVol with
+            // str=0 (moon-key sunDir.y ~0.97) — 16 shadow taps + gCloud FBM
+            // were * 0. trans stays outside so lampAccum is bit-identical.
+            If(grU.str.greaterThan(0.0), () => {
             const hSun = exp(max(p.y.sub(groundY), 0.0).mul(-0.03)).toVar();
-            const hLamp = exp(max(p.y.sub(groundY), 0.0).mul(-0.07)).toVar();
             const lc = grU.lightVP.mul(vec4(p, 1.0)).toVar();
             const sc = lc.xyz.div(lc.w).mul(0.5).add(0.5).toVar();
             const lit = float(1.0).toVar();
@@ -401,8 +404,12 @@
             });
             lit.mulAssign(gCloud(p).mul(0.62).oneMinus());   // SOFT crepuscular bands
             accum.addAssign(lit.mul(hSun).mul(trans));
+            });
             // Lamp in-scatter: nearest-6 aimed beams js/render/shaders/post.js.
             If(grU.lampStr.greaterThan(0.0).and(td.lessThan(200.0)), () => {
+              // hLamp only has one consumer (lampAccum). GLX moved the exp
+              // inside this gate — daytime sun-shafts force lampVol=0.
+              const hLamp = exp(max(p.y.sub(groundY), 0.0).mul(-0.07)).toVar();
               Loop({ start: int(0), end: int(6), type: "int", condition: "<" }, ({ i: li }) => {
                 If(float(li).greaterThanEqual(grU.numLights), () => { Break(); });
                 const geo = grU.lightGeo.element(li);
@@ -443,13 +450,17 @@
           });
           accum.divAssign(16.0);
           lampAccum.mulAssign(grU.mist.mul(grU.lampStr).mul(2.0 / 16.0));
-          // Henyey-Greenstein forward lobe + isotropic floor js/render/shaders/post.js.
+          // HG phase * str — skip the sqrt when str is 0 (GLX/WGSL).
+          const sunTerm = vec3(0.0).toVar();
+          If(grU.str.greaterThan(0.0), () => {
           const cosT = max(dot(rd, grU.sunDir), 0.0);
           const g = clamp(grU.hgAniso, 0.0, 0.95).toVar();
           const hgD = g.mul(g).add(1.0).sub(g.mul(cosT).mul(2.0)).toVar();
           const hg = g.mul(g).oneMinus().div(hgD.mul(sqrt(hgD)));
           const phase = hg.mul(0.16).add(grU.hgFloor);
-          return vec4(grU.sunColor.mul(accum).mul(phase).mul(grU.str).add(lampAccum), 1.0);
+          sunTerm.assign(grU.sunColor.mul(accum).mul(phase).mul(grU.str));
+          });
+          return vec4(sunTerm.add(lampAccum), 1.0);
         })(), "tlx-post-godray"),
       };
     }
@@ -457,6 +468,7 @@
     /* ── COMPOSITE (COMPOSITE_FS in js/render/shaders/post.js): the whole resolve ───── */
     const C = {
       aoTexel: uniform(new THREE.Vector2(0, 0)),
+      haveGodray: uniform(0),
       bloomAmt: uniform(0.55), bloomKnee: uniform(0.5),
       sunUV: uniform(new THREE.Vector2(-2, -2)),
       flareStr: uniform(0), exposure: uniform(1), sunShaft: uniform(0),
@@ -545,15 +557,17 @@
         // tailpipe; SKIPS car pixels (SSR alpha tag) so the body doesn't waver.
         const hazeUV = vec2(vUV).toVar();
         If(C.hazeStr.greaterThan(0.002), () => {
+          // SCREEN-SPACE TEST FIRST (GLX/WGSL). Gaussian is tight — ~8% of
+          // the frame is on-plume; the tag fetch is a full-res dependent read.
+          const hd = vUV.sub(C.hazeUV).sub(vec2(0.0, 0.08)).mul(vec2(3.2, 1.0)).toVar();
+          const hm = exp(dot(hd, hd).mul(-70.0)).mul(C.hazeStr).toVar();
+          If(hm.greaterThan(0.003), () => {
           const carHere = smoothstep(0.42, 0.55, tagT.sample(TL(vUV)).r).oneMinus();
           If(carHere.lessThan(0.25), () => {
-            const hd = vUV.sub(C.hazeUV).sub(vec2(0.0, 0.08)).mul(vec2(3.2, 1.0)).toVar();
-            const hm = exp(dot(hd, hd).mul(-70.0)).mul(C.hazeStr).toVar();
-            If(hm.greaterThan(0.003), () => {
-              const hp = vUV.y.mul(90.0).sub(C.hazeTime.mul(11.0)).toVar();
-              hazeUV.addAssign(vec2(sin(hp.add(vUV.x.mul(70.0))), cos(hp.mul(0.63)))
-                .mul(hm.mul(0.0075)));
-            });
+            const hp = vUV.y.mul(90.0).sub(C.hazeTime.mul(11.0)).toVar();
+            hazeUV.addAssign(vec2(sin(hp.add(vUV.x.mul(70.0))), cos(hp.mul(0.63)))
+              .mul(hm.mul(0.0075)));
+          });
           });
         });
         const scn = vec4(sceneT.sample(TL(hazeUV))).toVar();  // .rgb colour; tag is tagT
@@ -611,13 +625,13 @@
             aoW.addAssign(w);
           }
           aoV.assign(aoSum.div(aoW));
-        }).Else(() => {
-          aoV.assign(ssaoTexN.sample(TL(vUV)).r);
         });
         c.mulAssign(aoV);
 
-        // Volumetric sun shafts: additive (black texture when disabled).
-        c.addAssign(godrayTexN.sample(TL(vUV)).rgb);
+        // Volumetric sun shafts: skip the fetch when the CPU shed the pass.
+        If(C.haveGodray.greaterThan(0.5), () => {
+          c.addAssign(godrayTexN.sample(TL(vUV)).rgb);
+        });
 
         // ── Wet-road + car-paint screen-space reflection js/render/shaders/post.js ──
         const carPx = smoothstep(0.42, 0.55, tagA).oneMinus().toVar();
@@ -788,10 +802,13 @@
         c.mulAssign(C.exposure);
 
         // Bloom with the highlight-suppression knee, exposure-matched (COMPOSITE_FS).
-        const bloomSample = vec3(bloomTexN.sample(TL(vUV)).rgb).toVar();
-        const bloomMask = clamp(max(c.r, max(c.g, c.b)).sub(0.7), 0.0, 0.3)
-          .div(0.3).mul(C.bloomKnee).oneMinus();
-        c.addAssign(bloomSample.mul(C.bloomAmt).mul(bloomMask).mul(C.exposure));
+        const bloomSample = vec3(0.0).toVar();
+        If(C.bloomAmt.greaterThan(0.001), () => {
+          bloomSample.assign(bloomTexN.sample(TL(vUV)).rgb);
+          const bloomMask = clamp(max(c.r, max(c.g, c.b)).sub(0.7), 0.0, 0.3)
+            .div(0.3).mul(C.bloomKnee).oneMinus();
+          c.addAssign(bloomSample.mul(C.bloomAmt).mul(bloomMask).mul(C.exposure));
+        });
 
         // LENS DIRT veil js/render/shaders/post.js: grime scatters the bright-pass.
         const dirt = float(0.0).toVar();
@@ -801,7 +818,8 @@
         });
 
         // Screen-space sun shafts: 8 radial bright-pass taps js/render/shaders/post.js.
-        If(C.sunShaft.greaterThan(0.0), () => {
+        // Bloom-gated: the taps read the bright-pass; a shed chain is * 0.
+        If(C.sunShaft.greaterThan(0.0).and(C.bloomAmt.greaterThan(0.001)), () => {
           const toSun = C.sunUV.sub(vUV).toVar();
           const dist = length(toSun).toVar();
           If(dist.greaterThan(0.005), () => {
