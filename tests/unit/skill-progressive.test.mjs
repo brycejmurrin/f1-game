@@ -288,8 +288,10 @@ test("readonly review agents stay --fast and never start Playwright", () => {
   const bloat = fs.readFileSync(path.join(AGENTS, "bloat-auditor.md"), "utf8");
   assert.match(bloat, /BLOAT/);
   assert.match(bloat, /bloat-scan\.mjs/);
-  assert.doesNotMatch(bloat, /chrome-start/);
-  assert.doesNotMatch(bloat, /apex-eval\.mjs/);
+  assert.match(bloat, /NEVER start[\s\S]*chrome-start/);
+  assert.match(bloat, /NEVER start[\s\S]*apex-eval\.mjs/);
+  assert.doesNotMatch(bloat, /python3 tools\/probe-mcp\.py chrome-start/);
+  assert.doesNotMatch(bloat, /node tools\/apex-eval/);
 });
 
 test("do not grow a parallel Cursor skills or agents tree", () => {
