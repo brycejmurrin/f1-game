@@ -9,6 +9,7 @@ One 4×5 sheet per circuit: rows `dawn / day / dusk / night`, columns
 | Abu Dhabi | [abudhabi_grid.png](abudhabi_grid.png) |
 | Baku | [baku_grid.png](baku_grid.png) |
 | Bahrain | [bahrain_grid.png](bahrain_grid.png) |
+| Interlagos | [interlagos_grid.png](interlagos_grid.png) |
 | Jeddah | [jeddah_grid.png](jeddah_grid.png) |
 | Qatar | [qatar_grid.png](qatar_grid.png) |
 | Silverstone | [silverstone_grid.png](silverstone_grid.png) |
