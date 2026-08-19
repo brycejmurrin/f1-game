@@ -615,4 +615,5 @@ declare const TunerPanel: GameModuleFactory;
 declare const UiScale: GameModuleFactory;
 declare const CustomLogo: GameModuleFactory;
 declare const LiveryStore: GameModuleFactory;
+declare const RaceSettings: GameModuleFactory;
 declare const ApexCameras: GameModuleFactory;

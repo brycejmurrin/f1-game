@@ -349,7 +349,10 @@ const CEILINGS = {
   //   let stays so setup-ui keeps one binding. wingColorOf / drawAeroFlaps stay.
   // 8369 -> 8371: AGENT_FILES + AGENT_EDGES for apex-cameras.js (lazy inject
   // table; same lockstep as BACKEND_FILES). Not a feature.
-  "js/game.js": 8371,
+  // 8371 -> 8228: RACE SETTINGS chips + open/cancel moved to
+  // js/game/race-settings.js (RaceSettings.create(G)). 0 new G; rsReturn
+  // lives in the module. selGo / rs-go onclick stay.
+  "js/game.js": 8228,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

@@ -3026,6 +3026,9 @@ const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setT
 const { setScale, applyResMode } = UiScale.create(G);
 // MY TEAM emblem (js/game/custom-logo.js). G already owned store / decal key.
 const customLogo = CustomLogo.create(G);
+// RACE SETTINGS chips + open/cancel (js/game/race-settings.js). 0 new G;
+// rsReturn lives in the module so cancel and open share one binding.
+const { buildRaceSettings, openRaceSettings } = RaceSettings.create(G);
 // CAREER screen — new-career setup + season hub (js/game/career-ui.js). The rules
 // and the save live in js/game/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -7494,131 +7497,6 @@ $("adv-close").onclick = () => { $("advanced").hidden = true; };
 // it. A section banner is the only navigation this file has; one that lies is
 // worse than none.
 
-function buildRaceSettings() {
-  // In the room this screen confirms the host's choice and hands it to the
-  // other player — it does not drop the lights. A button saying RACE! there is
-  // a lie about what the next tap does.
-  $("rs-go").textContent = netRoom ? "CONFIRM" : "RACE!";
-  // TT list includes 4 because TT_LAPS = 4 is the openRaceSettings default —
-  // without it the screen opened with no LAPS chip highlighted.
-  // FULL is this CIRCUIT's grand prix distance (def.gpLaps — the real
-  // regulation, derived in js/track/tracks.js), not a flat 57 offered on all
-  // forty. Monaco is 78 laps and Spa is 44; one number could only ever be right
-  // for one of them, and 57 was not right for either. Filtered so the ladder
-  // stays strictly increasing on a short circuit-free layout.
-  const full = (Tracks.LIST[trackIdx] && Tracks.LIST[trackIdx].gpLaps) || 57;
-  const lapOpts = isTimeTrial() ? [3, 4, 5, 8]
-                                : [3, 5, 10, 25].filter((n) => n < full).concat(full);
-  // FULL now MOVES with the circuit, so a selection made at Monaco (78) is off
-  // the ladder at Spa (44) and would leave no chip lit — the same defect the
-  // TT comment above records. Clamp instead of silently deselecting.
-  if (!isTimeTrial() && raceLaps > full) raceLaps = full;
-  const lapsEl = $("rs-laps");
-  lapsEl.innerHTML = "";
-  for (const n of lapOpts) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (raceLaps === n ? " active" : "");
-    b.textContent = !isTimeTrial() && n === full ? full + " (FULL)" : String(n);
-    b.onclick = () => { raceLaps = n; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
-    lapsEl.appendChild(b);
-  }
-  const weatherEl = $("rs-weather");
-  weatherEl.innerHTML = "";
-  for (const [id, label, icon] of [["dry", "DRY", "☀"], ["wet", "WET", "💧"], ["rain", "RAIN", "🌧"], ["overcast", "CLOUDY", "☁"], ["fog", "FOG", "🌫"]]) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (raceWeather === id ? " active" : "");
-    b.textContent = icon + " " + label;
-    b.onclick = () => { raceWeather = id; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
-    weatherEl.appendChild(b);
-  }
-  const timeEl = $("rs-time");
-  timeEl.innerHTML = "";
-  for (const [id, label] of [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]]) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (raceTimeOfDay === id ? " active" : "");
-    b.textContent = label;
-    b.onclick = () => { raceTimeOfDay = id; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
-    timeEl.appendChild(b);
-  }
-  // DIFFICULTY — a race setting like the rest, so it is built here rather than
-  // on the select screen. Unlike laps/weather/time it PERSISTS (store), because
-  // it is a standing preference rather than a per-race choice.
-  $("rs-diff-section").hidden = isTimeTrial();  // no AI to rate in a time trial
-  const diffEl = $("rs-diff");
-  diffEl.innerHTML = "";
-  for (const d of ["easy", "normal", "hard"]) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (difficulty === d ? " active" : "");
-    b.setAttribute("aria-pressed", difficulty === d ? "true" : "false");
-    b.textContent = d.toUpperCase();
-    b.onclick = () => { difficulty = d; store.set("difficulty", d); buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
-    diffEl.appendChild(b);
-  }
-  // RELIABILITY — same idiom, same persistence, and hidden alongside DIFFICULTY
-  // in a time trial for the same reason: neither has anything to act on there.
-  // (ACTIVE AERO used to sit here. It is a CONTROL preference, not a property of
-  // the event, so it lives in pause > SETTINGS > DRIVING next to GEARS — where
-  // it can also be changed mid-race, which is when a player discovers they want
-  // it. See refreshAeroBtn.)
-  // Hidden in a time trial (no grid). A championship weekend decides the grid,
-  // so the chips go away and the label carries ON/OFF — dead chips looked live
-  // enough to tap and did nothing. Qualifying IS offered in a friend race.
-  const champ = isChampionship();
-  $("rs-quali-section").hidden = isTimeTrial();
-  const qEl = $("rs-quali");
-  qEl.innerHTML = "";
-  const qForced = champ ? SeasonCal.quali() : null;
-  $("rs-quali-label").textContent = "QUALIFYING LAP" + (qForced == null ? "" : " · " + (qForced ? "ON" : "OFF"));
-  qEl.hidden = qForced != null;
-  if (qForced == null) for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (raceQuali === on ? " active" : "");
-    b.setAttribute("aria-pressed", raceQuali === on ? "true" : "false");
-    b.textContent = label;
-    b.onclick = () => {
-      raceQuali = on; store.set("raceQuali", on);
-      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
-    };
-    qEl.appendChild(b);
-  }
-  // CAUTIONS — the flag layer. Hidden in a time trial for the same reason
-  // RELIABILITY is: alone on an empty track there is nothing to caution.
-  $("rs-caution-section").hidden = isTimeTrial();
-  const cauEl = $("rs-caution");
-  cauEl.innerHTML = "";
-  const cautionOn = raceCtl.enabled;
-  for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (cautionOn === on ? " active" : "");
-    b.setAttribute("aria-pressed", cautionOn === on ? "true" : "false");
-    b.textContent = label;
-    b.onclick = () => {
-      setCautionEnabled(on);
-      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
-    };
-    cauEl.appendChild(b);
-  }
-  $("rs-reliab-section").hidden = isTimeTrial();
-  const relEl = $("rs-reliab");
-  relEl.innerHTML = "";
-  for (const [id, label] of [["off", "OFF"], ["low", "LOW"], ["real", "REAL"]]) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (raceReliability === id ? " active" : "");
-    b.setAttribute("aria-pressed", raceReliability === id ? "true" : "false");
-    b.textContent = label;
-    b.onclick = () => {
-      raceReliability = id; store.set("reliability", id);
-      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
-    };
-    relEl.appendChild(b);
-  }
-}
-
-// RACE SETTINGS is reachable from #select and (in career) from #career, so it
-// records which screen to restore on cancel — the same return-path pattern
-// openGarage(from)/garageReturn uses, and for the same reason: unhiding #select
-// unconditionally used to drop the player on the wrong screen.
-let rsReturn = "select";
 // True while two connected players are sitting in the VS FRIEND waiting room.
 // It changes what the TERMINAL action of #select / #race-settings / #carsetup
 // means: normally those screens end in a race, but in the room they end by
@@ -7634,23 +7512,6 @@ function openRaceSetup() {
   els.select.hidden = false;
   if (soundOn) GameAudio.uiSelect();
 }
-function openRaceSettings(from) {
-  rsReturn = from || "select";
-  // Defaults on every visit is right when this screen is the last step before
-  // a race. In the VS FRIEND room the host may come back to change one thing,
-  // and resetting the other three would silently undo choices the guest has
-  // already been shown.
-  if (!netRoom) {
-    // A season's DISTANCE PRESELECTS the chip rather than overriding it: the
-    // player can still change this weekend's race from here.
-    raceLaps = isTimeTrial() ? TT_LAPS : SeasonCal.formatLaps(GAME_LAPS);
-    raceWeather = "dry";
-    raceTimeOfDay = "default";
-  }
-  buildRaceSettings();
-  $(rsReturn).hidden = true;
-  $("race-settings").hidden = false;
-}
 els.selGo.onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   if (els.selGo.dataset.seasonComplete === "1") {
@@ -7659,10 +7520,6 @@ els.selGo.onclick = () => {
   // Solo flows go through the garage; VS FRIEND owns a separate garage step.
   if (netRoom) { openRaceSettings("select"); return; }
   openGarage("select");
-};
-$("rs-cancel").onclick = () => {
-  $("race-settings").hidden = true;
-  $(rsReturn).hidden = false;
 };
 $("rs-go").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
