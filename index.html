@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1486">
+<meta name="apex-build" content="1487">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -20,7 +20,7 @@
      Measured chrome-devtools LCPBreakdown: almost all element render delay
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
-<link rel="preload" href="css/tokens.css?v=7ecf075d364e" as="style">
+<link rel="preload" href="css/tokens.css?v=24db675bf907" as="style">
 <link rel="preload" href="css/components.css?v=b30695818ab1" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
@@ -39,9 +39,9 @@
 <!-- MANIFEST.CSS order preserved (cascade). Title-critical sheets stay
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
-<link rel="stylesheet" href="css/tokens.css?v=7ecf075d364e">
+<link rel="stylesheet" href="css/tokens.css?v=24db675bf907">
 <link rel="stylesheet" href="css/components.css?v=b30695818ab1">
-<link rel="stylesheet" href="css/tuner.css?v=a1172b2c2801" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/tuner.css?v=8471a085cc37" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/menus.css?v=8092e2792eec">
 <link rel="stylesheet" href="css/carsetup.css?v=807c10d2cff4" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=ce419d9bb73a" media="print" onload="this.media='all'">
