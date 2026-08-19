@@ -152,7 +152,7 @@ function windowsAround(src, id) {
 function gatesFromHelp(d) {
   const text = `${d.label || ""} ${d.help || ""}`;
   const gates = new Set();
-  if (/only affects night|night sessions|after dark\b|at night\b|night sky|night ambient|moody-night|clear moon|night star|night buildings|night circuits|night\/wet liveries|deep night|night:|NIGHT AMBIENT|NIGHT SHEEN|CITY SKYGLOW|MOON /i.test(text)
+  if (/only affects night|night sessions|after dark\b|night ambient|moody-night|clear moon|night star|night buildings|night circuits|night\/wet liveries|NIGHT AMBIENT|NIGHT SHEEN|CITY SKYGLOW/i.test(text)
       || /\bNIGHT\b/.test(d.label || ""))
     gates.add("night");
   if (/only affects overcast|overcast sessions/i.test(text))
@@ -180,12 +180,27 @@ function gatesFromHelp(d) {
 }
 
 function nearestGuard(before) {
-  const a = before.lastIndexOf("else if (");
-  const b = before.lastIndexOf("if (");
-  const idx = Math.max(a, b);
-  if (idx < 0) return "";
-  const end = before.indexOf("{", idx);
-  return before.slice(idx, end < 0 ? idx + 180 : end);
+  let search = before;
+  while (search.length) {
+    const a = search.lastIndexOf("else if (");
+    const b = search.lastIndexOf("if (");
+    const idx = Math.max(a, b);
+    if (idx < 0) return "";
+    const brace = search.indexOf("{", idx);
+    const semi = search.indexOf(";", idx);
+    // One-liner `if (cond) stmt;` does not wrap a later LT read.
+    if (semi >= 0 && (brace < 0 || semi < brace)) {
+      search = search.slice(0, idx);
+      continue;
+    }
+    if (brace < 0) return "";
+    if (search.length - brace > 480) {
+      search = search.slice(0, idx);
+      continue;
+    }
+    return search.slice(idx, brace);
+  }
+  return "";
 }
 
 function gatesFromSnippet(before) {
