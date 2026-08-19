@@ -351,7 +351,10 @@ const CEILINGS = {
   // comment — bug-explaining, the ratchet-tolerated kind.
   // Union with d6614cf (env probe 4-frame cadence, car/lamp shadow skip,
   // drawGlow PerfGov gate): 8550 + 7 = 8557 on the merged tree.
-  // 8557 -> 8558: _castPropBatchesShadow(cadence) for instanced sun shadows.
+  // 8557 -> 8558: 0d973bf cadences instanced prop sun shadows (skip the
+  // snap-cached sun/moon `_castPropBatchesShadow` on odd frames at
+  // PerfGov.tier() >= 1). One gate line at the function it belongs to.
+  // Remeasured on the e9d847b union (split-newline count).
   "js/game.js": 8558,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
