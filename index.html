@@ -4,15 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <script>
-// ── iOS DOUBLE-TAP / GESTURE ZOOM ────────────────────────────────────────────
-// CSS `touch-action: manipulation` plus `maximum-scale=1` is not enough:
-// Safari ignores the viewport cap (a11y, since iOS 10), and `pan-y` / `pan-x`
-// on scroll panes override the * reset — WebKit still double-tap-zooms those.
-// A second tap on the same spot within 350 ms is the zoom gesture; cancel it.
-// A second tap on a DIFFERENT control (rapid menu work) is left alone.
-// Another finger still down is driving (GAS+steer), not a double-tap.
-// iOS GestureEvents are the pinch-page path; the garage car viewer uses
-// TouchEvents, so cancelling gesture* does not steal that.
 (function () {
   var lastT = 0, lastX = 0, lastY = 0;
   var TAP_MS = 350, TAP_PX2 = 900;
@@ -38,7 +29,58 @@
 <meta name="apple-mobile-web-app-title" content="Apex 26">
 <meta name="theme-color" content="#0a0a0f">
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
-<!-- Monotonic shell/service-worker generation. Asset URLs below are independently
-     content-hashed so an unrelated release does not invalidate every script. -->
 <meta name="apex-build" content="1499">
-<title>Apex 26 — F1 Racing & Data</title>
+<title>Apex 26 — F1 Racing &amp; Data</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-180.png">
+<link rel="stylesheet" href="css/tokens.css?v=1064355bba10">
+<link rel="stylesheet" href="css/components.css?v=5c65869df9de">
+<link rel="stylesheet" href="css/menus.css?v=a4fc56147e9a">
+<link rel="stylesheet" href="css/responsive.css?v=9771885af6b8">
+<script>
+(function () {
+  try {
+    var buildMeta = document.querySelector('meta[name="apex-build"]');
+    var loaded = buildMeta ? parseInt(buildMeta.content, 10) : 0;
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js" + (loaded ? "?v=" + loaded : "")).catch(function () {});
+    }
+    if (!loaded) return;
+    fetch("version.json?_=" + Date.now(), { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (v) {
+        if (!v || !v.build || v.build <= loaded) return;
+        var key = "apex26.shellReloadedTo";
+        if (sessionStorage.getItem(key) === String(v.build)) return;
+        sessionStorage.setItem(key, String(v.build));
+        location.replace(location.pathname + "?b=" + v.build + location.hash);
+      })
+      .catch(function () {});
+  } catch (e) {}
+})();
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="overlay" class="grain">
+  <div id="menu-brand">
+    <h1 id="title">APEX&nbsp;26</h1>
+    <p id="subtitle">2026 grid · 24 real circuits · tilt to steer</p>
+    <p id="disclaimer">Unofficial fan project — not affiliated with FIA or Formula 1</p>
+  </div>
+  <div id="menu-buttons">
+    <button id="mb-career" class="bigbtn">CAREER MODES</button>
+    <button id="mb-race" class="bigbtn">RACE</button>
+    <button id="mb-tt" class="bigbtn">TIME TRIAL</button>
+    <button id="mb-vs" class="bigbtn">RACE A FRIEND</button>
+    <button id="mb-season" class="bigbtn">SEASON</button>
+    <button id="mb-data" class="bigbtn alt">F1 DATA HUB</button>
+    <button id="mb-garage" class="bigbtn alt">GARAGE</button>
+    <button id="mb-settings" class="bigbtn alt">SETTINGS</button>
+  </div>
+</div>
+<p style="position:fixed;bottom:8px;left:8px;color:#666;font:12px monospace">Deploy recovery shell — full index pending</p>
+<script crossorigin="anonymous" src="js/game.js?v=1fd46d9563c6"></script>
+</body>
+</html>
