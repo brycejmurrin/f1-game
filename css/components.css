@@ -985,29 +985,29 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   border-color: var(--plate-line);
 }
 .pm-group .tune-row {
-  position: relative;
   margin: 0;
-  height: var(--tap);
   min-height: var(--tap);
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  gap: calc(var(--gap) * 0.25);
   box-sizing: border-box;
 }
 .pm-group .tune-row .tune-label {
-  position: absolute;
-  left: 0; right: 0; top: 0;
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
   margin: 0;
   /* --fs-2 (15px): under .sheet zoom 0.9 paints ≥13.5px (visual floor 12). */
   font-size: var(--fs-2);
   line-height: 1.2;
-  pointer-events: none;
-  z-index: 1;
 }
 .pm-group .tune-row input[type="range"] {
   width: 100%;
-  height: var(--tap);
-  min-height: var(--tap);
+  height: var(--tap-min);
+  min-height: var(--tap-min);
   margin: 0;
   box-sizing: border-box;
 }
@@ -1086,8 +1086,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   #pmsettings-inner .pm-groups > [role="tabpanel"] button {
     font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
     padding-inline: calc(var(--pad) * 0.75);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    white-space: normal; overflow: visible; text-overflow: clip;
+    height: auto;
     min-height: var(--tap);
+    line-height: 1.15;
   }
 }
 #advanced-inner .preset-btn,

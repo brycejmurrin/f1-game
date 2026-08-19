@@ -508,7 +508,7 @@
 
 /* ---------- extra funds ---------- */
 .cr-cheats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-.cr-cheats .sel-chip { flex: 1 1 auto; min-width: 120px; }
+.cr-cheats .sel-chip { flex: 1 1 4.5rem; min-width: 0; }
 
 /* Overlay leftover sheets: inherit --fit-at from the dialog. Compact packs
    rows and wraps names; #co-body / #ch-body / #cg-body / #q-body stay the

@@ -495,7 +495,7 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   assert.match(menus, /#rs-quali-section:has\(#rs-quali\[hidden\]\) \{\s*grid-column:\s*1 \/ -1;\s*grid-row:\s*1/);
   assert.match(menus, /:is\(#rs-diff-section, #rs-caution-section, #rs-reliab-section\) \{\s*grid-row:\s*3/);
   assert.match(menus, /#rs-body \{ overflow-y:\s*auto/);
-  assert.match(menus, /#rs-reliab \{ flex-wrap:\s*nowrap/);
+  assert.match(menus, /#rs-reliab,[\s\S]*?#rs-diff \{[\s\S]*?flex-wrap:\s*nowrap/);
   assert.match(menus, /#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) > :is\(#rs-diff-section, #rs-caution-section, #rs-reliab-section\) \{\s*grid-row:\s*3/);
   assert.match(menus, /#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) :is\(#rs-laps, #rs-weather\) \{\s*flex-wrap:\s*nowrap/);
   assert.match(menus, /@media \(orientation: portrait\) \{[\s\S]*?#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) #rs-reliab-section \{ grid-row:\s*4/);
@@ -535,12 +535,19 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.match(components, /\.bigbtn\.alt \{[\s\S]*?background:\s*var\(--plate\)/);
   assert.match(menus, /\.sel-chip \{[\s\S]*?background:\s*var\(--plate\)/);
   assert.match(menus, /\.sel-chip\.active \{[\s\S]*?background:\s*var\(--plate-on\)/);
+  assert.match(menus, /#race-settings \.sel-chip\.active \{[\s\S]*?background:\s*var\(--plate-on\)/);
   assert.match(carsetup, /\.cs-tab \{[\s\S]*?background:\s*var\(--plate\)/);
   assert.match(carsetup, /\.cs-tab\.active \{[\s\S]*?background:\s*var\(--plate-on\)/);
+  assert.match(read("css/data.css"), /\.dh-pill\.dh-active \{[\s\S]*?background:\s*var\(--plate-on\)/);
+  assert.match(read("css/data.css"), /\.dh-livebtn\.dh-active \{[\s\S]*?background:\s*var\(--plate-on\)/);
 });
 
 test("tool doors and lone foot actions do not stretch into banners", () => {
   const components = read("css/components.css");
   assert.match(components, /\.pm-doors\s*\{[\s\S]*?--balance-basis:\s*12rem/);
   assert.match(components, /\.sheet-foot \.bigbtn:only-child\s*\{[\s\S]*?flex:\s*0 1 auto/);
+  assert.match(components, /\.pm-group \.tune-row \.tune-label \{[\s\S]*?position:\s*static/);
+  assert.match(components, /#pmsettings-inner \.pm-groups > \[role="tabpanel"\] button \{[\s\S]*?white-space:\s*normal/);
+  assert.match(read("css/overlays.css"), /@container sheet \(max-width: 360px\) \{\s*#howtoplay dl/);
+  assert.match(read("css/career.css"), /\.cr-cheats \.sel-chip \{[\s\S]*?min-width:\s*0/);
 });

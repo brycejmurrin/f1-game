@@ -1210,7 +1210,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* ---------- race settings ---------- */
 .rs-row { margin-bottom: var(--gap); }
 #race-settings .sel-chip { font-size: clamp(var(--fs-micro), calc(1.6 * var(--vwz)), var(--fs-3)); padding: 8px 14px; }
-#race-settings .sel-chip.active { background: color-mix(in oklab, var(--red) 26%, transparent); border-color: var(--red); color: #fff; font-weight: 700; }
+#race-settings .sel-chip.active { background: var(--plate-on); box-shadow: var(--plate-on-glow); color: #fff; font-weight: 700; }
 /* LAPS + WEATHER pair up once there is room; TIME OF DAY always spans. */
 @container sheet (min-width: 440px) {
   #rs-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); align-content: start; }
@@ -1225,8 +1225,15 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* OFF/LOW/REAL are three short words. Wrapping REAL onto a second line
    parked it under BACK/RACE at UI SIZE 115% (852×393 champ: 192px column,
    OFF+LOW 93px each, REAL 46px into the foot). Keep them on one track. */
-#rs-reliab { flex-wrap: nowrap; --balance-basis: 0rem; --balance-min: 0rem; }
-#rs-reliab > .sel-chip { flex: 1 1 0; white-space: nowrap; }
+#rs-reliab,
+#rs-diff {
+  flex-wrap: nowrap;
+  --balance-basis: 0rem;
+  --balance-min: 0rem;
+}
+#rs-reliab > .sel-chip,
+#rs-diff > .sel-chip { flex: 1 1 0; min-width: 0; }
+#rs-reliab > .sel-chip { white-space: nowrap; }
 
 /* SHORT AND WIDE: fit the whole thing, because scrolling a settings screen is
    how you miss a setting. A landscape phone gives ~285px of body between the
