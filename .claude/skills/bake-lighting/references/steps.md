@@ -4,6 +4,20 @@ Load this when you have a full COPY VALUES blob and are ready to write
 `js/game/light-presets.js`. The index's CRITICAL full-replace rule still
 applies — a partial object wipes every other key.
 
+## Per-track proposal merge (no bake.mjs)
+
+When many tracks propose in parallel, each writes
+`artifacts/lighting/proposals/<id>.json` (schema in `docs/LIGHTING-PRESETS.md`).
+Parent merges — this is the only safe multi-agent path:
+
+```sh
+node .claude/skills/bake-lighting/merge-proposals.mjs
+```
+
+It Object.assigns only the proposed `"track|tod|wx"` keys, validates ids /
+ranges / slider-grid against live `TUNE_DEFS`, and leaves `"*"` plus every
+other track alone. It does **not** bump cache.
+
 ## One-key hand-merge (no bake.mjs)
 
 If you only need to update ONE `track|tod|weather` (or `"*"`) key and do not

@@ -392,14 +392,17 @@ test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
   test("a championship forces it on, and says so rather than hiding it", async ({ page }) => {
     // The choice is not the player's in a season — the weekend decides the grid
     // — but "why did this race qualify" is a question the screen should answer.
+    // Dead ON/OFF chips looked tappable and did nothing; the label carries it.
     await boot(page);
     await page.locator("#mb-season").click();
     await page.locator("#sel-go").click();
     await page.locator("#cs-done").click();
     await expect(page.locator("#rs-quali-section")).toBeVisible();
-    const state = await page.evaluate(() => [...document.querySelectorAll("#rs-quali .sel-chip")]
-      .map((b) => ({ on: b.classList.contains("active"), off: b.disabled })));
-    expect(state[1].on).toBe(true);          // ON
-    expect(state.every((c) => c.off)).toBe(true);
+    const state = await page.evaluate(() => ({
+      label: document.getElementById("rs-quali-label").textContent,
+      chipsHidden: document.getElementById("rs-quali").hidden,
+    }));
+    expect(state.label).toMatch(/ON/);
+    expect(state.chipsHidden).toBe(true);
   });
 });

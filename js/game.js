@@ -7688,7 +7688,7 @@ $("pm-settings-close").onclick = closeSettings;
 // tuners are reachable without starting a race first. closeSettings() already
 // only returns to the pause menu when actually paused, so from here it just
 // closes back to the title.
-$("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings(); };
+$("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); settingsNav.show("more", false); openSettings(); };
 // Advanced steering: opened from the settings menu, closes back to it.
 $("pm-advanced").onclick = () => { $("advanced").hidden = false; };
 $("adv-close").onclick = () => { $("advanced").hidden = true; };
@@ -7775,27 +7775,20 @@ function buildRaceSettings() {
   // the event, so it lives in pause > SETTINGS > DRIVING next to GEARS — where
   // it can also be changed mid-race, which is when a player discovers they want
   // it. See refreshAeroBtn.)
-  // Hidden in a time trial (no grid) and FORCED ON in a championship, where the
-  // weekend decides the grid and the choice is not the player's to make. Shown
-  // rather than removed there, because "why did this race qualify" is a
-  // question the screen should answer.
+  // Hidden in a time trial (no grid). A championship weekend decides the grid,
+  // so the chips go away and the label carries ON/OFF — dead chips looked live
+  // enough to tap and did nothing. Qualifying IS offered in a friend race.
   const champ = isChampionship();
-  // Qualifying IS offered in a friend race. This note used to say the chip was
-  // still hidden pending a hang on #q-go after a rival's lap landed — both
-  // halves of that are stale and were costing a reader real time. The spec
-  // ("TO THE GRID waits for the rival's lap, then races", multiplayer-room)
-  // passes, and the line below only ever hid the section for a TIME TRIAL,
-  // never in the room. The model now carries a lap per rival rather than two,
-  // and the gate waits for every one of them.
   $("rs-quali-section").hidden = isTimeTrial();
   const qEl = $("rs-quali");
   qEl.innerHTML = "";
-  for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
-    const active = champ ? (SeasonCal.quali() === on) : (raceQuali === on);
+  const qForced = champ ? SeasonCal.quali() : null;
+  $("rs-quali-label").textContent = "QUALIFYING LAP" + (qForced == null ? "" : " · " + (qForced ? "ON" : "OFF"));
+  qEl.hidden = qForced != null;
+  if (qForced == null) for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
     const b = document.createElement("button");
-    b.className = "sel-chip" + (active ? " active" : "");
-    b.setAttribute("aria-pressed", active ? "true" : "false");
-    b.disabled = champ;
+    b.className = "sel-chip" + (raceQuali === on ? " active" : "");
+    b.setAttribute("aria-pressed", raceQuali === on ? "true" : "false");
     b.textContent = label;
     b.onclick = () => {
       raceQuali = on; store.set("raceQuali", on);
@@ -8337,10 +8330,10 @@ function setPaused(p) {
   if (!p) { closeLightTuner(false); closeCamTuner(false); exitPhotoMode(); }
   els.pausemenu.hidden = !p;
   if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
-  if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season));
+  if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
-  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
+  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); $("pm-restart").disabled = !!(netPlay.active() || qualiNetDone); }
   else if (soundOn) GameAudio.startEngine();
   lastFrame = performance.now();
 }
