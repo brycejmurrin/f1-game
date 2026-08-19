@@ -290,7 +290,8 @@ same surface from a shell.
   `.claude/skills/README.md`. Which CLIs are wrapped as `apex_*`:
   `docs/AGENT-SURFACE.md`. Live canvas: `mcp-probe`. Deploy/`version.json`:
   `deploy-research` (do not attach `mcp-probe` for a version.json check).
-  Pre-push: `verify-agent`.
+  Pre-push: `verify-agent`. Fat skill / extract / dead code / agent bloat:
+  `slim-bloat` / `bloat-auditor`.
 - **Subagents** (isolated context): `.claude/agents/` — index in
   `.claude/agents/README.md`. `deploy-research` is the tinyfish-only
   post-deploy / public-web worker (no Chrome, no Playwright).

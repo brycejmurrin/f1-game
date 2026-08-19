@@ -12,12 +12,14 @@ single Claude tree to avoid drift).
 | **doc-drift-auditor** | Read-only docs-vs-code audit of ONE assigned doc. Returns `DOC-DRIFT` rows; no edits. |
 | **physics-contract-auditor** | Read-only `vstd-lint` + `Tracks.curvature` column classification (AI-only / assist-gated / broadcast / surface). No Playwright. |
 | **worktree-regression-check** | Read-only “is this failure pre-existing?” — `verify-change --fast` on an ephemeral worktree vs the session SHA / deploy tip. Never `--wait`. |
+| **bloat-auditor** | Read-only agent-bloat / simplify pass. `bloat-scan.mjs` + one assigned scope; returns `BLOAT` rows. No edits, no Playwright, no chrome-start. Parent applies one carve via **slim-bloat**. |
 
 **Token routing:** prefer these over attaching fat skills. Deploy/version →
 `deploy-research` (not full `mcp-probe`). Pre-push verify → `verify-agent`.
 One circuit → `track-surveyor`. One stale doc → `doc-drift-auditor`.
 Curvature / PACE semantics → `physics-contract-auditor`. Same-red on tip →
-`worktree-regression-check`. Parent keeps edits, cache bump, and deploy FF.
+`worktree-regression-check`. Fat skill / extract / dead code → `bloat-auditor`
+(parent applies via **slim-bloat**). Parent keeps edits, cache bump, and deploy FF.
 
 Skills (workflows) live in `.claude/skills/`. Canonical rules live in
 `AGENTS.md`. Which CLIs are wrapped as `apex_*`: `docs/AGENT-SURFACE.md`.
