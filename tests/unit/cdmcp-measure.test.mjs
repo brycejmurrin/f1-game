@@ -144,6 +144,18 @@ test("look-survey settles 1.6s only on day/dark rebuild, not every weather flip"
   assert.match(help.stdout, /tod\|wx|time-of-day|weather/i);
 });
 
+test("look-survey-sheet.py writes tracked docs/look-survey grids", () => {
+  const sheet = path.join(ROOT, "tools/look-survey-sheet.py");
+  assert.ok(fs.existsSync(sheet));
+  const py = fs.readFileSync(sheet, "utf8");
+  assert.match(py, /docs\/look-survey/);
+  assert.match(py, /--ready/);
+  const help = spawnSync("python3", [sheet, "--help"], { encoding: "utf8" });
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /--ready/);
+  assert.match(help.stdout, /20 PNGs|shots/);
+});
+
 test("sort_combos_min_rebuild groups sessionDark so loadTrack flips once", () => {
   const r = spawnSync("python3", ["-c", `
 import importlib.util
