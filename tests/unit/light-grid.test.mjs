@@ -511,8 +511,8 @@ test("CAMERA / SETTINGS / ADVANCED slider markup matches the JS clamps", () => {
   assert.equal(LMIN, -5); assert.equal(LMAX, 5);
   assert.equal(PMIN, 1); assert.equal(PMAX, 19);
 
-  const game = read("js/game.js");
-  const SCALE_MIN = num(game, "SCALE_MIN"), SCALE_MAX = num(game, "SCALE_MAX");
+  const uiScale = read("js/game/ui-scale.js");
+  const SCALE_MIN = num(uiScale, "SCALE_MIN"), SCALE_MAX = num(uiScale, "SCALE_MAX");
   assert.equal(SCALE_MIN, 40); assert.equal(SCALE_MAX, 200);
 
   const expectRange = (id, min, max) => {

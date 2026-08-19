@@ -218,7 +218,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     // measured, that took the parts list from 1.5 cards to 3.1.
     // The case this test exists for is unchanged and still exercised: two scales
     // that classify differently, with no resize between them, proving the
-    // classifier answers to `zoom` alone. 50 is SCALE_MIN (js/game.js) — the
+    // classifier answers to `zoom` alone. 50 is SCALE_MIN (js/game/ui-scale.js) — the
     // lowest a player can actually reach, which is the honest floor to test.
     await page.evaluate(() => window.__apex.uiScale(50));
     await page.waitForTimeout(400);
