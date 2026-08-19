@@ -70,13 +70,19 @@ test("__APEX_BUILD is derived, not a stale literal", () => {
 
 test("shell locks scale and cancels iOS double-tap / gesture zoom", () => {
   const m = indexHtml.match(/<meta\s+name="viewport"\s+content="([^"]+)"/);
+  console.log("[load-order] viewport content:", m ? m[1] : "NOT FOUND");
   assert.ok(m, "index.html must declare a viewport");
   assert.match(m[1], /maximum-scale=1/, "viewport must cap scale");
   assert.match(m[1], /user-scalable=no/, "viewport must disable pinch/double-tap scale");
+  const hasGesture = /addEventListener\("gesturestart"/.test(indexHtml);
+  const hasTouchEnd = /addEventListener\("touchend"/.test(indexHtml);
+  console.log("[load-order] gesturestart listener present:", hasGesture);
+  console.log("[load-order] touchend listener present:", hasTouchEnd);
   assert.match(indexHtml, /addEventListener\("gesturestart"/,
     "shell must cancel iOS GestureEvents (page pinch-zoom)");
   assert.match(indexHtml, /addEventListener\("touchend"/,
     "shell must cancel same-spot double-tap zoom");
+  console.log("[load-order] iOS zoom cancel: OK");
 });
 
 test("service-worker registration derives the shell build", () => {

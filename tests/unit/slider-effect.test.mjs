@@ -312,6 +312,8 @@ test("glareStr recipe uses night + full 0→max range", async () => {
   const knobs = Object.fromEntries(classifyKnobs(ROOT).map((k) => [k.id, k]));
   const defs = Object.fromEntries(loadTuneDefs(ROOT).map((d) => [d.id, d]));
   const plan = livePlan({ id: "glareStr" }, knobs.glareStr, defs.glareStr, ROOT);
+  console.log("[slider-effect] glareStr plan:", JSON.stringify({ tod: plan.tod, from: plan.from, to: plan.to }));
+  console.log("[slider-effect] glareStr def max:", defs.glareStr?.max);
   assert.equal(plan.tod, "night", "glareStr must use night (lamp halos only fire at night)");
   assert.equal(plan.from, 0, "glareStr from should be 0 (min)");
   const glareMax = defs.glareStr.max;
@@ -321,21 +323,32 @@ test("glareStr recipe uses night + full 0→max range", async () => {
 test("slider-effect-view.py --batch-summary produces summary.png", () => {
   const VIEW = path.join(ROOT, "tools/slider-effect-view.py");
   const batchJson = path.join(ROOT, "artifacts/lighting/slider-effect/batch.json");
-  if (!existsSync(batchJson)) return;  // no batch run yet — skip
+  if (!existsSync(batchJson)) {
+    console.log("[slider-effect] batch.json not present — skipping batch-summary test");
+    return;
+  }
+  console.log("[slider-effect] running --batch-summary on", batchJson);
   const r = spawnSync("python3", [VIEW, "--batch-summary", batchJson], {
     encoding: "utf8", cwd: ROOT, timeout: 30000,
   });
+  console.log("[slider-effect] batch-summary exit:", r.status, "stdout:", r.stdout.trim().slice(0, 200));
+  if (r.stderr) console.log("[slider-effect] batch-summary stderr:", r.stderr.trim().slice(0, 200));
   assert.equal(r.status, 0, r.stderr || r.stdout);
   assert.match(r.stdout, /summary\.png/);
   const summaryPath = path.join(path.dirname(batchJson), "summary.png");
+  console.log("[slider-effect] checking summary.png at", summaryPath, "exists:", existsSync(summaryPath));
   assert.ok(existsSync(summaryPath), `summary.png not written to ${summaryPath}`);
 });
 
 test("slider-effect-view.py produces diff.png alongside filter/heat/sheet", () => {
   const VIEW = path.join(ROOT, "tools/slider-effect-view.py");
   const sampleDir = path.join(ROOT, "artifacts/lighting/slider-effect/bahrain-night-dry-lampLevel");
-  if (!existsSync(path.join(sampleDir, "a.png"))) return;  // no live run yet — skip
+  if (!existsSync(path.join(sampleDir, "a.png"))) {
+    console.log("[slider-effect] no live run artifacts in", sampleDir, "— skipping view test");
+    return;
+  }
   const tmp = mkdtempSync(path.join(tmpdir(), "se-view-"));
+  console.log("[slider-effect] running slider-effect-view.py on", sampleDir, "→", tmp);
   try {
     const r = spawnSync("python3", [
       VIEW,
@@ -343,13 +356,18 @@ test("slider-effect-view.py produces diff.png alongside filter/heat/sheet", () =
       path.join(sampleDir, "b.png"),
       "--out", tmp,
     ], { encoding: "utf8", cwd: ROOT, timeout: 20000 });
+    console.log("[slider-effect] view.py exit:", r.status, "stdout:", r.stdout.trim().slice(0, 200));
+    if (r.stderr) console.log("[slider-effect] view.py stderr:", r.stderr.trim().slice(0, 200));
     assert.equal(r.status, 0, r.stderr || r.stdout);
     for (const f of ["filter.png", "heat.png", "diff.png", "sheet.png", "view.json"]) {
-      assert.ok(existsSync(path.join(tmp, f)), `${f} not written`);
+      const exists = existsSync(path.join(tmp, f));
+      console.log(`[slider-effect]   ${f}:`, exists ? "ok" : "MISSING");
+      assert.ok(exists, `${f} not written`);
     }
     // diff.png must exist and be a non-empty PNG
     const diffPng = path.join(tmp, "diff.png");
     const { size } = statSync(diffPng);
+    console.log("[slider-effect] diff.png size:", size, "bytes");
     assert.ok(size > 1000, `diff.png suspiciously small: ${size} bytes`);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
