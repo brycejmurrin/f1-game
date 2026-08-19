@@ -3411,6 +3411,18 @@ function shiftLong(c, d) {
 // so nothing aliases across a pair and the relaxation loop stays allocation-free.
 const _sep = { iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5 };
 const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5, aSp: 0, bSp: 0, sideContact: false };  // shared like _sep: both pairContact call sites destructure at once, keeping the relaxation loop allocation-free as its own comment promises
+// Reused AiDrive ctxs — updateCar used to pass a fresh object literal to
+// wantBoost / otShouldFire / brakeDecision / wantX / adaptLane / otPull /
+// defendPull / isBoxed every physics step (~8 × 20 cars × 60 Hz). Same
+// read-before-next-call contract as _ct / AiDrive.traits.
+const _aiBoost = { traits: null, energy: 0, otActive: false, kAhead60: 0, towCar: false, towGap: 0, towSpeed: 0, speed: 0, chaser: false, chaserGap: 0, chaserSpeed: 0, team: null, seat: 0, stats: null, ersDeploy: 0, ersRegen: 0 };
+const _aiOtFire = { traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0, speed: 0, aheadSpeed: 0, kAhead: 0, street: false, team: null, seat: 0, stats: null, other: null };
+const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null };
+const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
+const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
+const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null };
+const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null };
+const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const LCAR = 4.8, WCAR = 2.0;
 // Arc-bucket broadphase for resolveCollisions. Bucket width = LCAR so any
 // contacting pair shares a bucket or sits in adjacent ones (wrap-aware).
@@ -3791,7 +3803,9 @@ function updateCar(c, dt, ranked) {
       if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < 3) { chaser = o; chaserGap = -dprog; }  // attacker behind
     }
     roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
-    const boxed = AiDrive.isBoxed({ contactT: c.contactT, roomL, roomR, blocker, blockerGap, street: !!track.street });
+    _aiBoxed.contactT = c.contactT; _aiBoxed.roomL = roomL; _aiBoxed.roomR = roomR;
+    _aiBoxed.blocker = blocker; _aiBoxed.blockerGap = blockerGap; _aiBoxed.street = !!track.street;
+    const boxed = AiDrive.isBoxed(_aiBoxed);
     if (state === "race" && c.speed < 7 && boxed) c.stuckT = (c.stuckT || 0) + dt;
     else c.stuckT = Math.max(0, (c.stuckT || 0) - dt * 1.5);
     unstuckActive = c.stuckT > AiDrive.stuckThreshold(aiT);
@@ -3803,13 +3817,17 @@ function updateCar(c, dt, ranked) {
   if (c.otT > 0) c.otT -= dt;
   if (c.isPlayer && Input.consumeBoostToggle()) c.boostOn = !c.boostOn;   // BOOST is a toggle
   // Short-circuit empty battery before the LUT sample AiDrive would ignore anyway.
-  const wantBoost = (c.human ? c.boostOn
-    : (c.energy > 0.02 && AiDrive.wantBoost({
-        traits: aiT, energy: c.energy, otActive: c.otT > 0,
-        kAhead60: Tracks.curvature(track, wrapS(c.s + 60)),
-        towCar: !!towCar, towGap, towSpeed: towCar ? towCar.speed : 0, speed: c.speed,
-        chaser: !!chaser, chaserGap, chaserSpeed: chaser ? chaser.speed : 0, team: c.team, seat: c.seat, stats: c.houseStats, ersDeploy: c.ersDeploy, ersRegen: c.ersRegen,
-      })))
+  let aiWantsBoost = false;
+  if (!c.human && c.energy > 0.02) {
+    _aiBoost.traits = aiT; _aiBoost.energy = c.energy; _aiBoost.otActive = c.otT > 0;
+    _aiBoost.kAhead60 = Tracks.curvature(track, wrapS(c.s + 60));
+    _aiBoost.towCar = !!towCar; _aiBoost.towGap = towGap; _aiBoost.towSpeed = towCar ? towCar.speed : 0; _aiBoost.speed = c.speed;
+    _aiBoost.chaser = !!chaser; _aiBoost.chaserGap = chaserGap; _aiBoost.chaserSpeed = chaser ? chaser.speed : 0;
+    _aiBoost.team = c.team; _aiBoost.seat = c.seat; _aiBoost.stats = c.houseStats;
+    _aiBoost.ersDeploy = c.ersDeploy; _aiBoost.ersRegen = c.ersRegen;
+    aiWantsBoost = AiDrive.wantBoost(_aiBoost);
+  }
+  const wantBoost = (c.human ? c.boostOn : aiWantsBoost)
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
   // costs nothing, fires on a flat ERS, and never competes with BOOST for charge.
@@ -3848,15 +3866,15 @@ function updateCar(c, dt, ranked) {
   c.otArmed = otEnabled() && gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0
               && !c.finished && vStd(c.speed) > OT_MIN_SPEED;
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
-                      : (c.otArmed && AiDrive.otShouldFire(simRnd(), dt, {
-                          traits: aiT,
-                          blockerGap: blocker ? blockerGap : gapAhead * (c.speed || 1),
-                          gapAhead: gapAhead * (c.speed || 1),
-                          roomL, roomR, speed: c.speed,
-                          aheadSpeed: blocker ? blocker.speed : (ahead ? ahead.speed : c.speed),
-                          kAhead: Tracks.curvature(track, wrapS(c.s + 40)),
-                          street: !!track.street, team: c.team, seat: c.seat, stats: c.houseStats, other: blocker,
-                        }));
+                      : (c.otArmed && (_aiOtFire.traits = aiT,
+                          _aiOtFire.blockerGap = blocker ? blockerGap : gapAhead * (c.speed || 1),
+                          _aiOtFire.gapAhead = gapAhead * (c.speed || 1),
+                          _aiOtFire.roomL = roomL, _aiOtFire.roomR = roomR, _aiOtFire.speed = c.speed,
+                          _aiOtFire.aheadSpeed = blocker ? blocker.speed : (ahead ? ahead.speed : c.speed),
+                          _aiOtFire.kAhead = Tracks.curvature(track, wrapS(c.s + 40)),
+                          _aiOtFire.street = !!track.street, _aiOtFire.team = c.team, _aiOtFire.seat = c.seat,
+                          _aiOtFire.stats = c.houseStats, _aiOtFire.other = blocker,
+                          AiDrive.otShouldFire(simRnd(), dt, _aiOtFire)));
   if (fire && c.otArmed) {
     c.otT = otTimeFor(c); c.otCool = otCoolFor(c) + c.otT;
     if (c.isPlayer && soundOn) GameAudio.deployBoost();
@@ -3902,12 +3920,12 @@ function updateCar(c, dt, ranked) {
       if (ak > kMax) kMax = ak;
       AiDrive.pushLook(d, kk, Tracks.bankAngle(track, ss));
     }
-    const br = AiDrive.brakeDecision({
-      traits: aiT, samples: AiDrive.endLook(), latMax: LAT_MAX, aeroLoad: c.aeroLoad, brake: BRAKE, grip: gripMult(),
-      speed: c.speed, blocker: !!blocker, blockerGap,
-      blockerSpeed: blocker ? blocker.speed : 0,
-      roomL, roomR, team: c.team, seat: c.seat, stats: c.houseStats,
-    });
+    _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX;
+    _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE; _aiBr.grip = gripMult();
+    _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
+    _aiBr.blockerSpeed = blocker ? blocker.speed : 0;
+    _aiBr.roomL = roomL; _aiBr.roomR = roomR; _aiBr.team = c.team; _aiBr.seat = c.seat; _aiBr.stats = c.houseStats;
+    const br = AiDrive.brakeDecision(_aiBr);
     braking = br.braking;
     brakeLvl = br.brakeLvl;
     // Slipstream: in the wake ahead on a straight, shed drag and gain top speed —
@@ -3951,7 +3969,9 @@ function updateCar(c, dt, ranked) {
   } else {
     // AI takes X when armed unless wantX banks Z (hold/empty battery). Catch
     // and OT still force the open wing so a pass does not sit in high drag.
-    c.xOn = c.xArmed && AiDrive.wantX({ armed: true, team: c.team, seat: c.seat, stats: c.houseStats, energy: c.energy, catching: !!(towCar && towGap < 28), otActive: c.otT > 0 });
+    _aiWantX.armed = true; _aiWantX.team = c.team; _aiWantX.seat = c.seat; _aiWantX.stats = c.houseStats;
+    _aiWantX.energy = c.energy; _aiWantX.catching = !!(towCar && towGap < 28); _aiWantX.otActive = c.otT > 0;
+    c.xOn = c.xArmed && AiDrive.wantX(_aiWantX);
   }
   {
     // The flap POSITION, not the switch, is what the physics reads: the mode
@@ -4134,10 +4154,9 @@ function updateCar(c, dt, ranked) {
   else {
     // Adaptive preferred lane: under traffic density, slowly bias toward the
     // freer side so midfield trains fan out instead of locking one line forever.
-    c.lane = AiDrive.adaptLane(c.lane, {
-      traits: aiT, nearby: nearbyN, roomL, roomR, street: !!track.street,
-      baseLane: c.lanePref != null ? c.lanePref : c.lane,
-    }, dt);
+    _aiLane.traits = aiT; _aiLane.nearby = nearbyN; _aiLane.roomL = roomL; _aiLane.roomR = roomR;
+    _aiLane.street = !!track.street; _aiLane.baseLane = c.lanePref != null ? c.lanePref : c.lane;
+    c.lane = AiDrive.adaptLane(c.lane, _aiLane, dt);
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
     // partly follow the racing line, partly hold the car's own lane, so the
     // field fans out across the track rather than collapsing onto one line.
@@ -4153,17 +4172,19 @@ function updateCar(c, dt, ranked) {
     // OT / defend pulls live in AiDrive (craft on permanents, awareness + open
     // inside-room on streets). Tow is no longer permanent-only.
     if (blocker) {
-      overtake = AiDrive.otPull({
-        street: !!track.street, traits: aiT, speed: c.speed, team: c.team, seat: c.seat, stats: c.houseStats,
-        blockerSpeed: blocker.speed, blockerGap, roomL, roomR, other: blocker,
-      });
+      _aiOtPull.street = !!track.street; _aiOtPull.traits = aiT; _aiOtPull.speed = c.speed;
+      _aiOtPull.team = c.team; _aiOtPull.seat = c.seat; _aiOtPull.stats = c.houseStats;
+      _aiOtPull.blockerSpeed = blocker.speed; _aiOtPull.blockerGap = blockerGap;
+      _aiOtPull.roomL = roomL; _aiOtPull.roomR = roomR; _aiOtPull.other = blocker;
+      overtake = AiDrive.otPull(_aiOtPull);
     }
     let defend = 0;
     if (chaser && !blocker) {
-      defend = AiDrive.defendPull({
-        street: !!track.street, traits: aiT, speed: c.speed, team: c.team, seat: c.seat, stats: c.houseStats,
-        chaser: true, chaserGap, chaserSpeed: chaser.speed, kA, roomL, roomR, other: chaser,
-      });
+      _aiDefend.street = !!track.street; _aiDefend.traits = aiT; _aiDefend.speed = c.speed;
+      _aiDefend.team = c.team; _aiDefend.seat = c.seat; _aiDefend.stats = c.houseStats;
+      _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser.speed;
+      _aiDefend.kA = kA; _aiDefend.roomL = roomL; _aiDefend.roomR = roomR; _aiDefend.other = chaser;
+      defend = AiDrive.defendPull(_aiDefend);
     }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
     // clearly-freer side, but when both sides are similar fall back to the car's

@@ -336,7 +336,14 @@ const CEILINGS = {
   // 8635 -> 8512: UI SIZE / HUD SIZE + RESOLUTION moved to js/game/ui-scale.js
   // (UiScale.create(G)). 0 new physics; one deferred G.updateTrackPreview
   // beside buildSelect. Comments moved with the block.
-  "js/game.js": 8512,
+  // 8512 -> 8533: pool the 8 AiDrive ctx literals in updateCar onto reused
+  // scratches (_aiBoost / _aiOtFire / _aiBr / _aiLane / _aiWantX / _aiOtPull /
+  // _aiDefend / _aiBoxed). Same pairContact/_ct contract; ~8 × 20 cars × 60 Hz
+  // objects gone. simRnd() stays behind the otArmed short-circuit. The growth
+  // is the pooled declarations plus the field-fills that replace the literals
+  // — the ratchet-tolerated kind, since the alternative is a reader re-deriving
+  // that the callee is read-only.
+  "js/game.js": 8533,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

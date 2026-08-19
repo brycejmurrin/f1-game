@@ -927,9 +927,15 @@ GC is not: every AI car built a fresh `samples[]` of `{d,k,bank}` rows
 > **TAKEN 2026-08-18.** `AiDrive.traits` / `brakeDecision` write reused
 > scratches (read-before-next-call, same as `_ct`). `beginLook` /
 > `pushLook` / `endLook` recycle the look-ahead rows. Values are
-> bit-identical; do not re-allocate those three. Left on the table:
-> `wantBoost` / `otShouldFire` / `adaptLane` call-site ctx literals in
-> `updateCar` (3–4 small objects/car, not the sample fan-out).
+> bit-identical; do not re-allocate those three.
+>
+> **TAKEN 2026-08-19.** The leftover call-site ctx literals are gone too.
+> `updateCar` fills `_aiBoost` / `_aiOtFire` / `_aiBr` / `_aiLane` /
+> `_aiWantX` / `_aiOtPull` / `_aiDefend` / `_aiBoxed` then passes the
+> scratch. `simRnd()` stays behind the `otArmed` short-circuit. Guarded
+> by `tests/unit/ai-drive.test.mjs` (no `AiDrive.*( {` in `updateCar`)
+> and `tests/specs/physics-hotpath.spec.js` (ctx identity across steps).
+> Do not re-introduce object literals at those eight call sites.
 >
 > **TAKEN 2026-08-18 (leftover sweep).** WGX road `createChunkedMesh` now
 > expand-once + spatial bins (camera still skips frustum cull on

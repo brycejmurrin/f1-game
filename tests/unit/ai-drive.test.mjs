@@ -408,3 +408,25 @@ test("adaptLane on streets will not crawl toward a tight wall", () => {
   }, 0.5);
   assert.ok(open > 0 && open < 0.2, `street fan-out ${open}`);
 });
+
+test("updateCar does not allocate AiDrive ctx literals", () => {
+  // Source contract for the PERF-FINDINGS leftover: the eight helpers used
+  // to take a fresh `{ ... }` every physics step. They now read reused
+  // scratches (_aiBoost etc.). A new literal at those call sites is the
+  // defect coming back — catch it here without a browser.
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const fn = src.match(/function updateCar\([\s\S]*?\nfunction /);
+  assert.ok(fn, "updateCar body present");
+  const hits = fn[0].match(
+    /AiDrive\.(wantBoost|otShouldFire|brakeDecision|wantX|adaptLane|otPull|defendPull|isBoxed)\s*\((?:[^()]*?,)?\s*\{/,
+  );
+  assert.equal(hits, null, `updateCar still passes an object literal: ${hits && hits[0]}`);
+  assert.match(src, /const _aiBoost = \{/);
+  assert.match(src, /const _aiOtFire = \{/);
+  assert.match(src, /const _aiBr = \{/);
+  assert.match(src, /const _aiLane = \{/);
+  assert.match(src, /const _aiWantX = \{/);
+  assert.match(src, /const _aiOtPull = \{/);
+  assert.match(src, /const _aiDefend = \{/);
+  assert.match(src, /const _aiBoxed = \{/);
+});
