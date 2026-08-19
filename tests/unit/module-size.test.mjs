@@ -385,8 +385,10 @@ const CEILINGS = {
   // 3120 -> 3128: openf1/jolpica missing-path guards (typed {ok:false} instead
   // of fetching a garbage URL / throwing on HTML 404) + fetchTrackOutline
   // comment moved onto the function it describes.
-  "js/game/apex.js": 3132,
-  "js/game/agentview.js": 2900,
+  // Lowered after cursor/trim-redundant-comments-f22e removed ~700 lines of
+  // dividers/headers from apex.js and agentview.js (measured 2424 / 2432).
+  "js/game/apex.js": 2435,
+  "js/game/agentview.js": 2442,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
   // covered 55% of the steering wheel (depth-raster measured); ckpt now ends the
@@ -415,7 +417,8 @@ const CEILINGS = {
   // 2887 -> 3322: recipe-gated part-realism (exhaust lip/shield, fuel hatch/vent,
   // gearbox casing, floor plank/gurney/scroll, ERS blister, engine scoopLip,
   // faired wishbones, wheel gun-nut / tyre fillet, Brembo caliper).
-  "js/car/car3d.js": 3322,
+  // Lowered after trim-comments pass removed ~670 lines (measured 2651).
+  "js/car/car3d.js": 2661,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
@@ -442,7 +445,9 @@ const CEILINGS = {
   // Verified: prop-clipping + coplanar-faces + scenery-grounding all pass over
   // the 40-circuit build INCLUDING their anti-vacuity guards, which assert the
   // baseline caps are tight — i.e. the placement counts are exactly unchanged.
-  "js/track/tracks.js": 2940, // 2933 -> 2940: foundation() falls back to Tracks.terrainY when the 30 m build grid misses a flatTerrain shelf (Montreal pier sat 2.72 m above the ribbon the spec samples). // split("\\n") count of the 2931∪2924 union (noteSuppressed + WGX roadLutReady slab skip). // 2922 -> 2931: noteSuppressed() coalesces per-prop SUPPRESSED. // +2 WGX: skip fused props addBox slab.
+  // Lowered after trim-comments pass removed ~630 lines (measured 2308).
+  // Previous ceiling trail: 2933 -> 2940 (flatTerrain shelf + WGX slab + noteSuppressed).
+  "js/track/tracks.js": 2318,
 };
 
 test("the big modules are not growing unnoticed", () => {
