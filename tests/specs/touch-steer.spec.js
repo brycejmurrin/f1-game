@@ -182,6 +182,10 @@ test.describe("on-screen arrows ramp like a key, not a switch", () => {
       Input.setSteerMode("buttons");
       const gas = document.getElementById("btn-throttle");
       const left = document.getElementById("btn-steer-left");
+      gas.hidden = false;
+      left.hidden = false;
+      if (gas.parentElement) gas.parentElement.hidden = false;
+      if (left.parentElement) left.parentElement.hidden = false;
       const pe = (el, type, id, extra) => el.dispatchEvent(new PointerEvent(type, {
         pointerId: id, bubbles: true, cancelable: true, ...extra,
       }));

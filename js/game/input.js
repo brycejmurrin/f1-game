@@ -659,8 +659,10 @@ const Input = (function () {
   //      pointerId from EVERY hold button — a pointer that lifted anywhere is by
   //      definition no longer holding anything, even when the button itself never
   //      received the event (retargeted lift, missed lostpointercapture).
-  //   2. lostpointercapture, but ONLY when holdTargetGone — a capture steal
-  //      from a second hold button is not a lift (GAS + a turn arrow).
+  //   2. lostpointercapture, but ONLY via lostCaptureShouldRelease — a
+  //      capture steal from a second hold button is not a lift (GAS + a
+  //      turn arrow). A button that was already hidden at pointerdown is
+  //      not a teardown either.
   //   3. reset() (blur / tab-hidden) clears every set outright, covering OS
   //      interruptions where NO pointer event is delivered at all.
   // Without these, an interruption mid-hold left a ghost pointerId in the set:
@@ -674,6 +676,7 @@ const Input = (function () {
   function holdReleasePointer(pointerId) {
     for (const h of holdBtns) {
       h.anchors && h.anchors.delete(pointerId);
+      h.live && h.live.delete(pointerId);
       if (h.ids.delete(pointerId) && h.ids.size === 0) { h.apply(false); h.level && h.level(0); }
     }
   }
@@ -681,6 +684,7 @@ const Input = (function () {
     for (const h of holdBtns) {
       h.ids.clear();
       h.anchors && h.anchors.clear();
+      h.live && h.live.clear();
       h.apply(false);
       h.level && h.level(0);
     }
@@ -690,10 +694,14 @@ const Input = (function () {
   // capture target is hidden/removed (the stuck-GAS case) AND when a second
   // hold button calls setPointerCapture — WebKit keeps one capture slot, so
   // tapping LEFT while GAS is down steals capture from GAS and used to drop
-  // the throttle with the thumb still on it. Only honour the event when the
-  // button is actually gone. A still-visible target keeps the hold; the
-  // window pointerup / empty-touches nets clear it when the finger really
-  // leaves. Target === document is PE3 §9.5 (capture target disconnected).
+  // the throttle with the thumb still on it.
+  //
+  // Honour the event only when the button DISAPPEARED mid-hold (visible at
+  // pointerdown, gone now). Buttons start `[hidden]` in the shell and tests
+  // often press them that way; treating "currently hidden" as a teardown
+  // would drop every capture-steal in the harness AND a real two-thumb
+  // press if a parent group flickered hidden. Target === document is
+  // PE3 §9.5 (capture target disconnected) — always a teardown.
   function holdTargetGone(el) {
     if (!el || el === document) return true;
     if (!el.isConnected) return true;
@@ -705,6 +713,13 @@ const Input = (function () {
       if (s.display === "none" || s.visibility === "hidden") return true;
     } catch (_) { /* getComputedStyle can throw on a detached node */ }
     return false;
+  }
+  function lostCaptureShouldRelease(el, pointerId) {
+    if (!el || el === document || !el.isConnected) return true;
+    const h = holdBtns.find((x) => x.el === el);
+    const wasVisible = !!(h && h.live.get(pointerId));
+    if (!wasVisible) return false;
+    return holdTargetGone(el);
   }
 
   // PEDAL TRAVEL ON A TOUCHSCREEN. The analog-trigger note above says the
@@ -737,7 +752,8 @@ const Input = (function () {
     const dir = (opts && opts.dir) || 1;
     const ids = new Set();
     const anchors = level ? new Map() : null;   // pointerId -> axis pos at touch-down
-    holdBtns.push({ ids, apply, level, anchors });
+    const live = new Map();                     // pointerId -> visible at pointerdown
+    holdBtns.push({ ids, apply, level, anchors, el, live });
     el.addEventListener("pointerdown", e => {
       // Capture the pointer so the hold survives the finger/cursor drifting off
       // the button — without this a tiny move fires pointerleave and drops the
@@ -745,6 +761,7 @@ const Input = (function () {
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
       e.preventDefault();
       ids.add(e.pointerId);
+      live.set(e.pointerId, !holdTargetGone(el));
       apply(true);
       if (level) { anchors.set(e.pointerId, axis === "x" ? e.clientX : e.clientY); level(1); }
     });
@@ -761,6 +778,7 @@ const Input = (function () {
     });
     function release(e) {
       anchors && anchors.delete(e.pointerId);
+      live.delete(e.pointerId);
       if (!ids.delete(e.pointerId)) return;
       if (ids.size === 0) { apply(false); if (level) level(0); }
     }
@@ -775,7 +793,7 @@ const Input = (function () {
     // see holdTargetGone. A capture steal from another hold button must not
     // drop a thumb that is still down.
     el.addEventListener("lostpointercapture", function (e) {
-      if (!holdTargetGone(el)) return;
+      if (!lostCaptureShouldRelease(el, e.pointerId)) return;
       release(e);
     });
   }
@@ -1275,7 +1293,7 @@ const Input = (function () {
     // That matters here specifically: js/game.js hides #btn-throttle whenever
     // auto-throttle turns on, which is exactly the hidden-mid-hold shape.
     document.addEventListener("lostpointercapture", function (e) {
-      if (e.target && e.target !== document && !holdTargetGone(e.target)) return;
+      if (e.target && e.target !== document && !lostCaptureShouldRelease(e.target, e.pointerId)) return;
       holdReleasePointer(e.pointerId);
     }, true);
     // Net #4, and the only one that is not built on pointer events: WebKit
