@@ -356,7 +356,7 @@ test("How to Play exposes pinned semantic jump landmarks", () => {
   assert.match(css, /#howtoplay-inner\[data-shape="wide"\] > #htp-contents/);
   assert.match(css, /#howtoplay-inner\[data-density="compact"\] > #htp-contents/);
   assert.match(read("index.html"), /id="vsfriend-inner"/);
-  assert.match(css, /#howtoplay:has\(#htp-friends:target\)[\s\S]*?background:\s*var\(--red\)/);
+  assert.match(css, /#howtoplay:has\(#htp-friends:target\)[\s\S]*?background:\s*var\(--plate-on\)/);
   assert.match(css, /#howtoplay dt\[id\]\s*\{[^}]*scroll-margin-block-start/);
   assert.doesNotMatch(css, /#howtoplay dl\s*\{[^}]*max-content minmax\(0, 1fr\) max-content/,
     "help rows must not synchronize two unrelated answers");
@@ -517,4 +517,21 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(career,
     /#cr-inner:not\(\[data-pair="on"\]\):has\(#cr-left \.cr-slot\):has\(#cr-right \.cr-slot\) > #cr-body \{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/,
     "any stacked modes picker puts DRIVER and MY TEAM in one row");
+});
+
+test("neutral buttons share the settings tab-header plate", () => {
+  const tokens = read("css/tokens.css");
+  const components = read("css/components.css");
+  const menus = read("css/menus.css");
+  const carsetup = read("css/carsetup.css");
+  assert.match(tokens, /--plate:\s*rgba\(255,\s*255,\s*255,\s*0\.045\)/);
+  assert.match(tokens, /--plate-line:\s*rgba\(255,\s*255,\s*255,\s*0\.16\)/);
+  assert.match(tokens, /--plate-on:\s*color-mix\(in oklab, var\(--red\) 18%/);
+  assert.match(components, /#pm-category-tabs > button \{[\s\S]*?background:\s*var\(--plate\)/);
+  assert.match(components, /#pm-category-tabs > button\.active,[\s\S]*?background:\s*var\(--plate-on\)/);
+  assert.match(components, /\.bigbtn\.alt \{[\s\S]*?background:\s*var\(--plate\)/);
+  assert.match(menus, /\.sel-chip \{[\s\S]*?background:\s*var\(--plate\)/);
+  assert.match(menus, /\.sel-chip\.active \{[\s\S]*?background:\s*var\(--plate-on\)/);
+  assert.match(carsetup, /\.cs-tab \{[\s\S]*?background:\s*var\(--plate\)/);
+  assert.match(carsetup, /\.cs-tab\.active \{[\s\S]*?background:\s*var\(--plate-on\)/);
 });

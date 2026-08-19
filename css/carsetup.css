@@ -296,7 +296,7 @@
 .cs-tab {
   display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px;
   padding: 6px 10px; border-radius: var(--r-md); min-width: 0; overflow: hidden;
-  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
+  background: var(--plate); border: 1px solid var(--plate-line);
   cursor: pointer; text-align: left;
 }
 .cs-tab-lbl, .cs-tab-cur {
@@ -318,7 +318,7 @@
 .cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: rgba(255,255,255,0.4); }
 .cs-tab.upgraded .cs-tab-lbl { color: #4df; }
 .cs-tab.upgraded .cs-tab-cur { color: rgba(80,210,255,0.7); }
-.cs-tab.active { background: color-mix(in oklab, var(--red) 20%, transparent); border-color: var(--red); }
+.cs-tab.active { background: var(--plate-on); border-color: var(--red); box-shadow: var(--plate-on-glow); }
 .cs-tab.active .cs-tab-lbl { color: #fff; }
 .cs-tab.active .cs-tab-cur { color: rgba(255,255,255,0.72); }
 
@@ -326,7 +326,7 @@
 .cs-opt {
   display: flex; align-items: flex-start; gap: calc(var(--gap) * 0.8); text-align: left; width: 100%;
   padding: 8px 11px; border-radius: var(--r-md);
-  background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08);
+  background: var(--plate); border: 1px solid var(--plate-line);
   cursor: pointer;
 }
 .cs-opt-dot {
@@ -353,8 +353,8 @@
 }
 .cs-opt-cost.free { color: rgba(255,255,255,0.3); font-weight: 600; }
 .cs-opt.active {
-  background: color-mix(in oklab, var(--red) 20%, transparent); border-color: var(--red);
-  box-shadow: 0 2px 18px color-mix(in oklab, var(--red) 32%, transparent);
+  background: var(--plate-on); border-color: var(--red);
+  box-shadow: var(--plate-on-glow);
 }
 .cs-opt.active .cs-opt-dot { border-color: var(--red); background: radial-gradient(circle, #fff 0 3px, var(--red) 4px); }
 .cs-opt.active .cs-opt-cost { color: #fff; }

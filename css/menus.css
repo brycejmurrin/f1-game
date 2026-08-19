@@ -780,32 +780,25 @@ body { --compact-at: 600px; --wide-at: 620px; }
   padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.85);
   font-size: var(--fs-micro);
   border-radius: var(--r-sm);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  /* a shallow top-lit fill rather than one flat tint: the same physical
-     language as the buttons, one step quieter, so a row of chips reads as a
-     row of keys instead of a row of rectangles */
-  background: linear-gradient(180deg in oklab, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.035));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  border: 1px solid var(--plate-line);
+  /* Same dark plate as the settings tab headers — one family of keys. */
+  background: var(--plate);
+  box-shadow: none;
   transition: background 0.12s, box-shadow 0.12s;
   cursor: pointer;
 }
 @media (hover: hover) {
-  .sel-chip:hover { background: rgba(255,255,255,0.10); }
+  .sel-chip:hover { background: var(--plate-hover); }
 }
-.sel-chip:active { background: rgba(255,255,255,0.14); }
-/* The selection ring is drawn INSIDE the box (inset shadow), never as an
+.sel-chip:active { background: var(--plate-press); }
+/* Selected mark is the settings-tab recipe (left inset bar + glow), never an
    `outline`. An outline paints outside the border box, and these chips sit
-   flush against the inline-start edge of their scroll container, whose
-   overflow-x is hidden — so the leftmost chip (the selected driver, and the
-   selected difficulty) had the left side of its red ring sliced clean off.
-   An inset ring cannot be clipped by any ancestor, in any layout.
-   (The container used to be #sel-left; the identity column is gone, and the
-   chips now sit in #cs-options on the garage screen. The RULE is unchanged —
-   it is the reason it is inset that matters, and that survives the move.) */
+   flush against the inline-start edge of a hidden-overflow scroller — so an
+   outset ring on the leftmost chip gets sliced. The inset bar cannot. */
 .sel-chip.active {
   border-color: var(--red);
-  background: color-mix(in oklab, var(--red) 24%, transparent);
-  box-shadow: inset 0 0 0 2px var(--red), 0 0 14px color-mix(in oklab, var(--red) 38%, transparent);
+  background: var(--plate-on);
+  box-shadow: var(--plate-on-glow);
 }
 .sel-chip .swatch { display: inline-block; width: 12px; height: 12px; border-radius: var(--r-xs); margin-right: 6px; flex: none; }
 .sel-edit {
