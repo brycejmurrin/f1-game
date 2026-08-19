@@ -117,12 +117,14 @@ function loadBackendScripts(files, edges) {
 // install puts). Players on github.io skip this; tests and localhost inject.
 const AGENT_FILES = [
   "js/game/agentview-raster.js",
+  "js/game/agent-survey.js",
   "js/game/agentview.js",
   "js/game/apex-cameras.js",
   "js/game/apex.js",
 ];
 const AGENT_EDGES = [
   ["js/game/agentview-raster.js", "js/game/agentview.js"],
+  ["js/game/agent-survey.js", "js/game/agentview.js"],
   ["js/game/apex-cameras.js", "js/game/apex.js"],
 ];
 function wantAgentSurface() {

@@ -352,7 +352,9 @@ const CEILINGS = {
   // 8371 -> 8228: RACE SETTINGS chips + open/cancel moved to
   // js/game/race-settings.js (RaceSettings.create(G)). 0 new G; rsReturn
   // lives in the module. selGo / rs-go onclick stay.
-  "js/game.js": 8228,
+  // 8228 -> 8230: AGENT_FILES + AGENT_EDGES for agent-survey.js (lazy inject
+  // table; same lockstep as apex-cameras). Not a feature.
+  "js/game.js": 8230,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -384,7 +386,9 @@ const CEILINGS = {
   // comment moved onto the function it describes.
   // 3132 -> 2815: debug free-cam shots moved to js/game/apex-cameras.js.
   "js/game/apex.js": 2815,
-  "js/game/agentview.js": 2900,
+  // 2854 -> 2659: survey() + calibrated thresholds moved to
+  // js/game/agent-survey.js (AgentSurvey.create(ctx)). Slack closed.
+  "js/game/agentview.js": 2659,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
   // covered 55% of the steering wheel (depth-raster measured); ckpt now ends the

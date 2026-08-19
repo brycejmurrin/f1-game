@@ -406,12 +406,14 @@ const DEFERRED = {
 // ~350 KB of parse + PWA memory. Fetch-miss still caches on first use.
 const LAZY_AGENT = [
   "js/game/agentview-raster.js",
+  "js/game/agent-survey.js",
   "js/game/agentview.js",
   "js/game/apex-cameras.js",
   "js/game/apex.js",
 ];
 const LAZY_EDGES = [
   ["js/game/agentview-raster.js", "js/game/agentview.js"],
+  ["js/game/agent-survey.js", "js/game/agentview.js"],
   ["js/game/apex-cameras.js", "js/game/apex.js"],
 ];
 
