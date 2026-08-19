@@ -148,6 +148,7 @@ const FULL = [
   "js/game/perf.js",
   "js/game/gfx-quality.js",
   "js/game/ui-scale.js",
+  "js/game/custom-logo.js",
   "js/game/cockpit-opts.js",
   "js/game/metrics.js",
   "js/game/cameras.js",
@@ -333,6 +334,7 @@ const HARD_EDGES = [
   ["js/game/light-store.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
   ["js/game/audio-panel.js", "js/game.js"],   // game.js calls AudioPanel.create(G) at eval time
   ["js/game/ui-scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
+  ["js/game/custom-logo.js", "js/game.js"],   // game.js calls CustomLogo.create(G) at eval time
   ["js/game/career.js", "js/game/reliability.js"],  // reliability draws through Career.hash (call time, keep ordered)
   ["js/car/parts.js", "js/game/reliability.js"],    // buildQuality resolves a setup through Parts (call time, keep ordered)
   ["js/game/reliability.js", "js/game.js"],     // game.js validates the stored RELIABILITY level at eval
