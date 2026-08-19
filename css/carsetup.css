@@ -264,6 +264,7 @@
   flex-wrap: wrap;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   max-height: calc(var(--chip-h) * 2 + var(--gap));
   align-content: flex-start;
 }
