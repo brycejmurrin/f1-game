@@ -120,7 +120,16 @@ test("--live lampLevel --dry-run prints a night chase recipe and launches nothin
   assert.doesNotMatch(r.stderr, /PAGEERR|playwright/i);
 });
 
-test("slider-effect-view.py isolates changed pixels on a synthetic pair", () => {
+function hasViewDeps() {
+  const r = spawnSync("python3", ["-c", "from PIL import Image; import numpy"], {
+    encoding: "utf8",
+  });
+  return r.status === 0;
+}
+
+test("slider-effect-view.py isolates changed pixels on a synthetic pair", {
+  skip: hasViewDeps() ? false : "Pillow/numpy not installed (GitHub-hosted CI)",
+}, () => {
   const dir = mkdtempSync(path.join(tmpdir(), "slider-effect-"));
   try {
     const mk = spawnSync("python3", ["-c", `
