@@ -336,7 +336,9 @@ const CEILINGS = {
   // 8635 -> 8512: UI SIZE / HUD SIZE + RESOLUTION moved to js/game/ui-scale.js
   // (UiScale.create(G)). 0 new physics; one deferred G.updateTrackPreview
   // beside buildSelect. Comments moved with the block.
-  "js/game.js": 8512,
+  // 8512 -> 8518: render perf — env probe 4-frame cadence, car/lamp shadow skip,
+  // drawGlow PerfGov gate (no new physics).
+  "js/game.js": 8519,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

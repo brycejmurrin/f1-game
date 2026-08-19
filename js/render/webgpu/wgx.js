@@ -290,13 +290,13 @@ const WGX = (function () {
   const LAMP_SHADOW_SIZE = WGX_LITE ? 1 : 512;
   // WebGPU allows sampleCount 1 or 4 — ONLY. (w3.org/TR/webgpu: "sampleCount
   // must be either 1 or 4"; Dawn agrees, 4 being the one portable MSAA level.)
-  // This read 2 to mirror GLX's 2x WebGL MSAA and every real device rejected it
-  // — "Multisample count (2) is not supported", once per MS pipeline, then
-  // Invalid RenderPipeline / Invalid BindGroupLayout cascading off the first
-  // failure. Unit tests asserting msaa() === 2 passed throughout, because
-  // nothing in them ever asked a GPU.
+  // Desktop GRAPHICS: ULTRA (apex26.gfxHigh=1) keeps 4×; HIGH (gfxHigh=0) uses 1×
+  // — WebGPU cannot do 2×, so the savings mirror GLX capping HIGH at 2× MSAA.
+  // Missing key defaults to 4× (fresh install / harness) until gfx-quality runs.
   // `let` (not const): soft-adapter escape hatch may drop desktop 4 → 1.
-  let MSAA_COUNT = WGX_LITE ? 1 : 4;
+  let _wgxMsaa4 = true;
+  try { if (localStorage.getItem("apex26.gfxHigh") === "0") _wgxMsaa4 = false; } catch (_) { /* blocked storage: default 4× MSAA */ }
+  let MSAA_COUNT = WGX_LITE ? 1 : (_wgxMsaa4 ? 4 : 1);
 
   // ── Refusal bookkeeping ─────────────────────────────────────────────────────
   // Every path that makes create() return null records WHY, both on the console
