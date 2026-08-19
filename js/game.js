@@ -3384,14 +3384,17 @@ function update(dt) {
 
   if (soundOn) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
-    GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad, clamp(player.speed / vTop(), 0, 1), player.gear);
+    GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad,
+      clamp(player.speed / vTop(), 0, 1), player.gear,
+      { slip: player.slipFactor ?? 1, ax: player.axEstSm ?? 0,
+        onKerb: !!player.onKerb, wet: isWetRoad() });
     // Squeal from the CAR's slip, via the same skidIntensity the marks and smoke
     // use. This was a SECOND, independent copy of the old curvature formula
     // (|k| * speed), so the tyres you HEAR still screamed at the road's arc —
     // every corner squealed whether or not the car was actually sliding, and a
     // genuine slide down a straight was silent. Fixing the visual copy alone left
     // the most audible arc-coupling in the game untouched.
-    GameAudio.setSkid(player.skidIntensity || 0);
+    GameAudio.setSkid(player.skidIntensity || 0, isWetRoad());
   }
 }
 

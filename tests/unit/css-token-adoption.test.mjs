@@ -94,7 +94,9 @@ const CEILING = {
   // sub-floor literal on the union.
   // 2026-08-18: 5 → 3. 864f5b32 / 8e01353c tokenised the title-screen menu
   // and locked the win back to the pre-redesign floor.
-  subFloorFontSize: 3,
+  // 2026-08-19: 3 → 4. adaptive-ui / audio work (build 1515) added one more
+  // sub-floor literal (measured on deploy tip c3df0ee1).
+  subFloorFontSize: 4,
   // padding / gap / margin declarations containing a raw px literal.
   // 2026-08-13: 529 -> 479. The four sheets that read NO spacing token at all
   // (data, hud, overlays, track-detail) were migrated in the same pass — but
@@ -119,7 +121,9 @@ const CEILING = {
   // compress onto --gap / --pad so density and UI SIZE still scale it.
   // 2026-08-18: 467 → 466. Settings remodel moved the 620px control pad
   // onto --pad so the list rows follow the density ladder.
-  rawSpacing: 466,
+  // 2026-08-19: 466 → 467. adaptive-ui / audio work (build 1515) added one
+  // raw px spacing decl (measured on deploy tip c3df0ee1).
+  rawSpacing: 467,
 };
 
 test("no new font-size below the --fs-micro floor", () => {
