@@ -15,6 +15,7 @@ hits 20/20. Remaining tracks stay at the first-pass 4 (or mid-survey) until
 | Bahrain | [bahrain_grid.png](bahrain_grid.png) |
 | Baku | [baku_grid.png](baku_grid.png) |
 | COTA | [cota_grid.png](cota_grid.png) |
+| Hungaroring | [hungaroring_grid.png](hungaroring_grid.png) |
 | Interlagos | [interlagos_grid.png](interlagos_grid.png) |
 | Imola | [imola_grid.png](imola_grid.png) |
 | Jeddah | [jeddah_grid.png](jeddah_grid.png) |
