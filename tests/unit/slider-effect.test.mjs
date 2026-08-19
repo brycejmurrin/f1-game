@@ -9,7 +9,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,13 +33,14 @@ test("the tool exists", () => {
   assert.ok(existsSync(TOOL), "tools/slider-effect.mjs missing");
 });
 
-test("--help exits 0 and documents --live plus the failure-mode table", () => {
+test("--help exits 0 and documents --live visual filter plus the failure-mode table", () => {
   const r = run(["--help"]);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /--live/);
+  assert.match(r.stdout, /lampLevel/);
+  assert.match(r.stdout, /filter\.png/);
   assert.match(r.stdout, /APPLY_RACE_IDS/);
   assert.match(r.stdout, /LIGHTING-TUNER-SLIDERS/);
-  assert.match(r.stdout, /not implemented|NOT IMPLEMENTED/i);
 });
 
 test("--json lists ~183 knobs with id/group", () => {
@@ -96,10 +98,52 @@ test("--risk reapply flags apply-only knobs missing from APPLY_RACE_IDS (empty o
   }
 });
 
-test("--live does not launch a browser", () => {
+test("--live without an id exits 2 and does not mention a browser launch", () => {
   const r = run(["--live"]);
   assert.notEqual(r.status, 0);
-  assert.match(`${r.stdout}\n${r.stderr}`, /not implemented/i);
+  assert.match(`${r.stdout}\n${r.stderr}`, /--live <id>|lampLevel/);
+  assert.doesNotMatch(`${r.stdout}\n${r.stderr}`, /launchChromium|playwright/i);
+});
+
+test("--live lampLevel --dry-run prints a night chase recipe and launches nothing", () => {
+  const r = run(["--live", "lampLevel", "--dry-run", "--from", "0", "--to", "0.55"]);
+  assert.equal(r.status, 0, r.stderr);
+  const plan = JSON.parse(r.stdout);
+  assert.equal(plan.id, "lampLevel");
+  assert.equal(plan.tod, "night");
+  assert.equal(plan.from, 0);
+  assert.equal(plan.to, 0.55);
+  assert.ok(plan.track);
+  assert.doesNotMatch(r.stderr, /PAGEERR|playwright/i);
+});
+
+test("slider-effect-view.py isolates changed pixels on a synthetic pair", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "slider-effect-"));
+  try {
+    const mk = spawnSync("python3", ["-c", `
+from pathlib import Path
+from PIL import Image
+d = Path(${JSON.stringify(dir)})
+a = Image.new("RGB", (32, 16), (10, 10, 10))
+b = Image.new("RGB", (32, 16), (10, 10, 10))
+for x in range(8, 16):
+    for y in range(6, 12):
+        b.putpixel((x, y), (220, 40, 20))
+a.save(d / "a.png"); b.save(d / "b.png")
+`], { encoding: "utf8" });
+    assert.equal(mk.status, 0, mk.stderr);
+    const view = path.join(ROOT, "tools/slider-effect-view.py");
+    const r = spawnSync("python3", [view, path.join(dir, "a.png"), path.join(dir, "b.png"),
+      "--out", dir, "--hud-crop", "0"], { encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(existsSync(path.join(dir, "filter.png")));
+    assert.ok(existsSync(path.join(dir, "sheet.png")));
+    const stats = JSON.parse(r.stdout.trim().split("\n")[0]);
+    assert.ok(stats.changedPct > 1, `changedPct=${stats.changedPct}`);
+    assert.ok(stats.changedPct < 50, `changedPct=${stats.changedPct} too high`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("inventory tags: glx-only / saturate / sparse-pixels / wet-drizzle", () => {

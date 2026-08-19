@@ -17,9 +17,12 @@
  *   node tools/slider-effect.mjs --gate night
  *   node tools/slider-effect.mjs --risk inert|conditional|reapply|rebuild
  *   node tools/slider-effect.mjs --tag saturate|glx-only|sparse-pixels
+ *   node tools/slider-effect.mjs --live lampLevel --from 0 --to 0.55
+ *   node tools/slider-effect.mjs --filter --a a.png --b b.png --out dir
  *   node tools/slider-effect.mjs --json
  */
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
@@ -44,10 +47,13 @@ Usage:
   node tools/slider-effect.mjs --gate night
   node tools/slider-effect.mjs --risk inert|conditional|reapply|rebuild
   node tools/slider-effect.mjs --tag saturate|glx-only|sparse-pixels
+  node tools/slider-effect.mjs --live lampLevel --from 0 --to 0.55
+  node tools/slider-effect.mjs --live lampLevel --dry-run
+  node tools/slider-effect.mjs --filter --a a.png --b b.png --out dir
   node tools/slider-effect.mjs --json
   node tools/slider-effect.mjs --help
 
-Filters:
+Filters (no browser):
   --group NAME   TUNE_DEFS group (substring, case-insensitive)
   --class NAME   apply-only | per-frame | uniform | build-only
   --gate NAME    night | wet | rain | fog | overcast | day
@@ -57,12 +63,20 @@ Filters:
                  | sparse-pixels
   --json         JSON on stdout (knobs + counts)
 
-  --live  NOT IMPLEMENTED. Future protocol — do not launch a browser from this
-          tool: boot a track, A → B → A′ via __apex.lightTune({id}) and read
-          __apex.lightState() fields listed in each knob's \`moves\` array.
-          Restore the PRE-PUSH live value (never TUNE_DEFS.def — that overrides
-          a shipped preset and dirties localStorage). Assert derived state
-          returned. Exact and noise-free; do not use pixel MAD as the gate.
+Visual A/B (Playwright via tools/harness.mjs — not Chrome MCP):
+  --live ID      boot chase+park, set ID to --from then --to, write
+                 a.png / b.png / filter.png / heat.png / sheet.png
+                 filter.png keeps B only where pixels moved; the rest is crushed
+                 so you can see what the slider changed (lamp pools, fog, …)
+  --from N --to N   slider values (default: shipped def → farther extreme)
+  --track --tod --weather --frac   capture recipe (defaults from the knob's gates)
+  --out DIR      default artifacts/lighting/slider-effect/<track>-<tod>-<wx>-<id>
+  --dry-run      print the recipe; do not launch a browser
+  --filter --a PNG --b PNG --out DIR
+                 visual filter only, no game (two existing frames)
+
+  Restore the PRE-PUSH live value (never TUNE_DEFS.def). Do not run --live
+  while a Chrome look-survey holds the box.
 `;
 
 const APPLY_ONLY_FILES = ["js/game/atmosphere.js"];
@@ -131,7 +145,7 @@ function seedLog(root, ctx) {
   vm.runInContext(read(root, "js/log.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/log.js" });
 }
 
-function loadTuneDefs(root) {
+export function loadTuneDefs(root) {
   const sandbox = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
@@ -432,7 +446,7 @@ export function formatTable(knobs, counts) {
 }
 
 export function parseArgs(argv) {
-  const opts = { json: false, help: false, live: false };
+  const opts = { json: false, help: false, live: false, filter: false, dryRun: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const eq = (name) => {
@@ -444,10 +458,22 @@ export function parseArgs(argv) {
     };
     if (a === "--help" || a === "-h") opts.help = true;
     else if (a === "--json") opts.json = true;
-    else if (a === "--live") opts.live = true;
-    else if (eq("group") || eq("class") || eq("gate") || eq("risk") || eq("tag")) continue;
+    else if (a === "--filter") opts.filter = true;
+    else if (a === "--dry-run") opts.dryRun = true;
+    else if (a === "--live") {
+      opts.live = true;
+      if (argv[i + 1] && !argv[i + 1].startsWith("-")) opts.id = argv[++i];
+    }
+    else if (eq("group") || eq("class") || eq("gate") || eq("risk") || eq("tag")
+      || eq("id") || eq("track") || eq("tod") || eq("weather") || eq("out")
+      || eq("a") || eq("b") || eq("from") || eq("to") || eq("frac") || eq("hud-crop"))
+      continue;
     else if (a.startsWith("-")) throw new Error(`unknown flag: ${a}\n${HELP}`);
   }
+  if (opts["hud-crop"] != null) opts.hudCrop = Number(opts["hud-crop"]);
+  if (opts.from != null) opts.from = Number(opts.from);
+  if (opts.to != null) opts.to = Number(opts.to);
+  if (opts.frac != null) opts.frac = Number(opts.frac);
   if (opts.class && !CLASSES.has(opts.class))
     throw new Error(`--class must be one of ${[...CLASSES].join("|")}`);
   if (opts.risk && !RISKS.has(opts.risk))
@@ -459,15 +485,44 @@ export function parseArgs(argv) {
   return opts;
 }
 
-export function main(argv = process.argv.slice(2), root = ROOT) {
+const VIEW_PY = path.join(ROOT, "tools/slider-effect-view.py");
+
+export async function main(argv = process.argv.slice(2), root = ROOT) {
   const opts = parseArgs(argv);
   if (opts.help) {
     process.stdout.write(HELP);
     return 0;
   }
+  if (opts.filter || opts.a || opts.b) {
+    if (!opts.a || !opts.b) throw new Error("--filter needs --a PNG and --b PNG");
+    const out = opts.out || path.join(root, "artifacts/lighting/slider-effect/filter");
+    const r = spawnSync("python3", [
+      VIEW_PY, opts.a, opts.b, "--out", out,
+      "--hud-crop", String(opts.hudCrop ?? 0.10),
+    ], { encoding: "utf8" });
+    process.stdout.write(r.stdout || "");
+    if (r.status) process.stderr.write(r.stderr || "");
+    return r.status ?? 2;
+  }
   if (opts.live) {
-    process.stderr.write("slider-effect: --live is not implemented (no browser). See --help.\n");
-    return 2;
+    if (!opts.id) {
+      throw new Error("usage: --live <id>   e.g. --live lampLevel --from 0 --to 0.55");
+    }
+    const all = classifyKnobs(root);
+    const knob = all.find((k) => k.id === opts.id);
+    const def = loadTuneDefs(root).find((d) => d.id === opts.id);
+    const { livePlan, runLive } = await import("./slider-effect-live.mjs");
+    const plan = livePlan(opts, knob, def, root);
+    if (opts.dryRun) {
+      process.stdout.write(JSON.stringify({
+        id: plan.knob.id, class: plan.knob.class, gates: plan.knob.gates,
+        moves: plan.knob.moves, track: plan.track, tod: plan.tod,
+        weather: plan.weather, frac: plan.frac, from: plan.from, to: plan.to,
+        out: plan.out,
+      }, null, 2) + "\n");
+      return 0;
+    }
+    return runLive(opts, root, { knob, def });
   }
   const all = classifyKnobs(root);
   const knobs = filterKnobs(all, opts);
@@ -479,10 +534,8 @@ export function main(argv = process.argv.slice(2), root = ROOT) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try {
-    process.exitCode = main();
-  } catch (e) {
+  main().then((code) => { process.exitCode = code; }).catch((e) => {
     process.stderr.write(String(e.message || e) + "\n");
     process.exitCode = 2;
-  }
+  });
 }
