@@ -1,39 +1,9 @@
 /*
- * Apex 26 — WGSL foreground-FX shaders (WebGPU migration, Phase 4).
+ * Apex 26 — WGSL foreground-FX shaders (WGSLFx). Blob shadow, skid marks,
+ * glow billboards, textured decals — WGSL ports of js/render/shaders/fx.js.
+ * Loaded after wgsl-chunks.js. Uniform layouts exported as WGSLFx.*_UNIFORM_BYTES.
  *
- * The small "decal / billboard / stamp" shaders that draw ON TOP of the lit
- * scene: the blob car shadow, the tyre skid marks (single + batched), the
- * additive lamp-glare glow billboards, and the textured team/sponsor decals.
- * Each is a *reduced-but-faithful* WGSL port of the matching GLX GL program,
- * matching the Phase-2 porting philosophy (WGSLChunks.LIT et al).
- *
- * NO build step: plain JS template strings, concatenated at load, assigning one
- * global `WGSLFx`. No imports, no ES modules. Loaded AFTER js/render/webgpu/wgsl-chunks.js
- * (so `WGSLChunks` is available for concatenation if a leaf is useful — these FX
- * are simple enough that none of the shared math leaves are needed; they are pure
- * geometry quads with radial/atlas falloff, so nothing is concatenated here).
- *
- * PORTED FROM (stable GLX shader/function names):
- *  - BLOB_SHADOW : SHADOW_VS + SHADOW_FS (GLX.drawShadow)
- *  - MARK        : SHADOW_VS + MARK_FS (GLX.drawMark)
- *  - SKID        : MARK_BATCH_VS + MARK_FS (GLX.drawSkidBatch)
- *  - GLOW        : GLOW_VS + GLOW_FS (GLX.drawGlow)
- *  - DECAL       : DECAL_VS + DECAL_FS (GLX.drawDecal)
- *
- * WGSL-vs-GLSL gotchas applied (same list as wgsl-chunks.js header):
- *  - texture(s,uv)        -> textureSample(t, s, uv)  (texture + sampler split)
- *  - vec3                 -> vec3<f32>, strict f32 literals (0.0 not 0)
- *  - mat3(uModel)         -> mat3x3<f32>(m[0].xyz, m[1].xyz, m[2].xyz)
- *  - smoothstep(hi, lo, x) (descending, GLSL-legal) -> 1.0 - smoothstep(lo, hi, x)
- *                            (WGSL smoothstep is UNDEFINED when edge0 >= edge1)
- *  - discard              -> discard;  (alpha test on the decal atlas)
- *
- * UNIFORM LAYOUT — authored to WGSL std-layout (vec3 padded to vec4, 16-byte
- * align). Byte offsets are asserted in per-struct comments and the total size of
- * each block is exported as WGSLFx.*_UNIFORM_BYTES for the JS-side struct writers
- * in wgx.js. Every FX embeds its own viewProj in its uniform block (these passes
- * do not share the Lit FrameU — they run standalone after the lit/sky passes),
- * so each is a fully self-contained bind group.
+ * NO build step: plain JS template strings, one global WGSLFx.
  */
 "use strict";
 

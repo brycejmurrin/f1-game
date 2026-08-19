@@ -1,4 +1,4 @@
-/* Apex 26 — TLX: the three.js/TSL renderer backend (migration milestone 1). Third backend behind the js/render/gfx.js seam (GLX = WebGL2 default, WGX = frozen han… */
+/* Apex 26 — TLX: three.js/TSL renderer backend. Third backend behind js/render/gfx.js (GLX default, WGX opt-in). Opt-in via apex26.gfxBackend=three. */
 "use strict";
 
 const TLX = (function () {
@@ -102,14 +102,6 @@ const TLX = (function () {
       // 2D overlay — never getContext("2d") on #game (one context type per
       // canvas for life; three's WebGPU configure is lazy on first present).
       let _layoutCanvas = canvas;
-      // Software WebGPU: keep #game as three's GPU canvas. Soft-present is the
-      // #game-soft sibling overlay below (never getContext("2d") on #game —
-      // one context type per canvas for life). softGpu() aliases the overlay
-      // path so instanced draws / sky fallback / env restore stay off the
-      // native swapchain. Do not steal #game as 2D — that hides the overlay
-      // next to a detached canvas and leaves the page on an empty 2D #game.
-
-      // ── OPAQUE CANVAS (js/render/glx.js: `alpha: false`) ────────────────────
       // Not cosmetic, and not a memory tweak: the lit fragment writes the SSR
       // car-paint TAG — 0.35 — into ALPHA (tsl-lit.js, ctx.ssrTag), and the
       // post-only death path in present() keeps those materials while painting

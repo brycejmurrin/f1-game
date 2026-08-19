@@ -37,11 +37,7 @@
       m.customProgramCacheKey = () => key + (m.mrtNode ? "-mrt" : "");
     }
 
-    // ── M4: the tlx-shadow.js subsystem (null/absent -> no shadow code is
-    //    built and uShadowStr stays 0, the M3 look). Sun sampling is gated on
-    //    the sun map existing; car/lamp blocks on their (desktop-only) maps —
-    //    the mobile tier never compiles them, mirroring GLX's always-bound-
-    //    texture trick without needing dummy bindings. ─────────────────────
+    // tlx-shadow.js subsystem (null/absent → no shadow code).
     const SHD = (ctx.shadow && ctx.shadow.S) ? ctx.shadow : null;
     const SSR_TAG = !!ctx.ssrTag;
     const ENV_CUBE = ctx.envCube || null;
@@ -192,7 +188,7 @@
       uf1(U.ambContactDark, k("ambContactDark", 1.0));
       uf1(U.lampWallSpill, k("lampWallSpill", 1.0));
       U.envStr.value = 0;   // M9: overwritten by lit.setEnvStr() in tlx.js begin() from the probe-ready state
-      // ── M4 shadow upload (1:1 with the litU.uShadow* block in glx.js) ──
+      // M4 shadow upload (litU.uShadow* block in glx.js).
       if (shadowOn) {
         uf1(U.shadowBias, k("shadowBias", 0.001));
         uf1(U.pcssPen, k("pcssPen", 80.0));
@@ -835,7 +831,7 @@
 
         const Ngeo = vec3(N).toVar();
 
-        // ── car surface ids 20-27 (car3d.js SURFACES; js/render/shaders/lit.js) ───────
+        // car surface ids 20-27 (car3d.js SURFACES).
         const surfaceId = floor(matA.add(0.5)).toVar();
         const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(27.0)).toVar();
         const paintSurface = surfaceId.equal(20.0).toVar();
@@ -872,7 +868,7 @@
         const envSurface = carPaint.greaterThan(0.001).or(glassSurface)
           .and(clearcoat.greaterThan(0.001)).toVar();
 
-        // ── car-paint orange-peel micro normal (js/render/shaders/lit.js) ─────────────
+        // car-paint orange-peel micro normal.
         If(carPaint.greaterThan(0.001), () => {
           const pFade = clamp(vd.sub(18.0).div(50.0).oneMinus(), 0.0, 1.0).toVar();
           If(pFade.greaterThan(0.01), () => {
@@ -894,7 +890,7 @@
         // SAA source: geo + peel, before wall/MAT bump (WGX saaVar mix).
         const Nsaa = vec3(N).toVar();
 
-        // ── per-material procedural bump (before V/L/H/NoL — js/render/shaders/lit.js) ────
+        // per-material procedural bump (before V/L/H/NoL).
         N.assign(applyMaterialNormal(surfaceId, N, wp, vd));
         // Baked normal map composes on top (no-op at matTexMix 0 / no pack).
         if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd));
@@ -908,7 +904,7 @@
 
         const albedo = vec3(albedoIn).toVar();
 
-        // ── procedural ground texture + patches + cracks (js/render/shaders/lit.js) ───
+        // procedural ground texture + patches + cracks.
         const patchM = float(0.5).toVar();
         // fwidth(cr) BEFORE the detail If — same hoist as roadMarkings / WGX
         // fs_main. matU.detail is a uniform today; a per-fragment gate here
@@ -932,7 +928,7 @@
           albedo.assign(max(albedo, vec3(0.0)));
         });
 
-        // ── roughness resolution + car-surface clamps (js/render/shaders/lit.js) ──────
+        // roughness resolution + car-surface clamps.
         const rough = clamp(matU.roughness, 0.04, 1.0).toVar();
         If(carbonSurface, () => { rough.assign(max(rough, 0.56)); });
         If(rubberSurface, () => { rough.assign(max(rough, 0.90)); });
@@ -945,7 +941,7 @@
           rough.assign(clamp(rough.add(patchM.sub(0.5).mul(0.16).mul(min(matU.detail.mul(4.0), 1.0))), 0.04, 1.0));
         });
 
-        // ── procedural per-material albedo/roughness (js/render/shaders/lit.js) ───────────
+        // procedural per-material albedo/roughness.
         const packedMat = applyMaterial(surfaceId, albedo, rough, wp, Nvary, vd);
         albedo.assign(packedMat.xyz);
         rough.assign(packedMat.w);
@@ -955,7 +951,7 @@
           rough.assign(packedTex.w);
         }
 
-        // ── painted road markings (js/render/shaders/lit.js) ─────────────────────────────
+        // painted road markings.
         // AFTER the material grain and the baked texture, exactly as GLX
         // orders it, so the paint sits ON the tarmac rather than under it.
         // Called unconditionally: it carries its own hw mask and its
@@ -966,16 +962,14 @@
           rough.assign(packedPaint.w);
         }
 
-        // ── specular AA: widen roughness by the pre-material normal's
-        //    screen-space variance (WGX geo+peel mix). dFdx(N) after the
-        //    wall bump dulls brick/concrete vs WebGPU. ───────────
+        // specular AA: widen roughness by pre-material normal screen-space variance.
         const saaDx = dFdx(Nsaa), saaDy = dFdy(Nsaa);
         const saaVar = dot(saaDx, saaDx).add(dot(saaDy, saaDy)).toVar();
         rough.assign(min(1.0, sqrt(rough.mul(rough).add(saaVar.mul(0.35)))));
         const a = rough.mul(rough).toVar();
         const f0 = mix(vec3(specular.mul(0.08)), albedo, metalness).toVar();
 
-        // ── wet surface (rain — js/render/shaders/lit.js) ─────────────────────────────
+        // wet surface (rain).
         // wet = "rained on"; wetSheen = the specular WATER FILM. Porous ground
         // (grass/foliage/rock/sand/snow) drinks the water: it darkens but never
         // polishes. Reflection-side terms must key off wetSheen, not wet —
@@ -1096,7 +1090,7 @@
           });
         });
 
-        // ── sun Cook-Torrance specular, soft-clipped (js/render/shaders/lit.js) ────────
+        // sun Cook-Torrance specular, soft-clipped.
         const D = D_GGX(NoH, a);
         const Vis = V_SmithGGX(NoV, NoL, a);
         const F = F_Schlick(VoH, f0, clamp(rough.oneMinus(), 0.0, 1.0));
@@ -1110,7 +1104,7 @@
           ccSaaVar.assign(dot(ccDx, ccDx).add(dot(ccDy, ccDy)));
         });
 
-        // ── clearcoat sun lobe (js/render/shaders/lit.js) ──────────────────────────────
+        // clearcoat sun lobe.
         If(clearcoat.greaterThan(0.001), () => {
           const Hg = normalize(L.add(V));
           const NoHg = max(dot(Ngeo, Hg), 0.0);
@@ -1161,7 +1155,7 @@
           color.addAssign(addCC.div(addCC.mul(0.35).add(1.0)));  // gentle soft-clip
         });
 
-        // ── metallic-flake sparkle (js/render/shaders/lit.js) ─────────────────────────
+        // metallic-flake sparkle.
         If(carPaint.greaterThan(0.001).and(litNoL.greaterThan(0.0)).and(matU.sparkle.greaterThan(0.001)), () => {
           const spFade = clamp(vd.sub(14.0).div(30.0).oneMinus(), 0.0, 1.0).mul(matU.sparkle).toVar();
           spFade.mulAssign(smoothstep(0.06, 0.22, max(albedo.r, max(albedo.g, albedo.b))));
@@ -1180,7 +1174,7 @@
           });
         });
 
-        // ── environment sky reflection for glossy/wet surfaces (js/render/shaders/lit.js)
+        // environment sky reflection for glossy/wet surfaces.
         const envBlend = clamp(float(0.40).sub(rough).div(0.30), 0.0, 1.0).mul(specular).toVar();
         envBlend.assign(max(envBlend, wetSheen.mul(0.55)));
         If(envBlend.greaterThan(0.001), () => {
@@ -1202,7 +1196,7 @@
           color.addAssign(envAdd.div(envM.add(1.0)));           // Reinhard shoulder
         });
 
-        // ── sky rim fresnel (js/render/shaders/lit.js) ───────────────────────────────
+        // sky rim fresnel.
         {
           const rf = NoV.oneMinus();
           const rimFresnel = rf.mul(rf).mul(rf);
@@ -1210,7 +1204,7 @@
           color.addAssign(vec3(U.skyHorizon).mul(rimAmt));
         }
 
-        // ── ambient contact darkening (js/render/shaders/lit.js) ─────────────────────
+        // ambient contact darkening.
         {
           const ao = pow(max(N.y.mul(0.5).add(0.5), 1e-4), 0.35);
           color.mulAssign(mix(float(0.12).mul(U.ambContactDark).oneMinus(), float(1.0), ao));
