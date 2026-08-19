@@ -446,7 +446,9 @@ const CEILINGS = {
   // Verified: prop-clipping + coplanar-faces + scenery-grounding all pass over
   // the 40-circuit build INCLUDING their anti-vacuity guards, which assert the
   // baseline caps are tight — i.e. the placement counts are exactly unchanged.
-  "js/track/tracks.js": 2940, // 2933 -> 2940: foundation() falls back to Tracks.terrainY when the 30 m build grid misses a flatTerrain shelf (Montreal pier sat 2.72 m above the ribbon the spec samples). // split("\\n") count of the 2931∪2924 union (noteSuppressed + WGX roadLutReady slab skip). // 2922 -> 2931: noteSuppressed() coalesces per-prop SUPPRESSED. // +2 WGX: skip fused props addBox slab.
+  // 2940 -> 2866: terrainY grid + barycentric query moved to
+  // js/track/track-terrain.js. Tracks.terrainY is a one-line re-export.
+  "js/track/tracks.js": 2866, // 2933 -> 2940: foundation() falls back to Tracks.terrainY when the 30 m build grid misses a flatTerrain shelf (Montreal pier sat 2.72 m above the ribbon the spec samples). // split("\\n") count of the 2931∪2924 union (noteSuppressed + WGX roadLutReady slab skip). // 2922 -> 2931: noteSuppressed() coalesces per-prop SUPPRESSED. // +2 WGX: skip fused props addBox slab.
 };
 
 test("the big modules are not growing unnoticed", () => {

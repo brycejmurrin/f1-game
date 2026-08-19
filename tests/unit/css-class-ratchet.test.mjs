@@ -115,7 +115,8 @@ const CLASS_CEILING = 532;
 // Earlier slim-bloat extracts already spent the previous slack
 // (ui-scale / custom-logo / livery-store tags). Still far under ~1400.
 // +1 2026-08-19: <script> for js/game/race-settings.js (RaceSettings extract).
-const NODE_CEILING = 1212;
+// +1 2026-08-19: <script> for js/track/track-terrain.js (TrackTerrain extract).
+const NODE_CEILING = 1213;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module
