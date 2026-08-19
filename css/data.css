@@ -160,21 +160,28 @@ body[data-density="compact"] .dh-error { gap: var(--gap); padding: var(--gap); }
 body[data-density="compact"] .dh-race-sub {
   white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
 }
-/* On a narrow upright card, hiding half the destinations beyond a sideways
-   gesture makes the hub's information architecture undiscoverable. All six
-   labels fit comfortably in two equal columns, so trade one extra tab row for
-   a complete overview. Landscape keeps the single horizontal strip because
-   its scarce axis is height, not width. Orientation is a real viewport fact;
-   width uses the zoom-aware body flag (--wide-at) instead of max-width: 480px. */
-@media (orientation: portrait) {
-  body[data-width="narrow"] .dh-tabs {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    overflow-x: hidden;
-    overscroll-behavior-x: auto;
-    touch-action: pan-y;
-  }
-  body[data-width="narrow"] .dh-tab { width: 100%; min-width: 0; padding-inline: 8px; }
+/* TALL-SHAPED viewport: 2-column tab grid so all 6 destinations are visible
+   without a sideways gesture. Landscape keeps the horizontal strip (height
+   is scarce there, not width). Uses body[data-shape="tall"] (zoom-corrected,
+   set by SheetShape classifyBody) instead of @media (orientation: portrait)
+   which is wrong at non-100% zoom. Width still uses the zoom-aware body flag. */
+body[data-shape="tall"] body[data-width="narrow"] .dh-tabs,
+body[data-shape="tall"][data-width="narrow"] .dh-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow-x: hidden;
+  overscroll-behavior-x: auto;
+  touch-action: pan-y;
+  /* Use compact-size tabs in the 2-col grid so the 3 rows consume
+     var(--tap-min)*3 ≈ 72-84px instead of var(--tap)*3 ≈ 156px.
+     Reclaims ~80px for the content area on a portrait phone. */
+  gap: calc(var(--gap) * 0.4);
+  padding: calc(var(--gap) * 0.5) var(--gap);
+}
+body[data-shape="tall"][data-width="narrow"] .dh-tab {
+  width: 100%; min-width: 0; padding-inline: 8px;
+  min-height: var(--tap-min);
+  font-size: var(--fs-micro);
 }
 
 .dh-content {
@@ -625,6 +632,23 @@ body[data-width="narrow"] .dh-td-pts { width: 28px; }
 body[data-density="compact"] .dh-row { padding: 4px 4px; font-size: var(--fs-2); }
 body[data-density="compact"] .dh-pts { min-width: 36px; }
 body[data-density="compact"] .dh-gap { min-width: 30px; }
+
+/* NARROW/COMPACT STANDINGS: allow driver names to wrap instead of ellipsizing.
+   Long names like "Andrea Kimi Antonelli" truncate in the narrow column. With
+   white-space:normal the name wraps to 2 lines; the table-layout:fixed column
+   grows to content and the codechip stays on the first baseline. */
+body[data-width="narrow"] .dh-td-driver,
+body[data-density="compact"] .dh-td-driver {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+body[data-width="narrow"] .dh-td-driver .dh-name,
+body[data-density="compact"] .dh-td-driver .dh-name {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
 
 /* ── Schedule 2-column grid on a short+wide local viewport ──────────────── */
 .dh-race-grid { display: flex; flex-direction: column; }
