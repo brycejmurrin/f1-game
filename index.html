@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1461">
+<meta name="apex-build" content="1468">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -42,13 +42,13 @@
 <link rel="stylesheet" href="css/tokens.css?v=2e0d20e14bba">
 <link rel="stylesheet" href="css/components.css?v=b30695818ab1">
 <link rel="stylesheet" href="css/tuner.css?v=a1172b2c2801" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=29bef9af2a72">
-<link rel="stylesheet" href="css/carsetup.css?v=42534c84479e" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/menus.css?v=8092e2792eec">
+<link rel="stylesheet" href="css/carsetup.css?v=807c10d2cff4" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=ce419d9bb73a" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=92f2bff3c977" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=b3628cd9e29d">
 <link rel="stylesheet" href="css/track-detail.css?v=6105e0e4ffad" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/career.css?v=afbf05d849c5" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/career.css?v=e8ed7c0ac7d2" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=9ece0434b33b" media="print" onload="this.media='all'">
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
@@ -1755,7 +1755,7 @@
 <script crossorigin="anonymous" src="js/game/input.js?v=db727f63e954"></script>
 <script crossorigin="anonymous" src="js/game/audio.js?v=3e1623c9eca0"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=c215033b4fb4"></script>
-<script crossorigin="anonymous" src="js/game/spotify.js?v=9f17baa46dab"></script>
+<script crossorigin="anonymous" src="js/game/spotify.js?v=d4851738f786"></script>
 <script crossorigin="anonymous" src="js/game/audio-panel.js?v=18e142b1a237"></script>
 <script crossorigin="anonymous" src="js/data/api.js?v=f9392d7c9c6c"></script>
 <script crossorigin="anonymous" src="js/data/telemetry.js?v=20b1e1753cf7"></script>
@@ -1769,7 +1769,7 @@
 <script crossorigin="anonymous" src="js/car/liveries.js?v=62ed3d578b13"></script>
 <script crossorigin="anonymous" src="js/car/liverytex.js?v=6ceeacc3872f"></script>
 <script crossorigin="anonymous" src="js/car/ghost.js?v=0f7d7fef9e94"></script>
-<script crossorigin="anonymous" src="js/game/light-presets.js?v=01d5395a846a"></script>
+<script crossorigin="anonymous" src="js/game/light-presets.js?v=6d2572fa9091"></script>
 <script crossorigin="anonymous" src="js/game/physics-consts.js?v=fcc0717fa3cd"></script>
 <script crossorigin="anonymous" src="js/game/tables.js?v=2293aaaf19e1"></script>
 <script crossorigin="anonymous" src="js/game/lighting.js?v=22c84084eb8f"></script>
@@ -1787,7 +1787,7 @@
 <script crossorigin="anonymous" src="js/game/setup-ui.js?v=7274b0b69237"></script>
 <script crossorigin="anonymous" src="js/game/career-ui.js?v=dab232f3d43e"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=8e20a72bee1a"></script>
-<script crossorigin="anonymous" src="js/game/menus.js?v=7f8aebf0e917"></script>
+<script crossorigin="anonymous" src="js/game/menus.js?v=38c38a415f94"></script>
 <script crossorigin="anonymous" src="js/game/scrollfade.js?v=c468f3706d17"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
 <script crossorigin="anonymous" src="js/game/sheetshape.js?v=931be6f5d0c9"></script>
@@ -1795,7 +1795,7 @@
 <script crossorigin="anonymous" src="js/game/topmodal.js?v=d22910fec314"></script>
 <script crossorigin="anonymous" src="js/game/menunav.js?v=12d9bca64754"></script>
 <script crossorigin="anonymous" src="js/game/ariastate.js?v=1a795e030767"></script>
-<script crossorigin="anonymous" src="js/game/settings-nav.js?v=f4049b14c868"></script>
+<script crossorigin="anonymous" src="js/game/settings-nav.js?v=0e5185440a80"></script>
 <script crossorigin="anonymous" src="js/game/aerozones.js?v=1f77f601ce84"></script>
 <script crossorigin="anonymous" src="js/game/skidmarks.js?v=d7604789daaa"></script>
 <script crossorigin="anonymous" src="js/game/racecontrol.js?v=a978b7ab5795"></script>
@@ -1827,5 +1827,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=f0bfb2817114"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=2891c595f0f0"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=aced6d5696d5"></script>
-<script crossorigin="anonymous" src="js/game.js?v=d8a335f15f8c"></script>
+<script crossorigin="anonymous" src="js/game.js?v=6f429a4d7d2c"></script>
 </body></html>

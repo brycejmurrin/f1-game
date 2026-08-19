@@ -456,11 +456,11 @@ body { --compact-at: 600px; --wide-at: 620px; }
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-facts,
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-elev { display: none; }
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-map {
-  /* The JS preserves the circuit aspect with an inline width/height. Clamp to
-     both the chip ladder and the actual preview band so high UI sizes cannot
-     leave a 60px painted thumbnail inside a ~42px band. */
-  max-height: min(var(--chip-h), 100%);
-  max-width: min(42%, calc(var(--chip-h) * 1.8));
+  /* Compact stacked landscape used to hide this whole section. Keep it a
+     band (name beside map, extras still display:none) but size the outline
+     as a readable thumbnail — chip-h alone painted a 27×40 stamp. */
+  max-height: min(calc(var(--chip-h) * 2.6), 100%);
+  max-width: min(38%, calc(var(--chip-h) * 3.4));
 }
 /* When the shared functional-height cap is active, or the sheet itself is too
    narrow to seat a thumbnail beside the name, the name is the useful preview.
@@ -487,12 +487,8 @@ body { --compact-at: 600px; --wide-at: 620px; }
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-info {
   display: block;
 }
-/* On a short landscape phone the active catalogue row already supplies the
-   circuit identity. Removing the duplicate preview band buys the list an
-   entire control row at 100% and keeps the filter usable through 200%. */
-#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) > #sel-body > #sel-track-section {
-  display: none;
-}
+/* Compact stacked landscape keeps the thumbnail band (map + name). Hiding
+   the whole #sel-track-section dropped #sel-preview-map on play-shape. */
 #sel-inner:not([data-pair="on"]) > #sel-body > #sel-tracks {
   /* Basis 0, not auto: auto is the 2,000px catalogue, so shrink eats the
      list before grow can give it leftover body height. */
@@ -1258,6 +1254,24 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   :where(.sheet[data-density="compact"]) #race-settings .sel-chip { font-size: var(--fs-micro); padding: 7px 9px; letter-spacing: 0; }
   :where(.sheet[data-density="compact"]) #race-settings .sel-label { font-size: var(--fs-micro); margin-bottom: 3px; }
   :where(.sheet[data-density="compact"]) .rs-row { margin-bottom: calc(var(--gap) * 0.5); }
+  /* Championship QUALI is a label. display:contents + a full-span label
+     isolated DIFF on row 2 and parked CAUTIONS / RELIABILITY on row 4
+     under the foot (measured 852×393, cache 1464). Pin the label to row
+     1 and the two chip rows under it so DIFF / CAUTIONS / RELIABILITY
+     share the last row. overflow-y is the safety net when the chips are
+     still present (one-off ON/OFF). */
+  :where(.sheet[data-density="compact"]) #rs-body { overflow-y: auto; overscroll-behavior-y: contain; }
+  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > :is(.rs-row:nth-child(1), .rs-row:nth-child(2), #rs-time-section) {
+    grid-row: 2;
+  }
+  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > :is(#rs-diff-section, #rs-caution-section, #rs-reliab-section) {
+    grid-row: 3;
+  }
+  :where(.sheet[data-density="compact"]) #rs-quali-section:has(#rs-quali[hidden]) {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    margin-bottom: 0;
+  }
 }
 #race-settings .sel-chip {
   display: flex; align-items: center; justify-content: center; gap: 4px;

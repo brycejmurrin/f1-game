@@ -87,6 +87,8 @@ test("garage stacked categories are a horizontal strip", () => {
     "pair-on rail may still scroll vertically");
   assert.match(css, /#cs-inner\[data-density="compact"\]\s*\{\s*--pair-at:\s*2000px/,
     "compact garage stacks to the horizontal strip");
+  assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\):is\(\[data-shape="tall"\], \[data-density="compact"\]\) #cs-tabs \{[\s\S]*?flex-wrap:\s*wrap/,
+    "tall or compact stacked garage wraps the catalogue instead of hiding AERO behind a pan");
   assert.match(read("css/menus.css"), /#ss-inner\[data-density="compact"\]\s*\{\s*--pair-at:\s*2000px/,
     "compact season stacks via --pair-at, same as career");
   const js = read("js/game/setup-ui.js");
@@ -119,6 +121,16 @@ test("compact landscape catalogue spends its first viewport on a circuit", () =>
     "search keeps a readable floor so the row actually overflows at 200%");
   assert.doesNotMatch(css, /@container sheet \(max-width: 360px\)/);
   assert.doesNotMatch(css, /@container sheet \(max-width: 440px\)/);
+  assert.doesNotMatch(css,
+    /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\)\s*>\s*#sel-body\s*>\s*#sel-track-section\s*\{[^}]*display:\s*none/,
+    "compact stacked landscape must keep the thumbnail band; hiding the section dropped the map");
+  const menusJs = read("js/game/menus.js");
+  assert.match(css, /max-height:\s*min\(calc\(var\(--chip-h\) \* 2\.6\), 100%\)/);
+  assert.match(css, /max-width:\s*min\(38%, calc\(var\(--chip-h\) \* 3\.4\)\)/);
+  assert.match(menusJs, /cardInnerW \* \(compact \? 0\.38 : 0\.42\)/);
+  assert.match(menusJs, /chipH \* \(compact \? 3\.4 : 3\)/);
+  assert.match(menusJs, /slotH: chipH \* 2\.6/,
+    "every stacked SELECT map uses the readable thumbnail height — fitCanvas pins inline");
 });
 
 test("garage categories implement one roving tab system", () => {
@@ -464,4 +476,39 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
   assert.match(read("css/overlays.css"), /@container sheet \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
   assert.doesNotMatch(read("css/overlays.css"), /@media \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
   assert.match(menus, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/);
+});
+
+test("garage preview chips hug the sheet and season quali is a label", () => {
+  const garage = read("css/carsetup.css");
+  const game = read("js/game.js");
+  const spotify = read("js/game/spotify.js");
+  assert.match(garage, /#cs-stack \{[\s\S]*?left:\s*auto/);
+  assert.match(garage, /#cs-stack \{[\s\S]*?width:\s*max-content/);
+  assert.doesNotMatch(garage, /#cs-stack \{[\s\S]*?left:\s*calc\(var\(--safe-l\)/);
+  assert.match(game, /qEl\.hidden = qForced != null/);
+  assert.match(game, /QUALIFYING LAP" \+ \(qForced == null \? "" : " · " \+/);
+  const menus = read("css/menus.css");
+  assert.match(menus, /#rs-quali-section:has\(#rs-quali\[hidden\]\) \{\s*grid-column:\s*1 \/ -1;\s*grid-row:\s*1/);
+  assert.match(menus, /:is\(#rs-diff-section, #rs-caution-section, #rs-reliab-section\) \{\s*grid-row:\s*3/);
+  assert.match(menus, /#rs-body \{ overflow-y:\s*auto/);
+  assert.match(spotify, /if \(audio\) audio\.hidden = true/);
+  assert.match(spotify, /if \(audio\) audio\.hidden = false/);
+});
+
+test("title settings, pause standings, and career modes stay reachable", () => {
+  const game = read("js/game.js");
+  const nav = read("js/game/settings-nav.js");
+  const career = read("css/career.css");
+  assert.match(nav, /return \{ showCurrent: \(\) => show\(current, false\), show \}/,
+    "title Settings can land on MORE without a second click");
+  assert.match(game, /settingsNav\.show\("more", false\);\s*openSettings\(\)/,
+    "title Settings opens the MORE category (How to Play lives there)");
+  assert.match(game,
+    /pmStandings\.hidden = !\(isChampionship\(\) && SeasonCal\.hasProgress\(season\) && season\.round < SeasonCal\.rounds\(\)\)/,
+    "pause STANDINGS matches the title: hide once the season is finished");
+  assert.match(game, /\$\("pm-restart"\)\.disabled = !!\(netPlay\.active\(\) \|\| qualiNetDone\)/,
+    "RESTART looks dead in net / quali-net, same gate as its click handler");
+  assert.match(career,
+    /#cr-inner:not\(\[data-pair="on"\]\):has\(#cr-left \.cr-slot\):has\(#cr-right \.cr-slot\) > #cr-body \{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/,
+    "any stacked modes picker puts DRIVER and MY TEAM in one row");
 });

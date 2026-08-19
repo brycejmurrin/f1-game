@@ -193,6 +193,25 @@ than extremes); never re-state a knob at its default; respect the `"*"` matte-pa
 
 Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `light-presets.js`
 
+All 40 circuits now have a full `tod × weather` grid (800 condition keys plus `"*"`).
+
+Full-grid **mcp-probe `look-survey`** (chase + `park` + `snapCam`). Contact
+sheets land in [`docs/look-survey/`](look-survey/README.md) as each circuit
+hits all 20 looks (`python3 tools/look-survey-sheet.py --ready`). First visual
+pass was 4 looks × 40 circuits; the remaining 16 per track are still shooting.
+Cross-cutting from the frames:
+- Desert/street **nights** often flood/neon-hot with dusk-orange horizons —
+  lamps, bloom, exposure, city glow pulled so lights own a darker sky.
+- Weather-prone and many parkland **day|dry** looks had drifted toward
+  overcast — sun/key lifted so rain/overcast keep the murk.
+- Dawn on night-default tracks was often stadium-lit (`sunElev` too low);
+  sun lifted and floods dimmed.
+- Auto luma/`lightState` hints caught hot night p90 bloom and hot dusk on
+  the remaining day-default circuits; hand-reviewed the first wave of
+  night-defaults + weather greens + Monaco/Monza/Suzuka/Miami/Albert Park.
+`"*"` unchanged. Jeddah night-dry at frac 0.35 reads as dark neon canyon
+(intentional); Baku re-shot at frac 0.28.
+
 | Track | id | theme | default | status |
 |---|---|---|---|---|
 | Abu Dhabi | `abudhabi` | desert | night | ✅ |
@@ -219,14 +238,61 @@ Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `light-presets.js`
 | Suzuka | `suzuka` | green | day | ✅ |
 | Las Vegas | `vegas` | street_night | night | ✅ |
 | Zandvoort | `zandvoort` | green | day | ✅ |
+| Buenos Aires | `buenos_aires` | green | day | ✅ |
+| Catalunya | `catalunya` | modern | day | ✅ |
+| Estoril | `estoril` | modern | day | ✅ |
+| Hockenheim | `hockenheim` | green | day | ✅ |
+| Indianapolis | `indianapolis` | modern | day | ✅ |
+| Istanbul | `istanbul` | green | day | ✅ |
+| Jacarepaguá | `jacarepagua` | modern | day | ✅ |
+| Kyalami | `kyalami` | green | day | ✅ |
+| Magny-Cours | `magny_cours` | green | day | ✅ |
+| Mugello | `mugello` | green | day | ✅ |
+| Nürburgring | `nurburgring` | green | day | ✅ |
+| Paul Ricard | `paul_ricard` | modern | day | ✅ |
+| Portimão | `portimao` | green | day | ✅ |
+| Sepang | `sepang` | green | day | ✅ |
+| Sochi | `sochi` | modern | day | ✅ |
+| Watkins Glen | `watkins_glen` | green | day | ✅ |
 
 ---
+
+## Per-track proposal file
+
+Subagents never write `js/game/light-presets.js` (a partial bake wipes every
+other key). Each track writes one JSON file, then the parent merges:
+
+```
+artifacts/lighting/proposals/<id>.json
+node .claude/skills/bake-lighting/merge-proposals.mjs
+```
+
+```json
+{
+  "track": "sepang",
+  "theme": "green",
+  "nightDefault": false,
+  "notes": "equatorial haze; monsoon rain should read thick",
+  "combos": {
+    "day|dry": { "fogDensityMul": 1.35, "tint": 0.12, "shadowTintAmt": 0.08 },
+    "night|rain": { "lampLevel": 0.34, "ssrWetMul": 1.3, "fogDensityMul": 1.7 }
+  }
+}
+```
+
+`combos` keys are `tod|wx`. Values are sparse knob maps. Merge snaps against
+live `TUNE_DEFS` in `js/game/lighting.js` (ranges/steps there win over the
+table in this doc) and refuses unknown ids, out-of-range, or off-grid values.
+Do not re-state a knob at its `TUNE_DEFS.def`, and do not re-state a `"*"`
+baseline (`carGloss` 0.35, the shipped HDR grade) unless this condition must
+override it.
 
 ## Workflow
 
 1. One subagent per track proposes presets for all meaningful `tod × wx` combos (this doc = its brief; it also reads `js/circuits/<id>.js` for palette/locale).
-2. Proposals are baked into `js/game/light-presets.js` and the row flipped to ✅.
-3. Bump `index.html` `?v=` + `version.json`, verify no page errors, then push.
+2. Each subagent writes `artifacts/lighting/proposals/<id>.json` only.
+3. Parent merges with `merge-proposals.mjs`, flips the row to ✅, then
+   `node tools/bump-cache.mjs --apply` after the last js edit.
 
 ### Tuning one condition for the whole grid
 
