@@ -29,7 +29,8 @@ test("title overlay columns grow with --vwz instead of a pixel cap", () => {
   const responsive = read("css/responsive.css");
   assert.match(menus, /#menu-hero, #menu-primary, #menu-secondary \{ width: min\(calc\(78 \* var\(--vwz\)\), 100%\)/);
   assert.match(menus, /grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/);
-  assert.match(menus, /#menu-brand,\s*:where\(body\[data-density="compact"\]\) #menu-buttons \{[\s\S]*?42 \* var\(--vwz\)/);
+  assert.match(menus, /body\[data-shape="wide"\]\[data-density="compact"\]\) #menu-brand,[\s\S]*?42 \* var\(--vwz\)/,
+    "landscape compact title uses 42vwz and data-shape=wide");
   assert.doesNotMatch(menus, /min\(calc\(42 \* var\(--vwz\)\), 300px\)/);
   assert.match(responsive, /32 \* var\(--vwz\)/);
   assert.doesNotMatch(responsive, /clamp\(320px, calc\(24 \* var\(--vwz\)\), 420px\)/);

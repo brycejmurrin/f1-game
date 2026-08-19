@@ -269,7 +269,7 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
   assert.match(shape, /function classifyFlag\(el, w, cssVar, attr, hyst/);
   assert.match(shape, /classifyRail\(el, wOwn, hOwn\)/);
   assert.match(shape, /rowsAvail >= 3/);
-  assert.match(shape, /classifyFlag\(b, window\.innerWidth \/ scale, "--wide-at"/);
+  assert.match(shape, /classifyFlag\(b, wOwn, "--wide-at"/);
   assert.match(menus, /--wide-at:\s*620px/);
   assert.match(tuner, /--rail-at:\s*500px/);
   assert.match(tuner, /\[data-density="compact"\]\[data-rail="on"\]/);
@@ -495,13 +495,13 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
   assert.match(shape, /el\.dataset\.fit = state/);
   assert.match(components, /zoom:\s*var\(--sheet-scale, var\(--ui-scale\)\)/);
   assert.match(components, /\.sheet > :where\(\.sheet-head, \.sheet-body, \.sheet-foot\)\s*\{\s*min-width:\s*0/);
-  assert.match(garage, /#cs-inner\s*\{\s*--fit-at:\s*340px/);
-  assert.match(garage, /#cs-inner\s*\{\s*--fit-at:\s*240px/);
+  assert.match(garage, /#cs-inner[^{]*\{[^}]*--fit-at:\s*340px/);
+  assert.match(garage, /#cs-inner[^{]*\{[^}]*--fit-at:\s*240px/);
   assert.match(components, /#pmsettings-inner \{\s*--fit-at:\s*300px/);
   assert.match(components, /#pmsettings-inner \{\s*--fit-at:\s*220px/);
   assert.match(components, /#vsfriend-inner \{\s*--fit-at:\s*280px/);
   assert.match(read("css/career.css"), /#cr-inner \{[^}]*--fit-at:\s*300px/);
-  assert.match(read("css/career.css"), /#cr-inner \{[^}]*--fit-at:\s*220px/);
+  assert.match(read("css/career.css"), /#cr-inner[^{]*\{[^}]*--fit-at:\s*220px/);
   assert.match(menus, /#ss-inner \{[^}]*--fit-at:\s*300px/);
   assert.match(menus, /#ss-inner[^{]*\{[^}]*--fit-at:\s*220px/, "#ss-inner wide-shape fit-at 220px");
   assert.match(read("css/overlays.css"), /@container sheet \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
@@ -526,7 +526,7 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   assert.match(menus, /#rs-reliab,[\s\S]*?#rs-diff \{[\s\S]*?flex-wrap:\s*nowrap/);
   assert.match(menus, /#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) > :is\(#rs-diff-section, #rs-caution-section, #rs-reliab-section\) \{\s*grid-row:\s*3/);
   assert.match(menus, /#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) :is\(#rs-laps, #rs-weather\) \{\s*flex-wrap:\s*nowrap/);
-  assert.match(menus, /@media \(orientation: portrait\) \{[\s\S]*?#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) #rs-reliab-section \{ grid-row:\s*4/);
+  assert.match(menus, /\.sheet\[data-shape="tall"\] #rs-body:not\(:has\(#rs-quali\[hidden\]\)\) #rs-caution-section,[\s\S]*?grid-row:\s*4/);
   assert.match(read("css/components.css"), /#race-settings \.sheet \{ --compact-at:\s*760px/);
   assert.match(spotify, /if \(audio\) audio\.hidden = true/);
   assert.match(spotify, /if \(audio\) audio\.hidden = false/);

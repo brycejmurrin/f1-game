@@ -33,7 +33,7 @@
   #career { background: rgba(6, 6, 10, 0.92); }
 }
 #cr-inner { --sheet-w: 1020px; --fit-at: 300px; }
-@media (orientation: landscape) { #cr-inner { --fit-at: 220px; } }
+#cr-inner:not([data-shape="tall"]) { --fit-at: 220px; }
 
 /* ---------- head ---------- */
 #cr-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--gap); }
@@ -432,9 +432,11 @@
    <dialog> over #career, like the history sheet — both are read-only modals
    opened FROM the hub, and neither can be open at once. */
 #career-guide { --sheet-w: 560px; --fit-at: 300px; }
-@media (orientation: landscape) {
-  #career-offers, #career-history, #career-guide, #quali { --fit-at: 220px; }
-}
+/* Lower fit-at on wide-shaped sheets (zoom-corrected, not viewport orientation). */
+#career-offers .sheet:not([data-shape="tall"]),
+#career-history .sheet:not([data-shape="tall"]),
+#career-guide .sheet:not([data-shape="tall"]),
+#quali .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
 #cg-body { display: flex; flex-direction: column; gap: 4px; }
 /* Sections are a heading plus one card, and the heading owns the space above it
    — so the gap between a card and the NEXT heading is set once here rather than
