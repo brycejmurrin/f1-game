@@ -1,6 +1,7 @@
 # WebGPU (WGX) screenshot gallery
 
-Committed captures from `node tools/wgx-gallery.mjs --lite` on the software
+Committed captures from `node tools/wgx-shot.mjs --gallery --lite` (or
+`npm run wgx:gallery`) on the software WebGPU compositor path
 WebGPU compositor path (`apex26.gfxWgxAllowSoftware=1`). Every frame:
 `backend: webgpu`, `gpuErrors: 0`.
 
@@ -15,4 +16,4 @@ WebGPU compositor path (`apex26.gfxWgxAllowSoftware=1`). Every frame:
 | `bahrain.png` | Bahrain | orbit |
 
 Manifest: [`../wgx-gallery-manifest.json`](../wgx-gallery-manifest.json).
-Regenerate: `node tools/wgx-gallery.mjs --lite`.
+Regenerate: `npm run wgx:gallery` or `node tools/wgx-shot.mjs --gallery --lite`.

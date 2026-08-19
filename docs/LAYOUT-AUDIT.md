@@ -12,15 +12,20 @@ every other screenshot taken that day.
 The cure is not more screenshots. It is enumerating the matrix and measuring it.
 
 ```sh
-node tools/layout-audit.mjs                          # measure every cell
-node tools/layout-audit.mjs --shots                  # + a PNG per cell (slow)
+node tools/layout-audit.mjs --help
+node tools/layout-audit.mjs --list
+node tools/layout-audit.mjs                          # geometry matrix
+node tools/layout-audit.mjs --shots --dom            # + PNG / DOM per cell
 node tools/layout-audit.mjs --screens=select,garage --viewports=ios-*
 node tools/layout-audit.mjs --scale=100,130,150       # each viewport at each UI size
+node tools/layout-audit.mjs --gallery                 # fast PNG+DOM (no geometry probe)
+node tools/layout-audit.mjs --screen=settings         # one cell
+node tools/layout-audit.mjs --survey                  # title-path recipe (+ shots)
 ```
 
-Output lands in `artifacts/layout-audit/`: `audit.json` (the raw measurements,
-diffable build to build) and `index.html` (a screen x viewport grid, green /
-amber / red, hover a cell for the findings).
+Geometry output: `artifacts/layout-audit/{audit.json,index.html}`.
+Gallery output: `artifacts/layout-audit/gallery/{manifest.json,shots/,dom/}`.
+npm: `ui:audit` / `ui:gallery` / `ui:survey`.
 
 ---
 

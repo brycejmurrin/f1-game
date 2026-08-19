@@ -29,33 +29,61 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const DIR = path.join(ROOT, "artifacts/graphics/tuner-sweep");
 const W = 320, H = 180, SW = 160, SH = 90;
+export const FLOOR = 2.0;
 
 // Conditions chosen to exercise different consumers. Monza has night:false, so
 // a night probe needs a track whose def allows it.
-//
-// THE CONDITION LIST IS PART OF THE MEASUREMENT, NOT A SAMPLING CHOICE. A knob
-// whose consumer sits behind a weather branch this list never enters is scored
-// "inert" however long the sweep runs — a false negative that reads exactly
-// like a dead slider. The first three conditions here missed two real knobs
-// that way: js/game/atmosphere.js gates `overcastFogMul` behind
-// `raceWeather === "overcast"` and `fogWxMul` behind `raceWeather === "fog"`,
-// and neither weather was reachable from dry/wet alone. Both are knobs that
-// were separately found broken (missing from APPLY_RACE_IDS) — so the sweep
-// would have cleared them twice over.
-// Before adding a knob to a "dead" list, check that some condition here opens
-// its gate; `G.raceWeather` accepts dry | wet | rain | overcast | fog.
-const CONDS = {
-  "day-dry":      { track: "monaco",    tod: "day",   wx: "dry",      s: 0.16 },
+export const CONDS = {
+  "day-dry":      { track: "monaco",    tod: "day",   wx: "dry",      s: 0.45 },
   "night-dry":    { track: "vegas",     tod: "night", wx: "dry",      s: 0.25 },
   "dusk-wet":     { track: "singapore", tod: "dusk",  wx: "wet",      s: 0.30 },
-  "day-overcast": { track: "monaco",    tod: "day",   wx: "overcast", s: 0.16 },
-  "day-fog":      { track: "monaco",    tod: "day",   wx: "fog",      s: 0.16 },
+  "day-overcast": { track: "monaco",    tod: "day",   wx: "overcast", s: 0.45 },
+  "day-fog":      { track: "monaco",    tod: "day",   wx: "fog",      s: 0.45 },
 };
+
+/** @type {Record<string, (c: typeof CONDS[string]) => boolean>} */
+export const KNOB_OPEN = {
+  moonBright: (c) => c.tod !== "day",
+  nightAmbLift: (c) => c.tod === "night" || c.tod === "dusk",
+  bounceK: (c) => c.tod === "night" || c.tod === "dusk",
+  overcastFogMul: (c) => c.wx === "overcast",
+  fogWxMul: (c) => c.wx === "fog",
+};
+
+/** Knobs that need a real GPU PCSS path — SwiftShader GL2 has no R16F blocker FBO. */
+export const KNOB_ENV_GATED = new Set(["pcssPen"]);
+
+export function pushExtreme(def, condKey) {
+  const { id, min, max, def: d } = def;
+  if (id === "sunElev" && condKey.startsWith("day")) return min;
+  return (Math.abs(max - d) >= Math.abs(d - min)) ? max : min;
+}
+
+export function knobGateReason(id, condKey, cond, { softwareGl2 = true } = {}) {
+  const open = KNOB_OPEN[id];
+  if (open && !open(cond)) {
+    if (id === "moonBright" || id === "nightAmbLift") return "night-only";
+    if (id === "bounceK") return "lamps-off";
+    if (id === "overcastFogMul") return "needs-overcast";
+    if (id === "fogWxMul") return "needs-fog";
+    return "condition-gated";
+  }
+  if (softwareGl2 && KNOB_ENV_GATED.has(id)) return "software-gl2-no-pcss";
+  return null;
+}
+
+export function verdict(r) {
+  if (!r) return "-";
+  if (r.gated) return "gated";
+  if (r.noise > FLOOR && r.signal < r.noise * 3) return "noisy";
+  return r.signal > Math.max(FLOOR, r.noise * 3) ? "live" : "inert";
+}
 
 const arg = (k, d) => {
   const hit = process.argv.find((a) => a.startsWith(`--${k}=`));
@@ -78,33 +106,28 @@ function report() {
   for (const c of conds) for (const [id, r] of Object.entries(loadShard(c))) (all[id] ||= {})[c] = r;
   const ids = Object.keys(all);
   if (!ids.length) { console.log("no shards yet — run a --cond= sweep first"); return; }
-  // NOISE FLOOR, MEASURED (tools/lighting-tuner-sweep.mjs noise probe, monaco/day, frozen
-  // scene, five consecutive captures with nothing changed):
-  //   no re-park   0.19  0.29  1.74  0.41   <- the policy this tool uses
-  //   re-park      0.45 21.30 21.31 21.28   <- park() teleports the AI field
-  //   park+settle  1.72  1.78  1.37  0.65
-  // So a quiet frame still moves up to ~1.7 on its own. FLOOR is set above that
-  // rather than at a guessed 0.35, which would have scored a noise spike "live".
-  const FLOOR = 2.0;
-  const verdict = (r) => {
-    if (!r) return "-";
-    if (r.noise > FLOOR && r.signal < r.noise * 3) return "noisy";
-    return r.signal > Math.max(FLOOR, r.noise * 3) ? "live" : "inert";
-  };
-  const dead = [], noisy = [];
+
+  const dead = [], noisy = [], gatedOnly = [];
   for (const id of ids) {
-    const vs = conds.map((c) => verdict(all[id][c])).filter((v) => v !== "-");
+    const byCond = all[id];
+    const vs = conds.map((c) => verdict(byCond[c])).filter((v) => v !== "-");
     if (!vs.length) continue;
-    if (vs.every((v) => v === "inert")) dead.push(id);
-    else if (vs.every((v) => v === "noisy" || v === "inert")) noisy.push(id);
+    const measurable = vs.filter((v) => v !== "gated");
+    if (!measurable.length) { gatedOnly.push(id); continue; }
+    if (measurable.every((v) => v === "inert")) dead.push(id);
+    else if (measurable.every((v) => v === "noisy" || v === "inert")) noisy.push(id);
   }
   console.log(`knobs measured: ${ids.length}   conditions present: ${conds.filter((c) => Object.keys(loadShard(c)).length).join(", ")}`);
-  console.log(`\nINERT IN EVERY MEASURED CONDITION (${dead.length}) — candidates for a real defect:`);
+  console.log(`\nINERT IN EVERY MEASURED (non-gated) CONDITION (${dead.length}) — candidates for a real defect:`);
   for (const id of dead.sort()) {
     console.log(`  ${id.padEnd(20)} ` + conds.map((c) => {
-      const r = all[id][c]; return r ? `${c} sig ${r.signal.toFixed(2)}/noise ${r.noise.toFixed(2)}` : `${c} —`;
+      const r = all[id][c];
+      if (!r) return `${c} —`;
+      if (r.gated) return `${c} gated(${r.gated})`;
+      return `${c} sig ${r.signal.toFixed(2)}/noise ${r.noise.toFixed(2)}`;
     }).join("   "));
   }
+  console.log(`\nCONDITION- OR ENV-GATED ONLY (${gatedOnly.length}): ${gatedOnly.sort().join(", ") || "(none)"}`);
   console.log(`\nTOO NOISY TO JUDGE (${noisy.length}): ${noisy.sort().join(", ") || "(none)"}`);
 }
 
@@ -141,12 +164,15 @@ async function sweep() {
       for (let i = 0; i < 30; i++) await new Promise((r) => requestAnimationFrame(r));
     }, C);
 
-    // DO NOT re-park per capture. park() sets G.frozen (it exists to hold the
-    // scene still for exactly this) but it ALSO shoves every AI car 600 m
-    // backwards on each call — so calling it per shot teleports 21 cars between
-    // captures and manufactures the very noise it looks like it should remove.
-    // Measured: 22.3 mean-abs-diff between two back-to-back baselines with a
-    // re-park, against a frozen scene without one. Park once, at setup.
+    const prepKnobCam = async (id) => {
+      await page.evaluate(({ s, tod, knob }) => {
+        if (knob === "sunShaftMul" && (tod === "day" || tod === "dusk")) {
+          window.__apex.orbit(s, 35, 18, 50);
+          window.__apex.snapCam();
+        }
+      }, { s: C.s, tod: C.tod, knob: id });
+    };
+
     const shot = () => page.evaluate(async ({ SW, SH }) => {
       window.__apex.snapCam();
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -159,7 +185,14 @@ async function sweep() {
 
     for (let i = 0; i < slice.length; i++) {
       const d = slice[i];
-      const v = (Math.abs(d.max - d.def) >= Math.abs(d.def - d.min)) ? d.max : d.min;
+      const gate = knobGateReason(d.id, cond, C);
+      if (gate) {
+        done[d.id] = { group: d.group, def: d.def, gated: gate, signal: 0, noise: 0 };
+        writeFileSync(shardPath(cond), JSON.stringify(done, null, 1));
+        continue;
+      }
+      const v = pushExtreme(d, cond);
+      await prepKnobCam(d.id);
       const A = await shot();
       await page.evaluate(({ id, v }) => window.__apex.lightTune({ [id]: v }), { id: d.id, v });
       const B = await shot();
@@ -167,15 +200,27 @@ async function sweep() {
       const A2 = await shot();
       done[d.id] = { group: d.group, def: d.def, pushedTo: v,
                      signal: +mad(A, B).toFixed(4), noise: +mad(A, A2).toFixed(4) };
-      writeFileSync(shardPath(cond), JSON.stringify(done, null, 1));   // flush per knob
+      writeFileSync(shardPath(cond), JSON.stringify(done, null, 1));
       if (i % 10 === 0) console.error(`  ${i}/${slice.length} ${d.id} sig ${done[d.id].signal} noise ${done[d.id].noise}`);
     }
     console.error(`${cond}: done, ${Object.keys(done).length} knobs recorded`);
   } finally { await shutdown(); }
 }
 
-if (has("list")) {
-  console.log("conditions:", Object.keys(CONDS).join(", "));
-  for (const c of Object.keys(CONDS)) console.log(`  ${c.padEnd(10)} recorded: ${Object.keys(loadShard(c)).length}`);
-} else if (has("report")) report();
-else await sweep();
+function invokedAsCli() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return fileURLToPath(import.meta.url) === path.resolve(entry);
+  } catch {
+    return false;
+  }
+}
+
+if (invokedAsCli()) {
+  if (has("list")) {
+    console.log("conditions:", Object.keys(CONDS).join(", "));
+    for (const c of Object.keys(CONDS)) console.log(`  ${c.padEnd(10)} recorded: ${Object.keys(loadShard(c)).length}`);
+  } else if (has("report")) report();
+  else await sweep();
+}

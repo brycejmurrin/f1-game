@@ -3006,7 +3006,7 @@ const G = {
   loadCarModel, loadTrack, persistLightTune, copyLightTune, restoreLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   setCamMode: (...a) => setCamMode(...a),   // const from CamModes.create(G) below — defer
-  rescuePlayer, setLightTune, setWeatherLive, snapGameCam,
+  rescuePlayer, setLightTune, setWeatherLive, setTimeOfDay, weather, snapGameCam,
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   wireId,                               // stable cross-peer car identity
   setScale: (...a) => setScale(...a),   // const from UiScale.create(G) below — defer
@@ -3195,6 +3195,22 @@ function setWeatherLive(w) {
   // silently kept the previous weather (fog looked like a clear day).
   if (track) applyRaceSettings();
   return raceWeather;
+}
+
+// Live time-of-day + weather for player UI (lighting tuner) and __apex. The
+// agent surface is absent on GitHub Pages, so anything player-facing must go
+// through G — not window.__apex.
+function setTimeOfDay(tod) {
+  if (tod === undefined) return raceTimeOfDay;
+  const valid = ["default", "dawn", "day", "dusk", "night"];
+  raceTimeOfDay = valid.indexOf(tod) >= 0 ? tod : "default";
+  loadTrack(trackIdx);
+  applyRaceSettings();
+  return raceTimeOfDay;
+}
+function weather(w) {
+  if (w === undefined) return raceWeather;
+  return setWeatherLive(w);
 }
 
 // ── Dynamic weather progression (weather arc) ────────────────────────────────

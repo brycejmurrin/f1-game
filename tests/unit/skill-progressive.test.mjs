@@ -372,16 +372,17 @@ test("css-play names the css-play CLI and Playwright DOM commands", () => {
   assert.match(text, /hot-swap|hot.swap/i);
 });
 
-test("survey-ui-matrix names the ui-survey layout-audit recipe", () => {
+test("survey-ui-matrix names the layout-audit CLI recipes", () => {
   const text = fs.readFileSync(path.join(SKILLS, "survey-ui-matrix/SKILL.md"), "utf8");
-  assert.match(text, /ui-survey\.mjs/);
+  assert.match(text, /layout-audit\.mjs/);
+  assert.match(text, /--gallery|--survey/);
   assert.match(text, /npm run ui:survey/);
 });
 
-test("webgpu-debug names wgx-gallery importing runWgxShot", () => {
+test("webgpu-debug names wgx-shot --gallery for multi-track frames", () => {
   const text = fs.readFileSync(path.join(SKILLS, "webgpu-debug/SKILL.md"), "utf8");
-  assert.match(text, /wgx-gallery\.mjs/);
-  assert.match(text, /runWgxShot/);
+  assert.match(text, /wgx-shot\.mjs --gallery/);
+  assert.match(text, /wgx:gallery/);
 });
 
 test("skills README uses content-hash cache busting, not ?v=N", () => {
