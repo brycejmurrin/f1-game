@@ -1,17 +1,31 @@
 /**
  * slider-effect --live — A/B (or N-shot ramp) LIGHTING TUNER knobs and
- * visually filter the pixels that moved. Chase + park once per condition
- * (never orbit). Restore the pre-push live value, never TUNE_DEFS.def.
+ * visually filter the pixels that moved.
  *
- * --shots N   linspace from→to (default 2). Without --from/--to, N>2
- *             samples the full TUNE_DEFS min→max.
+ * Uses Playwright (harness.mjs). Do NOT run while cdmcp-cli.py look-survey
+ * is active — both own a Chromium process. Check: pgrep -a chromium
+ *
+ * Key design choices vs Chrome MCP / look-survey:
+ *  - Owns its own browser: no external Chrome session required.
+ *  - Camera is LOCKED between A and B with A.view({eye,target}) so a
+ *    park() drift cannot shift the viewpoint between shots.
+ *  - renderClock is pinned to 0 so sky/cloud animation doesn't move.
+ *  - Per-knob RECIPE_BY_ID table picks the right condition (night for lamps,
+ *    fog for fogWxMul, sky-camera for stars, …) so --all is a real sweep.
+ *  - Bucket grouping: knobs sharing the same condition park ONCE together.
+ *
+ * Timing guidance:
+ *  - per-frame knobs: ~20 s each (2 rAFs + settle steps)
+ *  - build-only (rebuild:true): ~30 s each (loadTrack rebuilds lamp geometry)
+ *  - --shots N>2: N × the per-frame cost; use for full-range ramps
+ *
+ * --shots N   linspace from→to (default 2 = A/B). Use 5 to see the ramp.
+ *             Without --from/--to, N>2 samples the full TUNE_DEFS min→max.
  * --levels v,v,v   explicit values (wins over --shots / --from / --to).
  *
- * One global recipe false-deads many knobs (docs/LIGHTING-TUNER-SLIDERS.md).
- * recipeForKnob() picks track|tod|wx + camera + companions per id so
- * `--live --all` is a real sweep, not 183 copies of Bahrain night dry.
- *
- * Do not run while Chrome DevTools MCP is driving the look-survey.
+ * RECIPE_BY_ID overrides inferred recipes for knobs that a single global
+ * Bahrain-night shot would false-dead (glareStr, fogWxMul, starBright, …).
+ * Full reference: docs/LIGHTING-TUNER-SLIDERS.md
  */
 import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -98,6 +112,11 @@ export const RECIPE_BY_ID = {
   moonDiscSize: { weather: "dry", tod: "night", track: "bahrain", camera: "sky" },
   moonHalo: { weather: "dry", tod: "night", track: "bahrain", camera: "sky" },
   lampShadow: { weather: "dry", tod: "night", track: "bahrain" },
+  // glareStr is a near-field billboard (fades beyond 170 m). The full range
+  // is 0→0.3 (max=0.3 in TUNE_DEFS). Shoot from 0 to max so the halo
+  // brightens visibly; the default 0.12→0.3 only moves sparse lamp pixels.
+  glareStr: { weather: "dry", tod: "night", track: "bahrain", from: 0, to: 0.3,
+    minDelta: 4, why: "near-field halo; full range 0→max needed to see change" },
   perChunkLights: { weather: "dry", tod: "night", track: "singapore", frac: 0.55, verdict: "inert" },
   roadChunkLamps: { weather: "dry", tod: "night", track: "singapore", frac: 0.55, verdict: "inert" },
   matTexMix: { weather: "dry", tod: "day", track: "monaco", verdict: "inert" },

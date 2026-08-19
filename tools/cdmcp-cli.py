@@ -754,17 +754,35 @@ def survey_track_looks(
 def cmd_look_survey(argv: list[str]) -> None:
     """One Chrome boot, several tod×weather lighting looks, chase+park+snapCam.
 
-    mcp-probe path for the per-track lighting retune: take_screenshot via
-    chrome-devtools MCP (not Playwright). Parks to about:blank after.
-    loadTrack rebuilds only on day ↔ dawn/dusk/night; weather-only looks skip
-    the 1.6 s poll. Combos are grouped so each track rebuilds at most once.
-    HUD off.
+    Uses chrome-devtools MCP (take_screenshot) — NOT Playwright. This is the
+    right tool for a full per-circuit lighting matrix (4 tod × 5 weather = 20
+    conditions) because it connects to a persistent Chrome session you can
+    also inspect interactively.  slider-effect --live is better for A/B-ing a
+    single LIGHTING TUNER knob because it owns its browser, locks the camera
+    between shots, and produces pixel-diff outputs.
 
-    Example:
+    Do NOT run look-survey while slider-effect --live is active — both open
+    Chromium. Check first: pgrep -a chromium | head -3
+
+    Outputs:
+      artifacts/lighting/shots/<track>/<tod>-<wx>.png  — one per combo
+      artifacts/lighting/shots/<track>/state.json       — lightState snapshot
+      docs/look-survey/<track>_grid.png                 — stitched sheet
+        (run: python3 tools/look-survey-sheet.py <track>)
+
+    loadTrack rebuilds only on day ↔ dawn/dusk/night flip; weather-only combos
+    skip the rebuild poll. Combos are sorted so each track rebuilds at most once.
+
+    Examples:
+      # All 20 conditions for Monaco
+      python3 tools/cdmcp-cli.py look-survey monaco --frac 0.45
+      # Specific subset
       python3 tools/cdmcp-cli.py look-survey bahrain --frac 0.12 \\
-        --combos dawn|dry,day|dry,night|dry,night|rain \\
-        --out artifacts/lighting/shots/bahrain
+        --combos dawn|dry,day|dry,night|dry,night|rain
+      # Batch plan (shoots only missing PNGs)
       python3 tools/cdmcp-cli.py look-survey --plan artifacts/lighting/survey-plan.json
+      # Stitch the contact sheet after shooting
+      python3 tools/look-survey-sheet.py monaco
     """
     p = argparse.ArgumentParser(prog="look-survey")
     p.add_argument("track", nargs="?", default=None)

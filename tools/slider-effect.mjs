@@ -69,31 +69,39 @@ Filters (no browser):
                  | sparse-pixels
   --json         JSON on stdout (knobs + counts)
 
-Visual A/B (Playwright via tools/harness.mjs — not Chrome MCP):
-  --live ID      boot chase+park, set ID across --shots / --levels, write
+Visual A/B (Playwright via tools/harness.mjs — NOT Chrome MCP):
+  --live ID      boot Playwright, chase+park at the knob's recipe, write
                  v0.png… / a.png / b.png / filter.png / heat.png / sheet.png
-                 (and ramp.png when N>2). filter.png keeps B only where
-                 pixels moved; the rest is crushed so you can see what
-                 the slider changed (lamp pools, fog, …)
-  --live --all   every TUNE_DEFS knob; park ONCE per track|tod|wx|camera
+                 (ramp.png when N>2). filter.png shows ONLY the changed pixels
+                 (B value), everything else crushed to black.
+  --live --all   every TUNE_DEFS knob; ONE park per shared condition bucket
   --live --group NAME   same, but only that TUNE_DEFS group
   --live --ids a,b,c    same batch, but only those ids
-  --shots N      how many frames (default 2). N>2 without --from/--to
-                 linspaces TUNE_DEFS min→max; with ends, linspaces those
+  --shots N      frames to capture (default 2 = A/B only). Use --shots 5 to
+                 see the full min→max ramp and discover mid-range behaviour.
+                 N>2 without --from/--to samples full TUNE_DEFS min→max;
+                 with ends, linspaces those ends.
   --levels v,v,v explicit slider values (wins over --shots / --from / --to)
-  --from N --to N   slider values (default 2-shot: shipped def → farther extreme)
-  --track --tod --weather --frac   capture recipe (defaults from the knob's gates
-                 plus the documented specials: fogWxMul→fog, moonShadow→night+wet,
+  --from N --to N   slider endpoints (2-shot default: shipped def → extreme)
+  --track --tod --weather --frac   override the capture recipe (auto-selected
+                 from the knob's gates + RECIPE_BY_ID in slider-effect-live.mjs:
+                 glareStr→night frac=0.12 full-range, fogWxMul→monaco fog day,
                  renderDistMul→spa day 0.50, starBright→bahrain sky, …)
   --out DIR      default artifacts/lighting/slider-effect/<track>-<tod>-<wx>-<id>
-  --dry-run      print the recipe(s); do not launch a browser
+  --dry-run      print the recipe(s) without launching a browser
   --filter --a PNG --b PNG --out DIR
-                 visual filter only, no game (two existing frames)
+                 run the visual filter on two existing PNGs, no game needed
 
-  Restore the PRE-PUSH live value (never TUNE_DEFS.def). Do not run --live
-  while a Chrome look-survey holds the box. One global Bahrain-night recipe
-  false-deads weather / far-clip / traffic / star knobs — --all uses per-id
-  recipes (docs/LIGHTING-TUNER-SLIDERS.md).
+  Timing: per-frame knobs ~20 s each; build-only (rebuild:true) ~30 s each.
+  Batching (--ids / --group / --all) amortises the setup: knobs that share a
+  condition bucket (same track/tod/weather/frac/camera) park ONCE together.
+
+  Do NOT run --live while cdmcp-cli.py look-survey is running — both launch
+  Playwright/Chrome. Check first: pgrep -a chromium | head -3
+
+  Restore the PRE-PUSH live value on exit (never TUNE_DEFS.def). One global
+  Bahrain-night recipe false-deads weather/fog/star/traffic knobs — --all
+  uses per-id RECIPE_BY_ID entries. Full reference: docs/LIGHTING-TUNER-SLIDERS.md
 `;
 
 const APPLY_ONLY_FILES = ["js/game/atmosphere.js"];
