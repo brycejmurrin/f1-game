@@ -79,7 +79,8 @@ window.LightPresets = {
     "fogTint": 0.18,
     "lampLevel": 0.12,
     "floodEmitMul": 0.4,
-    "bloomMul": 0.9
+    "bloomMul": 0.9,
+    "exposureMul": 0.82
   },
   "abudhabi|day|dry": {
     "keyMul": 1.25,
@@ -7009,7 +7010,8 @@ window.LightPresets = {
     "keyMul": 0.88,
     "cloudCover": 0.2,
     "fogDensityMul": 1.15,
-    "saturation": 0.92
+    "saturation": 0.92,
+    "exposureMul": 0.82
   },
   "silverstone|dusk|dry": {
     "sunTemp": -0.4,
