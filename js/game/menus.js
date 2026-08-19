@@ -586,20 +586,27 @@ function updateTrackPreview() {
   const sheet = card && card.closest(".sheet");
   const stacked = !!(sheet && sheet.dataset.pair !== "on");
   const compact = !!(sheet && sheet.dataset.density === "compact");
+  /* Use the sheet's measured shape (set by sheetshape.js in the sheet's own
+     zoom-corrected units) instead of matchMedia("orientation: portrait") which
+     reads the viewport and is the wrong proxy at non-100% zoom. */
+  const tallSheet = !!(sheet && sheet.dataset.shape === "tall");
   const cardInnerW = card ? card.clientWidth - padX : 260;
   const chipH = sheet ? px(getComputedStyle(sheet).getPropertyValue("--chip-h")) || 40 : 40;
-  /* In every stacked layout CSS makes the preview a thumbnail band beside its
-     caption. planPreview's 120px floor belongs to a full preview column, so use
-     the band's own token-based caps here and preserve the circuit aspect inside
-     them. One-and-a-half chip rows stays useful at 100% without overrunning the
-     band when a late density measurement switches a 200% sheet to compact. */
-  const plan = stacked
+  /* In every WIDE stacked layout CSS makes the preview a thumbnail band beside
+     its caption. planPreview's 120px floor belongs to a full preview column, so
+     use the band's own token-based caps here and preserve the circuit aspect
+     inside them. One-and-a-half chip rows stays useful at 100% without
+     overrunning the band when a late density measurement switches a 200% sheet
+     to compact.
+     On a TALL sheet the CSS overrides switch to a column layout with no height
+     cap, so we use planPreview to fill the available section height. */
+  const plan = (stacked && !tallSheet)
     ? {
       shape: "beside",
       // Match the compact CSS cap instead of pinning a 1.5-row canvas over it.
       // fitCanvas pins max-height inline, so a disagreement here makes JS win.
-      slotW: Math.min(cardInnerW * (compact ? 0.38 : 0.42), chipH * (compact ? 3.4 : 3)),
-      slotH: chipH * 2.6
+      slotW: Math.min(cardInnerW * (compact ? 0.48 : 0.42), chipH * (compact ? 5.2 : 3.5)),
+      slotH: chipH * 3.5
     }
     : TrackMaps.planPreview({
       aspect: a,

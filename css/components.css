@@ -258,6 +258,13 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   font-size: clamp(14px, calc(3.6 * var(--vhz)), 20px);
   padding: clamp(7px, 1.8vh, 14px) 16px;
 }
+/* A lone BACK / DONE / CLOSE is not a banner. Pairs (BACK + RACE!) still
+   share the foot 1:1 via flex-grow. */
+.sheet-foot .bigbtn:only-child {
+  flex: 0 1 auto;
+  width: auto;
+  margin-inline: auto;
+}
 /* ---------- pane-pair: the LIST/DETAIL primitive ----------
    #select, #carsetup and #career are all the same canonical layout — Material
    calls it list-detail, and every adaptive UI framework ships one — and this
@@ -289,11 +296,14 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    sheet; it reads `--pair-at` and writes `data-pair`. Attributes also carry
    specificity, which container queries do not — the tie that cost this project
    two debugging sessions.
-   Screens tune it with four properties and nothing else:
-     --pair-at     the sheet width at which the pair turns on (default 620px)
-     --pair-split  the SIDE column's track      (default minmax(0, 1fr))
-     --pair-main   the MAIN column's track      (default minmax(0, 1fr))
-     --pair-gap    the gutter between the panes (default 0.8 * --pad)
+   Screens tune it with five properties and nothing else:
+     --pair-at       the sheet width at which the pair turns on (default 620px)
+     --pair-compact  off = force stack when data-density=compact (default off)
+                     wide = pair when compact+horizontal, stack when compact+tall
+                     empty/on = keep reading --pair-at (safe default)
+     --pair-split    the SIDE column's track      (default minmax(0, 1fr))
+     --pair-main     the MAIN column's track      (default minmax(0, 1fr))
+     --pair-gap      the gutter between the panes (default 0.8 * --pad)
 
    THE SLOTS ARE NAMED BY POSITION, NOT BY ROLE. `.pair-side` is the narrow
    column with the action bar under it; `.pair-main` is the wide one that runs to
@@ -322,6 +332,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    rather than `[data-pair="off"]`, so the stack is also what an unmeasured sheet
    gets in the first frame, or if the script never loads. */
 .pane-pair {
+  --pair-compact: off;
   grid-template-columns: var(--pair-split, minmax(0, 1fr)) var(--pair-main, minmax(0, 1fr));
   grid-template-rows: auto minmax(0, 1fr) min-content;
   column-gap: var(--pair-gap, calc(var(--pad) * 0.8));
@@ -369,23 +380,35 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   scrollbar-gutter: stable;
   touch-action: pan-y;
 }
-/* .sf-t / .sf-b are set by js/game/scrollfade.js on exactly the panes that
-   currently have content hidden above / below. No class = no mask, so a pane
+/* .sf-t / .sf-b / .sf-l / .sf-r are set by js/game/scrollfade.js on panes
+   that still have content hidden on that edge. No class = no mask, so a pane
    whose content fits is never faded: the fade always means something. */
-.sf-t, .sf-b {
-  --sfade-t: 0px; --sfade-b: 0px;
-  mask-image: linear-gradient(to bottom,
-    transparent 0, #000 var(--sfade-t),
-    #000 calc(100% - var(--sfade-b)), transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom,
-    transparent 0, #000 var(--sfade-t),
-    #000 calc(100% - var(--sfade-b)), transparent 100%);
+.sf-t, .sf-b, .sf-l, .sf-r {
+  --sfade-t: 0px; --sfade-b: 0px; --sfade-l: 0px; --sfade-r: 0px;
+  mask-image:
+    linear-gradient(to bottom,
+      transparent 0, #000 var(--sfade-t),
+      #000 calc(100% - var(--sfade-b)), transparent 100%),
+    linear-gradient(to right,
+      transparent 0, #000 var(--sfade-l),
+      #000 calc(100% - var(--sfade-r)), transparent 100%);
+  mask-composite: intersect;
+  -webkit-mask-image:
+    linear-gradient(to bottom,
+      transparent 0, #000 var(--sfade-t),
+      #000 calc(100% - var(--sfade-b)), transparent 100%),
+    linear-gradient(to right,
+      transparent 0, #000 var(--sfade-l),
+      #000 calc(100% - var(--sfade-r)), transparent 100%);
+  -webkit-mask-composite: source-in;
 }
 /* 26px, not 20. These lists are rows of ~40px, and a fade shorter than half a
    row leaves the last one looking cut off rather than continuing — which is
    exactly how the standings and schedule tabs read. */
 .sf-t { --sfade-t: 26px; }
 .sf-b { --sfade-b: 26px; }
+.sf-l { --sfade-l: 26px; }
+.sf-r { --sfade-r: 26px; }
 
 /* ---------- scroll POSITION INDICATOR ----------
    A scrollbar thumb down the right edge, like a web page has. The fade above
@@ -566,6 +589,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   min-height: var(--tap);
   padding: 14px 20px;
   font-size: var(--fs-6);
+  color: #fff;
   background: var(--grad-primary);
   border: none;
   border-radius: var(--r-md);
@@ -654,24 +678,22 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    sheet plus the top lip, which is what makes a control look pressable on a
    dark background (an unfilled border alone reads as a disabled field). */
 .bigbtn.alt {
-  background: var(--surf-3); color: rgba(242,242,245,0.82);
-  border: 1px solid rgba(255,255,255,0.10);
-  /* same physical language as the primary, one stop quieter */
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.10),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
-    0 1px 2px rgba(0, 0, 0, 0.4);
+  background: var(--plate); color: var(--dim);
+  border: 1px solid var(--plate-line);
+  /* Flat plate, same as the settings tab headers — not a lighter raised slab. */
+  box-shadow: none;
 }
 @media (hover: hover) {
   .bigbtn.alt:hover {
-    background: rgba(255, 255, 255, 0.16);
-    border-color: color-mix(in oklab, var(--red) 32%, rgba(255,255,255,0.10));
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 2px 8px color-mix(in oklab, var(--red) 22%, transparent);
+    background: var(--plate-hover);
+    color: var(--text);
+    border-color: var(--plate-line);
+    box-shadow: none;
   }
 }
 .bigbtn.alt:active {
-  background: rgba(255, 255, 255, 0.2);
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.38);
+  background: var(--plate-press);
+  box-shadow: none;
 }
 
 /* Tap targets. Listed by control class rather than a blanket `.panel button`
@@ -704,6 +726,12 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 #advanced    { --sheet-w: 820px; --fit-at: 300px; }
 #audioset    { --sheet-w: 460px; --fit-at: 300px; }
 #race-settings { --sheet-w: 560px; --fit-at: 300px; }
+/* 760, not the 380 default. Seven chip rows at normal density overflow a
+   720-local portrait sheet and a 473-local 860×560 @115% window — REAL
+   sat under BACK/RACE (measured). Compact chrome + the 3-col pin need
+   to fire on those short-in-own-units sheets. inherits:false, so the
+   sheet node, not the dialog. */
+#race-settings .sheet { --compact-at: 760px; }
 @media (orientation: landscape) {
   #results, #standings, #race-settings, #audioset, #advanced, #customize { --fit-at: 220px; }
   #pausemenu { --fit-at: 180px; }
@@ -894,10 +922,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   min-height: var(--tap);
   margin: 0;
   padding: calc(var(--gap) * 0.6) calc(var(--gap) * 0.67);
-  border: 1px solid rgba(255,255,255,.16);
+  border: 1px solid var(--plate-line);
   border-radius: var(--r-sm);
-  background: rgba(255,255,255,.045);
-  color: var(--muted);
+  background: var(--plate);
+  color: var(--dim);
   font-size: clamp(var(--fs-1), calc(1.7 * var(--vwz)), var(--fs-3));
   font-weight: 750;
   letter-spacing: .06em;
@@ -907,8 +935,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pm-category-tabs > button[aria-selected="true"] {
   color: var(--text);
   border-color: var(--red);
-  background: color-mix(in oklab, var(--red) 18%, transparent);
-  box-shadow: inset 3px 0 0 var(--red), 0 0 12px color-mix(in oklab, var(--red) 28%, transparent);
+  background: var(--plate-on);
+  box-shadow: var(--plate-on-glow);
 }
 /* At very high UI zoom a phone sheet can be under 250 LOCAL px even though it
    fills the physical viewport. Keep the aria-label as the accessible name,
@@ -969,33 +997,33 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   /* Grows with the viewport, never under the micro floor inside sheet zoom. */
   font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
   letter-spacing: 0.04em;
-  background: color-mix(in oklab, #fff 6.5%, transparent);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: var(--plate);
+  border-color: var(--plate-line);
 }
 .pm-group .tune-row {
-  position: relative;
   margin: 0;
-  height: var(--tap);
   min-height: var(--tap);
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  gap: calc(var(--gap) * 0.25);
   box-sizing: border-box;
 }
 .pm-group .tune-row .tune-label {
-  position: absolute;
-  left: 0; right: 0; top: 0;
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
   margin: 0;
   /* --fs-2 (15px): under .sheet zoom 0.9 paints ≥13.5px (visual floor 12). */
   font-size: var(--fs-2);
   line-height: 1.2;
-  pointer-events: none;
-  z-index: 1;
 }
 .pm-group .tune-row input[type="range"] {
   width: 100%;
-  height: var(--tap);
-  min-height: var(--tap);
+  height: var(--tap-min);
+  min-height: var(--tap-min);
   margin: 0;
   box-sizing: border-box;
 }
@@ -1028,8 +1056,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font: inherit;
   font-size: var(--fs-4);
   color: var(--text);
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
   border-radius: var(--r-sm);
   padding: 0 calc(var(--gap) * 0.75);
 }
@@ -1042,8 +1070,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   color: var(--dim);
 }
 .pm-doors {
-  display: flex;
-  flex-direction: column;
+  /* Same primitive as chips / title rooms: wrap into a grid when the
+     sheet is wide enough, stack when it is not. */
+  --balance-basis: 12rem;
+  --balance-min: 9rem;
   gap: calc(var(--gap) * 0.5);
 }
 .pm-doors button {
@@ -1072,8 +1102,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   #pmsettings-inner .pm-groups > [role="tabpanel"] button {
     font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
     padding-inline: calc(var(--pad) * 0.75);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    white-space: normal; overflow: visible; text-overflow: clip;
+    height: auto;
     min-height: var(--tap);
+    line-height: 1.15;
   }
 }
 #advanced-inner .preset-btn,

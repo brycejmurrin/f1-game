@@ -40,11 +40,10 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       skew: Math.abs(bufferAspect - boxAspect) / Math.max(bufferAspect, boxAspect, 0.001),
     };
   });
-  // 852×393 is under #sel-inner --compact-at 480, so density stacks the
-  // catalogue (pair-at raised to 2000) even at UI SIZE 100%. The pair-on map
-  // aspect check belongs to a roomy sheet, not this viewport.
+  // 852×393 is under #sel-inner --compact-at 480, but the sheet is wide, so
+  // --pair-compact: wide keeps the catalogue in the right column.
   expect(initialSelect.density, JSON.stringify(initialSelect)).toBe("compact");
-  expect(initialSelect.pair).toBe("off");
+  expect(initialSelect.pair).toBe("on");
   // Match a landscape iPhone's notched safe area at a larger user-selected UI
   // size. That reproducibly enters the compact single-column layout; at the
   // default size this viewport correctly retains the roomy paired catalogue.
@@ -58,7 +57,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   });
   await page.waitForFunction(() => {
     const sel = document.getElementById("sel-inner");
-    return sel?.dataset.pair === "off" && sel.dataset.density === "compact";
+    return sel?.dataset.pair === "on" && sel.dataset.density === "compact"
+      && sel.dataset.shape !== "tall";
   }, null, { polling: 100, timeout: 10_000 });
   const compactCatalogue = await page.evaluate(() => {
     const list = document.getElementById("sel-tracks").getBoundingClientRect();
@@ -137,8 +137,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(searched.hidden).toBeGreaterThan(20);
   expect(searched.emptyHidden, "empty hidden").toBe(true);
 
-  // Stacked/short select: body is not a scroller; the track list fills it.
-  // 568×320 is under #sel-inner --pair-at 620, so SheetShape writes pair=off.
+  // Short landscape select: still wide-shaped, so --pair-compact: wide
+  // keeps pair-on (list on the right). Body is not a scroller.
   await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
     input.value = ""; input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -147,7 +147,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   await page.waitForFunction(() => {
     const inner = document.getElementById("sel-inner");
     const list = document.getElementById("sel-tracks");
-    return inner && inner.dataset.pair !== "on" && list && list.getBoundingClientRect().height > 80;
+    return inner && inner.dataset.pair === "on" && list && list.getBoundingClientRect().height > 80;
   }, null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => window.ScrollFade && window.ScrollFade.refresh());
   const stackedSel = await page.evaluate(() => {
@@ -175,7 +175,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       .filter((row) => !row.hidden).length;
     return { ...out, active: document.activeElement === input, shown };
   });
-  expect(stackedSel.pair).not.toBe("on");
+  expect(stackedSel.pair).toBe("on");
   expect(["auto", "scroll"]).not.toContain(stackedSel.bodyOY);
   expect(["auto", "scroll", "overlay"]).toContain(stackedSel.listOY);
   expect(stackedSel.bodySf).toBe(false);
@@ -184,7 +184,6 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(stackedSel.listH).toBeGreaterThan(80);
   expect(stackedSel.listH / stackedSel.bodyH).toBeGreaterThan(0.45);
   expect(stackedSel.listH).toBeGreaterThan(stackedSel.previewH);
-  expect(stackedSel.previewTop).toBeLessThan(stackedSel.listTop);
   expect(stackedSel.active).toBe(true);
   expect(stackedSel.shown).toBeGreaterThan(0);
 

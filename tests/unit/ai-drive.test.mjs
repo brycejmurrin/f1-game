@@ -416,11 +416,18 @@ test("updateCar does not allocate AiDrive ctx literals", () => {
   // defect coming back — catch it here without a browser.
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
   const fn = src.match(/function updateCar\([\s\S]*?\nfunction /);
+  console.log("[ai-drive] updateCar body found:", !!fn);
   assert.ok(fn, "updateCar body present");
   const hits = fn[0].match(
     /AiDrive\.(wantBoost|otShouldFire|brakeDecision|wantX|adaptLane|otPull|defendPull|isBoxed)\s*\((?:[^()]*?,)?\s*\{/,
   );
+  console.log("[ai-drive] inline literal at call sites:", hits ? hits[0] : "none (good)");
   assert.equal(hits, null, `updateCar still passes an object literal: ${hits && hits[0]}`);
+  const scratches = ["_aiBoost", "_aiOtFire", "_aiBr", "_aiLane", "_aiWantX", "_aiOtPull", "_aiDefend", "_aiBoxed"];
+  for (const s of scratches) {
+    const found = src.includes(`const ${s} = {`);
+    console.log(`[ai-drive] scratch ${s} declared:`, found);
+  }
   assert.match(src, /const _aiBoost = \{/);
   assert.match(src, /const _aiOtFire = \{/);
   assert.match(src, /const _aiBr = \{/);
