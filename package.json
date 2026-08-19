@@ -58,6 +58,7 @@
     "test:pick": "node tools/pick-tests.mjs",
     "test:bg": "node tools/test-bg.mjs",
     "ui:survey": "node tools/ui-survey.mjs",
+    "menu:gallery": "node tools/menu-dom-gallery.mjs",
     "ab:light": "node tools/lighting/ab-lighting.mjs",
     "setup:browsers": "bash tools/install-browsers.sh",
     "physics:sweep": "node tools/physics-tune-sweep.mjs",

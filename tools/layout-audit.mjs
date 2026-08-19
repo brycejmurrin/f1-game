@@ -22,6 +22,8 @@
 //   node tools/layout-audit.mjs --scale=100,130,150   # each viewport at each UI size
 //   node tools/layout-audit.mjs --circuits             # the two map screens, per circuit aspect
 //   node tools/layout-audit.mjs --circuits=jeddah,baku # or name them
+//   node tools/layout-audit.mjs --capture-only --dom --shots   # fast PNG + dom.json gallery
+//       (~10–20× faster than ui-audit.spec.js: one boot per viewport, no geometry probe)
 //
 // --scale JOINS THE VIEWPORT AXIS rather than becoming a third dimension of the
 // grid: a cell is identified as `ios-15-landscape@130`, so the queue, the merge
@@ -37,13 +39,11 @@ import path from "node:path";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
 import { launchChromium } from "./harness.mjs";
+import { collectDomInfo } from "./css-play.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const require = createRequire(ROOT + "/");
 const { devices } = require("playwright");
-
-const OUT = path.join(ROOT, "artifacts", "layout-audit");
-const SHOT_DIR = path.join(OUT, "shots");
 
 // ---------------------------------------------------------------- the matrix
 // VIEWPORTS: the shapes a display can be, not the devices people own. Each one
@@ -939,6 +939,11 @@ const PROBE = (rootSel) => {
 // ------------------------------------------------------------------ the runner
 const argv = process.argv.slice(2);
 const wantShots = argv.includes("--shots");
+const wantDom = argv.includes("--dom");
+const captureOnly = argv.includes("--capture-only");
+const OUT = path.join(ROOT, "artifacts", captureOnly ? "menu-dom-gallery" : "layout-audit");
+const SHOT_DIR = path.join(OUT, "shots");
+const DOM_DIR = path.join(OUT, "dom");
 const pick = (flag, all) => {
   const a = argv.find((x) => x.startsWith(flag));
   if (!a) return all;
@@ -953,7 +958,8 @@ const screens = argv.find((x) => x.startsWith("--screens="))
   : SCREENS;
 
 fs.mkdirSync(OUT, { recursive: true });
-if (wantShots) fs.mkdirSync(SHOT_DIR, { recursive: true });
+if (wantShots || captureOnly) fs.mkdirSync(SHOT_DIR, { recursive: true });
+if (wantDom || captureOnly) fs.mkdirSync(DOM_DIR, { recursive: true });
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
   ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml", ".woff2": "font/woff2" };
@@ -1021,7 +1027,13 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
     await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 60000 });
     // Stop the render loop first: the 3D scene starves the compositor, which
     // makes every later wait and every screenshot an order slower.
-    await page.evaluate(() => window.__apex.headless(true));
+    await page.evaluate((hideGame) => {
+      window.__apex.headless(true);
+      if (hideGame) {
+        const g = document.querySelector("#game");
+        if (g) g.style.visibility = "hidden";
+      }
+    }, captureOnly);
     // Persisted to localStorage, so it survives the reload recovery below.
     await applyScale(page, scale);
     // A cell that cannot be reached should cost seconds, not the 30s default —
@@ -1076,7 +1088,13 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
       if (!titleUsable) {
         await page.goto(base, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => !!window.__apex, null, { timeout: 60000 });
-        await page.evaluate(() => window.__apex.headless(true));
+        await page.evaluate((hideGame) => {
+          window.__apex.headless(true);
+          if (hideGame) {
+            const g = document.querySelector("#game");
+            if (g) g.style.visibility = "hidden";
+          }
+        }, captureOnly);
         await page.waitForTimeout(300);
         errors = [];
       }
@@ -1142,11 +1160,29 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
             Math.max(bufferAspect, boxAspect, 0.001) < 0.03;
         }, null, { polling: 50, timeout: 5000 }).catch(() => {});
       }
-      Object.assign(cell, await page.evaluate(PROBE, screen.root));
-      if (wantShots) {
+      if (captureOnly) {
+        if (wantDom || captureOnly) {
+          const dom = await page.evaluate(collectDomInfo, { root: screen.root });
+          const domFile = `${screen.id}__${vpName}.dom.json`;
+          fs.writeFileSync(path.join(DOM_DIR, domFile), JSON.stringify(dom, null, 2));
+          cell.dom = "dom/" + domFile;
+        }
         const file = `${screen.id}__${vpName}.png`;
         await page.screenshot({ path: path.join(SHOT_DIR, file), timeout: 300000 });
         cell.shot = "shots/" + file;
+      } else {
+        Object.assign(cell, await page.evaluate(PROBE, screen.root));
+        if (wantShots) {
+          const file = `${screen.id}__${vpName}.png`;
+          await page.screenshot({ path: path.join(SHOT_DIR, file), timeout: 300000 });
+          cell.shot = "shots/" + file;
+        }
+        if (wantDom) {
+          const dom = await page.evaluate(collectDomInfo, { root: screen.root });
+          const domFile = `${screen.id}__${vpName}.dom.json`;
+          fs.writeFileSync(path.join(DOM_DIR, domFile), JSON.stringify(dom, null, 2));
+          cell.dom = "dom/" + domFile;
+        }
       }
     } catch (e) {
       cell.skipped = e.message.split("\n")[0].slice(0, 120);
@@ -1154,6 +1190,10 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
     cell.errors = errors;
     rows.push(cell);
     const n = (a) => (a ? a.length : 0);
+    if (captureOnly) {
+      console.log(`${cell.screen.padEnd(13)} ${vpName.padEnd(28)} ` +
+        (cell.skipped ? `SKIPPED: ${cell.skipped}` : `shot ${cell.shot || "-"}  dom ${cell.dom || "-"}`));
+    } else {
     console.log(`${cell.screen.padEnd(13)} ${vpName.padEnd(28)} ` +
       (cell.skipped ? `SKIPPED: ${cell.skipped}`
         : `clipped ${String(n(cell.clipped)).padStart(2)}  offscreen ${String(n(cell.offscreen)).padStart(2)}` +
@@ -1172,6 +1212,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
                 (m.cropped ? ` CROP${m.longestEdgeRunPct}%` : "") +
                 (m.fillPct != null ? ` fill${m.fillPct}%` : "")).join(" ")
             : "")));
+    }
   }
   await page.close();
   await ctx.close();
@@ -1179,6 +1220,27 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
 
 await browser.close();
 server.close();
+
+if (captureOnly) {
+  const manifest = {
+    when: new Date().toISOString(),
+    build: JSON.parse(fs.readFileSync(path.join(ROOT, "version.json"), "utf8")).build,
+    viewports: viewports.map(([n, , w]) => ({ name: n, why: w })),
+    screens: screens.map((s) => ({ id: s.id, name: s.name, root: s.root })),
+    cells: rows.map((r) => ({
+      screen: r.screen,
+      viewport: r.viewport,
+      shot: r.shot || null,
+      dom: r.dom || null,
+      skipped: r.skipped || null,
+    })),
+  };
+  fs.writeFileSync(path.join(OUT, "manifest.json"), JSON.stringify(manifest, null, 2));
+  writeCaptureIndex(rows);
+  const skipped = rows.filter((r) => r.skipped);
+  console.log(`\n${rows.length} captures -> ${path.relative(ROOT, OUT)}/ (${skipped.length} skipped)`);
+  process.exit(skipped.length && rows.every((r) => r.skipped) ? 1 : 0);
+}
 
 // MERGE, don't clobber: a filtered run (--screens / --viewports) must top up the
 // grid rather than replace it with its own twelve cells, or re-running one
@@ -1241,6 +1303,30 @@ if (skipped.length) {
   console.log(`  a skip is NOT a pass. Re-run those cells alone before believing them:\n` +
     `    node tools/layout-audit.mjs --viewports=${vps} --screens=${scr} --jobs=1` +
     (SCALES[0] == null ? "" : ` --scale=${SCALES.join(",")}`));
+}
+
+function writeCaptureIndex(rows) {
+  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const items = rows.filter((r) => !r.skipped && r.shot).map((r) => {
+    const dom = r.dom ? `<a href="${esc(r.dom)}">dom</a>` : "";
+    return `<tr><td>${esc(r.screen)}</td><td>${esc(r.viewport)}</td>` +
+      `<td><a href="${esc(r.shot)}"><img src="${esc(r.shot)}" alt="" style="max-width:280px;border:1px solid #333"></a></td>` +
+      `<td>${dom}</td></tr>`;
+  }).join("\n");
+  fs.writeFileSync(path.join(OUT, "index.html"), `<!doctype html><meta charset="utf-8">
+<title>Apex 26 menu gallery</title>
+<style>
+ body{background:#0b0b10;color:#e8e8ee;font:13px/1.5 ui-sans-serif,system-ui;padding:24px}
+ h1{font-size:18px} table{border-collapse:collapse;margin-top:16px;width:100%}
+ th,td{border:1px solid #26262e;padding:8px 10px;vertical-align:top}
+ th{font-weight:600;color:#a9a9b6;font-size:11px;text-align:left}
+ a{color:#7fd89a}
+</style>
+<h1>APEX 26 — MENU SCREENSHOT + DOM GALLERY</h1>
+<p>Fast capture mode (<code>--capture-only --dom --shots</code>). One boot per viewport;
+structured DOM via <code>collectDomInfo</code> from css-play.</p>
+<table><thead><tr><th>Screen</th><th>Viewport</th><th>Screenshot</th><th>DOM</th></tr></thead>
+<tbody>${items}</tbody></table>`);
 }
 
 function writeIndex(rows) {
