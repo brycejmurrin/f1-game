@@ -12,7 +12,17 @@ const SettingsNav = (function () {
 
     const tablist = document.getElementById("pm-category-tabs");
     const syncOrientation = () => {
-      const cols = getComputedStyle(tablist).gridTemplateColumns.split(" ").filter(Boolean).length;
+      const style = getComputedStyle(tablist);
+      const flexDir = style.flexDirection || "row";
+      const flexRow = (style.display === "flex" || style.display === "inline-flex")
+        && !flexDir.startsWith("column");
+      // Flex reports gridTemplateColumns "none" (length 1). Treat a row as
+      // horizontal so Left/Right move between CONTROLS / DISPLAY / MORE.
+      if (flexRow) {
+        tablist.removeAttribute("aria-orientation");
+        return;
+      }
+      const cols = style.gridTemplateColumns.split(/\s+/).filter((t) => t && t !== "none").length;
       if (cols === 1) tablist.setAttribute("aria-orientation", "vertical");
       else tablist.removeAttribute("aria-orientation");
     };

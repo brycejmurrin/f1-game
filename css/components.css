@@ -856,15 +856,14 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pm-build { grid-column: 1 / -1; }
 
 /* ---------- settings sub-menu ----------
-   One category at a time. The old responsive column count made every setting
-   visible at once, but the result changed reading order as the sheet crossed a
-   breakpoint and mixed everyday controls with experimental switches and links
-   to other screens. A persistent category rail gives the screen one stable
-   hierarchy at every size. On narrow sheets it wraps as a compact 2-col
-   grid (CONTROLS | DISPLAY / MORE); once there is room it sits beside the
-   active panel. High UI sizes must not spend more than one primary control
-   row on that navigation (redesign contract). */
-#pmsettings-inner { --fit-at: 300px; }
+   One category at a time. Tabs stay a single equal-width row (flex, not a
+   3-col grid) so CONTROLS / DISPLAY / MORE share a top edge with the first
+   setting. A side rail plus a duplicate .pm-group-h left a dead strip above
+   the tabs and a 3-vs-2 column that never looked level. High UI sizes must
+   not spend more than one primary control row on that navigation. */
+#pmsettings-inner {
+  --fit-at: 300px;
+}
 @media (orientation: landscape) { #pmsettings-inner { --fit-at: 220px; } }
 #pm-settings-body {
   display: grid;
@@ -884,11 +883,14 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   padding-bottom: calc(var(--gap) * 0.6);
   background: var(--bg);
 }
-/* The balanced row chooses one, two or three controls from its own local width;
-   a 2 + 1 wrap makes MORE a deliberate full-width action, not a half-empty
-   grid. The wide container branch below remains a vertical navigation rail. */
+/* Equal segments: override .balanced-row's 7.25rem basis so three tabs stay
+   one even row instead of wrapping MORE onto a lonely second line. */
 #pm-category-tabs > button {
-  min-width: min(100%, var(--balance-min));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  min-width: 0;
   min-height: var(--tap);
   margin: 0;
   padding: calc(var(--gap) * 0.6) calc(var(--gap) * 0.67);
@@ -899,6 +901,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-size: clamp(var(--fs-1), calc(1.7 * var(--vwz)), var(--fs-3));
   font-weight: 750;
   letter-spacing: .06em;
+  text-align: center;
 }
 #pm-category-tabs > button.active,
 #pm-category-tabs > button[aria-selected="true"] {
@@ -918,9 +921,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   #pm-tab-controls::after { content: "CTRL"; }
   #pm-tab-display::after { content: "DISP"; }
 }
-/* Compact + locally narrow: one pan-x category row, not a 2+1 wrap that
-   spends the whole body before any setting appears. The 520px rail below
-   still wins when the sheet is wide enough. */
+/* Compact + locally narrow: lock one row. Equal flex still fills the
+   sheet; overflow-x is the escape if a label cannot shrink further. */
 @container sheet (max-width: 519px) {
   #pmsettings-inner[data-density="compact"] #pm-category-tabs {
     flex-wrap: nowrap;
@@ -929,9 +931,6 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
     scrollbar-width: none;
   }
   #pmsettings-inner[data-density="compact"] #pm-category-tabs::-webkit-scrollbar { display: none; }
-  #pmsettings-inner[data-density="compact"] #pm-category-tabs > button {
-    flex: 0 0 auto; min-width: auto;
-  }
 }
 .pm-groups { min-width: 0; }
 .pm-groups > [role="tabpanel"] { min-width: 0; }
@@ -941,18 +940,21 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   color: var(--red);
   font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
   font-weight: 700; letter-spacing: 0.11em;
+  line-height: 1.2;
+  box-sizing: border-box;
   margin: 0; padding-bottom: 4px;
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
+/* Tab already names the category. Keep later headings (COCKPIT). */
+#pm-panel-controls > .pm-group-h:first-child,
+#pm-panel-display > .pm-group-h:first-child,
+#pm-panel-more > .pm-group-h:first-child {
+  display: none;
+}
 .pm-group button { margin: 0; width: 100%; }
-/* SETTINGS CONTROLS SHARE ONE HEIGHT. DRIVING and DISPLAY sit in sibling
-   columns; when DISPLAY's .tune-row was ~80px (label + tap-min track) while
-   every DRIVING button was --tap, row N of one column never met row N of the
-   other — MEASURED 852×393 @100%: HIDE HUD and STEER lined up, then UI SIZE
-   sat 28px taller than RECALIBRATE and the columns drifted for the rest of
-   the sheet. Fix: every interactive row is exactly --tap tall. The label
-   overlays the top of the track (pointer-events: none) so the grab target
-   stays the full row. */
+/* Every interactive settings row is exactly --tap tall. The label overlays
+   the top of the track (pointer-events: none) so the grab target stays the
+   full row. */
 #pmsettings-inner .pm-group button,
 #pmsettings-inner .pm-doors button {
   height: var(--tap);
@@ -1047,23 +1049,6 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 .pm-doors button {
   margin: 0;
   min-width: 0;
-}
-@container sheet (min-width: 520px) {
-  #pm-settings-body {
-    grid-template-columns: minmax(145px, 0.28fr) minmax(0, 1fr);
-    gap: calc(var(--gap) * 1.25);
-  }
-  #pm-category-tabs {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    padding: 0;
-    background: transparent;
-  }
-  #pm-category-tabs > button {
-    text-align: left;
-    justify-content: flex-start;
-    font-size: clamp(var(--fs-1), calc(1.7 * var(--vwz)), var(--fs-3));
-  }
 }
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
 .sheet[data-density="compact"] .pm-doors { gap: 4px; }
