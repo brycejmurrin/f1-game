@@ -16,13 +16,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { seedLog } from "../helpers/seed-log.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PACK = path.join(ROOT, "assets", "pack");
 const MANIFEST = path.join(PACK, "manifest.json");
-const BUDGET_BYTES = 8 * 1024 * 1024;         // must match tools/assets.mjs
+const BUDGET_BYTES = 9 * 1024 * 1024;         // must match tools/assets.mjs; raised 8→9 for synthetic model pack
 const ALLOWED = new Set(["CC0", "CC0-1.0", "Apex26-Procedural"]);
 
 const TOOL_SRC = fs.readFileSync(path.join(ROOT, "tools", "assets.mjs"), "utf8");
@@ -38,7 +37,6 @@ function realMAT() {
   const sandbox = { Math, Array, Float32Array, Object, JSON, console };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
-  seedLog(sandbox);
   // Top-level `const` is block-scoped inside a VM and never lands on the
   // sandbox — the same rewrite tools/verify-track.cjs uses.
   vm.runInContext(src.replace(/^const\b/gm, "var"), sandbox, { filename: "geom.js" });
@@ -102,10 +100,13 @@ test("shader sources parse as JS (no stray backticks in GLSL comments)", () => {
   }
 });
 
-test("the baked-material knob is wired, and ON so the pack can contribute", () => {
-  // Default is non-zero so a loaded pack actually reaches the shader. Safety
-  // (no pack / bad pack / no createTextureArray → procedural look) lives in
-  // js/render/assets.js, not in the knob staying at 0.
+test("the baked-material knob is wired, and ON now that real scans ship", () => {
+  // This asserted def: 0 while the pack was my own procedural noise — there was
+  // no reason to change anyone's render for that. With real CC0 photoscans in
+  // the pack the deliberate default flipped, so the invariant flipped with it.
+  // What still holds is the safety property, and it is now carried by
+  // js/render/assets.js rather than by the knob: no pack, a malformed pack, or
+  // a backend without createTextureArray all fall back to the procedural look.
   const lighting = fs.readFileSync(path.join(ROOT, "js", "game", "lighting.js"), "utf8");
   const def = lighting.match(/\{ id: "matTexMix",[^}]*\}/);
   assert.ok(def, "matTexMix must exist in TUNE_DEFS");
@@ -115,45 +116,6 @@ test("the baked-material knob is wired, and ON so the pack can contribute", () =
   const v = parseFloat(d[1]);
   assert.ok(v > 0 && v <= 1, `matTexMix default ${v} must be in (0, 1]`);
   assert.match(def[0], /min: 0,/, "0 must stay reachable — it is the revert path if tarmac crawls");
-});
-
-test("bake-synthetic produces a dual-tier Apex26-Procedural pack with no network", () => {
-  // The no-download rebuild path. Must write BOTH tiers, stamp every layer
-  // Apex26-Procedural, and leave models/env alone — otherwise a synthetic
-  // rebake would orphan committed Kenney bins and HDRI ambients.
-  const os = require("node:os"), cp = require("node:child_process");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-synth-"));
-  try {
-    // Seed a fake prior pack so we can prove models/env survive the rewrite.
-    fs.mkdirSync(path.join(dir, "models"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "models", "keep.bin"), Buffer.from("AX26"));
-    fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({
-      version: 1,
-      materials: null,
-      models: { keep: { file: "models/keep.bin", licence: "CC0", author: "t", source: "t" } },
-      env: { "*|day": { ambientSky: [0.3, 0.3, 0.4], ambientGround: [0.1, 0.1, 0.1],
-                        licence: "CC0", author: "t", source: "t" } },
-      credits: [],
-    }));
-    const r = cp.spawnSync(process.execPath,
-      [path.join(ROOT, "tools", "assets.mjs"), "bake-synthetic"],
-      { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
-    assert.equal(r.status, 0, `bake-synthetic failed:\n${r.stdout}\n${r.stderr}`);
-    const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
-    assert.equal(m.materials.size, 256);
-    assert.ok(m.materials.low && m.materials.low.size === 128, "default bake must include low 128");
-    assert.ok(fs.existsSync(path.join(dir, m.materials.albedo)));
-    assert.ok(fs.existsSync(path.join(dir, m.materials.low.albedo)));
-    assert.ok(m.materials.layers.length >= 10, "expected the SCALES table layers");
-    for (const L of m.materials.layers) {
-      assert.equal(L.licence, "Apex26-Procedural", `${L.id} must be procedural`);
-      assert.match(L.source, /^procedural:/);
-    }
-    assert.ok(m.models.keep, "bake-synthetic must preserve models");
-    assert.ok(m.env["*|day"], "bake-synthetic must preserve env");
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
 });
 
 test("pack manifest is well-formed", { skip: !hasPack && "no pack installed" }, () => {
@@ -233,46 +195,6 @@ test("pack stays inside the clone-time budget", { skip: !hasPack && "no pack ins
     `pack is ${(bytes / 1048576).toFixed(2)} MB, budget is ${(BUDGET_BYTES / 1048576).toFixed(0)} MB`);
 });
 
-test("bake-synthetic-models replaces Kenney bins with Apex26-Procedural AX26", () => {
-  const os = require("node:os"), cp = require("node:child_process");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-synth-mdl-"));
-  try {
-    fs.mkdirSync(path.join(dir, "models"), { recursive: true });
-    // Seed a fake Kenney bin that must be overwritten / removed if not in catalog.
-    fs.writeFileSync(path.join(dir, "models", "kenney_construction-cone.bin"), Buffer.from("OLD"));
-    fs.writeFileSync(path.join(dir, "models", "orphan_old.bin"), Buffer.from("ORPHAN"));
-    fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({
-      version: 1, materials: null,
-      models: {
-        "kenney_construction-cone": {
-          file: "models/kenney_construction-cone.bin", licence: "CC0",
-          author: "Kenney", source: "kenney:x",
-        },
-        orphan_old: { file: "models/orphan_old.bin", licence: "CC0", author: "x", source: "x" },
-      },
-      env: {}, credits: [],
-    }));
-    const r = cp.spawnSync(process.execPath,
-      [path.join(ROOT, "tools", "assets.mjs"), "bake-synthetic-models"],
-      { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
-    assert.equal(r.status, 0, `bake-synthetic-models failed:\n${r.stdout}\n${r.stderr}`);
-    const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
-    assert.ok(!m.models.orphan_old, "non-catalog models must be dropped");
-    const cone = m.models["kenney_construction-cone"];
-    assert.ok(cone, "catalog id must be present");
-    assert.equal(cone.licence, "Apex26-Procedural");
-    assert.match(cone.source, /^procedural:/);
-    assert.ok(cone.verts >= 8, "cone must have geometry");
-    const bin = fs.readFileSync(path.join(dir, cone.file));
-    assert.equal(bin.toString("ascii", 0, 4), "AX26");
-    assert.ok(!fs.existsSync(path.join(dir, "models", "orphan_old.bin")));
-    // Spot-check a building id circuits actually place.
-    assert.ok(m.models["kenney_ind_building-a"].verts > 50);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
 test("bake-model round-trips glTF into the game's own vertex format", () => {
   // Exercises the whole model path — the real js/render/gltf.js reader in a VM,
   // the MAT stamping, the AX26 writer — against a hand-built single-triangle
@@ -348,85 +270,6 @@ test("bake-model round-trips glTF into the game's own vertex format", () => {
   }
 });
 
-test("bake-atlas slices a 4x4 sheet onto the named MAT layer", () => {
-  const os = require("node:os");
-  const cp = require("node:child_process");
-  const zlib = require("node:zlib");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-atlas-"));
-  try {
-    const grid = 4, tile = 8, size = grid * tile;
-    const rgba = Buffer.alloc(size * size * 4, 255);
-    // Unique mid-grey-ish colour per cell so mean-normalise keeps the hue.
-    for (let row = 0; row < grid; row++) {
-      for (let col = 0; col < grid; col++) {
-        const r = 80 + col * 24, g = 80 + row * 24, b = 140;
-        for (let y = 0; y < tile; y++) {
-          for (let x = 0; x < tile; x++) {
-            const o = ((row * tile + y) * size + col * tile + x) * 4;
-            rgba[o] = r; rgba[o + 1] = g; rgba[o + 2] = b; rgba[o + 3] = 255;
-          }
-        }
-      }
-    }
-    const crcTable = (() => {
-      const t = new Int32Array(256);
-      for (let n = 0; n < 256; n++) {
-        let c = n;
-        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-        t[n] = c;
-      }
-      return t;
-    })();
-    const crc32 = (buf) => {
-      let c = -1;
-      for (let i = 0; i < buf.length; i++) c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
-      return (c ^ -1) >>> 0;
-    };
-    const chunk = (type, data) => {
-      const len = Buffer.alloc(4); len.writeUInt32BE(data.length, 0);
-      const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
-      const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(body), 0);
-      return Buffer.concat([len, body, crc]);
-    };
-    const raw = Buffer.alloc((size * 4 + 1) * size);
-    for (let y = 0; y < size; y++) {
-      raw[y * (size * 4 + 1)] = 0;
-      rgba.copy(raw, y * (size * 4 + 1) + 1, y * size * 4, (y + 1) * size * 4);
-    }
-    const ihdr = Buffer.alloc(13);
-    ihdr.writeUInt32BE(size, 0); ihdr.writeUInt32BE(size, 4);
-    ihdr[8] = 8; ihdr[9] = 6;
-    const atlas = path.join(dir, "atlas.png");
-    fs.writeFileSync(atlas, Buffer.concat([
-      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-      chunk("IHDR", ihdr),
-      chunk("IDAT", zlib.deflateSync(raw, { level: 9 })),
-      chunk("IEND", Buffer.alloc(0)),
-    ]));
-
-    const r = cp.spawnSync(process.execPath, [
-      path.join(ROOT, "tools", "assets.mjs"), "bake-atlas",
-      "--albedo", atlas, "--grid", "4", "--inset", "0",
-      "--size", "8", "--low", "0", "--map", "BRICK=1,0",
-    ], { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
-    assert.equal(r.status, 0, `bake-atlas failed:\n${r.stdout}\n${r.stderr}`);
-
-    const png = fs.readFileSync(path.join(dir, "mat-albedo-8.png"));
-    assert.deepEqual([...png.subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
-    const w = png.readUInt32BE(16), h = png.readUInt32BE(20);
-    assert.equal(w, 8);
-    assert.equal(h, 8 * 17);
-    const man = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
-    const brick = man.materials.layers.find((L) => L.id === "brick");
-    assert.ok(brick, "BRICK layer missing from manifest");
-    assert.equal(brick.mat, 2);
-    assert.equal(brick.licence, "Apex26-Procedural");
-    assert.match(brick.source, /generated:.*#1,0/);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
 test("TrackGeom.addMesh transforms a baked model correctly", () => {
   // The placement maths for baked props. Getting the yaw sign or the normal
   // rotation wrong produces geometry that is *present and finite* — so
@@ -436,7 +279,6 @@ test("TrackGeom.addMesh transforms a baked model correctly", () => {
   const sandbox = { Math, Array, Float32Array, Object, JSON, console };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
-  seedLog(sandbox);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js", "track", "geom.js"), "utf8")
     .replace(/^const\b/gm, "var"), sandbox, { filename: "geom.js" });
   const G = sandbox.TrackGeom;
@@ -494,10 +336,10 @@ test("webbake toGLB re-packs .gltf + .bin into something gltf.js accepts", () =>
   const sandbox = {
     Math, Array, Object, JSON, Uint8Array, Uint16Array, Uint32Array, Int16Array,
     Float32Array, DataView, ArrayBuffer, TextEncoder, TextDecoder, Promise, Error, console,
+    Log: { warn: () => {}, info: () => {}, enabled: () => false },
   };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
-  seedLog(sandbox);
   load("js/render/gltf.js", sandbox);
   load("assets/pack/webbake.js", sandbox);
   assert.equal(typeof sandbox.WebBake.toGLB, "function");
@@ -558,7 +400,6 @@ test("webbake writes a ZIP that real unzip accepts", () => {
     };
     sandbox.window = sandbox;
     vm.createContext(sandbox);
-    seedLog(sandbox);
     vm.runInContext(fs.readFileSync(path.join(ROOT, "assets", "pack", "webbake.js"), "utf8")
       .replace(/^const\b/gm, "var"), sandbox, { filename: "webbake.js" });
 

@@ -9,11 +9,7 @@
         "mat": 1,
         "id": "concrete",
         "scale": 5.5,
-<<<<<<< HEAD
-        "source": "generated:assets/atlases/atlas-arch-albedo.png#2,0",
-=======
         "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -21,11 +17,7 @@
         "mat": 2,
         "id": "brick",
         "scale": 2.8,
-<<<<<<< HEAD
-        "source": "generated:assets/atlases/atlas-arch-albedo.png#1,0",
-=======
         "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -33,11 +25,7 @@
         "mat": 4,
         "id": "metal",
         "scale": 2.8,
-<<<<<<< HEAD
-        "source": "generated:assets/atlases/atlas-arch-albedo.png#2,2",
-=======
         "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -45,11 +33,7 @@
         "mat": 5,
         "id": "wood",
         "scale": 2.8,
-<<<<<<< HEAD
-        "source": "generated:assets/atlases/atlas-variety-albedo.png#0,0",
-=======
         "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -57,11 +41,7 @@
         "mat": 6,
         "id": "foliage",
         "scale": 4,
-<<<<<<< HEAD
-        "source": "generated:assets/atlases/atlas-nature-albedo.png#1,0",
-=======
         "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -69,11 +49,7 @@
         "mat": 7,
         "id": "fabric",
         "scale": 1.8,
-<<<<<<< HEAD
-        "source": "generated:assets/atlases/atlas-variety-albedo.png#2,0",
-=======
         "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -81,11 +57,7 @@
         "mat": 8,
         "id": "sand",
         "scale": 11,
-<<<<<<< HEAD
-        "source": "generated:assets/atlases/atlas-nature-albedo.png#1,3",
-=======
         "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -93,11 +65,7 @@
         "mat": 9,
         "id": "grass",
         "scale": 4.5,
-<<<<<<< HEAD
-        "source": "generated:assets/atlases/atlas-nature-albedo.png#2,1",
-=======
         "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -105,11 +73,7 @@
         "mat": 10,
         "id": "rock",
         "scale": 8,
-<<<<<<< HEAD
-        "source": "generated:assets/atlases/atlas-nature-albedo.png#1,2",
-=======
         "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -117,11 +81,7 @@
         "mat": 11,
         "id": "snow",
         "scale": 7,
-<<<<<<< HEAD
-        "source": "generated:assets/atlases/atlas-variety-albedo.png#0,1",
-=======
         "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -129,11 +89,7 @@
         "mat": 12,
         "id": "roof",
         "scale": 2.6,
-<<<<<<< HEAD
-        "source": "generated:assets/atlases/atlas-arch-albedo.png#2,1",
-=======
         "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -141,11 +97,7 @@
         "mat": 13,
         "id": "stone",
         "scale": 3.5,
-<<<<<<< HEAD
-        "source": "generated:assets/atlases/atlas-arch-albedo.png#1,1",
-=======
         "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -153,11 +105,7 @@
         "mat": 14,
         "id": "rust",
         "scale": 2.5,
-<<<<<<< HEAD
-        "source": "generated:assets/atlases/atlas-arch-albedo.png#3,2",
-=======
         "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -179,11 +127,7 @@
           "mat": 1,
           "id": "concrete",
           "scale": 5.5,
-<<<<<<< HEAD
-          "source": "generated:assets/atlases/atlas-arch-albedo.png#2,0",
-=======
           "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -191,11 +135,7 @@
           "mat": 2,
           "id": "brick",
           "scale": 2.8,
-<<<<<<< HEAD
-          "source": "generated:assets/atlases/atlas-arch-albedo.png#1,0",
-=======
           "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -203,11 +143,7 @@
           "mat": 4,
           "id": "metal",
           "scale": 2.8,
-<<<<<<< HEAD
-          "source": "generated:assets/atlases/atlas-arch-albedo.png#2,2",
-=======
           "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -215,11 +151,7 @@
           "mat": 5,
           "id": "wood",
           "scale": 2.8,
-<<<<<<< HEAD
-          "source": "generated:assets/atlases/atlas-variety-albedo.png#0,0",
-=======
           "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -227,11 +159,7 @@
           "mat": 6,
           "id": "foliage",
           "scale": 4,
-<<<<<<< HEAD
-          "source": "generated:assets/atlases/atlas-nature-albedo.png#1,0",
-=======
           "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -239,11 +167,7 @@
           "mat": 7,
           "id": "fabric",
           "scale": 1.8,
-<<<<<<< HEAD
-          "source": "generated:assets/atlases/atlas-variety-albedo.png#2,0",
-=======
           "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -251,11 +175,7 @@
           "mat": 8,
           "id": "sand",
           "scale": 11,
-<<<<<<< HEAD
-          "source": "generated:assets/atlases/atlas-nature-albedo.png#1,3",
-=======
           "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -263,11 +183,7 @@
           "mat": 9,
           "id": "grass",
           "scale": 4.5,
-<<<<<<< HEAD
-          "source": "generated:assets/atlases/atlas-nature-albedo.png#2,1",
-=======
           "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -275,11 +191,7 @@
           "mat": 10,
           "id": "rock",
           "scale": 8,
-<<<<<<< HEAD
-          "source": "generated:assets/atlases/atlas-nature-albedo.png#1,2",
-=======
           "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -287,11 +199,7 @@
           "mat": 11,
           "id": "snow",
           "scale": 7,
-<<<<<<< HEAD
-          "source": "generated:assets/atlases/atlas-variety-albedo.png#0,1",
-=======
           "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -299,11 +207,7 @@
           "mat": 12,
           "id": "roof",
           "scale": 2.6,
-<<<<<<< HEAD
-          "source": "generated:assets/atlases/atlas-arch-albedo.png#2,1",
-=======
           "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -311,11 +215,7 @@
           "mat": 13,
           "id": "stone",
           "scale": 3.5,
-<<<<<<< HEAD
-          "source": "generated:assets/atlases/atlas-arch-albedo.png#1,1",
-=======
           "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -323,11 +223,7 @@
           "mat": 14,
           "id": "rust",
           "scale": 2.5,
-<<<<<<< HEAD
-          "source": "generated:assets/atlases/atlas-arch-albedo.png#3,2",
-=======
           "source": "procedural:tools/assets.mjs",
->>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -952,143 +848,91 @@
       "id": "concrete",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-<<<<<<< HEAD
-      "source": "generated:assets/atlases/atlas-arch-albedo.png#2,0"
-=======
       "source": "procedural:tools/assets.mjs"
->>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "brick",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-<<<<<<< HEAD
-      "source": "generated:assets/atlases/atlas-arch-albedo.png#1,0"
-=======
       "source": "procedural:tools/assets.mjs"
->>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "metal",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-<<<<<<< HEAD
-      "source": "generated:assets/atlases/atlas-arch-albedo.png#2,2"
-=======
       "source": "procedural:tools/assets.mjs"
->>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "wood",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-<<<<<<< HEAD
-      "source": "generated:assets/atlases/atlas-variety-albedo.png#0,0"
-=======
       "source": "procedural:tools/assets.mjs"
->>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "foliage",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-<<<<<<< HEAD
-      "source": "generated:assets/atlases/atlas-nature-albedo.png#1,0"
-=======
       "source": "procedural:tools/assets.mjs"
->>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "fabric",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-<<<<<<< HEAD
-      "source": "generated:assets/atlases/atlas-variety-albedo.png#2,0"
-=======
       "source": "procedural:tools/assets.mjs"
->>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "sand",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-<<<<<<< HEAD
-      "source": "generated:assets/atlases/atlas-nature-albedo.png#1,3"
-=======
       "source": "procedural:tools/assets.mjs"
->>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "grass",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-<<<<<<< HEAD
-      "source": "generated:assets/atlases/atlas-nature-albedo.png#2,1"
-=======
       "source": "procedural:tools/assets.mjs"
->>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "rock",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-<<<<<<< HEAD
-      "source": "generated:assets/atlases/atlas-nature-albedo.png#1,2"
-=======
       "source": "procedural:tools/assets.mjs"
->>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "snow",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-<<<<<<< HEAD
-      "source": "generated:assets/atlases/atlas-variety-albedo.png#0,1"
-=======
       "source": "procedural:tools/assets.mjs"
->>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "roof",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-<<<<<<< HEAD
-      "source": "generated:assets/atlases/atlas-arch-albedo.png#2,1"
-=======
       "source": "procedural:tools/assets.mjs"
->>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "stone",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-<<<<<<< HEAD
-      "source": "generated:assets/atlases/atlas-arch-albedo.png#1,1"
-=======
       "source": "procedural:tools/assets.mjs"
->>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "rust",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-<<<<<<< HEAD
-      "source": "generated:assets/atlases/atlas-arch-albedo.png#3,2"
-=======
       "source": "procedural:tools/assets.mjs"
->>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
