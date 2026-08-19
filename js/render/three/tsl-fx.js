@@ -1,53 +1,4 @@
-/* Apex 26 — TLXShaders.fx: the FX materials for the TLX backend (M6).
- *
- * TSL ports of the five tiny GLSL programs in js/render/shaders/fx.js
- * (the GLSL source of truth):
- *   - blob shadow (SHADOW_VS/FS): unit xz quad lifted y=0.02 (baked into the
- *     shared quad geometry; the per-draw w/l scale is baked into the record's
- *     matrix by tlx.js), radial a = 0.45*(1-smoothstep(0.25,1,r)).
- *   - skid mark (MARK_FS): same quad, rectangular falloff
- *     a = 0.38*smoothstep(1,0.4,|u|)*smoothstep(1,0.3,|v|).
- *   - skid batch (MARK_BATCH_VS + MARK_FS): world-space verts with a -1..1
- *     uv attribute, identical falloff — one draw for the whole trail.
- *   - lamp lens glare (GLOW_VS/FS): camera-facing billboard expanded in the
- *     vertex stage from [corner, center, color, radius] records, additive
- *     core+veil falloff scaled by the uStr uniform.
- *   - FX particles (PARTICLE_VS/FS): same billboard expansion from
- *     [corner, center, color, size, alpha] records; two material variants
- *     replace the uAdditive uniform branch (alpha smoke vs premultiplied
- *     ONE/ONE sparks) — both variants of the same math, mirroring
- *     outColor = mix(vec4(col,a), vec4(col*a,1), uAdditive).
- *   - car decal (DECAL_VS/FS): textured quads over the bodywork, sun+hemi
- *     lit + uGlow lift, discard a<0.02 (material.alphaTest).
- *
- * GL-STATE MAPPING (glx.js drawShadow/drawMark/drawSkidBatch/drawGlow/
- * drawParticles/drawDecal 1:1): every FX material is transparent (never
- * depth-written), depth-TESTED, and — where GLX runs polygonOffset(-4,-8) —
- * carries the same polygon offset. GLX masks the alpha channel on particles
- * and decals (colorMask a=false) to protect the SSR car-paint tag; three
- * r184 has only a BOOLEAN Material.colorWrite (mapped to GPUColorWrite.ALL
- * or 0 — no per-channel mask on either backend), so the equivalent is done
- * through the blend stage instead: CustomBlending with
- * blendSrcAlpha=Zero / blendDstAlpha=One leaves dst alpha untouched for the
- * SAME result the colorMask gave. All five FX materials use it — GLX's
- * colorMask protects the SSR car-paint tag on the HDR scene target; TLX
- * has no per-channel mask, so the blend stage must leave dst alpha
- * untouched or a written a<1 would punch through that tag (and, on the
- * direct-to-canvas fallback, the page).
- * three owns per-material state, so nothing leaks into the next pass's
- * clear (the M4 caster-bug lesson).
- *
- * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
- *   TLXShaders.fx = (THREE, TSL, ctx) => ({ shadowMat, markMat, skidMat,
- *       glowMat, glowStr, particleMats, decalMaterialFor, updateFrame })
- * NEVER touches THREE/TSL at script eval — three exists only inside
- * TLX.create(). Geometry/buffer management (the shared quad, the dynamic
- * interleaved skid/glow/particle buffers) lives in tlx.js; this file is
- * materials only.
- *
- * STANDING RULE (tsl-lit.js header): every shared varying-derived TSL node
- * gets an unconditional Fn-body .toVar() anchor before any conditional use.
- */
+/* Apex 26 — TLXShaders.fx: the FX materials for the TLX backend (M6). TSL ports of the five tiny GLSL programs in js/render/shaders/fx.js (the GLSL source of trut… */
 "use strict";
 
 (function () {
@@ -82,16 +33,11 @@
         m.polygonOffsetUnits = -8;
       }
       if (o.doubleSided) m.side = THREE.DoubleSide;   // GLX disables CULL_FACE
-      // See tsl-lit.js pinProgram — r184 hashes child-node ids into the
-      // program key, so an unpinned FX material recompiles per mesh.
       m.lights = false;
       m.customProgramCacheKey = () => (o.key || "tlx-fx") + (m.mrtNode ? "-mrt" : "");
       return m;
     }
 
-    // Zero/One on the ssrTag attachment — GLX colorMask(a=false). Without
-    // this, renderer MRT default writes 1 and punches holes in car SSR
-    // under particles and decals.
     const _tagKeep = {
       blending: THREE.CustomBlending,
       blendSrc: THREE.ZeroFactor,
@@ -120,13 +66,10 @@
       return smoothstep(0.25, 1.0, r).oneMinus().mul(0.45);
     })();
 
-    // MARK_FS rectangular falloff — shared by the per-mark quad (uv from the
-    // quad position) and the world-space batch (uv attribute).
     const markFalloff = (uvv) =>
       smoothstep(float(1.0), float(0.4), abs(uvv.x))
         .mul(smoothstep(float(1.0), float(0.3), abs(uvv.y))).mul(0.38);
 
-    /* ── per-mark skid stamp (SHADOW_VS quad + MARK_FS) — the fallback path ── */
     const markMat = trackFx(fxMaterial({ offset: true, key: "tlx-fx-mark" }));
     markMat.colorNode = vec3(0.0);
     markMat.opacityNode = Fn(() => {
@@ -161,7 +104,6 @@
       })();
     }
 
-    /* ── lamp lens glare (GLOW_VS/FS): additive core + veil ───────────────── */
     const glowStr = uniform(0.12);   // uStr — set per drawGlow call (LT.glareStr def)
     const glowMat = trackFx(fxMaterial({ additive: true, doubleSided: true, key: "tlx-fx-glow" }));
     glowMat.positionNode = billboardPosition(attribute("fxRadius", "float"));
@@ -176,7 +118,6 @@
     })();
     glowMat.opacityNode = float(1.0);
 
-    /* ── FX particles (PARTICLE_VS/FS): two variants replace uAdditive ────── */
     function particleMaterial(additive) {
       const m = fxMaterial({ additive, doubleSided: true, key: additive ? "tlx-fx-pt-add" : "tlx-fx-pt" });
       m.positionNode = billboardPosition(attribute("fxSize", "float"));
@@ -213,10 +154,6 @@
 
     const decalCache = new Map();      // "texture.id|glow" -> material
     const DECAL_CACHE_CAP = 24;
-    // One graph per glow mode. The texture is a material reference so every
-    // cached decal material can share the program while still sampling its own
-    // `map`. Building texture(tex) per material under the shared cache key made
-    // three retain the first decal's TextureNode binding for every later car.
     const _decalGraph = [null, null];
     function sharedDecal(glow) {
       const gi = glow ? 1 : 0;
@@ -233,10 +170,6 @@
       }
       return packed;
     }
-    // Frame stamp per cached decal material — same guard as tlx.js materialFor.
-    // drawList holds material REFERENCES flushed at present(); FIFO eviction of
-    // an in-use entry mid-frame disposed the car's sponsor marks while later
-    // draws still referenced them.
     let _decalFrame = 0;
     function decalMaterialFor(tex, glow) {
       const key = tex.id + "|" + glow;

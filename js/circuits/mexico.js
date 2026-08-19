@@ -1,6 +1,4 @@
-/* Apex 26 — MEXICO CITY circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — MEXICO CITY circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -12,9 +10,6 @@
     // 120 m) — it was on the wrong PART of the lap, not in a corner.
     // See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.6350,
     name: "MEXICO CITY",
     gp: "Mexican GP",
@@ -26,24 +21,15 @@
     sceneryCoordinates: "racing",
     terrainOuter: 120,
     dressingExclusions: [
-      // The generic city base is the surrounding capital the park sits inside —
-      // exclude it only where the bespoke dressing curates the view: the
-      // Mixhuca park tree corridor (park-first DRS straight) and the Foro Sol
-      // stadium sector, whose bright apertures shared furniture would close.
       { kind: "city", s0: 0.02, s1: 0.14 },
       { kind: "city", s0: 0.60, s1: 0.94 },
       { kinds: ["foliage", "lighting"], s0: 0.70, s1: 0.89 },
     ],
-    // Cool thin-air haze: pale blue-grey horizon + slightly denser fog so far
-    // Sierra Nevada peaks read as altitude, not flat desert glare.
     pal: { zenith: [0.56, 0.72, 0.92], horizon: [0.68, 0.72, 0.78], grass: [0.34, 0.52, 0.26], runoff: [0.52, 0.38, 0.24], fog: [0.70, 0.74, 0.80], fogDensity: 0.0022, sunDir: [0.24111167647565865, 0.8639835073711102, 0.44203807353870755], sun: [1, 0.98, 0.88], sunColor: [1, 0.96, 0.86] },
     segs: [
       { t: 0, l: 300 }, { t: -90, l: 100 }, { t: 80, l: 90 }, { t: 0, l: 250 }, { t: 90, l: 100 }, { t: 0, l: 500 },
       { t: -60, l: 80 }, { t: 60, l: 70 }, { t: 0, l: 200 }, { t: 90, l: 100 }, { t: -130, l: 120 },
     ],
-    // Peraltada camber. The old banked bowl only survives as the final right/left
-    // onto the pit straight, but it is still the one genuinely banked corner here
-    // — everything else is ordinary 3° road camber.
     bankZones: [
       { frac: 0.1866, angleDeg: 3.5, widthM: 200 },   // the long right after the esses
       { frac: 0.7808, angleDeg: 3.0, widthM: 80 },
@@ -80,8 +66,6 @@
               terrace, tieredBowl, broadleafFall, plane, acacia, cypress,
               cameraTower, sponsorHoarding, broadcastCompound, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
-      // Lap sectors where dressingExclusions leaves the generic city generator
-      // running — see the def's `dressingExclusions` above.
       const cityBand = (s) => (s > 0.14 && s < 0.60) || s > 0.94 || s < 0.02;
 
       // Track centre + radius for far horizon rings
@@ -101,14 +85,8 @@
       const PARKGRN  = [0.34, 0.52, 0.26];
       const STONE    = [0.68, 0.60, 0.44];
       const fiesta   = [PINK, ORANGE, GREEN, [0.98, 0.82, 0.10]];
-      // Mexico City's jacarandas — planted across the capital in the 1920s and
-      // in violet flower through the spring race window. No other circuit on
-      // the calendar has a non-green treeline, so this is the cheapest possible
-      // way to make an ordinary park corridor unmistakably Mexico City.
       const JACARANDA = [0.46, 0.36, 0.74];
       const JAC2      = [0.54, 0.44, 0.80];
-      // Huizache (Acacia farnesiana) — native, flat-crowned, and what actually
-      // grows on the dry unirrigated edges of the Magdalena Mixhuca park.
       const HUIZACHE  = [0.36, 0.44, 0.26];
 
       // ── Papel-picado banner strip along a stand front ────────────────────────
@@ -197,11 +175,6 @@
         place(k, side, 3.4, [2.6, 0.16, len], [0.94, 0.94, 0.94]);
       };
 
-      // ════════════ BESPOKE FORO SOL CROWD-BOWL MODELS ════════════
-      // Real Estadio GNP Seguros bleachers: grey precast concrete decks with
-      // plain navy-blue bucket seats — not the rainbow "fiesta block" this used
-      // to render as. Only sparse marigold-orange pops survive, standing in for
-      // the Day-of-the-Dead crowd colour real broadcasts occasionally catch.
       const BOWL_BLUE = [0.25, 0.35, 0.62];
       const BOWL_GREY = [0.55, 0.56, 0.60];
       const BOWL_POP  = [0.92, 0.55, 0.16];   // sparse marigold-orange pop only
@@ -231,11 +204,6 @@
         }, { required: !!required });
       };
 
-      // ════════════════════════════════════════════════════════════════════════
-      // s=0.00  MAIN GRANDSTAND + START/FINISH STRAIGHT
-      // ════════════════════════════════════════════════════════════════════════
-      // Segment the long stand so its crowd and roof follow the final bend rather
-      // than cutting a low tangent chord across the racing line.
       for (const s of [0.972, 0.990, 0.008, 0.026]) {
         boundedStand(s, 1, 16, 26, SEATS, s < 0.98 ? ORANGE : PINK, s === 0.008);
         boundedStand(s, 1, 34, 28, CONCRETE, GREEN, false);
@@ -265,9 +233,6 @@
         lampPost(K(s),  1, 12);
       }
 
-      // ════════════════════════════════════════════════════════════════════════
-      // s=0.02  PIT / PADDOCK BLOCK (left side)
-      // ════════════════════════════════════════════════════════════════════════
       building(K(0.02), -1, 2, 16, 12, 60, { wall: [0.90, 0.90, 0.92],
                window: [0.30, 0.38, 0.44], floor: 3 });
       place(K(0.02), -1, 10, [17, 0.8, 60], [0.82, 0.82, 0.84]);   // flat roof slab
@@ -276,8 +241,6 @@
       for (const s of [0.005, 0.02, 0.035, 0.05]) {
         building(K(s), -1, 2.5, 7, 5, 14, { kind: "hall", wall: [0.93, 0.93, 0.95], window: [0.22, 0.26, 0.30], floor: 2 });
       }
-      // Paddock motorhomes — was a generic office-block building() under a
-      // "motorhomes" comment; motorhome() is the purpose-built swap.
       for (const s of [0.01, 0.03, 0.05]) {
         motorhome(K(s), -1, 22, 14, 9 + hash(K(s)) * 4, 16,
                  { wall: hash(K(s) * 5) > 0.5 ? [0.86, 0.40, 0.30] : [0.30, 0.42, 0.62],
@@ -287,8 +250,6 @@
       tower(K(0.04), -1, 6, 9, 26, { col: [0.82, 0.82, 0.86], cap: true, capCol: [0.20, 0.22, 0.26], mast: 7 });
       marshalPost(K(0.06), 1, 6);
 
-      // Paddock depth: a restrained second row of team hospitality buildings.
-      // These sit behind the garages/motorhomes so the pit straight remains open.
       for (const s of [0.014, 0.034, 0.054]) {
         const k = K(s), warm = hash(k * 107) > 0.5;
         building(k, -1, 40, 12, 8 + hash(k * 109) * 3, 18, {
@@ -297,22 +258,10 @@
           window: [0.56, 0.62, 0.68], floor: 2,
         });
       }
-      // Broadcast compound tucked behind the paddock row — OB trucks + uplink
-      // dishes, the infrastructure every real venue keeps out of shot. Sat
-      // well beyond the hospitality row's 40-52 m footprint.
       broadcastCompound(K(0.03), -1, 58, { vans: 3, dishes: 2, mastH: 10 });
 
-      // ════════════════════════════════════════════════════════════════════════
-      // s=0.06  PARK TREE-LINE — DRS straight Mixhuca green (park-first)
-      // Dense broadleaf corridor so the long straight reads as park before city.
-      // ════════════════════════════════════════════════════════════════════════
       hedge(0.04, 0.14, 1, 13, 3.2, TREEGRN);
       hedge(0.04, 0.12, -1, 16, 2.8, PARKGRN);
-      // ONE backdrop rank per shoulder, and a sparse one. The corridor used to
-      // carry up to three overlapping forestEdge ranks a side at density 0.9,
-      // which across the whole lap was 385 k verts — 28 % of the circuit, spent
-      // on the most interchangeable thing on it. The rank that the driver
-      // actually sees is the jacaranda avenue in front of it.
       forestEdge(0.04, 0.14,  1, 26, { density: 0.30, hMin: 9, hMax: 16, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
       forestEdge(0.04, 0.14, -1, 28, { density: 0.26, hMin: 8, hMax: 15, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
       avenue(0.04, 0.14,  1, 14, 26);
@@ -326,37 +275,20 @@
       avenue(0.16, 0.50, -1, 16, 36);
       avenue(0.30, 0.48,  1, 15, 34);
 
-      // ════════════════════════════════════════════════════════════════════════
-      // s=0.12  TURN 1 GRANDSTAND
-      // ════════════════════════════════════════════════════════════════════════
-      // Two-deck main T1 enclosure. Every stand outside the stadium used to be
-      // the same one-tier cantilever silhouette in a different colour; the
-      // liveries below come from STAND_SETS.mexico (navy / concrete / steel)
-      // and the tiers/roof kinds are what actually change the outline.
       grandstandEx(0.12, 1,  9, 80, null, GREEN,
                    { livery: "navy", tiers: 2, roof: "cantilever", endWalls: true });
       grandstandEx(0.12, 1, 30, 80, null, ORANGE,
                    { livery: "concrete", roof: "flat" });
       kerb(0.12, 1, 9); kerb(0.115, -1, 8);
 
-      // ════════════════════════════════════════════════════════════════════════
-      // s=0.20  MOISES SOLANA ESSES (both sides)
-      // ════════════════════════════════════════════════════════════════════════
       for (const side of [-1, 1]) {
         grandstandEx(0.20, side, 8, 48, null, side < 0 ? ORANGE : PINK,
                      { livery: side < 0 ? "steel" : "navy",
                        roof: side < 0 ? "truss" : "cantilever", pylons: side < 0 });
       }
       kerb(0.20, -1, 7); kerb(0.205, 1, 7);
-      // Broadcast vantage — the Esses are a real TV camera position and had
-      // nothing marking them. Set back beyond the grandstands' 12.5 m depth.
       cameraTower(K(0.20), 1, 30, { h: 18 });
 
-      // ════════════════════════════════════════════════════════════════════════
-      // MEXICO CITY URBAN SKYLINE — PUSHED BACK (park-first composition)
-      // Near cityFront thinned + set well beyond Mixhuca green so sprawl reads
-      // as backdrop, not street canyon. Stadium approach left mostly open.
-      // ════════════════════════════════════════════════════════════════════════
       cityFront(0.24, 0.48, -1, 72, {
         minH: 14, maxH: 36, depth: 18, lit: true,
         palette: [[0.64, 0.62, 0.58], [0.70, 0.68, 0.62], [0.58, 0.56, 0.54], [0.66, 0.60, 0.56]],
@@ -373,8 +305,6 @@
         windowCol: [0.90, 0.82, 0.52], step: 42
       });
 
-      // Reforma-inspired landmark cluster above the general Mexico City sprawl.
-      // Three separated silhouettes give the skyline a readable focal rhythm.
       tower(K(0.31), -1, 142, 18, 74, {
         col: [0.52, 0.58, 0.64], seg: 6, cap: true,
         capCol: [0.74, 0.78, 0.82], mast: 8,
@@ -398,20 +328,13 @@
         }
       });
 
-      // Sponsor hoarding on the run down to Horquilla — a straight stretch that
-      // read empty (only a hedge/guardrail/fence line, no advertising at all).
       sponsorHoarding(0.31, 0.39, -1, 9, { palette: fiesta });
 
-      // ════════════════════════════════════════════════════════════════════════
-      // s=0.42  HORQUILLA HAIRPIN
-      // ════════════════════════════════════════════════════════════════════════
       groundPlane(K(0.42), 1, 5, [60, 1.0, 50], [0.40, 0.40, 0.43]);  // grey runoff
       kerb(0.42, 1, 10);
       grandstandEx(0.42, 1, 7, 40, null, ORANGE,
                    { livery: "steel", roof: "truss", endWalls: true });
       banners(0.42, 1, 6);
-      // Broadcast vantage on the outside of the hairpin, and braking boards on
-      // the approach — both completely unmarked before this pass.
       cameraTower(K(0.42), -1, 20, { h: 16 });
       if (circuitKit) {
         circuitKit.trackSigns({
@@ -420,9 +343,6 @@
         });
       }
 
-      // ════════════════════════════════════════════════════════════════════════
-      // s=0.55  PARK / SPORTS FACILITY (Parque Deportivo)
-      // ════════════════════════════════════════════════════════════════════════
       for (const s of [0.510, 0.530, 0.550, 0.570, 0.590]) {
         const k = K(s);
         building(k, -1, 28 + hash(k) * 32, 24, 9 + hash(k * 3) * 5, 20,
@@ -434,10 +354,6 @@
       avenue(0.48, 0.68,  1, 13, 26);
       avenue(0.50, 0.68, -1, 14, 30);
 
-      // Palacio de los Deportes — the landmark copper geodesic dome that sits in
-      // this very sports park. A wide, low hyperbolic-paraboloid roof clad in
-      // oxidised copper-orange sheet; modelled as stacked frustum rings + four
-      // corner pylons hinting the saddle, set well back behind the park buildings.
       {
         const k = K(0.575), d = 96;
         const p = anchor(k, -1, d), bv = [p.r, p.u, p.t];
@@ -467,9 +383,6 @@
         }, { required: true });
       }
 
-      // ════════════════════════════════════════════════════════════════════════
-      // s=0.66  LUCHA-LIBRE TRIBUTE STATUE
-      // ════════════════════════════════════════════════════════════════════════
       {
         const k = K(0.66), d = 38;
         const p = anchor(k, 1, d);
@@ -480,15 +393,6 @@
           place(k, 1, d - 3.5, [3.2, 0.3, 5.5], [0.95, 0.80, 0.15]);
         }
       }
-
-      // ════════════════════════════════════════════════════════════════════════
-      // HERO: FORO SOL BASEBALL STADIUM (s≈0.72–0.88)
-      //
-      // Enclosed baseball bowl: continuous eye-height seat walls along the
-      // interior (s 0.73–0.86), bright ENTRY gap (~0.70–0.725) and EXIT gap
-      // (~0.86–0.89), green/dirt bowl floor between track and stands (off
-      // tarmac), nested grandstand tiers + rim caps behind the apertures.
-      // ════════════════════════════════════════════════════════════════════════
 
       // Bowl floor — former baseball field / concert pad beside the corridor.
       // gap kept large enough that rejBox/onTrack never clips the racing line.
@@ -529,10 +433,6 @@
           crowd: SEAT_NAVY, density: 0.66, step: 9,
         });
       }
-      // Outer upper deck: poured concrete terracing carried on the bowl's back,
-      // with its own retaining wall. terrace() rather than another tieredBowl
-      // so the rim reads as a DIFFERENT structure stacked on the lower bowl —
-      // shallower steps, flat risers, a plain wall closing the top.
       for (const side of [-1, 1]) {
         terrace(0.734, 0.852, side, 32, {
           rows: 5, rise: 1.9, depth: 2.8,
@@ -540,9 +440,6 @@
           crowd: SEAT_NAVY, density: 0.5, step: 10,
         });
       }
-      // Roofed press/suite boxes crowning the rim at the two ends only — the
-      // stadium's only covered seating, and what keeps the bowl from reading as
-      // a single unbroken step profile all the way round.
       boundedStand(0.744, -1, 52, 26, [0.60, 0.59, 0.58], BOWL_BLUE, false);
       boundedStand(0.842, -1, 52, 26, [0.60, 0.59, 0.58], BOWL_GREY, false);
       // Entry/exit end caps stay behind the bright apertures.
@@ -550,8 +447,6 @@
       boundedStand(0.875, -1, 36, 20, [0.58, 0.56, 0.54], BOWL_BLUE, false);
       boundedStand(0.875,  1, 36, 20, [0.58, 0.56, 0.54], BOWL_GREY, false);
 
-      // Foro Sol floodlight masts — set outside the upper terrace (which now
-      // reaches ~48 m) so they stand on the rim rather than inside the seating.
       for (const s of [0.74, 0.77, 0.80, 0.83, 0.85]) {
         lightMast(K(s), -1, 50, 52);
         if (s >= 0.80) lightMast(K(s), 1, 50, 52);
@@ -575,12 +470,6 @@
         banners(s, -1, 9); banners(s, 1, 9);
       }
 
-      // (The painted crowd-block accents that used to sit at 33 m are gone —
-      // that band is now the upper terrace, which carries real crowd bands.)
-
-      // Interior fencing at trackside (safety fence inside stadium) — bowl only.
-      // Pulled inside the bowl's first riser (gap 9): the fence used to sit at
-      // 10 m, which the stepped rake now occupies.
       fence(0.735, 0.855, -1, 7.5, 3.8, [0.82, 0.84, 0.88]);
       fence(0.735, 0.855,  1, 7.5, 3.8, [0.82, 0.84, 0.88]);
       wall(0.735, 0.855, -1, 6.4, 1.0, CONCRETE, 0.45);
@@ -600,9 +489,6 @@
         });
       }
 
-      // ════════════════════════════════════════════════════════════════════════
-      // s=0.88  FORO SOL EXIT — bright aperture back to open track
-      // ════════════════════════════════════════════════════════════════════════
       billboard(K(0.88), 1, 8, 14, 6, fiesta[1]);
       // Low media/hospitality wing outside the entry throat, behind the stands.
       building(K(0.695), -1, 30, 22, 14, 28, {
@@ -613,19 +499,10 @@
       forestEdge(0.89, 0.94, -1, 22, { density: 0.24, hMin: 7, hMax: 12, col: PARKGRN, col2: TREEGRN, pineFrac: 0.2 });
       avenue(0.89, 0.94, -1, 15, 28);
 
-      // ════════════════════════════════════════════════════════════════════════
-      // s=0.92  PERALTADA / ESTADIO STAND
-      // The banked Peraltada corner passes the Estadio (GNP Seguros) grandstand
-      // — NOT Estadio Azteca, which sits ~9 km away in Coyoacán and is not
-      // visible from here. This is simply the Peraltada/Estadio grandstand.
-      // ════════════════════════════════════════════════════════════════════════
       for (const s of [0.90, 0.92, 0.94]) {
         boundedStand(s, 1, 14, 24, SEATS, PINK, false);
         boundedStand(s, 1, 32, 26, CONCRETE, GREEN, false);
       }
-      // Packed upper terrace behind the banked Peraltada/Estadio stand. This
-      // follows the banking round instead of chording a 110 m tangent across
-      // the fastest corner on the lap, which is what the local model did.
       terrace(0.892, 0.952, 1, 46, {
         rows: 6, rise: 1.7, depth: 2.7, crowd: crowdCols,
         conc: [0.70, 0.69, 0.66], concAlt: [0.60, 0.59, 0.57],
@@ -638,8 +515,6 @@
       lampPost(K(0.91), -1, 14);
       lampPost(K(0.93), -1, 14);
       banners(0.92, 1, 9);
-      // Broadcast vantage on the outside of the Peraltada — the classic
-      // banked-corner TV shot, and previously completely unmarked.
       cameraTower(K(0.92), -1, 18, { h: 20 });
       sponsorHoarding(0.895, 0.935, -1, 9, { palette: fiesta });
 
@@ -659,9 +534,6 @@
         place(k, 1, 21, [0.5, 7, 16], [0.86, 0.12, 0.16]);
       }
 
-      // ════════════════════════════════════════════════════════════════════════
-      // TRACK FURNITURE: fences, guardrails, marshal posts, billboards
-      // ════════════════════════════════════════════════════════════════════════
       fence(0.10, 0.16, 1, 6, 3.2, [0.80, 0.82, 0.84]);
       guardrail(0.04, 0.11,  1, 4.5, [0.86, 0.86, 0.90]);
       guardrail(0.04, 0.11, -1, 4.5, [0.86, 0.86, 0.90]);
@@ -675,12 +547,6 @@
       billboard(K(0.33), -1, 16, 14, 5, fiesta[1]);
       billboard(K(0.46),  1, 10, 10, 4, fiesta[0]);
 
-      // ── Continuous perimeter: debris fence + hoarding line ──────────────────
-      // The Autodromo is fenced end to end, and the near band outside the
-      // stadium carried almost no structure — the fence/guardrail runs above
-      // covered barely a fifth of the lap. Everything here sits inside 12 m so
-      // it reads from the car, and stays clear of the generic city front row
-      // (which starts 13 m beyond the edge).
       const FENCE_M = [0.80, 0.82, 0.84];
       for (const [s0, s1, side] of [
         [0.00, 0.10,  1], [0.00, 0.10, -1],
@@ -690,18 +556,11 @@
         [0.60, 0.72,  1], [0.60, 0.72, -1],
         [0.86, 1.00,  1], [0.86, 1.00, -1],
       ]) fence(s0, s1, side, 5.5, 3.4, FENCE_M);
-      // Clipped park hedging along the verge footing. hedge() registers through
-      // indexSolid — it is solid to the scenery guards but does NOT move the
-      // driving limit, which a wall()/place() hoarding band would: a continuous
-      // solid at 4 m pulled the mean barrier line in by ~3 m and quietly took
-      // half the run-off off the circuit.
       for (const [s0, s1, side] of [
         [0.00, 0.10,  1], [0.16, 0.30,  1], [0.30, 0.48, -1],
         [0.48, 0.60,  1], [0.60, 0.72, -1], [0.86, 1.00,  1],
         [0.10, 0.30, -1], [0.48, 0.60, -1], [0.86, 1.00, -1],
       ]) hedge(s0, s1, side, 2.4, 1.4, side < 0 ? PARKGRN : TREEGRN);
-      // Sponsor hoardings on the fence line, right round the lap — these carry
-      // the fiesta colour the wall used to.
       for (let i = 0; i < 44; i++) {
         const sf = i / 44;
         if (sf > 0.72 && sf < 0.87) continue;      // Foro Sol bowl is dressed already
@@ -715,13 +574,6 @@
       for (const s of [0.16, 0.26, 0.36, 0.50, 0.60, 0.70, 0.95])
         marshalPost(K(s), -1, 6);
 
-      // ── Named enclosures the lap was missing ────────────────────────────────
-      // Grandstands 1-9 ring the Esses, Horquilla and the Peraltada run-in; the
-      // circuit previously had four stands outside the stadium.
-      // Liveries rotate STAND_SETS.mexico and the roof/tier options rotate with
-      // them, so the twelve enclosures read as twelve structures rather than
-      // one template tinted twelve ways. `crowd` still carries the fiesta
-      // fleck — that is a shirt colour, not a building.
       const MEX_STANDS = ["navy", "concrete", "steel"];
       const MEX_ROOFS  = ["cantilever", "flat", "truss"];
       const named = [
@@ -742,27 +594,12 @@
           endWalls: i % 5 === 0,
         });
       }
-      // Packed standing terraces behind the Esses and the Peraltada banking.
-      // Stepped concrete, not a flat eye-height slab: the general-admission
-      // terracing at Hermanos Rodríguez is poured steps, and the step profile
-      // is what separates it from the ticketed stands either side of it.
       terrace(0.215, 0.265,  1, 20, { rows: 4, rise: 1.6, depth: 2.6,
         crowd: crowdCols, density: 0.6, step: 9 });
       terrace(0.915, 0.965, -1, 20, { rows: 4, rise: 1.6, depth: 2.6,
         crowd: crowdCols, density: 0.6, step: 9 });
 
-      // ── Magdalena Mixhuca park corridor: a real avenue, not a thin hedge ────
-      // The DRS straight and the run down to the stadium are lined with mature
-      // park trees on both shoulders. Second and third ranks at 13/22 m fill
-      // the band between the fence and the first treeline.
-      // (The second and third forestEdge ranks that used to run here — twelve
-      // more full-band treelines at 13 m and 22 m on top of everything above —
-      // are what made this circuit's foliage both the heaviest and the least
-      // distinctive in the fleet. The avenue() calls in each section replace
-      // them with roughly a tenth of the geometry and a Mexican species mix.)
       avenue(0.60, 0.70, -1, 15, 30);
-      // Shrub clumps in the strip between the fence line (5.5 m) and the first
-      // treeline — the only band on this circuit with nothing else in it.
       every(26, (k) => {
         const sf = k / n;
         if (sf > 0.72 && sf < 0.87) return;                 // stadium bowl
@@ -791,12 +628,6 @@
         lampPost(K(sf), (i % 2) ? 1 : -1, 11);
       }
 
-      // ════════════════════════════════════════════════════════════════════════
-      // VEGETATION: cypress accents on the straights, park trees
-      // Palms used to stand here. They are a coastal-resort cue and read as
-      // Miami; the Magdalena Mixhuca park at 2,240 m plants columnar cypress
-      // (Cupressus lusitanica), jacaranda and ash instead.
-      // ════════════════════════════════════════════════════════════════════════
       for (const s of [0.05, 0.08, 0.92, 0.97]) {
         cypress(K(s), 1, 12 + hash(K(s)) * 7, 12 + hash(K(s) * 3) * 5, [0.16, 0.31, 0.20],
                 { slim: 0.9 });
@@ -809,9 +640,6 @@
         for (const side of [-1, 1]) {
           const r = hash(k * 91 + side);
           if (r > 0.50) continue;
-          // Inside the generic city sectors the skyline towers occupy the whole
-          // 8-80 m band, so a tree dropped in there grows through one. Park
-          // sectors get the near planting; city sectors keep the old set-back.
           const d = cityBand(s) ? 22 + hash(k * 92 + side) * 8
                                 : 13 + hash(k * 92 + side) * 22;
           const p = anchor(k, side, d);
@@ -823,9 +651,6 @@
         }
       });
 
-      // ════════════════════════════════════════════════════════════════════════
-      // FESTIVE FLAG POLES
-      // ════════════════════════════════════════════════════════════════════════
       every(60, (k) => {
         const side = hash(k * 31) > 0.5 ? 1 : -1;
         const d = 14 + hash(k * 32) * 8;
@@ -835,12 +660,6 @@
         addBox(out, vadd(p.c, p.u, 8), [2.4, 1.4, 0.2], fiesta[k % 4], [p.r, p.u, p.t]);
       });
 
-      // ════════════════════════════════════════════════════════════════════════
-      // PARKLAND TREES — the Autódromo sits inside the leafy Magdalena Mixhuca
-      // sports park, NOT a desert. The second, deeper rank this used to emit at
-      // every node is gone: two full-lap tree scatters plus the treelines above
-      // was three layers of the same green in the same 15-35 m band.
-      // ════════════════════════════════════════════════════════════════════════
       every(24, (k) => {
         for (const side of [1, -1]) {
           const s = k / n;
@@ -858,9 +677,6 @@
         }
       });
 
-      // ════════════════════════════════════════════════════════════════════════
-      // AZTEC STEPPED PYRAMID (infield monument, s≈0.45)
-      // ════════════════════════════════════════════════════════════════════════
       {
         const pA = anchor(K(0.45), -1, 55);
         if (!onTrack(pA.c[0], pA.c[2], 14)) {
@@ -873,11 +689,6 @@
         }
       }
 
-      // ════════════════════════════════════════════════════════════════════════
-      // SIERRA NEVADA — far volcano / mountain ring + cool thin-air haze
-      // Popocatépetl / Iztaccíhuatl silhouette on the high-altitude horizon.
-      // Sparse, far, cool blue-grey rock under denser fog (see pal.fogDensity).
-      // ════════════════════════════════════════════════════════════════════════
       for (const [extra, wMin, hMin, count, rock, snowL] of [
         [980,  360, 150, 16, [0.50, 0.55, 0.62], 0.74],
         [1260, 460, 210, 12, [0.56, 0.60, 0.66], 0.68],
@@ -894,8 +705,6 @@
         }
       }
 
-      // Hero twin-volcano relief: Popocatépetl's steep snowy cone and the lower,
-      // longer Iztaccíhuatl mass rise above the generic Sierra Nevada ring.
       {
         const popo = anchor(K(0.34), -1, 1180);
         mountain(popo.c[0], popo.c[2], pyMin, 560, 350, {
@@ -911,14 +720,12 @@
         });
       }
 
-      // ════════════════════════════════════════════════════════════════════════
       // HERO (OPTIONAL): AIRLINER ON APPROACH TO BENITO JUÁREZ INTERNATIONAL
       // Hermanos Rodríguez sits directly under Mexico City's main landing
       // corridor — no other circuit on the calendar can use this. One low-poly
       // silhouette, gear down, set far beyond the Esses/back straight so it
       // reads as a distant hazed shape crossing the sky, never as a trackside
       // prop. Flat-shaded fuselage + wing + tail — cheap, placed once.
-      // ════════════════════════════════════════════════════════════════════════
       {
         const a = anchor(K(0.20), 1, 820);           // ~700 m beyond the Esses
         const c = [a.c[0], a.c[1] + 210, a.c[2]];     // low final-approach altitude

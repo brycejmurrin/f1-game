@@ -1,15 +1,10 @@
-/* Apex 26 — CIRCUIT DE BARCELONA-CATALUNYA definition (data only).
-   Off-calendar (`classic: true`): the Spanish GP moved to the Madring for 2026,
-   so Catalunya is playable everywhere but is not a championship round.
-   Geometry from the OSM trace in js/track/geo-paths.js. */
+/* Apex 26 — CIRCUIT DE BARCELONA-CATALUNYA definition (data only). Off-calendar (`classic: true`): the Spanish GP moved to the Madring for 2026, so Catalunya is p… */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "catalunya",
     classic: true,
-    // Upstream es-1991 already runs clockwise, matching the racing direction
-    // (Elf at T1 is a right-hander).
     reverse: false,
     // The trace opens on the 700 m main straight, and its first vertex IS the
     // start line — measured, not nudged.
@@ -18,9 +13,6 @@
     // 120 m) — it was on the wrong PART of the lap, not in a corner.
     // See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.03,
     name: "CATALUNYA",
     gp: "Spanish GP",
@@ -48,9 +40,6 @@
       runoff:        [0.62, 0.48, 0.32],
       sunDir:        [0.40, 0.70, 0.28],
     },
-    // Catalunya sits on a hillside: the lap climbs from Turn 1 to the high
-    // ground at Campsa, then falls all the way down to the final corners.
-    // Authored, not surveyed.
     elevations: [
       { s: 0.18, halfM: 380, rise: 7.0 },    // climb through Renault/Repsol
       { s: 0.44, halfM: 420, rise: 11.0 },   // high ground before Campsa
@@ -80,16 +69,9 @@
       const PINE = [0.14, 0.31, 0.16], PINE_D = [0.11, 0.25, 0.14];
       const SCRUB = [0.33, 0.38, 0.20], SCRUB_D = [0.27, 0.32, 0.17];
       const GRAVEL = [0.70, 0.62, 0.46];
-      // Everything built here is bleached: sun-baked concrete, white render,
-      // pale ochre stone. Catalunya has no grey steel and no dark timber.
       const WHITE = [0.93, 0.92, 0.88], BONE = [0.86, 0.84, 0.78];
       const OCHRE = [0.76, 0.69, 0.55], SHADE = [0.66, 0.63, 0.58];
 
-      // ── The bespoke stand form: an OPEN bleached-concrete terrace ──
-      // Barcelona's crowd sits in uncovered raked concrete under a hard sun,
-      // with fabric shade sails pulled over the back rows. grandstandEx builds
-      // a clad shell with a metal roof — the opposite silhouette — so the
-      // corner bowls are laid out here as bare risers instead.
       function sunTerrace(s0, s1, side, gap, rows, step) {
         const SEATS = [[0.86, 0.85, 0.83], [0.72, 0.30, 0.24], [0.90, 0.78, 0.30]];
         let i = 0;
@@ -106,11 +88,6 @@
         });
       }
 
-      // =====================================================================
-      // 1. CATALAN SCRUB + UMBRELLA PINE — sparse, dry, nothing like a forest.
-      //    The circuit sits in open hillside; keep the planting thin and low so
-      //    the long sightlines that define this track survive.
-      // =====================================================================
       const openInfield = (s) => (s >= 0.92 || s <= 0.12) || (s >= 0.42 && s <= 0.52);
       every(30, (k) => {
         const s = k / n;
@@ -127,9 +104,6 @@
         bush(k, h < 0.72 ? -1 : 1, 7 + h * 6, h < 0.6 ? SCRUB : SCRUB_D);
         if (h > 0.80) bush(k, h > 0.90 ? -1 : 1, 13 + h * 8, SCRUB_D);
       });
-      // The far rank is deliberately thin: the bleached terraced hillside in
-      // section 6 now carries the outfield, and a dense tree belt in front of
-      // it would put a green wall back on a track that has none.
       every(64, (k) => {
         const s = k / n;
         if (openInfield(s)) return;
@@ -138,16 +112,6 @@
         tree(k, h < 0.5 ? -1 : 1, 40 + h * 26, 9 + h * 6, [0.24, 0.36, 0.19]);
       });
 
-      // =====================================================================
-      // 2. PIT COMPLEX AND MAIN GRANDSTAND — the long covered stand down the
-      //    whole main straight is Catalunya's most recognisable structure.
-      // =====================================================================
-      // The Montmeló pit terrace is a low WHITE building whose facade is almost
-      // entirely horizontal shading: stacked brise-soleil louvres over a
-      // recessed glazed ground floor, carried on slim round columns, with a
-      // thin flat roof slab floating clear of the wall. That louvred facade is
-      // the circuit's architectural signature and no amount of building() boxes
-      // produces it, so the terrace is laid out as six atomic bays here.
       {
         const COLUMN = [0.88, 0.87, 0.84], GLASS = [0.30, 0.42, 0.50];
         for (let i = 0; i < 6; i++) {
@@ -167,8 +131,6 @@
             for (let d = 0; d < 5; d++)
               addCyl(stage, vadd(vadd(a.c, a.r, -6.6), a.t, (d - 2) * 6.4),
                 0.24, 10.5, COLUMN, 8, b);
-            // FOUR horizontal louvres — the deep-shadow banding that reads as
-            // Mediterranean from a hundred metres away.
             for (let l = 0; l < 4; l++)
               addBox(stage, vadd(vadd(a.c, a.r, -6.2), a.u, 4.4 + l * 1.9),
                 [3.6, 0.28, 29], l & 1 ? BONE : WHITE, b);
@@ -178,8 +140,6 @@
             stage._mat = 0;
           }, { required: true });
         }
-        // Race control — a white slab with a projecting glazed gallery, capped
-        // by the Catalan senyera stripe the circuit paints on everything.
         const a = anchor(K(0.985), 1, 13);
         const b = [a.r, a.u, a.t];
         modelGroup("catalunya-race-control", {
@@ -206,10 +166,6 @@
       gantry(0.965, 8.0, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, -1, 11, 180, null, null,
         { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      // Catalunya's stands were entirely grey — the only fully monochrome
-      // stand set left in the fleet besides the two poured-concrete German ones.
-      // The senyera's red and gold is the obvious local colour, and Montmeló
-      // flies it everywhere.
       grandstandEx(0.055, -1, 12, 120, null, null, { livery: "crimson", endWalls: true });
       {
         const winLit = [0.97, 0.88, 0.54];
@@ -217,8 +173,6 @@
         const a = anchor(K(0.005), -1, 22);
         addBox(out, vadd(a.c, a.u, 10.4), [0.22, 1.5, 160], winLit, [a.r, a.u, a.t]);
       }
-      // Montmeló's paddock: white render carrying deep vertical sun-shading
-      // fins, which is what Catalan architecture does about a low western sun.
       for (let i = 0; i < 4; i++) {
         building(K(0.920 + i * 0.014), 1, 40, 26, 11, 16,
           { kind: "fin", wall: [0.90, 0.89, 0.85], window: [0.34, 0.38, 0.44], floor: 4.5 });
@@ -231,26 +185,14 @@
       broadcastCompound(K(0.912), 1, 76, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.90, 0.20, 0.16]);
 
-      // =====================================================================
-      // 3. THE CORNER STANDS — Catalunya's crowd sits in big freestanding
-      //    grandstands at Elf, Repsol, Campsa and the stadium section.
-      // =====================================================================
-      // One covered stand at Turn 1; everywhere else the crowd is on open
-      // bleached terracing under shade sails, which is what Barcelona actually
-      // looks like on a test day.
       grandstandEx(0.065, 1, 20, 96, null, null,
         { livery: "orange", tiers: 2, roof: "cantilever", endWalls: true });
       sunTerrace(0.222, 0.262, -1, 19, 5);
       sunTerrace(0.492, 0.522, 1, 21, 5);
       sunTerrace(0.674, 0.708, -1, 19, 6);
-      // The stadium section — the wrap of terracing through Europcar and the
-      // final corners (the New Holland / La Caixa grandstand bank) that turns the
-      // last sector into an amphitheatre. Open raked concrete, like the rest.
       sunTerrace(0.826, 0.868, -1, 19, 6);
       sunTerrace(0.876, 0.912,  1, 18, 5);
       sunTerrace(0.916, 0.948, 1, 17, 5);
-      // Fabric shade sails pulled over the back rows of the biggest terraces —
-      // nothing else here is soft or curved, so they read instantly.
       for (const [s, side, gap] of [[0.690, -1, 33], [0.932, 1, 30], [0.845, -1, 33]]) {
         const a = anchor(K(s), side, gap);
         sailCanopy(a.c, [a.r, a.u, a.t],
@@ -278,9 +220,6 @@
         { id: "catalunya-final-gravel", samples: 6 });
       marshalPost(K(0.925), 1, 9);
 
-      // =====================================================================
-      // 4. BOUNDARIES
-      // =====================================================================
       for (const [s0, s1] of [[0.10, 0.28], [0.34, 0.48], [0.53, 0.65], [0.72, 0.89]]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
@@ -293,10 +232,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      // =====================================================================
-      // 5. MONTMELÓ HILLS — the dry ridgelines beyond the circuit, with the
-      //    Montseny massif hazy on the far horizon.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -314,27 +249,11 @@
         }
       }
 
-      // =====================================================================
-      // 6. BESPOKE IDENTITY — the tall slim floodlight masts, the white
-      //    paddock-club terraces, the manicured landscaping, and the bleached
-      //    open hillside the whole site is cut into.
-      // =====================================================================
-      // Catalunya is one of the few permanent circuits fully lit for night
-      // testing, and the masts are unusually TALL and slim — the vertical
-      // punctuation on an otherwise horizontal, low-slung site. Real masts via
-      // floodMast rather than a hand-rolled pole so they carry lamp heads.
-      // light:false — generic floodlights still own the night pools; these are
-      // accent towers, not a replacement lighting rig.
       for (const [s, side, gap] of [
         [0.030, -1, 24], [0.075, 1, 34], [0.245, -1, 30],
         [0.505, 1, 34], [0.700, -1, 36], [0.935, 1, 34],
       ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3, light: false });
 
-      // The paddock-club terraces: three low white pavilions stepping along the
-      // hillside above Turn 1, each with a shaded roof deck. One 62 m block was
-      // silently rejected here (the T1 arc folds back under it); three short
-      // bays at staggered clearances fit and read as terraces, which is what
-      // they are.
       for (const [i, s, gap] of [[0, 0.030, 46], [1, 0.045, 34], [2, 0.060, 46]]) {
         const a = anchor(K(s), 1, gap);
         const b = [a.r, a.u, a.t];
@@ -358,15 +277,9 @@
         });
       }
 
-      // Manicured landscaping — clipped hedge banding and a rank of columnar
-      // Mediterranean cypress. Catalunya's verges are gardened; the hillside
-      // beyond them is not, and that contrast is worth building.
       hedge(0.955, 0.045, -1, 16, 3.0, [0.18, 0.36, 0.18]);
       hedge(0.020, 0.075, 1, 15, 2.6, [0.19, 0.37, 0.19]);
       hedge(0.660, 0.715, -1, 15, 2.6, [0.19, 0.37, 0.19]);
-      // Europcar (T9, s≈0.80) — the brief calls for gardened hedge banding and a
-      // cypress rank on BOTH sides here, the manicured strip before the run down
-      // to the stadium section.
       hedge(0.782, 0.822, 1, 15, 2.6, [0.19, 0.37, 0.19]);
       hedge(0.780, 0.820, -1, 15, 2.6, [0.18, 0.36, 0.18]);
       {
@@ -384,19 +297,9 @@
         }
       }
 
-      // THE BLEACHED HILLSIDE. Montmeló's outfield is dry terraced farmland cut
-      // into pale rock — the opposite of a forest circuit's green wall. Long low
-      // ochre benches stepping up the slope behind the outer runoff read as that
-      // terracing at speed, and they are what stops this track's backdrop being
-      // interchangeable with a German one.
       for (const [id, s, side, gap, offs] of [
         ["t1", 0.090, 1, 62], ["repsol", 0.215, -1, 58],
         ["campsa", 0.470, 1, 62],
-        // La Caixa's outfield curls back beside the T10 approach (s≈0.57); the
-        // bench's low-s end straddled that racing line and read ~4 m over it.
-        // Run this one UP the slope from La Caixa (s-offsets 0..+0.04) instead of
-        // centring it (±0.02), so the near end retreats from the loop-back. Only
-        // this bench needed it; the other three keep the symmetric span.
         ["lacaixa", 0.645, -1, 58, [0, 1, 2, 3, 4]],
       ]) {
         const js = offs || [-2, -1, 0, 1, 2];

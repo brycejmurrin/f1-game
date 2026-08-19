@@ -1,6 +1,4 @@
-/* Apex 26 — RED BULL RING circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — RED BULL RING circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -11,9 +9,6 @@
     // Was 0.1875, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.1875,
     sceneryCoordinates: "racing",
     name: "RED BULL RING",
@@ -23,8 +18,6 @@
     theme: "green",
     lengthKm: 4.3,
     baseHW: 7,
-    // Keep the alpine terrain local to each road section. The default 120 m
-    // ribbon overlaps the steep start/final-sector foldback near s≈0.98.
     terrainOuter: 48,
     dressingExclusions: [
       // Preserve clean sightlines to The Wing, the bull plaza and pit gantries.
@@ -32,26 +25,17 @@
       // Bespoke stands and forest rims own the Remus amphitheatre.
       { kind: "foliage", s0: 0.18, s1: 0.38, side: 1 },
     ],
-    // Near-field green identity: verdant runoff (not brown gravel). ATM.alpineGreen
-    // merges sky/grass/fog in scenery() when available.
     pal: { zenith: [0.22, 0.48, 0.82], horizon: [0.55, 0.72, 0.88], grass: [0.14, 0.44, 0.18], runoff: [0.34, 0.50, 0.26], fogDensity: 0.0016, sunDir: [0.59693248550091, 0.6446870843409829, 0.47754598840072804], sun: [1, 0.96, 0.84], sunColor: [1, 0.96, 0.88] },
     segs: [
       // Amplified T1–T3 climb + post-Remus plunge (fallback if GPS path absent).
       { t: 0, l: 280 }, { t: -90, l: 100, h: 22 }, { t: 90, l: 90, h: 8 }, { t: -100, l: 110, h: 14 }, { t: 80, l: 90, h: 6 }, { t: 0, l: 220, h: -18 },
       { t: -70, l: 80, h: -10 }, { t: 80, l: 90, h: -8 }, { t: 0, l: 480, h: -14 }, { t: 80, l: 100 }, { t: -60, l: 80 }, { t: 80, l: 90 },
     ],
-    // ~60 m top-to-bottom: Remus crest high, long post-Remus / T4 descent.
-    // Elevations use SOURCE coordinates. With the line corrected to 0.0 the map
-    // is the identity — racing s 0.308/0.408/0.608; broad shoulders cap the
-    // steepest grade near 12%.
     elevations: [
       { s: 0.3075, halfM: 360, rise: 22 },  // racing 0.12: T1 / Niki Lauda climb
       { s: 0.4075, halfM: 430, rise: 32 },  // racing 0.22: Remus crest / high point
       { s: 0.6075, halfM: 430, rise: -28 }, // racing 0.42: post-Remus / T4 descent
     ],
-    // Spielberg camber. The hillside corners are dished into the slope — Remus
-    // and the downhill T4/T5 pair notably so — which is what lets the Red Bull
-    // Ring's few corners be taken so fast.
     bankZones: [
       { frac: 0.1961, angleDeg: 4.0, widthM: 260 },   // T1 climb / Niki Lauda
       { frac: 0.3072, angleDeg: 4.0, widthM: 180 },   // Remus
@@ -64,15 +48,10 @@
       const { out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, broadleafFall, building, motorhome, tower, billboard, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, backdrop, forestEdge, ATM, pal, groundPatch, modelGroup, overheadSpan, cameraTower, broadcastCompound } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // Alpine-green atmosphere pack (cool sky + lush grass); keep runoff greener
-      // than the pack's default grey-gravel so near-field reads Styrian meadow.
       if (ATM && ATM.alpineGreen) {
         Object.assign(pal, ATM.alpineGreen, { runoff: [0.32, 0.52, 0.24] });
       }
 
-      // --- Styrian Alps: two concentric rings of organic peaks.
-      // Inner ring (210m out): dense dark-green foothills with rocky detail, moderate snow.
-      // Outer ring (480m out): sparser, taller, whiter peaks for the dramatic far Alpine wall.
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
@@ -94,9 +73,6 @@
         }
       }
 
-      // --- Mid-ground Styrian rolling hills: backdrop() GREEN auto-renders as
-      // organic rounded mounds — replaces the flat ridge() prisms for a softer look.
-      // Two rings: closer foothills (lighter green) + farther wooded hillsides (darker).
       every(9, (k) => {
         const hv = hash(k * 31 + 7);
         if (hv < 0.25) return;
@@ -114,7 +90,6 @@
                  [0.14 + hv * 0.08, 0.32 + hv * 0.08, 0.15]);
       });
 
-      // --- Alpine forest edges: forestEdge() replaces raw pine() loops —
       // canopy-clearance aware so trees never clip through guardrails/fences.
       // Sector 1 (start straight + T1 climb): left side forest backing the climb.
       forestEdge(0.0, 0.18, -1, 10, { density: 0.55, hMin: 9, hMax: 16,
@@ -141,7 +116,6 @@
       forestEdge(0.70, 0.97, 1, 12, { density: 0.25, hMin: 7, hMax: 12,
         col: [0.14, 0.30, 0.15], col2: [0.24, 0.42, 0.20], pineFrac: 0.55 });
 
-      // ---------------- Track furniture (continuous, both sides) ----------------
       // Armco guardrail backed by catch fencing around the whole lap edge.
       guardrail(0.0, 1.0, -1, 3.2, [0.86, 0.86, 0.90]);
       guardrail(0.0, 1.0, 1, 3.2, [0.86, 0.86, 0.90]);
@@ -150,17 +124,12 @@
 
       // Big braking-zone tyre walls on the outside of the heavy stops (T1, T3, T4).
       const rbRed = [0.82, 0.10, 0.16], rbNavy = [0.10, 0.14, 0.40], rbYel = [0.95, 0.80, 0.10];
-      // Orange/white/navy Austrian GP "Orange Army" crowd mix for the hillside
-      // spectatorHill terraces — the Green Hill's broadcast-signature look.
       const RB_HILL_CROWD = [
         [1.00, 0.58, 0.05], [0.98, 0.62, 0.10], [0.94, 0.66, 0.22],
         [0.90, 0.90, 0.92], [0.80, 0.80, 0.84],
         [0.10, 0.14, 0.40], [0.14, 0.18, 0.46], [0.18, 0.22, 0.50],
         [0.20, 0.20, 0.24],
       ];
-      // The shared open-seating models are RANGE emitters (s0, s1) so they can
-      // follow the arc; every stand in this file is authored as centre + length
-      // in metres. Convert once here.
       const rbSpan = (s, len) => { const h = (len / 2) / (ds * n); return [s - h, s + h]; };
       tyreWall(0.08, 0.13, 1, 6.5, rbRed);    // outside Turn 1 (Niki Lauda)
       tyreWall(0.20, 0.25, 1, 6.5, rbYel);    // outside Turn 3 (Remus) crest
@@ -187,9 +156,6 @@
         [0.44, -1, rbNavy], [0.58, 1, rbRed], [0.68, -1, rbYel], [0.82, 1, rbNavy], [0.88, -1, rbRed],
       ]) billboard(Math.round(n * s) % n, side, 7, 11, 3.4, col);
 
-      // ---------------- The Wing — pit & paddock complex ----------------
-      // Long low white pit building with thin cantilevered roof blade. The
-      // complete hero model is preflighted and committed atomically.
       {
         const a = anchor(K(0), -1, 13);
         modelGroup("redbull-wing", {
@@ -204,20 +170,12 @@
           addBox(stage, vadd(vadd(a.c, a.r, -6.5), a.u, 10.4), [0.25, 0.18, 64], [1.0, 0.96, 0.80], [a.r, a.u, a.t]);
         }, { required: true });
       }
-      // Paddock hospitality blocks behind the pits — motorhome() gives the
-      // real two-tier team-unit body + awning canopy instead of a flat
-      // building() office-block mass. Also fixes k=0.04/0.96 being passed as
-      // raw node indices instead of the fraction they clearly meant (anchor()
-      // indexes track.rx[k] etc. directly, so a non-integer k silently missed).
       motorhome(K(0), -1, 26, 18, 9, 22, { wall: [0.88, 0.90, 0.93], window: [0.20, 0.30, 0.42] });
       motorhome(K(0.04), -1, 26, 16, 7, 18, { wall: [0.80, 0.82, 0.86], window: [0.22, 0.32, 0.42] });
       motorhome(K(0.96), -1, 26, 16, 8, 20, { wall: [0.86, 0.88, 0.92], window: [0.20, 0.30, 0.42] });
       // Race-control / media tower over the start.
       tower(K(0.01), -1, 18, 9, 26, { col: [0.80, 0.82, 0.86], cap: true, capCol: rbNavy, mast: 7 });
 
-      // Start/finish gantry + a second scoring gantry down the straight. Their
-      // supports sit beyond the full rendered shoulder; the shared 1.5 m support
-      // offset intersects Red Bull's broad road mesh near s≈0.045.
       const scoringGantry = (s, h, id) => {
         const k = K(s), col = [0.12, 0.13, 0.16];
         for (const side of [-1, 1]) {
@@ -239,9 +197,6 @@
       scoringGantry(0.005, 7.5, "redbull-start-gantry");
       scoringGantry(0.045, 7.0, "redbull-scoring-gantry");
 
-      // ---------------- Lamp posts (day visibility / night readiness) ----------------
-      // Double-head aluminium lamp posts every ~60 m around the pit straight & stadium.
-      // Warm white lamp heads give a daytime aluminium look and double as night sources.
       along(0.96, 0.08, 60, (k) => {
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 3.8);
@@ -268,11 +223,6 @@
         }
       });
 
-      // ---------------- Signature landmarks ----------------
-      // Giant charging-bull statue on a green hillside above the lower sector,
-      // framed by a tall white archway (the Bull Plaza icon). Mounds sit UNDER
-      // the plaza so the dark bull stays sky-silhouetted — no tall backdrop
-      // behind it on this sightline.
       {
         const kb = Math.round(n * 0.10) % n;
         // Green hillside ramp pedestal (in front / under the plaza).
@@ -300,8 +250,6 @@
         }, { required: true });
       }
 
-      // Sponsor / energy-drink towers — tall slim branded pylons by the start area
-      // and at the stadium. Red-cap tops, multiple for visual richness.
       tower(K(0.01), 1, 30, 6.5, 40, { col: rbNavy, seg: 6, cap: true, capCol: rbRed, mast: 6 });
       tower(K(0.03), -1, 32, 5.5, 36, { col: [0.95, 0.60, 0.15], seg: 6, cap: true, capCol: rbRed, mast: 5 });
       tower(K(0.50), -1, 34, 5.5, 32, { col: rbRed, seg: 6, cap: true, capCol: [0.95, 0.95, 0.97], mast: 5 });
@@ -314,28 +262,12 @@
       billboard(Math.round(n * 0.62) % n, -1, 24, 20, 6, rbNavy);
       billboard(Math.round(n * 0.74) % n, 1, 18, 18, 7, [0.70, 0.70, 0.72]);
 
-      // ---------------- Grandstands with crowds + emissive lighting accents ----------------
-      // Concentrated at the start straight, T3 (Remus) crest, mid-sector
-      // sweepers and the final stadium bowl. Red Bull red/navy seat blocks.
       const shell = [0.40, 0.41, 0.46];
-      // Main straight (Stehtribüne / start) — a long banked run of stands.
-      // grandstandEx's tier/roof knobs vary the silhouette while explicit
-      // shell/crowd keep the Red Bull red/navy branding through the start.
       grandstandEx(0.985, 1, 24, 30, shell, rbRed, { tiers: 2, roof: "cantilever", suites: true, endWalls: true, h: 13 });
       grandstandEx(0.005, 1, 24, 30, shell, rbNavy, { tiers: 2, roof: "truss", suites: true, pylons: true, h: 13 });
       grandstandEx(0.04, 1, 17, 30, shell, rbRed, { roof: "cantilever", h: 11 });
       grandstandEx(0.07, 1, 14, 26, shell, rbNavy, { roof: "flat", h: 11 });
 
-      // ---- T1–T3 mega-stand: ONE continuous ~630 m Red Bull Grandstand ----
-      // Real Spielberg runs a single stand from the Turn 1 braking zone up over
-      // the Remus crest; this file used to scatter 5 disconnected 26–32 m boxes
-      // here (s=0.11, 0.20, 0.21, 0.23, 0.25) with bare grass between them.
-      // Chain contiguous grandstandEx segments edge-to-edge (each segment's
-      // half-length in metres converted via ds*n == track.total, so there is no
-      // gap fraction between them) and step the roofline up toward the crest and
-      // back down after it — double-deck through the middle, single-deck at
-      // both ends — alternating crimson-livery bands with explicit red/navy the
-      // way the real stand's coloured sections read from the grid.
       {
         const total = ds * n; // metres per lap (== track.total)
         const mToFrac = (m) => m / total;
@@ -371,13 +303,6 @@
       grandstandEx(0.34, -1, 9, 26, shell, rbRed, { roof: "cantilever" });
       grandstandEx(0.36, -1, 8, 24, shell, rbNavy, { roof: "flat" });
       grandstandEx(0.50, -1, 8, 26, null, null, { livery: "steel", roof: "flat" });
-      // Two of Spielberg's small stands used to be grandstandEx({roof:"none"}),
-      // which still builds a 12 m back shell — a grey wall standing in the
-      // middle of a Styrian meadow, and the same shell mass as the roofed
-      // hero stands 100 m away. Both are temporary structures in reality, and
-      // the shared library now models both forms without a shell. This one is
-      // out in the pasture section: rented tube-and-plank, benches on a timber
-      // deck, the standards visible right through it.
       scaffoldStand(...rbSpan(0.62, 22), 1, 8,
         { rows: 5, rise: 1.25, setback: 1.9, step: 8, legEvery: 1,
           crowd: RB_HILL_CROWD, density: 0.55,
@@ -390,21 +315,13 @@
       grandstandEx(0.86, -1, 8, 26, shell, rbRed, { tiers: 2, roof: "cantilever", suites: true, h: 12 });
       grandstandEx(0.88, 1, 8, 34, shell, rbNavy, { tiers: 2, roof: "truss", pylons: true, suites: true, h: 13 });
       grandstandEx(0.92, 1, 9, 28, shell, rbRed, { roof: "flat" });
-      // ...and this one closes the stadium bowl: bolted bare-aluminium planks on
-      // a steel frame, no shell and no roof, so the hillside stays visible over
-      // the top of it instead of being walled off by a sixth grey box.
       bleacher(...rbSpan(0.95, 22), 1, 10,
         { rows: 7, rise: 1.2, setback: 1.6, step: 8,
           frameCol: [0.70, 0.71, 0.75], plankCol: [0.78, 0.79, 0.82],
           crowd: RB_HILL_CROWD, density: 0.58 });
 
-      // Emissive grandstand fascia strips — bright warm accent on roof slab
-      // underside so stands read lit from the trackside camera at dusk/night.
       for (const [s, side, gap] of [
         [0.985, 1, 24], [0.005, 1, 24], [0.04, 1, 17], [0.07, 1, 14],
-        // (the T1-T3 mega-stand chain above is covered per-segment and doesn't
-        // share this constant-offset strip; its own roof already carries a
-        // NIGHT-gated emissive band per grandstandEx segment)
         [0.32, -1, 13], [0.34, -1, 13], [0.36, -1, 13],
         [0.70, 1, 13], [0.72, -1, 13], [0.76, -1, 13], [0.88, 1, 13], [0.92, 1, 13], [0.95, 1, 13],
       ]) {
@@ -414,7 +331,6 @@
         addBox(out, vadd(a.c, a.u, 12.6), [0.22, 0.16, 28], [1.0, 0.92, 0.70], [a.r, a.u, a.t]);
       }
 
-      // --- Meadow foreground: pastoral hedges frame the lap in key zones ---
       every(36, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 113 + side) > 0.68) continue;
@@ -425,8 +341,6 @@
         }
       });
 
-      // --- Remus corner crest landmark tower (s≈0.30) — golden pylon marking descent ---
-      // Base disc anchored at ground; main cylinder starts at ground, rises 50m.
       {
         const kR = Math.round(n * 0.30) % n;
         const rA = anchor(kR, 1, 22);
@@ -443,10 +357,6 @@
         addBox(out, vadd(rA.c, rA.u, 44.5), [6.5, 0.25, 6.5], [1.0, 0.88, 0.50], [rA.r, rA.u, rA.t]);
       }
 
-      // --- Remus crest + T3–T4 spectator amphitheatre ---
-      // Green hillside ski-jump ramp packing the outside of Remus and the plunge
-      // into Schlossgold — the calendar's famous grassy bowl. Stepped near/mid/far
-      // mounds read as a continuous amphitheatre wall from the crest.
       {
         const GN = [0.28, 0.52, 0.22], GM = [0.22, 0.44, 0.18], GF = [0.16, 0.36, 0.14];
         // Remus outside (R): climbing ski-jump face
@@ -466,12 +376,6 @@
         backdrop(K(0.33), -1, 34, [85, 20, 55], GN);
         backdrop(K(0.35), -1, 50, [105, 28, 68], GM);
         backdrop(K(0.37), -1, 68, [120, 34, 78], GF);
-        // The Green Hill FINALLY gets a crowd. These backdrop() mounds were bare
-        // green boxes despite being the circuit's broadcast signature — real
-        // Spielberg packs this whole hillside with orange-clad fans. spectatorHill
-        // terraces the near slope (in front of the mounds above) with informal
-        // standing terracing, no shell/roof, so it reads as general-admission
-        // grass viewing rather than a second grandstand.
         spectatorHill(0.195, 0.285, 1, 24, { rows: 4, rise: 1.3, depth: 2.2, step: 7,
           density: 0.45, crowd: RB_HILL_CROWD, grass: [0.30, 0.54, 0.24] });
         spectatorHill(0.305, 0.385, -1, 26, { rows: 4, rise: 1.3, depth: 2.2, step: 7,
@@ -483,17 +387,11 @@
           col: [0.11, 0.26, 0.13], col2: [0.18, 0.36, 0.16], pineFrac: 0.75 });
       }
 
-      // --- Styrian natural spectator hill (s≈0.52 mid-sector right-hander).
-      // The Red Bull Ring's famous grassy spectator hillsides — replaced the flat
-      // boxy bank with backdrop() rounded green mounds for an organic silhouette.
-      // Three staggered mounds: near/mid/far to give the slope real depth.
       {
         const kBank = Math.round(n * 0.52) % n;
         backdrop(kBank, 1, 32, [80, 18, 55], [0.28, 0.52, 0.22]);   // near bank face
         backdrop(kBank, 1, 55, [95, 24, 65], [0.22, 0.44, 0.18]);   // mid slope
         backdrop(kBank, 1, 80, [110, 30, 75], [0.18, 0.38, 0.15]);  // upper hillside
-        // Crowd terracing on the near bank face — this mid-sector hill had the
-        // same "bare green boxes" problem as the Remus/T4 Green Hill above.
         spectatorHill(0.495, 0.545, 1, 24, { rows: 4, rise: 1.2, depth: 2.0, step: 6,
           density: 0.45, crowd: RB_HILL_CROWD, grass: [0.30, 0.54, 0.24] });
         // Sparse pines crowning the hilltop behind the bank.
@@ -501,10 +399,8 @@
           col: [0.10, 0.24, 0.12], col2: [0.16, 0.32, 0.14], pineFrac: 0.78 });
       }
 
-      // --- Orange Army billboard near stadium bowl (s≈0.87, Dutch orange) ---
       billboard(Math.round(n * 0.87) % n, -1, 12, 8, 4, [1.0, 0.65, 0.0]);
 
-      // --- Styrian Alpine farmhouse silhouette (s≈0.55) ---
       // Reduced depth to avoid over-wide building warning (w=12, d=15 → 12<15*2.5).
       building(Math.round(n * 0.55) % n, -1, 18, 12, 6, 15,
         { wall: [0.48, 0.50, 0.52], window: [0.30, 0.35, 0.40], floor: 2 });
@@ -515,8 +411,6 @@
         addPrism(out, vadd(aFarm.c, aFarm.u, 6), [14, 4, 16], [0.36, 0.20, 0.14], [aFarm.r, aFarm.u, aFarm.t]);
       }
 
-      // --- Pit-lane exit lamp posts (tight cluster at s≈0.02) ---
-      // A pair of overhead light booms framing the pit exit.
       {
         const kPit = Math.round(n * 0.02) % n;
         for (const side of [-1, 1]) {
@@ -529,14 +423,6 @@
         }
       }
 
-      // =======================================================================
-      // BESPOKE STYRIAN-ALPINE LANDMARKS — local models from raw primitives
-      // =======================================================================
-
-      // --- Alpine chairlift climbing the forested hillside: a radial line of
-      //     A-frame pylons of increasing height, two parallel cables and hanging
-      //     Red-Bull-coloured chairs. A self-contained cable helper orients a thin
-      //     box between two arbitrary world points (no api dep beyond addBox).
       function chairlift(k, side, distNear, distFar, pylons) {
         const near = anchor(k, side, distNear);
         if (onTrack(near.c[0], near.c[2], 8)) return;
@@ -570,8 +456,6 @@
         out._mat = 0;
       }
 
-      // --- Styrian chalet: plastered body, dark-timber upper band, wide low-eave
-      //     roof, track-facing balcony rail and warm-lit windows.
       function alpineChalet(k, side, dist, w, h, d) {
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], Math.max(w, d) * 0.6 + 3)) return;
@@ -588,8 +472,6 @@
         addBox(out, vadd(vadd(a.c, a.u, h * 0.5), a.r, -side * (w * 0.5 + 0.05)), [0.1, h * 0.28, d * 0.5], [0.98, 0.86, 0.52], b); // window
       }
 
-      // --- Spielberg camping terrace: rows of RVs and ridge tents with a big
-      //     Red Bull flag pole. The famous Austrian GP campground.
       function campTerrace(k, side, dist, count) {
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], 22)) return;
@@ -623,11 +505,6 @@
         out._mat = 0;
       }
 
-      // --- Pasture fencing: simple post-and-rail runs for the rural back
-      //     straight. Checked per node (like the pit-exit/stadium lamp-post
-      //     loops above) so the line follows the road's curve, and each rail
-      //     is sized to the ACTUAL per-node spacing `along()` reports — a
-      //     padded constant would make adjacent rails overlap on the bends.
       function pastureFence(s0, s1, side, dist) {
         along(s0, s1, 14, (k, spacing) => {
           const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
@@ -640,10 +517,6 @@
         });
       }
 
-      // --- Hay bales: a small cluster of stacked round bales lying on their
-      //     side (the cylinder's extrusion axis is basis slot 1, so swapping
-      //     `u`/`t` into that slot lays it along the track tangent instead of
-      //     standing it upright).
       function hayBale(k, side, dist) {
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], 5)) return;
@@ -666,8 +539,6 @@
       campTerrace(K(0.15),  1, 46, 8);
       campTerrace(K(0.25), -1, 50, 7);
       campTerrace(K(0.85), -1, 44, 8);
-      // Rural back-straight texture (s≈0.40–0.62, ~900 m that had nothing in the
-      // near field): a fifth chalet plus pasture fencing and hay-bale clusters.
       alpineChalet(K(0.505), -1, 42, 9, 5, 11);
       pastureFence(0.41, 0.62, 1, 16);
       pastureFence(0.42, 0.605, -1, 15);
@@ -675,14 +546,6 @@
       hayBale(K(0.47), -1, 22);
       hayBale(K(0.565), 1, 24);
       hayBale(K(0.605), -1, 22);
-      // Field-boundary broadleaf along the same pasture stretch. Every tree at
-      // this circuit came out of a forestEdge() pine mix, so the meadow floor
-      // and the mountain slope grew the SAME conifer — but a Styrian valley
-      // floor is beech and maple standing alone at the field edges, and the
-      // pines start where the ground tilts. broadleafFall()'s off-axis lobe
-      // crown is that form (summer green passed in; the shape is the point,
-      // not the palette). Deliberately sparse and hedge-line-aligned: this is
-      // the boundary between two fields, not another treeline.
       const MEADOW_LEAF = [0.24, 0.42, 0.18], MEADOW_LEAF_L = [0.31, 0.48, 0.22];
       for (let i = 0; i < 13; i++) {
         const sf = 0.395 + i * 0.019;
@@ -693,27 +556,14 @@
                       { lobes: hv > 0.6 ? 3 : 2, spread: 0.85 + hv * 0.35 });
       }
 
-      // =======================================================================
-      // 2026 SCENERY DRESS PASS — six bounded, hero-sector additions
-      // =======================================================================
-
-      // 1) Stadium-approach hillside crowd terrace. This used to be a shelled
-      // grandstand() box sitting well behind the fence — the wrong silhouette
-      // for informal hillside viewing, and it read as a disconnected mini-stand
-      // next to the real ones. spectatorHill gives it the same grass-terrace
-      // treatment as the Green Hill and the mid-sector bank above.
       spectatorHill(0.80, 0.845, -1, 22, { rows: 3, rise: 1.1, depth: 1.8, step: 6,
         density: 0.40, crowd: RB_HILL_CROWD });
 
-      // 2) A dedicated far treeline adds woodland depth behind the open downhill
-      // sweep and stadium approach while leaving the near verge deliberately clear.
       forestEdge(0.39, 0.48, -1, 54, { density: 0.34, hMin: 11, hMax: 18,
         col: [0.08, 0.22, 0.11], col2: [0.15, 0.32, 0.14], pineFrac: 0.82 });
       forestEdge(0.58, 0.68, 1, 48, { density: 0.30, hMin: 10, hMax: 17,
         col: [0.09, 0.24, 0.12], col2: [0.17, 0.34, 0.15], pineFrac: 0.76 });
 
-      // 3) Styrian farmyard: a timber barn, broad Alpine roof, silo and equipment
-      // shed form one atomically guarded compound beyond the existing chalet row.
       {
         const a = anchor(K(0.58), -1, 76), b = [a.r, a.u, a.t];
         modelGroup("redbull-styrian-farmyard", {
@@ -731,8 +581,6 @@
         });
       }
 
-      // 4) Paddock depth behind The Wing: a second, farther hospitality row makes
-      // the start complex read as a full event campus rather than one facade.
       motorhome(K(0.975), -1, 43, 15, 7, 18,
         { wall: [0.78, 0.80, 0.84], window: [0.16, 0.24, 0.34] });
       motorhome(K(0.02), -1, 46, 18, 8, 20,
@@ -740,8 +588,6 @@
       motorhome(K(0.055), -1, 42, 14, 7, 17,
         { wall: [0.74, 0.76, 0.80], window: [0.20, 0.28, 0.38] });
 
-      // 5) Stadium fan village and event screen. The guarded footprint contains
-      // the full tent, screen and flag avenue, all far behind the spectator shell.
       {
         const a = anchor(K(0.84), -1, 58), b = [a.r, a.u, a.t];
         modelGroup("redbull-stadium-fan-village", {
@@ -763,9 +609,6 @@
         });
       }
 
-      // 6) Three high, distant peaks frame the Remus crest from the downhill
-      // camera. Their centres are over 300 m off the edge, preserving the bull
-      // plaza skyline and adding a focused Alpine hero backdrop rather than noise.
       {
         const a = anchor(K(0.235), -1, 330);
         for (const [off, w, h, seed] of [[-150, 240, 112, 701], [0, 290, 148, 709], [165, 230, 105, 719]]) {
@@ -777,9 +620,6 @@
         }
       }
 
-      // 7) Broadcast compound behind the stadium-bowl frontage (~s=0.86): an
-      // OB-van row, uplink dishes and a link mast, plus a small camera tower —
-      // no circuit in the game modelled this before this pass.
       broadcastCompound(K(0.865), 1, 34, { vans: 3, dishes: 2, mastH: 9 });
       cameraTower(K(0.855), 1, 26, { h: 16 });
     },

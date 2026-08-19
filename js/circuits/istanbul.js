@@ -7,8 +7,6 @@
   {
     id: "istanbul",
     classic: true,
-    // Istanbul Park is one of the few anti-clockwise circuits, and upstream
-    // tr-2005 is already drawn that way, so no flip.
     reverse: false,
     // The trace's first vertex is the start line, on the pit straight ahead of
     // the Turn 1 plunge.
@@ -16,9 +14,6 @@
     // Was 0.98, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.98,
     name: "ISTANBUL",
     gp: "Turkish GP",
@@ -46,9 +41,6 @@
       runoff:        [0.64, 0.58, 0.44],
       sunDir:        [0.46, 0.66, 0.30],
     },
-    // Istanbul Park is built across a valley and drops and climbs constantly —
-    // the Turn 1 plunge and the long climb out of Turn 9 are its character.
-    // Authored, not surveyed.
     elevations: [
       { s: 0.055, halfM: 300, rise: -12.0 },  // the Turn 1 downhill plunge
       { s: 0.28, halfM: 380, rise: -7.0 },    // valley floor before Turn 8
@@ -78,15 +70,10 @@
       const PINE = [0.13, 0.30, 0.15], PINE_D = [0.10, 0.24, 0.13];
       const SCRUB = [0.34, 0.38, 0.21], SCRUB_D = [0.28, 0.32, 0.18];
       const GRAVEL = [0.70, 0.63, 0.48];
-      // Istanbul Park is built out of one material: pale Thracian limestone,
-      // dry and warm. Nothing here is white, and nothing here is grey steel.
       const STONE = [0.84, 0.80, 0.71], STONE_D = [0.72, 0.68, 0.59];
       const STONE_L = [0.90, 0.86, 0.77], SHADOW = [0.55, 0.51, 0.44];
       const TURK_RED = [0.85, 0.11, 0.13];
 
-      // =====================================================================
-      // 1. THRACIAN SCRUB HILLSIDE — sparse pine and dry brush, not forest.
-      // =====================================================================
       const openArea = (s) => (s >= 0.93 || s <= 0.08) || (s >= 0.34 && s <= 0.46);
       every(28, (k) => {
         const s = k / n;
@@ -111,25 +98,12 @@
         tree(k, h < 0.5 ? -1 : 1, 42 + h * 26, 9 + h * 6, [0.24, 0.35, 0.19]);
       });
 
-      // =====================================================================
-      // 2. TURN 8 — the signature. A wide banked left with a natural
-      //    amphitheatre of terracing on the outside; nothing else at Istanbul
-      //    Park matters as much visually.
-      // =====================================================================
-      // THE AMPHITHEATRE. Turn 8's outside is a natural hollow in the hillside,
-      // and the crowd sits ON the slope: cut earth benches faced with dry stone
-      // that follow the corner arc for a quarter of a kilometre. A grandstand
-      // put here reads as a box parked in a field — the point of this corner is
-      // that the LAND is the stand — so the whole bowl is built as terracing.
       {
         const EARTH = [0.52, 0.44, 0.30], EARTH_D = [0.44, 0.37, 0.25];
         const CROWD = [[0.88, 0.14, 0.14], [0.92, 0.90, 0.86], [0.34, 0.34, 0.38]];
         let i = 0;
         along(0.340, 0.462, 8, (k, spacing) => {
           const seg = spacing * 0.97;
-          // Eight rows climbing ~24 m up the slope. Risers alternate between a
-          // stone retaining face and bare cut earth, which is what a hillside
-          // terrace built on a budget in 2005 actually looks like.
           for (let t = 0; t < 8; t++) {
             const a = anchor(k, 1, 16 + t * 4.0);
             const b = [a.r, a.u, a.t];
@@ -142,8 +116,6 @@
           }
           i++;
         });
-        // Dry-stone revetment closing the bottom of the bowl, so the terracing
-        // sits IN the hill rather than on top of it.
         groundedSegments({
           id: "istanbul-turn8-revetment",
           points: [0, 1, 2, 3, 4, 5, 6].map((j) => ({
@@ -154,8 +126,6 @@
       }
       groundPatch(K(0.400), 1, 8, [56, 0.18, 140], GRAVEL,
         { id: "istanbul-turn8-gravel", samples: 10 });
-      // Red flag ranks lining the top of the bowl — the crown of the
-      // amphitheatre, and the strongest colour anywhere on the circuit.
       {
         let f = 0;
         along(0.345, 0.458, 16, (k) => {
@@ -166,39 +136,17 @@
             (f++ & 1) ? TURK_RED : [0.92, 0.90, 0.88], b);
         });
       }
-      // Informal grass banks on the INSIDE of the corner, where the ground
-      // rises away from the apex — no terracing, people just stand on it.
       spectatorHill(0.352, 0.400, -1, 22, { rows: 3, rise: 1.1, depth: 1.9, density: 0.42, step: 9 });
       marshalPost(K(0.380), -1, 10);
       marshalPost(K(0.425), -1, 10);
       cameraTower(K(0.398), -1, 14, { h: 20 });   // the inside camera the corner is always shot from
-      // The Turn 8 GRANDSTAND crowning the amphitheatre — the roofed upper deck
-      // the brief calls for, set back ABOVE the earth terracing and the flag
-      // crown (terracing is the lower bowl out to ~46 m, flags at 50 m, this
-      // stand stands behind them at 54 m up the banked outside). Three ~46 m
-      // sections so the run follows the long left instead of cutting its chord
-      // across it. Crimson shell for the sea-of-red Turkish crowd; the hero
-      // centre section carries the hospitality suites. Reinforcing Turn 8's
-      // dominance over the rest of the lap is exactly the brief's instruction.
       for (const [i, s] of [[0, 0.360], [1, 0.400], [2, 0.440]]) {
         grandstandEx(s, 1, 54, 46, null, null, {
           livery: i === 1 ? "crimson" : "sandstone",
           tiers: 2, roof: "cantilever", suites: i === 1, endWalls: true, pylons: true,
         });
       }
-      // The long sweep is where the crowd banks are, so keep the inside open —
-      // that open infield is part of why the corner reads as enormous.
 
-      // =====================================================================
-      // 3. PIT COMPLEX — Istanbul's paddock is a long, low, pale-stone block
-      //    with a distinctive stepped roofline.
-      // =====================================================================
-      // A heavy pale-limestone terrace: solid stone piers between deeply
-      // RECESSED garage openings, narrow shaded window slots above, and a
-      // roofline that steps down in stages along the row. It is a masonry
-      // building pretending to be a hillside, which is the opposite of a
-      // glazed European pit block, and none of that survives a row of
-      // identical building() boxes — hence six atomic bays built here.
       {
         for (let i = 0; i < 6; i++) {
           const s = 0.948 + i * 0.012;
@@ -212,8 +160,6 @@
             stage._mat = MAT.STONE;
             seat.box(stage, a.c, [16, 1.0, 22], STONE_D, b);
             addBox(stage, vadd(vadd(a.c, a.r, 1.8), a.u, 4.6), [11, 7.2, 22], SHADOW, b);
-            // Stone piers standing proud of the recessed garage wall — the deep
-            // shadow between them is the whole facade.
             for (let d = 0; d < 5; d++)
               addBox(stage, vadd(vadd(a.c, a.r, -5.6), a.t, (d - 2) * 5.0),
                 [3.0, 8.4, 2.4], d & 1 ? STONE : STONE_L, b);
@@ -234,8 +180,6 @@
             stage._mat = 0;
           }, { required: true });
         }
-        // Race control — a stone drum with a projecting shaded gallery and a
-        // deep brise-soleil hood, capped by the flagpole cluster.
         const a = anchor(K(0.990), 1, 13);
         const b = [a.r, a.u, a.t];
         modelGroup("istanbul-race-control", {
@@ -250,13 +194,6 @@
           addBox(stage, vadd(vadd(a.c, a.r, -2.8), a.u, 22.5), [5.4, 3.4, 9.0],
             [0.90, 0.84, 0.58], b);
           stage._mat = MAT.STONE;
-          // Stepped-cornice ledges: 0.35 m thick with a reveal between each —
-          // the 1.3 m stride left a 0.95 m gap, over float-audit.cjs's 0.6 m
-          // "rests on" bridging tolerance (the support-chain EPS in tools/float-audit.cjs), so the
-          // whole flagpole cluster above read as unsupported even though it
-          // visually sits right on top. 0.9 m keeps a visible reveal (0.55 m)
-          // under the tolerance; the roof cap and flagpole cluster shift down
-          // by the same 1.4 m so they still land flush on the top ledge.
           for (let l = 0; l < 3; l++)
             addBox(stage, vadd(vadd(a.c, a.r, -4.2), a.u, 25.2 + l * 0.9), [4.4, 0.35, 11], STONE_L, b);
           addBox(stage, vadd(vadd(a.c, a.r, -2.6), a.u, 28.0), [9.5, 0.8, 12], STONE_L, b);
@@ -274,10 +211,6 @@
       grandstandEx(0.005, -1, 11, 150, null, null,
         { livery: "sandstone", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       grandstandEx(0.955, -1, 11, 90, null, null, { livery: "terracotta", endWalls: true });
-      // The paddock block behind the garages. One 92 m chord was silently
-      // rejected here (the straight folds back under its far end), so it is
-      // three shorter blocks whose caps STEP DOWN the slope — which is closer
-      // to the real building anyway, since it terraces with the hillside.
       for (const [i, s] of [[0, 0.952], [1, 0.966], [2, 0.994]]) {
         const a = anchor(K(s), 1, 44);
         const b = [a.r, a.u, a.t];
@@ -308,9 +241,6 @@
       broadcastCompound(K(0.915), 1, 72, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.86, 0.16, 0.14]);
 
-      // =====================================================================
-      // 4. OTHER CORNERS
-      // =====================================================================
       groundPatch(K(0.055), -1, 6, [34, 0.18, 48], GRAVEL,
         { id: "istanbul-t1-gravel", samples: 8 });
       tyreWall(0.040, 0.075, -1, 5, [0.86, 0.20, 0.18]);
@@ -329,9 +259,6 @@
       grandstandEx(0.900, 1, 20, 76, null, null, { livery: "sandstone", endWalls: true });
       marshalPost(K(0.898), 1, 9);
 
-      // =====================================================================
-      // 5. BOUNDARIES
-      // =====================================================================
       for (const [s0, s1] of [[0.09, 0.33], [0.47, 0.59], [0.65, 0.75], [0.79, 0.87]]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
@@ -343,10 +270,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      // =====================================================================
-      // 6. BACKDROP — the dry ridgelines of the Kocaeli hills, and a distant
-      //    hint of the Istanbul sprawl on one horizon.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -372,14 +295,6 @@
         }
       }
 
-      // =====================================================================
-      // 7. BESPOKE IDENTITY — the flag ranks, the stone entrance portal, and
-      //    the dry terraced hillside the whole valley is cut out of.
-      // =====================================================================
-      // A DOUBLE rank of Turkish flags down the pit straight, alternating red
-      // and white and standing well clear of the barrier. Photographs of this
-      // circuit are dominated by them; eight small pennants were not enough for
-      // that to register at racing speed.
       for (let i = 0; i < 16; i++) {
         const a = anchor(K(0.940 + i * 0.005), -1, 9);
         const b = [a.r, a.u, a.t];
@@ -387,22 +302,13 @@
         addCyl(out, a.c, 0.13, h, [0.92, 0.92, 0.92], 5, b);
         addBox(out, vadd(vadd(a.c, a.u, h - 2.4), a.t, 1.9), [0.15, 2.4, 3.6],
           (i & 1) ? TURK_RED : [0.94, 0.92, 0.90], b);
-        // Crescent hint: a pale disc offset on the red field. Two boxes is as
-        // far as a crescent goes at this scale, and it still reads as a flag
-        // rather than a plain coloured rectangle.
         if (i & 1)
           addBox(out, vadd(vadd(vadd(a.c, a.u, h - 2.4), a.t, 1.4), a.r, -0.1),
             [0.1, 1.0, 1.0], [0.95, 0.94, 0.92], b);
       }
-      // Broadcast masts at the vantage points, on stone-clad bases like
-      // everything else here.
       for (const [s, side, gap] of [[0.062, 1, 30], [0.615, -1, 28], [0.900, 1, 28]])
         cameraTower(K(s), side, gap, { h: 16, col: [0.62, 0.58, 0.52] });
 
-      // The stone entrance portal on the approach to the paddock — a pair of
-      // heavy limestone piers carrying a deep lintel, the one piece of overtly
-      // Ottoman-flavoured masonry on the site and a hero nobody would mistake
-      // for a German or Spanish circuit.
       {
         const a = anchor(K(0.930), -1, 52);
         const b = [a.r, a.u, a.t];
@@ -424,10 +330,6 @@
         });
       }
 
-      // THE THRACIAN HILLSIDE. This valley is dry terraced farmland cut into
-      // pale rock, and long low stone benches stepping up the slope behind the
-      // runoff are what make the outfield read as parched hillside rather than
-      // the green outfield of a European park circuit.
       for (const [id, s, side, gap] of [
         ["t1", 0.070, 1, 54], ["t4", 0.170, -1, 56],
         ["t9", 0.640, 1, 56], ["t12", 0.790, -1, 54],
@@ -447,9 +349,6 @@
         h: 1.3, step: 10,
         palette: [TURK_RED, [0.94, 0.92, 0.88], [0.14, 0.30, 0.58], [0.94, 0.76, 0.10]],
       });
-      // THRACIAN PINE BELT, set well back so the long sightlines this circuit
-      // is built on survive. The scattered ranks alone left the middle distance
-      // empty between the verge scrub and the ridgelines.
       for (const [s0, s1] of [[0.1, 0.32], [0.48, 0.91]]) {
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 20, { density: 0.42, hMin: 9, hMax: 17, pineFrac: 0.72, col: PINE, col2: PINE_D });

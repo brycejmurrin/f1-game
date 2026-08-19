@@ -1,18 +1,7 @@
-/* Apex 26 — static scenery data tables for js/track/tracks.js buildProps().
-   Pure constants (no closure state): per-track street-furniture + barrier
-   liveries, crowd/sign/house/motorhome palettes, and the city generator's
-   neon/daylight palettes + building-style tables. Hoisted out of buildProps
-   so the placement logic and the data can evolve separately. Must load
-   BEFORE js/track/tracks.js (see index.html and tools/verify-track.cjs). */
+/* Apex 26 — static scenery data tables for js/track/tracks.js buildProps(). Pure constants (no closure state): per-track street-furniture + barrier liveries, crow… */
 const TrackSceneryData = (function () {
   "use strict";
 
-  // UNIFIED CITY GENERATOR — every city circuit gets its own character via a
-  // per-track STYLE: a distinct neon palette, a building-MODEL mix (regular
-  // building silhouettes + a few bright "neon" types), a concrete tone, and a
-  // neonBias (how many buildings are neon vs plain). At night EVERY building
-  // gets at least a touch of neon; by day they're plain detailed concrete. Two
-  // staggered rows give depth; sign blades + retail boxes dress the gaps.
   const NC = {
     mag: [0.95, 0.15, 0.55], cyan: [0.18, 0.85, 0.98], gold: [1.00, 0.78, 0.12],
     violet: [0.62, 0.22, 1.0], blue: [0.22, 0.48, 1.0], orange: [1.00, 0.42, 0.08],
@@ -22,10 +11,6 @@ const TrackSceneryData = (function () {
     rose: [1.0, 0.45, 0.55], amber: [1.00, 0.55, 0.12],
   };
 
-  // Daytime facade colours — real building materials so a city in daylight
-  // isn't a wall of grey concrete. Warm stone/terracotta read as masonry
-  // (small punched windows via neonTower's `med` path); cool tones read as
-  // glass. Per-track `dayPal` arrays below pick a varied mix per circuit.
   const DC = {
     cream:   [0.86, 0.82, 0.72], sand:    [0.80, 0.71, 0.54], tan:     [0.74, 0.63, 0.47],
     stone:   [0.78, 0.76, 0.70], terra:   [0.74, 0.46, 0.34], brick:   [0.62, 0.40, 0.34],
@@ -41,9 +26,6 @@ const TrackSceneryData = (function () {
 
   const BLD = ["setback", "tiered", "podium", "slab", "twin", "jenga", "cylinder", "spire", "dome", "chevron", "notch", "fin", "antenna", "cross", "arch", "ziggurat", "drum", "hall"];
 
-  // Varied spectator clothing for a DAY crowd — a realistic mix of neutrals
-  // (denim, grey, white, khaki) with pops of team colour so a packed stand
-  // reads as thousands of individuals, not a flat painted slab.
   const CROWD_DAY = [
     [0.82, 0.82, 0.84], [0.74, 0.72, 0.68], [0.30, 0.34, 0.52], [0.20, 0.24, 0.34],
     [0.78, 0.20, 0.20], [0.86, 0.52, 0.16], [0.90, 0.82, 0.28], [0.24, 0.48, 0.28],
@@ -51,40 +33,18 @@ const TrackSceneryData = (function () {
     [0.40, 0.26, 0.18], [0.14, 0.16, 0.20], [0.86, 0.40, 0.46], [0.30, 0.62, 0.60],
   ];
 
-  // Per-building window tint when lit: a spread of warm office light, cool
-  // daylight-balanced glass and the occasional saturated accent so a long
-  // street wall shimmers with colour instead of one flat hue. HDR-boosted in
-  // building(), so these are kept near 1.0 here.
   const WINTINTS = [
     [0.98, 0.86, 0.56], [0.92, 0.82, 0.60],   // warm office
     [0.62, 0.76, 1.00], [0.72, 0.84, 0.98],   // cool glass
     [1.00, 0.70, 0.85], [0.70, 0.95, 0.90],   // soft accents
   ];
 
-  // House: small RESIDENTIAL massing — one box + a gabled/hipped roof + a
-  // chimney + a door and two windows. Deliberately much simpler/cheaper than
-  // building() and uses a warm render/stone/terracotta palette so villages and
-  // farmhouses read as homes, not office towers. (k, side, gap, w, h, d, opts)
-  // matches building()'s signature: w = depth away from the road (along `r`),
-  // d = frontage width parallel to the road (along `t`).
   const HOUSE_WALLS = [[0.86, 0.80, 0.68], [0.80, 0.62, 0.46], [0.74, 0.72, 0.70], [0.70, 0.50, 0.38]];
 
   const HOUSE_ROOFS = [[0.42, 0.20, 0.14], [0.32, 0.32, 0.35], [0.36, 0.24, 0.16]];
 
-  // Motorhome / team hospitality unit: a two-tier coach body + a slide-out
-  // AWNING CANOPY on posts (the signature paddock look — every real F1 team
-  // motorhome has one), a window ribbon, a roof AC unit, and a team-colour
-  // accent stripe along the base. Paddock rows on several tracks used to be
-  // 3 stacked plain boxes per unit — this is the purpose-built replacement.
-  // (k, side, gap, w, h, d, opts): w = depth away from the road (along `r`),
-  // d = length along the road (along `t`), matching building()/house().
   const MOTORHOME_BODY = [[0.90, 0.90, 0.92], [0.85, 0.86, 0.90], [0.94, 0.92, 0.86]];
 
-  // Trackside SIGNAGE: corner-number boards, circular speed-limit discs, and
-  // diagonal red/white braking-distance boards — the classic FIA trackside
-  // kit. No such model existed anywhere in the codebase before this; every
-  // real circuit is covered in these and their absence was a genuine gap.
-  // 7-segment digit rects in LOCAL unit space [x0,x1,y0,y1] (0..1 square).
   const SIGN_SEG = {
     top: [0.16, 0.84, 0.86, 1.00], mid: [0.16, 0.84, 0.44, 0.58], bottom: [0.16, 0.84, 0.00, 0.14],
     topL: [0.04, 0.20, 0.50, 0.94], topR: [0.80, 0.96, 0.50, 0.94],
@@ -99,15 +59,6 @@ const TrackSceneryData = (function () {
     8: ["top", "topL", "topR", "mid", "botL", "botR", "bottom"], 9: ["top", "topL", "topR", "mid", "botR", "bottom"],
   };
 
-  // Per-circuit barrier identity — each city gets its own armco livery (three
-  // cycling day stripe colours + a tinted night rail) so no two street
-  // walls look alike. Themes nod to each locale: Monaco classic red/white,
-  // Vegas casino gold/black, Madrid & Mexico national colours, Miami pastel
-  // vice, Saudi green at Jeddah, Azerbaijan teal at Baku, etc. `tyre` is the
-  // conveyor-belt cap colour for the corner tyre stacks (Miami/Shanghai/Mexico).
-  // Each theme cycles THREE stripe colours (locale / national palette) for a
-  // richer, more identifiable wall than a two-tone armco. `night` is the
-  // tinted dark rail; `tyre` the conveyor cap for corner tyre stacks.
   const BARRIER = {
     monaco:    { a: [0.95, 0.95, 0.96], b: [0.86, 0.16, 0.15], c: [0.13, 0.28, 0.55], night: [0.20, 0.20, 0.24], tyre: [0.86, 0.16, 0.15] },  // red/white + Riviera navy
     vegas:     { a: [0.97, 0.84, 0.12], b: [0.10, 0.10, 0.12], c: [0.85, 0.12, 0.48], night: [0.28, 0.10, 0.32], tyre: [0.97, 0.84, 0.12] },  // casino gold/black + neon magenta
@@ -123,7 +74,6 @@ const TrackSceneryData = (function () {
     abudhabi:  { a: [0.90, 0.92, 0.94], b: [0.00, 0.72, 0.68], c: [0.92, 0.18, 0.55], night: [0.10, 0.18, 0.22], tyre: [1.00, 0.62, 0.18] },
   };
 
-  // ── Per-track street / scenery furniture: lamp posts + roadside trees ──
   // Every circuit — city, desert AND forest/green — gets its own incidental
   // models so no two tracks share trees and lighting. tree: palm|broad|fir|
   // none; lamp: arm|globe|post|none with a per-track tint. Green circuits get
@@ -152,21 +102,11 @@ const TrackSceneryData = (function () {
     interlagos:  { tree: "palm",  fol: [0.26, 0.48, 0.20], lamp: "none" },                 // warm subtropical
     zandvoort:   { tree: "fir",   fol: [0.40, 0.45, 0.29], lamp: "none", sparse: true },   // coastal dune scrub — thin + pale
     redbull:     { tree: "fir",   fol: [0.17, 0.40, 0.22], lamp: "none" },                 // lush emerald alpine spruce
-    // The comment used to read "riverbank poplar/willow/oak", which is the real
-    // Santerno bank but NOT what this row selects — `cypress` is the columnar
-    // spire model catalunya/istanbul use for pine and monza for its avenue.
-    // Left as cypress rather than silently restyling a shipped circuit; if the
-    // riverbank species was the intent, that is a deliberate visual change.
     imola:       { tree: "cypress", fol: [0.24, 0.41, 0.21], lamp: "none" },                 // columnar spires
     hungaroring: { tree: "broad", fol: [0.44, 0.44, 0.19], lamp: "none", sparse: true, treeCrown: "columnar" },   // dry straw-olive, dusty bowl
     cota:        { tree: "acacia", fol: [0.32, 0.39, 0.18], lamp: "none" },                 // dry Texas live oak
     montreal:    { tree: "fir",   fol: [0.20, 0.42, 0.23], lamp: "none" },                 // lush island maple/conifer
     albert_park: { tree: "broad", fol: [0.28, 0.46, 0.22], lamp: "none", treeCrown: "vase" },                 // tidy Melbourne parkland
-    // ── retired / off-calendar circuits (def `classic: true`) ──
-    // These matter more than they look. Without an entry a circuit falls back to
-    // FURN_DEF[theme] — mid-green broadleaf, and for `modern` a white "post"
-    // lamp — which puts 2020s street lighting on a 1996 pit straight and cancels
-    // the identity the bespoke planting in each scenery() is built around.
     hockenheim:    { tree: "fir",   fol: [0.11, 0.30, 0.15], lamp: "none" },                          // Hardtwald pine corridor
     nurburgring:   { tree: "fir",   fol: [0.09, 0.27, 0.14], lamp: "none" },                          // dark Eifel spruce, bluer than Spa
     catalunya:     { tree: "stonePine",   fol: [0.16, 0.32, 0.17], lamp: "post",  lc: [0.96, 0.96, 1.0], sparse: true },  // thin Catalan umbrella pine
@@ -193,7 +133,6 @@ const TrackSceneryData = (function () {
     modern:       { tree: "broad", fol: [0.26, 0.42, 0.20], lamp: "post",  lc: [0.95, 0.95, 1.0] },
   };
 
-  // ── PER-CIRCUIT TRACKSIDE FURNITURE FORMS ───────────────────────────────
   // FURN keys a circuit's planting and lighting; KIT keys its barriers,
   // signage and marshal kit. Same rule, same fallback shape:
   //   KIT[def.id] || KIT_DEF[theme] || KIT_DEF.green
@@ -211,7 +150,6 @@ const TrackSceneryData = (function () {
   // "hoarding"/"palisade" are heavier than mesh. They appear only on circuits
   // with measured headroom, never in KIT_DEF.
   const KIT = {
-    // ── street circuits: rented kit, tecpro, printed hoarding ──
     monaco:      { marshal: "tent",      rail: "armco",       fence: "hoarding",  tyre: "tecpro",  board: "fascia",    gantry: "cantilever", camera: "scaffold",  hoarding: "barrierTop" },
     vegas:       { marshal: "hut",       rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },
     singapore:   { marshal: "hut",       rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "truss",      camera: "scaffold",  hoarding: "led" },
@@ -219,11 +157,9 @@ const TrackSceneryData = (function () {
     jeddah:      { marshal: "hut",       rail: "armco",       fence: "chainlink",  tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "monopole",  hoarding: "led" },
     miami:       { marshal: "kiosk",     rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },
     madrid:      { marshal: "tent",      rail: "jersey",      fence: "hoarding",  tyre: "tecpro",  board: "led",       gantry: "cantilever", camera: "scaffold",  hoarding: "banner" },
-    // ── Gulf / desert: containers, sand-proof kit, monopole signage ──
     bahrain:     { marshal: "container", rail: "wArmco",      fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "panel" },
     qatar:       { marshal: "container", rail: "wArmco",      fence: "panelled",  tyre: "airfence", board: "monopole", gantry: "portal",     camera: "monopole",  hoarding: "led" },
     abudhabi:    { marshal: "kiosk",     rail: "safer",       fence: "panelled",  tyre: "airfence", board: "led",      gantry: "truss",      camera: "monopole",  hoarding: "led" },
-    // ── modern Tilke-era permanent ──
     shanghai:    { marshal: "kiosk",     rail: "wArmco",      fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "truss",      camera: "monopole",  hoarding: "panel" },
     cota:        { marshal: "kiosk",     rail: "safer",       fence: "panelled",  tyre: "tecpro",  board: "monopole",  gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     sochi:       { marshal: "kiosk",     rail: "jersey",      fence: "panelled",  tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "monopole",  hoarding: "led" },
@@ -233,7 +169,6 @@ const TrackSceneryData = (function () {
     portimao:    { marshal: "cabin",     rail: "wArmco",      fence: "leaning",   tyre: "stack",   board: "trivision", gantry: "box",        camera: "scaffold",  hoarding: "panel" },
     istanbul:    { marshal: "kiosk",     rail: "armco",       fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "panel" },
     magny_cours: { marshal: "cabin",     rail: "wArmco",      fence: "mesh",      tyre: "stack",   board: "trivision", gantry: "box",        camera: "lattice",   hoarding: "panel" },
-    // ── old-school permanent: armco, timber, lattice ──
     spa:         { marshal: "cabin",     rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     monza:       { marshal: "hut",       rail: "armco",       fence: "leaning",   tyre: "stack",   board: "arched",    gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     imola:       { marshal: "cabin",     rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "arched",    gantry: "box",        camera: "lattice",   hoarding: "panel" },
@@ -257,8 +192,6 @@ const TrackSceneryData = (function () {
     albert_park: { marshal: "container", rail: "jersey",      fence: "chainlink", tyre: "tecpro",  board: "panel",     gantry: "box",        camera: "scaffold",  hoarding: "panel" },
   };
 
-  // Theme fallback. Every value here is the emitter's PRE-EXISTING default, so
-  // a circuit with no KIT row is untouched.
   const KIT_DEF = {
     green:        { marshal: "hut", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     desert:       { marshal: "hut", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
@@ -267,9 +200,6 @@ const TrackSceneryData = (function () {
     modern:       { marshal: "hut", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
   };
 
-  // fh / bh = front / back-row height [min, range]. Real-circuit character:
-  // Vegas/Singapore tall; Baku = low sandstone Old City + tall flame towers;
-  // Monaco = SHORT tan Mediterranean apartment blocks; Jeddah/Madrid/Miami mid.
   const STYLES = {
     vegas:     { neon: [NC.mag, NC.gold, NC.red, NC.cyan, NC.violet, NC.pink, NC.orange], bias: 0.62, fh: [18, 50], bh: [44, 78],
                  kinds: ["setback", "tiered", "podium", "slab", "twin", "jenga", "dome", "fin", "ziggurat", "drum"], neonKinds: ["screen", "clad", "antenna"], tone: null,
@@ -300,12 +230,6 @@ const TrackSceneryData = (function () {
     miami:     { neon: [NC.pink, NC.cyan, NC.teal, NC.orange, NC.purple], bias: 0.44, fh: [11, 30], bh: [28, 68],
                  kinds: ["setback", "podium", "slab", "cylinder", "twin", "dome", "chevron", "drum", "hall"], neonKinds: ["clad", "screen"], tone: { n: [0.15, 0.14, 0.18], d: [0.58, 0.60, 0.64] },
                  dayPal: [DC.cream, DC.white, DC.peach, DC.pink, DC.aqua, DC.mint, DC.lemon] },
-    // ── The six circuits that used to fall through to THEME_DEF.modern ──
-    // A missing STYLES entry is not neutral: every "modern"/"street_*" circuit
-    // without one drew the SAME generic cool-glass city, so six venues on three
-    // continents shared one skyline. These are all low-rise, none of them a
-    // downtown, and the point of each is what the buildings are MADE of.
-    // Catalan industrial park: Montmelo is warehouses and low render, not glass.
     catalunya:   { neon: [NC.gold, NC.red, NC.white, NC.orange], bias: 0.14, fh: [8, 18], bh: [14, 30],
                  kinds: ["hall", "slab", "podium", "setback", "chevron", "fin"], neonKinds: [], tone: { n: [0.20, 0.19, 0.17], d: [0.80, 0.78, 0.70] },
                  dayPal: [DC.white, DC.cream, DC.sand, DC.terra, DC.ochre, DC.stone, DC.tan] },
@@ -321,10 +245,6 @@ const TrackSceneryData = (function () {
     jacarepagua: { neon: [NC.green, NC.gold, NC.cyan, NC.white], bias: 0.16, fh: [8, 20], bh: [14, 34],
                  kinds: ["setback", "slab", "podium", "hall", "chevron", "tiered"], neonKinds: [], tone: { n: [0.18, 0.19, 0.17], d: [0.78, 0.74, 0.64] },
                  dayPal: [DC.cream, DC.white, DC.paleblue, DC.peach, DC.steel, DC.aqua, DC.coral] },
-    // No paul_ricard entry on purpose: Le Castellet excludes the city generator
-    // lap-wide ({kind:"city", s0:0, s1:1}) because a procedural skyline around
-    // an airfield plateau is wrong. A STYLES entry there would be dead config.
-    // Olympic Park: monumental civic slabs and arena drums, widely spaced.
     sochi:       { neon: [NC.white, NC.blue, NC.red, NC.gold, NC.cyan], bias: 0.24, fh: [12, 30], bh: [22, 52],
                  kinds: ["drum", "cross", "slab", "dome", "podium", "arch", "cylinder"], neonKinds: ["clad"], tone: { n: [0.15, 0.16, 0.19], d: [0.70, 0.71, 0.74] },
                  dayPal: [DC.white, DC.paleblue, DC.steel, DC.bluglass, DC.stone, DC.concrete, DC.greyblue] },
@@ -339,8 +259,6 @@ const TrackSceneryData = (function () {
                     dayPal: [DC.white, DC.paleblue, DC.greyblue, DC.slate, DC.stone, DC.teal, DC.cream] },
   };
 
-  // Named atmosphere / colour packs for scenery(api) and track `pal` merges.
-  // Tracks may Object.assign into def.pal or read ATM/COL from api / TrackSceneryData.
   const ATM = {
     coolNight: {
       zenith: [0.02, 0.03, 0.08], horizon: [0.06, 0.08, 0.14], fog: [0.05, 0.06, 0.10],
@@ -385,13 +303,6 @@ const TrackSceneryData = (function () {
     desertSand:  [0.72, 0.58, 0.38],   // warm tan runoff sandwich
   };
 
-  // GRANDSTAND LIVERIES — named shell/roof/fascia colour sets for grandstandEx().
-  // A single grey template used at every circuit is the main reason stands blur
-  // together (248 grandstand() call sites all rendered the same box). Each entry
-  // is one recognisable stand FAMILY: `shell` is the back mass, `roof` the
-  // cantilever slab, `fascia` the band closing shell-top to roof-underside.
-  // `crowd` tints the dark step risers (the spectators themselves come from
-  // CROWD_DAY / the night mix in crowdBank).
   const STAND_LIVERIES = {
     // Permanent-circuit steel and concrete
     steel:     { shell: [0.40, 0.41, 0.46], roof: [0.86, 0.88, 0.92], fascia: [0.44, 0.45, 0.50], crowd: [0.72, 0.40, 0.32] },
@@ -411,9 +322,6 @@ const TrackSceneryData = (function () {
     orange:    { shell: [0.68, 0.34, 0.08], roof: [0.90, 0.88, 0.84], fascia: [0.62, 0.31, 0.07], crowd: [0.92, 0.52, 0.10] },
   };
 
-  // Per-circuit stand FAMILIES — grandstandEx() rotates through the list so a
-  // circuit's stands vary from each other while staying recognisably one venue.
-  // Unlisted circuits fall back to STAND_SET_DEF.
   const STAND_SET_DEF = ["steel", "darkSteel", "concrete"];
   const STAND_SETS = {
     monza:       ["crimson", "concrete", "steel"],          // tifosi red + old park concrete
@@ -440,7 +348,6 @@ const TrackSceneryData = (function () {
     shanghai:    ["crimson", "alu", "darkSteel"],             // China red against modern steel
     albert_park: ["steel", "pastel", "alu"],                  // temporary park build, pale Melbourne palette
     madrid:      ["crimson", "sandstone", "steel"],         // the file hardcodes these at its own call sites
-    // ── retired / off-calendar circuits (def `classic: true`) ──
     hockenheim:    ["concrete", "darkSteel", "crimson"],        // Motodrom concrete bowl, German-GP red accents
     nurburgring:   ["darkSteel", "concrete", "alu"],        // cold Eifel steel and poured concrete
     catalunya:     ["pastel", "concrete", "terracotta"],    // bleached white render, warm Catalan trim

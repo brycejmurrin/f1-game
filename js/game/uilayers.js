@@ -1,29 +1,7 @@
 "use strict";
-/* UI LAYERS — the one answer to "which screen is on top, and are we racing?"
- *
- * WHY. Three modules used to ask that question and none of them agreed:
- *
- *   js/game/input.js   menuOverlayOpen()  — should a key drive the car?
- *   js/game/menunav.js LAYER_IDS          — which pane do the arrows move?
- *   js/game/topmodal.js `dialog.screen`   — which screens does Escape close?
- *
- * Each carried its own hand-maintained list, menunav.js's header asserted that
- * input.js "asks the same question", and by the time this was written the two
- * lists differed by five screens: #career and its three sub-sheets and #quali
- * were absent from the input gate, so arrow keys inside the career hub fell
- * through and latched the car's steering, and neither list had heard of
- * #lighting, #camtune, #vsfriend or #spotifypanel at all. A list that must be
- * edited in three files whenever a screen is added is a list that will drift
- * again; this is that list, once.
- *
- * THE TOP LAYER IS NOT ORDERABLE BY z-index, which is the other bug this fixes.
- * Every `.screen.dim` is a real <dialog> opened with showModal() (see
- * js/game/topmodal.js), and a top-layer dialog computes `z-index: auto` — so
- * ranking candidates by parseInt(zIndex) scored the modal as 0 and handed the
- * arrow keys and the wheel to whatever visible screen sat behind it. Measured:
- * with #standings open over the pause menu, the old activeLayer() returned
- * #overlay. `:modal` outranks every z-index here, because the platform says so.
- */
+/* UI LAYERS — which screen is on top, and are we racing?
+ * Canonical layer list (LAYER_IDS) for input.js, menunav.js, topmodal.js.
+ * showModal() dialogs outrank z-index (`:modal` beats parseInt(zIndex)). */
 window.UiLayers = (function () {
 
   /* Every screen-sized layer in the app, in no particular order — the ranking
@@ -58,9 +36,6 @@ window.UiLayers = (function () {
     { id: "track-detail" },
     { id: "lighting" },
     { id: "camtune" },
-    // The free camera is a SUB-LAYER of the two tuner panels (z 44 over their
-    // 42), so Escape steps out of the fly-cam before it closes the panel —
-    // which is what a back key should do, one step at a time.
     { id: "photo-controls" },
     { id: "datahub" },
   ];
@@ -76,11 +51,6 @@ window.UiLayers = (function () {
   const sel = (defs) => defs.map((d) => "#" + d.id + ":not([hidden])").join(",");
   const ALL_SEL = sel(DEFS);
 
-  // A zero box is the real test, not the hidden attribute: it also catches an
-  // element inside a display:none ancestor, a control in a collapsed section,
-  // and the several buttons index.html ships hidden and reveals per game mode.
-  // This is the strict form, used for CONTROLS (js/game/menunav.js filters its
-  // focus targets and scroll panes with it).
   function shown(el) {
     if (!el || el.hidden) return false;
     const r = el.getBoundingClientRect();
@@ -123,16 +93,11 @@ window.UiLayers = (function () {
       if (!shownLayer(el)) continue;
       const z = parseInt(getComputedStyle(el).zIndex, 10);
       const rank = isModal(el) ? Infinity : (isFinite(z) ? z : 0);
-      // >= so DOM order breaks a tie in favour of the LATER element, which is
-      // the one painted on top.
       if (rank >= bestRank) { bestRank = rank; best = el; }
     }
     return best;
   }
 
-  // "A menu is open" for the purpose of not driving the car. Ignores the
-  // `gate: false` layers (see DEFS). Same zero-size-wrapper allowance as top(),
-  // or the LIGHTING TUNER would go on handing arrow keys to the car.
   /* Resolved by ID rather than by document query, because THIS one is called
      from the frame loop. Input.poll() -> pollGamepad() runs every frame (before
      the paused gate, so on menus too) and asks anyOpen() on every one — and

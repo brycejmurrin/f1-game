@@ -1,13 +1,4 @@
-/*
- * Apex 26 — GLSL sources for the WebGL2 renderer (js/render/glx.js):
- * the small effect programs — blob shadow (SHADOW_*), skid-mark
- * stamps (MARK_*), racing-line decals (DECAL_*), HDR glows (GLOW_*) and the
- * particle sprites (PARTICLE_*).
- * Split from the old monolithic glx-shaders.js. Template strings may
- * interpolate GLXChunks (js/render/shaders/chunks.js — loads first); each file
- * registers its programs on the shared GLXShaders global. All shader files
- * must load BEFORE js/render/glx.js (it destructures GLXShaders at eval).
- */
+/* Apex 26 — GLSL sources for the WebGL2 renderer (js/render/glx.js): the small effect programs — blob shadow (SHADOW_*), skid-mark stamps (MARK_*), racing-line de… */
 "use strict";
 
 (function () {
@@ -43,9 +34,6 @@ void main() {
   outColor = vec4(0.0, 0.0, 0.0, a);
 }`;
 
-  // Batched skid marks: all live marks baked into one world-space vertex buffer
-  // (pos + uv per vertex) so the whole trail draws in ONE call instead of up to
-  // 120 per-mark drawElements. Same MARK_FS, so the look is identical.
   const MARK_BATCH_VS = `#version 300 es
 layout(location=0) in vec3 aPos;   // world position (metres)
 layout(location=1) in vec2 aUV;    // -1..1 across the stamp
@@ -56,11 +44,6 @@ void main() {
   gl_Position = uViewProj * vec4(aPos, 1.0);
 }`;
 
-  // ---- Textured car decals (team logos / sponsors) ----
-  // Flat UV'd quads sitting slightly proud of the bodywork, sampling a canvas-
-  // baked RGBA atlas (transparent where there's no mark). Lit by sun + hemisphere
-  // ambient so a decal sits INTO the paint's shading instead of floating flat;
-  // uGlow lifts bright marks so white sponsors read at night.
   const DECAL_VS = `#version 300 es
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec3 aNrm;
@@ -95,13 +78,6 @@ void main() {
   outColor = vec4(lit, t.a);
 }`;
 
-  // ---- Lamp lens glare (round veiling halo at each lamp head) ----
-  // A camera-facing quad per lamp, drawn ADDITIVELY into the HDR scene before
-  // bloom. Purely RADIAL: a hot core + a soft round veil, like real lens glare.
-  // (The old version was a downward cone wedge meant to fake a beam — seen from
-  // below/off-axis it projected as a bright diagonal dash hanging in the sky,
-  // one of the "rays from the sky". Beams in the air are the volumetric godray
-  // pass's job now; this billboard is only the glare around the source itself.)
   const GLOW_VS = `#version 300 es
 layout(location=0) in vec2 aCorner;   // x in {-1,+1}, y in {0,1}
 layout(location=1) in vec3 aCenter;   // lamp head world position
@@ -136,11 +112,6 @@ void main() {
   outColor = vec4(vColor * a, 1.0);   // additive (blendFunc ONE, ONE)
 }`;
 
-  // ---- Transient FX particles (tyre smoke / sparks / kickup / rain spray) ----
-  // Camera-facing soft billboards, batched by js/game/particles.js into one
-  // interleaved buffer per blend group. uAdditive switches the output packing:
-  // 0 = classic alpha transparency (smoke/dust/spray), 1 = premultiplied energy
-  // for the ONE/ONE spark group (HDR tints feed bloom).
   const PARTICLE_VS = `#version 300 es
 layout(location=0) in vec2 aCorner;   // quad corner in {-1,+1}²
 layout(location=1) in vec3 aCenter;   // particle world position

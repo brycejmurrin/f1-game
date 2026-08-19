@@ -102,8 +102,6 @@ const Liveries = (function () {
       nose: [0.90, 0.24, 0.34], pod: [0.10, 0.72, 0.58], wing: [0.98, 0.72, 0.12] },
     { id: "moonshot",  name: "Moonshot",    c1: [0.88, 0.86, 0.80], c2: [0.98, 0.42, 0.06], stripe: [0.06, 0.07, 0.10], accent: [0.75, 0.20, 0.16],
       nose: [0.06, 0.07, 0.10], halo: [0.98, 0.55, 0.08], noseStripe: [0.75, 0.20, 0.16] },
-    // SATIN schemes — a flat matte wrap. The finish reads strongest on dark and
-    // saturated bodies, where a clearcoat would otherwise blow out to a highlight.
     { id: "satinnight", name: "Satin Night", c1: [0.07, 0.07, 0.09], c2: [0.62, 0.10, 0.14], stripe: [0.80, 0.14, 0.18], accent: [0.55, 0.57, 0.62],
       halo: [0.62, 0.10, 0.14], finish: "satin" },
     { id: "mattelime", name: "Matte Lime",  c1: [0.20, 0.24, 0.10], c2: [0.72, 0.92, 0.14], stripe: [0.80, 0.98, 0.24], accent: [0.10, 0.11, 0.12],
@@ -120,8 +118,6 @@ const Liveries = (function () {
       pod: [0.92, 0.72, 0.34], halo: [0.92, 0.72, 0.34], finish: "satin" },
     { id: "tundra",    name: "Tundra",      c1: [0.66, 0.70, 0.68], c2: [0.86, 0.30, 0.10], stripe: [0.10, 0.14, 0.16], accent: [0.40, 0.46, 0.44],
       nose: [0.86, 0.30, 0.10], wing: [0.10, 0.14, 0.16], noseStripe: [0.10, 0.14, 0.16], finish: "satin" },
-    // CHROME schemes — the paint becomes a tinted mirror, so the primary colour
-    // reads as the metal itself rather than as a coat over it.
     { id: "mirrorlake", name: "Mirror Lake", c1: [0.80, 0.86, 0.92], c2: [0.06, 0.28, 0.52], stripe: [0.12, 0.52, 0.82], accent: [0.90, 0.94, 0.98],
       wing: [0.06, 0.28, 0.52], finish: "chrome" },
     { id: "copperhead", name: "Copperhead", c1: [0.72, 0.40, 0.18], c2: [0.10, 0.09, 0.10], stripe: [0.92, 0.62, 0.30], accent: [0.94, 0.78, 0.46],
@@ -406,12 +402,8 @@ const Liveries = (function () {
     ],
   };
 
-  // Full option list for a team: its default first, then team specials, then the
-  // universal set.
   function forTeam(team) {
     const def = { id: "default", name: "Team Livery", c1: team.color, c2: team.color2 };
-    // Optional extra paint carried on the team (custom "My Team" defines these via
-    // the MY TEAM panel). Additive: absent -> exact same default shape as before.
     const ex = team.livery;
     if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "halo", "finish"]) if (ex[k]) def[k] = ex[k];
     return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL);

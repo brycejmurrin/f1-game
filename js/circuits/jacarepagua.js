@@ -1,18 +1,11 @@
-/* Apex 26 — AUTÓDROMO INTERNACIONAL NELSON PIQUET (JACAREPAGUÁ) definition
-   (data only). Retired circuit (`classic: true`): last Brazilian GP 1989; the
-   circuit itself was demolished in 2012 for the Olympic park.
-   Geometry from the OSM trace in js/track/geo-paths.js. */
+/* Apex 26 — AUTÓDROMO INTERNACIONAL NELSON PIQUET (JACAREPAGUÁ) definition (data only). Retired circuit (`classic: true`): last Brazilian GP 1989; the circuit its… */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "jacarepagua",
     classic: true,
-    // Jacarepaguá ran ANTI-CLOCKWISE, like Interlagos, and upstream br-1977 is
-    // already drawn that way.
     reverse: false,
-    // A ~610 m straight spans the trace's wrap point (source 0.931→0.054) —
-    // that is the pit straight. Not GPS-calibrated.
     startFrac: 0.0,
     name: "JACAREPAGUA",
     gp: "Brazilian GP",
@@ -27,8 +20,6 @@
       { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
       { kind: "foliage", s0: 0.36, s1: 0.50 },   // the lagoon frontage
     ],
-    // Rio: brilliant tropical light with heavy coastal humidity flattening the
-    // horizon, over sandy restinga scrub.
     pal: {
       zenith:        [0.24, 0.48, 0.80],
       horizon:       [0.86, 0.86, 0.82],
@@ -42,8 +33,6 @@
       runoff:        [0.72, 0.68, 0.54],   // pale coastal sand
       sunDir:        [0.24, 0.86, 0.20],
     },
-    // Jacarepaguá was built on reclaimed coastal flat between a lagoon and the
-    // mountains — dead flat, and notorious for it.
     elevations: [
       { s: 0.28, halfM: 380, rise: 2.0 },
       { s: 0.70, halfM: 360, rise: -1.8 },
@@ -70,19 +59,9 @@
       const RESTINGA = [0.34, 0.44, 0.24];   // low sandy coastal scrub
       const SAND = [0.76, 0.71, 0.56];
 
-      // =====================================================================
-      // 1. THE PEDRA BRANCA MASSIF — the single thing that made Jacarepaguá
-      //    unmistakable: sheer forested granite peaks rising straight out of
-      //    the coastal flat right behind the circuit. Placed FIRST and given
-      //    the biggest budget, because in every photograph of this place the
-      //    mountains dominate and the track is an afterthought.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
-      // Steep, tall, closely-spaced peaks over roughly half the horizon — Rio's
-      // morros are near-vertical, not rolling hills, so hMin is high relative
-      // to wMin and `rough` is low (smooth granite domes, not eroded ridges).
       for (const rg of [
         { extra: 220, wMin: 190, hMin: 150, hVar: 90, wVar: 70, count: 16, arc: [0.55, 1.35],
           opts: { seg: 8, rough: 0.20, forest: [0.12, 0.32, 0.16], rock: [0.44, 0.42, 0.40], snowline: 2 } },
@@ -90,8 +69,6 @@
           opts: { seg: 8, rough: 0.22, forest: [0.16, 0.36, 0.20], rock: [0.50, 0.49, 0.48], snowline: 2 } },
       ]) {
         for (let i = 0; i < rg.count; i++) {
-          // Confined to an arc so the mountains sit on ONE side, as they do in
-          // reality — a full ring would read as a crater, not a coastal plain.
           const frac = rg.arc[0] + (i / (rg.count - 1)) * (rg.arc[1] - rg.arc[0]);
           const a = frac * 6.2832, h = hash(i * 7 + rg.extra);
           const r = rad + rg.extra + h * 40;
@@ -126,8 +103,6 @@
           [0.84, 0.62, 0.36], [0.60, 0.64, 0.72],
         ];
         const ROOF = [0.62, 0.60, 0.56], TANK = [0.30, 0.36, 0.46];
-        // Six clusters spread along the same arc the massif occupies, so the
-        // housing sits ON the mountains rather than floating beside them.
         for (let c = 0; c < 6; c++) {
           const frac = 0.62 + (c / 5) * 0.66;
           const ang = frac * 6.2832;
@@ -135,14 +110,6 @@
           const r = rad + 165 + hc * 55;
           const bx = cx + Math.cos(ang) * r, bz = cz + Math.sin(ang) * r;
           if (onTrack(bx, bz, 40)) continue;
-          // Rows climbing the slope: each row further back also sits higher,
-          // which is what makes a favela read as built on a hill rather than
-          // as a housing estate on a flat. `climb`/`back` are a hand-authored
-          // ramp, not a real terrain sample (there is no height query for the
-          // freeform mountain mesh out here) — capped at 6 rows because the
-          // 7th row's extrapolation walked one specific (c=5,row=6) box past
-          // the massif's actual surface and left it floating 58 m above
-          // anything solid.
           for (let row = 0; row < 6; row++) {
             const climb = row * 9.5;
             const back = row * 13;
@@ -156,11 +123,6 @@
               const y = pyMin + climb + hh / 2;
               const w = 7 + h * 4, d = 7 + (1 - h) * 4;
               addBox(out, [wx, y, wz], [w, hh, d], SKIN[(c * 5 + row * 3 + i) % SKIN.length]);
-              // Flat roof slab, water tank, and a whip antenna. At this range
-              // the roof clutter is most of the visible texture. addCyl's
-              // position argument is its BASE, not its centroid (see the
-              // addCyl note in js/track/geom.js) — seat these on the roof
-              // top rather than centring them on it.
               addBox(out, [wx, y + hh / 2 + 0.3, wz], [w + 0.8, 0.5, d + 0.8], ROOF);
               if (h > 0.42)
                 addCyl(out, [wx + 1.6, y + hh / 2 + 0.6, wz - 1.2], 1.1, 2.0, TANK, 6);
@@ -172,10 +134,8 @@
         }
       }
 
-      // =====================================================================
       // 2. THE LAGOON — Jacarepaguá sat on the edge of the Lagoa de Jacarepaguá,
       //    and the water was visible from the long back sweep.
-      // =====================================================================
       // A water body is centred on its anchor, so its SETBACK has to exceed its
       // own half-width or the footprint swallows the road. The lap also folds
       // back close on this side, so the engine only accepts a fairly compact
@@ -186,10 +146,6 @@
       // Sandy restinga shoreline between the track and the water.
       groundPatch(K(0.470), -1, 55, [60, 0.18, 300], SAND,
         { id: "jacarepagua-shoreline", samples: 10 });
-      // Coconut palms along the shore. These were tree() — a lollipop canopy on
-      // a trunk — which is the one silhouette a coconut palm does not have, and
-      // the shoreline is the signature view here. palm() draws the real thing:
-      // bare leaning trunk, radiating fronds, no ball of foliage.
       every(20, (k) => {
         const s = k / n;
         if (s < 0.36 || s > 0.60) return;
@@ -198,11 +154,6 @@
         if (h > 0.5) palm(k, -1, 74 + h * 26, 12 + h * 5, PALM_D);
       });
 
-      // =====================================================================
-      // 3. RESTINGA SCRUB — low, sandy, wind-flattened coastal vegetation
-      //    everywhere else. Deliberately LOW: this circuit had no trees of any
-      //    height around it, which is part of why it looked so exposed.
-      // =====================================================================
       const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.36 && s <= 0.50);
       every(18, (k) => {
         const s = k / n;
@@ -219,12 +170,6 @@
         tree(k, h < 0.5 ? -1 : 1, 24 + h * 18, 11 + h * 5, PALM);
       });
 
-      // =====================================================================
-      // 4. PIT COMPLEX — a long, low, sun-bleached 1970s concrete grandstand
-      //    with the pit boxes UNDERNEATH it, which is how Jacarepaguá was
-      //    built: one structure doing both jobs, not a separate stand and
-      //    garage block.
-      // =====================================================================
       {
         const a = anchor(K(0.975), 1, 13);
         const b = [a.r, a.u, a.t];
@@ -249,8 +194,6 @@
               [[0.94, 0.86, 0.20], [0.10, 0.42, 0.24], [0.90, 0.90, 0.88]][t % 3], b);
             stage._mat = 0;
           }
-          // Thin brise-soleil roof on slim columns — tropical shading, not a
-          // heavy cantilever.
           addBox(stage, vadd(vadd(a.c, a.r, 8), a.u, 17), [18, 0.5, 148], [0.86, 0.85, 0.80], b);
           for (let i = 0; i < 9; i++) {
             const p = vadd(vadd(a.c, a.r, 15), a.t, (i - 4) * 17);
@@ -272,11 +215,6 @@
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.955, 8.0, [0.15, 0.15, 0.18]);
-      // The paddock buildings, in Brazilian modernist idiom rather than as four
-      // window-banded boxes. The tell is the COBOGÓ screen — a perforated
-      // breeze-block wall carrying the whole facade, which is how you build for
-      // shade and ventilation in Rio and which no glazed European paddock has.
-      // Deep eaves on slim pilotis, raised off the ground, brise-soleil fins.
       for (let i = 0; i < 3; i++) {
         const a = anchor(K(0.916 + i * 0.020), 1, 46);
         const b = [a.r, a.u, a.t];
@@ -290,8 +228,6 @@
           addBox(stage, vadd(a.c, a.u, 3.9), [15, 0.6, 36], [0.80, 0.78, 0.74], b);
           // Two storeys set back behind the screen.
           addBox(stage, vadd(vadd(a.c, a.r, 1.6), a.u, 7.2), [11, 6.0, 34], SHADE, b);
-          // COBOGÓ: a lattice of blocks with gaps, standing proud of the wall.
-          // Rendered as alternating pierced courses — the gaps are the point.
           for (let cRow = 0; cRow < 5; cRow++) {
             const y = 5.0 + cRow * 1.5;
             for (let cCol = 0; cCol < 22; cCol++) {
@@ -316,27 +252,14 @@
       broadcastCompound(K(0.908), 1, 78, { vans: 2, dishes: 2, mastH: 9 });
       // Brazilian green-and-gold hoardings.
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.10, 0.44, 0.24]);
-      // The continuous green-and-gold hoarding RUN the brief calls for, low
-      // against the barrier down the whole pit straight — the advertising line
-      // the taller billboards and the flag rank stand behind. Sits at gap 5.5,
-      // in front of the flags (gap 7) and billboards (gap 8), so it layers with
-      // them instead of colliding. Brazil's flag colours: green, gold, blue, white.
       sponsorHoarding(0.955, 0.055, -1, 5.5, {
         h: 1.5, step: 11,
         palette: [[0.10, 0.44, 0.24], [0.94, 0.86, 0.20], [0.10, 0.22, 0.52], [0.92, 0.90, 0.88]],
       });
 
-      // =====================================================================
-      // 5. CORNERS — sand traps rather than gravel, which is what a circuit
-      //    built on a coastal sand flat actually had.
-      // =====================================================================
       groundPatch(K(0.075), 1, 6, [34, 0.18, 46], SAND,
         { id: "jacarepagua-t1-sand", samples: 8 });
       tyreWall(0.058, 0.094, 1, 5, [0.86, 0.20, 0.18]);
-      // Poured mass-concrete terracing, open to the sky. Jacarepaguá's stands
-      // were 1970s steps with no roof and no back shell — grandstandEx builds
-      // both, which put a modern covered stand on a circuit whose whole look
-      // was sun-bleached bare concrete.
       terrace(0.066, 0.085, -1, 18, {
         rows: 7, rise: 1.4, depth: 2.5, step: 9, density: 0.42,
         conc: [0.80, 0.78, 0.72], concAlt: [0.71, 0.69, 0.64],
@@ -366,9 +289,6 @@
       spectatorHill(0.14, 0.24, -1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.36, step: 9 });
       spectatorHill(0.66, 0.76, -1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.36, step: 9 });
 
-      // =====================================================================
-      // 6. BOUNDARIES
-      // =====================================================================
       for (const [s0, s1] of [[0.11, 0.34], [0.52, 0.60], [0.65, 0.85]]) {
         guardrail(s0, s1, -1, 8, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 8, [0.80, 0.81, 0.83]);
@@ -379,13 +299,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 9);
       }
 
-      // =====================================================================
-      // 7. BESPOKE IDENTITY — the tall slim floodlight masts and the Brazilian
-      //    flagpole rank, both of which show against the mountains.
-      // =====================================================================
-      // Warm-lensed masts: Rio ran evening support races, and the tall poles
-      // silhouetted against the granite are part of the place.
-      // light:false — accents over the generic floodlights dressing pass.
       for (const [s, side, gap] of [
         [0.030, -1, 26], [0.075, -1, 34], [0.470, 1, 40], [0.622, -1, 30], [0.882, -1, 26],
       ]) {

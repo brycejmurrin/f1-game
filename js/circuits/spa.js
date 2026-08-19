@@ -1,6 +1,4 @@
-/* Apex 26 — SPA circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — SPA circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -11,9 +9,6 @@
     // Was 0.9875, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.9875,
     name: "SPA",
     gp: "Belgian GP",
@@ -24,11 +19,7 @@
     sunAzimBias: 0.44,   // afternoon sun swings SW over the Ardennes ridge — long shadows down the Kemmel straight
     baseHW: 8,
     sceneryCoordinates: "racing",
-    // Keep the rendered hillside beneath Spa's camps, chalets and forest edge,
-    // but stop before the outer ribbon starts bridging the compact foldbacks.
     terrainOuter: 90,
-    // Spa owns its woodland composition. Suppress the generic foliage pass so it
-    // cannot duplicate the curated forest or place untracked trees in sightlines.
     dressingExclusions: [{ kind: "foliage", s0: 0, s1: 1 }],
     // Cool damp Ardennes overcast (ATM.dampArdennes) — grey sky/fog, no warm sun.
     pal: { zenith: [0.42, 0.48, 0.52], horizon: [0.58, 0.62, 0.64], grass: [0.14, 0.28, 0.16], runoff: [0.40, 0.38, 0.34], fog: [0.55, 0.60, 0.62], fogDensity: 0.0032, sunDir: [0.7141470886878855, 0.44326371022006683, 0.5417667569356373], sun: [0.88, 0.90, 0.92], sunColor: [0.88, 0.90, 0.92], ambientSky: [0.50, 0.54, 0.58], ambientGround: [0.28, 0.30, 0.26] },
@@ -38,18 +29,12 @@
       { t: -50, l: 90 }, { t: 70, l: 110 }, { t: 0, l: 320, h: -6 }, { t: -30, l: 180 }, { t: 80, l: 70 }, { t: -85, l: 70 },
       { t: 30, l: 120 },
     ],
-    // Eau Rouge dip, the Raidillon/Kemmel climb (the calendar's biggest, ~100 m
-    // top-to-bottom), then the long descent back through the second sector.
     elevations: [
       { s: 0.075, halfM: 360, rise: -18 }, // Eau Rouge compression
       { s: 0.155, halfM: 920, rise: 84 },  // Raidillon crest / Kemmel plateau
       { s: 0.46, halfM: 760, rise: 24 },   // rolling high ground before the descent
       { s: 0.72, halfM: 680, rise: -18 },  // Stavelot valley
     ],
-    // Spa camber. Pouhon and Stavelot are the two genuinely banked corners (both
-    // dished into the hillside, both taken far faster than their radius suggests);
-    // Raidillon and Blanchimont carry real camber too. La Source is deliberately
-    // left flat — it is close to off-camber in reality.
     bankZones: [
       { frac: 0.1854, angleDeg: 5.0, widthM: 130 },   // Raidillon
       { frac: 0.3685, angleDeg: 3.0, widthM: 80 },    // Les Combes
@@ -73,23 +58,13 @@
       // 1. Cool Ardennes atmosphere — grey zenith/horizon/fog; kill alpine sun.
       if (ATM && ATM.dampArdennes) Object.assign(pal, ATM.dampArdennes);
 
-      // Start gantry over the line (every circuit gets one). Point lights over
-      // the S/F are placed independently in buildTrackLights — not hung from
-      // this mesh.
       gantry(0.0, 7.5, [0.26, 0.28, 0.32]);
 
-      // --- Encircling Ardennes forested hills (NO snowcaps — summer Belgian GP).
-      // Centre-based ring so the forested peaks sit on the horizon, not scattered
-      // across the infield. snowline ≥ 2 keeps summits forest/rock only.
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
-      // Three concentric rings of organic peaks. Each ring is densely packed and
-      // angularly offset from its neighbours so the summits OVERLAP into one
-      // continuous forested wall with no gaps anywhere around the lap. Low `seg`
-      // keeps each peak cheap so we can afford many.
       const ranges = [
         // near forested wall — wMin/wVar sized so max(w)*0.62 < extra-8 (guard won't fire)
         { extra: 280, wMin: 160, hMin: 56, hVar: 54, wVar: 80, count: 32, phase: 0.0,
@@ -112,18 +87,12 @@
         }
       }
 
-      // --- Forested ridgelines settling behind the trackside treeline.
-      // 22 m height ≈ tall Ardennes pine — reads as a tree-top horizon, not a
-      // looming wall. 200 m+ keeps the near face >140 m from the road edge.
       every(64, (k) => {
         for (const side of [-1, 1]) {
           backdrop(k, side, 200 + hash(k * 13 + side) * 100, [110, 22, 90], [0.13, 0.30, 0.16]);
         }
       });
 
-      // --- Dense Ardennes pine forest walling both sides of the track. Tighter
-      // spacing and a low skip threshold so the woodland is continuous; a second
-      // deeper rank thickens the wall behind the front line.
       every(44, (k) => {
         for (const side of [-1, 1]) {
           const s = hash(k * 41 + side);
@@ -149,23 +118,10 @@
         for (const side of [-1, 1]) {
           const r = hash(k * 53 + side);
           pine(k, side, 7 + r * 10, 10 + r * 10, [0.08 + r * 0.05, 0.31, 0.15]);
-          // Second rank capped at ~30 m: Eau Rouge doubles back on itself inside
-          // 150 m, so past that the "deep" pines came out on the Raidillon verge
-          // and grew through its marshal posts and lighting masts.
           if (r > 0.5) pine(k, side, 20 + r * 10, 13 + r * 9, [0.10 + r * 0.04, 0.28, 0.13]);
         }
       });
 
-      // --- Modern pit/paddock complex: garage-bay rhythm + roof via the shared
-      // facility kit. Spa previously used NO facility kit at all — the whole
-      // complex was one undifferentiated 64 m building() slab with no bay
-      // rhythm — and no race-control tower closed it off.
-      // frac 0.006/0.014 (not 0.0): the last corner folds back close enough to
-      // the pit straight's LEFT edge that a facility centred exactly on the
-      // line clips it once its footprint is checked properly — building()'s
-      // own inline guard tests only half its true height and missed this; the
-      // kit's modelGroup preflight does not. A few metres downtrack of the
-      // line clears it with the same footprint.
       if (circuitKit) {
         circuitKit.pitBuilding({
           id: "kit:spa:pit-building", frac: 0.006, side: -1, gap: 9,
@@ -176,23 +132,13 @@
           size: [12, 24, 14], required: true,
         });
       }
-      // Paddock hospitality row set back behind the pit building — Spa's
-      // paddock was missing a team-motorhome row entirely (just the pit slab
-      // + one old building); motorhome() adds the two-tier body + awning.
       motorhome(Math.round(n * 0.001) % n, -1, 24, 16, 8, 20, { wall: [0.88, 0.89, 0.91], window: [0.30, 0.38, 0.46] });
       motorhome(Math.round(n * 0.006) % n, -1, 24, 15, 7, 18, { wall: [0.82, 0.84, 0.88], window: [0.32, 0.40, 0.48] });
       motorhome(Math.round(n * 0.994) % n, -1, 24, 15, 7, 18, { wall: [0.86, 0.87, 0.90], window: [0.30, 0.38, 0.46] });
       // Lone weathered old pit building on the original Kemmel straight (s≈0.10, far left).
       building(Math.round(n * 0.10) % n, -1, 40, 12, 9, 40, { kind: "chevron", wall: [0.74, 0.72, 0.66], window: [0.34, 0.34, 0.32], floor: 4 });
-      // Broadcast compound near Stavelot: OB trucks + satellite uplink dishes.
-      // This was the single most-requested missing model across the whole
-      // scenery review (14 of 24 circuits) and no track — Spa included — had
-      // any of it.
       broadcastCompound(K(0.755), -1, 45, { vans: 3, dishes: 2, mastH: 9 });
 
-      // CC0 Kenney paddock / village buildings near the Stavelot broadcast yard
-      // and Kemmel old pits. Pack-optional with procedural hall fallbacks so
-      // headless verify-track (no Assets) still dresses the same sites.
       {
         const pads = [
           ["kenney_com_building-e", 0.748, -1, 58],
@@ -214,19 +160,9 @@
         bakedModel("kenney_construction-cone", k, 1, 5.0, { tint: [1.0, 0.42, 0.10] });
       });
 
-      // --- Ardennes forest terrace: Spa's stands away from the pit straight are
-      //     not the modern concrete-and-cantilever kind — they are open decks of
-      //     creosoted timber planking on galvanised raking frames, roofed with
-      //     dark-green painted corrugated sheet on a lattice truss, sitting
-      //     straight in the treeline. That silhouette (open at the back, sheet
-      //     roof, no shell) is what a grandstandEx call cannot produce, and it is
-      //     also where this circuit's COLOUR comes from: the structure stays
-      //     forest-dark and the crowd supplies the orange/red/yellow.
       const ARD_TIMBER = [0.46, 0.36, 0.26];   // creosote-dark plank
       const ARD_STEEL  = [0.62, 0.64, 0.66];   // galvanised frame
       const ARD_ROOF   = [0.14, 0.24, 0.18];   // dark green painted sheet
-      // Spa's grandstands ARE the Orange Army — the colour a wet Ardennes day
-      // otherwise refuses to supply. Belgian red/yellow/black as the accent.
       const ARD_FANS = [
         [0.96, 0.44, 0.06], [0.94, 0.50, 0.10], [0.98, 0.56, 0.14], [0.90, 0.40, 0.05],
         [0.84, 0.16, 0.14], [0.90, 0.82, 0.22], [0.16, 0.16, 0.18], [0.88, 0.88, 0.86],
@@ -247,8 +183,6 @@
             stage._mat = MAT.METAL;
             seat.cyl(stage, vadd(p, a.r, IN * 5.0), 0.15, 2.2, ARD_STEEL, 5, b);
             seat.cyl(stage, vadd(p, a.r, -IN * 5.0), 0.17, backH + 4.2, ARD_STEEL, 5, b);
-            // Two ties per bay: enough to read as a braced frame at speed
-            // without paying for a full lattice on every division.
             addBox(stage, vadd(p, a.u, backH * 0.45), [10.2, 0.14, 0.14], ARD_STEEL, b);
             addBox(stage, vadd(p, a.u, backH + 2.6), [11.4, 0.16, 0.16], ARD_STEEL, b);
           }
@@ -267,83 +201,44 @@
                 [0.52, 0.95, 0.44], fans[Math.floor(h2 * 71) % fans.length], b);
             }
           }
-          // Corrugated sheet roof, laid rib by rib so it reads as sheet metal
-          // rather than a slab, pitched back off the top of the frame.
           stage._mat = MAT.METAL;
           for (let i = 0; i * 1.5 < len; i++) {
             const p = vadd(a.c, a.t, -len / 2 + i * 1.5 + 0.75);
             addBox(stage, vadd(vadd(p, a.r, -IN * 0.4), a.u, backH + 3.3),
               [11.8, 0.24, 0.8], (i % 2) ? ARD_ROOF : [0.18, 0.28, 0.21], b);
           }
-          // Rain gutter along the open front — the Ardennes detail that makes
-          // the roof read as a shelter rather than a lid.
           addBox(stage, vadd(vadd(a.c, a.r, IN * 5.5), a.u, backH + 3.0),
             [0.34, 0.34, len], [0.50, 0.52, 0.54], b);
           stage._mat = 0;
         });
       }
 
-      // --- Grandstands: pit, La Source, Raidillon Gold-4 amphitheatre, Les
-      // Combes, Bus Stop, Blanchimont. Six named stands now rotate through
-      // STAND_SETS.spa ("darkSteel","steel","concrete") via grandstandEx so
-      // each reads as a distinct structure instead of the same grey box.
       const GOLD4 = [0.46, 0.47, 0.50];   // darker concrete — Raidillon Gold 4 mass
-      // Main grandstand, pit straight: the hero stand gets a two-tier deck,
-      // hospitality suites and end walls — the full 2022-era treatment.
       grandstandEx(0.00, 1, 8, 46, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      // La Source hairpin: compact single-tier stand, open truss roof. Belgian
-      // red — the pit precinct is the one place at Spa with painted structure,
-      // and three shades of grey down the whole lap was the real problem here.
       grandstandEx(0.02, 1, 8, 26, null, null,
         { livery: "crimson", roof: "truss", endWalls: true, h: 9 });
-      // 2. Raidillon amphitheatre (Gold 4) — stepped SHORT bays climbing the crest
-      // at s≈0.07–0.10 R. Kept short + individually re-anchored: a single long
-      // stand lays its crowd along ONE node's flat tangent, so on this steep,
-      // curved climb the far rows flung up into the air / over the track. Short
-      // bays each seat on their own local slope, so the crowd stays grounded.
-      // Lengthened 18→26 m and given a second deck: the real Gold 4 was rebuilt
-      // in 2022 into a much larger dual-bay stand and the old single-tier bays
-      // read as undersized against it.
-      // The riser tint is the Orange Army, not a blue accent: Gold 4 is the
-      // bank that turns orange on race day and the structure stays concrete.
       for (const [s, gp] of [[0.070, 8], [0.088, 9], [0.097, 9]]) {
         grandstandEx(s, 1, gp, 26, GOLD4, [0.96, 0.46, 0.08],
           { tiers: 2, roof: "cantilever", pylons: true, roofCol: [0.62, 0.63, 0.66], fasciaCol: GOLD4 });
       }
-      // The general-admission terrace above the Gold 4 bays: timber planking on
-      // a galvanised frame under green sheet, packed with the orange bank.
       ardennesTerrace("spa-terrace-raidillon", K(0.105), 1, 16, 7, { rows: 7 });
       billboard(Math.round(n * 0.085) % n, 1, 14, 18, 10, [0.05, 0.06, 0.09]);
       // Stepped banking slabs climbing the R hillside behind/beside the stands.
       place(K(0.072), 1, 22, [10, 2.4, 16], GOLD4);
       place(K(0.080), 1, 26, [11, 3.6, 18], [0.44, 0.45, 0.48]);
       place(K(0.090), 1, 30, [12, 4.8, 20], [0.42, 0.43, 0.46]);
-      // Kemmel straight signage: ~560 m of the climb to Les Combes previously
-      // carried no trackside advertising at all — the inside (L) verge, clear
-      // of the Gold 4/Les Combes stands on the R, gets a continuous board run.
       sponsorHoarding(0.10, 0.18, -1, 3, { h: 1.2 });
-      // Kemmel inside terrace — the straight ran 560 m with nothing but signage
-      // on the left; a low timber deck answers the Gold 4 bank across the road.
       ardennesTerrace("spa-terrace-kemmel", K(0.135), -1, 14, 6, { rows: 5 });
-      // Les Combes: open tiered box, forest wall directly behind. Orange for
-      // the corner that empties the Dutch camps at the top of the climb.
       grandstandEx(0.16, 1, 8, 30, null, null,
         { livery: "orange", roof: "flat", endWalls: true });
-      // Fagnes/Stavelot high ground and the Bus Stop: two more forest terraces,
-      // so the lap's stands are steel-and-timber structures in a wood rather
-      // than three greys of the same modern shell.
       ardennesTerrace("spa-terrace-fagnes", K(0.60), -1, 16, 6, { rows: 6 });
       ardennesTerrace("spa-terrace-busstop", K(0.905), 1, 15, 5, { rows: 6 });
       // Bus Stop chicane: braking-zone stand facing the final complex.
       grandstandEx(0.92, 1, 8, 28, null, null, { livery: "steel", roof: "cantilever", pylons: true, endWalls: true });
-      // Blanchimont grandstand — missing from the original file entirely
-      // despite the corner carrying real camber and a marshal shelter already
-      // dressed here; set back beyond the guardrail and catch fence.
       grandstandEx(0.848, 1, 12, 36, null, null,
         { livery: "concrete", tiers: 2, roof: "truss" });
 
-      // --- Yellow-capped marshal posts dotted around the lap.
       every(120, (k) => {
         const side = hash(k * 33) < 0.5 ? -1 : 1;
         marshalPost(k, side, 4);
@@ -357,13 +252,9 @@
         marshalPost(K(0.55 + ds), -1, 4.2);
       }
 
-      // --- Eau Rouge: thickened concrete runoff wall at the valley base (s≈0.055–0.075 L).
       wall(0.055, 0.075, -1, 3.6, 1.8, [0.55, 0.55, 0.52], 1.2);
       place(K(0.060), -1, 5.2, [1.6, 1.6, 28], [0.52, 0.52, 0.50]);
       place(K(0.068), -1, 4.8, [1.4, 1.5, 24], [0.54, 0.54, 0.51]);
-      // The corner's namesake: a thin brook along the valley floor beyond the
-      // runoff wall. Eau Rouge ("red water") is named for this iron-stained
-      // Ardennes stream, and the circuit previously modelled none of it.
       {
         const BROOK = [0.18, 0.28, 0.22];
         waterSurface(K(0.059), -1, 8, [2.6, 0.14, 22], BROOK, { id: "spa-eau-rouge-brook-a" });
@@ -379,12 +270,6 @@
       tyreWall(0.762, 0.798, 1, 5.0, [0.55, 0.55, 0.52]);
       guardrail(0.748, 0.810, 1, 3.5, [0.84, 0.85, 0.88]);
 
-      // ======================================================================
-      // BESPOKE ARDENNES LANDMARKS — local models built from raw primitives
-      // ======================================================================
-
-      // --- Ardennes stone chalet: rendered body + steep slate A-frame roof +
-      //     stone chimney + a warm-lit gable window. The regional forest farmhouse.
       function chalet(k, side, dist, w, h, d, wallCol, roofCol) {
         const a = anchor(k, side, dist);
         const b = [a.r, a.u, a.t];
@@ -403,9 +288,6 @@
         });
       }
 
-      // --- Forest campsite / RV village: the campervans + ridge tents that pack
-      //     the Ardennes hillsides above Eau Rouge on race weekend — rows of
-      //     little caravans and tents, a shared awning and a glowing campfire.
       function rvCamp(k, side, dist, count) {
         const a = anchor(k, side, dist);
         const b = [a.r, a.u, a.t];
@@ -440,8 +322,6 @@
         });
       }
 
-      // --- Historic Spa timing / control tower: a stepped stack (office box →
-      //     tapered shaft → glazed timing box) with a clock face and flag mast.
       function timingTower(k, side, dist) {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         modelGroup("spa-timing-tower", {
@@ -464,8 +344,6 @@
         }, { required: true });
       }
 
-      // --- Spectator footbridge spanning the track: two stair towers + a decked
-      //     walkway with railings — one of Spa's forest crossings.
       function footbridge(s, deckCol) {
         const kb = K(s);
         const L = anchor(kb, -1, 3), R = anchor(kb, 1, 3);
@@ -504,40 +382,20 @@
       footbridge(0.125, [0.62, 0.34, 0.20]);   // Kemmel crossing
       footbridge(0.50,  [0.40, 0.42, 0.46]);   // mid-forest crossing
 
-      // --- Dress-pass hero additions: concentrated depth at Spa's natural
-      // amphitheatres while leaving Kemmel and Blanchimont's road-level views open.
-
-      // 4. Raidillon elevation theatre — two distant, staggered woodland ranks
-      // rise behind the Gold 4 stands and camps. The large gaps keep the crest
-      // and braking sightline clear while making the climb read through tree depth.
       forestEdge(0.050, 0.112, -1, 30, { density: 0.64, hMin: 14, hMax: 25,
         col: [0.07, 0.24, 0.11], col2: [0.13, 0.34, 0.15], pineFrac: 0.94 });
-      // The right-hand rank breaks over s≈0.070–0.088: the climb wraps back on
-      // itself there, so 38 m outside Raidillon is already the Kemmel verge — that
-      // stretch put 26 m pines through its lighting masts and trackside furniture.
       forestEdge(0.058, 0.070,  1, 38, { density: 0.58, hMin: 15, hMax: 26,
         col: [0.08, 0.25, 0.12], col2: [0.14, 0.35, 0.16], pineFrac: 0.92 });
       forestEdge(0.088, 0.108,  1, 38, { density: 0.58, hMin: 15, hMax: 26,
         col: [0.08, 0.25, 0.12], col2: [0.14, 0.35, 0.16], pineFrac: 0.92 });
 
-      // 5. Pouhon and Fagnes are natural grass-bank terracing in reality, not
-      // built stands — real viewing here is informal terraced hillside, so
-      // spectatorHill replaces the old hand-placed grandstand bays. They sit
-      // beyond the marshal rail on the outside hillside; short spans follow
-      // the slope and avoid forming a wall across the fast double-left.
       spectatorHill(0.525, 0.560, -1, 11, { rows: 4, density: 0.55, step: 6 });
       spectatorHill(0.658, 0.672, -1, 10, { rows: 3, density: 0.42, step: 6 });
 
-      // 6. Small cabin hamlets on the Les Combes and Stavelot high ground.
-      // Paired buildings, rather than a continuous row, retain the rural Ardennes
-      // character and remain well beyond the road-edge forest line.
       chalet(K(0.205),  1, 64, 7, 4.8, 10, [0.72, 0.69, 0.62], [0.28, 0.19, 0.15]);
       chalet(K(0.214),  1, 72, 6, 4.3, 9,  [0.76, 0.73, 0.66], [0.31, 0.21, 0.16]);
       chalet(K(0.706), -1, 62, 7, 4.7, 11, [0.75, 0.72, 0.65], [0.29, 0.19, 0.15]);
 
-      // 7. Purpose-built marshal and recovery infrastructure at the three remote
-      // high-speed sectors. CircuitKit groups preflight complete footprints and
-      // fail closed if a folded section makes any placement unsafe.
       if (circuitKit) {
         circuitKit.marshalShelter({ id: "kit:spa:les-combes-shelter", frac: 0.168,
           side: -1, gap: 7, size: [5, 3.2, 5] });
@@ -547,9 +405,6 @@
           side: 1, gap: 8, size: [5, 3.2, 5] });
       }
 
-      // 8. Mid-distance ridge shoulders frame the Pouhon valley and Stavelot
-      // descent below the far horizon ring. Broad, low, forest-only forms keep
-      // Spa wooded rather than alpine and remain more than 200 m off the road.
       for (const [s, side, seed] of [[0.50, -1, 811], [0.57, -1, 827],
                                     [0.70,  1, 843], [0.79,  1, 859]]) {
         const a = anchor(K(s), side, 230 + hash(seed) * 35);
@@ -559,8 +414,6 @@
                    rock: [0.30, 0.35, 0.31], snowline: 2 });
       }
 
-      // Deeper forest ranks for an even denser Ardennes wall in the mid sectors.
-      // Pouhon (0.42–0.58) and Blanchimont approach get denser sweeper walls.
       forestEdge(0.18, 0.42, -1, 14, { density: 0.6, hMin: 12, hMax: 22, col: [0.09, 0.28, 0.13], col2: [0.14, 0.36, 0.17], pineFrac: 0.85 });
       forestEdge(0.42, 0.58, -1, 11, { density: 0.78, hMin: 13, hMax: 24, col: [0.08, 0.26, 0.12], col2: [0.12, 0.34, 0.15], pineFrac: 0.9 });
       forestEdge(0.55, 0.74,  1, 14, { density: 0.6, hMin: 12, hMax: 22, col: [0.09, 0.28, 0.13], col2: [0.14, 0.36, 0.17], pineFrac: 0.85 });
@@ -570,8 +423,6 @@
         for (let j = 0; j < 3; j++) tree(K(s) + j, side, 18 + hash(K(s) * 5 + j) * 14, 10 + hash(K(s) * 9 + j) * 5, [0.13, 0.34, 0.16]);
       }
 
-      // --- Barriers: catch fence at the packed stands, armco on the fast forest
-      //     sweepers, tyre stacks at the heavy braking zones.
       fence(0.0, 0.03, 1, 6, 4.2, [0.74, 0.76, 0.80]);        // main straight stand
       fence(0.06, 0.11, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // Raidillon Gold-4 amphitheatre
       fence(0.15, 0.18, 1, 7, 4.2, [0.74, 0.76, 0.80]);       // Les Combes
@@ -583,17 +434,6 @@
       tyreWall(0.46, 0.49,  -1, 4.6, [0.55, 0.55, 0.52]);     // Pouhon
       tyreWall(0.905, 0.925, 1, 4.4, [0.78, 0.12, 0.12]);     // Bus Stop
 
-      // --- THE OLD CIRCUIT, CARRYING STRAIGHT ON AT LES COMBES -------------
-      // The single most Spa thing there is, and the circuit had no trace of it.
-      // Until 1970 this was a 14 km triangle of public road: the course did not
-      // turn right at Les Combes, it went STRAIGHT ON, plunging down through
-      // Burnenville and Malmedy to the Masta kink and Stavelot before climbing
-      // back. That road is still there — it is the N62 — and from the modern
-      // right-hander you can see it carrying on into the trees, narrower and
-      // older than the track you are on, with its own armco still standing.
-      //
-      // Modelled as a diverging ribbon: it leaves on the Kemmel tangent while
-      // the racing line turns away, so the two separate naturally over ~230 m.
       {
         const a0 = anchor(K(0.170), 1, 16);
         const dir = a0.t, rgt = a0.r, up = a0.u;
@@ -610,24 +450,18 @@
         const ARMCO    = [0.74, 0.75, 0.76];
         let laid = 0;
         for (let i = 0; i < 16; i++) {
-          // Drift gently right of the tangent — the old road fell away downhill
-          // toward Burnenville rather than running dead straight.
           const c = seatY(vadd(vadd(a0.c, dir, 14 + i * 15), rgt, i * i * 0.16));
           if (onTrack(c[0], c[2], 18)) continue;
           // Old road is NARROW: two lanes of a 1960s Ardennes highway.
           addBox(out, vadd(c, up, 0.09), [8.2, 0.16, 15.4], OLD_TAR, b);
           addBox(out, vadd(vadd(c, rgt, -4.6), up, 0.13), [1.2, 0.2, 15.4], OLD_EDGE, b);
           addBox(out, vadd(vadd(c, rgt,  4.6), up, 0.13), [1.2, 0.2, 15.4], OLD_EDGE, b);
-          // Period armco on posts, one run per panel, left side only — the
-          // right drops into the trees exactly as it does now.
           if (i % 2 === 0) {
             addBox(out, vadd(vadd(c, rgt, -5.6), up, 0.62), [0.14, 0.34, 15.0], ARMCO, b);
             addCyl(out, vadd(c, rgt, -5.6), 0.09, 0.62, [0.55, 0.55, 0.56], 4, b);
           }
           laid++;
         }
-        // A commemorative marker where the two courses part, and the forest
-        // closing in behind it — this is a road nobody races on any more.
         if (laid > 4) {
           const m = seatY(vadd(vadd(a0.c, dir, 26), rgt, -9));
           if (!onTrack(m[0], m[2], 12)) {
@@ -651,12 +485,6 @@
         }
       }
 
-      // --- FRANCORCHAMPS VILLAGE -------------------------------------------
-      // The circuit is named after a village and ran through it, and the
-      // village was not on the map: the outfield above La Source was cabins
-      // and forest. Ardennes building is unmistakable and cheap to read —
-      // rough grey limestone walls under STEEP dark-slate roofs, small
-      // windows, and a slate church spire above the roofline.
       {
         const STONE  = [0.68, 0.66, 0.62], STONE_W = [0.78, 0.76, 0.71];
         const SLATE  = [0.26, 0.27, 0.31], SLATE_D = [0.20, 0.21, 0.25];
@@ -673,10 +501,6 @@
           addBox(out, vadd(a.c, a.u, wallH * 0.5), [w, wallH, d],
                  hv < 0.4 ? STONE_W : STONE, b);
           out._mat = 0;
-          // The roof IS the Ardennes silhouette: steep, dark, deep-eaved.
-          // addPrism is BASE-anchored (see the addPrism note in
-          // js/track/geom.js) — seat it on the wall top, not w*0.30 (half its
-          // own height) above it.
           addPrism(out, vadd(a.c, a.u, wallH), [w * 1.12, w * 0.62, d * 1.06],
                    hv < 0.5 ? SLATE : SLATE_D, b);
           // Window band + a chimney on the ridge.
@@ -685,8 +509,6 @@
           addBox(out, vadd(vadd(a.c, a.t, d * 0.28), a.u, wallH + w * 0.55),
                  [0.9, 1.8, 0.9], STONE, b);
         }
-        // The church — every Ardennes village has one, and its slate spire is
-        // the only thing that breaks the treeline from the track.
         {
           const a = anchor(K(0.062), -1, 104);
           if (!onTrack(a.c[0], a.c[2], 26)) {
@@ -699,20 +521,12 @@
               addBox(stage, vadd(vadd(a.c, a.t, -11), a.u, 8.0), [7, 16, 7], STONE_W, b);
               stage._mat = 0;
               addPrism(stage, vadd(a.c, a.u, 12.4), [10.6, 5.4, 20.4], SLATE_D, b);
-              // addPyramid is BASE-anchored (base plane at `c`, apex at
-              // c+u*sz[1] — see addPyramid in js/track/geom.js), not centred;
-              // seat the spire on the tower top (u=16) instead of floating it
-              // by roughly half its own height.
               addPyramid(stage, vadd(vadd(a.c, a.t, -11), a.u, 15.8), [7.4, 9.5, 7.4],
                          SLATE, b);
               // Clock face and the cross above the spire.
               addBox(stage, vadd(vadd(vadd(a.c, a.t, -11), a.r, -3.6), a.u, 13.5),
                      [0.3, 1.9, 1.9], TRIM, b);
               stage._mat = MAT.METAL;
-              // addCyl is BASE-anchored — the spire apex is now at u=25.3
-              // (15.8 base + 9.5 height); seat the cross there with a small
-              // overlap instead of the 0.9 m gap the old apex-mismatched
-              // value left.
               addCyl(stage, vadd(vadd(a.c, a.t, -11), a.u, 25.1), 0.09, 2.2,
                      [0.60, 0.58, 0.52], 4, b);
               stage._mat = 0;

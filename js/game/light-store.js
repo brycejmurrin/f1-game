@@ -1,33 +1,4 @@
-/* Apex 26 — LIGHTING PROFILE STORE (LightStore.create(G))
-
-   The resolution and persistence half of the lighting tuner. js/game/lighting.js
-   owns the REGISTRY (TUNE_DEFS) and the live values (LT); js/game/light-presets.js
-   is the shipped baseline; js/game/tuner.js is the panel. This is the piece in
-   between: which of those layers wins, for the conditions on screen right now.
-
-   It lived in game.js because it reads live track / time-of-day / weather state,
-   and the header of tuner.js said so in as many words. That reason has not held
-   since the G façade existed — every one of those reads is already a G accessor,
-   and the whole surface (ltKey, setLightTune, applyLightTune, persistLightTune,
-   _ltStore) was ALREADY published on G for tuner.js, photomode.js, atmosphere.js
-   and apex.js. Five files were reaching through the façade for a block that was
-   still spelled out inside game.js. Moving it costs no new G member; it only
-   stops game.js being the sixth consumer of its own private state.
-
-   PROFILES ARE PER (track, time-of-day, weather). Store shape:
-     { "monza|night|wet": { lampLevel: 0.4, … }, "*": { …legacy flat format } }
-
-   Resolution, LOWEST precedence first:
-     TUNE_DEFS.def → LightPresets["*"] → LightPresets[key]
-                   → localStorage "*"  → localStorage[key]
-   so a committed light-presets.js is the shipped baseline and a player's own
-   edits always win over it. A missing layer is skipped, never defaulted through.
-
-   copyToTracks() is the one operation that writes profiles the player is NOT
-   looking at: it spreads the condition on screen sideways across the grid, to
-   every other track at the same time-of-day and weather. See its own comment for
-   the two modes and why storing is still sparse.
-*/
+/* Apex 26 — LIGHTING PROFILE STORE (LightStore.create(G)) The resolution and persistence half of the lighting tuner. js/game/lighting.js owns the REGISTRY (TUNE_D… */
 "use strict";
 const LightStore = (() => {
   function create(G) {
@@ -35,9 +6,6 @@ const LightStore = (() => {
     const { TUNE_DEFS, LT } = LightTune;
     const { store, clamp } = G;
 
-    // Knobs whose effect is BAKED INTO frame.*/frameSky.* by applyRaceSettings()
-    // rather than read per-frame in render(). Changing one re-runs that function
-    // so the change is live — safe because it re-derives from the branch values.
     const APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover",
       "moonBright", "cityGlowMul", "cityGlowTint", "ambTemp", "ambBalance",
       "skyColorSat", "fogColorSat",
@@ -70,9 +38,6 @@ const LightStore = (() => {
       }
     }
 
-    // The profile key for the CURRENT session conditions. A "default" TOD resolves
-    // to the track's actual day/night look, so it shares one profile with an
-    // explicit pick of the same look rather than splitting the player's edits in two.
     function key() {
       const track = G.track;
       if (!track || !track.def) return null;
@@ -87,9 +52,6 @@ const LightStore = (() => {
       return [F && F["*"], F && k && F[k], profiles["*"], k && profiles[k]];
     }
 
-    // What knob `d` resolves to for condition `k` WITHOUT k's own local profile —
-    // every layer of the ladder except the top one. A null/absent key just skips
-    // the per-condition file layer, which is what an unloaded track should do.
     function base(k, d) {
       let v = d.def;
       const F = window.LightPresets || null;
@@ -99,11 +61,6 @@ const LightStore = (() => {
       return clamp(v, d.min, d.max);
     }
 
-    // Write `v` into profile map `prof` for condition `k` under the rule set()
-    // uses: an explicit entry only where it differs from what k would resolve to
-    // on its own. Storing a value that equals the DEFAULT is still required when
-    // a file/global layer would otherwise win — that is how an edit (or a copy)
-    // pulls a shipped value back down. Returns true when the map changed.
     function put(prof, k, d, v) {
       v = clamp(v, d.min, d.max);
       if (v === base(k, d)) {
@@ -127,17 +84,11 @@ const LightStore = (() => {
     function liveEffects(rebuilt, reapply, reinit, fromApplyRace) {
       const track = G.track;
       if (rebuilt && track) { track._lights = null; track._alwaysLights = null; }
-      // Skip the reapply when applyRaceSettings itself invoked us: it derives from
-      // the fresh LT values the moment this returns, and re-entering ran the whole
-      // sky/ambient/fog derivation twice per track/time/weather transition.
       if (reapply && !fromApplyRace && track && G.state !== "menu" && G.state !== "select")
         G.applyRaceSettings();
       if (reinit && G.isWetRoad()) G.initRainDrops();
     }
 
-    // Rebuild LT for the current conditions — called whenever track/time/weather
-    // changes (via applyRaceSettings), so the right profile is live for both the
-    // tuner panel and actual racing.
     function apply(fromApplyRace) {
       if (Log.enabled("game", Log.DEBUG)) Log.debug("game", "LightStore.apply");
       const L = layers();
@@ -170,7 +121,6 @@ const LightStore = (() => {
       return true;
     }
 
-    // ── SPREAD ONE CONDITION ACROSS THE GRID ──────────────────────────────────
     // The tuner edits ONE (track, time, weather) profile at a time. That is right
     // for dialling a circuit in and wrong for the other thing people do with it:
     // settle a look for "dusk in the wet" and want it on all 40 circuits. By hand
@@ -241,8 +191,6 @@ const LightStore = (() => {
 
     return {
       key, apply, set, persist, copyToTracks, restore,
-      // The live object, not a copy: js/game/photomode.js deletes a key out of it
-      // to implement the tuner's RESET, and merges it for COPY VALUES.
       get profiles() { return profiles; },
       set profiles(v) { profiles = v || {}; },
     };

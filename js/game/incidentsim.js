@@ -1,69 +1,14 @@
-/* Apex 26 — Rapier bounded-takeover incident sim (adoption layer R2 + R3 + C1 +
-   C3, see spike/ADOPTION-PLAN.md Part 2 R2/R3 and Part 3 C1/C3). THE HIGH-RISK
-   LAYER: unlike R0/R1/Group A/B (which never move a car), this module is allowed
-   to move the player/AI car during a BOUNDED incident window — it is an
-   EXTENSION of the two sacred exceptions (the barrier clamp `xPinned` and the
-   car-car collision resolver), not a new authority.
-
-   Safety contract (non-negotiable — read spike/ADOPTION-PLAN.md and AGENTS.md
-   Physics):
-     - The bespoke world-space-rigid-body model stays the ALWAYS-AVAILABLE
-       authority. A takeover is a bounded window (launch → touchdown + settle,
-       hard-capped at WINDOW_MAX_S) that hands back; outside the window every car
-       runs the bespoke model exactly as today.
-     - FALLBACK IS MANDATORY. Every pose write is (a) inside an active takeover
-       window for that car AND (b) guarded by finite-checks + a per-tick teleport
-       bound. Any anomaly (non-finite px/pz/head/speed/(s,x), NaN, absurd
-       teleport, a rebuilt/lost Rapier world, or Rapier throwing) immediately
-       REVERTS that car to its last-good bespoke state and hands control back. A
-       glitch degrades to the bespoke model — it never bricks or strands a car.
-     - It NEVER changes LONG_GRIP / slipFactor / the friction ellipse.
-     - DETERMINISTIC: everything is seeded from game state (car index, tick,
-       quantised s, incident sequence). No Date.now / Math.random. Rapier is
-       bitwise deterministic per platform for a fixed body order.
-     - A takeover invalidates the involved car's lap/ghost EXPLICITLY (sets
-       c.incidentInvalidLap, which game.js reads at the lap line) — timing is
-       never silently corrupted.
-
-   Machinery: R2/R3/C1 are ONE takeover engine over DIFFERENT entry triggers.
-   The engine promotes a set of cars' kinematic mirrors (owned by DebrisWorld's
-   side-world) to Rapier 6-DoF DYNAMIC bodies, seeds them from the cars' current
-   world pose+velocity (roll energy clamped at hand-to), lets DebrisWorld.step()
-   advance them on the real road trimesh, reads the 6-DoF pose back into the cars
-   each tick, and hands each car back to the bicycle model once it settles
-   (reconstructing the road position, resyncing (s,x) via trackFrom, blending
-   speed by the measured retention factor, routing inverted-rest into the
-   existing rescue flow).
-
-     - R2 (flag apex26.r2Airborne) — single-car airborne/rollover from a launch
-       (hard wall strike or a big collision). Synthesises a clamped vertical +
-       roll kick and tumbles the car on the road until it settles.
-     - R3 + C3 (flag apex26.r3Contact) — a car-car contact whose severity clears
-       R3_CAR_V is resolved through Rapier (both cars promoted, brief planar
-       window) instead of the (prog,x) plane. Below the threshold the cheap
-       (prog,x) plane still runs — THAT event-scoping IS C3. (Car-WALL contact
-       resolution stays bespoke: the side-world has no barrier colliders, so the
-       xPinned clamp remains the authority — the safe, reversible choice.)
-     - C1 (flag apex26.c1Pileup) — a cluster of ≥3 cars in simultaneous
-       above-threshold contact is promoted AS ONE and resolved together, then
-       each survivor is handed back via the R2 protocol.
-
-   Created with the G ctx façade from game.js (IncidentSim.create(G)); must load
-   AFTER js/game/debrisworld.js and BEFORE js/game.js (see index.html /
-   tools/manifest.cjs). Reuses DebrisWorld's Rapier world — inert (owns() is an
-   O(1) `_incidentOwned` flag read) whenever DebrisWorld is disabled or every
-   flag is off. */
+/* Apex 26 — Rapier bounded-takeover incident sim (adoption layer R2 + R3 + C1 + C3, see spike/ADOPTION-PLAN.md Part 2 R2/R3 and Part 3 C1/C3). THE HIGH-RISK LAYER… */
 const IncidentSim = (function () {
   "use strict";
 
   let G = null;             // game.js ctx façade (live getters + trackFrom/worldFromTrack helpers)
 
-  // ── flags (all DEFAULT ON, each its own disable flag) ─────────────────────
+  // flags (all DEFAULT ON, each its own disable flag)
   let _r2 = true;           // apex26.r2Airborne — R2 airborne / rollover
   let _r3 = true;           // apex26.r3Contact — R3/C3 car-car contact resolution
   let _c1 = true;           // apex26.c1Pileup  — C1 multi-car pile-ups
 
-  // ── takeover state ────────────────────────────────────────────────────────
   const _owned = new Set(); // cars[] indices currently under takeover (owns())
   let _incidents = [];      // [{ kind, cars:[idx], tick0, seq, snap:Map, good:Map, settle:Map, gen }]
   const _cand = [];         // candidate contacts queued this tick by notify*(): {a,b,sev,kind}
@@ -72,10 +17,6 @@ const IncidentSim = (function () {
   let _promoted = 0, _handbacks = 0, _fallbacks = 0, _lastKind = "";
   let _forced = 0;          // one-shot manual trigger requested via __apex
 
-  // ── tuning (CONSERVATIVE — only genuine big incidents trigger) ────────────
-  // Car-car closing speed (m/s) gates. R3 = a real shunt (not a draft bump); R2
-  // = a heavy shunt that could launch a car. Below R3, the cheap (prog,x) plane
-  // keeps running (this is the C3 event-scoping).
   const R3_CAR_V = 15;         // m/s closing → resolve this car-car pair via Rapier
   const R2_CAR_V = 24;         // m/s closing → a launch (airborne 6-DoF)
   // Wall hit severity (xOver*60 + speed*0.15, the DebrisWorld severity units) → a
@@ -100,8 +41,6 @@ const IncidentSim = (function () {
   // upright landing from a dead stop that would instantly trip rescue.
   const RETAIN_MAX = 0.71;
   const RETAIN_FLOOR = 0.43;
-  // Inverted at rest: the car's local +Y, rotated to world, points below this →
-  // it settled on its side/roof → route into the existing rescue flow.
   const INVERT_UP_Y = 0.40;
 
   // Deterministic PRNG (mulberry32), seeded purely from game state.
@@ -127,9 +66,6 @@ const IncidentSim = (function () {
              setFlags, reset, forceLaunch, release };
   }
 
-  // Any incident feature on AND the Rapier side-world available. A cheap read;
-  // owns() works off the set regardless so the game-side early-outs are correct
-  // even mid-teardown.
   function active() {
     return (_r2 || _r3 || _c1) && typeof DebrisWorld !== "undefined" &&
            DebrisWorld.active() && DebrisWorld.rapierReady();
@@ -145,8 +81,6 @@ const IncidentSim = (function () {
       if ("r2Airborne" in o) _r2 = !!o.r2Airborne;
       if ("r3Contact" in o) _r3 = !!o.r3Contact;
       if ("c1Pileup" in o) _c1 = !!o.c1Pileup;
-      // Turning a feature off mid-incident hands any of its takeovers straight
-      // back (safe: the bespoke model resumes from the last-good pose).
       if (_incidents.length) {
         for (const inc of _incidents.slice()) {
           if ((inc.kind === "r2" && !_r2) || (inc.kind === "r3" && !_r3) || (inc.kind === "c1" && !_c1))
@@ -172,9 +106,6 @@ const IncidentSim = (function () {
     return true;
   }
 
-  // Full reset (tests / before makeCars): abort every takeover back to bespoke,
-  // clear ownership flags, zero counters. handbackCar clears each flag; the
-  // cars[] sweep catches any stray after a field rebuild dropped an index.
   function reset() {
     for (const inc of _incidents.slice())
       for (const i of inc.cars.slice()) handbackCar(inc, i, true);
@@ -184,10 +115,6 @@ const IncidentSim = (function () {
     return status();
   }
 
-  // ── game-side triggers (called from game.js at the SAME sites as the debris
-  // hooks; both no-ops unless active()). They only QUEUE candidates — promotion
-  // happens in preStep so the whole tick's contacts are clustered together. ────
-
   // Wall contact. sev is the DebrisWorld severity (xOver*60 + speed*0.15).
   function notifyWall(c, side, sev) {
     if (!active() || !_r2 || !c) return;
@@ -196,11 +123,6 @@ const IncidentSim = (function () {
     if (i < 0) return;
     _cand.push({ a: i, b: -1, sev, kind: "wall" });
   }
-  // Car-car contact from the (prog,x) resolver, relV = closing speed (m/s).
-  // _r2 belongs in this gate: a car-car hit above R2_CAR_V is an R2 launch
-  // (preStep classifies it), so gating on only _r3/_c1 made the r2-airborne-only
-  // config unreachable from car contacts. preStep still gates each kind on its
-  // own flag — letting candidates through here widens nothing.
   function notifyCar(a, b, relV) {
     if (!active() || !(_r2 || _r3 || _c1) || !a || !b) return;
     if (!fin(relV) || relV < R3_CAR_V) return;
@@ -210,9 +132,6 @@ const IncidentSim = (function () {
     _cand.push({ a: ia, b: ib, sev: relV, kind: "car" });
   }
 
-  // ── preStep: build incidents from this tick's candidates and PROMOTE. Runs
-  // BEFORE DebrisWorld.step so promoted bodies are dynamic when the world steps
-  // (DebrisWorld skips re-posing any index we mark dynamic). ──────────────────
   function preStep(dt) {
     if (!active()) { _cand.length = 0; return; }
     // Manual test trigger: launch the player once.
@@ -252,8 +171,6 @@ const IncidentSim = (function () {
     // Promote car-car clusters.
     for (const [root, set] of clusters) {
       if (_incidents.length >= MAX_INCIDENTS) break;
-      // A retirement is parked, not racing: taking one over would hand it back to
-      // Rapier and drive it off the spot retireCar() put it on.
       let idxs = [...set].filter((i) => !_owned.has(i) && cars[i] && !cars[i].finished && !cars[i].retired);
       if (!idxs.length) continue;
       const relV = maxRelV.get(root) || 0;
@@ -264,8 +181,6 @@ const IncidentSim = (function () {
       if (idxs.length > MAX_TAKEOVER) idxs = idxs.slice(0, MAX_TAKEOVER);
       startIncident(kind, idxs, relV, dt);
     }
-    // Promote single-car wall launches (R2), skipping any car already taken over
-    // by a cluster this tick.
     for (const [i, sev] of wallCand) {
       if (!_r2 || _owned.has(i) || !cars[i] || cars[i].finished || cars[i].retired) continue;
       if (_incidents.length >= MAX_INCIDENTS) break;
@@ -289,8 +204,6 @@ const IncidentSim = (function () {
     for (const i of idxs) {
       const c = cars[i];
       if (!c) continue;
-      // Seed world velocity from the car's own heading + speed + body slip — the
-      // exact decomposition game.js integrates (see the world-velocity lines).
       const head = fin(c.head) ? c.head : 0;
       const spd = fin(c.speed) ? c.speed : 0;
       const vLat = fin(c.vLat) ? c.vLat : 0;
@@ -301,8 +214,6 @@ const IncidentSim = (function () {
       const seed = (Math.imul(i + 1, 0x9E3779B1) ^ Math.imul((c.s | 0) + 1, 0x85EBCA6B)
                   ^ Math.imul(_seq + 1, 0xC2B2AE35) ^ (_tick + 1)) | 0;
       const r = rng32(seed);
-      // Vertical launch + roll ONLY for R2 (airborne). R3/C1 stay planar (a small
-      // settling nudge). Roll energy CLAMPED at hand-to per the deep-dive.
       let vy = 0, rollX = 0, rollZ = 0;
       if (kind === "r2") {
         vy = clamp(1.5 + (sev || 0) * 0.08, 0, LAUNCH_VY_MAX);
@@ -322,8 +233,6 @@ const IncidentSim = (function () {
       settle.set(i, 0);
       _owned.add(i);
       c._incidentOwned = true;
-      // EXPLICIT lap/ghost invalidation: the involved car's current timed lap is
-      // no longer clean (game.js reads this flag at the start/finish line).
       c.incidentInvalidLap = true;
       promoted.push(i);
     }
@@ -333,20 +242,12 @@ const IncidentSim = (function () {
     Log.info("game", "IncidentSim start " + kind + " cars=" + promoted.length);
   }
 
-  // ── postStep: read the 6-DoF pose back into each owned car, detect settle /
-  // window cap, and hand cars back. Runs AFTER DebrisWorld.step. Every pose
-  // write below is inside a live window AND guarded by finite + teleport checks;
-  // any failure reverts that car to its last-good state and hands back. ────────
   function postStep(dt) {
     _tick++;
     if (!_incidents.length) return;
-    // If the Rapier world is gone (disabled) or was rebuilt (track/field change),
-    // every takeover is invalid — degrade all to bespoke immediately.
     let worldOk = false, gen = -1;
     try { worldOk = DebrisWorld.active() && DebrisWorld.rapierReady(); gen = DebrisWorld.worldGen(); }
     catch (e) { worldOk = false; }
-    // Per-tick teleport bound (metres this tick): scales with dt so headless
-    // big-dt stepping is not falsely tripped, while NaN / Inf / absurd jumps are.
     const stepBound = 6 + 240 * (fin(dt) ? Math.abs(dt) : 1 / 60);
 
     for (const inc of _incidents.slice()) {
@@ -376,10 +277,6 @@ const IncidentSim = (function () {
         let tf = null;
         try { tf = G.trackFrom(px, pz, c.s); } catch (e) { tf = null; }
         if (!tf || !fin(tf.s) || !fin(tf.x)) { handbackCar(inc, i, true); continue; }
-        // The side-world has no barrier colliders (header contract). updateCar
-        // skips its wallAt clamp while owns() is set, so THIS write-back is
-        // the remaining outer bound: a launch may leave the tarmac, it may
-        // not pass through the barrier.
         if (G.track && typeof Tracks !== "undefined" && Tracks.wallAt) {
           const wr = Tracks.wallAt(G.track, tf.s, 1);
           const wl = Tracks.wallAt(G.track, tf.s, -1);
@@ -388,10 +285,6 @@ const IncidentSim = (function () {
         }
         const vHoriz = Math.hypot(pose.vx || 0, pose.vz || 0);
         const speed = fin(vHoriz) ? vHoriz : (lg ? lg.speed : 0);
-        // ── WRITE-BACK (window-scoped + guarded). HUMAN-car authority is
-        // px/pz/head/(s,x); AI authority is (s,x)/prog. See report. ──
-        // World pose follows the clamped (s,x) so a body that tumbled past
-        // the barrier does not paint the car through it.
         let wx = px, wz = pz;
         if (G.worldFromTrack) {
           try {
@@ -429,24 +322,15 @@ const IncidentSim = (function () {
     _incidents = _incidents.filter((inc) => inc.cars.length);
   }
 
-  // Yaw (heading about world +Y) from a body quaternion. Exact for a pure-Y
-  // rotation (the mirror seeding convention); an approximation while tumbling —
-  // good enough to hand back, the bespoke model re-derives from there.
   function yawOf(pose) {
     const x = pose.qx, y = pose.qy, z = pose.qz, w = pose.qw;
     return Math.atan2(2 * (w * y + x * z), 1 - 2 * (y * y + z * z));
   }
-  // World-Y component of the body's local +Y — < INVERT_UP_Y means it settled on
-  // its side/roof (inverted-rest → rescue flow).
   function upYOf(pose) {
     const x = pose.qx, z = pose.qz;
     return 1 - 2 * (x * x + z * z);
   }
 
-  // Hand ONE car back to the bespoke model. anomaly=true reverts to the last-good
-  // (or promote) snapshot with no blending — the safe degrade path. Otherwise a
-  // clean settle: reconstruct the road position, blend speed by the retention
-  // band, and route inverted-rest into the rescue flow.
   function handbackCar(inc, i, anomaly, pose) {
     const c = G.cars && G.cars[i];
     try { DebrisWorld.demoteCarKinematic(i); } catch (e) {}
@@ -470,25 +354,15 @@ const IncidentSim = (function () {
         const inV = snap && fin(snap.speed) ? Math.abs(snap.speed) : 0;
         const inverted = pose ? upYOf(pose) < INVERT_UP_Y : false;
         if (inverted) {
-          // Settled on its side/roof → the existing rescue flow (aligns heading,
-          // clears slip, restores a modest speed, resets wall/off/rescue timers).
           if (c.human && G.rescuePlayer) { try { G.rescuePlayer(c); } catch (e) {} }
           else rescueAI(c);
         } else {
-          // Upright: reconstruct the ROAD position from (s,x) (NOT the body's
-          // resting y — cuboid rests ~0.36 m vs the model's ~0.6 m ride height),
-          // so world ↔ (s,x) stays the exact identity the bespoke model needs.
           try {
             if (G.worldFromTrack && fin(c.s) && fin(c.x)) {
               const w = G.worldFromTrack(c.s, c.x);
               if (w && fin(w.x) && fin(w.z)) { c.px = w.x; c.pz = w.z; }
             }
           } catch (e) {}
-          // Speed retention: take the real horizontal speed, capped at RETAIN_MAX×
-          // the pre-incident speed, floored at RETAIN_FLOOR× so a clean settle
-          // isn't handed back dead-stopped into an instant rescue. The old
-          // min(floor, outV) lower bound meant the floor only ever applied at
-          // EXACTLY zero — every nonzero settle handed back at crawl speed.
           let outV = fin(c.speed) ? Math.abs(c.speed) : 0;
           if (inV > 0) outV = clamp(outV || inV * RETAIN_FLOOR, inV * RETAIN_FLOOR, inV * RETAIN_MAX);
           c.speed = fin(outV) ? outV : (inV * RETAIN_FLOOR);
@@ -497,16 +371,12 @@ const IncidentSim = (function () {
         }
         _handbacks++;
       }
-      // Continuity for the bespoke re-entry: the next updateCar computes ds from
-      // c._prevS, so anchor it to the handed-back s (no spurious wrong-way/lap).
       if (fin(c.s)) c._prevS = c.s;
     }
     Log.info("game", "IncidentSim end idx=" + i + (anomaly ? " anomaly" : ""));
     finishCar(inc, i);
   }
 
-  // Lightweight AI rescue mirror of rescuePlayer (AI has no world-space head
-  // authority): drop back onto the racing surface at current progress.
   function rescueAI(c) {
     const track = G.track; if (!track || !c) return;
     try {
@@ -530,8 +400,6 @@ const IncidentSim = (function () {
     inc.snap.delete(i); inc.good.delete(i); inc.settle.delete(i);
   }
 
-  // Manual test trigger (__apex.incident({launch:true})): launch the player next
-  // preStep. Deterministic (no wall clock).
   function forceLaunch() { _forced = 1; return status(); }
 
   function status() {

@@ -1,6 +1,4 @@
-/* Apex 26 — JEDDAH circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — JEDDAH circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -19,16 +17,8 @@
     terrainOuter: 28,
     sceneryCoordinates: "racing",
     dressingExclusions: [
-      // The generic city supplies the deep inland skyline behind the bespoke
-      // cityFront sectors; only the Red Sea waterfront stays open so the
-      // corniche landmarks read against the water.
       { kind: "city", s0: 0.05, s1: 0.66, side: 1 },
-      // The bespoke slim-LED-head rhythm (22 m, both sides) is the circuit's
-      // lighting identity — the light tunnel. Generic street lamps crowd the
-      // wall, clip the fastest curved sweeps, and break the rhythm.
       { kind: "lamps", s0: 0, s1: 1 },
-      // The Red Sea, marina, and lagoon stay open on the seaward side. Bespoke
-      // palms below supply the intentional waterfront planting.
       { kind: "foliage", s0: 0.05, s1: 0.66, side: 1 },
     ],
     lengthKm: 6.2,
@@ -38,10 +28,6 @@
       { t: 0, l: 700 }, { t: 80, l: 70 }, { t: -75, l: 60 }, { t: 0, l: 120 }, { t: 70, l: 65 }, { t: -70, l: 60 },
       { t: 0, l: 300 }, { t: -90, l: 80 }, { t: 0, l: 600 }, { t: -90, l: 80 }, { t: 65, l: 70 }, { t: -70, l: 70 },
     ],
-    // Jeddah's headline vertical feature IS camber: three corners are banked up
-    // to 12° in reality (the long left onto the north loop, the sweeper after it,
-    // and the final right). Modelled a little shallower here so the AI line and
-    // the wall geometry stay sane; the rest of the lap is street-crown 3°.
     bankZones: [
       { frac: 0.1825, angleDeg: 3.0, widthM: 90 },
       { frac: 0.2662, angleDeg: 3.0, widthM: 160 },
@@ -51,16 +37,6 @@
       { frac: 0.6110, angleDeg: 3.0, widthM: 120 },
       { frac: 0.9981, angleDeg: 6.0, widthM: 120 },   // banked final right
     ],
-    // Reclaimed seafront: still a drainage-scale grade, but the trace ships
-    // essentially level (~2.2 m) where the real corniche rolls ~9 m across the
-    // lap. Long wavelengths only — every gradient stays under ~2 %.
-    //
-    // The four `rise` values below WERE the real-world ~9 m figures verbatim —
-    // 6.5/-3.0/5.0/-1.5 — a straight contradiction of the comment two lines up,
-    // caught by tests/specs/new-hooks.spec.js asserting elevationRange <= 3 while this
-    // authored 9.586 m. Scaled by the same 2.2/9.586 ratio the comment always
-    // implied, keeping the s/halfM shape (the real corniche's wavelengths)
-    // and only correcting the amplitude back to what "shipped" was meant to mean.
     elevations: [
       { s: 0.16, halfM: 520, rise: 1.5 },
       { s: 0.30, halfM: 480, rise: -0.7 },
@@ -93,9 +69,6 @@
       const WALL_INL = [[0.17, 0.18, 0.23], [0.19, 0.20, 0.25],
                         [0.15, 0.16, 0.21], [0.21, 0.21, 0.26]];
 
-      // ── Corniche hospitality decks — pit lane and marina hero pockets ─────
-      // Atomic kit models stay well behind the barriers and frame the event
-      // without adding tall masses to the circuit's high-speed sightlines.
       if (circuitKit) {
         circuitKit.hospitality({
           id: "kit:jeddah:pit-hospitality", frac: 0.035, side: -1, gap: 72,
@@ -107,8 +80,6 @@
         });
       }
 
-      // ── Simple helpers ─────────────────────────────────────────────────────
-      // Floodlight mast: pole + lamp bar + ambient pool (sparse drama accents)
       const floodMast = (k, side, dist) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 5)) return;
@@ -117,19 +88,6 @@
         addBox(out, vadd(a.c, a.u, 0.20), [5.0, 0.28, 5.0], POOLAMB, b);
       };
 
-      // Slim cool-white LED head — light-tunnel identity (cheap: thin pole + cap)
-      // + a short arm reaching over the barrier, which is what actually makes a
-      // row of these read as a TUNNEL rather than a row of posts: the heads
-      // converge over the tarmac in perspective. `col` lets the run carry the
-      // Saudi green/gold accent every few poles.
-      // `lamp`: register this head as a real light source. The tunnel is ~560
-      // poles and lampPost caps at 96, so the caller lights a sampled subset —
-      // enough that track.lampPosts is non-empty, which is the part that
-      // matters. With it EMPTY, buildTrackLights fell back to its synthetic
-      // stride walk and invented 311 lights at a hard-coded 13 m, none of them
-      // over a pole and every one painting a lens halo in mid-air. DARK-GAP
-      // FILL covers the stretches between registered heads, and those fills are
-      // correctly halo-less.
       const ledHead = (k, side, dist, col, lamp) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 2)) return;
@@ -152,10 +110,6 @@
         addBox(out, vadd(a.c, a.u, 22.0), [3.0, 1.2, 3.0], LED, b);
       };
 
-      // ── 1. Grey concrete canyon + intermittent Saudi green/gold accents ───
-      // The shared helper is always wired (tracks.js assigns SceneryIdentity's
-      // toolkit into every scenery api), so no local fallback is needed.
-      // Heights 1.3–1.5 m read as Jersey barriers (not the solid-green night rails).
       const canyon = api.concreteCanyon;
       // The wall runs in alternating GREEN and GOLD blocks rather than one
       // colour or a random speckle. Saudi event dressing colour-blocks its
@@ -183,30 +137,11 @@
         });
       }
 
-      // ── 3. Cool-white LED light tunnel ────────────────────────────────────
-      // This used to call floodMastRing(40) — i.e. 310 of the 36 m dual-arm
-      // stadium masts that are QATAR's defining feature, standing 5.5 m off
-      // Jeddah's barriers. Two circuits cannot both own the tall-mast ring, and
-      // it is not what lights this place: the Corniche is lit by hundreds of
-      // slim 7.5 m LED poles hard against the wall, close enough together that
-      // their heads merge into a continuous ceiling of light down the fast
-      // sweeps. That density is the "fastest street circuit in the world"
-      // sensation — a tunnel rushing past — and it is what a Jeddah frame has
-      // that a Qatar frame cannot. Slim heads are ~4x cheaper each, so this
-      // buys nearly twice the pole count for well under half the vertices, and
-      // frees the budget for the green/gold barrier crown below.
-      // Every fifth pole burns Saudi green or gold.
       let poleI = 0;
       every(22, (k) => {
         for (const side of [1, -1]) {
           const accent = (poleI % 5 === 2) ? [0.24, 1.10, 0.48]
                        : (poleI % 5 === 4) ? [1.10, 0.88, 0.18] : LED;
-          // Every 7th pole carries the light record; the rest are geometry that
-          // the registered neighbours and the gap fill light. The stride is set
-          // to land UNDER lampPost's 96 cap rather than on it: past the cap
-          // registration silently returns false, and because the tunnel is
-          // walked in lap order the drops would all fall at the end of the lap,
-          // leaving the final sector the one stretch with no fixtures.
           ledHead(k, side, (side > 0 ? 4.6 : 4.9) + hash(k * 1.7 + side) * 1.0, accent,
                   poleI % 7 === 0);
           poleI++;
@@ -220,8 +155,6 @@
         lightTower(K(i / 4 + 0.08), (i % 2) ? 1 : -1, 11 + (i % 2) * 2);
       }
 
-      // ── Palm trees: Corniche signature (inland + sparse marina/lagoon only) ─
-      // Cull palms on the open Red Sea corridor (s≈0.05–0.40 R) so water reads.
       const PALMFROND = [0.12, 0.44, 0.19];
       for (let i = 0; i < 8; i++) {
         palm(K(0.42 + i * 0.04), 1, 18 + hash(i * 5) * 4, 6 + hash(i * 3) * 3, PALMFROND);
@@ -229,19 +162,10 @@
       for (let i = 0; i < 8; i++) {
         palm(K(i / 8 + 0.01), -1, 22 + hash(i * 7) * 5, 7 + hash(i * 11) * 3, [0.08, 0.36, 0.14]);
       }
-      // Dense, low Corniche promenade avenue around the lagoon hero sector.
-      // The 13 m setback keeps trunks behind the concrete canyon and leaves the
-      // open-sea straight (s 0.05–0.40) visually unobstructed.
       for (let i = 0; i < 9; i++) {
         palm(K(0.545 + i * 0.012), 1, 13 + (i % 2) * 3,
           6.5 + hash(i * 17 + 4) * 2.5, (i % 3) ? PALMFROND : [0.16, 0.50, 0.22]);
       }
-      // FORMAL PALM AVENUE on the inland shoulder of the fast north sweeps.
-      // The scattered plantings above read as landscaping; the Corniche's own
-      // planting is a strict double file at even spacing, and regularity is
-      // what the eye picks up at 300 km/h — a metronome of trunks flicking past
-      // a wall. Two staggered ranks, identical pitch, deliberately uniform
-      // height so the row does not dissolve into generic foliage.
       for (let i = 0; i < 16; i++) {
         const s = 0.655 + i * 0.0138;
         palm(K(s), -1, 11.5, 8.4 + (i % 2) * 0.5, PALMFROND);
@@ -254,18 +178,9 @@
         marshalPost(K(s), side, 2.4);
       }
 
-      // ── Red Sea + marina: continuous bands, not spaced panels ─────────────
-      // These were 8 and 7 fixed slabs dropped at even fractions. The stations
-      // sit ~278 m apart while the slabs are only 100 m long, so two thirds of
-      // the frontage was bare ground and the sea read as separated rectangles.
-      // waterBand rasterises the whole stretch instead. The marina and lagoon
-      // are ONE band: they used to overlap both radially and along the lap at
-      // the same water height, which is a z-fight waiting to happen.
       waterBand(0.06, 0.375, 1, 35, 260, 12, SEA, { id: "jeddah-red-sea" });
       waterBand(0.43, 0.64, 1, 22, 150, 12, [0.018, 0.035, 0.080],
         { id: "jeddah-marina-water" });
-      // Waterfront light ribbon: waist-high amber/cool bollards, concentrated
-      // at the marina rather than repeated around the full lap.
       for (let i = 0; i < 11; i++) {
         const s = 0.425 + i * 0.019;
         const k = K(s), col = (i % 3 === 0) ? WINTEAL : SPANGLE;
@@ -291,19 +206,6 @@
         }, { required: true });
       }
 
-      // ── AL-BALAD — historic Jeddah on the inland skyline ─────────────────
-      // The circuit's inland side was generic modern city mass, and Jeddah has
-      // the one piece of architecture on the calendar that cannot be mistaken
-      // for anywhere else: Al-Balad, the UNESCO-listed old town. Tall narrow
-      // coral-stone tower houses, four to six storeys, packed shoulder to
-      // shoulder — and hung off their faces, tier upon tier of ROSHAN: deep
-      // projecting bay windows of carved wooden lattice, traditionally painted
-      // a soft teal-green against the pale coral stone. The roshan ARE the
-      // building; a plain coral box is just a beige box.
-      //
-      // Sited inland (left) and set well back, because Al-Balad is a few km
-      // from the Corniche — this is the old town on the skyline behind the
-      // modern city, not a trackside façade.
       {
         const CORAL   = [0.84, 0.79, 0.68];
         const CORAL_D = [0.76, 0.71, 0.60];
@@ -325,8 +227,6 @@
           addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, d],
                  hv < 0.45 ? CORAL_D : CORAL, b);
           addBox(out, vadd(a.c, a.u, h + 0.55), [w + 0.7, 1.1, d + 0.7], CORAL_D, b);
-          // Roshan tiers on the two visible faces. Ground floor stays blank —
-          // the lattice starts at first floor, as it does in Al-Balad.
           for (let f = 1; f < floors; f++) {
             const y = f * fh + fh * 0.45;
             const col  = ((f + i) % 2) ? TEAL : TEAL_L;
@@ -354,15 +254,7 @@
       gantry(0.0,   13, [0.12, 0.13, 0.17]);
       gantry(0.012, 11, [0.12, 0.13, 0.17]);
 
-      // ── PIT BUILDING + MAIN GRANDSTAND — s 0.00 ──────────────────────────
-      // One long low pit building with a lit window band (was five stacked raw
-      // place() boxes reading as a row of blocks).
       building(K(0.0), -1, 16, 62, 8, 28, { kind: "hall", wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4 });
-      // MAIN GRANDSTAND — the only permanent seating on the Corniche, and the
-      // one place the national colours are worn at full size: a deep-green
-      // shell under a gold fascia and roof. Every other night circuit in the
-      // fleet fields grey/steel/sandstone stands, so a green stand behind the
-      // start line is unambiguous even in a thumbnail.
       const STAND_GREEN = [0.07, 0.30, 0.16];
       const STAND_GOLD  = [0.72, 0.58, 0.16];
       grandstandEx(0.0,  1, 15, 60, STAND_GREEN, [0.42, 0.46, 0.40],
@@ -372,9 +264,6 @@
         { tiers: 1, roof: "cantilever", endWalls: true,
           roofCol: STAND_GOLD, fasciaCol: STAND_GOLD });
 
-      // ── 2. Open Red Sea corridor — no seaward cityFront on s≈0.05–0.40 ────
-      // Keep sea / fountain / mosque; city mass stays inland (L). Thin residual
-      // seaward frontage only near the start/finish pocket.
       cityFront(0.88, 0.98, 1, 28, {
         minH: 8, maxH: 16, depth: 12,
         palette: WALL_INL, lit: true,
@@ -402,9 +291,6 @@
       building(K(0.27), -1, 55, 28, 115, 26, { kind: "spire", wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 8 });
       building(K(0.30), -1, 88, 24, 172, 22, { kind: "antenna", wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 8 });
       tower(K(0.285), -1, 140, 18, 160, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: 12 });
-      // Layered Corniche hotel frontage below the three landmark silhouettes.
-      // Mid-rise spacing maintains depth while leaving the driver-facing edge
-      // clear through the very fast sweep.
       cityFront(0.245, 0.335, -1, 96, {
         minH: 24, maxH: 62, depth: 20,
         palette: WALL_INL, lit: true, windowCol: WINCOOL,
@@ -433,12 +319,6 @@
       // ── T13 BANKED SECTOR — s 0.50 ───────────────────────────────────────
       floodMast(K(0.49), -1, 22);
       floodMast(K(0.51),  1, 26);
-      // T13 spectator bank. Everything here except the main stand is put up for
-      // race week on a closed public road and taken down after — tube-and-plank
-      // scaffold decks, not shells. Three separate grandstand() slabs read as
-      // permanent stadium architecture (Abu Dhabi's language); one continuous
-      // scaffold run reads as a street race that borrowed a corniche for a
-      // weekend, which is exactly what Jeddah is. Green and gold bench boards.
       if (typeof scaffoldStand === "function") {
         scaffoldStand(0.466, 0.534, 1, 17, {
           rows: 5, rise: 1.25, setback: 1.9, step: 21, density: 0.5, legEvery: 1,
@@ -451,10 +331,6 @@
         grandstand(0.525, 1, 22, 52, [0.12, 0.13, 0.17], [0.42, 0.54, 0.68]);
       }
       tyreWall(0.485, 0.515, -1, 3.5, MAGENTA);
-
-      // ── CORNICHE LAGOON — folded into the marina band above (s 0.43–0.64).
-      // Kept as a separate set of panels it overlapped that band at the same
-      // height, so the two surfaces fought for the same pixels.
 
       // ── HOTEL / COMMERCIAL CLUSTER — s 0.68–0.74 L ───────────────────────
       building(K(0.69), -1, 60, 26, 68, 22, { kind: "fin", wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 8 });
@@ -473,9 +349,6 @@
         }
       }
 
-      // ── FINAL SECTOR GRANDSTAND — s 0.89 R ───────────────────────────────
-      // Same temporary scaffold family as T13, with the striped awning that
-      // race-week seating on a hot corniche always carries.
       if (typeof scaffoldStand === "function") {
         scaffoldStand(0.876, 0.944, 1, 15, {
           rows: 4, rise: 1.25, setback: 1.9, step: 21, density: 0.52, legEvery: 1,
@@ -514,11 +387,6 @@
           out._mat = 0;
         }
       }
-
-      // ================= BESPOKE CORNICHE LANDMARKS =======================
-      // Locale-specific hero silhouettes built from primitives: the Al-Rahma
-      // "Floating Mosque", the record Jeddah Flagpole, and traditional lateen-
-      // sail dhows moored along the waterfront. All emissive-lit for the night.
 
       // ── Al-Rahma (Floating) Mosque — offshore white dome + minaret ───────
       const floatingMosque = (k, gap) => {
@@ -568,13 +436,6 @@
         }, { required: true });
       }
 
-      // ── Jeddah Tower — under-construction distant skyline silhouette ────
-      // The city's single defining real landmark, previously unrepresented:
-      // a tapered, flat-topped unfinished shaft still wearing its tower
-      // crane. Placed as a far backdrop layer well behind the s 0.27–0.31
-      // landmark-tower cluster (gap 260 vs. that group's 55–140) so it reads
-      // as background depth, not a trackside competitor, and clearly taller
-      // than every other tower on this skyline.
       {
         const a = anchor(K(0.29), -1, 260), b = [a.r, a.u, a.t];
         modelGroup("jeddah-tower-construction", {
@@ -584,14 +445,7 @@
           addFrustum(stage, a.c, 26, 9, 250, [0.40, 0.41, 0.45], 8, b);       // tapered unfinished shaft
           stage._mat = 0;
           addBox(stage, vadd(a.c, a.u, 254), [7, 8, 7], [0.28, 0.28, 0.32], b);         // crane cab (top at 258, flush on the 250 frustum top)
-          // Jib was set to height 262 — 3.55m clear of the cab roof (top 258) and
-          // therefore unsupported all the way down to the sea (float-audit: 261m
-          // gap). Seat it on the cab roof instead (half-height 0.45, small overlap).
           addBox(stage, vadd(a.c, a.u, 258.4), [0.6, 0.9, 34], [0.24, 0.24, 0.28], b);    // crane jib
-          // Beacon height was derived independently (258, off the cab roof) instead
-          // of from the jib it is meant to sit on, so it hung 3.25m below the jib
-          // with nothing underneath. Rest it on the jib's top face instead — the
-          // tangent offset (-14) already sits inside the jib's ±17m footprint.
           addBox(stage, vadd(vadd(a.c, a.u, 259.1), a.t, -14), [0.6, 0.6, 0.6], SPANGLE, b); // hazard beacon
         }, { required: false });
       }
@@ -600,12 +454,6 @@
       const dhow = (k, gap, sc) => {
         const a = anchor(k, 1, gap), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 6)) return;
-        // Datum is the WATER surface, which waterSurface/waterBand lay at
-        // pyMin - 0.8, not pyMin itself. Sitting at pyMin + 0.4*sc left every
-        // hull ~1.55 m clear of its own sea — above the 1.0 m footing the
-        // grounding audit allows, so the whole fleet (hull, mast, sail) read as
-        // unsupported. A moored dhow sits DOWN in the water; 0.15 m of draught
-        // keeps the waterline convincing and the footing unambiguous.
         const hull = [a.c[0], pyMin - 0.95 + 0.05 * sc, a.c[2]];
         out._mat = MAT.WOOD;
         addBox(out, vadd(hull, a.u, 0.8 * sc), [2.6 * sc, 1.7 * sc, 9 * sc], [0.30, 0.20, 0.11], b);   // dark wood hull
@@ -622,13 +470,9 @@
       for (let i = 0; i < 5; i++) dhow(K(0.43 + i * 0.010), 56 + (i % 3) * 14, 1.0 + (i % 2) * 0.4);
       for (let i = 0; i < 3; i++) dhow(K(0.57 + i * 0.014), 46 + (i % 2) * 12, 0.9 + (i % 2) * 0.3);
 
-      // ── FAR SKYLINE BACKDROP — inland only (open Red Sea corridor seaward) ─
-      // Use backdrop() for all distant geometry — far cheaper than building()
       for (let i = 0; i < 12; i++) {
         const s = i / 12;
         const w = 40 + hash(i * 11) * 30, h = 80 + hash(i * 7) * 100;
-        // Lifted from near-black so the towers register against the night sky
-        // (backdrop() auto-adds lit window bands on tall night silhouettes).
         backdrop(K(s), -1, 260 + (i % 4) * 20, [w, h, w], [0.22, 0.23, 0.31]);
       }
       // Sparse seaward backdrop only outside the open water corridor (0.05–0.40)

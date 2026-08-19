@@ -38,21 +38,8 @@ const UiScale = (() => {
     // NOTHING STORED => NO INLINE STYLE, so the `@media (pointer: coarse)` default
     // in the stylesheet stands and a phone is correct on its FIRST paint rather
     // than from whenever this module runs.
-    //
-    // SCALE_MIN was 90 (readability floor), then 80 — phones still wanted more
-    // headroom to "zoom way out"; 50%, then 40% is the floor now and the default
-    // stays 100%.
-    // SCALE_MAX went 150 -> 175 (tools/ui-scale-axis.mjs already validated to 200).
-    // Tap floors divide by --ui-scale (--tap-min), so WCAG 24px holds before zoom.
-    // (A concurrent branch pinned MAX back to 150 while doing clamp-path fixes;
-    // resolved in favour of the wider range on the owner's explicit ask — the
-    // clamp fixes themselves are kept, and ui-scale.spec.js now derives its
-    // expectations from __apex.uiScale() so either choice tests true.)
     const SCALE_MIN = 40, SCALE_MAX = 200, SCALE_STEP = 0.25;
     const scaleDefault = () => 100;
-    // Snap to the slider's step so stored values stay on the same lattice the
-    // <input> emits (otherwise a hand-typed __apex.uiScale(117) leaves the thumb
-    // between ticks and the label reads a number you cannot scrub back to).
     const scaleSnap = (v) => {
       const n = Math.max(SCALE_MIN, Math.min(SCALE_MAX, +v));
       return Math.round(n / SCALE_STEP) * SCALE_STEP;
@@ -88,9 +75,6 @@ const UiScale = (() => {
       });
     }
     function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); }
-    // `input`, not `change`: the size should follow the thumb while it is dragged,
-    // which is the only way to find the right one — the same convention the volume
-    // sliders use.
     $("pm-uiscale").oninput = (e) => {
       store.set("uiScale", scaleSnap(+e.target.value || scaleDefault()));
       applyUiScale();
@@ -101,9 +85,6 @@ const UiScale = (() => {
     };
     applyUiScale();
     applyHudScale();
-    // The __apex read/write door for both sliders (see G.setScale in the ctx
-    // façade). Kept here beside the appliers so there is one place that knows how a
-    // scale is stored, clamped and pushed to the DOM.
     function setScale(key, prop, v) {
       if (v !== undefined) {
         if (v === null) store.set(key, null);
@@ -113,10 +94,6 @@ const UiScale = (() => {
       return { pct: scalePct(key), stored: store.get(key, null), min: SCALE_MIN, max: SCALE_MAX, step: SCALE_STEP };
     }
 
-    // Render resolution setting: AUTO = the frame-time governor adapts the scale;
-    // LOW/MED/HIGH pin a fixed scale (and disable the governor so it can't fight
-    // the choice). LOW is also the safe pick on older phones — smaller render
-    // targets mean more GPU-memory headroom, not just more fps. Persisted.
     const RES_MODES = [
       { id: "auto", label: "AUTO" },
       { id: "low",  label: "LOW",  v: 0.5  },

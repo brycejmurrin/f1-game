@@ -1,78 +1,35 @@
-/* Apex 26 — levelled, namespaced logging. Global `Log`. Loads FIRST (see
-   tools/manifest.cjs) so every later module can call it at evaluation time.
-
-   WHY THIS EXISTS. Before it, diagnostics were ~59 bare console.* calls that
-   were on all the time and off never. The scenery suppression warnings alone
-   fire dozens of times per track build, so the browser console was unusable
-   during a build and every spec that listened to `console` had to filter noise
-   it did not care about. There was also no way to turn anything UP: a bug you
-   could not reproduce left nothing behind, because nothing was recorded.
-
-   Two independent thresholds, which is the whole point:
-     - the CONSOLE level decides what a human sees (default `warn` — exactly
-       what the bare console.warn calls printed before, so nothing got louder)
-     - the BUFFER level decides what is RETAINED in a ring buffer (default
-       `info`), readable afterwards via __apex.logs(). A test that fails, or a
-       player who hits something once, still has the record. Retention is never
-       LOWER than the console level — see bufferAt().
-
-   Configuration, highest precedence first:
-     Log.level("scenery:debug")     — at runtime, or __apex.logLevel(...)
-     ?log=debug&log=scenery:trace   — URL query, survives a reload
-     localStorage apex26.logLevel   — sticky across sessions
-     "warn" (console) / "info" (buffer)
-
-   Spec grammar is a comma-separated list of `level` or `ns:level`, where a bare
-   level sets the default for every namespace:
-     "debug"                  everything at debug
-     "warn,scenery:debug"     scenery verbose, the rest as shipped
-     "silent"                 nothing to the console (the buffer still fills)
-   Prefix a term with `buffer:` to move the retention threshold instead:
-     "buffer:debug"           retain debug, still print only warnings
-
-   HOT PATHS: the args to a call are evaluated whether or not it prints, so a
-   per-frame or per-primitive debug line must be guarded:
-     if (Log.enabled("scenery", Log.DEBUG)) Log.debug("scenery", expensive());
-
-   Safe outside a browser: tools/track-build-vm.cjs loads the track engine into
-   a Node VM with no localStorage and no location, so every host lookup here is
-   feature-detected. */
+/* Apex 26 — levelled namespaced logging (global Log). Loads first per tools/manifest.cjs. */
 const Log = (function () {
   "use strict";
 
-  // Ordered low → high. An entry passes a threshold when its level <= threshold.
   const LEVELS = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
   const NAMES = ["silent", "error", "warn", "info", "debug", "trace"];
 
-  // The namespaces in use. Not enforced — an unknown namespace logs fine and
-  // falls back to the default threshold — but a call site should pick from
-  // here so `Log.level("<ns>:debug")` has a discoverable vocabulary.
   const NAMESPACES = [
-    "scenery",   // prop placement + on-track suppression (js/track/scenery-*.js)
-    "track",     // build orchestration, geometry rejection (js/track/tracks.js)
-    "gfx",       // renderer backends: GLX / WGX / TLX (js/render/**)
-    "game",      // game loop, race logic, physics (js/game.js, js/game/**)
-    "data",      // the data hub + its API client (js/data/**)
-    "net",       // multiplayer wire (js/net/**)
-    "audio",     // WebAudio synth (js/game/audio.js)
-    "assets",    // baked asset pack (js/render/assets.js)
-    "apex",      // the __apex dev API itself (js/game/apex.js)
-    "car",       // car mesh, parts, liveries (js/car/**)
-    "ui",        // menus, HUD, screens (js/game/*ui*, hud, menus)
-    "input",     // steering, gamepad, touch (js/game/input.js)
+    "scenery",
+    "track",
+    "gfx",
+    "game",
+    "data",
+    "net",
+    "audio",
+    "assets",
+    "apex",
+    "car",
+    "ui",
+    "input",
   ];
 
-  const RING = 500;                 // records retained; oldest evicted first
+  const RING = 500;
 
-  let consoleDefault = LEVELS.warn; // what a human sees
-  let bufferDefault = LEVELS.info;  // what is retained for __apex.logs()
+  let consoleDefault = LEVELS.warn;
+  let bufferDefault = LEVELS.info;
   const consoleNs = Object.create(null);   // ns -> level override
   const bufferNs = Object.create(null);
 
-  const buf = [];                   // ring of {t, ns, level, msg}
-  let seq = 0;                      // monotonic id, so logs({since}) can page
+  const buf = [];
+  let seq = 0;
 
-  // ── configuration ────────────────────────────────────────────────────────
   function parseLevel(name) {
     const l = LEVELS[String(name).trim().toLowerCase()];
     return l === undefined ? null : l;
@@ -118,7 +75,6 @@ const Log = (function () {
     } catch (_) { /* no URL host (Node VM) */ }
   })();
 
-  // ── emission ─────────────────────────────────────────────────────────────
   function threshold(table, def, ns) {
     const v = table[ns];
     return v === undefined ? def : v;
@@ -176,7 +132,6 @@ const Log = (function () {
     try { return Math.round(performance.now()); } catch (_) { return 0; }
   }
 
-  // ── public surface ───────────────────────────────────────────────────────
   const api = {
     SILENT: 0, ERROR: 1, WARN: 2, INFO: 3, DEBUG: 4, TRACE: 5,
     LEVELS: LEVELS,
@@ -247,6 +202,4 @@ const Log = (function () {
   return api;
 })();
 
-// The track engine also runs inside a Node VM (tools/track-build-vm.cjs), where
-// `window` is the sandbox itself and this assignment is a harmless self-set.
 if (typeof window !== "undefined") window.Log = Log;

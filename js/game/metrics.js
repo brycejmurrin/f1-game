@@ -1,22 +1,4 @@
-/* Apex 26 — GameMetrics: toggleable in-game FPS / car / log overlay.
-
-   SETTINGS > DISPLAY > METRICS, or ` (backtick) / F9. Persists as
-   apex26.metrics. URL `?metrics=1` overrides for the session without writing
-   storage, same shape as CockpitOpts.
-
-   WHY ITS OWN FILE. This is not a quality tier. The overlay is DOM the
-   player asked for, so it lives next to the other injected SETTINGS buttons
-   (CockpitOpts) rather than growing js/game.js. The panel is created at
-   runtime — no index.html node, no new CSS class (inline styles on a
-   <pre id="game-metrics">).
-
-   Tick is its own rAF at ~4 Hz. It never runs when OFF, and it never logs
-   per frame. Turning ON raises the Log BUFFER to debug for the session so
-   the overlay's tail actually fills; the console stays at shipped warn.
-
-   Pages stay on the canvas (no clipboard). ` / F9 toggles. While ON,
-   [ ] cycle GOV/CAR/PHYS/LOG; 1–4 jump to a page; on LOG, - = cycle
-   namespace and ; cycles the display level. */
+/* Apex 26 — GameMetrics: toggleable in-game FPS / car / log overlay. SETTINGS > DISPLAY > METRICS, or ` (backtick) / F9. Persists as apex26.metrics. URL `?metrics… */
 const GameMetrics = (function () {
   "use strict";
 
@@ -40,9 +22,6 @@ let _btn = null;
 let _keysBound = false;
 let _raisedBuffer = null;
 
-// Below #pausebtn / #btn-cam (z 14) and the zoomed #hud-sectors stack
-// (visual top 8+tap+4+sat, ~80px tall at 100% HUD). z 11 so .touchbtn
-// (z 12) paints on top if a short landscape still overlaps the dock.
 const PANEL_STYLE = "position:fixed;right:8px;" +
   "top:calc(12px + var(--tap, 44px) + var(--sat, 0px) + 80px * var(--hud-scale, 1));" +
   "z-index:11;margin:0;padding:8px 10px;" +
@@ -222,8 +201,6 @@ function snapshot() {
       }
     }
   } catch (_) { /* timing needs player.px */ }
-  // HUD km/h is dashKph (vStd*3.6), not raw ground*3.6. Keep both: a painted
-  // 0 is a real parked reading, and headless leaves the digit at 0.
   try {
     if (wantCar && typeof document !== "undefined") {
       const n = document.getElementById("hud-speed-n");
@@ -231,8 +208,6 @@ function snapshot() {
       if (isFinite(v)) { out.dashKph = v; out.speedKph = v; out.speedIsDash = true; }
     }
   } catch (_) { /* no HUD (VM / menu) */ }
-  // probe() is one Tracks.sample. obs() adds walls, a 3-point lookahead,
-  // field sort, and reward terms — too much for a 4 Hz overlay.
   try {
     if (wantCar && typeof __apex !== "undefined" && __apex.probe) {
       const o = __apex.probe();

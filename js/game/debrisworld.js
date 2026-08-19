@@ -1,38 +1,7 @@
-/* Apex 26 — Rapier side-world for render-only debris (adoption phases R0+R1,
-   see spike/ADOPTION-PLAN.md Part 2). A physics side-world that NEVER moves a
-   car: the game's cars are mirrored in as kinematic bodies each fixed tick,
-   Rapier owns only its own small dynamic debris cuboids (endplate shards /
-   impact chunks), and results flow back purely as render transforms.
-
-   Contract with the bespoke physics (sacred, do not renegotiate here):
-     - zero writeback: nothing in this module writes to any car, to (s, x),
-       or to px/pz/head. Debris is a visual garnish.
-     - inert when disabled: game.js guards every call with DebrisWorld.active(),
-       which is a plain boolean read. Non-users never fetch rapier.mjs.
-     - deterministic: no Date.now/Math.random anywhere — spawn variation is
-       seeded from game state (tick counter, spawn sequence, car index), and
-       Rapier itself is bitwise deterministic per platform for a fixed body
-       insertion order (measured in spike/physics/README.md §c).
-
-   Loading: ON by default; disable via localStorage apex26.debris = "0" or
-   __apex.debris(false). On enable the vendored @dimforge/rapier3d-compat 0.19.3 module
-   (vendor/rapier-0.19.3/rapier.mjs, WASM inlined) is dynamic-import()ed — a
-   ~90 ms one-time init measured in spike/physics/DEEP-DIVE.md §2, off the
-   boot path by construction. The world (road trimesh with FIX_INTERNAL_EDGES
-   + car mirrors + a fixed pool of debris bodies) is built lazily on the first
-   step and rebuilt when the track or the field size changes.
-
-   Budget (measured in-browser, DEEP-DIVE §2): 22 mirrors + 100 debris ≈
-   0.36 ms mean / 1.1 ms p95 per tick all-in. This module caps live debris at
-   48 (16 on the mobile tier) — well inside that envelope.
-
-   Created with the G ctx façade from game.js (DebrisWorld.create(G));
-   must load BEFORE js/game.js (see index.html / tools/manifest.cjs). */
+/* Apex 26 — Rapier side-world for render-only debris (adoption phases R0+R1, see spike/ADOPTION-PLAN.md Part 2). A physics side-world that NEVER moves a car: the … */
 const DebrisWorld = (function () {
   "use strict";
 
-// Resolve the vendored module against THIS script's URL at eval time, so the
-// dynamic import works both at site root and under a GitHub-Pages subpath.
 const RAPIER_URL = (() => {
   const src = (document.currentScript && document.currentScript.src) || location.href;
   return new URL("../../vendor/rapier-0.19.3/rapier.mjs", src).href;
@@ -66,12 +35,6 @@ let _seq = 0;            // debris spawn sequence number
 let _spawnedTotal = 0;
 let _lastImpact = null;  // { kind, carIdx, sev, tick, spawned } — for tests
 
-// ── A1: real solved contact-force severity ──────────────────────────────────
-// The Rapier world has NO barrier colliders and cars are kinematic mirrors, so
-// real solved contact force exists ONLY for mirror(kin)↔dynamic(debris / A3
-// furniture) contacts. Car-car and car-wall keep the synthesised wallImpact /
-// carImpact severity as the fallback. Passing an EventQueue to world.step does
-// not alter the simulation, so debris determinism is preserved.
 let _events = null;      // reusable RAPIER.EventQueue(true)
 let _colliderCar = null; // Map: mirror collider handle → car idx (cars[] order)
 let _furnHandles = null; // Set: A3 furniture collider handles
@@ -143,10 +106,6 @@ const HAZARD_Y_TOL = 1.6;      // m — ignore bodies this far above/below the r
 const FURN_DISTURB_M = 1.2;    // m — a cone counts as a hazard only once knocked this far from home
 // B2 breakable-barrier tuning
 const PANEL_CAP = 10;          // max concurrent promoted panels (bounded body budget)
-// Armco slab half-extents in the panel's LOCAL frame. The panel is yawed about Y
-// to face along the track, and a Y-yaw maps local +z → track-forward and local
-// +x → track-lateral, so the slab is THIN across the track (x) and LONG along it
-// (z): lateral(thin) / height / along-track(long).
 const PANEL_LAT = 0.12, PANEL_HY = 0.5, PANEL_LEN = 0.75;
 const PANEL_MASS = 12;         // kg-ish — heavy enough to look solid, light enough to scatter
 const PANEL_BREAK = 1400;      // N — solved contact force on a panel that snaps its joint
@@ -253,9 +212,6 @@ function rapierReady() { return _loadState === 2 && !!world; }
 function worldGen() { return _worldGen; }
 function isCarDynamic(i) { return _dynCars.has(i); }
 
-// Promote mirror i from kinematicPositionBased → dynamic, seeded with world
-// linear/angular velocity. Marks it in _dynCars so step() stops posing it.
-// Returns false (a no-op the caller degrades to bespoke on) if anything is wrong.
 function promoteCarDynamic(i, lin, ang) {
   if (!world || !RAPIER || i < 0 || i >= _mirrors.length) return false;
   const b = _mirrors[i];
@@ -273,8 +229,6 @@ function promoteCarDynamic(i, lin, ang) {
   }
 }
 
-// Flip mirror i back to kinematic; step() resumes posing it from the car's
-// (handed-back) pose next tick.
 function demoteCarKinematic(i) {
   _dynCars.delete(i);
   if (!world || !RAPIER || i < 0 || i >= _mirrors.length) return false;
@@ -297,8 +251,6 @@ function carBodyPose(i) {
   } catch (e) { return null; }
 }
 
-// Group B flag get/set (used by __apex + tests). Passing an object sets flags;
-// no arg returns the current values. Purely a boolean read on the hot path.
 function groupBFlags(o) {
   if (o && typeof o === "object") {
     if ("breakBarriers" in o) _breakBarriers = !!o.breakBarriers;
@@ -307,8 +259,6 @@ function groupBFlags(o) {
   return { breakBarriers: _breakBarriers, marbleGrip: _marbleGripOn };
 }
 
-// The one call game.js guards everything with. Plain boolean read — the whole
-// module costs exactly this when disabled.
 function active() { return _active; }
 
 // Build the side-world at race SETUP instead of on the lights-out frame.
@@ -363,9 +313,6 @@ function furnCapFor() { return (G.gfx && G.gfx.mobileTier) ? FURN_CAP_MOBILE : F
 function buildWorld(track, cars) {
   world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = 1 / 60;
-  // A1: one reusable event queue (autoDrain). Passing it to world.step does not
-  // change the sim, so determinism holds. Per-car force accumulators + spall
-  // cooldowns are sized to the field and zeroed here.
   _events = new RAPIER.EventQueue(true);
   _colliderCar = new Map();
   _furnHandles = new Set();
@@ -373,9 +320,6 @@ function buildWorld(track, cars) {
   _panels = [];                // promoted panels are per-world (rebuilt on track/field change)
   _carForce = new Array(cars.length).fill(0);
   _spallCool = new Array(cars.length).fill(0);
-  // Road trimesh — the raw {pos,nrm,idx} geometry tracks.js keeps on the track
-  // object. FIX_INTERNAL_EDGES suppresses ghost bumps on the tessellated road
-  // (the spike's collider setup, spike/physics/rapier-eval.mjs).
   const geo = track.roadGeo;
   if (geo && geo.pos && geo.idx) {
     const roadBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
@@ -385,23 +329,16 @@ function buildWorld(track, cars) {
         RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES).setFriction(1.0),
       roadBody);
   }
-  // Kinematic car mirrors, one per car in cars[] order (order IS the
-  // determinism contract — fixed insertion order, fixed handles).
   _mirrors = [];
   for (let i = 0; i < cars.length; i++) {
     const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased());
     const col = world.createCollider(
       RAPIER.ColliderDesc.cuboid(MIRROR_HX, MIRROR_HY, MIRROR_HZ).setFriction(0.8), body);
-    // A1: solved contact force reported for this mirror's contacts with dynamic
-    // bodies (debris / A3 cones). Gate out gentle rubbing with a force threshold.
     col.setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS);
     col.setContactForceEventThreshold(FORCE_MIN);
     _colliderCar.set(col.handle, i);   // handle → cars[] index (stable order)
     _mirrors.push(body);
   }
-  // Fixed debris pool: bodies are created ONCE (deterministic construction),
-  // disabled while pooled, re-posed + re-enabled on spawn. Per-slot shard size
-  // is seeded by slot index: 0.06–0.25 m cuboids (endplate shard scale).
   _cap = capFor();
   _slots = [];
   for (let i = 0; i < _cap; i++) {
@@ -457,9 +394,6 @@ function buildWorld(track, cars) {
       _v.y = _smp.p[1] + CONE_HY + 0.02;
       _v.z = _smp.p[2] + _smp.r[2] / rl * f.x;
       body.setTranslation(_v, true);
-      // home = placed position — B1 counts a cone as a hazard only once it is
-      // knocked FURN_DISTURB_M off this (an untouched apex cone is scene dressing,
-      // not a yellow-flag hazard).
       _furn.push({ body, s: f.s, x: f.x, home: { x: _v.x, y: _v.y, z: _v.z } });
     }
     _furnBuilt = _furn.length > 0;
@@ -469,10 +403,6 @@ function buildWorld(track, cars) {
   Log.info("game", "DebrisWorld.buildWorld cars=" + cars.length);
 }
 
-// Derive a ≤cap near-apex cone list from the loaded circuit's curated turn
-// apexes (track.def.turns — the same source signBoard uses in tracks.js). Stored
-// regardless of active state so it's ready when the async rapier load finishes;
-// a cheap pure function (no Rapier), safe to call when disabled.
 function registerFurniture(track) {
   if (!track || !track.def || !track.def.turns || !track.def.turns.length) {
     _furnList = null; _furnTrack = null; return;
@@ -494,44 +424,27 @@ function registerFurniture(track) {
     list.push({ s, x });
   }
   _furnList = list; _furnTrack = track;
-  // If a world is already live for this exact track but has no furniture yet,
-  // rebuild it on the next step so the cones appear.
   if (world && _worldTrack === track && !_furnBuilt) destroyWorld();
 }
 
-// Full deterministic reset: tear the world down (it is rebuilt from scratch on
-// the next step, with identical body insertion order) and zero every counter,
-// so two identical input episodes produce identical debris. Used by tests via
-// __apex.debris({reset:true}).
 function reset() {
   destroyWorld();
   _tick = 0; _stepSkips = 0; _seq = 0; _spawnedTotal = 0; _lastImpact = null;
   _marbleSeq = 0; _furnBuilt = false; _lastForce = 0;
   _panelSeq = 0; _panelsBroken = 0;   // B2 counters (bodies torn down in destroyWorld)
-  // NOTE: _furnList / _furnTrack are track DATA (from registerFurniture), not
-  // per-episode state — they survive reset() so the rebuilt world still gets its
-  // cones. buildWorld re-creates the cone bodies deterministically.
   return status();
 }
 
 // ── game-side hooks (called from game.js, both guarded by active()) ─────────
 
-// Barrier contact. Called at the barrier clamp site on the FIRST pinned frame
-// (c.wasOnWall edge) with the pre-clamp lateral overshoot xOver (m/tick — the
-// lateral speed into the wall times dt). side = ±1 (right/left wall).
 function wallImpact(c, side, xOver) {
   const sev = (xOver || 0) * 60 + Math.abs(c.speed || 0) * 0.15;
   if (sev < WALL_SEV_MIN) return;
-  // mi = cars[] mirror index (A1): if this car also ploughs a dynamic body the
-  // same tick, the real solved force overrides the synthesised severity. carIdx
-  // stays the driver number (stable shard-scatter seed — unchanged behaviour).
   const mi = G.cars ? G.cars.indexOf(c) : -1;
   _queue.push({ kind: "wall", s: c.s, x: c.x, side, sev,
                 speed: Math.abs(c.speed || 0), carIdx: c.num | 0, mi });
 }
 
-// Car-car contact. Called from the (prog,x) rear-end resolution with the
-// closing speed relV (m/s).
 function carImpact(a, b, relV) {
   if (relV < CAR_SEV_MIN) return;
   _queue.push({ kind: "car", s: b.s, x: (a.x + b.x) * 0.5, side: a.x >= b.x ? 1 : -1,
@@ -578,8 +491,6 @@ function promoteBarrier(c, side, sev) {
         .setMass(PANEL_MASS).setFriction(0.7).setRestitution(0.1), body);
     col.setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS);
     col.setContactForceEventThreshold(FORCE_MIN);
-    // Fixed ImpulseJoint: identity local frames at each body origin → the panel is
-    // rigidly held at the backbone until the joint is removed on break.
     const jd = RAPIER.JointData.fixed(
       { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0, w: 1 },
       { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0, w: 1 });
@@ -593,8 +504,6 @@ function promoteBarrier(c, side, sev) {
   return made;
 }
 
-// Test helper (__apex.debris({burst:n})): queue n synthetic impacts at the
-// player. Deterministic (severity fixed, position from player state).
 function burst(n, sev) {
   const p = G.player;
   if (!p) return 0;
@@ -617,8 +526,6 @@ function tyreMarble(c, m) {
   const hot = (m.lock || 0) >= MARBLE_LOCK_GATE || (m.slip || 0) >= MARBLE_SLIP_GATE;
   if (!hot) return;
   const ci = G.cars ? G.cars.indexOf(c) : 0;
-  // Seeded per-car throttle: ~1 marble every few hot ticks. Seed is pure game
-  // state (tick, car idx, quantized slip) so two identical episodes match.
   const seed = (Math.imul(_tick + 1, 0x9E3779B1) ^ Math.imul(ci + 1, 0x85EBCA6B)
               ^ (Math.floor((m.slip || 0) * 997) | 0)) | 0;
   const r = rng32(seed);
@@ -645,8 +552,6 @@ function acquireMarble() {
   return oldest;
 }
 
-// Spawn ONE marble beside/behind the car, read-only from its (s,x). Seeded
-// stream `r` continues from tyreMarble so the whole emission is deterministic.
 function spawnMarble(c, m, r) {
   const track = G.track;
   if (!track) return;
@@ -686,10 +591,6 @@ function spawnImpact(imp, track) {
   const fx = _smp.t[0] / tl, fz = _smp.t[2] / tl;              // track forward (planar)
   const cx = _smp.p[0] + rx * imp.x, cz = _smp.p[2] + rz * imp.x;
   const cy = _smp.p[1] + 0.35;
-  // A1: if this car had a REAL solved contact force this tick (a mirror
-  // ploughing a dynamic body), fold it into the severity so count/energy scale
-  // with the actual hit. Burst hints keep their fixed severity (the determinism
-  // spec depends on it), so this only lifts wall/car/spall impacts.
   if (imp.kind !== "burst" && imp.mi != null && imp.mi >= 0 &&
       imp.mi < _carForce.length && _carForce[imp.mi] > 0) {
     const fsev = _carForce[imp.mi] / FORCE_SEV_SCALE;
@@ -709,8 +610,6 @@ function spawnImpact(imp, track) {
     _v.y = cy + r() * 0.5;
     _v.z = cz + fz * along + rz * imp.side * (0.4 + r() * 0.5);
     b.setTranslation(_v, true);
-    // velocity: mostly the car's forward motion, kicked away from the contact
-    // side and up — scaled by severity, all from the seeded stream.
     const vf = imp.speed * (0.25 + r() * 0.3);
     const vs = -imp.side * (1.5 + r() * 2.5) * Math.min(1, imp.sev / 10);
     _v.x = fx * vf + rx * vs; _v.y = 1.5 + r() * 2.5; _v.z = fz * vf + rz * vs;
@@ -726,9 +625,6 @@ function spawnImpact(imp, track) {
   _lastImpact = { kind: imp.kind, carIdx: imp.carIdx, sev: +imp.sev.toFixed(2), tick: _tick, spawned: n };
 }
 
-// ── per-tick step (ONE call site in game.js's fixed-step update) ────────────
-// Idle-check helpers. `_anyLive` / `_carNearFurn` are cheap (no Rapier).
-// `_anyAwake` / `_carNearLiveDebris` query bodies — only after something is live.
 function _anyLive(pool) {
   for (let i = 0; i < pool.length; i++) if (pool[i].live) return true;
   return false;
@@ -817,15 +713,6 @@ function step(dt) {
   if (world && (_worldTrack !== track || _mirrors.length !== cars.length)) destroyWorld();
   if (!world) buildWorld(track, cars);
   if (world.timestep !== dt) world.timestep = dt;
-  // Two-tier idle (mobile smoothness). Tier 1 — nothing live at all — skips
-  // everything: no WASM, no bookkeeping. Tier 2 — live bodies but all asleep
-  // and no car within FURN_WAKE_M — skips ONLY world.step + mirror posing.
-  // JS bookkeeping still runs so marbles/shards age out of `live` and panels
-  // reach PANEL_IDLE_DESPAWN_S. A sleep-only WASM skip WITHOUT that hoist
-  // froze kinematic mirrors (cars drove over settled marbles marbleGrip()
-  // still counted) and reset unbroken-panel restT forever (stale p.force).
-  // Pose + step resume together the tick a body wakes, a car enters the
-  // wake radius, a spawn is queued, or a cone is near enough to punt.
   if (_queue.length === 0 && _dynCars.size === 0 && !_anyLive(_panels)
       && !_anyLive(_slots) && !_anyLive(_marbles)
       && (!_furn.length || !_carNearFurn(track, cars))) {
@@ -847,9 +734,6 @@ function step(dt) {
   for (let i = 0; i < _spallCool.length; i++)
     if (_spallCool[i] > 0) _spallCool[i] = Math.max(0, _spallCool[i] - dt);
 
-  // sync-in: mirror every car's pose (position from the road frame, yaw from
-  // the world heading for the player / the track tangent for AI). ~0.01 ms
-  // for 22 cars (DEEP-DIVE §2).
   for (let i = 0; i < cars.length; i++) {
     // Incident sim owns this index as a DYNAMIC body — do NOT pose it (a dynamic
     // body has no setNextKinematic* semantics). IncidentSim reads it back instead.
@@ -866,8 +750,6 @@ function step(dt) {
     m.setNextKinematicRotation(_q);
   }
 
-  // consume queued impacts → spawn pooled shards. Remember which mirror indices
-  // were hinted this tick so an A1 spall doesn't double-spawn for the same car.
   _hinted.clear();
   if (_queue.length) {
     for (const imp of _queue) {
@@ -877,16 +759,6 @@ function step(dt) {
     _queue.length = 0;
   }
 
-  // A1: step WITH the event queue — this does NOT change the simulation, so
-  // debris positions stay bit-identical (determinism preserved).
-  //
-  // Guarded because this is the one raw wasm call in the frame path: a Rapier
-  // trap here ("unreachable") is not catchable by the caller and takes the whole
-  // PAGE down, not just the frame — a hard wall hit driven from rollout()/act()
-  // was observed killing an entire headless session. Every other Rapier call in
-  // this file is already defensive. On a trap, stand the debris world down for
-  // the session rather than re-entering it 60 times a second; the race keeps
-  // running without debris.
   try {
     world.step(_events);
   } catch (e) {
@@ -902,12 +774,8 @@ function step(dt) {
   _ageAndCullPool(_slots, dt, px, pz, pos.have, REST_DESPAWN_S, FAR_DESPAWN_M);
   _ageAndCullPool(_marbles, dt, px, pz, pos.have, MARBLE_REST_DESPAWN_S, MARBLE_FAR_DESPAWN_M);
 
-  // A1: drain the tick's contact-force events, canonicalise the order, and fold
-  // real force per car (mirror↔dynamic contacts only).
   drainForces(cars);
 
-  // A1: a mirror ploughing a dynamic body (e.g. clipping an A3 cone) hard with
-  // NO queued hint still throws a bounded, seeded spall burst next tick.
   for (let i = 0; i < _carForce.length; i++) {
     if (_carForce[i] > SPALL_MIN && _spallCool[i] <= 0 && !_hinted.has(i)) {
       const c = cars[i];
@@ -923,19 +791,12 @@ function step(dt) {
   if (_panels.length) updatePanels(dt, px, pz);
 }
 
-// B2: break panels whose SOLVED contact force (accumulated in drainForces this
-// tick) cleared PANEL_BREAK — removeImpulseJoint releases the panel and a seeded
-// kick scatters it — then free broken panels that have come to rest or wandered
-// far. The array is compacted and _panelHandles rebuilt only when it changes.
 function updatePanels(dt, px, pz) {
   let changed = false;
   for (const p of _panels) {
     if (!p.live) continue;
     if (!p.broken && p.joint && p.force > PANEL_BREAK) {
       try { world.removeImpulseJoint(p.joint, true); } catch (e) {}
-      // Zeroed on the transition: restT was counting IDLE time under the
-      // unbroken rule, and carrying that into the broken rule would despawn a
-      // freshly-scattered panel on its first sleeping tick.
       p.joint = null; p.broken = true; p.restT = 0; _panelsBroken++;
       // Seeded scatter kick (game state only, no wall clock / Math.random).
       const r = rng32((Math.imul(_tick + 1, 0x27D4EB2F) ^ Math.imul((p.s | 0) + 1, 0x9E3779B1)
@@ -961,8 +822,6 @@ function updatePanels(dt, px, pz) {
     const dx = t.x - px, dz = t.z - pz;
     const far = dx * dx + dz * dz > FAR_DESPAWN_M * FAR_DESPAWN_M;
     if (far || p.restT > (p.broken ? PANEL_REST_DESPAWN_S : PANEL_IDLE_DESPAWN_S)) {
-      // An unbroken panel still owns its joint; remove it before the bodies, or
-      // Rapier is left holding a joint whose ends have gone.
       if (p.joint) {
         try { world.removeImpulseJoint(p.joint, true); } catch (e) { /* ignored:
           this throws only if Rapier already dropped the joint, which is the
@@ -1104,8 +963,6 @@ function hazards() {
 // position each shave MARBLE_GRIP_PER off grip, floored at MARBLE_GRIP_MIN. Any
 // off-path (flag off, cold world, no marbles near) returns 1.0 — a true no-op.
 function marbleGrip(c) {
-  // _marbles.length is the pool CAP (always populated once the world is built) —
-  // early-out on whether any marble is actually live, not the array size.
   if (!_marbleGripOn || !world || !c || !_anyLive(_marbles)) return 1;
   const track = G.track;
   if (!track) return 1;
@@ -1124,9 +981,6 @@ function marbleGrip(c) {
   return n ? Math.max(MARBLE_GRIP_MIN, 1 - n * MARBLE_GRIP_PER) : 1;
 }
 
-// A1: drain contact-force events into a scratch buffer, SORT deterministically
-// (Rapier's drain order is not guaranteed) by (min handle, max handle, quantized
-// force), then fold each event's force into the car whose mirror was involved.
 function drainForces(cars) {
   for (let i = 0; i < _carForce.length; i++) _carForce[i] = 0;
   if (_carForce.length !== cars.length) {
@@ -1181,10 +1035,6 @@ const _panelOpts = { roughness: 0.7, metalness: 0.1, specular: 0.25 };  // B2 ar
 
 function shardMesh() {
   if (_shardMesh) return _shardMesh;
-  // A small carbon-shard cluster around the origin (~0.2 m across at scale 1);
-  // one mesh shared by every debris body, drawn per-instance with its own
-  // matrix. TrackGeom.addBox emits {pos,nrm,col,idx} — the createMesh contract
-  // on both GLX and TLX.
   const out = { pos: [], nrm: [], col: [], idx: [] };
   TrackGeom.addBox(out, [0, 0, 0], [0.20, 0.02, 0.13], [0.05, 0.05, 0.06]);        // carbon plate
   TrackGeom.addBox(out, [0.05, 0.02, -0.03], [0.07, 0.05, 0.08], [0.30, 0.31, 0.33]); // metal chunk
@@ -1194,8 +1044,6 @@ function shardMesh() {
 }
 function marbleMesh() {
   if (_marbleMesh) return _marbleMesh;
-  // A single tiny dark-rubber cube (~MARBLE_REF_SCALE half-extent); per-body
-  // scale maps it onto each marble's collider size.
   const out = { pos: [], nrm: [], col: [], idx: [] };
   TrackGeom.addBox(out, [0, 0, 0], [MARBLE_REF_SCALE, MARBLE_REF_SCALE * 0.7, MARBLE_REF_SCALE], [0.04, 0.04, 0.045]);
   _marbleMesh = G.gfx.createMesh(out);
@@ -1203,9 +1051,6 @@ function marbleMesh() {
 }
 function coneMesh() {
   if (_coneMesh) return _coneMesh;
-  // An orange marshalling cone centred on the origin (base at -CONE_HY so the
-  // mesh centroid lines up with the cuboid collider's centre). Drawn per-body
-  // with the Rapier transform, no per-body scale (scale 1).
   const out = { pos: [], nrm: [], col: [], idx: [] };
   TrackGeom.addBox(out, [0, -CONE_HY + 0.02, 0], [0.13, 0.02, 0.13], [0.9, 0.35, 0.05]); // base
   TrackGeom.addCone(out, [0, -CONE_HY + 0.04, 0], 0.10, CONE_HY * 1.9, [0.95, 0.42, 0.08], 10); // body
@@ -1213,12 +1058,8 @@ function coneMesh() {
   return _coneMesh;
 }
 
-// Draw one Rapier body's mesh: quaternion → column-major rotation, uniformly
-// scaled by `sc`, translated to the body position.
 function panelMesh() {
   if (_panelMesh) return _panelMesh;
-  // A red/white armco slab centred on the origin at the panel collider size,
-  // shared by every promoted panel (drawn per-body with its Rapier transform).
   const out = { pos: [], nrm: [], col: [], idx: [] };
   TrackGeom.addBox(out, [0, 0, 0], [PANEL_LAT, PANEL_HY, PANEL_LEN], [0.90, 0.92, 0.94]);        // rail face
   TrackGeom.addBox(out, [0, -PANEL_HY * 0.35, 0], [PANEL_LAT * 1.1, PANEL_HY * 0.25, PANEL_LEN], [0.86, 0.16, 0.15]); // red stripe
@@ -1266,9 +1107,6 @@ function draw() {
 // ── status (for __apex.debris and tests) ────────────────────────────────────
 function liveCount() { let n = 0; for (const s of _slots) if (s.live) n++; return n; }
 function marbleCount() { let n = 0; for (const s of _marbles) if (s.live) n++; return n; }
-// Flat [x,y,z,qx,qy,qz,qw] per body — impact debris FIRST (unchanged order, so
-// the determinism spec still matches element-for-element), then marbles, then
-// furniture. Every source is deterministic for a fixed seeded episode.
 function positions() {
   const out = [];
   for (const s of _slots) {

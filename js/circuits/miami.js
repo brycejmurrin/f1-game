@@ -1,6 +1,4 @@
-/* Apex 26 — MIAMI circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — MIAMI circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -11,9 +9,6 @@
     // Was 0.2325, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.2325,
     name: "MIAMI",
     gp: "Miami GP",
@@ -23,32 +18,19 @@
     lengthKm: 5.4,
     baseHW: 7,
     sceneryCoordinates: "racing",
-    // The campus is laterally level; keep a broad grounded shelf under the
-    // marina, beach club, parking lots, and stadium approaches.
     flatTerrain: true,
     terrainOuter: 90,
-    // The generic city/foliage base layer carries the campus's density; the
-    // bespoke facades and palms sit on top of it. Keep it (and the lamp rows)
-    // out of the curated hero zones only: the Hard Rock bowl horizon, the
-    // marina, and the beach club.
     dressingExclusions: [
       { kinds: ["city", "foliage"], s0: 0.94, s1: 0.08 },
       { kinds: ["city", "foliage"], s0: 0.26, s1: 0.38, side: 1 },
       { kinds: ["city", "foliage"], s0: 0.60, s1: 0.72 },
     ],
-    // Aqua runoff = Dolphins identity (COL.aquaRunoff); soft tropical haze so
-    // the Hard Rock bowl owns the near horizon over a distant downtown.
     pal: { zenith: [0.22, 0.5, 0.88], horizon: [0.80, 0.86, 0.90], grass: [0.20, 0.42, 0.18], runoff: [0.12, 0.72, 0.78], fogDensity: 0.0014, sunDir: [0.3131803839972462, 0.7933903061263571, 0.521967306662077], sun: [1, 0.96, 0.82], sunColor: [1, 0.94, 0.8] },
     segs: [
       { t: 0, l: 300 }, { t: 60, l: 80 }, { t: -65, l: 70 }, { t: 0, l: 200 }, { t: -80, l: 90 }, { t: 90, l: 100 },
       { t: -70, l: 80 }, { t: 0, l: 400 }, { t: 80, l: 90 }, { t: -80, l: 90 }, { t: 0, l: 240 },
     ],
-    // Elevations are authored in source-trace coordinates. With the line
-    // corrected to 0.0 the fmap is the identity, so 0.8925 is also racing s:
-    // the Turnpike T14–15 crest, ~11 ft. (Was racing 0.66 under startFrac 0.2325.)
     elevations: [{ s: 0.8925, halfM: 220, rise: 3.5 }],
-    // Hard Rock is car-park flat and laid over temporary tarmac, so camber is
-    // modest throughout — 3-3.5° on the sweeps, nothing dramatic anywhere.
     bankZones: [
       { frac: 0.0775, angleDeg: 3.5, widthM: 240 },
       { frac: 0.3785, angleDeg: 3.0, widthM: 130 },
@@ -67,15 +49,12 @@
       } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // Track centre + radius — for placing a clustered distant downtown that
-      // reads as ONE skyline far off, instead of a chaotic ring on every node.
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
 
-      // ---- Miami pastel palette (bright tropical day) ----
       const TEAL       = [0.20, 0.80, 0.78];
       const CORAL      = [1.0,  0.55, 0.45];
       const PINK       = [1.0,  0.65, 0.80];
@@ -105,11 +84,6 @@
         [0.58, 0.74, 0.90],   // ice-blue
         [0.82, 0.90, 0.76],   // sage
       ];
-      // Five cityFront runs used to share only two palettes verbatim (SKY_PAL
-      // itself repeated at 3 separate districts), so five different lap
-      // sections read as one building type recoloured. Each run below now gets
-      // its own slice/tone instead of reusing SKY_PAL in place — T1's arrival
-      // corridor keeps SKY_PAL as the "base" reading, the rest are distinct.
       const rotPal = (arr, k) => arr.slice(k % arr.length).concat(arr.slice(0, k % arr.length));
       const SKY_PAL_STADIUM = [   // stadium-lot corridor (T11 approach) — concrete-forward, cooler
         CONCRETE, GREYWHITE, [0.62, 0.82, 0.88], [0.80, 0.84, 0.88], [0.90, 0.84, 0.76],
@@ -118,7 +92,6 @@
         [0.30, 0.60, 0.64], [0.66, 0.40, 0.50], [0.44, 0.54, 0.78], [0.60, 0.68, 0.48], [0.78, 0.56, 0.32],
       ];
 
-      // ======================= BESPOKE MIAMI MODELS =======================
       // -- South-Beach club: sand deck, teal pool, DJ cabana, parasols, loungers --
       const beachClub = (s, side, dist) => {
         const k = K(s), a = anchor(k, side, dist), bv = [a.r, a.u, a.t];
@@ -138,10 +111,6 @@
           addBox(stage, vadd(vadd(a.c, a.t, -14), a.u, 3.6), [6.6, 0.6, 8.6], CORAL, bv);
           stage._mat = 0;
         }, { required: true });
-        // parasols (cone canopies on poles) + sun loungers scattered on the sand
-        // One canopy overlaps the nearby folded-back road footprint by ~4.2 m,
-        // but its underside is ~7.5 m above that road. This intentional, safe
-        // overhead geometry is kept outside the ground-model preflight.
         for (let i = 0; i < 8; i++) {
           const along = (hash(k + i) - 0.5) * 30, out2 = (hash(k * 3 + i) - 0.5) * 18 + 2;
           const base = vadd(vadd(a.c, a.t, along), a.r, out2);
@@ -178,13 +147,6 @@
         });
       };
 
-      // -- Multi-level open parking deck: precast tiers + ramped ends + cars --
-      // Miami's identity is literally its car parks, but carPark() above is a
-      // flat slab everywhere it's used. This is the vertical counterpart: N
-      // open precast tiers (floor + low perimeter beam + corner columns, no
-      // walls — a real open deck reads through its structure, not a skin),
-      // stepped ramp stacks at both ends, and a sparse scatter of parked-car
-      // boxes per level so the upper decks don't read as empty slabs.
       const parkingDeck = (s, side, dist, opts) => {
         opts = opts || {};
         const k = K(s), a = anchor(k, side, dist), bv = [a.r, a.u, a.t];
@@ -192,8 +154,6 @@
         const w = opts.w || 34, len = opts.len || 56;
         const total = tierH * tiers;
         const rampSteps = 5, rampStep = 2.6, rampRun = 3 + (rampSteps - 1) * rampStep + 2.4;
-        // Guard the COMPLETE stacked footprint (all tiers + both ramp stacks)
-        // up front — modelGroup's own preflight uses exactly this bounds box.
         const bounds = {
           center: vadd(a.c, a.u, total / 2),
           size: [w, total, len + 2 * rampRun],
@@ -224,8 +184,6 @@
                 [0.30 + tone * 0.5, 0.32 + hash(ci) * 0.4, 0.36 + hash(t) * 0.4], bv);
             }
           }
-          // Ramped ends — a stepped staircase profile rising from ground to
-          // the top tier at both ends (flat-shaded steps, not a tilted slab).
           for (const endSign of [-1, 1]) {
             for (let si = 0; si < rampSteps; si++) {
               const stepH = total * (si + 1) / rampSteps;
@@ -237,13 +195,11 @@
         }, { required: true });
       };
 
-      // ===================================================================
       // Shared overpass builder — used at s 0.635 and 0.685 (Turnpike zone).
       // FIXED: pushed both further into the Turnpike zone, away from the
       // start/finish gantry.  Pillars are now spaced only inside the
       // overpass deck footprint (pillar offset clamped to ±span*0.38 so they
       // never extend into the circuit's start sector).
-      // ===================================================================
       const buildOverpass = (s) => {
         const k = K(s);
         const supportGap = 4.0, supportWidth = 3.4, clearance = 10.4;
@@ -267,12 +223,6 @@
         }
       };
 
-      // ===================================================================
-      // MIAMI DOWNTOWN SKYLINE — pushed far + hazed so Hard Rock owns campus.
-      // ~12 tall + 6 mid-rise (was 36); washed toward horizon white.
-      // COLOUR RULE: no entry may have g > r AND g > b*1.05 — that triggers
-      // backdrop()'s green-terrain mound path instead of the building path.
-      // ===================================================================
       {
         const SKY_COLS = [
           [0.72, 0.84, 0.90],   // hazed ice-blue
@@ -310,14 +260,7 @@
         }
       }
 
-      // ===================================================================
-      // s 0.00 R — HARD ROCK STADIUM: massive elliptical bowl (campus hero).
-      // Enlarged bowl + taller coral/teal crown so it owns the S/F horizon
-      // ahead of the hazed downtown. Floor anchors to pyMin.
-      // ===================================================================
       {
-        // The old 100 m anchor let the 132 m bowl sweep back across the S/F
-        // footprint. Move the complete model outward while keeping it prominent.
         const a = anchor(K(0.0), 1, 155);
         const r = a.r, u = a.u, t = a.t;
         const RA = 132, RB = 100;
@@ -340,10 +283,6 @@
           addBox(out, vadd(vadd(c, u, h * 0.5),  rad2,  6), [12, h + 2, segW], GREYWHITE, [rad2, u, tan]);
           // upper shell tier
           addBox(out, vadd(vadd(c, u, h + 10),   rad2,  9), [11, 18, segW + 1], WHITE,     [rad2, u, tan]);
-          // coral/teal rim crown — thicker identity band. Seated ON the shell
-          // tier (which tops out at h+19): at h+22 its underside sat at h+19.9,
-          // leaving a 0.9 m slot right around the 48-segment ring ~78 m up —
-          // a band of boxes visibly hanging in the sky beside the circuit.
           addBox(out, vadd(vadd(c, u, h + 20.9), rad2,  9), [12, 4.2, segW + 2],
             (i % 2) ? CORAL : TEAL, [rad2, u, tan]);
           // outer aqua accent stripe (Dolphins cue on the bowl shell)
@@ -389,17 +328,7 @@
         }
       }
 
-      // ===================================================================
-      // s 0.00 L near — pit lane & paddock building block.
-      // All buildings get lit:true for dusk/night legibility.
-      // ===================================================================
       {
-        // Pit building, paddock terrace, and the arrival-court pavilions
-        // (below) used to be three near-identical white boxes. circuitKit's
-        // pitBuilding gives the pit lane its own garage-bay rhythm instead of
-        // a plain glass mass, so it reads as a working pit lane rather than a
-        // recoloured hospitality block; raceControl adds a distinct vertical
-        // silhouette the flat terrace and pavilions don't have.
         if (circuitKit) {
           circuitKit.pitBuilding({
             id: "kit:miami:pit-building", frac: 0.0, side: -1, gap: 13,
@@ -413,19 +342,12 @@
           // Fallback if the kit is unavailable — keep the pit lane building.
           building(K(0.0), -1, 13, 22, 9, 120, { kind: "hall", wall: WHITE, window: GLASS, lit: true, windowCol: WIN_AMBER });
         }
-        // paddock club terrace — deliberately a plain glass tower, distinct
-        // from the pit building's bay rhythm and the control tower's mast.
         building(K(0.0), -1, 42, 26, 22, 120,
           { kind: "slab", wall: WHITE, window: GLASS, floor: 6, lit: true, windowCol: WIN_AMBER });
         // pit wall
         wall(0.0, 0.05, -1, 2.2, 1.1, GREYWHITE);
       }
 
-      // ===================================================================
-      // START/FINISH GANTRIES — separated to avoid mutual clipping.
-      // The dark scoring arch is at s=0.0.
-      // The coral timing gantry is at s=0.014 (slightly further along).
-      // ===================================================================
       gantry(0.0,   6.6, [0.18, 0.20, 0.24]);   // dark scoring arch (start line)
       gantry(0.014, 7.0, CORAL);                  // coral timing gantry
 
@@ -454,15 +376,6 @@
       billboard(K(0.035), -1, 11, 16, 7, CORAL);
       billboard(K(0.05),  -1, 11, 16, 7, PINK);
 
-      // ===================================================================
-      // s 0.05–0.12 R mid — T1 ZONE: grandstands + cityFront facade + palms
-      // ===================================================================
-      // grandstandEx liveries rotate the Miami stand set (STAND_SETS.miami:
-      // pastel/teal/alu) so this run reads as several distinct stands, not
-      // one grey template recoloured; hash-driven crowd tint layers a bright
-      // Miami fleck colour independently of each livery's own shell tone. The
-      // apex stand (i=0 — the brief's named "T1 grandstand") gets a two-tier
-      // deck with end walls for the hero read.
       const T1_STANDS = ["pastel", "teal", "alu", "pastel"];
       for (let i = 0; i < 4; i++) {
         const s    = 0.05 + i * 0.015;
@@ -473,18 +386,12 @@
           roof: (i % 2) ? "truss" : "cantilever", endWalls: i === 0,
         });
       }
-      // Coherent pastel street facade on the right — hospitality buildings.
-      // Raised/deepened slightly to reflect the 2026-27 Paddock Club expansion
-      // at T1-T3 (real-world widening of the hospitality footprint here).
       cityFront(0.04, 0.12, 1, 30, {
         minH: 14, maxH: 38, depth: 25, step: 20,
         palette: SKY_PAL, lit: true, windowCol: WIN_AMBER,
       });
       for (let i = 0; i < 10; i++) palm(K(0.04 + i * 0.006), 1, 14 + (i % 2) * 5, 8 + hash(i) * 2, PALM_GREEN);
 
-      // ===================================================================
-      // s 0.13–0.19 — concrete barriers + debris fence + forestEdge backing
-      // ===================================================================
       wall(0.13, 0.19,  1, 3, 1.2, CONCRETE);
       wall(0.13, 0.19, -1, 3, 1.2, CONCRETE);
       fence(0.13, 0.19,  1, 3.5, 3.5, [0.78, 0.80, 0.82]);
@@ -494,9 +401,6 @@
         col: PALM_GREEN, col2: PALM_DARK, pineFrac: 0.0,
       });
 
-      // ===================================================================
-      // s 0.20 L mid — PALM CLUSTER + pastel low-rise street facade
-      // ===================================================================
       for (let i = 0; i < 18; i++) {
         const k = K(0.18 + (i % 6) * 0.004);
         palm(k, -1, 28 + (i % 4) * 7 + hash(i) * 4,   8 + hash(i * 7) * 5,
@@ -511,14 +415,6 @@
       });
       // Beach Club moved to T11–13 (s≈0.50) — see braking-zone section below.
 
-      // ===================================================================
-      // s 0.27–0.38 R — MIA MARINA (T5–9): fake vinyl water + MSC Yacht Club
-      // hero + a few large yacht silhouettes (cull the old dense fleet).
-      // ===================================================================
-
-      // Typed water surfaces feed the reflective water buffer. The old 2D
-      // groundPlane sizes were invalid under the shared foundation contract and
-      // silently emitted no marina at all.
       for (let m = 0; m < 3; m++) {
         const k = K(0.285 + m * 0.032);
         waterSurface(k, 1, 7.0, [72, 0.18, 110],
@@ -530,14 +426,6 @@
       }
       guardrail(0.26, 0.38, 1, 2.8, GREYWHITE);
 
-      // THE MARINA IS NOT A MARINA. Hard Rock has no water: the 2022 "marina"
-      // was a painted vinyl sheet laid over the car park with boats standing on
-      // it, and that is genuinely the most Miami thing on the calendar — so it
-      // is modelled honestly rather than dressed up as a harbour. Two details
-      // carry it: a hard PAINTED EDGE where the blue sheet stops and the
-      // asphalt resumes (real water has no straight white boundary), and a rank
-      // of identical hulls sitting flat on that sheet with no waterline, no
-      // draught and no mooring lines.
       along(0.265, 0.375, 8, (k) => {
         place(k, 1, 6.3, [0.45, 0.06, 8], WHITE);        // painted vinyl boundary
         place(k, 1, 6.9, [0.7, 0.05, 8], [0.34, 0.34, 0.36]);  // asphalt showing through
@@ -582,8 +470,6 @@
         });
       }
 
-      // MSC Yacht Club — one multi-deck hospitality mass (~50 ft / ~80 m read).
-      // Replaces the old mid-size barge as the marina hero silhouette.
       {
         const k = K(0.32);
         const a = anchor(k, 1, 38);
@@ -618,9 +504,6 @@
         }, { required: true });
       }
 
-      // Bare bolted bleachers looking across the vinyl at the boat show. No
-      // roof, no shell, no fascia — just planks on a frame standing on the car
-      // park, which is what general admission at Miami actually is.
       bleacher(0.284, 0.316, -1, 26, {
         rows: 8, rise: 0.7, setback: 0.95,
         frameCol: [0.74, 0.76, 0.80], plankCol: [0.72, 0.73, 0.76],
@@ -633,9 +516,6 @@
         col: PALM_GREEN, col2: PALM_DARK, pineFrac: 0.0,
       });
 
-      // ===================================================================
-      // s 0.43–0.52 L mid — STADIUM-LOT ZONE: grandstands + cityFront + palms
-      // ===================================================================
       const STADIUM_STANDS = ["teal", "alu", "pastel"];
       for (let i = 0; i < 3; i++) {
         const flick = PASTELS[Math.floor(hash(i * 11 + 5) * PASTELS.length) % PASTELS.length];
@@ -648,21 +528,9 @@
         palette: SKY_PAL_STADIUM, lit: true, windowCol: WIN_AMBER,
       });
       for (let i = 0; i < 10; i++) palm(K(0.43 + i * 0.005), -1, 12 + (i % 2) * 4, 8 + hash(i * 3) * 2, PALM_GREEN);
-      // Campus stadium car-park lots — the "car-park circuit" signature.
-      // Left lot stays a flat surface slab; the right lot becomes a 4-level
-      // open precast deck so the identity gets some vertical read, not just
-      // more flat asphalt.
       carPark(0.47, -1, 60, 4, 18);
       parkingDeck(0.55, 1, 70, { tiers: 4, w: 34, len: 56 });
 
-      // ===================================================================
-      // MIAMI CAMPUS HERO INFRASTRUCTURE — five bounded, high-value additions.
-      // These stay at fixed fractions and well beyond the barrier line; no new
-      // full-lap density is introduced into an already richly dressed circuit.
-      // ===================================================================
-
-      // 1) Hard Rock campus arrival court: low pastel pavilions and a broad
-      // shade canopy make the stadium foreground read as an event campus.
       {
         const a = anchor(K(0.025), 1, 82);
         const bv = [a.r, a.u, a.t];
@@ -681,8 +549,6 @@
         }, { required: true });
       }
 
-      // 2) Marina hospitality deck: two glass-fronted tiers and a striped
-      // rooftop canopy deepen the temporary "marina" illusion behind the yachts.
       {
         const a = anchor(K(0.355), 1, 78);
         const bv = [a.r, a.u, a.t];
@@ -701,8 +567,6 @@
         }, { required: true });
       }
 
-      // 3) Two Miami Vice pedestrian bridges punctuate the campus transitions.
-      // overheadSpan owns the complete deck/support clearance preflight.
       overheadSpan({
         id: "miami-teal-pedestrian-bridge", frac: 0.235, clearance: 7.4,
         thickness: 1.0, depth: 3.2, supportGap: 5.5, supportWidth: 1.4,
@@ -714,8 +578,6 @@
         color: CORAL, required: true,
       });
 
-      // 4) Paired broadcast/logistics compounds fill otherwise empty service
-      // ground without becoming a roadside wall.
       if (circuitKit) {
         circuitKit.serviceCompound({
           id: "kit:miami:broadcast-compound", frac: 0.205, side: 1, gap: 70,
@@ -727,8 +589,6 @@
         });
       }
 
-      // 5) Curated palm courts frame the campus gate and marina exit. Their
-      // generous offsets preserve the driver's braking and corner sightlines.
       for (let i = 0; i < 6; i++) {
         palm(K(0.012 + i * 0.006), 1, 64 + (i % 2) * 12,
           10 + hash(i * 71) * 3, (i % 2) ? PALM_DARK : PALM_GREEN);
@@ -736,11 +596,6 @@
           9 + hash(i * 73) * 3, (i % 2) ? PALM_GREEN : PALM_DARK);
       }
 
-      // ===================================================================
-      // AQUA RUNOFF APRONS — Dolphins identity at heavy-brake corners.
-      // pal.runoff already tints the verge; these wide pads punch the cue
-      // at T1, marina exit, T11, Turnpike chicane, and final corner.
-      // ===================================================================
       if (typeof runoffApron === "function") {
         const apronSpots = [
           [0.06,  1, 4.5], [0.08, -1, 4.5],   // T1
@@ -758,23 +613,12 @@
         }
       }
 
-      // ===================================================================
-      // s 0.50–0.60 R mid — T11–13 BRAKING ZONE: Beach Club + palms + boards
-      // Real Hard Rock Beach Club sits here (sand/pool/cabana spectacle).
-      // ===================================================================
       beachClub(0.52, 1, 48);
       for (let i = 0; i < 16; i++) palm(K(0.50 + i * 0.004),  1, 11 + (i % 3) * 6, 9 + hash(i)     * 2, PALM_GREEN);
       for (let i = 0; i < 6;  i++) palm(K(0.55 + i * 0.005), -1, 12 + (i % 2) * 5, 8 + hash(i * 2) * 1, PALM_DARK);
       billboard(K(0.50), 1, 11, 18, 9, CORAL);
       billboard(K(0.52), 1, 10, 16, 8, TEAL);
       billboard(K(0.54), 1, 10, 16, 8, PINK);
-      // SOUTH BEACH ART DECO ROW. The Beach Club corridor previously got the
-      // same generic cityFront massing as the other four districts, only in
-      // warmer colours — which is exactly the "livery-only" trap. Ocean Drive's
-      // hotels are low, white, and shaped: stepped ziggurat parapets, vertical
-      // eyebrow fins, chevron and notched cornices. building()'s massing
-      // library carries all four, so the silhouette changes and not just the
-      // paint. Deliberately SHORT (14-22 m) — Art Deco Miami is three storeys.
       const DECO = [
         [0.500, "ziggurat", WHITE,            22],
         [0.518, "fin",      [0.96, 0.86, 0.70], 18],
@@ -792,12 +636,6 @@
         });
       }
 
-      // ===================================================================
-      // s 0.635 & 0.685 — FLORIDA TURNPIKE OVERPASSES.
-      // Moved from 0.62/0.67 to 0.635/0.685 to ensure maximum separation
-      // from both the start gantry (s≈0) and the back straight billboards.
-      // Pillar height fixed so tops sit flush under the deck (no penetration).
-      // ===================================================================
       buildOverpass(0.635);
       buildOverpass(0.685);
 
@@ -814,16 +652,6 @@
         addBox(out, vadd(aR.c, aR.u, 8.4), [1.4, 0.5, 1.0], LAMP_WARM, [aR.r, aR.u, aR.t]);
       }
 
-      // ===================================================================
-      // s 0.77–0.85 both — BACK STRAIGHT (DRS zone): grandstands + cityFront
-      // ===================================================================
-      // Two roofed hero stands in the middle of the DRS zone, and RENTED
-      // SCAFFOLDING either side of them. Miami is a race meeting held in a car
-      // park: most of its seating is tube-and-plank hired for the weekend and
-      // taken away again, standing on the asphalt with the frame visible under
-      // the rake. grandstandEx cannot say that — it always builds a permanent
-      // back shell — which is why every temporary circuit in the game used to
-      // read as a permanent one.
       for (let i = 1; i <= 2; i++) {
         const flick = PASTELS[Math.floor(hash(i * 13 + 9) * PASTELS.length) % PASTELS.length];
         grandstandEx(0.77 + i * 0.025, -1, 20, 80, null, flick, {
@@ -838,10 +666,6 @@
         rows: 5, tubeCol: [0.72, 0.74, 0.78], deckCol: [0.74, 0.72, 0.66],
         bench: [PINK, WHITE, TEAL], crowd: PASTELS, density: 0.55, legEvery: 1,
       });
-      // Back-straight facades on the OUTER (spectator) side only. The +1 side
-      // faces the narrow grass median shared with the final straight (~15 m of
-      // grass), so no tall buildings go there — it would loom over / appear to
-      // cover the parallel track from overhead. Median keeps grass + palms.
       cityFront(0.76, 0.86, -1, 34, {
         minH: 16, maxH: 38, depth: 22, step: 20,
         palette: SKY_PAL_DUSKGLASS, lit: true, windowCol: WIN_AMBER,
@@ -859,12 +683,6 @@
         addBox(out, vadd(a.c, a.u, 0.06), [12, 0.2, 12], [0.96, 0.96, 0.88], [a.r, a.u, a.t]);
       }
 
-      // ===================================================================
-      // s 0.88–0.96 R — PADDOCK & FINAL CORNER: team buildings + grandstand
-      // ===================================================================
-      // Paddock / team buildings sit on the OUTER (-1) side, behind the final-
-      // corner grandstands (gap 26 clears the 18 m stands). The +1 side here
-      // faces the same narrow median as the back straight, so it stays open.
       cityFront(0.87, 0.97, -1, 26, {
         minH: 10, maxH: 28, depth: 22, step: 18,
         palette: [WHITE, ...rotPal(SKY_PAL, 3)], lit: true, windowCol: WIN_AMBER,
@@ -879,14 +697,6 @@
           (i % 2) ? PALM_GREEN : PALM_DARK);
       }
 
-      // ===================================================================
-      // s 0.90–0.94 — TURN 17: bespoke hairpin treatment. The real corner is
-      // the circuit's tightest (a 65 km/h hairpin), but it used to fall
-      // inside the generic 0.83–0.90 wall/fence block with nothing of its
-      // own, while the T14-15 chicane already gets two named tyre walls.
-      // Sausage kerbs (bankedKerbStrip) plus a tyre stack on each apex match
-      // that treatment here.
-      // ===================================================================
       if (typeof bankedKerbStrip === "function") {
         bankedKerbStrip(0.897, 0.923, 1,  { step: 6, safer: false });
         bankedKerbStrip(0.899, 0.921, -1, { step: 6, safer: false });
@@ -894,17 +704,10 @@
       tyreWall(0.900, 0.928, 1,  2.6, TEAL);
       tyreWall(0.904, 0.924, -1, 2.6, CORAL);
 
-      // ===================================================================
-      // s 0.96 both near — final-corner barrier walls
-      // ===================================================================
       wall(0.94, 0.99,  1, 3, 1.2, CONCRETE);
       wall(0.94, 0.99, -1, 3, 1.2, CONCRETE);
       fence(0.94, 0.99,  1, 3.5, 3.2, [0.78, 0.80, 0.82]);
 
-      // ===================================================================
-      // LAP-WIDE TRACK FURNITURE — barriers, fences, guardrail, tyre walls,
-      // marshal posts, shrubs, sponsor billboards.
-      // ===================================================================
       for (const [s0, s1] of [[0.32, 0.42], [0.55, 0.635], [0.635, 0.72], [0.83, 0.90]]) {
         wall(s0, s1,  1, 3, 1.0, CONCRETE);
         wall(s0, s1, -1, 3, 1.0, CONCRETE);
@@ -916,8 +719,6 @@
       tyreWall(0.645, 0.66,  1, 2.4, CORAL);
       tyreWall(0.66,  0.69, -1, 2.4, TEAL);
       tyreWall(0.155, 0.175, -1, 2.4, PINK);
-      // marshalPost performs its own off-track footprint guard. The previous
-      // centreline onTrack check was always true, so Miami emitted no posts.
       every(180, (k) => marshalPost(k, 1, 5));
       // Low shrubs
       for (let i = 0; i < 10; i++) {
@@ -932,19 +733,8 @@
           (i % 2) ? PALM_GREEN : PALM_DARK);
       }
 
-      // ===================================================================
-      // CAMPUS PALM ROWS
-      // Hard Rock's palms are PLANTED — evenly spaced ranks down the access
-      // roads and around the lot edges, which is what tells you this is a
-      // landscaped car park and not a jungle. Three every()-driven density
-      // layers used to drop up to six palms per node across most of the lap:
-      // 158 k verts, 15 % of the whole circuit, spent on a scatter that read
-      // as tropical undergrowth. A row is both cheaper and more Miami.
-      // ===================================================================
       const palmRow = (s0, s1, side, dist, stepM, hBase) => {
         along(s0, s1, stepM, (k) => {
-          // Alternating rank offset + species tone: a dead-straight identical
-          // row reads as a fence, a 1.5 m stagger reads as planting.
           palm(k, side, dist + (k & 1) * 1.5, hBase + hash(k * 29 + side) * 2.5,
                (k & 1) ? PALM_GREEN : PALM_DARK);
         });
@@ -955,9 +745,6 @@
       palmRow(0.72, 0.88,  1, 16, 34, 8.0);
       palmRow(0.60, 0.72, -1, 18, 34, 8.5);    // Turnpike service road
       palmRow(0.38, 0.55,  1, 16, 34, 8.5);    // stadium-lot perimeter
-      // Live oaks between the lots. Every green thing on this circuit was a
-      // palm, so the campus had exactly one silhouette; a low flat crown is the
-      // other tree South Florida actually plants in a parking lot for shade.
       const LIVE_OAK = [0.22, 0.38, 0.20];
       // Kept clear of the stadium-lot cityFront (side -1, 24-46 m): a species
       // call guards against the ROAD only, never against a building already
@@ -967,9 +754,6 @@
       along(0.74, 0.86, 52, (k) => acacia(k, 1, 26 + hash(k * 57) * 8, 7.0, LIVE_OAK,
                                           { layers: 2, spread: 10 }));
 
-      // ===================================================================
-      // BILLBOARD STRIP — Miami Vice saturated palette
-      // ===================================================================
       billboard(K(0.08),  -1, 14, 14, 16, [0.0,  0.70, 0.80]);
       billboard(K(0.18),   1, 15, 13, 15, [1.0,  0.40, 0.20]);
       billboard(K(0.35),  -1, 16, 14, 16, [0.95, 0.30, 0.60]);

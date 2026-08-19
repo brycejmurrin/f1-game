@@ -1,40 +1,12 @@
 "use strict";
-/* TOP MODAL — the platform's top layer, without rewriting the app's state machine.
- *
- * WHY. Every modal in this game was a `<div class="screen dim">` shown by setting
- * `.hidden = false`, and the stacking a hand-maintained z-index ladder (dozens
- * of distinct values, topping out at 9000 when measured). Nothing trapped
- * focus, Escape was handled in two files out of twelve, and the background
- * stayed interactive behind the scrim. `<dialog>.showModal()` supplies all of that —
- * the TOP LAYER (which no z-index can reorder and no `overflow: hidden` or
- * transformed ancestor can clip), `::backdrop`, Escape, focus containment and an
- * inert background — and it does so by deleting code rather than adding it.
- *
- * THE PROBLEM IS THE MIGRATION, NOT THE FEATURE. There are a couple of hundred
- * `.hidden =` sites across js/, many of them on these screens, and this app's state
- * machine has already proved that it does not survive having a screen's
- * visibility changed behind its back: forcing `#pmsettings.hidden = false`
- * desynced that screen and made every panel button inside it a silent no-op.
- * Rewriting sixty call sites in one change is how that becomes twelve bugs.
- *
- * So this is a SEAM, not a rewrite. A migrated screen becomes a `<dialog>` in
- * the markup and gains nothing else; this module watches its `hidden` attribute
- * and mirrors it onto `showModal()` / `close()`. Every existing call site keeps
- * working, unchanged and unaware, and screens migrate one at a time — each one
- * verified by its row in the layout grid before the next.
- *
- * `hidden` stays the source of truth deliberately. The alternative — making
- * `open` authoritative — means every reader of `.hidden` (menus.js, the pause
- * flow, the audit harness, the specs) has to learn a second way to ask the same
- * question, on a staggered schedule. One question, one answer, throughout.
- */
+/* TOP MODAL — mirrors each dialog.screen's `hidden` onto showModal()/close().
+ * Seam migration: `hidden` stays source of truth; screens migrate one at a time
+ * so existing `.hidden =` call sites keep working unchanged. */
 window.TopModal = (function () {
   const wired = new WeakSet();
 
   function sync(el) {
     const wantOpen = !el.hidden;
-    // showModal() throws InvalidStateError on an already-open dialog, and close()
-    // on a closed one is a no-op — so both directions are guarded.
     if (wantOpen && !el.open) {
       try { el.showModal(); } catch (_) { /* already in the top layer */ }
       try { Log.info("ui", "TopModal open #" + (el.id || "?")); } catch (_) { /* Log absent */ }
@@ -118,9 +90,6 @@ window.TopModal = (function () {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     const layer = window.UiLayers && window.UiLayers.top();
     if (!layer) return;
-    // A <dialog> gets Escape from the platform — the browser fires `cancel` on
-    // it and wire()'s handler turns that into the screen's own back button.
-    // Doing it here as well would open the door twice.
     if (layer.tagName === "DIALOG") return;
     if (layer.getAttribute("data-esc") === "none") {
       e.preventDefault(); e.stopPropagation();

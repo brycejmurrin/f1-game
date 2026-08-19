@@ -1,37 +1,12 @@
-/*
- * Apex 26 — procedural 2026 F1 car.
- * Car3D.build(color, color2) -> plain {pos,nrm,col,mat,idx} for gfx.createMesh.
- * Local space: +Z forward, +Y up, origin on the ground under the car center.
- * ~1.9 m wide, ~5.4 m long, ~0.95 m tall.
- *
- * The car is HAND-MODELLED from chiseled hexahedron blocks — nose wedge,
- * monocoque slab, cockpit collar, airbox trapezoid, engine-cover roof prism,
- * undercut sidepod slabs — every face flat-shaded, so each panel catches one
- * clean reflection tone and flashes as a unit (the low-poly facet glint that
- * matches the game world). Only the helmet dome and tyre treads stay smooth.
- */
+/* Apex 26 — procedural 2026 F1 car. Car3D.build(color, color2) -> plain {pos,nrm,col,mat,idx} for gfx.createMesh. Local space: +Z forward, +Y up, origin on the gr… */
 "use strict";
 
 const Car3D = (function () {
-  // Car-only surface ids deliberately live above TrackGeom.MAT's 0..15 range.
-  // Material 0 remains the generic/imported/custom compatibility path.
   const SURFACES = Object.freeze({
     custom: 0, paint: 20, carbon: 21, rubber: 22,
     metal: 23, glass: 24,
     emissive: 25, functionalEmissive: 25, panel: 26, mirror: 27,
   });
-  // Livery FINISH -> the surface id the body paint is emitted as. "gloss" (or an
-  // absent finish) keeps SURFACES.paint, i.e. the clearcoat + metallic-flake car
-  // paint the lit shader has always given bodywork. The two alternatives reuse
-  // ids the shader already classifies, so no renderer needs a new branch:
-  //   satin  -> panel   (roughness >= 0.72, specular 0.35 — a flat matte wrap)
-  //   chrome -> mirror  (clearcoat + env lobe + near-zero roughness)
-  // Chrome originally reused `metal`, which looked WORSE than gloss: metalness
-  // kills the diffuse response while the shader's env lobe is gated on
-  // clearcoat, which metal has none of — so the body went dark and flat with
-  // nothing to reflect. `mirror` is its own id so no existing metal part (rims,
-  // halo, heat shields) changes, and a backend that does not classify it simply
-  // renders ordinary paint.
   const FINISH_SURFACE = Object.freeze({ satin: 26, chrome: 27 });
   const DARK   = [0.05, 0.05, 0.05];
   const CARBON = [0.07, 0.07, 0.08];
@@ -62,22 +37,6 @@ const Car3D = (function () {
     ]),
   });
 
-  // ── Per-team chassis identity ────────────────────────────────────────────
-  // Each team gets a distinct SILHOUETTE independent of parts and livery: nose
-  // profile (length/width/droop), airbox intake scale, an optional engine-cover
-  // dorsal fin, mirror housing style and sidepod-inlet aspect. All knobs are
-  // bounded multipliers/offsets around the shared chassis datums so wheelbase,
-  // physics reference points and decal anchoring stay untouched (bodyAnchors
-  // consumes the SAME styled stations the bodywork lofts from).
-  //   noseTipZ  m   +longer / −shorter nose tip           (±0.10)
-  //   noseSlim  ×   tip width+height scale                (0.82..1.18)
-  //   noseDroop m   tip vertical drop (classic droop nose) (−0.03..+0.01)
-  //   airbox    ×   intake scale multiplier on the engine recipe
-  //   fin       0|1|2  engine-cover dorsal fin: none / low blade / tall blade
-  //                 (a SECONDARY ridge blade — the sharkFin tail plate itself
-  //                  is a separate part every non-cockpit car carries)
-  //   mirror    0|1|2  housing style: standard / swept-wide / low-slung
-  //   inlet     m   sidepod inlet-top bias: +taller / −squashed (±0.035)
   const DEFAULT_STYLE = Object.freeze({ noseTipZ: 0, noseSlim: 1, noseDroop: 0,
     airbox: 1, fin: 0, mirror: 0, inlet: 0 });
   const TEAM_STYLE = Object.freeze({
@@ -96,9 +55,6 @@ const Car3D = (function () {
   function teamStyleOf(teamId) {
     return (teamId && TEAM_STYLE[teamId]) || DEFAULT_STYLE;
   }
-  // Nose stations adjusted for a team style. The TIP takes the full effect; the
-  // MID station blends 40% of the slim/droop so the taper stays continuous into
-  // the fixed bulkhead station. Returns plain copies — CHASSIS stays frozen.
   function styledNoseStations(style) {
     const s = style || DEFAULT_STYLE;
     if (s === DEFAULT_STYLE || (!s.noseTipZ && s.noseSlim === 1 && !s.noseDroop)) return CHASSIS.nose;
@@ -167,20 +123,7 @@ const Car3D = (function () {
     addLoft(out, cz-sz/2, cx, cy, sx, sy, cz+sz/2, cx, cy, sx, sy, col, surface);
   }
 
-  // ── Hexahedron block ────────────────────────────────────────────────────────
-  // The car is HAND-MODELLED from chiseled blocks: each functional mass (nose
-  // wedge, monocoque slab, engine-cover prism, sidepod slab) is one 8-corner
-  // hexahedron with arbitrary corner positions — tapered wedges, undercuts and
-  // pinched ridges all come out of one primitive, every face flat-shaded.
-  // Corners: [FBL, FBR, FTR, FTL, RBL, RBR, RTR, RTL]  (F = +Z front, B/T =
-  // bottom/top, L/R = -x/+x). Degenerate corners (two at the same point) give
-  // wedges and prisms.
   function addBlock(out, q, col, colFront, surface, frontSurface, capFront, capRear) {
-    // Mirrored call sites (x → s*x for the left-hand copy of a part) reverse
-    // the corner winding, which inverts every face normal: the part then lights
-    // as an away-facing surface (flat grey, no sun) and back-face culling makes
-    // it SEE-THROUGH in race. Detect the flipped handedness — front-face normal
-    // pointing toward the rear frame — and re-wind so both sides shade alike.
     {
       const ax = q[1][0]-q[0][0], ay = q[1][1]-q[0][1], az = q[1][2]-q[0][2];
       const bx = q[3][0]-q[0][0], by = q[3][1]-q[0][1], bz = q[3][2]-q[0][2];
@@ -197,8 +140,6 @@ const Car3D = (function () {
     addQuad(out, q[1], q[5], q[6], q[2], col, surface);              // right (+X)
     addQuad(out, q[0], q[3], q[7], q[4], col, surface);              // left  (−X)
   }
-  // Convenience: block from two rectangular end frames {z, x?, y, w, h, t?}
-  // where t narrows the TOP edge (t=0 → roof ridge / wedge).
   function frame(f) {
     const w2 = f.w / 2, tw = (f.t !== undefined ? f.t : 1) * w2, x = f.x || 0;
     return [
@@ -210,32 +151,14 @@ const Car3D = (function () {
     const F = frame(front), R = frame(rear);
     addBlock(out, [F[0], F[1], F[2], F[3], R[0], R[1], R[2], R[3]], col, colFront, surface, frontSurface);
   }
-  // ── Wing element section ────────────────────────────────────────────────────
   // Chordwise stations from leading to trailing edge. Packed at BOTH ends: the
   // first third still owns the nose radius, and 0.84 keeps the last sixth a
   // knife rather than a 40 % linear fade from mid-chord to the TE (the look
   // that read as a rounded plank, especially on GLX/WGX paint).
   const FOIL_T = [0, 0.08, 0.28, 0.60, 0.84, 1];
-  // Half-thickness distribution, normalised to peak at 1. t^0.5 gives the
-  // square-root nose growth that reads ROUND at four stations; (1-t)^1.1 runs
-  // out to a genuinely sharp trailing edge. Thickness reaching zero at both ends
-  // is also what closes the section without needing cap geometry.
   const FOIL_PEAK = Math.pow(0.5 / 1.6, 0.5) * Math.pow(1 - 0.5 / 1.6, 1.1);
   const foilThick = (t) => Math.pow(t, 0.5) * Math.pow(1 - t, 1.1) / FOIL_PEAK;
-  // Camber as a fraction of chord. F1 wings are INVERTED, so the mean line bows
-  // DOWN off the chord line and the suction side is the underside.
   const FOIL_CAMBER = 0.05;
-  // Wing element split into a flat centre plus TWO outboard samples per side so
-  // sweep, taper and tip rise read as a hard planform, not three stacked boards.
-  //
-  // Each element is a CLOSED, CAMBERED SECTION — blunt leading edge, real
-  // underside, sharp trailing edge. It used to be a single double-sided quad per
-  // third: six triangles for a whole wing element, with `thick` doing nothing but
-  // offsetting that sheet upward. That is fine head-on and falls apart the moment
-  // anything looks along the span or watches an element rotate, which is exactly
-  // what ACTIVE AERO made it do — a plank pivoting in mid-air. Five span
-  // segments × five chord intervals is 100 triangles (was 48); the default body
-  // still sits under the 2.4k ceiling on the headroom that bought the foil.
   function addWingFoil(out, spec, col, surface) {
     const half = spec.half, inner = half * 0.34, mid = half * 0.67;
     const sweep = spec.sweep || 0, taper = spec.taper == null ? 1 : spec.taper;
@@ -273,9 +196,6 @@ const Car3D = (function () {
       }
     }
   }
-  // Join a short chain of arbitrary four-corner stations. This keeps low-poly
-  // bodywork readable while allowing the sidepod floor and shoulder to follow
-  // different curves (a rectangular loft cannot express a real undercut).
   function addStationLoft(out, stations, col, frontCol, surface, frontSurface) {
     for (let i = 0; i < stations.length - 1; i++) {
       addBlock(out, stations[i].concat(stations[i + 1]), col,
@@ -298,8 +218,6 @@ const Car3D = (function () {
       const ti = side > 0 ? 2 : 3;
       const fc = F[ti], rc = R[ti];
       const proud = 0.0006 * side;   // nudge outward in x so the crease wins depth
-      // top-face inset point (move inward in x by b) and side-face inset point
-      // (move down in y by b), for both the front and rear frame.
       const ft = [fc[0] - side * b + proud, fc[1], fc[2]];
       const fs = [fc[0] + proud, fc[1] - b, fc[2]];
       const rt = [rc[0] - side * b + proud, rc[1], rc[2]];
@@ -309,9 +227,6 @@ const Car3D = (function () {
       else          addQuad(out, ft, rt, rs, fs, col, surface);
     }
   }
-  // Plate with the same 45° crown the bodywork already uses. Thin endplates and
-  // canards otherwise flash as a single aliased edge; the bevel is the running
-  // highlight that makes a wing look cut rather than boxed.
   function addBeveledSpan(out, front, rear, b, col, colFront, surface, frontSurface) {
     addSpan(out, front, rear, col, colFront, surface, frontSurface);
     if (b > 0) addTopBevel(out, front, rear, b, col, surface);
@@ -334,8 +249,6 @@ const Car3D = (function () {
     addBlock(out, station(p0).concat(station(p1)), col, null, surface);
   }
 
-  // Diamond-section wishbone (chord along +Z airflow, thin in the load axis).
-  // Same 12-tri addBlock as addBeamBetween; stock cars keep the square tube.
   function addFairedArm(out, p0, p1, th, col, surface) {
     let dx = p1[0] - p0[0], dy = p1[1] - p0[1], dz = p1[2] - p0[2];
     const len = Math.hypot(dx, dy, dz) || 1;
@@ -402,8 +315,6 @@ const Car3D = (function () {
     }
   }
 
-  // Wheel: smooth-shaded tyre tread (shared ring verts, radial normals) + flat
-  // 2026-style cover disc + hub on both faces.
   function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
                     grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle) {
     const RC = rimColor || RIM;
@@ -412,15 +323,6 @@ const Car3D = (function () {
     const rimR = r * 0.68;
     const coverOpen = brakeStyle && brakeStyle.coverOpen || 0;
     const rotorScale = brakeStyle && brakeStyle.rotorScale || 1;
-    // Tread: a lofted profile of shared rings with analytic radial normals — the
-    // highlight wraps around the tyre instead of stepping facet to facet. Dry
-    // compounds are a flat 2-ring cylinder (r constant); the wet-weather
-    // `grooved` profile dips the radius at three bands to cut real circumferential
-    // tread grooves (the actual construction difference a wet tyre has, not just
-    // a different sidewall colour).
-    // `shoulder` 1/2 adds 18" Pirelli fillets at BOTH ends of that loft so the
-    // carcass is no longer a 90° cylinder. Computed here so PROFILE and the
-    // sidewall outer radius share one edgeRm. `|| 0` keeps missing / 0 identical.
     const tyreShoulder = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.shoulder) || 0)));
     const edgeRm = tyreShoulder === 2 ? 0.90 : tyreShoulder === 1 ? 0.945 : 1;
     const grooveCount = tyreStyle && tyreStyle.grooves != null
@@ -464,9 +366,6 @@ const Car3D = (function () {
         out.idx.push(A, B, C, A, C, D);
       }
     }
-    // Sidewalls (flat): rubber shoulder from tread to the aero-cover edge, then
-    // a distinct metal/carbon cover fan. Keeping the outer annulus rubber avoids
-    // the old full-wheel silver dinner-plate look.
     const hub0 = [x0-0.012, cy, cz], hub1 = [x1+0.012, cy, cz];
     const outerR = r * edgeRm;
     for (let i = 0; i < SEG; i++) {
@@ -491,8 +390,6 @@ const Car3D = (function () {
       if (!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0)
         addTri(out, hub0, L0, L1, HUB, SURFACES.metal);   // left (−X)
     }
-    // Brake rotor sits behind the cover; open-cover recipes expose alternating
-    // sectors while closed covers retain only a subtle metallic edge.
     const rotorOuter = r * Math.min(0.40, 0.32 * rotorScale);
     const rotorInner = r * 0.17;
     const rotorDetail = brakeStyle && brakeStyle.rotor || 0;
@@ -538,9 +435,6 @@ const Car3D = (function () {
         }
       }
     }
-    // Pirelli-style compound band: a bright ring on both sidewalls just inside
-    // the tread — the classic modern-F1 tyre read (and a colour accent on an
-    // otherwise all-dark corner of the car). TYRES visualTier recolours it.
     const BAND = bandColor || [0.85, 0.10, 0.08];
     const bandWidth = tyreStyle && tyreStyle.bandWidth != null ? tyreStyle.bandWidth : 0.09;
     for (const bs of [[x0, -1], [x1, 1]]) {
@@ -553,17 +447,8 @@ const Car3D = (function () {
         addQuad(out, A, B, C, D, BAND, SURFACES.rubber);   // single face (wheel drawn cull-off → shows both sides, no z-fight)
       }
     }
-    // --- Modern covered-wheel FACE: the flat disc above IS the aero cover (solid,
-    // opaque, single-face). On top of it, proud detail: machined cover vanes (so
-    // rotation reads), a raised hub cap + a bright wheel-nut centre, and the brake
-    // caliper clamped at the top edge where it actually peeks out past the cover.
-    // Everything here is additive/proud, so the opaque tyre structure is untouched.
 
-    // Cover vanes: six slim recessed-look blades sweeping out from the hub — subtle
-    // but enough to read the wheel ROTATION (tread/cover are rotationally uniform).
     const VANE = [0.26, 0.26, 0.30];
-    // Sidewall SHOULDER is now the PROFILE + edgeRm path above. The old
-    // coplanar stamp is gone — it did not change the silhouette.
     const coverVanes = tyreStyle && tyreStyle.coverVanes || 6;
     for (const ss of [[x0, -1], [x1, 1]]) {
       const xs = ss[0] + ss[1] * 0.014;
@@ -574,9 +459,6 @@ const Car3D = (function () {
         const P = (rad, s) => [xs, cy + uy * rad + py * hw * s, cz + uz * rad + pz * hw * s];
         addQuad(out, P(ri, 1), P(ro, 1), P(ro, -1), P(ri, -1), VANE, SURFACES.metal);
       }
-      // Disc FACE pattern, proud of the cover so it reads at a glance: a ring of
-      // drilled holes (1) or a set of curved slots (2). Two brake packages with
-      // the same duct size now look like different discs, not one resized disc.
       const discFace = Math.max(0, Math.min(2, Math.round((brakeStyle && brakeStyle.discFace) || 0)));
       if (discFace > 0) {
         const marks = discFace === 1 ? 10 : 6;
@@ -590,9 +472,6 @@ const Car3D = (function () {
         }
       }
     }
-    // Raised hub cap: a proud gunmetal centre disc + a bright wheel-nut cap (the
-    // brake package's accent colour, else the tyre band) — the modern F1 wheel
-    // centre and the one bright focal point on an otherwise dark corner.
     const HUBCAP = [0.15, 0.15, 0.18];
     const NUT = caliperColor || bandColor || [0.85, 0.72, 0.10];
     for (const ss of [[x0, -1], [x1, 1]]) {
@@ -602,8 +481,6 @@ const Car3D = (function () {
         addTri(out, ctr, [xc0, cy + hcR*Math.cos(a0), cz + hcR*Math.sin(a0)],
                          [xc0, cy + hcR*Math.cos(a1), cz + hcR*Math.sin(a1)], HUBCAP, SURFACES.metal);   // single face (cull-off → opaque both sides)
       }
-      // Centre-lock: shipped path is a square box. gunNut:1 draws a hex gun-nut
-      // (drive faces + collar) so the wheel-gun read is real; colour still from nut.
       const nutCol = (wheelStyle && wheelStyle.nut) || NUT;
       const gunNut = wheelStyle && wheelStyle.gunNut ? 1 : 0;
       if (!gunNut) {
@@ -663,8 +540,6 @@ const Car3D = (function () {
           addQuad(out, [bx0, y0, z0], [bx1, y0, z0], [bx1, y1, z1], [bx0, y1, z1], tc, SURFACES.metal);
         }
       }
-      // Cover DISH: stepped recess — outer annulus at cover depth, inner fan
-      // pushed inboard, radial wall between them so the face reads concave.
       const dish = Math.max(0, Math.min(2, Math.round((wheelStyle && wheelStyle.dish) || 0)));
       if (dish > 0) {
         const dr = rimR * (dish === 2 ? 0.80 : 0.88);
@@ -689,10 +564,6 @@ const Car3D = (function () {
         }
       }
     }
-    // Brake caliper: a compact monobloc clamped at the TOP of the disc (12 o'clock)
-    // where a covered-wheel caliper actually peeks out above the cover. Straddles
-    // the wheel width and sits proud on both faces so it reads from the side/3-4,
-    // in the brake package's accent colour with darker pad plates.
     if (caliperColor) {
       const calOut = fixedOut || out;
       const cr = r * 0.78;                     // top edge, just inside the tread band
@@ -736,9 +607,6 @@ const Car3D = (function () {
     }
   }
 
-  // A single wheel centred on the origin, axle along X — so the render layer can
-  // spin it about X (∝ speed) and steer the fronts about Y, then translate it to
-  // each corner. Used only for the player car (AI keep the baked static wheels).
   function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle) {
     const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor, rimColor,
@@ -756,16 +624,8 @@ const Car3D = (function () {
     return { rotating, fixed };
   }
 
-  // Cosmetic tint tables for the TYRES/BRAKES visual tells — tier 1 always
-  // matches today's hardcoded literals so an unmodified car is byte-identical.
   const TYRE_BAND     = { 0: [0.92, 0.92, 0.90], 1: [0.85, 0.10, 0.08], 2: [0.95, 0.15, 0.05] };
   const BRAKE_CALIPER = { 0: null, 1: null, 2: [0.75, 0.08, 0.05] };
-  // Rear-wing endplate geometry as a function of downforce level (0..4). SINGLE
-  // SOURCE OF TRUTH — the wing build below AND the driver-number decal in game.js
-  // (via Car3D.endplate / Car3D.numberBoard) both read this, so the endplate
-  // number tracks the plate at every downforce setting instead of a fixed height
-  // that only fits one wing. Concave (pow 0.7) growth: rises fast at low DF then
-  // flattens so max-DF doesn't tower. cy = vertical centre, sy = full height.
   function endplateGeom(aLvl) {
     const aN = (aLvl || 0) / 4;
     const cy = 0.60 + 0.20 * Math.pow(aN, 0.7);
@@ -781,29 +641,9 @@ const Car3D = (function () {
       rear: profile(-2.69, cy + 0.015, sy),
     };
   }
-  // ACTIVE AERO — the wing's OWN top elements, made moveable.
-  //
-  // These are NOT extra parts laid over the wing (the first cut of this was, and
-  // it looked exactly like what it was: a bolt-on). The top FW_MOVEABLE flaps of
-  // the front cascade and the top plane of the rear wing are LEFT OUT of the
-  // baked car mesh entirely and drawn instead as separate meshes that rotate —
-  // so the car at rest is geometrically identical to before, and X-mode rotates
-  // the real elements flat.
-  //
-  // Each spec is canonical: hinge at the ORIGIN with the chord running back
-  // along -z at zero incidence. `zAngle` is the element's own natural incidence
-  // (so drawing at zAngle reproduces the baked pose exactly) and `xAngle` is 0 —
-  // "open" means aligned with the airflow, not merely less steep.
   const FW_MOVEABLE = 2;
   const AERO_STYLE_DEF = { frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
                            rearSweep: 0.03, rearTaper: 0.98 };
-  // The front cascade table — the SINGLE definition, consumed both by the build
-  // (for the elements it still bakes) and by aeroFlapsGeom (for the ones it
-  // does not). [zLead, yLead, zTrail, yTrail, chordWMul, thick].
-  // NB aLvl is NOT an integer — several catalog options use fractional levels
-  // (1.15, 3.25, 3.6 …) and the wing build compares them raw. Truncating here
-  // silently gave those options a different endplate height and half-span than
-  // the mesh they were merged into.
   function frontCascade(aLvl) {
     const a = aLvl;
     const els = [
@@ -811,12 +651,6 @@ const Car3D = (function () {
       [2.50, 0.092, 2.24, 0.146, 0.98, 0.020],   // flap 1
     ];
     if (a >= 1) els.push([2.34, 0.148, 2.10, 0.212, 0.95, 0.018]);   // flap 2
-    // Flaps 3 and 4 sit 10 mm and 30 mm lower than they first shipped. The stack
-    // was drawn climbing into the nose overhang: at maximum downforce the top
-    // element passed ~21 mm THROUGH the nose underside, which no rotation can
-    // undo because the intersection is at the element's own rest attitude. The
-    // drop is the largest the slot gaps above them will take (flap 3 keeps 11 mm
-    // of daylight to flap 2, which is a slot, not a coincidence).
     if (a >= 3) els.push([2.20, 0.200, 1.98, 0.272, 0.92, 0.016]);   // flap 3
     if (a >= 4) els.push([2.08, 0.256, 1.88, 0.328, 0.88, 0.014]);   // flap 4
     return els;
@@ -827,8 +661,6 @@ const Car3D = (function () {
     return n - Math.min(FW_MOVEABLE, n - 1);
   }
   function frontHalf(aLvl) {
-    // Same comparisons the build uses, on the RAW level: `aLvl === 1` is false
-    // for 1.15, which is exactly the distinction a truncation destroys.
     return 0.92 * (aLvl <= 0 ? 0.74 : (aLvl === 1 ? 0.88 : 1.0));
   }
   // Extra incidence the CLOSED (Z-mode) pose takes on top of the element's own
@@ -870,12 +702,6 @@ const Car3D = (function () {
   // of it going one way and the bodywork going the other. The front's opening
   // therefore reads mostly as the trailing edge dropping, which is correct.
   const HINGE = { front: 0.80, rear: 0.86 };
-  // How much of its own incidence each wing gives up in X-mode. The rear goes to
-  // flat, which is what a 2026 rear wing does and where the straight-line gain
-  // comes from. The front only TRIMS: a front wing that flattened would both
-  // throw the balance to the rear and, at maximum downforce, have to swing its
-  // top flap up through the nose overhang to get there. Trimming is the real
-  // behaviour and it is also the one that fits in the space available.
   const OPEN_FRAC = { front: 1, rear: 1 };
   // Underside of the NOSE where it overhangs the front wing, as (z, y) samples
   // measured off the built body. This is a hard ceiling: at max downforce the
@@ -889,35 +715,12 @@ const Car3D = (function () {
     for (let i = 1; i < NOSE_UNDER.length; i++) {
       const [z1, y1] = NOSE_UNDER[i], [z0, y0] = NOSE_UNDER[i - 1];
       if (z <= z1) {
-        // An Infinity endpoint means "nothing overhangs the wing out here", so a
-        // slice touching one is UNCONSTRAINED — not pinned to whatever its finite
-        // neighbour happened to measure. Pinning it (which is what this did)
-        // invents a 0.294 m ceiling across z 1.96-2.00, and that phantom ceiling
-        // is low enough that the top cascade flap at maximum downforce has no
-        // valid attitude at all: every pose the solver tries "fails", so it falls
-        // back to an unclamped one and the flap ends up drawn through the nose.
         if (!isFinite(y0) || !isFinite(y1)) return Infinity;
         return y0 + (y1 - y0) * (z - z0) / (z1 - z0);
       }
     }
     return Infinity;
   }
-  // A hinged wing element. The mesh is emitted by the SAME addWingFoil call
-  // the baked wing used, merely translated so the PIVOT is at the origin — so
-  // the angles here are DELTAS from the element's own baked
-  // incidence, not absolute attitudes. That matters: at delta 0 the element is
-  // byte-for-byte the one the mesh used to contain. Building it flat and
-  // rotating instead (the first attempt) displaced every vertex by up to 172 mm,
-  // because addWingFoil's rise/sweep/thickness terms are applied in the CAR
-  // frame and a whole-element rotation drags them off-axis with it.
-  //
-  // zAngle is the extra bite the closed pose takes on, CLAMPED per element to
-  // that element's own headroom under the nose, so a closed wing is as steep as
-  // it can be without any part of it entering the bodywork. xAngle is -natural:
-  // rotating back by exactly the baked incidence lands the element FLAT.
-  // A point on a wing element's section at chordwise t and pose delta d, in
-  // car-local (z, y). `e` is the compact record below, shared by baked and
-  // moveable elements so the clearance maths does not care which is which.
   function elemPoint(e, d, t) {
     const ang = e.natural + d, c = Math.cos(ang), s = Math.sin(ang);
     const u = (t - e.hinge) * e.chord;
@@ -934,8 +737,6 @@ const Car3D = (function () {
       py: le[1] + (te[1] - le[1]) * hinge,
     };
   }
-  // Upper surface height of element `e` at car-local z when posed at delta `d`,
-  // or null if it does not reach that far along the car.
   function elemTopAt(e, d, z) {
     const N = 32;
     let prev = elemPoint(e, d, 0);
@@ -956,14 +757,6 @@ const Car3D = (function () {
     const natural = Math.atan2(dy, dz);
     const thick = planform ? planform.thick : 0;
     const want = planform && planform.hinge != null ? planform.hinge : HINGE[wing];
-    // The hinge is SEARCHED, not asserted. A pivot far back gives the most
-    // leading-edge swing — the thing that actually opens a slot — but it also
-    // drags the element's whole rear half up toward the nose when it flattens,
-    // and on the top cascade flap at maximum downforce the pivot itself ends up
-    // above the nose underside, so NO angle clears. Walking the pivot forward
-    // trades swing for headroom. Trying the candidates and keeping whichever
-    // yields the most usable travel beats picking one number and discovering per
-    // downforce level which elements it happens to lock solid.
     let hinge = want, pz = 0, py = 0, best = -1;
     for (let h = want; h >= 0.14; h -= 0.02) {
       const r = solvePoses(h);
@@ -985,8 +778,6 @@ const Car3D = (function () {
       xAngle: solved ? solved.open : -natural,
     }, planform);
 
-    // Solve the two end poses for a candidate pivot, or null if either end
-    // cannot be placed without entering the nose or the element below.
     function solvePoses(h) {
       const qz = zLead + (zTrail - zLead) * h, qy = yLead + (yTrail - yLead) * h;
       const self = { chord, thick, hinge: h, natural, pz: qz, py: qy };
@@ -1032,11 +823,6 @@ const Car3D = (function () {
       const bite = relax(Z_BITE[wing], -1, prev ? prev.zAngle : 0);
       if (bite == null) return null;
       const open = relax(-natural * OPEN_FRAC[wing], +1, prev ? prev.xAngle : 0);
-      // An element with a placeable closed pose but no placeable open one is
-      // PARKED, not forced open: it holds its downforce attitude. Better one
-      // flap that does not move than one drawn through the bodywork, and the
-      // packaging that causes it is real — the top cascade flap at maximum
-      // downforce genuinely has the nose 20 mm above it.
       return { bite, open: open == null ? bite : open, pz: qz, py: qy };
     }
   }
@@ -1063,17 +849,10 @@ const Car3D = (function () {
   //
   // Callers MUST treat the records as immutable — they are shared now.
   const _flapSpecs = new Map();
-  // The six-field signature depends ONLY on the recipe object, and callers hand
-  // the same memoised recipe every frame (game.js's teamDecalState caches it), so
-  // resolve it once per object rather than rebuilding an array, a map closure and
-  // a join on every lookup. aeroFlapsGeom is called per car per frame by
-  // drawAeroFlaps, so that key build was pure churn.
   const _flapSig = new WeakMap();
   function flapSig(st0) {
     let sig = _flapSig.get(st0);
     if (sig === undefined) {
-      // The same six fields the flap MESH cache keys on — the only ones the
-      // planform and the rear slot height read.
       sig = [st0.frontSweep, st0.frontTaper, st0.frontRise,
              st0.rearSweep, st0.rearTaper, st0.drs || 0]
         .map((v) => +v || 0).join(",");
@@ -1083,18 +862,10 @@ const Car3D = (function () {
   }
   function aeroFlapsGeom(aLvl, style) {
     const st0 = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
-    // RAW aLvl, not (aLvl | 0). Several catalog options use FRACTIONAL levels
-    // (see frontCascade) and solveFlapsGeom below reads the exact value, so
-    // truncating here made 2.2 and 2.8 share one cache slot: whichever solved
-    // first served both, and the other option silently wore the wrong flaps.
     const key = aLvl + "|" + flapSig(st0);
     let hit = _flapSpecs.get(key);
     if (!hit) {
       hit = solveFlapsGeom(aLvl, st0);
-      // Stamp each element with its resolved identity. js/game/carmesh.js keys its
-      // GPU mesh cache on exactly (level, recipe, element index) and used to
-      // recompute that signature itself, per flap per car per frame — four more
-      // array-map-join builds on top of this one. Now it just reads the stamp.
       for (let i = 0; i < hit.length; i++) hit[i].cacheKey = key + "|" + i;
       _flapSpecs.set(key, hit);
     }
@@ -1131,27 +902,11 @@ const Car3D = (function () {
         sweep: frontSweep * (0.75 + i * 0.10),
         rise: frontRise * (0.65 + i * 0.12),
         attachHalf: fwHalf + 0.03,
-        // The bold outboard upsweep hangs off the TOP element's trailing edge.
-        // That element is always one of the moveable ones, so the kick has to
-        // travel WITH it — anchoring it to the top still-baked element instead
-        // (an earlier attempt) silently moved it 172 mm on the car at rest.
         upsweep: i === els.length - 1 ? { fwHalf, e } : null,
       }, prev));
     }
-    // Rear: the 2026 rule is that every element EXCEPT the bottom mainplane
-    // rotates, so on a three-plane wing the top two move and the mainplane is
-    // structure. Below aLvl 2 the wing only has two planes, so only the top one
-    // moves — still "all but the mainplane".
-    // The slot height depends on `drs` as well as the level — the build reserves
-    // it with (aLvl >= 4 || aDrs), so dropping drs here would leave the plane
-    // floating 75 mm off its own slot on every DRS-option car.
     const ep = endplateGeom(a), crownY = ep.rear.top - 0.018;
     const upperTrailY = crownY - ((a >= 4 || (st.drs || 0)) ? 0.075 : 0);
-    // Chained the same way the front cascade is, and for the same reason: rear
-    // planes are stacked in slots too, and nothing was checking them. With the
-    // elements now sweeping 35 deg instead of a flat sheet tilting, an unchecked
-    // stack is one that quietly passes through itself at some blend nobody looked
-    // at. The mainplane below is structure, so it enters the chain at zero.
     const rearMain = Object.assign(
       elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.024, 0),
       { zAngle: 0, xAngle: 0 });
@@ -1169,19 +924,11 @@ const Car3D = (function () {
       addRear("rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.022, 0.9);
     }
     addRear("rear", [-2.38, upperTrailY - 0.075], [-2.64, upperTrailY], 0.026, 1);
-    // The proud max-downforce top plane. It used to be BAKED, which put the
-    // topmost element of the tallest wing on the grid among the parts that do
-    // not move — directly contradicting the rule the rest of this function
-    // implements, and leaving the one plane a following car actually sees frozen
-    // while the two beneath it swept. It is an element like any other.
     if (a >= 4 && !(st.drs || 0)) {
       addRear("rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.022, 1.1);
     }
     return out;
   }
-  // Geometry for ONE moveable element, in its canonical hinge frame. Built by
-  // the SAME planform emitter the baked wing uses, so a flap drawn at its zAngle
-  // is the element the mesh would otherwise have contained.
   function buildFlapGeom(el, col, finish) {
     const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     // The element exactly as the wing build emits it...
@@ -1190,9 +937,6 @@ const Car3D = (function () {
       half: el.half, thick: el.thick, taper: el.taper,
       sweep: el.sweep, rise: el.rise, attachHalf: el.attachHalf,
     }, col, SURFACES.paint);
-    // ...plus, on the top element, the outboard upsweep that flicks off its
-    // trailing edge into the endplate — same two spans the wing build used to
-    // emit, so the flick travels with the flap rather than being left behind.
     if (el.upsweep) {
       const { fwHalf, e } = el.upsweep;
       for (const sgn of [-1, 1]) {
@@ -1200,9 +944,6 @@ const Car3D = (function () {
                      { z: e[2] - 0.04, x: sgn * (fwHalf + 0.02), y: e[3] + 0.085, w: 0.09, h: e[5] * 1.6 }, col);
       }
     }
-    // ...then moved so its PIVOT sits at the origin, which is all the draw needs
-    // to rotate it in place. Nothing about the element's own shape is rebuilt —
-    // the pivot is a point on the chord line, not a re-anchoring of the mesh.
     for (let i = 0; i < out.pos.length; i += 3) {
       out.pos[i + 1] -= el.y;
       out.pos[i + 2] -= el.z;
@@ -1218,11 +959,6 @@ const Car3D = (function () {
     }
     return out;
   }
-  // Mid-chord of a wing's moveable section, car-local metres — what the GARAGE
-  // wing views aim at. For the multi-element front it is the group midpoint.
-  // Off the LEADING/TRAILING edges, not off the pivot: the pivot sits at a
-  // different fraction of the chord per wing, so aiming at it would frame the
-  // rear wing off its own trailing edge.
   function aeroFlapAim(aLvl, wing, style) {
     const els = aeroFlapsGeom(aLvl, style).filter((e) => e.wing === wing);
     let y = 0, z = 0;
@@ -1240,49 +976,21 @@ const Car3D = (function () {
     const ep = endplateGeom(aLvl), h = 0.20;
     return { cy: ep.cy - ep.sy * 0.5 + 0.05 + h * 0.5, h };
   }
-  // Shark-fin PLANFORM — SINGLE SOURCE OF TRUTH, same deal as the endplate above:
-  // the fin mesh (the sharkFin part below) AND the fin livery decal in
-  // js/game/carmesh.js both read it, so the tail graphic lands on the fin at
-  // every corner instead of on a rectangle that only roughly overlaps it.
-  // The outline lives in the fin's own (z, y) plane — a raked leading edge and a
-  // base that follows the engine-cover ridge down — plus the half-width at the
-  // base and at the top (the fin TAPERS, so a decal at one flat x floats off the
-  // top edge).
   const FIN = Object.freeze({
     baseLE: [-0.65, 0.7935], topLE: [-1.15, 0.97],
     topTE:  [-1.65, 0.97],   baseTE: [-1.70, 0.6197],
     halfBase: 0.022, halfTop: 0.014,
   });
   const finMix = (a, b, t) => a + (b - a) * t;
-  // Half-width of the fin's flank at a point ON it, plus `proud`. The fin tapers
-  // from halfBase at the engine-cover ridge to halfTop at the crown, so a decal
-  // pinned at one flat x lies on the surface at the bottom and floats a whole
-  // centimetre off it at the top.
   function finXAt(z, y, proud) {
     const u = (z - FIN.baseLE[0]) / (FIN.baseTE[0] - FIN.baseLE[0]);   // along the base edge
     const yBase = finMix(FIN.baseLE[1], FIN.baseTE[1], Math.max(0, Math.min(1, u)));
     const v = Math.max(0, Math.min(1, (y - yBase) / (FIN.topLE[1] - yBase)));
     return finMix(FIN.halfBase, FIN.halfTop, v) + proud;
   }
-  // The livery-GRAPHIC panel on the fin's flank, as the four corners
-  // [frontBottom, rearBottom, rearTop, frontTop] of the +x face ({x,y,z} each).
-  // It follows the whole swept outline, so the painted tail covers the fin the
-  // way a real one does. That means it is a sheared trapezoid — fine for an
-  // abstract wash and motif strokes, WRONG for a badge, which is why the crest
-  // gets its own upright patch below instead of riding on this one.
-  // `inset` pulls it in from the outline (fraction of each edge) so the graphic
-  // stops short of the fin's edges; `proud` lifts it off the surface.
   function sharkFinPanel(inset, proud) {
     const i = inset != null ? inset : 0.05;
     const p = proud != null ? proud : 0.002;
-    // The BASE edge insets further than the other three. The fin grows straight
-    // out of the engine-cover ridge and the accent pinstripe runs along that
-    // spine, so a wash carried all the way down reads as painted onto the trim
-    // rather than onto the fin. (This does not get the panel CLEAR of the
-    // pinstripe — it runs the fin's whole length a few cm below it, so the
-    // decal legitimately spans both paints, which is what
-    // tests/specs/parts-livery-contrast.spec.js records. It just stops the graphic
-    // sitting ON it.)
     const vBase = Math.max(i, 0.18);
     const at = (u, v) => {
       // bilinear over the outline: u = 0 leading → 1 trailing, v = 0 base → 1 top.
@@ -1293,13 +1001,6 @@ const Car3D = (function () {
     };
     return [at(i, vBase), at(1 - i, vBase), at(1 - i, 1 - i), at(i, 1 - i)];
   }
-  // The CREST patch on the fin: an UPRIGHT, axis-aligned SQUARE in the fin's
-  // (z, y) plane — not a slice of the planform. The fin's leading edge rakes back
-  // half a metre over its height and its base drops away rearward, so a badge
-  // mapped onto the outline leans and squashes with it; a logo has to stay
-  // vertical and square whatever the surface under it is doing. Sized and placed
-  // to sit inside the outline with clearance on all four sides (the fin is a full
-  // 0.35 m tall through this z range, and the crown is flat from z −1.15 back).
   const FIN_BADGE = Object.freeze({ z0: -1.235, z1: -1.465, y0: 0.725, y1: 0.955 });
   function sharkFinBadge(proud) {
     const p = proud != null ? proud : 0.0022;   // just outside the graphic panel
@@ -1325,18 +1026,10 @@ const Car3D = (function () {
   }
   function buildAeroParts(recipe, tier) {
     const lvl = tier === 0 ? 0 : tier === 2 ? 4 : 2;
-    // plate/casc/swan/tvane are the newer front-/rear-wing STRUCTURE knobs.
-    // `plate` defaults to 1 (the shipped outwash endplate); `casc` and `tvane`
-    // default to null, meaning "derive from lvl exactly as before", so every
-    // option written before these existed builds byte-identical geometry.
     return mergeRecipe({
       lvl, beam: tier === 2 ? 1 : 0, drs: 0,
       vane: lvl >= 4 ? 3 : lvl >= 3 ? 2 : lvl >= 1 ? 1 : 0,
       plate: 1, casc: null, swan: 0, tvane: null,
-      // 2026 body-kit knobs. All default 0 so older recipes stay byte-identical.
-      // duct 0|1|2  upper sidepod ram (none / letterbox / scooped snorkel)
-      // board 0|1|2 in-wash wakeboard ahead of the pod (none / fence / fence+foot)
-      // slot  0|1   rear floor-corner mouse-hole
       duct: 0, board: 0, slot: 0,
       frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
       rearSweep: 0.03, rearTaper: 0.98,
@@ -1369,8 +1062,6 @@ const Car3D = (function () {
     }, recipe);
   }
   function buildTyreParts(recipe, tier) {
-    // `shoulder`: 0 the shipped square sidewall / 1 rounded / 2 stepped. It
-    // changes the tyre's SILHOUETTE, which no amount of band-width tuning can.
     return mergeRecipe({ band: TYRE_BAND[tier], grooved: false, shoulder: 0 }, recipe);
   }
   function buildErsParts(recipe, tier, accent) {
@@ -1394,27 +1085,16 @@ const Car3D = (function () {
       hatch: 0, vent: 0,
     }, recipe);
   }
-  // EXHAUST: `pipes` null = derive the tip count from the engine's own plumbing
-  // (the shipped behaviour); a recipe may state it outright. bore/flare/wastegate/
-  // wrap default to the values that reproduce today's tailpipe exactly.
   function buildExhaustParts(recipe) {
     return mergeRecipe({
       pipes: null, bore: 1, flare: 0, wastegate: 0, wrap: 0,
       lip: 0, shield: 0,
     }, recipe);
   }
-  // FLOOR: the five evenly-spaced edge fences that used to be hardcoded, plus
-  // skid blocks and an edge lip. fences 5 / fenceH 1 is the shipped array.
   function buildFloorParts(recipe) {
     return mergeRecipe({ fences: 5, fenceH: 1, skid: 0, edgeLip: 0,
       plank: 0, gurney: 0, scroll: 0 }, recipe);
   }
-  // COCKPIT: the halo and its furniture. haloBlade thickens the hoop into an
-  // aero section, haloWing adds the upper flap many cars carry, camPods sets the
-  // T-cam pod count. All default to the shipped cockpit.
-  // WHEELS: rim furniture. spokes shows through an open cover, tape is a
-  // coloured band around the rim, dish sets how far the cover face is recessed,
-  // nut recolours the centre-lock. All default to the shipped wheel.
   function buildWheelParts(recipe) {
     return mergeRecipe({ spokes: 0, tape: 0, dish: 0, nut: null, gunNut: 0 }, recipe);
   }
@@ -1439,28 +1119,14 @@ const Car3D = (function () {
       wheels: buildWheelParts(recipe("wheels")),
     };
   }
-  // Resolve the continuous 0..4 downforce level from a getVisualTiers() object.
-  // Resolved recipes are authoritative; the coarse tier remains a stale-bundle
-  // fallback for AI/no-parts builds.
   function aeroLevelOf(T) {
     T = T || {};
     return buildAeroParts(T._visual && T._visual.aero, T.aero != null ? T.aero : 1).lvl;
   }
-  // The resolved aero RECIPE for a getVisualTiers() bag — the companion of
-  // aeroLevelOf, and the ONLY correct thing to hand aeroFlaps()/getAeroFlap().
-  // Every flap call site used to pass `parts.aero`, which is the coarse TIER
-  // NUMBER (0|1|2), not a recipe: a number is truthy, so aeroFlapsGeom took it
-  // as the style, read .frontSweep off it, and clamped undefined into NaN —
-  // silently NaN-ing every vertex of every moveable element. The wings were not
-  // failing to move; they were not being DRAWN, on any car whose style came
-  // through this path. buildAeroParts merges full defaults, so the recipe this
-  // returns always carries every field.
   function aeroStyleOf(T) {
     T = T || {};
     return buildAeroParts(T._visual && T._visual.aero, T.aero != null ? T.aero : 1);
   }
-  // Per-DRIVER helmet crown-stripe palette (indexed by car number) so team-mates
-  // and the field carry distinct helmets.
   const HELMET_ACCENT = [
     [0.95, 0.20, 0.15], [0.15, 0.45, 0.95], [0.97, 0.82, 0.10], [0.90, 0.90, 0.95],
     [0.15, 0.75, 0.35], [0.85, 0.40, 0.90], [0.98, 0.50, 0.10], [0.10, 0.80, 0.80],
@@ -1526,13 +1192,7 @@ const Car3D = (function () {
     const outerTail = (0.38 - 0.09 * (coke - 1)) * tailWidth;
     const inletFloor = 0.235 + 0.11 * (undercut - 1);
     const shoulderTop = 0.49 + 0.23 * (shoulder - 1);
-    // Team-style inlet aspect: +bias = taller/prouder inlet mouth, − = squashed
-    // letterbox. Only the front (inlet) station moves — the shoulder onward is
-    // engine-recipe territory, so parts and team identity stay orthogonal.
     const inletBias = style ? (style.inlet || 0) : 0;
-    // Seven stations (was four). 2026 pods are a tall shoulder over a scooped
-    // undercut that pinches into the coke-bottle — four linear slabs read as a
-    // crate. Extra creases keep flat-shading; they just land on the real curve.
     return [
       { z: 0.62, inner: 0.30, outer: outerFront, innerBottom: inletFloor,
         outerBottom: 0.245 + 0.06 * (undercut - 1),
@@ -1562,17 +1222,6 @@ const Car3D = (function () {
     ];
   }
 
-  // Memoised on (parts, teamId) OBJECT IDENTITY. The result is immutable — the
-  // three sampler methods are pure and podStations is already frozen copies — so
-  // handing the same object to every caller is safe, and `parts` here is the
-  // stable cached recipe game.js's teamDecalState already memoises per store.rev.
-  //
-  // Worth doing because the uncached build is ~20 allocations plus four
-  // Object.freeze calls (engine parts, three station arrays, a joined key string,
-  // three fresh method closures) and getCarDecalMesh calls it once per DRAWN CAR
-  // PER FRAME — purely to read anchors.key and discover the decal mesh it wanted
-  // is already cached. A WeakMap keyed on parts means an entry dies with the
-  // recipe that owns it; the inner Map is per teamId, which is a small fixed set.
   const _anchorCache = new WeakMap();
   const _anchorNullKey = {};   // stand-in for a null/undefined parts (legacy bodies)
   function bodyAnchors(parts, teamId) {
@@ -1591,8 +1240,6 @@ const Car3D = (function () {
     const T = parts || {};
     const tier = T.engine != null ? T.engine : 1;
     const eng = buildEngineParts(T._visual && T._visual.engine, tier);
-    // Team style shapes the SAME stations the bodywork lofts from, so decal /
-    // stripe / detail anchoring stays glued to the styled silhouette.
     const style = teamStyleOf(teamId);
     const podStations = sidepodStations(eng, style);
     const coverHeight = Math.max(0.78, Math.min(1.28, eng.coverHeight));
@@ -1676,9 +1323,6 @@ const Car3D = (function () {
     const teamId = opts && opts.teamId;
     Log.info("car", "build" + (teamId ? " " + teamId : ""));
     const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
-    // Section bookkeeping for the agent world view (carView({detail:"parts"})).
-    // Pure recording — no geometry changes, and the arrays are identical with or
-    // without it. Answers "how big is the rear wing" without rendering the car.
     const sections = [];
     const part = (name) => {
       const at = out.pos.length / 3;
@@ -1687,22 +1331,13 @@ const Car3D = (function () {
     };
     const c1 = color  || [0.8, 0.05, 0.05];
     const c2 = color2 || [0.9, 0.9, 0.1];
-    // Optional separate livery ACCENT colour for the extra paint-detail flashes
-    // (sidepod flash, nose flash, engine-cover pinstripe). Falls back to c2 so a
-    // livery without an explicit accent still gets tasteful team-colour detailing.
     const liv = (opts && opts.livery) || {};
     const accentC = liv.accent || c2;
-    // Further OPTIONAL livery colours, each additive and fully backward-compatible
-    // (a livery without them is byte-identical to before): `nose` paints a nose-tip
-    // cap, `pod` a bold sidepod panel, `wing` the front+rear wing flap elements,
-    // `halo` the cockpit-protection hoop. All fall back to sensible existing colours.
     const noseC = liv.nose || null;
     const podC  = liv.pod  || null;
     const wingC = liv.wing || c2;   // flap colour (front + rear) — c2 keeps today's look
     const finC  = liv.fin  || c2;   // shark-fin plate — c2 keeps today's look
     const haloTint = liv.halo || null;
-    // Parts-driven visual identity: `_visual` contains the resolved parametric
-    // recipe for every category; coarse tiers remain neutral fallbacks.
     const T = (opts && opts.parts) || {};
     const tier = (id) => T[id] != null ? T[id] : 1;
     const ersC2 = tier("ers") === 2 ? [c2[0]*1.8, c2[1]*1.8, c2[2]*1.8] : c2;
@@ -1716,34 +1351,20 @@ const Car3D = (function () {
     const gbStyle = design.gearbox;
     const fuelStyle = design.fuel;
     const aeroStyle = design.aero;
-    // ACTIVE AERO bookkeeping: the top wing elements are deliberately NOT baked
-    // into this mesh (see aeroFlapsGeom). Record exactly what they need so no
-    // consumer has to re-derive the level/style/colour and risk disagreeing with
-    // the wing this build actually produced. buildComplete() below is the "whole
-    // car" view for anything that wants the elements merged back in.
     out.flapInfo = null;   // filled in once wingC/aLvl are resolved, below
     const exhStyle = design.exhaust;
     const floorStyle = design.floor;
     const cockpitStyle = design.cockpit;
     const wheelStyle = design.wheels;
-    // Per-team chassis identity (opts.teamId): nose profile, airbox scale,
-    // dorsal fin, mirror style, sidepod-inlet aspect. Absent → shared default
-    // silhouette, byte-identical to before.
     const teamStyle = teamStyleOf(opts && opts.teamId);
     const anchors = bodyAnchors(T, opts && opts.teamId);
     const ckpt = opts && opts.cockpit;   // hoisted: buildSharedChassis needs it
 
     part("chassis");
-    // --- Shared chassis --- per-OPTION suspension shifts only ride height.
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
     buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle), ckpt);
 
     part("hood");
-    // --- Hood / vanity deck: a raised central panel over the monocoque, rising
-    // to a hump right in front of the cockpit. This is the "hood" the driver
-    // looks over in the onboard view (the modern F1 dash bulge / vanity panel);
-    // it also adds a chiselled centre spine to the chase-view silhouette. Runs
-    // from the nose bulkhead back to the dash, cresting at the cockpit. ---
     // In cockpit view the hood is remodelled LONGER and TALLER so it reads
     // clearly ahead of the driver (a stubby deck disappears under the dash).
     // ERS tier tints the two flat accent-colour "livery tell" panels (hood
@@ -1772,9 +1393,6 @@ const Car3D = (function () {
            ersC2, SURFACES.paint);
 
     part("bolsters");
-    // --- Cockpit-side head-protection bolsters: the raised survival-cell edges
-    // flanking the cockpit opening. They frame the driver's view left/right in
-    // the onboard cam and give the tub real shoulders in chase. ---
     if (ckpt) {
       for (const s of [-1, 1]) {
         // Survival-cell SIDE WALL: the tub edge the driver sits between, rising
@@ -1791,8 +1409,6 @@ const Car3D = (function () {
           [s*0.30, 0.34, 1.50], [s*0.56, 0.26, 1.50], [s*0.54, 0.50, 1.46], [s*0.30, 0.54, 1.46],  // front (nose end, low)
           [s*0.32, 0.40, 0.40], [s*0.55, 0.32, 0.40], [s*0.53, 0.62, 0.34], [s*0.32, 0.64, 0.34],  // rear (beside the driver, SHOULDER height)
         ], c1);
-        // Crown accent stripe: spans the wall's own z range at the mid-height of
-        // its taper, so it rides the crown instead of hanging off the end.
         addBox(out, s*0.45, 0.59, 0.85, 0.03, 0.03, 1.0, c2);
         // Inner tub wall (dark carbon) facing the driver. Follows the crown up.
         addBox(out, s*0.315, 0.49, 0.52, 0.02, 0.28, 0.60, INTAKE);
@@ -1817,15 +1433,7 @@ const Car3D = (function () {
     }
 
     part("sidepods");
-    // --- Sidepods: seven body stations create a deep inlet, scooped undercut,
-    // downwash shoulder and coke-bottle tail. Geometry datums returned here
-    // anchor all paint, sponsor, ERS and cooling details below.
     const podGeom = buildSidepodBodywork(out, c1, engStyle, anchors);
-    // `fracH` reads `height` as a FRACTION of the pod's height at each station
-    // instead of metres. The pod tapers front-to-rear, so a fixed metre height
-    // covers a different yFrac band at each station — which makes it impossible
-    // to size a band to a decal (whose extent IS in yFrac) or to butt two bands
-    // together without them overlapping and z-fighting somewhere along the pod.
     function addPodFlankSpan(zFront, zRear, yFrac, height, col, surface, proud, fracH) {
       // Never bridge a detail across a loft crease: each segment follows the
       // same station interval as the underlying sidepod surface.
@@ -1848,13 +1456,8 @@ const Car3D = (function () {
       }
     }
 
-    // Visible floor shoulder and edge wing. Aero recipes vary its exposure and
-    // rear cut so underfloor choices remain legible from normal 3/4 cameras.
     const floorEdge = Math.max(0.72, Math.min(1.35, aeroStyle.floorEdge));
     const floorCut = Math.max(0, Math.min(0.24, aeroStyle.floorCut));
-    // Half-width of the VISIBLE floor edge at a given z — the line the two spans
-    // below trace. The FLOOR recipe's furniture anchors to this, so it always
-    // sits on the car's outline instead of hiding under the sidepod.
     const floorEdgeAt = (z) => {
       const t = Math.max(0, Math.min(1, (0.78 - z) / 2.36));
       return (0.70 - 0.16 * Math.max(0, t - 0.5) * 2) * floorEdge;
@@ -1878,9 +1481,6 @@ const Car3D = (function () {
         addBox(out, x, 0.078 + rideDY, 0.82, 0.058, 0.030, 0.11, CARBON, SURFACES.carbon);
       }
     }
-    // 2026 rear floor-corner mouse-hole (`slot`). A dark cut ahead of the rear
-    // tyre — the regs allow a slotted spat here. Recipe-gated so the default
-    // body stays under the 2400 ceiling.
     const aSlot = Math.max(0, Math.min(1, Math.round((aeroStyle && aeroStyle.slot) || 0)));
     if (aSlot && !ckpt) {
       for (const s of [-1, 1]) {
@@ -1891,16 +1491,9 @@ const Car3D = (function () {
     }
 
     part("engineCover");
-    // --- Airbox + engine cover: sit BEHIND the driver, so they're skipped in
-    // the cockpit build (ckpt) — under brake pitch they'd otherwise swing up
-    // into the top/back of the onboard frame ("the thing behind us cutting in").
     let coverGeom = null;
     if (!ckpt) {
-      // Airbox: trapezoid block above the cockpit (dark intake front). The
-      // resolved engine recipe controls intake scale, snorkel and cover louvres.
       const engT = tier("engine");
-      // Team style scales the intake on top of the engine recipe (e.g. Audi's
-      // oversized ram inlet vs Williams' slimline duct).
       const inScale = (engStyle ? engStyle.in : (engT === 0 ? 0.52 : engT === 2 ? 1.65 : 1.0)) * teamStyle.airbox;
       const engSnork = engStyle ? !!engStyle.snork : engT === 2;
       addSpan(out, { z: -0.28, y: 0.76, w: 0.30 * inScale, h: 0.20 * inScale, t: 0.55 },
@@ -1919,8 +1512,6 @@ const Car3D = (function () {
         }
       }
       if (engSnork) {
-        // 2026 roll-hoop snorkel: lofted throat → crest → cover merge (was one
-        // boxy span). Scale tracks intake size so a quali PU dwarfs a turbo.
         const sk = 0.78 + inScale * 0.32;
         const mouth = { z: -0.12, y: 0.96, w: 0.15 * sk, h: 0.10 * sk, t: 0.62 };
         const crest = { z: -0.38, y: 1.02, w: 0.12 * sk, h: 0.13 * sk, t: 0.55 };
@@ -1939,10 +1530,6 @@ const Car3D = (function () {
             { z: lf.z, x: s*(lf.x*0.78), y: lf.top - 0.08, w: 0.015, h: 0.10 },
             { z: lr.z, x: s*(lr.x*0.78), y: lr.top - 0.08, w: 0.015, h: 0.10 }, CARBON);
       }
-      // Engine-cover hot-air cooling exit — FORM varies per PU spec (ENGINE_STYLE
-      // .outlet): 0 sealed low-drag deck, 1 slim gill pair, 2 broad shark-gill
-      // louvre bank + a central tail vent, 3 twin chimney stacks. A clear extra
-      // per-engine read on the cover flanks that a sealed deck (lean_burn) lacks.
       const engOutlet = engStyle && engStyle.outlet != null ? engStyle.outlet
                       : (engT === 2 ? 2 : engT === 0 ? 0 : 1);
       if (engOutlet >= 1) {
@@ -1969,8 +1556,6 @@ const Car3D = (function () {
         // Central hot-air vent slot at the tail of the cover (broad-cooling specs).
         if (engOutlet >= 2) addBox(out, 0, coverGeom.tailVentY, -1.72, 0.13, 0.05, 0.18, INTAKE);
       }
-      // Removable power-unit service panels expose the hidden-system story on
-      // the cover flanks without cutting away the primary silhouette.
       const servicePanels = Math.max(0, Math.min(4, Math.round(engStyle.servicePanel || 0)));
       for (const s of [-1, 1]) for (let i = 0; i < servicePanels; i++) {
         const z = -0.82 - i * 0.19, p = anchors.coverAt(z);
@@ -2005,15 +1590,10 @@ const Car3D = (function () {
       // FUEL: per-option filler cap colour.
       const fuelColor = fuelStyle ? fuelStyle.cap : (tier("fuel") === 2 ? [0.95, 0.28, 1.5] : [0.55, 0.52, 0.60]);
       const fuelDisplay = fuelColor.map((value) => Math.min(value, 1));
-      // Fuel filler on the airbox shoulder: a dark housing ringed by a bright
-      // fuel-grade COLLAR in the blend colour + a cap dot — a clear grade placard.
       addBox(out, 0.12, 0.795, -0.50, 0.075, 0.05, 0.12, [0.10, 0.10, 0.12], SURFACES.carbon);   // housing
       const fuelSurface = SURFACES.metal;
       addBox(out, 0.12, 0.828, -0.50, 0.10,  0.02, 0.15, fuelDisplay, fuelSurface);            // collar ring (proud)
       addBox(out, 0.12, 0.85,  -0.50, 0.035, 0.03, 0.05, fuelDisplay, fuelSurface);            // cap dot
-      // Filler HARDWARE (`filler`, 0..2): 0 is the three boxes above, byte-identical
-      // to the shipped cap. 1 grows a 2026 garage dry-break blister around that
-      // cap. 2 adds a second blister aft and an inboard breather standpipe.
       const fuelFiller = Math.max(0, Math.min(2, Math.round(fuelStyle.filler || 0)));
       if (fuelFiller >= 1) {
         const fuelPorts = [{ x: 0.12, z: -0.50, s: 1 }];
@@ -2087,8 +1667,6 @@ const Car3D = (function () {
     // (0.32..0.80), and the accentC flash below sits at 0.88 with its lower edge
     // no deeper than 0.8195 at any station. Clean gaps at every station.
     addPodFlankSpan(0.46, -0.34, 0.56, 0.48, PANEL, null, 0.008, true);
-    // Lower accent band. The `strip` decal (yFrac 0.08..0.30) crosses this, so
-    // liverytex counts c2 among that region's backgrounds.
     addPodFlankSpan(0.46, -0.34, 0.19, 0.22, c2, null, 0.008, true);
 
     // ERS: a color-coded ENERGY-CELL strip on the coke-bottle shoulder, plus a
@@ -2176,16 +1754,10 @@ const Car3D = (function () {
     }
 
     part("bodyDetail");
-    // --- 2026 bodywork detailing: a recessed radiator inlet mouth punched into
-    // the sidepod front (SHAPE varies per ENGINE_STYLE.inlet), and a row of
-    // little floor-edge fences — the fiddly ground-effect furniture that reads
-    // as a modern car. ---
     const engInlet = engStyle && engStyle.inlet != null ? engStyle.inlet
                    : (tier("engine") === 2 ? 2 : tier("engine") === 0 ? 0 : 1);
     for (const s of [-1, 1]) {
       const inlet = podGeom.inlet;
-      // Inlet mouth: 0 slim letterbox · 1 stock rounded · 2 wide high-flow scoop ·
-      // 3 tall twin-nostril. All punched at the same pod-front location.
       if (engInlet === 0) {
         addBox(out, s*inlet.x, inlet.y, inlet.z, inlet.width * 0.75, inlet.height * 0.38, 0.05, INTAKE);
       } else if (engInlet === 2) {
@@ -2200,17 +1772,11 @@ const Car3D = (function () {
         addBox(out, s * (inlet.x - s * inlet.width * 0.12), inlet.y + inlet.height * 0.08,
                inlet.z, inlet.width * 0.48, inlet.height * 0.88, 0.05, INTAKE);
       }
-      // FLOOR furniture hangs off the VISIBLE floor-edge line — the same span the
-      // aero floorEdge draws above — NOT the sidepod bottom. Anchored to the pod
-      // it sat under the bodywork overhang, so a floor package changed nothing a
-      // player could ever see; every piece here now breaks the car's outline.
       const fenceN = Math.max(0, Math.min(6, Math.round(floorStyle.fences)));
       const fenceH = Math.max(0.6, Math.min(1.6, floorStyle.fenceH));
       for (let i = 0; i < fenceN; i++) {
         const fz = 0.42 - i * 0.36;
         const ex = floorEdgeAt(fz);
-        // A swept blade standing up and OUTBOARD of the edge, tall enough that
-        // its crown clears the edge span and reads from a 3/4 camera.
         addSpan(out,
           { z: fz + 0.075, x: s * (ex + 0.012), y: 0.140 + rideDY + 0.048 * fenceH,
             w: 0.016, h: 0.095 * fenceH },
@@ -2218,9 +1784,6 @@ const Car3D = (function () {
             w: 0.013, h: 0.105 * fenceH },
           CARBON);
       }
-      // Floor EDGE WING + downturned seal. The painted chord still extends past
-      // the floor edge (silhouette in plan) but it is a thin beveled plate, not
-      // a fat slab; a carbon seal hangs below so "sealed edge" reads as hardware.
       const edgeLip = Math.max(0, Math.min(1, floorStyle.edgeLip || 0));
       if (edgeLip > 0) {
         const ef = floorEdgeAt(0.50), er = floorEdgeAt(-1.10);
@@ -2275,11 +1838,6 @@ const Car3D = (function () {
       addBox(out, 0, 0.036 + rideDY,  0.55, 0.30, 0.010, 0.08, [0.62, 0.60, 0.56], SURFACES.metal);
       addBox(out, 0, 0.036 + rideDY, -1.32, 0.28, 0.010, 0.08, [0.62, 0.60, 0.56], SURFACES.metal);
     }
-    // --- Sidepod cooling CHIMNEYS (engine recipe `chimney`, 0..3): squat stacks
-    // standing proud of the pod shoulder, each capped by a dark exit slot. The
-    // classic "we are running hot" tell, and the clearest way to read a
-    // cooling-led power unit apart from a sealed one at a glance. Anchored on
-    // podAt() so they ride whatever bodywork the engine recipe lofted. ---
     const engChimney = Math.max(0, Math.min(3, Math.round(engStyle.chimney || 0)));
     for (const s of [-1, 1]) for (let i = 0; i < engChimney; i++) {
       const z = -0.16 - i * 0.30, p = anchors.podAt(z);
@@ -2290,9 +1848,6 @@ const Car3D = (function () {
         CARBON);
       addBox(out, cx, p.top + 0.112, z - 0.012, 0.040, 0.014, 0.060, INTAKE);
     }
-    // 2026 optional UPPER SIDEPOD DUCT (`duct`). The regs allow a ram on top
-    // of the pod — the Benetton-like tell that reads as a 2026 concept vs a
-    // 2022-25 scoop. 0 none · 1 slim letterbox · 2 proud scooped snorkel.
     const aDuct = Math.max(0, Math.min(2, Math.round((aeroStyle && aeroStyle.duct) || 0)));
     if (aDuct > 0 && !ckpt) {
       for (const s of [-1, 1]) {
@@ -2311,15 +1866,11 @@ const Car3D = (function () {
     }
 
     part("livery");
-    // --- Livery accents: nose stripe + airbox spine stripe (team colour 2) ---
     const noseAccentRear = anchors.noseAt(1.60), noseAccentFront = anchors.noseAt(2.66);
     addLoft(out, 1.60, 0, noseAccentRear.top + 0.008, 0.09, 0.016,
            2.66, 0, noseAccentFront.top + 0.008, 0.05, 0.014, c2);
     addBox(out, 0, 0.862, -0.42, 0.06, 0.04, 0.52, c2);
 
-    // --- Extra paint detail: thin livery-ACCENT flashes (accentC, falls back to
-    // c2). Subtle strips of "paint" that catch the light without adding mass: a
-    // flash along each nose flank and a slim flash along each sidepod shoulder. ---
     for (const s of [-1, 1]) {
       const nf = anchors.noseAt(2.575), nr = anchors.noseAt(2.025);
       addSpan(out,
@@ -2327,19 +1878,8 @@ const Car3D = (function () {
         { z: nr.z, x: s*(nr.side + 0.006), y: (nr.bottom + nr.top) * 0.5, w: 0.012, h: 0.040 },
         accentC);
     }
-    // Skipped for the cockpit build: this band rides the pod flank at yFrac
-    // 0.88 and reaches z -0.025 — level with the driver's own head — so in
-    // first person it is a painted wall across the eye line, not a livery.
     if (!ckpt) addPodFlankSpan(0.425, -0.025, 0.88, 0.035, accentC, SURFACES.paint, 0.012);
 
-    // --- BODY stripe (livery.stripe): a bold contrasting band down the car's
-    // full spine — nose tip → nose → monocoque → hood crest, then (past the
-    // open cockpit) airbox → engine-cover ridge to the tail. Previously four
-    // DISCONNECTED segments (it stopped 0.45 m short of the tip, skipped the
-    // monocoque entirely, and the flat hood band floated above the sloping
-    // deck); now each piece is a crown-following loft that meets the next, so
-    // the stripe reads continuous from every camera. Only the cockpit opening
-    // legitimately interrupts it. ---
     const stripeC = liv.stripe || null;
     // Nose TIP z moves per team (TEAM_STYLE.noseTipZ, ±0.10): the cap and both
     // stripes must end at the STYLED tip, not the shared 3.18 datum, or the
@@ -2364,11 +1904,6 @@ const Car3D = (function () {
         addLoft(out, -1.95, 0, 0.600, 0.060, 0.02, -0.94, 0, 0.775, 0.075, 0.02, stripeC); // engine-cover ridge run to the tail
       }
     }
-    // --- NOSE stripe (livery.noseStripe): a classic painted band running the
-    // nose crown ONLY — very tip → bulkhead — independent of the full-length
-    // body stripe. Sits a hair prouder (+0.004 y) and slightly narrower than
-    // the body stripe's nose section, so specifying BOTH layers the nose band
-    // crisply on top instead of z-fighting. ---
     const noseStripeC = liv.noseStripe || null;
     if (noseStripeC) {
       const ns155 = anchors.noseAt(1.55), ns270 = anchors.noseAt(2.70), ns314 = anchors.noseAt(stripeTipZ);
@@ -2378,9 +1913,6 @@ const Car3D = (function () {
              stripeTipZ, 0, ns314.top + 0.016, 0.036, 0.010, noseStripeC);
     }
 
-    // --- Livery `nose` tip cap: a painted band wrapping the slim nose tip, sitting
-    // fractionally proud of the nose wedge so it reads as a distinct-colour nose
-    // cone (a staple real-F1 livery element). Only when the livery specifies it. ---
     if (noseC) {
       const capRearZ = styledTipZ - 0.38;
       const nt = anchors.noseAt(styledTipZ), nb = anchors.noseAt(capRearZ);
@@ -2389,18 +1921,12 @@ const Car3D = (function () {
                    { z: capRearZ, y: (nb.bottom + nb.top) * 0.5, w: nb.side*2 + 0.010,
                      h: nb.top - nb.bottom + 0.010, t: 0.86 }, noseC);
     }
-    // --- Livery `pod` panel: a bold contrasting block on each sidepod flank,
-    // forward of the sponsor board, for the two-tone sidepod look many liveries
-    // carry. Proud of the pod skin so it never z-fights. Only when specified. ---
     // Proud 0.006 keeps the pod panel UNDER the sponsor board (0.008): a board is
     // applied over the paint, not buried by it. At 0.016 the panel sat proud of
     // the board and covered it, so on every pod-set livery the sidepod wordmark
     // was actually sitting on the pod colour while being inked for the board.
     if (podC) addPodFlankSpan(0.45, 0.11, 0.60, 0.22, podC, SURFACES.paint, 0.006);
 
-    // --- Nose number deck: a flat base-paint panel raised proud of the nose
-    // crown, carrying the driver-number TEXTURE decal (see carDecalData). Base
-    // colour so the decal's own backing/keyline defines it. + a camera pod. ---
     const deckF = anchors.noseAt(2.15), deckR = anchors.noseAt(1.69);
     addLoft(out, deckR.z, 0, deckR.top + 0.010, Math.min(0.28, deckR.topSide*1.75), 0.018,
            deckF.z, 0, deckF.top + 0.010, Math.min(0.28, deckF.topSide*1.75), 0.018, c1);
@@ -2408,7 +1934,6 @@ const Car3D = (function () {
     addBox(out, 0, camPod.top + 0.045, 1.55, 0.06, 0.08, 0.15, DARK);
 
     part("cockpit");
-    // --- Cockpit opening (dark) + halo + front pillar ---
     // NONE OF THIS BELONGS IN THE FIRST-PERSON BUILD. The cockpit body is its
     // own model (opts.cockpit — see cockpitBodyMesh in game.js), drawn from
     // inside the car, and every piece here surrounds the driver's HEAD: the
@@ -2425,28 +1950,14 @@ const Car3D = (function () {
       addBox(out, 0, 0.74, -0.18, 0.60, 0.06, 0.07, DARK); // rear hoop
       addBox(out, 0, 0.60,  0.62, 0.05, 0.20, 0.05, DARK); // front pillar
     } else if (opts && opts.halo) {
-      // OPT-IN halo for the first-person build (SETTINGS > COCKPIT, default OFF
-      // — js/game/cockpit-opts.js). It cannot reuse the chase hoop above: that
-      // sits at y 0.70..0.74, 8.5 deg BELOW an eye at 0.82, so from inside it
-      // would cross the floor of the frame, not arc over the head. Rebuilt
-      // against the seated eye: ring 11 deg up at the front, 73 deg at the
-      // sides, pillar crossing the sightline as a real one does — which is
-      // precisely why this is a setting and not a default.
       for (const s of [-1, 1]) {
         addLoft(out, -0.15, s*0.30, 0.92, 0.05, 0.05,
                  0.62,     0,       0.98, 0.05, 0.05, HALO, SURFACES.metal);
       }
       addBox(out, 0, 0.79, 0.62, 0.045, 0.38, 0.045, HALO, SURFACES.metal); // front pillar
     }
-    // COCKPIT recipe. haloBlade fairs the hoop into an aero section, haloWing
-    // adds the upper winglet, camPods sets the T-cam count, screen adds the
-    // windscreen fairing ahead of the opening. All zero = the shipped cockpit.
-    // First-person build zeroes every knob (furniture lives around the head).
     const haloBlade = Math.max(0, Math.min(2, Math.round(ckpt ? 0 : cockpitStyle.haloBlade || 0)));
     if (haloBlade > 0) {
-      // Aero-section sleeves on the SAME arcs as the beveled titanium halo.
-      // Sit proud of the tube so the metal bevel still catches light; knob 2
-      // thickens and adds a centre crown fairing. FIA C3.13.3: y ≥ 0.695.
       const bw = haloBlade === 2 ? 0.072 : 0.048;
       const bh = haloBlade === 2 ? 0.038 : 0.028;
       const bladeC = haloTint || HALO;
@@ -2477,9 +1988,6 @@ const Car3D = (function () {
         addBox(out, s * 0.155, 0.872, 0.08, 0.010, 0.028, 0.10, wingC, SURFACES.metal);
       }
     }
-    // Halo furniture, T-cam pods and the deflector all live around the driver's
-    // head too — same reasoning as the hoop above, so the first-person build
-    // carries none of them.
     const camPods = Math.max(0, Math.min(2, Math.round(ckpt ? 0 : cockpitStyle.camPods || 0)));
     for (let i = 0; i < camPods; i++) {
       const s = i === 0 ? -1 : 1;
@@ -2502,12 +2010,6 @@ const Car3D = (function () {
     }
 
     part("mirrors");
-    // --- Side mirrors ---. In cockpit view they're moved FORWARD (ahead of the eye at z0.32)
-    // and out on longer stalks so they read at the sides of the onboard frame
-    // like real F1 wing mirrors; the chase build keeps the tucked position.
-    // Team mirror style: 1 = swept-wide (housing pushed outboard, wider and
-    // shorter), 2 = low-slung (dropped toward the pod shoulder). The cockpit
-    // build keeps the proven onboard framing regardless of style.
     const mSty = ckpt ? 0 : teamStyle.mirror;
     // Placement is REGULATION (docs/COCKPIT-DATUMS.md): the body must lie inside
     // RV-MIRROR-BODY, Y 470..680 x Z 640..720. At x 0.44 / y 0.735 ours sat
@@ -2516,8 +2018,6 @@ const Car3D = (function () {
     const mx = (ckpt ? 0.60 : 0.34) + (mSty === 1 ? 0.035 : 0);
     const msx = ckpt ? 0.54 : 0.30;
     const mY = (ckpt ? 0.678 : 0.735) + (mSty === 2 ? -0.032 : 0);
-    // C14.2.2b: the reflective surface is 200mm WIDE x 50mm HIGH. The housing
-    // was 32mm wide x 155mm tall — portrait, rotated 90 degrees from real.
     const mW = mSty === 1 ? 0.235 : 0.215;   // swept style: wider housing
     const mH = mSty === 1 ? 0.065 : 0.075;
     for (const s of [-1, 1]) {
@@ -2543,13 +2043,7 @@ const Car3D = (function () {
     }
 
     part("helmet");
-    // --- Driver helmet: smooth dome + visor + crown stripe ---
-    // Skipped for the first-person cockpit body (opts.noDriver): the camera
-    // sits where the driver's head is.
     if (!(opts && opts.noDriver)) {
-      // Per-driver helmet: dome carries a crown stripe + a nose flash in the
-      // driver's own accent colour (indexed by car number), so team-mates and
-      // the field look distinct rather than all wearing the team colour.
       const helmC = (opts && opts.num != null) ? HELMET_ACCENT[((opts.num % HELMET_ACCENT.length) + HELMET_ACCENT.length) % HELMET_ACCENT.length] : c2;
       addDome(out, 0, 0.585, -0.08, 0.145, c1);
       addBox(out, 0, 0.64, 0.05, 0.20, 0.075, 0.045, VISOR);  // visor band
@@ -2557,7 +2051,6 @@ const Car3D = (function () {
       addBox(out, 0, 0.60, 0.11, 0.11, 0.05, 0.02, helmC);    // nose flash
     }
 
-    // --- Airbox intake above the roll hoop (dark void) ---
     // NOT in the first-person build: it spans z -0.305..-0.175 and y 0.715..
     // 0.805, so against a driver's eye at (0.72, -0.20) its front face is 2.5 cm
     // from the camera and it straddles the eye line. Measured via the engine's
@@ -2565,10 +2058,6 @@ const Car3D = (function () {
     // was the dark mass across the view, and the thing "cutting" the wheel.
     if (!ckpt) addBox(out, 0, 0.76, -0.24, 0.15, 0.09, 0.13, INTAKE);
 
-    // --- T-cam mast above the airbox (the broadcast camera "T") ---
-    // Skipped in the cockpit body: it sits right at the driver's eye height
-    // 0.25 m behind the camera, and any camera transient turned it into a
-    // giant black rectangle filling the frame.
     if (!(opts && opts.noDriver)) {
       addBox(out, 0, 0.885, -0.30, 0.035, 0.09, 0.035, DARK);   // stalk
       addBox(out, 0, 0.955, -0.30, 0.30, 0.055, 0.06, DARK);    // T bar
@@ -2576,10 +2065,6 @@ const Car3D = (function () {
     }
 
     part("halo");
-    // --- Halo: the titanium cockpit-protection hoop (defining modern-F1 read).
-    // A central front pillar rising off the chassis, then two tubular arms
-    // arcing up-and-out over the driver and sweeping back down to the collar.
-    // Chase/AI only — the first-person cockpit body (ckpt) has its own framing. ---
     if (!ckpt) {
       const haloC = haloTint || HALO;   // livery-tinted hoop, else brushed titanium
       addBox(out, 0, 0.665, 0.47, 0.035, 0.27, 0.05, haloC, SURFACES.metal);   // front centre pillar — tall enough to meet the front arc's base (y 0.7875) instead of stopping 5.8cm short
@@ -2594,11 +2079,6 @@ const Car3D = (function () {
     }
 
     part("exhaust");
-    // --- Exhaust outlet poking from the tail cap --- per ENGINE option: a lone
-    // slim pipe at low spec, a fat central tailpipe flanked by two extra tips
-    // for engine recipes with the `twin` flag.
-    // The EXHAUST recipe owns the tailpipe; `pipes` null defers to the engine's
-    // own plumbing so a car with no exhaust part fitted is unchanged.
     const exhTwin = exhStyle.pipes != null ? exhStyle.pipes >= 3
       : (engStyle ? !!engStyle.twin : tier("engine") === 2);
     const exhBore = Math.max(0.7, Math.min(1.5, exhStyle.bore));
@@ -2685,13 +2165,6 @@ const Car3D = (function () {
     }
 
     part("sharkFin");
-    // --- Shark fin (team accent colour) --- a swept aero surface, not a flat
-    // plank: long raked leading edge (base front z-0.65 → top front z-1.15, a
-    // 0.50 m rake) tapering to a near-vertical trailing edge (only 0.05 m rake),
-    // the real-F1 fin profile. The base hugs the engine-cover's ridge line (it
-    // tapers from y0.83 at z-0.55 to y0.59 at z-2.00) so it reads as grown out
-    // of the cover instead of resting flat on top of it. Behind the driver —
-    // skipped in the cockpit build.
     if (!ckpt) {
       const fb = FIN.halfBase, ft = FIN.halfTop;
       addBlock(out, [
@@ -2702,32 +2175,14 @@ const Car3D = (function () {
       ], finC);
     }
 
-    // --- Driver number: now a TEXTURE decal on the nose-top plate (see
-    // carDecalData / the nose number plate below), not blocky 7-seg geometry —
-    // so it reads sharply and shows from the chase, hood AND cockpit cameras. ---
-
     part("sponsorBoard");
-    // --- Sponsor board on the sidepod flank + a base-paint NUMBER BOARD on each
-    // Downforce level 0..4 — resolved up here (before the number board) so the
-    // board tracks the rear-wing endplate for THIS aero setup. Per-option when
-    // the aero id is known, else mapped from the coarse 0/1/2 tier (AI / no
-    // parts → medium, lvl 2). See endplateGeom / numberBoard (single source of
-    // truth, shared with the game.js number decal via Car3D.*).
     const aeroT = tier("aero");
     const aLvl = aeroStyle && aeroStyle.lvl != null
       ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
-    // Everything buildComplete() needs to merge the moveable elements back in,
-    // taken from the values THIS build resolved rather than re-derived.
     out.flapInfo = { aLvl, style: aeroStyle, col: wingC };
 
-    // rear-wing endplate driver-number BOARD — placed by numberBoard(aLvl) so it
-    // sits low on the plate at every downforce level (the game.js number decal
-    // reads the SAME function, so the digit lands exactly on this board). ---
     const nb = numberBoard(aLvl);
     for (const s of [-1, 1]) {
-      // (The short PANEL box that used to sit here was a SECOND sponsor board,
-      // overlapping the flank span above at a different height and z range — two
-      // pale panels fighting for the same wordmark. The span is the board now.)
       addBox(out, s*0.527, nb.cy, -2.42, 0.012, nb.h, 0.30, c1);
     }
 
@@ -2748,27 +2203,13 @@ const Car3D = (function () {
       for (const s of [-1, 1])
         addBox(out, s*0.84, 0.55, 2.30, 0.035, 0.20, 0.48, wingC, SURFACES.paint);
     }
-    // --- Front wing: ANGLED wedge elements in the block language — thin
-    // leading edges rising to thicker trailing edges (real attack angle),
-    // swept endplates that grow rearward, and nose pylons so the wing hangs
-    // from the nose instead of floating. AERO visualTier reshapes element
-    // count / endplate size / dive-plane reach (tier 1 = today's baseline). ---
     const aBeam = aeroStyle ? (aeroStyle.beam || 0) : (aeroT === 2 ? 1 : 0);
     const aDrs  = aeroStyle ? (aeroStyle.drs  || 0) : 0;
     const frontSweep = Math.max(-0.08, Math.min(0.22, aeroStyle.frontSweep));
     const frontTaper = Math.max(0.72, Math.min(1.08, aeroStyle.frontTaper));
     const frontRise = Math.max(-0.03, Math.min(0.16, aeroStyle.frontRise));
 
-    // Front wing: a multi-element CASCADE — a wide, near-flat structural main
-    // plane plus a stack of progressively larger flap elements, each a thin wedge
-    // (low/forward leading edge → higher/rearward trailing edge = attack angle)
-    // separated by a visible slot gap. The outer thirds sweep UP boldly into tall
-    // arched endplates that flick outboard (2026-style outwash). Element count +
-    // span + endplate/canard size grow with aLvl. Half-span reaches fwHalf.
     const fwHalf = frontHalf(aLvl);               // half-span (endplate sits just outside)
-    // Element table lives in frontCascade() so the ACTIVE-AERO code and this
-    // build agree by construction. The top FW_MOVEABLE flaps are NOT baked —
-    // drawAeroFlaps() draws them so they can rotate (see aeroFlapsGeom).
     const fwElems = frontCascade(aLvl);
     const fwBaked = frontBakedCount(aLvl);
     for (let i = 0; i < fwBaked; i++) {
@@ -2781,13 +2222,6 @@ const Car3D = (function () {
         attachHalf: fwHalf + 0.03,
       }, i === 0 ? c1 : wingC, SURFACES.paint);
     }
-    // The bold outboard upsweep is emitted with the TOP element instead (see
-    // aeroFlapsGeom's `upsweep`), because that element is ACTIVE AERO: the kick
-    // is part of the flap and has to rotate with it.
-    // Endplate PROFILE (`plate`): 0 slim low-drag fence · 1 the shipped outwash
-    // flick · 2 a tall arched footplate with a bridging spar over its crown. The
-    // front wing is the first thing a chase camera sees, so this is the loudest
-    // single-knob silhouette change in the aero package.
     const aPlate = Math.max(0, Math.min(2, Math.round(
       aeroStyle.plate != null ? aeroStyle.plate : 1)));
     const PLATE = [
@@ -2795,32 +2229,20 @@ const Car3D = (function () {
       { hF: 0.22, hR: 0.40, kick: 0.060, footW: 0.13, footZ: 0.54, arch: 0 },
       { hF: 0.30, hR: 0.54, kick: 0.100, footW: 0.19, footZ: 0.62, arch: 1 },
     ][aPlate];
-    // Cascade winglet count on the endplate outer face. A recipe may set it
-    // outright; otherwise it falls back to the downforce-level map that shipped.
     const aCasc = Math.max(0, Math.min(3, Math.round(aeroStyle.casc != null ? aeroStyle.casc
       : (aLvl >= 4 ? 3 : (aLvl >= 3 ? 2 : (aLvl >= 1 ? 1 : 0))))));
     for (const s of [-1, 1]) {
       const epW = aLvl >= 4 ? 0.060 : (aLvl <= 0 ? 0.028 : 0.044);
       const epX = s * (fwHalf + 0.03);
-      // Main endplate: a swept plate rising up-and-outboard (the outwash flick) —
-      // moderated in height so it reads as a real 3-D structure without towering
-      // over the wing (it was ~1.5× too tall and looked detached from the plane).
-      // `t` pinches the crown into a ridge so the plate is a cut fence, not a box.
       addBeveledSpan(out,
         { z: 2.66, x: epX,                y: 0.135, w: epW, h: PLATE.hF, t: 0.62 },
         { z: 1.98, x: epX + s*PLATE.kick, y: 0.245, w: epW, h: PLATE.hR, t: 0.78 },
         Math.min(0.014, epW * 0.28), c2);
-      // Footplate: the horizontal "foot" kicking outward along the endplate base
-      // (the ground-effect seal that reads as a real front-wing foot).
       addBox(out, epX + s*(PLATE.footW * 0.23), 0.050, 2.30, PLATE.footW, 0.016, PLATE.footZ, c1);
-      // 2026 underwing fence — one carbon blade per side under the mid-span
-      // (FIA / RaceTeq: fences return under each half of the front wing).
       addBeveledSpan(out,
         { z: 2.58, x: s * (fwHalf * 0.52), y: 0.058, w: 0.012, h: 0.050, t: 0.50 },
         { z: 2.20, x: s * (fwHalf * 0.70), y: 0.066, w: 0.010, h: 0.044, t: 0.68 },
         0.005, CARBON);
-      // Tall-plate variant carries a bridging spar across the crown, tying the
-      // top of the arch back to the outer flap tip.
       if (PLATE.arch) {
         addBeveledSpan(out,
           { z: 2.60, x: epX + s*0.012, y: 0.135 + PLATE.hF * 0.5 + 0.010, w: 0.030, h: 0.018 },
@@ -2839,10 +2261,6 @@ const Car3D = (function () {
       addBox(out, s*0.10, 0.19, 2.46, 0.055, 0.20, 0.17, c1);                 // nose pylon
     }
 
-    // Bargeboard / turning-vane cluster ahead of the sidepods — per-OPTION
-    // silhouette via AERO_STYLE.vane (0 none · 1 single fence · 2 twin fences ·
-    // 3 curved triple cascade). Chase view only. Falls back to a level-mapped
-    // vane count when the aero id is unknown.
     const aVane = aeroStyle && aeroStyle.vane != null ? aeroStyle.vane
                 : (aLvl >= 4 ? 3 : aLvl >= 3 ? 2 : aLvl >= 1 ? 1 : 0);
     if (!ckpt && aVane > 0) {
@@ -2884,28 +2302,12 @@ const Car3D = (function () {
     }
 
     part("rearAssembly");
-    // --- Rear assembly: wing, DRS pod, rain light, diffuser, gearbox strakes,
-    // rear brake ducts. ALL of it sits well behind the driver, so the cockpit
-    // build (ckpt) skips the lot — like the airbox/engine cover above, nothing
-    // behind the seat should exist in the first-person body, so no transform
-    // edge case can ever swing rear bodywork across the onboard camera. ---
     if (!ckpt) {
-      // --- Rear wing: the single biggest aero tell. Lift + endplate height scale
-      // continuously with aLvl (lvl 0 = flat low-drag, lvl 4 = towering high-DF),
-      // element count grows, high levels add a swan-neck flap + T-wing, `beam`
-      // options add a beam wing, and `drs` options open a slotted top gap. ---
       const aN     = aLvl / 4;                  // 0..1 normalized downforce level
       const rwLift = (aLvl - 2) * 0.045;        // gentler vertical shift (beam-wing ref)
-      // Concave (square-rootish) growth so the wing DOESN'T tower at high DF: both
-      // the endplate height (epSY) and its vertical centre (epCY) rise quickly at
-      // low DF then flatten toward max — aLvl4 lands only ~0.07 above aLvl2 (roll-
-      // hoop / airbox level) instead of spiking a third higher than the car.
-      // Shared with the number board + game.js decal (endplateGeom, above).
       const _ep    = endplateGeom(aLvl);
       const epSY   = _ep.sy;   // lvl0 0.28 → lvl2 0.47 → lvl4 0.58 (capped)
       const epCY   = _ep.cy;   // lvl0 0.60 → lvl2 0.72 → lvl4 0.80 (slow rise)
-      // Tall SLIM swept endplates with a louvre cut-out cluster near the rear edge
-      // and a painted team-color top rail along the crown.
       for (const s of [-1, 1]) {
         addBeveledSpan(out,
           { z: _ep.front.z, x: s*0.50, y: _ep.front.cy, w: 0.040, h: _ep.front.sy, t: 0.58 },
@@ -2919,14 +2321,9 @@ const Car3D = (function () {
           { z: _ep.rear.z, x: s*0.50, y: _ep.rear.top, w: 0.046, h: 0.018, t: 0.85 },
           0.006, c2, null, SURFACES.paint);
       }
-      // Clean swept two/three-element rear wing (leading edge low/forward →
-      // trailing edge high/back). Main plane sits on the endplate centreline.
       const rearSweep = Math.max(-0.06, Math.min(0.20, aeroStyle.rearSweep));
       const rearTaper = Math.max(0.72, Math.min(1.08, aeroStyle.rearTaper));
       const crownY = _ep.rear.top - 0.018;
-      // Reserve the crown slot for the max-DF/DRS element. Lower packages place
-      // their top plane directly under the rail; taller stacks shift the regular
-      // three planes down so every tip remains captured by the endplate.
       const upperTrailY = crownY - (aLvl >= 4 || aDrs ? 0.075 : 0);
       const rearWing = (zLead, yLead, zTrail, yTrail, half, thick, col, scale) =>
         addWingFoil(out, {
@@ -2936,21 +2333,6 @@ const Car3D = (function () {
         }, col, SURFACES.paint);
       rearWing(-2.30, upperTrailY - 0.270, -2.52, upperTrailY - 0.225,
         0.51, 0.024, c1, 0.8);
-      // The middle plane is ACTIVE AERO as well — see aeroFlapsGeom's "rearMid".
-      // Only the mainplane above stays baked, which is exactly the 2026 rule:
-      // every rear element except the bottom mainplane rotates.
-      // The TOP rear plane is ACTIVE AERO and is drawn by drawAeroFlaps(), not
-      // baked here — see aeroFlapsGeom's "rear" entry, which reproduces exactly
-      // the rearWing(-2.38, upperTrailY - 0.075, -2.64, upperTrailY, …) element
-      // this line used to emit.
-      // Wing mount. Default: slim pylons sweeping UP and BACK from the rear crash
-      // structure to the underside of the main plane — this is what visually hangs
-      // the wing off the car (previously the mount sat above the plane, so the
-      // whole wing read as detached/floating). A central pylon reinforces it.
-      // `swan` swaps in a true swan-neck yoke instead: the necks climb PAST the
-      // main plane and hook back DOWN onto its upper surface, leaving the
-      // pressure side clean — the real reason teams run the layout, and an
-      // unmistakable tell from behind.
       const aSwan = aeroStyle && aeroStyle.swan ? 1 : 0;
       if (aSwan) {
         const mainTopY = upperTrailY - 0.225 + 0.016;
@@ -2968,21 +2350,13 @@ const Car3D = (function () {
       }
       addSpan(out, { z: -1.96, x: 0, y: 0.44, w: 0.09, h: 0.14 },
                    { z: -2.36, x: 0, y: epCY, w: 0.07, h: 0.10 }, DARK);   // central spine mount
-      // T-wing: shipped behaviour is "max DF and not DRS"; a recipe may request or
-      // suppress it outright via `tvane` so mid-downforce packages can carry one.
       const aTvane = aeroStyle && aeroStyle.tvane != null
         ? (aeroStyle.tvane ? 1 : 0) : (aLvl >= 4 && !aDrs ? 1 : 0);
-      // The extra proud top element of the max-DF look is ACTIVE AERO, drawn by
-      // drawAeroFlaps() — see aeroFlapsGeom's "rearTop". Baking it here left the
-      // highest plane on the car as the only one that could not move.
       if (aTvane) {
         addWingFoil(out, {
           zLead: -1.935, yLead: epCY + 0.188, zTrail: -2.025, yTrail: epCY + 0.212,
           half: 0.17, thick: 0.014, taper: 0.90, sweep: 0.018, rise: 0.006,
         }, c2, SURFACES.paint);
-        // T-wing mount: a slim central pylon down to the engine-cover ridge — without
-        // it the T-wing is a plank floating ~0.4m above the bodywork with nothing
-        // visibly holding it up.
         addBox(out, 0, (0.56 + epCY + 0.19) / 2, -1.98, 0.03, epCY + 0.19 - 0.56, 0.025, DARK);
       }
       if (aBeam) {
@@ -2997,29 +2371,18 @@ const Car3D = (function () {
       const drsSX = aLvl >= 3 ? 0.13 : 0.10;
       addBox(out, 0, epCY + 0.265, -2.52, drsSX, 0.05, 0.18, DARK); // DRS actuator pod
 
-      // --- FIA rain light: dark housing + HDR-red LED panel on the rear crash
-      // structure. The >1 albedo glows through the night emissive path (and blooms),
-      // so every car trails a visible red light after dark / in spray. A brighter
-      // central brake-light LED sits proud on the same housing. ---
       addBox(out, 0, 0.50, -2.52, 0.13, 0.18, 0.10, DARK);
       addBox(out, 0, 0.50, -2.585, 0.10, 0.13, 0.03,
              [2.6, 0.08, 0.06], SURFACES.emissive);
       addBox(out, 0, 0.50, -2.60, 0.04, 0.05, 0.02,
              [3.4, 0.12, 0.05], SURFACES.emissive);   // brake-light core
 
-      // --- Rear diffuser --- AERO visualTier scales width + front kick-up height.
-      // Tucked UP and pulled IN (vs. the old low, wide, overhanging slab) so it
-      // reads as a diffuser ramp under the crash structure instead of a big flat
-      // reflective "shelf" sticking out behind the tail — the underbody now
-      // mirrors the sky/road, and a broad down-facing plane there caught it.
       const diffW  = (0.72 + aLvl * 0.145) * Math.max(0.78, Math.min(1.3, aeroStyle.floorEdge));
       const diffH1 = (0.40 + aLvl * 0.325) *
         Math.max(0.72, Math.min(1.4, aeroStyle.diffuserRise));
       addLoft(out, -2.52, 0, 0.34, 1.12 * diffW, 0.30, -1.90, 0, 0.17, 0.92 * diffW, 0.14 * diffH1,
               [0.06, 0.06, 0.07], SURFACES.carbon);
 
-      // --- Gearbox visual tell: per-OPTION diffuser strake count + a rear crash
-      // structure fin. More strakes = higher-spec 'box. ---
       const gbStrakes = gbStyle ? gbStyle.strakes : (tier("gearbox") === 2 ? 5 : 0);
       const gbFin = gbStyle ? gbStyle.fin : (tier("gearbox") === 2 ? 1 : 0);
       const gbStrakeH = gbStyle && gbStyle.strakeH ? gbStyle.strakeH : 0.13;
@@ -3093,17 +2456,8 @@ const Car3D = (function () {
     }
 
     part("brakeDucts");
-    // --- Brake duct fairings (front + rear wheels) --- per BRAKES option: duct
-    // size + a big-brake winglet. Cockpit build keeps only the FRONT ducts.
     const brakesT = tier("brakes");
     const ductMul = brakeStyle ? brakeStyle.duct : (brakesT === 0 ? 0.5 : brakesT === 2 ? 1.9 : 1.0);
-    // Brake packages alter duct and caliper hardware. Heat glow is emitted only
-    // by the runtime brake-ring effect once live brake temperature crosses its
-    // threshold; baking it into high-spec meshes made parked cars look overheated.
-    // Duct FAIRING form (`scoop`): 0 bare inlet · 1 the horizontal winglet that
-    // shipped with big-brake specs · 2 a wrapped boomerang — winglet plus an
-    // outboard fence and a lower deflector curling around the wheel face. Absent
-    // from a recipe, it derives from duct size exactly as before.
     const brakeScoop = Math.max(0, Math.min(2, Math.round(
       brakeStyle && brakeStyle.scoop != null ? brakeStyle.scoop : (ductMul >= 1.3 ? 1 : 0))));
     for (const s of [-1, 1]) {
@@ -3128,17 +2482,10 @@ const Car3D = (function () {
     }
 
     part("suspension");
-    // --- Suspension wishbones --- SUSPENSION tier scales thickness + follows
-    // the ride-height shift from the floor plank above. Cockpit build keeps
-    // only the FRONT pair (rears sit behind the seat).
     const wbMul = suspStyle ? suspStyle.arm : (suspT === 0 ? 0.85 : suspT === 2 ? 1.3 : 1.0);
     const wbPush = suspStyle ? suspStyle.push : (suspT === 2 ? 1 : 0);
-    // Pullrod actuator runs the opposite diagonal to a pushrod (top-outboard →
-    // bottom-inboard vs bottom-outboard → top-inboard) — a clear layout tell.
     const wbPull = suspStyle && suspStyle.pull ? 1 : 0;
     const armTh = 0.026 * wbMul, suspC = [0.11, 0.11, 0.13];
-    // Inboard ROCKER fairing on the tub top ahead of the dash — the blister that
-    // covers the heave/rocker assembly. A silhouette tell no arm scaling gives.
     const rockerLvl = Math.max(0, Math.min(2, Math.round(suspStyle.rocker || 0)));
     const heaveOn = Math.max(0, Math.min(1, Math.round(suspStyle.heave || 0)));
     const fairArms = !!(wbPush || wbPull || rockerLvl || heaveOn);
@@ -3234,8 +2581,6 @@ const Car3D = (function () {
     }
 
     part("wheels");
-    // --- Wheels --- (skipped for the player car, which draws animated wheels)
-    // Per-compound band and tread treatment from the resolved tyre recipe.
     if (!noWheels) {
       const tyreBand = tyreStyle && tyreStyle.band || TYRE_BAND[tier("tyres")];
       // Per-option caliper accent peeking through the rim spokes, else tier.
@@ -3250,11 +2595,6 @@ const Car3D = (function () {
       }
     }
 
-    // --- Livery FINISH: the paint's MATERIAL, not its colour. Bodywork paint is
-    // the only thing emitted as SURFACES.paint, so a non-gloss finish is a single
-    // remap of those material ids (see FINISH_SURFACE). Carbon, rubber, glass,
-    // emissive and the sponsor/number panels keep their own ids, and a livery
-    // with no `finish` leaves the array byte-identical to before. ---
     const finishSurface = FINISH_SURFACE[liv.finish];
     if (finishSurface) {
       for (let i = 0; i < out.mat.length; i++) {
@@ -3281,16 +2621,6 @@ const Car3D = (function () {
     return out;
   }
 
-  // The WHOLE car in its REFERENCE pose: the baked mesh plus the moveable wing
-  // elements merged in at delta 0 — each element exactly where the fixed wing
-  // used to have it, vertex for vertex, at every downforce level. build() alone
-  // is the RENDER mesh (the elements are drawn separately so they can rotate);
-  // this is the geometric one, and it is what a question like "does the wing
-  // reach its endplates" or "how many triangles is this car" is really asking.
-  //
-  // Deliberately NOT the runtime closed pose, which carries Z_BITE on top: that
-  // is an attitude, and rotating an element about its own hinge cannot change
-  // the span, taper or endplate attachment this view exists to check.
   function buildComplete(color, color2, opts) {
     const out = build(color, color2, opts);
     const info = out.flapInfo;

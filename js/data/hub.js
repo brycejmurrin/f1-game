@@ -1,8 +1,4 @@
-/* Apex 26 — DataHub: F1 data overlay (#datahub).
-   Tabs: SCHEDULE | STANDINGS | LAST RACE | LIVE | TELEMETRY | EXPORT.
-   All API-derived DOM is built
-   with createElement/textContent (never innerHTML with API strings).
-   Styles live in css/data.css (every class prefixed dh-). */
+/* Apex 26 — DataHub: F1 data overlay (#datahub). Tabs: SCHEDULE | STANDINGS | LAST RACE | LIVE | TELEMETRY | EXPORT. All API-derived DOM is built with createEleme… */
 const DataHub = (function () {
   "use strict";
 
@@ -22,9 +18,6 @@ const DataHub = (function () {
   };
 
   const TABS = [
-    // Lazy closures: the tab loaders are consts destructured from the split
-    // Data* modules further down, so a direct reference here is a TDZ throw
-    // that kills the whole DataHub IIFE at load.
     { id: "schedule", label: "SCHEDULE", load: function () { return loadSchedule(); } },
     { id: "standings", label: "STANDINGS", load: function () { return loadStandings(); } },
     { id: "lastrace", label: "LAST RACE", load: function () { return loadLastRace(); } },
@@ -41,8 +34,6 @@ const DataHub = (function () {
   let returnFocus = null;
   const state = {};               // id -> {node, at}
   const gen = {};                 // id -> load generation (ignores stale resolutions)
-
-  /* ================= helpers ================= */
 
   function el(tag, cls, text) {
     const e = document.createElement(tag);
@@ -72,8 +63,6 @@ const DataHub = (function () {
   function todayISO() {
     return new Date().toISOString().slice(0, 10);
   }
-
-  /* ----- team colors via Teams.LIST (substring keywords, ordered) ----- */
 
   const TEAM_KEYS = [
     ["racing bulls", "RB"], ["rb f1", "RB"], ["visa", "RB"],
@@ -128,8 +117,6 @@ const DataHub = (function () {
     sw.style.background = cssColor(t ? t.color : null);
     return sw;
   }
-
-  /* ================= skeleton ================= */
 
   function init(rootEl) {
     if (root || !rootEl) return;
@@ -249,8 +236,6 @@ const DataHub = (function () {
 
   function isOpen() { return openFlag; }
 
-  /* ================= tab plumbing ================= */
-
   function tabDef(id) {
     for (let i = 0; i < TABS.length; i++) if (TABS[i].id === id) return TABS[i];
     return TABS[0];
@@ -349,23 +334,13 @@ const DataHub = (function () {
     return el("div", "dh-empty", text);
   }
 
-  /* ================= SCHEDULE ================= */
   // Implementation: js/data/schedule.js.
   const { loadSchedule } = DataSchedule.create({ el, emptyMsg, fmtDate, fmtDateTime, todayISO });
 
-  /* ================= STANDINGS ================= */
   const { loadStandings } = DataStandings.create({ el, emptyMsg, teamChip, findTeam, cssColor });
 
-  /* ================= LAST RACE ================= */
   const { loadLastRace } = DataLastRace.create({ el, emptyMsg, teamChip, fmtDate });
 
-  /* ========= session selection (shared by LIVE + TELEMETRY) ========= */
-
-  // Newest first, back to 2023 where OpenF1's data begins. Derived from the
-  // clock rather than written out, because the hardcoded [2026, 2025, 2024,
-  // 2023] would have stopped offering the CURRENT season from 2027 on — and
-  // YEARS[0] is the fallback for `sel.year`, so the picker would have quietly
-  // defaulted to a season in the past rather than shown an error.
   const OPENF1_FIRST_YEAR = 2023;
   const YEARS = (function () {
     const now = new Date().getFullYear();
@@ -379,8 +354,6 @@ const DataHub = (function () {
   function ensureSession(force) {
     const have = sel.sessionKey !== null;
     const fresh = have && sel.selAt && (Date.now() - sel.selAt) < SESSION_STALE_MS;
-    // A picker choice stays put; an auto-latest pick expires so LIVE can
-    // follow a new session after the previous one ends.
     if (have && sel.pinned && !force) return Promise.resolve(sel.meta);
     if (have && !force && fresh) return Promise.resolve(sel.meta);
     return F1API.latestSession(0).then(function (ses) {
@@ -391,9 +364,6 @@ const DataHub = (function () {
         sel.year = ses.year || YEARS[0];
         sel.selAt = Date.now();
       } else if (!sel.pinned) {
-        // latestSession resolved empty — the previous key is not "current".
-        // Keep polling a finished session as if it were live is how LIVE sat
-        // on a stale POS/TEAM after the weekend ended.
         sel.meta = null;
         sel.sessionKey = null;
         sel.meetingKey = null;
@@ -420,8 +390,6 @@ const DataHub = (function () {
     });
   }
 
-  // Year / Grand Prix / Session controls. onPick(meta) fires only on a user
-  // change (not initial population). Selection defaults to the latest session.
   function buildPicker(onPick) {
     let pickerGen = 0;
     const box = el("div", "dh-picker");
@@ -518,20 +486,17 @@ const DataHub = (function () {
     return box;
   }
 
-  /* ================= LIVE ================= */
   const { loadLive, stopLiveAuto } = DataLive.create({
     el, clear, emptyMsg, spinner, ensureSession, sel, buildPicker,
     invalidateOther, fmtDateTime, findTeam, cssColor, textColorOn, NO_LIVE_MSG
   });
 
-  /* ================= TELEMETRY ================= */
   // Implementation: js/data/telemetry.js.
   const { loadTelemetry, closeTelemPopup } = DataTelemetry.create({
     el: el, clear: clear, emptyMsg: emptyMsg, spinner: spinner, sel: sel,
     ensureSession: ensureSession, buildPicker: buildPicker,
     invalidateOther: invalidateOther, COMPOUND: COMPOUND, findTeam: findTeam,
     cssColor: cssColor, textColorOn: textColorOn, NO_TELEM_MSG: NO_TELEM_MSG });
-  /* ================= EXPORT tab (dev) ================= */
   // Implementation: js/data/export.js.
   const { loadExport } = DataExport.create({ el: el, clear: clear });
   return { init: init, open: open, close: close, isOpen: isOpen };

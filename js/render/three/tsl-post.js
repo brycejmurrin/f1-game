@@ -1,46 +1,4 @@
-/* Apex 26 — TLXShaders.post: the TSL post-chain shaders for the TLX backend
- * (M8). A 1:1 port of js/render/shaders/post.js (the GLSL source of truth):
- * BRIGHT (soft-knee bright pass), BLUR (5-tap separable gaussian), DOWN
- * (13-tap Jimenez + Karis firefly weighting), UP (9-tap tent, additive),
- * SSAO (8-tap horizon AO + contact-shadow march + bilateral-ready half-res
- * output), GODRAY (world-space 16-step shadow-map march + 12-lamp beam
- * in-scatter + the mapped-lamp spot shadow), the COMPOSITE (heat haze,
- * chromatic aberration, speed blur, sharpen, depth-aware bilateral AO
- * upsample, wet-road + car-paint SSR, bloom + lens dirt, screen sun shafts,
- * HDR grade, PARAMETERISED Narkowicz ACES, colourGrade, lens flare, vignette,
- * dither + grain) and FXAA — constants lifted verbatim, line refs in comments.
- *
- * CALIBRATION INVARIANTS (tlx.js header + js/render/shaders/chunks.js):
- *   - NO sRGB encode anywhere: the composite writes ACES output straight to
- *     the 8-bit target, exactly like GLX. The tone-map is the PARAMETERISED
- *     Narkowicz fit (uAcesA..E) — NOT three's built-in Hill ACES, NOT any
- *     renderer.toneMapping setting, NOT the vendored BloomNode's chain.
- *   - Every tune default mirrors LightTune.TUNE_DEFS (set CPU-side in
- *     tlx-post.js present(), like glx/post.js present()).
- *
- * UV CONVENTION: three's node system is top-left-origin on BOTH backends
- * (screenUV/screenCoordinate normalise WebGL's bottom-left fragcoord, and
- * texture nodes auto-flip render-target/depth reads on the GL backend — see
- * js/render/three/tsl-sky.js + tsl-lit.js flipUV). The GLX post math is written in GL
- * bottom-left vUV space (vUV.y<0.62 road gate, sunUV, haze plume, SSR streak
- * direction), so every pass anchors `vUV = (screenUV.x, 1-screenUV.y)` and
- * every texture fetch converts back through TL() — the GLSL math then ports
- * VERBATIM with zero sign flips.
- *
- * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
- *     TLXShaders.post = (THREE, TSL, ctx) => ({ bright, blurAO, blurGR, down,
- *         upAdd, upFinal, spread, ssao, godray, composite, fxaa, blit })
- * (spread is the shared blur-step uniform — tlx-post.js drives it every
- * present() from the BLOOM SPREAD knob: `P.spread.value = gk("bloomSpread")`.)
- * ctx = { chunks, shadow, sceneTex, sceneTagTex, sceneDepthTex, dirtTex, whiteTex,
- *         blackTex } — REAL texture objects (tlx-post.js creates the targets
- * first). NEVER touches THREE/TSL at script eval — three exists only inside
- * TLX.create().
- *
- * STANDING RULE (tsl-lit.js header): every shared varying-derived node gets
- * an unconditional Fn-body .toVar() anchor before any conditional use — here
- * screenUV/vUV and every reconstruction chain anchor at the top of each Fn.
- */
+/* Apex 26 — TLXShaders.post: the TSL post-chain shaders for the TLX backend (M8). A 1:1 port of js/render/shaders/post.js (the GLSL source of truth): BRIGHT (soft… */
 "use strict";
 
 (function () {
@@ -63,11 +21,7 @@
     // Shadow-map UV flip — the tsl-lit.js flipUV convention for compare taps.
     const flipUV = TL;
 
-    // Fixed input textures (real objects — the scene HDR target + its depth
-    // exist before this factory runs; dirt/white/black are 1x1-or-canvas).
     const sceneT = texture(ctx.sceneTex);
-    // Second HDR attachment: 0.35 on car paint, 1 elsewhere. Scene alpha
-    // cannot hold the tag (r185 isOpaque + NoBlending = coverage).
     const tagT = texture(ctx.sceneTagTex || ctx.sceneTex);
     const depthT = texture(ctx.sceneDepthTex);
     const dirtT = texture(ctx.dirtTex || ctx.blackTex);
@@ -76,8 +30,6 @@
     const _pinKeys = Object.create(null);
     function passMaterial(fragNode, key) {
       const m = new THREE.NodeMaterial();
-      // tlx-post owns the pass family. Register immediately so an exception
-      // during later material setup/factory construction can unwind it.
       if (typeof ctx.trackMaterial === "function") ctx.trackMaterial(m);
       m.fragmentNode = fragNode;
       m.depthTest = false;
@@ -85,15 +37,11 @@
       m.blending = THREE.NoBlending;
       m.fog = false;
       m.lights = false;
-      // Stable family key — see tsl-lit.js pinProgram. Unpinned NodeMaterial
-      // hashes child-node ids; getForRenderCacheKey in tlx.js then forks a
-      // program per QuadMesh. Each pass is one graph, one key.
       const k = key || "tlx-post";
       m.customProgramCacheKey = _pinKeys[k] || (_pinKeys[k] = () => k);
       return m;
     }
 
-    /* ── BRIGHT (BRIGHT_FS in js/render/shaders/post.js): quadratic soft knee ──────────── */
     const brightU = { threshold: uniform(0.75) };
     const bright = {
       U: brightU,
@@ -110,7 +58,6 @@
       })(), "tlx-post-bright"),
     };
 
-    /* ── BLUR (BLUR_FS in js/render/shaders/post.js): 5-tap separable gaussian ─────────── */
     // Two instances (SSAO r8 target family / godray HDR family) so a material
     // never renders into two different target formats (pipeline-per-format).
     function makeBlur(key) {
@@ -130,14 +77,9 @@
       })(), key);
       return { mat, tex, U };
     }
-    // These are the same graph shape but NOT the same bindings. Reusing one
-    // customProgramCacheKey makes three retain blurAO's texture-node binding
-    // when blurGR compiles, so the god-ray chain blurs the near-white AO buffer
-    // and the composite adds it across the whole frame.
     const blurAO = makeBlur("tlx-post-blur-ao");
     const blurGR = makeBlur("tlx-post-blur-godray");
 
-    /* ── DOWN (DOWN_FS in js/render/shaders/post.js): 13-tap Jimenez + Karis ──────────── */
     const downTex = texture(ctx.blackTex);
     const downU = { texel: uniform(new THREE.Vector2()), karis: uniform(0) };
     const down = {
@@ -323,9 +265,6 @@
         lampShadowVP: uniform(new THREE.Matrix4()),
         lampShadowIdx: uniform(-1.0),
       };
-      // Lamp arrays: pos / col / dir Vector3s + a packed Vector4 geo per lamp
-      // (x = rad, y = cosInner, z = cosOuter, w = volW) — the tsl-lit lampGeo
-      // pattern, so the per-frame mutation path is the one already proven.
       const grPos = Array.from({ length: GR_MAX_LIGHTS }, () => new THREE.Vector3());
       const grCol = Array.from({ length: GR_MAX_LIGHTS }, () => new THREE.Vector3());
       const grDir = Array.from({ length: GR_MAX_LIGHTS }, () => new THREE.Vector3(0, -1, 0));
@@ -347,8 +286,6 @@
         const s3 = vnoise(pIn.mul(2.03 * 2.03).add(1.7 * 2.03 + 1.7)).mul(0.125);
         return s1.add(s2).add(s3);
       };
-      // Cloud cover at a world point js/render/shaders/post.js — same clouds that
-      // dapple the ground (lit's cloudShadow), same 0.15 grazing floor.
       const gCloud = Fn(([wpIn]) => {
         const wp = vec3(wpIn).toVar();
         const res = float(0.0).toVar();
@@ -465,7 +402,6 @@
       };
     }
 
-    /* ── COMPOSITE (COMPOSITE_FS in js/render/shaders/post.js): the whole resolve ───── */
     const C = {
       aoTexel: uniform(new THREE.Vector2(0, 0)),
       haveGodray: uniform(0),
@@ -490,10 +426,6 @@
       reflect: uniform(0), ssrOk: uniform(0),
       reflSkyHi: uniform(new THREE.Vector3(0.05, 0.06, 0.09)),
       reflSkyLo: uniform(new THREE.Vector3(0.02, 0.025, 0.05)),
-      // Camera-aware SSR extent, matching GLX: a low ONBOARD eye needs the top
-      // cutoff raised and the near fade pulled in, or half the wet road falls
-      // outside the band. These were baked in as 0.62 / -2.5 here, so the three
-      // backend paths disagreed about where the wet road even is.
       ssrTopUV: uniform(0.62), ssrNear: uniform(-2.5),
       ssrThick: uniform(0.20), chromAb: uniform(0), grain: uniform(0),
       grainTime: uniform(0), sharpen: uniform(0), blackLift: uniform(0.005),
@@ -506,21 +438,10 @@
       shaftDecay: uniform(0.82), shaftSpread: uniform(1.0),
       flareStreak: uniform(7.0), flareStreak2: uniform(0.5),
     };
-    // Swappable inputs: bloom mip 0, blurred SSAO, godray — black/white
-    // fallbacks make each disabled block a mathematical no-op (glx/post.js
-    // whiteTex/blackTex bindings).
     const bloomTexN = texture(ctx.blackTex);
     const ssaoTexN = texture(ctx.whiteTex);
     const godrayTexN = texture(ctx.blackTex);
 
-    // ACES fitted filmic tone-map — the PARAMETERISED Narkowicz fit
-    // (GLXChunks.tonemap 1:1; coefficients from the TONE CURVE knobs; the
-    // defaults 2.51/0.03/2.43/0.59/0.14 reproduce the shipped curve exactly).
-    // max(x,0) FIRST — mirrors the sign guard in GLXChunks.tonemap. The rational
-    // curve rises back out of the negatives (x=-0.2417 clips to pure WHITE at the
-    // shipped coefficients), and SHARPEN's unsharp overshoot is unclamped, so a
-    // negative can reach here and paint a white fringe on the DARK side of a
-    // high-contrast edge. Bit-identical for every x >= 0.
     const acesTonemap = (x0) => {
       const x = max(x0, vec3(0.0));
       return clamp(x.mul(C.acesA.mul(x).add(C.acesB))
@@ -533,9 +454,6 @@
       const cp = C.invProj.mul(vec4(uvGl.mul(2.0).sub(1.0), d, 1.0));
       return cp.xyz.div(cp.w);
     };
-    // Scene sample carrying the CA radial split (caScene in js/render/shaders/post.js;
-    // the GLSL early-out is a pure optimisation: at uChromAb=0 the offset is
-    // exactly zero, so the 3-fetch form is bit-identical).
     const caScene = (uvGl) => {
       const dd = uvGl.sub(0.5);
       const a = C.chromAb.mul(0.004).mul(dot(dd, dd));
@@ -553,8 +471,6 @@
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const fragXY = vec2(screenCoordinate.xy).toVar();
 
-        // EXHAUST HEAT HAZE js/render/shaders/post.js: UV-warp anchored above the
-        // tailpipe; SKIPS car pixels (SSR alpha tag) so the body doesn't waver.
         const hazeUV = vec2(vUV).toVar();
         If(C.hazeStr.greaterThan(0.002), () => {
           // SCREEN-SPACE TEST FIRST (GLX/WGSL). Gaussian is tight — ~8% of
@@ -582,8 +498,6 @@
           c.b.assign(sceneT.sample(TL(hazeUV.sub(caDir.mul(caAmt)))).b);
         });
 
-        // SPEED BLUR js/render/shaders/post.js: radial smear; caScene carries CA so
-        // the two effects don't cancel — one UV domain.
         If(C.speedBlur.greaterThan(0.001), () => {
           const acc = vec3(c).toVar();
           for (let i = 1; i <= 4; i++) {
@@ -602,8 +516,6 @@
           c.addAssign(c.sub(bl).mul(C.sharpen).mul(0.9));
         });
 
-        // AO: depth-aware 4-tap BILATERAL upsample of the half-res buffer
-        // js/render/shaders/post.js — taps across a silhouette lose their vote.
         const aoV = float(1.0).toVar();
         If(C.aoTexel.x.greaterThan(0.0), () => {
           const aoDc = depthAt(vUV).toVar();
@@ -640,17 +552,11 @@
           .and(depthAt(vUV).lessThan(0.9999))
           .and(vUV.y.lessThan(C.ssrTopUV)), () => {   // sky/horizon seam gate
           const P = vec3(ssrViewPos(vUV)).toVar();
-          // 3-TEXEL derivative baseline (GLX build 746): at phone resolution one
-          // texel spans so little world space at a grazing road angle that the
-          // depth deltas are quantization-dominated and the normal turns to noise.
           const nT = C.reflTexel.mul(3.0).toVar();
           const dpx = ssrViewPos(vUV.add(vec2(nT.x, 0.0))).sub(P).toVar();
           const dpy = ssrViewPos(vUV.add(vec2(0.0, nT.y))).sub(P).toVar();
           const crv = cross(dpx, dpy).toVar();
           const crvL = length(crv).toVar();
-          // upVS is the ROAD PLANE's normal (game.js builds it from r x t), which
-          // is also the right degenerate fallback — defaulting to view-forward
-          // (0,0,1) zeroed upDot and collapsed the mask in one step.
           const upVSn = normalize(C.upVS).toVar();
           // CONDITIONING, not absolute magnitude (COMPOSITE_FS in
           // js/render/shaders/post.js). crvL scales with |dpx|·|dpy|, so at
@@ -663,9 +569,6 @@
           const Nv = select(crvL.greaterThan(1e-6).and(sinT.greaterThan(0.08)),
             crv.div(crvL), upVSn).toVar();
           If(Nv.z.lessThan(0.0), () => { Nv.assign(Nv.negate()); });
-          // A ground normal's view-space z is ~0 at grazing incidence, so the flip
-          // above is a coin toss and lands DOWN when the camera pitches up. That
-          // drove upDot to -1 and killed the mask past a few metres.
           If(dot(Nv, upVSn).lessThan(-0.25), () => { Nv.assign(Nv.negate()); });
           const upDot = dot(Nv, upVSn).toVar();
           // Relaxed up-facing test + far fade pushed out, matching GLX.
@@ -684,9 +587,6 @@
           If(ssrGate.greaterThan(0.001), () => {
             const carDomEarly = carTerm.greaterThan(roadTerm);
             const V = normalize(P.negate()).toVar();
-            // The ROAD reflects off its smooth PLANE, not its bumpy per-pixel
-            // normal — reflecting off Nv scatters the ray and splits the mirror
-            // into hit/miss patches. Car paint keeps its true normal.
             const Nr = select(carDomEarly, Nv, normalize(mix(Nv, upVSn, 0.85))).toVar();
             const R = reflect(V.negate(), Nr).toVar();
             // Jittered fine march js/render/shaders/post.js.
@@ -725,11 +625,6 @@
                 });
                 const fc = C.proj.mul(vec4(bP, 1.0)).toVar();
                 const huv = fc.xy.div(fc.w).mul(0.5).add(0.5).toVar();
-                // GRAZING SELF-REFLECTION REJECT: at a low onboard eye the ray
-                // skims the tarmac and lands on the ROAD itself, filling the wet
-                // mirror with wet-darkened asphalt. A rough wet surface barely
-                // reflects itself at grazing angles, so drop hits whose surface
-                // faces the same way the reflector does.
                 const hP = vec3(ssrViewPos(huv)).toVar();
                 const hdx = ssrViewPos(huv.add(vec2(nT.x, 0.0))).sub(hP).toVar();
                 const hdy = ssrViewPos(huv.add(vec2(0.0, nT.y))).sub(hP).toVar();
@@ -769,8 +664,6 @@
             // tracks up while the camera is level, and the cockpit pitches with
             // the road.
             const skyRefl = mix(C.reflSkyHi, C.reflSkyLo, clamp(dot(R, upVSn), 0.0, 1.0));
-            // Confidence, not a boolean: blend the fallback in over the hit's own
-            // screen-edge taper so a ray walking off frame has no seam.
             const conf = select(found.greaterThan(0.5), clamp(hit, 0.0, 1.0), float(0.0)).toVar();
             const reflCol = mix(skyRefl, hitCol, conf).toVar();
             reflCol.mulAssign(aoV.mul(aoV));           // Lagarde specular occlusion
@@ -788,8 +681,6 @@
             strength.mulAssign(min(gateSrc.div(0.20), 1.0));
             // Soft fade below the hard 0.62 gate — no seam js/render/shaders/post.js.
             strength.mulAssign(smoothstep(C.ssrTopUV.sub(0.06), C.ssrTopUV, vUV.y).oneMinus());
-            // Road cap 0.94 -> 0.80, matching GLX: keep more of the reflective lit
-            // base under a hit so hit and miss regions share the same wet look.
             const mixAmt = clamp(strength.mul(cover), 0.0, select(carDom, float(0.85), float(0.80)));
             const mirrored = select(carDom,
               c.mul(0.22).add(reflCol.mul(0.88)),
@@ -831,10 +722,6 @@
             Loop({ start: int(0), end: int(8), type: "int", condition: "<" }, () => {
               uvi.addAssign(stp);
               const suv2 = clamp(uvi, vec2(0.0), vec2(1.0)).toVar();
-              // Weight by sun proximity: no comet streaks off stray lamps.
-              // SCREEN SUN-SHAFT knob extends the rays (COMPOSITE_FS
-              // uShaftSpread), not just their brightness — a fixed 0.32
-              // disc made the slider look dead past 1.
               const reach = float(0.32).mul(C.shaftSpread);
               const sw = clamp(length(suv2.sub(C.sunUV)).div(reach), 0.0, 1.0).oneMinus().toVar();
               shaft.addAssign(bloomTexN.sample(TL(suv2)).rgb.mul(decay.mul(sw).mul(sw)));
@@ -846,8 +733,6 @@
           });
         });
 
-        // Professional HDR grade (applyHdrGrade in js/render/shaders/post.js, 916),
-        // gated so all-neutral knobs skip the transcendentals entirely.
         If(C.hdrGradeOn.greaterThan(0.5), () => {
           const lift = vec3(C.lift).toVar();
           const gain = max(C.gain, vec3(1e-3)).toVar();
@@ -881,8 +766,6 @@
         // Filmic tone-map (parameterised Narkowicz ACES) + WHITE POINT knee.
         c.assign(acesTonemap(c.div(C.whitePoint)));
 
-        // colourGrade js/render/shaders/post.js: broadcast gain, S-curve, contrast
-        // gamma, vibrance, saturation, tint, split-tone, black lift.
         c.mulAssign(vec3(1.015, 1.008, 0.992));
         c.assign(c.mul(c.mul(0.13).add(1.0)).div(c.mul(0.20).add(1.0)));
         c.assign(pow(max(c, vec3(0.0)), vec3(C.contrast)));
@@ -898,10 +781,6 @@
         c.assign(mix(c, c.mul(toneTint), C.gradeStr));
         c.assign(max(c, vec3(C.blackLift, C.blackLift.mul(0.8), C.blackLift.mul(0.6))));
 
-        // Lens flare js/render/shaders/post.js: DEPTH-OCCLUDED procedural streaks +
-        // ghosts — fades when geometry covers the sun's screen point.
-        // Skip the depth fetch when the flare is off or the sun is off-screen
-        // (uniform CF). Matches GLX post.js / WGSL composite.
         const sunVis = float(0.0).toVar();
         If(C.flareStr.greaterThan(0.0)
           .and(C.sunUV.x.greaterThanEqual(0.0)).and(C.sunUV.x.lessThanEqual(1.0))

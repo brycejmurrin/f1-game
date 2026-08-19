@@ -1,7 +1,4 @@
-/* Apex 26 — TrackMaps: offline 2D circuit outlines for the track picker.
-   Builds each circuit's centreline from the game's own spline engine (no race,
-   no network) and caches the normalised minimap polyline + corners (curated
-   CircuitMarkings turns when present, else curvature-detected) per track id. */
+/* Apex 26 — TrackMaps: offline 2D circuit outlines for the track picker. Builds each circuit's centreline from the game's own spline engine (no race, no network) … */
 const TrackMaps = (function () {
   "use strict";
 
@@ -22,8 +19,6 @@ const TrackMaps = (function () {
   // F1 sector colours (S1 = purple, S2 = red, S3 = yellow-green)
   const SECTOR_COLORS = ["#c084fc", "#e10600", "#a3e635"];
 
-  // Turn-class colours — match css/track-detail.css .tdc-* so the map and the
-  // TURNS chips agree.
   const CLASS_COLORS = {
     HAIRPIN: "#f87171",
     SLOW: "#fb923c",
@@ -45,8 +40,6 @@ const TrackMaps = (function () {
     return "MEDIUM";
   }
 
-  // Re-label SLOW/MEDIUM/FAST across a full corner list when absolute bands
-  // collapse to one class (≥70% same, or <2 classes among non-hairpins).
   function assignCornerClasses(crns) {
     if (!crns || !crns.length) return crns;
     for (let i = 0; i < crns.length; i++) {
@@ -75,8 +68,6 @@ const TrackMaps = (function () {
     return crns;
   }
 
-  // Peak |k|, radius, and heading change around a lap fraction. Window ±50 m
-  // finds the local apex when a curated mark is slightly off the peak.
   function measureApex(tr, frac) {
     const total = tr.total, n = tr.n, ds = total / n;
     const f = (((frac % 1) + 1) % 1);
@@ -145,9 +136,6 @@ const TrackMaps = (function () {
       const tr = Tracks.buildCenterline(def);
       if (tr && tr.map && tr.map.length > 2) {
         const pts = tr.map.map(function (p) { return [p[0], p[1]]; });
-        // Prefer curated FIA turn apexes when present on the def. Each corner
-        // carries radius + heading-sweep class (see classifyCorner /
-        // assignCornerClasses) — not bare peak |k|.
         let crns;
         if (def.turns && def.turns.length) {
           crns = def.turns.map(function (frac, i) { return cornerAt(tr, frac, i + 1); });
@@ -187,7 +175,6 @@ const TrackMaps = (function () {
     return Math.max(0.5, Math.min(2.5, (maxx - minx) / ((maxy - miny) || 1)));
   }
 
-  // ---- preview-card planning -------------------------------------------
   // How a circuit-preview card should spend its space, as pure arithmetic over
   // ONE card's measured geometry. It lives here, beside fitCanvas, rather than
   // in the menu module for one reason: every bug this logic has had was a
@@ -226,8 +213,6 @@ const TrackMaps = (function () {
       if (!sectionH) return Math.max(72, Math.round(cardInnerW / a));
       return sectionH - labelH - padY - (stacked ? infoH + gap : 0) - SLACK;
     };
-    // What stacking would actually achieve: the height it can afford, and the
-    // width that height implies. Whatever the width leaves over is dead card.
     const stackedH = Math.min(Math.round(cardInnerW / a), ceilFor(true));
     const stackedW = Math.min(cardInnerW, Math.round(stackedH * a));
     const beside = a < BESIDE_ASPECT_MAX && cardInnerW >= BESIDE_MIN_W &&
@@ -239,10 +224,6 @@ const TrackMaps = (function () {
     return { shape: beside ? "beside" : "stacked", slotW: slotW, slotH: slotH };
   }
 
-  // Size a canvas bitmap to fit maxW×maxH while keeping the circuit's aspect.
-  // Optionally pin the CSS box to that size (pinCss) so max-height/max-width
-  // cannot reshape the used box after the fact — object-fit:contain remains
-  // belt-and-braces when a later layout pass still clamps.
   function fitCanvas(canvas, maxW, maxH, def, pinCss) {
     const a = aspect(def);
     // A ResizeObserver can briefly report a zero slot while zoom/layout classes
@@ -260,9 +241,6 @@ const TrackMaps = (function () {
     if (pinCss) {
       canvas.style.width = w + "px";
       canvas.style.height = h + "px";
-      // Defeat stylesheet max-height/max-width caps that would reshape the
-      // box AFTER we pin — those caps are what stretched bitmaps under UI
-      // zoom. We already fitted inside the capped slot before pinning.
       canvas.style.maxWidth = w + "px";
       canvas.style.maxHeight = h + "px";
     } else {
@@ -304,11 +282,6 @@ const TrackMaps = (function () {
     return c ? c.py : null;
   }
 
-  // Circuit direction as it READS on the rendered (north-up) minimap, which is
-  // the ground truth the player sees. Validated against real OpenF1 lap telemetry
-  // for all circuits: positive signed area of (px, pz) renders/drives CLOCKWISE,
-  // negative renders ANTI-CLOCKWISE. (The earlier mapping was inverted, so the
-  // selector preview labelled every clockwise circuit "Anti-clockwise".)
   function circuitDirection(tr) {
     const px = tr.px, pz = tr.pz, n = tr.n;
     let area = 0;
@@ -384,9 +357,6 @@ const TrackMaps = (function () {
     });
   }
 
-  // Draw the outline into a canvas, fit with margin, preserving aspect ratio.
-  // opts: { color, casing, width, pad, start, startColor, corners, cornerColor,
-  //         sectors, drs }
   function draw(canvas, def, opts) {
     opts = opts || {};
     const g = canvas.getContext("2d");
@@ -411,7 +381,6 @@ const TrackMaps = (function () {
 
     const width = opts.width || 3;
     g.lineJoin = "round"; g.lineCap = "round";
-
 
     if (opts.sectors) {
       // Draw the full casing first so sectors don't have gaps in the outline
@@ -484,9 +453,6 @@ const TrackMaps = (function () {
       g.beginPath(); g.arc(PX(s[0]), PY(s[1]), width + 1.5, 0, Math.PI * 2); g.fill(); g.stroke();
     }
 
-      // Numbered corner markers — class-coloured rings, labels pushed OUTWARD
-      // from the circuit centroid so stacked chicanes stay readable. A second
-      // pass nudges any two labels that still collide.
       if (opts.corners) {
       const cs = data.corners;
       const rDot = opts.cornerR || 7;

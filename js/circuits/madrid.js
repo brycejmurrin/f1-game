@@ -9,8 +9,6 @@
     country: "Spain",
     night: false,
     theme: "modern",
-    // Hybrid venue: Madrid supplies its own street walls and open permanent-loop
-    // armco instead of the engine's unconditional full-lap street barrier.
     street: false,
     reverse: false,
     sceneryCoordinates: "racing",
@@ -20,8 +18,6 @@
     banked: true,
     bankZones: [
       { frac: 0.75, angleDeg: 13.5, widthM: 180 }, // 24% grade = atan(0.24)
-      // Ordinary road camber on the rest of the permanent loop — the bullring
-      // bowl is the exception, not the rule.
       { frac: 0.0524, angleDeg: 3.0, widthM: 180 },
       { frac: 0.3990, angleDeg: 3.5, widthM: 110 },
       { frac: 0.5711, angleDeg: 3.0, widthM: 90 },
@@ -69,8 +65,6 @@
       { t: -60, l: 90, h: 6 }, { t: 70, l: 90, h: -4 },
       { t: -50, l: 80 }, { t: 80, l: 90 }, { t: 60, l: 130 },
     ],
-    // El Búnker is the high urban section; the following dip produces Madrid's
-    // surveyed ~26 m range while La Monumental remains low and comparatively flat.
     elevations: [
       { s: 0.40, halfM: 520, rise: 18 },
       { s: 0.52, halfM: 360, rise: -8 },
@@ -101,9 +95,6 @@
       const OLIVE = [0.40, 0.46, 0.28];
       const CROWD = [0.48, 0.25, 0.24];
       const GOLD = [0.84, 0.66, 0.22];
-      // Madring's seat mouldings are the venue's brand colour, not stadium
-      // grey — red and gold alternating down the rake is the one thing that
-      // makes a bolted-together temporary deck read as SPANISH from trackside.
       const SEAT_COL = [
         [0.66, 0.16, 0.16], [0.80, 0.62, 0.20], [0.62, 0.15, 0.15], [0.86, 0.68, 0.24],
       ];
@@ -125,17 +116,6 @@
         }, { required: !!required });
       }
 
-      // ── IFEMA EXHIBITION HALL ───────────────────────────────────────────
-      // Six calls of one recipe framed the whole pit straight, and a row of
-      // six identical sheds is exactly the "every building looks the same"
-      // complaint. The real IFEMA campus was built in phases and its halls do
-      // NOT share a roof: `roof` picks one of three real exhibition-shed
-      // typologies, which is the only part of a big blank box anyone can read
-      // from trackside. Body and entrance stay common so it still reads as one
-      // campus. Hall signage carries the venue's red/gold.
-      //   "sawtooth" — north-light shed: glazed vertical face on every bay
-      //   "vault"    — barrel-vaulted roof run along the hall
-      //   "deck"     — flat roof with rooftop plant and an aerial mast
       function ifemaHall(id, frac, side, gap, required, opts) {
         opts = opts || {};
         const roof = opts.roof || "sawtooth";
@@ -146,8 +126,6 @@
           addBox(stage, vadd(a.c, a.u, 8), [32, 16, 74], WHITE, b);
           addBox(stage, vadd(a.c, a.u, 12.5), [32.4, 2.2, 74.4], GLASS, b);
           if (roof === "vault") {
-            // Barrel vault: two half-cylinders laid ALONG the hall. addCyl
-            // extrudes on its basis "up" slot, so the axis is put on a.t.
             for (const off of [-8.2, 8.2]) {
               addCyl(stage, vadd(vadd(vadd(a.c, a.r, off), a.t, -35), a.u, 16),
                 7.6, 70, OFFWHITE, 9, [a.u, a.t, a.r]);
@@ -159,17 +137,11 @@
             for (let i = -2; i <= 2; i++) {
               const p = vadd(vadd(a.c, a.t, i * 14), a.u, 18.4);
               addBox(stage, vadd(p, a.r, IN * 5), [7, 3.2, 8], STEEL, b);     // AHU plant
-              // Seat the shorter unit ON the deck. Sharing the tall unit's
-              // centre height left it hanging 0.8 m clear — addBox CENTRES, so
-              // two boxes of different heights cannot share a centre and both
-              // still touch the roof.
               addBox(stage, vadd(vadd(vadd(a.c, a.t, i * 14), a.r, -IN * 7), a.u, 17.6),
                 [4.2, 1.6, 5], CONCRETE, b);
             }
             addCyl(stage, vadd(vadd(a.c, a.t, 30), a.u, 16.8), 0.22, 9, STEEL, 5, b);
           } else {
-            // Sawtooth north-light: a raking bay with a glazed vertical face,
-            // the roof form that says "exhibition shed" at a glance.
             for (let i = -2; i <= 2; i++) {
               const p = vadd(vadd(a.c, a.t, i * 13), a.u, 16);
               addPrism(stage, p, [31, 3.4, 11], i % 2 ? STEEL : OFFWHITE, b);
@@ -180,43 +152,21 @@
           }
           const entrance = vadd(vadd(a.c, a.r, IN * 11), a.u, 6);
           addBox(stage, entrance, [7, 12, 34], GLASS, b);
-          // Hall signage band above the entrance — the campus wayfinding
-          // colour, and the cheapest way to tell two white sheds apart.
           addBox(stage, vadd(vadd(a.c, a.r, IN * 14.4), a.u, 13.2),
             [1.0, 2.2, 26], sign, b);
         });
       }
 
-      // The three decks are the "tendidos" of a bullring, so they are banded
-      // sol/sombra rather than uniform: the lower deck is warm stone, the middle
-      // carries the crowd tone, the top stays white. A flat white nest is what
-      // made 54 identical bays read as one extruded ring.
       const TENDIDO = [STONE, CROWD, WHITE];
       function monumentalStand(id, frac, side, gap, required) {
         venueGroup(id, frac, side, gap, [22, 22, 34], required, (stage, a) => {
           const b = basis(a);
           for (let tier = 0; tier < 3; tier++) {
-            // Depth tapers with the tier as well as width. The tiers overlap
-            // vertically by design (5.6 tall on a 3.0 rise), so leaving all three
-            // at depth 31 put their END faces on one plane -- same facing, zero
-            // gap, over the whole overlap. Stepping the depth back reads as an
-            // upper tier set in, which is what a real stand does anyway.
             const c = vadd(vadd(a.c, a.r, side * tier * 2.4), a.u, 3.0 + tier * 3.0);
             addBox(stage, c, [17 - tier * 1.8, 5.6, 31 - tier * 1.6], TENDIDO[tier], b);
           }
-          // addPrism is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js) — 13.6 was tier2's
-          // top (11.8) plus half the roof height, i.e. authored as if this were
-          // the CENTROID. That left the roof's base floating 1.8 m above the
-          // top tier with nothing filling the gap. Seat it just above tier2's
-          // top (a hair of clearance, not flush, so the two faces don't fight).
           addPrism(stage, vadd(vadd(a.c, a.r, side * 4.0), a.u, 11.9),
             [18, 3.2, 33], WHITE, b);
-          // Inner "barrera" wall — the face the driver actually sees from the
-          // banking. It was one blank OFFWHITE slab repeated 54 times; Las
-          // Ventas dresses exactly this face, so it now carries the venue's red
-          // capping band, a gold pinstripe and the dark callejón gate openings.
-          // All of it stays inside the declared bounds (this wall sits at
-          // -side*7.5, well inboard of the ±11 envelope).
           const wall = vadd(a.c, a.r, -side * 7.5);
           addBox(stage, vadd(wall, a.u, 5.0), [1.0, 10, 33], OFFWHITE, b);
           addBox(stage, vadd(wall, a.u, 9.4), [1.15, 1.2, 33], MADRID_RED, b);   // capping band
@@ -228,20 +178,6 @@
         });
       }
 
-      // ── MADRID STREET BLOCK ─────────────────────────────────────────────
-      // This one function dresses the whole urban sector (≈49 calls), so a
-      // single box-plus-cap-plus-glass-sliver recipe is what made Madrid's
-      // city read as one building repeated down the avenue. Madrid's actual
-      // fabric has three legible types and they alternate along a real street:
-      //   0 "galería"  — continuous projecting balcony bands, the ochre/brick
-      //                  ensanche block; the commonest thing in the city
-      //   1 "ático"    — a rendered slab whose top storey steps back behind a
-      //                  roof terrace with a parapet
-      //   2 "corrala"  — narrower older block, deep window reveals in a
-      //                  masonry face, no glazing ribbon at all
-      // Type is chosen from the block's own id hash, so the street is varied
-      // but deterministic, and every variant costs a handful of boxes: the
-      // bands are CONTINUOUS runs, not one box per window.
       const RENDER_COLS = [
         [0.78, 0.66, 0.50],   // ochre render
         [0.66, 0.42, 0.34],   // Madrid brick red
@@ -253,8 +189,6 @@
         const seq = urbanSeq++;
         const hv = hash(seq * 37 + 11);
         const type = Math.floor(hv * 3) % 3;
-        // Slightly warm the caller's grey toward Madrid render, keeping the
-        // caller's own light/dark intent (the depth ranks stay distinguishable).
         const rc = RENDER_COLS[(seq + Math.floor(hv * 4)) % RENDER_COLS.length];
         const wall = [(col[0] * 0.45 + rc[0] * 0.55), (col[1] * 0.45 + rc[1] * 0.55),
                       (col[2] * 0.45 + rc[2] * 0.55)];
@@ -268,13 +202,6 @@
           stage._mat = 0;
 
           if (type === 0) {
-            // Galería: three continuous balcony bands on the street face, each
-            // a slab plus a thin railing — one run per floor, not per window.
-            // The band STRADDLES the street face — 0.2 m into the wall, 0.7 m
-            // proud. Burying it flush instead (tried) leaves a 0.9 m-deep box
-            // fully embedded in the body, which is worse interpenetration than
-            // the overhang it was meant to avoid; a balcony that projects a
-            // little is both the honest shape and the cleaner solid.
             const bands = 3;
             for (let i = 0; i < bands; i++) {
               const y = bodyH * (0.28 + i * 0.22);
@@ -285,8 +212,6 @@
               addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 + 0.62)), a.u, y + 0.55),
                 [0.12, 0.9, d * 0.86], STEEL, b);
               stage._mat = 0;
-              // Glazed gallery behind the band — the enclosed balcony Madrid
-              // is full of, and the reason the street face reads as layered.
               addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 - 0.45)), a.u, y + 0.95),
                 [0.3, 1.5, d * 0.80], GLASS, b);
             }
@@ -311,8 +236,6 @@
             addBox(stage, vadd(vadd(a.c, a.r, -IN * w * 0.16), a.u, bodyH + 2.0),
               [0.3, 2.0, d * 0.66], GLASS, b);
           } else {
-            // Corrala: older masonry, deep reveals, no ribbon glazing. Two
-            // recessed window bands read as reveals at any distance.
             stage._mat = MAT.STONE;
             for (let i = 0; i < 2; i++) {
               addBox(stage, vadd(vadd(a.c, a.r, IN * (w * 0.5 - 0.45)), a.u,
@@ -331,13 +254,6 @@
             stage._mat = 0;
           }
 
-          // Rooftop clutter — a water tank and a chimney stack. Madrid's
-          // skyline is defined by this junk; a clean parapet is what makes a
-          // generated city look generated.
-          // Height is CLAMPED to the block's original silhouette (the old
-          // recipe topped out at h*0.90). The deep city ranks here sit close
-          // enough that growing a block in any axis turns a graze into a
-          // severe clip, so a block with no headroom simply gets no clutter.
           const roofTop = bodyH + (type === 1 ? 3.4 : 2.7);
           const headroom = h * 0.90 - roofTop;
           if (headroom > 1.2) {
@@ -382,13 +298,6 @@
         });
       }
 
-      // ── MADRING MODULAR DECK ────────────────────────────────────────────
-      // Madrid 2026 is a brand-new venue that is assembled, not poured: the
-      // stands are bolted steel frames on precast pads with aluminium bench
-      // decks and a printed fascia banner. grandstandEx's back-shell-and-
-      // cantilever silhouette is a permanent circuit's, which is precisely
-      // the wrong read here — so this form is built from primitives instead
-      // and gives Madrid a stand shape no other circuit has.
       function madringDeck(id, frac, side, gap, bays, opts) {
         opts = opts || {};
         const rows = opts.rows || 7, pitch = 6.6, len = bays * pitch;
@@ -397,9 +306,6 @@
         venueGroup(id, frac, side, gap, [15, topH + 5.5, len + 3], false, (stage, a) => {
           const b = basis(a);
           const IN = -side;                       // +1 along a.r faces the track
-          // Frame geometry: a raking diagonal per bay division, plus two ties.
-          // The diagonal needs its own basis, so build one orthonormal to the
-          // rake rather than shearing a box across a non-perpendicular pair.
           const run = 10.4, dl = Math.hypot(run, topH);
           const dv = [(a.r[0] * run * IN + a.u[0] * topH) / dl,
                       (a.r[1] * run * IN + a.u[1] * topH) / dl,
@@ -418,9 +324,6 @@
             addBox(stage, vadd(p, a.u, topH * 0.34), [10.6, 0.13, 0.13], STEEL, b);
             addBox(stage, vadd(p, a.u, topH * 0.72), [10.6, 0.13, 0.13], STEEL, b);
           }
-          // Aluminium treads with red/gold seat mouldings, and a summer crowd
-          // on them: a bespoke stand with no people in it reads as bare
-          // scaffolding next to grandstandEx's built-in crowd.
           for (let t = 0; t < rows; t++) {
             const lat = IN * (4.7 - t * 1.32), y = 1.5 + t * 1.42;
             stage._mat = MAT.METAL;
@@ -438,12 +341,8 @@
             }
           }
           stage._mat = 0;
-          // Printed fascia banner across the front of the deck — the venue's
-          // red-and-gold, and the piece that identifies the stand at speed.
           addBox(stage, vadd(vadd(a.c, a.r, IN * 5.6), a.u, 1.3), [0.22, 2.0, len], banner, b);
           addBox(stage, vadd(vadd(a.c, a.r, IN * 5.68), a.u, 0.6), [0.14, 0.44, len], GOLD, b);
-          // Tensile shade sail on the back legs — Madrid in summer is 35 °C and
-          // the temporary decks are covered by fabric, not a concrete slab.
           if (opts.canopy !== false) {
             stage._mat = MAT.FABRIC;
             for (let i = 0; i <= bays; i++)
@@ -459,12 +358,6 @@
         });
       }
 
-      // ── MADRING PIT LANE ────────────────────────────────────────────────
-      // Was five copies of the generic urbanBlock() office box. The real
-      // IFEMA pit building is a low white garage deck with individually
-      // shuttered bays, a glazed suite storey stepped back off the garage
-      // face and an open roof terrace with the venue banner along its edge —
-      // a silhouette no other structure on the lap repeats.
       function madringPitBay(id, frac, side, gap, bays) {
         const pitch = 7.0, len = bays * pitch;
         venueGroup(id, frac, side, gap, [17, 15, len + 2], false, (stage, a) => {
@@ -492,12 +385,6 @@
         });
       }
 
-      // IFEMA's horizontal white exhibition halls frame the pit straight. The
-      // real campus is a grid of ~12 giant sheds, so a deeper second rank keeps
-      // the venue reading as a campus rather than three isolated boxes.
-      // Roof typology alternates down the row so no two adjacent halls share a
-      // silhouette, and the deep second rank uses the plainest one (a flat deck
-      // reads correctly at distance where a sawtooth just turns to noise).
       ifemaHall("madrid-ifema-hall", 0.975, 1, 32, true, { roof: "sawtooth", sign: MADRID_RED });
       ifemaHall("madrid-ifema-hall-east", 0.035, 1, 34, false, { roof: "vault", sign: GOLD });
       ifemaHall("madrid-ifema-hall-west", 0.965, -1, 30, false, { roof: "deck", sign: MADRID_RED });
@@ -505,8 +392,6 @@
       ifemaHall("madrid-ifema-hall-northeast", 0.008, -1, 52, false, { roof: "deck", sign: MADRID_RED });
       ifemaHall("madrid-ifema-hall-far", 0.075, 1, 42, false, { roof: "vault", sign: GOLD });
 
-      // IFEMA's glazed south entrance and alternating roof lanterns make the
-      // exhibition campus read as a public venue rather than anonymous sheds.
       venueGroup("madrid-ifema-south-entrance", 0.055, -1, 24,
         [30, 22, 50], false, (stage, a) => {
           const b = basis(a);
@@ -543,12 +428,7 @@
         venueGroup("madrid-barajas-airliner", 0.024, -1, 640, [40, 180, 40], false, (stage, a) => {
           const alt = 90;
           const centre = vadd(a.c, a.u, alt);
-          // Fuselage cylinder: axis swapped onto the tangent so it flies level
-          // and horizontal instead of standing on end (addCyl extrudes along
-          // its basis[1]/"up" slot — here that's a.t).
           addCyl(stage, vadd(centre, a.t, -17), 1.7, 34, AIR_BODY, 8, [a.u, a.t, a.r]);
-          // Wing prisms: one ridge spanning the full wingspan through the
-          // fuselage centreline, chord along a.t, thickness along a.u.
           addPrism(stage, vadd(centre, a.u, -0.4), [4.2, 0.9, 26], AIR_BODY, [a.t, a.u, a.r]);
           // Tail fin: a vertical ridge near the tail.
           addPrism(stage, vadd(centre, a.t, -16.6), [0.6, 5.2, 4.2], AIR_TAIL, [a.r, a.u, a.t]);
@@ -568,49 +448,28 @@
       // the riser 0.77 m onto the tarmac.
       grandstandEx(0.00, -1, 10, 52, null, null,
         { livery: "crimson", tiers: 3, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      // T1 chicane stand, opposite the motorway overpass piers (brief s≈0.08).
-      // Low and open-trussed with no end walls — a corner stand seen THROUGH,
-      // deliberately a lighter silhouette than the three-tier hero above.
       grandstandEx(0.085, -1, 16, 45, null, null,
         { livery: "sandstone", tiers: 1, roof: "truss", h: 8 });
-      // El Búnker corner stand overlooking the retaining-wall drop (s≈0.50 L) —
-      // flat-roofed, two decks, closed ends: the heavy massing that suits a
-      // stand backed onto a concrete retaining face.
       grandstandEx(0.50, -1, 20, 40, null, null,
         { livery: "steel", tiers: 2, roof: "flat", endWalls: true, pylons: true });
 
-      // Three modular decks — the venue's signature stand form. Placed where
-      // a 2026 street/hybrid venue actually drops temporary seating: the wide
-      // urban avenue, the fast return leg and the pit-entry approach.
       madringDeck("madrid-deck-avenue", 0.135, 1, 12, 7, { rows: 7 });
       madringDeck("madrid-deck-avenue-far", 0.300, 1, 14, 6, { rows: 6, banner: GOLD });
       madringDeck("madrid-deck-return", 0.620, -1, 13, 7, { rows: 8 });
 
-      // Pits and paddock: bounded, terrain-seated bays rather than one long
-      // floating slab that can chord across the start-line curve. Each bay is
-      // short enough to follow the start "straight", which is not actually
-      // straight, and together they read as one continuous garage frontage.
       for (let i = 0; i < 5; i++) {
         madringPitBay(`madrid-pit-${i}`, (0.985 + i * 0.014) % 1, 1, 8, 3);
       }
-      // Race control closes the garage row at the pit-exit end: a glazed
-      // corner tower with the venue banner, not another anonymous office box.
       venueGroup("madrid-race-control", 0.058, 1, 10, [16, 30, 18], false, (stage, a) => {
         const b = basis(a);
         addBox(stage, vadd(a.c, a.u, 6.5), [14, 13, 16], WHITE, b);
         addBox(stage, vadd(a.c, a.u, 17.5), [12.5, 8.5, 14.5], GLASS, b);   // glazed control deck
         addBox(stage, vadd(a.c, a.u, 22.2), [13.2, 0.7, 15.2], OFFWHITE, b);
-        // Banner hangs on the track-facing face (this group sits on side +1,
-        // so the track is in the -a.r direction).
         addBox(stage, vadd(vadd(a.c, a.r, -7.2), a.u, 11.0),
           [0.3, 9.0, 3.4], MADRID_RED, b);
         seat.cyl(stage, vadd(a.c, a.u, 22.5), 0.16, 7, STEEL, 5, b);        // aerial mast
       });
 
-      // La Monumental: a CONTINUOUS 270-degree bowl — contiguous 34 m stand
-      // bays at ~34 m pitch (0.0062 lap frac) so the ring reads as one
-      // unbroken white nested bowl from the aerial and trackside, per the
-      // brief's hero-feature note, instead of six isolated bays.
       for (const side of [-1, 1]) {
         let i = 0;
         for (let f = 0.680; f <= 0.845; f += 0.0062, i++) {
@@ -620,8 +479,6 @@
           monumentalStand(id, f, side, 16, side === 1 && i === 11);
         }
       }
-      // A thin Las Ventas-inspired arcade and crowd crown sits behind the white
-      // bowl rim, adding Madrid identity without narrowing the banked sightline.
       for (let i = 0; i < 3; i++) {
         monumentalArcade(`madrid-monumental-arcade-${i}`, 0.705 + i * 0.05, 1);
       }
@@ -657,10 +514,6 @@
         runoffApron(at(f), 1, 6.0, [11, 0.3, 10], [0.44, 0.42, 0.40]);
         runoffApron(at(f), -1, 6.0, [11, 0.3, 10], [0.44, 0.42, 0.40]);
       }
-      // Raking buttress fins between the guardrail (4.8) and the bowl's stand
-      // ring (inner face ~19.5). One fin every ~24 m, each a wedge leaning back
-      // off the banking — a handful of primitives apiece, deliberately not a
-      // continuous wall.
       for (let f = 0.688; f <= 0.838; f += 0.0088) {
         for (const side of [-1, 1]) {
           const a = anchor(at(f), side, 9.5);
@@ -673,14 +526,8 @@
         }
       }
 
-      // Tunnel-mouth colour: the two portals below were thin trusses that read
-      // as open spans a car glimpses through, not enclosed tunnel mouths — the
-      // fix is a deeper deck plus a darker underside soffit trim (a second,
-      // thinner overheadSpan flush against the main slab's underside).
       const TUNNEL_DARK = [0.08, 0.08, 0.10];
 
-      // The motorway bridge is explicit intentional overhead geometry. Supports
-      // are separate bounded groups with their feet beyond the road edge.
       overheadSpan({
         id: "madrid-motorway-overpass",
         frac: 0.085,
@@ -717,8 +564,6 @@
         color: STEEL,
               supports: false,
       });
-      // A lightweight IFEMA access bridge marks the return from the permanent
-      // loop while retaining generous clearance and narrow off-edge supports.
       overheadSpan({
         id: "madrid-ifema-access-bridge",
         frac: 0.885,
@@ -748,13 +593,7 @@
           });
       }
 
-      // El Búnker's retaining face samples every segment foot against terrain so
-      // it follows the climb/drop instead of floating at one endpoint. Widened
-      // to f=0.35-0.55 — the elevations table's actual climb/drop range — from
-      // the old 0.43-0.54, which only covered the tail end of the real feature.
       const bunkerPts = [];
-      // Keep the samples close enough that a segment cannot chord across the
-      // curving road between two distant terrain feet.
       for (let f = 0.35; f <= 0.55; f += 0.003)
         bunkerPts.push({ k: at(f), side: 1, dist: 4.5 });
       groundedSegments({
@@ -764,11 +603,6 @@
         height: 6.5,
         color: CONCRETE,
       });
-      // Bunker-slot banding: 2-3 dark horizontal bands partway up the 6.5 m
-      // face — the "bunker slot" look the brief names by name, which a single
-      // flat CONCRETE wall doesn't deliver. Built the same way groundedSegments
-      // does internally (consecutive anchor()-sampled segments), just offset
-      // up the face instead of starting at ground level.
       function bunkerSlotBand(yBase, thick, col) {
         const pts = [];
         for (let f = 0.35; f <= 0.55; f += 0.006) pts.push(at(f));
@@ -810,18 +644,12 @@
         }
       }
 
-      // Paired colonnaded office fronts define the wide public-road avenue.
-      // Their deep setbacks preserve the fast urban-sector braking sightlines.
       for (let i = 0; i < 3; i++) {
         const frac = 0.175 + i * 0.025;
         avenueOffice(`madrid-avenue-left-${i}`, frac, -1, 24, 18 + i * 3);
         avenueOffice(`madrid-avenue-right-${i}`, frac + 0.006, 1, 26, 21 - i * 2);
       }
 
-      // Cuatro Torres forms a restrained skyline cluster behind the urban
-      // sector. Widened from 0.335-0.371 (3.6% of the lap — visible for one
-      // blink) to 0.30-0.40 so the four towers hold in view for the length of
-      // the urban sector instead of flashing past.
       for (let i = 0; i < 4; i++) {
         const frac = 0.30 + i * (0.10 / 3);
         const h = [54, 68, 62, 58][i];
@@ -834,8 +662,6 @@
           });
       }
 
-      // Chamartín-style mid-rises bridge the scale between the avenue and the
-      // Cuatro Torres silhouettes, creating a second deterministic depth layer.
       for (let i = 0; i < 9; i++) {
         const frac = 0.275 + i * 0.011;
         const side = i % 2 ? 1 : -1;
@@ -843,8 +669,6 @@
         urbanBlock(`madrid-skyline-midrise-${i}`, frac, side, 42 + (i % 2) * 5,
           13 + (i % 3), h, 17, i % 2 ? CONCRETE : OFFWHITE);
       }
-      // A second depth rank behind the urban avenue: distant low-rise Madrid
-      // rooftops so the skyline doesn't stop dead behind the first row.
       for (let i = 0; i < 8; i++) {
         const frac = 0.12 + i * 0.02;
         const side = i % 2 ? -1 : 1;
@@ -853,8 +677,6 @@
           16 + (i % 4), h, 24, i % 2 ? OFFWHITE : [0.74, 0.71, 0.66]);
       }
 
-      // Modern IFEMA grandstands on the return leg: stepped seating tiers under
-      // a white canopy (brief s≈0.90 R), between the pelouse and the pit entry.
       function ifemaStand(id, frac, side) {
         venueGroup(id, frac, side, 14, [18, 17, 30], false, (stage, a) => {
           const b = basis(a);
@@ -883,8 +705,6 @@
         });
       }
 
-      // Hybrid barrier rhythm: street/IFEMA sections are concrete; the permanent
-      // Monumental loop uses open armco. Together they register a full-lap boundary.
       for (const side of [-1, 1]) {
         wall(0.86, 0.54, side, 1.8, 1.25, CONCRETE, 0.48);
         guardrail(0.54, 0.86, side, 4.8, [0.80, 0.81, 0.83]);
@@ -894,10 +714,6 @@
       tyreWall(0.13, 0.16, -1, 3.2, [0.18, 0.38, 0.82]);
       tyreWall(0.49, 0.525, 1, 3.2, [0.92, 0.74, 0.13]);
 
-      // Race-infrastructure furniture — the circuit had almost none. A
-      // hoarding run along the front of the new main grandstand, a second run
-      // on the back straight, camera towers either side of T1, and one
-      // broadcast compound tucked behind the IFEMA paddock.
       sponsorHoarding(0.00, 0.03, -1, 6, { h: 1.3 });
       sponsorHoarding(0.615, 0.645, 1, 6, { h: 1.3 });
       cameraTower(at(0.078), 1, 20, { h: 16 });
@@ -928,10 +744,6 @@
         else bush(k, side, 13, OLIVE);
       }
 
-      // Low-detail Sierra de Guadarrama: a hazy blue-grey RIDGE line floated at
-      // the horizon floor. Chained prism ridges replace the old green/snow-cone
-      // mountains, which read as cartoon volcanoes against the dry plains —
-      // the brief wants a low distant blue-grey range, not alpine summits.
       const SIERRA = [0.55, 0.60, 0.66];
       const SIERRA_FAR = [0.61, 0.66, 0.72];
       let cx = 0, cz = 0;

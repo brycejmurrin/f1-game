@@ -1,17 +1,4 @@
-/* Apex 26 — AeroZones: the ACTIVE AERO activation zones for the loaded circuit.
-   AeroZones.create(G) — G supplies live `track`. Consumes the Tracks global.
-
-   Extracted verbatim from js/game.js. Pure circuit GEOMETRY: it reads the
-   spline's curvature and produces a list of arc-metre spans, and it knows
-   nothing about a car, a speed or a switch. That is what made it the first
-   thing worth lifting out of game.js — no closure state crosses the seam except
-   `track`, and the zones array now has exactly one owner.
-
-   The physics side stays in game.js on purpose: xStraightAhead() (is THIS car in
-   a zone) and aeroDfMult() (the downforce multiplier) both read car state and
-   the aero-load constants, so they belong next to the rest of the driving model.
-
-   Must load BEFORE js/game.js (see index.html / tools/manifest.cjs). */
+/* Apex 26 — AeroZones: the ACTIVE AERO activation zones for the loaded circuit. AeroZones.create(G) — G supplies live `track`. Consumes the Tracks global. Extract… */
 const AeroZones = (function () {
   "use strict";
 
@@ -69,15 +56,8 @@ const X_ZONE_K = 0.0014;
 // A circuit with NO entry keeps the pure length filter — right for the retired
 // classics, which have no FIA zone list under either ruleset.
 const ZONE_COUNT = {
-  // ── 2026 Straight Mode, as published by Formula 1 ────────────────────────
-  // Monaco is 0 on purpose, and not a gap: for 2026 active aero is switched off
-  // entirely there, cars "locked in Corner Mode for the entire Monte Carlo
-  // weekend". The scan already returned 0; now it does so for the stated reason.
   monaco: 0, suzuka: 2, albert_park: 5, shanghai: 4, miami: 3, montreal: 4,
   catalunya: 4, redbull: 4, silverstone: 4, spa: 5, hungaroring: 4,
-  // ── 2025 DRS, the stand-in where 2026 is unpublished ─────────────────────
-  // A PROXY, not fact: every 2026 circuit published so far came in 1-3 zones
-  // ABOVE its 2025 DRS count, so these are likely conservative.
   bahrain: 3, jeddah: 3, imola: 1, zandvoort: 2, monza: 2, baku: 2,
   singapore: 4, cota: 2, mexico: 3, interlagos: 2, vegas: 2, qatar: 1,
   abudhabi: 2,
@@ -142,11 +122,6 @@ const AERO_ZONE_TURNS = {
   abudhabi: [[4, 5], [16, 1]],
 };
 
-// Which turns bound a run [start,end) (arc metres, `end` may exceed `total` when
-// the run wraps the line). 1-based, T1 meaning turns[0]; a run starting before
-// the first apex is bounded by the LAST turn (it is the straight the line sits
-// on). Mirrors tools/aero-zone-turns.cjs's derivation exactly — that tool is
-// how AERO_ZONE_TURNS above was generated and re-checked.
 function turnsBounding(turns, total, run) {
   const f0 = (run.start / total) % 1, f1 = (run.end / total) % 1;
   let before = -1;
@@ -155,13 +130,6 @@ function turnsBounding(turns, total, run) {
   return [before < 0 ? turns.length : before + 1, after < 0 ? 1 : after + 1];
 }
 
-// Resolve one authored [fromTurn, toTurn, occ?] entry to the actual run the
-// geometry produced. `occ` (default 1) picks the Nth-LONGEST run among those
-// sharing that exact turn pair — needed where a straight is split by a kink too
-// weak to register its own turn apex, so two runs land on the same pair (only
-// albert_park's T10->T11 does today). Returns null if the pair no longer
-// matches anything (a stale entry after a def.turns change) rather than
-// silently grabbing the wrong straight.
 function runForTurnPair(runs, turns, total, entry) {
   const [fromT, toT, occ] = entry;
   const matches = runs.filter((r) => {
@@ -175,10 +143,6 @@ function create(G) {
   Log.info("game", "AeroZones.create");
   let zones = [];                               // [{start, end, len}] in arc metres
 
-  // Scan the whole lap for contiguous runs under X_ZONE_K and keep the ones long
-  // enough to qualify. Runs are found on the OPEN lap then the wrap is stitched,
-  // so a straight crossing the start line is one zone rather than two short ones
-  // that each fail the length test.
   function build() {
     zones = [];
     const track = G.track;
@@ -206,10 +170,6 @@ function create(G) {
     }
     if (cur) { cur.end = cur.start + cur.len; runs.push(cur); }
     const id = track.def && track.def.id;
-    // Turn-keyed, where the start line is trustworthy enough to number turns
-    // by (see AERO_ZONE_TURNS above). Falls through to the length-only
-    // selection below on any pair that no longer resolves, rather than
-    // dropping a zone the circuit is supposed to have.
     const turnPairs = AERO_ZONE_TURNS[id];
     if (turnPairs && track.def.turns && track.def.turns.length) {
       const resolved = turnPairs
@@ -220,11 +180,6 @@ function create(G) {
         return zones;
       }
     }
-    // With a known real count, take the N LONGEST straights and ignore the
-    // length rule: it is the count that is well sourced, and the FIA's own test
-    // is a time-at-speed with a safety veto that no distance bar reproduces.
-    // Melbourne's five and the Hungaroring's four include connectors well under
-    // 210 m, so applying X_ZONE_MIN as well would silently under-deliver them.
     const want = ZONE_COUNT[id];
     if (want != null) {
       zones = runs.slice().sort((a, b) => b.len - a.len).slice(0, want)
@@ -235,8 +190,6 @@ function create(G) {
     return zones;
   }
 
-  // The zone containing arc position s, or null. Zones can run past `total` when
-  // they wrap the start line, hence the second test.
   function at(s) {
     const track = G.track;
     if (!track || !track.total) return null;
@@ -247,8 +200,6 @@ function create(G) {
     return null;
   }
 
-  // Metres from s to the start of the next zone (0 when already inside one), or
-  // Infinity on a circuit with no zones at all.
   function ahead(s) {
     const track = G.track;
     if (!zones.length || !track || !track.total) return Infinity;
@@ -267,8 +218,6 @@ function create(G) {
 
   return {
     create, X_ZONE_K, X_ZONE_MIN, X_ZONE_VREF, X_STRAIGHT_T,
-    // Exposed for tests/tools only (tests/unit/aero-zones-turns.test.mjs,
-    // tools/aero-zone-turns.cjs) — build() is the one real call site.
     ZONE_COUNT, AERO_ZONE_TURNS, turnsBounding, runForTurnPair,
   };
 })();

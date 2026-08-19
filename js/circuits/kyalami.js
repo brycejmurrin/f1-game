@@ -7,14 +7,7 @@
   {
     id: "kyalami",
     classic: true,
-    // Upstream za-1961 is drawn anti-clockwise, but Kyalami is raced CLOCKWISE
-    // (Crowthorne at the end of the main straight is a right-hander), so the
-    // trace is flipped. tests/specs/f1-track-accuracy.spec.js carries the matching
-    // RACE_DIRECTION_OVERRIDES entry so the direction assertion still holds.
     reverse: true,
-    // A ~500 m straight spans the trace's wrap point (source 0.945→0.055) —
-    // that is the pit straight, so the line sits just past the seam.
-    // Not GPS-calibrated.
     startFrac: 0.01,
     name: "KYALAMI",
     gp: "South African GP",
@@ -29,8 +22,6 @@
       { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
       { kind: "foliage", s0: 0.36, s1: 0.48 },
     ],
-    // Highveld light: Kyalami sits at 1750 m, so the sun is harsh, the sky is
-    // a deep hard blue, and the winter grass is straw-gold rather than green.
     pal: {
       zenith:        [0.14, 0.36, 0.76],
       horizon:       [0.76, 0.76, 0.70],
@@ -44,9 +35,6 @@
       runoff:        [0.60, 0.46, 0.32],
       sunDir:        [0.30, 0.82, 0.24],
     },
-    // Kyalami is built across a ridge and the elevation change is severe — the
-    // climb from Barbecue up to Leeukop and the plunge down the back straight
-    // are what the circuit is known for. Authored, not surveyed.
     elevations: [
       { s: 0.16, halfM: 300, rise: -10.0 },  // drop away from Crowthorne
       { s: 0.36, halfM: 340, rise: 13.0 },   // the long climb
@@ -71,8 +59,6 @@
         addBox, addCyl, addFrustum, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // Highveld palette — thorn-tree greens are grey-blue, not lush, and the
-      // built world here is face brick, red oxide and corrugated iron.
       const THORN = [0.24, 0.36, 0.20], THORN_D = [0.19, 0.30, 0.17];
       const GUM = [0.20, 0.34, 0.22];
       const SCRUB = [0.44, 0.40, 0.22], SCRUB_D = [0.36, 0.34, 0.19];
@@ -81,25 +67,17 @@
       const IRON = [0.72, 0.71, 0.68], OXIDE = [0.56, 0.26, 0.18];
       const DUMP = [0.76, 0.70, 0.48];          // cyanided reef sand
 
-      // `reverse: true` makes the engine flip every `side` argument before it
-      // reaches anchor(), so the anchor lands on the far side from the one named
-      // here and it is +side (not -side) along a.r that points back at the road.
       const IN = (side) => side;
 
-      // =====================================================================
       // 1. HIGHVELD VELD — flat-topped acacia thorn trees scattered over open
       //    golden grass, plus the ranks of imported blue-gum along the
       //    boundary. Sparse and low: the veld reads as open, never wooded.
-      // =====================================================================
       const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.36 && s <= 0.48);
       every(30, (k) => {
         const s = k / n;
         if (openArea(s)) return;
         const h = hash(k * 31);
         if (h < 0.42) return;
-        // Acacia karroo: a bare trunk that forks low into one wide, shallow,
-        // near-horizontal crown. The umbrella is the whole silhouette — a
-        // rounded tree() canopy here would read as European parkland.
         const a = anchor(k, h < 0.5 ? -1 : 1, 14 + h * 12);
         const b = [a.r, a.u, a.t];
         const ht = 5 + h * 3, spread = 7 + h * 3;
@@ -127,10 +105,6 @@
         const side = (Math.floor(k / 20) % 2) ? 1 : -1;
         tree(k, side, 52 + (k % 3) * 4, 18 + hash(k * 7) * 6, GUM, { crown: "columnar" });
       });
-      // Red-earth scars where the veld is worn through to laterite — the
-      // spectator walkways and infield service roads. Highveld ground is not
-      // continuous grass and the colour break is half of why photos of this
-      // place look nothing like a European circuit.
       for (const [id, s, side, d, w, l] of [
         ["kyalami-earth-crowthorne", 0.115, -1, 26, 22, 90],
         ["kyalami-earth-esses", 0.330, 1, 30, 18, 70],
@@ -139,12 +113,6 @@
         ["kyalami-earth-climb", 0.470, 1, 44, 20, 80],     // laterite approach below the climb terrace
       ]) groundPatch(K(s), side, d, [w, 0.16, l], EARTH, { id, samples: 6 });
 
-      // =====================================================================
-      // 2. PIT COMPLEX — face brick under a deep corrugated verandah on
-      //    slender steel posts. At 1750 m the sun is the design problem, so
-      //    what the building is FOR is shade: a wide overhang and a shaded
-      //    walkway, not glass. The masonry is unpainted brick throughout.
-      // =====================================================================
       {
         const a = anchor(K(0.982), 1, 16), b = [a.r, a.u, a.t];
         const bays = 12, pitch = 7.4, len = bays * pitch, inw = IN(1);
@@ -160,8 +128,6 @@
             seat.box(stage, vadd(p, a.u, 4.6), [0.7, 0.5, 6.4], [0.80, 0.78, 0.74], b);
           }
           stage._mat = MAT.METAL;
-          // The verandah: a 6 m overhang on thin posts, with a red-oxide
-          // fascia and a rank of purlins visible under it from the pit lane.
           const eave = vadd(vadd(a.c, a.u, 8.0), a.r, inw * 9.0);
           for (let i = 0; i <= bays; i++) {
             const p = vadd(vadd(a.c, a.t, (i - bays / 2) * pitch), a.r, inw * 9.0);
@@ -179,8 +145,6 @@
           stage._mat = 0;
         }, { required: true });
       }
-      // Race control: a squat brick box with a continuous brise-soleil band
-      // shading its windows, and a lattice timing mast bolted to the side.
       {
         const a = anchor(K(0.999), 1, 20), b = [a.r, a.u, a.t], inw = IN(1);
         modelGroup("kyalami-race-control", {
@@ -207,9 +171,6 @@
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
-      // Highveld paddock: pitched corrugated roofs over low masonry, which is
-      // how everything on this plateau is built and nothing like a flat-roofed
-      // European hospitality block.
       for (let i = 0; i < 4; i++) {
         building(K(0.925 + i * 0.013), 1, 38, 25, 9, 19,
           { kind: "chevron", wall: [0.84, 0.80, 0.72], window: [0.32, 0.34, 0.38], floor: 4.5 });
@@ -223,13 +184,6 @@
       sponsorHoarding(0.950, 0.050, -1, 7, { h: 2.4, step: 12,
         palette: [[0.94, 0.72, 0.14], [0.16, 0.44, 0.26], [0.86, 0.22, 0.16], [0.20, 0.20, 0.22]] });
 
-      // =====================================================================
-      // 3. SPECTATOR TERRACES — concrete steps cut into the veld under a
-      //    corrugated-iron lean-to on red-oxide trusses. That roof is the
-      //    South African sports-ground vernacular: no cantilever, no fascia,
-      //    just sheeting on a raked frame, and it silhouettes completely
-      //    differently from a modern shelled stand.
-      // =====================================================================
       const CROWD = [[0.86, 0.84, 0.80], [0.20, 0.24, 0.34], [0.72, 0.24, 0.20],
                      [0.24, 0.44, 0.30], [0.90, 0.72, 0.24], [0.42, 0.36, 0.32]];
       const ironTerrace = (id, k, side, dist, bays, opts) => {
@@ -246,9 +200,6 @@
             seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y), [1.35, 1.15, len], [0.74, 0.72, 0.67], b);
             seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 1.15), [1.15, 0.45, len - 1.5],
               (t % 2) ? [0.62, 0.60, 0.56] : [0.68, 0.66, 0.62], b);
-            // A seated crowd on the steps. Without it the terracing reads as
-            // an empty flight of stairs, which is what an unpeopled bespoke
-            // stand always looks like next to grandstandEx's built-in crowd.
             stage._mat = MAT.FABRIC;
             for (let j = 0; j * 0.85 < len - 2; j++) {
               const h2 = hash(k * 31 + t * 97 + j * 13);
@@ -280,15 +231,9 @@
       ironTerrace("kyalami-terrace-main", K(0.005), -1, 13, 15, { rows: 7 });
       ironTerrace("kyalami-terrace-crowthorne", K(0.078), -1, 20, 10, { rows: 6 });
       ironTerrace("kyalami-terrace-leeukop", K(0.565), -1, 22, 8, { rows: 5 });
-      // One conventional stand, kept low and sandstone-coloured so the pit
-      // straight is not two copies of the same roof.
       grandstandEx(0.950, -1, 12, 80, null, null,
         { livery: "sandstone", roof: "flat", endWalls: true, h: 9 });
 
-      // =====================================================================
-      // 4. CORNERS — Crowthorne at the end of the long main straight is the
-      //    overtaking place and the one with the crowd.
-      // =====================================================================
       groundPatch(K(0.078), 1, 6, [40, 0.18, 54], EARTH,
         { id: "kyalami-crowthorne-gravel", samples: 8 });
       tyreWall(0.060, 0.098, 1, 5, [0.86, 0.20, 0.18]);
@@ -299,10 +244,6 @@
         { id: "kyalami-barbecue-gravel", samples: 6 });
       tyreWall(0.240, 0.272, -1, 4, [0.20, 0.40, 0.85]);
       marshalPost(K(0.250), 1, 9);
-      // General-admission grass bank on the inside of Barbecue — a low, sparse
-      // veld terrace, not a stand, so it fills the corner without wooding or
-      // walling the open highveld the brief insists on. Sits in front of the
-      // laterite walkway scar added above.
       spectatorHill(0.230, 0.290, 1, 16, { rows: 3, rise: 1.0, depth: 1.8, density: 0.34, step: 9 });
 
       groundPatch(K(0.565), 1, 5, [26, 0.18, 34], EARTH,
@@ -316,15 +257,8 @@
       marshalPost(K(0.880), 1, 9);
 
       spectatorHill(0.42, 0.52, 1, 16, { rows: 3, rise: 1.0, depth: 1.8, density: 0.36, step: 9 });
-      // The brief's "second run of terracing on the climb": the same corrugated
-      // lean-to vernacular as the main-straight terraces, set BEHIND and above
-      // the grass bank so the climb reads as a stepped enclosure (grass GA in
-      // front, covered concrete terrace up the slope) rather than one bare bank.
       ironTerrace("kyalami-terrace-climb", K(0.470), 1, 30, 10, { rows: 6 });
 
-      // =====================================================================
-      // 4. BOUNDARIES
-      // =====================================================================
       for (const [s0, s1] of [[0.11, 0.23], [0.28, 0.40], [0.46, 0.55], [0.60, 0.86]]) {
         guardrail(s0, s1, -1, 8, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 8, [0.80, 0.81, 0.83]);
@@ -335,10 +269,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 9);
       }
 
-      // =====================================================================
-      // 5. BACKDROP — the open highveld. Low, wide, hazy ridges a long way out
-      //    rather than close hills: this is high plateau, not a valley.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -355,11 +285,6 @@
           ridge(tx, tz, pyMin, a + 1.5708, len, w, hMin + h * hVar, col);
         }
       }
-      // MINE DUMPS — the flat-topped tailings mesas of the Witwatersrand reef,
-      // pale cyanided sand standing above the veld. Nothing about this shape
-      // is natural: dead-level tops, straight batter slopes, and a colour that
-      // belongs to no hill anywhere. They are the single most recognisable
-      // thing on the Gauteng horizon, so they get the best arc of the skyline.
       for (const [ang, r, baseR, topR, h] of [
         [0.55, 1.00, 150, 78, 44], [0.86, 1.16, 118, 62, 34],
         [1.18, 0.94, 132, 68, 39], [1.62, 1.22,  96, 48, 28],
@@ -372,8 +297,6 @@
         addFrustum(out, [tx, pyMin - 1 + h, tz], topR, topR * 0.94, 1.2, [0.68, 0.63, 0.44], 7, null);
         out._mat = 0;
       }
-      // Johannesburg's skyline as a faint smudge on one horizon — the city is
-      // close enough to see from the ridge on a clear day.
       {
         const k = K(0.55);
         for (let i = 0; i < 9; i++) {
@@ -382,14 +305,6 @@
         }
       }
 
-      // =====================================================================
-      // 6. LANDMARKS — gold headgear, a farm windpump and the face-brick
-      //    clubhouse. Three structures that place this circuit in Gauteng and
-      //    could not be mistaken for anywhere else on the calendar.
-      // =====================================================================
-      // Shaft headgear: the four-legged steel A-frame carrying two sheave
-      // wheels, with the winder house at its foot and a conveyor gantry
-      // running off toward the dumps.
       {
         const a = anchor(K(0.34), -1, 210);
         const b = [a.r, a.u, a.t];
@@ -400,8 +315,6 @@
           const legs = [[-6, -6], [6, -6], [-6, 6], [6, 6]];
           for (const [dx, dz] of legs)
             seat.cyl(stage, vadd(vadd(a.c, a.r, dx), a.t, dz), 0.5, 30, [0.42, 0.38, 0.34], 6, b);
-          // Horizontal bracing rings — a bare four-post box reads as a chimney,
-          // and it is the lattice that makes a headgear legible at distance.
           for (let i = 1; i <= 5; i++) {
             const y = i * 5;
             addBox(stage, vadd(a.c, a.u, y), [12.6, 0.24, 0.24], [0.44, 0.40, 0.36], b);
@@ -425,9 +338,6 @@
           stage._mat = 0;
         });
       }
-      // Windpump and dam: the multi-blade steel fan on a lattice tower over a
-      // circular corrugated reservoir. It stands on every farm on the highveld
-      // and reads instantly as African farmland rather than trackside kit.
       {
         const a = anchor(K(0.70), 1, 96), b = [a.r, a.u, a.t];
         modelGroup("kyalami-windpump", {
@@ -440,8 +350,6 @@
             addBox(stage, vadd(a.c, a.u, i * 2.6), [4.0, 0.10, 0.10], [0.55, 0.54, 0.52], b);
             addBox(stage, vadd(a.c, a.u, i * 2.6), [0.10, 0.10, 4.0], [0.55, 0.54, 0.52], b);
           }
-          // The fan: a hub disc and a ring of short blades, in the plane
-          // across the tower, plus the tail vane that keeps it into wind.
           const hub = vadd(vadd(a.c, a.u, 13.4), a.t, -1.4);
           addCyl(stage, hub, 0.55, 0.4, [0.60, 0.58, 0.55], 10, [a.r, a.t, a.u]);
           for (let i = 0; i < 12; i++) {
@@ -459,9 +367,6 @@
           stage._mat = 0;
         });
       }
-      // The clubhouse: face brick under a low pitched tile roof with a deep
-      // shaded stoep along its whole front. Kyalami's social heart is a
-      // country club, not a hospitality suite.
       {
         const a = anchor(K(0.965), 1, 66);
         const b = [a.r, a.u, a.t], inw = IN(1);
@@ -491,10 +396,6 @@
         addCyl(out, a.c, 0.20, 17, [0.22, 0.22, 0.25], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 17.4), [1.4, 0.6, 2.8], [0.94, 0.92, 0.82], [a.r, a.u, a.t]);
       }
-      // BUSHVELD THICKET. The highveld is not forest — it is open grass with
-      // clumped thorn along the drainage lines — so this belt is deliberately
-      // the sparsest in the fleet and set well back. Without it the outfield
-      // was bare ground to the horizon, which reads as a desert, not the veld.
       for (const [s0, s1] of [[0.12, 0.34], [0.5, 0.9]]) {
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 18, { density: 0.30, hMin: 6, hMax: 11, pineFrac: 0.08, col: GUM, col2: THORN });

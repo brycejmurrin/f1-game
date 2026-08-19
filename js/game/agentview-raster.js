@@ -1,38 +1,11 @@
-/* Apex 26 — AgentRaster: the text rasterisers behind the agent view's ONE
-   optional composition aid, render({what}). frame() renders the camera view as
-   a depth-sorted character grid, plan() the top-down map, carRender()/orthoCar()
-   the car's edge+shade elevations, and rasterTris() is the shared triangle
-   rasteriser they all sit on.
-
-   Split out of js/game/agentview.js, which had grown past 3400 lines. This band
-   is the natural seam: ~720 lines of pure geometry→text that touch the
-   perception layer at exactly two points (corners(), nextCorner()), and the one
-   layer the surface itself calls APPROXIMATE — decisions are supposed to come
-   from world()/scene()/trackInfo(), not from glyphs.
-
-   Created once per AgentView.create() via AgentRaster.create(ctx); everything
-   it needs arrives through that ctx, the same way the scenery-*.js modules
-   reach each other. Load order: before js/game/agentview.js. */
+/* Apex 26 — AgentRaster: the text rasterisers behind the agent view's ONE optional composition aid, render({what}). frame() renders the camera view as a depth-sor… */
 const AgentRaster = (function () {
   "use strict";
 
   function create(ctx) {
     Log.info("game", "AgentRaster.create");
-    // Tracks/M4 are globals reached at call time, exactly as agentview.js
-    // reaches them — only closure-scoped helpers need the ctx handshake.
     const { G, fail, resolveCamera, model, corners, nextCorner, carWorld, scr,
             clamp, r1, r2, API_VERSION, CONVENTIONS, wrapS } = ctx;
-
-    // ── frame() — the rendered view, as text ────────────────────────────────
-    // The screenshot replacement. visible() lists WHAT is on screen; this says
-    // WHERE, by rasterising the scene into a coarse character grid — the same
-    // information a screenshot carries about composition and occlusion, at a
-    // few hundred tokens instead of an image the model reads worse than text
-    // (BALROG: VLMs score lower with the image than without it).
-    //
-    // Every object is projected as its axis-aligned box, depth-sorted per cell.
-    // That is a real hidden-surface solve at grid resolution, not a guess: a
-    // grandstand in front of a treeline occludes it, and the cell says so.
 
     const GLYPHS = {
       road: "=", kerb: ":", car: "C", player: "@",
@@ -75,20 +48,9 @@ const AgentRaster = (function () {
         if (p.w < near) near = p.w;
       }
       if (!seen) return null;
-      // Corners behind the plane are simply dropped; the surviving extent
-      // understates a straddling box slightly, which is the safe direction —
-      // over-covering is what wrecks the raster.
-      //
-      // Depth is the CENTRE, not the nearest corner. An anonymous assembly can
-      // be 100 m long, and taking its near corner made its far end sort as if it
-      // were right in front of the camera — one structure then won every cell
-      // and reported the frame as 74% building with the road hidden behind it.
       return { x0, x1, y0, y1, near: mid.w };
     }
 
-    // A box the camera stands inside is not an object in shot — it is a loose
-    // hull that happens to enclose the viewer. Anonymous assemblies do this
-    // whenever their primitives straddle the track.
     function containsEye(eye, cx, cy, cz, hw, hh, hd) {
       return Math.abs(eye[0] - cx) <= hw && Math.abs(eye[2] - cz) <= hd
              && Math.abs(eye[1] - cy) <= hh;
@@ -104,18 +66,8 @@ const AgentRaster = (function () {
       if (cam.ok === false) return cam;
       const vp = cam.vp;
       const fr = G.frame || {};             // lighting/cullDist still read live
-      // ── raster geometry ──
-      // A character cell is about twice as tall as it is wide, so a grid whose
-      // ratio equals the viewport's renders SQUASHED. The default was 48x18:
-      // ratio 2.67, halved by the cell aspect to an effective 1.33 against a
-      // 2.16 viewport — a square object came out 1.6x too tall. Derive rows from
-      // the real aspect unless the caller pins them.
       const cellAspect = clamp(o.cellAspect || 2, 1, 4);
       const viewAspect = (G.gfx && G.gfx.aspect) || 2.16;
-      // Default stays coarse — 48 cols is what an agent should read. The cap is
-      // raised so a caller can ask for a large, sharp view on request; this is a
-      // human-facing quality knob, not something the default agent loop uses
-      // (see agentHelp: decisions come from world()/scene()/trackInfo()).
       const cols = clamp(o.cols | 0 || 48, 8, 400);
       const autoRows = Math.round(cols / (viewAspect * cellAspect));
       const rows = clamp(o.rows | 0 || autoRows, 4, 150);
@@ -149,20 +101,9 @@ const AgentRaster = (function () {
 
       const objects = [];
 
-      // ── the road itself ──
-      // Sampled as a lattice of surface points rather than a box: the ribbon is
-      // long, thin and curved, and one AABB round it would cover the sky.
       const roadPts = clamp(o.roadSamples | 0 || 90, 10, 400);
       const player = G.player;
       const s0 = player && player.s != null ? player.s : 0;
-      // The road is a surface, not a point cloud. Sampling its edges and filling
-      // the span between them is the only way to cover it: near the camera the
-      // ribbon is dozens of cells wide, and no affordable number of point
-      // samples fills that — the first attempt reported a road that fills the
-      // lower half of the render as 6% of the frame.
-      //
-      // Each pair of consecutive arc positions gives a trapezoid (left/right
-      // edge at two depths); scan-fill it row by row with interpolated columns.
       const BEHIND = 60;
       const edgeAt = (d) => {
         const ss = wrapS(s0 + d);
@@ -202,7 +143,6 @@ const AgentRaster = (function () {
         prev = cur || prev;
       }
 
-      // ── scenery ──
       const reg = G.track.props;
       if (reg) {
         for (const p of reg.list) {
@@ -210,10 +150,6 @@ const AgentRaster = (function () {
           const dist = Math.hypot(dx, dz);
           if (dist > range) continue;
           if (containsEye(eye, p.x, p.y, p.z, p.w / 2, p.h / 2, p.d / 2)) continue;
-          // A sparse hull is scatter, not a wall. Painting one solid put a
-          // 32x31 m box of lamp bases across 68% of the frame where the render
-          // shows sky and trees. Small props are exempt — their boxes ARE their
-          // geometry however low the ratio computes.
           if (p.fill != null && p.fill < 0.06 && p.w * p.d > 150) continue;
           const rect = boxRect(vp, p.x, p.y, p.z, p.w / 2, p.h / 2, p.d / 2);
           if (!rect) continue;
@@ -228,7 +164,7 @@ const AgentRaster = (function () {
         }
       }
 
-      // ── cars (painted last so they win ties against scenery at equal depth) ──
+      // cars (painted last so they win ties against scenery at equal depth)
       for (const c of G.cars) {
         const [wx, wz] = carWorld(c);
         const dist = Math.hypot(wx - eye[0], wz - eye[2]);
@@ -245,10 +181,6 @@ const AgentRaster = (function () {
         }
       }
 
-      // ── sky / ground for everything untouched ──
-      // Ray elevation per row from the camera pitch and vertical FOV; cheaper and
-      // steadier than unprojecting, and it puts the horizon where the renderer
-      // does to within a row.
       const tgt = cam.tgt || G.camTgt;
       const fwdY = (tgt[1] - eye[1]);
       const fwdH = Math.hypot(tgt[0] - eye[0], tgt[2] - eye[2]) || 1;
@@ -264,11 +196,6 @@ const AgentRaster = (function () {
         }
       }
 
-      // Optional EDGE overlay — the same depth-discontinuity edges the car
-      // render uses, over the scene's semantic glyphs. Silhouettes (a car
-      // against the road, a building against the sky) become | - / \ lines, so
-      // the composition reads as a drawing rather than a fill. Sky/ground are
-      // left alone. Uses the cell depth buffer already built for occlusion.
       const edges = o.edges ? new Array(N).fill(null) : null;
       if (edges) {
         const FAR = 1e6;
@@ -349,10 +276,6 @@ const AgentRaster = (function () {
             + "name a camera to compute a fresh one" : undefined,
         grid: {
           cols, rows, rangeM: range, horizonRow, lines,
-          // Keep it small on purpose. ASCIIEval finds model accuracy is
-          // sensitive to the LENGTH of the art and that a low-resolution
-          // prompting strategy improves perception — more cells is not more
-          // legible. https://arxiv.org/abs/2410.01733
           aspect: {
             viewport: r2(viewAspect), cellAspect,
             renderedAspect: r2(cols / rows / cellAspect),
@@ -383,7 +306,7 @@ const AgentRaster = (function () {
       };
     }
 
-    // ── the high-detail rasterizer — edge + shade, from real triangles ──────
+    // the high-detail rasterizer — edge + shade, from real triangles
     // The Acerola / Kang pipeline (https://www.youtube.com/watch?v=gg40RWiaHRY),
     // geometry-native: instead of a screen-space Difference-of-Gaussians + Sobel
     // on luminance, edges come straight from the DEPTH buffer (silhouettes and
@@ -399,8 +322,6 @@ const AgentRaster = (function () {
     const LIGHT = (() => { const l = [0.4, 0.75, 0.5]; const m = Math.hypot(l[0], l[1], l[2]);
                            return [l[0] / m, l[1] / m, l[2] / m]; })();
 
-    // tris: {pos, idx, nrm}. project(vx,vy,vz)->{x,y,depth}|null in sub-pixels.
-    // Returns { lines, cols, rows } after composing.
     function rasterTris(pos, idx, nrm, project, cols, rows, ss, edgeThresh) {
       const sw = cols * ss, sh = rows * ss, S = sw * sh;
       const depth = new Float64Array(S).fill(Infinity);
@@ -479,9 +400,6 @@ const AgentRaster = (function () {
       return { lines, cols, rows };
     }
 
-    // ── carRender() — orthographic edge+shade elevations of the car ─────────
-    // The text version of the car photo studio (render-car.mjs). Real mesh, real
-    // normals; +z forward, +y up.
     function orthoCar(pos, idx, nrm, ha, va, hSign, vSign, oa, cols, cellAspect, ss, EDGE_T) {
       let h0 = Infinity, h1 = -Infinity, v0 = Infinity, v1 = -Infinity;
       for (let i = 0; i < pos.length; i += 3) {
@@ -502,12 +420,6 @@ const AgentRaster = (function () {
       return { lines: r.lines, cols, rows, mPerCol: r2(mPerCol) };
     }
 
-    // ss = supersamples per character cell (anti-aliasing + gradient room in the
-    // existing Sobel-on-depth pipeline — see rasterTris above). Default 3 is what
-    // an agent should read; a caller can raise it for a sharper human-facing
-    // render, unclamped detail traded for real render time since rasterTris cost
-    // is O(cols*rows*ss^2). Both cols and ss are clamped here — carRender used to
-    // pass an uncapped o.cols straight through, so a bad call could hang the tab.
     function carRender(mesh, cols, edgeT, ssArg) {
       const pos = mesh.pos, idx = mesh.idx, nrm = mesh.nrm;
       const c = clamp(cols | 0 || 46, 12, 300);
@@ -525,18 +437,6 @@ const AgentRaster = (function () {
       };
     }
 
-    // ── plan() — the world from ABOVE, as text ──────────────────────────────
-    // frame() is first-person, so any "where am I on the circuit / what is
-    // around me in world terms" question forces the reference-frame shift models
-    // are documented to be worst at (REM 2512.00736: they "lack mechanisms for
-    // dynamic perspective-taking"). plan() gives the allocentric view directly:
-    // a top-down map, drawn car-up so forward is up and no rotation is needed to
-    // drive, with metric axes so every cell is also a coordinate.
-    //
-    // Grounded in the split the research shows: VoT (+27% from a 2D text grid),
-    // GSU (Cartesian coordinates beat an ASCII layout — so provide BOTH), STMR
-    // (semantic + topological + metric together beats any one). This is the text
-    // version of aerial-survey.mjs / the survey-track aerial.
     const PLAN_GLYPH = {
       road: ".", kerb: ":", car: "o", player: "@",
       tree: "t", pine: "t", palm: "t", conifer: "t", bush: ",", hedge: ",",
@@ -562,9 +462,6 @@ const AgentRaster = (function () {
       const mPerCol = (2 * radius) / cols;
       const mPerRow = mPerCol * cellAspect;
 
-      // Origin + orientation. Car-up rotates the world so the car's heading points
-      // to -row (up); north-up leaves world axes (─north-up is +z? use +x=east,
-      // -z=north as the map convention, matching mapPts y=north).
       let ox, oz, rot, frame;
       const carUp = o.northUp ? false : true;
       if (p && p.px != null) { ox = p.px; oz = p.pz; }
@@ -578,16 +475,6 @@ const AgentRaster = (function () {
         rot = 0; frame = "north-up (up = -z / north, right = +x / east)";
       }
       const cosR = Math.cos(rot), sinR = Math.sin(rot);
-      // world (x,z) -> cell. Up (-row) is forward in car-up, world -z in north-up.
-      //
-      // This used to apply the textbook math rotation matrix to (dx,dz), which is
-      // the wrong basis: heading here is a COMPASS angle, so forward is
-      // (sin h, cos h), not (cos h, sin h), and the car's right is (-cos h, sin h)
-      // — the same right vector the pixel-verified "+lateral = screen right" fact
-      // rests on. With the old matrix, rz for a point dead ahead swung as
-      // cos(2h): correct near h = 0/180 degrees, dead centre at 45/135, inverted
-      // between. The map was therefore only accidentally oriented for a minority
-      // of headings, which defeats the whole point of a car-up view.
       const toCell = (x, z) => {
         const dx = x - ox, dz = z - oz;
         let rx, rz;
@@ -611,9 +498,6 @@ const AgentRaster = (function () {
         return false;
       };
 
-      // ── the track ribbon ──
-      // Walk the whole lap; for each node in range, fill across the road width so
-      // the ribbon reads as a band, not a hairline. Priority 5 (below props/cars).
       const total = G.track.total, step = Math.max(2, mPerCol * 0.5);
       let onScreenNodes = 0;
       for (let s = 0; s < total; s += step) {
@@ -629,7 +513,6 @@ const AgentRaster = (function () {
         }
       }
 
-      // ── named scenery ──
       const reg = G.track.props;
       const counts = {};
       if (reg) {
@@ -640,7 +523,6 @@ const AgentRaster = (function () {
         }
       }
 
-      // ── cars ──
       const cars = [];
       for (const car of G.cars) {
         const [wx, wz] = carWorld(car);
@@ -669,9 +551,6 @@ const AgentRaster = (function () {
       const legend = {};
       for (const k of Object.keys(used)) legend[PLAN_GLYPH[k] || "?"] = k;
 
-      // ── the index: every notable thing on the map, keyed to its cell AND to
-      // metric coordinates, so the raster is the gestalt and this is the ground
-      // truth. GSU: coordinates beat an ASCII layout, so ship both.
       const cc = Math.round(cols / 2), cr = Math.round(rows / 2);
       const bearing = (rx, rz) => r1(Math.atan2(rx, -rz) * 180 / Math.PI); // 0=ahead,+=right
       const entry = (x, z, extra) => {
@@ -756,7 +635,6 @@ const AgentRaster = (function () {
               + "the world frame, {radiusM} to zoom.",
       };
     }
-
 
     return { frame, plan, carRender };
   }

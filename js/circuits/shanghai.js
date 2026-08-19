@@ -1,6 +1,4 @@
-/* Apex 26 — SHANGHAI circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — SHANGHAI circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -11,9 +9,6 @@
     // Was 0.1525, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.1525,
     name: "SHANGHAI",
     gp: "Chinese GP",
@@ -26,14 +21,7 @@
     flatTerrain: true,
     terrainOuter: 120,
     dressingExclusions: [
-      // Shanghai deliberately removed the generic tower wall (one Pudong cue
-      // only) — keep "city" excluded. The generic foliage/lamp/floodlight
-      // furniture is the campus's density base though; the guarded emitters
-      // already stop anything chording across the folded layout.
       { kind: "city", s0: 0, s1: 1 },
-      // Two curve pinch points where a generic conifer's canopy tiers overhang
-      // the fence line (props-over-road audit hotspots) — keep just these
-      // slivers tree-free.
       { kind: "foliage", s0: 0.425, s1: 0.445 },
       { kind: "foliage", s0: 0.720, s1: 0.765 },
     ],
@@ -42,8 +30,6 @@
       { t: 0, l: 400 }, { t: 50, l: 130 }, { t: 180, l: 200 }, { t: 50, l: 100 }, { t: 0, l: 250 }, { t: -90, l: 100 },
       { t: 0, l: 550 }, { t: -60, l: 90 }, { t: 60, l: 80 }, { t: -70, l: 90 }, { t: 70, l: 80 }, { t: 0, l: 200 },
     ],
-    // Shanghai camber. The T1-2-3 decreasing-radius spiral and the long T11-13
-    // sweep are the cambered ones; the snail and the hairpin get plain crown.
     bankZones: [
       { frac: 0.0133, angleDeg: 5.0, widthM: 200 },   // T1-2-3 spiral
       { frac: 0.1433, angleDeg: 3.0, widthM: 110 },
@@ -77,18 +63,6 @@
       } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // ── JIADING RICE PADDIES AND REED MARSH ──────────────────────────────
-      // The circuit's origin story is its landscape: this was SWAMPLAND used
-      // as rice paddy, and the ground was so soft that a raft of concrete
-      // piles had to be sunk before anything could be built on it. The lap was
-      // dressed with the city and the pit complex but its outfield was plain
-      // ground, which loses the one thing that makes Jiading look like Jiading
-      // rather than like any Tilke infield.
-      //
-      // Paddies read from three things and nothing else: they are RECTANGULAR,
-      // they are FLOODED (so they mirror the sky, not the grass), and they are
-      // divided by narrow raised earth bunds. Reed fringes where the water
-      // meets untended ground finish the marsh read.
       {
         const BUND   = [0.44, 0.38, 0.28];
         const PADDY  = [0.36, 0.44, 0.34];   // green shoots standing in water
@@ -109,13 +83,6 @@
               const hv = hash(kk * 29 + r * 17 + c * 11);
               const p = vadd(vadd(a0.c, a0.r, r * 26), a0.t, (c - 1) * 30);
               if (onTrack(p[0], p[2], 20)) continue;
-              // Every paddy carries its own small height offset. With all six
-              // in a block sharing exact heights, their bund tops and crop
-              // tops all landed on the same planes facing the same way, and
-              // coplanar-audit took shanghai from 5 spots to 14. The jitter is
-              // ~40-120 mm, comfortably past the audit's 20 mm GAP_MAX, and is
-              // physically right anyway: paddies are terraced to hold water at
-              // slightly different levels.
               const jit = (hash(kk * 61 + r * 23 + c * 37) - 0.5) * 0.24;
               // Raised bund frame — the paddy sits INSIDE it, slightly sunk.
               addBox(out, vadd(p, a0.u, 0.28 + jit), [24 + jit * 4, 0.56, 28 - jit * 3], BUND, b);
@@ -123,14 +90,6 @@
                 // Fallow / drained paddy: bare worked earth, no water.
                 addBox(out, vadd(p, a0.u, 0.34 + jit), [21, 0.16, 25], FALLOW, b);
               } else {
-                // Standing water. ONE real reflective sheet per block, not one
-                // per paddy: water finds its level, so every waterSurface sits
-                // at the same height, and ~40 of them across the lap put their
-                // faces on shared planes — that alone took shanghai from 5
-                // coplanar spots to 14 (verified by bisect: with the sheets
-                // disabled and every paddy box still in place, it reads 5).
-                // The remaining paddies get a plain sunk box, which loses the
-                // sky mirror but keeps the flooded tone.
                 if (r === 0 && c === 1) {
                   waterSurface(kk, side, gap - 0.5, [21, 0.14, 25],
                                [0.30, 0.38, 0.40],
@@ -146,18 +105,12 @@
               }
             }
           }
-          // Reed fringe along the outer edge of the block — where the paddies
-          // stop being farmed and go back to marsh.
           out._mat = MAT.FOLIAGE;
           for (let i = 0; i < 14; i++) {
             const hv = hash(kk * 43 + i * 7);
             const p = vadd(vadd(a0.c, a0.r, 54 + hv * 9),
                            a0.t, (i - 7) * 6.5 + hv * 2);
             if (onTrack(p[0], p[2], 16)) continue;
-            // The row walks up to ~46 m along the tangent and out to ~63 m
-            // beyond a0's own lateral offset from a SINGLE ground sample
-            // (a0.c) — on Shanghai's graded/cambered marsh that stranded the
-            // far end of the row above the real terrain. Re-seat per reed.
             const gy = groundUnder(p[0], p[2]);
             if (gy !== null) p[1] = gy;
             addCone(out, vadd(p, a0.u, 0.1), 1.5 + hv * 0.9, 2.4 + hv * 1.5,
@@ -167,11 +120,6 @@
         }
       }
 
-      // Places `count` evenly-spaced lotus-petal sails along a stand run —
-      // extends the venue's signature canopy (hand-authored at the T1 bowl
-      // and T14 hairpin as one-off anchor()+sailCanopy() triples) across the
-      // mid-sector and back-straight stand runs so it reads as recurring
-      // venue architecture instead of two isolated clusters.
       const sailRow = (s0, s1, side, dist, count, opts) => {
         opts = opts || {};
         const rx = opts.rx || 15, rz = opts.rz || 9, h = opts.h || 15;
@@ -183,7 +131,6 @@
         }
       };
 
-      // ---- Palette: hazy modern Tilke — concrete greys, white steel, marsh green ----
       const CONC  = [0.70, 0.72, 0.74];
       const WHITE = [0.90, 0.91, 0.92];
       const STEEL = [0.62, 0.64, 0.67];
@@ -212,29 +159,13 @@
       // Lamp post warm sodium glow (very bright amber for day-lit contrast)
       const LAMP_GLOW = [0.98, 0.86, 0.52];
 
-      // ================= START / FINISH — PIT BUILDING (s 0.00, L) =================
-      // The Shanghai paddock building is the one structure on the calendar that
-      // is laid out as a Chinese character: seen from above it traces 上 — a long
-      // base bar of garages along the straight, a spine running back from its
-      // middle out over the artificial lake on columns, and a short cross bar at
-      // the far end. A single building() slab (18 x 14 x 150 m) discarded every
-      // bit of that and read as any other pit lane in the game.
-      //
-      // Built from per-module primitives instead of one modelGroup on purpose:
-      // the pit straight folds back on itself tightly enough here that the
-      // footprint preflight refuses ANY declared group longer than ~35 m at any
-      // clearance (probed), whereas addBox's own per-box guard drops just the
-      // modules that would actually overhang the road.
       (function pitBuilding() {
-        // ---- base stroke: the garage row, ~40 boxes over ~130 m ----
         const GAR = 9;
         for (let i = 0; i < GAR; i++) {
           const s = 0.004 + (i + 0.5) / GAR * 0.052;
           const aB = anchor(K(s), -1, 11), bB = [aB.r, aB.u, aB.t];
           out._mat = MAT.CONCRETE;
           addBox(out, vadd(aB.c, aB.u, 4.2), [16, 8.4, 15.4], WHITE, bB);
-          // Garage-door rhythm read from the pit lane, plus the deep canopy
-          // overhang that shades every Tilke pit lane.
           const aD = anchor(K(s), -1, 2.4), bD = [aD.r, aD.u, aD.t];
           for (const off of [-5.2, 0, 5.2])
             addBox(out, vadd(vadd(aD.c, aD.u, 2.3), aD.t, off), [0.5, 4.4, 3.8], DARK, bD);
@@ -244,10 +175,6 @@
           // Glazed hospitality storey set back above the garage roof.
           const aG = anchor(K(s), -1, 13), bG = [aG.r, aG.u, aG.t];
           addBox(out, vadd(aG.c, aG.u, 10.5), [11, 3.8, 14.8], GLASS_HAZE, bG);
-          // Upswept wing roof: four lateral bands lifting as they run AWAY from
-          // the track. Stepped rather than a true ramp — at any distance the
-          // silhouette reads as one rising plane, and each band stays a guarded
-          // box so a fold-back module drops cleanly.
           out._mat = MAT.METAL;
           for (const [d, y, w] of [[6, 12.8, 8], [13, 13.9, 8], [20, 15.2, 8], [27, 16.7, 8]]) {
             const aW = anchor(K(s), -1, d);
@@ -256,16 +183,11 @@
           out._mat = 0;
         }
 
-        // ---- the lagoon the spine crosses ----
-        // Two small panels rather than one broad sheet: the pit straight folds
-        // back close enough on the left that the water preflight refuses
-        // anything wider than ~26 m or further out than ~30 m here (probed).
         waterSurface(K(0.020), -1, 24, [26, 0.18, 40], WATER,
           { id: "shanghai-pit-lagoon-a" });
         waterSurface(K(0.040), -1, 24, [20, 0.18, 30], WATER,
           { id: "shanghai-pit-lagoon-b" });
 
-        // ---- vertical stroke: the spine reaching back over the water ----
         const sp = anchor(K(0.030), -1, 26), bs = [sp.r, sp.u, sp.t];
         out._mat = MAT.CONCRETE;
         addBox(out, vadd(sp.c, sp.u, 12.0), [30, 5.6, 15], [0.88, 0.89, 0.91], bs);
@@ -281,7 +203,6 @@
         }
         out._mat = 0;
 
-        // ---- short top stroke: the cross bar closing the character ----
         for (let i = 0; i < 3; i++) {
           const a = anchor(K(0.016 + i * 0.014), -1, 46), b = [a.r, a.u, a.t];
           out._mat = MAT.CONCRETE;
@@ -296,12 +217,6 @@
       building(K(0.98), -1, 14, 16, 11, 55,
         { kind: "slab", wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 3 });
 
-      // =================================================================================
-      // TWIN WING BRIDGES — Shanghai's pit-straight gateway.
-      // One long white main stand + two slim wing decks (~38 m) spanning the straight
-      // on end pillars. Collapses the old tower / cantilever / cable-canopy stack into
-      // the clean Tilke "press centre + sky restaurant" silhouette.
-      // =================================================================================
       (function twinWings() {
         // Long white main stand (L) — simple raked tiers, flat roof, no cantilever clutter
         for (let i = 0; i < 7; i++) {
@@ -311,17 +226,10 @@
           addBox(out, vadd(vadd(a.c, a.u, 7.5), a.r, 1), [14, 2.6, 5], CROWD, b);
           addBox(out, vadd(vadd(a.c, a.u, 8), a.r, 14), [14, 16, 2.5], CONC, b);
           addBox(out, vadd(vadd(a.c, a.u, 16.5), a.r, 4), [14.5, 1.1, 20], WHITE, b);
-          // Rear roof columns. The front screen above is the only other thing
-          // tall enough to carry the roof, and it sits 6 m off the road edge —
-          // close enough that rejBox culls it wherever the coil folds back past
-          // this stand (5 of these 7 modules), leaving the roof on nothing. The
-          // columns stand inside the roof's own footprint, which always clears.
           for (const tOff of [-6, 0, 6])
             seat.cyl(out, vadd(vadd(a.c, a.t, tOff), a.r, -3), 0.35, 16.2, STEEL, 6, b);
         }
 
-        // Two slim wing decks: guarded off-edge pillars plus intentional overhead
-        // spans with explicit underside clearance and required diagnostics.
         for (const [id, sLap, hgt, deckD, col] of [
           ["shanghai-wing-east", 0.004, 38, 8.0, WHITE],
           ["shanghai-wing-west", 0.022, 36, 7.0, [0.86, 0.88, 0.90]],
@@ -332,11 +240,6 @@
             aR.c[0] - aL.c[0], aR.c[1] - aL.c[1], aR.c[2] - aL.c[2]
           );
 
-          // Pillar height is NOT `hgt`: overheadSpan measures its clearance from
-          // the ROAD datum (py) while anchor() sits on the verge terrain and
-          // sinks 0.3 m — and here the verge runs ~1.5 m below the road, so the
-          // old `hgt - 0.8` pillars stopped 2.3 m short of the deck they carry.
-          // Solve for the deck underside and overrun 0.5 m into the slab.
           const deckTopY = frameAt(sLap).c[1] + hgt + 0.5;
           for (const tOff of [-2.4, 2.4]) {
             seat.cyl(out, vadd(aL.c, aL.t, tOff), 0.45, deckTopY - aL.c[1], STEEL, 6, bL);
@@ -350,9 +253,6 @@
         }
       })();
 
-      // Restore the circuit's signature pit-campus mass with short, atomic
-      // race-control and hospitality blocks. The previous migration reduced
-      // this whole area to one low stand, leaving the pit straight anonymous.
       building(K(0.042), -1, 70, 20, 28, 34, {
         kind: "cylinder", wall: CONC, window: WIN_TOWER, floor: 5, lit: true,
       });
@@ -363,18 +263,12 @@
       // Start gantry over the line.
       gantry(0.004, 9, STEEL);
 
-      // ---- Pit wall + low garage boxes (R, near) red-edged ----
       wall(0.965, 0.05, 1, 6, 1.1, WHITE);
       place(K(0.99), 1, 10, [5, 2.4, 12], CONC);
       place(K(0.99), 1, 10, [5, 0.6, 12], RED);
 
-      // ---- Broadcast compound behind the paddock (OB vans + uplink dishes) ----
-      // Every real F1 venue runs one of these; the game had zero anywhere.
-      // Sits well beyond the garage boxes so it reads as background paddock
-      // infrastructure rather than crowding the pit-wall furniture.
       broadcastCompound(K(0.975), 1, 30, { vans: 3, dishes: 2, mastH: 10 });
 
-      // ---- Lamp posts down the pit straight — warm sodium heads ----
       along(0.00, 0.04, 18, (k) => {
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 12), b = [a.r, a.u, a.t];
@@ -383,7 +277,6 @@
         }
       });
 
-      // ---- LAKES by the pit complex (Yu Garden paddock water) ----
       waterSurface(K(0.88), -1,  95, [180, 0.18, 130], WATER,
         { id: "shanghai-yu-lake-south", required: true });
       waterSurface(K(0.01), -1, 98, [28, 0.18, 110], WATER,
@@ -393,7 +286,6 @@
       waterSurface(K(0.62), -1, 120, [70, 0.18, 80], [0.36, 0.48, 0.56],
         { id: "shanghai-marsh-pool", required: true });
 
-      // ---- Yu Garden paddock — pavilion villas in the lakes (Shanghai's unique paddock) ----
       (function yuGarden() {
         const pavilions = [
           [0.885, -1, 100, 10, 5.0, 8],
@@ -408,9 +300,6 @@
         for (const [s, sd, d, w, h, len] of pavilions) {
           const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
           addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, len], WHITE, b);
-          // Red pagoda-ish roof (prism) — Yu Garden homage, not team motorhomes.
-          // addPrism anchors at its BASE while the body box is CENTRED, so the
-          // body's top face is h; the old `h + 1.1` floated every roof by 1.1 m.
           seat.prism(out, vadd(a.c, a.u, h), [w * 1.2, 2.2, len * 1.2], RED, b);
           // Tiny lit window band
           addBox(out, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.48),
@@ -418,18 +307,12 @@
         }
       })();
 
-      // ================= START GRANDSTAND TIERS (s 0.04, L) =================
-      // Short, locally oriented modules follow the flat terrain without their
-      // unguarded crowd risers chord-cutting the nearby start/finish foldback.
-      // Steel/concrete liveries + a truss roof break the pair apart without
-      // introducing a third colour family this close to the twin-wing stand.
       grandstandEx(0.032, -1, 20, 28, null, null,
         { livery: "darkSteel", roof: "cantilever", endWalls: true });
       grandstandEx(0.052, -1, 24, 28, null, null,
         { livery: "alu", roof: "flat", pylons: true });
       billboard(K(0.045), -1, 14, 16, 4.5, YELLOW);
 
-      // ================= SNAIL T1–3 — coiling pale runoff (cockpit-readable) =================
       (function snailRunoff() {
         // Stepped apron pads outside the decreasing-radius right — spiral read at speed
         const pads = [
@@ -455,10 +338,6 @@
           place(k, 1, 3.8, [1.2, 0.35, 2.2], CONC);
         });
       })();
-      // Snail grandstands wrapping the coiling Turn 1–3 spiral — the venue's
-      // biggest single stand cluster (8 of the file's 28 grandstand() calls).
-      // Rotate STAND_SETS.shanghai (steel/crimson/concrete) with mixed
-      // tiers/roofs/suites instead of one grey box repeated eight times.
       grandstandEx(0.05,  1, 95, 30, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
       grandstandEx(0.085, 1, 85, 28, null, null,
@@ -467,29 +346,15 @@
         { livery: "alu", roof: "truss", pylons: true });
       grandstandEx(0.13,  1, 72, 26, null, null,
         { livery: "crimson", roof: "cantilever", endWalls: true });
-      // Second row, set back 100 m+ behind the front stands. These are overflow
-      // banks, not architecture: uncovered, so the lotus sails below stay the
-      // only canopy the eye finds in the bowl. roof:"none" is also the cheapest
-      // option in the bag, which is how the whole variety pass stays inside
-      // budget on a circuit that fields 26 stands.
       grandstandEx(0.064, 1, 112, 28, null, null,
         { livery: "alu", roof: "none" });
       grandstandEx(0.098, 1, 104, 30, null, null,
         { livery: "darkSteel", roof: "none", endWalls: true });
 
-      // LOTUS TERRACE — the venue's petal canopy turned into an actual STAND
-      // rather than a free-standing sail. Open raked seating with NO back shell
-      // and NO roof slab, covered instead by a row of overlapping petal shells
-      // carried on splayed steel Vs. grandstandEx cannot produce this silhouette
-      // at any option setting (its shell + slab are unconditional), and it is
-      // the form the T2/T3 spectator terraces at Shanghai are actually built in.
       const lotusTerrace = (id, s, side, gap, bays) => {
         const pitch = 11, len = bays * pitch;
         const a = anchor(K(s), side, gap + 6), b = [a.r, a.u, a.t];
         const IN = -side;                     // +1 along a.r points back at the track
-        // The stand this replaces registered its own front face; keep the
-        // exclusion so the perimeter treeline still frames it instead of
-        // growing through the seating.
         const half = (len / 2) / track.total;
         recordBarrier(s - half, s + half, side, gap);
         modelGroup(id, {
@@ -531,8 +396,6 @@
       billboard(K(0.095), 1, 44, 16, 5, RED);
       marshalPost(K(0.08), -1, 14);
 
-      // Lotus-petal roofs above the T1–3 spectator bowl. Separate oval sails
-      // follow the coil without forming a solid wall across the driver's view.
       for (const [s, side, dist, rx, rz] of [
         [0.050,  1, 106, 18, 10],
         [0.085,  1,  96, 17, 10],
@@ -544,12 +407,6 @@
         });
       }
 
-      // Fan-terrace colour-block variation. Previously only the two snail
-      // spots below had this treatment — everywhere else crowd colour was
-      // flat. Promoted to a local helper and spread to the mid-sector,
-      // back-straight and T14 stand runs: five spots across the lap instead
-      // of two. These low colour blocks sit beyond the guarded grandstand
-      // shells, tucked into the crowd mass.
       const fanTerraces = (spots) => {
         for (const [s, side, dist] of spots) {
           const a = anchor(K(s), side, dist), b = [a.r, a.u, a.t];
@@ -568,23 +425,15 @@
         [0.905, -1, 60],   // T14 hairpin
       ]);
 
-      // ================= ONE HAZY PUDONG CLUSTER (s 0.30, L far) =================
-      // Wraparound skyline rings culled — Jiading is marsh campus, not a megacity
-      // wall. One soft Pudong cue (Pearl + neighbours) at ~s0.30 is enough.
       (function pudongCluster() {
         const a = anchor(K(0.30), -1, 300), b = [a.r, a.u, a.t];
         const u = b[1];
 
-        // Localized hazed mid-rise skirt: enough mass to frame the four heroes,
-        // but still one Pudong cluster rather than the removed wraparound wall.
         for (let i = 0; i < 11; i++) {
           const off   = (i - 5) * 30 + (hash(i * 5) - 0.5) * 12;
           const depth = 40 + hash(i * 7) * 50;
           const h     = 55 + hash(i * 11) * 70;
           const w     = 14 + hash(i * 13) * 10;
-          // off/depth walk up to ~150 m off a0's single ground sample — on
-          // graded/cambered ground that stranded some of the 11 towers well
-          // above the real terrain. Re-seat each tower's own base.
           const base = vadd(vadd(a.c, a.r, off), a.t, depth);
           const gy = groundUnder(base[0], base[2]);
           if (gy !== null) base[1] = gy;
@@ -602,10 +451,6 @@
             [SKY_HAZE[0], SKY_HAZE[1], SKY_HAZE[2]]);
         }
 
-        // ── ORIENTAL PEARL TOWER ─────────────────────────────────────────────
-        // Iconic red-terracotta tripod + two observation spheres + spire.
-        // Anchored 50 m forward from cluster anchor, 2 m in r-offset so it stands
-        // slightly aside from the background tower mass.
         const pc = vadd(vadd(a.c, a.r, -2), a.t, 50);
         const stC = vadd(vadd(a.c, a.r, 55), a.t, 55);
         const jmC = vadd(vadd(a.c, a.r, -32), a.t, 50);
@@ -663,8 +508,6 @@
           frustum(vadd(jmC, u, 90), 4.5, 1.8, 20, [0.74, 0.73, 0.72], 8);
           cyl(vadd(jmC, u, 110), 0.7, 18, STEEL, 5);
 
-          // Shanghai World Financial Center: a slim blue-grey shaft with the
-          // unmistakable open "bottle opener" crown.
           frustum(swC, 10, 7, 114, [0.58, 0.66, 0.74], 6);
           box(vadd(vadd(swC, u, 132), a.r, -5), [4, 36, 11], GLASS);
           box(vadd(vadd(swC, u, 132), a.r,  5), [4, 36, 11], GLASS);
@@ -672,11 +515,6 @@
         }, { required: true });
       })();
 
-      // Optional honesty layer: Anting's real backdrop beside the (deliberately
-      // fictitious, per this file's own comments) Pudong cue is auto-plant
-      // sheds and country park, not skyline. A low industrial shed row sits
-      // well in front of the Pudong cluster (closer dist) so it reads as
-      // foreground without undercutting the recognisability cue behind it.
       (function industrialSheds() {
         for (let i = 0; i < 6; i++) {
           const k = K(0.335 + i * 0.007);
@@ -686,11 +524,6 @@
         }
       })();
 
-      // ================= MID-SECTOR GRANDSTAND (s 0.42–0.52, R) =================
-      // Six of the file's 28 grandstand() calls sat here varying only ±0.02
-      // RGB (SCENERY-UPGRADE-PLAN §3, one of the two flagged near-identical
-      // runs). Rotate the shanghai STAND_SETS livery family with tier/roof/
-      // suite variety so the run reads as a proper stadium build-up.
       grandstandEx(0.42, 1, 22, 30, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
       grandstandEx(0.45, 1, 20, 34, null, null,
@@ -708,14 +541,8 @@
       billboard(K(0.46), 1, 12, 16, 4.5, RED);
       marshalPost(K(0.45), 1, 12);
 
-      // Lotus-petal sail motif extended from the T1/T14 clusters across this
-      // run — sits ~11 m beyond the front-row stands, matching the T1 offset,
-      // so the canopy now reads as recurring venue architecture, not a
-      // two-cluster one-off.
       sailRow(0.415, 0.520, 1, 33, 4, { rx: 15, rz: 9, h: 15, col: WHITE });
 
-      // Modern spectator footbridge at the mid-sector arena. High clearance
-      // preserves braking references and gives the clustered stands a gateway.
       overheadSpan({
         id: "shanghai-mid-arena-bridge",
         frac: 0.472,
@@ -727,7 +554,6 @@
         required: true,
       });
 
-      // ================= MARSH / TREELINE (s 0.58–0.66, L far) =================
       // Primary backdrop identity: reclaimed marsh campus, not wraparound towers.
       for (let i = 0; i < 10; i++) {
         const k = K(0.56 + i * 0.012);
@@ -744,13 +570,6 @@
           [70 + hash(i * 3) * 40, 5 + hash(i * 5) * 6, 20], MARSH);
       }
 
-      // ================= MID-GROUND FILL — s 0.58–0.78 (emptiest fifth) =================
-      // Before this pass the only dressing between the mid-sector stands and
-      // the back-straight grandstands was a distant marsh backdrop + hedge —
-      // near-zero near/mid-ground furniture across ~20% of the lap
-      // (SCENERY-UPGRADE-PLAN §3). Add a continuous signage run, marshal
-      // cover, a camera tower on each side, and reed/scrub clumps between the
-      // fence line and the far marsh backdrop.
       sponsorHoarding(0.58, 0.72, 1, 9, {
         step: 14, palette: [RED, WHITE, YELLOW, STEEL], postCol: DARK,
       });
@@ -768,16 +587,12 @@
         bush(K(s), side, d + 6, MARSH_N);
       }
 
-      // ================= LONG BACK STRAIGHT — open verges (s 0.78, R) =================
       fence(0.72, 0.88, 1, 8, 3.0, [0.70, 0.72, 0.76]);
       billboard(K(0.76), 1, 10, 18, 5, RED);
       billboard(K(0.82), 1, 10, 18, 5, YELLOW);
       billboard(K(0.79), 1, 10, 18, 5, RED);
       marshalPost(K(0.80), 1, 14);
       marshalPost(K(0.74), 1, 12);
-      // Grandstand banks lining the long back straight — the second of the
-      // two six-stand near-identical runs flagged in SCENERY-UPGRADE-PLAN §3.
-      // Same livery/tier/roof rotation as the mid-sector run.
       grandstandEx(0.755, 1, 38, 34, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", endWalls: true });
       grandstandEx(0.775, 1, 62, 30, null, null,
@@ -805,7 +620,6 @@
         addBox(out, vadd(a.c, a.u, 9.6), [0.55, 0.28, 0.55], LAMP_GLOW, b);
       });
 
-      // ================= T14 HAIRPIN GRANDSTAND (s 0.90, L) =================
       grandstandEx(0.88,  -1, 24, 30, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
       grandstandEx(0.892, -1, 48, 28, null, null,
@@ -816,8 +630,6 @@
         { livery: "darkSteel", roof: "flat", pylons: true });
       grandstandEx(0.93,  -1, 30, 28, null, null,
         { livery: "crimson", roof: "flat", endWalls: true });
-      // A second lotus-roof family makes the T14 hairpin the visual counterpoint
-      // to the T1 bowl while leaving the corner exit and pit-entry sightline open.
       for (const [s, dist, rx] of [
         [0.880, 35, 16],
         [0.905, 39, 17],
@@ -832,8 +644,6 @@
       runoffApron(K(0.90), 1, 4, [40, 0.35, 55], PALE);
       marshalPost(K(0.90), 1, 14);
 
-      // Yu Garden lake boardwalk: a raised pedestrian causeway with sparse
-      // supports, entirely within the far-side paddock-water context.
       (function lakeBoardwalk() {
         const a = anchor(K(0.915), -1, 112), b = [a.r, a.u, a.t];
         modelGroup("shanghai-lake-boardwalk", {
@@ -855,8 +665,6 @@
         }, { required: true });
       })();
 
-      // Marsh islets and reed clumps break up the broad lake plane without
-      // filling the open back-straight horizon.
       for (const [i, s, gap, size] of [
         [0, 0.885, 122, [18, 0.24, 24]],
         [1, 0.905, 142, [14, 0.24, 19]],
@@ -875,7 +683,6 @@
         }
       }
 
-      // ================= PIT ENTRY BUILDINGS (s 0.96, R) =================
       building(K(0.96), 1, 2, 12,  9, 50, { kind: "hall", wall: [0.86, 0.87, 0.88], window: WIN_LIT, floor: 3 });
       building(K(0.94), 1, 2, 10,  7, 34, { kind: "slab", wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 2 });
 
@@ -898,7 +705,6 @@
         step: 54,
       });
 
-      // ---- Scattered marsh greenery + low treeline around the flat perimeter ----
       for (let k = 0; k < n; k += Math.max(1, Math.round(n / 50))) {
         for (const side of [-1, 1]) {
           const r = hash(k * 13 + side * 3);
@@ -909,7 +715,6 @@
         }
       }
 
-      // ================= TRACKSIDE FURNITURE — barriers, kerbs, signage (whole lap) =================
       guardrail(0.10, 0.27,  1, 5, STEEL);
       guardrail(0.32, 0.42,  1, 5, STEEL);
       guardrail(0.50, 0.70, -1, 5, STEEL);
@@ -948,7 +753,6 @@
       billboard(K(0.55),  1, 14, 14, 4, RED);
       billboard(K(0.66), -1, 16, 14, 4, YELLOW);
 
-      // ---- Crowd dabs on the existing grandstand banks ----
       (function crowds() {
         const spots = [
           [0.045, -1, 18], [0.06,  1, 70], [0.46, 1, 16],
@@ -958,9 +762,6 @@
           const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
           for (let i = 0; i < 5; i++) {
             const off = (i - 2) * 12;
-            // Terrace under the crowd: the banked slab used to start 4.9 m up
-            // with open air beneath it, so the spectators read as a block
-            // hovering beside the circuit rather than a stand.
             addBox(out, vadd(vadd(vadd(a.c, a.t, off), a.u, 2.45), a.r, 2),
                    [9, 4.9, 5], [0.42, 0.43, 0.47], b);
             addBox(out, vadd(vadd(vadd(a.c, a.t, off), a.u, 6), a.r, 2),
@@ -969,7 +770,6 @@
         }
       })();
 
-      // ---- Landscaping: avenues of trees behind stands + reeds near the lake ----
       hedge(0.90, 0.95, -1, 42, 3.0, TREE_G);
       for (let i = 0; i < 4; i++) {
         tree(K(0.90 + i * 0.012), -1, 42 + (i % 2) * 6, 7 + hash(i) * 3, TREE_G);
@@ -982,27 +782,22 @@
         pine(K(0.72 + i * 0.018), 1, 58 + (i % 2) * 5, 8 + hash(i * 5) * 4, TREE_G);
       }
 
-      // ================= FORMAL GARDEN FEATURES — SNAIL T1 ZONE (s 0.05–0.10) =================
       (function formalGardens() {
         const topiaryFracs = [0.060, 0.090, 0.120];
         const topiarySides = [-1, 1, -1];
         for (let i = 0; i < topiaryFracs.length; i++) {
           const tk = K(topiaryFracs[i]);
-          // Rounded clipped topiary shrubs (were 3 m green cubes). A low bush
-          // plus a smaller one set back reads as manicured formal planting.
           bush(tk, topiarySides[i], 50, [0.22, 0.38, 0.19]);
           bush(tk, topiarySides[i], 54, [0.24, 0.40, 0.21]);
         }
       })();
 
-      // ================= FORMAL TREE AVENUE (s 0.45–0.50) =================
       for (let j = 0; j < 4; j++) {
         const avS = 0.45 + j * 0.01;
         tree(K(avS), -1, 20 + j * 8, 7, [0.20, 0.40, 0.18]);
         tree(K(avS),  1, 20 + j * 8, 7, [0.20, 0.40, 0.18]);
       }
 
-      // ---- Distant marsh treeline ring (green = organic mounds) — no tower rings ----
       for (let i = 0; i < 28; i++) {
         const k = K(i / 28);
         const side = (i % 2) ? 1 : -1;

@@ -1,12 +1,4 @@
-/* Apex 26 — session atmosphere for js/game.js: applyRaceSettings(), the
-   lighting/weather/time-of-day monolith (sun + sky + ambient + fog branches
-   for night/dawn/dusk/day, wet/overcast/fog post-modifiers, ground mist,
-   lamp build, lightning arming) plus the per-track atmosphere bias
-   table. Extracted verbatim; live state (frame, frameSky, track, weather,
-   cloud/lightning timers) is reached through the ctx façade G handed to
-   Atmosphere.create(G); stable helpers (clamp, satAdjust, weather predicates,
-   applyLightTune) arrive by destructure. Consumes globals LightTune, V3,
-   Tracks. Must load BEFORE js/game.js (see index.html). */
+/* Apex 26 — session atmosphere for js/game.js: applyRaceSettings(), the lighting/weather/time-of-day monolith (sun + sky + ambient + fog branches for night/dawn/d… */
 const Atmosphere = (function () {
   "use strict";
 
@@ -17,21 +9,10 @@ const { clamp, satAdjust, isRaining, isWetRoad, isFloodActiveSession,
         _nightAmbientBand, applyLightTune } = G;
 const { LT, buildTrackLights } = LightTune;
 
-// Clear-weather haze scale — see the CLEAR-CONDITION HAZE PULL-BACK note at
-// its use site. 0.65 was picked by A/B on Spa day/dry: enough to give the
-// mid-distance its colour back without losing the sense of depth that some
-// haze provides. The FOG DENSITY tuner still multiplies on top, so a player
-// who wants the old wash can dial it straight back.
 const CLEAR_FOG_SCALE = 0.45;
 
 function applyRaceSettings() {
   Log.info("game", "Atmosphere.applyRaceSettings tod=" + G.raceTimeOfDay + " wx=" + G.raceWeather);
-  // Load the lighting-tuner profile for the current (track, time, weather) so
-  // the right per-condition values are live. Cheap (a few dozen assignments);
-  // applyRaceSettings only fires on track load / time / weather change.
-  // `true` = called from inside applyRaceSettings: suppresses applyLightTune's
-  // own reapply-on-change call back into this function (this run derives from
-  // the fresh LT values anyway — the re-entrant call ran everything twice).
   if (typeof applyLightTune === "function") applyLightTune(true);
   const isNightSession = G.raceTimeOfDay === "night" ||
     (G.raceTimeOfDay === "default" && G.track && G.track.def && G.track.def.night);
@@ -41,9 +22,6 @@ function applyRaceSettings() {
   if (isNightSession && G.track && G.track.def) {
     const _ct = G.track.def.theme === "street_night" || G.track.def.theme === "modern";
     G.frameSky.cityGlow = _ct ? [0.050, 0.038, 0.055] : [0.024, 0.018, 0.012];
-    // SKYGLOW WARMTH knob: white-balance the glow dome (and, via _nightAmbientBand's
-    // hue-mix, the warm cast it throws into the night ambient). + warm sodium,
-    // − cool LED/mercury. Unclamped-style mix, floored at 0.
     const _cgw = LT.cityGlowWarm || 0;
     if (_cgw) {
       const g = G.frameSky.cityGlow;
@@ -83,14 +61,8 @@ function applyRaceSettings() {
       // output — dragging any night slider in a wet/foggy night race decayed the
       // moon/cloud/horizon tint toward black. Same palette base loadTrack uses.
       G.frameSky.sunColor = _npal && _npal.sun ? _npal.sun.slice() : [1.0, 0.95, 0.84];
-      // NEAR-BLACK cool ambient: the world is genuinely dark, the LIGHT SOURCES
-      // (lamps, neon, lit windows) do all the lifting. A high ambient here is the
-      // #1 cause of a flat-grey "night that looks like dim day".
       G.frame.ambientGround = [0.0012, 0.0015, 0.0045];
       G.frame.ambientSky = [0.0034, 0.0046, 0.0110];
-      // Same moody-night floor/cap + city-glow hue the default-night path applies,
-      // so explicit setTimeOfDay("night") matches default-night (was ~5× darker,
-      // no neon cast). cityGlow is already set above (before this branch).
       _nightAmbientBand();
       G.frame.fogColor = [0.015, 0.017, 0.035];
       G.frame.fogDensity = 0.004;
@@ -101,41 +73,21 @@ function applyRaceSettings() {
       G.frameSky.moon = 0.85;
       // Night skies: few scattered clouds (don't block stars)
       G._cloudBase = 0.22;
-      // Night: low exposure keeps the dark dark under ACES so the bright lamp
-      // pools and lit windows punch through (raising exposure re-greys the night).
-      // Theme-aware to MATCH the default-night path: neon cities carry their own
-      // light (0.86); open/desert circuits lean on the floods alone, so they get
-      // the same gentle lift default mode gives them (0.90).
       G.frame.exposure = (G.track && G.track.def && G.track.def.theme === "street_night") ? 0.86 : 0.90;
     } else if (G.raceTimeOfDay === "dawn") {
-      // Pre-sunrise: deep teal-indigo zenith fading to a warm peach/rose horizon.
-      // Sun is barely above the horizon — very low elevation, coming from the east.
-      // Richer pre-sunrise: a deeper teal-indigo zenith over a luminous
-      // pink/coral-magenta horizon (the defining first-light colour), not a muddy
-      // brown-orange. Warm sun, with the DIRECT sun slightly warmer/stronger than
-      // the sky tint (sky is always a touch cooler/dimmer than the key light).
-      // Per-track variety (same clr/ovc pattern as the day branch): clear/arid
-      // circuits get the vivid coral-magenta first light and crisp air; overcast
-      // ones (Spa, Silverstone) a paler, mistier, grey-rose daybreak.
       const _dwBias = G.track && G.track.def ? _trackAtmoBias(G.track.def) : 0;
       const _dwClr = Math.max(0, -_dwBias);   // 0 … 0.55 clearness
       const _dwOvc = Math.max(0, _dwBias);    // 0 … 0.85 overcast
       G.frameSky.zenith  = [0.07 + _dwOvc * 0.09, 0.12 + _dwOvc * 0.09, 0.27 + _dwOvc * 0.04 - _dwClr * 0.03];
       G.frameSky.horizon = [0.88 - _dwOvc * 0.26 + _dwClr * 0.08, 0.50 - _dwOvc * 0.06, 0.40 + _dwOvc * 0.12 - _dwClr * 0.06];
       G.frameSky.sunColor = [1.0, 0.74 - _dwClr * 0.06 + _dwOvc * 0.10, 0.44 - _dwClr * 0.08 + _dwOvc * 0.16];
-      // Sun rising in the east; azimuth varies per circuit (mirrors _duskAz) so
-      // the low raking light doesn't strike every track from the same angle.
       const _dawnAz = G.track && G.track.def ? ((_trackAtmoBias(G.track.def) * 0.28) - 0.14) : 0;
-      // Rotated in the XZ plane (_sunDirAz) so the bias is compass-only — the old
-      // fold-into-x-then-normalise moved the elevation too. Same compass angle.
       G.frameSky.sunDir  = _sunDirAz([-0.62, 0.08, 0.28], -_dawnAz);
       G.frame.sunDir     = G.frameSky.sunDir;
       G.frame.sunColor   = [1.0 - _dwOvc * 0.10, 0.80 - _dwClr * 0.04 + _dwOvc * 0.06, 0.50 - _dwClr * 0.08 + _dwOvc * 0.16];
       // Cool teal fill from the sky, soft warm rose bounce from the ground
       G.frame.ambientGround = [0.20 - _dwOvc * 0.03, 0.13 + _dwOvc * 0.02, 0.10 + _dwOvc * 0.04];
       G.frame.ambientSky    = [0.22 + _dwOvc * 0.05, 0.26 + _dwOvc * 0.05, 0.40 + _dwOvc * 0.03];
-      // Fog: overcast dawns wake up under a thick grey-rose mist bank; clear
-      // desert dawns are crisp with only a thin warm haze at the horizon.
       G.frame.fogColor      = [0.52 + _dwOvc * 0.06 - _dwClr * 0.02, 0.36 + _dwOvc * 0.10, 0.34 + _dwOvc * 0.14 - _dwClr * 0.04];
       G.frame.fogDensity    = 0.0028 + _dwOvc * 0.0018 - _dwClr * 0.0012;
       G.frame.skyZenith     = G.frameSky.zenith;
@@ -143,34 +95,21 @@ function applyRaceSettings() {
       G.frameSky.moon = 0.30;   // fading moon still visible in the pre-dawn sky
       // Dawn: lingering cloud banks catch the first pink/gold light
       G._cloudBase = 0.56;
-      // Low sun + low ambient → lift exposure so the scene reads (kept moderate for
-      // a realistic, un-washed dawn).
       G.frame.exposure = 1.08;
     } else if (G.raceTimeOfDay === "dusk") {
-      // Richer golden hour: deeper indigo zenith, warmer coral/amber horizon,
-      // a sun closer to the deck for that low-angle drama.
-      // Per-track variety (same clr/ovc pattern as the day/dawn branches):
-      // clear circuits burn a saturated amber-orange sunset; overcast ones cool
-      // and grey it toward a muted rose-slate evening.
       const _dkBias = G.track && G.track.def ? _trackAtmoBias(G.track.def) : 0;
       const _dkClr = Math.max(0, -_dkBias);   // 0 … 0.55 clearness
       const _dkOvc = Math.max(0, _dkBias);    // 0 … 0.85 overcast
       G.frameSky.zenith  = [0.08 + _dkOvc * 0.08, 0.10 + _dkOvc * 0.08, 0.28 + _dkOvc * 0.03];
       G.frameSky.horizon = [0.72 - _dkOvc * 0.20 + _dkClr * 0.10, 0.34 + _dkOvc * 0.02, 0.08 + _dkOvc * 0.14 - _dkClr * 0.02];
       G.frameSky.sunColor = [1.0, 0.55 + _dkOvc * 0.10 - _dkClr * 0.05, 0.18 + _dkOvc * 0.16 - _dkClr * 0.05];
-      // Sun low in the west; vary azimuth slightly per track so not every
-      // circuit has identical low-angle raking light.
       const _duskAz = G.track && G.track.def ? ((_trackAtmoBias(G.track.def) * 0.28) - 0.14) : 0;
-      // Rotated in the XZ plane (_sunDirAz) so the bias is compass-only — the old
-      // fold-into-x-then-normalise moved the elevation too. Same compass angle.
       G.frameSky.sunDir  = _sunDirAz([0.50, 0.10, 0.22], _duskAz);
       G.frame.sunDir     = G.frameSky.sunDir;
       G.frame.sunColor   = [1.0 - _dkOvc * 0.12, 0.62 + _dkOvc * 0.04 - _dkClr * 0.05, 0.22 + _dkOvc * 0.14 - _dkClr * 0.06];
       // Warm amber ground bounce, cool sky fill from the blue zenith overhead
       G.frame.ambientGround = [0.28 - _dkOvc * 0.05, 0.16 + _dkOvc * 0.01, 0.06 + _dkOvc * 0.05];
       G.frame.ambientSky    = [0.32 + _dkOvc * 0.03, 0.22 + _dkOvc * 0.04, 0.28 + _dkOvc * 0.04];
-      // Fog: overcast evenings thicken into a grey-mauve murk; clear ones keep
-      // a thin amber haze hugging the horizon.
       G.frame.fogColor      = [0.58 - _dkOvc * 0.08, 0.28 + _dkOvc * 0.06, 0.10 + _dkOvc * 0.14];
       G.frame.fogDensity    = 0.0022 + _dkOvc * 0.0014 - _dkClr * 0.0008;
       G.frame.skyZenith     = G.frameSky.zenith;
@@ -178,59 +117,27 @@ function applyRaceSettings() {
       G.frameSky.moon = 0;
       // Dusk: plenty of cloud to catch the orange light and set the sky alight
       G._cloudBase = 0.58;
-      // Low sun energy but rich colour — slightly lifted exposure (kept moderate
-      // so golden hour reads filmic, not washed).
       G.frame.exposure = 1.03;
     } else {
-      // Bright day — a deep, saturated sky with PER-TRACK atmosphere so no two
-      // circuits share the same flat blue. `bias` runs -0.55 (clear desert) …
-      // +0.85 (overcast Spa): clear days get a deep saturated zenith, crisp low
-      // haze, a warm punchy sun and long shadows; humid/overcast days pale out,
-      // haze up and flatten. (The old single flat blue at exposure 0.92 is what
-      // read "washed/flat".)
       const _bias = G.track && G.track.def ? _trackAtmoBias(G.track.def) : 0;
       const clr = Math.max(0, -_bias);    // 0 … 0.55 clearness
       const ovc = Math.max(0, _bias);     // 0 … 0.85 overcast
-      // Zenith: a DEEP saturated blue when clear (the visible sky strip read pale
-      // and flat before), washing to flat grey when overcast.
       G.frameSky.zenith  = [0.09 - clr * 0.04 + ovc * 0.28, 0.26 - clr * 0.10 + ovc * 0.26, 0.95 - ovc * 0.24];
       G.frameSky.horizon = [0.54 + ovc * 0.22, 0.68 + ovc * 0.12, 0.90 - clr * 0.02];
-      // A lower, raking afternoon sun — high overhead light gave almost no shadow
-      // modelling, which is what read "flat". Dropping the elevation casts long
-      // building shadows for depth; azimuth varies per track so shadows fall
-      // differently circuit to circuit. (Track palettes may ship a low/odd sun
-      // tuned for their default ambience — override it for a clean day session.)
-      // Circuits with a real-world sun geography carry an explicit
-      // def.sunAzimBias (radians-ish horizontal offset, ±0.5 = strong tilt);
-      // everything else falls back to the atmosphere-bias heuristic.
       const _dayAz = (G.track && G.track.def && G.track.def.sunAzimBias != null)
         ? G.track.def.sunAzimBias : _bias * 0.6;
-      // Rotated in the XZ plane (_sunDirAz) so the bias is compass-only — the old
-      // fold-into-x-then-normalise moved the elevation too. Same compass angle.
       G.frameSky.sunDir = _sunDirAz([0.46, 0.58, 0.42], _dayAz);
       G.frame.sunDir    = G.frameSky.sunDir;
-      // Strong WARM sun vs a cooler, slightly darker sky-fill: neutral concrete
-      // then reads with a warm sunlit side and a cool shadow side (chiaroscuro),
-      // which is what lifts a grey city out of "dull/flat". Overcast neutralises
-      // the split toward a flat even grey.
-      // Clear days drop the blue channel → warmer key against the cool sky fill
-      // (stronger warm/cool chiaroscuro); overcast lifts blue back toward neutral.
       G.frame.sunColor   = [1.13 + clr * 0.04, 0.95 - ovc * 0.05, 0.72 - clr * 0.12 + ovc * 0.12];
       G.frameSky.sunColor = [1.0, 0.95, 0.84];
-      // Warm low ground bounce; cool, restrained sky fill so shadows keep depth
-      // (high flat ambient was washing the modelling out).
       G.frame.ambientGround = [0.24 + clr * 0.04, 0.19, 0.12];
       G.frame.ambientSky    = [0.26 + ovc * 0.12, 0.33 + ovc * 0.10, 0.50 + ovc * 0.06];
-      // Fog: clearer (lower density, sky-matched colour) so distance reads crisp
-      // instead of a flat grey wash; overcast hazes it back up.
       G.frame.fogColor      = [0.66 + ovc * 0.08, 0.74 + ovc * 0.05, 0.88 - clr * 0.05];
       G.frame.fogDensity    = 0.0008 + ovc * 0.0012;
       G.frame.skyZenith     = G.frameSky.zenith;
       G.frame.skyHorizon    = G.frameSky.horizon;
       G.frameSky.moon = 0;
       G._cloudBase = 0.44 + ovc * 0.42;     // modest broken cloud (sky shader adds the cumulus richness); overcast → heavy deck
-      // Brighter, punchier midday (was a flat 0.92). Clear days run a touch
-      // hotter; overcast pulled back so the grey doesn't glare.
       G.frame.exposure = 0.99 + clr * 0.05 - ovc * 0.08;
     }
   } else {
@@ -248,28 +155,12 @@ function applyRaceSettings() {
       if (_bp.ambientSky)    G.frame.ambientSky = _bp.ambientSky.slice();
       if (_bp.ambientGround) G.frame.ambientGround = _bp.ambientGround.slice();
       if (_bp.sun)           G.frameSky.sunColor = _bp.sun.slice();
-      // Sky dome zenith/horizon too: the overcast/fog weather branches below
-      // OVERWRITE frameSky.horizon to grey, and nothing restored it on the way
-      // back to clear (only loadTrack set it) — so a clear→fog→clear cycle left
-      // the horizon band + every reflection (frame.skyHorizon at 1603 feeds the
-      // LIT env mirror / SSR fallback) stuck fog-grey under a correct blue
-      // zenith. Re-derive from the palette each call, same base loadTrack uses.
       if (_bp.zenith)        G.frameSky.zenith  = _bp.zenith.slice();
       if (_bp.horizon)       G.frameSky.horizon = _bp.horizon.slice();
       G.frameSky.cloud = _bp.cloud !== undefined ? _bp.cloud : (isNightSession ? 0.22 : 0.4);
-      // Fog too (mirrors the sun/ambient reset above): the weather branches below
-      // MULTIPLY frame.fogDensity in place, so without a fresh base HERE every
-      // weather() flip or _APPLY_RACE_IDS slider drag compounded it (fog raced to
-      // white after a few ticks) and it stayed STUCK tripled after switching back
-      // to dry. Re-derive from the palette each call — same base loadTrack sets.
       if (_bp.fog) G.frame.fogColor = _bp.fog.slice();
       G.frame.fogDensity = _bp.fogDensity != null ? _bp.fogDensity : (isNightSession ? 0.004 : 0.0012);
     }
-    // Baked HDRI ambient is applied AFTER this whole TOD if/else (see below) so
-    // explicit day/dusk/dawn keys work too — not only palette-"default" mode.
-    // Keep the REFLECTED sky (frame.skyZenith/Horizon → LIT env/rim/SSR fallback)
-    // in sync with the sky dome so glass/wet-road/clearcoat mirror the sky the
-    // player actually sees (the weather post-modifiers below re-sync on their side).
     G.frame.skyZenith = G.frameSky.zenith; G.frame.skyHorizon = G.frameSky.horizon;
     // "default" — driven by the track palette; set moon + stars for night tracks.
     // stars must be reset here symmetrically with moon: only the explicit-TOD
@@ -277,36 +168,17 @@ function applyRaceSettings() {
     // applyRaceSettings re-run without a track reload) kept stars in a day sky.
     G.frameSky.moon = isNightSession ? 0.85 : 0;
     G.frameSky.stars = isNightSession ? 1 : 0;
-    // Dim the SCENE sun to soft moonlight at night. Many night palettes ship a
-    // bright, near-overhead sun (it drives the sky glow) — left undimmed it lit
-    // the road/scenery like daytime, which is why night looked washed (Singapore).
-    // frameSky.sunColor is left alone so the warm sky/dusk glow survives; the
-    // lamps (buildTrackLights) now carve out the actually-lit areas.
     if (isNightSession) G.frame.sunColor = [0.12, 0.14, 0.22];   // unified moonlight key (matches explicit-night)
     G._cloudBase = G.frameSky.cloud !== undefined ? G.frameSky.cloud
                : (isNightSession ? 0.22 : 0.44);   // modest cover; the sky shader carries the richer cumulus look
 
-    // Global night ambient FLOOR: some night tracks ship very dark palette
-    // ambients and rely entirely on per-mesh emissive to stay legible. Lift
-    // any night track up to a baseline so the road and scenery always read,
-    // without touching tracks that are already brighter (a floor, not a
-    // multiply — brilliantly-lit street circuits keep their tuned values).
-    // Moody-night ambient floor/cap + city-glow hue (shared with explicit-night
-    // via _nightAmbientBand so the two night paths match).
     if (isNightSession) _nightAmbientBand();
 
-    // ── Per-track atmosphere (default mode only) ──────────────────────────
-    // Nudge cloud cover and fog to give circuits a characteristic sky
-    // without overriding any explicit raceWeather or raceTimeOfDay choice.
     if (G.track && G.track.def) {
       const _def  = G.track.def;
       const _pal  = _def.palette || {};   // built def carries `palette` (not `pal`);
-                                          // the old `_def.pal` was always undefined,
-                                          // silently disabling the fog/sunDir nudges below.
       const _bias = _trackAtmoBias(_def);   // -1 (clear) … +1 (overcast)
 
-      // Cloud cover: start from the existing base then nudge by the bias.
-      // Bias +1 = +0.20 cloud; bias -1 = -0.18 cloud. Cap so stars remain.
       const _cloudNudge = _bias > 0 ? _bias * 0.20 : _bias * 0.18;
       G._cloudBase = Math.max(0.10, Math.min(isNightSession ? 0.45 : 0.80,
                             G._cloudBase + _cloudNudge));
@@ -316,9 +188,6 @@ function applyRaceSettings() {
         G.frame.fogDensity = Math.min(0.005, _pal.fogDensity * (1 + _bias * 0.30));
       }
 
-
-      // Exposure: night tracks already bright with floodlights; desert night
-      // tracks get a gentle lift; daytime green tracks sit near neutral.
       if (isNightSession) {
         // Low night exposure so the dark stays dark and the neon/floodlights punch.
         G.frame.exposure = (_def.theme === "street_night") ? 0.86 : 0.90;
@@ -332,14 +201,8 @@ function applyRaceSettings() {
         G.frame.exposure = 1.0;
       }
 
-      // Per-track sun azimuth variation: rotate the default sun direction
-      // horizontally by a small per-circuit offset so the raking shadows
-      // fall at a slightly different angle on each track. This is a purely
-      // cosmetic tweak applied only when the palette supplies a sunDir.
       if (_pal.sunDir && !isNightSession) {
         const _sd = _pal.sunDir.slice();
-        // def.sunAzimBias (real-world sun geography) wins; otherwise a mild
-        // tilt proportional to the atmosphere bias.
         const _azOffset = _def.sunAzimBias != null ? _def.sunAzimBias * 0.2 : _bias * 0.12;
         // Rotate the horizontal (X,Z) components by _azOffset radians
         const _sx = _sd[0], _sz = _sd[2];
@@ -422,8 +285,6 @@ function applyRaceSettings() {
     G.frameSky.sunColor = G.frameSky.sunColor.map((v) => v * _mute(0.8));
     G.frame.ambientSky = G.frame.ambientSky.map((v) => Math.min(1, v * 1.06));
     G.frame.ambientGround = G.frame.ambientGround.map((v) => Math.min(1, v * 1.06));
-    // Moody haze: thicker fog + a warm yellow-grey horizon (the "about to rain"
-    // light) so heavy overcast reads atmospheric, not just a flat grey dim.
     G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * (LT.overcastFogMul != null ? LT.overcastFogMul : 1.7);
     if (G.raceTimeOfDay === "default") { G.frameSky.horizon = [0.74, 0.73, 0.74]; G.frame.skyHorizon = G.frameSky.horizon; }
     // A night session must stay dark under overcast too — same guard the wet/fog
@@ -447,9 +308,6 @@ function applyRaceSettings() {
     // horizon flatten below reads the same `fc`, so it follows automatically.
     const fc = isNightSession ? [0.09, 0.10, 0.13] : [0.74, 0.76, 0.78];
     G.frame.fogColor = fc;
-    // Don't erase an explicit twilight horizon (dawn magenta / dusk coral) — only
-    // flatten the horizon to fog-grey in default mode. Sync frame.skyHorizon so
-    // reflections (glass/wet road/clearcoat) match the grey dome, not a stale blue.
     if (G.raceTimeOfDay === "default") { G.frameSky.horizon = fc.slice(); G.frame.skyHorizon = G.frameSky.horizon; }
     G.frame.sunColor = G.frame.sunColor.map((v) => v * _mute(0.6));
     G.frameSky.sunColor = G.frameSky.sunColor.map((v) => v * _mute(0.7));
@@ -465,9 +323,6 @@ function applyRaceSettings() {
     // Guarantee frame.exposure always has a value (default = 1.0 if nothing set above)
     if (G.frame.exposure == null) G.frame.exposure = 1.0;
   }
-  // Low-lying ground mist: rolling morning mist at dawn, atmospheric haze in
-  // wet/overcast/fog, a touch at night for mood; a clear day has none. Plus a
-  // per-track lean — humid circuits hold mist, arid deserts stay crisp.
   {
     let gm = 0;
     if (G.raceTimeOfDay === "dawn") gm = 0.40;
@@ -480,7 +335,7 @@ function applyRaceSettings() {
     gm *= 1.0 + clamp(_mb, -0.6, 0.6) * 0.5;
     G.frame.groundMist = clamp(gm, 0, 0.7);
   }
-  // ── Live lighting-tuner overrides on the CONDITION-derived values ──
+  // Live lighting-tuner overrides on the CONDITION-derived values
   // Re-derived fresh from the branch values every call (applyRaceSettings re-runs
   // whenever one of these knobs changes — see _APPLY_RACE_IDS), so they never
   // compound. All default to a no-op.
@@ -507,9 +362,6 @@ function applyRaceSettings() {
     if (G.frameSky.moon) G.frameSky.moon *= LT.moonBright;
     // CITY SKYGLOW (fresh array — never mutate the palette in place).
     if (G.frameSky.cityGlow && LT.cityGlowMul !== 1) G.frameSky.cityGlow = G.frameSky.cityGlow.map((v) => v * LT.cityGlowMul);
-    // AMBIENT WARMTH + SKY/GROUND FILL BALANCE — white-balance the hemisphere
-    // fill and tip its energy toward sky dome (+) or ground bounce (−). Fresh
-    // arrays; both default to a no-op.
     const at = LT.ambTemp || 0, ab = LT.ambBalance || 0;
     if ((at || ab) && G.frame.ambientSky && G.frame.ambientGround) {
       const ar = 1 + Math.max(0, -at) * 0.16 - Math.max(0, at) * 0.10;
@@ -519,10 +371,6 @@ function applyRaceSettings() {
       G.frame.ambientSky = [G.frame.ambientSky[0] * ar * skyG, G.frame.ambientSky[1] * ag * skyG, G.frame.ambientSky[2] * abb * skyG];
       G.frame.ambientGround = [G.frame.ambientGround[0] * ar * grdG, G.frame.ambientGround[1] * ag * grdG, G.frame.ambientGround[2] * abb * grdG];
     }
-    // SKY COLOUR SATURATION — push the sky dome toward grey (0) or oversaturate
-    // (>1) around its luma anchor. Fresh arrays; the reflected sky (glass / wet
-    // road / SSR fallback reads frame.skyZenith/Horizon) is re-synced so the
-    // mirror matches the dome the player sees. Default 1 = exact no-op.
     const _sat = LT.skyColorSat != null ? LT.skyColorSat : 1;
     if (_sat !== 1) {
       if (G.frameSky.zenith)  G.frameSky.zenith  = satAdjust(G.frameSky.zenith, _sat);
@@ -530,8 +378,6 @@ function applyRaceSettings() {
       G.frame.skyZenith  = G.frameSky.zenith;
       G.frame.skyHorizon = G.frameSky.horizon;
     }
-    // FOG COLOUR SATURATION — same treatment for the distance-haze base colour,
-    // applied BEFORE the in-shader FOG WARM / COOL balance. Fresh array, def 1.
     const _fsat = LT.fogColorSat != null ? LT.fogColorSat : 1;
     if (_fsat !== 1 && G.frame.fogColor) G.frame.fogColor = satAdjust(G.frame.fogColor, _fsat);
   }
@@ -553,7 +399,7 @@ function applyRaceSettings() {
   if (!(G._ltNextT > 0)) { G._ltFlash = 0; G._ltNextT = 3 + Math.random() * 5; }
 }
 
-// ── Per-track sun AZIMUTH bias ────────────────────────────────────────────────
+// Per-track sun AZIMUTH bias
 // Apply a per-track azimuth (compass) bias to an authored sun direction as a TRUE
 // XZ ROTATION — the same idiom the default-mode block below uses on _pal.sunDir.
 // The three explicit-TOD branches used to fold the bias straight into x and then
@@ -574,10 +420,6 @@ function _sunDirAz(base, xBias) {
   return V3.norm([h * Math.sin(az), base[1], h * Math.cos(az)]);
 }
 
-// ── Per-track atmosphere bias ─────────────────────────────────────────────────
-// Returns a value in roughly -1 (clear/arid) to +1 (overcast/misty) for the
-// given track def, based on known geographic/meteorological character.
-// Used by applyRaceSettings() to nudge _cloudBase and fog density.
 function _trackAtmoBias(def) {
   if (!def) return 0;
   const id = def.id;

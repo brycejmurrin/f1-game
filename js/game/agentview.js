@@ -1,22 +1,4 @@
-/* Apex 26 — AgentView: the agent-facing JSON view of the running game.
-
-   __apex is a dev console: ~180 flat hooks, each answering one narrow question,
-   most of them returning bare `false`/`null` when they can't. That is the right
-   shape for a human at a REPL and the wrong shape for a text-only agent, which
-   needs (a) one egocentric snapshot per decision, (b) semantics next to the
-   numbers, and (c) an error that says what to do next.
-
-   This module is that layer. It reads the same live state through the G ctx
-   façade and composes it; it owns no state of its own beyond a per-track corner
-   cache and the delta bookkeeping. __apex is unchanged underneath — see
-   docs/AGENT-WORLD-API.md for the design and the research behind it.
-
-   Conventions (repeated in every payload, because an agent cannot be assumed to
-   have read this file): metres, m/s, seconds, radians unless a key says
-   otherwise; +x is right of the centreline; +k is a LEFT-hand turn (measured —
-   see the corner-table note below); a rival's
-   `lateralM` is relative to the PLAYER, not the centreline.
-*/
+/* Apex 26 — AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … */
 const AgentView = (function () {
   "use strict";
 
@@ -35,14 +17,9 @@ const AgentView = (function () {
     "trackSide is the centreline side for cross-referencing); " +
     "rival lateralM is relative to the player (+ = to your right)";
 
-  // Corner-speed model for the suggested brake point. Deliberately approximate:
-  // this is a coaching hint an agent can sanity-check against, not the physics
-  // the car actually runs. Both are m/s^2.
   const LAT_GRIP = 26;
   const BRAKE_DECEL = 30;
 
-  // Radius (m) -> label. An LLM has read a great many sentences about "a 45 m
-  // hairpin" and none at all about "k = 0.0222", so both ship.
   const SEVERITY = [[30, "hairpin"], [70, "slow"], [150, "medium"], [350, "fast"]];
   const STRAIGHT_R = 800;      // above this radius, call it a straight
   const CORNER_K = 0.004;      // |k| below this is not cornering
@@ -78,8 +55,6 @@ const AgentView = (function () {
     Log.info("game", "AgentView.create");
     const { wrapS, gripMult, LONG_GRIP, update, els, camVantage } = G;
 
-    // Scratch matrices for rendering an arbitrary camera to text — so frame()
-    // is not tied to the LAST live frame. Built once; every call overwrites them.
     const _vView = new Float32Array(16), _vProj = new Float32Array(16),
           _vVP = new Float32Array(16);
     function buildVP(eye, tgt, fovDeg, far) {
@@ -90,10 +65,6 @@ const AgentView = (function () {
       return _vVP;
     }
 
-    // Resolve which camera frame() renders. Default is the LIVE frame — the one
-    // actually on screen. Naming a mode ("cockpit", "heli", …) or an orbit
-    // frames the shot WITHOUT moving the car or waiting for a render, which is
-    // the text version of previewCam()/apex-capture's per-mode screenshots.
     function resolveCamera(o) {
       const p = G.player;
       if (o.camera || o.orbit) {
@@ -109,11 +80,6 @@ const AgentView = (function () {
         const dist = clamp(o.orbit.dist || 12, 2, 400);
         const head = p.head || 0;
         const dx = Math.sin(head + Math.PI + az), dz = Math.cos(head + Math.PI + az);
-        // Height is RELATIVE TO THE ROAD, not to datum. Both Y values were a flat
-        // 0.6 absolute, so on any circuit with elevation the shot framed from
-        // metres under (or over) the car while still returning a full, plausible
-        // raster — the same failure the camVantage branch below warns about.
-        // apex.js carOrbit samples the road for exactly this reason.
         Tracks.sample(G.track, wrapS(p.s), scr);
         const y0 = scr.p[1] + 0.6;
         const eye = [p.px + dx * dist * Math.cos(el), y0 + dist * Math.sin(el),
@@ -128,13 +94,6 @@ const AgentView = (function () {
                       'unknown camera "' + o.camera + '"',
                       "one of: " + GameTables.CAM_MODES.map((c) => c.id || c).join(", "));
         }
-        // Pass the car's real world pose, exactly as the live frame loop does.
-        // With an empty `extra`, camVantage falls back to re-deriving the eye by
-        // sampling the road at (s, x) — and on a circuit that runs close to
-        // itself that reprojection can land on the wrong leg, putting the
-        // synthetic eye hundreds of metres away while the raster still comes
-        // back fully populated and plausible-looking. The player is a
-        // world-space rigid body; ask it where it is rather than re-deriving it.
         const v = camVantage(m, p.s, p.x, p.speed || 0, 0, {
           carPos: (p.px != null && p.pz != null) ? [p.px, p.pz] : null,
           carHead: p.head,
@@ -155,12 +114,9 @@ const AgentView = (function () {
                fovDeg: G.camFov, synthetic: false };
     }
 
-    // Own scratch. apex.js shares `smp`/`smp2` with game.js and has to re-sample
-    // to restore them after a lookahead loop (see obs()); borrowing that here
-    // would make this module's aliasing hazards someone else's problem.
     const scr = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
 
-    // ── curvature, smoothed ─────────────────────────────────────────────────
+    // curvature, smoothed
     // Tracks.curvature differentiates the tangent over a 12 m window, which is
     // fine for physics but too sharp to describe a corner: the OSM-derived
     // centrelines carry local zigzags, so at Monza the point curvature through
@@ -184,16 +140,6 @@ const AgentView = (function () {
       return d;
     }
 
-    // Bearing to a world point in degrees, POSITIVE TO YOUR RIGHT — which is
-    // what the payload note and every `side` mapping downstream promise.
-    //
-    // The bare angDiff(atan2(dx,dz), head) is positive to the LEFT: this world
-    // is Y-up right-handed, so the track's right vector sits at head-90°, not
-    // head+90°. Confirmed against pixels rather than algebra — a rival parked at
-    // lateralM +6 renders on the RIGHT of the cockpit view, while the unnegated
-    // bearing called it negative, and bearing disagreed with lateralM on 15 of
-    // 15 props ahead of a car sitting exactly on the centreline. Both cannot be
-    // right, and an inverted bearing silently steers an agent the wrong way.
     const bearingDegTo = (dx, dz, head) =>
       r1(-angDiff(Math.atan2(dx, dz), head) * 180 / Math.PI);
 
@@ -202,8 +148,6 @@ const AgentView = (function () {
       return angDiff(headingAt(s + W), headingAt(s - W)) / (2 * W);
     }
 
-    // Net heading swept between two arc positions, accumulated in short steps so
-    // a hairpin past +/-pi doesn't wrap onto itself.
     function sweep(from, to) {
       const step = 5;
       let psi = 0;
@@ -218,9 +162,6 @@ const AgentView = (function () {
     let lastPayload = null;     // for detail-agnostic delta mode
     let lastSeq = 0;
 
-    // ── errors ──────────────────────────────────────────────────────────────
-    // An agent gets nothing from `null`. Every failure says what went wrong and
-    // what to call instead; `state` gives it enough to verify the fix worked.
     function fail(error, message, fix) {
       return {
         ok: false, error, message, fix,
@@ -246,7 +187,7 @@ const AgentView = (function () {
       return null;
     }
 
-    // ── corner table (static per track, built once) ──────────────────────────
+    // corner table (static per track, built once)
     // def.turns is the curated FIA apex list from CircuitMarkings — real turn
     // numbering, in driving order. info().turns exposes only its LENGTH today,
     // which is the least useful projection of it available. Circuits without
@@ -277,8 +218,6 @@ const AgentView = (function () {
 
         const kA = smoothK(s);
         const sign = kA >= 0 ? 1 : -1;
-        // Expand while the road keeps bending the same way and hasn't released
-        // below a fifth of the peak. 300 m each side caps a long constant sweep.
         let entry = s, exit = s;
         for (let d = 5; d <= 300; d += 5) {
           const kk = smoothK(s - d);
@@ -289,8 +228,6 @@ const AgentView = (function () {
           if (kk * sign > 0 && Math.abs(kk) > peak * 0.2) exit = s + d; else break;
         }
 
-        // Radius from heading swept across the whole corner, not from any one
-        // sample — this is what makes a noisy centreline describable.
         const arc = Math.max(exit - entry, 1);
         const psi = sweep(entry, exit);
         const radius = Math.abs(psi) < 1e-3 ? 99999 : Math.min(99999, arc / Math.abs(psi));
@@ -332,10 +269,6 @@ const AgentView = (function () {
       return mergeOverlaps(out);
     }
 
-    // Some circuits number a double-apex as two turns (Parabolica, Campsa, the
-    // Esses). After snapping, both apexes land in the same bend and the table
-    // reports two ~90%-overlapping corners — which reads to an agent as two
-    // separate braking events. Merge them, keeping both turn numbers.
     function mergeOverlaps(list) {
       const out = [];
       for (const c of list) {
@@ -399,26 +332,12 @@ const AgentView = (function () {
     function roadShapeAt(s, entryS, exitS, dir) {
       const track = G.track, out = {};
 
-      // Banking has TWO sources and only one of them is usually populated.
-      // `track.bank[]` (via Tracks.bankAngle) is a per-node authored tilt that
-      // almost no circuit sets; the banking a driver actually feels comes from
-      // `def.bankZones` -> `track.bankP`, which Tracks.banking() turns into the
-      // real road-plane roll. Reading only bankAngle reported 0 deg on Abu
-      // Dhabi's banked corners. Prefer the real roll, fall back to the node
-      // array.
-      //
-      // Sign: bankingProfile raises the OUTER edge, and marks it with bsign
-      // (+1 = right edge). roll = atan2(lift*bsign, 2*hw), so a RIGHT-hander —
-      // whose outer edge is the left one — yields a NEGATIVE roll. Hence
-      // + bankingDeg = right edge raised = the road holds a LEFT-hander.
       let bankRad = 0;
       const bk = Tracks.banking ? Tracks.banking(track, wrapS(s), 0) : null;
       if (bk && bk.roll) bankRad = bk.roll;
       else if (Tracks.bankAngle) bankRad = Tracks.bankAngle(track, wrapS(s)) || 0;
       const bankDeg = r1(bankRad * 180 / Math.PI);
       out.bankingDeg = bankDeg;
-      // Banked into the turn = the road holds the car; adverse camber throws it
-      // out. Which one it is depends on the corner's direction, so say it.
       if (Math.abs(bankDeg) < 1.5 || (dir !== "L" && dir !== "R")) {
         out.camber = "flat";
       } else {
@@ -427,8 +346,6 @@ const AgentView = (function () {
                                                        : "off-camber";
       }
 
-      // Gradient across the corner (or +/-40 m when no span is given), as a
-      // percentage — the form a driver reads.
       const a = entryS != null ? entryS : s - 40, b = exitS != null ? exitS : s + 40;
       Tracks.sample(track, wrapS(a), scr); const y0 = scr.p[1];
       Tracks.sample(track, wrapS(b), scr); const y1 = scr.p[1];
@@ -477,7 +394,6 @@ const AgentView = (function () {
       return cornerCache.corners;
     }
 
-    // ── next corner ─────────────────────────────────────────────────────────
     // The single field an agent cannot derive from k and hw but can act on
     // immediately. Distance is measured to the corner's ENTRY, not its apex —
     // by the apex the decision has already been made.
@@ -525,8 +441,6 @@ const AgentView = (function () {
       };
     }
 
-    // The next few corners as a sequence, not just the imminent one — the agent
-    // plans a braking/line phase over a horizon, which one corner cannot express.
     function upcomingCorners(s, speed, n) {
       const list = corners();
       if (!list.length) return [];
@@ -549,14 +463,6 @@ const AgentView = (function () {
       });
     }
 
-    // ── pacenotes — the road ahead as a co-driver's callout ──────────────────
-    // The research's most on-domain finding: Columbia's Racing Auditory Display
-    // gave blind drivers full control from two channels — ego trajectory + the
-    // next few turns as {direction, sharpness, length, timing}. And rally
-    // pacenotes are a battle-tested, LLM-familiar, ~10-token serialisation of
-    // exactly that, denser than the nested nextCorners object and parseable by a
-    // rally-literate model. Severity is the rally 1-6 scale (1 = tightest), from
-    // the corner radius; the corner's own turn id keeps a stable reference.
     function paceSev(radiusM) {
       if (radiusM == null || radiusM >= STRAIGHT_R) return 6;
       if (radiusM < 30) return 1;
@@ -567,16 +473,11 @@ const AgentView = (function () {
       return 6;
     }
 
-    // One dense line, e.g. "R2 @90m don't-cut, L5 @260m into-str, R4 @1150m".
-    // "into-str" = the corner opens onto a straight (prioritise exit); "don't-cut"
-    // flags the tightest corners where an early apex throws the exit away.
     function pacenotes(s, speed) {
       const seq = upcomingCorners(s, speed, 3);
       if (!seq.length) return "clear road ahead";
       return seq.map((c) => {
         const sev = paceSev(c.radiusM);
-        // Rally pacenotes carry exactly these mutators — crest, off-camber,
-        // don't-cut — because they are what changes the call.
         const tags = [];
         if (c.elevation === "uphill") tags.push("uphill");
         else if (c.elevation === "downhill") tags.push("downhill");
@@ -588,7 +489,6 @@ const AgentView = (function () {
       }).join(", ");
     }
 
-    // ── look-ahead ──────────────────────────────────────────────────────────
     // Time-scaled, not distance-scaled. obs().scan is fixed at [10,30,60] m,
     // which is 1.2 s of warning at 50 m/s and 6 s at 10 m/s — backwards. GT
     // Sophy previews ~6 s of travel; the span follows velocity.
@@ -613,7 +513,6 @@ const AgentView = (function () {
       return { horizonS, horizonM: r1(horizon), pts: out };
     }
 
-    // ── rivals ──────────────────────────────────────────────────────────────
     // Per-rival rows, relative to the player. obs() today gives only aggregate
     // gapAhead/gapBehind in metres — correct, but an agent cannot decide which
     // side to attack from a scalar. GT Sophy encodes rivals as relative
@@ -667,19 +566,11 @@ const AgentView = (function () {
       return (typeof t === "object" ? (t.id || t.short || null) : t);
     }
 
-    // ── field() — the whole grid, compact ────────────────────────────────────
-    // The text-native mirror of __apex.fieldState()/cars(): race order with
-    // gaps. world().rivals is the SALIENCY-CAPPED egocentric few for the driving
-    // decision; this is the ALLOCENTRIC standings table — every car, by
-    // position, with gap-to-leader and interval to the car ahead. Still compact:
-    // team is an id string, one row per car, no nested records.
     function field(opts) {
       const bad = notReady();
       if (bad) return bad;
       const o = opts || {};
       const detail = o.detail || "brief";
-      // Every sibling validates its enum; field() silently took the detailed
-      // branch for any typo, so "drivee" looked like it worked.
       if (["brief", "full"].indexOf(detail) < 0) {
         return fail("BadArgumentError", 'detail must be "brief" or "full"',
                     'call field({detail:"full"})');
@@ -707,8 +598,6 @@ const AgentView = (function () {
           row.speedKph = r1((c.speed || 0) * 3.6);
           row.gapToLeaderM = r1(gapLeadM);
           row.finished = !!c.finished;
-          // race classification counts penalties, so a standings table that
-          // hides them is not the classification the agent is being scored on
           row.pace = r2(c.skill != null ? c.skill : 1);
           row.cuts = c.cuts || 0;
           row.timePenaltyS = c.penalty || 0;
@@ -730,10 +619,6 @@ const AgentView = (function () {
       };
     }
 
-    // ── affordances ─────────────────────────────────────────────────────────
-    // TextWorld and Jericho both ship an admissible-action list and agents lean
-    // on it hard. The `unavailable` half matters just as much: it stops the
-    // agent spending turns rediscovering a constraint.
     function affordances(nc, rv) {
       const p = G.player, can = [], cannot = [];
 
@@ -768,9 +653,6 @@ const AgentView = (function () {
         for (const [side, clear] of [["left", clearL], ["right", clearR]]) {
           const blocked = ahead.side === side && ahead.gapM < 12;
           if (clear > 3 && !blocked) {
-            // NB the parens: `a || b + c` binds as `a || (b + c)`, so writing
-            // `ahead.code || ("car " + id) + " " + gap` silently collapses the
-            // whole reason to just "VER" whenever the rival has a driver code.
             const who = ahead.code || ("car " + ahead.id);
             can.push({ id: "overtake_" + side,
                        why: who + " " + ahead.gapS + " s ahead, "
@@ -788,10 +670,6 @@ const AgentView = (function () {
       return { affordances: can, unavailable: cannot };
     }
 
-    // ── the one-line summary ────────────────────────────────────────────────
-    // ~30 tokens. The NLE language wrapper, SC2Arena and Generative Agents all
-    // converged on prose for the summary layer; it is cheap to build and it
-    // doubles as a human-readable debug line.
     function briefLine(ego, nc, rv) {
       const bits = [];
       bits.push("Lap " + ego.lap + ", P" + ego.pos);
@@ -812,20 +690,6 @@ const AgentView = (function () {
       return bits.join(", ") + ".";
     }
 
-    // ── delta ───────────────────────────────────────────────────────────────
-    // diff history (ICML 2024) reports ~4x more usable interaction history at
-    // fixed context by diffing consecutive observations. Arrays are replaced
-    // wholesale — element-wise diffing costs more to describe than it saves.
-    // Exact diffing is worthless here, and measuring said so: across a 20-step
-    // driving loop it saved 1.17x, because in a moving car every number changes
-    // every tick. The diff-history result this was modelled on came from
-    // NetHack, where the world is discrete and mostly static between actions —
-    // a racing sim is the opposite.
-    //
-    // So a change smaller than the agent could act on is not a change. This is
-    // the round-hard principle applied to time: 0.3 km/h and 4 cm of lateral
-    // drift are noise, and reporting them costs the same as reporting a corner
-    // arriving.
     const DEAD_ABS = 0.25;      // absolute deadband
     const DEAD_REL = 0.02;      // ...or 2% of the value, whichever is larger
 
@@ -837,8 +701,6 @@ const AgentView = (function () {
     function deltaOf(prev, next) {
       if (prev === undefined) return next;
       if (Array.isArray(next) || Array.isArray(prev)) {
-        // Arrays are all-or-nothing, but compare them through the deadband too
-        // so a lookahead whose distances moved 10 cm doesn't resend the lot.
         if (Array.isArray(prev) && Array.isArray(next) && prev.length === next.length) {
           for (let i = 0; i < next.length; i++) {
             if (deltaOf(prev[i], next[i]) !== undefined) return next;
@@ -859,11 +721,6 @@ const AgentView = (function () {
       return sameEnough(prev, next) ? undefined : next;
     }
 
-    // Merge only what was actually reported into the caller's believed state.
-    // Without this a deadband leaks: each tick's change is individually too
-    // small to send, the baseline advances anyway, and the caller's value drifts
-    // arbitrarily far from the truth. Holding the baseline at the last REPORTED
-    // value bounds the error at one deadband instead.
     function applyDelta(base, d) {
       if (d === undefined) return base;
       if (d === null || typeof d !== "object" || Array.isArray(d)) return d;
@@ -873,7 +730,6 @@ const AgentView = (function () {
       return out;
     }
 
-    // ── world() ─────────────────────────────────────────────────────────────
     function world(opts) {
       const bad = notReady();
       if (bad) return bad;
@@ -892,15 +748,10 @@ const AgentView = (function () {
       const wallR = Tracks.wallAt(G.track, p.s, 1);
       const wallL = -Tracks.wallAt(G.track, p.s, -1);
 
-      // Heading error against the local tangent, signed like steering: + = the
-      // nose points right of where the road goes.
       let headErr = Math.atan2(scr.t[0], scr.t[2]) - p.head;
       while (headErr > Math.PI) headErr -= 2 * Math.PI;
       while (headErr < -Math.PI) headErr += 2 * Math.PI;
 
-      // Retirements are NOT in the field — mirror js/game.js's own `ranked`, which
-      // drops them so the HUD position stops counting a parked car. Ranking over
-      // every car here made world().ego.pos disagree with the HUD after any DNF.
       const ranked = G.cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog);
       const pos = ranked.findIndex((c) => c.isPlayer) + 1;
 
@@ -922,10 +773,6 @@ const AgentView = (function () {
         halfWidthM: r1(hw),
         clearLeftM: r1(p.x - wallL), clearRightM: r1(wallR - p.x),
         energy: r2(p.energy || 0),
-        // Being punished and unable to perceive it is the worst kind of blind
-        // spot: an agent that cannot see `cuts`/`penalty` cannot learn to stop
-        // doing the thing being penalised. Three cuts are free; from the fourth
-        // on, every cut costs +5 s (js/game.js ~3655).
         penalties: {
           cuts: p.cuts || 0,
           // Off the RESETTING warning counter, not the lifetime `cuts` total —
@@ -935,9 +782,6 @@ const AgentView = (function () {
           timePenaltyS: p.penalty || 0,
           note: "cuts 1-3 warn; each cut from the 4th adds +5 s to your race time",
         },
-        // energy alone says how much charge is left, not whether it is going
-        // anywhere. Deployment, the overtake window and its cooldown are all
-        // separately actionable.
         ers: {
           charge: r2(p.energy || 0),
           deploying: !!p.deploying,
@@ -946,10 +790,6 @@ const AgentView = (function () {
           cooldownS: r1(p.otCool || 0),
           note: "overtake arms within ~1 s of the car ahead; 4 s boost, then 16 s cooldown",
         },
-        // ACTIVE AERO is the third straight-line lever and the only one that is
-        // not a battery: it costs cornering grip, not charge. `flap` is the
-        // travel 0..1 that the physics reads; `armed` is whether the road ahead
-        // is straight enough for the switch to do anything at all.
         aero: {
           mode: (p.aeroX || 0) > 0.05 ? "X" : "Z",
           flap: r2(p.aeroX || 0),
@@ -1022,21 +862,12 @@ const AgentView = (function () {
           vLat: r2(p.vLat || 0), axEstSm: r2(p.axEstSm || 0),
           offTrackS: r2(p.offT || 0), onKerb: !!p.onKerb,
           brakeHeat: r2(p.brakeHeat || 0),
-          // gear was exposed but engine state was not; and "am I off the road /
-          // stuck / about to be rescued" was invisible despite driving the
-          // rescue logic the agent has to react to.
           rpm: Math.round(p.rpm || 0),
           offroad: !!p.offroad,
           stuckS: r2(p.stuckT || 0),
           wallContactS: r2(p.wallT || 0),
-          // A crest/dip DELTA in ±0.20 spent as `* (1 + vertLoad)`, so an
-          // un-seeded car's load is 0, not 1 — reporting 1 claimed a car sitting
-          // on flat ground was carrying double the vertical load it had.
           vertLoad: r2(p.vertLoad != null ? p.vertLoad : 0),
         };
-        // setPhysics() can retune the car underneath an agent mid-session. If
-        // it cannot see the tunables it will attribute the change to its own
-        // driving. PHYSICS_VERSION only moves on shipped retunes, not overrides.
         payload.tunables = {
           WHEELBASE: G.WHEELBASE, PACE: G.PACE, DRIFT: G.DRIFT,
           ROAD_FOLLOW: G.ROAD_FOLLOW, PLAYER_GRIP: G.PLAYER_GRIP,
@@ -1052,9 +883,6 @@ const AgentView = (function () {
           payload.note = "no delta available for seq " + o.since + " — full payload returned";
         } else {
           const d = deltaOf(lastPayload, payload) || {};
-          // Advance the baseline by what was REPORTED, not by the freshly
-          // computed payload — otherwise the deadband silently drifts (see
-          // applyDelta).
           lastPayload = applyDelta(lastPayload, d);
           lastPayload.seq = payload.seq;
           lastSeq = payload.seq;
@@ -1067,13 +895,7 @@ const AgentView = (function () {
       return payload;
     }
 
-    // obs().done conflates "I spun" with "I was teleported" — an agent needs to
-    // tell those apart to know whether its policy failed or the sim rescued it.
     function terminal() {
-      // Guarded here rather than at the apex.js wrapper, which used to return a
-      // bare null before staging — the one hole in "no agent hook returns null".
-      // px is deliberately NOT required: finished/wrongWay/rescue are meaningful
-      // as soon as the grid exists, before the car has been placed.
       if (!G.track) {
         return fail("NoTrackError", "no track is loaded",
                     'call __apex.race("monza") first');
@@ -1085,8 +907,6 @@ const AgentView = (function () {
       const p = G.player;
       const rescued = p.rescueLastT != null && (G.raceT - p.rescueLastT) < 0.5;
       let reason = null;
-      // Retirement outranks the rest: a car that stopped is not going to finish,
-      // un-spin or be rescued, so an interval that ends here has really ended.
       if (p.retired) reason = "retired";
       else if (p.finished) reason = "finished";
       else if (p.wrongWay) reason = "wrong_way";
@@ -1094,19 +914,12 @@ const AgentView = (function () {
       return { done: reason != null, reason };
     }
 
-    // ── the rasters — js/game/agentview-raster.js ───────────────────────────
-    // frame()/plan()/carRender() are ~720 lines of pure geometry→text that
-    // reach the perception layer at exactly two points (corners, nextCorner),
-    // and they are the layer this surface itself calls APPROXIMATE. They live
-    // in their own file and take everything they need through this ctx, the
-    // way the scenery-*.js modules do. AgentRaster loads first — see
-    // tools/manifest.cjs HARD_EDGES.
     const _raster = AgentRaster.create({
       G, fail, resolveCamera, model, corners, nextCorner, carWorld, scr,
       clamp, r1, r2, API_VERSION, CONVENTIONS, wrapS,
     });
     const frame = _raster.frame, plan = _raster.plan, carRender = _raster.carRender;
-    // ── carView() — the car, without rendering it ───────────────────────────
+    // carView() — the car, without rendering it
     // Replaces tools/car/render-car.mjs for everything except "does it LOOK right":
     // team identity, livery, the full parts spec and what it does to the car,
     // the chassis silhouette knobs, and measured geometry from a real build.
@@ -1121,8 +934,6 @@ const AgentView = (function () {
                      || (Teams.LIST[G.teamIdx] || Teams.LIST[0]).id;
       const team = Teams.LIST.find((t) => t.id === teamId);
       if (!team) {
-        // Falling back to the first team would answer a question nobody asked
-        // and look like a valid result.
         return fail("NoTeamError", 'unknown team "' + teamId + '"',
                     "call __apex.teams() for the valid ids");
       }
@@ -1201,13 +1012,8 @@ const AgentView = (function () {
           }),
           mods: res.mods,
         },
-        // The per-team silhouette knobs — what makes this chassis look like this
-        // team's car independent of paint. Documented in js/car/car3d.js.
         chassis: {
           style,
-          // TEAM_STYLE is keyed by team id and DEFAULT_STYLE is not exported, so
-          // "does this team have a bespoke silhouette" is a key test, not an
-          // identity test against a value that isn't reachable from here.
           bespokeSilhouette: Object.prototype.hasOwnProperty.call(
             Car3D.TEAM_STYLE, team.id),
           axles: Car3D.AXLES,
@@ -1229,7 +1035,7 @@ const AgentView = (function () {
       };
     }
 
-    // ── survey() — geometry defects, as a report ────────────────────────────
+    // survey() — geometry defects, as a report
     // The survey-track workflow currently says "assert with screenshots + the
     // probe, not by reasoning about coordinates" — because the coordinates were
     // not trustworthy enough to reason about. With measured prop bounds they
@@ -1249,9 +1055,6 @@ const AgentView = (function () {
                             "grandstand", "billboard", "signBoard", "marshalPost"];
     const FLOAT_M = 0.6;        // base this far ABOVE terrain = floating
     const BURIED_M = 4;         // base this far BELOW terrain = swallowed
-    // A CLIFF is a slope, not a height. Testing absolute rise between lateral
-    // samples reported 157 "steps" on Spa, which is simply a hill: at 10 m
-    // sample spacing a 1 m rise is a 10% grade. 0.55 is ~29 degrees.
     const CLIFF_SLOPE = 0.55;
     const OVER_ROAD_M = 0.15;   // terrain above road surface by this = poking through
 
@@ -1262,17 +1065,12 @@ const AgentView = (function () {
       }
       const o = opts || {};
       const track = G.track, total = track.total;
-      // `at` is a COUNT of evenly-spaced stations across the WHOLE lap, not a
-      // position — survey always scans the full circuit and cannot be aimed at
-      // one section. `stations` is the honest name; `at` stays for callers that
-      // already use it. To look at one stretch, filter the returned rows by
-      // `frac` — there is no fromS/toS window here the way query() has one.
       const nAt = clamp((o.stations | 0) || (o.at | 0) || 24, 2, 200);
       const reach = clamp(o.reachM || 60, 10, 400);
       const nLat = clamp(o.lats | 0 || 13, 3, 41);
       const cap = clamp(o.limit | 0 || 20, 1, 200);
 
-      // ── lateral ground profile ──
+      // lateral ground profile
       const profile = [], holes = [], cliffs = [], overRoad = [];
       for (let i = 0; i < nAt; i++) {
         const frac = i / nAt;
@@ -1292,13 +1090,6 @@ const AgentView = (function () {
                             aboveRoadM: r2(ty - roadY) });
           }
         }
-        // A null BETWEEN solid readings is a hole in the ribbon — props out
-        // there fall back to the closed-form estimate and float or sink. A
-        // trailing null at the outer edge is just where the ribbon stops.
-        //
-        // Nulls over the ROAD are not holes: the terrain ribbon starts ~2.2 m
-        // beyond the tarmac by design and the road mesh covers the middle.
-        // Counting those reported one "hole" per station on a clean circuit.
         const ribbonFrom = scr.hw + 2.4;
         for (let j = 1; j < row.length - 1; j++) {
           if (Math.abs(row[j].latM) < ribbonFrom) continue;
@@ -1320,7 +1111,6 @@ const AgentView = (function () {
                        halfWidthM: r1(scr.hw), samples: row });
       }
 
-      // ── prop grounding ──
       const reg = track.props;
       const floating = [], buried = [], voidProps = [], propsOverRoad = [];
       let checked = 0;
@@ -1399,8 +1189,6 @@ const AgentView = (function () {
           terrainOverRoad: overRoad.length,
           modelsSuppressed: (md.suppressed || []).length,
           modelsInvalid: (md.invalid || []).length,
-          // Candidates are deliberately NOT part of the verdict: they are a
-          // screen with known over-reporting, not a defect count.
           clean: !floating.length && !buried.length && !overRoad.length
                  && !holes.length && !cliffs.length && !(md.invalid || []).length,
         },
@@ -1428,26 +1216,6 @@ const AgentView = (function () {
       };
     }
 
-    // ── worldModel() — the whole world as readable text ─────────────────────
-    // scene() answers "what is near me". This answers "what IS this place" —
-    // the entire circuit as one structured document.
-    //
-    // The problem is size, not availability. Suzuka records 3,422 point objects;
-    // listed individually that is ~85k tokens of "pine, pine, pine" and it does
-    // not describe the world any better than the raw vertex buffer did. So the
-    // model AGGREGATES: contiguous runs of the same kind on the same side become
-    // one feature — "412 pines along the left from 1.20 to 1.85 km" — which is
-    // both an order of magnitude cheaper and closer to what the place actually
-    // looks like. Individually interesting objects (grandstands, buildings,
-    // towers, mountains) stay as landmarks, and the lap is broken into
-    // corner-to-corner sections so the document can be read in order.
-    //
-    // detail: "summary" (totals + features + landmarks) | "sections" (+ a
-    // corner-by-corner walk) | "full" (+ the raw object list, paginated).
-
-    // Repeated dressing — clustered. Landforms cluster too: a mountain range is
-    // emitted as hundreds of ridge segments and listing each as a landmark buries
-    // the actual landmarks.
     const CLUSTER_KINDS = ["pine", "tree", "palm", "conifer", "bush", "hedge",
                            "prop", "signBoard", "marshalPost", "billboard",
                            "ridge", "peak", "structure"];
@@ -1459,23 +1227,11 @@ const AgentView = (function () {
     // Individually notable structures — a driver would point at these.
     const LANDMARK_KINDS = ["grandstand", "building", "house", "motorhome",
                             "tower", "mountain", "gantry"];
-    // Same kind, same side, and no bigger gap than this between neighbours =
-    // one continuous feature. 60 m is about the point where a treeline reads as
-    // two stands rather than one.
     const CLUSTER_GAP_M = 60;
-    // ...but a run is also cut here regardless of gaps. Without it, trees spaced
-    // every 20 m around a park circuit collapse into ONE feature covering the
-    // whole lap — true, and a useless description. Capping the run keeps every
-    // feature locally meaningful ("trees along the left, 0.0-0.4 km").
     const CLUSTER_MAX_RUN_M = 400;
 
     let modelCache = null;
 
-    // Arc position of a recorded prop. Most carry the node index they were
-    // placed from, which is exact and free; landforms placed in world coords
-    // (mountains, ridges) need the projection.
-    // Gantries straddle the road (side 0); landforms are placed in world coords
-    // and have no side at all. Collapsing both into "left" was wrong twice.
     function sideOf(v) {
       if (v == null) return "off-course";
       return v > 0 ? "right" : v < 0 ? "left" : "across";
@@ -1490,10 +1246,6 @@ const AgentView = (function () {
     // s = 0 and reported them all sitting on the start line.
     function propPos(p) {
       if (p.k != null) {
-        // p.side is the ±1 SIDE SELECTOR, not a distance — reporting it as
-        // `lat` made every node-anchored prop claim lateralM ±1.0 m. The true
-        // lateral offset isn't recorded on these records, so answer null and
-        // let the caller's `side` field carry the side.
         const k = ((p.k % G.track.n) + G.track.n) % G.track.n;
         return { s: k / G.track.n * G.track.total, lat: null, sideSel: p.side != null ? p.side : null };
       }
@@ -1507,9 +1259,6 @@ const AgentView = (function () {
       const reg = track.props;
       const pts = reg.list.map((p) => {
         const pos = propPos(p);
-        // An anonymous structure has no side recorded, but its projected lateral
-        // offset says which side of the road it stands on — far more useful than
-        // calling every one of them "off-course".
         const side = p.side != null ? sideOf(p.side)
                    : pos.lat == null ? "off-course"
                    : pos.lat > 0 ? "right" : "left";
@@ -1563,17 +1312,6 @@ const AgentView = (function () {
       return modelCache.m;
     }
 
-    // ── stable ids + describe() — the drill-down spine ───────────────────────
-    // The research settles how to render a world in HIGH detail: not one big
-    // dump. Flat-serialising a rich scene graph runs to millions of tokens and
-    // scores WORSE than exposing it queryably, and thousands of near-identical
-    // props are the worst case for context rot. Monza alone registers ~2835
-    // props. So the world stays STORED in full and the agent PULLS detail:
-    // every entity gets a stable id, and describe(id) returns everything known
-    // about exactly that one thing.
-    //
-    // Ids are derived, not stored, so they survive a rebuild and cost nothing:
-    //   prop:<index>   corner:<turn>   car:<id>   span:<index>
     function propId(i) { return "prop:" + i; }
 
     function parseId(id) {
@@ -1582,9 +1320,6 @@ const AgentView = (function () {
       return c < 0 ? { kind: s, ref: "" } : { kind: s.slice(0, c), ref: s.slice(c + 1) };
     }
 
-    // Everything known about one entity, by id. Bounded by construction — one
-    // entity, all of its fields — which is the point: unbounded detail about
-    // ONE thing is cheap, unbounded detail about everything is the failure mode.
     function describe(idOrOpts) {
       const bad = notReady();
       if (bad) return bad;
@@ -1619,9 +1354,6 @@ const AgentView = (function () {
       }
 
       if (kind === "car") {
-        // Number("") is 0, so a malformed "prop:" resolved to index 0 and
-        // returned a real object instead of an error. Require actual digits;
-        // NaN then falls through to the NotFoundError below.
         const idx = /^\d+$/.test(ref) ? Number(ref) : NaN;
         const car = G.cars.find((c, i) => (c.id != null ? c.id : i) === idx);
         if (!car) {
@@ -1643,9 +1375,6 @@ const AgentView = (function () {
       }
 
       if (kind === "span") {
-        // Number("") is 0, so a malformed "prop:" resolved to index 0 and
-        // returned a real object instead of an error. Require actual digits;
-        // NaN then falls through to the NotFoundError below.
         const idx = /^\d+$/.test(ref) ? Number(ref) : NaN;
         const sp = (track.props && track.props.spans) || [];
         if (!(idx >= 0 && idx < sp.length)) {
@@ -1654,14 +1383,6 @@ const AgentView = (function () {
                       + '; call render({what:"circuit"}) to list them');
         }
         const s = sp[idx];
-        // Span records store s0/s1 as LAP FRACTIONS (noteSpan's callers pass
-        // fractions; along() does s0*n). Reading them as arc-metres reported
-        // sub-metre spans everywhere and fromFrac values of ~1e-4. And spans
-        // WRAP the start line (along() walks s0→s1 modulo the lap; ~20 circuits
-        // fence 0.95→0.06), so length is the wrapped difference — worldModel()'s
-        // formula — not |s1-s0|, which reported the lap-long complement. The
-        // `|| 1` matches along()'s `|| n`: s0≡s1 (mod 1) walks a FULL lap
-        // (monaco/montreal/redbull wall/fence(0.0, 1.0)), not zero metres.
         const s0M = s.s0 * total, s1M = s.s1 * total;
         return {
           apiVersion: API_VERSION, id: "span:" + idx, type: "span",
@@ -1676,9 +1397,6 @@ const AgentView = (function () {
       }
 
       if (kind === "prop") {
-        // Number("") is 0, so a malformed "prop:" resolved to index 0 and
-        // returned a real object instead of an error. Require actual digits;
-        // NaN then falls through to the NotFoundError below.
         const idx = /^\d+$/.test(ref) ? Number(ref) : NaN;
         const list = (track.props && track.props.list) || [];
         if (!(idx >= 0 && idx < list.length)) {
@@ -1703,8 +1421,6 @@ const AgentView = (function () {
         };
         if (p.board) out.boardText = p.board;
         if (p.value != null) out.value = p.value;
-        // Where it sits relative to the car, when there is one — the same
-        // egocentric framing scene() uses, so ids cross-reference cleanly.
         if (G.player && G.player.px != null) {
           const dx = p.x - G.player.px, dz = p.z - G.player.pz;
           out.distM = r1(Math.hypot(dx, dz));
@@ -1730,7 +1446,7 @@ const AgentView = (function () {
                   'ids are "prop:<n>", "corner:<turn>", "car:<n>" or "span:<n>"');
     }
 
-    // ── atmosphere() — the light, as text ────────────────────────────────────
+    // atmosphere() — the light, as text
     // The largest reservoir of world state that never reached the agent.
     // __apex.lightState() is rich but raw: RGB triples, a sun vector, a fog
     // density. An agent cannot do anything with [0.31, 0.44, 0.68]. So this
@@ -1750,17 +1466,9 @@ const AgentView = (function () {
       const wx = G.raceWeather || "dry";
       const sun = fr.sunDir || sky.sunDir || null;
 
-      // Night is a SESSION fact, not something to infer from the sun vector: at
-      // night the renderer keeps the sun direction and just dims it to moonlight,
-      // so elevation still reads +43 deg. Deriving darkness from it reported "sun
-      // to your right" under a floodlit midnight sky, and suppressed the
-      // floodlight phrase because the sun looked high.
       const dark = tod === "night" || tod === "dusk" || tod === "dawn"
                 || (tod === "default" && !!(G.track.def && G.track.def.night));
 
-      // Elevation from the direction vector's up component; azimuth relative to
-      // the car's heading, so "behind you on the left" is expressible. At night
-      // this describes the MOON, so it is named accordingly.
       const body = dark ? "moon" : "sun";
       let elevDeg = null, relBearingDeg = null, where = null;
       if (sun) {
@@ -1782,8 +1490,6 @@ const AgentView = (function () {
       const nLights = fr.lights ? fr.lights.length / 15 : 0;
       const flood = G._lastFloodEmit || 0;
 
-      // Fog as a VISIBILITY DISTANCE, which is the actionable form. Exponential
-      // squared falloff: the range where the fog factor drops to ~0.05.
       const fog = fr.fogDensity != null ? +fr.fogDensity : null;
       const visM = fog && fog > 1e-6 ? Math.round(Math.sqrt(3) / fog) : null;
 
@@ -1833,17 +1539,6 @@ const AgentView = (function () {
       };
     }
 
-    // ── query() — pull a bounded subgraph ────────────────────────────────────
-    // The other half of drill-down: ask for a SLICE of the world rather than the
-    // whole thing. Filters compose — kind, an arc-position window, a radius
-    // around the car — and the answer is always capped and id-bearing so the
-    // agent can follow up with describe().
-    //
-    // Repeated dressing is returned PROTOTYPE + INSTANCES, not N near-identical
-    // records: one shape/size for the kind, then a compact row per instance.
-    // Semantic similarity is what drives context rot, so collapsing 400 pines
-    // into "this is what a pine is" + 400 positions is both the token win and
-    // the accuracy win.
     function query(opts) {
       const bad = notReady();
       if (bad) return bad;
@@ -1893,8 +1588,6 @@ const AgentView = (function () {
       const total_ = hits.length;
       const page = hits.slice(0, cap);
 
-      // Prototype per kind: the median-ish size, so an instance row can be just
-      // a position. Instances that differ materially carry their own size.
       const protos = {};
       for (const h of page) {
         const k = h.p.kind;
@@ -1915,8 +1608,6 @@ const AgentView = (function () {
               : h.pos.lat == null ? "off-course" : h.pos.lat > 0 ? "right" : "left",
           distM: r1(h.d), bearingDeg: h.bearingDeg,
         };
-        // Only carry a size when it differs from the prototype by >25% on any
-        // axis — otherwise the prototype already said it.
         const pr = prototypes[h.p.kind].sizeM;
         const dv = [h.p.w, h.p.h, h.p.d];
         for (let a = 0; a < 3; a++) {
@@ -2009,13 +1700,7 @@ const AgentView = (function () {
           lampPosts: (track.lampPosts || []).length,
           registryComplete: reg.dropped === 0, dropped: reg.dropped,
         },
-        // Contiguous runs of one kind on one side, collapsed. This is the bulk
-        // of the circuit's dressing expressed as a few dozen lines.
         features: m.features,
-        // Linear furniture — armco, catch fence, tyre walls, boundary walls —
-        // recorded as spans by the emitters rather than per 3-6 m segment.
-        // Length is the wrapped difference, and `|| 1` matches along()'s
-        // `|| n`: s0≡s1 (mod 1) walks a FULL lap, not zero metres.
         spans: reg.spans.map((sp) => ({
           kind: sp.kind, side: sp.side > 0 ? "right" : "left",
           fromFrac: sp.s0, toFrac: sp.s1,
@@ -2071,19 +1756,6 @@ const AgentView = (function () {
       return out;
     }
 
-    // ── rollout() — drive, then summarise ───────────────────────────────────
-    // The single biggest token win available. A 5 s experiment at 60 Hz is 300
-    // observations; reading them back frame by frame costs tens of thousands of
-    // tokens to answer a question ("did that setup carry more speed through T4?")
-    // that a digest answers in a few hundred.
-    //
-    // It also encodes the loop the real-time agent literature converges on: an
-    // LLM cannot decide at 60 Hz, so the policy runs at policyHz (default 10)
-    // while physics runs every tick. Pass a constant `input` instead and it is
-    // a pure open-loop probe.
-
-    // Which corner, if any, contains this arc position. entryS > exitS means the
-    // corner wraps the start/finish line.
     function cornerAt(s, list) {
       for (const c of list) {
         if (c.entryS <= c.exitS) { if (s >= c.entryS && s <= c.exitS) return c; }
@@ -2110,11 +1782,6 @@ const AgentView = (function () {
                     "policy is world => ({steer,throttle,brake}); use `input` for "
                     + "a constant input instead");
       }
-      // numOr, not `||`: isNum accepts a numeric STRING, and clamp returns its
-      // argument untouched when it is already in range — so a stringified dt
-      // survived validation as a string, then `raceT += dt` concatenated instead
-      // of adding (corrupting session state for every later call) and the digest
-      // threw on dt.toFixed. Coerce before clamping.
       const dt = clamp(numOr(o.dt, 1 / 60), 1 / 240, 1 / 10);
       const seconds = clamp(numOr(o.seconds, 5), 0.05, 120);
       const ticks = Math.max(1, Math.round(seconds / dt));
@@ -2133,9 +1800,6 @@ const AgentView = (function () {
       }
       if (o.input !== undefined) G._testInput = o.input || null;
 
-      // A rollout calls world() internally when a policy is supplied, which would
-      // otherwise advance seq and clobber the delta baseline of the caller's own
-      // observation chain. Snapshot and restore it.
       const savedPayload = lastPayload, savedSeq = lastSeq, savedCounter = seq;
 
       const p = G.player;
@@ -2160,10 +1824,6 @@ const AgentView = (function () {
                         "fix the policy; it receives world({detail:'brief'}) and "
                         + "must return {steer,throttle,brake} or null");
           }
-          // A policy that THROWS is caught below, but one that RETURNS
-          // {steer:NaN} was not: ?? in the driver only guards null/undefined, so
-          // a NaN steer reached the physics unfiltered. Drop non-finite steer
-          // rather than integrate it.
           if (inp && !isNum(inp.steer)) inp = Object.assign({}, inp, { steer: 0 });
           G._testInput = inp || null;
         }
@@ -2241,12 +1901,8 @@ const AgentView = (function () {
         wallContacts: contacts,
         lapsCompleted: lapsDone,
         lastLapS: lapsDone > 0 && p.lastLap ? r2(p.lastLap) : null,
-        // The point of the whole exercise for tuning work: minimum speed through
-        // each corner actually driven, which is what a setup change moves.
         cornerMinSpeedKph: Object.keys(cornerMin).map((t) =>
           ({ turn: t, minSpeedKph: r1(cornerMin[t] * 3.6) })),
-        // `reason`/`atS` are the FIRST event (unchanged); `events` is every one,
-        // and `last` is the state the interval actually ended in.
         terminal: { done: !!terminalReason, reason: terminalReason, atS: terminalAtT,
                     events: terminalEvents,
                     last: terminalEvents.length
@@ -2257,19 +1913,6 @@ const AgentView = (function () {
       };
     }
 
-    // ── render() — the one optional composition aid ─────────────────────────
-    // The machine-observation research is blunt about character rasters: the
-    // same content reads 30-45 pts worse as a grid of glyphs than as the image,
-    // and denser grids read WORSE, not better. So the four rasters — the camera
-    // view, the top-down map, the whole-circuit document, the car elevations —
-    // are demoted from four peer perception tools to ONE call behind a `what`
-    // switch, explicitly flagged as approximate. Decisions should come from
-    // world()/scene()/trackInfo(); render() is for coarse spatial intuition and
-    // human-readable debugging, not for reading geometry off the pixels.
-    //
-    // (frame()/plan()/worldModel()/visible() were exported as deprecated
-    // aliases for a while; every caller has been migrated to render({what})
-    // and scene({visible}), so the internals below are no longer exported.)
     function render(opts) {
       const o = opts || {};
       const what = o.what || "view";
@@ -2296,26 +1939,7 @@ const AgentView = (function () {
       return out;
     }
 
-    // ── agentHelp() — discovery ─────────────────────────────────────────────
-    // Progressive disclosure: ~200 tokens naming the surface and the loop, so an
-    // agent can find its way without loading docs/DEBUG-HOOKS.md.
-    // ── objective() — what the game IS, not how the API works ───────────────
-    // agentHelp() documents the surface; nothing said what the agent is trying
-    // to DO. The evidence for adding exactly this, and no more: attaching domain
-    // meaning to the identifiers an agent already reads is the single best token
-    // spend measured (BIRD text-to-SQL, 34.9% -> 54.9% from one "evidence"
-    // sentence per question), and reading a game's rules can beat a lot of
-    // experience (SPRING, NeurIPS 2023: GPT-4 given the Crafter paper outscored
-    // RL baselines trained for 1M steps).
-    //
-    // Deliberately STATIC facts only — the win condition, the trade-offs, the
-    // hard limits. It does NOT try to describe how the car behaves: one-shot
-    // dynamics rules are shown to improve then DEGRADE an agent (Cogito Ergo
-    // Ludo ablation), because a fixed description cannot be revised when it is
-    // wrong. Dynamics are for the agent to learn by calling rollout()/act().
-    //
-    // And it is one small call, not a doc: repository context files measurably
-    // fail to help while costing >20% more tokens (ETH Zurich, arXiv 2602.11988).
+    // Static win condition / trade-offs only — learn car dynamics via rollout()/act().
     function objective() {
       return {
         apiVersion: API_VERSION,
@@ -2354,19 +1978,6 @@ const AgentView = (function () {
       return {
         apiVersion: API_VERSION, physicsVersion: PHYSICS_VERSION,
         conventions: CONVENTIONS,
-        // Six calls, grouped by the question being asked. The surface is
-        // deliberately small: symbolic/relational data (world/scene/trackInfo)
-        // is what an agent reads to DECIDE; render() is the one optional raster,
-        // demoted to a coarse composition aid because character grids read worse
-        // than the structured numbers they are drawn from.
-        // Agent view is the TEXT-NATIVE mirror of the __apex debug toolkit:
-        // everything a developer inspects with the hooks + screenshots, in text.
-        // The curated calls below COMPOSE and render the spatial/visual things a
-        // dev would screenshot; the raw read hooks under `read` already return
-        // clean JSON, so call those directly; `control` is the verbs.
-        // Kept terse on purpose: what each field MEANS now lives in `fields`
-        // below, and what the GAME is lives in objective(). These say only which
-        // question each call answers.
         perceive: {
           "world({detail,horizonS,points,corners,since})":
             "WHERE AM I — egocentric snapshot, the per-tick spine. "
@@ -2384,8 +1995,6 @@ const AgentView = (function () {
             "SHOW IT — the one optional raster, APPROXIMATE. "
             + "what: 'view'|'map'|'circuit'|'car'. For intuition, not measurement",
         },
-        // DRILL-DOWN: the world is stored in full and PULLED by id. Dumping it
-        // would be both huge and less accurate — ask for one thing, or a slice.
         detail: {
           "describe(id)":
             "EVERYTHING ABOUT ONE THING — 'prop:12' | 'corner:T3' | 'car:4' | "
@@ -2448,8 +2057,6 @@ const AgentView = (function () {
           "terminal.reason": "why the episode ended — retired vs finished vs wrong_way vs rescued",
           "session.seed": "replay this exact episode with reset(frac, speed, x, seed)",
         },
-        // These __apex hooks ALREADY return clean JSON — call them directly, no
-        // agent-view wrapper needed. Grouped by what you inspect.
         read: {
           telemetry: "probe() physState() obs() scan() inputState() cars() carAt(i)",
           timing: "timing() sectorState() lapHistory() fieldState()",
@@ -2457,8 +2064,6 @@ const AgentView = (function () {
           geometry: "corners() wallStats() trackProfile() trackShape() groundY(f,l)",
           catalog: "tracks() teams() info()",
         },
-        // The control verbs — call on __apex to stage/drive the sim; read the
-        // result back with world()/field()/the hooks above.
         control: {
           stage: 'race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()',
           reproduce: "seed(n) sets the sim seed; same seed + same inputs => same "
@@ -2493,17 +2098,13 @@ const AgentView = (function () {
       };
     }
 
-    // ── scene() — named scenery near you ────────────────────────────────────
+    // scene() — named scenery near you
     // visible() locates scenery MASS (72 m anonymous cells). This names it. The
     // data comes from track.props, the registry buildProps now fills at each
     // semantic emitter (js/track/tracks.js note()); before that existed the only
     // thing surviving a build with a label on it was track.lampPosts.
     function scene(opts) {
       const o0 = opts || {};
-      // scene() answers "what is around me" two ways: by RADIUS around the car
-      // (the default) or, with {visible:true}, by what the CAMERA can actually
-      // see — the on-screen list that used to be visible(). One call, one
-      // question ("what is around me"), a mode switch for the frame of reference.
       if (o0.visible) return visible(o0);
       if (!G.track) {
         return fail("NoTrackError", "no track is loaded",
@@ -2527,8 +2128,6 @@ const AgentView = (function () {
       const cap = Math.max(1, Math.min(o.limit | 0 || 24, 200));
       const kinds = Array.isArray(o.kinds) && o.kinds.length ? o.kinds : null;
 
-      // Egocentric on the car when there is one, else on the camera — and say
-      // which, because "40 m ahead" means nothing without knowing ahead of what.
       let ox, oz, head, from;
       if (G.player && G.player.px != null) {
         ox = G.player.px; oz = G.player.pz; head = G.player.head; from = "player";
@@ -2565,10 +2164,6 @@ const AgentView = (function () {
                              : psd.lat == null ? "off-course"
                              : psd.lat > 0 ? "right" : "left",
                     sizeM: [p.w, p.h, p.d], at: [p.x, p.y, p.z],
-                    // whether sizeM came from the emitted geometry or the call
-                    // site's guess, and for anonymous assemblies how much of the
-                    // box is actually solid — a caller reasoning about clearance
-                    // needs both
                     measured: p.measured || undefined,
                     parts: p.parts, fill: p.fill });
       }
@@ -2614,7 +2209,7 @@ const AgentView = (function () {
       };
     }
 
-    // ── visible() — what is actually on screen ──────────────────────────────
+    // visible() — what is actually on screen
     // The renderer already answers this every frame: it extracts frustum planes
     // from frame.viewProj and tests them against per-chunk AABBs. Nothing was
     // retained, so the answer was thrown away 60 times a second. This runs the
@@ -2634,9 +2229,6 @@ const AgentView = (function () {
       if (!(cw > 1e-6)) return null;                 // at or behind the eye
       const nx = cx / cw, ny = cy / cw;
       const inFrame = nx >= -1 && nx <= 1 && ny >= -1 && ny <= 1;
-      // screenPct is only meaningful in frame. A point sitting on the eye plane
-      // has w -> 0 and projects to absurd coordinates (57.7% vs 27629%) — that
-      // is correct projective maths and useless to a reader, so don't ship it.
       return {
         inFrame,
         ndc: inFrame ? [r2(nx), r2(ny)] : null,
@@ -2686,10 +2278,6 @@ const AgentView = (function () {
                 || String(GameTables.CAM_MODES[G.camMode] || G.camMode),
           debugCam: !!G.dbgCam,
         },
-        // Everything here describes the LAST RENDERED frame. render() is skipped
-        // under headless, and a jump()/camera change does not take effect until
-        // a frame draws — so without this flag an agent can read a camera that
-        // is hundreds of metres from where it just put the car.
         framePending: !!G.headlessMode,
       };
       if (G.headlessMode) {
@@ -2698,7 +2286,6 @@ const AgentView = (function () {
                     + "let a frame draw for a live answer";
       }
 
-      // ── scenery chunks ──
       const mesh = G.track.meshes && G.track.meshes.props;
       const chunks = mesh && mesh.chunks;
       if (!chunks) {
@@ -2738,7 +2325,6 @@ const AgentView = (function () {
         };
       }
 
-      // ── cars ──
       out.cars = [];
       for (const c of G.cars) {
         const [wx, wz] = carWorld(c);
@@ -2750,25 +2336,18 @@ const AgentView = (function () {
           distM: distTo(wx, wz), bearingDeg: bearing,
           inFrame: !!(p && p.inFrame),
           screenPct: p ? p.screenPct : null,
-          // Look-direction, not clip-space w. project() is null only on the
-          // near plane; a car 100° off to the side still has w>0. |bearing|
-          // > 90 is "behind where you look".
           behindCamera: Math.abs(bearing) > 90,
         });
       }
       out.cars.sort((a, b) => a.distM - b.distM);
       out.carsInFrame = out.cars.filter((c) => c.inFrame).length;
 
-      // ── corners ──
       out.corners = [];
       for (const c of corners()) {
         Tracks.sample(G.track, c.s, scr);
         const wx = scr.p[0], wz = scr.p[2];
         const d = distTo(wx, wz);
         const p = project(vp, wx, scr.p[1], wz);
-        // A corner behind the camera projects to null — but "T1 is 190 m behind
-        // you" is exactly what an agent needs after a spin, so distance decides
-        // inclusion and the projection only decides whether it is on screen.
         if (!(p && p.inFrame) && d > 400) continue;
         const bearing = bearingTo(wx, wz);
         out.corners.push({ turn: c.turn, dir: c.dir, distM: d,
@@ -2782,7 +2361,7 @@ const AgentView = (function () {
       return out;
     }
 
-    // ── trackInfo() — static, fetch once per session ─────────────────────────
+    // trackInfo() — static, fetch once per session
     // Constant for the whole session, so it must never ride in the per-tick
     // payload. Progressive disclosure: hand the agent a pointer, not the data.
     function trackInfo(opts) {

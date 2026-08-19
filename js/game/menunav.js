@@ -1,44 +1,13 @@
 "use strict";
-// MenuNav — desktop input for the menus: a mouse wheel / trackpad that scrolls
-// the panel you are looking at, and arrow keys that move through it.
-//
-// WHY THIS EXISTS. Every menu is a `.sheet` whose head and foot are pinned and
-// whose ONE scroll region is a `.pane` inside it (see css/components.css). That
-// is exactly right for touch — you drag the list itself — and it is why the
-// select screen's circuit list, the only scrollable box on that screen, is a
-// 489x441 strip in the right-hand column. A trackpad user does not aim before
-// scrolling: they rest the pointer wherever the content they are reading is (the
-// circuit preview map, the car stats, the sheet title) and swipe. Every one of
-// those places is OUTSIDE the pane, and the whole chain above it —
-// #sel-track-section, .sheet, html/body — is `overflow: hidden`, so the wheel
-// event has nowhere to go and the menu appears frozen. Nothing was broken; the
-// only scrollable target was simply too small to hit by accident.
-//
-// So: a wheel that lands on no scrollable ancestor is REDIRECTED to the nearest
-// pane of the open menu, and the arrow keys move focus through that menu and
-// pull the focused row into view. Both are desktop affordances only; neither
-// changes a single touch gesture.
-//
-// The module owns no game state and self-initialises, like js/game/scrollfade.js
-// (which it tells to repaint after a redirected scroll, so the edge fade and the
-// position indicator stay honest).
 window.MenuNav = (function () {
 
-  // The menu LAYERS and "which one is on top" both live in js/game/uilayers.js
-  // now — js/game/input.js and js/game/topmodal.js ask the same module the same
-  // question, which is the whole point of it. This file used to carry its own
-  // copy of the list, and the copies drifted by five screens.
   const UL = window.UiLayers;
 
-  // Scroll regions, same list ScrollFade watches — `.pane` first and by class,
-  // because that is the design system's own name for "a scroll region".
   const SCROLLERS = ".pane,.panel-scroll,.scroll-y,.dh-content,#track-detail-body";
 
   const FOCUSABLE = "button:not([disabled]),a[href],input:not([disabled])," +
     "select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
 
-  // What the browser would have scrolled for one notch of a line/page-mode wheel.
-  // Firefox and some Windows mice report lines, not pixels.
   const LINE_PX = 16;
   const PAGE_FRAC = 0.9;       // PageUp/PageDown move just under a screenful
 
@@ -67,9 +36,6 @@ window.MenuNav = (function () {
     return dy < 0 ? el.scrollTop > 1 : el.scrollTop < max - 1;
   }
 
-  // A scroll REGION with content to scroll — regardless of where it is parked.
-  // `canScroll` answers "can this move right now"; this answers "is this a pane
-  // that owns the gesture", which is the question containment turns on.
   function isRegion(el) {
     if (!el || el.nodeType !== 1 || !el.matches || !el.matches(SCROLLERS)) return false;
     const oy = getComputedStyle(el).overflowY;
@@ -86,11 +52,6 @@ window.MenuNav = (function () {
     return out;
   }
 
-  // Which pane a gesture at (x, y) meant. Pair-on garage still has a rail and
-  // an options list, so "nearest" weighs the horizontal axis hardest: a swipe
-  // over the left column is about the left column even when the right one is
-  // the taller, more obvious target. Circuit Select's preview column is not a
-  // scroller; the wheel redirects to #sel-tracks.
   function nearestPane(layer, x, y, dy) {
     const list = panes(layer, dy);
     if (list.length < 2) return list[0] || null;
@@ -131,19 +92,6 @@ window.MenuNav = (function () {
     if (!layer) return;
     const dy = wheelPx(e);
     if (!dy) return;
-    // If anything from the cursor up to the layer can already take the scroll,
-    // this is a normal wheel over a normal list — leave the browser alone. The
-    // native path scrolls smoothly and latches; a redirect would be worse.
-    //
-    // A REGION YOU ARE POINTING AT KEEPS THE GESTURE EVEN WHEN IT CANNOT MOVE.
-    // Only `canScroll` used to end this walk, and it goes false the moment a pane
-    // is pinned at either end — so a wheel over the garage's category rail, once
-    // the rail bottomed out, was handed to the option list beside it, and the two
-    // panes read as one. That is what `overscroll-behavior: contain` already
-    // promises for the native path (css/components.css sets it on every .pane);
-    // the redirect was quietly breaking the promise. The redirect exists for
-    // gestures that land on NO scroll region — the sheet head, the stats block,
-    // the circuit map — and that is all it should do.
     const stop = layer.parentNode;
     for (let el = e.target; el && el !== stop; el = el.parentElement) {
       if (canScroll(el, dy)) return;
@@ -152,8 +100,6 @@ window.MenuNav = (function () {
     const pane = nearestPane(layer, e.clientX, e.clientY, dy);
     if (pane && scrollPane(pane, dy)) e.preventDefault();
   }
-
-  /* ---------------- arrow-key navigation ---------------- */
 
   function items(layer) {
     const out = [];
@@ -191,34 +137,7 @@ window.MenuNav = (function () {
     return best;
   }
 
-  // Spatial move, not DOM order: the menus mix vertical lists (circuits), grids
-  // (the twelve team tiles) and horizontal chip rows (drivers) inside the same
-  // layer, and only geometry gives the right answer in all three — down a column
-  // of tiles, along a row of chips, across from one column of the select screen
-  // to the other.
-  //
-  // But geometry ONLY within the BAND: a candidate that does not overlap the
-  // perpendicular extent of where you are is not "further down this column", it is
-  // somewhere else on the screen. Scoring those alongside the rest is how ArrowDown
-  // from the BACK button landed on Zandvoort, the fourteenth circuit, purely
-  // because it scored lowest.
-  //
-  //   `sign` > 0 for Down / Right. `best` is the nearest thing ahead in the band;
-  //   `edge` is the FURTHEST thing behind in it, i.e. where a wrap lands.
   function step(from, dx, dy, list) {
-    // A `.chip-row` is a BOUNDED SELECTOR — the two DRIVER chips in the garage,
-    // and every race-settings option group (`role="group"`). Left/Right move
-    // between that group's OWN chips in reading order and leave only from an end.
-    // Pure geometry gets this wrong the moment a chip row WRAPS: in the garage's
-    // narrow TEAM panel the two driver chips stack into a column, so `#1` sits
-    // ABOVE `#2` rather than left of it, and ArrowLeft from `#2` finds the
-    // SUSPENSION button — which really is the nearest thing in `#2`'s leftward
-    // band — instead of `#1`. Keying off the group, not the pixels, keeps
-    // Left/Right on the chips whether the row is laid out flat or wrapped. This
-    // is identical to the spatial result for a row that does NOT wrap (DOM order
-    // is reading order there), and falling through at the ends preserves the
-    // "no sideways wrap" rule below — Right off the last chip still leaves.
-    // Vertical moves stay geometric, which is how you step off a STACKED row.
     if (dx) {
       const row = from.closest && from.closest(".chip-row");
       if (row) {
@@ -275,15 +194,7 @@ window.MenuNav = (function () {
     return n ? list[((j % n) + n) % n] : null;
   }
 
-  // Where focus lands on the first arrow press: whatever the screen is already
-  // showing as chosen, so the first press moves off the current team / circuit
-  // rather than jumping to the top of the sheet.
   function currentItem(layer, list) {
-    // A screen may name a primary starting action independently of its stateful
-    // controls. Keep this as a separate lookup: querySelector returns document
-    // order across a combined selector, so title-screen Sound (aria-pressed)
-    // would otherwise beat the later Career action even if Career were included
-    // in the same selector.
     const preferred = layer.querySelector("[data-menu-default]");
     if (preferred && list.indexOf(preferred) >= 0) return preferred;
     const sel = layer.querySelector("[aria-selected='true'],[aria-pressed='true'],.active");
@@ -301,16 +212,11 @@ window.MenuNav = (function () {
 
   function focusItem(el, layer) {
     el.focus({ preventScroll: true });
-    // block:"nearest" keeps a row that is already visible exactly where it is —
-    // centring every step would make the list crawl under the cursor.
     el.scrollIntoView({ block: "nearest", inline: "nearest" });
     const sc = scrollerOf(el, layer);
     if (sc && window.ScrollFade) window.ScrollFade.paint(sc);
   }
 
-  // After a page: if the focused item is no longer inside its pane, move focus to
-  // the item nearest the pane's top edge that IS. Focus only — no scrollIntoView,
-  // which would undo the page we just performed.
   function keepFocusInView(pane, active, list) {
     if (!active || !pane.contains(active)) return;
     const p = pane.getBoundingClientRect();
@@ -327,9 +233,6 @@ window.MenuNav = (function () {
     if (best) best.focus({ preventScroll: true });
   }
 
-  // Controls that own the arrow keys themselves. A range slider is the one that
-  // matters here (the settings and lighting panels are full of them): stealing
-  // Left/Right from a focused slider would make it unadjustable by keyboard.
   function ownsArrows(el) {
     if (!el) return false;
     const t = el.tagName;
@@ -363,12 +266,6 @@ window.MenuNav = (function () {
     const inLayer = active && layer.contains(active) && list.indexOf(active) >= 0;
 
     if (paging) {
-      // THE REGION HOLDING FOCUS OWNS THESE KEYS. Home and End used to address
-      // the whole layer, so from inside the garage's option list End jumped to
-      // DONE in the sheet foot and Home landed on a preview control outside the
-      // sheet altogether — from a list of twenty parts, neither key could reach
-      // that list's own ends. Scope them to the pane focus is in; fall back to
-      // the layer when it is in none (the head, a foot button).
       const region = inLayer ? scrollerOf(active, layer) : null;
       if (key === "Home" || key === "End") {
         const scope = region ? list.filter((el) => region.contains(el)) : list;
@@ -382,18 +279,10 @@ window.MenuNav = (function () {
         nearestPane(layer, window.innerWidth / 2, window.innerHeight / 2, sign);
       if (!pane || !scrollPane(pane, sign * pane.clientHeight * PAGE_FRAC)) return;
       e.preventDefault();
-      // FOCUS TRAVELS WITH THE PAGE. Paging moved the pane and left focus behind,
-      // stranded off the top or bottom of it — so the row the keyboard was on was
-      // one the player could no longer see, and the next arrow press moved from
-      // there and snapped the pane back. Hand focus to the nearest row the page
-      // just brought on screen.
       if (region) keepFocusInView(region, active, list);
       return;
     }
 
-    // Always consume the arrow keys while a menu is open, even when the move
-    // finds nothing: the alternative is the browser scrolling the document (or,
-    // over the pause menu, the key reaching the car).
     e.preventDefault();
     if (!inLayer) { focusItem(currentItem(layer, list), layer); return; }
     const next = step(active, dir[0], dir[1], list);
@@ -414,8 +303,5 @@ window.MenuNav = (function () {
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  // FOCUSABLE is exported so a second caller (the gamepad A-button seam in
-  // js/game/input.js) can ask "is this a real actionable control" without a
-  // second copy of the selector to drift out of step with this one.
   return { activeLayer, nearestPane, onWheel, onKeyDown, FOCUSABLE, step, pickSideways };
 })();

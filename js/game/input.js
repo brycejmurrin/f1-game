@@ -1,26 +1,4 @@
-/*
- * Input: keyboard / gamepad / tilt / touch for Apex 26.
- *
- * Steering sources, by priority (see steer()): keyboard (held or still
- * returning to center) > gamepad (a connected pad with its stick
- * deflected) > on-screen steer buttons (steerMode "buttons") > tilt
- * (enabled and delivering fresh data) > touch (anchored drag on the
- * canvas — the finger's displacement from its touch-down point is the
- * wheel; the old lower-screen-halves rule is retired).
- *
- * Gamepad uses the W3C Gamepad API ("standard" mapping). It has no change
- * events, so poll() must be called once per frame from the game loop; it
- * works on desktop and iOS 14.5+ Safari with a paired PS5/Xbox/MFi pad.
- *
- * Tilt comes from the DeviceOrientationEvent API. Which euler angle maps
- * to a physical left-right tilt depends on how the screen is rotated, so
- * we remap by screen.orientation.angle. iOS 13+ gates the sensor behind
- * DeviceOrientationEvent.requestPermission(), which may only be called
- * from a user gesture — requestGyro() must be invoked from the start tap.
- *
- * No DOM access at module load time: everything is wired inside init()
- * so the script can be loaded headless.
- */
+/* Input: keyboard / gamepad / tilt / touch for Apex 26. Steering sources, by priority (see steer()): keyboard (held or still returning to center) > gamepad (a con… */
 "use strict";
 
 const Input = (function () {
@@ -28,31 +6,14 @@ const Input = (function () {
   let MAX_TILT = 36;          // degrees of tilt for full steering lock (higher = less sensitive)
   let DEADZONE = 2.5;         // degrees ignored around neutral — fixed small; not a player knob
   const TILT_SLEW = 8;        // fixed safety cap (steer units/s): a last guard so a hand jolt
-                              // can't snap the wheel. Smoothing itself is the One-Euro filter.
-  // THE SHARED DIGITAL STEER RAMP. Any steer command that arrives as a SWITCH
-  // rather than as a position — an arrow key, an on-screen arrow button, the
-  // moment a finger leaves the glass — has to become an angle over time, or the
-  // wheel goes to the stop in one tick. The keyboard has always had this; the
-  // on-screen arrows and canvas touch did not, which is why those two modes
-  // steered like a light switch. All three now share these rates.
   let KEY_RAMP_IN = 6;        // steer units/s toward full lock
   let KEY_RAMP_OUT = 8;       // steer units/s back to centre (quicker: releasing
-                              // is a request to stop, and should be answered)
-  // ADAPTIVE BUTTONS (STEERING & ASSISTS sheet; default mid). A 0..1 mix, not a switch:
-  // 0 = the fixed rates above; 1 = the missing RATE half of SPEED STEER, for
-  // digital sources only. The full curve is the same hyperbola as lockTaper
-  // (`1 / (1 + vStd / STEER_SPEED_REF)`); the slider blends toward it so a
-  // player can ask for a little heaviness at speed or a lot. Analog travel on
-  // the on-screen arrows (slide opposite the steer direction to ease) is
-  // blended the same way. Release still uses KEY_RAMP_OUT: letting go is a
-  // request to stop and should stay quick.
   let adaptiveMix = 0;
   let steerSpeedRef = 41.7;   // default SPEED STEER v5; pushed from steer-tuning
   let speedStdOverride = null;
   let speedProvider = null;
   const DEG = Math.PI / 180;
 
-  // keyboard
   let keyLeft = false;
   let keyRight = false;
   let keyBrake = false;
@@ -60,11 +21,8 @@ const Input = (function () {
   let keySteerVal = 0;        // ramped -1..1
   let keySteerT = 0;          // last ramp timestamp, ms (0 = unset)
 
-  // edge-triggered: overtake (X / OT tap), boost toggle (Space / BOOST tap)
   let overtakePressed = false;
   let boostTogglePressed = false;
-  // edge-triggered ACTIVE AERO toggle (Z key / d-pad up / AERO tap). Named for
-  // the modes it swaps between: Z-mode (downforce) and X-mode (low drag).
   let aeroTogglePressed = false;
   // edge-triggered gear shifts (manual mode)
   let shiftUpPressed = false;
@@ -81,22 +39,12 @@ const Input = (function () {
   let padSteer = 0;            // -1..1 from left stick / d-pad
   let padThrottle = false;
   let padBrake = false;
-  // Analog pedal travel, kept alongside the boolean. The triggers report 0..1 and
-  // the physics rewards MODULATION — trail-braking is a documented core mechanic
-  // (the friction ellipse hands grip back to the front tyres as you ease off) —
-  // but thresholding the trigger to a boolean here threw all of that away, so a
-  // pad driver could only stamp or lift. throttle()/braking() stay boolean for
-  // every existing caller; throttleLevel()/brakeLevel() expose the travel.
   let padThrottleVal = 0;
   let padBrakeVal = 0;
   let padPrevButtons = [];     // previous frame's pressed state, for rising edges
   const PAD_DEADZONE = 0.14;   // driving left-stick centre slop (ignored, then re-scaled)
   const PAD_NAV_DEADZONE = 0.22; // menu sticks only — larger so a resting stick does not creep
 
-  // gamepad MENU navigation (see the mapping table above pollGamepad). The pad
-  // has no OS key-repeat, so a held D-pad/stick direction is turned back into
-  // one — an initial delay before the first repeat, then a faster steady
-  // cadence, mirrored from typical desktop OS defaults.
   let padNavDir = null;           // held direction while a menu is open, or null
   let padNavNextT = 0;            // nowMs() of the next synthesized repeat
   let padNavSeeded = false;       // one ArrowDown seed per open-menu session
@@ -105,9 +53,6 @@ const Input = (function () {
   const PAD_NAV_REPEAT_MS = 130;  // interval between repeats while held
   const PAD_NAV_KEYS = { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" };
 
-  // canvas touch steering: identifier -> { anchorX, x, seq }
-  // `seq` is a monotonic stamp of when this touch last spoke — see
-  // recomputeTouchSteer for why insertion order cannot answer that question.
   const touches = new Map();
   let touchSeq = 0;
   let touchSteer = 0;      // the winning touch's drag, -1..1
@@ -118,9 +63,6 @@ const Input = (function () {
   // on-screen buttons (multi-pointer safe via per-button pointer sets)
   let btnThrottle = false;
   let btnBrake = false;
-  // Pedal travel for the on-screen pedals, the touchscreen's answer to an
-  // analog trigger. 1 on a plain press (the old behaviour, unchanged for anyone
-  // who just taps); see PEDAL_TRAVEL_PX for the ease-off gesture.
   let btnThrottleVal = 0;
   let btnBrakeVal = 0;
   let btnSteerLeft = false;
@@ -130,7 +72,6 @@ const Input = (function () {
   let btnSteerVal = 0;     // ramped -1..1 (the arrows are a keyboard with fat keys)
   let btnSteerT = 0;       // last ramp timestamp, ms
 
-  // tilt
   let tiltRaw = 0;            // latest remapped tilt, degrees (raw, like Neon Drift)
   let tiltZero = 0;           // calibrated neutral
   let tiltSeen = false;       // we have actually received sensor data
@@ -140,19 +81,10 @@ const Input = (function () {
   let steerMode = "tilt";
   let tiltSmoothed = 0;       // One-Euro-filtered tilt angle (deg)
   let lastOrientMs = 0;
-  // One-Euro adaptive low-pass filter (Casiez, Roussel & Vogel 2012) on the tilt
-  // roll angle. The cutoff frequency RISES with how fast the angle is changing:
-  // when the hand is still it filters hard (kills jitter on straights), when the
-  // hand moves fast it barely filters (no lag mid-corner). This replaces the old
-  // fixed EMA + slew-rate limiter, which had to trade one for the other.
-  //   minCutoff : Hz at rest — lower = smoother/steadier (the SMOOTHING slider)
-  //   beta      : how much the cutoff opens up with speed — higher = more responsive
   let OE_MIN_CUTOFF = 1.2;    // Hz — THE smoothing knob (set by the SMOOTHING slider)
   let OE_BETA = 0.10;
   const OE_DCUTOFF = 1.0;     // Hz, cutoff for the derivative estimate
   let oePrev = 0, oeDPrev = 0, oeInit = false;
-  // Final output stage: a FIXED slew-rate cap (TILT_SLEW units/s) as a last guard
-  // against a hand jolt; the One-Euro min-cutoff above is the player SMOOTHING knob.
   let tiltSteerVal = 0;       // last steer command emitted (-1..1)
   let tiltSteerT = 0;         // timestamp of the last tiltSteering() call (ms)
 
@@ -190,8 +122,6 @@ const Input = (function () {
     const r = 2 * Math.PI * cutoff * dt;
     return r / (r + 1);
   }
-  // Filter a raw angle sample (deg) given the elapsed time (s). Adaptive: heavy
-  // smoothing when slow, light when fast — the standard fix for "jittery vs laggy".
   function oneEuro(x, dt) {
     if (!oeInit) { oePrev = x; oeDPrev = 0; oeInit = true; return x; }
     if (dt <= 0) return oePrev;
@@ -202,8 +132,6 @@ const Input = (function () {
     oePrev = xHat; oeDPrev = dxHat;
     return xHat;
   }
-
-  /* ---------------- tilt ---------------- */
 
   function screenAngle() {
     if (typeof screen !== "undefined" && screen.orientation &&
@@ -216,13 +144,6 @@ const Input = (function () {
 
   function onOrient(e) {
     if (e.beta === null && e.gamma === null) return;
-    // Build the gravity direction in device coordinates from the Euler angles
-    // (independent of alpha/compass). Steering off a gravity-based ROLL — rather
-    // than the raw beta/gamma angle — keeps the response smooth and consistent
-    // however upright the phone is held: raw Euler angles jump and rescale near
-    // gimbal lock (phone near vertical), which made tilt "act differently" when
-    // held up vs laid flat. At flat the roll equals gamma/beta, so the familiar
-    // feel is preserved.
     const beta = (e.beta ?? 0) * DEG;     // front-back (X)
     const gamma = (e.gamma ?? 0) * DEG;  // left-right (Y)
     const cb = Math.cos(beta), sb = Math.sin(beta);
@@ -283,12 +204,7 @@ const Input = (function () {
   }
 
   function calibrate() {
-    // Capture the true neutral with no clamp — a landscape grip's neutral
-    // angle is often well past ±35°, and clamping it leaves a residual offset
-    // that pulls the car to one side. Recalibrated on orientation change too.
     tiltZero = tiltRaw;
-    // Reset One-Euro state so the first post-calibration sample sees dx=0,
-    // not a giant jump from the pre-calibration oePrev → avoids a derivative spike.
     oePrev = tiltRaw; oeDPrev = 0; oeInit = true;
     tiltSmoothed = tiltRaw;
     tiltSteerVal = 0;
@@ -299,7 +215,6 @@ const Input = (function () {
     return steerMode === "tilt" && tiltSeen;
   }
 
-  // ---- deterministic tilt emulation (test/autopilot harness) ----
   // Drive the FULL tilt pipeline with an explicit timestep instead of wall-clock:
   // feed a raw tilt angle (deg) and dt (s), get back the steer command (-1..1)
   // after the real One-Euro filter, dead zone, MAX_TILT map and slew limiter. Lets
@@ -320,8 +235,6 @@ const Input = (function () {
     oeInit = false; oePrev = 0; oeDPrev = 0;
     tiltSmoothed = 0; tiltSteerVal = 0; tiltZero = 0; tiltRaw = 0;
   }
-  // Invert the dead-zone + MAX_TILT map: the raw tilt angle (deg) needed to command
-  // a given steer target (-1..1). Used to convert an autopilot steer into a tilt.
   function steerToTilt(cmd) {
     if (Math.abs(cmd) < 1e-4) return 0;
     return clamp(cmd, -1, 1) * (MAX_TILT - DEADZONE) + Math.sign(cmd) * DEADZONE;
@@ -338,8 +251,6 @@ const Input = (function () {
   // riding on it. Now the only difference between the two callers is the one
   // that is supposed to differ: where dt comes from.
 
-  // Calibrated, filtered tilt angle -> steer target (-1..1), with a soft dead
-  // zone subtracted rather than clamped, so there is no step at its edge.
   function tiltTarget() {
     let d = tiltSmoothed - tiltZero;
     if (Math.abs(d) < DEADZONE) return 0;
@@ -347,9 +258,6 @@ const Input = (function () {
     return clamp(d / (MAX_TILT - DEADZONE), -1, 1);
   }
 
-  // Slew-rate limit toward the target so the command cannot jump even if the
-  // hand does. Releasing is 1.6x faster than tightening: letting go is a request
-  // to stop, and should be answered.
   function tiltSlew(target, dt) {
     const releasing = Math.abs(target) < Math.abs(tiltSteerVal);
     tiltSteerVal = moveToward(tiltSteerVal, target, (releasing ? 1.6 : 1.0) * TILT_SLEW * dt);
@@ -364,17 +272,10 @@ const Input = (function () {
     return tiltSlew(tiltTarget(), dt);
   }
 
-  /* ---------------- keyboard ---------------- */
-
   function moveToward(v, target, step) {
     return v + clamp(target - v, -step, step);
   }
 
-  // Advances the ramp on every call. steer() is polled once per PHYSICS STEP
-  // (js/game.js calls it from inside the fixed-step loop), so at 30 fps two
-  // calls share one frame's elapsed time and at 120 fps a frame may make none —
-  // wall-clock deltas keep the aggregate rate right through both. timeScale
-  // folds in hit-stop; see its declaration.
   function currentSpeedStd() {
     if (speedStdOverride != null) return speedStdOverride;
     if (typeof speedProvider === "function") {
@@ -383,8 +284,6 @@ const Input = (function () {
     }
     return 0;
   }
-  // Same hyperbola as lockTaper in js/game.js. SPEED STEER still owns the
-  // reference; this option only *enables* the rate half for digital inputs.
   function digitalRateIn() {
     if (adaptiveMix <= 0) return KEY_RAMP_IN;
     const ref = steerSpeedRef > 1 ? steerSpeedRef : 41.7;
@@ -410,11 +309,7 @@ const Input = (function () {
   // move through the menu and must not also be steering and braking the car
   // underneath it. Asked per key event, never per tick — keys are rare and the
   // set of open overlays changes without notice.
-  // THE LIST LIVES IN js/game/uilayers.js. This used to be a hand-maintained
-  // selector here and a second one in js/game/menunav.js, and they drifted: the
-  // career hub and its three sub-sheets and #quali were missing from this one,
-  // so an arrow press inside the career screen fell through and latched the
-  // car's steering. One list, asked by everyone.
+  // THE LIST LIVES IN js/game/uilayers.js.
   function menuOverlayOpen() {
     return !!(window.UiLayers && window.UiLayers.anyOpen());
   }
@@ -521,41 +416,15 @@ const Input = (function () {
     }
   }
 
-  /* ---------------- canvas touch steering ---------------- */
-
-  // TOUCH STEERING IS AN ANCHORED DRAG, and it used to be a coin flip.
-  //
-  // The old rule was: whichever HALF of the screen you touched, steer fully that
-  // way. Not "mostly" — `clientX < innerWidth/2 ? -1 : 1`, the same ±1 a held
-  // arrow key produces, delivered instantly with no ramp. So the one steering
-  // mode aimed squarely at an iPad had exactly two reachable steering angles,
-  // full left and full right, and a drag across the centre of the screen flipped
-  // between them with no hysteresis. Every other input had more resolution than
-  // the touchscreen: the pad has an analog stick, the keyboard at least ramps.
-  //
-  // Now the finger's own displacement IS the wheel. Touch down anywhere in the
-  // free centre of the screen to set an anchor, slide toward the corner you want,
-  // lift to let it ramp back to centre. RELATIVE rather than absolute, so it does
-  // not matter where on the glass the thumb happens to land or how big the device
-  // is, and TOUCH_RANGE scales with the viewport so the same gesture spans an
-  // iPhone SE and a 13-inch iPad.
-  //
-  // A tap therefore steers ZERO where it used to mean full lock. That is the
-  // change, not a side effect of it.
   const TOUCH_RANGE_FRAC = 0.12;   // viewport widths of drag for full lock
   const TOUCH_DEAD_PX = 5;         // slop around the anchor: a tap is not a steer
   let touchRangeFrac = TOUCH_RANGE_FRAC;
 
   function touchRangePx() {
     const w = (typeof window !== "undefined" && window.innerWidth) || 844;
-    // Floored so a very narrow window can't make the range so small that the
-    // dead zone covers all of it (which would leave only ±1 again).
     return Math.max(40, w * touchRangeFrac);
   }
 
-  // Displacement from this touch's anchor, as a steer command. Only touch mode
-  // steers from the canvas at all — the control buttons are separate elements in
-  // the corners, and tilt/button modes leave the centre free for other uses.
   function touchCmd(rec) {
     if (steerMode !== "touch") return 0;
     const dx = rec.x - rec.anchorX;
@@ -584,21 +453,12 @@ const Input = (function () {
     if (!touchActive) touchSteer = 0;
   }
 
-  // A CANVAS TOUCH IS ONLY DRIVING WHEN NOTHING IS OVER THE CANVAS. The same
-  // gate the keyboard uses (menuOverlayOpen), because the failure is the same:
-  // in the lighting tuner's FREE CAMERA the fly-cam wants that finger for a
-  // look-drag, and these handlers were still armed and preventDefault()ing it
-  // out from under it. Releases are always processed, exactly as onKey does it
-  // — swallowing a touchend is how a steering touch latches on with no way to
-  // clear it.
   function canvasTouchIsDriving() { return !menuOverlayOpen(); }
 
   function onTouchStart(e) {
     if (!canvasTouchIsDriving()) return;
     e.preventDefault();
     for (const t of e.changedTouches) {
-      // Anchor AT the touch-down point, so the command starts at exactly zero
-      // however far from centre the thumb landed — there is no jump to absorb.
       touches.set(t.identifier, { anchorX: t.clientX, x: t.clientX, seq: ++touchSeq });
     }
     recomputeTouchSteer();
@@ -622,11 +482,6 @@ const Input = (function () {
     recomputeTouchSteer();
   }
 
-  // While a finger is down the drag IS the command and there is nothing to
-  // smooth — the thumb's own position is already continuous, and filtering it
-  // would only add lag to a gesture the player can see. The ramp exists for the
-  // one discontinuity in the scheme: lifting off, which drops the input to
-  // nothing in a single event.
   function touchSteering() {
     const t = nowMs();
     const dt = (touchSteerT ? Math.min(0.1, (t - touchSteerT) / 1000) : 0) * timeScale;
@@ -636,10 +491,6 @@ const Input = (function () {
     return touchSteerVal;
   }
 
-  // The on-screen arrows are a keyboard with fatter keys, so they get the
-  // keyboard's ramp. Previously they returned a bare ±1 — full lock the instant
-  // a thumb touched down, which is unmanageable at speed and was the reason
-  // BUTTONS mode felt so much cruder than tilt.
   function buttonSteering() {
     const t = nowMs();
     const dt = (btnSteerT ? Math.min(0.1, (t - btnSteerT) / 1000) : 0) * timeScale;
@@ -650,8 +501,6 @@ const Input = (function () {
     btnSteerVal = moveToward(btnSteerVal, target, (target !== 0 ? digitalRateIn() : KEY_RAMP_OUT) * dt);
     return btnSteerVal;
   }
-
-  /* ---------------- on-screen buttons ---------------- */
 
   // Every wireHold button registers here so its private pressed-pointer set can
   // be cleared from OUTSIDE the closure. Nets that hang off this list:
@@ -755,9 +604,6 @@ const Input = (function () {
     const live = new Map();                     // pointerId -> visible at pointerdown
     holdBtns.push({ ids, apply, level, anchors, el, live });
     el.addEventListener("pointerdown", e => {
-      // Capture the pointer so the hold survives the finger/cursor drifting off
-      // the button — without this a tiny move fires pointerleave and drops the
-      // press the instant you start holding (gas "won't stay on" until settled).
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
       e.preventDefault();
       ids.add(e.pointerId);
@@ -803,8 +649,6 @@ const Input = (function () {
     if (!el) return;
     el.addEventListener("pointerdown", function () { fire(); });
   }
-
-  /* ---------------- gamepad ---------------- */
 
   // First connected pad, or null. (getGamepads() can return holes / stale slots.)
   function activePad() {
@@ -871,10 +715,6 @@ const Input = (function () {
   // never a second focus-mover. See padDispatchKey/padActivate/padEscape below
   // and their header comment for why B needs its own branch.
   function pollGamepad() {
-    // Skip the whole poll when nothing is connected. navigator.getGamepads()
-    // allocates a fresh GamepadList every call, so calling it each frame with no
-    // pad present is pure garbage. gamepadconnected flips padConnected true and
-    // resumes polling; gamepaddisconnected (and the null branch below) clears it.
     if (!padConnected) return;
     const pad = activePad();
     if (!pad) {
@@ -888,10 +728,6 @@ const Input = (function () {
       return;
     }
     padConnected = true;
-    // steering: left-stick X with a centre dead zone, re-scaled so it still
-    // reaches full lock; d-pad gives a digital override. Computed unconditionally
-    // (menu open or not) — it drives nothing while paused, so leaving it alone
-    // keeps driving byte-identical to before this change.
     let ax = (pad.axes && pad.axes.length) ? pad.axes[0] : 0;
     if (Math.abs(ax) < PAD_DEADZONE) ax = 0;
     else ax = Math.sign(ax) * (Math.abs(ax) - PAD_DEADZONE) / (1 - PAD_DEADZONE);
@@ -903,9 +739,6 @@ const Input = (function () {
     padBrakeVal = btnDown(pad, 1) ? 1 : clamp(btnVal(pad, 6), 0, 1);
     padThrottle = padThrottleVal > 0.12;
     padBrake = padBrakeVal > 0.12;
-    // Start/Menu is a pause TOGGLE regardless of what is on screen — same as
-    // KeyP, which is also ungated (see the "PAUSE AND BACK ARE COMMANDS" block
-    // in onKey above). Left outside the branch below on purpose.
     if (btnEdge(pad, 9) && onPauseCb) onPauseCb();
     // A MENU OPEN MEANS THE PAD DRIVES THE MENU, NOT THE CAR — mirroring
     // menuOverlayOpen() gating the keyboard's own driving keys elsewhere in
@@ -943,11 +776,6 @@ const Input = (function () {
     document.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
   }
 
-  // D-pad OR either stick, past PAD_NAV_DEADZONE (larger than the driving
-  // zone so a resting stick does not creep through the menu). Only one
-  // direction at a time — whichever axis (or digital pair) is further past
-  // the zone wins ties toward vertical, an arbitrary but consistent choice.
-  // Right stick is a fallback so a player who reaches for it still moves.
   function padNavDirOf(pad) {
     if (btnDown(pad, 12)) return "up";
     if (btnDown(pad, 13)) return "down";
@@ -963,8 +791,6 @@ const Input = (function () {
     return stick(ax[0] || 0, ax[1] || 0) || stick(ax[2] || 0, ax[3] || 0);
   }
 
-  // The focused control MenuNav would treat as a real target — same FOCUSABLE
-  // selector padActivate already used, so A and the open-menu seed cannot drift.
   function padFocusableInLayer() {
     const layer = window.MenuNav && window.MenuNav.activeLayer();
     if (!layer) return null;
@@ -1031,10 +857,6 @@ const Input = (function () {
     }
   }
 
-  // The menu-open half of pollGamepad(): direction hold-repeat, paging, A, B.
-  // First poll of a newly-open menu (including Start opening pause in the same
-  // frame — onPauseCb runs above this branch) seeds one focus visual so the
-  // player does not have to tap D-pad before they can see where they are.
   function padNavPoll(pad) {
     const top = window.UiLayers && window.UiLayers.top();
     if (top !== padNavSeedLayer) {
@@ -1044,17 +866,11 @@ const Input = (function () {
     const dir = padNavDirOf(pad);
     if (!padNavSeeded) {
       padNavSeeded = true;
-      // A held direction this frame already seeds via MenuNav's first-arrow
-      // path; A on this frame owns the empty path through padActivate. Either
-      // would double-fire if we also dispatched ArrowDown here.
       if (!dir && !btnEdge(pad, 0)) padSeedFocus();
     }
     if (dir) {
       const now = nowMs();
       if (dir !== padNavDir) {
-        // Fresh press (including switching straight from one direction to
-        // another): fire immediately, then arm the longer initial delay — a
-        // real key's first repeat is slower than its steady-state cadence.
         padNavDir = dir;
         padDispatchKey(PAD_NAV_KEYS[dir]);
         padNavNextT = now + PAD_NAV_DELAY_MS;
@@ -1065,8 +881,6 @@ const Input = (function () {
     } else {
       padNavDir = null;   // released the instant input returns to neutral
     }
-    // Triggers page vertically, bumpers page horizontally (the table's last
-    // two rows) — single-shot, not held-repeat, like the keys they stand in for.
     if (btnEdge(pad, 6)) padDispatchKey("PageUp");
     if (btnEdge(pad, 7)) padDispatchKey("PageDown");
     if (btnEdge(pad, 4)) padDispatchKey("ArrowLeft");
@@ -1085,14 +899,6 @@ const Input = (function () {
   // Silently no-ops where unsupported (e.g. most iOS controllers) — callers
   // already fire navigator.vibrate alongside, so haptics degrade gracefully.
   function rumble(intensity, ms) {
-    // Same guard pollGamepad() carries, and for the reason it states there:
-    // navigator.getGamepads() allocates a fresh GamepadList on every call, so
-    // reaching activePad() with no pad connected is pure garbage. rumble() is
-    // not occasional — js/game.js fires it every 0.12 s while riding a kerb and
-    // every 0.10-0.16 s past front-axle saturation, so for the keyboard/touch
-    // majority that was ~8-10 discarded GamepadLists per second of kerb-riding
-    // or sliding. activePad() returns null in exactly this state anyway, so
-    // this only moves the exit earlier.
     if (!padConnected) return;
     const pad = activePad();
     if (!pad) return;
@@ -1107,8 +913,6 @@ const Input = (function () {
       });
     } catch (e) { /* actuator busy or unsupported effect type */ }
   }
-
-  /* ---------------- public ---------------- */
 
   function steer() {
     const k = keyboardSteer();
@@ -1188,9 +992,6 @@ const Input = (function () {
       btnSteerVal = 0; btnSteerT = 0;
     }
     if (steerMode !== "touch") {
-      // A drag in progress when the mode changed is not a command in the new
-      // mode. Leaving its value latched would hold lock the player can no longer
-      // release, because nothing in the new mode ever calls touchSteering().
       touches.clear();
       touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
     }
@@ -1209,14 +1010,9 @@ const Input = (function () {
   }
   function setSpeedProvider(fn) { speedProvider = typeof fn === "function" ? fn : null; }
 
-  // Tilt sensitivity, driven by the in-game TILT RANGE slider. deg = tilt for
-  // full lock (higher = less sensitive).
   function setTiltSensitivity(deg) {
     if (typeof deg === "number" && isFinite(deg)) MAX_TILT = Math.max(8, Math.min(60, deg));
   }
-  // SMOOTHING knob: sets the One-Euro min-cutoff (Hz) — the filter that actually
-  // shapes tilt feel. Lower = steadier/smoother at rest (kills jitter, a touch of
-  // lag); higher = more immediate. (The slew limiter above is a fixed safety cap.)
   function setTiltSmoothing(cutoff) {
     if (typeof cutoff === "number" && isFinite(cutoff)) OE_MIN_CUTOFF = Math.max(0.3, Math.min(4, cutoff));
   }
@@ -1225,10 +1021,6 @@ const Input = (function () {
     if (typeof deg === "number" && isFinite(deg)) DEADZONE = Math.max(0, Math.min(Math.min(15, MAX_TILT - 1), deg));
   }
 
-  // Cached MediaQueryList: this is called from the per-tick physics path
-  // (autoThrottle/manualGears), and window.matchMedia() allocates a fresh
-  // MediaQueryList every call. mql.matches stays LIVE on the cached object,
-  // so convertible/hybrid devices still flip correctly.
   let _coarseMql = null;
   const _coarseCbs = [];
   function touchControlsNeeded() {
@@ -1261,8 +1053,6 @@ const Input = (function () {
   }
 
   function onScreenRotate() {
-    // New rotation remaps the tilt axis; let fresh readings arrive,
-    // then re-capture neutral.
     setTimeout(calibrate, 300);
   }
 
@@ -1282,16 +1072,6 @@ const Input = (function () {
     // overlay or stopPropagation between here and the button can't swallow it.
     window.addEventListener("pointerup", function (e) { holdReleasePointer(e.pointerId); }, true);
     window.addEventListener("pointercancel", function (e) { holdReleasePointer(e.pointerId); }, true);
-    // Net #3b, and it belongs on the DOCUMENT rather than on the button. The
-    // per-element `lostpointercapture` listener further up claims to cover the
-    // case where a held button is hidden or removed mid-hold — but Pointer
-    // Events 3 §9.5 says that when a capture target is no longer connected the
-    // override is set to THE DOCUMENT, and the resulting lostpointercapture is
-    // "fired at the document". An element-bound listener therefore cannot
-    // receive the very event it was added for. (For the `hidden` case the spec
-    // owes no implicit release at all, since hiding does not disconnect.)
-    // That matters here specifically: js/game.js hides #btn-throttle whenever
-    // auto-throttle turns on, which is exactly the hidden-mid-hold shape.
     document.addEventListener("lostpointercapture", function (e) {
       if (e.target && e.target !== document && !lostCaptureShouldRelease(e.target, e.pointerId)) return;
       holdReleasePointer(e.pointerId);
@@ -1364,15 +1144,6 @@ const Input = (function () {
             "\nBRK " + (s.braking ? "ON " : "off") +
             "  key:" + +s.key.brake + " btn:" + +s.btn.brake + " pad:" + +s.pad.brake +
             "\nheld ptrs [" + s.holdPointers.join(",") + "]" +
-            // steerMode and auto are the two fields that separate the two very
-            // different bugs that both read as "the throttle is stuck on": a
-            // latched hold button (btn:1 with no finger down) versus TOUCH mode,
-            // where js/game.js applies throttle by itself and removes the GAS
-            // button entirely — so the car accelerates with btn:0 and no pointer
-            // net is involved at all. Without these two the readout cannot tell
-            // a reporter which one they are looking at.
-            // Same predicate as autoThrottle() in js/game.js, computed from
-            // this module's own state rather than asked for across the boundary.
             "\nmode:" + s.steerMode +
             "  auto:" + ((touchControlsNeeded() && s.steerMode === "touch") ? "ON" : "off");
         }, 250);
@@ -1458,10 +1229,6 @@ const Input = (function () {
     cameraCyclePressed = false;
   }
 
-  // Live per-source input snapshot for diagnosis (surfaced as
-  // __apex.inputState()): shows WHICH source is asserting throttle/brake and
-  // whether any hold button still tracks pressed pointers. If a "stuck
-  // throttle" report ever recurs, this pinpoints the culprit in one call.
   function debugState() {
     return {
       steerMode,

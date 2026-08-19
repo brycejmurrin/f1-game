@@ -61,12 +61,8 @@ window.SpotifyMusic = (function () {
   let ready = false;
   let sdkPromise = null;
   let vol = 0.5;
-  // Set by any listener that has already named a failure, so the SDK's next
-  // token request cannot paper over it with a generic line.
   let explained = false;
   let lastPlayError = null;    // {status, reason} from the last refused play
-  // Polled playback detail for the in-game player panel. There is no push
-  // channel in remote mode, so everything here arrives on the 10s tick.
   let art = null, progressMs = 0, durationMs = 0;
   let shuffleOn = false, repeatMode = "off";
   let devVol = null, devSupportsVol = true, devName = "";
@@ -126,8 +122,6 @@ window.SpotifyMusic = (function () {
   function writeToken(t) { lsSet(K_TOKEN, JSON.stringify(t)); }
   function clearToken() { lsDel(K_TOKEN); }
 
-  /* ---------------- status ---------------- */
-
   function status() { return { state, message, deviceId, track }; }
   function setStatus(s, msg) { state = s; message = msg || ""; emit(); }
   function emit() {
@@ -139,8 +133,6 @@ window.SpotifyMusic = (function () {
     return function off() { const i = subs.indexOf(fn); if (i >= 0) subs.splice(i, 1); };
   }
 
-  /* ---------------- PKCE ---------------- */
-
   function b64url(bytes) {
     const a = new Uint8Array(bytes);
     let s = "";
@@ -151,8 +143,6 @@ window.SpotifyMusic = (function () {
   function challengeFor(v) {
     return crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)).then(b64url);
   }
-  // crypto.subtle only exists in a secure context — file:// and plain-http LAN
-  // addresses have neither that nor a redirect URI Spotify would accept anyway.
   function cryptoOk() {
     return typeof crypto !== "undefined" && !!crypto.getRandomValues &&
       !!crypto.subtle && typeof crypto.subtle.digest === "function";
@@ -168,10 +158,6 @@ window.SpotifyMusic = (function () {
   function redirectUri() { return location.origin + location.pathname; }
   function onLocalhost() { return location.hostname === "localhost"; }
 
-  /* ---------------- token lifecycle ---------------- */
-
-  // Returns a usable access token, refreshing when it is inside 60 s of expiry,
-  // or null when we are not (or no longer) authorised.
   function validToken() {
     const t = readToken();
     if (!t) return Promise.resolve(null);
@@ -212,8 +198,6 @@ window.SpotifyMusic = (function () {
           setStatus("configured",
             "Spotify session expired or the app was revoked. Press CONNECT to sign in again.");
         } else if (current && current.refresh_token === refreshToken) {
-          // Network, rate-limit and malformed/temporary responses are retryable.
-          // Keep the long-lived refresh token so the next action can recover.
           setStatus("configured", "Could not refresh the Spotify session (" + refreshError + "). Try again in a moment.");
         }
         return null;
@@ -222,14 +206,10 @@ window.SpotifyMusic = (function () {
       // resurrect credentials from an obsolete session over the new owner.
       const current = readToken();
       if (!current || current.refresh_token !== refreshToken) return null;
-      // Spotify ROTATES refresh tokens: when a new one comes back the old one
-      // dies with it, so persist whatever arrived and keep the old as fallback.
       writeToken({
         access_token: j.access_token,
         refresh_token: j.refresh_token || refreshToken,
         expires_at: Date.now() + (j.expires_in || 3600) * 1000,
-        // A refresh does not always echo the scope; keep what was granted at
-        // sign-in so debug()/check() can still say what this token may do.
         scope: j.scope || (readToken() || {}).scope || "",
       });
       return j.access_token;
@@ -244,8 +224,6 @@ window.SpotifyMusic = (function () {
     }).then((r) => r.json().catch(() => ({ error: "bad_response" })))
       .catch(() => ({ error: "network" }));
   }
-
-  /* ---------------- authorise / redirect ---------------- */
 
   function beginAuth() {
     const cid = clientId();
@@ -297,9 +275,6 @@ window.SpotifyMusic = (function () {
       try {
         const el = document.getElementById("audioset");
         if (!el) return;
-        // Spotify's own render() and onChange subscribers already received the
-        // redirect result. syncAudioPanel was a private function in another
-        // IIFE, so the old typeof-guarded call was permanently dead.
         el.hidden = false;
         const wrap = document.getElementById("as-sp-wrap");
         if (wrap && wrap.scrollIntoView) wrap.scrollIntoView({ block: "center" });
@@ -307,9 +282,6 @@ window.SpotifyMusic = (function () {
     }, 0);
   }
 
-  // Safe to call on EVERY load, including when nothing Spotify-related is
-  // configured: with no pending verifier in sessionStorage this returns without
-  // touching storage, the network or the URL.
   function handleRedirect() {
     let params;
     try { params = new URLSearchParams(location.search); } catch (e) { return Promise.resolve(); }
@@ -350,30 +322,20 @@ window.SpotifyMusic = (function () {
         expires_at: Date.now() + (j.expires_in || 3600) * 1000,
         scope: j.scope || "",
       });
-      // A token WITHOUT the streaming scope reaches the player and comes back as
-      // a bare "authentication_error", which reads as a login problem when the
-      // login was fine. Spotify returns the scopes it actually granted, so say
-      // the real thing instead: the app is not enabled for the Web Playback SDK.
       if (j.scope && j.scope.indexOf("streaming") < 0) {
         setStatus("error", "Signed in, but Spotify did not grant playback " +
           "permission. In your app's settings tick \"Web Playback SDK\", then " +
           "remove the app at spotify.com/account/apps and press CONNECT again.");
         return;
       }
-      // The user pressed CONNECT one navigation ago, so finishing the job is
-      // what they asked for — the only path that starts playback without a click.
       return mode() === "remote" ? connectRemote() : bootPlayer();
     });
   }
-
-  /* ---------------- Web Playback SDK ---------------- */
 
   function loadSdk() {
     if (window.Spotify && window.Spotify.Player) return Promise.resolve();
     if (sdkPromise) return sdkPromise;
     sdkPromise = new Promise((res, rej) => {
-      // The SDK calls one global hook. Chain any existing handler rather than
-      // stomping it — another script (or a second call here) may own it.
       const prev = window.onSpotifyWebPlaybackSDKReady;
       let timer = null;
       const cleanup = function () {
@@ -432,9 +394,6 @@ window.SpotifyMusic = (function () {
         ready = true;
         explained = false;
         setStatus("connected", "Connected. Apex 26 is now a Spotify device.");
-        // Install AFTER the transfer settles: GameAudio.setMusicBackend() calls
-        // start() synchronously, and a play request aimed at a device Spotify
-        // has not made active yet comes back "device not found".
         transfer(device_id).then(installBackend, installBackend);
         loadPlaylists();
       });
@@ -442,14 +401,6 @@ window.SpotifyMusic = (function () {
         ready = false;
         setStatus("connecting", "Playback moved to another Spotify device.");
       });
-      // The four SDK errors mean completely different things to a user, so each
-      // gets its own sentence instead of one raw payload dump. account_error is
-      // by far the most common — it is what a non-Premium account looks like.
-      // KEEP THE TOKEN. It is what check() needs: the player refusing a token
-      // says nothing about why, but that same token still answers GET /v1/me,
-      // which names the plan. Clearing it here threw away the only evidence and
-      // left the user to guess between "not Premium" and "SDK not enabled" —
-      // so instead, tear the player down and go ask.
       player.addListener("authentication_error", () => {
         explained = true;
         teardown();
@@ -500,8 +451,6 @@ window.SpotifyMusic = (function () {
     removeBackend();
   }
 
-  /* ---------------- Spotify Web API ---------------- */
-
   function api(path, opts) {
     return validToken().then((t) => {
       if (!t) return null;
@@ -520,8 +469,6 @@ window.SpotifyMusic = (function () {
       { method: "PUT", body: JSON.stringify({ device_ids: [id], play: false }) });
   }
 
-  // The picker's contents. Liked Songs is not a context uri — it is a set of
-  // track uris — so it is offered as a sentinel and resolved at play time.
   function loadPlaylists() {
     return api("/me/playlists?limit=50").then((r) => {
       if (!r) return [];
@@ -543,9 +490,6 @@ window.SpotifyMusic = (function () {
     const ctx = contextUri();
     let body;
     if (ctx === "liked") {
-      // .catch on the parse, not just on r.ok: a 204 or an empty body is "ok"
-      // and json() then throws, which escapes as an unhandled rejection — the
-      // game shows those as a full-screen crash overlay.
       return api("/me/tracks?limit=50")
         .then((r) => (r && r.ok ? r.json().catch(() => null) : null)).then((j) => {
         const uris = j && j.items ? j.items.map((i) => i.track && i.track.uri).filter(Boolean) : [];
@@ -557,9 +501,6 @@ window.SpotifyMusic = (function () {
     return sendPlay(q, body);
   }
 
-  // Handing the music back is better than silence: while a backend is installed
-  // GameAudio stays quiet, so a Spotify that cannot play leaves the player with
-  // no music at all. On a failure we cannot fix, give the soundtrack back.
   function releaseToBuiltIn(msg) {
     removeBackend();
     setStatus("connected", msg + " The game's own music is playing instead — fix that and press PLAY to retry.");
@@ -574,18 +515,11 @@ window.SpotifyMusic = (function () {
         installBackend();                 // it works — Spotify may own the music
         return;
       }
-      // Spotify says WHY in the body ("Device not found", PREMIUM_REQUIRED,
-      // "Player command failed: No active device"...). Mapping the status code
-      // alone threw that away and left every refusal looking the same.
       return r.text().then((txt) => {
         let reason = "";
         try { const j = JSON.parse(txt); reason = (j.error && (j.error.reason || j.error.message)) || ""; }
         catch (e) { reason = (txt || "").slice(0, 120); }
         lastPlayError = { status: r.status, reason: reason };
-        // 404 = "Device not found" / "No active device". Almost always a device
-        // that has gone idle or been re-minted, so re-list, TRANSFER to it (the
-        // step that actually wakes a sleeping device — a bare play at an
-        // inactive device just 404s), and try once more.
         if (r.status === 404 && !retried && mode() === "remote") {
           setStatus("connected", "Waking your Spotify device…");
           return loadDevices().then((ds) => {
@@ -629,10 +563,6 @@ window.SpotifyMusic = (function () {
   function loadDevices() {
     return devicesList().then((ds) => {
       devices = ds;
-      // A DEVICE ID IS NOT STABLE. Spotify mints a new one each time the app
-      // restarts, so a stored id from yesterday names a device that no longer
-      // exists — and playing at it returns 404 "Device not found". Drop it
-      // whenever the live list disagrees.
       const known = deviceId2();
       if (known && !ds.some((d) => d.id === known)) lsDel(K_DEV);
       // Adopt whatever is already active, so the common case needs no choosing.
@@ -644,11 +574,6 @@ window.SpotifyMusic = (function () {
         setStatus("connected", "No Spotify device found. Open Spotify on your phone or " +
           "computer (play anything for a second), then press REFRESH.");
       } else if (/No Spotify device found|Looking for your Spotify devices|Waking your Spotify device/.test(message)) {
-        // CLEAR THE STALE COMPLAINT. The no-device line is written the moment
-        // the list comes back empty — which it often is for a second before the
-        // phone reports in — and nothing ever replaced it, so the panel sat
-        // there insisting there was no device directly above a device picker
-        // showing an active one, while music played.
         const cur = ds.filter((d) => d.id === deviceId2())[0] || ds[0];
         setStatus("connected", cur
           ? (cur.name + " is ready. Pick a playlist and press PLAY.")
@@ -670,8 +595,6 @@ window.SpotifyMusic = (function () {
         track = it ? (it.name + " — " + (it.artists || []).map((a) => a.name).join(", ")) : null;
         title = it ? it.name : "";
         artist = it ? (it.artists || []).map((a) => a.name).join(", ") : "";
-        // Smallest image that is still sharp on a phone row — the 640px master
-        // is a needless download every poll.
         const imgs = (it && it.album && it.album.images) || [];
         art = imgs.length ? (imgs[imgs.length - 1] || imgs[0]).url : null;
         progressMs = (j && j.progress_ms) || 0;
@@ -681,10 +604,6 @@ window.SpotifyMusic = (function () {
         paused = !(j && j.is_playing);
         if (j && j.device) {
           devName = j.device.name || "";
-          // Clamped at the one place this enters the module: it feeds both the
-          // slider's native input (browser-clamped on assignment) and its text
-          // label (not — a bare write here left the two able to disagree if
-          // Spotify's API ever reported outside 0..100).
           devVol = typeof j.device.volume_percent === "number"
             ? Math.max(0, Math.min(100, j.device.volume_percent)) : null;
           devSupportsVol = j.device.supports_volume !== false;
@@ -702,8 +621,6 @@ window.SpotifyMusic = (function () {
   }
   function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
-  // Connect, remote flavour: there is nothing to boot. A valid token plus a
-  // device the account owns IS the connection.
   function connectRemote() {
     setStatus("connecting", "Looking for your Spotify devices…");
     return validToken().then((t) => {
@@ -747,8 +664,6 @@ window.SpotifyMusic = (function () {
     api("/me/player/shuffle?state=" + (on ? "true" : "false") +
         (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" }).then(afterCommand);
   }
-  // off -> context -> track -> off. "context" is repeat-the-playlist, which is
-  // the one a racing soundtrack actually wants.
   function cycleRepeat() {
     if (!BACKEND.active() || mode() !== "remote") return;
     const next = repeatMode === "off" ? "context" : repeatMode === "context" ? "track" : "off";
@@ -784,11 +699,6 @@ window.SpotifyMusic = (function () {
   /* ---------------- GameAudio backend ----------------
      GameAudio delegates ALL music here while this is installed. Stopping and
      resuming the built-in MP3 playlist is GameAudio's job, not ours. */
-  // MOBILE BROWSERS REQUIRE THIS. Spotify's SDK creates its own <audio>, and on
-  // mobile it can only be unmuted from inside a user gesture — activateElement()
-  // is that handshake. Without it the device connects, the API accepts the play
-  // call, and no sound ever comes out. Harmless on desktop, and safe to call
-  // more than once.
   function activate() {
     if (player && typeof player.activateElement === "function") {
       try { const p = player.activateElement(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
@@ -800,8 +710,6 @@ window.SpotifyMusic = (function () {
       if (!BACKEND.active()) return;
       if (!paused) return;                     // already playing: no-op
       if (mode() === "remote") {
-        // Resuming beats re-starting the context: it keeps the listener's place
-        // in the album/playlist they were already on.
         if (track) { api("/me/player/play" + remoteQuery(), { method: "PUT", body: "{}" }).then(pollNowPlaying); return; }
         playChosen();
         return;
@@ -826,15 +734,11 @@ window.SpotifyMusic = (function () {
         return track;
       }
       try { player.nextTrack(); } catch (e) {}
-      // nextTrack() is async — the real title lands on player_state_changed
-      // (which re-renders), so return what is known now.
       return track;
     },
     setVolume(v01) {
       vol = Math.max(0, Math.min(1, typeof v01 === "number" ? v01 : 0.5));
       if (mode() === "remote") {
-        // Not every device accepts remote volume (some phones refuse); a failure
-        // here is not worth a message — the device's own control still works.
         if (BACKEND.active()) {
           api("/me/player/volume?volume_percent=" + Math.round(vol * 100) +
               (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" });
@@ -868,9 +772,6 @@ window.SpotifyMusic = (function () {
     catch (e) {}
   }
   function installBackend() { setBackend(BACKEND); syncSession(); }
-  // Take or release the music role WITHOUT signing out. That distinction is the
-  // whole point of the source toggle: switching back to the game's own music
-  // should not cost a re-authorisation to switch away again.
   function useAsMusic(on) {
     if (on) {
       if (!BACKEND.active()) return false;
@@ -885,8 +786,6 @@ window.SpotifyMusic = (function () {
       ? GameAudio.musicBackend() === BACKEND : false;
   }
   function removeBackend() { setBackend(null); syncSession(); }
-
-  /* ---------------- public control ---------------- */
 
   function available() { return !!clientId(); }
   function configured() { const c = clientId(); return c ? { clientId: c } : null; }
@@ -918,9 +817,6 @@ window.SpotifyMusic = (function () {
     };
   }
 
-  // GET /v1/me answers both questions at once: `product` is the plan, and a 401
-  // means the token itself is dead. Returns a verdict object AND writes the
-  // conclusion to the status line, so it works with or without a console.
   function check() {
     const d = debug();
     if (!available()) { setStatus("off", copyOff()); return Promise.resolve({ ok: false, reason: "no-client-id" }); }
@@ -1003,9 +899,6 @@ window.SpotifyMusic = (function () {
         "Could not renew the Spotify session. Check your connection and try again.") : beginAuth()));
   }
 
-  // Local revoke only — Spotify has no browser-side revoke endpoint, so the
-  // honest wording is "signed out on this device". The app itself is removed
-  // from the account at spotify.com/account/apps.
   function disconnect() {
     clearToken();
     teardown();
@@ -1013,11 +906,6 @@ window.SpotifyMusic = (function () {
       available() ? "Signed out of Spotify on this device." : copyOff());
   }
 
-  /* ---------------- panel ---------------- */
-
-  // Short on purpose: the Premium / own-app / allowlist requirements are static
-  // and live in the panel's own help paragraph. Repeating them in a live status
-  // line just prints the same three sentences twice.
   function copyOff() {
     return "off — paste a Client ID above to enable it.";
   }
@@ -1026,9 +914,6 @@ window.SpotifyMusic = (function () {
   function txt(id, s) { const e = el(id); if (e) e.textContent = s; }
   function dis(id, b) { const e = el(id); if (e) e.disabled = !!b; }
 
-  // Both panels show the same two lists, so build them through one helper —
-  // and only when the contents actually changed, so an open <select> on a phone
-  // is not torn out from under a thumb mid-scroll.
   function fillSelect(id, opts, value, disabled) {
     const sel = el(id);
     if (!sel) return;
@@ -1061,8 +946,6 @@ window.SpotifyMusic = (function () {
     return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
   }
 
-  // The in-game player panel (#spotifypanel). Setup lives in MUSIC & SOUND;
-  // this is what you open mid-session.
   function renderPlayer() {
     if (!el("spotifypanel")) return;
     const live = BACKEND.active();
@@ -1090,9 +973,6 @@ window.SpotifyMusic = (function () {
     if (vol && devVol !== null && document.activeElement !== vol) vol.value = String(devVol);
     txt("sp-vol-v", devVol === null ? "—" : String(devVol));
     if (vol) vol.disabled = !live || !devSupportsVol;
-    // supports_volume is a per-device fact and it is FALSE for most phones —
-    // the Spotify mobile app leaves volume to the hardware buttons. A slider
-    // that is simply greyed out reads as broken, so say which it is.
     txt("sp-vol-note", !live ? ""
       : devSupportsVol ? "Sets the volume on " + (devName || "the device") + " itself."
       : "This device does not accept remote volume — use its own volume buttons. " +
@@ -1183,15 +1063,12 @@ window.SpotifyMusic = (function () {
     on("as-sp-device", "change", (e) => setDevice(e.target.value));
     on("as-sp-refresh", "click", () => loadDevices());
 
-    // ---- the in-game player panel ----
     on("sp-prev", "click", prev);
     on("sp-toggle", "click", () => { activate(); toggle(); });
     on("sp-fwd", "click", () => BACKEND.skip());
     on("sp-shuffle", "click", () => setShuffle(!shuffleOn));
     on("sp-repeat", "click", cycleRepeat);
     on("sp-vol", "input", (e) => { txt("sp-vol-v", e.target.value); });
-    // Commit on release, not on every pixel of the drag: each one is an API
-    // call, and a dragged slider would spend the whole rate-limit budget.
     on("sp-vol", "change", (e) => setDeviceVolume(+e.target.value || 0));
     on("sp-playlist2", "change", (e) => { activate(); setContext(e.target.value); if (e.target.value) playChosen(); });
     on("sp-device2", "change", (e) => setDevice(e.target.value));
@@ -1210,16 +1087,11 @@ window.SpotifyMusic = (function () {
     on("as-sp-playlist", "change", (e) => {
       activate();
       setContext(e.target.value);
-      // Picking one is the instruction to play it — otherwise the choice sits
-      // there doing nothing until something else happens to call start().
       if (e.target.value && BACKEND.active()) playChosen();
     });
     on("as-sp-play", "click", () => {
       activate();                       // must happen inside the click itself
       if (!BACKEND.active()) return;
-      // BACKEND.start(), not player.resume(): in the default REMOTE mode there
-      // is no local `player` object, so resume() threw into the empty catch and
-      // the PLAY button silently did nothing whenever a track was loaded.
       if (track) BACKEND.start(); else playChosen();
     });
     on("as-sp-pause", "click", () => BACKEND.stop());
@@ -1250,8 +1122,6 @@ window.SpotifyMusic = (function () {
   return {
     available, configured, setClientId,
     connect, disconnect, status, onChange, debug, check,
-    // What Spotify thinks is going on, for the console: the devices it can see
-    // and why the last play call was refused.
     devices() {
       return api("/me/player/devices")
         .then((r) => (r && r.ok ? r.json().catch(() => null) : { httpStatus: r && r.status }));
@@ -1260,8 +1130,6 @@ window.SpotifyMusic = (function () {
     activate,
     context: contextUri, setContext, play() { return playChosen(); },
     mode, setMode, setDevice, deviceList() { return devices.slice(); },
-    // Called by game.js when the panel opens: poll immediately rather than
-    // showing whatever the last 10s tick left behind.
     openPanel() {
       const audio = el("audioset");
       if (audio) audio.hidden = true;

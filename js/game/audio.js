@@ -1,18 +1,4 @@
-/*
- * GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice
- * and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a
- * user gesture so the context can start.
- *
- * Engine voice models the 2026 hybrid turbo V6: two detuned saws + a
- * square through a speed-tracking lowpass, a faint high sine for the
- * turbo whine, and a filtered-noise layer that fades IN when the car is
- * slowing — the MGU-K harvesting whirr. Real CC0 engine recordings
- * (assets/sfx/) are pitched + crossfaded when decoded, with the synth as
- * a fallback.
- *
- * Music is streamed from prebaked audio files (assets/music/), lazy-loaded,
- * decoded once and cached per context, then looped — no runtime sequencer.
- */
+/* GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a user gestur… */
 "use strict";
 
 const GameAudio = (function () {
@@ -23,8 +9,6 @@ const GameAudio = (function () {
   let sfxVol = 1;
   let sfxEnabled = true;      // the SOUND EFFECTS switch — music is unaffected
   let musicVol = 0.5;
-  // musicVol 0.5 lands on 0.26 — the level music has always sat at under the
-  // engine — so the default slider position keeps the balance the game shipped.
   const MUSIC_FULL = 0.52;
   let isEnabled = true;
 
@@ -40,11 +24,6 @@ const GameAudio = (function () {
   let shiftDuck = 0, shiftDuckT = 0;   // transient engine-gain dip from a gear shift
   let idleGainRamped = false;          // the sample voice's one-time fade-in (see setEngine)
 
-  // Sample-based engine core: real CC0 recordings (assets/sfx/, from
-  // pmndrs/racing-game, CC0). engine = idle/low-rev loop, accel = high-rev loop;
-  // we pitch both by playbackRate (so revs rise through a gear and DROP on an
-  // upshift) and crossfade idle->accel with load. Falls back to the synth core
-  // below if the samples aren't decoded yet (offline / not loaded).
   let engBuf = null, accBuf = null, samplesReady = false;
   let engSrcIdle = null, engSrcAcc = null, engGainIdle = null, engGainAcc = null;
   let usingSamples = false;
@@ -62,32 +41,13 @@ const GameAudio = (function () {
   let musicToken = 0;
   const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
   const MENU_TRACK = "assets/music/menu.mp3";
-  // THE PLAYLIST. One list shared by the menu and the race, so the soundtrack
-  // carries across the transition instead of restarting, and each track hands
-  // over to the next when it ends (see playMusicBuffer's onended). skipTrack()
-  // jumps to the next one — that is what the pause menu's SKIP TRACK does.
-  //
-  // Entries are OBJECTS, not bare urls, because the list is no longer fixed:
-  // MusicLib appends the player's own uploaded files (js/game/music-lib.js) as
-  // object URLs, whose href is an opaque uuid — so the display name has to
-  // travel with the entry instead of being recovered from the file path, and a
-  // stable `id` is needed to remove one track without disturbing the rest.
   const PLAYLIST = [
     { id: "builtin:menu", name: "menu", url: MENU_TRACK, builtin: true },
     { id: "builtin:song2", name: "song2", url: "assets/music/song2.mp3", builtin: true },
     { id: "builtin:song3", name: "song3", url: "assets/music/song3.mp3", builtin: true },
   ];
   let musicIndex = 0;
-  // WHICH TRACKS ARE ELIGIBLE. The shipped songs and the player's uploads live
-  // in one list so a single SKIP walks through both, but a player who added
-  // their own music usually wants only that — or only the originals. This
-  // filters the list without rebuilding it, so ids and indices stay stable.
-  //   "all" (default) | "builtin" | "user"
   let source = "all";
-  // An installed backend (Spotify — js/game/spotify.js) TAKES OVER the music
-  // role entirely: every startMusic/stopMusic/skipTrack/setMusicVolume call
-  // site in game.js is left untouched and simply delegates here, and the
-  // built-in playlist goes quiet until the backend is removed again.
   let backend = null;
   let listenersAttached = false;
   let rebuildTries = 0;
@@ -127,18 +87,6 @@ const GameAudio = (function () {
     return v;
   }
 
-  // Find the most pitch-STABLE ~2s window of a decoded clip, so the engine loop
-  // sits on a steady-RPM stretch instead of a dynamic (revving/shifting) part.
-  // Uses zero-crossing rate per 0.1s as a cheap pitch proxy and picks the window
-  // with the lowest coefficient of variation. Returns { start, end } in seconds.
-  // Memoised on the buffer. The scan below walks EVERY sample counting zero
-  // crossings, and its result is a pure function of the buffer — but
-  // startEngine() called it fresh for both engine buffers on every race start,
-  // every UN-PAUSE (js/game.js) and every return from a hidden tab. At a 48 kHz
-  // context that is ~2.41 M float reads and sign comparisons, synchronously on
-  // the main thread, to recompute a value that cannot have changed: the buffers
-  // are only replaced when the audio context is rebuilt, and a new context means
-  // new buffer objects, so a WeakMap keyed on the buffer self-invalidates.
   const _loopMemo = new WeakMap();
   function findStableLoop(buf) {
     const memo = _loopMemo.get(buf);
@@ -179,10 +127,6 @@ const GameAudio = (function () {
     master = ctx.createGain();
     master.gain.value = isEnabled ? 0.8 : 0;
     master.connect(ctx.destination);
-    // THE SFX BUS. Everything that is not music — engine, skids, rain, UI ticks
-    // — runs through here so it can be levelled independently of the music,
-    // which has its own gain on the same master. Without the split there was one
-    // volume for the whole mix and the only music control was on/off.
     sfxBus = ctx.createGain();
     sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
     sfxBus.connect(master);
@@ -195,9 +139,6 @@ const GameAudio = (function () {
     return true;
   }
 
-  // Fetch + decode the engine recordings into ctx-bound buffers. Best-effort:
-  // if it fails (offline, decode error), samplesReady stays false and the engine
-  // falls back to the synth core. Buffers are cleared on a context rebuild.
   function loadEngineSamples() {
     if (!ctx || samplesReady) return;
     const grab = (url) => fetch(url)
@@ -206,9 +147,6 @@ const GameAudio = (function () {
     Promise.all([grab(SFX_ENGINE), grab(SFX_ACCEL)])
       .then(([e, a]) => { engBuf = e; accBuf = a; samplesReady = true; Log.debug("audio", "engine samples decoded"); })
       .catch((err) => {
-        // The synth voice takes over, so this is not fatal — which is exactly
-        // why it needs saying. Otherwise "the engine sounds different on my
-        // machine" has no trace anywhere.
         Log.warn("audio", "engine sample load/decode failed, using synth voice: " + ((err && err.message) || err));
       });
   }
@@ -265,8 +203,6 @@ const GameAudio = (function () {
         lastFailedResume = 0;
         Log.info("audio", "GameAudio.resume state=" + (ctx && ctx.state));
       }).catch((err) => {
-        // A refused resume is THE cause of "there is no sound at all", and it
-        // used to leave no record of any kind.
         Log.warn("audio", "context resume rejected (state=" + (ctx && ctx.state) + "): " + ((err && err.message) || err));
       });
     }
@@ -329,8 +265,6 @@ const GameAudio = (function () {
 
   function now() { return ctx ? ctx.currentTime : 0; }
 
-  /* ---------------- one-shot helpers ---------------- */
-
   function env(gainNode, t0, peak, attack, decay) {
     const g = gainNode.gain;
     g.cancelScheduledValues(t0);
@@ -383,8 +317,6 @@ const GameAudio = (function () {
     if (!noisePoolBuf) noisePoolBuf = noiseBuf(NOISE_POOL_S);
     return noisePoolBuf;
   }
-  // Point `src` at the shared buffer and return the offset to start it from.
-  // Falls back to a dedicated buffer for anything longer than the pool.
   function bindNoise(src, needS) {
     if (needS >= NOISE_POOL_S) { src.buffer = noiseBuf(needS); return 0; }
     src.buffer = noisePool();
@@ -395,8 +327,6 @@ const GameAudio = (function () {
     if (!sfxOk()) return;
     const t0 = now() + (when || 0);
     const src = ctx.createBufferSource();
-    // start(t0, off) → stop(t0 + decay + 0.1), so the window needed inside the
-    // pool is decay + 0.1 (a small margin over that keeps the tail clear).
     const off = bindNoise(src, decay + 0.15);
     const f = ctx.createBiquadFilter();
     f.type = "lowpass";
@@ -408,8 +338,6 @@ const GameAudio = (function () {
     src.stop(t0 + decay + 0.1);
     src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
   }
-
-  /* ---------------- engine ---------------- */
 
   function startEngine() {
     if (!ctx || engineOn) return;
@@ -432,13 +360,8 @@ const GameAudio = (function () {
     engSrcIdle = engSrcAcc = engGainIdle = engGainAcc = null;
     idleGainRamped = false;   // new gain node, so the fade-in must happen again
     if (usingSamples) {
-      // real engine recordings: idle loop + acceleration loop, crossfaded and
-      // pitched (playbackRate) by rev/gear in setEngine.
       engSrcIdle = ctx.createBufferSource(); engSrcIdle.buffer = engBuf; engSrcIdle.loop = true;
       engSrcAcc = ctx.createBufferSource(); engSrcAcc.buffer = accBuf; engSrcAcc.loop = true;
-      // loop the most pitch-stable ~2s stretch of each clip (steady RPM), not the
-      // whole dynamic recording, so a held throttle sustains a constant note;
-      // start playback in-region.
       const li = findStableLoop(engBuf), la = findStableLoop(accBuf);
       engSrcIdle.loopStart = li.start; engSrcIdle.loopEnd = li.end;
       engSrcAcc.loopStart = la.start; engSrcAcc.loopEnd = la.end;
@@ -557,25 +480,13 @@ const GameAudio = (function () {
     engineOn = false;
   }
 
-  // rev01 0..1 drives engine PITCH (so it revs within a gear and drops on an
-  // upshift); speed01 (optional) drives loudness/brightness/harvest so they
-  // stay steady across shifts. boost01 0..1 (truthy ok), offroad bool.
-  // gear (optional 1..8) gives each gear a distinct base/ceiling so an
-  // upshift is clearly heard and 2nd vs 6th differ even at equal rev01.
   function setEngine(rev01, boost01, offroad, speed01, gear) {
-    // Muted = master gain 0 but engineOn stays true — without this return the
-    // ~10 setTargetAtTime calls per frame kept scheduling on the audio thread
-    // while producing silence. Same for SFX mute: sfxBus gain is 0 but
-    // automation still ran every frame until sfxEnabled was gated here.
     if (!engineOn || !sfxOk()) return;
     const rev = clamp01(rev01 || 0);
     const s = clamp01(typeof speed01 === "number" ? speed01 : (rev01 || 0));
     const b = clamp01(typeof boost01 === "number" ? boost01 : (boost01 ? 1 : 0));
     const t = ctx.currentTime;
 
-    // Per-gear character. g01 = 0 in 1st .. 1 in 8th. Lower gears reach a higher
-    // ceiling (short ratios scream); higher gears top out lower (long ratios
-    // drone). Used by both the sample (playbackRate) and synth (freq) cores.
     let g01 = 0.3, gIdle = 95, gSpan = 700;
     if (typeof gear === "number" && isFinite(gear)) {
       const gi = Math.max(1, Math.min(8, Math.round(gear)));
@@ -593,20 +504,6 @@ const GameAudio = (function () {
     }
 
     if (usingSamples) {
-      // F1-style pitch: every gear starts LOW and screams up to a high redline.
-      // A big, near-uniform low->high sweep makes the rev climb obvious; tall
-      // gears top out a touch lower so an upshift still drops the pitch. On an
-      // upshift rev resets low, so the note snaps back down and climbs again.
-      // Pitch is proportional to RPM, and rev01 IS normalized RPM, so a straight
-      // linear map is physically correct: every gear reaches the SAME redline
-      // note, and an upshift drops the pitch only partially (rpmFor lowers the
-      // RPM by the gear ratio — more in low gears, less in high gears). Pitched
-      // down overall per feedback; redline kept near where gear 7 sat ("about
-      // right"), idle brought lower for a deeper low end.
-      // Base pitch tracks rpm (research: engine pitch is proportional to RPM,
-      // and games crossfade short pitched loops to avoid the chipmunk artifact).
-      // On top of that, drop the low gears noticeably for a deeper, gruntier
-      // launch (gears 1-3 scaled down; 4+ normal) — a deliberate feel choice.
       const g = (typeof gear === "number" && isFinite(gear)) ? Math.max(1, Math.min(8, Math.round(gear))) : 8;
       const gmul = g <= 3 ? [0.6, 0.72, 0.84][g - 1] : 1.0;
       const rate = (0.25 + rev * 0.45) * (1 + 0.04 * b) * gmul;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
@@ -636,9 +533,6 @@ const GameAudio = (function () {
       engC.frequency.setTargetAtTime(base * 0.5, t, 0.025);
     }
 
-    // lowpass + loudness follow SPEED (steady across shifts); revs add bite.
-    // Samples need a higher cutoff floor (they're full recordings) and their own
-    // master level since the idle/accel sub-gains already mix them.
     const cut = usingSamples
       ? Math.min(11000, 2600 + s * 5800 + rev * 2400 + b * 1500)   // open: let the recording breathe
       : Math.min(7200, 600 + s * 4200 + rev * 700 + b * 1400);
@@ -648,15 +542,10 @@ const GameAudio = (function () {
       : (0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0));
     engGain.gain.setTargetAtTime(lvl * (1 - 0.55 * shiftDuck), t, 0.03);
 
-    // turbo whine tracks revs. With a real recording (which already has its own
-    // turbo/harmonic content) keep this very subtle so it doesn't sit on top as a
-    // synthetic tone — the audio test showed these synth layers dominating.
     whineOsc.frequency.setTargetAtTime(1500 + rev * 2000, t, 0.05);
     whineGain.gain.setTargetAtTime(
       (0.004 + rev * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0) * (usingSamples ? 0.50 : 1), t, 0.08);
 
-    // harvesting whirr fades IN under braking/lift: infer deceleration
-    // from the speed trajectory between calls
     const dt = lastEngT ? Math.max(0.001, t - lastEngT) : 0;
     let target = 0;
     if (dt > 0) {
@@ -666,10 +555,6 @@ const GameAudio = (function () {
     lastEngT = t;
     lastSpeed = s;
     harvLevel += (target - harvLevel) * Math.min(1, (dt || 0.016) / 0.12);
-    // Off for real recordings — and when it is off, BOTH of these are wasted:
-    // the gain is multiplied to a constant 0, and the filter is being swept
-    // behind that zero. usingSamples is the shipping path, so this was two more
-    // per-frame automation events producing silence.
     if (!usingSamples) {
       harvGain.gain.setTargetAtTime(harvLevel * 0.06, t, 0.06);
       harvFilter.frequency.setTargetAtTime(700 + s * 1600, t, 0.08);
@@ -695,16 +580,11 @@ const GameAudio = (function () {
     }
   }
 
-  /* ---------------- rain ---------------- */
-
   let rainSrc = null, rainGain = null, rainHp = null, rainLp = null, rainStopping = false;
   let rainPending = null;   // gain a start asked for while stopRain's teardown was running
   let rainWanted = false;   // wanted even when nodes are torn down (rebuildCtx / tab hide)
 
   function startRain(gain) {
-    // Optional gain for a softer tier (no live caller passes one today — both
-    // call sites use the full 0.065). Re-targets live if already
-    // running, so a mid-race wet↔rain flip fades the loop instead of sticking.
     const g = gain == null ? 0.065 : gain;
     rainWanted = true;
     if (rainSrc) { if (rainGain) rainGain.gain.setTargetAtTime(g, now(), 0.8); return; }
@@ -777,8 +657,6 @@ const GameAudio = (function () {
       shiftDuckT = t0;
     }
 
-    // short synth blip — a filtered saw "chirp". Upshift snaps up and fades;
-    // downshift sits lower and blips slightly up (heel-and-toe).
     const osc = ctx.createOscillator();
     const f = ctx.createBiquadFilter();
     const g = ctx.createGain();
@@ -801,8 +679,6 @@ const GameAudio = (function () {
     // a touch of mechanical click via short filtered noise
     noise(isUp ? 0.05 : 0.045, 0.05, isUp ? 2600 : 1800);
   }
-
-  /* ---------------- sfx ---------------- */
 
   // i 0..4 — each start light a touch higher than the last
   function lightOn(i) {
@@ -855,8 +731,6 @@ const GameAudio = (function () {
     noise(0.09, 0.05, 320);
   }
 
-  // Thunder: a deep rolling rumble (low-pass noise, long decay) with a closer
-  // crack on top and a long low tail. `near` 0..1 scales loudness + brightness.
   function thunder(near) {
     const n = Math.max(0, Math.min(1, near == null ? 0.6 : near));
     noise(0.10 + n * 0.22, 0.9 + n * 0.7, 170 + n * 150);      // rolling body
@@ -895,8 +769,6 @@ const GameAudio = (function () {
     blip(165, "square", 0.14, 0.01, 0.45, 58);
   }
 
-  /* ---------------- music ---------------- */
-
   /*
    * Music is now real, downloaded CC0 tracks (see assets/music/CREDITS.txt),
    * streamed and looped through the AudioContext. The old synth sequencer was
@@ -922,8 +794,6 @@ const GameAudio = (function () {
     src.loop = PLAYLIST.length < 2;
     src.connect(musicGain);
     src.onended = function () {
-      // only the source that is still current may advance the playlist — a
-      // stopped/superseded one fires onended too
       if (src !== musicSrc || token !== musicToken || !musicOn) return;
       nextTrack(1);
     };
@@ -940,8 +810,6 @@ const GameAudio = (function () {
     for (let i = 0; i < PLAYLIST.length; i++) if (eligible(i)) return true;
     return false;
   }
-  // Walk `step` at a time until an eligible slot turns up, giving up after one
-  // full lap so an empty selection cannot spin forever.
   function seekEligible(from, step) {
     const n = PLAYLIST.length;
     if (!n) return -1;
@@ -953,8 +821,6 @@ const GameAudio = (function () {
     return eligible(from) ? from : -1;
   }
 
-  // Move `step` places along the playlist and start playing there. Used both by
-  // the end-of-track handover and by SKIP TRACK in the pause menu.
   function nextTrack(step) {
     if (!PLAYLIST.length) return;
     const i = seekEligible(musicIndex, step || 1);
@@ -995,11 +861,6 @@ const GameAudio = (function () {
     musicOn = true;
     currentUrl = url;
     const token = ++musicToken;
-    // ONLY THE THREE SHIPPED TRACKS ARE CACHED. decodeAudioData yields raw PCM
-    // — a 4-minute stereo 48 kHz song is ~45-90 MB — so keeping every uploaded
-    // file the player has ever selected would be an out-of-memory on a phone
-    // after a handful of them. Built-ins are a bounded three; user tracks pay a
-    // re-decode each time they come round instead.
     const cacheable = !!PLAYLIST[musicIndex].builtin;
     if (ctx.state !== "running") { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
     if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
@@ -1023,12 +884,6 @@ const GameAudio = (function () {
     if (sfxBus) sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
     return sfxVol;
   }
-  // Mute the effects WITHOUT touching the music: the engine, tyres, rain and UI
-  // all sit on the sfx bus, so zeroing it leaves the soundtrack playing. That is
-  // the whole point of the switch — music with no sound effects is a legitimate
-  // way to play, and routing this through the master would kill both.
-  // The sources keep running (silently) rather than being torn down, so nothing
-  // has to be rebuilt when the switch comes back on.
   function setSfxEnabled(b) {
     sfxEnabled = !!b;
     if (sfxBus) sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
@@ -1037,15 +892,11 @@ const GameAudio = (function () {
   function setMusicVolume(v) {
     musicVol = clamp01(typeof v === "number" ? v : 0.5);
     if (musicGain) musicGain.gain.value = musicVol * MUSIC_FULL;
-    // A backend's audio is its own media element, outside this AudioContext —
-    // musicGain cannot reach it, so the level has to be forwarded.
     if (backend) { try { backend.setVolume(musicVol); } catch (e) {} }
     return musicVol;
   }
   function volumes() { return { sfx: sfxVol, music: musicVol }; }
 
-  // Skip to the next track on demand. Returns the new track's file name so the
-  // caller can say what is playing.
   function skipTrack() {
     if (!musicEnabled) return null;
     if (backend) { try { return backend.skip(); } catch (e) { return null; } }
@@ -1053,10 +904,6 @@ const GameAudio = (function () {
     nextTrack(1);
     return trackName();
   }
-  // Step BACK one track. nextTrack() already takes a signed step, so the only
-  // new thing here is the Spotify backend, whose remote transport has its own
-  // previous() — falling back to skip() there would jump forward, which is the
-  // opposite of what the button says.
   function prevTrack() {
     if (!musicEnabled) return null;
     if (backend) {
@@ -1099,9 +946,6 @@ const GameAudio = (function () {
     const wasPlaying = musicOn && i === musicIndex;
     delete musicBuffers[PLAYLIST[i].url];
     PLAYLIST.splice(i, 1);
-    // Keep musicIndex pointing at the SAME track it was on: removing an earlier
-    // entry shifts everything down, and getting this wrong makes an unrelated
-    // song restart every time the player deletes a file.
     if (i < musicIndex) musicIndex--;
     if (!PLAYLIST.length) { stopInternal(); musicIndex = 0; return true; }
     musicIndex = ((musicIndex % PLAYLIST.length) + PLAYLIST.length) % PLAYLIST.length;
@@ -1110,8 +954,6 @@ const GameAudio = (function () {
   }
   function playTrackId(id) {
     const i = indexOfId(id);
-    // playIndex owns musicOn — setting it here would leave the mixer believing
-    // music is playing when the call is refused (music off, backend installed).
     if (i < 0 || backend || !musicEnabled) return false;
     playIndex(i);
     return musicOn;
@@ -1141,10 +983,6 @@ const GameAudio = (function () {
   }
   function musicBackend() { return backend; }
 
-  // trackIdx >= 0 -> one of the race loops; trackIdx < 0 -> menu loop.
-  // Streams a real CC0 track (lazy-loaded, then cached). No-op before init().
-  // Toggle just the music, independent of the master sound toggle. Engine + SFX
-  // keep playing when music is off.
   function setMusicEnabled(b) {
     musicEnabled = !!b;
     if (!musicEnabled) stopMusic();
@@ -1162,18 +1000,9 @@ const GameAudio = (function () {
     // interrupt it — going to the grid used to restart the track from zero.
     // Whatever is playing keeps playing; we only start something if silent.
     if (musicOn && musicSrc) return;
-    // ALWAYS RESUME AT THE CURRENT SLOT. trackIdx is the CIRCUIT index at the
-    // race call sites, which was only ever harmless while the playlist was a
-    // fixed three: with uploads in the list, "race at Monza" would have started
-    // playlist entry 4. The index is kept for API compatibility and is no
-    // longer a position in this list.
     playIndex(musicIndex);
   }
 
-  // stopInternal() silences OUR playlist only; stopMusic() is the public one and
-  // also pauses a backend. Keeping them apart is what lets setMusicBackend()
-  // mute the built-in tracks without telling Spotify to pause the moment it
-  // connects.
   function stopInternal() {
     musicOn = false;
     currentUrl = null;
@@ -1234,11 +1063,6 @@ const GameAudio = (function () {
     setSfxEnabled,
     setMusicVolume,
     volumes,
-    // debug audio-test hooks. rate() is the exact pitch multiplier the engine is
-    // playing at (ground truth — output pitch scales linearly with it).
-    // centroidHz() is the spectral centroid of the live output (a stable
-    // brightness/pitch proxy, unlike the single loudest bin which hops between
-    // harmonics). Together they let tests verify pitch vs gear/throttle.
     rate() { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value.toFixed(4) : 0; },
     centroidHz() {
       if (!dbgAnalyser || !ctx) return 0;

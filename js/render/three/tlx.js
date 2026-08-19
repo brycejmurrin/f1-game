@@ -1,139 +1,4 @@
-/* Apex 26 — TLX: the three.js/TSL renderer backend (migration milestone 1).
- *
- * Third backend behind the js/render/gfx.js seam (GLX = WebGL2 default,
- * WGX = frozen hand-written WebGPU, TLX = three.js r185.1 with WebGPURenderer
- * and automatic WebGL2 fallback). Opt-in via localStorage
- * apex26.gfxBackend = "three"; installed by game.js's descriptor-copy onto
- * the GLX object so every direct GLX.* call site and test monkey-patch keeps
- * working (object identity is the compatibility contract).
- *
- * ARCHITECTURE (see spike/ADOPTION-PLAN.md + the milestone plan):
- * - This file and its tlx-…/tsl-… siblings are classic IIFE scripts like the
- *   rest of the codebase. The ONLY ES-module content is the vendored three
- *   build in vendor/three-0.185.1/, reached through the inline importmap in
- *   index.html by a dynamic import() inside TLX.create() — so GLX users never
- *   fetch a byte of it and a failed import falls back to GLX via Gfx.create's
- *   never-throw null contract.
- * - tsl-….js files publish FACTORY functions on the TLXShaders global
- *   ((THREE, TSL, ctx) => nodes) and must NEVER touch THREE at script eval —
- *   three does not exist until create() runs.
- *
- * STANDING RULES (learned in the spike, see spike/README.md):
- * - Every shared varying-derived TSL node gets an unconditional Fn-body
- *   .toVar() anchor before any conditional use (TSL emits cached property
- *   chains at FIRST USE; a first use inside If/ElseIf strands the assignments
- *   in that branch and every out-of-branch consumer silently reads garbage).
- * - THREE.ColorManagement.enabled = false and outputColorSpace =
- *   LinearSRGBColorSpace; NO sRGB encode in any pass — the whole game look,
- *   the LightPresets and every pixel baseline are calibrated without one
- *   (js/render/shaders/chunks.js).
- * - Defaults for every frame.tune / present(opts.tune) knob MUST mirror
- *   LightTune.TUNE_DEFS, same as GLX (js/render/gfx.js contract note).
- *
- * M1 STATUS: renderer lifecycle is real (dynamic import, WebGPURenderer with
- * WebGL2 fallback, resize/renderScale, Color-clear begin/present — skyZenith
- * when the frame has one, else fogColor for the no-track menu path at
- * js/game.js); every other contract member is
- * present as a SAFE no-op so game.js can issue the full frame protocol without
- * crashing. M2+ replace the no-ops subsystem by subsystem.
- *
- * M3 STATUS: the TSL lit core is live — TLXShaders.chunks + TLXShaders.lit
- * (tsl-chunks.js / tsl-lit.js) supply the full lit fragment (15 procedural
- * materials, car ids 20-27, FLAG wave, sun+hemi+32-lamp lighting, fog stack,
- * wetness, cloud shadows). GLX's per-draw material scalars land through a
- * MATERIAL CACHE: three can't read per-object uniforms off one shared
- * material, so each distinct opts signature (9 scalars + flags, the game's
- * ~20 hoisted opts objects) gets its own material variant whose scalars are
- * uniform nodes — every variant emits identical program text, so the GL
- * program is compiled once. Cap 64 entries, oldest evicted (a continuously
- * animated scalar, e.g. dusk floodEmit, would otherwise mint variants per
- * frame — revisit in M8 if that path shows up hot).
- * Debug: __tlx.shader(idx) dumps generated GLSL/WGSL; ?viz=mat|normal|lamp
- * (or localStorage apex26.tlxViz) paints bisect views.
- *
- * M4 STATUS: the three-map shadow subsystem is live (tlx-shadow.js,
- * TLXShaders.shadowSys): static sun map (2048²/1024² mobile/512² software-GL,
- * snap-cached by game.js), per-frame car map (1024² desktop / 256² software-GL)
- * and nearest-floodlight spot map (512² / 256² software-GL), sampled in tsl-lit
- * via hardware-compare depth taps.
- * Armed flags clear in present() like GLX's post present. PCSS blocker map
- * is live on the WebGPU backend (sampler-free textureLoad downsample,
- * tlx-shadow.js); the WebGL2 fallback keeps the fixed-R look and pcss()
- * reports the live state.
- *
- * M5 STATUS: the procedural sky is live (tsl-sky.js, TLXShaders.sky — the
- * full SKY_FS port: gradient/golden hour, clouds, sun corona+disc, stars,
- * moon, city glow, lightning, dither). Delivered as scene.backgroundNode:
- * three renders it on its internal camera-following background mesh (depth
- * off, drawn first, z pinned to the far plane — GLX's exact draw order) and
- * the node reconstructs the per-pixel view ray from frameSky.invViewProj
- * (screenUV -> NDC -> both z planes), identical to SKY_VS. begin() clears
- * backgroundNode each frame; drawSky() re-arms it — so the no-track/menu
- * path keeps the flat Color clear (skyZenith when the frame has one, else
- * fogColor). A missed TSL sky (software-GL compile miss, HDR-target skip)
- * must not fall through to dusk fog (~beige [0.68,0.64,0.54]) or the whole
- * frame reads as a washed void. The env-probe double-call (M9) just
- * overwrites uniforms (last drawSky before render wins). Post chain is
- * live (M8, tlx-post.js).
- *
- * M6 STATUS: the FX draw paths are live (tsl-fx.js, TLXShaders.fx): blob
- * shadows + per-mark skid stamps (shared unit quad, per-draw w/l baked into
- * the record's matrix), the one-draw skid batch, additive lamp glare halos
- * (built from frame.lights stride-15 records with GLX's near-field fade +
- * colour normalisation), the two-group particle batches, and the textured
- * car decals (material cached per texture+glow). Each is a draw-list record
- * like the world draws; every FX material is transparent, so three renders
- * them in its transparent pass AFTER all opaques (strictly safer than GLX's
- * inline order — FX never write depth, so a later opaque would stomp them),
- * and present() stamps renderOrder = submission index on every record so
- * the callers' relative FX order (shadows -> decals -> glow -> skids ->
- * particles) survives three's z-sort. GLX's colorMask-alpha-off on
- * particles/decals maps to blendSrcAlpha=Zero/blendDstAlpha=One (three has
- * only a boolean Material.colorWrite — see the tsl-fx.js header).
- *
- * M7 STATUS: the chunked-mesh path is live (tlx-chunked.js,
- * TLXShaders.chunked): createChunkedMesh bins the city/props triangles into
- * 72 m XZ cells (GLXChunked port — shared attribute set, one index buffer +
- * AABB per cell, staged release of the multi-million-element source arrays),
- * drawChunked records the WHOLE chunked mesh and present() culls it against
- * begin()'s viewProj copy + frame.cullDist when the camera is final — every
- * visible chunk becomes one pooled mesh stamping the record's renderOrder
- * (the M6 LOAD-BEARING rule holds: FX/glass interleaving survives).
- * castShadowChunked culls against the shadow system's castCullVP (lamp cone)
- * or the sun lightVP, radial cull OFF — an off-camera building still casts
- * into view. Probe: __tlx.chunkState() = {on, total, visible} from the last
- * presented frame.
- *
- * M8 STATUS: the post-processing chain is live (tsl-post.js shaders +
- * tlx-post.js orchestration): present() renders the world into a full-res
- * HDR target (+ sampleable depth) and resolves through SSAO (+ bilateral
- * upsample in the composite), the world-space godray march (sampling the M4
- * sun/lamp shadow maps — the lamp's armed flag is read by the chain BEFORE
- * clearArmed()), the bright-pass + 13/9-tap mip-chain bloom, the full
- * 58-uniform COMPOSITE (parameterised Narkowicz ACES — never three's
- * tone-mapping —, colour grade, wet-road + car-paint SSR reading the alpha
- * tag, heat haze, lens dirt/flare, vignette, dither/grain) and FXAA. The lit
- * core now writes the SSR car tag into alpha (tsl-lit ctx.ssrTag) and
- * noAlphaWrite/translucent draws preserve dst alpha through the blend stage
- * (Zero/One alpha factors — the GLX colorMask discipline). hdrMode() is true
- * when the chain is up on a float target; every block bails per-frame on a
- * probe-less path (setup preview: no proj/invProj -> no SSAO/SSR/shafts) and
- * allocates nothing until first enabled. Debug: ?viz=ssao|bloom|shafts|
- * composite-off bisect views + __tlx.postState(). MSAA stays off (FXAA
- * carries AA — the GLX mobile-tier recipe; see tlx-post.js header).
- *
- * MOBILE (since every device may select every renderer — docs/ARCHITECTURE.md):
- * - A PHONE DEFAULTS TO three's WebGL2 BACKEND, desktop keeps auto-pick. iOS
- *   26+ ships navigator.gpu, so "three falls back by itself" is false exactly
- *   where it is needed; the full reasoning is at the forceWebGL pin in
- *   create(). apex26.tlxForceGL overrides in both directions ("1"/"0").
- * - Context/device loss is RECOVERED here (renderer.onDeviceLost +
- *   webglcontextrestored), because three's default handler leaves a silently
- *   dead canvas and GLX's recovery lives in a GLX.init() this path never runs.
- * - Every discretionary per-frame GPU pass keys on the DEVICE (isMobile), not
- *   the memory tier (mobileTier) — the js/render/glx/shadow.js + js/game/perf.js
- *   rule. See tlx-shadow.js.
- */
+/* Apex 26 — TLX: three.js/TSL renderer backend. Third backend behind js/render/gfx.js (GLX default, WGX opt-in). Opt-in via apex26.gfxBackend=three. */
 "use strict";
 
 const TLX = (function () {
@@ -150,20 +15,12 @@ const TLX = (function () {
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas /*, opts */) {
     try {
-      // Capture the mobile-tier decision from GLX BEFORE game.js's
-      // descriptor-copy overwrites GLX's own values with ours.
-      // js/render/glx.js stays the single source of truth (lighting.js reads it
-      // at script-eval time, long before any backend exists).
       const isMobile = (typeof GLX !== "undefined" && !!GLX.isMobile);
       const mobileTier = (typeof GLX !== "undefined" && !!GLX.mobileTier);
 
-      // The ES-module island: resolved through the inline importmap in
-      // index.html. Failure (old browser, missing vendor) -> null -> GLX.
       const THREE = await import("three/webgpu");
       const TSL = await import("three/tsl");
 
-      // Calibration invariant: the game's look is authored with NO sRGB
-      // encode anywhere (js/render/shaders/chunks.js).
       THREE.ColorManagement.enabled = false;
 
       // ── WHICH three BACKEND: apex26.tlxForceGL "1" = pin WebGL2, "0" =
@@ -239,23 +96,12 @@ const TLX = (function () {
       let _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _capPref === "1");
       let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
       let _blitRT = null, _softImg = null, _softBlitGen = 0;
-      // readRenderTargetPixelsAsync owns a full-frame staging allocation. Keep
-      // at most one live and coalesce callers onto the newest rendered target;
-      // software adapters can otherwise queue hundreds while mapAsync lags.
       let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
       const _softPresentWaiters = [];
       // Layout/CSS size follows the VISIBLE canvas. Soft-present is a sibling
       // 2D overlay — never getContext("2d") on #game (one context type per
       // canvas for life; three's WebGPU configure is lazy on first present).
       let _layoutCanvas = canvas;
-      // Software WebGPU: keep #game as three's GPU canvas. Soft-present is the
-      // #game-soft sibling overlay below (never getContext("2d") on #game —
-      // one context type per canvas for life). softGpu() aliases the overlay
-      // path so instanced draws / sky fallback / env restore stay off the
-      // native swapchain. Do not steal #game as 2D — that hides the overlay
-      // next to a detached canvas and leaves the page on an empty 2D #game.
-
-      // ── OPAQUE CANVAS (js/render/glx.js: `alpha: false`) ────────────────────
       // Not cosmetic, and not a memory tweak: the lit fragment writes the SSR
       // car-paint TAG — 0.35 — into ALPHA (tsl-lit.js, ctx.ssrTag), and the
       // post-only death path in present() keeps those materials while painting
@@ -299,9 +145,6 @@ const TLX = (function () {
         const renderer = new THREE.WebGPURenderer({
           canvas,
           alpha: false,
-          // Straight alpha. Default true would premultiply the SSR car-paint
-          // tag (0.35) into RGB on any path that still writes that channel,
-          // which is the other half of "the car vanished on three.js".
           premultipliedAlpha: false,
           ...(glCtx ? { context: glCtx } : {}),
           // js/render/glx.js's `antialias: !IS_MOBILE` 1:1 — "phones never take
@@ -523,8 +366,6 @@ const TLX = (function () {
           const rk = "apex26.ctxLostReloads";
           const n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
           sessionStorage.setItem(rk, String(n));
-          // 1.2 s: long enough for a real "restored" event to win the race
-          // below, short enough that the player reads it as a hitch.
           if (n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
           else {
             // Third loss in one tab. GLX's identical 2-cap ends in a frozen
@@ -546,8 +387,6 @@ const TLX = (function () {
           }
         } catch (_) { /* no sessionStorage -> skip the auto-recovery rather than loop uncounted */ }
       };
-      // three does NOT route "restored" anywhere (it only listens for the loss),
-      // so the immediate-reload half of GLX's pair has to be registered here.
       try {
         canvas.addEventListener("webglcontextrestored",
           function () { try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ } }, false);
@@ -571,36 +410,13 @@ const TLX = (function () {
         } catch (_) { return false; }
       }
 
-      // The seam is immediate-mode (draw(mesh, model, opts) between begin and
-      // present) while three is retained-mode. Bridge: draw() appends a
-      // (geometry, matrix) record; present() materialises records into a
-      // pooled set of THREE.Mesh objects IN SUBMISSION ORDER (GLX semantics:
-      // caller order is draw order) and renders once. TrackGraph.batches()
-      // go through createInstancedBatch → THREE.InstancedMesh (one draw call
-      // per batch, frustum-repacked by cullInstances).
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0.04, 0.04, 0.06);
-      // Pooled meshes write matrixWorld themselves in acquireMesh (the scene
-      // root is identity, so world = local). Auto-update would walk the whole
-      // graph on each renderer.render() (shadow primes + env faces + present)
-      // for no result — and a missed write leaves cars at the origin.
       scene.matrixAutoUpdate = false;
       scene.matrixWorldAutoUpdate = false;
       const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 4000);
       camera.matrixAutoUpdate = false;
 
-      // ── Expose the three objects for the Three.js DevTools extension ────────
-      // The extension discovers a scene by scanning globals; without these its
-      // panel is simply empty and you cannot tell "nothing exposed" from
-      // "backend not running". Publishing them also enables the standard
-      // console workflow (scene.children, camera.position.set(...),
-      // new THREE.BoxHelper(obj)) and, on this backend specifically, is the
-      // only practical way to inspect the TSL material graph.
-      //
-      // Debug-only: nothing in the game reads these back, so they can be
-      // deleted at any time. THREE itself is published too because every helper
-      // (AxesHelper/BoxHelper/CameraHelper) needs the constructor, and the
-      // module is loaded through a dynamic import that the console cannot reach.
       try {
         window.scene = scene; window.camera = camera; window.renderer = renderer;
         window.THREE = THREE;
@@ -617,9 +433,6 @@ const TLX = (function () {
       unlitMat.side = THREE.FrontSide;
       unlitMat.lights = false;
       unlitMat.customProgramCacheKey = () => "tlx-unlit";
-      // Instanced scenery owns a separate tint attribute. Keeping the canonical
-      // per-vertex colour in `color` preserves mixed-colour models (brown tree
-      // trunks + per-instance foliage, billboard frames + tinted faces).
       const unlitInstancedMat = new THREE.MeshBasicNodeMaterial();
       unlitInstancedMat.colorNode = TSL.attribute("color", "vec3")
         .mul(TSL.attribute("instanceTint", "vec3"));
@@ -632,9 +445,6 @@ const TLX = (function () {
       // first present() throw so later frames do not recompile the dead graph.
       let _drawMatMode = 0;
 
-      // Debug viz mode (?viz=… or localStorage apex26.tlxViz), read BEFORE
-      // the factories: lit viz modes replace the scene material, post viz
-      // modes (M8) route through the chain's bisect blit instead.
       const vizMode = (function () {
         try {
           return new URL(location.href).searchParams.get("viz")
@@ -643,11 +453,6 @@ const TLX = (function () {
       })();
       const LIT_VIZ = ["mat", "normal", "lamp"];
 
-      // ── M4: the three-map shadow subsystem (tlx-shadow.js factory) ───────
-      // Created BEFORE the lit core: tsl-lit builds its shadow sampling
-      // around the subsystem's depth textures at factory time. Guarded like
-      // the lit factory — missing/broken keeps the no-op shadow members and
-      // the lit core simply compiles without shadow taps.
       let shadowSys = null;
       try {
         if (window.TLXShaders && TLXShaders.shadowSys) {
@@ -668,10 +473,6 @@ const TLX = (function () {
         if (window.TLXShaders && TLXShaders.chunks) chunks = TLXShaders.chunks(THREE, TSL);
       } catch (_) { chunks = null; }
 
-      // ── M8: the post chain (tsl-post.js + tlx-post.js factories) ─────────
-      // Created BEFORE the lit core: lit bakes the SSR alpha-tag write only
-      // when an offscreen HDR target exists to carry it (ctx.ssrTag).
-      // Guarded: missing/broken keeps direct-to-canvas rendering (M7 look).
       let post = null;
       try {
         if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
@@ -695,21 +496,7 @@ const TLX = (function () {
         post = null;
       }
 
-      // ── M9: the live environment probe cube target ───────────────────────
-      // A 64px cubemap rendered around the player car (one face per ~2 frames,
-      // driven by game.js's envFaceBegin/End), sky+world only. The car-paint
-      // clearcoat samples it for real reflections of the surroundings — GLX's
-      // envInit()/envFaceBegin/envFaceEnd port (those three functions in glx.js). Built BEFORE
-      // the lit core so tsl-lit can bind ctx.envCube at factory time; starts
-      // black (rendered nothing yet) and uEnvStr gates it to 0 until the first
-      // full 6-face cycle completes. Type mirrors GLX: HDR (half-float) when
-      // the post chain reports a renderable float target, else 8-bit — same
-      // decision GLX makes via PST.hdrOk(). Guarded: a failure leaves envRT
-      // null and every env member a safe no-op (the pre-M9 analytic look).
-      // NO sRGB anywhere — NoColorSpace on the cube, the calibration invariant.
       const ENV_SIZE = 64;
-      // Probe draw-distance, metres — GLX ENV_CULL_M. A 64px face is ~1.4 deg/px;
-      // uncapped the cube re-draws the 900 m city. Baked ON (was PerfTry.envCull).
       const ENV_CULL_M = 300;
       let envRT = null, envDummy = null;
       try {
@@ -765,9 +552,6 @@ const TLX = (function () {
           t.needsUpdate = true;
           return t;
         };
-        // Mid-grey albedo (the shader's ×2.0 makes it a no-op) and a flat
-        // tangent normal (0.5, 0.5) — a placeholder that changes nothing even
-        // if it were sampled with the knob up before a pack lands.
         matPlaceAlbedo = grey([128, 128, 128]);
         matPlaceNormal = grey([128, 128, 255]);
         matMaps = { albedo: matPlaceAlbedo, normal: matPlaceNormal };
@@ -787,10 +571,6 @@ const TLX = (function () {
         lit = null;
       }
 
-      // ── M5: the procedural sky (tsl-sky.js factory) ──────────────────────
-      // Guarded like the others: missing/broken keeps drawSky a no-op and the
-      // flat scene.background clear (the M4 look). Shares ctx.chunks for
-      // ignoise; the sky-family hash/vnoise/fbm live inside tsl-sky.js.
       let sky = null;
       try {
         if (window.TLXShaders && TLXShaders.sky) {
@@ -802,10 +582,6 @@ const TLX = (function () {
         sky = null;
       }
 
-      // ── M6: the FX materials (tsl-fx.js factory) ─────────────────────────
-      // Guarded like the others: missing/broken keeps every FX member a safe
-      // no-op (drawSkidBatch still returns true — the per-mark fallback is
-      // fx-backed too, so falling back would only spam dead records).
       let fx = null;
       try {
         if (window.TLXShaders && TLXShaders.fx) {
@@ -816,9 +592,6 @@ const TLX = (function () {
         fx = null;
       }
 
-      // ── M7: the chunked-mesh subsystem (tlx-chunked.js factory) ──────────
-      // Guarded like the others: missing/broken keeps the M2 single-geometry
-      // fallback (one un-culled draw — correct, just slower on street props).
       let chunkedSys = null;
       try {
         if (window.TLXShaders && TLXShaders.chunked) {
@@ -836,9 +609,6 @@ const TLX = (function () {
       const vizMat = (lit && vizMode && LIT_VIZ.indexOf(vizMode) >= 0)
         ? lit.makeViz(vizMode) : null;
 
-      // ── material cache: GLX per-draw opts -> material variant ────────────
-      // (see the M3 STATUS note in the header for why a cache, not per-draw
-      // uniforms). Key = the 9 material scalars + render-state flags.
       const defaultMat = lit ? lit.makeMaterial({}) : null;
       const defaultMatChunked = lit ? lit.makeMaterial({ chunked: true }) : null;
       const defaultMatInstanced = lit ? lit.makeMaterial({ instanced: true }) : null;
@@ -863,12 +633,6 @@ const TLX = (function () {
         if (vizMat) return vizMat;
         if (!opts) return chunked ? defaultMatChunked : (instanced ? defaultMatInstanced : defaultMat);
         const o = opts;
-        // emissive is the one scalar callers ANIMATE (dusk floodEmit ramps it
-        // every frame): raw in the key it mints a variant per step of the
-        // ramp, and on r185.1 every cache eviction still leaks bindings for shared
-        // textures (three #33952, fixed only in r186). Quantised to 1/32 the
-        // full ramp costs ≤33 variants — under the cap, so no evictions —
-        // and the ≤0.03 emissive delta is invisible.
         const key =
           (o.emissive !== undefined ? Math.round(o.emissive * 32) / 32 : 0) + "," +
           (o.alpha !== undefined ? Math.round(o.alpha * 32) / 32 : 1) + "," +
@@ -1025,12 +789,6 @@ const TLX = (function () {
 
       function cullInstances(batch, planes, opts) {
         if (!batch || !batch.cells) return batch ? batch.instances : 0;
-        // A batch has one physical instance buffer, so only the frustum whose
-        // pack is resident can be cached. The old two-signature cache remembered
-        // counts for two frusta but not their packed matrices: shadow L1 -> main M
-        // could return M's old count while L1's transforms remained uploaded.
-        // Compare all coefficients as well; the old p[0]/p[3]-only hash collided
-        // for mirrored yaw/pitch frusta.
         let samePack = !!batch._cullPlanes;
         if (samePack) {
           let po = 0;
@@ -1129,11 +887,6 @@ const TLX = (function () {
       }
       const meshPool = [];          // recycled THREE.Mesh wrappers
       let poolUsed = 0;
-      // Two scratch matrices for begin()'s view reconstruction. BOTH are
-      // hoisted: multiplyMatrices reads its operands before writing, so the
-      // second cannot be _tmpMat4 — and it used to be a `new THREE.Matrix4()`
-      // per frame, the only per-frame allocation left in this file. 60 Hz of
-      // garbage buys nothing on desktop and buys a GC hitch on a phone.
       const _tmpMat4 = new THREE.Matrix4(), _tmpMat4b = new THREE.Matrix4();
 
       // ── M6 FX plumbing ───────────────────────────────────────────────────
@@ -1167,11 +920,6 @@ const TLX = (function () {
         }
         return a;
       }
-      // Dynamic interleaved vertex streams (skid batch / glow / particles):
-      // ONE InterleavedBuffer each — the GLX VBO layouts verbatim, with the
-      // billboard center riding in "position" so three derives the draw
-      // count naturally. ensureStream grows (recreates) on demand; true =
-      // freshly (re)created, so callers re-upload even when not dirty.
       function ensureStream(slot, verts) {
         if (slot.geo && slot.cap >= verts) return false;
         const cap = Math.max(slot.cap * 2, verts, slot.min);
@@ -1189,11 +937,6 @@ const TLX = (function () {
         slot.ib.addUpdateRange(0, floats);
         slot.ib.needsUpdate = true;
       }
-      // Skid trail: [px,py,pz,u,v] stride 5, 6 verts/mark (game.js MAX_SKID
-      // 120 marks). Glow: [cornerX,cornerY, cx,cy,cz, r,g,b, radius] stride 9
-      // (32 lamps preallocated — the frame.lights cull cap). Particles:
-      // [corner2, center3, rgb3, size, alpha] stride 10 (pool cap 256), one
-      // slot per blend group (particles.js issues one call per group/frame).
       const skidStream = { geo: null, ib: null, cap: 0, min: 120 * 6, stride: 5,
         attrs: [["position", 3, 0], ["uv", 2, 3]] };
       const glowStream = { geo: null, ib: null, cap: 0, min: 32 * 6, stride: 9,
@@ -1206,18 +949,8 @@ const TLX = (function () {
       // GLX _glowCorners with the GLOW_VS y*2-1 remap pre-baked (y 0..1 -> ±1).
       const _glowCorners = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1];
       let frameEye = null;          // frame.eye — the glow near-field fade origin
-      // ── M7 chunked-cull frame state ──────────────────────────────────────
-      // begin() copies frame.viewProj here (game.js may swap the frame's own
-      // array between begin and present — the env-probe path does on GLX);
-      // present() culls chunked records against THIS frustum, when the
-      // frame's camera is final.
       const _frameVP = new Float32Array(16);
       let frameCullDist = 0;        // frame.cullDist — the radial draw cap (0 = off)
-      // ── M8: frame state the post chain consumes at present() (the GLX
-      // frameInvProj/frameInvVP/frameSunVS/… latch — js/render/glx.js). All
-      // POINTERS into the game's stable per-frame arrays; nulled every
-      // begin() so a probe-less path (setup preview, menus) self-disables
-      // SSAO/SSR/godray rather than reconstructing with stale matrices. ─────
       const _postF = {
         proj: null, invProj: null, invVP: null, sunVS: null, upVS: null,
         skyHi: null, skyLo: null, viewProj: null, sunDir: null, sunColor: null,
@@ -1226,8 +959,6 @@ const TLX = (function () {
       const _chunkFrame = { total: 0, visible: 0 };   // reset each begin
       const _chunkLast = { total: 0, visible: 0 };    // latched at present — __tlx.chunkState()
       const _mirrorRelease = [];    // chunked meshes whose first lit draw is THIS render
-      // Per-frame FX record counters (reset in begin, latched at present) —
-      // the __tlx.fxState() probe the M6 tests assert against.
       const _fxFrame = { shadows: 0, marks: 0, skidVerts: 0, glow: 0, particles: 0, decals: 0 };
       const _fxLast = { shadows: 0, marks: 0, skidVerts: 0, glow: 0, particles: 0, decals: 0 };
       // M10 façade-wiring probe: how many meshes this backend actually created.
@@ -1237,15 +968,6 @@ const TLX = (function () {
       // WebGL2 context, which is never init'd when TLX is active).
       const _meshMade = { mesh: 0, chunked: 0, tex: 0 };
 
-      // ── M9 env-probe frame state (js/render/glx.js port) ─────────────────────
-      // A CubeCamera owns the 6 face sub-cameras with the correct cube-face
-      // orientations (fov 90, aspect 1, near 0.4, far 900 — GLX's
-      // perspectiveTo(π/2, 1, 0.4, 900)). envFaceBegin positions it at the
-      // probe eye and returns the CURRENT face's invViewProj so game.js can
-      // point the sky node's ray reconstruction at that face; envFaceEnd
-      // materialises the world draw-list (sky + track, NO cars/FX) into the
-      // face and advances the completed-face mask. A full 6-face cycle sets
-      // envReady — until then uEnvStr stays 0 and the cube reads black.
       let envCubeCam = null;
       let envFacesMask = 0, envReady = false, _envActive = false;
       // Software / soft-GPU faces clear black and skip the world. envReady
@@ -1265,12 +987,6 @@ const TLX = (function () {
       }
       function ensureEnvCam() {
         if (envCubeCam || !envRT) return;
-        // CubeCamera(near, far, renderTarget): its 6 children are the face
-        // PerspectiveCameras. three only orients them inside update() (which
-        // renders all 6 faces at once); we render ONE face per call, so we
-        // orient them ourselves via updateCoordinateSystem() — after which
-        // children[f] pairs with setRenderTarget(envRT, f), the exact face
-        // index/camera pairing three's own update() loop uses.
         envCubeCam = new THREE.CubeCamera(0.4, 900, envRT);
         try {
           envCubeCam.coordinateSystem = renderer.coordinateSystem;
@@ -1335,18 +1051,8 @@ const TLX = (function () {
           new Float32Array(data.nrm && data.nrm.length === pos.length ? data.nrm : verts * 3), 3));
         g.setAttribute("color", new THREE.BufferAttribute(
           new Float32Array(data.col && data.col.length === pos.length ? data.col : verts * 3), 3));
-        // per-vertex procedural material id (0 = FLAT), consumed by tsl-lit.
-        // ALWAYS present: the lit material reads attribute('mat') — a missing
-        // attribute is undefined-read territory on strict GL drivers.
         g.setAttribute("mat", new THREE.BufferAttribute(
           new Float32Array(data.mat && data.mat.length === verts ? data.mat : verts), 1));
-        // Road track-space coords (arc-length s, signed lateral x, half-width),
-        // GLX attribute location 4 (js/render/glx.js trk). tsl-lit's roadMarkings()
-        // paints the edge lines and the dashed centre line analytically from
-        // these, so a road mesh WITHOUT them renders as bare tarmac — which is
-        // exactly what this backend did until now. ALWAYS present, zero-filled
-        // for every non-road mesh: hw = 0 makes roadMarkings() a no-op, and a
-        // missing attribute is undefined-read territory (same rule as `mat`).
         g.setAttribute("trk", new THREE.BufferAttribute(
           new Float32Array(data.trk && data.trk.length === pos.length ? data.trk : verts * 3), 3));
         if (data.idx && data.idx.length) {
@@ -1394,8 +1100,6 @@ const TLX = (function () {
           if (lose) { try { lose.loseContext(); } catch (_) {} }
           if (filled) return filled;
         }
-        // A canvas is bound to one context type for life — the 2d fallback
-        // needs its own.
         const cv2 = (typeof OffscreenCanvas !== "undefined")
           ? new OffscreenCanvas(size, size)
           : Object.assign(document.createElement("canvas"), { width: size, height: size });
@@ -1414,8 +1118,6 @@ const TLX = (function () {
         return filled;
       }
 
-      // CACHED CSS SIZE — same forced-reflow trap GLX documented at
-      // js/render/glx.js (clientWidth in begin() → HUD layout → jank).
       let cssW = 0, cssH = 0, cssDirty = true;
       const markCssDirty = () => { cssDirty = true; };
       if (typeof window !== "undefined" && window.addEventListener) {
@@ -1453,8 +1155,6 @@ const TLX = (function () {
             _displayCanvas.width = w;
             _displayCanvas.height = h;
           }
-          // M8: the post targets track the scaled backing size (PerfGov
-          // renderScale changes land here through setRenderScale -> resize).
           if (post) post.resize(w, h);
         }
       }
@@ -1633,9 +1333,6 @@ const TLX = (function () {
           g.setIndex(new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
           return { __tlx: true, geo: g, tex: true, count: data.idx.length };
         },
-        // M7: real chunked build (tlx-chunked.js) — spatial binning, per-cell
-        // AABBs, staged release of the source arrays. Falls back to the M2
-        // single un-culled geometry when the factory is missing.
         createChunkedMesh(data, cellSize) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
           _meshMade.chunked++;
@@ -1683,8 +1380,6 @@ const TLX = (function () {
           try {
             const n = layers || 17;
             const data = new Uint8Array(size * size * 4 * n);
-            // Neutral fill so a layer with no image is a no-op if sampled:
-            // mid-grey albedo (×2.0 in the shader) / flat tangent normal.
             data.fill(128);
             for (let i = 3; i < data.length; i += 4) data[i] = 255;
             const filled = readbackTextureLayers(size, images, n, data);
@@ -1744,22 +1439,14 @@ const TLX = (function () {
         materialMapState() {
           const sc = (lit && lit.uniforms && lit.uniforms.matTexScale && lit.uniforms.matTexScale.array) || [];
           return {
-            // Pack ownership — NOT "placeholder exists" (placeholders are always
-            // bound so a naïve matMaps.albedo check stayed true after unload).
             albedo: !!matOwnedAlbedo, normal: !!matOwnedNormal,
             layers: Array.from(sc).reduce((n, s) => n + (s > 0 ? 1 : 0), 0),
             scales: Array.from(sc),
           };
         },
 
-        // frame protocol — shadow passes delegate to the M4 subsystem
-        // (tlx-shadow.js); a missing factory keeps them as safe no-ops.
         shadowBegin(vp) { if (shadowSys) shadowSys.shadowBegin(vp); },
         castShadow(mesh, model) { if (shadowSys) shadowSys.castShadow(mesh, model); },
-        // M7: cull chunked casters against the ACTIVE depth pass's light
-        // frustum — castCullVP (the lamp's perspective cone between
-        // lampShadowBegin/End) or the static sun box (js/render/glx/chunked.js).
-        // NO radial cull: an off-camera building can still cast INTO view.
         castShadowChunked(mesh, model) {
           if (!shadowSys) return;
           const S = shadowSys.S;
@@ -1814,8 +1501,6 @@ const TLX = (function () {
           _envSvVP = frame.viewProj; _envSvEye = frame.eye; _envSvCull = frame.cullDist;
           frame.viewProj = _envVPArr; frame.eye = eye;
           frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
-          // Probe runs BEFORE gfx.begin(); without this the cube bakes the
-          // previous frame's sun/fog (or factory defaults on the first faces).
           if (lit.updateFrame) lit.updateFrame(frame);
           return _envInvArr;
         },
@@ -1826,10 +1511,6 @@ const TLX = (function () {
             return;
           }
           const faceCam = envCubeCam.children[face & 7];
-          // Materialise the world draw-list (sky background node + track meshes
-          // — game.js issued NO car/FX draws in the probe pass) into the face.
-          // Chunked records cull against the face frustum; radial cap is the
-          // mutated frame.cullDist (ENV_CULL_M, baked ON).
           const faceVP = _envVPArr;
           const faceCull = (_envFrame && _envFrame.cullDist) || 0;
           const faceEye = (_envFrame && _envFrame.eye) || null;
@@ -1882,9 +1563,6 @@ const TLX = (function () {
           for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
           const prevSky = scene.backgroundNode;
           try {
-            // Feedback-loop guard: the glass we're about to draw is an
-            // envSurface that samples the cube — point the shared cube node at
-            // the black dummy while envRT is the render target, restore after.
             if (lit && lit.setEnvCube && envDummy) lit.setEnvCube(envDummy.texture);
             // Software GL: the procedural sky is a second full TSL compile+
             // fill per face. Reflections stay road/terrain; the 64px cube
@@ -1917,8 +1595,6 @@ const TLX = (function () {
           _restoreEnvFrame();
         },
         envProbeReady() { return envReady; },
-        // New track/session: the cube still holds the OLD circuit — hold the
-        // probe black (uEnvStr 0) until a fresh full cube captures (GLX 1:1).
         envProbeReset() { envFacesMask = 0; envReady = false; _envBlank = false; },
 
         // ── Cull-test helpers (GLX parity) ──────────────────────────────────
@@ -2003,19 +1679,10 @@ const TLX = (function () {
           _matFrame++;   // new frame: last frame's materials are evictable again
           resize();
           _instAlive.clear();
-          // Color fallback when TSL backgroundNode misses. Fog at dusk is a
-          // beige (~0.68,0.64,0.54) that filled every software-GL probe as a
-          // washed void; zenith is the sky the node would have drawn. Menu
-          // frames without skyZenith still clear to fogColor.
           const z = frame && frame.skyZenith;
           const f = (z && z.length >= 3) ? z
             : ((frame && frame.fogColor) || [0.04, 0.04, 0.06]);
           scene.background.setRGB(f[0], f[1], f[2]);
-          // Camera from the game's column-major matrices. Main path supplies
-          // proj + invProj + viewProj (view = invProj * viewProj); the
-          // setup-preview and no-track paths supply only viewProj — then the
-          // projection IS the viewProj with an identity view (correct MVP;
-          // view-space effects self-disable on those paths anyway).
           camera.matrixWorldAutoUpdate = false;
           if (frame && frame.proj && frame.invProj && frame.viewProj) {
             camera.projectionMatrix.fromArray(frame.proj);
@@ -2030,29 +1697,19 @@ const TLX = (function () {
           }
           camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
           if (frame && frame.eye) camera.position.set(frame.eye[0], frame.eye[1], frame.eye[2]);
-          // M3: push the frame + tune uniforms (sun/ambient/fog/wetness/knobs
-          // + the stride-15 lamp arrays, capped 32) into the shared lit set.
           if (lit && frame) {
             lit.updateFrame(frame);
-            // M9: env-probe strength. 0 until a full cube has captured; forced
-            // 0 on a probe-less preview (frame.noEnv) even if a stale cube
-            // lingers — js/render/glx.js 1:1 (fallback mirrors TUNE_DEFS
-            // carEnvCube def 0). Held off while rendering INTO the cube.
             if (lit.setEnvStr) {
               const _T = frame.tune;
               const _envOn = envRT && envReady && !_envBlank && !frame.noEnv && !_envActive;
               lit.setEnvStr(_envOn ? (_T && _T.carEnvCube != null ? _T.carEnvCube : 0) : 0);
             }
           }
-          // M6: decal-pass uniforms (keyMul sun / ambientMul ambient) + the
-          // per-frame FX pools.
           if (fx && frame) fx.updateFrame(frame);
           frameEye = (frame && frame.eye) || null;
           // M7: latch the cull frustum + radial cap for present()'s chunk cull.
           if (frame && frame.viewProj) _frameVP.set(frame.viewProj);
           frameCullDist = (frame && frame.cullDist) || 0;
-          // M8: latch the post chain's frame inputs (js/render/glx.js). The
-          // viewProj is the _frameVP COPY — immune to a swapped frame array.
           _postF.proj = (frame && frame.proj) || null;
           _postF.invProj = (frame && frame.invProj) || null;
           _postF.invVP = (frame && frame.invViewProj) || null;
@@ -2072,19 +1729,11 @@ const TLX = (function () {
           _fxMatUsed = 0;
           _fxFrame.shadows = 0; _fxFrame.marks = 0; _fxFrame.skidVerts = 0;
           _fxFrame.glow = 0; _fxFrame.particles = 0; _fxFrame.decals = 0;
-          // M5: sky is opt-in PER FRAME — a frame that issues no drawSky
-          // (menus, no-track) keeps the flat Color clear above (zenith/fog).
           scene.backgroundNode = null;
           drawList.length = 0;
           _dMatUsed = 0;
           return true;
         },
-        // M5: update the sky uniforms from whatever frameSky carries and arm
-        // the background node for this frame's render. game.js may call this
-        // twice per frame (env-probe pass with a swapped invViewProj, then
-        // the main pass with the restored one — js/game.js); the LAST update
-        // before render owns the uniforms. Env-probe faces use setEnvCube's
-        // dummy-cube guard while rendering into the probe (M9 landed).
         drawSky(frameSky) {
           if (!sky || !frameSky) return;
           sky.update(frameSky);
@@ -2093,25 +1742,13 @@ const TLX = (function () {
           // is still zenith, not leftover fog from a previous menu frame.
           const z = frameSky.zenith || frameSky.skyZenith;
           if (z && z.length >= 3) scene.background.setRGB(z[0], z[1], z[2]);
-          // Software GL: the full SKY_FS node is a second TSL compile that
-          // either misses (Color fog → beige void) or reconstructs rays
-          // against the HDR target so every pixel is horizon beige. Arm the
-          // zenith-only fallback; real GPUs keep the procedural dome.
-          // skyState().on stays true (M5) because a backgroundNode is set.
           scene.backgroundNode = ((softwareGL || softGpu()) && sky.fallbackNode)
             ? sky.fallbackNode : sky.node;
-          // three lazily builds a NodeMaterial around backgroundNode. Pin it
-          // so getForRenderCacheKey does not hash child-node ids (the same
-          // compile-storm the mesh materials hit). Harmless if the mesh is
-          // not born yet — present() retries.
           pinSkyMaterial();
         },
         draw(mesh, model, opts) {
           if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, false) });
         },
-        // M7: a chunked mesh records the WHOLE handle; present() culls it per
-        // chunk against the frame's final camera. The M2 fallback shape
-        // (chunks null / factory missing) stays a single-geometry record.
         drawChunked(mesh, model, opts) {
           if (!mesh) return;
           if (mesh.chunks && chunkedSys) {
@@ -2131,18 +1768,11 @@ const TLX = (function () {
           drawList.push({ geo: getFxQuad(), m: fxMatFor(modelMat, w, l), mat: fx.shadowMat });
           _fxFrame.shadows++;
         },
-        // Single skid-mark stamp — the per-mark fallback when a caller skips
-        // the batch (same quad + matrix treatment, MARK_FS falloff).
         drawMark(modelMat, w, l) {
           if (!fx || !modelMat) return;
           drawList.push({ geo: getFxQuad(), m: fxMatFor(modelMat, w, l), mat: fx.markMat });
           _fxFrame.marks++;
         },
-        // Batched skid trail: glx.js drawSkidBatch — `verts` is the game's
-        // complete interleaved CPU array ([pos3,uv2] x 6 verts/mark), so a
-        // grow-recreate can re-upload it wholesale even when not dirty.
-        // Always returns true (handled) — on a missing fx factory the per-
-        // mark fallback would be dead records through the same factory.
         drawSkidBatch(verts, vertCount, dirty) {
           if (!fx || !verts || !(vertCount > 0)) return true;
           const fresh = ensureStream(skidStream, vertCount);
@@ -2155,10 +1785,6 @@ const TLX = (function () {
           _fxFrame.skidVerts = vertCount;
           return true;
         },
-        // Additive lamp lens-glare halos: glx.js drawGlow verbatim — reads
-        // stride-15 frame.lights records (fields 0-6 + 14), skips glareW<=0,
-        // near-field fade over 60..170 m, physical-intensity colour
-        // normalisation, lens-housing radius — into one billboard batch.
         drawGlow(lights, str) {
           if (!fx || !lights || !lights.length || !(str > 0)) return;
           const nL = (lights.length / 15) | 0;
@@ -2211,10 +1837,6 @@ const TLX = (function () {
           drawList.push({ geo: slot.geo, m: null, mat: fx.particleMats[additive ? 1 : 0] });
           _fxFrame.particles += verts / 6;
         },
-        // Textured car decal: glx.js drawDecal — the record's material is
-        // cached per (texture, glow) inside the fx factory (~2 textures/car,
-        // 2 glow states). The matrix is copied (pool) — game.js reuses its
-        // per-index arrays.
         drawDecal(mesh, modelMat, tex, opts) {
           if (!fx || !mesh || !mesh.geo || !tex || !tex.tex || !modelMat) return;
           drawList.push({ geo: mesh.geo, m: fxMatFor(modelMat, 1, 1),
@@ -2235,19 +1857,11 @@ const TLX = (function () {
               continue;
             }
             if (rec.chunked) {
-              // M7: cull NOW, against begin()'s viewProj copy — the camera is
-              // final at present time. Every visible chunk stamps the SAME
-              // renderOrder = submission index, so the record stays one unit
-              // in three's list sort (the M6 LOAD-BEARING rule).
               const n = chunkedSys.cull(rec.chunked, _frameVP, frameEye, frameCullDist);
               const vis = chunkedSys.visList;
               for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
               _chunkFrame.total += rec.chunked.chunks.length;
               _chunkFrame.visible += n;
-              // First lit render with >= 1 chunk drawn uploads the shared
-              // vertex attributes — the CPU mirrors can go after render()
-              // (kept under a viz override: viz materials consume a subset
-              // of the attributes, so not all buffers would be created).
               if (n > 0 && !rec.chunked._mirrorsFreed && !vizMat) _mirrorRelease.push(rec.chunked);
               continue;
             }
@@ -2276,8 +1890,6 @@ const TLX = (function () {
               const rt = _ensureBlitRT(W, H);
               renderer.setRenderTarget(rt);
               renderer.render(scene, camera);
-              // Stay on the RT — setRenderTarget(null) is getCurrentTexture()
-              // and breaks mapAsync on software Dawn.
               _queueSoftBlit(rt);
               return;
             }
@@ -2316,14 +1928,7 @@ const TLX = (function () {
             // View-space post already self-disables; paint the default
             // framebuffer like GLX.
             if (post && _postF.proj) {
-              // Same pin as paintCanvas(): three lazily builds the
-              // backgroundNode material on first render. Pinning only the
-              // canvas fallback left the HDR scene target on the Color
-              // clear whenever the lazy compile missed (software GL).
               pinSkyMaterial();
-              // Second HDR attachment carries the 0.35 car-paint tag.
-              // Armed only here: env faces and the canvas fallback are
-              // single-target (mrtNode + setMRT would emit 2 locations).
               if (lit && lit.setSsrMrt) lit.setSsrMrt(true);
               if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
               const _hadMrt = !!(TSL.mrt && renderer.setMRT);
@@ -2369,10 +1974,6 @@ const TLX = (function () {
             catch (e) { persistFail(e); refuseTab(); }
           }
           _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
-          // M7 staged release, final stage: the render above created the GPU
-          // buffers for any first-drawn chunked mesh — drop its shared vertex
-          // mirrors (js/render/glx/chunked.js "uploaded to the VBO — drop the CPU
-          // copy"; see tlx-chunked.js releaseMirrors for why this is safe).
           for (let i = 0; i < _mirrorRelease.length; i++) chunkedSys.releaseMirrors(_mirrorRelease[i]);
           _mirrorRelease.length = 0;
           _fxLast.shadows = _fxFrame.shadows; _fxLast.marks = _fxFrame.marks;
@@ -2395,11 +1996,9 @@ const TLX = (function () {
                 .catch(() => {});
             } catch (_) {}
           }
+          // debug — the __tlx tooling
         },
 
-        // debug — the __tlx tooling (mirrors the spike's __spike hooks):
-        //   shader(idx)  generated GLSL/WGSL for scene mesh #idx (async)
-        //   viz          the active ?viz= / apex26.tlxViz mode (null = off)
         __tlx: {
           renderer, THREE, TSL,
           get lit() { return lit; },
@@ -2407,15 +2006,10 @@ const TLX = (function () {
           get sky() { return sky; },
           get fx() { return fx; },
           get post() { return post; },
-          // M8 probe: chain liveness + which blocks ran on the last presented
-          // frame + the current target size — what the M8 tests assert.
           postState() {
             if (!post) return { on: false, hdr: false, blocks: {}, targets: [0, 0] };
             return post.state();
           },
-          // M6 probe: FX record counts from the last presented frame (blob
-          // shadows, per-mark stamps, skid batch verts, glare halos, live
-          // particles, decal draws) — what the M6 tests assert against.
           fxState() {
             return {
               on: !!fx,
@@ -2424,8 +2018,6 @@ const TLX = (function () {
               particles: _fxLast.particles, decals: _fxLast.decals,
             };
           },
-          // M5 probe: is the sky armed for the current frame, and what did
-          // the last drawSky upload? (tests assert the night/day gates here)
           skyState() {
             return {
               on: !!(sky && scene.backgroundNode),
@@ -2434,23 +2026,12 @@ const TLX = (function () {
               sunDir: sky ? sky.uniforms.sunDir.value.toArray() : null,
             };
           },
-          // M7 probe: chunk totals from the last presented frame, summed over
-          // every chunked record (props + glass on street circuits). visible
-          // < total at any parked camera proves the cull engages.
           chunkState() {
             return { on: !!chunkedSys, total: _chunkLast.total, visible: _chunkLast.visible };
           },
-          // M10 probe: cumulative mesh-creation counts routed through THIS
-          // backend (createMesh/createChunkedMesh/createTexMesh). Non-zero after
-          // a track build proves tracks.js resolved its gfx from Tracks.build's
-          // opts.gfx and built through the façade, not a hardcoded GLX.
           meshState() {
             return { mesh: _meshMade.mesh, chunked: _meshMade.chunked, tex: _meshMade.tex };
           },
-          // M9 probe: env-cube liveness — is the target allocated (on), which
-          // face captures next (face bit-mask -> lowest unset), the cube edge
-          // size, and whether a full 6-face cycle has completed (ready). The
-          // M9 test asserts the cube goes ready on a parked race frame.
           envState() {
             let face = 0;
             while (face < 6 && (envFacesMask & (1 << face))) face++;

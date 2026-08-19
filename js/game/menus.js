@@ -1,14 +1,4 @@
-/* Apex 26 — the select-screen UI for js/game.js: the track picker with its live
-   preview map + elevation canvases, and the fullscreen circuit-detail modal.
-   The screen answers WHERE you race and nothing else — who you are and what you
-   drive belong to the garage (js/game/setup-ui.js), which START opens on the
-   way to the race. It used to carry a YOUR CAR summary card and a GARAGE button
-   as well, and won at neither job.
-   Also owns the shared team-picker sheet (#teampicker) that the garage opens.
-   Pure DOM; live selection state comes through the ctx façade G handed to
-   Menus.create(G). Consumes globals Teams, Tracks, TrackMaps, SeasonCal (the
-   season's calendar is the PLAYER's now — length, circuits and order).
-   Must load BEFORE js/game.js (see index.html). */
+/* Apex 26 — the select-screen UI for js/game.js: the track picker with its live preview map + elevation canvases, and the fullscreen circuit-detail modal. The scr… */
 const Menus = (function () {
   "use strict";
 
@@ -45,8 +35,6 @@ const retrySave = () => {
   if (typeof Career !== "undefined" && Career.data && Career.data()) results.push(Career.saveStatus());
   if (G.season && !(typeof Career !== "undefined" && Career.inCareer && Career.inCareer()))
     results.push(store.write("season", G.season));
-  // With no active championship, use a harmless probe so Settings-only users
-  // can still verify that storage became available again.
   if (!results.length) results.push(store.write("saveProbe", { at: Date.now() }));
   const durable = results.every((r) => r && r.durable);
   if (durable) {
@@ -99,22 +87,13 @@ const vt = (fn) => {
   setTimeout(run, 60);
 };
 
-// ---- full-screen team picker ----------------------------------------------
-// The twelve-way team choice, opened from the garage's TEAM & DRIVER tab. It
-// used to be reachable from a summary card on the select screen too; that card
-// is gone, and the garage is the one place a team is chosen.
 const teamPicker = () => $("teampicker");
-// Which screen opened the picker, so picking a team rebuilds the right one.
-// The sheet is shared; without this, choosing a team in the garage would
-// silently rebuild the select screen behind it and leave the garage stale.
 let pickerHost = "select";
 let previewOpenRaf = 0;
 
 function teamSwatch(t) {
   const sw = document.createElement("span");
   sw.className = "tm-colour";
-  // Two-tone: the livery's primary with its accent as a stripe, which is what
-  // makes teams distinguishable at a glance (several 2026 cars are near-black).
   sw.style.background = "linear-gradient(135deg," + cssCol(t.color) + " 62%," + cssCol(t.color2 || t.color) + " 62%)";
   sw.setAttribute("aria-hidden", "true");
   return sw;
@@ -138,8 +117,6 @@ function buildTeamPicker() {
   Teams.LIST.forEach((t, i) => {
     const b = document.createElement("button");
     b.className = "team-tile" + (i === G.teamIdx ? " active" : "");
-    // A visual outline is not a state a screen reader can see; role=option +
-    // aria-selected is what makes the current team announce as current.
     b.setAttribute("role", "option");
     b.setAttribute("aria-selected", i === G.teamIdx ? "true" : "false");
     const body = document.createElement("span");
@@ -148,9 +125,6 @@ function buildTeamPicker() {
     name.className = "tm-name"; name.textContent = t.name;
     const sub = document.createElement("span");
     sub.className = "tm-sub";
-    // Whose seats are already spoken for, so it reads BEFORE you tap rather
-    // than only on the driver chips one screen later. Empty off-line, which is
-    // what keeps every solo mode exactly as it was.
     const taken = G.peerSeats ? G.peerSeats() : [];
     const isTaken = (si) => taken.some((s) => s.team === t.id && s.driver === si);
     sub.textContent = t.drivers
@@ -159,18 +133,11 @@ function buildTeamPicker() {
     body.append(name, sub);
     b.append(teamSwatch(t), body);
     b.onclick = () => {
-      // The old team's driver index means nothing here, so this used to reset
-      // to seat 0 flat. In a friend race seat 0 may be the seat the other
-      // player is in, which dropped you straight into a taken seat with a
-      // disabled chip underneath you. Take the first seat nobody holds; the
-      // seat-clash rule in js/net/lobby.js catches the simultaneous case.
       let seat = 0;
       while (seat < t.drivers.length - 1 && isTaken(seat)) seat++;
       G.teamIdx = i; G.driverIdx = seat; store.set("team", i);
       store.set("driver", seat);
       setTeamPicker(false);
-      // Rebuild whichever screen opened the sheet. The garage repaints its own
-      // 3D car for free — getSetupPreviewMesh() is keyed on the team id.
       if (pickerHost === "garage") { G.buildSetup(); tickUi(); }
       else vt(() => { buildSelect(); tickUi(); });
     };
@@ -178,17 +145,10 @@ function buildTeamPicker() {
   });
 }
 
-// Panes only measure themselves when something tells them to; opening a sheet
-// is exactly such a moment (see js/game/scrollfade.js).
-// The track-detail map's size observer (openTrackDetail). Module-scoped so a
-// re-open disconnects the previous one instead of stacking a fresh observer —
-// and a stale closure over the PREVIOUS circuit — on every visit.
 let detailRO = null;
 
 const ScrollFadeRefresh = () => { if (window.ScrollFade) window.ScrollFade.refresh(); };
 
-// Circuit list filter: all / championship calendar / retired classics.
-// Persisted so a player who only races classics does not re-tap every open.
 let trackFilter = store.get("trackFilter", "all");
 if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic") trackFilter = "all";
 const trackFilters = [["all", "ALL"], ["season", "SEASON"], ["classic", "CLASSICS"]];
@@ -259,11 +219,6 @@ function trackFilterBar() {
 }
 
 function buildSelect() {
-  // ONE QUESTION: WHERE. The car summary and its GARAGE button that used to
-  // share this screen are gone (index.html) — WHO and WHAT are chosen in the
-  // garage, which START now opens on the way to the race. So the only thing
-  // that differs between modes here is what the screen is called and what the
-  // foot button promises next.
   const room = !!G.netRoom;
   const seasonComplete = !room && G.seasonMode && G.season && !SeasonCal.canRace(G.season);
   els.selGo.textContent = seasonComplete ? "VIEW FINAL STANDINGS" : room ? "NEXT" : "START";
@@ -286,11 +241,6 @@ function buildSelect() {
       els.selTracks.appendChild(done);
     }
     const rnd = (G.season && G.season.round || 0) + 1;
-    // The way in to SEASON SETUP. Built here rather than put in index.html so it
-    // exists ONLY in the season branch — #select's pixel golden is captured
-    // through GRAND PRIX (tests/specs/menu-baseline.spec.js), and a button in the
-    // shell would have moved it. The title screen's SEASON button is unchanged
-    // too: a player who just wants to race should not have to dismiss an editor.
     const custom = document.createElement("button");
     custom.id = "sel-customise";
     custom.className = "sel-chip";
@@ -320,10 +270,6 @@ function buildSelect() {
   } else {
     els.selTracks.textContent = "";
     els.selTracks.appendChild(trackFilterBar());
-    // Two groups: the championship calendar, then the retired circuits. Only the
-    // header changes — every row is a normal, selectable track either way.
-    // Filter chips (ALL / SEASON / CLASSICS) hide a group rather than renumber
-    // Tracks.LIST — selection still indexes into the full list.
     let group = null;
     Tracks.LIST.forEach((t, i) => {
       if (trackFilter === "season" && t.classic) return;
@@ -371,11 +317,7 @@ function buildSelect() {
       row.onclick = () => {
         G.trackIdx = i;
         store.set("trackId", t.id);
-        // Keep the legacy index warm for an older cached build opened after this
-        // one; new builds resolve trackId first and survive list reordering.
         store.set("track", i);
-        // In-place highlight — full buildSelect() was O(all tracks) + ScrollFade
-        // + View Transition on every click.
         els.selTracks.querySelectorAll(".track-row").forEach((r) => {
           const on = r.dataset.trackIdx === String(i);
           r.classList.toggle("active", on);
@@ -396,13 +338,6 @@ function buildSelect() {
     applyTrackSearch(trackQuery);
     updateTrackPreview();
   }
-  // buildSelect runs while #select is still hidden at every entry point, so
-  // the synchronous preview pass can only draw against placeholder geometry.
-  // Refit after two frames: the first exposes and classifies the sheet, the
-  // second sees the settled data-pair/data-shape box. ResizeObserver remains
-  // the ongoing resize path, but first paint no longer depends on when a busy
-  // browser happens to deliver its callback (the audit caught intermittent
-  // 1x1 maps when three SwiftShader contexts competed).
   if (previewOpenRaf) cancelAnimationFrame(previewOpenRaf);
   previewOpenRaf = requestAnimationFrame(() => {
     previewOpenRaf = requestAnimationFrame(() => {
@@ -437,9 +372,6 @@ function drawElevProfile(cv, t, showEl) {
   const span = mx - mn || 1;
   const pad = 3;
   const yNorm = (v) => eh - pad - ((v - mn) / span) * (eh - 2 * pad);
-  // The trace is walked TWICE on purpose: once closed down to the baseline for
-  // the fill, once open for the stroke, so the stroke does not draw the two
-  // vertical closing edges. `i <= py.length` closes the lap back onto py[0].
   const trace = () => {
     eg.beginPath();
     for (let i = 0; i <= py.length; i++) {
@@ -460,28 +392,9 @@ function drawElevProfile(cv, t, showEl) {
   return true;
 }
 
-// large preview of the currently-selected circuit: sector-coloured outline,
-// DRS zones, numbered corners, name / GP / length / turn count, track facts.
-/* THE PREVIEW CARD'S BOX IS NOT KNOWN WHEN THE SCREEN OPENS.
- * Same shape as js/game/sheetshape.js's own note: a hidden element measures
- * 0x0, so the first useful measurement is the ResizeObserver callback when its
- * screen is shown, not the call that showed it. updateTrackPreview() runs on
- * that first (unmeasurable) pass and deliberately does not pin; this refits
- * once the card has a box, and again whenever it changes — a UI SIZE change, an
- * orientation flip, or sheetshape.js flipping data-pair / data-shape, all of
- * which move the budget without changing the selected circuit.
- *
- * BOTH AXES. The budget in updateTrackPreview is driven by the card's WIDTH
- * (cardInnerW, and the `beside` switch that keys off it) as much as by the
- * section's height, so a width-only or height-only guard would sit out the
- * pair flip that changes the layout most.
- *
- * TERMINATION: refit only when the card's box actually differs from the one we
- * last fitted against. Without that guard this is a classic RO feedback loop —
- * the refit clears the map's pins and may set data-map-shape, either of which
- * can resize the card and fire the observer again. Sibling precedent: the
- * track-detail modal's own observer guards on a `lastFit` key for exactly this
- * reason. */
+/* Refit the preview card once ResizeObserver reports a real box (hidden = 0×0
+ * on first paint). Guard on last fitted dimensions — refit clears map pins and
+ * can re-fire the observer without termination. */
 let previewRo = null, previewCardBox = "";
 function watchPreviewCard(card) {
   if (!card || typeof ResizeObserver !== "function") return;
@@ -542,10 +455,6 @@ function updateTrackPreview() {
   }
   drawElevProfile(document.getElementById("sel-preview-elev"), t);
 
-  // Size the bitmap to the circuit's own aspect inside the CSS slot. A fixed
-  // 520×300 canvas displayed under max-height caps (or UI zoom reshaping the
-  // card) was getting CSS-squashed; fitCanvas + object-fit:contain keep the
-  // outline true while --ui-scale zoom still enlarges the whole sheet.
   const map = els.selPreviewMap;
   const a = TrackMaps.aspect(t);
   // Clear prior pins so the stylesheet width / max-height slot can be measured.
@@ -596,16 +505,12 @@ function updateTrackPreview() {
   const plan = stacked
     ? {
       shape: "beside",
-      // Match the compact CSS cap instead of pinning a 1.5-row canvas over it.
-      // fitCanvas pins max-height inline, so a disagreement here makes JS win.
       slotW: Math.min(cardInnerW * (compact ? 0.38 : 0.42), chipH * (compact ? 3.4 : 3)),
       slotH: chipH * 2.6
     }
     : TrackMaps.planPreview({
       aspect: a,
       cardInnerW: cardInnerW,
-      // The scrolling section is the honest ceiling: the card grows to its
-      // content, so bounding the map by the CARD's own height is circular.
       sectionH: section ? section.clientHeight : 0,
       labelH: label ? label.offsetHeight : 0,
       infoH: info ? info.offsetHeight : 0,
@@ -682,9 +587,6 @@ function openTrackDetail() {
   if (streetEl) streetEl.hidden = !t.street;
   if (bankedEl) bankedEl.hidden = !t.banked;
 
-  // Elevation sparkline — same painter as the preview chart above; here the
-  // canvas has a WRAPPER that carries the hidden state (the preview canvas
-  // hides itself), which was the only real difference between the two blocks.
   drawElevProfile(document.getElementById("track-detail-elev"), t,
                   document.getElementById("track-detail-elev-wrap"));
 
@@ -719,8 +621,6 @@ function openTrackDetail() {
     return '<div class="tdc-corner"><span class="tdc-num">T' + c.n + '</span><span class="' + cls + '">' + lbl + '</span></div>';
   }).join("");
 
-  // Crossfade into the full-screen circuit-detail modal (progressive
-  // enhancement; the content above is already populated while hidden).
   Log.info("ui", "Menus.open track-detail");
   vt(() => { modal.hidden = false; });
   const cv = document.getElementById("track-detail-canvas");
@@ -739,9 +639,6 @@ function openTrackDetail() {
     // A queued rAF/ResizeObserver delivery may arrive after CLOSE. Never
     // measure and redraw a hidden modal, and never retain its circuit closure.
     if (modal.hidden) return;
-    // Fit the canvas to the wrap in local (pre-zoom) CSS pixels. clientWidth
-    // is correct inside `zoom: var(--ui-scale)` sheets; gBCR would mix visual
-    // pixels and re-introduce stretch at UI SIZE ≠ 100%.
     const wrapW = wrap ? wrap.clientWidth : (window.innerWidth - 24);
     const wrapH = wrap ? wrap.clientHeight : (window.innerHeight - 80);
     const maxW = Math.max(200, wrapW > 0 ? wrapW : Math.min(window.innerWidth - 24, 600));
@@ -750,8 +647,6 @@ function openTrackDetail() {
     if (key === lastFit) return;   // the observer below also fires on our own pin
     lastFit = key;
     const fit = TrackMaps.fitCanvas(cv, maxW, maxH, t, true);
-    // Same box-relative marker scaling as the picker preview: these radii were
-    // tuned against a 520x300 buffer and fitCanvas now sizes the buffer itself.
     const mk = Math.min(1, fit.w / 520, fit.h / 300);
     TrackMaps.draw(cv, t, {
       color: TrackMaps.themeColor(t), startColor: "#e10600",

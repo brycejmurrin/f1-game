@@ -1,14 +1,4 @@
-/* Apex 26 — F1API: Jolpica (Ergast) + OpenF1 clients.
-   All methods return Promises of SIMPLIFIED plain objects (see docs/ARCHITECTURE.md).
-   Single internal queue (>= 400 ms between real network requests), localStorage
-   cache ("apex26.api.<url>" -> {t, data}). 429 / 5xx are retried with backoff
-   (10 s → 20 s, max 2 retries — long waits avoid consuming more quota; callers
-   that need more can add their own circuit-level retry on top). Retry-After
-   header honoured. On final failure serves stale cache if present (with
-   Log.warn on the "data" namespace), else rejects — EXCEPT live-session auth
-   lockouts ("Live F1 session…" / HTTP 401 / 403), which always reject rather
-   than pass off stale classification as fresh. Never auto-polls.
-   No DOM / localStorage access at module top level. */
+/* Apex 26 — F1API: Jolpica (Ergast) + OpenF1 clients. All methods return Promises of SIMPLIFIED plain objects (see docs/ARCHITECTURE.md). Single internal queue (>… */
 const F1API = (function () {
   "use strict";
 
@@ -40,9 +30,6 @@ const F1API = (function () {
   const MAX_RETRY = 2;         // retries on 429 / 5xx before giving up
   const RETRY_BASE_MS = 10000; // 10 s first retry — OpenF1 rate-limits hard; short
   const RETRY_CAP_MS = 25000;  //   delays only eat more quota, so wait longer
-  // A fetch with no deadline owns the shared queue forever. Browser network
-  // stacks can leave a black-holed request pending for minutes, during which
-  // every otherwise unrelated data-hub endpoint is stuck behind it.
   const FETCH_TIMEOUT_MS = 15000;
 
   const MINUTE = 60 * 1000;
@@ -64,11 +51,6 @@ const F1API = (function () {
   const sessionDates = {};              // sessionKey -> date_start ISO (seen sessions)
   const meetingDates = {};              // meetingKey -> date_start ISO (seen meetings)
 
-  /* ---------- cache ---------- */
-
-  // Drop expired apex26.api.* entries. Windowed OpenF1 URLs are unique per
-  // time range and would otherwise fill the ~5 MiB origin quota forever.
-  // maxAge defaults to TTL_HISTORIC (7 d) — anything older is dead weight.
   function purgeExpiredCache(maxAge) {
     if (maxAge == null) maxAge = TTL_HISTORIC;
     let removed = 0;
@@ -93,8 +75,6 @@ const F1API = (function () {
     return removed;
   }
 
-  // On quota pressure: purge expired, then drop oldest remaining api keys
-  // until the write fits (or nothing left to drop).
   function purgeOldestCache(count) {
     let removed = 0;
     try {
@@ -131,10 +111,6 @@ const F1API = (function () {
   function writeCache(url, data) {
     const key = CACHE_PREFIX + url;
     const payload = JSON.stringify({ t: Date.now(), data: data });
-    // Sweep at most once per batch-sized window. LIVE settles four requests at
-    // once, and parsing every cached telemetry blob four times on the main thread
-    // was more expensive than the writes themselves. Quota recovery below still
-    // forces a sweep immediately, irrespective of this cadence.
     const now = Date.now();
     if (now - lastCacheSweepAt >= CACHE_SWEEP_MS) {
       purgeExpiredCache();
@@ -154,8 +130,6 @@ const F1API = (function () {
       Log.warn("data", "apex26: api cache write still failing after purge", e2);
     }
   }
-
-  /* ---------- queued, cached fetch ---------- */
 
   function endpointName(url) {
     const noQ = String(url || "").split("?")[0];
@@ -195,9 +169,6 @@ const F1API = (function () {
     return Promise.race([network, timeout]).finally(function () { clearTimeout(timer); });
   }
 
-  // fetch with retry on rate-limit (429) / transient server (5xx) errors. Honours
-  // a Retry-After header when present, else exponential backoff. Each wait happens
-  // inside the shared queue, so a burst self-throttles instead of hammering 429s.
   function fetchRetry(url, attempt) {
     lastNetAt = Date.now();
     return fetchTimed(url).then(function (res) {
@@ -249,8 +220,6 @@ const F1API = (function () {
     const cache = !options || options.cache !== false;
     const quiet = ttl <= 0 || (options && options.cache === false);
     const name = endpointName(url);
-    // ttl <= 0: bypass cache read (still write on success) so live AUTO can
-    // refresh every 30 s instead of being stuck behind TTL_LATEST (10 min).
     const hit = cache ? readCache(url) : null;
     if (ttl > 0 && hit && (Date.now() - hit.t) < ttl) return Promise.resolve(hit.data);
 
@@ -286,8 +255,6 @@ const F1API = (function () {
     return job;
   }
 
-  /* ---------- small mapping helpers (tolerate anything) ---------- */
-
   function num(v) {
     const n = typeof v === "number" ? v : parseFloat(v);
     return isFinite(n) ? n : null;
@@ -302,8 +269,6 @@ const F1API = (function () {
     const lists = json && json.MRData && json.MRData.StandingsTable && json.MRData.StandingsTable.StandingsLists;
     return (Array.isArray(lists) && lists[0]) || null;
   }
-
-  /* ---------- Jolpica methods ---------- */
 
   function schedule() {
     return request(JOLPICA + "/" + season() + ".json", TTL_SCHEDULE).then(function (json) {
@@ -386,8 +351,6 @@ const F1API = (function () {
     });
   }
 
-  /* ---------- OpenF1 methods ---------- */
-
   function sessionTtl(sessionKey) {
     // The known-latest session is always treated as live.
     if (sessionKey === latestSessionKey) return TTL_LATEST;
@@ -406,10 +369,6 @@ const F1API = (function () {
 
   function meetingTtl(meetingKey) {
     const ds = meetingDates[meetingKey];
-    // Unknown recency: stay conservative so genuinely-live data still
-    // refreshes — the same default sessionTtl() makes. A future date_start
-    // (negative age) is an upcoming weekend whose session list is still
-    // filling in; only a meeting comfortably in the past is frozen.
     if (!ds) return TTL_LATEST;
     const age = Date.now() - Date.parse(ds);
     if (!isFinite(age) || age < 0) return TTL_LATEST;
@@ -509,10 +468,6 @@ const F1API = (function () {
     });
   }
 
-  // LIVE uses one full snapshot and then server-filtered deltas. These calls are
-  // deliberately memory-only: a new timestamp makes every URL unique, and
-  // persisting those responses would recreate the unbounded window-cache problem
-  // this module's eviction code exists to prevent.
   function deltaUrl(path, sessionKey, sinceISO) {
     let url = OPENF1 + path + "?session_key=" + encodeURIComponent(sessionKey);
     if (sinceISO) url += "&date%3E=" + encodeURIComponent(sinceISO);
@@ -543,8 +498,6 @@ const F1API = (function () {
     });
   }
 
-  // Gap to leader per driver — OpenF1 tracks it separately from /position,
-  // which carries running order but not the timed gap the LIVE gap bars need.
   function intervals(sessionKey, ttl) {
     const url = OPENF1 + "/intervals?session_key=" + encodeURIComponent(sessionKey);
     return request(url, ttl != null ? ttl : sessionTtl(sessionKey)).then(function (list) {
@@ -610,8 +563,6 @@ const F1API = (function () {
       });
     });
   }
-
-  /* ---------- telemetry (OpenF1, free historical) ---------- */
 
   function sessionLaps(sessionKey, driverNumber) {
     const url = OPENF1 + "/laps?session_key=" + encodeURIComponent(sessionKey) +

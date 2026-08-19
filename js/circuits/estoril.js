@@ -15,9 +15,6 @@
     // Was 0.96, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.96,
     name: "ESTORIL",
     gp: "Portuguese GP",
@@ -32,8 +29,6 @@
       { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
       { kind: "foliage", s0: 0.34, s1: 0.46 },
     ],
-    // Atlantic coast light — bright but with sea haze softening the horizon,
-    // over dry pine-and-scrub hillside.
     pal: {
       zenith:        [0.24, 0.46, 0.78],
       horizon:       [0.82, 0.82, 0.76],
@@ -47,9 +42,6 @@
       runoff:        [0.62, 0.52, 0.38],
       sunDir:        [0.40, 0.70, 0.30],
     },
-    // Estoril sits on a hillside above the coast and undulates throughout —
-    // the climb to Turn 1 and the drop through the back section are the ones
-    // that matter. Authored, not surveyed.
     elevations: [
       { s: 0.09, halfM: 280, rise: 7.0 },
       { s: 0.32, halfM: 320, rise: -8.0 },
@@ -75,8 +67,6 @@
         addBox, addCyl, addFrustum, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // Estoril's three materials are limewash, terracotta and rust-primed
-      // scaffold tube. Everything below is mixed from those.
       const LIME = [0.95, 0.94, 0.90], LIME_D = [0.86, 0.85, 0.80];
       const TILE = [0.68, 0.33, 0.21], TILE_D = [0.54, 0.27, 0.18];
       const AZUL = [0.24, 0.42, 0.66];          // azulejo blue
@@ -85,14 +75,6 @@
       const SCRUB = [0.33, 0.38, 0.21], SCRUB_D = [0.27, 0.32, 0.18];
       const GRAVEL = [0.66, 0.58, 0.42];
 
-      // =====================================================================
-      // 1. STONE PINE AND SCRUB — Pinus pinea, not fir. The tree has a bare
-      //    leaning trunk carrying ONE wide flat parasol of canopy, and that
-      //    silhouette against the sea haze is the first thing you recognise
-      //    about this hillside. The stacked-cone pine() helper draws a
-      //    northern conifer, which is the one thing Estoril is not, so the
-      //    species is built here instead.
-      // =====================================================================
       const stonePine = (k, side, dist, h, col) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         const lean = (hash(k * 13 + dist) - 0.5) * 0.9;   // the Atlantic wind
@@ -120,8 +102,6 @@
         if (h < 0.44) return;
         bush(k, h < 0.72 ? -1 : 1, 7 + h * 6, h < 0.6 ? SCRUB : SCRUB_D);
       });
-      // Cork oak — the other hillside tree, squat and grey-olive next to the
-      // pines rather than a second rank of the same thing.
       every(46, (k) => {
         const s = k / n;
         if (openArea(s)) return;
@@ -130,13 +110,11 @@
         tree(k, h < 0.5 ? -1 : 1, 44 + h * 24, 8 + h * 4, [0.29, 0.34, 0.20]);
       });
 
-      // =====================================================================
       // 2. PIT COMPLEX — one long masonry terrace under one continuous
       //    pantile roof, with an open first-floor balcony over the garages.
       //    Estoril never had a glazed paddock: the building is limewash, tile
       //    and shade, so it is modelled as a single hero rather than assembled
       //    from repeated office blocks.
-      // =====================================================================
       const pitBlock = (id, frac, bays) => {
         const a = anchor(K(frac), 1, 18), b = [a.r, a.u, a.t];
         const pitch = 7.8, len = bays * pitch;
@@ -145,8 +123,6 @@
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
           seat.box(stage, a.c, [13, 7.0, len], LIME, b);
-          // Garage apertures on the pit-lane face — the only openings, since
-          // the rest of the wall is solid to keep the sun out.
           for (let i = 0; i < bays; i++) {
             const p = vadd(vadd(a.c, a.t, (i - (bays - 1) / 2) * pitch), a.r, -6.3);
             seat.box(stage, p, [0.4, 4.4, 5.4], [0.19, 0.21, 0.23], b);
@@ -165,14 +141,8 @@
           stage._mat = 0;
         }, { required: true });
       };
-      // Two blocks rather than one: a single 100 m terrace does not clear the
-      // pit-straight footprint test at a believable 12 m setback, and the break
-      // between them is where the pit entry and the tower go anyway.
       pitBlock("estoril-pit-terrace-a", 0.960, 7);
       pitBlock("estoril-pit-terrace-b", 0.996, 7);
-      // Torre de cronometragem — a square limewashed tower with an external
-      // stair and a tiled pyramid cap. Deliberately masonry: a tapered steel
-      // mast would put a modern venue at the end of this pit lane.
       {
         const a = anchor(K(0.978), 1, 22), b = [a.r, a.u, a.t];
         modelGroup("estoril-timing-tower", {
@@ -215,12 +185,6 @@
       sponsorHoarding(0.955, 0.045, -1, 6.5, { h: 2.2, step: 11,
         palette: [[0.14, 0.36, 0.22], [0.86, 0.22, 0.18], [0.94, 0.86, 0.24], LIME] });
 
-      // =====================================================================
-      // 3. SPECTATOR TERRACES — Estoril's crowd sat on scaffold. An open tube
-      //    frame with plank decks and painted bench rows is the stand form in
-      //    every photograph of the place, and you can see the pines straight
-      //    through it, which no shelled grandstand does.
-      // =====================================================================
       const BENCH = [[0.84, 0.30, 0.24], [0.90, 0.88, 0.82], [0.28, 0.42, 0.66], [0.72, 0.64, 0.32]];
       const CROWD = [[0.90, 0.88, 0.84], [0.22, 0.28, 0.40], [0.78, 0.26, 0.20],
                      [0.26, 0.46, 0.32], [0.92, 0.76, 0.28], [0.46, 0.40, 0.36]];
@@ -274,19 +238,11 @@
       };
       scaffoldStand("estoril-stand-pit", K(0.005), -1, 13, 18, { rows: 5, awning: true });
       scaffoldStand("estoril-stand-t1", K(0.078), -1, 22, 11, { rows: 4 });
-      // The brief puts scaffold terraces on BOTH sides of the 0.02-0.20 stretch;
-      // the outside of the Turn 1/Turn 2 sequence had none. A shorter open rake
-      // there closes that gap without crowding the pines behind it.
       scaffoldStand("estoril-stand-esses", K(0.140), 1, 20, 9, { rows: 4 });
       scaffoldStand("estoril-stand-parabolica", K(0.900), 1, 18, 14, { rows: 5, awning: true });
-      // A single masonry terrace at the line for contrast with all that tube —
-      // uncovered, terracotta-fronted, the one permanent structure.
       grandstandEx(0.955, -1, 12, 78, null, null,
         { livery: "terracotta", roof: "none", endWalls: true, h: 8 });
 
-      // =====================================================================
-      // 4. CORNERS
-      // =====================================================================
       groundPatch(K(0.078), 1, 5, [30, 0.18, 40], GRAVEL,
         { id: "estoril-t1-gravel", samples: 7 });
       tyreWall(0.062, 0.096, 1, 4, [0.86, 0.20, 0.18]);
@@ -301,8 +257,6 @@
         { id: "estoril-t12-gravel", samples: 6 });
       marshalPost(K(0.775), -1, 9);
 
-      // Parabolica Ayrton Senna — the long final corner, with the biggest
-      // crowd bank on the circuit on its outside.
       groundPatch(K(0.900), -1, 6, [40, 0.18, 90], GRAVEL,
         { id: "estoril-parabolica-gravel", samples: 9 });
       tyreWall(0.880, 0.925, -1, 5, [0.85, 0.78, 0.20]);
@@ -310,9 +264,6 @@
       marshalPost(K(0.895), 1, 10);
       for (const s of [0.875, 0.905]) billboard(K(s), -1, 14, 12, 4.5, [0.88, 0.20, 0.16]);
 
-      // =====================================================================
-      // 5. BOUNDARIES
-      // =====================================================================
       for (const [s0, s1] of [[0.11, 0.32], [0.37, 0.52], [0.57, 0.72], [0.78, 0.86]]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
@@ -323,12 +274,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      // =====================================================================
-      // 6. BACKDROP — asymmetric on purpose. The Serra de Sintra closes the
-      //    inland horizon; seaward there is nothing but the Atlantic under
-      //    haze, so the ridge ring is CUT over that arc instead of ringing the
-      //    circuit evenly the way an inland venue's would.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -357,13 +302,6 @@
         }
       }
 
-      // =====================================================================
-      // 7. LANDMARKS — an aldeia on the ridge, a farol over the water and a
-      //    moinho on the skyline. Three shapes that belong to this coast and
-      //    to nowhere else on the calendar.
-      // =====================================================================
-      // Aldeia: cubed limewashed houses stepping down the slope around a
-      // church whose bell tower is the tallest thing for miles.
       {
         const a = anchor(K(0.30), -1, 96), b = [a.r, a.u, a.t];
         modelGroup("estoril-aldeia", {
@@ -379,8 +317,6 @@
             seat.prism(stage, vadd(p, a.u, ht), [w + 0.5, 1.6, d + 0.5], h < 0.5 ? TILE : TILE_D, b);
             stage._mat = MAT.CONCRETE;
           }
-          // Igreja: a nave, a tiled roof, and a square campanile with the
-          // arched belfry opening cut through it.
           const c = vadd(a.c, a.r, 9);
           seat.box(stage, c, [11, 8, 20], LIME, b);
           seat.box(stage, vadd(vadd(c, a.t, -12), a.u, 0), [6, 17, 6], LIME, b);
@@ -392,8 +328,6 @@
           stage._mat = 0;
         });
       }
-      // Farol: the banded coastal lighthouse standing over the water on the
-      // seaward side, with its lantern gallery and keeper's cottage.
       {
         const a = anchor(K(0.62), -1, 150), b = [a.r, a.u, a.t];
         modelGroup("estoril-farol", {
@@ -416,8 +350,6 @@
           stage._mat = 0;
         });
       }
-      // Moinho: the whitewashed drum windmill with a conical cap and four
-      // lattice sails, still standing on every hilltop above this coast.
       {
         const a = anchor(K(0.44), 1, 118), b = [a.r, a.u, a.t];
         modelGroup("estoril-moinho", {
@@ -446,8 +378,6 @@
         addCyl(out, a.c, 0.19, 16, [0.22, 0.22, 0.25], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 16.4), [1.3, 0.6, 2.6], [0.94, 0.92, 0.82], [a.r, a.u, a.t]);
       }
-      // MARITIME PINE. Estoril sits behind the coast on sandy ground carrying
-      // stands of wind-shaped pine — low, and thinned by the Atlantic wind.
       for (const [s0, s1] of [[0.12, 0.32], [0.48, 0.9]]) {
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 20, { density: 0.46, hMin: 8, hMax: 14, pineFrac: 0.82, col: PINE, col2: PINE_D });

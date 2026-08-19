@@ -40,38 +40,12 @@ const TrackSpace = (function () {
     return sampler(toSourceFrac(def, racingFrac));
   }
 
-  // WHICH SPACE a def's scenery numbers are written in — the ONE answer, so
-  // that the point path and the range path below cannot disagree about it.
-  // They did: sceneryFrac()/sceneryNode() consulted def.sceneryCoordinates
-  // while both scenery call sites of range() passed a hard-coded "source", so
-  // on a def declaring "racing" AND reverse:true the point emitters stayed put
-  // and the range emitters were mirrored about startFrac. Exactly two circuits
-  // declare that pair, kyalami and paul_ricard, and both were wrong: kyalami's
-  // Crowthorne gravel is a POINT at racing 0.078 and the tyre wall written to
-  // back it is a RANGE at 0.060-0.098, which was landing at 0.912-0.950 — most
-  // of a lap away, on the other side. Not merely cosmetic, either:
-  // guardrail/fence/tyreWall feed recordBarrier, so barL/barR went with them.
   function scenerySpace(def) {
     const mode = def && def.sceneryCoordinates;
     if (mode === "racing" || mode === "source") return mode;
-    // The legacy default, unchanged: forward-lap scenery has always been read
-    // as racing space and reversed scenery as the source trace. New defs opt
-    // into an explicit contract without moving legacy landmarks globally.
     return def && def.reverse ? "source" : "racing";
   }
 
-  // Scenery authored in RACING space is tied to the direction of travel, so
-  // flipping `reverse` moves every landmark to its mirror image. That is the
-  // right answer for kyalami and paul_ricard, whose anchors were written
-  // against the reversed lap they already drive. It is the wrong answer for a
-  // circuit whose anchors were written against the FORWARD traversal and which
-  // is only now being reversed — singapore, whose imported centreline turned
-  // out to run clockwise while Marina Bay is anti-clockwise. Such a def sets
-  // `sceneryLapMirror: true` and its racing anchors are mirrored (s → −s,
-  // k → −k, ranges swapped) so the physical world stays put while the driving
-  // direction flips. Sides need no help here: transformSceneryApi already
-  // negates `side` for any reversed def, which is exactly the flip a mirrored
-  // anchor needs to land back on the same kerb.
   function lapMirror(def) {
     return !!(def && def.reverse && def.sceneryLapMirror);
   }
@@ -125,10 +99,6 @@ const TrackSpace = (function () {
   }
 
   function sceneryNode(def, node, count) {
-    // Node units, not fractions: rounding the shift ONCE against the same node
-    // count the caller is indexing keeps the node path and the fraction path
-    // naming the same physical place. Deriving it per call from the fraction
-    // would let them drift by a node at some circuits and not others.
     const n = Math.max(1, Math.round(count) || 1);
     const shift = Math.round(sceneryOriginDelta(def) * n);
     if (scenerySpace(def) !== "racing") return ((sourceNodeToRacing(def, node, n) + shift) % n + n) % n;
@@ -150,11 +120,6 @@ const TrackSpace = (function () {
     // wants > 0.99 — because 0→1 arrived here as 0.295→0.295.
     if (Math.abs(s1 - s0) >= 1 - 1e-9) return { s0: 0, s1: 1 };
     const r = range(def, s0, s1, scenerySpace(def));
-    // The origin shift goes HERE and not inside range(), because range() also
-    // serves resolve()'s hwZones remap, which is source-authored and already
-    // origin-independent — shifting that would drag every half-width zone off
-    // its corner. Rotating both ends by the same amount preserves their order,
-    // so the wrap/swap decision range() already made still holds.
     const shift = sceneryOriginDelta(def);
     if (!shift) return r;
     // A WHOLE LAP ROTATES ONTO ITSELF. `recordBarrier(0, 1, ...)` means "the
@@ -168,9 +133,6 @@ const TrackSpace = (function () {
 
   function range(def, s0, s1, coordinateSpace) {
     const racing = coordinateSpace === "racing";
-    // A mirrored racing range flips end-for-end just like a reversed source
-    // range does — without the swap, [s0,s1] wraps the long way round and the
-    // zone covers most of the lap instead of the arc that was authored.
     const mirror = racing && lapMirror(def);
     const map = racing
       ? (s) => wrap01(mirror ? -s : s)

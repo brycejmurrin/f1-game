@@ -1,15 +1,4 @@
-/*
- * Ghost: records the player's lap and replays the best one as a translucent
- * "ghost" car to race against — the core time-attack loop. This is a pure data
- * layer: game.js feeds it a sample each frame (lap time + track position) and
- * asks it where the ghost is at a given lap time; game.js owns the drawing.
- *
- * A lap is stored as parallel arrays of (t, s, x): t = seconds into the lap,
- * s = arc-distance along the centreline, x = lateral offset in metres. That is
- * everything needed to reconstruct the ghost's pose via Tracks.sample(track, s)
- * offset by x — no need to store world coords or heading. Best lap per circuit
- * persists in localStorage so it survives reloads.
- */
+/* Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. This is a pure data layer: ga… */
 "use strict";
 
 const Ghost = (function () {
@@ -51,8 +40,6 @@ const Ghost = (function () {
     } catch (e) { Log.warn("car", "ghost save fail"); }
   }
 
-  // Call when a circuit is loaded. Pulls that circuit's stored best lap (if any)
-  // for playback and resets the recorder.
   function setTrack(id) {
     trackId = id;
     const g = loadStore()[id];
@@ -71,10 +58,6 @@ const Ghost = (function () {
     lastSampleT = -1;
   }
 
-  // Record one frame. t = seconds since this lap began; s = arc-distance along
-  // the centreline; x = lateral offset (m). Throttled to HZ so storage stays
-  // small regardless of frame rate. Reverse-progress samples are discarded so
-  // the timed lap remains in the monotonic distance domain used by timeAt().
   function record(t, s, x) {
     if (!rec) return;
     if (rec.t.length && t - lastSampleT < 1 / HZ) return;
@@ -85,8 +68,6 @@ const Ghost = (function () {
     rec.x.push(round(x, 2));
   }
 
-  // Call when a lap completes. Stores it as the new best for this circuit if it
-  // beats the stored time. Returns true on a new record.
   function finishLap(lapTime) {
     if (!Number.isFinite(lapTime) || lapTime <= 0) { rec = null; return false; }
     if (!rec || rec.t.length < MIN_SAMPLES) { rec = null; return false; }
@@ -117,9 +98,6 @@ const Ghost = (function () {
     return lo;
   }
 
-  // Where is the best-lap ghost at lap time t? Returns { s, x } (interpolated)
-  // or null if there is no ghost / playback is disabled. game.js turns this into
-  // a pose with Tracks.sample(track, s) offset laterally by x.
   function at(t) {
     if (!best) return null;
     const ts = best.t, ss = best.s, xs = best.x, n = ts.length;
@@ -133,9 +111,6 @@ const Ghost = (function () {
     return { s: ss[i] + (ss[j] - ss[i]) * f, x: xs[i] + (xs[j] - xs[i]) * f, done: false };
   }
 
-  // Inverse lookup: given the player's current arc-distance s, return the ghost's
-  // lap time when it was at that same position. Uses binary search on best.s[];
-  // record() retains only forward-progress samples. Returns null without a ghost.
   function timeAt(s) {
     if (!best || !best.s || !best.s.length) return null;
     const ss = best.s, ts = best.t, n = ss.length;
@@ -149,8 +124,6 @@ const Ghost = (function () {
     return ts[lo] + (ts[j] - ts[lo]) * f;
   }
 
-  // Wipe the stored best for one circuit (null = all). Used by a "clear records"
-  // control and useful in tests.
   function clear(id) {
     const store = loadStore();
     if (id == null) { saveStore({}); }

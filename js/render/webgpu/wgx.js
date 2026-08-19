@@ -1,92 +1,10 @@
 /*
- * Apex 26 — WebGPU renderer backend (WGX). Migration Phase 2 + 3 + 4
- * (post chain + foreground FX).
+ * Apex 26 — WebGPU renderer backend (WGX). Second GLX draw-API implementer;
+ * opt-in via apex26.gfxBackend=webgpu. WGSL in js/render/webgpu/wgsl-*.js.
+ * create() returns null on any failure → GLX fallback. Boot self-test at end
+ * of create(). Full parity matrix, traps, soft-present: docs/research/WEBGPU-PARITY.md.
  *
- * A second implementer of the GLX draw-API contract (the renderer object
- * returned by the GLX IIFE). See docs/archive/webgpu/WEBGPU-MIGRATION.md,
- * docs/archive/webgpu/WEBGPU-PHASE0-NOTES.md, docs/archive/webgpu/WEBGPU-PHASE2-NOTES.md and js/render/gfx.js for the
- * interface contract and the frame/opts object shapes.
- *
- * WHAT IS REAL (Phase 1 + Phase 2):
- *   - adapter / device acquisition (async); context configure(); DPR resize;
- *     device-lost reload — unchanged from Phase 1.
- *   - REAL mesh geometry: createMesh / createChunkedMesh build interleaved
- *     GPUBuffers (stride 48 = pos3+mat / nrm3+s / col3+pack(x,hw)) + index buffers; per-chunk
- *     AABBs kept for cull. free* call buffer.destroy().
- *   - A LIT render pass into an RGBA16F HDR scene texture (+ depth24plus depth):
- *       * FRAME uniform buffer (viewProj/eye/sun/ambient/sky/fog/tune scalars)
- *       * a 32-entry Light STORAGE buffer (the flat stride-15 array maps verbatim)
- *       * per-draw model+material via a dynamic-offset uniform buffer (stride 256)
- *       * PBR fragment shader (WGSLChunks.LIT): ambient + sun + 32 lamps +
- *         emissive + fog + applyMaterial* + lamp-shadow PCF + Poisson PCSS.
- *       * opaque / alpha / double-sided / no-alpha-write pipeline variants (cached)
- *   - drawSky() renders the WGSL SKY into the same pass (background).
- *   - drawChunked() frustum-culls chunks against frame.viewProj + frame.cullDist
- *     (ported _extractPlanes / _aabbInFrustum / _aabbDist2).
- *   - present() tonemaps (ACES + exposure) the HDR scene target to the swapchain.
- *
- * PHASE 3 (this pass): sun shadow map. A depth-only caster pass (shadowBegin /
- * castShadow / castShadowChunked / shadowEnd) rasterises the scene from the sun
- * into a depth texture; the LIT shader 3×3-PCF-compares against it (comparison
- * sampler) and modulates the sun diffuse+spec. Also fixes a latent GL→WebGPU
- * clip-space z bug (Z01 remap) that would have half-clipped ALL geometry.
- *
- * PHASE 4 (this pass): the post-processing chain + foreground FX.
- *   - present() now runs the WGSLPost chain (js/render/webgpu/wgsl-post.js) in its
- *     documented PASS_ORDER: SSAO (half-res) -> GODRAY (half-res, world-space
- *     march) -> BLOOM down/up mip chain (rgba16f, additive up) -> COMPOSITE
- *     (scene * AO + godray, exposure, bloom, ACES, colour grade, lens flare,
- *     vignette, grain, dither) into an LDR target -> FXAA to the swapchain. Every
- *     uniform is driven from the present `opts` (exposure/bloom/threshold/ssao/
- *     contact/godray/grade/tune/flareMul), matching GLX present() field names.
- *     Aux targets are cleared (AO->white, godray/bloom->black) when a pass is
- *     skipped so the composite never samples a stale frame. If the post
- *     pipelines/targets are unavailable, present() FALLS BACK to the Phase-2
- *     tonemap blit (no crash).
- *   - FX (js/render/webgpu/wgsl-fx.js): drawShadow/drawMark (blob + skid stamps),
- *     drawSkidBatch (batched trail), drawGlow (additive HDR halos), drawDecal
- *     (textured atlas) — all recorded INTO the open lit pass so they interleave
- *     with draw()/drawSky() exactly as game.js expects. createTexMesh/createTexture
- *     are real (GPUTexture upload) so decals have an atlas.
- *
- * PARITY (2026-08): gpuTimer, createTextureArray/matTexMix, generateMips (env +
- *   2d + arrays), lamp shadows, instancing family, drawParticles, MSAA 4× with
- *   manual depth resolve, Poisson PCSS, world-space god-ray, applyMaterial*,
- *   road markings, heat haze, SSAO/god-ray separable blur. See
- *   docs/research/WEBGPU-PARITY.md.
- *
- * BOOT SELF-TEST (see _selfTest at the end of create()): WebGPU reports a bad
- * shader or pipeline ASYNCHRONOUSLY — createRenderPipeline() returns a
- * live-looking object and the draw is silently dropped — so a backend can
- * "initialise" perfectly and then render an all-black world. Before returning,
- * create() therefore checks every shader module's compilation info, forces the
- * base lit pipeline inside a validation error scope, and renders + READS BACK a
- * pixel through the real blit pipeline. Any proven failure returns null and the
- * caller falls back to GLX; a check that cannot be RUN is skipped, never fatal.
- *
- * NO build step, no ES modules: "use strict" IIFE assigning one global `WGX`.
- * WGSL lives as inline template strings (js/render/webgpu/wgsl-chunks.js).
- *
- * ON PHONES (added after the fact — WGX was written and FROZEN while boot
- * refused every alternate backend whenever GLX.isMobile). iOS 26+ Safari and
- * Android 12+ Chrome expose navigator.gpu, so the RENDERER button's WEBGPU stop
- * now lands here on real handsets. Nothing below claims that looks right; what
- * it does claim is that the phone pays no MORE than GLX would:
- *   - SHADOW_SIZE and the dynamic car shadow map key on IS_MOBILE (the device),
- *     matching js/render/glx/shadow.js, not MOBILE_TIER — GRAPHICS: HIGH buys
- *     quality on a desktop, never a per-frame extra depth pass on a phone GPU.
- *   - the full-res SSR target (8 B/px that GLX does not allocate at all) is
- *     skipped on the mobile tier; the 1×1 placeholder makes the LIT SSR block a
- *     documented no-op.
- * Post-chain target formats match GLX's slim set: SSAO is r8unorm (GLX r8),
- * bloom/godray are rg11b10ufloat (GLX R11F_G11F_B10F). The HDR scene target
- * stays rgba16float because LIT writes scene-alpha (the SSR car-paint tag).
- * The last line of defence remains game.js's boot canary (apex26.gfxBackendProbe),
- * which reverts to WebGL2 on jetsam. A live create/device-lost refusal keeps
- * the WEBGPU pick and falls this tab back to GLX (session skip).
- *
- * Feature-detected & inert: WGX.create() returns null on any failure so the
- * caller falls back to GLX. Constructing on a supported browser never throws.
+ * NO build step: "use strict" IIFE assigning global WGX.
  */
 "use strict";
 
@@ -166,13 +84,12 @@ const WGX = (function () {
   // z'=0.5z+0.5w is z=2z'-w.
   const Z01INV = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,2,0, 0,0,-1,1]);
 
-  // Phase-4 post shader/FX registries (separate files; may be absent when the
+  // Post shader/FX registries (separate files; may be absent when the
   // backend is loaded standalone — post/FX then stay disabled and the frame
   // falls back to the tonemap blit rather than failing WGX.create()).
   const _Post = (typeof window !== "undefined" && window.WGSLPost) || null;
   const _Fx   = (typeof window !== "undefined" && window.WGSLFx)   || null;
 
-  // ── render-target formats ──
   const SCENE_FORMAT = "rgba16float";   // HDR scene (core-renderable/blendable)
   const DEPTH_FORMAT = "depth24plus";
   const LDR_FORMAT   = "rgba8unorm";    // COMPOSITE output (FXAA reads it)
@@ -190,7 +107,6 @@ const WGX = (function () {
   let POST_HDR_FORMAT = "rg11b10ufloat";
   const BLOOM_MAX_LEVELS = 5;           // GLX bloom mip-chain depth cap
 
-  // ── the WGSL source module (js/render/webgpu/wgsl-chunks.js) ──
   // Resolved defensively, because this file used to dereference WGSLChunks at
   // IIFE-EVAL time: a missing/failed wgsl-chunks.js threw HERE, which left the
   // `const WGX` binding permanently in its temporal dead zone — and a TDZ
@@ -206,7 +122,6 @@ const WGX = (function () {
   })();
   const _CH = _Chunks || {};   // sizes below fall back to 0 when absent; create() refuses first
 
-  // ── uniform sizes / layout (must match WGSLChunks.LIT struct comments) ──
   const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 560
   const FRAME_FLOATS = FRAME_BYTES / 4;                 // 140
   const LIGHT_STRIDE = _CH.LIGHT_STRIDE_BYTES | 0;      // 64
@@ -222,7 +137,6 @@ const WGX = (function () {
   const MAX_DRAWS = 4096;                               // per-frame draw slots
   const BLIT_BYTES = _CH.BLIT_UNIFORM_BYTES | 0;        // 16
 
-  // ── shadow map (Phase 3) ──
   // Keyed on the DEVICE (IS_MOBILE), not the memory tier — the same key
   // js/render/glx/shadow.js uses, and for its reason: GRAPHICS: HIGH on a phone
   // must not 4x the snap-cache redraw cost (terrain+road+whole city re-rasterised
@@ -246,7 +160,6 @@ const WGX = (function () {
   const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
   const SHADOW_MODEL_F32_STRIDE = SHADOW_MODEL_STRIDE >> 2; // 64 — pad to minUniformBufferOffsetAlignment
 
-  // ── vertex layout: [pos3, nrm3, col3], stride 36 ──
   // A 4th attr on the ribbon VBO zeroed (and broke pos fetch) on
   // SwiftShader-Dawn — including 4095-vert pieces. mat+trk live in the
   // group-2 world-XZ LUT; fs reconstructs (s, x, hw) from wpos.
@@ -298,7 +211,6 @@ const WGX = (function () {
   try { if (localStorage.getItem("apex26.gfxHigh") === "0") _wgxMsaa4 = false; } catch (_) { /* blocked storage: default 4× MSAA */ }
   let MSAA_COUNT = WGX_LITE ? 1 : (_wgxMsaa4 ? 4 : 1);
 
-  // ── Refusal bookkeeping ─────────────────────────────────────────────────────
   // Every path that makes create() return null records WHY, both on the console
   // and on WGX.lastFailure, so "the RENDERER button says WEBGPU but the game is
   // running WebGL2" is a question with an answer instead of a mystery. (The
@@ -349,7 +261,6 @@ const WGX = (function () {
     return out;
   }
 
-  // ── Frustum cull helpers — ported verbatim from GLX's frustum helpers.
   //    Gribb–Hartmann from a COLUMN-MAJOR view-proj; inside = a*x+b*y+c*z+d >= 0.
   const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
                      new Float32Array(4), new Float32Array(4), new Float32Array(4)];
@@ -792,7 +703,6 @@ const WGX = (function () {
       };
     } catch (_) { /* onuncapturederror is optional; _bootError/_gpuErrors stay 0 if we cannot hook it */ }
 
-    // ── state ──
     let width = 0, height = 0, aspect = 1, renderScale = 1;
     let lastFrame = null;
 
@@ -837,7 +747,8 @@ const WGX = (function () {
 
     // Culling frame state.
     let frameViewProj = null, frameEye = null, frameCullDist = 0;
-    // Phase-4 frame extras (post chain + FX). frameVPGpu is the Z01-remapped
+    // Post-chain + FX frame extras.
+    // frameVPGpu is the Z01-remapped
     // view-proj the depth buffer was rasterised with — every FX embeds it so its
     // clip-z matches the scene depth; frameInvProjW is the WebGPU-convention
     // inverse projection for SSAO view-pos reconstruction.
@@ -855,12 +766,11 @@ const WGX = (function () {
     let skyPipeline, blitPipeline, linearSampler, envCubeSamp;
     const _litPipelines = new Map();
 
-    // Shadow-pass objects (Phase 3).
+    // Shadow-pass objects.
     let shadowTex = null, shadowView = null, shadowSampler = null;
-    let envCubeView = null, ssrView = null;   // Phase-4b: env-probe cube + SSR result (placeholders until their passes run)
+    let envCubeView = null, ssrView = null;   // env-probe cube + SSR placeholders until their passes run
     let _ssrReady = false;   // SSR flips true once its pass runs (env reflection is analytic-sky — no probe gate needed)
     let _frameReflect = 0;   // wet-road SSR strength (== GLX present opts.reflect). Still packed into next begin() for debug; consume is same-frame in COMPOSITE.
-    // ── Live env-cube probe (Phase-4b): a real RGBA16F cube captured one face/frame,
     //   so lacquered car paint mirrors the actual surroundings when the CAR ENV
     //   REFLECTION tuner is on. Off by default (carEnvCube=0 ⇒ analytic sky only). ──
     const ENV_SIZE = 64;
@@ -940,7 +850,6 @@ const WGX = (function () {
         depthSampleView = null, blitBindGroup = null, _texW = 0, _texH = 0,
         _targetRetryAt = 0, _targetRetryW = 0, _targetRetryH = 0;
 
-    // ── Phase-4 post targets/pipelines (size-independent pipelines built once in
     //    _buildPost; size-dependent targets + bind groups (re)built in
     //    ensureTargets). _postReady/_fxReady gate a safe fallback to the blit. ──
     let _postReady = false, _fxReady = false, _cfgWarned = false;
@@ -958,7 +867,6 @@ const WGX = (function () {
     // Per-pass CPU scratch for uniform writes (largest block is SSAO, 176 B/44 f).
     const postScratch = new Float32Array(80);
 
-    // ── Phase-4 foreground FX (blob shadow / skid / glow / decal). ──
     let quadFxVBO = null, quadFxUBO = null, quadFxBG = null, fxQuadLayout = null;
     let pBlob = null, pMark = null;
     let pSkid = null, skidUBO = null, skidFxBG = null, skidVBO = null,
@@ -1048,11 +956,6 @@ const WGX = (function () {
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT });
       ssrView = _ssrPlace.createView();
 
-      // LENS DIRT grime map (mirror GLX.makeDirtTex): a deterministic 256×256 2D-
-      // canvas grime texture the composite pass samples. Built once here so the
-      // composite bind group's binding 6 is always valid. On any failure (no
-      // document/canvas — e.g. the node test harness) fall back to a black 1×1 so
-      // the sample reads 0 and the LENS DIRT knob becomes a clean no-op.
       _dirtView = _makeDirtView();
 
       // Explicit bind-group layouts (needed for the dynamic-offset draw UBO).
@@ -1177,7 +1080,6 @@ const WGX = (function () {
         primitive: { topology: "triangle-list" },
       });
 
-      // ── Shadow pass pipeline (Phase 3): vertex-only depth render from the sun.
       shadowUBO = device.createBuffer({ size: WGSLChunks.SHADOW_LVP_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       shadowModelUBO = device.createBuffer({ size: SHADOW_SLOTS * SHADOW_MODEL_STRIDE, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       shadowG0Layout = device.createBindGroupLayout({
@@ -1279,7 +1181,6 @@ const WGX = (function () {
         } catch (_) { _timestampOk = false; /* timestamp-query feature advertised but createQuerySet failed */ }
       }
 
-      // ── Blocker downsample pipeline ──
       blockerUBO = device.createBuffer({
         size: 16, // size of BlockerU
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
@@ -1338,7 +1239,6 @@ const WGX = (function () {
       return _fail("init threw: " + ((e && e.message) || e));
     }
 
-    // ── Phase-4 post-processing pipelines (size-independent; targets/BGs are
     //    built per-size in ensureTargets). A failure here only disables the
     //    post chain (present falls back to the tonemap blit) — it does NOT fail
     //    WGX.create(), so lit+sky+shadow still render. ──
@@ -1471,7 +1371,6 @@ const WGX = (function () {
       } catch (_) { pComposite = null; }   // disable post; ensureTargets stays inert
     }
 
-    // ── Phase-4 foreground-FX pipelines (blob shadow / skid / glow / decal). A
     //    failure leaves _fxReady false and the FX methods no-op. ──
     function _buildFx() {
       if (!_Fx) return;
@@ -1630,13 +1529,12 @@ const WGX = (function () {
     }
     // Minimal rung: leave the post chain unbuilt. pComposite stays null, so
     // ensureTargets allocates ONLY scene+depth+blit (no ssao/godray/bloom/ldr
-    // aux targets) and present() takes the Phase-2 tonemap blit — that is the
+    // aux targets) and present() takes the tonemap blit — that is the
     // bulk of the discretionary target bytes the device that just died was
     // carrying. FX stay: they record into the lit pass and own no targets.
     if (!WGX_MINIMAL) _buildPost();
     _buildFx();
 
-    // ── Lit pipeline variants (blend / cull / alpha-write / depthBias), built & cached lazily.
     function _litPipeline(opts) {
       const blend = !!(opts && opts.alpha !== undefined && opts.alpha < 1);
       const dbl   = !!(opts && opts.doubleSided);
@@ -1702,7 +1600,6 @@ const WGX = (function () {
       return p;
     }
 
-    // ── resize (mirror GLX.resize()) ──
     function _configureCanvas() {
       if (!ctx || !device) return null;
       try {
@@ -2262,7 +2159,6 @@ const WGX = (function () {
       _destroyTargetSet(old);
     }
 
-    // ── buffer helper: create a GPUBuffer initialised from a typed array ──
     // Geometry is uploaded with queue.writeBuffer, NOT createBuffer({
     // mappedAtCreation:true}). mappedAtCreation needs a client-visible mapping
     // as large as the WHOLE buffer, and Dawn throws when that allocation fails:
@@ -2387,7 +2283,6 @@ const WGX = (function () {
       };
     }
 
-    // ── Resources (Phase 2) ──
     // createBuffer may still throw a synchronous RangeError when the allocation
     // cannot be satisfied — writeBuffer removed the mappable-pool failure above,
     // not plain out-of-memory, which is the pressure that precedes a device
@@ -2606,7 +2501,7 @@ const WGX = (function () {
       }
       return { _wgx: "mesh", vbuf, ibuf, sbuf, attrBG, count: b.count, indexFormat: b.indexFormat, chunks: null };
     }
-    // Textured decal mesh (Phase 4): interleave pos3+nrm3+uv2 -> stride-32 vbuf +
+    // Textured decal mesh: interleave pos3+nrm3+uv2 -> stride-32 vbuf +
     // index buffer, matching the DECAL shader vertex layout (js/render/webgpu/wgsl-fx.js).
     function createTexMesh(data) {
       if (!data || !data.pos || !data.nrm || !data.uv) return { _wgx: "texmesh", _phase: 4 };
@@ -2852,7 +2747,7 @@ const WGX = (function () {
       } catch (_) { return _blackFallback(); /* dirt-map canvas/upload failed: composite samples black 1×1 */ }
     }
 
-    // 2D texture (decal atlas, Phase 4): upload an ImageBitmap/canvas/ImageData
+    // 2D texture (decal atlas): upload an ImageBitmap/canvas/ImageData
     // (via copyExternalImageToTexture, flipY to match GLX's UNPACK_FLIP_Y) or raw
     // RGBA bytes (via writeTexture). Returns { texture, view } or an inert token.
     function createTexture(src) {
@@ -2900,7 +2795,6 @@ const WGX = (function () {
     }
     function freeTexture(t) { if (t && t.texture) t.texture.destroy(); }
 
-    // ── frame uniform + light storage upload (mirror GLX.begin) ──
     function _writeFrame(f) {
       const d = frameData;
       const vp = (f.viewProj && f.viewProj.length >= 16) ? f.viewProj : IDENT;
@@ -2927,7 +2821,7 @@ const WGX = (function () {
       d.set(_vpGpu, 0);
       frameVPGpu.set(_vpGpu);   // persistent copy for the FX passes (post/fx)
       const eye = f.eye || [0,0,0], sd = f.sunDir || [0.3,0.6,0.5], sc = f.sunColor || [1,0.95,0.9];
-      // Phase-4 post/FX frame extras.
+      // Post/FX frame extras.
       frameSunDir = f.sunDir || null;
       frameSunColor = f.sunColor || null;
       frameProjRaw = f.proj || null;
@@ -3139,7 +3033,6 @@ const WGX = (function () {
       device.queue.writeBuffer(skyUBO, 0, skyData);
     }
 
-    // ── begin(frame): open the lit pass into the HDR scene target ──
     let encoder = null, litPass = null, currentView = null, _drawSlot = 0;
     function begin(frame) {
       if (_lost) return false;
@@ -3364,7 +3257,7 @@ const WGX = (function () {
       flush();
     }
 
-    // Fallback path: the Phase-2 tonemap blit (HDR scene -> swapchain). Used when
+    // Fallback path: tonemap blit (HDR scene -> swapchain). Used when
     // the post chain never built or a target is missing this frame.
     function _tonemapBlit(exposure) {
       blitData[0] = exposure; blitData[1] = 0; blitData[2] = 0; blitData[3] = 0;
@@ -3404,7 +3297,6 @@ const WGX = (function () {
       }
     }
 
-    // ── Live env-cube probe ────────────────────────────────────────────────────
     // GLX parity (js/render/glx.js envFaceBegin/End): capture ONE cube face of the world
     // around the player car per frame into a real RGBA16F cube; after a full 6-face
     // cycle the LIT car-paint block samples it (Block 7, envProbeStr). game.js re-issues
@@ -3529,7 +3421,6 @@ const WGX = (function () {
       return { ux, uy, flare, shaft, onScreen: ux >= 0 && ux <= 1 && uy >= 0 && uy <= 1 };
     }
 
-    // ── capturePixels(): read the NEXT presented frame back as RGBA ──────────
     // Source: softPresentTex on software adapters (COPY_SRC; swapchain never
     // touched — first getCurrentTexture() breaks mapAsync device-wide), else
     // the swapchain texture. present() encodes copyTextureToBuffer on the
@@ -3605,7 +3496,6 @@ const WGX = (function () {
       } catch (_) { finish(); }
     }
 
-    // ── present(opts): close the lit pass, run the Phase-4 post chain
     //    (SSAO -> godray -> bloom -> composite -> FXAA), fall back to the blit. ──
     function present(opts) {
       // Car / lamp shadow maps must be re-armed by a fresh *Begin every frame
@@ -3684,7 +3574,7 @@ const WGX = (function () {
       _frameReflect = (o.reflect != null ? o.reflect : 0);
       const exposure = o.exposure != null ? o.exposure : 1.0;
 
-      // Fallback: post disabled / targets absent -> tonemap blit, exactly as Phase 2.
+      // Fallback: post disabled / targets absent -> tonemap blit.
       if (!_postReady || !pComposite || !ldrView || bloomLv.length === 0) {
         _tonemapBlit(exposure);
         const disp = _softDisplayEncode();
@@ -3721,7 +3611,6 @@ const WGX = (function () {
       const sun = _sunScreen();
       const sunUVx = sun ? sun.ux : -2, sunUVy = sun ? sun.uy : -2;
 
-      // ── SSR (full-res) — wet-road / lacquer reflections into ssrTex, consumed
       //    by COMPOSITE this same present() (binding 8). Skipped when dry.
       const _wet = (lastFrame && lastFrame.wetness) || 0;
       // opts.reflect is the governor's SSR shed (game.js: tier >= 2 -> 0). Gating
@@ -3757,7 +3646,6 @@ const WGX = (function () {
         p.setPipeline(pSSR); p.setBindGroup(0, ssrBG); p.draw(3, 1, 0, 0); p.end();
       }
 
-      // ── 0) SSAO (half-res) into ssaoTex, or clear it to white when unavailable.
       const aoStr = o.ssao != null ? o.ssao : 0;
       const contact = (o.contact > 0 && frameSunVS) ? o.contact : 0;
       const haveAO = frameHaveProj && ssaoBG && (aoStr > 0 || contact > 0);
@@ -3780,7 +3668,6 @@ const WGX = (function () {
       // Composite else-path is now aoV = 1.0 with no fetch (wgsl-post.js), so a
       // skipped SSAO pass does not need a white clear. Stale contents are unread.
 
-      // ── 1) GODRAY (half-res) — world-space march through depth + sun/lamp
       // CPU gates like GLX: sun shaft strength (no on-screen requirement — shafts
       // still light the mist when the sun sits just off-frame) or lamp volumetric.
       const grStr = o.godray != null ? o.godray : 0;
@@ -3859,7 +3746,6 @@ const WGX = (function () {
         }
       }
 
-      // ── 2+3) BLOOM mip chain (down bright-pass+blur, then additive up).
       const bloomAmt = o.bloom != null ? o.bloom : 0.55;
       const threshold = o.threshold != null ? o.threshold : 0.75;
       const spread = (T && T.bloomSpread != null) ? T.bloomSpread : 1;
@@ -3894,7 +3780,6 @@ const WGX = (function () {
       // Composite gates bloom on bloomAmt > 0, so a shed chain does not need
       // a black clear of mip0. Stale contents are unread.
 
-      // ── 4) COMPOSITE (full-res) -> LDR intermediate.
       {
         const s = postScratch;
         // Normalise mip-chain accumulation to keep the tuned bloom energy (GLX).
@@ -3997,7 +3882,6 @@ const WGX = (function () {
         p.setPipeline(pComposite); p.setBindGroup(0, compositeBG); p.draw(3, 1, 0, 0); p.end();
       }
 
-      // ── 5) FXAA (full-res) -> swapchain.
       {
         const s = postScratch;
         s[0] = 1 / tw; s[1] = 1 / th; s[2] = 0; s[3] = 0;
@@ -4050,7 +3934,6 @@ const WGX = (function () {
       }
     }
 
-    // ── Shadow pass (Phase 3): sun depth map ──────────────────────────────
     // Runs BEFORE begin() each frame (matches game.js render order): its own
     // command encoder, submitted in shadowEnd() so the depth map is ready for
     // the later lit pass that samples it. All current casters use MAT_IDENT, but
@@ -4183,7 +4066,6 @@ const WGX = (function () {
       _shadowRendered = true;
     }
 
-    // ── Dynamic CAR shadow pass (GLX parity): car meshes only, every frame ──
     // Shares the depth pipeline and the dynamic-offset model ring with the
     // static pass (safe: shadowEnd submits before this Begin rewrites slots).
     // PHONES keep blob-only shadows, matching GLX — which gates on IS_MOBILE, the
@@ -4548,7 +4430,6 @@ const WGX = (function () {
       litPass.draw(nVert);
     }
 
-    // ── Phase-4 foreground FX (recorded INTO the open lit pass, matching how
     //    game.js interleaves them with draw()/drawSky() before present()). ──
 
     // Blob shadow + skid stamp share the unit quad + dynamic-offset uniform ring.
@@ -4703,7 +4584,6 @@ const WGX = (function () {
       litPass.drawIndexed(mesh.count);
     }
 
-    // ── Boot self-test ─────────────────────────────────────────────────────────
     // The failure this closes: WebGPU reports almost nothing by throwing. A WGSL
     // error, a mismatched bind-group layout or an unsupported target format all
     // produce a live-LOOKING device and an INVALID pipeline whose draws are
@@ -5000,7 +4880,6 @@ const WGX = (function () {
     try { Log.info("gfx", "WGX bind ok"); } catch (_) { /* harness */ }
 
     return {
-      // ── Lifecycle / capability ──
       init() { return true; },
       resize,
       setRenderScale,
@@ -5008,35 +4887,32 @@ const WGX = (function () {
       get width() { return width; },
       get height() { return height; },
       get aspect() { return aspect; },
-      hdrMode: () => true,           // Phase 2: RGBA16F scene target + Phase 4 post chain
+      hdrMode: () => true,           // RGBA16F scene target + post chain
       msaa: () => _msaaCount,
       pcss: () => true,              // Poisson-8 + far 4-tap + blocker search (GLX parity)
       isMobile: IS_MOBILE,
       mobileTier: MOBILE_TIER,
 
-      // ── Resources (Phase 2) ──
       chunkedTrackCoords: true,
       createMesh,
-      createTexMesh,                 // Phase 4 (textured decals)
+      createTexMesh,                 // textured decals
       createChunkedMesh,
-      createTexture,                 // Phase 4
+      createTexture,                 // decal atlas upload
       freeMesh,
       freeChunkedMesh,
       freeTexture,
 
-      // ── Frame ──
       begin,
       present,
       draw,
       drawChunked,
       drawSky,
-      drawShadow,                    // Phase 4 (blob shadow quad, in lit pass)
-      drawMark,                      // Phase 4 (single skid-mark stamp)
-      drawSkidBatch,                 // Phase 4 (batched skid trail, one draw)
-      drawGlow,                      // Phase 4 (additive lamp-glare billboards, HDR)
-      drawDecal,                     // Phase 4 (team/sponsor decal atlas)
+      drawShadow,                    // blob shadow quad, in lit pass
+      drawMark,                      // single skid-mark stamp
+      drawSkidBatch,                 // batched skid trail, one draw
+      drawGlow,                      // additive lamp-glare billboards, HDR
+      drawDecal,                     // team/sponsor decal atlas
 
-      // ── Shadow pass (Phase 3) ──
       shadowBegin,
       castShadow,
       castShadowChunked,
@@ -5044,7 +4920,6 @@ const WGX = (function () {
       carShadowBegin,
       carShadowEnd,
 
-      // ── Env probe (Phase 4b) ──
       envFaceBegin,
       envFaceEnd,
       envProbeReady() { return _envProbeLive; },
@@ -5061,7 +4936,6 @@ const WGX = (function () {
       aabbInFrustum: _aabbInFrustum,
       aabbDist2: _aabbDist2,
 
-      // ── Parity surface (must stay on this object) ──────────────────────────
       // These were once absent / explicit `undefined`. They are real WGX
       // implementations now (2026-08 parity pass) and MUST remain listed here
       // because of HOW this backend is installed: game.js does

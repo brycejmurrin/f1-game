@@ -27,15 +27,8 @@ window.ScrollFade = (function () {
   const SEL = [
     ".pane", ".panel-scroll", ".scroll-y",
     ".dh-content", "#track-detail-body",
-    // The TITLE screen. It only scrolls when the button column outgrows the
-    // window — a short landscape phone, or UI SIZE turned up — but when it does
-    // it is the first screen a player ever sees, and a menu that silently hides
-    // its last two buttons is worse there than anywhere else.
     "#overlay",
   ].join(",");
-  // Overlays whose [hidden] flip is what first gives their regions a box. The
-  // data hub (#datahub) and track detail (#track-detail) are toggled by the
-  // hidden attribute like the rest.
   const SCREENS = "#select,#season-setup,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay,#advanced,#pmsettings," +
     "#lighting,#camtune,#audioset,#results,#quali,#standings,#race-settings,#customize,#pausemenu," +
     "#datahub,#track-detail,#vsfriend,#spotifypanel";
@@ -53,9 +46,6 @@ window.ScrollFade = (function () {
   // scrollHeight read forces a fresh reflow — one per region rather than one for
   // the batch, and this now runs over every .pane on every menu mutation.
   function measure(el) {
-    // overflow:hidden still reports scrollHeight > clientHeight. Painting a
-    // thumb there made Circuit Select look like two vertical catalogues:
-    // the clipped sheet body plus #sel-tracks.pane (the real list).
     const oy = getComputedStyle(el).overflowY;
     if (oy !== "auto" && oy !== "scroll" && oy !== "overlay") {
       return { el, max: 0, scrollable: false, top: 0, thumb: 0, track: el.clientHeight };
@@ -91,9 +81,6 @@ window.ScrollFade = (function () {
       return;
     }
     const y = Math.round((m.top / m.max) * (m.track - m.thumb));
-    // Only write when the thumb actually moved: a redundant custom-property set
-    // still invalidates style for the whole subtree, and paintAll runs on every
-    // mutation of every menu.
     const prev = last.get(el);
     if (prev && prev.h === m.thumb && prev.y === y) return;
     el.style.setProperty("--sf-h", m.thumb + "px");
@@ -105,9 +92,6 @@ window.ScrollFade = (function () {
 
   function paintAll() {
     timer = 0;
-    // Measure everything, THEN write everything: one layout for the whole batch
-    // instead of one per region. Skip regions whose screen layer is [hidden] —
-    // mid-race resize used to force layout over every menu pane still in the DOM.
     const els = document.querySelectorAll(SEL);
     const measured = [];
     els.forEach((el) => {
@@ -128,8 +112,6 @@ window.ScrollFade = (function () {
     if (timer) return;
     timer = setTimeout(paintAll, 0);
   }
-  // Layout after a screen opens settles over several frames (web fonts, the
-  // view transition, canvas sizing), so re-measure once things stop moving.
   let settleSoon = 0, settleLate = 0;
   function settle() {
     schedule();
@@ -140,16 +122,12 @@ window.ScrollFade = (function () {
   }
 
   const ro = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
-  // Deliberately NOT one observer over document.body: the HUD rewrites classes
-  // every frame during a race, and every callback would force a layout read.
   const contentMo = typeof MutationObserver === "function" ? new MutationObserver(schedule) : null;
   const screenMo = typeof MutationObserver === "function" ? new MutationObserver(settle) : null;
 
   function watch(el) {
     if (watched.has(el)) return;
     watched.add(el);
-    // Observe the scroller only — child RO storms on garage/select rebuilds;
-    // contentMo already sees childList on the pane.
     if (ro) ro.observe(el);
     if (contentMo) contentMo.observe(el, { childList: true, subtree: true });
   }

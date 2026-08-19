@@ -33,13 +33,7 @@ window.MusicLib = (function () {
 
   const MAX_BYTES = 25 * 1024 * 1024;   // ~25 MB: a long MP3, not someone's FLAC album
   const NAME_MAX = 48;                  // display only — a 200-char file name wrecks the row
-  // See openDb(). Generous on purpose: the request competes with this game's
-  // boot — track build plus WebGL compilation — and a 4s budget was expiring on
-  // a perfectly healthy store, which then stayed "unavailable" all session.
   const OPEN_MS = 12000;
-  // Some browsers report an empty `type` for a perfectly good MP3 (notably older
-  // Android WebViews and files dragged in from odd file systems), so the
-  // extension is a legitimate second opinion — not a shortcut.
   const AUDIO_EXT = /\.(mp3|m4a|aac|ogg|oga|wav|flac|opus)$/i;
 
   const NO_TRACKS_MSG = "Add your own audio files — they stay in this browser and join the in-game playlist.";
@@ -47,16 +41,11 @@ window.MusicLib = (function () {
 
   let dbPromise = null;      // memoised open, so init() is safe to call twice
   let readyPromise = null;   // memoised init()
-  // available() is SYNC (the UI asks mid-render), so answer the obvious case up
-  // front instead of staying optimistic until the first open resolves. Reading
-  // the property itself throws in some locked-down builds.
   let usable = (() => { try { return typeof indexedDB !== "undefined" && !!indexedDB; } catch (e) { return false; } })();
   let cache = [];            // [{id, name, size, added}] — mirrors the store, for sync count()
   const urls = new Map();    // db id -> object URL. WE own these; remove() revokes.
 
   const $ = (id) => document.getElementById(id);
-
-  /* ---------------- IndexedDB plumbing ---------------- */
 
   function openDb() {
     if (dbPromise) return dbPromise;
@@ -77,8 +66,6 @@ window.MusicLib = (function () {
         if (db) db.onversionchange = () => { try { db.close(); } catch (e) { /* another lifecycle path closed it first */ } };
         res(db || null);
       };
-      // Merely TOUCHING indexedDB throws in some private-mode builds, and
-      // open() can throw SecurityError when storage is disabled by policy.
       try {
         if (typeof indexedDB === "undefined" || !indexedDB) { finish(null); return; }
         r = indexedDB.open(DB_NAME, DB_VERSION);
@@ -133,8 +120,6 @@ window.MusicLib = (function () {
     }));
   }
 
-  /* ---------------- GameAudio bridge ---------------- */
-
   // The playlist id namespace is a contract with js/game/audio.js: user uploads
   // are "user:<db id>", shipped tracks are "builtin:<name>". Never mint or
   // remove an id outside our own prefix.
@@ -161,10 +146,6 @@ window.MusicLib = (function () {
     urls.delete(id);
   }
 
-  /* ---------------- rendering ---------------- */
-
-  // KB under a megabyte: a short clip is a legitimate thing to add, and one
-  // decimal of MB renders every one of them as a uniform "0.0 MB".
   function mb(bytes) {
     return bytes < 1048576 ? Math.max(1, Math.round(bytes / 1024)) + " KB"
       : (bytes / 1048576).toFixed(1) + " MB";
@@ -211,8 +192,6 @@ window.MusicLib = (function () {
     if (line) line.textContent = msg || (!usable ? DEAD_MSG : (cache.length ? cache.length + (cache.length === 1 ? " track" : " tracks") + " in your library." : NO_TRACKS_MSG));
   }
 
-  // Only re-marks the playing row. game.js calls this on every track change, and
-  // rebuilding the rows there would drop focus mid-keyboard-navigation.
   function refresh() {
     const box = $("as-tracks");
     if (!box) return;
@@ -221,8 +200,6 @@ window.MusicLib = (function () {
       el.classList.toggle("playing", !!playingId && playingId === pid(+el.dataset.id));
     });
   }
-
-  /* ---------------- public API ---------------- */
 
   function init() {
     if (readyPromise) return readyPromise;
@@ -240,8 +217,6 @@ window.MusicLib = (function () {
       usable = false; cache = []; readyPromise = null; render();
       Log.warn("audio", "MusicLib.init failed: " + ((e && e.message) || e));
     });
-    // A run that found no usable store is not a result worth remembering
-    // either — the next add() should get a fresh attempt.
     readyPromise = readyPromise.then((v) => { if (!usable) readyPromise = null; return v; });
     return readyPromise;
   }
@@ -275,8 +250,6 @@ window.MusicLib = (function () {
           if (!isAudio(file)) { out.skipped++; out.errors.push(file.name + ": not an audio file — skipped"); return; }
           if (file.size > MAX_BYTES) { out.skipped++; out.errors.push(file.name + ": too large (max 25 MB)"); return; }
           const name = niceName(file);
-          // Same name AND same byte count is the same file re-picked; storing it
-          // twice costs real disk and gives two identical playlist rows.
           if (cache.some((m) => m.name === name && m.size === file.size)) { out.skipped++; return; }
           const rec = { name, type: file.type || "", size: file.size, added: Date.now(), blob: file };
           return write((store) => store.add(rec)).then((id) => {
@@ -329,8 +302,6 @@ window.MusicLib = (function () {
   }
 
   function list() { return init().then(() => cache.map((m) => ({ id: m.id, name: m.name, size: m.size, added: m.added }))); }
-
-  /* ---------------- DOM wiring ---------------- */
 
   function wire() {
     // Guard every id: specs and tools load partial DOM, and a missing element

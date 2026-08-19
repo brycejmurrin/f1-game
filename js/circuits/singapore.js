@@ -1,6 +1,4 @@
-/* Apex 26 — SINGAPORE circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — SINGAPORE circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -11,9 +9,6 @@
     // Was 0.5075, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.5075,
     // Marina Bay races ANTI-CLOCKWISE — Pirelli ("cars are driving
     // anti-clockwise"), f1-fansite ("Driving direction: Counterclockwise"),
@@ -27,19 +22,12 @@
     // startFrac is unchanged and must stay so: racing 0 maps to source `phi`
     // under BOTH branches of toSourceFrac, so the start line does not move.
     reverse: true,
-    // The bespoke scenery below predates this discovery and is anchored in the
-    // racing space of the FORWARD traversal, so it has to be mirrored back or
-    // every landmark lands on the far side of the lap. See TrackSpace.lapMirror.
     sceneryLapMirror: true,
     gp: "Singapore GP",
     country: "Singapore",
     night: true,
     theme: "street_night",
     sceneryTheme: "street",
-    // Cool teal-glass palette for the shared circuitKit facilities (pit
-    // building + race-control tower) — distinct from the generic street
-    // theme's flat grey shell, so the pit precinct reads as glazed
-    // curtain-wall rather than concrete.
     sceneryThemeOverrides: {
       palette: { shell: [0.16, 0.30, 0.40], roof: [0.80, 0.88, 0.94] },
     },
@@ -50,16 +38,8 @@
     terrainOuter: 48,
     sceneryCoordinates: "racing",
     dressingExclusions: [
-      // The generic street-night city is the CBD density base under the bespoke
-      // facades; keep it (and shared foliage/lamps) out of the bay/hero
-      // sightlines only. Floodlights stay excluded lap-wide — the bespoke
-      // floodMastRing IS the race-lighting rig (no duplicate poles/pools).
       { kinds: ["city", "foliage"], s0: 0.15, s1: 0.48, side: 1 },
       { kinds: ["city", "foliage"], s0: 0.78, s1: 0.90, side: 1 },
-      // Same double-build, the remaining quarter of side 1: the two rules above
-      // stop at 0.90 and start again at 0.15, but cityFront()'s first call
-      // (below) runs 0.90->0.16 across that exact seam. Closes the gap between
-      // them rather than widening either.
       { kinds: ["city", "foliage"], s0: 0.90, s1: 0.15, side: 1 },
       // The comment above has always been true for side 1, where the two bay
       // windows exclude the generic pass from the sightlines cityFront() does
@@ -84,9 +64,6 @@
       // 1,006,947 with ZERO change to the bespoke facade wall itself.
       { kinds: ["city", "foliage"], s0: 0.00, s1: 0.20, side: -1 },
       { kinds: ["city", "foliage"], s0: 0.48, s1: 0.88, side: -1 },
-      // Third side=-1 cityFront() call, the pit-straight fencing wall
-      // (s0=0.955, s1=0.04 below) — same redundant-layer overlap as the two
-      // rules above, just a smaller range.
       { kinds: ["city", "foliage"], s0: 0.955, s1: 0.04, side: -1 },
       { kind: "lamps", s0: 0, s1: 1 },
     ],
@@ -122,22 +99,10 @@
       { t: 0, l: 200 }, { t: -95, l: 70 }, { t: 90, l: 80 }, { t: -80, l: 60 }, { t: 60, l: 70 }, { t: -90, l: 90 },
       { t: 0, l: 180 }, { t: -90, l: 70 }, { t: -90, l: 70 }, { t: 85, l: 60 }, { t: -95, l: 80 },
     ],
-    // Elevations are source-trace fractions, remapped through TrackSpace.toRacingFrac
-    // at load time (js/track/tracks.js ~2454) — with this circuit's reverse:true that
-    // remap is racing = wrap01(startFrac - source), NOT source - startFrac. The two s
-    // values below solve that inverse for the intended racing positions: the Sheares
-    // underpass dip (racing s≈0.10) and Anderson Bridge rise (racing s≈0.62). Re-solved
-    // for startFrac 0.0000 (moved off 0.5075 by the start-line fix above) — recompute
-    // these again if startFrac ever moves. Keep reclaimed-land Singapore nearly flat
-    // otherwise.
     elevations: [
       { s: 0.9000, halfM: 120, rise: -2.5 },
       { s: 0.3800, halfM: 120, rise: 2.5 },
     ],
-    // Marina Bay runs on real city streets: the bay-front boulevards are wide,
-    // the Turn 1-3 complex, the Anderson Bridge link and the Esplanade squeeze
-    // are not. s0/s1 are CONTROL-POINT index fractions in SOURCE space; the
-    // racing-lap arc each lands on is in the trailing comment.
     hwZones: [
       { s0: 0.5890, s1: 0.6642, hw: 5.2, ease: 0.012 },  // arc 0.098-0.152 T1-T3
       { s0: 0.1020, s1: 0.1774, hw: 5.1, ease: 0.012 },  // arc 0.650-0.685 bridge link
@@ -207,7 +172,6 @@
         }
       };
 
-      // ---- Night colour palette ----
       // Windows: cool fluorescent / cyan office dominant (warm floods stay on tarmac)
       const WIN_WARM = [1.00, 0.88, 0.68];   // warm incandescent (hotels only)
       const WIN_COOL = [0.68, 0.78, 0.98];   // cool fluorescent
@@ -224,20 +188,14 @@
       const WALL_CBD  = [0.18, 0.20, 0.30];  // dark blue-grey CBD glass
       const WALL_LITE = [0.22, 0.24, 0.34];  // slightly lighter near tower
       const WALL_WARM = [0.26, 0.22, 0.18];  // warm concrete hotel
-      // ===================================================================
-      // UNDERPASS PORTALS — Sheares Bridge (s≈0.10) + finish under-grandstand
-      // (s≈0.93–0.98). Dark soffit beat unique to Marina Bay night racing.
-      // ===================================================================
       makePortal("sheares", 0.085, 0.115, { h: 7.4, gap: 2.2 });
       makePortal("finish-underpass", 0.925, 0.985, { h: 6.8, gap: 2.4 });
 
-      // ===================================================================
       // FAR SILHOUETTE BAND — fills sky behind near facades; anchored far
       // enough (340+ m) that it never clips near geometry. backdrop()
       // auto-adds window bands for night circuits so these aren't flat slabs.
       // Reduced to 48 instances (was 80) since window bands add geometry;
       // staggered distances give depth layering without redundancy.
-      // ===================================================================
       {
         const N = 48;
         for (let i = 0; i < N; i++) {
@@ -253,39 +211,16 @@
         }
       }
 
-      // ===================================================================
-      // NEAR CBD FACADE WALLS — cityFront() produces aligned street-canyon
-      // facades. PERFORMANCE NOTE: SwiftShader (software renderer) is ~200×
-      // slower than GPU. step=44 m and limited coverage keeps building count
-      // comparable to the original loop (~80 buildings vs. 112 in old band).
-      // The far backdrop() layer handles the rest of the horizon.
-      // ===================================================================
-      // Right side: the Republic Boulevard canyon. These facades used to stand
-      // 106 m off the barrier, which is not what Marina Bay looks like from the
-      // car — the CBD towers rise straight off the pavement there, and at 106 m
-      // the whole row read as horizon haze. gap 20 puts the street wall where
-      // the driver actually sees it.
       cityFront(0.90, 0.16, 1, 20, {
         minH: 55, maxH: 165, depth: 28, lit: true,
         palette: [WALL_CBD, WALL_LITE, WALL_CBD, [0.16, 0.18, 0.26]],
         windowCol: WIN_CYAN, floor: 18, step: 70,
       });
-      // s 0.16–0.35 R is open bay (waterBand + Marina Bay Sands beyond), so
-      // that stretch keeps its across-the-water setback.
       cityFront(0.16, 0.35, 1, 104, {
         minH: 55, maxH: 165, depth: 28, lit: true,
         palette: [WALL_CBD, WALL_LITE, WALL_CBD, [0.16, 0.18, 0.26]],
         windowCol: WIN_CYAN, floor: 18, step: 95,
       });
-      // Left side: colonial district & back-straights — inland, street-tight.
-      // step widened from 44/48 — each unit's neonFacade curtain wall is
-      // capped at rows=10/cols=6 by lod() regardless of building height, so
-      // beyond a point the only lever left that doesn't touch shared engine
-      // code (js/track/scenery-city.js, shared by every street/night circuit)
-      // is fewer, still-varied units. Same Qatar precedent (fc40591b) as the
-      // dressingExclusions above, second technique: widen an along()/every()
-      // step where density exceeds what's visually resolvable at driving
-      // speed, rather than thin detail per unit.
       cityFront(0.00, 0.20, -1, 18, {
         minH: 26, maxH: 90, depth: 22, lit: true,
         palette: [WALL_WARM, WALL_CBD, [0.20, 0.18, 0.24], WALL_LITE],
@@ -297,11 +232,9 @@
         floor: 14, step: 75,
       });
 
-      // ===================================================================
       // s 0.18 R — MARINA BAY SANDS: 3 towers + skypark slab
       // Outer towers tip toward centre under the boat deck (postcard lean).
       // Towers spaced so faces never intersect; skypark bridges the tops.
-      // ===================================================================
       {
         const k    = K(0.18);
         const a    = anchor(k, 1, 150);
@@ -333,8 +266,6 @@
           }
           const b = [rT, uT, tT];
           const mid = vadd(base, uT, H * 0.5);
-          // Glass-fin towers (Marina Bay Sands) — concrete shafts, glass
-          // curtain, metal fins/crowns. Skypark deck is wood planking.
           stage._mat = MAT.CONCRETE;
           TrackGeom.addBox(stage, mid,                         [TOWERW, H, 28],               wall,               b);
           stage._mat = MAT.GLASS;
@@ -351,15 +282,6 @@
         // Span follows leaned tops (outers closer together at the crown)
         const spanR = Math.hypot(tops[2][0] - tops[0][0], tops[2][2] - tops[0][2]);
         const skyW  = Math.max(spanR + TOWERW, gap * 2 + TOWERW * 0.7);
-        // `mid` (tops[1]) IS the centre tower's top surface height (H, base-anchored
-        // addBox above puts its top exactly there). These three slab boxes are
-        // addBox — CENTRE-anchored — but their old +3.5/+6.0/+5.5 offsets left the
-        // main slab's underside 1.75 m above that top surface, more than the
-        // audit's 0.6 m "rests on" slack, so the whole 200 m-tall assembly read
-        // as unsupported. Shifted down by 1.45 m (every offset moves together,
-        // so the slab/rim/pool stack keeps its original relative geometry) to
-        // seat the main slab's underside ~0.3 m above the tower top.
-        // Main slab — wooden observation deck (SkyPark plank walk)
         stage._mat = MAT.WOOD;
         TrackGeom.addBox(stage, vadd(mid, a.u, 2.05), [skyW, 3.5, 32],      [0.86, 0.82, 0.74], [a.r, a.u, a.t]);
         stage._mat = MAT.METAL;
@@ -370,10 +292,6 @@
         }, { required: true });
       }
 
-      // ===================================================================
-      // s 0.22 R — ARTSCIENCE MUSEUM: white lotus — 5 separated petal cones
-      // Petals spaced 15 m apart (diameter 14 m each) so they don't overlap.
-      // ===================================================================
       {
         const k       = K(0.22);
         const a       = anchor(k, 1, 90);
@@ -386,9 +304,6 @@
           const pc    = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
                          a.c[1],
                          a.c[2] + a.r[2] * dx + a.t[2] * dz];
-          // Outer white shell — addCone is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js),
-          // so `pc` (already sitting at ground height) IS the base position;
-          // adding a.u*PETAL_H/2 floated the whole cone by half its own height.
           addCone(out, pc, 6.5, PETAL_H,       [0.94, 0.95, 0.97], 9, [a.r, a.u, a.t]);
           // Inner warm-lit face (slightly smaller, glows like up-lit marble)
           addCone(out, pc, 4.8, PETAL_H * 0.6, [1.00, 0.92, 0.76], 8, [a.r, a.u, a.t]);
@@ -399,14 +314,8 @@
         addBox(out, vadd(a.c, a.u, 1.5), [BASE_R * 2 + 4, 0.6, BASE_R * 2 + 4], [0.70, 0.65, 0.50], [a.r, a.u, a.t]);
       }
 
-      // ===================================================================
-      // s 0.26 R — GARDENS BY THE BAY SUPERTREES: 11 trees, offset laterally
-      // so canopies (rad ~14-18 m) don't overlap; two staggered rows.
-      // ===================================================================
       {
         const k = K(0.26);
-        // Row A: 6 trees along track direction, spread 16 m apart laterally
-        // Row B: 5 trees inset 20 m further back, staggered between row A
         for (let i = 0; i < 11; i++) {
           const rowB  = i >= 6;
           const idx   = rowB ? i - 6 : i;
@@ -428,27 +337,13 @@
           const c    = a.c;
           const h    = 28 + (idx % 4) * 9;
           const capR = 13 + (idx % 2) * 4;
-          // Trunk (dark green). addCyl/addCone are BASE-anchored in TrackGeom
-          // (js/track/geom.js) — they build from `c` up to `c + u*h` — so the
-          // old `c + u*h*0.5` put the trunk's FOOT half its own height in the
-          // air and carried the canopies up with it. Forward, that was invisible:
-          // the trees spread over the CBD façade mass, which the float audit
-          // accepted as support. Reversed they spread the other way, over open
-          // ground, and eleven trees stood 14-27 m up. Anchor the foot at `c`.
           addCyl(out, c, 2.2, h, [0.15, 0.36, 0.20], 7, [a.r, a.u, a.t]);
-          // Main canopy cap — vivid NEON colour. Base sits 2 m BELOW the trunk
-          // top so it overlaps rather than hovers; a cone base exactly at `h`
-          // would leave a hairline the grounding walk can miss.
           addCone(out, vadd(c, a.u, h - 2), capR, 8, NEON[(i % 2) ? 0 : 3], 9, [a.r, a.u, a.t]);
           // Upper secondary glow, overlapping the cap it sits in.
           addCone(out, vadd(c, a.u, h + 4), capR * 0.55, 5, NEON[(i + 1) % 4], 7, [a.r, a.u, a.t]);
         }
       }
 
-      // ===================================================================
-      // s 0.34 L — mid-rise hotels with vivid neon billboards
-      // Buildings spaced 28 m apart (w=24 → clear gap 4 m) so no overlap.
-      // ===================================================================
       {
         const k = K(0.34);
         // 5 buildings: inner face starts at 42 m + (i*28) to give clear spacing
@@ -468,13 +363,6 @@
         billboard(K(0.38),   -1, 10, 17, 11, NEON[3]);
       }
 
-      // ===================================================================
-      // s 0.43–0.50 R — distant skyline across the bay (waterfront towers).
-      // These are the far-distance buildings seen across Marina Bay itself —
-      // backdrop() puts them at 200+ m so they sit well behind the near
-      // cityFront() facades at 100 m. backdrop() auto-adds window bands
-      // for night circuits so each slab reads as a lit tower face.
-      // ===================================================================
       for (let i = 0; i < 6; i++) {
         const dist = 205 + i * 38;   // stepped 200–410 m — no overlap possible
         backdrop(K(0.45), 1, dist, [42, 60 + hash(i * 13) * 90, 30], [0.09, 0.10, 0.20]);
@@ -503,13 +391,6 @@
         }
       }
 
-      // ===================================================================
-      // s 0.55 L — FULLERTON HOTEL: wide warm-uplit neoclassical block.
-      // The real Fullerton is a grand Palladian building (former GPO) with a
-      // wide colonnade base, warm cream-limestone walls and a flat roofline.
-      // building() with arch:"flat" preserves that horizontal massing; warm
-      // window tones reflect the hotel's warm interior lighting.
-      // ===================================================================
       {
         const k = K(0.55);
         building(k, -1, 18, 48, 26, 34, {
@@ -519,8 +400,6 @@
           lit:    true,
           arch:   "flat",               // keep the iconic horizontal roofline
         });
-        // Ground-level colonnade warm uplighting strip (the Fullerton's signature
-        // amber wash that makes the columns glow at night)
         {
           const a = anchor(k, -1, 42);
           addBox(out, vadd(a.c, a.u, 2.5), [50, 4.5, 36], [1.00, 0.82, 0.50], [a.r, a.u, a.t]);
@@ -529,10 +408,6 @@
         }
       }
 
-      // ===================================================================
-      // s 0.62 — ANDERSON BRIDGE: arched truss over the Singapore River
-      // (two separate bridge sides, ribs spaced 10 m apart — no overlap)
-      // ===================================================================
       {
         const k = K(0.62);
         for (const side of [-1, 1]) {
@@ -557,10 +432,6 @@
         }
       }
 
-      // ===================================================================
-      // s 0.66 L — ESPLANADE "Durian": two spiky domed shells
-      // Spaced 28 m apart (dome radius ~18 m → 10 m clear gap).
-      // ===================================================================
       {
         const k = K(0.66);
         const DOME_SEP = 28;   // centre-to-centre; each dome rad ~14 m so no overlap
@@ -593,14 +464,6 @@
       // s 0.70 L — The Padang: dark open field (lawn)
       place(K(0.70), -1, 46, [70, 1.5, 70], [0.06, 0.10, 0.06]);
 
-      // ===================================================================
-      // s 0.714 L — NATIONAL GALLERY / former SUPREME COURT–CITY HALL:
-      // a large cream neoclassical colonnaded civic block with a low dome,
-      // set back beyond the Padang lawn. Previously a total landmark gap on
-      // a lap that already nails Fullerton, the Merlion and Marina Bay
-      // Sands. Silhouette-only: colonnade row + pediment + a shallow dome
-      // on one wing (the former Supreme Court rotunda).
-      // ===================================================================
       {
         const k = K(0.714);
         const a = anchor(k, -1, 100);
@@ -609,8 +472,6 @@
         const W = 46, H = 20, D = 64;   // W: depth away from road, D: frontage length
         // Main civic block
         addBox(out, vadd(a.c, a.u, H * 0.5), [W, H, D], CREAM, [a.r, a.u, a.t]);
-        // Colonnade — a row of columns along the road-facing front, raised on
-        // a low base course.
         const COLN = 10;
         for (let i = 0; i < COLN; i++) {
           const off = (i - (COLN - 1) / 2) * (D * 0.82 / (COLN - 1));
@@ -627,24 +488,10 @@
           addCone(out, vadd(domeC, a.u, 2.6), 7.6, 4.4, CREAM, 12, [a.r, a.u, a.t]);
           addCyl(out, vadd(domeC, a.u, 7.4), 0.5, 2.0, CREAM_HI, 6, [a.r, a.u, a.t]);
         }
-        // Warm uplighting wash at the base — a civic building lit at night,
-        // matching the amber treatment already used at Fullerton.
         addBox(out, vadd(vadd(a.c, a.r, W * 0.44), a.u, 1.2), [1.4, 2.4, D * 0.9],
           [1.00, 0.90, 0.66], [a.r, a.u, a.t]);
       }
 
-      // ===================================================================
-      // s 0.722 L — THE NEW SUPREME COURT (Foster, 2005), behind the old one
-      // F1.com's own landmark list for Marina Bay names the Supreme Court, and
-      // the circuit only had the neoclassical building it REPLACED (the block
-      // above, now the National Gallery). The working court stands directly
-      // behind it and is one of the most recognisable silhouettes in the city:
-      // a broad horizontal slab faced in close-spaced vertical stone fins,
-      // with the Court of Appeal carried on top as a CANTILEVERED DISC. The
-      // disc is the whole landmark — a flying saucer parked on a law court.
-      // Set at gap 168 so it rises behind the Gallery's dome rather than
-      // competing with it at the same depth.
-      // ===================================================================
       {
         const a = anchor(K(0.722), -1, 168), b = [a.r, a.u, a.t];
         const STONE  = [0.80, 0.78, 0.73];
@@ -657,8 +504,6 @@
           const W = 40, H = 34, D = 78;
           // The slab, glazed between its fins.
           addBox(stage, vadd(a.c, a.u, H * 0.5), [W, H, D], GLASS, b);
-          // Vertical fin order — the building's texture, and cheap: one thin
-          // box per fin across the road-facing front.
           const FINS = 26;
           for (let i = 0; i < FINS; i++) {
             const off = (i - (FINS - 1) / 2) * (D * 0.94 / (FINS - 1));
@@ -672,8 +517,6 @@
           }
           // Roof deck the disc sits on.
           addBox(stage, vadd(a.c, a.u, H + 0.9), [W + 2, 1.8, D + 2], STONE, b);
-          // THE DISC. Cantilevered clear of the slab toward the Padang, held
-          // on a short drum, with a bright glazed rim band under its lip.
           const dc = vadd(vadd(a.c, a.r, W * 0.30), a.u, H + 2.4);
           addCyl(stage, dc, 5.0, 4.5, STONE, 10, b);
           addFrustum(stage, vadd(dc, a.u, 4.0), 12.5, 17.5, 3.2, STONE, 20, b);
@@ -683,13 +526,6 @@
         });
       }
 
-      // ===================================================================
-      // s 0.690 L — ST ANDREW'S CATHEDRAL, across the Padang lawn
-      // White Gothic-revival, and the only spire on this skyline. It stands
-      // on the far side of the Padang from the circuit, so it reads across
-      // the open lawn with nothing in front of it — which is exactly why it
-      // is worth having on a lap otherwise built from glass and stone slabs.
-      // ===================================================================
       {
         const a = anchor(K(0.690), -1, 126), b = [a.r, a.u, a.t];
         const WHITE = [0.93, 0.92, 0.89];
@@ -726,12 +562,6 @@
         });
       }
 
-      // ===================================================================
-      // s 0.703 R — SINGAPORE CRICKET CLUB pavilion, opposite the Padang
-      // lawn: a small white colonial box with a cupola. The Padang used to
-      // be just a flat dark slab on one side of the road with nothing
-      // answering it on the other.
-      // ===================================================================
       {
         const k = K(0.703);
         const a = anchor(k, 1, 34);
@@ -751,10 +581,6 @@
         addCyl(out, vadd(cupC, a.u, 3.6), 0.1, 1.4, WHITE_COL, 4, [a.r, a.u, a.t]);
       }
 
-      // ===================================================================
-      // s 0.80 R — HELIX BRIDGE: glowing double-helix lattice arc
-      // 16 arc segments; each node uses track basis so no floating geometry.
-      // ===================================================================
       {
         const k = K(0.80);
         const a = anchor(k, 1, 32);
@@ -768,12 +594,6 @@
           // Side lattice bar
           const barOff = Math.sin(t2 * 11) * 5.5;
           addBox(out, vadd(c, a.r, barOff), [0.9, 1.4, 1.6], [0.86, 0.88, 0.93], [a.r, a.u, a.t]);
-          // Connecting strut back to the main tube (cause: cantilever, docs/
-          // SCENERY-GROUNDING.md §3.4). At the widest swing (|barOff|~5.5) the
-          // bar's inner face sits ~3.1 m clear of the tube's own 2.4 m radius
-          // — past the audit's overlap reach, so it hung with no visible arm
-          // carrying it. Spans from the tube out to the bar with a 0.3 m
-          // overlap margin on each end.
           addBox(out, vadd(c, a.r, barOff / 2), [Math.abs(barOff) + 0.6, 0.4, 0.4],
                  [0.86, 0.88, 0.93], [a.r, a.u, a.t]);
           // Helix crossbar
@@ -787,16 +607,8 @@
         }
       }
 
-      // s 0.86 R — SINGAPORE FLYER. The shared wheel is a true vertical ring;
-      // the old bespoke model accidentally laid its rim flat in the XZ plane.
       ferrisWheel(K(0.86), 1, 58, 44);
 
-      // ===================================================================
-      // s 0.92–0.05 — pit straight: neon billboard funnel back to start,
-      // pit-lane building wall L (Paddock Club / pit hospitality suites),
-      // and pit lane perimeter fencing. cityFront() for the L-side pit
-      // complex gives proper aligned office / hospitality massing.
-      // ===================================================================
       {
         billboard(K(0.92),  1,  11, 18, 11, NEON[3]);
         billboard(K(0.92), -1,  11, 18, 11, NEON[2]);
@@ -806,19 +618,12 @@
         billboard(K(0.96), -1,  10, 17, 11, NEON[3]);
         billboard(K(0.98),  1,  10, 15, 10, NEON[2]);
       }
-      // Pit straight L — Paddock Club / media centre (warm lit suites)
-      // Gap=14m + step=28m keeps buildings clear of the pit lane wall.
       cityFront(0.955, 0.04, -1, 14, {
         minH: 12, maxH: 24, depth: 16, lit: true,
         palette: [WALL_WARM, [0.24, 0.22, 0.18], WALL_WARM, [0.20, 0.19, 0.16]],
         windowCol: WIN_WARM, floor: 4, step: 28,
       });
 
-      // ===================================================================
-      // WATERFRONT PROMENADE GLOW STRIPS — warm illuminated window bands
-      // on the harbourfront walk (s 0.18–0.45 and 0.80–0.88).
-      // Pushed out to 24 m so they sit beyond the kerb/barrier.
-      // ===================================================================
       for (const s of [0.20, 0.30, 0.42, 0.82, 0.88]) {
         const a = anchor(K(s), 1, 24);
         // s=0.30 sits on a locally steeper stretch of the promenade than the
@@ -833,39 +638,10 @@
         addBox(out, vadd(a.c, a.u, 0.8), [3.8, 1.2, 28], NEON[1],  [a.r, a.u, a.t]);
       }
 
-      // ===================================================================
-      // BAY WATER — dark mirror used by the typed reflective-water model below.
-      // ===================================================================
       const BAY = [0.06, 0.08, 0.14];
 
-      // ===================================================================
-      // FLOODLIGHT MASTS — one intentional warm-white ring. Shared generic
-      // floodlights are excluded above, avoiding duplicate poles and pools.
-      // floodMastRing registers lens posts (default light:true) so night pools
-      // anchor to these fixtures instead of the empty-list synthetic fallback.
-      // ===================================================================
-      // ~1600 projectors on masts down both kerbs is the defining look of the
-      // Singapore night race; a 75 m spacing left long unlit-looking gaps.
       floodMastRing(38, { h: 24, dist: 11, cool: false, pool: true, arms: 3 });
 
-      // ===================================================================
-      // MAIN STRAIGHT — continuous glass Pit Building (L) + race-control
-      // tower, Float@Marina Bay grandstands (R), start gantry, marshal posts.
-      // The real Pit Building is one continuous ~350 m three-storey glass
-      // structure, not five detached garage sheds. circuitKit.pitBuilding
-      // extrudes along a single fixed track frame, so one call can only span
-      // a LOCALLY STRAIGHT stretch of road — and measuring this circuit's
-      // own spline shows the pit-entry approach (s≈0.986-0.992) is a real
-      // dogleg kink, same as the source circuit's pit-lane entry. Four
-      // abutting facility segments — long where the road is straight, short
-      // through the kink — read as one continuous glazed structure (~245 m
-      // of built frontage across a ~290 m run) instead of five disconnected
-      // sheds, and each stays inside its own safe straight run so none of
-      // them oversweeps the actual tarmac. The race-control tower is a
-      // proper circuitKit facility (replacing the old hand-rolled
-      // timing-tower boxes), sharing the pit precinct's cool-glass palette
-      // set via sceneryThemeOverrides at the top of this file.
-      // ===================================================================
       if (circuitKit) {
         const PIT_SEGS = [
           { id: "kit:singapore:pit-building-1", frac: 0.958,  len: 90, garages: 8 },
@@ -879,40 +655,21 @@
             size: [22, 16, seg.len], garages: seg.garages, style: "flat",
             required: true,
           });
-          // Thin cyan glazing band — one per storey — reads as a lit
-          // curtain wall at night against each segment's own frontage.
           const a = anchor(K(seg.frac), -1, 11);
           for (const yy of [4.0, 8.6, 13.2]) {
             addBox(out, vadd(a.c, a.u, yy), [0.7, 2.6, seg.len - 4], WIN_CYAN, [a.r, a.u, a.t]);
           }
         }
-        // Race-control tower, set back behind the pit building roofline at
-        // the finish-line end of the complex.
         circuitKit.raceControl({
           id: "kit:singapore:pit-race-control", frac: 0.999, side: -1, gap: 46,
           size: [14, 34, 16], required: true,
         });
-        // Beacon light on the race-control roof — a landmark visible from
-        // across the venue, echoing the old hand-rolled tower's night glow.
-        // MIXED COORDINATE SPACES: circuitKit.raceControl's `frac` goes through
-        // circuit-kit.js's SHIFT-ONLY frameAt wrapper; this anchor needs KOLD so
-        // it lands on the same spot. The tower's "lattice" landmark
-        // (the `lattice` branch of tower() in js/track/landmark-kit.js)
-        // stacks 6 levels inset 0.86x, so its real roof surface sits a touch
-        // under the nominal size[1]=34 (~33.6 m), not at 34. addCone is
-        // BASE-anchored, so the beacon's base needs to be near that real
-        // roof height, not the nominal one.
         {
           const a = anchor(KOLD(0.999), -1, 53);
           addCone(out, vadd(a.c, a.u, 33.4), 2.2, 6, NEON[1], 6, [a.r, a.u, a.t]);
         }
       }
 
-      // Grandstands on the right of the main straight — the hero stand faces
-      // the new glass Pit Building, so it gets the full three-tier treatment
-      // (scaffold livery, matching Singapore's temporary-structure look);
-      // its neighbours step down in tier count and rotate liveries so the
-      // straight doesn't read as one repeated box.
       grandstandEx(0.99,  1, 12, 62, null, null,
         { livery: "scaffold", tiers: 3, roof: "truss", suites: true, endWalls: true, pylons: true });
       grandstandEx(0.02,  1, 12, 62, null, null,
@@ -932,16 +689,10 @@
         color: [0.95, 0.05, 0.05], required: true, supports: false,
       });
 
-      // ===================================================================
-      // MARSHAL POSTS at corner approaches
-      // ===================================================================
       for (const s of [0.07, 0.16, 0.28, 0.36, 0.47, 0.60, 0.68, 0.76, 0.84, 0.94]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 7);
       }
 
-      // ===================================================================
-      // CATCH FENCES — street-circuit look, both sides, broken into spans.
-      // ===================================================================
       for (const [s0, s1, side] of [
         [0.00, 0.18, -1], [0.20, 0.40, -1], [0.42, 0.62, -1], [0.64, 0.85, -1], [0.87, 0.99, -1],
         [0.00, 0.16,  1], [0.30, 0.44,  1], [0.55, 0.66,  1], [0.92, 0.99,  1],
@@ -949,16 +700,11 @@
         // Sit behind the 1.2 m concrete wall rather than sharing its edge.
         fence(s0, s1, side, 3.0, 3.4, [0.66, 0.70, 0.78]);
       }
-      // Marina Bay is fenced end to end; the runs above left most of the
-      // right-hand side bare. Close them.
       for (const [s0, s1, side] of [
         [0.17, 0.29,  1], [0.45, 0.54,  1], [0.67, 0.79,  1], [0.80, 0.91,  1],
         [0.185, 0.195, -1], [0.405, 0.415, -1], [0.625, 0.635, -1],
       ]) fence(s0, s1, side, 3.0, 3.4, [0.66, 0.70, 0.78]);
 
-      // ===================================================================
-      // TYRE WALLS at tight 90-degree apex/exit kerbs
-      // ===================================================================
       for (const [s0, s1, side] of [
         [0.085, 0.10, 1], [0.235, 0.25, -1], [0.475, 0.49, -1],
         [0.66, 0.675,  1], [0.82, 0.835,  -1],
@@ -966,24 +712,17 @@
         tyreWall(s0, s1, side, 1.6, NEON[K(s0) % 4]);
       }
 
-      // ===================================================================
-      // TROPICAL PALMS & LANDSCAPING
-      // ===================================================================
       every(26, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 5 + side) < 0.30) continue;
           palm(k, side, 8 + hash(k + side) * 5, 9 + hash(k * 2 + side) * 5, [0.18, 0.42, 0.20]);
         }
       });
-      // Kept at the original spacing/offset: the generic street dressing puts a
-      // 9 m-wide retail box centred 9 m out, so a denser shrub line here simply
-      // grows through it.
       every(62, (k) => {
         if (hash(k * 9) < 0.60) return;
         bush(k, hash(k) < 0.5 ? -1 : 1, 8 + hash(k) * 5, [0.14, 0.36, 0.18]);
       });
 
-      // ===================================================================
       // TRACKSIDE NEON SIGNAGE — collapsed from three overlapping billboard
       // passes (a 32-slot barrier ring, a scattered punctuation pass and a
       // corner-neon pass) that stacked near-identical geometry, worst around
@@ -993,7 +732,6 @@
       // passes) plus a sparse jittered ring filling the gaps between them —
       // never a mechanical 1-in-32 grid — and it explicitly skips s
       // 0.895-0.995, which the pit-straight funnel below already owns.
-      // ===================================================================
       for (const [s, side, hue, w, h] of [
         [0.04,  1, 1, 16, 10], [0.08,  1, 2, 15, 9],  [0.14, -1, 0, 17, 10],
         [0.24, -1, 3, 14, 9],  [0.31,  1, 1, 18, 10], [0.36,  1, 0, 15, 9],
@@ -1002,34 +740,17 @@
       ]) {
         billboard(K(s), side, 11, w, h, NEON[hue]);
       }
-      // Sparse ring filling the gaps between the hand-placed signs above —
-      // under half the density of the old 32-slot grid, jittered so the
-      // spacing reads as organic rather than a repeating pattern.
       {
         const RING_N = 14;
         for (let i = 0; i < RING_N; i++) {
           const sf = (i + 0.5 + (hash(i * 3.3) - 0.5) * 0.6) / RING_N;
           if (sf > 0.895 && sf < 0.995) continue;   // pit-straight funnel's stretch
           const side = hash(i * 1.7) < 0.5 ? -1 : 1;
-          // gap 9.5 clears billboard()'s own w/2+1 requirement at the widest
-          // jittered panel (w up to 16 → needs gap>9) — the old 32-slot ring
-          // used gap 8 here and silently dropped its widest instances.
           billboard(K(sf), side, 9.5, 10 + hash(i * 4.1) * 6, 4.5 + hash(i * 2.1) * 2, NEON[i % 4]);
         }
       }
-      // Low continuous ad-hoarding run along the pit-straight barrier — a
-      // different silhouette (waist-height boards on posts, not tall neon
-      // panels) underneath the funnel billboards, instead of a third stack
-      // of the same shape in the most crowded stretch of the lap.
       sponsorHoarding(0.895, 0.995, 1, 5, { h: 1.2, step: 11 });
 
-      // Padang / Esplanade / Bay grandstand ring — Marina Bay seats ~40 000 and
-      // the lap carries seventeen stands. These used to share two near-
-      // identical hue formulas; now each rotates through Singapore's stand
-      // set (STAND_SETS.singapore: scaffold/teal/darkSteel — temporary
-      // scaffold decks, teal-accented permanent seating, dark steel bays)
-      // with tier count varied by hash so the ring reads as a real venue
-      // built up over years, not one template repeated seventeen times.
       const SGP_LIV = ["scaffold", "teal", "darkSteel"];
       let standIdx = 0;
       for (const [s, side, gap, len] of [
@@ -1045,16 +766,6 @@
           endWalls: hash(K(s) * 1.7) < 0.4,
         });
       }
-      // ── SCAFFOLD BAY STAND (bespoke — NOT grandstandEx) ─────────────────
-      // Marina Bay's seating is not a grandstand, it is scaffolding. Every
-      // inland stand here is a bolted tube frame stood up on ballast pads for
-      // one week a year: open standards and ledgers, a diagonal in every bay,
-      // aluminium plank decks, a mesh-screened back and NO shell or roof at
-      // all. grandstandEx's back shell plus cantilever roof is a permanent
-      // circuit's silhouette, which on a temporary street venue is precisely
-      // the wrong read — and a shell also hides the thing that makes this
-      // circuit look like itself, which is a lattice lit from underneath.
-      // Built from primitives, local to this closure.
       const SCAF_TUBE = [0.58, 0.60, 0.64];      // galvanised tube
       const SCAF_DECK = [0.66, 0.68, 0.71];      // aluminium plank
       const SCAF_MESH = [0.13, 0.15, 0.18];      // dark safety screen
@@ -1074,8 +785,6 @@
         const bays = Math.max(3, Math.round(len / 6.4));
         const pitch = len / bays;
         const topH = 2.2 + rows * 1.34;
-        // A diagonal needs its own orthonormal basis — shearing a box across a
-        // non-perpendicular pair produces a twisted brace, not a raking one.
         const run = 9.0, dl = Math.hypot(run, topH);
         const dv = [(a.r[0] * run * IN + a.u[0] * topH) / dl,
                     (a.r[1] * run * IN + a.u[1] * topH) / dl,
@@ -1113,21 +822,15 @@
           }
           out._mat = 0;
         }
-        // Mesh safety screen closing the back — a thin dark panel on the rear
-        // standards, not a shell. Reads as screen, occludes nothing.
         out._mat = MAT.METAL;
         addBox(out, vadd(vadd(a.c, a.r, -IN * 4.6), a.u, topH * 0.55 + 0.9),
                [0.1, topH * 1.1, len], SCAF_MESH, b);
         out._mat = 0;
         // Printed sponsor fascia across the front of the deck.
         addBox(out, vadd(vadd(a.c, a.r, IN * 4.9), a.u, 1.5), [0.2, 1.9, len], banner, b);
-        // Uplight wash under the front row — Marina Bay lights everything from
-        // below, and it is what makes the frame read as a lattice at night.
         addBox(out, vadd(vadd(a.c, a.r, IN * 4.2), a.u, 0.55), [1.4, 0.3, len - 2],
                [1.10, 0.94, 0.62], b);
       }
-      // The six inland stands are temporary scaffold; the eleven on the bay
-      // front above stay as the semi-permanent seated ring.
       for (const [s, side, gap, len, rows, banner] of [
         [0.060, -1, 15, 44, 7, NEON[1]], [0.205,  1, 15, 42, 6, NEON[2]],
         [0.290,  1, 16, 44, 7, NEON[0]], [0.455, -1, 15, 42, 6, NEON[3]],
@@ -1142,12 +845,6 @@
         place(K(s), side, 3.2, [1.6, 0.18, 8], [0.92, 0.92, 0.94]);
       }
 
-      // ===================================================================
-      // CBD HERO TOWERS — tall tapered skyscrapers giving skyline depth.
-      // Uses the tower() helper (frustum + cap + antenna mast) at 200–280 m
-      // so they sit behind the cityFront() near facades. windowCol selects
-      // alternating cyan / cool-blue to vary the night appearance.
-      // ===================================================================
       for (const [s, side, seedOff] of [
         [0.12, -1, 0], [0.50, -1, 3], [0.58, 1, 6], [0.74, -1, 9], [0.06, 1, 12],
       ]) {
@@ -1168,30 +865,9 @@
         }
       }
 
-      // ═══════════════════════════════════════════════════════════════════
-      // BESPOKE MARINA BAY WATERFRONT MODELS
-      // ═══════════════════════════════════════════════════════════════════
-
-      // ── Reflective Marina Bay water ──────────────────────────────────────
-      // A true reflective buffer mirroring the lit skyline across the bay,
-      // laid along the R (waterfront) side of the bay sections.
-      // Bands, not two isolated 80 m panels on a bay that runs for hundreds of
-      // metres — the water used to appear as a pair of rectangles adrift on
-      // bare ground rather than as a waterfront.
-      // Depth stays at the original 64 m — pushing the bay further out put the
-      // waterfront towers in the water. Only the along-lap coverage changes.
       waterBand(0.26, 0.36, 1, 40, 104, 12, BAY, { id: "marina-water-30", required: true });
       waterBand(0.80, 0.90, 1, 40, 104, 12, BAY, { id: "marina-water-84", required: true });
 
-      // ═══════════════════════════════════════════════════════════════════
-      // 2026 SCENERY DRESS PASS — six bounded Marina Bay hero layers.
-      // All structures use footprint-tested helpers and sit well beyond the
-      // narrow street walls; fixed fractions keep the result deterministic.
-      // ═══════════════════════════════════════════════════════════════════
-
-      // 1) s 0.39–0.43 L — Raffles / City Hall illuminated hotel terrace.
-      // Stepped setbacks preserve the braking-zone view while warm windows and
-      // bright cornices distinguish the hotel district from the cool CBD glass.
       for (const [s, gap, w, h, d] of [
         [0.390, 34, 30, 48, 24],
         [0.410, 54, 34, 62, 26],
@@ -1205,9 +881,6 @@
           [1.00, 0.88, 0.58], [a.r, a.u, a.t]);
       }
 
-      // 2) s 0.46–0.52 R — layered financial-district crowns across the bay.
-      // Three different depths create parallax behind the promenade rather
-      // than another continuous facade wall.
       for (const [s, dist, baseW, h, capCol] of [
         [0.460, 150, 30, 138, WIN_CYAN],
         [0.490, 188, 34, 176, WIN_COOL],
@@ -1218,9 +891,6 @@
         });
       }
 
-      // 3) s 0.20 / 0.44 R — extra reflective water shelves and pier lights.
-      // These overlap the bay visually, but remain separate bounded water
-      // models so the waterfront has foreground, middle and far depth.
       for (const [s, gap, depth] of [[0.20, 52, 52], [0.44, 58, 58]]) {
         waterBand(s - 0.03, s + 0.03, 1, gap, gap + depth, 12, BAY, {
           id: `marina-water-depth-${Math.round(s * 100)}`,
@@ -1233,12 +903,6 @@
         }
       }
 
-      // 4) s 0.735–0.785 — Padang / Esplanade spectator theatre.
-      // Stands are staggered and kept 20+ m behind the walls, concentrating
-      // crowd density at the civic hero sector without forming a blind canyon.
-      // The Padang stand is the biggest of the three (two-tier, hospitality
-      // suites) facing the National Gallery / Cricket Club precinct just up
-      // the road; the Esplanade pair are smaller single-tier scaffold decks.
       grandstandEx(0.735, -1, 22, 54, null, null,
         { livery: "teal", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
       grandstandEx(0.765,  1, 26, 48, null, null,
@@ -1246,17 +910,12 @@
       grandstandEx(0.785, -1, 24, 46, null, null,
         { livery: "darkSteel", tiers: 1, roof: "cantilever" });
 
-      // 5) s 0.445 — Bayfront pedestrian link, high and shallow so it reads
-      // as a bridge beat without blocking the skyline on corner approach.
       overheadSpan({
         id: "bayfront-pedestrian-link", frac: 0.445, clearance: 7.4,
         thickness: 0.8, depth: 2.6, supportGap: 4.2,
         color: [0.30, 0.48, 0.66],
       });
 
-      // 6) s 0.50–0.57 and 0.70–0.78 — deliberate tropical boulevards.
-      // Alternating palms and low shrubs form two sparse ranks; the inner rank
-      // remains outside the barriers and no canopy is placed over sightlines.
       for (const [s, side] of [
         [0.500, -1], [0.525, -1], [0.550, -1], [0.575, -1],
         [0.705,  1], [0.730,  1], [0.755,  1], [0.780,  1],
@@ -1268,8 +927,6 @@
         bush(k, side, 10, [0.16, 0.40, 0.18]);
       }
 
-      // ── THE MERLION — Singapore's icon: lion head + fish body + water jet ─
-      // Placed on the bayfront (R) facing Marina Bay, spouting a cyan jet.
       {
         const a = anchor(K(0.58), 1, 34);
         if (!onTrack(a.c[0], a.c[2], 12)) {
@@ -1319,12 +976,6 @@
         addBox(out, vadd(a.c, a.u, 2.4 * sc), [2.6 * sc, 1.8 * sc, 4 * sc], [0.42, 0.30, 0.20], b);  // cabin
         out._mat = 0;
         addBox(out, vadd(a.c, a.u, 2.6 * sc), [2.7 * sc, 0.7 * sc, 4.1 * sc], glow, b);              // lit windows
-        // String of festive lights along the roofline. The cabin (above) is
-        // only 4*sc long (half-extent 2*sc along a.t); at the old 1.4*sc
-        // spacing the two end lights (s=-2/+2) sat 2.8*sc out — past the
-        // cabin's own footprint and too high above the hull deck (1.75*sc
-        // clear) to rest on anything, hanging unsupported past the roof's
-        // edge. 0.9*sc keeps the whole 5-light string within the cabin.
         for (let s = -2; s <= 2; s++) addBox(out, vadd(vadd(a.c, a.t, s * 0.9 * sc), a.u, 3.4 * sc), [0.3 * sc, 0.3 * sc, 0.3 * sc], s % 2 ? NEON[2] : NEON[1], b);
       };
       for (let i = 0; i < 6; i++) {

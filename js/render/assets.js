@@ -1,31 +1,4 @@
-/*
- * Apex 26 — Assets: the baked asset pack loader.
- *
- * Loads `assets/pack/manifest.json` and everything it references: the baked PBR
- * MATERIAL ARRAYS (albedo+roughness, normal+AO), baked MODEL geometry, and
- * per-(track, time-of-day) ENVIRONMENT ambient. Produced offline by
- * `node tools/assets.mjs` — see docs/research/ASSET-API-RESEARCH.md.
- *
- * THREE THINGS THIS MODULE GUARANTEES, because the game shipped for years
- * without any of these assets and must keep working without them:
- *
- *  1. NO PACK IS A VALID STATE. A 404 on the manifest, a malformed manifest, a
- *     half-decoded image — every failure path leaves the game rendering its
- *     pure-procedural look. Nothing here throws into the caller and nothing
- *     here is awaited by the boot path.
- *  2. THE BACKEND MAY NOT SUPPORT IT. Material arrays need
- *     `gfx.createTextureArray` + `setMaterialMaps`. GLX (WebGL2), TLX (three),
- *     and WGX (WebGPU) all implement them; a future/broken backend without the
- *     pair is feature-detected and left on the pure-procedural look. Never
- *     assumed.
- *  3. THE KNOB IS THE OFF-SWITCH. The lit shader's uMatTexMix is a LIGHTING
- *     TUNER knob shipped at 1.0 (TUNE_DEFS matTexMix), so a present pack is ON
- *     by default. `matTexMix` 0 / `__apex.matTex(0)` is the A/B off-switch that
- *     restores the pure-procedural render — and at 0 the pack is never fetched.
- *
- * NO build step, no ES modules: "use strict" IIFE assigning one global
- * `Assets`. Loads after glx.js and before game.js. Nothing runs at load time.
- */
+/* Apex 26 — Assets: the baked asset pack loader. Loads `assets/pack/manifest.json` and everything it references: the baked PBR MATERIAL ARRAYS (albedo+roughness, … */
 "use strict";
 
 const Assets = (function () {
@@ -49,8 +22,6 @@ const Assets = (function () {
   const _models = Object.create(null);   // id -> {pos,nrm,col,mat,idx} | null (miss)
   const _modelPromises = Object.create(null);
 
-  // Bind the active renderer. game.js calls this once, right after it resolves
-  // gfx (GLX or a Gfx.create() backend), and before any load().
   function init(gfx) { _gfx = gfx || null; }
 
   function supported() {
@@ -70,8 +41,6 @@ const Assets = (function () {
       _manifest = j;
       return j;
     } catch (e) {
-      // A 404 here is the NORMAL case for a checkout with no pack baked. Don't
-      // log — a console error on every boot would train people to ignore it.
       _manifest = false; _err = "no-pack";
       return false;
     }
@@ -79,9 +48,6 @@ const Assets = (function () {
 
   // ── material arrays ────────────────────────────────────────────────────────
 
-  // The two material images are FILMSTRIPS: one image of size×(size*layers)
-  // with layer N at y = N*size. One request instead of seventeen, and
-  // createImageBitmap can slice a sub-rectangle without a canvas round-trip.
   async function _decodeStrip(file, size, present) {
     const res = await fetch(PACK_DIR + file);
     if (!res.ok) throw new Error("fetch " + file);
@@ -91,8 +57,6 @@ const Assets = (function () {
     try {
       for (let i = 0; i < MAT_LAYERS; i++) {
         if (!present[i]) continue;
-        // Slice straight out of the encoded blob — no intermediate canvas, so a
-        // 17-layer strip costs one decode and seventeen crops.
         out[i] = await createImageBitmap(blob, 0, i * size, size, size);
       }
       return out;
@@ -146,19 +110,12 @@ const Assets = (function () {
     if (!m || !m.materials) { _tier = "off"; return false; }
     const mats = m.materials;
 
-    // Tier: phones get the small strip if the pack baked one. `mobileTier` is
-    // the renderer's own memory-pressure signal — the same one that caps
-    // shadow-map and scene-buffer sizes.
     const wantLow = opts.tier ? opts.tier === "low"
                               : !!(_gfx.isMobile || _gfx.mobileTier);
     const variant = (wantLow && mats.low) ? mats.low : mats;
     const size = variant.size | 0;
     if (!size || !variant.albedo) { _err = "bad-materials"; _tier = "off"; return false; }
 
-    // Which layers exist, and at what world tile size. A layer with no entry
-    // (or scale <= 0) keeps its procedural look — GLASS and FLAG are deliberate
-    // omissions: a baked map would blur glass's mirror read, and FLAG's
-    // geometry is displaced in the vertex shader.
     const present = new Array(MAT_LAYERS).fill(false);
     const scales = new Float32Array(MAT_LAYERS);
     for (const L of (variant.layers || [])) {
@@ -188,8 +145,6 @@ const Assets = (function () {
       _tier = "off";
       return false;
     }
-    // ImageBitmaps are copied into the texture on upload; holding them past
-    // that pins a second full copy of the pack in memory.
     _releaseStrip(albedo); _releaseStrip(normal);
 
     _gfx.setMaterialMaps({ albedo: albedoTex, normal: normalTex, scales: scales });
@@ -231,8 +186,6 @@ const Assets = (function () {
     return state();
   }
 
-  // Drop the material arrays and go back to the procedural look. Used by the
-  // tier switch and by tests that need a clean slate.
   function unload() {
     if (_gfx && _gfx.setMaterialMaps) _gfx.setMaterialMaps(null);
     _uploaded = false;
@@ -242,14 +195,6 @@ const Assets = (function () {
 
   // ── baked models ───────────────────────────────────────────────────────────
 
-  // A baked model is the game's OWN interleaved vertex format, not glTF: the
-  // bake tool (tools/assets.mjs) already resolved materials down to a vertex
-  // colour plus a MAT id, so this is a straight typed-array view with no
-  // parsing, no material resolution and no runtime cost beyond the fetch.
-  //
-  // Layout (little-endian): magic "AX26" | u32 version | u32 vertCount |
-  // u32 idxCount | u32 flags | f32 pos[3*v] | f32 nrm[3*v] | f32 col[3*v] |
-  // f32 mat[v] | u32 idx[i]
   function _parseModel(buf) {
     const dv = new DataView(buf);
     if (dv.byteLength < 20) return null;
@@ -271,9 +216,6 @@ const Assets = (function () {
     return { pos, nrm, col, mat, idx };
   }
 
-  // Fetch + parse a baked model by manifest id. Resolves to the mesh data, or
-  // null when the pack has no such model — callers fall back to the procedural
-  // geometry they already build.
   function model(id) {
     if (id in _models) return Promise.resolve(_models[id]);
     if (_modelPromises[id]) return _modelPromises[id];
@@ -302,14 +244,6 @@ const Assets = (function () {
     return _manifest && _manifest.models ? Object.keys(_manifest.models) : [];
   }
 
-  // SYNCHRONOUS lookup — null until loadModels() has resolved.
-  //
-  // This exists because the track build is synchronous all the way down:
-  // Tracks.build -> buildProps -> the circuit's own scenery(api) callback. An
-  // async fetch inside that call chain would make prop placement depend on
-  // network timing, so the same circuit could build differently twice. Models
-  // are therefore ALL prefetched before a track builds, and placement is a
-  // plain cache read that either has the geometry or definitively does not.
   function modelSync(id) { return _models[id] || null; }
 
   // Prefetch every model in the pack. Resolves to the number now resident.
@@ -352,9 +286,6 @@ const Assets = (function () {
     };
   }
 
-  // Attribution roll. CC0 needs no attribution, but crediting the people whose
-  // scans are in the game is the right thing and the licence audit in
-  // `tools/assets.mjs verify` depends on every entry carrying a source.
   function credits() {
     return (_manifest && _manifest.credits) ? _manifest.credits.slice() : [];
   }

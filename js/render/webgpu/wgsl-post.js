@@ -1,101 +1,4 @@
-/*
- * Apex 26 — WGSL post-processing shaders (WebGPU migration, Phase 4).
- *
- * A FAITHFUL-BUT-REDUCED WGSL port of the GLX post chain — the same philosophy
- * the Phase 2 sky/lit port used (docs/archive/webgpu/WEBGPU-PHASE2-NOTES.md) and the Phase 3
- * shadow port (docs/archive/webgpu/WEBGPU-PHASE3-NOTES.md): keep the *look-defining* math,
- * drop the deep tail. The Phase-4 tail that WAS deferred — screen-space
- * reflections, radial speed-blur, chromatic aberration and unsharp-mask sharpen
- * — is now ported (SSR as its own pass; the three image FX folded into
- * COMPOSITE). Nothing here is wired into index.html — the wgx.js pipeline agent
- * owns that. This file only ships the shader strings + their exact bind/uniform
- * contracts. Passes `node --check`.
- *
- * NO build step: plain JS template strings, one global `WGSLPost`. No modules.
- *
- * GROUNDING (the GLX programs this ports — all of them in js/render/shaders/post.js;
- * glx.js only destructures GLXShaders and holds no shader source):
- *   POST_VS       js/render/shaders/post.js   fullscreen-triangle vertex (VBO-less)
- *   BRIGHT_FS     js/render/shaders/post.js   bright-pass threshold
- *   DOWN_FS       js/render/shaders/post.js   13-tap Jimenez bloom downsample
- *   UP_FS         js/render/shaders/post.js   9-tap tent bloom upsample (additive)
- *   SSAO_FS       js/render/shaders/post.js   depth-based horizon-AO + contact shadow
- *   GODRAY_FS     js/render/shaders/post.js   volumetric shafts (world-march) — see NOTE
- *   COMPOSITE_FS  js/render/shaders/post.js COMPOSITE_FS   scene+bloom+ssao+godray, ACES, grade, flare, vignette
- *   FXAA_FS       js/render/shaders/post.js COMPOSITE_FS   Timothy Lottes compact FXAA
- *
- * Composed from the shared leaves in js/render/webgpu/wgsl-chunks.js (a global loaded
- * BEFORE this file):
- *   WGSLChunks.fullscreenTri  — fsTriNDC(vi): VBO-less triangle NDC positions
- *   WGSLChunks.tonemap        — acesTonemap(vec3): shared ACES filmic leaf
- *   WGSLChunks.hash / .vnoise — value-hash + fbm (available; not all passes need them)
- *
- * WGSL-vs-GLSL notes carried over (see wgsl-chunks.js header):
- *   - textureSampleLevel(t,s,uv,0.0) not texture(s,uv); split texture+sampler.
- *   - vec3<f32>, explicit f32(), 1.0 not 1. dFdx/dFdy -> dpdx/dpdy.
- *   - depth is [0,1] in WebGPU NDC (no *2-1 window->NDC remap that GL needs).
- *   - depth textures bind as texture_depth_2d and are read with textureLoad
- *     (Safari / compat-mode rejects texture_depth_2d + a non-comparison sampler).
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * SHARED SCREEN CONVENTION (contract for wgx.js)
- * ─────────────────────────────────────────────────────────────────────────────
- * Every pass is a fullscreen triangle: draw(3), no vertex buffers. The vertex
- * stage emits `uv` in TEXTURE space (origin top-left, y-down):
- *     uv = ((p.x+1)*0.5, (1-p.y)*0.5)      // p = NDC from fsTriNDC(vi)
- * View-position reconstruction from depth (SSAO) uses NDC:
- *     ndc = vec3(uv.x*2-1, 1 - uv.y*2, depth)   // depth already 0..1
- * so the invProj uniform wgx uploads MUST be the WebGPU-convention inverse
- * projection (clip[0..1 z] -> view).
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * RENDER-TARGET CHAIN wgx.js should allocate (pass order = WGSLPost.PASS_ORDER)
- * ─────────────────────────────────────────────────────────────────────────────
- * Inputs from the main pass:  sceneHDR (rgba16float, full-res, .a = SSR car tag),
- *                             sceneDepth (depth24plus/depth32f).
- *
- *   0. SSAO      : half-res R8/rgba8. reads sceneDepth.            -> ssaoTex
- *   0b SSAO denoise / god-ray blur: separable 5-tap gaussian (BLUR)
- *   1. GODRAY    : half-res rgba16float. world-space march through
- *                  depth + sun/lamp shadow maps.                   -> godrayTex
- *   2. BLOOM_DOWN: mip0 = bright-pass+downsample of sceneHDR at HALF res
- *                  (threshold > 0); mips 1..N-1 = plain downsample of the
- *                  previous mip (threshold = 0). Each mip is rgba16float, each
- *                  half the size of the last (GLX BLOOM_DIV=2, up to 5 levels).
- *   3. BLOOM_UP  : from the smallest mip upward, tent-upsample each level ADD-
- *                  blended (blend: src ONE, dst ONE) into the next-larger mip.
- *                  The full bloom result ends up in mip0.                -> bloomTex (mip0)
- *   3b SSR       : full-res rgba16float. reads sceneHDR + sceneDepth (+ invProj/
- *                  proj/upVS). Marches the reflected view ray to mirror the
- *                  on-screen world onto up-facing wet road. .rgb = soft-clipped
- *                  reflected HDR colour, .a = mix amount (0 = no reflection).
- *                  Consumed by COMPOSITE (or the LIT pass) on wet surfaces.  -> ssrTex
- *   4. COMPOSITE : full-res -> LDR intermediate (or straight to swapchain if
- *                  FXAA is folded off). reads sceneHDR, bloomTex(mip0),
- *                  ssaoTex, godrayTex. Also runs chromatic aberration, radial
- *                  speed-blur and unsharp sharpen on the scene read (each gated
- *                  0 = no-op). If wgx also feeds ssrTex here, add it as a 7th
- *                  binding and mix per the SSR contract below.          -> ldrTex
- *   5. FXAA      : full-res LDR -> swapchain. reads ldrTex.        -> present
- *
- * FXAA is a SEPARATE pass (not folded into COMPOSITE) so the edge AA runs on the
- * final tonemapped LDR image, exactly like GLX (FXAA_FS is the last blit). If a
- * target wants to skip AA, present COMPOSITE straight to the swapchain and drop
- * pass 5.
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * NOW PORTED (Phase 4b) vs the earlier DEFERRED list:
- *   - Wet-road screen-space reflection: the big SSR march block is lifted into a
- *     SEPARATE `SSR` pass (GLX COMPOSITE_FS wet-road block, js/render/shaders/post.js COMPOSITE_FS) —
- *     short march for mobile; road + car-paint (scene .a tag) paths as in GLX.
- *   - Radial speed-blur, chromatic aberration, unsharp mask: folded into
- *     COMPOSITE (GLX COMPOSITE_FS, js/render/shaders/post.js COMPOSITE_FS), each gated by a scalar
- *     so 0 = the shipped no-op look.
- *   - Film grain is KEPT (cheap, one hash); dither is KEPT (8-bit banding fix).
- * GODRAY is the GLX world-space march (depth + sun/lamp shadows + HG phase);
- * BLUR is the shared 5-tap separable gaussian used to denoise SSAO and soften
- * the shaft slices (GLX BLUR_FS, js/render/shaders/post.js).
- */
+/* Apex 26 — WGSL post-processing shaders (WGSLPost). WGSL port of js/render/shaders/post.js: SSAO, godray, bloom, SSR, composite, FXAA. Composes WGSLChunks leaves (fullscreenTri, tonemap). wgx.js owns pipelines/targets. */
 "use strict";
 
 const WGSLPost = (function () {
@@ -103,7 +6,6 @@ const WGSLPost = (function () {
   const fullscreenTri = CH.fullscreenTri || "";
   const tonemap = CH.tonemap || "";
 
-  // ── Shared fullscreen-triangle vertex stage (mirror BLIT in wgsl-chunks.js) ──
   // Emits texture-space uv (y-down). Depends on fsTriNDC from `fullscreenTri`.
   const POST_VS = `
 struct VOut {
@@ -119,7 +21,6 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
   return o;
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 1. BLOOM_DOWN — bright-pass threshold + 13-tap downsample.
   //    Port of GLX BRIGHT_FS js/render/shaders/post.js folded into DOWN_FS js/render/shaders/post.js.
   //    threshold > 0 -> bright-pass gate the result (first mip). threshold == 0
@@ -133,7 +34,6 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
   //      texel     : vec2<f32>  off 0   (1/srcWidth, 1/srcHeight)
   //      threshold : f32        off 8   (>0 = bright-pass, 0 = plain downsample)
   //      _pad      : f32        off 12
-  // ════════════════════════════════════════════════════════════════════════
   const BLOOM_DOWN = `
 struct BloomDownU {
   texel     : vec2<f32>,
@@ -198,7 +98,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(s, 1.0);
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 2. BLOOM_UP — 9-tap tent upsample. Port of GLX UP_FS js/render/shaders/post.js.
   //    Additive combine is done by the PIPELINE BLEND STATE (src ONE, dst ONE),
   //    NOT in the shader — the shader just outputs the tent-filtered sample so
@@ -213,7 +112,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      texel  : vec2<f32>  off 0   (1/srcWidth, 1/srcHeight of the SOURCE mip)
   //      spread : f32        off 8   (tent radius scale; GLX BLOOM SPREAD, def 1.0)
   //      _pad   : f32        off 12
-  // ════════════════════════════════════════════════════════════════════════
   const BLOOM_UP = `
 struct BloomUpU {
   texel  : vec2<f32>,
@@ -241,7 +139,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(s / 16.0, 1.0);
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 3. SSAO — depth-based horizon AO + optional contact shadow.
   //    Port of GLX SSAO_FS js/render/shaders/post.js, reduced to 8 directional taps and
   //    a 5-step contact march (mobile). Reconstructs view position from depth,
@@ -258,7 +155,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      sunVS   : vec4<f32>    off 128   (xyz sun dir in view space)
   //      p0      : vec4<f32>    off 144   (texel.x, texel.y, strength, contact)
   //      p1      : vec4<f32>    off 160   (radius, near, far, _pad)
-  // ════════════════════════════════════════════════════════════════════════
   const SSAO = `
 struct SsaoU {
   invProj : mat4x4<f32>,
@@ -370,7 +266,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(vec3<f32>(ao), 1.0);
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 3b. BLUR — separable 5-tap gaussian (GLX BLUR_FS).
   //    SSAO: one H then V pass. God-ray: H+V twice with growing radius so the
   //    world-march slices soften into volumes instead of thin stripes.
@@ -382,7 +277,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    UNIFORM BlurU (16 B):
   //      dir : vec2<f32>  off 0   (texel * axis, e.g. (1/w, 0) or (0, 1/h))
   //      _pad: vec2<f32>  off 8
-  // ════════════════════════════════════════════════════════════════════════
   const BLUR = `
 struct BlurU { dir : vec4<f32> };
 @group(0) @binding(0) var srcTex  : texture_2d<f32>;
@@ -404,14 +298,12 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(s, 1.0);
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 4. GODRAY — world-space 16-step march through scene depth + sun/lamp
   //    shadow maps (GLX GODRAY_FS). Composite adds the result. CPU gates on
   //    sun-on-screen or lampVol > 0. A separable BLUR follows the march.
   //    Lamp loop is 6, not 12: GLX uploads GR_MAX_LIGHTS=12 as headroom but
   //    GODRAY_FS only consumes nearest-6 (16×6 cost cap). Matching the
   //    consumer keeps WGX from showing more beams than GLX.
-  // ════════════════════════════════════════════════════════════════════════
   const GODRAY = `
 struct GodrayU {
   invVP    : mat4x4<f32>,   // off   0
@@ -558,7 +450,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(sunTerm + lampAccum, 1.0);
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 5. COMPOSITE — final resolve to LDR.
   //    Port of GLX COMPOSITE_FS (js/render/shaders/post.js COMPOSITE_FS), reduced: scene * SSAO,
   //    + godray, * exposure, + bloom (tone-masked), ACES tonemap (shared leaf),
@@ -591,7 +482,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //                                          zw = aoTexel (half-res 1/w,1/h; 0 = skip
   //                                          bilateral upsample, plain SSAO sample)
   //      imgFx       : vec4<f32>  off 112   (chromAb, sharpen, speedBlur, bloomKnee)
-  //                                          NEW Phase-4b image FX. Each 0 = no-op:
+  //                                          image FX. Each 0 = no-op:
   //                                          chromAb  = radial R/B split amount
   //                                          sharpen  = unsharp-mask crispness
   //                                          speedBlur= radial centre->edge smear
@@ -613,7 +504,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    NOTE: sunShaft (p0.z) is SCREEN sun-shaft intensity only (8-tap radial
   //    bloom toward sunUV). Volumetric godray is added unscaled; its strength
   //    lives in the GODRAY uniform.
-  // ════════════════════════════════════════════════════════════════════════
   const COMPOSITE = `
 struct CompositeU {
   p0          : vec4<f32>,
@@ -1013,7 +903,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(c, 1.0);
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 6. FXAA — Timothy Lottes compact edge AA. Port of GLX FXAA_FS (js/render/shaders/post.js COMPOSITE_FS).
   //    Runs LAST on the tonemapped LDR image, straight to the swapchain.
   //
@@ -1024,7 +913,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    UNIFORM FxaaU (16 B):
   //      texel : vec2<f32>  off 0   (1/width, 1/height)
   //      _pad  : vec2<f32>  off 8
-  // ════════════════════════════════════════════════════════════════════════
   const FXAA = `
 struct FxaaU {
   texel : vec2<f32>,
@@ -1065,7 +953,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(rB, 1.0);
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 7. SSR — wet-road + car-paint screen-space reflection (its own full-res pass).
   //    Port of the GLX COMPOSITE_FS wet-road SSR block (js/render/shaders/post.js COMPOSITE_FS),
   //    reduced for mobile: road + car-paint (.a tag) paths, SHORT 12-step reflected-
@@ -1113,7 +1000,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      gloss     : vec4<f32>    off 192   (x = carGloss, GLX uCarGloss def 1.0;
   //                                          yzw pad). Drives the car SSR streak
   //                                          width: carSoft = clamp((1.4-gloss)*0.5).
-  // ════════════════════════════════════════════════════════════════════════
   const SSR = `
 struct SsrU {
   invProj   : mat4x4<f32>,

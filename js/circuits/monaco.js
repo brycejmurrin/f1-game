@@ -1,6 +1,4 @@
-/* Apex 26 — MONACO circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — MONACO circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -16,24 +14,14 @@
     street: true,
     terrainOuter: 28,
     sceneryCoordinates: "source",
-    // Wider Armco stand-off than the 0.35 m street default — Monaco's barriers
-    // line the harbour front and the engine builds them at this gap.
     barrierGap: 2.0,
     dressingExclusions: [
       // Keep generic city furniture out of the tunnel and the Casino sightline.
       { kinds: ["city", "foliage", "lighting"], s0: 0.50, s1: 0.60 },
       { kind: "city", s0: 0.17, s1: 0.24 },
-      // Exclusions are always racing-space, even though bespoke scenery is source-space.
-      // The harbour occupies the right side of the racing lap from Portier to Rascasse.
       { kinds: ["city", "foliage"], s0: 0.29, s1: 0.70, side: 1 },
-      // Harbour front along the pit straight: open water — no props.
-      // (Was hard-coded in the engine as `side === 1 && k < n * 0.14`.)
       { kinds: ["city", "foliage"], s0: 0, s1: 0.14, side: 1 },
     ],
-    // The bundled GPS trace (js/track/geo-paths.js) runs counter-clockwise; real Monaco
-    // is driven CLOCKWISE. `reverse` flips the lap direction in the engine
-    // (centreline + minimap + scenery/barrier s-coordinates) so the car drives
-    // the correct way without re-digitising the trace or re-authoring scenery.
     reverse: true,
     // Rotate the start/finish line onto the main pit/harbour straight so the lap
     // begins on the straight with the first corner at its end (fraction of the
@@ -43,32 +31,15 @@
     // 120 m) — it was on the wrong PART of the lap, not in a corner.
     // See docs/tracks/START-LINES.md.
     startFrac: 0.2516,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.28,
     pal: { horizon: [0.55, 0.68, 0.82], grass: [0.36, 0.35, 0.34], runoff: [0.42, 0.41, 0.4], concrete: [0.24, 0.23, 0.22], fogDensity: 0.0014, sunDir: [0.22008805283522467, 0.8803522113408987, 0.4201681008672471], sun: [1, 0.98, 0.93], sunColor: [1, 0.97, 0.9] },
-    // NOTE: Monaco's geometry comes from the real GPS trace in js/track/geo-paths.js
-    // (CircuitPaths.monaco); these segs are only a fallback if that trace is
-    // absent. Editing them has no effect while the trace is present.
     segs: [
       { t: 0, l: 230 }, { t: -70, l: 75 }, { t: 25, l: 260, h: 14 }, { t: 70, l: 110 }, { t: -80, l: 80, w: 4.8 }, { t: 0, l: 90, h: -6 },
       { t: -80, l: 80, w: 4.8 }, { t: -160, l: 120, w: 4.5, h: -4 }, { t: -55, l: 80 }, { t: -45, l: 80 }, { t: 15, l: 260, h: -4 }, { t: -60, l: 70, w: 4.8 },
       { t: 0, l: 40 }, { t: 65, l: 60 }, { t: -65, l: 60 }, { t: 40, l: 100 }, { t: -70, l: 65, w: 4.8 }, { t: 0, l: 35 },
       { t: 70, l: 65 }, { t: -80, l: 70 }, { t: 70, l: 65 }, { t: -75, l: 70, w: 4.8 }, { t: -40, l: 120 },
     ],
-    // Climb to Casino Square, then the plunge down through Mirabeau and the
-    // tunnel toward the harbour (40 m top-to-bottom as authored; real Monaco
-    // is ~42 m). Street circuit: barriers,
-    // not a wide terrain ribbon, so elevation was always safe here.
     elevations: [{ s: 0.10, halfM: 340, rise: 30 }, { s: 0.55, halfM: 220, rise: -10 }],
-    // Monaco does not have a constant road width — it pinches through Loews and
-    // Portier and round the swimming pool, and only really opens up on the pit
-    // straight, in the tunnel and along the harbour. hwZones can only NARROW, so
-    // the base 10 m stays the wide sections and these squeeze the tight ones.
-    // s0/s1 are CONTROL-POINT index fractions in SOURCE space (applyHwZones walks
-    // pts by index and the trace is not evenly spaced); the racing-lap arc each
-    // one lands on is in the trailing comment.
     hwZones: [
       { s0: 0.1524, s1: 0.2131, hw: 4.6, ease: 0.012 },  // arc 0.112-0.150 Massenet/Casino
       { s0: 0.8217, s1: 0.8864, hw: 4.1, ease: 0.012 },  // arc 0.432-0.462 Loews hairpin
@@ -77,8 +48,6 @@
       { s0: 0.4848, s1: 0.5349, hw: 4.4, ease: 0.012 },  // arc 0.815-0.855 swimming pool
       { s0: 0.3488, s1: 0.3918, hw: 4.3, ease: 0.012 },  // arc 0.930-0.955 Rascasse
     ],
-    // Public roads with a drainage crown, not banking — 2.5-3° is all Monaco has,
-    // and several corners (Loews especially) are close to flat in reality.
     bankZones: [
       { frac: 0.1286, angleDeg: 3.0, widthM: 60 },    // Massenet
       { frac: 0.2961, angleDeg: 3.0, widthM: 160 },   // Mirabeau/descent
@@ -104,8 +73,6 @@
       const KOLD = (s) => (K(s) + _kShift) % n;
       const racingSide = (side) => def.reverse ? -side : side;
 
-      // ── Colour palette ────────────────────────────────────────────────────
-      // Mediterranean pastels: cream, terracotta, ochre, dusty rose, stone
       const CREAM  = [0.95, 0.90, 0.78];
       const TERRA  = [0.80, 0.45, 0.32];
       const OCHRE  = [0.85, 0.70, 0.45];
@@ -151,22 +118,6 @@
       wall(0.0, FULL_LAP, 1, 1.2, 0.8, ARMCO, 0.22);
       guardrail(0.02, 0.07, -1, 0.5, ARMCO);
 
-      // ── SECTOR 1 — START / SAINTE DEVOTE CLIMB (s=0.00→0.08) ───────────
-      // Left: stone buildings. Right: pit lane terrace + grandstand.
-      // cityFront disabled: Monaco's tight parallel streets (20-30m apart) cause
-      // buildings on one section to wrap around and intrude on nearby track even
-      // with minimal depth=5m. Tested depth 5-18m, all intrude.
-      // cityFront(0.00, 0.07, -1, 11, {
-      //   minH: 14, maxH: 24, depth: 5, step: 12,
-      //   palette: [CREAM, DUSTY, STONE, OCHRE],
-      //   lit: true, windowCol: WINLIT,
-      // });
-      // cityFront(0.00, 0.07,  1, 11, {
-      //   minH: 12, maxH: 22, depth: 5, step: 14,
-      //   palette: [STONE, CREAM, DUSTY],
-      //   lit: true, windowCol: WINLIT,
-      // });
-
       // Sainte Devote chapel (s=0.05, R mid)
       {
         const k = K(0.05), a = anchor(k, 1, 18);
@@ -179,9 +130,6 @@
         }, { required: true });
       }
 
-      // Sainte Dévote bleacher — the narrow bolted rake wedged between the
-      // barrier and the buildings on the climb out of the corner. No roof and
-      // no shell will fit here; that is precisely what a bleacher is for.
       bleacher(0.055, 0.078, 1, 7, {
         rows: 6, rise: 0.68, setback: 0.85,
         frameCol: [0.70, 0.72, 0.75], plankCol: [0.74, 0.72, 0.68],
@@ -189,11 +137,6 @@
         density: 0.62,
       });
 
-      // ── SECTOR 2 — BEAU RIVAGE HILLSIDE CLIMB (s=0.08→0.26) ─────────────
-      // The hillside soars steeply on the LEFT (inland rock face). RIGHT side is
-      // close apartment facades. Dense cityFront stays DISABLED (intrusions).
-      // Top-3 #1: sparse close pastel canyon — 8–12 cream/ochre boxes, gap 2–4 m,
-      // depth ≤12. L skips the Casino mass at s≈0.20; Tabac inland is Top-3 #3.
       {
         // Hand-spaced Beau Rivage climb (L) — step helper would over-fill.
         const spots = [
@@ -213,8 +156,6 @@
               lit: true, windowCol: WINLIT });
         }
       }
-      // Rocky/green hillside above the buildings — backdrop() with green renders
-      // as organic rounded mounds, not boxy slabs.
       for (let i = 0; i < 6; i++) {
         const k = K(0.09 + i * 0.028);
         const hv = hash(k * 3.1 + 7);
@@ -237,13 +178,6 @@
         }
       }
 
-      // ── CASINO DE MONTE-CARLO (s=0.20, L) ───────────────────────────────
-      // KOLD + raw frame, same disease as the pool/terrace/Rock: the authored
-      // 0.20 is OLD-RACING, but the wrapped anchor() read it as SOURCE and
-      // slid the whole mass onto a different, sloped stretch of the climb —
-      // the flanking corner towers' fixed vertical offsets (a single a.c
-      // sample under a 44 m-wide, +/-13 m mass) floated off the real local
-      // ground there. float-audit flagged the two dome caps at ~40 m up.
       {
         const k = KOLD(0.20);
         const rr = [track.rx[k], track.ry[k], track.rz[k]];
@@ -283,24 +217,9 @@
         }
       }
 
-      // ── HÔTEL DE PARIS — Casino Square twin (s≈0.21, R, opposite Casino) ──
-      // Top-3 #2: TV silhouette is Casino + this cream hotel mass, not Casino alone.
       {
         const k = K(0.21);
         const HOTEL = [0.92, 0.88, 0.82];
-        // Built from RAW PRIMITIVES, not building() — deliberately, and the
-        // Casino above does the same for the same reason. `dressingExclusions`
-        // carries `{ kind: "city", s0: 0.17, s1: 0.24 }` to keep generic city
-        // furniture out of the Casino sightline, and building() honours it, so
-        // this landmark was silently dropped: removing the building() call
-        // changed the vertex count by exactly ZERO.
-        //
-        // The decorations below did NOT get dropped with it. The primitive
-        // guard only rejects geometry near road level (bridges and gantries
-        // have to be allowed through), so the ochre cornice at 41 m sailed past
-        // it and hung in the sky over Casino Square with nothing underneath —
-        // a 24 x 3 x 21 m slab, 39 m up, which float-audit ranks as the single
-        // worst float on the circuit.
         const a = anchor(k, 1, 14.5);
         if (!onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
@@ -321,14 +240,6 @@
         }
       }
 
-      // ── CAFÉ DE PARIS — the third side of Casino Square (s≈0.228, R) ─────
-      // Casino Square is a THREE-sided room: the Casino on one side, the Hôtel
-      // de Paris opposite, and the Café de Paris closing it. The circuit had
-      // the first two and nothing at all on the third, so the square read as a
-      // corridor between two masses rather than a plaza. The café is lower and
-      // longer than either hotel — a belle-époque pavilion under a glazed
-      // barrel roof, fronted by the terrace that is the actual Monaco image:
-      // rows of parasols and awnings right up against the barrier.
       {
         const k = K(0.228);
         const CAFE  = [0.94, 0.90, 0.83];
@@ -369,11 +280,6 @@
         }
       }
 
-      // ── THE MASSENET STATUE (s≈0.185, L) ─────────────────────────────────
-      // Turn 3 is named for Jules Massenet, and it is named for him because
-      // his statue stands right there in the Casino gardens — the corner's
-      // namesake was the one thing at Massenet the circuit did not have.
-      // Bronze figure on a stepped stone plinth, facing the square.
       {
         const k = K(0.185), a = anchor(k, -1, 11);
         if (!onTrack(a.c[0], a.c[2], 7)) {
@@ -411,31 +317,12 @@
         for (let j = 0; j < 6; j++) bush(K(0.198 + j * 0.007), -1, 9 + (j % 2) * 3, [0.24, 0.44, 0.22]);
       }
 
-      // ── SECTOR 3 — CASINO / MIRABEAU DESCENT (s=0.26→0.42) ─────────────
-      // cityFront disabled: intrusions persist even at depth=5m.
-      // cityFront(0.26, 0.42, -1, 12, {
-      //   minH: 16, maxH: 32, depth: 5, step: 12,
-      //   palette: [CREAM, DUSTY, OCHRE, TERRA, STONE],
-      //   lit: true, windowCol: WINLIT,
-      // });
-      // cityFront(0.26, 0.42,  1, 12, {
-      //   minH: 14, maxH: 28, depth: 5, step: 14,
-      //   palette: [STONE, OCHRE, CREAM, DUSTY],
-      //   lit: true, windowCol: WINLIT,
-      // });
-      // Rocky scrub above the Mirabeau buildings — green/grey hillside backdrop.
       for (let i = 0; i < 4; i++) {
         const k = K(0.29 + i * 0.035);
         const hv = hash(k * 4.1 + 3);
         backdrop(k, -1, 46 + hv * 18, [65 + hv * 30, 20 + hv * 14, 50],
                  [0.22 + hv * 0.04, 0.40 + hv * 0.05, 0.24]);
       }
-
-      // NOTE: the Prince's Palace / Rock of Monaco used to sit here (s≈0.17,
-      // inland, behind Casino Square) — that's the wrong headland. Casino sits
-      // on the Monte-Carlo hill; Le Rocher (with the Palace) is the promontory
-      // across the harbour, seen from the harbour-front straight. Moved to
-      // SECTOR 5 below as a harbour backdrop.
 
       // ── FAIRMONT HAIRPIN HOTEL (s=0.40, R) ──────────────────────────────
       {
@@ -454,32 +341,6 @@
           { kind: "podium", wall: [0.88, 0.84, 0.76], window: WIN, floor: 6, lit: true, windowCol: WINLIT });
       }
 
-      // ── SECTOR 4 — TUNNEL (old-racing 0.478→0.553 = racing 0.449→0.524) ───────────────────────────────
-      // The one piece of Monaco that is not a street: ~250 m bored under the
-      // headland, and the only place on the calendar where the driver loses the
-      // sky. What it needs, in order of how much each one is missed:
-      //
-      //   1. LIGHT. The old build put its ceiling strip at height 6.0 while the
-      //      roof slab occupied 5.8→7.0 — the strip was buried INSIDE the slab,
-      //      and it was a raw addBox over the centreline, so the on-road guard
-      //      dropped every one of them anyway (only overheadSpan may cross the
-      //      road). Net effect: a pitch-black lid. Real Monaco runs continuous
-      //      luminaire lines the whole length, and they are the single thing
-      //      that makes a tunnel read as a tunnel rather than as a dark room.
-      //   2. A VAULT. One flat centred slab can only be a lid. `overheadSpan`
-      //      now takes a lateral `offset`, so the soffit is built as three
-      //      descending bands per side — crown, mid, springing — that step down
-      //      to meet the wall cornice.
-      //   3. WALLS with courses: sooty plinth, washed upper panel, cable tray,
-      //      pilaster ribs, delineator studs, emergency doors, livery panels.
-      //      A single 6.4 m grey slab per side is what made it read as a duct.
-      //   4. MASS OVERHEAD. The roof used to stop dead at the sky, so from the
-      //      harbour side the tunnel was a floating deck. The headland (and the
-      //      Fairmont sitting on it) now sits on top of it.
-      //
-      // Everything crossing the road clears 5.3 m at its lowest (the audits'
-      // over-road ceiling is 5.0 m); everything else is a guarded addBox kept
-      // outside hw so the road-footprint test drops nothing.
       {
         // KOLD, not K and not KR. This block was authored against the RAW
         // racing arrays as they were when startFrac was 0.28 — pre-7a17351,
@@ -510,20 +371,12 @@
         const WALLLO  = [0.17, 0.17, 0.19];      // tyre-soot plinth
         const DUCT    = [0.40, 0.41, 0.43];      // cable tray
         const RIB     = [0.29, 0.28, 0.30];      // pilaster
-        // Albedos ABOVE white are the scenery's "this surface IS a light source"
-        // tag (see the emissive branch in js/render/shaders/lit.js): they read
-        // as bright fittings under daylight ambient AND bloom once floodEmit
-        // ramps at dusk/night. Nothing else can light a day-session tunnel —
-        // point lights only feed the shader when the session is dark.
         const LUM     = [1.36, 1.30, 1.08];      // luminaire line
         const STUD    = [1.12, 1.02, 0.66];      // wall-base delineator
         const EXITGRN = [0.30, 1.24, 0.52];      // emergency-exit sign
         const KERB    = [0.44, 0.43, 0.41];      // service kerb over the verge
         const ROCK    = [0.42, 0.40, 0.35];      // headland above the bore
         const SCRUB   = [0.34, 0.40, 0.29];
-        // Armco livery inside the tunnel — Monaco's barriers carry advertising
-        // the whole way through, and a colour every 8 m is what gives the run
-        // its rhythm at 290 km/h.
         const LIVERY = [[0.82, 0.16, 0.18], [0.10, 0.26, 0.62], [0.94, 0.90, 0.30],
                         [0.92, 0.92, 0.94], [0.14, 0.52, 0.32]];
 
@@ -562,11 +415,6 @@
               thickness: 2.25, depth: dz * 1.10, span: cw * 0.32, offset: sd * cw * 0.44,
               color: VAULT, supports: false, required: true,
             });
-            // ── LUMINAIRE LINE ───────────────────────────────────────────
-            // Continuous, recessed into the crown (top 6.55 > the crown soffit
-            // at 6.45, so the trough is let into the vault rather than floating
-            // under it) and hanging 0.85 m proud — the bright line a driver
-            // actually sees streaming overhead.
             overheadSpan({
               id: `monaco-tunnel-lamp-${side}-${k}`, frac: k / n, rawFrac: true, clearance: 5.70,
               thickness: 0.90, depth: dz * 0.99, span: cw * 0.075, offset: sd * cw * 0.155,
@@ -606,16 +454,10 @@
             addBox(out, lat(sd * (hw[k] + 1.88), 5.08),  [1.06, 0.96, dz * 1.07], VAULT,  b);
             // Cable tray / service duct running the length at shoulder height.
             addBox(out, lat(sd * (hw[k] + 1.30), 3.95),  [0.34, 0.30, dz * 1.01], DUCT,   b);
-            // Delineator stud on the plinth nosing — the reflector run that
-            // gives the wall a speed cue in an otherwise featureless bore.
             addBox(out, lat(sd * (hw[k] + 1.36), 1.42),  [0.10, 0.13, 0.34],      STUD,   b);
             // Livery panel on the armco face.
             addBox(out, lat(sd * (hw[k] + 1.34), 0.46),  [0.06, 0.58, dz * 0.72],
                    LIVERY[(si + (sd < 0 ? 0 : 2)) % LIVERY.length], b);
-            // Service kerb over the verge: inside a bore the ground beside the
-            // road is a poured footway, not the khaki runoff the terrain ribbon
-            // was showing through. Runs road-edge → wall face (hw+0.30 to
-            // hw+1.40) so no strip of verge is left visible between the two.
             addBox(out, lat(sd * (hw[k] + 0.85), 0.15),  [1.10, 0.30, dz * 1.03], KERB,   b);
             // Pilaster rib every other station, starting above the armco.
             if (si % 2 === 0)
@@ -628,16 +470,6 @@
             }
           }
 
-          // ── OVERBURDEN ───────────────────────────────────────────────────
-          // The headland the bore runs through, in two rock courses standing on
-          // the vault's flat 7.80 m deck: from the harbour the tunnel now reads
-          // as a rock spur with a road through it instead of a floating deck.
-          //
-          // Courses are 4 stations long and CENTRED two stations downstream of
-          // the station that emits them, so the run starts flush with the entry
-          // portal. Centring them on the emitting station instead hangs 16 m of
-          // rock out over the open approach road — which, on the run down from
-          // Portier, is the first thing you see.
           if (si % 4 === 0 && si + 4 <= lastStation) {
             const kc = (k + step * 2) % n;
             const ridge = 3.0 + hash(k * 5.1) * 2.6;
@@ -654,12 +486,6 @@
           }
         }
 
-        // ── PORTALS ───────────────────────────────────────────────────────
-        // Both mouths get the same frame: jamb piers standing on the verge, a
-        // projecting architrave over the opening, and stepped rock above it so
-        // the bore is cut INTO something. The entry mouth previously had a bare
-        // lintel with open sky behind it, which is what made it read as a
-        // concrete overpass on the approach.
         const tunnelPortal = (frac, tag) => {
           const k = KOLD(frac);  // raw-array reader — same KOLD rule as tunS/tunE
           const r = [track.rx[k], track.ry[k], track.rz[k]];
@@ -670,8 +496,6 @@
           out._mat = MAT.STONE;
           for (const sd of [-1, 1]) {
             const c = [px[k] + r[0] * sd * (hw[k] + 2.6), py[k], pz[k] + r[2] * sd * (hw[k] + 2.6)];
-            // Pier depth is deliberately NOT the architrave's 2.60: matching it
-            // put the two front faces on one plane, same-facing, and they fought.
             addBox(out, vadd(c, u, 4.70), [2.60, 9.40, 3.12], STONE, b);
             addBox(out, vadd(c, u, 9.70), [3.20, 0.80, 3.56], [0.70, 0.68, 0.62], b);
           }
@@ -691,20 +515,11 @@
             thickness: 3.20, depth: 1.60, span: cw * 0.72,
             color: SCRUB, supports: false, required: true,
           });
-          // Height-limit plate hung under the architrave — what the eye uses to
-          // judge the mouth's scale on the run down from Portier.
           overheadSpan({
             id: `monaco-tunnel-portal-${tag}-sign`, frac: k / n, rawFrac: true, clearance: 6.90,
             thickness: 0.55, depth: 0.30, span: cw * 0.13,
             color: [0.94, 0.92, 0.86], supports: false, required: true,
           });
-          // ── PORTAL FLOODLIGHTS ─────────────────────────────────────────
-          // Twin cowled floods on each pier, raked up the portal face, plus a
-          // brighter transition light just inside the mouth. The transition
-          // lamps are the real ones: a driver's eyes cannot adapt across a
-          // 250 m bore in the time it takes to reach it, so tunnels run their
-          // entry zone far brighter than the middle and taper it down. That
-          // gradient is what stops the mouth reading as a black rectangle.
           for (const sd of [-1, 1]) {
             const c = [px[k] + r[0] * sd * (hw[k] + 2.6), py[k], pz[k] + r[2] * sd * (hw[k] + 2.6)];
             const head = vadd(vadd(c, r, -sd * 1.15), u, 8.30);
@@ -731,34 +546,11 @@
         tunnelPortal(TUN1, "exit");
       }
 
-      // ── SECTOR 5 — HARBOUR FRONT (s=0.585→0.98) ─────────────────────────
-      // LEFT = harbour/sea. RIGHT = continuous inland apartment facades.
-      // Coherent pastel cityFront on the RIGHT (inland side).
-      // cityFront disabled: intrusions persist even at depth=5m.
-      // cityFront(0.585, 0.98, 1, 12, {
-      //   minH: 16, maxH: 32, depth: 5, step: 14,
-      //   palette: [CREAM, DUSTY, OCHRE, TERRA, STONE, SAGE],
-      //   lit: true, windowCol: WINLIT,
-      // });
-      // ── POST-TUNNEL HARBOUR INFILL (s=0.585→0.65, R) ─────────────────────
-      // The stretch right out of the tunnel read empty on the inland side —
-      // the facade wall didn't resume until the harbour-balcony blocks at
-      // s≈0.66, and no circuit in the game modelled a broadcast compound.
       pastelStreetRow(0.595, 0.655, 1, 4, {
         palette: [CREAM, DUSTY, OCHRE, STONE],
         minH: 12, maxH: 20, depth: 8, step: 20,
         window: WIN, windowCol: WINLIT, lit: true,
       });
-      // gap was 24: broadcastCompound's mast reads terrain height once, at its
-      // own anchor point, then walks its mast/lamp offset out from there
-      // (js/track/scenery-identity.js) — at gap=24 that anchor lands right on
-      // the drop where the inland shoulder falls away toward the harbour, so
-      // the mast (offset further out and along the compound) sampled ground
-      // that wasn't under it and floated ~3.5-16 m depending on which piece
-      // (float-audit). vans=1 alone (a much shorter compound, so a smaller
-      // walk) barely moved the gap, which means the anchor point itself, not
-      // the walk distance, was the problem — gap=16 sits it back from the
-      // drop entirely (float-audit: clean).
       broadcastCompound(K(0.615), 1, 16, { vans: 3, dishes: 2, mastH: 12 });
       cameraTower(K(0.625), -1, 26, { h: 16, boom: 1.4 });   // clear of the quay scaffold stand (9-19 m)
 
@@ -770,21 +562,6 @@
         backdrop(k, 1, 48 + hv * 20, [22 + hv * 12, h, 18], PASTELS[(i * 3) % PASTELS.length]);
       }
 
-      // ── PRINCE'S PALACE / ROCK OF MONACO — harbour backdrop ─────────────
-      // Le Rocher is the promontory across Port Hercule from this stretch —
-      // the real broadcast establishing shot. Previously modelled behind
-      // Casino Square (wrong headland, wrong side of the harbour entirely);
-      // it now rises on the far shore, well beyond the yacht ranks and
-      // breakwater (which top out around dist 135m), so nothing in front
-      // occludes the base of the rock.
-      // KOLD + raw frame, same disease as the pool/terrace: the authored
-      // 0.665 is OLD-RACING (the harbour front), but the wrapped anchor read
-      // it as source and set the Rock down ~50 m off CASINO SQUARE — float-
-      // audit's worst cluster on the circuit (the palace deck, dome tier and
-      // turrets hanging at 40-68 m with nothing beneath). The crown is also
-      // pulled INSIDE the r=22 rock top it stands on: the 32x34 deck, the
-      // +/-15 wings and the +/-20 turrets all overhung the tier below, so
-      // their rims floated even where the rock itself was placed correctly.
       {
         const k = KOLD(0.665);
         const gap = 150;
@@ -820,12 +597,6 @@
 
       // ── YACHT BUILDER ─────────────────────────────────────────────────────
       const yacht = (yc, b, u, r, t, sc, hullCol) => {
-        // Seat the hull on the ACTUAL water surface, not the quay terrain
-        // anchor() resolved: waterSurface()/waterField() lay their sheet at
-        // pyMin - 0.8 (js/track/tracks.js), well below the marina promenade
-        // anchor() samples. X/Z stay the caller's berth position — only Y
-        // moves off the ground and into the harbour, with ~0.25*sc of hull
-        // draught below the waterline so it reads as floating IN the water.
         yc = [yc[0], pyMin - 0.8 - 0.25 * sc, yc[2]];
         const HULL = hullCol || [0.97, 0.97, 0.99];
         const L = 22 * sc, W = 7 * sc;
@@ -840,14 +611,6 @@
         out._mat = MAT.METAL;
         addBox(out, vadd(sup, u, 6.8 * sc), [W * 0.6, 2.2 * sc, L * 0.40], [0.94, 0.95, 0.97], b);
         addBox(out, vadd(sup, u, 9.0 * sc), [W * 0.42, 1.8 * sc, L * 0.26], [0.84, 0.86, 0.90], b);
-        // Flagpole box (addBox, centre-anchored) sat at 11.6*sc while the deck
-        // below it (previous addBox) only reaches 9.0*sc + 1.8*sc/2 = 9.9*sc —
-        // a 1.45*sc gap (1.1-2.3 m over this yacht's sc range), stacked but not
-        // touching (float-audit: EPS is a flat 0.6 m, not scaled by sc). Pulled
-        // down to overlap the deck top by 0.2*sc. The mast (addCyl, base-
-        // anchored) chased the old box position at 12*sc, leaving the same gap
-        // above the deck even after the box moved — pulled down in step to
-        // overlap the box's new top by 0.2*sc (mast top now 15*sc, was 17*sc).
         addBox(out, vadd(sup, u, 9.95 * sc), [W * 0.5, 0.5 * sc, 0.6 * sc], [0.80, 0.82, 0.86], b);
         addCyl(out, vadd(sup, u, 10.0 * sc), 0.18 * sc, 5 * sc, [0.85, 0.85, 0.88], 4, b);
         addBox(out, vadd(vadd(yc, t, L * 0.30), u, 3.4 * sc), [W * 0.7, 0.7 * sc, 0.3 * sc], [0.85, 0.86, 0.9], b);
@@ -869,14 +632,6 @@
         const hull = (i % 5 === 0) ? [0.18, 0.20, 0.26] : (i % 7 === 0) ? [0.85, 0.86, 0.9] : [0.97, 0.97, 0.99];
         yacht(vadd(a.c, a.r, -2 + (i % 3) * 4), b, a.u, a.r, a.t, sc, hull);
       }
-      // Far mast cluster + breakwater. anchor()'s `a.c` is quay/terrain
-      // height, but at 90+ m out these masts are past the breakwater, over
-      // open harbour water — the fixed `+u*5` base offset floated them
-      // ~5 m above the anchor with nothing under them (float-audit: gap
-      // ~4.7 m, no support within its 6 m search radius). Base them on the
-      // water surface instead (pyMin - 0.8, same datum yacht()/megaYacht()
-      // use) — the mast base sits right at the waterline, as if rising from
-      // a small unmodelled hull.
       for (let i = 0; i < 6; i++) {
         const k = K(0.62 + i * 0.05), a = anchor(k, -1, 90 + hash(k) * 22);
         const mastBase = [a.c[0], pyMin - 0.8, a.c[2]];
@@ -901,9 +656,6 @@
         }
       }
 
-      // ── TABAC / SWIMMING POOL SECTION (s=0.71→0.84) ─────────────────────
-      // Top-3 #3 (+ #1 Tabac inland): pastel façade row facing the marina (R).
-      // Dense cityFront stays DISABLED — cream/terracotta slabs via pastelStreetRow.
       {
         pastelStreetRow(0.72, 0.82, 1, 3, {
           palette: [CREAM, TERRA, OCHRE, DUSTY],
@@ -911,12 +663,6 @@
           window: WIN, windowCol: WINLIT, lit: true,
         });
       }
-      // Swimming pool (L / harbour side — keep clear of inland façades)
-      // KOLD + raw frame, NOT wrapped anchor(): the authored 0.80 is OLD-RACING
-      // (the pool, racing ~0.77). Wrapped anchor treated it as source and set
-      // the whole deck down on the HAIRPIN descent, where the 8 m offset folds
-      // back across the 10 m-radius loop — the white deck edges were the bars
-      // lying on the street at racing 0.35-0.39.
       {
         const k = KOLD(0.80);
         const gap = hw[k] + 8;
@@ -964,15 +710,11 @@
         width: 0.8, height: 0.8, color: [0.88, 0.86, 0.80],
       });
 
-      // ── RASCASSE / PADDOCK (s=0.87→0.95, R) ─────────────────────────────
-      // Low paddock hospitality buildings — proper massing, not flat boxes.
       cityFront(0.87, 0.95, 1, 9, {
         minH: 10, maxH: 16, depth: 7, step: 18,
         palette: [CREAM, STONE, DUSTY, OCHRE],
         lit: true, windowCol: WINLIT,
       });
-      // CC0 Kenney suburban blocks deepen the Rascasse/paddock street wall
-      // (pack-optional; cityFront above remains the always-on massing).
       {
         const houses = [
           ["kenney_sub_building-type-a", 0.88, 1, 22],
@@ -989,10 +731,6 @@
       }
       guardrail(0.88, 0.95, 1, 1.0, ARMCO);
 
-      // ── LA RASCASSE — corner-apex clubhouse (s≈0.905, quay side) ────────
-      // The real Rascasse bar/restaurant sits right on the harbour side at
-      // the hairpin apex — the balcony where post-race celebrations happen.
-      // Small and close, distinct from the general paddock cityFront wall.
       {
         const k = K(0.905);
         const RASCASSE_WALL = [0.86, 0.80, 0.62];
@@ -1004,8 +742,6 @@
           addBox(out, vadd(aBldg.c, aBldg.u, 5.6), [11.2, 1.8, 9.2], WIN, b);
           addBox(out, vadd(aBldg.c, aBldg.u, 6.1), [11.4, 0.9, 9.4], WINLIT, b);
         }
-        // Cantilevered balcony overhanging the apex, closer to the road than
-        // the building mass above — the famous champagne-spray vantage point.
         const aBalc = anchor(k, -1, 4.5);
         if (!onTrack(aBalc.c[0], aBalc.c[2], 4)) {
           const bb = [aBalc.r, aBalc.u, aBalc.t];
@@ -1017,16 +753,6 @@
         }
       }
 
-      // ── YACHT CLUB DE MONACO — Rascasse-side quay hero ──────────────────
-      // Foster + Partners' wave-roofed clubhouse: white stepped terraces
-      // toward the water, topped by an undulating overhang of tilted slabs.
-      // Placed just beyond Rascasse toward Anthony Noghès, clear of the
-      // marina yacht ranks and the corner-apex clubhouse above.
-      // KOLD + raw frame, same disease as the pool/Rock/Casino: the authored
-      // 0.955 is OLD-RACING (just beyond Rascasse, racing ~0.88), but the
-      // wrapped anchor() read it as SOURCE and slid the clubhouse onto a
-      // different stretch — the five wave-roof slabs, offset up to +/-12.8 m
-      // off the single a.c sample, floated clear of the real local ground.
       {
         const k = KOLD(0.955);
         const rr = [track.rx[k], track.ry[k], track.rz[k]];
@@ -1058,19 +784,6 @@
         }
       }
 
-      // ── SECTOR 6 — RETURN / ANTONY NOGHES (s=0.95→1.00) ─────────────────
-      // cityFront disabled: intrusions persist even at depth=5m.
-      // cityFront(0.95, 1.00, -1, 9, {
-      //   minH: 14, maxH: 26, depth: 5, step: 12,
-      //   palette: [CREAM, DUSTY, STONE],
-      //   lit: true, windowCol: WINLIT,
-      // });
-      // cityFront(0.95, 1.00, 1, 9, {
-      //   minH: 12, maxH: 22, depth: 5, step: 14,
-      //   palette: [STONE, CREAM, OCHRE],
-      //   lit: true, windowCol: WINLIT,
-      // });
-
       // ── STREET LAMP POSTS (~every 55m, staggered) ────────────────────────
       for (let i = 0; i < 24; i++) {
         const s = i / 24;
@@ -1097,11 +810,6 @@
 
       // ── PIT WALL & START GRANDSTAND (s=0.03, R) ──────────────────────────
       wall(0.0, 0.06, 1, 1.5, 1.0, [0.66, 0.67, 0.69], 0.6);
-      // This was a 7×9×35 m GREY BOX standing in for the start grandstand.
-      // Monaco's stands are not buildings: the whole circuit is bolted together
-      // out of scaffolding in April and taken apart in June, and the frame is
-      // visible under and behind every rake. scaffoldStand is that structure —
-      // tubes, timber deck, benches, handrail, no shell.
       scaffoldStand(0.016, 0.048, 1, 9, {
         rows: 5, rise: 1.1, setback: 1.7, legEvery: 1,
         tubeCol: [0.74, 0.76, 0.78], deckCol: [0.72, 0.68, 0.60],
@@ -1113,8 +821,6 @@
         place(k, 1, 4, [0.4, 1.1, 5], [0.80, 0.80, 0.82]);
       }
 
-      // ── PALMS ─────────────────────────────────────────────────────────────
-      // Promenade palms along harbour railing
       for (let i = 0; i < 12; i++) {
         const k = K(0.59 + i * 0.029);
         palm(k, -1, 5, 8 + hash(k * 3) * 3, [0.25, 0.45, 0.22]);
@@ -1130,20 +836,9 @@
         palm(k, -1, 6, 7 + hash(k * 5) * 4, [0.24, 0.44, 0.21]);
       }
 
-      // ── MEDITERRANEAN PLANTING ────────────────────────────────────────────
-      // The "cypress" here used to be a 17 m green CYLINDER — no trunk, no
-      // taper, no crown. cypress() is the real columnar spire, and the two
-      // other species below are what the Côte d'Azur actually grows: the
-      // parasol pine that leans off the rock above Beau Rivage, and the
-      // pollarded plane that lines every boulevard on this coast. Between them
-      // they give Monaco a planting silhouette no other circuit has — palms
-      // alone read as any warm-weather venue.
       const CYPRESS = [0.16, 0.32, 0.14];
       const PINEGRN = [0.20, 0.36, 0.20];
       const PLANEGRN = [0.32, 0.46, 0.26];
-      // Casino-garden pair (as before) plus a clump on the free inland verge
-      // between the pastel street row and the Rascasse paddock front — the
-      // 0.80 group used to stand in the swimming pool.
       for (const [sf, cnt, sd, gap] of [[0.20, 2, 0, 10], [0.832, 3, 1, 8]]) {
         for (let j = 0; j < cnt; j++) {
           const k = K(sf + j * 0.012);
@@ -1152,27 +847,16 @@
                   { slim: 0.75 });
         }
       }
-      // Stone pines on the rock face above the Beau Rivage / Mirabeau climb —
-      // set well back so the crowns break the hillside silhouette rather than
-      // the street wall. `lean` is what makes a coastal pine read as coastal.
       for (let i = 0; i < 7; i++) {
         const k = K(0.095 + i * 0.032);
         stonePine(k, -1, 30 + hash(k * 2.3) * 12, 13 + hash(k * 5.1) * 6, PINEGRN,
                   { lean: 1.15, spread: 1.05 });
       }
-      // Boulevard Albert 1er's plane trees along the harbour front. Monaco
-      // pollards them hard every winter, which is why the crown is a stack of
-      // flattened discs and not a cone.
-      // Bounded to the stretch of quay between the scaffold stand that ends at
-      // 0.665 and Grandstand K that starts at 0.733: plane() only guards
-      // against the ROAD, so a stand in the way has to be dodged by hand.
       along(0.672, 0.728, 28, (k) => {
         plane(k, -1, 9 + hash(k * 7.9) * 2, 9 + hash(k * 4.1) * 3, PLANEGRN,
               { stages: 2, spread: 0.62 });
       });
 
-      // ── HILLSIDE SKYLINE TOWERS (far back, dist ≥ 65m) ───────────────────
-      // These read as the high-rise Monaco residential towers above the city.
       for (const [sf, sd, ht] of [
         [0.12, -1, 70], [0.34, -1, 64], [0.74,  1, 66], [0.88, 1, 58], [0.50, -1, 62]
       ]) {
@@ -1194,15 +878,6 @@
       gantry(0.0, 8.2, [0.20, 0.22, 0.26]);
       gantry(0.235, 8.0, [0.22, 0.24, 0.28]);
 
-      // Liveries rotate through STAND_SETS.monaco ("scaffold", "pastel", "alu")
-      // so the four stands read as distinct temporary structures, not one
-      // grey box repeated. Grandstand K (harbour side, Tabac→Piscine) is the
-      // real long stand along the quay — extended from 48 m to its proper
-      // span and recentred off the swimming-pool footprint at s≈0.80.
-      // The quay stands between the tunnel exit and Tabac are the ones erected
-      // on the harbour front itself — open scaffolding over the water, with a
-      // striped awning instead of a roof. Grandstand K below stays a
-      // grandstandEx because it is the one structure here that reads permanent.
       scaffoldStand(0.615, 0.665, -1, 9, {
         rows: 5, rise: 1.15, setback: 1.8, legEvery: 1, awning: true,
         awningCols: [[0.90, 0.88, 0.84], [0.72, 0.20, 0.22]],
@@ -1247,23 +922,7 @@
       guardrail(0.15, 0.19, -1, 0.4, ARMCO);
       guardrail(0.62, 0.68, -1, 0.4, ARMCO);
 
-      // ═══════════════════════════════════════════════════════════════════
-      // BESPOKE HARBOUR & LANDMARK MODELS
-      // ═══════════════════════════════════════════════════════════════════
-
-      // ── Reflective Mediterranean harbour (waterField reflective basin) ────
-      // A true reflective water buffer that mirrors the sky, laid across the
-      // whole harbour basin behind the promenade. Sits below the quay lip.
-      // Three longitudinal stations × eight outward ranks form a bounded tiled
-      // basin. Individual 46×48 m panels cannot chord across Monaco's foldbacks.
       const harbourStations = [0.365, 0.545, 0.59]; // racing fractions
-      // Rasterised as a fine grid rather than 46x48 m slabs. The slab version
-      // needed 27 m of road clearance per panel, so the basin came out as
-      // separated blue rectangles on bare ground — and the 138 m band between
-      // ranks 114 and 252, where the lap folds back through the water, was
-      // rejected outright at every station (verified: re-adding those ranks
-      // fails the build three times over). At 12 m cells the same region closes
-      // up to the kerb and only the road corridor itself stays open.
       for (let station = 0; station < harbourStations.length; station++) {
         waterField(K(harbourStations[station]), 1, 16, 300, 72, 12, SEA,
           { id: `monaco-harbour-water-${station}`, required: true });
@@ -1277,14 +936,7 @@
       // basin needs a real harbour polygon in world XZ, not more track-relative
       // stations.
 
-      // ── FLAGSHIP SUPERYACHT — bespoke multi-deck megayacht ───────────────
-      // Hull prism bow + stacked white superstructure decks + wrap-around
-      // railings + radar arch + mast + helipad disc + tender on the aft deck.
       const megaYacht = (a, sc, hullCol) => {
-        // Same fix as `yacht()` above: anchor() gives quay-terrain height,
-        // but the hull needs to sit on the harbour water surface
-        // (pyMin - 0.8), draught below the waterline. X/Z keep the berth
-        // position already validated by the onTrack() check at the call site.
         a = Object.assign({}, a, { c: [a.c[0], pyMin - 0.8 - 0.2 * sc, a.c[2]] });
         const b = [a.r, a.u, a.t];
         const HULL = hullCol || [0.97, 0.97, 0.99];
@@ -1310,13 +962,6 @@
         for (const [y, ln] of [[5.4, 0.5], [8.4, 0.4], [11.2, 0.28]]) {
           addBox(out, vadd(sup, a.u, (y + 0.2) * sc), [W * 0.92, 0.9 * sc, L * ln * 1.01], [0.18, 0.28, 0.40], b);
         }
-        // Radar arch (two legs + crossbar) above the bridge deck. The legs
-        // (addCyl, base-anchored) sat at 13.4*sc while the top deck below
-        // (previous addBox) only reaches 11.2*sc + 2.6*sc/2 = 12.5*sc — a
-        // 0.9*sc gap (0.7-0.9 m over this yacht's sc range), stacked but not
-        // touching. Whole arch/mast/flag assembly shifted down 1.1*sc so the
-        // legs overlap the deck top by 0.2*sc; crossbar, mast and flag keep
-        // their original spacing relative to the legs (unchanged internally).
         out._mat = MAT.METAL;
         for (const o of [-W * 0.28, W * 0.28]) {
           addCyl(out, vadd(vadd(sup, a.r, o), a.u, 12.3 * sc), 0.16 * sc, 2.4 * sc, [0.85, 0.86, 0.90], 5, b);
@@ -1353,15 +998,6 @@
         if (!onTrack(a3.c[0], a3.c[2], 12)) megaYacht(a3, 0.8, [0.94, 0.90, 0.82]);
       }
 
-      // (The old "ornate stone arch mouth" block that stood here duplicated the
-      // s=0.585 exit portal — same ashlar piers at hw+2.6, a second crown and a
-      // second rock band. It is now one shared tunnelPortal() called at both
-      // mouths, up in the SECTOR 4 block, so the entry gets the same treatment
-      // and the exit stops emitting two of everything.)
-
-      // ── TIERED PASTEL HILLSIDE TERRACES (Beau Rivage climb, L) ───────────
-      // Stepped apartment terraces that rise and set back up the rock face —
-      // the signature Monte-Carlo tiered-hillside silhouette above the road.
       const terraceStack = (a, tiers, baseCol) => {
         const b = [a.r, a.u, a.t];
         let up = 0, back = 0, w = 26;
@@ -1387,9 +1023,6 @@
         if (!onTrack(a.c[0], a.c[2], 16)) terraceStack(a, 4, DUSTY);
       }
 
-      // ── DEEP-WATER MARINA PONTOONS + SAILBOATS (s=0.63→0.79, L) ─────────
-      // Finger piers and a far rank of masts make the harbour read as a basin,
-      // rather than a single row of yachts beside the circuit.
       for (let i = 0; i < 4; i++) {
         const k = K(0.63 + i * 0.052);
         const a = anchor(k, -1, 66 + (i & 1) * 8);
@@ -1419,9 +1052,6 @@
         });
       }
 
-      // ── BELLE ÉPOQUE CASINO-HOTEL WINGS (s=0.18→0.24) ───────────────────
-      // Secondary cream masses frame Casino Square and stop the hero buildings
-      // from reading as isolated towers.
       for (const [sf, side, gap, w, h, d, col] of [
         [0.182,  1, 7, 18, 31, 16, [0.94, 0.90, 0.83]],
         [0.238,  1, 6, 20, 34, 17, [0.88, 0.82, 0.72]],
@@ -1433,9 +1063,6 @@
         });
       }
 
-      // ── PACKED MIRABEAU HILLSIDE APARTMENTS (s=0.28→0.38, L) ────────────
-      // Narrow vertical slabs climb behind the descent, with repeated balcony
-      // lips facing the circuit. Each complete block is footprint-preflighted.
       for (let i = 0; i < 4; i++) {
         const k = K(0.285 + i * 0.029);
         const a = anchor(k, -1, 35 + (i & 1) * 9);
@@ -1459,9 +1086,6 @@
         });
       }
 
-      // ── TUNNEL HILLSIDE CONTEXT + VENT PAVILIONS (s=0.51/0.585) ─────────
-      // Hotel/rock masses sit beyond both portals while compact ventilation
-      // pavilions crown the tunnel shoulders, preserving the road opening.
       for (const [sf, side] of [[0.515, -1], [0.575, 1]]) {
         const k = K(sf);
         building(k, side, 12, 22, 28, 24, { kind: "tiered",
@@ -1475,10 +1099,6 @@
         }, (stage) => {
           stage._mat = MAT.STONE;
           addBox(stage, vadd(a.c, a.u, 3.4), [10, 6.8, 10], STONE, b);
-          // addFrustum is BASE-anchored (geom.js), but 8.2 was written as if it
-          // centred the roof: the pavilion block below tops out at 3.4+6.8/2=6.8,
-          // so the frustum's base floated 1.4 m clear of it. Based at 6.6 so the
-          // roof overlaps the block's top by 0.2 m instead.
           stage._mat = MAT.METAL;
           addFrustum(stage, vadd(a.c, a.u, 6.6), 4.2, 3.2, 3.0, [0.46, 0.48, 0.46], 8, b);
           addBox(stage, vadd(a.c, a.u, 10.2), [4.8, 1.0, 4.8], [0.34, 0.36, 0.36], b);
@@ -1486,9 +1106,6 @@
         });
       }
 
-      // ── HARBOUR-FACING BALCONY WALL (s=0.66→0.82, R) ────────────────────
-      // A sparse set of broad apartment fronts gives the Tabac/pool cameras a
-      // packed Monaco backdrop while retaining gaps at corner sightlines.
       for (let i = 0; i < 4; i++) {
         const k = K(0.66 + i * 0.052);
         const a = anchor(k, 1, 25 + (i & 1) * 7);

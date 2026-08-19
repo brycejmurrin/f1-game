@@ -1,12 +1,4 @@
-/*
- * Apex 26 — GLX chunked-mesh subsystem (split out of js/render/glx.js).
- * Frustum-culled chunked meshes for the heavy city/props geometry: one shared
- * VBO/VAO with one index buffer per spatial XZ cell, drawn (or shadow-cast)
- * only when the cell's AABB survives the active frustum. Wired through the
- * GLXCore ctx: glx.js calls GLXChunked.init(core) inside GLX.init() and
- * delegates createChunkedMesh/drawChunked/castShadowChunked/freeChunkedMesh.
- * Must load before js/render/glx.js (glx.js calls GLXChunked.init at init time).
- */
+/* Apex 26 — GLX chunked-mesh subsystem (split out of js/render/glx.js). Frustum-culled chunked meshes for the heavy city/props geometry: one shared VBO/VAO with o… */
 "use strict";
 
 const GLXChunked = (function () {
@@ -16,9 +8,6 @@ const GLXChunked = (function () {
     const { bindVAO, setBlend, setDepthMask, toF32, createMesh, litMaterial } = core;
     const F = core.frame;
 
-    // Gribb–Hartmann plane extraction from a COLUMN-MAJOR view-proj (m[col*4+row]).
-    // Planes are [a,b,c,d], inside = a*x+b*y+c*z+d >= 0. Scratch is module-static so
-    // culling allocates nothing per frame.
     const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
                        new Float32Array(4), new Float32Array(4), new Float32Array(4)];
     function _setPlane(p, a, b, c, d) {
@@ -54,11 +43,6 @@ const GLXChunked = (function () {
       return dx * dx + dy * dy + dz * dz;
     }
 
-    // Build a chunked mesh: ONE shared VBO/VAO + one index buffer per spatial XZ
-    // cell (cellSize metres), each with an AABB over the verts it references. Index
-    // type is Uint32 whenever total verts > 65535 (chunk indices reference the full
-    // shared vertex array). Returns an object that also works as a plain mesh
-    // (top-level vao/vbo/ib/count) so a stray draw()/castShadow() won't crash.
     function createChunkedMesh(data, cellSize) {
       const cell = cellSize > 0 ? cellSize : 72;
       let pos = toF32(data.pos), nrm = toF32(data.nrm), col = toF32(data.col);
@@ -66,17 +50,11 @@ const GLXChunked = (function () {
       const triCount = (srcIdx.length / 3) | 0;
       if (triCount < 2000) {
         const m = createMesh(data);
-        // createMesh returns null on a lost/absent context (ctxGone); every
-        // mesh/chunked consumer null-guards, so fail closed rather than deref
-        // null.chunks (the same crash class as the createInstancedBatch vao fix).
         if (!m) return null;
         m.chunks = null;
         return m;
       }
       let mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
-      // Same optional attribs as createMesh: mat (attrib 3) then trk (attrib 4).
-      // Dropping trk here is why PER-CHUNK ROAD painted a blank ribbon — the
-      // markings shader gates on vTrk.z (half-width) and the generic attrib is 0.
       const trk = data.trk && data.trk.length === vCount * 3 ? toF32(data.trk) : null;
       const hasMat = mat != null;
       const hasTrk = trk != null;
@@ -104,8 +82,6 @@ const GLXChunked = (function () {
       if (data._keepFullGeometry === false) {
         data.nrm = data.col = data.mat = data.trk = null;
       }
-      // Bin triangles by centroid cell. Numeric key (fast, no string alloc): the
-      // grid is bounded (tracks span a few km), so pack signed cell coords.
       const buckets = new Map();
       for (let t = 0; t < srcIdx.length; t += 3) {
         const a = srcIdx[t], b = srcIdx[t+1], c = srcIdx[t+2];
@@ -122,12 +98,6 @@ const GLXChunked = (function () {
         if (bx<mn[0])mn[0]=bx; if (bx>mx[0])mx[0]=bx; if (by<mn[1])mn[1]=by; if (by>mx[1])mx[1]=by; if (bz<mn[2])mn[2]=bz; if (bz>mx[2])mx[2]=bz;
         if (cx<mn[0])mn[0]=cx; if (cx>mx[0])mx[0]=cx; if (cy<mn[1])mn[1]=cy; if (cy>mx[1])mx[1]=cy; if (cz<mn[2])mn[2]=cz; if (cz>mx[2])mx[2]=cz;
       }
-      // Positions are now only referenced by the growable `bk.idx` arrays (as
-      // indices, not coords) — drop the vertex coordinate copies before the
-      // per-bucket IndexArray allocations below. The source index array is also
-      // fully consumed by the bins: dropping it matters most — on a ~5 M-vert
-      // street circuit it's a multi-million-element JS array that would otherwise
-      // stay resident for the whole session via track.propsGeo/glassGeo.
       pos = null;
       if (!data._keepPositions) { data.pos = null; data.idx = null; }
       const vao = gl.createVertexArray();
@@ -180,15 +150,8 @@ const GLXChunked = (function () {
         chunks.push({ byteOffset: off * BPI, count: arr.length, indexType, min: bk.mn, max: bk.mx });
         off += arr.length;
       });
-      // This bind happened INSIDE the bindVertexArray(vao) block above, so the
-      // VAO records it — and now records the one buffer every chunk draws from,
-      // where before it happened to record whichever bucket converted last.
       gl.bindVertexArray(null);
       core.invalidateVAO();   // keep glx.js's VAO bind cache in sync with the direct bind above
-      // `count` is now the WHOLE mesh, not chunks[0]. That only affects the
-      // "works as a plain mesh" fallback, which it makes correct: a stray
-      // draw()/castShadow() on a chunked mesh used to render one arbitrary
-      // cell, and now renders all of it.
       return { vao, vbo, ib: ibo, count: total, indexType, chunks, cellSize: cell };
     }
 
@@ -209,31 +172,12 @@ const GLXChunked = (function () {
       if (!mesh.chunks) { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib); gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0); return; }
       _extractPlanes(F.viewProj, _fcPlanes);
       const chunks = mesh.chunks;
-      // Radial draw-distance cap: the frustum's far plane is the only distance cull,
-      // so when it's pushed out (free camera) a high/wide vantage admits the whole
-      // ~5 M-vert city at once — a mobile-tiler OOM. When frame.cullDist is set, also
-      // skip any chunk whose nearest point is beyond it (fog hides the edge).
       const eye = F.eye;
       const cd = F.cullDist, cd2 = cd * cd,
             ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
-      // PER-CHUNK LAMPS: bind each chunk's OWN nearest-32 instead of the frame's
-      // single global 32. The 32-lamp ceiling is a fragment-shader uniform-array
-      // size (MAX_LIGHTS), so it bounds lights per DRAW, not per scene — and the
-      // track's lamps are baked and static while chunks have fixed AABBs, so the
-      // per-chunk set is computed once and cached on the chunk. A dense night
-      // circuit then lights every chunk to its own budget instead of making the
-      // whole visible world compete for 32 slots, and per-fragment cost FALLS
-      // (a chunk binds only lamps that actually reach it). Off by default.
-      // > 0, not truthiness: the knob is a 0..1 amount now (its value is the
-      // lamp-intensity scale glx.js applies), so any positive value enables it.
       const perChunk = F.perChunkLights > 0 && F.allLights;
-      // One element-buffer bind for the whole pass. The VAO already records it
-      // (see createChunkedMesh), so this is belt-and-braces against a stray
-      // bind made under this VAO — not a per-draw cost.
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib);
       if (perChunk) {
-        // No merging here BY CONSTRUCTION: each chunk binds its own nearest-32
-        // lamp set between draws, so two chunks cannot share one drawElements.
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
           if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
@@ -247,12 +191,6 @@ const GLXChunked = (function () {
           gl.drawElements(gl.TRIANGLES, ch.count, ch.indexType, ch.byteOffset);
         }
       } else {
-        // Merge RUNS of adjacent visible chunks into one draw. Chunks were
-        // written to the index buffer in array order, so chunks adjacent in the
-        // array are contiguous in the buffer — accumulating `count` over a run
-        // and drawing from the run's first byteOffset submits exactly the same
-        // triangles in exactly the same order as the per-chunk loop did. A
-        // culled chunk breaks the run; nothing else does.
         let runOff = -1, runCount = 0;
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
@@ -268,8 +206,6 @@ const GLXChunked = (function () {
         }
         if (runOff >= 0) gl.drawElements(gl.TRIANGLES, runCount, mesh.indexType, runOff);
       }
-      // Restore the frame-global set so later non-chunked draws (car, road
-      // furniture) are unaffected by whatever the last chunk happened to bind.
       if (perChunk) core.uploadLightSet(F.lights, null, F.lights ? (F.lights.length / 15) | 0 : 0);
     }
 
@@ -295,24 +231,14 @@ const GLXChunked = (function () {
       return out;
     }
 
-    // Shadow cast for a chunked mesh, culled against the shadow light frustum (an
-    // off-camera building can still cast INTO view, so we cull by the light-VP, not
-    // the camera). Runs under the depth program (bound by GLXShadow.shadowBegin).
     function castShadowChunked(mesh, model) {
       const SH = core.shadow;
       if ((core.ctxGone && core.ctxGone()) || !SH.depthPassOn || !mesh) return;
       bindVAO(mesh.vao);
       gl.uniformMatrix4fv(SH.depthU.uModel, false, model);
       if (!mesh.chunks) { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib); gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0); return; }
-      // Cull against the ACTIVE depth pass's light frustum: the sun box by
-      // default, or the lamp's perspective frustum between lampShadowBegin/End —
-      // that tight cone is what keeps the per-frame lamp pass down to a handful
-      // of city chunks instead of the whole circuit.
       _extractPlanes(SH.castCullVP || SH.lightVP, _fcPlanes);
       const chunks = mesh.chunks;
-      // Same single bind + run-merging as drawChunked; see the notes there. The
-      // lamp shadow pass runs this EVERY night frame against a tight cone, so
-      // its surviving chunk set is small and highly contiguous.
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib);
       let runOff = -1, runCount = 0;
       for (let i = 0; i < chunks.length; i++) {
@@ -331,8 +257,6 @@ const GLXChunked = (function () {
     function freeChunkedMesh(mesh) {
       if (!mesh) return;
       core.unbindVAOIf(mesh.vao);
-      // One index buffer per mesh now, chunked or not — chunks are ranges into
-      // mesh.ib and own nothing to delete.
       if (mesh.ib) gl.deleteBuffer(mesh.ib);
       if (mesh.vbo) gl.deleteBuffer(mesh.vbo);
       if (mesh.vao) gl.deleteVertexArray(mesh.vao);
@@ -354,8 +278,6 @@ const GLXChunked = (function () {
 
     Log.info("gfx", "GLX chunked init");
     return { createChunkedMesh, drawChunked, castShadowChunked, freeChunkedMesh,
-             // exported so callers outside the draw path can run the SAME cull
-             // test the GPU path runs, rather than reimplementing it and drifting
              makeFrustumPlanes, aabbInFrustum: _aabbInFrustum, aabbDist2: _aabbDist2 };
   }
 

@@ -1,48 +1,4 @@
-/*
- * NetHandshake — getting two browsers connected with NO server of ours.
- *
- * WebRTC is peer-to-peer once connected, but every connection needs a
- * signalling exchange first, and signalling normally means a server. This game
- * is static files on GitHub Pages and intends to stay that way, so the
- * exchange is done BY THE PLAYERS: the host generates an invite code, sends it
- * however they like (chat, SMS, a link), and pastes back the answer code their
- * friend returns. Two pastes, no infrastructure, £0.
- *
- * Three things make that practical:
- *
- * 1. VANILLA ICE. We wait for ICE gathering to COMPLETE before emitting the
- *    code, so every candidate is already inside the SDP. Trickle ICE would be
- *    faster to first-byte but would need a live channel to trickle over —
- *    which is the very thing we don't have. Waiting is what makes a single
- *    static string sufficient.
- *
- * 2. THE CODE IS COMPRESSED. A gathered SDP is 2-4 KB of highly repetitive
- *    text, which is a miserable thing to paste. We strip the lines that can be
- *    rebuilt from a template, then deflate + base64url what remains. Typical
- *    result is a few hundred characters. CompressionStream is used where it
- *    exists and skipped where it doesn't — the format carries a flag byte,
- *    and a plain .p code is readable by everyone. The interop is
- *    ONE-DIRECTIONAL, though: a browser without CompressionStream lacks
- *    DecompressionStream too (they ship together), so it can send but cannot
- *    read a compressed .z/.s code — decodeCode's inflate throws there and the
- *    player is told the code is corrupted rather than that the browser is too
- *    old.
- *
- * 3. THE BUILD NUMBER IS PART OF THE CODE. Two peers on different cached
- *    builds have different track splines, different barrier positions and
- *    different physics constants — they would desync immediately and
- *    inexplicably. version.json's `build` is embedded and checked before the
- *    connection is used, so a mismatch is a clear "reload to update" instead
- *    of a mystery. Scenery is deliberately NOT checked: props never affect
- *    physics, so peers may legitimately differ there.
- *
- * What this cannot do alone: traverse every NAT. Some symmetric-NAT pairs
- * will never connect P2P without a TURN relay — which is why one ships by
- * default (transport.js's Metered free-tier credentials URL, overridable via
- * apex26.turnApi). Only when that relay's quota or endpoint fails does the
- * unconnectable case return, and then the UI must say so plainly rather than
- * spinning forever.
- */
+/* NetHandshake — getting two browsers connected with NO server of ours. WebRTC is peer-to-peer once connected, but every connection needs a signalling exchange fi… */
 "use strict";
 
 const NetHandshake = (function () {
@@ -52,9 +8,6 @@ const NetHandshake = (function () {
   const NO_TRANSPORT = { ok: false, error: "no_transport",
     message: "WebRTC is unavailable in this browser." };
   const GATHER_TIMEOUT_MS = 8000; // stop waiting for stragglers; what we have is usually enough
-  // Real codes are a few hundred characters. These generous ceilings prevent a
-  // pasted/link-supplied code from multiplying into several unbounded strings,
-  // ArrayBuffers and JSON objects on a memory-constrained phone.
   const MAX_CODE_CHARS = 512 * 1024;
   const MAX_DECODED_BYTES = 256 * 1024;
 
@@ -68,7 +21,6 @@ const NetHandshake = (function () {
     return res;
   }
 
-  // ---- base64url (no padding) — safe in a URL fragment and in a chat message
   function bytesToB64url(bytes) {
     let s = "";
     for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
@@ -94,10 +46,6 @@ const NetHandshake = (function () {
     return new Uint8Array(await new Response(stream).arrayBuffer());
   }
   async function inflateBytes(bytes) {
-    // THE CODE IS ATTACKER-CONTROLLED: a few hundred base64 chars of
-    // deflate can expand to gigabytes. Read the stream chunk-wise against a
-    // hard cap instead of buffering blind — real codes inflate to ~2-6 KB,
-    // so 256 KB is generous headroom, and past it we stop pulling entirely.
     const reader = new Blob([bytes]).stream()
       .pipeThrough(new DecompressionStream("deflate-raw")).getReader();
     const chunks = []; let total = 0;
@@ -115,7 +63,6 @@ const NetHandshake = (function () {
   const deflate = (text) => deflateBytes(enc().encode(text));
   const inflate = async (bytes) => dec().decode(await inflateBytes(bytes));
 
-  // ---- SDP normalisation ---------------------------------------------------
   // PRESERVE THE SDP VERBATIM. An earlier version stripped "regenerable"
   // attributes (rtpmap, fmtp, extmap, ssrc, msid, rtcp-fb) to shorten the
   // paste. That was wrong twice over: every one of those is an AUDIO/VIDEO
@@ -133,27 +80,11 @@ const NetHandshake = (function () {
     return lines.length ? lines.join("\r\n") + "\r\n" : "";
   }
 
-  // ---- code encode / decode ------------------------------------------------
-  // Payload: {b: build, k: "offer"|"answer", p: {...profile}, s: sdp}
-  // No version field: the MAGIC prefix already carries it, and a second
-  // marker is a second thing that can disagree.
-  //
-  // Three formats, distinguished by the middle segment:
-  //   .s.  COMPACT — the SDP as a NetSdp byte struct, then the rest as JSON,
-  //        the whole thing deflated. ~5x shorter than .z., which is what makes
-  //        the code scannable as a QR rather than only pasteable.
-  //   .z.  the full payload as deflated JSON
-  //   .p.  the full payload as plain JSON (no CompressionStream)
-  // The decoder understands all three, so the compact path can be abandoned at
-  // encode time — see NetSdp.packChecked — without the far end caring.
   async function encodeCode(payload) {
     if (canCompress()) {
       try {
         const packed = payload.s ? await NetSdp.packChecked(payload.s) : null;
         if (packed) {
-          // Two lengths then the two bodies: the SDP struct is binary and the
-          // rest is JSON, and deflate does better on them concatenated than it
-          // would on the struct base64'd into a JSON string.
           const rest = enc().encode(JSON.stringify(Object.assign({}, payload, { s: undefined })));
           const joined = new Uint8Array(2 + packed.length + rest.length);
           joined[0] = packed.length >> 8; joined[1] = packed.length & 0xff;
@@ -191,10 +122,6 @@ const NetHandshake = (function () {
       if (mode === "p" && bytes.byteLength > MAX_DECODED_BYTES) return CORRUPT;
       const json = mode === "z" ? await inflate(bytes) : dec().decode(bytes);
       const payload = JSON.parse(json);
-      // JSON.parse happily returns null / a number / a string — and every
-      // caller immediately reads `payload.k`, which THROWS on null past this
-      // try into callers with no catch. A payload that is not an object is
-      // the same thing as a corrupt code, said before it can throw.
       if (!payload || typeof payload !== "object") return CORRUPT;
       return { ok: true, payload };
     } catch (e) {
@@ -202,11 +129,6 @@ const NetHandshake = (function () {
     }
   }
 
-  // ---- ICE gathering -------------------------------------------------------
-  // Resolve when gathering completes, or when the timeout fires — whichever is
-  // first. A timeout is NOT an error: the candidates gathered so far are
-  // usually enough to connect, and waiting forever for a straggling relay
-  // candidate is worse than trying with what we have.
   function waitForIce(pc, timeoutMs) {
     if (pc.iceGatheringState === "complete") return Promise.resolve(true);
     return new Promise((resolve) => {
@@ -224,18 +146,10 @@ const NetHandshake = (function () {
     });
   }
 
-  // ---- build identity ------------------------------------------------------
-  // Same source the shell's stale-PWA guard uses, so there is exactly one
-  // notion of "which build am I".
   let _buildCache = null;
   async function localBuild() {
     if (_buildCache != null) return _buildCache;
     try {
-      // Cache-buster AS WELL AS no-store, matching the shell's stale-PWA guard
-      // in index.html. sw.js serves version.json network-first but falls back
-      // to the cache after a 3 s timeout, so on a slow link a bare no-store
-      // request can still be answered with a STALE build — which would reject
-      // a peer we actually match.
       const r = await fetch("version.json?_=" + Date.now(), { cache: "no-store" });
       const v = await r.json();
       _buildCache = (v && v.build != null) ? v.build : null;
@@ -259,8 +173,6 @@ const NetHandshake = (function () {
   // Peers must agree on the build. Everything physics-relevant — the spline,
   // the barrier positions, the tuning constants — ships inside it.
   function checkBuild(mine, theirs) {
-    // An unknown build is not a matching build. This has to come FIRST: the
-    // equality below is what a pair of unknowns used to satisfy.
     if (mine == null || theirs == null) {
       return {
         ok: false,
@@ -282,7 +194,6 @@ const NetHandshake = (function () {
     };
   }
 
-  // ---- the two halves of the exchange -------------------------------------
   // host: createInvite() -> code, give it away, then acceptAnswer(theirCode).
   // guest: acceptInvite(theirCode) -> code, send it back, done.
   //
@@ -312,11 +223,6 @@ const NetHandshake = (function () {
     }
   }
 
-  // Hand a decoded SDP to the peer connection, and answer TRUE/FALSE rather
-  // than throwing. Two ways the string can be wrong and both come from outside:
-  // it may not be a string at all (a code whose JSON parsed but carries no `s`),
-  // and it may be a string WebRTC refuses to parse. Neither is exceptional here
-  // — a bad code is the ordinary case this module exists to name.
   async function setRemote(pc, type, sdp) {
     if (typeof sdp !== "string" || !sdp) return false;
     try {
@@ -326,9 +232,6 @@ const NetHandshake = (function () {
   }
 
   async function acceptInvite(transport, code, profile, opts) {
-    // Validate the CODE before the connection. Nothing here needs a peer
-    // connection, and "that code is incomplete" is a far more actionable thing
-    // to tell someone than a generic transport error they cannot act on.
     const parsed = await decodeCode(code);
     if (!parsed.ok) return hsLog("accept", parsed);
     if (parsed.payload.k !== "offer") {
@@ -339,12 +242,6 @@ const NetHandshake = (function () {
     const pc = transport && transport.pc;
     if (!pc) return hsLog("accept", NO_TRANSPORT);
 
-    // THE SDP IS ATTACKER-CONTROLLED and this module's whole job is to turn a
-    // bad code into a typed, actionable message. Unguarded, a payload that
-    // parses but carries a missing or hostile `s` threw out of here into a
-    // caller with no catch (lobby.js makeAnswer/acceptAnswer), which
-    // index.html's unhandledrejection handler turned into a full-screen raw
-    // stack overlay on top of a lobby stuck on "Reading invite…".
     const took = await setRemote(pc, "offer", parsed.payload.s);
     if (!took) return hsLog("accept", CORRUPT);
     await pc.setLocalDescription(await pc.createAnswer());
@@ -362,12 +259,6 @@ const NetHandshake = (function () {
     if (!build.ok) return hsLog("answer", build);
     const pc = transport && transport.pc;
     if (!pc) return hsLog("answer", NO_TRANSPORT);
-    // ONLY while an answer is awaited. setRemoteDescription(answer) on a PC
-    // in "stable" throws InvalidStateError — seen UNCAUGHT in a real console.
-    // Two real ways to get here: the same answer handled twice, or an answer
-    // arriving after the host ROTATED to a fresh transport (which is stable,
-    // having no local offer yet). Neither is an exception-worthy surprise;
-    // both are "this answer is not for this connection", said typed.
     if (pc.signalingState !== "have-local-offer") {
       return hsLog("answer", { ok: false, error: "already_answered",
                message: "That answer was already used, or arrived too late." });
