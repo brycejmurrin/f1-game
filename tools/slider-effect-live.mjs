@@ -149,10 +149,8 @@ export async function runLive(opts, root, ctx) {
 
     const stored = Number.isFinite(shotA.stored) && Number.isFinite(shotB.stored)
       && shotA.stored !== shotB.stored;
-    const moved = plan.knob.moves.filter((f) => {
-      const da = shotA.state?.[f], db = shotB.state?.[f];
-      return JSON.stringify(da) !== JSON.stringify(db);
-    });
+    const delta = stateDelta(shotA.state, shotB.state);
+    const moved = Object.keys(delta).filter((f) => f !== "envProbe");
     const camDelta = Math.max(
       ...(shotA.eye || [0]).map((x, i) => Math.abs(x - (shotB.eye || [0])[i] || 0)),
       ...(shotA.tgt || [0]).map((x, i) => Math.abs(x - (shotB.tgt || [0])[i] || 0)),
@@ -164,7 +162,7 @@ export async function runLive(opts, root, ctx) {
       from: plan.from, to: plan.to,
       stored: { a: shotA.stored, b: shotB.stored, ok: !!stored },
       restored: restoreTo,
-      state: stateDelta(shotA.state, shotB.state),
+      state: delta,
       movedFields: moved,
       pixels,
       camera: { delta: camDelta, stable: camDelta <= 1e-3, dbgCamActive: shotA.dbgCamActive },
