@@ -480,12 +480,20 @@ const GameAudio = (function () {
     engineOn = false;
   }
 
-  function setEngine(rev01, boost01, offroad, speed01, gear) {
+  function setEngine(rev01, boost01, offroad, speed01, gear, physics) {
     if (!engineOn || !sfxOk()) return;
     const rev = clamp01(rev01 || 0);
     const s = clamp01(typeof speed01 === "number" ? speed01 : (rev01 || 0));
     const b = clamp01(typeof boost01 === "number" ? boost01 : (boost01 ? 1 : 0));
     const t = ctx.currentTime;
+
+    // Physics extras: traction slip, longitudinal accel, kerb, wet road.
+    // Defaults to neutral (full grip, no braking, on tarmac, dry) when absent.
+    const ph = physics || {};
+    const slip01 = clamp01(1 - (ph.slip != null ? ph.slip : 1)); // 0=grip 1=full slide
+    const brakeFrac = clamp01(-(ph.ax || 0) / 60);              // 60 m/s² ≈ full BRAKE
+    const onKerb = !!ph.onKerb;
+    const wet = !!ph.wet;
 
     let g01 = 0.3, gIdle = 95, gSpan = 700;
     if (typeof gear === "number" && isFinite(gear)) {
@@ -533,16 +541,26 @@ const GameAudio = (function () {
       engC.frequency.setTargetAtTime(base * 0.5, t, 0.025);
     }
 
+    // Engine load from traction loss: when wheels are sliding the engine works
+    // harder — filter opens and gain rises slightly. Braking at the limit adds
+    // a brief intake/turbo suck quality via a subtler filter lift.
+    const slipLoad  = slip01 * 0.12;          // up to +12% filter open under slide
+    const brakeLoad = brakeFrac * 0.08;        // up to +8% under hard braking
+    const kerbLoad  = onKerb ? 0.04 : 0;      // small gain bump over a kerb
+
     const cut = usingSamples
-      ? Math.min(11000, 2600 + s * 5800 + rev * 2400 + b * 1500)   // open: let the recording breathe
-      : Math.min(7200, 600 + s * 4200 + rev * 700 + b * 1400);
+      ? Math.min(11000, 2600 + s * 5800 + rev * 2400 + b * 1500 + slipLoad * 2000 + brakeLoad * 1200)
+      : Math.min(7200,  600  + s * 4200 + rev * 700  + b * 1400 + slipLoad * 1000 + brakeLoad * 600);
     engFilter.frequency.setTargetAtTime(cut, t, 0.05);
     const lvl = usingSamples
-      ? (0.3 + s * 0.3 + rev * 0.08 + b * 0.08 + (offroad ? 0.03 : 0))
-      : (0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0));
+      ? (0.3 + s * 0.3 + rev * 0.08 + b * 0.08 + (offroad ? 0.03 : 0) + slipLoad * 0.8 + kerbLoad)
+      : (0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0) + slipLoad * 0.2 + kerbLoad * 0.3);
     engGain.gain.setTargetAtTime(lvl * (1 - 0.55 * shiftDuck), t, 0.03);
 
-    whineOsc.frequency.setTargetAtTime(1500 + rev * 2000, t, 0.05);
+    // Turbo whine: in low gears (1-3) mechanical supercharger character — the
+    // frequency climbs faster but levels off earlier than at high speed.
+    const lowGearFactor = g01 < 0.35 ? 0.85 + g01 * 0.43 : 1;   // compressed range in low gears
+    whineOsc.frequency.setTargetAtTime((1500 + rev * 2000) * lowGearFactor, t, 0.05);
     whineGain.gain.setTargetAtTime(
       (0.004 + rev * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0) * (usingSamples ? 0.50 : 1), t, 0.08);
 
@@ -636,13 +654,16 @@ const GameAudio = (function () {
     } catch (e) { rainStopping = false; rainPending = null; }
   }
 
-  // x 0..1; looped bandpass noise follows it
-  function setSkid(x) {
+  // x 0..1; looped bandpass noise follows it.
+  // wet=true shifts the centre frequency down — water spray has a lower
+  // spectral character than hot dry-rubber screech.
+  function setSkid(x, wet) {
     if (!engineOn || !skidGain) return;
     const v = clamp01(x || 0);
-    skidGain.gain.value = v * 0.16;
+    skidGain.gain.value = v * (wet ? 0.10 : 0.16);   // wetter = quieter, sibilant
     if (v > 0) {
-      skidFilter.frequency.value = 760 + v * 420 + Math.sin(now() * 30) * 80;
+      const base = wet ? 480 : 760;                    // wet: lower splash vs dry: screech
+      skidFilter.frequency.value = base + v * 320 + Math.sin(now() * 30) * 60;
     }
   }
 
