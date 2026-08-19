@@ -12,6 +12,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 
 | Skill | Use it when |
 |---|---|
+| **apex-env-setup** | First thing on a cold machine / after Playwright or MCP failures — installs Node deps, Playwright Chromium, Chrome DevTools MCP, tinyfish, Vulkan packages via `tools/cloud-agent-install.sh`. |
 | **survey-track** | End-to-end circuit accuracy: survey → diagnose geometry → edit → verify → ship (orchestrates scenery/debug/probe + ground-profile). |
 | **bump-cache** | Any `js/` or `css/` edit (or script/link tag change) — refresh `?v=<sha256>` hashes and the shell generation in `version.json` before commit. |
 | **new-track** | Adding a circuit or editing geometry/metadata in `js/circuits/`. |
@@ -23,68 +24,8 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **cross-backend-parity** | A look/knob/feature differs between GLX, WGX and TLX — the parity audit loop, drift hotspots, gap recording. |
 | **deploy-merge** | Merging with / pushing to the deploy branch — cross-lineage cache max+1, union sweeps, baseline re-measure. Live version.json → deploy-research. |
 | **survey-ui-matrix** | Reviewing the whole UI across orientations, viewport shapes, UI/HUD scale and pointer type — Playwright MCP resize/DOM/CSS (`tools/playwright-mcp.sh`) or Chrome DevTools MCP; enumerate screens from source, measure each cell, capture. |
-| **css-play** | Iterating on one menu/HUD stylesheet — host localhost, open a screen, dump DOM, hot-swap `css/`, screenshot (`tools/css-play.mjs` / `playwright-mcp.sh play\|dom`). |
-| **restructure-screens-css** | Restructuring/consolidating screens, menus, dialogs, the DOM or the CSS class/token system — collapsing duplicate families, adding/removing a layer, the split-index.html question, height-responsive design. |
-| **ui-menu-a11y** | Menus/dialogs, Escape/back, keyboard nav, UI scale, AriaState, layout tests. |
-| **multiplayer-debug** | VS FRIEND / WebRTC — loopback, invite SDP, room codes, ICE/TURN, authority. |
-| **career-mode** | DRIVER / MY TEAM career — saves, economy, R&D, quali/reliability weekend flow. |
-| **season-mode** | Standalone Season calendar + weekend format (`season-cal` / `season-ui`); career stays on `Tracks.SEASON`. |
-| **input-controls** | Gamepad / touch / tilt / keyboard / driving-help assists — devices, not forces. |
-| **data-hub** | Data Hub tabs + F1API / `js/data/` — empty/stale/wrong-year tabs. |
-| **ai-racecraft** | AI OT/brake/lane/ERS + driver-rating axes (`ai-drive.js`). |
-| **race-incidents-control** | Debris, incident takeovers, race-control flags, caution/VSC/SC, determinism. |
-| **debug-cameras** | The 13 camera modes + free framing hooks (`view`/`eyeAt`/`orbit`/…). |
-| **debug-tracks** | Track geometry/surface/barrier query hooks + multi-track sweeps. |
-| **debug-state** | Live race/physics/lighting telemetry + headless `act`/`obs`/`reset`. |
-| **agent-view** | Perceive and drive the game as text — `__apex` agent-view + `tools/agent.mjs`. |
-| **playwright-probe** | Headless screenshots/evals — `shot.mjs`, `apex-eval.mjs`, `apex-capture.mjs`. |
-| **pixel-perfect** | Pixel-by-pixel screenshot baselines (`toHaveScreenshot`). Prefer **playwright-probe** / **survey-ui-matrix** for Apex 26 itself. |
-| **webapp-testing** | Python Playwright helper scripts for a generic local webapp. Prefer **playwright-probe** for this repo. |
-| **mcp-probe** | Driving the LIVE game or DEPLOYED site interactively — Chrome DevTools MCP + tinyfish, unified via `tools/probe-mcp.py` (`chrome_*` / `tinyfish_*`; `chrome-start` daemon for multi-call state; TinyFish requires one-time setup plus an injected key). Local CLI pins → `apex-tools` / `./tools/apex-tools-mcp.sh`. Interactive UI resize/DOM → `survey-ui-matrix` / `playwright-mcp.sh`. |
-| **motion-capture** | Temporal artifacts while driving (flicker/shimmer/crawl) — `tools/capture/motion-capture.mjs`. |
-| **audio-debug** | WebAudio synth — engine pitch, sfx, music layers, mute/volume. |
-| **perf-profile** | Headless V8 CPU flame chart of the game loop (Playwright CDP). |
-| **lighting-tuner** | Scene lighting — `lightTune`, time-of-day/weather, `lightState`, orbit shots. |
-| **bake-lighting** | Baking a pasted `window.LightPresets = {…}` export into shipped presets. |
-| **webgl-debug** | WebGL2/GLX issues — lights, shadows, bloom, shader compile, GL errors. |
-| **webgpu-debug** | WebGPU/WGX issues — black screen, WGSL derivative uniformity, GPU validation errors, device-loss ladder, `wgx-validate.mjs --static` (full Dawn parent-only). |
-| **webgpu-inspector** | Inspect GPU objects / WGSL via `webgpu-inspector-mcp`. Prefer **webgpu-debug** + `wgx-validate.mjs` for Apex 26 itself. |
-| **game-feel** | Juice/feedback on Apex systems (camera/particles/audio/skids) without touching physics. |
-| **scene-graph-instancing** | Migrating scenery emitters to `TrackGraph`, graph parity, instanced draws, `bakeOnly`. |
-| **garage-parts-livery** | Parts catalog, SIGNATURE/FACTORY presets, garage UI, livery finish/fin, ERS/aero load. |
-| **asset-pack** | Baking/verifying `assets/pack`, MAT layers, `matTexMix`, procedural fallback. |
-| **pwa-cache-service-worker** | `sw.js` precache, `version.json` network-first, DEFERRED optional assets, stale PWA. |
-| **slim-bloat** | Agent bloat / Claude-simplify — fat files or skills, saturated ratchets, dead/duplicate code, stale comments, extract or tree-split. Dispatch `bloat-auditor`; parent applies one carve. |
+| **css-play** | Iterating on one menu/HUD stylesheet — host localhost, open a screen, dump DOM, hot-swap `css/`, screenshot (`tools/css-play.mjs` / `playwright-mcp.sh play|dom`). |
+| **playwright-probe** | Headless screenshots/evals — `shot.mjs`, `apex-eval.mjs`, `apex-capture.mjs`. Run **apex-env-setup** first if browsers missing. |
+| **mcp-probe** | Live canvas via Chrome DevTools MCP / tinyfish. Run **apex-env-setup** first if MCP/Chrome missing. |
 
-The debug-* skills pair with `tools/apex-eval.mjs` / `tools/capture/apex-capture.mjs` so
-changes are validated visually, not just asserted.
-
-**Route:** deploy/`version.json` → `deploy-research`; pre-push → `verify-agent`;
-live canvas → `mcp-probe`; local CLI pins → `apex-tools`; host Chromium →
-`playwright` (`browser_*`). Do not attach `mcp-probe` for a version.json
-check. Wrap table: `docs/AGENT-SURFACE.md`.
-
-Output paths: batch/test under `artifacts/`, human-reviewed captures under
-`scratch/` (see `AGENTS.md`).
-
-Design principles:
-- **No build step** — refresh `?v=<sha256>` + shell generation in `version.json` on asset edits (`tools/bump-cache.mjs`).
-- **Debug-hooks first** — assert via `__apex`, not brittle magnitudes.
-- **Headless verify-track** — fast pre-push guard for circuit/track engine edits.
-- **Progressive disclosure** — keep `SKILL.md` short (when / entry / hard
-  don'ts / dispatch). Move war stories and long recipes to
-  `references/*.md` or `docs/` and `Read` them only when the task needs them.
-  Fat always-loaded skills burn tokens; `mcp-probe` is the template.
-  Official cap is 500 lines
-  (https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices);
-  the project template is thinner. `tests/unit/skill-progressive.test.mjs` holds both.
-  Cursor `paths:` on file-family skills (`webgpu-debug`, `webgl-debug`,
-  `new-track`, `scenery-dress`) so they surface only when matching files are in
-  play; leave it unset on cross-cutting skills (`check-changes`, `bump-cache`,
-  `deploy-merge`).
-- **Description = what + when** — third person, under 1024 chars, must contain
-  a trigger (`Use when` / `Use proactively`). Vague descriptions ("helps with
-  documents") fail discovery in a 41-skill library.
-- **One command over a ritual** — `verify-change.mjs` composes pick-tests +
-  the fast gate + batched groups; skills should name the composer, not restated
-  five-step prose.
+See individual `SKILL.md` files under this directory for full workflows.

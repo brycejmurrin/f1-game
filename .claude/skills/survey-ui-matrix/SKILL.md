@@ -5,6 +5,18 @@ description: Use when systematically reviewing Apex 26's UI across orientations,
 
 # Surveying the whole UI across the whole matrix
 
+## Prerequisites (always)
+
+Playwright MCP + Chromium must be installed before interactive resize/DOM work:
+
+```bash
+bash .claude/skills/apex-env-setup/scripts/ensure-apex-env.sh
+# or: bash tools/cloud-agent-install.sh
+bash tools/playwright-mcp.sh status 2>/dev/null || true
+```
+
+See **apex-env-setup** if browsers or the Playwright MCP wrapper are missing.
+
 A layout bug is never "on a screen" — it is a **cell of a matrix**: screen ×
 viewport × scale × pointer. **One CLI:** `tools/layout-audit.mjs`.
 
@@ -18,33 +30,4 @@ node tools/layout-audit.mjs                   # full geometry matrix (npm run ui
 ```
 
 This skill is the **interactive** complement: Playwright MCP for resize / DOM /
-CSS (`browser_resize`, `browser_snapshot`, `browser_evaluate`), Chrome DevTools
-MCP for emulate + heap when needed. Canvas hidden either way.
-
-Single known bug → **ui-menu-a11y**. One-screen CSS edit loop → **css-play**.
-Restructure decisions → **restructure-screens-css**.
-
-**Measure with the MCP; capture with either — but read the traps first.**
-
-## Axes
-
-| axis | values worth running | why |
-|---|---|---|
-| viewport | `852x393`, `393x852`, `834x1194`, `1194x834`, `1440x900`, `1920x1080`, `1080x1920` | a portrait WINDOW can hold a landscape SHEET |
-| orientation | both, per device | not a proxy for sheet shape — see `data-shape` |
-| UI scale | 80, 100, **115**, 130, 150 | `__apex.uiScale(n)`; default is 100 on every pointer |
-| HUD scale | same range, independently | `__apex.hudScale(n)` — they must not move together |
-| pointer | `mobile,touch` vs desktop | `body.desktop` flips the density ladder |
-
-`emulate` string: `"<w>x<h>x<dpr>[,mobile][,touch][,landscape]"`.
-**Always test 115**, not just 100 — several confirmed defects were invisible
-at 100%. Default is 1.0 on every pointer now (`css/tokens.css`).
-
-## Load on demand
-
-- Setup ritual, instrument check, screen enumeration →
-  [references/setup.md](references/setup.md).
-- Probe JS (clip/trunc/tap/overflow) + routes + CSS-cache diagnosis +
-  measured mistakes → [references/probes.md](references/probes.md).
-- Chrome park-before-Playwright → [.claude/skills/mcp-probe/references/traps.md](../mcp-probe/references/traps.md) §1.
-- Playwright MCP wrapper → `tools/playwright-mcp.sh` (`.mcp.json` `playwright`).
+CSS survey (`tools/playwright-mcp.sh`) or Chrome DevTools MCP; enumerate screens from source, measure each cell, capture.
