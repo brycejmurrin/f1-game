@@ -255,6 +255,14 @@
 #cs-inner:not([data-pair="on"]) #cs-tabs .cs-tab {
   flex: 0 0 auto; white-space: nowrap;
 }
+/* A tall stacked sheet has height to show the catalogue. Compact
+   landscape (play-shape) hid CAMERA-adjacent cats behind a sideways
+   pan too — wrapping two one-line rows beats that (compact already
+   drops .cs-tab-cur). */
+#cs-inner:not([data-pair="on"]):is([data-shape="tall"], [data-density="compact"]) #cs-tabs {
+  flex-wrap: wrap;
+  overflow-x: hidden;
+}
 #cs-options {
   flex: 1 1 auto; min-height: 0;
   display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5);
@@ -765,7 +773,10 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 #cs-stack {
   pointer-events: none;
   position: absolute;
-  left: calc(var(--safe-l) + var(--gap));
+  /* Hug the sheet, not the left safe edge. A left+right stretch parked CAMERA
+     and ACTIVE AERO across the car well, a tap away from the panel they belong
+     to. Content-width + the scaled sheet inset keeps the overlap fix below. */
+  left: auto;
   bottom: calc(var(--safe-b) + var(--gap));
   /* MULTIPLY BY --ui-scale: THE PANEL PAINTS BIGGER THAN ITS CSS WIDTH.
      #cs-inner is inside `.sheet`, which carries `zoom: var(--ui-scale)`
@@ -784,8 +795,10 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
      at the CONSUMPTION site, because the two consumers are in different zoom
      spaces and no single declared value can be right for both. */
   right: calc(var(--safe-r) + var(--cs-sheet-w) * var(--ui-scale) + var(--gap));
+  width: max-content;
+  max-width: calc(100vw - var(--safe-l) - var(--safe-r) - var(--cs-sheet-w) * var(--ui-scale) - var(--gap) * 2);
   z-index: 2;
-  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px;
 }
 /* The two top-level buttons. This row is all that shows at rest. */
 #cs-bar {

@@ -2926,6 +2926,7 @@ const G = {
   // both need the OTHER one's entry point — hence the pair.
   openSeasonSetup: () => seasonUi.open(),
   buildSelect: (...a) => buildSelect(...a),
+  updateTrackPreview: (...a) => updateTrackPreview(...a),
   // Read-only qualifying model for the CURRENT track (__apex.qualiSim).
   qualiSim: (playerTime) => quali.preview(playerTime || 0),
   refreshCareerButton: (...a) => refreshCareerButton(...a),
@@ -2943,7 +2944,7 @@ const G = {
   // deletes a key out of it for the tuner's RESET and merges it for COPY VALUES.
   get _ltStore() { return ltStore.profiles; }, set _ltStore(v) { ltStore.profiles = v; },
   photoCam, photoKeys, photoMouse, photoMove, photoLook,
-  applyResMode: (...a) => applyResMode(...a),
+  applyResMode: (...a) => applyResMode(...a),   // const from UiScale.create(G) below — defer
   ltKey: (...a) => ltKey(...a),
   // (setLightTune is a hoisted function, exposed as a plain shorthand below —
   // the deferred-arrow copy that used to sit here was a dead duplicate key.)
@@ -3007,7 +3008,7 @@ const G = {
   rescuePlayer, setLightTune, setWeatherLive, snapGameCam,
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   wireId,                               // stable cross-peer car identity
-  setScale,                             // UI SIZE / HUD SIZE — see __apex.uiScale
+  setScale: (...a) => setScale(...a),   // const from UiScale.create(G) below — defer
   // Debug teleports can run while a headless/SwiftShader frame is starved.
   // Let apex.js synchronise its observable HUD state without waiting for rAF.
   refreshHud: (...a) => updateHud(...a),   // const initialised below — defer
@@ -3041,6 +3042,9 @@ const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
 const { buildSetup, openSetup } = SetupUI.create(G);
 // Select-screen UI (js/game/menus.js).
 const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
+// UI SIZE / HUD SIZE + RESOLUTION (js/game/ui-scale.js). After Menus so the
+// first applyUiScale can refresh an already-built select preview.
+const { setScale, applyResMode } = UiScale.create(G);
 // CAREER screen — new-career setup + season hub (js/game/career-ui.js). The rules
 // and the save live in js/game/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -7383,131 +7387,8 @@ document.addEventListener("pointerdown", () => {
 }, { once: false, capture: true });
 
 
-// UI SIZE / HUD SIZE: how big the interface is, as a percentage, on two
-// independent sliders. Each writes a custom property the stylesheets consume as
-// a `zoom`:
-//   --ui-scale   the menus  — .sheet (components.css), #overlay (menus.css)
-//   --hud-scale  the race   — the HUD clusters (hud.css), the dock (overlays.css)
-//
-// TWO KNOBS BECAUSE THE TWO LAYERS ARE READ DIFFERENTLY. Menu type is read at
-// rest, with time to spare; the HUD is glanced at while driving, and the size
-// that works there depends on where the phone is mounted and whose eyes are
-// reading it. They also compete for the same screen, so trading one against the
-// other is a real choice rather than a compromise to be guessed at centrally.
-//
-// SLIDERS RATHER THAN CONSTANTS because this is the thing measurement could not
-// settle: what reads correctly at arm's length on a phone in motion is not a
-// question a screenshot answers, and three rounds of picking a number from one
-// ended with "still too small". The player has the device.
-//
-// Written INLINE ON documentElement (<html>), which is where css/tokens.css
-// declares both properties. That element matters: a custom property is
-// substituted where it is DECLARED, so a value set on <body> leaves :root's
-// rules reading :root's own value and the knob silently does nothing — measured
-// on build 997, where --tap sat at `calc(44px * 1)` at every setting until this
-// moved to documentElement.
-//
-// NOTHING STORED => NO INLINE STYLE, so the `@media (pointer: coarse)` default
-// in the stylesheet stands and a phone is correct on its FIRST paint rather
-// than from whenever this module runs.
-//
-// SCALE_MIN was 90 (readability floor), then 80 — phones still wanted more
-// headroom to "zoom way out"; 50% is the floor now and the default stays 100%.
-// SCALE_MAX went 150 -> 175 (tools/ui-scale-axis.mjs already validated to 200).
-// Tap floors divide by --ui-scale (--tap-min), so WCAG 24px holds before zoom.
-// (A concurrent branch pinned MAX back to 150 while doing clamp-path fixes;
-// resolved in favour of the wider range on the owner's explicit ask — the
-// clamp fixes themselves are kept, and ui-scale.spec.js now derives its
-// expectations from __apex.uiScale() so either choice tests true.)
-const SCALE_MIN = 40, SCALE_MAX = 200, SCALE_STEP = 0.25;
-const scaleDefault = () => 100;
-// Snap to the slider's step so stored values stay on the same lattice the
-// <input> emits (otherwise a hand-typed __apex.uiScale(117) leaves the thumb
-// between ticks and the label reads a number you cannot scrub back to).
-const scaleSnap = (v) => {
-  const n = Math.max(SCALE_MIN, Math.min(SCALE_MAX, +v));
-  return Math.round(n / SCALE_STEP) * SCALE_STEP;
-};
-const scalePct = (k) => {
-  const v = store.get(k, null);
-  return typeof v === "number" ? scaleSnap(v) : scaleDefault();
-};
-const scaleLabel = (pct) => {
-  const t = scaleSnap(pct);
-  return (Math.abs(t % 1) < 1e-9 ? String(Math.round(t)) : t.toFixed(1)) + "%";
-};
-function applyScale(key, prop, inputId) {
-  const stored = store.get(key, null);
-  // The CSS custom property drives the ACTUAL on-screen size — it must read the
-  // CLAMPED (and step-snapped) pct, not the raw stored number. A value outside
-  // [SCALE_MIN, SCALE_MAX] can reach storage from outside this slider (an older
-  // build's range, a direct localStorage edit) and this function runs on every
-  // boot, so an unclamped read here silently applied an out-of-range scale while
-  // the slider's own displayed number — always clamped — showed something else.
-  const pct = scalePct(key);
-  if (typeof stored === "number") document.documentElement.style.setProperty(prop, pct / 100);
-  else document.documentElement.style.removeProperty(prop);
-  const input = $(inputId); if (input) input.value = String(pct);
-  const out = $(inputId + "-v"); if (out) out.textContent = scaleLabel(pct);
-}
-let uiScalePreviewRaf = 0;
-function applyUiScale()  {
-  applyScale("uiScale",  "--ui-scale",  "pm-uiscale");
-  if (uiScalePreviewRaf) return; // coalesce slider input; hidden select refreshes on open
-  uiScalePreviewRaf = requestAnimationFrame(function () { uiScalePreviewRaf = 0;
-    try { if (els.select && !els.select.hidden) updateTrackPreview(); } catch (e) { /* menus not ready */ }
-  });
-}
-function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); }
-// `input`, not `change`: the size should follow the thumb while it is dragged,
-// which is the only way to find the right one — the same convention the volume
-// sliders use.
-$("pm-uiscale").oninput = (e) => {
-  store.set("uiScale", scaleSnap(+e.target.value || scaleDefault()));
-  applyUiScale();
-};
-$("pm-hudscale").oninput = (e) => {
-  store.set("hudScale", scaleSnap(+e.target.value || scaleDefault()));
-  applyHudScale();
-};
-applyUiScale();
-applyHudScale();
-// The __apex read/write door for both sliders (see G.setScale in the ctx
-// façade). Kept here beside the appliers so there is one place that knows how a
-// scale is stored, clamped and pushed to the DOM.
-function setScale(key, prop, v) {
-  if (v !== undefined) {
-    if (v === null) store.set(key, null);
-    else store.set(key, scaleSnap(+v || scaleDefault()));
-    if (key === "uiScale") applyUiScale(); else applyHudScale();
-  }
-  return { pct: scalePct(key), stored: store.get(key, null), min: SCALE_MIN, max: SCALE_MAX, step: SCALE_STEP };
-}
-
-// Render resolution setting: AUTO = the frame-time governor adapts the scale;
-// LOW/MED/HIGH pin a fixed scale (and disable the governor so it can't fight
-// the choice). LOW is also the safe pick on older phones — smaller render
-// targets mean more GPU-memory headroom, not just more fps. Persisted.
-const RES_MODES = [
-  { id: "auto", label: "AUTO" },
-  { id: "low",  label: "LOW",  v: 0.5  },
-  { id: "med",  label: "MED",  v: 0.75 },
-  { id: "high", label: "HIGH", v: 1.0  },
-];
-let resMode = store.get("resMode", "auto");
-function applyResMode() {
-  const m = RES_MODES.find((r) => r.id === resMode) || RES_MODES[0];
-  const btn = $("pm-res"); if (btn) btn.textContent = "RESOLUTION: " + m.label;
-  if (m.v != null) { PerfGov.setAutoRes(false); if (gfx.setRenderScale) gfx.setRenderScale(m.v); }
-  else PerfGov.setAutoRes(true);   // governor takes over from wherever the scale sits now
-}
-$("pm-res").onclick = () => {
-  resMode = RES_MODES[(RES_MODES.findIndex((r) => r.id === resMode) + 1) % RES_MODES.length].id;
-  store.set("resMode", resMode);
-  applyResMode();
-  if (soundOn) GameAudio.uiSelect();
-};
-applyResMode();
+// UI SIZE / HUD SIZE + RESOLUTION live in js/game/ui-scale.js (UiScale.create(G)
+// — wired after Menus). Bug-explaining comments moved with the block.
 
 // RENDERER cycle lives in js/game/gfx-quality.js with GRAPHICS — wired at
 // DOMContentLoaded so SETTINGS shows it during (and after) a deferred backend load.
@@ -7668,7 +7549,7 @@ $("pm-settings-close").onclick = closeSettings;
 // tuners are reachable without starting a race first. closeSettings() already
 // only returns to the pause menu when actually paused, so from here it just
 // closes back to the title.
-$("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings(); };
+$("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); settingsNav.show("more", false); openSettings(); };
 // Advanced steering: opened from the settings menu, closes back to it.
 $("pm-advanced").onclick = () => { $("advanced").hidden = false; };
 $("adv-close").onclick = () => { $("advanced").hidden = true; };
@@ -7755,27 +7636,20 @@ function buildRaceSettings() {
   // the event, so it lives in pause > SETTINGS > DRIVING next to GEARS — where
   // it can also be changed mid-race, which is when a player discovers they want
   // it. See refreshAeroBtn.)
-  // Hidden in a time trial (no grid) and FORCED ON in a championship, where the
-  // weekend decides the grid and the choice is not the player's to make. Shown
-  // rather than removed there, because "why did this race qualify" is a
-  // question the screen should answer.
+  // Hidden in a time trial (no grid). A championship weekend decides the grid,
+  // so the chips go away and the label carries ON/OFF — dead chips looked live
+  // enough to tap and did nothing. Qualifying IS offered in a friend race.
   const champ = isChampionship();
-  // Qualifying IS offered in a friend race. This note used to say the chip was
-  // still hidden pending a hang on #q-go after a rival's lap landed — both
-  // halves of that are stale and were costing a reader real time. The spec
-  // ("TO THE GRID waits for the rival's lap, then races", multiplayer-room)
-  // passes, and the line below only ever hid the section for a TIME TRIAL,
-  // never in the room. The model now carries a lap per rival rather than two,
-  // and the gate waits for every one of them.
   $("rs-quali-section").hidden = isTimeTrial();
   const qEl = $("rs-quali");
   qEl.innerHTML = "";
-  for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
-    const active = champ ? (SeasonCal.quali() === on) : (raceQuali === on);
+  const qForced = champ ? SeasonCal.quali() : null;
+  $("rs-quali-label").textContent = "QUALIFYING LAP" + (qForced == null ? "" : " · " + (qForced ? "ON" : "OFF"));
+  qEl.hidden = qForced != null;
+  if (qForced == null) for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
     const b = document.createElement("button");
-    b.className = "sel-chip" + (active ? " active" : "");
-    b.setAttribute("aria-pressed", active ? "true" : "false");
-    b.disabled = champ;
+    b.className = "sel-chip" + (raceQuali === on ? " active" : "");
+    b.setAttribute("aria-pressed", raceQuali === on ? "true" : "false");
     b.textContent = label;
     b.onclick = () => {
       raceQuali = on; store.set("raceQuali", on);
@@ -8317,10 +8191,10 @@ function setPaused(p) {
   if (!p) { closeLightTuner(false); closeCamTuner(false); exitPhotoMode(); }
   els.pausemenu.hidden = !p;
   if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
-  if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season));
+  if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
-  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
+  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); $("pm-restart").disabled = !!(netPlay.active() || qualiNetDone); }
   else if (soundOn) GameAudio.startEngine();
   lastFrame = performance.now();
 }

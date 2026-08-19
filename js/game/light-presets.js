@@ -72,7 +72,7 @@ window.LightPresets = {
     "grMul": 0.9
   },
   "abudhabi|dawn|rain": {
-    "sunElev": -16,
+    "sunElev": -5,
     "keyMul": 0.78,
     "mistDensity": 1.65,
     "fogDensityMul": 1.5,
@@ -81,10 +81,13 @@ window.LightPresets = {
     "ssrWetMul": 1.35,
     "tint": -0.12,
     "fogTint": 0.1,
-    "saturation": 0.88
+    "saturation": 0.88,
+    "lampLevel": 0.12,
+    "floodEmitMul": 0.4,
+    "bloomMul": 0.9
   },
   "abudhabi|dawn|wet": {
-    "sunElev": -18,
+    "sunElev": -5,
     "sunTemp": -0.3,
     "grMul": 1.25,
     "mistDensity": 1.55,
@@ -92,7 +95,9 @@ window.LightPresets = {
     "wetDark": 1.15,
     "tint": 0.08,
     "fogTint": 0.18,
-    "lampLevel": 0.16
+    "lampLevel": 0.12,
+    "floodEmitMul": 0.4,
+    "bloomMul": 0.9
   },
   "abudhabi|day|dry": {
     "keyMul": 1.25,
@@ -142,14 +147,15 @@ window.LightPresets = {
     "ambientMul": 1.05
   },
   "abudhabi|dusk|dry": {
-    "sunElev": -15,
+    "sunElev": -5,
     "sunTemp": -0.6,
     "grMul": 1.5,
     "keyMul": 1.1,
-    "lampLevel": 0.2,
+    "lampLevel": 0.18,
     "glowAmp": 2.5,
     "cityGlowMul": 0.8,
-    "tint": 0.1
+    "tint": 0.1,
+    "floodEmitMul": 0.45
   },
   "abudhabi|dusk|fog": {
     "fogDensityMul": 2,
@@ -157,22 +163,24 @@ window.LightPresets = {
     "fogTint": 0.25,
     "keyMul": 0.85,
     "saturation": 0.82,
-    "tint": 0.05,
-    "lampLevel": 0.28,
-    "glowAmp": 2.4,
-    "cityGlowMul": 0.7
+    "tint": 0.08,
+    "lampLevel": 0.24,
+    "glowAmp": 2.15,
+    "cityGlowMul": 0.7,
+    "bloomMul": 0.85
   },
   "abudhabi|dusk|overcast": {
     "keyMul": 0.88,
     "ambientMul": 1.2,
     "cloudCover": 0.35,
     "shadowStr": 0.7,
-    "tint": -0.05,
+    "tint": 0.08,
     "fogTint": 0.1,
-    "lampLevel": 0.28,
-    "glowAmp": 2.35,
+    "lampLevel": 0.24,
+    "glowAmp": 2.15,
     "cityGlowMul": 0.65,
-    "saturation": 0.92
+    "saturation": 0.92,
+    "bloomMul": 0.85
   },
   "abudhabi|dusk|rain": {
     "sunElev": -10,
@@ -182,9 +190,11 @@ window.LightPresets = {
     "fogDensityMul": 1.45,
     "rainCount": 500,
     "lightning": 1.4,
-    "tint": -0.12,
-    "lampLevel": 0.28,
-    "saturation": 0.88
+    "tint": 0.08,
+    "lampLevel": 0.24,
+    "saturation": 0.88,
+    "bloomMul": 0.85,
+    "glowAmp": 2.15
   },
   "abudhabi|dusk|wet": {
     "sunElev": -12,
@@ -195,8 +205,9 @@ window.LightPresets = {
     "tint": 0.08,
     "fogTint": 0.15,
     "lampLevel": 0.24,
-    "glowAmp": 2.55,
-    "cityGlowMul": 0.75
+    "glowAmp": 2.15,
+    "cityGlowMul": 0.75,
+    "bloomMul": 0.85
   },
   "abudhabi|night|dry": {
     "lampLevel": 0.32,
@@ -517,18 +528,23 @@ window.LightPresets = {
     "ssrWetMul": 1.3,
     "tint": -0.08,
     "fogTint": 0.12,
-    "saturation": 0.9
+    "saturation": 0.9,
+    "wetDark": 1.18
   },
   "bahrain|dawn|wet": {
     "sunTemp": -0.25,
-    "sunElev": -10,
+    "sunElev": -5,
     "grMul": 1.6,
     "mistDensity": 1.55,
     "ssrWetMul": 1.25,
     "wetDark": 1.15,
     "tint": 0.08,
     "fogTint": 0.2,
-    "keyMul": 0.8
+    "keyMul": 0.8,
+    "lampLevel": 0.12,
+    "floodEmitMul": 0.4,
+    "bloomMul": 0.85,
+    "exposureMul": 0.9
   },
   "bahrain|day|dry": {
     "keyMul": 1.48,
@@ -588,44 +604,51 @@ window.LightPresets = {
     "sunTemp": -0.35,
     "keyMul": 0.9,
     "grMul": 2,
-    "glowAmp": 2.9,
-    "lampLevel": 0.28,
-    "tint": 0.2,
+    "glowAmp": 2.1,
+    "lampLevel": 0.24,
+    "tint": 0.08,
     "saturation": 1.15,
-    "bloomMul": 1.4
+    "bloomMul": 0.9,
+    "cityGlowMul": 0.5
   },
   "bahrain|dusk|fog": {
     "fogDensityMul": 1.9,
     "mistDensity": 1.7,
     "fogTint": 0.35,
     "keyMul": 0.75,
-    "saturation": 0.85,
+    "saturation": 0.84,
     "tint": 0.08,
-    "lampLevel": 0.3,
-    "glowAmp": 2.6
+    "lampLevel": 0.24,
+    "glowAmp": 2.1,
+    "bloomMul": 0.9,
+    "cityGlowMul": 0.5
   },
   "bahrain|dusk|overcast": {
     "keyMul": 0.8,
     "ambientMul": 1.25,
     "cloudCover": 0.35,
     "shadowStr": 0.7,
-    "tint": -0.05,
+    "tint": 0.08,
     "fogTint": 0.12,
-    "lampLevel": 0.3,
+    "lampLevel": 0.24,
     "saturation": 0.92,
-    "glowAmp": 2.5
+    "glowAmp": 2.15,
+    "bloomMul": 0.85
   },
   "bahrain|dusk|rain": {
     "keyMul": 0.82,
     "sunTemp": -0.2,
     "ssrWetMul": 1.35,
-    "fogDensityMul": 1.4,
+    "fogDensityMul": 1.45,
     "rainCount": 450,
     "lightning": 1.45,
-    "tint": -0.08,
+    "tint": 0.08,
     "fogTint": 0.08,
-    "lampLevel": 0.32,
-    "saturation": 0.9
+    "lampLevel": 0.24,
+    "saturation": 0.9,
+    "wetDark": 1.18,
+    "bloomMul": 0.85,
+    "glowAmp": 2.15
   },
   "bahrain|dusk|wet": {
     "sunTemp": -0.3,
@@ -633,10 +656,12 @@ window.LightPresets = {
     "grMul": 1.7,
     "ssrWetMul": 1.3,
     "wetDark": 1.15,
-    "tint": 0.1,
+    "tint": 0.08,
     "fogTint": 0.18,
-    "lampLevel": 0.3,
-    "bloomMul": 1.25
+    "lampLevel": 0.24,
+    "bloomMul": 0.9,
+    "glowAmp": 2.1,
+    "cityGlowMul": 0.5
   },
   "bahrain|night|dry": {
     "lampLevel": 0.28,
@@ -668,7 +693,13 @@ window.LightPresets = {
     "shadowStr": 0.65,
     "tint": -0.15,
     "pcssPen": 120,
-    "glowAmp": 2.5
+    "glowAmp": 2.2,
+    "exposureMul": 0.84,
+    "bloomMul": 0.82,
+    "nightAmbLift": 0.74,
+    "fogDensityMul": 1.15,
+    "floodEmitMul": 0.6,
+    "lampLevel": 0.28
   },
   "bahrain|night|rain": {
     "rainCount": 520,
@@ -686,12 +717,13 @@ window.LightPresets = {
   },
   "bahrain|night|wet": {
     "ssrWetMul": 1.35,
-    "wetDark": 1.2,
+    "wetDark": 1.22,
     "roadRough": 0.85,
     "tint": -0.05,
-    "bloomMul": 1.3,
+    "bloomMul": 0.75,
     "shadowStr": 0.88,
-    "exposureMul": 0.96
+    "exposureMul": 0.82,
+    "nightAmbLift": 0.72
   },
   "baku|dawn|dry": {
     "sunTemp": -0.25,
@@ -739,14 +771,16 @@ window.LightPresets = {
   },
   "baku|dawn|wet": {
     "sunTemp": -0.35,
-    "sunElev": -28,
+    "sunElev": -5,
     "grMul": 1.6,
     "mistDensity": 1.7,
     "ssrWetMul": 1.25,
     "wetDark": 1.1,
     "tint": 0.15,
-    "lampLevel": 0.2,
-    "fogDensityMul": 1.15
+    "lampLevel": 0.12,
+    "fogDensityMul": 1.15,
+    "floodEmitMul": 0.4,
+    "bloomMul": 0.9
   },
   "baku|day|dry": {
     "keyMul": 1.45,
@@ -800,9 +834,9 @@ window.LightPresets = {
   },
   "baku|dusk|dry": {
     "sunTemp": -0.35,
-    "sunElev": -18,
+    "sunElev": -5,
     "grMul": 1.7,
-    "lampLevel": 0.3,
+    "lampLevel": 0.18,
     "glowAmp": 2.7,
     "cityGlowMul": 0.75,
     "floodEmitMul": 0.45,
@@ -3378,7 +3412,14 @@ window.LightPresets = {
     "lampVolHaze": 1.3,
     "saturation": 0.85,
     "ambTemp": 0.2,
-    "tint": -0.15
+    "tint": -0.15,
+    "exposureMul": 0.8,
+    "bloomMul": 0.8,
+    "glowAmp": 2.2,
+    "nightAmbLift": 0.7,
+    "lampLevel": 0.28,
+    "poolEnergy": 0.52,
+    "floodEmitMul": 0.65
   },
   "jeddah|night|overcast": {
     "cloudCover": 0.28,
@@ -3388,9 +3429,14 @@ window.LightPresets = {
     "cityGlowMul": 1.25,
     "cityGlowWarm": 0.32,
     "starBright": 0.18,
-    "lampLevel": 0.36,
-    "glowAmp": 2.7,
-    "saturation": 0.94
+    "lampLevel": 0.28,
+    "glowAmp": 2.2,
+    "saturation": 0.94,
+    "exposureMul": 0.8,
+    "bloomMul": 0.8,
+    "nightAmbLift": 0.7,
+    "poolEnergy": 0.52,
+    "floodEmitMul": 0.65
   },
   "jeddah|night|rain": {
     "keyMul": 0.7,
@@ -3409,11 +3455,17 @@ window.LightPresets = {
     "nightAmbLift": 0.72
   },
   "jeddah|night|wet": {
-    "ssrWetMul": 1.3,
-    "wetDark": 1.15,
+    "ssrWetMul": 1.35,
+    "wetDark": 1.22,
     "lampVolHaze": 0.85,
     "ambTemp": 0.15,
-    "tint": -0.1
+    "tint": -0.1,
+    "exposureMul": 0.82,
+    "nightAmbLift": 0.72,
+    "bloomMul": 0.75,
+    "glowAmp": 2.2,
+    "floodEmitMul": 0.6,
+    "lampLevel": 0.28
   },
   "kyalami|dawn|dry": {
     "sunTemp": -0.42,
@@ -6004,47 +6056,63 @@ window.LightPresets = {
     "bloomMul": 0.9
   },
   "qatar|dawn|fog": {
-    "sunElev": -14,
+    "sunElev": -5,
     "sunTemp": -0.36,
     "keyMul": 0.7,
-    "fogDensityMul": 1.95,
-    "mistDensity": 1.85,
+    "fogDensityMul": 2,
+    "mistDensity": 2,
     "mistHeight": 0.42,
     "fogTint": 0.24,
     "tint": 0.16,
-    "saturation": 0.82
+    "saturation": 0.84,
+    "exposureMul": 0.9,
+    "bloomMul": 0.85,
+    "lampLevel": 0.12,
+    "floodEmitMul": 0.4
   },
   "qatar|dawn|overcast": {
-    "sunElev": -10,
-    "keyMul": 0.62,
+    "sunElev": -5,
+    "keyMul": 0.75,
     "grMul": 1.15,
     "ambientMul": 1.18,
-    "cloudCover": 0.28,
+    "cloudCover": 0.38,
     "shadowStr": 0.78,
     "tint": 0.14,
     "fogTint": 0.16,
-    "saturation": 0.9
+    "saturation": 0.9,
+    "exposureMul": 0.9,
+    "bloomMul": 0.85,
+    "lampLevel": 0.12,
+    "floodEmitMul": 0.4
   },
   "qatar|dawn|rain": {
-    "sunElev": -12,
-    "keyMul": 0.68,
+    "sunElev": -5,
+    "keyMul": 0.72,
     "sunTemp": -0.22,
     "ssrWetMul": 1.28,
-    "wetDark": 1.16,
+    "wetDark": 1.18,
     "rainCount": 420,
-    "fogDensityMul": 1.42,
+    "fogDensityMul": 1.55,
     "tint": 0.1,
-    "saturation": 0.86
+    "saturation": 0.86,
+    "exposureMul": 0.9,
+    "bloomMul": 0.85,
+    "lampLevel": 0.12,
+    "floodEmitMul": 0.4
   },
   "qatar|dawn|wet": {
-    "sunElev": -14,
+    "sunElev": -5,
     "sunTemp": -0.38,
     "grMul": 1.55,
     "mistDensity": 1.55,
     "ssrWetMul": 1.22,
     "wetDark": 1.12,
     "tint": 0.18,
-    "fogTint": 0.2
+    "fogTint": 0.2,
+    "exposureMul": 0.9,
+    "bloomMul": 0.85,
+    "lampLevel": 0.12,
+    "floodEmitMul": 0.4
   },
   "qatar|day|dry": {
     "keyMul": 1.35,
@@ -6101,56 +6169,68 @@ window.LightPresets = {
   "qatar|dusk|dry": {
     "keyMul": 0.8,
     "sunTemp": -0.42,
-    "sunElev": -12,
+    "sunElev": -5,
     "grMul": 1.7,
-    "tint": 0.3,
+    "tint": 0.08,
     "fogTint": 0.28,
-    "glowAmp": 2.5,
-    "lampLevel": 0.3
+    "glowAmp": 2.1,
+    "lampLevel": 0.24,
+    "bloomMul": 0.9,
+    "cityGlowMul": 0.5,
+    "floodEmitMul": 0.45
   },
   "qatar|dusk|fog": {
     "sunElev": -11,
     "sunTemp": -0.35,
     "fogDensityMul": 1.9,
-    "mistDensity": 1.65,
-    "lampLevel": 0.32,
+    "mistDensity": 1.7,
+    "lampLevel": 0.24,
     "lampFogBase": 0.62,
-    "glowAmp": 2.4,
-    "tint": 0.14,
-    "saturation": 0.84
+    "glowAmp": 2.1,
+    "tint": 0.08,
+    "saturation": 0.84,
+    "bloomMul": 0.9,
+    "cityGlowMul": 0.5
   },
   "qatar|dusk|overcast": {
     "sunElev": -8,
-    "keyMul": 0.68,
-    "cloudCover": 0.3,
-    "lampLevel": 0.3,
-    "glowAmp": 2.45,
-    "tint": 0.12,
+    "keyMul": 0.78,
+    "cloudCover": 0.38,
+    "lampLevel": 0.24,
+    "glowAmp": 2.2,
+    "tint": 0.08,
     "shadowStr": 0.72,
     "saturation": 0.9,
-    "ambientMul": 1.12
+    "ambientMul": 1.12,
+    "bloomMul": 0.9,
+    "cityGlowMul": 0.5
   },
   "qatar|dusk|rain": {
     "sunElev": -10,
     "keyMul": 0.7,
     "sunTemp": -0.22,
-    "lampLevel": 0.32,
-    "glowAmp": 2.45,
-    "ssrWetMul": 1.3,
+    "lampLevel": 0.24,
+    "glowAmp": 2.1,
+    "ssrWetMul": 1.35,
     "rainCount": 460,
-    "fogDensityMul": 1.48,
-    "tint": 0.06,
-    "lightning": 1.28
+    "fogDensityMul": 1.45,
+    "tint": 0.08,
+    "lightning": 1.28,
+    "bloomMul": 0.9,
+    "cityGlowMul": 0.5,
+    "wetDark": 1.18
   },
   "qatar|dusk|wet": {
     "sunElev": -11,
     "sunTemp": -0.38,
     "grMul": 1.45,
-    "lampLevel": 0.3,
-    "glowAmp": 2.5,
+    "lampLevel": 0.24,
+    "glowAmp": 2.1,
     "ssrWetMul": 1.24,
     "wetDark": 1.12,
-    "tint": 0.2
+    "tint": 0.08,
+    "bloomMul": 0.9,
+    "cityGlowMul": 0.5
   },
   "qatar|night|dry": {
     "tint": 0.05,
@@ -6184,8 +6264,14 @@ window.LightPresets = {
     "ambientMul": 0.95,
     "shadowStr": 0.75,
     "tint": 0.06,
-    "lampLevel": 0.31,
-    "saturation": 0.9
+    "lampLevel": 0.28,
+    "saturation": 0.9,
+    "exposureMul": 0.8,
+    "bloomMul": 0.8,
+    "glowAmp": 2.2,
+    "nightAmbLift": 0.7,
+    "poolEnergy": 0.52,
+    "floodEmitMul": 0.65
   },
   "qatar|night|rain": {
     "tint": -0.08,
@@ -6204,14 +6290,20 @@ window.LightPresets = {
   },
   "qatar|night|wet": {
     "tint": -0.04,
-    "ssrWetMul": 1.2,
-    "wetDark": 1.15,
+    "ssrWetMul": 1.35,
+    "wetDark": 1.22,
     "fogDensityMul": 1.3,
     "lampVolHaze": 1,
     "lampFogHaze": 0.9,
     "mistDensity": 1.3,
     "saturation": 0.9,
-    "cloudCover": 0.25
+    "cloudCover": 0.25,
+    "exposureMul": 0.82,
+    "nightAmbLift": 0.72,
+    "bloomMul": 0.75,
+    "glowAmp": 2.2,
+    "floodEmitMul": 0.6,
+    "lampLevel": 0.28
   },
   "redbull|dawn|dry": {
     "sunTemp": -0.28,
@@ -6842,18 +6934,21 @@ window.LightPresets = {
     "grMul": 1.35,
     "mistDensity": 1.35,
     "tint": 0.02,
-    "exposureMul": 0.92,
-    "ambTemp": 0.08
+    "exposureMul": 0.9,
+    "ambTemp": 0.08,
+    "bloomMul": 0.85
   },
   "silverstone|dawn|fog": {
-    "fogDensityMul": 2.3,
+    "fogDensityMul": 2,
     "mistDensity": 2,
     "mistHeight": 0.36,
     "keyMul": 0.65,
-    "saturation": 0.8,
+    "saturation": 0.84,
     "tint": -0.28,
     "ambientMul": 1.12,
-    "fogTint": -0.15
+    "fogTint": -0.15,
+    "exposureMul": 0.9,
+    "bloomMul": 0.85
   },
   "silverstone|dawn|overcast": {
     "keyMul": 0.78,
@@ -6883,7 +6978,9 @@ window.LightPresets = {
     "wetDark": 1.1,
     "tint": -0.1,
     "keyMul": 0.85,
-    "fogDensityMul": 1.2
+    "fogDensityMul": 1.2,
+    "exposureMul": 0.9,
+    "bloomMul": 0.85
   },
   "silverstone|day|dry": {
     "keyMul": 1.22,
@@ -6937,9 +7034,11 @@ window.LightPresets = {
     "sunElev": -8,
     "grMul": 1.5,
     "tint": 0.08,
-    "lampLevel": 0.32,
+    "lampLevel": 0.24,
     "poolEnergy": 0.65,
-    "exposureMul": 0.95
+    "exposureMul": 0.95,
+    "bloomMul": 0.85,
+    "glowAmp": 2.15
   },
   "silverstone|dusk|fog": {
     "fogDensityMul": 2,
@@ -6993,46 +7092,62 @@ window.LightPresets = {
     "exposureMul": 0.88
   },
   "silverstone|night|fog": {
-    "fogDensityMul": 2.15,
+    "fogDensityMul": 1.7,
     "mistDensity": 2,
-    "lampLevel": 0.36,
+    "lampLevel": 0.28,
     "lampVolHaze": 1.2,
     "lampFogHaze": 0.85,
     "starBright": 0.15,
     "tint": -0.22,
     "ambientMul": 0.52,
-    "nightAmbLift": 0.6
+    "nightAmbLift": 0.74,
+    "exposureMul": 0.84,
+    "bloomMul": 0.82,
+    "glowAmp": 2.2,
+    "floodEmitMul": 0.6
   },
   "silverstone|night|overcast": {
     "cloudCover": 0.4,
-    "lampLevel": 0.36,
+    "lampLevel": 0.28,
     "starBright": 0.1,
     "glowAmp": 2.2,
     "ambientMul": 0.58,
-    "nightAmbLift": 0.65,
+    "nightAmbLift": 0.74,
     "moonBright": 0.3,
-    "tint": -0.15
+    "tint": -0.15,
+    "exposureMul": 0.84,
+    "bloomMul": 0.82,
+    "fogDensityMul": 1.15,
+    "floodEmitMul": 0.6
   },
   "silverstone|night|rain": {
-    "lampLevel": 0.38,
+    "lampLevel": 0.28,
     "fogDensityMul": 1.55,
     "rainCount": 560,
     "lightning": 1.8,
     "lampVolHaze": 1.15,
-    "ssrWetMul": 1.4,
+    "ssrWetMul": 1.35,
     "tint": -0.2,
     "ambientMul": 0.5,
-    "nightAmbLift": 0.58
+    "nightAmbLift": 0.72,
+    "exposureMul": 0.82,
+    "bloomMul": 0.75,
+    "wetDark": 1.22,
+    "glowAmp": 2.2,
+    "floodEmitMul": 0.6
   },
   "silverstone|night|wet": {
-    "lampLevel": 0.36,
+    "lampLevel": 0.28,
     "ssrWetMul": 1.35,
     "wetDark": 1.12,
-    "glowAmp": 2.5,
+    "glowAmp": 2.2,
     "starBright": 0.75,
     "ambientMul": 0.55,
-    "nightAmbLift": 0.68,
-    "poolEnergy": 0.72
+    "nightAmbLift": 0.7,
+    "poolEnergy": 0.52,
+    "exposureMul": 0.8,
+    "bloomMul": 0.8,
+    "floodEmitMul": 0.65
   },
   "singapore|dawn|dry": {
     "sunTemp": -0.35,
@@ -7170,12 +7285,14 @@ window.LightPresets = {
     "fogDensityMul": 1.9,
     "mistDensity": 2.05,
     "keyMul": 0.72,
-    "lampLevel": 0.28,
+    "lampLevel": 0.24,
     "lampFogBase": 0.7,
-    "glowAmp": 2,
+    "glowAmp": 2.15,
     "cityGlowMul": 0.42,
     "bloomKnee": 0.62,
-    "saturation": 0.84
+    "saturation": 0.84,
+    "bloomMul": 0.85,
+    "tint": 0.08
   },
   "singapore|dusk|overcast": {
     "keyMul": 0.85,
@@ -7230,25 +7347,36 @@ window.LightPresets = {
     "fogDensityMul": 1.8,
     "mistDensity": 1.7,
     "lampFogBase": 0.75,
-    "nightAmbLift": 0.76,
+    "nightAmbLift": 0.7,
     "bloomKnee": 0.64,
-    "cityGlowMul": 1.25,
-    "glowAmp": 2.45,
+    "cityGlowMul": 0.55,
+    "glowAmp": 2.2,
     "saturation": 0.8,
-    "exposureMul": 0.85,
-    "starBright": 0.12
+    "exposureMul": 0.8,
+    "starBright": 0.12,
+    "bloomMul": 0.8,
+    "lampLevel": 0.28,
+    "poolEnergy": 0.52,
+    "floodEmitMul": 0.65,
+    "cityGlowWarm": -0.25
   },
   "singapore|night|overcast": {
     "cloudCover": 0.3,
-    "nightAmbLift": 0.8,
+    "nightAmbLift": 0.7,
     "bloomKnee": 0.64,
     "shadowStr": 0.9,
     "moonBright": 0.48,
-    "cityGlowMul": 1.15,
-    "glowAmp": 2.35,
+    "cityGlowMul": 0.55,
+    "glowAmp": 2.2,
     "mistDensity": 1.18,
     "saturation": 0.92,
-    "starBright": 0.15
+    "starBright": 0.15,
+    "exposureMul": 0.8,
+    "bloomMul": 0.8,
+    "lampLevel": 0.28,
+    "poolEnergy": 0.52,
+    "floodEmitMul": 0.65,
+    "cityGlowWarm": -0.25
   },
   "singapore|night|rain": {
     "ssrWetMul": 1.52,
@@ -7270,14 +7398,20 @@ window.LightPresets = {
   "singapore|night|wet": {
     "ssrWetMul": 1.48,
     "wetDark": 1.18,
-    "nightAmbLift": 0.78,
+    "nightAmbLift": 0.7,
     "bloomKnee": 0.66,
     "fogDensityMul": 1.18,
     "mistDensity": 1.22,
-    "cityGlowMul": 1.22,
-    "glowAmp": 2.45,
+    "cityGlowMul": 0.55,
+    "glowAmp": 2.2,
     "starBright": 0.2,
-    "tint": -0.08
+    "tint": -0.08,
+    "exposureMul": 0.8,
+    "bloomMul": 0.8,
+    "lampLevel": 0.28,
+    "poolEnergy": 0.52,
+    "floodEmitMul": 0.65,
+    "cityGlowWarm": -0.25
   },
   "sochi|dawn|dry": {
     "sunTemp": -0.28,
@@ -7484,14 +7618,17 @@ window.LightPresets = {
     "sunTemp": -0.3,
     "grMul": 1.4,
     "mistDensity": 1.5,
-    "sunElev": -8
+    "sunElev": -5,
+    "lampLevel": 0.12,
+    "floodEmitMul": 0.4,
+    "bloomMul": 0.9
   },
   "spa|dawn|fog": {
-    "fogDensityMul": 2.35,
-    "mistDensity": 2.15,
+    "fogDensityMul": 2,
+    "mistDensity": 2,
     "mistHeight": 0.4,
     "keyMul": 0.62,
-    "saturation": 0.78,
+    "saturation": 0.84,
     "tint": -0.25,
     "ambientMul": 1.1,
     "fogTint": -0.18,
@@ -7579,12 +7716,14 @@ window.LightPresets = {
     "fogDensityMul": 2.15,
     "mistDensity": 2,
     "keyMul": 0.68,
-    "tint": -0.16,
+    "tint": 0.08,
     "saturation": 0.82,
-    "lampLevel": 0.33,
+    "lampLevel": 0.24,
     "lampVolHaze": 0.95,
     "fogTint": -0.14,
-    "sunTemp": -0.2
+    "sunTemp": -0.2,
+    "bloomMul": 0.85,
+    "glowAmp": 2.15
   },
   "spa|dusk|overcast": {
     "keyMul": 0.72,
@@ -7912,22 +8051,28 @@ window.LightPresets = {
     "keyMul": 0.72,
     "sunTemp": -0.15,
     "mistDensity": 1.8,
-    "fogDensityMul": 1.65,
+    "fogDensityMul": 1.55,
     "rainCount": 450,
     "ssrWetMul": 1.35,
     "tint": -0.1,
     "saturation": 0.9,
-    "lampLevel": 0.34
+    "lampLevel": 0.34,
+    "exposureMul": 0.9,
+    "bloomMul": 0.85,
+    "wetDark": 1.18
   },
   "vegas|dawn|wet": {
     "sunTemp": -0.28,
-    "sunElev": -20,
+    "sunElev": -5,
     "grMul": 1.45,
     "mistDensity": 1.7,
     "ssrWetMul": 1.3,
     "wetDark": 1.12,
     "tint": 0.12,
-    "lampLevel": 0.3
+    "lampLevel": 0.12,
+    "exposureMul": 0.9,
+    "bloomMul": 0.85,
+    "floodEmitMul": 0.4
   },
   "vegas|day|dry": {
     "keyMul": 1.42,
@@ -7984,10 +8129,10 @@ window.LightPresets = {
   "vegas|dusk|dry": {
     "sunTemp": -0.5,
     "grMul": 1.85,
-    "sunElev": -18,
+    "sunElev": -5,
     "keyMul": 1.12,
-    "lampLevel": 0.38,
-    "floodEmitMul": 0.72,
+    "lampLevel": 0.18,
+    "floodEmitMul": 0.45,
     "glowAmp": 2.7,
     "cityGlowMul": 0.85,
     "tint": 0.28
@@ -7997,11 +8142,12 @@ window.LightPresets = {
     "mistDensity": 1.85,
     "sunTemp": -0.3,
     "grMul": 1.25,
-    "glowAmp": 2.35,
+    "glowAmp": 2.15,
     "cityGlowMul": 0.65,
     "saturation": 0.85,
-    "tint": 0.1,
-    "lampLevel": 0.34
+    "tint": 0.08,
+    "lampLevel": 0.24,
+    "bloomMul": 0.85
   },
   "vegas|dusk|overcast": {
     "keyMul": 0.88,
@@ -8414,13 +8560,15 @@ window.LightPresets = {
     "sunTemp": -0.4,
     "grMul": 1.6,
     "keyMul": 0.85,
-    "sunElev": -18,
-    "lampLevel": 0.45,
-    "floodEmitMul": 0.78,
-    "glowAmp": 2.95,
+    "sunElev": -5,
+    "lampLevel": 0.24,
+    "floodEmitMul": 0.45,
+    "glowAmp": 2.1,
     "ambientMul": 0.92,
-    "tint": 0.12,
-    "exposureMul": 1.13
+    "tint": 0.08,
+    "exposureMul": 1.13,
+    "bloomMul": 0.9,
+    "cityGlowMul": 0.5
   },
   "zandvoort|dusk|fog": {
     "fogDensityMul": 2.15,
@@ -8459,10 +8607,13 @@ window.LightPresets = {
     "sunElev": -16,
     "ssrWetMul": 1.32,
     "wetDark": 1.12,
-    "tint": 0.06,
-    "lampLevel": 0.42,
+    "tint": 0.08,
+    "lampLevel": 0.24,
     "floodEmitMul": 0.75,
-    "keyMul": 0.8
+    "keyMul": 0.8,
+    "glowAmp": 2.1,
+    "bloomMul": 0.9,
+    "cityGlowMul": 0.5
   },
   "zandvoort|night|dry": {
     "keyMul": 0.14,
@@ -8479,13 +8630,17 @@ window.LightPresets = {
     "keyMul": 0.1,
     "fogDensityMul": 2.25,
     "mistDensity": 2.05,
-    "lampLevel": 0.35,
+    "lampLevel": 0.28,
     "lampVolHaze": 1.15,
     "lampFogHaze": 0.88,
     "starBright": 0.12,
     "tint": -0.22,
     "ambientMul": 0.4,
-    "nightAmbLift": 0.55
+    "nightAmbLift": 0.7,
+    "bloomMul": 0.78,
+    "glowAmp": 2.2,
+    "exposureMul": 0.84,
+    "floodEmitMul": 0.6
   },
   "zandvoort|night|overcast": {
     "keyMul": 0.12,
@@ -8493,32 +8648,41 @@ window.LightPresets = {
     "starBright": 0.08,
     "moonBright": 0.28,
     "ambientMul": 0.44,
-    "nightAmbLift": 0.58,
-    "lampLevel": 0.35,
-    "glowAmp": 2.25,
-    "tint": -0.14
+    "nightAmbLift": 0.7,
+    "lampLevel": 0.28,
+    "glowAmp": 2.2,
+    "tint": -0.14,
+    "bloomMul": 0.78,
+    "exposureMul": 0.84,
+    "floodEmitMul": 0.6
   },
   "zandvoort|night|rain": {
     "keyMul": 0.1,
     "ambientMul": 0.38,
-    "nightAmbLift": 0.52,
+    "nightAmbLift": 0.72,
     "fogDensityMul": 1.65,
     "mistDensity": 1.75,
     "rainCount": 580,
     "rainWind": 0.48,
     "lightning": 1.45,
-    "ssrWetMul": 1.48,
-    "lampLevel": 0.37
+    "ssrWetMul": 1.35,
+    "lampLevel": 0.37,
+    "exposureMul": 0.82,
+    "bloomMul": 0.75,
+    "wetDark": 1.22
   },
   "zandvoort|night|wet": {
     "keyMul": 0.12,
     "ambientMul": 0.4,
-    "nightAmbLift": 0.58,
-    "ssrWetMul": 1.42,
-    "wetDark": 1.12,
-    "lampLevel": 0.36,
-    "glowAmp": 2.55,
+    "nightAmbLift": 0.72,
+    "ssrWetMul": 1.35,
+    "wetDark": 1.22,
+    "lampLevel": 0.28,
+    "glowAmp": 2.2,
     "mistDensity": 1.3,
-    "starBright": 0.7
+    "starBright": 0.7,
+    "exposureMul": 0.82,
+    "bloomMul": 0.75,
+    "floodEmitMul": 0.6
   }
 };

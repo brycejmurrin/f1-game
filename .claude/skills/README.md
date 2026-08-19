@@ -54,6 +54,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **garage-parts-livery** | Parts catalog, SIGNATURE/FACTORY presets, garage UI, livery finish/fin, ERS/aero load. |
 | **asset-pack** | Baking/verifying `assets/pack`, MAT layers, `matTexMix`, procedural fallback. |
 | **pwa-cache-service-worker** | `sw.js` precache, `version.json` network-first, DEFERRED optional assets, stale PWA. |
+| **slim-bloat** | Agent bloat / Claude-simplify — fat files or skills, saturated ratchets, dead/duplicate code, stale comments, extract or tree-split. Dispatch `bloat-auditor`; parent applies one carve. |
 
 The debug-* skills pair with `tools/apex-eval.mjs` / `tools/capture/apex-capture.mjs` so
 changes are validated visually, not just asserted.

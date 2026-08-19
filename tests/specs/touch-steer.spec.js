@@ -170,6 +170,49 @@ test.describe("on-screen arrows ramp like a key, not a switch", () => {
     await page.evaluate(() => window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 12 })));
     expect(await pump(page)).toBe(0);
   });
+
+  // THE PLAYER REPORT: buttons mode, thumb on GAS, tap LEFT/RIGHT to turn,
+  // throttle dies. Two real fingers are two pointerIds. WebKit then fires
+  // lostpointercapture / pointerleave on the FIRST button — setPointerCapture
+  // on the turn arrow steals the only capture slot, and the anti-latch nets
+  // treated that as "finger up". The first thumb is still on the glass.
+  test("holding GAS survives tapping a turn arrow", async ({ page }) => {
+    const r = await page.evaluate(() => {
+      Input.reset();
+      Input.setSteerMode("buttons");
+      const gas = document.getElementById("btn-throttle");
+      const left = document.getElementById("btn-steer-left");
+      gas.hidden = false;
+      left.hidden = false;
+      if (gas.parentElement) gas.parentElement.hidden = false;
+      if (left.parentElement) left.parentElement.hidden = false;
+      const pe = (el, type, id, extra) => el.dispatchEvent(new PointerEvent(type, {
+        pointerId: id, bubbles: true, cancelable: true, ...extra,
+      }));
+      pe(gas, "pointerdown", 41);
+      const held = Input.throttle();
+      pe(left, "pointerdown", 42);
+      // Capture steal: GAS is still shown, thumb still down (buttons: 1).
+      pe(gas, "lostpointercapture", 41, { buttons: 1 });
+      const afterSteal = Input.throttle();
+      // setPointerCapture also fires a boundary pointerleave (see holdSetupCtl
+      // in js/game.js — they already refuse to release on that event).
+      pe(gas, "pointerleave", 41, { buttons: 1 });
+      const afterLeave = Input.throttle();
+      const turning = Input.debugState().btn.left;
+      window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 42 }));
+      const afterTurnUp = Input.throttle();
+      window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 41 }));
+      const afterGasUp = Input.throttle();
+      return { held, afterSteal, afterLeave, turning, afterTurnUp, afterGasUp };
+    });
+    expect(r.held).toBe(true);
+    expect(r.afterSteal).toBe(true);
+    expect(r.afterLeave).toBe(true);
+    expect(r.turning).toBe(true);
+    expect(r.afterTurnUp).toBe(true);
+    expect(r.afterGasUp).toBe(false);
+  });
 });
 
 test.describe("adaptive buttons are analog triggers for digital steer", () => {
