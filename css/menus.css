@@ -1254,17 +1254,26 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   :where(.sheet[data-density="compact"]) #race-settings .sel-chip { font-size: var(--fs-micro); padding: 7px 9px; letter-spacing: 0; }
   :where(.sheet[data-density="compact"]) #race-settings .sel-label { font-size: var(--fs-micro); margin-bottom: 3px; }
   :where(.sheet[data-density="compact"]) .rs-row { margin-bottom: calc(var(--gap) * 0.5); }
-  /* Championship QUALI is a label. Leaving it as a grid cell parked
-     RELIABILITY on a third chip row that sat under the foot (measured
-     852×393). Promote the label to a full-width line so DIFF / CAUTIONS /
-     RELIABILITY share the last chip row. overflow-y is the safety net when
-     the chips are still present (one-off ON/OFF). */
+  /* Championship QUALI is a label. display:contents + a full-span label
+     isolated DIFF on row 2 and parked CAUTIONS / RELIABILITY on row 4
+     under the foot (measured 852×393, cache 1464). Pin the label to row
+     1 and the two chip rows under it so DIFF / CAUTIONS / RELIABILITY
+     share the last row. overflow-y is the safety net when the chips are
+     still present (one-off ON/OFF). */
   :where(.sheet[data-density="compact"]) #rs-body { overflow-y: auto; overscroll-behavior-y: contain; }
-  :where(.sheet[data-density="compact"]) #rs-quali-section:has(#rs-quali[hidden]) {
-    display: contents;
+  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > .rs-row:nth-child(1),
+  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > .rs-row:nth-child(2),
+  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > #rs-time-section {
+    grid-row: 2;
   }
-  :where(.sheet[data-density="compact"]) #rs-quali-section:has(#rs-quali[hidden]) #rs-quali-label {
+  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > #rs-diff-section,
+  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > #rs-caution-section,
+  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > #rs-reliab-section {
+    grid-row: 3;
+  }
+  :where(.sheet[data-density="compact"]) #rs-quali-section:has(#rs-quali[hidden]) {
     grid-column: 1 / -1;
+    grid-row: 1;
     margin-bottom: 0;
   }
 }

@@ -255,9 +255,11 @@
 #cs-inner:not([data-pair="on"]) #cs-tabs .cs-tab {
   flex: 0 0 auto; white-space: nowrap;
 }
-/* A tall stacked sheet has height to show the catalogue. Wrapping beats
-   a sideways pan that hid CAMERA-adjacent cats (AERO) behind the fold. */
-#cs-inner:not([data-pair="on"])[data-shape="tall"] #cs-tabs {
+/* A tall stacked sheet has height to show the catalogue. Compact
+   landscape (play-shape) hid CAMERA-adjacent cats behind a sideways
+   pan too — wrapping two one-line rows beats that (compact already
+   drops .cs-tab-cur). */
+#cs-inner:not([data-pair="on"]):is([data-shape="tall"], [data-density="compact"]) #cs-tabs {
   flex-wrap: wrap;
   overflow-x: hidden;
 }

@@ -87,8 +87,8 @@ test("garage stacked categories are a horizontal strip", () => {
     "pair-on rail may still scroll vertically");
   assert.match(css, /#cs-inner\[data-density="compact"\]\s*\{\s*--pair-at:\s*2000px/,
     "compact garage stacks to the horizontal strip");
-  assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\)\[data-shape="tall"\] #cs-tabs \{[\s\S]*?flex-wrap:\s*wrap/,
-    "a tall stacked garage wraps the catalogue instead of hiding AERO behind a pan");
+  assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\):is\(\[data-shape="tall"\], \[data-density="compact"\]\) #cs-tabs \{[\s\S]*?flex-wrap:\s*wrap/,
+    "tall or compact stacked garage wraps the catalogue instead of hiding AERO behind a pan");
   assert.match(read("css/menus.css"), /#ss-inner\[data-density="compact"\]\s*\{\s*--pair-at:\s*2000px/,
     "compact season stacks via --pair-at, same as career");
   const js = read("js/game/setup-ui.js");
@@ -488,7 +488,8 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   assert.match(game, /qEl\.hidden = qForced != null/);
   assert.match(game, /QUALIFYING LAP" \+ \(qForced == null \? "" : " · " \+/);
   const menus = read("css/menus.css");
-  assert.match(menus, /#rs-quali-section:has\(#rs-quali\[hidden\]\) \{\s*display:\s*contents/);
+  assert.match(menus, /#rs-quali-section:has\(#rs-quali\[hidden\]\) \{\s*grid-column:\s*1 \/ -1;\s*grid-row:\s*1/);
+  assert.match(menus, /#rs-reliab-section \{\s*grid-row:\s*3/);
   assert.match(menus, /#rs-body \{ overflow-y:\s*auto/);
   assert.match(spotify, /if \(audio\) audio\.hidden = true/);
   assert.match(spotify, /if \(audio\) audio\.hidden = false/);
