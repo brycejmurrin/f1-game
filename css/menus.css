@@ -920,11 +920,51 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      "set" were never what rendered; the base 10px/11px were.
      This is the exact trap the note under THE PREVIEW CARD IN THE TWO-COLUMN
      LAYOUT describes, and it caught the phone sizes too. The touch sizes now
-     live AFTER those base rules, where they can actually win — see THE TOUCH
+     live AFTER those base rules, where they can already win — see THE TOUCH
      TYPE FLOOR at the end of this file. Only the layout values stay here,
      because nothing re-declares them. */
   #sel-preview-facts { gap: 5px; margin-top: 5px; }
   #sel-preview-elev { height: 26px; margin-top: 4px; }
+
+  /* PORTRAIT STACKED: BIGGER MAP.
+     The stacked rules (lines ~433–478) force flex-direction:row and cap the map
+     at chip-h*3.5 (~140px) to keep it a thumbnail band. In portrait we want the
+     map as the centrepiece — full width, taller. Override with matching or higher
+     specificity so portrait wins regardless of source order.
+     Three IDs beat the two-ID stacked rule. */
+  #sel-inner:not([data-pair="on"]) > #sel-body > #sel-track-section {
+    max-height: 55%;
+  }
+  #sel-inner:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section {
+    max-height: 62%;
+  }
+  #sel-inner:not([data-pair="on"]) > #sel-body > #sel-track-section > #sel-track-preview {
+    flex-direction: column;
+    align-items: stretch;
+    --sel-map-w: 100%;
+  }
+  /* Remove the chip-h*3.5 cap so the map can grow to fill the section budget.
+     Three selectors: two IDs + attribute beats the two-ID map cap above. */
+  #sel-inner:not([data-pair="on"]) > #sel-body > #sel-track-section #sel-preview-map {
+    max-height: none;
+    max-width: 100%;
+    width: var(--sel-map-w, 100%);
+  }
+  /* Compact portrait: same column layout, slightly smaller budget so one list
+     item stays visible. */
+  #sel-inner:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section > #sel-track-preview {
+    flex-direction: column;
+    align-items: stretch;
+    --sel-map-w: 100%;
+  }
+  #sel-inner:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section #sel-preview-map {
+    max-height: none;
+    max-width: 100%;
+  }
+  /* Restore the caption elements hidden by compact stacked rules so they appear
+     under the map in portrait compact view. */
+  #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-meta,
+  #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-facts { display: flex; }
 }
 
 /* THE PREVIEW CARD IN THE TWO-COLUMN LAYOUT.
