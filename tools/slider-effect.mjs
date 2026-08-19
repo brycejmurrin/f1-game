@@ -16,6 +16,7 @@
  *   node tools/slider-effect.mjs --class apply-only
  *   node tools/slider-effect.mjs --gate night
  *   node tools/slider-effect.mjs --risk inert|conditional|reapply|rebuild
+ *   node tools/slider-effect.mjs --tag saturate|glx-only|sparse-pixels
  *   node tools/slider-effect.mjs --json
  */
 import { readFileSync } from "node:fs";
@@ -42,6 +43,7 @@ Usage:
   node tools/slider-effect.mjs --class apply-only
   node tools/slider-effect.mjs --gate night
   node tools/slider-effect.mjs --risk inert|conditional|reapply|rebuild
+  node tools/slider-effect.mjs --tag saturate|glx-only|sparse-pixels
   node tools/slider-effect.mjs --json
   node tools/slider-effect.mjs --help
 
@@ -50,13 +52,17 @@ Filters:
   --class NAME   apply-only | per-frame | uniform | build-only
   --gate NAME    night | wet | rain | fog | overcast | day
   --risk NAME    inert | conditional | reapply | rebuild
+  --tag NAME     night-only | overcast-only | fog-only | rain-only | wet-drizzle
+                 | traffic | far-scenery | bloom-tier | glx-only | saturate
+                 | sparse-pixels
   --json         JSON on stdout (knobs + counts)
 
   --live  NOT IMPLEMENTED. Future protocol — do not launch a browser from this
           tool: boot a track, A → B → A′ via __apex.lightTune({id}) and read
           __apex.lightState() fields listed in each knob's \`moves\` array.
-          Restore A′ and assert the derived state returned. That is exact and
-          noise-free; do not use pixel MAD (LIGHTING-TUNER-SLIDERS.md).
+          Restore the PRE-PUSH live value (never TUNE_DEFS.def — that overrides
+          a shipped preset and dirties localStorage). Assert derived state
+          returned. Exact and noise-free; do not use pixel MAD as the gate.
 `;
 
 const APPLY_ONLY_FILES = ["js/game/atmosphere.js"];
@@ -80,6 +86,22 @@ const WEATHER_GATES = new Set(["wet", "rain", "fog", "overcast"]);
 const CLASSES = new Set(["apply-only", "per-frame", "uniform", "build-only"]);
 const RISKS = new Set(["inert", "conditional", "reapply", "rebuild"]);
 const GATES = new Set(["night", "wet", "rain", "fog", "overcast", "day"]);
+const TAGS = new Set([
+  "night-only", "overcast-only", "fog-only", "rain-only", "wet-drizzle",
+  "traffic", "far-scenery", "bloom-tier", "glx-only", "saturate", "sparse-pixels",
+]);
+const TAG_BY_ID = {
+  lampCull: "traffic",
+  renderDistMul: "far-scenery",
+  perChunkLights: "glx-only",
+  roadChunkLamps: "glx-only",
+  lampFogBase: "saturate",
+  vignetteSoft: "saturate",
+  godrayAniso: "saturate",
+  carGloss: "saturate",
+  starBright: "sparse-pixels",
+  flareStreak2: "sparse-pixels",
+};
 
 const read = (root, p) => readFileSync(path.join(root, p), "utf8");
 
@@ -248,6 +270,18 @@ function inertFromHelp(d) {
     || /Held off automatically/i.test(h);
 }
 
+function tagsFromKnob(d, gates) {
+  const tags = new Set();
+  if (gates.length === 1) {
+    const only = `${gates[0]}-only`;
+    if (TAGS.has(only)) tags.add(only);
+  }
+  if (/^drizzle/i.test(d.id)) tags.add("wet-drizzle");
+  if (/^(bloom|sunShaft)/i.test(d.id)) tags.add("bloom-tier");
+  if (TAG_BY_ID[d.id]) tags.add(TAG_BY_ID[d.id]);
+  return [...tags].sort();
+}
+
 /**
  * Classify every TUNE_DEFS knob. Pure source reads — no browser.
  * @param {string} [root]
@@ -310,6 +344,7 @@ export function classifyKnobs(root = ROOT) {
     if (gates.size) risks.push("conditional");
     if (!where.length || inertFromHelp(d)) risks.push("inert");
 
+    const gateList = [...gates].sort();
     const moveList = [...moves];
     knobs.push({
       id: d.id,
@@ -321,8 +356,9 @@ export function classifyKnobs(root = ROOT) {
       reinitRain: !!d.reinitRain,
       applyRace: registered.has(d.id),
       uniform: d.u || null,
-      gates: [...gates].sort(),
-      weatherGated: [...gates].some((g) => WEATHER_GATES.has(g)),
+      gates: gateList,
+      tags: tagsFromKnob(d, gateList),
+      weatherGated: gateList.some((g) => WEATHER_GATES.has(g)),
       consumer: inferConsumer(d, moveList, klass),
       moves: moveList,
       risks,
@@ -349,6 +385,10 @@ export function filterKnobs(knobs, opts = {}) {
   if (opts.risk) {
     const r = String(opts.risk).toLowerCase();
     out = out.filter((k) => k.risks.includes(r));
+  }
+  if (opts.tag) {
+    const t = String(opts.tag).toLowerCase();
+    out = out.filter((k) => k.tags.includes(t));
   }
   return out;
 }
@@ -405,7 +445,7 @@ export function parseArgs(argv) {
     if (a === "--help" || a === "-h") opts.help = true;
     else if (a === "--json") opts.json = true;
     else if (a === "--live") opts.live = true;
-    else if (eq("group") || eq("class") || eq("gate") || eq("risk")) continue;
+    else if (eq("group") || eq("class") || eq("gate") || eq("risk") || eq("tag")) continue;
     else if (a.startsWith("-")) throw new Error(`unknown flag: ${a}\n${HELP}`);
   }
   if (opts.class && !CLASSES.has(opts.class))
@@ -414,6 +454,8 @@ export function parseArgs(argv) {
     throw new Error(`--risk must be one of ${[...RISKS].join("|")}`);
   if (opts.gate && !GATES.has(opts.gate))
     throw new Error(`--gate must be one of ${[...GATES].join("|")}`);
+  if (opts.tag && !TAGS.has(opts.tag))
+    throw new Error(`--tag must be one of ${[...TAGS].join("|")}`);
   return opts;
 }
 

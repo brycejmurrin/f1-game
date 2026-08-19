@@ -101,3 +101,17 @@ test("--live does not launch a browser", () => {
   assert.notEqual(r.status, 0);
   assert.match(`${r.stdout}\n${r.stderr}`, /not implemented/i);
 });
+
+test("inventory tags: glx-only / saturate / sparse-pixels / wet-drizzle", () => {
+  const { knobs } = json(["--json"]);
+  const byId = Object.fromEntries(knobs.map((k) => [k.id, k]));
+  assert.ok(byId.perChunkLights.tags.includes("glx-only"), byId.perChunkLights.tags);
+  assert.ok(byId.roadChunkLamps.tags.includes("glx-only"));
+  assert.ok(byId.lampFogBase.tags.includes("saturate"));
+  assert.ok(byId.starBright.tags.includes("sparse-pixels"));
+  const drizzle = knobs.find((k) => k.id.startsWith("drizzle"));
+  assert.ok(drizzle, "expected a drizzle* knob");
+  assert.ok(drizzle.tags.includes("wet-drizzle"), drizzle.id);
+  const glx = json(["--tag", "glx-only", "--json"]);
+  assert.deepEqual(glx.knobs.map((k) => k.id).sort(), ["perChunkLights", "roadChunkLamps"]);
+});
