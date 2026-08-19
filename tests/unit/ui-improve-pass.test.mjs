@@ -489,7 +489,7 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   assert.match(game, /QUALIFYING LAP" \+ \(qForced == null \? "" : " · " \+/);
   const menus = read("css/menus.css");
   assert.match(menus, /#rs-quali-section:has\(#rs-quali\[hidden\]\) \{\s*grid-column:\s*1 \/ -1;\s*grid-row:\s*1/);
-  assert.match(menus, /#rs-reliab-section \{\s*grid-row:\s*3/);
+  assert.match(menus, /:is\(#rs-diff-section, #rs-caution-section, #rs-reliab-section\) \{\s*grid-row:\s*3/);
   assert.match(menus, /#rs-body \{ overflow-y:\s*auto/);
   assert.match(spotify, /if \(audio\) audio\.hidden = true/);
   assert.match(spotify, /if \(audio\) audio\.hidden = false/);

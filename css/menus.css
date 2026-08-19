@@ -1261,14 +1261,10 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      share the last row. overflow-y is the safety net when the chips are
      still present (one-off ON/OFF). */
   :where(.sheet[data-density="compact"]) #rs-body { overflow-y: auto; overscroll-behavior-y: contain; }
-  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > .rs-row:nth-child(1),
-  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > .rs-row:nth-child(2),
-  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > #rs-time-section {
+  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > :is(.rs-row:nth-child(1), .rs-row:nth-child(2), #rs-time-section) {
     grid-row: 2;
   }
-  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > #rs-diff-section,
-  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > #rs-caution-section,
-  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > #rs-reliab-section {
+  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > :is(#rs-diff-section, #rs-caution-section, #rs-reliab-section) {
     grid-row: 3;
   }
   :where(.sheet[data-density="compact"]) #rs-quali-section:has(#rs-quali[hidden]) {
