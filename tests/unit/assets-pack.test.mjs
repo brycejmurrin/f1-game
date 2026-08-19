@@ -272,6 +272,85 @@ test("bake-model round-trips glTF into the game's own vertex format", () => {
   }
 });
 
+test("bake-atlas slices a 4x4 sheet onto the named MAT layer", () => {
+  const os = require("node:os");
+  const cp = require("node:child_process");
+  const zlib = require("node:zlib");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-atlas-"));
+  try {
+    const grid = 4, tile = 8, size = grid * tile;
+    const rgba = Buffer.alloc(size * size * 4, 255);
+    // Unique mid-grey-ish colour per cell so mean-normalise keeps the hue.
+    for (let row = 0; row < grid; row++) {
+      for (let col = 0; col < grid; col++) {
+        const r = 80 + col * 24, g = 80 + row * 24, b = 140;
+        for (let y = 0; y < tile; y++) {
+          for (let x = 0; x < tile; x++) {
+            const o = ((row * tile + y) * size + col * tile + x) * 4;
+            rgba[o] = r; rgba[o + 1] = g; rgba[o + 2] = b; rgba[o + 3] = 255;
+          }
+        }
+      }
+    }
+    const crcTable = (() => {
+      const t = new Int32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        t[n] = c;
+      }
+      return t;
+    })();
+    const crc32 = (buf) => {
+      let c = -1;
+      for (let i = 0; i < buf.length; i++) c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+      return (c ^ -1) >>> 0;
+    };
+    const chunk = (type, data) => {
+      const len = Buffer.alloc(4); len.writeUInt32BE(data.length, 0);
+      const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+      const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(body), 0);
+      return Buffer.concat([len, body, crc]);
+    };
+    const raw = Buffer.alloc((size * 4 + 1) * size);
+    for (let y = 0; y < size; y++) {
+      raw[y * (size * 4 + 1)] = 0;
+      rgba.copy(raw, y * (size * 4 + 1) + 1, y * size * 4, (y + 1) * size * 4);
+    }
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(size, 0); ihdr.writeUInt32BE(size, 4);
+    ihdr[8] = 8; ihdr[9] = 6;
+    const atlas = path.join(dir, "atlas.png");
+    fs.writeFileSync(atlas, Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      chunk("IHDR", ihdr),
+      chunk("IDAT", zlib.deflateSync(raw, { level: 9 })),
+      chunk("IEND", Buffer.alloc(0)),
+    ]));
+
+    const r = cp.spawnSync(process.execPath, [
+      path.join(ROOT, "tools", "assets.mjs"), "bake-atlas",
+      "--albedo", atlas, "--grid", "4", "--inset", "0",
+      "--size", "8", "--low", "0", "--map", "BRICK=1,0",
+    ], { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
+    assert.equal(r.status, 0, `bake-atlas failed:\n${r.stdout}\n${r.stderr}`);
+
+    const png = fs.readFileSync(path.join(dir, "mat-albedo-8.png"));
+    assert.deepEqual([...png.subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
+    const w = png.readUInt32BE(16), h = png.readUInt32BE(20);
+    assert.equal(w, 8);
+    assert.equal(h, 8 * 17);
+    const man = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
+    const brick = man.materials.layers.find((L) => L.id === "brick");
+    assert.ok(brick, "BRICK layer missing from manifest");
+    assert.equal(brick.mat, 2);
+    assert.equal(brick.licence, "Apex26-Procedural");
+    assert.match(brick.source, /generated:.*#1,0/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("TrackGeom.addMesh transforms a baked model correctly", () => {
   // The placement maths for baked props. Getting the yaw sign or the normal
   // rotation wrong produces geometry that is *present and finite* — so

@@ -333,14 +333,15 @@
           }
           const b = [rT, uT, tT];
           const mid = vadd(base, uT, H * 0.5);
-          // Main shaft
+          // Glass-fin towers (Marina Bay Sands) — concrete shafts, glass
+          // curtain, metal fins/crowns. Skypark deck is wood planking.
+          stage._mat = MAT.CONCRETE;
           TrackGeom.addBox(stage, mid,                         [TOWERW, H, 28],               wall,               b);
-          // Window glazing face — slightly proud of the wall, covers 70% of height
+          stage._mat = MAT.GLASS;
           TrackGeom.addBox(stage, vadd(base, uT, H * 0.52),    [TOWERW + 0.6, H * 0.76, 28.6], winC,               b);
-          // Vertical lit fin, alternating blue & gold for night detail
+          stage._mat = MAT.METAL;
           const finCol = t === 0 ? [0.90, 0.75, 0.30] : [0.40, 0.65, 1.00];
           TrackGeom.addBox(stage, vadd(base, uT, H * 0.50),    [2.0, H * 0.60, 29.2],         finCol,             b);
-          // Bright crown at top of each tower
           TrackGeom.addBox(stage, vadd(base, uT, H * 0.92),    [TOWERW + 1, H * 0.10, 29],    [0.92, 0.95, 1.00], b);
           tops.push(vadd(base, uT, H));
         }
@@ -358,12 +359,14 @@
         // as unsupported. Shifted down by 1.45 m (every offset moves together,
         // so the slab/rim/pool stack keeps its original relative geometry) to
         // seat the main slab's underside ~0.3 m above the tower top.
-        // Main slab — lighter warm sand colour (the real MBS deck is sand-coloured)
+        // Main slab — wooden observation deck (SkyPark plank walk)
+        stage._mat = MAT.WOOD;
         TrackGeom.addBox(stage, vadd(mid, a.u, 2.05), [skyW, 3.5, 32],      [0.86, 0.82, 0.74], [a.r, a.u, a.t]);
-        // Glowing neon rim — the iconic cyan strip seen from every angle
+        stage._mat = MAT.METAL;
         TrackGeom.addBox(stage, vadd(mid, a.u, 4.55), [skyW + 1, 1.2, 32],  NEON[1],             [a.r, a.u, a.t]);
-        // Rooftop pool and garden strip — warm amber
+        stage._mat = MAT.GLASS;
         TrackGeom.addBox(stage, vadd(mid, a.u, 4.05), [skyW - TOWERW + 4, 0.8, 10], WIN_GOLD,   [a.r, a.u, a.t]);
+        stage._mat = 0;
         }, { required: true });
       }
 

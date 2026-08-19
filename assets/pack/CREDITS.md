@@ -6,19 +6,19 @@ Powered by Poly Haven.
 
 | kind | id | author | licence | source |
 |---|---|---|---|---|
-| material | concrete | Poly Haven contributors | CC0 | polyhaven:concrete_panels |
-| material | brick | Poly Haven contributors | CC0 | polyhaven:red_brick |
-| material | metal | Poly Haven contributors | CC0 | polyhaven:corrugated_iron |
-| material | wood | Poly Haven contributors | CC0 | polyhaven:wood_planks |
-| material | foliage | Poly Haven contributors | CC0 | polyhaven:leafy_grass |
-| material | fabric | Poly Haven contributors | CC0 | polyhaven:denim_fabric |
-| material | sand | Poly Haven contributors | CC0 | polyhaven:coast_sand_01 |
-| material | grass | Poly Haven contributors | CC0 | polyhaven:sparse_grass |
-| material | rock | Poly Haven contributors | CC0 | polyhaven:rock_ground |
-| material | snow | Poly Haven contributors | CC0 | polyhaven:snow_02 |
-| material | roof | Poly Haven contributors | CC0 | polyhaven:clay_roof_tiles |
-| material | stone | Poly Haven contributors | CC0 | polyhaven:castle_brick_02_red |
-| material | rust | Poly Haven contributors | CC0 | polyhaven:rusty_metal |
+| material | concrete | Apex 26 | Apex26-Procedural | generated:assets/atlases/atlas-arch-albedo.png#2,0 |
+| material | brick | Apex 26 | Apex26-Procedural | generated:assets/atlases/atlas-arch-albedo.png#1,0 |
+| material | metal | Apex 26 | Apex26-Procedural | generated:assets/atlases/atlas-arch-albedo.png#2,2 |
+| material | wood | Apex 26 | Apex26-Procedural | generated:assets/atlases/atlas-variety-albedo.png#0,0 |
+| material | foliage | Apex 26 | Apex26-Procedural | generated:assets/atlases/atlas-nature-albedo.png#1,0 |
+| material | fabric | Apex 26 | Apex26-Procedural | generated:assets/atlases/atlas-variety-albedo.png#2,0 |
+| material | sand | Apex 26 | Apex26-Procedural | generated:assets/atlases/atlas-nature-albedo.png#1,3 |
+| material | grass | Apex 26 | Apex26-Procedural | generated:assets/atlases/atlas-nature-albedo.png#2,1 |
+| material | rock | Apex 26 | Apex26-Procedural | generated:assets/atlases/atlas-nature-albedo.png#1,2 |
+| material | snow | Apex 26 | Apex26-Procedural | generated:assets/atlases/atlas-variety-albedo.png#0,1 |
+| material | roof | Apex 26 | Apex26-Procedural | generated:assets/atlases/atlas-arch-albedo.png#2,1 |
+| material | stone | Apex 26 | Apex26-Procedural | generated:assets/atlases/atlas-arch-albedo.png#1,1 |
+| material | rust | Apex 26 | Apex26-Procedural | generated:assets/atlases/atlas-arch-albedo.png#3,2 |
 | material | asphalt | Poly Haven contributors | CC0 | polyhaven:asphalt_track |
 | model | kenney_construction-barrier | Kenney | CC0 | kenney:city-kit-roads |
 | model | kenney_construction-cone | Kenney | CC0 | kenney:city-kit-roads |

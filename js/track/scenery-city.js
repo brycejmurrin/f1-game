@@ -28,6 +28,20 @@ const SceneryCity = (function () {
     Log.info("scenery", "scenery-city dress " + (def && def.id));
     const { WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY } = TrackSceneryData;
 
+    // Daytime wall material from vertex colour. Cream / ochre Belle Époque
+    // stucco is STONE (not brick — a warm-R test painted Monaco limestone as
+    // red masonry). Terracotta / face-brick stays BRICK. Cool greys stay
+    // CONCRETE. Night masses keep CONCRETE under the neon skin.
+    const facadeMat = (rgb) => {
+      const r = rgb[0], g = rgb[1], b = rgb[2];
+      const luma = (r + g + b) / 3;
+      const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+      const warm = r - b;
+      if (r > g + 0.16 && warm > 0.12 && chroma > 0.14 && luma < 0.70) return MAT.BRICK;
+      if (luma > 0.55 && chroma < 0.28 && warm > -0.04) return MAT.STONE;
+      return MAT.CONCRETE;
+    };
+
     // neonFacade(): the shared, DETAILED night facade for both building kinds —
     // an INSET-WINDOW curtain wall (the b6fbf4a style) on the track-facing face:
     // proud dark structural frame rails + vertical mullions, with recessed glass
@@ -267,9 +281,9 @@ const SceneryCity = (function () {
         const dayWall = wallLuma > 0.45
           ? [body[0] * 0.78, body[1] * 0.78, body[2] * 0.78]
           : [0.42 + cv * 0.12, 0.42 + cv * 0.11, 0.41 + cv * 0.10];
-        // Wall material: warm/light facades read as BRICK, cooler/grey as CONCRETE;
+        // Wall material from tone (cream→STONE, terracotta→BRICK, grey→CONCRETE);
         // reflective window bands carry the GLASS mullion-grid material.
-        const wmat = (dayWall[0] > 0.5 && dayWall[0] > dayWall[2] + 0.03) ? MAT.BRICK : MAT.CONCRETE;
+        const wmat = facadeMat(dayWall);
         out._mat = wmat; glassBuf._mat = MAT.GLASS;
         const ok = ctx.instance(UNIT_BOX,                                                   // solid wall mass
           { o: vadd(p.c, p.u, yBase + sh / 2), r: p.r, u: p.u, t: p.t, s: [sw, sh, sd], col: dayWall },
@@ -502,11 +516,9 @@ const SceneryCity = (function () {
         dface(2, 1, sd / 2, 0, sw, true);        // +t side: simple
         dface(2, -1, sd / 2, 0, sw, true);       // -t side: simple
       };
-      // Body material: night masses read as CONCRETE (grey structural mass under
-      // the neon skin); day facades split BRICK (warm masonry) / CONCRETE (cool)
-      // by tone, same rule as building().
-      const bmat = NIGHT ? MAT.CONCRETE
-        : (bodyCol[0] > 0.5 && bodyCol[0] > bodyCol[2] + 0.03) ? MAT.BRICK : MAT.CONCRETE;
+      // Body material: night masses stay CONCRETE under the neon skin;
+      // day facades use the same cream/brick/concrete split as building().
+      const bmat = NIGHT ? MAT.CONCRETE : facadeMat(bodyCol);
       // One stacked section centred at up=yb+sh/2, optionally offset along tangent.
       // Restores the CALLER's material (not a hard 0) so a MAT.METAL default set
       // around the whole kind-dispatch below survives between/after sec() calls —

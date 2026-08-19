@@ -7,105 +7,105 @@
         "mat": 1,
         "id": "concrete",
         "scale": 5.5,
-        "source": "polyhaven:concrete_panels",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-arch-albedo.png#2,0",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 2,
         "id": "brick",
         "scale": 2.8,
-        "source": "polyhaven:red_brick",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-arch-albedo.png#1,0",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 4,
         "id": "metal",
         "scale": 2.8,
-        "source": "polyhaven:corrugated_iron",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-arch-albedo.png#2,2",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 5,
         "id": "wood",
         "scale": 2.8,
-        "source": "polyhaven:wood_planks",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-variety-albedo.png#0,0",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 6,
         "id": "foliage",
         "scale": 4,
-        "source": "polyhaven:leafy_grass",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-nature-albedo.png#1,0",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 7,
         "id": "fabric",
         "scale": 1.8,
-        "source": "polyhaven:denim_fabric",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-variety-albedo.png#2,0",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 8,
         "id": "sand",
         "scale": 11,
-        "source": "polyhaven:coast_sand_01",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-nature-albedo.png#1,3",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 9,
         "id": "grass",
         "scale": 4.5,
-        "source": "polyhaven:sparse_grass",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-nature-albedo.png#2,1",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 10,
         "id": "rock",
         "scale": 8,
-        "source": "polyhaven:rock_ground",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-nature-albedo.png#1,2",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 11,
         "id": "snow",
         "scale": 7,
-        "source": "polyhaven:snow_02",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-variety-albedo.png#0,1",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 12,
         "id": "roof",
         "scale": 2.6,
-        "source": "polyhaven:clay_roof_tiles",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-arch-albedo.png#2,1",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 13,
         "id": "stone",
         "scale": 3.5,
-        "source": "polyhaven:castle_brick_02_red",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-arch-albedo.png#1,1",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 14,
         "id": "rust",
         "scale": 2.5,
-        "source": "polyhaven:rusty_metal",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-arch-albedo.png#3,2",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 16,
@@ -124,105 +124,105 @@
           "mat": 1,
           "id": "concrete",
           "scale": 5.5,
-          "source": "polyhaven:concrete_panels",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-arch-albedo.png#2,0",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 2,
           "id": "brick",
           "scale": 2.8,
-          "source": "polyhaven:red_brick",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-arch-albedo.png#1,0",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 4,
           "id": "metal",
           "scale": 2.8,
-          "source": "polyhaven:corrugated_iron",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-arch-albedo.png#2,2",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 5,
           "id": "wood",
           "scale": 2.8,
-          "source": "polyhaven:wood_planks",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-variety-albedo.png#0,0",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 6,
           "id": "foliage",
           "scale": 4,
-          "source": "polyhaven:leafy_grass",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-nature-albedo.png#1,0",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 7,
           "id": "fabric",
           "scale": 1.8,
-          "source": "polyhaven:denim_fabric",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-variety-albedo.png#2,0",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 8,
           "id": "sand",
           "scale": 11,
-          "source": "polyhaven:coast_sand_01",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-nature-albedo.png#1,3",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 9,
           "id": "grass",
           "scale": 4.5,
-          "source": "polyhaven:sparse_grass",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-nature-albedo.png#2,1",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 10,
           "id": "rock",
           "scale": 8,
-          "source": "polyhaven:rock_ground",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-nature-albedo.png#1,2",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 11,
           "id": "snow",
           "scale": 7,
-          "source": "polyhaven:snow_02",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-variety-albedo.png#0,1",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 12,
           "id": "roof",
           "scale": 2.6,
-          "source": "polyhaven:clay_roof_tiles",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-arch-albedo.png#2,1",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 13,
           "id": "stone",
           "scale": 3.5,
-          "source": "polyhaven:castle_brick_02_red",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-arch-albedo.png#1,1",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 14,
           "id": "rust",
           "scale": 2.5,
-          "source": "polyhaven:rusty_metal",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-arch-albedo.png#3,2",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 16,
@@ -846,93 +846,93 @@
     {
       "kind": "material",
       "id": "concrete",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:concrete_panels"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-arch-albedo.png#2,0"
     },
     {
       "kind": "material",
       "id": "brick",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:red_brick"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-arch-albedo.png#1,0"
     },
     {
       "kind": "material",
       "id": "metal",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:corrugated_iron"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-arch-albedo.png#2,2"
     },
     {
       "kind": "material",
       "id": "wood",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:wood_planks"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-variety-albedo.png#0,0"
     },
     {
       "kind": "material",
       "id": "foliage",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:leafy_grass"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-nature-albedo.png#1,0"
     },
     {
       "kind": "material",
       "id": "fabric",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:denim_fabric"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-variety-albedo.png#2,0"
     },
     {
       "kind": "material",
       "id": "sand",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:coast_sand_01"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-nature-albedo.png#1,3"
     },
     {
       "kind": "material",
       "id": "grass",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:sparse_grass"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-nature-albedo.png#2,1"
     },
     {
       "kind": "material",
       "id": "rock",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:rock_ground"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-nature-albedo.png#1,2"
     },
     {
       "kind": "material",
       "id": "snow",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:snow_02"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-variety-albedo.png#0,1"
     },
     {
       "kind": "material",
       "id": "roof",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:clay_roof_tiles"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-arch-albedo.png#2,1"
     },
     {
       "kind": "material",
       "id": "stone",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:castle_brick_02_red"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-arch-albedo.png#1,1"
     },
     {
       "kind": "material",
       "id": "rust",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:rusty_metal"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-arch-albedo.png#3,2"
     },
     {
       "kind": "material",

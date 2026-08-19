@@ -256,22 +256,30 @@
         const a = { c: [cxw, (gy == null ? py[k] : gy) - 0.3, czw], r: rr, u: uu, t: tt };
         if (!onTrack(a.c[0], a.c[2], 26)) {
           const b = [a.r, a.u, a.t];
+          // Beaux-Arts cream limestone + oxidised-copper roofs (Garnier/Dutrou).
+          out._mat = MAT.STONE;
           addBox(out, vadd(a.c, a.u, 13), [44, 26, 30], CREAM, b);
-          addBox(out, vadd(a.c, a.u, 28), [46, 4, 32], [0.30, 0.45, 0.38], b);
           for (const o of [-13, 13]) {
             addBox(out, vadd(vadd(a.c, a.t, o), a.u, 30), [9, 18, 9], [0.90, 0.85, 0.74], b);
+          }
+          out._mat = MAT.METAL;
+          addBox(out, vadd(a.c, a.u, 28), [46, 4, 32], [0.30, 0.45, 0.38], b);
+          for (const o of [-13, 13]) {
             addPrism(out, vadd(vadd(a.c, a.t, o), a.u, 40.5), [9.2, 5, 9.2], [0.28, 0.42, 0.36], b);
           }
           // window bands + lit evening glow
+          out._mat = MAT.GLASS;
           for (let f = 0; f < 4; f++) {
             addBox(out, vadd(a.c, a.u, 5 + f * 6), [44.4, 2.2, 30.4], WIN, b);
             addBox(out, vadd(a.c, a.u, 6.0 + f * 6), [44.6, 1.1, 30.6], WINLIT, b);
           }
+          out._mat = MAT.METAL;
           for (const o of [-8, 8]) {
             const lc = vadd(vadd(a.c, a.t, o), a.u, 0);
             addCyl(out, lc, 0.10, 5.5, [0.72, 0.74, 0.76], 5, b);
             addCyl(out, vadd(lc, a.u, 5.3), 0.55, 0.18, LAMP, 6, b);
           }
+          out._mat = 0;
         }
       }
 
@@ -296,18 +304,20 @@
         const a = anchor(k, 1, 14.5);
         if (!onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
-          // The mass itself, with its floor bands.
+          // Cream limestone palace + terracotta mansard (Hôtel de Paris, 1864).
+          out._mat = MAT.STONE;
           addBox(out, vadd(a.c, a.u, 20), [22, 40, 18], HOTEL, b);
+          addBox(out, vadd(vadd(a.c, a.t, 14), a.u, 14), [14, 28, 12], HOTEL, b);
+          out._mat = MAT.GLASS;
           for (let f = 0; f < 7; f++) {
             addBox(out, vadd(a.c, a.u, 5 + f * 5), [22.3, 1.8, 18.3], WIN, b);
           }
-          // Ochre mansard / cornice strip, now sitting ON something.
-          addBox(out, vadd(a.c, a.u, 41), [23, 3.2, 19], OCHRE, b);
-          // Secondary wing toward the square.
-          addBox(out, vadd(vadd(a.c, a.t, 14), a.u, 14), [14, 28, 12], HOTEL, b);
           for (let f = 0; f < 5; f++) {
             addBox(out, vadd(vadd(a.c, a.t, 14), a.u, 4 + f * 5), [14.3, 1.6, 12.3], WIN, b);
           }
+          out._mat = MAT.ROOF;
+          addBox(out, vadd(a.c, a.u, 41), [23, 3.2, 19], OCHRE, b);
+          out._mat = 0;
         }
       }
 
@@ -334,25 +344,28 @@
         const a = anchor(k, 1, 14);
         if (!onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
-          // The pavilion mass, lower and longer than either hotel.
+          // Cream pavilion, glazed barrel, terracotta cornice, canvas terrace.
+          out._mat = MAT.STONE;
           addBox(out, vadd(a.c, a.u, 9.5), [16, 19, 34], CAFE, b);
+          out._mat = MAT.GLASS;
           for (let f = 0; f < 4; f++) {
             addBox(out, vadd(a.c, a.u, 3.5 + f * 4), [16.3, 1.6, 34.3], WIN, b);
           }
-          // Glazed barrel roof + ochre cornice, the café's own silhouette.
-          addBox(out, vadd(a.c, a.u, 19.6), [17, 1.4, 35], OCHRE, b);
           addCyl(out, vadd(a.c, a.u, 21.4), 3.6, 32, [0.72, 0.80, 0.84], 9,
             [a.u, a.r, a.t]);
-          // Terrace: striped awning bays over café tables, facing the square.
+          out._mat = MAT.ROOF;
+          addBox(out, vadd(a.c, a.u, 19.6), [17, 1.4, 35], OCHRE, b);
           for (let i = 0; i < 7; i++) {
             const p = vadd(vadd(a.c, a.t, (i - 3) * 4.6), a.r, -8.5);
+            out._mat = MAT.FABRIC;
             addBox(out, vadd(p, a.u, 3.5), [5.2, 0.35, 4.2],
               i % 2 ? AWN_R : AWN_W, b);
-            addCyl(out, p, 0.10, 3.4, [0.66, 0.64, 0.60], 4, b);
-            // Parasol + table pair under each bay.
-            addCyl(out, vadd(p, a.r, -1.6), 0.08, 2.3, [0.72, 0.70, 0.66], 4, b);
             addCone(out, vadd(vadd(p, a.r, -1.6), a.u, 2.1), 1.5, 0.7, AWN_W, 7, b);
+            out._mat = MAT.METAL;
+            addCyl(out, p, 0.10, 3.4, [0.66, 0.64, 0.60], 4, b);
+            addCyl(out, vadd(p, a.r, -1.6), 0.08, 2.3, [0.72, 0.70, 0.66], 4, b);
           }
+          out._mat = 0;
         }
       }
 
@@ -1432,12 +1445,17 @@
         modelGroup(`monaco-mirabeau-balconies-${i}`, {
           center: vadd(a.c, a.u, h * 0.5), size: [w + 2, h + 2, 13], basis: b,
         }, (stage) => {
-          addBox(stage, vadd(a.c, a.u, h * 0.5), [w, h, 11], PASTELS[(i + 2) % PASTELS.length], b);
+          const wall = PASTELS[(i + 2) % PASTELS.length];
+          stage._mat = wall[0] > wall[1] + 0.16 ? MAT.BRICK : MAT.STONE;
+          addBox(stage, vadd(a.c, a.u, h * 0.5), [w, h, 11], wall, b);
           for (let floor = 1; floor * 4.3 < h - 1; floor++) {
             const fc = vadd(vadd(a.c, a.t, -5.8), a.u, floor * 4.3);
+            stage._mat = MAT.STONE;
             addBox(stage, fc, [w + 1.2, 0.35, 1.5], [0.84, 0.82, 0.78], b);
+            stage._mat = MAT.METAL;
             addBox(stage, vadd(fc, a.u, 1.0), [w + 0.8, 0.18, 0.25], [0.48, 0.52, 0.54], b);
           }
+          stage._mat = 0;
         });
       }
 
@@ -1455,13 +1473,16 @@
         modelGroup(`monaco-tunnel-vent-${side < 0 ? "entry" : "exit"}`, {
           center: vadd(a.c, a.u, 6), size: [11, 12, 11], basis: b,
         }, (stage) => {
+          stage._mat = MAT.STONE;
           addBox(stage, vadd(a.c, a.u, 3.4), [10, 6.8, 10], STONE, b);
           // addFrustum is BASE-anchored (geom.js), but 8.2 was written as if it
           // centred the roof: the pavilion block below tops out at 3.4+6.8/2=6.8,
           // so the frustum's base floated 1.4 m clear of it. Based at 6.6 so the
           // roof overlaps the block's top by 0.2 m instead.
+          stage._mat = MAT.METAL;
           addFrustum(stage, vadd(a.c, a.u, 6.6), 4.2, 3.2, 3.0, [0.46, 0.48, 0.46], 8, b);
           addBox(stage, vadd(a.c, a.u, 10.2), [4.8, 1.0, 4.8], [0.34, 0.36, 0.36], b);
+          stage._mat = 0;
         });
       }
 
@@ -1476,14 +1497,19 @@
         modelGroup(`monaco-harbour-balcony-wall-${i}`, {
           center: vadd(a.c, a.u, h * 0.5), size: [24, h + 2, 12], basis: b,
         }, (stage) => {
-          addBox(stage, vadd(a.c, a.u, h * 0.5), [22, h, 10], PASTELS[(i * 2 + 1) % PASTELS.length], b);
+          const wall = PASTELS[(i * 2 + 1) % PASTELS.length];
+          stage._mat = wall[0] > wall[1] + 0.16 ? MAT.BRICK : MAT.STONE;
+          addBox(stage, vadd(a.c, a.u, h * 0.5), [22, h, 10], wall, b);
           for (let floor = 1; floor * 4.2 < h - 1; floor++) {
             const fc = vadd(vadd(a.c, a.t, -5.3), a.u, floor * 4.2);
+            stage._mat = MAT.STONE;
             addBox(stage, fc, [23, 0.32, 1.2], CREAM, b);
+            stage._mat = MAT.METAL;
             for (const x of [-8, -4, 0, 4, 8]) {
               addCyl(stage, vadd(vadd(fc, a.r, x), a.u, 0.45), 0.05, 0.9, [0.50, 0.52, 0.54], 3, b);
             }
           }
+          stage._mat = 0;
         });
       }
     },
