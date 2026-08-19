@@ -22,6 +22,8 @@ deploy so Safari's aggressive disk cache doesn't serve stale modules.
 | **Gamepad** | **iOS 14.5+** | PS5 DualSense / Xbox Series / MFi over Bluetooth, "standard" mapping |
 | Keyboard | iPad + HW keyboard | Same bindings as desktop |
 
+Safari still double-tap-zooms a `pan-y` pane even with `touch-action: manipulation` on `*` and `maximum-scale=1` (it ignores the viewport cap for a11y). The shell therefore also ships `user-scalable=no` and an early `touchend`/`gesture*` `preventDefault` in `index.html` that cancels a second tap on the same spot within 350 ms. Rapid taps on *different* controls, and two-thumb driving, are left alone.
+
 ### Why gamepad support
 
 The input-latency research ranked a controller as the lowest-latency,
