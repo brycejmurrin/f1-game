@@ -53,10 +53,11 @@ export const CAMERA_FRACTIONS = Object.freeze(Object.fromEntries(Object.entries(
 export const SLIDER_GROUPS = Object.freeze([
   { id: "foundation", labels: ["SUN & MOON", "AMBIENT & BOUNCE"] },
   { id: "shadows", labels: ["SHADOWS"] },
-  { id: "night", labels: ["TRACK LIGHTS", "NIGHT GLOW & BLOOM"] },
-  { id: "weather", labels: ["ATMOSPHERE", "SKY & WEATHER", "RAIN & LIGHTNING"] },
-  { id: "surface", labels: ["REFLECTIONS & WET ROAD", "CAR"] },
+  { id: "night", labels: ["LAMPS", "NIGHT GLOW & BLOOM"] },
+  { id: "weather", labels: ["ATMOSPHERE", "SKY & WEATHER"] },
+  { id: "surface", labels: ["ROAD & REFLECTIONS", "CAR"] },
   { id: "grade", labels: ["IMAGE & COLOUR"] },
+  { id: "fx", labels: ["FX"] },
 ].map((group) => Object.freeze({ ...group, labels: Object.freeze(group.labels) })));
 
 export const REGIONS = Object.freeze(Object.fromEntries(Object.entries({

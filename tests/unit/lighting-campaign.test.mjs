@@ -7,6 +7,7 @@ import {
   TRACKS, TODS, WEATHERS, CAMERA_FRACTIONS, SHARDS, SLIDER_GROUPS, REGIONS,
   conditionKey, enumerateConditions, validateConfig,
 } from "../../tools/lighting-campaign/config.mjs";
+import { classifyKnobs } from "../../tools/slider-effect.mjs";
 import { measurePixels, evaluateGates } from "../../tools/lighting-campaign/metrics.mjs";
 import {
   validateProfile,
@@ -134,6 +135,20 @@ test("nested exported configuration is immutable", () => {
   assert.ok(Object.values(CAMERA_FRACTIONS).every(Object.isFrozen));
   assert.ok(SLIDER_GROUPS.every((group) => Object.isFrozen(group) && Object.isFrozen(group.labels)));
   assert.ok(Object.values(REGIONS).every(Object.isFrozen));
+});
+
+test("SLIDER_GROUPS labels match live TUNE_DEFS groups", () => {
+  const live = new Set(classifyKnobs().map((k) => k.group));
+  const labels = SLIDER_GROUPS.flatMap((g) => [...g.labels]);
+  for (const label of labels) {
+    assert.ok(live.has(label), `stale campaign group label: ${label}`);
+  }
+  assert.ok(labels.includes("LAMPS"));
+  assert.ok(labels.includes("ROAD & REFLECTIONS"));
+  assert.ok(labels.includes("FX"));
+  assert.ok(!labels.includes("TRACK LIGHTS"));
+  assert.ok(!labels.includes("RAIN & LIGHTNING"));
+  assert.ok(!labels.includes("REFLECTIONS & WET ROAD"));
 });
 
 test("condition keys use the shipped preset format", () => {
