@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <script>
+// ── iOS DOUBLE-TAP / GESTURE ZOOM ────────────────────────────────────────────
+// CSS `touch-action: manipulation` plus `maximum-scale=1` is not enough:
+// Safari ignores the viewport cap (a11y, since iOS 10), and `pan-y` / `pan-x`
+// on scroll panes override the * reset — WebKit still double-tap-zooms those.
+// A second tap on the same spot within 350 ms is the zoom gesture; cancel it.
+// A second tap on a DIFFERENT control (rapid menu work) is left alone.
+// Another finger still down is driving (GAS+steer), not a double-tap.
+// iOS GestureEvents are the pinch-page path; the garage car viewer uses
+// TouchEvents, so cancelling gesture* does not steal that.
 (function () {
   var lastT = 0, lastX = 0, lastY = 0;
   var TAP_MS = 350, TAP_PX2 = 900;
@@ -29,20 +38,69 @@
 <meta name="apple-mobile-web-app-title" content="Apex 26">
 <meta name="theme-color" content="#0a0a0f">
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
-<meta name="apex-build" content="1499">
+<!-- Monotonic shell/service-worker generation. Asset URLs below are independently
+     content-hashed so an unrelated release does not invalidate every script. -->
+<meta name="apex-build" content="1501">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
+<!-- Preload the type/token + component sheets that paint the title LCP (H1).
+     Measured chrome-devtools LCPBreakdown: almost all element render delay
+     behind the serial IIFE wall — getting CSS bytes early shortens the style
+     phase before the first paint of #title. -->
+<link rel="preload" href="css/tokens.css?v=1064355bba10" as="style">
+<link rel="preload" href="css/components.css?v=5c65869df9de" as="style">
+<!-- Preload the two faces the TITLE composition uses, and only those. The
+     @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
+     the system fallback paints instantly and never blocks first render — that
+     stays true; a preload does not block rendering, it only starts the fetch at
+     the shell instead of after the CSS that references it has parsed. MEASURED:
+     the faces land at ~126 ms, well before FCP.
+     HONEST SCOPE: this was chased as the cause of the title screen's ~0.45
+     layout shift and it was NOT — the real cause was the first-paint value of
+     body[data-density] (see the inline script below). Kept because getting the
+     real face onto the first paint is worth 25 KB on its own terms.
+     Only 2 of the 7 vendored faces; NO ?v= — fonts are immutable, content-named
+     vendored assets (same rule as vendor/three-*). -->
+<link rel="preload" href="assets/fonts/titillium-web-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/titillium-web-latin-700-italic.woff2" as="font" type="font/woff2" crossorigin>
+<!-- MANIFEST.CSS order preserved (cascade). Title-critical sheets stay
+     render-blocking; the rest use print→all so Slow-4G RenderBlocking
+     (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=1064355bba10">
 <link rel="stylesheet" href="css/components.css?v=5c65869df9de">
+<link rel="stylesheet" href="css/tuner.css?v=ce3bbfcb095a" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/menus.css?v=a4fc56147e9a">
+<link rel="stylesheet" href="css/carsetup.css?v=332364684c97" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/hud.css?v=ce419d9bb73a" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/overlays.css?v=8db615ce0381" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=9771885af6b8">
-<script>
+<link rel="stylesheet" href="css/track-detail.css?v=6105e0e4ffad" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/career.css?v=a7e8cfe99dfc" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/data.css?v=ba62fccc10ad" media="print" onload="this.media='all'">
+<!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
+     stylesheet hrefs inside noscript would also break load-order + sw precache
+     parsers that scan every rel=stylesheet. -->
+<script>// ── SHELL VERSION GUARD ──────────────────────────────────────────────────────
+// index.html is the ONE file with no cache-buster on itself, so an installed
+// PWA / home-screen shell can go stale (new JS/CSS load, but old HTML markup —
+// e.g. a new pause-menu button never appears). This reads the build baked
+// into THIS (possibly cached) shell from its build meta, then fetches a tiny
+// network-truth version.json (no-store, never cached). If the deployed build is
+// newer, it reloads once past the HTTP cache with a busting query. The
+// sessionStorage guard prevents any reload loop.
 (function () {
   try {
     var buildMeta = document.querySelector('meta[name="apex-build"]');
     var loaded = buildMeta ? parseInt(buildMeta.content, 10) : 0;
+    // OFFLINE CACHE: register the service worker (sw.js) so the game installs
+    // and plays offline after one visit. The query mirrors the shell generation
+    // this guard just parsed — a new deploy is therefore a genuinely
+    // different registration URL, which makes the browser check for an updated
+    // worker right away instead of waiting up to 24h on the spec's periodic
+    // byte-diff. sw.js itself derives its cache generation from version.json,
+    // so this is just about prompting a timely update check, not correctness.
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js" + (loaded ? "?v=" + loaded : "")).catch(function () {});
     }
@@ -52,35 +110,1754 @@
       .then(function (v) {
         if (!v || !v.build || v.build <= loaded) return;
         var key = "apex26.shellReloadedTo";
-        if (sessionStorage.getItem(key) === String(v.build)) return;
+        if (sessionStorage.getItem(key) === String(v.build)) return;  // already tried this build
         sessionStorage.setItem(key, String(v.build));
+        // Query busts the cached shell. KEEP THE HASH: dropping it silently
+        // destroyed VS FRIEND invite links (#vs=CODE) opened on a stale shell —
+        // the one visitor class guaranteed to hit this reload path.
         location.replace(location.pathname + "?b=" + v.build + location.hash);
       })
       .catch(function () {});
   } catch (e) {}
 })();
 </script>
+<script>
+// ── ON-SCREEN ERROR CATCHER ──────────────────────────────────────────────────
+// Surfaces any uncaught error / promise rejection as a fixed overlay so a crash
+// is readable on a phone with no dev console. Shows message + stack; tap to hide.
+(function () {
+  // A PINNED message is a ROOT CAUSE and outranks everything after it. A module
+  // that failed to load produces a cascade of downstream ReferenceErrors, each
+  // of which would otherwise overwrite the one line that says WHY — leaving the
+  // player looking at "SeasonCal is not defined" with no hint that the file
+  // simply never arrived. First pin wins; nothing unpins.
+  var pinned = false;
+  function show(title, msg, stack, pin) {
+    if (pinned && !pin) return;
+    if (pin) pinned = true;
+    try {
+      var d = document.getElementById("__err_overlay");
+      if (!d) {
+        d = document.createElement("div"); d.id = "__err_overlay";
+        d.style.cssText = "position:fixed;inset:0;z-index:99999;background:#12060a;color:#ffb3b3;"
+          + "font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;padding:16px;overflow:auto;"
+          + "white-space:pre-wrap;word-break:break-word;-webkit-user-select:text;user-select:text";
+        d.onclick = function () { d.style.display = "none"; };
+        (document.body || document.documentElement).appendChild(d);
+      }
+      d.style.display = "block";
+      d.textContent = "⚠ " + title + "\n\n" + (msg || "") + "\n\n" + (stack || "")
+        + "\n\n(tap to dismiss · build " + (window.__APEX_BUILD || "?") + ")";
+    } catch (e) {}
+  }
+  // Build number for the overlay footer — parsed from the shell generation meta
+  // the same way the shell version guard does.
+  try {
+    var bm = document.querySelector('meta[name="apex-build"]');
+    window.__APEX_BUILD = bm ? parseInt(bm.content, 10) : 0;
+  } catch (e) { window.__APEX_BUILD = 0; }
+  // Exposed so same-origin try/catch (e.g. the game loop) can report the REAL
+  // error object — window.onerror censors cross-origin script errors to a bare
+  // "Script error." with no message/stack; a caught error keeps full detail.
+  window.__apexReportError = function (where, err) {
+    show("Caught @ " + where, (err && (err.message || err)) || "unknown", err && err.stack);
+  };
+  window.addEventListener("error", function (e) {
+    // "ResizeObserver loop completed with undelivered notifications" (and the
+    // older "…loop limit exceeded") is a spec-defined BENIGN notification the
+    // browser fires when an observer callback changes layout — not a crash.
+    // Every serious app ignores it; letting it paint a full-screen error overlay
+    // (e.g. when the data-hub telemetry popup sizes its canvases) is far worse
+    // than the thing it is reporting.
+    var m = (e && e.message) || "";
+    if (m.indexOf("ResizeObserver loop") !== -1) return;
+    show("JS error", m || String(e), (e && e.error && e.error.stack) || (e && e.filename + ":" + e.lineno + ":" + e.colno));
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    var r = e && e.reason; show("Promise rejection", (r && (r.message || r)) || "unknown", r && r.stack);
+  });
+
+  // ── A SCRIPT TAG THAT NEVER LOADED IS NOT A JS ERROR: IT IS A BROKEN INSTALL ─
+  //
+  // WHY THIS EXISTS, measured live at build 1238. Every new js/ module ships a
+  // brand-new URL, and its first deploy has a window where the shell can name a
+  // file the CDN edge does not serve yet. Pages answers 404, the browser CACHES
+  // that 404 against the VERSIONED url, and from then on the game dies on every
+  // load with a bare "Can't find variable: SeasonCal" — because js/game.js is
+  // fine and the file that defines the global simply is not there. A plain
+  // reload re-reads the cached 404, so it does not heal; only the next ?v= bump
+  // does, which can be hours.
+  //
+  // Resource load failures do NOT bubble, so this listener is in the capture
+  // phase and is separate from the window.onerror handler above — that one only
+  // ever sees the CONSEQUENCE (the ReferenceError from the first file that
+  // needed the missing global), by which point the cause is off-screen.
+  //
+  // The repair is a ONE-SHOT reload with the stale entries dropped: sweep the
+  // service-worker caches, re-request the failed URL with cache:"reload" to
+  // punch the HTTP cache entry, then reload. Scripts load before js/game.js
+  // evaluates, so nothing is lost by restarting here. sessionStorage bounds it
+  // to a single attempt: if the file is genuinely absent from the build, the
+  // second pass names it in the overlay instead of looping forever.
+  var RETRY_KEY = "__apex_script_retry";
+  var scriptFailed = false;
+  window.addEventListener("error", function (e) {
+    var el = e && e.target;
+    if (!el || el.tagName !== "SCRIPT" || !el.src) return;   // not a resource error
+    if (el.src.indexOf(location.origin) !== 0) return;       // our own files only
+    scriptFailed = true;
+    var already;
+    try { already = sessionStorage.getItem(RETRY_KEY); } catch (_) { already = "1"; }
+    if (already) {
+      show("Module failed to load", el.src,
+        "A reload with caches cleared did not fix it, so this file is missing from "
+        + "the build rather than merely stale. Nothing local will repair that.", true);
+      return;
+    }
+    try { sessionStorage.setItem(RETRY_KEY, "1"); } catch (_) {}
+    var go = function () { location.reload(); };
+    Promise.resolve()
+      .then(function () {
+        if (!window.caches) return null;
+        return caches.keys().then(function (names) {
+          return Promise.all(names.map(function (n) { return caches.delete(n); }));
+        });
+      })
+      .then(function () { return fetch(el.src, { cache: "reload" }); })
+      .then(go, go);
+  }, true);
+  // A CLEAN load clears the one-shot, so a genuine failure weeks later still
+  // gets its retry. A load that lost a script keeps the flag set — that is what
+  // makes the second pass report instead of reloading again.
+  window.addEventListener("load", function () {
+    if (scriptFailed) return;
+    try { sessionStorage.removeItem(RETRY_KEY); } catch (_) {}
+  });
+})();
+</script>
 </head>
-<body>
-<canvas id="game"></canvas>
-<div id="overlay" class="grain">
-  <div id="menu-brand">
-    <h1 id="title">APEX&nbsp;26</h1>
-    <p id="subtitle">2026 grid · 24 real circuits · tilt to steer</p>
-    <p id="disclaimer">Unofficial fan project — not affiliated with FIA or Formula 1</p>
-  </div>
-  <div id="menu-buttons">
-    <button id="mb-career" class="bigbtn">CAREER MODES</button>
-    <button id="mb-race" class="bigbtn">RACE</button>
-    <button id="mb-tt" class="bigbtn">TIME TRIAL</button>
-    <button id="mb-vs" class="bigbtn">RACE A FRIEND</button>
-    <button id="mb-season" class="bigbtn">SEASON</button>
-    <button id="mb-data" class="bigbtn alt">F1 DATA HUB</button>
-    <button id="mb-garage" class="bigbtn alt">GARAGE</button>
-    <button id="mb-settings" class="bigbtn alt">SETTINGS</button>
+<body><canvas id="game"></canvas>
+<!-- BODY DENSITY, BEFORE THE BROWSER CAN PAINT ANYTHING.
+     body[data-density] selects #overlay's one- vs two-column title grid
+     (css/menus.css, css/responsive.css). js/game/sheetshape.js owns this answer
+     and every later one; this is only the FIRST one, hoisted to a point with no
+     network dependency.
+     WHY INLINE, measured: an external <script> races the first paint and does
+     not reliably win. With sheetshape.js at script #4 of 146 on a quiet box, two
+     consecutive cold loads gave CLS 0.0824 and 0.5929 — same build, same box,
+     the only difference being who won the race. Baseline was 0.5241; inline it
+     is 0.0602/0.0824 ("good" is under 0.1).
+     NOT A DUPLICATED THRESHOLD: both numbers are read back out of CSS, so
+     menus.css stays the one place they are declared. -->
+<script>
+  (function () {
+    var b = document.body;
+    if (!b || !window.getComputedStyle) return;
+    try {
+      var scale = parseFloat(getComputedStyle(document.documentElement)
+        .getPropertyValue("--ui-scale")) || 1;
+      var at = parseFloat(getComputedStyle(b)
+        .getPropertyValue("--compact-at")) || 380;
+      b.setAttribute("data-density",
+        (window.innerHeight / scale) < at ? "compact" : "normal");
+    } catch (e) { /* a wrong first shape is survivable; a boot failure is not */ }
+  })();
+</script>
+<!-- shown by CSS when body.in-race + portrait orientation — works on iOS too -->
+<div id="rotate-device" role="dialog" aria-modal="true"
+     aria-labelledby="rotate-title" aria-describedby="rotate-detail" aria-hidden="true">
+  <div class="rotate-inner">
+    <div class="rotate-icon" aria-hidden="true">&#8635;</div>
+    <p id="rotate-title">Rotate to landscape to race</p>
+    <small id="rotate-detail">Turn off rotation lock, then rotate your phone.</small>
+    <button id="rotate-controls" type="button">OPEN CONTROLS</button>
+    <button id="rotate-exit" type="button">EXIT RACE</button>
   </div>
 </div>
-<p style="position:fixed;bottom:8px;left:8px;color:#666;font:12px monospace">Deploy recovery shell — full index pending</p>
+
+<!-- race HUD -->
+<div id="hud" hidden>
+  <div class="hud-top">
+    <div class="hud-box"><div class="hud-label">POS</div><div id="hud-pos" class="hud-value">-</div></div>
+    <div class="hud-box"><div class="hud-label">LAP</div><div id="hud-lap" class="hud-value">-</div></div>
+    <div class="hud-box"><div class="hud-label">TIME</div><div id="hud-time" class="hud-value">0:00.0</div></div>
+    <div class="hud-box"><div class="hud-label">BEST</div><div id="hud-best" class="hud-value">-</div></div>
+  </div>
+  <div class="hud-gaps">
+    <div id="hud-gap-ahead" class="hud-gap"></div>
+    <div id="hud-gap-behind" class="hud-gap"></div>
+  </div>
+  <!-- THE BOTTOM BAR. One flex row holding the left thumb's controls, the
+       instrument cluster and the right thumb's controls. Siblings in a flex row
+       CANNOT overlap, which is the entire reason this exists: every previous
+       layout positioned each button absolutely with its own per-mode constants,
+       so adding one control silently pushed another onto a neighbour and only a
+       25-case matrix could find it. There are no coordinates here at all.
+       The bar is pointer-events:none (as #hud is) and only the BUTTONS opt back
+       in, so the empty middle still passes drags through to the canvas — which
+       touch steering needs, since it steers by an anchored drag on the canvas.
+       js/game.js fills the two docks (see layoutDocks): a control genuinely
+       changes side between modes — the throttle is left-thumb in tilt and
+       right-thumb in buttons mode — which is the one thing CSS cannot express. -->
+  <div id="hud-dock">
+    <div id="dock-left" class="dock"></div>
+    <div class="hud-bottom">
+      <div id="hud-gearbox">
+        <div id="hud-gear">1</div>
+        <div id="hud-tach"><div id="hud-rpm-fill"></div></div>
+      </div>
+      <div id="hud-speed"><span id="hud-speed-n">0</span><span class="hud-unit">KM/H</span></div>
+      <div id="hud-energy"><div id="hud-energy-fill"></div><div class="hud-energy-label">ENERGY</div></div>
+      <div id="hud-ot" class="ot-off">OVERTAKE</div>
+      <div id="hud-aero" class="ax-off">Z-MODE</div>
+    </div>
+    <div id="dock-right" class="dock"></div>
+  </div>
+  <canvas id="minimap" width="140" height="140"></canvas>
+  <div id="hud-sectors"></div>
+  <div id="hud-flag" hidden></div>
+</div>
+
+<div id="lights" hidden>
+  <span class="light"></span><span class="light"></span><span class="light"></span><span class="light"></span><span class="light"></span>
+</div>
+
+<div id="announce" hidden></div>
+
+<!-- touch controls -->
+<!-- Grouped, not a flat list. A dock holding loose buttons wraps them wherever
+     the width runs out, which produced a DN button above its own UP. These four
+     groups each have a fixed shape — pedals and shifts are vertical pairs
+     (brake over gas, up over down, as every car has them), and the taps are a
+     3-tall COLUMN standing beside them — so a dock can only ever place whole
+     groups, and a pair cannot come apart or invert. layoutDocks() in js/game.js
+     moves the GROUPS between docks; the buttons never move again. -->
+<div id="grp-pedals" class="dock-grp col">
+  <button id="btn-brake" class="touchbtn pedal" hidden aria-label="Brake">BRAKE</button>
+  <button id="btn-throttle" class="touchbtn pedal" hidden aria-label="Gas">GAS</button>
+</div>
+<div id="grp-shifts" class="dock-grp col">
+  <button id="shift-up" class="touchbtn shiftbtn" hidden aria-label="Shift up">&#9650;<small>UP</small></button>
+  <button id="shift-down" class="touchbtn shiftbtn" hidden aria-label="Shift down">&#9660;<small>DN</small></button>
+</div>
+<div id="grp-steer" class="dock-grp row">
+  <button id="btn-steer-left" class="touchbtn steerbtn" hidden aria-label="Steer left">&#9664;</button>
+  <button id="btn-steer-right" class="touchbtn steerbtn" hidden aria-label="Steer right">&#9654;</button>
+</div>
+<div id="grp-taps" class="dock-grp col">
+  <button id="btn-boost" class="touchbtn" hidden aria-label="Boost">BOOST</button>
+  <button id="btn-ot" class="touchbtn" hidden aria-label="Overtake">OT</button>
+  <button id="btn-aero" class="touchbtn" hidden aria-label="Active aero">AERO</button>
+</div>
+
+<button id="btn-cam" hidden aria-label="Camera">CHASE</button>
+<button id="pausebtn" hidden aria-label="Pause">&#10074;&#10074;</button>
+<!-- Shown only while the HUD is hidden (body.hud-hidden): the one control that
+     brings the HUD + buttons back. Tiny, top-right, out of the way. -->
+<button id="hud-restore" aria-label="Show HUD">&#128065;</button>
+<!-- Every dialog below is the same shape: .screen (safe-area inset, centres)
+     wrapping a .sheet of head / scrolling body / pinned foot. See the comment
+     at the top of css/components.css. -->
+<dialog id="pausemenu" class="screen dim" data-esc-close="pm-resume" aria-labelledby="dlg-pause" hidden>
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="dlg-pause">PAUSED</h2></div>
+    <div class="sheet-body pane stack">
+      <button id="pm-resume" autofocus>RESUME</button>
+      <button id="pm-restart">RESTART RACE</button>
+      <button id="pm-settings">SETTINGS&hellip;</button>
+      <button id="pm-standings" hidden>STANDINGS</button>
+      <button id="pm-quit">QUIT TO MENU</button>
+      <!-- Which build am I actually running? index.html carries no ?v= of its
+           own, so a stale shell or service-worker cache can serve old JS with no
+           visible sign — a bug report and a fix can then disagree for hours with
+           nobody able to tell. Filled in by js/game/menus.js from the same ?v=
+           the version guard parses, so it is the build that is EXECUTING, not a
+           string baked into the markup. -->
+      <p id="pm-build" class="build-tag" aria-label="build number"></p>
+    </div>
+  </div>
+</dialog>
+
+<!-- settings sub-menu — opened from the pause menu; keeps the pause screen itself
+     down to the essentials. All the tuning/toggle controls live here. -->
+<dialog id="pmsettings" class="screen dim" data-esc-close="pm-settings-close" aria-labelledby="dlg-settings" hidden>
+  <div id="pmsettings-inner" class="sheet">
+    <div class="sheet-head"><h2 id="dlg-settings">SETTINGS</h2></div>
+    <div id="pm-settings-body" class="sheet-body pane">
+      <div id="pm-category-tabs" class="balanced-row" role="tablist" aria-label="Settings categories">
+        <button id="pm-tab-controls" class="active" type="button" role="tab" aria-label="Controls"
+          aria-selected="true" aria-controls="pm-panel-controls" tabindex="0">CONTROLS</button>
+        <button id="pm-tab-display" type="button" role="tab" aria-label="Display"
+          aria-selected="false" aria-controls="pm-panel-display" tabindex="-1">DISPLAY</button>
+        <button id="pm-tab-more" type="button" role="tab"
+          aria-selected="false" aria-controls="pm-panel-more" tabindex="-1">MORE</button>
+      </div>
+      <div class="pm-groups">
+        <section id="pm-panel-controls" class="pm-group" role="tabpanel"
+          aria-labelledby="pm-tab-controls" tabindex="0">
+          <h3 class="pm-group-h">DRIVING CONTROLS</h3>
+          <button id="pm-steer">STEER: TILT</button>
+          <button id="pm-calib">RECALIBRATE TILT</button>
+          <button id="pm-gears">GEARS: AUTO</button>
+          <!-- ACTIVE AERO — whether the 2026 moveable wing switches itself inside
+               an activation zone. It sits with GEARS because it is the same kind
+               of choice: how much of the car you operate yourself. It was in RACE
+               SETTINGS, next to LAPS and WEATHER, which was wrong — those describe
+               the event, this describes the driver, and a control preference you
+               can only change by quitting to the menu is one you cannot change
+               when you discover you want it.
+               MANUAL by default: the button IS the mechanic. AUTO exists because
+               inside a zone X-mode is never the wrong choice, so a player who
+               forgets it is simply slower than the AI, which takes every zone. -->
+          <button id="pm-aero">ACTIVE AERO: MANUAL</button>
+        </section>
+        <section id="pm-panel-display" class="pm-group" role="tabpanel"
+          aria-labelledby="pm-tab-display" tabindex="0" hidden>
+          <h3 class="pm-group-h">DISPLAY</h3>
+          <button id="pm-hidehud">HIDE HUD</button>
+          <!-- step 0.5 — layout tiers (`--pair-at` / `--compact-at` via
+               SheetShape) sit INSIDE this range, so a notch can flip arrangement
+               not just size. MEASURED garage portrait: two columns at 80%,
+               stacked at 100%; compact head engages between 105 and 110. Step 5
+               overshot those edges; step 1 still jumped past a threshold while
+               dragging on a short phone track. Half-percent keeps the hunt tight.
+               applyScale() clamps to SCALE_MIN/MAX and snaps to 0.5. -->
+          <label class="tune-row"><span class="tune-label">UI SIZE <b id="pm-uiscale-v">100%</b></span>
+            <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size"></label>
+          <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
+            <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
+          <button id="pm-res">RESOLUTION: AUTO</button>
+          <button id="pm-renderer">RENDERER: WEBGL2</button>
+          <!-- THREE PATH / SCREENSHOTS / SAVE SCREENSHOT / status are injected
+               by js/game/gfx-quality.js (same body-node reason as RESET RENDERER). -->
+          <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
+        </section>
+        <nav id="pm-panel-more" class="pm-doors" role="tabpanel"
+          aria-labelledby="pm-tab-more" tabindex="0" hidden>
+          <h3 class="pm-group-h">TOOLS &amp; HELP</h3>
+          <button id="pm-advanced">ADVANCED STEERING&hellip;</button>
+          <button id="pm-lighting">LIGHTING TUNER&hellip;</button>
+          <button id="pm-camtune">CAMERA TUNER&hellip;</button>
+          <button id="pm-audio">MUSIC &amp; SOUND&hellip;</button>
+          <button id="pm-howto">HOW TO PLAY&hellip;</button>
+        </nav>
+      </div>
+    </div>
+    <div class="sheet-foot"><button id="pm-settings-close" autofocus class="bigbtn alt">BACK</button></div>
+  </div>
+</dialog>
+
+<!-- main menu -->
+<div id="overlay" class="grain">
+  <!-- Branding and small print are ONE block, in ONE grid row.
+       They used to be two blocks stacked in two rows with the button column
+       beside them. A grid distributes a row's spare height across its rows, and
+       the buttons are the tallest thing on the screen — so on a desktop that
+       spare height landed BETWEEN the subtitle and the disclaimer and pushed
+       them ~90px apart. Nested, there is no second row for the gap to open in. -->
+  <div id="menu-brand">
+    <h1 id="title">APEX&nbsp;26</h1>
+    <p id="subtitle">2026 grid &middot; 24-round season + 16 classics &middot; tilt to steer</p>
+    <div id="menu-meta">
+      <!-- The master sound toggle lives IN the title composition, not floating
+           over the app. It used to be `position: fixed` at the top-right corner
+           (css/overlays.css) and was un-hidden on every NON-RACE screen, so it
+           painted over whatever each sheet put in that corner — measured
+           colliding with CAREER MODES on the title screen and with FREE BUILD in
+           the garage. It is a title-screen convenience (the switches that matter
+           are in SETTINGS > MUSIC & SOUND), so it belongs on the title screen,
+           where it hides and shows with #overlay for free. -->
+      <p id="audiostate"></p>
+      <button id="soundbtn" class="minibtn" aria-pressed="true">&#9834; ON</button>
+      <p id="disclaimer">Unofficial fan project &mdash; not affiliated with FIA or Formula 1</p>
+    </div>
+  </div>
+  <div id="menu-buttons">
+    <!-- Inline Lucide icons (ISC — assets/icons/lucide-LICENSE.txt). stroke=currentColor
+         so they inherit the button's text colour; sized via .btn-ico in css/menus.css. -->
+    <!-- HERO: the long game, on its own and taller than everything under it.
+         It used to sit in a flat stack of five identical red buttons, which gave
+         a 24-round career the same weight as a single time trial. #mb-career-sub
+         carries the live save (team, year, round) so CONTINUE says what it is
+         continuing; refreshCareerButton() fills both it and the label. -->
+    <div id="menu-hero">
+    <button id="mb-career" class="bigbtn" data-menu-default><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub"></span></span></button>
+    </div>
+    <!-- PLAY NOW: the four one-sitting modes, 2x2 so four entries cost two rows
+         rather than four. Same red family as the hero, one step down in size. -->
+    <div id="menu-primary" class="balanced-row">
+    <button id="mb-race" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></svg>RACE</button>
+    <button id="mb-tt" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></svg>TIME TRIAL</button>
+    <button id="mb-vs" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>RACE A FRIEND</button>
+    <button id="mb-season" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2"/><path d="M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2"/><path d="M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3"/><path d="M4 22h16"/><path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/><path d="M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"/></svg>SEASON</button>
+    </div>
+    <!-- SECONDARY: everything that is not a way to play. Half-height,
+         two across, so the rooms never compete with the modes for the eye. -->
+    <div id="menu-secondary" class="balanced-row">
+    <button id="mb-standings" class="bigbtn alt minibtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/></svg>STANDINGS</button>
+    <button id="mb-data" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>F1 DATA HUB</button>
+    <button id="mb-garage" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>GARAGE</button>
+    <button id="mb-settings" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>SETTINGS</button>
+    <button id="mb-help" class="bigbtn alt minibtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>HOW TO PLAY</button>
+    </div>
+  </div>
+</div>
+
+<!-- select screen — two panes: WHO you are on the left, WHERE you race on the
+     right. The circuit preview is PINNED at the top of the right pane and only
+     the track list under it scrolls, so the map of the circuit you picked never
+     scrolls away while you browse the others. -->
+<!-- CAREER. A full-screen page like #select (not a .dim modal), because in career
+     it REPLACES #select: the calendar decides where you race, so the only thing
+     left to choose is whether you are ready. Two states share the sheet — the
+     new-career setup and the season hub — both built by js/game/career-ui.js into
+     the two empty panes. -->
+<div id="career" class="screen" data-esc-close="cr-back" hidden>
+  <div id="cr-inner" class="sheet pane-pair">
+    <div class="sheet-head" id="cr-header">
+      <div id="cr-titlebar"><h2 id="cr-title">CAREER</h2><div id="cr-sub"></div></div>
+      <div id="cr-meters"></div>
+    </div>
+    <div class="sheet-body" id="cr-body">
+      <div id="cr-left" class="pane pair-side"></div>
+      <div id="cr-right" class="pane pair-main"></div>
+    </div>
+    <div class="sheet-foot" id="cr-foot">
+      <button id="cr-back" class="bigbtn alt minibtn">MAIN MENU</button>
+      <button id="cr-garage" class="bigbtn alt minibtn">&#128295; GARAGE</button>
+      <button id="cr-go" class="bigbtn">GO RACING</button>
+    </div>
+  </div>
+</div>
+
+<!-- end of season: the year that was, and who wants you for the next one -->
+<dialog id="career-offers" class="screen dim" data-esc-close="co-back" aria-labelledby="co-title" hidden>
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="co-title">END OF SEASON</h2></div>
+    <div class="sheet-body pane" id="co-body"></div>
+    <div class="sheet-foot" id="co-foot">
+      <button id="co-back" autofocus class="bigbtn alt">DECIDE LATER</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- career history: the record of everything this career has achieved -->
+<!-- HOW CAREER WORKS. One sheet, TWO documents: the driver career and MY TEAM
+     are different games sharing a core, and a guide that hedged between them
+     would describe neither. js/game/career-ui.js builds whichever applies, and
+     the setup screen opens it for the flavour being CONSIDERED — reading what a
+     mode is should not cost a career to find out. -->
+<dialog id="career-guide" class="screen dim" data-esc-close="cg-back" aria-labelledby="cg-title" hidden>
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="cg-title">HOW CAREER WORKS</h2></div>
+    <div class="sheet-body pane" id="cg-body"></div>
+    <div class="sheet-foot" id="cg-foot">
+      <button id="cg-back" autofocus class="bigbtn alt">BACK</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="career-history" class="screen dim" data-esc-close="ch-back" aria-labelledby="ch-title" hidden>
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="ch-title">CAREER HISTORY</h2></div>
+    <div class="sheet-body pane" id="ch-body"></div>
+    <div class="sheet-foot" id="ch-foot">
+      <button id="ch-back" autofocus class="bigbtn alt">BACK</button>
+    </div>
+  </div>
+</dialog>
+
+<div id="select" class="screen" data-esc-close="sel-back" hidden>
+  <div id="sel-inner" class="sheet pane-pair">
+
+    <div class="sheet-head"><h2 id="select-title">SELECT</h2></div>
+
+    <div class="sheet-body" id="sel-body">
+      <!-- WHAT YOU ARE TAKING OUT: a summary of the car, and the way through
+           to the garage where it is configured. One scrolling column. -->
+      <!-- WHERE YOU RACE: label + preview are pinned, #sel-tracks scrolls. -->
+      <section class="pair-side" id="sel-track-section">
+        <h3 class="sel-label" id="sel-circuit-label">CIRCUIT</h3>
+        <div id="sel-track-preview">
+          <canvas id="sel-preview-map" width="520" height="300" role="img" aria-label="Circuit layout preview"></canvas>
+          <div id="sel-preview-info">
+            <div id="sel-preview-name"></div>
+            <div id="sel-preview-gp"></div>
+            <div id="sel-preview-meta"></div>
+            <div id="sel-preview-rec"></div>
+            <div id="sel-preview-facts"></div>
+            <canvas id="sel-preview-elev" width="280" height="36" role="img" aria-label="Elevation profile"></canvas>
+          </div>
+        </div>
+      </section>
+      <!-- The list is a SIBLING of the label+preview section, not a child of it,
+           so the two-column layout can make it a grid item of the sheet itself
+           and span it down through the action-bar row (css/menus.css). A nested
+           grid cannot span a row of its parent, and the action bar only ever
+           holds BACK and START — both under the preview column. Stacked: label,
+           compact preview band, then the list — one column, list scrolls. -->
+      <div id="sel-tracks" class="pane pair-main" role="group" aria-labelledby="sel-circuit-label"></div>
+    </div>
+
+    <div class="sheet-foot">
+      <button id="sel-back" class="bigbtn alt">BACK</button>
+      <button id="sel-go" class="bigbtn">START</button>
+    </div>
+  </div>
+</div>
+
+<!-- SEASON SETUP — the calendar (how many rounds, which circuits, in what order,
+     classics included) and the weekend format (qualifying, sprint, distance,
+     points). A .dim modal rather than a page like #select, because it lays OVER
+     the season select screen and BACK returns there.
+     Both panes are EMPTY: js/game/season-ui.js builds them, the same way
+     js/game/career-ui.js fills #cr-left / #cr-right. Nothing here is markup a
+     screen-shaped feature needs in the shell. -->
+<dialog id="season-setup" class="screen dim" data-esc-close="ss-back" aria-labelledby="ss-title" hidden>
+  <div id="ss-inner" class="sheet pane-pair">
+    <div class="sheet-head"><h2 id="ss-title">SEASON SETUP</h2></div>
+    <div class="sheet-body" id="ss-body">
+      <div id="ss-cal" class="pane pair-side"></div>
+      <div id="ss-pool" class="pane pair-main"></div>
+    </div>
+    <div class="sheet-foot">
+      <button id="ss-back" autofocus class="bigbtn alt">BACK</button>
+      <button id="ss-apply" class="bigbtn">APPLY</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- team picker — opened from the team card on the select screen. Big tiles:
+     colour block, name, engine and both drivers, so picking a team is one
+     confident tap instead of hunting a 60px chip. -->
+<dialog id="teampicker" class="screen dim" data-esc-close="tp-close" aria-labelledby="dlg-teampicker" hidden>
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="dlg-teampicker">SELECT TEAM</h2></div>
+    <div id="sel-teams" class="sheet-body pane" role="listbox" aria-label="Team"></div>
+    <div class="sheet-foot"><button id="tp-close" autofocus class="bigbtn alt">CLOSE</button></div>
+  </div>
+</dialog>
+
+<!-- VS FRIEND — the whole multiplayer lobby.
+     There is NO server anywhere in this design, so the two players ARE the
+     signalling channel: the host generates an invite code, sends it however
+     they like, and pastes back the answer their friend returns. Two pastes,
+     no infrastructure. The codes are long because they carry a full ICE-gathered
+     SDP, compressed — hence copy buttons rather than an expectation of typing. -->
+<dialog id="vsfriend" class="screen dim" data-esc-close="vs-close" aria-labelledby="dlg-vsfriend" hidden>
+  <div id="vsfriend-inner" class="sheet">
+    <div id="vs-head" class="sheet-head"><h2 id="dlg-vsfriend">RACE A FRIEND</h2></div>
+    <div class="sheet-body pane" id="vs-body">
+
+      <div id="vs-pick" class="vs-step">
+        <p class="vs-hint">Two drivers, one circuit. One of you hosts and picks the race; the other joins.</p>
+        <button id="vs-host" class="bigbtn">HOST A RACE</button>
+        <button id="vs-join" class="bigbtn alt">JOIN A FRIEND</button>
+        <!-- Room codes are a BACKUP path, and ALWAYS available — nothing is
+             ever hidden here. They need no configuration: with no private
+             relay set they ride the public Nostr relay pool
+             (NetRendezvous.configured() is unconditionally true, js/net/
+             rendezvous.js:90); localStorage apex26.rendezvous only switches
+             them to a private Worker relay. They stay the backup path because
+             everything else in this game is static files that cannot break,
+             while this one depends on a service somebody keeps alive. -->
+        <div id="vs-code-entry">
+          <p class="vs-hint">…or use a short room code.</p>
+          <div class="vs-actions">
+            <button id="vs-code-host" class="bigbtn minibtn">NEW CODE</button>
+            <button id="vs-code-join" class="bigbtn alt minibtn">ENTER CODE</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- The room-code flow. One step, not two: the relay carries both halves,
+           so there is nothing for a player to copy in either direction. -->
+      <div id="vs-code" class="vs-step" hidden>
+        <h3 class="vs-col-head"><span class="vs-num">1</span><span id="vs-code-head">Room code</span></h3>
+        <p class="vs-hint" id="vs-code-hint"></p>
+        <div id="vs-code-show" hidden>
+          <output id="vs-code-value" class="vs-bigcode"></output>
+          <div class="vs-actions">
+            <button id="vs-code-share" class="bigbtn minibtn">SHARE</button>
+            <button id="vs-code-copy" class="bigbtn alt minibtn">COPY</button>
+          </div>
+        </div>
+        <div id="vs-code-input" hidden>
+          <input id="vs-code-in" class="vs-code vs-codebox" type="text" inputmode="latin"
+                 autocapitalize="characters" autocomplete="off" spellcheck="false"
+                 maxlength="8" placeholder="ABC123" aria-label="Room code">
+          <button id="vs-code-go" class="bigbtn">JOIN</button>
+        </div>
+      </div>
+
+      <!-- Both flows are TWO STEPS, so they are laid out as two columns rather
+           than one long scroll. The game is played in landscape, where the sheet
+           is short and wide: stacked, step 2 sat entirely below the fold and the
+           screen read as "generate a code and then nothing happens". Side by
+           side, the whole exchange is visible at once. -->
+      <div id="vs-hosting" class="vs-step vs-two" hidden>
+        <section class="vs-col">
+          <h3 class="vs-col-head"><span class="vs-num">1</span>Send the invite</h3>
+          <!-- Scanned with the guest's ORDINARY camera app, which opens the
+               link. No in-page scanner, and none needed. -->
+          <figure class="vs-qr-wrap" id="vs-qr-wrap" hidden>
+            <canvas id="vs-qr" width="320" height="320" role="img"
+                    aria-label="QR code containing the invite link"></canvas>
+            <figcaption class="vs-hint">Point their camera at this</figcaption>
+          </figure>
+          <div class="vs-actions">
+            <button id="vs-share-invite" class="bigbtn minibtn">SHARE LINK</button>
+            <button id="vs-copy-invite" class="bigbtn alt minibtn">COPY CODE</button>
+          </div>
+          <!-- The raw code is the manual fallback, so it sits where a fallback
+               belongs: after the things that work, and folded away. -->
+          <details class="vs-raw">
+            <summary>Show the code</summary>
+            <textarea id="vs-invite" class="vs-code" readonly rows="3" aria-label="Invite code"></textarea>
+          </details>
+        </section>
+        <section class="vs-col">
+          <h3 class="vs-col-head"><span class="vs-num">2</span>Get their answer</h3>
+          <p class="vs-hint">Scan the code on their screen, or paste what they send.</p>
+          <div class="vs-actions">
+            <button id="vs-scan-answer" class="bigbtn minibtn">SCAN</button>
+            <button id="vs-paste-answer" class="bigbtn alt minibtn">PASTE</button>
+          </div>
+          <textarea id="vs-answer-in" class="vs-code" rows="3" maxlength="524288" placeholder="…or paste their answer code here" aria-label="Answer code"></textarea>
+          <button id="vs-accept" class="bigbtn">CONNECT</button>
+        </section>
+      </div>
+
+      <div id="vs-joining" class="vs-step vs-two" hidden>
+        <section class="vs-col">
+          <h3 class="vs-col-head"><span class="vs-num">1</span>Get their invite</h3>
+          <p class="vs-hint">Opening their link fills this in for you.</p>
+          <div class="vs-actions">
+            <button id="vs-scan-invite" class="bigbtn minibtn">SCAN</button>
+            <button id="vs-paste-invite" class="bigbtn alt minibtn">PASTE</button>
+          </div>
+          <textarea id="vs-invite-in" class="vs-code" rows="3" maxlength="524288" placeholder="…or paste their invite code here" aria-label="Invite code"></textarea>
+          <button id="vs-make-answer" class="bigbtn">GENERATE ANSWER</button>
+        </section>
+        <section class="vs-col">
+          <h3 class="vs-col-head" id="vs-answer-hint" hidden><span class="vs-num">2</span>Send this back</h3>
+          <!-- This QR carries the RAW CODE, not a link — unlike the invite one.
+               There is no "open this to answer" journey: the host scans it from
+               the page that is holding their peer connection, and a URL would
+               navigate them away from it. -->
+          <figure class="vs-qr-wrap" id="vs-answer-qr-wrap" hidden>
+            <canvas id="vs-answer-qr" width="320" height="320" role="img"
+                    aria-label="QR code containing the answer code"></canvas>
+            <figcaption class="vs-hint">Let them scan this</figcaption>
+          </figure>
+          <div class="vs-actions" id="vs-answer-actions" hidden>
+            <button id="vs-share-answer" class="bigbtn minibtn">SHARE</button>
+            <button id="vs-copy-answer" class="bigbtn alt minibtn">COPY</button>
+          </div>
+          <details class="vs-raw" id="vs-answer-raw" hidden>
+            <summary>Show the code</summary>
+            <textarea id="vs-answer" class="vs-code" readonly rows="3" aria-label="Answer code"></textarea>
+          </details>
+          <p class="vs-hint" id="vs-answer-wait">Generate your answer, send it back, then wait here.</p>
+        </section>
+      </div>
+
+      <!-- THE WAITING ROOM. Reached once the two are connected, and it is the
+           only screen both players see at the same time. The host owns the
+           race; each player owns their own car.
+           The CIRCUIT/SETTINGS and GARAGE buttons open the game's REAL screens
+           (#select, #race-settings, #carsetup) rather than reimplementing
+           them — which is how custom teams, liveries and the parts budget come
+           along for free instead of being a second, poorer copy. -->
+      <div id="vs-room" class="vs-step vs-two" hidden>
+        <section class="vs-col">
+          <h3 class="vs-col-head"><span class="vs-num">1</span>The race</h3>
+          <dl class="vs-summary" id="vs-race-summary"></dl>
+          <button id="vs-edit-race" class="bigbtn minibtn">CIRCUIT &amp; SETTINGS</button>
+          <p class="vs-hint" id="vs-race-note"></p>
+        </section>
+        <section class="vs-col">
+          <h3 class="vs-col-head"><span class="vs-num">2</span>The grid</h3>
+          <!-- One row per player. #vs-me stays a single fixed row because YOU
+               are always exactly one and always first. #vs-them is now a LIST
+               the lobby fills with a row per other player — it keeps its id so
+               that everything already reading "the other player's row" still
+               finds it, and reads the same with one child as it always did. -->
+          <div class="vs-driver" id="vs-me"></div>
+          <div class="vs-others" id="vs-them"></div>
+          <button id="vs-edit-car" class="bigbtn minibtn">GARAGE</button>
+          <!-- Host only, and only below the cap. Invites are SEQUENTIAL: this
+               mints a fresh connection and a fresh code while everyone already
+               in the room stays connected. -->
+          <button id="vs-invite-more" class="bigbtn alt minibtn" hidden>INVITE ANOTHER</button>
+          <div class="vs-actions">
+            <button id="vs-ready" class="bigbtn alt minibtn" aria-pressed="false">READY</button>
+            <button id="vs-start" class="bigbtn minibtn">START</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- The camera. Lives outside the two steps because either one can open
+           it, and because a live camera needs exactly one place to be torn
+           down from. playsinline is not optional: without it iOS Safari throws
+           the video full-screen and the lobby disappears behind it. -->
+      <div id="vs-scan" class="vs-scan" hidden>
+        <video id="vs-scan-video" playsinline muted autoplay
+               aria-label="Camera viewfinder for scanning a code"></video>
+        <button id="vs-scan-cancel" class="bigbtn alt minibtn">CANCEL</button>
+      </div>
+
+      <p id="vs-status" class="vs-status" role="status" aria-live="polite"></p>
+    </div>
+    <div class="sheet-foot"><button id="vs-close" autofocus class="bigbtn alt">CLOSE</button></div>
+  </div>
+</dialog>
+
+<!-- track detail fullscreen overlay -->
+<!-- A REAL <dialog>, not a div with role="dialog" aria-modal="true". The
+     hand-written version told assistive tech the page behind was inert while
+     Tab walked straight out into #select — the worst combination. showModal()
+     supplies that semantics for real, so the ARIA attributes are gone: the
+     platform asserts it. js/game/topmodal.js mirrors `hidden` onto
+     showModal()/close(), so no JS call site changes. Pinned by
+     tests/specs/menu-keyboard.spec.js ":modal" — which was RED while this shipped
+     as a div, because the conversion commit lost this hunk in a merge. -->
+<dialog id="track-detail" class="screen dim" aria-labelledby="track-detail-name" data-esc-close="track-detail-close" hidden>
+  <div id="track-detail-header">
+    <div id="track-detail-name"></div>
+    <button id="track-detail-close" autofocus class="tdc-close-btn" aria-label="Close">&#x2715;</button>
+  </div>
+  <div id="track-detail-body">
+    <div id="track-detail-canvas-wrap">
+      <canvas id="track-detail-canvas" width="800" height="560" role="img" aria-label="Circuit layout diagram"></canvas>
+    </div>
+    <div id="track-detail-panel">
+      <div id="track-detail-meta"></div>
+      <div id="track-detail-flags">
+        <span id="tdf-night" class="tdf-flag" hidden>NIGHT</span>
+        <span id="tdf-street" class="tdf-flag tdf-street" hidden>STREET</span>
+        <span id="tdf-banked" class="tdf-flag tdf-banked" hidden>BANKED</span>
+      </div>
+      <div id="track-detail-elev-wrap" hidden>
+        <div class="tds-subtitle">ELEVATION</div>
+        <canvas id="track-detail-elev" width="240" height="48" role="img" aria-label="Elevation profile"></canvas>
+      </div>
+      <div id="track-detail-drs-wrap" hidden>
+        <div class="tds-subtitle">DRS ZONES</div>
+        <div id="track-detail-drs-list"></div>
+      </div>
+      <div id="track-detail-corners">
+        <div class="tdc-title">TURNS</div>
+        <div id="track-detail-list"></div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- race settings -->
+<dialog id="race-settings" class="screen dim" data-esc-close="rs-cancel" aria-labelledby="dlg-racesettings" hidden>
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="dlg-racesettings">RACE SETTINGS</h2></div>
+    <div class="sheet-body pane" id="rs-body">
+      <div class="rs-row">
+        <h3 class="sel-label" id="rs-laps-label">LAPS</h3>
+        <div id="rs-laps" class="chip-row balanced-row" role="group" aria-labelledby="rs-laps-label"></div>
+      </div>
+      <div class="rs-row">
+        <h3 class="sel-label" id="rs-weather-label">WEATHER</h3>
+        <div id="rs-weather" class="chip-row balanced-row" role="group" aria-labelledby="rs-weather-label"></div>
+      </div>
+      <div class="rs-row" id="rs-time-section">
+        <h3 class="sel-label" id="rs-time-label">TIME OF DAY</h3>
+        <div id="rs-time" class="chip-row balanced-row" role="group" aria-labelledby="rs-time-label"></div>
+      </div>
+      <!-- DIFFICULTY lives here with the other race settings, not on the select
+           screen: it is a property of the race you are about to start, the same
+           as laps and weather. Hidden in a time trial — there is no AI to rate. -->
+      <div class="rs-row" id="rs-diff-section">
+        <h3 class="sel-label" id="rs-diff-label">DIFFICULTY</h3>
+        <div id="rs-diff" class="chip-row balanced-row" role="group" aria-labelledby="rs-diff-label"></div>
+      </div>
+      <!-- RELIABILITY — whether cars can retire. A standing preference like
+           DIFFICULTY, and OFF by default so no existing save starts losing cars.
+           Hidden in a time trial: there is no race to be retired from. -->
+      <!-- QUALIFYING LAP — whether this race is qualified for. A one-off Grand
+           Prix has always dropped you at P12 and gone straight to the lights;
+           that is a quick blast, and it is also the only mode where where you
+           START owes nothing to how fast you are. ON runs the one-lap session
+           the championship weekend uses, so the grid is earned.
+           It belongs HERE and not in pause > SETTINGS: it is a property of the
+           race you are about to run, like LAPS and WEATHER, not a control
+           preference like GEARS or ACTIVE AERO. Hidden in a time trial — there
+           is no grid to set. -->
+      <div class="rs-row" id="rs-quali-section">
+        <h3 class="sel-label" id="rs-quali-label">QUALIFYING LAP</h3>
+        <div id="rs-quali" class="chip-row balanced-row" role="group" aria-labelledby="rs-quali-label"></div>
+      </div>
+      <!-- CAUTIONS — race control's flags: local yellow, VSC, safety car, raised
+           when enough debris settles on the racing surface. Genuinely a property
+           of the EVENT (unlike ACTIVE AERO, which moved to pause > SETTINGS), so
+           it belongs beside RELIABILITY. Until now it was only switchable by
+           setting the apex26.caution localStorage key by hand, which meant a
+           whole race-control layer nobody could find. Hidden in a time trial:
+           alone on track there is nothing to be cautioned about. -->
+      <div class="rs-row" id="rs-caution-section">
+        <h3 class="sel-label" id="rs-caution-label">CAUTIONS</h3>
+        <div id="rs-caution" class="chip-row balanced-row" role="group" aria-labelledby="rs-caution-label"></div>
+      </div>
+      <div class="rs-row" id="rs-reliab-section">
+        <h3 class="sel-label" id="rs-reliab-label">RELIABILITY</h3>
+        <div id="rs-reliab" class="chip-row balanced-row" role="group" aria-labelledby="rs-reliab-label"></div>
+      </div>
+    </div>
+    <div class="sheet-foot">
+      <button id="rs-cancel" autofocus class="bigbtn alt">BACK</button>
+      <button id="rs-go" class="bigbtn">RACE!</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- season standings overlay -->
+<dialog id="standings" class="screen dim" data-esc-close="standings-close" aria-labelledby="standings-title" hidden>
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="standings-title">CHAMPIONSHIP STANDINGS</h2></div>
+    <div class="sheet-body pane" id="standings-body"></div>
+    <div class="sheet-foot"><button id="standings-close" autofocus class="bigbtn">CLOSE</button></div>
+  </div>
+</dialog>
+
+<!-- qualifying. A .dim modal, not a page: it lays over the screen that sent you
+     here and the session behind it is still what you are in. Two states share
+     the sheet — before the session it offers DRIVE or SIMULATE, after it shows
+     the classification and only TO THE GRID (css/career.css toggles on .q-done,
+     so the foot is never rebuilt out from under a keyboard user). -->
+<dialog id="quali" class="screen dim" data-esc-close="q-back" aria-labelledby="q-title" hidden>
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="q-title">QUALIFYING</h2></div>
+    <div class="sheet-body pane" id="q-body"><div id="q-table"></div></div>
+    <div class="sheet-foot" id="q-foot">
+      <!-- BACK is only offered BEFORE the session. Once a lap has been driven or
+           taken, going back would silently throw the result away — and the
+           classification IS the grid, so there is nothing left to reconsider.
+           css/career.css hides it on .q-done alongside DRIVE/SIMULATE. -->
+      <button id="q-back" autofocus class="bigbtn alt minibtn">BACK</button>
+      <button id="q-drive" class="bigbtn">DRIVE MY LAP</button>
+      <button id="q-sim" class="bigbtn alt minibtn">SIMULATE</button>
+      <button id="q-go" class="bigbtn">TO THE GRID</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- results -->
+<dialog id="results" class="screen dim" data-esc="none" aria-labelledby="results-title" hidden>
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="results-title">RACE RESULT</h2></div>
+    <div class="sheet-body pane" id="results-table"></div>
+    <div class="sheet-foot">
+      <button id="res-menu" class="bigbtn alt">MENU</button>
+      <button id="res-next" class="bigbtn">NEXT</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- customize my team -->
+<dialog id="customize" class="screen dim" data-esc-close="cz-cancel" aria-labelledby="dlg-customize" hidden>
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="dlg-customize">MY TEAM</h2></div>
+    <div class="sheet-body pane" id="cz-body">
+    <div class="cz-row"><label for="cz-name">TEAM NAME</label><input id="cz-name" type="text" maxlength="22" placeholder="My Team"></div>
+    <div class="cz-row"><label for="cz-short">SHORT CODE</label><input id="cz-short" type="text" maxlength="4" placeholder="YOU"></div>
+    <div class="cz-row"><label for="cz-color">PRIMARY</label><input id="cz-color" type="color"></div>
+    <div class="cz-row"><label for="cz-color2">ACCENT</label><input id="cz-color2" type="color"></div>
+    <!-- Collapsed by default: this is the 12-row, 34-of-52-control bulk of the
+         densest screen in the app, and every one of these rows is already
+         labelled optional. A native <details> means the required fields above
+         (identity) and below (driver) stay on screen without it; the label
+         doubles as the disclosure. Not exclusive with anything — nothing else
+         on this screen collapses, so there is nothing to be exclusive with. -->
+    <details id="cz-paint">
+    <summary class="cz-sep">EXTRA PAINT — OPTIONAL</summary>
+    <div id="cz-paint-rows">
+    <div class="cz-row cz-liv-row"><label for="cz-stripe">BODY STRIPE</label><input id="cz-stripe" type="color"><button type="button" id="cz-stripe-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-nosestripe">NOSE STRIPE</label><input id="cz-nosestripe" type="color"><button type="button" id="cz-nosestripe-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-detail">DETAIL</label><input id="cz-detail" type="color"><button type="button" id="cz-detail-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-nose">NOSE CAP</label><input id="cz-nose" type="color"><button type="button" id="cz-nose-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-pod">SIDEPOD</label><input id="cz-pod" type="color"><button type="button" id="cz-pod-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-wing">WINGS</label><input id="cz-wing" type="color"><button type="button" id="cz-wing-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-fin">TAIL FIN</label><input id="cz-fin" type="color"><button type="button" id="cz-fin-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-finart">TAIL GRAPHIC</label><input id="cz-finart" type="color"><button type="button" id="cz-finart-none" class="cz-liv-none">NONE</button></div>
+    <!-- Upload your own emblem. Downscaled and stored locally; CLEAR falls back
+         to the generated monogram crest. -->
+    <div class="cz-row cz-liv-row"><label for="cz-logofile">LOGO IMAGE</label>
+      <span class="cz-logo-wrap">
+        <img id="cz-logo-prev" alt="" hidden>
+        <label class="cz-liv-none" for="cz-logofile">UPLOAD</label>
+        <input id="cz-logofile" type="file" accept="image/*" hidden>
+        <button type="button" id="cz-logo-clear" class="cz-liv-none">CLEAR</button>
+      </span></div>
+    <div class="cz-row cz-liv-row"><label for="cz-logo">LOGO TINT</label><input id="cz-logo" type="color"><button type="button" id="cz-logo-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-halo">HALO</label><input id="cz-halo" type="color"><button type="button" id="cz-halo-none" class="cz-liv-none">NONE</button></div>
+    <!-- FINISH is the paint MATERIAL, not a colour, so it gets a 3-way choice
+         instead of a swatch + NONE. Gloss is the default clearcoat car paint. -->
+    <div class="cz-row cz-liv-row"><label>FINISH</label><span class="cz-finish" id="cz-finish"><button type="button" data-cz-finish="gloss" class="cz-liv-none active">GLOSS</button><button type="button" data-cz-finish="satin" class="cz-liv-none">SATIN</button><button type="button" data-cz-finish="chrome" class="cz-liv-none">CHROME</button></span></div>
+    </div><!-- /#cz-paint-rows -->
+    </details>
+    <!-- The driver is not paint. These three used to sit inside EXTRA PAINT —
+         OPTIONAL, so the form said a name and a car number were livery layers. -->
+    <div class="cz-sep">DRIVER</div>
+    <div class="cz-row"><label for="cz-driver">NAME</label><input id="cz-driver" type="text" maxlength="22" placeholder="Your Name"></div>
+    <div class="cz-row"><label for="cz-code">CODE</label><input id="cz-code" type="text" maxlength="3" placeholder="YOU"></div>
+    <div class="cz-row"><label for="cz-num">CAR NUMBER</label><input id="cz-num" type="number" min="0" max="99" placeholder="99"></div>
+    <div id="cz-preview"><span id="cz-swatch1"></span><span id="cz-swatch2"></span><span id="cz-pvtext"></span></div>
+    </div>
+    <div class="sheet-foot">
+      <button id="cz-cancel" autofocus class="bigbtn alt">CANCEL</button>
+      <button id="cz-save" class="bigbtn">SAVE</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- car setup — a .screen whose .sheet is DOCKED to the right edge instead of
+     centred, so the live 3D car preview stays visible on the left. Everything
+     else is the shared vocabulary: sheet-head / sheet-body / sheet-foot, and
+     the two scroll regions are .pane. -->
+<div id="carsetup" class="screen" data-esc-close="cs-back" hidden>
+  <!-- Preview controls for the live car. Sits OUTSIDE #cs-inner, over the
+       region of the canvas the sheet leaves for the car. #carsetup is
+       pointer-events:none so the canvas still gets the orbit drag; the controls
+       opt themselves back in.
+
+       TWO buttons, not fifteen. Flat, every camera control was a chip in one
+       wrapping row, which stacked three deep over the car on a landscape phone
+       and left the car peering out from behind its own instrument panel. The
+       camera set is BROAD but shallow — you open it, aim, and leave — so it
+       collapses behind one CAMERA disclosure. ACTIVE AERO stays out here as a
+       direct toggle because it is the opposite: one tap, watched repeatedly,
+       and its label is also the state readout.
+
+       Grouped in spans on purpose. AriaState labels a button GROUP (a parent's
+       button children) as toggles the moment one of them carries `active`, and
+       explicitly refuses to do it for a stack of plain actions. SPIN is a real
+       toggle and sits alone so it gets labelled; the view/zoom chips are
+       momentary jumps and stay in their own parents so they are never announced
+       as unpressed toggles. -->
+  <div id="cs-stack">
+    <div id="cs-cam-panel" hidden>
+      <div class="cs-pan-row">
+        <span class="cs-pan-lbl" aria-hidden="true">VIEW</span>
+        <div id="cs-view" role="group" aria-label="Camera presets">
+          <button type="button" class="cs-view-btn" data-cs-view="hero" title="Three-quarter view">3/4</button>
+          <button type="button" class="cs-view-btn" data-cs-view="front" title="Front view">FRONT</button>
+          <button type="button" class="cs-view-btn" data-cs-view="side" title="Side view">SIDE</button>
+          <button type="button" class="cs-view-btn" data-cs-view="rear" title="Rear view">REAR</button>
+          <button type="button" class="cs-view-btn" data-cs-view="top" title="Top view">TOP</button>
+        </div>
+      </div>
+      <!-- The wing framings are their own row rather than two more VIEW chips:
+           the flaps rotate about the car's X axis, so FRONT and REAR stare
+           straight down that axis and show nothing moving. These are the angles
+           that do, and the label is what says so. -->
+      <div class="cs-pan-row">
+        <span class="cs-pan-lbl" aria-hidden="true">WINGS</span>
+        <div id="cs-wing-views" role="group" aria-label="Wing framings">
+          <button type="button" id="cs-wing-front" class="cs-view-btn" data-cs-view="wingFront"
+                  title="Frame the FRONT wing from a three-quarter angle — the best view of its elements opening"
+                  aria-label="View the front wing">FRONT</button>
+          <button type="button" id="cs-wing-rear" class="cs-view-btn" data-cs-view="wingRear"
+                  title="Frame the REAR wing from a three-quarter angle — the best view of its elements opening"
+                  aria-label="View the rear wing">REAR</button>
+        </div>
+      </div>
+      <!-- Drive the orbit directly, not just to fixed presets. These repeat
+           while held, so they pan/tilt/zoom continuously rather than stepping —
+           which is also why picking one does NOT close the panel. -->
+      <div class="cs-pan-row">
+        <span class="cs-pan-lbl" aria-hidden="true">MOVE</span>
+        <div class="cs-pan-grp" role="group" aria-label="Move the camera">
+          <button type="button" id="cs-view-left" class="cs-view-btn" title="Rotate left" aria-label="Rotate left">&#9664;</button>
+          <button type="button" id="cs-view-right" class="cs-view-btn" title="Rotate right" aria-label="Rotate right">&#9654;</button>
+          <button type="button" id="cs-view-up" class="cs-view-btn" title="Raise the camera" aria-label="Raise the camera">&#9650;</button>
+          <button type="button" id="cs-view-down" class="cs-view-btn" title="Lower the camera" aria-label="Lower the camera">&#9660;</button>
+          <span class="cs-view-sep" aria-hidden="true"></span>
+          <button type="button" id="cs-view-in" class="cs-view-btn" title="Zoom in" aria-label="Zoom in">&plus;</button>
+          <button type="button" id="cs-view-out" class="cs-view-btn" title="Zoom out" aria-label="Zoom out">&minus;</button>
+        </div>
+      </div>
+      <!-- PAN moves the whole rig instead of circling it. Orbit and zoom can
+           only ever look at the same point from further away, so studying one
+           end of the car up close was impossible: this walks the camera along
+           the flank and past either end. Thin arrows, not the solid triangles
+           the MOVE row uses — they do different things and must not read as the
+           same control twice. -->
+      <div class="cs-pan-row">
+        <span class="cs-pan-lbl" aria-hidden="true">PAN</span>
+        <div class="cs-pan-grp" role="group" aria-label="Pan the camera">
+          <button type="button" id="cs-pan-left" class="cs-view-btn" title="Slide left" aria-label="Pan left">&larr;</button>
+          <button type="button" id="cs-pan-right" class="cs-view-btn" title="Slide right" aria-label="Pan right">&rarr;</button>
+          <span class="cs-view-sep" aria-hidden="true"></span>
+          <button type="button" id="cs-pan-fwd" class="cs-view-btn" title="Slide forward, toward the nose" aria-label="Pan forward">&uarr;</button>
+          <button type="button" id="cs-pan-back" class="cs-view-btn" title="Slide back, toward the rear wing" aria-label="Pan back">&darr;</button>
+        </div>
+      </div>
+      <div class="cs-pan-row">
+        <span class="cs-pan-lbl" aria-hidden="true"></span>
+        <div class="cs-pan-grp">
+          <span class="cs-view-grp">
+            <button type="button" id="cs-view-spin" class="cs-view-btn active" aria-pressed="true" title="Auto-rotate the car">SPIN</button>
+          </span>
+          <span class="cs-view-grp">
+            <button type="button" id="cs-view-reset" class="cs-view-btn" title="Back to the default view">RESET</button>
+          </span>
+          <span class="cs-view-hint">drag to orbit</span>
+        </div>
+      </div>
+    </div>
+    <div id="cs-bar">
+      <span class="cs-view-grp">
+        <button type="button" id="cs-cam" aria-expanded="false" aria-controls="cs-cam-panel"
+                title="Camera: presets, wing framings, and manual orbit">
+          <span>CAMERA</span>
+          <span class="cs-cam-caret" aria-hidden="true">&#9652;</span>
+        </button>
+      </span>
+      <div id="cs-aero-bar">
+        <button type="button" id="cs-aero" aria-pressed="false"
+                title="Active aero: open and close the front and rear wing flaps (Z-mode = downforce, X-mode = low drag)">
+          <span class="cs-aero-lbl">ACTIVE AERO</span>
+          <span class="cs-aero-val">Z-MODE</span>
+        </button>
+      </div>
+    </div>
+  </div>
+  <div id="cs-inner" class="sheet pane-pair pair-foot-full">
+    <div id="cs-header" class="sheet-head">
+      <div id="cs-titlebar">
+        <h2>GARAGE</h2>
+        <div id="cs-team"></div>
+      </div>
+      <div id="cs-budget-wrap">
+        <div id="cs-budget-bar"><div id="cs-budget-fill"></div></div>
+        <div id="cs-budget-row">
+          <div id="cs-budget"></div>
+          <button id="cs-unlimited" class="cs-unlimited-btn">&#8734; FREE BUILD</button>
+        </div>
+      </div>
+      <div id="cs-stats-inner"></div>
+    </div>
+    <div id="cs-body" class="sheet-body">
+      <div id="cs-tabs" class="pane pair-side"></div>
+      <div id="cs-options" class="pane pair-main"></div>
+    </div>
+    <!-- BACK returns to whichever screen opened the GARAGE; DONE goes FORWARD
+         (from the circuit picker it lands on race settings). Escape presses
+         BACK — see data-esc-close on #carsetup. -->
+    <div class="sheet-foot"><button id="cs-back" class="bigbtn alt">BACK</button><button id="cs-done" class="bigbtn">DONE</button></div>
+  </div>
+</div>
+
+<!-- how to play -->
+<dialog id="howtoplay" class="screen dim" data-esc-close="htp-close" aria-labelledby="dlg-howtoplay" hidden>
+  <div id="howtoplay-inner" class="sheet">
+    <div class="sheet-head">
+      <h2 id="dlg-howtoplay">HOW TO PLAY</h2>
+    </div>
+    <nav id="htp-contents" aria-label="How to play sections">
+      <a href="#htp-controls">CONTROLS</a>
+      <a href="#htp-racing">RACING</a>
+      <a href="#htp-setup">SETUP</a>
+      <a href="#htp-modes">MODES</a>
+      <a href="#htp-friends">FRIENDS</a>
+    </nav>
+    <dl class="sheet-body pane">
+      <dt id="htp-controls">PC / KEYBOARD</dt>
+      <dd>
+        Steer <span class="key">A</span><span class="key">D</span> or <span class="key">&larr;</span><span class="key">&rarr;</span> &nbsp;
+        Gas <span class="key">W</span> / <span class="key">&uarr;</span> &nbsp;
+        Brake <span class="key">S</span> / <span class="key">&darr;</span> &nbsp;
+        Boost <span class="key">Space</span> tap to toggle &nbsp;
+        Overtake <span class="key">X</span> &nbsp;
+        Active aero <span class="key">Z</span> &nbsp;
+        Camera <span class="key">C</span> cycles<br>
+        Shift Up <span class="key">E</span> &nbsp; Shift Down <span class="key">Q</span> / <span class="key">Shift</span> when <span class="key">GEARS: MANUAL</span><br>
+        Pause <span class="key">P</span> &nbsp; Back <span class="key">Esc</span> (pauses only if nothing is open)<br>
+        Menus: arrows move in every direction — Left/Right leave a list for the header or column beside it. <span class="key">Enter</span> confirms. Keys always steer on a desktop. <span class="key">ADAPTIVE BUTTONS</span> (default ON) slows the keys at speed. <span class="key">BRAKE CUE</span> ticks faster when a corner needs the anchors — it never brakes for you
+      </dd>
+      <dt>CONTROLLER</dt>
+      <dd>
+        Left stick / D-pad steer. <span class="key">RT</span> / <span class="key">A</span> gas. <span class="key">LT</span> / <span class="key">B</span> brake (triggers are analog). <span class="key">X</span> boost toggle. <span class="key">Y</span> overtake. D-pad up aero. <span class="key">LB</span> / <span class="key">RB</span> gears. View cycles camera. Start pauses.
+        <br>PlayStation: Cross / Circle / Square / Triangle and L2 / R2 are the same slots. Adaptive Buttons does not change the stick.
+        <br>Menus: either stick / D-pad move in every direction (hold to repeat) — Left/Right leave a list for the header or column beside it. <span class="key">A</span> confirms, <span class="key">B</span> backs, triggers page. Start still pauses
+      </dd>
+      <dt>TOUCH / MOBILE</dt>
+      <dd>
+        Pause &rarr; <span class="key">SETTINGS</span> &rarr; <span class="key">STEER</span> cycles TILT / BUTTONS / TOUCH.
+        <br><span class="key">TILT</span> &mdash; roll the phone; <span class="key">GAS</span> + <span class="key">BRAKE</span> sit left. <span class="key">GEARS: MANUAL</span> (tilt only — BUTTONS already uses both thumbs) puts the shifter left and the pedals right. Calibrates at the lights. Allow motion when asked; deny switches to BUTTONS.
+        <br><span class="key">BUTTONS</span> &mdash; on-screen arrows left, pedals right. Hold an arrow; slide the thumb back to ease. <span class="key">ADAPTIVE BUTTONS</span> (default ON; 1 is OFF) makes that heavier at speed. <span class="key">BRAKE CUE</span> is the tick that says when to brake.
+        <br><span class="key">TOUCH</span> &mdash; drag on the track from where you put your finger (a tap does not steer). The car accelerates on its own; <span class="key">BRAKE</span> stays left. No GAS pedal
+      </dd>
+      <dt id="htp-racing">&#9889; BOOST</dt>
+      <dd>Toggle electric deploy on/off. Drains the energy bar; recharges when you lift or brake. Tapers off at very high speed &mdash; 2026 rules</dd>
+      <dt>&#8646; ACTIVE AERO</dt>
+      <dd>The 2026 moveable wings. <span class="key">Z-MODE</span> is the default: flaps shut, maximum downforce. Press <span class="key">Z</span> (or tap <span class="key">AERO</span>) in an <span class="key">ACTIVATION ZONE</span> for <span class="key">X-MODE</span> &mdash; the top elements of both wings rotate flat, cutting drag for a higher top speed but giving up grip. It slams shut the moment you brake or leave the zone. Costs no energy: unlike BOOST and OVERTAKE you pay for it in cornering, not charge.
+        <br><b>Zones are fixed per circuit</b>, like DRS boards &mdash; the chip counts the next one down in metres. A circuit with no straight worth 3 seconds gets none at all, and there the chip reads <span class="key">NO AERO ZONE</span>: that is Monaco.
+        <br><b>No proximity rule</b>, and no first-lap wait &mdash; unlike OVERTAKE, every driver gets it on every lap in every zone, leader and backmarker alike. Prefer not to think about it? <span class="key">SETTINGS &rarr; ACTIVE AERO: AUTO</span> takes every zone for you and removes the button</dd>
+      <dt>OVERTAKE</dt>
+      <dd>Within 1 s of the car ahead the OT light arms. Activate for 4 s of full-power deploy with no taper &mdash; the 2026 electrical overtaking aid that replaced DRS. Because it IS the overtaking aid it carries DRS's safety rules: nothing on the opening lap (it wakes when the leader starts lap 2) and nothing under a caution. The chip reads <span class="key">NO OVERTAKE</span> when it is switched off rather than merely unarmed</dd>
+      <dt>GEARS</dt>
+      <dd>Toggle <span class="key">GEARS: MANUAL</span> in <span class="key">SETTINGS</span> when thumbs are free (desktop, or TILT on a phone). Shift up near the redline, down for corner exits. BUTTONS and TOUCH on a phone stay automatic so a thumb is free. The tachometer + gear indicator sit bottom-centre</dd>
+      <dt id="htp-setup">&#127909; CAMERA</dt>
+      <dd>Tap <span class="key">CAM</span> or press <span class="key">C</span> to cycle 13 views &mdash; CHASE, COCKPIT, TV SIDE, CINEMATIC and the rest. Hold CAM about a third of a second, or right-click it, for the picker. Your choice is remembered</dd>
+      <dt>&#9881; SETTINGS</dt>
+      <dd>Pause (<span class="key">P</span> or the <span class="key">&#10074;&#10074;</span> button; <span class="key">Esc</span> only if nothing is open) then <span class="key">SETTINGS</span> for everything below &mdash; steering, gears, lighting, sound, music and HUD. <span class="key">BACK</span> returns to the pause screen</dd>
+      <dt>&#127918; CHANGE STEERING</dt>
+      <dd>In <span class="key">SETTINGS</span>: <span class="key">STEER</span> cycles tilt / buttons / touch on a phone. A keyboard and a plugged-in pad always work on desktop. <span class="key">ADVANCED STEERING</span> opens STEERING &amp; ASSISTS — presets, driving help, the racing line, <span class="key">ADAPTIVE BUTTONS</span> (keys and on-screen arrows only; 1 is OFF, default ON) and <span class="key">BRAKE CUE</span> (1 is OFF — a tick, never a takeover). The ADVANCED disclosure is lock, speed steer and the rest. Everything applies instantly and is saved</dd>
+      <dt>&#128161; LIGHTING</dt>
+      <dd>In <span class="key">SETTINGS</span> tap <span class="key">LIGHTING TUNER</span> for a live tuner &mdash; time of day, exposure, colour grade and more, with a real-time preview. Values are saved per track / time / weather</dd>
+      <dt>&#128266; SOUND &amp; HUD</dt>
+      <dd>In <span class="key">SETTINGS</span> open <span class="key">MUSIC &amp; SOUND</span> for the music and effects switches, their volumes, and what is playing &mdash; or <span class="key">HIDE HUD</span> for a clean cinematic view (the small eye icon brings it back)</dd>
+      <dt>TRACK LIMITS</dt>
+      <dd>Grass is slow. Cutting the track repeatedly earns a +5 s penalty</dd>
+      <dt id="htp-modes">RACE</dt>
+      <dd>22 cars, five red lights, lights out. Points 25-18-15-12-10-8-6-4-2-1</dd>
+      <dt>SEASON</dt>
+      <dd>All 24 circuits in calendar order &mdash; championship standings saved between visits</dd>
+      <dt>TIME TRIAL</dt>
+      <dd>Solo on track, no rivals. Set your fastest lap; your track record is saved and shown on the circuit list</dd>
+      <!-- The two modes HOW TO PLAY never mentioned. It listed RACE, SEASON and
+           TIME TRIAL and stopped there, so the long game and the only way to
+           play against another person were both invisible from the one screen a
+           new player opens to find out what the game is. -->
+      <dt>CAREER</dt>
+      <dd>The long game. Sign for a team as a DRIVER and climb, or own the twelfth
+        team in MY TEAM and run it. Every weekend qualifies, prize money buys
+        parts, and the grid develops between seasons. Three save slots per mode,
+        and each mode has its own guide inside &mdash; press CAREER MODES</dd>
+      <dt>QUALIFYING</dt>
+      <dd>Championship weekends start with one flying lap. DRIVE MY LAP to set
+        your own time, or SIMULATE to take the modelled one &mdash; either way the
+        sheet is the grid you start from. You cannot do both</dd>
+      <dt id="htp-friends">&#128101; RACE A FRIEND</dt>
+      <dd>Two players, one race, no server. The host makes an invite code, the
+        guest sends one back, and those two pastes ARE the connection &mdash; so
+        anything you can send a message on will do. In the same room, scan the QR
+        code instead. Both of you need the same version of the game</dd>
+    </dl>
+    <div class="sheet-foot"><button id="htp-close" autofocus class="bigbtn">DONE</button></div>
+  </div>
+</dialog>
+
+<!-- advanced steering options -->
+<dialog id="advanced" class="screen dim" data-esc-close="adv-close" aria-labelledby="dlg-advanced" hidden>
+  <div id="advanced-inner" class="sheet">
+    <div class="sheet-head"><h2 id="dlg-advanced">STEERING &amp; ASSISTS</h2></div>
+    <!-- Scrollable body between the fixed title and the fixed DONE bar, so the
+         action button never floats over (or hides) the last controls. -->
+    <div class="sheet-body pane">
+    <p class="adv-intro">Pick a preset to set everything at once &mdash; most players never need more. Adjust the few controls below to taste, or open <b>Advanced</b> for the full set of knobs. Everything takes effect immediately and is saved.</p>
+
+    <div class="preset-row">
+      <button id="pm-preset-relax" class="preset-btn">RELAX<small>easiest &mdash; the car helps you</small></button>
+      <button id="pm-preset-standard" class="preset-btn">STANDARD<small>balanced default</small></button>
+      <button id="pm-preset-pro" class="preset-btn">PRO<small>sharp &mdash; full control</small></button>
+    </div>
+
+    <!-- simplified, player-facing controls (most players never need more) -->
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">TILT SENSITIVITY <b id="pm-tiltsimple-v">6</b></span>
+        <input id="pm-tiltsimple" type="range" min="1" max="10" step="1" value="6" aria-label="Tilt sensitivity"></label>
+      <p class="adv-help">How sharply the car answers your phone tilt. Higher = less tilt needed for full lock (more sensitive); lower = relaxed, bigger tilts.</p>
+    </div>
+    <div class="adv-item">
+      <span class="tune-label">STEERING</span>
+      <div class="opt-row" role="group" aria-label="Steering feel">
+        <button id="pm-steer-easy" class="opt-btn">SUPER EASY</button>
+        <button id="pm-steer-assist" class="opt-btn">ASSISTED</button>
+        <button id="pm-steer-normal" class="opt-btn">NORMAL</button>
+        <button id="pm-steer-sim" class="opt-btn">SIM</button>
+      </div>
+      <p class="adv-help">Overall steering feel, from forgiving and stable to sharp and direct.</p>
+    </div>
+    <div class="adv-item">
+      <span class="tune-label">DRIVING HELP</span>
+      <div class="opt-row" role="group" aria-label="Driving help">
+        <button id="pm-help-low" class="opt-btn">LOW</button>
+        <button id="pm-help-med" class="opt-btn">MEDIUM</button>
+        <button id="pm-help-high" class="opt-btn">HIGH</button>
+      </div>
+      <p class="adv-help">How much of each corner the car steers for you. Higher = easier to stay on track.</p>
+    </div>
+    <div class="adv-item">
+      <span class="tune-label">RACING LINE</span>
+      <div class="opt-row" role="group" aria-label="Racing line assist">
+        <button id="pm-line-off" class="opt-btn">OFF</button>
+        <button id="pm-line-corner" class="opt-btn">CORNERS</button>
+        <button id="pm-line-full" class="opt-btn">FULL</button>
+      </div>
+      <p class="adv-help">Optional gentle pull toward the ideal line. Never overrides your steering.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">ADAPTIVE BUTTONS <b id="pm-adaptbtn-v">6</b></span>
+        <input id="pm-adaptbtn" type="range" min="1" max="10" step="1" value="6" aria-label="Adaptive buttons"></label>
+      <p class="adv-help">Slows the keys and on-screen arrows at speed so a tap is a smaller correction. OFF (1) is the old snap. Does not change the stick, tilt, or a drag on the track. SPEED STEER still picks the speed that feels heavy.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">BRAKE CUE <b id="pm-brakecue-v">CUE 6</b></span>
+        <input id="pm-brakecue" type="range" min="1" max="10" step="1" value="6" aria-label="Brake cue"></label>
+      <p class="adv-help">A tick that speeds up when you need to brake for a corner. 1 is OFF. Higher = earlier warning (more lookahead). Takes over nothing.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">OVERALL SPEED <b id="pm-pace-v">84%</b></span>
+        <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed"></label>
+      <p class="adv-help">How fast the whole field actually covers the track &mdash; you and the AI together. Shown as a share of reference pace: 100% is full speed, and every notch is 6% either way. Your dash and gearbox keep their full range at every setting; higher just means everyone laps quicker.</p>
+    </div>
+
+    <!-- Native disclosure: expanded/collapsed state, keyboard toggling (Enter/
+         Space on the summary) and screen-reader "expanded" announcement all
+         come from the element for free, and the JS handler in
+         steer-tuning.js only has to play the click sound. -->
+    <details id="adv-details">
+    <summary id="adv-more" class="adv-more-btn">ADVANCED</summary>
+    <div id="adv-extra">
+    <h3 class="adv-sec">TILT INPUT <span>how phone motion becomes steering (tilt mode)</span></h3>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">TILT RANGE <b id="pm-tiltdeg-v">5</b></span>
+        <input id="pm-tiltdeg" type="range" min="1" max="10" step="1" value="5" aria-label="Tilt range"></label>
+      <p class="adv-help">The same sensitivity as the top slider, with a finer label: how far you tilt the phone for full lock. Higher = less tilt needed; lower = relaxed, big tilts.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">6</b></span>
+        <input id="pm-smooth" type="range" min="1" max="10" step="1" value="6" aria-label="Steer smoothing"></label>
+      <p class="adv-help">How steady the tilt filter holds the wheel. Higher = smoother and calmer at rest (kills hand jitter) with a touch more lag; lower = more immediate.</p>
+    </div>
+
+    <h3 class="adv-sec">CAR HANDLING <span>how steering becomes motion (all inputs)</span></h3>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">DRIVING HELP <b id="pm-help-v">6</b></span>
+        <input id="pm-help" type="range" min="1" max="10" step="1" value="6"></label>
+      <p class="adv-help">How much of each corner the car steers for you. Higher = the car tracks the bend automatically and you just trim the line; lower = you do the work. The single biggest &ldquo;easier to drive&rdquo; knob.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">5</b></span>
+        <input id="pm-rate" type="range" min="1" max="10" step="1" value="5"></label>
+      <p class="adv-help">Turn-in snappiness (shorter wheelbase). Higher = sharper, faster turn-in; lower = lazier and more stable.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">LINEARITY <b id="pm-expo-v">5</b></span>
+        <input id="pm-expo" type="range" min="1" max="10" step="1" value="5"></label>
+      <p class="adv-help">Input curve. Low = gentle near centre for fine corrections; high = direct, 1:1 response. Raise it if steering feels mushy near centre.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">STEER LOCK <b id="pm-lock-v">5</b></span>
+        <input id="pm-lock" type="range" min="1" max="10" step="1" value="5"></label>
+      <p class="adv-help">Maximum turn angle at full lock. Higher = tighter cornering, but easier to over-rotate. (Auto-tapers at high speed.)</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">SPEED STEER <b id="pm-speedsteer-v">5</b></span>
+        <input id="pm-speedsteer" type="range" min="1" max="10" step="1" value="5"></label>
+      <p class="adv-help">How much steering you keep at high speed. Higher = sharper and more responsive flat-out; lower = calmer and more stable.</p>
+    </div>
+
+    <h3 class="adv-sec">DRIVER AID</h3>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">RACING LINE <b id="pm-line-v">OFF</b></span>
+        <input id="pm-line" type="range" min="-5" max="5" step="1" value="0"></label>
+      <p class="adv-help">Optional bias toward the line. PULL (+) eases toward the apex; PUSH (&minus;) runs wider; OFF = pure manual. Never overrides your steering.</p>
+    </div>
+    </div><!-- /#adv-extra -->
+    </details>
+    </div><!-- /.sheet-body -->
+    <div class="sheet-foot"><button id="adv-close" autofocus class="bigbtn">DONE</button></div>
+  </div>
+</dialog>
+
+<!-- music & sound: the audio mixer. Its own screen rather than more buttons in
+     the settings grid, because two sliders and a now-playing readout do not fit
+     a one-line-per-control column. -->
+<dialog id="audioset" class="screen dim" data-esc-close="as-close" aria-labelledby="dlg-audioset" hidden>
+  <div id="audioset-inner" class="sheet">
+    <div class="sheet-head"><h2 id="dlg-audioset">MUSIC &amp; SOUND</h2></div>
+    <div class="sheet-body pane">
+      <!-- Each section is a header row with its switch on the right, then its
+           slider. The two are independent: music with no effects is a normal way
+           to play, so neither switch touches the other.
+
+           Each section is now a <details> — MUSIC and SOUND EFFECTS open by
+           default (every player's two most-used controls; the ON/OFF switch is
+           in the summary itself so it's reachable either way), YOUR TRACKS and
+           SPOTIFY closed (opt-in workflows most players never touch — SPOTIFY
+           is "dormant until a Client ID is entered" even when it IS open).
+           The switch buttons inside MUSIC/SOUND EFFECTS' summaries stop click
+           propagation (js/game/audio-panel.js) so pressing ON/OFF changes the
+           setting without also toggling the section — the alternative the
+           2026-08 menu review considered and rejected was relocating them out
+           of the header, which would have reversed the full-width-halves
+           decision two rules below records. -->
+      <details id="as-music-details" class="as-sec" open>
+        <summary class="as-head">
+          <h3 class="adv-sec">MUSIC</h3>
+          <div class="opt-row as-toggle" role="group" aria-label="Music on or off">
+            <button id="as-music-on" class="opt-btn" type="button">ON</button>
+            <button id="as-music-off" class="opt-btn" type="button">OFF</button>
+          </div>
+        </summary>
+        <label class="tune-row"><span class="tune-label">VOLUME <b id="as-mvol-v">5</b></span>
+          <input id="as-mvol" type="range" min="0" max="10" step="1" value="5" aria-label="Music volume"></label>
+        <!-- Which library the MUSIC controls drive. SPOTIFY is only selectable
+             once it is connected; picking another source releases it without
+             signing out. -->
+        <div class="opt-row" role="group" aria-label="Music source">
+          <button id="as-src-all" class="opt-btn" type="button">ALL</button>
+          <button id="as-src-builtin" class="opt-btn" type="button">DEFAULT</button>
+          <button id="as-src-user" class="opt-btn" type="button">MY TRACKS</button>
+          <button id="as-src-spotify" class="opt-btn" type="button">SPOTIFY</button>
+        </div>
+        <p id="as-src-note" class="as-note"></p>
+        <!-- NOW PLAYING. Was a lone SKIP button beside a run of small text, so
+             the track name was the least prominent thing in its own row and
+             there was no way back to the previous track. It is now a card: the
+             title is the biggest thing in it, the source sits under it as a
+             caption, and the transport is a real three-button group. -->
+        <div class="as-now-card">
+          <div class="as-now-meta">
+            <span class="as-now-cap">NOW PLAYING</span>
+            <b id="as-now" class="as-now-title">&mdash;</b>
+            <span id="as-now-src" class="as-now-sub"></span>
+          </div>
+          <div class="as-transport" role="group" aria-label="Music transport">
+            <button id="as-prev" class="as-tbtn" type="button" aria-label="Previous track">&#9198;</button>
+            <button id="as-play" class="as-tbtn as-tbtn-main" type="button" aria-label="Play or pause">&#9654;</button>
+            <button id="as-skip" class="as-tbtn" type="button" aria-label="Next track">&#9197;</button>
+          </div>
+        </div>
+      </details>
+
+      <details id="as-sound-details" class="as-sec" open>
+        <summary class="as-head">
+          <h3 class="adv-sec">SOUND EFFECTS</h3>
+          <div class="opt-row as-toggle" role="group" aria-label="Sound effects on or off">
+            <button id="as-sound-on" class="opt-btn" type="button">ON</button>
+            <button id="as-sound-off" class="opt-btn" type="button">OFF</button>
+          </div>
+        </summary>
+        <label class="tune-row"><span class="tune-label">VOLUME <b id="as-svol-v">10</b></span>
+          <input id="as-svol" type="range" min="0" max="10" step="1" value="10" aria-label="Sound effects volume"></label>
+        <p class="as-note">Engine, tyres, rain and menu clicks. Independent of the music.</p>
+      </details>
+
+      <!-- YOUR TRACKS: uploaded audio files, stored in IndexedDB by
+           js/game/music-lib.js and appended to the same playlist as the shipped
+           songs, so SKIP walks through both. Closed by default — an upload
+           workflow most players never touch, and the biggest single chunk of
+           this screen's control count after Spotify. -->
+      <details id="as-tracks-details" class="as-sec">
+        <summary class="as-head"><h3 class="adv-sec">YOUR TRACKS</h3></summary>
+        <button id="as-add" class="adv-more-btn" type="button">&#43; ADD MP3s</button>
+        <!-- The extension list is not redundant: Android WebViews that report an
+             empty MIME type filter those files out of a bare audio/* picker. -->
+        <input id="as-file" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.oga,.wav,.flac,.opus" multiple hidden aria-label="Add music files">
+        <div id="as-tracks" class="music-list"></div>
+        <p id="as-lib-msg" class="as-note">Files stay on this device &mdash; nothing is uploaded anywhere.</p>
+      </details>
+
+      <!-- SPOTIFY: personal-use only, and dormant until a Client ID is entered.
+           Spotify's developer policy does not permit shipping their audio as a
+           game soundtrack, and a Development Mode app only works for the
+           owner's own allowlisted Premium accounts — so no client ID is
+           committed and the whole block does nothing until one is pasted in.
+           Closed by default: this is the single largest section on the screen
+           (15+ controls) and stays inert for every player who never pastes in
+           a client id — id kept on the <details> itself (js/game/spotify.js
+           reads dataset.spState off #as-sp-wrap; tag-agnostic, untouched). -->
+      <details id="as-sp-wrap" class="as-sec">
+        <summary class="as-head"><h3 class="adv-sec">SPOTIFY</h3></summary>
+        <!-- autocapitalize/autocorrect off: a client id is 32 hex characters and
+             a phone keyboard will happily capitalise and "fix" it. -->
+        <label class="tune-row"><span class="tune-label">CLIENT ID</span>
+          <input id="as-sp-id" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" placeholder="paste your Spotify app client id" aria-label="Spotify client ID"></label>
+        <div class="opt-row">
+          <button id="as-sp-save" class="opt-btn" type="button">SAVE</button>
+          <button id="as-sp-connect" class="opt-btn" type="button">CONNECT</button>
+          <button id="as-sp-disconnect" class="opt-btn" type="button">DISCONNECT</button>
+        </div>
+        <!-- HOW TO PLAY. REMOTE drives Spotify on a device you already have
+             (phone, laptop) over the Web API — no DRM, no SDK, works on iOS.
+             IN BROWSER makes this tab the player via the Web Playback SDK,
+             which iOS Safari cannot run at all. -->
+        <div class="opt-row" role="group" aria-label="Spotify playback mode">
+          <button id="as-sp-mode-remote" class="opt-btn" type="button">REMOTE</button>
+          <button id="as-sp-mode-browser" class="opt-btn" type="button">IN BROWSER</button>
+        </div>
+        <p class="as-note">REMOTE plays through the Spotify app on your phone or computer &mdash; open it once so it shows up below. IN BROWSER plays here, but needs desktop Chrome/Edge/Firefox.</p>
+        <label class="tune-row"><span class="tune-label">DEVICE</span>
+          <select id="as-sp-device" aria-label="Spotify device"></select></label>
+        <button id="as-sp-refresh" class="adv-more-btn" type="button">&#8635; REFRESH DEVICES</button>
+
+        <!-- WHAT TO PLAY. Connecting only makes this browser a Spotify device;
+             it does not queue anything, and a browser that has never played has
+             no context to resume — which is why "connected" could be silent. -->
+        <label class="tune-row"><span class="tune-label">PLAY FROM</span>
+          <select id="as-sp-playlist" aria-label="Spotify playlist"></select></label>
+        <div class="opt-row">
+          <button id="as-sp-play" class="opt-btn" type="button">&#9654; PLAY</button>
+          <button id="as-sp-pause" class="opt-btn" type="button">&#10074;&#10074; PAUSE</button>
+          <button id="as-sp-next" class="opt-btn" type="button">&#9197; NEXT</button>
+        </div>
+        <!-- CHECK ACCOUNT asks Spotify's own API which of the two invisible
+             causes is the real one: plan (GET /me -> product) or a token with no
+             streaming permission. Without it both surface as one opaque error. -->
+        <button id="as-sp-check" class="adv-more-btn" type="button">CHECK ACCOUNT</button>
+        <!-- The full player (art, progress, shuffle/repeat, device volume,
+             playlist search) lives in its own sheet — too much to inline here,
+             and worth keeping. It is reached from beside the settings that
+             enable it rather than from a permanently-greyed pause-menu button. -->
+        <button id="as-sp-open" class="adv-more-btn" type="button" disabled>&#9835; OPEN PLAYER&hellip;</button>
+        <p class="as-note">Status: <b id="as-sp-status">not configured</b></p>
+        <p class="as-note">Playing: <b id="as-sp-now">&mdash;</b></p>
+        <!-- The setup rules are static, so they live here rather than being
+             burned into the live status line. -->
+        <p class="as-note">Personal use only. Needs Spotify <b>Premium</b> (not Mini/Lite), your own app at developer.spotify.com, and your account on that app&rsquo;s user allowlist. Register this exact Redirect URI on it:</p>
+        <p class="as-note"><b id="as-sp-uri" class="sp-uri">&mdash;</b></p>
+        <p class="as-note">CONNECT sends you to Spotify to sign in and reloads the game on the way back &mdash; do it from the menu, not mid-race. This panel reopens when you return.</p>
+        <p class="as-note">Running it locally? Serve from <b>http://127.0.0.1:&lt;port&gt;/</b> &mdash; Spotify rejects <b>localhost</b> as a redirect URI.</p>
+      </details>
+
+    </div>
+    <div class="sheet-foot"><button id="as-close" autofocus class="bigbtn">DONE</button></div>
+  </div>
+</dialog>
+
+<!-- SPOTIFY player: the in-game transport for a connected Spotify. Setup (client
+     id, connect, mode) stays in MUSIC & SOUND; this is the thing you open mid
+     session to see what is playing and change it. Rendered by js/game/spotify.js. -->
+<dialog id="spotifypanel" class="screen dim" data-esc-close="sp-close" aria-labelledby="dlg-spotify" hidden>
+  <div id="spotifypanel-inner" class="sheet">
+    <div class="sheet-head"><h2 id="dlg-spotify">SPOTIFY</h2></div>
+    <div class="sheet-body pane">
+      <div class="sp-now">
+        <img id="sp-art" class="sp-art" alt="" hidden>
+        <div class="sp-now-txt">
+          <div id="sp-title" class="sp-title">&mdash;</div>
+          <div id="sp-artist" class="sp-artist"></div>
+          <div id="sp-on" class="sp-on"></div>
+        </div>
+      </div>
+      <div class="sp-bar" aria-hidden="true"><div id="sp-bar-fill" class="sp-bar-fill"></div></div>
+      <div class="opt-row">
+        <button id="sp-prev" class="opt-btn" type="button" aria-label="Previous track">&#9198;</button>
+        <button id="sp-toggle" class="opt-btn" type="button" aria-label="Play or pause">&#9654;</button>
+        <button id="sp-fwd" class="opt-btn" type="button" aria-label="Next track">&#9197;</button>
+      </div>
+      <div class="opt-row">
+        <button id="sp-shuffle" class="opt-btn" type="button">SHUFFLE</button>
+        <button id="sp-repeat" class="opt-btn" type="button">REPEAT: OFF</button>
+      </div>
+      <label class="tune-row"><span class="tune-label">DEVICE VOLUME <b id="sp-vol-v">&mdash;</b></span>
+        <input id="sp-vol" type="range" min="0" max="100" step="5" value="50" aria-label="Spotify device volume"></label>
+      <p id="sp-vol-note" class="as-note"></p>
+
+      <h3 class="adv-sec">PLAY FROM</h3>
+      <label class="tune-row"><span class="tune-label">YOUR PLAYLISTS</span>
+        <select id="sp-playlist2" aria-label="Spotify playlist"></select></label>
+      <input id="sp-search" type="search" placeholder="search playlists&hellip;" aria-label="Search Spotify playlists"
+             autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <div id="sp-results" class="music-list"></div>
+
+      <h3 class="adv-sec">DEVICE</h3>
+      <label class="tune-row"><span class="tune-label">PLAYING ON</span>
+        <select id="sp-device2" aria-label="Spotify device"></select></label>
+      <button id="sp-refresh2" class="adv-more-btn" type="button">&#8635; REFRESH DEVICES</button>
+      <p id="sp-status2" class="as-note"></p>
+    </div>
+    <div class="sheet-foot"><button id="sp-close" autofocus class="bigbtn">DONE</button></div>
+  </div>
+</dialog>
+
+<!-- lighting tuner: live sliders for every lighting/rendering tunable on the
+     loaded track. Docked right so the scene keeps rendering as a live preview;
+     rows are generated from TUNE_DEFS in js/game/lighting.js (wired in game.js). -->
+<div id="lighting" data-esc-close="lt-close" hidden>
+  <div id="lighting-inner" class="sheet">
+    <!-- #lt-rail groups the panel's fixed furniture so a wide-but-short screen
+         can stand it up as a column beside the sliders (see css/tuner.css). It
+         is `display: contents` at every other size, so the tall panel keeps
+         exactly the flat head/rows/foot flow it has always had. -->
+    <div id="lt-rail" class="pane">
+      <div id="lt-head">
+        <h2>LIGHTING TUNER</h2>
+        <button id="pc-toggle">&#128247; FREE CAMERA</button>
+      </div>
+      <div id="lt-profile"></div>
+      <div id="lt-preview"></div>
+      <!-- COPY TO ALL TRACKS: spread the condition being edited sideways across
+           the grid (same time-of-day + weather, every other circuit). Rows are
+           generated by js/game/tuner.js; the store operation is
+           LightStore.copyToTracks (js/game/light-store.js). -->
+      <div id="lt-spread"></div>
+      <label class="lt-help-toggle"><input id="lt-help-on" type="checkbox"> Show explanations</label>
+      <div id="lt-tabs" class="lt-tabs balanced-row" role="tablist" aria-label="Lighting categories"></div>
+    </div>
+    <div id="lt-rows" class="pane"></div>
+    <textarea id="lt-json" readonly hidden aria-label="Exported tuning values"></textarea>
+    <div class="sheet-foot balanced-row">
+      <!-- "RESET", not "RESET ALL": the handler drops the LOCAL edits for the
+           current track|time-of-day|weather only, and deliberately leaves the
+           other conditions and the shipped file untouched. The old label
+           promised a global reset, so a user who had tuned several
+           conditions read the per-condition behaviour as reset being broken. -->
+      <button id="lt-reset" title="Drop local edits for THIS track / time of day / weather, and clear any legacy global overrides left by an older save. The shipped presets are untouched.">RESET</button>
+      <button id="lt-copy">COPY VALUES</button>
+      <button id="lt-close" class="bigbtn">DONE</button>
+    </div>
+  </div>
+</div>
+
+<!-- camera tuner: per-camera-mode framing offsets (height/distance/side/pitch/
+     yaw/fov) for each of the 13 player cameras. Docked right like the lighting
+     tuner so the live view behind it is the preview; the mode chips switch the
+     live camera and the sliders always edit the camera you're looking through.
+     Rows are generated from CamTune.defs() in js/game/cam-tune.js (panel UI:
+     js/game/cam-tuner.js). -->
+<div id="camtune" data-esc-close="ct-close" hidden>
+  <div id="camtune-inner" class="sheet">
+    <!-- #ct-rail mirrors #lt-rail in the lighting tuner, and exists for the same
+         one reason: the wide-and-short RAIL layout (css/tuner.css) is a two-column
+         grid whose child-PLACEMENT rules need something to place. Without it the
+         grid container applied to this panel — the selector is
+         `:is(#lighting-inner, #camtune-inner)` — while every placement rule named
+         an `#lt-*` id that does not exist in here, so these four children
+         auto-flowed into whatever cell came next: the title landed beside the mode
+         buttons, the slider column was left ~90px wide with three words to a line,
+         and the middle of the panel was empty. It is `display: contents` at every
+         other size, so it changes nothing elsewhere. -->
+    <div id="ct-rail">
+      <div id="ct-head">
+        <h2>CAMERA TUNER</h2>
+      </div>
+      <div id="ct-profile"></div>
+      <div id="ct-modes" class="lt-tabs balanced-row" role="tablist" aria-label="Camera modes"></div>
+      <label class="lt-help-toggle"><input id="ct-help-on" type="checkbox"> Show explanations</label>
+    </div>
+    <div id="ct-rows" class="pane" role="tabpanel"></div>
+    <div class="sheet-foot balanced-row">
+      <button id="ct-reset" title="Reset framing offsets for the camera mode currently being edited. Other modes are untouched.">RESET CAM</button>
+      <button id="ct-reset-all" title="Reset every camera mode to shipped defaults.">RESET ALL</button>
+      <button id="ct-close" class="bigbtn">DONE</button>
+    </div>
+  </div>
+</div>
+
+<!-- photo mode: on-screen fly-cam controls (shown while FREE CAMERA is on).
+     Desktop uses WASD / R-F / arrows / drag; touch uses the two thumbsticks
+     + the up/down buttons. Container is click-through; only the controls grab
+     pointer events (see .pc-* CSS). -->
+<div id="photo-controls" data-esc-close="pc-exit" hidden>
+  <div class="pc-stickwrap pc-move-wrap">
+    <span class="pc-lbl">MOVE</span>
+    <div id="pc-move" class="pc-stick"><div class="pc-nub"></div></div>
+  </div>
+  <div class="pc-altcol">
+    <button id="pc-up" class="pc-btn" aria-label="Up">&#9650;</button>
+    <button id="pc-down" class="pc-btn" aria-label="Down">&#9660;</button>
+  </div>
+  <div class="pc-stickwrap pc-look-wrap">
+    <span class="pc-lbl">LOOK</span>
+    <div id="pc-look" class="pc-stick"><div class="pc-nub"></div></div>
+  </div>
+  <div id="pc-bar">
+    <span class="pc-hint">WASD move&nbsp;&middot;&nbsp;R/F up&middot;down&nbsp;&middot;&nbsp;arrows or drag to look&nbsp;&middot;&nbsp;Shift boost</span>
+    <label class="pc-fovlab">FOV&nbsp;<input id="pc-fov" type="range" min="20" max="110" step="1" value="60"></label>
+    <button id="pc-hud">HIDE HUD</button>
+    <button id="pc-panel">HIDE PANEL</button>
+    <button id="pc-exit">EXIT</button>
+  </div>
+  <!-- shown only while body.pc-uihidden: the one control that brings the
+       photo-mode UI back (mirrors the race HUD's #hud-restore eye). -->
+  <button id="pc-restore" aria-label="Show controls">&#128065;</button>
+</div>
+
+<!-- data hub -->
+<div id="datahub" hidden></div>
+
+
+<div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
+
+<!-- three.js import map (TLX backend, apex26.gfxBackend="three"): resolves the
+     bare specifiers used by the DYNAMIC import() inside TLX.create() and by the
+     vendored files' own imports. Inline (no src) so the load-order test and the
+     service worker's tag parser both ignore it; the vendor URLs carry no ?v= —
+     immutability comes from the versioned directory name (upgrade = new dir). -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three-0.185.1/three.webgpu.min.js",
+    "three/webgpu": "./vendor/three-0.185.1/three.webgpu.min.js",
+    "three/tsl": "./vendor/three-0.185.1/three.tsl.min.js",
+    "three/addons/": "./vendor/three-0.185.1/addons/",
+    "@trystero-p2p/core": "./vendor/trystero-0.25.3/core/index.js",
+    "@trystero-p2p/nostr": "./vendor/trystero-0.25.3/nostr/index.js",
+    "@noble/secp256k1": "./vendor/trystero-0.25.3/noble-secp256k1.js"
+  }
+}
+</script>
+
+<script crossorigin="anonymous" src="js/log.js?v=da9d964fe2a5"></script>
+<script crossorigin="anonymous" src="js/mat4.js?v=11205916c4e7"></script>
+<script crossorigin="anonymous" src="js/render/shaders/chunks.js?v=4573d49f92ab"></script>
+<script crossorigin="anonymous" src="js/render/shaders/lit.js?v=6de3af7b5c8f"></script>
+<script crossorigin="anonymous" src="js/render/shaders/sky.js?v=baab42036af5"></script>
+<script crossorigin="anonymous" src="js/render/shaders/fx.js?v=4d9988f6e023"></script>
+<script crossorigin="anonymous" src="js/render/shaders/post.js?v=ddd9ef7abac7"></script>
+<script crossorigin="anonymous" src="js/render/glx/post.js?v=3e808c5dcc85"></script>
+<script crossorigin="anonymous" src="js/render/glx/shadow.js?v=48ccf914f593"></script>
+<script crossorigin="anonymous" src="js/render/glx/chunked.js?v=1afa33444a4a"></script>
+<script crossorigin="anonymous" src="js/render/glx.js?v=33d0625f4db9"></script>
+<!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
+     two OPT-IN renderer backends and are injected by js/game.js only when
+     apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that
+     every visitor used to parse for a backend almost nobody runs. sw.js seeds
+     them into its OPTIONAL precache set, since it discovers everything else by
+     parsing the tags below. -->
+
+<script crossorigin="anonymous" src="js/render/gfx.js?v=2b78de7e433c"></script>
+<script crossorigin="anonymous" src="js/render/gltf.js?v=83f4f23bbab9"></script>
+<script crossorigin="anonymous" src="js/render/assets.js?v=ed166b68b74b"></script>
+<script crossorigin="anonymous" src="js/car/teams.js?v=453435b9c847"></script>
+<script crossorigin="anonymous" src="js/car/driver-ratings.js?v=a7553359ad7c"></script>
+<script crossorigin="anonymous" src="js/track/geo-paths.js?v=d748206b17ab"></script>
+<script crossorigin="anonymous" src="js/track/geom.js?v=4d52510dc682"></script>
+<script crossorigin="anonymous" src="js/track/scenery-data.js?v=4877dcd9d6a3"></script>
+<script crossorigin="anonymous" src="js/track/markings.js?v=f4fa828792f8"></script>
+<script crossorigin="anonymous" src="js/track/space.js?v=6a5ae14a9db5"></script>
+<script crossorigin="anonymous" src="js/track/surface.js?v=5c992e9071d8"></script>
+<script crossorigin="anonymous" src="js/track/models.js?v=413b985e7735"></script>
+<script crossorigin="anonymous" src="js/track/graph.js?v=77d11e3fe999"></script>
+<script crossorigin="anonymous" src="js/track/themes.js?v=846aede07be2"></script>
+<script crossorigin="anonymous" src="js/track/landmark-kit.js?v=b5a86310198b"></script>
+<script crossorigin="anonymous" src="js/track/circuit-kit.js?v=531fbdebf053"></script>
+<script crossorigin="anonymous" src="js/track/spline.js?v=72cf1bacbb58"></script>
+<script crossorigin="anonymous" src="js/track/mesh.js?v=bed946bd74ef"></script>
+<script crossorigin="anonymous" src="js/track/scenery-nature.js?v=6ed3498d6c2f"></script>
+<script crossorigin="anonymous" src="js/track/scenery-structures.js?v=724d5faa8cd4"></script>
+<script crossorigin="anonymous" src="js/track/scenery-city.js?v=3a3f1278afaa"></script>
+<script crossorigin="anonymous" src="js/track/scenery-identity.js?v=6684360d2153"></script>
+<!-- circuit definitions (data) — must load before the tracks engine -->
+<script crossorigin="anonymous" src="js/circuits/bahrain.js?v=b4720e606096"></script>
+<script crossorigin="anonymous" src="js/circuits/monaco.js?v=f8c14f1be139"></script>
+<script crossorigin="anonymous" src="js/circuits/silverstone.js?v=0697f0f2a503"></script>
+<script crossorigin="anonymous" src="js/circuits/spa.js?v=b613b02f1f37"></script>
+<script crossorigin="anonymous" src="js/circuits/monza.js?v=0f5b8e9f6548"></script>
+<script crossorigin="anonymous" src="js/circuits/suzuka.js?v=96b6d8a2f36e"></script>
+<script crossorigin="anonymous" src="js/circuits/singapore.js?v=7847ebcfec4c"></script>
+<script crossorigin="anonymous" src="js/circuits/cota.js?v=8df1823a2fcb"></script>
+<script crossorigin="anonymous" src="js/circuits/interlagos.js?v=8ade6c5f34a8"></script>
+<script crossorigin="anonymous" src="js/circuits/vegas.js?v=3f4c7c20f19a"></script>
+<script crossorigin="anonymous" src="js/circuits/madrid.js?v=9c31c1fccab0"></script>
+<script crossorigin="anonymous" src="js/circuits/zandvoort.js?v=edd0261e23fa"></script>
+<script crossorigin="anonymous" src="js/circuits/jeddah.js?v=da0152f41a17"></script>
+<script crossorigin="anonymous" src="js/circuits/albert_park.js?v=451b0398cfc0"></script>
+<script crossorigin="anonymous" src="js/circuits/shanghai.js?v=46328eb4f443"></script>
+<script crossorigin="anonymous" src="js/circuits/miami.js?v=75ac63f9e281"></script>
+<script crossorigin="anonymous" src="js/circuits/imola.js?v=849fc2133f7f"></script>
+<script crossorigin="anonymous" src="js/circuits/montreal.js?v=850806cc2b11"></script>
+<script crossorigin="anonymous" src="js/circuits/redbull.js?v=cf9160da6d99"></script>
+<script crossorigin="anonymous" src="js/circuits/hungaroring.js?v=d9ea04342703"></script>
+<script crossorigin="anonymous" src="js/circuits/baku.js?v=4f009c5e1063"></script>
+<script crossorigin="anonymous" src="js/circuits/mexico.js?v=26171a3093cd"></script>
+<script crossorigin="anonymous" src="js/circuits/qatar.js?v=412cabf06c49"></script>
+<script crossorigin="anonymous" src="js/circuits/abudhabi.js?v=655bf7174d85"></script>
+<script crossorigin="anonymous" src="js/circuits/hockenheim.js?v=6751bb23921f"></script>
+<script crossorigin="anonymous" src="js/circuits/nurburgring.js?v=6f5045a9ce96"></script>
+<script crossorigin="anonymous" src="js/circuits/catalunya.js?v=abdc1ea00005"></script>
+<script crossorigin="anonymous" src="js/circuits/sepang.js?v=065bad585712"></script>
+<script crossorigin="anonymous" src="js/circuits/istanbul.js?v=f60ddcab474e"></script>
+<script crossorigin="anonymous" src="js/circuits/paul_ricard.js?v=a5b85a3b3c19"></script>
+<script crossorigin="anonymous" src="js/circuits/portimao.js?v=8e875d218837"></script>
+<script crossorigin="anonymous" src="js/circuits/sochi.js?v=4a8a4b15b54a"></script>
+<script crossorigin="anonymous" src="js/circuits/mugello.js?v=6cc2459d2c52"></script>
+<script crossorigin="anonymous" src="js/circuits/magny_cours.js?v=db7d207652ca"></script>
+<script crossorigin="anonymous" src="js/circuits/estoril.js?v=73a18e14e05c"></script>
+<script crossorigin="anonymous" src="js/circuits/kyalami.js?v=83e3a730f126"></script>
+<script crossorigin="anonymous" src="js/circuits/watkins_glen.js?v=9129de0ac607"></script>
+<script crossorigin="anonymous" src="js/circuits/indianapolis.js?v=bc6ccec8ed47"></script>
+<script crossorigin="anonymous" src="js/circuits/buenos_aires.js?v=0a9def10b45a"></script>
+<script crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=87f687006e3a"></script>
+<script crossorigin="anonymous" src="js/track/tracks.js?v=5498a86e86dc"></script>
+<script crossorigin="anonymous" src="js/track/maps.js?v=2d3d982969f3"></script>
+<script crossorigin="anonymous" src="js/car/car3d.js?v=3aa3b11c7855"></script>
+<script crossorigin="anonymous" src="js/game/input.js?v=7463a05cb89c"></script>
+<script crossorigin="anonymous" src="js/game/audio.js?v=9aa1a78aa2c3"></script>
+<script crossorigin="anonymous" src="js/game/music-lib.js?v=f43e998612b3"></script>
+<script crossorigin="anonymous" src="js/game/spotify.js?v=cc6586d8487e"></script>
+<script crossorigin="anonymous" src="js/game/audio-panel.js?v=97c5dd551254"></script>
+<script crossorigin="anonymous" src="js/data/api.js?v=541307e2e606"></script>
+<script crossorigin="anonymous" src="js/data/telemetry.js?v=68d406c0e812"></script>
+<script crossorigin="anonymous" src="js/data/export.js?v=6e85c1a591de"></script>
+<script crossorigin="anonymous" src="js/data/schedule.js?v=6ccedb2bf1a0"></script>
+<script crossorigin="anonymous" src="js/data/standings.js?v=420627476c88"></script>
+<script crossorigin="anonymous" src="js/data/lastrace.js?v=b7d043cba6a1"></script>
+<script crossorigin="anonymous" src="js/data/live.js?v=22e76b382159"></script>
+<script crossorigin="anonymous" src="js/data/hub.js?v=9b3c3a57efa5"></script>
+<script crossorigin="anonymous" src="js/car/parts.js?v=299db50b7f16"></script>
+<script crossorigin="anonymous" src="js/car/liveries.js?v=3c03d579e61e"></script>
+<script crossorigin="anonymous" src="js/car/liverytex.js?v=02d15bbad542"></script>
+<script crossorigin="anonymous" src="js/car/ghost.js?v=b8777e65ad76"></script>
+<script crossorigin="anonymous" src="js/game/light-presets.js?v=e48dbae5d8d1"></script>
+<script crossorigin="anonymous" src="js/game/physics-consts.js?v=95ddf68ac644"></script>
+<script crossorigin="anonymous" src="js/game/tables.js?v=02a99fbba028"></script>
+<script crossorigin="anonymous" src="js/game/lighting.js?v=85e23f7c7462"></script>
+<script crossorigin="anonymous" src="js/game/light-store.js?v=96b0ed6e1f7c"></script>
+<script crossorigin="anonymous" src="js/game/carmesh.js?v=b1136756cc1e"></script>
+<script crossorigin="anonymous" src="js/game/bodyattitude.js?v=7d125d9a7b2a"></script>
+<script crossorigin="anonymous" src="js/game/particles.js?v=0a35218b18ee"></script>
+<script crossorigin="anonymous" src="js/game/atmosphere.js?v=f092d6941db0"></script>
+<script crossorigin="anonymous" src="js/game/store.js?v=cb6e2596c9a6"></script>
+<script crossorigin="anonymous" src="js/game/career.js?v=1462db3f7fb9"></script>
+<script crossorigin="anonymous" src="js/game/season-cal.js?v=c2fd14b4b4d5"></script>
+<script crossorigin="anonymous" src="js/game/reliability.js?v=9e717a04faeb"></script>
+<script crossorigin="anonymous" src="js/game/ai-drive.js?v=c92a9de051f6"></script>
+<script crossorigin="anonymous" src="js/game/cam-tune.js?v=6ee854005123"></script>
+<script crossorigin="anonymous" src="js/game/setup-ui.js?v=b498bd200cc5"></script>
+<script crossorigin="anonymous" src="js/game/career-ui.js?v=211814be85a1"></script>
+<script crossorigin="anonymous" src="js/game/season-ui.js?v=f0de928ac0d6"></script>
+<script crossorigin="anonymous" src="js/game/menus.js?v=ccd1fbcea0b5"></script>
+<script crossorigin="anonymous" src="js/game/scrollfade.js?v=c213148b2fd4"></script>
+<script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
+<script crossorigin="anonymous" src="js/game/sheetshape.js?v=9074805bc9fd"></script>
+<script crossorigin="anonymous" src="js/game/uilayers.js?v=fe49a193dea2"></script>
+<script crossorigin="anonymous" src="js/game/topmodal.js?v=a919b357882c"></script>
+<script crossorigin="anonymous" src="js/game/menunav.js?v=852981a7ae03"></script>
+<script crossorigin="anonymous" src="js/game/ariastate.js?v=973a5889cce1"></script>
+<script crossorigin="anonymous" src="js/game/settings-nav.js?v=b08f88915465"></script>
+<script crossorigin="anonymous" src="js/game/aerozones.js?v=3918f5735cf7"></script>
+<script crossorigin="anonymous" src="js/game/skidmarks.js?v=445e60150252"></script>
+<script crossorigin="anonymous" src="js/game/racecontrol.js?v=329deff1767c"></script>
+<script crossorigin="anonymous" src="js/game/photomode.js?v=96ed06f175b8"></script>
+<script crossorigin="anonymous" src="js/game/tuner.js?v=97d8133f20c4"></script>
+<script crossorigin="anonymous" src="js/game/cam-tuner.js?v=3f5f9f5075ed"></script>
+<script crossorigin="anonymous" src="js/game/brake-cue.js?v=8f7e053da8f9"></script>
+<script crossorigin="anonymous" src="js/game/steer-tuning.js?v=27e9146feea9"></script>
+<script crossorigin="anonymous" src="js/game/perf.js?v=495da1c1cfe4"></script>
+<script crossorigin="anonymous" src="js/game/gfx-quality.js?v=6a49b31c1a10"></script>
+<script crossorigin="anonymous" src="js/game/ui-scale.js?v=71d20ad63b86"></script>
+<script crossorigin="anonymous" src="js/game/cockpit-opts.js?v=c45e493fa4ab"></script>
+<script crossorigin="anonymous" src="js/game/metrics.js?v=e21faf7cf0d4"></script>
+<script crossorigin="anonymous" src="js/game/cameras.js?v=9a0b5d9b5eed"></script>
+<script crossorigin="anonymous" src="js/game/cam-modes.js?v=0ccbabb90f93"></script>
+<script crossorigin="anonymous" src="js/game/hud.js?v=6c33b0d4b80b"></script>
+<script crossorigin="anonymous" src="js/game/results.js?v=40a2c4e24afe"></script>
+<script crossorigin="anonymous" src="js/game/quali.js?v=b2612a3fb892"></script>
+<script crossorigin="anonymous" src="js/game/debrisworld.js?v=51060dc2bda8"></script>
+<script crossorigin="anonymous" src="js/game/incidentsim.js?v=8d348151205e"></script>
+<script crossorigin="anonymous" src="js/net/nostr.js?v=8d425220e84a"></script>
+<script crossorigin="anonymous" src="js/net/rendezvous.js?v=e8f0d312c2fc"></script>
+<script crossorigin="anonymous" src="js/net/sdp.js?v=1d82f2230798"></script>
+<script crossorigin="anonymous" src="js/net/qr.js?v=69234de73182"></script>
+<script crossorigin="anonymous" src="js/net/scan.js?v=da29034793de"></script>
+<script crossorigin="anonymous" src="js/net/transport.js?v=449e7bf69997"></script>
+<script crossorigin="anonymous" src="js/net/handshake.js?v=235f43f8bc4c"></script>
+<script crossorigin="anonymous" src="js/net/snapshot.js?v=7e15ac80cc3a"></script>
+<script crossorigin="anonymous" src="js/net/session.js?v=ab5f8dedabbc"></script>
+<script crossorigin="anonymous" src="js/net/netplay.js?v=b40763a2e674"></script>
+<script crossorigin="anonymous" src="js/net/lobby.js?v=a0d265295a26"></script>
 <script crossorigin="anonymous" src="js/game.js?v=1fd46d9563c6"></script>
-</body>
-</html>
+</body></html>
