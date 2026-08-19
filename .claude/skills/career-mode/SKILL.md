@@ -35,7 +35,8 @@ node tools/test-bg.mjs modes              # career + quali + season + TT — the
 npm run test:tooling-fast
 ```
 
-Deep references: `docs/CAREER.md`, `docs/DEBUG-HOOKS.md` (Career & qualifying).
+`Career.upgradeBudget()` lives on `Career` in `js/game/career.js` (the UI only
+calls it). Deep references: `docs/CAREER.md`, `docs/DEBUG-HOOKS.md`.
 
 ## Load on demand
 
