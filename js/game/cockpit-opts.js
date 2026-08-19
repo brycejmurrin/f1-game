@@ -1,4 +1,6 @@
-/* Apex 26 — CockpitOpts: player-facing options for the first-person view. Today that is one switch, the HALO, but the shape is deliberate: cockpit look-and-feel c… */
+/* Apex 26 — CockpitOpts: player-facing options for the first-person view. Today that is one switch, the HALO, but the shape is deliberate: cockpit look-and-feel choices live here, not in graphics quality or steer-tuning.
+
+   WHY ITS OWN FILE. Same reason as GameMetrics: inject SETTINGS buttons without growing index.html or inventing CSS classes. */
 const CockpitOpts = (function () {
   "use strict";
 
@@ -98,4 +100,48 @@ if (typeof document !== "undefined") {
 }
 
 return { KEY, KEY_TC, halo, setHalo, turnChase, setTurnChase, turnChaseLead };
+})();
+
+/* Metrics panel safe-area: keep #game-metrics clear of notch / home indicator.
+   Inline PANEL_STYLE in metrics.js is not zoom-aware for env insets; override
+   when the panel mounts. House height unit is svh (not dvh) to avoid toolbar jitter. */
+(function metricsSafeArea() {
+  "use strict";
+  var HUD_TOP = "min(120px, calc(80px * var(--hud-scale, 1)))";
+  var STYLE =
+    "position:fixed;" +
+    "right:calc(8px + var(--sar, 0px));" +
+    "top:calc(12px + var(--tap, 44px) + var(--sat, 0px) + " + HUD_TOP + ");" +
+    "z-index:11;margin:0;padding:10px 12px;" +
+    "font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;" +
+    "color:#d8ffe0;background:rgba(4,8,6,.82);border:1px solid rgba(90,200,120,.4);" +
+    "border-radius:8px;pointer-events:none;white-space:pre;text-align:left;" +
+    "max-width:min(52ch,calc(100vw - 16px - var(--sal, 0px) - var(--sar, 0px)));" +
+    "max-height:calc(100svh - 12px - var(--tap, 44px) - var(--sat, 0px) - " +
+      HUD_TOP + " - max(80px, calc(72px + var(--sab, 0px))));" +
+    "overflow-y:auto;pointer-events:auto;text-shadow:0 1px 2px rgba(0,0,0,.9);" +
+    "letter-spacing:.01em";
+  function apply(el) {
+    if (!el || el.id !== "game-metrics") return;
+    el.style.cssText = STYLE;
+  }
+  function scan() {
+    apply(document.getElementById("game-metrics"));
+  }
+  if (typeof document === "undefined") return;
+  scan();
+  try {
+    var mo = new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var nodes = muts[i].addedNodes;
+        for (var j = 0; j < nodes.length; j++) {
+          var n = nodes[j];
+          if (n && n.id === "game-metrics") apply(n);
+        }
+      }
+    });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+  } catch (_) {
+    setInterval(scan, 1000);
+  }
 })();
