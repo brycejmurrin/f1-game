@@ -1395,8 +1395,7 @@ const api = {
   // "wet" = damp track (wet road, no falling rain); "rain" = wet road + falling
   // rain + lightning. Toggles the rain layer + audio live for mid-race changes.
   weather(w) {
-    if (w === undefined) return G.raceWeather;
-    return setWeatherLive(w);   // shared live path (rain layer, audio, lighting)
+    return G.weather(w);
   },
 
   // Dynamic weather progression: weatherArc(from, to, seconds) arms a scripted
@@ -1419,12 +1418,7 @@ const api = {
   // state actually flips (dawn/dusk/night share one build; day is the other), so
   // switching among the three dark times is near-instant. Fast path for sweeps.
   setTimeOfDay(tod) {
-    if (tod === undefined) return G.raceTimeOfDay;
-    const valid = ["default", "dawn", "day", "dusk", "night"];
-    G.raceTimeOfDay = valid.indexOf(tod) >= 0 ? tod : "default";
-    loadTrack(G.trackIdx);
-    applyRaceSettings();
-    return G.raceTimeOfDay;
+    return G.setTimeOfDay(tod);
   },
 
   // Force-rescue the player immediately (same as auto-rescue after 3 s stuck).

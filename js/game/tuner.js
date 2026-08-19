@@ -12,7 +12,7 @@ function create(G) {
 Log.info("game", "TunerPanel.create");
 const { TUNE_DEFS, LT } = LightTune;
 // Stable helpers from the game.js closure.
-const { $, els, ltKey, setLightTune, persistLightTune } = G;
+const { $, els, ltKey, setLightTune, persistLightTune, setTimeOfDay, weather } = G;
 const exitPhotoMode = (...a) => G.exitPhotoMode(...a);
 
 function fmtTune(d, v) {
@@ -57,7 +57,7 @@ let _ltPrevTOD = null, _ltPrevWx = null;
 const LT_TODS = ["dawn", "day", "dusk", "night", "default"];
 const LT_WX = ["dry", "wet", "rain", "fog", "overcast"];
 function refreshLtPreviewActive() {
-  const tod = __apex.setTimeOfDay(), wx = __apex.weather();
+  const tod = setTimeOfDay(), wx = weather();
   for (const t of LT_TODS) { const el = $("lt-tod-" + t); if (el) el.classList.toggle("on", t === tod); }
   for (const w of LT_WX) { const el = $("lt-wx-" + w); if (el) el.classList.toggle("on", w === wx); }
 }
@@ -94,9 +94,9 @@ function buildLtPreview() {
     host.appendChild(row);
   };
   mkGroup("TIME", LT_TODS, ["DAWN", "DAY", "DUSK", "NIGHT", "TRACK"],
-    (t) => __apex.setTimeOfDay(t), "lt-tod-");
+    (t) => setTimeOfDay(t), "lt-tod-");
   mkGroup("WEATHER", LT_WX, ["DRY", "WET", "RAIN", "FOG", "CLOUD"],
-    (w) => __apex.weather(w), "lt-wx-");
+    (w) => weather(w), "lt-wx-");
 }
 // COPY TO ALL TRACKS. Every other control in this panel edits the ONE
 // (track, time-of-day, weather) profile named above it; these two write the same
@@ -324,8 +324,8 @@ function refreshLightTunePanel() {
 $("pm-lighting").onclick = () => {
   Log.info("game", "TunerPanel.open");
   buildLightTunePanel();
-  _ltPrevTOD = __apex.setTimeOfDay();   // capture the race's real conditions
-  _ltPrevWx = __apex.weather();
+  _ltPrevTOD = setTimeOfDay();   // capture the race's real conditions
+  _ltPrevWx = weather();
   refreshLtPreviewActive();
   $("lt-json").hidden = true;
   $("lighting").hidden = false;
@@ -337,8 +337,8 @@ function closeLightTuner(showPauseMenu) {
   if (G.photoMode) exitPhotoMode();
   _ltUndo = null; ltDisarm();   // the copy's one-step revert does not outlive the panel
   // Restore the race's real time & weather (preview was transient).
-  if (_ltPrevTOD != null && __apex.setTimeOfDay() !== _ltPrevTOD) __apex.setTimeOfDay(_ltPrevTOD);
-  if (_ltPrevWx != null && __apex.weather() !== _ltPrevWx) __apex.weather(_ltPrevWx);
+  if (_ltPrevTOD != null && setTimeOfDay() !== _ltPrevTOD) setTimeOfDay(_ltPrevTOD);
+  if (_ltPrevWx != null && weather() !== _ltPrevWx) weather(_ltPrevWx);
   _ltPrevTOD = null; _ltPrevWx = null;
   $("lighting").hidden = true;
   document.body.classList.remove("lt-open");   // restore race HUD + touch controls
