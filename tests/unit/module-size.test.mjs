@@ -333,7 +333,10 @@ const CEILINGS = {
   // injector). window.__apex = null is the eval-time latch the global
   // registry pins on this file; ApexApi.create stays call-time after the
   // inject. Bug-explaining growth at the boot site, not a feature.
-  "js/game.js": 8635,
+  // 8635 -> 8512: UI SIZE / HUD SIZE + RESOLUTION moved to js/game/ui-scale.js
+  // (UiScale.create(G)). 0 new physics; one deferred G.updateTrackPreview
+  // beside buildSelect. Comments moved with the block.
+  "js/game.js": 8512,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

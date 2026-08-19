@@ -455,6 +455,8 @@ interface GameCtx {
   readonly photoMove: PhotoAxis;
   readonly photoLook: PhotoAxis;
   readonly applyResMode: () => void;
+  /** Select-screen track card refresh — Menus owns it; UiScale calls it on zoom. */
+  readonly updateTrackPreview: () => void;
   readonly ltKey: () => string;
   readonly exitPhotoMode: () => void;
 
@@ -610,3 +612,4 @@ declare const SetupUI: GameModuleFactory;
 declare const SkidMarks: GameModuleFactory;
 declare const SteerTuning: GameModuleFactory;
 declare const TunerPanel: GameModuleFactory;
+declare const UiScale: GameModuleFactory;
