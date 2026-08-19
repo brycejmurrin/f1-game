@@ -371,13 +371,14 @@ test("ui-survey.mjs is a layout-audit recipe, not a second Playwright probe", as
   assert.ok(!over.includes("--jobs=1"));
 });
 
-test("wgx-gallery.mjs imports runWgxShot instead of spawning wgx-shot", () => {
+test("wgx-gallery.mjs forwards to wgx-shot --gallery", () => {
   const src = fs.readFileSync(path.join(TOOLS, "wgx-gallery.mjs"), "utf8");
-  assert.match(src, /from ["']\.\/wgx-shot\.mjs["']/);
-  assert.match(src, /runWgxShot/);
-  assert.doesNotMatch(src, /spawnSync/);
+  assert.match(src, /wgx-shot\.mjs/);
+  assert.match(src, /--gallery/);
   const shot = fs.readFileSync(path.join(TOOLS, "wgx-shot.mjs"), "utf8");
   assert.match(shot, /export async function runWgxShot/);
+  assert.match(shot, /export async function runWgxGallery/);
+  assert.match(shot, /export const WGX_GALLERY_SHOTS/);
   assert.doesNotMatch(shot, /locator\(["']#game["']\)\.screenshot/);
   assert.match(shot, /page\.screenshot\(\s*\{\s*path[^}]*clip/);
 });

@@ -184,7 +184,7 @@ These stay CLI-only on purpose. The MCP must refuse if asked to grow them.
 | `assets.mjs bake*` | Author-time writer | skill **asset-pack** |
 | `rotate-markings.cjs --write` | Mutates circuit markings | CLI after `--check` review |
 | `graph-parity.cjs` without `BASE=` | Vacuous pass on a clean tree | `apex_graph_parity` with `base` |
-| `wgx-gallery.mjs` | Batch Chromium | skill **webgpu-debug** (parent session) |
+| `wgx-gallery.mjs` | Forwarder → `wgx-shot.mjs --gallery` | skill **webgpu-debug** (parent session); prefer `npm run wgx:gallery` |
 | `lighting-tuner-sweep.mjs` / `physics-tune-sweep.mjs` | Long, sharded, resumable | skills **lighting-tuner** / **tune-physics** |
 | `rtc-e2e*.mjs` / `nostr-probe.mjs` | Real network / minutes | skill **multiplayer-debug** |
 | `report-server.mjs` | Binds `0.0.0.0` | skill **mcp-probe** |

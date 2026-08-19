@@ -1,88 +1,30 @@
 #!/usr/bin/env node
-// wgx-gallery.mjs — batch WebGPU screenshots across a curated track set.
-//
-// Writes PNGs + manifest to artifacts/tmp/wgx-gallery/<stamp>/ (gitignored).
-// Committed reference: docs/research/wgx-gallery-manifest.json (recipe + last run).
-//
-// Usage:
-//   node tools/wgx-gallery.mjs [--lite] [--out DIR]
-
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+// Forwarder → wgx-shot.mjs --gallery (kept for docs/skills that still name wgx-gallery).
+import { spawnSync } from "node:child_process";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runWgxShot } from "./wgx-shot.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const args = process.argv.slice(2);
-const lite = args.includes("--lite");
-const outArg = args.indexOf("--out");
-const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-const outRoot = outArg >= 0 ? args[outArg + 1] : join("artifacts", "tmp", "wgx-gallery", stamp);
-
-/** @type {{ track: string, cam: string, extra?: string[] }[]} */
-const SHOTS = [
-  { track: "montreal", cam: "orbit" },
-  { track: "montreal", cam: "eye" },
-  { track: "singapore", cam: "orbit" },
-  { track: "vegas", cam: "orbit" },
-  { track: "spa", cam: "orbit" },
-  { track: "monaco", cam: "eye" },
-  { track: "bahrain", cam: "orbit" },
-];
-
-mkdirSync(outRoot, { recursive: true });
-
-const results = [];
-let failures = 0;
-
-for (const spec of SHOTS) {
-  const label = spec.track + (spec.cam !== "orbit" ? "-" + spec.cam : "");
-  const outDir = join(outRoot, label);
-  mkdirSync(outDir, { recursive: true });
-  let shotErr = null;
-  let shotOk = false;
-  try {
-    const result = await runWgxShot({ track: spec.track, lite, cam: spec.cam, outDir });
-    shotOk = !!(result && result.ok);
-  } catch (e) {
-    shotErr = String((e && e.message) || e).slice(0, 300);
-  }
-  const statePath = join(outDir, "state.json");
-  const state = existsSync(statePath)
-    ? JSON.parse(readFileSync(statePath, "utf8"))
-    : null;
-  const entry = {
-    label,
-    track: spec.track,
-    cam: spec.cam,
-    ok: shotOk && state && state.backend === "webgpu" && state.gpuErrors === 0,
-    backend: state && state.backend,
-    gpuErrors: state && state.gpuErrors,
-    coveragePct: state && state.coveragePct,
-    canvas: join(outDir, "canvas.png"),
-    exitCode: shotOk ? 0 : 1,
-    error: shotErr,
-  };
-  results.push(entry);
-  if (!entry.ok) failures++;
-  console.log(label, entry.ok ? "ok" : "FAIL", entry.gpuErrors != null ? "gpuErrors=" + entry.gpuErrors : "");
+/** Build argv for wgx-shot --gallery; caller flags pass through. */
+export function buildWgxGalleryArgs(userArgv) {
+  const extra = userArgv.slice();
+  if (!extra.includes("--gallery")) extra.unshift("--gallery");
+  return extra;
 }
 
-const manifest = {
-  generatedAt: new Date().toISOString(),
-  lite,
-  outRoot,
-  backend: "webgpu",
-  shots: results.map(({ canvas, ...rest }) => rest),
-};
-writeFileSync(join(outRoot, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+function invokedAsCli() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return fileURLToPath(import.meta.url) === resolve(entry);
+  } catch {
+    return false;
+  }
+}
 
-const refPath = join(ROOT, "docs/research/wgx-gallery-manifest.json");
-writeFileSync(refPath, JSON.stringify({
-  ...manifest,
-  note: "PNG output is gitignored under artifacts/; re-run tools/wgx-gallery.mjs to regenerate.",
-}, null, 2) + "\n");
-
-console.log("wrote", join(outRoot, "manifest.json"));
-console.log("updated", refPath);
-process.exit(failures ? 1 : 0);
+if (invokedAsCli()) {
+  const dest = fileURLToPath(new URL("./wgx-shot.mjs", import.meta.url));
+  const r = spawnSync(process.execPath, [dest, ...buildWgxGalleryArgs(process.argv.slice(2))], {
+    stdio: "inherit",
+  });
+  process.exit(r.status ?? 1);
+}

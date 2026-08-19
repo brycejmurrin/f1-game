@@ -4,14 +4,15 @@
 // SwiftShader-Vulkan validates WGX but does not composite the hidden swapchain;
 // wgx.js readbacks the present target and putImageData() on #game when allowed.
 //
-// Usage:
+//   node tools/wgx-shot.mjs --help
 //   node tools/wgx-shot.mjs [trackId] [--lite] [--out DIR] [--cam orbit|eye|park]
+//   node tools/wgx-shot.mjs --gallery [--lite] [--out DIR]
 //
-// wgx-gallery.mjs imports runWgxShot() — do not spawn this file as a subprocess.
+// Import runWgxShot() / runWgxGallery() — do not spawn this file as a subprocess.
 // Canvas shots use page.screenshot({ clip }) so a live WebGL canvas does not
 // trip Playwright's locator.screenshot stability timeout.
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -19,6 +20,92 @@ import { startStaticServer, launchChromium, shutdown, WEBGPU_CHROMIUM_ARGS } fro
 
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** @type {{ track: string, cam: string }[]} */
+export const WGX_GALLERY_SHOTS = [
+  { track: "montreal", cam: "orbit" },
+  { track: "montreal", cam: "eye" },
+  { track: "singapore", cam: "orbit" },
+  { track: "vegas", cam: "orbit" },
+  { track: "spa", cam: "orbit" },
+  { track: "monaco", cam: "eye" },
+  { track: "bahrain", cam: "orbit" },
+];
+
+function printHelp() {
+  console.log(`wgx-shot — WebGPU screenshot helper
+
+  --help                         this text
+  --gallery                      batch curated track set + manifest
+  --lite                         WGX lite stack (software WebGPU)
+  --cam orbit|eye|park           camera for single shot (default orbit)
+  --out DIR                      output directory
+
+  [trackId]                      single shot (default montreal)
+  npm run wgx:gallery            alias for --gallery --lite
+`);
+}
+
+export async function runWgxGallery({ lite = false, outRoot } = {}) {
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const dest = outRoot || join("artifacts", "tmp", "wgx-gallery", stamp);
+  mkdirSync(dest, { recursive: true });
+
+  const results = [];
+  let failures = 0;
+
+  for (const spec of WGX_GALLERY_SHOTS) {
+    const label = spec.track + (spec.cam !== "orbit" ? "-" + spec.cam : "");
+    const shotDir = join(dest, label);
+    mkdirSync(shotDir, { recursive: true });
+    let shotErr = null;
+    let shotOk = false;
+    try {
+      const result = await runWgxShot({ track: spec.track, lite, cam: spec.cam, outDir: shotDir });
+      shotOk = !!(result && result.ok);
+    } catch (e) {
+      shotErr = String((e && e.message) || e).slice(0, 300);
+    }
+    const statePath = join(shotDir, "state.json");
+    const state = existsSync(statePath)
+      ? JSON.parse(readFileSync(statePath, "utf8"))
+      : null;
+    const entry = {
+      label,
+      track: spec.track,
+      cam: spec.cam,
+      ok: shotOk && state && state.backend === "webgpu" && state.gpuErrors === 0,
+      backend: state && state.backend,
+      gpuErrors: state && state.gpuErrors,
+      coveragePct: state && state.coveragePct,
+      canvas: join(shotDir, "canvas.png"),
+      exitCode: shotOk ? 0 : 1,
+      error: shotErr,
+    };
+    results.push(entry);
+    if (!entry.ok) failures++;
+    console.log(label, entry.ok ? "ok" : "FAIL", entry.gpuErrors != null ? "gpuErrors=" + entry.gpuErrors : "");
+  }
+
+  const manifest = {
+    generatedAt: new Date().toISOString(),
+    lite,
+    outRoot: dest,
+    backend: "webgpu",
+    shots: results.map(({ canvas, ...rest }) => rest),
+  };
+  writeFileSync(join(dest, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+
+  const refPath = join(ROOT, "docs/research/wgx-gallery-manifest.json");
+  writeFileSync(refPath, JSON.stringify({
+    ...manifest,
+    note: "PNG output is gitignored under artifacts/; re-run node tools/wgx-shot.mjs --gallery to regenerate.",
+  }, null, 2) + "\n");
+
+  console.log("wrote", join(dest, "manifest.json"));
+  console.log("updated", refPath);
+  return { ok: failures === 0, failures, outRoot: dest, manifest };
+}
 
 export async function runWgxShot({
   track = "montreal",
@@ -143,15 +230,34 @@ function invokedAsCli() {
 
 if (invokedAsCli()) {
   const args = process.argv.slice(2);
-  const track = args.find((a) => !a.startsWith("--")) || "montreal";
+  if (args.includes("--help") || args.includes("-h")) {
+    printHelp();
+    process.exit(0);
+  }
+
   const lite = args.includes("--lite");
+  const outArg = args.indexOf("--out");
+  const outDir = outArg >= 0 ? args[outArg + 1] : null;
+
+  if (args.includes("--gallery")) {
+    let exitCode = 0;
+    try {
+      const result = await runWgxGallery({ lite, outRoot: outDir || undefined });
+      if (!result.ok) exitCode = 1;
+    } catch (e) {
+      console.error("wgx-shot --gallery failed:", (e && e.message) || e);
+      exitCode = 1;
+    }
+    process.exit(exitCode);
+  }
+
+  const track = args.find((a) => !a.startsWith("--")) || "montreal";
   const camArg = args.indexOf("--cam");
   const cam = camArg >= 0 ? args[camArg + 1] : "orbit";
-  const outArg = args.indexOf("--out");
-  const outDir = outArg >= 0 ? args[outArg + 1] : join("artifacts", "tmp", "wgx-shots", track);
+  const shotOut = outDir || join("artifacts", "tmp", "wgx-shots", track);
   let exitCode = 0;
   try {
-    const result = await runWgxShot({ track, lite, cam, outDir });
+    const result = await runWgxShot({ track, lite, cam, outDir: shotOut });
     if (!result.ok) exitCode = 1;
     console.log(JSON.stringify(result, null, 2));
   } catch (e) {

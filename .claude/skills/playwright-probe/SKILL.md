@@ -70,7 +70,7 @@ A blank/dark canvas comes out < ~5 KB; a real 3D frame is tens of KB (the
 suite's non-blank heuristic). **WGX on SwiftShader:** native swapchain is blank;
 use `gfx-probe.mjs --backend webgpu` for visible `#game` (soft-present blit),
 not a raw `#game` screenshot without `awaitSoftPresent`. Multi-track WGX frames:
-`node tools/wgx-gallery.mjs` (imports `runWgxShot`; do not spawn `wgx-shot.mjs`).
+`node tools/wgx-shot.mjs --gallery` (or `npm run wgx:gallery`).
 For the full camera-hook
 reference
 (park/freeze/eyeAt/orbit/view/cinematic/carOrbit/previewCam) see

@@ -379,10 +379,10 @@ test("survey-ui-matrix names the layout-audit CLI recipes", () => {
   assert.match(text, /npm run ui:survey/);
 });
 
-test("webgpu-debug names wgx-gallery importing runWgxShot", () => {
+test("webgpu-debug names wgx-shot --gallery for multi-track frames", () => {
   const text = fs.readFileSync(path.join(SKILLS, "webgpu-debug/SKILL.md"), "utf8");
-  assert.match(text, /wgx-gallery\.mjs/);
-  assert.match(text, /runWgxShot/);
+  assert.match(text, /wgx-shot\.mjs --gallery/);
+  assert.match(text, /wgx:gallery/);
 });
 
 test("skills README uses content-hash cache busting, not ?v=N", () => {
