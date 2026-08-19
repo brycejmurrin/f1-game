@@ -69,14 +69,14 @@ test("assertCssRel stays inside css/ and exists on disk", () => {
   assert.throws(() => assertCssRel("css/../index.html"), /escapes|css\/\*\.css/);
 });
 
-test("every css-play screen id is a layout-audit screen", () => {
-  const audit = fs.readFileSync(path.join(ROOT, "tools", "layout-audit.mjs"), "utf8");
+test("every css-play screen id is a menu-screens screen", () => {
+  const audit = fs.readFileSync(path.join(ROOT, "tools", "menu-screens.mjs"), "utf8");
   const known = new Set([...audit.matchAll(/id:\s*"([a-z0-9-]+)"/g)].map((m) => m[1]));
   const ids = Object.keys(SCREENS);
   assert.ok(ids.length >= 6, `expected the title-path set, got ${ids.join(",")}`);
   const missing = ids.filter((id) => !known.has(id));
   assert.deepEqual(missing, [],
-    "css-play invented a screen layout-audit does not open — reuse an audit id or add it there first");
+    "css-play invented a screen menu-screens does not open — reuse an audit id or add it there first");
 });
 
 test("listScreens names a root and a click path", () => {
