@@ -340,7 +340,11 @@ const CEILINGS = {
   // (CustomLogo.create(G)). 0 new G members; store / $ / soundOn /
   // invalidateDecalTextures / _spMeshKey already on the façade.
   // 8449 is split("\\n") (trailing newline); not a raise.
-  "js/game.js": 8449,
+  // 8449 -> 8396: live weather switch + weather-arc moved into
+  // js/game/atmosphere.js (setWeatherLive / startWeatherArc / tickWeatherArc).
+  // 0 new G; raceWeather / weatherArc / rain predicates already on the façade.
+  // The weatherArc let stays so G.weatherArc keeps one binding.
+  "js/game.js": 8396,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

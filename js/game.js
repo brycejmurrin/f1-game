@@ -3005,7 +3005,8 @@ const G = {
   loadCarModel, loadTrack, persistLightTune, copyLightTune, restoreLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   setCamMode: (...a) => setCamMode(...a),   // const from CamModes.create(G) below — defer
-  rescuePlayer, setLightTune, setWeatherLive, snapGameCam,
+  rescuePlayer, setLightTune, snapGameCam,
+  setWeatherLive: (...a) => setWeatherLive(...a),   // const from Atmosphere.create — defer
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   wireId,                               // stable cross-peer car identity
   setScale: (...a) => setScale(...a),   // const from UiScale.create(G) below — defer
@@ -3022,7 +3023,8 @@ const G = {
   onPeerQuali, onPeerQualiLive, openQualiForNet, refreshQualiGate,
   get raceQuali() { return raceQuali; }, set raceQuali(v) { raceQuali = !!v; },
   openGarageFrom: (from) => openGarage(from),
-  startRace, startWeatherArc, update, wrapS, quitToMenu,
+  startRace, update, wrapS, quitToMenu,
+  startWeatherArc: (...a) => startWeatherArc(...a),   // const from Atmosphere.create — defer
 };
 
 // Lighting profile resolution + persistence (js/game/light-store.js). FIRST of
@@ -3036,8 +3038,10 @@ const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResu
 // In-race HUD + minimap (js/game/hud.js).
 const hud = GameHud.create(G);
 const updateHud = hud.updateHud;
-// Session atmosphere: applyRaceSettings + per-track bias (js/game/atmosphere.js).
-const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
+// Session atmosphere: applyRaceSettings + live weather / weather-arc
+// (js/game/atmosphere.js). G already owned raceWeather / weatherArc / the
+// rain predicates.
+const { applyRaceSettings, setWeatherLive, startWeatherArc, tickWeatherArc } = Atmosphere.create(G);
 // CAR SETUP panel UI (js/game/setup-ui.js).
 const { buildSetup, openSetup } = SetupUI.create(G);
 // Select-screen UI (js/game/menus.js).
@@ -3163,67 +3167,10 @@ function quitToMenu() {
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
 const ranked = [];
-// ── Live weather switch (shared path) ────────────────────────────────────────
-// The single way weather changes mid-session: sets raceWeather, re-seeds the
-// rain overlay, flips the rain audio and re-applies the frame lighting. Used by
-// __apex.weather() and the dynamic weather-arc progression below, so every
-// consumer (rain layer, audio, lighting, AI grip, wetness ramp target) follows
-// no matter who initiated the change.
-function setWeatherLive(w) {
-  raceWeather = (w === "wet" || w === "rain" || w === "overcast" || w === "fog") ? w : "dry";
-  if (isWetRoad()) {   // rain = storm, wet = drizzle tier (see applyRaceSettings)
-    initRainDrops();
-    Particles.rainShow(true);
-  } else {
-    Particles.rainShow(false);
-  }
-  if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
-  // Re-apply the frame lighting NOW: without this a live weather change only
-  // moved the wetness ramp / rain overlay — the cloud cover, muted sun,
-  // ambient lift, fog density and exposure branches in applyRaceSettings
-  // silently kept the previous weather (fog looked like a clear day).
-  if (track) applyRaceSettings();
-  return raceWeather;
-}
-
-// ── Dynamic weather progression (weather arc) ────────────────────────────────
-// Optional scripted per-race weather transition — OFF by default (no arc unless
-// started via __apex.weatherArc(from, to, secs); a race-settings surface can
-// hook in later). The arc walks the dry↔wet↔rain ladder stage by stage over its
-// duration (lateral conditions like fog/overcast jump direct), flipping each
-// stage through setWeatherLive() so the rain overlay/audio/lighting/AI grip all
-// follow, and frame.wetness ramps via the existing per-frame ramp. Ticked from
-// update() on the fixed physics clock, so it also runs under __apex.headless.
+// Live weather switch + weather-arc live in js/game/atmosphere.js
+// (Atmosphere.create(G)). The let stays here so G.weatherArc / apex.js keep
+// one binding; start/tick mutate it through the façade.
 let weatherArc = null;   // { from, to, t, dur, seq }
-const _WX_LADDER = ["dry", "wet", "rain"];
-const _WX_VALID = ["dry", "wet", "rain", "overcast", "fog"];
-function weatherArcSeq(from, to) {
-  const a = _WX_LADDER.indexOf(from), b = _WX_LADDER.indexOf(to);
-  if (a >= 0 && b >= 0 && a !== b) {
-    const seq = [];
-    for (let i = a; (a < b) ? i <= b : i >= b; i += (a < b) ? 1 : -1) seq.push(_WX_LADDER[i]);
-    return seq;   // e.g. dry→rain = [dry, wet, rain]; rain→dry = [rain, wet, dry]
-  }
-  return [from, to];
-}
-function startWeatherArc(from, to, dur) {
-  if (_WX_VALID.indexOf(from) < 0 || _WX_VALID.indexOf(to) < 0 || from === to) return null;
-  weatherArc = { from, to, t: 0, dur: Math.max(1, dur || 60), seq: weatherArcSeq(from, to) };
-  if (raceWeather !== from) setWeatherLive(from);
-  return weatherArc;
-}
-function tickWeatherArc(dt) {
-  if (!weatherArc) return;
-  weatherArc.t += dt;
-  const f = Math.min(1, weatherArc.t / weatherArc.dur);
-  const seq = weatherArc.seq;
-  const want = seq[Math.min(seq.length - 1, Math.floor(f * seq.length))];
-  if (raceWeather !== want) setWeatherLive(want);
-  if (f >= 1) {
-    if (raceWeather !== weatherArc.to) setWeatherLive(weatherArc.to);
-    weatherArc = null;   // arc complete — weather stays at `to`
-  }
-}
 
 function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
