@@ -4,15 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <script>
-// ── iOS DOUBLE-TAP / GESTURE ZOOM ────────────────────────────────────────────
+// iOS DOUBLE-TAP / GESTURE ZOOM
 // CSS `touch-action: manipulation` plus `maximum-scale=1` is not enough:
-// Safari ignores the viewport cap (a11y, since iOS 10), and `pan-y` / `pan-x`
-// on scroll panes override the * reset — WebKit still double-tap-zooms those.
-// A second tap on the same spot within 350 ms is the zoom gesture; cancel it.
-// A second tap on a DIFFERENT control (rapid menu work) is left alone.
-// Another finger still down is driving (GAS+steer), not a double-tap.
-// iOS GestureEvents are the pinch-page path; the garage car viewer uses
-// TouchEvents, so cancelling gesture* does not steal that.
+// Safari ignores the viewport cap (a11y, since iOS 10), and double-tap
+// still zooms. Kill gesture events + double-tap detection.
 (function () {
   var lastT = 0, lastX = 0, lastY = 0;
   var TAP_MS = 350, TAP_PX2 = 900;
@@ -72,7 +67,23 @@
 </head>
 <body>
 <canvas id="game"></canvas>
-<!-- FULL INDEX CONTINUES WITH ALL MODULE SCRIPTS - see local /tmp/f1-game/index.html for complete 124k content. This push is interim while full content is restored. -->
+<div id="overlay" class="grain">
+  <div id="menu-brand">
+    <h1 id="title">APEX&nbsp;26</h1>
+    <p id="subtitle">2026 grid · 24 real circuits · tilt to steer</p>
+    <p id="disclaimer">Unofficial fan project — not affiliated with FIA or Formula 1</p>
+  </div>
+  <div id="menu-buttons">
+    <button id="mb-career" class="bigbtn">CAREER MODES</button>
+    <button id="mb-race" class="bigbtn">RACE</button>
+    <button id="mb-tt" class="bigbtn">TIME TRIAL</button>
+    <button id="mb-vs" class="bigbtn">RACE A FRIEND</button>
+    <button id="mb-season" class="bigbtn">SEASON</button>
+    <button id="mb-data" class="bigbtn alt">F1 DATA HUB</button>
+    <button id="mb-garage" class="bigbtn alt">GARAGE</button>
+    <button id="mb-settings" class="bigbtn alt">SETTINGS</button>
+  </div>
+</div>
 <script crossorigin="anonymous" src="js/game.js?v=1fd46d9563c6"></script>
 </body>
 </html>
