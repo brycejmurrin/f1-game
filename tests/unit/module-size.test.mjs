@@ -344,7 +344,10 @@ const CEILINGS = {
   // js/game/atmosphere.js (setWeatherLive / startWeatherArc / tickWeatherArc).
   // 0 new G; raceWeather / weatherArc / rain predicates already on the façade.
   // The weatherArc let stays so G.weatherArc keeps one binding.
-  "js/game.js": 8396,
+  // 8396 -> 8369: livery id / custom list / resolveLivery moved to
+  // js/game/livery-store.js (LiveryStore.create(G)). 0 new G; livDraftOverride
+  // let stays so setup-ui keeps one binding. wingColorOf / drawAeroFlaps stay.
+  "js/game.js": 8369,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

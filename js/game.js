@@ -1291,45 +1291,10 @@ function saveTeamParts(teamId, parts) {
   store.set("parts." + teamId, parts);
 }
 
-// ---------- liveries (custom paint jobs) ----------
-function getLiveryId(teamId) { return store.get("livery." + teamId, "default"); }
-function saveLiveryId(teamId, id) { store.set("livery." + teamId, id); }
-// Player-created liveries, stored per team as [{id,name,c1,c2,stripe?}].
-function getCustomLiveries(teamId) { return store.get("livery.custom." + teamId, []); }
-function setCustomLiveries(teamId, arr) { store.set("livery.custom." + teamId, arr); }
-// Full paint-job list for a team: catalog (default + specials + universal) + the
-// player's own creations.
-function getLiveries(team) { return Liveries.forTeam(team).concat(getCustomLiveries(team.id)); }
-// Resolve a team's chosen paint job -> { c1, c2, stripe } bodywork colours (its
-// own team colours for "default"). Everything that builds a car mesh paints with
-// these.
-// Transient un-saved paint job previewed live in the creator: { teamId, liv }.
-// Overrides the resolved livery for that one team while the creator is open.
+// Livery id / custom list / resolve live in js/game/livery-store.js
+// (LiveryStore.create(G)). The draft let stays here so G.livDraftOverride /
+// setup-ui keep one binding; resolve reads it through the façade.
 let livDraftOverride = null;
-// Memoized per team.id, invalidated by store.rev — during a race this resolves to
-// a cached object with zero localStorage access and zero per-frame allocation.
-const _livResolveCache = new Map();
-function resolveLivery(team) {
-  if (livDraftOverride && livDraftOverride.teamId === team.id) {
-    const l = livDraftOverride.liv;
-    return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
-             nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
-             fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null,
-             noseStripe: l.noseStripe || null, finish: l.finish || null };
-  }
-  const c = _livResolveCache.get(team.id);
-  if (c && c.rev === store.rev) return c.val;
-  const liv = getLiveries(team).find((l) => l.id === getLiveryId(team.id));
-  // Optional livery detail colours (nose cap, sidepod panel, wing flaps, halo tint)
-  // — additive, so an unmodified livery still resolves to today's exact object shape.
-  const val = liv ? { c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
-                      nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
-                      fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null,
-                      noseStripe: liv.noseStripe || null, finish: liv.finish || null }
-                  : { c1: team.color, c2: team.color2, stripe: null, accent: null };
-  _livResolveCache.set(team.id, { val, rev: store.rev });
-  return val;
-}
 
 // The colour a team's WING FLAP elements are painted — the same fallback chain
 // Car3D uses for `wingC` when it builds the baked front/rear wing planes, so the
@@ -1745,7 +1710,7 @@ function buildCarData(team, extra) {
 }
 
 // Memoized per team.id, invalidated by store.rev — same pattern as
-// _livResolveCache above, and for the same reason. This key is rebuilt from
+// resolveLivery's cache (LiveryStore), and for the same reason. This key is rebuilt from
 // getLiveryId (a store read, itself two string concatenations) plus
 // Parts.factoryKey (a fresh 12-element array and a ~60-char join), and teamMesh
 // is called for EVERY drawn car in the body pass, again in the dynamic car-shadow
@@ -2906,8 +2871,12 @@ const G = {
   get unlimitedBudget() { return unlimitedBudget; }, set unlimitedBudget(v) { unlimitedBudget = v; },
   get teamIdx() { return teamIdx; }, set teamIdx(v) { teamIdx = v; },
   // Stable helpers consumed by js/game/setup-ui.js.
-  arrToHex, hexToArr, getTeamParts, saveTeamParts, getLiveryId, saveLiveryId,
-  getCustomLiveries, setCustomLiveries, getLiveries, invalidateDecalTextures,
+  arrToHex, hexToArr, getTeamParts, saveTeamParts, invalidateDecalTextures,
+  getLiveryId: (...a) => getLiveryId(...a),           // const from LiveryStore.create — defer
+  saveLiveryId: (...a) => saveLiveryId(...a),
+  getCustomLiveries: (...a) => getCustomLiveries(...a),
+  setCustomLiveries: (...a) => setCustomLiveries(...a),
+  getLiveries: (...a) => getLiveries(...a),
   // Mutable state + helpers consumed by js/game/menus.js.
   get driverIdx() { return driverIdx; }, set driverIdx(v) { driverIdx = v; },
   get difficulty() { return difficulty; }, set difficulty(v) { difficulty = v; },
@@ -3042,6 +3011,10 @@ const updateHud = hud.updateHud;
 // (js/game/atmosphere.js). G already owned raceWeather / weatherArc / the
 // rain predicates.
 const { applyRaceSettings, setWeatherLive, startWeatherArc, tickWeatherArc } = Atmosphere.create(G);
+// Livery store (js/game/livery-store.js). Before SetupUI — the garage tab
+// reads G.getLiveryId / getLiveries at first paint.
+const { getLiveryId, saveLiveryId, getCustomLiveries, setCustomLiveries,
+        getLiveries, resolveLivery } = LiveryStore.create(G);
 // CAR SETUP panel UI (js/game/setup-ui.js).
 const { buildSetup, openSetup } = SetupUI.create(G);
 // Select-screen UI (js/game/menus.js).

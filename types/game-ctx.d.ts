@@ -614,3 +614,4 @@ declare const SteerTuning: GameModuleFactory;
 declare const TunerPanel: GameModuleFactory;
 declare const UiScale: GameModuleFactory;
 declare const CustomLogo: GameModuleFactory;
+declare const LiveryStore: GameModuleFactory;
