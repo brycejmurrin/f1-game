@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <script>
+// iOS DOUBLE-TAP / GESTURE ZOOM
+// CSS `touch-action: manipulation` plus `maximum-scale=1` is not enough:
+// Safari ignores the viewport cap (a11y, since iOS 10), and double-tap
+// still zooms. Kill gesture events + double-tap detection.
 (function () {
   var lastT = 0, lastX = 0, lastY = 0;
   var TAP_MS = 350, TAP_PX2 = 900;
@@ -30,7 +34,7 @@
 <meta name="theme-color" content="#0a0a0f">
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <meta name="apex-build" content="1499">
-<title>Apex 26 — F1 Racing &amp; Data</title>
+<title>Apex 26 — F1 Racing & Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
@@ -80,7 +84,6 @@
     <button id="mb-settings" class="bigbtn alt">SETTINGS</button>
   </div>
 </div>
-<p style="position:fixed;bottom:8px;left:8px;color:#666;font:12px monospace">Deploy recovery shell — full index pending</p>
 <script crossorigin="anonymous" src="js/game.js?v=1fd46d9563c6"></script>
 </body>
 </html>
