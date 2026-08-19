@@ -483,6 +483,11 @@ the pack lands asynchronously. That is the same trick `setEnvCube` already used.
   correctly lists ambientCG `foundAssets[].assetId` (previously always empty).
   The browser `webbake.js` path remains the fastest full-pack bake; CLI is for
   single-layer swaps without a DevTools session.
+- **`bake-atlas`** (2026-08). Slices a 4×4 albedo/normal sheet onto named MAT
+  layers (`--preset generated` or `--map BRICK=1,0`). Mean-normalises, heals
+  tile seams, derives a normal from luminance when the sheet is albedo-only,
+  and leaves unmapped slots (ASPHALT / WOOD / FABRIC / SNOW) on the photoscans.
+  Sources: `assets/atlases/`.
 - **KTX2.** The pack is ~5.4 MB against an 8 MB budget. The VRAM argument in §3.2
   still stands for a full-resolution scan bake — revisit at that point, not now.
 

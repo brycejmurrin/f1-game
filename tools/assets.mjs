@@ -10,6 +10,7 @@
  * pulled here, at author time, verified, credited and committed.
  *
  *   node tools/assets.mjs bake-synthetic [--size N]   generate a pack, no network
+ *   node tools/assets.mjs bake-atlas [--preset generated]   slice 4x4 atlases → MAT layers
  *   node tools/assets.mjs search <textures|models|hdris> <query>
  *   node tools/assets.mjs fetch <mat> <source> [--res 1k]   download CC0 source maps
  *   node tools/assets.mjs bake-material <mat> <dir> [--size N]   sources -> layer
@@ -21,11 +22,11 @@
  * `bake-synthetic` has NO dependencies and needs NO network: it generates every
  * material layer from multi-octave noise, encoded to PNG with node's own zlib.
  * That is what makes the whole runtime path testable in CI and in a sandbox
- * with no egress.  The committed pack is a real Poly Haven CC0 bake (via
- * webbake.js / import-pack).  `fetch`/`bake-material` are the offline
- * re-bake path (network + sharp) that mirrors webbake's mean-normalised
- * Diffuse/nor_gl/arm packing — use them to swap a single MAT layer without
- * reopening a browser.
+ * with no egress.  The committed pack is a hybrid: Poly Haven CC0 photoscans
+ * (via webbake.js / import-pack) for ASPHALT / WOOD / FABRIC / SNOW, plus
+ * generated 4x4 atlas tiles (`bake-atlas --preset generated`) for the scenery
+ * slots.  `fetch`/`bake-material` are the offline re-bake path (network +
+ * sharp) that mirrors webbake's mean-normalised Diffuse/nor_gl/arm packing.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -76,6 +77,45 @@ const SCALES = {
 };
 
 const MAT_NAME = Object.fromEntries(Object.entries(MAT).map(([k, v]) => [v, k]));
+
+// Roughness packed into albedo alpha when the source atlas has no ARM map.
+const ROUGHNESS = {
+  [MAT.CONCRETE]: 210, [MAT.BRICK]: 220, [MAT.METAL]: 80, [MAT.WOOD]: 190,
+  [MAT.FOLIAGE]: 230, [MAT.FABRIC]: 240, [MAT.SAND]: 235, [MAT.GRASS]: 230,
+  [MAT.ROCK]: 215, [MAT.SNOW]: 160, [MAT.ROOF]: 200, [MAT.STONE]: 220,
+  [MAT.RUST]: 230, [MAT.ASPHALT]: 240,
+};
+
+// Author-time 4×4 atlases (not loaded by the game). Tile coords are 0-based
+// (col, row) with row 0 at the TOP of the PNG — the same convention as the
+// filmstrip (layer N at y = N*size).
+const ATLAS_DIR = path.join(ROOT, "assets", "atlases");
+const ATLAS_PRESETS = {
+  generated: {
+    grid: 4,
+    inset: 4,
+    files: {
+      "arch-albedo": "atlas-arch-albedo.png",
+      "arch-normal": "atlas-arch-normal.png",
+      "nature-albedo": "atlas-nature-albedo.png",
+      "organic-normal": "atlas-organic-normal.png",
+    },
+    // ASPHALT / WOOD / FABRIC / SNOW stay on the Poly Haven photoscans —
+    // the atlases have no tarmac, no wood albedo, no cloth, no snow.
+    layers: [
+      { mat: "CONCRETE", albedo: ["arch-albedo", 2, 0], normal: ["arch-normal", 2, 0] },
+      { mat: "BRICK",    albedo: ["arch-albedo", 1, 0], normal: ["arch-normal", 0, 0] },
+      { mat: "METAL",    albedo: ["arch-albedo", 0, 2], normal: ["arch-normal", 2, 1] },
+      { mat: "ROOF",     albedo: ["arch-albedo", 2, 1], normal: null },
+      { mat: "STONE",    albedo: ["arch-albedo", 0, 1], normal: ["arch-normal", 0, 1] },
+      { mat: "RUST",     albedo: ["arch-albedo", 3, 2], normal: ["arch-normal", 1, 2] },
+      { mat: "FOLIAGE",  albedo: ["nature-albedo", 0, 0], normal: ["organic-normal", 0, 0] },
+      { mat: "GRASS",    albedo: ["nature-albedo", 2, 0], normal: null },
+      { mat: "SAND",     albedo: ["nature-albedo", 0, 3], normal: null },
+      { mat: "ROCK",     albedo: ["nature-albedo", 1, 2], normal: null },
+    ],
+  },
+};
 
 // ───────────────────────────── PNG encoder ───────────────────────────────────
 // A dependency-free RGBA8 encoder.  PNG rather than WebP because node ships
@@ -896,6 +936,164 @@ function meanNormaliseAlbedo(rgba, w, h) {
   return out;
 }
 
+function sliceAtlasTile(png, cols, rows, col, row, inset) {
+  if (col < 0 || row < 0 || col >= cols || row >= rows)
+    fail(`atlas tile (${col},${row}) is outside the ${cols}x${rows} grid`);
+  const tw = Math.floor(png.w / cols), th = Math.floor(png.h / rows);
+  if (tw < 4 || th < 4) fail(`atlas tile ${tw}x${th} is too small to slice`);
+  const pad = Math.max(0, Math.min(inset, Math.floor(Math.min(tw, th) / 4)));
+  const x0 = col * tw + pad, y0 = row * th + pad;
+  const w = tw - pad * 2, h = th - pad * 2;
+  const out = Buffer.alloc(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    const src = ((y0 + y) * png.w + x0) * 4;
+    png.rgba.copy(out, y * w * 4, src, src + w * 4);
+  }
+  return { w, h, rgba: out };
+}
+
+function resizeBilinear(src, sw, sh, dw, dh) {
+  if (sw === dw && sh === dh) return Buffer.from(src);
+  const out = Buffer.alloc(dw * dh * 4);
+  for (let y = 0; y < dh; y++) {
+    const fy = (y + 0.5) * sh / dh - 0.5;
+    const y0 = Math.max(0, Math.min(sh - 1, Math.floor(fy)));
+    const y1 = Math.min(sh - 1, y0 + 1);
+    const ty = fy - y0;
+    for (let x = 0; x < dw; x++) {
+      const fx = (x + 0.5) * sw / dw - 0.5;
+      const x0 = Math.max(0, Math.min(sw - 1, Math.floor(fx)));
+      const x1 = Math.min(sw - 1, x0 + 1);
+      const tx = fx - x0;
+      const at = (xx, yy) => (yy * sw + xx) * 4;
+      const d = (y * dw + x) * 4;
+      for (let c = 0; c < 4; c++) {
+        const a = src[at(x0, y0) + c] * (1 - tx) + src[at(x1, y0) + c] * tx;
+        const b = src[at(x0, y1) + c] * (1 - tx) + src[at(x1, y1) + c] * tx;
+        out[d + c] = Math.round(a * (1 - ty) + b * ty);
+      }
+    }
+  }
+  return out;
+}
+
+// Soft-match opposite edges so a sliced atlas tile repeats less obviously.
+// The GPU will wrap these in world space; a hard crop from a 4x4 sheet
+// almost never already tiles.
+function healSeams(rgba, size, band) {
+  const n = Math.max(0, Math.min(band, Math.floor(size / 4)));
+  if (!n) return rgba;
+  const out = Buffer.from(rgba);
+  const pix = (x, y) => (y * size + x) * 4;
+  for (let i = 0; i < n; i++) {
+    const w = (1 - (i + 1) / (n + 1)) * 0.5;
+    for (let y = 0; y < size; y++) {
+      const L = pix(i, y), R = pix(size - 1 - i, y);
+      for (let c = 0; c < 3; c++) {
+        const avg = (out[L + c] + out[R + c]) * 0.5;
+        out[L + c] = Math.round(out[L + c] * (1 - w) + avg * w);
+        out[R + c] = Math.round(out[R + c] * (1 - w) + avg * w);
+      }
+    }
+    for (let x = 0; x < size; x++) {
+      const T = pix(x, i), B = pix(x, size - 1 - i);
+      for (let c = 0; c < 3; c++) {
+        const avg = (out[T + c] + out[B + c]) * 0.5;
+        out[T + c] = Math.round(out[T + c] * (1 - w) + avg * w);
+        out[B + c] = Math.round(out[B + c] * (1 - w) + avg * w);
+      }
+    }
+  }
+  return out;
+}
+
+function luminanceHeight(rgba, w, h) {
+  const H = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const o = i * 4;
+    H[i] = (rgba[o] * 0.2126 + rgba[o + 1] * 0.7152 + rgba[o + 2] * 0.0722) / 255;
+  }
+  return H;
+}
+
+function normalsFromHeight(H, size, strength) {
+  const out = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const xm = (x - 1 + size) % size, xp = (x + 1) % size;
+      const ym = (y - 1 + size) % size, yp = (y + 1) % size;
+      const dx = (H[y * size + xp] - H[y * size + xm]) * 0.5;
+      const dy = (H[yp * size + x] - H[ym * size + x]) * 0.5;
+      const nx = -dx * strength, ny = -dy * strength, nz = 1;
+      const len = Math.hypot(nx, ny, nz) || 1;
+      const o = (y * size + x) * 4;
+      out[o] = Math.round(clamp01(nx / len * 0.5 + 0.5) * 255);
+      out[o + 1] = Math.round(clamp01(ny / len * 0.5 + 0.5) * 255);
+      out[o + 2] = Math.round(clamp01(H[y * size + x]) * 255);
+      out[o + 3] = 255;
+    }
+  }
+  return out;
+}
+
+function looksLikeNormalMap(rgba) {
+  let n = 0, mr = 0, mg = 0, mb = 0;
+  for (let i = 0; i < rgba.length; i += 16) {   // subsample
+    mr += rgba[i]; mg += rgba[i + 1]; mb += rgba[i + 2]; n++;
+  }
+  mr /= n; mg /= n; mb /= n;
+  return mr > 70 && mr < 190 && mg > 70 && mg < 190 && mb > 140;
+}
+
+function emptyStrips(size) {
+  const stripH = size * MAT_LAYERS;
+  const alb = Buffer.alloc(size * stripH * 4, 128);
+  const nor = Buffer.alloc(size * stripH * 4, 128);
+  for (let i = 3; i < alb.length; i += 4) alb[i] = 255;
+  for (let i = 0; i < nor.length; i += 4) {
+    nor[i] = 128; nor[i + 1] = 128; nor[i + 2] = 255; nor[i + 3] = 255;
+  }
+  return { alb, nor, stripH };
+}
+
+function loadStrips(size) {
+  const albName = `mat-albedo-${size}.png`, norName = `mat-normal-${size}.png`;
+  const albPath = path.join(PACK, albName), norPath = path.join(PACK, norName);
+  const stripH = size * MAT_LAYERS;
+  if (fs.existsSync(albPath) && fs.existsSync(norPath)) {
+    const alb = decodePNG(fs.readFileSync(albPath));
+    const nor = decodePNG(fs.readFileSync(norPath));
+    if (alb.w !== size || alb.h !== stripH)
+      fail(`${albName} is ${alb.w}x${alb.h}; expected ${size}x${stripH}`);
+    if (nor.w !== size || nor.h !== stripH)
+      fail(`${norName} is ${nor.w}x${nor.h}; expected ${size}x${stripH}`);
+    return { alb: alb.rgba, nor: nor.rgba, stripH };
+  }
+  return emptyStrips(size);
+}
+
+function writeStrips(alb, nor, size, lowSize) {
+  fs.mkdirSync(PACK, { recursive: true });
+  const albName = `mat-albedo-${size}.png`, norName = `mat-normal-${size}.png`;
+  fs.writeFileSync(path.join(PACK, albName), encodePNG(size, size * MAT_LAYERS, alb));
+  fs.writeFileSync(path.join(PACK, norName), encodePNG(size, size * MAT_LAYERS, nor));
+  if (lowSize && size % lowSize === 0 && lowSize < size) {
+    const f = size / lowSize;
+    const a = downsample(alb, size, size * MAT_LAYERS, f);
+    const n = downsample(nor, size, size * MAT_LAYERS, f);
+    fs.writeFileSync(path.join(PACK, `mat-albedo-${lowSize}.png`), encodePNG(a.w, a.h, a.rgba));
+    fs.writeFileSync(path.join(PACK, `mat-normal-${lowSize}.png`), encodePNG(n.w, n.h, n.rgba));
+  }
+  return { albName, norName };
+}
+
+function blitLayer(strip, tile, mid, size) {
+  const y0 = mid * size;
+  for (let y = 0; y < size; y++) {
+    tile.copy(strip, ((y0 + y) * size) * 4, y * size * 4, (y + 1) * size * 4);
+  }
+}
+
 function findSourceMap(dir, stems) {
   for (const stem of stems) {
     for (const ext of ["jpg", "jpeg", "png", "webp"]) {
@@ -1049,6 +1247,153 @@ async function bakeMaterial(args) {
   console.log(`baked ${matKey} (mat ${mid}) from ${path.relative(ROOT, srcDir)} @ ${size}px`);
 }
 
+// ──────────────────────────── atlas bake ─────────────────────────────────────
+// Slice a 4x4 (or NxN) albedo/normal atlas into MAT layers and patch them
+// into the committed filmstrips. Unmapped slots (ASPHALT, WOOD, …) stay as
+// they are. No sharp, no network — decodePNG + the helpers above.
+
+function parseMapArg(s) {
+  // BRICK=1,0  or  BRICK=1,0,arch-normal,0,0
+  const m = /^([A-Z]+)=(\d+),(\d+)(?:,([A-Za-z0-9_-]+),(\d+),(\d+))?$/.exec(s);
+  if (!m) fail(`bad --map "${s}" — expected MAT=col,row or MAT=col,row,normalId,ncol,nrow`);
+  return {
+    mat: m[1],
+    albedo: [null, +m[2], +m[3]],
+    normal: m[4] ? [m[4], +m[5], +m[6]] : null,
+  };
+}
+
+function bakeAtlas(args) {
+  const presetName = strArg(args, "--preset", null);
+  const preset = presetName ? ATLAS_PRESETS[presetName] : null;
+  if (presetName && !preset) fail(`unknown --preset ${presetName} (have ${Object.keys(ATLAS_PRESETS).join(", ")})`);
+
+  const grid = intArg(args, "--grid", preset ? preset.grid : 4);
+  const inset = intArg(args, "--inset", preset ? preset.inset : 4);
+  const man = readManifest();
+  const size = intArg(args, "--size", (man.materials && man.materials.size) || 256);
+  const lowSize = intArg(args, "--low", (man.materials && man.materials.low && man.materials.low.size) || 128);
+  if (size < 8 || (size & (size - 1)) !== 0)
+    fail(`--size must be a power of two >= 8 (got ${size})`);
+
+  const files = { ...(preset && preset.files) };
+  const albedoPath = strArg(args, "--albedo", null);
+  const normalPath = strArg(args, "--normal", null);
+  if (albedoPath) files.albedo = path.resolve(albedoPath);
+  if (normalPath) files.normal = path.resolve(normalPath);
+
+  const layers = preset ? preset.layers.map((L) => ({ ...L })) : [];
+  for (const raw of allArgs(args, "--map")) {
+    const parsed = parseMapArg(raw);
+    parsed.albedo[0] = parsed.albedo[0] || "albedo";
+    layers.push(parsed);
+  }
+  if (!layers.length)
+    fail("bake-atlas needs --preset generated and/or --map MAT=col,row");
+
+  const cache = Object.create(null);
+  const loadAtlas = (id) => {
+    if (!id) return null;
+    if (cache[id]) return cache[id];
+    const spec = files[id];
+    if (!spec) fail(`atlas id "${id}" has no file (pass --albedo / --normal or use a preset)`);
+    const p = path.isAbsolute(spec) ? spec : path.join(preset ? ATLAS_DIR : process.cwd(), spec);
+    if (!fs.existsSync(p)) fail(`atlas not found: ${p}`);
+    cache[id] = decodePNG(fs.readFileSync(p));
+    cache[id]._path = p;
+    return cache[id];
+  };
+
+  const { alb: albStrip, nor: norStrip } = loadStrips(size);
+  const baked = [];
+
+  for (const L of layers) {
+    const matKey = L.mat.toUpperCase();
+    const mid = MAT[matKey];
+    if (mid == null) fail(`unknown MAT "${L.mat}"`);
+    if (mid === MAT.FLAT || mid === MAT.GLASS || mid === MAT.FLAG)
+      fail(`${matKey} is never baked`);
+    if (!(SCALES[mid] > 0)) fail(`${matKey} has no SCALES entry`);
+
+    const [albId, ac, ar] = L.albedo;
+    const albPng = loadAtlas(albId);
+    const tile = sliceAtlasTile(albPng, grid, grid, ac, ar, inset);
+    let alb = resizeBilinear(tile.rgba, tile.w, tile.h, size, size);
+    alb = healSeams(alb, size, Math.max(2, Math.round(size / 32)));
+    alb = meanNormaliseAlbedo(alb, size, size);
+    const rough = ROUGHNESS[mid] != null ? ROUGHNESS[mid] : 220;
+    for (let i = 3; i < alb.length; i += 4) alb[i] = rough;
+
+    let nor;
+    if (L.normal) {
+      const [nid, nc, nr] = L.normal;
+      const nPng = loadAtlas(nid);
+      const nTile = sliceAtlasTile(nPng, grid, grid, nc, nr, inset);
+      let nRgba = resizeBilinear(nTile.rgba, nTile.w, nTile.h, size, size);
+      nRgba = healSeams(nRgba, size, Math.max(2, Math.round(size / 32)));
+      if (looksLikeNormalMap(nRgba)) {
+        nor = Buffer.alloc(size * size * 4);
+        const H = luminanceHeight(alb, size, size);
+        for (let i = 0; i < size * size; i++) {
+          const o = i * 4;
+          nor[o] = nRgba[o];
+          nor[o + 1] = nRgba[o + 1];
+          nor[o + 2] = Math.round(clamp01(H[i]) * 255);
+          nor[o + 3] = 255;
+        }
+      } else {
+        nor = normalsFromHeight(luminanceHeight(alb, size, size), size, 8);
+      }
+    } else {
+      nor = normalsFromHeight(luminanceHeight(alb, size, size), size, 8);
+    }
+
+    blitLayer(albStrip, alb, mid, size);
+    blitLayer(norStrip, nor, mid, size);
+    const srcFile = path.relative(ROOT, albPng._path);
+    baked.push({
+      mid, id: MAT_NAME[mid].toLowerCase(),
+      source: `generated:${srcFile}#${ac},${ar}`,
+      licence: "Apex26-Procedural",
+      author: "Apex 26",
+    });
+    console.log(`  ${matKey} ← ${srcFile} tile ${ac},${ar}`);
+  }
+
+  const { albName, norName } = writeStrips(albStrip, norStrip, size, lowSize || 0);
+  const out = readManifest();
+  out.version = 1;
+  out.materials = out.materials || { size, layers: [] };
+  out.materials.size = size;
+  out.materials.albedo = albName;
+  out.materials.normal = norName;
+  if (lowSize && lowSize < size) {
+    out.materials.low = out.materials.low || { size: lowSize, layers: [] };
+    out.materials.low.size = lowSize;
+    out.materials.low.albedo = `mat-albedo-${lowSize}.png`;
+    out.materials.low.normal = `mat-normal-${lowSize}.png`;
+  }
+  const layersOut = out.materials.layers || [];
+  for (const rec of baked) {
+    const i = layersOut.findIndex((x) => x.mat === rec.mid);
+    const row = {
+      mat: rec.mid, id: rec.id, scale: SCALES[rec.mid],
+      source: rec.source, licence: rec.licence, author: rec.author,
+    };
+    if (i >= 0) layersOut[i] = row; else layersOut.push(row);
+  }
+  layersOut.sort((a, b) => a.mat - b.mat);
+  out.materials.layers = layersOut;
+  if (out.materials.low) out.materials.low.layers = layersOut;
+  out.models = out.models || {};
+  out.env = out.env || {};
+  out.credits = buildCredits(out);
+  writeManifest(out);
+  credits();
+  report(out);
+  console.log(`baked ${baked.length} atlas layer(s) @ ${size}px`);
+}
+
 // ────────────────────────────── verify / credits ─────────────────────────────
 
 function verify() {
@@ -1163,6 +1508,11 @@ function report(m) {
 }
 
 const strArg = (a, k, d) => { const i = a.indexOf(k); return i >= 0 && a[i + 1] ? a[i + 1] : d; };
+const allArgs = (a, k) => {
+  const out = [];
+  for (let i = 0; i < a.length; i++) if (a[i] === k && a[i + 1]) out.push(a[i + 1]);
+  return out;
+};
 const intArg = (a, k, d) => { const v = strArg(a, k, null); return v == null ? d : parseInt(v, 10); };
 const floatArg = (a, k, d) => { const v = strArg(a, k, null); return v == null ? d : parseFloat(v); };
 const vecArg = (a, k) => {
@@ -1177,6 +1527,7 @@ function fail(msg) { console.error(`error: ${msg}`); process.exit(1); }
 const USAGE = `Apex 26 asset bake CLI
 
   bake-synthetic [--size N]        generate the full material pack (no network, no deps)
+  bake-atlas [--preset generated]  slice 4x4 albedo/normal atlases into MAT layers
   search <type> <query>            list CC0 candidates on Poly Haven + ambientCG
   fetch <MAT> <host:id> [--res 1k] download CC0 source maps (Diffuse/nor_gl/arm)
   bake-material <MAT> <dir>        composite source maps into a layer (needs sharp)
@@ -1192,6 +1543,7 @@ async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   switch (cmd) {
     case "bake-synthetic": bakeSynthetic(args); break;
+    case "bake-atlas": bakeAtlas(args); break;
     case "search": await search(args); break;
     case "fetch": await fetchSource(args); break;
     case "bake-material": await bakeMaterial(args); break;

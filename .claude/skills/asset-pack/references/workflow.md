@@ -45,12 +45,21 @@ WGX is a device/feature miss, not "WGX has no arrays."
    Blend is **multiplicative** — per-track tarmac tint and racing-line wear
    survive.
 
-4. **Add a real CC0 layer** — manifest shape in
+4. **Slice a generated 4×4 atlas** onto scenery MAT slots (keeps the
+   Poly Haven ASPHALT / WOOD / FABRIC / SNOW layers):
+   ```sh
+   node tools/assets.mjs bake-atlas --preset generated
+   node tools/assets.mjs verify
+   ```
+   Sources live in `assets/atlases/`. `--map BRICK=1,0` patches one tile;
+   `ATLAS_PRESETS.generated` in `tools/assets.mjs` is the committed mapping.
+
+5. **Add a real CC0 layer** — manifest shape in
    `docs/research/ASSET-API-RESEARCH.md`; run `verify`; confirm MAT id and
    `scale` (world metres per tile — there is no `worldTile` field; the
    manifest and `tools/assets.mjs` `SCALES` table both call it `scale`).
 
-5. **Validate**:
+6. **Validate**:
    ```sh
    npm run test:tooling-fast
    node tools/test-bg.mjs api
@@ -58,7 +67,7 @@ WGX is a device/feature miss, not "WGX has no arrays."
    Visual: **lighting-tuner** or **webgl-debug** / **webgpu-debug** on a track
    with varied surfaces.
 
-6. **Ship** — commit `assets/pack/` when regenerated. Bump `?v=N` +
+7. **Ship** — commit `assets/pack/` when regenerated. Bump `?v=N` +
    `version.json` only if you changed `js/` or `css/` (**bump-cache**). Pack
    URLs rely on SW cache generation + revalidation, not shell `?v=`.
 
