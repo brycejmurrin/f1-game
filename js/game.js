@@ -3118,25 +3118,16 @@ function clearMenuScreens() {
   garageReturn = "select";
 }
 
-const rotateBlockMql = window.matchMedia
-  ? window.matchMedia("(orientation: portrait) and (pointer: coarse) and (max-width: 743px)")
-  : { matches: false };
+const rotateBlockMql = window.matchMedia ? window.matchMedia("(orientation: portrait) and (pointer: coarse) and (max-width: 743px)") : { matches: false };
 function syncRotateBlocker(moveFocus) {
-  const box = $("rotate-device");
-  if (!box) return false;
-  const active = document.body.classList.contains("in-race") && rotateBlockMql.matches
-    && !document.body.classList.contains("rotate-help-open");
-  box.setAttribute("aria-hidden", active ? "false" : "true");
-  if (active && moveFocus) requestAnimationFrame(() => {
-    const first = $("rotate-controls");
-    if (first && document.body.classList.contains("in-race") && rotateBlockMql.matches) first.focus();
-  });
-  return active;
+  const box = $("rotate-device"); if (!box) return false;
+  const active = document.body.classList.contains("in-race") && rotateBlockMql.matches && !document.body.classList.contains("rotate-help-open");
+  box.setAttribute("aria-hidden", active ? "false" : "true"); if (active && moveFocus) requestAnimationFrame(() => {
+    const first = $("rotate-controls"); if (first && document.body.classList.contains("in-race") && rotateBlockMql.matches) first.focus();
+  }); return active;
 }
-if (rotateBlockMql.addEventListener)
-  rotateBlockMql.addEventListener("change", () => syncRotateBlocker(true));
-else if (rotateBlockMql.addListener)
-  rotateBlockMql.addListener(() => syncRotateBlocker(true));
+if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", () => syncRotateBlocker(true));
+else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
 function quitToMenu() {
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
@@ -7514,16 +7505,12 @@ $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 // there with nothing else to restore.
 $("pm-howto").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("htp-close").onclick = () => {
-  els.howtoplay.hidden = true;
-  const fromRotate = document.body.classList.contains("rotate-help-open");
-  document.body.classList.remove("rotate-help-open");
-  if (fromRotate) syncRotateBlocker(true);
+  els.howtoplay.hidden = true; const fromRotate = document.body.classList.contains("rotate-help-open");
+  document.body.classList.remove("rotate-help-open"); if (fromRotate) syncRotateBlocker(true);
 };
 $("rotate-controls").onclick = () => {
-  setPaused(true);
-  document.body.classList.add("rotate-help-open");
-  syncRotateBlocker(false);
-  els.howtoplay.hidden = false;
+  setPaused(true); document.body.classList.add("rotate-help-open");
+  syncRotateBlocker(false); els.howtoplay.hidden = false;
   const close = $("htp-close"); if (close) close.focus();
 };
 $("rotate-exit").onclick = () => quitToMenu();
@@ -8522,4 +8509,3 @@ await bootAgentSurface();
 netLobby.wire();
 
 })();
-

@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1471">
+<meta name="apex-build" content="1473">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -45,8 +45,8 @@
 <link rel="stylesheet" href="css/menus.css?v=8092e2792eec">
 <link rel="stylesheet" href="css/carsetup.css?v=807c10d2cff4" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=ce419d9bb73a" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=5489c876360d" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/responsive.css?v=10328b8a0892">
+<link rel="stylesheet" href="css/overlays.css?v=f307cde7fe57" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/responsive.css?v=9771885af6b8">
 <link rel="stylesheet" href="css/track-detail.css?v=6105e0e4ffad" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=e8ed7c0ac7d2" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=9ece0434b33b" media="print" onload="this.media='all'">
@@ -208,16 +208,6 @@
 </script>
 </head>
 <body><canvas id="game"></canvas>
-<aside id="save-warning" class="save-warning" role="alert" hidden>
-  <div class="save-warning-copy">
-    <strong>SESSION ONLY — SAVING UNAVAILABLE</strong>
-    <span id="save-warning-detail">Progress will be lost when this page closes or reloads.</span>
-  </div>
-  <div class="save-warning-actions">
-    <button id="save-retry" type="button">RETRY SAVE</button>
-    <button id="save-export" type="button">EXPORT RECOVERY</button>
-  </div>
-</aside>
 <!-- BODY DENSITY, BEFORE THE BROWSER CAN PAINT ANYTHING.
      body[data-density] selects #overlay's one- vs two-column title grid
      (css/menus.css, css/responsive.css). js/game/sheetshape.js owns this answer
@@ -251,10 +241,8 @@
     <div class="rotate-icon" aria-hidden="true">&#8635;</div>
     <p id="rotate-title">Rotate to landscape to race</p>
     <small id="rotate-detail">Turn off rotation lock, then rotate your phone.</small>
-    <div class="rotate-actions">
-      <button id="rotate-controls" type="button">OPEN CONTROLS</button>
-      <button id="rotate-exit" type="button">EXIT RACE</button>
-    </div>
+    <button id="rotate-controls" type="button">OPEN CONTROLS</button>
+    <button id="rotate-exit" type="button">EXIT RACE</button>
   </div>
 </div>
 
@@ -1802,7 +1790,7 @@
 <script crossorigin="anonymous" src="js/game/setup-ui.js?v=7274b0b69237"></script>
 <script crossorigin="anonymous" src="js/game/career-ui.js?v=dab232f3d43e"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=8e20a72bee1a"></script>
-<script crossorigin="anonymous" src="js/game/menus.js?v=28cd2aca0e1b"></script>
+<script crossorigin="anonymous" src="js/game/menus.js?v=e990ed33a3e3"></script>
 <script crossorigin="anonymous" src="js/game/scrollfade.js?v=c468f3706d17"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
 <script crossorigin="anonymous" src="js/game/sheetshape.js?v=931be6f5d0c9"></script>
@@ -1827,7 +1815,7 @@
 <script crossorigin="anonymous" src="js/game/cameras.js?v=577b77b3b7e7"></script>
 <script crossorigin="anonymous" src="js/game/cam-modes.js?v=94d3266248e8"></script>
 <script crossorigin="anonymous" src="js/game/hud.js?v=3d3fc4f75f28"></script>
-<script crossorigin="anonymous" src="js/game/results.js?v=b6a49d429cdb"></script>
+<script crossorigin="anonymous" src="js/game/results.js?v=a95aec8a58ad"></script>
 <script crossorigin="anonymous" src="js/game/quali.js?v=eb08e041b1ea"></script>
 <script crossorigin="anonymous" src="js/game/debrisworld.js?v=f72538e5cdcc"></script>
 <script crossorigin="anonymous" src="js/game/incidentsim.js?v=887687a6a634"></script>
@@ -1842,5 +1830,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=f0bfb2817114"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=2891c595f0f0"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=aced6d5696d5"></script>
-<script crossorigin="anonymous" src="js/game.js?v=8677cef8c6f6"></script>
+<script crossorigin="anonymous" src="js/game.js?v=01a0a236c56a"></script>
 </body></html>

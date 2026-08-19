@@ -594,32 +594,32 @@ body[data-density="compact"] #campicker {
    use them. Only what is specific to THIS container stays here. */
 #results-table { font-size: 14px; font-variant-numeric: tabular-nums; }
 #results .sheet-foot, #standings .sheet-foot, #howtoplay .sheet-foot, #advanced .sheet-foot { justify-content: center; }
-.res-settle-unsaved { margin-top: var(--gap); color: #ffd180; font-weight: 800; }
+#res-settle-unsaved { margin-top: var(--gap); color: #ffd180; font-weight: 800; }
 
-.save-warning {
+#save-warning {
   position: fixed; z-index: 8500;
-  top: max(8px, env(safe-area-inset-top)); left: 50%;
+  top: max(var(--gap), env(safe-area-inset-top)); left: 50%;
   transform: translateX(-50%);
-  width: min(760px, calc(100vw - 24px));
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 10px 12px;
+  width: min(48rem, calc(100vw - 2 * var(--gap)));
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center; gap: var(--gap);
+  padding: var(--gap);
   border: 1px solid rgba(255, 209, 128, 0.72); border-radius: var(--r-card);
   background: rgba(25, 18, 8, 0.96); color: #fff3d6;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.45);
+  box-shadow: var(--shadow-sheet);
   font-size: var(--fs-micro);
 }
-.save-warning[hidden] { display: none; }
-.save-warning-copy { display: grid; gap: 2px; min-width: 0; }
-.save-warning-copy strong { color: #ffd180; letter-spacing: 0.04em; }
-.save-warning-actions { display: flex; flex: 0 0 auto; gap: 8px; }
-.save-warning-actions button {
-  min-height: var(--tap-min); padding: 0 12px; border: 1px solid rgba(255,255,255,0.22);
+#save-warning[hidden] { display: none; }
+#save-warning strong { color: #ffd180; letter-spacing: 0.04em; }
+#save-warning-detail { min-width: 0; }
+#save-warning button {
+  min-height: var(--tap-min); padding: 0 var(--gap); border: 1px solid rgba(255,255,255,0.22);
   border-radius: var(--r-pill); background: rgba(255,255,255,0.08); color: #fff;
   font: inherit; font-weight: 800;
 }
-@media (max-width: 620px) {
-  .save-warning { align-items: stretch; flex-direction: column; }
-  .save-warning-actions { display: grid; grid-template-columns: 1fr 1fr; }
+@media (max-width: 38.75rem) {
+  #save-warning { grid-template-columns: 1fr 1fr; }
+  #save-warning strong, #save-warning-detail { grid-column: 1 / -1; }
 }
 
 /* ---------- how to play ---------- */
@@ -1060,4 +1060,3 @@ body[data-density="compact"] #campicker {
    we say so plainly — hence a distinct state rather than the same grey text. */
 #vsfriend .vs-status.vs-error { color: #ff8a80; opacity: 1; }
 } /* @layer overlays */
-

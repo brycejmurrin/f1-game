@@ -21,6 +21,11 @@ const { $, els, store, cssCol, fmtTime, ttBoard, tickUi, scheduleFlybyTrack } = 
 // Surface that distinction globally: the in-memory cache preserves this
 // session, but the player must know a reload will discard it and must have a
 // recovery path that never exports credentials or unrelated preferences.
+document.body.insertAdjacentHTML("afterbegin",
+  '<aside id="save-warning" role="alert" hidden><strong>SESSION ONLY — SAVING UNAVAILABLE</strong>' +
+  '<span id="save-warning-detail">Progress will be lost when this page closes or reloads.</span>' +
+  '<button id="save-retry" type="button">RETRY SAVE</button>' +
+  '<button id="save-export" type="button">EXPORT RECOVERY</button></aside>');
 const saveWarning = $("save-warning");
 const saveWarningDetail = $("save-warning-detail");
 const showSaveWarning = (reason) => {
@@ -780,4 +785,3 @@ return { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, set
 
 return { create };
 })();
-
