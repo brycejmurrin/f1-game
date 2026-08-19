@@ -616,8 +616,12 @@ const GameAudio = (function () {
 
   function stopRain(keepWant) {
     if (!keepWant) rainWanted = false;
-    rainPending = null;   // a newer stop cancels a queued restart, wet or dry
+    // Only clear rainPending when there is an active source to tear down.
+    // If rainStopping is already true and rainSrc is null, a prior stopRain is
+    // already running its 1.2 s teardown — clearing rainPending here would drop
+    // a startRain that queued itself during that window (rapid stop→start→stop).
     if (!rainSrc) return;
+    rainPending = null;   // a newer stop cancels a queued restart, wet or dry
     rainStopping = true;
     const s = rainSrc, g = rainGain, h = rainHp, l = rainLp;
     rainSrc = null; rainGain = null; rainHp = null; rainLp = null;

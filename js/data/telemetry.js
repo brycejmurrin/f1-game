@@ -426,7 +426,28 @@ const DataTelemetry = (function () {
   function buildTelemetryView(detail, tels) {
     stopTelAnim();
     const laps = tels.filter(function (t) { return t.car && t.car.length; });
-    const primary = laps[0] || tels[0];
+    if (!laps[0]) {
+      // No lane carries car telemetry — show headers + empty message then quit.
+      const mainArea = el("div", "dh-telem-main");
+      const laneCols0 = laneColors(tels);
+      const dupNum0 = {};
+      tels.forEach(function (t) { dupNum0[t.d.num] = (dupNum0[t.d.num] || 0) + 1; });
+      tels.forEach(function (t, i) {
+        const ht = el("div", "dh-live-title dh-thead");
+        const sw = el("span", "dh-swatch"); sw.style.background = cssColor(laneCols0[i]);
+        ht.appendChild(sw);
+        const nameEl = el("span", "dh-tname", (t.d.name || dcode(t.d)));
+        nameEl.title = t.d.name || dcode(t.d);
+        ht.appendChild(nameEl);
+        if (dupNum0[t.d.num] > 1 && t.sessionLabel) ht.appendChild(el("span", "dh-lane-ses", t.sessionLabel));
+        ht.appendChild(el("span", "dh-tsect", "Car telemetry isn't available for this lap."));
+        mainArea.appendChild(ht);
+      });
+      detail.appendChild(mainArea);
+      appendStintsPits(mainArea, tels[0]);
+      return;
+    }
+    const primary = laps[0];
     const compare = laps[1] || null;
     const laneCols = laneColors(tels);
     const dupNum = {};
@@ -463,13 +484,6 @@ const DataTelemetry = (function () {
       }
       mainArea.appendChild(ht);
     });
-
-    if (!laps.length) {
-      mainArea.appendChild(emptyMsg("Car telemetry isn't available for this lap."));
-      detail.appendChild(mainArea);
-      appendStintsPits(mainArea, primary);
-      return;
-    }
 
     const view = {
       laps: laps,

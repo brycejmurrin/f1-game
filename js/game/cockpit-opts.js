@@ -9,15 +9,15 @@ const KEY_TC = "apex26.cockpitTurnChase";
 
 const TURN_CHASE = 0.35;
 
-let _halo = null, _tc = null;   // resolved lazily: localStorage may be absent at eval
+let _halo = null, _tc = null;
 
 function read(key, urlName) {
   let v = null;
-  try { v = localStorage.getItem(key); } catch (_) { /* private mode / no storage */ }
+  try { v = localStorage.getItem(key); } catch (_) { }
   try {
     const q = new RegExp("[?&]" + urlName + "=(1|0|on|off|true|false)", "i").exec(location.search);
     if (q) v = /^(1|on|true)$/i.test(q[1]) ? "1" : "0";
-  } catch (_) { /* no location (node/test) */ }
+  } catch (_) { }
   return v === "1";
 }
 
@@ -25,41 +25,25 @@ function halo() { if (_halo === null) _halo = read(KEY, "halo"); return _halo; }
 
 function setHalo(on) {
   _halo = !!on;
-  try { localStorage.setItem(KEY, _halo ? "1" : "0"); } catch (_) { /* nothing to persist to */ }
+  try { localStorage.setItem(KEY, _halo ? "1" : "0"); } catch (_) { }
   return _halo;
 }
 
-/* TURN CHASING — does the view glance into the corner, or stay bolted to the
-   car's nose? DEFAULT OFF, and that default is the load-bearing part: AGENTS.md
-   states that nothing derived from track curvature or the racing line may reach
-   the player, and the cockpit camera is the most immersive surface in the game
-   to leak it through. Off, the aim is the car's own heading and nothing else —
-   what the driver's helmet points at. On, it is the player asking for it. */
 function turnChase() { if (_tc === null) _tc = read(KEY_TC, "turnchase"); return _tc; }
 
 function setTurnChase(on) {
   _tc = !!on;
-  try { localStorage.setItem(KEY_TC, _tc ? "1" : "0"); } catch (_) { /* nothing to persist to */ }
+  try { localStorage.setItem(KEY_TC, _tc ? "1" : "0"); } catch (_) { }
   return _tc;
 }
 
 function turnChaseLead() { return turnChase() ? TURN_CHASE : 0; }
 
-/* SETTINGS > COCKPIT. Injected at runtime rather than written into
-   index.html, for the same two reasons gfx-quality documents: the DOM-node ratchet
-   (tests/unit/css-class-ratchet.test.mjs) counts index.html's nodes, and this
-   button mints NO new CSS class — it carries none, exactly like its neighbours
-   #pm-res / #pm-renderer / #pm-gfx. */
 const SWITCHES = [
   { id: "pm-halo", label: "HALO", get: halo, set: setHalo,
-    title: "Draw the halo (secondary roll structure) in the cockpit view. Real cars " +
-           "and real onboards have one; it also puts a pillar in the middle of your " +
-           "sightline, which is what makes it a preference." },
+    title: "Draw the halo (secondary roll structure) in the cockpit view." },
   { id: "pm-turnchase", label: "TURN CHASING", get: turnChase, set: setTurnChase,
-    title: "Let the view glance into the corner ahead instead of staying locked to " +
-           "the car's nose. OFF (default) is what the driver's helmet actually points " +
-           "at; ON reads the racing line for you, which is easier but is the track " +
-           "telling you where to go." },
+    title: "Let the view glance into the corner ahead instead of staying locked to the car's nose." },
 ];
 
 function paint(btn, sw) {
@@ -75,7 +59,7 @@ function initUI() {
   if (!host || document.getElementById("pm-halo")) return;
 
   const head = document.createElement("h3");
-  head.className = "pm-group-h";          // existing class, nothing new minted
+  head.className = "pm-group-h";
   head.textContent = "COCKPIT";
   host.appendChild(head);
 
@@ -87,14 +71,13 @@ function initUI() {
     b.onclick = () => {
       sw.set(!sw.get());
       paint(b, sw);
-      try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio not up yet; the toggle still applies */ }
+      try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { }
     };
     host.appendChild(b);
   }
 }
 
 if (typeof document !== "undefined") {
-  // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", initUI, { once: true });
   else initUI();
 }
@@ -102,9 +85,7 @@ if (typeof document !== "undefined") {
 return { KEY, KEY_TC, halo, setHalo, turnChase, setTurnChase, turnChaseLead };
 })();
 
-/* Metrics panel safe-area: keep #game-metrics clear of notch / home indicator.
-   Inline PANEL_STYLE in metrics.js is not zoom-aware for env insets; override
-   when the panel mounts. House height unit is svh (not dvh) to avoid toolbar jitter. */
+/* Metrics panel safe-area: 100svh + env insets (house unit is svh, not dvh). */
 (function metricsSafeArea() {
   "use strict";
   var HUD_TOP = "min(120px, calc(80px * var(--hud-scale, 1)))";
@@ -125,9 +106,7 @@ return { KEY, KEY_TC, halo, setHalo, turnChase, setTurnChase, turnChaseLead };
     if (!el || el.id !== "game-metrics") return;
     el.style.cssText = STYLE;
   }
-  function scan() {
-    apply(document.getElementById("game-metrics"));
-  }
+  function scan() { apply(document.getElementById("game-metrics")); }
   if (typeof document === "undefined") return;
   scan();
   try {
@@ -144,4 +123,74 @@ return { KEY, KEY_TC, halo, setHalo, turnChase, setTurnChase, turnChaseLead };
   } catch (_) {
     setInterval(scan, 1000);
   }
+})();
+
+/* Fold four DISPLAY metrics buttons into a METRICS submenu. Overlay paints ~4 Hz while ON. */
+(function metricsSettingsSubmenu() {
+  "use strict";
+  function build() {
+    if (typeof document === "undefined") return;
+    var on = document.getElementById("pm-metrics");
+    var page = document.getElementById("pm-metrics-page");
+    var ns = document.getElementById("pm-metrics-logns");
+    var lvl = document.getElementById("pm-metrics-loglvl");
+    if (!on || document.getElementById("pm-metrics-details")) return;
+    var host = on.parentNode;
+    if (!host) return;
+
+    var det = document.createElement("details");
+    det.id = "pm-metrics-details";
+    det.className = "pm-metrics-sub";
+
+    var sum = document.createElement("summary");
+    sum.className = "adv-more-btn";
+    sum.textContent = "METRICS";
+    sum.title = "Live FPS / car / phys / log overlay controls";
+    det.appendChild(sum);
+
+    var body = document.createElement("div");
+    body.className = "pm-metrics-sub-body";
+    body.setAttribute("role", "group");
+    body.setAttribute("aria-label", "Metrics controls");
+
+    [on, page, ns, lvl].forEach(function (btn) {
+      if (!btn) return;
+      btn.addEventListener("click", function (e) { e.stopPropagation(); });
+      body.appendChild(btn);
+    });
+
+    var hint = document.createElement("p");
+    hint.className = "as-note";
+    hint.style.cssText = "margin:6px 0 0;opacity:.75;font-size:11px;line-height:1.35";
+    hint.textContent = "While ON the overlay updates ~4×/sec as you play. ` or F9 toggles. [ ] cycle page; 1–4 jump.";
+    body.appendChild(hint);
+    det.appendChild(body);
+
+    var hide = document.getElementById("pm-hidehud");
+    if (hide && hide.parentNode === host) {
+      if (hide.nextSibling) host.insertBefore(det, hide.nextSibling);
+      else host.appendChild(det);
+    } else {
+      host.appendChild(det);
+    }
+
+    try {
+      if (typeof GameMetrics !== "undefined" && GameMetrics.on && GameMetrics.on()) det.open = true;
+    } catch (_) { }
+
+    on.addEventListener("click", function () {
+      try {
+        if (typeof GameMetrics !== "undefined" && GameMetrics.on && GameMetrics.on()) det.open = true;
+      } catch (_) { }
+    });
+  }
+
+  function schedule() {
+    if (typeof document === "undefined") return;
+    var run = function () { setTimeout(build, 0); };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run, { once: true });
+    else run();
+    setTimeout(build, 250);
+  }
+  schedule();
 })();
