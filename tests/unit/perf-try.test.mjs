@@ -35,7 +35,7 @@ test("late sky is the only world draw order", () => {
   assert.doesNotMatch(game, /_skyLate|PerfTry/);
   assert.match(game, /drawWorldMeshes\(frame, night, wet, _floodEmit, false\)/);
   assert.match(game, /gfx\.drawSky\(frameSky\)/);
-  assert.match(game, /if \(frame\.lights && !_studioRig\) gfx\.drawGlow\(frame\.lights, LT\.glareStr\)/);
+  assert.match(game, /if \(frame\.lights && !_studioRig && PerfGov\.tier\(\) < 3\) gfx\.drawGlow\(frame\.lights, LT\.glareStr\)/);
   // Env-probe face uses the same opaque → sky order as the main camera.
   assert.match(game, /frameSky\.invViewProj = _envInv;[\s\S]{0,280}?drawWorldMeshes\(frame, night, wet, _floodEmit, false\);[\s\S]{0,80}?gfx\.drawSky\(frameSky\);[\s\S]{0,40}?gfx\.envFaceEnd/);
 });

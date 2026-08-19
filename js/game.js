@@ -6158,8 +6158,12 @@ function render(dt) {
     // WGX mobile tiers may no-op the pass (blob fallback); menu/select skip
     // because the car loop doesn't run and its pooled AI matrices would be
     // stale race positions.
-    if (gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 && (_hasLivePlayerShadow || _shadowCount > 0) && player &&
-        state !== "menu") {
+    // Car shadow pass: skip odd frames at low speed — the 1024² map persists
+    // one frame and parked/slow driving does not need 60 Hz updates.
+    const _carSpd = player ? Math.abs(player.speed) : 0;
+    const _carShadowFrame = (_frameNo & 1) === 0 || _carSpd > vStd(0.15);
+    if (gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 && _carShadowFrame &&
+        (_hasLivePlayerShadow || _shadowCount > 0) && player && state !== "menu") {
       const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
       // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
       // the moonlight floor (or the knob's above-0.5 override) active, cars
@@ -6483,6 +6487,9 @@ function render(dt) {
         const _lsx = Math.round(camEye[0] / 12), _lsz = Math.round(camEye[2] / 12);
         if (flBest === _lampShBest && _lsx === _lampShSX && _lsz === _lampShSZ) {
           // Map from last rebuild still bound; skip the 512² props pass.
+        } else if ((_frameNo & 1) !== 0 && flBest === _lampShBest) {
+          // Defer a cell-only rebuild one frame — props are static; the prior
+          // map stays valid while the eye crosses a 12 m snap cell.
         } else {
         _lampShBest = flBest; _lampShSX = _lsx; _lampShSZ = _lsz;
         // Perspective frustum down the beam: fov spans the OUTER cone (plus
@@ -6565,7 +6572,7 @@ function render(dt) {
   _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
   frameSky.lightning = _ltFlash || 0;
   // ── Live env probe: render ONE 64px cubemap face of the world around the
-  // player car every other frame (full refresh every 12 frames). The car-paint clearcoat
+  // player car every fourth frame on a live race (full refresh every 24 frames). The car-paint clearcoat
   // samples it for REAL reflections of the surroundings — trees, buildings,
   // track, sky — including everything behind the camera that SSR can't see.
   // CAR tuner ENV REFLECTION (carEnvCube) = 0 skips the pass entirely.
@@ -6573,13 +6580,13 @@ function render(dt) {
   // a second time each frame and is anchored to the player car, which isn't the
   // subject while flying the lighting-tuner free camera — dropping it here removes
   // the biggest per-frame load multiplier during the exact mode that OOM-crashes.
-  // Advance one face only every OTHER frame — a full 6-face cube cycle then takes
-  // 12 frames instead of 6, halving the probe's whole-world re-draw cost (imperceptible
-  // for a 64px blurred reflection probe).
-  // Every-other-frame on a live race (12 frames / cube). park() freezes
-  // physics for shots/tests — then one face per frame so a parked M9 cube
-  // goes ready in 6 presents, not 12 (SwiftShader is seconds-per-frame).
-  if (player && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & 1) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  // Advance one face every FOURTH frame on a live race — a full 6-face cube
+  // cycle then takes 24 frames instead of 6, cutting the probe's whole-world
+  // re-draw cost by ~75% (imperceptible on a 64px blurred reflection probe).
+  // park() freezes physics for shots/tests — then one face per frame so a
+  // parked M9 cube goes ready in 6 presents, not 24 (SwiftShader is
+  // seconds-per-frame).
+  if (player && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & 3) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
@@ -6621,7 +6628,7 @@ function render(dt) {
   //  LT.glareStr, default 0.12.)
   drawWorldMeshes(frame, night, wet, _floodEmit, false);
   gfx.drawSky(frameSky);
-  if (frame.lights && !_studioRig) gfx.drawGlow(frame.lights, LT.glareStr);
+  if (frame.lights && !_studioRig && PerfGov.tier() < 3) gfx.drawGlow(frame.lights, LT.glareStr);
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the

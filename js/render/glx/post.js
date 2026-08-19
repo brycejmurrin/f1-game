@@ -137,14 +137,19 @@ const GLXPost = (function () {
         const ds = gl.getInternalformatParameter(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, gl.SAMPLES);
         const cMax = cs && cs.length ? cs[0] : 0;
         const dMax = ds && ds.length ? ds[0] : 0;
-        // Desktop: 4× to match WGX (WebGPU forbids 2, so WGX is 4 or 1). Fall
-        // back to 2 when the HDR format or the device cannot do 4, then 0.
-        // FXAA (full-res, below) still cleans leftover specular/edge shimmer.
+        // Desktop: 4× on GRAPHICS: ULTRA (apex26.gfxHigh=1); 2× on HIGH and
+        // below when the format supports it — halves MSAA fill vs the old
+        // always-4 path while FXAA still cleans specular shimmer.
         // Mobile: no MSAA — two extra full-res multisampled surfaces
         // (~20-30 MB) against a tight jetsam budget; FXAA alone carries the AA.
         // Phones used to inherit 2× when GRAPHICS: HIGH flipped the whole
         // memory tier; IS_MOBILE keeps that from coming back.
         msaaSamples = IS_MOBILE ? 0 : Math.min(4, cMax, dMax);
+        if (!IS_MOBILE) {
+          let _gfxHighOff = false;
+          try { _gfxHighOff = localStorage.getItem("apex26.gfxHigh") === "0"; } catch (_) { /* blocked storage: keep ULTRA MSAA cap */ }
+          if (_gfxHighOff && msaaSamples > 2) msaaSamples = 2;
+        }
         if (msaaSamples < 2) msaaSamples = 0;
       } catch (e) { msaaSamples = 0; }
       compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uHaveGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uSsrTopUV", "uSsrNear", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uShaftSpread", "uFlareStreak", "uFlareStreak2"]);

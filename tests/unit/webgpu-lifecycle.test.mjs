@@ -1040,7 +1040,7 @@ test("Safari/compat: depth is textureLoad, adapter retries, lite stack skips tim
   // pins the GATE (lite skips the timer) rather than the probe's spelling.
   assert.match(WGX_SOURCE, /_canTimestamp = !WGX_LITE && _has\("timestamp-query"\)/);
   assert.match(WGX_SOURCE, /adapter\.features\.has\(name\)/);
-  assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : 4/);
+  assert.match(WGX_SOURCE, /MSAA_COUNT = WGX_LITE \? 1 : \(_wgxMsaa4 \? 4 : 1\)/);
   assert.match(WGX_SOURCE, /apex26\.gfxWgxFail/);
 });
 
