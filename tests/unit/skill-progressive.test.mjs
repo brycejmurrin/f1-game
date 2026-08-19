@@ -9,6 +9,7 @@
 // require name + description + model (inherit | a model id).
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -105,6 +106,8 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["debug-state", "references/hooks.md"],
     ["deploy-merge", "references/protocol.md"],
     ["css-play", "references/loop.md"],
+    ["slim-bloat", "references/do-not.md"],
+    ["slim-bloat", "references/carves.md"],
   ];
   for (const [name, ref] of splits) {
     const skill = fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8");
@@ -182,8 +185,8 @@ test("every custom subagent declares name, description, and model", () => {
   // name + description required; model: inherit (or a model id) so a subagent
   // does not silently pick a different model; readonly / is_background optional.
   const files = fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md");
-  assert.ok(files.length >= 6,
-    "expected deploy-research, verify-agent, track-surveyor, plus doc-drift / physics-contract / worktree-regression");
+  assert.ok(files.length >= 7,
+    "expected deploy-research, verify-agent, track-surveyor, plus doc-drift / physics-contract / worktree-regression / bloat-auditor");
   for (const f of files) {
     const text = fs.readFileSync(path.join(AGENTS, f), "utf8");
     const fm = frontmatter(text);
@@ -263,7 +266,7 @@ test("coverage skills exist for input, season, data-hub, and AI", () => {
 });
 
 test("readonly review agents stay --fast and never start Playwright", () => {
-  for (const id of ["doc-drift-auditor", "physics-contract-auditor", "worktree-regression-check"]) {
+  for (const id of ["doc-drift-auditor", "physics-contract-auditor", "worktree-regression-check", "bloat-auditor"]) {
     const file = path.join(AGENTS, `${id}.md`);
     assert.ok(fs.existsSync(file), `missing .claude/agents/${id}.md`);
     const text = fs.readFileSync(file, "utf8");
@@ -282,6 +285,13 @@ test("readonly review agents stay --fast and never start Playwright", () => {
   assert.match(wt, /verify-change\.mjs --fast/);
   const drift = fs.readFileSync(path.join(AGENTS, "doc-drift-auditor.md"), "utf8");
   assert.match(drift, /DOC-DRIFT/);
+  const bloat = fs.readFileSync(path.join(AGENTS, "bloat-auditor.md"), "utf8");
+  assert.match(bloat, /BLOAT/);
+  assert.match(bloat, /bloat-scan\.mjs/);
+  assert.match(bloat, /NEVER start[\s\S]*chrome-start/);
+  assert.match(bloat, /NEVER start[\s\S]*apex-eval\.mjs/);
+  assert.doesNotMatch(bloat, /python3 tools\/probe-mcp\.py chrome-start/);
+  assert.doesNotMatch(bloat, /node tools\/apex-eval/);
 });
 
 test("do not grow a parallel Cursor skills or agents tree", () => {
@@ -326,7 +336,7 @@ test("file-family skills declare Cursor paths; cross-cutting skills do not", () 
     assert.ok(fm.paths, `${name}: missing paths frontmatter`);
     assert.match(fm.paths, re, `${name}: paths ${fm.paths} should match ${re}`);
   }
-  for (const name of ["check-changes", "bump-cache", "deploy-merge", "mcp-probe", "playwright-probe"]) {
+  for (const name of ["check-changes", "bump-cache", "deploy-merge", "mcp-probe", "playwright-probe", "slim-bloat"]) {
     const fm = frontmatter(fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8"));
     assert.equal(fm.paths, undefined, `${name} is cross-cutting — leave paths unset`);
   }
@@ -386,4 +396,44 @@ test("wgx-capture pairs with webgpu-debug in tools/README.md", () => {
   assert.ok(row, "tools/README.md lost the wgx-capture.mjs row");
   assert.match(row, /webgpu-debug/);
   assert.doesNotMatch(row, /webgl-debug/);
+});
+
+test("slim-bloat is the Claude-simplify analog and stays a thin index", () => {
+  const skill = fs.readFileSync(path.join(SKILLS, "slim-bloat/SKILL.md"), "utf8");
+  const fm = frontmatter(skill);
+  assert.equal(fm.name, "slim-bloat");
+  assert.match(fm.description, /Use when/i);
+  assert.match(fm.description, /bloat|dead|extract|split/i);
+  assert.ok(skill.split("\n").length <= 180, "slim-bloat SKILL.md must stay a thin index");
+  assert.match(skill, /bloat-auditor/);
+  assert.match(skill, /bloat-scan\.mjs/);
+  assert.match(skill, /extract-module\.mjs/);
+  assert.match(skill, /mcp-probe|Context7|context7/i);
+  assert.doesNotMatch(skill, /npx playwright test/);
+  const doNot = fs.readFileSync(path.join(SKILLS, "slim-bloat/references/do-not.md"), "utf8");
+  assert.match(doNot, /PACE|vTop|vStd|aStd/);
+  assert.match(doNot, /IIFE|ES module/i);
+  assert.match(doNot, /updateCar|render\(\)/);
+  assert.match(doNot, /bug-explaining/);
+  const carves = fs.readFileSync(path.join(SKILLS, "slim-bloat/references/carves.md"), "utf8");
+  assert.match(carves, /manifest\.cjs/);
+  assert.match(carves, /bump-cache/);
+  assert.match(carves, /Module\.create/);
+});
+
+test("bloat-scan reports ratchet slack and skill sizes as JSON", () => {
+  const r = spawnSync(process.execPath, ["tools/bloat-scan.mjs", "--json"], {
+    cwd: ROOT, encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  const j = JSON.parse(r.stdout);
+  assert.equal(j.ok, true);
+  const game = j.files.find((f) => f.path === "js/game.js");
+  assert.ok(game, "scan missed js/game.js");
+  assert.equal(game.kind, "ratchet");
+  assert.ok(Number.isInteger(game.lines) && game.lines > 0);
+  assert.ok(Number.isInteger(game.ceiling) && game.ceiling >= game.lines);
+  const skill = j.files.find((f) => f.path === ".claude/skills/slim-bloat/SKILL.md");
+  assert.ok(skill, "scan missed slim-bloat SKILL.md");
+  assert.equal(skill.kind, "skill");
 });

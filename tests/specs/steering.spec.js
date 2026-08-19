@@ -340,7 +340,11 @@ test.describe("Apex 26 — keyboard latch", () => {
     const r = await page.evaluate(() => {
       const el = document.getElementById("btn-throttle");   // wired via wireHold at init
       const pe = (type) => el.dispatchEvent(new PointerEvent(type, { pointerId: 1, bubbles: true, cancelable: true }));
-      // Hold the pedal.
+      // Show it first — the shell starts the pedal `[hidden]`, and a capture
+      // steal on an already-hidden button is NOT a teardown (see
+      // lostCaptureShouldRelease). The production bug is hide-mid-hold.
+      el.hidden = false;
+      if (el.parentElement) el.parentElement.hidden = false;
       pe("pointerdown");
       const held = Input.throttle();
       // The pedal is hidden by a state change → capture is lost implicitly. The
