@@ -682,7 +682,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
     // measurement of the machine, not of the page. docs/LAYOUT-AUDIT.md already
     // records the same trap costing 98 cells once before.
     await page.goto(base, { waitUntil: "domcontentloaded", timeout: 90000 });
-    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 60000 });
+    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 60000 });
     // Stop the render loop first: the 3D scene starves the compositor, which
     // makes every later wait and every screenshot an order slower.
     await page.evaluate(() => window.__apex.headless(true));
@@ -739,7 +739,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
       });
       if (!titleUsable) {
         await page.goto(base, { waitUntil: "domcontentloaded" });
-        await page.waitForFunction(() => !!window.__apex, null, { timeout: 60000 });
+        await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 60000 });
         await page.evaluate(() => window.__apex.headless(true));
         await page.waitForTimeout(300);
         errors = [];
