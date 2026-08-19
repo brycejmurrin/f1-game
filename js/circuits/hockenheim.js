@@ -1,21 +1,11 @@
-/* Apex 26 — HOCKENHEIMRING circuit definition (data only).
-   Retired circuit (`classic: true`): last German GP 2019, not on the current
-   calendar, so it is playable everywhere but never a championship round.
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js
-   engine (palette resolved there from `night`, geometry from the OSM trace in
-   js/track/geo-paths.js). */
+/* Apex 26 — HOCKENHEIMRING circuit definition (data only). Retired circuit (`classic: true`): last German GP 2019, not on the current calendar, so it is playable … */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "hockenheim",
     classic: true,
-    // Upstream trace de-1932 already runs the racing direction (clockwise —
-    // Nordkurve at T1 is a right-hander), so no flip is needed.
     reverse: false,
-    // The trace's first vertex sits on the pit straight (within ~35 m of the
-    // start/finish line), so almost no rotation is required. Not GPS-calibrated:
-    // OpenF1 has no coverage for a circuit that left the calendar in 2019.
     startFrac: 0.0,
     name: "HOCKENHEIM",
     gp: "German GP",
@@ -25,12 +15,7 @@
     lengthKm: 4.6,
     baseHW: 7.5,
     sceneryCoordinates: "racing",
-    // The Motodrom bowl and the forest ranks own their own ground; keep the
-    // rendered terrain wide enough to carry both without bridging the foldback
-    // between the stadium section and the pit straight.
     terrainOuter: 110,
-    // The stadium section is a continuous wall of grandstand — the generic
-    // foliage/lamp pass has nowhere to stand there.
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.78, s1: 0.06 },   // Motodrom + pits
       { kind: "foliage", s0: 0.40, s1: 0.50 },               // Spitzkehre runoff
@@ -47,28 +32,15 @@
       grass:         [0.19, 0.42, 0.19],
       sunDir:        [0.42, 0.62, 0.36],
     },
-    // Unused: js/track/geo-paths.js carries the real OSM centreline for this id,
-    // and the trace always wins (js/track/tracks.js `realPoints(...) || centerline(...)`).
-    // Kept out deliberately rather than shipped as dead data.
-    //
-    // Hockenheim is flat by F1 standards — the Rhine plain — but not dead flat:
-    // the forest loop falls away gently to the Spitzkehre and climbs back into
-    // the stadium. Authored (not surveyed): tools/bake-elevation.mjs needs SRTM
-    // over the network. Fractions are RACING-lap space (startFrac is 0 here).
     elevations: [
       { s: 0.26, halfM: 380, rise: -3.5 },  // drift down through the forest loop
       { s: 0.46, halfM: 300, rise: -5.0 },  // Spitzkehre sits in the low corner
       { s: 0.70, halfM: 420, rise: 4.0 },   // climb back toward the Motodrom
     ],
-    // The stadium hairpins and the Spitzkehre are genuinely pinched; the
-    // Parabolika and the pit straight keep the full width. hwZones can only
-    // narrow, so the 7.5 m base stays everywhere else.
     hwZones: [
       { s0: 0.435, s1: 0.480, hw: 6.2, ease: 0.012 },  // Spitzkehre hairpin
       { s0: 0.815, s1: 0.960, hw: 6.6, ease: 0.015 },  // Motodrom stadium loop
     ],
-    // Modest camber — Hockenheim's corners are mostly flat, but the Sachskurve
-    // and the Nordkurve are dished enough to matter.
     bankZones: [
       { frac: 0.055, angleDeg: 3.0, widthM: 110 },   // Nordkurve
       { frac: 0.335, angleDeg: 2.5, widthM: 90 },    // Ostkurve entry
@@ -83,9 +55,6 @@
         addBox, addCyl, addPrism, addCone } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // A basis rotated by `ang` in the (right, up) plane. Hockenheim's pit roof
-      // and the Motodrom's rake are both SLOPES, and a slope is the one thing a
-      // stack of axis-aligned boxes cannot fake at silhouette distance.
       const tiltBasis = (a, ang) => {
         const c = Math.cos(ang), s = Math.sin(ang);
         return [
@@ -101,11 +70,6 @@
       const GRAVEL = [0.66, 0.61, 0.48];
       const CONC = [0.68, 0.68, 0.66];
 
-      // =====================================================================
-      // 1. THE FOREST — Hockenheim's whole identity outside the stadium is a
-      //    corridor cut through the Hardtwald. Dense both sides everywhere the
-      //    stadium isn't.
-      // =====================================================================
       const inStadium = (s) => s >= 0.78 || s <= 0.06;
       // THE HARDTWALD WALL. Hockenheim is the forest circuit and was one of the
       // only ones in the fleet never calling forestEdge() — its trees were four
@@ -121,18 +85,12 @@
             density: 0.86, hMin: 16, hMax: 30, pineFrac: 0.82,
             col: PINE, col2: LEAF_D,
           });
-          // A second wall set back behind the first, taller and darker, so the
-          // corridor has depth instead of being one flat green cutout.
           forestEdge(s0, s1, side, 26, {
             density: 0.62, hMin: 22, hMax: 36, pineFrac: 0.9,
             col: PINE_D, col2: PINE_D,
           });
         }
       }
-      // Deep Hardtwald rank on the old blast — a third belt set well back with
-      // the tallest, darkest firs, so the corridor reads as a plantation that
-      // runs hundreds of metres deep rather than a thin screen with sky behind
-      // it. Kept sparse (8 m) so it stays a backdrop mass, not doubled trunks.
       for (const [s0, s1] of [[0.075, 0.305], [0.505, 0.765]]) {
         for (const side of [-1, 1]) {
           forestEdge(s0, s1, side, 42, {
@@ -176,20 +134,9 @@
         bush(k, h < 0.78 ? -1 : 1, 6.5 + h * 4, [0.16, 0.34, 0.16]);
       });
 
-      // =====================================================================
-      // 2. THE MOTODROM — the signature, and the reason this section is built
-      //    from scratch rather than from grandstandEx: the stadium is one
-      //    UNBROKEN ring of terracing, and a row of separate stand boxes with
-      //    daylight between them is exactly what Hockenheim does not look like.
-      //    The bowl below runs continuously from the Sachskurve right round to
-      //    the pit-straight entry; the roofed tribunes then sit on top of it.
-      // =====================================================================
       const BOWL_CONC = [[0.63, 0.62, 0.59], [0.55, 0.545, 0.525]];
       const BOWL_CROWD = [[0.88, 0.86, 0.82], [0.22, 0.30, 0.52],
                           [0.78, 0.28, 0.22], [0.90, 0.78, 0.28]];
-      // One continuous rake of stepped concrete: each row is a riser slab plus a
-      // crowd band, and the whole thing walks the arc node by node so it hugs
-      // the stadium curve instead of chording across it.
       function motodromTerrace(s0, s1, side, gap, rows, step) {
         let i = 0;
         along(s0, s1, step, (k, spacing) => {
@@ -204,18 +151,9 @@
           i++;
         });
       }
-      // The outer ring: 5 rows, ~19 m of rake, unbroken through the whole arc.
-      // It stops at 0.945 because the pit terrace below stands on the same side
-      // from 0.952 — the bowl ends where the garages begin, as it really does.
       motodromTerrace(0.790, 0.945, 1, 13, 5, 9);
-      // The inner ring facing back across the infield is shallower — the
-      // stadium is asymmetric, and a matching rake both sides reads as a bowl
-      // that isn't there. Ends short of the main grandstand at 0.010.
       motodromTerrace(0.840, 0.965, -1, 12, 3, 10);
 
-      // Continuous fascia + cantilever roof band over the covered half of the
-      // outer ring. Emitted as a run of short slabs on the arc for the same
-      // reason as the terracing: one long chord would leave the curve.
       {
         const roofCol = [0.30, 0.31, 0.34], fascia = [0.86, 0.86, 0.84];
         along(0.815, 0.940, 11, (k, spacing) => {
@@ -229,8 +167,6 @@
       // Mercedes-tribune style banked earth terraces closing the far end.
       spectatorHill(0.760, 0.798, -1, 15, { rows: 4, rise: 1.2, depth: 1.9, density: 0.55, step: 8 });
 
-      // Stadium videowall + scoreboard mast at the Sachskurve — the thing the
-      // whole bowl faces, and the tallest object in the arena.
       {
         const a = anchor(K(0.882), 1, 40);
         const b = [a.r, a.u, a.t];
@@ -247,11 +183,6 @@
         }, { required: true });
       }
 
-      // The MERCEDES-TRIBÜNE — the Motodrom's one covered HERO stand, a taller
-      // roofed upper tier rising behind the open concrete terracing at the
-      // Mercedes/Sachs corner. The ring below stays continuous; this only marks
-      // the main tribune the whole bowl is named for, its deep cantilever roof
-      // and bright name fascia riding clear above the terrace roof band.
       {
         const a = anchor(K(0.828), 1, 28);
         const b = [a.r, a.u, a.t];
@@ -274,8 +205,6 @@
           // Deep cantilever roof reaching forward over the terrace, tilted.
           addBox(stage, vadd(vadd(a.c, a.r, -4), a.u, 25.5), [30, 0.7, 50],
             [0.30, 0.31, 0.34], roofB);
-          // Bright name fascia hung under the leading eave — the board that
-          // names the stand, the one saturated element the grey bowl carries.
           addBox(stage, vadd(vadd(a.c, a.r, -18), a.u, 23.6), [1.2, 2.6, 48],
             [0.88, 0.88, 0.86], b);
           addBox(stage, vadd(vadd(a.c, a.r, -18.1), a.u, 23.6), [1.0, 1.6, 42],
@@ -300,14 +229,6 @@
         });
       }
 
-      // =====================================================================
-      // 3. PIT COMPLEX & START/FINISH — the 2002 Motodrom rebuild. Its
-      //    silhouette from the straight is a single long SLOPE: one shallow
-      //    roof plane cantilevered over the pit lane on raking struts, above a
-      //    glazed team-balcony mezzanine. A row of identical building() boxes
-      //    with a flat slab on top gets none of that, so the whole terrace is
-      //    built here from primitives, one atomic bay at a time.
-      // =====================================================================
       {
         const PIT_WALL = [0.90, 0.90, 0.88], PLINTH = [0.34, 0.35, 0.38];
         const SHUTTER = [0.22, 0.23, 0.26], GLASS = [0.34, 0.45, 0.54];
@@ -345,8 +266,6 @@
             stage._mat = 0;
           }, { required: true });
         }
-        // Race control: a narrow slab with a glazed wedge head cantilevered out
-        // over the line, not the generic tapered tower() cylinder.
         const a = anchor(K(0.995), 1, 14);
         const b = [a.r, a.u, a.t];
         modelGroup("hockenheim-race-control", {
@@ -367,13 +286,8 @@
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.975, 8.0, [0.15, 0.15, 0.18]);
-      // Main grandstand opposite the pits — the one covered stand at Hockenheim
-      // that really is a separate steel structure rather than part of the bowl.
       grandstandEx(0.010, -1, 11, 140, null, null,
         { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      // Paddock hospitality behind the garages.
-      // The 2002 rebuild's hospitality: paired glass slabs split by a full-height
-      // vertical slot — cool, sheer and German, not a rendered Mediterranean box.
       for (let i = 0; i < 4; i++) {
         building(K(0.955 + i * 0.016), 1, 40, 22, 14, 20,
           { kind: "notch", wall: [0.74, 0.76, 0.80], window: [0.36, 0.44, 0.52], floor: 4.0 });
@@ -386,10 +300,6 @@
       broadcastCompound(K(0.945), 1, 74, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.985, 0.005, 0.025]) billboard(K(s), -1, 8, 12, 4.5, [0.90, 0.86, 0.30]);
 
-      // =====================================================================
-      // 4. THE SPITZKEHRE — the hairpin at the far end of the Parabolika, with
-      //    its big gravel trap and the temporary stand that always sat outside it.
-      // =====================================================================
       groundPatch(K(0.455), -1, 6, [46, 0.18, 60], GRAVEL,
         { id: "hockenheim-spitzkehre-gravel", samples: 8 });
       tyreWall(0.440, 0.475, -1, 5, [0.86, 0.20, 0.18]);
@@ -408,9 +318,6 @@
         { id: "hockenheim-forest-exit-gravel", samples: 5 });
       marshalPost(K(0.60), 1, 9);
 
-      // =====================================================================
-      // 5. BOUNDARIES — armco through the forest, debris fence at the stadium.
-      // =====================================================================
       for (const [s0, s1] of [[0.06, 0.32], [0.36, 0.43], [0.49, 0.60], [0.64, 0.78]]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
@@ -424,9 +331,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      // =====================================================================
-      // 6. CONTINUOUS HARDTWALD BACKDROP — the forest wall ringing the circuit.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -444,16 +348,6 @@
         }
       }
 
-      // =====================================================================
-      // 7. BESPOKE IDENTITY — the forest corridor wall, the marker boards, and
-      //    the stadium's inner infield service compound.
-      // =====================================================================
-      // THE HARDTWALD WALL. Outside the stadium, Hockenheim is a corridor cut
-      // through a plantation: the trees start at the fence line and stop being
-      // individual trees within a few metres. Scattered pine() ranks alone read
-      // as parkland, so a continuous dark canopy mass is emitted right behind
-      // the armco and the scattered ranks in section 1 break its edge up. The
-      // arena arc is deliberately excluded — that contrast IS the circuit.
       {
         const WALL_D = [0.075, 0.20, 0.105], WALL = [0.095, 0.245, 0.125];
         for (const [s0, s1] of [
@@ -464,8 +358,6 @@
             along(s0, s1, 12, (k, spacing) => {
               const seg = spacing * 1.02;   // overlap so the wall never gaps
               const h = hash(k * 29 + side);
-              // Two overlapping slabs at different depths and heights: the
-              // silhouette has to be ragged or it reads as a hedge.
               const a1 = anchor(k, side, 16 + h * 3);
               addPrism(out, a1.c, [11, 17 + h * 7, seg], (i & 1) ? WALL_D : WALL,
                 [a1.r, a1.u, a1.t]);
@@ -477,8 +369,6 @@
         }
       }
 
-      // Braking-marker boards down the Parabolika — the long approach to the
-      // Spitzkehre is the one place a driver reads distance boards at speed.
       {
         const board = [0.94, 0.94, 0.90];
         for (let i = 0; i < 4; i++) {
@@ -488,8 +378,6 @@
         }
       }
 
-      // Infield service compound inside the stadium bowl: low sheds and a
-      // medical/marshal block, set well behind the inner grandstand line.
       {
         const a = anchor(K(0.890), -1, 46);
         const b = [a.r, a.u, a.t];
@@ -506,17 +394,12 @@
         });
       }
 
-      // Advertising runs at the foot of the bowl. Board height is deliberately
-      // low: the terracing starts at 13 m out, so anything taller would stand
-      // in front of the first row rather than in front of the crowd.
       sponsorHoarding(0.800, 0.945, 1, 6.5, {
         h: 1.3, step: 10,
         palette: [[0.86, 0.16, 0.14], [0.94, 0.93, 0.90], [0.10, 0.30, 0.62], [0.96, 0.78, 0.08]],
       });
       sponsorHoarding(0.845, 0.960, -1, 6.0, { h: 1.2, step: 11 });
 
-      // Broadcast lattice masts in the stadium — the Motodrom is the one place
-      // on this circuit with an elevated camera on every corner of the arena.
       cameraTower(K(0.838), 1, 8, { h: 17 });
       cameraTower(K(0.918), -1, 8, { h: 15 });
       cameraTower(K(0.470), 1, 10, { h: 14 });   // Spitzkehre, the other TV vantage

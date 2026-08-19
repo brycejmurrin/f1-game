@@ -9,8 +9,6 @@
     classic: true,
     // Upstream ru-2014 already runs clockwise, matching the racing direction.
     reverse: false,
-    // The trace's first vertex sits on the start straight before Turn 1.
-    // Not GPS-calibrated.
     startFrac: 0.0,
     name: "SOCHI",
     gp: "Russian GP",
@@ -25,12 +23,6 @@
       // Sochi runs through the Olympic Park — paved plaza, not vegetation.
       { kinds: ["foliage"], s0: 0.90, s1: 0.30 },
       { kind: "foliage", s0: 0.42, s1: 0.58 },
-      // The park stretch is the whole point of this circuit and every building
-      // in it is a named 2014 venue built below. The `modern` theme's generic
-      // tower/neon-retail generator standing between them turns the one thing
-      // Sochi has that nobody else does into anonymous downtown. Excluded here
-      // only — the outer loop keeps it, because the Adler resort blocks really
-      // are the backdrop out there.
       { kind: "city", s0: 0.86, s1: 0.34 },
     ],
     // Black Sea coast: soft humid light, hazy horizon, subtropical green.
@@ -46,8 +38,6 @@
       grass:         [0.22, 0.42, 0.20],
       sunDir:        [0.44, 0.66, 0.32],
     },
-    // The Olympic Park is reclaimed coastal flat — Sochi is nearly level, with
-    // only gentle movement around the outer loop.
     elevations: [
       { s: 0.34, halfM: 420, rise: 3.5 },
       { s: 0.68, halfM: 400, rise: -3.0 },
@@ -58,8 +48,6 @@
       { s0: 0.790, s1: 0.835, hw: 6.4, ease: 0.012 },  // Turn 16-17
     ],
     bankZones: [
-      // Turn 2 is the signature: a 180-degree left wrapped around the Medals
-      // Plaza, long enough that its camber genuinely matters.
       { frac: 0.085, angleDeg: 5.0, widthM: 260 },
       { frac: 0.430, angleDeg: 3.0, widthM: 120 },
       { frac: 0.900, angleDeg: 3.5, widthM: 120 },
@@ -79,11 +67,6 @@
       const WHITE = [0.93, 0.94, 0.96];
       const GLASS = [0.34, 0.46, 0.58];
 
-      // =====================================================================
-      // 1. THE OLYMPIC PARK — Sochi's whole first third runs between the 2014
-      //    venues across open paved plaza. Big, clean, geometric volumes; no
-      //    trees, no crowd banks, just architecture and hard standing.
-      // =====================================================================
       groundPatch(K(0.09), 1, 6, [120, 0.18, 260], PLAZA,
         { id: "sochi-medals-plaza", samples: 12 });
 
@@ -201,9 +184,6 @@
           [0.82, 0.90, 0.96], 5, [a.r, a.u, a.t]);
       }
 
-      // The Iceberg Skating Palace — the fourth big venue, and the one with a
-      // shape nothing else here has: a long hall under a single shallow arc
-      // roof that oversails both ends.
       {
         const a = anchor(K(0.290), 1, 122);
         const b = [a.r, a.u, a.t];
@@ -226,9 +206,6 @@
         });
       }
 
-      // The Olympic rings monument on the plaza. Five rings, each built from a
-      // ring of short chords — the most literally recognisable object on this
-      // circuit and the reason anyone knows these shots are Sochi.
       {
         const a = anchor(K(0.062), 1, 58);
         const b = [a.r, a.u, a.t];
@@ -245,9 +222,6 @@
             const cAlong = (top ? (r - 1) : (r - 3.5)) * 6.4;
             const cUp = 9.2 + (top ? 2.6 : 0);
             const hub = vadd(vadd(a.c, a.t, cAlong), a.u, cUp);
-            // Each ring is 14 short chords laid end to end around a circle.
-            // dir/perp are rebuilt as an orthonormal pair per chord so the
-            // segments meet cleanly instead of shearing away from the circle.
             for (let j = 0; j < 14; j++) {
               const ang = j / 14 * 6.2832, cA = Math.cos(ang), sA = Math.sin(ang);
               const dir = [], perp = [];
@@ -266,8 +240,6 @@
         });
       }
 
-      // The plaza itself is a designed paved surface, not a car park: broad
-      // light slabs with darker banding, running right up to the barrier.
       groundPatch(K(0.230), 1, 6, [90, 0.18, 220], PLAZA,
         { id: "sochi-north-plaza", samples: 10 });
       groundPatch(K(0.030), -1, 6, [60, 0.18, 160], PLAZA,
@@ -281,10 +253,6 @@
         });
       }
 
-      // =====================================================================
-      // 2. THE OUTER LOOP — beyond the park the circuit runs past ordinary
-      //    subtropical coastal planting.
-      // =====================================================================
       every(26, (k) => {
         const s = k / n;
         if (s <= 0.30 || s >= 0.90) return;
@@ -304,13 +272,6 @@
       hedge(0.02, 0.28, 1, 22, 3.0, [0.17, 0.36, 0.18]);
       hedge(0.02, 0.28, -1, 20, 3.0, [0.17, 0.36, 0.18]);
 
-      // =====================================================================
-      // 3. PIT COMPLEX — built as part of the Olympic Park and detailed like
-      //    the venues rather than like a race circuit: three glazed storeys
-      //    behind a white horizontal brise-soleil screen, under one long flat
-      //    roof plane. The louvre bands are what make it read as Sochi from
-      //    trackside — the building is essentially striped.
-      // =====================================================================
       for (const [i, s] of [0.938, 0.958, 0.978, 0.998].entries()) {
         const a = anchor(K(s), -1, 16);
         const b = [a.r, a.u, a.t];
@@ -338,8 +299,6 @@
           stage._mat = 0;
         }, { required: true });
       }
-      // Race control: a glass prism cantilevered clear of the pit roof, capped
-      // by a flat blade — the same architectural language, stood on end.
       {
         const a = anchor(K(0.986), -1, 30);
         const b = [a.r, a.u, a.t];
@@ -382,13 +341,6 @@
       broadcastCompound(K(0.916), -1, 74, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), 1, 8, 12, 4.5, [0.20, 0.34, 0.70]);
 
-      // =====================================================================
-      // 4. CORNERS — the park's spectator structures are not grandstands with
-      //    a slab roof on the back. They are open raked decks under a
-      //    translucent barrel canopy carried on white ribs, matching the
-      //    venues; you see sky and the arena behind THROUGH the stand, which is
-      //    the whole reason the park section photographs the way it does.
-      // =====================================================================
       const arcStand = (s0, s1, side, gap, opts) => {
         opts = opts || {};
         const rows = opts.rows || 8, rise = opts.rise || 0.82, depth = opts.depth || 1.25;
@@ -438,10 +390,6 @@
             const across = (R - Math.cos(mid) * R) * squash;
             const up = 3.0 + Math.sin(mid) * R * lift;
             const chord = (Math.PI / segs) * R * lift * 1.15;
-            // Rib chord, tilted to follow the arc tangent at this station. The
-            // chord's own "right" axis has to be rebuilt perpendicular to that
-            // tilt — reusing a.r would hand addBox a non-orthogonal basis and
-            // shear every rib in the arc.
             const cM = Math.cos(mid), sM = Math.sin(mid);
             const dir = [], perp = [];
             for (let axis = 0; axis < 3; axis++) {
@@ -480,10 +428,6 @@
       tyreWall(0.800, 0.830, -1, 4, [0.85, 0.78, 0.20]);
       marshalPost(K(0.810), 1, 9);
 
-      // =====================================================================
-      // 5. BOUNDARIES — Sochi is a permanent circuit laid out on street-like
-      //    alignments, so long continuous armco is right for most of the lap.
-      // =====================================================================
       for (const [s0, s1] of [[0.06, 0.23], [0.28, 0.52], [0.58, 0.79], [0.84, 0.92]]) {
         guardrail(s0, s1, -1, 6, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 6, [0.80, 0.81, 0.83]);
@@ -494,10 +438,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      // =====================================================================
-      // 6. BACKDROP — the Caucasus. The mountains behind Sochi are the reason
-      //    the Olympics were there, and they close every wide shot.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -515,15 +455,6 @@
         }
       }
 
-      // =====================================================================
-      // 7. BESPOKE IDENTITY — the park's lighting columns. This is genuinely
-      //    the strongest recurring motif on Sochi's opening sector: white
-      //    columns 20 m tall, twin-headed, planted at a metronomic spacing
-      //    right around the Turn 2 loop on BOTH sides. Nothing else on the
-      //    calendar repeats a vertical element that insistently, and getting
-      //    the rhythm dead-even is the point — irregular spacing reads as
-      //    ordinary trackside furniture instead of civic landscaping.
-      // =====================================================================
       {
         let i = 0;
         along(0.92, 0.32, 34, (k) => {
@@ -553,13 +484,6 @@
       cameraTower(K(0.545), -1, 30, { h: 17 });
       cameraTower(K(0.815), 1, 26, { h: 17 });
 
-      // =====================================================================
-      // 8. SHAYBA ARENA — the fifth 2014 venue, and the one with a silhouette
-      //    none of the others has: a round "puck" (shayba = hockey puck) wrapped
-      //    in a spiralling banded ribbon facade, sat low under a shallow domed
-      //    cap. It rings the same park cluster as Bolshoy and Adler, so it goes
-      //    in the venue band on the right of the Turn 2 loop, probed clear.
-      // =====================================================================
       {
         const a = anchor(K(0.245), 1, 152);
         const b = [a.r, a.u, a.t];
@@ -570,9 +494,6 @@
           // Base drum.
           addCyl(stage, a.c, 29, 9, [0.82, 0.84, 0.88], 16, b);
           stage._mat = MAT.METAL;
-          // The swirl: banded ribbon frustums climbing the drum, each stepped in
-          // slightly and alternating a cool blue-grey against the white so the
-          // spiral reads from any angle — the facade IS the recognition.
           const band = [[0.90, 0.92, 0.95], [0.40, 0.54, 0.70], [0.86, 0.88, 0.92]];
           for (let i = 0; i < 4; i++) {
             const r0 = 30 - i * 1.3, r1 = 29.4 - i * 1.3;
@@ -590,14 +511,6 @@
         });
       }
 
-      // =====================================================================
-      // 9. FORMAL LANDSCAPING — the park is designed ground, not wild: ordered
-      //    ranks of clipped columnar trees on the OUTER LOOP only (the plaza
-      //    stays paving + architecture per the brief), plus formal ornamental
-      //    bedding framed by clipped hedge borders at the plaza edges. Sochi's
-      //    Black Sea promenades really are lined with cypress avenues, so the
-      //    columnar spire is the right species as well as the right discipline.
-      // =====================================================================
       const CYP = [0.16, 0.34, 0.20], CYP_D = [0.13, 0.29, 0.18];
       for (const [s0, s1, side, dist, h] of [
         [0.320, 0.395, -1, 15, 11],
@@ -606,9 +519,6 @@
         [0.635, 0.715,  1, 17, 11],
       ]) along(s0, s1, 12, (k) => cypress(k, side, dist, h + hash(k * 5) * 1.6,
         hash(k * 9) < 0.5 ? CYP : CYP_D, { slim: 0.85 }));
-      // Formal ornamental beds — low clipped hedge borders framing a coloured
-      // bedding panel, laid as geometric parterre at the plaza approaches. No
-      // trees here: this is landscaped civic ground, not planting run wild.
       for (const [id, s, side, gap] of [
         ["approach", 0.300, 1, 8], ["north", 0.235, 1, 32],
       ]) {

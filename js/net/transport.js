@@ -1,39 +1,4 @@
-/*
- * NetTransport — the wire under multiplayer, and the seam that keeps the
- * netcode testable.
- *
- * TWO CHANNELS, because the two kinds of traffic want opposite things:
- *
- *   "state"  UNRELIABLE, UNORDERED. Car snapshots and input packets. A late
- *            packet is worthless here — by the time a retransmit arrived the
- *            car has already moved on — so never retransmit one, and never let
- *            a lost packet hold up the ones behind it.
- *   "event"  RELIABLE, ORDERED. Lobby, race settings, the start tick, lap and
- *            sector times, results, disconnect. Losing any of these breaks the
- *            session outright; a few ms of head-of-line blocking does not.
- *
- * TWO IMPLEMENTATIONS behind one interface:
- *
- *   loopback(opts) -> [a, b]   Two endpoints wired to each other IN ONE PAGE,
- *                              with injectable latency, jitter, loss and
- *                              reordering. This exists so the whole
- *                              replication layer can be tested headlessly with
- *                              no network, no signalling and no second
- *                              browser — which is the only way netcode stays
- *                              working in a suite this size. It is deliberately
- *                              written BEFORE the real transport.
- *   rtc(opts)                  RTCPeerConnection + the two DataChannels above.
- *
- * DELIVERY IS EXPLICIT. A queued message only moves when pump(nowMs) is
- * called. A live session pumps from the game loop; a test pumps from its own
- * clock. That is what makes latency and loss reproducible instead of
- * wall-clock dependent — a loss test that depends on how busy the CPU was is
- * not a test. The RTC transport pumps its own receive queue the same way, so
- * both implementations deliver on the same schedule relative to the sim.
- *
- * Randomness for jitter/loss comes from an injected rnd() (default
- * Math.random) so a test can seed it and replay an exact loss pattern.
- */
+/* NetTransport — the wire under multiplayer, and the seam that keeps the netcode testable. TWO CHANNELS, because the two kinds of traffic want opposite things: "s… */
 "use strict";
 
 const NetTransport = (function () {
@@ -41,7 +6,6 @@ const NetTransport = (function () {
   const EVENT = "event";                 // reliable / ordered
   const CHANNELS = [STATE, EVENT];
 
-  // ---- shared endpoint plumbing -------------------------------------------
   // Both implementations expose the same surface, so NetSession/NetPlay never
   // learn which one they are on.
   function makeEndpoint(name) {
@@ -62,14 +26,6 @@ const NetTransport = (function () {
     };
   }
 
-  // ---- loopback ------------------------------------------------------------
-  // opts: { latencyMs, jitterMs, loss (0..1), rnd }
-  // Returns [a, b]. Anything a sends arrives at b and vice versa.
-  //
-  // Loss and reorder apply ONLY to the "state" channel: that is the honest
-  // model, because the reliable channel's whole point is that the browser
-  // hides those from us. Simulating loss on it would be testing a scenario
-  // that cannot happen.
   function loopback(opts) {
     opts = opts || {};
     const latency = opts.latencyMs != null ? opts.latencyMs : 50;
@@ -104,21 +60,13 @@ const NetTransport = (function () {
       if (channel === STATE) {
         if (loss > 0 && rnd() < loss) { dropped++; return; }
       }
-      // Jitter alone reorders the unordered channel: two packets sent in
-      // order can land out of order once their arrival times cross, which is
-      // the real mechanism rather than a separate knob.
       const at = (from._wire || 0) + latency + (jitter ? (rnd() * 2 - 1) * jitter : 0);
       queue.push({ at, to, channel, data, seq: seq++ });
     }
 
-    // Drain only what is addressed to THIS endpoint, matching rtc() where
-    // pump() drains that peer's own inbox. A transport whose two
-    // implementations deliver to different places is not substitutable.
     function deliverTo(self, localNow) {
       const t = wireNow(self, localNow);
       if (!queue.length) return 0;
-      // Sort by arrival, then send order for ties — so the unordered channel
-      // only ever reorders because we ASKED it to above, not by an unstable sort.
       queue.sort((p, q) => (p.at - q.at) || (p.seq - q.seq));
       const held = [];
       let n = 0;
@@ -153,7 +101,6 @@ const NetTransport = (function () {
     return [a, b];
   }
 
-  // ---- WebRTC --------------------------------------------------------------
   // The DataChannel configs are the whole point of having two of them:
   //   state: {ordered:false, maxRetransmits:0}  — fire and forget
   //   event: default                            — reliable, ordered
@@ -326,8 +273,6 @@ const NetTransport = (function () {
     "turn:staticauth.openrelay.metered.ca:443",
     "turn:staticauth.openrelay.metered.ca:443?transport=tcp",
   ];
-  // freestun needs no derivation, so it is usable synchronously and survives a
-  // browser with no WebCrypto.
   const FREE_TURN = [
     { urls: "turn:freestun.net:3478", username: "free", credential: "free" },
   ];
@@ -345,9 +290,6 @@ const NetTransport = (function () {
     if (deriving) return deriving;
     const sub = (typeof crypto !== "undefined" && crypto.subtle) ? crypto.subtle : null;
     if (!sub) return Promise.resolve(null);      // no WebCrypto: freestun only
-    // A day out. Long enough that a lobby left open over lunch still works,
-    // short enough that a code scraped out of the bundle is not a standing
-    // grant.
     const username = String(Math.floor(Date.now() / 1000) + 86400);
     const enc = (s) => new TextEncoder().encode(s);
     deriving = sub.importKey("raw", enc(OPEN_RELAY_SECRET), { name: "HMAC", hash: "SHA-1" }, false, ["sign"])
@@ -396,13 +338,7 @@ const NetTransport = (function () {
     if (opts.iceServers) return opts.iceServers;
     const list = [{ urls: STUN }];
     const mine = turnFromStore();
-    // A relay you configured yourself goes first; credential-fetched servers
-    // follow. ICE prefers whichever actually yields a working pair, so listing
-    // both costs nothing but a couple of extra candidates.
     if (mine) list.push(mine);
-    // Only merge while fresh — expired Metered credentials gather as failures
-    // that look like "relay:0" while the endpoint is fine. prefetchIce()
-    // refreshes before a new PC; skip a stale list rather than offer it.
     if (iceCredFresh()) list.push(...fetchedIce);
     // The free relays go LAST when opted in, and only ever add candidates.
     // ICE tries every pair it can form and keeps the best, so ordering by
@@ -415,9 +351,6 @@ const NetTransport = (function () {
     return list;
   }
 
-  // Has a relay of any kind made it into the list? The lobby's failure copy
-  // needs to say "no relay is configured" or "a relay did not answer", and
-  // those are opposite instructions to give a player.
   function hasRelay() {
     return iceServers({}).some((e) => {
       const urls = Array.isArray(e.urls) ? e.urls : [e.urls];
@@ -431,15 +364,9 @@ const NetTransport = (function () {
     if (!PC) return null;                      // caller falls back / reports
 
     const ep = makeEndpoint(opts.name || "rtc");
-    // Construction can throw on a locked-down or policy-restricted browser.
-    // Report that as "unavailable" like a missing API rather than letting it
-    // escape into a click handler, where it would kill the UI silently.
     let pc;
     try {
       const cfg = { iceServers: iceServers(opts) };
-      // "relay" makes ICE discard host and srflx candidates, so the ONLY way a
-      // pair can form is through TURN. If the relay path is broken, it fails
-      // here rather than on a stranger's phone.
       const policy = opts.iceTransportPolicy || (relayOnly() ? "relay" : null);
       if (policy) cfg.iceTransportPolicy = policy;
       pc = new PC(cfg);
@@ -449,10 +376,6 @@ const NetTransport = (function () {
     }
     Log.info("net", "rtc create");
     const chans = {};
-    // STATE is disposable and can drop oldest. EVENT is reliable protocol state,
-    // so silently dropping it would desynchronise the race; instead a peer that
-    // overruns its bounded inbox is disconnected explicitly. This matters most
-    // while a tab is backgrounded and pump() is throttled or paused.
     const STATE_INBOX_CAP = 64;
     const EVENT_INBOX_CAP = 256;
     const INBOX_BYTE_CAP = 1024 * 1024;
@@ -526,8 +449,6 @@ const NetTransport = (function () {
         if (kind === STATE) queuedState++;
         else queuedEvents++;
         while (queuedState > STATE_INBOX_CAP) {
-          // The newest state packet is the useful one. Event packets stay in
-          // their original relative position while the oldest snapshot leaves.
           const i = inbox.findIndex((m) => m.channel === STATE);
           if (i < 0) break; // defensive: queuedState and inbox should agree
           const removed = inbox.splice(i, 1)[0];
@@ -552,8 +473,6 @@ const NetTransport = (function () {
       const s = pc.connectionState;
       if (Log.enabled("net", Log.DEBUG)) Log.debug("net", "pc state -> " + s);
       if ((s === "failed" || s === "disconnected" || s === "closed") && ep.status !== "closed") {
-        // The one line that says WHY a race ended. Without it a dropped peer is
-        // indistinguishable from a clean leave anywhere in the logs.
         Log.info("net", "connection closed (" + s + ")");
         ep.status = "closed"; ep._emit("close", s);
       }
@@ -565,8 +484,6 @@ const NetTransport = (function () {
       if (!ch || ch.readyState !== "open") return false;
       try { ch.send(data); return true; } catch (e) { return false; }
     };
-    // Drain everything the browser has handed us since the last call. No
-    // scheduling here — RTC has already applied the real network's latency.
     ep.pump = function () {
       const count = inbox.length;
       if (!count) return 0;
@@ -586,10 +503,6 @@ const NetTransport = (function () {
       ice: pc.iceConnectionState,
       gathering: pc.iceGatheringState,
       candidates: Object.assign({}, found),
-      // "was a relay even offered to ICE", not "is one of mine configured" —
-      // the lobby's failure copy branches on it to choose between two opposite
-      // instructions, and a player who opted into the free relays, or whose
-      // apex26.turnApi answered, has one without it being theirs.
       turn: hasRelay(),
       ownTurn: !!turnFromStore(),
     });
@@ -602,9 +515,6 @@ const NetTransport = (function () {
 
   return {
     STATE, EVENT, loopback, rtc, supported,
-    // Exported so the ICE configuration is testable: whether a relay is
-    // reachable decides whether the hardest ~10-25% of networks can play at
-    // all, and that is not something to discover from a user's screenshot.
     STUN, prefetchIce, iceServers, hasRelay,
   };
 })();

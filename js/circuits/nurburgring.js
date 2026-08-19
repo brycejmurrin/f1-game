@@ -1,21 +1,11 @@
-/* Apex 26 — NÜRBURGRING (GP-Strecke) circuit definition (data only).
-   Retired circuit (`classic: true`): last hosted the 2020 Eifel GP and is not on
-   the current calendar. This is the modern 5.1 km Grand-Prix-Strecke, NOT the
-   20.8 km Nordschleife — the upstream OSM dataset has no Nordschleife trace.
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js
-   engine (geometry from the OSM trace in js/track/geo-paths.js). */
+/* Apex 26 — NÜRBURGRING (GP-Strecke) circuit definition (data only). Retired circuit (`classic: true`): last hosted the 2020 Eifel GP and is not on the current ca… */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "nurburgring",
     classic: true,
-    // Upstream trace de-1927 runs clockwise, matching the racing direction
-    // (Castrol-S at T1 is a right), so no flip.
     reverse: false,
-    // The trace's first vertex opens the 547 m pit straight; nudge the line a
-    // little along it so the grid sits where it really does, short of the
-    // Castrol-S braking zone. Not GPS-calibrated — OpenF1 has no Eifel data.
     startFrac: 0.02,
     name: "NURBURGRING",
     gp: "Eifel GP",
@@ -25,15 +15,11 @@
     lengthKm: 5.1,
     baseHW: 7.5,
     sceneryCoordinates: "racing",
-    // The Eifel hillside and the Mercedes-Arena bowl both need ground; stop
-    // short of bridging the tight Arena foldback.
     terrainOuter: 100,
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.94, s1: 0.10 },  // pit straight + Arena
       { kind: "foliage", s0: 0.60, s1: 0.68 },              // Dunlop-Kehre runoff
     ],
-    // Cool, damp Eifel upland light — the Nürburgring is 600 m up and famously
-    // grey. Muted sun, high haze, deep conifer green.
     pal: {
       zenith:        [0.38, 0.48, 0.60],
       horizon:       [0.66, 0.70, 0.72],
@@ -46,9 +32,6 @@
       grass:         [0.16, 0.36, 0.17],
       sunDir:        [0.50, 0.52, 0.42],
     },
-    // Real Eifel relief: the lap drops away from the Arena through the Ford
-    // Kurve, runs low through the back section and climbs hard back to the
-    // Veedol chicane. Authored, not surveyed (bake-elevation needs network).
     elevations: [
       { s: 0.18, halfM: 340, rise: -8.0 },   // drop out of the Mercedes-Arena
       { s: 0.42, halfM: 460, rise: -12.0 },  // low ground through the back loop
@@ -75,11 +58,6 @@
         addBox, addCyl, addCone, addPrism, addFrustum } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // ── A bespoke stand form that is deliberately NOT grandstandEx ──
-      // The Eifel tribunes are open scaffold: a bare tube frame with bench rows
-      // and daylight straight through it, nothing like the clad shell + solid
-      // roof grandstandEx builds. Sky visible through a stand is the whole
-      // reason to model one this way, so there is no back wall and no roof.
       function scaffoldStand(s0, s1, side, gap, rows) {
         const TUBE = [0.62, 0.63, 0.66], DECK = [0.44, 0.45, 0.48];
         const BENCH = [[0.80, 0.78, 0.74], [0.30, 0.36, 0.52], [0.72, 0.28, 0.24]];
@@ -94,8 +72,6 @@
             addBox(out, vadd(a.c, a.u, y), [1.95, 0.18, seg], DECK, b);
             addBox(out, vadd(a.c, a.u, y + 0.62), [0.9, 1.05, seg * 0.94],
               BENCH[(i + t) % 3], b);
-            // Vertical leg under every second bay: the frame reads as a frame
-            // only when the legs are visible below the rake.
             if ((i & 1) === 0)
               addCyl(out, a.c, 0.09, y, TUBE, 4, b);
           }
@@ -111,9 +87,6 @@
       const LEAF = [0.17, 0.40, 0.19], LEAF_D = [0.13, 0.33, 0.16];
       const GRAVEL = [0.62, 0.58, 0.48];
 
-      // =====================================================================
-      // 1. EIFEL CONIFER FOREST — spruce ranks walling the back half of the lap.
-      // =====================================================================
       const openArena = (s) => (s >= 0.94 || s <= 0.20);
       // The spruce WALL. Like Hockenheim this circuit never called forestEdge(),
       // so its forest was scattered every() passes with daylight through them in
@@ -133,10 +106,6 @@
           });
         }
       }
-      // A third, deepest spruce rank set well back — the Eifel plantation is
-      // dense and runs for kilometres, so the back half of the lap wants a dark
-      // wall of firs behind the near belts, not sky. Sparse (8 m) to stay a
-      // backdrop mass rather than doubling the trunk count on every straight.
       for (const [s0, s1] of [[0.215, 0.605], [0.650, 0.925]]) {
         for (const side of [-1, 1]) {
           forestEdge(s0, s1, side, 41, {
@@ -177,13 +146,6 @@
         bush(k, h < 0.78 ? -1 : 1, 6.5 + h * 4, [0.14, 0.31, 0.15]);
       });
 
-      // =====================================================================
-      // 2. MERCEDES-ARENA — the stadium-style bowl of grandstands wrapping the
-      //    slow complex just after the start, the circuit's signature view.
-      // =====================================================================
-      // One covered hero stand, then a continuous seat wall closing the rest of
-      // the ring. The Arena is a bowl: separate stand boxes with gaps between
-      // them would leave the slow complex looking like an open field again.
       grandstandEx(0.115, 1, 15, 96, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       bowlSeatWall(0.145, 0.205, 1, 15, {
@@ -198,21 +160,11 @@
         const a = anchor(K(0.115), 1, 23);
         addBox(out, vadd(a.c, a.u, 10.2), [0.22, 1.4, 88], winLit, [a.r, a.u, a.t]);
       }
-      // The gravel here is pinched between the Arena's two legs; the original
-      // 34x44 patch was silently rejected for overlapping the foldback.
       groundPatch(K(0.135), 1, 6, [18, 0.18, 26], GRAVEL,
         { id: "nurburgring-arena-gravel", samples: 6 });
       tyreWall(0.120, 0.155, 1, 5, [0.86, 0.20, 0.18]);
       marshalPost(K(0.140), -1, 10);
 
-      // =====================================================================
-      // 3. PIT COMPLEX, START/FINISH AND THE ring°BOULEVARD BLOCK
-      // =====================================================================
-      // Eifel masonry, not a white autodrome terrace. The GP-Strecke's pit block
-      // is a heavy grey stone-and-concrete building: a ground-floor ARCADE of
-      // square piers with the garages recessed behind it, a deep projecting
-      // eaves cornice, and steep slate roof pitches — the local vernacular. Six
-      // atomic bays instead of one chord, so the terrace follows the straight.
       {
         const STONE = [0.60, 0.60, 0.59], STONE_D = [0.47, 0.47, 0.47];
         const SLATE = [0.30, 0.31, 0.35], GLASS = [0.30, 0.40, 0.48];
@@ -232,9 +184,6 @@
             stage._mat = MAT.GLASS;
             addBox(stage, vadd(vadd(a.c, a.r, -7.1), a.u, 8.6), [0.4, 2.8, 26], GLASS, b);
             stage._mat = MAT.CONCRETE;
-            // The arcade: five square piers carrying the upper floor. This is
-            // the element that makes the block read as masonry rather than as
-            // a shed with a window strip painted on it.
             for (let d = 0; d < 5; d++) {
               const p = vadd(vadd(a.c, a.r, -5.4), a.t, (d - 2) * 6.2);
               addBox(stage, vadd(p, a.u, 3.0), [1.5, 6.0, 1.6], STONE, b);
@@ -242,15 +191,11 @@
             // Deep eaves cornice — the heavy shadow line under the roof.
             addBox(stage, vadd(vadd(a.c, a.r, -1.2), a.u, 11.1), [20, 1.0, 29], STONE_D, b);
             stage._mat = MAT.METAL;
-            // Twin steep slate pitches. A single flat cap here would erase the
-            // one silhouette difference between this and every other pit lane.
             for (const off of [-4.2, 4.2])
               addPrism(stage, vadd(vadd(a.c, a.r, off), a.u, 11.6), [9, 4.2, 28], SLATE, b);
             stage._mat = 0;
           }, { required: true });
         }
-        // Race control — a squat glazed drum on a stone core, capped by the
-        // timing gallery ring. Set beside the line, not on the pit roof.
         const a = anchor(K(0.988), 1, 13);
         const b = [a.r, a.u, a.t];
         modelGroup("nurburgring-race-control", {
@@ -272,11 +217,6 @@
       grandstandEx(0.005, -1, 11, 150, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       grandstandEx(0.960, -1, 11, 96, null, null, { livery: "concrete", endWalls: true });
-      // The MERCEDES-BENZ TRIBÜNE header — the pale name board and star roundel
-      // mounted along the front of the main stand's cantilever roof. The stand
-      // itself is one of a dozen dark-steel boxes on the fleet; this board is
-      // what makes it read as the Nürburgring's named main tribune, the one
-      // saturated marker on an otherwise grey start/finish straight.
       {
         const a = anchor(K(0.998), -1, 12);
         const b = [a.r, a.u, a.t];
@@ -289,8 +229,6 @@
           addBox(stage, vadd(a.c, a.u, 17.6), [1.1, 3.2, 60], [0.90, 0.90, 0.88], b);
           addBox(stage, vadd(vadd(a.c, a.r, 0.3), a.u, 17.6), [0.9, 1.9, 52],
             [0.16, 0.18, 0.22], b);                                     // lettering band
-          // The star roundel at centre — a silver disc on a dark backing,
-          // the badge the whole stand is named for.
           addCyl(stage, vadd(vadd(a.c, a.r, 0.4), a.u, 19.6), 3.0, 0.35,
             [0.20, 0.21, 0.24], 8, discB);
           addCyl(stage, vadd(vadd(a.c, a.r, 0.8), a.u, 19.6), 2.5, 0.3,
@@ -299,11 +237,6 @@
         });
       }
 
-      // ring°boulevard — the glass-and-steel leisure complex bolted onto the
-      // back of the paddock in 2009 and the one genuinely MODERN thing on this
-      // grey old circuit. A barrel-vaulted glazed hall on a rank of raking
-      // steel masts; two shorter halls instead of one 120 m chord so the run
-      // follows the straight rather than cutting the corner off it.
       {
         const glass = [0.46, 0.60, 0.72], frame = [0.36, 0.38, 0.42];
         for (let i = 0; i < 2; i++) {
@@ -330,8 +263,6 @@
           });
         }
       }
-      // The 1984 GP-Strecke complex steps back in stages as it climbs — heavy,
-      // grey and terraced into the Eifel slope rather than standing on it.
       for (let i = 0; i < 4; i++) {
         building(K(0.930 + i * 0.014), 1, 38, 23, 15, 18,
           { kind: "tiered", wall: [0.76, 0.77, 0.79], window: [0.30, 0.34, 0.42], floor: 4.0 });
@@ -343,8 +274,6 @@
       });
       broadcastCompound(K(0.920), 1, 72, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.005, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.90, 0.86, 0.30]);
-      // Board runs down the straight and round the Arena. Muted primaries: the
-      // Eifel palette is grey and washed, and saturated hoardings fight it.
       sponsorHoarding(0.965, 0.045, -1, 6.5, {
         h: 1.25, step: 10,
         palette: [[0.72, 0.20, 0.18], [0.86, 0.86, 0.84], [0.16, 0.30, 0.54], [0.80, 0.70, 0.16]],
@@ -355,15 +284,9 @@
       cameraTower(K(0.190), 1, 9, { h: 14 });
       cameraTower(K(0.660), -1, 10, { h: 15 });
 
-      // =====================================================================
-      // 4. BACK-SECTION CORNERS — Dunlop-Kehre, Schumacher-S, Veedol.
-      // =====================================================================
       groundPatch(K(0.660), -1, 6, [30, 0.18, 40], GRAVEL,
         { id: "nurburgring-dunlop-gravel", samples: 7 });
       tyreWall(0.645, 0.680, -1, 5, [0.20, 0.40, 0.85]);
-      // Open scaffold tribunes out here, not clad stands: away from the Arena
-      // the Nürburgring's seating is bolted together for the weekend and you
-      // can see the spruce through it.
       scaffoldStand(0.648, 0.686, 1, 15, 7);
       marshalPost(K(0.655), 1, 9);
 
@@ -377,9 +300,6 @@
       tyreWall(0.915, 0.950, -1, 4, [0.86, 0.20, 0.18]);
       marshalPost(K(0.935), 1, 9);
 
-      // =====================================================================
-      // 5. BOUNDARIES
-      // =====================================================================
       for (const [s0, s1] of [[0.20, 0.29], [0.32, 0.50], [0.54, 0.63], [0.69, 0.77], [0.80, 0.90]]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
@@ -392,11 +312,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      // =====================================================================
-      // 6. EIFEL HILLS — forested uplands ringing the whole circuit. This is
-      //    what makes the GP-Strecke read as a mountain circuit rather than a
-      //    flat autodrome.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -429,13 +344,6 @@
         }
       });
 
-      // =====================================================================
-      // 7. BESPOKE IDENTITY — the Dunlop bridge over the pit-straight approach
-      //    and the hillside spectator banks the Eifel crowds actually stand on.
-      // =====================================================================
-      // THE DUNLOP BRIDGE. A plain slab span is not it: the thing everyone
-      // recognises is the ARCH and the deep advertising fascia hung off it, so
-      // the arch ribs and the board are modelled on top of the declared span.
       {
         const clearance = 7.2, STEEL = [0.58, 0.60, 0.64];
         api.overheadSpan({
@@ -460,8 +368,6 @@
             stage._mat = MAT.CONCRETE;
             addCyl(stage, a.c, 1.0, clearance, [0.54, 0.56, 0.60], 8, b);
             stage._mat = MAT.METAL;
-            // Arch springing: two ribs leaning inward over the road, plus the
-            // vertical hanger that ties the deck to them.
             for (const t of [-1.4, 1.4]) {
               const foot = vadd(vadd(a.c, a.t, t), a.u, clearance);
               addCyl(stage, foot, 0.28, 5.2, STEEL, 5,
@@ -472,9 +378,6 @@
             stage._mat = 0;
           }, { required: true });
         }
-        // The advertising board itself — the reason the bridge has a name. It
-        // spans the road overhead, so it goes through the declared span's
-        // clearance envelope and rides above it rather than beside it.
         const a = anchor(K(0.215), 1, 4.2);
         const b = [a.r, a.u, a.t];
         addBox(out, vadd(vadd(a.c, a.r, -18), a.u, clearance + 5.6),
@@ -487,37 +390,20 @@
       spectatorHill(0.36, 0.46, 1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
       spectatorHill(0.70, 0.78, -1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
 
-      // =====================================================================
-      // 8. BURG NÜRBURG — the twelfth-century castle on the volcanic plug above
-      //    the track. The circuit is NAMED after it, it is visible from most of
-      //    the lap, and it is the one thing in the Eifel that could not be
-      //    anywhere else. A ring of forested hills is generic upland; a ruined
-      //    keep on a cone is the Nürburgring.
-      // =====================================================================
       {
-        // Sit it on its own hill, clear of the mountain ring so the silhouette
-        // reads against sky rather than against another summit.
         const ang = 1.15 * 6.2832 % 6.2832;
         const r = rad + 210;
         const bx = cx + Math.cos(ang) * r, bz = cz + Math.sin(ang) * r;
-        // The plug the castle stands on — steep, isolated, and taller than the
-        // ridge line around it.
         mountain(bx, bz, pyMin, 170, 128,
           { seg: 7, rough: 0.16, forest: [0.13, 0.32, 0.16], rock: [0.42, 0.40, 0.37], snowline: 2, seed: 991 });
         const STONE = [0.55, 0.53, 0.48], STONE_D = [0.44, 0.42, 0.38];
         const SLATE = [0.30, 0.31, 0.34];
         const base = pyMin + 118;   // near the summit of that cone
-        // Curtain wall: an irregular octagon of squat towers linked by wall
-        // runs, which is what a hilltop Burg is — not a fairy-tale palace.
         const R = 26;
         for (let i = 0; i < 8; i++) {
           const t = i / 8 * 6.2832;
           const tx = bx + Math.cos(t) * R, tz = bz + Math.sin(t) * R;
           const th = 9 + hash(i * 37 + 3) * 5;
-          // addCyl is BASE-anchored (geom.js): the shaft starts AT `base` and the
-          // parapet sits on its top. The +th/2 / +th+0.6 that shipped were the
-          // centre-anchored answer — towers stood half their height in the air
-          // and their parapets landed inside the shaft.
           addCyl(out, [tx, base, tz], 4.2, th, i & 1 ? STONE : STONE_D, 6);
           addCyl(out, [tx, base + th, tz], 4.8, 1.2, STONE_D, 6);   // corbelled parapet
           // Wall run to the next tower.
@@ -532,16 +418,12 @@
         // The keep — square, tall, broken-topped. A ruin, so no roof on it.
         addBox(out, [bx, base + 13, bz], [13, 26, 13], STONE);
         addBox(out, [bx, base + 26.4, bz], [14.2, 1.4, 14.2], STONE_D);
-        // Broken merlons around the keep head, alternating so the top reads as
-        // toothed rather than as a flat slab.
         for (let i = 0; i < 12; i++) {
           const t = i / 12 * 6.2832;
           if (i % 3 === 2) continue;                       // the missing teeth
           addBox(out, [bx + Math.cos(t) * 6.6, base + 28.2, bz + Math.sin(t) * 6.6],
             [1.8, 2.4, 1.8], STONE);
         }
-        // One intact corner turret with a slate cap — the single pointed
-        // silhouette that makes the whole thing legible at distance.
         addCyl(out, [bx + 8.5, base, bz - 8.5], 3.0, 32, STONE, 6);        // base-anchored: base → base+32
         addCone(out, [bx + 8.5, base + 32, bz - 8.5], 3.6, 7.5, SLATE, 6); // cap seats on that top
       }

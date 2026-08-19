@@ -19,8 +19,6 @@ const SceneryThemes = (function () {
   };
 
   const THEMES = {
-    // Was literally {} — which meant the circuits that auto-derive
-    // `permanent` all collapsed onto bare BASE and shared one facility look.
     permanent: {
       palette: { shell: [0.72, 0.73, 0.75], roof: [0.34, 0.36, 0.40],
                  glass: [0.28, 0.38, 0.50], accent: [0.86, 0.30, 0.20] },

@@ -1,11 +1,4 @@
-/* Apex 26 — in-race HUD + minimap for js/game.js. Write-cached DOM setters
-   (the panel ticks ~10 Hz but most fields hold steady), cached sector-row
-   nodes, and the minimap with its pre-rendered track-outline blit. Live game
-   state comes through the ctx façade handed to GameHud.create(ctx) (the `G`
-   object in game.js): els, player, cars, ranked, track, state, timeTrial,
-   lapsTarget, sectorLast, ttRecord, fmtTime, cssCol, dashKph, otEnabled,
-   aeroZoneAhead, aeroZones, cautionInfo. Consumes globals Ghost, TrackMaps,
-   GameTables. Must load BEFORE js/game.js (see index.html). */
+/* Apex 26 — in-race HUD + minimap for js/game.js. Write-cached DOM setters (the panel ticks ~10 Hz but most fields hold steady), cached sector-row nodes, and the … */
 const GameHud = (function () {
   "use strict";
 
@@ -22,22 +15,16 @@ let minimapBg = null;         // offscreen canvas with pre-rendered track shape
 let _flagShown = false;       // B1 caution-flag visibility cache (avoid layout thrash)
 let _teamSkin = null;         // last team id pushed to <html data-team> (skins the HUD accent)
 
-// HUD write-caches: skip the DOM mutation when the value hasn't changed (the panel
-// ticks ~10Hz but most fields hold steady between updates). Keyed per element.
 const _hudTxt = new WeakMap();   // el -> last textContent
 const _hudSty = new WeakMap();   // el -> { prop: lastVal }
 const _hudCls = new WeakMap();   // el -> last className
 const _hudTog = new WeakMap();   // el -> { cls: lastBool }
 function hText(el, v) { if (!el) return; if (_hudTxt.get(el) !== v) { _hudTxt.set(el, v); el.textContent = v; } }
-// Custom properties need setProperty — `el.style["--e"] = x` is silently a
-// no-op, which is the kind of failure that looks like a broken stylesheet.
 function hStyle(el, prop, v) { if (!el) return; let m = _hudSty.get(el); if (!m) { m = {}; _hudSty.set(el, m); }
   if (m[prop] !== v) { m[prop] = v; if (prop.charCodeAt(0) === 45) el.style.setProperty(prop, v); else el.style[prop] = v; } }
 function hClass(el, v) { if (!el) return; if (_hudCls.get(el) !== v) { _hudCls.set(el, v); el.className = v; } }
 function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m) { m = {}; _hudTog.set(el, m); } if (m[cls] !== on) { m[cls] = on; el.classList.toggle(cls, on); } }
 
-// Sector row: cached span nodes (built once), textContent-updated each tick — no
-// per-tick innerHTML re-parse.
 let _secRows = null;
 function buildSecRows() {
   const SC = ["#c084fc", "#e10600", "#a3e635"], labels = ["S1", "S2", "S3"];
@@ -134,11 +121,6 @@ function fitHud() {
   const root = document.documentElement;
   const scale = +root.style.getPropertyValue("--hud-scale") || 1;
   const key = window.innerWidth + "x" + window.innerHeight + "@" + scale;
-  // Resize and HUD SIZE are the obvious inputs and get an immediate re-measure.
-  // The slow poll on top of them is for the ones a fingerprint cannot see: the
-  // gap readout is EMPTY at the green light and ~110px wide once it has rivals
-  // to report, and the POS row widens from "1/22" to "12/22". Four rect reads at
-  // 2Hz — updateHud itself runs at ~10Hz — is nothing next to the frame.
   if (key === _fitKey && --_fitWait > 0) return;
   _fitKey = key; _fitWait = 30;   // ~0.5 s at 60 Hz tick — was 5 (~12 Hz layout thrash)
   const wide = (el) => {
@@ -147,8 +129,6 @@ function fitHud() {
     if (!r.width) return 0;
     return r.width / (el.currentCSSZoom || 1);
   };
-  // The CONTENT extent of a container, for the ones that can be compressed below
-  // it. Union of the children's rects, in the container's own unzoomed units.
   const span = (el) => {
     if (!el) return 0;
     let lo = Infinity, hi = -Infinity;
@@ -163,8 +143,6 @@ function fitHud() {
   const top = wide(document.querySelector(".hud-top"));
   if (!top) { _fitKey = ""; return; }   // menu layer: nothing laid out, measure again next tick
   const half = window.innerWidth / 2;
-  // The left corner is the map plus the gap readout beside it, and the right is
-  // the sector box; each competes with half the POS row for half the screen.
   const map = wide(els.minimap), gaps = wide(els.gapA && els.gapA.parentNode);
   const left = (map ? 10 + map + 8 + gaps : 0) + FIT_AIR;
   const right = wide(els.hudSectors) + 10 + FIT_AIR;
@@ -189,10 +167,6 @@ function fitHud() {
 function updateHud(force) {
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
   if (!player) return;
-  // Per-team HUD skin: mirror the player's team id onto <html data-team> so the
-  // CSS --accent token resolves to the team colour (see css/tokens.css). Cached
-  // — the attribute write only fires when the team actually changes. Purely
-  // presentational; falls back to the default red accent if unset.
   if (player.team && player.team.id !== _teamSkin) {
     _teamSkin = player.team.id;
     document.documentElement.dataset.team = _teamSkin;
@@ -217,46 +191,20 @@ function updateHud(force) {
   hToggle(els.tach, "redline", player.rpm > MAX_RPM * 0.92);
   // toggle-button states
   hToggle(els.btnBoost, "on", player.boostOn);
-  // THE BOOST BUTTON IS THE BATTERY. Its colour is mixed from the charge, so a
-  // flat pack reads as a washed-out button and a full one as vivid green — you
-  // can tell what pressing it will buy you without looking away at the bar.
-  // Quantised to 20 steps because hStyle only writes on CHANGE, and a raw float
-  // changes every single frame: that would be a style write per frame per
-  // button, which is exactly what this HUD's write-caching exists to avoid.
   hStyle(els.btnBoost, "--e", (Math.round((player.energy || 0) * 20) / 20).toFixed(2));
   hToggle(els.btnOT, "on", player.otT > 0);
   hToggle(els.btnOT, "armed", player.otArmed && player.otT <= 0);
   const ot = player.otT > 0 ? "ot-active" : player.otArmed ? "ot-armed" : player.otCool > 0 ? "ot-cool" : "ot-off";
   hClass(els.ot, ot);
-  // "NO OVERTAKE" says WHY the button is dead, and the difference matters: not
-  // yet armed means keep closing on the car ahead, whereas lap 1 or a caution
-  // means nothing you do will arm it. A control that looks merely unlucky when
-  // it is actually switched off is one the player keeps stabbing at.
   const otOff = G.state === "race" && !G.otEnabled() && player.otT <= 0;
   hText(els.ot, player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1)
                 : otOff ? "NO OVERTAKE" : "OVERTAKE");
   hToggle(els.btnOT, "dead", otOff);
-  // ACTIVE AERO. Three states worth telling apart at a glance: the flap is OPEN
-  // (X-MODE), the road ahead would allow it (armed, so the button is worth
-  // pressing), or it is simply unavailable here. `aeroX` is the flap travel,
-  // not the switch, so the readout follows the wing rather than the button.
   const xOpen = (player.aeroX || 0) > 0.05;
-  // ACTIVATION ZONES are a PLACE, so the readout is a distance, not a mood. The
-  // rolling look-ahead this replaced could only ever say yes/no about the here
-  // and now; a fixed zone can be announced like a DRS board, which is the whole
-  // reason the real system uses fixed zones. Four states: open, standing in a
-  // zone (press it), a zone counting down ahead, and a circuit that has none —
-  // Monaco has no qualifying straight, and there the button is simply not a
-  // thing that exists.
   const dz = G.aeroZoneAhead ? G.aeroZoneAhead(player.s || 0) : Infinity;
   const noZones = !(G.aeroZones && G.aeroZones.length);
   hToggle(els.btnAero, "on", xOpen);
   hToggle(els.btnAero, "armed", !!player.xArmed && !xOpen);
-  // Faded when the CIRCUIT has no zone: the control exists, this track just
-  // cannot use it, and the struck-through NO AERO ZONE chip beside it says so.
-  // AUTO is not handled here — there the button is removed from the dock
-  // outright (showTouchControls), because the wing driving itself is a control
-  // with no job rather than a control that is temporarily unavailable.
   hToggle(els.btnAero, "dead", noZones);
   hClass(els.aero, noZones ? "ax-none" : xOpen ? "ax-open"
     : player.xArmed ? "ax-armed" : "ax-off");
@@ -291,8 +239,6 @@ function updateHud(force) {
   } else {
     // gaps — reuse the module-scope prog-sorted field from the update loop
     const ranked = G.ranked;
-    // -1 once the player has retired: it is no longer in `ranked`, and ranked[0]
-    // would then read as "the car right behind you" — the leader.
     const i = ranked.indexOf(player);
     const a = i > 0 ? ranked[i - 1] : null, b = i >= 0 ? ranked[i + 1] : null;
     const gap = gapForm();
@@ -377,11 +323,6 @@ function drawMinimap() {
     const p = map[Math.floor(c.s / track.total * n) % n];
     const x = 6 + p[0] * (W - 16), y = 6 + p[1] * (H - 16);
     mm.fillStyle = c.team._cssColor || (c.team._cssColor = G.cssCol(c.team.color));   // team colours are static — compute once
-    // ANOTHER PERSON, not an AI. Every rival used to be one 4px team-coloured
-    // square, so the friend you are actually racing looked exactly like the
-    // nineteen cars you are not — and because a friend can be your TEAM-MATE,
-    // that could be two identical squares in the same colour. c.human without
-    // c.local is precisely "a human who is not you" (see setCarRole).
     if (c.human && !c.local) {
       mm.fillRect(x - 1, y - 1, 6, 6);
       // A white ring, because the team colour is the one thing it cannot use to

@@ -1,12 +1,4 @@
-/*
- * Apex 26 — GLX post-processing subsystem (split out of js/render/glx.js).
- * Owns the whole post chain: the HDR scene + MSAA targets, bright pass,
- * mip-chain bloom, SSAO, volumetric god rays, the composite (tone-map +
- * grade + SSR + flare + vignette), FXAA resolve, and the procedural lens-dirt
- * texture. Wired through the GLXCore ctx: glx.js calls GLXPost.init(core)
- * inside GLX.init() and delegates present() here.
- * Must load before js/render/glx.js (glx.js calls GLXPost.init at init time).
- */
+/* Apex 26 — GLX post-processing subsystem (split out of js/render/glx.js). Owns the whole post chain: the HDR scene + MSAA targets, bright pass, mip-chain bloom, … */
 "use strict";
 
 const GLXPost = (function () {
@@ -28,9 +20,6 @@ const GLXPost = (function () {
     let ssaoW = 0, ssaoH = 0;   // SSAO runs at half res (upscaled in composite)
     let fxaaProg = null, fxaaU = null, ldrFBO = null, ldrTex = null;   // FXAA pass + its LDR input
 
-    // Post-processing state. postEnabled stays false (and rendering goes straight
-    // to the default framebuffer, exactly as before) if any target/program setup
-    // fails, so the game always renders.
     let postEnabled = false;
     let brightProg = null, brightU = null;
     let blurProg = null, blurU = null;
@@ -38,14 +27,9 @@ const GLXPost = (function () {
     let compProg = null, compU = null;
     let sceneFBO = null, sceneTex = null, sceneDepth = null;
     let colorType = null;        // HALF_FLOAT if renderable, else UNSIGNED_BYTE
-    // Mip-chain bloom: progressive downsample levels (half res, /4, /8, …), then
-    // additive tent upsample back to level 0 — wide multi-octave glow.
     const BLOOM_DIV = 2;         // level 0 at half resolution
     const BLOOM_LEVELS_MAX = 5;
     let bloomLv = [];            // [{fbo, tex, w, h}] — rebuilt on resize
-    // MSAA scene target: the geometry passes render into multisampled renderbuffers,
-    // resolved (blitFramebuffer) into sceneTex/sceneDepth before post — real edge AA
-    // on the HDR path, with FXAA left to clean up what the resolve misses.
     let msaaSamples = 0;         // 0/1 = off (render straight into sceneFBO)
     let msFBO = null, msColorRB = null, msDepthRB = null;
 
@@ -61,9 +45,6 @@ const GLXPost = (function () {
     const _NEGZ = [0, 0, -1];
     const _SKY_HI = [0.05, 0.06, 0.09];
     const _SKY_LO = [0.02, 0.025, 0.05];
-    // Tuner-knob upload cache (PERF-FINDINGS §3). Composite grade scalars do
-    // not change mid-frame; skip equal re-uploads. Per-frame values (sunUV,
-    // flare, exposure, grainTime, haze) still go up every present().
     const _compUf = Object.create(null);
     function uf1(loc, key, v) {
       if (!loc) return;
@@ -106,11 +87,7 @@ const GLXPost = (function () {
       return n;
     }
 
-    // Build the post-processing programs + pick a colour format. Returns true if
-    // the whole chain is usable; on any failure the caller leaves post disabled.
     function setup() {
-      // RGBA16F is the ideal HDR target (preserves sun/specular > 1 for bloom);
-      // fall back to 8-bit if float colour buffers aren't renderable.
       const ext = gl.getExtension("EXT_color_buffer_float");
       colorType = ext ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
 
@@ -129,8 +106,6 @@ const GLXPost = (function () {
       blurU = locs(blurProg, ["uTex", "uDir"]);
       downU = locs(downProg, ["uTex", "uTexel", "uKaris"]);
       upU = locs(upProg, ["uTex", "uTexel", "uSpread"]);
-      // MSAA: pick the sample count the HDR colour format actually supports (many
-      // mobile GPUs render RGBA16F but not multisampled RGBA16F — query, don't assume).
       try {
         const fmt = colorType === gl.HALF_FLOAT ? gl.RGBA16F : gl.RGBA8;
         const cs = gl.getInternalformatParameter(gl.RENDERBUFFER, fmt, gl.SAMPLES);
@@ -166,12 +141,6 @@ const GLXPost = (function () {
       return true;
     }
 
-    // LENS DIRT smudge map: a small procedural greyscale texture generated on a
-    // canvas at init (this repo ships no image assets). A low-frequency value-noise
-    // base (random coarse grid upscaled with bilinear smoothing) plus soft grime
-    // blobs, dust specks and faint wipe streaks. Deterministic LCG seed → every
-    // load gets the same lens. Sampled by COMPOSITE_FS to scatter bloom energy
-    // into a veil and to break the sun flare into a blotchy, smudged one.
     function makeDirtTex() {
       try {
         const S = 256;
@@ -237,11 +206,6 @@ const GLXPost = (function () {
       if (!postEnabled) return;
       const { width, height } = core.getSize();
       const internal = colorType === gl.HALF_FLOAT ? gl.RGBA16F : gl.RGBA8;
-      // Slimmer formats where full RGBA16F is waste (bandwidth is the tiled-GPU
-      // frame cost): SSAO stores one scalar (sampled .r) -> R8; bloom + godray
-      // are alpha-less positive HDR colour -> R11F_G11F_B10F (half the bytes;
-      // renderable under the same EXT_color_buffer_float the HDR path requires).
-      // LDR fallback keeps RGBA8 everywhere.
       const hdrOk = colorType === gl.HALF_FLOAT;
       const mk = (w, h, fmt) => {
         const tex = gl.createTexture();
@@ -255,13 +219,6 @@ const GLXPost = (function () {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         return tex;
       };
-      // scene target (full res) + depth as a SAMPLEABLE texture (enables SSAO and
-      // any depth-aware post; same pattern already used for the shadow map).
-      // NOTE (every block below): bind the FBO BEFORE deleting its old attachments.
-      // Deleting a texture only auto-detaches it from the CURRENTLY BOUND
-      // framebuffer — deleted-while-attached-elsewhere keeps the storage resident,
-      // so old + new full-size target sets were transiently alive together
-      // (~tens of MB per setRenderScale call): a jetsam kill on mobile web apps.
       if (!sceneFBO) sceneFBO = gl.createFramebuffer();
       gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
       if (sceneTex) gl.deleteTexture(sceneTex);
@@ -278,19 +235,11 @@ const GLXPost = (function () {
       gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, sceneDepth, 0);
-      // The CRITICAL target: every 3D pixel goes through it when post is on. On a
-      // driver where RGBA16F + depth-texture isn't a renderable combo (possible
-      // even with EXT_color_buffer_float present), skipping this check left
-      // postEnabled true and the whole view black — the designed fallback is
-      // direct-to-screen rendering, so take it. (Same pattern as msFBO below.)
       if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         postEnabled = false;
         return;
       }
-      // MSAA scene target: multisampled colour + depth renderbuffers, resolved into
-      // sceneTex/sceneDepth at present(). Falls back silently (msaaSamples = 0) if
-      // the combo doesn't yield a complete FBO on this driver.
       if (msaaSamples > 1) {
         const internalD = gl.DEPTH_COMPONENT24;
         if (!msFBO) msFBO = gl.createFramebuffer();
@@ -306,8 +255,6 @@ const GLXPost = (function () {
         gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, msColorRB);
         gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, msDepthRB);
         if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-          // Bail cleanly: without this the two just-allocated multisampled
-          // surfaces (~30 MB at full res) stayed attached to msFBO forever.
           gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, null);
           gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, null);
           gl.deleteRenderbuffer(msColorRB); gl.deleteRenderbuffer(msDepthRB);
@@ -325,8 +272,6 @@ const GLXPost = (function () {
         const fbo = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-        // Level 0 proves the RGBA16F-colour-only combo renders on this driver;
-        // deeper levels are the same format, so one check covers the chain.
         if (i === 0 && gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
           gl.deleteTexture(tex); gl.deleteFramebuffer(fbo);
           gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -336,9 +281,6 @@ const GLXPost = (function () {
         bloomLv.push({ fbo, tex, w: bw, h: bh });
         bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1);
       }
-      // SSAO targets (HALF res): raw AO + a blurred copy to denoise the 12-tap pass.
-      // AO is low-frequency, so half-res + LINEAR upscale in the composite is ~75%
-      // cheaper with no visible loss (depth is still sampled at full res per tap).
       if (ssaoProg) {
         ssaoW = Math.max(1, Math.floor(width / 2));
         ssaoH = Math.max(1, Math.floor(height / 2));
@@ -372,8 +314,6 @@ const GLXPost = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayBlurTex, 0);
       }
-      // LDR target (full res, RGBA8): the composite renders here so the FXAA pass
-      // can edge-detect on the final tonemapped image, then resolve to the screen.
       if (fxaaProg) {
         if (!ldrFBO) ldrFBO = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, ldrFBO);
@@ -394,18 +334,12 @@ const GLXPost = (function () {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
-    // Bind the frame's scene render target (the MSAA or HDR offscreen target when
-    // post is enabled, else the default framebuffer) and restore the full-size
-    // viewport. Used by GLX.begin() and by the shadow passes' End rebind.
     function bindSceneTarget() {
       gl.bindFramebuffer(gl.FRAMEBUFFER, postEnabled ? (msaaSamples > 1 ? msFBO : sceneFBO) : null);
       const { width, height } = core.getSize();
       gl.viewport(0, 0, width, height);
     }
 
-    // Resolve the HDR scene to the screen: extract bright areas, blur them into a
-    // bloom buffer, then composite scene + bloom with tonemap + vignette. No-op when
-    // post is disabled (the scene was drawn straight to the screen already).
     function present(opts) {
       const SH = core.shadow;
       // Car shadow map must be re-armed by a fresh carShadowBegin every frame —
@@ -420,8 +354,6 @@ const GLXPost = (function () {
       const threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
       const bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
 
-      // MSAA resolve: average the multisampled scene into sceneTex (and copy depth
-      // into sceneDepth for SSAO/god-rays/SSR) before any post pass samples them.
       if (msaaSamples > 1) {
         gl.bindFramebuffer(gl.READ_FRAMEBUFFER, msFBO);
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, sceneFBO);
@@ -481,8 +413,6 @@ const GLXPost = (function () {
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
 
-      // 0b) Volumetric sun shafts: world-space march of the sun shadow map (half-res)
-      // then a separable blur. Gated on the sun being up (grStr > 0) + shadows on.
       const grStr = opts && opts.godray !== undefined ? opts.godray : 0;
       const lampVol = (opts && opts.lampVol) || 0;
       const sunGR = SH.enabled && grStr > 0;
@@ -527,9 +457,6 @@ const GLXPost = (function () {
           grNL = _grKeepNearest(total, 6);   // == GR_MAX_LIGHTS, the beam march's bound
           for (let i = 0; i < grNL; i++) {
             const o = _grSel[i].o;
-            // Map the frame.lights record that has this frame's spot-shadow map
-            // to its slot in THIS pass's nearest-N ordering (the two differ: the
-            // lit pass indexes frame.lights directly, this pass re-sorts by eye).
             if (lampArmed && o === SH.lampIdx * 15) grLampIdx = i;
             _grPos[i*3]=L[o]; _grPos[i*3+1]=L[o+1]; _grPos[i*3+2]=L[o+2];
             _grCol[i*3]=L[o+3]; _grCol[i*3+1]=L[o+4]; _grCol[i*3+2]=L[o+5];
@@ -567,9 +494,6 @@ const GLXPost = (function () {
         useProg(blurProg);
         gl.uniform1i(blurU.uTex, 0);
         gl.activeTexture(gl.TEXTURE0);
-        // Double separable blur (H+V twice): the march + shadow slices otherwise
-        // leave thin stripe artifacts that read as "random tiny rays" — two passes
-        // turn the shafts into wide, soft volumes.
         for (let bp = 0; bp < 2; bp++) {
           gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
           gl.bindTexture(gl.TEXTURE_2D, godrayTex);
@@ -582,14 +506,6 @@ const GLXPost = (function () {
         }
       }
 
-      // 1+2) bright-pass + mip-chain bloom. The whole ~10-14 fullscreen-pass chain
-      //    only feeds the composite's bloom sampler, which is scaled by bloomAmt —
-      //    so when bloom is off (bloomAmt <= 0) skip it all and let the composite
-      //    read blackTex (bound below) for a zero contribution.
-      // An EMPTY chain is legal: createTargets() only builds levels while the half-res
-      // size is >= 8px, so a not-yet-laid-out (1x1-clamped) canvas leaves bloomLv = []
-      // with postEnabled still true. Treat that exactly like bloom-off — without the
-      // nLv gate present() dereferenced bloomLv[0] and threw every frame.
       const nLv = bloomLv.length;
       const doBloom = bloomAmt > 0 && nLv > 0;
       if (doBloom) {
@@ -603,9 +519,6 @@ const GLXPost = (function () {
         gl.uniform1f(brightU.uThreshold, threshold);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-        // 2) mip-chain bloom: progressive 13-tap downsample to the smallest level,
-        //    then additive 9-tap tent upsample back up — each level contributes one
-        //    octave of blur, so bright sources get a tight core AND a wide soft halo.
         useProg(downProg);
         gl.uniform1i(downU.uTex, 0);
         for (let i = 1; i < nLv; i++) {
@@ -613,9 +526,6 @@ const GLXPost = (function () {
           gl.viewport(0, 0, bloomLv[i].w, bloomLv[i].h);
           gl.bindTexture(gl.TEXTURE_2D, bloomLv[i - 1].tex);
           gl.uniform2f(downU.uTexel, 1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
-          // Karis partial luma weighting on the FIRST downsample only — that's
-          // where sub-pixel HDR spikes (the bloom "fireflies") get averaged in;
-          // later mips are already low-pass and keep the plain 13-tap kernel.
           gl.uniform1f(downU.uKaris, i === 1 ? 1 : 0);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
         }
@@ -624,10 +534,6 @@ const GLXPost = (function () {
         // BLOOM SPREAD knob: widen/tighten every octave's tent radius uniformly.
         gl.uniform1f(upU.uSpread, opts && opts.tune && opts.tune.bloomSpread != null ? opts.tune.bloomSpread : 1);
         for (let i = nLv - 1; i >= 1; i--) {
-          // Intermediate levels accumulate (ONE, ONE) so every octave sums; the FINAL
-          // pass into level 0 OVERWRITES instead — level 0 still holds the sharp
-          // unblurred bright-pass, and adding onto it would re-inject the scene's
-          // bright areas at full sharpness (large lamp-lit surfaces wash out).
           const last = i === 1;
           setBlend(!last);
           if (!last) gl.blendFunc(gl.ONE, gl.ONE);
@@ -641,8 +547,6 @@ const GLXPost = (function () {
         setBlend(false);
       }
 
-      // 3) composite — to the LDR target when FXAA is on (it resolves to screen),
-      //    else straight to the screen.
       const useFxaa = fxaaProg && ldrFBO && ldrTex;
       gl.bindFramebuffer(gl.FRAMEBUFFER, useFxaa ? ldrFBO : null);
       gl.viewport(0, 0, width, height);
@@ -651,21 +555,12 @@ const GLXPost = (function () {
       gl.bindTexture(gl.TEXTURE_2D, sceneTex);
       gl.uniform1i(compU.uScene, 0);
       gl.activeTexture(gl.TEXTURE1);
-      // When bloom is off the mip chain was skipped and bloomLv[0] holds a stale
-      // frame — bind the 1×1 black source so the composite reads zero contribution.
       gl.bindTexture(gl.TEXTURE_2D, doBloom ? bloomLv[0].tex : blackTex);
       gl.uniform1i(compU.uBloom, 1);
-      // Normalise the mip-chain accumulation (level 0 holds nLv-1 summed blur
-      // octaves) so the hand-tuned per-time-of-day bloom amounts keep their overall
-      // energy — same brightness budget, spread over a wider, smoother halo.
       gl.uniform1f(compU.uBloomAmt, bloomAmt * 1.25 / Math.max(nLv - 1, 1));
-      // AO: post-blur result is in ssaoTex; when AO is off bind a white 1×1 so the
-      // shader's `c *= texture(uSSAO).r` is a no-op.
       gl.activeTexture(gl.TEXTURE2);
       gl.bindTexture(gl.TEXTURE_2D, haveAO ? ssaoTex : whiteTex);
       gl.uniform1i(compU.uSSAO, 2);
-      // Half-res AO grid texel for the composite's depth-aware bilateral upsample;
-      // zeroed when AO is off so the shader takes the plain (1×1 white) fetch.
       gl.uniform2f(compU.uAOTexel, haveAO ? 1 / ssaoW : 0, haveAO ? 1 / ssaoH : 0);
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D, haveGR ? godrayTex : blackTex);
@@ -683,12 +578,6 @@ const GLXPost = (function () {
         if (cw > 0) {
           _sunUV[0] = cx / cw * 0.5 + 0.5;
           _sunUV[1] = cy / cw * 0.5 + 0.5;
-          // Lens flare peaks at GOLDEN HOUR (low sun), fading as the sun climbs —
-          // the opposite of the old height-scaled version that vanished at sunset.
-          // Gate flare + shafts by the sun's actual BRIGHTNESS, not just elevation:
-          // at night the key light is dim moonlight kept above the horizon for sky
-          // glow, and without this gate the radial pass streaked every bright lamp
-          // head toward the moon — random "beams from the sky".
           const _sl = F.sunColor ? Math.max(F.sunColor[0], F.sunColor[1], F.sunColor[2]) : 1;
           const _sunGate = Math.min(1, Math.max(0, (_sl - 0.35) / 0.45));
           if (s[1] > -0.02) {
@@ -727,8 +616,6 @@ const GLXPost = (function () {
       uf3(compU.uGradeShadow, "gradeShadow", gSh[0], gSh[1], gSh[2]);
       uf3(compU.uGradeHi, "gradeHi", gHi[0], gHi[1], gHi[2]);
       uf1(compU.uGradeStr, "gradeStr", grade && grade.str !== undefined ? grade.str : 0);
-      // Live colour-grade tunables (IMAGE & COLOUR panel); defaults reproduce the
-      // shipped grade so a missing tune object changes nothing.
       const CT = opts && opts.tune || null;
       uf4(compU.uTone0, "tone0",
         CT && CT.blacks != null ? CT.blacks : 0,
@@ -754,10 +641,6 @@ const GLXPost = (function () {
       uf1(compU.uContrast,   "contrast",   CT && CT.contrast   != null ? CT.contrast   : 1.12);
       uf1(compU.uVibrance,   "vibrance",   CT && CT.vibrance   != null ? CT.vibrance   : 0.20);
       uf1(compU.uSaturation, "saturation", CT && CT.saturation != null ? CT.saturation : 1.0);
-      // Skip the whole HDR lift/gamma/gain/tone block when every knob sits at
-      // neutral (the shipped default): applyHdrGrade is then a mathematical
-      // no-op, but it still cost ~20 ALU incl. 4-5 transcendentals on every
-      // full-screen pixel of every frame.
       const _hg = CT && (
         (CT.blacks || 0) !== 0 || (CT.shadows || 0) !== 0 || (CT.midtones || 0) !== 0 ||
         (CT.highlights || 0) !== 0 || (CT.whites || 0) !== 0 || (CT.toe || 0) !== 0 ||
@@ -795,34 +678,20 @@ const GLXPost = (function () {
       gl.uniform1f(compU.uSpeedBlur,  opts && opts.speedBlur != null ? opts.speedBlur : 0.0);
       // SUN-SHAFT REACH / FLARE STREAK knobs (defaults reproduce the shipped look).
       uf1(compU.uShaftDecay, "shaftDecay", CT && CT.sunShaftDecay != null ? CT.sunShaftDecay : 0.82);
-      // Reach scales with the SCREEN SUN-SHAFT knob, sub-linearly so the shipped
-      // value (1) keeps the shipped radius and turning it up genuinely extends the
-      // rays instead of only brightening a fixed disc. sqrt keeps 4x strength at a
-      // 2x radius rather than blowing the pass across the whole frame.
       const _shaftMul = (opts && opts.tune && opts.tune.sunShaftMul != null) ? opts.tune.sunShaftMul : 1;
       uf1(compU.uShaftSpread, "shaftSpread", Math.sqrt(Math.max(0.05, _shaftMul)));
       uf1(compU.uFlareStreak, "flareStreak", CT && CT.flareStreak   != null ? CT.flareStreak   : 7.0);
       uf1(compU.uFlareStreak2, "flareStreak2", CT && CT.flareStreak2 != null ? CT.flareStreak2  : 0.5);
-      // EXHAUST HEAT HAZE: screen-anchored shimmer plume (opts.haze = {u, v, str}
-      // computed by the caller from the player tailpipe projection; absent = off).
       const hz = opts && opts.haze;
       gl.uniform2f(compU.uHazeUV, hz ? hz.u : -9, hz ? hz.v : -9);
       gl.uniform1f(compU.uHazeStr, hz ? hz.str : 0);
       gl.uniform1f(compU.uHazeTime, F.time);
       uf1(compU.uSsrThick,   "ssrThick",   CT && CT.ssrThick   != null ? CT.ssrThick   : 0.20);
-      // LENS DIRT: bind the procedural smudge map (black fallback = veil term is
-      // zero even if the knob is up, so a failed canvas init degrades silently).
       gl.activeTexture(gl.TEXTURE5);
       gl.bindTexture(gl.TEXTURE_2D, dirtTex || blackTex);
       gl.uniform1i(compU.uDirt, 5);
       uf1(compU.uLensDirt, "lensDirt", CT && CT.lensDirt != null ? CT.lensDirt : 0.15);
-      // uReflTexel drives both SSR and SHARPEN, so upload it every frame (not only
-      // inside the haveRefl block) — otherwise sharpen samples with a stale texel.
       gl.uniform2f(compU.uReflTexel, 1 / width, 1 / height);
-      // Camera-aware SSR screen extent: a low onboard eye (cockpit/hood) sees the
-      // wet road climb higher up the frame and start right at the nose, so game.js
-      // raises the top cutoff + pulls the near-field fade in for those cams. Every
-      // frame (defaults reproduce the shipped chase framing when opts omit them).
       gl.uniform1f(compU.uSsrTopUV, opts && opts.ssrTopUV != null ? opts.ssrTopUV : 0.62);
       gl.uniform1f(compU.uSsrNear,  opts && opts.ssrNear  != null ? opts.ssrNear  : -2.5);
       // Wet-road screen-space reflection: needs depth + view/proj + world-up-in-view.
@@ -882,10 +751,6 @@ const GLXPost = (function () {
 
     return {
       enabled: () => postEnabled,
-      // The gfx.js contract for this is "the scene buffer is float (HDR)" —
-      // which is only true while the post chain is actually in use. When
-      // setup()/createTargets() fall back to direct rendering the frame goes
-      // to the 8-bit default framebuffer, whatever the extension said.
       hdrOk: () => postEnabled && colorType === gl.HALF_FLOAT,
       msaa: () => msaaSamples,
       createTargets,

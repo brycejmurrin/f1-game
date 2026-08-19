@@ -1,55 +1,4 @@
-/* Apex 26 — TLXShaders.shadowSys: the three-map shadow subsystem for the TLX
- * backend (M4). The three.js sibling of js/render/glx/shadow.js:
- *
- *   - STATIC SUN map   2048² desktop / 1024² on ANY phone — snap-cached by
- *     game.js (shadowBegin only runs on a recentre / sun change), terrain +
- *     road + props casters.
- *   - CAR map          1024², true desktop only — cleared + redrawn every armed
- *     frame so moving cars get live sun shadows (direction/length correct,
- *     car-on-car works). Armed by carShadowBegin, cleared in tlx present().
- *   - LAMP spot map    512², true desktop only — per-frame depth render down
- *     the nearest floodlight's PERSPECTIVE beam; lampIdx tags which
- *     frame.lights record the lit pass gates its PCF to.
- *
- * All three key on the DEVICE (ctx.isMobile), never the memory tier — see the
- * note above the constants for the GLX rule and the bug that keying on
- * mobileTier caused.
- *
- * game.js DRIVES all three passes (snap cache, caster selection, light VPs —
- * js/game.js + 3636-3691); this file only implements the seam members.
- * Each pass follows the tlx.js draw-list pattern: Begin sets the depth camera
- * from the column-major lightVP, castShadow accumulates pooled THREE.Mesh
- * casters, End renders once into the pass's depth target. Casters render
- * DOUBLE-SIDED (GLX disables CULL_FACE: back faces into the map avoid
- * peter-panning).
- *
- * The depth textures are sampled by tsl-lit.js via texture(...).compare(z) —
- * hardware sampler2DShadow PCF on the WebGL backend (LinearFilter +
- * LessEqualCompare == GLX's LINEAR + COMPARE_REF_TO_TEXTURE), WGSL
- * textureSampleCompare on WebGPU.
- *
- * PCSS blocker map (closes TODO M4-PCSS): GLX builds a
- * 512² R16F min-of-4 blocker map from the sun depth texture through a
- * COMPARE-OFF sampler object (js/render/glx/shadow.js). three has no per-use
- * sampler override — a texture with compareFunction set is ALWAYS declared
- * sampler2DShadow / textureSampleCompare, so the same depth texture cannot
- * also be SAMPLED as a plain texture. But WGSL textureLoad takes NO sampler
- * at all and is legal on texture_depth_2d (the WGSL builder's
- * generateTextureLoad emits it as-is), so on the WebGPU backend the blocker
- * downsample reads the sun depth with TSL.textureLoad and needs no second
- * caster pass — refreshed in endPass() only when the SUN map re-rendered,
- * GLX's snap-cache cadence. The WebGL2 fallback backend keeps pcssEnabled
- * false (texelFetch on sampler2DShadow is invalid GLSL; the compare-off
- * route there needs a depth-in-color caster pass — see
- * docs/research/TLX-PCSS-RESEARCH.md). Desktop WebGL2 writes TSL.depth into
- * an R16F color attachment and textureLoads that (texelFetch is legal on a
- * color texture). Phones and software GL keep the fixed-R look.
- *
- * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
- *     TLXShaders.shadowSys = (THREE, TSL, ctx) => ({ S, sunTex, … })
- * ctx = { renderer, isMobile, mobileTier }. NEVER touches THREE/TSL at script eval —
- * three exists only inside TLX.create().
- */
+/* Apex 26 — TLXShaders.shadowSys: the three-map shadow subsystem for the TLX backend (M4). The three.js sibling of js/render/glx/shadow.js: - STATIC SUN map 2048²… */
 "use strict";
 
 (function () {
@@ -85,9 +34,6 @@
     const CAR_SIZE = softwareGL ? 256 : 1024;                      // dynamic car-only map (true desktop only)
     const LAMP_SIZE = softwareGL ? 256 : 512;                      // nearest-floodlight spot map (true desktop only)
 
-    // Shared state, field names 1:1 with GLXShadow's S so tlx.js's state
-    // introspection (carShadowState/lampShadowState) and tsl-lit's updateFrame
-    // read the same shape on either backend.
     const S = {
       SIZE: SUN_SIZE,
       enabled: false,
@@ -98,10 +44,6 @@
       // are never created, so their Begins no-op but game.js still issues the
       // caster draws, which must be silently swallowed (GLX S.depthPassOn).
       depthPassOn: false,
-      // Light frustum the chunked shadow caster culls against: null = the
-      // static sun box (S.lightVP); lampShadowBegin points it at the lamp's
-      // perspective frustum for the duration of that pass (GLXShadow
-      // S.castCullVP 1:1 — consumed by tlx.js castShadowChunked, M7).
       castCullVP: null,
       carEnabled: false, carLightVP: new Float32Array(16),
       carBoxScale: 1,            // cBox / default-42m — see carShadowBegin (GLX parity)
@@ -127,8 +69,6 @@
       // wrap defaults to ClampToEdge — matches GLX
       const opts = { depthTexture };
       if (hdrColor) {
-        // Desktop WebGL2 PCSS: color holds window depth (TSL.depth) so the
-        // blocker pass can texelFetch a plain texture. R16F matches GLX.
         opts.type = THREE.HalfFloatType;
         opts.format = THREE.RedFormat;
       }
@@ -168,9 +108,6 @@
         bmat.fog = false;
         bmat.lights = false;
         bmat.customProgramCacheKey = () => colorPcss ? "tlx-blocker-gl" : "tlx-blocker";
-        // k source texels per dest texel; taps at the block centre ±1 source
-        // texel — texel-exact GLX BLOCKER_FS (its vUV lands on the block
-        // centre and uSrcTexel offsets one source texel with NEAREST).
         const k = SUN_SIZE / BLOCKER_SIZE;
         const lo = (k >> 1) - 1, hi = (k >> 1) + 1;
         const srcTex = colorPcss ? sunRT.texture : sunRT.depthTexture;
@@ -214,8 +151,6 @@
     // sky, geometry unaffected because each lit draw re-enables the mask).
     // The maps' color attachments are throwaway, so writing black is free.
     const depthMat = new THREE.MeshBasicNodeMaterial();
-    // Desktop WebGL2 PCSS reads this color as window depth. Other paths
-    // throw the color attachment away (black is free).
     depthMat.colorNode = colorPcss ? TSL.vec4(TSL.depth, 0.0, 0.0, 1.0) : TSL.vec3(0.0);
     depthMat.side = THREE.DoubleSide;
     depthMat.fog = false;
@@ -253,9 +188,6 @@
     let iUsed = 0;
     // Scratch for setMatrixAt — never allocate per cast (was per-instance GC).
     const _castMat = new THREE.Matrix4();
-    // Explicit count = the light-frustum slice packed by cullInstances(). With
-    // no count, preserve the full-set contract so casters behind the main camera
-    // can still hit the light frustum.
     function castInstanced(batch, count) {
       if (!S.depthPassOn || !batch || !batch.geo) return;
       const culled = count !== undefined;
@@ -279,8 +211,6 @@
       m.geometry = batch.geo;
       m.material = depthMat;
       const dst = m.instanceMatrix.array;
-      // An explicit count follows cullInstances(), whose packed matrices are the
-      // light-frustum slice. With no count retain the full-set shadow contract.
       const src = culled && batch.packMatrices ? batch.packMatrices : batch.srcMatrices;
       if (src && src.length >= n * 16) {
         for (let i = 0, o = 0; i < n; i++, o += 16) {
@@ -353,9 +283,6 @@
       target = null;
     }
 
-    // Prime each target once (empty render) so the depth textures exist on the
-    // GPU before the lit pass ever binds them — the sun map may not render
-    // until the first recentre, and the car/lamp maps not at all by day/menu.
     (function prime() {
       shadowCam.projectionMatrix.identity();
       shadowCam.projectionMatrixInverse.identity();
@@ -424,10 +351,6 @@
       shadowBegin,
       castShadow: cast,
       castInstanced,
-      // M7: tlx.js castShadowChunked owns the per-chunk light-frustum cull
-      // (tlx-chunked.js) and feeds each visible chunk through castShadow.
-      // This member stays the plain caster as the FALLBACK for the M2
-      // single-geometry chunked shape (chunked factory missing).
       castShadowChunked: cast,
       shadowEnd: endPass,
       carShadowEnd: endPass,

@@ -1,33 +1,12 @@
-/* Apex 26 — pure 3D geometry emitters shared by the track/scenery builders
-   (js/track/tracks.js). Each add*(out, ...) pushes positions/normals/colours/indices
-   into the caller's `out` accumulator; emit() fan-triangulates one auto-
-   oriented convex face; MAT is the per-vertex procedural-material id map
-   (stamped via out._mat). Stateless and renderer-free: no GLX, no track state —
-   loads under tools/verify-track.cjs's bare VM sandbox. Must load BEFORE
-   js/track/tracks.js (see index.html). */
+/* Apex 26 — pure 3D geometry emitters shared by the track/scenery builders (js/track/tracks.js). Each add*(out, ...) pushes positions/normals/colours/indices into… */
 const TrackGeom = (function () {
   "use strict";
 
-  // Contextified-global aliases — the mechanism and the honest scope are written
-  // out once, in js/track/models.js above firstNonFinite. Short version: under
-  // vm.createContext (verify-track, graph-parity, the headless audits, the VM
-  // unit suites) a bare `Math.`/`Number.` read goes through the contextified
-  // global's C++ interceptor at ~140-220 ns instead of ~3.3 ns; in a browser it
-  // is already ~3.3 ns, so this buys developer iteration time, not framerate.
-  // Used only in the per-vertex / per-primitive emitters below.
   const __M = Math, __isFinite = Number.isFinite;
 
-  // Procedural surface-material ids — stamped per-vertex (out._mat) and textured
-  // in the lit shader's applyMaterial() (js/render/glx.js). 0 = FLAT (untextured, the
-  // original look). Exposed to per-track scenery() via api.MAT.
   const MAT = { FLAT: 0, CONCRETE: 1, BRICK: 2, GLASS: 3, METAL: 4, WOOD: 5,
                 FOLIAGE: 6, FABRIC: 7, SAND: 8, GRASS: 9, ROCK: 10, SNOW: 11,
                 ROOF: 12, STONE: 13, RUST: 14,
-                // FLAG (15): waving cloth. The lit VERTEX shader displaces these
-                // verts with a travelling sine; the FRACTIONAL part of the stamped
-                // id (15.0..15.4) encodes the per-vertex wave weight (0 = hoist
-                // edge pinned to the pole → 0.4 = free edge, weight 1). Emitted
-                // per-vertex by tracks.js flagQuad, not via out._mat.
                 FLAG: 15,
                 // ASPHALT (16): the racing surface. Must stay ABOVE the flag's
                 // 15.0..16.0 fractional window (the vertex shader keys the cloth
@@ -38,7 +17,6 @@ const TrackGeom = (function () {
                 // js/render/shaders/lit.js.
                 ASPHALT: 16 };
 
-  // ---------- small vec math (self-contained; doesn't depend on M4/V3) ----------
   function cross(a, b) {
     return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
   }
@@ -77,9 +55,6 @@ const TrackGeom = (function () {
   function addBox(out, c, sz, col, basis) {
     const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
     const hx = sz[0] / 2, hy = sz[1] / 2, hz = sz[2] / 2;
-    // Basis pre-scaled by the half-extents once, so a corner is three multiply-
-    // adds off the sign triple instead of nine multiplies through a closure
-    // that returned a fresh [x,y,z]. That closure ran 24x per box.
     const rx = r[0] * hx, ry = r[1] * hx, rz = r[2] * hx;
     const ux = u[0] * hy, uy = u[1] * hy, uz = u[2] * hy;
     const fx = f[0] * hz, fy = f[1] * hz, fz = f[2] * hz;
@@ -104,8 +79,6 @@ const TrackGeom = (function () {
     for (let fi = 0; fi < 6; fi++) {
       const o = fi * BOX_STRIDE;
       const base = pos.length / 3;
-      // Outward normal: the named basis vector, signed. Unscaled — the
-      // half-extents belong to the corners, not the normal.
       const ax = BOX_FACES[o + 12], sg = BOX_FACES[o + 13];
       const bv = ax === 0 ? r : ax === 1 ? u : f;
       const nx = bv[0] * sg, ny = bv[1] * sg, nz = bv[2] * sg;
@@ -124,21 +97,11 @@ const TrackGeom = (function () {
     }
   }
 
-  // ---------- richer primitives (beyond the box) ----------
   // Emit one flat convex polygon (3+ coplanar verts in perimeter order), fan-
   // triangulated, auto-oriented so its face points AWAY from `ref` (an interior
   // point) — so callers never have to reason about CCW winding under backface
   // culling. Normal is the face normal (flat shading, matches the box look).
   function emit(out, verts, col, ref) {
-    // Reject non-finite geometry at the door. The GUARDED wrappers in tracks.js
-    // (addBox/addCyl/…) already finite-check their arguments, so for years a
-    // NaN anchor merely dropped the affected prop. emit() is the raw path with
-    // no such check, and the moment a helper started using it directly — the
-    // tree() canopy underside — a single tree resolving to node -1 pushed NaN
-    // into the shared props buffer. validateGeometry then rejects the WHOLE
-    // mesh and safe() substitutes an empty one, so one bad vertex costs a
-    // circuit every prop it has. Silverstone shipped with no scenery that way.
-    // Dropping one triangle is always better than losing the buffer.
     for (let i = 0; i < verts.length; i++) {
       const v = verts[i];
       if (!v || !__isFinite(v[0]) || !__isFinite(v[1]) || !__isFinite(v[2])) return false;
@@ -159,18 +122,6 @@ const TrackGeom = (function () {
   }
   const vadd = (p, v, s) => [p[0] + v[0] * s, p[1] + v[1] * s, p[2] + v[2] * s];
 
-  // Triangular prism / ridge: base sz[0] wide × sz[2] long, rising to a ridge
-  // line along the LENGTH at height sz[1]. A-frame roofs, mountain ridges.
-  //
-  // ⚠ `c` is the BASE CENTRE, not the centroid — the prism occupies c → c+u*sz[1].
-  // addBox/addPyramid centre their `c` instead, so a roof written as
-  //   addPrism(out, vadd(top, u, roofH / 2), …)   // WRONG — floats by roofH/2
-  // hangs clear of whatever it is meant to cap. Seat it flush on the surface:
-  //   addPrism(out, top, …)                        // right
-  // This asymmetry produced seven separate floating-roof defects (neonTower
-  // chevron/hall, interlagos + cota terraces, zandvoort huts, madrid bays,
-  // imola village) — check it before adding a caller. addCyl/addCone/addFrustum
-  // are base-anchored the same way.
   function addPrism(out, c, sz, col, basis) {
     const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
     const hx = sz[0] / 2, hl = sz[2] / 2, h = sz[1], ref = vadd(c, u, h * 0.4);
@@ -198,8 +149,6 @@ const TrackGeom = (function () {
     const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
     const ap = vadd(c, u, h), ref = vadd(c, u, h * 0.35);
     const ring = (a) => vadd(vadd(c, r, __M.cos(a) * rad), f, __M.sin(a) * rad);
-    // Cache ring ends once per segment (PERF-FINDINGS). Keep angle as
-    // (i+1)/seg*6.2832 — NOT %seg: 6.2832 ≠ 2π, wrapping moves the last edge.
     for (let i = 0; i < seg; i++) {
       const p0 = ring(i / seg * 6.2832), p1 = ring((i + 1) / seg * 6.2832);
       emit(out, [p0, p1, ap], col, ref);
@@ -221,8 +170,6 @@ const TrackGeom = (function () {
     }
   }
 
-  // Frustum: n-gon truncated cone, base radius `rBase` → top radius `rTop` over
-  // height `h`. Stack these for colour-banded mountains (forest → rock → snow).
   function addFrustum(out, c, rBase, rTop, h, col, seg, basis) {
     seg = seg || 8;
     const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
@@ -236,11 +183,6 @@ const TrackGeom = (function () {
     }
   }
 
-  // Organic mountain at world `c`, base radius `baseR`, height `h`. A radial mesh
-  // of stacked rings whose per-angle radius is perturbed (vertical ridges/gullies)
-  // and whose apex is jittered off-centre, so no two read as the same symmetric
-  // cone. Faces are coloured by height — forested base → rock → ragged snow cap.
-  // opts: { seg, seed, rough, forest, rock, snow, snowline, right, fwd }.
   function addMountain(out, c, baseR, h, opts) {
     opts = opts || {};
     const seg = opts.seg || 10, seed = opts.seed || 0, rough = opts.rough != null ? opts.rough : 0.34;
@@ -260,10 +202,6 @@ const TrackGeom = (function () {
       return [c[0] + rx[0] * __M.cos(a) * rad + fz[0] * __M.sin(a) * rad, c[1] + y, c[2] + rx[2] * __M.cos(a) * rad + fz[2] * __M.sin(a) * rad];
     };
     const ref = [c[0], c[1] + h * 0.4, c[2]];
-    // zoneAt(): the SAME height-fraction test as colAt, returning a procedural
-    // MATERIAL id per zone (forest→FOLIAGE, rock/transition→ROCK, snow→SNOW) so
-    // the mountain's craggy/snowy surface gets a real light-catching bump, not
-    // just the flat colour-zone shading below.
     const zoneAt = (fy, i) => {
       const fr = fy / h + (h2(i, 99) - 0.5) * 0.07;
       if (fr > snowline + 0.04) return MAT.SNOW;
@@ -311,11 +249,6 @@ const TrackGeom = (function () {
   function addMesh(out, mesh, opts) {
     if (!mesh || !mesh.pos || !mesh.idx || !mesh.pos.length) return false;
     const o = opts || {};
-    // Validate the SUPPLIED values before defaulting. `o.x || 0` would coerce a
-    // NaN to 0, silently relocating the model to the world origin instead of
-    // rejecting the placement — the same class of failure as the NaN anchor that
-    // once cost Silverstone every one of its 783 066 prop vertices, except this
-    // one leaves a building sitting at (0,0,0) rather than dropping the buffer.
     const bad = (v) => v != null && !isFinite(v);
     if (bad(o.x) || bad(o.y) || bad(o.z) || bad(o.scale) || bad(o.rotY)) return false;
     const s = o.scale != null ? o.scale : 1;
@@ -325,8 +258,6 @@ const TrackGeom = (function () {
     const nv = mesh.pos.length / 3;
     const base = out.pos.length / 3;
     const mm = out.mat;
-    // opts.mat overrides the baked per-vertex id — lets one model be dressed as
-    // concrete on one circuit and rusted metal on another.
     const forced = o.mat != null ? o.mat : null;
     const fallback = out._mat || 0;
     for (let i = 0; i < nv; i++) {

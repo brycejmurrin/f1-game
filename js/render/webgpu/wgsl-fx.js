@@ -39,7 +39,6 @@
 
 const WGSLFx = (function () {
 
-  // ───────────────────────────────────────────────────────────────────────────
   // 1. BLOB_SHADOW — soft dark elliptical ground decal under a car.
   //
   //    GEOMETRY : a shared unit quad, aPos in -0.5..0.5 (x, z). Scaled to the
@@ -86,7 +85,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   return vec4<f32>(0.0, 0.0, 0.0, a);
 }`;
 
-  // ───────────────────────────────────────────────────────────────────────────
   // 2a. MARK — a single rectangular tyre-mark stamp on the road (per-draw quad).
   //
   //    GEOMETRY : same shared unit quad as BLOB_SHADOW (aPos -0.5..0.5), scaled
@@ -134,7 +132,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   return vec4<f32>(0.0, 0.0, 0.0, a);
 }`;
 
-  // ───────────────────────────────────────────────────────────────────────────
   // 2b. SKID — the batched skid trail: ONE draw over a prebuilt world-space
   //     vertex buffer holding every live mark segment (GLX drawSkidBatch).
   //
@@ -191,7 +188,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   return vec4<f32>(in.col.rgb, a);
 }`;
 
-  // ───────────────────────────────────────────────────────────────────────────
   // 3. GLOW — additive HDR lens-glare billboard, one round quad per lamp head.
   //
   //    GEOMETRY : real interleaved vertex buffer, 6 verts/lamp, built each frame
@@ -257,7 +253,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   return vec4<f32>(in.col * a, 1.0);
 }`;
 
-  // ───────────────────────────────────────────────────────────────────────────
   // 4. DECAL — textured atlas quad (team number / sponsor) sitting proud of the
   //     bodywork, sampling an RGBA decal atlas (GLX drawDecal).
   //

@@ -1,14 +1,4 @@
-/* Apex 26 — SkidMarks: the tyre-mark ring buffer and its batched draw.
-   SkidMarks.create(G) — needs nothing from G; it is called with it only to match
-   the module convention. Consumes the renderer handle passed to draw().
-
-   Extracted verbatim from js/game.js. Self-contained by construction: the eight
-   pieces of state below are read and written HERE and nowhere else, which is
-   what made this the first clean lift out of game.js after aerozones. The three
-   call sites in game.js pass everything in — a reset at race start, a stamp per
-   sliding frame, and a draw per rendered frame.
-
-   Must load BEFORE js/game.js (see index.html / tools/manifest.cjs). */
+/* Apex 26 — SkidMarks: the tyre-mark ring buffer and its batched draw. SkidMarks.create(G) — needs nothing from G; it is called with it only to match the module c… */
 const SkidMarks = (function () {
   "use strict";
 
@@ -16,11 +6,7 @@ const MAX_SKID = 120;
 const _SKID_W = 0.6, _SKID_L = 2.2;
 // 6 verts (two tris) — matches the shadowVAO quad winding [0,1,2, 0,2,3].
 const _SKID_CORNERS = [-0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5];
-// Beyond this the per-mark FALLBACK path culls. Squared, so the compare needs no
-// sqrt. Only the fallback uses it; the batch draws the whole buffer in one call.
 const SKID_CULL = 170 * 170;
-// Frames between stamps while the car is sliding. At 60 Hz that is a mark every
-// ~83 ms, which fills the 120-mark ring in ~10 s of continuous slide.
 const STAMP_EVERY = 5;
 
 function create(_G) {
@@ -30,10 +16,6 @@ function create(_G) {
   let idx = 0;
   let frameT = 0;               // frame countdown between stamp placements
 
-  // Batched skid trail: all live marks baked into one world-space vertex buffer
-  // (pos3 + uv2 per vertex, 6 verts/mark) drawn in a single call. Rebuilt only
-  // when a mark is added/evicted (at most every ~5 frames while sliding) instead
-  // of issuing up to 120 per-mark draws every frame.
   const verts = new Float32Array(MAX_SKID * 6 * 5);
   let vertCount = 0;
   let dirty = false;
@@ -65,11 +47,6 @@ function create(_G) {
     active = 0; idx = 0; frameT = 0; dirty = true;
   }
 
-  // Advance the stamp countdown for a sliding car and lay a mark when it fires.
-  // `laying` folds the caller's whole condition (sliding hard enough OR off
-  // track, and moving) into one boolean so the rule stays where the car state
-  // is. Not laying resets the countdown, so the first mark of a new slide is
-  // immediate rather than up to five frames late.
   function stamp(mat, laying) {
     if (!laying) { frameT = 0; return; }
     if (--frameT > 0) return;
@@ -80,8 +57,6 @@ function create(_G) {
     dirty = true;               // rebuild the batched trail next render
   }
 
-  // One batched call, falling back to per-mark draws when the batch path is
-  // unavailable (older GPU where the batch program failed to link).
   function draw(gfx, camEye) {
     let rebuilt = false;
     if (dirty) { rebuild(); rebuilt = true; }

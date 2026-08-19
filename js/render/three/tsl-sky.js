@@ -1,52 +1,4 @@
-/* Apex 26 — TLXShaders.sky: the procedural sky for the TLX backend (M5).
- *
- * A 1:1 port of js/render/shaders/sky.js (SKY_VS/SKY_FS — the GLSL source of
- * truth) into three.js TSL nodes: gradient dome (overcast flattening, day
- * deep-blue band + azimuthal life, golden-hour + low-sun horizon band,
- * below-horizon earth), the full procedural cloud pass (two drift vectors +
- * evo warp, coverage, billow definition octave, the *0.16-plane horizon
- * cloud-bank, thickness FBM, cloudTop/Bot model, silver lining, twilight
- * wash, moon tint, lightning bleach), Mie forward scatter, the sun compass
- * horizon glow, corona + aureole + squashed HDR disc, the round-point star
- * field (spawn window, giants, twinkle, cloud occlusion), moon disc + halo,
- * the city light-pollution dome with cloud-belly pickup, and the 1/255
- * time-stepped IGN output dither. Constants verbatim from sky.js — the
- * structural gates included: nightSky = step(0.5, uStars) zeroes daytime/
- * twilight AND damps the corona (at night uSunDir is the MOON key pointing
- * high — without the gate a daytime sun disc paints among the stars).
- *
- * DELIVERY: instead of GLX's fullscreen triangle at far depth, the factory
- * returns a NODE for three's scene.backgroundNode — three renders it on its
- * internal camera-following background mesh (depthTest/Write off, drawn
- * first, vertex z pinned to w == the far plane), which is exactly the GLX
- * draw order. The RAY MATH stays identical to SKY_VS: per-pixel NDC from
- * screenUV, unprojected through uInvViewProj on both z planes (frameSky
- * carries invViewProj each frame — the env-probe pass in game.js swaps it
- * per face, so update() must NOT derive the ray from three's camera nodes).
- * screenUV is top-left origin on BOTH backends (three normalises the WebGL
- * gl_FragCoord to the WebGPU convention), hence the 1-y in the NDC build.
- *
- * NOISE FAMILY: the SKY-family hash/vnoise/fbm (GLXChunks.hash + .vnoise —
- * hash2's 127.1/311.7/34.5 constants, hash3, 4-octave fbm) live HERE, not in
- * tsl-chunks.js: tsl-chunks holds the SURFACE family (hash21 123.34/456.21)
- * whose vnoise would collide by name, and the sky is this family's only TSL
- * consumer. ignoise is shared from ctx.chunks (the one genuinely common leaf).
- *
- * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
- *     TLXShaders.sky = (THREE, TSL, ctx) =>
- *         ({ node, fallbackNode, uniforms, update })
- * fallbackNode is a zenith→horizon screen-Y mix (no ray reconstruction).
- * tlx.js arms it on software GL: the full SKY_FS node either misses
- * (fog Color → beige void) or reconstructs rays badly against the HDR
- * target. Real GPUs keep `node`.
- * ctx = { chunks } (TLXShaders.chunks(THREE, TSL); optional — ignoise falls
- * back to a local copy). NEVER touches THREE/TSL at script eval — three
- * exists only inside TLX.create().
- *
- * STANDING RULE (tsl-lit.js header): every shared varying-derived node gets
- * an unconditional Fn-body .toVar() anchor before any conditional use —
- * here screenUV and the whole dir chain anchor at the top of the Fn.
- */
+/* Apex 26 — TLXShaders.sky: the procedural sky for the TLX backend (M5). A 1:1 port of js/render/shaders/sky.js (SKY_VS/SKY_FS — the GLSL source of truth) into th… */
 "use strict";
 
 (function () {
@@ -86,8 +38,6 @@
       p.mulAssign(2.02); s.addAssign(vnoise(p).mul(0.0625));
       return s;
     });
-    // ignoise: the shared leaf from tsl-chunks (local fallback keeps the
-    // factory self-sufficient if ctx.chunks is absent).
     const ignoise = (ctx && ctx.chunks && ctx.chunks.ignoise) || Fn(([p]) => {
       return fract(float(52.9829189).mul(fract(dot(p, vec2(0.06711056, 0.00583715)))));
     });
@@ -181,9 +131,6 @@
       // Bright-DAY gate (sun well up, ~25°+) + TWILIGHT gate (dawn/dusk).
       const daytime = smoothstep(0.35, 0.60, sunE).toVar();
       const twilight = smoothstep(0.02, 0.22, sunE).mul(daytime.oneMinus()).toVar();
-      // NIGHT gate: at night uSunDir points HIGH (it doubles as the moon key
-      // light) which reads as midday to sunE — zero the sun-driven day/
-      // twilight ENRICHMENTS so no daytime sun/cumulus paint among the stars.
       const nightSky = step(0.5, U.stars).toVar();
       daytime.mulAssign(nightSky.oneMinus());
       twilight.mulAssign(nightSky.oneMinus());
@@ -206,8 +153,6 @@
         const horizonO = mix(U.horizon, greyH, overcast.mul(0.60));
         // SKY GRADIENT knob (def 0.35 = as-shipped).
         c.assign(mix(horizonO, zenithO, pow(up, U.skyGrad)));
-        // Day gradient LIFE: deep saturated-blue low/mid band + faint
-        // azimuthal variation. Day-only, faded under overcast.
         const bandLM = smoothstep(0.06, 0.55, up).oneMinus().mul(smoothstep(0.0, 0.06, up));
         const deepBlue = vec3(0.10, 0.30, 0.72);
         c.assign(mix(c, mix(c, deepBlue, 0.30),
@@ -236,9 +181,6 @@
         c.assign(mix(U.horizon.mul(0.85), vec3(0.035, 0.030, 0.022), gnd.mul(gnd)));
       });
 
-      // --- Procedural cloud layer ---
-      // Coverage/thickness along this ray, hoisted for the city-glow cloud
-      // pickup + star occlusion below.
       const cityCov = float(0.0).toVar();
       const cityThick = float(0.0).toVar();
       If(U.cloud.greaterThan(0.001).and(up.greaterThan(0.012)), () => {
@@ -310,8 +252,6 @@
           const moonLit = U.moon.mul(cov).mul(thick.mul(0.6).oneMinus()).mul(0.18);
           lit.assign(mix(lit, lit.add(vec3(0.08, 0.10, 0.16)), moonLit));
         });
-        // LIGHTNING: the deck flares — thick bellies brightest (bolt inside/
-        // behind the deck), cool blue-white, HDR >1 so it blooms.
         If(U.lightning.greaterThan(0.001), () => {
           const ltFlash = vec3(0.82, 0.94, 1.30).mul(thick.mul(1.2).add(1.0));
           lit.assign(mix(lit, ltFlash, clamp(U.lightning.mul(thick.mul(0.60).add(0.40)), 0.0, 1.0)));
@@ -321,8 +261,6 @@
         cityThick.assign(thick);
       });
 
-      // LIGHTNING sky-gradient lift: the clear dome between the clouds picks
-      // up a gentler cool bleach, weighted DOWN where the deck already flared.
       If(U.lightning.greaterThan(0.001).and(up.greaterThan(0.0)), () => {
         c.addAssign(vec3(0.10, 0.13, 0.20).mul(U.lightning).mul(cityCov.mul(0.6).oneMinus()));
       });
@@ -339,9 +277,6 @@
       If(sunHLen.greaterThan(0.05), () => {
         const dirH = vec2(dir.x, dir.z);
         const dirHLen = length(dirH).toVar();
-        // select() compiles to a real ternary; the max() guards the unselected
-        // divide (a 0-length dirH would put NaN in the dead branch on strict
-        // drivers that evaluate both sides).
         const hdot = dirHLen.greaterThan(0.05)
           .select(max(dot(dirH.div(max(dirHLen, 1e-5)), sunH.div(sunHLen)), 0.0), float(0.0));
         const hband = max(abs(up).mul(5.0).oneMinus(), 0.0);
@@ -369,8 +304,6 @@
       const discCore = mix(vec3(2.3, 2.2, 1.9), sunWarm.mul(2.8), golden);
       c.addAssign(discCore.mul(disc));
 
-      // --- Stars (night tracks): round anti-aliased point discs, brightness
-      //     capped below the bloom threshold (no streak smear) ---
       If(U.stars.greaterThan(0.5).and(up.greaterThan(0.05)), () => {
         const SC = 180.0;
         const cell = floor(dir.mul(SC)).toVar();
@@ -405,16 +338,10 @@
           .mul(0.28).mul(U.moonHalo).mul(U.moon);
         const moonCol = vec3(0.82, 0.88, 1.00);
         If(up.greaterThan(0.0).and(md.greaterThan(0.0)), () => {
-          // Cloud occlusion: the moon sits BEHIND the deck exactly as the
-          // stars do (SKY_FS in js/render/shaders/sky.js). Without this a
-          // stormy/foggy night painted a crisp moon ON TOP of the clouds
-          // while the stars behind it were correctly hidden.
           c.addAssign(moonCol.mul(moonDisc.mul(1.10).add(moonHalo)).mul(cityCov.oneMinus()));
         });
       });
 
-      // CITY SKYGLOW: light-pollution dome hugging the horizon + a hint of
-      // cloud-belly pickup (clouds over a lit city glow from below).
       If(U.cityGlow.x.add(U.cityGlow.y).add(U.cityGlow.z).greaterThan(0.001), () => {
         const horiz = pow(clamp(max(dir.y, 0.0).mul(2.4).oneMinus(), 0.0, 1.0),
           U.cityGlowReach.mul(3.0));
@@ -424,8 +351,6 @@
         c.addAssign(U.cityGlow.mul(pickup).mul(0.45));
       });
 
-      // ~1/255 time-stepped IGN dither: the night gradient spans a handful of
-      // 8-bit steps and the quantisation happens right here at scene write.
       const skyDth = ignoise(screenCoordinate.xy
         .add(mod(floor(U.time.mul(60.0)), 64.0).mul(5.588238)));
       c.addAssign(skyDth.sub(0.5).mul(1.0 / 255.0));
@@ -433,10 +358,6 @@
       return vec4(c, 1.0);
     })();
 
-    // Cheap miss-path for software GL (tlx.js drawSky). No invViewProj ray —
-    // a SwiftShader HDR target used to collapse the full node to fog beige
-    // or a flat zenith lid. Mix the same zenith/horizon uniforms the full
-    // node reads, keyed on screen Y (top-left origin on both backends).
     const fallbackNode = Fn(() => {
       const t = smoothstep(0.08, 0.88, screenUV.y);
       return vec4(mix(U.zenith, U.horizon, t), 1.0);

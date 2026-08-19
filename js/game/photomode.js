@@ -1,9 +1,4 @@
-/* Apex 26 — photo mode for js/game.js: the free-fly camera (WASD/mouse/touch
-   sticks), enter/exit plumbing (render-scale bump, HUD hide, LT copy helpers)
-   and its DOM wiring. Live camera/session state comes through the ctx façade
-   G handed to Photomode.create(G); the photoCam/photoKeys/... scratch objects
-   arrive by destructure (stable refs, mutated in place). Consumes globals
-   GameAudio, PerfGov. Must load BEFORE js/game.js (see index.html). */
+/* Apex 26 — photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks), enter/exit plumbing (render-scale bump, HUD hide, LT copy helpers) and its D… */
 const Photomode = (function () {
   "use strict";
 
@@ -41,13 +36,8 @@ function updatePhotoCam(dt) {
   const cp = Math.cos(photoCam.pitch), sp = Math.sin(photoCam.pitch);
   const fwd = [Math.sin(photoCam.yaw) * cp, sp, -Math.cos(photoCam.yaw) * cp];
   const rgt = [Math.cos(photoCam.yaw), 0, Math.sin(photoCam.yaw)];
-  // Move: WASD + touch move stick (forward follows the look pitch); R/F + up/down
-  // buttons ride the WORLD vertical so you can climb straight up.
   const mf = (photoKeys.w ? 1 : 0) - (photoKeys.s ? 1 : 0) - photoMove.y;   // stick UP (dy<0) = forward
   const ms = (photoKeys.d ? 1 : 0) - (photoKeys.a ? 1 : 0) + photoMove.x;
-  // Vertical input (R/F keys + up/down buttons) ramps with hold time so height
-  // can be framed precisely: a tap nudges ~0.4 m, a hold accelerates to the
-  // full fly speed over ~2 s.
   const mvIn = (photoKeys.up ? 1 : 0) - (photoKeys.dn ? 1 : 0) + G.photoAlt;
   G.photoVertT = mvIn ? G.photoVertT + dt : 0;
   const vRamp = Math.min(1, 0.12 + 0.88 * Math.pow(Math.min(G.photoVertT / 2.2, 1), 1.6));
@@ -67,19 +57,11 @@ function updatePhotoCam(dt) {
   G.dbgCam = { eye: [e[0], e[1], e[2]], target: [e[0] + fwd[0] * 100, e[1] + fwd[1] * 100, e[2] + fwd[2] * 100],
              fov: photoCam.fov, far: gfx.isMobile ? 1100 : 2500, fog: 1.0 };   // not 8000 — a huge far plane wrecks depth precision → z-fighting/flicker
 }
-// Free-cam is a sub-mode OF the lighting tuner: the tuner panel stays open (docked
-// right) so sliders can be adjusted while the camera flies, and the effect is seen
-// from any angle. Only the race HUD is hidden (body.photo-mode) to declutter.
 function enterPhotoMode() {
   if (G.photoMode) return;
   Log.info("game", "Photomode.enter");
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   G.photoMode = true;
-  // Lock resolution while flying (no governor stepping — every scale change
-  // reallocates the whole post chain). The previous scale is restored on exit
-  // (NOT a snap to full res, which was a reallocation burst at the worst moment).
-  // Follows the user's RESOLUTION setting as-is — no forced downgrade; the
-  // far-plane clamp in updatePhotoCam is what bounds draw volume/GPU cost.
   PerfGov.setAutoRes(false);
   G._photoPrevScale = gfx.getRenderScale ? gfx.getRenderScale() : 1;
   initPhotoCam();
@@ -101,15 +83,9 @@ function exitPhotoMode() {
   const t = $("pc-toggle"); if (t) { t.classList.remove("on"); t.innerHTML = "📷 FREE CAMERA"; }
   window.removeEventListener("keydown", photoKeyHandler, true);
   window.removeEventListener("keyup", photoKeyHandler, true);
-  // Restore the pre-photo scale, then re-apply the user's RESOLUTION setting
-  // (fixed modes re-pin their scale + keep the governor off; AUTO re-enables it).
   if (gfx.setRenderScale) gfx.setRenderScale(G._photoPrevScale || 1);
   applyResMode();
 }
-// Temporarily tuck the tuner panel away for an unobstructed scene, still flying.
-// With the panel gone the right half of the screen frees up, so body.pc-nopanel
-// relocates the LOOK stick + up/down column to the bottom-right corner (classic
-// dual-stick ergonomics); showing the panel again moves them back left.
 function togglePhotoPanel() {
   const p = $("lighting-inner"); if (!p) return;
   const hide = !p.hidden;
@@ -118,8 +94,6 @@ function togglePhotoPanel() {
   const pb = $("pc-panel"); if (pb) pb.textContent = hide ? "SHOW PANEL" : "HIDE PANEL";
   if (G.soundOn) GameAudio.uiTick();
 }
-// Photo-mode HIDE HUD: hide every control (bar, sticks, tuner panel) for a
-// clean frame; the tiny top-right eye brings it all back. Keys keep flying.
 function setPhotoUiHidden(hide) {
   document.body.classList.toggle("pc-uihidden", hide);
   if (G.soundOn) GameAudio.uiTick();
@@ -142,12 +116,6 @@ function photoKeyHandler(e) {
     case "ArrowLeft": photoKeys.yl = down; break;
     case "ArrowRight": photoKeys.yr = down; break;
     case "ShiftLeft": case "ShiftRight": photoKeys.boost = down; break;
-    // Escape is NOT handled here. It used to call setPaused(false), which threw
-    // away the fly-cam, the tuner panel AND the pause in one press — three
-    // screens for one key. #photo-controls is a layer like any other now
-    // (js/game/uilayers.js) and carries data-esc-close="pc-exit", so Escape
-    // steps out of the free camera and leaves you on the panel you opened it
-    // from. Press it again to leave the panel.
     default: hit = false;
   }
   if (hit) { e.preventDefault(); e.stopPropagation(); }
@@ -166,9 +134,6 @@ function wirePhotoStick(id, vec) {
     if (nub) nub.style.transform = "translate(" + (dx * rad * 0.6) + "px," + (dy * rad * 0.6) + "px)";
   };
   const end = () => { vec.x = 0; vec.y = 0; pid = null; if (nub) nub.style.transform = "translate(0,0)"; };
-  // Only the finger that STARTED the drag ends it. Two fingers on one stick used
-  // to mean the first one lifting zeroed the vector while the second was still
-  // pressing, so the stick died under your thumb.
   const endIf = (e) => { if (pid === null || e.pointerId === pid) end(); };
   el.addEventListener("pointerdown", (e) => {
     pid = e.pointerId;
@@ -210,9 +175,6 @@ function wirePhotoHold(id, on, off) {
   });
   el.addEventListener("pointerup", release);
   el.addEventListener("pointercancel", release);
-  // With the pointer captured, pointerleave no longer fires while held — which
-  // is the point: a thumb drifting a few px off the button used to stop the
-  // climb. It stays for the mouse, where there is no capture to lose.
   el.addEventListener("pointerleave", release);
   el.addEventListener("lostpointercapture", release);   // see wirePhotoStick
 }
@@ -266,17 +228,6 @@ $("lt-reset").onclick = () => {
   // reached through the legacy global layer cleared below.
   const key = ltKey();
   if (key && G._ltStore[key]) delete G._ltStore[key];
-  // …and the legacy GLOBAL layer, or the reset cannot reach the shipped values
-  // at all. light-store.js resolves def -> LightPresets["*"] -> LightPresets[key]
-  // -> profiles["*"] -> profiles[key], so profiles["*"] OUTRANKS the shipped
-  // file. Nothing in the current UI can create or edit that layer: it exists
-  // only because the legacy-format migration in js/game/light-store.js turns a
-  // pre-nested flat {id:number} save into { "*": saved }. So for a player
-  // carrying one, RESET was a no-op on
-  // every knob in that blob, on every track and every condition — invisible
-  // state defeating the one button that exists to clear state. Deleting it does
-  // reach other conditions, which is why the comment above no longer claims
-  // otherwise; migration residue is not a setting the player chose.
   if (G._ltStore["*"]) delete G._ltStore["*"];
   persistLightTune();
   applyLightTune();
@@ -284,9 +235,6 @@ $("lt-reset").onclick = () => {
   $("lt-json").hidden = true;
 };
 $("lt-copy").onclick = () => {
-  // Export the FULL set (shipped file merged with every local edit, local
-  // winning) as the paste-ready body for js/game/light-presets.js — replace that
-  // file's `window.LightPresets = {…}` literal with this to bake it in.
   const merged = {};
   const F = window.LightPresets || {};
   const S = G._ltStore || {};
@@ -316,10 +264,6 @@ $("lt-copy").onclick = () => {
     btn.textContent = ok ? "COPIED ✓" : "SELECT & COPY ↑";
     setTimeout(() => { btn.textContent = "COPY VALUES"; }, 1800);
   };
-  // Auto-copy: prefer the async Clipboard API (the button click is the required
-  // user gesture); fall back to execCommand on the selected textarea for older
-  // mobile / installed-PWA webviews where navigator.clipboard is unavailable or
-  // rejects. The textarea stays visible either way as a manual fallback.
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(json).then(() => flash(true), () => {
       let ok = false; try { ok = document.execCommand && document.execCommand("copy"); } catch (e) {}

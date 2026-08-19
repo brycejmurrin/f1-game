@@ -1,8 +1,4 @@
-/* Apex 26 — persistence for js/game.js: the cached localStorage wrapper
-   (`store`, all keys prefixed "apex26."), the per-track time-trial
-   leaderboard, season-points identity/migration helpers, and hex<->rgb.
-   Pure data + localStorage; the only other global consumed is Teams (season
-   roster). Must load BEFORE js/game.js (see index.html). */
+/* Apex 26 — persistence for js/game.js: the cached localStorage wrapper (`store`, all keys prefixed "apex26."), the per-track time-trial leaderboard, season-point… */
 const GameStore = (function () {
   "use strict";
 
@@ -12,8 +8,6 @@ const store = {
   _clearRev: 0,        // storage.clear() invalidates every key without naming one
   _listeners: new Set(),
   rev: 0,              // bumped on every set — memo caches key off this to self-invalidate
-  // NON-NULL once a read or write has failed: the DOMException name ("QuotaExceededError",
-  // "SecurityError", …). See the comment on set().
   broken: null,
   get(k, d) {
     const key = "apex26." + k;
@@ -30,8 +24,6 @@ const store = {
       }
       this._cache.set(key, v);
     }
-    // Callers treat hot-path results as read-only; menu callers that mutate a
-    // returned object always saveTeamParts()/store.set() after, re-caching the ref.
     return v === undefined ? d : v;
   },
   // THE CACHE IS WRITTEN EVEN WHEN THE DISK WRITE FAILS, AND THAT IS DELIBERATE —
@@ -67,10 +59,6 @@ const store = {
     this._notify({ key: k, durable, reason: result.reason, local: true });
     return result;
   },
-  // A key-scoped generation lets domain owners detect that THEIR backing value
-  // moved without treating an unrelated preference write as a save conflict.
-  // The string form keeps clear() and per-key counters independent without a
-  // lossy numeric packing scheme.
   keyRevision(k) {
     const key = k.indexOf("apex26.") === 0 ? k : "apex26." + k;
     return this._clearRev + ":" + (this._keyRev.get(key) || 0);
@@ -86,7 +74,6 @@ const store = {
       catch (e) { Log.warn("game", "persistence observer failed: " + ((e && e.message) || e)); }
     }
   },
-  // ---- cross-tab -----------------------------------------------------------
   // THE CACHE MAKES A SECOND TAB DANGEROUS, and that is what this fixes. `_cache`
   // exists so the render loop never calls getItem/JSON.parse, and it is populated
   // on first read — so once tab A has read `career`, it answers every later get()
@@ -122,18 +109,10 @@ const store = {
   foreign: 0,          // applied foreign writes — surfaced by __apex.persistState()
 };
 
-// Self-install. There is no init() in this module's contract and every consumer
-// gets `store` straight off the global, so the listener has to arm itself; a
-// listener that waits to be wired is a listener nobody wires. Guarded because
-// this file also loads in Node VM harnesses with no window.
 if (typeof window !== "undefined" && window.addEventListener) {
   window.addEventListener("storage", (e) => { store.onForeignWrite(e); });
 }
 
-// Report the FIRST failure loudly and every later one only to the buffer. A dead
-// localStorage fails on every single call, so an unconditional warn would bury
-// the console in one identical line; the ring buffer still has the full history
-// for __apex.logs({ns:"game"}).
 function noteBroken(e, what) {
   const name = (e && e.name) || "Error";
   const first = !store.broken;
@@ -143,8 +122,6 @@ function noteBroken(e, what) {
   if (first) Log.warn("game", msg); else Log.info("game", msg);
 }
 
-// Per-track time-trial leaderboard: top 10 laps ever, each tagged with the
-// team + driver that set it. Stored sorted ascending by lap time.
 const TT_BOARD_MAX = 10;
 function ttBoard(trackId) {
   const b = store.get("ttlb." + trackId, []);
@@ -169,7 +146,6 @@ function rgbToHex(c) {
   return "#" + f(c[0]) + f(c[1]) + f(c[2]);
 }
 
-// ---------- season points identity ----------
 function seasonDriverId(teamId, driverIndex) { return teamId + ":" + driverIndex; }
 function seasonRoster() {
   const roster = [];
@@ -216,8 +192,6 @@ function remapPoints(season) {
   return season;
 }
 
-// Mutates + PERSISTS the standalone season save (no-op on null); returns it so
-// game.js can do `season = GameStore.migrateSeasonPoints(season)`.
 function migrateSeasonPoints(season) {
   if (!season) return season;
   remapPoints(season);
@@ -225,13 +199,6 @@ function migrateSeasonPoints(season) {
   return season;
 }
 
-// ---------- career save ----------
-// THREE careers, under `apex26.career.0..2` (js/game/career.js owns the slots and
-// which one is live; the single-save `apex26.career` of the first build migrates
-// into slot 0). Versioned from the start: the shape will grow, and a stored save
-// has to survive that. Migrations are a ladder — one function per version step,
-// each taking the save from v(i) to v(i+1) — so a save written by any past build
-// climbs to the current shape one rung at a time.
 const CAREER_V = 1;
 const CAREER_MIGRATIONS = [
   // v0 -> v1: the first shipped shape. A v0 save predates `v` entirely.
@@ -268,16 +235,10 @@ function migrateCareer(career) {
   career.history = Array.isArray(career.history) ? career.history : [];
   career.dev = career.dev && typeof career.dev === "object" ? career.dev : {};
   career.tdev = career.tdev && typeof career.tdev === "object" ? career.tdev : {};
-  // The rollover's three: grid overrides the driver market writes, the contract
-  // offers waiting to be signed, and the current round's objective. Fills, not a
-  // migration step — a save from before any of them existed is still a valid v1
-  // save, it just has nothing in them yet.
   career.seats = career.seats && typeof career.seats === "object" ? career.seats : {};
   career.offers = Array.isArray(career.offers) ? career.offers : [];
   career.obj = career.obj && typeof career.obj === "object" ? career.obj : null;
   career.budgetLvl = career.budgetLvl | 0;
-  // The open-ended research facility (js/game/career.js). A fill, not a
-  // migration step: a save from before it existed is a valid v1 save at level 0.
   career.facility = career.facility | 0;
   career.moves = Array.isArray(career.moves) ? career.moves : [];
   career.paidSponsors = Array.isArray(career.paidSponsors) ? career.paidSponsors : [];
@@ -288,4 +249,3 @@ return { store, ttBoard, ttBoardAdd,
          hexToRgb, rgbToHex, seasonDriverId,
          migrateSeasonPoints, migrateCareer, CAREER_V };
 })();
-

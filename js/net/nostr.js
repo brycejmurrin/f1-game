@@ -1,65 +1,12 @@
-/*
- * NetNostr — the room-code rendezvous, over public Nostr relays.
- *
- * WHY NOSTR AND NOT A PUBLIC MQTT BROKER. The first version of this used the
- * free public MQTT brokers (EMQX, HiveMQ, Mosquitto). It worked, and it should
- * not have shipped: HiveMQ's terms say the broker "must not be used in
- * Production, Dev, Staging or UAT environments", and EMQX says the same. Those
- * are TEST brokers lent for learning the protocol, and pointing a game at them
- * is taking something that was not offered.
- *
- * Nostr relays are the opposite case. Accepting arbitrary signed events from
- * anonymous clients is what a relay is FOR — it is the protocol's entire
- * premise, not a courtesy being abused. The shipped RELAYS list below opens a
- * handful at once, so no single operator is load-bearing.
- *
- * HOW THE EXCHANGE ACTUALLY RUNS. The default path is directExchange(): our
- * OWN WebSockets straight to the relays, publishing and subscribing the two
- * invite/answer STRINGS and nothing else. The vendored Trystero module is
- * used only for its Nostr event framing and signing helpers (createEvent /
- * subscribe) — no Trystero room is opened. The race then runs over our own
- * RTCPeerConnection with its unreliable state channel, its reliable event
- * channel, and its TURN relay; everything downstream is untouched. The old
- * route — a full Trystero room, whose own WebRTC data channel carried the
- * strings — survives as the opt-in legacy branch in exchange(), behind
- * localStorage apex26.nostrTrystero; directExchange()'s header records why
- * it was replaced.
- *
- * WHAT THE RELAYS SEE. The payload is sealed with AES-GCM under a key derived
- * from the room code (NetRendezvous.seal/open), and the topics are hashes of
- * the code rather than the code itself — so a relay operator carries bytes it
- * cannot read, and someone watching the room namespace learns nothing. The
- * code is the secret: the same trust model as the invite code it replaces.
- * (On the legacy branch, Trystero's `password` option gives the equivalent
- * guarantee.)
- *
- * WHY IT IS LOADED LATE. Trystero is an ES module and ~170 KB with its schnorr
- * dependency. It is imported the first time somebody uses a room code and
- * never during boot, so a player who only ever shares a link pays nothing for
- * it. That also keeps it out of the IIFE load order entirely — it is reached
- * by dynamic import through the same importmap as vendored three.js.
- */
+/* NetNostr — the room-code rendezvous, over public Nostr relays. WHY NOSTR AND NOT A PUBLIC MQTT BROKER. The first version of this used the free public MQTT broke… */
 "use strict";
 
 const NetNostr = (function () {
   const APP_ID = "apex26-vs";
 
-  // A room is live, not a mailbox: unlike an MQTT retained message there is
-  // nothing held for later, so the host stays in the room until the guest
-  // arrives. That is what the lobby's "waiting for them to join" screen IS.
   const JOIN_TIMEOUT_MS = 120000;
-  // How long to give the relays to answer at all before deciding the network,
-  // rather than the other player, is the problem.
   const RELAY_CHECK_MS = 6000;
-  // How often the host says its offer again while waiting. A Nostr room has no
-  // memory — Trystero subscribes with `since: now()` and the events are
-  // ephemeral — so anything said before a guest subscribed is unreachable to
-  // it, for ever. Five seconds is slow enough not to look like spam to a relay
-  // and fast enough that nobody notices the wait.
   const REPOST_MS = 5000;
-  // Relay traffic is anonymous and therefore attacker-controlled. The largest
-  // handshake accepted downstream is 512 KiB; AES-GCM adds 28 bytes and base64
-  // expands by 4/3. Keep the JSON frame only a small envelope larger than that.
   const MAX_HANDSHAKE_CHARS = 512 * 1024;
   const MAX_CONTENT_CHARS = Math.ceil((MAX_HANDSHAKE_CHARS + 28) / 3) * 4;
   const MAX_FRAME_CHARS = MAX_CONTENT_CHARS + 8192;
@@ -209,9 +156,6 @@ const NetNostr = (function () {
     catch (e) { return { close: false, message: null }; }
   }
 
-  // A tiny bounded admission gate around the expensive base64 + PBKDF2/AES
-  // work. Overflow closes only the relay that sent it; the other sockets remain
-  // available. Duplicates are admitted without consuming another worker.
   function createBoundedInbox(consume) {
     const seen = new Set();
     let seenChars = 0, active = 0;
@@ -283,19 +227,7 @@ const NetNostr = (function () {
                       + " Use the invite link or QR instead." });
     }
 
-    // WHICH SIDE ARE WE? The one that does NOT reply. `reply` is the guest's
-    // whole definition (it cannot speak until it has seen the invite), so it is
-    // the only reliable discriminator — and the header's two-party host, the one
-    // that just passes `send` and waits for the answer, has no mintOffer and no
-    // onJoiner. Classified off those two it came out `hosting === false`:
-    // it published its invite on the "|answer" topic and listened on "|offer",
-    // where the guest was also listening and nobody ever published. Both sides
-    // then sat out the full JOIN_TIMEOUT_MS. Latent because the lobby's public
-    // path always passes onJoiner and swap-as-host only runs on the private
-    // relay — but it is the shape this module's own contract documents.
     const hosting = !reply;
-    // The side we PUBLISH on and the side we LISTEN on. Separate, or a peer
-    // reads its own publication straight back and answers itself.
     const mineTopic  = await roomId(code + (hosting ? "|offer" : "|answer"));
     const theirTopic = await roomId(code + (hosting ? "|answer" : "|offer"));
 
@@ -326,8 +258,6 @@ const NetNostr = (function () {
         let frame;
         try {
           const sealed = await NetRendezvous.seal(code, text);
-          // base64 so it survives JSON, and short enough that a relay will
-          // take it: an invite is ~240 chars packed.
           let bin = "";
           for (let i = 0; i < sealed.length; i++) bin += String.fromCharCode(sealed[i]);
           frame = await mod.createEvent(mineTopic, btoa(bin));
@@ -352,9 +282,6 @@ const NetNostr = (function () {
         if (hosting) {
           // An answer. Hand it over; the room stays open for more joiners.
           if (onJoiner) { Promise.resolve().then(() => onJoiner(null, text)).catch(() => {}); return; }
-          // No onJoiner: this is the header's two-party host, which "resolves
-          // when the answer arrives". Discarding it here left that caller
-          // waiting out the timeout on an answer it had already been handed.
           finish({ ok: true, payload: text });
           return;
         }
@@ -387,9 +314,6 @@ const NetNostr = (function () {
         else if (onTick) { try { onTick(); } catch (e) {} }
       }, 1000);
 
-      // Say it again while nobody has taken it. A relay carries live events
-      // only, so a peer that subscribes after we published hears nothing until
-      // we publish again — this is what makes arriving late survivable.
       const repost = setInterval(() => { if (!done && current) publish(current); }, REPOST_MS);
 
       setTimeout(() => finish({ ok: false, error: "expired",
@@ -461,8 +385,6 @@ const NetNostr = (function () {
         }
       }, RELAY_CHECK_MS);
 
-      // A host stays open for further joiners and says so immediately, exactly
-      // as the Trystero path did.
       if (onJoiner && !settled) {
         settled = true;
         nostrLog({ ok: true, subscribed: true });
@@ -484,19 +406,10 @@ const NetNostr = (function () {
   }
 
   async function exchange(opts) {
-    // THE DIRECT PATH IS THE DEFAULT. See directExchange() above for why: the
-    // Trystero room used the relays to build a peer connection, and then sent
-    // our signalling over THAT — a WebRTC link established in order to
-    // establish a WebRTC link, with the first dying as the second starts.
-    // localStorage apex26.nostrTrystero = "true" restores the old route for a
-    // side-by-side comparison.
     let legacy = false;
     try { legacy = localStorage.getItem("apex26.nostrTrystero") === "true"; } catch (e) {}
     if (!legacy) return directExchange(opts);
     Log.info("net", "nostr start");
-    // send/reply are the two-party pair this started as. mintOffer+onJoiner are
-    // SUBSCRIPTION mode: a host that stays in the room and answers each arrival
-    // with an offer of its own, rather than resolving on the first one.
     const { code, send, reply, token, onTick, mintOffer, onJoiner, onFail } = opts;
     if (!available()) {
       return nostrLog({ ok: false, error: "unsupported",
@@ -610,8 +523,6 @@ const NetNostr = (function () {
         leave();
         nostrLog(r);
         if (!settled) { settled = true; resolve(r); return; }
-        // Already answered, so the only way to report this is the callback the
-        // caller gave us.
         if (onFail) { try { onFail(r); } catch (e) {} }
       };
 
@@ -666,17 +577,8 @@ const NetNostr = (function () {
       }, RELAY_CHECK_MS);
 
       try {
-        // password: the ROOM CODE. Trystero encrypts the signalling payload
-        // with it, so the relay relays ciphertext.
         roomId(code).then((id) => {
           if (done) return;
-          // WHICH RELAYS. Trystero's getRelays() picks its subset
-          // DETERMINISTICALLY from a hash of the appId, so every player of this
-          // game gets the same handful for ever — a bad draw is permanent, not
-          // intermittent. A real console showed ours: two with dead DNS, one
-          // timing out, one rate-limiting. Being able to say otherwise is both
-          // the fix for that and what makes this path testable at all, against
-          // a relay on localhost (tools/net/nostr-local.cjs).
           room = mod.joinRoom(Object.assign(
             { appId: APP_ID, password: code },
             relayUrls() ? { relayConfig: { urls: relayUrls() } } : null,
@@ -688,35 +590,16 @@ const NetNostr = (function () {
           // network failure's clothes. tests/unit/net-trystero-api.test.mjs pins
           // both shapes against the vendored source.
           const swap = room.makeAction("swap");
-          // TARGETED send. Trystero 0.25's signature is
-          // send(data, options) with options.target — NOT send(data, id) as
-          // the older tuple API suggested. Getting that wrong posts to
-          // EVERYONE, which is exactly what makes two joiners collide on the
-          // host's single offer. Pinned in tests/unit/net-trystero-api.test.mjs.
           const post = (data, to) => (to ? swap.send(data, { target: to }) : swap.send(data));
-          // Per-JOINER, not global. As one boolean this was "somebody is being
-          // answered", which with three joiners means two of them are dropped.
           const handling = new Set();
 
           swap.onMessage = (async (data, ctx) => {
-            // Trystero hands the sender as ctx.peerId — the second argument is
-            // a metadata OBJECT, not a bare id.
             const from = (ctx && ctx.peerId) || null;
             if (done) return;
             if (typeof data !== "string" || !data) return;
-            // SUBSCRIPTION MODE — a host that wants several players. Every
-            // joiner's answer is handed straight over and the room STAYS OPEN;
-            // only cancel, expiry, a dead relay or an explicit stop() ends it.
-            // Promise-caught, not try-caught: onJoiner is async, and a plain
-            // try/catch around an async call misses its rejection — which is
-            // exactly how an InvalidStateError reached a real console as
-            // "Uncaught (in promise)".
             if (onJoiner) { Promise.resolve().then(() => onJoiner(from, data)).catch(() => {}); return; }
             if (handling.has(from)) return;
             if (!reply) { finish({ ok: true, payload: data }); return; }
-            // Answering takes seconds (setRemoteDescription plus a full ICE
-            // gather), and the room stays open across it — leaving early would
-            // throw away the channel the answer has to go back down.
             handling.add(from);
             let out;
             try { out = await reply(data); }
@@ -759,9 +642,6 @@ const NetNostr = (function () {
               if (done || ++tries > 4) { clearInterval(resend); return; }
               shout();
             }, 1200);
-            // Long enough for those retries to actually go out. finish() leaves
-            // the room, and leaving it is what used to cut the answer off
-            // after a single 600 ms attempt.
             setTimeout(() => { clearInterval(resend); finish({ ok: true, payload: data }); }, 6500);
           });
 
@@ -775,17 +655,6 @@ const NetNostr = (function () {
           // inside a try/catch does not look like a bug, it looks like the
           // network being down.
           if (mintOffer || onJoiner) {
-            // THE OFFER IS BROADCAST IMMEDIATELY, and again to anyone who
-            // turns up. That is what the two-party path did and it is why it
-            // worked: posting only on onPeerJoin makes the whole room-code
-            // route depend on peer-presence propagating through relays that
-            // are frequently half-dead, and when it does not, the host sits
-            // there having said nothing at all.
-            //
-            // `current` is the offer on the table. One SDP offer belongs to one
-            // RTCPeerConnection, so once somebody takes it the caller rotates
-            // in a fresh one — rotate() below — rather than this minting a new
-            // connection on every join, which is what got us rate-limited.
             let current = send || null;
             // NOTE — DO NOT "refresh a stale offer" HERE. Build 975 tried it:
             // a joiner arriving more than 25 s after the offer was gathered
@@ -802,8 +671,6 @@ const NetNostr = (function () {
             // a timer.
             const put = (to) => { if (current) { try { post(current, to); } catch (e) {} } };
             if (!current && mintOffer) {
-              // No opening offer supplied: make one now rather than waiting for
-              // an arrival to trigger it.
               Promise.resolve(mintOffer(null)).then((o) => { if (!done && o) { current = o; put(); } }).catch(() => {});
             } else {
               put();
@@ -859,17 +726,11 @@ const NetNostr = (function () {
               if (!done) { try { post(send); } catch (e) {} }
             }, REPOST_MS);
           }
-          // Subscription mode has nothing to wait for: hand back the way to
-          // stop, and let the lobby decide when the room closes.
           if (onJoiner && !settled) {
-            // settled, NOT done: the room is open and the relay probe, the join
-            // timeout and the cancellation tick all have to keep running.
             settled = true;
             nostrLog({ ok: true, subscribed: true });
             resolve({
               ok: true, subscribed: true,
-              // Called once a guest has taken the current offer: an SDP offer
-              // belongs to one connection, so the next arrival needs its own.
               rotate: (next) => (rotate ? rotate(next) : null),
               stop: () => finish({ ok: false, error: "stopped", message: "" }),
             });
@@ -882,12 +743,7 @@ const NetNostr = (function () {
   }
 
   return { APP_ID, JOIN_TIMEOUT_MS, RELAY_CHECK_MS, available, roomId, exchange, directExchange, load,
-    // Exported FOR THE TESTS. A bad stored override used to reach
-    // `new WebSocket()` and throw out of joinRoom, and asserting that on the
-    // source text is the kind of test that passes while the code is broken.
     RELAYS, relayUrls, validRelay,
-    // Pure bounded-input helpers exported for Node regressions; production uses
-    // these exact functions in directExchange's WebSocket handler.
     MAX_CONTENT_CHARS, MAX_FRAME_CHARS, MAX_SEEN, MAX_SEEN_CHARS, MAX_HEARD_ACTIVE,
     readRelayFrame, createBoundedInbox };
 })();

@@ -1,36 +1,7 @@
-/*
- * NetQr — an invite you point a camera at.
- *
- * WHY THIS IS WORTH A FILE. The most common way two friends race is in the
- * same room, and in that situation copying a 240-character code between two
- * phones is absurd. A QR of the invite LINK removes the whole exchange in one
- * direction: the host shows it, the guest points their phone's ordinary camera
- * app at it, and the link opens the game with the joining step already showing
- * and the code already filled in.
- *
- * Note what that does NOT require: any scanning code of ours, and any
- * BarcodeDetector support. The guest uses the camera app they already have.
- * That matters because BarcodeDetector is absent on desktop Linux Chrome and
- * on iOS Safari — measured, not assumed — so an in-page scanner would work for
- * a minority of players while the OS camera works for essentially all of them.
- * The answer still comes back by paste or share sheet; there is no "open this
- * to answer" journey, because the host already has the page open.
- *
- * WHAT THIS IMPLEMENTS. Byte mode, error correction level L, versions 1-20,
- * with the mask chosen by the standard penalty rules. Level L because our
- * payload is a URL displayed on a bright screen at close range — the error
- * budget is better spent on a lower version (fewer, larger modules) than on
- * redundancy nobody needs. Versions stop at 20 because a code that needs more
- * than ~850 bytes has already failed the "scannable" test that justifies this.
- *
- * This is deliberately an encoder ONLY. A decoder is an order of magnitude more
- * code — binarisation, perspective correction, error correction — for a job the
- * operating system already does.
- */
+/* NetQr — an invite you point a camera at. WHY THIS IS WORTH A FILE. The most common way two friends race is in the same room, and in that situation copying a 240… */
 "use strict";
 
 const NetQr = (function () {
-  // ---- GF(256), the field Reed-Solomon lives in ----------------------------
   // Primitive polynomial x^8 + x^4 + x^3 + x^2 + 1 (0x11D), as the QR spec says.
   const EXP = new Uint8Array(512), LOG = new Uint8Array(256);
   (function initField() {
@@ -45,8 +16,6 @@ const NetQr = (function () {
   })();
   const gfMul = (a, b) => (a === 0 || b === 0 ? 0 : EXP[LOG[a] + LOG[b]]);
 
-  // Generator polynomial for `n` error-correction codewords: the product of
-  // (x - a^i). Built once per call; n is at most 30 here.
   function rsGenerator(n) {
     let poly = [1];
     for (let i = 0; i < n; i++) {
@@ -74,10 +43,6 @@ const NetQr = (function () {
     return rem;
   }
 
-  // ---- version tables (level L only) ---------------------------------------
-  // [ecPerBlock, blocksGroup1, dataCwGroup1, blocksGroup2, dataCwGroup2].
-  // Group 2's blocks hold exactly one more data codeword than group 1's; that
-  // is how the spec spreads a total that does not divide evenly.
   const L_BLOCKS = [
     null,
     [7, 1, 19, 0, 0], [10, 1, 34, 0, 0], [15, 1, 55, 0, 0], [20, 1, 80, 0, 0],
@@ -109,7 +74,6 @@ const NetQr = (function () {
     return 0;
   }
 
-  // ---- bit stream -----------------------------------------------------------
   function buildData(bytes, version) {
     const bits = [];
     const push = (value, n) => { for (let i = n - 1; i >= 0; i--) bits.push((value >> i) & 1); };
@@ -127,17 +91,12 @@ const NetQr = (function () {
       for (let j = 0; j < 8; j++) byte = (byte << 1) | bits[i + j];
       out[i / 8] = byte;
     }
-    // Pad with the spec's alternating filler. Not arbitrary: 0xEC/0x11 was
-    // chosen to avoid patterns that confuse a scanner.
     for (let i = bits.length / 8, alt = 0; i < out.length; i++, alt ^= 1) {
       out[i] = alt ? 0x11 : 0xec;
     }
     return out;
   }
 
-  // Split into blocks, error-correct each, then INTERLEAVE. The interleaving is
-  // the point of the whole arrangement: a smudge on the printed code damages
-  // one codeword of many blocks rather than destroying one block outright.
   function interleave(data, version) {
     const [ecLen, b1, d1, b2, d2] = L_BLOCKS[version];
     const blocks = [];
@@ -155,9 +114,6 @@ const NetQr = (function () {
     return Uint8Array.from(out);
   }
 
-  // ---- the matrix -----------------------------------------------------------
-  // `reserved` marks every module that is a function pattern, so the data
-  // placement walk can skip it without having to know what it is.
   function makeMatrix(version) {
     const size = version * 4 + 17;
     const m = new Uint8Array(size * size);
@@ -194,8 +150,6 @@ const NetQr = (function () {
     }
 
     set(8, size - 8, 1);                              // the always-dark module
-    // Reserve the format-info strip; the values are written after masking,
-    // because the mask id is part of what they encode.
     for (let i = 0; i < 9; i++) { if (i !== 6) set(i, 8, 0); if (i !== 6) set(8, i, 0); }
     for (let i = 0; i < 8; i++) { set(size - 1 - i, 8, 0); set(8, size - 1 - i, 0); }
     if (version >= 7) {
@@ -207,8 +161,6 @@ const NetQr = (function () {
     return { size, m, reserved };
   }
 
-  // The data walk: two columns at a time, right to left, alternating upward and
-  // downward, skipping the vertical timing column.
   function placeData(mat, codewords) {
     const { size, m, reserved } = mat;
     let bit = 0;
@@ -244,9 +196,6 @@ const NetQr = (function () {
     (x, y) => (((x + y) % 2) + ((x * y) % 3)) % 2 === 0,
   ];
 
-  // The four penalty rules. A scanner reads any mask equally well; these exist
-  // to steer away from patterns that LOOK like function patterns or that lose
-  // contrast, so the "best" mask is the least confusable one.
   function penalty(m, size) {
     const at = (x, y) => m[y * size + x];
     let score = 0;
@@ -290,7 +239,6 @@ const NetQr = (function () {
     return score;
   }
 
-  // ---- format & version information ----------------------------------------
   // BCH(15,5) over the format bits, then XOR 0x5412 so an all-zero format is
   // never all-zero on the code.
   function formatBits(maskId) {
@@ -305,26 +253,17 @@ const NetQr = (function () {
     return (version << 12) | rem;
   }
 
-  // The format strip is written twice, and the two copies run in DIFFERENT
-  // directions around different corners. Every index here is (x, y) through
-  // put() rather than a raw offset: the first version of this transposed the
-  // two, which produces a picture indistinguishable from a QR code that no
-  // scanner on earth can read.
   function writeFormat(m, size, maskId) {
     const bits = formatBits(maskId);
     const b = (i) => (bits >> i) & 1;
     const put = (x, y, v) => { m[y * size + x] = v; };
 
-    // Copy 1: down the left of the top-left finder, then right along its foot,
-    // skipping the timing row/column at 6.
     for (let i = 0; i <= 5; i++) put(8, i, b(i));
     put(8, 7, b(6));
     put(8, 8, b(7));
     put(7, 8, b(8));
     for (let i = 9; i <= 14; i++) put(14 - i, 8, b(i));
 
-    // Copy 2: right along row 8 from the top-right corner, then up column 8
-    // from the bottom-left.
     for (let i = 0; i <= 7; i++) put(size - 1 - i, 8, b(i));
     for (let i = 8; i <= 14; i++) put(8, size - 15 + i, b(i));
   }
@@ -339,7 +278,6 @@ const NetQr = (function () {
     }
   }
 
-  // ---- the whole thing ------------------------------------------------------
   // Returns { version, size, modules } where modules[y*size+x] is 1 for dark,
   // or null if the text simply will not fit — which the caller must handle by
   // showing the code as text rather than by drawing a wrong QR.
@@ -369,9 +307,6 @@ const NetQr = (function () {
     return { version, size: base.size, modules: best.m, mask: best.id };
   }
 
-  // ---- drawing --------------------------------------------------------------
-  // The quiet zone is not decoration: the spec requires four clear modules on
-  // every side, and without it many scanners simply will not lock on.
   const QUIET = 4;
 
   function draw(canvas, text, opts) {
@@ -384,9 +319,6 @@ const NetQr = (function () {
     canvas.width = px; canvas.height = px;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
-    // Always light-on-dark-modules regardless of the page theme. A QR inverted
-    // to match a dark UI is unreadable to a large share of scanners, and this
-    // is the one element on screen whose job is to be machine-read.
     ctx.fillStyle = o.light || "#ffffff";
     ctx.fillRect(0, 0, px, px);
     ctx.fillStyle = o.dark || "#000000";

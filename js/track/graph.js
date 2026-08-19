@@ -1,70 +1,11 @@
-/* Apex 26 — TrackGraph: the scenery MODEL LIBRARY + NODE GRAPH.
- *
- * Why this exists
- * ---------------
- * buildProps emits every prop straight into one shared triangle soup, so the
- * cost of detail scales with the number of PLACEMENTS, not the number of
- * models. Spa places 1 788 pines, each a 126-vertex cone stack: ~225 k of its
- * 446 k prop vertices (~9 MB of VBO) are clones of one small model. Nothing
- * downstream can tell them apart either — the renderer sees anonymous triangles
- * and js/track/tracks.js keeps a PARALLEL note() registry purely so
- * __apex.scene() can name things.
- *
- * A model here is a list of PRIMITIVE OPS in canonical space (origin, identity
- * basis) — not baked vertices. Recording ops rather than triangles is what makes
- * the migration safe: replaying an op list through buildProps's own GUARDED
- * emitters reproduces the same on-track rejection decisions, the same absorb*
- * occupancy writes and the same geometry as the hand-written emitter did, so a
- * migrated helper is parity-checkable against the original.
- *
- * Each placement becomes a NODE: { model, origin, basis, scale, meta }. That is
- * the scene graph — the data an instanced renderer needs (one canonical mesh per
- * model + one transform per node) and the semantic record the agent view wants,
- * in one structure instead of two.
- *
- * Contract
- * --------
- *   const graph = TrackGraph.create({ raw });        // raw = UNGUARDED emitters
- *   graph.instance(key, place, build, meta)          // define-once + place
- *   graph.bake(emit)                                 // replay every node
- *   graph.batches()                                  // instanced-draw handoff
- *   graph.stats()                                    // reuse / vertex accounting
- *
- * `place` is { o:[x,y,z], r, u, t, s?:[sx,sy,sz] } — origin plus the track basis
- * the model is oriented into, plus an optional per-node scale applied in that
- * basis BEFORE the rotation. Scale is what lets one model serve placements that
- * differ only in size (a treeline's per-tree height jitter), instead of minting
- * a near-duplicate model per placement.
- *
- * Pure data + math. No renderer, no track state, no globals beyond the one it
- * assigns — loads under the bare VM sandbox of tools/verify-track.cjs.
- * Load order: before js/track/tracks.js.
- */
+/* Apex 26 — TrackGraph: the scenery MODEL LIBRARY + NODE GRAPH. Why this exists --------------- buildProps emits every prop straight into one shared triangle soup… */
 const TrackGraph = (function () {
   "use strict";
 
-  // Contextified-global aliases — mechanism and honest scope documented once in
-  // js/track/models.js above firstNonFinite. Under vm.createContext a bare
-  // `Math.`/`Number.` read costs ~140-220 ns against ~3.3 ns from a scope slot;
-  // in a browser it is already ~3.3 ns, so this is developer-iteration time, not
-  // framerate. Used in the per-placement / per-op paths below only.
   const __M = Math, __isFinite = Number.isFinite;
-
-  // Op kinds mirror the guarded emitter surface in buildProps. Each carries its
-  // centre in LOCAL space; sizes are local too and scale with the node.
-  //   box/prism/pyramid : { c, sz }
-  //   cyl/cone          : { c, rad, h, seg }
-  //   frustum           : { c, rB, rT, h, seg }
-  // `mat` is the MAT id in force for that op (out._mat at emission time).
 
   const isVec3 = (v) => Array.isArray(v) && v.length === 3 && v.every(__isFinite);
 
-  // Sentinel colour: "take this vertex colour from the NODE, not the model".
-  // Emitters that vary only by tint — a city's window panes, each with its own
-  // hash-jittered warm/neon colour — would otherwise mint a model per pane and
-  // instance at 1.00x. With this they share one model and carry colour per
-  // placement, which is exactly what a per-instance colour attribute is for.
-  // The canonical mesh bakes these as white; the colour lives on the node.
   const NODE_COLOR = "@node";
   const WHITE = [1, 1, 1];
   const colourOf = (op, place) =>
@@ -100,7 +41,6 @@ const TrackGraph = (function () {
     const nodes = [];
     let dropped = 0;
 
-    // ---- recorder: what a model's build(rec) function writes into ----
     function recorder(ops) {
       // undefined = "inherit whatever out._mat holds at replay time". out._mat is
       // a persistent register, so a helper that never sets it (marshalPost) must
@@ -119,7 +59,6 @@ const TrackGraph = (function () {
       };
     }
 
-    // ---- canonical mesh: replay a model's ops at origin with the RAW emitters ----
     // This is the buffer an instanced renderer uploads ONCE per model. It is also
     // how the model's vertex cost and AABB are measured — by construction rather
     // than by a per-primitive vertex-count formula that would drift from geom.js.
@@ -176,14 +115,7 @@ const TrackGraph = (function () {
       const meshOf = () => (geo === undefined ? (geo = bakeCanonical(ops)) : geo);
       m = {
         key, ops, uses: 0,
-        // A radial op (cyl/cone/frustum) is round in the local XZ plane. Replay
-        // sizes it with radScale() = max(|sx|,|sz|) because the primitive
-        // emitters cannot make an ellipse — but an INSTANCE matrix scales x and z
-        // independently, so under a non-uniform XZ scale the two paths disagree.
-        // Flagged here so batches() can route those placements back to the bake.
         hasRadial: ops.some((o) => o.op === "cyl" || o.op === "cone" || o.op === "frustum"),
-        // Whether the model's colour comes from the node (a per-instance colour
-        // attribute) rather than the shared mesh.
         nodeColored: ops.some((o) => o.col === NODE_COLOR),
         get geo() { return meshOf(); },
         get aabb() { return aabb === undefined ? (aabb = aabbOf(meshOf())) : aabb; },
@@ -193,10 +125,6 @@ const TrackGraph = (function () {
       return m;
     }
 
-    // Replay one model into the world through the caller's emitters. `emit` is
-    // the GUARDED emitter set, so every op is on-track tested exactly as the
-    // hand-written helper's own call was. Returns the number of ops that
-    // actually landed — 0 means the whole placement was suppressed.
     function replay(m, place, emit, out) {
       const s = place.s;
       const rs = radScale(s), us = upScale(s);
@@ -229,14 +157,6 @@ const TrackGraph = (function () {
       return landed;
     }
 
-    // Define-once + place. `meta` is the semantic record (kind, k, side, …) that
-    // makes the node answerable by the agent view.
-    //
-    // When `out._preferInstance` is set (props soup only — see tracks.js), a
-    // dry-run counts how many ops survive the guards WITHOUT writing triangles.
-    // Fully instancable placements skip the fuse; the race path draws them via
-    // graph.batches() → createInstancedBatch. Partials / radial+nonUniformXZ
-    // still fuse. Glass / alt buffers leave the flag off and keep today's fuse.
     function instance(key, place, build, meta, emit, out) {
       if (!place || !isVec3(place.o) || !isVec3(place.r) || !isVec3(place.u) || !isVec3(place.t)) {
         dropped++;
@@ -265,9 +185,6 @@ const TrackGraph = (function () {
           s: place.s || null,
           col: place.col || null,
           landed,
-          // A placement whose ops were only PARTLY suppressed does not equal its
-          // model: drawing the whole mesh at this transform would put back the
-          // primitives the guard removed. batches() keeps these out.
           full,
           meta: meta || null,
         });
@@ -282,9 +199,6 @@ const TrackGraph = (function () {
       return landed;
     }
 
-    // Replay every node — the S2 bake path. Reproduces the soup from the graph
-    // alone, which is what proves the graph is a complete description of the
-    // scenery rather than a side-channel that happens to agree.
     function bake(emit, out) {
       let landed = 0;
       for (const node of nodes) {
@@ -295,24 +209,6 @@ const TrackGraph = (function () {
       return landed;
     }
 
-    // ---- the instanced-draw handoff ----
-    // One producer, any number of backend consumers. GLX wants a per-instance
-    // mat4 in attributes 5-8 via vertexAttribDivisor; three.js wants the same
-    // matrices in an InstancedMesh; neither should have to know how a node is
-    // stored. So this emits plain typed arrays and nothing else.
-    //
-    // Matrices are COLUMN-MAJOR, the layout both GLX's M4 and THREE.Matrix4 use:
-    // columns 0-2 are the (scaled) basis vectors r/u/t, column 3 the origin.
-    // That is exactly xform()'s world = o + R*(local*s), so an instanced draw of
-    // `geo` under this matrix reproduces what replay() emitted.
-    //
-    // Two classes of node CANNOT be instanced and are returned separately rather
-    // than silently mis-drawn:
-    //   * partially suppressed placements (see node.full), and
-    //   * radial geometry under a non-uniform XZ scale (see model.hasRadial) —
-    //     replay makes those round via max(|sx|,|sz|), an instance matrix would
-    //     make them elliptical.
-    // The caller bakes that remainder. `bake()` already does exactly that.
     function batches() {
       const byModel = new Map();
       const bakeOnly = [];
@@ -355,11 +251,6 @@ const TrackGraph = (function () {
       return { batches: out, bakeOnly };
     }
 
-    // The number this whole exercise turns on: instanced cost vs fused cost.
-    // byKind is the actionable half — a migrated emitter whose reuse sits at 1.00
-    // is one whose parameters are continuous (or affine in a scale it cannot
-    // factor out), and is therefore a re-parameterisation candidate rather than
-    // an instancing win. That distinction is invisible without this breakdown.
     function stats() {
       let unique = 0, fused = 0;
       for (const m of models.values()) {

@@ -1,21 +1,7 @@
-/* Apex 26 — SceneryCity: the city/building band of the buildProps
-   composite-model toolkit — the shared neonFacade curtain wall, the
-   building()/neonTower() massing generators, the cityFront street wall,
-   plus houses, motorhomes, towers, street lamps, neon signs and billboards.
-   Split out of js/track/tracks.js buildProps; created once per build via
-   SceneryCity.create(ctx) with the shared scenery ctx. anchor comes from
-   SceneryNature and along from SceneryStructures via ctx (both created
-   before this module).
-   Load order: before js/track/tracks.js (which calls create() at build). */
+/* Apex 26 — SceneryCity: the city/building band of the buildProps composite-model toolkit — the shared neonFacade curtain wall, the building()/neonTower() massing… */
 const SceneryCity = (function () {
   "use strict";
 
-  // The one model every axis-aligned facade box shares: a unit cube with its
-  // size on the node scale and its colour on the node. Window panes, floor rails
-  // and mullions are all dim()-shaped boxes on the same building basis, so the
-  // whole city's facade furniture is ONE 24-vertex model plus a transform each.
-  // No rec.mat(): out._mat is set by the caller (METAL for frames, GLASS/0 for
-  // panes) and the ops inherit it, exactly as the inline addBox calls did.
   const UNIT_BOX = "unit-box";
   const unitBox = (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR);
 
@@ -28,10 +14,6 @@ const SceneryCity = (function () {
     Log.info("scenery", "scenery-city dress " + (def && def.id));
     const { WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY } = TrackSceneryData;
 
-    // Daytime wall material from vertex colour. Cream / ochre Belle Époque
-    // stucco is STONE (not brick — a warm-R test painted Monaco limestone as
-    // red masonry). Terracotta / face-brick stays BRICK. Cool greys stay
-    // CONCRETE. Night masses keep CONCRETE under the neon skin.
     const facadeMat = (rgb) => {
       const r = rgb[0], g = rgb[1], b = rgb[2];
       const luma = (r + g + b) / 3;
@@ -42,19 +24,6 @@ const SceneryCity = (function () {
       return MAT.CONCRETE;
     };
 
-    // neonFacade(): the shared, DETAILED night facade for both building kinds —
-    // an INSET-WINDOW curtain wall (the b6fbf4a style) on the track-facing face:
-    // proud dark structural frame rails + vertical mullions, with recessed glass
-    // panes set behind them so the facade reads as a real glazed building from any
-    // angle. Most panes are DARK; only a minority are lit (mostly warm office
-    // light, a few neon) so it stays mostly dark — "less neon, more detail".
-    // Neon is ADDED ONLY on neon-city (street_night) tracks: a couple of thin
-    // edge lines + a slightly higher share of neon-lit panes. Other night tracks
-    // get warm-lit windows and no neon. `side` gives the track-facing direction.
-    // neonAmt (0..1) sets how "neon" the facade is: 0 = a plain GENERAL building
-    // (warm office windows, no neon edges); ~0.3 = mostly warm with a few neon
-    // panes; 1 = a full neon tower (neon-tinted panes + glowing edge lines + a
-    // cornice). This lets general buildings and neon buildings share one facade.
     const neonFacade = (mid, bb, side, sw, sh, sd, neon, seed, neonAmt) => {
       const u = bb[1];
       const frameCol = [0.12, 0.12, 0.15];                       // dark structural frame
@@ -64,31 +33,14 @@ const SceneryCity = (function () {
       const litShare = 0.20 + neonAmt * 0.08, neonShare = neonAmt * 0.7;
       const rows = lod(Math.max(4, Math.min(10, Math.round(sh / 4.4))), 3);   // perf: coarser window grid (was 15 / 3.4); mobile LOD via lod()
       const fh = sh / rows, frameT = 0.30, railH = Math.max(0.4, fh * 0.24), winH = Math.max(0.5, fh - railH);
-      // Draw the inset curtain wall on ONE vertical face. nAxis = outward axis idx
-      // (0=r,2=t), nSign = its sign, nHalf = half-extent along it; wAxis = the
-      // in-plane horizontal axis idx, faceW = that face's width. Box dims are built
-      // per-axis so the same code does the track-facing face AND the two sides.
       const drawFace = (nAxis, nSign, nHalf, wAxis, faceW, sOff, simple) => {
         const nVec = bb[nAxis], wVec = bb[wAxis];
-        // SIMPLE sides = a coarse pane grid only (no rails / mullions / neon edges)
-        // so the sides are cheap and the city can stay dense.
-        // perf: fewer panes per face (was simple 4/4.2, full 8/2.6; rowN 9/5.0)
         const cols = simple ? Math.max(2, Math.min(3, Math.round(faceW / 5.4))) : lod(Math.max(2, Math.min(6, Math.round(faceW / 3.3))), 2);
         const rowN = simple ? lod(Math.max(2, Math.min(6, Math.round(sh / 6.4))), 2) : rows;
         const fhh = sh / rowN, winHH = Math.max(0.5, fhh - railH);
         const fBase = vadd(mid, nVec, nSign * (nHalf + 0.34));
-        // Mullions sit a touch BEHIND the rails. Both used to hang off fBase at
-        // the identical frameT, so at every crossing of the window grid — and
-        // there are thousands per circuit — two same-facing faces met at zero
-        // gap and fought at any distance. This was the single largest z-fight
-        // population in the game. 5 cm reads as a normal facade layering
-        // (horizontal bands proud of the verticals) and holds past 500 m.
         const mBase = vadd(mid, nVec, nSign * (nHalf + 0.29));
-        // Edge neon is meant to stand PROUD of the frame, but frameT * 1.05 put
-        // it only 7.5 mm clear — inside one depth unit by 200 m. Give it real air.
         const nBase = vadd(mid, nVec, nSign * (nHalf + 0.40));
-        // Panes are 0.08 thick, so an offset of 0.04 put their inner face dead
-        // flush with the wall. Same standoff rule as the tower's dface below.
         const gBase = vadd(mid, nVec, nSign * (nHalf + 0.05 + 0.04));
         const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
         out._mat = MAT.METAL;
@@ -109,20 +61,8 @@ const SceneryCity = (function () {
               col = hash(seed + sOff + c * 3.1 + ri * 1.7) < neonShare
                 ? [nc[0] * tw, nc[1] * tw, nc[2] * tw] : [warm[0] * tw, warm[1] * tw, warm[2] * tw];
             }
-            // Lit panes glow on the emissive props mesh. UNLIT panes on the main
-            // track-facing facade become REFLECTIVE dark glass (routed to glassBuf)
-            // so night windows mirror the floodlights/neon city as live glints —
-            // net-zero geometry (same boxes, redistributed). Simple side faces keep
-            // their panes on props so the unchunked glass draw stays bounded.
             const toGlass = !lit && !simple;
             if (toGlass) glassBuf._mat = MAT.GLASS; else out._mat = 0;   // lit panes stay untextured (pure emissive read)
-            // Every pane in the game is the same UNIT box: its dimensions ride
-            // the node scale and its tint the node colour, so the whole city —
-            // every face of every building on every circuit — shares ONE model
-            // per buffer. Panes are the largest single block of geometry on the
-            // street circuits (Vegas ~1.8 M prop verts), and the per-pane hash
-            // tint is precisely what a per-instance colour attribute exists for:
-            // without TrackGraph.NODE_COLOR each lit pane would mint its own model.
             ctx.instance(UNIT_BOX,
               { o: vadd(vadd(gBase, wVec, cx), u, ry),
                 r: bb[0], u: bb[1], t: bb[2],
@@ -160,12 +100,6 @@ const SceneryCity = (function () {
       drawFace(2, 1, sd / 2, 0, sw, 137, true);      // +t side: simple
       drawFace(2, -1, sd / 2, 0, sw, 311, true);     // -t side: simple
     };
-    // Multi-storey building with real MASSING — not a single box. Picks an
-    // archetype (flat / stepped / tapered / tower) by hash and stacks setback
-    // sections so the silhouette reads as a built structure. Each section is a
-    // solid core + inset glazing bands (corner columns show) + a mullion rib;
-    // the roofline gets a parapet and hash-varied clutter. `gap` is the inner
-    // face clearance from the road edge (dist = gap + w/2).
     const building = (k, side, gap, w, h, d, opts) => {
       opts = opts || {};
       if (w > d * 2.5)
@@ -194,28 +128,13 @@ const SceneryCity = (function () {
         ctx.noteSuppressed("building", `building SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (footprint over track)`);
         return;
       }
-      // Past both guards (mass collision, footprint over track) — this building
-      // ships, so record it for the agent world view.
       ctx.note("building", [p.c[0], p.c[1] + h / 2, p.c[2]], [w, h, d], { k, side });
-      // opts.kind opens neonTower()'s MASSING LIBRARY to ordinary building()
-      // callers. Those ~20 forms (tiered / podium / slab / twin / jenga /
-      // cylinder / dome / fin / ziggurat / drum / arch / …) already existed, but
-      // the only path into them was the city generator's STYLES table — so every
-      // hand-placed pit block, paddock and hospitality unit in the fleet came out
-      // as the same setback box, and authors worked around it circuit-side.
-      // Without a kind NOTHING below changes: this branch is purely additive.
       if (opts.kind) {
-        // neonTower reads its body colour off tone.n (night) / tone.d (day).
-        // building()'s own day path LIFTS a dark night wall to concrete so a
-        // facade tuned for night glow doesn't read as a navy box at noon; do the
-        // same for the delegated form or the two paths disagree in daylight.
         const wl = opts.wall ? (opts.wall[0] + opts.wall[1] + opts.wall[2]) / 3 : 1;
         const tone = {
           n: opts.wall || [0.14, 0.14, 0.17],
           d: (opts.wall && wl > 0.45) ? opts.wall : [0.46, 0.46, 0.45],
         };
-        // Match building()'s own facade choice rather than neonTower's default
-        // (a full 1.0 on neon-city tracks): a pit block is not a casino.
         neonTower(k, side, dist, w, h, d,
                   opts.windowCol || opts.window || [1.0, 0.88, 0.55],
                   opts.kind, tone,
@@ -223,35 +142,17 @@ const SceneryCity = (function () {
                                     : (theme === "street_night" ? 0.85 : 0.32));
         return;
       }
-      // Lit windows follow the SESSION (NIGHT), not a baked flag — otherwise a
-      // casino marked lit:true glows neon in broad daylight. opts.lit:false can
-      // still force a building to stay unlit even at night.
       const nightLit = NIGHT && opts.lit !== false;
       let body = opts.wall || [0.62, 0.64, 0.68];
-      // Night city-glow floor: ambient + neon spill keep real building walls off
-      // pure black at night. Without this, dark-walled night facades (e.g. Vegas
-      // [0.20]) read as black silhouettes once the sun is low.
       if (nightLit) body = [Math.max(body[0], 0.26), Math.max(body[1], 0.24), Math.max(body[2], 0.30)];
-      // HDR-bright lit glazing. The lit shader's emissive term reads the albedo
-      // directly, so window colours >1 glow strongly and trip the bloom threshold
-      // — this is what turns flat dark boxes into a skyline that actually lights
-      // up at night. Day glass stays a reflective blue-grey window panel.
       const winBase = opts.windowCol || opts.window || [1.0, 0.88, 0.55];
       const HDR = 1.55;
       const litGlass = [winBase[0] * HDR, winBase[1] * HDR, winBase[2] * HDR];
-      // Day glazing: a muted, slightly-darker blue-grey window — desaturated so
-      // daytime shows LESS colour (the neon window tint barely reads by day).
       const dayGlass = opts.window
         ? [Math.min(0.9, opts.window[0] * 0.25 + 0.30), Math.min(0.9, opts.window[1] * 0.25 + 0.33), Math.min(0.9, opts.window[2] * 0.25 + 0.38)]
         : [0.34, 0.40, 0.50];
       const glass = nightLit ? litGlass : dayGlass;
       const floorH = opts.floor || 4.0;
-      // One mass section, yBase → yBase+sh. Two distinct design languages:
-      //  • NIGHT  → a glowing GLASS CURTAIN WALL. The lit skin is the dominant
-      //    surface, broken only by a fine grid of thin dark mullions + floor
-      //    spandrels. No bright-pane-on-dark-wall checker. Some towers stay dark
-      //    for contrast; skin brightness/tint vary per building for skyline depth.
-      //  • DAY    → a solid wall with flush bright window bands set into it.
       const section = (yBase, sw, sh, sd) => {
         if (nightLit) {
           // NIGHT = a dark neutral-grey concrete mass (NOT tinted by the neon, so
@@ -264,25 +165,14 @@ const SceneryCity = (function () {
             { o: vadd(p.c, p.u, yBase + sh / 2), r: p.r, u: p.u, t: p.t, s: [sw, sh, sd], col: bodyTint },
             unitBox, { kind: "buildingMass", k, side }) > 0;
           if (ok === false) return false;
-          // Landmark buildings: full neon on neon-city tracks, a lighter touch on
-          // any other night circuit so every night track gets some neon.
           neonFacade(vadd(p.c, p.u, yBase + sh / 2), b, side, sw, sh, sd, winBase, k * 7.1 + side * 3.3, theme === "street_night" ? 0.85 : 0.32);
           return ok;
         }
-        // DAY: solid wall mass with flush bright window bands cut into a grid.
-        // Walls tuned near-black for night glow look like dark navy boxes in day
-        // (even their lit faces, and especially shadowed sides). So in daylight a
-        // dark night-wall is REPLACED by a light concrete/tan tone (varied per
-        // building); genuinely light facades (cream landmarks) keep their colour.
         const wallLuma = (body[0] + body[1] + body[2]) / 3;
         const cv = hash(k * 1.7 + side * 2.9);
-        // Muted, darker daytime concrete (the user wants day darker / less colour);
-        // very light cream landmarks are pulled down a touch too.
         const dayWall = wallLuma > 0.45
           ? [body[0] * 0.78, body[1] * 0.78, body[2] * 0.78]
           : [0.42 + cv * 0.12, 0.42 + cv * 0.11, 0.41 + cv * 0.10];
-        // Wall material from tone (cream→STONE, terracotta→BRICK, grey→CONCRETE);
-        // reflective window bands carry the GLASS mullion-grid material.
         const wmat = facadeMat(dayWall);
         out._mat = wmat; glassBuf._mat = MAT.GLASS;
         const ok = ctx.instance(UNIT_BOX,                                                   // solid wall mass
@@ -290,9 +180,6 @@ const SceneryCity = (function () {
           unitBox, { kind: "buildingMass", k, side }) > 0;
         const rows = Math.max(2, Math.min(8, Math.round(sh / floorH)));
         const fh = sh / rows;
-        // Inset-window facade: a proud structural frame surrounds glass set back
-        // near the wall face. Frame protrudes 0.38 m (dayMull shade); glass only
-        // 0.05 m — clear depth difference from any angle so panes read as inset.
         const dayMull = [dayWall[0] * 0.82, dayWall[1] * 0.82, dayWall[2] * 0.82];
         const frameOut = 0.38;
         const glassOut = 0.05;
@@ -301,9 +188,6 @@ const SceneryCity = (function () {
         const fR = -side * (sw / 2 + frameOut);
         const gR = -side * (sw / 2 + glassOut);
         const fBase = vadd(p.c, p.r, fR);
-        // Same rail/mullion tie as the night path above: identical base plane and
-        // identical frameT meant every grid crossing was a zero-gap same-facing
-        // pair. Set the mullions 5 cm back so the horizontals read as proud.
         const mBase = vadd(p.c, p.r, -side * (sw / 2 + frameOut - 0.05));
         const gBase = vadd(p.c, p.r, gR);
         const railH = Math.max(0.45, fh * 0.28);
@@ -313,8 +197,6 @@ const SceneryCity = (function () {
             unitBox, { kind: "facadeRail", k, side });
         }
         const winH = Math.max(0.6, fh - railH);
-        // Reflective glass bands routed to the glass mesh (real sky reflection);
-        // warm-light (Mediterranean) facades get dark recessed windows on props.
         const dMed = dayWall[0] > 0.6 && dayWall[0] > dayWall[2] + 0.08;
         for (let r = 0; r < rows; r++) {
           const ry01 = (r + 0.5) / rows;
@@ -328,8 +210,6 @@ const SceneryCity = (function () {
             out._mat = wmat;
           } else {
             const t01 = 0.42 + ry01 * 0.16;
-            // Darker glass base → the reflected sky/sun has real contrast to read
-            // against (a bright window albedo washes the reflection flat).
             ctx.instance(UNIT_BOX,
               { o: vadd(gBase, p.u, yBase + (r + 0.5) * fh), r: p.r, u: p.u, t: p.t,
                 s: [glassT, winH, sd * 0.94], col: [t01 * 0.40, t01 * 0.47, t01 * 0.62] },
@@ -385,18 +265,12 @@ const SceneryCity = (function () {
       if (arch === "flat") {
         if (section(0, w, h, d) === false) return;
       } else if (arch === "setback") {
-        // base + a narrower upper joined by a short tapered collar (not an abrupt
-        // box step) so the setback reads as sculpted massing.
         const h1 = h * 0.55, collar = h * 0.05;
         if (section(0, w, h1, d) === false) return;
         addFrustum(out, vadd(p.c, p.u, h1), diag * 0.5, diag * 0.40, collar, crownCol, 8, b);
         section(h1 + collar, w * 0.72, h - h1 - collar, d * 0.72);
         topW = w * 0.72; topD = d * 0.72;
       } else if (arch === "taper") {
-        // Windowed shaft takes almost the whole height; the frustum is only a SMALL
-        // tapered cap. (A tall frustum was a giant blank angled wall with no window
-        // detail — the "angled wall / blank box" look.) A couple of glazing rings
-        // keep even that small cap from reading blank.
         const bh = h * 0.90;
         if (section(0, w, bh, d) === false) return;
         addFrustum(out, vadd(p.c, p.u, bh), diag * 0.5, diag * 0.33, h - bh, crownCol, 8, b);
@@ -408,8 +282,6 @@ const SceneryCity = (function () {
         addFrustum(out, vadd(p.c, p.u, bh), diag * 0.5, diag * 0.30, crownH, crownCol, 8, b);
         topY = bh + crownH; topW = w * 0.36; topD = d * 0.36;
       }
-      // Sculpted crown — a short chamfered cap, then a hash-varied finial so no
-      // two rooflines match and none is a flat box edge.
       {
         const capR = Math.max(topW, topD) * 0.5, capH = Math.min(3.5, h * 0.07 + 1);
         addFrustum(out, vadd(p.c, p.u, topY), capR, capR * 0.45, capH, crownCol, 6, b);
@@ -437,9 +309,6 @@ const SceneryCity = (function () {
           addBox(out, vadd(p.c, p.u, by), [topW * 1.05, 0.7, topD * 1.05], neon, b);
         }
         if (h > 38) {
-          // Beacon sits 2.4 m over the roof, so it needs the mast a real
-          // aviation light stands on — without it the red cube hung in clear
-          // air above every tall tower on every city circuit.
           addCyl(out, vadd(p.c, p.u, topY), 0.14, 2.4, [0.30, 0.30, 0.34], 4, b);          // beacon mast
           addBox(out, vadd(p.c, p.u, topY + 2.4), [1.1, 1.1, 1.1], [3.2, 0.4, 0.3], b);    // red beacon
         }
@@ -447,10 +316,6 @@ const SceneryCity = (function () {
       blockAt(k, side, gap, d / 2);   // solid: stop the car before the façade
       massAdd(p.c, w, d, b);          // claim the ground so later masses yield
     };
-    // neonTower(): the INNER-ring filler model — a dark detailed tower sharing the
-    // neonFacade() treatment with the building() landmarks. `kind` varies the
-    // silhouette (setback / tiered ziggurat / podium-and-tower) so the street wall
-    // isn't a row of identical boxes.
     const neonTower = (k, side, dist, w, h, d, neon, kind, tone, neonAmt) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       const reach = Math.max(w, d);   // used below for cylinder/dome/drum radii
@@ -477,26 +342,14 @@ const SceneryCity = (function () {
       const na = neonAmt == null ? (theme === "street_night" ? 1 : 0) : neonAmt;  // 0=general … 1=neon
       const neonOn = NIGHT && na > 0.3;                                           // bright neon trim?
       const warm = [1.0, 0.80, 0.46];                                            // general office light
-      // Day window grid around a mass centre. Modern buildings get REFLECTIVE
-      // GLASS panes routed to the glass mesh (real sky reflection via the shader);
-      // warm-light "Mediterranean" tones (Monaco) instead get small recessed dark
-      // windows on the cream wall, so they read as stone apartments, not glass.
       const med = bodyCol[0] > 0.6 && bodyCol[0] > bodyCol[2] + 0.08;   // warm light wall
       const medWin = [bodyCol[0] * 0.34, bodyCol[1] * 0.30, bodyCol[2] * 0.26];   // dark window reveal
       const dayGridAt = (cen, sw, sh, sd) => {
         const rows = lod(Math.max(4, Math.min(10, Math.round(sh / 4.4))), 3);   // perf: cap + coarser (was uncapped / 3.4); mobile LOD via lod()
-        // Draw the window grid on one vertical face (track-facing or a side). Same
-        // per-axis box-dim trick as neonFacade so the sides are glazed too.
         const dface = (nAxis, nSign, nHalf, wAxis, faceW, simple) => {
           // perf: fewer panes per face (was simple 4/4.0, full 7/2.4; rowN 9/5.0)
           const cols = simple ? Math.max(2, Math.min(3, Math.round(faceW / 5.2))) : lod(Math.max(2, Math.min(6, Math.round(faceW / 3.1))), 2);
           const rowN = simple ? lod(Math.max(2, Math.min(6, Math.round(sh / 6.4))), 2) : rows;
-          // Stand every pane's INNER face clear of the wall by a fixed amount,
-          // derived from that pane's own thickness. The single offset of 0.03
-          // could not do that for two different thicknesses: the 0.06 med pane
-          // came out dead flush with the wall face and the 0.08 one sank 10 mm
-          // INTO it. Both tie against the body across the pane's whole area, and
-          // a tower carries hundreds of panes.
           const PANE_STANDOFF = 0.05;
           const gBase = (thick) => vadd(cen, b[nAxis], nSign * (nHalf + PANE_STANDOFF + thick / 2));
           const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
@@ -505,8 +358,6 @@ const SceneryCity = (function () {
             for (let r = 0; r < rowN; r++) {
               const ry01 = (r + 0.5) / rowN;
               const at = (thick) => vadd(vadd(gBase(thick), b[wAxis], cx), b[1], (-0.5 + ry01) * sh);
-              // NOTE: out._mat / glassBuf._mat are separate registers — addBox reads
-              // whichever buffer object is actually passed as its first argument.
               if (med) { out._mat = MAT.GLASS; addBox(out, at(0.06), dim(0.06, (sh / rowN) * 0.42, (faceW / cols) * 0.42), medWin, b); out._mat = 0; }
               else { const t01 = 0.42 + ry01 * 0.16; glassBuf._mat = MAT.GLASS; addBox(glassBuf, at(0.08), dim(0.08, (sh / rowN) * 0.62, (faceW / cols) * 0.6), [t01 * 0.40, t01 * 0.47, t01 * 0.62], b); glassBuf._mat = 0; }
             }
@@ -516,26 +367,11 @@ const SceneryCity = (function () {
         dface(2, 1, sd / 2, 0, sw, true);        // +t side: simple
         dface(2, -1, sd / 2, 0, sw, true);       // -t side: simple
       };
-      // Body material: night masses stay CONCRETE under the neon skin;
-      // day facades use the same cream/brick/concrete split as building().
       const bmat = NIGHT ? MAT.CONCRETE : facadeMat(bodyCol);
-      // One stacked section centred at up=yb+sh/2, optionally offset along tangent.
-      // Restores the CALLER's material (not a hard 0) so a MAT.METAL default set
-      // around the whole kind-dispatch below survives between/after sec() calls —
-      // that's what tags every cap/antenna/trim box without touching each one.
-      // `ro` shifts the section laterally. The "notch" and "arch" kinds each set
-      // two members side by side along the tangent at the SAME sw and sd, so both
-      // members' lateral faces landed on one plane — same facing, zero gap, and
-      // over the members' full height, which on a tower is hundreds of m2. Only
-      // ever called with a positive multiple of `side`, i.e. AWAY from the track,
-      // so no member creeps toward the circuit.
       const sec = (yb, sw, sh, sd, seed, to, ro) => {
         const cen = vadd(vadd(vadd(a.c, a.u, yb + sh / 2), b[2], to || 0), b[0], ro || 0);
         const prevMat = out._mat;
         out._mat = bmat;
-        // Return the guarded emitter's verdict: false = body rejected, so the
-        // caller drops roofs/caps/masts that would otherwise float (deploy-side
-        // grounding fix, ported onto the split module).
         const okB = addBox(out, cen, [sw, sh, sd], bodyCol, b);
         out._mat = prevMat;
         if (okB === false) return false;
@@ -543,8 +379,6 @@ const SceneryCity = (function () {
         else dayGridAt(cen, sw, sh, sd);
         return okB;
       };
-      // Caps / antennas / trim below default to METAL (roofline plant, masts,
-      // beacons) unless a branch overrides it locally.
       out._mat = MAT.METAL;
       if (kind === "tiered") {
         let yb = 0, tw = w, td = d;
@@ -616,8 +450,6 @@ const SceneryCity = (function () {
       } else if (kind === "chevron") {                           // pitched / gabled roof block
         const bh = h * 0.82;
         if (sec(0, w, bh, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents // addPrism takes its `c` as the BASE, not the centre (unlike addBox), so
-        // adding half the roof height here lifted the gable clear of the tower —
-        // h*0.09 of open sky under every chevron roof (9 m on a 100 m tower).
         seat.prism(out, vadd(a.c, a.u, bh), [w, h * 0.18, d], cap, b);                                       // gable roof, seated on the body
         if (neonOn) addBox(out, vadd(a.c, a.u, bh + h * 0.18), [w * 1.02, 0.5, d * 1.02], neon, b);          // eave neon
       } else if (kind === "notch") {                             // twin slabs split by a vertical slot
@@ -681,8 +513,6 @@ const SceneryCity = (function () {
       out._mat = 0;
       blockAt(k, side, dist - reach / 2, reach / 2);
     };
-    // neonSign(): a tall thin illuminated sign blade beside the track — vertical
-    // signage to dress the gaps between towers. Pole + a slim bright neon panel.
     const neonSign = (k, side, dist, h, neon) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       if (onTrack(a.c[0], a.c[2], 2)) return;
@@ -691,26 +521,12 @@ const SceneryCity = (function () {
       addBox(out, vadd(a.c, a.u, h * 0.62), [0.9, h * 0.6, 0.35], col, b);                  // vertical blade
       blockAt(k, side, dist - 0.6, 0.6);
     };
-    // streetLamp(): a roadside lamp post with a cantilever arm reaching toward the
-    // track. The lamp head glows HDR at night (per-track tint) and reads as a
-    // painted housing by day. `style` varies the silhouette: "arm" (highway
-    // cantilever), "globe" (heritage twin globes), "post" (simple modern column).
     const streetLamp = (k, side, dist, head, h, lstyle) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       if (onTrack(a.c[0], a.c[2], 2)) return;
       const pole = [0.13, 0.13, 0.15];
-      // Night head albedo trimmed 1.9x -> 1.4x: the emissive path pushes bright
-      // albedo a further ~2.3x past 1.0 for bloom, so 1.9 stacked to ~5x HDR and
-      // the mast heads stayed glaring even after the point-light energy was
-      // dimmed (the head geometry glow is independent of the light scale).
       const lit = NIGHT ? [head[0] * 1.4, head[1] * 1.4, head[2] * 1.4]
                         : [head[0] * 0.72, head[1] * 0.72, head[2] * 0.70];
-      // Graph form: a lamp's silhouette depends only on (style, height, side, lit
-      // colour) — the per-placement `dist` jitter moves the ANCHOR, not the shape.
-      // Height is 7 or 8 and style is one of three, so a whole circuit's lamp line
-      // is a handful of models. The cantilever arm is inlined here rather than
-      // routed through ctx.cantilever: it is two boxes, and recording them keeps
-      // the arm in the same model as its own head and column.
       ctx.instance(
         `lamp|${lstyle || "arm"}|${h}|${side}|${lit.join(",")}`,
         { o: a.c, r: a.r, u: a.u, t: a.t },
@@ -731,14 +547,6 @@ const SceneryCity = (function () {
         },
         { kind: "streetLamp", k, side });
     };
-    // cityFront(): a CONTINUOUS, ALIGNED street wall of buildings from lap-fraction
-    // s0→s1 on `side` at clearance `gap`. Steps along the track (~18–26 m) and emits
-    // one building() per step with hash-varied height/width/colour so it reads as a
-    // real facade rather than scattered boxes. The inner face is held at a constant
-    // setback (`gap`) so the row aligns. On night circuits (or opts.lit) windows are
-    // emissive-bright so the skyline is legible after dark. Inherits building()'s
-    // onTrack guard and blockAt() boundary.
-    //   opts: { minH, maxH, depth, palette:[colA,colB,…], lit, windowCol, step }
     const cityFront = (s0, s1, side, gap, opts) => {
       opts = opts || {};
       const minH = opts.minH != null ? opts.minH : 16;
@@ -753,9 +561,6 @@ const SceneryCity = (function () {
       along(s0, s1, step, (k) => {
         const s = hash(k * 5.3 + side * 0.9);
         const w = 14 + s * 16;                    // 14–30 m wide facade unit
-        // Height = blend of a per-building hash and a slow per-cluster hash so the
-        // skyline has runs of related heights (a real street), not jarring
-        // tall-short-tall noise. Occasional unit spikes into a landmark tower.
         const hLocal = hash(k * 9.1 + side * 1.7);
         const hCluster = hash(Math.floor(k / 3) * 2.7 + side * 1.3);
         let h = minH + (0.6 * hLocal + 0.4 * hCluster) * (maxH - minH);
@@ -799,8 +604,6 @@ const SceneryCity = (function () {
       const nightLit = NIGHT && opts.lit !== false;
       // Main box mass.
       addBox(out, vadd(p.c, p.u, h / 2), [w, h, d], wall, b);
-      // Roof — gable (ridge along the frontage) or hip (single apex), a slight
-      // eave overhang so it reads distinct from the wall below.
       const roofH = h * (0.42 + hash(k * 13.3 + side) * 0.20);
       const roofSz = [w * 1.10, roofH, d * 1.10];
       if (roofType === "hip") addPyramid(out, vadd(p.c, p.u, h), roofSz, roofCol, b);
@@ -810,8 +613,6 @@ const SceneryCity = (function () {
         const cc = vadd(vadd(vadd(p.c, p.r, w * 0.22 * side), p.t, d * 0.12), p.u, h * 0.65);
         addCyl(out, cc, 0.32, roofH * 0.95, [0.40, 0.36, 0.34], 4, b);
       }
-      // Door + two windows on the road-facing wall. Warm HDR glow at night (a lit
-      // cottage window), a plain pale pane by day.
       const faceOff = -side * (w / 2 + 0.02);
       const winCol = opts.window || (nightLit ? [1.55, 1.10, 0.55] : [0.72, 0.80, 0.84]);
       addBox(out, vadd(vadd(p.c, p.r, faceOff), p.u, 1.0), [0.06, 2.0, 1.1], [0.26, 0.18, 0.13], b);
@@ -834,8 +635,6 @@ const SceneryCity = (function () {
       const accent = opts.accent || [0.75, 0.10, 0.10];
       const nightLit = NIGHT && opts.lit !== false;
       const winCol = opts.window || (nightLit ? [1.5, 1.3, 0.85] : [0.30, 0.36, 0.42]);
-      // Lower deck (full footprint) + a slightly set-back upper deck — the real
-      // two-tier hospitality-unit silhouette, not a flat single box.
       const loH = h * 0.56;
       addBox(out, vadd(p.c, p.u, loH / 2), [w, loH, d], body, b);
       addBox(out, vadd(p.c, p.u, loH + (h - loH) / 2), [w * 0.86, h - loH, d * 0.90], body, b);
@@ -844,18 +643,10 @@ const SceneryCity = (function () {
       addBox(out, vadd(vadd(p.c, p.r, faceOff), p.u, loH * 0.62), [0.05, loH * 0.30, d * 0.82], winCol, b);
       // Livery accent stripe along the base.
       addBox(out, vadd(vadd(p.c, p.r, faceOff * 1.001), p.u, loH * 0.12), [0.06, loH * 0.14, d * 0.94], accent, b);
-      // Slide-out awning canopy on two support posts, reaching toward the paddock
-      // walkway (away from the unit, same outward direction as the road-facing
-      // wall) — the classic team-hospitality shade structure.
       const awnDist = w * 0.42;
       const awnC = vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.u, loH * 0.92);
       addBox(out, awnC, [0.05, 0.10, d * 0.9], opts.awning || [0.20, 0.22, 0.26], b);
       for (const e of [-1, 1]) {
-        // Posts stand on the GROUND and rise to the awning. addCyl is
-        // BASE-anchored, so offsetting down from the awning by less than the
-        // post's own length (−loH*0.44 for a loH*0.82 post) left each foot
-        // loH*0.48 in the air — 2.3 m on a tall unit — while overshooting the
-        // canopy it holds up by loH*0.38.
         const postC = vadd(vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.t, e * d * 0.42), p.u, -0.2);
         addCyl(out, postC, 0.05, loH * 0.92 + 0.25, [0.35, 0.35, 0.38], 4, b);
       }
@@ -874,32 +665,16 @@ const SceneryCity = (function () {
       }
       ctx.note("tower", [p.c[0], p.c[1] + h / 2, p.c[2]], [baseW, h, baseW], { k, side });
       addFrustum(out, vadd(p.c, p.u, -0.6), baseW * 0.5, baseW * 0.335, h + 0.6, opts.col || [0.70, 0.72, 0.75], opts.seg || 8, b);   // base sunk 0.6
-      // Two glazing bands up the shaft + a proud observation deck near the top —
-      // turns the blank tapered cone into an occupied control tower. Band radius
-      // tracks the frustum taper (base 0.5w → top 0.335w) so they hug the wall.
       const glass = opts.glassCol || [0.40, 0.52, 0.64];
       const rAt = (f) => baseW * (0.5 - 0.165 * f) * 1.03;
       addCyl(out, vadd(p.c, p.u, h * 0.40), rAt(0.40), h * 0.05, glass, opts.seg || 8, b);
       addCyl(out, vadd(p.c, p.u, h * 0.66), rAt(0.66), h * 0.05, glass, opts.seg || 8, b);
       addBox(out, vadd(p.c, p.u, h * 0.84), [baseW * 0.62, baseW * 0.05, baseW * 0.62], opts.deckCol || [0.26, 0.28, 0.32], b);   // observation deck
       if (opts.cap) addBox(out, vadd(p.c, p.u, h), [baseW * 0.7, baseW * 0.18, baseW * 0.7], opts.capCol || [0.2, 0.2, 0.24], b);
-      // Mast stands on the CAP's top face. The cap box is centred at h with
-      // height baseW*0.18, so its top is h + baseW*0.09 — using the full 0.18
-      // left the mast hanging half a cap-height above it.
-      // `mast` is a HEIGHT in metres. Two Vegas towers passed `mast: true`
-      // alongside `cap: true`, which reads naturally but made the height
-      // non-finite — the primitive guard rejected it and both landmarks lost
-      // their antenna silently. Coerce the boolean to a proportional default
-      // rather than leaving a plausible call site broken.
       const mastH = opts.mast === true ? Math.max(4, h * 0.12) : opts.mast;
       if (mastH) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.09 : 0)), 0.18, mastH, [0.3, 0.3, 0.32], 4, b);
       blockAt(k, side, dist - baseW * 0.5, baseW * 0.5);   // solid base
     };
-    // Advertising hoarding / billboard: a panel on two slim posts.
-    //   opts: { style: "panel"(default) | "monopole" | "trivision" | "arched"
-    //                | "led" | "fascia" | "banner", postCol }
-    // "fascia" has NO posts — it bolts to the barrier top, which is what a
-    // street circuit actually has room for.
     const billboard = (k, side, gap, w, h, col, opts) => {
       const st = (opts && opts.style) || kitOf("board", "panel");
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
@@ -909,13 +684,7 @@ const SceneryCity = (function () {
       }
       ctx.note("billboard", vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], { k, side });
       const place = { o: p.c, r: p.r, u: p.u, t: p.t };
-      // Each post is its OWN node. Keeping the pair in one model would fold the
-      // +/-0.4w spacing into the geometry and mint a model per width; a z-scale
-      // would instead stretch the post RADIUS (radScale takes max(|sx|,|sz|)).
-      // Promoting the offset to the placement leaves one model per height.
       const postCol = (opts && opts.postCol) || [0.2, 0.2, 0.22];
-      // Post COUNT and form are what the style changes; the panel below is
-      // shared. "fascia" bolts straight to the barrier and has none at all.
       const posts = st === "fascia" ? []
         : st === "monopole" || st === "tower" ? [0]
         : [-w * 0.4, w * 0.4];
@@ -936,22 +705,15 @@ const SceneryCity = (function () {
             }
           },
           { kind: "billboard", k, side });
-      // Backlit at night: trackside advertising is illuminated at real races —
-      // the lifted albedo rides the emissive path so panels glow softly.
       let face = col || [0.9, 0.85, 0.2];
       if (NIGHT) face = [Math.min(1.45, face[0] * 1.30 + 0.10),
                          Math.min(1.45, face[1] * 1.30 + 0.10),
                          Math.min(1.45, face[2] * 1.30 + 0.10)];
-      // The panel is a plain box: width on the node scale and the advert colour on
-      // the node, so every hoarding of a given height shares ONE model however
-      // wide it is and whatever it advertises.
       ctx.instance(`billboard-face|${h}|${st}`,
         Object.assign({ s: [1, 1, w], col: face }, place),
         (rec) => {
           const NC = TrackGraph.NODE_COLOR;
           if (st === "trivision") {
-            // Three angled slats — the rotating-prism hoarding. Reads as a
-            // louvred face rather than a flat board from any angle.
             for (let i = 0; i < 3; i++)
               rec.box([(i - 1) * 0.16, h + 0.6 + i * 1.05, 0], [0.42, 0.95, 1], NC);
           } else if (st === "arched") {

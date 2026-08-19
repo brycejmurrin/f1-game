@@ -1,44 +1,4 @@
-/* Apex 26 — TLXShaders.postChain: the post-processing ORCHESTRATION for the
- * TLX backend (M8). The three.js sibling of js/render/glx/post.js: owns the
- * render targets (full-res HDR scene + sampleable depth, the 5-level bloom
- * mip chain, half-res SSAO + godray pairs, the full-res LDR FXAA input), the
- * pass order, target ping-pong, and the whole CPU side of present(opts) —
- * per-block gating, tune-knob defaults (TUNE_DEFS mirrors), the sun-UV /
- * _sunGate projection, and the godray nearest-12 lamp selection.
- *
- * PASS ORDER (glx/post.js present() 1:1):
- *   0.  SSAO (half res)  -> separable blur H+V          (aoStr|contact gated)
- *   0b. GODRAY (half res, world-space sun-map march) -> double blur H+V x2
- *   1.  BRIGHT pass  scene -> bloom level 0 (half res)  (bloomAmt gated)
- *   2.  DOWN x(n-1)  13-tap Jimenez mip chain; Karis on the first mip only
- *       UP   x(n-1)  9-tap tent, ADDITIVE into each larger level; the FINAL
- *                    pass into level 0 OVERWRITES (js/render/shaders/post.js)
- *   3.  COMPOSITE    -> LDR target (all 58 uniforms; ACES/grade/SSR/flare)
- *   4.  FXAA         -> canvas
- *
- * PER-BLOCK BAIL: a disabled block allocates NOTHING — the SSAO pair, the
- *   godray pair and the bloom chain are created lazily on the first frame
- *   their gate opens (ensure*()); until then the composite reads the 1x1
- *   white/black no-op fallbacks, exactly like GLX's whiteTex/blackTex binds.
- *
- * LAMP-MAP SNAPSHOT: present() reads S.lampArmed for the godray lamp-index
- *   mapping BEFORE tlx.js clears the armed flags (clearArmed runs after this
- *   chain returns) — the GLX ordering where the godray pass consumes the
- *   armed state that present() then retires.
- *
- * DEVIATION vs GLX (documented, deliberate): no MSAA scene target — three's
- *   RenderTarget MSAA resolve doesn't expose the resolved DEPTH the SSAO/SSR/
- *   godray blocks need, so TLX runs the GLX mobile-tier recipe (no MSAA,
- *   FXAA carries the edge AA) on every tier. No invalidateFramebuffer either
- *   (three owns attachment lifecycle).
- *
- * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
- *     TLXShaders.postChain = (THREE, TSL, ctx) => ({ enabled, hdrOk,
- *         sceneTarget, resize, present, state, viz }) | throws -> caller
- * disables post (tlx.js renders direct to canvas, the M7 look).
- * ctx = { renderer, isMobile, chunks, shadow, viz }. NEVER touches THREE/TSL
- * at script eval — three exists only inside TLX.create().
- */
+/* Apex 26 — TLXShaders.postChain: the post-processing ORCHESTRATION for the TLX backend (M8). The three.js sibling of js/render/glx/post.js: owns the render targe… */
 "use strict";
 
 (function () {
@@ -46,10 +6,6 @@
 
   function postChain(THREE, TSL, ctx) {
     const renderer = ctx.renderer;
-    // Every resource created by this chain stays owned here, including lazy
-    // targets. The renderer keeps GPU-side state after JS references disappear,
-    // so runtime degradation and partial construction both need an explicit,
-    // idempotent unwind.
     const ownedRTs = new Set();
     const ownedTextures = new Set();
     const ownedMaterials = new Set();
@@ -76,18 +32,6 @@
       ownedMaterials.clear(); ownedRTs.clear(); ownedTextures.clear();
     }
     try {
-    // ctx.isMobile is deliberately NOT read here, and that is a decision, not a
-    // dropped gate: the MSAA deviation above means this chain already runs the
-    // GLX mobile-tier recipe (no multisampled scene target, FXAA carries the
-    // AA) on every tier, and every remaining block is gated by the caller —
-    // present(opts) receives ssao/godray/bloom already zeroed by PerfGov.tier()
-    // and the GRAPHICS preset, so a disabled block allocates nothing (the
-    // per-block bail above). A second phone-only gate here would shadow the
-    // governor's decision rather than add to it. The one place where a phone
-    // still costs more than GLX is FORMAT, not gating: GLX uses R8 for the SSAO
-    // pair and R11F_G11F_B10F for bloom/godray, while three exposes neither as
-    // a render-target format — those targets are RGBA8/RGBA16F here (~4 MB more
-    // at phone resolution). Documented, accepted, not silently unnoticed.
     const shadow = ctx.shadow || null;
     const viz = (ctx.viz && POST_VIZ.indexOf(ctx.viz) >= 0) ? ctx.viz : null;
 
@@ -117,9 +61,6 @@
     const whiteTex = onePx(255);
     const blackTex = onePx(0);
 
-    // ── LENS DIRT smudge map: the glx/post.js makeDirtTex canvas port —
-    // deterministic LCG seed, value-noise base + grime blobs + dust specks +
-    // wipe streaks. A failed canvas leaves the black fallback (knob no-ops).
     function makeDirtTex() {
       try {
         const S = 256;
@@ -190,12 +131,7 @@
       return rt;
     }
 
-    // The CRITICAL target: every 3D pixel goes through it. Full-res HDR +
-    // a SAMPLEABLE depth texture (NO compareFunction — raw reads for SSAO/
-    // SSR/godray reconstruction; the shadow maps keep their own compare ones).
     let W = 1, H = 1;
-    // Track depth independently until the RenderTarget adopts it, so a target
-    // constructor throw still releases a partially-created depth texture.
     const sceneDepthTex = ownTexture(new THREE.DepthTexture(1, 1));
     sceneDepthTex.name = "TLXSceneDepth";
     const sceneRT = ownRT(new THREE.RenderTarget(1, 1, {
@@ -205,8 +141,6 @@
     sceneRT.texture.name = "output";
     sceneRT.texture.generateMipmaps = false;
     sceneRT.texture.colorSpace = THREE.NoColorSpace;
-    // Attachment 1: SSR car-paint tag (0.35). r185 cannot store that in
-    // scene alpha (NoBlending → isOpaque false → output.a is coverage).
     let sceneTagTex = sceneRT.texture;
     if (sceneRT.textures && sceneRT.textures[1]) {
       sceneRT.textures[1].name = "ssrTag";
@@ -214,8 +148,6 @@
       sceneRT.textures[1].colorSpace = THREE.NoColorSpace;
       sceneTagTex = sceneRT.textures[1];
     }
-    // LDR target: composite output, FXAA input (always allocated — FXAA is
-    // the unconditional resolve, like GLX's ldrFBO).
     const ldrRT = makeRT(1, 1, THREE.UnsignedByteType);
     ldrRT.texture.name = "TLXPostLDR";
 
@@ -253,9 +185,6 @@
       }
       return nLv > 0;
     }
-    // three r184 leaked RT textures on setSize(); r185 (#33511) disposes them.
-    // Keep the explicit texture disposals so a stale vendor cannot regress the
-    // "black frame after resize" report; double-dispose is safe.
     function rtSetSize(rt, w, h) {
       if (rt.width === w && rt.height === h) return;
       rt.setSize(w, h);
@@ -352,10 +281,6 @@
       const prevAutoClear = renderer.autoClear;
       renderer.autoClear = false;   // fullscreen passes overwrite; UP accumulates
       let dest = null;
-      // try/finally, not a plain restore at the end: tlx.js catches around
-      // post.present() and repaints direct-to-canvas — without the finally, a
-      // throw mid-chain latches autoClear=false for every later classic-path
-      // frame, which skips three's clear and smears the canvas until reload.
       try {
 
       const threshold = o.threshold !== undefined ? o.threshold : 0.75;
@@ -364,13 +289,9 @@
       const contactStr = o.contact !== undefined ? o.contact : 0;
       let grStr = o.godray !== undefined ? o.godray : 0;
       const lampVol = o.lampVol || 0;
-      // ?viz= bisect: force the inspected block live so there is something
-      // to look at even on a frame whose gate would be closed.
       if (viz === "ssao") aoStr = Math.max(aoStr, 0.95);
       if (viz === "shafts" || viz === "godray") grStr = Math.max(grStr, 0.8);
 
-      // ── 0) SSAO + separable blur (js/render/shaders/post.js). Runs when EITHER
-      // knob is live — contact shadows ride in this pass. ───────────────────
       const haveAO = !!((aoStr > 0 || contactStr > 0) && F.invProj) && ensureAO();
       if (haveAO) {
         const U = P.ssao.U;
@@ -431,8 +352,6 @@
           grNL = _grKeepNearest(total, 6);
           for (let i = 0; i < grNL; i++) {
             const oi = _grSel[i].o;
-            // Map the record holding this frame's spot-shadow map to its slot
-            // in THIS pass's nearest-N ordering (js/render/shaders/post.js).
             if (lampArmed && oi === S.lampIdx * 15) grLampIdx = i;
             P.godray.lightPos[i].set(L[oi], L[oi + 1], L[oi + 2]);
             P.godray.lightCol[i].set(L[oi + 3], L[oi + 4], L[oi + 5]);
@@ -472,8 +391,6 @@
         }
         P.spread.value = gk("bloomSpread", 1);           // BLOOM SPREAD knob
         for (let i = nLv - 1; i >= 1; i--) {
-          // Intermediates accumulate (ONE,ONE); the FINAL into level 0
-          // OVERWRITES — level 0 still holds the sharp bright pass.
           const up = i === 1 ? P.upFinal : P.upAdd;
           up.tex.value = bloomLv[i].rt.texture;
           up.U.texel.value.set(1 / bloomLv[i].w, 1 / bloomLv[i].h);
@@ -489,8 +406,6 @@
       P.composite.tex.ssao.value = haveAO ? ssaoRT.texture : whiteTex;
       C.aoTexel.value.set(haveAO ? 1 / aoW : 0, haveAO ? 1 / aoH : 0);
       P.composite.tex.godray.value = haveGR ? godrayRT.texture : blackTex;
-      // Sun screen-UV projection + the _sunGate brightness gate + golden-hour
-      // flare curve (js/render/shaders/post.js verbatim).
       let sunUVx = -2, sunUVy = -2, flareStr = 0, sunShaft = 0;
       if (F.sunDir && F.viewProj) {
         const s = F.sunDir, vp = F.viewProj;
@@ -514,10 +429,6 @@
       C.sunUV.value.set(sunUVx, sunUVy);
       C.flareStr.value = flareStr * (o.flareMul != null ? o.flareMul : 1);   // LENS FLARE knob
       C.exposure.value = o.exposure !== undefined ? o.exposure : 1.0;
-      // GATED ON haveBloom: the shaft pass READS THE BLOOM CHAIN
-      // (COMPOSITE_FS in js/render/shaders/post.js). When bloom is off we
-      // bind blackTex, so the 8 dependent fetches accumulated vec3(0).
-      // GLX zeroes the uniform rather than paying the taps; same here.
       const _shaftMul = gk("sunShaftMul", 1);
       C.sunShaft.value = haveBloom ? sunShaft * _shaftMul : 0;
       const grade = o.grade;
@@ -564,8 +475,6 @@
       C.acesE.value = gk("acesE", 0.14);
       C.speedBlur.value = o.speedBlur != null ? o.speedBlur : 0.0;
       C.shaftDecay.value = gk("sunShaftDecay", 0.82);
-      // Reach scales with SCREEN SUN-SHAFT, sub-linearly so the shipped
-      // value (1) keeps the shipped radius (js/render/glx/post.js).
       C.shaftSpread.value = Math.sqrt(Math.max(0.05, _shaftMul));
       C.flareStreak.value = gk("flareStreak", 7.0);
       C.flareStreak2.value = gk("flareStreak2", 0.5);
@@ -575,15 +484,11 @@
       C.hazeStr.value = hz ? hz.str : 0;
       C.hazeTime.value = F.time || 0;
       C.ssrThick.value = gk("ssrThick", 0.20);
-      // Camera-aware SSR extent (game.js sets these per camera; onboard cams get
-      // a raised top cutoff and a pulled-in near fade).
       C.ssrTopUV.value = o.ssrTopUV != null ? o.ssrTopUV : 0.62;
       C.ssrNear.value = o.ssrNear != null ? o.ssrNear : -2.5;
       C.lensDirt.value = dirtTex ? gk("lensDirt", 0.15) : 0;
       // uReflTexel drives SSR + SHARPEN + the vignette aspect — every frame.
       C.reflTexel.value.set(1 / W, 1 / H);
-      // Wet-road/car SSR needs depth + view/proj + world-up-in-view; uSsrOk
-      // gates the whole branch on probe-less paths (setup preview).
       const reflStr = o.reflect || 0;
       const haveRefl = !!(F.invProj && F.proj && F.upVS);
       if (haveRefl) {

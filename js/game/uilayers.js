@@ -58,9 +58,6 @@ window.UiLayers = (function () {
     { id: "track-detail" },
     { id: "lighting" },
     { id: "camtune" },
-    // The free camera is a SUB-LAYER of the two tuner panels (z 44 over their
-    // 42), so Escape steps out of the fly-cam before it closes the panel —
-    // which is what a back key should do, one step at a time.
     { id: "photo-controls" },
     { id: "datahub" },
   ];
@@ -76,11 +73,6 @@ window.UiLayers = (function () {
   const sel = (defs) => defs.map((d) => "#" + d.id + ":not([hidden])").join(",");
   const ALL_SEL = sel(DEFS);
 
-  // A zero box is the real test, not the hidden attribute: it also catches an
-  // element inside a display:none ancestor, a control in a collapsed section,
-  // and the several buttons index.html ships hidden and reveals per game mode.
-  // This is the strict form, used for CONTROLS (js/game/menunav.js filters its
-  // focus targets and scroll panes with it).
   function shown(el) {
     if (!el || el.hidden) return false;
     const r = el.getBoundingClientRect();
@@ -123,16 +115,11 @@ window.UiLayers = (function () {
       if (!shownLayer(el)) continue;
       const z = parseInt(getComputedStyle(el).zIndex, 10);
       const rank = isModal(el) ? Infinity : (isFinite(z) ? z : 0);
-      // >= so DOM order breaks a tie in favour of the LATER element, which is
-      // the one painted on top.
       if (rank >= bestRank) { bestRank = rank; best = el; }
     }
     return best;
   }
 
-  // "A menu is open" for the purpose of not driving the car. Ignores the
-  // `gate: false` layers (see DEFS). Same zero-size-wrapper allowance as top(),
-  // or the LIGHTING TUNER would go on handing arrow keys to the car.
   /* Resolved by ID rather than by document query, because THIS one is called
      from the frame loop. Input.poll() -> pollGamepad() runs every frame (before
      the paused gate, so on menus too) and asks anyOpen() on every one — and

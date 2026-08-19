@@ -1,8 +1,4 @@
-/* Apex 26 — INDIANAPOLIS MOTOR SPEEDWAY (road course) definition (data only).
-   Retired circuit (`classic: true`): last United States GP 2007.
-   This is the F1 ROAD COURSE — the infield section joined to the oval's front
-   straight, which F1 ran CLOCKWISE, opposite the oval's own direction.
-   Geometry from the OSM trace in js/track/geo-paths.js. */
+/* Apex 26 — INDIANAPOLIS MOTOR SPEEDWAY (road course) definition (data only). Retired circuit (`classic: true`): last United States GP 2007. This is the F1 ROAD C… */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -17,9 +13,6 @@
     // Was 0.05, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.05,
     name: "INDIANAPOLIS",
     gp: "United States GP",
@@ -29,11 +22,7 @@
     lengthKm: 4.2,
     baseHW: 8,
     sceneryCoordinates: "racing",
-    // The Speedway is a walled bowl of grandstand; the terrain ribbon only has
-    // to carry the infield, so keep it tight and let the stands do the work.
     terrainOuter: 90,
-    // Nothing grows inside a motor speedway. Suppress the generic foliage pass
-    // across the whole oval section — grass, tarmac and grandstand only.
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.86, s1: 0.22 },
       { kind: "foliage", s0: 0.30, s1: 0.70 },
@@ -50,22 +39,15 @@
       grass:         [0.24, 0.44, 0.20],
       sunDir:        [0.34, 0.78, 0.26],
     },
-    // The Speedway is famously, deliberately flat — it was built on Indiana
-    // farmland and graded level. Only the faintest movement in the infield.
     elevations: [
       { s: 0.40, halfM: 300, rise: 1.8 },
       { s: 0.68, halfM: 280, rise: -1.5 },
     ],
     hwZones: [
-      // The infield section is a normal road course and much narrower than the
-      // 15 m oval it joins; hwZones can only narrow, so the 8 m base stays the
-      // front straight and the banked Turn 1.
       { s0: 0.240, s1: 0.700, hw: 6.4, ease: 0.020 },
       { s0: 0.760, s1: 0.820, hw: 6.6, ease: 0.012 },
     ],
     bankZones: [
-      // Turn 1 IS the oval's banked Turn 1 — 9 degrees, taken flat, and the
-      // only real banking on the F1 lap.
       { frac: 0.115, angleDeg: 9.0, widthM: 320 },
       { frac: 0.880, angleDeg: 6.0, widthM: 200 },
     ],
@@ -83,34 +65,6 @@
       const CONC = [0.74, 0.73, 0.70];
       const SEAT = [[0.30, 0.42, 0.66], [0.86, 0.86, 0.84], [0.72, 0.20, 0.18]];
 
-      // =====================================================================
-      // 1. THE GRANDSTAND WALL — the Speedway's identity. Not a few stands
-      //    dotted around a circuit: a CONTINUOUS two-and-three-tier wall of
-      //    seating running the entire front straight and both oval turns,
-      //    enclosing the track like a stadium. Nothing else on the calendar
-      //    looks remotely like this.
-      // =====================================================================
-      // Outer wall — unbroken along the whole oval portion, built from 30 short
-      // bays rather than 12 long ones. grandstandEx lays every stand out as a
-      // straight CHORD off the tangent at its own node, so a 118 m block sitting
-      // on an oval turn cuts the corner: its seating bank and concourse deck
-      // swing wide enough that their world AABBs reach the road corridor further
-      // round the turn, which is what props-over-road reads (4.75 m at f=0.33 —
-      // the deck itself stays ~18 m clear, the reading comes from that test's
-      // AABB prefilter, but a 118 m chord on a 4076 m oval is a bad
-      // approximation of the arc either way). Shorter bays cut the sagitta.
-      // Same total run and the same colour bands / roofed sections: the livery
-      // and roof cadence key off `g`, the original 12-bay index.
-      //
-      // EACH BAY IS SHORTER THAN ITS PITCH (0.93), so neighbours ABUT instead of
-      // overlapping. The long version overlapped too — 118 m of stand on a
-      // 115.4 m pitch — but its chords met at a steep enough angle that the two
-      // shells were not parallel. Short bays are very nearly parallel, and the
-      // first cut of this fix (bay = 1.02 x pitch) put two shells and two rear
-      // fascias on one plane: a 50 m2 same-facing coplanar pair, the z-fight
-      // class coplanar-faces.test.mjs ratchets. Ending each bay ~1 m short of
-      // the next removes the shared plane rather than papering over it; the seam
-      // sits behind the terrace colour bands, which run continuously past it.
       const OUTER_BAYS = 40, OUTER_SPAN = 0.3396;   // 12 x 0.0283 — unchanged run
       const OUTER_RUN = 1384;                       // metres of wall the span covers
       for (let i = 0; i < OUTER_BAYS; i++) {
@@ -128,11 +82,6 @@
           livery: i % 2 ? "alu" : "concrete", tiers: 2, endWalls: false,
         });
       }
-      // Terraced seating colour bands — blue/white/red bucket seats are what
-      // makes an empty Speedway stand read as a Speedway stand. Same bay
-      // cadence as the shells: a 62 m colour slab on the oval turn was a
-      // longer chord than the stand it dressed, and that is what
-      // props-over-road still read at racing 0.33 after the shell split.
       const SEAT_BAYS = 44;
       for (let i = 0; i < SEAT_BAYS; i++) {
         const s = (0.86 + i * (OUTER_SPAN / SEAT_BAYS)) % 1;
@@ -146,11 +95,6 @@
         out._mat = 0;
       }
 
-      // =====================================================================
-      // 2. THE PAGODA — the Speedway's control tower and the single most
-      //    recognisable structure in American motor racing: a stack of
-      //    diminishing glass tiers with overhanging eaves, over the start line.
-      // =====================================================================
       {
         const a = anchor(K(0.005), -1, 30);
         const b = [a.r, a.u, a.t];
@@ -159,13 +103,6 @@
         }, (stage) => {
           // Solid base housing.
           addBox(stage, vadd(a.c, a.u, 5), [20, 10, 24], [0.80, 0.80, 0.82], b);
-          // Five diminishing tiers, each with an overhanging eave — the
-          // pagoda profile. Glass band on every tier. Stepped at 6.85 m, not
-          // the round 8 m the silhouette suggests: each eave (half-height
-          // 0.45, so its top sits 4.05 above its own tier's y) left a 0.95 m
-          // gap to the NEXT tier's glazing base at an 8 m step — stacked but
-          // not touching, so tiers 2-4 and the mast read as floating. 6.85 m
-          // overlaps each eave into the tier above it by 0.2 m instead.
           for (let t = 0; t < 5; t++) {
             const w = 17 - t * 2.2, d = 21 - t * 2.6;
             const y = 12 + t * 6.85;
@@ -173,27 +110,14 @@
             addBox(stage, vadd(a.c, a.u, y + 3.6), [w + 3, 0.9, d + 3.4],
               [0.86, 0.86, 0.88], b);                                                    // eave
           }
-          // Crowning mast — seated with the same 0.2 m overlap on the top
-          // tier's eave (top 4 * 6.85 + 12 + 4.05 = 43.45).
           addCyl(stage, vadd(a.c, a.u, 43.25), 0.5, 10, [0.90, 0.90, 0.92], 8, b);
         }, { required: true });
       }
 
-      // =====================================================================
-      // 2b. THE SCORING PYLON — the black obelisk opposite the start line,
-      //     carrying the running order as three columns of illuminated car
-      //     numbers. It is the second thing anyone recognises about this place
-      //     after the Pagoda, and no other circuit on the calendar has one.
-      //     The numbers are real digits (signDigit), not a texture-ish stripe —
-      //     a blank black slab reads as an office block, and the whole point of
-      //     the pylon is that it is COVERED in numerals.
-      // =====================================================================
       {
         const a = anchor(K(0.030), -1, 24);
         const b = [a.r, a.u, a.t];
         const AMBER = [1.0, 0.74, 0.12], PANEL = [0.07, 0.07, 0.08];
-        // Car numbers as they'd sit mid-race — arbitrary but plausible, and
-        // stable per build because they're a fixed table, not a hash.
         const ORDER = [[1, 16], [4, 63], [55, 81], [44, 14], [23, 22],
                        [27, 31], [10, 77], [18, 24], [20, 3]];
         modelGroup("indy-scoring-pylon", {
@@ -202,8 +126,6 @@
           // Poured base the shaft grows out of.
           addBox(stage, vadd(a.c, a.u, 1.1), [7.6, 2.2, 9.0], [0.78, 0.78, 0.76], b);
           addBox(stage, vadd(a.c, a.u, 2.5), [8.4, 0.6, 9.8], [0.86, 0.86, 0.84], b);
-          // Tapered black shaft — square section, narrowing with height, which
-          // is what makes it an obelisk rather than a tower.
           addFrustum(stage, vadd(a.c, a.u, 17), 4.3, 3.2, 29, PANEL, 4, b);
           // Number panels down the track-facing face. Three columns, nine rows.
           const proud = 0.06;
@@ -230,11 +152,6 @@
         }, { required: true });
       }
 
-      // =====================================================================
-      // 3. PIT LANE — the Speedway's pit boxes are open-fronted stalls under
-      //    one long flat roof on slim posts, NOT the enclosed garage blocks
-      //    every road course uses. Built from primitives for that reason.
-      // =====================================================================
       {
         const a = anchor(K(0.955), -1, 15);
         const b = [a.r, a.u, a.t];
@@ -255,9 +172,6 @@
       gantry(0.0, 9.5, [0.15, 0.15, 0.18]);
       gantry(0.955, 9, [0.15, 0.15, 0.18]);
 
-      // The YARD OF BRICKS — the preserved metre of original 1909 paving at
-      // the start/finish line. A tiny detail, and the one every broadcast opens
-      // with. Alternating brick tones across the track width.
       {
         const a = anchor(K(0.0), 0, 0);
         for (let i = 0; i < 14; i++) {
@@ -267,12 +181,6 @@
         }
       }
 
-      // GASOLINE ALLEY — the garage rows behind the pits, and nothing like the
-      // glazed paddock block of a modern circuit. They are long, low, white
-      // clapboard-and-block sheds with a raised MONITOR ROOF running the ridge
-      // (a clerestory vent strip on a stepped-up spine), roll-up doors down one
-      // flank, and a service alley between the rows. Five building() boxes with
-      // a window band read as an office park; the monitor roof is the tell.
       for (let row = 0; row < 3; row++) {
         const a = anchor(K(0.906 + row * 0.020), -1, 40 + row * 20);
         const b = [a.r, a.u, a.t];
@@ -286,8 +194,6 @@
           addBox(stage, vadd(a.c, a.u, 7.0), [15.8, 0.5, 65], [0.74, 0.74, 0.72], b);
           addBox(stage, vadd(a.c, a.u, 8.6), [5.6, 2.8, 60], WALL, b);
           addBox(stage, vadd(a.c, a.u, 10.2), [6.6, 0.45, 61], [0.70, 0.70, 0.68], b);
-          // Clerestory glazing in the monitor — the vent strip that lights the
-          // shop floor, and the reason these buildings have a silhouette.
           for (const sgn of [-1, 1])
             addBox(stage, vadd(vadd(a.c, a.r, sgn * 2.7), a.u, 8.7),
               [0.25, 1.7, 57], [0.42, 0.48, 0.52], b);
@@ -303,8 +209,6 @@
           }
         });
       }
-      // Service alley hardstanding between the rows, so the gap between sheds
-      // reads as paved yard rather than the outfield grass showing through.
       for (const [id, s, gap] of [["a", 0.916, 52], ["b", 0.916, 72]]) {
         groundPatch(K(s), -1, gap, [12, 0.16, 66], [0.56, 0.56, 0.55],
           { id: `indy-alley-${id}`, samples: 8 });
@@ -317,10 +221,6 @@
       broadcastCompound(K(0.895), -1, 78, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.97, 0.01, 0.04]) billboard(K(s), -1, 10, 14, 5, [0.20, 0.30, 0.60]);
 
-      // =====================================================================
-      // 4. THE INFIELD ROAD COURSE — a completely different world from the
-      //    oval: low, open, grassy, with modest temporary furniture.
-      // =====================================================================
       groundPatch(K(0.300), 1, 5, [26, 0.18, 34], [0.66, 0.62, 0.50],
         { id: "indy-infield-gravel-a", samples: 6 });
       tyreWall(0.286, 0.316, 1, 4, [0.86, 0.20, 0.18]);
@@ -335,11 +235,6 @@
         { id: "indy-infield-gravel-c", samples: 6 });
       marshalPost(K(0.655), -1, 9);
 
-      // Infield seating is TEMPORARY — bolted aluminium bleachers and rented
-      // scaffold that go up for race week, not the permanent concrete wall of
-      // the oval. grandstandEx would give all three the same roofed shell as
-      // the main straight and erase exactly that contrast, which is the whole
-      // reason the road course looks like a different venue from the oval.
       bleacher(0.292, 0.309, -1, 28, {
         rows: 8, step: 8, density: 0.44,
         plankCol: [0.66, 0.67, 0.70], frameCol: [0.58, 0.59, 0.62],
@@ -356,10 +251,6 @@
         crowd: [[0.72, 0.20, 0.18], [0.86, 0.86, 0.84], [0.30, 0.42, 0.66]],
       });
 
-      // BRICKYARD CROSSING — four holes of the Speedway's golf course really do
-      // sit inside this infield, which is a genuinely strange thing to see from
-      // a racing car and unique to Indianapolis. Mown green, pale sand bunkers,
-      // a flagstick, and the trees that separate the fairways.
       for (const [id, s, side, gap] of [
         ["1", 0.345, 1, 44], ["2", 0.430, -1, 48],
         ["3", 0.570, 1, 46], ["4", 0.628, -1, 42],
@@ -375,8 +266,6 @@
           [0.90, 0.16, 0.14], b);
       }
 
-      // Sparse infield planting — the Speedway's golf course and service roads
-      // occupy the middle, so a few ornamental clumps only.
       every(40, (k) => {
         const s = k / n;
         if (s < 0.28 || s > 0.72) return;
@@ -388,10 +277,6 @@
         tree(k, h < 0.775 ? -1 : 1, 34 + h * 20, 10 + h * 6, h < 0.775 ? LEAF_D : LEAF);
       });
 
-      // =====================================================================
-      // 5. BOUNDARIES — the oval has a solid concrete SAFER wall, the infield
-      //    has ordinary armco. That contrast is worth showing.
-      // =====================================================================
       for (const [s0, s1] of [[0.24, 0.70]]) {
         guardrail(s0, s1, -1, 6, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 6, [0.80, 0.81, 0.83]);
@@ -406,10 +291,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      // =====================================================================
-      // 6. BACKDROP — flat Indiana. No hills at all: a low treeline and the
-      //    Speedway's own light towers are the whole horizon.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -425,11 +306,6 @@
           ridge(tx, tz, pyMin, a + 1.5708, len, w, hMin + h * hVar, col);
         }
       }
-      // The Speedway's tall lattice light towers ringing the oval — the tallest
-      // things for miles and a fixture of every wide shot. floodMast draws the
-      // real article (pole, dual arms, lens bank, ground pool) and guards its own
-      // footprint, which a hand-rolled cylinder-and-box pair does neither of.
-      // light:false — oval still uses the generic floodlights pass for pools.
       for (let i = 0; i < 9; i++) {
         floodMast(K((0.84 + i * 0.042) % 1), 1, 44, { h: 34, cool: true, arms: 3, light: false });
       }
@@ -437,23 +313,9 @@
       cameraTower(K(0.115), 1, 30, { h: 18 });
       cameraTower(K(0.500), -1, 26, { h: 15 });
 
-      // THE SNAKE PIT — the infield mound inside the banked Turn 1, where the
-      // Speedway's crowd stands rather than sits. Dense, informal, and on the
-      // opposite side of the track from all that permanent concrete seating.
       spectatorHill(0.085, 0.150, -1, 26,
         { rows: 4, rise: 1.2, depth: 2.0, density: 0.66, step: 8 });
 
-      // =====================================================================
-      // 7. ENRICHMENT — additive detail that fills genuine gaps without
-      //    disturbing the curated sections above. Idiom preserved: dead flat,
-      //    blue/white/red bucket-seat bands, permanent concrete on the oval and
-      //    race-week temporary furniture in the infield.
-      // =====================================================================
-      // 7a. The oval bowl does not stop dead where the tall front-straight wall
-      //     ends (~s0.19): the seating tapers DOWN through the Turn 1 exit as
-      //     the track peels off into the infield. Two shorter, lower-tier
-      //     segments close that daylight so the wall reads as one continuous
-      //     sweep rather than a slab cut off mid-air.
       for (const [s, tiers, liv, len, gap] of [
         [0.198, 2, "concrete", 84, 13],
         [0.222, 1, "alu", 64, 15],
@@ -462,8 +324,6 @@
           livery: liv, tiers, roof: null, endWalls: tiers === 1, pylons: false,
         });
       }
-      // Carry the blue/white/red bucket-seat bands over those two segments so
-      // the added stands read as Speedway seating, not a grey terrace.
       for (let i = 0; i < 10; i++) {
         const s = (0.188 + i * 0.0055) % 1;
         const a = anchor(K(s), 1, 16);
@@ -474,10 +334,6 @@
         }
         out._mat = 0;
       }
-      // 7b. One more TEMPORARY infield stand — a bolted bleacher carrying the
-      //     same bucket bands — at the road-course corner near s0.40, filling
-      //     the long empty run between the s0.29 bleacher and the s0.51
-      //     scaffold. Temporary, because everything in the infield is.
       bleacher(0.392, 0.408, 1, 20, {
         rows: 7, step: 8, density: 0.40,
         plankCol: [0.70, 0.71, 0.74], frameCol: [0.60, 0.61, 0.64],

@@ -1,22 +1,10 @@
-/* Apex 26 — car mesh/decal/cockpit-instrument geometry builders for js/game.js:
-   the shared decal-quad meshes (logo/sponsor UVs into the LiveryTex atlas),
-   the effect quads (brake-glow ring, rain light, exhaust/boost flames, ERS
-   strip) and the first-person cockpit rig instruments (wheel, LED strip,
-   gear/speed digits, ERS/pedal bars, OT lamp). Pure geometry + per-mesh
-   memo caches; the only dependency is the renderer handle, injected once at
-   boot via CarMesh.init(gfx) (gfx = GLX or the WebGPU backend). State-
-   coupled car drawing (liveries, teamMesh, drawCockpitRig) stays in game.js.
-   Must load BEFORE js/game.js (see index.html). */
+/* Apex 26 — car mesh/decal/cockpit-instrument geometry builders for js/game.js: the shared decal-quad meshes (logo/sponsor UVs into the LiveryTex atlas), the effe… */
 const CarMesh = (function () {
   "use strict";
 
 let _gfx = null;            // renderer handle, set once by init()
 function init(gfx) { Log.info("game", "CarMesh.init"); _gfx = gfx; }
 
-// ---------- Car decals (team logo + sponsor textures on the bodywork) ----------
-// ONE shared decal-quad mesh (fixed panel UVs into the LiveryTex atlas layout);
-// the per-team atlas TEXTURE carries the actual logos/sponsors, so the geometry
-// is team-independent. Drawn over the painted body each frame (gfx.drawDecal).
 const _carDecalMeshes = {};
 const _carDecalOrder = [];
 const CAR_DECAL_CACHE_MAX = 24;
@@ -51,8 +39,6 @@ function carDecalData(aLvl, parts, legacyBody, teamId) {
     }
     out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
   };
-  // Sidepod flanks → primary sponsor. Right side reads front→back; left mirrors so
-  // the wordmark is upright on both flanks. zF=front(+Z), zR=rear(−Z).
   const zF = 0.46, zR = -0.34;
   const pY = (p, f) => p.bottom + (p.top - p.bottom) * f;
   const podAt = (z) => anchors ? anchors.podAt(z) :
@@ -80,63 +66,25 @@ function carDecalData(aLvl, parts, legacyBody, teamId) {
     }
   };
   podDecal(R.titleA, 0.32, 0.80, 0.018);   // sits wholly on the PANEL board
-  // Engine-cover top → team crest + tail livery graphic (reads from the chase
-  // cam; top = toward the tail).
   const cf = anchors ? anchors.coverAt(-0.62) : { x: 0.27, top: 0.81 };
   const cr = anchors ? anchors.coverAt(-1.28) : { x: 0.20, top: 0.69 };
   quad([[-cf.x*0.72, cf.top+0.008, -0.62], [cf.x*0.72, cf.top+0.008, -0.62],
         [cr.x*0.72, cr.top+0.008, -1.28], [-cr.x*0.72, cr.top+0.008, -1.28]], [0, 1, 0.06], R.crest);
-  // Shark-fin flanks → the SAME tail graphic (the big vertical rear canvas — the
-  // "tail wrap" à la a real F1 shark fin). The corners come from
-  // Car3D.sharkFinPanel(), the SAME planform the fin mesh is built from, so the
-  // decal follows the raked leading edge, the base sloping down the engine-cover
-  // ridge, AND the fin's width taper. It used to be an axis-aligned rectangle
-  // (y 0.655..0.945, z -0.82..-1.56 at a flat x 0.023) laid over a swept
-  // trapezoid: its front-top corner cleared the leading edge by ~0.09 m and its
-  // front-bottom edge hung ~0.11 m below the fin, so the accent wash and a third
-  // of the motif floated in the air beside the cover instead of painting the fin.
   const fp = Car3D.sharkFinPanel ? Car3D.sharkFinPanel()
     : [{ x: 0.023, y: 0.655, z: -0.82 }, { x: 0.023, y: 0.655, z: -1.56 },
        { x: 0.023, y: 0.945, z: -1.56 }, { x: 0.023, y: 0.945, z: -0.82 }];
-  // The fin decals are lit by SUN + HEMISPHERE AMBIENT only (glx.drawDecal
-  // uploads no point lights), so a normal of exactly ±X collects nothing from a
-  // sun with no sideways component and almost nothing from the sky term — a
-  // white team mark rendered as ~70% grey. Tilting the normal up puts it back:
-  // the sun contribution then depends only on n.y, which is IDENTICAL for both
-  // flanks, so the two faces still match exactly. The quads stay where they are;
-  // only the shading normal leans.
   const FIN_N = 0.78, FIN_NY = 0.62;      // normalised: 0.78² + 0.62² ≈ 1
   const face = (c, region) => {
     const v = (i, s) => [s * c[i].x, c[i].y, c[i].z];
-    // +x face reads front→back; the −x face mirrors (and reverses winding) so the
-    // mark is upright on both flanks.
     quad([v(0, 1), v(1, 1), v(2, 1), v(3, 1)], [FIN_N, FIN_NY, 0], region);
     quad([v(1, -1), v(0, -1), v(3, -1), v(2, -1)], [-FIN_N, FIN_NY, 0], region);
   };
   face(fp, R.fin);
-  // The crest gets its own UPRIGHT SQUARE patch rather than a slice of the panel
-  // above. Sharing the planform quad is what made every fin badge look squished
-  // and leaned-over: that quad is a sheared trapezoid (the leading edge rakes back
-  // 0.50 m and the front edge is barely half the height of the rear one), so the
-  // bilinear UVs dragged the logo with it. A square region on a square patch is
-  // distortion-free no matter what the surface under it is doing.
   if (Car3D.sharkFinBadge && R.finBadge) face(Car3D.sharkFinBadge(), R.finBadge);
-  // Nose-top plate → big driver NUMBER (top of the digit toward the nose tip).
-  // The nose block is IDENTICAL in the chase and cockpit builds, so this reads
-  // upright from chase, hood AND cockpit cameras (all look forward over the nose).
   const nR = anchors ? anchors.noseAt(1.72) : { top: 0.45, topSide: 0.16 };
   const nF = anchors ? anchors.noseAt(2.10) : { top: 0.43, topSide: 0.14 };
-  // Corner order matters: quad()'s first PAIR is the texture BOTTOM edge. Every
-  // other horizontal decal (the cover crest, the rear-wing band) lists its FRONT
-  // pair first, so texture-up points rearward. These two nose quads listed the
-  // REAR pair first, which is the opposite convention — so the number and the
-  // nose sponsor rendered 180 degrees out, i.e. upside down on the nose.
   quad([[-nF.topSide*0.84, nF.top+0.020, 2.10], [nF.topSide*0.84, nF.top+0.020, 2.10],
         [nR.topSide*0.84, nR.top+0.020, 1.72], [-nR.topSide*0.84, nR.top+0.020, 1.72]], [0, 1, 0.05], R.num);
-  // Nose-rear deck (behind the number) → secondary sponsor. The nose crown SLOPES
-  // UP toward the bulkhead, so the decal quad follows that slope (rear corners
-  // higher than front) — a flat horizontal quad floated/tilted off the surface
-  // and read "detached". Corner heights track the crown so it lies painted-on.
   const nsR = anchors ? anchors.noseAt(1.16) : { top: 0.54, topSide: 0.15 };
   const nsF = anchors ? anchors.noseAt(1.66) : { top: 0.48, topSide: 0.14 };
   quad([[-nsF.topSide*0.82, nsF.top+0.014, 1.66], [nsF.topSide*0.82, nsF.top+0.014, 1.66],
@@ -178,8 +126,6 @@ function getCarDecalMesh(aLvl, parts, legacyBody, teamId) {
   const anchorParts = legacyBody ? null : parts;
   const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId) : { key: "legacy" };
   const level = aLvl == null ? 2 : Number(aLvl);
-  // anchors.key already folds in the team style, so styled and default noses
-  // cache as distinct decal meshes.
   const k = level + "|" + (legacyBody ? "imported|" : "") + anchors.key;
   if (!_carDecalMeshes[k]) {
     _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(level, parts, legacyBody, teamId));
@@ -192,15 +138,9 @@ function getCarDecalMesh(aLvl, parts, legacyBody, teamId) {
   }
   return _carDecalMeshes[k];
 }
-// Cockpit view draws only the FORWARD decals (the nose number), since the
-// engine-cover / sidepod / hood decals sit behind or beside the driver and the
-// ckpt body omits those surfaces. The nose is identical in both builds, so the
-// number lands exactly on the nose plate ahead of the driver.
 let _cockpitDecalMesh = null, _cockpitDecalKey = "";
 function getCockpitDecalMesh(parts, teamId) {
   if (typeof LiveryTex === "undefined" || !_gfx.createTexMesh) return null;
-  // Player-only, so a single-slot cache suffices — but keyed by team + anchors
-  // now that the nose profile is per-team (switching teams re-anchors the number).
   const anchorsForKey = Car3D.bodyAnchors ? Car3D.bodyAnchors(parts, teamId) : null;
   const wantKey = (teamId || "") + "|" + (anchorsForKey ? anchorsForKey.key : "legacy");
   if (_cockpitDecalMesh && _cockpitDecalKey !== wantKey) {
@@ -211,9 +151,6 @@ function getCockpitDecalMesh(parts, teamId) {
     _cockpitDecalKey = wantKey;
     const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
     const u = { uL: R.num.x / S, uR: (R.num.x + R.num.w) / S, vT: 1 - R.num.y / S, vB: 1 - (R.num.y + R.num.h) / S };
-    // The ckpt hood is now a LOW cowl that stops behind the nose deck, so the
-    // nose number is visible out ahead of the driver — use the same nose-plate
-    // placement as the chase build (nose geometry is identical in both builds).
     const anchors = anchorsForKey;
     const nr = anchors ? anchors.noseAt(1.72) : { top: 0.45, topSide: 0.16 };
     const nf = anchors ? anchors.noseAt(2.10) : { top: 0.43, topSide: 0.14 };
@@ -229,9 +166,6 @@ function getCockpitDecalMesh(parts, teamId) {
   return _cockpitDecalMesh;
 }
 
-// Brake-glow ring: a flat emissive annulus (axle-aligned, both windings so it
-// reads from either side) drawn just proud of each wheel face while the discs
-// are hot — the classic F1 glowing-brake cue. Shared by all four wheels.
 let brakeRingMesh = null;
 function getBrakeRing() {
   if (brakeRingMesh) return brakeRingMesh;
@@ -251,9 +185,6 @@ function getBrakeRing() {
   return brakeRingMesh;
 }
 
-// Rain-light strobe overlay: a small rear-facing HDR-red quad drawn over the
-// baked LED panel while the road is wet, blinking like the real FIA ~4 Hz
-// strobe. Shared by all cars (one draw per car per frame during the on-phase).
 let rainLightMesh = null;
 function getRainLight() {
   if (rainLightMesh) return rainLightMesh;
@@ -265,10 +196,6 @@ function getRainLight() {
   rainLightMesh = _gfx.createMesh(out);
   return rainLightMesh;
 }
-// Exhaust flame: a tiny HDR quad behind the tailpipe, flickering while the
-// player is on throttle after dark — an arcade heat-glow cue.
-// Flame tint comes from the resolved Parts fuel recipe; this module only owns
-// the generic effect geometry and caches meshes by colour.
 const _exhaustMeshes = {};
 function getExhaustFlame(color) {
   const R = Array.isArray(color) ? color : [2.6, 1.05, 0.25];
@@ -281,8 +208,6 @@ function getExhaustFlame(color) {
   out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
   return (_exhaustMeshes[key] = _gfx.createMesh(out));
 }
-// Boost flame: a larger blue-white plasma quad behind the tailpipe while ERS
-// boost is deploying — visible at every time of day.
 let boostMesh = null;
 function getBoostFlame() {
   if (boostMesh) return boostMesh;
@@ -294,9 +219,6 @@ function getBoostFlame() {
   boostMesh = _gfx.createMesh(out);
   return boostMesh;
 }
-// ERS indicator: a thin cyan strip on the rear crash structure above the rain
-// light — dim when boost is ARMED, bright strobing while DEPLOYING (the field
-// reads your energy state the way real ERS boards do).
 let ersMesh = null;
 function getErsLight() {
   if (ersMesh) return ersMesh;
@@ -309,26 +231,9 @@ function getErsLight() {
   return ersMesh;
 }
 
-// ACTIVE AERO — the wing's OWN top elements, lifted out of the baked car mesh so
-// they can rotate. Geometry comes from Car3D.buildFlapGeom, which runs the SAME
-// planform emitter the baked wing uses, in a canonical hinge frame (leading edge
-// at the origin, chord back along -z), so the draw only has to rotate and place
-// it. These are not parts laid OVER the wing — they are the wing.
 const _flapMeshes = {};
 const _flapOrder = [];
-// Sized from the FIELD, not picked. Colour and aero recipe are per TEAM, so a
-// full grid needs one mesh per moveable element per team — 11 teams times up to
-// five elements is 55, before the player's own setup, the garage turntable and a
-// career MY TEAM. 48 was under that, and the eviction is FIFO: a full grid
-// overflowed it and then thrashed, deleting and recreating a GPU buffer for
-// every flap of every car, every frame. Each mesh is one wing element, so the
-// headroom costs nothing.
 const FLAP_CACHE_MAX = 128;
-// One mesh per (element, downforce level, colour). `idx` indexes the array
-// Car3D.aeroFlaps() returns — each element has its own chord, span and taper.
-// `el` is the element record the caller ALREADY solved (drawAeroFlaps walks
-// Car3D.aeroFlaps() and holds it); passing it in skips a second identical lookup
-// per flap per car per frame. Omitted, it is resolved here as before.
 function getAeroFlap(aLvl, col, idx, style, el, finish) {
   const c = col || [0.9, 0.9, 0.1];
   // aLvl is passed through RAW — catalog options use fractional levels and the
@@ -336,13 +241,6 @@ function getAeroFlap(aLvl, col, idx, style, el, finish) {
   // either (it is part of the cache key for the same reason).
   const g = el || Car3D.aeroFlaps(aLvl, style)[idx | 0];
   if (!g) return null;
-  // The style is part of the key: the flap PLANFORM reads the recipe's
-  // sweep/taper/rise (and drs moves the rear slot), and with real per-option
-  // recipes flowing through here two options at the same level and colour are
-  // NOT the same mesh. Keying without it served whichever was built first.
-  // Car3D stamps that (level, recipe, index) identity onto the element when it
-  // solves it, so this is a read rather than the array-map-join it used to
-  // rebuild on every call; the fallback covers a record from an older solve.
   const sig = g.cacheKey || (g.id + aLvl + "|" + (style ? [
     style.frontSweep, style.frontTaper, style.frontRise,
     style.rearSweep, style.rearTaper, style.drs || 0].map((v) => +v || 0).join(",") : "d"));
@@ -368,12 +266,6 @@ function getAeroFlap(aLvl, col, idx, style, el, finish) {
   return mesh;
 }
 
-// ── First-person cockpit rig (COCKPIT cam viewmodel) ─────────────────────────
-// The car body is hidden in cockpit view and has no modelled interior, so the
-// driver's-eye view draws the real car body (minus the helmet + halo) plus a steering
-// wheel drawn separately so it can roll with the smoothed steering input.
-// Everything is metres in car-local coords (+z nose, +y up; driver eye sits
-// at roughly (0, 0.98, -0.05) — see the cockpit camVantage).
 function _rigBox(out, cx, cy, cz, sx, sy, sz, col) {
   const x0 = cx - sx / 2, x1 = cx + sx / 2, y0 = cy - sy / 2, y1 = cy + sy / 2, z0 = cz - sz / 2, z1 = cz + sz / 2;
   const F = [
@@ -393,11 +285,6 @@ function _rigBox(out, cx, cy, cz, sx, sy, sz, col) {
 let cockpitWheelMesh = null;
 function getCockpitWheel() {
   if (cockpitWheelMesh) return cockpitWheelMesh;
-  // A real modern F1 wheel carrying ALL the telemetry (that's where it lives on
-  // the real car): shift-light LED row across the top, central LCD with the
-  // gear/speed/pedal/energy readouts drawn live over it, button clusters,
-  // rotary knobs, shift paddles. Built centred on the hub (origin), wheel
-  // plane in XY facing the driver (-z side); rolled about Z by the draw call.
   const out = { pos: [], nrm: [], col: [], idx: [] };
   const CARB = [0.04, 0.04, 0.05], RUB = [0.085, 0.085, 0.095], KNOB = [0.75, 0.72, 0.15];
   _rigBox(out, -0.165, 0.0, 0, 0.05, 0.20, 0.062, RUB);        // hand grips
@@ -433,9 +320,6 @@ function getCockpitWheel() {
   cockpitWheelMesh = _gfx.createMesh(out);
   return cockpitWheelMesh;
 }
-// Shift-light LED strip across the top of the wheel fascia — LIVE, keyed to
-// RPM like the real wheel: greens, ambers, reds, then the blue "shift now"
-// pair. One cached mesh per lit-count (9 tiny meshes, wheel-local coords).
 const _ledMeshes = {};
 // `lit` 0-8 lights that many LEDs left-to-right. 9 is the SHIFT FLASH: a real
 // wheel does not just fill the strip and stop — at the shift point the whole
@@ -472,8 +356,6 @@ function getGearDigit(g) {
   _gearMeshes[g] = _gfx.createMesh(out);
   return _gearMeshes[g];
 }
-// Small 7-seg digits for the LCD speed readout (cached 0-9, origin-centred —
-// positioned per frame with a translate composed onto the wheel matrix).
 const _spdMeshes = {};
 function getSpeedDigit(d) {
   if (_spdMeshes[d]) return _spdMeshes[d];
@@ -492,8 +374,6 @@ function getSpeedDigit(d) {
   _spdMeshes[d] = _gfx.createMesh(out);
   return _spdMeshes[d];
 }
-// Live ERS fill (anchored LEFT for matrix X-scale) + pedal bars (anchored
-// BOTTOM for matrix Y-scale).
 let _ersBarMesh = null;
 function getErsBar() {
   if (_ersBarMesh) return _ersBarMesh;
@@ -502,18 +382,6 @@ function getErsBar() {
   _ersBarMesh = _gfx.createMesh(out);
   return _ersBarMesh;
 }
-// ACTIVE AERO readout, wheel-mounted. In cockpit view the HUD's whole aero chip
-// is hidden (css/track-detail.css `body.cockpit-cam #hud-aero`), so without this
-// the driver has NO aero information at all — the same gap the OVERTAKE lamp
-// fills for its own button, and the reason this mirrors that lamp across the
-// wheel rather than inventing a second idiom.
-//
-// Both parts key off `aeroX` — the FLAP TRAVEL — not the switch, the same
-// choice js/game/hud.js documents ("the readout follows the wing rather than
-// the button"): a flap caught part-open reads as part-open instead of lying in
-// either direction. The lamp answers "what mode am I in", the bar answers "how
-// far has the wing actually moved", which is the question a driver watching the
-// X-mode transition on a straight actually has.
 const _aeroLamps = {};
 function getAeroLamp(state) {                       // 0 unavailable, 1 armed, 2 open
   if (_aeroLamps[state]) return _aeroLamps[state];
@@ -525,8 +393,6 @@ function getAeroLamp(state) {                       // 0 unavailable, 1 armed, 2
   _aeroLamps[state] = _gfx.createMesh(out);
   return _aeroLamps[state];
 }
-// Travel bar under the lamp. Anchored at x=0 (box spans 0..w) so the caller
-// scales the matrix X column by the travel — the same trick getErsBar uses on Y.
 let _aeroBarBg = null, _aeroBarFill = null;
 function getAeroBar(fill) {
   if (fill ? _aeroBarFill : _aeroBarBg) return fill ? _aeroBarFill : _aeroBarBg;
@@ -548,18 +414,12 @@ function drawWheelExtras(mat, c, t) {
   const ax = Math.max(0, Math.min(1, c.aeroX || 0));
   const open = ax > 0.05;
   _gfx.draw(getAeroLamp(open ? 2 : c.xArmed ? 1 : 0), mat, _AX_FX);
-  // The bar only appears once there is travel to report. A permanently visible
-  // empty gauge on a circuit with no aero zones (Monaco) is clutter that says
-  // nothing — the dark lamp already carries "not a thing that exists here".
   if (ax <= 0.02) return;
   _axT[12] = 0.067; _axT[13] = 0.004; _axT[14] = -0.0315;
   M4.mulTo(_axM, mat, _axT);
   _gfx.draw(getAeroBar(false), _axM, _AX_FX);
   _axM[0] *= ax; _axM[1] *= ax; _axM[2] *= ax;
   _gfx.draw(getAeroBar(true), _axM, ax < 0.999
-    // Mid-travel pulses: the flap takes ~0.385 s to open and ~0.125 s to shut
-    // (X_OPEN_RATE / X_CLOSE_RATE in physics-consts.js), and a moving wing is
-    // exactly when the driver wants to know it is moving.
     ? { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.65 + 0.35 * Math.sin(t * 20) }
     : _AX_FX);
 }

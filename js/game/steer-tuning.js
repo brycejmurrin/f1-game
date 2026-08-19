@@ -1,8 +1,4 @@
-/* Apex 26 — steering-tuning sliders, presets and macro levels for js/game.js
-   (the ADVANCED pause-menu page). Writes the live physics tunables through
-   the ctx façade G (the same getter/setter surface __apex.setPhysics uses),
-   so slider changes hit the bicycle model exactly as before. Consumes globals
-   GameAudio, Input, Log. Must load BEFORE js/game.js (see index.html). */
+/* Apex 26 — steering-tuning sliders, presets and macro levels for js/game.js (the ADVANCED pause-menu page). Writes the live physics tunables through the ctx faça… */
 const SteerTuning = (function () {
   "use strict";
 
@@ -12,12 +8,9 @@ Log.info("input", "SteerTuning.create");
 const { $, store, clamp } = G;
 if (window.BrakeCue && BrakeCue.create) BrakeCue.create(G);
 
-// Every 1..10 knob's DOM range (index.html: min="1" max="10") — named so the
-// clamp below and the slider markup cannot silently drift apart.
 const SLIDER_MIN = 1, SLIDER_MAX = 10;
 const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 
-// ---- steering tuning sliders (pause menu) ----
 // Every slider is an integer 1..10 (racing line is -5..5) that maps to a
 // physical value. Each maps so the DEFAULT value reproduces the original
 // hand-tuned feel. Higher slider = the direction named in the label.
@@ -46,14 +39,6 @@ const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 // The simplified default-view controls (STEERING / TILT / DRIVING HELP / RACING
 // LINE) bundle these for players who don't want the detail — see refreshMacros().
 function tiltDegFromRange(v) { return Math.round(50 + (18 - 50) * (v - 1) / 9); }
-// SMOOTHING -> One-Euro min-cutoff (Hz), but the SLIDER IS LINEAR IN LAG, because
-// lag is what a player feels and it goes as 1/(2*pi*fc). A Hz-linear slider (the
-// old 2.2 -> 0.4 Hz ramp) put 7.2 ms between notches 1 and 2 and 132.6 ms between
-// 9 and 10 — a 9x variation in what one notch does — and its top end was 398 ms
-// of steering lag, which is not a setting anybody can drive.
-// 55 -> 195 ms is a uniform 15.6 ms per notch. v6 = 132.8 ms = 1.199 Hz, i.e.
-// the original 1.20 Hz feel to a rounding error: nobody's car changes, only the
-// intermediate steps move. v1 = 2.894 Hz (snappy), v10 = 0.816 Hz (very steady).
 const SMOOTH_LAG_LO = 55, SMOOTH_LAG_HI = 195;   // ms of lag at notch 1 / notch 10
 function lagFromSmooth(v) { return SMOOTH_LAG_LO + (SMOOTH_LAG_HI - SMOOTH_LAG_LO) * (v - 1) / 9; }
 function cutoffFromSmooth(v) { return 1000 / (2 * Math.PI * lagFromSmooth(v)); }
@@ -109,12 +94,9 @@ function paceLabel(v) { return Math.round(paceFromSlider(v) * 100) + "%"; }
 // It is now opt-IN: the default is v1 (off), and the range runs 0 .. 0.70.
 function helpFromSlider(v)   { return (v - 1) / 9 * 0.70; }            // 0..0.70 assist gain, v1 = OFF
 function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " + (-v)); }
-// ADAPTIVE BUTTONS: v1 is a true zero (the fixed KEY_RAMP), v10 is the full
-// SPEED STEER hyperbola + analog travel. The slider is linear in mix.
 function adaptMixFromSlider(v) { return (v - 1) / 9; }   // 0..1, v1 = OFF
 function adaptLabel(v) { return v <= 1 ? "OFF" : String(v); }
 
-// ---- presets ----
 // Three named bundles drive all the handling sliders at once so a player never
 // has to understand the underlying knobs. STANDARD reproduces the original
 // hand-tuned defaults; RELAX stacks every forgiveness lever (on-rails grip,
@@ -139,11 +121,6 @@ const PRESET_STORE = {  // slider store-key  ->  preset field
   adaptiveButtons: "adaptiveButtons", brakeCue: "brakeCue",
 };
 
-// ---- simplified ("macro") controls ----
-// The default view exposes a handful of plain-language controls; each fans out to
-// the granular store keys above, so presets, the Advanced sliders and the macros
-// all stay in sync. STEER_LEVELS bundle the four cornering-feel knobs into named
-// steps that line up with the presets (RELAX→easy, STANDARD→normal, PRO→sim).
 const STEER_LEVELS = {
   easy:   { steerRate: 4, steerExpo: 4, steerLock: 5, steerSpeed: 4 },
   assist: { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 4 },
@@ -183,9 +160,6 @@ function matchSteerLevel() {
 // Mirror the granular store values back onto the simplified controls so the two
 // views never disagree (presets, Advanced edits and macros all stay in sync).
 function refreshMacros() {
-  // Clamped for the same reason as applySteerTuning(): each of these drives a
-  // .textContent directly, which — unlike the .value assignment beside it — the
-  // DOM does not clamp on its own.
   const ts = clamp(store.get("tiltDeg", 6), SLIDER_MIN, SLIDER_MAX);
   if ($("pm-tiltsimple")) { $("pm-tiltsimple").value = ts; $("pm-tiltsimple-v").textContent = ts; }
   const lvl = matchSteerLevel();
@@ -204,7 +178,6 @@ function refreshMacros() {
   }
 }
 
-// ---- store schema migration: a LADDER, one step per version ----
 //
 // This is the only code in the game that OVERWRITES a setting the player chose,
 // which is why it is written as a ladder and not as a flag. `store.get(k, d)`
@@ -264,9 +237,6 @@ const PACE_V2_TO_V3 = (() => {
   return m;
 })();
 
-// Write a key on a migration's behalf and say so. Logs only when the value
-// actually MOVED — a write that changes nothing is not a rewrite, and a log line
-// per boot for it would bury the ones that matter.
 function migSet(to, key, value, why) {
   const had = store.get(key, null);
   store.set(key, value);
@@ -275,7 +245,6 @@ function migSet(to, key, value, why) {
 }
 
 const STEER_MIGRATIONS = [
-  // ---- v1 -> v2: DRIVING HELP and RACING LINE reset to off ----
   //
   // Changing the drivingHelp default from 6 to 1 only reached a FRESH install, so
   // every player who had ever opened the settings kept the old always-on assist —
@@ -302,7 +271,6 @@ const STEER_MIGRATIONS = [
       migSet(2, "raceLine", 0, "no line pull by default: the mechanism changed with it");
   } },
 
-  // ---- v2 -> v3: the RACE PACE regrid ----
   //
   // The notch numbers stopped meaning what they meant: 1..10 on a piecewise-linear
   // 0.50..1.30 grid became 1..19 on an even 6 %/notch geometric one. A stored 3
@@ -336,14 +304,6 @@ const STEER_MIGRATIONS = [
       }
   } },
 
-  // ---- v3 -> v4: ADAPTIVE BUTTONS becomes a 1..10 strength ----
-  //
-  // The first ship was a boolean (0 = off, 1 = on). The slider's 1 is OFF, so
-  // leaving a stored 1 alone would silently turn the feature off for anyone who
-  // had switched it on. 0 and 1 are the only values that boolean ever wrote.
-// A store with NO key is left alone: store.get() applies the live default
-// (notch 6 = mid strength as of 2026-08-18). Writing 1 here would pin the
-// old OFF default forever.
   { to: 4, apply() {
       const from = store.get("adaptiveButtons", null);
       if (from === 0) migSet(4, "adaptiveButtons", 1, "OFF stays OFF on the 1..10 strength slider");
@@ -406,12 +366,6 @@ function applySteerTuning() {
   refreshPresetButtons();
   refreshMacros();
 }
-// Clamped here too, not just in applySteerTuning() — the DOM range input clamps
-// its OWN .value on a real drag, but that guarantee is specific to a genuine
-// user drag; it does not cover a value pushed onto the element some other way.
-// Explicit clamps make every write path agree with the one applySteerTuning()
-// reads back on the next boot, rather than trusting two different mechanisms
-// to reach the same answer.
 $("pm-rate").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("steerRate", v);
   G.WHEELBASE = wheelbaseFromSlider(v); $("pm-rate-v").textContent = v; clearPreset();
@@ -464,7 +418,6 @@ $("pm-preset-relax").onclick    = () => { applyPreset("relax");    if (G.soundOn
 $("pm-preset-standard").onclick = () => { applyPreset("standard"); if (G.soundOn) GameAudio.uiSelect(); };
 $("pm-preset-pro").onclick      = () => { applyPreset("pro");      if (G.soundOn) GameAudio.uiSelect(); };
 
-// ---- simplified controls: each fans out to the granular store keys ----
 $("pm-tiltsimple").oninput = (e) => {
   store.set("tiltDeg", clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX)); clearPreset(); applySteerTuning();
 };
@@ -491,9 +444,6 @@ Input.setSpeedProvider(function () {
   if (!p) return 0;
   return Math.abs(p.speed || 0) / Math.max(G.PACE || 1, 0.05);
 });
-// <details> owns open/closed state, keyboard toggling and the "expanded"
-// announcement itself; the native "toggle" event fires on both directions,
-// so this only has to add the click sound.
 $("adv-details").addEventListener("toggle", () => {
   if (G.soundOn) GameAudio.uiSelect();
 });

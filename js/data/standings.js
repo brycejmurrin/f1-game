@@ -10,11 +10,6 @@ const DataStandings = (function () {
     function rowTeam(row, teamName) {
       const t = findTeam(teamName);
       if (!t || !t.color) return;
-      // Mercedes' primary is near-black and Racing Bulls' is close behind, so a
-      // bar painted with the livery colour would be an invisible bar on a black
-      // page for exactly the teams whose identity is the secondary. Same rule
-      // the [data-team] accents use in css/tokens.css: below a luminance floor,
-      // take color2.
       const lum = 0.2126 * t.color[0] + 0.7152 * t.color[1] + 0.0722 * t.color[2];
       row.style.setProperty("--row-team", cssColor(lum < 0.10 && t.color2 ? t.color2 : t.color));
     }
@@ -33,9 +28,6 @@ const DataStandings = (function () {
           const leaderPts = drivers.length > 0 && drivers[0].pos === 1 ? drivers[0].points : null;
           drivers.forEach(s => {
             const row = el("div", "dh-row");
-            // The team colour becomes a 3px edge down the row (see .dh-row in
-            // css/data.css): twenty rows of text turn into a chart you can read
-            // down the side, and team-mates pair up without reading a word.
             rowTeam(row, s.team);
             if (s.pos === 1) row.classList.add("dh-row-lead");
             row.appendChild(el("span", "dh-pos", s.pos !== null && s.pos !== undefined ? s.pos : "—"));
@@ -88,11 +80,6 @@ const DataStandings = (function () {
               myDrivers.sort((a, b) => b.points - a.points);
               const h2h = el("div", "dh-h2h-bar");
               const d1 = myDrivers[0], d2 = myDrivers[1];
-              // Denominator is the two SHOWN drivers' combined points, not the
-              // constructor total: `s.points` also carries points scored by drivers
-              // who have since left the team (mid-season swap), so `100 - p1` would
-              // hand that surplus to d2 and misstate the head-to-head. denom>0 holds
-              // because s.points>0 gated us in and d1 is the top scorer.
               const denom = (d1.points + d2.points) || 1;
               const p1 = (d1.points / denom) * 100;
 

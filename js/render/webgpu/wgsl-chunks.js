@@ -1646,7 +1646,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   // untouched (GLX js/render/shaders/sky.js).
   let overcast = smoothstep(0.5, 1.0, cloud);
 
-  // --- Sky gradient ---
   var c : vec3<f32>;
   if (up >= 0.0) {
     // Overcast grey-shift, night-gated (GLX SKY_FS). A day overcast ceiling
@@ -1687,7 +1686,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     c = mix(U.horizon.xyz * 0.85, vec3<f32>(0.035, 0.030, 0.022), gnd * gnd);
   }
 
-  // --- Procedural cloud layer (basic) ---
   // covRay: cloud coverage seen along this ray, hoisted for the star-occlusion
   // term below (GLX parity — stars fade out behind the deck).
   var covRay = 0.0;
@@ -1738,7 +1736,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     c = c + vec3<f32>(0.10, 0.13, 0.20) * lightning * (1.0 - covRay * 0.6);
   }
 
-  // --- Mie forward scatter + sun corona/disc ---
   let upPos = max(up, 0.0);
   // MIE SCATTER knob (clamp keeps the mix blend valid past 1).
   c = mix(c, sunColor, clamp(pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieScatter, 0.0, 1.0));
@@ -1755,7 +1752,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let discCore = mix(vec3<f32>(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
   c = c + discCore * disc;
 
-  // --- Stars ---
   if (stars > 0.5 && up > 0.05) {
     let SC = 180.0;
     let cell = floor(dir * SC);
@@ -1777,7 +1773,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     }
   }
 
-  // --- Moon disc + halo ---
   if (moon > 0.0 && stars > 0.5) {
     let moonDir = normalize(vec3<f32>(0.42, 0.72, 0.55));
     let md = dot(dir, moonDir);
@@ -1790,7 +1785,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     }
   }
 
-  // --- City skyglow ---
   if (U.cityGlow.x + U.cityGlow.y + U.cityGlow.z > 0.001) {
     let horiz = pow(clamp(1.0 - max(dir.y, 0.0) * 2.4, 0.0, 1.0), 3.0 * cityGlowReach);   // CITY GLOW REACH knob
     c = c + U.cityGlow.xyz * horiz;

@@ -16,9 +16,6 @@
     // Was 0.95, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.95,
     name: "SEPANG",
     gp: "Malaysian GP",
@@ -46,16 +43,12 @@
       grass:         [0.17, 0.42, 0.17],
       sunDir:        [0.20, 0.90, 0.14],
     },
-    // Sepang is built on reclaimed palm plantation — gently rolling, with a
-    // real drop through the T5-T6 sweep and a climb back to the hairpin.
     elevations: [
       { s: 0.22, halfM: 420, rise: -5.0 },
       { s: 0.46, halfM: 380, rise: 4.5 },
       { s: 0.74, halfM: 460, rise: -4.0 },
     ],
     hwZones: [
-      // Sepang is famously wide — 22 m in places — so only the genuinely tight
-      // corners narrow at all.
       { s0: 0.145, s1: 0.185, hw: 6.8, ease: 0.014 },  // T3-T4
       { s0: 0.560, s1: 0.600, hw: 6.9, ease: 0.014 },  // T9 hairpin
       { s0: 0.865, s1: 0.905, hw: 6.6, ease: 0.012 },  // T15 final hairpin
@@ -78,9 +71,6 @@
       const JUNGLE = [0.11, 0.34, 0.14], JUNGLE_L = [0.20, 0.46, 0.20];
       const GRAVEL = [0.68, 0.60, 0.44];
 
-      // A basis tilted by `ar` in the (right, up) plane and then `at` in the
-      // (fwd, up) plane. The twin canopies below are DOUBLY curved surfaces —
-      // a panel that is only tilted one way turns a saddle back into a ramp.
       const tilt2 = (a, ar, at) => {
         const cr = Math.cos(ar), sr = Math.sin(ar);
         const r1 = [a.r[0] * cr + a.u[0] * sr, a.r[1] * cr + a.u[1] * sr, a.r[2] * cr + a.u[2] * sr];
@@ -91,11 +81,6 @@
         return [r1, u2, t2];
       };
 
-      // =====================================================================
-      // 1. PALM PLANTATION — Sepang is carved out of oil palm, and the ordered
-      //    rows of identical palms ringing the circuit are its signature.
-      //    Regular spacing (not hash-scattered) is the point.
-      // =====================================================================
       const openArea = (s) => (s >= 0.90 || s <= 0.10) || (s >= 0.30 && s <= 0.40);
       // A plantation is a GRID: identical trees, identical spacing, identical
       // height, in ranks you can sight down. Every other circuit in the game
@@ -120,9 +105,6 @@
       }
       let row = 0;
       along(0.10, 0.90, 26, (k) => {
-        // Alternate rows step half a pitch outward, so the ranks form the
-        // quincunx an oil-palm estate is actually planted on rather than a
-        // plain square grid.
         const stagger = (row & 1) ? 7 : 0;
         for (const side of [-1, 1]) {
           palm(k, side, 19 + stagger, 12.5, PALM_F);
@@ -141,19 +123,6 @@
         bush(k, h < 0.72 ? -1 : 1, 8 + h * 5, h < 0.6 ? JUNGLE : JUNGLE_L);
       });
 
-      // =====================================================================
-      // 2. THE TWIN-CANOPY PIT COMPLEX — Sepang's defining structure: two
-      //    enormous fabric hyperbolic-paraboloid roofs over the main grandstand
-      //    and paddock, visible from every corner of the site.
-      // =====================================================================
-      // ── THE TWIN CANOPIES ──
-      // Sepang's roofs are hyperbolic paraboloids: doubly-curved fabric saddles,
-      // two opposite corners pulled UP and two pulled DOWN, stretched between
-      // slim masts. A pair of flat tilted slabs meeting at a ridge — which is
-      // what stood here before — is a tent, and a tent is the one shape these
-      // are famous for not being. So the surface is built properly: a panel
-      // grid sampled off y = H·u·v, each panel individually tilted to the local
-      // gradient in BOTH directions so the warp is visible from any angle.
       function hyparCanopy(id, s, side, gap, W, L, H, lift, col, required) {
         const a = anchor(K(s), side, gap);
         const b = [a.r, a.u, a.t];
@@ -171,15 +140,11 @@
               const ar = Math.atan2(H * v, W * L);
               const at = Math.atan2(H * u, W * L);
               const p = vadd(vadd(vadd(a.c, a.r, u), a.t, v), a.u, y);
-              // Alternating panel tone: fabric canopies are seamed, and a flat
-              // single colour over 1500 m² reads as plastic.
               const shade = ((i + j) & 1) ? 1 : 0.94;
               addBox(stage, p, [panelW * 1.04, 0.35, panelL * 1.04],
                 [col[0] * shade, col[1] * shade, col[2] * shade], tilt2(a, ar, at));
             }
           }
-          // The two HIGH corners are held up by masts, the two LOW corners are
-          // tied down — that opposition is what makes a saddle stand up.
           for (const [su, sv] of [[-1, -1], [1, 1]]) {
             const foot = vadd(vadd(a.c, a.r, su * W * 0.92), a.t, sv * L * 0.92);
             const top = lift + H * 0.92 * 0.92 + 3;
@@ -205,17 +170,11 @@
           }
         }, { required: !!required });
       }
-      // Main grandstand canopy (spectator side) and paddock canopy (pit side).
-      // They face each other across the straight, which is the view from the
-      // grid — the one image everybody has of this circuit.
       hyparCanopy("sepang-canopy-main", 0.985, -1, 22, 14, 42, 9, 24,
         [0.95, 0.95, 0.93], true);
       hyparCanopy("sepang-canopy-paddock", 0.955, 1, 22, 13, 34, 8, 22,
         [0.93, 0.94, 0.92], true);
 
-      // The raked seating UNDER the main canopy. Deliberately not grandstandEx:
-      // this stand has no roof and no back shell of its own — the canopy above
-      // is its roof — so it is a bare terrace stepping up toward the masts.
       {
         const SEATS = [[0.16, 0.44, 0.26], [0.90, 0.90, 0.86], [0.86, 0.72, 0.14]];
         let i = 0;
@@ -232,10 +191,6 @@
         });
       }
 
-      // The pit terrace itself sits under the paddock canopy, so it is a low
-      // OPEN structure: a deep continuous garage arcade with no roof of its
-      // own, a first-floor gallery, and the tall glazed race-control fin at the
-      // end of the row.
       {
         const WHITE = [0.94, 0.94, 0.92], TEAL = [0.10, 0.36, 0.34];
         const SHUTTER = [0.24, 0.26, 0.28], GLASS = [0.32, 0.46, 0.50];
@@ -267,8 +222,6 @@
             stage._mat = 0;
           }, { required: true });
         }
-        // Race control: a tall narrow FIN, glazed on the track face, capped by
-        // an oversailing louvre hood against the equatorial sun.
         const a = anchor(K(0.010), 1, 14);
         const b = [a.r, a.u, a.t];
         modelGroup("sepang-race-control", {
@@ -289,9 +242,6 @@
       }
       gantry(0.0, 9, [0.15, 0.15, 0.18]);
       gantry(0.960, 8.5, [0.15, 0.15, 0.18]);
-      // Sepang's hospitality reads as paired towers under the big sail canopies —
-      // tall and narrow so air moves between them, which is what you build in
-      // equatorial humidity.
       for (let i = 0; i < 4; i++) {
         building(K(0.900 + i * 0.014), 1, 46, 21, 17, 16,
           { kind: "twin", wall: [0.88, 0.88, 0.86], window: [0.34, 0.42, 0.48], floor: 4.0 });
@@ -304,13 +254,6 @@
       broadcastCompound(K(0.892), 1, 78, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.97, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.20, 0.50, 0.30]);
 
-      // =====================================================================
-      // 3. CORNER STANDS AND RUNOFF — Sepang's tarmac runoff is vast, so the
-      //    gravel is limited and the stands sit a long way back.
-      // =====================================================================
-      // The satellite stands all carry the same white fabric roof language as
-      // the twin canopies — at Sepang every shelter on the site is a tensioned
-      // white membrane, and steel-grey cantilevers would break that instantly.
       const TENT_ROOF = [0.94, 0.94, 0.92], TENT_FASCIA = [0.14, 0.42, 0.36];
       const shelter = (s, side, gap, len, opts) =>
         grandstandEx(s, side, gap, len, null, null, Object.assign(
@@ -337,14 +280,9 @@
       tyreWall(0.868, 0.902, -1, 9, [0.85, 0.78, 0.20]);
       marshalPost(K(0.880), 1, 11);
 
-      // Monsoon drainage channels — Sepang's races are defined by tropical
-      // downpours, and the deep open drains beside the runoff are always visible.
       waterBand(0.18, 0.28, -1, 30, 34, 3, [0.24, 0.32, 0.26], { id: "sepang-drain-north" });
       waterBand(0.62, 0.72, 1, 32, 36, 3, [0.24, 0.32, 0.26], { id: "sepang-drain-south" });
 
-      // =====================================================================
-      // 4. BOUNDARIES
-      // =====================================================================
       for (const [s0, s1] of [[0.09, 0.30], [0.36, 0.55], [0.61, 0.75], [0.78, 0.86]]) {
         guardrail(s0, s1, -1, 9, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 9, [0.80, 0.81, 0.83]);
@@ -356,10 +294,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 10);
       }
 
-      // =====================================================================
-      // 5. BACKDROP — the plantation horizon, with the limestone hills of
-      //    Selangor faint behind it and the KLIA control tower on the skyline.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -376,11 +310,7 @@
           ridge(tx, tz, pyMin, a + 1.5708, len, w, hMin + h * hVar, col);
         }
       }
-      // KLIA's control tower and terminal roofline on the far horizon — the
-      // airport is the circuit's immediate neighbour.
       {
-        // At 250 m out the terminal footprint reached back over the far side of
-        // the lap and the whole model was silently dropped; 180 m clears it.
         const k = K(0.42);
         const a = anchor(k, 1, 180);
         const b = [a.r, a.u, a.t];
@@ -396,10 +326,6 @@
         }, { required: true });
       }
 
-      // =====================================================================
-      // 6. TROPICAL DETAIL — the tall slim floodlight masts and the covered
-      //    walkways that shade every path on the site.
-      // =====================================================================
       for (const [s, side, gap] of [
         [0.030, -1, 30], [0.065, 1, 36], [0.340, -1, 40], [0.580, 1, 36], [0.885, -1, 32],
       ]) {
@@ -407,10 +333,6 @@
         addCyl(out, a.c, 0.24, 22, [0.24, 0.24, 0.26], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 22.4), [1.8, 0.7, 3.4], [0.96, 0.94, 0.84], [a.r, a.u, a.t]);
       }
-      // Shaded spectator walkway behind the main grandstand — a slatted roof on
-      // slim posts, the thing everyone stands under between sessions. One 90 m
-      // run was silently dropped here (the straight's far side folds under it),
-      // so it is three shorter bays that each clear the preflight.
       for (const [i, s] of [[0, 0.020], [1, 0.035], [2, 0.050]]) {
         const a = anchor(K(s), -1, 30);
         const b = [a.r, a.u, a.t];
@@ -418,8 +340,6 @@
           center: vadd(a.c, a.u, 3), size: [9, 8, 30], basis: b,
         }, (stage) => {
           addBox(stage, vadd(a.c, a.u, 4.6), [6.4, 0.35, 28], [0.90, 0.88, 0.82], b);
-          // Slats, not a solid slab: the shadow pattern is the whole character
-          // of a tropical walkway and costs three thin boxes per bay.
           for (let l = 0; l < 3; l++)
             addBox(stage, vadd(vadd(a.c, a.r, (l - 1) * 2.2), a.u, 5.0),
               [0.9, 0.5, 28], [0.72, 0.71, 0.66], b);
@@ -427,11 +347,6 @@
             addCyl(stage, vadd(a.c, a.t, (p - 1) * 11), 0.18, 4.6, [0.72, 0.72, 0.74], 6, b);
         });
       }
-      // The same slatted shade run behind the T1 and T15 satellite stands — at
-      // Sepang every path between the enclosures is roofed against the sun and
-      // the monsoon, so those spectator clusters get covered walkways too. Single
-      // 30 m bays set well back behind each stand, so neither crosses a
-      // doubling-back stretch of the lap the way the dropped 90 m run did.
       for (const [id, s, side, gap] of [
         ["t1", 0.072, 1, 52],
         ["t15", 0.900, -1, 46],
@@ -450,9 +365,6 @@
         });
       }
 
-      // Sponsor boards and the broadcast masts. Saturated tropical greens and
-      // reds — the equatorial light here washes everything pale, so the only
-      // strong colour on the circuit has to come from the signage.
       sponsorHoarding(0.955, 0.075, -1, 8, {
         h: 1.3, step: 11,
         palette: [[0.10, 0.52, 0.32], [0.94, 0.93, 0.90], [0.88, 0.16, 0.14], [0.96, 0.80, 0.10]],

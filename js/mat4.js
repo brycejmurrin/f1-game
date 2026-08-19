@@ -1,35 +1,9 @@
-/*
- * Apex 26 — column-major 4x4 matrix + vec3 helpers, plus the three SCALAR
- * helpers every module used to re-declare (M4.clamp / M4.lerp / M4.wrapDelta).
- * Float32Array(16) layout matches uniformMatrix4fv (m[col*4+row]).
- *
- * WHY THE SCALARS LIVE HERE. clamp was hand-copied into 15 files, lerp into 8,
- * the shortest-way arc wrap into 7 (docs/ARCHITECTURE-REVIEW.md §8). This file
- * is the SECOND script tag, so it is the only existing home every consumer —
- * including the deferred backends, which load last — can bind at evaluation
- * time; a new file would mean a new global, a manifest entry, an index.html tag
- * and a global-registry baseline edit to buy exactly the same reachability.
- * They hang off M4 rather than becoming a third global for the same reason:
- * tests/unit/global-registry.test.mjs grandfathers this file's [M4, V3] pair
- * and nothing else, and a property is not a global.
- */
+/* Apex 26 — column-major 4x4 matrix + vec3 helpers, plus the three SCALAR helpers every module used to re-declare (M4.clamp / M4.lerp / M4.wrapDelta). Float32Arra… */
 "use strict";
 
 const M4 = (function () {
-  // ---- scalar helpers -------------------------------------------------------
-  // CALL SITES ALIAS THESE (`const clamp = M4.clamp;`) rather than calling
-  // `M4.clamp(...)` per use. Same function object, so a hot path keeps the exact
-  // monomorphic inline-cache shape its own local copy had — the migration is a
-  // deduplication, not a change of call cost.
   function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
   function lerp(a, b, t) { return a + (b - a) * t; }
-  // Shortest-way delta on a CIRCULAR axis: arc position s over track.total, or
-  // an angle over 2π. `d` is the difference of two values on the same circle,
-  // so |d| < period and ONE fold is always enough — every hand-written copy
-  // relied on that. It is the wrap the review calls out: one copy folding the
-  // wrong way sends a car backwards down the whole lap, once per lap.
-  // NOT for an unbounded accumulator (js/game.js's headInterp/yawVisInterp fold
-  // a heading that can be many turns from its predecessor — those need a loop).
   function wrapDelta(d, period) {
     const half = period * 0.5;
     if (d > half) return d - period;

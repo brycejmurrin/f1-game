@@ -1,25 +1,8 @@
-/* Apex 26 — lighting tuner data + parametric light builders for js/game.js:
-   TUNE_DEFS (the LIGHTING TUNER slider registry — the def values ARE the
-   shipped tuning), the live LT value object (mutated in place by
-   js/game/light-store.js's profile resolution and __apex.lightTune),
-   floodColor / LAMP_KINDS (per-theme + per-fixture light character) and
-   buildTrackLights(track) (bakes the per-track light records). No game
-   state: profile persistence and the (track, time-of-day, weather)
-   resolution live in js/game/light-store.js. Must load BEFORE js/game.js
-   (see index.html). */
+/* Apex 26 — lighting tuner data + parametric light builders for js/game.js: TUNE_DEFS (the LIGHTING TUNER slider registry — the def values ARE the shipped tuning)… */
 const LightTune = (function () {
   "use strict";
 
-// Lamp set for ANY track (street posts and flood banks share this list; the
-// caller only feeds them to the shader when the scene is dark — night/dusk/dawn).
-// A light roughly every ~22 m (alternating sides) at mast height, capped to the
-// 48 shader slots (minus a small tail-light reservation in traffic) by the
-// per-frame cull. Flat 15-float records [x,y,z, r,g,b, rad, aim, cone, bleed,
-// vol, glare]. Colour, brightness, pool size and mast style all vary by circuit
-// character (see floodColor). HDR (>1) so the pools bloom.
 function floodColor(theme, id) {
-  // tint (relative RGB), HDR intensity, pool radius (m), and `street` = slim
-  // lamp-post masts (vs tall flood banks). Per-theme so each circuit reads right.
   let base;
   switch (theme) {
     // Radii sized for the raking throw from the verge mast: the pool's far
@@ -31,9 +14,6 @@ function floodColor(theme, id) {
     case "desert":       base = { tint: [1.28, 1.00, 0.60], intensity: 18.0, radius: 34, street: false }; break; // warm sodium flood banks
     default:             base = { tint: [1.14, 1.06, 0.84], intensity: 19.0, radius: 36, street: false }; break; // green/classic warm-white
   }
-  // Per-LOCALE character so night circuits don't all share one tint: humid/warm
-  // cities glow amber (sodium + sea-haze scatter), crisp desert/LED cities stay
-  // cool. Only the tint shifts; intensity/radius/mast style keep the theme tuning.
   const WARM = { singapore: [1.06, 0.99, 0.88], jeddah: [1.16, 1.02, 0.78],
                  interlagos: [1.10, 1.01, 0.84], montreal: [1.05, 1.00, 0.90],
                  baku: [1.08, 1.00, 0.86] };
@@ -89,10 +69,6 @@ const TUNE_DEFS = [
   { id: "ssaoRadius",   label: "AO RADIUS",       group: "SHADOWS", min: 0.02, max: 1.465, step: 0.005, def: 0.6, u: "uRadius", help: "World-space reach of the AO sampling. Small = tight contact shading; large = broad soft occlusion. The screen-space sample radius saturates at close range past the default, so extra headroom mainly extends how far into the distance strong AO still reaches. Stays live on GRAPHICS: LOW with AMBIENT OCCLUSION." },
   { id: "contactStr",   label: "CONTACT SHADOW",  group: "SHADOWS", min: 0, max: 2, step: 0.01, def: 1.0, help: "Grounding shadow under the car/props where the sun map can't reach. Stays live on GRAPHICS: LOW; the governor or a crash floor can still shed the pass." },
   { id: "ambContactDark", label: "AMBIENT CONTACT DARK", group: "SHADOWS", min: 0, max: 2.5, step: 0.01, def: 1.0, u: "uAmbContactDark", help: "How much the ambient-occlusion term darkens the AMBIENT fill in creases/contact points (distinct from AMBIENT OCCLUSION, which darkens the whole shaded result). 1 = as-shipped (up to 12% ambient drop in deep creases), 0 = ambient fill is untouched by AO (flatter, brighter corners), higher = crushes contact points toward black. All three renderers (WebGL2, three.js and WebGPU)." },
-  // ── LAMPS ── one tab for every track lamp (street posts + flood banks).
-  // Was split as FLOODLIGHTS / LAMP BEHAVIOUR; both drove the same lampPosts
-  // pipeline, so the two names read as two systems. Sections keep the old
-  // visual grouping without a second tab.
   { id: "lampLevel",    label: "LAMP LEVEL",      group: "LAMPS", section: "POOLS", min: 0, max: 0.687, step: 0.001, def: 0.26, help: "Overall lamp brightness ceiling (on top of the twilight ramp). Applies to every track lamp — street posts and flood banks alike. 0 = fully off." },
   { id: "lampDensity",  label: "LAMP DENSITY",    group: "LAMPS", section: "POOLS", min: 0.1, max: 2.35, step: 0.005, def: 1.0, rebuild: true, help: "How densely lamps are placed along the track (1 = shipped ~22 m stride). Higher = more poles/pools per kilometre; lower = sparser. Light pools update live; pole geometry refreshes on the next track load. Distinct from LAMP COUNT (how many nearest lamps the shader keeps)." },
   { id: "floodDay",     label: "DAYTIME LAMPS",   group: "LAMPS", section: "POOLS", min: 0, max: 4.5, step: 0.001, def: 0.0, help: "Light track lamps during DAY sessions (normally off — the sun dominates). 0 = off (as-shipped), higher = brighter daytime pools. Lets you run a lit stadium look under a blue sky. Brightness still rides LAMP LEVEL and the per-lamp POOL ENERGY on top of this." },
@@ -164,11 +140,6 @@ const TUNE_DEFS = [
   // ── CAR ──
   { id: "carReflect",   label: "CAR REFLECTION",  group: "CAR", min: 0, max: 1, step: 0.005, def: 0.05, u: "uCarReflect", help: "How strongly the world (track, sky, lights) mirrors on the car bodywork. Off on GRAPHICS: LOW and MEDIUM (SSR cost shed)." },
   { id: "carEnvCube",   label: "ENV REFLECTION",  group: "CAR", min: 0, max: 1, step: 0.01,
-    // Desktop default ON (0.3): the live probe pass is cheap there and the paint
-    // mirroring the real surroundings is a marquee look. Mobile stays OFF — the
-    // extra per-frame world pass + HDR cube can exhaust memory-limited mobile
-    // GPUs and drop the WebGL context (tier-gated at the def, so presets /
-    // localStorage still override either way).
     def: (typeof GLX !== "undefined" && GLX.isMobile) ? 0.0 : 0.3,
     help: "Live cubemap probe: the paint mirrors the REAL surroundings (one face re-rendered per frame). Default ON (0.3) on desktop; OFF on phones — the extra per-frame world pass + HDR cube can exhaust memory-limited mobile GPUs and drop the WebGL context. 0 = analytic sky reflection only (no probe pass). It's a 0..1 cross-fade so the range is already exact — only the step got finer. Off on GRAPHICS: LOW and MEDIUM (env-probe cost shed)." },
   { id: "carGloss",     label: "PAINT GLOSS",     group: "CAR", min: 0.2, max: 1.4, step: 0.005, def: 1.0,  u: "uCarGloss", help: "Sharpness of the paint's highlights & reflections. Higher = glassier (lower roughness). Ceiling is 1.4 — `carSoft = clamp((1.4 - gloss)*0.5, 0, 1)` in the SSR streak is already 0 there, so anything higher was dead travel. Floor 0.15 is where typical paint roughness (`base/gloss`) hits the 1.0 clamp." },
@@ -266,24 +237,9 @@ const TUNE_DEFS = [
   // ── FX ── transient particle effects (js/game/particles.js pool)
   { id: "particleMul",  label: "PARTICLE FX",     group: "FX", min: 0, max: 2, step: 0.005, def: 1.0, help: "Transient particle amount — tyre smoke, collision sparks, gravel kickup and rain spray. 0 = off, 1 = as-shipped, 2 = double the emission rate." },
 ];
-// LT holds the LIVE values the driver reads every frame. They are resolved by
-// js/game/light-store.js from a per-CONDITION profile store: each (track,
-// time-of-day, weather) combination keeps its own set of overrides, so
-// night+wet Monaco and day+dry Monza are tuned independently. Resolution per
-// id, lowest precedence first: TUNE_DEFS default → LightPresets["*"] →
-// LightPresets[key] → player "*" → player [key] (the player layers live in
-// localStorage). Only non-default values are stored.
 const LT = {};
 for (const d of TUNE_DEFS) LT[d.id] = d.def;
 
-// Per-KIND light parameters. The kind itself is decided ONCE in tracks.js
-// (buildProps mast block) and carried on track.lampPosts, so the painted lens
-// albedo always matches the light emitted here. CCT-authentic palette (HPS
-// sodium 2100K → broadcast flood 5700K). Cones are a tight HOT CORE (the bright
-// pool under the fixture) + a wide soft skirt reaching the far edge; bleed is
-// LOW so the valleys between lamps stay visibly darker than the pools — that
-// pool/valley contrast is what makes the light read as CAST by the fixture
-// instead of an ambient wash.
 const LAMP_KINDS = {
   flood_bank: { col: [1.02, 1.06, 1.18], eMul: 1.00, cIn: 0.80, cOut: 0.50, blB: 0.08, blV: 0.06, volW: 1.0,  glareW: 1.2, tintMix: 0.12 }, // 5700K broadcast bank (eMul 1.35 stacked too hot on the pit straight)
   halide:     { col: [0.96, 1.03, 1.05], eMul: 1.05, cIn: 0.80, cOut: 0.46, blB: 0.06, blV: 0.06, volW: 0.8,  glareW: 1.0, tintMix: 0.30 }, // 4300K metal halide
@@ -366,10 +322,6 @@ function lampStrideM() { return 22 / lampDensityFactor(); }
 function lampStrideNodes(ds) {
   return Math.max(1, Math.round(lampStrideM() / ds));
 }
-// Thin or densify the fixture list so live LAMP DENSITY matches without a full
-// track rebuild. dens<1 drops posts below the target spacing; dens>1 inserts
-// synthetic roadside lights (no lens halo) between fixtures — poles catch up
-// on the next Tracks.build (which reads the same LT.lampDensity).
 function applyLampDensity(posts, track, height, onlyAlways) {
   if (!posts || !posts.length || onlyAlways) return posts;
   const dens = lampDensityFactor();
@@ -414,15 +366,9 @@ function applyLampDensity(posts, track, height, onlyAlways) {
   const cap = 800;
   return sorted.concat(fill.slice(0, Math.max(0, cap - sorted.length)));
 }
-// `onlyAlways` builds ONLY the fixtures a circuit marked always-on (see
-// lampPost() in js/track/tracks.js) — the set game.js uploads in a BRIGHT
-// session, where the ordinary lamps stay off.
 function buildTrackLights(track, onlyAlways) {
   const lights = [];
   const n = track.n, total = track.total;
-  // Guard against a not-yet-complete track (centreline arrays missing): return
-  // empty so the caller's rebuild-if-empty retries next frame rather than caching
-  // a bad empty result.
   if (!n || !total || !track.px || !track.rx) return lights;
   Log.info("game", "LightTune.buildTrackLights track=" + ((track.def && track.def.id) || "?"));
   const ds = total / n;
@@ -431,23 +377,12 @@ function buildTrackLights(track, onlyAlways) {
   const height = street ? 9 : 13;   // at the mast-top lens (buildProps masts)
   // Deterministic per-lamp hash in [0,1) so a circuit's lamp pattern is stable.
   const lh = (j) => { const x = Math.sin((j + 1) * 127.13) * 43758.5453; return x - Math.floor(x); };
-  // Saturated accent palette for "neon spill" lamps on city circuits — coloured
-  // light washing off signage onto the street (magenta/cyan/lime/red-orange).
-  // Kept PASTEL and dim — real signage spill is a subtle tint on the street, not
-  // a saturated paint-bucket pool.
   const NEON_SPILL = [[1.35, 0.75, 1.1], [0.75, 1.15, 1.3], [0.9, 1.25, 0.85], [1.3, 0.85, 0.65]];
-  // Every point light is emitted FROM a visible fixture: buildProps exports the
-  // exact world position of each mast lens (track.lampPosts — same density-aware
-  // stride, side parity and onTrack suppression as the drawn masts), so glare
-  // halos, specular streaks, volumetric beams and reflections all anchor to
-  // geometry. Fallback: synthetic stride walk when lampPosts is absent.
   let posts = (track.lampPosts && track.lampPosts.length) ? track.lampPosts : null;
   if (onlyAlways) {
     posts = posts ? posts.filter((p) => p && p.always) : null;
     if (!posts || !posts.length) return lights;
   }
-  // BEFORE density and gap fill: both walk `k`, so they need it to mean the
-  // place the fixture actually stands.
   if (posts) posts = resolvePostNodes(track, posts);
   posts = applyLampDensity(posts, track, height, onlyAlways);
   // ── DARK-GAP FILL ─────────────────────────────────────────────────────────
@@ -487,18 +422,9 @@ function buildTrackLights(track, onlyAlways) {
     const side = posts ? posts[i].side : ((i % 2 === 0) ? 1 : -1);
     const bri  = 0.70 + lh(i + 97) * 0.62;      // 0.70 … 1.32 brightness (wide)
     const hard = lh(i + 53);                    // 0 = soft wide rim, 1 = hard crisp rim
-    // ── LAMP TYPOLOGY ─────────────────────────────────────────────────────────
-    // Not one kind of lamp: the pit straight runs dense cool-white broadcast
-    // flood banks; city circuits mix sodium street posts with saturated NEON
-    // SPILL (signage light washing the street in colour); permanent circuits are
-    // flood masts with the odd warm "work lamp" (aging bulb). Each kind has its
-    // own colour, cone and energy.
     const frac = k / n;
     const pitStraight = frac < 0.045 || frac > 0.985;   // start/finish zone
     const kindRoll = lh(i + 71);
-    // Custom fixtures are exempt: a circuit-placed luminaire is a specific,
-    // modelled thing, and hanging a random magenta signage washer off it would
-    // invent a light source that has no fixture.
     if (street && kindRoll < 0.10 && !pitStraight && !(post && post.custom)) {
       // EDGE WASHER: coloured signage light belongs on WALLS and verges, never on
       // the racing line. A low pastel lamp at the track edge aimed OUTWARD washes
@@ -512,24 +438,15 @@ function buildTrackLights(track, onlyAlways) {
       let wdx = track.rx[k] * side * 0.55, wdy = -0.83, wdz = track.rz[k] * side * 0.55;
       const wdl = Math.hypot(wdx, wdy, wdz) || 1; wdx /= wdl; wdy /= wdl; wdz /= wdl;
       const we = intensity * 0.30 * (4.5 * 4.5) * LT.poolEnergy;
-      // POOL ENERGY / POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply
-      // to these washer lights too (their help text promises "each/every lamp")
-      // — same maths as the mast lamps below. (The energy factor was a 0.55
-      // literal — poolEnergy's default — so the shipped look is identical.)
       lights.push(wx0, wy0, wz0,
         Math.max(0, nc[0]) * we, Math.max(0, nc[1]) * we, Math.max(0, nc[2]) * we,
         16 * LT.lampRadiusMul, wdx, wdy, wdz,
         0.55, 0.55 - 0.50 * (LT.beamCone || 1), Math.min(0.9, 0.10 * LT.bleedMul), 0.35, 0);
     }
     let eMul = 1.0, coneIn, coneOut, pr, pg, pb, tintMix = 0.38;
-    // Per-type VOLUMETRIC weight (record field 13): how strongly this lamp's
-    // beam shows in the air. Per-type GLARE weight (field 14): lens-halo size/
-    // strength in drawGlow (0 = fixture-less light, no halo).
     let volW = 0.55, glareW = 1.0, bleed;
     const KP = posts && posts[i].kind ? LAMP_KINDS[posts[i].kind] : null;
     if (KP) {
-      // KIND path: parameters from the table; the visible lens in tracks.js was
-      // painted with this kind's albedo, so fixture and light always agree.
       pr = KP.col[0]; pg = KP.col[1]; pb = KP.col[2];
       eMul = KP.eMul; coneIn = KP.cIn; coneOut = KP.cOut;
       tintMix = KP.tintMix; volW = KP.volW; glareW = KP.glareW;
@@ -545,8 +462,6 @@ function buildTrackLights(track, onlyAlways) {
       pr = 1.38; pg = 0.74; pb = 0.30; tintMix = 0.2;
       coneIn = 0.70; coneOut = 0.48;
     } else {
-      // Standard street post / flood mast: sodium-orange ↔ warm-yellow ↔ cool-white
-      // temperature mix so a row of lamps reads like real aged street lighting.
       const ct = lh(i + 17);
       if (ct < 0.34)      { pr = 1.34; pg = 0.70; pb = 0.32; }   // orange sodium
       else if (ct < 0.68) { pr = 1.16; pg = 1.00; pb = 0.55; }   // warm yellow
@@ -557,8 +472,6 @@ function buildTrackLights(track, onlyAlways) {
     // A fill light has no fixture, so it must not draw a lens halo hanging in
     // mid-air; damp its volumetric beam for the same reason.
     if (posts && posts[i].synth) { glareW = 0; volW = Math.min(volW, 0.3); }
-    // BEAM CONE WIDTH knob: scale the soft-skirt angular width (coneIn−coneOut).
-    // >1 widens the illuminated cone (lower outer cos), <1 tightens the hotspot.
     coneOut = coneIn - (coneIn - coneOut) * (LT.beamCone || 1);
     const mr = tint[0] * tintMix + pr * (1 - tintMix);
     const mg = tint[1] * tintMix + pg * (1 - tintMix);
@@ -569,9 +482,6 @@ function buildTrackLights(track, onlyAlways) {
       const bleedVar  = street ? 0.18 : 0.12;
       bleed = bleedBase + lh(i + 31) * bleedVar;
     }
-    // Beam aim: from the mast lens at the CENTRE OF THE NEAR LANE (side·hw/2) —
-    // the pool spans centreline→near edge and sits under/near the fixture, so
-    // the lamp visibly throws its light DOWN onto the road it stands over.
     const lx = posts ? posts[i].x : track.px[k] + track.rx[k] * (track.hw[k] + 6) * side;
     const ly = posts ? posts[i].y : track.py[k] + height;
     const lz = posts ? posts[i].z : track.pz[k] + track.rz[k] * (track.hw[k] + 6) * side;
@@ -591,12 +501,6 @@ function buildTrackLights(track, onlyAlways) {
     if (post && post.aim) { ax = post.aim[0]; ay = post.aim[1]; az = post.aim[2]; }
     const anorm = Math.hypot(ax, ay, az) || 1;
     ax /= anorm; ay /= anorm; az /= anorm;
-    // Physically-based punctual light: intensity is in inverse-square units (the
-    // shader divides by d²), so scale by the lens→road distance² AND the surface
-    // incidence at the aim point (NoL = h/al for an up-facing road) — a raking
-    // beam needs more flux than a top-down one to land the same pool luminance.
-    // The incidence divisor is CLAMPED so a mast beside banked/elevated road
-    // (lens barely above the aim point) can't blow the energy up.
     const hAim = Math.max(ly - track.py[k], 1);
     const ePhys = intensity * bri * eMul * (al * al) * LT.poolEnergy / Math.max(hAim / al, 0.35)
                 * (post && post.energy != null ? post.energy : 1);
@@ -609,17 +513,8 @@ function buildTrackLights(track, onlyAlways) {
       ax, ay, az, coneIn, coneOut, Math.min(0.9, bleed * LT.bleedMul), volW, glareW,
     );
   }
-  // START-GANTRY DOWNLIGHTS: a crisp white bar of light straight down over the
-  // start/finish at node 0 (typical gantry height) — marks the line the way
-  // broadcast lighting does. Placement is independent of the scenery gantry mesh.
-  // Skipped in the always-on subset: that set is "fixtures that burn in daylight",
-  // and broadcast lighting over the grid is not one of them.
   if (!onlyAlways) {
     const hwk = track.hw[0] || 7;
-    // Halved (1.15 -> 0.55 weight): three of these stack right over the grid, on
-    // top of the flood_bank pit-straight lamps — the start line was the hottest
-    // spot on every night circuit, blowing the road out exactly where every race
-    // (and the player's first impression of the night lighting) begins.
     const ge = intensity * 0.55 * (8 * 8) * LT.poolEnergy;
     // POOL ENERGY / POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply
     // here too — the gantry bar previously ignored them ("every floodlight" per
@@ -646,18 +541,10 @@ function buildTrackLights(track, onlyAlways) {
 // ── Per-frame light assembly (extracted from js/game.js) ─────────────────────
 const _clampNum = (v, a, b) => (v < a ? a : v > b ? b : v);
 
-// Car rain lights as REAL light sources after dark: the nearest few cars carry a
-// small red point light at the tail, so traffic reads as moving light sources —
-// a red glow trailing each car on the road surface.
 const _tlSmp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const _tlSel = [];
 function appendCarTailLights(frame, track, cars, player, mobileTier) {
   const L = frame.lights;
-  // PER-CHUNK LAMPS needs to know which records here are the DYNAMIC ones, and
-  // it cannot be derived by measuring frame.lights before/after: when the set is
-  // already at cap this function TRIMS the farthest static lamps before pushing,
-  // so the length is unchanged and a before/after diff reports zero. Record the
-  // range authoritatively instead, and zero it on every early return.
   frame.tailStart = L ? (L.length / 15) | 0 : 0;
   frame.tailCount = 0;
   // frame.lights is always the per-frame copy (flicker copies every frame), so
@@ -670,8 +557,6 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
     const ds = Math.abs(c.s - player.s);
     const d = Math.min(ds, track.total - ds);
     if (d < tlRange) {
-      // Reuse pooled {c,d} entries in place (same pattern as _lightCullBuf) —
-      // fresh objects here were per-car-per-frame GC churn on night tracks.
       const e = _tlSel[_tlN];
       if (e) { e.c = c; e.d = d; } else _tlSel[_tlN] = { c: c, d: d };
       _tlN++;
@@ -681,30 +566,9 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   _tlSel.sort(_byDistAsc);   // hoisted comparator, shared with setFrameLights
   const nT = Math.min(_tlSel.length, 5);
   if (nT <= 0) return;
-  // Reserve up to nT slots for the nearest cars' tail-lights. On a dense night
-  // grid the floodlights alone can fill the frame's light budget, so appending
-  // overflowed and the shader dropped the tail-lights. Evict that many of the
-  // FARTHEST floods instead (setFrameLights sorts ascending by distance, so the
-  // tail end is farthest). Measure against the SAME budget setFrameLights culled
-  // to — against the literal 32 this whole reserve was a no-op on the mobile
-  // tier, i.e. on exactly the devices it was written to protect.
-  // Measure against the TOTAL slot budget, not the LAMP budget. lampCap conflates
-  // the two: with traffic it returns lampCull (40) because — in its own words —
-  // "~8 of the 48 shader slots stay free for tail-lights". setFrameLights culls
-  // lamps to that 40, so room came out 40 - 40 = 0 and this evicted lamps into
-  // eight slots that were sitting empty. The eviction is a hard delete with no
-  // fade (the cull's distance ramp has already been applied and baked in), so on
-  // a desktop night grid three lamps at FULL brightness vanished the moment a
-  // third rival came inside tailRange, and which three depended on camera yaw
-  // because the set is ordered by the yaw-biased metric.
-  // Mobile still evicts, deliberately: there the cap IS 24 lights total, which is
-  // the per-fragment budget the tier exists to protect.
   const SLOTS = mobileTier ? 24 : 48;   // js/render/glx.js MAX_LIGHTS
   const room = SLOTS - ((L.length / 15) | 0);
   if (room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
-  // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range
-  // cutoff so a car doesn't pop in/out abruptly as it drifts past the limit. 0 =
-  // hard cutoff (as-shipped), so the fade term is 1 for every selected car.
   const tlFade = LT.tailFade != null ? LT.tailFade : 0;
   for (let j = 0; j < nT; j++) {
     const sel = _tlSel[j], c = sel.c;
@@ -713,9 +577,6 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
     // rear-facing, tilted down: the glow lands on the road behind the car
     let dx = -tx * 0.87, dy = -0.5, dz = -tz * 0.87;
     const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
-    // BRAKE FLARE: the tail glow surges while the car is braking. brakeHeat is
-    // the render-only 0..1 disc-heat ramp every car already tracks (rises under
-    // braking, cools after) — read-only here, physics untouched.
     const bAmt = _clampNum(c.brakeHeat || 0, 0, 1) * LT.brakeGlowMul;
     const fadeF = tlFade > 0 ? _clampNum((tlRange - sel.d) / tlFade, 0, 1) : 1;
     const tlm = LT.tailLightMul * (1 + bAmt * 1.6) * fadeF;
@@ -731,9 +592,6 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   frame.tailStart = ((L.length / 15) | 0) - nT;
 }
 
-// Cull the track light set to the nearest CAP lamps (shader max 48; traffic uses
-// LT.lampCull, def 40, leaving room for car tail lights) and flatten into
-// `frame.lights`. Called each frame only when floodlights are lit.
 const _lightCullBuf = [];
 const _lightScaleBuf = [];
 const _lightHeap = [];         // pooled max-heap (≤CAP entries) for nearest-N selection
@@ -762,8 +620,6 @@ let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched O
 let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
 const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
 const _flSteady = [1, 1, 1];   // identity when flicker+warmup would leave intensity unchanged
-// Flicker/warmup factors — closed over by hoisted `_flLive` so setFrameLights
-// does not allocate a fresh closure every frame on night tracks.
 let _flFlick = 0, _flWarmK = 1, _flTNow = 0;
 function _flSteadyFn() { return _flSteady; }
 function _flLive(o) {
@@ -783,8 +639,6 @@ function _flLive(o) {
   _flScr[2] = f * (1 - cold * 0.38);
   return _flScr;
 }
-// Ranked-set cache: skip the O(count·log CAP) rebuild when the eye/fwd have not
-// moved enough to change membership. Fade still uses geometric g (not yaw).
 const _RANK_EYE_EPS2 = 0.25;   // 0.5 m eye motion → rebuild
 const _RANK_FWD_EPS2 = 1e-4;   // unnormalized fwd delta (yaw/aim change)
 let _rankSrc = null, _rankCap = -1, _rankCount = -1;
@@ -792,42 +646,21 @@ let _rankEyeX = NaN, _rankEyeY = NaN, _rankEyeZ = NaN;
 let _rankFwdX = NaN, _rankFwdZ = NaN;
 let _rankGRef = 1, _rankDEdge = 1, _rankTrunc = false;
 let _rankReach = NaN, _rankBias = NaN, _rankFade = NaN;
-// How many lights this frame may end up carrying. Named because BOTH movers need
-// the same answer — setFrameLights culls down to it, and appendCarTailLights has
-// to evict against it to make room. appendCarTailLights used to measure its room
-// against the shader's literal 32 instead, so on the mobile tier (CAP 24) it saw
-// 8 free slots that did not exist, evicted nothing, and left the phone running 29
-// lights through the per-fragment loop the 24 was chosen to protect.
 function lampCap(carCount, mobileTier) {
-  // With traffic, CAP defaults to lampCull (40) so ~8 of the 48 shader slots stay
-  // free for tail-lights; solo runs use the full 48. Mobile tier clamps both
-  // paths to 24: the per-fragment lamp loop (GGX + clearcoat per lamp) is the
-  // dominant night fill cost on phones, and clamping HERE (not the knob's def)
-  // means a per-track preset can't push a phone back up to 48.
   return Math.min(
     carCount > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 40) : 48,
     mobileTier ? 24 : 48);
 }
 function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet) {
-  // srcSet overrides the session light set (the daylight always-on subset);
-  // absent, the baked full set is used exactly as before.
   const src = srcSet || track._lights;
   // Empty set / not a lit session (caller usually gates, but count===0 is free).
   if (!src || !src.length) { frame.lights = null; _rankSrc = null; return; }
-  // Reserve slots for car tail lights: appendCarTailLights fills AFTER this
-  // cull, against the same budget (see lampCap).
   const CAP = lampCap(cars.length, mobileTier);
-  // scale may be a scalar (uniform dim) or a [r,g,b] vector (time-of-day brightness
-  // + warmth: dim & warm at twilight, full & neutral at deep night).
   const sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);
   const sg = Array.isArray(scale) ? scale[1] : sr;
   const sb = Array.isArray(scale) ? scale[2] : sr;
   const count = src.length / 15;
   const out = _lightScaleBuf;
-  // Per-lamp FLICKER, computed CPU-side each frame (zero shader cost): healthy
-  // lamps barely breathe (±2%), the occasional aging tube visibly pulses (±10%).
-  // Hash on the lamp's stable source offset so the same lamp always flickers the
-  // same way — the night stops being a frozen still.
   const tNow = performance.now() * 0.001;
   // WARMUP: when the floods switch on (race start on a night track, a live
   // day→night flip) discharge lamps don't snap to full — they run slightly dim
@@ -837,8 +670,6 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // baked track records are never touched.
   if (tNow - _lampLastT > 1.0) { _lampWarmT0 = tNow; _rankSrc = null; }
   _lampLastT = tNow;
-  // Skip sin/hash work when intensity would be unchanged: flicker knob at 0 and
-  // warmup fully settled (or warmup knob 0 = instant). Max warmDur is 8×knob.
   const flick = LT.lampFlicker || 0;
   const warmK = LT.lampWarmup != null ? LT.lampWarmup : 1;
   const warmDone = !(warmK > 0) || (tNow - _lampWarmT0) >= 8 * warmK;
@@ -864,20 +695,8 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
     frame.lights = out;
     return;
   }
-  // Distance-rank: select the nearest CAP. Reuse a pooled object array + the
-  // output buffer so a dense night grid doesn't allocate fresh garbage every
-  // frame (was the main source of Minor-GC jitter on Vegas/Singapore).
-  // Lights BEHIND the camera rank farther: a purely radial nearest-N wastes
-  // half the budget on lamps you can't see, ending the lit road in a hard dark
-  // boundary ahead. The forward bias (LT.lampBehindBias) pushes that boundary
-  // further out — past the night fog wall.
   const fx = fwd ? fwd[0] : 0, fz = fwd ? fwd[2] : 0;
   const flen2 = fx * fx + fz * fz || 1;
-  // LAMP REACH AHEAD knob: as-shipped this is 1 (no-op). Above 1, lamps roughly
-  // ahead of the camera get their ranked distance shrunk (mirror of the
-  // BEHIND-CAM BIAS penalty below, applied as a divisor instead of a
-  // multiplier), so they win the nearest-CAP budget from farther out and the
-  // lit zone reaches further down the road on a dense track.
   const reach = LT.lampReach != null ? LT.lampReach : 1;
   const bias = LT.lampBehindBias != null ? LT.lampBehindBias : 5.25;
   const fade = LT.lampCullFade != null ? LT.lampCullFade : 0.35;   // LAMP CULL FADE knob
@@ -898,16 +717,10 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
     for (let i = 0; i < count; i++) {
       const o = i * 15, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
       let d = dx * dx + dy * dy + dz * dz;
-      // Behind-camera penalty RAMPED in over ~14° past the camera plane (was a hard
-      // sign test ×6.25: the instant a lamp crossed the plane its rank leapt several
-      // places in ONE frame, stepping its pool's brightness — and a fast chase-cam
-      // yaw flipped the half-space for many lamps at once, a whole-field shudder).
       const b = dx * fx + dz * fz;
       if (b < 0) {
         const dl2 = dx * dx + dz * dz || 1;
         const ratio2 = (b * b) / (flen2 * dl2 * 0.0625);
-        // BEHIND-CAM BIAS knob scales how hard rearward lamps are pushed down the
-        // nearest-N rank (def 5.25 = as-shipped forward push).
         d *= 1 + bias * Math.min(1, ratio2);
       } else if (reach > 1) {
         const dl2 = dx * dx + dz * dz || 1;
@@ -931,8 +744,6 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
       if (e) { e.d = d; e.g = g; e.o = o; } else buf[i] = { d: d, g: g, o: o };
     }
     buf.length = count;
-    // Partial selection: keep only the nearest CAP in a max-heap instead of sorting
-    // all ~count entries every frame (O(count·log CAP) vs O(count·log count)).
     heap.length = 0;
     for (let i = 0; i < count; i++) {
       const e = buf[i];
@@ -945,19 +756,8 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
         for (;;) { const l = pi * 2 + 1, rr = l + 1; let lg = pi; if (l < CAP && heap[l].d > heap[lg].d) lg = l; if (rr < CAP && heap[rr].d > heap[lg].d) lg = rr; if (lg === pi) break; const t = heap[pi]; heap[pi] = heap[lg]; heap[lg] = t; pi = lg; }
       }
     }
-    // Sort just those 32 ascending so the tail fade eases the farthest of the set.
-    // (Comparator hoisted to module scope — this runs every lit frame.)
     heap.sort(_byDistAsc);
-    // DISTANCE-based tail fade (was rank-quantised in 1/6 steps: a lamp entered the
-    // set at an instant 16.7% and its brightness stepped by 16.7% every rank churn —
-    // visible stepping as the set shifted at speed). Fading by closeness to the set
-    // boundary is continuous: 0 exactly at the boundary, full by ~35% inside it, so
-    // membership changes are invisible.
     dEdge = heap[heap.length - 1].d || 1;
-    // The boundary fade only makes sense when lamps were actually culled — if the
-    // whole baked set fit inside CAP (the 24-32-lamp tracks that now take this
-    // path for its sorting), there is no set boundary, and fading "the farthest
-    // of the set" would black out a real lamp that used to be lit.
     truncated = count > CAP;
     // ── THE FADE MUST NOT KNOW WHICH WAY THE CAMERA POINTS ────────────────────
     // This was `(dEdge - e.d) / (dEdge * 0.35)`, and BOTH terms carry camera yaw:
@@ -1022,9 +822,6 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
     out.push(src[o], src[o+1], src[o+2],
       src[o+3] * sr * f[0] * cullF, src[o+4] * sg * f[1] * cullF, src[o+5] * sb * f[2] * cullF,
       src[o+6], src[o+7], src[o+8], src[o+9], src[o+10], src[o+11], src[o+12], src[o+13],
-      // glareW fades with the cull too: drawGlow normalises the lamp colour, so a
-      // colour-only fade barely dims the halo — it blinked off at ~full brightness
-      // when the lamp left the set.
       src[o+14] * cullF);
   }
   frame.lights = out;

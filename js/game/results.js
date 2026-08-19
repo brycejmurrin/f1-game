@@ -1,13 +1,4 @@
-/* Apex 26 — results / time-trial / championship-standings DOM builders for
-   js/game.js. Pure DOM assembly from race + season state; no physics, no
-   renderer. Live game state comes through the ctx façade handed to
-   GameResults.create(ctx) at boot (see the `G` object in game.js): els, $,
-   track, cars, player, season, seasonMode, TT session fields, fmtTime,
-   ttBoard, teamById, cssCol, announce, soundOn. Consumes globals Teams, Tracks,
-   Ghost, GameAudio, and SeasonCal — the calendar LENGTH and the points table are
-   the season's to choose now, and a sprint is scored on a round that has not
-   closed yet.
-   Must load BEFORE js/game.js (see index.html). */
+/* Apex 26 — results / time-trial / championship-standings DOM builders for js/game.js. Pure DOM assembly from race + season state; no physics, no renderer. Live g… */
 const GameResults = (function () {
   "use strict";
 
@@ -18,9 +9,6 @@ function buildResults(order) {
   Log.info("ui", "GameResults.buildResults n=" + (order && order.length));
   const els = G.els, season = G.season, track = G.track, cars = G.cars;
   els.resultsTable.textContent = "";
-  // A SPRINT is scored on a round that has not closed yet, so `season.round` is
-  // still the round BEFORE it — naming it "ROUND n" would print last weekend's
-  // number over this weekend's result. Name the session instead.
   const sprint = G.seasonMode && SeasonCal.scored() === "sprint";
   els.resultsTitle.textContent = sprint ? "SPRINT — " + track.def.name
     : G.seasonMode ? "ROUND " + season.round + " — " + track.def.name
@@ -28,10 +16,6 @@ function buildResults(order) {
   order.forEach((c, i) => {
     const row = document.createElement("div");
     const podium = i === 0 ? " p1" : i === 1 ? " p2" : i === 2 ? " p3" : "";
-    // Another PERSON, not an AI. `you` already marks the local player, so this
-    // is the friend you were racing — and on a results screen "who did I
-    // actually beat" is the question being asked. Same signal the HUD and the
-    // qualifying sheet use: human without local (see setCarRole).
     const other = c.human && !c.local ? " q-real" : "";
     row.className = "res-row" + podium + (c.isPlayer ? " you" : "") + other;
     const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
@@ -51,11 +35,6 @@ function buildResults(order) {
       nm.appendChild(tag);
     }
     const pt = document.createElement("span"); pt.className = "res-pts";
-    // Classified last and scoring nothing — the same rule endRace awards on, said
-    // in the one word the sport uses for it. The TABLE has to be the one that was
-    // actually paid: a sprint pays 8-7-6…, and a season may have chosen the
-    // classic 10-6-4… table, so reading Teams.POINTS here printed a number the
-    // standings underneath it disagreed with.
     const table = sprint ? SeasonCal.SPRINT_POINTS
       : G.seasonMode ? SeasonCal.pointsTable() : Teams.POINTS;
     pt.textContent = c.retired ? "DNF" : (table[i] || 0) + " pts";
@@ -111,8 +90,6 @@ function buildResults(order) {
     tb.className = "res-settle-v"; tb.textContent = st.money.toLocaleString() + " cr";
     tot.append(ta, tb);
     box.appendChild(tot);
-    // Reputation is not money, so it sits under the total rather than in the
-    // column — but it is the other thing this round changed.
     const rep = document.createElement("div");
     rep.className = "res-settle-row rep";
     const ra = document.createElement("span"); ra.textContent = "Reputation";
@@ -211,8 +188,6 @@ function buildTTResults() {
   lbHead.textContent = "LEADERBOARD — " + track.def.name;
   els.resultsTable.appendChild(lbHead);
 
-  // top laps ever on this track, each tagged with the team + driver that set it.
-  // Entries from this session (ts >= session start) are highlighted.
   const board = G.ttBoard(track.def.id);
   board.forEach((e, i) => {
     const team = G.teamById(e.teamId);
@@ -312,11 +287,6 @@ function buildStandings() {
   }
 }
 
-// THE END OF A SEASON. Replaces the round result already on screen with the
-// champion and the final table, in place — the player is still on #results and
-// the button under them becomes MAIN MENU. Lived inline in js/game.js's resNext
-// handler until the season-format work; it is results DOM and belongs with the
-// rest of it (the handler kept the two-click flow, which is flow, not markup).
 function buildChampion() {
   const els = G.els, season = G.season;
   const sorted = G.cars.slice().sort((a, b) => (season.pts[b.driverId] || 0) - (season.pts[a.driverId] || 0));

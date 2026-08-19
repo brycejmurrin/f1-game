@@ -16,8 +16,6 @@ const SettingsNav = (function () {
       const flexDir = style.flexDirection || "row";
       const flexRow = (style.display === "flex" || style.display === "inline-flex")
         && !flexDir.startsWith("column");
-      // Flex reports gridTemplateColumns "none" (length 1). Treat a row as
-      // horizontal so Left/Right move between CONTROLS / DISPLAY / MORE.
       if (flexRow) {
         tablist.removeAttribute("aria-orientation");
         return;
@@ -53,8 +51,6 @@ const SettingsNav = (function () {
       tab.onclick = () => { show(id, false); if (onSelect) onSelect(); };
       tab.onkeydown = (e) => {
         let next = null;
-        // A viewport/UI-scale change can land between ResizeObserver delivery
-        // and this key event; derive orientation from the current grid now.
         syncOrientation();
         const vertical = tablist.getAttribute("aria-orientation") === "vertical";
         if ((!vertical && e.key === "ArrowRight") || (vertical && e.key === "ArrowDown")) next = (index + 1) % IDS.length;
@@ -67,8 +63,6 @@ const SettingsNav = (function () {
           // horizontal rail, Up/Down retain their native page-scroll behavior.
           if (e.key.startsWith("Arrow")) {
             e.stopImmediatePropagation();
-            // MenuNav listens above this widget and may have moved focus during
-            // capture before the tab sees the event; restore the owning tab.
             tab.focus();
           }
           return;

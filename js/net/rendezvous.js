@@ -1,61 +1,4 @@
-/*
- * NetRendezvous — a short room code instead of a pasted invite.
- *
- * WHAT THIS IS NOT. It is not an account, a username, or a directory. A room
- * code is a throwaway meeting point that exists for about two minutes and then
- * evaporates: nothing is stored, nothing is claimed, nothing can be squatted,
- * and no personal data is retained. That is the entire reason to prefer it over
- * "invite by username" — a username is an identity, and an identity drags in
- * recovery, impersonation, moderation and GDPR. A code drags in none of that
- * because there is nothing behind it to own.
- *
- * WHAT IT DOES. Exactly the exchange the two players already do by hand, with a
- * tiny server holding the two strings instead of a human carrying them:
- *
- *   HOST                        rendezvous                       GUEST
- *   POST offer  ─────────────▶  [held, TTL]
- *                               ◀──────── GET offer ──────────   types the code
- *                               ◀──────── POST answer ────────
- *   GET answer  ◀─────────────
- *   ...direct P2P from here; the server never sees another byte...
- *
- * Gameplay traffic never touches it. It holds two ~240-byte strings for a
- * couple of minutes, which is why this fits inside a free tier at any traffic a
- * fan game will ever see.
- *
- * NOTHING TO DEPLOY, NOTHING TO CONFIGURE. The meeting place is the public
- * NOSTR relay network, reached through Trystero (js/net/nostr.js). Accepting
- * arbitrary events from anonymous clients is what a relay is FOR, which is why
- * this is Nostr and not one of the free public MQTT brokers an earlier version
- * used: those are TEST brokers, and HiveMQ's and EMQX's terms both say plainly
- * that they must not be used by real applications.
- *
- * Our own Cloudflare Worker (worker/rendezvous.js) still takes precedence when
- * its URL is set, because a relay you control beats a stranger's — but it is
- * an upgrade, never a requirement.
- *
- * THE PUBLIC RELAYS CARRY NOTHING READABLE. Trystero encrypts the signalling
- * payload under the room code and the room id is a hash of the code rather than
- * the code itself, so the code is the secret — the same trust model as the
- * invite code this replaces.
- *
- * THE PRIVATE WORKER PATH IS SEALED TOO. httpPut() stores a versioned AES-GCM
- * envelope under the room code, and a separate random owner capability lets a
- * host retry without relying on ciphertext equality. The Worker never receives
- * plaintext SDP; a legacy plaintext record is read only for the two-minute
- * rolling-deploy window and is never newly written by this build.
- *
- * IT IS A BACKUP OPTION, NOT A REPLACEMENT. The link and QR paths stay primary
- * because they depend on nothing at all, while this leans on servers somebody
- * else runs and may stop running. So every function here resolves to a typed
- * error instead of throwing, and none sits on a path the other flows touch.
- *
- * WHY THE CODE LOOKS LIKE IT DOES. Six characters from an alphabet with no
- * 0/O and no 1/I/L, because the whole point is that it can be read aloud or
- * typed without a second attempt. That is ~10^9 combinations: unguessable
- * enough that nobody brute-forces their way into your lobby during the two
- * minutes it exists, which four digits (10,000 of them) would not be.
- */
+/* NetRendezvous — a short room code instead of a pasted invite. WHAT THIS IS NOT. It is not an account, a username, or a directory. A room code is a throwaway mee… */
 "use strict";
 
 const NetRendezvous = (function () {
@@ -63,15 +6,9 @@ const NetRendezvous = (function () {
   const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
   const CODE_LEN = 6;
 
-  // An OPTIONAL private relay. Empty by default and that is the supported
-  // state: with nothing here the public-broker backend is used and room codes
-  // work out of the box. Set it (or localStorage apex26.rendezvous) only to
-  // point at your own worker/rendezvous.js deployment.
   const DEFAULT_URL = "";
   const STORE_KEY = "apex26.rendezvous";
 
-  // Topics live under one prefix so a broker operator can see the shape of the
-  // traffic without being able to read any of it.
   const TOPIC = "apex26/rv";
 
   const POLL_MS = 1200;             // how often to ask if the other side arrived
@@ -86,8 +23,6 @@ const NetRendezvous = (function () {
     return String(raw).replace(/\/+$/, "");
   }
 
-  // Room codes are ALWAYS available: with no private relay set, the public
-  // broker backend is used, which needs no account and nothing deployed.
   const configured = () => true;
   const usingPrivateRelay = () => !!baseUrl();
 
@@ -99,27 +34,18 @@ const NetRendezvous = (function () {
     } catch (e) { return false; }
   }
 
-  // crypto.getRandomValues, not Math.random: a predictable code is a code
-  // someone else can be sitting on when you generate it.
   function makeCode() {
     const n = new Uint8Array(CODE_LEN);
     if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(n);
     else for (let i = 0; i < CODE_LEN; i++) n[i] = Math.floor(Math.random() * 256);
     let out = "";
-    // Modulo bias across 256 -> 31 is real but tiny, and irrelevant against a
-    // two-minute TTL; rejection sampling here would be ceremony.
     for (let i = 0; i < CODE_LEN; i++) out += ALPHABET[n[i] % ALPHABET.length];
     return out;
   }
 
-  // Accept what a human actually types: lower case, spaces, a dash in the
-  // middle, and the letters they were always going to substitute.
   function normalise(code) {
     const s = String(code || "").toUpperCase().replace(/[^0-9A-Z]/g, "")
       .replace(/O/g, "0").replace(/[IL]/g, "1");
-    // ...then map those back onto the alphabet we actually emit, so O->0->? is
-    // not a dead end: 0 and 1 are not in the alphabet, so a typo of O or I is
-    // simply wrong rather than silently a different room.
     return s.replace(/0/g, "O").replace(/1/g, "I");
   }
 
@@ -161,28 +87,12 @@ const NetRendezvous = (function () {
     }
   }
 
-  // ---- encryption -----------------------------------------------------------
-  // The public broker is PUBLIC: anyone may subscribe to any topic. So what
-  // crosses it is ciphertext under a key derived from the room code, and the
-  // topic is a HASH of the code rather than the code itself — otherwise
-  // watching the topic namespace would hand out the codes.
-  //
-  // This is not defence against a determined attacker with the code; it is what
-  // makes the room code the secret, exactly as the invite code is today. Nobody
-  // sweeping the broker learns anything.
-  //
-  // seal()/open() are shared by BOTH backends. NetNostr carries the bytes
-  // directly; the private Worker carries a `v1.<base64url>` envelope and uses a
-  // separate random owner capability to distinguish a host retry from a second
-  // host. Ciphertext equality cannot do that because AES-GCM uses a fresh IV.
   const SALT = enc().encode("apex26-rendezvous-v1");
 
   async function keyFor(code) {
     const base = await crypto.subtle.importKey(
       "raw", enc().encode(normalise(code)), "PBKDF2", false, ["deriveKey"]);
     return crypto.subtle.deriveKey(
-      // 120k iterations: ~100 ms on a phone, once per handshake. Cheap here,
-      // expensive for anyone grinding the 10^9 code space.
       { name: "PBKDF2", salt: SALT, iterations: 120000, hash: "SHA-256" },
       base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
   }
@@ -213,16 +123,12 @@ const NetRendezvous = (function () {
         { name: "AES-GCM", iv: bytes.slice(0, 12) }, await keyFor(code), bytes.slice(12));
       return dec().decode(pt);
     } catch (e) {
-      // A wrong key fails the GCM tag, which is indistinguishable from garbage
-      // — and both mean the same thing here: this is not our message.
       return null;
     }
   }
 
   function b64url(bytes) {
     let binary = "";
-    // Real handshakes are a few hundred bytes. Chunking still keeps a malformed
-    // near-limit payload from exceeding apply()/argument limits in a browser.
     for (let i = 0; i < bytes.length; i += 0x4000) {
       binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x4000));
     }
@@ -242,9 +148,6 @@ const NetRendezvous = (function () {
   }
 
   async function openPrivate(code, payload) {
-    // A two-minute legacy mailbox may straddle a deploy. Reading its plaintext
-    // lets the new client reach the normal build-mismatch message instead of
-    // reporting corrupt signalling; every newly written payload is sealed.
     if (typeof payload !== "string" || !payload) return null;
     if (!payload.startsWith("v1.")) return payload;
     try { return await open(code, unb64url(payload.slice(3))); }
@@ -257,7 +160,6 @@ const NetRendezvous = (function () {
     return b64url(bytes);
   }
 
-  // ---- the two halves -------------------------------------------------------
   // Deliberately the same shape as NetHandshake's: publish a blob, then wait for
   // the other one to appear. What travels is exactly the invite/answer code the
   // manual flow uses, so the rendezvous is a courier and not a participant — it
@@ -288,27 +190,12 @@ const NetRendezvous = (function () {
     return { ok: true, body: { payload } };
   }
 
-  // ---- the public-relay backend ---------------------------------------------
-  // A Nostr room is LIVE, not a mailbox: unlike a retained MQTT message there
-  // is nothing sitting there for later, so both peers meet in the room and swap
-  // strings. That is why this is one exchange() rather than a put and a get —
-  // and it is a better fit anyway, since the host is already sitting on a
-  // "waiting for them to join" screen while it happens.
   function nostrExchange(o) {
     return NetNostr.exchange({
       code: o.code, send: o.mine, reply: o.reply, token: o.token, onTick: o.onTick,
     });
   }
 
-  // HOST A ROOM several people can walk into, rather than trade one string with
-  // one person. Resolves as soon as it is listening, with a stop() — the room
-  // stays open and onJoiner fires per arrival.
-  //
-  // PUBLIC RELAY ONLY. The private mailbox is genuinely a mailbox: two fixed
-  // slots with a single-writer rule on `offer` that exists to stop a second
-  // host stealing somebody's guest, and per-joiner slots there are a different
-  // change with its own failure modes. A configured private relay therefore
-  // still hosts ONE guest, and says so rather than silently taking one player.
   function hostRoom(o) {
     if (usingPrivateRelay()) {
       Log.warn("net", "room host fail not_supported");
@@ -319,19 +206,10 @@ const NetRendezvous = (function () {
     return NetNostr.exchange({
       code: o.code, send: o.mine, mintOffer: o.mintOffer, onJoiner: o.onJoiner,
       token: o.token, onTick: o.onTick,
-      // A room that resolves early can still fail LATER — dead relays, the
-      // code expiring — and after the promise is answered this callback is the
-      // only way to say so.
       onFail: o.onFail,
     });
   }
 
-  // The private relay keeps the put/get shape (it really is a mailbox); the
-  // public one is a live swap. swap() is the interface the lobby uses, and it
-  // hides which of the two is underneath.
-  // Low-level/test callers get the same retry semantics as swap(): re-posting
-  // the identical offer reuses its capability, while a different offer for the
-  // same code is a distinct claimant and receives 409 from the Worker.
   const offerOwners = new Map();
   function ownerFor(code, payload) {
     const key = normalise(code);
@@ -352,8 +230,6 @@ const NetRendezvous = (function () {
   };
   const get = (code, slot) => httpGet(code, slot);
 
-  // Give `mine` to the other side and get theirs back, whichever backend is in
-  // play. `slot`/`want` only mean anything to the mailbox backend.
   function rvLog(action, res) {
     if (res && res.ok) Log.info("net", action + " ok");
     else if (res && (res.error === "cancelled")) Log.info("net", action + " cancelled");
@@ -364,8 +240,6 @@ const NetRendezvous = (function () {
   async function swap(o) {
     const { code, mine, reply, slot, want, token, onTick } = o;
     if (!usingPrivateRelay()) return nostrExchange(o);
-    // The mailbox backend does the same trade in two steps. A replier waits
-    // for the other side FIRST, then posts what it produced.
     if (reply) {
       const got = await waitFor(code, want, token, onTick);
       if (!got.ok) return rvLog("swap", got);
@@ -386,19 +260,12 @@ const NetRendezvous = (function () {
     return rvLog("swap", got.ok ? { ok: true, payload: got.payload } : got);
   }
 
-  // Poll until the other side posts, the caller cancels, or we give up. The
-  // cancel token is an object with .cancelled — a plain flag rather than an
-  // AbortController, because the thing being cancelled is a LOOP, and leaving a
-  // poll running after someone has closed the lobby is how a dead screen keeps
-  // hitting a server.
   async function waitFor(code, slot, token, onTick) {
     const started = Date.now();
     for (;;) {
       if (token && token.cancelled) return ERR("cancelled", "");
       const res = await get(code, slot);
       if (res.ok && res.body && res.body.payload) return { ok: true, payload: res.body.payload };
-      // not_found simply means "not yet" — everything else is fatal and should
-      // surface immediately rather than being retried for two minutes.
       if (!res.ok && res.error !== "not_found") return res;
       if (Date.now() - started > POLL_TIMEOUT_MS) {
         return ERR("expired", "Nobody joined that code. Codes only last a couple of minutes.");
@@ -411,9 +278,6 @@ const NetRendezvous = (function () {
   return {
     ALPHABET, CODE_LEN, POLL_TIMEOUT_MS, STORE_KEY, DEFAULT_URL, TOPIC,
     configured, usingPrivateRelay, setUrl, baseUrl, swap, hostRoom,
-    // Exported for the tests: the crypto is what makes a public broker safe to
-    // use, and "it encrypted something" is not the same claim as "the wrong
-    // code cannot read it".
     seal, open, topicFor,
     makeCode, normalise, valid,
     put, get, waitFor,

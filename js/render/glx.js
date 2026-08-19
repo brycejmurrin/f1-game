@@ -1,16 +1,7 @@
-/*
- * Apex 26 — WebGL2 renderer core: the PBR GGX lit pass (sun + 32 spot lamps,
- * shadow maps, procedural materials, wet road, fog), the procedural sky and
- * the FX passes — ~13 programs. GLSL sources live in js/render/shaders/
- * (chunks/lit/sky/fx/post); the post, shadow and chunked-scenery subsystems
- * are split into js/render/glx/.
- */
+/* Apex 26 — WebGL2 renderer core: the PBR GGX lit pass (sun + 32 spot lamps, shadow maps, procedural materials, wet road, fog), the procedural sky and the FX pass… */
 "use strict";
 
 const GLX = (function () {
-  // GLSL sources live in js/render/shaders/{lit,sky,fx,post}.js (loaded before this
-  // file). The post/shadow sources are destructured by the split subsystem modules
-  // (js/render/glx/post.js, js/render/glx/shadow.js) instead of here.
   const { LIT_VS, LIT_FS, SKY_VS, SKY_FS, SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, PARTICLE_VS, PARTICLE_FS } = GLXShaders;
 
   let gl = null;
@@ -36,13 +27,8 @@ const GLX = (function () {
   const IS_MOBILE = _forceMobile ||
     /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
     (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
-  // A capable phone can opt into the desktop-quality tier (full DPR + MSAA +
-  // full-res atlases + 2048 shadows) via the pause-menu GRAPHICS: HIGH setting.
-  // Default OFF — the safe tier is what keeps memory-limited devices alive.
   let _gfxHigh = false;
   try { _gfxHigh = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}
-  // MOBILE TIER = a phone NOT opted into high quality. All the memory downgrades
-  // key off this, so HIGH restores full quality (a reload re-runs init with it).
   const MOBILE_TIER = IS_MOBILE && !_gfxHigh;
   let _ctxLost = false;   // true between webglcontextlost and the reload on restore
   function ctxGone() { return _ctxLost || !!(gl && gl.isContextLost && gl.isContextLost()); }
@@ -59,14 +45,7 @@ const GLX = (function () {
   let _anisoExt = null, _anisoMax = 0;   // EXT_texture_filter_anisotropic (capped 4×)
   let _gpuQActive = null;   // query open between begin() and present() this frame
   let litProg = null, litU = null;
-  // Identity model matrix for instanced draws: the transform lives in the
-  // per-instance columns, so uModel is unused on that path.
   const IDENT4 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
-  // Baked PBR material arrays (js/render/assets.js). Layer index == MAT id, so
-  // the shader indexes them with the per-vertex material id it already carries.
-  // Null until a pack is loaded — a pack ships in assets/pack and loads at boot
-  // (matTexMix def 1.0), but load is async and can fail, so every path below
-  // has to survive them staying null and degrade to the procedural look.
   let matAlbedoTex = null, matNormalTex = null, matDummyArrTex = null;
   const MAT_TEX_LAYERS = 17;                                 // MAT.FLAT(0) … MAT.ASPHALT(16)
   const matTexScales = new Float32Array(MAT_TEX_LAYERS);     // world metres per tile; 0 = absent
@@ -82,11 +61,6 @@ const GLX = (function () {
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
-  // ── Live environment probe ──────────────────────────────────────────────────
-  // A small cubemap rendered around the player car (one face per frame — full
-  // refresh every 6 frames) that the car-paint clearcoat samples for REAL
-  // reflections of the surrounding world. 64px RGBA8 faces + mips: reflections
-  // are blurred by paint roughness anyway, so tiny faces read perfectly.
   const ENV_SIZE = 64;
   // Probe draw-distance cull, metres. Counted reach in docs/PERF-FINDINGS.md /
   // tools/chunk-reach.cjs. A face is 90 deg across ENV_SIZE pixels = 1.41 deg/px,
@@ -94,9 +68,6 @@ const GLX = (function () {
   const ENV_CULL_M = 300;
   let envTex = null, envFBO = null, envDepthRB = null, envDummyTex = null;
   let envFacesMask = 0, envReady = false, _envActive = false;
-  // Saved game-frame fields while a probe face is open — restored in envFaceEnd
-  // so drawWorldMeshes (propBatches cull via frame.viewProj) still sees the
-  // probe frustum. Restoring in envFaceBegin left cull against the main camera.
   let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
   const _envView = new Float32Array(16), _envProj = new Float32Array(16),
         _envVP = new Float32Array(16), _envInvVP = new Float32Array(16),
@@ -112,17 +83,8 @@ const GLX = (function () {
   let frameEye = null;
   let frameCullDist = 0;   // >0: radial draw-distance cap for chunked scenery (mobile free-cam) — bounds chunk count when the far plane is pushed out
   let frameLights = null;
-  // Full baked track light list + the PER-CHUNK LAMPS toggle. GLXChunked reads
-  // both to bind a per-chunk light subset instead of this frame's global 32.
   let frameAllLights = null, framePerChunkLights = 0, frameTailStart = 0, frameTailCount = 0;
-  // Track-lamp intensity scale applied in uploadLightSet. 1 unless PER-CHUNK
-  // LAMPS is on, in which case it is that knob's value — see begin().
   let _lampScale = 1;
-  // Point-light upload scratch (lit program). Sized for MAX_LIGHTS (48) and
-  // reused every frame — .subarray(0, nL*stride) is uploaded to avoid per-frame
-  // typed-array allocs (GC jitter on dense night grids). Mirrors the _gr*
-  // god-ray scratch, which moved to js/render/glx/post.js with present().
-  // Four vec4s match lit.js packing (pos+rad / col+bleed / dir+coneIn / coneOut).
   const MAX_LIGHTS = 48;
   const _luA = new Float32Array(MAX_LIGHTS * 4), _luB = new Float32Array(MAX_LIGHTS * 4),
         _luC = new Float32Array(MAX_LIGHTS * 4), _luD = new Float32Array(MAX_LIGHTS * 4);
@@ -140,17 +102,11 @@ const GLX = (function () {
   let decalProg = null, decalU = null;   // textured car-decal (logo/sponsor) pass
   let frameTime = 0, frameCloud = 0, frameCloudSpeed = 1;
 
-  // The split renderer subsystems (js/render/glx/{post,shadow,chunked}.js),
-  // wired at init() through the GLXCore ctx built there. PST = post chain,
-  // SHD = shadow maps (sun/car/lamp + PCSS blocker), CHK = chunked meshes.
   let core = null, PST = null, SHD = null, CHK = null;
-
 
   // Material uniform cache — skip redundant per-draw scalar uploads.
   let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1, _matCC = -1, _matCP = -1, _matSpark = -1;
 
-  // Active-program cache — gl.useProgram is a pipeline-flushing state change, so
-  // skip it when the requested program is already bound. Route every bind here.
   let _activeProg = null;
   function useProg(p) { if (p !== _activeProg) { gl.useProgram(p); _activeProg = p; } }
 
@@ -161,12 +117,6 @@ const GLX = (function () {
   // frame's matrix so the upload happens at most once per program per frame.
   let _frameToken = 0;
   let _shadowVPToken = -1, _markVPToken = -1;
-  // Tuner-knob upload cache (PERF-FINDINGS §3). envFaceBegin() calls begin()
-  // and the main camera calls begin() again in the same game frame with the
-  // same LIGHTING TUNER scalars; WebGL uniforms persist on the program, so
-  // equal values are skipped. View / eye / env / lights / time still upload
-  // every begin(). Honest cost is ~0.05 ms — hygiene, not a GPU win.
-  // Cleared when lit/sky programs are (re)linked.
   const _litUf = Object.create(null), _skyUf = Object.create(null);
   function _clearUf(o) { for (const k in o) delete o[k]; }
   function uf1(loc, cache, key, v) {
@@ -174,17 +124,9 @@ const GLX = (function () {
     if (cache[key] !== v) { gl.uniform1f(loc, v); cache[key] = v; }
   }
 
-  // VAO bind cache — drawElements requires the right VAO, but consecutive draws
-  // of the same mesh (or repeated skid/shadow quads sharing shadowVAO) would
-  // otherwise rebind redundantly. Binding null after every draw also forces a
-  // rebind on the next; instead leave the last VAO bound and skip no-op binds.
   let _activeVAO = null;
   function bindVAO(v) { if (v !== _activeVAO) { gl.bindVertexArray(v); _activeVAO = v; } }
 
-  // Render-state cache — enable/disable(BLEND) and depthMask are pipeline state
-  // changes. Many consecutive draws share the same state (e.g. dozens of skid
-  // marks and car shadows per frame), so collapse redundant toggles into no-ops.
-  // begin() resyncs these to GL defaults each frame; present() restores them.
   let _blendOn = false, _depthWrite = true;
   function setBlend(on) {
     if (on !== _blendOn) { if (on) gl.enable(gl.BLEND); else gl.disable(gl.BLEND); _blendOn = on; }
@@ -259,7 +201,6 @@ const GLX = (function () {
     return u;
   }
 
-
   function init(canvasEl) {
     canvas = canvasEl;
     watchCanvasSize();
@@ -278,10 +219,6 @@ const GLX = (function () {
     // actual querying is gated behind gpuTimer(true).
     try { _gpuTimerExt = gl.getExtension("EXT_disjoint_timer_query_webgl2"); } catch (_) { _gpuTimerExt = null; }
 
-    // Anisotropic filtering (ubiquitous, but still an extension in WebGL2).
-    // Applied at a modest 4× to the mippy content textures (decal atlases,
-    // env cube) so decals stay legible at grazing angles instead of smearing
-    // into the LINEAR_MIPMAP_LINEAR blur. Query once; 0 = unavailable.
     try {
       _anisoExt = gl.getExtension("EXT_texture_filter_anisotropic")
                || gl.getExtension("WEBKIT_EXT_texture_filter_anisotropic");
@@ -289,11 +226,6 @@ const GLX = (function () {
         ? Math.min(4, gl.getParameter(_anisoExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT) || 0) : 0;
     } catch (_) { _anisoExt = null; _anisoMax = 0; }
 
-    // WebGL context-loss recovery. Mobile tile GPUs can drop the context under
-    // memory pressure (the per-frame env-probe cube adds load). Without a handler
-    // the loss is permanent and later gl calls cascade into errors. preventDefault
-    // lets the GPU restore; on restore we reload to cleanly rebuild every GL
-    // resource (programs, FBOs, textures, meshes) rather than track them all.
     canvas.addEventListener("webglcontextlost", function (e) {
       e.preventDefault(); _ctxLost = true;
       // Only downgrade quality on a loss that happened while VISIBLE — that's the
@@ -486,8 +418,6 @@ const GLX = (function () {
     }
     if (particleProg) {
       particleU = locs(particleProg, ["uViewProj", "uEye", "uAdditive"]);
-      // Dynamic interleaved buffer: [cornerX, cornerY, cx, cy, cz, r, g, b,
-      // size, alpha] ×6 verts/particle (filled by js/game/particles.js).
       particleVAO = gl.createVertexArray();
       gl.bindVertexArray(particleVAO);
       particleVBO = gl.createBuffer();
@@ -529,24 +459,9 @@ const GLX = (function () {
     return true;
   }
 
-  // Adaptive render scale: the whole 3D pipeline (scene + every post FBO) sizes
-  // off width/height, and the canvas CSS size is fixed — so scaling the backing
-  // store down and letting the browser upscale is a single knob that trades
-  // sharpness for fill-rate. The HUD is a DOM overlay, so only the 3D view
-  // softens. setRenderScale() drives it from the frame-time governor in game.js.
   let renderScale = 1;
-  // CACHED CSS SIZE. resize() is the first statement of every render() — and
-  // clientWidth/clientHeight are LAYOUT reads, so asking for them there forces a
-  // synchronous reflow of anything dirtied since the last frame. The HUD dirties
-  // layout constantly (textContent, style and classList writes, plus a dataset
-  // write on documentElement), so the frame loop was paying a forced reflow every
-  // time the 10 Hz HUD tick, an announce, or a lights change landed. The CSS box
-  // only changes on a viewport/orientation change or a rotation of the device, so
-  // read it when the browser tells us it moved and cache it in between.
   let cssW = 0, cssH = 0, cssDirty = true;
   const markCssDirty = () => { cssDirty = true; };
-  // Wired from init(), NOT at IIFE eval: `canvas` is still null up here, so an
-  // observer attached at module scope would silently observe nothing.
   function watchCanvasSize() {
     if (typeof window === "undefined" || !window.addEventListener) return;
     window.addEventListener("resize", markCssDirty);
@@ -618,14 +533,6 @@ const GLX = (function () {
       idx = big ? new Uint32Array(idx) : new Uint16Array(idx);
     }
 
-    // Interleaved: [x,y,z, nx,ny,nz, r,g,b (, mat) (, s,x,hw)] per vertex — one
-    // buffer. Optional per-vertex material id (data.mat) adds a 10th float
-    // (attrib 3); meshes without it stay 9-float and aMat reads the generic
-    // default (0=FLAT). Optional track coords (data.trk: arc-length s, signed
-    // lateral offset, half-width — 3 floats, attrib 4) let the ROAD evaluate its
-    // markings analytically in the fragment shader instead of carrying a vertex
-    // column per painted line. Meshes without it read (0,0,0), and the shader
-    // gates on hw > 0 so nothing else can accidentally paint lines on itself.
     const mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
     const trk = data.trk && data.trk.length === vCount * 3 ? toF32(data.trk) : null;
     const fpv = 9 + (mat ? 1 : 0) + (trk ? 3 : 0);
@@ -710,8 +617,6 @@ const GLX = (function () {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    // 4× anisotropy: decal atlases are read at grazing angles on the bodywork —
-    // trilinear alone smears the sponsors/numbers into mip blur there.
     if (_anisoMax > 1) gl.texParameterf(gl.TEXTURE_2D, _anisoExt.TEXTURE_MAX_ANISOTROPY_EXT, _anisoMax);
     gl.bindTexture(gl.TEXTURE_2D, null);
     return tex;
@@ -752,20 +657,13 @@ const GLX = (function () {
     gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    // REPEAT, unlike createTexture's CLAMP_TO_EDGE: these tile across a whole
-    // circuit's worth of world-space triplanar coordinate.
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.REPEAT);
-    // The road is the grazing-angle surface these exist for — trilinear alone
-    // smears tarmac aggregate into mip mush ~20 m ahead of the car.
     if (_anisoMax > 1) gl.texParameterf(gl.TEXTURE_2D_ARRAY, _anisoExt.TEXTURE_MAX_ANISOTROPY_EXT, _anisoMax);
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, null);
     return tex;
   }
 
-  // Adopt (or clear, with a falsy argument) the baked material maps. Frees any
-  // previously-bound arrays so a pack swap — tier change, test teardown — can't
-  // leak GPU memory.
   function setMaterialMaps(maps) {
     if (matAlbedoTex) { gl.deleteTexture(matAlbedoTex); matAlbedoTex = null; }
     if (matNormalTex) { gl.deleteTexture(matNormalTex); matNormalTex = null; }
@@ -775,8 +673,6 @@ const GLX = (function () {
     matNormalTex = maps.normal || null;
     const sc = maps.scales;
     if (sc) for (let i = 0; i < MAT_TEX_LAYERS; i++) matTexScales[i] = +sc[i] > 0 ? +sc[i] : 0;
-    // No albedo array means no baked material at all: zero every scale so the
-    // shader's per-layer `scale <= 0` test short-circuits before it samples.
     if (!matAlbedoTex) matTexScales.fill(0);
   }
 
@@ -797,19 +693,12 @@ const GLX = (function () {
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, null);
   }
 
-  // Per-frame material-map binding. Units 10/11 are free — the lit pass holds 0
-  // (shadow), 5 (decal), 6, 7 (PCSS blocker), 8 (car shadow), 9 (lamp shadow).
   function bindMaterialMaps(mix) {
     ensureMatDummy();
     gl.activeTexture(gl.TEXTURE10);
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, matAlbedoTex || matDummyArrTex);
     gl.uniform1i(litU.uMatAlbedoTex, 10);
     gl.activeTexture(gl.TEXTURE11);
-    // No baked normal array → sample the NEUTRAL 128-grey dummy, not the albedo
-    // array. A pack with albedo but no normal is documented-valid ("albedo alone
-    // still helps"); falling back to matAlbedoTex here fed coloured albedo RGB to
-    // applyMaterialTexNormal as a tangent-space normal, warping shading on every
-    // grass/rock/wall layer instead of degrading cleanly.
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, matNormalTex || matDummyArrTex);
     gl.uniform1i(litU.uMatNormalTex, 11);
     gl.activeTexture(gl.TEXTURE0);      // leave unit 0 active + bound to the shadow map
@@ -824,8 +713,6 @@ const GLX = (function () {
     if (ctxGone() || !decalProg || !mesh || !tex) return;
     useProg(decalProg);
     gl.uniformMatrix4fv(decalU.uModel, false, modelMat);
-    // Frame-constant uniforms once per frame (same token pattern as
-    // drawShadow/drawMark) — this runs once per car livery, ~22x/frame.
     if (_decalVPToken !== _frameToken) {
       _decalVPToken = _frameToken;
       gl.uniformMatrix4fv(decalU.uViewProj, false, frameViewProj);
@@ -835,10 +722,6 @@ const GLX = (function () {
       gl.uniform3fv(decalU.uAmbGround, frameAmbGround);
     }
     gl.uniform1f(decalU.uGlow, (opts && opts.glow) || 0);
-    // Bind the decal texture to a SPARE unit (5), NOT unit 0 — the lit pass keeps
-    // the shadow map bound to TEXTURE0 for the whole frame, so clobbering unit 0
-    // here would make every later lit draw (e.g. the player's wheels, drawn right
-    // after these decals) sample this RGBA image as the shadow map → broken/black.
     gl.activeTexture(gl.TEXTURE5);
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.uniform1i(decalU.uTex, 5);
@@ -873,10 +756,6 @@ const GLX = (function () {
   }
 
   function envInit() {
-    // HDR cube (RGBA16F) when float buffers are renderable — so emissive light
-    // sources (neon, lit windows, floodlights, the sun) keep their >1 brightness
-    // in the reflection and bloom on the paint, like the wet road's SSR. Falls
-    // back to 8-bit (LDR, lights clamp to white) where float isn't renderable.
     const envInternal = PST.hdrOk() ? gl.RGBA16F : gl.RGBA8;
     const envType = PST.hdrOk() ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
     envTex = gl.createTexture();
@@ -887,8 +766,6 @@ const GLX = (function () {
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    // 4× anisotropy on the env cube: the clearcoat mirror samples it along
-    // grazing reflection rays where plain trilinear over-blurs.
     if (_anisoMax > 1) gl.texParameterf(gl.TEXTURE_CUBE_MAP, _anisoExt.TEXTURE_MAX_ANISOTROPY_EXT, _anisoMax);
     gl.generateMipmap(gl.TEXTURE_CUBE_MAP);   // texture-complete (black) from frame 0
     ensureEnvDummy();
@@ -901,10 +778,6 @@ const GLX = (function () {
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, envDepthRB);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
-  // Render one probe face: caller re-issues the world draws (sky + track meshes,
-  // no cars) between envFaceBegin and envFaceEnd. Reuses begin() with the face's
-  // camera so every lighting uniform (sun, shadow map, ambient, fog, tune)
-  // matches the main frame exactly. Returns the face's invViewProj for drawSky.
   function envFaceBegin(face, eye, frame) {
     if (!gl || ctxGone()) return null;
     if (!envTex) envInit();
@@ -918,10 +791,6 @@ const GLX = (function () {
     gl.bindFramebuffer(gl.FRAMEBUFFER, envFBO);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
       gl.TEXTURE_CUBE_MAP_POSITIVE_X + face, envTex, 0);
-    // Keep probe VP / eye / cullDist on `frame` until envFaceEnd so
-    // drawWorldMeshes → makeFrustumPlanes(frame.viewProj) culls propBatches
-    // against the face frustum (chunked draws already read frameViewProj from
-    // begin()). Restoring here made reflections miss off-camera props.
     _envFrame = frame;
     _envSvVP = frame.viewProj; _envSvEye = frame.eye; _envSvCull = frame.cullDist;
     frame.viewProj = _envVP; frame.eye = eye;
@@ -966,8 +835,6 @@ const GLX = (function () {
     }
   }
 
-  // Open a GPU timer query for this frame (if timing is on and none is already
-  // open). Called from begin(); the matching endQuery is in present().
   function _gpuTimerBegin() {
     if (!_gpuTimerOn || !_gpuTimerExt || _gpuQActive) return;
     const q = gl.createQuery();
@@ -976,21 +843,8 @@ const GLX = (function () {
     _gpuQActive = q;
   }
 
-  // Close the frame's query and harvest any completed result. GPU_DISJOINT means
-  // the GPU was interrupted (e.g. power-state change) and every in-flight timing
-  // is invalid — drop them. Keeps at most a few queries in flight.
-  // NOTE the _gpuTimerOn gate. The extension is acquired unconditionally at
-  // context creation, so without it the gl.getParameter below ran at the END OF
-  // EVERY FRAME on every device that has EXT_disjoint_timer_query_webgl2 (i.e.
-  // all of Chrome desktop + Android) for a feature that ships off. getParameter
-  // with an uncached pname is a synchronous round trip to the GPU process — a
-  // command-buffer flush plus blocking IPC — so this was a per-frame pipeline
-  // stall, worst exactly when the GPU process is already backed up. _gpuTimerBegin
-  // has always had this guard; this one did not.
   function _gpuTimerEnd() {
     if (!_gpuTimerExt) return;
-    // Timing just switched off: close and drain what is still in flight, then
-    // stop touching the GPU until it is switched back on.
     if (!_gpuTimerOn && !_gpuQActive && !_gpuQPending.length) return;
     if (_gpuQActive) {
       gl.endQuery(_gpuTimerExt.TIME_ELAPSED_EXT);
@@ -1036,20 +890,11 @@ const GLX = (function () {
     frameCloudSpeed = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
     frameLights = frame.lights || null;
     frameAllLights = frame.allLights || null;
-    // 0..1 AMOUNT, not a flag: > 0 enables per-chunk lamp sets and sets how
-    // strongly they light. Kept numeric all the way through — coercing to 1
-    // here is what made it a toggle.
     framePerChunkLights = +frame.perChunkLights || 0;
-    // Track-lamp intensity scale. 1 when the feature is off, so nothing about
-    // the shipped look changes; the knob's own value once it is on.
     _lampScale = framePerChunkLights > 0 ? framePerChunkLights : 1;
     frameTailStart = frame.tailStart | 0;
     frameTailCount = frame.tailCount | 0;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
-    // Render the scene into the HDR offscreen target when post is enabled, else
-    // straight to the default framebuffer. With MSAA the geometry goes into the
-    // multisampled renderbuffer, resolved into sceneTex/sceneDepth at present().
-    // An env-probe face (envFaceBegin) instead targets the probe cubemap FBO.
     if (_envActive) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, envFBO);
       gl.viewport(0, 0, ENV_SIZE, ENV_SIZE);
@@ -1060,10 +905,6 @@ const GLX = (function () {
     // depth buffer to clear, and blend off is the opaque-pass default.
     gl.disable(gl.BLEND); _blendOn = false;
     gl.depthMask(true); _depthWrite = true;
-    // Same resync for the three states the setters above route. This is
-    // what keeps a cached value from outliving the frame that set it — and it
-    // runs unconditionally, so the cached and uncached paths start each frame
-    // from identical GL state.
     resetDrawState();
     const fc = frame.fogColor;
     gl.clearColor(fc[0], fc[1], fc[2], 1);
@@ -1085,16 +926,11 @@ const GLX = (function () {
       _ambScratchS[0] = s[0] * _ambM; _ambScratchS[1] = s[1] * _ambM; _ambScratchS[2] = s[2] * _ambM;
       gl.uniform3fv(litU.uAmbGround, _ambScratchG);
       gl.uniform3fv(litU.uAmbSky, _ambScratchS);
-      // The decal pass reads frameAmb* — point it at the SAME scaled ambient the
-      // lit pass just uploaded. Decals used the raw frame colours, so moving the
-      // AMBIENT slider re-lit the bodywork but not the sponsor marks on it.
       frameAmbSky = _ambScratchS; frameAmbGround = _ambScratchG;
     } else {
       gl.uniform3fv(litU.uAmbGround, frame.ambientGround);
       gl.uniform3fv(litU.uAmbSky, frame.ambientSky);
     }
-    // Same for the KEY LIGHT slider on the decals' sun term (raw frameSunColor
-    // stays untouched for the god-ray/flare passes, which are not keyMul-lit).
     const _kM = T && T.keyMul != null ? T.keyMul : 1.0;
     if (_kM !== 1 && frameSunColor) {
       _decalSunScr[0] = frameSunColor[0] * _kM;
@@ -1115,10 +951,6 @@ const GLX = (function () {
     uf1(litU.uMistHeight,  _litUf, "mistHeight",  T && T.mistHeight  != null ? T.mistHeight  : 0.30);
     uf1(litU.uShadowTintAmt, _litUf, "shadowTintAmt", T && T.shadowTintAmt != null ? T.shadowTintAmt : 0.0);
     uf1(litU.uWetDark,     _litUf, "wetDark",     T && T.wetDark     != null ? T.wetDark     : 1.0);
-    // BAKED MATERIALS knob. Ships at 1.0 (mirrors TUNE_DEFS matTexMix def);
-    // __apex.matTex(0) is the A/B off-switch back to pure procedural. A missing
-    // pack still renders procedural — bindMaterialMaps forces uMatTexMix to 0
-    // whenever no albedo array is loaded, whatever the slider says.
     bindMaterialMaps(T && T.matTexMix != null ? T.matTexMix : 1.0);
     gl.uniform3fv(litU.uFogColor, frame.fogColor);
     // FOG DENSITY knob: scale the per-condition haze depth (multiplier, def 1).
@@ -1126,18 +958,6 @@ const GLX = (function () {
     // and both other backends — an omitted field is documented-valid and must not
     // upload `undefined * mul = NaN`, which blacks out the whole scene.
     gl.uniform1f(litU.uFogDensity, (frame.fogDensity != null ? frame.fogDensity : 0) * (T && T.fogDensityMul != null ? T.fogDensityMul : 1));
-    // uBlockerMap's UNIT IS ASSIGNED UNCONDITIONALLY, the bind is not. It is the
-    // only `sampler2D` in LIT_FS and uShadowMap on unit 0 is a `sampler2DShadow`,
-    // so leaving it at its default unit 0 puts two DIFFERENT sampler types on one
-    // texture image unit — GLES 3.0 §2.11.7 makes that an INVALID_OPERATION at the
-    // next draw, not a link error, so the whole lit pass would draw nothing and
-    // the world would vanish under sky + post. Reachable: glx/shadow.js allocates
-    // the blocker as R16F, which needs EXT_color_buffer_float, so a device without
-    // it fails checkFramebufferStatus and leaves pcssEnabled false forever. The
-    // neighbouring uLampShadowMap comment makes this argument correctly for the
-    // SAME sampler type; the blocker was the one case it did not cover. Hoisted
-    // ABOVE the SHD.enabled branch because its else-arm leaves BOTH samplers at
-    // their default unit 0, which is the same collision by another route.
     gl.uniform1i(litU.uBlockerMap, 7);
     if (SHD.enabled) {
       gl.activeTexture(gl.TEXTURE0);
@@ -1164,11 +984,6 @@ const GLX = (function () {
       let _hf = (_kl - 0.28) / 0.14;
       _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
       _hf = _hf * _hf * (3 - 2 * _hf);
-      // Clear-night moon shadows: floor the key-dim fade with the MOON SHADOWS
-      // knob scaled by the clear-night factor (game.js frame.moonGate — bright
-      // moon, low cloud, dry road, no fog; or, above 0.5, the knob itself
-      // forcing the gate open regardless of weather). 0 = old fade-to-nothing
-      // night.
       const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (frame.moonGate || 0);
       if (_mSh > _hf) _hf = _mSh;
       gl.uniform1f(litU.uShadowStr, (T && T.shadowStr != null ? T.shadowStr : 1.15) * _hf);
@@ -1179,9 +994,6 @@ const GLX = (function () {
       // camera, so the fade front never jumps on a box recentre.
       gl.uniform3fv(litU.uShadowCtr, frame.shadowCtr || frame.eye || [0, 0, 0]);
       gl.uniform1f(litU.uShadowTexel, 1.0 / SHD.SIZE);
-      // Dynamic car shadow map — unit 8, armed only on frames where game.js ran
-      // the car caster pass (carShadowBegin). The texture is always bound while
-      // enabled so the sampler2DShadow stays complete even when gated off.
       if (SHD.carEnabled) {
         gl.activeTexture(gl.TEXTURE8);
         gl.bindTexture(gl.TEXTURE_2D, SHD.carTex);
@@ -1229,8 +1041,6 @@ const GLX = (function () {
     uf1(litU.uCarSunGlint, _litUf, "carSunGlint", T && T.carSunGlint != null ? T.carSunGlint : 12.0);
     uf1(litU.uCarSparkle,  _litUf, "carSparkle",  T && T.carSparkle  != null ? T.carSparkle  : 1.6);
     uf1(litU.uFogSunCore,  _litUf, "fogSunCore",  T && T.fogSunCore  != null ? T.fogSunCore  : 0.6);
-    // LAMP NEAR CLAMP / WINDOW SUN FLASH / SKY RIM GLOW / AMBIENT CONTACT DARK /
-    // LAMP WALL SPILL knobs (defaults = shipped look).
     uf1(litU.uLampNearClamp,  _litUf, "lampNearClamp",  T && T.lampNearClamp  != null ? T.lampNearClamp  : 4.0);
     uf1(litU.uWindowSunFlash, _litUf, "windowSunFlash", T && T.windowSunFlash != null ? T.windowSunFlash : 1.0);
     uf1(litU.uSkyRimGlow,     _litUf, "skyRimGlow",     T && T.skyRimGlow     != null ? T.skyRimGlow     : 1.0);
@@ -1248,44 +1058,15 @@ const GLX = (function () {
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, (envTex && !_envActive) ? envTex : envDummyTex);
     gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(litU.uEnvCube, 6);
-    // uEnvStr stays 0 until the first full 6-face cycle (probe still black), and
-    // frame.noEnv forces it off for probe-less views (the SETUP MENU preview)
-    // even when a stale cube lingers from a prior race — so the menu car reads
-    // matte (gentle analytic sheen) instead of mirroring last race's scene.
-    // Fallback 0 (= probe OFF) is the SAFE side of the tier-gated TUNE_DEFS
-    // carEnvCube default (0.3 desktop / 0.0 mobile) — a caller with no tune obj
-    // gets no probe rather than the old 1.0 fallback's full-mirror surprise.
     gl.uniform1f(litU.uEnvStr, (envTex && envReady && !_envActive && !frame.noEnv)
       ? (T && T.carEnvCube != null ? T.carEnvCube : 0.0) : 0.0);
-    // Point lights (floodlights / street lights). frame.lights is a flat array
-    // of at most MAX_LIGHTS (48) entries, already culled to the nearest set by
-    // the caller. Uploaded once per frame; uNumLights=0 on day.
     {
       const L = frame.lights;
-      // Flat stride-15: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner, cosOuter,
-      // bleed, volW, glareW]. volW is consumed by the godray pass only; glareW
-      // (lens-glare halo weight) by drawGlow only.
       uploadLightSet(L, null, L ? (L.length / 15) | 0 : 0);
     }
     _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = _matCC = _matCP = _matSpark = -1;
   }
 
-  // Upload a set of point lights into the lit program's MAX_LIGHTS uniform
-  // arrays. Two callers: begin() sends this frame's globally-culled
-  // frame.lights (idx = null, entries read in order), and GLXChunked sends a
-  // PER-CHUNK subset via an index array into the track's full baked light list
-  // (PER-CHUNK LAMPS knob). The per-chunk path is why this is factored out: the
-  // shader still only ever sees <= MAX_LIGHTS, so the fragment loop is
-  // untouched — only WHICH lamps are bound changes, per draw. That lifts
-  // the cap for the SCENE as a whole (each chunk gets its own budget)
-  // without costing a uniform slot or a per-fragment iteration.
-  // L2/o2/n2 (optional): a SECOND source appended after the idx-selected ones —
-  // the per-frame dynamic lights (car tail-lights), which appendCarTailLights
-  // pushes onto frame.lights AFTER the static cull and therefore live outside
-  // track._lights. Without this a per-chunk set would silently drop them and
-  // scenery would stop catching tail-light spill the moment the knob went on.
-  // Tail lights are reserved FIRST (there are at most 5, and a car beside you
-  // matters more than the 32nd-nearest lamp), then static lamps fill what's left.
   function uploadLightSet(L, idx, n, L2, o2, n2) {
     const nTail = (L2 && n2 > 0) ? Math.min(n2 | 0, MAX_LIGHTS) : 0;
     const nStatic = L ? Math.max(0, Math.min(MAX_LIGHTS - nTail, n | 0)) : 0;
@@ -1322,21 +1103,9 @@ const GLX = (function () {
     gl.uniform4fv(litU["uLightD[0]"], D, 0, nL * 4);
   }
 
-  // Shared lit-pass material setup — draw() below and GLXChunked.drawChunked
-  // both route through this single helper (formerly duplicated in lockstep):
-  // bind the lit program, upload the model matrix, and set the material
-  // scalars through the redundancy cache. Returns the resolved alpha for the
-  // caller's blend/depth-mask decisions.
   function litMaterial(modelMat, opts) {
     useProg(litProg);
     gl.uniformMatrix4fv(litU.uModel, false, modelMat);
-    // The instancing gate is NOT re-uploaded here. It used to be defaulted off on
-    // every lit draw, and litMaterial is the funnel for all of them — 150-300 a
-    // frame (world meshes, car bodies, wheels, aero flaps, brake rings, LEDs,
-    // debris) — to clear a flag only drawInstanced ever sets. It now follows the
-    // depth pass's already-correct shape (castShadowInstanced in glx/shadow.js):
-    // drawInstanced brackets its OWN draw with 1/0, so the uniform is 0 outside
-    // that bracket by construction and 0 at link time before the first one.
     const emissive = opts && opts.emissive !== undefined ? opts.emissive : 0;
     const alpha = opts && opts.alpha !== undefined ? opts.alpha : 1;
     // Material (set every draw so values never leak from the previous mesh).
@@ -1361,7 +1130,6 @@ const GLX = (function () {
     return alpha;
   }
 
-  // ---------- instanced draw (the TrackGraph.batches() consumer) ----------
   // One canonical mesh + a per-instance transform, instead of the same geometry
   // fused into the world N times. See js/track/graph.js and
   // docs/research/SCENE-GRAPH-PLAN.md; the producer is graph.batches().
@@ -1372,10 +1140,6 @@ const GLX = (function () {
   // col,idx,mat} geometry works in both paths.
   function createInstancedBatch(data, matrices, colors, opts) {
     const mesh = createMesh(data);
-    // createMesh returns null on a lost/absent context (ctxGone) — every batch
-    // consumer (drawInstanced/castShadowInstanced/freeInstancedBatch) already
-    // null-guards, so fail closed here rather than deref null.vao. The old
-    // unguarded read threw "reading 'vao'" on racy menu-scene warmup.
     if (!mesh) return null;
     const vao = mesh.vao;
     gl.bindVertexArray(vao);
@@ -1408,22 +1172,12 @@ const GLX = (function () {
     mesh.ibo = ibo;
     mesh.cbo = cbo;
 
-    // Optional spatial buckets for per-frame frustum culling. WebGL2 has NO
-    // baseInstance, so an instanced draw always starts at instance 0 — a visible
-    // subset cannot be expressed as an offset. The only way to draw part of a
-    // batch is to PACK the visible instances to the front of the buffer and
-    // re-upload, which is what cullInstances() does; these buckets are what keep
-    // that repack proportional to what is on screen rather than to the whole
-    // batch. Same 72 m grid the chunked meshes use, so the two agree about what
-    // "nearby" means.
     if (opts && opts.cellSize > 0) {
       const cell = opts.cellSize;
       // Conservative per-instance reach: the model's own extent, scaled by the
       // largest scale any instance applies. Cheap and never under-estimates.
       let reach = opts.radius || 0;
       if (!reach) {
-        // Largest |component| in the canonical mesh: the model sits at the origin
-        // (TrackGraph guarantees it), so this is its radius in every direction.
         const p0 = data.pos;
         for (let i = 0; i < p0.length; i++) { const a = Math.abs(p0[i]); if (a > reach) reach = a; }
       }
@@ -1450,20 +1204,11 @@ const GLX = (function () {
       mesh.packMatrices = new Float32Array(matrices.length);
       mesh.packColors = mesh.srcColors ? new Float32Array(mesh.srcColors.length) : null;
     }
-    // A batch with no per-instance colour falls back to the context-wide generic
-    // value for attribute 9, which init() pins at (1,1,1).
     return mesh;
   }
 
-  // Repack the instances whose cell survives the frustum to the front of the GPU
-  // buffer and record how many. Returns the visible count. A batch created
-  // without cellSize has no cells and is left whole (always drawn in full).
-  // Skips bufferSubData when the visible cell set (count + cell-index hash) is
-  // unchanged from the previous cull — static prop batches often match.
   function cullInstances(batch, planes) {
     if (!batch || !batch.cells) return batch ? batch.instances : 0;
-    // There is one GPU instance buffer, so only its resident pack can be a hit.
-    // A two-frustum count cache returned the right N with the wrong transforms.
     let samePack = !!batch._cullPlanes;
     if (samePack) {
       let po = 0;
@@ -1481,8 +1226,6 @@ const GLX = (function () {
     for (const c of batch.cells) {
       if (!CHK.aabbInFrustum(planes, c.mn, c.mx)) continue;
       for (const i of c.idx) {
-        // Copy without Float32Array.subarray — that view was a per-instance alloc
-        // on Vegas-scale batches (tens of thousands/frame).
         const so = i * 16, dOff = n * 16;
         for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
         if (dc) {
@@ -1511,11 +1254,6 @@ const GLX = (function () {
     return n;
   }
 
-  // OPAQUE-ONLY: a blended instanced draw would drop depth writes (below) but
-  // would NOT mask alpha writes the way draw() does, so it would drag the SSR
-  // car-paint tag stored in scene alpha. Every current caller (the TrackGraph
-  // prop batches; tests/specs/instanced-draw.spec.js) passes alpha 1 — route
-  // translucent work through draw() instead.
   function drawInstanced(batch, opts) {
     if (ctxGone() || !batch || !batch.instances) return;
     // IDENTITY model matrix: the transform lives entirely in the instance
@@ -1528,11 +1266,6 @@ const GLX = (function () {
     const dbl = opts && opts.doubleSided;
     if (dbl) setCull(false);
     const n = batch.visible === undefined ? batch.instances : batch.visible;
-    // Bracket the gate around THIS draw — the shape castShadowInstanced already
-    // uses — instead of asking every one of the frame's other lit draws to clear
-    // it afterwards. Set inside the n > 0 guard so a zero-instance batch leaves
-    // the uniform exactly as it found it. (This also drops the per-call
-    // Object.assign that existed only to smuggle the _instanced flag through.)
     if (n > 0) {
       if (litU.uInstanced) gl.uniform1f(litU.uInstanced, 1);
       gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
@@ -1560,11 +1293,6 @@ const GLX = (function () {
     setDepthMask(alpha >= 1);
     setBlend(alpha < 1);
     bindVAO(mesh.vao);
-    // Scene alpha is the SSR car-paint tag (see LIT_FS outColor), written only
-    // by OPAQUE draws — so ANY blended draw masks alpha writes automatically
-    // (default blending blends the alpha channel too, dragging a stored 0.35
-    // tag across the composite's 0.42-0.55 threshold). noAlphaWrite remains as
-    // an explicit opt-out for opaque FX quads.
     const noAW = (opts && opts.noAlphaWrite) || alpha < 1;
     if (noAW) setAlphaWrite(false);
     // doubleSided: render back faces too (cull off) — for the wheels + car body,
@@ -1572,12 +1300,6 @@ const GLX = (function () {
     // coincident duplicate to z-fight.
     const dbl = opts && opts.doubleSided;
     if (dbl) setCull(false);
-    // Depth bias for DECAL geometry (start line, road markings): nudge the
-    // fragment's depth toward the camera instead of lifting the mesh in Y.
-    // A geometric lift is resolution-dependent — it holds up close and
-    // z-fights at distance, where depth precision collapses under a 0.3 m
-    // near plane. polygonOffset scales with the local depth slope, so a
-    // decal wins at every distance and grazing angle without moving it.
     const _db = opts && opts.depthBias;
     if (_db) { setPolyOffset([_db[0], _db[1]]); }
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
@@ -1634,8 +1356,6 @@ const GLX = (function () {
     gl.uniform2f(shadowU.uSize, w, l);
     setBlend(true);
     setDepthMask(false);
-    // Pull the flat quad toward the camera in depth so it can't z-fight the
-    // coplanar road underneath (the "shadow flickering under the car").
     setPolyOffset([-4.0, -8.0]);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
@@ -1659,11 +1379,6 @@ const GLX = (function () {
     setPolyOffset(null);
   }
 
-  // Batched skid marks. `verts` is an interleaved Float32Array (pos3 + uv2 per
-  // vertex, 6 verts/mark); `vertCount` verts are live. When `dirty`, re-upload
-  // the buffer (marks change at most every few frames). One draw for the whole
-  // trail — replaces up to 120 per-mark drawMark calls. Returns false if the
-  // batch path is unavailable (caller falls back to per-mark drawMark).
   function drawSkidBatch(verts, vertCount, dirty) {
     if (ctxGone()) return true; // no-op; per-mark fallback would also fail
     if (!markBatchProg || vertCount <= 0) return !markBatchProg ? false : true;
@@ -1709,22 +1424,15 @@ const GLX = (function () {
       const glareW = lights[o + 14];
       if (!(glareW > 0)) continue;
       const cx = lights[o], cy = lights[o + 1], cz = lights[o + 2];
-      // Lens glare is a NEAR-FIELD veiling effect. Distant sources already read
-      // as bloom on their emissive head geometry — a halo billboard out there is
-      // a detached orb hanging in the sky (elevated flood heads especially).
       const dxE = cx - ex, dyE = cy - ey, dzE = cz - ez;
       const dEye = Math.sqrt(dxE * dxE + dyE * dyE + dzE * dzE);
       const fade = Math.min(1, Math.max(0, (170 - dEye) / 110));
       if (fade <= 0) continue;
-      // Light colours carry PHYSICAL intensities (hundreds, for the inverse-square
-      // shader) — normalise to a display-scale corona colour that keeps the hue.
       let r = lights[o + 3], g = lights[o + 4], b = lights[o + 5];
       const rad = lights[o + 6];
       const cm = Math.max(r, g, b) || 1;
       const csc = Math.min(1, 3.2 / cm) * (0.5 + 0.5 * Math.min(1, cm / 40)) * fade * glareW;
       r *= csc; g *= csc; b *= csc;
-      // Billboard size: a small LENS HALO hugging the lamp head — NOT a beam cone.
-      // Sized to the lens housing (~2 m) and scaled by the lamp's glare weight.
       const brad = Math.min(2.2, rad * 0.10) * (0.7 + 0.6 * Math.min(glareW, 2));
       for (let v = 0; v < 6; v++) {
         const c = _glowCorners[v];
@@ -1827,8 +1535,6 @@ const GLX = (function () {
     draw,
     drawChunked: (mesh, modelMat, opts) => CHK.drawChunked(mesh, modelMat, opts),
     castShadowChunked: (mesh, model) => CHK.castShadowChunked(mesh, model),
-    // Cull-test helpers, so a caller outside the draw path (the agent world
-    // view's visible()) runs the same frustum maths the GPU path runs.
     makeFrustumPlanes: (viewProj) => CHK.makeFrustumPlanes(viewProj),
     aabbInFrustum: (planes, mn, mx) => CHK.aabbInFrustum(planes, mn, mx),
     // WGX and TLX both export this; GLX had it in CHK but never forwarded it,
@@ -1845,15 +1551,11 @@ const GLX = (function () {
     envFaceBegin,
     envFaceEnd,
     envProbeReady() { return envReady; },
-    // New track/session: the cube still holds the OLD circuit — hold the
-    // analytic fallback until a fresh 6-face cycle has re-rendered the world.
     envProbeReset() { envFacesMask = 0; envReady = false; },
     shadowBegin: (lightVP) => SHD.shadowBegin(lightVP),
     castShadow: (mesh, model) => SHD.castShadow(mesh, model),
     castShadowInstanced: (batch, count) => SHD.castShadowInstanced(batch, count),
     shadowEnd: () => SHD.shadowEnd(),
-    // Active light VP for shadow-caster cull (lamp frustum while lamp pass is
-    // open, else the sun ortho). game.js cullInstances before castShadowInstanced.
     get shadowCullVP() { return SHD ? (SHD.castCullVP || SHD.lightVP) : null; },
     carShadowBegin: (lightVP, boxScale) => SHD.carShadowBegin(lightVP, boxScale),
     carShadowEnd: () => SHD.carShadowEnd(),
@@ -1870,9 +1572,6 @@ const GLX = (function () {
     msaa: () => PST.msaa(),
     pcss: () => SHD.pcssEnabled,
     setRenderScale, getRenderScale,
-    // GPU frame timer. gpuTimer(true|false) toggles timing (returns whether it's
-    // supported + on); gpuTimer() reads state. gpuMs() returns the most recent
-    // GPU frame time in ms, or -1 if unsupported / no result yet.
     gpuTimer(on) {
       if (on !== undefined) {
         _gpuTimerOn = !!on && !!_gpuTimerExt;

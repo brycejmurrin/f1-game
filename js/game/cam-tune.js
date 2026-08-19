@@ -1,27 +1,4 @@
-/* Apex 26 — PER-CAMERA-MODE framing offsets (the CAMERA TUNER's data layer):
-   the knob registry (CAM_TUNE_DEFS), the per-mode override store (localStorage
-   apex26.camTune) and apply(), which nudges an already-solved {eye,tgt,fov}
-   vantage. js/game/cameras.js calls apply() at the END of vantage(), just
-   before the ground clamp, so the live camera, snapGameCam() and
-   __apex.previewCam() all frame identically — and a lowered eye is still
-   caught by the terrain floor.
-
-   Values are stored PER CAMERA MODE ("chase", "hood", "cockpit", …): tuning
-   CHASE never touches HOOD, which is the whole point — one player wants the
-   chase cam further back and the hood cam a touch lower, and those are
-   different rigs. Every knob defaults to 0 = the shipped framing, so an
-   untuned install renders byte-identically to before this file existed.
-
-   The rig model (why these six knobs and not a free 6-DOF camera):
-     HEIGHT / DISTANCE / SIDE translate the EYE only, leaving the aim point on
-     the car — raise the eye and the camera looks DOWN at the car rather than
-     sliding it out of frame. PITCH / YAW then rotate the aim about the eye,
-     and FOV trims the zoom. That ordering means you can never lose the car off
-     screen with the translation knobs alone, which a naive "move the whole
-     rig" model does immediately.
-
-   Panel UI lives in js/game/cam-tuner.js (CamTunerPanel). Must load BEFORE
-   js/game.js (see index.html); consumes GameStore at eval time. */
+/* Apex 26 — PER-CAMERA-MODE framing offsets (the CAMERA TUNER's data layer): the knob registry (CAM_TUNE_DEFS), the per-mode override store (localStorage apex26.c… */
 const CamTune = (function () {
   "use strict";
 
@@ -59,12 +36,8 @@ const CAM_TUNE_DEFS = [
 const DEF_BY_ID = {};
 for (const d of CAM_TUNE_DEFS) DEF_BY_ID[d.id] = d;
 
-// Solved FOV floor/ceiling after the offset — a slider that could drive the
-// projection to 0° or past 180° would produce a degenerate matrix, not a look.
 const FOV_MIN = 20, FOV_MAX = 110;
 
-// Store shape: { chase: {height: 0.4, fov: -3}, hood: {…} } — sparse, only the
-// knobs the player actually moved, only the modes they touched.
 let _store = {};
 let _any = false;            // fast path: skip apply() entirely when nothing is tuned
 
@@ -114,9 +87,6 @@ function set(mode, id, v) {
   if (!d || !mode || typeof v !== "number" || !isFinite(v)) return false;
   v = clamp(v, d.min, d.max);
   const prof = _store[mode] || (_store[mode] = {});
-  // Only a value that differs from the shipped framing is worth storing — that
-  // keeps the persisted blob to what the player actually changed and makes
-  // "is this mode tuned?" a key count rather than a float comparison sweep.
   if (v === d.def) delete prof[id]; else prof[id] = v;
   if (!Object.keys(prof).length) delete _store[mode];
   refreshAny();
@@ -126,9 +96,6 @@ function reset(mode) { Log.info("game", "CamTune.reset " + mode); delete _store[
 function resetAll() { Log.info("game", "CamTune.resetAll"); _store = {}; refreshAny(); }
 function all() { return _store; }
 
-// Nudge a solved vantage in place. eye/tgt are mutated; the (possibly clamped)
-// FOV is RETURNED because it is a scalar. Called once per camera solve, so it
-// allocates nothing.
 function apply(mode, eye, tgt, fov) {
   if (!_any) return fov;
   const prof = _store[mode];
@@ -147,8 +114,6 @@ function apply(mode, eye, tgt, fov) {
   fx /= fl; fz /= fl;
   const rx = -fz, rz = fx;
   if (h || d || sd) {
-    // Translate the EYE only — the aim point stays where the mode put it, so
-    // the car cannot slide out of frame no matter how these are dialled.
     eye[0] += -fx * d + rx * sd;
     eye[1] += h;
     eye[2] += -fz * d + rz * sd;
@@ -157,15 +122,11 @@ function apply(mode, eye, tgt, fov) {
     let dx = tgt[0] - eye[0], dy = tgt[1] - eye[1], dz = tgt[2] - eye[2];
     if (ya) {
       const c = Math.cos(ya * DEG), s = Math.sin(ya * DEG);
-      // + = pan toward the RIGHT vector (-fz, fx) — the rotation direction is
-      // flipped together with rx/rz above so SIDE and YAW agree.
       const nx = dx * c - dz * s, nz = dz * c + dx * s;
       dx = nx; dz = nz;
     }
     if (pi) {
       const L = Math.hypot(dx, dz), len = Math.hypot(L, dy) || 1;
-      // Clamp the elevation short of straight up/down: at ±90° the horizontal
-      // component collapses and lookAt's up vector degenerates.
       const el = clamp(Math.atan2(dy, L) + pi * DEG, -1.45, 1.45);
       const nl = Math.cos(el) * len;
       dy = Math.sin(el) * len;

@@ -1,9 +1,4 @@
 "use strict";
-// liverytex.js — per-team LIVERY TEXTURE ATLAS generator.
-// Pure canvas-2D. Draws stylised (fan-art) team crests, invented sponsor
-// wordmarks and the car number onto a transparent SIZE×SIZE atlas. The 3D car
-// maps panel UVs onto the named REGIONS below. Original stylised marks only —
-// these are recognisable-in-silhouette homages, NOT exact trademark repros.
 const LiveryTex = (function () {
   const SIZE = 1024;
   // Mobile tier: upload atlases at half size — 22 cars × 1024² RGBA + mips was
@@ -28,11 +23,6 @@ const LiveryTex = (function () {
     num:    { x: 700, y: 420, w: 284, h: 284 },  // large car number
     strip:  { x: 40,  y: 720, w: 944, h: 130 },  // long thin sponsor strip (sidepod lower)
     fin:    { x: 40,  y: 856, w: 430, h: 160 },  // shark-fin tail: the painted graphic, stretched over the whole swept fin
-    // The fin's crest rides on its OWN square region, mapped to an upright square
-    // patch on the fin (Car3D.sharkFinBadge). It cannot share the `fin` rect: that
-    // one is stretched over the fin's raked, tapering outline, which shears and
-    // squashes anything with a recognisable shape. Square region → square patch →
-    // undistorted badge, whatever the surface under it is doing.
     finBadge: { x: 500, y: 856, w: 160, h: 160 },
   };
 
@@ -43,23 +33,12 @@ const LiveryTex = (function () {
     cadillac: 11,
   };
 
-  // Short codes for the generic-monogram fallback crest, and the id list the
-  // logo loader kicks off with. BOTH come from Teams.LIST — this file used to
-  // keep its own SHORT table and it had drifted: `redbull` and `racingbulls`
-  // were BOTH "RB" (one monogram for two teams), and four of eleven disagreed
-  // with the roster (ferrari SF vs FER, haas HAAS vs HAA, audi AUDI vs AUD,
-  // redbull RB vs RBR). Latent, because drawCrest only reaches crestGeneric
-  // when CRESTS[teamId] is absent and all eleven teams have a bespoke crest —
-  // but a second copy of data the roster already owns is how a twelfth team
-  // ships with the wrong letters on it.
   const teamShort = (id) => {
     const t = (typeof Teams !== "undefined" && Teams.LIST || []).find((x) => x.id === id);
     return (t && t.short) || String(id || "").slice(0, 3).toUpperCase();
   };
   const teamIds = () => (typeof Teams !== "undefined" && Teams.LIST || []).map((t) => t.id);
 
-  // Invented, plausible fake sponsor wordmarks per team (titleA, titleB, wing,
-  // strip get the first four; strip repeats a couple for a long thin band).
   const SPONSORS = {
     redbull:     ["SKYSTRIKE", "ADRENYX", "VOLTRUSH", "AEROBOLT", "NITROX", "THUNDERA"],
     racingbulls: ["STRADALE", "VELOCE", "URBANO", "SCATTO", "NEONVIA", "RAGAZZO"],
@@ -94,18 +73,7 @@ const LiveryTex = (function () {
     return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
   }
   const INK_DARK = [0.06, 0.06, 0.08], INK_LIGHT = [0.97, 0.97, 0.98];
-  // Text on this car is legible below about 4.5:1; under 3:1 it disappears at
-  // racing distance. Marks that cannot reach the target get a halo instead.
-  // 4.5 is the WCAG threshold for *body* text on a screen you are staring at.
-  // These are bold marks on a car moving past at speed, and a mark that lands
-  // just over the line — dark-on-crimson at 4.50 on Audi's titanium livery —
-  // reads as legible-but-muddy. 6.5 haloes those too: 17% of marks get an
-  // outline rather than 4%, and the rest stay clean.
   const INK_TARGET = 6.5, INK_FLOOR = 3.0;
-  // Pick the ink with the best WORST-CASE contrast over every paint the mark can
-  // land on. A sidepod wordmark can straddle the base paint AND a livery's pod
-  // panel, so inking it against c1 alone is how a mark ends up invisible on the
-  // half of the panel nobody checked.
   function inkOn(bgs) {
     const list = bgs.filter(Boolean);
     if (!list.length) return INK_LIGHT;
@@ -118,13 +86,8 @@ const LiveryTex = (function () {
     ink.worst = Math.max(d, l);
     return ink;
   }
-  // The halo a mark needs when no ink clears INK_TARGET on its background: the
-  // opposite ink, stroked behind the glyphs, which buys contrast on any paint.
   function haloFor(ink) { return lum(ink) < 0.5 ? INK_LIGHT : INK_DARK; }
 
-  // ── text drawing ───────────────────────────────────────────────────────────
-  // Draw UPPERCASE text with manual letter-spacing, fit-to-width, centred/left
-  // in a region rect. Bold heavy condensed feel via "900" weight Arial.
   function drawWordmark(ctx, text, R, ink, opts) {
     opts = opts || {};
     const pad = opts.pad != null ? opts.pad : 14;
@@ -167,8 +130,6 @@ const LiveryTex = (function () {
     ctx.clip();
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
-    // Halo first, under the fill: a stroke in the opposite ink so the wordmark
-    // still separates from a paint neither black nor white contrasts well with.
     if (opts.halo) {
       ctx.strokeStyle = css(opts.halo);
       ctx.lineWidth = Math.max(2, size * 0.13);
@@ -187,10 +148,6 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  // Big centred number — bold italic F1-style numeral with an accent outline and
-  // a soft drop shadow for depth. `ink` fills, `accent` haloes, optional `bg`
-  // paints a rounded backing patch (so the number reads on any surface colour,
-  // e.g. the accent-coloured shark fin it sits on).
   function drawNumber(ctx, n, R, ink, accent, bg) {
     if (bg) {
       // Rounded number-board patch: base-paint fill + thin accent keyline.
@@ -245,9 +202,6 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  // ── crest helpers ──────────────────────────────────────────────────────────
-  // Fit a normalized-drawing (0..1 x, 0..1 y) into region R, centred, keeping a
-  // margin. Returns a transform helper {X,Y,S}.
   function fit(R, margin) {
     margin = margin != null ? margin : 0.1;
     const s = Math.min(R.w, R.h) * (1 - margin * 2);
@@ -260,12 +214,6 @@ const LiveryTex = (function () {
     };
   }
 
-  // ── per-team crests ────────────────────────────────────────────────────────
-  // Each draws a recognisable-in-silhouette stylised mark inside rect R using
-  // path primitives filled with `ink` (+ `accent` second colour where it helps).
-
-  // Brand-accurate hardcoded hues (0..1 float) for marks needing a specific
-  // colour. Original stylised fan-art — not exact trademark reproductions.
   const BRAND = {
     rbRed:    [0.855, 0.043, 0.086],
     rbGold:   [1.0,   0.788, 0.024],
@@ -278,8 +226,6 @@ const LiveryTex = (function () {
     cadGold:  [0.788, 0.643, 0.353],
   };
 
-  // A charging, horned bull silhouette in a local box (x0,y0,w,h) of the fit.
-  // dir=+1 → head/horns to the RIGHT; dir=-1 mirrors (head to the LEFT).
   function drawBull(ctx, f, x0, y0, w, h, dir, style) {
     const U = (u) => f.X(x0 + (dir > 0 ? u : 1 - u) * w);
     const V = (v) => f.Y(y0 + v * h);
@@ -334,21 +280,9 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  // Ferrari — rearing prancing horse on a shield hint. Assembled from SEPARATE
-  // simple shapes (barrel ellipse, tapered neck quad, head wedge, stroked legs
-  // and tail) that overlap in one colour, rather than one long outline path.
-  // Three earlier attempts at a single path all blobbed: the curves between
-  // distant control points swallow the head, and every leg gap the outline
-  // describes is a pixel or two across at badge size.
-  // Proportion is the whole job. A rearing horse is VERTICAL — hind legs
-  // planted, barrel tilted up to the left, small head high. Drawn on a
-  // horizontal axis it reads as a standing animal; give it a short round body,
-  // a blunt head or an upward-curling tail and it reads as a cat.
   function crestFerrari(ctx, R, ink, accent, bare) {
     const f = fit(R, 0.06);
     ctx.save();
-    // yellow shield (skipped in `bare` mode — e.g. the shark fin wants just the
-    // horse painted on the bodywork, not a badge)
     if (!bare) {
       ctx.fillStyle = css(BRAND.ferYellow);
       ctx.beginPath();
@@ -367,15 +301,10 @@ const LiveryTex = (function () {
         ctx.fillRect(f.X(x0 + i * w), bandY, f.S(w) + 1, bandH);
       }
     }
-    // In bare mode the horse takes the ink so it reads on the team-colour fin;
-    // on the shield it is black, via brandMark so a livery `logo` reaches it.
     const col = bare ? css(ink) : css(brandMark([0.05, 0.05, 0.06]));
     ctx.fillStyle = col; ctx.strokeStyle = col;
     ctx.lineCap = "round"; ctx.lineJoin = "round";
 
-    // TAIL — thick at the root, sweeping back and DOWN off the rump.
-    // Filled and tapered, not a stroke: an even-width arc off the rump reads as
-    // a third hind leg.
     ctx.beginPath();
     ctx.moveTo(f.X(0.60), f.Y(0.47));
     ctx.quadraticCurveTo(f.X(0.84), f.Y(0.55), f.X(0.80), f.Y(0.90));   // outer edge
@@ -422,8 +351,6 @@ const LiveryTex = (function () {
     ctx.quadraticCurveTo(f.X(0.265), f.Y(0.305), f.X(0.215), f.Y(0.325));// jaw to muzzle
     ctx.closePath();
     ctx.fill();
-    // "SF" at the foot of the shield (badge form only — the bare fin mark is
-    // just the horse).
     if (!bare) {
       ctx.font = "700 " + Math.round(f.S(0.13)) + "px Georgia, serif";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -432,18 +359,10 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  // McLaren — the speedmark: ONE bold crescent, fat at the left and sweeping up
-  // to a point at the right, with a deeply concave underside. It used to carry a
-  // second streak underneath, which the real mark does not have and which read
-  // as a smear at badge size. brandMark() keeps it visible on McLaren's own car,
-  // where a papaya mark on papaya paint was invisible.
   function crestMclaren(ctx, R, ink, accent) {
     const f = fit(R, 0.08);
     ctx.save();
     ctx.fillStyle = css(brandMark(BRAND.papaya));
-    // ASYMMETRIC: a fat rounded end on the left tapering to a sharp point on the
-    // right. Tapering both ends turns it into a leaf, which is what it looked
-    // like before.
     ctx.beginPath();
     ctx.moveTo(f.X(0.07), f.Y(0.42));                                    // top of the thick end
     ctx.quadraticCurveTo(f.X(0.46), f.Y(0.27), f.X(0.98), f.Y(0.16));    // top edge to the tip
@@ -465,13 +384,6 @@ const LiveryTex = (function () {
       ctx.fillStyle = css(BRAND.rbGold);
       ctx.beginPath(); ctx.arc(cx, cy, f.S(0.3), 0, Math.PI * 2); ctx.fill();
     }
-    // two red bulls charging toward each other (horns meeting at centre top).
-    // Keep the bulls red on the gold disc. On the BARE fin there is no disc, so
-    // the silhouette has to hold against the fin's own paint — and the fin is
-    // painted c2, which for Red Bull itself is the gold. Gold-on-gold is why the
-    // bulls only showed where the tail wash happened to cross them. `ink` is
-    // already chosen for the fin paint, so its polarity picks the brand colour
-    // that reads: dark ink = pale fin → red bulls; light ink = dark fin → gold.
     const red = css(brandMark(!bare ? BRAND.rbRed
       : (lum(ink) < 0.5 ? BRAND.rbRed : BRAND.rbGold)));
     drawBull(ctx, f, 0.02, 0.16, 0.5, 0.62, +1, red);   // left bull, head to right
@@ -556,9 +468,6 @@ const LiveryTex = (function () {
     ctx.quadraticCurveTo(f.X(0.28), f.Y(0.30), f.X(0.16), f.Y(0.22));
     ctx.closePath();
     ctx.fill();
-    // "RB" energy mark beneath the head. Through brandMark: hardcoded white put
-    // it on Racing Bulls' own near-white car, invisible — the same failure the
-    // papaya-on-papaya speedmark had.
     ctx.fillStyle = css(brandMark([0.97, 0.97, 0.98]));
     ctx.font = "900 " + Math.round(f.S(0.2)) + "px Arial, sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -566,8 +475,6 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  // Haas — the angular "H" inside a bold ring: two uprights joined by a steep
-  // DIAGONAL crossbar, not a flat one. The ring is the half that was missing.
   function crestHaas(ctx, R, ink, accent) {
     const f = fit(R, 0.06);
     const red = css(brandMark(BRAND.haasRed));
@@ -595,9 +502,6 @@ const LiveryTex = (function () {
   function crestWilliams(ctx, R, ink, accent) {
     const f = fit(R, 0.08);
     ctx.save();
-    // A real W — four strokes, with the centre peak reaching FULL height like
-    // the mark it is based on. This used to draw one chevron twice at an offset,
-    // which renders as a big V with a shadow.
     ctx.lineJoin = "miter";
     ctx.lineCap = "butt";
     ctx.miterLimit = 8;
@@ -675,10 +579,6 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  // Cadillac — the modern crest: a WIDE shield, far wider than it is tall,
-  // filled with a grid of horizontal bars. The laurel wreath this used to draw
-  // was dropped from the real mark in 2014, and the shield it ringed was tall
-  // and narrow — both wrong.
   function crestCadillac(ctx, R, ink, accent, bare) {
     const f = fit(R, 0.04);
     const gold = css(brandMark(BRAND.cadGold));
@@ -697,8 +597,6 @@ const LiveryTex = (function () {
     ctx.fillStyle = gold;
     shield(0);
     ctx.fill();
-    // Knock the bar grid out of the shield so the crest reads as panels rather
-    // than a solid blob — destination-out keeps it correct on any paint.
     ctx.save();
     shield(0.035);
     ctx.clip();
@@ -763,11 +661,6 @@ const LiveryTex = (function () {
   function onLogosReady(cb) { if (typeof cb === "function") _logosReady.push(cb); }
   function loadLogos(ids) {
     if (typeof Image === "undefined") return;
-    // Resolve against THIS SCRIPT's URL, not the document's. A relative
-    // "assets/logos/..." is document-relative, so it 404s for every consumer
-    // that does not sit at the site root — tools/carview.html asked for
-    // /tools/assets/logos/... and silently fell back to the vector crests.
-    // Reuse the shell's cache-bust too so a redeployed mark is not served stale.
     let base = "", v = "";
     try {
       const own = document.querySelector('script[src*="liverytex.js"]');
@@ -790,8 +683,6 @@ const LiveryTex = (function () {
     }
     function done() {
       if (--_logosPending > 0) return;
-      // Atlases built before the marks arrived are now stale — the listener is
-      // how game.js knows to drop its cached decal textures and rebuild.
       for (const cb of _logosReady) { try { cb(); } catch (_) {} }
     }
   }
@@ -808,10 +699,6 @@ const LiveryTex = (function () {
       any later registerMark, and every crest falls back to the vector form. */ }
   }
 
-  // Register a mark at RUNTIME for one team — how MY TEAM's uploaded logo gets
-  // in. Same slot the shipped files use, so everything downstream (halo, the
-  // `logo` tint, the fin badge) applies to it unchanged. `src` may be a data
-  // URL or a path; falsy clears it and drops back to the vector crest.
   function setTeamLogo(id, src) {
     if (!src) {
       delete LOGOS[id];
@@ -828,9 +715,6 @@ const LiveryTex = (function () {
     img.src = src;
   }
 
-  // Mean colour of a mark's opaque pixels — what it "reads as" from a distance.
-  // Sampled at low resolution once per image; buildAtlas uses it to decide
-  // whether the mark separates from the paint it is about to land on.
   function avgColour(img) {
     try {
       const n = 32, c = document.createElement("canvas");
@@ -847,24 +731,16 @@ const LiveryTex = (function () {
       return w ? [r / w / 255, g / w / 255, b / w / 255] : null;
     } catch (_) { return null; }
   }
-  // Draw a loaded mark to fit `R`, preserving its aspect. `tint` (the livery
-  // `logo` colour) recolours it to a flat silhouette via an offscreen pass.
   function drawLogoImage(ctx, img, R, tint, halo) {
     const pad = 0.015, bw = R.w * (1 - pad * 2), bh = R.h * (1 - pad * 2);
     const sc = Math.min(bw / img.naturalWidth, bh / img.naturalHeight);
     const w = img.naturalWidth * sc, h = img.naturalHeight * sc;
     const x = R.x + (R.w - w) / 2, y = R.y + (R.h - h) / 2;
     if (!tint) {
-      // Halo, not a recolour: filling every opaque pixel with one colour turns a
-      // hollow mark into a blob — Audi's four rings became a white sausage and
-      // Ferrari's shield a black shape. A shadow in the contrast ink separates
-      // the real artwork from the paint without touching its colours.
       if (halo) {
         ctx.save();
         ctx.shadowColor = css(halo);
         ctx.shadowBlur = Math.max(4, w * 0.085);
-        // Each pass deepens the halo; a mark whose own colour matches the car
-        // (Audi's black rings on a black car) needs a strong one to read at all.
         for (let i = 0; i < 5; i++) ctx.drawImage(img, x, y, w, h);
         ctx.restore();
       }
@@ -882,11 +758,6 @@ const LiveryTex = (function () {
   }
 
   let _logoInk = null, _crestBg = null, _crestInk = null;
-  // A brand colour is only usable if it separates from the paint UNDER it.
-  // McLaren's mark is papaya and McLaren's car is papaya, so the speedmark was
-  // drawn invisibly on its own team's livery — the one crest that most needed to
-  // read was the one that could not. Fall back to the contrast ink there, which
-  // is already chosen for this exact background.
   function brandMark(c) {
     if (_logoInk) return _logoInk;
     if (_crestBg && _crestInk && contrast(c, _crestBg) < 2.2) return _crestInk;
@@ -903,10 +774,6 @@ const LiveryTex = (function () {
     } finally { _logoInk = _crestBg = _crestInk = null; }
   }
 
-  // Per-team livery GRAPHIC backdrop painted behind the crest — an accent wash +
-  // bold flowing streaks (edges faded to transparent) so the engine cover / tail
-  // reads as a real designed livery panel (à la the Red Bull tail) rather than a
-  // logo floating on flat paint. Style varies per team so each tail is distinct.
   const TAIL_STYLE = {
     redbull:     { kind: "diag",    a: 0.80 },   // charging diagonal slash
     racingbulls: { kind: "diag",    a: 0.70 },   // youthful bold slash
@@ -925,8 +792,6 @@ const LiveryTex = (function () {
     const acc = stripe || c2;
     const X = R.x, Y = R.y, W = R.w, H = R.h;
     ctx.save();
-    // 1) directional accent wash across the panel — a firmer diagonal band so the
-    //    tail carries a clear designed base tint before the motif strokes land.
     const g = ctx.createLinearGradient(X, Y + H, X + W, Y);
     g.addColorStop(0.0, cssA(acc, 0));
     g.addColorStop(0.5, cssA(acc, st.a * 0.85));
@@ -999,31 +864,16 @@ const LiveryTex = (function () {
     canvas.width = SIZE;
     canvas.height = SIZE;
     const ctx = canvas.getContext("2d");
-    // No clearRect: a freshly created canvas bitmap is already transparent
-    // black per spec, and setting width/height above re-initialises it. The
-    // clear was a semantic no-op over the full SIZE^2 surface, once per
-    // (team, livery, number, isPlayer) atlas — ~22 of them at a race start.
     ctx.imageSmoothingEnabled = true;
 
     colors = colors || {};
     const c1 = colors.c1 || [0.1, 0.1, 0.12];
     const c2 = colors.c2 || [0.9, 0.9, 0.92];
     const stripe = colors.stripe || null;
-    // The shark fin is its own paintable panel: `fin` is the plate colour and
-    // `finArt` the tail graphic on it. Both optional — a livery that sets neither
-    // gets exactly today's look (fin = c2, art auto-picked to read on it).
     const finPaint = colors.fin || c2;
     const finArt = colors.finArt || null;
-    // The team CREST itself, wherever it is drawn (engine cover + shark fin).
-    // Distinct from `finArt`, which is the abstract tail wash behind it — one is
-    // the mark, the other is the paint job it sits on. Absent = the automatic
-    // ink, which is chosen to contrast whatever paint the crest lands on.
     const logo = colors.logo || null;
 
-    // Each region is inked against the paint IT lands on, not against c1 for all
-    // of them. A livery that sets `pod` repaints the lower sidepod, which is
-    // exactly where the strip and the bottom of the primary wordmark sit — inking
-    // those against the base paint is how a mark ends up unreadable on the panel.
     const pod = colors.pod || null;
     // The sidepod carries a physical sponsor BOARD — a fixed pale panel the car
     // mesh paints under the wordmark — and the ink logic never knew about it.
@@ -1031,32 +881,13 @@ const LiveryTex = (function () {
     // that pale board at 1.4:1, which is the faint sidepod text. It is part of
     // the background set now, so the ink (or its halo) has to clear it too.
     const board = (typeof Car3D !== "undefined" && Car3D.PANEL_COL) || [0.82, 0.82, 0.86];
-    // The sponsor board now covers the whole titleA/titleB rect (car3d.js sizes
-    // the flank span to yFrac 0.32..0.80 to match podDecal), so the wordmark sits
-    // on ONE surface and inks for it alone — ~12.6:1 on every livery instead of
-    // the compromise between board and paint that forced a halo on 70% of them.
     const podBg = [board];
-    // The `strip` decal sits wholly on the c2 accent band (car3d sizes that band
-    // to yFrac 0.08..0.30 to match), so it inks for c2 alone.
     const stripBg = [c2];
-    // The nose NUMBER sits over the c2 crown stripe (the addLoft accent running
-    // z 1.60..2.66) as well as the base paint, so it is inked for both.
     const ink = inkOn([c1, c2]);             // nose / endplate number
-    // The engine-cover crest is BISECTED by the shark fin, which is painted c2 —
-    // the mark genuinely spans two colours, so it is inked for both and takes a
-    // halo when they disagree. (Verified by the mesh probe in
-    // tests/specs/parts-livery-contrast.spec.js, which reads what is actually behind
-    // each decal rather than trusting this list.)
     const inkCrest = inkOn([c1, finPaint]);
-    // The SHARK FIN is painted `fin` (c2 unless the livery picks one — see the
-    // sharkFin block in car3d.js), not c1, so inking its motif for the body put a
-    // white crest on a white fin at 1.00:1 on any livery whose accent is pale —
-    // Ferrari's default among them.
     const inkFin = inkOn([finPaint]);
     const inkPod = inkOn(podBg);              // sidepod wordmarks
     const inkStrip = inkOn(stripBg);
-    // A mark that cannot reach INK_TARGET on its background gets a halo rather
-    // than being left to vanish; below INK_FLOOR it would be invisible outright.
     const haloIf = (i) => (i.worst < INK_TARGET ? haloFor(i) : null);
 
     let accent = c2;
@@ -1077,30 +908,15 @@ const LiveryTex = (function () {
 
     // Engine-cover panel: tail graphic + full crest (badge is fine on the flat top).
     drawTailGraphic(ctx, teamId, REGIONS.crest, c1, c2, stripe);
-    // A mark that cannot separate from the paint is silhouetted in the contrast
-    // ink instead — Audi's black rings and Cadillac's black crest both sit on
-    // black cars, where the real artwork is invisible.
     const markHalo = (img, bg, ink) =>
       (img && img._avg && contrast(img._avg, bg) < 2.6 ? ink : null);
     if (LOGOS[teamId]) {
       drawLogoImage(ctx, LOGOS[teamId], REGIONS.crest, logo,
                     markHalo(LOGOS[teamId], c1, inkCrest));
     } else drawCrest(ctx, teamId, REGIONS.crest, inkCrest, accent, false, logo, c1);
-    // Shark-fin panel: the SAME tail graphic + a BARE motif (disc/shield stripped)
-    // so the fin reads as a painted tail, not a floating badge.
-    // The wash + motif strokes are the accent colour, and the FIN IS ITS OWN
-    // PANEL — so handing this the body's accent (`stripe`, else c2) painted Red
-    // Bull's yellow slashes onto its yellow fin, and the only yellow you could
-    // see was the part that overhung onto the bodywork. A livery can name the
-    // colour outright (`finArt`); otherwise take the first candidate that
-    // actually separates from the paint it lands on.
     const finWash = finArt || [stripe, c1, accent, inkFin].filter(Boolean)
       .find((c) => contrast(c, finPaint) >= 1.8) || inkFin;
     drawTailGraphic(ctx, teamId, REGIONS.fin, c1, finPaint, finWash);
-    // The BARE motif (disc/shield stripped) goes in the square badge region, which
-    // the car maps to an upright square on the fin — so it reads as a painted tail
-    // rather than a floating badge, without inheriting the fin's rake.
-    // Accent has to separate from the FIN's ink here, not the body's.
     const finAccent = contrast(accent, inkFin) >= 2.0 ? accent
       : (contrast(c1, inkFin) >= 2.0 ? c1 : haloFor(inkFin));
     if (LOGOS[teamId]) {
@@ -1114,8 +930,6 @@ const LiveryTex = (function () {
       { align: "center", halo: haloIf(inkPod) });
     drawWordmark(ctx, names[1], REGIONS.titleB, inkPod,
       { align: "center", halo: haloIf(inkPod) });
-    // The rear-wing band is inked for the WING flap colour, which a livery sets
-    // independently (it defaults to c2, not c1).
     const inkWing = inkOn([colors.wing || c2]);
     drawWordmark(ctx, names[2], REGIONS.wing, inkWing,
       { align: "center", spacing: 0.1, halo: haloIf(inkWing) });
@@ -1123,9 +937,6 @@ const LiveryTex = (function () {
     drawWordmark(ctx, names[3] + "   " + names[4] + "   " + names[5],
       REGIONS.strip, inkStrip, { align: "center", spacing: 0.04, halo: haloIf(inkStrip) });
 
-    // Car number — driver-specific when the caller passes one, else the team's
-    // primary number. Drawn on the base-paint nose flank, so `ink` (chosen to
-    // contrast c1) reads cleanly.
     const num = numberOverride != null ? numberOverride
               : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);
     drawNumber(ctx, num, REGIONS.num, ink, accent, c1);

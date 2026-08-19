@@ -9,8 +9,6 @@
     classic: true,
     // Upstream ar-1952 already runs clockwise, matching the racing direction.
     reverse: false,
-    // An ~800 m straight spans the trace's wrap point (source 0.894→0.080) —
-    // that is the pit straight. Not GPS-calibrated.
     startFrac: 0.0,
     name: "BUENOS AIRES",
     gp: "Argentine GP",
@@ -25,8 +23,6 @@
       { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
       { kind: "foliage", s0: 0.38, s1: 0.48 },
     ],
-    // Buenos Aires summer (the GP ran in April): warm, slightly hazy River
-    // Plate light over flat green parkland.
     pal: {
       zenith:        [0.26, 0.46, 0.74],
       horizon:       [0.80, 0.80, 0.74],
@@ -38,8 +34,6 @@
       grass:         [0.24, 0.46, 0.21],
       sunDir:        [0.40, 0.72, 0.30],
     },
-    // The autódromo sits on the pampa at the edge of the city — genuinely flat.
-    // Only the faintest movement, and honestly so.
     elevations: [
       { s: 0.30, halfM: 340, rise: 2.2 },
       { s: 0.66, halfM: 320, rise: -2.0 },
@@ -50,8 +44,6 @@
       { s0: 0.830, s1: 0.875, hw: 6.4, ease: 0.012 },
     ],
     bankZones: [
-      // The Curvón is the long sweeping right that gives this circuit its
-      // character — a big constant-radius bend rather than a hairpin.
       { frac: 0.380, angleDeg: 5.0, widthM: 240 },
       { frac: 0.070, angleDeg: 3.0, widthM: 110 },
     ],
@@ -64,33 +56,22 @@
         addBox, addCyl, addCone, addPrism, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // Plátano (London plane) is THE Buenos Aires street tree — pale mottled
-      // trunk, broad light-green crown, planted in disciplined avenues.
       const PLANE = [0.30, 0.50, 0.24], PLANE_D = [0.24, 0.42, 0.20];
       const EUC = [0.26, 0.40, 0.26];
       const GRAVEL = [0.68, 0.64, 0.50];
       const CELESTE = [0.44, 0.68, 0.86];   // Argentine light blue
 
-      // =====================================================================
-      // 1. PLANE-TREE AVENUES — the autódromo is a city park, so its planting
-      //    is ORDERED: evenly spaced avenues, not scattered woodland. That
-      //    regularity is the difference between this and a rural circuit.
-      // =====================================================================
       const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.38 && s <= 0.48);
       every(15, (k) => {
         const s = k / n;
         if (openArea(s)) return;
         for (const side of [-1, 1]) {
-          // Pale mottled trunk under a broad crown — a plane tree, built
-          // explicitly rather than via tree() so the trunk colour reads.
           const a = anchor(k, side, 17 + ((k / 15) % 2) * 2);
           const b = [a.r, a.u, a.t];
           const h = 11 + hash(k * 7 + side) * 4;
           out._mat = MAT.WOOD;
           addCyl(out, a.c, 0.42, h * 0.48, [0.72, 0.70, 0.62], 6, b);
           out._mat = MAT.FOLIAGE;
-          // Broad, flattened, two-stage crown — a pollarded plane, not the
-          // conical tree() the rest of the game plants.
           addCyl(out, vadd(a.c, a.u, h * 0.46), 4.2 + h * 0.12, h * 0.34, PLANE, 7, b);
           addCyl(out, vadd(a.c, a.u, h * 0.74), 3.0 + h * 0.08, h * 0.24, PLANE_D, 7, b);
           out._mat = 0;
@@ -114,12 +95,6 @@
       hedge(0.14, 0.34, -1, 26, 3.2, [0.19, 0.40, 0.19]);
       hedge(0.56, 0.78, 1, 26, 3.2, [0.19, 0.40, 0.19]);
 
-      // =====================================================================
-      // 2. THE 1950s CONCRETE TERRACES — Buenos Aires was built in the Perón
-      //    era and its stands are mass-concrete stepped terraces with open
-      //    fronts and no roofs, nothing like a modern cantilever stand. Built
-      //    from primitives so the period reads.
-      // =====================================================================
       function concreteTerrace(id, s, side, gap, len, tiers) {
         const a = anchor(K(s), side, gap);
         const b = [a.r, a.u, a.t];
@@ -132,8 +107,6 @@
             const hgt = 1.6 + t * 2.2;
             addBox(stage, vadd(vadd(a.c, a.r, t * 3.2), a.u, hgt * 0.5),
               [3.1, hgt, len], t % 2 ? [0.72, 0.71, 0.67] : [0.66, 0.65, 0.61], b);
-            // Crowd band on each step. The material flag lives on the buffer
-            // being written, so it has to be set on `stage`, not on `out`.
             stage._mat = MAT.FABRIC;
             addBox(stage, vadd(vadd(a.c, a.r, t * 3.2), a.u, hgt + 0.55),
               [2.6, 1.1, len - 2],
@@ -150,10 +123,6 @@
       concreteTerrace("baires-terrace-curvon", 0.380, 1, 20, 120, 5);
       concreteTerrace("baires-terrace-t1", 0.075, 1, 18, 80, 4);
 
-      // =====================================================================
-      // 3. PIT LANE — a low, flat-roofed 1950s block with a simple continuous
-      //    awning on square columns. Deliberately plain.
-      // =====================================================================
       {
         const a = anchor(K(0.975), 1, 15);
         const b = [a.r, a.u, a.t];
@@ -189,9 +158,6 @@
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.955, 8.0, [0.15, 0.15, 0.18]);
-      // Peronist-era civic building: squat masonry drums, monumental at ground
-      // level and deliberately heavy — the autodromo was a state project and
-      // its buildings were built to say so.
       for (let i = 0; i < 4; i++) {
         building(K(0.918 + i * 0.013), 1, 40, 22, 9, 22,
           { kind: "drum", wall: [0.86, 0.85, 0.80], window: [0.30, 0.34, 0.42], floor: 4.2 });
@@ -204,19 +170,11 @@
       broadcastCompound(K(0.908), 1, 72, { vans: 2, dishes: 2, mastH: 9 });
       // Argentine light-blue-and-white hoardings.
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, CELESTE);
-      // Celeste-and-white hoarding run down the ~800 m pit straight — brief §4:
-      // "hoarding run down the pit straight". Three corner billboards left
-      // hundreds of metres of the longest straight on the lap reading empty;
-      // this lines it in the circuit's own celeste/white/navy, the one splash
-      // of livery the pampa gives it. sponsorHoarding self-rejects on tarmac.
       sponsorHoarding(0.945, 0.055, -1, 3.6, {
         h: 1.2, step: 12,
         palette: [CELESTE, [0.94, 0.93, 0.90], [0.10, 0.28, 0.52]],
       });
 
-      // =====================================================================
-      // 4. CORNERS
-      // =====================================================================
       groundPatch(K(0.075), -1, 5, [28, 0.18, 38], GRAVEL,
         { id: "baires-t1-gravel", samples: 7 });
       tyreWall(0.060, 0.092, -1, 4, [0.86, 0.20, 0.18]);
@@ -239,9 +197,6 @@
       spectatorHill(0.20, 0.32, -1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
       spectatorHill(0.62, 0.74, 1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
 
-      // =====================================================================
-      // 5. BOUNDARIES
-      // =====================================================================
       for (const [s0, s1] of [[0.11, 0.34], [0.42, 0.50], [0.55, 0.82], [0.87, 0.91]]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
@@ -252,10 +207,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      // =====================================================================
-      // 6. BACKDROP — the pampa and the edge of the city. Flat, low, with
-      //    apartment blocks on one horizon: this circuit is inside Buenos Aires.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -280,10 +231,6 @@
         }
       }
 
-      // =====================================================================
-      // 7. BESPOKE IDENTITY — the flagpole avenue at the entrance and the
-      //    lakeside of the park the circuit runs through.
-      // =====================================================================
       for (let i = 0; i < 10; i++) {
         const a = anchor(K(0.960 + i * 0.005), -1, 7);
         const b = [a.r, a.u, a.t];
@@ -291,27 +238,14 @@
         addBox(out, vadd(vadd(a.c, a.u, 8.4), a.t, 1.2), [0.14, 1.6, 2.6],
           i % 2 ? CELESTE : [0.95, 0.94, 0.92], b);
       }
-      // Open lattice camera scaffolds, not sealed masts — this is a 1950s
-      // municipal autódromo and everything on it is bolted tube.
       cameraTower(K(0.030), -1, 24, { h: 13 });
       cameraTower(K(0.380), 1, 40, { h: 16 });
       cameraTower(K(0.850), 1, 26, { h: 13 });
-      // THE PARK ITSELF. The autodromo sits inside a municipal park, and behind
-      // the ordered plane avenues is continuous mixed woodland. Broadleaf almost
-      // exclusively — a conifer here would read as northern European.
       for (const [s0, s1] of [[0.12, 0.36], [0.5, 0.9]]) {
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 30, { density: 0.62, hMin: 11, hMax: 18, pineFrac: 0.04, col: EUC, col2: PLANE_D });
       }
 
-      // =====================================================================
-      // 8. THE PÓRTICO — the monumental entrance portal on the approach to the
-      //    paddock. Buenos Aires was a state project of the Perón era and its
-      //    architecture says so: a heavy masonry portal with paired pylons, a
-      //    deep entablature and the circuit's name in relief. This is the one
-      //    structure at the autódromo that could not belong to any European or
-      //    Asian circuit, and the site had nothing like it.
-      // =====================================================================
       {
         const a = anchor(K(0.928), -1, 48);
         const b = [a.r, a.u, a.t];
@@ -321,8 +255,6 @@
           center: vadd(a.c, a.u, 11), size: [14, 26, 40], basis: b,
         }, (stage) => {
           stage._mat = MAT.STONE;
-          // Paired pylons each side, the inner one taller — the Peronist civic
-          // idiom is symmetry plus mass, not decoration.
           for (const t of [-13, -9.5, 9.5, 13]) {
             const tall = Math.abs(t) < 11;
             addBox(stage, vadd(vadd(a.c, a.t, t), a.u, tall ? 8.5 : 7.0),
@@ -334,8 +266,6 @@
           addBox(stage, vadd(a.c, a.u, 20.4), [5.0, 0.9, 28], STONE, b);
           // Name band in relief on the frieze.
           addBox(stage, vadd(vadd(a.c, a.r, -3.2), a.u, 17.6), [0.4, 1.4, 22], BRONZE, b);
-          // Flanking flag masts — the Argentine celeste is already the crowd
-          // colour on the terraces, so it carries through here.
           stage._mat = MAT.METAL;
           for (const t of [-16.5, 16.5]) {
             addCyl(stage, vadd(a.c, a.t, t), 0.13, 15, [0.90, 0.90, 0.92], 5, b);
@@ -346,11 +276,6 @@
         });
       }
 
-      // THE PARK LAKE. The autódromo sits inside a municipal park built around
-      // water. A flat green outfield gives none of that away.
-      // NOT the Curvón, which this comment used to name: that corner is at
-      // 0.380 on this file's own evidence (its bankZones entry, its terrace and
-      // its gravel patch all sit there) and the lake is a quarter-lap away.
       groundPatch(K(0.655), 1, 74, [40, 0.16, 90], [0.30, 0.42, 0.26],
         { id: "baires-lake-shore", samples: 8 });
       waterSurface(K(0.655), 1, 96, [30, 0.18, 74], [0.24, 0.40, 0.44],

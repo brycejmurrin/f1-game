@@ -1,54 +1,4 @@
-/* Apex 26 — TLXShaders.lit: the TSL lit-shader core for the TLX backend (M3).
- *
- * A 1:1 port of js/render/shaders/lit.js (the GLSL source of truth) into
- * three.js TSL nodes: all 15 procedural track materials + the car surface ids
- * (20-27, including MIRROR chrome), the FLAG cloth-wave vertex displacement, hemisphere ambient +
- * lambert sun + GGX specular (soft-clipped), the 32-lamp spot loop with GGX +
- * clearcoat lobes, cloud shadows, wetness, the analytic clearcoat env mirror,
- * metallic-flake sparkle, emissive/hdrTag over-white glow, and the full fog
- * stack (height fog + sun in-scatter + fogTint + lamp-fog Reinhard + ground
- * mist). Constants are lifted verbatim from lit.js — line refs in comments.
- *
- * M4: sun/car/lamp SHADOW-MAP sampling is live — a 1:1 port of lit.js
- * sampleShadow() + the in-loop lamp shadow (the uLampShadowOn branch), fed by
- * tlx-shadow.js depth targets through ctx.shadow. Depth taps compile to
- * hardware-compare sampler2DShadow on the WebGL backend via TSL's
- * texture(...).compare(z); shadow-map UVs are passed in three's WebGPU
- * convention (y flipped once here; the texture node's flipY re-flips on the
- * GL backend — the same double-flip three's own shadow code relies on).
- *
- * PCSS blocker search HAS landed on WebGPU (textureLoad depth) and desktop
- * WebGL2 (R16F TSL.depth color — texelFetch is legal on a color texture).
- * The sun branch scales R = mix(1.5, 6.0, pen) from the receiver-blocker
- * gap. Phones and software WebGL2 have no blocker — they scale that same
- * R=3 by pcssPen/80 (identity at the shipped def) so SHADOW SOFTEN stays
- * live. Not distance-based PCSS on that path.
- *
- * M9 (the live env CUBE probe) HAS landed and is no longer stubbed: tlx.js
- * builds the cube target and drives setEnvStr() from the probe-ready state,
- * and the clearcoat mirror below blends the real cube fetch.
- *   - SSR car-paint ALPHA TAG (M8): written when ctx.ssrTag is set — the
- *     post chain's offscreen HDR target carries it to the composite's SSR.
- *     Without a chain (direct to canvas) the tag stays off (the M3 rule).
- *
- * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
- *     TLXShaders.lit = (THREE, TSL, ctx) => ({ makeMaterial, makeViz,
- *                                              uniforms, updateFrame, ... })
- * ctx = { chunks } from TLXShaders.chunks(THREE, TSL). NEVER touches THREE or
- * TSL at script eval — three exists only inside TLX.create().
- *
- * ── STANDING RULE (critical — the spike's black-lamp landmine) ──────────────
- * TSL emits a cached property chain (normalWorld -> normalView ->
- * v_normalViewGeometry, positionWorld -> ...) at its FIRST USE SITE. If that
- * first use sits inside an If/ElseIf branch, the chain's assignments strand in
- * that branch and every out-of-branch consumer silently reads an uninitialized
- * local — black/garbage output on the WebGL backend, no error. Therefore:
- * EVERY shared varying-derived node (normalWorld, positionWorld, attributes,
- * camera-relative chains) gets an UNCONDITIONAL Fn-BODY .toVar() ANCHOR before
- * any conditional use. Anchors must be Fn-body statements (a .toVar() outside
- * an Fn body also emits at first use — measured in the spike, not guessed).
- * See spike/three-spike.js applyMaterial "PORT FRICTION".
- */
+/* Apex 26 — TLXShaders.lit: the TSL lit-shader core for the TLX backend (M3). A 1:1 port of js/render/shaders/lit.js (the GLSL source of truth) into three.js TSL … */
 "use strict";
 
 (function () {
@@ -78,10 +28,6 @@
     const _pinKeys = Object.create(null);
     function pinProgram(m, key) {
       m.lights = false;
-      // Lit already does its own fog / albedo. three's NodeMaterial fog
-      // (default true) and vertexColors would run on top of colorNode and
-      // double-darken bodywork; premultiply would then scale that by the
-      // SSR tag if it ever leaked back into opacity.
       m.fog = false;
       m.vertexColors = false;
       m.premultipliedAlpha = false;
@@ -97,22 +43,7 @@
     //    the mobile tier never compiles them, mirroring GLX's always-bound-
     //    texture trick without needing dummy bindings. ─────────────────────
     const SHD = (ctx.shadow && ctx.shadow.S) ? ctx.shadow : null;
-    // M8: the offscreen HDR target exists — write the SSR car-paint tag into
-    // alpha (js/render/shaders/lit.js). False (no post chain) keeps the M3 behaviour:
-    // the canvas is the target and a 0.35 alpha would ghost the cars.
     const SSR_TAG = !!ctx.ssrTag;
-    // M9: the live env-probe cube (tlx.js CubeRenderTarget.texture), bound at
-    // factory time. Null (no probe target) keeps the analytic-gradient mirror
-    // ONLY — the pre-M9 look. A JS-level guard, so the cube fetch is absent
-    // from the compiled program when there's no cube (no dummy binding needed).
-    // ONE shared cube node across every material variant (like the U.* uniform
-    // nodes): tlx.js swaps its .value to a black dummy cube while rendering
-    // INTO the probe (the env pass draws glass, an envSurface — sampling the
-    // live cube there would be a texture feedback loop; GLX's dummy-cube guard,
-    // js/render/glx.js). cubeTexture(base, dir, lod) clones per use with
-    // referenceNode = base (three.js CubeTextureNode), so the swap covers
-    // every variant. CubeTextureNode has no .uv() — that is a 2D TextureNode
-    // setter and threw on every chrome/env surface.
     const ENV_CUBE = ctx.envCube || null;
     const envCubeNode = ENV_CUBE ? cubeTexture(ENV_CUBE) : null;
     const shadowOn = !!(SHD && SHD.S.enabled && SHD.sunTex);
@@ -163,9 +94,6 @@
       lampWallSpill:  uniform(1.0),   // LAMP WALL SPILL
       envStr:         uniform(0.0),   // live env-probe strength; set by setEnvStr() from tlx.js begin()
       numLights:      uniform(0),
-      // ── M4 shadow uniforms (the litU.uShadow* uploads in glx.js; defaults mirror TUNE_DEFS) ──
-      // shadowStr is the EFFECTIVE strength: knob × key-luminance fade (with
-      // the MOON SHADOWS floor), computed CPU-side in updateFrame like GLX.
       shadowStr:      uniform(0.0),   // SHADOW DARKNESS (def 1.15) × key fade; 0 until a frame arrives
       shadowRange:    uniform(80.0),  // SHADOW DISTANCE (box half-size, m)
       shadowBias:     uniform(0.001), // SHADOW BIAS
@@ -188,9 +116,6 @@
       lampShadowOn:   uniform(0.0),
       lampShadowIdx:  uniform(-1.0),  // float compare vs the loop index (small ints are exact)
     };
-    // Lamp arrays: the flat stride-15 frame.lights record split by consumer,
-    // exactly like js/render/glx.js / the spike. geo = (rad, cosInner, cosOuter,
-    // bleed). volW/glareW are godray/glow-pass fields — not consumed here.
     const lampPos = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3());
     const lampCol = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3());
     const lampDir = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3(0, -1, 0));
@@ -272,11 +197,6 @@
         uf1(U.shadowBias, k("shadowBias", 0.001));
         uf1(U.pcssPen, k("pcssPen", 80.0));
         U.pcssOn.value = SHD.S.pcssEnabled ? 1 : 0;
-        // Key-luminance fade: cast shadows dissolve as the key dims toward
-        // moonlight, floored by MOON SHADOWS × the clear-night factor
-        // (frame.moonGate — clear-night moonK, or above 0.5 the knob itself
-        // forcing the floor open regardless of weather) so bright clear moons
-        // keep soft shadows.
         const _kl = frame.sunColor
           ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
         let _hf = (_kl - 0.28) / 0.14;
@@ -372,10 +292,6 @@
       const wp = vec3(wpIn).toVar();
       const nrm = vec3(nrmIn).toVar();
       const res = float(1.0).toVar();
-      // GLX parity (js/render/shaders/lit.js sampleShadow): uShadowStr <= 0
-      // collapses the whole function to 1.0 — mix(1, sh, 0) is identity — so
-      // skip every PCF / car-map tap on overcast-night frames where the CPU
-      // already drove strength to 0 via the key-luminance fade.
       If(U.shadowStr.greaterThan(0.0), () => {
         const lc = U.lightVP.mul(vec4(wp, 1.0)).toVar();
         const sc = lc.xyz.div(lc.w).mul(0.5).add(0.5).toVar();
@@ -395,12 +311,6 @@
             const cosTheta = clamp(dot(normalize(nrm), U.sunDir), 0.05, 1.0);
             const slopeBias = t.mul(1.5).mul(sqrt(cosTheta.mul(cosTheta).oneMinus()).div(cosTheta));
             const biasTerm = clamp(slopeBias, 0.0005, 0.004).add(U.shadowBias.mul(0.5)).toVar();
-            // SHADOW DISTANCE bias scaling (lit.js parity). biasTerm is clamped in
-            // absolute depth units, but a shadow texel's world size sweeps 12.5x
-            // across the SHADOW DISTANCE range — unscaled, the same push is ~25x
-            // too much at the near end and barely covers acne at the far end.
-            // STATIC map only: the car branch below multiplies the SAME biasTerm
-            // by carBiasScale, so scaling the shared term would square it there.
             const z = sc.z.sub(biasTerm.mul(U.shadowRange.div(80.0))).toVar();
             // SHADOW DISTANCE kernel compensation (js/render/shaders/lit.js).
             const boxK = min(1.0, float(80.0).div(U.shadowRange)).toVar();
@@ -429,13 +339,8 @@
                 R.assign(float(3.0).mul(U.pcssPen.div(80.0)));
               });
             } else {
-              // Phones / software WebGL2: no blocker (no TSL.depth sun RT).
-              // Keep SHADOW SOFTEN live by scaling the fixed Poisson R.
-              // Identity at TUNE_DEFS def 80. Same tap count — not PCSS.
               R.assign(float(3.0).mul(U.pcssPen.div(80.0)));
             }
-            // Texel-grid-anchored IGN dither (js/render/shaders/lit.js): glued to the
-            // ground, not screen-keyed — no penumbra boil while driving.
             const ign = ignoise(floor(sc.xy.div(t)));
             const ang = ign.mul(6.2831853);
             const cr = cos(ang).toVar(), sr = sin(ang).toVar();
@@ -461,8 +366,6 @@
             }).Else(() => {
               sh.assign(s.mul(0.25));
             });
-            // Dynamic CAR map min-combine (js/render/shaders/lit.js): ortho, so no
-            // perspective divide; same bias; fixed tight 4-tap PCF.
             if (carShadowOn) {
               If(U.carShadowOn.greaterThan(0.5), () => {
                 const cc = U.carLightVP.mul(vec4(wp, 1.0));
@@ -537,16 +440,11 @@
       }).ElseIf(mid.equal(14.0), () => {  // RUST/CORRUGATED: sinusoidal ridges
         h.assign(sin(hc.mul(7.5)).mul(0.55).add(vnoise(uv.mul(6.0)).mul(0.10)));
       }).ElseIf(mid.equal(16.0), () => {  // ASPHALT: fine aggregate only (js/render/shaders/lit.js)
-        // Two tight octaves and nothing below ~0.1 m. A low-frequency term here
-        // would read as a rippled road under the car and crawl at speed.
         h.assign(vnoise(uv.mul(9.0)).mul(0.34).add(vnoise(uv.mul(26.0)).mul(0.16)));
       });
       return h;
     });
 
-    // Per-MATERIAL coordinate classification, shared by the procedural bump and
-    // the baked texture sample below (GLX: matWallLike in lit.js). Declared here
-    // rather than next to the baked-texture block so it precedes its first use.
     const matWallLike = (mid) => mid.equal(1.0).or(mid.equal(2.0)).or(mid.equal(4.0))
       .or(mid.equal(5.0)).or(mid.equal(7.0)).or(mid.equal(12.0))
       .or(mid.equal(13.0)).or(mid.equal(14.0));
@@ -559,10 +457,6 @@
       const N = vec3(Nin).toVar();
       const wp = vec3(wpIn).toVar();
       const bumpFade = clamp(vd.sub(22.0).div(58.0).oneMinus(), 0.0, 1.0).toVar();
-      // 1..14 plus ASPHALT(16); GLASS(3) and FLAG(15) are excluded, matching
-      // GLX's `mid == 0 || mid == 3 || mid == 15` early-out. ASPHALT was
-      // outside the old < 14.5 bound, so the road — the surface on screen for
-      // the whole race — got NO procedural relief on this backend at all.
       const inRange = mid.greaterThan(0.5).and(mid.lessThan(16.5))
         .and(mid.notEqual(3.0)).and(mid.notEqual(15.0));
       // DERIVATIVES UNCONDITIONAL (roadMarkings / WGX fs_main pattern): fwidth
@@ -591,13 +485,6 @@
                 .mul(amt.mul(bumpFade).mul(aaFade).div(e)))));
           });
         }).Else(() => {
-          // Ground/road gets the SAME grazing-angle guard as the wall branch
-          // (lit.js aaG, 0.10/0.55 on the xz footprint). It was missing here, so
-          // the road — the one horizontal surface viewed almost edge-on at
-          // 80 m/s — kept full relief where a pixel spans many times the 0.22
-          // probe epsilon and the 3-tap gradient aliases into crawling moire.
-          // The fade only ever REDUCES bump, so head-on grass/sand/rock are
-          // unchanged.
           const aaG = clamp(fwGround.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
           If(aaG.greaterThan(0.005), () => {
             const e = 0.22;
@@ -701,8 +588,6 @@
       const uv = matTexUV(mid, normalize(vec3(nrmIn)), wp).toVar();
       const t = matAlbedoNode.sample(uv).depth(int(matTexLayer(mid)));
       If(live.and(far.greaterThan(0.001)), () => {
-        // Multiplicative, exactly as GLX: the per-track tarmac tint, the
-        // racing-line rubber wear and the per-vertex grain all have to survive.
         const k = U.matTexMix.mul(far).toVar();
         albedo.assign(mix(albedo, albedo.mul(t.xyz).mul(2.0), k));
         rough.assign(clamp(mix(rough, t.w, k.mul(0.8)), 0.04, 1.0));
@@ -755,8 +640,6 @@
       // Sub-pixel minification: fade amplitude rather than let a half-covered
       // band strobe. Soft knee on the RAW footprint (same 0.10/0.55 as WGX).
       const mip = clamp(fwX.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
-      // hw > 0.5 marks road SURFACE; every other mesh reads trk = (0,0,0), and
-      // the kerb ribbon / edge skirt push hw 0 so they are skipped too.
       const onRoad = select(hw.greaterThan(0.5), float(1.0), float(0.0)).toVar();
       const m = max(edge, band.mul(dash)).mul(mip).mul(onRoad).toVar();
 
@@ -891,9 +774,6 @@
           albedo.assign(mix(albedo, albedo.mul(vec3(0.62, 0.42, 0.28)), rust.mul(0.5).mul(far)));
           rough.assign(min(1.0, rough.add(far.mul(0.14))));
         }).ElseIf(mid.equal(16.0), () => {  // ASPHALT — aggregate speckle + wear patches (js/render/shaders/lit.js)
-          // Deliberately understated: this is the surface under the car for the
-          // whole race, so it gets tone variation rather than pattern. No
-          // fract()/sin() term at all — nothing here can strobe, only soften.
           albedo.mulAssign(vnoise(wp.xz.mul(0.035)).sub(0.5).mul(0.10).mul(far).add(1.0));
           albedo.mulAssign(vnoise(wp.xz.mul(7.0)).sub(0.5).mul(0.13).mul(near).add(1.0));
           rough.assign(min(1.0, rough.add(far.mul(0.10))));
@@ -919,8 +799,6 @@
     // drawn through drawChunked/castShadowChunked (it is — js/game.js,4810).
     function buildFragment(matU, chunked, instanced) {
       return Fn(() => {
-        // ── STANDING-RULE ANCHORS: unconditional Fn-body .toVar() on every
-        //    shared varying-derived node BEFORE any conditional use. ──────────
         const wp = vec3(positionWorld).toVar();               // vWorldPos
         const Nvary = vec3(normalWorld).toVar();              // vNrm (raw varying)
         const objP = vec3(positionGeometry).toVar();          // vObjPos
@@ -928,26 +806,14 @@
         const albedoIn = instanced
           ? vertexColor.mul(attribute("instanceTint", "vec3")).toVar()
           : vertexColor;                                             // vCol
-        // Smooth attribute, same as before the garage-blank regression.
-        // GLX is `flat out float vMat`; a TSL `varying().setInterpolation(FLAT)`
-        // compiled but the garage turntable drew nothing (software GL / three
-        // r185). FLAG wave still reads the per-vertex attribute in the VS.
         const matA = float(attribute("mat", "float")).toVar();       // vMat
-        // vTrk — road track-space (s, x, halfWidth); (0,0,0) on every other
-        // non-chunked mesh. Anchored here with the other varyings per the
-        // standing rule, because roadMarkings() takes derivatives of it.
         const trkA = chunked ? null : vec3(attribute("trk", "vec3")).toVar();  // vTrk
         const vd = length(wp.sub(cameraPosition)).toVar();    // vDist
         const V = normalize(cameraPosition.sub(wp)).toVar();
 
-        // Two-sided lighting: flip N toward the viewer on back fragments
-        // (js/render/shaders/lit.js). Raw normalWorld carries no faceDirection flip.
         const N = select(frontFacing, Nvary, Nvary.negate()).toVar();
         N.assign(normalize(N));
 
-        // ── ground micro-normal relief (uDetail — js/render/shaders/lit.js) ───────────
-        // Hoist xz footprint before the detail If (uniform gate, but keep the
-        // roadMarkings discipline so a future non-uniform gate cannot poison WGSL).
         const mnFp = max(fwidth(wp.x), fwidth(wp.z)).toVar();
         If(matU.detail.greaterThan(0.001), () => {
           const mnFade = clamp(vd.sub(25.0).div(70.0).oneMinus(), 0.0, 1.0)
@@ -967,8 +833,6 @@
           });
         });
 
-        // Geometric normal for the clearcoat lobes + env mirror — captured
-        // AFTER the ground relief, BEFORE paint/material bumps (js/render/shaders/lit.js).
         const Ngeo = vec3(N).toVar();
 
         // ── car surface ids 20-27 (car3d.js SURFACES; js/render/shaders/lit.js) ───────
@@ -981,8 +845,6 @@
         const glassSurface = surfaceId.equal(24.0).toVar();
         const emissiveSurface = surfaceId.equal(25.0).toVar();
         const panelSurface = surfaceId.equal(26.0).toVar();
-        // MIRROR: chrome livery finish (FINISH_SURFACE.chrome). Paint-like
-        // (keeps clearcoat + env lobe) but metallic and nearly smooth.
         const mirrorSurface = surfaceId.equal(27.0).toVar();
         const carPaint = select(classifiedCar,
           select(paintSurface.or(mirrorSurface), matU.carPaint, float(0.0)), matU.carPaint).toVar();
@@ -994,10 +856,6 @@
         const metalness = select(classifiedCar,
           select(metalSurface, max(matU.metalness, 0.78),
             select(mirrorSurface, max(matU.metalness, 0.55),
-              // PAINT gets metalness instead of falling through to 0.0 — mirrors
-              // js/render/shaders/lit.js. tables.js sets 0.12 on every PAINT_*
-              // and describes the flake it is meant to produce; the 0.0 discarded
-              // it and made CAR METALLIC dead on every car pixel.
               select(carbonSurface, float(0.08),
                 select(paintSurface, matU.metalness, float(0.0))))),
           matU.metalness).toVar();
@@ -1136,12 +994,6 @@
           wet.assign(U.wetness.mul(upFace));
           const pn = vnoise(wp.xz.mul(0.13).add(4.7));
           puddle.assign(smoothstep(0.48, 0.88, pn).mul(wet).mul(porous.oneMinus()));
-          // Porous as a FRACTION of the road result — mirrors js/render/shaders/lit.js.
-          // The two coefficients were transposed here as they were in GLX: mix(a,b,t)
-          // returns a for porous=0 (tarmac) and b for porous=1, so tarmac absorbed
-          // 58% while soaked grass absorbed only 42%, leaving verges BRIGHTER than
-          // the ribbon they border. As a fraction the two saturate together and
-          // porous stays strictly darker across the whole wetDark range.
           const absorbRoad = clamp(U.wetDark.mul(0.58).oneMinus(), 0.0, 1.0);
           const absorb = mix(absorbRoad, absorbRoad.mul(0.66), porous);
           albedo.mulAssign(mix(float(1.0), absorb, wet));
@@ -1155,12 +1007,6 @@
 
         const amb = mix(vec3(U.ambGround), vec3(U.ambSky), N.y.mul(0.5).add(0.5)).toVar();
 
-        // ── shadow: hard sun/car map (M4) × soft drifting cloud shadows
-        //    (js/render/shaders/lit.js). Nvary = the RAW varying normal, matching the GLSL
-        //    sampleShadow's normalize(vNrm). ───────────────────────────────────
-        // NoL GATE — js/render/shaders/lit.js: sampleShadow + cloudShadow are
-        // thrown away on back-faces (litNoL *= NoL) except clearcoat, which
-        // shades on Ngeo. Skip the taps when the result cannot contribute.
         const shadow = float(1.0).toVar();
         If(NoL.greaterThan(0.0).or(clearcoat.greaterThan(0.001)), () => {
           const sunSh = sampleShadow ? sampleShadow(wp, Nvary) : float(1.0);
@@ -1176,12 +1022,6 @@
             U.shadowTintAmt.mul(clamp(litNoL.oneMinus(), 0.0, 1.0))));
         });
 
-        // ── the 32-lamp spot loop (js/render/shaders/lit.js) ───────────────────────────
-        // Windowed inverse-square + aimed cone + bleed + bounce fill + GGX and
-        // clearcoat lamp lobes with their soft-clips. The single mapped lamp
-        // (i == uLampShadowIdx) gets a real 4-tap PCF from the 512² spot map
-        // (M4) — direct terms only; bounce fill + fog in-scatter stay
-        // unshadowed (they are indirect).
         const lampFogAcc = vec3(0.0).toVar();
         Loop({ start: int(0), end: int(MAX_LIGHTS), type: "int", condition: "<" }, ({ i }) => {
           If(float(i).greaterThanEqual(U.numLights), () => { Break(); });
@@ -1200,22 +1040,12 @@
               const beam = smoothstep(geo.z, geo.y, cd).toVar();
               const spotD = mix(geo.w, float(1.0), beam);                       // illumination follows the beam
               const spotS = mix(mix(float(0.16), float(0.30), wetSheen).mul(U.lampWallSpill), float(1.0), beam);  // reflection floor
-              // U.lampFog is 0 by day, so skip the accumulate (uniform CF —
-              // safe for TSL→WGSL). Matches GLX lit.js / WGSL chunks.
               If(U.lampFog.greaterThan(0.0), () => {
                 lampFogAcc.addAssign(U.lampCol.element(i).mul(att.mul(mix(float(0.35), float(1.0), beam))));
               });
               const NoLl = max(dot(N, Ld), 0.0).toVar();
-              // Per-lamp shadow for the one mapped floodlight (js/render/shaders/lit.js):
-              // perspective divide, slope-boosted constant bias (perspective
-              // depth precision lives at the lens, the road receiver near the
-              // far plane), 4-tap PCF at 1.5/512.
               const lampSh = float(1.0).toVar();
               if (lampShadowOn) {
-                // NoLl GATE — js/render/shaders/lit.js: lampSh's only readers
-                // are the NoLl-scaled diffuse and the specular block already
-                // inside NoLl>0. A back-facing fragment paid 4 compare taps
-                // for a result multiplied by zero.
                 If(U.lampShadowOn.greaterThan(0.5).and(float(i).equal(U.lampShadowIdx)).and(NoLl.greaterThan(0.0)), () => {
                   const lpc = U.lampShadowVP.mul(vec4(wp, 1.0)).toVar();
                   If(lpc.w.greaterThan(0.0), () => {
@@ -1274,8 +1104,6 @@
         specCol.assign(specCol.div(specCol.add(1.0)));
         color.addAssign(specCol);
 
-        // ── clearcoat specular AA variance of Ngeo (js/render/shaders/lit.js) — gated
-        //    on the UNIFORM so the derivative sits in uniform control flow ────
         const ccSaaVar = float(0.0).toVar();
         If(matU.clearcoat.greaterThan(0.001), () => {
           const ccDx = dFdx(Ngeo), ccDy = dFdy(Ngeo);
@@ -1298,10 +1126,6 @@
           color.addAssign(ccCol);
         });
 
-        // ── clearcoat ENV mirror (the analytic-clearcoat-ENV block in lit.js).
-        //    uEnvStr = 0 -> analytic
-        //    sky-gradient path only; > 0 blends in the M9 live cube fetch
-        //    (textureLod(uEnvCube, Rg, rough*2.5) × uEnvStr — glx.js parity). ──
         If(envSurface, () => {
           const Rg = reflect(V.negate(), Ngeo).toVar();
           const NoVc = max(dot(Ngeo, V), 1e-4);
@@ -1392,9 +1216,6 @@
           color.mulAssign(mix(float(0.12).mul(U.ambContactDark).oneMinus(), float(1.0), ao));
         }
 
-        // ── emissive + over-white hdrTag glow (js/render/shaders/lit.js). The hdrTag
-        //    push is computed NOW so >1 albedos (neon/lenses) carry HDR energy;
-        //    bloom consumes it in M8. ───────────────────────────────────────────
         If(emissive.greaterThan(0.0), () => {
           color.assign(mix(color, albedo, emissive));
           const bright = max(albedo.r, max(albedo.g, albedo.b));
@@ -1403,8 +1224,6 @@
           color.addAssign(albedo.mul(glow).mul(U.glowAmp).mul(hdrTag.mul(U.bloomBoost).add(1.0)));
         });
 
-        // ── fog stack (js/render/shaders/lit.js) ─────────────────────────────────────
-        // squared-exponential height fog
         const heightAtten = select(U.fogHeight.greaterThan(0.0),
           exp(max(wp.y.sub(cameraPosition.y), 0.0).negate().mul(U.fogHeight)),
           float(1.0));
@@ -1441,13 +1260,6 @@
           color.assign(mix(color, mistCol, clamp(mist, 0.0, 0.45)));
         });
 
-        // ── output alpha ──────────────────────────────────────────────────────
-        // M8: car-paint pixels are TAGGED in alpha (0.35 — js/render/shaders/lit.js)
-        // when the offscreen HDR target carries the frame; the composite's SSR
-        // reads the road/car masks off it. Opaque draws write it directly;
-        // translucent/noAlphaWrite draws preserve dst alpha through the blend
-        // stage (Zero/One alpha factors in makeMaterial — GLX's colorMask).
-        // Without the post chain (direct to canvas) the tag stays off.
         return vec4(color, SSR_TAG
           ? select(carPaint.greaterThan(0.001), float(0.35), matU.alpha)
           : matU.alpha);
@@ -1530,8 +1342,6 @@
         g = _sharedGraph[idx] = {
           rgb: packed.rgb, a: packed.a, opacity: matU.alpha,
           out,
-          // Named to match sceneRT.textures[1].name. Env / canvas RTs have
-          // no such texture, so MRTNode.setup skips this output.
           mrt: (SSR_TAG && typeof mrt === "function")
             ? mrt({ output: out, ssrTag: packed.a })
             : null,
@@ -1559,8 +1369,6 @@
       const packed = sharedFragment(!!o.chunked, !!o.instanced);
       _mats.push(m);
       m.colorNode = packed.rgb;
-      // Coverage only. packed.a is the SSR tag (0.35 on paint) — putting it
-      // here is what made three.js cars invisible (see factory comment).
       m.opacityNode = packed.opacity;
       m.outputNode = packed.out;
       m.positionNode = _sharedPos || (_sharedPos = flagPositionNode());
@@ -1656,13 +1464,7 @@
       return m;
     }
 
-    // M9: live env-probe strength. tlx.js drives this each begin() from the
-    // probe's ready state × the CAR ENV REFLECTION (carEnvCube) knob — 0 keeps
-    // the analytic-gradient mirror only, >0 blends in the real cube fetch.
     function setEnvStr(v) { U.envStr.value = +v || 0; }
-    // M9: swap the shared env-cube binding. tlx.js points it at a black dummy
-    // cube while rendering INTO the probe (feedback-loop guard) and back at the
-    // live cube for the main pass. No-op when there's no cube node.
     function setEnvCube(tex) { if (envCubeNode && tex) envCubeNode.value = tex; }
     // Arm the second HDR attachment (ssrTag) only for the main scene render.
     // Env faces and the canvas fallback must keep mrtNode null — same
@@ -1676,19 +1478,9 @@
       }
     }
 
-    // Adopt a loaded asset pack (js/render/assets.js). The texture nodes were
-    // bound to the placeholders at factory time, so — exactly like setEnvCube
-    // above — the swap is a `.value` assignment on the shared node, NOT a
-    // rebuild. The scales are what the shader actually tests to decide whether
-    // a material has a baked layer, so clearing them is what turns the feature
-    // back off; passing a falsy `maps` does precisely that.
     function setMaterialMaps(maps) {
       if (matAlbedoNode && maps && maps.albedo) matAlbedoNode.value = maps.albedo;
       if (matNormalNode && maps && maps.normal) matNormalNode.value = maps.normal;
-      // uniformArray exposes its backing store as .array; .value is the
-      // fallback name on older three builds. Guard both — a wrong guess here
-      // would silently leave every scale at 0, i.e. the feature would look
-      // "loaded" and do nothing.
       const store = U.matTexScale.array || U.matTexScale.value;
       if (store) {
         for (let i = 0; i < 17; i++)

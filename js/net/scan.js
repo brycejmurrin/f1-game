@@ -1,30 +1,4 @@
-/*
- * NetScan — reading a QR code with the device camera, in the page.
- *
- * WHY THIS EXISTS AT ALL. The invite already travels as a link and as a QR, so
- * the guest never types anything. The ANSWER is the leg that was still a
- * copy/paste, and it cannot be removed: WebRTC needs each side to learn the
- * other's DTLS fingerprint, which comes from a locally generated certificate
- * that cannot be seeded. Two transfers are mandatory without a rendezvous
- * server, and there deliberately isn't one. So the answer stops being a COPY
- * instead: the guest shows it as a QR and the host points a camera at it.
- *
- * WHY WE CARRY A DECODER. BarcodeDetector would do this natively and is 250 KB
- * lighter, but it does not exist on iOS Safari or on desktop Linux Chrome —
- * measured, not assumed — and iOS-phone-to-desktop is exactly the pairing this
- * is for. A native fast path that covers neither end of the target case is not
- * a fast path, it is a second code path to test. So jsQR runs everywhere.
- *
- * WHY IT IS LAZY. The decoder is 257 KB and most sessions never scan anything.
- * It is injected the first time start() is called and never sits in the boot
- * path. sw.js precaches it as OPTIONAL, the same way vendored three.js is
- * handled, so an install cannot fail over it.
- *
- * THE CAMERA IS THE POINT OF CARE. A live camera that outlives the screen that
- * opened it is a privacy problem before it is a battery problem, so stop() is
- * idempotent, kills every track, and is wired to every exit: a successful
- * decode, cancel, closing the lobby, and the page going away.
- */
+/* NetScan — reading a QR code with the device camera, in the page. WHY THIS EXISTS AT ALL. The invite already travels as a link and as a QR, so the guest never ty… */
 "use strict";
 
 const NetScan = (function () {
@@ -72,9 +46,6 @@ const NetScan = (function () {
     let ctx = null;
     let onCode = null;
     let stopped = true;
-    // Every asynchronous phase belongs to one start attempt. stop() and a newer
-    // start invalidate the token so a late permission response cannot turn the
-    // camera back on after the player has left this screen.
     let generation = 0;
 
     function stopTracks(s) {
@@ -89,8 +60,6 @@ const NetScan = (function () {
       clearInterval(timer);
       timer = null;
       if (stream) {
-        // Every track, not just the first: a constraint set can hand back more
-        // than one, and a single live track keeps the camera light on.
         stopTracks(stream);
         stream = null;
       }
@@ -115,9 +84,6 @@ const NetScan = (function () {
       catch (e) { return; }                     // a decoder throw is not a scan failure
       if (!out || !out.data) return;
       const fn = onCode;
-      // Stop BEFORE handing the result over: the handler navigates the lobby on,
-      // and a camera still running behind the next screen is the exact failure
-      // this module is careful about.
       stop();
       fn(out.data);
     }
@@ -144,9 +110,6 @@ const NetScan = (function () {
       if (attempt !== generation) return cancelled();
       let nextStream = null;
       try {
-        // environment = the rear camera on a phone. `ideal`, not `exact`: a
-        // laptop has only one camera and an exact constraint would fail on it
-        // rather than quietly using the one it has.
         nextStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: "environment" },
                    width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -175,8 +138,6 @@ const NetScan = (function () {
       onCode = cb;
       if (!canvas) {
         canvas = document.createElement("canvas");
-        // willReadFrequently: every frame is read back with getImageData, which
-        // is the pathological case for a GPU-backed canvas.
         ctx = canvas.getContext("2d", { willReadFrequently: true });
       }
       if (!ctx) {
@@ -189,8 +150,6 @@ const NetScan = (function () {
       video.muted = true;
       try { await video.play(); } catch (e) { /* autoplay policy; frames still arrive */ }
       if (attempt !== generation) {
-        // stop() already disposed the committed stream. This guard chiefly
-        // prevents a late play() from arming an interval for a dead attempt.
         return cancelled();
       }
       timer = setInterval(tick, DECODE_EVERY_MS);

@@ -1,35 +1,4 @@
-/* Apex 26 — DRIVER RATINGS: the five-axis skill table for the 2026 grid.
-
-   Deliberately NOT in js/car/teams.js. That file is the verified real-world grid
-   (names, numbers, colours, engine suppliers) and is also loaded by
-   tools/carview.html through the manifest's CARVIEW subset, which has no use for
-   skill numbers. These are game-balance values that will be tuned; keeping them
-   apart means tuning them never touches the factual data.
-
-   Keyed by driver CODE, not by team+seat, so a driver keeps their ratings when
-   the career driver market moves them to another team.
-
-   Pure data + pure functions. No globals consumed, so it needs no HARD_EDGE — it
-   only has to load before anything that reads it (js/game/career.js, js/game.js).
-
-   THE AXES (0..100)
-
-     pace         raw one-lap speed. The one that feeds AI top speed and
-                  qualifying, and the one weighted heaviest in overall().
-     craft        wheel-to-wheel: OT fire, late-brake, lane adapt, pass/defend.
-     awareness    incidents/penalties PLUS follow gap, yield, stuck, ERS bank,
-                  street OT scale (see js/game/ai-drive.js).
-     consistency  NOT a level, a VARIANCE: it narrows the random band around a
-                  driver's pace AND widens the AI brake soft-band (see
-                  AiDrive.brakeDecision). A rookie is not slower on average,
-                  just less repeatable.
-     experience   races started; damps development; also steers smoothing /
-                  unstuck panic / OT hesitation in the AI loop.
-
-   Ratings are read through DriverRatings.get(code, tier, dev) — callers pass the
-   career's per-driver development delta as `dev` (Career.devFor(teamId, seat)),
-   which layers on top. Outside career devFor returns nothing and these values are
-   used as-is. */
+/* Apex 26 — DRIVER RATINGS: the five-axis skill table for the 2026 grid. Deliberately NOT in js/car/teams.js. That file is the verified real-world grid (names, nu… */
 const DriverRatings = (function () {
   "use strict";
 
@@ -98,8 +67,6 @@ function fromTier(tier, code) {
   };
 }
 
-// The ratings for a driver code. `tier` only matters when the code is unknown.
-// `deltas` (career development) is added on top and clamped back into range.
 function get(code, tier, deltas) {
   const row = BASE[code];
   const r = row
@@ -117,7 +84,6 @@ function overall(r) {
                   + r.consistency * 0.12 + r.experience * 0.04);
 }
 
-// ---------- ratings -> the AI speed multiplier ----------
 // This replaces `Math.min(1.0, 0.92 + simRnd() * 0.1)` in makeCars(). That roll
 // ran [0.92, 1.02] clamped at 1.0, so ~20% of draws landed exactly on the clamp
 // and its true mean was ~0.968. SKILL_BASE/SKILL_SPAN are chosen to put the
@@ -129,16 +95,8 @@ function overall(r) {
 // in a midfield car can take the fight to a poor one in a better car.
 const SKILL_BASE = 0.856;
 const SKILL_SPAN = 0.13333;   // × (pace/100)
-// Jitter is scaled by (1 - consistency), so consistency is a VARIANCE axis, not a
-// speed one: a rookie is not slower on average, just less repeatable.
 const SKILL_JITTER = 0.03;
 
-// `roll` is a [0,1) sample the CALLER has already drawn. It is passed in rather
-// than drawn here so this function cannot change how much of the sim stream
-// makeCars() consumes: the draw stays unconditional in driverSkill() (game.js)
-// whether or not ratings are in play. That INVARIANCE is the contract, not a
-// particular count — makeCars() draws twice per driver, the lane jitter as well
-// as this one.
 function skill(r, roll) {
   const jitter = (roll - 0.5) * SKILL_JITTER * (1 - r.consistency / 100);
   return clamp(SKILL_BASE + (r.pace / 100) * SKILL_SPAN + jitter, 0.90, 1.0);

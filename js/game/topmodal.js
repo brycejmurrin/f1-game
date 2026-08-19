@@ -33,8 +33,6 @@ window.TopModal = (function () {
 
   function sync(el) {
     const wantOpen = !el.hidden;
-    // showModal() throws InvalidStateError on an already-open dialog, and close()
-    // on a closed one is a no-op — so both directions are guarded.
     if (wantOpen && !el.open) {
       try { el.showModal(); } catch (_) { /* already in the top layer */ }
       try { Log.info("ui", "TopModal open #" + (el.id || "?")); } catch (_) { /* Log absent */ }
@@ -118,9 +116,6 @@ window.TopModal = (function () {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     const layer = window.UiLayers && window.UiLayers.top();
     if (!layer) return;
-    // A <dialog> gets Escape from the platform — the browser fires `cancel` on
-    // it and wire()'s handler turns that into the screen's own back button.
-    // Doing it here as well would open the door twice.
     if (layer.tagName === "DIALOG") return;
     if (layer.getAttribute("data-esc") === "none") {
       e.preventDefault(); e.stopPropagation();

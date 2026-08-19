@@ -29,33 +29,17 @@ const DataLive = (function () {
     let liveTimer = null;
     let liveRefreshGen = 0;
     const liveOpts = { auto: false, sort: "pos" };
-    // Re-arm hook for the CURRENT live body. renderLiveBody() points this at a
-    // closure over its own dataEl/refresh, so resuming always drives the body
-    // actually on screen rather than one a picker change has since replaced.
     let armAuto = null;
 
     function stopLiveAuto() {
       if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
     }
 
-    // Re-arm auto-refresh if AUTO is on and the timer is not running. The
-    // hub stops the timer whenever the player leaves this tab (hub.js
-    // showTab) — but it re-shows the tab from a CACHED node without calling
-    // back into this module, so nothing here ever ran again and the player
-    // came back to an AUTO button still lit over a permanently disarmed
-    // interval. The sentinel below calls this the moment the cached node is
-    // re-attached.
     function resumeLiveAuto() {
       if (!liveOpts.auto || liveTimer || !armAuto) return;
       armAuto();
     }
 
-    // The one standard hook a detached-and-reattached DOM subtree gets: a
-    // custom element's connectedCallback fires every time the node lands back
-    // in the document. renderLiveBody() plants one in the controls bar, so the
-    // hub's cached-node fast path (clear + appendChild, no call into this
-    // module) still resumes auto-refresh. The class closes over THIS create()'s
-    // resumeLiveAuto; the hub only ever calls create() once.
     const SENTINEL = "dh-live-sentinel";
     function makeSentinel() {
       if (typeof customElements === "undefined") return null;
@@ -73,17 +57,6 @@ const DataLive = (function () {
       return s;
     }
 
-    // The truthful "updated" time: when this session's data last came from the
-    // NETWORK, not when we last asked for it. F1API.request() serves its
-    // localStorage cache silently (TTL_LATEST is 10 minutes for a live
-    // session — api.js), so stamping the wall clock on every refresh cycle
-    // claimed a freshness the 30 s loop was not actually delivering. The API
-    // layer records the real landing time as `t` on every cache write
-    // ("apex26.api.<url>" -> {t, data}, the shape api.js's header documents),
-    // so the newest `t` across this tab's three endpoints IS the moment the
-    // panel's data last truly arrived. Finding no entry means the responses
-    // cannot have come from cache — a first fetch, storage unavailable, or a
-    // stubbed API — and then "now" is honest.
     function lastFetchedAt(sessionKey) {
       let newest = 0;
       try {
@@ -141,8 +114,6 @@ const DataLive = (function () {
       const autoBtn = el("button", "dh-livebtn" + (liveOpts.auto ? " dh-active" : ""), "AUTO");
       autoBtn.type = "button";
       autoBtn.title = "Auto-refresh every 30s";
-      // This toolbar mixes an action and a toggle. State the toggle explicitly
-      // so AriaState does not infer that neighbouring REFRESH is aria-pressed.
       autoBtn.setAttribute("data-aria-toggle", "");
       autoBtn.setAttribute("aria-pressed", liveOpts.auto ? "true" : "false");
       const stamp = el("span", "dh-live-updated", "");
@@ -162,9 +133,6 @@ const DataLive = (function () {
       };
 
       function refresh() {
-        // Coalesce manual clicks and AUTO ticks onto the batch already running.
-        // F1API serializes its network work, so overlapping four-request batches
-        // otherwise grow a queue faster than a throttled API can drain it.
         if (refreshPromise) return refreshPromise;
         if (liveOpts.auto) stopLiveAuto();
         const myGen = ++liveRefreshGen;
@@ -196,8 +164,6 @@ const DataLive = (function () {
         refreshPromise = Promise.all([
           F1API.weather(meta.sessionKey, ttl).catch(catchLive),
           positionReq.catch(catchLive),
-          // Driver identity is stable during a session; retain the API module's
-          // normal TTL rather than forcing a redundant network fetch every tick.
           F1API.sessionDrivers(meta.sessionKey).catch(catchLive),
           intervalReq.catch(catchLive)
         ]).then(res => {
@@ -230,8 +196,6 @@ const DataLive = (function () {
           // batch finishes, never while it is still occupying F1API's queue.
           if (liveOpts.auto && armAuto === scheduleAuto && dataEl.isConnected) scheduleAuto();
         });
-        // No rejection arm: every input above is pre-caught by catchLive
-        // (which always returns null), so Promise.all cannot reject.
         return refreshPromise;
       }
 
@@ -243,17 +207,11 @@ const DataLive = (function () {
         stopLiveAuto();
         resumeLiveAuto();
       });
-      // From here on, resuming means THIS body. Set before the sentinel goes
-      // in, or a picker-change rebuild would re-arm the replaced body instead.
       scheduleAuto = () => {
         stopLiveAuto();
         if (!liveOpts.auto || armAuto !== scheduleAuto) return;
         // An in-flight batch owns scheduling through its finally arm above.
         if (refreshPromise) return;
-        // Skip the fetch while the tab is hidden — OpenF1's free tier is rate-
-        // limited (export.js sleeps 3-5s between calls), and a backgrounded hub
-        // otherwise keeps spending requests forever. Recheck periodically so it
-        // resumes on its own when the tab is visible again.
         liveTimer = setTimeout(() => {
           liveTimer = null;
           if (!liveOpts.auto || armAuto !== scheduleAuto || !dataEl.isConnected) return;
@@ -264,10 +222,6 @@ const DataLive = (function () {
       armAuto = scheduleAuto;
       const sentinel = makeSentinel();
       if (sentinel) bar.appendChild(sentinel);
-      // ...and directly too, not only via the sentinel: the FIRST render
-      // happens while the node is still detached (the hub attaches it after
-      // loadLive resolves, which is when the sentinel fires), but a picker
-      // change rebuilds in place, where this call is the one that re-arms.
       resumeLiveAuto();
       refresh();
     }
@@ -380,8 +334,6 @@ const DataLive = (function () {
             gapWrap.appendChild(gapLbl);
             row.appendChild(gapWrap);
           } else if (liveOpts.sort === "pos" && typeof p.timeDiff === "string") {
-            // A lapped driver: api.js passes "+1 LAP"/"+2 LAPS" through as a
-            // string. A lap down is not a time gap — label it, draw no bar.
             const gapWrap = el("div", "dh-live-gapwrap");
             gapWrap.appendChild(el("span", "dh-live-gaplbl", p.timeDiff));
             row.appendChild(gapWrap);

@@ -1,54 +1,4 @@
-/*
- * NetSnapshot — what actually goes on the wire, and how a rival is drawn
- * smoothly from packets that arrive late, out of order, or not at all.
- *
- * WHY STATE AND NOT INPUTS. The obvious design for a racing game is lockstep:
- * send inputs, replay them, get identical results. It does not work here.
- * ECMAScript does not pin the results of Math.exp/sin/pow/atan2, and the
- * driving model uses all four every tick (damp() is exp-based, STEER_EXPO is a
- * pow, banking is a sin, slip angles are atan2). Two browsers — even two
- * versions of the same browser — will diverge, and at 90 m/s a one-ULP
- * disagreement becomes a car length within seconds. So we replicate STATE,
- * which does not care about any of that.
- *
- * THE PACKET. 13 bytes per car, which is not an optimisation so much as a
- * consequence of the coordinate system: a car is a position along the road
- * plus an offset across it, so there is very little to send.
- *
- *   id     u8    G.wireId (teamIndex*2 + seat) — never a cars[] index: each
- *                peer's grid is ordered differently, so only a grid-invariant
- *                id can say WHICH car this is (netplay.js routes by it)
- *   s      u32   arc position, centimetres  (a 7 km circuit is 700,000 cm)
- *   x      i16   lateral offset, centimetres (±327 m — the road is ~8 m)
- *   head   u16   world heading, full turn mapped across the range
- *   speed  i16   centimetres/second, SIGNED so the reverse crawl survives
- *   gearF  u8    gear in the low nibble, deploy/offroad/kerb/brake flags above
- *   lap    u8    lap counter; with s this reconstructs prog
- *
- * At 20 Hz that is ~1.9 KB/s for two humans and ~5.3 KB/s if a host ever
- * broadcasts a full 22-car grid. Bandwidth is not, and will not be, the
- * constraint here — latency and authority are.
- *
- * There is deliberately NO input packet. Under distributed authority nobody
- * ever simulates anybody else's car, so nobody needs anybody else's inputs;
- * a wire format for them would be dead weight defended by a plausible-sounding
- * comment. The in-memory seam (c.netInput, fed by __apex.carInput) stays,
- * because that is what a future host-authoritative mode would build on.
- *
- * THE INTERPOLATION BUFFER. Remote cars are drawn ~100 ms in the past, between
- * the two packets that bracket that moment, which is what turns 20 Hz of
- * arriving data into a smoothly moving car. When a packet is late we
- * EXTRAPOLATE instead — and this is where the (s, x) representation earns its
- * keep. Extrapolating a car in free 3D drifts it off the road and into
- * barriers; extrapolating along s is `s += speed·dt`, which follows the
- * centreline, the elevation and the banking for free and CANNOT leave the
- * track. Guessing wrong here costs a small position error rather than a car
- * embedded in a wall.
- *
- * Both interpolations are wrap-aware: s wraps at the start/finish line and
- * head wraps at a full turn, so both take the short way round. Getting that
- * wrong makes a car sprint backwards down the lap once per lap.
- */
+/* NetSnapshot — what actually goes on the wire, and how a rival is drawn smoothly from packets that arrive late, out of order, or not at all. WHY STATE AND NOT IN… */
 "use strict";
 
 const NetSnapshot = (function () {
@@ -66,9 +16,6 @@ const NetSnapshot = (function () {
   const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
   const i32 = (v) => (v | 0);
 
-  // Quantisers. Every one is lossy by a known, stated amount — 1 cm of
-  // position, ~0.005 degrees of heading, 1 cm/s of speed — all far below
-  // anything a player can see at racing speed.
   const encS = (s) => clamp(Math.round(s * 100), 0, 4294967295) >>> 0;
   const decS = (v) => v / 100;
   const encX = (x) => clamp(Math.round(x * 100), -32768, 32767) | 0;
@@ -78,7 +25,6 @@ const NetSnapshot = (function () {
   const encH = (h) => (Math.round((((h % TAU) + TAU) % TAU) / TAU * U16) % U16) & 0xffff;
   const decH = (v) => (v / U16) * TAU;
 
-  // ---- car state <-> bytes --------------------------------------------------
   function writeCar(dv, off, id, c) {
     dv.setUint8(off, id & 0xff);
     dv.setUint32(off + 1, encS(c.s || 0));
@@ -111,12 +57,7 @@ const NetSnapshot = (function () {
     };
   }
 
-  // ---- snapshot ------------------------------------------------------------
-  // entries: [{id, car}] — an explicit id rather than the array index, so a
-  // peer can send a subset (its own car) without the receiver having to guess.
   function encodeSnapshot(tick, entries) {
-    // Filter before counting: writeCar does `id & 0xff`, so -1 becomes 255
-    // and the count byte would still advertise the omitted slots.
     const list = [];
     const src = entries || [];
     for (let i = 0; i < src.length && list.length < 255; i++) {
@@ -140,8 +81,6 @@ const NetSnapshot = (function () {
     if (!dv || dv.byteLength < SNAP_HEADER) return null;
     if (dv.getUint8(0) !== TYPE_SNAPSHOT) return null;
     const n = dv.getUint8(5);
-    // A truncated packet is a corrupt packet — decode nothing rather than
-    // hand the game a half-read car at a garbage position.
     if (dv.byteLength < SNAP_HEADER + n * CAR_BYTES) return null;
     const cars = [];
     let off = SNAP_HEADER;
@@ -157,7 +96,6 @@ const NetSnapshot = (function () {
     return null;
   }
 
-  // ---- wrap-aware interpolation --------------------------------------------
   // Both of these take the SHORT way round. Without that, a car crossing the
   // start/finish line appears to sprint backwards down the whole lap, and one
   // rotating through the heading wrap spins the wrong way — once per lap,
@@ -168,10 +106,6 @@ const NetSnapshot = (function () {
     return ((v % period) + period) % period;
   }
 
-  // ---- the interpolation buffer -------------------------------------------
-  // One per remote car. Packets may arrive late, out of order, or twice — the
-  // unreliable channel promises none of those things — so push() inserts by
-  // tick and ignores duplicates rather than assuming arrival order.
   function createInterp(opts) {
     opts = opts || {};
     const total = opts.total || 1;         // track length, for wrap-aware s
@@ -191,35 +125,15 @@ const NetSnapshot = (function () {
         if (i >= 0 && samples[i].t === t) return false;   // duplicate — ignore
         samples.splice(i + 1, 0, rec);
       }
-      // shift(), not slice(): once the buffer is full this runs on EVERY
-      // inbound packet, and slice() rebuilt a 32-element array each time for
-      // something that is only ever one over.
       while (samples.length > keep) samples.shift();
       return true;
     }
 
-    // s AND lap ARE ONE QUANTITY. netplay reconstructs cumulative progress as
-    // `c.prog = c.lap * total + c.s` (js/net/netplay.js), and the whole race
-    // order — plus the AI's read of who is leading — is sorted on prog. So the
-    // two have to cross the start/finish line TOGETHER. They used not to: s was
-    // wrapped here while lap was copied from whichever sample happened to be
-    // nearer in time (blend) or left untouched entirely (advance), so either
-    // side of the line the pair disagreed and the rival's prog was out by a
-    // whole lap for up to a packet interval. The +1 case is the bad one — it
-    // briefly ranks the rival as leader, and js/game.js's `_leadHuman` then
-    // rubber-bands the entire AI field off a car that is actually last.
-    //
-    // splitS() takes a raw arc position that may sit outside [0, total) and
-    // returns the in-range s together with the number of lines it crossed to get
-    // there. Both movers below go through it, so they cannot drift apart on the
-    // wrap — the same reason session.js shares this file's toView().
     function splitS(raw) {
       const laps = Math.floor(raw / total);
       return { s: raw - laps * total, laps };
     }
 
-    // Advance a state along the ROAD. This is the whole reason (s, x) is worth
-    // having on the wire: it cannot dead-reckon a car off the circuit.
     function advance(st, dtMs) {
       const dt = dtMs / 1000;
       const w = splitS(st.s + st.speed * dt);
@@ -235,22 +149,12 @@ const NetSnapshot = (function () {
     }
 
     function blend(a, b, u) {
-      // Discrete fields (gear, the flags) step rather than blend — half a gear
-      // is not a thing — so start from whichever sample is nearer and overwrite
-      // only what genuinely interpolates. Same reason as advance(): a new packet
-      // field is carried automatically.
       const out = Object.assign({}, u < 0.5 ? a : b, {
         x: a.x + (b.x - a.x) * u,
         head: lerpWrapped(a.head, b.head, u, TAU),
         speed: a.speed + (b.speed - a.speed) * u,
         extrapolated: false,
       });
-      // Take the short way round for the DISTANCE moved (as before), then let
-      // splitS say whether that landed past the line. Deriving the lap from the
-      // same delta that produced s is what keeps the pair consistent; anchoring
-      // on `a` rather than blending the two lap counters means a sender whose
-      // lap ticks a frame before or after its s wrap cannot drag the rival
-      // through a whole phantom lap.
       const d = M4.wrapDelta(b.s - a.s, total);   // shortest way round (js/mat4.js)
       const w = splitS(a.s + d * u);
       out.s = w.s;
@@ -258,16 +162,11 @@ const NetSnapshot = (function () {
       return out;
     }
 
-    // Where the car should be DRAWN now: delayMs in the past, so there is
-    // normally a packet on each side of that moment to blend between.
     function sample(nowMs) {
       if (!samples.length) return null;
       const target = nowMs - delayMs;
       const newest = samples[samples.length - 1];
       if (target >= newest.t) {
-        // Ran dry. Coast along the road, but only so far — past a quarter of a
-        // second the guess is worse than admitting we don't know, and a car
-        // frozen briefly reads better than one confidently in the wrong place.
         return advance(newest, Math.min(target - newest.t, maxExtrapMs));
       }
       const oldest = samples[0];

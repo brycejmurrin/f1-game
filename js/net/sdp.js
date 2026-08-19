@@ -1,50 +1,9 @@
-/*
- * NetSdp — the invite code's payload, as bytes instead of prose.
- *
- * WHY. A gathered data-channel SDP is ~700 bytes of text; deflated and
- * base64url'd it still lands around 650 characters. That is a miserable thing
- * to paste, it gets line-wrapped and mangled by chat clients, and — the reason
- * this file exists — it is far too much data for a QR code that a phone camera
- * can actually read. A code you can scan is a completely different product
- * from a code you have to copy, and the only thing standing in the way is size.
- *
- * WHAT IS ACTUALLY IN THERE. Almost none of that SDP is information. We only
- * ever negotiate one thing — a single data-channel m-line — so every line is
- * either a constant we can rebuild from a template, or one of five facts:
- *
- *   the DTLS fingerprint      32 bytes
- *   the ICE ufrag             ~4 bytes
- *   the ICE pwd               ~24 bytes
- *   the DTLS setup role       2 bits
- *   the candidates            ~7-19 bytes each
- *
- * That is ~90 bytes for a typical host+srflx pair, or about 120 base64url
- * characters — roughly a fifth of the deflated text, and comfortably inside a
- * QR code that scans on the first try.
- *
- * WHY THIS IS SAFE TO DO, given the last attempt at shortening the SDP shipped
- * a bug that broke every real connection: this does not EDIT the SDP. It
- * extracts the five facts and rebuilds a complete, well-formed description from
- * a fixed template, and — see verify() — the result is handed to a throwaway
- * RTCPeerConnection BEFORE it is ever handed to a human. If this browser will
- * not accept our own reconstruction, pack() is abandoned and the caller falls
- * back to the deflated full text. The format flag in the code says which was
- * used, so the two paths interoperate.
- *
- * WHAT IS DELIBERATELY DROPPED. TCP candidates (`tcptype`): for a data channel
- * across a NAT they are near-useless, and dropping them is most of the
- * remaining size. Same-host TCP fallback is the cost, and on a link where UDP
- * is entirely blocked no amount of signalling was going to help anyway.
- */
+/* NetSdp — the invite code's payload, as bytes instead of prose. WHY. A gathered data-channel SDP is ~700 bytes of text; deflated and base64url'd it still lands a… */
 "use strict";
 
 const NetSdp = (function () {
   const VERSION = 1;
 
-  // Candidate encodings. The mDNS form is the interesting one: Chrome hides
-  // your LAN address behind a random `<uuid>.local` hostname, and a UUID is 16
-  // bytes of hex — so it packs smaller than the text that names it, and the
-  // same-Wi-Fi case (two phones on a sofa) keeps working.
   const C_MDNS = 0, C_HOST4 = 1, C_SRFLX4 = 2, C_RELAY4 = 3, C_HOST6 = 4, C_SRFLX6 = 5;
   const ADDR_LEN = { 0: 16, 1: 4, 2: 4, 3: 4, 4: 16, 5: 16 };
   const TYPE_OF = { 0: "host", 1: "host", 2: "srflx", 3: "relay", 4: "host", 5: "srflx" };
@@ -52,19 +11,11 @@ const NetSdp = (function () {
 
   const SETUPS = ["actpass", "active", "passive", "holdconn"];
   const MAX_CANDS = 8;              // more than this is stragglers, not reach
-  // Which kinds keep their place when the budget is tight. Relay first: it is
-  // the one that works when nothing else does, and it is also the one that
-  // arrives last and so was always the one truncated away. Then the public
-  // address, then the LAN ones.
   const RETAIN = [3 /*C_RELAY4*/, 2 /*C_SRFLX4*/, 5 /*C_SRFLX6*/,
                   0 /*C_MDNS*/, 1 /*C_HOST4*/, 4 /*C_HOST6*/];
 
-  // RFC 5245 priority for component 1 at full local preference. Recomputed
-  // rather than carried: it is a pure function of the candidate type, so
-  // sending it would be sending four bytes of arithmetic.
   const PRIORITY = { host: 2113937151, srflx: 1677729535, relay: 16777215 };
 
-  // ---- small parsers --------------------------------------------------------
   const line = (sdp, re) => { const m = sdp.match(re); return m ? m[1] : null; };
 
   function hexToBytes(hex) {
@@ -90,8 +41,6 @@ const NetSdp = (function () {
   }
   const bytesToV4 = (b) => Array.from(b).join(".");
 
-  // IPv6 with :: expansion. Written out rather than pulled from a helper
-  // because the game has no other reason to know what an IPv6 address is.
   function v6ToBytes(addr) {
     const zone = addr.indexOf("%");
     if (zone >= 0) addr = addr.slice(0, zone);
@@ -124,9 +73,6 @@ const NetSdp = (function () {
     return words.slice(0, bestAt).join(":") + "::" + words.slice(bestAt + bestLen).join(":");
   }
 
-  // ---- candidates -----------------------------------------------------------
-  // a=candidate:<foundation> <component> <transport> <priority> <addr> <port>
-  //   typ <type> [raddr <a> rport <p>] ...
   function parseCandidate(text) {
     const t = text.trim().split(/\s+/);
     if (t.length < 8 || t[6] !== "typ") return null;
@@ -174,10 +120,6 @@ const NetSdp = (function () {
       + h.slice(16, 20) + "-" + h.slice(20) + ".local";
   }
 
-  // ---- pack -----------------------------------------------------------------
-  // Returns null for ANYTHING it does not fully understand. A partial pack is
-  // the one outcome worse than a long code: it would produce an invite that
-  // looks fine and cannot connect.
   function pack(sdp) {
     const text = String(sdp || "");
     const fpHex = line(text, /^a=fingerprint:sha-256 (\S+)/mi);
@@ -221,8 +163,6 @@ const NetSdp = (function () {
       if (!byKind.has(c.kind)) byKind.set(c.kind, []);
       byKind.get(c.kind).push(c);
     }
-    // Relay first, so that when the budget is tight the fallback of last
-    // resort is the thing guaranteed a place.
     const order = [...byKind.keys()].sort((a, b) => RETAIN.indexOf(a) - RETAIN.indexOf(b));
     const cands = [];
     for (let round = 0; cands.length < MAX_CANDS; round++) {
@@ -266,7 +206,6 @@ const NetSdp = (function () {
     return out;
   }
 
-  // ---- unpack ---------------------------------------------------------------
   function unpack(bytes) {
     if (!bytes || bytes.length < 4) return null;
     let o = 0;
@@ -275,12 +214,6 @@ const NetSdp = (function () {
     const count = bytes[o++];
     if (bytes.length < o + 32) return null;
     const fp = bytesToHex(bytes.slice(o, o + 32), ":"); o += 32;
-    // CHECK THE CURSOR BEFORE EACH LENGTH BYTE, not only the span after it. Past
-    // the end `bytes[o++]` is undefined, every later `bytes.length < o + len`
-    // compares against NaN (always false, so the guards pass) and o itself goes
-    // NaN — truncated input then survived all the way to the candidate loop and
-    // was rejected only because ADDR_LEN[undefined] happens to be null. That
-    // accident is not a bounds check, and any edit to the loop removes it.
     if (o >= bytes.length) return null;
     const ufLen = bytes[o++];
     if (bytes.length < o + ufLen) return null;
@@ -302,9 +235,6 @@ const NetSdp = (function () {
     }
     if (!cands.length) return null;
 
-    // The template. Every line here is either mandated by the SDP grammar or
-    // identical in every data-channel offer this game will ever make — which is
-    // exactly why none of it needs to travel.
     return [
       "v=0",
       "o=- 1 2 IN IP4 127.0.0.1",
@@ -333,7 +263,6 @@ const NetSdp = (function () {
     return s;
   }
 
-  // ---- the safety net -------------------------------------------------------
   // Hand our own reconstruction to a throwaway RTCPeerConnection before any
   // human ever sees it. This is the difference between "shortening the SDP is
   // risky" and "shortening the SDP is checked": if this browser will not accept
@@ -360,8 +289,6 @@ const NetSdp = (function () {
     }
   }
 
-  // pack + prove it survives the round trip, in one call. Returns the bytes, or
-  // null meaning "use the full text".
   async function packChecked(sdp) {
     const bytes = pack(sdp);
     if (!bytes) return null;
