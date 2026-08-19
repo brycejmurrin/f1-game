@@ -251,10 +251,12 @@
      font is var(--fs-micro) at ~11px, so 28px leaves ~17px for top+bottom
      padding — tight but readable and touch-target-safe (28/1.15 = 24.3px
      own px, just above WCAG 2.5.8's 24px minimum). */
-  grid-template-rows: repeat(2, 28px);
+  /* Row height: tap-min (24px at 100%, 20.9px at 115%) + 4px = 28px / 24.9px.
+     Expressed as calc so the row tracks --tap-min rather than being a bare literal. */
+  grid-template-rows: repeat(2, calc(var(--tap-min) + 4px));
   overflow-x: hidden;
   overflow-y: hidden;
-  max-height: calc(28px * 2 + var(--gap));
+  max-height: calc((var(--tap-min) + 4px) * 2 + var(--gap));
   align-content: start;
 }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab {
@@ -272,7 +274,9 @@
      at that size and avoids truncation on the longest labels. */
   /* 8px own px = 9.2px rendered at 115% — SUSPENSION needs 46px at this size
      which fits inside the 53px column interior (tab 58px - 2×border - 2×pad). */
-  font-size: 8px;
+  /* 3px below --fs-micro (11px → 8px own px = 9.2px rendered at 115%).
+     SUSPENSION at 8px needs ~46px, inside the 53px column interior. */
+  font-size: calc(var(--fs-micro) - 3px);
   letter-spacing: 0;
 }
 #cs-options {
