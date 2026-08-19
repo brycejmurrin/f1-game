@@ -85,7 +85,9 @@ if (typeof document !== "undefined") {
 return { KEY, KEY_TC, halo, setHalo, turnChase, setTurnChase, turnChaseLead };
 })();
 
-/* Metrics panel safe-area: 100svh + env insets (house unit is svh, not dvh). */
+/* Metrics panel safe-area: 100svh + env insets (house unit is svh, not dvh).
+   Re-applies on mount, style mutations, and resize so metrics.js's first
+   PANEL_STYLE paint cannot win the race permanently. */
 (function metricsSafeArea() {
   "use strict";
   var HUD_TOP = "min(120px, calc(80px * var(--hud-scale, 1)))";
@@ -102,9 +104,14 @@ return { KEY, KEY_TC, halo, setHalo, turnChase, setTurnChase, turnChaseLead };
       HUD_TOP + " - max(80px, calc(72px + var(--sab, 0px))));" +
     "overflow-y:auto;pointer-events:auto;text-shadow:0 1px 2px rgba(0,0,0,.9);" +
     "letter-spacing:.01em";
+  var _applying = false;
   function apply(el) {
     if (!el || el.id !== "game-metrics") return;
-    el.style.cssText = STYLE;
+    if (_applying) return;
+    var cur = el.style.cssText || "";
+    if (cur.indexOf("var(--sar") >= 0 && cur.indexOf("100svh") >= 0) return;
+    _applying = true;
+    try { el.style.cssText = STYLE; } finally { _applying = false; }
   }
   function scan() { apply(document.getElementById("game-metrics")); }
   if (typeof document === "undefined") return;
@@ -112,24 +119,85 @@ return { KEY, KEY_TC, halo, setHalo, turnChase, setTurnChase, turnChaseLead };
   try {
     var mo = new MutationObserver(function (muts) {
       for (var i = 0; i < muts.length; i++) {
-        var nodes = muts[i].addedNodes;
+        var m = muts[i];
+        if (m.type === "attributes" && m.target && m.target.id === "game-metrics") {
+          apply(m.target);
+          continue;
+        }
+        var nodes = m.addedNodes;
         for (var j = 0; j < nodes.length; j++) {
           var n = nodes[j];
           if (n && n.id === "game-metrics") apply(n);
         }
       }
     });
-    mo.observe(document.documentElement, { childList: true, subtree: true });
-  } catch (_) {
-    setInterval(scan, 1000);
-  }
+    mo.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+  } catch (_) { /* no MO */ }
+  try {
+    window.addEventListener("resize", scan, { passive: true });
+    window.visualViewport && window.visualViewport.addEventListener("resize", scan, { passive: true });
+  } catch (_) { /* SSR */ }
+  var n = 0;
+  var t = setInterval(function () {
+    scan();
+    if (++n >= 10) clearInterval(t);
+  }, 400);
 })();
 
-/* Fold four DISPLAY metrics buttons into a METRICS submenu. Overlay paints ~4 Hz while ON. */
+/* METRICS submenu under DISPLAY — compact on short/high-scale viewports. */
 (function metricsSettingsSubmenu() {
   "use strict";
+  function injectCss() {
+    if (document.getElementById("pm-metrics-sub-css")) return;
+    var s = document.createElement("style");
+    s.id = "pm-metrics-sub-css";
+    s.textContent = [
+      "#pm-metrics-details.pm-metrics-sub { margin: 6px 0 0; }",
+      "#pm-metrics-details.pm-metrics-sub > summary.adv-more-btn { cursor: pointer; }",
+      "#pm-metrics-details .pm-metrics-sub-body {",
+      "  display: flex; flex-direction: column; gap: 4px;",
+      "  padding: 6px 0 2px;",
+      "  max-height: min(280px, calc(100svh - 9rem));",
+      "  overflow-y: auto;",
+      "}",
+      "#pm-metrics-details .pm-metrics-sub-body > button {",
+      "  width: 100%; margin: 0;",
+      "}",
+      "#pm-metrics-details .pm-metrics-hint {",
+      "  margin: 4px 0 0; opacity: .7; font-size: 11px; line-height: 1.3;",
+      "}",
+      "@media (max-height: 420px) {",
+      "  #pm-metrics-details .pm-metrics-sub-body {",
+      "    display: grid; grid-template-columns: 1fr 1fr; gap: 4px 6px;",
+      "    max-height: min(160px, calc(100svh - 7rem));",
+      "  }",
+      "  #pm-metrics-details .pm-metrics-sub-body > button { width: auto; }",
+      "  #pm-metrics-details .pm-metrics-hint {",
+      "    grid-column: 1 / -1; font-size: 10px; margin: 2px 0 0;",
+      "  }",
+      "}",
+      "@media (max-height: 480px) {",
+      "  html[style*='--ui-scale: 1.1'] #pm-metrics-details .pm-metrics-sub-body,",
+      "  html[style*='--ui-scale:1.1'] #pm-metrics-details .pm-metrics-sub-body,",
+      "  html[style*='--ui-scale: 1.15'] #pm-metrics-details .pm-metrics-sub-body,",
+      "  html[style*='--ui-scale:1.15'] #pm-metrics-details .pm-metrics-sub-body,",
+      "  html[style*='--ui-scale: 1.3'] #pm-metrics-details .pm-metrics-sub-body,",
+      "  html[style*='--ui-scale:1.3'] #pm-metrics-details .pm-metrics-sub-body {",
+      "    max-height: min(140px, calc(100svh - 8rem));",
+      "  }",
+      "}",
+    ].join("\n");
+    (document.head || document.documentElement).appendChild(s);
+  }
+
   function build() {
     if (typeof document === "undefined") return;
+    injectCss();
     var on = document.getElementById("pm-metrics");
     var page = document.getElementById("pm-metrics-page");
     var ns = document.getElementById("pm-metrics-logns");
@@ -160,9 +228,8 @@ return { KEY, KEY_TC, halo, setHalo, turnChase, setTurnChase, turnChaseLead };
     });
 
     var hint = document.createElement("p");
-    hint.className = "as-note";
-    hint.style.cssText = "margin:6px 0 0;opacity:.75;font-size:11px;line-height:1.35";
-    hint.textContent = "While ON the overlay updates ~4×/sec as you play. ` or F9 toggles. [ ] cycle page; 1–4 jump.";
+    hint.className = "pm-metrics-hint as-note";
+    hint.textContent = "Live ~4×/sec while ON. ` / F9 toggle · [ ] page · 1–4 jump";
     body.appendChild(hint);
     det.appendChild(body);
 
@@ -176,12 +243,12 @@ return { KEY, KEY_TC, halo, setHalo, turnChase, setTurnChase, turnChaseLead };
 
     try {
       if (typeof GameMetrics !== "undefined" && GameMetrics.on && GameMetrics.on()) det.open = true;
-    } catch (_) { }
+    } catch (_) { /* not ready */ }
 
     on.addEventListener("click", function () {
       try {
         if (typeof GameMetrics !== "undefined" && GameMetrics.on && GameMetrics.on()) det.open = true;
-      } catch (_) { }
+      } catch (_) { /* ignore */ }
     });
   }
 
@@ -191,6 +258,7 @@ return { KEY, KEY_TC, halo, setHalo, turnChase, setTurnChase, turnChaseLead };
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run, { once: true });
     else run();
     setTimeout(build, 250);
+    setTimeout(build, 1000);
   }
   schedule();
 })();
