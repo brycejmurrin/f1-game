@@ -111,7 +111,10 @@ const CLASS_CEILING = 532;
 // +8 2026-08-18: Adaptive Buttons moved onto the simple sheet; BRAKE CUE
 // slider + How-to-Play key chips + brake-cue.js script tag. Still under ~1400.
 // −10 2026-08-18: #menu-status chips removed with the dashboard chrome.
-const NODE_CEILING = 1210;
+// +1 2026-08-19: <script> for js/car/car3d-flaps.js (Car3DFlaps extract).
+// Earlier slim-bloat extracts already spent the previous slack
+// (ui-scale / custom-logo / livery-store tags). Still far under ~1400.
+const NODE_CEILING = 1211;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module
