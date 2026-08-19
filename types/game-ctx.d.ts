@@ -531,6 +531,10 @@ interface GameCtx {
   readonly rescuePlayer: (c: CarState) => void;
   readonly setLightTune: (id: string, v: unknown) => void;
   readonly setWeatherLive: (w: Weather) => void;
+  /** Live time-of-day (read with no arg, write with tod). Rebuilds track when day/night flips. */
+  readonly setTimeOfDay: (tod?: TimeOfDay) => TimeOfDay;
+  /** Live weather (read with no arg, write with w). Same path as __apex.weather(). */
+  readonly weather: (w?: Weather) => Weather;
   readonly snapGameCam: () => void;
   readonly setCarRole: (c: CarState, human: boolean, local: boolean) => void;
   readonly modsFor: (team: TeamDef, setup: PartsSetup) => CarMods;

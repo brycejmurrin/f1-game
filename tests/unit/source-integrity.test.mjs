@@ -218,9 +218,9 @@ test("index.html's tags are balanced and correctly nested", () => {
     "silently re-nests around it, and a whole screen ends up inside the wrong parent");
 });
 
-test("tools/layout-audit.mjs knows about every screen in the shell", () => {
+test("tools/menu-screens.mjs knows about every screen in the shell", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  const audit = fs.readFileSync(path.join(ROOT, "tools/layout-audit.mjs"), "utf8");
+  const audit = fs.readFileSync(path.join(ROOT, "tools/menu-screens.mjs"), "utf8");
 
   const shell = new Set([
     ...[...html.matchAll(/<dialog id="([a-z0-9-]+)"/g)].map((m) => m[1]),
@@ -236,7 +236,7 @@ test("tools/layout-audit.mjs knows about every screen in the shell", () => {
 
   assert.deepEqual(missing, [],
     "a screen exists in index.html that tools/layout-audit.mjs never opens, so the " +
-    "layout survey silently does not cover it. Add it to SCREENS there — or, if it " +
+    "layout survey silently does not cover it. Add it to SCREENS in menu-screens.mjs — or, if it " +
     "genuinely cannot be surveyed, say why here rather than leaving the gap unstated");
 });
 

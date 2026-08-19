@@ -88,7 +88,7 @@ Ports (do not reuse): TinyFish `3711`, chrome daemon `3712`, apex-tools HTTP
 | Live `version.json` / Pages | **deploy-research** / TinyFish | `mcp-probe`, curl github.io |
 | Batch screenshots | skill **playwright-probe** (`apex_shot` / `shot.mjs`) | Chrome MCP while Playwright runs |
 | Interactive host browser | repo MCP **playwright** (`browser_*` via `playwright-mcp.sh`) | `test-bg.mjs`; chrome-devtools at the same time |
-| One-screen CSS try-on | skill **css-play** → `css-play.mjs` / `playwright-mcp.sh play\|dom` | `layout-audit` / `ui-survey` (the matrix) |
+| One-screen CSS try-on | skill **css-play** → `css-play.mjs` / `playwright-mcp.sh play\|dom` | `layout-audit` matrix / `--gallery` |
 | Start Playwright **groups** | `tools/test-bg.mjs` (CLI only) | any `apex_*` wrap; host `browser_*` |
 | Agent bloat / extract / dead code | skill **slim-bloat** → `bloat-auditor` + `bloat-scan.mjs` | a browser group; raising a ratchet to hide growth |
 
@@ -184,7 +184,7 @@ These stay CLI-only on purpose. The MCP must refuse if asked to grow them.
 | `assets.mjs bake*` | Author-time writer | skill **asset-pack** |
 | `rotate-markings.cjs --write` | Mutates circuit markings | CLI after `--check` review |
 | `graph-parity.cjs` without `BASE=` | Vacuous pass on a clean tree | `apex_graph_parity` with `base` |
-| `wgx-gallery.mjs` | Batch Chromium | skill **webgpu-debug** (parent session) |
+| `wgx-gallery.mjs` | Forwarder → `wgx-shot.mjs --gallery` | skill **webgpu-debug** (parent session); prefer `npm run wgx:gallery` |
 | `lighting-tuner-sweep.mjs` / `physics-tune-sweep.mjs` | Long, sharded, resumable | skills **lighting-tuner** / **tune-physics** |
 | `rtc-e2e*.mjs` / `nostr-probe.mjs` | Real network / minutes | skill **multiplayer-debug** |
 | `report-server.mjs` | Binds `0.0.0.0` | skill **mcp-probe** |

@@ -357,6 +357,19 @@ scene event it drives even happening in this shot (traffic, dark sky, weather),
 and would this effect show up in a MEAN across the whole frame or only in a
 handful of pixels?
 
+`tools/slider-effect.mjs --live` now carries a **per-id recipe** for every
+`TUNE_DEFS` knob (`tools/slider-effect-live.mjs`). `--live --all --dry-run`
+prints the 183 plans grouped by `track|tod|wx|camera` so a real sweep parks
+once per condition, not once per slider. `--shots N` sets how many frames
+(default 2); without `--from`/`--to`, N>2 linspaces the slider's min→max.
+`--levels 0,0.26,0.55` sets the values explicitly. A 2-shot still writes
+`a.png`/`b.png`/`filter.png`/`sheet.png`; N>2 also writes `v0.png…` and a
+labeled `ramp.png`. Documented specials: `fogWxMul` → fog, `overcastFogMul` →
+overcast, `drizzle*` → wet (not rain), `moonShadow` → night+wet,
+`renderDistMul` → Spa day 0.50 chase, `starBright` → Bahrain night sky,
+`lampCull`/`tailLightMul` → Singapore night + traffic. Pixel MAD is still
+corroboration; `lightState` is the verdict.
+
 ## The full day-dry sweep's 18 "no clear signal" knobs: all 18 confirmed live
 
 A later day-dry sweep over the 178 knobs that existed then
