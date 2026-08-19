@@ -232,6 +232,21 @@ test("log page filters the tail by namespace and level", () => {
   assert.match(tr.logs[0], /build done monza/);
 });
 
+test("page and log filters persist while metrics are off", () => {
+  const { M, disk } = load({});
+  assert.equal(M.on(), false);
+  assert.equal(M.setPage("phys"), "phys");
+  assert.equal(M.setLogNs("game"), "game");
+  assert.equal(M.setLogLvl("debug"), "debug");
+  assert.equal(disk.get("apex26.metricsPage"), "phys");
+  assert.equal(disk.get("apex26.metricsLogNs"), "game");
+  assert.equal(disk.get("apex26.metricsLogLvl"), "debug");
+  M.set(true);
+  assert.equal(M.page(), "phys");
+  assert.equal(M.logNs(), "game");
+  assert.equal(M.logLvl(), "debug");
+});
+
 test("GOV snapshot skips probe() and physState()", () => {
   let probe = 0, phys = 0;
   const { M } = load({
@@ -254,6 +269,42 @@ test("?metrics=1 set() does not write storage", () => {
   assert.equal(disk.get("apex26.metrics"), "0");
   M.set(true);
   assert.equal(disk.get("apex26.metrics"), "0", "URL pin must not write storage");
+});
+
+test("initUI injects separate metrics, page, and log settings buttons", () => {
+  const host = { children: [], appendChild(el) { this.children.push(el); },
+    insertBefore(el, ref) {
+      const i = this.children.indexOf(ref);
+      if (i < 0) this.children.push(el);
+      else this.children.splice(i, 0, el);
+    } };
+  const anchor = { parentNode: host, nextSibling: null };
+  host.children.push(anchor);
+  const { M } = load({
+    document: {
+      readyState: "complete",
+      addEventListener() {},
+      createElement(tag) {
+        return { id: "", type: "button", tagName: tag.toUpperCase(), textContent: "",
+          title: "", onclick: null, setAttribute() {}, style: {} };
+      },
+      getElementById(id) {
+        if (id === "pm-hidehud") return anchor;
+        if (id === "pm-metrics" || id === "pm-metrics-page" ||
+            id === "pm-metrics-logns" || id === "pm-metrics-loglvl") return null;
+        return null;
+      },
+    },
+  });
+  assert.ok(host.children.some((n) => n.id === "pm-metrics"));
+  assert.ok(host.children.some((n) => n.id === "pm-metrics-page"));
+  assert.ok(host.children.some((n) => n.id === "pm-metrics-logns"));
+  assert.ok(host.children.some((n) => n.id === "pm-metrics-loglvl"));
+  const metricsBtn = host.children.find((n) => n.id === "pm-metrics");
+  assert.match(metricsBtn.textContent, /^METRICS: OFF$/);
+  M.setPage("car");
+  const pageBtn = host.children.find((n) => n.id === "pm-metrics-page");
+  assert.match(pageBtn.textContent, /^METRICS PAGE: CAR$/);
 });
 
 test("HIDE HUD CSS leaves #game-metrics visible", () => {

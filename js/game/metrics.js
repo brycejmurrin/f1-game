@@ -1,6 +1,7 @@
 /* Apex 26 — GameMetrics: toggleable in-game FPS / car / log overlay.
 
-   SETTINGS > DISPLAY > METRICS, or ` (backtick) / F9. Persists as
+   SETTINGS > DISPLAY — METRICS (on/off), METRICS PAGE (gov/car/phys/log),
+   LOG NS, and LOG SHOW. Or ` (backtick) / F9 on the canvas. Persists as
    apex26.metrics. URL `?metrics=1` overrides for the session without writing
    storage, same shape as CockpitOpts.
 
@@ -37,6 +38,9 @@ let _raf = 0;
 let _lastPaint = 0;
 let _panel = null;
 let _btn = null;
+let _pageBtn = null;
+let _logNsBtn = null;
+let _logLvlBtn = null;
 let _keysBound = false;
 let _raisedBuffer = null;
 
@@ -423,8 +427,31 @@ function startLoop() {
 
 function paintBtn(btn) {
   if (!btn) return;
-  btn.textContent = "METRICS: " + (on() ? page().toUpperCase() : "OFF");
+  btn.textContent = "METRICS: " + (on() ? "ON" : "OFF");
   btn.setAttribute("aria-pressed", on() ? "true" : "false");
+}
+
+function paintPageBtn(btn) {
+  if (!btn) return;
+  btn.textContent = "METRICS PAGE: " + page().toUpperCase();
+  btn.setAttribute("aria-pressed", on() ? "true" : "false");
+}
+
+function paintLogNsBtn(btn) {
+  if (!btn) return;
+  btn.textContent = "LOG NS: " + logNs().toUpperCase();
+}
+
+function paintLogLvlBtn(btn) {
+  if (!btn) return;
+  btn.textContent = "LOG SHOW: " + logLvl().toUpperCase();
+}
+
+function paintSettingBtns() {
+  paintBtn(_btn);
+  paintPageBtn(_pageBtn);
+  paintLogNsBtn(_logNsBtn);
+  paintLogLvlBtn(_logLvlBtn);
 }
 
 function raiseBuffer() {
@@ -461,7 +488,7 @@ function set(v) {
     restoreBuffer();
     paintOverlay();
   }
-  paintBtn(_btn);
+  paintSettingBtns();
   return next;
 }
 
@@ -474,7 +501,7 @@ function setPage(name) {
   store(PAGE_KEY, next, /[?&]metricsPage=/i);
   try { if (on()) Log.info("game", "metrics page " + next); } catch (_) { /* Log not loaded */ }
   if (on()) paintOverlay();
-  paintBtn(_btn);
+  paintSettingBtns();
   return _page;
 }
 
@@ -490,6 +517,7 @@ function setLogNs(name) {
   _logNs = next;
   store(LOG_NS_KEY, next, /[?&]metricsLog=/i);
   if (on()) paintOverlay();
+  paintSettingBtns();
   return _logNs;
 }
 
@@ -505,6 +533,7 @@ function setLogLvl(name) {
   _logLvl = next;
   store(LOG_LVL_KEY, next, /[?&]metricsLvl=/i);
   if (on()) paintOverlay();
+  paintSettingBtns();
   return _logLvl;
 }
 
@@ -519,27 +548,66 @@ function typingTarget(t) {
     t.tagName === "SELECT" || t.tagName === "BUTTON" || t.isContentEditable);
 }
 
+function insertAfter(host, anchor, el) {
+  if (anchor.nextSibling) host.insertBefore(el, anchor.nextSibling);
+  else host.appendChild(el);
+  return anchor = el;
+}
+
+function makeMetricsBtn(id, title, paint, onClick) {
+  const b = document.createElement("button");
+  b.id = id;
+  b.type = "button";
+  b.title = title;
+  paint(b);
+  b.onclick = () => {
+    onClick();
+    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); }
+    catch (_) { /* audio not up yet; the toggle still applies */ }
+  };
+  return b;
+}
+
 function initUI() {
   try { Log.info("game", "GameMetrics.initUI"); } catch (_) { /* Log not loaded */ }
   if (typeof document === "undefined") return;
   const anchor = document.getElementById("pm-hidehud");
   const host = anchor && anchor.parentNode;
   if (host && !document.getElementById("pm-metrics")) {
-    const b = document.createElement("button");
-    b.id = "pm-metrics";
-    b.type = "button";
-    b.title = "Live FPS / car / phys / log overlay. ` or F9 toggle. Click cycles pages; LOG again turns off. [ ] pages, 1–4 jump, - = log ns, ; log level.";
-    paintBtn(b);
-    b.onclick = () => {
-      if (!on()) set(true);
-      else if (page() === "log") set(false);
-      else nextPage(1);
-      try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); }
-      catch (_) { /* audio not up yet; the toggle still applies */ }
-    };
-    if (anchor.nextSibling) host.insertBefore(b, anchor.nextSibling);
-    else host.appendChild(b);
-    _btn = b;
+    let ins = anchor;
+    _btn = makeMetricsBtn(
+      "pm-metrics",
+      "Show the live metrics overlay on the canvas. ` or F9 also toggles it. " +
+        "Each page shows different data: GOV = perf/session, CAR = timing/speed, " +
+        "PHYS = grip/forces, LOG = filtered log tail.",
+      paintBtn,
+      () => { toggle(); },
+    );
+    ins = insertAfter(host, ins, _btn);
+
+    _pageBtn = makeMetricsBtn(
+      "pm-metrics-page",
+      "Which overlay page is shown while METRICS is ON. Pick a page before turning on, or use [ ] / 1–4 in-game.",
+      paintPageBtn,
+      () => { nextPage(1); },
+    );
+    ins = insertAfter(host, ins, _pageBtn);
+
+    _logNsBtn = makeMetricsBtn(
+      "pm-metrics-logns",
+      "Filter the LOG overlay tail to one namespace (* = all). = / - cycle while the overlay is up.",
+      paintLogNsBtn,
+      () => { nextLogNs(1); },
+    );
+    ins = insertAfter(host, ins, _logNsBtn);
+
+    _logLvlBtn = makeMetricsBtn(
+      "pm-metrics-loglvl",
+      "How verbose the LOG overlay tail is (warn / info / debug). ; cycles while the overlay is up.",
+      paintLogLvlBtn,
+      () => { nextLogLvl(1); },
+    );
+    insertAfter(host, ins, _logLvlBtn);
   }
 
   if (typeof window !== "undefined" && !_keysBound) {
@@ -585,7 +653,8 @@ function initUI() {
 }
 
 if (typeof document !== "undefined") {
-  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", initUI, { once: true });
   else initUI();
 }
 
