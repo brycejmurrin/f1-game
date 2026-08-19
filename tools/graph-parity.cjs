@@ -105,12 +105,12 @@ function main() {
 
   let baseTracks, headTracks;
   try {
-    baseTracks = buildContext(baseDir);
+    baseTracks = buildContext(baseDir, { instancing: false });
   } catch (e) {
     console.error(`FAIL: baseline ${baseRef} did not load: ${e.message}`);
     process.exit(1);
   }
-  headTracks = buildContext(ROOT);
+  headTracks = buildContext(ROOT, { instancing: false });
 
   const ids = args.includes("--all") || !args.length
     ? headTracks.LIST.map((d) => d.id)

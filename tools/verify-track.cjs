@@ -75,7 +75,9 @@ if (process.argv[2] === "--all") {
 // `rootOverride` loads the same manifest file list from a DIFFERENT checkout —
 // tools/graph-parity.cjs points it at a baseline worktree so two builds can be
 // compared vertex-for-vertex in one process.
-function buildContext(rootOverride) {
+function buildContext(rootOverride, opts) {
+  opts = opts || {};
+  const useInstancing = opts.instancing !== false;
   // Locals, NOT a reassignment of the module-level consts, and NOT read back off
   // module.exports: this file calls main() at load time when run directly, which
   // is before the export assignment at the bottom has executed.
@@ -98,6 +100,16 @@ function buildContext(rootOverride) {
       return { verts, idxCount };
     },
   };
+  if (useInstancing) {
+    Object.assign(GLX, {
+      createInstancedBatch: function (geo, matrices) {
+        const n = matrices && matrices.length ? matrices.length / 16 : 0;
+        const verts = geo && geo.pos ? geo.pos.length / 3 : 0;
+        return { verts, instances: n, idxCount: 0 };
+      },
+      freeInstancedBatch: function () {},
+    });
+  }
 
   const sandbox = {
     // Browser globals the scripts reference
@@ -197,6 +209,12 @@ function verifyTrack(id) {
   const road    = track.meshes.road    ? track.meshes.road.verts    : 0;
   const terrain = track.meshes.terrain ? track.meshes.terrain.verts : 0;
   const props   = track.meshes.props   ? track.meshes.props.verts   : 0;
+  let inst = 0;
+  if (track.meshes.propBatches) {
+    for (let i = 0; i < track.meshes.propBatches.length; i++) {
+      inst += track.meshes.propBatches[i].instances || 0;
+    }
+  }
   const total   = road + terrain + props;
 
   // Belt and braces: every circuit dresses itself, so zero props means the
@@ -212,7 +230,8 @@ function verifyTrack(id) {
     throw new Error(`${id} props ${props} verts exceed cap ${PROP_VERT_CAP[id]}`);
   }
 
-  console.log(`OK ${id}: props ${props} verts (road ${road}, terrain ${terrain}) — ${total} total`);
+  console.log(`OK ${id}: props ${props} verts (road ${road}, terrain ${terrain})` +
+    (inst ? ` — ${inst} instanced` : "") + ` — ${total} total`);
 }
 
 // Reusable VM harness — consumed by tests (scenery-api-contract, foundation).
