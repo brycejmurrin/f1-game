@@ -1,14 +1,15 @@
 #!/usr/bin/env node
-// menu-capture.mjs — shared menu screenshot + DOM engine (wgx-shot shape).
+// menu-capture.mjs — library for layout-audit --gallery / --screen= (not a CLI).
 //
 //   import { runMenuShot, runMenuGallery } from "./menu-capture.mjs";
 //
-// Single cell (one boot):
+// Single cell:
 //   await runMenuShot({ screen: "settings", viewport: "ios-iphone-landscape" });
 //
 // Batch (one boot per viewport, parallel jobs, resumable):
 //   await runMenuGallery({ jobs: 2, force: false });
 //
+// CLI: node tools/layout-audit.mjs --gallery | --screen=ID | --list | --report
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,7 +29,7 @@ import {
 } from "./menu-screens.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const DEFAULT_OUT = path.join(ROOT, "artifacts", "menu-dom-gallery");
+const DEFAULT_OUT = path.join(ROOT, "artifacts", "layout-audit", "gallery");
 
 export { SCREENS, VIEWPORTS, OVERLAY_IDS, listScreenIds, getScreen, pickScreens, pickViewports };
 
@@ -351,7 +352,7 @@ export async function runMenuGallery(opts = {}) {
 export function reportMenuGallery(outDir = DEFAULT_OUT) {
   const manifestPath = path.join(outDir, "manifest.json");
   if (!fs.existsSync(manifestPath)) {
-    console.log("no manifest yet — run menu-dom-gallery first");
+    console.log("no manifest yet — run: node tools/layout-audit.mjs --gallery");
     return { ok: false };
   }
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
@@ -386,63 +387,13 @@ export function parseMenuGalleryArgv(argv) {
     force: has("--force"),
     jobs: Number(arg("--jobs=") || "2") || 2,
     screens: arg("--screens=") ? pickScreens(SCREENS, arg("--screens=")) : SCREENS,
-    viewports: arg("--viewports=") ? pickViewports(VIEWPORTS, arg("--viewports=")) : pickViewports(VIEWPORTS, "ios-iphone-landscape,ios-iphone-portrait"),
+    viewports: arg("--viewports=")
+      ? pickViewports(VIEWPORTS, arg("--viewports="))
+      : pickViewports(VIEWPORTS, "ios-iphone-landscape,ios-iphone-portrait"),
     scales: parseScales(argv),
     circuits: parseCircuits(argv),
     outDir: arg("--out=") ? path.resolve(ROOT, arg("--out=")) : DEFAULT_OUT,
-    screen: argv.find((a) => !a.startsWith("--")) || null,
+    screen: arg("--screen=") || argv.find((a) => !a.startsWith("--")) || null,
     viewport: arg("--viewport=") || "ios-iphone-landscape",
   };
-}
-
-function invokedAsCli() {
-  const entry = process.argv[1];
-  if (!entry) return false;
-  try {
-    return fileURLToPath(import.meta.url) === path.resolve(entry);
-  } catch {
-    return false;
-  }
-}
-
-if (invokedAsCli()) {
-  const opts = parseMenuGalleryArgv(process.argv.slice(2));
-  if (opts.list) {
-    printMenuCatalog();
-    process.exit(0);
-  }
-  if (opts.report) {
-    reportMenuGallery(opts.outDir);
-    process.exit(0);
-  }
-  if (opts.screen) {
-    runMenuShot({
-      screen: opts.screen,
-      viewport: opts.viewport,
-      outDir: opts.outDir,
-      force: opts.force,
-    }).then((r) => {
-      console.log(JSON.stringify(r, null, 2));
-      process.exit(r.ok ? 0 : 1);
-    }).catch((e) => {
-      console.error(e.message || e);
-      process.exit(1);
-    });
-  } else {
-    runMenuGallery({
-      screens: opts.screens,
-      viewports: opts.viewports,
-      scales: opts.scales,
-      circuits: opts.circuits,
-      jobs: opts.jobs,
-      force: opts.force,
-      outDir: opts.outDir,
-    }).then((r) => {
-      console.log(`\n${r.rows.length} cells -> ${path.relative(ROOT, r.outDir)}/ (${r.skipped} skipped)`);
-      process.exit(r.ok ? 0 : 1);
-    }).catch((e) => {
-      console.error(e.message || e);
-      process.exit(1);
-    });
-  }
 }

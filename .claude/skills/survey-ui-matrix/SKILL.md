@@ -6,13 +6,20 @@ description: Use when systematically reviewing Apex 26's UI across orientations,
 # Surveying the whole UI across the whole matrix
 
 A layout bug is never "on a screen" — it is a **cell of a matrix**: screen ×
-viewport × scale × pointer. Batch instrument: `tools/layout-audit.mjs`.
-Title-path recipe (six screens at iPhone landscape, with shots):
-`node tools/ui-survey.mjs` / `npm run ui:survey` — a layout-audit alias;
-`tools/ui-mcp-survey.mjs` is a forwarder to that file. This skill is the
-**interactive** one: Playwright MCP for resize / DOM / CSS (`browser_resize`,
-`browser_snapshot`, `browser_evaluate`), Chrome DevTools MCP for emulate +
-heap when needed. Canvas hidden either way.
+viewport × scale × pointer. **One CLI:** `tools/layout-audit.mjs`.
+
+```sh
+node tools/layout-audit.mjs --help
+node tools/layout-audit.mjs --list
+node tools/layout-audit.mjs --survey          # title-path + shots (npm run ui:survey)
+node tools/layout-audit.mjs --gallery         # fast PNG+DOM all menus (npm run ui:gallery)
+node tools/layout-audit.mjs --screen=settings # one cell
+node tools/layout-audit.mjs                   # full geometry matrix (npm run ui:audit)
+```
+
+This skill is the **interactive** complement: Playwright MCP for resize / DOM /
+CSS (`browser_resize`, `browser_snapshot`, `browser_evaluate`), Chrome DevTools
+MCP for emulate + heap when needed. Canvas hidden either way.
 
 Single known bug → **ui-menu-a11y**. One-screen CSS edit loop → **css-play**.
 Restructure decisions → **restructure-screens-css**.

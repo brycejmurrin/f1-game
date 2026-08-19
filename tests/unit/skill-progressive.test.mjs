@@ -372,9 +372,10 @@ test("css-play names the css-play CLI and Playwright DOM commands", () => {
   assert.match(text, /hot-swap|hot.swap/i);
 });
 
-test("survey-ui-matrix names the ui-survey layout-audit recipe", () => {
+test("survey-ui-matrix names the layout-audit CLI recipes", () => {
   const text = fs.readFileSync(path.join(SKILLS, "survey-ui-matrix/SKILL.md"), "utf8");
-  assert.match(text, /ui-survey\.mjs/);
+  assert.match(text, /layout-audit\.mjs/);
+  assert.match(text, /--gallery|--survey/);
   assert.match(text, /npm run ui:survey/);
 });
 

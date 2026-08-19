@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// menu-screens.mjs — canonical screen routes for layout-audit, menu-shot, menu-dom-gallery.
+// menu-screens.mjs — canonical screen routes for layout-audit.mjs.
 import { createRequire } from "node:module";
 import { pickCircuit } from "./circuit-axis.mjs";
 

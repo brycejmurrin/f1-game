@@ -1,37 +1,37 @@
 #!/usr/bin/env node
-// LAYOUT AUDIT — every screen, on every shape of display, measured the same way.
+// LAYOUT AUDIT — one CLI for menu geometry, screenshots, and DOM dumps.
 //
-// WHY THIS EXISTS. The layout bugs in this app are not bugs in a screen, they are
-// bugs in a CELL of a matrix: a screen crossed with a viewport. The circuit list
-// stopped 49px above the sheet floor only in the two-column branch; the garage
-// stacked its categories only at the sheet's 430px floor width; the preview card
-// clipped its chip row only where the column was shorter than the card. Every one
-// of those was found by looking at one screenshot and missed everywhere else,
-// because nothing enumerated the matrix.
+// Catalog: menu-screens.mjs. Capture engine: menu-capture.mjs (library, not a CLI).
 //
-// So: MEASURE FIRST, LOOK SECOND. Screenshots are slow (SwiftShader, seconds to
-// minutes each) and prove nothing you can grep. The probe below reads geometry
-// out of the live DOM — what overflows, what is clipped, what is off screen, what
-// is too small to tap, what scrolls and whether it reaches the floor — for every
-// (screen, viewport) pair, and writes both JSON and a gallery page. Shots are
-// opt-in (--shots) and are for the eye, after the numbers say where to look.
+//   node tools/layout-audit.mjs --help
+//   node tools/layout-audit.mjs --list
+//   node tools/layout-audit.mjs --report
 //
-//   node tools/layout-audit.mjs                  # measure every cell, write JSON + HTML
-//   node tools/layout-audit.mjs --shots          # also capture a PNG per cell (slow)
+//   # Geometry matrix (default) — clip / tap / overflow / starved
+//   node tools/layout-audit.mjs
 //   node tools/layout-audit.mjs --screens=select,garage --viewports=ios-*
-//   node tools/layout-audit.mjs --scale=100,130,150   # each viewport at each UI size
-//   node tools/layout-audit.mjs --circuits             # the two map screens, per circuit aspect
-//   node tools/layout-audit.mjs --circuits=jeddah,baku # or name them
-//   node tools/layout-audit.mjs --capture-only --dom --shots   # fast PNG + dom.json gallery
-//       (~10–20× faster than ui-audit.spec.js: one boot per viewport, no geometry probe)
+//   node tools/layout-audit.mjs --shots --dom          # + PNG / DOM per cell
+//   node tools/layout-audit.mjs --scale=100,130 --circuits=jeddah
 //
-// --scale JOINS THE VIEWPORT AXIS rather than becoming a third dimension of the
-// grid: a cell is identified as `ios-15-landscape@130`, so the queue, the merge
-// and the HTML table all keep working unchanged, and the scaled variants sit in
-// their own columns next to the size they came from — which is where you want
-// them when the question is "what did two notches up cost this screen?".
+//   # Fast PNG + DOM gallery (one boot per viewport, resumable, parallel)
+//   node tools/layout-audit.mjs --gallery
+//   node tools/layout-audit.mjs --gallery --screens=title,garage --jobs=1
+//   node tools/layout-audit.mjs --gallery --force
 //
-// Output: artifacts/layout-audit/{audit.json,index.html,shots/*.png}
+//   # One screen
+//   node tools/layout-audit.mjs --screen=settings
+//   node tools/layout-audit.mjs --screen=garage --viewport=ios-iphone-portrait
+//
+//   # Title-path recipe (six screens @ play-shape landscape + shots)
+//   node tools/layout-audit.mjs --survey
+//   npm run ui:survey
+//
+// Output:
+//   geometry → artifacts/layout-audit/{audit.json,index.html,shots/,dom/}
+//   gallery  → artifacts/layout-audit/gallery/{manifest.json,index.html,shots/,dom/}
+//
+// --scale joins the viewport axis (`ios-iphone-landscape@130`). Raise --jobs=N
+// only when /proc/loadavg first field is under ~3.
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -39,10 +39,82 @@ import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
 import { launchChromium } from "./harness.mjs";
 import { collectDomInfo } from "./css-play.mjs";
-import { SCREENS, VIEWPORTS, OVERLAY_IDS } from "./menu-screens.mjs";
-import { runMenuGallery } from "./menu-capture.mjs";
+import { SCREENS, VIEWPORTS, OVERLAY_IDS, pickScreens, pickViewports } from "./menu-screens.mjs";
+import {
+  runMenuGallery,
+  runMenuShot,
+  reportMenuGallery,
+  printMenuCatalog,
+} from "./menu-capture.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const GALLERY_OUT = path.join(ROOT, "artifacts", "layout-audit", "gallery");
+const GEOM_OUT = path.join(ROOT, "artifacts", "layout-audit");
+const SURVEY_SCREENS = "title,select,garage,settings,career,datahub";
+const SURVEY_VIEWPORTS = "ios-iphone-landscape";
+
+function printHelp() {
+  console.log(`layout-audit — menu geometry + screenshot/DOM capture
+
+  --list                         screen / viewport catalog (no browser)
+  --report                       summarize last --gallery run
+  --help
+
+  (default)                      geometry matrix → artifacts/layout-audit/
+  --shots / --dom                add PNG / structured DOM to geometry cells
+  --screens=a,b / --viewports=   filter cells (wildcards: ios-*)
+  --scale=100,130 / --circuits=  UI-scale and map-circuit axes
+  --jobs=N                       parallel viewports (default 3 geometry / 2 gallery)
+
+  --gallery                      fast PNG+DOM only (no geometry probe)
+  --screen=ID                    one screen PNG+DOM (implies gallery cell)
+  --viewport=NAME                viewport for --screen= (default ios-iphone-landscape)
+  --survey                       title-path recipe (6 screens @ landscape + --shots)
+  --force                        recapture gallery cells (skip resume)
+  --out=DIR                      gallery output (default artifacts/layout-audit/gallery)
+
+Legacy: --capture-only is an alias for --gallery.
+`);
+}
+
+function parseArgv(argv) {
+  const has = (f) => argv.includes(f);
+  const arg = (prefix) => {
+    const hit = argv.find((a) => a.startsWith(prefix));
+    return hit ? hit.slice(prefix.length) : null;
+  };
+  const gallery = has("--gallery") || has("--capture-only");
+  const screen = arg("--screen=");
+  const survey = has("--survey");
+  let screenPat = arg("--screens=");
+  let viewportPat = arg("--viewports=");
+  let jobsDefault = gallery || screen ? 2 : 3;
+  if (survey) {
+    if (!screenPat) screenPat = SURVEY_SCREENS;
+    if (!viewportPat) viewportPat = SURVEY_VIEWPORTS;
+    jobsDefault = 1;
+  }
+  return {
+    help: has("--help") || has("-h"),
+    list: has("--list"),
+    report: has("--report"),
+    gallery: gallery || !!screen,
+    screen,
+    survey,
+    force: has("--force"),
+    wantShots: has("--shots") || survey || gallery || !!screen,
+    wantDom: has("--dom") || gallery || !!screen,
+    jobs: Number(arg("--jobs=") || String(jobsDefault)) || jobsDefault,
+    screens: pickScreens(SCREENS, screenPat),
+    viewports: pickViewports(VIEWPORTS, viewportPat || (gallery && !screen ? "ios-iphone-landscape,ios-iphone-portrait" : null)),
+    viewport: arg("--viewport=") || "ios-iphone-landscape",
+    scales: parseScales(argv),
+    circuits: parseCircuits(argv),
+    outDir: arg("--out=")
+      ? path.resolve(ROOT, arg("--out="))
+      : (gallery || screen ? GALLERY_OUT : GEOM_OUT),
+  };
+}
 // ------------------------------------------------------------------ the probe
 // Runs in the page. Everything here is geometry — no screenshots, no judgement
 // calls that depend on colour or style, so a result can be diffed build to build.
@@ -503,43 +575,58 @@ const PROBE = (rootSel) => {
 
 // ------------------------------------------------------------------ the runner
 const argv = process.argv.slice(2);
-const wantShots = argv.includes("--shots");
-const wantDom = argv.includes("--dom");
-const captureOnly = argv.includes("--capture-only");
-const OUT = path.join(ROOT, "artifacts", captureOnly ? "menu-dom-gallery" : "layout-audit");
-const SHOT_DIR = path.join(OUT, "shots");
-const DOM_DIR = path.join(OUT, "dom");
-const pick = (flag, all) => {
-  const a = argv.find((x) => x.startsWith(flag));
-  if (!a) return all;
-  const pats = a.split("=")[1].split(",");
-  return all.filter((x) => pats.some((p) => p.endsWith("*") ? x[0].startsWith(p.slice(0, -1)) : x[0] === p || x.id === p));
-};
-const viewports = pick("--viewports=", VIEWPORTS);
-const SCALES = parseScales(argv);
-const CIRCUITS_AXIS = parseCircuits(argv);
-const screens = argv.find((x) => x.startsWith("--screens="))
-  ? SCREENS.filter((s) => argv.find((x) => x.startsWith("--screens=")).split("=")[1].split(",").includes(s.id))
-  : SCREENS;
+const opts = parseArgv(argv);
 
-fs.mkdirSync(OUT, { recursive: true });
-if (wantShots || captureOnly) fs.mkdirSync(SHOT_DIR, { recursive: true });
-if (wantDom || captureOnly) fs.mkdirSync(DOM_DIR, { recursive: true });
-
-const JOBS = Number((argv.find((a) => a.startsWith("--jobs=")) || "--jobs=3").split("=")[1]) || 3;
-
-if (captureOnly) {
-  const result = await runMenuGallery({
-    screens,
-    viewports,
-    scales: SCALES,
-    circuits: CIRCUITS_AXIS,
-    jobs: JOBS,
-    force: argv.includes("--force"),
-    outDir: OUT,
+if (opts.help) {
+  printHelp();
+  process.exit(0);
+}
+if (opts.list) {
+  printMenuCatalog();
+  process.exit(0);
+}
+if (opts.report) {
+  const r = reportMenuGallery(opts.outDir);
+  process.exit(r.ok ? 0 : 1);
+}
+if (opts.screen) {
+  const result = await runMenuShot({
+    screen: opts.screen,
+    viewport: opts.viewport,
+    outDir: opts.outDir,
+    force: opts.force,
   });
+  console.log(JSON.stringify(result, null, 2));
   process.exit(result.ok ? 0 : 1);
 }
+if (opts.gallery) {
+  const result = await runMenuGallery({
+    screens: opts.screens,
+    viewports: opts.viewports,
+    scales: opts.scales,
+    circuits: opts.circuits,
+    jobs: opts.jobs,
+    force: opts.force,
+    outDir: opts.outDir,
+  });
+  console.log(`\n${result.rows.length} cells -> ${path.relative(ROOT, result.outDir)}/ (${result.skipped} skipped)`);
+  process.exit(result.ok ? 0 : 1);
+}
+
+const wantShots = opts.wantShots && !opts.gallery;
+const wantDom = opts.wantDom && !opts.gallery;
+const OUT = GEOM_OUT;
+const SHOT_DIR = path.join(OUT, "shots");
+const DOM_DIR = path.join(OUT, "dom");
+const viewports = opts.viewports;
+const SCALES = opts.scales;
+const CIRCUITS_AXIS = opts.circuits;
+const screens = opts.screens;
+const JOBS = opts.jobs;
+
+fs.mkdirSync(OUT, { recursive: true });
+if (wantShots) fs.mkdirSync(SHOT_DIR, { recursive: true });
+if (wantDom) fs.mkdirSync(DOM_DIR, { recursive: true });
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
   ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml", ".woff2": "font/woff2" };

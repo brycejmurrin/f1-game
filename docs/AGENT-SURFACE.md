@@ -88,7 +88,7 @@ Ports (do not reuse): TinyFish `3711`, chrome daemon `3712`, apex-tools HTTP
 | Live `version.json` / Pages | **deploy-research** / TinyFish | `mcp-probe`, curl github.io |
 | Batch screenshots | skill **playwright-probe** (`apex_shot` / `shot.mjs`) | Chrome MCP while Playwright runs |
 | Interactive host browser | repo MCP **playwright** (`browser_*` via `playwright-mcp.sh`) | `test-bg.mjs`; chrome-devtools at the same time |
-| One-screen CSS try-on | skill **css-play** → `css-play.mjs` / `playwright-mcp.sh play\|dom` | `layout-audit` / `ui-survey` (the matrix) |
+| One-screen CSS try-on | skill **css-play** → `css-play.mjs` / `playwright-mcp.sh play\|dom` | `layout-audit` matrix / `--gallery` |
 | Start Playwright **groups** | `tools/test-bg.mjs` (CLI only) | any `apex_*` wrap; host `browser_*` |
 | Agent bloat / extract / dead code | skill **slim-bloat** → `bloat-auditor` + `bloat-scan.mjs` | a browser group; raising a ratchet to hide growth |
 
@@ -157,7 +157,7 @@ names the CLI.
 | `apex_wgx_capture` | `wgx-capture.mjs` | browser | webgpu-debug |
 | `apex_wgx_shot` | `wgx-shot.mjs` | browser | webgpu-debug |
 | `apex_quick_validate` | `quick-validate.mjs` | browser | check-changes |
-| `apex_ui_survey` | `ui-survey.mjs` | browser | survey-ui-matrix |
+| `apex_ui_survey` | `layout-audit.mjs --survey` (via `ui-survey.mjs`) | browser | survey-ui-matrix |
 
 Pins the wrap always applies (you cannot override them):
 
