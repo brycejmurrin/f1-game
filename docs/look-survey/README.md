@@ -12,3 +12,4 @@ One 4×5 sheet per circuit: rows `dawn / day / dusk / night`, columns
 | Jeddah | [jeddah_grid.png](jeddah_grid.png) |
 | Qatar | [qatar_grid.png](qatar_grid.png) |
 | Singapore | [singapore_grid.png](singapore_grid.png) |
+| Las Vegas | [vegas_grid.png](vegas_grid.png) |
