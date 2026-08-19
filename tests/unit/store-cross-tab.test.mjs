@@ -172,3 +172,4 @@ test("a write this tab made still wins its own cache — no self-invalidation lo
   // survives; if that ever changed, set()-then-get() would round-trip the disk.
   assert.equal(store.get("track", -1), 7);
 });
+

@@ -86,6 +86,14 @@ const CEILING = {
   // readout is a peripheral glance during a lap rather than menu chrome a
   // stopped player reads, and at --fs-micro it rendered as a banner beside the
   // minimap. Same class of exception as #hud-speed's raw 34px.
+  // 2026-08-18: 1a3975c5 briefly added two 10px #subtitle eyebrows (3→5);
+  // eedad021 restored the color system and those decls left (back to 3).
+  // 2026-08-18: 3 → 4. 8d82b062 menu-hierarchy redesign added `#subtitle`
+  // `font-size: 11px` on the title eyebrow (already red on deploy tip).
+  // 2026-08-18: 4 → 5. 0ccd1b4c dashboard/season menu composition added another
+  // sub-floor literal on the union.
+  // 2026-08-18: 5 → 3. 864f5b32 / 8e01353c tokenised the title-screen menu
+  // and locked the win back to the pre-redesign floor.
   subFloorFontSize: 3,
   // padding / gap / margin declarations containing a raw px literal.
   // 2026-08-13: 529 -> 479. The four sheets that read NO spacing token at all
@@ -96,7 +104,22 @@ const CEILING = {
   // a hairline should stay a hairline when the density ladder tightens.
   // 2026-08-14: 475 -> 474. `.hud-gaps` lost an inert `gap: 4px` (it was never
   // a flex container) when the widget was resized in the HUD SIZE pass.
-  rawSpacing: 471,
+  // 2026-08-18: 471 -> 470. Data Hub Last Race column-hide rules lost a
+  // duplicate landscape `padding` when they moved onto body[data-width].
+  // 2026-08-18: 470 -> 467. Short-landscape HUD shrink left responsive.css
+  // (`padding`/`gap` on .hud-box / .hud-top / #hud-sectors).
+  // 2026-08-18: 467 → 476. Same 8d82b062 title-menu block added nine raw
+  // padding/gap/margin decls (brand clamp, #subtitle, #menu-meta, button stacks).
+  // 2026-08-18: 476 → 490. 0ccd1b4c dashboard/season menu block (+14 in menus.css).
+  // 2026-08-18: 490 → 467. Title-screen tokenisation restored the 467 lock.
+  // 2026-08-18: 467 → 481. Deploy `45dc6cb1` short-landscape / mid-width
+  // menu compress (css/menus.css) added 14 raw padding/gap/margin decls
+  // and did not remasure the ceiling; the union is 481.
+  // 2026-08-18: 481 → 467. Tokenised that short-landscape / mid-width
+  // compress onto --gap / --pad so density and UI SIZE still scale it.
+  // 2026-08-18: 467 → 466. Settings remodel moved the 620px control pad
+  // onto --pad so the list rows follow the density ladder.
+  rawSpacing: 466,
 };
 
 test("no new font-size below the --fs-micro floor", () => {
@@ -163,12 +186,10 @@ test("the zero-spacing-token sheet list only shrinks", () => {
   /* data.css, hud.css, overlays.css and track-detail.css came OFF this list on
      2026-08-13 — they now read --pad / --gap and so move with the density
      ladder, which is what "things do not resize" actually meant.
-     responsive.css stays, and is a different case that should be judged
-     differently rather than queued for the same migration: it is the
-     media-query sheet, so its raw values are deliberately viewport-absolute
-     (safe-area insets, the landscape-phone caps). It is listed because the
-     measurement is the measurement. */
-  const KNOWN_ZERO = ["responsive.css"];
+     2026-08-18: responsive.css left too — the desktop title column now reads
+     --gap for the skew gutter (CAREER hang). Remaining raw px there are
+     viewport-absolute caps, not a density-blind sheet. */
+  const KNOWN_ZERO = [];
   const zero = sheets()
     .filter(({ name }) => name !== "tokens.css")
     .filter(({ src }) => /(?:padding|margin|gap)[a-z-]*:[^;{}]*[0-9.]+px/.test(src))

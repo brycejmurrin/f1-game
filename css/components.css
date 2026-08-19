@@ -136,7 +136,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   width: min(100%, var(--sheet-w, 520px));
   max-height: 100%;
   background: var(--panel);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid color-mix(in oklab, var(--red) 20%, rgba(255, 255, 255, 0.12));
   border-radius: var(--r-lg);
   /* lightness + a top lip do the lifting here; the cast shadow only matters
      against the 3D scene (see the elevation notes in css/tokens.css) */
@@ -221,7 +221,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   position: relative;
   /* Darker than the body and shaded from the top, so the action bar reads as
      the plate the sheet stands on rather than one more band of content. */
-  background: linear-gradient(180deg in oklab, rgba(0, 0, 0, 0.30), rgba(8, 8, 13, 0.97) 60%);
+  background: linear-gradient(180deg in oklab, color-mix(in oklab, var(--red) 8%, rgba(0, 0, 0, 0.30)), rgba(8, 8, 13, 0.80) 60%);
 }
 .sheet-foot::before {
   content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
@@ -251,7 +251,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 .sheet[data-density="compact"] .sheet-body { padding-top: 0; padding-bottom: calc(var(--pad) * 0.25); }
 .sheet[data-density="compact"] .sheet-foot { padding-top: calc(var(--pad) * 0.22); padding-bottom: calc(var(--pad) * 0.22); }
 .sheet-foot .bigbtn {
-  width: auto; min-width: 110px; margin: 0; flex: 0 1 auto;
+  width: auto; min-width: min(100%, 110px); margin: 0; flex: 1 1 0;
   /* same reasoning as the title: on a 393px-tall screen a 20px/14px button is
      ~54px of the ~230px the content has to live in.
      Floor 14px so 90% UI zoom still clears the 12px visual type floor. */
@@ -291,7 +291,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    two debugging sessions.
    Screens tune it with four properties and nothing else:
      --pair-at     the sheet width at which the pair turns on (default 620px)
-     --pair-split  the SIDE column's track      (default minmax(0, 42%))
+     --pair-split  the SIDE column's track      (default minmax(0, 1fr))
      --pair-main   the MAIN column's track      (default minmax(0, 1fr))
      --pair-gap    the gutter between the panes (default 0.8 * --pad)
 
@@ -322,7 +322,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    rather than `[data-pair="off"]`, so the stack is also what an unmeasured sheet
    gets in the first frame, or if the script never loads. */
 .pane-pair {
-  grid-template-columns: var(--pair-split, minmax(0, 42%)) var(--pair-main, minmax(0, 1fr));
+  grid-template-columns: var(--pair-split, minmax(0, 1fr)) var(--pair-main, minmax(0, 1fr));
   grid-template-rows: auto minmax(0, 1fr) min-content;
   column-gap: var(--pair-gap, calc(var(--pad) * 0.8));
 }
@@ -581,7 +581,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
     inset 0 1px 0 rgba(255, 255, 255, 0.30),
     inset 0 -1px 0 rgba(0, 0, 0, 0.32),
     0 2px 4px rgba(0, 0, 0, 0.45),
-    0 6px 20px rgba(225, 6, 0, 0.38);
+    0 6px 22px color-mix(in oklab, var(--red) 46%, transparent);
   transition: background 0.14s, box-shadow 0.14s, transform 0.1s;
   /* the sweep below is clipped to the button's own rounded box */
   position: relative;
@@ -635,7 +635,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
       inset 0 1px 0 rgba(255, 255, 255, 0.38),
       inset 0 -1px 0 rgba(0, 0, 0, 0.32),
       0 3px 6px rgba(0, 0, 0, 0.45),
-      0 10px 30px rgba(225, 6, 0, 0.55);
+      0 10px 32px color-mix(in oklab, var(--red) 62%, transparent);
   }
 }
 /* Pressed = the light moves. The lit lip goes out, an inner shadow drops in
@@ -647,7 +647,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   box-shadow:
     inset 0 2px 5px rgba(0, 0, 0, 0.45),
     0 1px 2px rgba(0, 0, 0, 0.4),
-    0 2px 10px rgba(225, 6, 0, 0.34);
+    0 2px 12px color-mix(in oklab, var(--red) 42%, transparent);
   transform: skewX(-6deg) scale(0.97);
 }
 /* Secondary buttons are raised surfaces, not outlines: a lightness step off the
@@ -665,7 +665,8 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 @media (hover: hover) {
   .bigbtn.alt:hover {
     background: rgba(255, 255, 255, 0.16);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 2px 6px rgba(0,0,0,0.45);
+    border-color: color-mix(in oklab, var(--red) 32%, rgba(255,255,255,0.10));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 2px 8px color-mix(in oklab, var(--red) 22%, transparent);
   }
 }
 .bigbtn.alt:active {
@@ -689,22 +690,28 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 }
 
 /* ---------- dialog sheets (pause menu, settings, results, …) ---------- */
-/* Every one of these is `.screen > .sheet`; only the width differs. */
-#pausemenu   { --sheet-w: 420px; }
+/* Every one of these is `.screen > .sheet`. --sheet-w is the width cap;
+   --fit-at (where set) inherits onto the inner .sheet so classifyFit can
+   shrink the sheet at 200% UI size. Landscape is a viewport fact. */
+#pausemenu   { --sheet-w: 420px; --fit-at: 260px; }
 #pmsettings  { --sheet-w: 760px; }
-#results     { --sheet-w: 600px; }
-#standings   { --sheet-w: 560px; }
+#results     { --sheet-w: 600px; --fit-at: 300px; }
+#standings   { --sheet-w: 560px; --fit-at: 300px; }
 /* Help uses a term rail beside a readable description column. At the old 700px
    cap long explanations wrapped heavily; 1000px uses available desktop width
    while viewport fitting still protects constrained/high-scale sheets. */
 #howtoplay   { --sheet-w: 1000px; }
-#advanced    { --sheet-w: 820px; }
-#audioset    { --sheet-w: 460px; }
-#race-settings { --sheet-w: 560px; }
+#advanced    { --sheet-w: 820px; --fit-at: 300px; }
+#audioset    { --sheet-w: 460px; --fit-at: 300px; }
+#race-settings { --sheet-w: 560px; --fit-at: 300px; }
+@media (orientation: landscape) {
+  #results, #standings, #race-settings, #audioset, #advanced, #customize { --fit-at: 220px; }
+  #pausemenu { --fit-at: 180px; }
+}
 /* Wide enough for three columns of rows on a landscape phone. At 560px the form
    was two narrow columns and still ran 171px past the fold; the sheet is capped
    by the safe-area width anyway, so this only ever spends room that exists. */
-#customize   { --sheet-w: 760px; }
+#customize   { --sheet-w: 760px; --fit-at: 300px; }
 /* THE ONE THAT WAS MISSING. #vsfriend was the only dialog in the game with no
    --sheet-w, so it fell through to the generic 520px fallback in `.sheet` — the
    second-narrowest number in this table, on the screen with a TWO-COLUMN layout
@@ -712,11 +719,56 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    phone, with the rest black. 760px matches #pmsettings and #customize, which
    are the other two that carry a form in two columns. */
 #vsfriend    { --sheet-w: 760px; }
+#vsfriend-inner { --fit-at: 280px; }
+@media (orientation: landscape) { #vsfriend-inner { --fit-at: 200px; } }
 
 /* Dialogs stack over a full screen (the team picker sits on the select screen),
    so the scrim has to actually separate them — 0.6 left the sheet looking
-   washed with the menu behind it reading through. */
-.screen.dim { background: rgba(0, 0, 0, 0.72); }
+   washed with the menu behind it reading through. The fix is to fade the
+   UNDERLYING MENU chrome (rules just below), not to black out #game. */
+.screen.dim {
+  background:
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
+    rgba(0, 0, 0, 0.42);
+}
+
+/* Fade the menu under a dim dialog — not the canvas. opacity, not hidden,
+   so layer queries and tests still match the open attribute. */
+body:has(dialog.screen:not([hidden])) #overlay {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(#teampicker:not([hidden])) #select,
+body:has(#race-settings:not([hidden])) #select,
+body:has(#track-detail:not([hidden])) #select {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(#customize:not([hidden])) #select,
+body:has(#season-setup:not([hidden])) #select {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(#career-offers:not([hidden])) #career,
+body:has(#career-history:not([hidden])) #career,
+body:has(#career-guide:not([hidden])) #career,
+body:has(#teampicker:not([hidden])) #career {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(#datahub:not([hidden])) #overlay {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(#advanced:not([hidden])) #pmsettings,
+body:has(#audioset:not([hidden])) #pmsettings {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(#howtoplay:not([hidden])) #pmsettings {
+  opacity: 0;
+  pointer-events: none;
+}
 
 /* Z-INDEX IS ONLY FOR THE SCREENS STILL IN NORMAL FLOW.
    A screen migrated to `<dialog>.showModal()` (js/game/topmodal.js) renders in
@@ -745,7 +797,14 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    QUIT is the exception the other way: it is the only destructive item here, so
    it gets a rule above it and a muted red label — visibly apart from the two
    harmless ones, without shouting louder than RESUME. */
-#pm-resume { background: var(--red); color: #fff !important; border-color: var(--red); font-weight: 700; font-size: var(--fs-5); }  /* was 15px, one step from --fs-5's 16px */
+#pm-resume {
+  background: var(--grad-primary); color: #fff !important; border-color: transparent;
+  font-weight: 700; font-size: var(--fs-5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.32),
+    0 6px 20px color-mix(in oklab, var(--red) 42%, transparent);
+}
 #pm-quit {
   color: color-mix(in oklab, var(--red) 62%, #fff);
   margin-top: calc(var(--gap) * 0.5);
@@ -776,15 +835,36 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 #pausemenu .sheet[data-density="compact"] .build-tag {
   margin: 2px 0 0;
 }
+/* Opaque enough that leftover HUD cannot read through the card. Color is
+   the original dim wash, not carnival inks. */
+#pausemenu.screen.dim {
+  background:
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 14%, transparent), transparent 58%),
+    rgba(6, 6, 10, 0.58);
+}
+/* Two-up secondary doors. A 420×232 card on 852×393 spent its height on four
+   full-width --tap rows; RESTART | SETTINGS share a row so RESUME stays the
+   one full-width primary and QUIT stays the one full-width destructive. */
+#pausemenu .sheet-body.stack {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--gap) * 0.6);
+}
+#pm-resume,
+#pm-quit,
+#pm-standings,
+#pm-build { grid-column: 1 / -1; }
 
 /* ---------- settings sub-menu ----------
-   One category at a time. The old responsive column count made every setting
-   visible at once, but the result changed reading order as the sheet crossed a
-   breakpoint and mixed everyday controls with experimental switches and links
-   to other screens. A persistent category rail gives the screen one stable
-   hierarchy at every size. On narrow sheets it wraps as a compact 2-col
-   grid (CONTROLS | DISPLAY / MORE); once there is room it sits beside the
-   active panel. */
+   One category at a time. Tabs stay a single equal-width row (flex, not a
+   3-col grid) so CONTROLS / DISPLAY / MORE share a top edge with the first
+   setting. A side rail plus a duplicate .pm-group-h left a dead strip above
+   the tabs and a 3-vs-2 column that never looked level. High UI sizes must
+   not spend more than one primary control row on that navigation. */
+#pmsettings-inner {
+  --fit-at: 300px;
+}
+@media (orientation: landscape) { #pmsettings-inner { --fit-at: 220px; } }
 #pm-settings-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -803,11 +883,14 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   padding-bottom: calc(var(--gap) * 0.6);
   background: var(--bg);
 }
-/* The balanced row chooses one, two or three controls from its own local width;
-   a 2 + 1 wrap makes MORE a deliberate full-width action, not a half-empty
-   grid. The wide container branch below remains a vertical navigation rail. */
+/* Equal segments: override .balanced-row's 7.25rem basis so three tabs stay
+   one even row instead of wrapping MORE onto a lonely second line. */
 #pm-category-tabs > button {
-  min-width: min(100%, var(--balance-min));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  min-width: 0;
   min-height: var(--tap);
   margin: 0;
   padding: calc(var(--gap) * 0.6) calc(var(--gap) * 0.67);
@@ -815,16 +898,17 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   border-radius: var(--r-sm);
   background: rgba(255,255,255,.045);
   color: var(--muted);
-  font-size: var(--fs-1);
+  font-size: clamp(var(--fs-1), calc(1.7 * var(--vwz)), var(--fs-3));
   font-weight: 750;
   letter-spacing: .06em;
+  text-align: center;
 }
 #pm-category-tabs > button.active,
 #pm-category-tabs > button[aria-selected="true"] {
   color: var(--text);
   border-color: var(--red);
-  background: rgba(232,0,45,.14);
-  box-shadow: inset 3px 0 0 var(--red);
+  background: color-mix(in oklab, var(--red) 18%, transparent);
+  box-shadow: inset 3px 0 0 var(--red), 0 0 12px color-mix(in oklab, var(--red) 28%, transparent);
 }
 /* At very high UI zoom a phone sheet can be under 250 LOCAL px even though it
    fills the physical viewport. Keep the aria-label as the accessible name,
@@ -837,24 +921,40 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   #pm-tab-controls::after { content: "CTRL"; }
   #pm-tab-display::after { content: "DISP"; }
 }
+/* Compact + locally narrow: lock one row. Equal flex still fills the
+   sheet; overflow-x is the escape if a label cannot shrink further. */
+@container sheet (max-width: 519px) {
+  #pmsettings-inner[data-density="compact"] #pm-category-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto; overflow-y: hidden;
+    overscroll-behavior-x: contain; touch-action: pan-x;
+    scrollbar-width: none;
+  }
+  #pmsettings-inner[data-density="compact"] #pm-category-tabs::-webkit-scrollbar { display: none; }
+}
 .pm-groups { min-width: 0; }
 .pm-groups > [role="tabpanel"] { min-width: 0; }
 .pm-groups > [role="tabpanel"][hidden] { display: none !important; }
 .pm-group { display: flex; flex-direction: column; gap: 6px; }
 .pm-group-h {
-  color: var(--red); font-size: var(--fs-3); font-weight: 700; letter-spacing: 0.11em;
+  color: var(--red);
+  font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
+  font-weight: 700; letter-spacing: 0.11em;
+  line-height: 1.2;
+  box-sizing: border-box;
   margin: 0; padding-bottom: 4px;
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
+/* Tab already names the category. Keep later headings (COCKPIT). */
+#pm-panel-controls > .pm-group-h:first-child,
+#pm-panel-display > .pm-group-h:first-child,
+#pm-panel-more > .pm-group-h:first-child {
+  display: none;
+}
 .pm-group button { margin: 0; width: 100%; }
-/* SETTINGS CONTROLS SHARE ONE HEIGHT. DRIVING and DISPLAY sit in sibling
-   columns; when DISPLAY's .tune-row was ~80px (label + tap-min track) while
-   every DRIVING button was --tap, row N of one column never met row N of the
-   other — MEASURED 852×393 @100%: HIDE HUD and STEER lined up, then UI SIZE
-   sat 28px taller than RECALIBRATE and the columns drifted for the rest of
-   the sheet. Fix: every interactive row is exactly --tap tall. The label
-   overlays the top of the track (pointer-events: none) so the grab target
-   stays the full row. */
+/* Every interactive settings row is exactly --tap tall. The label overlays
+   the top of the track (pointer-events: none) so the grab target stays the
+   full row. */
 #pmsettings-inner .pm-group button,
 #pmsettings-inner .pm-doors button {
   height: var(--tap);
@@ -862,12 +962,15 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  text-align: left;
   width: 100%;
-  /* Control labels are glanced mid-corner — --fs-4 (17px) stays ≥~15px visual
-     at the UI SIZE floor (90%). MEASURED before: compact phone buttons read
-     ~10.4 own/--fs-2 and failed the arm's-length floor in the readability survey. */
-  font-size: var(--fs-4);
+  padding-inline: calc(var(--pad) * 0.75);
+  /* Grows with the viewport, never under the micro floor inside sheet zoom. */
+  font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+  letter-spacing: 0.04em;
+  background: color-mix(in oklab, #fff 6.5%, transparent);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 .pm-group .tune-row {
   position: relative;
@@ -947,23 +1050,6 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   margin: 0;
   min-width: 0;
 }
-@container sheet (min-width: 520px) {
-  #pm-settings-body {
-    grid-template-columns: minmax(145px, 0.28fr) minmax(0, 1fr);
-    gap: calc(var(--gap) * 1.25);
-  }
-  #pm-category-tabs {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    padding: 0;
-    background: transparent;
-  }
-  #pm-category-tabs > button {
-    text-align: left;
-    justify-content: flex-start;
-    font-size: var(--fs-2);
-  }
-}
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
 .sheet[data-density="compact"] .pm-doors { gap: 4px; }
 #pmsettings-inner.sheet[data-density="compact"] .pm-doors button {
@@ -984,11 +1070,21 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 }
 @container sheet (min-width: 620px) {
   #pmsettings-inner .pm-groups > [role="tabpanel"] button {
-    font-size: var(--fs-2); padding: 8px 6px;
+    font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+    padding-inline: calc(var(--pad) * 0.75);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     min-height: var(--tap);
   }
 }
+#advanced-inner .preset-btn,
+#advanced-inner .opt-btn {
+  font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
+}
+#advanced-inner .adv-intro,
+#advanced-inner .tune-label {
+  font-size: clamp(var(--fs-micro), calc(1.7 * var(--vwz)), var(--fs-3));
+}
+
 /* (BACK was outlined red too — same reasoning as the pause stack above. It is
    the only button in this foot, so nothing needs to out-shout anything.) */
 
@@ -1065,7 +1161,11 @@ dialog.screen {
   overflow: hidden;
 }
 dialog.screen[open] { display: grid; }
-dialog.screen.dim::backdrop { background: rgba(6, 6, 10, 0.92); }
+dialog.screen.dim::backdrop {
+  background:
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
+    rgba(6, 6, 10, 0.38);
+}
 @media (prefers-reduced-transparency: reduce) {
   dialog.screen.dim::backdrop { background: rgba(0, 0, 0, 0.96); }
 }

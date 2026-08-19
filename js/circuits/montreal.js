@@ -922,6 +922,10 @@
                 basis,
                 col: [0.60, 0.62, 0.64],
                 embed: 0,
+                // Anchor height is the FALLBACK only. foundation() now also
+                // consults Tracks.terrainY so a large flatTerrain triangle
+                // (skipped by the build-time 30 m grid) still plants the foot
+                // on the same ribbon the foundation spec samples.
                 ground: a.c[1] + 0.3,
               }) || ok;
             }
@@ -939,6 +943,10 @@
           supportGap: 5,
           color: [0.68, 0.70, 0.72],
           required: true,
+          // Custom foundation() piers above are the legs. The default
+          // overheadSpan posts sit on surface.heightAt, which on this
+          // flatTerrain shelf is ~2.7 m above the ribbon the spec measures.
+          supports: false,
         });
       }
 
@@ -1105,3 +1113,4 @@
   }
   );
 })();
+

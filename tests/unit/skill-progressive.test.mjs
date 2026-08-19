@@ -104,6 +104,7 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["perf-profile", "references/flame.md"],
     ["debug-state", "references/hooks.md"],
     ["deploy-merge", "references/protocol.md"],
+    ["css-play", "references/loop.md"],
   ];
   for (const [name, ref] of splits) {
     const skill = fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8");
@@ -350,6 +351,15 @@ test("AGENTS.md points at mcp-probe recipes for renderer probes", () => {
   const text = fs.readFileSync(path.join(ROOT, "AGENTS.md"), "utf8");
   assert.match(text, /mcp-probe\/references\/recipes\.md/);
   assert.doesNotMatch(text, /mcp-probe\/SKILL\.md[^\n]*Probing a specific renderer/);
+});
+
+test("css-play names the css-play CLI and Playwright DOM commands", () => {
+  const text = fs.readFileSync(path.join(SKILLS, "css-play/SKILL.md"), "utf8");
+  assert.match(text, /css-play\.mjs/);
+  assert.match(text, /playwright-mcp\.sh/);
+  assert.match(text, /#game/);
+  assert.match(text, /bump-cache/);
+  assert.match(text, /hot-swap|hot.swap/i);
 });
 
 test("survey-ui-matrix names the ui-survey layout-audit recipe", () => {

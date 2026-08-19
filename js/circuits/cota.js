@@ -83,30 +83,35 @@
       // -- Bespoke: Austin360 Amphitheater — proscenium shell + PA towers + LED wall + lawn --
       const amphiStage = (s, side, dist) => {
         const k = K(s), a = anchor(k, side, dist), bv = [a.r, a.u, a.t];
-        const center = vadd(vadd(a.c, a.r, 8), a.u, 13);
+        // origin is the declared box centre in plan: every primitive used to
+        // emit from the ANCHOR while the preflight box sat 8 m further out, so
+        // ~55 × 28 m of stage/LED wall landed 8 m closer to the racing line
+        // than the guard ever tested (4.79 m over the tarmac at racing 0.877).
+        const origin = vadd(a.c, a.r, 8);
+        const center = vadd(origin, a.u, 13);
         modelGroup("cota-amphitheater", {
           center, size: [52, 30, 56], basis: bv,
         }, (stage) => {
           // raised black stage deck
           stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(a.c, a.u, 2.4), [28, 4.8, 22], [0.18, 0.18, 0.21], bv);
+          addBox(stage, vadd(origin, a.u, 2.4), [28, 4.8, 22], [0.18, 0.18, 0.21], bv);
           stage._mat = 0;
           // fan roof canopy — three tiered arcs stepping back over the stage
           stage._mat = MAT.METAL;
           for (let i = 0; i < 3; i++) {
-            addFrustum(stage, vadd(vadd(a.c, a.u, 17 + i * 3), a.r, i * 5),
+            addFrustum(stage, vadd(vadd(origin, a.u, 17 + i * 3), a.r, i * 5),
                        27 - i * 5, 23 - i * 5, 2.6, [0.82 - i * 0.06, 0.82 - i * 0.06, 0.86], 18, bv);
           }
           stage._mat = 0;
           // proscenium back wall + big glowing LED video wall
           stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(vadd(a.c, a.u, 11), a.r, -8), [2.2, 22, 30], [0.14, 0.14, 0.16], bv);
+          addBox(stage, vadd(vadd(origin, a.u, 11), a.r, -8), [2.2, 22, 30], [0.14, 0.14, 0.16], bv);
           stage._mat = 0;
-          addBox(stage, vadd(vadd(a.c, a.u, 11), a.r, -6.8), [0.6, 13, 22], [0.32, 0.56, 0.88], bv);
+          addBox(stage, vadd(vadd(origin, a.u, 11), a.r, -6.8), [0.6, 13, 22], [0.32, 0.56, 0.88], bv);
           // PA line-array towers flanking the stage
           stage._mat = MAT.METAL;
           for (const so of [-1, 1]) {
-            const base = vadd(a.c, a.t, so * 17);
+            const base = vadd(origin, a.t, so * 17);
             addCyl(stage, base, 0.55, 20, [0.12, 0.12, 0.14], 4, bv);
             for (let j = 0; j < 5; j++)
               addBox(stage, vadd(base, a.u, 11 + j * 1.5), [1.7, 1.3, 2.6], [0.06, 0.06, 0.08], bv);
@@ -115,7 +120,7 @@
           // packed lawn crowd OUTWARD of the stage (away from the track), speckled
           for (let r = 0; r < 6; r++)
             for (let c = 0; c < 22; c++) {
-              const p = vadd(vadd(vadd(a.c, a.r, 8 + r * 3), a.u, 0.9),
+              const p = vadd(vadd(vadd(origin, a.r, 8 + r * 3), a.u, 0.9),
                              a.t, (c - 11) * 2.1 + (hash(r * 31 + c) - 0.5));
               addBox(stage, p, [0.8, 1.0, 0.7], crowdCols[(r * 7 + c) % crowdCols.length], bv);
             }

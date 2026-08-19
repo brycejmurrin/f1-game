@@ -23,7 +23,8 @@ copy those stats. Measured:
 | `standard` | 0.22 / 0.29 | 4.3 s | 5.9 s | 3.6 s / 12.9 s |
 | `overcharge` | 1.00 / 1.00 | 7.1 s | 4.0 s | 5.2 s / 9.0 s |
 
-A car with no parts — every AI — sits at the midpoint of both axes.
+AI cars use the team's `FACTORY_PRESETS` aero/ERS (SIGNATURE equivalents
+already differ). A car with no resolved setup still sits at the midpoint.
 `physState()` reports `ersDeploy`, `ersRegen`, `drain`, `regen`, `otTime`,
 `otCool`.
 
@@ -43,7 +44,8 @@ each recipe field, and `tests/specs/parts-physics.spec.js` fails on an unregiste
 stale field, a duplicate recipe within a category, or an engine that repeats
 another's six-field bodywork shape. The newer STRUCTURE knobs are
 `aero.plate/casc/swan/tvane` (endplate profile, cascade count, swan-neck mount,
-T-wing), `engine.chimney`, `brakes.scoop`, `ers.conduit`, `fuel.filler`,
+T-wing), `aero.duct/board/slot` (2026 upper pod ram, in-wash wakeboard, floor
+mouse-hole), `engine.chimney`, `brakes.scoop`, `ers.conduit`, `fuel.filler`,
 `exhaust.pipes/bore/flare/wastegate/wrap` and `floor.fences/fenceH/skid/edgeLip`
 — each defaults to the shipped geometry, so an option written before them is
 unchanged. EXHAUST and FLOOR took over geometry that used to be hardcoded (the
@@ -60,6 +62,7 @@ physics-identical clones of the universal option named in `equivalent` — they 
 a distinct mesh, never an advantage, and the test suite enforces that. Every team
 fields one in every category via `FACTORY_PRESETS`, except the four on a
 manufacturer-exclusive FACTORY power unit (that unit is already team-unique).
-`FACTORY_PRESETS` drives AI car MESHES only — never AI physics or player saves.
+`FACTORY_PRESETS` drives AI meshes and the works aero/ERS the AI now runs.
+Player saves still go through the garage, not this table.
 
 ---

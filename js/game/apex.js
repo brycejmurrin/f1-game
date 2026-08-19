@@ -5,7 +5,7 @@
    over game.js's lets) handed to ApexApi.create(G) at boot — mutable state
    reads/writes go through G.<name>, stable helpers arrive by destructure.
    The runtime surface of window.__apex is unchanged.
-   Must load BEFORE js/game.js (see index.html). */
+   Injected by game.js when wantAgentSurface() — not a tagged script. */
 const ApexApi = (function () {
   "use strict";
 
@@ -558,7 +558,7 @@ const api = {
     o = o || {};
     if (o.drift != null) G.DRIFT = o.drift;
     if (o.pace != null) G.PACE = o.pace;
-    if (o.speedRef != null) G.STEER_SPEED_REF = o.speedRef;
+    if (o.speedRef != null) { G.STEER_SPEED_REF = o.speedRef; Input.setSteerSpeedRef(o.speedRef); }
     if (o.wheelbase != null) G.WHEELBASE = o.wheelbase;
     if (o.expo != null) G.STEER_EXPO = o.expo;
     if (o.maxSlip != null) G.STEER_MAX_SLIP = o.maxSlip;
@@ -1457,13 +1457,13 @@ const api = {
       // "why is this car quick?" is answerable without reading the source.
       // tierV folds the team's TIER_V together with career team development;
       // skill is the driver. Both are 1-ish multipliers on vmax.
-      tierV: +(c.tierV || 0).toFixed(6), skill: +(c.skill || 0).toFixed(6),
+      tierV: +(c.tierV || 0).toFixed(6), skill: +(c.skill || 0).toFixed(6), aeroLoad: +(c.aeroLoad != null ? c.aeroLoad : 0.5).toFixed(3), ersDeploy: +(c.ersDeploy != null ? c.ersDeploy : 0.5).toFixed(3),
       // Racecraft axes the AI loop actually reads (0..1). Exposed so a probe can
       // tell VER-from-LIN without opening driver-ratings.js.
       // Defaults match AiDrive.traits mid-grid fallback (0.75), not 0.
       craft: +(c.craft != null ? c.craft : 0.75).toFixed(3),
       awareness: +(c.awareness != null ? c.awareness : 0.75).toFixed(3),
-      experience: +(c.experience != null ? c.experience : 0.75).toFixed(3),
+      experience: +(c.experience != null ? c.experience : 0.75).toFixed(3), consistency: +(c.consistency != null ? c.consistency : 0.75).toFixed(3),
       lane: +(c.lane != null ? c.lane : 0).toFixed(3),
       // AI intent peek — kinematic cars only. stuckT > AiDrive.stuckThreshold
       // is what flips unstuck; deploying is the live ERS/OT thrust flag.
@@ -1562,15 +1562,15 @@ const api = {
   },
   // GPU frame-time probe (Chrome/Android only; iOS Safari lacks the timer
   // extension). gpuTimer(true) starts timing, gpuTimer(false) stops, gpuTimer()
-  // reads the latest sample: { supported, on, ms } where ms is the GPU cost of a
-  // recent frame (-1 until a result lands, a few frames after enabling). This is
-  // the GPU-side counterpart to the CPU flame chart — use it to tell whether
-  // night-track spikes are GPU-bound (fragment/fill) before deciding on
-  // instancing vs shader work vs WebGPU.
+  // reads the latest sample: { supported, on, ms, software }. ms is the GPU
+  // cost of a recent frame (-1 until a result lands). software is `ms < 0`:
+  // no sample yet, no extension, or a software rasterizer (SwiftShader).
+  // Do not treat a negative ms as a GPU millisecond.
   gpuTimer: (on) => {
-    if (!gfx || !gfx.gpuTimer) return { supported: false, on: false, ms: -1 };
+    if (!gfx || !gfx.gpuTimer) return { supported: false, on: false, ms: -1, software: true };
     const st = gfx.gpuTimer(on);
-    return { supported: st.supported, on: st.on, ms: gfx.gpuMs ? gfx.gpuMs() : -1 };
+    const ms = gfx.gpuMs ? gfx.gpuMs() : -1;
+    return { supported: st.supported, on: st.on, ms, software: ms < 0 };
   },
   // lightTune(o?) — get or set the live lighting-tuner values (same registry as
   // the pause-menu LIGHTING TUNER panel). No args: returns {id: value} for every

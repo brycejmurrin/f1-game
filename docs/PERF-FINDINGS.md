@@ -916,6 +916,31 @@ estimated.
 > **SUPERSEDED 2026-08-18.** Both scans now pre-reject before wrap (windows
 > 34.1 m and 6.5 m), same form as `pairContact`. Do not re-implement.
 
+**AI brake-look + traits allocate every physics step.** vegas
+`profile-gameloop … physics` (2026-08-18) still has `update` 24.6 %,
+`updateCar` 13.3 %, `brakeTarget` 1.4 %. The math is the look-ahead; the
+GC is not: every AI car built a fresh `samples[]` of `{d,k,bank}` rows
+(~10), plus `AiDrive.traits()` and `brakeDecision()` object literals.
+~20 cars × ~12 objects × 60 Hz ≈ 14 k short-lived objects/s, same class
+`pairContact` already left (`_ct` / `_sep`).
+
+> **TAKEN 2026-08-18.** `AiDrive.traits` / `brakeDecision` write reused
+> scratches (read-before-next-call, same as `_ct`). `beginLook` /
+> `pushLook` / `endLook` recycle the look-ahead rows. Values are
+> bit-identical; do not re-allocate those three. Left on the table:
+> `wantBoost` / `otShouldFire` / `adaptLane` call-site ctx literals in
+> `updateCar` (3–4 small objects/car, not the sample fan-out).
+>
+> **TAKEN 2026-08-18 (leftover sweep).** WGX road `createChunkedMesh` now
+> expand-once + spatial bins (camera still skips frustum cull on
+> `surfaceId === 16`; shadow `castShadowChunked` culls AABBs). Props/glass
+> share one IBO with `firstIndex` run-merge. TLX `uf1` skips unchanged
+> tuner scalars. `resolveCollisions` rebuilds buckets only after
+> `shiftLong`. AI scans skip `finished` rivals. SW install no longer
+> precaches `apex.js` / `agentview*` (fetch-miss still caches them).
+> Still open: lazy circuit tags, script-tag `defer`, WGX whole-UBO skip
+> (view/eye/time change every driving frame).
+
 **`uCarReflect` is not shed with `po.reflect`.** Tier 2 sets `po.reflect = 0`
 and the source says "Tier 2 drops the wet-road SSR march" — but the SSR gate is
 `(uReflect > 0.001 || carPx > 0.3)` and `uCarReflect` keeps its 0.05 default,
@@ -1030,9 +1055,12 @@ content-hash `?v=<sha256>` + `readyState !== "complete"`, typed
 accumulators, `massBlocked` grid, emitter `lo()` cache, baked PerfTry ON
 paths. Do not re-open those from the hunt file.
 
-**Still counting work:** WGX `_writeShadowModel` still uploads every
-shadow slot (lit path already has `_flushDrawUBO`). Optional: defer the
-350 KB agent surface (PWA memory).
+**Taken 2026-08-18:** WGX `_flushShadowModelUBO` — one `writeBuffer` per
+shadow pass, same ring as `_flushDrawUBO`. Same pass also batched
+`_writeQuadFx` / `drawDecal` via `_flushLitRings()`. `apex.js` +
+`agentview*` are `LAZY_AGENT` (no tagged script; Pages players skip
+~350 KB). DebrisWorld skips `world.step` when live bodies are asleep and
+no car is in `FURN_WAKE_M`, with JS despawn + panel `force = 0` hoisted.
 
 ## 4. Recorded negative results
 

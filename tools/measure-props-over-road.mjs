@@ -29,7 +29,7 @@ try {
   await p.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 30000 });
   await p.evaluate(() => {
     window.__caps = [];
-    const grab = (g) => { try { window.__caps.push({ pos: g && g.pos ? Array.from(g.pos) : null, idx: g && g.idx ? Array.from(g.idx) : null, n: g && g.pos ? g.pos.length / 3 : 0, blocks: g && g.__blocks ? g.__blocks.map((b) => ({ base: b.base, count: b.count, id: b.id })).filter((b) => b.id) : null }); } catch (e) {} };
+    const grab = (g) => { try { window.__caps.push({ pos: g && g.pos ? Array.from(g.pos) : null, idx: g && g.idx ? Array.from(g.idx) : null, col: g && g.col ? Array.from(g.col) : null, n: g && g.pos ? g.pos.length / 3 : 0, blocks: g && g.__blocks ? g.__blocks.map((b) => ({ base: b.base, count: b.count, id: b.id })).filter((b) => b.id) : null }); } catch (e) {} };
     for (const fn of ["createChunkedMesh", "createMesh"]) { const o = GLX[fn]; if (!o) continue; GLX[fn] = function (g) { grab(g); return o.apply(this, arguments); }; }
   });
   await p.evaluate((t) => __apex.race(t, "day", "dry"), TRACK);
@@ -45,7 +45,7 @@ try {
     if (!road) return { track: TRACK, max: 0, top: [], err: "no road mesh" };
     const rp = window.__caps[road.i].pos; for (let v = 0; v < rp.length; v += 3) { const k = near(rp[v], rp[v + 2]); const lat = Math.abs((rp[v] - px[k]) * rx[k] + (rp[v + 2] - pz[k]) * rz[k]); if (lat < 13 && lat > hw[k]) hw[k] = lat; } for (let k = 0; k < M; k++) if (hw[k] < 3) hw[k] = 6;
     const tps = []; for (let i = 0; i < M; i++) for (const s of [-0.9, -0.6, -0.3, 0, 0.3, 0.6, 0.9]) tps.push({ x: px[i] + rx[i] * s * hw[i], z: pz[i] + rz[i] * s * hw[i], y: py[i], frac: i / M });
-    const pit = (X, Z, ax, az, bx, bz, cx, cz) => { const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = X - ax, v2z = Z - az; const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z; const dn = d00 * d11 - d01 * d01; if (Math.abs(dn) < 1e-9) return null; const u = (d11 * d20 - d01 * d21) / dn, vv = (d00 * d21 - d01 * d20) / dn; return (u >= -0.02 && vv >= -0.02 && u + vv <= 1.02) ? { u, vv } : null; };
+    const pit = (X, Z, ax, az, bx, bz, cx, cz) => { const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = X - ax, v2z = Z - az; const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z; const dn = d00 * d11 - d01 * d01; if (Math.abs(dn) < 0.01) return null; /* same 5×5 cm projected-area guard as props-over-road.spec.js — 1e-9 lets near-vertical faces of long stands report a box-top height at any distance */ const u = (d11 * d20 - d01 * d21) / dn, vv = (d00 * d21 - d01 * d20) / dn; return (u >= -0.02 && vv >= -0.02 && u + vv <= 1.02) ? { u, vv } : null; };
     const terr = sized.filter((c) => c.i !== road.i && c.maxLat > 14).sort((a, b) => a.len - b.len)[0];
     const skip = new Set([road.i]); if (terr) skip.add(terr.i);
     // WHICH EMITTER PUT IT THERE. js/track/models.js records one __blocks entry
@@ -77,7 +77,7 @@ try {
           if (tp.x < mnx - 0.3 || tp.x > mxx + 0.3 || tp.z < mnz - 0.3 || tp.z > mxz + 0.3) continue;
           const bc = pit(tp.x, tp.z, ax, az, bx, bz, cx, cz); if (!bc) continue;
           const yf = ay + bc.u * (cy - ay) + bc.vv * (by - ay); const over = yf - tp.y;
-          if (over > TOL && over < CEIL) hits.push({ frac: +tp.frac.toFixed(3), over: +over.toFixed(2), cx: +((ax + bx + cx) / 3).toFixed(1), cz: +((az + bz + cz) / 3).toFixed(1), triY: +((ay + by + cy) / 3).toFixed(2), by: owner(cap, idx[t]) });
+          if (over > TOL && over < CEIL) hits.push({ frac: +tp.frac.toFixed(3), over: +over.toFixed(2), cx: +((ax + bx + cx) / 3).toFixed(1), cz: +((az + bz + cz) / 3).toFixed(1), triY: +((ay + by + cy) / 3).toFixed(2), by: owner(cap, idx[t]), col: cap.col ? [cap.col[a], cap.col[a + 1], cap.col[a + 2]].map((v) => +v.toFixed(2)) : null, edges: [Math.hypot(ax - bx, az - bz), Math.hypot(bx - cx, bz - cz), Math.hypot(cx - ax, cz - az)].map((v) => +v.toFixed(2)) });
         }
       }
     }

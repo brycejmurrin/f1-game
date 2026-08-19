@@ -407,7 +407,7 @@ test("post resize destroys replaced bloom buffers and cleans partial buffer allo
   assert.ok(h.buffers.slice(failedBufferStart).every((resource) => resource.destroyed));
 
   h.clearFailures();
-  h.canvas.clientWidth = 481;
+  h.canvas.clientWidth = 640;
   gfx.resize();
   assert.equal(gfx.begin({}), true);
   assert.ok(oldTextures.every((resource) => resource.destroyed), "replaced textures must be destroyed");
@@ -443,7 +443,7 @@ test("a different target size bypasses the allocation retry cooldown", async () 
   const callsAfterFailure = h.textureCount();
 
   h.clearFailures();
-  h.canvas.clientWidth = 513;
+  h.canvas.clientWidth = 640;
   gfx.resize();
   assert.equal(gfx.begin({}), true);
   assert.ok(h.textureCount() > callsAfterFailure, "new dimensions must retry immediately");
@@ -900,7 +900,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /aInst0/);
   assert.match(CHUNKS_SOURCE, /matTrkArr/);
   assert.match(CHUNKS_SOURCE, /@builtin\(vertex_index\) vid/);
-  assert.match(CHUNKS_SOURCE, /packedRoad/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /packedRoad/);
   assert.match(CHUNKS_SOURCE, /D\.mat2\.z/);
   assert.match(WGX_SOURCE, /o\.surfaceId/);
   assert.doesNotMatch(CHUNKS_SOURCE, /@location\(3\) aMatTrk/);
@@ -916,29 +916,53 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /_expandPull/);
   assert.match(WGX_SOURCE, /hasTrk/);
   assert.match(WGX_SOURCE, /const PIECE = 4095/);
+  assert.match(WGX_SOURCE, /hasTrk roads are createMesh pieces/);
   assert.match(WGX_SOURCE, /g2Layout/);
   assert.match(WGX_SOURCE, /read-only-storage/);
-  assert.match(WGX_SOURCE, /setBindGroup\(2, _roadLutBG \|\| attrBG/);
+  assert.match(WGX_SOURCE, /setBindGroup\(2, _roadLutBG \|\| attrBG \|\| zeroAttrBG\)/);
+  assert.match(WGX_SOURCE, /pieces.push\(_meshFromPull\(vert, attr, n, b.indexFormat\)\)/);
+  assert.match(CHUNKS_SOURCE, /else if \(D\.mat2\.z > 15\.5 && D\.mat2\.z < 16\.5\)/);
   assert.match(WGX_SOURCE, /roadLutReady/);
   assert.match(WGX_SOURCE, /function _litOpts/);
   assert.match(WGX_SOURCE, /o\.surfaceId === 16/);
-  assert.match(WGX_SOURCE, /extra\.decal = true/);
+  assert.match(WGX_SOURCE, /extra\.doubleSided = true;/);
+  assert.match(WGX_SOURCE, /extra\.depthBias = null;/);
+  assert.match(WGX_SOURCE, /o\.buryRibbon\) extra\.depthBias = \[5, 10\]/);
+  assert.match(WGX_SOURCE, /Raw RGB\. Packing MAT into col\.x/);
+  assert.match(WGX_SOURCE, /const GW = 32, GH = 32, SLOT = 16/);
+  assert.match(WGX_SOURCE, /const MAX_S = 2000/);
+  assert.match(CHUNKS_SOURCE, /let s = best\.z \+ ds;/);
+  assert.match(WGX_SOURCE, /function holdSoftPresent/);
+  assert.match(WGX_SOURCE, /apex26\.wgxHoldPresent/);
+  assert.match(CHUNKS_SOURCE, /o\.trk = pulled\.yzw/);
+  assert.match(CHUNKS_SOURCE, /@location\(3\)       trk : vec3<f32>/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /@interpolate\(linear\) trk/);
+  assert.match(CHUNKS_SOURCE, /let useWorldTrk = fromWorld\.w > 0\.5;/);
+  assert.match(CHUNKS_SOURCE, /vTrk = select\(select\(vec3<f32>\(0\.0\), in\.trk, !isRoadDraw\), fromWorld\.xyz, useWorldTrk\)/);
+  assert.match(CHUNKS_SOURCE, /dpdx\(in\.trk\)/);
+  assert.match(CHUNKS_SOURCE, /let vsMat = in\.matId/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /useVsTrk = isRoadDraw && in\.matTrk\.w > 0\.5/);
+  assert.match(CHUNKS_SOURCE, /dpdx\(fromWorld\.xyz\)/);
+  assert.match(CHUNKS_SOURCE, /isRoadDraw \|\| classified > 0\.5/);
+  assert.doesNotMatch(WGX_SOURCE, /extra\.decal = true/);
   assert.match(WGX_SOURCE, /depthCompare: decal \? "always"/);
   assert.match(WGX_SOURCE, /o\.surfaceId !== 16/);
   assert.doesNotMatch(WGX_SOURCE, /if \(o\.buryRibbon\) return;/);
   assert.match(CHUNKS_SOURCE, /if \(!ff && !isRoadDraw\) \{ N = -N; \}/);
   assert.match(CHUNKS_SOURCE, /if \(isRoadDraw && N\.y < 0\.0\) \{ N = -N; \}/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /wp\.y = wp\.y \+ 0\.08/);
   assert.match(WGX_SOURCE, /const flip = \(i % 3 === 1\) \? 1 : \(i % 3 === 2\) \? -1 : 0;/);
   assert.match(CHUNKS_SOURCE, /if \(i32\(vMatId \+ 0\.5\) == 16\) \{\s*roadMarkings/);
-  assert.match(CHUNKS_SOURCE, /let onRibbon = select\(dCenter <= hw \+ 8\.0, abs\(x\) <= hw \+ 2\.4, tangOk\)/);
-  assert.match(CHUNKS_SOURCE, /if \(\(bury \|\| slab\) && !isRoadDraw && !isCarDraw && fromWorld\.w > 0\.5\) \{\s*discard;/);
-  assert.match(CHUNKS_SOURCE, /let isCarDraw = D\.mat2\.z >= 19\.5 && D\.mat2\.z <= 27\.5;/);
+  assert.match(CHUNKS_SOURCE, /let onRibbon = select\(dCenter <= hw \+ 0\.8, abs\(x\) <= hw \+ 0\.55, tangOk\)/);
+  assert.match(CHUNKS_SOURCE, /if \(bury && !isRoadDraw && fromWorld\.w > 0\.5\) \{\s*discard;/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /let slab = max\(fwWpos/);
   assert.match(WGX_SOURCE, /data\.trk && data\.trk\.length >= vCount \* 3/);
   assert.match(WGX_SOURCE, /d\[base \+ 27\] = o\.buryRibbon \? 1 : 0;/);
   assert.match(WGX_SOURCE, /m3\+m2, m7\+m6, m11\+m10, m15\+m14\); \/\/ near \(GL clip w\+z >= 0\)/);
   assert.doesNotMatch(CHUNKS_SOURCE, /1\.0, 0\.0, 1\.0/);
   assert.doesNotMatch(WGX_SOURCE, /__wgxDbg/);
   assert.match(CHUNKS_SOURCE, /trkFromWorld\(wp\.xyz\)/);
+  assert.match(CHUNKS_SOURCE, /trkFromWorld\(in\.wpos\)/);
   assert.match(CHUNKS_SOURCE, /0\.12 \* F\.params9\.x/, "AMBIENT CONTACT DARK");
   assert.match(CHUNKS_SOURCE, /0\.16, 0\.30, wetSheen\) \* F\.params9\.y/, "LAMP WALL SPILL");
   assert.match(CHUNKS_SOURCE, /0\.6 \* F\.params9\.z/, "WINDOW SUN FLASH");
@@ -1055,7 +1079,17 @@ test("soft-present uses ephemeral staging buffers for visible 2D blit", () => {
   assert.match(WGX_SOURCE, /function _softDisplayEncode\(/);
   assert.match(WGX_SOURCE, /function _softDisplayFinish\(/);
   assert.match(WGX_SOURCE, /onSubmittedWorkDone\(\)\.then\(finish/);
-  assert.match(WGX_SOURCE, /maxPx >= 8[\s\S]{0,200}_softBlitNotify\(\)/);
+  assert.match(WGX_SOURCE, /maxPx >= 8[\s\S]{0,200}_softBlitNotify\(/);
+  assert.match(WGX_SOURCE, /if \(_softHold \|\| _softDisplayPending\) return null/,
+    "hold + one in-flight map — menu/pits must not consume the only reliable SwiftShader map");
+  assert.match(WGX_SOURCE, /function _softDisplayAbort\(/);
+  assert.match(WGX_SOURCE, /seq: _softBlitSeq/);
+  assert.match(WGX_SOURCE, /sceneGen: _softSceneGen/);
+  assert.match(WGX_SOURCE, /function invalidateSoftPresent\(/);
+  assert.match(WGX_SOURCE, /Do NOT destroy the in-flight MAP_READ buffer/);
+  assert.match(WGX_SOURCE, /const needGen = _softSceneGen/,
+    "awaitSoftPresent waits for a blit at the snapCam scene generation, not a later encode");
+  assert.match(WGX_SOURCE, /_softShownGen >= needGen \|\| \(shown0 === 0 && seq > 0\)/);
   assert.match(WGX_SOURCE, /function _capFinish\(cap\)/);
   assert.match(WGX_SOURCE, /function _capFinish\(cap\)[\s\S]*onSubmittedWorkDone\(\)\.then\(finish/);
   assert.doesNotMatch(
@@ -1378,7 +1412,7 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
 
   // …and the footprint must reach every consumer as a parameter.
   for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
-                    /let fwTrkAttr = abs\(dpdx\(in\.matTrk\.yzw\)\) \+ abs\(dpdy\(in\.matTrk\.yzw\)\);/,
+                    /let fwTrkAttr = abs\(dpdx\(in\.trk\)\) \+ abs\(dpdy\(in\.trk\)\);/,
                     /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, litNrm, packOn\);/,
                     /roadMarkings\(&albedo, &rough, vTrk, fwTrk\);/,
                     // The one the first fix missed: this sits behind `if (detail
@@ -1598,6 +1632,69 @@ test("bloom pipelines target POST_HDR_FORMAT, the bloom mips' own format", () =>
     "pBloomUp must target POST_HDR_FORMAT (the bloom mip texture format)");
 });
 
+test("shadow model UBO flushes once per pass (not per cast)", () => {
+  // Lit draws already batch via _flushDrawUBO. Shadow used to upload 16
+  // floats per castShadow* (sun + car + lamp). WebGPU Fundamentals:
+  // fill one typed array, one writeBuffer, dynamic offsets at setBindGroup.
+  const write = WGX_SOURCE.match(/function _writeShadowModel\([\s\S]*?\n    \}/);
+  assert.ok(write, "_writeShadowModel exists");
+  assert.doesNotMatch(write[0], /writeBuffer/,
+    "_writeShadowModel must only fill the CPU ring — no per-cast queue upload");
+  assert.match(WGX_SOURCE, /function _flushShadowModelUBO/,
+    "one flush must exist, matching the lit _flushDrawUBO shape");
+  assert.match(WGX_SOURCE, /shadowModelRing/,
+    "CPU ring must exist (SHADOW_SLOTS × 64 floats)");
+  assert.match(WGX_SOURCE, /const SHADOW_SLOTS = MAX_DRAWS;/,
+    "shadow capacity must cover dense static graph batches");
+  assert.match(WGX_SOURCE, /shadow caster ring overflow/,
+    "future capacity regressions must be diagnosed");
+  for (const name of ["shadowEnd", "carShadowEnd", "lampShadowEnd"]) {
+    const idx = WGX_SOURCE.indexOf("function " + name + "(");
+    assert.ok(idx >= 0, name + " exists");
+    const body = WGX_SOURCE.slice(idx, idx + 900);
+    assert.match(body, /_flushShadowModelUBO\(\)/, name + " must flush the shadow model ring");
+    const flushAt = body.indexOf("_flushShadowModelUBO()");
+    const submitAt = body.indexOf("queue.submit");
+    assert.ok(flushAt >= 0 && submitAt > flushAt, name + " must flush before submit");
+  }
+  const set = WGX_SOURCE.match(/function _shadowSetModel\([\s\S]*?\n    \}/);
+  assert.ok(set, "_shadowSetModel exists");
+  assert.doesNotMatch(set[0], /setBindGroup\([^)]*\[slot/,
+    "_shadowSetModel must not allocate a fresh offset array per cast");
+});
+
+test("quad FX and decal UBOs flush once per lit pass (not per stamp)", () => {
+  // Blob shadows (~field size) and car decals used per-slot writeBuffer into
+  // already-dynamic-offset rings. Same leftover shape as the shadow model
+  // flush: fill a CPU ring, one upload before litPass.end().
+  const write = WGX_SOURCE.match(/function _writeQuadFx\([\s\S]*?\n    \}/);
+  assert.ok(write, "_writeQuadFx exists");
+  assert.doesNotMatch(write[0], /writeBuffer/,
+    "_writeQuadFx must only fill quadFxRing — no per-stamp queue upload");
+  const withoutFlush = WGX_SOURCE
+    .replace(/function _flushQuadFxUBO\([\s\S]*?\n    \}/, "")
+    .replace(/function _flushDecalUBO\([\s\S]*?\n    \}/, "");
+  assert.doesNotMatch(withoutFlush, /writeBuffer\(quadFxUBO/,
+    "quadFxUBO must be written only from _flushQuadFxUBO");
+  assert.doesNotMatch(withoutFlush, /writeBuffer\(decalUBO/,
+    "decalUBO must be written only from _flushDecalUBO");
+  assert.match(WGX_SOURCE, /function _flushLitRings/,
+    "draw + quad + decal rings must flush together so an End site cannot forget one");
+  for (const name of ["envFaceEnd", "present"]) {
+    const idx = WGX_SOURCE.indexOf("function " + name + "(");
+    assert.ok(idx >= 0, name + " exists");
+    const body = WGX_SOURCE.slice(idx, idx + 1400);
+    assert.match(body, /_flushLitRings\(\)/, name + " must flush all lit rings");
+    const flushAt = body.indexOf("_flushLitRings()");
+    const endAt = body.indexOf("litPass.end()");
+    assert.ok(flushAt >= 0 && endAt > flushAt, name + " must flush before litPass.end()");
+  }
+  const stamp = WGX_SOURCE.match(/function _drawQuadStamp\([\s\S]*?\n    \}/);
+  assert.ok(stamp, "_drawQuadStamp exists");
+  assert.doesNotMatch(stamp[0], /setBindGroup\([^)]*\[slot/,
+    "_drawQuadStamp must not allocate a fresh offset array per stamp");
+});
+
 test("blur separable passes use a dynamic-offset UBO ring (not one shared write)", () => {
   // H then V (and times>1) into one uniform region before submit left every
   // pass seeing the last writeBuffer — SSAO/god-ray axes collapsed.
@@ -1626,20 +1723,4 @@ test("drawParticles never destroys the VBO mid-frame (retire, flush after submit
     "smoke + sparks must ping-pong distinct VBO/UBO slots before submit");
   assert.match(WGX_SOURCE, /_retireFlush\(\)/,
     "present must flush retired buffers after submit");
-});
-
-test("shadow caster capacity follows the draw ring and uploads once per pass", () => {
-  // Dense graph-instanced tracks exceed forty model batches. A fixed 40-slot
-  // ring returned -1 and silently skipped every later caster; Singapore lost
-  // roughly ten model classes from its directional/moon shadow map.
-  assert.match(WGX_SOURCE, /const SHADOW_SLOTS = MAX_DRAWS;/,
-    "shadow capacity must cover the renderer's full per-pass draw ceiling");
-  const write = WGX_SOURCE.match(/function _writeShadowModel\([\s\S]*?\n    \}/);
-  assert.ok(write, "shadow model staging writer exists");
-  assert.doesNotMatch(write[0], /queue\.writeBuffer/,
-    "one queue write per caster must not return");
-  assert.match(WGX_SOURCE, /function _flushShadowModels\([\s\S]*?queue\.writeBuffer/,
-    "the used shadow-model prefix must be uploaded once before submit");
-  assert.match(WGX_SOURCE, /shadow caster ring overflow/,
-    "a future capacity regression must be diagnosed rather than silently dropping casters");
 });

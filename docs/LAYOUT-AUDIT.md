@@ -120,7 +120,7 @@ found a real WCAG failure in the lighting tuner within a minute.
 | `garage` | `#carsetup` | `#mb-garage` → ENGINE tab |
 | `career` | `#career` | `#mb-career` (new-career SETUP state) |
 | `datahub` | `#datahub` | `#mb-data` |
-| `howtoplay` | `#howtoplay` | `#mb-help` |
+| `howtoplay` | `#howtoplay` | `#mb-settings` → `#pm-tab-more` → `#pm-howto` |
 | `settings` | `#pmsettings` | `#mb-settings` |
 | `vsfriend` | `#vsfriend` | `#mb-vs` |
 | `teampicker` | `#teampicker` | garage → TEAM tab → `#cs-team-card` |

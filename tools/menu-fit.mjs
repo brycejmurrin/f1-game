@@ -92,7 +92,7 @@ const SCREENS = [
      await until('#customize:not([hidden])', 4000);
    `, "#customize"],
   ["carsetup", `document.getElementById('mb-race').click(); document.getElementById('sel-go').click()`, "#carsetup"],
-  ["howtoplay", `document.getElementById('mb-help').click()`, "#howtoplay"],
+  ["howtoplay", `document.getElementById('mb-settings').click(); await until('#pmsettings:not([hidden])', 4000); document.getElementById('pm-tab-more').click(); document.getElementById('pm-howto').click()`, "#howtoplay"],
   ["pause", `window.__apex.race('bahrain'); `, "#pausemenu"],
 
   // ── F1 DATA HUB (#datahub — markup is built entirely by js/data/hub.js) ──

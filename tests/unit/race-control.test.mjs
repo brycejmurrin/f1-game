@@ -318,3 +318,4 @@ test("it is inert when the side-world is down or the race is not running", () =>
   run(rc, 2);
   assert.equal(rc.info().level, 0, "debris side-world inactive");
 });
+

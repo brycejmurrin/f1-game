@@ -16,8 +16,10 @@
 //
 // Rules encoded here:
 //  - FULL is every TAGGED js/ file, in the exact index.html <script> order.
-//  - DEFERRED is the rest: js/ files with no tag, injected at runtime by
-//    game.js when opted into. FULL ∪ DEFERRED must cover js/**/*.js.
+//  - DEFERRED is renderer backends with no tag, injected at runtime by
+//    game.js when opted into. LAZY_AGENT is the __apex / agentview surface
+//    (same "no tag" rule, but NOT SW-optional — V8 full-compiles install
+//    puts). FULL ∪ DEFERRED ∪ LAZY_AGENT must cover js/**/*.js.
 //  - The circuit tags ("@circuits") stay in their curated order — that
 //    order IS Tracks.LIST, which is the track-picker order. The season
 //    calendar is Tracks.SEASON, the `classic: false` prefix of that list, so
@@ -141,6 +143,7 @@ const FULL = [
   "js/game/photomode.js",
   "js/game/tuner.js",
   "js/game/cam-tuner.js",
+  "js/game/brake-cue.js",
   "js/game/steer-tuning.js",
   "js/game/perf.js",
   "js/game/gfx-quality.js",
@@ -153,9 +156,8 @@ const FULL = [
   "js/game/quali.js",
   "js/game/debrisworld.js",
   "js/game/incidentsim.js",
-  "js/game/agentview-raster.js",
-  "js/game/agentview.js",
-  "js/game/apex.js",
+  // agentview* + apex.js are LAZY_AGENT — injected when tests / localhost /
+  // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).
   // Multiplayer wire. Pure logic with no game dependency, so position only
   // has to satisfy "before whatever consumes it" — game.js, last as always.
   "js/net/nostr.js",
@@ -235,9 +237,6 @@ const TRACK_VM = [
 
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
-  // agentview.js destructures AgentRaster.create(ctx) at create() time, so
-  // the raster module must have evaluated first.
-  ["js/game/agentview-raster.js", "js/game/agentview.js"],
   ["js/mat4.js", "js/render/glx.js"],                       // glx uses M4 at init
   // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
   // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is
@@ -336,6 +335,7 @@ const HARD_EDGES = [
   ["js/car/parts.js", "js/game/reliability.js"],    // buildQuality resolves a setup through Parts (call time, keep ordered)
   ["js/game/reliability.js", "js/game.js"],     // game.js validates the stored RELIABILITY level at eval
   ["js/mat4.js", "js/game/ai-drive.js"],         // AiDrive binds M4.clamp/lerp at eval
+  ["js/mat4.js", "js/game/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
   ["js/game/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
   ["js/game/career.js", "js/game/career-ui.js"],  // the screen reads the Career rules
 ];
@@ -389,6 +389,19 @@ const DEFERRED = {
 // tlx.js to gfx.js are gone on purpose: gfx.js reads those globals inside
 // Gfx.create(), which the loader only reaches after the group has evaluated, so
 // the ordering is now enforced by the await rather than by tag position.
+// Dev/test surface. No <script> tag, no SW install put (full code cache).
+// game.js injects these when wantAgentSurface() — __TEST_MODE, localhost,
+// ?apex=1 / ?debug= / ?report=, or apex26.devApi=1. Players on Pages skip
+// ~350 KB of parse + PWA memory. Fetch-miss still caches on first use.
+const LAZY_AGENT = [
+  "js/game/agentview-raster.js",
+  "js/game/agentview.js",
+  "js/game/apex.js",
+];
+const LAZY_EDGES = [
+  ["js/game/agentview-raster.js", "js/game/agentview.js"],
+];
+
 const DEFERRED_EDGES = [
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"], // string concat at eval
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],
@@ -429,6 +442,6 @@ const circuitPath = (id) => `${CIRCUITS_DIR}/${id}.js`;
 
 module.exports = {
   CIRCUITS, CIRCUITS_DIR, FULL, CSS, CARVIEW, TRACK_VM, HARD_EDGES,
-  DEFERRED, DEFERRED_EDGES,
+  DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES,
   PATHS, circuitPath,
 };

@@ -292,3 +292,4 @@ test("scenery SUPPRESSED is coalesced, not a per-prop Log.warn", () => {
   assert.match(tracks, /const noteSuppressed = /);
   assert.match(tracks, /: suppressed /);
 });
+

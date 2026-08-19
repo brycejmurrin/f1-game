@@ -120,6 +120,17 @@ async function precacheAssetLists() {
       optional.add(u);
     }
   }
+  // Cache API put during install makes V8 build a "full" code cache of every
+  // script (v8.dev). These three are LAZY_AGENT (no <script> tag) — belt and
+  // suspenders if a tag is re-added. Do NOT add them to optional: that is
+  // still an install-time put. Fetch-miss still cache.put on first use.
+  for (const u of [...essential]) {
+    if (u.includes("js/game/apex.js") ||
+        u.includes("js/game/agentview.js") ||
+        u.includes("js/game/agentview-raster.js")) {
+      essential.delete(u);
+    }
+  }
   return { essential: Array.from(essential), optional: Array.from(optional) };
 }
 

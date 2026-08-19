@@ -528,19 +528,23 @@ pass through. This is the reliable way to get state out of a real device —
 `copy()` only resolves at top-level console scope and the clipboard API needs
 document focus.
 
-### `gpuTimer(on?) → {supported, on, ms}`
+### `gpuTimer(on?) → {supported, on, ms, software}`
 Opt-in GPU frame timer (`EXT_disjoint_timer_query_webgl2`). `gpuTimer(true)`
 starts timing, `gpuTimer(false)` stops, `gpuTimer()` reads the latest sample.
 `ms` is the GPU-side cost of a recent frame (`-1` until a result lands, a few
-frames after enabling, or when unsupported). This is the GPU-side counterpart to
-the `perf-profile` CPU flame chart — use it to tell whether a spike is GPU-bound
-(fill/fragment) or CPU-bound before optimising. **Chrome/Android only**: the
-extension is absent on iOS Safari (`supported:false`) and yields garbage under
-SwiftShader (CI), where GPU_DISJOINT stays set and readings are dropped to `-1`.
+frames after enabling, or when unsupported). `software` is `ms < 0`: no sample
+yet, the extension is absent, or the backend is a software rasterizer
+(SwiftShader / Lavapipe). Do not treat a negative `ms` as a GPU millisecond —
+on a real device after a few timed frames `software` goes false and `ms` is the
+sample. This is the GPU-side counterpart to the `perf-profile` CPU flame chart —
+use it to tell whether a spike is GPU-bound (fill/fragment) or CPU-bound before
+optimising. **Chrome/Android only**: the extension is absent on iOS Safari
+(`supported:false`) and yields garbage under SwiftShader (CI), where
+GPU_DISJOINT stays set and readings stay at `-1` (`software:true`).
 ```js
 __apex.race("vegas"); __apex.gpuTimer(true);
 // drive a few frames on a busy night circuit, then:
-__apex.gpuTimer();   // → { supported:true, on:true, ms:6.2 }
+__apex.gpuTimer();   // → { supported:true, on:true, ms:6.2, software:false }
 ```
 
 ### `groundY(f, lat?) → {x, z, roadY, terrainY, gap}`
@@ -668,7 +672,7 @@ Six more expose the ACTIVE AERO trade, which is otherwise applied deep inside
 | `vmaxNow` | this car's top-speed ceiling INCLUDING the X-mode gain |
 | `aeroGrip` | the aero-load grip term at the current speed — `1 + DOWNFORCE × aeroDf × (v/vTop)²` |
 | `aeroDf` | the downforce multiplier alone: 1 shut, `1 − xDfLoss` fully open |
-| `aeroLoad` | HOW MUCH WING this car carries, 0..1 (`Parts.aeroLoad`) — 0 = `minimal`, 1 = `ground_effect`, 0.5 for a car with no parts (every AI) |
+| `aeroLoad` | HOW MUCH WING this car carries, 0..1 (`Parts.aeroLoad`) — 0 = `minimal`, 1 = `ground_effect`; AI uses the works FACTORY_PRESETS load, 0.5 only if unset |
 | `xVmaxGain` / `xDfLoss` | the two halves of the trade for THIS car, interpolated by `aeroLoad` |
 
 Six more cover the ERS part's grip on the battery and the overtake window:
@@ -1147,13 +1151,15 @@ Force-rescue the player immediately — same mechanism as the 3-second auto-resc
 `physState()` so a test can confirm the car was repositioned. Returns `false` if
 no race is active.
 
-### `inputState() → {steerMode, key, btn, pad, touchSteer, canvasTouches, holdPointers, throttle, braking}`
+### `inputState() → {steerMode, key, btn, pad, touchSteer, canvasTouches, holdPointers, throttle, braking, adaptiveButtons, speedStd, rateIn}`
 Live per-source input snapshot: which source (keyboard `key`, on-screen buttons
 `btn`, gamepad `pad`, canvas touch) is asserting throttle/brake/steer right now,
 plus `holdPointers` — the pressed-pointer count each on-screen hold button is
 tracking (all zeros when nothing is held; a non-zero entry with no finger down
 means a stuck/ghost pointer). The one-call diagnosis for any "input seems stuck
-on" report.
+on" report. `adaptiveButtons` / `adaptiveMix` (0..1) / `speedStd` / `rateIn` are the
+STEERING & ASSISTS ADAPTIVE BUTTONS path (digital steer rate blended toward the
+SPEED STEER hyperbola; the slider is how much).
 
 **On-screen variant for a phone with no console:** load the game with
 `?inputdebug=1` (or set `localStorage["apex26.inputDebug"] = "1"`) and a small
@@ -2085,7 +2091,8 @@ Three things to know:
 - **`screenPct` is null unless `inFrame`.** A point on the eye plane has `w→0`
   and projects to coordinates like `27629%`. That is correct projective maths
   and useless, so it isn't shipped. Corners behind you are still listed, with
-  `behindCamera: true` and a bearing near ±180° — "T2 is 80 m behind you" is
+  `behindCamera: true` when `|bearingDeg| > 90` (behind the look direction,
+  not merely behind the near plane) — "T2 is 80 m behind you" is
   exactly what an agent needs after a spin.
 
 
@@ -2606,11 +2613,12 @@ __apex.qualiSim()[0];   // → { pos:1, code:"VER", t:100.958, gap:0, … }
 ```
 
 ### `carAt(i)` — additions
-`code`, `seat`, `tierV`, `skill` and `ratings`. `tierV` and `skill` are the two
+`code`, `seat`, `tierV`, `skill`, `aeroLoad`, `ersDeploy` and `ratings`. `tierV` and `skill` are the two
 multipliers that decide how fast an AI car is allowed to be (`vmax = VMAX · PACE ·
 tierV · skill · difficulty`), so "why is this car quick?" is answerable without
 reading the source. `tierV` folds the team's `TIER_V` together with career team
-development; `skill` is the driver.
+development; `skill` is the driver. `aeroLoad` / `ersDeploy` are the works-car
+wing and ERS map the AI now actually runs (0.5 if unset).
 
 ## Reliability & retirements
 

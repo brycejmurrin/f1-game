@@ -288,8 +288,14 @@ async function runProbeAttempt(attemptNum) {
         }
         if (max < 8) throw new Error("visible #game canvas blank after soft-present (maxLuma=" + max + ")");
       }), { attempts: 2, delayMs: 2000 });
-      await retryStep("screenshot-canvas", () =>
-        page.locator("#game").screenshot({ path: canvasPath, type: "png", timeout: 60000 }));
+      // putImageData keeps mutating #game — Playwright's locator screenshot
+      // waits for "stability" and times out. Dump the 2D bitmap instead.
+      const canvasB64 = await page.evaluate(() => {
+        const g = document.getElementById("game");
+        if (!g || typeof g.toDataURL !== "function") throw new Error("#game has no toDataURL");
+        return g.toDataURL("image/png").split(",")[1];
+      });
+      writeFileSync(canvasPath, Buffer.from(canvasB64, "base64"));
       log("canvas", "visible #game canvas.png saved");
 
       // TLX's blit already used mapAsync on softOutRT. A second
@@ -390,6 +396,15 @@ async function runProbeAttempt(attemptNum) {
         hasGpu: !!navigator.gpu,
         coveragePct: view && view.coveragePct,
         roadLutReady: lutSrc ? lutSrc.roadLutReady() : null,
+        softPresent: (typeof GLX !== "undefined" && GLX.softPresentState)
+          ? GLX.softPresentState() : null,
+        sky: (function () {
+          const g = document.getElementById("game");
+          const ctx = g && g.getContext("2d");
+          if (!ctx) return null;
+          const p = ctx.getImageData(g.width >> 1, 8, 1, 1).data;
+          return [p[0], p[1], p[2]];
+        })(),
       };
     });
 

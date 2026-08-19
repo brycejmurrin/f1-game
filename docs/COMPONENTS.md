@@ -1,6 +1,6 @@
 # The component inventory — what exists, who owns it, what is shared
 
-`css/` holds **508 classes in 53 families**, and until this document there was no
+`css/` holds **505 classes in 53 families**, and until this document there was no
 list of them. That absence has a cost, and it has already been paid: `.res-*` is
 defined in `components.css` *and* `career.css`, which is something I found by
 grepping in the middle of fixing an unrelated cascade-layer bug rather than by
@@ -64,15 +64,12 @@ The long tail (`sf-`, `q-`, `cg-`, `tm-`, `spf-`, `ot-`, `ax-`, `flag-`, `sec-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
 `season-`, `pair-`, `build-`) is one file each and needs no map.
 
-**A family leaves this list when it leaves `css/`.** The title screen's mb-prefix
-family was here until its two
-classes — `.mb-stack` and `.mb-sub`, both of which dressed a single element
-inside a single button on the title screen — were replaced by `#mb-career > span`
-and `#mb-career-sub`. That is the `--sheet-w` move applied to a family instead of
-a width: a class that can only ever match one element is a context, and a context
-belongs in a selector. `tests/unit/component-inventory.test.mjs` is what makes the
-removal provable — it fails on a family named here that `css/` no longer defines,
-so a consolidation cannot be claimed without this table moving.
+**A family leaves this list when it leaves `css/`.** The title screen's old
+`.mb-stack` / `.mb-sub` pair was replaced by `#mb-career > span` and
+`#mb-career-sub`; `.mb-label` is a span hook with no stylesheet rule.
+The season-status chips on `#menu-status` left with that dashboard chrome.
+Unused `.ui-panel` / `.ui-kicker` / `.ui-value` /
+`.ui-muted` placeholders were removed rather than inventoried as dead.
 
 A family can also shrink without disappearing, and `cs-` did: the garage's
 preview bar had `.cs-view-btn` plus two variants that existed only to restate a
@@ -135,6 +132,8 @@ file and named nowhere, which is exactly the drift the new assertion in
 `tests/unit/component-inventory.test.mjs` now prevents. `.sheet-foot` is the
 most-shared class in the project and had no entry at all:
 
+- `.alt` — `components` + `menus`. Alternate `.bigbtn` look on Select / Career;
+  defined on `.bigbtn.alt` in `components`, re-tinted per-screen in `menus`
 - `.adv-item` — `components` + `tuner`
 - `.adv-more-btn` — `components` + `tuner`
 - `.cs-stat-bar-wrap` — `carsetup` + `menus` + `responsive`
@@ -143,13 +142,20 @@ most-shared class in the project and had no entry at all:
 - `.cs-stat-val` — `carsetup` + `menus` + `responsive`
 - `.cz-liv-none` — `components` + `menus`
 - `.opt-btn` — `components` + `tuner`
+- `.pm-group` / `.pm-group-h` — `components` + `menus`. Pause-settings group and
+  its heading; `menus` re-tints them under `#pmsettings`
 - `.preset-btn` — `components` + `tuner`
 - `.preset-row` — `components` + `tuner`
 - `.res-name` — `career` + `components`
+- `.res-pts` — `career` + `components`. Compact Career history / qualifying wrap
+  the shared points cell instead of ellipsizing it.
 - `.season-upcoming-row` — `components` + `menus`
 - `.sf-scroll` — `components` + `tuner`
 - `.sheet-foot` — `career` + `carsetup` + `components` + `menus` + `overlays` + `tuner`
 - `.sheet-head` — `components` + `overlays`
+- `.sheet-body` — `components` + `overlays`. How to Play, Career guide, and
+  Career history place the shared body on the sheet grid for the wide contents
+  rail (`#htp-contents` / `#cg-contents` / `#ch-contents`).
 - `.team-tile` — `components` + `menus`
 - `.track-row` — `components` + `menus`
 - `.tune-label` — `components` + `tuner`
@@ -157,7 +163,7 @@ most-shared class in the project and had no entry at all:
 
 ## Dead classes
 
-None, out of 508 — a class defined in `css/` and referenced from neither
+None, out of 505 — a class defined in `css/` and referenced from neither
 `index.html` nor any `js/` file. The three this section used to name
 (`dh-leg-swatch`, `dh-sectors`, `foot-end`) have since been deleted from `css/`,
 and the last of them took its whole class family with it — which is why no

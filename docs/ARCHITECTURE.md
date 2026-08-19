@@ -19,7 +19,8 @@ the `js/game.js` entry at the root.
 **`tools/manifest.cjs` is the single source of truth for load order.** The
 `<script>` tag order in `index.html` must match it — `tests/unit/load-order.test.mjs`
 (run via `npm run test:tooling`) asserts they never diverge. Adding a file means
-a script tag AND a manifest entry. The abbreviated sketch below is a subset;
+a `FULL` script tag, a `DEFERRED` backend entry, or a `LAZY_AGENT` entry
+(`apex.js` / `agentview*` — injected when tests / localhost / `?apex=1`). The abbreviated sketch below is a subset;
 consult the manifest for the full, current order:
 
 ```
@@ -672,7 +673,7 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `cam-modes.js` | `CamModes` | the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to `cameras.js` |
 | `hud.js` | `GameHud` | in-race DOM HUD (pos/lap/times, speed, energy, gaps, minimap) |
 | `results.js` | `GameResults` | results + season-end screens, penalties, points |
-| `apex.js` | `ApexApi` | the **whole `window.__apex` dev API** (see DEBUG-HOOKS.md) |
+| `apex.js` | `ApexApi` | the **whole `window.__apex` dev API** (see DEBUG-HOOKS.md). `LAZY_AGENT` — no tagged script; `game.js` injects it when `wantAgentSurface()` |
 | `atmosphere.js` | `Atmosphere` | `applyRaceSettings` — time-of-day/weather scene state, palettes, flood activation |
 | `setup-ui.js` | `SetupUI` | GARAGE screen — TEAM & DRIVER, 12 part categories + budget, LIVERY |
 | `menus.js` | `Menus` | menu/select/pause DOM flows |

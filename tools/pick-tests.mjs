@@ -112,6 +112,7 @@ export const RULES = [
   [/^js\/game\/physics-consts\.js/, ["behaviour", "api", "circuit", "physics", "collision", "hooks"], "the driving model's immutable numbers — same blast radius as game.js"],
   [/^js\/game\/(cameras|cam-tune|cam-tuner|cam-modes)\.js/, ["camera"], ""],
   [/^js\/game\/(input|steer-tuning|uilayers)\.js/, ["steering"], ""],
+  [/^js\/game\/brake-cue\.js/, ["steering", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
   [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers|cam-modes|gfx-quality|metrics|cockpit-opts|sheetshape)\.js/, ["ui"], "DOM screens"],
   [/^js\/game\/(lighting|light-presets|atmosphere|tuner)\.js/, ["webgl", "ab"], ""],
   [/^js\/game\/(career|career-ui|reliability|quali)\.js/, ["modes", "state-unit"], ""],

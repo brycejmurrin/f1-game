@@ -342,12 +342,10 @@ test.describe("UI scale", () => {
       return { layoutCols: layout.gridTemplateColumns.split(" ").length,
         tabCols: tabs.gridTemplateColumns.split(" ").length };
     });
-    expect(wide.layoutCols).toBe(2);
-    expect(wide.tabCols).toBe(1);
+    expect(wide.layoutCols).toBe(1);
+    expect(wide.tabCols).toBe(1); // flex row reports grid-template-columns: none
     await page.locator("#pm-tab-display").focus();
     await page.keyboard.press("ArrowRight");
-    await expect(page.locator("#pm-tab-display")).toBeFocused();
-    await page.keyboard.press("ArrowDown");
     await expect(page.locator("#pm-tab-more")).toBeFocused();
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -358,7 +356,7 @@ test.describe("UI scale", () => {
         tabCols: tabs.gridTemplateColumns.split(" ").length };
     });
     expect(narrow.layoutCols).toBe(1);
-    expect(narrow.tabCols).toBe(2); // 2×2 keeps full labels legible on phone sheets
+    expect(narrow.tabCols).toBe(1);
 
     await page.locator("#pm-tab-display").focus();
     await page.keyboard.press("ArrowRight");

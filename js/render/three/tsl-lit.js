@@ -20,8 +20,9 @@
  * PCSS blocker search HAS landed on WebGPU (textureLoad depth) and desktop
  * WebGL2 (R16F TSL.depth color — texelFetch is legal on a color texture).
  * The sun branch scales R = mix(1.5, 6.0, pen) from the receiver-blocker
- * gap. Phones and software GL keep the fixed R=3 — GLX's own blocker-off
- * radius.
+ * gap. Phones and software WebGL2 have no blocker — they scale that same
+ * R=3 by pcssPen/80 (identity at the shipped def) so SHADOW SOFTEN stays
+ * live. Not distance-based PCSS on that path.
  *
  * M9 (the live env CUBE probe) HAS landed and is no longer stubbed: tlx.js
  * builds the cube target and drives setEnvStr() from the probe-ready state,
@@ -215,7 +216,15 @@
 
     /** begin(frame) -> uniform values. Mirrors the semantics of glx.js begin():
      * ambient scaled CPU-side by tune.ambientMul; keyMul/fog/mist knobs applied
-     * where glx.js applies them; every default = TUNE_DEFS def. */
+     * where glx.js applies them; every default = TUNE_DEFS def.
+     * uf1: GLX `_litUf` parity — skip a scalar `.value` write when it already
+     * equals the resolved number. First begin() writes (constructor defaults
+     * differ, or the node is still the TUNE_DEFS seed); later frames skip
+     * unchanged LIGHTING TUNER knobs. Factory-scoped: no alloc per frame.
+     * Color / Vector3 / Matrix4 lanes stay on `u.value.set` / `.fromArray`. */
+    function uf1(u, v) {
+      if (u.value !== v) u.value = v;
+    }
     function updateFrame(frame) {
       const T = (frame && frame.tune) || null;
       const k = (id, def) => (T && T[id] != null ? T[id] : def);
@@ -229,39 +238,39 @@
       s3(U.skyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
       s3(U.fogColor, frame.fogColor || [0.04, 0.04, 0.06]);
       U.fogDensity.value = (frame.fogDensity || 0) * k("fogDensityMul", 1);
-      U.fogHeight.value = T && T.fogHeight != null ? T.fogHeight
-        : (frame.fogHeight != null ? frame.fogHeight : 0.0);
+      uf1(U.fogHeight, T && T.fogHeight != null ? T.fogHeight
+        : (frame.fogHeight != null ? frame.fogHeight : 0.0));
       U.groundMist.value = (frame.groundMist != null ? frame.groundMist : 0) * k("mistDensity", 1);
       U.lampFog.value = frame.lampFog != null ? frame.lampFog : 0;
       U.wetness.value = frame.wetness != null ? frame.wetness : 0;
       U.time.value = frame.time != null ? frame.time : 0;
       U.cloudCover.value = frame.cloud != null ? frame.cloud : 0;
       U.cloudSpeed.value = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
-      U.bounceK.value = k("bounceK", 0.04);
-      U.mistShare.value = k("mistShare", 1.5);
-      U.lampFogClip.value = k("fogClip", 0.7);
-      U.glowAmp.value = k("glowAmp", 2.3);
-      U.bloomBoost.value = k("neonBoost", 0.6);
-      U.keyMul.value = k("keyMul", 1.0);
-      U.fogTint.value = k("fogTint", 0.0);
-      U.mistHeight.value = k("mistHeight", 0.30);
-      U.shadowTintAmt.value = k("shadowTintAmt", 0.0);
-      U.wetDark.value = k("wetDark", 1.0);
-      U.matTexMix.value = k("matTexMix", 1.0);   // TUNE_DEFS def (was 0.0 — see the declaration)
-      U.cloudShadowDim.value = k("cloudShadowDim", 0.80);
-      U.carSunGlint.value = k("carSunGlint", 12.0);
-      U.carSparkle.value = k("carSparkle", 1.6);
-      U.fogSunCore.value = k("fogSunCore", 0.6);
-      U.lampNearClamp.value = k("lampNearClamp", 4.0);
-      U.windowSunFlash.value = k("windowSunFlash", 1.0);
-      U.skyRimGlow.value = k("skyRimGlow", 1.0);
-      U.ambContactDark.value = k("ambContactDark", 1.0);
-      U.lampWallSpill.value = k("lampWallSpill", 1.0);
+      uf1(U.bounceK, k("bounceK", 0.04));
+      uf1(U.mistShare, k("mistShare", 1.5));
+      uf1(U.lampFogClip, k("fogClip", 0.7));
+      uf1(U.glowAmp, k("glowAmp", 2.3));
+      uf1(U.bloomBoost, k("neonBoost", 0.6));
+      uf1(U.keyMul, k("keyMul", 1.0));
+      uf1(U.fogTint, k("fogTint", 0.0));
+      uf1(U.mistHeight, k("mistHeight", 0.30));
+      uf1(U.shadowTintAmt, k("shadowTintAmt", 0.0));
+      uf1(U.wetDark, k("wetDark", 1.0));
+      uf1(U.matTexMix, k("matTexMix", 1.0));   // TUNE_DEFS def (was 0.0 — see the declaration)
+      uf1(U.cloudShadowDim, k("cloudShadowDim", 0.80));
+      uf1(U.carSunGlint, k("carSunGlint", 12.0));
+      uf1(U.carSparkle, k("carSparkle", 1.6));
+      uf1(U.fogSunCore, k("fogSunCore", 0.6));
+      uf1(U.lampNearClamp, k("lampNearClamp", 4.0));
+      uf1(U.windowSunFlash, k("windowSunFlash", 1.0));
+      uf1(U.skyRimGlow, k("skyRimGlow", 1.0));
+      uf1(U.ambContactDark, k("ambContactDark", 1.0));
+      uf1(U.lampWallSpill, k("lampWallSpill", 1.0));
       U.envStr.value = 0;   // M9: overwritten by lit.setEnvStr() in tlx.js begin() from the probe-ready state
       // ── M4 shadow upload (1:1 with the litU.uShadow* block in glx.js) ──
       if (shadowOn) {
-        U.shadowBias.value = k("shadowBias", 0.001);
-        U.pcssPen.value = k("pcssPen", 80.0);
+        uf1(U.shadowBias, k("shadowBias", 0.001));
+        uf1(U.pcssPen, k("pcssPen", 80.0));
         U.pcssOn.value = SHD.S.pcssEnabled ? 1 : 0;
         // Key-luminance fade: cast shadows dissolve as the key dims toward
         // moonlight, floored by MOON SHADOWS × the clear-night factor
@@ -276,7 +285,7 @@
         const _mSh = k("moonShadow", 0.25) * (frame.moonGate || 0);
         if (_mSh > _hf) _hf = _mSh;
         U.shadowStr.value = k("shadowStr", 1.15) * _hf;
-        U.shadowRange.value = k("shadowRange", 80.0);
+        uf1(U.shadowRange, k("shadowRange", 80.0));
         U.shadowTexel.value = 1 / (SHD.sunSize || 2048);
         const _sc = frame.shadowCtr || frame.eye;
         if (_sc) U.shadowCtr.value.set(_sc[0], _sc[1], _sc[2]);
@@ -413,7 +422,17 @@
                                min(btap(-1.0, -1.0), btap(1.0, -1.0)));
                 const pen = clamp(z.sub(zb).mul(U.pcssPen), 0.0, 1.0);
                 R.assign(mix(float(1.5), float(6.0), pen));
+              }).Else(() => {
+                // Desktop WebGL2 / WebGPU: blocker exists but PCSS is off
+                // (far LOD, or S.pcssEnabled flipped false). Keep SHADOW
+                // SOFTEN live — same R-scale as the no-blocker path.
+                R.assign(float(3.0).mul(U.pcssPen.div(80.0)));
               });
+            } else {
+              // Phones / software WebGL2: no blocker (no TSL.depth sun RT).
+              // Keep SHADOW SOFTEN live by scaling the fixed Poisson R.
+              // Identity at TUNE_DEFS def 80. Same tap count — not PCSS.
+              R.assign(float(3.0).mul(U.pcssPen.div(80.0)));
             }
             // Texel-grid-anchored IGN dither (js/render/shaders/lit.js): glued to the
             // ground, not screen-keyed — no penumbra boil while driving.
@@ -1219,9 +1238,11 @@
                 .mul(att.mul(spotD).mul(lampSh)).mul(NoLl)
                 .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
               // bounce fill (uBounceK, def 0.04 — js/render/shaders/lit.js)
-              color.addAssign(albedo.mul(U.lampCol.element(i))
-                .mul(att.mul(U.bounceK).mul(NoLl.mul(0.45).add(0.55)))
-                .mul(metalness.oneMinus()));
+              If(U.bounceK.greaterThan(0.0), () => {
+                color.addAssign(albedo.mul(U.lampCol.element(i))
+                  .mul(att.mul(U.bounceK).mul(NoLl.mul(0.45).add(0.55)))
+                  .mul(metalness.oneMinus()));
+              });
               // GGX + clearcoat lamp speculars, NoLl-gated (js/render/shaders/lit.js)
               If(NoLl.greaterThan(0.0), () => {
                 const Hl = normalize(Ld.add(V));

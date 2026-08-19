@@ -7,6 +7,8 @@ description: Use when the user asks for batch headless screenshots or evals of a
 
 Interactive resize / DOM / CSS survey is **Playwright MCP**
 (`tools/playwright-mcp.sh`, skill `survey-ui-matrix`), not this batch harness.
+One-screen CSS edit + hot-swap + structured DOM dump is **css-play**
+(`tools/css-play.mjs` / `playwright-mcp.sh play|dom`).
 
 The renderer runs deterministically headless under SwiftShader, so you can drive
 the real game and the `__apex` API from Node to validate cameras, modes, tracks,

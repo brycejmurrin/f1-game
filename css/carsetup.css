@@ -302,7 +302,7 @@
 .cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: rgba(255,255,255,0.4); }
 .cs-tab.upgraded .cs-tab-lbl { color: #4df; }
 .cs-tab.upgraded .cs-tab-cur { color: rgba(80,210,255,0.7); }
-.cs-tab.active { background: rgba(225,6,0,0.16); border-color: var(--red); }
+.cs-tab.active { background: color-mix(in oklab, var(--red) 20%, transparent); border-color: var(--red); }
 .cs-tab.active .cs-tab-lbl { color: #fff; }
 .cs-tab.active .cs-tab-cur { color: rgba(255,255,255,0.72); }
 
@@ -337,8 +337,8 @@
 }
 .cs-opt-cost.free { color: rgba(255,255,255,0.3); font-weight: 600; }
 .cs-opt.active {
-  background: rgba(225,6,0,0.14); border-color: var(--red);
-  box-shadow: 0 2px 16px rgba(225,6,0,0.22);
+  background: color-mix(in oklab, var(--red) 20%, transparent); border-color: var(--red);
+  box-shadow: 0 2px 18px color-mix(in oklab, var(--red) 32%, transparent);
 }
 .cs-opt.active .cs-opt-dot { border-color: var(--red); background: radial-gradient(circle, #fff 0 3px, var(--red) 4px); }
 .cs-opt.active .cs-opt-cost { color: #fff; }
@@ -1085,6 +1085,14 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
    aero chips on touch; full --tap stays off here so the header does not reclaim
    the third of the panel the comment above documented. */
 #cs-inner[data-density="compact"] #cs-unlimited { min-height: var(--chip-h); }
+/* One-line tabs on a short sheet. The current-part line doubled the strip
+   (measured 54px / scrollWidth 1110 on 852×393) and hid half the catalogue
+   behind a sideways pan. The option list already names the fitted part. */
+#cs-inner[data-density="compact"] .cs-tab-cur { display: none; }
+#cs-inner[data-density="compact"] .cs-tab {
+  padding: calc(var(--gap) * 0.45) calc(var(--gap) * 0.8);
+  justify-content: center;
+}
 /* AND THE BUDGET BAR GOES, because it is the one thing in this header that says
    nothing the line beside it does not. "BUDGET: 600 / 600 cr remaining" is the
    same fact, exactly, in text — the bar is a glanceable for a number that is

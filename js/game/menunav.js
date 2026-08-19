@@ -172,6 +172,25 @@ window.MenuNav = (function () {
 
   function overlaps(a1, a2, b1, b2) { return Math.min(a2, b2) - Math.max(a1, b1) > 1; }
 
+  // Out-of-band horizontal: land in the adjacent column at similar height.
+  // In-band scoring weights `across * 2` so a slightly-offset item in the same
+  // row loses to a true neighbour; here Y is a light tie-break (`* 0.25`) so a
+  // header sitting above the current row still wins over a far DOM neighbour,
+  // while the closest-Y item to that side still beats a header at the top of
+  // the column (the player then arrows up). Vertical moves never call this.
+  function pickSideways(fromBox, boxes, dx) {
+    const a = fromBox;
+    let best = null, bestCost = Infinity;
+    for (const b of boxes) {
+      const along = (b.x - a.x) * dx;
+      if (along <= 1) continue;
+      const across = Math.abs(b.y - a.y);
+      const cost = along + across * 0.25;
+      if (cost < bestCost) { bestCost = cost; best = b; }
+    }
+    return best;
+  }
+
   // Spatial move, not DOM order: the menus mix vertical lists (circuits), grids
   // (the twelve team tiles) and horizontal chip rows (drivers) inside the same
   // layer, and only geometry gives the right answer in all three — down a column
@@ -227,21 +246,33 @@ window.MenuNav = (function () {
       }
     }
     if (best) return best;
-    // Nothing ahead in the band. Vertically that means the end of a column or a
-    // list, and it WRAPS — the select screen's left column bottoms out at START,
-    // which is also the last focusable element in the sheet, so without a wrap
-    // ArrowDown just dead-ends there. Sideways it does not: a chip row that
-    // teleported you back to its first chip would read as a stuck key.
+    // Nothing ahead in the band. Horizontally the band is too strict once you
+    // sit mid-list in a tall column: ArrowLeft from a circuit row cannot reach
+    // the preview / filters / BACK because they sit higher than the current
+    // row. A second pass, Y weighted lightly, lands in the adjacent column at
+    // similar height. Vertical moves must NOT get this pass — that is the
+    // Zandvoort trap. Then vertical wrap (end of a column), then DOM wrap so a
+    // pad press is never a no-op. Sideways must NOT wrap inside the band (a
+    // chip row would teleport back to its first chip); chip rows already leave
+    // at their ends above.
+    if (dx) {
+      const boxes = [];
+      for (const el of list) {
+        if (el === from) continue;
+        const b = centre(el);
+        boxes.push({ el, x: b.x, y: b.y });
+      }
+      const hit = pickSideways(a, boxes, dx);
+      if (hit) return hit.el;
+    }
     if (dy && edge) return edge;
-    // No band at all (an isolated control, or the end of a wrapping grid row):
-    // DOM order, which on these screens is reading order — and which is what
-    // carries ArrowRight from the last tile of a team-picker row onto the first
-    // tile of the next.
+    // No band, or a sideways end: DOM / reading order. Wrap so Left from the
+    // first item and Right from the last are never a no-op — a pad D-pad press
+    // always lands somewhere.
     const i = list.indexOf(from);
     const n = list.length;
     const j = i + (sign > 0 ? 1 : -1);
-    if (dy) return list[((j % n) + n) % n];
-    return list[j] || null;
+    return n ? list[((j % n) + n) % n] : null;
   }
 
   // Where focus lands on the first arrow press: whatever the screen is already
@@ -386,5 +417,5 @@ window.MenuNav = (function () {
   // FOCUSABLE is exported so a second caller (the gamepad A-button seam in
   // js/game/input.js) can ask "is this a real actionable control" without a
   // second copy of the selector to drift out of step with this one.
-  return { activeLayer, nearestPane, onWheel, onKeyDown, FOCUSABLE };
+  return { activeLayer, nearestPane, onWheel, onKeyDown, FOCUSABLE, step, pickSideways };
 })();

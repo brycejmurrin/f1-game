@@ -88,6 +88,7 @@ Ports (do not reuse): TinyFish `3711`, chrome daemon `3712`, apex-tools HTTP
 | Live `version.json` / Pages | **deploy-research** / TinyFish | `mcp-probe`, curl github.io |
 | Batch screenshots | skill **playwright-probe** (`apex_shot` / `shot.mjs`) | Chrome MCP while Playwright runs |
 | Interactive host browser | repo MCP **playwright** (`browser_*` via `playwright-mcp.sh`) | `test-bg.mjs`; chrome-devtools at the same time |
+| One-screen CSS try-on | skill **css-play** → `css-play.mjs` / `playwright-mcp.sh play\|dom` | `layout-audit` / `ui-survey` (the matrix) |
 | Start Playwright **groups** | `tools/test-bg.mjs` (CLI only) | any `apex_*` wrap; host `browser_*` |
 
 Call `apex_status` before any `apex_*` browser tool. Occupancy treats host

@@ -583,22 +583,29 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   // best2.w carries sample hw — origin placeholder (w=0) must not invent a tangent.
   let tangOk = best2.w > 0.5 && dot(tangRaw, tangRaw) > 1e-4;
   let tang = normalize(select(vec2<f32>(1.0, 0.0), tangRaw, tangOk));
-  let right = vec2<f32>(tang.y, -tang.x);
+  // Face +s so lateral x does not flip when the nearest sample swaps, and
+  // dashed paint can use a continuous along-track s (nearest-bin s stair-steps).
+  let sSign = select(1.0, sign(best2.z - best.z), abs(best2.z - best.z) > 1e-3);
+  let tangFwd = tang * sSign;
+  let right = vec2<f32>(tangFwd.y, -tangFwd.x);
   let x = select(0.0, dot(wp.xz - best.xy, right), tangOk);
+  let ds = select(0.0, dot(wp.xz - best.xy, tangFwd), tangOk);
+  // Two-sample s-blend warped the near dash (measured). Nearest + ds
+  // stair-steps at cell swaps but keeps rectangular paint.
+  let s = best.z + ds;
   let hw = best.w;
   let dCenter = sqrt(bestD);
   // Prefer perpendicular distance when a real tangent exists. Point-distance
   // alone rejects on-ribbon fragments: 32×32 cells are tens of metres across,
-  // so the nearest centerline sample can be > hw+2.4 away along-track.
-  // Lateral slack is the grass verge (~2.2 m), not 8 m — a wider hole ate
-  // the inner terrain rails (berms / elevation). Along-track LUT coarseness
-  // still uses +8 on point-distance when no tangent exists.
-  let onRibbon = select(dCenter <= hw + 8.0, abs(x) <= hw + 2.4, tangOk);
+  // so the nearest centerline sample can sit far along-track.
+  // Hole is tarmac + kerb lip only (~0.55 m). hw+2.4 ate the barrier line
+  // and the first terrain rail (verge / berms at ~hw+2.2). Without a tangent,
+  // a circle of radius hw+0.8 stays on the ribbon — hw+8 ate a disk of walls.
+  let onRibbon = select(dCenter <= hw + 0.8, abs(x) <= hw + 0.55, tangOk);
   let valid = gated && hw > 0.5 && onRibbon;
   // xyz = track (s, lateral x, half-width); w = 1 when the LUT hit is valid.
-  // Material id comes from DrawU.mat2.z on road draws — do not classify MAT
-  // here (a bad tangent used to tag the ribbon MAT 9 / grass).
-  return select(vec4<f32>(0.0), vec4<f32>(best.z, x, hw, 1.0), valid);
+  // Asphalt vs verge is classified in fs_main from abs(x) < hw - 0.45.
+  return select(vec4<f32>(0.0), vec4<f32>(s, x, hw, 1.0), valid);
 }
 ${hash}
 ${vnoise}
@@ -641,11 +648,12 @@ struct VSOut {
   @location(0)       nrm   : vec3<f32>,
   @location(1)       col   : vec3<f32>,
   @location(2)       wpos  : vec3<f32>,
-  @location(3)       matTrk : vec4<f32>,
+  // vec3, not vec4: Dawn drops location-3 .w and that poisoned interpolated s.
+  // Default perspective — @interpolate(linear) shattered dashes at chase
+  // angle (measured).
+  @location(3)       trk : vec3<f32>,
   @location(4) @interpolate(flat) matId : f32,
-  @location(5)       trk   : vec3<f32>,
-  @location(6) @interpolate(flat) vid : f32,
-  @location(7)       objPos : vec3<f32>,
+  @location(5)       objPos : vec3<f32>,
 };
 
 @vertex
@@ -670,22 +678,24 @@ fn vs_main(
   var wp = model * vec4<f32>(aPos, 1.0);
   // Upper-left 3x3 of the (column-major) model matrix — GLX mat3(uModel).
   let nm = mat3x3<f32>(model[0].xyz, model[1].xyz, model[2].xyz);
-  // No 4th vertex attribute — Dawn zeroed it (and broke pos fetch) on large
-  // ribbon VBOs. Rebuild mat+trk from the centerline LUT / storage[vid].
+  // No 4th vertex attribute — Dawn zeros it (and pos fetch) even in a
+  // separate stride-16 slot. Road pieces bind authored storage[vid]
+  // (mat,s,x,hw). The LUT (magic 12345) is only a fallback when group 2
+  // is the world grid — using it at every road vertex stair-steps dashes.
   var pulled = vec4<f32>(0.0);
-  if (matTrkArr[0].x != 12345.0) { pulled = matTrkArr[vid]; }
-  if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
+  if (matTrkArr[0].x != 12345.0) {
+    pulled = matTrkArr[vid];
+  } else if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
     let wt = trkFromWorld(wp.xyz);
-    if (wt.w > 0.5) { pulled = vec4<f32>(16.0, wt.x, wt.y, wt.z); }
-    // Software-GPU fallback on top of lit depthBias. GLX uses
-    // polygonOffset only — dropping this lift reopens terrain-over-road
-    // on SwiftShader. Do not treat as a look-parity bug.
-    wp.y = wp.y + 0.08;
+    if (wt.w > 0.5) {
+      let mid = select(0.0, 16.0, abs(wt.y) < wt.z - 0.45);
+      pulled = vec4<f32>(mid, wt.x, wt.y, wt.z);
+    }
   }
-  o.matTrk = pulled;
+  // Do not lift the ribbon. An 8 cm Y bump won the floor/terrain depth
+  // fight and then buried cars, AI, and fence feet in the tarmac.
+  o.trk = pulled.yzw;           // s, x, hw — vec3 at location 3
   o.matId = pulled.x;
-  o.trk = pulled.yzw;
-  o.vid = f32(vid);
   o.nrm  = nm * aNrm;
   o.col  = col;
   o.wpos = wp.xyz;
@@ -699,16 +709,25 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Screen-space derivatives MUST be computed in uniform control flow at the top level
   // before any branching or early exit.
   let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
-  let fwTrkAttr = abs(dpdx(in.matTrk.yzw)) + abs(dpdy(in.matTrk.yzw));
-  let fwCol = abs(dpdx(in.col)) + abs(dpdy(in.col));
+  let fwTrkAttr = abs(dpdx(in.trk)) + abs(dpdy(in.trk));
   let fromWorld = trkFromWorld(in.wpos);
-  let fwWorld = abs(dpdx(fromWorld.yzw)) + abs(dpdy(fromWorld.yzw));
-  let packedRoad = in.col.x > 1.5 && in.col.x < 40.0;
+  // fromWorld.xyz is (s, x, hw) — not .yzw (that was x/hw/valid and smashed dash AA).
+  let fwWorld = abs(dpdx(fromWorld.xyz)) + abs(dpdy(fromWorld.xyz));
   let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
-  let useWorldTrk = isRoadDraw && in.matTrk.z <= 0.5 && fromWorld.w > 0.5;
-  let vTrk = select(in.matTrk.yzw, fromWorld.xyz, useWorldTrk);
-  let vMatId = select(select(in.matTrk.x, floor(in.col.x), packedRoad), D.mat2.z, D.mat2.z > 0.5);
-  let fwTrk = select(select(fwTrkAttr, vec3<f32>(fwCol.y, fwCol.z, fwCol.z), packedRoad), fwWorld, useWorldTrk);
+  // Location-3 in.trk shards dashes on Dawn (loc5 / linear / perspective
+  // all measured). Road markings reconstruct (s,x,hw) per fragment from
+  // interpolated wpos + the world LUT — bind group 2 is the LUT, not
+  // authored storage[vid]. LUT miss on a road draw zeros trk so we do
+  // not fall back to the shattered interpolator.
+  let useWorldTrk = fromWorld.w > 0.5;
+  let vTrk = select(select(vec3<f32>(0.0), in.trk, !isRoadDraw), fromWorld.xyz, useWorldTrk);
+  let lutAsphalt = abs(fromWorld.y) < fromWorld.z - 0.45;
+  let vsMat = in.matId;
+  let classified = select(select(0.0, 16.0, lutAsphalt), vsMat, vsMat > 0.5);
+  // surfaceId 16 is the isRoadDraw flag, not a material stamp. Forcing 16
+  // on every fragment painted kerbs, grass shoulders, and skirts as asphalt.
+  let vMatId = select(D.mat2.z, classified, isRoadDraw || classified > 0.5);
+  let fwTrk = select(fwTrkAttr, fwWorld, useWorldTrk);
   let vDist = length(in.wpos - F.eye.xyz);
   // Every baked MAT layer is sampled here in uniform CF with a CONSTANT
   // array index so textureSample can use implicit LOD + anisotropy — the
@@ -780,16 +799,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let saaDyGeo = dpdy(topNgeo);
   let saaDxPeel = dpdx(Npeel);
   let saaDyPeel = dpdy(Npeel);
-  // Floor + detail terrain bury the ribbon on SwiftShader-Dawn. Punch the
-  // LUT tarmac footprint (onRibbon is hw+2.4, the verge — not the berms).
-  // Huge-footprint triangles catch the scenery addBox slab (two 1600 m faces).
+  // Floor + terrain only. The 1600 m scenery slab is skipped on WGX
+  // (G.roadLutReady); a screen-footprint "slab" test also punched long
+  // barrier / grandstand faces that sit on the ribbon.
   let bury = D.mat2.w > 0.5;
-  let slab = max(fwWpos.x, fwWpos.z) > 6.0;
-  // Close chase-cam car triangles have huge wpos derivatives and sit on the
-  // LUT footprint — the slab term would discard bodywork as if it were the
-  // scenery addBox. Surfaces 20–27 are the car catalog (lit.js / DrawU.mat2.z).
-  let isCarDraw = D.mat2.z >= 19.5 && D.mat2.z <= 27.5;
-  if ((bury || slab) && !isRoadDraw && !isCarDraw && fromWorld.w > 0.5) {
+  if (bury && !isRoadDraw && fromWorld.w > 0.5) {
     discard;
   }
 
@@ -881,7 +895,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let NoH = max(dot(N, H), 0.0);
   let VoH = max(dot(V, H), 0.0);
 
-  var albedo    = select(in.col, vec3<f32>(fract(in.col.x)), packedRoad);
+  var albedo    = in.col;
   var emissive  = D.mat0.x;
   let alpha     = D.mat0.y;
   var metalness = D.mat0.w;
@@ -1241,7 +1255,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // kerbs, car flanks) with the lamp tint even outside the beam — a near-free
     // stand-in for local ambient probes, with a soft NoL floor (mirrors GLX
     // js/render/shaders/lit.js; BOUNCE = params3.x = uBounceK, default 0.04).
-    color = color + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
+    if (F.params3.x > 0.0) {
+      color = color + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
+    }
     // GGX specular from the lamp (same microfacet BRDF as the sun).
     // LAMP WALL SPILL (params9.y = uLampWallSpill): out-of-beam reflection floor
     // so wet roads / walls still streak a lamp you can see, not only the pool.

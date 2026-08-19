@@ -23,6 +23,7 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **cross-backend-parity** | A look/knob/feature differs between GLX, WGX and TLX — the parity audit loop, drift hotspots, gap recording. |
 | **deploy-merge** | Merging with / pushing to the deploy branch — cross-lineage cache max+1, union sweeps, baseline re-measure. Live version.json → deploy-research. |
 | **survey-ui-matrix** | Reviewing the whole UI across orientations, viewport shapes, UI/HUD scale and pointer type — Playwright MCP resize/DOM/CSS (`tools/playwright-mcp.sh`) or Chrome DevTools MCP; enumerate screens from source, measure each cell, capture. |
+| **css-play** | Iterating on one menu/HUD stylesheet — host localhost, open a screen, dump DOM, hot-swap `css/`, screenshot (`tools/css-play.mjs` / `playwright-mcp.sh play\|dom`). |
 | **restructure-screens-css** | Restructuring/consolidating screens, menus, dialogs, the DOM or the CSS class/token system — collapsing duplicate families, adding/removing a layer, the split-index.html question, height-responsive design. |
 | **ui-menu-a11y** | Menus/dialogs, Escape/back, keyboard nav, UI scale, AriaState, layout tests. |
 | **multiplayer-debug** | VS FRIEND / WebRTC — loopback, invite SDP, room codes, ICE/TURN, authority. |

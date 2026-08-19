@@ -56,6 +56,11 @@ const GLXPost = (function () {
     const _grPos = new Float32Array(18), _grCol = new Float32Array(18),
           _grRad = new Float32Array(6), _grDir = new Float32Array(18),
           _grCone = new Float32Array(12), _grVolW = new Float32Array(6), _grSel = [];
+    const _sunUV = [-2, -2];
+    const _ONE3 = [1, 1, 1];
+    const _NEGZ = [0, 0, -1];
+    const _SKY_HI = [0.05, 0.06, 0.09];
+    const _SKY_LO = [0.02, 0.025, 0.05];
     // Tuner-knob upload cache (PERF-FINDINGS §3). Composite grade scalars do
     // not change mid-frame; skip equal re-uploads. Per-frame values (sunUV,
     // flare, exposure, grainTime, haze) still go up every present().
@@ -460,7 +465,7 @@ const GLXPost = (function () {
         // Contact shadows ride along in the AO pass when proj + view-sun are present.
         const csOn = contactStr > 0 && F.proj && F.sunVS;
         gl.uniformMatrix4fv(ssaoU.uProj, false, F.proj || F.invProj);
-        gl.uniform3fv(ssaoU.uSunVS, F.sunVS || [0, 0, -1]);
+        gl.uniform3fv(ssaoU.uSunVS, F.sunVS || _NEGZ);
         gl.uniform1f(ssaoU.uContact, csOn ? contactStr : 0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         // Blur H (ssaoTex -> ssaoBlurFBO) then V (ssaoBlurTex -> ssaoFBO). Half res.
@@ -496,7 +501,7 @@ const GLXPost = (function () {
         gl.uniformMatrix4fv(godrayU.uLightVP, false, SH.lightVP);
         gl.uniform3fv(godrayU.uEye, F.eye);
         gl.uniform3fv(godrayU.uSunDir, F.sunDir);
-        gl.uniform3fv(godrayU.uSunColor, F.sunColor || [1, 1, 1]);
+        gl.uniform3fv(godrayU.uSunColor, F.sunColor || _ONE3);
         gl.uniform1f(godrayU.uStr, sunGR ? grStr : 0.0);
         gl.uniform1f(godrayU.uTime, F.time);
         gl.uniform1f(godrayU.uCloudCover, F.cloud);
@@ -666,7 +671,8 @@ const GLXPost = (function () {
       gl.bindTexture(gl.TEXTURE_2D, haveGR ? godrayTex : blackTex);
       gl.uniform1i(compU.uGodray, 3);
       // Project sun direction to screen UV for lens flare
-      let sunUV = [-2, -2], flareStr = 0, sunShaft = 0;
+      let flareStr = 0, sunShaft = 0;
+      _sunUV[0] = -2; _sunUV[1] = -2;
       if (F.sunDir && F.viewProj) {
         const s = F.sunDir;
         // Treat sun as infinitely distant: clip pos = VP * (sunDir, 0)
@@ -675,7 +681,8 @@ const GLXPost = (function () {
         const cy = vp[1]*s[0] + vp[5]*s[1] + vp[9]*s[2];
         const cw = vp[3]*s[0] + vp[7]*s[1] + vp[11]*s[2];
         if (cw > 0) {
-          sunUV = [cx / cw * 0.5 + 0.5, cy / cw * 0.5 + 0.5];
+          _sunUV[0] = cx / cw * 0.5 + 0.5;
+          _sunUV[1] = cy / cw * 0.5 + 0.5;
           // Lens flare peaks at GOLDEN HOUR (low sun), fading as the sun climbs —
           // the opposite of the old height-scaled version that vanished at sunset.
           // Gate flare + shafts by the sun's actual BRIGHTNESS, not just elevation:
@@ -695,7 +702,7 @@ const GLXPost = (function () {
           if (s[1] > 0.05) sunShaft = s[1] * 0.8 * _sunGate;
         }
       }
-      gl.uniform2fv(compU.uSunUV, sunUV);
+      gl.uniform2fv(compU.uSunUV, _sunUV);
       // LENS FLARE knob scales the whole sun/lamp flare + ghost stack (def 1).
       gl.uniform1f(compU.uFlareStr, flareStr * (opts && opts.flareMul != null ? opts.flareMul : 1));
       const exposure = opts && opts.exposure !== undefined ? opts.exposure : 1.0;
@@ -715,9 +722,11 @@ const GLXPost = (function () {
       gl.uniform1f(compU.uSunShaft, doBloom ? sunShaft * (opts && opts.tune && opts.tune.sunShaftMul != null ? opts.tune.sunShaftMul : 1) : 0);
       // Cinematic split-tone grade (neutral by default → existing look unchanged).
       const grade = opts && opts.grade;
-      gl.uniform3fv(compU.uGradeShadow, grade && grade.shadow ? grade.shadow : [1, 1, 1]);
-      gl.uniform3fv(compU.uGradeHi, grade && grade.hi ? grade.hi : [1, 1, 1]);
-      gl.uniform1f(compU.uGradeStr, grade && grade.str !== undefined ? grade.str : 0);
+      const gSh = grade && grade.shadow ? grade.shadow : _ONE3;
+      const gHi = grade && grade.hi ? grade.hi : _ONE3;
+      uf3(compU.uGradeShadow, "gradeShadow", gSh[0], gSh[1], gSh[2]);
+      uf3(compU.uGradeHi, "gradeHi", gHi[0], gHi[1], gHi[2]);
+      uf1(compU.uGradeStr, "gradeStr", grade && grade.str !== undefined ? grade.str : 0);
       // Live colour-grade tunables (IMAGE & COLOUR panel); defaults reproduce the
       // shipped grade so a missing tune object changes nothing.
       const CT = opts && opts.tune || null;
@@ -830,8 +839,8 @@ const GLXPost = (function () {
         gl.uniformMatrix4fv(compU.uInvProj, false, F.invProj);
         gl.uniformMatrix4fv(compU.uProj, false, F.proj);
         gl.uniform3fv(compU.uUpVS, F.upVS);
-        gl.uniform3fv(compU.uReflSkyHi, F.skyHi || [0.05, 0.06, 0.09]);
-        gl.uniform3fv(compU.uReflSkyLo, F.skyLo || [0.02, 0.025, 0.05]);
+        gl.uniform3fv(compU.uReflSkyHi, F.skyHi || _SKY_HI);
+        gl.uniform3fv(compU.uReflSkyLo, F.skyLo || _SKY_LO);
       }
       gl.uniform1f(compU.uSsrOk, haveRefl ? 1 : 0);
       gl.uniform1f(compU.uReflect, haveRefl ? reflStr : 0);

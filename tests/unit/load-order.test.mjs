@@ -7,9 +7,12 @@
 //   - the stylesheet <link> sequence must equal MANIFEST.CSS
 //   - every ?v= value must match that asset's content hash
 //   - the shell build meta and version.json generation must match
-//   - every file under js/**/*.js must appear in FULL (no forgotten tags,
-//     no dead files) — catches "created the file but forgot the tag"
-//   - every HARD_EDGES pair must be ordered (eval-time dependencies)
+//   - every file under js/**/*.js must appear in FULL ∪ DEFERRED ∪ LAZY_AGENT
+//     (no forgotten tags, no dead files) — catches "created the file but
+//     forgot the tag / DEFERRED / LAZY_AGENT entry"
+//   - every HARD_EDGES pair must be ordered in FULL (eval-time dependencies)
+//   - LAZY_AGENT has no <script> tag and is not SW-optional (V8 full-compiles
+//     install puts); game.js AGENT_FILES / AGENT_EDGES must match the manifest
 //   - tools/carview.html's tags must equal MANIFEST.CARVIEW
 //   - TRACK_VM entries must exist and appear in FULL
 //
@@ -72,7 +75,7 @@ test("service-worker registration derives the shell build", () => {
     "service-worker registration must append the parsed build once");
 });
 
-test("every js/**/*.js appears in MANIFEST.FULL (and vice versa)", () => {
+test("every js/**/*.js appears in FULL ∪ DEFERRED ∪ LAZY_AGENT (and vice versa)", () => {
   const files = [];
   (function walk(dir) {
     for (const name of readdirSync(join(ROOT, dir)).sort()) {
@@ -81,13 +84,13 @@ test("every js/**/*.js appears in MANIFEST.FULL (and vice versa)", () => {
       else if (name.endsWith(".js")) files.push(rel);
     }
   })("js");
-  // FULL ∪ DEFERRED: a deferred file has no <script> tag by design, but it must
-  // still be accounted for somewhere, or "created the file, forgot to load it"
+  // FULL ∪ DEFERRED ∪ LAZY_AGENT: a tagless file has no <script> by design, but
+  // it must still be accounted for, or "created the file, forgot to load it"
   // stops being catchable.
-  const known = new Set([...MANIFEST.FULL, ...deferredFiles()]);
+  const known = new Set([...MANIFEST.FULL, ...deferredFiles(), ...lazyFiles()]);
   const missing = files.filter((f) => !known.has(f));
   const dead = [...known].filter((f) => !files.includes(f));
-  assert.deepEqual(missing, [], `js/ files with no manifest entry (add a <script> tag + manifest line, or a DEFERRED entry): ${missing}`);
+  assert.deepEqual(missing, [], `js/ files with no manifest entry (add a <script> tag + manifest line, a DEFERRED entry, or a LAZY_AGENT entry): ${missing}`);
   assert.deepEqual(dead, [], `manifest entries with no file on disk: ${dead}`);
 });
 
@@ -99,6 +102,10 @@ test("every js/**/*.js appears in MANIFEST.FULL (and vice versa)", () => {
 // a tagless file is invisible to it).
 function deferredFiles() {
   return Object.values(MANIFEST.DEFERRED).flat();
+}
+
+function lazyFiles() {
+  return MANIFEST.LAZY_AGENT || [];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -155,6 +162,52 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   const seeded = new Set([...optional[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]));
   for (const f of deferredFiles()) {
     assert.ok(seeded.has(f), `${f} is DEFERRED, so sw.js must seed it (the tag parser cannot find it)`);
+  }
+});
+
+test("LAZY_AGENT files have no <script> tag", () => {
+  const tagged = new Set(scriptSrcs.map(stripV));
+  assert.ok(lazyFiles().length >= 3, "LAZY_AGENT must list the agent surface");
+  for (const f of lazyFiles()) {
+    assert.ok(!tagged.has(f), `${f} is LAZY_AGENT but still has a <script> tag in index.html`);
+  }
+});
+
+test("LAZY_EDGES are ordered within LAZY_AGENT", () => {
+  const group = lazyFiles();
+  for (const [before, after] of MANIFEST.LAZY_EDGES) {
+    assert.ok(group.includes(before) && group.includes(after),
+      `LAZY_EDGES pair ${before} -> ${after} spans no LAZY_AGENT file`);
+    assert.ok(group.indexOf(before) < group.indexOf(after), `${before} must load before ${after}`);
+  }
+});
+
+test("js/game.js AGENT_FILES equals MANIFEST.LAZY_AGENT", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const block = src.match(/const AGENT_FILES = \[([\s\S]*?)\n\];/);
+  assert.ok(block, "js/game.js must declare AGENT_FILES for the lazy agent surface");
+  const listed = [...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(listed, MANIFEST.LAZY_AGENT);
+});
+
+test("js/game.js AGENT_EDGES equals MANIFEST.LAZY_EDGES", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const block = src.match(/const AGENT_EDGES = \[([\s\S]*?)\n\];/);
+  assert.ok(block, "js/game.js must declare AGENT_EDGES for the lazy agent DAG");
+  const listed = [...block[1].matchAll(/\["([^"]+)",\s*"([^"]+)"\]/g)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(listed, MANIFEST.LAZY_EDGES);
+});
+
+test("sw.js optional precache does not include LAZY_AGENT", () => {
+  // Install-time Cache.put full-compiles (v8.dev). These three stay fetch-miss
+  // only — do not seed them in optional the way DEFERRED backends are seeded.
+  const sw = readFileSync(join(ROOT, "sw.js"), "utf8");
+  const optional = sw.match(/const optional = new Set\(\[([\s\S]*?)\]\);/);
+  assert.ok(optional, "sw.js must declare an `optional` precache Set");
+  const seeded = new Set([...optional[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]));
+  for (const f of lazyFiles()) {
+    assert.ok(!seeded.has(f), `${f} is LAZY_AGENT — must not be SW-optional`);
+    assert.ok(![...seeded].some((u) => u.includes(f)), `${f} must not appear in sw.js optional`);
   }
 });
 

@@ -201,6 +201,22 @@ function create(G) {
     Log.info("ui", "SeasonUI.close");
   }
 
+  function refreshTitle() {
+    const btn = $("mb-season");
+    if (!btn) return;
+    let textNode = null;
+    for (let i = 0; i < btn.childNodes.length; i++) {
+      const n = btn.childNodes[i];
+      if (n.nodeType === 3) { textNode = n; break; }
+    }
+    if (!textNode) return;
+    const season = G.season;
+    const n = SeasonCal.rounds();
+    textNode.nodeValue = (SeasonCal.hasProgress(season) && n)
+      ? ("SEASON · R" + Math.min((season.round || 0) + 1, n) + " OF " + n)
+      : "SEASON";
+  }
+
   $("ss-back").onclick = () => { close(); if (G.soundOn) GameAudio.uiSelect(); };
   $("ss-apply").onclick = () => {
     Log.info("ui", "SeasonUI.apply");
@@ -214,10 +230,11 @@ function create(G) {
     G.trackIdx = SeasonCal.trackIndex(0);
     close();
     G.buildSelect();
+    G.refreshCareerButton();
     if (G.soundOn) GameAudio.uiSelect();
   };
 
-  return { open, close, build };
+  return { open, close, build, refreshTitle };
 }
 
 return { create };

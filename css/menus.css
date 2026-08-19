@@ -60,15 +60,15 @@
   /* in oklab so the red wash stays red through its falloff instead of
      sagging grey, and .grain (css/components.css) dithers what is left */
   background:
-    radial-gradient(120% 90% at 50% 10% in oklab, rgba(225, 6, 0, 0.20), transparent 62%),
-    rgba(6, 6, 10, 0.55);
+    radial-gradient(120% 90% at 50% 10% in oklab, color-mix(in oklab, var(--red) 22%, transparent), transparent 64%),
+    rgba(6, 6, 10, 0.36);
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; touch-action: pan-y;
 }
 #title {
   font-size: clamp(34px, calc(9 * var(--vwz)), 92px);
   color: var(--text);
-  text-shadow: 0 0 36px rgba(225, 6, 0, 0.75), 0 2px 12px rgba(0, 0, 0, 0.8);
+  text-shadow: 0 0 42px color-mix(in oklab, var(--red) 82%, transparent), 0 2px 12px rgba(0, 0, 0, 0.8);
 }
 /* The accent rule UNDERLINES THE WORDMARK. It was `width: 70%; margin: 4px auto
    0` — 70% of the h1, centred inside it — so it began and ended under arbitrary
@@ -82,9 +82,15 @@
   margin: 10px 0 0;
   background: var(--red);
   transform: skewX(-30deg);
-  box-shadow: 0 0 14px rgba(225, 6, 0, 0.6);
+  box-shadow: 0 0 18px color-mix(in oklab, var(--red) 78%, transparent);
 }
-#subtitle { color: rgba(242, 242, 245, 0.72); margin: 10px 0 0; font-size: 14px; letter-spacing: 0.04em; }
+#subtitle {
+  color: rgba(242, 242, 245, 0.78);
+  margin: 10px 0 0;
+  font-size: clamp(var(--fs-micro), calc(1.15 * var(--vwz)), var(--fs-4));
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7);
+}
 /* THREE TIERS, by how much of your evening the thing costs.
    HERO is the career — the 24-round game everything else feeds into. PLAY NOW is
    the four one-sitting modes, 2x2. SECONDARY is the rooms: half-height, two
@@ -98,14 +104,18 @@
 #menu-buttons { display: grid; gap: calc(var(--gap) * 0.9); justify-items: center; width: 100%; }
 /* 78vw via --vwz, not bare: this group is inside #menu-buttons, which is
    `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
-#menu-hero, #menu-primary, #menu-secondary { width: min(calc(78 * var(--vwz)), 340px); }
+#menu-hero, #menu-primary, #menu-secondary { width: min(calc(78 * var(--vwz)), 100%); }
 #menu-hero { display: grid; }
-/* Four modes normally settle into 2x2, but the row is content-driven: feature
-   availability can hide/add an action without leaving a half-empty grid cell. */
-#menu-primary {
-  --balance-basis: 45%;
-  --balance-min: 40%;
+/* Equal 2-up cells that still wrap. 50% minus a sliver of the row gap keeps two
+   doors on one line; a lone last child (STANDINGS season) still fills the row
+   via flex-grow. 45/40 let a long label steal width and the gutter drifted. */
+#menu-primary, #menu-secondary {
+  --balance-basis: calc(50% - 0.5em);
+  --balance-min: calc(50% - 0.5em);
+  /* Same track gap so the 2-up play doors and the rooms share one lattice.
+     0.55 on secondary only made that tier ~2–5px narrower on desktop. */
   gap: calc(var(--gap) * 0.7);
+  align-items: stretch;
 }
 /* The hero is the one button on the screen with two lines of text, so it centres
    its own stack rather than inheriting the single-line baseline the others use. */
@@ -135,15 +145,17 @@
 #menu-secondary {
   display: flex;
   flex-wrap: wrap;
-  --balance-basis: 45%;
-  --balance-min: 40%;
-  gap: calc(var(--gap) * 0.55);
 }
 /* STANDINGS appears only mid-season. `.balanced-row` ignores the hidden button,
    keeps the normal four controls as two pairs, and lets a visible fifth action
-   fill its final line without a state-specific selector. */
-#menu-buttons .bigbtn { margin: 0; width: 100%; }
-#menu-buttons :is(#menu-primary, #menu-secondary).balanced-row > .bigbtn { width: auto; }
+   fill its final line without a state-specific selector. width:100% (not auto)
+   so a long label wraps inside its half instead of widening its cell. */
+#menu-buttons .bigbtn { margin: 0; width: 100%; border-width: 1px; border-style: solid; }
+/* Primary has `border: none`; rooms have a 1px .alt hairline. Matching width
+   keeps the two 2-up columns on the same vertical tracks (measured 205 vs 203
+   on 1280 before this). Color stays transparent on the red doors. */
+#menu-buttons :is(#menu-hero, #menu-primary) .bigbtn { border-color: transparent; }
+#menu-buttons :is(#menu-primary, #menu-secondary).balanced-row > .bigbtn { width: 100%; min-width: 0; }
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
 .minibtn {
@@ -266,25 +278,14 @@ body { --compact-at: 600px; --wide-at: 620px; }
 }
 @media (orientation: landscape) {
   :where(body[data-density="compact"]) #overlay {
-    /* minmax(0, auto) on the BRAND column, for the reason #menu-primary states
-       above: an `auto` track refuses to shrink below its longest word, so the
-       column is sized by whatever prose it happens to contain and the button
-       column is pushed along by it. Measured at 734x343 with the landscape
-       safe-area insets injected (l/r 59px, as tools/layout-audit.mjs does):
-       brand took 348px, +32 gap, +300 of buttons = 680 in a 600px content box,
-       and #menu-buttons hung 13px past #overlay — which clips, since #overlay
-       is overflow-x: hidden.
-       The trigger was raising #disclaimer to the --fs-micro floor: a longer
-       line of the same words, in a track with no shrink floor. But the fault
-       was always in the track, not the type — this block's own comment records
-       the pair already outrunning vw at UI SIZE 150% (measured R=884 on 852).
-       A shrink floor lets the brand column wrap its prose instead, which is
-       what the disclaimer and subtitle are for; the button column is
-       fixed-width (min(42vwz, 300px)) and so keeps its size either way. */
-    grid-template-columns: minmax(0, auto) auto;
+    /* Equal shrinkable tracks. auto+auto sized the brand by its longest word
+       and the doors by a px cap, so the pair was never even and outran vw
+       when zoomed. 1fr 1fr shares leftover; children use 42vwz so paint
+       width tracks the viewport and --ui-scale together. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     justify-content: center;
     justify-content: safe center;
-    align-content: center; justify-items: start;
+    align-content: center; justify-items: stretch;
     /* Re-stating `safe center` because this block re-declares align-content and
        would otherwise take the base rule's overflow bug back — see there.
        Same for justify-content: at UI SIZE 150% the brand+button pair can be
@@ -294,10 +295,16 @@ body { --compact-at: 600px; --wide-at: 620px; }
     column-gap: 32px;
   }
   :where(body[data-density="compact"]) #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
+  :where(body[data-density="compact"]) #menu-brand,
+  :where(body[data-density="compact"]) #menu-buttons {
+    width: min(calc(42 * var(--vwz)), 100%);
+    min-width: 0;
+    max-width: 100%;
+  }
   :where(body[data-density="compact"]) #menu-buttons {
     grid-column: 2; grid-row: 1;
     align-self: stretch;
-    width: auto;
+    justify-items: stretch;
   }
   :where(body[data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
   :where(body[data-density="compact"]) #subtitle { margin: 8px 0 0; font-size: var(--fs-micro); }
@@ -308,7 +315,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
      150% without touching type size (brand+46vw+gap measured ~872 on 852). */
   :where(body[data-density="compact"]) #menu-hero,
   :where(body[data-density="compact"]) #menu-primary,
-  :where(body[data-density="compact"]) #menu-secondary { width: min(calc(42 * var(--vwz)), 300px); }
+  :where(body[data-density="compact"]) #menu-secondary { width: 100%; }
   /* One notch up, for the same reason as the HUD and the tap ladder: this
      block is the PHONE, and it was the smallest type in the app on the device
      held furthest from your face. The group widths above cap the row, so the
@@ -383,7 +390,15 @@ body { --compact-at: 600px; --wide-at: 620px; }
 }
 
 /* ---------- select screen ---------- */
-#select { z-index: 25; background: rgba(6, 6, 10, 0.92); }
+#select {
+  z-index: 25;
+  background:
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
+    rgba(6, 6, 10, 0.42);
+}
+@media (prefers-reduced-transparency: reduce) {
+  #select { background: rgba(6, 6, 10, 0.92); }
+}
 #sel-inner { --sheet-w: 1020px; }
 /* STACKED: ONE LIST SCROLLER. The circuit map is context — a compact band —
    not a second document. #sel-body is a flex column that does NOT scroll;
@@ -713,8 +728,8 @@ body { --compact-at: 600px; --wide-at: 620px; }
 }
 .team-card:active, .team-tile:active { background: rgba(255, 255, 255, 0.14); }
 .team-tile.active {
-  border-color: var(--red); background: rgba(225, 6, 0, 0.18);
-  box-shadow: 0 0 14px rgba(225, 6, 0, 0.25);
+  border-color: var(--red); background: color-mix(in oklab, var(--red) 24%, transparent);
+  box-shadow: 0 0 16px color-mix(in oklab, var(--red) 36%, transparent);
 }
 /* Two-tone block: several 2026 liveries are near-black, so the accent stripe is
    what actually tells them apart at a glance. */
@@ -793,8 +808,8 @@ body { --compact-at: 600px; --wide-at: 620px; }
    it is the reason it is inset that matters, and that survives the move.) */
 .sel-chip.active {
   border-color: var(--red);
-  background: rgba(225, 6, 0, 0.18);
-  box-shadow: inset 0 0 0 2px var(--red), 0 0 12px rgba(225, 6, 0, 0.28);
+  background: color-mix(in oklab, var(--red) 24%, transparent);
+  box-shadow: inset 0 0 0 2px var(--red), 0 0 14px color-mix(in oklab, var(--red) 38%, transparent);
 }
 .sel-chip .swatch { display: inline-block; width: 12px; height: 12px; border-radius: var(--r-xs); margin-right: 6px; flex: none; }
 .sel-edit {
@@ -1027,7 +1042,8 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    same threshold. `data-pair="on"` is what puts both panes in a
    `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
    scroll region needs. */
-#ss-inner { --sheet-w: 1020px; --pair-at: 620px; }
+#ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; }
+@media (orientation: landscape) { #ss-inner { --fit-at: 220px; } }
 /* SHORT SHEET: stack even when clientWidth stays above 620 (landscape phone at
    a raised UI SIZE). Same compact --pair-at raise as career / select / garage. */
 #ss-inner[data-density="compact"] { --pair-at: 2000px; }
@@ -1111,51 +1127,37 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 }
 #sel-track-search::placeholder { color: var(--dim); opacity: 1; }
 #sel-track-empty { padding: var(--pad); text-align: center; }
-/* A notched phone in landscape can leave the single-column list only ~140px
-   tall. Spending two control rows here hid the first actual circuit entirely.
-   Keep the filter and search on one row only in that exact compact/wide mode;
-   portrait and the roomy paired catalogue retain the easier two-row layout. */
+/* Compact stacked landscape: one pan-x toolbar. --fit-at can inflate local
+   width past a px query while the row is still starving, so this keys on
+   density. Chips keep intrinsic width; search will not shrink below 12rem. */
 #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter {
   flex-wrap: nowrap;
   align-items: center;
+  position: static;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
+  display: none;
 }
 #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter .sel-chip {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  min-width: max-content;
   padding-inline: calc(var(--gap) * 0.55);
 }
 #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-search {
-  flex: 1 1 9rem;
-  min-width: 9rem;
+  flex: 1 0 12rem;
+  min-width: 12rem;
 }
 /* The sticky filter already names SEASON and CLASSICS. Repeating that group
    heading directly below it costs the only circuit row on a short landscape
    sheet (measured 852×393, notched, UI SIZE 150%: 0px of the first row). */
 #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) .track-group-head {
   display: none;
-}
-/* At 175–200% a landscape phone gives the sheet less than 360 local px. Four
-   controls cannot shrink into that width without their labels overlapping.
-   Keep one touch-height row, preserve each control's intrinsic width, and make
-   the toolbar itself horizontally pannable. The redundant group heading drops
-   here so the first actual circuit still fits below the toolbar. */
-@container sheet (max-width: 360px) {
-  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter {
-    position: static;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    touch-action: pan-x;
-    scrollbar-width: none;
-  }
-  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
-    display: none;
-  }
-  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter .sel-chip {
-    flex: 0 0 auto;
-    min-width: max-content;
-  }
-  #sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-search {
-    flex: 0 0 9rem;
-  }
 }
 /* Compact: hide the meta line so rows pack tighter without losing the name. */
 .sheet[data-density="compact"] .track-row-meta { display: none; }
@@ -1185,7 +1187,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   .track-row:hover { background: rgba(255, 255, 255, 0.06); }
 }
 .track-row:active { background: rgba(255, 255, 255, 0.09); }
-.track-row.active { background: rgba(225, 6, 0, 0.12); border-left: 3px solid var(--red); padding-left: 9px; }
+.track-row.active { background: color-mix(in oklab, var(--red) 16%, transparent); border-left: 3px solid var(--red); padding-left: 9px; }
 .track-row-name {
   flex: 1;
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;
@@ -1210,8 +1212,8 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 
 /* ---------- race settings ---------- */
 .rs-row { margin-bottom: var(--gap); }
-#race-settings .sel-chip { font-size: var(--fs-micro); padding: 8px 14px; }
-#race-settings .sel-chip.active { background: rgba(225,6,0,0.20); border-color: var(--red); color: #fff; font-weight: 700; }
+#race-settings .sel-chip { font-size: clamp(var(--fs-micro), calc(1.6 * var(--vwz)), var(--fs-3)); padding: 8px 14px; }
+#race-settings .sel-chip.active { background: color-mix(in oklab, var(--red) 26%, transparent); border-color: var(--red); color: #fff; font-weight: 700; }
 /* LAPS + WEATHER pair up once there is room; TIME OF DAY always spans. */
 @container sheet (min-width: 440px) {
   #rs-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); align-content: start; }
