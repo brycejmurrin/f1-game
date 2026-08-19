@@ -407,7 +407,9 @@ const CEILINGS = {
   // 2887 -> 3322: recipe-gated part-realism (exhaust lip/shield, fuel hatch/vent,
   // gearbox casing, floor plank/gurney/scroll, ERS blister, engine scoopLip,
   // faired wishbones, wheel gun-nut / tyre fillet, Brembo caliper).
-  "js/car/car3d.js": 3322,
+  // 3322 -> 2876: active-aero solver (endplate/cascade/hinge/aeroFlapsGeom)
+  // moved to js/car/car3d-flaps.js. Mesh emission stays. FOIL_CAMBER moved.
+  "js/car/car3d.js": 2876,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

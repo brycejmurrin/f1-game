@@ -92,6 +92,7 @@ const FULL = [
   ...circuitFiles,
   "js/track/tracks.js",
   "js/track/maps.js",
+  "js/car/car3d-flaps.js",
   "js/car/car3d.js",
   "js/game/input.js",
   "js/game/audio.js",
@@ -202,6 +203,7 @@ const CARVIEW = [
   "js/render/glx.js",
   "js/car/teams.js",
   "js/car/parts.js",
+  "js/car/car3d-flaps.js",
   "js/car/car3d.js",
   "js/car/liveries.js",
   "js/car/liverytex.js",
@@ -337,6 +339,7 @@ const HARD_EDGES = [
   ["js/game/ui-scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
   ["js/game/custom-logo.js", "js/game.js"],   // game.js calls CustomLogo.create(G) at eval time
   ["js/game/livery-store.js", "js/game.js"],  // game.js calls LiveryStore.create(G) at eval time
+  ["js/car/car3d-flaps.js", "js/car/car3d.js"], // car3d eval-destructures Car3DFlaps
   ["js/game/career.js", "js/game/reliability.js"],  // reliability draws through Career.hash (call time, keep ordered)
   ["js/car/parts.js", "js/game/reliability.js"],    // buildQuality resolves a setup through Parts (call time, keep ordered)
   ["js/game/reliability.js", "js/game.js"],     // game.js validates the stored RELIABILITY level at eval
