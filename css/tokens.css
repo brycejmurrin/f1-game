@@ -540,9 +540,15 @@ html, body {
 
 body.in-race .touchbtn,
 body.in-race #hud,
-body.in-race #pausebtn {
+body.in-race #pausebtn,
+body.in-race #btn-cam {
   -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none;
+  /* Two thumbs (GAS + a turn arrow) must not become a pinch/pan that
+     pointercancel's the first hold — #game already opts out; the HUD
+     chrome did not, which is why throttle died when a second finger
+     went down. */
+  touch-action: none;
 }
 
 h1, h2, .hud-value, .bigbtn {
