@@ -357,6 +357,19 @@ scene event it drives even happening in this shot (traffic, dark sky, weather),
 and would this effect show up in a MEAN across the whole frame or only in a
 handful of pixels?
 
+`tools/slider-effect.mjs --live` now carries a **per-id recipe** for every
+`TUNE_DEFS` knob (`tools/slider-effect-live.mjs`). `--live --all --dry-run`
+prints the 183 plans grouped by `track|tod|wx|camera` so a real sweep parks
+once per condition, not once per slider. `--shots N` sets how many frames
+(default 2); without `--from`/`--to`, N>2 linspaces the slider's min→max.
+`--levels 0,0.26,0.55` sets the values explicitly. A 2-shot still writes
+`a.png`/`b.png`/`filter.png`/`sheet.png`; N>2 also writes `v0.png…` and a
+labeled `ramp.png`. Documented specials: `fogWxMul` → fog, `overcastFogMul` →
+overcast, `drizzle*` → wet (not rain), `moonShadow` → night+wet,
+`renderDistMul` → Spa day 0.50 chase, `starBright` → Bahrain night sky,
+`lampCull`/`tailLightMul` → Singapore night + traffic. Pixel MAD is still
+corroboration; `lightState` is the verdict.
+
 ## The full day-dry sweep's 18 "no clear signal" knobs: all 18 confirmed live
 
 A later day-dry sweep over the 178 knobs that existed then
@@ -720,3 +733,86 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
 | `particleMul` | PARTICLE FX | 0 … 3 | 1 | — |  | particles.js×3 |
+
+---
+
+## Tools for exploring sliders
+
+Two tools exist for measuring and visualising slider effects. They use
+**different browser mechanisms** and must not run simultaneously.
+
+| | `slider-effect --live` | `cdmcp-cli.py look-survey` |
+|---|---|---|
+| Browser | Playwright (owns its own Chromium) | Chrome DevTools MCP (connects to an existing session) |
+| Purpose | A/B or N-shot ramp a **single knob** | Full tod×weather **matrix** for a circuit |
+| Camera lock | Yes — `A.view({eye,target})` pinned between shots | No — each shot parks fresh |
+| renderClock | Pinned to 0 (no sky drift) | Not pinned |
+| Pixel diff | `filter.png`, `heat.png`, MAD/p99 stats | No — raw screenshots only |
+| Stitched sheet | `sheet.png` per knob | `docs/look-survey/<id>_grid.png` (via look-survey-sheet.py) |
+| Can run together | **No** — check `pgrep -a chromium` first | **No** |
+
+### slider-effect quick reference
+
+```sh
+# No browser — classify all knobs in a group
+node tools/slider-effect.mjs --group LAMPS
+node tools/slider-effect.mjs --risk inert --json
+
+# Single knob A/B (default: shipped def → farther extreme)
+node tools/slider-effect.mjs --live saturation
+node tools/slider-effect.mjs --live glareStr   # auto-selects night + full 0→0.3 range
+
+# Explicit range
+node tools/slider-effect.mjs --live saturation --from 0 --to 2
+
+# 5-shot ramp (shows full range, not just two endpoints)
+node tools/slider-effect.mjs --live contrast --shots 5
+
+# Batch — one park per shared condition
+node tools/slider-effect.mjs --live --ids bloomMul,bloomSpread,threshOff
+node tools/slider-effect.mjs --live --group "NIGHT GLOW & BLOOM"
+
+# Dry-run: see recipes without launching a browser
+node tools/slider-effect.mjs --live --all --dry-run
+node tools/slider-effect.mjs --live glareStr --dry-run
+
+# Filter only (two existing PNGs, no game)
+node tools/slider-effect.mjs --filter --a a.png --b b.png --out dir/
+```
+
+### look-survey quick reference
+
+```sh
+# Serve the game first (required — Chrome MCP needs a URL):
+npx serve -l 3456 .
+
+# All 20 conditions for a circuit
+python3 tools/cdmcp-cli.py look-survey monaco --frac 0.45
+
+# Subset
+python3 tools/cdmcp-cli.py look-survey bahrain --frac 0.12 \
+  --combos dawn|dry,day|dry,dusk|dry,night|dry,night|wet,night|rain
+
+# Batch plan (shoots only missing PNGs across all circuits)
+python3 tools/cdmcp-cli.py look-survey --plan artifacts/lighting/survey-plan.json
+
+# Stitch the 4×5 contact sheet
+python3 tools/look-survey-sheet.py monaco
+# Or all circuits that have shots:
+python3 tools/look-survey-sheet.py --ready
+```
+
+### When a slider appears inert
+
+1. **Confirm the condition** — `--dry-run` shows which track/tod/weather the
+   recipe picks. Night-gated knobs do nothing on a day track.
+2. **Check `lightState()`** — pixel MAD is the wrong measure for ambient/fog
+   knobs diluted across the frame. Run `node tools/slider-effect.mjs --live
+   nightAmbLift --shots 2` and look at `result.json` → `movedFields`.
+3. **Check `result.stored`** — if `stored.a === stored.b` the value was not
+   accepted (clamped, not in `APPLY_RACE_IDS`, or `rebuild:true` not triggering).
+4. **`--shots 5`** — the default 2-shot can land on a flat region; a ramp
+   shows where the curve starts moving.
+
+See also: `tools/slider-effect.mjs --risk inert` lists knobs the static
+classifier has flagged as conditionally or structurally inert.

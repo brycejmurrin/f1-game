@@ -149,5 +149,5 @@
       "error": null
     }
   ],
-  "note": "Committed PNGs live in docs/research/wgx-gallery/; re-run node tools/wgx-gallery.mjs --lite and copy canvas.png files to refresh."
+  "note": "Committed PNGs live in docs/research/wgx-gallery/; re-run node tools/wgx-shot.mjs --gallery --lite and copy canvas.png files to refresh."
 }

@@ -68,6 +68,17 @@ test("__APEX_BUILD is derived, not a stale literal", () => {
     "index.html must not hardcode window.__APEX_BUILD = <number> (the ?v= bump sed does not touch it)");
 });
 
+test("shell locks scale and cancels iOS double-tap / gesture zoom", () => {
+  const m = indexHtml.match(/<meta\s+name="viewport"\s+content="([^"]+)"/);
+  assert.ok(m, "index.html must declare a viewport");
+  assert.match(m[1], /maximum-scale=1/, "viewport must cap scale");
+  assert.match(m[1], /user-scalable=no/, "viewport must disable pinch/double-tap scale");
+  assert.match(indexHtml, /addEventListener\("gesturestart"/,
+    "shell must cancel iOS GestureEvents (page pinch-zoom)");
+  assert.match(indexHtml, /addEventListener\("touchend"/,
+    "shell must cancel same-spot double-tap zoom");
+});
+
 test("service-worker registration derives the shell build", () => {
   assert.match(indexHtml, /meta\[name="apex-build"\]/,
     "inline shell code must discover the shell generation from metadata");

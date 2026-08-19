@@ -69,8 +69,9 @@ Live session: **mcp-probe** with
 `localStorage.setItem("apex26.gfxBackend","webgpu")` before reload.
 `render({what:"view"})` is the cheap scene truth; for visible WGX pixels use
 `node tools/gfx-probe.mjs --backend webgpu <track>` (`#game` after
-`awaitSoftPresent`). Multi-track gallery: `node tools/wgx-gallery.mjs` (imports
-`runWgxShot` from `wgx-shot.mjs` — do not spawn wgx-shot as a subprocess).
+`awaitSoftPresent`). Multi-track gallery: `node tools/wgx-shot.mjs --gallery`
+(or `npm run wgx:gallery`). Legacy path `wgx-gallery.mjs` forwards to the same
+flags.
 Readback oracle: `node tools/wgx-capture.mjs <track>`.
 
 ## Load on demand

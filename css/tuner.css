@@ -703,7 +703,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-tabs {
     display: flex; flex-wrap: wrap;
     --balance-basis: 5.5rem; --balance-min: 5rem;
-    overflow: visible; touch-action: auto;
+    overflow: visible; touch-action: manipulation;
     margin: 2px 0 4px; padding: 0;
     background: none; border-bottom: none;
   }

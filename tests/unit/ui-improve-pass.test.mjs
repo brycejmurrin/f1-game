@@ -203,6 +203,13 @@ test("camera reset actions state their scope", () => {
   assert.match(html, /id="ct-reset-all"[^>]*title=/);
 });
 
+test("lighting tuner preview uses G facade, not __apex (Pages has no agent surface)", () => {
+  const lighting = read("js/game/tuner.js");
+  assert.doesNotMatch(lighting, /__apex/);
+  assert.match(lighting, /setTimeOfDay/);
+  assert.match(lighting, /weather/);
+});
+
 test("generated lighting and camera tabs carry the complete tab contract", () => {
   const html = read("index.html");
   const lighting = read("js/game/tuner.js");
