@@ -60,7 +60,7 @@ const PANEL_STYLE = "position:fixed;right:8px;" +
   "border-radius:8px;pointer-events:none;white-space:pre;text-align:left;" +
   "max-width:min(52ch,calc(100vw - 16px));" +
   "max-height:calc(100dvh - 12px - var(--tap, 44px) - var(--sat, 0px) - " +
-    HUD_TOP_OFFSET + " - 80px);" +
+    HUD_TOP_OFFSET + " - 70px);" +
   "overflow-y:auto;pointer-events:auto;text-shadow:0 1px 2px rgba(0,0,0,.9);" +
   "letter-spacing:.01em";
 
@@ -457,9 +457,9 @@ function paintOverlay() {
                       "   auto " + fmt(s.auto)),
         row("gfx",    fmt(s.backend || null) + "   scale " + fmt(s.scale) + "   strikes " + fmt(s.strikes)),
         sep(),
-        row("track",  (s.track || "menu") + "   " + (s.flow || s.session || s.state || "")),
-        row("flag",   (s.caution || "GREEN") + "   cam " + fmt(s.cam || null) +
-                      (s.quali ? "   quali" : "") + (s.career ? "   career" : "")),
+        row("session", (s.track || "menu") + "  " + (s.flow || s.session || s.state || "") +
+                       "  " + (s.caution || "GREEN") + "  cam " + fmt(s.cam || null) +
+                       (s.quali ? "  quali" : "") + (s.career ? "  career" : "")),
         row("build",  s.buildDone ? s.buildDone.replace(/^build done /, "") : "—"),
       ];
     }
