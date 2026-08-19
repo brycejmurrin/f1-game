@@ -644,6 +644,25 @@ function updateTrackPreview() {
   const measurable = !!(card && card.clientWidth > 0);
   const fit = TrackMaps.fitCanvas(map, plan.slotW, plan.slotH, t, measurable);
   watchPreviewCard(card);
+  // CRISP CANVAS AT UI SIZE > 100%.
+  // fitCanvas sizes the buffer to local CSS px (pre-zoom). Inside
+  // `zoom: var(--ui-scale)` the canvas is then scaled up visually, making
+  // the circuit outline look soft at 115%+. Multiply the bitmap by
+  // devicePixelRatio × ui-scale so one drawing pixel = one physical screen
+  // pixel at every zoom setting.
+  // CSS width/height stay at the local values (fit.w/fit.h) — only the
+  // bitmap expands. TrackMaps.draw uses the CSS-px reference (fit.w/fit.h)
+  // for marker scaling, so markers stay the right box-relative size even
+  // though the buffer is larger.
+  const _uiZoom = parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")
+  ) || 1;
+  const _dpr = window.devicePixelRatio || 1;
+  const _pxRatio = _uiZoom * _dpr;
+  if (_pxRatio > 1.01) {
+    map.width  = Math.round(fit.w * _pxRatio);
+    map.height = Math.round(fit.h * _pxRatio);
+  }
   // Corner markers/casing are drawn at ABSOLUTE canvas px (see TrackMaps.draw),
   // tuned for the canvas's old fixed 520x300 HTML size. fitCanvas now sizes the
   // drawing buffer itself to the measured CSS slot (so a narrow layout gets a
@@ -653,6 +672,7 @@ function updateTrackPreview() {
   // blob. Scale every absolute-px draw param by how far the fitted buffer sits
   // below that 520x300 reference so markers keep the same box-relative size
   // the old fixed-buffer-plus-CSS-shrink rendering always had.
+  // NOTE: use fit.w/fit.h (CSS-px) as the reference, not the expanded buffer.
   const mk = Math.min(1, fit.w / 520, fit.h / 300);
   TrackMaps.draw(map, t, {
     color: TrackMaps.themeColor(t), startColor: "#e10600",
