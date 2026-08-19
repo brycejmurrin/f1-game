@@ -545,10 +545,16 @@
 }
 #cg-body .sel-label[id], #ch-body .sel-label[id] { scroll-margin-block-start: var(--gap); }
 
-#career-guide .sheet[data-shape="wide"],
-#career-history .sheet[data-shape="wide"] {
+/* :has(> #cg-contents) carries that ID's specificity, so the 4-row
+   stacked template above beats a plain [data-shape=wide] 3-row rule
+   (measured 860×560 @115%: rows 39 / 432 / 0 / 0, head at y=-52,
+   foot 10px). Restate wide with :has so the rail+body share one 1fr
+   row and the foot keeps an auto track. */
+#career-guide .sheet[data-shape="wide"]:not([data-density="compact"]):has(> #cg-contents),
+#career-history .sheet[data-shape="wide"]:not([data-density="compact"]):has(> #ch-contents) {
   grid-template-columns: minmax(7.5rem, 11rem) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: start;
 }
 #career-guide .sheet[data-shape="wide"] > .sheet-head,
 #career-history .sheet[data-shape="wide"] > .sheet-head {

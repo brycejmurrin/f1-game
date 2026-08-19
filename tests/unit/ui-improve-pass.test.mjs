@@ -89,7 +89,7 @@ test("garage stacked categories are a horizontal strip", () => {
     "compact garage stacks to the horizontal strip");
   assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #cs-tabs \{[\s\S]*?flex-wrap:\s*wrap/,
     "short wide stacked garage wraps the catalogue instead of hiding AERO behind a pan");
-  assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #cs-tabs \{[\s\S]*?max-height:\s*calc\(var\(--chip-h\) \* 2\.15/,
+  assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #cs-tabs \{[\s\S]*?max-height:\s*calc\(var\(--chip-h\) \* 2/,
     "wrapped play-shape tabs cap at two rows so #cs-options keeps a list");
   assert.doesNotMatch(css, /#cs-inner:not\(\[data-pair="on"\]\):is\(\[data-shape="tall"\], \[data-density="compact"\]\) #cs-tabs \{[\s\S]*?flex-wrap:\s*wrap/,
     "tall stacked garage must keep the horizontal strip — wrapping 14 tabs starved options");

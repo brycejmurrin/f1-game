@@ -263,10 +263,12 @@
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs {
   flex-wrap: wrap;
   overflow-x: hidden;
-  max-height: calc(var(--chip-h) * 2.15 + var(--gap));
+  overflow-y: auto;
+  max-height: calc(var(--chip-h) * 2 + var(--gap));
+  align-content: flex-start;
 }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab {
-  padding: calc(var(--gap) * 0.28) calc(var(--gap) * 0.5);
+  padding: calc(var(--gap) * 0.22) calc(var(--gap) * 0.42);
 }
 #cs-options {
   flex: 1 1 auto; min-height: 0;
