@@ -357,14 +357,17 @@ window.LightPresets = {
     "surfDetail": 1.1
   },
   "albert_park|dusk|dry": {
-    "sunTemp": -0.38,
-    "grMul": 1.52,
+    "sunTemp": -0.28,
+    "grMul": 1.3,
     "saturation": 1.12,
-    "tint": 0.18,
+    "tint": 0.06,
     "ambTemp": -0.14,
-    "glowAmp": 2.45,
-    "lampLevel": 0.33,
-    "bloomMul": 1.15
+    "glowAmp": 2.1,
+    "lampLevel": 0.22,
+    "bloomMul": 0.85,
+    "sunElev": -6,
+    "floodEmitMul": 0.5,
+    "exposureMul": 0.94
   },
   "albert_park|dusk|fog": {
     "sunTemp": -0.28,
@@ -412,13 +415,16 @@ window.LightPresets = {
     "keyMul": 0.09,
     "ambientMul": 0.41,
     "moonBright": 0.88,
-    "lampLevel": 0.29,
-    "poolEnergy": 0.59,
+    "poolEnergy": 0.5,
     "lampRadiusMul": 1.08,
-    "glowAmp": 2.42,
-    "cityGlowMul": 1.42,
-    "starBright": 1.12,
-    "lampTemp": -0.18
+    "glowAmp": 2.05,
+    "cityGlowMul": 0.35,
+    "starBright": 1.1,
+    "lampTemp": -0.18,
+    "bloomMul": 0.7,
+    "exposureMul": 0.82,
+    "floodEmitMul": 0.55,
+    "nightAmbLift": 0.66
   },
   "albert_park|night|fog": {
     "keyMul": 0.05,
@@ -469,15 +475,17 @@ window.LightPresets = {
     "tint": -0.12
   },
   "bahrain|dawn|dry": {
-    "sunElev": -4,
+    "sunElev": -5,
     "sunTemp": -0.35,
     "keyMul": 0.8,
     "grMul": 1.9,
     "mistDensity": 1.85,
     "ambTemp": -0.2,
-    "exposureMul": 0.88,
-    "floodEmitMul": 0.7,
-    "tint": 0.12
+    "exposureMul": 0.9,
+    "floodEmitMul": 0.4,
+    "tint": 0.12,
+    "lampLevel": 0.12,
+    "bloomMul": 0.85
   },
   "bahrain|dawn|fog": {
     "fogDensityMul": 2,
@@ -631,16 +639,18 @@ window.LightPresets = {
     "bloomMul": 1.25
   },
   "bahrain|night|dry": {
-    "lampLevel": 0.33,
-    "poolEnergy": 0.62,
+    "lampLevel": 0.28,
+    "poolEnergy": 0.52,
     "keyMul": 0.42,
     "starBright": 1.6,
-    "glowAmp": 2.15,
-    "floodEmitMul": 0.8,
+    "glowAmp": 2.2,
+    "floodEmitMul": 0.65,
     "exposureMul": 0.8,
     "cityGlowMul": 0.5,
     "tint": 0.06,
-    "fogTint": 0.06
+    "fogTint": 0.06,
+    "bloomMul": 0.8,
+    "nightAmbLift": 0.7
   },
   "bahrain|night|fog": {
     "fogDensityMul": 1.9,
@@ -662,15 +672,17 @@ window.LightPresets = {
   },
   "bahrain|night|rain": {
     "rainCount": 520,
-    "ssrWetMul": 1.5,
+    "ssrWetMul": 1.35,
     "wetDark": 1.22,
     "glowAmp": 2.05,
     "floodEmitMul": 0.75,
-    "exposureMul": 0.78,
+    "exposureMul": 0.82,
     "lampLevel": 0.3,
     "tint": -0.15,
     "fogDensityMul": 1.22,
-    "cityGlowMul": 0.45
+    "cityGlowMul": 0.45,
+    "nightAmbLift": 0.72,
+    "bloomMul": 0.75
   },
   "bahrain|night|wet": {
     "ssrWetMul": 1.35,
@@ -682,15 +694,15 @@ window.LightPresets = {
     "exposureMul": 0.96
   },
   "baku|dawn|dry": {
-    "sunTemp": -0.28,
-    "sunElev": -8,
-    "grMul": 1.4,
-    "mistDensity": 1.25,
-    "ambientMul": 1.1,
-    "tint": 0.12,
+    "sunTemp": -0.25,
+    "sunElev": -5,
+    "grMul": 1.35,
+    "mistDensity": 1.2,
+    "ambientMul": 1.08,
+    "tint": 0.08,
     "lampLevel": 0.12,
-    "glowAmp": 1.7,
-    "cityGlowMul": 0.35,
+    "glowAmp": 1.65,
+    "cityGlowMul": 0.3,
     "starBright": 0.5,
     "bloomMul": 0.9
   },
@@ -737,15 +749,15 @@ window.LightPresets = {
     "fogDensityMul": 1.15
   },
   "baku|day|dry": {
-    "keyMul": 1.4,
-    "sunElev": 22,
-    "shadowTintAmt": 0.28,
-    "tint": 0.04,
-    "contrast": 1.15,
+    "keyMul": 1.45,
+    "sunTemp": 0.02,
+    "sunElev": 18,
+    "shadowTintAmt": 0.26,
+    "tint": 0.02,
     "daySkyBlue": 1.12,
     "ssrDryDay": 0.1,
-    "ambientMul": 1.12,
-    "exposureMul": 1.04
+    "ambientMul": 1.15,
+    "exposureMul": 1.06
   },
   "baku|day|fog": {
     "keyMul": 0.78,
@@ -990,13 +1002,14 @@ window.LightPresets = {
   },
   "buenos_aires|dusk|dry": {
     "sunTemp": -0.42,
-    "sunElev": -14,
+    "sunElev": -5,
     "keyMul": 0.9,
     "grMul": 1.48,
     "tint": 0.28,
     "lampLevel": 0.32,
     "poolEnergy": 0.66,
-    "fogTint": 0.1
+    "fogTint": 0.1,
+    "floodEmitMul": 0.5
   },
   "buenos_aires|dusk|fog": {
     "sunTemp": -0.3,
@@ -1183,14 +1196,16 @@ window.LightPresets = {
   },
   "catalunya|dusk|dry": {
     "sunTemp": -0.46,
-    "sunElev": -14,
+    "sunElev": -5,
     "grMul": 1.48,
-    "tint": 0.26,
-    "lampLevel": 0.34,
+    "tint": 0.08,
+    "lampLevel": 0.24,
     "poolEnergy": 0.66,
-    "glowAmp": 2.55,
-    "cityGlowMul": 0.82,
-    "exposureMul": 1.04
+    "glowAmp": 2.1,
+    "cityGlowMul": 0.5,
+    "exposureMul": 1.04,
+    "bloomMul": 0.9,
+    "floodEmitMul": 0.5
   },
   "catalunya|dusk|fog": {
     "sunTemp": -0.3,
@@ -1235,15 +1250,18 @@ window.LightPresets = {
   },
   "catalunya|night|dry": {
     "keyMul": 0.18,
-    "nightAmbLift": 0.78,
+    "nightAmbLift": 0.7,
     "ambientMul": 0.68,
     "cityGlowMul": 1.52,
-    "glowAmp": 2.68,
-    "lampLevel": 0.4,
-    "poolEnergy": 0.7,
+    "glowAmp": 2.2,
+    "lampLevel": 0.28,
+    "poolEnergy": 0.52,
     "starBright": 0.38,
     "ssrDryNight": 0.11,
-    "tint": 0.08
+    "tint": 0.08,
+    "exposureMul": 0.8,
+    "bloomMul": 0.8,
+    "floodEmitMul": 0.65
   },
   "catalunya|night|fog": {
     "keyMul": 0.12,
@@ -1382,14 +1400,16 @@ window.LightPresets = {
   },
   "cota|dusk|dry": {
     "sunTemp": -0.45,
-    "sunElev": -15,
+    "sunElev": -5,
     "keyMul": 0.9,
     "grMul": 1.4,
-    "tint": 0.25,
-    "lampLevel": 0.35,
+    "tint": 0.08,
+    "lampLevel": 0.24,
     "poolEnergy": 0.7,
-    "bloomMul": 1.15,
-    "exposureMul": 1.05
+    "bloomMul": 0.85,
+    "exposureMul": 1.05,
+    "glowAmp": 2.15,
+    "floodEmitMul": 0.5
   },
   "cota|dusk|fog": {
     "sunTemp": -0.35,
@@ -1596,14 +1616,15 @@ window.LightPresets = {
   },
   "estoril|dusk|dry": {
     "sunTemp": -0.28,
-    "sunElev": -12,
+    "sunElev": -5,
     "grMul": 1.38,
-    "lampLevel": 0.34,
+    "lampLevel": 0.24,
     "poolEnergy": 0.64,
     "floodEmitMul": 0.82,
-    "glowAmp": 2.45,
+    "glowAmp": 2.15,
     "tint": 0.08,
-    "keyMul": 0.9
+    "keyMul": 0.9,
+    "bloomMul": 0.85
   },
   "estoril|dusk|fog": {
     "sunTemp": -0.2,
@@ -1767,7 +1788,12 @@ window.LightPresets = {
     "ambTemp": 0.06,
     "contrast": 1.16,
     "saturation": 1.02,
-    "fogTint": -0.05
+    "fogTint": -0.05,
+    "keyMul": 1.22,
+    "sunElev": 6,
+    "cloudCover": -0.1,
+    "exposureMul": 1.04,
+    "shadowStr": 1.05
   },
   "hockenheim|day|fog": {
     "fogDensityMul": 2.15,
@@ -1811,14 +1837,15 @@ window.LightPresets = {
   },
   "hockenheim|dusk|dry": {
     "sunTemp": -0.42,
-    "sunElev": -14,
+    "sunElev": -5,
     "keyMul": 0.88,
     "grMul": 1.45,
     "tint": 0.12,
     "lampLevel": 0.34,
     "poolEnergy": 0.72,
     "bloomMul": 1.12,
-    "exposureMul": 1.04
+    "exposureMul": 1.04,
+    "floodEmitMul": 0.5
   },
   "hockenheim|dusk|fog": {
     "sunTemp": -0.3,
@@ -1864,16 +1891,18 @@ window.LightPresets = {
     "fogDensityMul": 1.15
   },
   "hockenheim|night|dry": {
-    "nightAmbLift": 0.72,
+    "nightAmbLift": 0.7,
     "ambientMul": 0.68,
     "keyMul": 0.18,
-    "lampLevel": 0.42,
+    "lampLevel": 0.28,
     "poolEnergy": 0.82,
     "cityGlowMul": 0.25,
-    "glowAmp": 1.55,
+    "glowAmp": 2.2,
     "starBright": 1.15,
     "lampTemp": 0.08,
-    "bloomMul": 1.1
+    "bloomMul": 0.78,
+    "exposureMul": 0.84,
+    "floodEmitMul": 0.6
   },
   "hockenheim|night|fog": {
     "nightAmbLift": 0.65,
@@ -2024,14 +2053,15 @@ window.LightPresets = {
   },
   "hungaroring|dusk|dry": {
     "sunTemp": -0.4,
-    "sunElev": -16,
+    "sunElev": -5,
     "grMul": 1.65,
     "ambTemp": -0.18,
     "tint": 0.16,
     "fogTint": 0.15,
     "lampLevel": 0.2,
     "glowAmp": 2.45,
-    "exposureMul": 1.05
+    "exposureMul": 1.05,
+    "floodEmitMul": 0.5
   },
   "hungaroring|dusk|fog": {
     "sunTemp": -0.3,
@@ -2183,9 +2213,13 @@ window.LightPresets = {
   "imola|day|dry": {
     "shadowTintAmt": 0.25,
     "sunTemp": -0.1,
-    "keyMul": 1.08,
+    "keyMul": 1.22,
     "saturation": 1.05,
-    "tint": 0.08
+    "tint": 0.08,
+    "sunElev": 6,
+    "cloudCover": -0.1,
+    "exposureMul": 1.04,
+    "shadowStr": 1.05
   },
   "imola|day|fog": {
     "fogDensityMul": 2.15,
@@ -2224,15 +2258,18 @@ window.LightPresets = {
     "keyMul": 0.95
   },
   "imola|dusk|dry": {
-    "sunElev": -12,
+    "sunElev": -5,
     "sunTemp": -0.25,
     "grMul": 1.5,
-    "lampLevel": 0.38,
+    "lampLevel": 0.24,
     "poolEnergy": 0.65,
-    "glowAmp": 2.6,
+    "glowAmp": 2.1,
     "floodEmitMul": 0.72,
     "keyMul": 0.87,
-    "exposureMul": 1.08
+    "exposureMul": 1.08,
+    "bloomMul": 0.9,
+    "cityGlowMul": 0.5,
+    "tint": 0.08
   },
   "imola|dusk|fog": {
     "sunElev": -12,
@@ -2283,13 +2320,17 @@ window.LightPresets = {
     "ambientMul": 0.42,
     "keyMul": 0.22,
     "moonBright": 1.08,
-    "lampLevel": 0.38,
+    "lampLevel": 0.28,
     "poolEnergy": 0.62,
     "starBright": 1.35,
     "lampTemp": -0.18,
-    "nightAmbLift": 0.78,
+    "nightAmbLift": 0.7,
     "cityGlowMul": 0.45,
-    "bleedMul": 0.85
+    "bleedMul": 0.85,
+    "bloomMul": 0.78,
+    "glowAmp": 2.2,
+    "exposureMul": 0.84,
+    "floodEmitMul": 0.6
   },
   "imola|night|fog": {
     "fogDensityMul": 2.45,
@@ -2398,7 +2439,11 @@ window.LightPresets = {
     "contrast": 1.15,
     "saturation": 1.04,
     "mieScatter": 1.2,
-    "keyMul": 1.05
+    "keyMul": 1.22,
+    "sunElev": 6,
+    "cloudCover": -0.1,
+    "exposureMul": 1.04,
+    "shadowStr": 1.05
   },
   "indianapolis|day|fog": {
     "fogDensityMul": 2.1,
@@ -2441,14 +2486,15 @@ window.LightPresets = {
   },
   "indianapolis|dusk|dry": {
     "sunTemp": -0.5,
-    "sunElev": -14,
+    "sunElev": -5,
     "keyMul": 0.88,
     "grMul": 1.85,
     "tint": 0.28,
     "lampLevel": 0.38,
     "poolEnergy": 0.72,
     "bloomMul": 1.12,
-    "exposureMul": 1.04
+    "exposureMul": 1.04,
+    "floodEmitMul": 0.5
   },
   "indianapolis|dusk|fog": {
     "sunTemp": -0.35,
@@ -2493,16 +2539,19 @@ window.LightPresets = {
     "grMul": 1.5
   },
   "indianapolis|night|dry": {
-    "nightAmbLift": 0.72,
+    "nightAmbLift": 0.7,
     "ambientMul": 0.7,
-    "lampLevel": 0.48,
+    "lampLevel": 0.28,
     "poolEnergy": 0.85,
     "lampRadiusMul": 1.15,
     "starBright": 1.35,
     "moonBright": 1.1,
     "cityGlowMul": 0.45,
-    "bloomMul": 1.15,
-    "glareStr": 0.16
+    "bloomMul": 0.78,
+    "glareStr": 0.16,
+    "glowAmp": 2.2,
+    "exposureMul": 0.84,
+    "floodEmitMul": 0.6
   },
   "indianapolis|night|fog": {
     "nightAmbLift": 0.68,
@@ -2834,13 +2883,14 @@ window.LightPresets = {
   },
   "istanbul|dusk|dry": {
     "sunTemp": -0.52,
-    "sunElev": -16,
+    "sunElev": -5,
     "grMul": 1.62,
     "tint": 0.22,
     "lampLevel": 0.32,
     "poolEnergy": 0.62,
     "fogTint": 0.12,
-    "bloomMul": 1.08
+    "bloomMul": 1.08,
+    "floodEmitMul": 0.5
   },
   "istanbul|dusk|fog": {
     "sunTemp": -0.38,
@@ -2881,14 +2931,18 @@ window.LightPresets = {
     "poolEnergy": 0.64
   },
   "istanbul|night|dry": {
-    "nightAmbLift": 0.68,
+    "nightAmbLift": 0.7,
     "ambientMul": 0.72,
     "keyMul": 0.18,
-    "lampLevel": 0.4,
+    "lampLevel": 0.28,
     "poolEnergy": 0.72,
     "lampRadiusMul": 1.12,
     "starBright": 1.22,
-    "cityGlowMul": 0.42
+    "cityGlowMul": 0.42,
+    "bloomMul": 0.78,
+    "glowAmp": 2.2,
+    "exposureMul": 0.84,
+    "floodEmitMul": 0.6
   },
   "istanbul|night|fog": {
     "nightAmbLift": 0.6,
@@ -3028,13 +3082,14 @@ window.LightPresets = {
   },
   "jacarepagua|dusk|dry": {
     "sunTemp": -0.42,
-    "sunElev": -12,
+    "sunElev": -5,
     "grMul": 1.5,
     "mistDensity": 1.4,
     "fogTint": 0.25,
     "tint": 0.22,
     "lampLevel": 0.32,
-    "bloomMul": 1.12
+    "bloomMul": 1.12,
+    "floodEmitMul": 0.5
   },
   "jacarepagua|dusk|fog": {
     "fogDensityMul": 1.95,
@@ -3134,17 +3189,18 @@ window.LightPresets = {
     "ambientMul": 0.75
   },
   "jeddah|dawn|dry": {
-    "keyMul": 0.9,
-    "sunTemp": -0.28,
+    "keyMul": 0.95,
+    "sunTemp": -0.22,
     "sunElev": -4,
-    "grMul": 1.4,
-    "lampLevel": 0.14,
-    "cityGlowMul": 0.22,
-    "cityGlowWarm": 0.1,
-    "mistDensity": 1.2,
-    "tint": 0.06,
-    "fogTint": 0.04,
-    "bloomMul": 0.85
+    "grMul": 1.25,
+    "lampLevel": 0.12,
+    "cityGlowMul": 0.18,
+    "cityGlowWarm": 0.05,
+    "mistDensity": 1.1,
+    "tint": 0.04,
+    "fogTint": 0.02,
+    "bloomMul": 0.85,
+    "exposureMul": 0.92
   },
   "jeddah|dawn|fog": {
     "fogDensityMul": 2.05,
@@ -3190,15 +3246,17 @@ window.LightPresets = {
     "fogTint": 0.08
   },
   "jeddah|day|dry": {
-    "keyMul": 1.22,
-    "sunTemp": -0.12,
-    "shadowTintAmt": 0.2,
-    "tint": 0.08,
-    "fogTint": 0.04,
+    "keyMul": 1.28,
+    "sunTemp": -0.08,
+    "shadowTintAmt": 0.18,
+    "tint": 0.04,
+    "fogTint": 0.02,
     "cloudCover": -0.22,
     "cityGlowMul": 0,
     "glowAmp": 1.5,
-    "daySkyBlue": 1.14
+    "daySkyBlue": 1.14,
+    "sunElev": 6,
+    "exposureMul": 1.04
   },
   "jeddah|day|fog": {
     "fogDensityMul": 1.9,
@@ -3337,16 +3395,18 @@ window.LightPresets = {
   "jeddah|night|rain": {
     "keyMul": 0.7,
     "fogDensityMul": 1.6,
-    "lampVolHaze": 0.85,
+    "lampVolHaze": 0.7,
     "ssrWetMul": 1.35,
     "wetDark": 1.22,
     "rainCount": 480,
     "lightning": 1.2,
     "saturation": 0.9,
-    "ambTemp": 0.15,
-    "tint": -0.15,
-    "bloomMul": 0.8,
-    "exposureMul": 0.86
+    "ambTemp": 0.1,
+    "tint": -0.1,
+    "bloomMul": 0.75,
+    "exposureMul": 0.84,
+    "glowAmp": 2.2,
+    "nightAmbLift": 0.72
   },
   "jeddah|night|wet": {
     "ssrWetMul": 1.3,
@@ -3457,14 +3517,18 @@ window.LightPresets = {
   },
   "kyalami|dusk|dry": {
     "sunTemp": -0.52,
-    "sunElev": -14,
+    "sunElev": -5,
     "keyMul": 0.92,
     "grMul": 1.55,
-    "tint": 0.28,
+    "tint": 0.08,
     "shadowStr": 1.28,
     "fogDensityMul": 0.68,
-    "lampLevel": 0.32,
-    "flareMul": 1.15
+    "lampLevel": 0.24,
+    "flareMul": 1.15,
+    "glowAmp": 2.1,
+    "bloomMul": 0.9,
+    "cityGlowMul": 0.5,
+    "floodEmitMul": 0.5
   },
   "kyalami|dusk|fog": {
     "sunTemp": -0.28,
@@ -3661,14 +3725,15 @@ window.LightPresets = {
   },
   "madrid|dusk|dry": {
     "sunTemp": -0.5,
-    "sunElev": -12,
+    "sunElev": -5,
     "grMul": 1.8,
     "floodEmitMul": 0.69,
-    "glowAmp": 2.8,
-    "lampLevel": 0.35,
-    "tint": 0.3,
+    "glowAmp": 2.15,
+    "lampLevel": 0.24,
+    "tint": 0.08,
     "exposureMul": 1.05,
-    "mistDensity": 0.8
+    "mistDensity": 0.8,
+    "bloomMul": 0.85
   },
   "madrid|dusk|fog": {
     "sunTemp": -0.3,
@@ -3713,15 +3778,17 @@ window.LightPresets = {
   },
   "madrid|night|dry": {
     "keyMul": 0.18,
-    "nightAmbLift": 0.75,
+    "nightAmbLift": 0.7,
     "ambientMul": 0.68,
     "cityGlowMul": 1.45,
-    "glowAmp": 2.6,
-    "floodEmitMul": 0.78,
-    "lampLevel": 0.4,
+    "glowAmp": 2.2,
+    "floodEmitMul": 0.6,
+    "lampLevel": 0.28,
     "poolEnergy": 0.68,
     "starBright": 0.55,
-    "tint": 0.06
+    "tint": 0.06,
+    "bloomMul": 0.78,
+    "exposureMul": 0.84
   },
   "madrid|night|fog": {
     "keyMul": 0.12,
@@ -3873,14 +3940,15 @@ window.LightPresets = {
   },
   "magny_cours|dusk|dry": {
     "sunTemp": -0.48,
-    "sunElev": -16,
+    "sunElev": -5,
     "grMul": 1.55,
     "tint": 0.16,
     "lampLevel": 0.3,
     "poolEnergy": 0.62,
     "bloomMul": 1.1,
     "exposureMul": 1.05,
-    "ambTemp": -0.12
+    "ambTemp": -0.12,
+    "floodEmitMul": 0.5
   },
   "magny_cours|dusk|fog": {
     "sunTemp": -0.32,
@@ -4080,7 +4148,7 @@ window.LightPresets = {
   },
   "mexico|dusk|dry": {
     "sunTemp": -0.38,
-    "sunElev": -12,
+    "sunElev": -5,
     "grMul": 1.68,
     "tint": 0.18,
     "lampLevel": 0.24,
@@ -4290,15 +4358,16 @@ window.LightPresets = {
     "cloudCover": 0.15
   },
   "miami|dusk|dry": {
-    "sunElev": -10,
-    "sunTemp": -0.35,
-    "floodEmitMul": 0.66,
-    "glowAmp": 2.6,
-    "lampLevel": 0.33,
+    "sunElev": -6,
+    "sunTemp": -0.28,
+    "floodEmitMul": 0.55,
+    "glowAmp": 2.15,
+    "lampLevel": 0.24,
     "keyMul": 0.95,
-    "grMul": 1.6,
-    "tint": 0.22,
-    "bloomMul": 1.15
+    "grMul": 1.25,
+    "tint": 0.08,
+    "bloomMul": 0.88,
+    "cityGlowMul": 0.55
   },
   "miami|dusk|fog": {
     "sunElev": -8,
@@ -4347,15 +4416,18 @@ window.LightPresets = {
     "grMul": 1.6
   },
   "miami|night|dry": {
-    "cityGlowMul": 1.1,
-    "glowAmp": 2.45,
+    "cityGlowMul": 1.05,
+    "glowAmp": 2.25,
     "floodEmitMul": 0.69,
-    "lampLevel": 0.38,
+    "lampLevel": 0.28,
     "lampTemp": -0.1,
     "starBright": 0.42,
-    "neonBoost": 0.72,
+    "neonBoost": 0.7,
     "cityGlowWarm": -0.1,
-    "tint": 0.1
+    "tint": 0.1,
+    "bloomMul": 0.85,
+    "exposureMul": 0.88,
+    "nightAmbLift": 0.72
   },
   "miami|night|fog": {
     "fogDensityMul": 1.9,
@@ -4720,7 +4792,7 @@ window.LightPresets = {
   },
   "montreal|dusk|dry": {
     "sunTemp": -0.62,
-    "sunElev": -18,
+    "sunElev": -5,
     "keyMul": 0.86,
     "grMul": 1.55,
     "lampLevel": 0.3,
@@ -4776,13 +4848,17 @@ window.LightPresets = {
   "montreal|night|dry": {
     "keyMul": 0.06,
     "ambientMul": 0.42,
-    "nightAmbLift": 0.72,
+    "nightAmbLift": 0.7,
     "lampLevel": 0.28,
     "cityGlowMul": 1.18,
     "cityGlowReach": 1.22,
     "starBright": 1.05,
     "moonBright": 0.82,
-    "tint": -0.12
+    "tint": -0.12,
+    "bloomMul": 0.78,
+    "glowAmp": 2.2,
+    "exposureMul": 0.84,
+    "floodEmitMul": 0.6
   },
   "montreal|night|fog": {
     "keyMul": 0.04,
@@ -4885,11 +4961,14 @@ window.LightPresets = {
     "tint": 0.06
   },
   "monza|day|dry": {
-    "keyMul": 1.12,
-    "shadowTintAmt": 0.15,
-    "tint": 0.08,
-    "saturation": 1.04,
-    "grMul": 1.25
+    "keyMul": 1.28,
+    "sunElev": 5,
+    "shadowTintAmt": 0.18,
+    "tint": 0.04,
+    "saturation": 1.05,
+    "grMul": 0.9,
+    "exposureMul": 1.04,
+    "shadowStr": 1.08
   },
   "monza|day|fog": {
     "fogDensityMul": 2,
@@ -4930,15 +5009,16 @@ window.LightPresets = {
     "shadowStr": 0.85
   },
   "monza|dusk|dry": {
-    "sunElev": -10,
-    "sunTemp": -0.35,
-    "grMul": 1.5,
-    "lampLevel": 0.3,
-    "floodEmitMul": 0.66,
-    "glowAmp": 2.5,
-    "tint": 0.12,
-    "cloudCover": 0.1,
-    "exposureMul": 0.95
+    "sunElev": -8,
+    "sunTemp": -0.28,
+    "grMul": 1.35,
+    "lampLevel": 0.24,
+    "floodEmitMul": 0.55,
+    "glowAmp": 2.15,
+    "tint": 0.08,
+    "cloudCover": 0.05,
+    "exposureMul": 0.92,
+    "bloomMul": 0.85
   },
   "monza|dusk|fog": {
     "sunTemp": -0.32,
@@ -4986,14 +5066,16 @@ window.LightPresets = {
   "monza|night|dry": {
     "keyMul": 0.15,
     "moonBright": 0.9,
-    "ambientMul": 0.55,
-    "lampLevel": 0.32,
+    "ambientMul": 0.52,
+    "lampLevel": 0.28,
     "lampTemp": -0.15,
-    "floodEmitMul": 0.75,
-    "glowAmp": 2.8,
-    "cityGlowMul": 0.6,
+    "floodEmitMul": 0.58,
+    "glowAmp": 2.15,
+    "cityGlowMul": 0.4,
     "starBright": 1.1,
-    "exposureMul": 0.9
+    "exposureMul": 0.84,
+    "bloomMul": 0.75,
+    "nightAmbLift": 0.68
   },
   "monza|night|fog": {
     "keyMul": 0.1,
@@ -5099,7 +5181,12 @@ window.LightPresets = {
     "fogTint": 0.08,
     "saturation": 1.04,
     "contrast": 1.16,
-    "mistDensity": 0.85
+    "mistDensity": 0.85,
+    "keyMul": 1.22,
+    "sunElev": 6,
+    "cloudCover": -0.1,
+    "exposureMul": 1.04,
+    "shadowStr": 1.05
   },
   "mugello|day|fog": {
     "fogDensityMul": 1.85,
@@ -5142,7 +5229,7 @@ window.LightPresets = {
   },
   "mugello|dusk|dry": {
     "sunTemp": -0.55,
-    "sunElev": -16,
+    "sunElev": -5,
     "grMul": 1.65,
     "sunShaftMul": 1.35,
     "tint": 0.28,
@@ -5150,7 +5237,8 @@ window.LightPresets = {
     "lampLevel": 0.3,
     "ambTemp": -0.12,
     "flareMul": 1.18,
-    "keyMul": 0.92
+    "keyMul": 0.92,
+    "floodEmitMul": 0.5
   },
   "mugello|dusk|fog": {
     "sunTemp": -0.4,
@@ -5194,15 +5282,19 @@ window.LightPresets = {
     "fogTint": 0.14
   },
   "mugello|night|dry": {
-    "nightAmbLift": 0.72,
+    "nightAmbLift": 0.7,
     "ambientMul": 0.62,
-    "lampLevel": 0.34,
+    "lampLevel": 0.28,
     "poolEnergy": 0.68,
     "cityGlowMul": 0.35,
     "starBright": 1.35,
     "lampTemp": -0.18,
     "bleedMul": 0.7,
-    "moonBright": 1.12
+    "moonBright": 1.12,
+    "bloomMul": 0.78,
+    "glowAmp": 2.2,
+    "exposureMul": 0.84,
+    "floodEmitMul": 0.6
   },
   "mugello|night|fog": {
     "fogDensityMul": 2.15,
@@ -5564,15 +5656,18 @@ window.LightPresets = {
   },
   "paul_ricard|dusk|dry": {
     "sunTemp": -0.55,
-    "sunElev": -18,
+    "sunElev": -5,
     "keyMul": 0.95,
     "grMul": 1.55,
-    "tint": 0.22,
-    "lampLevel": 0.28,
+    "tint": 0.08,
+    "lampLevel": 0.24,
     "flareMul": 1.18,
     "fogDensityMul": 0.72,
     "sunShaftMul": 1.22,
-    "cityGlowMul": 0.28
+    "cityGlowMul": 0.28,
+    "bloomMul": 0.85,
+    "glowAmp": 2.15,
+    "floodEmitMul": 0.5
   },
   "paul_ricard|dusk|fog": {
     "sunTemp": -0.38,
@@ -5785,14 +5880,15 @@ window.LightPresets = {
   },
   "portimao|dusk|dry": {
     "sunTemp": -0.52,
-    "sunElev": -14,
+    "sunElev": -5,
     "grMul": 1.62,
     "tint": 0.28,
     "lampLevel": 0.32,
     "poolEnergy": 0.64,
     "keyMul": 0.9,
     "flareMul": 1.18,
-    "fogTint": 0.12
+    "fogTint": 0.12,
+    "floodEmitMul": 0.5
   },
   "portimao|dusk|fog": {
     "sunTemp": -0.32,
@@ -6225,10 +6321,11 @@ window.LightPresets = {
     "grMul": 1.42,
     "sunElev": -8,
     "floodEmitMul": 0.68,
-    "glowAmp": 2.5,
-    "lampLevel": 0.3,
+    "glowAmp": 2.15,
+    "lampLevel": 0.24,
     "keyMul": 0.88,
-    "tint": 0.08
+    "tint": 0.08,
+    "bloomMul": 0.85
   },
   "redbull|dusk|fog": {
     "fogDensityMul": 1.78,
@@ -6274,16 +6371,19 @@ window.LightPresets = {
     "fogDensityMul": 1.12
   },
   "redbull|night|dry": {
-    "nightAmbLift": 0.58,
+    "nightAmbLift": 0.7,
     "ambientMul": 0.44,
     "keyMul": 0.1,
-    "lampLevel": 0.3,
-    "poolEnergy": 0.6,
+    "lampLevel": 0.28,
+    "poolEnergy": 0.52,
     "starBright": 1.82,
     "cityGlowMul": 0.16,
     "moonBright": 1.08,
     "tint": -0.06,
-    "bloomMul": 0.92
+    "bloomMul": 0.8,
+    "exposureMul": 0.8,
+    "glowAmp": 2.2,
+    "floodEmitMul": 0.65
   },
   "redbull|night|fog": {
     "fogDensityMul": 1.88,
@@ -6646,11 +6746,13 @@ window.LightPresets = {
   "shanghai|dusk|dry": {
     "sunTemp": -0.2,
     "grMul": 1.35,
-    "sunElev": -12,
-    "tint": 0.18,
-    "glowAmp": 2.52,
+    "sunElev": -5,
+    "tint": 0.08,
+    "glowAmp": 2.15,
     "cityGlowMul": 0.5,
-    "floodEmitMul": 0.27
+    "floodEmitMul": 0.27,
+    "bloomMul": 0.85,
+    "lampLevel": 0.24
   },
   "shanghai|dusk|fog": {
     "fogDensityMul": 1.75,
@@ -6991,7 +7093,7 @@ window.LightPresets = {
     "keyMul": 0.85
   },
   "singapore|day|dry": {
-    "keyMul": 1.32,
+    "keyMul": 1.22,
     "daySkyBlue": 1.14,
     "shadowTintAmt": 0.16,
     "fogDensityMul": 1.28,
@@ -7000,7 +7102,11 @@ window.LightPresets = {
     "tint": 0.12,
     "contrast": 1.18,
     "cityGlowMul": 0.05,
-    "saturation": 1.06
+    "saturation": 1.06,
+    "sunElev": 6,
+    "cloudCover": -0.1,
+    "exposureMul": 1.04,
+    "shadowStr": 1.05
   },
   "singapore|day|fog": {
     "fogDensityMul": 1.95,
@@ -7047,15 +7153,17 @@ window.LightPresets = {
   },
   "singapore|dusk|dry": {
     "sunTemp": -0.42,
-    "sunElev": -16,
+    "sunElev": -5,
     "grMul": 1.65,
     "lampLevel": 0.24,
-    "glowAmp": 2.05,
+    "glowAmp": 2.15,
     "cityGlowMul": 0.48,
     "bloomKnee": 0.66,
     "ambientMul": 0.92,
     "floodEmitMul": 0.42,
-    "mistDensity": 1.28
+    "mistDensity": 1.28,
+    "bloomMul": 0.85,
+    "tint": 0.08
   },
   "singapore|dusk|fog": {
     "sunTemp": -0.3,
@@ -7106,16 +7214,17 @@ window.LightPresets = {
     "mistDensity": 1.35
   },
   "singapore|night|dry": {
-    "nightAmbLift": 0.82,
+    "nightAmbLift": 0.7,
     "bloomKnee": 0.72,
-    "bloomMul": 0.85,
-    "glowAmp": 2.55,
+    "bloomMul": 0.78,
+    "glowAmp": 2.2,
     "cityGlowMul": 1.35,
-    "floodEmitMul": 0.72,
+    "floodEmitMul": 0.6,
     "starBright": 0.22,
-    "lampLevel": 0.32,
+    "lampLevel": 0.28,
     "mistDensity": 1.28,
-    "ssrDryNight": 0.05
+    "ssrDryNight": 0.05,
+    "exposureMul": 0.84
   },
   "singapore|night|fog": {
     "fogDensityMul": 1.8,
@@ -7144,14 +7253,19 @@ window.LightPresets = {
   "singapore|night|rain": {
     "ssrWetMul": 1.52,
     "wetDark": 1.22,
-    "nightAmbLift": 0.74,
-    "exposureMul": 0.82,
+    "nightAmbLift": 0.7,
+    "exposureMul": 0.8,
     "bloomKnee": 0.7,
     "fogDensityMul": 1.42,
     "rainCount": 520,
     "lightning": 1.35,
-    "cityGlowMul": 1.1,
-    "glowAmp": 2.4
+    "cityGlowMul": 0.55,
+    "glowAmp": 2.2,
+    "bloomMul": 0.8,
+    "lampLevel": 0.28,
+    "poolEnergy": 0.52,
+    "floodEmitMul": 0.65,
+    "cityGlowWarm": -0.25
   },
   "singapore|night|wet": {
     "ssrWetMul": 1.48,
@@ -7260,13 +7374,14 @@ window.LightPresets = {
   },
   "sochi|dusk|dry": {
     "sunTemp": -0.38,
-    "sunElev": -14,
+    "sunElev": -5,
     "grMul": 1.55,
-    "tint": 0.12,
-    "lampLevel": 0.32,
+    "tint": 0.08,
+    "lampLevel": 0.24,
     "floodEmitMul": 0.72,
-    "glowAmp": 2.45,
-    "cityGlowMul": 0.55
+    "glowAmp": 2.15,
+    "cityGlowMul": 0.55,
+    "bloomMul": 0.85
   },
   "sochi|dusk|fog": {
     "sunTemp": -0.24,
@@ -7649,10 +7764,14 @@ window.LightPresets = {
     "shadowStr": 0.85
   },
   "suzuka|dusk|dry": {
-    "sunTemp": -0.35,
-    "grMul": 1.4,
-    "lampLevel": 0.35,
-    "tint": 0.1
+    "sunTemp": -0.3,
+    "grMul": 1.3,
+    "lampLevel": 0.24,
+    "tint": 0.06,
+    "sunElev": -6,
+    "glowAmp": 2.1,
+    "bloomMul": 0.9,
+    "floodEmitMul": 0.5
   },
   "suzuka|dusk|fog": {
     "fogDensityMul": 1.78,
@@ -7698,15 +7817,16 @@ window.LightPresets = {
   },
   "suzuka|night|dry": {
     "keyMul": 0.12,
-    "ambientMul": 0.42,
-    "nightAmbLift": 0.74,
-    "lampLevel": 0.3,
-    "poolEnergy": 0.62,
-    "glowAmp": 2.45,
-    "cityGlowMul": 0.88,
-    "cityGlowWarm": 0.22,
+    "ambientMul": 0.4,
+    "nightAmbLift": 0.68,
+    "lampLevel": 0.28,
+    "glowAmp": 2.2,
+    "cityGlowMul": 0.55,
+    "cityGlowWarm": 0.05,
     "starBright": 1.22,
-    "lampTemp": -0.16
+    "lampTemp": 0.05,
+    "bloomMul": 0.8,
+    "exposureMul": 0.86
   },
   "suzuka|night|fog": {
     "fogDensityMul": 2.15,
@@ -7758,7 +7878,7 @@ window.LightPresets = {
   },
   "vegas|dawn|dry": {
     "sunTemp": -0.28,
-    "sunElev": -8,
+    "sunElev": -5,
     "grMul": 1.35,
     "mistDensity": 1.25,
     "tint": 0.1,
@@ -8033,7 +8153,11 @@ window.LightPresets = {
     "saturation": 1.02,
     "contrast": 1.14,
     "daySkyBlue": 1.06,
-    "keyMul": 1.03
+    "keyMul": 1.22,
+    "sunElev": 6,
+    "cloudCover": -0.1,
+    "exposureMul": 1.04,
+    "shadowStr": 1.05
   },
   "watkins_glen|day|fog": {
     "fogDensityMul": 2.05,
