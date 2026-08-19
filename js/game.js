@@ -7755,27 +7755,20 @@ function buildRaceSettings() {
   // the event, so it lives in pause > SETTINGS > DRIVING next to GEARS — where
   // it can also be changed mid-race, which is when a player discovers they want
   // it. See refreshAeroBtn.)
-  // Hidden in a time trial (no grid) and FORCED ON in a championship, where the
-  // weekend decides the grid and the choice is not the player's to make. Shown
-  // rather than removed there, because "why did this race qualify" is a
-  // question the screen should answer.
+  // Hidden in a time trial (no grid). A championship weekend decides the grid,
+  // so the chips go away and the label carries ON/OFF — dead chips looked live
+  // enough to tap and did nothing. Qualifying IS offered in a friend race.
   const champ = isChampionship();
-  // Qualifying IS offered in a friend race. This note used to say the chip was
-  // still hidden pending a hang on #q-go after a rival's lap landed — both
-  // halves of that are stale and were costing a reader real time. The spec
-  // ("TO THE GRID waits for the rival's lap, then races", multiplayer-room)
-  // passes, and the line below only ever hid the section for a TIME TRIAL,
-  // never in the room. The model now carries a lap per rival rather than two,
-  // and the gate waits for every one of them.
   $("rs-quali-section").hidden = isTimeTrial();
   const qEl = $("rs-quali");
   qEl.innerHTML = "";
-  for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
-    const active = champ ? (SeasonCal.quali() === on) : (raceQuali === on);
+  const qForced = champ ? SeasonCal.quali() : null;
+  $("rs-quali-label").textContent = "QUALIFYING LAP" + (qForced == null ? "" : " · " + (qForced ? "ON" : "OFF"));
+  qEl.hidden = qForced != null;
+  if (qForced == null) for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
     const b = document.createElement("button");
-    b.className = "sel-chip" + (active ? " active" : "");
-    b.setAttribute("aria-pressed", active ? "true" : "false");
-    b.disabled = champ;
+    b.className = "sel-chip" + (raceQuali === on ? " active" : "");
+    b.setAttribute("aria-pressed", raceQuali === on ? "true" : "false");
     b.textContent = label;
     b.onclick = () => {
       raceQuali = on; store.set("raceQuali", on);

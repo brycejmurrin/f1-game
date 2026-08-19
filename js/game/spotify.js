@@ -1196,7 +1196,10 @@ window.SpotifyMusic = (function () {
     on("sp-playlist2", "change", (e) => { activate(); setContext(e.target.value); if (e.target.value) playChosen(); });
     on("sp-device2", "change", (e) => setDevice(e.target.value));
     on("sp-refresh2", "click", () => loadDevices());
-    on("sp-close", "click", () => { const p = el("spotifypanel"); if (p) p.hidden = true; });
+    on("sp-close", "click", () => {
+      const p = el("spotifypanel"); if (p) p.hidden = true;
+      const audio = el("audioset"); if (audio) audio.hidden = false;
+    });
     let searchT = null;
     on("sp-search", "input", (e) => {
       const q = e.target.value;
@@ -1260,6 +1263,8 @@ window.SpotifyMusic = (function () {
     // Called by game.js when the panel opens: poll immediately rather than
     // showing whatever the last 10s tick left behind.
     openPanel() {
+      const audio = el("audioset");
+      if (audio) audio.hidden = true;
       const p = el("spotifypanel");
       if (p) p.hidden = false;
       Log.info("audio", "SpotifyMusic.openPanel");

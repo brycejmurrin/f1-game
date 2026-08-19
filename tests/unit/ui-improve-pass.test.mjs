@@ -476,6 +476,19 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
   assert.match(menus, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/);
 });
 
+test("garage preview chips hug the sheet and season quali is a label", () => {
+  const garage = read("css/carsetup.css");
+  const game = read("js/game.js");
+  const spotify = read("js/game/spotify.js");
+  assert.match(garage, /#cs-stack \{[\s\S]*?left:\s*auto/);
+  assert.match(garage, /#cs-stack \{[\s\S]*?width:\s*max-content/);
+  assert.doesNotMatch(garage, /#cs-stack \{[\s\S]*?left:\s*calc\(var\(--safe-l\)/);
+  assert.match(game, /qEl\.hidden = qForced != null/);
+  assert.match(game, /QUALIFYING LAP" \+ \(qForced == null \? "" : " · " \+/);
+  assert.match(spotify, /if \(audio\) audio\.hidden = true/);
+  assert.match(spotify, /if \(audio\) audio\.hidden = false/);
+});
+
 test("title settings, pause standings, and career modes stay reachable", () => {
   const game = read("js/game.js");
   const nav = read("js/game/settings-nav.js");
