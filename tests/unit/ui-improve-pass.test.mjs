@@ -498,7 +498,7 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
   assert.match(garage, /#cs-inner[^{]*\{[^}]*--fit-at:\s*340px/);
   assert.match(garage, /#cs-inner[^{]*\{[^}]*--fit-at:\s*240px/);
   assert.match(components, /#pmsettings-inner \{\s*--fit-at:\s*300px/);
-  assert.match(components, /#pmsettings-inner \{\s*--fit-at:\s*220px/);
+  assert.match(components, /#pmsettings-inner[^{]*\{\s*--fit-at:\s*220px/);
   assert.match(components, /#vsfriend-inner \{\s*--fit-at:\s*280px/);
   assert.match(read("css/career.css"), /#cr-inner \{[^}]*--fit-at:\s*300px/);
   assert.match(read("css/career.css"), /#cr-inner[^{]*\{[^}]*--fit-at:\s*220px/);
