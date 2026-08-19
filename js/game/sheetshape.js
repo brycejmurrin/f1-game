@@ -64,10 +64,18 @@ window.SheetShape = (function () {
   function classifyPair(el, w) {
     /* Compact list/detail sheets stack even when clientWidth is still above
        --pair-at (a landscape phone at a raised UI SIZE). `--pair-compact: off`
-       on `.pane-pair` is that answer; empty/on keeps reading --pair-at. */
+       on `.pane-pair` is that answer; empty/on keeps reading --pair-at.
+       `wide` is SELECT's answer: a short HORIZONTAL sheet still has a right
+       column to give the catalogue — stacking it wasted that half. A tall
+       compact sheet still stacks. */
     const mode = getComputedStyle(el).getPropertyValue("--pair-compact").trim();
     if (el.dataset.density === "compact" && mode === "off") {
       if (el.dataset.pair !== "off") el.dataset.pair = "off";
+      return;
+    }
+    if (el.dataset.density === "compact" && mode === "wide") {
+      const next = el.dataset.shape === "tall" ? "off" : "on";
+      if (el.dataset.pair !== next) el.dataset.pair = next;
       return;
     }
     classifyFlag(el, w, "--pair-at", "pair", PAIR_HYST);

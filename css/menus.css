@@ -562,11 +562,11 @@ body { --compact-at: 600px; --wide-at: 620px; }
   /* Preview facts start wrapping out of their capped band before the generic
      380px sheet threshold (measured: phone portrait @125%, 432 own px). */
   --compact-at: 480px;
+  /* Compact+horizontal keeps the list in the right column. Stacking a wide
+     short sheet left the map as a left stamp and wasted the rest of the row. */
+  --pair-compact: wide;
 }
 @media (orientation: landscape) { #sel-inner { --fit-at: 210px; } }
-/* SHORT SHEET: `.pane-pair { --pair-compact: off }` stacks this sheet when
-   compact even if clientWidth stays above 620 (landscape phone at a raised
-   UI SIZE). Density is classified first (sheetshape.js), then pair. */
 
 /* COLUMNS ARE FOR A WIDE SHEET; A TALL ONE GETS BANDS. Gating the two-column
    split on width alone put an upright iPad (810px sheet, 1170px tall) into
@@ -613,6 +613,10 @@ body { --compact-at: 600px; --wide-at: 620px; }
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview #sel-preview-map {
   max-height: 50%;
   object-fit: contain;
+}
+#sel-inner[data-pair="on"]:not([data-shape="tall"])[data-density="compact"] #sel-track-preview #sel-preview-map {
+  /* Compact pair hides the caption, so the 50% facts reserve is empty column. */
+  max-height: 100%;
 }
 /* FIT THE PREVIEW, DO NOT SCROLL IT. Pair-on already gives this column a
    definite height (sheet grid row 2 is minmax(0, 1fr); body is display:contents).
@@ -998,6 +1002,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* Compact pair-on: the active row already names the circuit. At 175–200% the
    map needs the whole preview column; retaining even name + record put a
    partially clipped caption under it. */
+#sel-inner[data-pair="on"][data-density="compact"] #sel-circuit-label,
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-info { display: none; }
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-gp,
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-meta { display: none; }
@@ -1119,10 +1124,10 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 }
 #sel-track-search::placeholder { color: var(--dim); opacity: 1; }
 #sel-track-empty { padding: var(--pad); text-align: center; }
-/* Compact stacked landscape: one pan-x toolbar. --fit-at can inflate local
-   width past a px query while the row is still starving, so this keys on
-   density. Chips keep intrinsic width; search will not shrink below 12rem. */
-#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter {
+/* Compact landscape toolbar: one pan-x row, stacked or paired. --fit-at can
+   inflate local width past a px query while the row is still starving, so
+   this keys on density. Chips keep intrinsic width; search stays ≥ 12rem. */
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-filter {
   flex-wrap: nowrap;
   align-items: center;
   position: static;
@@ -1133,22 +1138,22 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   touch-action: pan-x;
   scrollbar-width: none;
 }
-#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
   display: none;
 }
-#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-filter .sel-chip {
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-filter .sel-chip {
   flex: 0 0 auto;
   min-width: max-content;
   padding-inline: calc(var(--gap) * 0.55);
 }
-#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) #sel-track-search {
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-search {
   flex: 1 0 12rem;
   min-width: 12rem;
 }
 /* The sticky filter already names SEASON and CLASSICS. Repeating that group
    heading directly below it costs the only circuit row on a short landscape
    sheet (measured 852×393, notched, UI SIZE 150%: 0px of the first row). */
-#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) .track-group-head {
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) .track-group-head {
   display: none;
 }
 /* Compact: hide the meta line so rows pack tighter without losing the name. */

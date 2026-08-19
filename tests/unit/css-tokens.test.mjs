@@ -108,6 +108,9 @@ test("every .pane-pair sheet declares the --pair-at that switches it on", () => 
     "without four copies of `--pair-at: 2000px`.");
   assert.match(shape, /--pair-compact/,
     "classifyPair must read --pair-compact after data-density is written.");
+  assert.match(shape, /mode === "wide"/,
+    "SELECT's compact+horizontal pair is classifyPair's `wide` mode.");
+  assert.match(css, /#sel-inner\s*\{[^}]*--pair-compact\s*:\s*wide/);
   assert.doesNotMatch(css, /\[data-density="compact"\]\s*\{[^}]*--pair-at\s*:\s*2000px/,
     "the 2000px compact raise is retired — --pair-compact: off on .pane-pair is the stack.");
 });

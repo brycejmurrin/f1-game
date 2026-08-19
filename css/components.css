@@ -299,6 +299,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    Screens tune it with five properties and nothing else:
      --pair-at       the sheet width at which the pair turns on (default 620px)
      --pair-compact  off = force stack when data-density=compact (default off)
+                     wide = pair when compact+horizontal, stack when compact+tall
                      empty/on = keep reading --pair-at (safe default)
      --pair-split    the SIDE column's track      (default minmax(0, 1fr))
      --pair-main     the MAIN column's track      (default minmax(0, 1fr))

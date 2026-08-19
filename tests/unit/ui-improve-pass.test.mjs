@@ -66,8 +66,9 @@ test("circuit select stacked uses one list scroller", () => {
     "the track list fills leftover body height from a zero basis");
   assert.match(css, /#sel-inner\[data-pair="on"\]:not\(\[data-shape="tall"\]\) #sel-track-section \{[\s\S]*?overflow:\s*hidden/,
     "wide preview column fits instead of scrolling as a second document");
-  assert.match(read("css/components.css"), /\.pane-pair\s*\{[^}]*--pair-compact\s*:\s*off/,
-    "compact select stacks via --pair-compact, same as career / garage / season");
+  assert.match(read("css/menus.css"), /#sel-inner\s*\{[^}]*--pair-compact\s*:\s*wide/,
+    "compact wide SELECT pairs so the catalogue sits in the right column");
+  assert.match(read("js/game/sheetshape.js"), /mode === "wide"/);
   assert.doesNotMatch(read("js/game/scrollfade.js"), /"\.pane", "#sel-body"/);
   assert.doesNotMatch(read("js/game/menunav.js"), /\.pane,#sel-body/);
   assert.doesNotMatch(read("tools/layout-audit.mjs"), /\.pane,#sel-body/);
@@ -116,12 +117,12 @@ test("circuit catalogue has a searchable filter toolbar", () => {
 test("compact landscape catalogue spends its first viewport on a circuit", () => {
   const css = read("css/menus.css");
   assert.match(css,
-    /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\) \.track-group-head\s*\{[^}]*display:\s*none/);
+    /#sel-inner\[data-density="compact"\]:not\(\[data-shape="tall"\]\) \.track-group-head\s*\{[^}]*display:\s*none/);
   assert.match(css,
-    /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\) #sel-track-filter \{[\s\S]*?overflow-x:\s*auto/,
-    "compact stacked filter pans; do not re-gate this on a local max-width query");
+    /#sel-inner\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #sel-track-filter \{[\s\S]*?overflow-x:\s*auto/,
+    "compact landscape filter pans in both stacked and paired columns");
   assert.match(css,
-    /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\) #sel-track-search \{[\s\S]*?min-width:\s*12rem/,
+    /#sel-inner\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #sel-track-search \{[\s\S]*?min-width:\s*12rem/,
     "search keeps a readable floor so the row actually overflows at 200%");
   assert.doesNotMatch(css, /@container sheet \(max-width: 360px\)/);
   assert.doesNotMatch(css, /@container sheet \(max-width: 440px\)/);
