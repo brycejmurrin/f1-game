@@ -102,13 +102,10 @@ test("shader sources parse as JS (no stray backticks in GLSL comments)", () => {
   }
 });
 
-test("the baked-material knob is wired, and ON now that real scans ship", () => {
-  // This asserted def: 0 while the pack was my own procedural noise — there was
-  // no reason to change anyone's render for that. With real CC0 photoscans in
-  // the pack the deliberate default flipped, so the invariant flipped with it.
-  // What still holds is the safety property, and it is now carried by
-  // js/render/assets.js rather than by the knob: no pack, a malformed pack, or
-  // a backend without createTextureArray all fall back to the procedural look.
+test("the baked-material knob is wired, and ON so the pack can contribute", () => {
+  // Default is non-zero so a loaded pack actually reaches the shader. Safety
+  // (no pack / bad pack / no createTextureArray → procedural look) lives in
+  // js/render/assets.js, not in the knob staying at 0.
   const lighting = fs.readFileSync(path.join(ROOT, "js", "game", "lighting.js"), "utf8");
   const def = lighting.match(/\{ id: "matTexMix",[^}]*\}/);
   assert.ok(def, "matTexMix must exist in TUNE_DEFS");
@@ -118,6 +115,45 @@ test("the baked-material knob is wired, and ON now that real scans ship", () => 
   const v = parseFloat(d[1]);
   assert.ok(v > 0 && v <= 1, `matTexMix default ${v} must be in (0, 1]`);
   assert.match(def[0], /min: 0,/, "0 must stay reachable — it is the revert path if tarmac crawls");
+});
+
+test("bake-synthetic produces a dual-tier Apex26-Procedural pack with no network", () => {
+  // The no-download rebuild path. Must write BOTH tiers, stamp every layer
+  // Apex26-Procedural, and leave models/env alone — otherwise a synthetic
+  // rebake would orphan committed Kenney bins and HDRI ambients.
+  const os = require("node:os"), cp = require("node:child_process");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-synth-"));
+  try {
+    // Seed a fake prior pack so we can prove models/env survive the rewrite.
+    fs.mkdirSync(path.join(dir, "models"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "models", "keep.bin"), Buffer.from("AX26"));
+    fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({
+      version: 1,
+      materials: null,
+      models: { keep: { file: "models/keep.bin", licence: "CC0", author: "t", source: "t" } },
+      env: { "*|day": { ambientSky: [0.3, 0.3, 0.4], ambientGround: [0.1, 0.1, 0.1],
+                        licence: "CC0", author: "t", source: "t" } },
+      credits: [],
+    }));
+    const r = cp.spawnSync(process.execPath,
+      [path.join(ROOT, "tools", "assets.mjs"), "bake-synthetic"],
+      { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
+    assert.equal(r.status, 0, `bake-synthetic failed:\n${r.stdout}\n${r.stderr}`);
+    const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
+    assert.equal(m.materials.size, 256);
+    assert.ok(m.materials.low && m.materials.low.size === 128, "default bake must include low 128");
+    assert.ok(fs.existsSync(path.join(dir, m.materials.albedo)));
+    assert.ok(fs.existsSync(path.join(dir, m.materials.low.albedo)));
+    assert.ok(m.materials.layers.length >= 10, "expected the SCALES table layers");
+    for (const L of m.materials.layers) {
+      assert.equal(L.licence, "Apex26-Procedural", `${L.id} must be procedural`);
+      assert.match(L.source, /^procedural:/);
+    }
+    assert.ok(m.models.keep, "bake-synthetic must preserve models");
+    assert.ok(m.env["*|day"], "bake-synthetic must preserve env");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("pack manifest is well-formed", { skip: !hasPack && "no pack installed" }, () => {
@@ -195,6 +231,46 @@ test("pack stays inside the clone-time budget", { skip: !hasPack && "no pack ins
   walk(PACK);
   assert.ok(bytes <= BUDGET_BYTES,
     `pack is ${(bytes / 1048576).toFixed(2)} MB, budget is ${(BUDGET_BYTES / 1048576).toFixed(0)} MB`);
+});
+
+test("bake-synthetic-models replaces Kenney bins with Apex26-Procedural AX26", () => {
+  const os = require("node:os"), cp = require("node:child_process");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-synth-mdl-"));
+  try {
+    fs.mkdirSync(path.join(dir, "models"), { recursive: true });
+    // Seed a fake Kenney bin that must be overwritten / removed if not in catalog.
+    fs.writeFileSync(path.join(dir, "models", "kenney_construction-cone.bin"), Buffer.from("OLD"));
+    fs.writeFileSync(path.join(dir, "models", "orphan_old.bin"), Buffer.from("ORPHAN"));
+    fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({
+      version: 1, materials: null,
+      models: {
+        "kenney_construction-cone": {
+          file: "models/kenney_construction-cone.bin", licence: "CC0",
+          author: "Kenney", source: "kenney:x",
+        },
+        orphan_old: { file: "models/orphan_old.bin", licence: "CC0", author: "x", source: "x" },
+      },
+      env: {}, credits: [],
+    }));
+    const r = cp.spawnSync(process.execPath,
+      [path.join(ROOT, "tools", "assets.mjs"), "bake-synthetic-models"],
+      { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
+    assert.equal(r.status, 0, `bake-synthetic-models failed:\n${r.stdout}\n${r.stderr}`);
+    const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
+    assert.ok(!m.models.orphan_old, "non-catalog models must be dropped");
+    const cone = m.models["kenney_construction-cone"];
+    assert.ok(cone, "catalog id must be present");
+    assert.equal(cone.licence, "Apex26-Procedural");
+    assert.match(cone.source, /^procedural:/);
+    assert.ok(cone.verts >= 8, "cone must have geometry");
+    const bin = fs.readFileSync(path.join(dir, cone.file));
+    assert.equal(bin.toString("ascii", 0, 4), "AX26");
+    assert.ok(!fs.existsSync(path.join(dir, "models", "orphan_old.bin")));
+    // Spot-check a building id circuits actually place.
+    assert.ok(m.models["kenney_ind_building-a"].verts > 50);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("bake-model round-trips glTF into the game's own vertex format", () => {
