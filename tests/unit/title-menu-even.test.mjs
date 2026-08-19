@@ -10,7 +10,8 @@ const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 
 test("title 2-up rows share equal flex cells and fill them", () => {
   const menus = read("css/menus.css");
-  assert.match(menus, /#menu-primary, #menu-secondary\s*\{[^}]*--balance-min:\s*calc\(50%/);
+  assert.match(menus, /#menu-primary\s*\{[^}]*--balance-min:\s*calc\(50%/);
+  assert.match(menus, /#menu-secondary\s*\{[^}]*--balance-basis:\s*5\.5rem/);
   assert.match(menus, /#menu-primary, #menu-secondary\s*\{[^}]*gap:\s*calc\(var\(--gap\) \* 0\.7\)/);
   assert.match(
     menus,

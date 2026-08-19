@@ -48,8 +48,12 @@ test("guide and history contents rail keys on wide sheet shape, strip when compa
   assert.match(js, /"cg-" \+ slug\(title\)/);
   assert.match(js, /head\("CAREER TOTALS", "ch-totals"\)/);
   assert.match(js, /head\("SEASON BY SEASON", "ch-seasons"\)/);
+  assert.match(css, /#career-guide \.sheet\[data-shape="wide"\]:not\(\[data-density="compact"\]\):has\(> #cg-contents\)/);
+  assert.match(css, /#career-history \.sheet\[data-shape="wide"\]:not\(\[data-density="compact"\]\):has\(> #ch-contents\)/);
   assert.match(css, /#career-guide \.sheet\[data-shape="wide"\] > #cg-contents/);
   assert.match(css, /#career-history \.sheet\[data-shape="wide"\] > #ch-contents/);
+  assert.match(css, /#career-guide \.sheet\[data-shape="wide"\] > #cg-contents,[\s\S]*?min-height:\s*0/);
+  assert.match(css, /#career-guide \.sheet\[data-shape="wide"\] > \.sheet-body,[\s\S]*?min-height:\s*0/);
   assert.match(css, /#career-guide \.sheet\[data-density="compact"\] > #cg-contents/);
   assert.match(css, /#career-history \.sheet\[data-density="compact"\] > #ch-contents/);
   assert.match(html, /class="sheet-body pane" id="cg-body"/);

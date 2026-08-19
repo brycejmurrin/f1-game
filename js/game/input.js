@@ -846,8 +846,8 @@ const Input = (function () {
   // Poll the active gamepad once per frame. The Gamepad API has no events for
   // button/axis changes — you must read a fresh snapshot each frame — so this is
   // called at the top of the game loop, before the physics step, to keep input
-  // latency to a single frame. Standard mapping WHILE DRIVING (UiLayers.anyOpen()
-  // false):
+  // latency to a single frame. Standard mapping WHILE DRIVING (UiLayers.navOpen()
+  // false — anyOpen() stays false on the title overlay):
   //   axis 0  left-stick X (steer)      btn 7 RT / btn 0 A  throttle
   //   btn 14/15 d-pad left/right        btn 6 LT / btn 1 B  brake
   //   btn 2 X  boost toggle             btn 3 Y  overtake
@@ -855,7 +855,7 @@ const Input = (function () {
   //   btn 12 d-pad up  active aero (X-mode) toggle
   //   btn 8 View/Back  camera           btn 9 Menu/Start  pause
   //
-  // Standard mapping WHILE A MENU IS OPEN (UiLayers.anyOpen() true) — the UWP
+  // Standard mapping WHILE A MENU IS OPEN (UiLayers.navOpen() true) — the UWP
   // gamepad/keyboard-parity mapping settled in
   // docs/research/PLATFORM-INPUT-NOTES.md §8, now shipped:
   //   d-pad (12-15) AND left stick   arrow keys (with OS-style hold-repeat,
@@ -913,7 +913,7 @@ const Input = (function () {
     // held LB/RB/trigger can never also queue a gear shift or camera cycle
     // that fires the instant the menu closes (see docs/research note above
     // clearEdges() for the bug class this avoids).
-    if (window.UiLayers && window.UiLayers.anyOpen()) {
+    if (window.UiLayers && window.UiLayers.navOpen()) {
       padNavPoll(pad);
     } else {
       padNavDir = null;   // fresh hold-timer the next time a menu opens
@@ -997,6 +997,10 @@ const Input = (function () {
   function padActivate() {
     const focused = padFocusableInLayer();
     if (focused) {
+      // A click on a focused range/number jumps the thumb to the click
+      // coordinate — not "confirm this control". Left/Right already own it.
+      const ty = (focused.type || "").toLowerCase();
+      if (focused.tagName === "INPUT" && (ty === "range" || ty === "number")) return;
       focused.click();
       return;
     }

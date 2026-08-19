@@ -33,7 +33,9 @@ window.AriaState = (function () {
     // #spotifypanel's SHUFFLE/REPEAT are the same `.active`-class opt-row shape as
     // the Spotify mode toggles inside #audioset, which ARE synced — one widget
     // family must not announce its state in one panel and go silent in the other.
-    "#race-settings,#customize,#datahub,#track-detail,#spotifypanel";
+    // #vsfriend / #season-setup are already in UiLayers; they were the two
+    // DOM-built overlays this observer had never heard of.
+    "#race-settings,#customize,#datahub,#track-detail,#spotifypanel,#vsfriend,#season-setup";
 
   const isOn = (el) => ON.some((c) => el.classList.contains(c));
   // Groups whose semantics are already stated explicitly are left alone: a

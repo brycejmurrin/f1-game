@@ -330,14 +330,18 @@ window.MenuNav = (function () {
   // Controls that own the arrow keys themselves. A range slider is the one that
   // matters here (the settings and lighting panels are full of them): stealing
   // Left/Right from a focused slider would make it unadjustable by keyboard.
-  function ownsArrows(el) {
+  // Range/number own ONLY those two keys — Up/Down must leave the row.
+  function ownsArrows(el, key) {
     if (!el) return false;
     const t = el.tagName;
     if (t === "TEXTAREA" || t === "SELECT") return true;
     if (t === "INPUT") {
       const ty = (el.type || "text").toLowerCase();
-      return ty !== "checkbox" && ty !== "radio" && ty !== "button" &&
-             ty !== "submit" && ty !== "reset";
+      if (ty === "checkbox" || ty === "radio" || ty === "button" ||
+          ty === "submit" || ty === "reset") return false;
+      if (ty === "range" || ty === "number")
+        return key === "ArrowLeft" || key === "ArrowRight";
+      return true;
     }
     if (el.getAttribute && el.getAttribute("role") === "tab") return true;
     return !!el.isContentEditable;
@@ -356,7 +360,7 @@ window.MenuNav = (function () {
     const layer = activeLayer();
     if (!layer) return;
     const active = document.activeElement;
-    if (ownsArrows(active)) return;
+    if (ownsArrows(active, key)) return;
 
     const list = items(layer);
     if (!list.length) return;

@@ -243,18 +243,21 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   display: inline-flex; align-items: center; justify-content: center;
   width: auto; margin: 0; min-width: 0;
   padding: 5px 9px; font-size: var(--fs-micro); letter-spacing: 0.04em;
-  border: 1px solid rgba(255, 255, 255, 0.16); border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--plate-line); border-radius: var(--r-pill);
+  background: var(--plate); color: var(--dim);
   cursor: pointer; transition: background 0.12s, color 0.12s;
   /* wraps rather than truncates: at rail width a column is ~100px and the
      longest label needs two lines. Grid rows stretch, so both cells match. */
   white-space: normal; text-align: center; line-height: 1.15;
 }
 @media (hover: hover) {
-  #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+  #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover { background: var(--plate-hover); color: #fff; }
 }
-#lt-tabs .lt-tab:active, #ct-modes .lt-tab:active { background: rgba(255, 255, 255, 0.16); color: #fff; }
-#lt-tabs .lt-tab.on, #ct-modes .lt-tab.on { background: var(--red); border-color: var(--red); color: #fff; }
+#lt-tabs .lt-tab:active, #ct-modes .lt-tab:active { background: var(--plate-press); color: #fff; }
+#lt-tabs .lt-tab.on, #ct-modes .lt-tab.on {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+  box-shadow: var(--plate-on-glow);
+}
 .lt-group { display: none; }
 .lt-group.active { display: block; }
 /* The active tab already names the group, so drop the in-panel section header. */
@@ -276,7 +279,10 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 3px 0; }
 .lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; color: var(--dim); }
 .lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; min-height: var(--tap-min); margin: 0; padding: 4px 3px; font-size: var(--fs-micro); }
-.lt-preview-row .opt-btn.on { background: var(--red); color: #fff; border-color: var(--red); }
+.lt-preview-row .opt-btn.on {
+  background: var(--plate-on); color: var(--text); border-color: var(--red);
+  box-shadow: var(--plate-on-glow);
+}
 #lighting-inner .sheet-foot, #camtune-inner .sheet-foot {
   display: flex; gap: 8px; flex-shrink: 0;
   margin-top: 10px; padding-top: 10px;
@@ -441,7 +447,8 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   text-transform: none; line-height: 1.2;
 }
 .preset-btn.active {
-  background: var(--red); border-color: var(--red); color: #fff;
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+  box-shadow: var(--plate-on-glow);
 }
 .preset-btn.active small { opacity: 0.85; }
 /* segmented option groups (STEERING / DRIVING HELP / RACING LINE) */
@@ -458,7 +465,10 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   display: inline-flex; align-items: center; justify-content: center;
   font-size: var(--fs-micro); letter-spacing: 0.03em; text-align: center;
 }
-.opt-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
+.opt-btn.active {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+  box-shadow: var(--plate-on-glow);
+}
 /* THE ACTION BAR IS NOT ALLOWED OFF THE BOTTOM. #lt-rows is meant to absorb all
    the overflow so the panel itself never scrolls (see the head of this file),
    and when it cannot — head plus foot taller than the panel — the panel becomes

@@ -102,13 +102,17 @@ test("every .pane-pair sheet declares the --pair-at that switches it on", () => 
     "the two panes will stack at full height instead of becoming bounded scroll regions. " +
     "Declare it beside the sheet's --sheet-w (620px matches #sel-inner / #cr-inner / #ss-inner).");
 
-  const unstacked = pairs.filter((id) => !new RegExp(
-    "#" + id + "\\[data-density=\"compact\"\\]\\s*\\{[^}]*--pair-at\\s*:\\s*2000px").test(css));
-  assert.deepEqual(unstacked, [],
-    "a .pane-pair sheet keeps its wide --pair-at when compact, so a landscape phone " +
-    "at a raised UI SIZE stays pair-on (clientWidth is still above the threshold) and " +
-    "the stacked one-scroller rules never fire. Raise --pair-at to 2000px on " +
-    "[data-density=compact], same as #cr-inner / #sel-inner / #cs-inner.");
+  const shape = fs.readFileSync(path.join(ROOT, "js/game/sheetshape.js"), "utf8");
+  assert.match(css, /\.pane-pair\s*\{[^}]*--pair-compact\s*:\s*off/,
+    "`.pane-pair` must default `--pair-compact: off` so compact sheets stack " +
+    "without four copies of `--pair-at: 2000px`.");
+  assert.match(shape, /--pair-compact/,
+    "classifyPair must read --pair-compact after data-density is written.");
+  assert.match(shape, /mode === "wide"/,
+    "SELECT's compact+horizontal pair is classifyPair's `wide` mode.");
+  assert.match(css, /#sel-inner\s*\{[^}]*--pair-compact\s*:\s*wide/);
+  assert.doesNotMatch(css, /\[data-density="compact"\]\s*\{[^}]*--pair-at\s*:\s*2000px/,
+    "the 2000px compact raise is retired — --pair-compact: off on .pane-pair is the stack.");
 });
 
 test("stacked season setup has one reachable vertical scroll owner", () => {

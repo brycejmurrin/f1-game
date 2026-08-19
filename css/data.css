@@ -81,12 +81,12 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   width: var(--tap); height: var(--tap); flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
   border-radius: var(--r-md); padding: 0; font-size: var(--fs-5);
-  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: #c4c4c8; cursor: pointer;
+  background: var(--plate); border: 1px solid var(--plate-line); color: var(--dim); cursor: pointer;
 }
 @media (hover: hover) {
-  .dh-close:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  .dh-close:hover { background: var(--plate-hover); color: #fff; }
 }
-.dh-close:active { background: rgba(255,255,255,0.18); color: #fff; }
+.dh-close:active { background: var(--plate-press); color: #fff; }
 
 /* A SIDEWAYS SCROLL REGION IS NOT FINISHED AT `overflow-x: auto`. Two more
    declarations decide whether a thumb-drag actually pans it, and this strip had
@@ -116,25 +116,26 @@ body[data-width="wide"][data-density="normal"] .dh-card {
 .dh-tab {
   flex: 0 0 auto;
   min-height: var(--tap);         /* primary nav — full thumb height */
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
   border-radius: var(--r-md);
   padding: 7px 14px;
   font-size: var(--fs-2); font-weight: 700; letter-spacing: 0.07em;
-  color: #8a8a95;
+  color: var(--dim);
   white-space: nowrap;
   text-align: center;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 @media (hover: hover) {
-  .dh-tab:hover { background: rgba(255,255,255,0.11); color: #c4c4c8; border-color: rgba(255,255,255,0.22); }
+  .dh-tab:hover { background: var(--plate-hover); color: var(--text); border-color: var(--plate-line); }
 }
-.dh-tab:active { background: rgba(255,255,255,0.14); color: #c4c4c8; }
+.dh-tab:active { background: var(--plate-press); color: var(--text); }
 .dh-tab.dh-active {
-  background: #e10600;
-  border-color: #e10600;
-  color: #fff;
+  background: var(--plate-on);
+  border-color: var(--red);
+  color: var(--text);
   font-weight: 800;
+  box-shadow: var(--plate-on-glow);
 }
 /* UI SIZE can turn a physically short screen into a very short LOCAL card.
    body[data-density] is measured in those same zoom-adjusted units; compact
@@ -445,7 +446,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   color: #f2f2f5;
 }
 .dh-trestart { padding: 7px var(--gap); }
-.dh-tplay.dh-tplaying { background: #e10600; border-color: #e10600; color: #fff; }
+.dh-tplay.dh-tplaying { background: var(--plate-on); border-color: var(--red); color: #fff; box-shadow: var(--plate-on-glow); }
 .dh-trates { display: flex; gap: 4px; }
 .dh-ratebtn {
   font-size: var(--fs-2); font-weight: 800;
@@ -494,7 +495,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   border: 1px solid rgba(255, 255, 255, 0.18);
   color: #f2f2f5;
 }
-.dh-livebtn.dh-active { background: #e10600; border-color: #e10600; color: #fff; }
+.dh-livebtn.dh-active { background: var(--plate-on); border-color: var(--red); color: #fff; box-shadow: var(--plate-on-glow); }
 /* ---------- compare lanes (multi-driver + cross-session telemetry) ---------- */
 /* session badge on a lane row / header / legend chip (R, Q, P2, …) */
 .dh-lane-ses {
@@ -544,15 +545,22 @@ body[data-width="narrow"] .dh-thint { display: none; }
   margin-bottom: var(--gap); padding-bottom: var(--gap);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
-.dh-pick-years { display: flex; flex-wrap: wrap; gap: 4px; }
+.dh-pick-years {
+  display: flex; flex-wrap: nowrap; gap: 4px;
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; touch-action: pan-x;
+  scrollbar-width: none;
+}
+.dh-pick-years::-webkit-scrollbar { display: none; }
 .dh-pill {
   font-size: var(--fs-micro); font-weight: 700;
   padding: 5px calc(var(--pad) * 0.5); border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
   color: #f2f2f5;
+  flex: 0 0 auto;
 }
-.dh-pill.dh-active { background: #e10600; border-color: #e10600; color: #fff; }
+.dh-pill.dh-active { background: var(--plate-on); border-color: var(--red); color: #fff; box-shadow: var(--plate-on-glow); }
 .dh-pill:disabled { opacity: 0.4; cursor: default; }
 
 /* ---------- TAP TARGETS ----------
