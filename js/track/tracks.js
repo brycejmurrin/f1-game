@@ -330,7 +330,7 @@ const Tracks = (function () {
     for (const name of ["place", "prop", "backdrop", "groundPlane", "anchor", "pine", "tree",
                         "palm", "conifer", "building", "house", "motorhome", "tower", "billboard",
                         "marshalPost", "bush", "signBoard", "ferrisWheel", "floodMast", "runoffApron",
-                        "cameraTower", "broadcastCompound", "waterSurface",
+                        "cameraTower", "broadcastCompound", "waterSurface", "bakedModel",
                         "cypress", "stonePine", "broadleafFall", "acacia", "plane"]) {
       const f = api[name]; if (f) w[name] = (k, side, ...r) => f(RK(k), SIDE(side), ...r);
     }
@@ -2136,13 +2136,36 @@ const Tracks = (function () {
       const o = opts || {};
       const a = anchor(k, side, dist);
       if (!a || !isFinite(a.c[0]) || !isFinite(a.c[1]) || !isFinite(a.c[2])) return false;
+      // Footprint guard: pack models have no UV-local "inner face" — the mesh
+      // AABB is centred on the anchor. Without this, a suburban block on a
+      // reversed street circuit (Monaco) can sit with its body over a foldback
+      // of the racing line while the anchor itself clears.
+      const sc = o.scale != null ? o.scale : 1;
+      let hx = 4 * sc, hz = 4 * sc;
+      if (mesh.pos && mesh.pos.length >= 3) {
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        for (let i = 0; i < mesh.pos.length; i += 3) {
+          const x = mesh.pos[i], z = mesh.pos[i + 2];
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+        }
+        if (Number.isFinite(minX)) {
+          hx = Math.max(0.5, (maxX - minX) * 0.5 * sc);
+          hz = Math.max(0.5, (maxZ - minZ) * 0.5 * sc);
+        }
+      }
+      const clear = def.street ? 2.5 : 1.0;
+      if (rejBox(a.c, [hx * 2 + clear * 2, 8, hz * 2 + clear * 2], [a.r, a.u, a.t])) {
+        Log.warn("scenery", `bakedModel SUPPRESSED id=${id} at k=${k} side=${side}: dist=${dist} (footprint over track)`);
+        return false;
+      }
       // Face the track by default: yaw from the track tangent, flipped on the
       // right-hand side so a model authored facing +Z always looks at the road.
       const yaw = o.rotY != null ? o.rotY
                 : Math.atan2(a.t[0], a.t[2]) + (side < 0 ? Math.PI / 2 : -Math.PI / 2);
       return TrackGeom.addMesh(out, mesh, {
         x: a.c[0], y: a.c[1] + (o.lift || 0), z: a.c[2],
-        rotY: yaw, scale: o.scale != null ? o.scale : 1,
+        rotY: yaw, scale: sc,
         tint: o.tint || null, mat: o.mat,
       });
     }

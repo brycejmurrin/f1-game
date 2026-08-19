@@ -9,7 +9,8 @@
  * and the game is an offline-first PWA on static hosting.  So every byte is
  * pulled here, at author time, verified, credited and committed.
  *
- *   node tools/assets.mjs bake-synthetic [--size N]   generate a pack, no network
+ *   node tools/assets.mjs bake-synthetic [--size N] [--models]  generate a pack, no network
+ *   node tools/assets.mjs bake-synthetic-models   generate AX26 models, no network / no glTF
  *   node tools/assets.mjs bake-atlas [--preset generated]   slice 4x4 atlases → MAT layers
  *   node tools/assets.mjs search <textures|models|hdris> <query>
  *   node tools/assets.mjs fetch <mat> <source> [--res 1k]   download CC0 source maps
@@ -22,17 +23,19 @@
  * `bake-synthetic` has NO dependencies and needs NO network: it generates every
  * material layer from multi-octave noise, encoded to PNG with node's own zlib.
  * That is what makes the whole runtime path testable in CI and in a sandbox
- * with no egress.  The committed pack is a hybrid: the Poly Haven CC0
- * photoscan for ASPHALT (the racing surface), plus generated 4x4 atlas
- * tiles (`bake-atlas --preset generated`) for every other scenery slot.
- * `fetch`/`bake-material` are the offline re-bake path (network + sharp)
- * that mirrors webbake's mean-normalised Diffuse/nor_gl/arm packing.
+ * with no egress — and it is the DEFAULT way to ship the material pack so we
+ * never need a CDN download to rebuild.  The committed pack is a hybrid: the
+ * Poly Haven CC0 photoscan for ASPHALT (the racing surface), plus generated
+ * 4x4 atlas tiles (`bake-atlas --preset generated`) for every other scenery
+ * slot.  `fetch`/`bake-material` / webbake.js remain the optional path for
+ * photographic CC0 scans when someone wants them.
  */
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { buildAll as buildSynthModels, CATALOG_IDS as SYNTH_MODEL_IDS } from "./synth-models.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // APEX_PACK_DIR redirects every write, so tests can exercise a full bake in a
@@ -321,63 +324,126 @@ function fbm(x, y, baseFreq, octaves, gain = 0.5) {
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
+// Tiny tiling Worley (cellular) distance — stone/rock/grass clumps without a
+// download. Period wraps so the tile stays seamless.
+function worley(u, v, cells) {
+  const cu = u * cells, cv = v * cells;
+  const ix = Math.floor(cu), iy = Math.floor(cv);
+  let best = 9;
+  for (let oy = -1; oy <= 1; oy++) {
+    for (let ox = -1; ox <= 1; ox++) {
+      const cx = ix + ox, cy = iy + oy;
+      const mx = ((cx % cells) + cells) % cells;
+      const my = ((cy % cells) + cells) % cells;
+      const px = cx + hash21(mx, my);
+      const py = cy + hash21(my + 17, mx + 9);
+      const d = Math.hypot(cu - px, cv - py);
+      if (d < best) best = d;
+    }
+  }
+  return best;
+}
+
 // Height field per material, in tile-normalised (0..1) coordinates.  Mirrors
 // matBumpHeight()'s pattern vocabulary (js/render/shaders/lit.js) so a
 // baked layer reads as the same material, just finer.  Returns 0..1.
+// Shapes deliberately echo the photographic CC0 slots we used to fetch
+// (concrete panels, corrugated iron, clay tiles, …) so a synthetic rebuild
+// keeps the same silhouette vocabulary without a CDN round-trip.
 function matHeight(mid, u, v) {
   switch (mid) {
     case MAT.CONCRETE: {
-      const seam = Math.abs(((v * 4) % 1) - 0.5) < 0.03 ? 0.4 : 0;
-      return clamp01(fbm(u, v, 8, 5) * 0.9 - seam);
+      // Prefab panels: 3×3 grid, chamfered joints, fine aggregate, bolt pips.
+      const cols = 3, rows = 3;
+      const bx = (u * cols) % 1, by = (v * rows) % 1;
+      const joint = Math.min(bx, 1 - bx, by, 1 - by);
+      const chamfer = joint < 0.06 ? joint / 0.06 : 1;
+      const agg = fbm(u, v, 18, 5) * 0.22;
+      const cx = Math.floor(u * cols), cy = Math.floor(v * rows);
+      const bolt =
+        (Math.hypot(bx - 0.12, by - 0.12) < 0.035 ||
+         Math.hypot(bx - 0.88, by - 0.12) < 0.035 ||
+         Math.hypot(bx - 0.12, by - 0.88) < 0.035 ||
+         Math.hypot(bx - 0.88, by - 0.88) < 0.035)
+          ? 0.18 + hash21(cx, cy) * 0.1 : 0;
+      return clamp01(0.55 * chamfer + agg + bolt);
     }
     case MAT.BRICK: {
       const rows = 10, cols = 5;
       const row = Math.floor(v * rows);
       const off = (row % 2) * 0.5;
       const bx = ((u + off / cols) * cols) % 1, by = (v * rows) % 1;
-      const mort = 0.07;
+      const mort = 0.08;
       const joint = Math.min(bx, 1 - bx) < mort || Math.min(by, 1 - by) < mort;
-      return joint ? 0.12 : 0.62 + hash21(row, Math.floor((u + off / cols) * cols)) * 0.28;
+      const face = 0.58 + hash21(row, Math.floor((u + off / cols) * cols)) * 0.32
+                 + fbm(u * 8, v * 8, 6, 3) * 0.12;
+      return joint ? 0.10 + fbm(u, v, 20, 2) * 0.08 : clamp01(face);
     }
-    case MAT.METAL: return clamp01(0.45 + fbm(u * 26, v, 8, 3) * 0.35);
+    case MAT.METAL: {
+      // Corrugated sheet: strong sine ridges + faint mill noise.
+      const ridges = 10;
+      const wave = Math.sin(u * Math.PI * 2 * ridges);
+      const ridge = wave * wave;                         // rounded troughs
+      return clamp01(0.35 + ridge * 0.45 + fbm(u * 4, v * 12, 8, 3) * 0.12);
+    }
     case MAT.WOOD: {
-      const planks = 4;
-      const seam = Math.min((u * planks) % 1, 1 - ((u * planks) % 1)) < 0.02 ? 0.35 : 0;
-      return clamp01(0.6 + fbm(u * 3, v * 26, 6, 4) * 0.38 - seam);
+      const planks = 5;
+      const pid = Math.floor(u * planks);
+      const seam = Math.min((u * planks) % 1, 1 - ((u * planks) % 1)) < 0.025 ? 0.4 : 0;
+      const grain = fbm(u * 2 + pid * 0.17, v * 28, 8, 5) * 0.4;
+      const ring = Math.sin((v + hash21(pid, 3) * 0.4) * Math.PI * 2 * 14) * 0.06;
+      return clamp01(0.55 + grain + ring - seam);
     }
-    case MAT.FOLIAGE: return clamp01(fbm(u, v, 5, 5, 0.55));
+    case MAT.FOLIAGE: {
+      const clumps = 1 - Math.min(1, worley(u, v, 7) * 1.3);
+      return clamp01(clumps * 0.7 + fbm(u, v, 14, 4, 0.55) * 0.45);
+    }
     case MAT.FABRIC: {
-      const w = (Math.sin(u * Math.PI * 2 * 16) + Math.sin(v * Math.PI * 2 * 16)) * 0.16;
-      return clamp01(0.5 + w + fbm(u, v, 12, 3) * 0.16);
+      const warp = Math.sin(u * Math.PI * 2 * 24) * 0.14;
+      const weft = Math.sin(v * Math.PI * 2 * 24) * 0.14;
+      return clamp01(0.5 + warp + weft + fbm(u, v, 16, 3) * 0.12);
     }
     case MAT.SAND: {
-      const ripple = Math.sin(u * Math.PI * 2 * 5 + fbm(u, v, 2, 3) * 6) * 0.26;
-      return clamp01(0.5 + ripple + fbm(u, v, 14, 4) * 0.22);
+      const ripple = Math.sin(u * Math.PI * 2 * 6 + fbm(u, v, 2, 3) * 5) * 0.28;
+      return clamp01(0.48 + ripple + fbm(u, v, 18, 4) * 0.24);
     }
-    case MAT.GRASS: return clamp01(fbm(u, v, 9, 5, 0.55) * 0.8 + fbm(u, v, 30, 2) * 0.3);
-    case MAT.ROCK: return clamp01(fbm(u, v, 3, 6, 0.55));
-    case MAT.SNOW: return clamp01(fbm(u, v, 3, 4) * 0.8 + fbm(u, v, 24, 2) * 0.2);
+    case MAT.GRASS: {
+      const tuft = 1 - Math.min(1, worley(u, v, 11) * 1.5);
+      return clamp01(tuft * 0.55 + fbm(u, v, 12, 5, 0.55) * 0.5 + fbm(u, v, 40, 2) * 0.2);
+    }
+    case MAT.ROCK: {
+      const cell = 1 - Math.min(1, worley(u, v, 5) * 1.1);
+      return clamp01(cell * 0.55 + fbm(u, v, 4, 6, 0.55) * 0.55);
+    }
+    case MAT.SNOW:
+      return clamp01(0.55 + fbm(u, v, 3, 4) * 0.35 + fbm(u, v, 28, 2) * 0.18);
     case MAT.ROOF: {
-      const courses = 6;
+      // Overlapping clay courses with rounded tile noses.
+      const courses = 7, across = 5;
       const ty = (v * courses) % 1;
-      return clamp01(Math.sin(ty * Math.PI) * 0.75 + fbm(u * 3, Math.floor(v * courses), 4, 2) * 0.2);
+      const tx = (u * across + Math.floor(v * courses) * 0.5) % 1;
+      const nose = Math.sin(Math.min(1, ty / 0.22) * Math.PI) * 0.55;
+      const gap = (tx < 0.06 || tx > 0.94) ? 0.25 : 0;
+      return clamp01(0.35 + nose + fbm(u * 4, Math.floor(v * courses), 4, 2) * 0.15 - gap);
     }
     case MAT.STONE: {
-      const cells = 4;
+      const cells = 5;
       const cx = Math.floor(u * cells), cy = Math.floor(v * cells);
-      const jx = (hash21(cx, cy) - 0.5) * 0.16, jy = (hash21(cy, cx) - 0.5) * 0.16;
+      const jx = (hash21(cx, cy) - 0.5) * 0.2, jy = (hash21(cy, cx) - 0.5) * 0.2;
       const fx = (u * cells) % 1 - jx, fy = (v * cells) % 1 - jy;
       const d = Math.min(Math.min(fx, 1 - fx), Math.min(fy, 1 - fy));
-      return clamp01((d < 0.07 ? 0.15 : 0.7) + fbm(u, v, 10, 3) * 0.25);
+      const face = 0.55 + hash21(cx, cy) * 0.3 + fbm(u, v, 12, 3) * 0.2;
+      return clamp01(d < 0.08 ? 0.12 + fbm(u, v, 20, 2) * 0.1 : face);
     }
     case MAT.RUST: {
-      const corr = Math.sin(u * Math.PI * 2 * 4) * 0.35;
-      return clamp01(0.5 + corr + fbm(u, v, 8, 4) * 0.24);
+      const corr = Math.sin(u * Math.PI * 2 * 5);
+      const blotch = fbm(u, v, 5, 5) > 0.55 ? 0.25 : 0;
+      return clamp01(0.4 + corr * corr * 0.35 + blotch + fbm(u, v, 14, 3) * 0.15);
     }
     case MAT.ASPHALT:
       // Deliberately the flattest in the table — see the MAT.ASPHALT note in
       // js/track/geom.js.  Fine aggregate only: no macro term can crawl.
-      return clamp01(0.42 + fbm(u, v, 22, 4) * 0.42 + fbm(u, v, 60, 2) * 0.16);
+      return clamp01(0.42 + fbm(u, v, 22, 5) * 0.4 + fbm(u, v, 64, 2) * 0.18);
     default: return 0.5;
   }
 }
@@ -390,35 +456,68 @@ function matSurface(mid, h, u, v) {
   const t = (lo, hi) => lo + (hi - lo) * h;
   let r, g, b, rough;
   switch (mid) {
-    case MAT.BRICK:
-      r = t(0.36, 0.62); g = t(0.34, 0.5); b = t(0.33, 0.46); rough = 0.88; break;
-    case MAT.METAL:
-      r = g = b = t(0.4, 0.62); rough = 0.35 + (1 - h) * 0.2; break;
-    case MAT.WOOD:
-      r = t(0.36, 0.6); g = t(0.32, 0.52); b = t(0.28, 0.44); rough = 0.75; break;
-    case MAT.FOLIAGE:
-      r = t(0.34, 0.52); g = t(0.42, 0.62); b = t(0.3, 0.44); rough = 0.9; break;
-    case MAT.FABRIC:
-      r = g = b = t(0.42, 0.58); rough = 0.95; break;
-    case MAT.SAND:
-      r = t(0.44, 0.6); g = t(0.41, 0.56); b = t(0.36, 0.48); rough = 0.96; break;
-    case MAT.GRASS:
-      r = t(0.36, 0.54); g = t(0.44, 0.62); b = t(0.32, 0.46); rough = 0.92; break;
-    case MAT.ROCK:
-      r = g = b = t(0.36, 0.62); rough = 0.9; break;
-    case MAT.SNOW:
-      r = g = t(0.6, 0.72); b = t(0.62, 0.74); rough = 0.6; break;
-    case MAT.ROOF:
-      r = t(0.4, 0.62); g = t(0.34, 0.5); b = t(0.3, 0.44); rough = 0.85; break;
-    case MAT.STONE:
-      r = t(0.38, 0.6); g = t(0.37, 0.58); b = t(0.35, 0.55); rough = 0.88; break;
-    case MAT.RUST:
-      r = t(0.4, 0.62); g = t(0.32, 0.48); b = t(0.26, 0.38); rough = 0.92; break;
+    case MAT.CONCRETE: {
+      const cool = fbm(u * 3, v * 3, 4, 3) * 0.04;
+      r = t(0.40, 0.58) - cool; g = t(0.40, 0.57) - cool; b = t(0.39, 0.55);
+      rough = 0.86; break;
+    }
+    case MAT.BRICK: {
+      // Warm fired clay on the face, cooler/darker mortar in the joints.
+      const warm = h > 0.35;
+      if (warm) {
+        r = t(0.42, 0.68); g = t(0.28, 0.42); b = t(0.24, 0.34);
+      } else {
+        r = t(0.38, 0.48); g = t(0.36, 0.46); b = t(0.34, 0.44);
+      }
+      rough = 0.9; break;
+    }
+    case MAT.METAL: {
+      const shine = 0.42 + h * 0.28;
+      r = g = b = shine; rough = 0.28 + (1 - h) * 0.35; break;
+    }
+    case MAT.WOOD: {
+      const plank = Math.floor(u * 5);
+      const tint = hash21(plank, 11) * 0.08;
+      r = t(0.34, 0.58) + tint; g = t(0.28, 0.48) + tint * 0.6; b = t(0.22, 0.38);
+      rough = 0.78; break;
+    }
+    case MAT.FOLIAGE: {
+      r = t(0.30, 0.48); g = t(0.40, 0.64); b = t(0.26, 0.40); rough = 0.92; break;
+    }
+    case MAT.FABRIC: {
+      r = g = b = t(0.40, 0.58); rough = 0.96; break;
+    }
+    case MAT.SAND: {
+      r = t(0.46, 0.64); g = t(0.42, 0.58); b = t(0.34, 0.46); rough = 0.97; break;
+    }
+    case MAT.GRASS: {
+      const dry = fbm(u, v, 3, 3);
+      r = t(0.32, 0.52) + dry * 0.06; g = t(0.42, 0.64); b = t(0.28, 0.42);
+      rough = 0.93; break;
+    }
+    case MAT.ROCK: {
+      r = g = b = t(0.34, 0.60); rough = 0.91; break;
+    }
+    case MAT.SNOW: {
+      r = g = t(0.58, 0.74); b = t(0.60, 0.76); rough = 0.55; break;
+    }
+    case MAT.ROOF: {
+      r = t(0.42, 0.66); g = t(0.30, 0.46); b = t(0.26, 0.38); rough = 0.84; break;
+    }
+    case MAT.STONE: {
+      const cool = hash21(Math.floor(u * 5), Math.floor(v * 5)) * 0.06;
+      r = t(0.36, 0.58) - cool; g = t(0.36, 0.56) - cool; b = t(0.34, 0.54);
+      rough = 0.89; break;
+    }
+    case MAT.RUST: {
+      r = t(0.42, 0.68); g = t(0.28, 0.44); b = t(0.20, 0.32); rough = 0.94; break;
+    }
     case MAT.ASPHALT: {
       // Sparse pale aggregate poking through the binder — the one feature that
       // reads as "tarmac" up close and that a 2-octave shader term cannot hold.
-      const chip = hash21(Math.floor(u * 220), Math.floor(v * 220)) > 0.93 ? 0.1 : 0;
-      r = g = b = t(0.42, 0.56) + chip; rough = 0.94; break;
+      const chip = hash21(Math.floor(u * 240), Math.floor(v * 240)) > 0.92 ? 0.12 : 0;
+      const wear = fbm(u * 2, v * 8, 4, 3) * 0.04;
+      r = g = b = t(0.40, 0.54) + chip + wear; rough = 0.94; break;
     }
     default:
       r = g = b = t(0.42, 0.58); rough = 0.85; break;
@@ -428,14 +527,7 @@ function matSurface(mid, h, u, v) {
 
 // ───────────────────────── synthetic material bake ───────────────────────────
 
-function bakeSynthetic(args) {
-  const size = intArg(args, "--size", 128);
-  if (size < 8 || (size & (size - 1)) !== 0)
-    fail(`--size must be a power of two >= 8 (got ${size})`);
-
-  const ids = Object.keys(SCALES).map(Number).sort((a, b) => a - b);
-  console.log(`baking ${ids.length} material layers at ${size}px …`);
-
+function bakeOneSize(size, ids) {
   const stripH = size * MAT_LAYERS;
   const albedo = Buffer.alloc(size * stripH * 4);
   const normal = Buffer.alloc(size * stripH * 4);
@@ -470,7 +562,10 @@ function bakeSynthetic(args) {
         const dx = (H[y * size + xp] - H[y * size + xm]) * 0.5;
         const dy = (H[yp * size + x] - H[ym * size + x]) * 0.5;
         // Strength is per-material: ASPHALT stays nearly flat by design.
-        const k = mid === MAT.ASPHALT ? 3.0 : 8.0;
+        const k = mid === MAT.ASPHALT ? 3.0
+                : mid === MAT.METAL ? 11.0
+                : mid === MAT.CONCRETE || mid === MAT.BRICK ? 9.0
+                : 8.0;
         const nx = -dx * k, ny = -dy * k, nz = 1;
         const len = Math.hypot(nx, ny, nz) || 1;
         normal[o] = Math.round(clamp01(nx / len * 0.5 + 0.5) * 255);
@@ -485,20 +580,131 @@ function bakeSynthetic(args) {
   const aFile = `mat-albedo-${size}.png`, nFile = `mat-normal-${size}.png`;
   fs.writeFileSync(path.join(PACK, aFile), encodePNG(size, stripH, albedo));
   fs.writeFileSync(path.join(PACK, nFile), encodePNG(size, stripH, normal));
-
-  const m = readManifest();
-  m.materials = {
-    size,
-    albedo: aFile,
-    normal: nFile,
+  return {
+    size, albedo: aFile, normal: nFile,
     layers: ids.map((mid) => ({
       mat: mid, id: MAT_NAME[mid].toLowerCase(), scale: SCALES[mid],
       source: "procedural:tools/assets.mjs", licence: "Apex26-Procedural",
       author: "Apex 26",
     })),
   };
+}
+
+function bakeSynthetic(args) {
+  // Default: bake BOTH tiers (256 high + 128 low) so phones get the small
+  // strip without a second authoring pass. Pass --size N to bake only one.
+  const only = intArg(args, "--size", 0);
+  const sizes = only ? [only] : [256, 128];
+  for (const s of sizes) {
+    if (s < 8 || (s & (s - 1)) !== 0)
+      fail(`--size must be a power of two >= 8 (got ${s})`);
+  }
+
+  const ids = Object.keys(SCALES).map(Number).sort((a, b) => a - b);
+  console.log(`baking ${ids.length} material layers at ${sizes.join("+")}px (no network) …`);
+
+  const baked = {};
+  for (const s of sizes) baked[s] = bakeOneSize(s, ids);
+
+  const high = baked[256] || baked[sizes[0]];
+  const low = baked[128] && high.size !== 128 ? baked[128] : null;
+
+  const m = readManifest();
+  m.materials = {
+    size: high.size,
+    albedo: high.albedo,
+    normal: high.normal,
+    layers: high.layers,
+  };
+  if (low) m.materials.low = low;
+  else delete m.materials.low;
   m.credits = buildCredits(m);
   writeManifest(m);
+  credits();
+  report(m);
+  // Optional: also regenerate models in the same offline pass.
+  if (args.includes("--models")) bakeSyntheticModels([]);
+}
+
+// ───────────────────────── synthetic model bake ──────────────────────────────
+// Replace downloaded Kenney/glTF AX26 bins with geometry generated in
+// tools/synth-models.mjs. Same IDs the circuits already call via bakedModel(),
+// so no js/circuits edit is required. No network, no sharp, no glTF.
+
+function writeAX26(mesh, matName) {
+  const mid = MAT[matName] || MAT.CONCRETE;
+  const nv = mesh.pos.length / 3;
+  const nrm = mesh.nrm && mesh.nrm.length === nv * 3 ? mesh.nrm : new Float32Array(nv * 3);
+  const col = mesh.col && mesh.col.length === nv * 3 ? mesh.col : new Float32Array(nv * 3).fill(0.7);
+  const matArr = mesh.mat && mesh.mat.length === nv ? mesh.mat : new Float32Array(nv).fill(mid);
+  const head = Buffer.alloc(20);
+  head.write("AX26", 0, "ascii");
+  head.writeUInt32LE(1, 4);
+  head.writeUInt32LE(nv, 8);
+  head.writeUInt32LE(mesh.idx.length, 12);
+  head.writeUInt32LE(0, 16);
+  return Buffer.concat([
+    head,
+    Buffer.from(Float32Array.from(mesh.pos).buffer),
+    Buffer.from(Float32Array.from(nrm).buffer),
+    Buffer.from(Float32Array.from(col).buffer),
+    Buffer.from(Float32Array.from(matArr).buffer),
+    Buffer.from(Uint32Array.from(mesh.idx).buffer),
+  ]);
+}
+
+function bakeSyntheticModels(_args) {
+  console.log(`baking ${SYNTH_MODEL_IDS.length} procedural models (no network) …`);
+  fs.mkdirSync(path.join(PACK, "models"), { recursive: true });
+  const built = buildSynthModels();
+  const m = readManifest();
+  m.models = m.models || {};
+
+  // Drop previous model bins that we are replacing (and orphans no longer in catalog).
+  const keepFiles = new Set();
+  let verts = 0;
+  for (const id of SYNTH_MODEL_IDS) {
+    const mesh = built[id];
+    if (!mesh || mesh.verts < 3) fail(`synth model "${id}" produced no geometry`);
+    const buf = writeAX26(mesh, mesh.matName);
+    const rel = path.join("models", `${id}.bin`).split(path.sep).join("/");
+    fs.writeFileSync(path.join(PACK, rel), buf);
+    keepFiles.add(path.basename(rel));
+    verts += mesh.verts;
+    m.models[id] = {
+      file: rel,
+      verts: mesh.verts,
+      tris: mesh.tris,
+      mat: mesh.matName,
+      sizeM: mesh.sizeM,
+      source: "procedural:tools/synth-models.mjs",
+      licence: "Apex26-Procedural",
+      author: "Apex 26",
+      md5: crypto.createHash("md5").update(buf).digest("hex"),
+    };
+  }
+  // Remove Kenney (or other) bins that are no longer in the synthetic catalog,
+  // and drop their manifest entries so verify cannot see a stale CC0 download.
+  for (const id of Object.keys(m.models)) {
+    if (!SYNTH_MODEL_IDS.includes(id)) {
+      const f = m.models[id].file;
+      const abs = path.join(PACK, f);
+      if (fs.existsSync(abs)) fs.unlinkSync(abs);
+      delete m.models[id];
+      console.log(`removed non-catalog model ${id}`);
+    }
+  }
+  for (const f of fs.readdirSync(path.join(PACK, "models"))) {
+    if (f.endsWith(".bin") && !keepFiles.has(f)) {
+      fs.unlinkSync(path.join(PACK, "models", f));
+      console.log(`removed orphan ${f}`);
+    }
+  }
+
+  m.credits = buildCredits(m);
+  writeManifest(m);
+  credits();
+  console.log(`synthetic models: ${SYNTH_MODEL_IDS.length} ids, ${verts} verts total`);
   report(m);
 }
 
@@ -545,26 +751,12 @@ async function bakeModel(args) {
   const matName = (strArg(args, "--mat", "CONCRETE") || "CONCRETE").toUpperCase();
   if (!(matName in MAT)) fail(`--mat must be one of ${Object.keys(MAT).join(", ")}`);
   const mid = MAT[matName];
-
   const nv = mesh.pos.length / 3;
   const nrm = mesh.nrm && mesh.nrm.length === nv * 3 ? mesh.nrm : new Float32Array(nv * 3).fill(0);
   const col = mesh.col && mesh.col.length === nv * 3 ? mesh.col : new Float32Array(nv * 3).fill(0.7);
-  const matArr = new Float32Array(nv).fill(mid);
-
-  const head = Buffer.alloc(20);
-  head.write("AX26", 0, "ascii");
-  head.writeUInt32LE(1, 4);
-  head.writeUInt32LE(nv, 8);
-  head.writeUInt32LE(mesh.idx.length, 12);
-  head.writeUInt32LE(0, 16);
-  const out = Buffer.concat([
-    head,
-    Buffer.from(Float32Array.from(mesh.pos).buffer),
-    Buffer.from(Float32Array.from(nrm).buffer),
-    Buffer.from(Float32Array.from(col).buffer),
-    Buffer.from(matArr.buffer),
-    Buffer.from(Uint32Array.from(mesh.idx).buffer),
-  ]);
+  const out = writeAX26({
+    pos: mesh.pos, nrm, col, mat: new Float32Array(nv).fill(mid), idx: mesh.idx,
+  }, matName);
 
   const rel = path.join("models", `${id}.bin`);
   fs.mkdirSync(path.join(PACK, "models"), { recursive: true });
@@ -1532,7 +1724,9 @@ function fail(msg) { console.error(`error: ${msg}`); process.exit(1); }
 
 const USAGE = `Apex 26 asset bake CLI
 
-  bake-synthetic [--size N]        generate the full material pack (no network, no deps)
+  bake-synthetic [--size N] [--models]  generate the full material pack (no network, no deps)
+                                   --models: also run bake-synthetic-models
+  bake-synthetic-models            generate AX26 scenery models (no network / glTF)
   bake-atlas [--preset generated]  slice 4x4 albedo/normal atlases into MAT layers
   search <type> <query>            list CC0 candidates on Poly Haven + ambientCG
   fetch <MAT> <host:id> [--res 1k] download CC0 source maps (Diffuse/nor_gl/arm)
@@ -1549,6 +1743,7 @@ async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   switch (cmd) {
     case "bake-synthetic": bakeSynthetic(args); break;
+    case "bake-synthetic-models": bakeSyntheticModels(args); break;
     case "bake-atlas": bakeAtlas(args); break;
     case "search": await search(args); break;
     case "fetch": await fetchSource(args); break;

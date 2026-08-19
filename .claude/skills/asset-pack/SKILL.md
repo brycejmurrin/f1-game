@@ -34,7 +34,12 @@ device/feature miss, not "WGX has no pack."
 
 | Command / hook | Role |
 |---|---|
+<<<<<<< HEAD
 | `node tools/assets.mjs bake-synthetic` | Regenerate pack, no network |
+=======
+| `node tools/assets.mjs bake-synthetic [--size N] [--models]` | Regenerate pack, no network/deps (default: 256+128). `--models` also rebuilds AX26 scenery models. |
+| `node tools/assets.mjs bake-synthetic-models` | Replace pack models with procedural AX26 meshes (same ids as circuit `bakedModel()` calls) |
+>>>>>>> origin/cursor/synthetic-models-4d65
 | `node tools/assets.mjs verify` | Licence allow-list, md5, 8 MB budget |
 | `./tools/apex-tools-mcp.sh call apex_assets_verify '{}'` | Same pin; never bake |
 | `__apex.assets()` | `{ supported, pack, uploaded, tier, layers, error, … }` |

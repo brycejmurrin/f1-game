@@ -2,12 +2,18 @@
   "version": 1,
   "materials": {
     "size": 256,
+    "albedo": "mat-albedo-256.png",
+    "normal": "mat-normal-256.png",
     "layers": [
       {
         "mat": 1,
         "id": "concrete",
         "scale": 5.5,
+<<<<<<< HEAD
         "source": "generated:assets/atlases/atlas-arch-albedo.png#2,0",
+=======
+        "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -15,7 +21,11 @@
         "mat": 2,
         "id": "brick",
         "scale": 2.8,
+<<<<<<< HEAD
         "source": "generated:assets/atlases/atlas-arch-albedo.png#1,0",
+=======
+        "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -23,7 +33,11 @@
         "mat": 4,
         "id": "metal",
         "scale": 2.8,
+<<<<<<< HEAD
         "source": "generated:assets/atlases/atlas-arch-albedo.png#2,2",
+=======
+        "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -31,7 +45,11 @@
         "mat": 5,
         "id": "wood",
         "scale": 2.8,
+<<<<<<< HEAD
         "source": "generated:assets/atlases/atlas-variety-albedo.png#0,0",
+=======
+        "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -39,7 +57,11 @@
         "mat": 6,
         "id": "foliage",
         "scale": 4,
+<<<<<<< HEAD
         "source": "generated:assets/atlases/atlas-nature-albedo.png#1,0",
+=======
+        "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -47,7 +69,11 @@
         "mat": 7,
         "id": "fabric",
         "scale": 1.8,
+<<<<<<< HEAD
         "source": "generated:assets/atlases/atlas-variety-albedo.png#2,0",
+=======
+        "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -55,7 +81,11 @@
         "mat": 8,
         "id": "sand",
         "scale": 11,
+<<<<<<< HEAD
         "source": "generated:assets/atlases/atlas-nature-albedo.png#1,3",
+=======
+        "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -63,7 +93,11 @@
         "mat": 9,
         "id": "grass",
         "scale": 4.5,
+<<<<<<< HEAD
         "source": "generated:assets/atlases/atlas-nature-albedo.png#2,1",
+=======
+        "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -71,7 +105,11 @@
         "mat": 10,
         "id": "rock",
         "scale": 8,
+<<<<<<< HEAD
         "source": "generated:assets/atlases/atlas-nature-albedo.png#1,2",
+=======
+        "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -79,7 +117,11 @@
         "mat": 11,
         "id": "snow",
         "scale": 7,
+<<<<<<< HEAD
         "source": "generated:assets/atlases/atlas-variety-albedo.png#0,1",
+=======
+        "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -87,7 +129,11 @@
         "mat": 12,
         "id": "roof",
         "scale": 2.6,
+<<<<<<< HEAD
         "source": "generated:assets/atlases/atlas-arch-albedo.png#2,1",
+=======
+        "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -95,7 +141,11 @@
         "mat": 13,
         "id": "stone",
         "scale": 3.5,
+<<<<<<< HEAD
         "source": "generated:assets/atlases/atlas-arch-albedo.png#1,1",
+=======
+        "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -103,7 +153,11 @@
         "mat": 14,
         "id": "rust",
         "scale": 2.5,
+<<<<<<< HEAD
         "source": "generated:assets/atlases/atlas-arch-albedo.png#3,2",
+=======
+        "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -111,20 +165,25 @@
         "mat": 16,
         "id": "asphalt",
         "scale": 3.5,
-        "source": "polyhaven:asphalt_track",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "procedural:tools/assets.mjs",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       }
     ],
-    "albedo": "mat-albedo-256.png",
     "low": {
       "size": 128,
+      "albedo": "mat-albedo-128.png",
+      "normal": "mat-normal-128.png",
       "layers": [
         {
           "mat": 1,
           "id": "concrete",
           "scale": 5.5,
+<<<<<<< HEAD
           "source": "generated:assets/atlases/atlas-arch-albedo.png#2,0",
+=======
+          "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -132,7 +191,11 @@
           "mat": 2,
           "id": "brick",
           "scale": 2.8,
+<<<<<<< HEAD
           "source": "generated:assets/atlases/atlas-arch-albedo.png#1,0",
+=======
+          "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -140,7 +203,11 @@
           "mat": 4,
           "id": "metal",
           "scale": 2.8,
+<<<<<<< HEAD
           "source": "generated:assets/atlases/atlas-arch-albedo.png#2,2",
+=======
+          "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -148,7 +215,11 @@
           "mat": 5,
           "id": "wood",
           "scale": 2.8,
+<<<<<<< HEAD
           "source": "generated:assets/atlases/atlas-variety-albedo.png#0,0",
+=======
+          "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -156,7 +227,11 @@
           "mat": 6,
           "id": "foliage",
           "scale": 4,
+<<<<<<< HEAD
           "source": "generated:assets/atlases/atlas-nature-albedo.png#1,0",
+=======
+          "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -164,7 +239,11 @@
           "mat": 7,
           "id": "fabric",
           "scale": 1.8,
+<<<<<<< HEAD
           "source": "generated:assets/atlases/atlas-variety-albedo.png#2,0",
+=======
+          "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -172,7 +251,11 @@
           "mat": 8,
           "id": "sand",
           "scale": 11,
+<<<<<<< HEAD
           "source": "generated:assets/atlases/atlas-nature-albedo.png#1,3",
+=======
+          "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -180,7 +263,11 @@
           "mat": 9,
           "id": "grass",
           "scale": 4.5,
+<<<<<<< HEAD
           "source": "generated:assets/atlases/atlas-nature-albedo.png#2,1",
+=======
+          "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -188,7 +275,11 @@
           "mat": 10,
           "id": "rock",
           "scale": 8,
+<<<<<<< HEAD
           "source": "generated:assets/atlases/atlas-nature-albedo.png#1,2",
+=======
+          "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -196,7 +287,11 @@
           "mat": 11,
           "id": "snow",
           "scale": 7,
+<<<<<<< HEAD
           "source": "generated:assets/atlases/atlas-variety-albedo.png#0,1",
+=======
+          "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -204,7 +299,11 @@
           "mat": 12,
           "id": "roof",
           "scale": 2.6,
+<<<<<<< HEAD
           "source": "generated:assets/atlases/atlas-arch-albedo.png#2,1",
+=======
+          "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -212,7 +311,11 @@
           "mat": 13,
           "id": "stone",
           "scale": 3.5,
+<<<<<<< HEAD
           "source": "generated:assets/atlases/atlas-arch-albedo.png#1,1",
+=======
+          "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -220,7 +323,11 @@
           "mat": 14,
           "id": "rust",
           "scale": 2.5,
+<<<<<<< HEAD
           "source": "generated:assets/atlases/atlas-arch-albedo.png#3,2",
+=======
+          "source": "procedural:tools/assets.mjs",
+>>>>>>> origin/cursor/synthetic-models-4d65
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -228,556 +335,553 @@
           "mat": 16,
           "id": "asphalt",
           "scale": 3.5,
-          "source": "polyhaven:asphalt_track",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "procedural:tools/assets.mjs",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         }
-      ],
-      "albedo": "mat-albedo-128.png",
-      "normal": "mat-normal-128.png"
-    },
-    "normal": "mat-normal-256.png"
+      ]
+    }
   },
   "models": {
     "kenney_construction-barrier": {
       "file": "models/kenney_construction-barrier.bin",
-      "verts": 96,
-      "tris": 60,
+      "verts": 144,
+      "tris": 72,
       "mat": "CONCRETE",
       "sizeM": [
-        0.88,
-        1,
-        1.89
+        0.95,
+        1.18,
+        1.96
       ],
-      "source": "kenney:city-kit-roads",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "954d3b3640767ee9a15f14737693b695"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "d4991a51bfbf9209aff80f81a221f563"
     },
     "kenney_construction-cone": {
       "file": "models/kenney_construction-cone.bin",
-      "verts": 104,
-      "tris": 66,
+      "verts": 170,
+      "tris": 84,
       "mat": "CONCRETE",
       "sizeM": [
-        0.8,
-        1,
-        0.8
+        0.85,
+        0.93,
+        0.85
       ],
-      "source": "kenney:city-kit-roads",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "595f15df712b0755e18c26beef42bf9b"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "b99452181fc04516c0791cc7012f6fe2"
     },
     "kenney_construction-light": {
       "file": "models/kenney_construction-light.bin",
-      "verts": 176,
-      "tris": 100,
-      "mat": "CONCRETE",
+      "verts": 122,
+      "tris": 72,
+      "mat": "METAL",
       "sizeM": [
-        0.32,
-        1,
-        0.32
+        0.28,
+        1.01,
+        0.72
       ],
-      "source": "kenney:city-kit-roads",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "3cfdc27b65343b0522ea8342c3fdd952"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "0f248cc6d7b8aaa0cbdd33ad3c91bbce"
     },
     "kenney_ind_building-a": {
       "file": "models/kenney_ind_building-a.bin",
-      "verts": 3390,
-      "tris": 2046,
+      "verts": 3484,
+      "tris": 1764,
       "mat": "CONCRETE",
       "sizeM": [
-        19.84,
-        14,
-        11.83
+        21.06,
+        18.41,
+        13.34
       ],
-      "source": "kenney:city-kit-industrial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "1d5c377370d5fb9a1f5e2b8ccda21f35"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "dbbbb3898ba2ffe25f93ea9e57379102"
     },
     "kenney_ind_building-d": {
       "file": "models/kenney_ind_building-d.bin",
-      "verts": 1906,
-      "tris": 1158,
+      "verts": 1534,
+      "tris": 776,
       "mat": "CONCRETE",
       "sizeM": [
-        8.74,
-        14,
-        14.05
+        9.18,
+        18.11,
+        15.12
       ],
-      "source": "kenney:city-kit-industrial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "6417ffd609f353ec64d1122bc1de290d"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "daaeb17314883e986bd01a491b7a8f31"
     },
     "kenney_ind_building-h": {
       "file": "models/kenney_ind_building-h.bin",
-      "verts": 1190,
-      "tris": 698,
+      "verts": 3196,
+      "tris": 1620,
       "mat": "CONCRETE",
       "sizeM": [
-        25.23,
-        14,
-        25
+        25.92,
+        16.5,
+        25.98
       ],
-      "source": "kenney:city-kit-industrial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "eb89a71ea6ce458517232421bc06a9bf"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "cf6cda4997e92c574f370118400572dc"
     },
     "kenney_ind_building-l": {
       "file": "models/kenney_ind_building-l.bin",
-      "verts": 3098,
-      "tris": 1904,
+      "verts": 2692,
+      "tris": 1368,
       "mat": "CONCRETE",
       "sizeM": [
-        15.15,
-        14,
-        13.6
+        16.2,
+        15.73,
+        15.42
       ],
-      "source": "kenney:city-kit-industrial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "9fbe812bdbedf386b0d2db3b80e4034f"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "8f8043ea01001837d8033165a02aa762"
     },
     "kenney_ind_building-o": {
       "file": "models/kenney_ind_building-o.bin",
-      "verts": 1438,
-      "tris": 868,
+      "verts": 1920,
+      "tris": 960,
       "mat": "CONCRETE",
       "sizeM": [
-        13.48,
-        14,
-        18.91
+        14.04,
+        16.5,
+        19.98
       ],
-      "source": "kenney:city-kit-industrial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "0fbe71735642316c9e3d899c089aaa92"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "126a373db8fd2ec07a66b67e6b0a6cf5"
     },
     "kenney_ind_chimney-medium": {
       "file": "models/kenney_ind_chimney-medium.bin",
-      "verts": 256,
-      "tris": 168,
+      "verts": 319,
+      "tris": 216,
       "mat": "CONCRETE",
       "sizeM": [
-        3.27,
-        14,
-        3.27
+        3.4,
+        14.7,
+        3.23
       ],
-      "source": "kenney:city-kit-industrial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "87754d5689f2036b1b0dd50464b27f76"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "699c22351cde59042d0e585029995a40"
     },
     "kenney_ind_detail-tank": {
       "file": "models/kenney_ind_detail-tank.bin",
-      "verts": 420,
-      "tris": 236,
-      "mat": "CONCRETE",
+      "verts": 586,
+      "tris": 376,
+      "mat": "METAL",
       "sizeM": [
-        28.59,
-        14,
-        17.37
+        8.15,
+        9.95,
+        20
       ],
-      "source": "kenney:city-kit-industrial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "0797a5eb26ef1df67a4d0afb1b27e052"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "3a66bbaaaf419fa1af9526ddc150f19a"
     },
     "kenney_com_building-a": {
       "file": "models/kenney_com_building-a.bin",
-      "verts": 2074,
-      "tris": 1252,
+      "verts": 2976,
+      "tris": 1488,
       "mat": "BRICK",
       "sizeM": [
-        10.93,
-        16,
-        11.63
+        11.34,
+        18.51,
+        12.96
       ],
-      "source": "kenney:city-kit-commercial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "5efb88c44bd44781da3caca4fc6deac5"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "98cc55902db04bbbb0a2e2ac88462e7b"
     },
     "kenney_com_building-e": {
       "file": "models/kenney_com_building-e.bin",
-      "verts": 2443,
-      "tris": 1509,
+      "verts": 6816,
+      "tris": 3408,
       "mat": "BRICK",
       "sizeM": [
-        29.38,
-        16,
-        18.06
+        30.24,
+        18.51,
+        19.2
       ],
-      "source": "kenney:city-kit-commercial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "3b26c07b8a155904ed1f2de05322318d"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "b4a46bbc4cbd5f9d64c03d3b2f76fb52"
     },
     "kenney_com_low-detail-building-a": {
       "file": "models/kenney_com_low-detail-building-a.bin",
-      "verts": 252,
-      "tris": 188,
+      "verts": 310,
+      "tris": 164,
       "mat": "BRICK",
       "sizeM": [
-        4,
-        16,
-        4
+        4.16,
+        20.02,
+        4.2
       ],
-      "source": "kenney:city-kit-commercial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "a33199b85e5ce30498aa66105d50dbc4"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "3c5dd06491cf5586c15dcb6b2a3b7b12"
     },
     "kenney_com_low-detail-building-wide-a": {
       "file": "models/kenney_com_low-detail-building-wide-a.bin",
-      "verts": 220,
-      "tris": 156,
+      "verts": 360,
+      "tris": 180,
       "mat": "BRICK",
       "sizeM": [
-        14.55,
-        16,
-        7.27
+        15.08,
+        18.43,
+        8.44
       ],
-      "source": "kenney:city-kit-commercial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "5aa55786182c8bf5fe47c90c8be59206"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "a2bbb9004c23e26697a9c1524b0216b5"
     },
     "kenney_twr_building-sample-house-b": {
       "file": "models/kenney_twr_building-sample-house-b.bin",
-      "verts": 620,
-      "tris": 374,
+      "verts": 1388,
+      "tris": 712,
       "mat": "CONCRETE",
       "sizeM": [
-        9.91,
-        18,
-        19.99
+        10.64,
+        12.3,
+        13.97
       ],
-      "source": "kenney:modular-buildings",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "de74784f893e8ba3fb6e396a513887d9"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "278f681b814c94e9158446031ca92599"
     },
     "kenney_twr_building-sample-tower-a": {
       "file": "models/kenney_twr_building-sample-tower-a.bin",
-      "verts": 648,
-      "tris": 398,
+      "verts": 2206,
+      "tris": 1112,
       "mat": "CONCRETE",
       "sizeM": [
-        7.92,
-        18,
-        9
+        8.1,
+        22.11,
+        9.18
       ],
-      "source": "kenney:modular-buildings",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "b23fe82186824a2c57b9040162924aed"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "afcd6c54774826ebfea981d873151c64"
     },
     "kenney_twr_building-sample-tower-c": {
       "file": "models/kenney_twr_building-sample-tower-c.bin",
-      "verts": 620,
-      "tris": 384,
+      "verts": 1990,
+      "tris": 1004,
       "mat": "CONCRETE",
       "sizeM": [
-        6.31,
-        18,
-        7.31
+        6.48,
+        22.11,
+        7.56
       ],
-      "source": "kenney:modular-buildings",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "7a0d9091b25074948159bcdc2898d94f"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "5ed2c93758824efc8fb9f7ef57ec7a51"
     },
     "kenney_sub_building-type-a": {
       "file": "models/kenney_sub_building-type-a.bin",
-      "verts": 1870,
-      "tris": 1174,
+      "verts": 1728,
+      "tris": 864,
       "mat": "BRICK",
       "sizeM": [
-        15.6,
-        10,
-        12.33
+        16.8,
+        13.52,
+        13.72
       ],
-      "source": "kenney:city-kit-suburban",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "2655f1e37b5c1d7601c18550fa1183c8"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "063fc3f79fadf35b88b870ae856127e3"
     },
     "kenney_sub_building-type-c": {
       "file": "models/kenney_sub_building-type-c.bin",
-      "verts": 1886,
-      "tris": 1196,
+      "verts": 1588,
+      "tris": 816,
       "mat": "BRICK",
       "sizeM": [
-        12.45,
-        10,
-        9.95
+        12.96,
+        11.73,
+        10.88
       ],
-      "source": "kenney:city-kit-suburban",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "f3b185637859928c210318ad3df60716"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "a76493035ca81ff6bc052fcdceabd52f"
     },
     "kenney_sub_building-type-h": {
       "file": "models/kenney_sub_building-type-h.bin",
-      "verts": 1228,
-      "tris": 770,
+      "verts": 2256,
+      "tris": 1128,
       "mat": "BRICK",
       "sizeM": [
-        17.63,
-        10,
-        12.42
+        18.36,
+        12.51,
+        13.48
       ],
-      "source": "kenney:city-kit-suburban",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "9cc43bbe39a66855f36d8ab238a35d60"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "00aee3d2bcbfcd62696f6cbe9b162d62"
     },
     "kenney_sub_building-type-k": {
       "file": "models/kenney_sub_building-type-k.bin",
-      "verts": 1690,
-      "tris": 1024,
+      "verts": 864,
+      "tris": 432,
       "mat": "BRICK",
       "sizeM": [
-        8.01,
-        10,
-        8.87
+        8.96,
+        13.52,
+        10.01
       ],
-      "source": "kenney:city-kit-suburban",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "362d3ae78f302947e0056087d2abc05a"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "d18948b6fbff6b71ccc3bf7440fa316f"
     },
     "kenney_sub_building-type-r": {
       "file": "models/kenney_sub_building-type-r.bin",
-      "verts": 1676,
-      "tris": 1030,
+      "verts": 1588,
+      "tris": 816,
       "mat": "BRICK",
       "sizeM": [
-        9.01,
-        10,
-        8.94
+        9.72,
+        11.73,
+        9.84
       ],
-      "source": "kenney:city-kit-suburban",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "5676d0f8cbbf61567a9a4170252453f2"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "28a73cbf03c1791eb40e99f64dac9e3a"
     },
     "kenney_ind_building-b": {
       "file": "models/kenney_ind_building-b.bin",
-      "verts": 4066,
-      "tris": 2422,
+      "verts": 3648,
+      "tris": 1824,
       "mat": "CONCRETE",
       "sizeM": [
-        19.84,
-        14,
-        12.02
+        21.06,
+        16.5,
+        13.86
       ],
-      "source": "kenney:city-kit-industrial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "043071f47c282ad5c04ea79a9053c195"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "aab1cc25ce44814725ef8448cbdb2c05"
     },
     "kenney_ind_building-c": {
       "file": "models/kenney_ind_building-c.bin",
-      "verts": 3062,
-      "tris": 1780,
+      "verts": 2668,
+      "tris": 1356,
       "mat": "CONCRETE",
       "sizeM": [
-        21.01,
-        14,
-        23.61
+        22.14,
+        15.73,
+        24.95
       ],
-      "source": "kenney:city-kit-industrial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "8d49d26f831c7eb8e9ffb04fe4658856"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "e33cae2cfb628b992cc79edc9498598a"
     },
     "kenney_ind_building-e": {
       "file": "models/kenney_ind_building-e.bin",
-      "verts": 2462,
-      "tris": 1484,
+      "verts": 2650,
+      "tris": 1340,
       "mat": "CONCRETE",
       "sizeM": [
-        14.28,
-        14,
-        10.95
+        15.12,
+        17.03,
+        12.3
       ],
-      "source": "kenney:city-kit-industrial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "bb9678716d066b92d453cc219cec2b85"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "22c95514be0092ad968da8421687bb40"
     },
     "kenney_ind_building-g": {
       "file": "models/kenney_ind_building-g.bin",
-      "verts": 2024,
-      "tris": 1242,
+      "verts": 2904,
+      "tris": 1452,
       "mat": "CONCRETE",
       "sizeM": [
-        18.35,
-        14,
-        14.04
+        20.02,
+        18.41,
+        15.94
       ],
-      "source": "kenney:city-kit-industrial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "960619fd5f7cdd7db6716a3aa8cbb33f"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "820c43c81fa7332fd64f33382db13b9b"
     },
     "kenney_ind_building-q": {
       "file": "models/kenney_ind_building-q.bin",
-      "verts": 3470,
-      "tris": 2062,
+      "verts": 4180,
+      "tris": 2112,
       "mat": "CONCRETE",
       "sizeM": [
-        34.05,
-        14,
-        28.16
+        35.64,
+        16.5,
+        29.46
       ],
-      "source": "kenney:city-kit-industrial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "3a46f2c4d4e3a1be9c8b3aa9c84a0858"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "8b1406125b10fae3ad2a985d520f2648"
     },
     "kenney_ind_chimney-large": {
       "file": "models/kenney_ind_chimney-large.bin",
-      "verts": 384,
-      "tris": 212,
+      "verts": 331,
+      "tris": 234,
       "mat": "CONCRETE",
       "sizeM": [
-        8.24,
-        14,
-        8.24
+        7.8,
+        15.1,
+        7.8
       ],
-      "source": "kenney:city-kit-industrial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "bb1283fe37f99326ec086acb738425a3"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "60cd7d23a519f08aea90eb912b67c6b4"
     },
     "kenney_com_building-b": {
       "file": "models/kenney_com_building-b.bin",
-      "verts": 2018,
-      "tris": 1276,
+      "verts": 3628,
+      "tris": 1836,
       "mat": "BRICK",
       "sizeM": [
-        13.5,
-        18,
-        13.09
+        14.04,
+        20.51,
+        14.52
       ],
-      "source": "kenney:city-kit-commercial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "2322c5d3f9df0cfc6d00d28fe30621b3"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "2fa05e575547905dc054540fa8380955"
     },
     "kenney_com_building-f": {
       "file": "models/kenney_com_building-f.bin",
-      "verts": 2842,
-      "tris": 1794,
+      "verts": 2014,
+      "tris": 1016,
       "mat": "BRICK",
       "sizeM": [
-        8.93,
-        18,
-        10.95
+        9.18,
+        23.29,
+        11.34
       ],
-      "source": "kenney:city-kit-commercial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "1c2569064b0a28ad89b952e4b2658387"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "d6cc580ff131dffc37fdd84b831b4886"
     },
     "kenney_com_building-skyscraper-b": {
       "file": "models/kenney_com_building-skyscraper-b.bin",
-      "verts": 2646,
-      "tris": 1592,
+      "verts": 2300,
+      "tris": 1168,
       "mat": "BRICK",
       "sizeM": [
-        5.46,
-        18,
-        5.46
+        5.62,
+        25.2,
+        5.62
       ],
-      "source": "kenney:city-kit-commercial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "b9c0458fc82bf97e7c1460f42cc87e30"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "5e95c0440d20418e3448f69230681f92"
     },
     "kenney_com_low-detail-building-c": {
       "file": "models/kenney_com_low-detail-building-c.bin",
-      "verts": 210,
-      "tris": 142,
+      "verts": 364,
+      "tris": 204,
       "mat": "BRICK",
       "sizeM": [
-        4,
-        18,
-        4
+        4.16,
+        19.65,
+        4.2
       ],
-      "source": "kenney:city-kit-commercial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "336dc9ce59b66676730e01955b89ab32"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "3f9845b0fd836bce194b7d0851e8d073"
     },
     "kenney_com_low-detail-building-wide-b": {
       "file": "models/kenney_com_low-detail-building-wide-b.bin",
-      "verts": 324,
-      "tris": 246,
+      "verts": 436,
+      "tris": 240,
       "mat": "BRICK",
       "sizeM": [
-        15.65,
-        18,
-        7.83
+        16.12,
+        20.43,
+        8.13
       ],
-      "source": "kenney:city-kit-commercial",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "a2ceab2c9b122ab547c468bd2860d985"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "20b57765f09f4fdd53b6510cad0741af"
     },
     "kenney_sub_fence-low": {
       "file": "models/kenney_sub_fence-low.bin",
-      "verts": 328,
+      "verts": 360,
       "tris": 180,
       "mat": "WOOD",
       "sizeM": [
         10.5,
-        1.4,
-        6.9
+        1.3,
+        0.18
       ],
-      "source": "kenney:city-kit-suburban",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "fcb0611f61dc6555880c7dd58d12d52a"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "c9b873da3d34e4e2f7cf7050fb56e052"
     },
     "kenney_sub_fence": {
       "file": "models/kenney_sub_fence.bin",
-      "verts": 160,
-      "tris": 88,
+      "verts": 192,
+      "tris": 96,
       "mat": "WOOD",
       "sizeM": [
-        2.46,
-        1.4,
-        0.39
+        2.5,
+        1.6,
+        0.2
       ],
-      "source": "kenney:city-kit-suburban",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "5f78e52da209265f6ff0d5575515ee44"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "a0591f1a8886a719518d16e03977cbe1"
     },
     "kenney_sub_planter": {
       "file": "models/kenney_sub_planter.bin",
-      "verts": 360,
-      "tris": 204,
+      "verts": 144,
+      "tris": 72,
       "mat": "WOOD",
       "sizeM": [
-        3.16,
-        1.4,
-        2.37
+        3.2,
+        1.5,
+        2.4
       ],
-      "source": "kenney:city-kit-suburban",
-      "licence": "CC0",
-      "author": "Kenney",
-      "md5": "9acf260afd38d599d511633b4a112394"
+      "source": "procedural:tools/synth-models.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26",
+      "md5": "901c40865ab327f6309d530646f66e64"
     }
   },
   "env": {
@@ -792,9 +896,9 @@
         0.0919,
         0.1251
       ],
-      "source": "polyhaven:kloofendal_43d_clear_puresky",
-      "licence": "CC0",
-      "author": "Poly Haven contributors"
+      "source": "procedural:tools/assets.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26"
     },
     "*|day": {
       "ambientSky": [
@@ -807,9 +911,9 @@
         0.0919,
         0.1251
       ],
-      "source": "polyhaven:kloofendal_43d_clear_puresky",
-      "licence": "CC0",
-      "author": "Poly Haven contributors"
+      "source": "procedural:tools/assets.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26"
     },
     "*|dusk": {
       "ambientSky": [
@@ -822,9 +926,9 @@
         0.1634,
         0.2016
       ],
-      "source": "polyhaven:industrial_sunset_puresky",
-      "licence": "CC0",
-      "author": "Poly Haven contributors"
+      "source": "procedural:tools/assets.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26"
     },
     "*|dawn": {
       "ambientSky": [
@@ -837,9 +941,9 @@
         0.0632,
         0.0675
       ],
-      "source": "polyhaven:venice_sunset",
-      "licence": "CC0",
-      "author": "Poly Haven contributors"
+      "source": "procedural:tools/assets.mjs",
+      "licence": "Apex26-Procedural",
+      "author": "Apex 26"
     }
   },
   "credits": [
@@ -848,378 +952,430 @@
       "id": "concrete",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
+<<<<<<< HEAD
       "source": "generated:assets/atlases/atlas-arch-albedo.png#2,0"
+=======
+      "source": "procedural:tools/assets.mjs"
+>>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "brick",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
+<<<<<<< HEAD
       "source": "generated:assets/atlases/atlas-arch-albedo.png#1,0"
+=======
+      "source": "procedural:tools/assets.mjs"
+>>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "metal",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
+<<<<<<< HEAD
       "source": "generated:assets/atlases/atlas-arch-albedo.png#2,2"
+=======
+      "source": "procedural:tools/assets.mjs"
+>>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "wood",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
+<<<<<<< HEAD
       "source": "generated:assets/atlases/atlas-variety-albedo.png#0,0"
+=======
+      "source": "procedural:tools/assets.mjs"
+>>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "foliage",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
+<<<<<<< HEAD
       "source": "generated:assets/atlases/atlas-nature-albedo.png#1,0"
+=======
+      "source": "procedural:tools/assets.mjs"
+>>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "fabric",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
+<<<<<<< HEAD
       "source": "generated:assets/atlases/atlas-variety-albedo.png#2,0"
+=======
+      "source": "procedural:tools/assets.mjs"
+>>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "sand",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
+<<<<<<< HEAD
       "source": "generated:assets/atlases/atlas-nature-albedo.png#1,3"
+=======
+      "source": "procedural:tools/assets.mjs"
+>>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "grass",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
+<<<<<<< HEAD
       "source": "generated:assets/atlases/atlas-nature-albedo.png#2,1"
+=======
+      "source": "procedural:tools/assets.mjs"
+>>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "rock",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
+<<<<<<< HEAD
       "source": "generated:assets/atlases/atlas-nature-albedo.png#1,2"
+=======
+      "source": "procedural:tools/assets.mjs"
+>>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "snow",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
+<<<<<<< HEAD
       "source": "generated:assets/atlases/atlas-variety-albedo.png#0,1"
+=======
+      "source": "procedural:tools/assets.mjs"
+>>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "roof",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
+<<<<<<< HEAD
       "source": "generated:assets/atlases/atlas-arch-albedo.png#2,1"
+=======
+      "source": "procedural:tools/assets.mjs"
+>>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "stone",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
+<<<<<<< HEAD
       "source": "generated:assets/atlases/atlas-arch-albedo.png#1,1"
+=======
+      "source": "procedural:tools/assets.mjs"
+>>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "rust",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
+<<<<<<< HEAD
       "source": "generated:assets/atlases/atlas-arch-albedo.png#3,2"
+=======
+      "source": "procedural:tools/assets.mjs"
+>>>>>>> origin/cursor/synthetic-models-4d65
     },
     {
       "kind": "material",
       "id": "asphalt",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:asphalt_track"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_construction-barrier",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-roads"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_construction-cone",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-roads"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_construction-light",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-roads"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-a",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-industrial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-d",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-industrial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-h",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-industrial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-l",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-industrial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-o",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-industrial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_chimney-medium",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-industrial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_detail-tank",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-industrial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_building-a",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-commercial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_building-e",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-commercial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_low-detail-building-a",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-commercial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_low-detail-building-wide-a",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-commercial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_twr_building-sample-house-b",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:modular-buildings"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_twr_building-sample-tower-a",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:modular-buildings"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_twr_building-sample-tower-c",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:modular-buildings"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_building-type-a",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-suburban"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_building-type-c",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-suburban"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_building-type-h",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-suburban"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_building-type-k",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-suburban"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_building-type-r",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-suburban"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-b",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-industrial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-c",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-industrial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-e",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-industrial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-g",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-industrial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-q",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-industrial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_chimney-large",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-industrial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_building-b",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-commercial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_building-f",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-commercial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_building-skyscraper-b",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-commercial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_low-detail-building-c",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-commercial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_low-detail-building-wide-b",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-commercial"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_fence-low",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-suburban"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_fence",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-suburban"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_planter",
-      "author": "Kenney",
-      "licence": "CC0",
-      "source": "kenney:city-kit-suburban"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/synth-models.mjs"
     },
     {
       "kind": "env",
       "id": "*|default",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:kloofendal_43d_clear_puresky"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "env",
       "id": "*|day",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:kloofendal_43d_clear_puresky"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "env",
       "id": "*|dusk",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:industrial_sunset_puresky"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     },
     {
       "kind": "env",
       "id": "*|dawn",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:venice_sunset"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "procedural:tools/assets.mjs"
     }
   ]
 }

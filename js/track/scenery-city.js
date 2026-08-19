@@ -336,7 +336,7 @@ const SceneryCity = (function () {
               unitBox, { kind: "windowPane", k, side }, { buf: glassBuf });
           }
         }
-        const nm = Math.max(2, Math.min(4, Math.round(sd / 6)));
+        const nm = Math.max(2, Math.min(6, Math.round(sd / 5)));
         for (let c = 1; c <= nm; c++) {
           const off = -sd / 2 + (c / (nm + 1)) * sd;
           ctx.instance(UNIT_BOX,
@@ -344,7 +344,7 @@ const SceneryCity = (function () {
               s: [frameT, sh, 0.5], col: dayMull },
             unitBox, { kind: "facadeMullion", k, side });
         }
-        const nmR = sw > 18 ? 2 : 1;
+        const nmR = sw > 14 ? (sw > 22 ? 3 : 2) : 1;
         for (let c = 1; c <= nmR; c++) {
           const off = -sw / 2 + (c / (nmR + 1)) * sw;
           ctx.instance(UNIT_BOX,
@@ -367,6 +367,22 @@ const SceneryCity = (function () {
       // buildings, where 1 % is already larger, looking exactly as before.
       const plOut = Math.max(0.22, w * 0.01), pdOut = Math.max(0.22, d * 0.01);
       addBox(out, vadd(p.c, p.u, plH / 2), [w + 2 * plOut, plH, d + 2 * pdOut], plinth, b);
+      // Ground-floor entrance on the trackside face — a recessed door + short
+      // canopy so a blank plinth reads as a building people enter, not a crate.
+      // Skipped at night (neon facade owns the read) and for very narrow units.
+      if (!nightLit && d >= 6 && w >= 5) {
+        const doorCol = [plinth[0] * 0.45, plinth[1] * 0.42, plinth[2] * 0.48];
+        const doorH = Math.min(2.6, plH * 0.92 + 1.4);
+        const doorW = Math.min(1.8, d * 0.22);
+        const faceR = -side * (w / 2 + 0.06);
+        const doorC = vadd(vadd(p.c, p.r, faceR), p.u, doorH / 2);
+        addBox(out, doorC, [0.18, doorH, doorW], doorCol, b);
+        // Awning / canopy proud of the facade above the door.
+        const awnCol = [plinth[0] * 0.72, plinth[1] * 0.72, plinth[2] * 0.74];
+        addBox(out,
+          vadd(vadd(p.c, p.r, -side * (w / 2 + 0.55)), p.u, doorH + 0.15),
+          [1.1, 0.14, doorW + 1.2], awnCol, b);
+      }
       // Archetype: favour slender TAPERED + individually-crowned forms over
       // stacked rectangular prisms. Short blocks stay simple; mid/tall ones taper
       // and always get a sculpted crown (never a bare cut-off box top). The crown
@@ -414,6 +430,13 @@ const SceneryCity = (function () {
         const capR = Math.max(topW, topD) * 0.5, capH = Math.min(3.5, h * 0.07 + 1);
         addFrustum(out, vadd(p.c, p.u, topY), capR, capR * 0.45, capH, crownCol, 6, b);
         topY += capH;
+        // Low parapet lip around flat/short crowns — from above (orbit shots)
+        // a bare cut-off roof is the #1 "crate" tell; a 0.45 m rim fixes it.
+        if (!nightLit && arch === "flat" && h < 28) {
+          const rim = [crownCol[0] * 0.88, crownCol[1] * 0.88, crownCol[2] * 0.90];
+          addBox(out, vadd(p.c, p.u, topY - capH + 0.2),
+                 [topW * 1.02, 0.45, topD * 1.02], rim, b);
+        }
         const rt = hash(k * 3.3 + side * 1.9);
         if (h > 30 && rt < 0.58) {
           // slim spire/mast — taller on taller towers; lit tip beacon at night
@@ -422,6 +445,14 @@ const SceneryCity = (function () {
           if (nightLit) addBox(out, vadd(p.c, p.u, topY + spH), [0.9, 0.9, 0.9], [3.2, 0.4, 0.3], b);
         } else if (rt < 0.82) {
           addBox(out, vadd(p.c, p.u, topY + 1.3), [topW * 0.32, 2.6, topD * 0.32], [0.30, 0.30, 0.34], b);  // plant housing
+          // Twin HVAC / duct boxes next to plant housing on mid paddock blocks.
+          if (!nightLit && h >= 10 && h < 40 && rt > 0.55) {
+            const hx = (hash(k * 7.1 + side) - 0.5) * topW * 0.35;
+            const hz = (hash(k * 9.3 + side) - 0.5) * topD * 0.35;
+            addBox(out,
+              vadd(vadd(vadd(p.c, p.u, topY + 0.7), p.r, hx), p.t, hz),
+              [topW * 0.18, 1.4, topD * 0.22], [0.38, 0.38, 0.40], b);
+          }
         }
         // else: clean chamfered cap, no finial
       }

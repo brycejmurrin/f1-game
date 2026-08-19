@@ -966,7 +966,10 @@
 
       // ── RASCASSE / PADDOCK (s=0.87→0.95, R) ─────────────────────────────
       // Low paddock hospitality buildings — proper massing, not flat boxes.
-      cityFront(0.87, 0.95, 1, 9, {
+      // Dense pastel street wall on the RIGHT (inland). After reverse remap this
+      // range sits on the Mirabeau→Loews approach — keep depth generous so the
+      // oriented footprints cannot chord across the hairpin.
+      cityFront(0.87, 0.95, 1, 16, {
         minH: 10, maxH: 16, depth: 7, step: 18,
         palette: [CREAM, STONE, DUSTY, OCHRE],
         lit: true, windowCol: WINLIT,
@@ -975,17 +978,17 @@
       // (pack-optional; cityFront above remains the always-on massing).
       {
         const houses = [
-          ["kenney_sub_building-type-a", 0.88, 1, 22],
-          ["kenney_sub_building-type-c", 0.91, 1, 24],
-          ["kenney_sub_building-type-h", 0.94, 1, 23],
-          ["kenney_sub_building-type-k", 0.89, -1, 16],
+          ["kenney_sub_building-type-a", 0.88, 1, 28],
+          ["kenney_sub_building-type-c", 0.91, 1, 30],
+          ["kenney_sub_building-type-h", 0.94, 1, 29],
+          ["kenney_sub_building-type-k", 0.89, -1, 22],
         ];
         for (const [id, s, side, dist] of houses) {
           if (!bakedModel(id, K(s), side, dist, { scale: 1.15 }))
             building(K(s), side, dist, 12, 10, 10,
               { kind: "slab", wall: CREAM, window: WIN, floor: 3 });
         }
-        bakedModel("kenney_sub_planter", K(0.90), 1, 7, { scale: 1.2 });
+        bakedModel("kenney_sub_planter", K(0.90), 1, 14, { scale: 1.2 });
       }
       guardrail(0.88, 0.95, 1, 1.0, ARMCO);
 
@@ -996,24 +999,34 @@
       {
         const k = K(0.905);
         const RASCASSE_WALL = [0.86, 0.80, 0.62];
-        const aBldg = anchor(k, -1, 9);
-        if (!onTrack(aBldg.c[0], aBldg.c[2], 9)) {
-          const b = [aBldg.r, aBldg.u, aBldg.t];
-          addBox(out, vadd(aBldg.c, aBldg.u, 4.0), [11, 8.0, 9], RASCASSE_WALL, b);
-          addBox(out, vadd(aBldg.c, aBldg.u, 8.4), [11.4, 0.8, 9.4], [0.30, 0.28, 0.26], b);
-          addBox(out, vadd(aBldg.c, aBldg.u, 5.6), [11.2, 1.8, 9.2], WIN, b);
-          addBox(out, vadd(aBldg.c, aBldg.u, 6.1), [11.4, 0.9, 9.4], WINLIT, b);
-        }
         // Cantilevered balcony overhanging the apex, closer to the road than
         // the building mass above — the famous champagne-spray vantage point.
-        const aBalc = anchor(k, -1, 4.5);
-        if (!onTrack(aBalc.c[0], aBalc.c[2], 4)) {
-          const bb = [aBalc.r, aBalc.u, aBalc.t];
-          addBox(out, vadd(aBalc.c, aBalc.u, 4.4), [7, 0.3, 7], [0.72, 0.70, 0.66], bb);
-          addBox(out, vadd(aBalc.c, aBalc.u, 4.9), [7.1, 0.7, 0.15], [0.65, 0.20, 0.18], bb);
+        // Gap was 4.5 with a 7.4 m canopy: after Monaco's reverse remapping this
+        // sits at the Loews/Mirabeau hairpin, and the oriented footprint crossed
+        // the racing line (measure-props: 4.94 m over at frac 0.284). Pull it
+        // back and preflight the whole balcony as one group so a partial emit
+        // cannot leave the red canopy on the tarmac.
+        const aBalc = anchor(k, -1, 12);
+        const balcB = [aBalc.r, aBalc.u, aBalc.t];
+        modelGroup("monaco-rascasse-balcony", {
+          center: vadd(aBalc.c, aBalc.u, 5.0), size: [8.5, 6.0, 8.5], basis: balcB,
+        }, (stage) => {
+          addBox(stage, vadd(aBalc.c, aBalc.u, 4.4), [7, 0.3, 7], [0.72, 0.70, 0.66], balcB);
+          addBox(stage, vadd(aBalc.c, aBalc.u, 4.9), [7.1, 0.7, 0.15], [0.65, 0.20, 0.18], balcB);
           for (const o of [-3.2, 3.2])
-            addCyl(out, vadd(vadd(aBalc.c, aBalc.t, o), aBalc.u, 2.2), 0.14, 4.4, [0.55, 0.55, 0.55], 5, bb);
-          addBox(out, vadd(aBalc.c, aBalc.u, 5.6), [7.4, 1.4, 7.4], [0.85, 0.20, 0.18], bb);
+            addCyl(stage, vadd(vadd(aBalc.c, aBalc.t, o), aBalc.u, 2.2), 0.14, 4.4, [0.55, 0.55, 0.55], 5, balcB);
+          addBox(stage, vadd(aBalc.c, aBalc.u, 5.6), [7.4, 1.4, 7.4], [0.85, 0.20, 0.18], balcB);
+        });
+        // Keep the clubhouse mass further out than the balcony.
+        {
+          const aBldg = anchor(k, -1, 14);
+          if (!onTrack(aBldg.c[0], aBldg.c[2], 12)) {
+            const b = [aBldg.r, aBldg.u, aBldg.t];
+            addBox(out, vadd(aBldg.c, aBldg.u, 4.0), [11, 8.0, 9], RASCASSE_WALL, b);
+            addBox(out, vadd(aBldg.c, aBldg.u, 8.4), [11.4, 0.8, 9.4], [0.30, 0.28, 0.26], b);
+            addBox(out, vadd(aBldg.c, aBldg.u, 5.6), [11.2, 1.8, 9.2], WIN, b);
+            addBox(out, vadd(aBldg.c, aBldg.u, 6.1), [11.4, 0.9, 9.4], WINLIT, b);
+          }
         }
       }
 

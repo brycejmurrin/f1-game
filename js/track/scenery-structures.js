@@ -656,6 +656,16 @@ const SceneryStructures = (function () {
         for (let y = 1.6; y < topH; y += 2.2)
           addBox(out, vadd(vadd(a.c, a.r, backLat / 2), a.u, y),
                  [Math.abs(backLat) + 0.4, 0.12, 0.12], frameCol, b);
+        // Diagonal cross-braces on the side face — bolted bleachers always
+        // triangulate; without these the frame reads as a ladder of boxes.
+        if (topH > 2.5 && Math.abs(backLat) > 1.2) {
+          const braceCol = [frameCol[0] * 0.9, frameCol[1] * 0.9, frameCol[2] * 0.92];
+          for (const sgn of [-1, 1]) {
+            const mid = vadd(vadd(a.c, a.r, backLat / 2), a.u, topH * 0.45);
+            addBox(out, vadd(mid, a.t, sgn * seg * 0.42),
+                   [Math.abs(backLat) * 0.95, 0.10, 0.10], braceCol, b);
+          }
+        }
         for (let r = 0; r < rows; r++) {
           const lat = side * r * setback, y = lift + 0.6 + r * rise;
           const rc = vadd(vadd(a.c, a.r, lat), a.u, y);
