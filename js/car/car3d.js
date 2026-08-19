@@ -151,7 +151,6 @@ const Car3D = (function () {
     const F = frame(front), R = frame(rear);
     addBlock(out, [F[0], F[1], F[2], F[3], R[0], R[1], R[2], R[3]], col, colFront, surface, frontSurface);
   }
-  // ── Wing element section ────────────────────────────────────────────────────
   // Chordwise stations from leading to trailing edge. Packed at BOTH ends: the
   // first third still owns the nose radius, and 0.84 keeps the last sixth a
   // knife rather than a 40 % linear fade from mid-chord to the TE (the look
@@ -1362,16 +1361,10 @@ const Car3D = (function () {
     const ckpt = opts && opts.cockpit;   // hoisted: buildSharedChassis needs it
 
     part("chassis");
-    // --- Shared chassis --- per-OPTION suspension shifts only ride height.
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
     buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle), ckpt);
 
     part("hood");
-    // --- Hood / vanity deck: a raised central panel over the monocoque, rising
-    // to a hump right in front of the cockpit. This is the "hood" the driver
-    // looks over in the onboard view (the modern F1 dash bulge / vanity panel);
-    // it also adds a chiselled centre spine to the chase-view silhouette. Runs
-    // from the nose bulkhead back to the dash, cresting at the cockpit. ---
     // In cockpit view the hood is remodelled LONGER and TALLER so it reads
     // clearly ahead of the driver (a stubby deck disappears under the dash).
     // ERS tier tints the two flat accent-colour "livery tell" panels (hood
@@ -1873,7 +1866,6 @@ const Car3D = (function () {
     }
 
     part("livery");
-    // --- Livery accents: nose stripe + airbox spine stripe (team colour 2) ---
     const noseAccentRear = anchors.noseAt(1.60), noseAccentFront = anchors.noseAt(2.66);
     addLoft(out, 1.60, 0, noseAccentRear.top + 0.008, 0.09, 0.016,
            2.66, 0, noseAccentFront.top + 0.008, 0.05, 0.014, c2);
@@ -1929,9 +1921,6 @@ const Car3D = (function () {
                    { z: capRearZ, y: (nb.bottom + nb.top) * 0.5, w: nb.side*2 + 0.010,
                      h: nb.top - nb.bottom + 0.010, t: 0.86 }, noseC);
     }
-    // --- Livery `pod` panel: a bold contrasting block on each sidepod flank,
-    // forward of the sponsor board, for the two-tone sidepod look many liveries
-    // carry. Proud of the pod skin so it never z-fights. Only when specified. ---
     // Proud 0.006 keeps the pod panel UNDER the sponsor board (0.008): a board is
     // applied over the paint, not buried by it. At 0.016 the panel sat proud of
     // the board and covered it, so on every pod-set livery the sidepod wordmark
@@ -1945,7 +1934,6 @@ const Car3D = (function () {
     addBox(out, 0, camPod.top + 0.045, 1.55, 0.06, 0.08, 0.15, DARK);
 
     part("cockpit");
-    // --- Cockpit opening (dark) + halo + front pillar ---
     // NONE OF THIS BELONGS IN THE FIRST-PERSON BUILD. The cockpit body is its
     // own model (opts.cockpit — see cockpitBodyMesh in game.js), drawn from
     // inside the car, and every piece here surrounds the driver's HEAD: the
@@ -2063,7 +2051,6 @@ const Car3D = (function () {
       addBox(out, 0, 0.60, 0.11, 0.11, 0.05, 0.02, helmC);    // nose flash
     }
 
-    // --- Airbox intake above the roll hoop (dark void) ---
     // NOT in the first-person build: it spans z -0.305..-0.175 and y 0.715..
     // 0.805, so against a driver's eye at (0.72, -0.20) its front face is 2.5 cm
     // from the camera and it straddles the eye line. Measured via the engine's

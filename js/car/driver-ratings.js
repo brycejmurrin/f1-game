@@ -7,7 +7,6 @@ const AXES = ["pace", "craft", "awareness", "consistency", "experience"];
 // [pace, craft, awareness, consistency, experience]. Compact on purpose — 22 rows
 // of five numbers stay readable as a table, where 22 objects would not.
 const BASE = {
-  // ── front ──
   VER: [96, 96, 88, 94,  92],   // fastest on the grid, and knows it
   LEC: [94, 89, 84, 86,  84],
   NOR: [93, 90, 86, 90,  72],   // 2025 champion
@@ -16,7 +15,6 @@ const BASE = {
   HAM: [89, 95, 92, 88, 100],   // pace has ebbed; racecraft has not
   SAI: [88, 88, 86, 88,  90],
   ALO: [86, 96, 88, 88, 100],   // the reason ratings cannot be derived from car tier
-  // ── midfield ──
   GAS: [84, 84, 82, 82,  86],
   ALB: [84, 84, 84, 84,  78],
   ANT: [84, 78, 72, 74,  32],   // quick, raw
@@ -25,7 +23,6 @@ const BASE = {
   HAD: [82, 78, 76, 78,  30],
   PER: [80, 82, 78, 74,  92],
   BEA: [80, 76, 74, 76,  34],
-  // ── back ──
   LAW: [79, 76, 74, 74,  38],
   BOT: [79, 82, 84, 84,  96],
   COL: [78, 74, 68, 70,  30],

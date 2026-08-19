@@ -35,8 +35,6 @@ const DataHub = (function () {
   const state = {};               // id -> {node, at}
   const gen = {};                 // id -> load generation (ignores stale resolutions)
 
-  /* ================= helpers ================= */
-
   function el(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -65,8 +63,6 @@ const DataHub = (function () {
   function todayISO() {
     return new Date().toISOString().slice(0, 10);
   }
-
-  /* ----- team colors via Teams.LIST (substring keywords, ordered) ----- */
 
   const TEAM_KEYS = [
     ["racing bulls", "RB"], ["rb f1", "RB"], ["visa", "RB"],
@@ -121,8 +117,6 @@ const DataHub = (function () {
     sw.style.background = cssColor(t ? t.color : null);
     return sw;
   }
-
-  /* ================= skeleton ================= */
 
   function init(rootEl) {
     if (root || !rootEl) return;
@@ -242,8 +236,6 @@ const DataHub = (function () {
 
   function isOpen() { return openFlag; }
 
-  /* ================= tab plumbing ================= */
-
   function tabDef(id) {
     for (let i = 0; i < TABS.length; i++) if (TABS[i].id === id) return TABS[i];
     return TABS[0];
@@ -342,17 +334,12 @@ const DataHub = (function () {
     return el("div", "dh-empty", text);
   }
 
-  /* ================= SCHEDULE ================= */
   // Implementation: js/data/schedule.js.
   const { loadSchedule } = DataSchedule.create({ el, emptyMsg, fmtDate, fmtDateTime, todayISO });
 
-  /* ================= STANDINGS ================= */
   const { loadStandings } = DataStandings.create({ el, emptyMsg, teamChip, findTeam, cssColor });
 
-  /* ================= LAST RACE ================= */
   const { loadLastRace } = DataLastRace.create({ el, emptyMsg, teamChip, fmtDate });
-
-  /* ========= session selection (shared by LIVE + TELEMETRY) ========= */
 
   const OPENF1_FIRST_YEAR = 2023;
   const YEARS = (function () {
@@ -499,20 +486,17 @@ const DataHub = (function () {
     return box;
   }
 
-  /* ================= LIVE ================= */
   const { loadLive, stopLiveAuto } = DataLive.create({
     el, clear, emptyMsg, spinner, ensureSession, sel, buildPicker,
     invalidateOther, fmtDateTime, findTeam, cssColor, textColorOn, NO_LIVE_MSG
   });
 
-  /* ================= TELEMETRY ================= */
   // Implementation: js/data/telemetry.js.
   const { loadTelemetry, closeTelemPopup } = DataTelemetry.create({
     el: el, clear: clear, emptyMsg: emptyMsg, spinner: spinner, sel: sel,
     ensureSession: ensureSession, buildPicker: buildPicker,
     invalidateOther: invalidateOther, COMPOUND: COMPOUND, findTeam: findTeam,
     cssColor: cssColor, textColorOn: textColorOn, NO_TELEM_MSG: NO_TELEM_MSG });
-  /* ================= EXPORT tab (dev) ================= */
   // Implementation: js/data/export.js.
   const { loadExport } = DataExport.create({ el: el, clear: clear });
   return { init: init, open: open, close: close, isOpen: isOpen };

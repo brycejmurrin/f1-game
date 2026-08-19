@@ -2,36 +2,34 @@
 const Log = (function () {
   "use strict";
 
-  // Ordered low → high. An entry passes a threshold when its level <= threshold.
   const LEVELS = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
   const NAMES = ["silent", "error", "warn", "info", "debug", "trace"];
 
   const NAMESPACES = [
-    "scenery",   // prop placement + on-track suppression (js/track/scenery-*.js)
-    "track",     // build orchestration, geometry rejection (js/track/tracks.js)
-    "gfx",       // renderer backends: GLX / WGX / TLX (js/render/**)
-    "game",      // game loop, race logic, physics (js/game.js, js/game/**)
-    "data",      // the data hub + its API client (js/data/**)
-    "net",       // multiplayer wire (js/net/**)
-    "audio",     // WebAudio synth (js/game/audio.js)
-    "assets",    // baked asset pack (js/render/assets.js)
-    "apex",      // the __apex dev API itself (js/game/apex.js)
-    "car",       // car mesh, parts, liveries (js/car/**)
-    "ui",        // menus, HUD, screens (js/game/*ui*, hud, menus)
-    "input",     // steering, gamepad, touch (js/game/input.js)
+    "scenery",
+    "track",
+    "gfx",
+    "game",
+    "data",
+    "net",
+    "audio",
+    "assets",
+    "apex",
+    "car",
+    "ui",
+    "input",
   ];
 
-  const RING = 500;                 // records retained; oldest evicted first
+  const RING = 500;
 
-  let consoleDefault = LEVELS.warn; // what a human sees
-  let bufferDefault = LEVELS.info;  // what is retained for __apex.logs()
+  let consoleDefault = LEVELS.warn;
+  let bufferDefault = LEVELS.info;
   const consoleNs = Object.create(null);   // ns -> level override
   const bufferNs = Object.create(null);
 
-  const buf = [];                   // ring of {t, ns, level, msg}
-  let seq = 0;                      // monotonic id, so logs({since}) can page
+  const buf = [];
+  let seq = 0;
 
-  // ── configuration ────────────────────────────────────────────────────────
   function parseLevel(name) {
     const l = LEVELS[String(name).trim().toLowerCase()];
     return l === undefined ? null : l;
@@ -77,7 +75,6 @@ const Log = (function () {
     } catch (_) { /* no URL host (Node VM) */ }
   })();
 
-  // ── emission ─────────────────────────────────────────────────────────────
   function threshold(table, def, ns) {
     const v = table[ns];
     return v === undefined ? def : v;
@@ -135,7 +132,6 @@ const Log = (function () {
     try { return Math.round(performance.now()); } catch (_) { return 0; }
   }
 
-  // ── public surface ───────────────────────────────────────────────────────
   const api = {
     SILENT: 0, ERROR: 1, WARN: 2, INFO: 3, DEBUG: 4, TRACE: 5,
     LEVELS: LEVELS,

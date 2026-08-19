@@ -1,19 +1,5 @@
 "use strict";
-/* Apex 26 — Parts catalog and stat helpers.
-   Twelve upgrade categories: engine, aero, suspension, brakes, tyres, ers,
-   gearbox, fuel, exhaust, floor, cockpit, wheels.
-   Options marked with `supplier` are exclusive to teams using that power unit.
-   getMods(setup, teamEngine) / getCost(setup, teamEngine) fall back to the
-   category default when a supplier-locked option doesn't match the team.
-   statMult() maps a 0-100 team stat to a 0.85-1.00 physics multiplier.
-   visualTier (0=low/1=mid/2=high) drives Car3D's parts-driven geometry —
-   purely cosmetic, no relation to the physics multipliers below. The
-   category default is always tier 1 so an unmodified car's geometry is
-   unchanged.
-   Options tagged SIGNATURE are locked to one team (`teams`) and are exact
-   cost/physics CLONES of the universal option named in `equivalent` — they buy
-   a distinct mesh, never an advantage. See FACTORY_PRESETS below for the grid's
-   fixed visual identity. */
+/* Apex 26 — Parts catalog and stat helpers. Twelve upgrade categories; supplier-locked options fall back via getMods/getCost; statMult() maps 0–100 team stats to 0.85–1.00; visualTier drives Car3D geometry only; SIGNATURE options clone `equivalent` for mesh identity — see FACTORY_PRESETS. */
 const Parts = (function () {
   const BUDGET = 600;
 

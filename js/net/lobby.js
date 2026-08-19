@@ -209,15 +209,6 @@ const NetLobby = (function () {
     // this fails need OPPOSITE responses. Which one happened is decided by
     // whether we ever learnt our own public address:
     //
-    //   no srflx candidate  -> STUN never answered. The network is filtering
-    //                          it, and a different network genuinely may work.
-    //   srflx but no path   -> both sides know both addresses and the packets
-    //                          still will not flow: symmetric NAT. Switching
-    //                          Wi-Fi will not help; only a relay does, and a
-    //                          relay costs someone money to run. Saying "try
-    //                          again" here would send them round a loop that
-    //                          cannot succeed.
-    //
     // The stale case is the one worth catching separately, because our own
     // design causes it: the codes are carried by a human, and a NAT's UDP
     // mapping expires in about a minute. Take too long over the paste and the

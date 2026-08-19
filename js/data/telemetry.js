@@ -73,7 +73,6 @@ const DataTelemetry = (function () {
     const v = ch.get(c);
     return (v === null || v === undefined || isNaN(v)) ? null : v;
   }
-  // normalize a sample to 0..1 of the plot height for the given channel
   function chanNorm(ch, c, view) {
     const v = chanRaw(ch, c);
     if (v === null) return null;
@@ -81,7 +80,6 @@ const DataTelemetry = (function () {
     if (ch.norm === "rpm") return clamp(v / view.rpmMax, 0, 1);
     return clamp((v - ch.lo) / (ch.hi - ch.lo), 0, 1);
   }
-  // nearest car sample (by lap time t) to a cursor time
   function sampleAt(car, t) {
     if (!car || !car.length) return null;
     let lo = 0, hi = car.length - 1;

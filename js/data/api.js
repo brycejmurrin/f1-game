@@ -51,8 +51,6 @@ const F1API = (function () {
   const sessionDates = {};              // sessionKey -> date_start ISO (seen sessions)
   const meetingDates = {};              // meetingKey -> date_start ISO (seen meetings)
 
-  /* ---------- cache ---------- */
-
   function purgeExpiredCache(maxAge) {
     if (maxAge == null) maxAge = TTL_HISTORIC;
     let removed = 0;
@@ -132,8 +130,6 @@ const F1API = (function () {
       Log.warn("data", "apex26: api cache write still failing after purge", e2);
     }
   }
-
-  /* ---------- queued, cached fetch ---------- */
 
   function endpointName(url) {
     const noQ = String(url || "").split("?")[0];
@@ -259,8 +255,6 @@ const F1API = (function () {
     return job;
   }
 
-  /* ---------- small mapping helpers (tolerate anything) ---------- */
-
   function num(v) {
     const n = typeof v === "number" ? v : parseFloat(v);
     return isFinite(n) ? n : null;
@@ -275,8 +269,6 @@ const F1API = (function () {
     const lists = json && json.MRData && json.MRData.StandingsTable && json.MRData.StandingsTable.StandingsLists;
     return (Array.isArray(lists) && lists[0]) || null;
   }
-
-  /* ---------- Jolpica methods ---------- */
 
   function schedule() {
     return request(JOLPICA + "/" + season() + ".json", TTL_SCHEDULE).then(function (json) {
@@ -358,8 +350,6 @@ const F1API = (function () {
       };
     });
   }
-
-  /* ---------- OpenF1 methods ---------- */
 
   function sessionTtl(sessionKey) {
     // The known-latest session is always treated as live.
@@ -573,8 +563,6 @@ const F1API = (function () {
       });
     });
   }
-
-  /* ---------- telemetry (OpenF1, free historical) ---------- */
 
   function sessionLaps(sessionKey, driverNumber) {
     const url = OPENF1 + "/laps?session_key=" + encodeURIComponent(sessionKey) +

@@ -158,12 +158,10 @@ const NetSession = (function () {
 
     return {
       pump,
-      // -- sending --
       sendState: (bytes) => transport.send(CH_STATE, bytes),
       sendEvent(type, data) {
         return transport.send(CH_EVENT, JSON.stringify({ t: type, d: data === undefined ? null : data }));
       },
-      // -- receiving --
       onState(fn) { stateHandlers.push(fn); return this; },
       onEvent(type, fn) {
         if (!eventHandlers.has(type)) eventHandlers.set(type, []);
