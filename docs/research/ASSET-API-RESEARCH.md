@@ -486,7 +486,9 @@ the pack lands asynchronously. That is the same trick `setEnvCube` already used.
 - **`bake-atlas`** (2026-08). Slices a 4×4 albedo/normal sheet onto named MAT
   layers (`--preset generated` or `--map BRICK=1,0`). Mean-normalises, heals
   tile seams, derives a normal from luminance when the sheet is albedo-only,
-  and leaves unmapped slots (ASPHALT / WOOD / FABRIC / SNOW) on the photoscans.
+  and leaves unmapped slots (ASPHALT by default) on the photoscans. The
+  committed `generated` preset now also covers WOOD / FABRIC / SNOW from
+  `atlas-variety-*.png`.
   Sources: `assets/atlases/`.
 - **KTX2.** The pack is ~5.4 MB against an 8 MB budget. The VRAM argument in §3.2
   still stands for a full-resolution scan bake — revisit at that point, not now.

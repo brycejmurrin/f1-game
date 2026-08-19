@@ -9,11 +9,12 @@ is **Apex26-Procedural**.
 
 | file | role |
 |---|---|
-| `atlas-arch-albedo.png` | masonry, metal, roof, rust, cobbles |
+| `atlas-arch-albedo.png` | masonry, metal, roof, rust, cobbles, herringbone |
 | `atlas-arch-normal.png` | matching architectural relief |
 | `atlas-nature-albedo.png` | foliage, grass, sand, rock |
 | `atlas-organic-normal.png` | grain / pore detail for organic slots |
+| `atlas-variety-albedo.png` | wood, cloth, snow, and extra hard-surface tiles |
+| `atlas-variety-normal.png` | matching grain / weave / drift relief |
 
 Tile → `MAT` mapping lives in `ATLAS_PRESETS.generated` in `tools/assets.mjs`.
-ASPHALT, WOOD, FABRIC, and SNOW stay on the Poly Haven photoscans — these
-sheets have no tarmac, wood albedo, cloth, or snow.
+**ASPHALT stays on the Poly Haven photoscan** — these sheets have no tarmac.

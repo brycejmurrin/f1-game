@@ -46,7 +46,7 @@ WGX is a device/feature miss, not "WGX has no arrays."
    survive.
 
 4. **Slice a generated 4×4 atlas** onto scenery MAT slots (keeps the
-   Poly Haven ASPHALT / WOOD / FABRIC / SNOW layers):
+   Poly Haven ASPHALT racing-surface layer; every other slot is generated):
    ```sh
    node tools/assets.mjs bake-atlas --preset generated
    node tools/assets.mjs verify

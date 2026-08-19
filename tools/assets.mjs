@@ -22,11 +22,11 @@
  * `bake-synthetic` has NO dependencies and needs NO network: it generates every
  * material layer from multi-octave noise, encoded to PNG with node's own zlib.
  * That is what makes the whole runtime path testable in CI and in a sandbox
- * with no egress.  The committed pack is a hybrid: Poly Haven CC0 photoscans
- * (via webbake.js / import-pack) for ASPHALT / WOOD / FABRIC / SNOW, plus
- * generated 4x4 atlas tiles (`bake-atlas --preset generated`) for the scenery
- * slots.  `fetch`/`bake-material` are the offline re-bake path (network +
- * sharp) that mirrors webbake's mean-normalised Diffuse/nor_gl/arm packing.
+ * with no egress.  The committed pack is a hybrid: the Poly Haven CC0
+ * photoscan for ASPHALT (the racing surface), plus generated 4x4 atlas
+ * tiles (`bake-atlas --preset generated`) for every other scenery slot.
+ * `fetch`/`bake-material` are the offline re-bake path (network + sharp)
+ * that mirrors webbake's mean-normalised Diffuse/nor_gl/arm packing.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -99,20 +99,26 @@ const ATLAS_PRESETS = {
       "arch-normal": "atlas-arch-normal.png",
       "nature-albedo": "atlas-nature-albedo.png",
       "organic-normal": "atlas-organic-normal.png",
+      "variety-albedo": "atlas-variety-albedo.png",
+      "variety-normal": "atlas-variety-normal.png",
     },
-    // ASPHALT / WOOD / FABRIC / SNOW stay on the Poly Haven photoscans —
-    // the atlases have no tarmac, no wood albedo, no cloth, no snow.
+    // ASPHALT stays on the Poly Haven photoscan — do not replace the racing
+    // surface. Every other scenery slot comes from the generated sheets.
+    // Coords are 0-based (col, row); row 0 is the PNG top.
     layers: [
       { mat: "CONCRETE", albedo: ["arch-albedo", 2, 0], normal: ["arch-normal", 2, 0] },
       { mat: "BRICK",    albedo: ["arch-albedo", 1, 0], normal: ["arch-normal", 0, 0] },
-      { mat: "METAL",    albedo: ["arch-albedo", 0, 2], normal: ["arch-normal", 2, 1] },
-      { mat: "ROOF",     albedo: ["arch-albedo", 2, 1], normal: null },
-      { mat: "STONE",    albedo: ["arch-albedo", 0, 1], normal: ["arch-normal", 0, 1] },
-      { mat: "RUST",     albedo: ["arch-albedo", 3, 2], normal: ["arch-normal", 1, 2] },
-      { mat: "FOLIAGE",  albedo: ["nature-albedo", 0, 0], normal: ["organic-normal", 0, 0] },
-      { mat: "GRASS",    albedo: ["nature-albedo", 2, 0], normal: null },
-      { mat: "SAND",     albedo: ["nature-albedo", 0, 3], normal: null },
+      { mat: "METAL",    albedo: ["arch-albedo", 2, 2], normal: ["arch-normal", 2, 2] },
+      { mat: "WOOD",     albedo: ["variety-albedo", 0, 0], normal: ["variety-normal", 0, 0] },
+      { mat: "FOLIAGE",  albedo: ["nature-albedo", 1, 0], normal: ["organic-normal", 0, 0] },
+      { mat: "FABRIC",   albedo: ["variety-albedo", 2, 0], normal: ["variety-normal", 2, 0] },
+      { mat: "SAND",     albedo: ["nature-albedo", 1, 3], normal: null },
+      { mat: "GRASS",    albedo: ["nature-albedo", 2, 1], normal: null },
       { mat: "ROCK",     albedo: ["nature-albedo", 1, 2], normal: null },
+      { mat: "SNOW",     albedo: ["variety-albedo", 0, 1], normal: ["variety-normal", 0, 1] },
+      { mat: "ROOF",     albedo: ["arch-albedo", 2, 1], normal: null },
+      { mat: "STONE",    albedo: ["arch-albedo", 1, 1], normal: ["arch-normal", 1, 1] },
+      { mat: "RUST",     albedo: ["arch-albedo", 3, 2], normal: ["arch-normal", 1, 2] },
     ],
   },
 };

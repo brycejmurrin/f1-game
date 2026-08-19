@@ -23,7 +23,7 @@
         "mat": 4,
         "id": "metal",
         "scale": 2.8,
-        "source": "generated:assets/atlases/atlas-arch-albedo.png#0,2",
+        "source": "generated:assets/atlases/atlas-arch-albedo.png#2,2",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -31,15 +31,15 @@
         "mat": 5,
         "id": "wood",
         "scale": 2.8,
-        "source": "polyhaven:wood_planks",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-variety-albedo.png#0,0",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 6,
         "id": "foliage",
         "scale": 4,
-        "source": "generated:assets/atlases/atlas-nature-albedo.png#0,0",
+        "source": "generated:assets/atlases/atlas-nature-albedo.png#1,0",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -47,15 +47,15 @@
         "mat": 7,
         "id": "fabric",
         "scale": 1.8,
-        "source": "polyhaven:denim_fabric",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-variety-albedo.png#2,0",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 8,
         "id": "sand",
         "scale": 11,
-        "source": "generated:assets/atlases/atlas-nature-albedo.png#0,3",
+        "source": "generated:assets/atlases/atlas-nature-albedo.png#1,3",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -63,7 +63,7 @@
         "mat": 9,
         "id": "grass",
         "scale": 4.5,
-        "source": "generated:assets/atlases/atlas-nature-albedo.png#2,0",
+        "source": "generated:assets/atlases/atlas-nature-albedo.png#2,1",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -79,9 +79,9 @@
         "mat": 11,
         "id": "snow",
         "scale": 7,
-        "source": "polyhaven:snow_02",
-        "licence": "CC0",
-        "author": "Poly Haven contributors"
+        "source": "generated:assets/atlases/atlas-variety-albedo.png#0,1",
+        "licence": "Apex26-Procedural",
+        "author": "Apex 26"
       },
       {
         "mat": 12,
@@ -95,7 +95,7 @@
         "mat": 13,
         "id": "stone",
         "scale": 3.5,
-        "source": "generated:assets/atlases/atlas-arch-albedo.png#0,1",
+        "source": "generated:assets/atlases/atlas-arch-albedo.png#1,1",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -140,7 +140,7 @@
           "mat": 4,
           "id": "metal",
           "scale": 2.8,
-          "source": "generated:assets/atlases/atlas-arch-albedo.png#0,2",
+          "source": "generated:assets/atlases/atlas-arch-albedo.png#2,2",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -148,15 +148,15 @@
           "mat": 5,
           "id": "wood",
           "scale": 2.8,
-          "source": "polyhaven:wood_planks",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-variety-albedo.png#0,0",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 6,
           "id": "foliage",
           "scale": 4,
-          "source": "generated:assets/atlases/atlas-nature-albedo.png#0,0",
+          "source": "generated:assets/atlases/atlas-nature-albedo.png#1,0",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -164,15 +164,15 @@
           "mat": 7,
           "id": "fabric",
           "scale": 1.8,
-          "source": "polyhaven:denim_fabric",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-variety-albedo.png#2,0",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 8,
           "id": "sand",
           "scale": 11,
-          "source": "generated:assets/atlases/atlas-nature-albedo.png#0,3",
+          "source": "generated:assets/atlases/atlas-nature-albedo.png#1,3",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -180,7 +180,7 @@
           "mat": 9,
           "id": "grass",
           "scale": 4.5,
-          "source": "generated:assets/atlases/atlas-nature-albedo.png#2,0",
+          "source": "generated:assets/atlases/atlas-nature-albedo.png#2,1",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -196,9 +196,9 @@
           "mat": 11,
           "id": "snow",
           "scale": 7,
-          "source": "polyhaven:snow_02",
-          "licence": "CC0",
-          "author": "Poly Haven contributors"
+          "source": "generated:assets/atlases/atlas-variety-albedo.png#0,1",
+          "licence": "Apex26-Procedural",
+          "author": "Apex 26"
         },
         {
           "mat": 12,
@@ -212,7 +212,7 @@
           "mat": 13,
           "id": "stone",
           "scale": 3.5,
-          "source": "generated:assets/atlases/atlas-arch-albedo.png#0,1",
+          "source": "generated:assets/atlases/atlas-arch-albedo.png#1,1",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -862,42 +862,42 @@
       "id": "metal",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "generated:assets/atlases/atlas-arch-albedo.png#0,2"
+      "source": "generated:assets/atlases/atlas-arch-albedo.png#2,2"
     },
     {
       "kind": "material",
       "id": "wood",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:wood_planks"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-variety-albedo.png#0,0"
     },
     {
       "kind": "material",
       "id": "foliage",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "generated:assets/atlases/atlas-nature-albedo.png#0,0"
+      "source": "generated:assets/atlases/atlas-nature-albedo.png#1,0"
     },
     {
       "kind": "material",
       "id": "fabric",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:denim_fabric"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-variety-albedo.png#2,0"
     },
     {
       "kind": "material",
       "id": "sand",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "generated:assets/atlases/atlas-nature-albedo.png#0,3"
+      "source": "generated:assets/atlases/atlas-nature-albedo.png#1,3"
     },
     {
       "kind": "material",
       "id": "grass",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "generated:assets/atlases/atlas-nature-albedo.png#2,0"
+      "source": "generated:assets/atlases/atlas-nature-albedo.png#2,1"
     },
     {
       "kind": "material",
@@ -909,9 +909,9 @@
     {
       "kind": "material",
       "id": "snow",
-      "author": "Poly Haven contributors",
-      "licence": "CC0",
-      "source": "polyhaven:snow_02"
+      "author": "Apex 26",
+      "licence": "Apex26-Procedural",
+      "source": "generated:assets/atlases/atlas-variety-albedo.png#0,1"
     },
     {
       "kind": "material",
@@ -925,7 +925,7 @@
       "id": "stone",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "generated:assets/atlases/atlas-arch-albedo.png#0,1"
+      "source": "generated:assets/atlases/atlas-arch-albedo.png#1,1"
     },
     {
       "kind": "material",
