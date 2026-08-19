@@ -480,13 +480,13 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
 
 test("garage preview chips hug the sheet and season quali is a label", () => {
   const garage = read("css/carsetup.css");
-  const game = read("js/game.js");
+  const rs = read("js/game/race-settings.js");
   const spotify = read("js/game/spotify.js");
   assert.match(garage, /#cs-stack \{[\s\S]*?left:\s*auto/);
   assert.match(garage, /#cs-stack \{[\s\S]*?width:\s*max-content/);
   assert.doesNotMatch(garage, /#cs-stack \{[\s\S]*?left:\s*calc\(var\(--safe-l\)/);
-  assert.match(game, /qEl\.hidden = qForced != null/);
-  assert.match(game, /QUALIFYING LAP" \+ \(qForced == null \? "" : " · " \+/);
+  assert.match(rs, /qEl\.hidden = qForced != null/);
+  assert.match(rs, /QUALIFYING LAP" \+ \(qForced == null \? "" : " · " \+/);
   const menus = read("css/menus.css");
   assert.match(menus, /#rs-quali-section:has\(#rs-quali\[hidden\]\) \{\s*grid-column:\s*1 \/ -1;\s*grid-row:\s*1/);
   assert.match(menus, /:is\(#rs-diff-section, #rs-caution-section, #rs-reliab-section\) \{\s*grid-row:\s*3/);
