@@ -245,19 +245,35 @@
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  flex-wrap: wrap;
+  /* Two fixed rows sized at 28px each (instead of chip-h ~40px): 14 tabs fit
+     7+7 and the total tab strip shrinks from chip-h*2+gap (~88px) to 60px,
+     freeing ~28px extra for #cs-options on a 343px landscape phone. The label
+     font is var(--fs-micro) at ~11px, so 28px leaves ~17px for top+bottom
+     padding — tight but readable and touch-target-safe (28/1.15 = 24.3px
+     own px, just above WCAG 2.5.8's 24px minimum). */
+  grid-template-rows: repeat(2, 28px);
   overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  max-height: calc(var(--chip-h) * 2 + var(--gap));
-  align-content: flex-start;
+  overflow-y: hidden;
+  max-height: calc(28px * 2 + var(--gap));
+  align-content: start;
 }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab {
-  /* 14 tabs (TEAM + 12 parts + LIVERY). Flex wrap stayed content-sized
-     (play @115: 6+7+1, LIVERY on a clipped third Y). Seven equal grid
-     tracks put every tab on two rows inside the cap. */
+  /* 14 tabs in 7×2 grid. Stretch to fill the fixed 28px row. */
   min-width: 0;
-  padding: calc(var(--gap) * 0.22) calc(var(--gap) * 0.42);
+  min-height: 0;
+  padding: 2px calc(var(--gap) * 0.2);
+  justify-content: center;
+  align-items: stretch;
+}
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab-lbl {
+  /* Tighter font so labels fit inside the 7-column grid without ellipsis.
+     "SUSPENSION" at 11px needs ~61px; at 9.5px needs ~53px — matching the
+     ~53px column interior. --label is 10px in compact; 9.5px stays legible
+     at that size and avoids truncation on the longest labels. */
+  /* 8px own px = 9.2px rendered at 115% — SUSPENSION needs 46px at this size
+     which fits inside the 53px column interior (tab 58px - 2×border - 2×pad). */
+  font-size: 8px;
+  letter-spacing: 0;
 }
 #cs-options {
   flex: 1 1 auto; min-height: 0;
