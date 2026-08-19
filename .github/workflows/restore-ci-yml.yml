@@ -1,0 +1,67 @@
+name: restore-ci-yml
+on:
+  workflow_dispatch:
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/f1-game-project-26h3ng
+          fetch-depth: 20
+      - name: Restore ci.yml from 7dde794 and wire select-specs
+        run: |
+          set -eu
+          git config user.email "brycejmurrin@users.noreply.github.com"
+          git config user.name "Bryce Murrin"
+          # Restore good base
+          git show 7dde794:.github/workflows/ci.yml > .github/workflows/ci.yml
+          python3 - <<'PY'
+from pathlib import Path
+text = Path('.github/workflows/ci.yml').read_text()
+start = text.find('        run: |', text.find('Select specs for this change'))
+if start < 0:
+    raise SystemExit('select-specs run block not found')
+next_step = text.find('\n      - name:', start)
+if next_step < 0:
+    raise SystemExit('next step not found')
+new_text = text[:start] + '        run: bash tools/ci-select-specs-step.sh' + text[next_step:]
+Path('.github/workflows/ci.yml').write_text(new_text)
+assert 'run: bash tools/ci-select-specs-step.sh' in new_text
+assert 'no valid comparison base for $EVENT' not in new_text
+print('wired ok, len', len(new_text))
+PY
+          # Ensure helpers exist and are executable (they should already be on tip)
+          test -f tools/ci-resolve-before.sh
+          test -f tools/ci-select-specs-step.sh
+          chmod +x tools/ci-resolve-before.sh tools/ci-select-specs-step.sh
+          mkdir -p .github/actions/select-specs
+          cat > .github/actions/select-specs/action.yml <<'ACT'
+name: select-specs
+description: Resolve comparison base (HEAD~1 fallback) and select Playwright specs
+runs:
+  using: composite
+  steps:
+    - name: Select specs for this change
+      id: sel
+      shell: bash
+      env:
+        EVENT: ${{ github.event_name }}
+        PUSH_BEFORE: ${{ github.event.before }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+      run: bash tools/ci-select-specs-step.sh
+outputs:
+  specs:
+    description: space-separated spec paths
+    value: ${{ steps.sel.outputs.specs }}
+ACT
+          git add .github/workflows/ci.yml tools/ci-resolve-before.sh tools/ci-select-specs-step.sh .github/actions/select-specs/action.yml
+          git commit -m "fix(ci): restore ci.yml and wire selected-specs to HEAD~1 helper
+
+Replace the fail-closed inline select-specs step body with
+tools/ci-select-specs-step.sh (which calls ci-resolve-before.sh).
+Empty/zero github.event.before now falls back to HEAD~1 instead of
+red-closing the selected gate."
+          git push origin HEAD:claude/f1-game-project-26h3ng
