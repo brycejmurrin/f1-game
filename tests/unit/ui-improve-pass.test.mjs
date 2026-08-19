@@ -119,6 +119,9 @@ test("compact landscape catalogue spends its first viewport on a circuit", () =>
     "search keeps a readable floor so the row actually overflows at 200%");
   assert.doesNotMatch(css, /@container sheet \(max-width: 360px\)/);
   assert.doesNotMatch(css, /@container sheet \(max-width: 440px\)/);
+  assert.doesNotMatch(css,
+    /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\)\s*>\s*#sel-body\s*>\s*#sel-track-section\s*\{[^}]*display:\s*none/,
+    "compact stacked landscape must keep the thumbnail band; hiding the section dropped the map");
 });
 
 test("garage categories implement one roving tab system", () => {
@@ -464,4 +467,22 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
   assert.match(read("css/overlays.css"), /@container sheet \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
   assert.doesNotMatch(read("css/overlays.css"), /@media \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
   assert.match(menus, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/);
+});
+
+test("title settings, pause standings, and career modes stay reachable", () => {
+  const game = read("js/game.js");
+  const nav = read("js/game/settings-nav.js");
+  const career = read("css/career.css");
+  assert.match(nav, /return \{ showCurrent: \(\) => show\(current, false\), show \}/,
+    "title Settings can land on MORE without a second click");
+  assert.match(game, /settingsNav\.show\("more", false\);\s*openSettings\(\)/,
+    "title Settings opens the MORE category (How to Play lives there)");
+  assert.match(game,
+    /pmStandings\.hidden = !\(isChampionship\(\) && SeasonCal\.hasProgress\(season\) && season\.round < SeasonCal\.rounds\(\)\)/,
+    "pause STANDINGS matches the title: hide once the season is finished");
+  assert.match(game, /\$\("pm-restart"\)\.disabled = !!\(netPlay\.active\(\) \|\| qualiNetDone\)/,
+    "RESTART looks dead in net / quali-net, same gate as its click handler");
+  assert.match(career,
+    /#cr-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):has\(#cr-left \.cr-slot\):has\(#cr-right \.cr-slot\) > #cr-body \{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/,
+    "compact stacked modes picker puts DRIVER and MY TEAM in one row");
 });

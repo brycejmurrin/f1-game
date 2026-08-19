@@ -7668,7 +7668,7 @@ $("pm-settings-close").onclick = closeSettings;
 // tuners are reachable without starting a race first. closeSettings() already
 // only returns to the pause menu when actually paused, so from here it just
 // closes back to the title.
-$("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings(); };
+$("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); settingsNav.show("more", false); openSettings(); };
 // Advanced steering: opened from the settings menu, closes back to it.
 $("pm-advanced").onclick = () => { $("advanced").hidden = false; };
 $("adv-close").onclick = () => { $("advanced").hidden = true; };
@@ -8317,10 +8317,10 @@ function setPaused(p) {
   if (!p) { closeLightTuner(false); closeCamTuner(false); exitPhotoMode(); }
   els.pausemenu.hidden = !p;
   if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
-  if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season));
+  if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
-  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); }
+  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); $("pm-restart").disabled = !!(netPlay.active() || qualiNetDone); }
   else if (soundOn) GameAudio.startEngine();
   lastFrame = performance.now();
 }

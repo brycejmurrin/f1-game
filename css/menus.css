@@ -487,12 +487,8 @@ body { --compact-at: 600px; --wide-at: 620px; }
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-info {
   display: block;
 }
-/* On a short landscape phone the active catalogue row already supplies the
-   circuit identity. Removing the duplicate preview band buys the list an
-   entire control row at 100% and keeps the filter usable through 200%. */
-#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) > #sel-body > #sel-track-section {
-  display: none;
-}
+/* Compact stacked landscape keeps the thumbnail band (map + name). Hiding
+   the whole #sel-track-section dropped #sel-preview-map on play-shape. */
 #sel-inner:not([data-pair="on"]) > #sel-body > #sel-tracks {
   /* Basis 0, not auto: auto is the 2,000px catalogue, so shrink eats the
      list before grow can give it leftover body height. */
