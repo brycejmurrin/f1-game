@@ -732,14 +732,14 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    to fire on those short-in-own-units sheets. inherits:false, so the
    sheet node, not the dialog. */
 #race-settings .sheet { --compact-at: 760px; }
-/* --fit-at by sheet shape (zoom-corrected) not viewport orientation. */
-#results .sheet:not([data-shape="tall"]),
-#standings .sheet:not([data-shape="tall"]),
-#race-settings .sheet:not([data-shape="tall"]),
-#audioset .sheet:not([data-shape="tall"]),
-#advanced .sheet:not([data-shape="tall"]),
-#customize .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
-#pausemenu .sheet:not([data-shape="tall"]) { --fit-at: 180px; }
+/* --fit-at on wide-shaped sheets (zoom-corrected), not viewport orientation. */
+#results .sheet:not([data-shape="tall"])     { --fit-at: 220px; }
+#standings .sheet:not([data-shape="tall"])   { --fit-at: 220px; }
+#race-settings .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
+#audioset .sheet:not([data-shape="tall"])    { --fit-at: 220px; }
+#advanced .sheet:not([data-shape="tall"])    { --fit-at: 220px; }
+#customize .sheet:not([data-shape="tall"])   { --fit-at: 220px; }
+#pausemenu .sheet:not([data-shape="tall"])   { --fit-at: 180px; }
 /* Wide enough for three columns of rows on a landscape phone. At 560px the form
    was two narrow columns and still ran 171px past the fold; the sheet is capped
    by the safe-area width anyway, so this only ever spends room that exists. */

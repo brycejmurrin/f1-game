@@ -44,17 +44,17 @@ test("session dialogs declare --fit-at next to --sheet-w so classifyFit can shri
     "pause is a short button stack — slightly smaller floor than Settings");
 });
 
-test("landscape --fit-at uses a viewport orientation query", () => {
+test("landscape --fit-at uses zoom-correct data-shape selector (not @media orientation)", () => {
   const css = read("css/components.css");
-  const land = css.match(/@media\s*\(orientation:\s*landscape\)\s*\{[\s\S]*?#pausemenu[\s\S]*?\}/);
-  assert.ok(land, "pause landscape --fit-at lives in an orientation query");
-  assert.match(css, /@media\s*\(orientation:\s*landscape\)[\s\S]*#results[\s\S]*--fit-at:\s*220px/);
-  assert.match(css, /@media\s*\(orientation:\s*landscape\)[\s\S]*#standings[\s\S]*--fit-at:\s*220px/);
-  assert.match(css, /@media\s*\(orientation:\s*landscape\)[\s\S]*#race-settings[\s\S]*--fit-at:\s*220px/);
-  assert.match(css, /@media\s*\(orientation:\s*landscape\)[\s\S]*#audioset[\s\S]*--fit-at:\s*220px/);
-  assert.match(css, /@media\s*\(orientation:\s*landscape\)[\s\S]*#advanced[\s\S]*--fit-at:\s*220px/);
-  assert.match(css, /@media\s*\(orientation:\s*landscape\)[\s\S]*#customize[\s\S]*--fit-at:\s*220px/);
-  assert.match(css, /@media\s*\(orientation:\s*landscape\)[\s\S]*#pausemenu\s*\{[^}]*--fit-at:\s*180px/);
+  // Converted from @media (orientation: landscape) to data-shape="wide" (sheetshape.js).
+  for (const id of ["results", "standings", "race-settings", "audioset", "advanced", "customize"]) {
+    assert.match(css, new RegExp(`#${id} \\.sheet:not\\(\\[data-shape="tall"\\]\\)[^{]*\\{[^}]*--fit-at:\\s*220px`),
+      `${id} --fit-at must use data-shape selector`);
+  }
+  assert.match(css, /#pausemenu \.sheet:not\(\[data-shape="tall"\]\)[^{]*\{[^}]*--fit-at:\s*180px/,
+    "pausemenu --fit-at must use data-shape selector");
+  assert.doesNotMatch(css, /@media\s*\(orientation:\s*landscape\)\s*\{[\s\S]*?#pausemenu/,
+    "pausemenu must not use @media orientation for --fit-at (zoom-blind)");
 });
 
 test("standings body uses local leftover height, not a viewport svh cap", () => {
