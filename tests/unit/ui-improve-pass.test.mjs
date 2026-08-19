@@ -286,8 +286,8 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
   assert.match(data, /body\[data-density="compact"\] \.dh-overlay/);
   assert.doesNotMatch(data, /orientation:\s*landscape\) and \(max-height:/,
     "data hub short-height chrome must use body[data-density], not viewport max-height");
-  assert.match(data, /@media \(orientation:\s*portrait\)[\s\S]*?body\[data-width="narrow"\] \.dh-tabs/,
-    "portrait 2×3 destinations use the zoom-aware width flag");
+  assert.match(data, /body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tabs/,
+    "portrait 2×3 destinations use the zoom-aware shape+width flags (not @media orientation)");
   assert.match(menus, /#ss-inner\[data-density="compact"\] #ss-cal \.season-upcoming-row[^{]*\{[^}]*flex-wrap:\s*wrap/);
 });
 
