@@ -1,6 +1,6 @@
 # Testing reference
 
-114 root Playwright spec files (`tests/specs/*.spec.js`) + 124 `node --test` unit suites
+114 root Playwright spec files (`tests/specs/*.spec.js`) + 125 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -902,6 +902,7 @@ what it covers.
 | `docs-integrity.test.mjs` | live docs, skills AND source comments reference only files that exist; AGENTS.md's suite counts, the scenery-api member count, the renderer-backend list, and the skills/tools/docs indexes all match the repo |
 | `skill-progressive.test.mjs` | mcp-probe SKILL.md stays a thin index (≤120 lines) with traps/recipes in `references/`; previously-fat skills stay split (index ≤180 + the named reference file) |
 | `css-play.test.mjs` | `tools/css-play.mjs` parse/list/hot-swap contract and the Playwright wrapper's `play`/`dom` commands — screen ids are a subset of layout-audit, `--css` stays inside `css/`, `--help`/`--list` do not launch Chromium, the tool never calls bump-cache mid-loop |
+| `menu-capture.test.mjs` | `layout-audit.mjs` / `menu-capture.mjs` CLI contracts — `--gallery`, `--list`, `--help`, `--survey` argv parsing, cell resume paths, and screen catalog coverage (no browser) |
 | `test-groups.test.mjs` | the taxonomy: pick-tests rules name real groups and route every source dir; this document lists every group and every test file; `RENDER_SPECS` partitions cleanly; the manual suites stay out of default discovery |
 | `circuit-def-fields.test.mjs` | every field authored in `js/circuits/<id>.js` survives the field-by-field copy into `Tracks.LIST`, or is named engine-only with a reason — an uncopied field reads as `undefined` at every consumer, silently, and the circuit renders as though it was never written |
 | `backend-surface-parity.test.mjs` | every name GLX publishes is an own property of WGX and TLX (`undefined` allowed, absent not) — game.js installs a backend by descriptor-copy, so an absent name keeps GLX's own function running against a null `gl`/`CHK`, and every feature test for it passes before throwing |

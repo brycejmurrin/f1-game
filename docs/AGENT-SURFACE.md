@@ -157,7 +157,7 @@ names the CLI.
 | `apex_wgx_capture` | `wgx-capture.mjs` | browser | webgpu-debug |
 | `apex_wgx_shot` | `wgx-shot.mjs` | browser | webgpu-debug |
 | `apex_quick_validate` | `quick-validate.mjs` | browser | check-changes |
-| `apex_ui_survey` | `layout-audit.mjs --survey` (via `ui-survey.mjs`) | browser | survey-ui-matrix |
+| `apex_ui_survey` | `ui-survey.mjs` | browser | survey-ui-matrix |
 
 Pins the wrap always applies (you cannot override them):
 
