@@ -1134,12 +1134,15 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   }
 
   // Cook-Torrance sun specular, soft-clipped so highlights sheen not clip.
-  let Dg = D_GGX(NoH, a);
-  let Vg = V_SmithGGX(NoV, NoL, a);
-  let Fg = F_Schlick(VoH, f0, clamp(1.0 - rough, 0.0, 1.0));
-  var specCol = (Dg * Vg) * Fg * F.sunColor.xyz * litNoL;
-  specCol = specCol / (1.0 + specCol);
-  color = color + specCol;
+  // specCol is * litNoL; a backface paid two GGX evals for 0.
+  if (NoL > 0.0) {
+    let Dg = D_GGX(NoH, a);
+    let Vg = V_SmithGGX(NoV, NoL, a);
+    let Fg = F_Schlick(VoH, f0, clamp(1.0 - rough, 0.0, 1.0));
+    var specCol = (Dg * Vg) * Fg * F.sunColor.xyz * litNoL;
+    specCol = specCol / (1.0 + specCol);
+    color = color + specCol;
+  }
 
   // Specular AA variance for clearcoat + lacquer env disc (GLX parity).
   // ccDx/ccDy are hoisted to uniform control flow (see where Ngeo is bound).
@@ -1156,6 +1159,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let NoHg = max(dot(Ngeo, Hg), 0.0);
     let NoVg = max(dot(Ngeo, V), 1e-4);
     let NoLg = max(dot(Ngeo, L), 0.0);
+    if (NoLg > 0.0) {
     // Specular AA (GLX parity): widen the fixed lobe by the geometric-normal
     // variance so the streak stops strobing on tight curvature; flat panels
     // keep the crisp 0.035. Capped so silhouette edges can't matte it out.
@@ -1169,6 +1173,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     var ccCol = vec3<f32>(Dc * Vc * Fc) * F.sunColor.xyz * NoLg * shadow * keyMul * clearcoat;
     ccCol = 2.6 * ccCol / (2.6 + ccCol);
     color = color + ccCol;
+    }
   }
 
   // [Block 7] ENV lacquer mirror (GLX energy-conserving clearcoat env — lit.js).
@@ -1327,7 +1332,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // WINDOW SUN FLASH (params9.z = uWindowSunFlash): dry glossy glass catches
     // a tight sun glint. Gated (1-wetSheen) so wet road is unchanged; night
     // moonlight is naturally negligible (GLX js/render/shaders/lit.js).
-    envColor = envColor + F.sunColor.xyz * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wetSheen) * envBlend * 0.6 * F.params9.z * keyMul;
+    // * (1-wetSheen): a fully-wet road paid pow(_,22) for a result of 0.
+    if ((1.0 - wetSheen) * F.params9.z * keyMul > 0.001) {
+      envColor = envColor + F.sunColor.xyz * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wetSheen) * envBlend * 0.6 * F.params9.z * keyMul;
+    }
     let ef0 = F_Schlick(max(dot(N, V), 0.0), vec3<f32>(0.04), 1.0).x;
     let envFresnel = mix(ef0, ef0 * ef0, wetSheen * 0.35);
     let envWet = envColor * (1.0 - wetSheen * 0.45);
@@ -1383,62 +1391,66 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     color = color + albedo * glow * F.params1.y * (1.0 + hdrTag * F.params7.z);   // params1.y = uGlowAmp
   }
 
-  // Height-based fog + sun in-scatter (GLX LIT_FS js/render/shaders/lit.js; lamp-fog /
-  // ground-mist volumetrics deferred to Phase 4).
+  // Height-based fog + sun in-scatter (GLX LIT_FS js/render/shaders/lit.js).
+  // Same dummy-producer gate as GLX: skip pow/exp when density and mist are off.
   let fogDensity = F.params0.x;
-  let fogHeight  = F.params0.y;
-  var heightAtten = 1.0;
-  if (fogHeight > 0.0) {
-    heightAtten = exp(-max(in.wpos.y - F.eye.y, 0.0) * fogHeight);
-  }
-  let fd = vDist * fogDensity * heightAtten;
-  let fAmt = 1.0 - exp(-fd * fd);
-  let rd = normalize(in.wpos - F.eye.xyz);
-  let sunAmt = max(dot(rd, F.sunDir.xyz), 1e-4);   // floor: pow(0,n) NaNs on mobile
-  var fogCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 4.0));
-  // FOG SUN CORE knob (F.params6.w; GLX parity, def 0.6). Read directly — 0 is a
-  // valid "no hot core", so the uploader always packs the resolved value.
-  fogCol = fogCol + F.sunColor.xyz * pow(sunAmt, 16.0) * F.params6.w;
-  // FOG WARM / COOL white-balance (params3.y; GLX uFogTint asymmetric mix).
-  let fTint = F.params3.y;
-  fogCol = fogCol * vec3<f32>(
-    1.0 + max(fTint, 0.0) * 0.25 - max(-fTint, 0.0) * 0.12,
-    1.0 - abs(fTint) * 0.02,
-    1.0 - max(fTint, 0.0) * 0.25 + max(-fTint, 0.0) * 0.18);
-  // [Block 6 — lamp-fog] Nearby floodlights/neon tint the DISTANT fog wall so it
-  // glows around the lamps at night (mirrors GLX LIT_FS; F.params8.x = uLampFog).
-  var lampFogC = vec3<f32>(0.0);
-  if (F.params8.x > 0.0) {
-    let lf = lampFog * F.params8.x;
-  // FOG LAMP CLIP knob (F.params7.x = uLampFogClip, def 0.7; GLX js/render/shaders/lit.js):
-  // scales the soft-clip denominator so a lamp cluster can never push the fog wall
-  // past the night bloom threshold into a white wash. lampFogC is reused by the
-  // ground-mist glow below, so the knob shapes both halos.
-    lampFogC = lf / (1.0 + max(max(lf.r, lf.g), lf.b) * F.params7.x);
-    fogCol = fogCol + lampFogC;
-  }
-  color = mix(color, fogCol, fAmt);
-
-  // [Block 6 — ground mist] Low drifting FBM haze pooling near the surface (mirrors
-  // GLX LIT_FS js/render/shaders/lit.js). GROUND MIST (params3.z) carries frame.groundMist ×
-  // mistDensity (uploaded wgx.js d[78], == GLX uGroundMist) and gates the whole block
-  // exactly like GLX (if uGroundMist > 0.001) — no fogDensity proxy, so clear/dry
-  // air is a true no-op. MIST HEIGHT (params3.w) sets the vertical falloff.
   let mistK = max(F.params3.z, 0.0);
-  if (mistK > 0.001) {
-    let mh = max(F.params3.w, 0.05);
-    let lowH = max(in.wpos.y - (F.eye.y - 5.0), 0.0);
-    // GLX parity (lit.js): band = exp(-lowH * (0.09 / mh)). The old WGX form
-    // exp(-lowH/(mh*20)) == exp(-lowH*0.05/mh) fell off ~1.8× too slowly and
-    // the extra *0.5 + 0.35 clamp stacked a denser low sheet than GLX's 0.45
-    // ceiling — a washed translucent band over the road on misty day circuits.
-    let band = exp(-lowH * (0.09 / mh));
-    let mp = in.wpos.xz * 0.020 + vec2<f32>(F.params0.z * 0.010, F.params0.z * 0.006);
-    let dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
-    let mistAmt = mistK * band * smoothstep(0.35, 0.72, fbm(mp)) * dRamp;
-    // MIST GLOW SHARE knob (F.params5.w; GLX uMistShare parity, def 1.5).
-    let mistCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 3.0)) + lampFogC * F.params5.w;
-    color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.45));
+  if (fogDensity > 0.0 || mistK > 0.001) {
+    let rd = normalize(in.wpos - F.eye.xyz);
+    let sunAmt = max(dot(rd, F.sunDir.xyz), 1e-4);   // floor: pow(0,n) NaNs on mobile
+    // [Block 6 — lamp-fog] Nearby floodlights/neon tint the DISTANT fog wall so it
+    // glows around the lamps at night (mirrors GLX LIT_FS; F.params8.x = uLampFog).
+    var lampFogC = vec3<f32>(0.0);
+    if (F.params8.x > 0.0) {
+      let lf = lampFog * F.params8.x;
+    // FOG LAMP CLIP knob (F.params7.x = uLampFogClip, def 0.7; GLX js/render/shaders/lit.js):
+    // scales the soft-clip denominator so a lamp cluster can never push the fog wall
+    // past the night bloom threshold into a white wash. lampFogC is reused by the
+    // ground-mist glow below, so the knob shapes both halos.
+      lampFogC = lf / (1.0 + max(max(lf.r, lf.g), lf.b) * F.params7.x);
+    }
+    if (fogDensity > 0.0) {
+      let fogHeight  = F.params0.y;
+      var heightAtten = 1.0;
+      if (fogHeight > 0.0) {
+        heightAtten = exp(-max(in.wpos.y - F.eye.y, 0.0) * fogHeight);
+      }
+      let fd = vDist * fogDensity * heightAtten;
+      let fAmt = 1.0 - exp(-fd * fd);
+      var fogCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 4.0));
+      // FOG SUN CORE knob (F.params6.w; GLX parity, def 0.6). Read directly — 0 is a
+      // valid "no hot core", so the uploader always packs the resolved value.
+      fogCol = fogCol + F.sunColor.xyz * pow(sunAmt, 16.0) * F.params6.w;
+      // FOG WARM / COOL white-balance (params3.y; GLX uFogTint asymmetric mix).
+      let fTint = F.params3.y;
+      fogCol = fogCol * vec3<f32>(
+        1.0 + max(fTint, 0.0) * 0.25 - max(-fTint, 0.0) * 0.12,
+        1.0 - abs(fTint) * 0.02,
+        1.0 - max(fTint, 0.0) * 0.25 + max(-fTint, 0.0) * 0.18);
+      fogCol = fogCol + lampFogC;
+      color = mix(color, fogCol, fAmt);
+    }
+
+    // [Block 6 — ground mist] Low drifting FBM haze pooling near the surface (mirrors
+    // GLX LIT_FS js/render/shaders/lit.js). GROUND MIST (params3.z) carries frame.groundMist ×
+    // mistDensity (uploaded wgx.js d[78], == GLX uGroundMist) and gates the whole block
+    // exactly like GLX (if uGroundMist > 0.001) — no fogDensity proxy, so clear/dry
+    // air is a true no-op. MIST HEIGHT (params3.w) sets the vertical falloff.
+    if (mistK > 0.001) {
+      let mh = max(F.params3.w, 0.05);
+      let lowH = max(in.wpos.y - (F.eye.y - 5.0), 0.0);
+      // GLX parity (lit.js): band = exp(-lowH * (0.09 / mh)). The old WGX form
+      // exp(-lowH/(mh*20)) == exp(-lowH*0.05/mh) fell off ~1.8× too slowly and
+      // the extra *0.5 + 0.35 clamp stacked a denser low sheet than GLX's 0.45
+      // ceiling — a washed translucent band over the road on misty day circuits.
+      let band = exp(-lowH * (0.09 / mh));
+      let mp = in.wpos.xz * 0.020 + vec2<f32>(F.params0.z * 0.010, F.params0.z * 0.006);
+      let dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
+      let mistAmt = mistK * band * smoothstep(0.35, 0.72, fbm(mp)) * dRamp;
+      // MIST GLOW SHARE knob (F.params5.w; GLX uMistShare parity, def 1.5).
+      let mistCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 3.0)) + lampFogC * F.params5.w;
+      color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.45));
+    }
   }
 
   return vec4<f32>(color, select(alpha, 0.35, carPaint > 0.001));
@@ -1669,6 +1681,9 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
       let az = vnoise(vec2<f32>(atan2(dir.z, dir.x) * 2.2, up * 6.0)) - 0.5;
       c = c * (1.0 + az * 0.05 * daytime * (1.0 - overcast) * (1.0 - smoothstep(0.0, 0.5, up)));
     }
+    // Golden-hour + low-sun band: both amounts are 0 when sunE >= 0.72
+    // (GLX SKY_FS). Default day / night moon-key skip; dawn/dusk still enter.
+    if (sunE < 0.72) {
     // Golden-hour warm band near the horizon when the sun is low.
     let goldenAmt = (1.0 - smoothstep(0.0, 0.72, sunE)) * (1.0 - smoothstep(0.0, 0.32, up))
                   * (1.0 - overcast * 0.9);
@@ -1682,6 +1697,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let lowColor = mix(vec3<f32>(0.90, 0.26, 0.03), vec3<f32>(1.0, 0.66, 0.12),
                        clamp(sunE * 3.0, 0.0, 1.0));
     c = mix(c, lowColor, lowBand * 0.70);
+    }
   } else {
     let gnd = clamp(-up * 5.0, 0.0, 1.0);
     c = mix(U.horizon.xyz * 0.85, vec3<f32>(0.035, 0.030, 0.022), gnd * gnd);
@@ -1742,18 +1758,22 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let upPos = max(up, 0.0);
   // MIE SCATTER knob (clamp keeps the mix blend valid past 1).
   c = mix(c, sunColor, clamp(pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieScatter, 0.0, 1.0));
-  let golden = 1.0 - smoothstep(0.0, 0.45, sunE);
-  let coronaDamp = 1.0 - nightSky;
-  let sunWarm = mix(sunColor, sunColor * vec3<f32>(1.18, 0.52, 0.24), golden);
-  c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * coronaAureole;   // SUN AUREOLE knob
-  c = c + sunWarm * pow(sd, 300.0) * 0.95 * sunCorona * coronaDamp;   // SUN CORONA RING knob
-  let dd = dir - sunDir * sd;
-  // SUN HORIZON SQUASH knob: scales the golden-hour vertical squash of the disc.
-  let perp = length(vec2<f32>(length(dd.xz), dd.y * mix(1.0, mix(1.0, 1.6, golden), sunSquash)));
-  // SUN DISC SIZE knob: scale both smoothstep edges to grow/shrink the disc.
-  let disc = smoothstep(mix(0.018, 0.028, golden) * sunDiscSize, 0.006 * sunDiscSize, perp) * coronaDamp;
-  let discCore = mix(vec3<f32>(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
-  c = c + discCore * disc;
+  // SKIP THE WHOLE BLOCK ON A NIGHT FRAME (GLX SKY_FS) — don't mul-to-zero.
+  // uStars/nightSky is a uniform, so the branch is uniform control flow.
+  if (nightSky < 0.5) {
+    let golden = 1.0 - smoothstep(0.0, 0.45, sunE);
+    let coronaDamp = 1.0 - nightSky;
+    let sunWarm = mix(sunColor, sunColor * vec3<f32>(1.18, 0.52, 0.24), golden);
+    c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * coronaAureole;   // SUN AUREOLE knob
+    c = c + sunWarm * pow(sd, 300.0) * 0.95 * sunCorona * coronaDamp;   // SUN CORONA RING knob
+    let dd = dir - sunDir * sd;
+    // SUN HORIZON SQUASH knob: scales the golden-hour vertical squash of the disc.
+    let perp = length(vec2<f32>(length(dd.xz), dd.y * mix(1.0, mix(1.0, 1.6, golden), sunSquash)));
+    // SUN DISC SIZE knob: scale both smoothstep edges to grow/shrink the disc.
+    let disc = smoothstep(mix(0.018, 0.028, golden) * sunDiscSize, 0.006 * sunDiscSize, perp) * coronaDamp;
+    let discCore = mix(vec3<f32>(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
+    c = c + discCore * disc;
+  }
 
   // --- Stars ---
   if (stars > 0.5 && up > 0.05) {

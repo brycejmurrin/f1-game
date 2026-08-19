@@ -489,6 +489,7 @@
       P.composite.tex.ssao.value = haveAO ? ssaoRT.texture : whiteTex;
       C.aoTexel.value.set(haveAO ? 1 / aoW : 0, haveAO ? 1 / aoH : 0);
       P.composite.tex.godray.value = haveGR ? godrayRT.texture : blackTex;
+      C.haveGodray.value = haveGR ? 1 : 0;
       // Sun screen-UV projection + the _sunGate brightness gate + golden-hour
       // flare curve (js/render/shaders/post.js verbatim).
       let sunUVx = -2, sunUVy = -2, flareStr = 0, sunShaft = 0;

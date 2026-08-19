@@ -158,12 +158,12 @@ uniform float uStrength;
 uniform float uContact;  // contact-shadow strength (0 = off)
 uniform float uRadius;   // AO world-space sample reach (def 0.6)
 out vec4 outColor;
-vec3 viewPos(vec2 uv) {
-  float d = texture(uDepth, uv).r;
+vec3 viewPosD(vec2 uv, float d) {
   vec4 c = vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
   vec4 v = uInvProj * c;
   return v.xyz / v.w;
 }
+vec3 viewPos(vec2 uv) { return viewPosD(uv, texture(uDepth, uv).r); }
 const vec2 K[12] = vec2[12](
   vec2(0.0,1.0), vec2(0.5,0.866), vec2(0.866,0.5),
   vec2(1.0,0.0), vec2(0.866,-0.5), vec2(0.5,-0.866),
@@ -172,7 +172,7 @@ const vec2 K[12] = vec2[12](
 void main() {
   float d = texture(uDepth, vUV).r;
   if (d >= 0.99999) { outColor = vec4(1.0); return; }   // sky
-  vec3 P = viewPos(vUV);
+  vec3 P = viewPosD(vUV, d);
   // Guarded: at depth silhouettes the derivatives can be parallel/zero and
   // normalize(0) is NaN — a speckled AO pixel. Fall back to eye-facing.
   vec3 crN = cross(dFdx(P), dFdy(P));
@@ -204,7 +204,8 @@ void main() {
     float ca = cos(a), sa = sin(a);
     for (int i = 0; i < 8; i++) {   // 12→8 taps (half-res + blurred)
       vec2 k = vec2(K[i].x * ca - K[i].y * sa, K[i].x * sa + K[i].y * ca);
-      vec3 S = viewPos(clamp(vUV + k * scr, vec2(0.001), vec2(0.999)));
+      vec2 suv = clamp(vUV + k * scr, vec2(0.001), vec2(0.999));
+      vec3 S = viewPos(suv);
       vec3 V = S - P;
       float len = length(V);
       // Occluder must rise above the tangent plane (dot>bias) and be within radius.
@@ -430,17 +431,20 @@ void main() {
   }
   accum /= float(N);
   lampAccum *= uMist * uLampStr * 2.0 / float(N);
-  // Henyey-Greenstein phase (g=0.60 = a wider forward lobe so the shafts read
-  // across a broader arc, not only when staring straight at the sun) + a small
-  // isotropic floor so lit haze glows everywhere, giving an atmospheric volume.
-  float cosT = max(dot(rd, uSunDir), 0.0);
-  // GOD-RAY FOCUS knob (def 0.60 = as-shipped); clamped <0.95 to keep the HG
-  // denominator well-behaved. GOD-RAY HAZE knob (def 0.020) is the isotropic floor.
-  float g = clamp(uHgAniso, 0.0, 0.95);
-  float hgD = 1.0 + g * g - 2.0 * g * cosT;   // >= (1-g)^2 > 0 at the clamp, sqrt safe
-  float hg = (1.0 - g * g) / (hgD * sqrt(hgD));   // == pow(d, 1.5) minus the transcendental
-  float phase = hg * 0.16 + uHgFloor;
-  outColor = vec4(uSunColor * accum * phase * uStr + lampAccum, 1.0);
+  // Henyey-Greenstein phase. Sole consumer is * uStr — night haveGR is
+  // lampVol with uStr=0, so the sqrt was identity 0. Uniform-coherent.
+  vec3 sunTerm = vec3(0.0);
+  if (uStr > 0.0) {
+    float cosT = max(dot(rd, uSunDir), 0.0);
+    // GOD-RAY FOCUS knob (def 0.60 = as-shipped); clamped <0.95 to keep the HG
+    // denominator well-behaved. GOD-RAY HAZE knob (def 0.020) is the isotropic floor.
+    float g = clamp(uHgAniso, 0.0, 0.95);
+    float hgD = 1.0 + g * g - 2.0 * g * cosT;   // >= (1-g)^2 > 0 at the clamp, sqrt safe
+    float hg = (1.0 - g * g) / (hgD * sqrt(hgD));   // == pow(d, 1.5) minus the transcendental
+    float phase = hg * 0.16 + uHgFloor;
+    sunTerm = uSunColor * accum * phase * uStr;
+  }
+  outColor = vec4(sunTerm + lampAccum, 1.0);
 }`;
 
   // Composite: scene + bloom, filmic ACES tone-map, colour grading, sun shafts,
@@ -453,6 +457,7 @@ uniform sampler2D uBloom;
 uniform sampler2D uSSAO;     // ambient occlusion (1 = unoccluded)
 uniform vec2 uAOTexel;       // 1/ssaoW, 1/ssaoH (half-res grid) — 0 when AO is off
 uniform sampler2D uGodray;   // additive volumetric sun shafts
+uniform float uHaveGodray;   // 1 when the CPU ran the pass (0 = skip the fetch)
 uniform float uBloomAmt;
 uniform float uBloomKnee;    // how much bloom is suppressed over bright pixels (def 0.5)
 uniform vec2 uSunUV;
@@ -709,7 +714,9 @@ void main() {
   // pixel keep their bilinear weights, re-weighted by how close each tap's
   // depth is to THIS pixel's full-res depth — taps that belong to the other
   // side of an edge lose their vote, so AO stays pinned to its own surface.
-  // uAOTexel is zeroed when AO is off (1×1 white bound): plain fetch, no cost.
+  // uAOTexel is zeroed when AO is off: the else IS the AO-off path, so aoV
+  // is 1.0 with no fetch. The old 1x1 white sample was multiplied-by-one waste
+  // (same shape as the taken uSunShaft / dummy-producer gates).
   float aoV = 1.0;
   if (uAOTexel.x > 0.0) {
     float aoDc = texture(uDepth, vUV).r;
@@ -732,13 +739,12 @@ void main() {
       aoW += w;
     }
     aoV = aoSum / aoW;
-  } else {
-    aoV = texture(uSSAO, vUV).r;
   }
   c *= aoV;
 
   // Volumetric sun shafts: additive in-scattered sunlight (0 when disabled).
-  c += texture(uGodray, vUV).rgb;
+  // uHaveGodray is 0 when the CPU skipped the pass (1x1 black was bound).
+  if (uHaveGodray > 0.5) c += texture(uGodray, vUV).rgb;
 
   // ── Wet-road screen-space reflection ────────────────────────────────────────
   // The neon city and lit windows are emissive geometry (not point lights), so
@@ -1087,15 +1093,23 @@ void main() {
 
   // Improved bloom: add with a mild tone-aware mask so it doesn't wash out
   // already-bright pixels (reduce bloom addition proportionally in highlights).
-  vec3 bloomSample = texture(uBloom, vUV).rgb;
-  // uBloomKnee (BLOOM ON HIGHLIGHTS) scales the highlight suppression: 0 = bloom
-  // everything evenly (milky), 1 = strongly hold bloom off blown pixels (crisp).
-  float bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.7, 0.0, 0.3) / 0.3 * uBloomKnee;
-  // Scale by uExposure to match the scene: the bright-pass samples the RAW
-  // pre-exposure HDR target, but the scene above is already multiplied by
-  // uExposure. Without this, a driven exposure (0.86–0.90 at night) dimmed the
-  // scene while the halos kept full pre-exposure energy — over-strong bloom.
-  c += bloomSample * uBloomAmt * bloomMask * uExposure;
+  // Skip the fetch when the CPU shed the chain (uBloomAmt == 0); dirt then
+  // multiplies vec3(0) and is also a no-op. Same dummy-producer shape as
+  // the taken uSunShaft gate. The SCREEN SUN-SHAFT block below also reads
+  // uBloom — gate it on the same uniform so a shed chain is not 8 black taps.
+  vec3 bloomSample = vec3(0.0);
+  float bloomMask = 1.0;
+  if (uBloomAmt > 0.001) {
+    bloomSample = texture(uBloom, vUV).rgb;
+    // uBloomKnee (BLOOM ON HIGHLIGHTS) scales the highlight suppression: 0 = bloom
+    // everything evenly (milky), 1 = strongly hold bloom off blown pixels (crisp).
+    bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.7, 0.0, 0.3) / 0.3 * uBloomKnee;
+    // Scale by uExposure to match the scene: the bright-pass samples the RAW
+    // pre-exposure HDR target, but the scene above is already multiplied by
+    // uExposure. Without this, a driven exposure (0.86–0.90 at night) dimmed the
+    // scene while the halos kept full pre-exposure energy — over-strong bloom.
+    c += bloomSample * uBloomAmt * bloomMask * uExposure;
+  }
 
   // LENS DIRT veil: grime on the lens scatters incoming light into a smudgy
   // film. Driven by the blurred bright-pass, so it only appears where the frame
@@ -1110,7 +1124,9 @@ void main() {
   // Sun shafts / god-rays: radial samples from current pixel toward the sun's
   // screen position, reading the bright-pass (bloom[0] after bright-pass step).
   // Additively composited. Gated when uSunShaft > 0 (sun on-screen, above horizon).
-  if (uSunShaft > 0.0) {
+  // Also requires bloom: every tap is texture(uBloom), and a shed chain is
+  // bound as 1×1 black (or stale on WGX) so the 8 fetches were * 0.
+  if (uSunShaft > 0.0 && uBloomAmt > 0.001) {
     vec2 toSun = uSunUV - vUV;
     float dist = length(toSun);
     // Only cast rays when we're not right on top of the sun (avoid div-zero).

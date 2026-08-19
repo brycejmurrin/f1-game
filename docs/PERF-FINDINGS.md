@@ -927,19 +927,129 @@ GC is not: every AI car built a fresh `samples[]` of `{d,k,bank}` rows
 > **TAKEN 2026-08-18.** `AiDrive.traits` / `brakeDecision` write reused
 > scratches (read-before-next-call, same as `_ct`). `beginLook` /
 > `pushLook` / `endLook` recycle the look-ahead rows. Values are
-> bit-identical; do not re-allocate those three. Left on the table:
-> `wantBoost` / `otShouldFire` / `adaptLane` call-site ctx literals in
-> `updateCar` (3–4 small objects/car, not the sample fan-out).
+> bit-identical; do not re-allocate those three.
+>
+> **TAKEN 2026-08-19.** The leftover call-site ctx literals are gone too.
+> `updateCar` fills `_aiBoost` / `_aiOtFire` / `_aiBr` / `_aiLane` /
+> `_aiWantX` / `_aiOtPull` / `_aiDefend` / `_aiBoxed` then passes the
+> scratch. `simRnd()` stays behind the `otArmed` short-circuit. Guarded
+> by `tests/unit/ai-drive.test.mjs` (no `AiDrive.*( {` in `updateCar`)
+> and `tests/specs/physics-hotpath.spec.js` (ctx identity across steps).
+> Do not re-introduce object literals at those eight call sites.
 >
 > **TAKEN 2026-08-18 (leftover sweep).** WGX road `createChunkedMesh` now
-> expand-once + spatial bins (camera still skips frustum cull on
-> `surfaceId === 16`; shadow `castShadowChunked` culls AABBs). Props/glass
-> share one IBO with `firstIndex` run-merge. TLX `uf1` skips unchanged
-> tuner scalars. `resolveCollisions` rebuilds buckets only after
-> `shiftLong`. AI scans skip `finished` rivals. SW install no longer
-> precaches `apex.js` / `agentview*` (fetch-miss still caches them).
-> Still open: lazy circuit tags, script-tag `defer`, WGX whole-UBO skip
-> (view/eye/time change every driving frame).
+> expand-once + spatial bins. Props/glass share one IBO with `firstIndex`
+> run-merge. TLX `uf1` skips unchanged tuner scalars. `resolveCollisions`
+> rebuilds buckets only after `shiftLong`. AI scans skip `finished`
+> rivals. SW install no longer precaches `apex.js` / `agentview*`
+> (fetch-miss still caches them).
+>
+> **TAKEN 2026-08-19 (render leftover).** WGX `drawChunked` now frustum +
+> radial-culls the road (surfaceId 16) — near is GL clip `w+z`, the old
+> exemption threw away the env-probe 300 m cap. WGSL/TSL sky skip the
+> night corona/disc (GLX already had the gate); TSL also gates the
+> day-band `atan`+`vnoise`. TLX shadow `cullInstances(..., {upload:false})`
+> packs CPU-side only (shadow has its own InstancedMesh). WGX skid
+> expand 5→9 only when the VBO is dirty. Still open: lazy circuit tags,
+> script-tag `defer`, WGX whole-UBO skip, TLX road `trk` so
+> `chunkedTrackCoords` can flip on.
+>
+> **TAKEN 2026-08-19 (render leftover 2).** Countable dummy-producer /
+> multiplied-by-zero leftovers on the draw path, all three backends:
+> - Sun Cook-Torrance + clearcoat sun lobe gated on `NoL` / `NoLg`
+>   (lamp `NoLl` twin). Backfaces skip two GGX evals for a result of 0.
+> - Composite else-path no longer fetches the 1×1 white SSAO / black
+>   bloom; `uHaveGodray` skips the god-ray fetch on GLX/TLX. WGX leftover 6
+>   packs haveGR in CompositeU `lift.w` and skips the same fetch.
+> - SSAO centre uses `viewPosD` / `ssaoViewPosFromD` — one depth sample,
+>   not two. GLSL ES 3.00 has no overloads; the 1-arg `viewPos` wrapper
+>   stays for contact-shadow sites.
+> - MSAA depth resolve / blit only when SSAO, godray, SSR or flare will
+>   read it (auto-tier 4 night sheds all four).
+> - WGX no longer `_clearTarget`s unread SSAO-white / bloom-mip0.
+> - AI cars after the behind-camera / near-eye tests skip an 8 m sphere
+>   outside the same 6 planes as `propBatches`. Player never culled.
+>   The side-frustum `continue` is **after** `_shadowCount++` so a rival
+>   just off a chase FOV still casts into the ±42 m car map (a look-wrong
+>   the first hoist introduced). GLX/TLX `makeFrustumPlanes` honour the
+>   pooled `out`. `needDepth` / WGX `_ssrEarly` treat omitted
+>   `carReflect` as the 0.05 tuner default — otherwise a dry night
+>   skipped the MSAA depth resolve while car-paint SSR still marched.
+>   Guarded by `tests/unit/perf-try.test.mjs`.
+>   Do not invent a millisecond claim. Do not re-open the 08-18 union
+>   banner items (WGX road cull, UBO skip, defer, pine unit-Y, merging
+>   AI loops).
+>
+> **TAKEN 2026-08-19 (render leftover 3).** Fog `pow`/`exp` dummy-producer
+> gate, all three backends. `uFogDensity==0` made `fd==0` / `f==0` so the
+> mix was identity, but every lit fragment still paid `pow(sunAmt,4)`,
+> `pow(sunAmt,16)`, tint, and `1-exp(-fd²)`. Outer gate is
+> `density>0 || mist>0` (mist reuses `sunAmount` / `lampFogC`); inner
+> gate wraps the height/`pow`/mix so a density-0 + mist-on tuner frame
+> still tints. Race sessions keep density > 0 (clear day 0.0008) — this
+> is the setup-preview / carview / tuner-zero path. Uniform-coherent
+> (WebGPU Fundamentals + MDN: skip unused ALU; no warp divergence).
+> Do not invent a millisecond claim. Still open: lazy circuit tags,
+> script `defer`, WGX whole-UBO skip, TLX road `trk` / `chunkedTrackCoords`.
+>
+> **TAKEN 2026-08-19 (render leftover 4).** Window-sun-flash `pow(_,22)`
+> dummy-producer, all three backends. The term is
+> `* (1-wetSheen) * envBlend * uWindowSunFlash * uKeyMul`. Wet road
+> forces `envBlend` high, then multiplies the flash by 0 — every wet
+> tarmac fragment paid the 22-exponent for identity. Gate is
+> `(1-wetSheen)*uWindowSunFlash*uKeyMul > 0.001` (tuner-zero and
+> keyMul-0 too). Dry glass is unchanged. Do not invent a millisecond
+> claim. Do not re-open the 08-18 union banner. Still open: lazy
+> circuit tags, script `defer`, WGX whole-UBO skip, TLX road `trk`.
+>
+> **TAKEN 2026-08-19 (render leftover 5).** Sky golden-hour + low-sun
+> band dummy-producer, all three backends. First factor is
+> `(1-smoothstep(0, 0.72, sunE))` / `(1-smoothstep(0, 0.60, sunE))` —
+> both identically 0 when `sunE >= 0.72` (default day ~0.95, night
+> moon-key ~1). Gate is `if (sunE < 0.72)` / `If(sunE.lessThan(0.72))`
+> wrapping `goldenAmt` + `lowBand`. `sunE` is a uniform (`uSunDir.y`).
+> Dawn/dusk still enter. Uniform-coherent. Do not invent a millisecond
+> claim. Still open: lazy circuit tags, script `defer`, WGX whole-UBO
+> skip, TLX road `trk`.
+>
+> **TAKEN 2026-08-19 (render leftover 6).** WGX composite godray fetch
+> dummy-producer. After SSR remul, `U.lift.w` (s[47]) is dead — wetness
+> lives in the SSR pass `.a`. Pack `s[47] = haveGR ? 1 : 0` and gate
+> `if (U.lift.w > 0.5) { c += textureSampleLevel(godrayTex…) }`. Keep
+> `let ssrWet = U.lift.w` so Dawn still compiles a leftover use. Delete
+> the dummy `_clearTarget(godrayView)` (stale contents unread, same as
+> leftover-2 SSAO/bloom) and the now-dead `_clearTarget` helper. Do not grow CompositeU past 256 B. Do not
+> zero `gain.w` carReflect when `!_ssrReady`. Do not invent a
+> millisecond claim. Still open: lazy circuit tags, script `defer`,
+> WGX whole-UBO skip, TLX road `trk`.
+>
+> **TAKEN 2026-08-19 (render leftover 7).** Sky twilight cloud wash
+> `pow(sd, 2.5) * twilight`. `twilight` is a uniform
+> (`smoothstep(0.02,0.22,sunE) * (1-dayGate) * (1-nightSky)`) —
+> identically 0 on default day (~0.95) and night. Default `cloud` is
+> 0.4 so the cloud block is live; the pow was `* 0`. Gate
+> `if (twilight > 0.001)` on GLSL + TSL. WGSL cloud path has no
+> twilight wash. Dawn/dusk still enter.
+>
+> **TAKEN 2026-08-19 (render leftover 8).** TSL godray sun-half +
+> `hLamp` parity with GLSL/WGSL. Night `haveGR` is `lampVol` with
+> `uStr=0` (moon-key `sunDir.y ~ 0.97`) — TSL still paid 16 shadow
+> compares + 16× `gCloud` FBM then `* str`. `hLamp` exp sat outside
+> `lampStr>0` (every daytime sun-shaft frame). Move both behind the
+> existing uniform gates; `trans` stays outside. Also reorder TSL
+> heat-haze: Gaussian first, scene-tag fetch second (GLX/WGSL already
+> had this — ~92% of pixels are off-plume).
+>
+> **TAKEN 2026-08-19 (render leftover 9).** Godray Henyey-Greenstein
+> `sqrt` dummy-producer, all three backends. The phase's only
+> consumer is `* uStr`. Night lamp-vol frames skip it. Uniform-coherent.
+>
+> **TAKEN 2026-08-19 (render leftover 10).** WGX SSR pass omitted
+> `carReflect` defaulted to 0 while leftover-2's `_ssrEarly` and
+> composite `gain.w` already use the 0.05 tuner default. HIGH dry paid
+> the MSAA depth resolve, skipped the march, then COMPOSITE fetched a
+> target that never ran. The pass now defaults to 0.05 like GLX
+> `_carReflPre`. Do not zero `gain.w`.
 
 **`uCarReflect` is not shed with `po.reflect`.** Tier 2 sets `po.reflect = 0`
 and the source says "Tier 2 drops the wet-road SSR march" — but the SSR gate is

@@ -1,6 +1,6 @@
 # Testing reference
 
-114 root Playwright spec files (`tests/specs/*.spec.js`) + 124 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 124 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -232,7 +232,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 
 | Group | What it runs |
 |---|---|
-| `physics` | the driving model itself: physics-characterization, physics-fixes, longitudinal, projection, understeer-cue. world-physics and active-aero bill to `behaviour`, elevation-tracks to `circuit`. The 16 per-circuit foundation specs LEFT this group — they contain no driving-model physics, and the `physics-` filename prefix existed only to be caught by this glob, so every driving-model edit paid ~16 circuit builds it could not break while `js/circuits/` edits never ran them. Misgrouped in both directions |
+| `physics` | the driving model itself: physics-characterization, physics-fixes, physics-hotpath, longitudinal, projection, understeer-cue. world-physics and active-aero bill to `behaviour`, elevation-tracks to `circuit`. The 16 per-circuit foundation specs LEFT this group — they contain no driving-model physics, and the `physics-` filename prefix existed only to be caught by this glob, so every driving-model edit paid ~16 circuit builds it could not break while `js/circuits/` edits never ran them. Misgrouped in both directions |
 | `foundation` | the 16 per-circuit foundation specs (`tests/specs/*-foundation.spec.js`) — required models present, props clear of the racing surface, terrain grounded, water safe, walls sane. Routed from `js/circuits/` and the track engine, which is what actually breaks them |
 | `collision` | car-to-car and wall collision, drift, off-track |
 | `behaviour` | world-physics, active-aero, aero-zones. The collision/drift/offtrack members and physics-fixes LEFT in the double-billing dedupe — each spec was running twice whenever two of its groups co-ran, which `pick-tests` makes routine. Coverage is unchanged: the dedupe shipped WITH new `pick-tests` routing (game.js and physics-consts.js now select `collision` and `hooks` too), verified by comparing the SPEC-FILE union before and after, not the group names |
@@ -689,6 +689,7 @@ what it covers.
 |---|---|
 | `world-physics.spec.js` | the player integrates a bicycle model in WORLD space; `(s, x)` is read back, not authoritative |
 | `physics-fixes.spec.js` | the physics/collision robustness pass |
+| `physics-hotpath.spec.js` | leftover AiDrive ctx literals in `updateCar` stay pooled — wraps the eight helpers and asserts the same scratch object is reused across steps |
 | `longitudinal.spec.js` | longitudinal + grip physics and full-lap progress |
 | `physics-characterization.spec.js` | CHARACTERIZATION of the driving model against a committed baseline — asserts the numbers did not move, not that they are right. Live gate against `tests/data/physics-baseline.json`; regenerate with `APEX_UPDATE_BASELINE=1` and read the diff |
 | `projection.spec.js` | world↔track (Frenet) projection continuity — no lap-distance teleport near hairpins |

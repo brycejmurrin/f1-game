@@ -582,7 +582,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.deepEqual(composite.slice(40, 44), [5, 6, 7, 1],
     "tone1 is whites/toe/shoulder/hdrGradeOn — off-neutral knobs must arm the gate");
   assert.deepEqual(composite.slice(44, 47), [8, 9, 10], "lift RGB must occupy floats 44..46");
-  assert.equal(composite[47], 0, "lift.w is wetness — harness begin() has no wetness");
+  assert.equal(composite[47], 0, "lift.w is haveGR — harness present() has no godray");
   assert.deepEqual(composite.slice(48, 51), [11, 12, 13], "gamma RGB must occupy floats 48..50");
   assert.equal(composite[51], 0, "gamma.w is opts.reflect — harness present() has none");
   assert.deepEqual(composite.slice(52, 55), [14, 15, 16], "gain RGB must occupy floats 52..54");
@@ -946,7 +946,8 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /isRoadDraw \|\| classified > 0\.5/);
   assert.doesNotMatch(WGX_SOURCE, /extra\.decal = true/);
   assert.match(WGX_SOURCE, /depthCompare: decal \? "always"/);
-  assert.match(WGX_SOURCE, /o\.surfaceId !== 16/);
+  assert.match(WGX_SOURCE, /const cull = !!frameViewProj;/);
+  assert.doesNotMatch(WGX_SOURCE, /o\.surfaceId !== 16/);
   assert.doesNotMatch(WGX_SOURCE, /if \(o\.buryRibbon\) return;/);
   assert.match(CHUNKS_SOURCE, /if \(!ff && !isRoadDraw\) \{ N = -N; \}/);
   assert.match(CHUNKS_SOURCE, /if \(isRoadDraw && N\.y < 0\.0\) \{ N = -N; \}/);

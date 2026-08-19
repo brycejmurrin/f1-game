@@ -1184,12 +1184,17 @@ void main() {
   }
 
   // Cook-Torrance specular, soft-clipped so highlights sheen instead of clipping.
-  float D = D_GGX(NoH, a);
-  float Vis = V_SmithGGX(NoV, NoL, a);
-  vec3 F = F_Schlick(VoH, f0, clamp(1.0 - rough, 0.0, 1.0));
-  vec3 specCol = (D * Vis) * F * uSunColor * litNoL;
-  specCol = specCol / (1.0 + specCol);
-  color += specCol;
+  // specCol is * litNoL (= NoL * …). A backface paid GGX + F_Schlick + Reinhard
+  // for a result of exactly 0. Verbatim the lamp GGX gate above. H stays live
+  // (sparkle reads it inside litNoL > 0).
+  if (NoL > 0.0) {
+    float D = D_GGX(NoH, a);
+    float Vis = V_SmithGGX(NoV, NoL, a);
+    vec3 F = F_Schlick(VoH, f0, clamp(1.0 - rough, 0.0, 1.0));
+    vec3 specCol = (D * Vis) * F * uSunColor * litNoL;
+    specCol = specCol / (1.0 + specCol);
+    color += specCol;
+  }
 
   // Specular AA for the CLEARCOAT lobes below: the base-coat saaVar above
   // widens only the base roughness — the fixed-a clearcoat streak and the
@@ -1220,6 +1225,7 @@ void main() {
     float NoHg = max(dot(Ngeo, Hg), 0.0);
     float NoVg = max(dot(Ngeo, V), 1e-4);
     float NoLg = max(dot(Ngeo, L), 0.0);
+    if (NoLg > 0.0) {
     // Widened by the geometric-normal variance (specular AA, same recipe as
     // the base coat): flat panels keep the crisp 0.035 lobe, tight curvature
     // fattens it just enough to stop the per-pixel strobing. Capped so a hard
@@ -1234,6 +1240,7 @@ void main() {
     vec3 ccCol = vec3(Dc * Vc * Fc) * uSunColor * NoLg * shadow * uKeyMul * clearcoat;
     ccCol = 2.6 * ccCol / (2.6 + ccCol);
     color += ccCol;
+    }
   }
 
   // Analytic clearcoat ENV mirror — the lacquer reflects a procedural sky in the
@@ -1360,7 +1367,10 @@ void main() {
     // Dry glossy glass catches the sun too — a tighter, softer glint so day/dawn/dusk
     // windows flash where they face the sun. Gated (1-wet) so wet road is unchanged;
     // night sun is dim moonlight so this is naturally negligible after dark.
-    envColor += uSunColor * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wetSheen) * envBlend * 0.6 * uWindowSunFlash * uKeyMul;   // WINDOW SUN FLASH × KEY LIGHT (def 1.0 = shipped)
+    // * (1-wetSheen): a fully-wet road paid pow(_,22) for a result of 0.
+    if ((1.0 - wetSheen) * uWindowSunFlash * uKeyMul > 0.001) {
+      envColor += uSunColor * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wetSheen) * envBlend * 0.6 * uWindowSunFlash * uKeyMul;   // WINDOW SUN FLASH × KEY LIGHT (def 1.0 = shipped)
+    }
     // Roughness dampens the env contribution: rough surfaces see a blurry flat sky.
     float roughDamp = 1.0 - rough * 0.7;
     // Fresnel: reflection is strongest at grazing angles. On wet ground square
@@ -1429,55 +1439,62 @@ void main() {
 
   // Height-based fog: density falls off exponentially with altitude above eye level.
   // uFogHeight = 0 → uniform (original behaviour); > 0 → pooling fog.
-  float heightAtten = uFogHeight > 0.0
-    ? exp(-max(vWorldPos.y - uEye.y, 0.0) * uFogHeight)
-    : 1.0;
-  float fd = vDist * uFogDensity * heightAtten;
-  float f = 1.0 - exp(-fd * fd);
-  // Sun in-scattering (Inigo Quilez): the fog is NOT a flat colour — when the
-  // view ray points toward the sun, the fog glows toward the sun's colour
-  // (forward Mie scatter), staying neutral away from it. Gives volumetric depth
-  // and makes a low warm sun bleed dramatically through dawn/dusk haze.
-  vec3 rd = -V;   // == normalize(vWorldPos - uEye); V is already normalized above
-  float sunAmount = max(dot(rd, uSunDir), 0.0);
-  // Wider exponent (4) = the warm sun-glow in the haze spreads across a broader
-  // arc of the horizon for a more dramatic sunset; an extra tight core (pow 16)
-  // adds a hot bloom right at the sun.
-  float sunAmt = max(sunAmount, 1e-4);   // floor base: pow(0.0, n) NaNs on mobile GPUs
-  vec3 fogCol = mix(uFogColor, uSunColor, pow(sunAmt, 4.0));
-  // FOG SUN CORE knob (def 0.6 = as-shipped): the tight hot bloom right at the sun.
-  fogCol += uSunColor * pow(sunAmt, 16.0) * uFogSunCore;
-  // FOG WARM / COOL white-balance (uFogTint 0 = neutral, + warm, − cool).
-  fogCol *= vec3(1.0 + max(uFogTint, 0.0) * 0.25 - max(-uFogTint, 0.0) * 0.12,
-                 1.0 - abs(uFogTint) * 0.02,
-                 1.0 - max(uFogTint, 0.0) * 0.25 + max(-uFogTint, 0.0) * 0.18);
-  // GLOWING FOG: nearby lamps tint the fog itself, so fog banks glow around
-  // floodlights and neon at night. Soft-clipped so a lamp cluster can never
-  // push the fog wall past the night bloom threshold into a white wash; the
-  // mix by f below gates it, so clear air (f near 0) gets no halo. Energy
-  // split with the godray pass: godray owns the NEAR air column (Beer-Lambert
-  // decay + range gate), this tint owns the DISTANT fog wall (f grows with
-  // distance) - the two never stack in the same regime.
-  vec3 lampFogC = vec3(0.0);
-  if (uLampFog > 0.0) {
-    vec3 lf = lampFog * uLampFog;
-    lampFogC = lf / (1.0 + max(max(lf.r, lf.g), lf.b) * uLampFogClip);
-    fogCol += lampFogC;
-  }
-  color = mix(color, fogCol, f);
-  // Low-lying GROUND MIST: a drifting FBM fog that pools near the surface (dawn /
-  // humid / overcast). Densest at a low datum, thinning with altitude and ramping
-  // in with distance; broken by a slow-drifting FBM so it rolls rather than a
-  // flat sheet. Tinted by the fog colour with a warm sun in-scatter.
-  if (uGroundMist > 0.001) {
-    float lowH = max(vWorldPos.y - (uEye.y - 5.0), 0.0);
-    // MIST HEIGHT BAND: taller band (bigger uMistHeight) = slower vertical falloff.
-    float band = exp(-lowH * (0.09 / max(uMistHeight, 0.05)));
-    vec2 mp = vWorldPos.xz * 0.020 + vec2(uTime * 0.010, uTime * 0.006);
-    float dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
-    float mist = uGroundMist * band * smoothstep(0.35, 0.72, cloudFBM(mp)) * dRamp;
-    vec3 mistCol = mix(uFogColor, uSunColor, pow(max(sunAmount, 1e-4), 3.0)) + lampFogC * uMistShare;
-    color = mix(color, mistCol, clamp(mist, 0.0, 0.45));
+  // Fog pow/exp + mist share sunAmount / lampFogC. When both producers are
+  // off (setup preview, carview, tuner fog=0 + mist=0) fd==0 so the mix is
+  // identity — skip the stack. Race sessions keep density > 0.
+  if (uFogDensity > 0.0 || uGroundMist > 0.001) {
+    // Sun in-scattering (Inigo Quilez): the fog is NOT a flat colour — when the
+    // view ray points toward the sun, the fog glows toward the sun's colour
+    // (forward Mie scatter), staying neutral away from it. Gives volumetric depth
+    // and makes a low warm sun bleed dramatically through dawn/dusk haze.
+    vec3 rd = -V;   // == normalize(vWorldPos - uEye); V is already normalized above
+    float sunAmount = max(dot(rd, uSunDir), 0.0);
+    // GLOWING FOG: nearby lamps tint the fog itself, so fog banks glow around
+    // floodlights and neon at night. Soft-clipped so a lamp cluster can never
+    // push the fog wall past the night bloom threshold into a white wash; the
+    // mix by f below gates it, so clear air (f near 0) gets no halo. Energy
+    // split with the godray pass: godray owns the NEAR air column (Beer-Lambert
+    // decay + range gate), this tint owns the DISTANT fog wall (f grows with
+    // distance) - the two never stack in the same regime.
+    vec3 lampFogC = vec3(0.0);
+    if (uLampFog > 0.0) {
+      vec3 lf = lampFog * uLampFog;
+      lampFogC = lf / (1.0 + max(max(lf.r, lf.g), lf.b) * uLampFogClip);
+    }
+    if (uFogDensity > 0.0) {
+      float heightAtten = uFogHeight > 0.0
+        ? exp(-max(vWorldPos.y - uEye.y, 0.0) * uFogHeight)
+        : 1.0;
+      float fd = vDist * uFogDensity * heightAtten;
+      float f = 1.0 - exp(-fd * fd);
+      // Wider exponent (4) = the warm sun-glow in the haze spreads across a broader
+      // arc of the horizon for a more dramatic sunset; an extra tight core (pow 16)
+      // adds a hot bloom right at the sun.
+      float sunAmt = max(sunAmount, 1e-4);   // floor base: pow(0.0, n) NaNs on mobile GPUs
+      vec3 fogCol = mix(uFogColor, uSunColor, pow(sunAmt, 4.0));
+      // FOG SUN CORE knob (def 0.6 = as-shipped): the tight hot bloom right at the sun.
+      fogCol += uSunColor * pow(sunAmt, 16.0) * uFogSunCore;
+      // FOG WARM / COOL white-balance (uFogTint 0 = neutral, + warm, − cool).
+      fogCol *= vec3(1.0 + max(uFogTint, 0.0) * 0.25 - max(-uFogTint, 0.0) * 0.12,
+                     1.0 - abs(uFogTint) * 0.02,
+                     1.0 - max(uFogTint, 0.0) * 0.25 + max(-uFogTint, 0.0) * 0.18);
+      fogCol += lampFogC;
+      color = mix(color, fogCol, f);
+    }
+    // Low-lying GROUND MIST: a drifting FBM fog that pools near the surface (dawn /
+    // humid / overcast). Densest at a low datum, thinning with altitude and ramping
+    // in with distance; broken by a slow-drifting FBM so it rolls rather than a
+    // flat sheet. Tinted by the fog colour with a warm sun in-scatter.
+    if (uGroundMist > 0.001) {
+      float lowH = max(vWorldPos.y - (uEye.y - 5.0), 0.0);
+      // MIST HEIGHT BAND: taller band (bigger uMistHeight) = slower vertical falloff.
+      float band = exp(-lowH * (0.09 / max(uMistHeight, 0.05)));
+      vec2 mp = vWorldPos.xz * 0.020 + vec2(uTime * 0.010, uTime * 0.006);
+      float dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
+      float mist = uGroundMist * band * smoothstep(0.35, 0.72, cloudFBM(mp)) * dRamp;
+      vec3 mistCol = mix(uFogColor, uSunColor, pow(max(sunAmount, 1e-4), 3.0)) + lampFogC * uMistShare;
+      color = mix(color, mistCol, clamp(mist, 0.0, 0.45));
+    }
   }
   // Car-paint pixels are TAGGED in alpha (opaque draws never blend, so the
   // channel is free): the composite SSR pass reflects the real world on car
