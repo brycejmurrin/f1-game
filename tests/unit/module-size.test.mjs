@@ -336,10 +336,11 @@ const CEILINGS = {
   // 8635 -> 8512: UI SIZE / HUD SIZE + RESOLUTION moved to js/game/ui-scale.js
   // (UiScale.create(G)). 0 new physics; one deferred G.updateTrackPreview
   // beside buildSelect. Comments moved with the block.
-  // 8512 -> 8448: MY TEAM custom emblem moved to js/game/custom-logo.js
+  // 8512 -> 8449: MY TEAM custom emblem moved to js/game/custom-logo.js
   // (CustomLogo.create(G)). 0 new G members; store / $ / soundOn /
   // invalidateDecalTextures / _spMeshKey already on the façade.
-  "js/game.js": 8448,
+  // 8449 is split("\\n") (trailing newline); not a raise.
+  "js/game.js": 8449,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
