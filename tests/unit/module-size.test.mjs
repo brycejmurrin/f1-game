@@ -336,7 +336,8 @@ const CEILINGS = {
   // 8635 -> 8512: UI SIZE / HUD SIZE + RESOLUTION moved to js/game/ui-scale.js
   // (UiScale.create(G)). 0 new physics; one deferred G.updateTrackPreview
   // beside buildSelect. Comments moved with the block.
-  "js/game.js": 8512,
+  // 8512 -> 8528: G.setTimeOfDay + G.weather (lighting tuner must not call __apex on Pages).
+  "js/game.js": 8528,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
