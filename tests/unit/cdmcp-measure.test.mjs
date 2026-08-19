@@ -129,6 +129,18 @@ test("cdmcp-bg --status is safe when idle", () => {
   assert.match(r.stdout, /cdmcp-measure/);
 });
 
+test("slider-ab help is chase-not-orbit and HUD-crops the race clock", () => {
+  const help = spawnSync("python3", [CLI, "slider-ab", "--help"], { encoding: "utf8" });
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /chase/i);
+  assert.match(help.stdout, /hud-crop-frac/);
+  assert.match(help.stdout, /0\.28/);
+  const py = fs.readFileSync(CLI, "utf8");
+  assert.match(py, /heli\/far\/orbit/);
+  assert.match(py, /POS\/LAP\/TIME/);
+  assert.doesNotMatch(py, /camera\(\s*["']orbit["']/);
+});
+
 test("look-survey settles 1.6s only on day/dark rebuild, not every weather flip", () => {
   const py = fs.readFileSync(CLI, "utf8");
   assert.match(py, /def look_settle_js/);
