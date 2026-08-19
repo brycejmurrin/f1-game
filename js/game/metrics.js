@@ -428,14 +428,16 @@ function paintOverlay() {
     }
   } else if (s.page === "log") {
     const filterRow = fmt(s.logLvl) + "  ns:" + fmt(s.logNs) + "  " + fmt(s.logShown) + "/" + fmt(s.logN);
+    const logMax = narrow ? 36 : 50;
+    const trimLog = (str) => str.length > logMax ? str.slice(0, logMax - 1) + "\u2026" : str;
     lines = [
       hdr + "  = ns  ; lvl",
       sep(),
       row("level",  fmt(s.logConsole || null) + " / buf:" + fmt(s.logBuffer || null)),
       row("show",   filterRow),
       sep(),
-    ].concat(s.logs.length ? s.logs : ["(empty — raise level with ;",
-                                       " or cycle ns with =)"]);
+    ].concat(s.logs.length ? s.logs.map(trimLog) : ["(empty — raise level with ;",
+                                                     " or cycle ns with =)"]);
   } else {
     // GOV — most critical: fps + frame time front, then context
     if (narrow) {
