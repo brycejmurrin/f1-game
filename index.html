@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1471">
+<meta name="apex-build" content="1472">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -21,7 +21,7 @@
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
 <link rel="preload" href="css/tokens.css?v=cc3f373981a4" as="style">
-<link rel="preload" href="css/components.css?v=0ab3309e5748" as="style">
+<link rel="preload" href="css/components.css?v=aa72636b0dda" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -40,9 +40,9 @@
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=cc3f373981a4">
-<link rel="stylesheet" href="css/components.css?v=0ab3309e5748">
+<link rel="stylesheet" href="css/components.css?v=aa72636b0dda">
 <link rel="stylesheet" href="css/tuner.css?v=cbb21fa36258" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=6373caaf065b">
+<link rel="stylesheet" href="css/menus.css?v=8b0b38496100">
 <link rel="stylesheet" href="css/carsetup.css?v=ddc6c674c33e" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=ce419d9bb73a" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=e86e874c1cad" media="print" onload="this.media='all'">
@@ -400,7 +400,7 @@
                by js/game/gfx-quality.js (same body-node reason as RESET RENDERER). -->
           <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
         </section>
-        <nav id="pm-panel-more" class="pm-doors" role="tabpanel"
+        <nav id="pm-panel-more" class="pm-doors balanced-row" role="tabpanel"
           aria-labelledby="pm-tab-more" tabindex="0" hidden>
           <h3 class="pm-group-h">TOOLS &amp; HELP</h3>
           <button id="pm-advanced">ADVANCED STEERING&hellip;</button>

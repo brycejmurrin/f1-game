@@ -258,6 +258,13 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   font-size: clamp(14px, calc(3.6 * var(--vhz)), 20px);
   padding: clamp(7px, 1.8vh, 14px) 16px;
 }
+/* A lone BACK / DONE / CLOSE is not a banner. Pairs (BACK + RACE!) still
+   share the foot 1:1 via flex-grow. */
+.sheet-foot .bigbtn:only-child {
+  flex: 0 1 auto;
+  width: auto;
+  margin-inline: auto;
+}
 /* ---------- pane-pair: the LIST/DETAIL primitive ----------
    #select, #carsetup and #career are all the same canonical layout — Material
    calls it list-detail, and every adaptive UI framework ships one — and this
@@ -1047,8 +1054,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   color: var(--dim);
 }
 .pm-doors {
-  display: flex;
-  flex-direction: column;
+  /* Same primitive as chips / title rooms: wrap into a grid when the
+     sheet is wide enough, stack when it is not. */
+  --balance-basis: 12rem;
+  --balance-min: 9rem;
   gap: calc(var(--gap) * 0.5);
 }
 .pm-doors button {

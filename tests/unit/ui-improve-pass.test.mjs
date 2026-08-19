@@ -377,7 +377,7 @@ test("variable control clusters use one content-driven balanced-row primitive", 
   const camera = read("js/game/cam-modes.js");
   assert.match(components, /\.balanced-row\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*wrap/);
   assert.match(components, /\.balanced-row > :not\(\[hidden\]\)\s*\{[^}]*flex:\s*1 1 var\(--balance-basis/);
-  for (const id of ["pm-category-tabs", "menu-secondary", "rs-laps", "rs-weather",
+  for (const id of ["pm-category-tabs", "menu-secondary", "pm-panel-more", "rs-laps", "rs-weather",
     "rs-time", "rs-diff", "rs-quali", "rs-caution", "rs-reliab", "lt-tabs", "ct-modes"]) {
     assert.match(html, new RegExp(`id="${id}"[^>]*class="[^"]*balanced-row`), `${id} must balance from local space`);
   }
@@ -534,4 +534,10 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.match(menus, /\.sel-chip\.active \{[\s\S]*?background:\s*var\(--plate-on\)/);
   assert.match(carsetup, /\.cs-tab \{[\s\S]*?background:\s*var\(--plate\)/);
   assert.match(carsetup, /\.cs-tab\.active \{[\s\S]*?background:\s*var\(--plate-on\)/);
+});
+
+test("tool doors and lone foot actions do not stretch into banners", () => {
+  const components = read("css/components.css");
+  assert.match(components, /\.pm-doors\s*\{[\s\S]*?--balance-basis:\s*12rem/);
+  assert.match(components, /\.sheet-foot \.bigbtn:only-child\s*\{[\s\S]*?flex:\s*0 1 auto/);
 });

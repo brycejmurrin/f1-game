@@ -106,16 +106,25 @@
    `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
 #menu-hero, #menu-primary, #menu-secondary { width: min(calc(78 * var(--vwz)), 100%); }
 #menu-hero { display: grid; }
-/* Equal 2-up cells that still wrap. 50% minus a sliver of the row gap keeps two
-   doors on one line; a lone last child (STANDINGS season) still fills the row
-   via flex-grow. 45/40 let a long label steal width and the gutter drifted. */
+/* Shared gap / stretch. Column count lives on each row: primary is a
+   forced 2x2, secondary wraps from local space (see the two rules below). */
 #menu-primary, #menu-secondary {
-  --balance-basis: calc(50% - 0.5em);
-  --balance-min: calc(50% - 0.5em);
-  /* Same track gap so the 2-up play doors and the rooms share one lattice.
+  /* Same track gap so the play doors and the rooms share one lattice.
      0.55 on secondary only made that tier ~2–5px narrower on desktop. */
   gap: calc(var(--gap) * 0.7);
   align-items: stretch;
+}
+/* Play modes stay a forced 2x2 — four equal cells, never a 3+1 leftover. */
+#menu-primary {
+  --balance-basis: calc(50% - 0.5em);
+  --balance-min: calc(50% - 0.5em);
+}
+/* Rooms wrap from local space. Three visible doors (DATA / GARAGE /
+   SETTINGS) sit on one row when the column holds them, instead of
+   stretching SETTINGS into a banner because HOW TO PLAY is hidden. */
+#menu-secondary {
+  --balance-basis: 5.5rem;
+  --balance-min: 5.5rem;
 }
 /* The hero is the one button on the screen with two lines of text, so it centres
    its own stack rather than inheriting the single-line baseline the others use. */
@@ -146,10 +155,9 @@
   display: flex;
   flex-wrap: wrap;
 }
-/* STANDINGS appears only mid-season. `.balanced-row` ignores the hidden button,
-   keeps the normal four controls as two pairs, and lets a visible fifth action
-   fill its final line without a state-specific selector. width:100% (not auto)
-   so a long label wraps inside its half instead of widening its cell. */
+/* STANDINGS / HOW TO PLAY are hidden until they have a reason to show.
+   `.balanced-row` ignores [hidden], so the usual three rooms sit on one
+   row. width:100% keeps a long label wrapping inside its cell. */
 #menu-buttons .bigbtn { margin: 0; width: 100%; border-width: 1px; border-style: solid; }
 /* Primary has `border: none`; rooms have a 1px .alt hairline. Matching width
    keeps the two 2-up columns on the same vertical tracks (measured 205 vs 203
