@@ -75,6 +75,7 @@ test("agentview-raster.js exposes create() and the three rasters", () => {
 test("AgentView.create() still returns the whole documented surface", () => {
   const get = evalGlobals([
     "js/game/agentview-raster.js",
+    "js/game/agent-survey.js",
     "js/game/agentview.js",
   ]);
   const AgentView = get("AgentView");
@@ -132,7 +133,7 @@ test("span lengthM: wrap, plain and full-lap spans match along()'s walk", () => 
     banking: () => null, terrainY: () => 0,
   };
   const get = evalGlobals(
-    ["js/game/agentview-raster.js", "js/game/agentview.js"],
+    ["js/game/agentview-raster.js", "js/game/agent-survey.js", "js/game/agentview.js"],
     { Tracks: TracksStub });
   const view = get("AgentView").create({
     wrapS: (s) => ((s % TOTAL) + TOTAL) % TOTAL,
@@ -154,6 +155,17 @@ test("span lengthM: wrap, plain and full-lap spans match along()'s walk", () => 
                    "worldModel span lengths must match describe()'s");
 });
 
+test("agent-survey.js exposes create() and survey()", () => {
+  const get = evalGlobals(["js/game/agent-survey.js"]);
+  const AgentSurvey = get("AgentSurvey");
+  assert.equal(typeof AgentSurvey, "object", "AgentSurvey global missing");
+  assert.equal(typeof AgentSurvey.create, "function",
+               "AgentSurvey.create missing — agentview.js calls it at create()");
+  const band = AgentSurvey.create({});
+  assert.equal(typeof band.survey, "function",
+               "AgentSurvey lost survey() — agentview.js destructures it");
+});
+
 test("the raster band reaches agentview through ctx, not a global grab", () => {
   // agentview.js must not reference the raster functions except through the
   // create() handshake — otherwise the split silently re-couples.
@@ -163,4 +175,9 @@ test("the raster band reaches agentview through ctx, not a global grab", () => {
   assert.doesNotMatch(src, /function\s+(frame|plan|carRender)\s*\(/,
                       "a raster function was re-defined in agentview.js — it "
                       + "belongs in js/game/agentview-raster.js");
+  assert.match(src, /AgentSurvey\.create\(/,
+               "agentview.js no longer creates the survey band");
+  assert.doesNotMatch(src, /function\s+survey\s*\(/,
+                      "survey() was re-defined in agentview.js — it "
+                      + "belongs in js/game/agent-survey.js");
 });
