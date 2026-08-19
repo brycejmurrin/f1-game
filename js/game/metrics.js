@@ -1,6 +1,7 @@
 /* Apex 26 — GameMetrics: toggleable in-game FPS / car / log overlay.
 
-   SETTINGS > DISPLAY > METRICS, or ` (backtick) / F9. Persists as
+   SETTINGS > DISPLAY — METRICS (on/off), METRICS PAGE (gov/car/phys/log),
+   LOG NS, and LOG SHOW. Or ` (backtick) / F9 on the canvas. Persists as
    apex26.metrics. URL `?metrics=1` overrides for the session without writing
    storage, same shape as CockpitOpts.
 
@@ -37,21 +38,40 @@ let _raf = 0;
 let _lastPaint = 0;
 let _panel = null;
 let _btn = null;
+let _pageBtn = null;
+let _logNsBtn = null;
+let _logLvlBtn = null;
 let _keysBound = false;
 let _raisedBuffer = null;
 
-// Below #pausebtn / #btn-cam (z 14) and the zoomed #hud-sectors stack
-// (visual top 8+tap+4+sat, ~80px tall at 100% HUD). z 11 so .touchbtn
-// (z 12) paints on top if a short landscape still overlaps the dock.
+// Mirrors the HUD gap-form pattern (js/game/hud.js): innerWidth / hudScale
+// is the slot proxy. Two display densities:
+//   WIDE  (ratio >= 480): label column + value, full rows, up to 12 rows
+//   NARROW (ratio < 480): compact, two values per line, fewer rows
+// Position: right-anchored, below the sector strip (top = tap + sat + hud
+// offset), above the bottom HUD dock. The 80px * hud-scale term is clamped
+// to 120px so at 150% HUD the panel doesn't descend into the mid-screen.
+const HUD_TOP_OFFSET = "min(120px, calc(80px * var(--hud-scale, 1)))";
 const PANEL_STYLE = "position:fixed;right:8px;" +
-  "top:calc(12px + var(--tap, 44px) + var(--sat, 0px) + 80px * var(--hud-scale, 1));" +
-  "z-index:11;margin:0;padding:8px 10px;" +
-  "font:11px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;" +
-  "color:#d8ffe0;background:rgba(6,10,8,.72);border:1px solid rgba(90,180,110,.35);" +
-  "border-radius:6px;pointer-events:none;white-space:pre;text-align:left;" +
-  "max-width:min(46ch,calc(100vw - 16px));" +
-  "max-height:min(28em,calc(100dvh - 12px - var(--tap, 44px) - var(--sat, 0px) - 80px * var(--hud-scale, 1) - 96px));" +
-  "overflow-y:auto;pointer-events:auto;text-shadow:0 1px 0 #000";
+  "top:calc(12px + var(--tap, 44px) + var(--sat, 0px) + " + HUD_TOP_OFFSET + ");" +
+  "z-index:11;margin:0;padding:10px 12px;" +
+  "font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;" +
+  "color:#d8ffe0;background:rgba(4,8,6,.82);border:1px solid rgba(90,200,120,.4);" +
+  "border-radius:8px;pointer-events:none;white-space:pre;text-align:left;" +
+  "max-width:min(52ch,calc(100vw - 16px));" +
+  "max-height:calc(100dvh - 12px - var(--tap, 44px) - var(--sat, 0px) - " +
+    HUD_TOP_OFFSET + " - 80px);" +
+  "overflow-y:auto;pointer-events:auto;text-shadow:0 1px 2px rgba(0,0,0,.9);" +
+  "letter-spacing:.01em";
+
+// Adaptive density: same proxy as HUD gap — innerWidth / hudScale.
+// At < 480 use the compact (narrow) layout with 2 values per line.
+function metricsRatio() {
+  try {
+    const s = +document.documentElement.style.getPropertyValue("--hud-scale") || 1;
+    return window.innerWidth / s;
+  } catch (_) { return 800; }
+}
 
 function qFlag(re) {
   try { return re.exec(location.search); } catch (_) { return null; }
@@ -338,8 +358,16 @@ function fmtTime(t) {
 }
 
 function pageTabs(cur) {
-  return PAGES.map((p) => (p === cur ? "*" + p.toUpperCase() : p)).join("  ");
+  return PAGES.map((p) => (p === cur ? "▸" + p.toUpperCase() : p)).join("  ");
 }
+
+// Two-column row: label (padded to L chars) then value.
+const L = 8;
+function row(label, value) { return (label + ":").padEnd(L) + " " + value; }
+function sep() { return "─".repeat(24); }
+
+// Compact two-value pair for narrow screens.
+function pair(l1, v1, l2, v2) { return l1 + " " + v1 + "   " + l2 + " " + v2; }
 
 function paintOverlay() {
   const el = ensurePanel();
@@ -347,60 +375,94 @@ function paintOverlay() {
   if (!on()) { el.hidden = true; return; }
   el.hidden = false;
   const s = snapshot();
-  const tabs = "METRICS  " + pageTabs(s.page) + "   ] [  1-4";
+  const narrow = metricsRatio() < 480;
+  const hdr = "● " + pageTabs(s.page) + "  ] [  1-4";
   let lines;
+
   if (s.page === "car") {
-    lines = [
-      tabs,
-      "dash " + fmt(s.dashKph) + " km/h   gnd " + fmt(s.gndKph) + " km/h   g" + fmt(s.gear),
-      "s " + fmt(s.s, 1) + "  x " + fmt(s.x, 2) +
-        "  ers " + fmt(s.energy, 2) + "  aero " + fmt(s.aeroX, 2),
-      "lap " + fmt(s.lap) + (s.lapsTarget != null ? "/" + s.lapsTarget : "") +
-        "  P" + fmt(s.pos) + (s.total != null ? "/" + s.total : "") +
-        "  S" + fmt(s.sector) +
-        "  t " + fmtTime(s.lapTime) + "  best " + fmtTime(s.best) +
-        "  last " + fmtTime(s.lastLap),
-      "gap " + fmt(s.gapAhead, 1) + " / " + fmt(s.gapBehind, 1) +
-        " m   yaw " + fmt(s.angle, 3) +
-        "   k " + fmt(s.k, 4) +
-        "   hw " + fmt(s.hw, 1),
-    ];
+    if (narrow) {
+      lines = [
+        hdr,
+        pair("spd", fmt(s.dashKph) + "km/h", "g", fmt(s.gear)),
+        pair("ERS", fmt(s.energy, 2), "aero", fmt(s.aeroX, 2)),
+        pair("P",   fmt(s.pos), "lap", fmt(s.lap) + (s.lapsTarget != null ? "/" + s.lapsTarget : "")),
+        "t   " + fmtTime(s.lapTime) + "  best " + fmtTime(s.best),
+        pair("gap", fmt(s.gapAhead, 1) + "/" + fmt(s.gapBehind, 1), "S", fmt(s.sector)),
+      ];
+    } else {
+      lines = [
+        hdr,
+        sep(),
+        row("speed",  fmt(s.dashKph) + " km/h   gnd " + fmt(s.gndKph) + " km/h"),
+        row("gear",   fmt(s.gear) + "   ERS " + fmt(s.energy, 2) + "   aero " + fmt(s.aeroX, 2)),
+        row("pos",    "P" + fmt(s.pos) + (s.total != null ? "/" + s.total : "") +
+                      "   lap " + fmt(s.lap) + (s.lapsTarget != null ? "/" + s.lapsTarget : "") +
+                      "   S" + fmt(s.sector)),
+        row("time",   fmtTime(s.lapTime) + "   best " + fmtTime(s.best)),
+        row("last",   fmtTime(s.lastLap)),
+        row("gap",    fmt(s.gapAhead, 1) + " / " + fmt(s.gapBehind, 1) + " m"),
+        row("s  x",   fmt(s.s, 1) + "   " + fmt(s.x, 2) + "   k " + fmt(s.k, 4)),
+      ];
+    }
   } else if (s.page === "phys") {
-    lines = [
-      tabs,
-      "slip " + fmt(s.slipDeg, 1) + "°   vLat " + fmt(s.vLat, 2) +
-        "   yawRate " + fmt(s.yawRate, 2) + "   slipF " + fmt(s.slipFactor, 2),
-      "ax " + fmt(s.axEstSm, 2) + "   axFrac " + fmt(s.axFrac, 2) +
-        "   slope " + fmt(s.slope, 3) +
-        "   ww " + fmt(s.wrongWay) + "   rescue " + fmt(s.rescueT, 1),
-      "head " + fmt(s.head, 2) + "   vmax " + fmt(s.vmaxNow, 1) +
-        "   aeroGrip " + fmt(s.aeroGrip, 3) + "   aeroDf " + fmt(s.aeroDf, 2),
-      "xOn " + fmt(s.xOn) + "  armed " + fmt(s.xArmed) +
-        "   load " + fmt(s.aeroLoad, 2) + "   aeroX " + fmt(s.aeroX, 2),
-    ];
+    if (narrow) {
+      lines = [
+        hdr,
+        pair("slip", fmt(s.slipDeg, 1) + "°", "slipF", fmt(s.slipFactor, 2)),
+        pair("vLat", fmt(s.vLat, 2), "yaw", fmt(s.yawRate, 2)),
+        pair("ax",   fmt(s.axEstSm, 2), "slope", fmt(s.slope, 3)),
+        pair("vmax", fmt(s.vmaxNow, 1), "ww", fmt(s.wrongWay)),
+        pair("grip", fmt(s.aeroGrip, 3), "xOn", fmt(s.xOn)),
+      ];
+    } else {
+      lines = [
+        hdr,
+        sep(),
+        row("slip",   fmt(s.slipDeg, 1) + "°   vLat " + fmt(s.vLat, 2) + "   slipF " + fmt(s.slipFactor, 2)),
+        row("yaw",    fmt(s.yawRate, 2) + " rad/s   ax " + fmt(s.axEstSm, 2) + "   axFrac " + fmt(s.axFrac, 2)),
+        row("slope",  fmt(s.slope, 3) + "   wrongWay " + fmt(s.wrongWay) + "   rescue " + fmt(s.rescueT, 1) + "s"),
+        row("vmax",   fmt(s.vmaxNow, 1) + " m/s   head " + fmt(s.head, 2)),
+        row("aero",   "grip " + fmt(s.aeroGrip, 3) + "   df " + fmt(s.aeroDf, 2) + "   load " + fmt(s.aeroLoad, 2)),
+        row("DRS",    "on " + fmt(s.xOn) + "   armed " + fmt(s.xArmed) + "   aeroX " + fmt(s.aeroX, 2)),
+      ];
+    }
   } else if (s.page === "log") {
+    const filterRow = fmt(s.logLvl) + "  ns:" + fmt(s.logNs) + "  " + fmt(s.logShown) + "/" + fmt(s.logN);
     lines = [
-      tabs + "   = ns  ; lvl",
-      "log " + fmt(s.logConsole || null) + "/" + fmt(s.logBuffer || null) +
-        "   show " + fmt(s.logLvl) + "  ns " + fmt(s.logNs) +
-        "   " + fmt(s.logShown) + "/" + fmt(s.logN),
-      "— log —",
-    ].concat(s.logs.length ? s.logs : ["(empty — raise lvl with ; or cycle ns with =)"]);
+      hdr + "  = ns  ; lvl",
+      sep(),
+      row("level",  fmt(s.logConsole || null) + " / buf:" + fmt(s.logBuffer || null)),
+      row("show",   filterRow),
+      sep(),
+    ].concat(s.logs.length ? s.logs : ["(empty — raise level with ;",
+                                       " or cycle ns with =)"]);
   } else {
-    lines = [
-      tabs,
-      "fps " + fmt(s.fps) + "   frame " + fmt(s.ms) + " ms   budget " + fmt(s.budget) + " ms",
-      "scale " + fmt(s.scale) + "   tier " + fmt(s.tier) +
-        (s.tierFloor != null ? " floor " + s.tierFloor : "") +
-        "   auto " + fmt(s.auto) + "   strikes " + fmt(s.strikes) +
-        "   gfx " + fmt(s.backend || null),
-      (s.track || "menu") + "  " + (s.flow || s.session || s.state || "") +
-        "  " + (s.caution || "GREEN") +
-        "  cam " + fmt(s.cam || null) +
-        (s.quali ? "  quali" : "") + (s.career ? "  career" : "") +
-        (s.gpuMs != null ? "  gpu " + s.gpuMs + " ms" : ""),
-      s.buildDone || "(no build done yet for this circuit)",
-    ];
+    // GOV — most critical: fps + frame time front, then context
+    if (narrow) {
+      lines = [
+        hdr,
+        pair("fps", fmt(s.fps), "ms", fmt(s.ms)),
+        pair("tier", fmt(s.tier), "auto", fmt(s.auto)),
+        pair("gfx", fmt(s.backend || null), "str", fmt(s.strikes)),
+        (s.track || "menu") + "  " + (s.caution || "GREEN"),
+      ];
+    } else {
+      lines = [
+        hdr,
+        sep(),
+        row("fps",    fmt(s.fps) + "   frame " + fmt(s.ms) + " ms" +
+                      (s.gpuMs != null ? "   gpu " + s.gpuMs + " ms" : "")),
+        row("budget", fmt(s.budget) + " ms   tier " + fmt(s.tier) +
+                      (s.tierFloor != null ? " (fl " + s.tierFloor + ")" : "") +
+                      "   auto " + fmt(s.auto)),
+        row("gfx",    fmt(s.backend || null) + "   scale " + fmt(s.scale) + "   strikes " + fmt(s.strikes)),
+        sep(),
+        row("track",  (s.track || "menu") + "   " + (s.flow || s.session || s.state || "")),
+        row("flag",   (s.caution || "GREEN") + "   cam " + fmt(s.cam || null) +
+                      (s.quali ? "   quali" : "") + (s.career ? "   career" : "")),
+        row("build",  s.buildDone ? s.buildDone.replace(/^build done /, "") : "—"),
+      ];
+    }
   }
   el.textContent = lines.join("\n");
 }
@@ -423,8 +485,31 @@ function startLoop() {
 
 function paintBtn(btn) {
   if (!btn) return;
-  btn.textContent = "METRICS: " + (on() ? page().toUpperCase() : "OFF");
+  btn.textContent = "METRICS: " + (on() ? "ON" : "OFF");
   btn.setAttribute("aria-pressed", on() ? "true" : "false");
+}
+
+function paintPageBtn(btn) {
+  if (!btn) return;
+  btn.textContent = "METRICS PAGE: " + page().toUpperCase();
+  btn.setAttribute("aria-pressed", on() ? "true" : "false");
+}
+
+function paintLogNsBtn(btn) {
+  if (!btn) return;
+  btn.textContent = "LOG NS: " + logNs().toUpperCase();
+}
+
+function paintLogLvlBtn(btn) {
+  if (!btn) return;
+  btn.textContent = "LOG SHOW: " + logLvl().toUpperCase();
+}
+
+function paintSettingBtns() {
+  paintBtn(_btn);
+  paintPageBtn(_pageBtn);
+  paintLogNsBtn(_logNsBtn);
+  paintLogLvlBtn(_logLvlBtn);
 }
 
 function raiseBuffer() {
@@ -461,7 +546,7 @@ function set(v) {
     restoreBuffer();
     paintOverlay();
   }
-  paintBtn(_btn);
+  paintSettingBtns();
   return next;
 }
 
@@ -474,7 +559,7 @@ function setPage(name) {
   store(PAGE_KEY, next, /[?&]metricsPage=/i);
   try { if (on()) Log.info("game", "metrics page " + next); } catch (_) { /* Log not loaded */ }
   if (on()) paintOverlay();
-  paintBtn(_btn);
+  paintSettingBtns();
   return _page;
 }
 
@@ -490,6 +575,7 @@ function setLogNs(name) {
   _logNs = next;
   store(LOG_NS_KEY, next, /[?&]metricsLog=/i);
   if (on()) paintOverlay();
+  paintSettingBtns();
   return _logNs;
 }
 
@@ -505,6 +591,7 @@ function setLogLvl(name) {
   _logLvl = next;
   store(LOG_LVL_KEY, next, /[?&]metricsLvl=/i);
   if (on()) paintOverlay();
+  paintSettingBtns();
   return _logLvl;
 }
 
@@ -519,27 +606,66 @@ function typingTarget(t) {
     t.tagName === "SELECT" || t.tagName === "BUTTON" || t.isContentEditable);
 }
 
+function insertAfter(host, anchor, el) {
+  if (anchor.nextSibling) host.insertBefore(el, anchor.nextSibling);
+  else host.appendChild(el);
+  return anchor = el;
+}
+
+function makeMetricsBtn(id, title, paint, onClick) {
+  const b = document.createElement("button");
+  b.id = id;
+  b.type = "button";
+  b.title = title;
+  paint(b);
+  b.onclick = () => {
+    onClick();
+    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); }
+    catch (_) { /* audio not up yet; the toggle still applies */ }
+  };
+  return b;
+}
+
 function initUI() {
   try { Log.info("game", "GameMetrics.initUI"); } catch (_) { /* Log not loaded */ }
   if (typeof document === "undefined") return;
   const anchor = document.getElementById("pm-hidehud");
   const host = anchor && anchor.parentNode;
   if (host && !document.getElementById("pm-metrics")) {
-    const b = document.createElement("button");
-    b.id = "pm-metrics";
-    b.type = "button";
-    b.title = "Live FPS / car / phys / log overlay. ` or F9 toggle. Click cycles pages; LOG again turns off. [ ] pages, 1–4 jump, - = log ns, ; log level.";
-    paintBtn(b);
-    b.onclick = () => {
-      if (!on()) set(true);
-      else if (page() === "log") set(false);
-      else nextPage(1);
-      try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); }
-      catch (_) { /* audio not up yet; the toggle still applies */ }
-    };
-    if (anchor.nextSibling) host.insertBefore(b, anchor.nextSibling);
-    else host.appendChild(b);
-    _btn = b;
+    let ins = anchor;
+    _btn = makeMetricsBtn(
+      "pm-metrics",
+      "Show the live metrics overlay on the canvas. ` or F9 also toggles it. " +
+        "Each page shows different data: GOV = perf/session, CAR = timing/speed, " +
+        "PHYS = grip/forces, LOG = filtered log tail.",
+      paintBtn,
+      () => { toggle(); },
+    );
+    ins = insertAfter(host, ins, _btn);
+
+    _pageBtn = makeMetricsBtn(
+      "pm-metrics-page",
+      "Which overlay page is shown while METRICS is ON. Pick a page before turning on, or use [ ] / 1–4 in-game.",
+      paintPageBtn,
+      () => { nextPage(1); },
+    );
+    ins = insertAfter(host, ins, _pageBtn);
+
+    _logNsBtn = makeMetricsBtn(
+      "pm-metrics-logns",
+      "Filter the LOG overlay tail to one namespace (* = all). = / - cycle while the overlay is up.",
+      paintLogNsBtn,
+      () => { nextLogNs(1); },
+    );
+    ins = insertAfter(host, ins, _logNsBtn);
+
+    _logLvlBtn = makeMetricsBtn(
+      "pm-metrics-loglvl",
+      "How verbose the LOG overlay tail is (warn / info / debug). ; cycles while the overlay is up.",
+      paintLogLvlBtn,
+      () => { nextLogLvl(1); },
+    );
+    insertAfter(host, ins, _logLvlBtn);
   }
 
   if (typeof window !== "undefined" && !_keysBound) {
@@ -585,7 +711,8 @@ function initUI() {
 }
 
 if (typeof document !== "undefined") {
-  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", initUI, { once: true });
   else initUI();
 }
 

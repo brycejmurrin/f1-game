@@ -115,7 +115,8 @@ const CLASS_CEILING = 534;
 // −10 2026-08-18: #menu-status chips removed with the dashboard chrome.
 // +1 2026-08-19: <script> block for iOS double-tap zoom cancel (gesturestart/
 // touchend handlers). Needed for Safari which ignores viewport maximum-scale.
-const NODE_CEILING = 1211;
+// +1 2026-08-19: four separate pm-metrics* buttons injected into DISPLAY panel.
+const NODE_CEILING = 1212;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module

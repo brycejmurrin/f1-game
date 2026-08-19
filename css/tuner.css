@@ -123,14 +123,16 @@ body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
    which pushed #lt-rows 17px into the home-indicator inset. A rule that fixes the
    narrow case and costs the wide one has to ask which case it is in. */
 body.photo-mode:not(.pc-nopanel) :is(#lt-head, #ct-head) { flex-wrap: wrap; }
-body.photo-mode:not(.pc-nopanel) #lighting-inner > .sheet-foot > button {
+body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner) > .sheet-foot > :is(#lt-close, #ct-close) {
   /* DONE is a .bigbtn and measured 113.2 own units against a 91.2-unit content
      box, so it hung out of the panel. A grid item's automatic minimum is its
      content — the same refusal-to-shrink that has cost this pass four separate
      findings — so the floor has to be named. `flex: 1 1 auto` then lets the
      three of them share what there is instead of each demanding its natural
      width and wrapping to three rows: the foot measured 154 units tall of a
-     330-unit panel at 150%, which is half the height the sliders needed. */
+     330-unit panel at 150%, which is half the height the sliders needed.
+     Previously only covered #lighting-inner; #camtune-inner's #ct-close was
+     missing — both tuners use the same panel shape in photo mode. */
   min-width: 0; flex: 1 1 auto;
 }
 /* AND ON A SHORT ONE, THE FURNITURE GOES TOO. Same argument the TIME/WEATHER
