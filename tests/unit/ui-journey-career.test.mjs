@@ -26,7 +26,8 @@ test("career overlay dialogs declare --fit-at for the anonymous .sheet", () => {
     assert.match(css, new RegExp(id + "[^{]*\\{[^}]*--fit-at:\\s*220px"),
       `${id} must drop to 220px in landscape, matching Settings`);
   }
-  assert.match(css, /@media \(orientation:\s*landscape\)/);
+  assert.match(css, /#cr-inner[^{]*\{[^}]*--fit-at:\s*220px/,
+    "hub landscape --fit-at uses data-shape (not @media orientation)");
   assert.match(css, /#cr-inner \{[^}]*--fit-at:\s*300px/,
     "hub --fit-at must stay on #cr-inner");
 });

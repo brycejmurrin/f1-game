@@ -269,85 +269,58 @@ body { --compact-at: 600px; --wide-at: 620px; }
 /* Portrait: give the button column the leftover row under the brand so the
    max-height above is not "full viewport on top of the brand" (which would
    overflow again with no parent scroller). auto / minmax(0,1fr) + stretch is
-   the flex/grid form of "brand sizes itself, buttons get the rest and scroll". */
-@media (orientation: portrait) {
-  :where(body[data-density="compact"]) #overlay {
-    grid-template-rows: auto minmax(0, 1fr);
-    align-content: stretch;
-  }
-  :where(body[data-density="compact"]) #menu-brand { grid-row: 1; }
-  :where(body[data-density="compact"]) #menu-buttons {
-    grid-row: 2;
-    align-self: stretch;
-    min-height: 0;
-    max-height: none; /* the 1fr row is the cap */
-    height: 100%;
-  }
+   the flex/grid form of "brand sizes itself, buttons get the rest and scroll".
+   Uses body[data-shape="tall"] set by SheetShape classifyBody() from the
+   zoom-corrected viewport dimensions (innerWidth/Height ÷ --ui-scale), which
+   agrees with @media orientation in result but is combinable with data-density
+   in a single selector without a nested media query. */
+:where(body[data-shape="tall"][data-density="compact"]) #overlay {
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
 }
-@media (orientation: landscape) {
-  :where(body[data-density="compact"]) #overlay {
-    /* Equal shrinkable tracks. auto+auto sized the brand by its longest word
-       and the doors by a px cap, so the pair was never even and outran vw
-       when zoomed. 1fr 1fr shares leftover; children use 42vwz so paint
-       width tracks the viewport and --ui-scale together. */
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    justify-content: center;
-    justify-content: safe center;
-    align-content: center; justify-items: stretch;
-    /* Re-stating `safe center` because this block re-declares align-content and
-       would otherwise take the base rule's overflow bug back — see there.
-       Same for justify-content: at UI SIZE 150% the brand+button pair can be
-       wider than vw (measured R=884 on 852), and plain center parks the right
-       column past the scrollport's end edge. */
-    align-content: safe center;
-    column-gap: 32px;
-  }
-  :where(body[data-density="compact"]) #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
-  :where(body[data-density="compact"]) #menu-brand,
-  :where(body[data-density="compact"]) #menu-buttons {
-    width: min(calc(42 * var(--vwz)), 100%);
-    min-width: 0;
-    max-width: 100%;
-  }
-  :where(body[data-density="compact"]) #menu-buttons {
-    grid-column: 2; grid-row: 1;
-    align-self: stretch;
-    justify-items: stretch;
-  }
-  :where(body[data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
-  :where(body[data-density="compact"]) #subtitle { margin: 8px 0 0; font-size: var(--fs-micro); }
-  :where(body[data-density="compact"]) #menu-meta { margin-top: 12px; gap: 4px; }
-  :where(body[data-density="compact"]) #audiostate { font-size: var(--fs-micro); }
-  :where(body[data-density="compact"]) #disclaimer { font-size: var(--fs-micro); }
-  /* 42vwz (was 46): layout-only width cut so the right column clears vw at
-     150% without touching type size (brand+46vw+gap measured ~872 on 852). */
-  :where(body[data-density="compact"]) #menu-hero,
-  :where(body[data-density="compact"]) #menu-primary,
-  :where(body[data-density="compact"]) #menu-secondary { width: 100%; }
-  /* One notch up, for the same reason as the HUD and the tap ladder: this
-     block is the PHONE, and it was the smallest type in the app on the device
-     held furthest from your face. The group widths above cap the row, so the
-     extra size comes out of padding rather than pushing anything off screen. */
-  :where(body[data-density="compact"]) #menu-hero .bigbtn { padding-block: 12px; }
-  /* (The save line's font-size used to be re-stated here as var(--fs-micro).
-     That is the SAME value the base rule already gives it, at the same
-     specificity, in the same layer — a declaration that could never change a
-     computed pixel. Deleted rather than re-pointed at the new id.) */
-  /* Horizontal padding is TIGHTER than the type grew, to buy the labels room
-     back out of the gutter rather than out of the type.
-     IT DOES NOT SAVE "RACE A FRIEND", and this comment used to claim it did.
-     Measured at 667x375: that label needs 209px on one line against a 155px
-     cell — a 54px shortfall, where the whole horizontal padding is 20px. The
-     cell would have to reach ~408px, and the brand column beside it is 273px,
-     so 273 + 32 + 408 = 713 in a 667px window. It wraps to two lines at every
-     landscape width, on touch and desktop alike, and that is the correct
-     outcome: the alternative is either a horizontal overflow on the narrowest
-     phone or that one button carrying smaller type than the five around it.
-     The row is sized by its tallest cell, so SEASON grows to match — which is
-     why the pair still reads as a pair. */
-  :where(body[data-density="compact"]) #menu-buttons .bigbtn { width: 100%; padding: 11px 10px; font-size: 17px; }
-  :where(body[data-density="compact"]) #menu-buttons .minibtn { padding: 7px 10px; font-size: var(--fs-micro); }
+:where(body[data-shape="tall"][data-density="compact"]) #menu-brand { grid-row: 1; }
+:where(body[data-shape="tall"][data-density="compact"]) #menu-buttons {
+  grid-row: 2;
+  align-self: stretch;
+  min-height: 0;
+  max-height: none; /* the 1fr row is the cap */
+  height: 100%;
 }
+/* LANDSCAPE COMPACT: side-by-side brand + buttons.
+   Uses body[data-shape="wide"] (zoom-corrected, set by SheetShape classifyBody)
+   in place of @media (orientation: landscape). The two agree in result — the
+   ratio of zoom-corrected dimensions equals the ratio of raw dimensions — but
+   data-shape is combinable with data-density in one selector and is consistent
+   with the sheet-level data-shape convention everywhere else. */
+:where(body[data-shape="wide"][data-density="compact"]) #overlay {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  justify-content: safe center;
+  align-content: safe center; justify-items: stretch;
+  column-gap: 32px;
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-brand,
+:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons {
+  width: min(calc(42 * var(--vwz)), 100%);
+  min-width: 0;
+  max-width: 100%;
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons {
+  grid-column: 2; grid-row: 1;
+  align-self: stretch;
+  justify-items: stretch;
+}
+:where(body[data-shape="wide"][data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
+:where(body[data-shape="wide"][data-density="compact"]) #subtitle { margin: 8px 0 0; font-size: var(--fs-micro); }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-meta { margin-top: 12px; gap: 4px; }
+:where(body[data-shape="wide"][data-density="compact"]) #audiostate { font-size: var(--fs-micro); }
+:where(body[data-shape="wide"][data-density="compact"]) #disclaimer { font-size: var(--fs-micro); }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-hero,
+:where(body[data-shape="wide"][data-density="compact"]) #menu-primary,
+:where(body[data-shape="wide"][data-density="compact"]) #menu-secondary { width: 100%; }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-hero .bigbtn { padding-block: 12px; }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn { width: 100%; padding: 11px 10px; font-size: 17px; }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .minibtn { padding: 7px 10px; font-size: var(--fs-micro); }
 
 /* HIGH UI SIZE ON A CONSTRAINED VIEWPORT
    --------------------------------------

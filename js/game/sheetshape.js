@@ -293,8 +293,25 @@ window.SheetShape = (function () {
     if (!b) return;
     const scale = parseFloat(
       getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
-    classifyDensity(b, window.innerHeight / scale);
-    classifyFlag(b, window.innerWidth / scale, "--wide-at", "width", WIDE_HYST, "wide", "narrow");
+    const wOwn = window.innerWidth / scale;
+    const hOwn = window.innerHeight / scale;
+    classifyDensity(b, hOwn);
+    classifyFlag(b, wOwn, "--wide-at", "width", WIDE_HYST, "wide", "narrow");
+    /* ZOOM-CORRECT BODY ORIENTATION. `@media (orientation: portrait)` reads the
+       viewport in CSS px, which is the same coordinate space as innerWidth/Height
+       before dividing by --ui-scale. At non-100% zoom the scaled dimensions
+       disagree with the raw ones: a 393×852 phone at 150% UI SIZE gives the
+       layout 262×568 own units, still portrait-shaped, but a 568×320 landscape
+       screen at 200% gives 284×160 — still landscape-shaped. The ratio alone is
+       what decides portrait vs landscape, so zoom never distorts the ANSWER, only
+       the numbers that produce it. This attribute therefore agrees with the media
+       query in practice, but is written on body as data-shape so CSS can combine
+       it with data-density in a single selector without a media query. */
+    const ratio = hOwn / wOwn;
+    const wasShape = b.dataset.shape;
+    const nowShape = wasShape === "tall" ? (ratio <= TALL_OFF ? "wide" : "tall")
+      : (ratio >= TALL_ON ? "tall" : "wide");
+    if (nowShape !== wasShape) b.dataset.shape = nowShape;
   }
 
   function reclassify() {

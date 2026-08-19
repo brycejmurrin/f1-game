@@ -104,34 +104,16 @@
    the width, and portrait's ~367px container sits under the 400px the container
    query uses to add the second column — the right threshold for the option
    list, the wrong one for these. */
-@media (orientation: portrait) {
-  /* #cs-inner in front deliberately. The base `#cs-stats-inner` rule that sets
-     one column lives further down this file, and at equal specificity the later
-     rule wins — written bare, this one measured as one 247px column and did
-     nothing. */
-  #cs-inner #cs-stats-inner { grid-template-columns: 1fr 1fr; }
-  /* Two columns only pay if the row FITS one. `.cs-stat-label` is a fixed 84px
-     and the value sits at the far end, so at ~172px per column the number was
-     pushed past the edge and #cs-inner clips — measured, ACCEL's 94 and
-     BRAKING's 91 were sliced in half. Let the label take what the text needs and
-     the bar absorb the rest; the number is the datum and never gives ground. */
-  /* min-width:0 on the ROW is the one that matters. A grid item's default
-     min-width is min-content, so the track refused to go under the row's
-     intrinsic width no matter what the children were told — the second column
-     still ran 18px past the edge with the label already set to auto. */
-  #cs-inner #cs-stats-inner { column-gap: calc(var(--gap) * 0.8); }
-  #cs-inner #cs-stats-inner .cs-stat-row { min-width: 0; }
-  #cs-inner #cs-stats-inner .cs-stat-label { width: auto; min-width: 0; flex: 0 1 auto; }
-  /* The bar goes, in this layout only. A ~172px column cannot seat a label, a
-     bar and a number: with the bar in, "CORNERING" truncated; with it out, all
-     four labels and all four values fit whole. The number IS the stat — the bar
-     is a comparison aid, and a clipped word costs more than a missing one on the
-     screen where the labels are already the thing being read. Portrait stacked
-     only; every wider layout keeps its bars. */
-  #cs-inner #cs-stats-inner .cs-stat-bar-wrap { display: none; }
-  #cs-inner #cs-stats-inner .cs-stat-row { justify-content: space-between; }
-  #cs-inner #cs-stats-inner .cs-stat-val { flex: 0 0 auto; }
-}
+/* TALL-SHAPED GARAGE: stats block goes to two columns.
+   Uses data-shape="tall" (zoom-corrected, set by sheetshape.js) rather than
+   @media (orientation: portrait) which reads the viewport and is wrong at
+   non-100% UI SIZE — same fix already applied to #sel-inner and #rs-body.
+   Two IDs beat the single-ID base rule at the same source position. */
+#cs-inner[data-shape="tall"] #cs-stats-inner { grid-template-columns: 1fr 1fr; column-gap: calc(var(--gap) * 0.8); }
+#cs-inner[data-shape="tall"] #cs-stats-inner .cs-stat-row { min-width: 0; justify-content: space-between; }
+#cs-inner[data-shape="tall"] #cs-stats-inner .cs-stat-label { width: auto; min-width: 0; flex: 0 1 auto; }
+#cs-inner[data-shape="tall"] #cs-stats-inner .cs-stat-bar-wrap { display: none; }
+#cs-inner[data-shape="tall"] #cs-stats-inner .cs-stat-val { flex: 0 0 auto; }
 
 /* ---------- header ---------- */
 /* .sheet-head is a space-between row; the setup header is a stack of three
@@ -683,8 +665,9 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 /* Minimum LOCAL height for title/budget, one category row, one usable option
    row and the action bar. SheetShape converts this to a per-panel zoom cap only
    when the safe viewport cannot afford the user's requested UI size. */
-@media (orientation: portrait) { #cs-inner { --fit-at: 340px; } }
-@media (orientation: landscape) { #cs-inner { --fit-at: 240px; } }
+/* --fit-at by sheet shape (zoom-corrected) not viewport orientation. */
+#cs-inner[data-shape="tall"]             { --fit-at: 340px; }
+#cs-inner:not([data-shape="tall"])       { --fit-at: 240px; }
 /* SHORT SHEET: `--pair-compact: off` stacks this sheet so the tab strip
    stays horizontal. A 852×393 phone is compact and still wide enough for
    pair-on, which kept the vertical rail and starved #cs-options. */
@@ -1174,15 +1157,15 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
    than the measured room required by header + tabs + one option + actions.
    Portrait and landscape have different budgets because portrait owns a tall
    bottom band while landscape shares the frame with the car. */
-@media (orientation: portrait) {
-  @container sheet (max-width: 300px) {
-    #cs-inner[data-density="compact"] #cs-stats-inner { display: none; }
-  }
+/* Stat-block hide thresholds differ by sheet shape: a tall sheet shows stats
+   until 300px (portrait phone stacked), a wide sheet until 420px (landscape phone
+   paired — more chrome around the stat band competes for the same narrow column).
+   Uses data-shape (zoom-corrected) not @media orientation. */
+@container sheet (max-width: 300px) {
+  #cs-inner[data-shape="tall"][data-density="compact"] #cs-stats-inner { display: none; }
 }
-@media (orientation: landscape) {
-  @container sheet (max-width: 420px) {
-    #cs-inner[data-density="compact"] #cs-stats-inner { display: none; }
-  }
+@container sheet (max-width: 420px) {
+  #cs-inner:not([data-shape="tall"])[data-density="compact"] #cs-stats-inner { display: none; }
 }
 /* THE FOOT IS THE LAST THING THAT MAY PUSH CONTENT OFF. On a landscape phone at
    UI SIZE 150% the head and the foot together came to 2px more than the panel,
