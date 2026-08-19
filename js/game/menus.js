@@ -586,18 +586,21 @@ function updateTrackPreview() {
   const sheet = card && card.closest(".sheet");
   const stacked = !!(sheet && sheet.dataset.pair !== "on");
   const compact = !!(sheet && sheet.dataset.density === "compact");
-  const portrait = matchMedia("(orientation: portrait)").matches;
+  /* Use the sheet's measured shape (set by sheetshape.js in the sheet's own
+     zoom-corrected units) instead of matchMedia("orientation: portrait") which
+     reads the viewport and is the wrong proxy at non-100% zoom. */
+  const tallSheet = !!(sheet && sheet.dataset.shape === "tall");
   const cardInnerW = card ? card.clientWidth - padX : 260;
   const chipH = sheet ? px(getComputedStyle(sheet).getPropertyValue("--chip-h")) || 40 : 40;
-  /* In every LANDSCAPE stacked layout CSS makes the preview a thumbnail band
-     beside its caption. planPreview's 120px floor belongs to a full preview
-     column, so use the band's own token-based caps here and preserve the circuit
-     aspect inside them. One-and-a-half chip rows stays useful at 100% without
+  /* In every WIDE stacked layout CSS makes the preview a thumbnail band beside
+     its caption. planPreview's 120px floor belongs to a full preview column, so
+     use the band's own token-based caps here and preserve the circuit aspect
+     inside them. One-and-a-half chip rows stays useful at 100% without
      overrunning the band when a late density measurement switches a 200% sheet
      to compact.
-     In PORTRAIT the CSS overrides switch to a column layout with no height cap,
-     so we use planPreview there to fill the available section height. */
-  const plan = (stacked && !portrait)
+     On a TALL sheet the CSS overrides switch to a column layout with no height
+     cap, so we use planPreview to fill the available section height. */
+  const plan = (stacked && !tallSheet)
     ? {
       shape: "beside",
       // Match the compact CSS cap instead of pinning a 1.5-row canvas over it.

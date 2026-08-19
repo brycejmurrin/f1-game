@@ -566,7 +566,10 @@ body { --compact-at: 600px; --wide-at: 620px; }
      short sheet left the map as a left stamp and wasted the rest of the row. */
   --pair-compact: wide;
 }
-@media (orientation: landscape) { #sel-inner { --fit-at: 210px; } }
+/* Wide sheet (landscape-shaped) can afford a slightly lower fit-at floor.
+   Uses data-shape which is measured in the sheet's own units by sheetshape.js,
+   not @media orientation which reads the viewport and is wrong at non-100% zoom. */
+#sel-inner:not([data-shape="tall"]) { --fit-at: 210px; }
 
 /* COLUMNS ARE FOR A WIDE SHEET; A TALL ONE GETS BANDS. Gating the two-column
    split on width alone put an upright iPad (810px sheet, 1170px tall) into
@@ -893,79 +896,71 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    Only the type sizes are listed: the map's width is the inherited knob, so an
    upright TABLET (which stacks map-over-facts at --sel-map-w: 100%) keeps its
    full-width map and simply gets the smaller caption too. */
-@media (orientation: portrait) {
-  /* PHONE PORTRAIT: MAP ON TOP, FACTS AS A CAPTION UNDER IT — the same band the
-     upright tablet gets, for the same reason. Widening the map inside the ROW
-     layout backfired: at 62% the facts had 230px left, so the meta wrapped to
-     two lines and every chip took a row of its own, and the card came out TALLER
-     than when the map was small. Full width doubles the map (160 -> 323px) and
-     the caption under it costs four short lines. The elevation strip goes: at
-     323px wide and 22px tall it is a texture, not a reading, and it is the one
-     thing here that costs height without saying anything the chips do not. */
-  @container sheet (max-width: 619px) {
-    #sel-track-preview { flex-direction: column; align-items: stretch; --sel-map-w: 100%; }
-    #sel-preview-info { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
-    #sel-preview-name, #sel-preview-gp, #sel-preview-meta { margin: 0; }
-    #sel-preview-facts { flex-basis: 100%; }
-    /* Two IDs: the base `#sel-preview-elev { display: block }` is declared later
-       in this file, and a single-ID rule here would lose to it on source order —
-       the same trap the map's width knob exists to dodge. */
-    #sel-track-preview #sel-preview-elev { display: none; }
-  }
-  /* THE PREVIEW TYPE SIZES THAT USED TO SIT HERE WERE INERT, and had been for
-     as long as they existed. #sel-preview-{name,gp,meta,rec} and .spf-fact are
-     all re-declared at the bottom of this file (~588-594) at the SAME
-     specificity, and a media query adds none — so source order decided it and
-     the later block won every time. The 9px facts and 10px GP line this block
-     "set" were never what rendered; the base 10px/11px were.
-     This is the exact trap the note under THE PREVIEW CARD IN THE TWO-COLUMN
-     LAYOUT describes, and it caught the phone sizes too. The touch sizes now
-     live AFTER those base rules, where they can already win — see THE TOUCH
-     TYPE FLOOR at the end of this file. Only the layout values stay here,
-     because nothing re-declares them. */
-  #sel-preview-facts { gap: 5px; margin-top: 5px; }
-  #sel-preview-elev { height: 26px; margin-top: 4px; }
+/* TALL-SHEET (portrait-shaped) SELECT PREVIEW.
+   Uses data-shape="tall" set by sheetshape.js from the sheet's measured geometry,
+   not @media (orientation: portrait) which reads the viewport and is the wrong
+   proxy at non-100% zoom (measured: at 115% a phone's sheet is portrait-shaped
+   but the viewport pixel count may not be, so the media query misfires).
 
-  /* PORTRAIT STACKED: BIGGER MAP.
-     The stacked rules (lines ~433–478) force flex-direction:row and cap the map
-     at chip-h*3.5 (~140px) to keep it a thumbnail band. In portrait we want the
-     map as the centrepiece — full width, taller. Override with matching or higher
-     specificity so portrait wins regardless of source order.
-     Three IDs beat the two-ID stacked rule. */
-  #sel-inner:not([data-pair="on"]) > #sel-body > #sel-track-section {
-    max-height: 55%;
-  }
-  #sel-inner:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section {
-    max-height: 62%;
-  }
-  #sel-inner:not([data-pair="on"]) > #sel-body > #sel-track-section > #sel-track-preview {
-    flex-direction: column;
-    align-items: stretch;
-    --sel-map-w: 100%;
-  }
-  /* Remove the chip-h*3.5 cap so the map can grow to fill the section budget.
-     Three selectors: two IDs + attribute beats the two-ID map cap above. */
-  #sel-inner:not([data-pair="on"]) > #sel-body > #sel-track-section #sel-preview-map {
-    max-height: none;
-    max-width: 100%;
-    width: var(--sel-map-w, 100%);
-  }
-  /* Compact portrait: same column layout, slightly smaller budget so one list
-     item stays visible. */
-  #sel-inner:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section > #sel-track-preview {
-    flex-direction: column;
-    align-items: stretch;
-    --sel-map-w: 100%;
-  }
-  #sel-inner:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section #sel-preview-map {
-    max-height: none;
-    max-width: 100%;
-  }
-  /* Restore the caption elements hidden by compact stacked rules so they appear
-     under the map in portrait compact view. */
-  #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-meta,
-  #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-facts { display: flex; }
+   PHONE / SMALL TABLET PORTRAIT: MAP ON TOP, FACTS AS A CAPTION UNDER IT.
+   Widening the map inside the ROW layout backfired: at 62% the facts had 230px
+   left, so the meta wrapped to two lines and every chip took a row of its own,
+   and the card came out TALLER than when the map was small. Full width doubles
+   the map (160 → 323px) and the caption under it costs four short lines.
+   The elevation strip goes: at 323px wide and 22px tall it is a texture, not a
+   reading. Only the upright TABLET (wide enough to get a two-column sheet but
+   tall-shaped) keeps a full-width map via the container query below. */
+@container sheet (max-width: 619px) {
+  #sel-inner[data-shape="tall"] #sel-track-preview { flex-direction: column; align-items: stretch; --sel-map-w: 100%; }
+  #sel-inner[data-shape="tall"] #sel-preview-info { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+  #sel-inner[data-shape="tall"] #sel-preview-name,
+  #sel-inner[data-shape="tall"] #sel-preview-gp,
+  #sel-inner[data-shape="tall"] #sel-preview-meta { margin: 0; }
+  #sel-inner[data-shape="tall"] #sel-preview-facts { flex-basis: 100%; }
+  /* Two IDs + attribute: the base `#sel-preview-elev { display: block }` is
+     declared later; a single-ID rule here would lose on source order. */
+  #sel-inner[data-shape="tall"] #sel-track-preview #sel-preview-elev { display: none; }
 }
+/* Type spacing (not re-declared later, so source-order doesn't matter here). */
+#sel-inner[data-shape="tall"] #sel-preview-facts { gap: 5px; margin-top: 5px; }
+#sel-inner[data-shape="tall"] #sel-preview-elev { height: 26px; margin-top: 4px; }
+
+/* TALL STACKED: BIGGER MAP.
+   The stacked rules force flex-direction:row and cap the map at chip-h*3.5
+   (~140px) to keep it a thumbnail band. On a tall sheet the map is the
+   centrepiece — full width, filling the section height. Override with three-ID
+   specificity to beat the two-ID stacked rule.
+   Applies whenever the sheet is tall-shaped, regardless of zoom level — which
+   is exactly what the old @media (orientation: portrait) failed to do. */
+#sel-inner[data-shape="tall"]:not([data-pair="on"]) > #sel-body > #sel-track-section {
+  max-height: 55%;
+}
+#sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section {
+  max-height: 62%;
+}
+#sel-inner[data-shape="tall"]:not([data-pair="on"]) > #sel-body > #sel-track-section > #sel-track-preview {
+  flex-direction: column;
+  align-items: stretch;
+  --sel-map-w: 100%;
+}
+/* Remove the chip-h*3.5 cap so the map fills the section budget. */
+#sel-inner[data-shape="tall"]:not([data-pair="on"]) > #sel-body > #sel-track-section #sel-preview-map {
+  max-height: none;
+  max-width: 100%;
+  width: var(--sel-map-w, 100%);
+}
+#sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section > #sel-track-preview {
+  flex-direction: column;
+  align-items: stretch;
+  --sel-map-w: 100%;
+}
+#sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section #sel-preview-map {
+  max-height: none;
+  max-width: 100%;
+}
+/* Restore caption elements hidden by compact stacked rules in tall compact view. */
+#sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] #sel-preview-meta,
+#sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] #sel-preview-facts { display: flex; }
 
 /* THE PREVIEW CARD IN THE TWO-COLUMN LAYOUT.
    Scoped through #sel-track-preview — two IDs — deliberately. A container query
@@ -1081,7 +1076,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
    scroll region needs. */
 #ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; }
-@media (orientation: landscape) { #ss-inner { --fit-at: 220px; } }
+#ss-inner:not([data-shape="tall"]) { --fit-at: 220px; }
 /* SHORT SHEET: `--pair-compact: off` on `.pane-pair` stacks this sheet when
    compact even if clientWidth stays above 620. Same as select / career / garage. */
 /* Stacked season setup owns ONE vertical scroll region. Without this branch the
@@ -1284,98 +1279,75 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    two, nothing spanning, and the chips dialled down: seven sections become
    three rows of about 200px total. Taller screens keep the roomy two-column
    layout, where there was never a problem. */
-/* The height half of this condition now comes from data-density, measured in the
-   units the content is actually laid out in (js/game/sheetshape.js). Orientation
-   and width stay media queries: zoom does not distort either.
-
-   `:where()` CARRIES ZERO SPECIFICITY, and that is the whole reason it is used
-   here rather than a bare prefix. A plain `.sheet[data-density=...]` ancestor adds
-   a class and an attribute to every selector in the block, which is enough to beat
-   a LATER rule that used to win — measured: #sel-inner's height cap started
-   overriding a rule it had always lost to, and the desktop select golden moved.
-   Wrapped in :where(), these rules keep exactly the specificity they had. */
-@media (orientation: landscape) {
-  :where(.sheet[data-density="compact"]) #rs-body { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: calc(var(--pad) * 0.7); }
+/* WIDE-SHAPED SHEET (landscape-shaped) RACE SETTINGS: three-column compact grid.
+   Uses data-shape="wide" from sheetshape.js — measured in the sheet's own
+   zoom-corrected units — instead of @media (orientation: landscape) which reads
+   the viewport and fires incorrectly at non-100% zoom.
+   `:where()` keeps specificity identical to the rule it used to be. */
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: calc(var(--pad) * 0.7); }
   /* TIME OF DAY and DIFFICULTY stop spanning — in three columns a full-width
      row is the thing that pushes everything else down. */
-  :where(.sheet[data-density="compact"]) #rs-body #rs-time-section,
-  :where(.sheet[data-density="compact"]) #rs-body #rs-diff-section { grid-column: auto; }
-  /* RACE SETTINGS is seen before every single race, and its labels used to be
-     the smallest type in the app at 9px — under the --label floor by a third.
-     The chips are also the thing you AIM at here, so undersized type with thin
-     padding was a small target as well as small text. */
-  :where(.sheet[data-density="compact"]) #race-settings .sel-chip { font-size: var(--fs-micro); padding: 7px 9px; letter-spacing: 0; }
-  :where(.sheet[data-density="compact"]) #race-settings .sel-label { font-size: var(--fs-micro); margin-bottom: 3px; }
-  :where(.sheet[data-density="compact"]) .rs-row { margin-bottom: calc(var(--gap) * 0.5); }
-  /* Championship QUALI is a label. display:contents + a full-span label
-     isolated DIFF on row 2 and parked CAUTIONS / RELIABILITY on row 4
-     under the foot (measured 852×393, cache 1464). Pin the label to row
-     1 and the two chip rows under it so DIFF / CAUTIONS / RELIABILITY
-     share the last row. overflow-y is the safety net when the chips are
-     still present (one-off ON/OFF). */
-  :where(.sheet[data-density="compact"]) #rs-body { overflow-y: auto; overscroll-behavior-y: contain; }
-  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > :is(.rs-row:nth-child(1), .rs-row:nth-child(2), #rs-time-section) {
-    grid-row: 2;
-  }
-  :where(.sheet[data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > :is(#rs-diff-section, #rs-caution-section, #rs-reliab-section) {
-    grid-row: 3;
-  }
-  :where(.sheet[data-density="compact"]) #rs-quali-section:has(#rs-quali[hidden]) {
-    grid-column: 1 / -1;
-    grid-row: 1;
-    margin-bottom: 0;
-  }
-  /* ONE-OFF play-shape: keep the 3-col compact grid. QUALI sits with
-     LAPS/WEATHER; TIME spans. LAPS/WEATHER wrapping to two chip-rows
-     ate the last row (play @115: labels on the foot, chips 46px into
-     BACK/RACE). Pack those groups on one line like #rs-reliab. */
-  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) {
-    align-content: start;
-  }
-  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) > :is(.rs-row:nth-child(1), .rs-row:nth-child(2), #rs-quali-section) {
-    grid-row: 1;
-  }
-  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) #rs-time-section {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) > :is(#rs-diff-section, #rs-caution-section, #rs-reliab-section) {
-    grid-row: 3;
-  }
-  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) :is(#rs-laps, #rs-weather) {
-    flex-wrap: nowrap;
-    --balance-basis: 0rem;
-    --balance-min: 0rem;
-  }
-  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) :is(#rs-laps, #rs-weather) > .sel-chip {
-    flex: 1 1 0;
-    min-width: 0;
-  }
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body #rs-time-section,
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body #rs-diff-section { grid-column: auto; }
+:where(.sheet[data-shape="wide"][data-density="compact"]) #race-settings .sel-chip { font-size: var(--fs-micro); padding: 7px 9px; letter-spacing: 0; }
+:where(.sheet[data-shape="wide"][data-density="compact"]) #race-settings .sel-label { font-size: var(--fs-micro); margin-bottom: 3px; }
+:where(.sheet[data-shape="wide"][data-density="compact"]) .rs-row { margin-bottom: calc(var(--gap) * 0.5); }
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body { overflow-y: auto; overscroll-behavior-y: contain; }
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > :is(.rs-row:nth-child(1), .rs-row:nth-child(2), #rs-time-section) {
+  grid-row: 2;
 }
-/* ONE-OFF portrait: two columns. TIME spans; DIFF/QUALI then
-   CAUTION/RELIAB share the last two rows (port @115 was 22px into the
-   foot before this pin). Compact landscape keeps three columns above. */
-@media (orientation: portrait) {
-  #rs-body:not(:has(#rs-quali[hidden])) {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: var(--pad);
-    align-content: start;
-  }
-  #rs-body:not(:has(#rs-quali[hidden])) > .rs-row:nth-child(1),
-  #rs-body:not(:has(#rs-quali[hidden])) > .rs-row:nth-child(2) { grid-row: 1; }
-  #rs-body:not(:has(#rs-quali[hidden])) #rs-time-section {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-  #rs-body:not(:has(#rs-quali[hidden])) #rs-diff-section,
-  #rs-body:not(:has(#rs-quali[hidden])) #rs-quali-section {
-    grid-column: auto;
-    grid-row: 3;
-  }
-  #rs-body:not(:has(#rs-quali[hidden])) #rs-caution-section,
-  #rs-body:not(:has(#rs-quali[hidden])) #rs-reliab-section { grid-row: 4; }
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > :is(#rs-diff-section, #rs-caution-section, #rs-reliab-section) {
+  grid-row: 3;
 }
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-quali-section:has(#rs-quali[hidden]) {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  margin-bottom: 0;
+}
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) {
+  align-content: start;
+}
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) > :is(.rs-row:nth-child(1), .rs-row:nth-child(2), #rs-quali-section) {
+  grid-row: 1;
+}
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) #rs-time-section {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) > :is(#rs-diff-section, #rs-caution-section, #rs-reliab-section) {
+  grid-row: 3;
+}
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) :is(#rs-laps, #rs-weather) {
+  flex-wrap: nowrap;
+  --balance-basis: 0rem;
+  --balance-min: 0rem;
+}
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) :is(#rs-laps, #rs-weather) > .sel-chip {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* TALL-SHAPED SHEET (portrait): two-column race settings layout.
+   TIME spans; DIFF/QUALI then CAUTION/RELIAB share the last two rows.
+   Uses data-shape="tall" (zoom-correct) not @media (orientation: portrait). */
+.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: var(--pad);
+  align-content: start;
+}
+.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) > .rs-row:nth-child(1),
+.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) > .rs-row:nth-child(2) { grid-row: 1; }
+.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) #rs-time-section {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) #rs-diff-section,
+.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) #rs-quali-section {
+  grid-column: auto;
+  grid-row: 3;
+}
+.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) #rs-caution-section,
+.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) #rs-reliab-section { grid-row: 4; }
 #race-settings .sel-chip {
   display: flex; align-items: center; justify-content: center; gap: 4px;
   padding-inline: 6px; min-width: 0;
