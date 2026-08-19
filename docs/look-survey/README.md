@@ -15,3 +15,4 @@ One 4×5 sheet per circuit: rows `dawn / day / dusk / night`, columns
 | Singapore | [singapore_grid.png](singapore_grid.png) |
 | Spa | [spa_grid.png](spa_grid.png) |
 | Las Vegas | [vegas_grid.png](vegas_grid.png) |
+| Zandvoort | [zandvoort_grid.png](zandvoort_grid.png) |
