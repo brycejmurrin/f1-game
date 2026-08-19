@@ -1084,6 +1084,21 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   margin: 0;
   min-width: 0;
 }
+/* WIDE-SHAPED SETTINGS: two-column option grid so landscape phones don't
+   have to scroll through a single full-width column of buttons.
+   Each option button shrinks from full-sheet width (~717px) to half-width
+   (~350px). Sliders (.tune-row) and the renderer picker (#pm-renderer-row)
+   span both columns — they need the width.
+   Uses data-shape="wide" (sheetshape.js, zoom-corrected) not @media orientation. */
+#pmsettings-inner[data-shape="wide"] .pm-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+#pmsettings-inner[data-shape="wide"] .pm-group .tune-row,
+#pmsettings-inner[data-shape="wide"] .pm-group .pm-group-h,
+#pmsettings-inner[data-shape="wide"] .pm-group #pm-renderer-row,
+#pmsettings-inner[data-shape="wide"] .pm-group #pm-gfx-status { grid-column: 1 / -1; }
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
 .sheet[data-density="compact"] .pm-doors { gap: 4px; }
 #pmsettings-inner.sheet[data-density="compact"] .pm-doors button {
