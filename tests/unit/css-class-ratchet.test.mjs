@@ -87,7 +87,9 @@ export function shellNodes() {
 // placeholders (no html/js consumer) removed from css/menus.css.
 // 534 → 532: .menu-status-item / .menu-status-label left with the
 // title-screen dashboard chrome.
-const CLASS_CEILING = 532;
+// 532 → 534: ScrollFade's sideways "more this way" edges (.sf-l / .sf-r),
+// the horizontal twin of the existing .sf-t / .sf-b pair. No new host class.
+const CLASS_CEILING = 534;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under

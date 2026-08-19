@@ -104,13 +104,9 @@
   border-right: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-/* SHORT SHEET: tighten the slot picker so guide CTAs stay reachable.
-   Measured 852×393 @115%: with pair on, SLOT 3 and #cr-guide-* sat ~83px past
-   #cr-inner. Compacting padding helps; forcing the stack (high --pair-at) makes
-   #cr-body the scroller so both modes + guides are one finger-flick away. */
-#cr-inner[data-density="compact"] {
-  --pair-at: 2000px;
-}
+/* SHORT SHEET: `--pair-compact: off` stacks this sheet so #cr-body is the
+   scroller. Measured 852×393 @115%: pair-on left SLOT 3 and the guide CTAs
+   ~83px past #cr-inner. */
 /* Modes picker: DRIVER | MY TEAM side by side on any stacked sheet so
    MY TEAM is not below the fold. Hub (no .cr-slot in both panes) stays one
    column and keeps #cr-body as the scroller. Compact was the first cut;

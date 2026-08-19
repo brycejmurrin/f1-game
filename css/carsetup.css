@@ -685,10 +685,9 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
    when the safe viewport cannot afford the user's requested UI size. */
 @media (orientation: portrait) { #cs-inner { --fit-at: 340px; } }
 @media (orientation: landscape) { #cs-inner { --fit-at: 240px; } }
-/* SHORT SHEET: stack even when clientWidth stays above 400. A 852×393 phone is
-   compact (--compact-at 480) and still wide enough for pair-on, which keeps the
-   vertical tab rail and starves #cs-options. Density is classified first. */
-#cs-inner[data-density="compact"] { --pair-at: 2000px; }
+/* SHORT SHEET: `--pair-compact: off` stacks this sheet so the tab strip
+   stays horizontal. A 852×393 phone is compact and still wide enough for
+   pair-on, which kept the vertical rail and starved #cs-options. */
 
 /* ================= LAYOUT: container queries on the sheet =================
    Not media queries. What the panel can afford is a function of the width it

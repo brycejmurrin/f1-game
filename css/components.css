@@ -296,11 +296,13 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    sheet; it reads `--pair-at` and writes `data-pair`. Attributes also carry
    specificity, which container queries do not — the tie that cost this project
    two debugging sessions.
-   Screens tune it with four properties and nothing else:
-     --pair-at     the sheet width at which the pair turns on (default 620px)
-     --pair-split  the SIDE column's track      (default minmax(0, 1fr))
-     --pair-main   the MAIN column's track      (default minmax(0, 1fr))
-     --pair-gap    the gutter between the panes (default 0.8 * --pad)
+   Screens tune it with five properties and nothing else:
+     --pair-at       the sheet width at which the pair turns on (default 620px)
+     --pair-compact  off = force stack when data-density=compact (default off)
+                     empty/on = keep reading --pair-at (safe default)
+     --pair-split    the SIDE column's track      (default minmax(0, 1fr))
+     --pair-main     the MAIN column's track      (default minmax(0, 1fr))
+     --pair-gap      the gutter between the panes (default 0.8 * --pad)
 
    THE SLOTS ARE NAMED BY POSITION, NOT BY ROLE. `.pair-side` is the narrow
    column with the action bar under it; `.pair-main` is the wide one that runs to
@@ -329,6 +331,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    rather than `[data-pair="off"]`, so the stack is also what an unmeasured sheet
    gets in the first frame, or if the script never loads. */
 .pane-pair {
+  --pair-compact: off;
   grid-template-columns: var(--pair-split, minmax(0, 1fr)) var(--pair-main, minmax(0, 1fr));
   grid-template-rows: auto minmax(0, 1fr) min-content;
   column-gap: var(--pair-gap, calc(var(--pad) * 0.8));
@@ -376,23 +379,35 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   scrollbar-gutter: stable;
   touch-action: pan-y;
 }
-/* .sf-t / .sf-b are set by js/game/scrollfade.js on exactly the panes that
-   currently have content hidden above / below. No class = no mask, so a pane
+/* .sf-t / .sf-b / .sf-l / .sf-r are set by js/game/scrollfade.js on panes
+   that still have content hidden on that edge. No class = no mask, so a pane
    whose content fits is never faded: the fade always means something. */
-.sf-t, .sf-b {
-  --sfade-t: 0px; --sfade-b: 0px;
-  mask-image: linear-gradient(to bottom,
-    transparent 0, #000 var(--sfade-t),
-    #000 calc(100% - var(--sfade-b)), transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom,
-    transparent 0, #000 var(--sfade-t),
-    #000 calc(100% - var(--sfade-b)), transparent 100%);
+.sf-t, .sf-b, .sf-l, .sf-r {
+  --sfade-t: 0px; --sfade-b: 0px; --sfade-l: 0px; --sfade-r: 0px;
+  mask-image:
+    linear-gradient(to bottom,
+      transparent 0, #000 var(--sfade-t),
+      #000 calc(100% - var(--sfade-b)), transparent 100%),
+    linear-gradient(to right,
+      transparent 0, #000 var(--sfade-l),
+      #000 calc(100% - var(--sfade-r)), transparent 100%);
+  mask-composite: intersect;
+  -webkit-mask-image:
+    linear-gradient(to bottom,
+      transparent 0, #000 var(--sfade-t),
+      #000 calc(100% - var(--sfade-b)), transparent 100%),
+    linear-gradient(to right,
+      transparent 0, #000 var(--sfade-l),
+      #000 calc(100% - var(--sfade-r)), transparent 100%);
+  -webkit-mask-composite: source-in;
 }
 /* 26px, not 20. These lists are rows of ~40px, and a fade shorter than half a
    row leaves the last one looking cut off rather than continuing — which is
    exactly how the standings and schedule tabs read. */
 .sf-t { --sfade-t: 26px; }
 .sf-b { --sfade-b: 26px; }
+.sf-l { --sfade-l: 26px; }
+.sf-r { --sfade-r: 26px; }
 
 /* ---------- scroll POSITION INDICATOR ----------
    A scrollbar thumb down the right edge, like a web page has. The fade above

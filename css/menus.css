@@ -438,6 +438,12 @@ body { --compact-at: 600px; --wide-at: 620px; }
   flex: 0 1 auto; min-height: 0; max-height: 42%;
   overflow: hidden;
 }
+#sel-inner:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section {
+  /* Compact / high UI SIZE used to hide the map or stamp it at 2.6 chips.
+     Spend more of the stacked body on the outline so lower-res and zoomed
+     sheets still read the circuit, not a postage stamp. */
+  max-height: 58%;
+}
 #sel-inner:not([data-pair="on"]) > #sel-body > #sel-track-section > #sel-track-preview {
   flex: 0 1 auto; min-height: 0;
   /* The preview is a band in every stacked sheet: thumbnail beside caption.
@@ -466,22 +472,15 @@ body { --compact-at: 600px; --wide-at: 620px; }
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-map {
   /* Compact stacked landscape used to hide this whole section. Keep it a
      band (name beside map, extras still display:none) but size the outline
-     as a readable thumbnail — chip-h alone painted a 27×40 stamp. */
-  max-height: min(calc(var(--chip-h) * 2.6), 100%);
-  max-width: min(38%, calc(var(--chip-h) * 3.4));
+     as a readable preview — chip-h * 2.6 painted a stamp at 115%. */
+  max-height: min(calc(var(--chip-h) * 4.2), 100%);
+  max-width: min(48%, calc(var(--chip-h) * 5.2));
 }
-/* When the shared functional-height cap is active, or the sheet itself is too
-   narrow to seat a thumbnail beside the name, the name is the useful preview.
-   Dropping the decorative map returns a complete control row to the catalogue
-   and avoids clipping an inline aspect-ratio size inside a sub-60px band. */
-#sel-inner[data-fit="on"] #sel-preview-map { display: none; }
+/* Truly tiny sheets cannot seat a thumbnail beside the name. data-fit and
+   landscape-narrow used to hide the map on every zoomed / low-res phone;
+   those keep the outline and let the caps above bind. */
 @container sheet (max-width: 300px) {
   #sel-inner[data-density="compact"] #sel-preview-map { display: none; }
-}
-@media (orientation: landscape) {
-  @container sheet (max-width: 420px) {
-    #sel-inner[data-density="compact"] #sel-preview-map { display: none; }
-  }
 }
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-track-preview {
   /* A short/high-scale sheet cannot afford a map row followed by a caption
@@ -564,13 +563,9 @@ body { --compact-at: 600px; --wide-at: 620px; }
   --compact-at: 480px;
 }
 @media (orientation: landscape) { #sel-inner { --fit-at: 210px; } }
-/* SHORT SHEET: stack even when the box is still wide in CSS px. Career already
-   does this (`#cr-inner[data-density="compact"] { --pair-at: 2000px }`). A
-   landscape phone at UI SIZE 150% keeps a ~700px clientWidth, so the 620px
-   pair threshold stays on and the compact preview-band / one-list rules never
-   fire. Density is classified first (sheetshape.js), then pair reads the
-   raised threshold. */
-#sel-inner[data-density="compact"] { --pair-at: 2000px; }
+/* SHORT SHEET: `.pane-pair { --pair-compact: off }` stacks this sheet when
+   compact even if clientWidth stays above 620 (landscape phone at a raised
+   UI SIZE). Density is classified first (sheetshape.js), then pair. */
 
 /* COLUMNS ARE FOR A WIDE SHEET; A TALL ONE GETS BANDS. Gating the two-column
    split on width alone put an upright iPad (810px sheet, 1170px tall) into
@@ -1041,9 +1036,8 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    scroll region needs. */
 #ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; }
 @media (orientation: landscape) { #ss-inner { --fit-at: 220px; } }
-/* SHORT SHEET: stack even when clientWidth stays above 620 (landscape phone at
-   a raised UI SIZE). Same compact --pair-at raise as career / select / garage. */
-#ss-inner[data-density="compact"] { --pair-at: 2000px; }
+/* SHORT SHEET: `--pair-compact: off` on `.pane-pair` stacks this sheet when
+   compact even if clientWidth stays above 620. Same as select / career / garage. */
 /* Stacked season setup owns ONE vertical scroll region. Without this branch the
    two `.pane` children take their full natural height, #ss-body overflows while
    remaining `overflow: visible`, and #ss-inner clips the result. On a 390x844

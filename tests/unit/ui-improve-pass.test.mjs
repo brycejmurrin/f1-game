@@ -66,8 +66,8 @@ test("circuit select stacked uses one list scroller", () => {
     "the track list fills leftover body height from a zero basis");
   assert.match(css, /#sel-inner\[data-pair="on"\]:not\(\[data-shape="tall"\]\) #sel-track-section \{[\s\S]*?overflow:\s*hidden/,
     "wide preview column fits instead of scrolling as a second document");
-  assert.match(css, /#sel-inner\[data-density="compact"\]\s*\{\s*--pair-at:\s*2000px/,
-    "compact select stacks via --pair-at, same as career");
+  assert.match(read("css/components.css"), /\.pane-pair\s*\{[^}]*--pair-compact\s*:\s*off/,
+    "compact select stacks via --pair-compact, same as career / garage / season");
   assert.doesNotMatch(read("js/game/scrollfade.js"), /"\.pane", "#sel-body"/);
   assert.doesNotMatch(read("js/game/menunav.js"), /\.pane,#sel-body/);
   assert.doesNotMatch(read("tools/layout-audit.mjs"), /\.pane,#sel-body/);
@@ -85,16 +85,16 @@ test("garage stacked categories are a horizontal strip", () => {
     "stacked tabs pan sideways and override .pane overflow-y");
   assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs \{[\s\S]*?overflow-y:\s*auto/,
     "pair-on rail may still scroll vertically");
-  assert.match(css, /#cs-inner\[data-density="compact"\]\s*\{\s*--pair-at:\s*2000px/,
-    "compact garage stacks to the horizontal strip");
+  assert.match(read("css/components.css"), /\.pane-pair\s*\{[^}]*--pair-compact\s*:\s*off/,
+    "compact garage stacks to the horizontal strip via --pair-compact");
   assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #cs-tabs \{[\s\S]*?grid-template-columns:\s*repeat\(7,\s*minmax\(0,\s*1fr\)\)/,
     "short wide stacked garage packs fourteen tabs as two rows of seven");
   assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #cs-tabs \{[\s\S]*?max-height:\s*calc\(var\(--chip-h\) \* 2/,
     "wrapped play-shape tabs cap at two rows so #cs-options keeps a list");
   assert.doesNotMatch(css, /#cs-inner:not\(\[data-pair="on"\]\):is\(\[data-shape="tall"\], \[data-density="compact"\]\) #cs-tabs \{[\s\S]*?flex-wrap:\s*wrap/,
     "tall stacked garage must keep the horizontal strip — wrapping 14 tabs starved options");
-  assert.match(read("css/menus.css"), /#ss-inner\[data-density="compact"\]\s*\{\s*--pair-at:\s*2000px/,
-    "compact season stacks via --pair-at, same as career");
+  assert.match(read("css/components.css"), /\.pane-pair\s*\{[^}]*--pair-compact\s*:\s*off/,
+    "compact season stacks via --pair-compact, same as career");
   const js = read("js/game/setup-ui.js");
   assert.match(js, /scrollIntoView\(\{ block: "nearest", inline: "center" \}\)/);
 });
@@ -129,12 +129,17 @@ test("compact landscape catalogue spends its first viewport on a circuit", () =>
     /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\)\s*>\s*#sel-body\s*>\s*#sel-track-section\s*\{[^}]*display:\s*none/,
     "compact stacked landscape must keep the thumbnail band; hiding the section dropped the map");
   const menusJs = read("js/game/menus.js");
-  assert.match(css, /max-height:\s*min\(calc\(var\(--chip-h\) \* 2\.6\), 100%\)/);
-  assert.match(css, /max-width:\s*min\(38%, calc\(var\(--chip-h\) \* 3\.4\)\)/);
-  assert.match(menusJs, /cardInnerW \* \(compact \? 0\.38 : 0\.42\)/);
-  assert.match(menusJs, /chipH \* \(compact \? 3\.4 : 3\)/);
-  assert.match(menusJs, /slotH: chipH \* 2\.6/,
-    "every stacked SELECT map uses the readable thumbnail height — fitCanvas pins inline");
+  assert.match(css, /max-height:\s*min\(calc\(var\(--chip-h\) \* 4\.2\), 100%\)/);
+  assert.match(css, /max-width:\s*min\(48%, calc\(var\(--chip-h\) \* 5\.2\)\)/);
+  assert.match(css,
+    /#sel-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] > #sel-body > #sel-track-section \{[\s\S]*?max-height:\s*58%/,
+    "compact stacked band spends more of the body on the map");
+  assert.doesNotMatch(css, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/);
+  assert.doesNotMatch(css, /@container sheet \(max-width: 420px\)/);
+  assert.match(menusJs, /cardInnerW \* \(compact \? 0\.48 : 0\.42\)/);
+  assert.match(menusJs, /chipH \* \(compact \? 5\.2 : 3\)/);
+  assert.match(menusJs, /slotH: chipH \* \(compact \? 4\.2 : 2\.6\)/,
+    "CSS and JS stay in lockstep — fitCanvas pins max-height inline");
 });
 
 test("garage categories implement one roving tab system", () => {
@@ -442,6 +447,20 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   const activate = inputFn(src, "padActivate");
   assert.match(activate, /padSeedFocus\(\)/,
     "A's empty path must reuse padSeedFocus — not a second mover");
+  assert.match(activate, /ty === "range" \|\| ty === "number"/,
+    "A on a focused range/number must not click-to-jump the thumb");
+
+  assert.match(src, /UiLayers\.navOpen\(\)/,
+    "title #overlay is pad-navigable; anyOpen() stays false there");
+  assert.match(read("js/game/uilayers.js"), /function navOpen\(\)/);
+  assert.match(read("js/game/menunav.js"), /ty === "range" \|\| ty === "number"/,
+    "range/number own only Left/Right so Up/Down leave the row");
+  assert.match(read("js/game/ariastate.js"), /#vsfriend,#season-setup/,
+    "AriaState watches the two DOM-built overlays UiLayers already lists");
+  assert.match(read("js/game/scrollfade.js"), /"#menu-buttons"/,
+    "title chrome fade watches the zoomed #menu-buttons scroller");
+  assert.match(read("js/game/scrollfade.js"), /overflowX/,
+    "sideways strips get .sf-l / .sf-r, not only overflow-y thumbs");
 
   const poll = inputFn(src, "padNavPoll");
   assert.match(poll, /padNavSeeded/, "first padNavPoll of a newly-open menu seeds once");
@@ -479,7 +498,8 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
   assert.match(menus, /#ss-inner \{[^}]*--fit-at:\s*220px/);
   assert.match(read("css/overlays.css"), /@container sheet \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
   assert.doesNotMatch(read("css/overlays.css"), /@media \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
-  assert.match(menus, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/);
+  assert.doesNotMatch(menus, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/,
+    "zoomed / data-fit SELECT keeps the map; caps bind instead of hiding it");
 });
 
 test("garage preview chips hug the sheet and season quali is a label", () => {

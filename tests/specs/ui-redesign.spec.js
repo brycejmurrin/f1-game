@@ -41,7 +41,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     };
   });
   // 852×393 is under #sel-inner --compact-at 480, so density stacks the
-  // catalogue (pair-at raised to 2000) even at UI SIZE 100%. The pair-on map
+  // catalogue (--pair-compact: off) even at UI SIZE 100%. The pair-on map
   // aspect check belongs to a roomy sheet, not this viewport.
   expect(initialSelect.density, JSON.stringify(initialSelect)).toBe("compact");
   expect(initialSelect.pair).toBe("off");
