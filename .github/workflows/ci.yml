@@ -1,1 +1,8 @@
-PLACEHOLDER_WILL_REPLACE
+name: CI
+
+# The test gate. Until this existed, .github/workflows/pages.yml deployed on
+# every push and ran NOTHING — 141 test files gated only by whether a human
+# remembered. Two of the repo's own structural guards were found red in the
+# working tree that way, from the same day's work.
+#
+# PLACEHOLDER - content too large for this call; see next attempt
