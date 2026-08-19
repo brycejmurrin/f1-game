@@ -30,6 +30,25 @@
 */
 "use strict";
 const RaceControl = (() => {
+  // Result countdown policy. A winner crossing the line is not permission to
+  // remove a human who is still racing: single-player AI can finish first, and
+  // multiplayer humans can be separated by much more than 3.5 seconds. The
+  // hard cap remains the bounded escape hatch for an unfinished/stale human.
+  // AI-only harnesses retain the old "shortly after the winner" behaviour.
+  function finishDelay(cars, raceT, lapsTarget) {
+    let anyHuman = false, allHumansDone = true, anyFinished = false;
+    for (const c of cars || []) {
+      if (c && c.finished) anyFinished = true;
+      if (!c || !c.human) continue;
+      anyHuman = true;
+      if (!c.finished && !c.retired) allHumansDone = false;
+    }
+    if (anyHuman && allHumansDone) return 2.2;
+    if (!anyHuman && anyFinished) return 3.5;
+    if (raceT > 360 * lapsTarget) return 0.1;
+    return 0;
+  }
+
   const LABEL = ["GREEN", "YELLOW", "VSC", "SAFETY CAR"];
   const YELLOW_MIN = 3;    // settled hazards in ONE sector -> local yellow
   const VSC_MIN = 6;       // total settled hazards on the surface -> VSC
@@ -239,5 +258,6 @@ const RaceControl = (() => {
       get enabled() { return enabled; },
     };
   }
-  return { create };
+  return { create, finishDelay };
 })();
+

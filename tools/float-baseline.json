@@ -1,7 +1,7 @@
 {
   "madrid": 2,
   "mexico": 1,
-  "montreal": 1,
+  "montreal": 0,
   "abudhabi": 0,
   "albert_park": 0,
   "bahrain": 0,
@@ -40,3 +40,4 @@
   "watkins_glen": 0,
   "zandvoort": 0
 }
+

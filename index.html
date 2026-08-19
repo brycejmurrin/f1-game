@@ -11,7 +11,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1471">
+<meta name="apex-build" content="1474">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -45,8 +45,8 @@
 <link rel="stylesheet" href="css/menus.css?v=8092e2792eec">
 <link rel="stylesheet" href="css/carsetup.css?v=807c10d2cff4" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=ce419d9bb73a" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=9d299f79f8e6" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/responsive.css?v=b3628cd9e29d">
+<link rel="stylesheet" href="css/overlays.css?v=f307cde7fe57" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/responsive.css?v=9771885af6b8">
 <link rel="stylesheet" href="css/track-detail.css?v=6105e0e4ffad" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=e8ed7c0ac7d2" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=9ece0434b33b" media="print" onload="this.media='all'">
@@ -235,11 +235,14 @@
   })();
 </script>
 <!-- shown by CSS when body.in-race + portrait orientation — works on iOS too -->
-<div id="rotate-device">
+<div id="rotate-device" role="dialog" aria-modal="true"
+     aria-labelledby="rotate-title" aria-describedby="rotate-detail" aria-hidden="true">
   <div class="rotate-inner">
-    <div class="rotate-icon">&#8635;</div>
-    <p>Rotate to landscape to race</p>
-    <small>Or lock rotation in Control Center&nbsp;/&nbsp;Quick Settings</small>
+    <div class="rotate-icon" aria-hidden="true">&#8635;</div>
+    <p id="rotate-title">Rotate to landscape to race</p>
+    <small id="rotate-detail">Turn off rotation lock, then rotate your phone.</small>
+    <button id="rotate-controls" type="button">OPEN CONTROLS</button>
+    <button id="rotate-exit" type="button">EXIT RACE</button>
   </div>
 </div>
 
@@ -1726,7 +1729,7 @@
 <script crossorigin="anonymous" src="js/circuits/shanghai.js?v=363c245f31e4"></script>
 <script crossorigin="anonymous" src="js/circuits/miami.js?v=59ec5d81ef6d"></script>
 <script crossorigin="anonymous" src="js/circuits/imola.js?v=b6896c096d69"></script>
-<script crossorigin="anonymous" src="js/circuits/montreal.js?v=37d552113731"></script>
+<script crossorigin="anonymous" src="js/circuits/montreal.js?v=e07c5bb35e27"></script>
 <script crossorigin="anonymous" src="js/circuits/redbull.js?v=96ce893faa71"></script>
 <script crossorigin="anonymous" src="js/circuits/hungaroring.js?v=e0243a5f75a5"></script>
 <script crossorigin="anonymous" src="js/circuits/baku.js?v=f73b7896ab51"></script>
@@ -1778,8 +1781,8 @@
 <script crossorigin="anonymous" src="js/game/bodyattitude.js?v=517a947361fb"></script>
 <script crossorigin="anonymous" src="js/game/particles.js?v=90aaaca0f4d8"></script>
 <script crossorigin="anonymous" src="js/game/atmosphere.js?v=cce133b55ea5"></script>
-<script crossorigin="anonymous" src="js/game/store.js?v=f7d9107b2000"></script>
-<script crossorigin="anonymous" src="js/game/career.js?v=3b09a418d6be"></script>
+<script crossorigin="anonymous" src="js/game/store.js?v=0a16f4ae1ea7"></script>
+<script crossorigin="anonymous" src="js/game/career.js?v=2715f3c7d2db"></script>
 <script crossorigin="anonymous" src="js/game/season-cal.js?v=7f26f695d31e"></script>
 <script crossorigin="anonymous" src="js/game/reliability.js?v=483552b62ac9"></script>
 <script crossorigin="anonymous" src="js/game/ai-drive.js?v=8f08a841957c"></script>
@@ -1787,7 +1790,7 @@
 <script crossorigin="anonymous" src="js/game/setup-ui.js?v=7274b0b69237"></script>
 <script crossorigin="anonymous" src="js/game/career-ui.js?v=dab232f3d43e"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=8e20a72bee1a"></script>
-<script crossorigin="anonymous" src="js/game/menus.js?v=38c38a415f94"></script>
+<script crossorigin="anonymous" src="js/game/menus.js?v=e990ed33a3e3"></script>
 <script crossorigin="anonymous" src="js/game/scrollfade.js?v=c468f3706d17"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
 <script crossorigin="anonymous" src="js/game/sheetshape.js?v=931be6f5d0c9"></script>
@@ -1798,7 +1801,7 @@
 <script crossorigin="anonymous" src="js/game/settings-nav.js?v=0e5185440a80"></script>
 <script crossorigin="anonymous" src="js/game/aerozones.js?v=1f77f601ce84"></script>
 <script crossorigin="anonymous" src="js/game/skidmarks.js?v=d7604789daaa"></script>
-<script crossorigin="anonymous" src="js/game/racecontrol.js?v=a978b7ab5795"></script>
+<script crossorigin="anonymous" src="js/game/racecontrol.js?v=6919dab7c99e"></script>
 <script crossorigin="anonymous" src="js/game/photomode.js?v=52e5f7950e04"></script>
 <script crossorigin="anonymous" src="js/game/tuner.js?v=647bc13307be"></script>
 <script crossorigin="anonymous" src="js/game/cam-tuner.js?v=1ac37b5b0651"></script>
@@ -1812,7 +1815,7 @@
 <script crossorigin="anonymous" src="js/game/cameras.js?v=577b77b3b7e7"></script>
 <script crossorigin="anonymous" src="js/game/cam-modes.js?v=94d3266248e8"></script>
 <script crossorigin="anonymous" src="js/game/hud.js?v=3d3fc4f75f28"></script>
-<script crossorigin="anonymous" src="js/game/results.js?v=c4dafcdffad5"></script>
+<script crossorigin="anonymous" src="js/game/results.js?v=a95aec8a58ad"></script>
 <script crossorigin="anonymous" src="js/game/quali.js?v=eb08e041b1ea"></script>
 <script crossorigin="anonymous" src="js/game/debrisworld.js?v=f72538e5cdcc"></script>
 <script crossorigin="anonymous" src="js/game/incidentsim.js?v=887687a6a634"></script>
@@ -1827,5 +1830,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=f0bfb2817114"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=2891c595f0f0"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=aced6d5696d5"></script>
-<script crossorigin="anonymous" src="js/game.js?v=6f429a4d7d2c"></script>
+<script crossorigin="anonymous" src="js/game.js?v=01a0a236c56a"></script>
 </body></html>

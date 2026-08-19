@@ -2576,6 +2576,7 @@ function startRace() {
   // and setMusic/setSfx lift it if it is off, so it can never strand you.
   // (#soundbtn rides #overlay now — see css/overlays.css for why.)
   document.body.classList.add("in-race");
+  syncRotateBlocker(true);
   holdRaceWake();
   for (const l of els.lights.children) l.classList.remove("on");
   showTouchControls(true);
@@ -3117,12 +3118,24 @@ function clearMenuScreens() {
   garageReturn = "select";
 }
 
+const rotateBlockMql = window.matchMedia ? window.matchMedia("(orientation: portrait) and (pointer: coarse) and (max-width: 743px)") : { matches: false };
+function syncRotateBlocker(moveFocus) {
+  const box = $("rotate-device"); if (!box) return false;
+  const active = document.body.classList.contains("in-race") && rotateBlockMql.matches && !document.body.classList.contains("rotate-help-open");
+  box.setAttribute("aria-hidden", active ? "false" : "true"); if (active && moveFocus) requestAnimationFrame(() => {
+    const first = $("rotate-controls"); if (first && document.body.classList.contains("in-race") && rotateBlockMql.matches) first.focus();
+  }); return active;
+}
+if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", () => syncRotateBlocker(true));
+else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
+
 function quitToMenu() {
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
   closeCamTuner(false); exitPhotoMode();
   state = "menu"; paused = false;
-  $("quali").classList.remove("q-done"); document.body.classList.remove("in-race");
+  $("quali").classList.remove("q-done"); document.body.classList.remove("in-race", "rotate-help-open");
+  syncRotateBlocker(false);
   dropRaceWake();
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
@@ -3336,27 +3349,12 @@ function update(dt) {
   // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
   updateCaution(dt);
 
-  // race ends when the player finishes, or shortly after the winner does, or
-  // at a hard time cap so it can never hang
+  // Race-control owns the finish policy as well as neutralisation rules. In a
+  // human race an AI/other player crossing first must NOT start a 3.5 s result
+  // countdown while somebody is still driving. The hard time cap remains the
+  // bounded escape hatch for an unfinished or stale participant.
   if (resultT === 0) {
-    // EVERY human home, not just "the" player — with a second driver on track
-    // the race must not end the moment the first of them crosses the line.
-    // Identical to the old `player.finished` whenever there is exactly one.
-    let anyHuman = false, allHumansDone = true;
-    for (const c of cars) {
-      if (!c.human) continue;
-      anyHuman = true;
-      // Retired counts as done. A driver whose race is over should see the
-      // classification, not sit in the gravel watching the rest of the field.
-      if (!c.finished && !c.retired) { allHumansDone = false; break; }
-    }
-    if (anyHuman && allHumansDone) resultT = 2.2;
-    else {
-      let anyFin = false;
-      for (let i = 0; i < cars.length; i++) if (cars[i].finished) { anyFin = true; break; }
-      if (anyFin) resultT = 3.5;
-      else if (raceT > 360 * lapsTarget) resultT = 0.1;
-    }
+    resultT = RaceControl.finishDelay(cars, raceT, lapsTarget);
   }
   if (resultT > 0) {
     resultT -= dt;
@@ -7506,7 +7504,16 @@ $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 // #pmsettings in z-index, so it lays over the settings menu and DONE returns
 // there with nothing else to restore.
 $("pm-howto").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
-$("htp-close").onclick = () => { els.howtoplay.hidden = true; };
+$("htp-close").onclick = () => {
+  els.howtoplay.hidden = true; const fromRotate = document.body.classList.contains("rotate-help-open");
+  document.body.classList.remove("rotate-help-open"); if (fromRotate) syncRotateBlocker(true);
+};
+$("rotate-controls").onclick = () => {
+  setPaused(true); document.body.classList.add("rotate-help-open");
+  syncRotateBlocker(false); els.howtoplay.hidden = false;
+  const close = $("htp-close"); if (close) close.focus();
+};
+$("rotate-exit").onclick = () => quitToMenu();
 // Team picker: opened by the garage's TEAM & DRIVER tab (js/game/setup-ui.js).
 // Closing without choosing leaves the current team as-is. Nothing to rebuild —
 // the garage is still underneath, unchanged.

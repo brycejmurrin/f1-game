@@ -48,6 +48,14 @@ const store = {
   // __apex.persistState() exposes it so the failure is testable rather than
   // inferred from a player's reload.
   set(k, v) {
+    return this.write(k, v).durable;
+  },
+  // Structured companion to set(). New domain save boundaries use this so a
+  // write failure cannot be collapsed into an ignored boolean. `ok` describes
+  // whether the requested value remains usable in this session; `durable`
+  // describes whether it will survive a reload. The cache write below makes
+  // ok:true even when durable:false, by design.
+  write(k, v) {
     const key = "apex26." + k;
     let durable = true;
     try { localStorage.setItem(key, JSON.stringify(v)); }
@@ -55,10 +63,9 @@ const store = {
     this._cache.set(key, v);
     this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
     this.rev++;
-    // Most callers only need the session value and deliberately ignore this.
-    // Destructive migrations are different: they must not erase their source
-    // until the replacement is known to have reached durable storage.
-    return durable;
+    const result = { ok: true, durable, reason: durable ? null : (this.broken || "Error") };
+    this._notify({ key: k, durable, reason: result.reason, local: true });
+    return result;
   },
   // A key-scoped generation lets domain owners detect that THEIR backing value
   // moved without treating an unrelated preference write as a save conflict.
@@ -281,3 +288,4 @@ return { store, ttBoard, ttBoardAdd,
          hexToRgb, rgbToHex, seasonDriverId,
          migrateSeasonPoints, migrateCareer, CAREER_V };
 })();
+

@@ -1644,6 +1644,10 @@ test("shadow model UBO flushes once per pass (not per cast)", () => {
     "one flush must exist, matching the lit _flushDrawUBO shape");
   assert.match(WGX_SOURCE, /shadowModelRing/,
     "CPU ring must exist (SHADOW_SLOTS × 64 floats)");
+  assert.match(WGX_SOURCE, /const SHADOW_SLOTS = MAX_DRAWS;/,
+    "shadow capacity must cover dense static graph batches");
+  assert.match(WGX_SOURCE, /shadow caster ring overflow/,
+    "future capacity regressions must be diagnosed");
   for (const name of ["shadowEnd", "carShadowEnd", "lampShadowEnd"]) {
     const idx = WGX_SOURCE.indexOf("function " + name + "(");
     assert.ok(idx >= 0, name + " exists");

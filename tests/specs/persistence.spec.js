@@ -72,6 +72,10 @@ test.describe("persistence failure is visible", () => {
     // The message has to name the consequence, not just the exception — "will
     // NOT survive a reload" is the only part of it a player can act on.
     expect(r.logs.some((m) => /reload/.test(m))).toBe(true);
+    const warning = page.locator("#save-warning");
+    await expect(warning).toBeVisible();
+    await expect(warning).toContainText("SESSION ONLY");
+    await expect(warning).toContainText("QuotaExceededError");
   });
 
   test("the exception's own name is reported, not a generic flag", async ({ page }) => {
@@ -98,6 +102,22 @@ test.describe("persistence failure is visible", () => {
     expect(back).toBe("auto");
   });
 
+  test("the recovery export contains game progress, not the storage cache", async ({ page }) => {
+    await bootBroken(page);
+    await page.evaluate(() => window.__apex.aeroMode("auto"));
+    const download = page.waitForEvent("download");
+    await page.locator("#save-export").click();
+    const item = await download;
+    expect(item.suggestedFilename()).toMatch(/^apex26-recovery-\d+\.json$/);
+    const path = await item.path();
+    const text = await import("node:fs/promises").then((fs) => fs.readFile(path, "utf8"));
+    const recovery = JSON.parse(text);
+    expect(recovery.format).toBe("apex26-recovery-v1");
+    expect(recovery.persistence.durable).toBe(false);
+    expect(recovery.persistence.reason).toBe("QuotaExceededError");
+    expect(recovery).not.toHaveProperty("cache");
+  });
+
   test("the loud warning fires once, not once per write", async ({ page, consoleLines }) => {
     await bootBroken(page);
     await page.evaluate(() => {
@@ -113,3 +133,4 @@ test.describe("persistence failure is visible", () => {
     expect(buffered).toBeGreaterThan(1);
   });
 });
+

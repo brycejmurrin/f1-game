@@ -17,6 +17,64 @@ Log.info("ui", "Menus.create");
 // Stable helpers from the game.js closure.
 const { $, els, store, cssCol, fmtTime, ttBoard, tickUi, scheduleFlybyTrack } = G;
 
+// localStorage can be unavailable even while the game remains fully playable.
+// Surface that distinction globally: the in-memory cache preserves this
+// session, but the player must know a reload will discard it and must have a
+// recovery path that never exports credentials or unrelated preferences.
+document.body.insertAdjacentHTML("afterbegin",
+  '<aside id="save-warning" role="alert" hidden><strong>SESSION ONLY — SAVING UNAVAILABLE</strong>' +
+  '<span id="save-warning-detail">Progress will be lost when this page closes or reloads.</span>' +
+  '<button id="save-retry" type="button">RETRY SAVE</button>' +
+  '<button id="save-export" type="button">EXPORT RECOVERY</button></aside>');
+const saveWarning = $("save-warning");
+const saveWarningDetail = $("save-warning-detail");
+const showSaveWarning = (reason) => {
+  if (!saveWarning) return;
+  saveWarning.hidden = false;
+  saveWarningDetail.textContent = "Progress will be lost when this page closes or reloads"
+    + (reason ? " (" + reason + ")." : ".");
+};
+const hideSaveWarning = () => { if (saveWarning) saveWarning.hidden = true; };
+if (store.broken) showSaveWarning(store.broken);
+store.subscribe((change) => {
+  if (change && change.local && change.durable === false) showSaveWarning(change.reason);
+});
+
+const retrySave = () => {
+  const results = [];
+  if (typeof Career !== "undefined" && Career.data && Career.data()) results.push(Career.saveStatus());
+  if (G.season && !(typeof Career !== "undefined" && Career.inCareer && Career.inCareer()))
+    results.push(store.write("season", G.season));
+  // With no active championship, use a harmless probe so Settings-only users
+  // can still verify that storage became available again.
+  if (!results.length) results.push(store.write("saveProbe", { at: Date.now() }));
+  const durable = results.every((r) => r && r.durable);
+  if (durable) {
+    store.broken = null;
+    hideSaveWarning();
+    if (G.announce) G.announce("SAVE RESTORED");
+  } else showSaveWarning((results.find((r) => r && r.reason) || {}).reason || store.broken);
+};
+const exportRecovery = () => {
+  const payload = {
+    format: "apex26-recovery-v1",
+    exportedAt: new Date().toISOString(),
+    build: (window.__APEX_BUILD__ || null),
+    career: typeof Career !== "undefined" && Career.data ? Career.data() : null,
+    season: G.season || null,
+    persistence: { durable: false, reason: store.broken || "unknown" },
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "apex26-recovery-" + Date.now() + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+  if (G.announce) G.announce("RECOVERY EXPORTED");
+};
+if ($("save-retry")) $("save-retry").onclick = retrySave;
+if ($("save-export")) $("save-export").onclick = exportRecovery;
+
 // Progressive-enhancement screen swap: run a DOM change inside a native
 // same-document View Transition when the browser supports it (Baseline 2025)
 // for a free crossfade, else run it plainly. Zero dependency, purely visual —

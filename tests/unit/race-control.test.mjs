@@ -70,6 +70,36 @@ function run(rc, secs) {
   for (let t = 0; t < secs * 60; t++) rc.update(1 / 60);
 }
 
+test("a winner never ends the race while a human is still driving", () => {
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const cars = [
+    { human: false, finished: true, retired: false },
+    { human: true, finished: false, retired: false },
+  ];
+  assert.equal(finishDelay(cars, 20, 3), 0,
+    "an AI winner must not start the result countdown for an unfinished player");
+
+  cars.push({ human: true, finished: true, retired: false });
+  assert.equal(finishDelay(cars, 20, 3), 0,
+    "the first multiplayer human finishing must not remove the other human");
+});
+
+test("the finish policy closes completed human races and bounded edge cases", () => {
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  assert.equal(finishDelay([
+    { human: true, finished: true, retired: false },
+    { human: true, finished: false, retired: true },
+  ], 20, 3), 2.2, "finished and retired humans are both done");
+
+  assert.equal(finishDelay([
+    { human: false, finished: true, retired: false },
+  ], 20, 3), 3.5, "AI-only harnesses retain the winner delay");
+
+  assert.equal(finishDelay([
+    { human: true, finished: false, retired: false },
+  ], 1081, 3), 0.1, "the hard cap still prevents a permanently hung race");
+});
+
 test("green with an empty track, and the level->label table", () => {
   const rc = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx());
   run(rc, 1);
@@ -288,3 +318,4 @@ test("it is inert when the side-world is down or the race is not running", () =>
   run(rc, 2);
   assert.equal(rc.info().level, 0, "debris side-world inactive");
 });
+

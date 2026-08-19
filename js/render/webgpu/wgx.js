@@ -241,7 +241,8 @@ const WGX = (function () {
   // depth texture (the layout demands one), and the shader never samples it
   // because params6.y (_carShadowArmed) stays 0 with the pass gated off below.
   const CAR_SHADOW_ALLOC = WGX_LITE ? 1 : CAR_SHADOW_SIZE;
-  const SHADOW_SLOTS = 40;                              // caster draws per shadow pass (car pass casts one per car, up to ~22 + margin; ring is safe to reuse per pass because each pass submits before the next Begin rewrites slots)
+  // Static graph batches set the high-water mark; dense circuits exceed 40.
+  const SHADOW_SLOTS = MAX_DRAWS;
   const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
   const SHADOW_MODEL_F32_STRIDE = SHADOW_MODEL_STRIDE >> 2; // 64 — pad to minUniformBufferOffsetAlignment
 
@@ -889,7 +890,7 @@ const WGX = (function () {
     // per-cast uploads. Same shape as drawRing / _flushDrawUBO.
     const shadowModelRing = new Float32Array(SHADOW_SLOTS * SHADOW_MODEL_F32_STRIDE);
     const _shadowDynOff = [0];   // reused dynamic-offset scratch (was a fresh [slot*stride] per cast)
-    let shadowEncoder = null, shadowPass = null, _shadowSlot = 0;
+    let shadowEncoder = null, shadowPass = null, _shadowSlot = 0, _shadowOverflow = 0;
     // Dynamic per-frame CAR shadow map (GLX parity — see carShadowBegin).
     let carShadowTex = null, carShadowView = null, carShadowUBO = null, carShadowG0BindGroup = null;
     let _carShadowArmed = false, _carArms = 0, _carBoxScale = 1;
@@ -4047,10 +4048,11 @@ const WGX = (function () {
     function _flushShadowModelUBO() {
       if (!shadowModelUBO || _shadowSlot <= 0) return;
       device.queue.writeBuffer(shadowModelUBO, 0, shadowModelRing, 0, _shadowSlot * SHADOW_MODEL_F32_STRIDE);
+      if (_shadowOverflow) Log.warn("gfx", "WGX shadow caster ring overflow: " + _shadowOverflow + " draw(s) skipped");
     }
     function _shadowSetModel(model) {
+      if (_shadowSlot >= SHADOW_SLOTS) { _shadowOverflow++; return -1; }
       const slot = _shadowSlot++;
-      if (slot >= SHADOW_SLOTS) return -1;
       _writeShadowModel(slot, model);
       _shadowDynOff[0] = slot * SHADOW_MODEL_STRIDE;
       shadowPass.setBindGroup(1, shadowModelBindGroup, _shadowDynOff);
@@ -4061,7 +4063,7 @@ const WGX = (function () {
       _shadowLightVP = (lightVP && lightVP.length >= 16) ? lightVP : IDENT;  // raw — CPU chunk cull
       _mul4(shadowLVPData, Z01, _shadowLightVP);   // Z01-remapped — depth store + LIT lookup
       device.queue.writeBuffer(shadowUBO, 0, shadowLVPData);
-      _shadowSlot = 0;
+      _shadowSlot = 0; _shadowOverflow = 0;
       shadowEncoder = device.createCommandEncoder();
       shadowPass = shadowEncoder.beginRenderPass({
         colorAttachments: [],
@@ -4178,7 +4180,7 @@ const WGX = (function () {
       _shadowLightVP = null;   // castShadowChunked must NOT frustum-cull with stale static planes
       _mul4(carShadowLVPData, Z01, (lightVP && lightVP.length >= 16) ? lightVP : IDENT);
       device.queue.writeBuffer(carShadowUBO, 0, carShadowLVPData);
-      _shadowSlot = 0;
+      _shadowSlot = 0; _shadowOverflow = 0;
       shadowEncoder = device.createCommandEncoder();
       shadowPass = shadowEncoder.beginRenderPass({
         colorAttachments: [],
@@ -4208,7 +4210,7 @@ const WGX = (function () {
       _mul4(lampShadowLVPData, Z01, raw);
       device.queue.writeBuffer(lampShadowUBO, 0, lampShadowLVPData);
       if (lightVP) _extractPlanes(raw, _fcPlanes);
-      _shadowSlot = 0;
+      _shadowSlot = 0; _shadowOverflow = 0;
       shadowEncoder = device.createCommandEncoder();
       shadowPass = shadowEncoder.beginRenderPass({
         colorAttachments: [],
