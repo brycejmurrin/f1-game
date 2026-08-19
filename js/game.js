@@ -8293,9 +8293,9 @@ els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("stand
 {
   const tag = $("pm-build");
   if (tag) {
-    const link = document.querySelector('link[rel="stylesheet"][href*="?v="]');
-    const m = link && link.href.match(/[?&]v=(\d+)/);
-    tag.textContent = m ? `build ${m[1]}` : "build unknown";
+    const meta = document.querySelector('meta[name="apex-build"]');
+    const build = meta && meta.content;
+    tag.textContent = build ? `build ${build}` : "build unknown";
   }
 }
 
