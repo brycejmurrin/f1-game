@@ -14,6 +14,7 @@ hits 20/20. Remaining tracks stay at the first-pass 4 (or mid-survey) until
 | Albert Park | [albert_park_grid.png](albert_park_grid.png) |
 | Bahrain | [bahrain_grid.png](bahrain_grid.png) |
 | Baku | [baku_grid.png](baku_grid.png) |
+| COTA | [cota_grid.png](cota_grid.png) |
 | Interlagos | [interlagos_grid.png](interlagos_grid.png) |
 | Jeddah | [jeddah_grid.png](jeddah_grid.png) |
 | Miami | [miami_grid.png](miami_grid.png) |
