@@ -5532,9 +5532,10 @@ const _wmGateDry = { roughness: 0.45, metalness: 0.30, specular: 0.50 };
 // Instanced prop shadow cast: cull to the active light frustum (sun ortho or
 // lamp cone via gfx.shadowCullVP) before castShadowInstanced — shared by the
 // snap-cached sun pass and the per-frame lamp pass.
-function _castPropBatchesShadow() {
+function _castPropBatchesShadow(cadence) {
   const _pb = track.meshes.propBatches;
   if (!_pb || !gfx.castShadowInstanced) return;
+  if (cadence && PerfGov.tier() >= 1 && (_frameNo & 1) === 1) return;
   const planes = (gfx.shadowCullVP && gfx.makeFrustumPlanes)
     ? gfx.makeFrustumPlanes(gfx.shadowCullVP) : null;
   for (let i = 0; i < _pb.length; i++) {
@@ -6120,7 +6121,7 @@ function render(dt) {
         gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
         // Cull instanced props to the light ortho before cast — same frustum
         // castShadowChunked already uses (shadowCullVP || sun lightVP).
-        _castPropBatchesShadow();
+        _castPropBatchesShadow(true);
       }
       gfx.shadowEnd();
     }
@@ -6511,7 +6512,7 @@ function render(dt) {
         }
         gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
         // Lamp pass: cull against the lamp perspective frustum (castCullVP).
-        _castPropBatchesShadow();
+        _castPropBatchesShadow(false);
         gfx.lampShadowEnd();
         } // end lamp-shadow snap rebuild
       }
