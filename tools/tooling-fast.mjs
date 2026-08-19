@@ -115,6 +115,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lighting-reapply.test.mjs",
   "tests/unit/lamp-density.test.mjs",
   "tests/unit/lighting-rebuild.test.mjs",
+  "tests/unit/slider-effect.test.mjs",
   "tests/unit/lighting-tuner-sweep.test.mjs",
   "tests/unit/perf-governor.test.mjs",
   "tests/unit/terrain-normals.test.mjs",
