@@ -165,7 +165,6 @@ body[data-density="compact"] .dh-race-sub {
    is scarce there, not width). Uses body[data-shape="tall"] (zoom-corrected,
    set by SheetShape classifyBody) instead of @media (orientation: portrait)
    which is wrong at non-100% zoom. Width still uses the zoom-aware body flag. */
-body[data-shape="tall"] body[data-width="narrow"] .dh-tabs,
 body[data-shape="tall"][data-width="narrow"] .dh-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
