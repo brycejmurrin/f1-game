@@ -111,7 +111,9 @@
    Two IDs beat the single-ID base rule at the same source position. */
 #cs-inner[data-shape="tall"] #cs-stats-inner { grid-template-columns: 1fr 1fr; column-gap: calc(var(--gap) * 0.8); }
 #cs-inner[data-shape="tall"] #cs-stats-inner .cs-stat-row { min-width: 0; justify-content: space-between; }
-#cs-inner[data-shape="tall"] #cs-stats-inner .cs-stat-label { width: auto; min-width: 0; flex: 0 1 auto; }
+/* flex: 0 0 auto — do not shrink; the bar is hidden in this layout so there
+   is room for the full label text (CORNERING needs ~84px at --fs-micro). */
+#cs-inner[data-shape="tall"] #cs-stats-inner .cs-stat-label { width: auto; min-width: 0; flex: 0 0 auto; }
 #cs-inner[data-shape="tall"] #cs-stats-inner .cs-stat-bar-wrap { display: none; }
 #cs-inner[data-shape="tall"] #cs-stats-inner .cs-stat-val { flex: 0 0 auto; }
 
