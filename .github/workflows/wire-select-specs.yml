@@ -1,0 +1,52 @@
+name: wire-select-specs
+# One-shot: apply HEAD~1 select-specs wire-up to ci.yml and push to deploy.
+# Delete this workflow after it lands.
+on:
+  workflow_dispatch:
+  push:
+    branches: [cursor/ci-wire-v3]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/f1-game-project-26h3ng
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Apply wire-up if still needed
+        run: |
+          set -eu
+          if grep -q 'run: bash tools/ci-select-specs-step.sh' .github/workflows/ci.yml; then
+            echo "already wired"
+            exit 0
+          fi
+          test -f tools/ci-select-specs-step.sh
+          python3 << 'PY'
+          from pathlib import Path
+          text = Path('.github/workflows/ci.yml').read_text()
+          start = text.index('      - name: Select specs for this change')
+          run_start = text.index('        run: |', start)
+          next_step = text.index('\n      - name: Install browser', run_start)
+          new_block = '        run: bash tools/ci-select-specs-step.sh'
+          wired = text[:run_start] + new_block + text[next_step:]
+          assert 'ci-select-specs-step.sh' in wired
+          assert 'no valid comparison base for $EVENT' not in wired
+          Path('.github/workflows/ci.yml').write_text(wired)
+          print('wired', len(wired))
+          PY
+      - name: Commit and push to deploy
+        run: |
+          set -eu
+          if git diff --quiet -- .github/workflows/ci.yml; then
+            echo "no change"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/ci.yml
+          git commit -m "fix(ci): wire select-specs step to HEAD~1 fallback helper"
+          git push origin HEAD:claude/f1-game-project-26h3ng
