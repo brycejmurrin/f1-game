@@ -351,7 +351,8 @@ const CEILINGS = {
   // comment — bug-explaining, the ratchet-tolerated kind.
   // Union with d6614cf (env probe 4-frame cadence, car/lamp shadow skip,
   // drawGlow PerfGov gate): 8550 + 7 = 8557 on the merged tree.
-  "js/game.js": 8557,
+  // 8557 -> 8558: _castPropBatchesShadow(cadence) for instanced sun shadows.
+  "js/game.js": 8558,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
