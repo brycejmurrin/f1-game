@@ -128,3 +128,40 @@ test("cdmcp-bg --status is safe when idle", () => {
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /cdmcp-measure/);
 });
+
+test("look-survey settles 1.6s only on day/dark rebuild, not every weather flip", () => {
+  const py = fs.readFileSync(CLI, "utf8");
+  assert.match(py, /def look_settle_js/);
+  assert.match(py, /def sort_combos_min_rebuild/);
+  assert.match(py, /sessionDark|tod !== "day"/);
+  assert.match(py, /builtNight/);
+  assert.match(py, /const rebuilt = prevDark == null \|\| nowDark !== prevDark/);
+  assert.match(py, /if \(prevTod !== tod && a\.setTimeOfDay\)/);
+  assert.doesNotMatch(py, /await wait\(1600\)/);
+  const help = spawnSync("python3", [CLI, "look-survey", "--help"], { encoding: "utf8" });
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /--plan/);
+  assert.match(help.stdout, /tod\|wx|time-of-day|weather/i);
+});
+
+test("sort_combos_min_rebuild groups sessionDark so loadTrack flips once", () => {
+  const r = spawnSync("python3", ["-c", `
+import importlib.util
+from pathlib import Path
+p = Path("tools/cdmcp-cli.py")
+spec = importlib.util.spec_from_file_location("cdmcp_cli", p)
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+combos = [("night","rain"),("day","dry"),("dawn","wet"),("day","fog"),("dusk","dry")]
+dark_first = m.sort_combos_min_rebuild(combos, True)
+assert [c[0] == "day" for c in dark_first] == [False, False, False, True, True], dark_first
+day_first = m.sort_combos_min_rebuild(combos, False)
+assert [c[0] == "day" for c in day_first] == [True, True, False, False, False], day_first
+js = m.look_settle_js("dawn", "wet", 0.12, "dawn", True)
+assert "await wait(1600)" not in js
+assert "builtNight" in js
+print("ok")
+`], { encoding: "utf8", cwd: ROOT });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /ok/);
+});

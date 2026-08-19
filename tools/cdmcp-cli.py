@@ -583,66 +583,48 @@ def cmd_slider_ab(argv: list[str]) -> None:
     print(f"after:  {after_png}")
 
 
-def cmd_look_survey(argv: list[str]) -> None:
-    """One Chrome boot, several tod×weather lighting looks, chase+park+snapCam.
+# dawn/dusk/night share one mesh build; day is the other (js/game.js loadTrack).
+# Weather-only flips are applyRaceSettings — no 1.6 s rebuild.
+DEFAULT_LOOK_COMBOS = (
+    "dawn|dry,dawn|wet,dawn|rain,dawn|fog,dawn|overcast,"
+    "day|dry,day|wet,day|rain,day|fog,day|overcast,"
+    "dusk|dry,dusk|wet,dusk|rain,dusk|fog,dusk|overcast,"
+    "night|dry,night|wet,night|rain,night|fog,night|overcast"
+)
 
-    mcp-probe path for the per-track lighting retune: take_screenshot via
-    chrome-devtools MCP (not Playwright). Parks to about:blank after.
-    Night/day flips wait 1.6s for the dark rebuild. HUD off.
 
-    Example:
-      python3 tools/cdmcp-cli.py look-survey bahrain --frac 0.12 \\
-        --combos dawn|dry,day|dry,night|dry,night|rain \\
-        --out artifacts/lighting/shots/bahrain
-    """
-    p = argparse.ArgumentParser(prog="look-survey")
-    p.add_argument("track")
-    p.add_argument("--frac", type=float, default=0.12)
-    p.add_argument(
-        "--combos",
-        default="day|dry,night|dry,day|rain,dawn|fog",
-        help="comma list of tod|wx (dawn|day|dusk|night × dry|wet|rain|fog|overcast)",
-    )
-    p.add_argument(
-        "--port",
-        type=int,
-        default=int(__import__("os").environ.get("APEX_PORT") or __import__("os").environ.get("PORT") or "3456"),
-    )
-    p.add_argument(
-        "--out",
-        default=None,
-        help="directory for <tod>-<wx>.png + state.json",
-    )
-    args = p.parse_args(argv)
+def session_dark(tod: str) -> bool:
+    return tod != "day"
 
-    combos = []
-    for raw in args.combos.split(","):
-        raw = raw.strip()
-        if not raw:
+
+def parse_look_combos(raw: str) -> list[tuple[str, str]]:
+    combos: list[tuple[str, str]] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
             continue
-        parts = raw.split("|")
-        if len(parts) != 2:
-            print(f"bad combo {raw!r} — want tod|wx", file=sys.stderr)
-            sys.exit(1)
-        combos.append((parts[0], parts[1]))
-    if not combos:
-        print("no combos", file=sys.stderr)
-        sys.exit(1)
+        tod, wx = part.split("|", 1)
+        combos.append((tod, wx))
+    return combos
 
-    out_dir = Path(args.out) if args.out else \
-        ROOT / "artifacts" / "lighting" / "shots" / args.track
-    out_dir.mkdir(parents=True, exist_ok=True)
 
-    server = _ensure_static_server(args.port)
-    url = f"http://127.0.0.1:{args.port}/"
-    states = []
-    c = McpClient()
-    try:
-        c.start()
-        print(f"→ navigate_page {url}")
-        c.call("navigate_page", {"url": url})
+def sort_combos_min_rebuild(
+    combos: list[tuple[str, str]], prefer_dark: bool
+) -> list[tuple[str, str]]:
+    """Group by sessionDark so loadTrack rebuilds at most once per track."""
+    wx_order = {"dry": 0, "wet": 1, "rain": 2, "fog": 3, "overcast": 4}
+    tod_order = {"day": 0, "dawn": 1, "dusk": 2, "night": 3}
 
-        boot_js = f"""async () => {{
+    def key(c: tuple[str, str]) -> tuple[int, int, int]:
+        dark = session_dark(c[0])
+        group = 0 if dark == prefer_dark else 1
+        return (group, tod_order.get(c[0], 9), wx_order.get(c[1], 9))
+
+    return sorted(combos, key=key)
+
+
+def look_boot_js(track: str) -> str:
+    return f"""async () => {{
   const wait = ms => new Promise(r => setTimeout(r, ms));
   for (let i = 0; i < 80 && !window.__apex; i++) await wait(250);
   if (!window.__apex) return {{ ok: false, error: "no __apex" }};
@@ -650,33 +632,58 @@ def cmd_look_survey(argv: list[str]) -> None:
   if (typeof Assets !== "undefined" && Assets.loadModels) {{
     try {{ await Assets.loadModels(); }} catch (_) {{}}
   }}
-  a.race({json.dumps(args.track)});
+  a.race({json.dumps(track)});
   for (let i = 0; i < 80 && !(a.info() && a.info().track); i++) await wait(200);
   a.go();
   a.step(1/60, 120);
   a.camera("chase");
   if (a.hud) a.hud(false);
-  return {{ ok: true, track: a.info().track, theme: a.info().theme }};
+  const ls = a.lightState ? a.lightState() : null;
+  const info = a.info() || {{}};
+  return {{
+    ok: true,
+    track: info.track,
+    builtNight: ls && ls.builtNight,
+    trackNight: ls && ls.trackNight,
+  }};
 }}"""
-        print("→ evaluate_script (boot)")
-        boot = eval_json(c.call("evaluate_script", {"function": boot_js}))
-        if not boot.get("ok"):
-            print(f"boot failed: {boot}", file=sys.stderr)
-            sys.exit(1)
 
-        for tod, wx in combos:
-            look_js = f"""async () => {{
+
+def look_settle_js(tod: str, wx: str, frac: float, prev_tod: str | None, parked: bool) -> str:
+    """Settle one look. 1.6 s poll only when sessionDark flips (day ↔ dawn/dusk/night)."""
+    return f"""async () => {{
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const a = window.__apex;
-  if (a.weather) a.weather({json.dumps(wx)});
-  if (a.setTimeOfDay) a.setTimeOfDay({json.dumps(tod)});
-  a.park({args.frac});
-  a.snapCam();
-  a.step(1/60, 24);
-  await wait(1600);
+  const tod = {json.dumps(tod)};
+  const wx = {json.dumps(wx)};
+  const frac = {frac};
+  const prevTod = {json.dumps(prev_tod)};
+  const parked = {json.dumps(parked)};
+  if (a.weather) a.weather(wx);
+  if (prevTod !== tod && a.setTimeOfDay) a.setTimeOfDay(tod);
+  const nowDark = tod !== "day";
+  const prevDark = prevTod == null ? null : prevTod !== "day";
+  const rebuilt = prevDark == null || nowDark !== prevDark;
+  if (!parked || rebuilt) {{
+    a.park(frac);
+    a.snapCam();
+  }}
+  if (rebuilt) {{
+    const t0 = performance.now();
+    while (performance.now() - t0 < 1800) {{
+      const ls = a.lightState && a.lightState();
+      if (ls && !!ls.builtNight === nowDark) break;
+      await wait(40);
+    }}
+    a.step(1/60, 6);
+  }} else {{
+    a.step(1/60, 2);
+  }}
+  await new Promise(r => requestAnimationFrame(r));
   const ls = a.lightState ? a.lightState() : null;
   return {{
     ok: true,
+    rebuilt,
     tod: a.setTimeOfDay(),
     weather: a.weather(),
     lightState: ls,
@@ -686,15 +693,158 @@ def cmd_look_survey(argv: list[str]) -> None:
     builtNight: ls && ls.builtNight,
   }};
 }}"""
-            print(f"→ look {tod}|{wx}")
-            look = eval_json(c.call("evaluate_script", {"function": look_js}))
-            png = out_dir / f"{tod}-{wx}.png"
-            c.call("take_screenshot", {"filePath": str(png)})
-            look["png"] = str(png)
-            look["combo"] = f"{tod}|{wx}"
-            states.append(look)
-            print(f"   wrote {png}  lights={look.get('numLights')} exp={look.get('exposure')} sunY={look.get('sunY')}")
 
+
+def survey_track_looks(
+    c: McpClient,
+    track: str,
+    frac: float,
+    combos: list[tuple[str, str]],
+    out_dir: Path,
+    prefer_dark: bool | None = None,
+) -> list[dict]:
+    """Boot one track, shoot combos, merge state.json. Returns new look records."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    print(f"→ boot {track}")
+    boot = eval_json(c.call("evaluate_script", {"function": look_boot_js(track)}))
+    if not boot.get("ok"):
+        print(f"boot failed {track}: {boot}", file=sys.stderr)
+        return [{"track": track, "ok": False, "error": boot}]
+    if prefer_dark is None:
+        prefer_dark = bool(boot.get("trackNight") or boot.get("builtNight"))
+    ordered = sort_combos_min_rebuild(combos, prefer_dark)
+    prev: dict[str, dict] = {}
+    state_path = out_dir / "state.json"
+    if state_path.is_file():
+        try:
+            old = json.loads(state_path.read_text())
+            for rec in old.get("looks") or []:
+                if rec.get("combo"):
+                    prev[rec["combo"]] = rec
+        except Exception:
+            prev = {}
+    states: list[dict] = []
+    prev_tod: str | None = None
+    parked = False
+    for tod, wx in ordered:
+        print(f"  look {tod}|{wx}")
+        rec = eval_json(c.call("evaluate_script", {
+            "function": look_settle_js(tod, wx, frac, prev_tod, parked),
+        }))
+        png = out_dir / f"{tod}-{wx}.png"
+        c.call("take_screenshot", {"filePath": str(png)})
+        rec["png"] = str(png)
+        rec["combo"] = f"{tod}|{wx}"
+        prev[rec["combo"]] = rec
+        states.append(rec)
+        parked = True
+        prev_tod = tod
+        print(
+            f"    wrote {png} rebuilt={rec.get('rebuilt')} "
+            f"lights={rec.get('numLights')} exp={rec.get('exposure')} sunY={rec.get('sunY')}"
+        )
+    merged = list(prev.values())
+    merged.sort(key=lambda r: r.get("combo") or "")
+    state_path.write_text(
+        json.dumps({"track": track, "frac": frac, "looks": merged}, indent=2) + "\n"
+    )
+    return states
+
+
+def cmd_look_survey(argv: list[str]) -> None:
+    """One Chrome boot, several tod×weather lighting looks, chase+park+snapCam.
+
+    mcp-probe path for the per-track lighting retune: take_screenshot via
+    chrome-devtools MCP (not Playwright). Parks to about:blank after.
+    loadTrack rebuilds only on day ↔ dawn/dusk/night; weather-only looks skip
+    the 1.6 s poll. Combos are grouped so each track rebuilds at most once.
+    HUD off.
+
+    Example:
+      python3 tools/cdmcp-cli.py look-survey bahrain --frac 0.12 \\
+        --combos dawn|dry,day|dry,night|dry,night|rain \\
+        --out artifacts/lighting/shots/bahrain
+      python3 tools/cdmcp-cli.py look-survey --plan artifacts/lighting/survey-plan.json
+    """
+    p = argparse.ArgumentParser(prog="look-survey")
+    p.add_argument("track", nargs="?", default=None)
+    p.add_argument("--frac", type=float, default=0.12)
+    p.add_argument(
+        "--combos",
+        default="day|dry,night|dry,day|rain,dawn|fog",
+        help="comma list of tod|wx (dawn|day|dusk|night × dry|wet|rain|fog|overcast)",
+    )
+    p.add_argument(
+        "--plan",
+        default=None,
+        help="JSON plan with tracks[] + optional combos; shoots every missing PNG",
+    )
+    p.add_argument(
+        "--only",
+        default="",
+        help="with --plan, comma track ids",
+    )
+    p.add_argument("--force", action="store_true", help="re-shoot existing PNGs")
+    p.add_argument(
+        "--port",
+        type=int,
+        default=int(__import__("os").environ.get("APEX_PORT") or __import__("os").environ.get("PORT") or "3456"),
+    )
+    p.add_argument(
+        "--out",
+        default=None,
+        help="directory for <tod>-<wx>.png + state.json (single-track mode)",
+    )
+    args = p.parse_args(argv)
+
+    jobs: list[tuple[str, float, list[tuple[str, str]], Path, bool | None]] = []
+    if args.plan:
+        plan = json.loads(Path(args.plan).read_text())
+        wanted = {s.strip() for s in args.only.split(",") if s.strip()}
+        default_combos = parse_look_combos(plan.get("combos") or DEFAULT_LOOK_COMBOS)
+        for t in plan["tracks"]:
+            if wanted and t["id"] not in wanted:
+                continue
+            combos = parse_look_combos(t["combos"]) if t.get("combos") else default_combos
+            out_dir = ROOT / "artifacts" / "lighting" / "shots" / t["id"]
+            need = combos if args.force else [
+                c for c in combos if not (out_dir / f"{c[0]}-{c[1]}.png").is_file()
+            ]
+            if not need:
+                print(f"skip {t['id']} ({len(combos)}/{len(combos)} looks exist)")
+                continue
+            print(f"todo {t['id']} {len(need)}/{len(combos)} missing")
+            jobs.append((t["id"], float(t["frac"]), need, out_dir, bool(t.get("night"))))
+    else:
+        if not args.track:
+            print("look-survey needs a track or --plan", file=sys.stderr)
+            sys.exit(2)
+        combos = parse_look_combos(args.combos)
+        if not combos:
+            print("no combos", file=sys.stderr)
+            sys.exit(1)
+        out_dir = Path(args.out) if args.out else \
+            ROOT / "artifacts" / "lighting" / "shots" / args.track
+        jobs.append((args.track, float(args.frac), combos, out_dir, None))
+
+    if not jobs:
+        print("nothing to survey")
+        print("= run passed (0/0 tracks)")
+        return
+
+    server = _ensure_static_server(args.port)
+    url = f"http://127.0.0.1:{args.port}/"
+    c = McpClient()
+    summary = []
+    try:
+        c.start()
+        print(f"→ navigate_page {url}")
+        c.call("navigate_page", {"url": url})
+        for track, frac, combos, out_dir, prefer_dark in jobs:
+            states = survey_track_looks(c, track, frac, combos, out_dir, prefer_dark)
+            ok = all(s.get("ok") for s in states)
+            summary.append({"track": track, "ok": ok, "looks": len(states)})
+            print(f"= {track} {'passed' if ok else 'failed'} ({len(states)} looks)")
         try:
             c.call("navigate_page", {"url": "about:blank"})
         except Exception:
@@ -708,11 +858,10 @@ def cmd_look_survey(argv: list[str]) -> None:
             except subprocess.TimeoutExpired:
                 server.kill()
 
-    state_path = out_dir / "state.json"
-    state_path.write_text(json.dumps({"track": args.track, "frac": args.frac, "looks": states}, indent=2) + "\n")
-    print(f"state: {state_path}")
-    ok = sum(1 for s in states if s.get("ok"))
-    print(f"= run {'passed' if ok == len(states) else 'failed'} ({ok}/{len(states)} looks)")
+    failed = [s for s in summary if not s.get("ok")]
+    print(f"= run {'passed' if not failed else 'failed'} ({len(summary) - len(failed)}/{len(summary)} tracks)")
+    if failed:
+        sys.exit(1)
 
 
 def main() -> None:
