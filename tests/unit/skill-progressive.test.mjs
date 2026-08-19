@@ -108,6 +108,8 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["css-play", "references/loop.md"],
     ["slim-bloat", "references/do-not.md"],
     ["slim-bloat", "references/carves.md"],
+    ["pixel-perfect", "references/workflows.md"],
+    ["webgpu-inspector", "references/setup.md"],
   ];
   for (const [name, ref] of splits) {
     const skill = fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8");
