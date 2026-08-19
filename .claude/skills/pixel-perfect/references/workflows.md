@@ -1,0 +1,224 @@
+# Pixel-perfect workflows A–F (load on demand)
+
+Read the matching section after [SKILL.md](../SKILL.md) Entry dispatched it. Templates: [examples/playwright.config.ts](examples/playwright.config.ts), [examples/visual.spec.ts](examples/visual.spec.ts), [fixtures/visual.ts](fixtures/visual.ts). Extra notes: [setup/README.md](setup/README.md), [baseline/README.md](baseline/README.md), [comparison/README.md](comparison/README.md).
+
+## Workflow A: Full Setup
+
+**Precondition:** Step 1 returned `CONFIG_MISSING`.
+
+**Exit condition:** `npx playwright test --list` prints test names without errors.
+
+**Step 1.** Check for existing `package.json`:
+```bash
+ls package.json 2>/dev/null && echo "EXISTS" || echo "MISSING"
+```
+If MISSING: run `npm init -y` first. If EXISTS: skip — do not re-initialize.
+
+**Step 2.** Install Playwright:
+```bash
+npm install -D @playwright/test
+npx playwright install chromium
+```
+If this fails: check `node -v` — requires v18+.
+
+**Step 3.** Ask the user: "What URL does your dev server run on? (e.g. http://localhost:3000)"
+Wait for their answer. Save it — you will use it in Step 4 and in Workflow B.
+
+**Step 4.** Write the config file. Use the Read tool to load the template:
+Read file: `~/.claude/skills/pixel-perfect/references/examples/playwright.config.ts`
+Write it to: `./playwright.config.ts`
+If the user's URL differs from `http://localhost:3000`, use the Edit tool to find the exact string `'http://localhost:3000'` inside `playwright.config.ts` and replace it with the user's URL.
+
+**Step 5.** Write the test file:
+Read file: `~/.claude/skills/pixel-perfect/references/examples/visual.spec.ts`
+Write it to: `./tests/visual.spec.ts`
+
+**Step 6.** Verify setup is functional:
+```bash
+npx playwright test --list
+```
+If this errors or prints `0 tests`: show the output to the user and stop. Do not proceed to Workflow B.
+
+**Optional:** If the project uses custom fonts, JS animations (GSAP, Framer Motion), or lazy-loaded images, also install the fixture now — see **Workflow E** Steps 1–2.
+
+**Workflow A complete** → continue to **Workflow B**.
+
+---
+
+## Workflow B: Capture Baseline
+
+**Precondition:** CONFIG_EXISTS + BASELINES_MISSING + SERVER_OK. (Or: just completed Workflow A.)
+
+**Exit condition:** `find snapshots/ -name "*.png" | wc -l` prints a non-zero number and snapshots are committed to git.
+
+**Step 1.** Verify the dev server responds. Use the `baseURL` from `playwright.config.ts` (default: `http://localhost:3000`). Replace the URL in the command if yours differs:
+```bash
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
+```
+Expected: `200`. If not 200: STOP. Tell the user the server is not responding and ask them to start it.
+
+**Step 2.** Check if Docker is available:
+```bash
+docker --version 2>/dev/null && echo "DOCKER_OK" || echo "NO_DOCKER"
+```
+
+If DOCKER_OK — capture inside Docker (matches Linux CI, avoids font rendering diffs):
+```bash
+docker run --rm --ipc=host -v "$(pwd):/work" -w /work \
+  mcr.microsoft.com/playwright:v1.50.1-noble \
+  npx playwright test --update-snapshots
+```
+
+If NO_DOCKER — ask the user:
+> "Docker is not available. Baselines captured locally on macOS can cause false CI failures due to font rendering differences. Do you want to proceed locally (acceptable if you won't use CI), or install Docker first?"
+Wait for their answer before proceeding. If they confirm local: run `npx playwright test --update-snapshots`.
+
+**Step 3.** Verify snapshots were created:
+```bash
+find snapshots/ -name "*.png" | wc -l
+```
+If output is `0` or command errors: STOP. Show the user the test output and ask to debug.
+
+**Step 4.** Commit baselines:
+```bash
+if ! git rev-parse --is-inside-work-tree 2>/dev/null; then
+  echo "Not a git repository — skipping commit."
+elif git check-ignore -q snapshots/ 2>/dev/null; then
+  echo "⚠️  snapshots/ is listed in .gitignore — remove it so baselines can be committed."
+else
+  git add snapshots/
+  if git diff --staged --quiet; then
+    echo "Snapshots already committed — nothing to add."
+  else
+    git commit -m "chore: add visual baselines"
+    echo "Done. Push to remote: git push"
+  fi
+fi
+```
+
+**Workflow B complete.** Baselines are now the source of truth.
+
+---
+
+## Workflow C: Update Baseline
+
+**Precondition:** Tests failing with 'screenshot doesn't match' and the user confirmed the change is **intentional**.
+
+Use when a design change is intentional and the current baseline is outdated.
+
+**Before Step 1.** Ask the user:
+> "What is the reason for updating these baselines? (e.g., 'updated button design', 'new header font')"
+Wait for their answer. Save it. You will use it in Step 2. Do not proceed until you have a clear answer.
+
+**Step 1.** Check if Docker is available:
+```bash
+docker --version 2>/dev/null && echo "DOCKER_OK" || echo "NO_DOCKER"
+```
+
+If DOCKER_OK — update snapshots inside Docker:
+```bash
+docker run --rm --ipc=host -v "$(pwd):/work" -w /work \
+  mcr.microsoft.com/playwright:v1.50.1-noble \
+  npx playwright test --update-snapshots
+```
+This updates all existing baselines AND creates new ones.
+
+If NO_DOCKER — existing baselines need updating, so local font rendering on macOS may differ from Linux CI:
+1. Install Docker (recommended) and rerun this step.
+2. Or run `npx playwright test --update-snapshots` locally and accept that CI may need a re-run after push (CI captures its own Linux baselines).
+
+Ask the user which they prefer before proceeding.
+
+**Step 2.** Commit with the reason the user gave you:
+```bash
+git add snapshots/ && git commit -m "chore: update visual baselines — USER_REASON"
+```
+Replace `USER_REASON` with the exact answer from the user. Do not invent a reason. If the user's reason contains backticks, `$(`, or newlines, ask for a simpler version — those characters cause shell injection in the commit command.
+
+> ⚠️ Never auto-update snapshots in CI. Use the [update-snapshots workflow](../.github/workflows/update-snapshots.yml) for intentional updates — it requires a reason and commits with attribution.
+
+---
+
+## Workflow D: Debug Comparison
+
+**Precondition:** Tests failing with 'screenshot doesn't match' and the user confirmed it is a **bug** (unexpected change).
+
+**Step 1.** Run tests and capture output:
+```bash
+npx playwright test 2>&1 | tail -30
+```
+
+**Step 2.** Find diff images (CLI-friendly — no browser needed):
+```bash
+find playwright-report/ -name "*-diff.png" -o -name "*-actual.png" 2>/dev/null | head -20
+find test-results/ -name "*.png" 2>/dev/null | head -20
+```
+Show the user the list of diff image paths. Ask them to open the files to see what changed.
+
+**Step 3.** If the user has a browser available, they can run the HTML report themselves:
+```
+npx playwright show-report
+```
+Do NOT run `show-report` yourself — it starts a web server and blocks the terminal indefinitely.
+
+---
+
+## Workflow E: Fix Flakiness with Fixture
+
+**Precondition:** Tests are flaky (pass sometimes, fail sometimes) — not a consistent snapshot mismatch.
+
+For pages with custom fonts, JS animations (Framer Motion, GSAP), or lazy-loaded images.
+
+**Step 1.** Copy fixture to your project using the Read and Write tools:
+Read file: `~/.claude/skills/pixel-perfect/references/fixtures/visual.ts`
+Write it to: `./tests/fixtures/visual.ts`
+
+**Step 2.** In your test file (e.g. `tests/visual.spec.ts`), find the import line:
+```typescript
+import { test, expect } from '@playwright/test';
+```
+Replace it with:
+```typescript
+import { test, expect, waitForPageReady } from './fixtures/visual';
+```
+(Adjust the relative path if your test file is in a different location.)
+
+**Step 3.** In every test that calls `toHaveScreenshot()`, add these two lines immediately before the `toHaveScreenshot` call:
+```typescript
+await page.locator('TODO_REPLACE_WITH_KEY_SELECTOR').waitFor();  // key element confirming page is loaded (e.g. 'h1', '.hero', '[data-testid="loaded"]')
+await waitForPageReady(page);              // fonts + images + GSAP freeze
+```
+Replace `TODO_REPLACE_WITH_KEY_SELECTOR` with the actual selector for the main content element on that page.
+
+The fixture uses `addInitScript` (runs before any app JS) to:
+- Mock `IntersectionObserver` (lazy loaders fire immediately)
+- Set `window.__PLAYWRIGHT__ = true` (for Framer Motion / app-level animation disabling)
+
+---
+
+## Workflow F: GitHub Actions
+
+**Precondition:** Workflow B is complete — baselines are committed and pushed to git.
+
+**Exit condition:** Both workflow files exist at `.github/workflows/visual-tests.yml` and `.github/workflows/update-snapshots.yml`, and CI runs green on push.
+
+**Step 1.** Read and write the workflow files:
+Read file: `~/.claude/skills/pixel-perfect/.github/workflows/visual-tests.yml`
+Write it to: `./.github/workflows/visual-tests.yml`
+
+Read file: `~/.claude/skills/pixel-perfect/.github/workflows/update-snapshots.yml`
+Write it to: `./.github/workflows/update-snapshots.yml`
+
+**Step 2.** Configure `BASE_URL` for CI. Ask the user:
+> "What URL should CI run visual tests against? (e.g. https://staging.example.com)"
+
+Then add it as a repository secret in GitHub (**Settings → Secrets and variables → Actions → New repository secret**, name: `BASE_URL`). The workflows already read `BASE_URL` from secrets — no edits needed.
+
+If the user has no staging URL yet (tests run against localhost only), skip this step. CI will fail at the network step until a server is available.
+
+**Key requirements:**
+- Baselines must be committed to git before running in CI
+- `CI=true` is set automatically by GitHub Actions
+- Both workflows use `--ipc=host` to prevent Chromium crashes in Docker
+- `update-snapshots.yml` runs only on branches, never on tags (prevents corrupting release tags)
+- ⚠️ Keep the Docker image version in sync with `@playwright/test` in `package.json`. To check: `node -e "console.log(require('./package-lock.json').packages['node_modules/@playwright/test'].version)"`
