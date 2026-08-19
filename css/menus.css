@@ -456,11 +456,11 @@ body { --compact-at: 600px; --wide-at: 620px; }
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-facts,
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-elev { display: none; }
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-map {
-  /* The JS preserves the circuit aspect with an inline width/height. Clamp to
-     both the chip ladder and the actual preview band so high UI sizes cannot
-     leave a 60px painted thumbnail inside a ~42px band. */
-  max-height: min(var(--chip-h), 100%);
-  max-width: min(42%, calc(var(--chip-h) * 1.8));
+  /* Compact stacked landscape used to hide this whole section. Keep it a
+     band (name beside map, extras still display:none) but size the outline
+     as a readable thumbnail — chip-h alone painted a 27×40 stamp. */
+  max-height: min(calc(var(--chip-h) * 2.6), 100%);
+  max-width: min(38%, calc(var(--chip-h) * 3.4));
 }
 /* When the shared functional-height cap is active, or the sheet itself is too
    narrow to seat a thumbnail beside the name, the name is the useful preview.

@@ -122,6 +122,13 @@ test("compact landscape catalogue spends its first viewport on a circuit", () =>
   assert.doesNotMatch(css,
     /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\)\s*>\s*#sel-body\s*>\s*#sel-track-section\s*\{[^}]*display:\s*none/,
     "compact stacked landscape must keep the thumbnail band; hiding the section dropped the map");
+  const menusJs = read("js/game/menus.js");
+  assert.match(css, /max-height:\s*min\(calc\(var\(--chip-h\) \* 2\.6\), 100%\)/);
+  assert.match(css, /max-width:\s*min\(38%, calc\(var\(--chip-h\) \* 3\.4\)\)/);
+  assert.match(menusJs, /cardInnerW \* \(compact \? 0\.38 : 0\.42\)/);
+  assert.match(menusJs, /chipH \* \(compact \? 3\.4 : 3\)/);
+  assert.match(menusJs, /chipH \* \(compact \? 2\.6 : 1\.5\)/,
+    "JS slotH must match the compact CSS cap — fitCanvas pins inline");
 });
 
 test("garage categories implement one roving tab system", () => {
