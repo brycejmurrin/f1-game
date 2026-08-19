@@ -4,6 +4,41 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <script>
-// PLACEHOLDER_FULL_CONTENT_TOO_LARGE_IN_THIS_TURN
+// ── iOS DOUBLE-TAP / GESTURE ZOOM ────────────────────────────────────────────
+// CSS `touch-action: manipulation` plus `maximum-scale=1` is not enough:
+// Safari ignores the viewport cap (a11y, since iOS 10), and `pan-y` / `pan-x`
+// on scroll panes override the * reset — WebKit still double-tap-zooms those.
+// A second tap on the same spot within 350 ms is the zoom gesture; cancel it.
+// A second tap on a DIFFERENT control (rapid menu work) is left alone.
+// Another finger still down is driving (GAS+steer), not a double-tap.
+// iOS GestureEvents are the pinch-page path; the garage car viewer uses
+// TouchEvents, so cancelling gesture* does not steal that.
+(function () {
+  var lastT = 0, lastX = 0, lastY = 0;
+  var TAP_MS = 350, TAP_PX2 = 900;
+  function kill(e) { e.preventDefault(); }
+  document.addEventListener("gesturestart", kill, { capture: true, passive: false });
+  document.addEventListener("gesturechange", kill, { capture: true, passive: false });
+  document.addEventListener("gestureend", kill, { capture: true, passive: false });
+  document.addEventListener("dblclick", kill, { capture: true });
+  document.addEventListener("touchend", function (e) {
+    if (e.touches && e.touches.length) return;
+    var t = e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    var now = Date.now();
+    var dx = t.clientX - lastX, dy = t.clientY - lastY;
+    if (now - lastT <= TAP_MS && dx * dx + dy * dy <= TAP_PX2) kill(e);
+    lastT = now; lastX = t.clientX; lastY = t.clientY;
+  }, { capture: true, passive: false });
+})();
 </script>
-</head><body></body></html>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Apex 26">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
+<!-- Monotonic shell/service-worker generation. Asset URLs below are independently
+     content-hashed so an unrelated release does not invalidate every script. -->
+<meta name="apex-build" content="1499">
+<title>Apex 26 — F1 Racing & Data</title>
