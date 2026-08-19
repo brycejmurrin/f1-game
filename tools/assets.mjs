@@ -33,6 +33,16 @@ import path from "node:path";
 import zlib from "node:zlib";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+
+let _synthModels = null;
+async function getSynthModels() {
+  if (!_synthModels) {
+    const m = await import("./synth-models.mjs").catch(() => null);
+    _synthModels = m || { buildAll: null, CATALOG_IDS: [] };
+  }
+  return _synthModels;
+}
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // APEX_PACK_DIR redirects every write, so tests can exercise a full bake in a
@@ -428,14 +438,7 @@ function matSurface(mid, h, u, v) {
 
 // ───────────────────────── synthetic material bake ───────────────────────────
 
-function bakeSynthetic(args) {
-  const size = intArg(args, "--size", 128);
-  if (size < 8 || (size & (size - 1)) !== 0)
-    fail(`--size must be a power of two >= 8 (got ${size})`);
-
-  const ids = Object.keys(SCALES).map(Number).sort((a, b) => a - b);
-  console.log(`baking ${ids.length} material layers at ${size}px …`);
-
+function bakeOneSize(size, ids) {
   const stripH = size * MAT_LAYERS;
   const albedo = Buffer.alloc(size * stripH * 4);
   const normal = Buffer.alloc(size * stripH * 4);
@@ -470,7 +473,10 @@ function bakeSynthetic(args) {
         const dx = (H[y * size + xp] - H[y * size + xm]) * 0.5;
         const dy = (H[yp * size + x] - H[ym * size + x]) * 0.5;
         // Strength is per-material: ASPHALT stays nearly flat by design.
-        const k = mid === MAT.ASPHALT ? 3.0 : 8.0;
+        const k = mid === MAT.ASPHALT ? 3.0
+                : mid === MAT.METAL ? 11.0
+                : mid === MAT.CONCRETE || mid === MAT.BRICK ? 9.0
+                : 8.0;
         const nx = -dx * k, ny = -dy * k, nz = 1;
         const len = Math.hypot(nx, ny, nz) || 1;
         normal[o] = Math.round(clamp01(nx / len * 0.5 + 0.5) * 255);
@@ -485,21 +491,72 @@ function bakeSynthetic(args) {
   const aFile = `mat-albedo-${size}.png`, nFile = `mat-normal-${size}.png`;
   fs.writeFileSync(path.join(PACK, aFile), encodePNG(size, stripH, albedo));
   fs.writeFileSync(path.join(PACK, nFile), encodePNG(size, stripH, normal));
-
-  const m = readManifest();
-  m.materials = {
-    size,
-    albedo: aFile,
-    normal: nFile,
+  return {
+    size, albedo: aFile, normal: nFile,
     layers: ids.map((mid) => ({
       mat: mid, id: MAT_NAME[mid].toLowerCase(), scale: SCALES[mid],
       source: "procedural:tools/assets.mjs", licence: "Apex26-Procedural",
       author: "Apex 26",
     })),
   };
+}
+
+function bakeSynthetic(args) {
+  // Default: bake BOTH tiers (256 high + 128 low) so phones get the small
+  // strip without a second authoring pass. Pass --size N to bake only one.
+  const only = intArg(args, "--size", 0);
+  const sizes = only ? [only] : [256, 128];
+  for (const s of sizes) {
+    if (s < 8 || (s & (s - 1)) !== 0)
+      fail(`--size must be a power of two >= 8 (got ${s})`);
+  }
+
+  const ids = Object.keys(SCALES).map(Number).sort((a, b) => a - b);
+  console.log(`baking ${ids.length} material layers at ${sizes.join("+")}px (no network) …`);
+
+  const baked = {};
+  for (const s of sizes) baked[s] = bakeOneSize(s, ids);
+
+  const high = baked[256] || baked[sizes[0]];
+  const low = baked[128] && high.size !== 128 ? baked[128] : null;
+
+  const m = readManifest();
+  m.materials = {
+    size: high.size,
+    albedo: high.albedo,
+    normal: high.normal,
+    layers: high.layers,
+  };
+  if (low) m.materials.low = low;
+  else delete m.materials.low;
   m.credits = buildCredits(m);
   writeManifest(m);
+  credits();
   report(m);
+  // Optional: also regenerate models in the same offline pass.
+  if (args.includes("--models")) bakeSyntheticModels([]);
+}
+
+function writeAX26(mesh, matName) {
+  const mid = MAT[matName] || MAT.CONCRETE;
+  const nv = mesh.pos.length / 3;
+  const nrm = mesh.nrm && mesh.nrm.length === nv * 3 ? mesh.nrm : new Float32Array(nv * 3);
+  const col = mesh.col && mesh.col.length === nv * 3 ? mesh.col : new Float32Array(nv * 3).fill(0.7);
+  const matArr = mesh.mat && mesh.mat.length === nv ? mesh.mat : new Float32Array(nv).fill(mid);
+  const head = Buffer.alloc(20);
+  head.write("AX26", 0, "ascii");
+  head.writeUInt32LE(1, 4);
+  head.writeUInt32LE(nv, 8);
+  head.writeUInt32LE(mesh.idx.length, 12);
+  head.writeUInt32LE(0, 16);
+  return Buffer.concat([
+    head,
+    Buffer.from(Float32Array.from(mesh.pos).buffer),
+    Buffer.from(Float32Array.from(nrm).buffer),
+    Buffer.from(Float32Array.from(col).buffer),
+    Buffer.from(Float32Array.from(matArr).buffer),
+    Buffer.from(Uint32Array.from(mesh.idx).buffer),
+  ]);
 }
 
 // ───────────────────────────── model bake ────────────────────────────────────
@@ -1530,9 +1587,67 @@ const vecArg = (a, k) => {
 
 function fail(msg) { console.error(`error: ${msg}`); process.exit(1); }
 
+async function bakeSyntheticModels(_args) {
+  const { buildAll: buildSynthModels, CATALOG_IDS: SYNTH_MODEL_IDS } = await getSynthModels();
+  if (!buildSynthModels) { console.error("synth-models.mjs not found"); process.exit(1); }
+  console.log(`baking ${SYNTH_MODEL_IDS.length} procedural models (no network) …`);
+  fs.mkdirSync(path.join(PACK, "models"), { recursive: true });
+  const built = buildSynthModels();
+  const m = readManifest();
+  m.models = m.models || {};
+
+  // Drop previous model bins that we are replacing (and orphans no longer in catalog).
+  const keepFiles = new Set();
+  let verts = 0;
+  for (const id of SYNTH_MODEL_IDS) {
+    const mesh = built[id];
+    if (!mesh || mesh.verts < 3) fail(`synth model "${id}" produced no geometry`);
+    const buf = writeAX26(mesh, mesh.matName);
+    const rel = path.join("models", `${id}.bin`).split(path.sep).join("/");
+    fs.writeFileSync(path.join(PACK, rel), buf);
+    keepFiles.add(path.basename(rel));
+    verts += mesh.verts;
+    m.models[id] = {
+      file: rel,
+      verts: mesh.verts,
+      tris: mesh.tris,
+      mat: mesh.matName,
+      sizeM: mesh.sizeM,
+      source: "procedural:tools/synth-models.mjs",
+      licence: "Apex26-Procedural",
+      author: "Apex 26",
+      md5: crypto.createHash("md5").update(buf).digest("hex"),
+    };
+  }
+  // Remove Kenney (or other) bins that are no longer in the synthetic catalog,
+  // and drop their manifest entries so verify cannot see a stale CC0 download.
+  for (const id of Object.keys(m.models)) {
+    if (!SYNTH_MODEL_IDS.includes(id)) {
+      const f = m.models[id].file;
+      const abs = path.join(PACK, f);
+      if (fs.existsSync(abs)) fs.unlinkSync(abs);
+      delete m.models[id];
+      console.log(`removed non-catalog model ${id}`);
+    }
+  }
+  for (const f of fs.readdirSync(path.join(PACK, "models"))) {
+    if (f.endsWith(".bin") && !keepFiles.has(f)) {
+      fs.unlinkSync(path.join(PACK, "models", f));
+      console.log(`removed orphan ${f}`);
+    }
+  }
+
+  m.credits = buildCredits(m);
+  writeManifest(m);
+  credits();
+  console.log(`synthetic models: ${SYNTH_MODEL_IDS.length} ids, ${verts} verts total`);
+  report(m);
+}
+
 const USAGE = `Apex 26 asset bake CLI
 
   bake-synthetic [--size N]        generate the full material pack (no network, no deps)
+  bake-synthetic-models            generate AX26 scenery models (no network / glTF)
   bake-atlas [--preset generated]  slice 4x4 albedo/normal atlases into MAT layers
   search <type> <query>            list CC0 candidates on Poly Haven + ambientCG
   fetch <MAT> <host:id> [--res 1k] download CC0 source maps (Diffuse/nor_gl/arm)
@@ -1549,6 +1664,7 @@ async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   switch (cmd) {
     case "bake-synthetic": bakeSynthetic(args); break;
+    case "bake-synthetic-models": await bakeSyntheticModels(args); break;
     case "bake-atlas": bakeAtlas(args); break;
     case "search": await search(args); break;
     case "fetch": await fetchSource(args); break;
