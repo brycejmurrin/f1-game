@@ -200,7 +200,6 @@
       // start/finish gantry.  Pillars are now spaced only inside the
       // overpass deck footprint (pillar offset clamped to ±span*0.38 so they
       // never extend into the circuit's start sector).
-      // ===================================================================
       const buildOverpass = (s) => {
         const k = K(s);
         const supportGap = 4.0, supportWidth = 3.4, clearance = 10.4;

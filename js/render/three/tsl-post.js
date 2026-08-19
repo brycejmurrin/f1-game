@@ -42,7 +42,6 @@
       return m;
     }
 
-    /* ── BRIGHT (BRIGHT_FS in js/render/shaders/post.js): quadratic soft knee ──────────── */
     const brightU = { threshold: uniform(0.75) };
     const bright = {
       U: brightU,
@@ -59,7 +58,6 @@
       })(), "tlx-post-bright"),
     };
 
-    /* ── BLUR (BLUR_FS in js/render/shaders/post.js): 5-tap separable gaussian ─────────── */
     // Two instances (SSAO r8 target family / godray HDR family) so a material
     // never renders into two different target formats (pipeline-per-format).
     function makeBlur(key) {
@@ -82,7 +80,6 @@
     const blurAO = makeBlur("tlx-post-blur-ao");
     const blurGR = makeBlur("tlx-post-blur-godray");
 
-    /* ── DOWN (DOWN_FS in js/render/shaders/post.js): 13-tap Jimenez + Karis ──────────── */
     const downTex = texture(ctx.blackTex);
     const downU = { texel: uniform(new THREE.Vector2()), karis: uniform(0) };
     const down = {
@@ -394,7 +391,6 @@
       };
     }
 
-    /* ── COMPOSITE (COMPOSITE_FS in js/render/shaders/post.js): the whole resolve ───── */
     const C = {
       aoTexel: uniform(new THREE.Vector2(0, 0)),
       bloomAmt: uniform(0.55), bloomKnee: uniform(0.5),

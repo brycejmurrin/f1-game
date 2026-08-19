@@ -136,7 +136,6 @@
 
       // 2. THE LAGOON — Jacarepaguá sat on the edge of the Lagoa de Jacarepaguá,
       //    and the water was visible from the long back sweep.
-      // =====================================================================
       // A water body is centred on its anchor, so its SETBACK has to exceed its
       // own half-width or the footprint swallows the road. The lap also folds
       // back close on this side, so the engine only accepts a fairly compact

@@ -196,7 +196,6 @@
       // auto-adds window bands for night circuits so these aren't flat slabs.
       // Reduced to 48 instances (was 80) since window bands add geometry;
       // staggered distances give depth layering without redundancy.
-      // ===================================================================
       {
         const N = 48;
         for (let i = 0; i < N; i++) {
@@ -236,7 +235,6 @@
       // s 0.18 R — MARINA BAY SANDS: 3 towers + skypark slab
       // Outer towers tip toward centre under the boat deck (postcard lean).
       // Towers spaced so faces never intersect; skypark bridges the tops.
-      // ===================================================================
       {
         const k    = K(0.18);
         const a    = anchor(k, 1, 150);
@@ -734,7 +732,6 @@
       // passes) plus a sparse jittered ring filling the gaps between them —
       // never a mechanical 1-in-32 grid — and it explicitly skips s
       // 0.895-0.995, which the pit-straight funnel below already owns.
-      // ===================================================================
       for (const [s, side, hue, w, h] of [
         [0.04,  1, 1, 16, 10], [0.08,  1, 2, 15, 9],  [0.14, -1, 0, 17, 10],
         [0.24, -1, 3, 14, 9],  [0.31,  1, 1, 18, 10], [0.36,  1, 0, 15, 9],

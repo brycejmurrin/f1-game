@@ -229,7 +229,6 @@
       }
     }
 
-    /* ── BRDF leaves (js/render/shaders/lit.js) — plain node composition, inlined ────── */
     const D_GGX = (NoH, a) => {
       const a2 = a.mul(a);
       const d = NoH.mul(NoH).mul(a2.sub(1.0)).add(1.0);
@@ -249,7 +248,6 @@
       return f0.add(vec3(f90).sub(f0).mul(v2.mul(v2).mul(v)));
     };
 
-    /* ── cloud shadows (js/render/shaders/lit.js) ─────────────────────────────────────── */
     // 2-octave FBM (per-pass tuning — matches LIT's cloudFBM, unrolled).
     const cloudFBM = (pIn) => {
       const s1 = vnoise(pIn).mul(0.5);

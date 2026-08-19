@@ -441,7 +441,6 @@
       // GPS-referenced apex fractions — displaced by ~0.25 of a lap from its
       // real apex. Moved here to match; see also Bico de Pato/Mergulho/
       // Junção/Arquibancadas below, which had the same problem.
-      // ===================================================================
       groundPatch(K(0.45), 1, 6, [40, 1.2, 30], [0.62, 0.56, 0.40],
                   { id: "interlagos-descida-gravel", samples: 6 });
       hedge(0.42, 0.50, -1, 14, 2.0, GREEN);

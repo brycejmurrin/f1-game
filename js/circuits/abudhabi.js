@@ -206,7 +206,6 @@
       // garage row, plus a shallow sunken apron leading into it; guarded as
       // one atomic model (modelGroup) so its footprint never reaches the
       // racing line.
-      // ===================================================================
       {
         const tk = K(0.045);
         const a = anchor(tk, 1, 40);
@@ -578,7 +577,6 @@
       // PALMS — using forestEdge() for sections near barriers so canopies
       // never clip through fence/wall geometry.
       // Bare palm() calls only where dist is safely large (20m+).
-      // ===================================================================
       // Marina-facing palm avenue: forestEdge() handles barrier-safe placement.
       // gap=20 keeps canopy inner edge well clear of any barrier at ~4-5m.
       forestEdge(0.50, 0.74, 1, 20, {

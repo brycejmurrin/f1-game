@@ -104,7 +104,6 @@
       //
       // All use anchor() so they sit on the terrain surface, never float.
       // mountain() baseY = a.c[1] (terrain-anchored ground Y at that lateral dist).
-      // -----------------------------------------------------------------------
 
       every(55, (k) => {
         const frac = k / n;
@@ -229,7 +228,6 @@
       // explicitly as `orange` throughout — every seat in the ground is packed
       // with Verstappen fans regardless of the stand's own material, so only
       // the structure varies, never the crowd tint.
-      // -----------------------------------------------------------------------
       // MODULAR DUNE DECK — the form grandstandEx structurally cannot make.
       // Two thirds of Zandvoort's capacity is trucked in and bolted together for
       // the weekend: a Nussli-style steel frame standing straight on the sand,

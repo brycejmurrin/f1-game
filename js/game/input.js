@@ -133,8 +133,6 @@ const Input = (function () {
     return xHat;
   }
 
-  /* ---------------- tilt ---------------- */
-
   function screenAngle() {
     if (typeof screen !== "undefined" && screen.orientation &&
         typeof screen.orientation.angle === "number") {
@@ -273,8 +271,6 @@ const Input = (function () {
     tiltSteerT = t;
     return tiltSlew(tiltTarget(), dt);
   }
-
-  /* ---------------- keyboard ---------------- */
 
   function moveToward(v, target, step) {
     return v + clamp(target - v, -step, step);
@@ -420,8 +416,6 @@ const Input = (function () {
     }
   }
 
-  /* ---------------- canvas touch steering ---------------- */
-
   const TOUCH_RANGE_FRAC = 0.12;   // viewport widths of drag for full lock
   const TOUCH_DEAD_PX = 5;         // slop around the anchor: a tap is not a steer
   let touchRangeFrac = TOUCH_RANGE_FRAC;
@@ -507,8 +501,6 @@ const Input = (function () {
     btnSteerVal = moveToward(btnSteerVal, target, (target !== 0 ? digitalRateIn() : KEY_RAMP_OUT) * dt);
     return btnSteerVal;
   }
-
-  /* ---------------- on-screen buttons ---------------- */
 
   // Every wireHold button registers here so its private pressed-pointer set can
   // be cleared from OUTSIDE the closure. Nets that hang off this list:
@@ -657,8 +649,6 @@ const Input = (function () {
     if (!el) return;
     el.addEventListener("pointerdown", function () { fire(); });
   }
-
-  /* ---------------- gamepad ---------------- */
 
   // First connected pad, or null. (getGamepads() can return holes / stale slots.)
   function activePad() {
@@ -923,8 +913,6 @@ const Input = (function () {
       });
     } catch (e) { /* actuator busy or unsupported effect type */ }
   }
-
-  /* ---------------- public ---------------- */
 
   function steer() {
     const k = keyboardSteer();

@@ -1,4 +1,4 @@
-/* Apex 26 — levelled, namespaced logging. Global `Log`. Loads FIRST (see tools/manifest.cjs) so every later module can call it at evaluation time. WHY THIS EXISTS… */
+/* Apex 26 — levelled namespaced logging (global Log). Loads first per tools/manifest.cjs. */
 const Log = (function () {
   "use strict";
 

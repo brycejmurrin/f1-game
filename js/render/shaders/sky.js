@@ -64,7 +64,6 @@ void main() {
   // Overcast factor: drives grey-shift and corona damping under heavy cloud.
   float overcast = smoothstep(0.5, 1.0, uCloud);
 
-  // --- Sky gradient ---
   vec3 c;
   if (up >= 0.0) {
     // Under heavy overcast, flatten zenith/horizon toward a uniform grey.
@@ -198,7 +197,6 @@ void main() {
   float mieDamp = 1.0 - overcast * 0.85;
   c = mix(c, uSunColor, clamp(pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieDamp * uMieScatter, 0.0, 1.0));
 
-  // --- Horizon glow in the sun's compass direction ---
   vec2 sunH = vec2(uSunDir.x, uSunDir.z);
   float sunHLen = length(sunH);
   if (sunHLen > 0.05) {
@@ -209,7 +207,6 @@ void main() {
     c += uSunColor * pow(hdot, 6.0) * hband * hband * 0.22 * sunHLen * mieDamp;
   }
 
-  // --- Sun corona + disc (damped under overcast) ---
   // goldenFactor: 1 when the sun is at the horizon, 0 high up — drives reddening,
   // a broader warm aureole, a vertically flattened disc, and a brighter HDR core.
   // coronaDamp folds in the NIGHT gate: the sun disc + corona + inner ring all
@@ -241,7 +238,6 @@ void main() {
     c += discCore * disc;
   }
 
-  // --- Stars (night tracks) ---
   if (uStars > 0.5 && up > 0.05) {
     // ROUND point stars. The old version lit whole direction-grid CELLS, which
     // project as elongated dashes on screen (they read as "tiny rays"), and its
@@ -267,7 +263,6 @@ void main() {
     }
   }
 
-  // --- Moon disc + halo (night tracks) ---
   if (uMoon > 0.0 && uStars > 0.5) {
     vec3 moonDir = normalize(vec3(0.42, 0.72, 0.55));
     float md = dot(dir, moonDir);

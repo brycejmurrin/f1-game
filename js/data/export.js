@@ -96,7 +96,6 @@ const DataExport = (function () {
     });
   }
 
-  /* ---- minimal STORE-only ZIP writer (no deps; PNGs are already compressed) ---- */
   const CRC_TABLE = (function () {
     const t = new Uint32Array(256);
     for (let n = 0; n < 256; n++) {

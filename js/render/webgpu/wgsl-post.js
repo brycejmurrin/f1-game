@@ -1,13 +1,4 @@
-/*
- * Apex 26 — WGSL post-processing shaders (WGSLPost).
- * WGSL port of js/render/shaders/post.js: SSAO, godray, bloom, SSR, composite, FXAA.
- * Composes WGSLChunks leaves (fullscreenTri, tonemap). wgx.js owns pipelines/targets.
- * Pass order = WGSLPost.PASS_ORDER. Bind/uniform contracts documented inline.
- *
- * Screen UV: texture space, origin top-left, y-down (POST_VS). Depth is [0,1]
- * WebGPU NDC; depth textures use textureLoad + texture_depth_2d (Safari compat).
- * NO build step: plain JS template strings, one global WGSLPost.
- */
+/* Apex 26 — WGSL post-processing shaders (WGSLPost). WGSL port of js/render/shaders/post.js: SSAO, godray, bloom, SSR, composite, FXAA. Composes WGSLChunks leaves (fullscreenTri, tonemap). wgx.js owns pipelines/targets. */
 "use strict";
 
 const WGSLPost = (function () {
@@ -30,7 +21,6 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
   return o;
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 1. BLOOM_DOWN — bright-pass threshold + 13-tap downsample.
   //    Port of GLX BRIGHT_FS js/render/shaders/post.js folded into DOWN_FS js/render/shaders/post.js.
   //    threshold > 0 -> bright-pass gate the result (first mip). threshold == 0
@@ -44,7 +34,6 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
   //      texel     : vec2<f32>  off 0   (1/srcWidth, 1/srcHeight)
   //      threshold : f32        off 8   (>0 = bright-pass, 0 = plain downsample)
   //      _pad      : f32        off 12
-  // ════════════════════════════════════════════════════════════════════════
   const BLOOM_DOWN = `
 struct BloomDownU {
   texel     : vec2<f32>,
@@ -109,7 +98,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(s, 1.0);
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 2. BLOOM_UP — 9-tap tent upsample. Port of GLX UP_FS js/render/shaders/post.js.
   //    Additive combine is done by the PIPELINE BLEND STATE (src ONE, dst ONE),
   //    NOT in the shader — the shader just outputs the tent-filtered sample so
@@ -124,7 +112,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      texel  : vec2<f32>  off 0   (1/srcWidth, 1/srcHeight of the SOURCE mip)
   //      spread : f32        off 8   (tent radius scale; GLX BLOOM SPREAD, def 1.0)
   //      _pad   : f32        off 12
-  // ════════════════════════════════════════════════════════════════════════
   const BLOOM_UP = `
 struct BloomUpU {
   texel  : vec2<f32>,
@@ -152,7 +139,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(s / 16.0, 1.0);
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 3. SSAO — depth-based horizon AO + optional contact shadow.
   //    Port of GLX SSAO_FS js/render/shaders/post.js, reduced to 8 directional taps and
   //    a 5-step contact march (mobile). Reconstructs view position from depth,
@@ -169,7 +155,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      sunVS   : vec4<f32>    off 128   (xyz sun dir in view space)
   //      p0      : vec4<f32>    off 144   (texel.x, texel.y, strength, contact)
   //      p1      : vec4<f32>    off 160   (radius, near, far, _pad)
-  // ════════════════════════════════════════════════════════════════════════
   const SSAO = `
 struct SsaoU {
   invProj : mat4x4<f32>,
@@ -279,7 +264,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(vec3<f32>(ao), 1.0);
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 3b. BLUR — separable 5-tap gaussian (GLX BLUR_FS).
   //    SSAO: one H then V pass. God-ray: H+V twice with growing radius so the
   //    world-march slices soften into volumes instead of thin stripes.
@@ -291,7 +275,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    UNIFORM BlurU (16 B):
   //      dir : vec2<f32>  off 0   (texel * axis, e.g. (1/w, 0) or (0, 1/h))
   //      _pad: vec2<f32>  off 8
-  // ════════════════════════════════════════════════════════════════════════
   const BLUR = `
 struct BlurU { dir : vec4<f32> };
 @group(0) @binding(0) var srcTex  : texture_2d<f32>;
@@ -313,14 +296,12 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(s, 1.0);
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 4. GODRAY — world-space 16-step march through scene depth + sun/lamp
   //    shadow maps (GLX GODRAY_FS). Composite adds the result. CPU gates on
   //    sun-on-screen or lampVol > 0. A separable BLUR follows the march.
   //    Lamp loop is 6, not 12: GLX uploads GR_MAX_LIGHTS=12 as headroom but
   //    GODRAY_FS only consumes nearest-6 (16×6 cost cap). Matching the
   //    consumer keeps WGX from showing more beams than GLX.
-  // ════════════════════════════════════════════════════════════════════════
   const GODRAY = `
 struct GodrayU {
   invVP    : mat4x4<f32>,   // off   0
@@ -461,7 +442,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(U.sunColor.xyz * accum * phase * uStr + lampAccum, 1.0);
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 5. COMPOSITE — final resolve to LDR.
   //    Port of GLX COMPOSITE_FS (js/render/shaders/post.js COMPOSITE_FS), reduced: scene * SSAO,
   //    + godray, * exposure, + bloom (tone-masked), ACES tonemap (shared leaf),
@@ -516,7 +496,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    NOTE: sunShaft (p0.z) is SCREEN sun-shaft intensity only (8-tap radial
   //    bloom toward sunUV). Volumetric godray is added unscaled; its strength
   //    lives in the GODRAY uniform.
-  // ════════════════════════════════════════════════════════════════════════
   const COMPOSITE = `
 struct CompositeU {
   p0          : vec4<f32>,
@@ -911,7 +890,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(c, 1.0);
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 6. FXAA — Timothy Lottes compact edge AA. Port of GLX FXAA_FS (js/render/shaders/post.js COMPOSITE_FS).
   //    Runs LAST on the tonemapped LDR image, straight to the swapchain.
   //
@@ -922,7 +900,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    UNIFORM FxaaU (16 B):
   //      texel : vec2<f32>  off 0   (1/width, 1/height)
   //      _pad  : vec2<f32>  off 8
-  // ════════════════════════════════════════════════════════════════════════
   const FXAA = `
 struct FxaaU {
   texel : vec2<f32>,
@@ -963,7 +940,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(rB, 1.0);
 }`;
 
-  // ════════════════════════════════════════════════════════════════════════
   // 7. SSR — wet-road + car-paint screen-space reflection (its own full-res pass).
   //    Port of the GLX COMPOSITE_FS wet-road SSR block (js/render/shaders/post.js COMPOSITE_FS),
   //    reduced for mobile: road + car-paint (.a tag) paths, SHORT 12-step reflected-
@@ -1011,7 +987,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      gloss     : vec4<f32>    off 192   (x = carGloss, GLX uCarGloss def 1.0;
   //                                          yzw pad). Drives the car SSR streak
   //                                          width: carSoft = clamp((1.4-gloss)*0.5).
-  // ════════════════════════════════════════════════════════════════════════
   const SSR = `
 struct SsrU {
   invProj   : mat4x4<f32>,

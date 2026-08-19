@@ -1,4 +1,4 @@
-/* Apex 26 — Tracks engine: turns per-circuit definitions (js/circuits/<id>.js, registered on the global TrackDefs list) into resampled closed Catmull-Rom splines … */
+/* Apex 26 — track engine: circuit defs (js/circuits/) → splines, meshes, scenery(api). */
 const Tracks = (function () {
   "use strict";
   let keepGeometry = false;

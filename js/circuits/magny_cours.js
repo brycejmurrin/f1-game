@@ -155,7 +155,6 @@
       //    Bay fractions run 0.985 -> 0.045: s≈0.955-0.975 is the tight
       //    foldback behind the short pit straight and rejects anything longer
       //    than ~16 m inside 40 m of setback.
-      // =====================================================================
       for (const [i, s] of [0.985, 0.005, 0.025, 0.045].entries()) {
         const a = anchor(K(s), 1, 17);
         const b = [a.r, a.u, a.t];

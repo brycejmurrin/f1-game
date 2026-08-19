@@ -11,7 +11,6 @@ const PerfGov = (function () {
 
 let _gfx = null;
 
-// ── Adaptive-resolution governor ─────────────────────────────────────────────
 // Holds framerate by scaling the 3D render resolution (gfx.setRenderScale) when
 // frames run slow, restoring sharpness when there's headroom. Conservative:
 // only downscales when clearly missing THIS DEVICE'S OWN observed budget (see

@@ -720,14 +720,12 @@
         });
       }
 
-      // ════════════════════════════════════════════════════════════════════════
       // HERO (OPTIONAL): AIRLINER ON APPROACH TO BENITO JUÁREZ INTERNATIONAL
       // Hermanos Rodríguez sits directly under Mexico City's main landing
       // corridor — no other circuit on the calendar can use this. One low-poly
       // silhouette, gear down, set far beyond the Esses/back straight so it
       // reads as a distant hazed shape crossing the sky, never as a trackside
       // prop. Flat-shaded fuselage + wing + tail — cheap, placed once.
-      // ════════════════════════════════════════════════════════════════════════
       {
         const a = anchor(K(0.20), 1, 820);           // ~700 m beyond the Esses
         const c = [a.c[0], a.c[1] + 210, a.c[2]];     // low final-approach altitude

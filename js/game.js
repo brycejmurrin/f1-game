@@ -1,4 +1,4 @@
-/* Apex 26 — main game: state machine, physics, AI, race logic. Contract: docs/ARCHITECTURE.md. Depends on globals M4,V3,GLX,Teams,Tracks, Car3D,Input,GameAudio,F1… */
+/* Apex 26 — main game: state machine, physics, AI, race logic. See docs/ARCHITECTURE.md. */
 (async function () {
 "use strict";
 
@@ -347,9 +347,6 @@ function autoThrottle() { return Input.touchControlsNeeded() && steerMode === "t
 let season = store.get("season", null);      // {round, pts:{driverId:n}, teamPts:{id:n}, driverCodes:{driverId:code}}
 function migrateSeasonPoints() { season = GameStore.migrateSeasonPoints(season); }
 
-// The immutable numbers live in js/game/physics-consts.js (global PhysicsConsts)
-// together with the rationale that tuned them; game.js destructures them once
-// here. Everything slider- or harness-tunable stays a `let` below.
 const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
         GRAVITY_SLOPE, LAT_MAX, STEER_VMAX, FRONT_WEIGHT, CS_FRONT, CS_REAR,
         WT_LONG, DOWNFORCE, X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, X_DF_LOSS_LO,
@@ -561,12 +558,7 @@ function otTimeFor(c) { return lerp(OT_TIME_LO, OT_TIME_HI, ersDeployOf(c)); }
 function otCoolFor(c) { return lerp(OT_COOL_HI, OT_COOL_LO, ersDeployOf(c)); }
 
 let aeroZ = null;   // AeroZones.create(G), assigned once G exists (below)
-// -- ACTIVE AERO: ACTIVATION ZONES -------------------------------------------
-// The zone GEOMETRY lives in js/game/aerozones.js (AeroZones.create(G), wired
-// after the G façade as `aeroZ`). It is pure circuit geometry — curvature in,
-// arc-metre spans out — and knows nothing about a car. What stays here is the
-// half that reads car state: whether THIS car is in a zone, and what opening
-// the wing costs it.
+// ACTIVE AERO: zone geometry in AeroZones; per-car cost/state logic here.
 //
 // X_STRAIGHT_T / X_ZONE_K / X_ZONE_VREF / X_ZONE_MIN / X_ZONE_STEP live with the
 // geometry. (The first two were COPIED rather than moved when this was
@@ -2215,8 +2207,6 @@ const G = {
   get season() { return season; }, set season(v) { season = v; },
   get flow() { return flow; }, set flow(v) { setFlow(v); },
   get session() { return session; }, set session(v) { session = v; },
-  // The career SAVE lives in js/game/career.js, which owns it outright — this is a
-  // read-through so there is exactly one copy, never a stale mirror in a closure.
   get career() { return Career.data(); },
   get careerSettlement() { return careerSettlement; },
   openCareer: (...a) => openCareer(...a),
@@ -5587,9 +5577,6 @@ document.addEventListener("pointerdown", () => {
 
 // UI SIZE / HUD SIZE + RESOLUTION live in js/game/ui-scale.js (UiScale.create(G)
 // — wired after Menus). Bug-explaining comments moved with the block.
-
-// RENDERER cycle lives in js/game/gfx-quality.js with GRAPHICS — wired at
-// DOMContentLoaded so SETTINGS shows it during (and after) a deferred backend load.
 
 $("mb-race").onclick = () => {
   setFlow("gp"); session = "race";

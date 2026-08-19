@@ -70,7 +70,6 @@
       smoothstep(float(1.0), float(0.4), abs(uvv.x))
         .mul(smoothstep(float(1.0), float(0.3), abs(uvv.y))).mul(0.38);
 
-    /* ── per-mark skid stamp (SHADOW_VS quad + MARK_FS) — the fallback path ── */
     const markMat = trackFx(fxMaterial({ offset: true, key: "tlx-fx-mark" }));
     markMat.colorNode = vec3(0.0);
     markMat.opacityNode = Fn(() => {
@@ -105,7 +104,6 @@
       })();
     }
 
-    /* ── lamp lens glare (GLOW_VS/FS): additive core + veil ───────────────── */
     const glowStr = uniform(0.12);   // uStr — set per drawGlow call (LT.glareStr def)
     const glowMat = trackFx(fxMaterial({ additive: true, doubleSided: true, key: "tlx-fx-glow" }));
     glowMat.positionNode = billboardPosition(attribute("fxRadius", "float"));
@@ -120,7 +118,6 @@
     })();
     glowMat.opacityNode = float(1.0);
 
-    /* ── FX particles (PARTICLE_VS/FS): two variants replace uAdditive ────── */
     function particleMaterial(additive) {
       const m = fxMaterial({ additive, doubleSided: true, key: additive ? "tlx-fx-pt-add" : "tlx-fx-pt" });
       m.positionNode = billboardPosition(attribute("fxSize", "float"));

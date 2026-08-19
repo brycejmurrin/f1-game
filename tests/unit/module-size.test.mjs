@@ -338,7 +338,7 @@ const CEILINGS = {
   // beside buildSelect. Comments moved with the block.
   // 8512 -> 6478: comment-bloat pass (trim-comments.mjs — section dividers,
   // narrative blocks, shortened headers; kept bug/physics/port/silent-catch notes).
-  "js/game.js": 6467,
+  "js/game.js": 6454,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

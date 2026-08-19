@@ -149,7 +149,6 @@ vec3 F_Schlick(float VoH, vec3 f0, float f90) {
   return f0 + (vec3(f90) - f0) * (v2 * v2 * v);
 }
 
-// --- Procedural surface texture (value noise on world XZ; no UVs needed) ---
 ${GLXChunks.surfaceNoise}
 ${GLXChunks.ignoise}
 

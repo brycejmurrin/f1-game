@@ -11,7 +11,6 @@
       abs, max, min, normalize, length, sin, atan, step,
     } = TSL;
 
-    /* ── SKY-family noise (GLXChunks.hash + GLXChunks.vnoise, verbatim) ────── */
     const hash3 = Fn(([pIn]) => {
       const p = fract(vec3(pIn).mul(0.3183099).add(vec3(0.1, 0.2, 0.3))).mul(17.0).toVar();
       return fract(p.x.mul(p.y).mul(p.z).mul(p.x.add(p.y).add(p.z)));
@@ -42,7 +41,6 @@
       return fract(float(52.9829189).mul(fract(dot(p, vec2(0.06711056, 0.00583715)))));
     });
 
-    /* ── the 28 uniforms (drawSky upload in js/render/glx.js) ─────────────── */
     const U = {
       invViewProj:   uniform(new THREE.Matrix4()),
       zenith:        uniform(new THREE.Vector3(0.18, 0.40, 0.78)),
@@ -112,7 +110,6 @@
       s1(U.lightning, sky.lightning, 0);
     }
 
-    /* ── the fragment (SKY_VS ray math + SKY_FS in js/render/shaders/sky.js) ─ */
     const node = Fn(() => {
       // ── ANCHORS: screenUV + the whole ray chain, unconditional ────────────
       const suv = vec2(screenUV).toVar();
@@ -137,7 +134,6 @@
       // Overcast factor: grey-shift + corona damping under heavy cloud.
       const overcast = smoothstep(0.5, 1.0, U.cloud).toVar();
 
-      // --- Sky gradient ---
       const c = vec3(0.0).toVar();
       If(up.greaterThanEqual(0.0), () => {
         // Under heavy overcast, flatten zenith/horizon toward a uniform grey.
@@ -265,13 +261,11 @@
         c.addAssign(vec3(0.10, 0.13, 0.20).mul(U.lightning).mul(cityCov.mul(0.6).oneMinus()));
       });
 
-      // --- Mie forward scatter: glow toward the sun, strongest near horizon ---
       const upPos = max(up, 0.0).toVar();
       const mieDamp = overcast.mul(0.85).oneMinus().toVar();
       c.assign(mix(c, U.sunColor, clamp(pow(sd, 5.0).mul(0.22)
         .mul(max(upPos.mul(1.5).oneMinus(), 0.0)).mul(mieDamp).mul(U.mieScatter), 0.0, 1.0)));
 
-      // --- Horizon glow in the sun's compass direction ---
       const sunH = vec2(U.sunDir.x, U.sunDir.z).toVar();
       const sunHLen = length(sunH).toVar();
       If(sunHLen.greaterThan(0.05), () => {
@@ -284,7 +278,6 @@
           .mul(0.22).mul(sunHLen).mul(mieDamp));
       });
 
-      // --- Sun corona + disc (damped under overcast; nightSky gate folded in
       //     so a night session can never paint a sun disc among the stars) ---
       const coronaDamp = overcast.mul(0.92).oneMinus().mul(nightSky.oneMinus()).toVar();
       const golden = smoothstep(0.0, 0.45, sunE).oneMinus().toVar();
@@ -326,7 +319,6 @@
         });
       });
 
-      // --- Moon disc + halo (night tracks; stable world-space direction) ---
       If(U.moon.greaterThan(0.0).and(U.stars.greaterThan(0.5)), () => {
         const moonDir = normalize(vec3(0.42, 0.72, 0.55));
         const md = dot(dir, moonDir).toVar();

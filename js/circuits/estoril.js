@@ -115,7 +115,6 @@
       //    Estoril never had a glazed paddock: the building is limewash, tile
       //    and shade, so it is modelled as a single hero rather than assembled
       //    from repeated office blocks.
-      // =====================================================================
       const pitBlock = (id, frac, bays) => {
         const a = anchor(K(frac), 1, 18), b = [a.r, a.u, a.t];
         const pitch = 7.8, len = bays * pitch;
