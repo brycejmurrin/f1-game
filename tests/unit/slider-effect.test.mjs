@@ -37,6 +37,7 @@ test("--help exits 0 and documents --live visual filter plus the failure-mode ta
   const r = run(["--help"]);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /--live/);
+  assert.match(r.stdout, /--all/);
   assert.match(r.stdout, /lampLevel/);
   assert.match(r.stdout, /filter\.png/);
   assert.match(r.stdout, /APPLY_RACE_IDS/);
@@ -98,10 +99,10 @@ test("--risk reapply flags apply-only knobs missing from APPLY_RACE_IDS (empty o
   }
 });
 
-test("--live without an id exits 2 and does not mention a browser launch", () => {
+test("--live without an id/--all/--group exits 2 and does not mention a browser launch", () => {
   const r = run(["--live"]);
   assert.notEqual(r.status, 0);
-  assert.match(`${r.stdout}\n${r.stderr}`, /--live <id>|lampLevel/);
+  assert.match(`${r.stdout}\n${r.stderr}`, /--live <id>|--all|lampLevel/);
   assert.doesNotMatch(`${r.stdout}\n${r.stderr}`, /launchChromium|playwright/i);
 });
 
@@ -144,6 +145,88 @@ a.save(d / "a.png"); b.save(d / "b.png")
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("every TUNE_DEFS knob has a valid live recipe (no browser)", async () => {
+  const { classifyKnobs, loadTuneDefs } = await import("../../tools/slider-effect.mjs");
+  const { livePlan, RECIPE_BY_ID } = await import("../../tools/slider-effect-live.mjs");
+  const knobs = classifyKnobs(ROOT);
+  const defs = loadTuneDefs(ROOT);
+  const byDef = new Map(defs.map((d) => [d.id, d]));
+  assert.equal(knobs.length, defs.length, "catalog and TUNE_DEFS length drifted");
+  const TODS = new Set(["dawn", "day", "dusk", "night"]);
+  const WXS = new Set(["dry", "wet", "rain", "fog", "overcast"]);
+  for (const knob of knobs) {
+    const def = byDef.get(knob.id);
+    assert.ok(def, `missing TUNE_DEFS for ${knob.id}`);
+    const plan = livePlan({ id: knob.id }, knob, def, ROOT);
+    assert.ok(TODS.has(plan.tod), `${knob.id} tod=${plan.tod}`);
+    assert.ok(WXS.has(plan.weather), `${knob.id} weather=${plan.weather}`);
+    assert.ok(Number.isFinite(plan.frac) && plan.frac >= 0 && plan.frac < 1, `${knob.id} frac`);
+    assert.ok(Number.isFinite(plan.from), `${knob.id} from`);
+    assert.ok(Number.isFinite(plan.to) && plan.to !== plan.from, `${knob.id} to==from`);
+    assert.match(plan.camera, /^(chase|sky|horizon)$/, `${knob.id} camera`);
+    assert.ok(plan.bucket.includes(plan.track), `${knob.id} bucket`);
+  }
+  for (const id of Object.keys(RECIPE_BY_ID)) {
+    assert.ok(byDef.has(id), `RECIPE_BY_ID stale id ${id}`);
+  }
+});
+
+test("documented live recipes: weather / far-clip / traffic / stars", async () => {
+  const { classifyKnobs, loadTuneDefs } = await import("../../tools/slider-effect.mjs");
+  const { livePlan } = await import("../../tools/slider-effect-live.mjs");
+  const knobs = Object.fromEntries(classifyKnobs(ROOT).map((k) => [k.id, k]));
+  const defs = Object.fromEntries(loadTuneDefs(ROOT).map((d) => [d.id, d]));
+  const plan = (id) => livePlan({ id }, knobs[id], defs[id], ROOT);
+
+  assert.equal(plan("fogWxMul").weather, "fog");
+  assert.equal(plan("overcastFogMul").weather, "overcast");
+  assert.equal(plan("moonShadow").tod, "night");
+  assert.equal(plan("moonShadow").weather, "wet");
+  assert.equal(plan("renderDistMul").track, "spa");
+  assert.equal(plan("renderDistMul").tod, "day");
+  assert.equal(plan("renderDistMul").frac, 0.50);
+  assert.equal(plan("starBright").track, "bahrain");
+  assert.equal(plan("starBright").tod, "night");
+  assert.equal(plan("starBright").camera, "sky");
+  assert.equal(plan("lampReach").track, "singapore");
+  assert.ok(Math.abs(plan("lampReach").frac - 0.55) < 1e-9);
+  assert.equal(plan("floodDay").tod, "day");
+  assert.equal(plan("sunElev").tod, "dawn");
+  assert.equal(plan("lampCull").traffic, true);
+  assert.equal(plan("tailLightMul").traffic, true);
+  assert.equal(plan("drizzleCount").weather, "wet");
+  assert.notEqual(plan("drizzleCount").weather, "rain");
+  assert.equal(plan("rainCount").weather, "rain");
+  assert.equal(plan("cloudDef").camera, "horizon");
+});
+
+test("--live --all --dry-run prints a plan for every knob, batched by condition", () => {
+  const r = run(["--live", "--all", "--dry-run"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.doesNotMatch(r.stderr, /PAGEERR|playwright|launchChromium/i);
+  const data = JSON.parse(r.stdout);
+  assert.ok(data.count >= 170 && data.count <= 200, `count=${data.count}`);
+  assert.equal(data.plans.length, data.count);
+  assert.ok(data.bucketCount >= 4, `bucketCount=${data.bucketCount} (one recipe is not enough)`);
+  assert.ok(data.bucketCount < data.count, "should park once per condition, not per knob");
+  const byId = Object.fromEntries(data.plans.map((p) => [p.id, p]));
+  assert.equal(byId.fogWxMul.weather, "fog");
+  assert.equal(byId.renderDistMul.track, "spa");
+  assert.equal(byId.starBright.camera, "sky");
+  assert.ok(data.buckets.every((b) => b.ids.length >= 1));
+});
+
+test("--live --group LAMPS --dry-run is a subset, still night-heavy", () => {
+  const r = run(["--live", "--group", "LAMPS", "--dry-run"]);
+  assert.equal(r.status, 0, r.stderr);
+  const data = JSON.parse(r.stdout);
+  assert.ok(data.count >= 15 && data.count < 80, `LAMPS count=${data.count}`);
+  assert.ok(data.plans.every((p) => p.id));
+  const flood = data.plans.find((p) => p.id === "floodDay");
+  assert.ok(flood, "floodDay is in LAMPS");
+  assert.equal(flood.tod, "day");
 });
 
 test("inventory tags: glx-only / saturate / sparse-pixels / wet-drizzle", () => {

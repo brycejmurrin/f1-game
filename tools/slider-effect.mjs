@@ -49,6 +49,8 @@ Usage:
   node tools/slider-effect.mjs --tag saturate|glx-only|sparse-pixels
   node tools/slider-effect.mjs --live lampLevel --from 0 --to 0.55
   node tools/slider-effect.mjs --live lampLevel --dry-run
+  node tools/slider-effect.mjs --live --all --dry-run
+  node tools/slider-effect.mjs --live --group LAMPS --dry-run
   node tools/slider-effect.mjs --filter --a a.png --b b.png --out dir
   node tools/slider-effect.mjs --json
   node tools/slider-effect.mjs --help
@@ -68,15 +70,21 @@ Visual A/B (Playwright via tools/harness.mjs — not Chrome MCP):
                  a.png / b.png / filter.png / heat.png / sheet.png
                  filter.png keeps B only where pixels moved; the rest is crushed
                  so you can see what the slider changed (lamp pools, fog, …)
+  --live --all   every TUNE_DEFS knob; park ONCE per track|tod|wx|camera
+  --live --group NAME   same, but only that TUNE_DEFS group
   --from N --to N   slider values (default: shipped def → farther extreme)
-  --track --tod --weather --frac   capture recipe (defaults from the knob's gates)
+  --track --tod --weather --frac   capture recipe (defaults from the knob's gates
+                 plus the documented specials: fogWxMul→fog, moonShadow→night+wet,
+                 renderDistMul→spa day 0.50, starBright→bahrain sky, …)
   --out DIR      default artifacts/lighting/slider-effect/<track>-<tod>-<wx>-<id>
-  --dry-run      print the recipe; do not launch a browser
+  --dry-run      print the recipe(s); do not launch a browser
   --filter --a PNG --b PNG --out DIR
                  visual filter only, no game (two existing frames)
 
   Restore the PRE-PUSH live value (never TUNE_DEFS.def). Do not run --live
-  while a Chrome look-survey holds the box.
+  while a Chrome look-survey holds the box. One global Bahrain-night recipe
+  false-deads weather / far-clip / traffic / star knobs — --all uses per-id
+  recipes (docs/LIGHTING-TUNER-SLIDERS.md).
 `;
 
 const APPLY_ONLY_FILES = ["js/game/atmosphere.js"];
@@ -446,7 +454,7 @@ export function formatTable(knobs, counts) {
 }
 
 export function parseArgs(argv) {
-  const opts = { json: false, help: false, live: false, filter: false, dryRun: false };
+  const opts = { json: false, help: false, live: false, filter: false, dryRun: false, all: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const eq = (name) => {
@@ -460,6 +468,7 @@ export function parseArgs(argv) {
     else if (a === "--json") opts.json = true;
     else if (a === "--filter") opts.filter = true;
     else if (a === "--dry-run") opts.dryRun = true;
+    else if (a === "--all") opts.all = true;
     else if (a === "--live") {
       opts.live = true;
       if (argv[i + 1] && !argv[i + 1].startsWith("-")) opts.id = argv[++i];
@@ -505,21 +514,35 @@ export async function main(argv = process.argv.slice(2), root = ROOT) {
     return r.status ?? 2;
   }
   if (opts.live) {
-    if (!opts.id) {
-      throw new Error("usage: --live <id>   e.g. --live lampLevel --from 0 --to 0.55");
+    const batch = opts.all || (!opts.id && !!opts.group);
+    if (!opts.id && !batch) {
+      throw new Error("usage: --live <id> | --live --all | --live --group NAME   e.g. --live lampLevel --from 0 --to 0.55");
     }
     const all = classifyKnobs(root);
+    const defs = loadTuneDefs(root);
+    const {
+      livePlan, runLive, runLiveBatch, plansForKnobs, summarizePlan,
+    } = await import("./slider-effect-live.mjs");
+    if (batch) {
+      const knobs = filterKnobs(all, opts);
+      if (!knobs.length) throw new Error("no knobs matched the live filter");
+      const packed = plansForKnobs(knobs, defs, opts, root);
+      if (opts.dryRun) {
+        process.stdout.write(JSON.stringify({
+          count: packed.plans.length,
+          bucketCount: packed.buckets.length,
+          buckets: packed.buckets,
+          plans: packed.plans.map(summarizePlan),
+        }, null, 2) + "\n");
+        return 0;
+      }
+      return runLiveBatch(opts, root, knobs, defs);
+    }
     const knob = all.find((k) => k.id === opts.id);
-    const def = loadTuneDefs(root).find((d) => d.id === opts.id);
-    const { livePlan, runLive } = await import("./slider-effect-live.mjs");
+    const def = defs.find((d) => d.id === opts.id);
     const plan = livePlan(opts, knob, def, root);
     if (opts.dryRun) {
-      process.stdout.write(JSON.stringify({
-        id: plan.knob.id, class: plan.knob.class, gates: plan.knob.gates,
-        moves: plan.knob.moves, track: plan.track, tod: plan.tod,
-        weather: plan.weather, frac: plan.frac, from: plan.from, to: plan.to,
-        out: plan.out,
-      }, null, 2) + "\n");
+      process.stdout.write(JSON.stringify(summarizePlan(plan), null, 2) + "\n");
       return 0;
     }
     return runLive(opts, root, { knob, def });
