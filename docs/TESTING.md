@@ -1169,3 +1169,15 @@ directories from a crashed reify are not usable — `--no-audit
 packages are already present).
 Allowlist `registry.npmjs.org`, `archive.ubuntu.com`, `security.ubuntu.com`,
 and `cdn.playwright.dev` if a cold snapshot must actually download.
+
+**A missing browser/module reads as a boot regression, not a setup gap
+(2026-08-17).** `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` keeps `npm install` to
+seconds but leaves the BROWSER absent, and the specs launch the headless
+shell, not the `/opt/google/chrome` a cloud box ships — `npx playwright
+install chromium-headless-shell` after `npm install` is what actually gets
+it. "Cannot find module" means a missing `npm install`; `browserType.launch:
+Executable doesn't exist …chromium_headless_shell` means a missing browser.
+Either one produced a total-red run (measured: 73/73 of `test:tiny` failed)
+that looked exactly like a real boot regression. Read the FIRST failure's
+message before believing any red run — the cure for both is seconds, not a
+bisect.

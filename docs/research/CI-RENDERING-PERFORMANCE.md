@@ -118,6 +118,76 @@ carries that scar tissue: `retries: 1` on CI, a 120 s timeout, a `--workers`
 cap, and a comment explaining that a hanging menu click means the box is
 oversubscribed. Those are all SwiftShader-shaped.
 
+### Fresh-agent npm bootstrap (moved from root AGENTS.md)
+
+```sh
+bash tools/cloud-agent-install.sh
+# equivalent manual steps when the script is not the dashboard install:
+export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+npm install --ignore-scripts --no-audit --prefer-offline
+npx playwright install chromium-headless-shell
+npx playwright install chromium
+```
+
+The dashboard `install` should call `bash tools/cloud-agent-install.sh`. A bare
+`npm install` can die on `registry.npmjs.org` ECONNRESET with npm's "Exit
+handler never called!" (measured 2026-08-17, `bld-20260817-e70b375f`) even
+when `node_modules` is already usable. (`wgx-validate` / `wgx-capture` need
+full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
+`test -f /usr/share/vulkan/icd.d/lvp_icd.json` fails → reinstall
+`mesa-vulkan-drivers` or re-Save the env snapshot.
+
+**MCP.** Seven-server map: [`docs/AGENT-SURFACE.md`](../AGENT-SURFACE.md).
+Keep `apex-tools` in repo-root `.mcp.json` (and `.cursor/mcp.json`). Cloud
+host catalog is often empty — then `./tools/apex-tools-mcp.sh call`,
+`./tools/playwright-mcp.sh`, `./tools/tinyfish-mcp.sh`,
+`python3 tools/probe-mcp.py`. Do not attach `mcp-probe` for a `version.json`
+check. Never run Chrome MCP while Playwright is running.
+
+### Software pixels — backend/probe reference (moved from root AGENTS.md)
+
+On SwiftShader/Lavapipe the **native WebGPU swapchain never composites** to the
+screen — that path stays black. WGX routes the visible `#game` through a **2D
+soft-present blit** (final pass → `COPY_SRC` texture → `putImageData` on
+`#game`; never `getCurrentTexture()`, which breaks `mapAsync` device-wide).
+Cache **1342+** uses ephemeral per-frame staging buffers +
+`onSubmittedWorkDone` before readback; `awaitSoftPresent()` resolves only after
+a non-blank visible blit.
+
+| Backend | Command / path | Checks |
+|---------|----------------|--------|
+| **WGX visible canvas** | `node tools/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
+| **WGX readback** | `node tools/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
+| **WGX A/B** | `node tools/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
+| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | CI pin WebGL2 (`tlxForceGL=1`). AUTO is WebGPU (lite stack). `mappedAtCreation` → `queue.writeBuffer`. |
+| **TLX WebGPU** | `node tools/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | Soft-present 2D blit (Lavapipe). Never `getCurrentTexture()` on software. |
+
+**A UNIT TEST OF A RENDERER BACKEND IS NOT EVIDENCE THAT IT RUNS.** WGX's mock
+device passed every assertion while FOUR separate defects made the real backend
+refuse to boot (MSAA 2 is illegal in WebGPU; a derivative behind a branch is a
+WGSL compile error; `mappedAtCreation` for a 35 MB mesh exhausts the mappable
+pool; `rg11b10ufloat` is not a render target without its optional feature). Each
+hid the one after it, so they came out one boot at a time — and none was
+findable without a live device:
+
+```sh
+npx serve -l 3456 .   # a SECURE CONTEXT: navigator.gpu is absent on about:blank
+node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
+```
+
+`probe` writes the backend pick and RELOADS in one batch (`--backend
+webgl2|three|webgpu`; `three` gets the specs' WebGL2 pin), `--eval` runs a body,
+`--console RE` greps the dump, `--dry-run` shows the batch. In page code use
+BARE globals — `GLX`, not `window.GLX`: script-level `const` is a lexical
+binding, not a window property. A clean WGX boot writes NO console line and
+leaves `sessionStorage["apex26.gfxBound"]` absent (that key means it refused) —
+both ABSENCE signals, so confirm with one positive: drive a race and assert
+`canvas.getContext("webgl2") === null`, which only holds once WebGPU has claimed
+the canvas. SwiftShader is a validation oracle; for WGX **visible** pixels use
+`gfx-probe.mjs` (`#game` after `awaitSoftPresent`); for readback oracle use
+`wgx-capture.mjs` → `frame.png`. Full trap list:
+`.claude/skills/mcp-probe/references/recipes.md` §Probing a specific renderer.
+
 ## 2. Sharding is the wrong first move
 
 Consistent advice across sources, and it contradicts the obvious instinct:

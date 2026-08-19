@@ -49,9 +49,8 @@ Session shape — this is what controls both wall time and waiting:
    the specs launch the headless shell, not the `/opt/google/chrome` this box
    ships. "Cannot find module" means a missing `npm install`;
    `browserType.launch: Executable doesn't exist …chromium_headless_shell`
-   means a missing browser. Either reads as a total-red run that looks like a
-   boot regression (measured 2026-08-17: 73/73 of `test:tiny`), and the cure is
-   seconds. Read the FIRST failure's message before believing any red run.
+   means a missing browser. Read the FIRST failure's message before believing
+   any red run — field notes: `docs/TESTING.md` §Operational field notes.
 2. Make ALL source edits first, then verify ONCE. Tests serve `js/` and `css/`
    from the working tree, so a run in flight forbids source edits — run the
    browser tests a single time, at the end, just before the cache bump. Do not
@@ -101,83 +100,27 @@ Session shape — this is what controls both wall time and waiting:
 
 ### Software pixels in this container (no real GPU)
 
-On SwiftShader/Lavapipe the **native WebGPU swapchain never composites** to the
-screen — that path stays black. WGX routes the visible `#game` through a **2D
-soft-present blit** (final pass → `COPY_SRC` texture → `putImageData` on
-`#game`; never `getCurrentTexture()`, which breaks `mapAsync` device-wide).
-Cache **1342+** uses ephemeral per-frame staging buffers +
-`onSubmittedWorkDone` before readback; `awaitSoftPresent()` resolves only after
-a non-blank visible blit.
-
-| Backend | Command / path | Checks |
-|---------|----------------|--------|
-| **WGX visible canvas** | `node tools/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
-| **WGX readback** | `node tools/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
-| **WGX A/B** | `node tools/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
-| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | CI pin WebGL2 (`tlxForceGL=1`). AUTO is WebGPU (lite stack). `mappedAtCreation` → `queue.writeBuffer`. |
-| **TLX WebGPU** | `node tools/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | Soft-present 2D blit (Lavapipe). Never `getCurrentTexture()` on software. |
-
-Deep notes + measured canvas colours: `docs/research/CI-RENDERING-PERFORMANCE.md`
-§Measured. Env packages + install: §Cursor Cloud below.
-
-**A UNIT TEST OF A RENDERER BACKEND IS NOT EVIDENCE THAT IT RUNS.** WGX's mock
-device passed every assertion while FOUR separate defects made the real backend
-refuse to boot (MSAA 2 is illegal in WebGPU; a derivative behind a branch is a
-WGSL compile error; `mappedAtCreation` for a 35 MB mesh exhausts the mappable
-pool; `rg11b10ufloat` is not a render target without its optional feature). Each
-hid the one after it, so they came out one boot at a time — and none was
-findable without a live device:
-
-```sh
-npx serve -l 3456 .   # a SECURE CONTEXT: navigator.gpu is absent on about:blank
-node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
-```
-
-`probe` writes the backend pick and RELOADS in one batch (`--backend
-webgl2|three|webgpu`; `three` gets the specs' WebGL2 pin), `--eval` runs a body,
-`--console RE` greps the dump, `--dry-run` shows the batch. In page code use
-BARE globals — `GLX`, not `window.GLX`: script-level `const` is a lexical
-binding, not a window property. A clean WGX boot writes NO console line and
-leaves `sessionStorage["apex26.gfxBound"]` absent (that key means it refused) —
-both ABSENCE signals, so confirm with one positive: drive a race and assert
-`canvas.getContext("webgl2") === null`, which only holds once WebGPU has claimed
-the canvas. SwiftShader is a validation oracle; for WGX **visible** pixels use
-`gfx-probe.mjs` (`#game` after `awaitSoftPresent`); for readback oracle use
-`wgx-capture.mjs` → `frame.png`. Full trap list:
-`.claude/skills/mcp-probe/references/recipes.md` §Probing a specific renderer.
+No real GPU here: the native WebGPU swapchain never composites, so WGX
+soft-present-blits to `#game` instead. **A unit test against WGX's mock
+device is not evidence the real backend boots** — a live device has caught
+defects (illegal MSAA count, a branched WGSL compile error, a `mappedAtCreation`
+pool exhaustion, a missing optional render-target feature) that no mock catches,
+one at a time, each hiding the next. Full backend/probe-command table, the
+boot-verification recipe, and the four-defect story:
+`docs/research/CI-RENDERING-PERFORMANCE.md` §Software pixels; renderer trap
+list: `.claude/skills/mcp-probe/references/recipes.md` §Probing a specific
+renderer.
 
 ## Cursor Cloud specific instructions
 
 Personal/dashboard env for this repo (not `.cursor/environment.json`). Persist
-system packages via snapshot + Save on the environment dashboard — an `apt-get`
-in a live agent does **not** survive the next cold boot unless the snapshot is
-saved.
-
-**Packages for software WebGPU / headed probes** (idempotent in `install`):
-
-- `mesa-vulkan-drivers` — Lavapipe ICD at `/usr/share/vulkan/icd.d/lvp_icd.json`
-- `vulkan-tools` — `vulkaninfo` sanity
-- `xvfb` — headed Lavapipe / X11 display (`DISPLAY=:1` already common here)
-
-**Fresh-agent bootstrap** (after packages; matches Verification §1):
-
-```sh
-bash tools/cloud-agent-install.sh
-# equivalent manual steps when the script is not the dashboard install:
-export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-npm install --ignore-scripts --no-audit --prefer-offline
-npx playwright install chromium-headless-shell
-npx playwright install chromium
-```
-
-The dashboard `install` should call `bash tools/cloud-agent-install.sh`. A bare
-`npm install` can die on `registry.npmjs.org` ECONNRESET with npm's "Exit
-handler never called!" (measured 2026-08-17, `bld-20260817-e70b375f`) even
-when `node_modules` is already usable. (`wgx-validate` / `wgx-capture` need
-full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
-`test -f /usr/share/vulkan/icd.d/lvp_icd.json` fails → reinstall
-`mesa-vulkan-drivers` or re-Save the env snapshot. Measurement table and MCP
-flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
+system packages (`mesa-vulkan-drivers`, `vulkan-tools`, `xvfb`) via snapshot +
+Save on the environment dashboard — an `apt-get` in a live agent does **not**
+survive the next cold boot unless the snapshot is saved. Fresh-agent bootstrap
+is `bash tools/cloud-agent-install.sh` (matches Verification §1); the npm
+ECONNRESET war story, the full package list, and the ready-made probe-command
+table are in `docs/research/CI-RENDERING-PERFORMANCE.md` §Cursor Cloud agent
+environment.
 
 **MCP.** Seven-server map: [`docs/AGENT-SURFACE.md`](docs/AGENT-SURFACE.md).
 Keep **`apex-tools` in repo-root `.mcp.json`** (and `.cursor/mcp.json`). Cloud
@@ -301,6 +244,39 @@ same surface from a shell.
   root `.mcp.json` so a host that loads the repo catalog can call it; if the
   session catalog is empty, use the shell wrappers (see §MCP).
 
+## Managing tokens and context
+
+This file loads into every session unconditionally — keep it a rule list, not
+a reference. Measurements, war stories, and tables belong in the linked
+`docs/*.md` or a skill, loaded only when the task touches that area (see
+`slim-bloat` above). The same discipline applies to what an agent does at
+runtime:
+
+- **CLI over MCP when both reach the same result.** `tools/*.mjs` /
+  `apex_*` wrappers add no per-tool listing cost the way a raw
+  `chrome-devtools` / `probe` MCP tool call does; prefer the wrapper (see
+  `docs/AGENT-SURFACE.md`'s wrap map) unless the task genuinely needs
+  interactive multi-step browser control.
+- **Delegate verbose, non-browser operations to a subagent** so the noise
+  (test/log dumps, doc audits, wide greps) stays in its context, not the
+  main one — that is what `bloat-auditor`, `doc-drift-auditor`, and
+  `verify-agent` are for. This does not relax §Verification rule 7: a
+  subagent still never gets a browser run.
+  Background CLI runs return with the full log; grep/tail to the lines
+  that matter (`SKIPPED`, nonzero metrics, `FAIL`) instead of pasting a
+  raw multi-hundred-line dump into the reply.
+- **Don't attach or poll an MCP server the task doesn't need.** A server
+  that answers `tools/list` still costs its schema in context once a tool
+  from it is called; if a session's tool catalog carries servers unrelated
+  to the current task, say so and suggest the user detach them rather than
+  exercising them "just in case."
+- **Match verification scale to the change** — §Verification's table
+  already encodes this; it is a context rule as much as a wall-clock one,
+  since a browser GROUP dumps far more into context than a single spec.
+- **Suggest `/clear` when a request is genuinely unrelated** to the
+  session's prior work, rather than carrying stale context forward across
+  an unrelated task.
+
 ## Area references (load on demand)
 
 Skills / MCP / wrap: `docs/AGENT-SURFACE.md`. Lighting/sky:
@@ -308,15 +284,9 @@ Skills / MCP / wrap: `docs/AGENT-SURFACE.md`. Lighting/sky:
 (`.claude/skills/bake-lighting` lands a COPY VALUES export). Renderers
 (GLX/WGX/TLX): `docs/RENDERERS.md`. Career: `docs/CAREER.md`. Multiplayer:
 `docs/MULTIPLAYER.md`. Scenery: `docs/SCENERY-API.md`. Testing:
-`docs/TESTING.md`. WGX/WGSL (`js/render/webgpu/`):
-`docs/research/WEBGPU-PARITY.md`.
-
-Two WGSL rules the language enforces and a mock device cannot: `sampleCount` is
-1 or 4 ONLY, and `dpdx`/`dpdy`/`fwidth` may appear ONLY where control flow is
-uniform — in practice the first statements of `fs_main`, passed down as a
-parameter, because a callee that returns early non-uniformly poisons its caller
-too. Breaking either does not throw: WGX refuses and the game falls back to GLX
-with one console warning.
+`docs/TESTING.md`. WGX/WGSL (`js/render/webgpu/`) including the `sampleCount`
+and derivative-uniformity rules a mock device cannot catch:
+`docs/research/WEBGPU-PARITY.md` §5 Standing WebGPU hazards.
 
 ## Git branch & deploy
 

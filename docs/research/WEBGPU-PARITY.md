@@ -592,6 +592,14 @@ regresses.
 | Descriptor-copy install | Missing names inherit dead GLX fns | Adding a GLX method without an explicit WGX value |
 | Y flip | `copyExternalImageToTexture({flipY})` is per-call, not a pack state | Assuming GL `UNPACK_FLIP_Y` semantics globally |
 | Depth compare | WebGPU NDC z already [0,1] after `Z01`; shadow `refD` is not remapped again | A leftover `* 0.5 + 0.5` on shadow z |
+| `sampleCount` / derivatives | `sampleCount` is 1 or 4 ONLY; `dpdx`/`dpdy`/`fwidth` may appear ONLY where control flow is uniform — in practice the first statements of `fs_main`, passed down as a parameter, because a callee that returns early non-uniformly poisons its caller too | Any other MSAA count; a derivative call behind a branch or after an early return |
+
+Neither of the last row's rules throws at record time — the mock device passes
+both. Breaking either does not crash the game: WGX's own validation refuses
+the pipeline and falls back to GLX with one console warning. That silent
+fallback is why a unit test against the mock device is not evidence the real
+backend boots — see §1a's four-bugs case above for what a live device catches
+that the mock cannot.
 
 ---
 
