@@ -355,7 +355,9 @@ const CEILINGS = {
   // snap-cached sun/moon `_castPropBatchesShadow` on odd frames at
   // PerfGov.tier() >= 1). One gate line at the function it belongs to.
   // Remeasured on the e9d847b union (split-newline count).
-  "js/game.js": 8558,
+  // 8558 -> 8574: G.setTimeOfDay + G.weather so the lighting tuner
+  // (player-facing, GitHub Pages) never calls window.__apex.
+  "js/game.js": 8574,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

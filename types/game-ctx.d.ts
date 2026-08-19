@@ -531,6 +531,8 @@ interface GameCtx {
   readonly rescuePlayer: (c: CarState) => void;
   readonly setLightTune: (id: string, v: unknown) => void;
   readonly setWeatherLive: (w: Weather) => void;
+  readonly setTimeOfDay: (tod?: string) => string;
+  readonly weather: (w?: Weather) => Weather;
   readonly snapGameCam: () => void;
   readonly setCarRole: (c: CarState, human: boolean, local: boolean) => void;
   readonly modsFor: (team: TeamDef, setup: PartsSetup) => CarMods;
