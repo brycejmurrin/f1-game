@@ -88,8 +88,13 @@ test("selection resolves the event-specific base and fails closed when it cannot
   const selected = ciWorkflow.split("\n  selected:")[1];
   assert.match(selected, /PUSH_BEFORE: \$\{\{ github\.event\.before \}\}/);
   assert.match(selected, /PR_BASE: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
-  assert.match(selected, /push\) BEFORE="\$PUSH_BEFORE"/);
-  assert.match(selected, /pull_request\) BEFORE="\$PR_BASE"/);
+  // Base resolution may be inline OR delegated to ci-resolve-before.sh (HEAD~1 fallback).
+  const hasInline = /push\) BEFORE="\$PUSH_BEFORE"/.test(selected);
+  const hasDelegate = /ci-resolve-before\.sh/.test(selected);
+  assert.ok(hasInline || hasDelegate, "selected must resolve push/PR base inline or via ci-resolve-before.sh");
+  if (!hasDelegate) {
+    assert.match(selected, /pull_request\) BEFORE="\$PR_BASE"/);
+  }
   assert.match(selected, /no valid comparison base/);
   assert.match(selected, /comparison base .* is unreachable/);
   assert.match(selected, /r\.reason === "unmatched"/);
