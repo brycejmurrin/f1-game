@@ -1,0 +1,17 @@
+name: select-specs
+description: Resolve comparison base (HEAD~1 fallback) and select Playwright specs
+runs:
+  using: composite
+  steps:
+    - name: Select specs for this change
+      id: sel
+      shell: bash
+      env:
+        EVENT: ${{ github.event_name }}
+        PUSH_BEFORE: ${{ github.event.before }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+      run: bash tools/ci-select-specs-step.sh
+outputs:
+  specs:
+    description: space-separated spec paths
+    value: ${{ steps.sel.outputs.specs }}
