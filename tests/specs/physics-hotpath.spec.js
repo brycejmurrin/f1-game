@@ -66,6 +66,13 @@ test("AiDrive ctx scratches stay reused across physics steps", async ({ loadTrac
     };
   });
 
+  console.log("[physics-hotpath] result:", JSON.stringify(r));
+  console.log("[physics-hotpath] 180-step wall time:", r.ms?.toFixed(1), "ms");
+  console.log("[physics-hotpath] nCars:", r.nCars, "  allFinite:", r.finite);
+  console.log("[physics-hotpath] calls:", JSON.stringify(r.calls));
+  console.log("[physics-hotpath] mismatch:", JSON.stringify(r.mismatch));
+  console.log("[physics-hotpath] reused:", JSON.stringify(r.reused));
+
   expect(r.ok, r.reason || "wrap failed").toBe(true);
   expect(r.finite).toBe(true);
   expect(r.nCars).toBeGreaterThan(8);

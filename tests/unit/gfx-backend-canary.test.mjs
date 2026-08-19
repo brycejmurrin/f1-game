@@ -411,29 +411,36 @@ test("WGX sky ports GLX overcast grey-shift, horizon bank, and azimuthal variati
   assert.match(sky, /greyZ/);
   assert.match(sky, /bankThresh/);
   assert.match(sky, /atan2\(dir\.z,\s*dir\.x\)/);
+  console.log("[gfx-canary] checking WGX sky night-corona gate: wgsl-chunks.js");
   assert.match(sky, /if \(nightSky < 0\.5\)/,
     "night corona/disc must skip (GLX SKY_FS) — do not mul-to-zero");
   assert.doesNotMatch(sky, /Deliberately reduced vs GLX SKY_FS/);
 });
 
 test("TLX sky gates night corona and the day-band atan like GLX", () => {
+  console.log("[gfx-canary] checking TLX sky night-corona + day-band gate: tsl-sky.js");
   const sky = read("js/render/three/tsl-sky.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(sky, /If\(nightSky\.lessThan\(0\.5\)/,
     "night corona/disc must skip (GLX SKY_FS) — do not mul-to-zero");
   assert.match(sky, /If\(daytime\.greaterThan\(0\.0\)/,
     "day-band atan+vnoise must skip when daytime is 0");
+  console.log("[gfx-canary] TLX sky gates: OK");
 });
 
 test("TLX shadow cull packs CPU-side without uploading the lit InstancedMesh", () => {
+  console.log("[gfx-canary] checking TLX shadow cull upload:false: tlx.js");
   const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const at = tlx.indexOf("function cullInstances");
+  console.log("[gfx-canary] cullInstances offset in tlx.js:", at);
   assert.notEqual(at, -1, "cullInstances moved");
   const body = tlx.slice(at, at + 3600);
   assert.match(body, /opts && opts\.upload === false/,
     "shadow path must be able to skip the lit imesh setMatrixAt walk");
+  console.log("[gfx-canary] checking TLX shadow cull upload:false call site: game.js");
   const game = read("js/game.js");
   assert.match(game, /cullInstances\([^)]*planes,\s*\{\s*upload:\s*false\s*\}\)/,
     "sun/lamp prop-shadow must pass upload:false");
+  console.log("[gfx-canary] TLX shadow cull upload:false: OK");
 });
 
 test("WGX phone post targets use the slim GLX-equivalent formats", () => {
