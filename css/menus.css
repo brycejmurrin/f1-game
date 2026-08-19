@@ -456,7 +456,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
 /* Token-based map cap so the band stays a band. --chip-h answers density;
    object-fit keeps the outline true when the cap binds. */
 #sel-inner:not([data-pair="on"]) #sel-preview-map {
-  max-height: calc(var(--chip-h) * 3);
+  max-height: calc(var(--chip-h) * 3.5);
   object-fit: contain;
 }
 /* Compact stacked: the band is a thumbnail + name. Rec / GP / meta / facts /
@@ -472,8 +472,9 @@ body { --compact-at: 600px; --wide-at: 620px; }
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-map {
   /* Compact stacked landscape used to hide this whole section. Keep it a
      band (name beside map, extras still display:none) but size the outline
-     as a readable preview — chip-h * 2.6 painted a stamp at 115%. */
-  max-height: min(calc(var(--chip-h) * 4.2), 100%);
+     as a readable preview — chip-h * 2.6 painted a stamp at 115%.
+     3.5 chips fits the 58% band so one catalogue row stays on screen. */
+  max-height: min(calc(var(--chip-h) * 3.5), 100%);
   max-width: min(48%, calc(var(--chip-h) * 5.2));
 }
 /* Truly tiny sheets cannot seat a thumbnail beside the name. data-fit and

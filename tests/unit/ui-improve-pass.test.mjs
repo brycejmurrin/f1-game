@@ -129,16 +129,16 @@ test("compact landscape catalogue spends its first viewport on a circuit", () =>
     /#sel-inner\[data-density="compact"\]:not\(\[data-pair="on"\]\):not\(\[data-shape="tall"\]\)\s*>\s*#sel-body\s*>\s*#sel-track-section\s*\{[^}]*display:\s*none/,
     "compact stacked landscape must keep the thumbnail band; hiding the section dropped the map");
   const menusJs = read("js/game/menus.js");
-  assert.match(css, /max-height:\s*min\(calc\(var\(--chip-h\) \* 4\.2\), 100%\)/);
+  assert.match(css, /max-height:\s*min\(calc\(var\(--chip-h\) \* 3\.5\), 100%\)/);
   assert.match(css, /max-width:\s*min\(48%, calc\(var\(--chip-h\) \* 5\.2\)\)/);
   assert.match(css,
     /#sel-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] > #sel-body > #sel-track-section \{[\s\S]*?max-height:\s*58%/,
-    "compact stacked band spends more of the body on the map");
+    "compact stacked band spends more of the body on the map without eating the list");
   assert.doesNotMatch(css, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/);
   assert.doesNotMatch(css, /@container sheet \(max-width: 420px\)/);
   assert.match(menusJs, /cardInnerW \* \(compact \? 0\.48 : 0\.42\)/);
-  assert.match(menusJs, /chipH \* \(compact \? 5\.2 : 3\)/);
-  assert.match(menusJs, /slotH: chipH \* \(compact \? 4\.2 : 2\.6\)/,
+  assert.match(menusJs, /chipH \* \(compact \? 5\.2 : 3\.5\)/);
+  assert.match(menusJs, /slotH: chipH \* 3\.5/,
     "CSS and JS stay in lockstep — fitCanvas pins max-height inline");
 });
 

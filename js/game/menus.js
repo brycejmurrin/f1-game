@@ -540,8 +540,8 @@ function updateTrackPreview() {
       shape: "beside",
       // Match the compact CSS cap instead of pinning a 1.5-row canvas over it.
       // fitCanvas pins max-height inline, so a disagreement here makes JS win.
-      slotW: Math.min(cardInnerW * (compact ? 0.48 : 0.42), chipH * (compact ? 5.2 : 3)),
-      slotH: chipH * (compact ? 4.2 : 2.6)
+      slotW: Math.min(cardInnerW * (compact ? 0.48 : 0.42), chipH * (compact ? 5.2 : 3.5)),
+      slotH: chipH * 3.5
     }
     : TrackMaps.planPreview({
       aspect: a,
