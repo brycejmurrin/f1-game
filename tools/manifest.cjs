@@ -405,10 +405,12 @@ const DEFERRED = {
 const LAZY_AGENT = [
   "js/game/agentview-raster.js",
   "js/game/agentview.js",
+  "js/game/apex-cameras.js",
   "js/game/apex.js",
 ];
 const LAZY_EDGES = [
   ["js/game/agentview-raster.js", "js/game/agentview.js"],
+  ["js/game/apex-cameras.js", "js/game/apex.js"],
 ];
 
 const DEFERRED_EDGES = [

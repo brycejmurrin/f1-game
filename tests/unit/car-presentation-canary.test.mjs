@@ -78,7 +78,7 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
 });
 
 test("orbit / agent-view read the mirrored world pose for the field", () => {
-  const apex = read("js/game/apex.js");
+  const apex = read("js/game/apex-cameras.js");
   const view = read("js/game/agentview.js");
   assert.match(apex, /const cx = \(c\.px != null\) \? c\.px/);
   assert.match(apex, /const cz = \(c\.pz != null\) \? c\.pz/);

@@ -346,8 +346,10 @@ const CEILINGS = {
   // The weatherArc let stays so G.weatherArc keeps one binding.
   // 8396 -> 8369: livery id / custom list / resolveLivery moved to
   // js/game/livery-store.js (LiveryStore.create(G)). 0 new G; livDraftOverride
-  // let stays so setup-ui keeps one binding. wingColorOf / drawAeroFlaps stay.
-  "js/game.js": 8369,
+  //   let stays so setup-ui keeps one binding. wingColorOf / drawAeroFlaps stay.
+  // 8369 -> 8371: AGENT_FILES + AGENT_EDGES for apex-cameras.js (lazy inject
+  // table; same lockstep as BACKEND_FILES). Not a feature.
+  "js/game.js": 8371,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -377,7 +379,8 @@ const CEILINGS = {
   // 3120 -> 3128: openf1/jolpica missing-path guards (typed {ok:false} instead
   // of fetching a garbage URL / throwing on HTML 404) + fetchTrackOutline
   // comment moved onto the function it describes.
-  "js/game/apex.js": 3132,
+  // 3132 -> 2815: debug free-cam shots moved to js/game/apex-cameras.js.
+  "js/game/apex.js": 2815,
   "js/game/agentview.js": 2900,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and

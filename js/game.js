@@ -118,10 +118,12 @@ function loadBackendScripts(files, edges) {
 const AGENT_FILES = [
   "js/game/agentview-raster.js",
   "js/game/agentview.js",
+  "js/game/apex-cameras.js",
   "js/game/apex.js",
 ];
 const AGENT_EDGES = [
   ["js/game/agentview-raster.js", "js/game/agentview.js"],
+  ["js/game/apex-cameras.js", "js/game/apex.js"],
 ];
 function wantAgentSurface() {
   if (typeof window !== "undefined" && window.__TEST_MODE) return true;
