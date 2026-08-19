@@ -24,8 +24,6 @@
 //
 // The module owns no game state and self-initialises.
 window.AriaState = (function () {
-  // The class a group uses to mean "this is the chosen one". `dh-active` is the
-  // data hub's own prefix for the same idea.
   const ON = ["active", "dh-active"];
   // Roots to watch: everything that is a menu, plus the two DOM-built overlays.
   const ROOTS = "#overlay,#select,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay,#advanced," +
@@ -43,19 +41,10 @@ window.AriaState = (function () {
   const claimed = (el) =>
     el.hasAttribute("aria-selected") || el.hasAttribute("aria-checked") ||
     el.hasAttribute("aria-pressed") ||
-    // Some mixed action/toggle toolbars mark their true toggles explicitly so
-    // a neighbouring action (for example LIVE's REFRESH button) is not falsely
-    // announced as an unpressed toggle.
     el.hasAttribute("data-aria-toggle") ||
-    // A visually emphasized action can share the same `.active` class as a
-    // selected toggle without acquiring toggle semantics of its own.
     el.hasAttribute("data-aria-action") ||
     el.getAttribute("role") === "option" || el.getAttribute("role") === "tab";
 
-  // Buttons already known to be toggles. Once a group has announced itself as
-  // one, it keeps saying so — otherwise the single-button toggles (MY TEAM's
-  // seven NONE switches) would drop the attribute entirely when switched off,
-  // and "no state" is not the same answer as "off".
   const labelled = new WeakSet();
 
   /* Label every button in `parent` — but only once one of them has actually
@@ -115,9 +104,6 @@ window.AriaState = (function () {
     Log.info("game", "AriaState.init");
     const obs = new MutationObserver((records) => {
       for (const r of records) {
-        // Only a class flip or a new subtree can change a group's state; the
-        // aria-pressed writes above are invisible here (attributeFilter), so
-        // this cannot feed itself.
         if (r.type === "childList" || r.type === "attributes") { schedule(); return; }
       }
     });

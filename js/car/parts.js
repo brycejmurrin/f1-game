@@ -1,19 +1,5 @@
 "use strict";
-/* Apex 26 — Parts catalog and stat helpers.
-   Twelve upgrade categories: engine, aero, suspension, brakes, tyres, ers,
-   gearbox, fuel, exhaust, floor, cockpit, wheels.
-   Options marked with `supplier` are exclusive to teams using that power unit.
-   getMods(setup, teamEngine) / getCost(setup, teamEngine) fall back to the
-   category default when a supplier-locked option doesn't match the team.
-   statMult() maps a 0-100 team stat to a 0.85-1.00 physics multiplier.
-   visualTier (0=low/1=mid/2=high) drives Car3D's parts-driven geometry —
-   purely cosmetic, no relation to the physics multipliers below. The
-   category default is always tier 1 so an unmodified car's geometry is
-   unchanged.
-   Options tagged SIGNATURE are locked to one team (`teams`) and are exact
-   cost/physics CLONES of the universal option named in `equivalent` — they buy
-   a distinct mesh, never an advantage. See FACTORY_PRESETS below for the grid's
-   fixed visual identity. */
+/* Apex 26 — Parts catalog and stat helpers. Twelve upgrade categories; supplier-locked options fall back via getMods/getCost; statMult() maps 0–100 team stats to 0.85–1.00; visualTier drives Car3D geometry only; SIGNATURE options clone `equivalent` for mesh identity — see FACTORY_PRESETS. */
 const Parts = (function () {
   const BUDGET = 600;
 
@@ -52,8 +38,6 @@ const Parts = (function () {
         { id: "chimney_spec",  label: "Chimney Spec",  cost:  90, desc: "Open-cooling installation — runs hot mappings safely for strong acceleration", accel: 1.08, speed: 1.01, visual: { in: 1.22, snork: 0, twin: 0, inlet: 2, outlet: 2, podWidth: 1.03, shoulderHeight: 1.05, undercut: 0.97, coke: 1.05, tailWidth: 1.01, coverHeight: 1.06, chimney: 3 }, visualTier: 1 },
         { id: "sealed_pod",    label: "Sealed Bodywork", cost: 110, desc: "Fully closed cooling — minimum drag from a tightly packaged installation", speed: 1.06, accel: 1.02, visual: { in: 0.96, snork: 0, twin: 0, inlet: 1, outlet: 1, podWidth: 0.84, shoulderHeight: 0.94, undercut: 1.22, coke: 1.20, tailWidth: 0.82, coverHeight: 0.96, chimney: 0 }, visualTier: 1 },
         { id: "plenum_max",    label: "Plenum Max",    cost: 170, desc: "Oversized airbox plenum — deep breathing across the whole rev range",   speed: 1.07, accel: 1.09, visual: { in: 1.72, snork: 1, twin: 1, inlet: 3, outlet: 2, podWidth: 1.11, shoulderHeight: 1.21, undercut: 0.85, coke: 0.96, tailWidth: 1.09, coverHeight: 1.19, chimney: 1 }, visualTier: 2 },
-        // ENGINE — one SIGNATURE per team (stat- and cost-identical to the
-        // universal option each team already fields; only the mesh differs).
         { id: "sig_mclaren_pu", label: "Woking Hybrid", cost: 150, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "hybrid_max",
           desc: "McLaren signature hybrid — Hybrid Max performance with 1 cooling chimney", speed: 1.05, accel: 1.08, cornering: 1.03, visual: { in: 1.3, snork: 1, twin: 1, inlet: 2, outlet: 2, podWidth: 1.037, shoulderHeight: 1.122, undercut: 0.908, coke: 0.988, tailWidth: 1.026, coverHeight: 1.107, chimney: 1 , scoopLip: 1}, visualTier: 2 },
         { id: "sig_alpine_pu", label: "Enstone Hybrid", cost: 60, teams: ["alpine"], tag: "SIGNATURE", equivalent: "performance",
@@ -93,20 +77,14 @@ const Parts = (function () {
           desc: "Aston Martin signature tunnel floor — Ground Effect performance with an active upper flap and floor-corner slots", speed: 0.87, cornering: 1.32, braking: 1.10, visual: { lvl: 4, beam: 1, vane: 2, drs: 1, plate: 1, casc: 2, swan: 0, tvane: 1, duct: 0, board: 2, slot: 1, frontSweep: 0.10, frontTaper: 0.87, frontRise: 0.12, rearSweep: 0.15, rearTaper: 0.82, floorEdge: 1.32, floorCut: 0.21, diffuserRise: 1.38 }, visualTier: 2 },
         { id: "sig_redbull_concept", label: "Newey Concept", cost: 170, teams: ["redbull"], tag: "SIGNATURE", equivalent: "ground_effect",
           desc: "Red Bull signature high-rake concept — Ground Effect performance with a wakeboard and floor-corner slots", speed: 0.87, cornering: 1.32, braking: 1.10, visual: { lvl: 4, beam: 1, vane: 3, plate: 2, casc: 2, swan: 1, tvane: 0, duct: 0, board: 2, slot: 1, frontSweep: 0.08, frontTaper: 0.90, frontRise: 0.14, rearSweep: 0.11, rearTaper: 0.87, floorEdge: 1.26, floorCut: 0.19, diffuserRise: 1.44 }, visualTier: 2 },
-        // Wing-STRUCTURE packages — plate profile, cascade count, swan-neck mount
-        // and T-wing are the visual tells (see the aero recipe knobs in car3d.js).
         { id: "swan_low",      label: "Swan-Neck Low Drag", cost: 70, desc: "Over-slung wing mount on a stripped front end — clean airflow, minimal downforce", speed: 1.07, cornering: 0.86, visual: { lvl: 1, vane: 1, plate: 0, casc: 0, swan: 1, tvane: 0, frontSweep: 0.02, frontTaper: 0.99, frontRise: 0.01, rearSweep: 0.05, rearTaper: 0.92, floorEdge: 0.90, floorCut: 0.05, diffuserRise: 0.86 }, visualTier: 0 },
         { id: "outwash_max",   label: "Max Outwash",   cost: 140, desc: "Tall arched endplates and a full canard cascade — front-end bite in slow corners", speed: 0.96, cornering: 1.20, braking: 1.04, visual: { lvl: 3, vane: 2, plate: 2, casc: 3, swan: 0, tvane: 0, frontSweep: 0.14, frontTaper: 0.85, frontRise: 0.13, rearSweep: 0.06, rearTaper: 0.95, floorEdge: 1.12, floorCut: 0.13, diffuserRise: 1.18 }, visualTier: 2 },
         { id: "twin_tier",     label: "Twin-Tier Wing", cost: 150, desc: "Swan-neck rear with a T-wing tier — stable rear platform through fast sequences", speed: 0.97, cornering: 1.22, braking: 1.03, visual: { lvl: 3, beam: 1, vane: 2, plate: 1, casc: 2, swan: 1, tvane: 1, frontSweep: 0.07, frontTaper: 0.92, frontRise: 0.07, rearSweep: 0.11, rearTaper: 0.89, floorEdge: 1.08, floorCut: 0.12, diffuserRise: 1.20 }, visualTier: 2 },
         { id: "sig_cadillac_lowline", label: "Detroit Lowline", cost: 80, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "le_mans",
           desc: "Cadillac signature superspeedway trim — Le Mans Trim performance with a stretched flat-deck wing and a letterbox duct", speed: 1.14, cornering: 0.80, visual: { lvl: 0, vane: 0, beam: 0, plate: 0, casc: 0, swan: 0, tvane: 0, duct: 1, board: 0, slot: 0, frontSweep: -0.02, frontTaper: 1.04, frontRise: 0, rearSweep: 0.01, rearTaper: 0.94, floorEdge: 0.84, floorCut: 0.04, diffuserRise: 0.74 }, visualTier: 0 },
-        // 2026 body-kit packages — upper pod duct, in-wash wakeboard, floor slot.
-        // Structure knobs only; stats stay inside the existing aero spread.
         { id: "wake_board", label: "Wakeboard Kit", cost: 110, desc: "In-wash floor board ahead of the sidepod — 2026 bargeboard return for mid-speed bite", speed: 0.98, cornering: 1.14, braking: 1.03, visual: { lvl: 2, vane: 2, plate: 1, casc: 1, swan: 0, tvane: 0, duct: 0, board: 2, slot: 0, frontSweep: 0.05, frontTaper: 0.96, frontRise: 0.05, rearSweep: 0.04, rearTaper: 0.96, floorEdge: 1.06, floorCut: 0.08, diffuserRise: 1.08 }, visualTier: 2 },
         { id: "pod_duct", label: "Upper Duct", cost: 95, desc: "Top-of-sidepod ram — the optional 2026 cooling duct, cleaner than a wide scoop", speed: 1.03, cornering: 1.06, visual: { lvl: 2, vane: 1, plate: 1, casc: 1, swan: 0, tvane: 0, duct: 2, board: 0, slot: 0, frontSweep: 0.03, frontTaper: 0.99, frontRise: 0.03, rearSweep: 0.02, rearTaper: 0.99, floorEdge: 0.96, floorCut: 0.05, diffuserRise: 0.94 }, visualTier: 1 },
         { id: "reg26_concept", label: "2026 Concept", cost: 185, desc: "Full 2026 body kit — scooped duct, wakeboard and floor-corner slots on a high-DF stack", speed: 0.93, cornering: 1.24, braking: 1.08, visual: { lvl: 3.4, beam: 1, vane: 2, plate: 2, casc: 2, swan: 1, tvane: 1, duct: 2, board: 2, slot: 1, frontSweep: 0.10, frontTaper: 0.88, frontRise: 0.11, rearSweep: 0.10, rearTaper: 0.88, floorEdge: 1.20, floorCut: 0.16, diffuserRise: 1.26 }, visualTier: 2 },
-        // AERO — one SIGNATURE per team (stat- and cost-identical to the
-        // universal option each team already fields; only the mesh differs).
         { id: "sig_mercedes_wing", label: "Brackley Aero Kit", cost: 80, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "high",
           desc: "Mercedes signature aero kit — High DF performance with a scooped upper duct on a swan-neck mount", speed: 0.95, cornering: 1.15, visual: { lvl: 3.25, vane: 2, frontSweep: 0.07, frontTaper: 0.928, frontRise: 0.09, rearSweep: 0.084, rearTaper: 0.918, floorEdge: 1.037, floorCut: 0.1, diffuserRise: 1.114, plate: 1, casc: 1, swan: 1, tvane: 0, duct: 2, board: 0, slot: 0 }, visualTier: 2 },
         { id: "sig_ferrari_wing", label: "Maranello Aero Kit", cost: 190, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "circuit_adaptive",
@@ -147,8 +125,6 @@ const Parts = (function () {
           desc: "McLaren signature adaptive platform — Active performance with slimline carbon arms", cornering: 1.28, speed: 1.02, visual: { ride: -0.047, arm: 0.92, push: 1, pull: 1, rocker: 2 , heave: 1}, visualTier: 2 },
         { id: "sig_audi_damper", label: "Neuburg Damper", cost: 100, teams: ["audi"], tag: "SIGNATURE", equivalent: "triple_damper",
           desc: "Audi signature three-stage damper — Triple Damper performance with a heavy-gauge arm set", cornering: 1.17, speed: 1.01, visual: { ride: -0.017, arm: 1.32, push: 1, rocker: 2 }, visualTier: 2 },
-        // SUSPENSION — one SIGNATURE per team (stat- and cost-identical to the
-        // universal option each team already fields; only the mesh differs).
         { id: "sig_mercedes_susp", label: "Brackley Chassis", cost: 170, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "interlinked",
           desc: "Mercedes signature chassis — Interlinked performance with a crossed pullrod actuator", speed: 1.01, cornering: 1.23, braking: 1.05, visual: { ride: -0.024, arm: 1.053, push: 1, pull: 1, wishbone: 1.06, toe: 0.94, rocker: 2 , heave: 1}, visualTier: 2 },
         { id: "sig_ferrari_susp", label: "Maranello Chassis", cost: 90, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "racing",
@@ -194,8 +170,6 @@ const Parts = (function () {
           desc: "Mercedes signature brake package — Carbon Ceramic performance with Petronas-teal hardware", braking: 1.24, visual: { cal: [0.0, 0.75, 0.70], duct: 1.55, rim: [0.60, 0.62, 0.66], discFace: 1 , caliper: 1}, visualTier: 2 },
         { id: "sig_aston_carbon", label: "Lagonda Carbon", cost: 100, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "ventilated",
           desc: "Aston Martin signature vented brake — Ventilated Carbon performance with racing-green monoblocs", braking: 1.18, visual: { cal: [0.0, 0.55, 0.38], duct: 1.40, rim: [0.50, 0.44, 0.20], discFace: 2 , caliper: 2}, visualTier: 2 },
-        // BRAKES — one SIGNATURE per team (stat- and cost-identical to the
-        // universal option each team already fields; only the mesh differs).
         { id: "sig_mclaren_brakes", label: "Woking Brake Pack", cost: 180, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "six_piston",
           desc: "McLaren signature brake pack — Six Piston performance with a duct winglet", cornering: 1.02, braking: 1.27, visual: { cal: [1, 0.5, 0], duct: 1.643, rim: [0.24, 0.28, 0.34], scoop: 1, discFace: 1 , caliper: 2}, visualTier: 2 },
         { id: "sig_redbull_brakes", label: "Milton Keynes Brake Pack", cost: 120, teams: ["redbull"], tag: "SIGNATURE", equivalent: "carbon_mag",
@@ -234,8 +208,6 @@ const Parts = (function () {
           desc: "Cadillac signature sprint compound — Sprint Soft performance with a gold double-width band", speed: 0.93, cornering: 1.22, accel: 1.08, visual: { band: [0.92, 0.72, 0.18], grooved: false, grooves: 0, bandWidth: 0.125, coverVanes: 4, shoulder: 2 }, visualTier: 2 },
         { id: "sig_rb_street", label: "Faenza Street", cost: 130, teams: ["racingbulls"], tag: "SIGNATURE", equivalent: "supersoft",
           desc: "Racing Bulls signature street compound — Super Soft performance with a twin-blue sidewall band", speed: 0.94, cornering: 1.20, accel: 1.06, visual: { band: [0.20, 0.30, 0.95], grooved: false, grooves: 0, bandWidth: 0.135, coverVanes: 7, shoulder: 1 }, visualTier: 2 },
-        // TYRES — one SIGNATURE per team (stat- and cost-identical to the
-        // universal option each team already fields; only the mesh differs).
         { id: "sig_mercedes_tyre", label: "Brackley Compound", cost: 0, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "medium",
           desc: "Mercedes signature compound — Medium performance with a 10-vane wheel cover", speed: 1.00, accel: 1.00, cornering: 1.00, visual: { band: [0.96, 0.8, 0.1], grooved: false, grooves: 0, bandWidth: 0.069, coverVanes: 10, shoulder: 1 }, visualTier: 1 },
         { id: "sig_ferrari_tyre", label: "Maranello Compound", cost: 80, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "soft",
@@ -280,8 +252,6 @@ const Parts = (function () {
           desc: "Audi signature deployment map — Supercapacitor performance with a red energy conduit", speed: 1.04, accel: 1.13, braking: 1.04, visual: { led: [2.35, 0.18, 0.08], pack: 1.12 , blister: 1}, visualTier: 2 },
         { id: "sig_alpine_boost", label: "Enstone Boost", cost: 150, teams: ["alpine"], tag: "SIGNATURE", equivalent: "race_mode",
           desc: "Alpine signature deployment map — Race Mode performance with a rose-glow energy cell", speed: 1.03, accel: 1.07, visual: { led: [1.90, 0.55, 1.20], pack: 1.18 , blister: 2}, visualTier: 2 },
-        // ERS — one SIGNATURE per team (stat- and cost-identical to the
-        // universal option each team already fields; only the mesh differs).
         { id: "sig_mercedes_ers", label: "Brackley Deploy Map", cost: 150, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "race_mode",
           desc: "Mercedes signature deploy map — Race Mode performance with an external conduit run", speed: 1.03, accel: 1.07, visual: { led: [0.1, 1.85, 1.7], pack: 1.14, cells: 5, conduit: 1 , blister: 2}, visualTier: 2 },
         { id: "sig_ferrari_ers", label: "Maranello Deploy Map", cost: 120, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "torque_fill",
@@ -322,8 +292,6 @@ const Parts = (function () {
           desc: "Ferrari signature shift package — Seamless Shift performance in a sculpted red-crackle casing", speed: 1.05, accel: 1.12, cornering: 1.02, visual: { strakes: 4, fin: 1, strakeH: 0.21, finSY: 0.16, finSZ: 0.38, casing: 3, louvres: 4, heat: 1 , heatFins: 3, ribs: 1}, visualTier: 2 },
         { id: "sig_williams_longshift", label: "Grove Longshift", cost: 40, teams: ["williams"], tag: "SIGNATURE", equivalent: "long_ratio",
           desc: "Williams signature top-speed stack — Long Ratio performance with a heat-wrapped slim case", speed: 1.04, accel: 0.97, visual: { strakes: 3, fin: 0, strakeH: 0.18, casing: 1, louvres: 0, heat: 1, caseWidth: 0.92 , heatFins: 4, ribs: 1}, visualTier: 1 },
-        // GEARBOX — one SIGNATURE per team (stat- and cost-identical to the
-        // universal option each team already fields; only the mesh differs).
         { id: "sig_mercedes_gbox", label: "Brackley Gearcase", cost: 90, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "sequential_pro",
           desc: "Mercedes signature gearcase — Sequential Pro performance with a 4-strake diffuser", speed: 1.02, accel: 1.07, visual: { strakes: 4, fin: 1, strakeH: 0.163, finSY: 0.17, finSZ: 0.32, casing: 2, louvres: 3, heat: 1, caseWidth: 0.92 , heatFins: 0, ribs: 2}, visualTier: 2 },
         { id: "sig_mclaren_gbox", label: "Woking Gearcase", cost: 210, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "seamless_shift",
@@ -360,8 +328,6 @@ const Parts = (function () {
           desc: "Alpine signature synthetic blend — Dense E-Fuel performance with a blue-pink burn", speed: 1.045, accel: 1.085, braking: 1.01, visual: { cap: [0.10, 0.72, 1.85], flame: [0.65, 0.32, 1.95], fxFlame: [0.85, 0.65, 2.85], line: 2 , hatch: 1}, visualTier: 2 },
         { id: "sig_haas_blend", label: "Kannapolis Blend", cost: 90, teams: ["haas"], tag: "SIGNATURE", equivalent: "race_blend",
           desc: "Haas signature race fuel — Race Blend performance with a stars-and-stripes red burn", speed: 1.02, accel: 1.06, visual: { cap: [1.70, 0.20, 0.15], flame: [1.90, 0.30, 0.25], fxFlame: [2.90, 0.60, 0.40], line: 2 , hatch: 1}, visualTier: 1 },
-        // FUEL — one SIGNATURE per team (stat- and cost-identical to the
-        // universal option each team already fields; only the mesh differs).
         { id: "sig_mercedes_fuel", label: "Brackley Blend", cost: 175, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "efuel_dense",
           desc: "Mercedes signature blend — Dense E-Fuel performance with a quick-fill coupling", speed: 1.045, accel: 1.085, braking: 1.01, visual: { cap: [0, 1.2, 1.12], flame: [0.35, 1.55, 1.45], fxFlame: [0.525, 2.325, 2.175], filler: 1, line: 1 , hatch: 1, vent: 1}, visualTier: 2 },
         { id: "sig_ferrari_fuel", label: "Maranello Blend", cost: 90, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "race_blend",
@@ -393,8 +359,6 @@ const Parts = (function () {
         { id: "inconel",    label: "Inconel Race",   cost: 140, desc: "Thin-wall Inconel system — mass saving with a broad power gain",              speed: 1.04, accel: 1.05, visual: { pipes: 3, bore: 1.05, flare: 0, wastegate: 0, wrap: 1 , lip: 2, shield: 1}, visualTier: 2 },
         { id: "tri_exit",   label: "Tri-Exit",       cost: 170, desc: "Three-pipe exit — the classic scavenging layout in race trim",                speed: 1.04, accel: 1.07, visual: { pipes: 3, bore: 1.16, flare: 0.5, wastegate: 2, wrap: 0 , lip: 1, shield: 1}, visualTier: 2 },
         { id: "hyper_scav", label: "Hyper Scavenge", cost: 200, desc: "Pulse-tuned scavenging — peak flow at every point in the rev range",          speed: 1.05, accel: 1.08, visual: { pipes: 3, bore: 1.30, flare: 1, wastegate: 2, wrap: 1 }, visualTier: 2 },
-        // EXHAUST — one SIGNATURE per team (stat- and cost-identical to the
-        // universal option each team already fields; only the mesh differs).
         { id: "sig_mercedes_exh", label: "Brackley Exhaust", cost: 60, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "free_flow",
           desc: "Mercedes signature exhaust — Free Flow performance with a flared megaphone tip", speed: 1.03, accel: 1.03, visual: { pipes: 1, bore: 1.121, flare: 0.5, wastegate: 0, wrap: 0 , lip: 2, shield: 1}, visualTier: 1 },
         { id: "sig_ferrari_exh", label: "Maranello Exhaust", cost: 170, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "tri_exit",
@@ -429,8 +393,6 @@ const Parts = (function () {
         { id: "fence_array", label: "Fence Array",    cost:  90, desc: "Full fence array — keeps the floor sealed when the car is yawed",              speed: 0.98, cornering: 1.10, visual: { fences: 6, fenceH: 1.3, skid: 0, edgeLip: 0.3 , plank: 1, gurney: 1, scroll: 1}, visualTier: 2 },
         { id: "edge_wing",   label: "Edge Wing",      cost: 120, desc: "Floor-edge wing — extra load for a modest drag penalty",                       speed: 0.98, cornering: 1.13, braking: 1.02, visual: { fences: 5, fenceH: 1.2, skid: 1, edgeLip: 1 , gurney: 1}, visualTier: 2 },
         { id: "venturi",     label: "Venturi Floor",  cost: 190, desc: "Full venturi package — maximum underbody load at every speed",                 speed: 0.96, cornering: 1.16, braking: 1.04, visual: { fences: 6, fenceH: 1.45, skid: 2, edgeLip: 1 , plank: 1, scroll: 1}, visualTier: 2 },
-        // FLOOR — one SIGNATURE per team (stat- and cost-identical to the
-        // universal option each team already fields; only the mesh differs).
         { id: "sig_mercedes_floor", label: "Brackley Floor", cost: 120, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "edge_wing",
           desc: "Mercedes signature floor — Edge Wing performance with a 5-fence floor edge on titanium skids", speed: 0.98, cornering: 1.13, braking: 1.02, visual: { fences: 5, fenceH: 1.164, skid: 1, edgeLip: 1 , plank: 1}, visualTier: 2 },
         { id: "sig_ferrari_floor", label: "Maranello Floor", cost: 190, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "venturi",
@@ -464,8 +426,6 @@ const Parts = (function () {
         { id: "deflector",  label: "Deflector",     cost:  60, desc: "Cockpit deflector — steadier air over the driver at speed",                  speed: 1.03, braking: 1.02, visual: { haloBlade: 1, haloWing: 0, camPods: 1, screen: 1 }, visualTier: 2 },
         { id: "halo_wing",  label: "Halo Wing",     cost: 110, desc: "Upper halo flap — real downforce from the cockpit structure itself",         speed: 0.99, cornering: 1.07, visual: { haloBlade: 1, haloWing: 1, camPods: 1, screen: 0 }, visualTier: 2 },
         { id: "full_shroud",label: "Full Shroud",   cost: 160, desc: "Fully faired halo with flap and deflector — the complete cockpit package",   speed: 1.01, cornering: 1.08, braking: 1.02, visual: { haloBlade: 2, haloWing: 1, camPods: 2, screen: 1 }, visualTier: 2 },
-        // COCKPIT — one SIGNATURE per team (stat- and cost-identical to the
-        // universal option each team already fields; only the mesh differs).
         { id: "sig_mercedes_cpit", label: "Brackley Cockpit", cost: 110, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "halo_wing",
           desc: "Mercedes signature cockpit — Halo Wing performance with a bladed halo", speed: 0.99, cornering: 1.07, visual: { haloBlade: 2, haloWing: 1, camPods: 1, screen: 0 }, visualTier: 2 },
         { id: "sig_ferrari_cpit", label: "Maranello Cockpit", cost: 160, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "full_shroud",
@@ -500,8 +460,6 @@ const Parts = (function () {
         { id: "mag_forged",label: "Forged Mag",   cost: 110, desc: "Forged magnesium rim — real unsprung mass saved at every corner",           accel: 1.05, braking: 1.05, cornering: 1.03, visual: { spokes: 8, tape: 0, dish: 1, nut: [0.60, 0.55, 0.30] }, visualTier: 2 },
         { id: "aero_disc", label: "Aero Disc",    cost: 130, desc: "Fully dished aero disc — top speed at the cost of brake cooling",           speed: 1.05, braking: 0.98, visual: { spokes: 0, tape: 1, dish: 2, nut: [0.15, 0.60, 0.95] , gunNut: 1}, visualTier: 2 },
         { id: "works_rim", label: "Works Rim",    cost: 170, desc: "Works-spec rim package — the complete wheel, and it looks it",              speed: 1.03, accel: 1.04, cornering: 1.04, braking: 1.04, visual: { spokes: 6, tape: 1, dish: 2, nut: [0.98, 0.62, 0.05] , gunNut: 1}, visualTier: 2 },
-        // WHEELS — one SIGNATURE per team (stat- and cost-identical to the
-        // universal option each team already fields; only the mesh differs).
         { id: "sig_mercedes_rim", label: "Brackley Rim", cost: 110, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "mag_forged",
           desc: "Mercedes signature rim — Forged Mag performance with a 7-spoke rim with a banded shoulder", accel: 1.05, cornering: 1.03, braking: 1.05, visual: { spokes: 7, tape: 1, dish: 1, nut: [0, 0.75, 0.7] , gunNut: 1}, visualTier: 2 },
         { id: "sig_ferrari_rim", label: "Maranello Rim", cost: 170, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "works_rim",
@@ -602,13 +560,6 @@ const Parts = (function () {
     };
   }
 
-  // `owned` (a Set of fittable option ids, or null) is the career R&D gate and is
-  // deliberately NOT threaded into _resolve/resolveSetup/getMods/getCost/
-  // getVisualTiers: ownership is enforced on WRITE, at the getTeamParts funnel in
-  // game.js, not on read. Threading it through resolution would oblige every caller
-  // to pass it — and any that forgot would silently disagree with the rest — while
-  // putting career save state on the physics path. The argument exists only so the
-  // garage can grey out the rows a career has not researched yet.
   function isOptionAvailable(opt, team, owned) {
     const ctx = teamContext(team);
     const suppliers = opt.suppliers || (opt.supplier ? [opt.supplier] : null);
@@ -683,15 +634,6 @@ const Parts = (function () {
     return 0.85 + (stat / 100) * 0.15;
   }
 
-  // HOW MUCH WING, 0..1. The aero catalog runs from `minimal` (cornering 0.78 —
-  // a Monza-spec sliver) to `ground_effect` (1.32 — everything the floor and the
-  // wings can make), and that span IS the axis active aero trades along: a big
-  // wing has more drag to shed and more downforce to lose when the flaps open,
-  // a small one has neither. Read off the resolved option's own `cornering`, not
-  // the combined mods, because suspension and tyres also move that number and
-  // neither of them is a wing.
-  // Derived from the catalog rather than pinned to literals, so adding an option
-  // outside today's range re-scales the axis instead of clipping against it.
   const AERO_SPAN = (function () {
     const cat = CATALOG.find((c) => c.id === "aero");
     let lo = Infinity, hi = -Infinity;
@@ -702,15 +644,6 @@ const Parts = (function () {
     }
     return { lo, hi };
   })();
-  // WHAT THE ERS OPTION IS FOR, as two 0..1 axes. The category's descriptions
-  // have always promised battery behaviour — "harvests extra energy under
-  // braking", "maximum recovery window", "immediate deployment" — while the
-  // options only ever moved speed and accel like every other part, so none of it
-  // was true. These two read the bias already encoded in the option's own stats:
-  //   deploy <- accel   (deploy, mgu_k_max, overtake_focus, full_attack: high)
-  //   regen  <- speed   (harvest, thermal_max: high, and low on accel)
-  // which is exactly how the catalog already separates them. Normalised against
-  // the ERS category's own spans so a new option re-scales rather than clips.
   const ERS_SPAN = (function () {
     const cat = CATALOG.find((c) => c.id === "ers");
     const span = (k) => {
@@ -751,9 +684,6 @@ const Parts = (function () {
   function getVisualTiers(setup, team) {
     const resolved = resolveSetup(setup, team);
     const out = Object.assign({}, resolved.tiers);
-    // Resolved option id per category — lets Car3D drive per-OPTION visuals
-    // (e.g. Pirelli tyre-compound colours) beyond the coarse 0/1/2 tier. The
-    // tier lookups above are unchanged; this rides along under a reserved key.
     out._ids = resolved.ids;
     out._visual = resolved.visual;
     return out;

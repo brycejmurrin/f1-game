@@ -1,6 +1,4 @@
-/* Apex 26 — SUZUKA circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — SUZUKA circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -12,9 +10,6 @@
     // 120 m) — it was on the wrong PART of the lap, not in a corner.
     // See docs/tracks/START-LINES.md.
     startFrac: 0.9942,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.6125,
     sceneryCoordinates: "racing",
     name: "SUZUKA",
@@ -48,17 +43,9 @@
     // tucks exactly beneath the upper ribbon instead of clipping through it.
     elevations: [{ s: 0.8125, halfM: 300, rise: 11 }, { s: 0.0625, halfM: 260, rise: -5 }],
     bridges: [{ s: 0.4298, halfM: 160, rise: 13.5 }],
-    // Suzuka's Esses are noticeably narrower than the rest of the lap. s0/s1 are
-    // CONTROL-POINT index fractions in SOURCE space (applyHwZones walks pts by
-    // index and the trace is not evenly spaced); the racing-lap arc is in the
-    // trailing comment. Spoon and the Casio triangle are deliberately left at
-    // base width — narrowing there lets the bespoke Casio wall props through the
-    // on-track rejection guard and they end up over the tarmac.
     hwZones: [
       { s0: 0.8710, s1: 0.9671, hw: 6.1, ease: 0.012 },  // arc 0.300-0.348 the Esses
     ],
-    // Suzuka camber. 130R is the one that matters — a genuinely banked, long
-    // radius left taken flat — with 3.5-4° through the rest of the figure-of-8.
     bankZones: [
       { frac: 0.0622, angleDeg: 4.0, widthM: 260 },   // T1/T2
       { frac: 0.3306, angleDeg: 3.5, widthM: 220 },   // Dunlop / Degner approach
@@ -94,26 +81,13 @@
       const sakuraPink  = [0.96, 0.72, 0.80];
       const sakuraLight = [0.98, 0.80, 0.88];
 
-      // ── Grandstand helper: terrain-seated raked crowd + back shell, varied per
-      //    call via grandstandEx opts — liveries rotate through STAND_SETS.suzuka
-      //    (steel/navy/concrete) so the ten stands read as one venue that still
-      //    differs stand-to-stand, instead of one grey box repeated ten times. ──
       const stand = (s, side, gap, len, opts) => {
         grandstandEx(s, side, gap, len, null, null, opts || {});
       };
-      // ── Uncovered seating helper. grandstandEx({roof:"none"}) is NOT an open
-      //    bank: it still builds the 12 m back shell, so the two "uncovered
-      //    bleacher" calls this file used to make read as roofless boxes with a
-      //    wall behind the crowd. The shared bleacher() is the real form —
-      //    planks on a bolted frame, a guard rail, and open sky behind. Ranges
-      //    are the old centre ±half the old length: 5.8 km/lap, so 1 m ≈ 1.72e-4.
       const M = 1 / 5800;
       const openBank = (s, side, gap, lenM, opts) =>
         bleacher(s - lenM * M / 2, s + lenM * M / 2, side, gap, opts);
 
-      // ── Forested Mie-prefecture hills: three depth-haze rings of wooded summits
-      //    encircling the circuit. Near rings overlap so the horizon reads as one
-      //    continuous green wall with no gaps. No snow (Suzuka is wooded). ──────
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
@@ -136,9 +110,6 @@
         }
       }
 
-      // ── Backdrop rounded hills (midground green mounds between track and
-      //    distant mountains — fills the gap between forestEdge and skyline) ───
-      // Near midground: dense green backdrop mounds visible at every corner
       for (let i = 0; i < 18; i++) {
         const frac = i / 18;
         const k = Math.round(frac * n) % n;
@@ -148,18 +119,12 @@
                  [0.22 + hash(i * 3.3) * 0.06, 0.40 + hash(i * 4.7) * 0.06, 0.20 + hash(i * 2.1) * 0.04]);
       }
 
-      // ── Motopia theme park + giant Ferris wheel ──────────────────────────────
-      // Hero silhouette on the MAIN STRAIGHT (s≈0.02), left/outside — readable
-      // from the Esses climb and start/finish. Decluttered: no coaster loops or
-      // chair-swing clutter competing with the wheel rim.
       const wheelK = Math.round(n * 0.02) % n;
       ferrisWheel(wheelK, -1, 62, 38);     // 38 m radius — tall main-straight silhouette
 
       // Single flanking accent tower (aft of wheel) — keeps Motopia colour without crowding
       tower(Math.round(n * 0.038) % n, -1, 105, 7, 42, { col: [0.80, 0.82, 0.86], seg: 7, cap: true, capCol: neonBlue, mast: 5 });
 
-      // Motopia arrival gate: a compact red/white Japanese event arch frames the
-      // park perimeter without adding another tall silhouette beside the wheel.
       {
         const g = anchor(K(0.055), -1, 52), gb = [g.r, g.u, g.t];
         const gc = vadd(g.c, g.u, 5.2);
@@ -236,12 +201,6 @@
         place(kk, -1, dist, [8, 4, 8], [0.88, 0.76, 0.54]);
       }
 
-      // ── BESPOKE MOTOPIA FAIRGROUND RIDES ─────────────────────────────────────
-      //    Keep carousel + one drop tower only — coaster loops / chair-swing were
-      //    competing with the Ferris rim silhouette on the main-straight skyline.
-
-      // Carousel (merry-go-round): striped conical canopy on a central pole, a ring
-      // of horse-poles with painted horses, and a bright valance rim.
       const carousel = (k, side, dist, rad) => {
         const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
         if (onTrack(p.c[0], p.c[2], 4)) return;
@@ -264,8 +223,6 @@
         out._mat = 0;
       };
 
-      // Drop tower: tall gantry mast, corner rails, a passenger gondola ring that
-      // sits partway up, and a warm beacon at the summit.
       const dropRide = (k, side, dist, h) => {
         const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
         if (onTrack(p.c[0], p.c[2], 4)) return;
@@ -297,25 +254,16 @@
         addBox(out, vadd(lp2.c, lp2.u, 8.4), [1.4, 0.4, 0.9], lampWarm, lb2);
       }
 
-      // ── Pit & paddock complex (right side of main straight) ───────────────────
-      // Garage-bay rhythm via circuitKit — replaces two raw building() slabs
-      // that gave the whole pit complex zero bay rhythm (just a windowed wall).
       if (circuitKit) {
         circuitKit.pitBuilding({
           id: "kit:suzuka:pit-building", frac: 0.985, side: 1, gap: 9,
           size: [14, 9, 60], garages: 15, required: true,
         });
-        // Suzuka's Race Control tower — the clock-face silhouette in every
-        // pit-straight broadcast shot. Was a generic scenic tower() with no
-        // clock and no relationship to the garage block it sits beside.
         circuitKit.raceControl({ style: "tapered",
           id: "kit:suzuka:race-control", frac: 0.995, side: 1, gap: 22,
           size: [9, 30, 9], required: true,
         });
       }
-      // Analogue clock face on the tower's pit-straight-facing side. The kit's
-      // raceControl has no clock option, so this is a small bespoke addition
-      // flush with the tower's front face (same k/side/gap as the call above).
       {
         const rk = Math.round(n * 0.995) % n;
         const rc = anchor(rk, 1, 22), rb = [rc.r, rc.u, rc.t];
@@ -330,14 +278,7 @@
           addBox(stage, vadd(faceC, rc.r, 0.32), [0.14, 2.3, 0.14], navy, rb);          // minute hand
         }, { required: true });
       }
-      // Broadcast compound behind the pit roof — OB trucks + satellite uplink
-      // dishes. No circuit modelled this before; the plan's top requested
-      // new landmark. Set back at gap 32 (clear of the pit building's 9-23 m
-      // footprint) and offset to frac 0.992 (clear of both the pit building's
-      // and race control's tangential extents).
       broadcastCompound(Math.round(n * 0.992) % n, 1, 32, { vans: 3, dishes: 2, mastH: 9 });
-      // Japanese GP hospitality village: low, modular event suites behind the
-      // paddock preserve the pit-straight sightline while deepening race-weekend scale.
       if (circuitKit) {
         circuitKit.hospitality({
           id: "kit:suzuka:paddock-hospitality", frac: 0.975, side: 1, gap: 58,
@@ -366,10 +307,6 @@
         billboard(Math.round(n * (0.0 + i * 0.012)) % n, 1, 6, 8, 4, parkCol[i % parkCol.length]);
       }
 
-      // ── Spectator footbridges ─────────────────────────────────────────────────
-      // Intentional overhead spans carry an explicit underside clearance. Their
-      // terrain-grounded side towers are committed atomically, so a nearby foldback
-      // can suppress the complete support instead of leaving half a model behind.
       const footbridge = (id, s, deckH) => {
         const k = Math.round(s * n) % n;
         overheadSpan({ id, frac: s, clearance: deckH, thickness: 1.2, depth: 4.5,
@@ -395,17 +332,8 @@
       overheadSpan({ id: "suzuka-130r-gantry", frac: 0.86, clearance: 7.0,
         thickness: 0.8, depth: 1.6, supportGap: 2.4, color: steel, required: true });
 
-      // ── Hillside forest treelines using forestEdge() — REPLACES raw pine loops
-      //    and hedge slabs. Safe gap ensures no canopy clips barriers/walls.
-      //    Esses sector: dense mixed conifer + broadleaf on both sides ───────────
       forestEdge(0.10, 0.24,  1, 14, { density: 0.72, hMin: 9, hMax: 16,
         col:  [0.13, 0.34, 0.15], col2: [0.16, 0.36, 0.14], pineFrac: 0.65 });
-      // The Esses INNER verge and the pit-straight LEFT verge are the same strip of
-      // ground: s≈0.133–0.175 backs straight onto s≈0.95–0.99, only ~23 m edge to
-      // edge, and each side already has a catch fence 5–6 m in. That leaves a ~12 m
-      // plantable band — narrower than a broadleaf crown (~13 m across), which is
-      // why a mixed treeline here pushed through both fences. Plant the pinch once,
-      // with the narrow cedars that do fit; the wide sections keep the mixed forest.
       forestEdge(0.10, 0.133, -1, 14, { density: 0.68, hMin: 8, hMax: 15,
         col:  [0.14, 0.35, 0.16], col2: [0.17, 0.37, 0.15], pineFrac: 0.60 });
       forestEdge(0.133, 0.175, -1, 8, { density: 0.60, hMin: 8, hMax: 14,
@@ -424,17 +352,11 @@
         col:  [0.12, 0.32, 0.14], col2: [0.15, 0.35, 0.13], pineFrac: 0.60 });
       forestEdge(0.55, 0.72, -1, 12, { density: 0.68, hMin: 8, hMax: 14,
         col:  [0.13, 0.33, 0.14], col2: [0.15, 0.35, 0.13], pineFrac: 0.58 });
-      // A sparse second woodland rank closes the distant Hairpin/Spoon backdrop;
-      // the 34 m gap leaves the first-rank trees and braking sightlines legible.
       forestEdge(0.42, 0.54, -1, 34, { density: 0.34, hMin: 10, hMax: 17,
         col: [0.11, 0.30, 0.13], col2: [0.16, 0.36, 0.15], pineFrac: 0.66 });
       forestEdge(0.57, 0.70, 1, 34, { density: 0.32, hMin: 10, hMax: 16,
         col: [0.12, 0.31, 0.14], col2: [0.17, 0.37, 0.16], pineFrac: 0.62 });
 
-      // Back straight / 130R / Casio sector. Both ranks break either side of the
-      // figure-8 crossover (s≈0.805–0.83): there the verge is the bridge approach
-      // over the lower road at s≈0.226, so a 12 m treeline reached across and into
-      // that road's catch fence.
       forestEdge(0.72, 0.805,  1, 12, { density: 0.65, hMin: 8, hMax: 13,
         col:  [0.13, 0.34, 0.15], col2: [0.16, 0.36, 0.14], pineFrac: 0.55 });
       forestEdge(0.83, 0.92,   1, 12, { density: 0.65, hMin: 8, hMax: 13,
@@ -444,18 +366,11 @@
       forestEdge(0.83, 0.92,  -1, 12, { density: 0.62, hMin: 7, hMax: 13,
         col:  [0.12, 0.33, 0.14], col2: [0.15, 0.35, 0.13], pineFrac: 0.52 });
 
-      // Main straight / pit straight back verge (left side, behind grandstands).
-      // s≈0.94–0.99 is the far end of the shared Esses corridor above and is
-      // planted from that side, so this rank stops short of it rather than
-      // dropping a second treeline into the same 12 m strip.
       forestEdge(0.92, 0.94,  -1, 20, { density: 0.55, hMin: 8, hMax: 14,
         col:  [0.14, 0.35, 0.16], col2: [0.17, 0.37, 0.15], pineFrac: 0.55 });
       forestEdge(0.99, 0.10,  -1, 20, { density: 0.55, hMin: 8, hMax: 14,
         col:  [0.14, 0.35, 0.16], col2: [0.17, 0.37, 0.15], pineFrac: 0.55 });
 
-      // ── Sakura cherry-blossom — Esses climb identity only ─────────────────────
-      //    Sparse pink accent on the left rise (s≈0.18–0.22). Motopia / lap-wide
-      //    sakura thinned so the climb reads as the seasonal beat.
       {
         const essesSakura = [
           [0.175, 20, 7.5], [0.188, 24, 8.2], [0.200, 18, 7.0],
@@ -471,15 +386,6 @@
         tree(Math.round(n * 0.62) % n, -1, 22, 6.5, sakuraLight);
       }
 
-      // ── Sugi (Japanese cedar) plantation ranks ───────────────────────────
-      // The Suzuka hills are worked cedar forest, and a plantation does not
-      // look like a wood: it is PLANTED IN LINES of near-identical narrow
-      // spires, which is why it reads as Japan and not as Belgian or English
-      // countryside. forestEdge's mixed scatter cannot make that — it is built
-      // to look natural. cypress() is the columnar form; used here at full
-      // height with a tight `slim` it is sugi, the same way monza/imola use it
-      // for the Italian avenue. Ranks sit as a SECOND row at gap ~20, behind
-      // the existing mixed treeline, so the near verge keeps its variety.
       const SUGI  = [0.10, 0.27, 0.15], SUGI_D = [0.07, 0.21, 0.12];
       for (const [s0, side, gap, cnt, stepF] of [
         [0.262,  1, 20, 11, 0.0068],   // Degner descent
@@ -494,13 +400,6 @@
         }
       }
 
-      // ── Momiji (Japanese maple) — the low, wide, many-lobed crown planted
-      //    in ones and twos at the foot of the cedar. Suzuka's April slot is
-      //    why the sakura above exist; the red-leaf maple (Acer palmatum
-      //    atropurpureum) carries that colour the rest of the year, so a few
-      //    crimson crowns among the green are correct in the same frame.
-      //    broadleafFall's overlapping off-axis lobes are the point: a solid
-      //    cone of red would read as a traffic cone, not a tree.
       const MOMIJI_R = [0.62, 0.16, 0.14], MOMIJI_G = [0.24, 0.44, 0.20];
       for (const [s, side, gap, h, red] of [
         [0.163,  1, 15, 6.5, 1], [0.172,  1, 19, 7.5, 0], [0.181,  1, 16, 6.0, 1],
@@ -514,11 +413,6 @@
                       { lobes: 4, spread: 1.25, barkCol: [0.32, 0.26, 0.22] });
       }
 
-      // ── Nobori: the tall narrow vertical event banners that line every
-      //    Japanese race approach, hung from a short top arm on a slim pole.
-      //    Latin-alphabet sponsor hoardings are what every circuit in the
-      //    fleet already has; this is the one piece of trackside signage whose
-      //    SHAPE — tall, thin, portrait — is specific to this country.
       const noboriCols = [neonRed, [0.98, 0.98, 0.96], navy, neonYel, [0.10, 0.52, 0.30]];
       const nobori = (kk, side, dist, i) => {
         const p = anchor(kk, side, dist), b = [p.r, p.u, p.t];
@@ -533,18 +427,10 @@
                [0.07, 0.5, 0.82], [0.96, 0.96, 0.94], b);
         out._mat = 0;
       };
-      // Pit-straight approach (behind the billboard row at gap 6) and the
-      // Motopia gate walk-up, where the crowd actually files in.
       for (let i = 0; i < 12; i++) nobori(Math.round(n * (0.955 + i * 0.0042)) % n, 1, 12, i);
       for (let i = 0; i < 8; i++)  nobori(Math.round(n * (0.045 + i * 0.0046)) % n, -1, 26, i + 2);
       for (let i = 0; i < 6; i++)  nobori(Math.round(n * (0.298 + i * 0.0055)) % n, -1, 11, i + 1);
 
-      // ── Dunlop Curve branded arch ─────────────────────────────────────────────
-      // The corner is named for a Dunlop tyre-company arch that once spanned it;
-      // nothing in the scene marked it. A branded overhead span (Dunlop blue)
-      // plus two branded pylons — the same safe overhead-span mechanism already
-      // used for the start/scoring gantries, with trackside posts standing in
-      // for the arch's legs instead of relying on unguarded beam-mounted signage.
       {
         const dunlopBlue = [0.05, 0.28, 0.62], dunlopYellow = [0.96, 0.80, 0.10];
         const dk = K(0.205);
@@ -575,13 +461,6 @@
       fence(0.10, 0.24,  1, 6, 4, [0.70, 0.72, 0.76]);   // Esses outer
       fence(0.10, 0.24, -1, 6, 4, [0.70, 0.72, 0.76]);   // Esses inner
       fence(0.80, 0.90,  1, 6, 4, [0.70, 0.72, 0.76]);   // 130R outer
-      // 130R INNER (left). Suzuka fences both sides here, and without a barrier
-      // on this verge nothing stopped the roadside foliage scatter dropping a
-      // broadleaf inside the road edge: a tree anchored at s=0.8935 landed 4.3 m
-      // off the tarmac at s=0.869 and leant its crown 3.1 m over the racing line
-      // (the crown's underside skirt goes through the raw emit path, which the
-      // footprint guard does not cover). The fence puts that stretch into the
-      // spatial barrier index, so clearTreeDist() moves the tree out or drops it.
       fence(0.845, 0.925, -1, 6, 4, [0.70, 0.72, 0.76]);
       fence(0.92, 0.98,  1, 5, 4, [0.70, 0.72, 0.76]);   // Casio chicane
       fence(0.92, 0.98, -1, 5, 4, [0.70, 0.72, 0.76]);
@@ -593,9 +472,6 @@
       for (const [s, sd] of [[0.12, 1], [0.28, -1], [0.43, 1], [0.58, -1], [0.72, 1], [0.85, 1], [0.95, -1]]) {
         marshalPost(Math.round(n * s) % n, sd, 5);
       }
-      // ── Degner→Hairpin corridor (s≈0.30–0.45) — was bare but for a fence and a
-      //    marshal post: braking/corner signage close to the road plus a
-      //    broadcast camera tower rising above the treeline. ───────────────────
       if (circuitKit) {
         circuitKit.trackSigns({
           id: "kit:suzuka:degner-signs", frac: 0.335, side: -1, gap: 6,
@@ -628,8 +504,6 @@
         minimumClearance: 4.8, thickness: 1.7, depth: 20, span: hw[Math.round(0.226 * n) % n] * 2 + 8,
         supportGap: 2.8, supportWidth: 1.8, color: [0.13, 0.33, 0.21],
         required: true });
-      // Concrete abutment houses and Honda-red caps make the figure-eight
-      // crossing read as engineered infrastructure rather than a floating deck.
       for (const side of [-1, 1]) {
         const ca = anchor(K(0.226), side, 8.5), cb = [ca.r, ca.u, ca.t];
         const cc = vadd(ca.c, ca.u, 2.6);
@@ -671,9 +545,6 @@
         addBox(out, vadd(lp4.c, lp4.u, 9.4), [1.6, 0.4, 1.0], lampWarm, lb4);
       });
 
-      // ── Grandstands at all signature corners — ten stands, liveries rotated
-      //    through STAND_SETS.suzuka (steel/navy/concrete) via grandstandEx opts
-      //    so no two neighbours read as the same grey box. ─────────────────────
       stand(0.00, -1, 15, 52, { livery: "navy", tiers: 2, roof: "cantilever",
         suites: true, endWalls: true, pylons: true }); // Main grandstand — clear of the curved pit approach; navy base under the Honda crown accent
       stand(0.15,  1, 15, 28, { livery: "steel", roof: "truss" });         // Esses — compact bank on the rising outside
@@ -684,35 +555,17 @@
       stand(0.50,  1, 8, 24,  { livery: "orange" });                    // Mid-circuit flex stand
       stand(0.875, 1, 18, 24, { livery: "orange", endWalls: true }); // 130R exit crowd
 
-      // ── The two OPEN banks. Suzuka's outfield seating away from the main
-      //    stands is bolted steel bleacher, not a shelled grandstand — the
-      //    Esses crest and the 200R approach are both bare rakes on the
-      //    hillside, and the sky behind them is half of what makes those
-      //    corners read as hill country rather than a stadium.
       openBank(0.205, 1, 20, 22, { rows: 9, rise: 0.70, setback: 0.92,
         frameCol: [0.58, 0.60, 0.64], plankCol: [0.66, 0.67, 0.70], density: 0.72 });
       openBank(0.750, 1,  8, 26, { rows: 7, rise: 0.72, setback: 0.95,
         frameCol: [0.56, 0.58, 0.62], plankCol: [0.64, 0.65, 0.68], density: 0.66 });
 
-      // ── Spoon and 130R: grass-bank terracing, not roofed stands ──────────────
-      // Real spectator viewing here is informal earth terracing on the hillside,
-      // not a built stand — spectatorHill replaces the roofed grandstand() calls
-      // that used to stand in for both.
       const hillHalf = (lenM) => (lenM / 2) / track.total;
       spectatorHill(0.62 - hillHalf(40), 0.62 + hillHalf(40), -1, 9,
         { rows: 4, density: 0.55 }); // Spoon
       spectatorHill(0.84 - hillHalf(36), 0.84 + hillHalf(36), 1, 8,
         { rows: 4, density: 0.5 });  // 130R
 
-      // ── BAMBOO GROVES ────────────────────────────────────────────────────
-      // Suzuka sits in the foothills of the Suzuka mountains in Mie, and the
-      // circuit already plants the sugi (cedar) that covers those hills. What
-      // was missing is the OTHER half of that landscape: at the edge of every
-      // Japanese hill plantation, where the cedar thins toward cleared ground,
-      // there is bamboo — and it looks nothing like a tree. Tall, bare, pale,
-      // absurdly slender culms in a dense stand with the foliage all held in
-      // the top third. Cedar and bamboo side by side is the read; cedar alone
-      // could be Oregon.
       {
         const CULM   = [0.62, 0.66, 0.36];
         const CULM_D = [0.52, 0.58, 0.30];
@@ -730,12 +583,6 @@
           for (let i = 0; i < count; i++) {
             const hv = hash(kk * 7 + i * 31 + gap);
             const hv2 = hash(kk * 11 + i * 17);
-            // Culms are placed on a deterministic GRID with jitter, not by
-            // hashing both axes independently. Pure hashing let two culms in a
-            // 20-strong grove land on the same spot, and two overlapping
-            // same-colour culms put their faces on one plane — suzuka's +1
-            // coplanar spot in CI. The grid guarantees separation; the jitter
-            // keeps the grove from reading as planted rows.
             const gx = (i % 5) - 2, gz = Math.floor(i / 5) - 1.5;
             const a = anchor(kk + Math.round(gx * 2.2 + (hv - 0.5) * 1.4),
                              side, gap + gz * 4.6 + (hv2 - 0.5) * 2.0);
@@ -757,13 +604,6 @@
         }
       }
 
-      // ── HILLSIDE SHRINE AND TORII ────────────────────────────────────────
-      // Mie is Shinto country — Ise Jingu is an hour down the road — and a
-      // small wooded shrine with a vermilion torii at the foot of its steps is
-      // as ordinary in this landscape as a church spire in the Ardennes. One,
-      // set back on the wooded rise outside the Spoon side of the lap, where
-      // it reads against the cedar rather than competing with the Ferris wheel
-      // that owns the main-straight skyline.
       {
         const a = anchor(K(0.648), -1, 96);
         if (!onTrack(a.c[0], a.c[2], 24)) {
@@ -775,8 +615,6 @@
           modelGroup("suzuka-shrine", {
             center: vadd(a.c, a.u, 4.5), size: [22, 12, 14], basis: b,
           }, (stage) => {
-            // Torii: two slightly-splayed pillars, a curved-up kasagi lintel
-            // above a second straight nuki beam. The proportions are the read.
             stage._mat = MAT.WOOD;
             for (const t of [-2.9, 2.9]) {
               addCyl(stage, vadd(a.c, a.t, t), 0.30, 5.2, VERM, 6, b);
@@ -797,8 +635,6 @@
               addBox(stage, vadd(lc, a.u, 1.5), [0.62, 0.62, 0.62], [0.76, 0.75, 0.70], b);
               addPyramid(stage, vadd(lc, a.u, 2.1), [1.0, 0.5, 1.0], [0.66, 0.65, 0.60], b);
             }
-            // The shrine building itself: timber box under a heavy dark hip
-            // roof with deep overhanging eaves — the eaves are the silhouette.
             stage._mat = MAT.WOOD;
             const hc = vadd(vadd(a.c, a.r, 12.5), a.u, 2.6);
             addBox(stage, hc, [6.0, 3.4, 8.0], WALL, b);

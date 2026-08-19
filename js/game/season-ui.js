@@ -1,24 +1,4 @@
-/* Apex 26 — the SEASON SETUP screen (#season-setup): the calendar the player
-   races and the format they race it under. Opens over #select from the CUSTOMISE
-   button js/game/menus.js draws in its season branch, and BACK returns there.
-
-   Rules and persistence live in js/game/season-cal.js; this file is DOM only —
-   the same split, and the same reason, as js/game/career.js / career-ui.js. Live
-   game state comes through the ctx façade handed to SeasonUI.create(ctx) at boot
-   (see the `G` object in game.js): els, $, store, season, trackIdx, buildSelect,
-   soundOn. Consumes globals Tracks, SeasonCal, GameAudio, ScrollFade.
-
-   EVERY FIGURE ON THIS SCREEN IS READ, NEVER TYPED. The points tables, the lap
-   options and the presets all come off SeasonCal, so a tune there cannot leave a
-   number on this screen that the race does not honour — the rule
-   js/game/career-ui.js already follows for the career guide.
-
-   NOTHING IS LIVE UNTIL APPLY. The screen edits a DRAFT copy of the config;
-   BACK discards it. That matters because applying a calendar RESETS the
-   championship, and a player poking at the format to see what is there has not
-   asked to throw away eleven rounds of points.
-
-   Must load BEFORE js/game.js (see index.html). */
+/* Apex 26 — the SEASON SETUP screen (#season-setup): the calendar the player races and the format they race it under. Opens over #select from the CUSTOMISE button… */
 const SeasonUI = (function () {
   "use strict";
 
@@ -26,8 +6,6 @@ function create(G) {
   Log.info("ui", "SeasonUI.create");
   const { $, els } = G;
 
-  // The working copy. Null while the screen is closed — open() takes a fresh
-  // one off SeasonCal every time, so a discarded edit cannot come back.
   let draft = null;
 
   function el(tag, cls, text) {
@@ -36,9 +14,6 @@ function create(G) {
     if (text != null) n.textContent = text;
     return n;
   }
-  // Section heading, on the shared .sel-label the whole app uses (the dim
-  // uppercase text with the skewed red tick), with an id so the chip group under
-  // it can point aria-labelledby at it.
   function head(text, id) {
     const h = el("h3", "sel-label", text);
     if (id) h.id = id;
@@ -46,8 +21,6 @@ function create(G) {
   }
   function tick() { if (G.soundOn) GameAudio.uiTick(); }
 
-  // A row of choices, in the #race-settings idiom: a labelled group of chips
-  // whose `active` chip is the current value. `opts` is [value, label] pairs.
   function chipRow(parent, label, id, opts, current, pick) {
     parent.appendChild(head(label, id + "-label"));
     const row = el("div", "chip-row");
@@ -64,7 +37,6 @@ function create(G) {
     parent.appendChild(row);
   }
 
-  // ---------- the calendar pane ----------
   function buildCalendar() {
     const pane = $("ss-cal");
     pane.textContent = "";
@@ -76,13 +48,9 @@ function create(G) {
       if (!t) return;
       const row = el("div", "season-upcoming-row");
       row.append(el("span", "sur-rnd", "R" + (i + 1)), el("span", "sur-name", t.name));
-      // MOVE and REMOVE. Chips rather than a drag handle: this list is 24 rows
-      // long on a 390 px-tall landscape phone, where a drag is a scroll.
       const ctl = [
         ["↑", "Move up", i > 0, () => { swap(i, i - 1); }],
         ["↓", "Move down", i < draft.trackIds.length - 1, () => { swap(i, i + 1); }],
-        // The LAST round cannot be removed: a zero-round calendar is not a
-        // season, and SeasonCal would silently hand back the full one anyway.
         ["✕", "Remove", draft.trackIds.length > 1, () => { draft.trackIds.splice(i, 1); }],
       ];
       for (const [glyph, label, on, act] of ctl) {
@@ -101,7 +69,6 @@ function create(G) {
     const t = ids[a]; ids[a] = ids[b]; ids[b] = t;
   }
 
-  // ---------- presets, format, and the circuits still on the shelf ----------
   function buildPool() {
     const pane = $("ss-pool");
     pane.textContent = "";
@@ -159,11 +126,6 @@ function create(G) {
     const rest = Tracks.LIST.filter((t) => !used.has(t.id));
     pane.appendChild(head(rest.length ? "ADD A CIRCUIT" : "EVERY CIRCUIT IS ON THE CALENDAR"));
     for (const t of rest) {
-      // .track-row, not .season-upcoming-row: this list is the same thing #select's
-      // circuit picker is — a tappable row of name + meta — and that family is
-      // already a complete <button> (the reset, the --tap floor, the hover and
-      // press states). The calendar pane opposite is NOT tappable, which is why
-      // it stays on .season-upcoming-row.
       const row = el("button", "track-row");
       row.type = "button";
       row.setAttribute("aria-label", "Add " + t.name + " to the calendar");
@@ -179,9 +141,6 @@ function create(G) {
     if (!draft) return;
     buildCalendar();
     buildPool();
-    // APPLY says what it will COST when a championship is already running, on the
-    // button itself — a confirm dialog for this would be a second sheet over a
-    // sheet, and the answer fits in the label.
     const live = SeasonCal.hasProgress(G.season);
     $("ss-apply").textContent = live ? "APPLY — RESTART SEASON" : "APPLY";
     if (window.ScrollFade) ScrollFade.refresh();
@@ -221,10 +180,6 @@ function create(G) {
   $("ss-apply").onclick = () => {
     Log.info("ui", "SeasonUI.apply");
     SeasonCal.setConfig(draft);
-    // A NEW calendar is a NEW championship. Points scored over a schedule that
-    // no longer exists cannot be carried into one that does — half of them may
-    // have been won at circuits the season no longer visits — so the standings
-    // reset with the calendar rather than being silently re-indexed.
     G.season = SeasonCal.restart();
     G.store.set("season", G.season);
     G.trackIdx = SeasonCal.trackIndex(0);

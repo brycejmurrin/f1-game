@@ -1,6 +1,4 @@
-/* Apex 26 — SILVERSTONE circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — SILVERSTONE circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -11,9 +9,6 @@
     // Was 0.6400, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.5224,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.6400,
     name: "SILVERSTONE",
     gp: "British GP",
@@ -25,8 +20,6 @@
     sunAzimBias: 0.28,   // high-summer northern sun, gentle SW tilt over the old airfield
     baseHW: 8,
     sceneryCoordinates: "racing",
-    // Broad, level former-airfield ground. Keep the ribbon wide enough to ground
-    // the close stands/aprons without reaching the distant farmland models.
     terrainOuter: 110,
     flatTerrain: true,
     dressingExclusions: [
@@ -46,9 +39,6 @@
       { s: 0.76, halfM: 420, rise: 7 },
       { s: 0.19, halfM: 480, rise: -7 },
     ],
-    // Silverstone camber. An old airfield: nothing is steeply banked, but Copse,
-    // Becketts and Stowe all carry enough camber to be taken at the speeds they
-    // are — 3.5-4.5°, with the Luffield/Woodcote loop a touch flatter.
     bankZones: [
       { frac: 0.0267, angleDeg: 4.0, widthM: 110 },   // Copse
       { frac: 0.2122, angleDeg: 3.5, widthM: 190 },   // Becketts
@@ -75,8 +65,6 @@
           id: "kit:silverstone:pit-building", frac: 0.97,
           side: 1, gap: 180, size: [18, 10, 72], garages: 12, required: true,
         });
-        // Set-back Wing hospitality and paddock logistics deepen the event campus
-        // without closing the view down the pit straight.
         circuitKit.hospitality({
           id: "kit:silverstone:wing-hospitality", frac: 0.465,
           side: 1, gap: 76, size: [20, 9, 58], modules: 6,
@@ -94,7 +82,6 @@
       // 2. British overcast sky + lusher grass (ATM.britishOvercast).
       if (ATM && ATM.britishOvercast) Object.assign(pal, ATM.britishOvercast);
 
-      // ---- Palette (English-countryside green / overcast) ----
       const COPSE  = [0.12, 0.36, 0.16];   // dark-green tree copses / hedgerows
       const COPSE2 = [0.16, 0.40, 0.18];   // slightly lighter broadleaf
       const PINEG  = [0.10, 0.30, 0.14];   // conifer needle green
@@ -104,11 +91,6 @@
       const CONC   = [0.74, 0.75, 0.76];
       // Airfield asphalt apron — former runway concrete, slightly lighter than racing line
       const APRON  = (ATM && ATM.britishOvercast && ATM.britishOvercast.runoff) || [0.48, 0.46, 0.42];
-      // Muted British-summer crowd tones. Saturated primaries here read as a
-      // stripe of coloured blocks rather than people at 20-30 m, which is where
-      // the banks and open bleachers sit — the engine's own CROWD_DAY pack is
-      // similarly damped. Declared up here because the bleacher ranks below
-      // need it before the near-band dressing section does.
       const CROWD_C = [
         [0.52, 0.30, 0.28], [0.28, 0.32, 0.46], [0.62, 0.60, 0.56],
         [0.26, 0.40, 0.30], [0.44, 0.32, 0.42], [0.60, 0.48, 0.30],
@@ -118,7 +100,6 @@
       const LIT_WIN = [0.95, 0.82, 0.40];  // warm amber — Wing/tower lit windows
       const LIT_COOL = [0.70, 0.85, 0.95]; // cool blue-white — upper control room
 
-      // ---- LOW distant Northamptonshire treeline backdrop (flat — no snow) ----
       every(110, (kk) => {
         for (const side of [-1, 1]) {
           backdrop(kk, side, 195 + hash(kk * 6 + side) * 60, [150, 15, 150], [0.16, 0.30, 0.16]);
@@ -132,9 +113,6 @@
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
-      // Northamptonshire is FLAT former-airfield land — big sky, low horizon.
-      // These rings read as a distant WOODLAND treeline, not hills, so heights
-      // are kept low (were 18-40 m, which looked like mountains).
       for (const [extra, count, wMin, hMin, hVar, fc, rc] of [
         [270, 20, 180,  9, 6, [0.16, 0.36, 0.18], [0.22, 0.40, 0.22]],
         [370, 18, 220, 11, 7, [0.14, 0.32, 0.16], [0.20, 0.36, 0.20]],
@@ -150,11 +128,6 @@
         }
       }
 
-      // ---- Hedgerow-gridded flat farmland + perimeter hedgerows ----
-      // INNER ring: the clipped hedges that actually back onto the spectator
-      // enclosures — close enough to read from the car as the edge of the
-      // circuit's own grounds rather than as distant farmland. Hangar Straight
-      // (0.18-0.28) is deliberately left without an inner hedge.
       hedge(0.60, 0.64, -1, 30, 2.6, COPSE);   // Village/Loop infield boundary
       hedge(0.60, 0.64,  1, 34, 2.6, COPSE);   // Village outer enclosure
       hedge(0.86, 0.94, -1, 32, 2.4, COPSE);   // Woodcote infield
@@ -162,8 +135,6 @@
       hedge(0.34, 0.38,  1, 36, 2.4, COPSE);   // Vale/Club outer
       hedge(0.70, 0.76,  1, 30, 2.4, COPSE);   // Aintree / Wellington
       hedge(0.76, 0.82, -1, 33, 2.4, COPSE);   // Brooklands infield
-      // OUTER ring: the original farmland boundaries, still well beyond the
-      // enclosures so the patchwork keeps its depth.
       hedge(0.20, 0.28,  1, 105, 2.4, COPSE);
       hedge(0.18, 0.22, -1, 120, 2.4, COPSE);
       // Outer farmland hedgerow grid — second ring of field strips.
@@ -186,15 +157,6 @@
       hedge(0.70, 0.80,  1, 150, 2.2, COPSE2);
       hedge(0.24, 0.34, -1, 160, 2.2, COPSE2);
 
-      // ---- Oak copses (Chapel/Cheese Copse, s≈0.15 L; scattered elsewhere) ----
-      // Named Silverstone copses — dense broadleaf patches using forestEdge for
-      // canopy-safe placement. gap = outer clearance; forestEdge adds canopy radius.
-      // Hangar Straight (≈0.18–0.28) kept OPEN — no dense outfield belt there.
-      // The copses are the circuit's OWN trees, not distant farmland — Chapel
-      // and Cheese Copse stand just past the run-off, and the Village/Loop and
-      // Luffield woods crowd the infield. They used to sit 24-62 m out, which
-      // from the car put most of the leaf area past the enclosures; 13-16 m
-      // puts them where the real copses are, just beyond the debris fencing.
       forestEdge(0.14, 0.17, -1, 14, { density: 0.8, hMin: 9, hMax: 14, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Chapel/Cheese Copse
       forestEdge(0.61, 0.64,  1, 14, { density: 0.75,hMin: 8, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.15 }); // Village-side copse
       forestEdge(0.69, 0.71, -1, 13, { density: 0.8, hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Loop infield copse
@@ -203,18 +165,7 @@
       forestEdge(0.89, 0.92, -1, 14, { density: 0.7, hMin: 8, hMax: 12, col: COPSE2, col2: COPSE,  pineFrac: 0.2  }); // Woodcote area
       forestEdge(0.34, 0.36,  1, 15, { density: 0.65,hMin: 8, hMax: 12, col: COPSE,  col2: COPSE2, pineFrac: 0.2  }); // Vale outfield copse
       forestEdge(0.57, 0.60, -1, 16, { density: 0.65,hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Farm curve infield copse
-      // Scattered broadleaf fringe past the enclosures. This used to be ONE
-      // full-lap belt at a flat 48 m: a continuous treeline the whole way round,
-      // parked far enough out to be fog. It is now per-sector, so the trees sit
-      // in the visible band where Silverstone really has them (the infields and
-      // the Wellington/Luffield perimeter) and stay away — or away entirely —
-      // where the airfield is genuinely open.
       for (const [s0, s1, side, gap, dens] of [
-        // The Copse-inside infield (s 0.96-0.048 L) is a narrow strip between
-        // the National straight and the pit straight. A treeline planted in it
-        // gets walked outward by the barrier guard until it is clear, which on
-        // this pinch means ACROSS the pit straight — that left a canopy 3.6 m
-        // over the racing line at s=0.036. Start past the pinch.
         [0.048, 0.10, -1, 20, 0.10],  // Copse inside
         [0.02, 0.09,  1, 24, 0.08],   // Copse outfield, past the run-off
         [0.10, 0.18, -1, 24, 0.09],   // Maggotts/Becketts infield
@@ -226,11 +177,7 @@
         [0.76, 0.96,  1, 19, 0.11],   // Brooklands > Woodcote perimeter belt
         [0.80, 0.95, -1, 21, 0.09],   // Luffield infield
       ]) forestEdge(s0, s1, side, gap, { density: dens, hMin: 7, hMax: 12, col: COPSE, col2: COPSE2, pineFrac: 0.25 });
-      // Hangar Straight (0.18-0.28) gets NO near fringe on either side — the
-      // open airfield vista between the hangars is the point of the place.
 
-      // 1. Vast airfield run-off aprons at the signature fast corners.
-      // Former runway slabs — wide, low, forgiving asphalt beyond the verge.
       for (const [id, s, side, gap, size] of [
         ["copse", 0.04, 1, 4, [38, 0.28, 58]],
         ["maggotts-left", 0.12, -1, 4, [34, 0.28, 50]],
@@ -242,23 +189,6 @@
         id: `silverstone-runoff-${id}`, samples: 6,
       });
 
-      // ---- Big grandstands at the signature corners ----
-      // Silverstone's stands sit right on top of the run-off apron, not out in
-      // the fields — gaps here are the front-row clearance beyond the road edge.
-      // Every stand is built as a STRAIGHT chord along the tangent at its own
-      // node, so length is the real constraint once they move in: a 70-90 m
-      // block at 18-22 m clearance swings its far end out over a doubling-back
-      // stretch of the lap. Silverstone's stands are separate blocks anyway, so
-      // the hero enclosures are split into adjacent 40-50 m sections.
-      //
-      // grandstandEx + STAND_SETS.silverstone ("navy","steel","alu") replaces
-      // the near-identical grey grandstand() boxes that used to stand at every
-      // one of these: each call now rotates a named shell family while a shared
-      // Silverstone-blue roof/fascia keeps the whole venue reading as one place
-      // (real Silverstone stands carry the same blue fascia trim regardless of
-      // shell colour). Hero corners (Copse, Stowe, the Wing) get raked two- or
-      // three-tier decks with hospitality suites; the rest stay single-tier to
-      // hold the vertex budget.
       const STAND_LIVS = ["navy", "steel", "alu"];      // STAND_SETS.silverstone rotation
       const SIL_ROOF   = [0.16, 0.30, 0.58];             // shared Silverstone-blue roof
       const SIL_FASCIA = [0.09, 0.19, 0.42];             // shared deeper-blue fascia band
@@ -294,18 +224,6 @@
       // Chapel corner — fans favourite viewpoint
       stand(0.17, -1, 20, 46,  { roof: "truss", endWalls: true });
 
-      // 4. Broad spectator fields: secondary stand ranks fill the famous viewing
-      // bowls, while Hangar Straight itself remains deliberately open. These sat
-      // 42-52 m back and read as distant scenery; a second rank at 26-34 m sits
-      // BEHIND the front stands above and still reads as a stepped enclosure.
-      //
-      // These six are OPEN BLEACHERS, not more roofed shells. The British GP's
-      // general-admission ranks behind the named enclosures are bolted steel
-      // scaffolding with a guard rail and nothing over it — and on a former
-      // airfield that distinction is the whole point of the place: eighteen
-      // shelled boxes in a ring turn the biggest sky on the calendar into a
-      // stadium. bleacher() also costs less than the shell it replaces, which
-      // is what pays for the oaks further down. 5.9 km/lap → 1 m ≈ 1.695e-4.
       const M = 1 / 5900;
       for (const [s, side, gap, len, rows] of [
         [0.105, -1, 34, 44, 8], // Maggotts approach
@@ -315,21 +233,11 @@
         [0.815, -1, 28, 46, 8], // Brooklands approach
         [0.875, -1, 26, 46, 7], // Luffield/Woodcote
       ]) bleacher(s - len * M / 2, s + len * M / 2, side, gap, {
-        // step 12, not the 6 m default: a bleacher emits its whole rake per
-        // bay, so the bay count is what this model costs. Twelve metres of
-        // chord on a secondary rank set 26-34 m back is invisible, and the
-        // difference between 6 and 12 here is ~30 k verts on a circuit that is
-        // already the heaviest in the fleet.
         rows, rise: 0.70, setback: 0.92, density: 0.66, step: 12,
         frameCol: [0.58, 0.60, 0.64], plankCol: [0.64, 0.65, 0.68],
         crowd: CROWD_C,
       });
 
-      // 4b. The rest of the named Silverstone enclosures. Every British GP
-      // grandstand has a name on the ticket, and the lap was missing most of
-      // them — Village, Vale, Farm, Aintree, Woodcote and the National-straight
-      // Copse/Becketts pair. Modest lengths so the lap reads as a ring of
-      // separate stands rather than one continuous wall of seating.
       for (const [s, side, gap, len, opts] of [
         [0.020,  1, 14, 46, {}],                            // Copse entry (National straight)
         [0.155, -1, 14, 44, {}],                             // Becketts inner
@@ -344,22 +252,11 @@
         [0.940,  1, 16, 52, {}],                             // National straight (old pits side)
       ]) stand(s, side, gap, len, opts);
 
-      // ---- The Wing building (s≈0.43–0.47 R) — four grounded atomic bays ----
-      // Four overlapping 64 m bays follow the pit-straight ground/heading and
-      // restore the full ~240 m body, glazing and roof treatment without one
-      // long chord crossing the road. Each required group declares complete bounds.
       {
         const wingFracs = [0.435, 0.445, 0.455, 0.465];
         for (let i = 0; i < wingFracs.length; i++) {
           const a = anchor(k(wingFracs[i]), 1, 16);
           const b = [a.r, a.u, a.t];
-          // The Wing's signature is a swept, tapered cantilever roofline, not
-          // the flat constant-height slab this used to be. sweepPeak gives the
-          // whole building a shallow rise-and-fall along its length (low at
-          // both gable ends, cresting over the middle two bays); within each
-          // bay the roof is a 3-step TAPER from a thick spine over the back
-          // wall down to a thin leading edge cantilevered out over the road —
-          // an aerofoil-like cross-section instead of one uniform-height box.
           const sweepPeak = Math.sin(((i + 0.5) / wingFracs.length) * Math.PI);
           const roofY = 12.0 + sweepPeak * 1.8;
           modelGroup(`silverstone-wing-facade-${i + 1}`, {
@@ -371,8 +268,6 @@
             TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [20.2, 3.8, 62], [0.10, 0.14, 0.22], b);
             TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [18, 3.2, 60], LIT_WIN, b);
             stage._mat = MAT.METAL;
-            // Tapered roof: three 8 m-wide bands stepping DOWN from the back
-            // (over the set-back wall) to the leading, trackside edge.
             const bands = [
               { rOff:  8, h: 1.7,  top: roofY + 0.9 },   // back spine (tallest)
               { rOff:  0, h: 1.15, top: roofY + 0.35 },  // mid step
@@ -382,19 +277,13 @@
               const rc = vadd(vadd(a.c, a.r, bd.rOff), a.u, bd.top - bd.h / 2);
               TrackGeom.addBox(stage, rc, [8.4, bd.h, 64], [0.90, 0.92, 0.96], b);
             }
-            // Thin roof fin along the tallest (back) band — the accent blade
-            // that reads from trackside as the building's signature line.
             TrackGeom.addBox(stage, vadd(vadd(a.c, a.r, 8), a.u, roofY + 1.6), [0.5, 1.0, 60], [0.86, 0.88, 0.92], b);
           }, { required: true });
         }
       }
 
-      // Wing grandstand (behind pit building, s≈0.46 R) — the tall stepped
-      // seating the brief calls for flanking The Wing; the venue's biggest
-      // single stand gets the full three-tier treatment.
       stand(0.46, 1, 12, 110, { tiers: 3, roof: "cantilever", suites: true, endWalls: true, pylons: true });
 
-      // ---- The Wing: control tower rising from the building roofline (s≈0.44 R) ----
       // Placed at dist=32, anchored cleanly off track — uses tower() composite helper
       {
         const tDist = 32;
@@ -409,8 +298,6 @@
           TrackGeom.addBox(stage, vadd(ta.c, ta.u, 26), [5, 3, 5], [0.10, 0.14, 0.20], b);
           TrackGeom.addBox(stage, vadd(ta.c, ta.u, 27), [4.4, 1.8, 4.4], LIT_COOL, b);
           stage._mat = MAT.METAL;
-          // Mast STANDS ON the lit control-room box (top at 27 + 1.8/2 = 27.9);
-          // it used to start at 29, hovering 1.1 m clear of the roof it rises from.
           TrackGeom.addCyl(stage, vadd(ta.c, ta.u, 27.9), 0.16, 11, [0.32, 0.32, 0.34], 4, b);
           TrackGeom.addCyl(stage, vadd(ta.c, ta.u, 38.9), 0.28, 0.5, [0.90, 0.20, 0.20], 6, b);
           TrackGeom.addBox(stage, vadd(ta.c, ta.u, 13.5), [4.6, 1.2, 4.6], LIT_WIN, b);
@@ -440,12 +327,6 @@
 
       // BRDC clubhouse set back (s≈0.48 R) — pale historical building
       building(k(0.48), 1, 28, 22, 9, 20, { kind: "chevron", wall: [0.76, 0.76, 0.72], window: [0.18, 0.24, 0.30] });
-      // Formal pollarded avenue on the clubhouse lawn. Everything else growing
-      // at this circuit is a copse, a windbreak or a hedgerow — i.e. landscape
-      // that happened. This is the one PLANTED, cut-back, deliberate row, and
-      // plane()'s crown is a disc rather than a cone precisely because that is
-      // what annual pollarding leaves behind. Two short files flanking the
-      // approach, well inside the clubhouse's own setback.
       for (let i = 0; i < 4; i++) {
         plane(k(0.470 + i * 0.0042), 1, 21, 12 + (i % 2) * 1.5, COPSE2,
               { stages: 2, spread: 0.8 });
@@ -453,7 +334,6 @@
               { stages: 2, spread: 0.8 });
       }
 
-      // ---- Lamp posts along the pit straight and around The Wing ----
       // Double-arm floodlight columns — distinctive at circuits (white/silver poles, twin heads)
       {
         // pit straight lamp posts (s 0.44–0.50, right side at dist≈6)
@@ -465,10 +345,6 @@
           if (onTrack(la.c[0], la.c[2], 1.2)) continue;
           // lamp column
           addCyl(out, la.c, 0.18, 12, [0.72, 0.74, 0.78], 6, [la.r, la.u, la.t]);
-          // Crossarm and twin lamp heads. The arm's LONG axis has to run along
-          // the tangent, because that is the axis the heads are offset on — as
-          // [5.0, 0.28, 0.28] it spanned 5 m laterally and the two heads hung
-          // 2.2 m away from anything (the float-audit cantilever signature).
           addBox(out, vadd(la.c, la.u, 11.8), [0.28, 0.28, 5.4], [0.70, 0.72, 0.76], [la.r, la.u, la.t]);
           addBox(out, vadd(vadd(la.c, la.t, -2.2), la.u, 11.6), [1.8, 0.6, 1.0], LIT_WIN, [la.r, la.u, la.t]);
           addBox(out, vadd(vadd(la.c, la.t,  2.2), la.u, 11.6), [1.8, 0.6, 1.0], LIT_WIN, [la.r, la.u, la.t]);
@@ -484,18 +360,12 @@
         }
       }
 
-      // ---- National pit straight (s≈0.0) garages + pit wall + paddock ----
       building(k(0.97), 1, 6, 12, 8, 90, { kind: "hall", wall: [0.82, 0.83, 0.85], window: [0.20, 0.24, 0.28], floor: 4 });
-      // paddock support buildings / hospitality units set back behind the pits —
-      // motorhome() gives the real two-tier team-unit body + awning canopy
-      // instead of a flat building() office-block mass.
       for (const [s, d, w, h, ln, col] of [
         [0.95, 40, 14, 7, 34, [0.76, 0.76, 0.72]],
         [0.99, 44, 16, 6, 30, [0.72, 0.74, 0.76]],
         [0.92, 38, 12, 6, 26, [0.78, 0.77, 0.73]],
       ]) motorhome(k(s), 1, d, w, h, ln, { wall: col, window: [0.28, 0.32, 0.36] });
-      // CC0 Kenney warehouses / service sheds behind the National paddock
-      // (pack-optional; procedural halls when Assets has not loaded models).
       {
         const yards = [
           ["kenney_ind_building-e", 0.93, 1, 78],
@@ -527,14 +397,11 @@
       ]) {
         const a = anchor(k(s), 1, d);
         addBox(out, vadd(a.c, a.u, 1.8), [14, 3.5, 18], tCol, [a.r, a.u, a.t]);
-        // addPrism anchors at its BASE — at +5.1 the roof floated 1.55 m above
-        // the 3.55 m wall top. seat.prism states the intent instead.
         seat.prism(out, vadd(a.c, a.u, 3.55), [14, 2.6, 18], [0.96, 0.97, 0.98], [a.r, a.u, a.t]);
         // marquee lit interior
         addBox(out, vadd(a.c, a.u, 2.2), [12, 2.8, 16], LIT_WIN, [a.r, a.u, a.t]);
       }
 
-      // ---- Catch fencing behind the grandstands at the signature corners ----
       fence(0.02, 0.08,  1,  9, 4.5, [0.74, 0.76, 0.80]);
       fence(0.28, 0.34,  1, 12, 4.5, [0.74, 0.76, 0.80]);
       fence(0.38, 0.44,  1,  9, 4.5, [0.74, 0.76, 0.80]);
@@ -542,7 +409,6 @@
       fence(0.53, 0.58,  1, 12, 4.5, [0.74, 0.76, 0.80]);
       fence(0.64, 0.70, -1, 11, 4.5, [0.74, 0.76, 0.80]);  // The Loop
 
-      // ---- Armco guardrails lining fast sweeps + tyre-wall stacks at apexes ----
       guardrail(0.05, 0.10,  1, 5, [0.82, 0.82, 0.84]);
       guardrail(0.16, 0.22, -1, 5, [0.82, 0.82, 0.84]);
       guardrail(0.50, 0.56,  1, 6, [0.82, 0.82, 0.84]);
@@ -553,14 +419,12 @@
       tyreWall(0.655, 0.67, -1, 3.5, RED);
       tyreWall(0.84, 0.855, -1, 3.5, [0.2, 0.4, 0.8]);
 
-      // ---- Marshal posts dotted around the lap ----
       for (const [s, side] of [[0.05, 1], [0.13, -1], [0.20, -1], [0.31, 1], [0.41, 1],
                                [0.55, 1], [0.66, -1], [0.78, 1], [0.86, -1], [0.95, 1],
                                [0.22, 1], [0.48, -1], [0.60, 1]]) {
         marshalPost(k(s), side, 4);
       }
 
-      // ---- Advertising hoardings around the major corners + pit straight ----
       billboard(k(0.04),  1, 20, 12, 4.5, [0.18, 0.52, 0.28]);
       billboard(k(0.40),  1, 20, 14, 5.0, [0.85, 0.28, 0.18]);
       billboard(k(0.66), -1, 18, 12, 4.5, [0.18, 0.38, 0.68]);
@@ -570,40 +434,22 @@
       billboard(k(0.54), -1, 14, 14, 5.0, [0.86, 0.28, 0.18]);
       billboard(k(0.30),  1, 22, 14, 5.0, [0.18, 0.38, 0.68]);  // Stowe
 
-      // ---- Pine windbreak rows (airfield perimeter) + outer broadleaf copse belts ----
-      // Windbreaks: mix of conifer/broadleaf at mid-distances using forestEdge.
-      // pineFrac=0.6 gives the classic Silverstone mixed-hedgerow/conifer windbreak feel.
-      // Hangar Straight (0.18–0.28) deliberately skipped — open airfield vista.
       forestEdge(0.14, 0.17,  1, 17, { density: 0.35, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Maggotts right (pre-Hangar)
       forestEdge(0.29, 0.42,  1, 18, { density: 0.35, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Stowe right (post-Hangar)
       forestEdge(0.58, 0.68, -1, 15, { density: 0.35, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Abbey/Loop left
       forestEdge(0.78, 0.90, -1, 17, { density: 0.35, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Luffield left
-      // These belts still break mid-run, but for a different reason now they are
-      // in the visible band: a belt that reaches far out on this airfield leaves
-      // its own outfield and comes back over the lap on the far side (s≈0.06-0.08
-      // landed on the National straight, s≈0.47-0.52 on the start/finish complex,
-      // and the 122 m Maggotts belt put a canopy 2.8 m over the pit straight).
       forestEdge(0.05, 0.061, -1, 18, { density: 0.3, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Maggotts far side
       forestEdge(0.078, 0.12, -1, 18, { density: 0.3, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55});
       forestEdge(0.44, 0.468,  1, 19, { density: 0.3, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // behind The Wing
-      // Broadleaf copse belts (the named Silverstone landscape copses), mixed
-      // through the conifer windbreaks above at the same depth rather than
-      // stacked 80-110 m behind them where nothing was legible.
-      // Maggotts belt ends before Hangar Straight; Stowe belt starts after.
       forestEdge(0.14, 0.17, -1, 18, { density: 0.4, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Maggotts outer (pre-Hangar)
       forestEdge(0.49, 0.497, 1, 18, { density: 0.4, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Wing outer belt
       forestEdge(0.516, 0.53, 1, 18, { density: 0.4, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); //  (breaks over the pit complex)
       forestEdge(0.71, 0.75,  1, 18, { density: 0.4,  hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Aintree outer copse
-      // (A "Village outer belt" forestEdge(0.61,0.65,-1,...) used to sit right
-      // here, duplicating the broadleaf fringe belt that already covers
-      // 0.60-0.76 on this side above — one of several stacked treatments
-      // relieving the Village/Loop infield's repetition; removed.)
       forestEdge(0.35, 0.39, -1, 19, { density: 0.3,  hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Vale outer field copse
       // Very thin Hangar Straight fringe only — silhouette hangars need sky behind them
       forestEdge(0.18, 0.28,  1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
       forestEdge(0.18, 0.28, -1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
 
-      // ---- Low farm sheds on the flat outfield (hangars live on Hangar Straight below) ----
       for (const [s, side, d, w, h, ln] of [
         [0.50,  1, 145, 24, 5, 34],
         [0.74,  1, 150, 20, 5, 26],
@@ -615,14 +461,10 @@
         const a = anchor(k(s), side, d);
         if (!onTrack(a.c[0], a.c[2], 18)) {
           addBox(out, vadd(a.c, a.u, h * 0.4), [w, h * 0.8, ln], [0.56, 0.54, 0.50], [a.r, a.u, a.t]);
-          // addPrism is BASE-anchored (see the note at line 521): seat the roof on
-          // the wall top. The extra + h*0.2 was half the prism height, and left a
-          // 1 m air gap on all six sheds.
           addPrism(out, vadd(a.c, a.u, h * 0.8), [w, h * 0.4, ln], [0.46, 0.44, 0.42], [a.r, a.u, a.t]);
         }
       }
 
-      // ---- Red/white kerb accent boxes + paved run-off framing at apexes ----
       for (const [s, side] of [[0.04, 1], [0.12, -1], [0.12, 1], [0.30, 1], [0.40, 1], [0.55, 1], [0.66, -1], [0.85, -1]]) {
         place(k(s), side, 2, [0.5, 0.3, 8], side > 0 ? RED : WHITE);
         place(k(s), side, 9, [12, 0.1, 14], CONC);
@@ -631,7 +473,6 @@
       place(k(0.45), 1, 2, [0.4, 0.28, 6], RED);
       place(k(0.45), 1, 8, [11, 0.1, 10], CONC);
 
-      // ---- Pit garage bays: 10 evenly spaced garage boxes along the pit lane ----
       {
         for (let i = 0; i < 10; i++) {
           const gapStep = 14;
@@ -647,13 +488,6 @@
         }
       }
 
-      // ---- English oak: the named Copse trees, and the hedgerow standards ----
-      // Silverstone's corners are named after the copses (Copse, Chapel,
-      // Cheese) and this is oak country — but every tree on the lap came out
-      // of tree(), whose stacked-cone crown is a conifer-ish blob. The oak is
-      // BROAD and LOW with an irregular outline; broadleafFall builds a crown
-      // from overlapping off-axis lobes, which is that shape (pass a summer
-      // green — the form is what differs from tree(), not the palette).
       const oak = (kk, side, dist, h, col) =>
         broadleafFall(kk, side, dist, h, col,
                       { lobes: 3, spread: 1.35, barkCol: [0.33, 0.30, 0.26] });
@@ -667,11 +501,6 @@
           oak(kk, 1, 60 + hash(kk * 9 + j) * 18, 10 + hash(kk * 13 + j) * 5, COPSE);
         }
       }
-      // Hedgerow standards — the solitary field oaks left standing when the
-      // hedges were laid, and the one piece of Northamptonshire landscape that
-      // is legible from the car at 200 km/h. Kept in the 20-34 m band beside
-      // the named copses and hedge lines, in ones and twos: a hedgerow oak is
-      // singular by definition, and a rank of them would be an orchard.
       for (const [s, side, gap, h, alt] of [
         [0.132,  1, 26, 15, 0], [0.152, -1, 22, 17, 1],   // Chapel / Cheese Copse
         [0.335,  1, 28, 16, 0], [0.362, -1, 24, 14, 1],   // Vale outfield
@@ -680,10 +509,8 @@
         [0.782,  1, 27, 15, 0], [0.912, -1, 24, 16, 1],   // Brooklands / Woodcote
       ]) oak(k(s), side, gap, h, alt ? COPSE2 : COPSE);
 
-      // ---- Pit control tower near the start gantry ----
       building(k(0.01), 1, 8, 9, 5, 11, { kind: "podium", wall: [0.76, 0.75, 0.70], window: [0.26, 0.30, 0.34] });
 
-      // ---- Maggotts/Becketts infield oak cluster ----
       {
         const maggFracs = [0.110, 0.120, 0.130];
         const maggDists = [85, 95, 100];
@@ -693,14 +520,12 @@
         }
       }
 
-      // ---- Brooklands section: darker outer trees + banking suggestion ----
       for (let i = 0; i < 5; i++) {
         const s = 0.80 + i * 0.012;
         oak(k(s), -1, 85 + hash(k(s) * 17) * 20, 11 + hash(k(s) * 19) * 5, [0.16, 0.32, 0.14]);
         oak(k(s), -1, 65 + hash(k(s) * 23) * 25, 10 + hash(k(s) * 29) * 6, [0.14, 0.30, 0.13]);
       }
 
-      // ---- Additional outer signage along the main straight ----
       // Low sponsors/sector boards on the outer wall beyond pit lane
       for (const [s, col] of [
         [0.49, [0.20, 0.40, 0.72]], [0.51, [0.85, 0.20, 0.20]],
@@ -709,15 +534,6 @@
         billboard(k(s), -1, 20, 10, 4.0, col);
       }
 
-      // =======================================================================
-      // BESPOKE AIRFIELD & FARMLAND LANDMARKS — local models from raw primitives
-      // =======================================================================
-
-      // --- Silverstone Experience museum: the ONE former RAF hangar that
-      //     really is still standing at the circuit, re-clad in Silverstone
-      //     blue with a glazed entrance gable and forecourt sign rather than
-      //     left as bare wartime corrugated iron — the barrel-roofed hall
-      //     silhouette is unchanged, so the shape still reads as "ex-hangar".
       function heritageMuseum(kk, side, dist) {
         const w = 32, bodyH = 9, ln = 40;
         const a = anchor(kk, side, dist);
@@ -729,8 +545,6 @@
         addCyl(out, vadd(vadd(a.c, a.u, bodyH), a.t, -ln / 2), w / 2, ln,
                [0.58, 0.60, 0.65], 8, [a.r, a.t, a.u]);                                   // original barrel roof, repainted
         out._mat = MAT.METAL;
-        // Silverstone-blue fascia band along the eaves — the branding line
-        // that marks this hangar out as the museum, not one more wartime shed.
         addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.94), a.t, 0), [w + 0.4, 1.1, ln], [0.10, 0.20, 0.44], b);
         // Glazed entrance gable + canopy at the trackside end.
         const gable = vadd(vadd(a.c, a.u, bodyH * 0.42), a.t, -(ln / 2 + 0.05));
@@ -743,8 +557,6 @@
         out._mat = 0;
       }
 
-      // --- Northamptonshire farm barn: barn-red body, pitched roof, hay-loft door
-      //     and a corrugated grain silo alongside.
       function barn(kk, side, dist) {
         const a = anchor(kk, side, dist);
         if (onTrack(a.c[0], a.c[2], 20)) return;
@@ -761,8 +573,6 @@
         out._mat = 0;
       }
 
-      // --- Heritage Spitfire on a plinth: raised fuselage, elliptical wings, nose
-      //     cone, tail fin/plane and a glazed canopy. RAF-airfield history display.
       function heritagePlane(kk, side, dist) {
         const a = anchor(kk, side, dist);
         if (onTrack(a.c[0], a.c[2], 16)) return;
@@ -780,8 +590,6 @@
         out._mat = 0;
       }
 
-      // --- Start-light gantry cluster spanning the National straight: twin masts,
-      //     a typed overhead span and five red start-light boxes.
       function startGantryCluster(s) {
         const kb = k(s), L = anchor(kb, -1, 2.4), R = anchor(kb, 1, 2.4);
         const bL = [L.r, L.u, L.t], H = 8;
@@ -794,21 +602,6 @@
         addCyl(out, L.c, 0.4, H, [0.20, 0.21, 0.24], 6, bL);
         addCyl(out, R.c, 0.4, H, [0.20, 0.21, 0.24], 6, [R.r, R.u, R.t]);
         const beam = vadd(L.c, L.u, H + 0.35);
-        // Crossbar physically bridging the two masts. The five light boxes
-        // below are centred on the centreline (up to ~3.2 m either side)
-        // while the masts stand at anchor()'s hw+2.4 — tens of metres further
-        // out on the National Straight — so nothing ever touched between
-        // them: the lights floated straight up from raw ground with no
-        // support in the chain. Anchored off the SAME centreline point the
-        // light row already uses (not a separately-derived mast midpoint, to
-        // rule out any L.c/R.c drift), tall enough to bracket the masts'
-        // whole height and wide enough to clear either mast regardless of
-        // this straight's actual half-width. TrackGeom.addBox is the same
-        // raw call the lights already use, deliberately bypassing the
-        // road-footprint guard for this overhead cluster. Sized 0.1 m inside
-        // the overheadSpan's planes on every shared axis (span top H+0.70,
-        // faces ±0.7): matching them exactly put two same-facing 18 m² faces
-        // at 0.0 mm over the grid — the coplanar sweep's z-fight class.
         TrackGeom.addBox(out, vadd(beam, L.u, -0.75), [50, 2.0, 1.2],
                          [0.20, 0.21, 0.24], bL);
         for (let i = 0; i < 5; i++)
@@ -817,26 +610,14 @@
         out._mat = 0;
       }
 
-      // 3. Hangar Straight (≈0.18–0.28) stays genuinely open. No hangars have
-      // stood here since RAF Silverstone closed in 1946 — the barrel-roofed
-      // WWII silhouettes that used to dress this stretch (and the outfield
-      // near the Wing/Loop/Maggotts) were an anachronism, removed outright.
-      // Northamptonshire farm barns + grain silos gridding the fields.
       barn(k(0.30), -1, 165);
       barn(k(0.62), -1, 170);
       barn(k(0.86),  1, 160);
-      // Silverstone Experience museum (s≈0.95 R, paddock entrance) — the one
-      // former hangar that really is still standing at the circuit.
       heritageMuseum(k(0.95), 1, 115);
-      // Heritage Spitfire on a plinth, moved to read ALONGSIDE the museum
-      // (it used to sit alone out by the Wing, unrelated to any building).
       heritagePlane(k(0.953), 1, 92);
       // Rich start-light gantry cluster spanning the National straight.
       startGantryCluster(0.995);
 
-      // 5. Former-runway remnant beside Hangar Straight. A single broad slab and
-      // sparse threshold bars read as airfield heritage without building a wall
-      // against the intentionally open rural horizon.
       groundPatch(k(0.235), 1, 64, [28, 0.16, 190], [0.36, 0.37, 0.38], {
         id: "silverstone-heritage-runway", samples: 8,
       });
@@ -844,8 +625,6 @@
         place(k(0.235), 1, d, [1.4, 0.12, 14], [0.84, 0.84, 0.80]);
       }
 
-      // 6. Event service roads: narrow, subdued asphalt links behind the Wing,
-      // National paddock and the Luffield camping fields.
       for (const [id, s, side, gap, len] of [
         ["wing",     0.475, 1, 44, 92],
         ["paddock",  0.930, 1, 46, 84],
@@ -856,8 +635,6 @@
         id: `silverstone-service-road-${id}`, samples: 7,
       });
 
-      // 7. British GP camping fields: three bounded, atomic clusters of white
-      // caravans and small coloured tents, well behind the Luffield perimeter.
       for (let field = 0; field < 3; field++) {
         const s = 0.735 + field * 0.045;
         const a = anchor(k(s), 1, 56 + field * 12);
@@ -873,8 +650,6 @@
             const tent = (i + field) % 3 === 0;
             if (tent) {
               stage._mat = MAT.FABRIC;
-              // addPrism is BASE-anchored: pitching it at +1.35 left every tent
-              // hovering half its own height above the field.
               TrackGeom.addPrism(stage, c, [4.8, 2.7, 6.5],
                                  i % 2 ? [0.78, 0.20, 0.18] : [0.20, 0.38, 0.62], b);
             } else {
@@ -889,33 +664,13 @@
         });
       }
 
-      // =======================================================================
-      // 8. NEAR-BAND EVENT DRESSING (8-40 m)
-      // Silverstone is a former airfield: wide, flat, big sky. What fills that
-      // emptiness on a race weekend is not landscape but INFRASTRUCTURE — a
-      // continuous ribbon of hoardings, debris fencing, spectator mounds,
-      // marshal posts, TV towers and hospitality standing on the run-off aprons.
-      // Everything below lives inside 40 m of the road edge, where it actually
-      // reads from the cockpit, and the horizon above stays open.
-      // =======================================================================
-
       const BANK   = [0.34, 0.42, 0.24];   // packed-earth spectator mound
       const BANK2  = [0.20, 0.44, 0.20];   // grassed terrace tread
       const SPONSOR = [
         [0.85, 0.16, 0.14], [0.12, 0.36, 0.70], [0.94, 0.76, 0.10],
         [0.10, 0.52, 0.30], [0.92, 0.92, 0.94], [0.16, 0.18, 0.22],
       ];
-      // (CROWD_C is declared with the palette at the top of this function — the
-      // bleacher ranks at the stands section need it before this point.)
 
-      // hoardingLine()/crowdMound()/tvTower() used to be hand-rolled here.
-      // They are now the shared engine models sponsorHoarding()/spectatorHill()/
-      // cameraTower() (js/track/scenery-structures.js + scenery-nature.js),
-      // called directly at their old call sites below — the local versions
-      // are gone.
-
-      // --- Trackside marshal / recovery point: a low bunker, a fire-tender bay
-      //     and a crane pad. Grouped so a rejected footprint drops all of it.
       function marshalBay(id, s, side, gap) {
         const a = anchor(k(s), side, gap), b = [a.r, a.u, a.t];
         modelGroup(`silverstone-marshal-bay-${id}`, {
@@ -932,10 +687,6 @@
         });
       }
 
-      // ---- Trackside layering, from the tarmac outward: hoardings at 9.5 m
-      //      (mounted on the barrier line), debris fence at 11.5, then the stands
-      //      from 12 and the mounds from 20. Hangar Straight is skipped
-      //      throughout — its whole character is empty grass to the horizon.
       for (const [s0, s1, side] of [
         [0.97, 0.09,  1], [0.97, 0.09, -1],   // Copse / National straight
         [0.09, 0.18, -1], [0.09, 0.18,  1],   // Maggotts > Chapel
@@ -948,10 +699,6 @@
         [0.86, 0.96, -1], [0.88, 0.96,  1],   // Woodcote > National
       ]) sponsorHoarding(s0, s1, side, 9.5, { palette: SPONSOR, step: 12 });
 
-      // ---- Debris fencing behind the hoardings, all the way round the
-      //      spectator sectors. fence() indexes its geometry for the foliage
-      //      guard but does NOT tighten the driving limit, so the circuit still
-      //      drives with its airfield-sized run-off.
       for (const [s0, s1, side] of [
         [0.96, 0.10,  1], [0.96, 0.10, -1],
         [0.09, 0.18, -1], [0.30, 0.35,  1],
@@ -961,9 +708,6 @@
         [0.86, 0.96, -1],
       ]) fence(s0, s1, side, 11.5, 5.0, [0.74, 0.76, 0.80]);
 
-      // ---- Spectator mounds: the grass banks that ring the infield and the
-      //      outside of the slower corners. Kept off Hangar Straight and off the
-      //      fast Copse/Stowe entries, where the run-off is genuinely empty.
       for (const [s0, s1, side, gap, rise] of [
         [0.024, 0.042, -1, 20, 3.6],   // Copse infield bank
         [0.068, 0.084,  1, 24, 3.2],   // Copse exit outer
@@ -983,7 +727,6 @@
         grass: BANK2, riser: BANK, crowd: CROWD_C,
       });
 
-      // ---- TV camera towers at the signature vantage points.
       for (const [s, side, gap, h] of [
         [0.045,  1, 22, 11], [0.125, -1, 22, 12], [0.235, 1, 26, 13],
         [0.305,  1, 24, 12], [0.405,  1, 18, 11], [0.475, -1, 20, 13],
@@ -991,7 +734,6 @@
         [0.915, -1, 22, 11],
       ]) cameraTower(k(s), side, gap, { h, col: STEEL });
 
-      // ---- Marshal / recovery bays behind the run-off at the high-risk points.
       for (const [id, s, side, gap] of [
         ["copse", 0.055, 1, 26], ["becketts", 0.150, -1, 24],
         ["stowe", 0.320, 1, 28], ["club", 0.420, 1, 22],
@@ -999,7 +741,6 @@
         ["brooklands", 0.795, -1, 24], ["woodcote", 0.895, -1, 24],
       ]) marshalBay(id, s, side, gap);
 
-      // ---- Corner boards and braking markers — the small, close furniture that
       //      gives a straight a sense of speed. gap 7-8 sits just past the verge.
       for (const [s, side, num] of [
         [0.030,  1,  9], [0.105, -1, 10], [0.145,  1, 12], [0.290,  1, 15],
@@ -1010,7 +751,6 @@
         [0.020,  1], [0.270,  1], [0.375,  1], [0.535,  1], [0.640, -1], [0.765, -1],
       ]) for (let i = 3; i >= 1; i--) signBoard(k(s - i * 0.006), side, 8, "braking", i);
 
-      // ---- More marshal posts: a manned post roughly every 300 m, which is
       //      what an FIA circuit actually carries.
       for (const [s, side] of [[0.02, -1], [0.09, 1], [0.16, 1], [0.25, -1],
                                [0.28, 1], [0.35, -1], [0.44, 1], [0.52, -1],
@@ -1019,7 +759,6 @@
         marshalPost(k(s), side, 8);
       }
 
-      // ---- Extra tyre-wall stacks at the remaining apexes.
       tyreWall(0.115, 0.128, -1, 3.5, [0.9, 0.6, 0.1]);
       tyreWall(0.165, 0.176, -1, 3.5, [0.2, 0.4, 0.8]);
       tyreWall(0.545, 0.558,  1, 3.5, [0.9, 0.6, 0.1]);
@@ -1027,9 +766,6 @@
       tyreWall(0.775, 0.788, -1, 3.5, [0.2, 0.4, 0.8]);
       tyreWall(0.905, 0.918, -1, 3.5, RED);
 
-      // ---- Hospitality / tented village pulled onto the near aprons. The
-      //      British GP's paddock club and team units line the pit straight and
-      //      the Brooklands complex, not the far fields.
       for (const [s, side, d, w, ln, tCol] of [
         [0.505, 1, 30, 12, 16, [0.92, 0.93, 0.94]],
         [0.520, 1, 32, 12, 16, [0.90, 0.91, 0.92]],
@@ -1049,7 +785,6 @@
         addBox(out, vadd(a.c, a.u, 1.7), [w - 1.6, 2.6, ln - 2], LIT_WIN, b);
       }
 
-      // ---- Media/timing cabins and toilet/concession blocks behind the stands.
       for (const [s, side, d, w, h, ln] of [
         [0.060,  1, 30, 6, 3.2, 12], [0.135, -1, 32, 6, 3.2, 10],
         [0.300,  1, 34, 7, 3.4, 14], [0.410,  1, 26, 6, 3.2, 12],
@@ -1068,9 +803,6 @@
                [0.12, h * 0.4, ln - 3], [0.26, 0.32, 0.38], b);
       }
 
-      // ---- Helicopter pad on the infield apron — the British GP's shuttle
-      //      traffic is part of the place. Pad, marking bars and a parked
-      //      airframe, all grounded on the same anchor.
       {
         const s = 0.375, side = -1;
         groundPatch(k(s), side, 34, [30, 0.14, 30], [0.30, 0.31, 0.33], {
@@ -1096,9 +828,6 @@
         }
       }
 
-      // ---- Airfield-heritage windsock beside the helipad and at the runway
-      //      remnant: two masts, an orange cone each. Small, but it is the one
-      //      prop that says "this used to be an aerodrome".
       for (const [s, side, d] of [[0.385, -1, 30], [0.245, 1, 34]]) {
         const a = anchor(k(s), side, d), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 4)) continue;
@@ -1110,7 +839,6 @@
         out._mat = 0;
       }
 
-      // ---- Flagpole avenue along the National straight — the BRDC row of
       //      national flags that fronts the old pit complex.
       {
         const a = anchor(k(0.965), 1, 22), b = [a.r, a.u, a.t];
@@ -1124,18 +852,6 @@
         }
       }
 
-      // ---- THE CAMPSITES ---------------------------------------------------
-      // The British Grand Prix is a camping festival with a race attached:
-      // Woodlands, Whittlebury and the rest put tens of thousands of people in
-      // the fields around the circuit for the weekend, and from the track the
-      // outfield is a horizon of tents, caravans and flags. The circuit had
-      // hedgerows, farm buildings and silos out there — correct for a Tuesday
-      // in February, wrong for race weekend, and it left every wide shot
-      // looking like an empty airfield.
-      //
-      // Deliberately BEYOND the farmland band (gap 130-210) so the hedgerow /
-      // field structure still reads first, and deliberately cheap per unit: a
-      // ridge tent is one prism, so a thousand-tent field stays affordable.
       {
         const TENT = [
           [0.82, 0.28, 0.20], [0.20, 0.36, 0.62], [0.86, 0.84, 0.78],
@@ -1143,9 +859,6 @@
         ];
         const VAN  = [0.88, 0.87, 0.83], VAN_D = [0.76, 0.76, 0.74];
         const AWN  = [0.30, 0.34, 0.40];
-        // Four fields, sited where the real campsites sit relative to the lap:
-        // Woodlands out past Stowe/Vale, Whittlebury behind Brooklands/Luffield,
-        // plus the Copse-side and Becketts-side overflow.
         for (const [s0, s1, side, gap, rows] of [
           // Gaps are chosen to CLEAR the existing far hedgerows, which sit at
           // 105/120/150/155/160/165 on specific arcs. The first cut put field 2
@@ -1173,9 +886,6 @@
           // 11 m each plus the marquee beyond them, and the reservation is
           // measured from the inner face, so the width covers the lot.
           indexSolid(s0, s1, side, gap - 6, rows * 11 + 34);
-          // Pitch spacing in METRES, not in nodes. Deriving cols from the node
-          // count put one column every ~90 m and produced 30 tents a field —
-          // a lay-by, not a campsite. span*n*ds is the field's arc length.
           const cols = Math.max(8, Math.round(span * n * ds / 12));
           // Column pitch is nominal CENTRELINE arc length, but these fields sit
           // 130-175 m out — and on the inside of a bend the anchors compress
@@ -1210,8 +920,6 @@
                 // Ridge tent — one prism, the whole point of the budget.
                 const w = 2.2 + hv * 1.6, ln = 2.6 + hv * 2.2;
                 out._mat = MAT.FABRIC;
-                // Pitched at a.c — addPrism is BASE-anchored, exactly as the
-                // camping-field tents above already are.
                 addPrism(out, a.c, [w, 1.5 + hv * 0.7, ln],
                          TENT[Math.floor(hv * 997) % TENT.length], b);
                 out._mat = 0;
@@ -1230,8 +938,6 @@
               }
             }
           }
-          // A marquee / catering tent per field — the one big white mass that
-          // tells you this is an organised site and not a lay-by.
           const mk = k((s0 + span * 0.5) % 1);
           const ma = anchor(mk, side, gap + rows * 11 + 14);
           if (!onTrack(ma.c[0], ma.c[2], 30)) {

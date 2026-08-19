@@ -1,6 +1,4 @@
-/* Apex 26 — ALBERT PARK circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — ALBERT PARK circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -11,9 +9,6 @@
     // Was 0.0925, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.0925,
     name: "ALBERT PARK",
     gp: "Australian GP",
@@ -27,8 +22,6 @@
     flatTerrain: true,
     terrainOuter: 120,
     dressingExclusions: [
-      // Bespoke parkland owns the planting; generic floodlights stay so night
-      // pools remain fixture-anchored (no bespoke mast ring on this circuit).
       { kind: "foliage", s0: 0, s1: 1 },
     ],
     pal: { zenith: [0.22, 0.44, 0.82], horizon: [0.76, 0.79, 0.82], grass: [0.28, 0.50, 0.24], runoff: [0.48, 0.42, 0.32], fogDensity: 0.0012, sunDir: [0.6666666666666667, 0.6666666666666667, 0.33333333333333337], sun: [1, 0.95, 0.8], sunColor: [1, 0.93, 0.78] },
@@ -36,8 +29,6 @@
       { t: 0, l: 300 }, { t: 50, l: 100 }, { t: -50, l: 90 }, { t: 65, l: 80 }, { t: 0, l: 200 }, { t: 80, l: 90 },
       { t: -90, l: 100 }, { t: 60, l: 90 }, { t: 0, l: 260 }, { t: 80, l: 90 }, { t: 0, l: 200 }, { t: 70, l: 80 },
     ],
-    // Albert Park camber: the parkland sweepers (T6, T9-T10) are the cambered
-    // ones; the tight 90° street-style corners get only a road crown's worth.
     bankZones: [
       { frac: 0.1125, angleDeg: 3.0, widthM: 90 },    // T1
       { frac: 0.1810, angleDeg: 3.0, widthM: 90 },    // T3
@@ -46,12 +37,6 @@
       { frac: 0.7331, angleDeg: 3.0, widthM: 110 },   // T10
       { frac: 0.9741, angleDeg: 3.0, widthM: 90 },    // last corner
     ],
-    // Source-trace fractions. Sub-metre relief preserves measurable grade for
-    // physics without turning the essentially-flat lakeside park into hills.
-    // NB the ~5 m of real Albert Park roll is deliberately NOT modelled here:
-    // tests/unit/albert-park-foundation.test.mjs codifies this circuit's flat terrain
-    // contract (|rise| <= 0.75 m, total range <= 1.2 m). Raising it needs that
-    // guard relaxed first.
     elevations: [{ s: 0.2125, halfM: 340, rise: 0.6 }, { s: 0.6425, halfM: 300, rise: -0.4 }],
     scenery: function (api) {
       const { out, n, px, pz, pyMin, place, prop, backdrop, waterSurface, groundPatch, modelGroup, groundYAt,
@@ -76,8 +61,6 @@
           id: "kit:albert_park:track-signs", frac: 0.88,
           side: 1, gap: 22, size: [3, 3, 42], count: 6, required: true,
         });
-        // Temporary Melbourne GP village: premium suites by the lake and the
-        // bounded support compound tucked behind the pit-entry tree line.
         circuitKit.hospitality({
           id: "kit:albert_park:lakeside-hospitality", frac: 0.635,
           side: 1, gap: 38, size: [20, 9, 38], modules: 5,
@@ -88,18 +71,9 @@
         });
       }
 
-      // ---- Palette (Melbourne lakeside parkland, bright day) ----
       const GRASS  = [0.32, 0.62, 0.28];
       const WATER  = [0.20, 0.45, 0.62];
       const WHITE  = [0.92, 0.92, 0.92], RED = [0.80, 0.15, 0.15];
-      // ====================================================================
-      // MELBOURNE SPORTS AND AQUATIC CENTRE (MSAC) — the one large permanent
-      // building inside Albert Park, and the circuit had nothing for it. It
-      // sits on the park's eastern side and is impossible to miss in life: a
-      // long low pale hall under a shallow curved roof, with a deep glazed
-      // frontage and the tall blank box of the diving hall breaking the
-      // roofline at one end. Everything else in this park is trees, water and
-      // temporary structures, so a permanent civic mass reads strongly.
       {
         const a = anchor(k(0.145), 1, 62);
         if (!onTrack(a.c[0], a.c[2], 30)) {
@@ -115,8 +89,6 @@
             addBox(stage, vadd(a.c, a.u, 5.6), [34, 11.2, 92], PALE, b);
             addBox(stage, vadd(vadd(a.c, a.r, -17.2), a.u, 6.2), [0.6, 7.2, 78], GLASS, b);
             addBox(stage, vadd(vadd(a.c, a.r, -17.6), a.u, 2.2), [0.5, 1.0, 80], TRIM, b);
-            // Shallow curved roof — a flattened half-cylinder laid along the
-            // building, which is the shape that stops it reading as a shed.
             addCyl(stage, vadd(a.c, a.u, 10.4), 8.2, 92, PALE_D, 12,
                    [a.u, a.r, a.t]);
             addBox(stage, vadd(a.c, a.u, 11.4), [36, 0.5, 93], PALE_D, b);
@@ -135,11 +107,6 @@
         }
       }
 
-      // ALBERT PARK LAKE — broad expanse of calm water dominating the circuit's
-      // left side (s≈0.27–0.65 L). Multi-layered water planes with depth
-      // and subtle shimmer. Far basin + near-shore ripple edge zones.
-      // ====================================================================
-      // Split the basin into typed surfaces that stay clear of the foldback road.
       waterSurface(k(0.38), -1, 120, [860, 0.2, 860], [0.18, 0.38, 0.56],
                    { id: "albert-lake-west" });
       waterSurface(k(0.58), -1, 110, [820, 0.2, 820], [0.18, 0.38, 0.56],
@@ -156,7 +123,6 @@
                      { id: `albert-lake-infield-${i}` });
       }
 
-      // ---- Moored rowboats + kayaks (s≈0.45–0.55 water edge) ----
       for (let j = 0; j < 6; j++) {
         const a = anchor((k(0.47 + j * 0.025) + j * 15) % n, -1, 54 + hash(j * 7) * 32);
         if (onTrack(a.c[0], a.c[2], 3)) continue;
@@ -165,12 +131,6 @@
           addCyl(out, vadd(a.c, a.t, -0.5), 0.08, 5.2, [0.40, 0.35, 0.28], 4, [a.r, a.u, a.t]);
       }
 
-      // ====================================================================
-      // BESPOKE ALBERT PARK LAKE FOUNTAIN — the signature central water jet.
-      // A ringed basin with a tall white central plume, a ring of angled spray
-      // jets, and concentric ripple bands spreading across the water. Placed out
-      // on the lake off the lakeside stretch so it reads from the whole L side.
-      // ====================================================================
       const lakeFountain = (kk, dist, scale) => {
         const p = anchor(kk, -1, dist), b = [p.r, p.u, p.t];
         if (onTrack(p.c[0], p.c[2], 6)) return;
@@ -203,8 +163,6 @@
       lakeFountain(k(0.46), 96, 1.4);    // hero fountain, mid-lake
       lakeFountain(k(0.56), 78, 0.85);   // smaller companion jet nearer shore
 
-      // Low reed islets make the near/mid/far shore read as layered parkland
-      // without lifting a visual wall across the lake, fountains, or skyline.
       for (const [s, dist, seed] of [[0.34, 68, 31], [0.47, 74, 47], [0.60, 66, 61]]) {
         const a = anchor(k(s), -1, dist), b = [a.r, a.u, a.t];
         modelGroup(`albert-shore-reeds-${seed}`, {
@@ -226,7 +184,6 @@
         });
       }
 
-      // ---- Lakeside jetty / boardwalk pier reaching into the water (s≈0.50 L) ----
       {
         const a = anchor(k(0.50), -1, 40), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 4)) {
@@ -241,13 +198,6 @@
         }
       }
 
-      // ====================================================================
-      // MELBOURNE CBD SKYLINE — coplanar with the lake (same side, beyond water).
-      // Postcard read: water → fountain → 3–5 hero towers on the far shore.
-      // Culled the old ~80-building R-side wall; heroes sit at dist ≥ 320 m so
-      // they clear the lake planes (≈40–120 m) and read as one lakeside frame.
-      // ====================================================================
-      // Hero towers: Eureka-like spire + Australia 108 dark slab + mid cluster
       for (const [s, dist, bw, th, mast, col] of [
         [0.42, 340, 28, 280, 48, [0.28, 0.36, 0.48]],  // Eureka-like — tallest + mast
         [0.46, 355, 32, 250,  0, [0.18, 0.20, 0.24]],  // Australia 108-like dark slab
@@ -267,21 +217,12 @@
                  [bw, bh, 20],
                  [0.38 + hash(i * 7) * 0.06, 0.42 + hash(i * 3) * 0.05, 0.54 + hash(i * 11) * 0.05]);
       }
-      // Far-shore South Melbourne mid-rises bridge the scale between park trees
-      // and the CBD heroes while remaining low enough to preserve open sky.
       for (let i = 0; i < 4; i++) {
         backdrop(k(0.35 + i * 0.055), -1, 455 + hash(80 + i) * 34,
                  [18 + hash(90 + i) * 12, 38 + hash(100 + i) * 28, 16],
                  [0.43, 0.47, 0.56]);
       }
 
-      // ====================================================================
-      // PARKLAND HORIZON — rounded green mound backdrop, both sides.
-      // backdrop() auto-detects green-dominant colour → renders as organic
-      // stacked-frustum mounds rather than flat slabs.  Placed at dist 160–240 m
-      // so they sit behind forestEdge treelines. Skip lakeside L (s≈0.27–0.65)
-      // so mounds don't fight the lake + CBD coplanar frame.
-      // ====================================================================
       every(100, (kk) => {
         for (const side of [-1, 1]) {
           if (side === -1 && kk >= k(0.27) && kk <= k(0.65)) continue;
@@ -293,34 +234,19 @@
         }
       });
 
-      // ====================================================================
-      // EUCALYPTUS PARKLAND — broadleaf only (pineFrac: 0), greyer-green canopy.
-      // Melbourne parkland reads dusty olive/grey-green, not Alpine pine forest.
-      // ALL foliage via forestEdge() (canopy-radius aware). Gap clears barriers.
-      //
-      // Circuit zones:
-      //   s=0.00–0.10  main straight + pit lane → grandstands both sides
-      //   s=0.10–0.27  fast sweeps T1–T4 → light parkland
-      //   s=0.27–0.65  LAKESIDE — L water + CBD beyond; R parkland strip
-      //   s=0.65–0.85  southern park loop — denser eucalyptus
-      //   s=0.85–1.00  pit approach straight
-      // ====================================================================
       const EUC  = [0.30, 0.42, 0.28];   // grey-green eucalyptus
       const EUC2 = [0.34, 0.46, 0.30];   // slightly lighter canopy twin
 
-      // ---- Main straight LHS (pit wall side) — sparse, behind grandstand ----
       forestEdge(0.00, 0.10, -1, 11, {
         density: 0.45, hMin: 9, hMax: 16,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      // ---- Main straight RHS — grandstands + hospitality, tight parkland strip ----
       forestEdge(0.00, 0.10, 1, 13, {
         density: 0.40, hMin: 8, hMax: 14,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      // ---- Fast sweeps T1–T4 (s=0.10–0.27), both sides ----
       forestEdge(0.10, 0.27, -1, 9, {
         density: 0.60, hMin: 10, hMax: 17,
         col: EUC, col2: EUC2, pineFrac: 0,
@@ -330,19 +256,16 @@
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      // ---- Lakeside RHS (s=0.27–0.65) — parkland strip (CBD is now beyond water L) ----
       forestEdge(0.27, 0.65, 1, 13, {
         density: 0.45, hMin: 10, hMax: 17,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      // ---- Lakeside LHS — sparse shore figs/eucalyptus so water + skyline read ----
       forestEdge(0.27, 0.65, -1, 19, {
         density: 0.40, hMin: 11, hMax: 18,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      // ---- Southern park loop (s=0.65–0.85) — denser native eucalyptus ----
       forestEdge(0.65, 0.85, -1, 9, {
         density: 0.70, hMin: 11, hMax: 19,
         col: EUC, col2: EUC2, pineFrac: 0,
@@ -352,7 +275,6 @@
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      // ---- Pit approach (s=0.85–1.00) — both sides, lighter canopy ----
       forestEdge(0.85, 1.00, -1, 9, {
         density: 0.45, hMin: 9, hMax: 15,
         col: EUC, col2: EUC2, pineFrac: 0,
@@ -362,7 +284,6 @@
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      // ---- Chicane complex (s=0.75–0.82) — taller eucalyptus specimens ----
       forestEdge(0.75, 0.82, -1, 11, {
         density: 0.70, hMin: 13, hMax: 20,
         col: EUC2, col2: [0.36, 0.48, 0.32], pineFrac: 0,
@@ -372,8 +293,6 @@
         col: EUC2, col2: [0.36, 0.48, 0.32], pineFrac: 0,
       });
 
-      // A second, looser rank behind the eastern sweeps and southern loop gives
-      // the temporary road circuit genuine avenue depth rather than a flat hedge.
       forestEdge(0.12, 0.25, 1, 27, {
         density: 0.30, hMin: 13, hMax: 20,
         col: EUC, col2: EUC2, pineFrac: 0,
@@ -383,7 +302,6 @@
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      // ---- Far-background eucalyptus canopy (atmospheric depth) ----
       every(60, (kk) => {
         for (const side of [-1, 1]) {
           if (side === -1 && kk >= k(0.27) && kk <= k(0.65)) continue; // keep lake sightline open
@@ -393,32 +311,16 @@
         }
       });
 
-      // ---- Palm avenue along lakeside Lakeside Drive section (s≈0.50–0.60 L) ----
-      // Palms frame the dramatic lakeside stretch, planted at gap 15-23 —
-      // clear of the guardrail at gap=3.
       for (let j = 0; j < 10; j++) {
         const kk = (k(0.52) + j * 2) % n;
         palm(kk, -1, 15 + hash(kk * 9 + j) * 8, 12 + hash(kk * 12 + j) * 4, [0.21, 0.47, 0.25]);
       }
-      // Broadleaf avenue accent clusters (plane/elm) around the pit straight —
-      // real Albert Park's pit-straight avenue is lined with deciduous
-      // plane/elm trees, not palms; palms are a Lakeside Drive thing only
-      // (kept in the loop above).
       const AVENUE = [0.30, 0.46, 0.22];
       for (let j = 0; j < 3; j++) {
         tree((k(0.0) + j * 3) % n, 1, 20 + j * 7, 13 + hash(j * 3) * 3, AVENUE);
         tree((k(0.94) + j * 3) % n, 1, 20 + j * 7, 12 + hash(j * 5) * 3, AVENUE);
       }
 
-      // ---- Rowing boathouses (s≈0.40, 0.44 L) ----
-      // The real lake shore is lined with low single-storey weatherboard rowing
-      // sheds — NOT the three-storey glass office blocks `building(floor:3,
-      // h:16-18)` used to emit here. Rebuilt at the right scale (~16w x 5h x
-      // 20d) with a pitched gable roof, cream/weatherboard cladding, a boat-bay
-      // door facing the water, a timber launch ramp and a couple of upturned
-      // hulls resting beside the shed. Each instance is one atomic modelGroup
-      // so its full footprint (walls + roof overhang + ramp) is guarded in one
-      // rejBox test rather than a single inner-face point.
       const WBOARD = [0.75, 0.72, 0.62];
       const boathouse = (kk, side, gap, seed) => {
         const w = 16, wallH = 3.4, roofH = 1.8, d = 20;
@@ -449,15 +351,6 @@
       boathouse(k(0.40), -1, 26, 0);
       boathouse(k(0.44), -1, 30, 1);
 
-      // ====================================================================
-      // LAKESIDE STADIUM (s≈0.645 R, ~32–40 m out) — the real athletics/soccer
-      // venue beside the track, previously modelled as a generic "Recreation
-      // Reserve" office block on the LAKE side. A slim white grandstand roof
-      // arcing over a flat oval pitch, on the inland (R) side between the two
-      // existing spectator grandstands at 0.62 and 0.66. One atomic modelGroup
-      // (shell + arcing roof segments + support pylons) guarded by a single
-      // full-footprint rejBox test; the oval pitch is its own guarded groundPatch.
-      // ====================================================================
       {
         const kk = k(0.645), gapShell = 36;
         const a = anchor(kk, 1, gapShell), b = [a.r, a.u, a.t];
@@ -468,8 +361,6 @@
         }, (stage) => {
           // Slim single-tier stand shell along the pitch's far side
           addBox(stage, vadd(a.c, a.u, 1.6), [8, 3.2, 60], [0.90, 0.90, 0.91], b);
-          // Slim arcing roof: tilted white segments rising then falling toward
-          // the ends — a shallow arc silhouette rather than a flat slab.
           const segN = 9;
           for (let i = 0; i < segN; i++) {
             const f = (i + 0.5) / segN - 0.5;              // -0.5 .. 0.5 along length
@@ -488,15 +379,6 @@
       groundPatch(k(0.645), 1, 17, [30, 0.12, 66], [0.22, 0.50, 0.24],
                   { id: "albert-lakeside-stadium-pitch", samples: 8 });
 
-      // ====================================================================
-      // GRANDSTANDS — main straight + signature corners, named after Albert
-      // Park's real stands (Brabham, Fangio, Hill, Ricciardo, Waite, Webber).
-      // All ~21 stands used to share one grey SHELL/CROWD pair — the single
-      // biggest repetition problem on this circuit. grandstandEx() rotates
-      // them through the circuit's STAND_SETS.albert_park liveries
-      // (steel/navy/alu) and varies roof style/tiers/detailing per stand so
-      // the venue reads as built up over years, not stamped from one mould.
-      // ====================================================================
       grandstandEx(0.00, -1, 14, 90, null, null,             // Brabham — hero main stand
         { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       grandstandEx(0.07, -1, 14, 60, null, null,              // Fangio — pit-straight extension
@@ -524,8 +406,6 @@
       grandstandEx(0.45, -1, 16, 44, null, null,               // lakeside bank
         { livery: "alu", roof: "truss" });
 
-      // Packed, low crowd banks at the two broadcast hero sectors. Their short
-      // bounded runs sit behind the barriers and keep corner-exit sightlines open.
       bowlSeatWall(0.145, 0.205, -1, 18, {
         h: 4.8, thick: 3.2, shell: [0.50, 0.51, 0.54], step: 10,
         crowdCols: [[0.82, 0.22, 0.18], [0.92, 0.78, 0.24], [0.22, 0.46, 0.72]],
@@ -535,15 +415,6 @@
         crowdCols: [[0.86, 0.24, 0.18], [0.88, 0.86, 0.82], [0.18, 0.52, 0.36]],
       });
 
-      // ====================================================================
-      // PIT COMPLEX (s≈0.0 R) — the one permanent building on a circuit that
-      // is otherwise a public park with a race bolted to it for a fortnight.
-      // A plain building() slab plus a flat dark roof slab said nothing about
-      // it; the Albert Park pit building's actual signature is a LONG shallow
-      // undulating roof running the full 180 m over a white two-storey block,
-      // with the race-control tower stepped up at the pit-exit end. Modelled
-      // as one atomic group (footprint probed: accepted from gap 16 out).
-      // ====================================================================
       {
         const aP = anchor(k(0.0), 1, 16), bP = [aP.r, aP.u, aP.t];
         modelGroup("albert-pit-complex", {
@@ -566,9 +437,6 @@
           addBox(stage, vadd(aP.c, aP.u, 9.2), [13, 3.6, 168], [0.24, 0.34, 0.44], bP);
           stage._mat = MAT.CONCRETE;
           addBox(stage, vadd(aP.c, aP.u, 11.4), [14.4, 0.8, 170], [0.90, 0.90, 0.92], bP);
-          // The roof: a shallow undulating ribbon, not a slab. Each panel steps
-          // its own height along a long sine, so the eye reads one continuous
-          // wave down the straight rather than a lid.
           stage._mat = MAT.METAL;
           const PANELS = 24;
           for (let i = 0; i < PANELS; i++) {
@@ -601,9 +469,6 @@
                  [a.r, a.u, a.t]);
       }
 
-      // ---- Paddock freight containers near pit entry (s≈0.97 L) ----
-      // Stacked containers: each is a solid box with a thin lid strip so they
-      // read as real containers rather than anonymous blocks.
       for (let j = 0; j < 4; j++) {
         const gap = 18 + j * 7;
         const CCOL = [[0.70, 0.28, 0.22], [0.28, 0.38, 0.64], [0.78, 0.76, 0.36], [0.52, 0.53, 0.56]][j];
@@ -619,9 +484,6 @@
                [CCOL[0] * 0.7, CCOL[1] * 0.7, CCOL[2] * 0.7], [a.r, a.u, a.t]);
       }
 
-      // ---- Lakeside grass fan banking / hill (s≈0.90 R) ----
-      // Replaced flat stacked slabs with a frustrated mound that reads as a
-      // grassy hill/embankment.  Outer backdrop mound behind a low foreground ridge.
       {
         const a = anchor(k(0.90), 1, 34);
         if (!onTrack(a.c[0], a.c[2], 8)) {
@@ -636,12 +498,6 @@
         }
       }
 
-      // ====================================================================
-      // KERBS — bold red/white densification at T1 and chicane complexes.
-      // Taller sausage strips (h≈0.28) so they punch at race speed; gap 1.8–2.2
-      // keeps footprints clear of tarmac (rejBox). Mid-lap apexes stay lighter.
-      // ====================================================================
-      // T1–T2 sweep (s≈0.03–0.08) — alternating sausage kerbs both sides
       for (const [s, side, col] of [
         [0.030,  1, RED],   [0.035,  1, WHITE], [0.040,  1, RED],   [0.045,  1, WHITE],
         [0.050,  1, RED],   [0.055, -1, WHITE], [0.060, -1, RED],   [0.065, -1, WHITE],
@@ -657,8 +513,6 @@
       ]) {
         place(k(s), side, 1.9, [0.55, 0.28, 7.0], col);
       }
-      // Fast sweeps (s≈0.18–0.26, real T5/T6) — named FIA corners that had NO
-      // kerbing at all despite the T1 and chicane treatment above.
       for (const [s, side, col] of [
         [0.180,  1, RED],   [0.185,  1, WHITE], [0.190,  1, RED],   [0.195,  1, WHITE],
         [0.220, -1, RED],   [0.225, -1, WHITE], [0.230, -1, RED],   [0.235, -1, WHITE],
@@ -666,8 +520,6 @@
       ]) {
         place(k(s), side, 1.9, [0.55, 0.28, 7.0], col);
       }
-      // Lakeside rights (s≈0.53–0.60, real T9/T10) — same gap; matching FIA
-      // sausage kerbs so the lakeside apexes read the same as T1/the chicane.
       for (const [s, side, col] of [
         [0.530, -1, RED],   [0.535, -1, WHITE], [0.540, -1, RED],   [0.545, -1, WHITE],
         [0.560, -1, RED],   [0.565, -1, WHITE], [0.570, -1, RED],
@@ -687,14 +539,6 @@
                     { id: `albert-runoff-${s}-${side}`, samples: 5 });
       }
 
-      // ====================================================================
-      // ALBERT PARK GOLF COURSE — southern infield (s≈0.65–0.85 L). The real
-      // 18-hole public course occupies this interior; today it renders as
-      // unbroken eucalyptus canopy. A handful of fairway-green ground patches
-      // plus two pale sand bunkers, placed just beyond the southern loop's
-      // treelines (which reach out to ~gap 40 m there), read as golf turf
-      // glimpsed through the parkland rather than continuous forest.
-      // ====================================================================
       const FAIRWAY = [0.30, 0.58, 0.24];
       const BUNKER  = [0.86, 0.79, 0.62];
       for (const [s, gap, w, len] of [
@@ -709,11 +553,6 @@
       groundPatch(k(0.80), -1, 70, [12, 0.10, 12], BUNKER,
                   { id: "albert-golf-bunker-2", samples: 3 });
 
-      // ====================================================================
-      // Street-circuit temporary-style barriers — armco + catch fence densified
-      // for park-road tension (permanent dressing in this build). Longer runs
-      // at T1 and the chicane; lakeside armco kept.
-      // ====================================================================
       const FENCE_COL = [0.74, 0.76, 0.80];
       const ARMCO    = [0.90, 0.90, 0.92];
       const ARMCO_R  = [0.85, 0.18, 0.16];
@@ -744,11 +583,6 @@
       tyreWall(0.77, 0.81,  1, 3.5, RED);
       tyreWall(0.78, 0.82, -1, 3.5, WHITE);
 
-      // A Melbourne GP lap is debris-fenced end to end — the park roads are
-      // public the other 51 weeks, so the temporary perimeter is continuous.
-      // The runs above left s=0.14-0.60 and s=0.84-0.90 bare, which is most of
-      // the lakeside and Lakeside Drive: no near-track structure at all through
-      // the fastest half of the circuit. Close the gaps on both sides.
       fence(0.14, 0.42,  1,  9, 3.6, FENCE_COL);
       fence(0.14, 0.41, -1,  9, 3.6, FENCE_COL);
       fence(0.42, 0.60,  1,  9, 3.6, FENCE_COL);
@@ -756,9 +590,6 @@
       fence(0.72, 0.75,  1,  9, 3.6, FENCE_COL);
       fence(0.84, 0.92,  1,  9, 3.6, FENCE_COL);
       fence(0.84, 0.90, -1,  9, 3.6, FENCE_COL);
-      // Waist-high spectator rail set just outside the debris fence — the
-      // second line every temporary parkland circuit runs behind its catch
-      // fencing, and it puts readable structure in the first 15 m of verge.
       guardrail(0.15, 0.40, -1, 13, ARMCO);
       guardrail(0.60, 0.73,  1, 13, ARMCO);
       guardrail(0.86, 0.94, -1, 13, ARMCO);
@@ -770,14 +601,6 @@
         marshalPost(k(s), side, 6);
       }
 
-      // PARK DECK — the general-admission seating in the viewing areas the named
-      // stands skip. These are not small grandstands: they are scaffold decks
-      // craned onto levelled timber mats over public parkland, with a ridged
-      // canvas shade stretched over the back rows only and a printed hoarding
-      // wrapping the frame. grandstandEx cannot make that — its 10 m concrete
-      // back shell is unconditional, so even at roof:"none" it reads permanent.
-      // The peaked canvas also ties them to the marquees dressing the rest of
-      // the park, which is the thing that makes Melbourne look like Melbourne.
       const parkDeck = (id, s, side, gap, bays, opts) => {
         opts = opts || {};
         const rows = opts.rows || 6, pitch = 6.8, len = bays * pitch;
@@ -828,9 +651,6 @@
                         [0.90, 0.90, 0.88]][Math.floor(h2 * 97) % 4], b);
             }
           }
-          // Ridged canvas shade over the back rows only — masts, ridge beam,
-          // and a run of white prisms. Front rows stay open, as they are in
-          // every temporary bleacher at this circuit.
           const shadeLat = IN * -2.6, shadeY = topH + 3.4;
           stage._mat = MAT.METAL;
           for (let i = 0; i <= bays; i++)
@@ -865,17 +685,7 @@
                    0.30 + hash(k(s) * 7.7) * 0.5]);
       }
 
-      // ====================================================================
-      // PIT / PADDOCK precinct — control tower, motorhomes, support trucks
-      // ====================================================================
-      // Race control now lives inside the pit complex above (it is part of that
-      // building at Albert Park, not a free-standing mast). What the paddock
-      // actually gains each March is TEMPORARY vertical structure: a scaffold
-      // camera/marshal tower behind the garages, trucked in with everything else.
       cameraTower(k(0.02), 1, 30, { h: 18, col: [0.62, 0.64, 0.68] });
-      // Team motorhome row — the comment already called these "motorhomes" but
-      // they were generic office-block building() calls; motorhome() gives the
-      // real two-tier team-unit body + awning canopy.
       for (let j = 0; j < 6; j++) {
         const kk = (k(0.0) + j * 8) % n;
         const wall = [[0.86, 0.87, 0.88], [0.30, 0.40, 0.60], [0.70, 0.30, 0.25],
@@ -897,11 +707,6 @@
         addBox(out, vadd(ap.c, ap.u, 18), [3.0, 1.5, 0.3], [0.80, 0.18, 0.18], [ap.r, ap.u, ap.t]);
       }
 
-      // ====================================================================
-      // PARKLAND STREET LIGHTING — slim aluminium poles, warm lantern heads.
-      // Lantern colour [0.96, 0.93, 0.70] glows at night / reads as chrome day.
-      // All posts at dist ≥ 11 m from road edge (beyond fence/guardrail at 3–10 m).
-      // ====================================================================
       const LAMP_COL = [0.96, 0.93, 0.70];
       const POLE_COL = [0.35, 0.35, 0.37];
 
@@ -940,9 +745,6 @@
         }
       }
 
-      // ====================================================================
-      // PARKLAND AMENITIES — event marquees, colourful hospitality tents
-      // ====================================================================
       for (const [s, side, cnt] of [[0.65, 1, 3], [0.32, -1, 3], [0.88, 1, 2], [0.12, -1, 2]]) {
         for (let j = 0; j < cnt; j++) {
           const a = anchor((k(s) + j * 8) % n, side, 46 + j * 12);
@@ -955,9 +757,6 @@
         }
       }
 
-      // ====================================================================
-      // BILLBOARDS + start gantry + sponsor hoardings
-      // ====================================================================
       billboard(k(0.30),  1, 18, 14, 5, [0.20, 0.40, 0.70]);
       billboard(k(0.55), -1, 16, 14, 5, [0.86, 0.30, 0.20]);
       billboard(k(0.12),  1, 16, 12, 4.5, [0.90, 0.80, 0.20]);

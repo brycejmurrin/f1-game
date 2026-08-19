@@ -80,6 +80,7 @@ const KNOWN_EXTERNAL_READS = {
   ],
   "js/game/menus.js": ["__APEX_BUILD__"],        // exportRecovery stamps the shell build id
   "js/game/perf.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
+  "js/game/menus.js": ["__APEX_BUILD__"],        // exportRecovery stamps the shell build id
   "js/game/apex.js": ["__APEX_BUILD", "__apexErrors"],      // the shell is outside the manifest,
   "js/game.js": ["__APEX_BUILD", "__apexReportError", "__TEST_MODE"], // so the scan cannot see the writer; Playwright init-script flag
   "js/game/menus.js": ["__APEX_BUILD__"],        // build stamp for export recovery (index.html meta)

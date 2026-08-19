@@ -1,6 +1,4 @@
-/* Apex 26 — MONZA circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — MONZA circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -11,9 +9,6 @@
     // Was 0.0125, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.0125,
     name: "MONZA",
     gp: "Italian GP",
@@ -21,8 +16,6 @@
     night: false,
     theme: "green",
     lengthKm: 5.8,
-    // Bespoke landmarks below are authored against the racing lap used by the
-    // Monza brief (0 = start/finish), not the unrotated source trace.
     sceneryCoordinates: "racing",
     // Keep the royal-park terrain under the deep forest ranks and hero models.
     terrainOuter: 120,
@@ -35,11 +28,6 @@
     ],
     sunAzimBias: 0.16,   // royal-park afternoon: western sun raking through the trees onto the Curva Grande
     baseHW: 8,
-    // Monza hand-builds its own pit complex below (Tribuna Centrale, facing
-    // stand, garages, tensile canopy, podium tower) — the engine's generic
-    // 7-box pit/grandstand fallback in js/track/tracks.js is unconditional and
-    // was landing directly on top of it. Opt out; nothing else in this file
-    // depends on the fallback.
     ownPitStraight: true,
     pal: {
       zenith:        [0.20, 0.40, 0.70],
@@ -57,34 +45,20 @@
       { t: 70, l: 70 }, { t: 75, l: 130 }, { t: 60, l: 120 }, { t: 0, l: 260 }, { t: -50, l: 55 }, { t: 65, l: 70 },
       { t: 0, l: 360 }, { t: 150, l: 220 },
     ],
-    // Source-trace coordinates: a shallow Roggia dip and modest Lesmo crest.
-    // With the line corrected to 0.0 the fmap is the identity — racing s 0.3125
-    // and 0.4925.
     elevations: [
       { s: 0.3125, halfM: 220, rise: -1.5 },
       { s: 0.4925, halfM: 340, rise: 4.5 },
     ],
-    // Monza is a wide, fast park circuit but the three chicanes are deliberately
-    // pinched — the Rettifilo most of all. hwZones can only narrow, so the 16 m
-    // base stays the straights, Curva Grande and the Parabolica.
-    // s0/s1 are CONTROL-POINT index fractions in SOURCE space; the racing-lap arc
-    // each lands on is in the trailing comment.
     hwZones: [
       { s0: 0.0155, s1: 0.0949, hw: 6.8, ease: 0.012 },  // arc 0.003-0.024 Rettifilo
       { s0: 0.2821, s1: 0.3460, hw: 7.0, ease: 0.012 },  // arc 0.212-0.234 Roggia
       { s0: 0.5960, s1: 0.7315, hw: 7.2, ease: 0.012 },  // arc 0.524-0.572 Ascari
     ],
-    // Monza camber. The Parabolica (Curva Alboreto) and both Lesmos are the
-    // properly cambered corners — they are what let the whole corner be taken at
-    // one steady, very high speed; Curva Grande and Ascari carry less.
     bankZones: [
       { frac: 0.0769, angleDeg: 3.0, widthM: 240 },   // Curva Grande
       { frac: 0.2964, angleDeg: 6.0, widthM: 140 },   // Lesmo 1
       { frac: 0.3456, angleDeg: 6.0, widthM: 80 },    // Lesmo 2
       { frac: 0.5443, angleDeg: 3.5, widthM: 110 },   // Ascari
-      // Parabolica is capped at 4°: above that the dropped inner edge slides out
-      // from under the apex kerb/apron props and the ground-over-road probe
-      // starts reporting the verge sitting over the tarmac.
       { frac: 0.7355, angleDeg: 4.0, widthM: 300 },   // Parabolica
     ],
     scenery: function (api) {
@@ -99,28 +73,6 @@
         bakedModel, px, pz } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // ── THE PARK WALL (Muro del Serraglio) ────────────────────────────────
-      // Monza is not a circuit in a wood, it is a circuit inside a WALLED
-      // ESTATE — the Royal Park is the largest walled park in Europe, ~688 ha
-      // ringed by a continuous brick boundary wall with regular piers. The
-      // circuit had the trees and the Villa but not the thing that makes them
-      // a park rather than a forest, so the outfield read as open countryside.
-      //
-      // Built on the engine's `wall()` emitter, NOT on a hand-rolled box loop.
-      // The first version walked the arc itself and emitted a fixed-length
-      // panel per node, which overlapped its neighbour wherever the anchors
-      // compress on the inside of a bend — two same-colour side faces on one
-      // plane, facing the same way, which is a guaranteed z-fight. It took
-      // monza from 8 coplanar spots to 22 and CI caught it. Shortening the
-      // panel got it to 10; measuring the true anchor step made it 15. The
-      // hand-rolled approach was simply the wrong tool. `wall()` walks with
-      // `along()` and carries the along-track length in the node SCALE, so
-      // consecutive segments abut exactly instead of guessing at a spacing.
-      //
-      // Three arcs behind the treeline rather than lap-wide: the wall should be
-      // something caught THROUGH the pines, not a fence around the racing.
-      // Brick-warm, so it separates from the grey concrete of the Sopraelevata
-      // ruin, which is the other long low mass out there.
       {
         const BRICK = [0.56, 0.40, 0.32];
         const CAP   = [0.70, 0.68, 0.62];
@@ -130,10 +82,6 @@
           [0.640, 0.780, -1, 62],
         ]) {
           wall(s0, s1, side, gap, 2.6, BRICK, 0.55);
-          // Piers: isolated masonry posts every ~34 m, proud of the wall in
-          // both width and height so none of their faces share a plane with
-          // it. Sparse and free-standing, so they cannot seam against each
-          // other the way the old per-node panels did.
           const span = (s1 - s0 + 1) % 1;
           const count = Math.max(3, Math.round(span * n * ds / 34));
           for (let i = 0; i <= count; i++) {
@@ -146,8 +94,6 @@
             out._mat = 0;
           }
         }
-        // Porta / gateway: one monumental opening in the wall, the way into
-        // the estate. Piers, a stone lintel and a pair of ironwork leaves.
         {
           const a = anchor(K(0.172), -1, 68);
           if (!onTrack(a.c[0], a.c[2], 22)) {
@@ -181,25 +127,8 @@
       const LEAF = [0.18, 0.45, 0.20], LEAF_L = [0.24, 0.50, 0.24], LEAF_D = [0.15, 0.38, 0.18];
       const GRAVEL = [0.68, 0.60, 0.42];
 
-      // =====================================================================
-      // 1. ROYAL PARK FOREST — broadleaf + umbrella-pine corridor.
-      //    every() node-step approach keeps geometry within SwiftShader budget.
-      //    Ranks A-D provide depth; Lesmo section adds extra close-canopy trees.
-      // =====================================================================
-      // The two ornamental lakes (s≈0.20-0.28, s≈0.36-0.42) and the Villa Reale
-      // grounds (s≈0.58-0.66) are manicured formal parkland in real photos —
-      // open lawns and specimen trees, not wild canopy. Deliberately excludes
-      // Lesmo (0.43-0.54): those woods stay dense, they're a separate identity.
       const openParkland = (s) =>
         (s >= 0.19 && s <= 0.28) || (s >= 0.36 && s <= 0.42) || (s >= 0.58 && s <= 0.66);
-      // Rank A — the umbrella pines themselves. Monza's near-verge signature is
-      // the pino domestico: a long bare trunk under a flat parasol crown, which
-      // is exactly why a 20 m tree can stand 10 m off the road here without
-      // closing the sightline. pine()'s stacked conifer tiers — a spruce — were
-      // the wrong species for the one tree every photograph of this circuit is
-      // framed through, and they were also what made this rank read the same as
-      // Spa's and Suzuka's. The deep ranks C/D below stay pine(): the far wall
-      // of the park IS mixed conifer, and it wants the darker, taller mass.
       every(24, (k) => {
         const h = hash(k * 31);
         const thin = openParkland(k / n);
@@ -251,15 +180,9 @@
       hedge(0.32, 0.46, -1, 22, 5, [0.13, 0.34, 0.17]);
       hedge(0.66, 0.78,  1, 22, 5, [0.13, 0.34, 0.17]);
       hedge(0.82, 0.94, -1, 24, 5, [0.12, 0.33, 0.16]);
-      // Manicured lawn edges around the two lakes and the Villa Reale grounds
-      // (the openParkland arc above): clipped hedge instead of thinned forest,
-      // matching the formal-garden look real photos show there.
       hedge(0.19, 0.28, -1, 18, 4.5, [0.13, 0.35, 0.17]);   // west park lake
       hedge(0.36, 0.42,  1, 22, 4.5, [0.13, 0.35, 0.17]);   // Villa lake
       hedge(0.58, 0.66,  1, 24, 4.5, [0.13, 0.35, 0.17]);   // Villa Reale approach
-      // Lesmo 1 & 2 (s≈0.43–0.54) — famous woodland curves: extra pines to
-      // reinforce the canopy through these fast sweeps. A dedicated ~14 m rank
-      // keeps the corridor dense without duplicating the four full-lap layers.
       every(14, (k) => {
         const s = k / n;
         if (s < 0.43 || s > 0.54) return;
@@ -270,16 +193,6 @@
         if (h > 0.70) tree(k,  1, 15 + h * 3, 12 + h * 8, LEAF);
       });
 
-      // =====================================================================
-      // 2. PIT STRAIGHT / START–FINISH — grandstands, tifosi, podium, pit boxes
-      //    Tribuna Centrale (main historic stand), facing stand, new modernized
-      //    pit building with permanent roof, modernized grandstand islands.
-      // =====================================================================
-      // Tribuna Centrale — long stepped main grandstand (pit-side, left).
-      // Historic stand built to seat 3000, now modernized with island design.
-      // grandstandEx + STAND_SETS.monza ("crimson","concrete","steel") replaces
-      // the flat 6-arg call so the three pit-straight stands read as distinct
-      // structures instead of the same grey box repeated three times.
       grandstandEx(0.005, -1, 10, 160, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       // Secondary lower stand behind Centrale (historic structure).
@@ -291,9 +204,6 @@
       // Accent green band (park integration) below red trim.
       prop(K(0.00), -1, 8.3, [1.8, 0.8, 128], [0.30, 0.54, 0.28]);
 
-      // ── Lit window strips on the main grandstand back-shell (night-ready) ──
-      // These bright amber bands read as interior lighting at dusk/night while
-      // remaining plausible sun-lit glazing by day.
       {
         const winLit = [0.98, 0.88, 0.52];  // warm amber glow
         const gsA = anchor(K(0.005), -1, 17.5);
@@ -309,8 +219,6 @@
         addBox(out, vadd(gsC.c, gsC.u, 9.5), [0.22, 1.4, 118], winLit, [gsC.r, gsC.u, gsC.t]);
       }
 
-      // Pit building / garages along the pit wall (right side).
-      // Modernized pit complex: refurbished garages with improved facilities.
       const pitWall = [0.86, 0.86, 0.84];
       for (let i = 0; i < 8; i++) {
         const s = 0.965 + i * 0.0085;
@@ -341,8 +249,6 @@
           addCyl(out, a2.c, 0.35, 9, [0.72, 0.70, 0.68], 8, null);
         }
       }
-      // Podium / timing tower at the line — iconic white tower with red cap.
-      // Historic 1922 structure, recently modernized. Tall mast for timing/announcements.
       tower(K(0.0), 1, 13, 6, 46, { col: [0.92, 0.92, 0.90], cap: true, capCol: [0.78, 0.14, 0.12], mast: 8 });
       // Podium base platform (marble-look step for award ceremony).
       {
@@ -360,9 +266,6 @@
       for (const s of [0.94, 0.97, 0.015, 0.04]) billboard(K(s), -1, 7, 11, 4.5, [0.92, 0.88, 0.30]);
       for (const s of [0.95, 0.03]) billboard(K(s), 1, 26, 12, 5, [0.88, 0.84, 0.80]);
 
-      // ── Lamp posts along the pit straight — night-ready / day-plausible ──
-      // Placed on both sides of the straight (s=0.93..0.07). Slender dark poles
-      // with a bright warm lamp head that reads as a luminaire day or night.
       along(0.93, 0.07, 28, (k) => {
         for (const side of [-1, 1]) {
           const gap = side < 0 ? 6 : 5;   // left slightly further (stand side)
@@ -378,15 +281,9 @@
         }
       });
 
-      // =====================================================================
-      // 3. CHICANES & PARABOLICA — gravel traps, kerb trim, tyre walls, stands
-      // =====================================================================
-      // Variante del Rettifilo (s~0.04) — heavy braking, big gravel, tyre wall.
       groundPatch(K(0.04), 1, 5, [24, 0.18, 34], GRAVEL,
         { id: "monza-rettifilo-gravel", samples: 6 });
       tyreWall(0.03, 0.055, 1, 4, [0.88, 0.20, 0.18]);
-      // Rettifilo's permanent stand faces the heaviest braking zone on the lap:
-      // an exposed steel truss roof over a single deep rake, closed at both ends.
       grandstandEx(0.05, -1, 12, 76, null, null,
         { livery: "crimson", roof: "truss", endWalls: true, pylons: true, h: 11 });
       marshalPost(K(0.045), 1, 10);
@@ -413,10 +310,6 @@
         addBox(out, vadd(af.c, af.u, 2.5), [14, 2.4, 22], fogCol, [af.r, af.u, af.t]);
       }
       marshalPost(K(0.31), -1, 9);
-      // The Roggia — the irrigation ditch the chicane takes its name from. A
-      // narrow murky-water strip parallel to the track past the gravel trap
-      // and marshal post (not a lake): gap0/gap1 pinned close together for a
-      // ditch-width band rather than a wide basin.
       waterBand(0.283, 0.317, -1, 32, 36, 4, [0.30, 0.35, 0.23], { id: "monza-roggia-ditch", required: true });
 
       // Lesmo 1 & 2 (s~0.45–0.52) — tight woodland curves, gravel + tyre.
@@ -433,8 +326,6 @@
       groundPatch(K(0.795), 1, 6, [24, 0.18, 32], GRAVEL,
         { id: "monza-ascari-gravel-right", samples: 6 });
       tyreWall(0.77, 0.80, -1, 4, [0.88, 0.20, 0.18]);
-      // Ascari's stand is the modern one: two rakes under an open lattice roof on
-      // trackside pylons, so it reads tall and light against the woodland behind.
       grandstandEx(0.78, -1, 14, 80, null, null,
         { livery: "steel", tiers: 2, roof: "truss", pylons: true, endWalls: true, h: 12 });
       marshalPost(K(0.785), 1, 9);
@@ -455,9 +346,6 @@
       fence(0.77, 0.80, -1, 9, 4, [0.74, 0.76, 0.80]);
       fence(0.89, 0.93, 1, 9, 4, [0.74, 0.76, 0.80]);
 
-      // Royal-park armco is the visible solid boundary between major runoff
-      // zones. The shared helper grounds every segment and registers matching
-      // collision, eliminating the old long stretches of scenery-only edge.
       for (const [s0, s1] of [
         [0.07, 0.28], [0.32, 0.44], [0.53, 0.76], [0.81, 0.88],
       ]) {
@@ -470,13 +358,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      // =====================================================================
-      // 4. SOPRAELEVATA — old steep banked-oval ruin landmark (s~0.50–0.58 L)
-      //    80% gradient concrete bank built from a fan of leaning prism/box
-      //    segments, weathered grey with cracks and moss-green streaks. Built
-      //    1954, unused for decades, tree roots cracking the surface. Placed
-      //    well off-track in the infield/park so it reads as a historic relic.
-      // =====================================================================
       (function buildBanking() {
         const conc = [0.66, 0.64, 0.60], concDk = [0.54, 0.52, 0.49], moss = [0.36, 0.48, 0.32];
         const tierPoints = (dist) => {
@@ -487,8 +368,6 @@
           }
           return points;
         };
-        // Three terrain-following steps preserve the steep oval silhouette while
-        // sampling every endpoint instead of freezing a 120 m model to one Y.
         groundedSegments({
           id: "monza-banking-lower", points: tierPoints(68),
           width: 8.5, height: 4.5, color: concDk,
@@ -505,11 +384,6 @@
           id: "monza-banking-moss", points: tierPoints(66.8),
           width: 0.8, height: 3.2, color: moss,
         });
-        // Saplings and creeping bushes growing out of the abandoned banking's
-        // cracked upper tier — nature reclaiming a structure unused for
-        // decades. Anchored to the SAME terrain-following points as the tiers
-        // above (not a fresh anchor()) so each plant sits on the actual bank
-        // surface instead of a flat guess at one height.
         for (const p of tierPoints(80)) {
           const h = hash(p.k * 17 + 41);
           if (h < 0.55) continue;
@@ -518,10 +392,6 @@
         }
       })();
 
-      // =====================================================================
-      // 5. PARK STRUCTURES — Villa Reale, paddock buildings, ornamental lakes
-      // =====================================================================
-      // Villa Reale — cream neoclassical block in the park (s~0.62 R far).
       building(K(0.62), 1, 70, 64, 24, 30, { kind: "podium", wall: [0.87, 0.81, 0.67], window: [0.70, 0.64, 0.50], floor: 6 });
       // ── Lit window bands on Villa Reale for night-ready depth ──
       {
@@ -534,23 +404,11 @@
       building(K(0.605), 1, 72, 30, 16, 22, { kind: "slab", wall: [0.85, 0.79, 0.65], window: [0.68, 0.62, 0.48] });
       building(K(0.635), 1, 72, 30, 16, 22, { kind: "slab", wall: [0.85, 0.79, 0.65], window: [0.68, 0.62, 0.48] });
 
-      // Paddock / hospitality buildings behind the pits (left, s~0.97–0.02).
-      // Modern containerized/modular hospitality modules, white/light grey with dark windows.
       for (let i = 0; i < 4; i++) {
         const s = 0.93 + i * 0.022;
         building(K(s), -1, 40, 24, 12, 18,
           { kind: "hall", wall: [0.80, 0.80, 0.82], window: [0.32, 0.36, 0.44], floor: 4.5, roof: true });
       }
-      // Lit windows on the hospitality row: NOT drawn here. These buildings
-      // use kind:"hall" (the `hall` branch of building() in js/track/scenery-city.js, neonTower), whose
-      // body only reaches h*0.5*0.7 = 4.2 m of the nominal h=12 before the
-      // gable roof takes over, and which already emits its own eave-neon
-      // band from the same `window` option passed to building() above. A
-      // hand-drawn band authored against the full h=12 (offsets 5.5/9.5)
-      // floated 1.0-4.5 m above the real wall/roof on 3 of 4 buildings —
-      // removed rather than re-fitted to a shape the circuit shouldn't
-      // duplicate the engine's own massing knowledge of.
-      // Motorhome row in the paddock (was a single flat coloured box per unit).
       every(40, (k) => {
         const h = hash(k * 71 + 31);
         if (h < 0.5) return;
@@ -559,16 +417,8 @@
         motorhome(k, -1, 55 + h * 10, 10, 4, 6, { wall: [0.6 + h * 0.3, 0.6, 0.62] });
       });
 
-      // OB compound behind the paddock (s~0.98) — the flattest stretch of the
-      // lap and set well behind the hospitality row (dist 52) and motorhome
-      // camp (dist up to 65) so its van/dish/mast footprint clears both.
-      // Every real F1 venue has satellite trucks and uplink dishes back here;
-      // Monza had none.
       broadcastCompound(K(0.98), -1, 75, { vans: 3, dishes: 2, mastH: 9 });
 
-      // CC0 Kenney warehouses / service yard behind hospitality. Pack-optional:
-      // bakedModel returns false without assets/pack/models, so each site keeps
-      // a procedural hall fallback (verify-track builds without the pack).
       {
         const yards = [
           ["kenney_ind_building-a", 0.935, -1, 62],
@@ -585,8 +435,6 @@
         bakedModel("kenney_ind_chimney-medium", K(0.942), -1, 70, { scale: 0.65 });
       }
 
-      // Jersey barriers + cones on the Rettifilo runoff (pack-optional polish;
-      // tyreWall above remains the always-on safety marker).
       along(0.028, 0.052, 5.0, (k) => {
         bakedModel("kenney_construction-barrier", k, 1, 6.4, { scale: 1.2 });
       });
@@ -594,8 +442,6 @@
         bakedModel("kenney_construction-cone", k, 1, 5.0, { tint: [1.0, 0.42, 0.10] });
       });
 
-      // Ornamental park lakes use the reflective water buffer and explicit model
-      // intent; required diagnostics catch accidental suppression or bad sizing.
       waterSurface(K(0.40), 1, 95, [180, 0.18, 230], [0.30, 0.50, 0.70],
         { id: "monza-villa-lake", required: true });
       waterSurface(K(0.24), -1, 90, [140, 0.18, 170], [0.28, 0.48, 0.68],
@@ -605,27 +451,12 @@
         for (let i = 0; i < 4; i++) tree(K(s + (i - 2) * 0.01), sd, 70 + i * 8, 12 + i, LEAF_L);
       }
 
-      // =====================================================================
-      // 6. MILAN SKYLINE — distant faint towers on the horizon (s~0.96 R far)
-      //    Hazed, cool-grey silhouette suggesting urban sprawl far from the park.
-      // =====================================================================
       const kmilan = K(0.96);
       for (let i = 0; i < 7; i++) {
         building(kmilan, 1, 210 + i * 28, 16, 36 + i * 10, 16,
           { kind: "spire", wall: [0.62 + i * 0.015, 0.66 + i * 0.015, 0.72 + i * 0.015], window: [0.52, 0.56, 0.62] });
       }
-      // Lit windows on the Milan skyline: NOT drawn here. kind:"spire"
-      // (the `spire` branch of building() in js/track/scenery-city.js, neonTower) is a TAPERED round
-      // shaft (frustum + ring lights), not a flat rectangular wall — a flat
-      // 14 m window band centred on it clips the taper on both ends and
-      // reads as floating debris. The spire already lights its own rings
-      // from the same `window` option passed to building() above.
 
-      // =====================================================================
-      // 7. CONTINUOUS FOREST BACKDROP — unbroken low canopy wall ringing the lap
-      //    Multi-layer forest rings at 120m, 185m, 260m create immersive deep park.
-      //    Represents the 688-hectare Parco di Monza's dense perimeter woodlands.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -644,15 +475,6 @@
         }
       }
 
-      // =====================================================================
-      // 8. ENHANCED SCENERY — wooded hills backdrop, dense Lesmo canopy,
-      //    improved Parabolica stands, Italian kerb colours, tifosi flags.
-      // =====================================================================
-
-      // 8a. Extra backdrop wooded hills — two near rings of ridge prisms
-      //     at 80–110 m and 145–185 m beyond the track envelope, staggered
-      //     so the park horizon looks organic and unbroken. Reuses cx/cz/rad
-      //     computed in section 7.
       {
         // Near ring — warmer green (80–110 m out)
         for (let i = 0; i < 12; i++) {
@@ -674,12 +496,6 @@
         }
       }
 
-      // 8b. Expand Parabolica grandstand — two extra sections widening the arc.
-      // The three sections STEP: the 0.905 hero is two-tier under a cantilever
-      // with suites, entry (0.875) is a single rake on an open truss, exit
-      // (0.935) drops again to a flat-capped block. Reading them left to right
-      // gives the arc a rising-then-falling roofline instead of one shell
-      // repeated three times in three colours.
       grandstandEx(0.875, 1, 14, 80, null, null,
         { livery: "concrete", roof: "truss", pylons: true, endWalls: true, h: 11 });
       grandstandEx(0.935, 1, 14, 80, null, null,
@@ -727,14 +543,6 @@
         ridge(tx, tz, pyMin, a, 20, 18, 14 + h * 10, PINE_D);
       }
 
-      // 8f. Park furniture details — lake-edge vegetation clusters.
-      // INTERLEAVED with section 5's lakeside cluster (the `[[0.40, 1], [0.24,
-      // -1]]` loop above), not stacked on it. Both walk si = i - 2 in steps of
-      // 0.01 over the SAME two (s, side) pairs, so the first four of these five
-      // shared an arc with one of those four exactly, 2 m further out and 3 m
-      // taller in the same colour — eight interpenetrating trunks. The half-step
-      // keeps every tree the author placed and puts them BETWEEN their
-      // neighbours, which is what a second "details" pass was for.
       for (const [s, sd, colL] of [[0.40, 1, LEAF_L], [0.24, -1, LEAF_L]]) {
         for (let i = 0; i < 5; i++) {
           const si = i - 2;
@@ -742,8 +550,6 @@
         }
       }
 
-      // ── 8g. Track-perimeter lamp posts at key corner exits / chicane entries ──
-      // A lighter presence than the pit-straight cluster — one post per marshal zone.
       for (const [s, side, gap] of [
         [0.04,  1, 9],   // Rettifilo exit right
         [0.30, -1, 8],   // Roggia left
@@ -759,19 +565,6 @@
         addBox(out, vadd(ap.c, ap.u, 10.7), [1.1, 0.5, 0.6], [0.98, 0.94, 0.72], [ap.r, ap.u, ap.t]);
       }
 
-      // =====================================================================
-      // 9. BESPOKE ENRICHMENT — Italian cypress avenues, terraced tifosi bowls,
-      //    Autodromo museum portico. All models are LOCAL to this closure.
-      // =====================================================================
-
-      // ── 9a. Italian cypress — the tall slim dark-green spire that lines
-      //     Italian avenues (distinct columnar form vs. the umbrella pines).
-      //     Monza's hand-rolled cypress() is gone: the shared api.cypress() is
-      //     that model generalised (same trunk plus 1.45/1.10/0.70 cone stack),
-      //     and it adds the sunk root stub and the per-instance tone shift the
-      //     local one faked with a two-colour coin flip. CYP stays as the tone
-      //     to pass in — the shared model darkens half the instances to within
-      //     a rounding error of the old CYP_D. ──
       const CYP = [0.12, 0.29, 0.16];
       // Formal cypress avenue flanking the approach to the Villa Reale (s~0.60).
       for (let i = 0; i < 8; i++) {
@@ -785,30 +578,12 @@
                   14 + hash(i * 5 + s0 * 50) * 6, CYP);
       }
 
-      // ── 9b. Terraced tifosi bowl — bespoke multi-tier crowd wall that steps
-      //     up and back, packing spectators into a towering historic tribuna.
-      //     Cheap: a few slabs + a light row of speckle cubes per tier. ──
-      // Shell tone pairs echo grandstandEx's STAND_LIVERIES families (this bowl
-      // predates grandstandEx and keeps its own bespoke tifosi-band styling, so
-      // it borrows the same named-family idea rather than converting outright)
-      // — matches STAND_SETS.monza ["crimson","concrete","steel"] so the five
-      // bowls read as distinct stands instead of one grey shell five times.
       const SHELL_SETS = {
         crimson:  [[0.60, 0.44, 0.42], [0.48, 0.34, 0.32]],   // warm red-brick tint
         concrete: [[0.57, 0.58, 0.60], [0.51, 0.52, 0.55]],   // original tone (unchanged)
         steel:    [[0.50, 0.53, 0.58], [0.42, 0.45, 0.50]],   // cool grey
       };
       const TIFOSI = [[0.84, 0.26, 0.22], [0.88, 0.86, 0.82], [0.30, 0.40, 0.62], [0.72, 0.63, 0.30]];
-      // The hand-rolled bowl that used to live here is now api.tieredBowl() —
-      // this file is the model the shared one was generalised FROM, so the
-      // geometry is unchanged (5.6 m tier depth, 3 + 3.3t riser, crowd band at
-      // h+0.85, fascia at h+1.85, cantilever over the top tier). What DOES
-      // change is that the shared version is a RANGE emitter walking the arc
-      // with along(), where the local one froze one anchor and extruded a
-      // straight `len` box off it — at the Parabolica (92 m through the
-      // circuit's longest curve) that box chorded across the bowl it was
-      // supposed to wrap. Monza's five bowls are authored as centre + length,
-      // so convert metres → arc fraction once here rather than at five sites.
       const TOTAL_M = ds * n;
       const tifosiBowl = (s, side, gap, len, tiers, livery) => {
         const half = (len / 2) / TOTAL_M;
@@ -816,23 +591,15 @@
           tiers, tierDepth: 5.6, base: 3, rise: 3.3,
           shell: SHELL_SETS[livery] || SHELL_SETS.concrete,
           crowd: TIFOSI, density: 0.55, roof: true, roofCol: [0.19, 0.19, 0.23],
-          // 11 m bays: the local model's ONE box per tier is the cheapest a
-          // bowl can be, and the shared emitter costs a set of bays instead.
-          // A bay per ~11 m still tracks the Parabolica arc while keeping the
-          // five bowls inside the park's vertex budget.
           step: 11,
         });
       };
-      // A wall of tifosi at the start/finish and around the iconic Parabolica.
-      // Livery family varies per stand (see SHELL_SETS above).
       tifosiBowl(0.905, 1, 26, 92, 4, "crimson");   // Parabolica outer — largest crowd
       tifosiBowl(0.02, 1, 40, 84, 4, "steel");      // facing the pit straight
       tifosiBowl(0.955, -1, 30, 78, 4, "concrete"); // behind Tribuna Centrale
       tifosiBowl(0.11, 1, 24, 64, 3, "crimson");    // Curva Grande sweep
       tifosiBowl(0.78, -1, 30, 70, 3, "steel");     // Ascari outer
 
-      // ── 9c. Autodromo museum / podium building — a low classical block with a
-      //     columned portico + pediment, evoking the historic 1922 buildings. ──
       (function museum() {
         const a = anchor(K(0.0), 1, 40);
         const b = [a.r, a.u, a.t], base = a.c;
@@ -862,20 +629,9 @@
         out._mat = 0;
       })();
 
-      // =====================================================================
-      // 10. TOP-3 IDENTITY — Ascari Sopraelevata flyover, chicane kerb
-      //     punctuation, Curva Grande pine wall.
-      // =====================================================================
-
-      // 10a. Ascari Sopraelevata flyover — tilted concrete bridge over the
-      //     racing line ~s 0.70–0.76 (cars pass under). Distinct from the
-      //     off-track banking ruin at s~0.53: this is the historic oval
-      //     crossing the modern circuit on the Ascari approach.
       (function sopraelevataFlyover() {
         const conc = [0.66, 0.64, 0.60], concDk = [0.54, 0.52, 0.49];
         const bridgeS = 0.73, clearance = 6.8;
-        // One declared crossing replaces four overlapping legacy portals. The
-        // required span records its 6.8 m underside clearance explicitly.
         overheadSpan({
           id: "monza-sopraelevata-flyover",
           frac: bridgeS,
@@ -883,8 +639,6 @@
           thickness: 2.2,
           depth: 72,
           span: 28,
-          // Supports are emitted and preflighted as the two required groups
-          // below; disable the span helper's generic depth-sized support boxes.
           supports: false,
           color: concDk,
           required: true,
@@ -902,8 +656,6 @@
           }, { required: true });
         }
 
-        // The surviving oval banks rise from sampled terrain along both sides,
-        // rather than sharing one midpoint height and floating over the approach.
         const points = (side) => {
           const result = [];
           for (let s = 0.695; s <= 0.765 + 1e-9; s += 0.01)
@@ -920,9 +672,6 @@
         });
       })();
 
-      // 10b. Chicane red/white kerb punctuation — Rettifilo, Roggia, Ascari.
-      //     Bright Italian sausage-kerb rhythm at the three heavy-braking zones
-      //     (start-straight strip in 8c stays; these punch the chicanes).
       {
         const kerbR = [0.88, 0.16, 0.12], kerbW = [0.94, 0.94, 0.92];
         const strips = [
@@ -943,11 +692,6 @@
         }
       }
 
-      // 10c. Curva Grande pine wall — densify the corridor both sides ~s 0.08–0.18
-      //     so the fast sweep reads as a green tunnel at speed. The two INNER
-      //     ranks are parasol pines (what actually lines this sweep); the two
-      //     set-back ranks stay spruce, so the wall has a canopy layer over a
-      //     dark understorey rather than one repeated silhouette four deep.
       every(14, (k) => {
         const s = k / n;
         if (s < 0.08 || s > 0.18) return;
@@ -958,23 +702,9 @@
         if (h > 0.50) pine(k,  1, 21 + h * 4, 17 + h * 9, PINE);
       });
 
-      // 10d. General-admission crowd hills — Curva Grande and the Lesmo woods
-      //     have dense forest but (until now) zero spectators; real fans stand
-      //     on informal grass banks cut into the treeline, not in a grandstand.
-      //     spectatorHill runs ~70 verts/m, so each stays to one side with
-      //     reduced rows/density/step — a facility-sized cost, not a hero one.
       spectatorHill(0.08, 0.18, -1, 13, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
       spectatorHill(0.43, 0.54,  1, 13, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
 
-      // =====================================================================
-      // 11. ROYAL-PARK HERO LAYERS — deeper woodland, banking archaeology,
-      //     tifosi camps, the old Vedano approach and braking-zone crowds.
-      //     All additions stay in short hero sectors and well behind barriers.
-      // =====================================================================
-
-      // 11a. Sparse second-canopy sentinels close only Curva Grande and Lesmo.
-      // The 30–38 m setback leaves the fast driver's sightline open; a coarse
-      // 42 m cadence adds depth without another expensive continuous tree wall.
       every(42, (k) => {
         const s = k / n;
         const grande = s >= 0.09 && s <= 0.155;
@@ -987,9 +717,6 @@
           pine(k, h > 0.78 ? -1 : 1, 38 + h * 5, 18 + h * 7, PINE_D);
       });
 
-      // 11b. Abandoned oval control hut above the surviving Sopraelevata tiers.
-      // A faded scoring panel and concrete stair ribs make the ruin read as
-      // motorsport archaeology rather than a generic retaining wall.
       building(K(0.545), -1, 94, 13, 9, 10, { kind: "hall",
         wall: [0.57, 0.55, 0.51], window: [0.28, 0.30, 0.29], floor: 4.5,
       });
@@ -1001,9 +728,6 @@
           [a.r, a.u, a.t]);
       }
 
-      // 11c. Compact race-weekend camps in woodland clearings: striped ridge
-      // tents, support vans and Italian flag markers. Each clearing is one
-      // bounded atomic model, far enough out to preserve high-speed sightlines.
       function tifosiCamp(id, s, side, gap) {
         const a = anchor(K(s), side, gap);
         const b = [a.r, a.u, a.t];
@@ -1019,9 +743,6 @@
             const row = i % 2, alongOff = (Math.floor(i / 2) - 1) * 12;
             const across = (row ? 1 : -1) * 5;
             const p = vadd(vadd(a.c, a.r, across), a.t, alongOff);
-            // addPrism is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js) — the
-            // position arg IS the base centre, not the centroid. Passing
-            // base + h/2 (as this did) floats the tent by half its height.
             addPrism(stage, p, [5.5, 3, 6.5],
               tentCols[i % tentCols.length], b);
           }
@@ -1039,9 +760,6 @@
       tifosiCamp("monza-tifosi-camp-curva-grande", 0.185, -1, 54);
       tifosiCamp("monza-tifosi-camp-ascari", 0.825, 1, 56);
 
-      // 11d. Vedano-side historic entrance: a cream masonry arch and pediment
-      // set deep behind Parabolica, suggesting the old park gateway without
-      // creating an overhead obstruction on the racing circuit.
       {
         const a = anchor(K(0.945), 1, 58);
         const b = [a.r, a.u, a.t], stone = [0.84, 0.80, 0.70];
@@ -1053,23 +771,11 @@
           addBox(stage, vadd(vadd(a.c, a.t, -9), a.u, 5), [6, 10, 4.2], stone, b);
           addBox(stage, vadd(vadd(a.c, a.t, 9), a.u, 5), [6, 10, 4.2], stone, b);
           addBox(stage, vadd(a.c, a.u, 10.2), [6, 2.2, 22], [0.77, 0.72, 0.62], b);
-          // Lintel top sits at 10.2 + 2.2/2 = 11.3; the roof prism (BASE-
-          // anchored) was seated at 12.3 — a 1.0 m gap, just past the 0.6 m
-          // "rests on" bridge, so it read as floating clear to bare terrain.
-          // Overlap the roof into the lintel by 0.2 m (not flush, to avoid a
-          // new coplanar spot) instead of stacking exactly on top of it.
           addPrism(stage, vadd(a.c, a.u, 11.1), [6.4, 2.5, 23],
             [0.88, 0.84, 0.74], b);
         });
       }
 
-      // 11e. Opposing, compact tifosi stands at the three major braking zones.
-      // Their 28–32 m clearances keep marker boards and corner entry visible.
-      // These are the CHEAP seats — race-week seating that goes up in April and
-      // comes down in September. roof:"none" plus a back shell barely taller
-      // than the top row is what separates them on the skyline from the roofed
-      // permanent stands 20 m in front of them; without it Monza had six
-      // identically-profiled shells and only the paint told them apart.
       grandstandEx(0.032, 1, 32, 54, null, null, { livery: "crimson", roof: "none", h: 7 });
       grandstandEx(0.295, -1, 28, 50, null, null, { livery: "concrete", roof: "none", h: 6.5 });
       grandstandEx(0.775, 1, 30, 58, null, null, { livery: "steel", roof: "none", h: 7 });

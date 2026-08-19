@@ -15,9 +15,6 @@
     // Was 0.05, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.05,
     name: "MUGELLO",
     gp: "Tuscan GP",
@@ -44,8 +41,6 @@
       grass:         [0.24, 0.42, 0.19],
       sunDir:        [0.44, 0.64, 0.32],
     },
-    // Mugello lives in a valley in the Tuscan hills and rides its contours —
-    // the run up to Casanova-Savelli and the drop through Arrabbiata are big.
     elevations: [
       { s: 0.16, halfM: 340, rise: 10.0 },   // climb after San Donato
       { s: 0.34, halfM: 380, rise: -11.0 },  // drop to Casanova-Savelli
@@ -146,22 +141,14 @@
           const b = [a.r, a.u, a.t];
           const hv = hash(kk * 43 + gap);
           const w = 12 + hv * 4, d = 15 + hv * 6, wallH = 7 + hv * 2;
-          // Reserve the whole yard — house, tower and both cypresses — BEFORE
-          // drawing any of it. The half-span along the arc is d plus the
-          // cypress reach, converted to a lap fraction.
           const halfFrac = (d * 0.5 + w * 1.1) / track.total;
           indexSolid(sf - halfFrac, sf + halfFrac, side, gap - 4, w * 2.0);
           out._mat = MAT.STONE;
           addBox(out, vadd(a.c, a.u, wallH * 0.5), [w, wallH, d],
                  hv < 0.5 ? RENDER : RENDER_D, b);
           out._mat = 0;
-          // Shallow terracotta pitch with deep eaves — the eaves are the read.
-          // addPrism anchors at its BASE (geom.js), so it seats ON the wall top:
-          // the extra half-height (+w*0.13) floated all four roofs ~1.6-2.1 m.
           addPrism(out, vadd(a.c, a.u, wallH), [w * 1.14, w * 0.27, d * 1.10],
                    hv < 0.5 ? TILE : TILE_D, b);
-          // Square tower end on the older houses. ABUTS the gable, it does not
-          // sink into it — 3 m of overlap is severe interpenetration.
           if (hv > 0.45) {
             const tc = vadd(a.c, a.t, d * 0.5 + 3.8);
             out._mat = MAT.STONE;
@@ -179,17 +166,6 @@
           out._mat = MAT.FOLIAGE;
           for (const t of [-w * 0.85, w * 0.85]) {
             const cc = vadd(vadd(a.c, a.t, t), a.r, -w * 0.7);
-            // Single-anchor extrapolation (cause class c): `a.c` is one ground
-            // sample at the farmhouse's own anchor, and the gate is up to
-            // sqrt((w*0.85)^2 + (w*0.7)^2) ~15 m away from it across a Tuscan
-            // hillside that the farmhouse's own straight-line lateral offset
-            // does not track. Re-seat on the ground actually under the gate.
-            // -0.7 sinks the base — the same "sunk base, no slope float" idiom
-            // as pine/tree/palm's trunks (the groundUnder helper in js/track/scenery-nature.js etc): the
-            // bottom cone's own footing (ch*0.10, ~1.2-1.6 m up) sits right at
-            // the audit's 1.0 m grounded-footing radius, so anything short of
-            // that sink reads as its own marginal float and can no longer
-            // anchor the taller cone stacked on top of it.
             cc[1] = groundUnder(cc[0], cc[2]) - 0.7;
             if (onTrack(cc[0], cc[2], 8)) continue;
             const ch = 12 + hash(kk + t) * 4;
@@ -204,16 +180,10 @@
       const LEAF = [0.20, 0.44, 0.20], LEAF_D = [0.15, 0.36, 0.17];
       const GRAVEL = [0.68, 0.61, 0.44];
       const CYP = [0.11, 0.27, 0.15], CYP_D = [0.08, 0.21, 0.12];
-      // Tuscan masonry palette: warm ochre render, travertine trim, terracotta
-      // pantile, and the Ferrari red the whole paddock is trimmed in.
       const STONE = [0.82, 0.76, 0.62], TRAV = [0.88, 0.85, 0.76];
       const TERRA = [0.62, 0.33, 0.23], ROSSO = [0.80, 0.12, 0.10];
       const OLIVE = [0.44, 0.48, 0.34], VINE = [0.30, 0.40, 0.22];
 
-      // =====================================================================
-      // 1. TUSCAN WOODLAND — mixed broadleaf on the valley sides, denser than
-      //    the Spanish/Portuguese circuits but nothing like the Eifel.
-      // =====================================================================
       const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.36 && s <= 0.46);
       every(22, (k) => {
         const s = k / n;
@@ -240,10 +210,6 @@
         bush(k, h < 0.75 ? -1 : 1, 7 + h * 5, [0.18, 0.38, 0.18]);
       });
 
-      // =====================================================================
-      // 2. CYPRESS AVENUES — the Tuscan signature. Tall, slim, near-black
-      //    spires marking the ridgelines and the approach to the paddock.
-      // =====================================================================
       function cypress(k, side, dist, h) {
         const a = anchor(k, side, dist);
         // Overhang past the supporting body (cause class b) — via a MISSING
@@ -271,14 +237,6 @@
       for (let i = 0; i < 8; i++) cypress(K(0.470 + i * 0.008), 1, 54 + (i % 2) * 5, 14 + hash(i * 5) * 6);
       for (let i = 0; i < 6; i++) cypress(K(0.180 + i * 0.008), -1, 50 + (i % 2) * 4, 13 + hash(i * 11) * 6);
 
-      // =====================================================================
-      // 3. PIT COMPLEX — Mugello's paddock is Ferrari-owned and it looks it:
-      //    ochre render and travertine trim rather than white panel, a repeated
-      //    ARCHED garage bay instead of a rectangular door, a deep overhanging
-      //    eave of terracotta pantile over the hospitality storey, and rosso
-      //    corsa on every band and handrail. It is the only pit building on the
-      //    calendar detailed like a Tuscan building rather than an airport.
-      // =====================================================================
       for (const [i, s] of [0.945, 0.963, 0.981, 0.999].entries()) {
         const a = anchor(K(s), 1, 16);
         const b = [a.r, a.u, a.t];
@@ -287,8 +245,6 @@
         }, (stage) => {
           stage._mat = MAT.STONE;
           addBox(stage, vadd(a.c, a.u, 3.6), [14, 7.2, 40], STONE, b);
-          // Arched garage bays: a travertine pier between each pair, and a
-          // shallow arch head built from three stepped voussoir blocks.
           for (let g = 0; g < 4; g++) {
             const off = (g - 1.5) * 9.4;
             const face = vadd(vadd(a.c, a.t, off), a.r, -7.1);
@@ -320,8 +276,6 @@
           stage._mat = 0;
         }, { required: true });
       }
-      // Race control: a square travertine tower with a rosso cap band and an
-      // open loggia under the roof — a campanile, not an air-traffic cab.
       {
         const a = anchor(K(0.988), 1, 28);
         const b = [a.r, a.u, a.t];
@@ -352,8 +306,6 @@
         const a = anchor(K(0.005), -1, 8);
         addBox(out, vadd(a.c, a.u, 1.6), [2, 1.6, 150], [0.80, 0.14, 0.12], [a.r, a.u, a.t]);
       }
-      // Tuscan stone: low, wide, gabled halls sitting long on the ground, the
-      // shape of the farm buildings this valley is otherwise made of.
       for (let i = 0; i < 4; i++) {
         building(K(0.925 + i * 0.013), 1, 40, 28, 8, 20,
           { kind: "hall", wall: STONE, window: [0.30, 0.32, 0.36], floor: 4.5 });
@@ -366,15 +318,6 @@
       broadcastCompound(K(0.916), 1, 74, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.86, 0.14, 0.12]);
 
-      // =====================================================================
-      // 4. CORNERS — Mugello keeps proper gravel traps, which is part of why
-      //    it feels like an old-school circuit despite being fast and modern.
-      // =====================================================================
-      // Mugello's corner enclosures are not roofed grandstands: they are bare
-      // poured-concrete terraces stepping up the valley side, fronted with the
-      // red-and-white painted band the circuit repaints every year and railed
-      // with plain galvanised tube. From the car they read as a striped
-      // concrete shelf on the hill, which is nothing like a grey stand box.
       const terrazza = (s0, s1, side, gap, opts) => {
         opts = opts || {};
         const rows = opts.rows || 7, rise = opts.rise || 0.9, depth = opts.depth || 1.5;
@@ -398,16 +341,6 @@
               h < 0.3 ? [0.84, 0.16, 0.14] : [0.90, 0.88, 0.84], b);   // tifosi red
             out._mat = MAT.CONCRETE;
           }
-          // Galvanised tube handrail capping the top step.
-          //
-          // Single-anchor extrapolation (cause class c): `a.c` is one ground
-          // sample at the road edge, and on Casanova-Savelli's tight radius
-          // the rail is up to rows*depth (~10 m) further out along `a.r` —
-          // far enough round the corner's fan that reusing a.c's accumulated
-          // step height (0.9 + rows*rise) floated the rail ~8 m above the
-          // actual hillside there. Re-seat on the ground actually under the
-          // rail; terrainYAt is null off the rendered ribbon, where the
-          // accumulated-step estimate remains the best available guess.
           out._mat = MAT.METAL;
           const topBack = 0.9 + rows * depth, topUp = 0.9 + rows * rise;
           const railBase = vadd(a.c, a.r, side * topBack);
@@ -444,9 +377,6 @@
       spectatorHill(0.16, 0.26, -1, 14, { rows: 3, rise: 1.1, depth: 1.8, density: 0.42, step: 9 });
       spectatorHill(0.62, 0.72, 1, 14, { rows: 3, rise: 1.1, depth: 1.8, density: 0.42, step: 9 });
 
-      // =====================================================================
-      // 5. BOUNDARIES
-      // =====================================================================
       for (const [s0, s1] of [[0.10, 0.28], [0.34, 0.46], [0.53, 0.61], [0.67, 0.85]]) {
         guardrail(s0, s1, -1, 8, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 8, [0.80, 0.81, 0.83]);
@@ -457,10 +387,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 9);
       }
 
-      // =====================================================================
-      // 6. THE MUGELLO HILLS — the valley walls that make this circuit look
-      //    like nowhere else on the calendar.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -482,14 +408,6 @@
         }
       }
 
-      // =====================================================================
-      // 7. BESPOKE IDENTITY — the podere. What is actually around Mugello is
-      //    not "countryside", it is farmed Tuscan hillside: a stone casale with
-      //    a tower, its outbuildings, a cypress drive climbing to the door, and
-      //    the vine and olive rows that cover every slope between the woods.
-      //    The rows matter more than the buildings — regular parallel planting
-      //    on a hillside is instantly Tuscany and instantly not England.
-      // =====================================================================
       {
         const a = anchor(K(0.500), 1, 110);
         const b = [a.r, a.u, a.t];
@@ -498,8 +416,6 @@
         }, (stage) => {
           stage._mat = MAT.STONE;
           addBox(stage, vadd(a.c, a.u, 5.5), [16, 11, 22], STONE, b);
-          // The square dovecote tower every real casale grew: one storey higher
-          // than the house and the thing that makes the silhouette read.
           addBox(stage, vadd(vadd(a.c, a.t, -8), a.u, 8.5), [9, 17, 9],
             [0.80, 0.74, 0.60], b);
           stage._mat = 0;
@@ -518,8 +434,6 @@
               [0.25, 1.9, 1.2], [0.30, 0.36, 0.28], b);
           }
         });
-        // Cypress drive: a proper avenue climbing from the road to the door,
-        // planted in matched pairs at even spacing rather than dotted about.
         for (let i = 0; i < 7; i++) {
           const dist = 74 + i * 6;
           cypress(K(0.494), 1, dist, 15 + hash(i * 3) * 4);
@@ -527,8 +441,6 @@
         }
       }
 
-      // A hilltop pieve with its campanile — the other thing on every Tuscan
-      // ridge, and visible from the whole back half of the lap.
       {
         const a = anchor(K(0.235), -1, 118);
         const b = [a.r, a.u, a.t];
@@ -553,10 +465,6 @@
         cypress(K(0.243), -1, 104, 17);
       }
 
-      // Vine and olive rows on the open valley sides. Planted as evenly spaced
-      // parallel strips: from the car the regularity is what reads, not the
-      // individual plants, so each row is one low bar and the olives are the
-      // paler, wider-spaced ones on the drier upper ground.
       for (const [s0, s1, side, gap, kind] of [
         [0.14, 0.26, 1, 62, "vine"],
         [0.44, 0.58, 1, 70, "vine"],
@@ -585,8 +493,6 @@
                 [0.9, 1.5, spacing * 0.96], r & 1 ? VINE : [0.26, 0.36, 0.20], b);
               out._mat = 0;
             } else {
-              // Olives: individual round-crowned trees on a wide grid, not a
-              // hedge — the gaps between them are the point.
               const h = hash(k * 7 + r * 13);
               if (h < 0.45) continue;
               addCyl(out, vadd(base, a.u, 0.7),
@@ -611,25 +517,12 @@
       cameraTower(K(0.072), -1, 30, { h: 18 });
       cameraTower(K(0.500), 1, 30, { h: 18 });
       cameraTower(K(0.880), 1, 28, { h: 16 });
-      // THE MUGELLO HILLSIDE. This circuit runs through a wooded Tuscan valley
-      // and the trees come right down to the barriers on the climbs. Mixed oak
-      // and pine, dense — the cypresses stay as the ordered accent above.
       for (const [s0, s1] of [[0.12, 0.34], [0.48, 0.9]]) {
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 14, { density: 0.64, hMin: 11, hMax: 20, pineFrac: 0.45, col: PINE, col2: LEAF_D });
       }
-      // A taller BACK RANK on the wooded hillside above the Arrabbiate, stepped
-      // behind the front treeline and the cypress ranks, so the valley wall on
-      // the outside of the circuit's signature corners reads with real depth.
       forestEdge(0.50, 0.68, 1, 30, { density: 0.22, hMin: 15, hMax: 24, pineFrac: 0.5, col: PINE_D, col2: LEAF_D });
 
-      // =====================================================================
-      // 8. SAN DONATO GRANDSTAND — the big covered stand on the outside of Turn
-      //    1, above the poured terracing: a raked two-tier crimson deck with a
-      //    cantilever roof and a glazed hospitality band, the shot every start
-      //    is framed on. It sits back up the hill behind the terrazza, not on
-      //    top of it — added above the curated corner, not in place of it.
-      // =====================================================================
       grandstandEx(0.074, -1, 36, 88, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", suites: true,
           endWalls: true, pylons: true });

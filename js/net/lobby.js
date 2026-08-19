@@ -1,73 +1,21 @@
-/*
- * NetLobby — getting two people into the same race, with no server.
- *
- * This is the piece that makes multiplayer usable by a person rather than by
- * __apex. It owns the #vsfriend screen and drives the whole sequence:
- *
- *   HOST                                  GUEST
- *   createInvite()  ──── code ────────▶   acceptInvite(code)
- *   acceptAnswer(code) ◀─── code ─────    (shows answer)
- *   ...DataChannels open...
- *   send HELLO (profile) ◀──────────▶    send HELLO (profile)
- *   send SETTINGS (track, laps, …) ──▶    applyRaceSettings()
- *   send START (tick)  ──────────────▶    both start together
- *
- * The two code pastes ARE the signalling server. That is the whole reason this
- * design has no backend: WebRTC needs an out-of-band exchange to get started,
- * and two people already have one — chat, SMS, a link. It is clumsier than a
- * room code, and it is free forever with nothing to run or keep up.
- *
- * WHAT THE PROFILE CARRIES, and what it deliberately doesn't. Team, driver,
- * livery and the PARTS SETUP IDS. Ids, never resolved multipliers — since
- * Phase 0 made part upgrades per-car, a peer sending `{cornering: 9}` would
- * simply be faster, so the numbers are always recomputed locally from the ids
- * through the same Parts.getMods() the local car uses. That does not make this
- * cheat-proof (nothing peer-to-peer is), but it means honest clients agree and
- * a tampered one has to work at it.
- *
- * The host owns the race settings for a plain reason: somebody has to, and
- * splitting the choice between two people is a negotiation with no natural
- * winner. The guest's own track/laps/weather selections are simply overridden
- * for the session.
- */
+/* NetLobby — getting two people into the same race, with no server. This is the piece that makes multiplayer usable by a person rather than by __apex. It owns the… */
 "use strict";
 
 const NetLobby = (function () {
-  // 30 s was too tight. A real ICE exchange over mobile data, with a relay
-  // candidate in the mix, can legitimately take most of a minute — and this
-  // timer starts at the LAST paste, so it is racing a handshake that has
-  // already used up its patience elsewhere. A definite `failed` short-circuits
-  // it anyway (see waitForOpen), so waiting longer only costs time in the case
-  // where there is still hope.
   const CONNECT_TIMEOUT_MS = 60000;
 
   function create(G) {
     Log.info("net", "lobby create");
     const $ = (id) => document.getElementById(id);
-    // CONNECTED transports, one per guest, keyed by the id the host minted for
-    // that invite. `transport` below is the one currently being NEGOTIATED —
-    // there is at most one at a time, because invites are sequential: you
-    // invite, they connect, you invite the next. That is a real simplification
-    // and not a limitation of the wire: with several offers outstanding, a
-    // pasted answer has to be matched to the offer that produced it, and the
-    // one thing a person pasting a code cannot tell you is which invite it
-    // answers.
     const transports = new Map();
     let transport = null;                  // the pending one, mid-handshake
     let nextGuestId = 0;
-    // The open room-code subscription, if one is running — held so closing the
-    // lobby can stop it. A room nobody is watching still holds relay sockets.
     let codeRoom = null;
     // The room code we closed to get out of Trystero's way, and must reopen
     // once our own connection is up. Null when we are not hosting a room.
     let codeReopen = null;
-    // A guest has exactly one peer — the host — and calls it PEER_ONE. A host
-    // mints an id per guest. Asymmetric on purpose: only the host ever needs to
-    // tell several peers apart.
     const mintGuestId = () => "g" + (++nextGuestId);
     let pendingId = null;
-    // Four players: a fixed grid, and a phone in landscape. The cap is here
-    // rather than in the wire because the wire does not care.
     const MAX_GUESTS = 3;
     let role = null;
     let pollTimer = null;
@@ -116,7 +64,6 @@ const NetLobby = (function () {
       for (const k of ["pick", "hosting", "joining", "room", "code"]) if (e[k]) e[k].hidden = (k !== step);
     }
 
-    // ---- what we tell the other side about ourselves ----------------------
     function localProfile() {
       const team = Teams.LIST[G.teamIdx] || Teams.LIST[0];
       let setup = null;
@@ -124,8 +71,6 @@ const NetLobby = (function () {
       return {
         team: team.id,
         driver: G.driverIdx || 0,
-        // Ids only — see the header. The receiving side recomputes the
-        // multipliers itself so a peer cannot simply declare better ones.
         parts: setup,
         livery: (G.getLiveryId ? G.getLiveryId(team.id) : null),
       };
@@ -142,7 +87,6 @@ const NetLobby = (function () {
       catch (e) { return null; }
     }
 
-    // ---- connection -------------------------------------------------------
     // How a transport gets made is injectable, for the same reason the wire
     // itself is: a test must be able to exercise this screen without building
     // a real RTCPeerConnection. That is not a convenience — a PC whose ICE
@@ -194,12 +138,6 @@ const NetLobby = (function () {
     }
 
     function newTransport(asRole) {
-      // Drop only the PENDING attempt, not the connections already made. A
-      // previous attempt that timed out leaves a dead RTCPeerConnection behind
-      // and reusing it is how the lobby ended up reporting "WebRTC is
-      // unavailable" on a device that had just successfully generated an
-      // invite — but tearing down everything here would have dropped the
-      // guests already in the room the moment the host invited another.
       dropPending();
       role = asRole;
       pendingId = asRole === "host" ? mintGuestId() : PEER_ONE;
@@ -210,10 +148,6 @@ const NetLobby = (function () {
       }
       const id = pendingId;
       transport.onClose(() => {
-        // One guest dropping is not the room ending. Close that peer's session
-        // and leave the rest connected; only the LAST connection going away
-        // stops the pump, or a 40 Hz timer runs forever holding a peer
-        // connection alive. For a guest, losing the host is always the end.
         transports.delete(id);
         const s = sessions.get(id);
         if (s) { try { s.close(); } catch (e) {} }
@@ -223,12 +157,6 @@ const NetLobby = (function () {
         session = [...sessions.values()][0] || null;
         if (!sessions.size) {
           clearInterval(pumpTimer); pumpTimer = null;
-          // SAY WHICH loss this was. Everyone connects THROUGH the host — that
-          // is what a star is — so the host going away ends the room for
-          // everybody, and there is no recovery to offer. A guest leaving is a
-          // different event with a different answer, and "Connection closed"
-          // for both told a player nothing about which had happened or whether
-          // waiting would help.
           say(role === "guest"
             ? "The host left, so the race is over. Everyone connects through them."
             : "Connection closed.", true);
@@ -256,17 +184,12 @@ const NetLobby = (function () {
       pendingId = null;
     }
 
-    // No live connection is NOT the same as no WebRTC support, and telling a
-    // player the wrong one sends them looking for a browser problem that does
-    // not exist.
     function noConnectionMsg() {
       return NetTransport.supported()
         ? "That attempt has ended. Tap HOST A RACE or JOIN A FRIEND to start over."
         : "This browser cannot do WebRTC, so it cannot race a friend.";
     }
 
-    // Everything: every connected guest AND the pending attempt. Leaving the
-    // lobby has to close all of them or the peer connections outlive the screen.
     function teardown() {
       clearInterval(pollTimer);
       clearInterval(pumpTimer);
@@ -285,15 +208,6 @@ const NetLobby = (function () {
     // "It didn't work" is not an answer a player can act on, and the two ways
     // this fails need OPPOSITE responses. Which one happened is decided by
     // whether we ever learnt our own public address:
-    //
-    //   no srflx candidate  -> STUN never answered. The network is filtering
-    //                          it, and a different network genuinely may work.
-    //   srflx but no path   -> both sides know both addresses and the packets
-    //                          still will not flow: symmetric NAT. Switching
-    //                          Wi-Fi will not help; only a relay does, and a
-    //                          relay costs someone money to run. Saying "try
-    //                          again" here would send them round a loop that
-    //                          cannot succeed.
     //
     // The stale case is the one worth catching separately, because our own
     // design causes it: the codes are carried by a human, and a NAT's UDP
@@ -320,11 +234,6 @@ const NetLobby = (function () {
           + " after a minute or so. Start a new invite and paste the answer back"
           + " more quickly.";
       }
-      // TWO DIFFERENT PROBLEMS, and they take opposite instructions. With no
-      // relay in the config there is nothing to diagnose and the fix is the
-      // same network. With one configured, the relay itself is the suspect —
-      // and telling that player to change Wi-Fi sends them round a loop that
-      // cannot succeed, which is what the old single sentence did.
       return "Could not connect after " + secs + "s" + last + "."
         + " Both sides found an address but the direct link was blocked, which"
         + " means one of these networks needs a relay to get through."
@@ -337,9 +246,6 @@ const NetLobby = (function () {
             + " apex26.turnApi to a credentials URL.");
     }
 
-    // Poll for the DataChannels opening. There is no event that means "the
-    // whole session is ready" — each channel opens separately — so the
-    // transport raises open only once BOTH are up, and this waits for that.
     function waitForOpen() {
       clearInterval(pollTimer);
       const started = Date.now();
@@ -383,18 +289,10 @@ const NetLobby = (function () {
           onConnected(watchedId, watched);
           return;
         }
-        // Surface the ICE/connection state while we wait. This is the only
-        // window into a handshake that cannot be reproduced in any test here,
-        // so when it stalls the player can say WHERE rather than just "it
-        // didn't work".
         const st = watched.stats ? watched.stats() : null;
         const secs = Math.round((Date.now() - started) / 1000);
         if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")" + relayNote);
 
-        // A definite `failed` is final — ICE has exhausted every pair. Waiting
-        // out the rest of the timer after that just makes the player watch a
-        // spinner for a verdict already delivered. `disconnected` is NOT final:
-        // it can recover on its own, so it keeps waiting.
         const dead = st && (st.ice === "failed" || st.connection === "failed");
         if (dead || Date.now() - started > CONNECT_TIMEOUT_MS) {
           clearInterval(pollTimer);
@@ -410,11 +308,6 @@ const NetLobby = (function () {
       }, 250);
     }
 
-    // The lobby runs BEFORE either side has a track loaded — which is the whole
-    // point, since the guest learns which race to load from the host. So the
-    // session is opened here and pumped on a short interval of its own; once
-    // the race is up, NetPlay adopts the same session and the game loop takes
-    // over pumping it at frame rate.
     function onConnected(id, t) {
       id = id != null ? id : PEER_ONE;
       t = t || transport;
@@ -424,16 +317,7 @@ const NetLobby = (function () {
       if (transport === t) { transport = null; pendingId = null; }
       const made = NetSession.create({ transport: t });
       sessions.set(id, made);
-      // This guest is IN, so the offer it used is spent — an SDP offer belongs
-      // to one connection. Put a fresh one on the table for whoever is next.
-      // Safe here and not earlier: t has moved into `transports` and pendingId
-      // is cleared just above, so minting cannot close a live handshake.
       if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) {} }
-      // REOPEN the room we closed for this guest's ICE. Closing it is what
-      // makes the connection work at all (see onJoiner); reopening is what
-      // keeps a room code a way in for three and four players rather than
-      // exactly one. Same code, so anybody still reading it off a screen is
-      // not stranded, and only while there is space.
       if (codeReopen && transports.size < MAX_GUESTS) {
         const again = codeReopen;
         codeReopen = null;
@@ -441,13 +325,8 @@ const NetLobby = (function () {
       } else {
         codeReopen = null;
       }
-      // The first connection, not the most recent — `session` means "the one
-      // most callers mean", and on a guest it is the only one there is.
       session = [...sessions.values()][0];
       clearInterval(pumpTimer);
-      // Every session, not "the" session: a host with three guests has three
-      // connections and all of them have to be pumped or the quiet ones look
-      // like they dropped.
       pumpTimer = setInterval(() => {
         const now = performance.now();
         for (const s of allSessions()) s.pump(now);
@@ -498,10 +377,6 @@ const NetLobby = (function () {
         _ready.set(id, !!(d && d.ready));
         renderRoom();
       });
-      // GO is separate from SETTINGS on purpose. Settings now change LIVE while
-      // both players sit in the room, so "the host chose a track" and "the host
-      // pressed start" have to be different messages — they used to be the same
-      // one, which is why arriving settings launched the race immediately.
       made.onEvent(NetPlay.EV.GO, () => { if (role === "guest") beginRace(); });
       // The sender-binding NetPlay's bindSession applies (sendersOwnDriver
       // there) has to hold HERE too, or it guards the wrong phase: qualifying
@@ -522,8 +397,6 @@ const NetLobby = (function () {
         return !!(p && p.team && d.driverId != null
           && d.driverId === p.team + ":" + (p.driver || 0));
       }
-      // Only reaches the game while WE hold the session — once NetPlay owns it,
-      // its own handler does this and the lobby is out of the loop.
       made.onEvent(NetPlay.EV.QUALI, (d) => { if (d && d.t > 0 && sendersOwnDriver(d) && G.onPeerQuali) G.onPeerQuali(d); });
       // The lap in progress. Qualifying runs while the LOBBY still holds the
       // connection, so the live clock has to exist on this side too or it only
@@ -534,7 +407,6 @@ const NetLobby = (function () {
       openRoom();
     }
 
-    // ---- the waiting room -------------------------------------------------
     // Both players sit here until the host starts. The host owns the race; each
     // player owns their own car. Nothing here reimplements a picker: the
     // buttons open the game's real #select / #race-settings / #carsetup
@@ -547,14 +419,7 @@ const NetLobby = (function () {
     const PEER_ONE = "peer";
     const _peers = new Map();
     const _ready = new Map();
-    // The first (and today only) peer, for the callers and specs that ask about
-    // "the other player" in the singular.
     const firstPeer = () => (_peers.size ? [..._peers.values()][0] : null);
-    // Everyone we have heard from AT ALL, by either route. Readiness is not
-    // conditional on a profile having arrived: READY and HELLO are separate
-    // events and either can land first, so keying "who is in the room" off
-    // _peers alone left a peer that had said READY but not yet HELLO invisible,
-    // and START stayed disabled with both players saying they were done.
     const peerIds = () => new Set([..._peers.keys(), ..._ready.keys()]);
     // Everyone has to be ready, and there has to BE somebody: an empty room
     // where nobody has said anything must not read as unanimous consent.
@@ -580,9 +445,6 @@ const NetLobby = (function () {
 
     function publishSettings() {
       if (!sessions.size || role !== "host") return false;
-      // To every guest. The host owns the race, so the settings are one fact
-      // that all of them have to receive — a guest that missed it would load a
-      // different circuit.
       return broadcast(NetPlay.EV.SETTINGS, {
         track: G.trackIdx,
         laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
@@ -596,11 +458,6 @@ const NetLobby = (function () {
     const DIFFICULTY = new Set(["easy", "normal", "hard"]);
     const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
-    // Treat a SETTINGS event as one atomic value. The host owns the choice, but
-    // it is still a remote peer: accepting five fields and rejecting the sixth
-    // would leave a hybrid setup neither side sent. In particular, laps/time
-    // used to be rendered through innerHTML; type checks here remain a security
-    // boundary as well as a compatibility guard.
     function normaliseSettings(d) {
       if (!d || typeof d !== "object" || Array.isArray(d)) return null;
       const out = {};
@@ -634,8 +491,6 @@ const NetLobby = (function () {
       return out;
     }
 
-    // Guest: adopt the host's race setup wholesale. Any track/laps/weather the
-    // guest had chosen is simply overridden for the session.
     function applySettings(d) {
       const next = normaliseSettings(d);
       if (!next) {
@@ -652,10 +507,6 @@ const NetLobby = (function () {
       return true;
     }
 
-    // Called by game.js when a player comes back from the garage or the race
-    // settings, so the other side sees the change without anyone pressing
-    // anything. A room that only updates on START would let two people spend a
-    // minute each choosing a car neither can see.
     function roomChanged(what) {
       if (!session) return false;
       // Resolve BEFORE announcing: a seat can be claimed while you are still in
@@ -664,8 +515,6 @@ const NetLobby = (function () {
       // sends the hello itself, so this must not send a second.
       if (what === "car") { if (!resolveSeatClash()) broadcast(NetPlay.EV.HELLO, localProfile()); }
       else publishSettings();
-      // Changing your mind un-readies you — otherwise READY means "I was happy
-      // with something else".
       if (selfReady) setReady(false);
       renderRoom();
       return true;
@@ -685,14 +534,6 @@ const NetLobby = (function () {
       return out;
     }
 
-    // ---- seat exclusivity -------------------------------------------------
-    // The garage can only grey out a seat it has ALREADY been told about, so
-    // two people picking the same driver in the same instant gets through. The
-    // room settles it afterwards, and the rule is a RANK rather than
-    // `if (role === "guest")`: you yield to anyone ranked below you. Host is 0
-    // and a guest is 1 today; when the room grows past two a guest becomes
-    // 1 + join order and host-wins turns into join-order-wins with this line
-    // unchanged, which is the whole reason it is written this way.
     function seatRank() { return role === "host" ? 0 : 1; }
 
     // The same rule applied to SOMEBODY ELSE, so an onlooker can work out which
@@ -706,10 +547,6 @@ const NetLobby = (function () {
       return 1 + [...peerIds()].indexOf(id);  // guests, in join order
     }
 
-    // Seats we would have to move OUT of, as opposed to peerSeats(), which is
-    // every other player and is what the garage greys out. The two differ on
-    // purpose: you may not PICK a seat someone else is in whatever your rank,
-    // but you only YIELD one to somebody who outranks you.
     function blockingSeats() {
       return seatRank() === 0 ? [] : peerSeats();
     }
@@ -723,12 +560,6 @@ const NetLobby = (function () {
       return { driver: d ? d.name : "that seat", team: t ? t.short : "" };
     };
 
-    // Where a yielding player goes. The team-mate seat first — they chose that
-    // team for a reason and exclusivity is per SEAT, so it is nearly always
-    // free — then the first free seat anywhere, walking Teams.LIST in order so
-    // both screens would reach the same answer. With two players step one
-    // always succeeds; step two is what makes three and four work with no
-    // second rule.
     function firstFreeSeat(preferTeamId, blocked) {
       const pref = Teams.LIST.find((t) => t.id === preferTeamId);
       if (pref && pref.drivers) {
@@ -757,10 +588,6 @@ const NetLobby = (function () {
       const mine = localProfile();
       if (!heldBy(blocked, mine.team, mine.driver)) return false;
       const move = firstFreeSeat(mine.team, blocked);
-      // Every seat on the grid spoken for is not reachable with four players
-      // and twenty-odd seats, but silently leaving two cars in one is exactly
-      // the failure this function exists to end — so leave the clash standing
-      // and say so rather than pretending it resolved.
       if (!move) { say("Every seat is taken. Pick another car.", true); return false; }
 
       const ti = Teams.LIST.findIndex((t) => t.id === move.team);
@@ -776,13 +603,7 @@ const NetLobby = (function () {
       say(was.driver + " was taken — you're driving " + now.driver
         + (now.team ? " (" + now.team + ")" : "") + ".");
       broadcast(NetPlay.EV.HELLO, localProfile());
-      // Your READY was for a car you are no longer in — the same reasoning
-      // roomChanged() uses when you change your own mind.
       if (selfReady) setReady(false);
-      // The garage REPLACES the room (openSetup hides #vsfriend), so a hello
-      // can land while the chips are the screen — repaint them under the
-      // player. The say() above is not lost meanwhile: #vs-status keeps its
-      // text, so it is there when cs-done brings the room back.
       const garage = $("carsetup");
       if (garage && !garage.hidden && G.buildSetup) G.buildSetup();
       renderRoom();
@@ -791,8 +612,6 @@ const NetLobby = (function () {
 
     const TEAM_OF = (p) => (p && p.team && Teams.LIST.find((t) => t.id === p.team)) || null;
 
-    // team.color is an [r,g,b] triple in 0..1 — the renderer's format, not CSS.
-    // Handed to a style attribute raw it silently produces nothing.
     function css(rgb) {
       if (!Array.isArray(rgb)) return "#888";
       const b = rgb.map((v) => Math.max(0, Math.min(255, Math.round(v * 255))));
@@ -829,9 +648,6 @@ const NetLobby = (function () {
       return false;
     }
 
-    // Does somebody of LOWER rank hold this peer's seat? Every other player is
-    // checked, ourselves included — when we are host we outrank every guest, so
-    // a guest that lands on our car is the one that moves.
     function outranked(id) {
       const mine = _peers.get(id);
       if (!mine || !mine.team) return false;
@@ -868,10 +684,6 @@ const NetLobby = (function () {
       const team = TEAM_OF(profile);
       const seat = profile ? (profile.driver || 0) : 0;
       const d = team && team.drivers ? team.drivers[seat] : null;
-      // THREE-LETTER codes for both, the way a timing screen does it. Full
-      // names spend the column on "Scuderia Ferrari HP" and then truncate the
-      // driver — who is the part that says which of the two cars is theirs.
-      // The full text stays as a tooltip rather than being lost.
       const who = team ? `${team.short} · ${d ? (d.code || d.name) : "—"}` : "choosing a car…";
       const full = team ? `${team.name}${d ? " · " + d.name : ""}` : "still choosing";
       const frag = document.createDocumentFragment();
@@ -922,10 +734,6 @@ const NetLobby = (function () {
       }
       if (e.editRace) e.editRace.hidden = !host;
       if (e.raceNote) {
-        // Both facts a guest needs, said before they matter rather than after.
-        // Everyone connects through the host, so if the host leaves the room
-        // ends — that is inherent to a star and worth stating, not papering
-        // over with a generic "connection closed" once it happens.
         e.raceNote.textContent = host ? ""
           : "The host chooses the circuit and conditions — and everyone connects through them, so if they leave, the race ends.";
         e.raceNote.hidden = host;
@@ -948,24 +756,14 @@ const NetLobby = (function () {
           el.appendChild(inner);
           return el;
         };
-        // "Them" while there is one other player, because that is what a person
-        // says; P2/P3/P4 once there are several, because "them" no longer picks
-        // anybody out.
         const rows = document.createDocumentFragment();
         if (ids.length) ids.forEach((k, i) => rows.appendChild(row(driverLine(
-              // A player who is about to yield this seat is drawn as still
-              // choosing rather than as a second copy of somebody else's car.
-              // See willYield(): this is the state one round trip early, not a
-              // guess, and every screen derives it from the same rank rule.
               willYield(k) ? null : (_peers.get(k) || null),
               ids.length > 1 ? "P" + (i + 2) : "Them", !!_ready.get(k)))));
         else rows.appendChild(row(driverLine(null, "Them", false)));
         replace(e.them, rows);
       }
       if (e.inviteMore) {
-        // Only the host invites, and only while there is room. Disabled rather
-        // than hidden at the cap so the reason is visible — the same reasoning
-        // the garage uses for a taken seat.
         e.inviteMore.hidden = !host;
         const full = sessions.size >= MAX_GUESTS;
         e.inviteMore.disabled = full;
@@ -976,9 +774,6 @@ const NetLobby = (function () {
         e.ready.setAttribute("aria-pressed", selfReady ? "true" : "false");
       }
       if (e.start) {
-        // Only the host can start, and only once both have said they are done
-        // choosing — a race that begins while someone is still in the garage
-        // puts them on the grid in a car they did not pick.
         e.start.hidden = !host;
         e.start.disabled = !(selfReady && peersReady());
       }
@@ -1009,20 +804,9 @@ const NetLobby = (function () {
       dropPending();         // and the half-built invite transport it minted
     }
 
-    // Start the race, THEN bind the session to it: NetPlay needs a built track
-    // to find grid slots for the two drivers.
-    // QUALIFYING COMES BEFORE THE HAND-OFF, which is the whole difficulty.
-    //
-    // beginRace() used to build the race and hand the connection to NetPlay in
-    // one breath. A qualifying session happens BEFORE there is a race to hand
-    // over, so with GRID: QUALIFYING the lobby keeps the connection through the
-    // session — it is what carries the two lap times — and finishStart() runs
-    // only when the players leave the sheet for the grid.
     function beginRace() {
       if (G.raceQuali && G.openQualiForNet) {
         say("Qualifying…");
-        // The SESSION stays open through qualifying (it carries the lap times),
-        // but the room does not: a qualifying session is minutes long.
         sealRoom();
         if (G.setNetRoom) G.setNetRoom(false);
         try {
@@ -1038,10 +822,6 @@ const NetLobby = (function () {
       finishStart();
     }
 
-    // Our own driven lap, out over the reliable channel. During qualifying the
-    // LOBBY still owns the session — NetPlay has not been handed it yet — so
-    // this is the route, and game.js asks whichever of the two currently holds
-    // the connection.
     function reportQuali(driverId, t) {
       if (!session || !(t > 0)) return false;
       return broadcast(NetPlay.EV.QUALI, { driverId, t: +t.toFixed(3) });
@@ -1055,9 +835,6 @@ const NetLobby = (function () {
     function finishStart() {
       say("Starting race…");
       sealRoom();      // idempotent: the quali branch may already have run it
-      // Out of the room: the game screens go back to behaving normally, or the
-      // next visit to the garage would try to return to a lobby that has been
-      // replaced by a Grand Prix.
       if (G.setNetRoom) G.setNetRoom(false);
       try {
         // A friend race is a one-off Grand Prix, never a championship round
@@ -1071,42 +848,15 @@ const NetLobby = (function () {
         return;
       }
       const started = G.netPlay.start({
-        // The whole map, keyed the same way the lobby keyed it, so NetPlay
-        // holds one connection per guest exactly as the room did.
         sessions: [...sessions.entries()].map(([id, s]) => ({ id, session: s })),
         session, role,
         peerProfile: firstPeer(),
         peerMods: modsFromProfile(firstPeer()),
-        // The list form. NetPlay builds one remote slot per entry, so growing
-        // the room is a matter of this array getting longer.
-        //
-        // WITH THE CONNECTION ID, keyed exactly as `sessions` above. NetPlay
-        // files each rival under this id (peerCar) and looks it up on close to
-        // decide whether one guest dropped or the room emptied. Sent without
-        // one, every joiner collapsed onto the `PEER_ONE` fallback while the
-        // sessions stayed keyed "g1"/"g2" — so remoteFor(id) was always null,
-        // the close handler fell through to `stop()`, and ONE guest leaving
-        // ended the race for everybody still driving. Indistinguishable from
-        // correct at two players, which is why it took a third to show up.
         peers: [..._peers.entries()].map(([id, p]) => ({ id, profile: p, mods: modsFromProfile(p) })),
       });
       clearInterval(pumpTimer);          // the game loop pumps it from here on
       pumpTimer = null;
       session = null;                    // owned by NetPlay now
-      // ...and so is every entry in the map — FORGET them, not just the
-      // singular. The transport.onClose hook armed in newTransport() lives for
-      // the whole life of each connection, and it closes whatever
-      // `sessions.get(id)` returns. NetSession.close() fires the close
-      // handlers with the hardcoded reason "local" — and those handlers are
-      // NetPlay's from the moment start() ran (bindSession clearHandlers) —
-      // so a mid-race peer drop was reported to NetPlay as a deliberate local
-      // stop, which it maps to "say nothing": RIVAL DISCONNECTED only ever
-      // appeared when the 6 s heartbeat timeout happened to win the race.
-      // With the map empty that hook keeps only its own bookkeeping
-      // (transports/_peers/_ready and the status line) and the session's own
-      // transport.onClose reaches NetPlay with the truthful "transport".
-      // `transports` is deliberately KEPT: the raw connections are still the
-      // lobby's to report (status()/sdp()) and to close in teardown().
       sessions.clear();
       if (!started.ok) {
         say(started.message || "Could not start the session.", true);
@@ -1115,32 +865,13 @@ const NetLobby = (function () {
         if (G.quitToMenu) G.quitToMenu();
         return;
       }
-      // Host names the instant of lights-out; the guest receives it as an
-      // event and both drive their countdown to the same moment. Without this
-      // each side counts down on its own clock and the grids are released
-      // however far apart the handshake happened to take.
       if (role === "host") G.netPlay.hostStart();
       close();
     }
 
-    // peerId -> NetSession. One entry today, because there is one transport —
-    // but the room is a star: when it holds four players the HOST has three
-    // sessions and each guest still has one, to the host. Routing every read
-    // through the map now means Phase C's transport work adds entries rather
-    // than rewriting this file.
-    //
-    // NetSession itself is untouched and stays one-per-transport: that is the
-    // right shape (one clock estimate, one liveness clock, one handler table
-    // per connection). There are simply several of them.
     const sessions = new Map();
-    // THE session, for the many call sites that mean "the connection we talk
-    // over". On a guest that is the only one there will ever be — the host. On
-    // the host today it is the single guest.
     let session = null;
     const allSessions = () => [...sessions.values()];
-    // Say something to everyone. On a guest that is the host; on the host it is
-    // every guest, which is what makes the relay and the lobby events reach a
-    // room rather than a pair.
     function broadcast(type, data) {
       let ok = false;
       for (const s of allSessions()) { try { ok = s.sendEvent(type, data) || ok; } catch (e) {} }
@@ -1148,12 +879,6 @@ const NetLobby = (function () {
     }
     let pumpTimer = null;
 
-    // ---- the four buttons -------------------------------------------------
-    // host/join/makeAnswer/acceptAnswer all RETURN their result as well as
-    // rendering it. The DOM is the player's view of the handshake, not the
-    // only way to reach it — without a return value the sole way to drive this
-    // is clicking buttons and scraping textareas, which is exactly the kind of
-    // test that fights actionability instead of exercising WebRTC.
     async function host() {
       const gen = beginOperation();
       await readyIce();
@@ -1174,23 +899,12 @@ const NetLobby = (function () {
       return res;
     }
 
-    // Invite a further player WITHOUT disturbing the ones already here. The
-    // room stays up; only the invite step is shown again, and the connections
-    // already made keep running because newTransport() no longer tears them
-    // down. Sequential by design — see the note on `transports`.
     async function inviteAnother() {
       if (role !== "host") return { ok: false, error: "not_host" };
       if (sessions.size >= MAX_GUESTS) {
         say("That is four players — the grid is full.", true);
         return { ok: false, error: "room_full" };
       }
-      // BOTH WAYS IN, for the second guest as much as the first. This used to
-      // go straight to host(), which meant a room code could only ever invite
-      // ONE player — the rest had to be pasted a link, for no reason other
-      // than which button had been wired. So it returns to the choice, with
-      // the JOIN options hidden: a host inviting somebody is not also looking
-      // for a room to join, and offering it would be a way to destroy the room
-      // you already have.
       show("pick");
       if ($("vs-join")) $("vs-join").hidden = true;
       if ($("vs-code-join")) $("vs-code-join").hidden = true;
@@ -1200,8 +914,6 @@ const NetLobby = (function () {
 
     async function join() {
       const gen = beginOperation();
-      // Show the step FIRST: if the transport cannot be created, the error has
-      // to land somewhere the player can see, and that is this screen.
       show("joining");
       await readyIce();
       if (!operationCurrent(gen)) return cancelledResult();
@@ -1258,14 +970,6 @@ const NetLobby = (function () {
       return res;
     }
 
-    // ---- getting a code IN, by any route ----------------------------------
-    // Scan, paste button, paste event and invite link all land here, and all
-    // four then behave identically: fill the box and RUN. Requiring a separate
-    // confirming tap after a scan would be asking the player to agree with what
-    // the camera just did.
-    //
-    // The invite QR carries a full URL, so a scan of it yields a link rather
-    // than a code — unwrap it, and accept a bare code just as happily.
     function codeFrom(text) {
       const raw = String(text || "").trim();
       if (!raw) return "";
@@ -1293,8 +997,6 @@ const NetLobby = (function () {
       if (e.scan) e.scan.hidden = true;
     }
 
-    // kind: "invite" (guest reading the host's screen) | "answer" (host reading
-    // the guest's). Same camera, same decoder, different destination.
     async function scan(kind) {
       const e = els();
       if (!e.scan || !e.scanVideo) return { ok: false, error: "no_ui" };
@@ -1321,9 +1023,6 @@ const NetLobby = (function () {
       });
       if (delivered) return res;
       if (scanner !== attempt || scannerGeneration !== gen) {
-        // stop() may have run while decoder loading or camera permission was
-        // pending. NetScan.start() can only expose the late stream after its
-        // promise settles, so stop it again here, by identity.
         attempt.stop();
         return cancelledResult();
       }
@@ -1331,8 +1030,6 @@ const NetLobby = (function () {
       return res;
     }
 
-    // One tap instead of focus-select-paste-submit, which is the whole of the
-    // remaining friction when the two players are not in the same room.
     async function pasteInto(kind) {
       let text = "";
       try { text = await navigator.clipboard.readText(); }
@@ -1350,7 +1047,6 @@ const NetLobby = (function () {
       catch (e) { say("Could not copy — select the code and copy it manually.", true); return false; }
     }
 
-    // ---- handing the code to a human --------------------------------------
     // The invite goes out as a LINK, not a code: opening it drops the guest
     // straight into joining with the box already filled (see wire()), which
     // removes the "paste this into the right field" step entirely. The code
@@ -1373,8 +1069,6 @@ const NetLobby = (function () {
       if (canShare()) {
         try { await navigator.share(data); say("Shared."); return true; }
         catch (e) {
-          // Closing the share sheet is a decision, not a failure — say nothing
-          // and leave the code on screen.
           if (e && e.name === "AbortError") return false;
         }
       }
@@ -1404,9 +1098,6 @@ const NetLobby = (function () {
       return paintQr($("vs-qr-wrap"), $("vs-qr"),
         code ? NetHandshake.inviteUrl(code) : null);
     }
-    // The answer QR carries the RAW CODE, not a link. There is no "open this to
-    // answer" journey — the host scans it from the very page holding their peer
-    // connection, and following a URL would throw that connection away.
     function drawAnswerQr(code) {
       const e = els();
       return paintQr(e.answerQrWrap, e.answerQr, code || null);
@@ -1416,8 +1107,6 @@ const NetLobby = (function () {
       const e = els();
       const code = e.invite ? e.invite.value : "";
       const url = code ? NetHandshake.inviteUrl(code) : null;
-      // No location to build a URL from (a file:// page): share the code itself
-      // rather than the string "null".
       if (!url) return handOff({ title: "Apex 26", text: code }, code);
       return handOff({ title: "Apex 26", text: "Race me on Apex 26", url }, url);
     }
@@ -1427,7 +1116,6 @@ const NetLobby = (function () {
       return handOff({ title: "Apex 26 answer", text: code }, code);
     }
 
-    // ---- room codes (the BACKUP path) -------------------------------------
     // Same handshake, same codes on the wire — a relay carries the two strings
     // instead of a human. It is hidden unless a relay URL is configured, and it
     // never replaces the link/QR flow: everything else in this game is static
@@ -1438,9 +1126,6 @@ const NetLobby = (function () {
     function stopCodeWait() {
       if (codeWait) codeWait.cancelled = true;
       codeWait = null;
-      // A subscription keeps the Nostr room — and its relay sockets — open
-      // until told otherwise. Cancelling the wait has to close it too, or the
-      // lobby leaks a websocket per room the player ever opened.
       if (codeRoom && codeRoom.stop) { try { codeRoom.stop(); } catch (e) {} }
       codeRoom = null;
     }
@@ -1484,22 +1169,11 @@ const NetLobby = (function () {
       say("Waiting for them to join…");
       codeWait = { cancelled: false };
 
-      // PUBLIC RELAY: stay in the room and take everyone who arrives, up to the
-      // cap. Each joiner gets a connection and an offer of its OWN — one SDP
-      // offer belongs to one RTCPeerConnection, so the invite minted above is
-      // spent on whoever comes first and the rest are minted on demand.
       if (!NetRendezvous.usingPrivateRelay()) {
         const answersSeen = new Set();
         const sub = await NetRendezvous.hostRoom({
           code, token: codeWait,
-          // The offer already prepared above goes out IMMEDIATELY, exactly as
-          // the two-party path did. Waiting for a peer-join event before
-          // saying anything is what broke this.
           mine: invite.code,
-          // The room stays open, so a failure after it opens has nowhere else
-          // to go. Without this a host whose relays were all unreachable was
-          // told NOTHING and watched a spinner — the console knew, the player
-          // did not.
           onFail: (r) => {
             if (!operationCurrent(gen)) return;
             if (!r || r.error === "cancelled" || r.error === "stopped") return;
@@ -1533,11 +1207,6 @@ const NetLobby = (function () {
           },
           onJoiner: async (_who, answer) => {
             if (!operationCurrent(gen)) return;
-            // Each answer ONCE, and only while a handshake is waiting for one.
-            // A repeat (relay quirk, a guest retrying) or an answer landing
-            // after rotation would otherwise be applied to whatever transport
-            // is pending NOW — a fresh stable PC, which throws. Seen in a real
-            // console as an uncaught InvalidStateError.
             if (answersSeen.has(answer)) return;
             // MARK IT SEEN ONLY ONCE IT CAN BE ACTED ON. Recording it before
             // the guard below meant an answer that arrived a moment too early
@@ -1585,14 +1254,6 @@ const NetLobby = (function () {
             codeReopen = code;
             stopCodeWait();
             waitForOpen();
-            // NOT rotating here. Minting the next offer means newTransport(),
-            // which drops the PENDING one — and the pending one is this guest's
-            // connection, still gathering ICE. Doing it here killed the
-            // handshake a moment after completing it: the answer arrived, was
-            // accepted, and then the transport it belonged to was closed.
-            // The room rotates once the guest is actually connected, in
-            // onConnected() below, by which point this transport has moved into
-            // `transports` and pendingId is clear.
           },
         });
         if (!operationCurrent(gen)) {
@@ -1641,10 +1302,6 @@ const NetLobby = (function () {
       if (!newTransport("guest")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       const pending = transport;
       say("Looking for that room…");
-      // The guest cannot answer until it has SEEN the host's invite, so it
-      // hands the exchange a reply function instead of a string: whatever the
-      // host posted comes in, and the answer this produces goes back out over
-      // the same room without it being torn down in between.
       codeWait = { cancelled: false };
       let answered = null;
       const done = await NetRendezvous.swap({
@@ -1679,8 +1336,6 @@ const NetLobby = (function () {
       });
       if (!operationCurrent(gen) || transport !== pending) return cancelledResult();
       if (!done.ok) {
-        // A reply that failed has the REAL reason (a stale invite, a build
-        // mismatch); the exchange only knows that it did not produce a string.
         const why = (done.error === "reply_failed" && answered && !answered.ok) ? answered : done;
         if (why.error !== "cancelled") say(why.message || "Could not join that room.", true);
         return why;
@@ -1701,7 +1356,6 @@ const NetLobby = (function () {
     // than no branch. Real relay failures surface from exchange() as typed
     // errors (all_rejected, timeout) and are reported where they happen.
 
-    // ---- open / close -----------------------------------------------------
     // A PHONE THAT HOSTS FALLS ASLEEP, and that is the whole reason "desktop
     // hosts → phone joins" worked while the reverse did not (reported from a
     // real pair of devices). Hosting means WAITING — you tap NEW CODE, put the
@@ -1763,10 +1417,6 @@ const NetLobby = (function () {
       invalidateOperations();
       holdWake();
       Log.info("net", "lobby open");
-      // Start fetching relay credentials NOW if a credentials URL is
-      // configured — connecting comes seconds later, and the fetch usually
-      // wins that race, so the first connection attempt already carries relay
-      // candidates. Fire-and-forget: no relay configured is a normal state.
       try { if (NetTransport.prefetchIce) NetTransport.prefetchIce(); } catch (e) {}
       const e = els();
       if (!e.screen) return false;
@@ -1787,8 +1437,6 @@ const NetLobby = (function () {
       if ($("vs-qr-wrap")) $("vs-qr-wrap").hidden = true;
       if (e.answerQrWrap) e.answerQrWrap.hidden = true;
       stopScan();
-      // Re-fold the raw code: it is the fallback, and an open disclosure from
-      // last time makes the sheet open on three lines of base64.
       const raw = document.querySelector("#vs-hosting .vs-raw");
       if (raw) raw.open = false;
       say("");
@@ -1816,13 +1464,7 @@ const NetLobby = (function () {
       invalidateOperations();
       clearInterval(pollTimer);
       Log.info("net", "lobby close");
-      // Leaving the screen with the camera still running is the failure this
-      // module is most careful about — close() is also the SUCCESS path, since
-      // the race starts by closing the lobby.
       stopScan();
-      // The wake lock is the lobby's, not the game's: in-race the screen is
-      // being touched constantly, and holding it past close would silently
-      // change every player's battery life for a feature they left.
       dropWake();
       const e = els();
       if (e.screen) e.screen.hidden = true;
@@ -1833,9 +1475,6 @@ const NetLobby = (function () {
     function cancel() {
       stopScan();
       stopCodeWait();
-      // stopCodeWait() stops the LIVE room but not the queued intent: without
-      // this, a codeReopen left by onJoiner silently reopens a stale room-code
-      // room on some later, unrelated connection (W4 finding on codeReopen).
       codeReopen = null;
       teardown();
       role = null;
@@ -1864,9 +1503,6 @@ const NetLobby = (function () {
       on("vs-paste-invite", () => pasteInto("invite"));
       on("vs-paste-answer", () => pasteInto("answer"));
       on("vs-scan-cancel", () => { stopScan(); say(""); });
-      // The room opens the game's REAL screens. They return here because
-      // openGarage/openRaceSettings already take a return target, and game.js
-      // routes it back to this dialog while a session is in the room.
       on("vs-edit-race", () => { if (role === "host" && G.openRaceSetup) G.openRaceSetup(); });
       on("vs-edit-car", () => { if (G.openGarageFrom) G.openGarageFrom("vsfriend"); });
       on("vs-ready", () => setReady(!selfReady));
@@ -1884,14 +1520,6 @@ const NetLobby = (function () {
         return handOff({ title: "Apex 26", text: "Race me on Apex 26 — room code " + c }, c);
       });
       on("vs-start", startFromRoom);
-      // CLOSE MEANS "BACK", NOT "DESTROY", WHEN THERE IS A ROOM TO GO BACK TO.
-      //
-      // The invite and code steps are reached FROM the waiting room via INVITE
-      // ANOTHER, and closing there used to cancel() — tearing down every
-      // connection and dropping the player on the main menu, taking any
-      // already-connected guests with them. Losing three players because you
-      // changed your mind about inviting a fourth is not a close button, it is
-      // a trapdoor.
       on("vs-close", () => {
         const e = els();
         const inRoom = transports.size > 0;
@@ -1919,27 +1547,16 @@ const NetLobby = (function () {
       // A camera must not outlive the tab being backgrounded — on a phone that
       // is someone walking away with the light still on.
       document.addEventListener("visibilitychange", () => { if (document.hidden) stopScan(); });
-      // No camera, no SCAN button. Unlike the settings grid, this row is built
-      // before the screen is ever shown, so nothing reflows under a thumb.
       if (!NetScan.supported()) {
         for (const id of ["vs-scan-invite", "vs-scan-answer"]) {
           const b = $(id);
           if (b) b.hidden = true;
         }
       }
-      // Name the button after what it will actually do on THIS device. With no
-      // share sheet it copies the link, and a button labelled SHARE that
-      // silently copies is a button that has lied. SHARE LINK and COPY CODE
-      // stay distinct even then, because they hand over different things.
       const si = $("vs-share-invite");
       if (si && !canShare()) si.textContent = "COPY LINK";
-      // The answer is the same string either way, so without a share sheet the
-      // two buttons would be one button twice. Decided once here, at boot,
-      // before the screen is ever shown — not a reflow under someone's thumb.
       const sa = $("vs-share-answer");
       if (sa && !canShare()) sa.hidden = true;
-      // An invite link puts the code in the fragment, so opening one should
-      // drop straight into joining rather than making them find the button.
       const fromUrl = NetHandshake.inviteFromUrl();
       if (fromUrl) {
         open();
@@ -1955,23 +1572,11 @@ const NetLobby = (function () {
       shareInvite, shareAnswer, canShare,
       scan, stopScan, pasteInto, deliver,
       codeHost, codeJoin, stopCodeWait,
-      // Start watching for the channels to open. Normally called by
-      // makeAnswer/acceptAnswer; exported so a test can reach onConnected() —
-      // and therefore the waiting room — over a loopback transport, which has
-      // no SDP for the handshake to work with but IS open.
       watchForOpen: waitForOpen,
-      // The waiting room. roomChanged() is game.js's way back in after a player
-      // returns from the garage or the race settings.
       roomChanged, setReady, startFromRoom, renderRoom,
       // Mint a further invite without disturbing the room. Host only, capped.
       inviteAnother,
-      // Every seat somebody ELSE is in. Built from the profiles the room
-      // already exchanges (EV.HELLO, re-sent on every garage exit), so this
-      // adds no wire traffic — it only reads what was always being sent.
       peerSeats,
-      // Our own qualifying lap goes out through whichever of the lobby and
-      // NetPlay currently holds the connection; during the session that is the
-      // lobby, because the hand-off has not happened yet.
       reportQuali, reportQualiLive,
       roomState: () => ({
         open: !!(els().roomStep && !els().roomStep.hidden),
@@ -1980,12 +1585,6 @@ const NetLobby = (function () {
       }),
       localProfile, modsFromProfile, setTransportFactory,
       failureMsg,
-      // WHAT ACTUALLY CROSSED THE WIRE, which is not the same question as what
-      // each side gathered. Both peers can hold four working relay candidates
-      // and still fail to pair if the SDP that reached the other end carried
-      // none of them — and every counter we have reports the LOCAL gather, so
-      // that difference was invisible. The candidate lines are the whole
-      // point; the descriptions come back whole so nothing is pre-judged.
       sdp: () => {
         const t = transport || [...transports.values()][0];
         const pc = t && t.pc;
@@ -1998,8 +1597,6 @@ const NetLobby = (function () {
           ice: pc.iceConnectionState, conn: pc.connectionState,
           localTypes: types(local), remoteTypes: types(remote),
           local, remote,
-          // The connection itself, for lobbyPairs()' getStats(). Underscored
-          // because it is a live handle and not part of the readable snapshot.
           _pc: pc,
         };
       },
@@ -2009,10 +1606,6 @@ const NetLobby = (function () {
         connected: transports.size > 0,
         guests: transports.size,
         pending: !!transport,
-        // The live ICE/connection state and the CANDIDATE TYPES — the only
-        // window into a handshake that no in-process test can reproduce, and
-        // the difference between "this network blocks STUN" and "these two
-        // networks need a relay", which look identical from the outside.
         wire: transport && transport.stats ? transport.stats()
           : ([...transports.values()][0] || {}).stats ? [...transports.values()][0].stats() : null,
       }),

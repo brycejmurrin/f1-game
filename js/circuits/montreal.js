@@ -1,6 +1,4 @@
-/* Apex 26 — MONTREAL circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — MONTREAL circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -12,9 +10,6 @@
     // 120 m) — it was on the wrong PART of the lap, not in a corner.
     // See docs/tracks/START-LINES.md.
     startFrac: 0.0198,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.9150,
     name: "MONTREAL",
     gp: "Canadian GP",
@@ -36,8 +31,6 @@
       { t: 0, l: 380 }, { t: 80, l: 90 }, { t: -90, l: 100 }, { t: 0, l: 300 }, { t: 90, l: 90 }, { t: 0, l: 420 },
       { t: -80, l: 90 }, { t: 60, l: 70 }, { t: -60, l: 70 }, { t: 0, l: 220 }, { t: 100, l: 110 }, { t: -100, l: 110 },
     ],
-    // Île Notre-Dame is a flat island and its corners are correspondingly low
-    // camber — 3° at most, just enough for the chicanes and the hairpin to bite.
     bankZones: [
       { frac: 0.2171, angleDeg: 3.0, widthM: 120 },
       { frac: 0.3698, angleDeg: 3.0, widthM: 120 },
@@ -45,17 +38,11 @@
       { frac: 0.6136, angleDeg: 3.0, widthM: 90 },
       { frac: 0.7599, angleDeg: 3.0, widthM: 80 },    // the hairpin
     ],
-    // Île Notre-Dame is nearly level: the bridge approach plus a couple of metres
-    // of island roll — ~3 m over the lap, nothing over ~1.2 %.
     elevations: [
       { s: 0.52, halfM: 220, rise: 1.25 },
       { s: 0.115, halfM: 300, rise: 2.2 },
       { s: 0.755, halfM: 260, rise: -1.0 },
     ],
-    // Île Notre-Dame is a flat, man-made island sitting ~level with the water.
-    // flatTerrain makes the terrain ribbon a WIDE, dead-level grass shelf so there
-    // is real green land all around the road (trees/props sit on it instead of
-    // floating over a sunk fallback), out to the shoreline ~70 m from the edge.
     flatTerrain: true,
     terrainOuter: 70,
     scenery: function (api) {
@@ -80,14 +67,9 @@
         addCyl(target || out, a, rad, L, col, seg || 3, [right, up, fwd]);
       };
 
-      // ── Island Y-level reference constants ────────────────────────────────
-      // All features are anchored to these absolute Y values so they sit at
-      // the correct height relative to the island slab regardless of how deep
-      // groundYAt() goes for large lateral distances on a flat island.
       const BASE   = pyMin || 0;
       const BANK_T = BASE - 0.35;   // far-bank shore: above river (−0.45), below main island
 
-      // ---- Île Notre-Dame palette (bright June day) ----
       const WALL     = [0.78, 0.79, 0.80];   // pale concrete
       // Bright teal Olympic Basin + St. Lawrence — COL.basinTeal when available
       const TEAL     = (COL && COL.basinTeal) || [0.08, 0.55, 0.62];
@@ -110,8 +92,6 @@
         addBox(out, vadd(a.c, a.u, h - 0.7), [0.04, 1.4, 2.4], col, b);
       };
 
-      // Olympic Basin officials' tower: a narrow stacked concrete-and-glass
-      // silhouette, kept compact so it punctuates the water without closing the view.
       const rowingTower = (id, s, side, dist, h) => {
         const a = anchor(K(s), side, dist);
         const b = [a.r, a.u, a.t];
@@ -126,9 +106,6 @@
             addBox(stage, vadd(vadd(a.c, a.u, y), a.r, -2.36),
               [0.22, 1.55, 5.2], [0.30, 0.46, 0.56], b);
           }
-          // Main box top is h*0.96 (centred at h*0.48, height h*0.96), not h --
-          // the roof cap referenced raw h, leaving a 0.63-0.71m gap (h=17..19)
-          // just over the rests-on tolerance. Seat both on the true top.
           addBox(stage, vadd(a.c, a.u, h * 0.96 + 0.2),
             [7.2, 0.5, 8.0], [0.90, 0.91, 0.92], b);
           addCyl(stage, vadd(a.c, a.u, h * 0.96 + 0.45),
@@ -136,15 +113,6 @@
         });
       };
 
-      // St. Lawrence River: typed water strips begin beyond the 70 m terrain
-      // ribbon. Segmenting the surround keeps each footprint away from foldbacks
-      // and sends reflections through the dedicated water mesh.
-      // Continuous bands per bank. This was 16 stations of 150 m panels spaced
-      // ~272 m apart, so well over half the river was bare ground; worse, the
-      // colour alternated RIVER/RIVER2 per station, which turned what did get
-      // drawn into a visible checkerboard. The runs below are the old station
-      // list with its three skipped segments (i=4 and i=11 on the right bank,
-      // i=7 on the left) expressed as gaps between bands instead.
       for (const [side, runs] of [[-1, [[0, 6], [8, 15]]], [1, [[0, 3], [5, 10], [12, 15]]]])
         for (const [a, b] of runs)
           waterBand(a / 16, (b + 1) / 16, side, 72, 180, 12, RIVER, {
@@ -168,8 +136,6 @@
                [lenM, H, depth], col || FARBANK, [a.r, a.u, a.t]);
       };
 
-      // ── Inner lagoon + Jean-Doré Beach (per aerial reference) ──────────────
-      // A compact typed lagoon with a terrain-conforming Jean-Doré beach.
       {
         const LAGOON = [0.13, 0.28, 0.38];   // park lagoon water (darker, muted)
         const SAND   = [0.88, 0.80, 0.58];   // Jean-Doré beach sand (pale tan)
@@ -182,11 +148,6 @@
         });
       }
 
-      // ===================================================================
-      // Continuous pale concrete walls lining both edges. Pull the walls one
-      // metre outward at the two tight foldbacks so their connected chords do
-      // not cut across the neighbouring racing surface.
-      // ===================================================================
       for (const side of [-1, 1]) {
         for (const [s0, s1, gap] of [
           [0.0, 0.19, 2.5], [0.19, 0.23, 3.5], [0.23, 0.69, 2.5],
@@ -198,9 +159,6 @@
       fence(0.0, 1.0, -1, 3.4, 3.0, [0.72, 0.74, 0.78]);
       fence(0.0, 1.0,  1, 3.4, 3.0, [0.72, 0.74, 0.78]);
 
-      // Wide parkland ground planes — fill verges so the island slab shows green
-      // everywhere instead of bare terrain-ribbon steps.
-      // Pit straight + approach: both sides (fraction 0.88–0.08, wrapping through 1)
       for (let i = 0; i < 8; i++) {
         const s = (0.88 + i * 0.025) % 1;
         groundPatch(K(s),  1, 8, [48, 0.35, 42], GRASS,
@@ -233,13 +191,6 @@
         marshalPost(K(s), (Math.round(s * 100) % 2) ? 1 : -1, 8.5);
       }
 
-      // ===================================================================
-      // s 0.02 R — Pit wall & main grandstand on the start straight
-      // ===================================================================
-      // Grandstands vary across the three montreal STAND_SETS families
-      // (steel / navy / alu) instead of one grey/warm palette repeated 11–12
-      // times; the main straight's flagship stand gets a second tier, suites
-      // and a truss roof to read as the venue's biggest structure.
       grandstandEx(0.02,  1,  8, 120, null, null,
         { livery: "teal", tiers: 2, roof: "truss", suites: true, endWalls: true, pylons: true });
       grandstandEx(0.0,  -1, 10,  90, null, null, { livery: "steel", roof: "cantilever", endWalls: true });
@@ -255,11 +206,6 @@
       flagMast(K(0.005), -1, 10, 12, [0.88, 0.12, 0.16]);
       flagMast(K(0.999),  1,  9, 11, [0.88, 0.12, 0.16]);
 
-      // Pit lane / paddock behind the left pit wall — the 2019 Espace Paddock
-      // rebuild via the shared facility kit (circuitKit was previously entirely
-      // unused at Montreal; this replaced eight hand-rolled flat-roof
-      // building() boxes with a real garage-bay rhythm, a canopied hospitality
-      // wing, and the TV/service presence the paddock otherwise has none of).
       if (circuitKit) {
         circuitKit.pitBuilding({
           id: "kit:montreal:pit-building", frac: 0.995,
@@ -285,9 +231,6 @@
       }
       broadcastCompound(K(0.03), -1, 58, { vans: 3, dishes: 2, mastH: 10 });
 
-      // Pit-straight billboards / advertising hoardings (right verge, well clear).
-      // Warm zone (main straight) — varied amber/yellow/red instead of one
-      // repeated yellow board.
       const STRAIGHT_HUES = [
         [0.90, 0.62, 0.14], [0.88, 0.82, 0.22], [0.86, 0.24, 0.20], [0.92, 0.50, 0.12],
       ];
@@ -297,9 +240,6 @@
       // Cooler basin zone starts here (Olympic Basin rowing lake) — teal/blue.
       billboard(K(0.07), -1, 11, 12, 4, [0.18, 0.52, 0.58]);
 
-      // ===================================================================
-      // s 0.04 both — Senna S chicane: angled kerb slabs + tyre-wall funnel
-      // ===================================================================
       for (const side of [-1, 1]) {
         for (let j = 0; j < 4; j++) {
           place(K(0.04 + j * 0.004), side, 3, [3, 0.2, 4], (j % 2) ? KERB_W : KERB_R);
@@ -310,15 +250,10 @@
       tyreWall(0.042, 0.06,  -1, 3.2, [0.90, 0.90, 0.30]);
       marshalPost(K(0.05), 1, 9);
 
-      // ===================================================================
-      // s 0.07–0.20 L — Olympic Basin rowing lake (continuous water band)
-      // ===================================================================
       {
         waterBand(0.065, 0.20, -1, 26, 136, 12, BASIN,
           { id: "montreal-olympic-basin-north" });
       }
-      // Far bank of the basin: dense broadleaf forestEdge (pushed out across the water)
-      // (increased gap from 36m to 42m to clear curve intrusion around s=0.20)
       forestEdge(0.07, 0.19, -1, 42, {
         density: 0.75, hMin: 9, hMax: 16,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.2
@@ -329,8 +264,6 @@
         backdrop(k, -1, 140 + hash(i * 11) * 25, [20, 7 + hash(i * 5) * 5, 20], [0.16, 0.30, 0.17]);
       }
 
-      // Olympic rowing identity: paired officials' silhouettes and sparse lane
-      // marker floats across the open basin. All remain well beyond the fence.
       rowingTower("montreal-rowing-tower-north", 0.135, -1, 49, 17);
       for (let i = 0; i < 4; i++) {
         const s = 0.088 + i * 0.023;
@@ -342,13 +275,6 @@
         }
       }
 
-      // Basin-entry spectator hero beat, opposite the water so the long view
-      // remains open while the braking zone gains a recognisable event crowd.
-      // TEMPORARY seating, not a permanent stand: Île Notre-Dame is a public
-      // park 51 weeks a year, and everything outside the pit-straight enclosure
-      // is scaffold tube and plank put up for race week and taken down after.
-      // scaffoldStand() is that structure — visible legs under an open rake —
-      // where grandstandEx would put a permanent shell on parkland.
       scaffoldStand(0.1575, 0.1725, 1, 17, {
         rows: 6, rise: 1.10, setback: 1.85, legEvery: 1,
         tubeCol: [0.66, 0.67, 0.70], deckCol: [0.70, 0.66, 0.58],
@@ -356,9 +282,6 @@
         density: 0.6,
       });
 
-      // ── s 0.10 L — Rowing regatta spectator platform overlooking the basin ──
-      // A simple concrete deck on stilts — like the permanent grandstand at the
-      // 1976 Olympic rowing venue on the island.
       {
         const k = K(0.10);
         const a = anchor(k, -1, 28);
@@ -374,11 +297,6 @@
         }
       }
 
-      // ===================================================================
-      // s 0.13–0.35 — Parc Jean-Drapeau: parkland forestEdge both sides
-      // (replaces old manual tree() loops that clipped into fences)
-      // ===================================================================
-      // Right verge: park trees from Senna S through the back of the island
       forestEdge(0.13, 0.19, 1, 12, {
         density: 0.72, hMin: 8, hMax: 14,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.15
@@ -397,24 +315,9 @@
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.10
       });
 
-      // ── Maples: Parc Jean-Drapeau's specimen trees, and the one species
-      //    nobody would mistake for anywhere else. forestEdge gives Montreal a
-      //    competent belt of generic broadleaf — the same belt Silverstone,
-      //    Imola and Suzuka get from the same emitter with different colours.
-      //    broadleafFall's crown is built from overlapping OFF-AXIS LOBES
-      //    rather than one stacked cone, which is the maple's actual
-      //    silhouette: broad, low, irregular, and readable in profile against
-      //    the basin water behind it.
-      //
-      //    A June race is green, so most of these are green — but the Crimson
-      //    King Norway maple is purple-red all summer and is planted right
-      //    through Montreal's parks, so the red crowns are in season, not an
-      //    autumn scene dropped into a summer one.
       const MAPLE_G  = [0.20, 0.42, 0.19];   // sugar maple, high summer
       const MAPLE_G2 = [0.26, 0.48, 0.22];   // lighter, sunlit crown
       const MAPLE_R  = [0.36, 0.14, 0.20];   // 'Crimson King' — deep purple-red
-      // [frac, side, gap, height, tone] — placed as SPECIMENS in ones and twos
-      // on the lawns, the way a park plants them, not as a continuous rank.
       for (const [s, side, gap, h, tone] of [
         [0.142,  1, 17, 13, 0], [0.151,  1, 22, 15, 1], [0.168,  1, 18, 12, 2],
         [0.178,  1, 24, 14, 0], [0.243,  1, 19, 13, 1], [0.256,  1, 25, 15, 0],
@@ -440,10 +343,6 @@
           (i % 2) ? [0.22, 0.42, 0.20] : [0.18, 0.38, 0.18]);
       }
 
-      // ===================================================================
-      // s 0.35–0.50 — Mid-island gap: forestEdge (previously bare)
-      // The infield and outer park between the Casino complex and L'Épingle.
-      // ===================================================================
       forestEdge(0.35, 0.50, 1, 12, {
         density: 0.65, hMin: 7, hMax: 13,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.12
@@ -452,8 +351,6 @@
         density: 0.55, hMin: 7, hMax: 12,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.10
       });
-      // Deep woodland shoulders bridge the previously open transition into
-      // L'Épingle without planting the hairpin's braking or apex sightline.
       forestEdge(0.495, 0.535, -1, 24, {
         density: 0.62, hMin: 8, hMax: 15,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.12
@@ -467,22 +364,12 @@
         bush(K(0.37 + i * 0.012), (i % 2) ? 1 : -1, 10 + hash(i * 7) * 4,
           (i % 2) ? [0.20, 0.40, 0.18] : [0.24, 0.44, 0.20]);
       }
-      // s 0.35–0.50 is the emptiest eighth of the lap (previously just
-      // forestEdge) — add a TV camera position and a sponsor hoarding run
-      // so the stretch reads as covered/dressed, not a gap in the broadcast.
       cameraTower(K(0.385), 1, 25, { h: 16 });
       sponsorHoarding(0.36, 0.44, 1, 11, {
         palette: [[0.14, 0.42, 0.68], [0.90, 0.90, 0.90], [0.10, 0.34, 0.72], [0.90, 0.62, 0.14]],
       });
       billboard(K(0.44), -1, 10, 12, 4, [0.20, 0.46, 0.42]);
 
-      // ===================================================================
-      // s 0.25 R far — Casino de Montréal (former France/Québec Expo 67
-      // pavilions, merged and raised for the 1993 casino conversion). The
-      // real building is 8–9 storeys (~48–55 m) and steps in as it climbs,
-      // wrapped in aluminium fins — modelled here as three tapering tiers
-      // (widest at grade, narrowest at the crown) instead of one 30 m slab.
-      // ===================================================================
       {
         const k = K(0.25);
         const a = anchor(k, 1, 175);
@@ -490,18 +377,12 @@
         const PALE   = [0.82, 0.84, 0.88];   // Expo concrete / aluminium
         const PALE2  = [0.88, 0.90, 0.93];   // brighter fin faces
         const WIN    = [0.55, 0.68, 0.78];   // recessed glazing between fins
-        // Three stacked tiers, each set back and narrower than the one below —
-        // total crown height ≈ 52 m plus the 2.4 m plinth and roof cap.
         const TIERS = [
           { H: 24, W: 48, D: 36, nfin: 9 },   // grade-level hall (original footprint)
           { H: 17, W: 38, D: 28, nfin: 7 },   // first setback
           { H: 11, W: 28, D: 20, nfin: 5 },   // crown
         ];
         out._mat = MAT.CONCRETE;
-        // Top of the podium plinth: the plinth below is addBox-centred at
-        // y=1.2 with full height 2.4 (see "Low podium plinth" below), so its
-        // top is 1.2 + 2.4/2 = 2.4, not 1.2+2.4=3.6. The old sum floated the
-        // whole tier stack 1.2 m clear of the plinth it was meant to sit on.
         const PLINTH_TOP = 1.2 + 2.4 / 2;
         let yBase = PLINTH_TOP;
         for (const tier of TIERS) {
@@ -537,38 +418,14 @@
         out._mat = 0;
       }
 
-      // ── Near far-bank (Île Sainte-Hélène) strip across a water channel on the
-      // NW (left) side: the Biosphère + La Ronde stand on THIS, beyond the river
-      // margin, so they read as a neighbouring island across the water. ──
-      // Stations at half the old spacing so consecutive slabs OVERLAP. At
-      // 0.030 apart (~131 m) against a 135 m along-track extent they only just
-      // touched on a straight, and split open into separated rectangles
-      // wherever the bank curved — the far shore read as three floating slabs
-      // rather than a continuous island.
       for (let i = 0; i < 13; i++) {
         farBank(K(0.27 + i * 0.015), -1, 185, 320, 220);
       }
 
-      // ===================================================================
-      // ── CALDER'S "TROIS DISQUES" (1967) ──────────────────────────────────
-      // Parc Jean-Drapeau is Expo 67 ground and it is full of public art; the
-      // circuit had the Biosphère and the Casino pavilions but none of the
-      // sculpture. Calder's monumental stabile — commissioned for Expo 67,
-      // formally Trois disques, universally called L'Homme — is the one piece
-      // that is a landmark in its own right, and it stands on the Île
-      // Sainte-Hélène side, so it reads across the water.
-      //
-      // Two things make it recognisable and both are easy to get wrong: it is
-      // built from FLAT PLATES splaying outward from a narrow waist, and it is
-      // UNPAINTED STAINLESS STEEL — not the vermilion or black that most
-      // Calder stabiles wear. A red one here would be the wrong sculpture.
       {
         const a = anchor(K(0.335), -1, 210);
         if (!onTrack(a.c[0], a.c[2], 30)) {
           const b = [a.r, a.u, a.t];
-          // At this distance anchor().c follows groundYAt down below the river
-          // bed. The sculpture stands on the far-bank slab at BANK_T, so use an
-          // explicit island-surface origin just like farBank() above.
           const foot = vadd(a.c, a.u, BANK_T - a.c[1]);
           const STEEL  = [0.78, 0.80, 0.83];
           const STEEL_D = [0.66, 0.68, 0.72];
@@ -576,24 +433,6 @@
             center: vadd(foot, a.u, 11), size: [26, 26, 26], basis: b,
           }, (stage) => {
             stage._mat = MAT.METAL;
-            // Four round legs splaying out from the waist. Each segment is an
-            // actual arbitrary-axis strut between its intended endpoints; the
-            // previous vertical-frustum approximation jumped sideways between
-            // segments and left two pieces genuinely floating.
-            // Each leg gets its OWN spread scale. With all four on identical
-            // spreads, legs sharing a dr sat at the same r and legs sharing a
-            // dt sat at the same t — either way their side faces landed on one
-            // plane. Varying thickness alone did not fix it because the t-faces
-            // depend on the splay, not the thickness. Desynchronising the
-            // splay moves every plane apart at once.
-            // Legs as round tapering members, not flat plates. Calder's real
-            // stabile IS plate steel, but four plate legs converging on one
-            // waist put faces on shared planes no matter how the splay,
-            // thickness or depth was varied — five separate attempts, all
-            // still +1 on coplanar-audit. A frustum has no flat side face to
-            // share, so the fight cannot occur. At this distance (gap 210,
-            // across the water) the silhouette is what carries the sculpture,
-            // and the splay reads the same.
             const LEGS = [[-1, -1, 1.00], [1, -1, 1.07], [-1, 1, 1.14], [1, 1, 1.21]];
             for (const [dr, dt, sc] of LEGS) {
               for (let i = 0; i < 6; i++) {
@@ -622,10 +461,6 @@
             // A 1.8 m lower waist overlaps those caps without moving the body
             // or changing its upper silhouette.
             addFrustum(stage, vadd(foot, a.u, 11.0), 1.8, 1.1, 2.4, STEEL, 9, b);
-            // Base was 14.6 vs the first segment's top at 11.0+2.4=13.4 — a
-            // 1.2 m gap, over the 0.6 m support slack. Based 0.2 m into the
-            // first segment (13.2) and extended to keep the SAME top (20.2,
-            // where the disc below already sits comfortably inside it).
             addFrustum(stage, vadd(foot, a.u, 13.2), 1.1, 0.7, 7.0, STEEL, 9, b);
             const disc = [a.u, a.r, a.t];
             addCyl(stage, vadd(foot, a.u, 19.4), 3.4, 0.35, STEEL, 14, disc);
@@ -678,12 +513,6 @@
         }
       }
 
-      // s 0.30 L far — Biosphère geodesic dome (landmark across St. Lawrence)
-      // Bare silver-grey steel lattice sphere (acrylic skin burned off 1976):
-      // ~76 m wide, ~62 m high. Built as a stack of many thin frustum rings
-      // following a near-spherical profile so the silhouette reads as a rounded
-      // open dome, not a tiered tower. 18-sided frusta keep the geodesic feel.
-      // ===================================================================
       {
         const k = K(0.30);
         const a = anchor(k, -1, 205);
@@ -715,10 +544,6 @@
         addFrustum(out, vadd(a.c, a.u, R), R + 0.4, R + 0.4, 1.2, DOME_D, 18, [a.r, a.u, a.t]);
         out._mat = 0;
 
-        // ── GEODESIC STRUT LATTICE ──────────────────────────────────────────
-        // Meridian ribs + latitude rings + a band of diagonals stretched over the
-        // frustum shell so the silhouette reads as Buckminster Fuller's open steel
-        // lattice (the acrylic skin burned off in 1976), not a smooth dome.
         const LAT = [0.60, 0.62, 0.66];               // steel lattice grey
         const surf = (y, phi) => vadd(vadd(vadd(a.c, a.u, y),
                      a.r, rAt(y) * Math.cos(phi)), a.t, rAt(y) * Math.sin(phi));
@@ -758,26 +583,10 @@
         out._mat = 0;
       }
 
-      // ===================================================================
-      // s 0.28–0.48 L far — Montreal downtown skyline ACROSS the St. Lawrence
-      //
-      // A single cohesive cluster of mid-rise glass towers grounded on a far-bank
-      // strip BEYOND a broad water channel on the NW bearing. Capped ~200–226 m
-      // (1250 René-Lévesque 226 m / 1000 de La Gauchetière 205 m as the tallest)
-      // — a downtown across the river, not a wall ringing the lap.
-      // ===================================================================
-
-      // Far-bank land the city stands on — pushed VERY far back and confined to a
-      // narrow bearing so downtown reads as a faint hazy cluster on the horizon
-      // (per the aerial, the city is far and small, NOT a near wall of towers).
-      // Widened s-span (0.32→0.43) to fully cover the skyline placement below.
       for (let i = 0; i < 6; i++) {
         farBank(K(0.32 + i * 0.019), -1, 1500, 1760, 320, [0.36, 0.41, 0.40]);
       }
 
-      // A single compact cluster of distant mid-rise towers on a narrow bearing,
-      // pushed far back into the fog so they read as a faint hazy downtown — not
-      // a wall ringing the lap. Tighter s-span, lower, fewer, much farther out.
       cityFront(0.36, 0.41, -1, 1520, {
         minH: 55, maxH: 130, depth: 26, step: 30,
         palette: [
@@ -795,16 +604,6 @@
                  [22, 100 + hash(i * 13) * 70, 22], [0.54, 0.58, 0.64]);
       }
 
-      // ===================================================================
-      // s 0.34–0.40 L far — Jacques Cartier Bridge: Montreal's most
-      // recognisable non-track structure, previously entirely absent. A
-      // distant steel cantilever through-truss silhouette on the downtown
-      // bearing, nearer than the skyline cluster but beyond Habitat 67 —
-      // geographically it crosses the St. Lawrence between the island and
-      // the far bank. Reuses strut() (built for the Biosphère lattice): a
-      // dozen repeated verticals + X-braced diagonals read as an open truss
-      // at 1.4 km without modelling individual rivets.
-      // ===================================================================
       {
         const jk = K(0.37);
         const ja = anchor(jk, -1, 1400);
@@ -816,8 +615,6 @@
         addBox(out, vadd(ja.c, ja.u, DECK_Y), [12, 2.4, SPAN], STEEL, jb);
         // Top chord of the through-truss
         addBox(out, vadd(ja.c, ja.u, TOP_Y), [8, 1.6, SPAN], STEEL, jb);
-        // A dozen bays of verticals + X-braced diagonals — the repeated-strut
-        // read that sells an open truss at distance.
         let prevTop = vadd(vadd(ja.c, ja.t, -half), ja.u, TOP_Y);
         let prevBot = vadd(vadd(ja.c, ja.t, -half), ja.u, DECK_Y + 1.2);
         for (let i = 0; i <= BAYS; i++) {
@@ -838,13 +635,6 @@
         }
       }
 
-      // ===================================================================
-      // s 0.332 L, 790 m — Habitat 67: Moshe Safdie's stepped modular
-      // apartment block, one of Montreal's most recognisable silhouettes.
-      // Five plain backdrop() boxes read as an anonymous ridge; a proper
-      // stepped-cube model — 15 offset concrete cubes climbing and receding
-      // in a pyramid, alternating pale tones — reads as the real building.
-      // ===================================================================
       {
         const hk = K(0.332);
         const ha = anchor(hk, -1, 790);
@@ -852,9 +642,6 @@
         const CUBE = 9;                        // module edge length (m)
         const TONE_A = [0.72, 0.70, 0.65];      // pale warm concrete
         const TONE_B = [0.80, 0.79, 0.75];      // lighter tone
-        // [tangent offset (module units), level (module units), lateral jog
-        // (module units, away from the track as the stack climbs)] — five
-        // rows of 5/4/3/2/1 cubes, each row set back and up from the one below.
         const LAYOUT = [
           [0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0], [4, 0, 0],
           [0.5, 1, 0.3], [1.5, 1, 0.3], [2.5, 1, 0.3], [3.5, 1, 0.3],
@@ -880,9 +667,6 @@
         });
       }
 
-      // ===================================================================
-      // s 0.45 R close — Casino corner footbridge spanning the track
-      // ===================================================================
       {
         const k = K(0.45);
         const frame = frameAt(0.45);
@@ -922,10 +706,6 @@
                 basis,
                 col: [0.60, 0.62, 0.64],
                 embed: 0,
-                // Anchor height is the FALLBACK only. foundation() now also
-                // consults Tracks.terrainY so a large flatTerrain triangle
-                // (skipped by the build-time 30 m grid) still plants the foot
-                // on the same ribbon the foundation spec samples.
                 ground: a.c[1] + 0.3,
               }) || ok;
             }
@@ -943,26 +723,15 @@
           supportGap: 5,
           color: [0.68, 0.70, 0.72],
           required: true,
-          // Custom foundation() piers above are the legs. The default
-          // overheadSpan posts sit on surface.heightAt, which on this
-          // flatTerrain shelf is ~2.7 m above the ribbon the spec measures.
           supports: false,
         });
       }
 
-      // ===================================================================
-      // s 0.45 R far — La Ronde amusement park ferris wheel across the water
-      // ===================================================================
-      // La Ronde sits on Île Sainte-Hélène across the water — place on the farBank
-      // strip (near=185) so the bases don't float over open water.
       ferrisWheel(K(0.42), 1, 200, 34);
       // fairground tower beside ferris wheel
       tower(K(0.40), 1, 220, 14, 46,
         { col: [0.78, 0.62, 0.40], seg: 6, cap: true, capCol: [0.8, 0.3, 0.2], mast: 10 });
 
-      // ===================================================================
-      // s 0.55 both — L'Épingle hairpin: tight U of walls + grandstand
-      // ===================================================================
       grandstandEx(0.55,  1, 12, 70, null, null, { livery: "alu", roof: "cantilever" });
       grandstandEx(0.53, -1, 12, 60, null, null, { livery: "teal", roof: "flat" });
       grandstandEx(0.57,  1, 13, 60, null, null, { livery: "steel", roof: "cantilever" });
@@ -977,12 +746,6 @@
       // Casino/back straight runs the length of the Olympic Basin — cool teal.
       billboard(K(0.58), -1, 11, 12, 4, [0.14, 0.46, 0.62]);
 
-      // ===================================================================
-      // s 0.58–0.75 R — Casino/back Straight: the long Olympic Basin flanks the
-      // straight (the island's identity — ~half the lap runs alongside it).
-      // Water slab sits close to the verge so it reads as the immediate flank;
-      // the parkland treeline is pushed out to the far bank behind it.
-      // ===================================================================
       {
         waterBand(0.565, 0.679, 1, 24, 144, 12, BASIN,
           { id: "montreal-olympic-basin-straight" });
@@ -1008,19 +771,9 @@
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.15
       });
 
-      // ── s 0.65 L — Concrete spectator grandstand on the Casino straight ──
-      // Modelled after the permanent stands that overlook the run between
-      // L'Épingle and the final chicane (the busiest spectator zone on the island).
-      // (increased gap from 11m→14m→18m to clear curve intrusion at s=0.72)
       grandstandEx(0.65, -1, 18, 80, null, null,
         { livery: "teal", tiers: 2, roof: "cantilever", endWalls: true });
 
-      // ===================================================================
-      // s 0.66–0.90 — Back stretch through Parc Jean-Drapeau (parkland)
-      // ===================================================================
-      // Midway on the back straight — the second temporary rank (see the basin
-      // entry above). Slightly taller and shallower than that one so the two
-      // read as separate hires rather than one model placed twice.
       scaffoldStand(0.7327, 0.7473, -1, 18, {
         rows: 5, rise: 1.22, setback: 2.0, legEvery: 2, awning: true,
         awningCols: [[0.90, 0.90, 0.88], [0.86, 0.20, 0.18]],
@@ -1040,8 +793,6 @@
       // Park canal frontage — cool green, matching the basin/canal identity.
       billboard(K(0.84), -1, 11, 12, 4, [0.18, 0.48, 0.30]);
 
-      // Parkland forestEdge: back straight and final sector
-      // (replaces scattered tree() calls with clipping-safe placement)
       forestEdge(0.84, 0.92, 1, 14, {
         density: 0.68, hMin: 8, hMax: 14,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.15
@@ -1052,18 +803,12 @@
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.10
       });
 
-      // ── s 0.80 R — Small park pavilion / timing tower beside the back straight ──
-      // Montreal's infield contains several permanent buildings from the 1976 Games
-      // including the lightweight pavilions that now house race infrastructure.
       {
         const k = K(0.80);
         building(k, 1, 28, 18, 12, 16,
           { kind: "cross", wall: [0.74, 0.76, 0.80], window: [0.52, 0.64, 0.76], floor: 3 });
       }
 
-      // ===================================================================
-      // s 0.92 both — Final chicane: tight kerb funnel + tyre walls
-      // ===================================================================
       for (const side of [-1, 1]) {
         for (let j = 0; j < 4; j++) place(K(0.92 + j * 0.004), side, 3, [3, 0.2, 4], (j % 2) ? KERB_W : KERB_R);
       }
@@ -1071,11 +816,6 @@
       marshalPost(K(0.93), -1, 9);
       grandstandEx(0.93, -1, 12, 70, null, null, { livery: "alu", roof: "flat" });
 
-      // ===================================================================
-      // s 0.95–0.99 R — Wall of Champions: taller pale hero wall + signage
-      // ===================================================================
-      // Iconic outer wall right on the final-chicane exit — taller pale concrete
-      // so it reads as a hero beat at speed (not a low verge barrier).
       wall(0.955, 0.99, 1, 0.8, 3.6, [0.84, 0.85, 0.87], 0.7);
 
       // Red "Bienvenue" signature stripe on the wall face.
@@ -1084,9 +824,6 @@
         const a = anchor(k, 1, 0.78);
         addBox(out, vadd(a.c, a.u, 1.8), [0.10, 0.70, 22], [0.88, 0.20, 0.18], [a.r, a.u, a.t]);
       }
-      // "Bienvenue / Bonjour Québec" tourism panel — the defining signage of the
-      // Wall of Champions exit. Long Québec-blue board on posts just behind the
-      // outer wall, with a white cross band (fleur-de-lis read at distance).
       {
         const k = K(0.972);
         const a = anchor(k, 1, 2.4);
@@ -1113,4 +850,3 @@
   }
   );
 })();
-

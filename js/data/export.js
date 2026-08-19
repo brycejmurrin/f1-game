@@ -1,8 +1,4 @@
-/* Apex 26 — the data hub's EXPORT tab (dev tool): gathers one fast-lap GPS
-   trace per circuit from OpenF1 and downloads a ZIP (traces JSON + labelled
-   map PNG per circuit) with a hand-rolled ZIP writer. Split out of
-   js/data/hub.js; instantiated by the DataHub shell via DataExport.create(ctx).
-   Uses the F1API global directly. Must load BEFORE js/data/hub.js. */
+/* Apex 26 — the data hub's EXPORT tab (dev tool): gathers one fast-lap GPS trace per circuit from OpenF1 and downloads a ZIP (traces JSON + labelled map PNG per c… */
 const DataExport = (function () {
   "use strict";
 
@@ -17,19 +13,11 @@ const DataExport = (function () {
 
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
-  // Gather {circuit -> {sf, trace, ...}} for a season. Sequential, paced, and
-  // retried so it survives OpenF1 rate limiting (429). The api layer already
-  // backs off per request; here we add inter-meeting spacing plus a second pass
-  // over any circuits the first pass missed. `log` streams progress to the UI.
   function gatherStartLines(year, log) {
     const out = { year: year, generatedAt: new Date().toISOString(), circuits: {} };
-    // 5 s between meetings + 3 s sleeps between each request within a meeting
-    // keeps the rate well under OpenF1's free-tier limit (~20 req/min).
     const GAP = 5000;
     const DRIVERS = 3;
 
-    // Resolve one meeting → store its trace. Returns true if captured.
-    // retrying=true suppresses the 90-second rate-limit wait to avoid double-wait.
     function tryMeeting(m, retrying) {
       const key = m.circuit || m.name;
       return F1API.sessionsForMeeting(m.meetingKey).then(function (ss) {
@@ -84,8 +72,6 @@ const DataExport = (function () {
       });
     }
 
-    // Walk a list of meetings sequentially, pausing GAP between each. Returns the
-    // sub-list that did NOT yield a trace (for a retry pass).
     function pass(list, label) {
       let chain = Promise.resolve();
       const missed = [];
@@ -110,7 +96,6 @@ const DataExport = (function () {
     });
   }
 
-  /* ---- minimal STORE-only ZIP writer (no deps; PNGs are already compressed) ---- */
   const CRC_TABLE = (function () {
     const t = new Uint32Array(256);
     for (let n = 0; n < 256; n++) {
@@ -155,10 +140,6 @@ const DataExport = (function () {
 
   function safeName(s) { return String(s || "circuit").replace(/[^a-z0-9_-]+/gi, "_"); }
 
-  // Render one gathered trace to a PNG (Uint8Array). Draws the lap path, marks
-  // trace[0] = the real start/finish point (red), and an arrow for the initial
-  // travel direction — so the start line & driving direction can be eyeballed
-  // against the in-game layout.
   function traceToPng(circ) {
     const t = circ.trace || [];
     const W = 560, H = 560, pad = 48;
@@ -209,9 +190,6 @@ const DataExport = (function () {
       "(traces JSON + a labelled map image per circuit) and send it to me."));
 
     const yearRow = el("div", "dh-pick-years");
-    // Newest first, back to 2023 where OpenF1's data begins. Derived from the
-    // clock like hub.js's YEARS, because a hardcoded [2025, 2024, 2023] stops
-    // offering the CURRENT season — the exact trap the sibling picker purged.
     const OPENF1_FIRST_YEAR = 2023;
     const years = [];
     for (let y = Math.max(new Date().getFullYear(), OPENF1_FIRST_YEAR); y >= OPENF1_FIRST_YEAR; y--) years.push(y);
@@ -296,7 +274,6 @@ const DataExport = (function () {
 
     return Promise.resolve(wrap);
   }
-
 
     return { loadExport };
   }

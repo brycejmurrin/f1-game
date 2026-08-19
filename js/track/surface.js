@@ -4,7 +4,7 @@ const TrackSurface = (function () {
   "use strict";
 
   const clamp01 = (v) => M4.clamp(v, 0, 1);
-  const lerp = M4.lerp;                       // shared scalar helper (js/mat4.js)
+  const lerp = M4.lerp;
 
   function monotonicRails(def, outerW, street, flat) {
     const seeds = street
@@ -20,14 +20,9 @@ const TrackSurface = (function () {
     if (!clipped.length || Math.abs(clipped[clipped.length - 1] - outerW) > 1e-6)
       clipped.push(outerW);
 
-    // Long lateral faces can chord across a nearby lower section even when all
-    // their vertices were clipped. Subdivide every span so face interiors remain
-    // local enough for the road-corridor carving pass.
     const rails = [];
     let previous = 0;
     for (const end of clipped) {
-      // 16 m bounds face span tightly enough for centroid corridor carving while
-      // keeping all-circuit mesh captures within browser memory.
       const pieces = Math.max(1, Math.ceil((end - previous) / 16));
       for (let i = 1; i <= pieces; i++) rails.push(lerp(previous, end, i / pieces));
       previous = end;

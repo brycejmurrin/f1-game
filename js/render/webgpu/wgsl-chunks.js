@@ -1,34 +1,14 @@
 /*
- * Apex 26 — WGSL shader chunks (WebGPU migration, Phase 0/1).
+ * Apex 26 — WGSL shader chunks (WGSLChunks). Shared WGSL math leaves plus
+ * SKY/LIT/SHADOW/BLIT/BLOCKER shader strings for WGX. Mirror names with
+ * js/render/shaders/chunks.js where applicable. WGSL: texture+sampler split,
+ * vec3<f32>, @builtin(vertex_index). See docs/research/WEBGPU-PARITY.md.
  *
- * A minimal "shader chunk" registry — the WebGPU-side realization of the
- * maintainability review's recommendation (docs/archive/webgpu/WEBGPU-MAINTAINABILITY.md
- * §B / §C.1). It holds the shared *math leaves* that multiple WGSL passes will
- * want as named string fragments, exactly the way a future GLSL-side
- * `js/render/shaders/chunks.js` would (same chunk NAMES on both sides, so a change to
- * the noise/tonemap math is "edit two small leaves" instead of "hand-diff two
- * 850-line files").
- *
- * NO build step: these are plain JS template strings, concatenated at load,
- * assigning one global `WGSLChunks`. No imports, no ES modules.
- *
- * Scope for Phase 0/1: only the leaves the *sky* shader needs (hash, value
- * noise/fbm, an ACES tonemap leaf, and the fullscreen-triangle vertex helper),
- * plus the ported SKY shader itself (`WGSLChunks.SKY` — the simplest GLX shader,
- * SKY_FS at js/render/shaders/sky.js). The heavy Lit/Composite shaders are explicitly NOT
- * ported here (Phase 2/4).
- *
- * WGSL vs GLSL notes captured while porting (see docs/archive/webgpu/WEBGPU-PHASE0-NOTES.md):
- *  - texture(s,uv)          -> textureSample(t, s, uv)  (texture+sampler split)
- *  - vec3                   -> vec3<f32>, strict typing (1.0 not 1, explicit f32())
- *  - gl_VertexID            -> @builtin(vertex_index) (u32)
- *  - gl_Position (z=w)      -> @builtin(position); depth 1.0 via pos = vec4(p,1,1)
- *  - integer bit ops        -> WGSL needs u32 literals: (vi << 1u) & 2u
+ * NO build step: plain JS template strings, one global WGSLChunks.
  */
 "use strict";
 
 const WGSLChunks = (function () {
-  // ── hash: cheap value-hash leaves (mirror SKY_FS hash2/hash3, js/render/shaders/sky.js) ──
   const hash = `
 fn hash2(p_in: vec2<f32>) -> f32 {
   var p = fract(p_in * vec2<f32>(127.1, 311.7));
@@ -41,7 +21,6 @@ fn hash3(p_in: vec3<f32>) -> f32 {
   return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
 }`;
 
-  // ── vnoise: value noise + 4-octave fbm (mirror of GLXChunks.vnoise in
   //    js/render/shaders/chunks.js) ──
   // Depends on `hash` (uses hash2). The old GLSL vnoise/vnoise2 duplication is
   // gone — the sky-family GLSL copy lives once there, under this chunk's name.
@@ -68,7 +47,6 @@ fn fbm(p_in: vec2<f32>) -> f32 {
   return s;
 }`;
 
-  // ── tonemap: ACES filmic approx — a shared math leaf the review names as one
   //    of the "single-source" candidates (acesTonemap, js/render/shaders/chunks.js). Not used
   //    by the sky (which outputs HDR straight to an LDR swapchain here), but
   //    included as the seed of the shared post-math the Composite port will use.
@@ -405,7 +383,6 @@ fn acesTonemap(x0: vec3<f32>, a: f32, b: f32, c: f32, d: f32, e: f32) -> vec3<f3
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
 }`;
 
-  // ── fullscreenTri: the empty-VBO fullscreen triangle (mirror SKY_VS/POST_VS
   //    gl_VertexID trick, js/render/shaders/sky.js / post.js). draw(3) with no vertex buffers; WGSL
   //    generates the NDC positions from @builtin(vertex_index).
   const fullscreenTri = `
@@ -416,7 +393,6 @@ fn fsTriNDC(vi: u32) -> vec2<f32> {
   return vec2<f32>(x, y) * 2.0 - vec2<f32>(1.0);
 }`;
 
-  // ── brdf: the Cook-Torrance GGX trio shared by the Lit sun + point lights.
   //    Verbatim port of GLX's D_GGX / V_SmithGGX / F_Schlick (js/render/shaders/lit.js),
   //    the single-source math leaf the migration plan names (§2a). Any future
   //    edit to the microfacet model happens here, mirrored into the GLSL leaf.
@@ -440,45 +416,7 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   return f0 + (vec3<f32>(f90) - f0) * (v2 * v2 * v);
 }`;
 
-  // ── LIT: a FAITHFUL-BUT-REDUCED WGSL port of GLX's Lit program
-  //    (LIT_VS js/render/shaders/lit.js, LIT_FS js/render/shaders/lit.js). It renders the BASE PBR
-  //    that carries the scene read: hemisphere ambient + Lambert sun diffuse +
-  //    Cook-Torrance sun specular (soft-clipped), the 32 aimed point lights
-  //    (windowed 1/d² falloff + spot cone + diffuse + GGX spec), emissive HDR
-  //    glow, and height fog with sun in-scatter.
-  //
-  //    PHASE 3 (landed): sun shadow map (3×3-PCF compare, see the shadow block).
-  //    PHASE 4 (landed): the deferred MATERIAL blocks now consume the plumbed
-  //    scalars — each gated on its scalar so a 0 value is a no-op and the existing
-  //    Phase-2/3 looks are byte-for-byte unchanged. Faithful-but-reduced ports:
-  //      * [Block 1a/1b] ground/terrain detail micro-normal + procedural albedo
-  //        grain  (detail = mat1.y ; GLX LIT_FS js/render/shaders/lit.js, 473-507)
-  //      * [Block 2]    clearcoat 2nd low-roughness spec lobe (sun + lamp glints)
-  //        (clearcoat = mat1.z ; GLX js/render/shaders/lit.js, 638-646)
-  //      * [Block 3a]   car-paint orange-peel micro-normal
-  //        (carPaint = mat1.w ; GLX js/render/shaders/lit.js)
-  //      * [Block 4]    metallic-flake sparkle (view-dependent glint, paint-only)
-  //        (sparkle = mat2.x, gated on carPaint ; GLX js/render/shaders/lit.js)
-  //      * [Block 5/5b] wet-road response: lower roughness + grazing Fresnel sheen
-  //        (wetness = params1.z ; GLX js/render/shaders/lit.js, 761-801)
-  //      * [Block 6]    lamp-fog glow + low ground-mist  (GLX js/render/shaders/lit.js)
-  //    PHASE 4 (deferred features, this file): PCSS-style shadow penumbra +
-  //    cool shadow tint (params4.x/.y consumed in the shadow block);
-  //      * [Block 7]    energy-conserving lacquer env mirror (envProbeStr =
-  //        params5.x ; group0 @binding 4/5 ; mirrors GLX clearcoat env, not
-  //        uCarReflect — params4.z drives car-paint SSR consume below)
-  //      * [Block 8]    wet-road SSR + car-paint SSR consume (ssrStrength =
-  //        params4.w / carReflect = params4.z ; group0 @binding 6)
-  //    applyMaterial* / applyMaterialNormal are ported (14 procedural MAT ids).
-  //    params9 carries the four LIT tuner knobs that used to have no FrameU
-  //    lane (uAmbContactDark / uLampWallSpill / uWindowSunFlash / uSkyRimGlow).
-  //
-  //    UNIFORM LAYOUT — authored to WGSL std-layout rules and MUST match the
-  //    JS-side struct writers in wgx.js (_writeFrame / _writeDraw). vec3s are
-  //    padded to vec4 (16-byte align). Byte offsets are asserted in comments.
-  //      FrameU  : 560 B (see WGX.FRAME_UNIFORM_BYTES)
-  //      Light   :  64 B/light × 48 = 3072 B storage (see WGX.LIGHT_STRIDE_BYTES)
-  //      DrawU   : 112 B, dynamic-offset stride 256 (see WGX.DRAW_UNIFORM_BYTES)
+  // LIT: WGSL port of js/render/shaders/lit.js (LIT_VS/LIT_FS). Uniform layout must match wgx.js _writeFrame/_writeDraw.
   const LIT = `
 struct FrameU {
   viewProj   : mat4x4<f32>,   // off   0
@@ -1456,7 +1394,6 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   return vec4<f32>(color, select(alpha, 0.35, carPaint > 0.001));
 }`;
 
-  // ── SHADOW: depth-only sun-shadow caster pass (Phase 3). Vertex-only pipeline
   //    (no fragment stage) — rasterises clip-space depth into the shadow map from
   //    the sun's POV. Model rides a dynamic-offset uniform so terrain / road /
   //    props share one buffer (one slot per castShadow* call).
@@ -1482,7 +1419,6 @@ fn vs_main(@location(0) aPos : vec3<f32>,
   return S.lightVP * (model * vec4<f32>(aPos, 1.0));
 }`;
 
-  // ── BLIT: the present() resolve. Samples the RGBA16F scene target, applies
   //    exposure + the shared ACES tonemap leaf, writes the LDR swapchain. A
   //    stand-in for the full Phase-4 post chain (bloom/SSAO/godray/SSR/grade/
   //    flare/FXAA). Fullscreen triangle; uv flips Y into texture space.
@@ -1513,7 +1449,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(acesTonemap(hdr, 2.51, 0.03, 2.43, 0.59, 0.14), 1.0);
 }`;
 
-  // ── BLOCKER: min-of-4 downsample of the sun shadow depth map into the 512²
   //    r16float blocker map (PCSS-lite blocker-search source; GLX BLOCKER_FS
   //    parity). This chunk was MISSING when wgx.js first referenced
   //    WGSLChunks.BLOCKER — createShaderModule({code: undefined}) threw and
@@ -1554,7 +1489,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(min(min(d0, d1), min(d2, d3)), 0.0, 0.0, 1.0);
 }`;
 
-  // ── SKY: the first real WGSL shader. A faithful port of SKY_FS
   //    (js/render/shaders/sky.js) — gradient (zenith/horizon) with overcast
   //    grey-shift + azimuthal variation, golden-hour horizon warmth, procedural
   //    clouds with twilight horizon bank + lightning flash, Mie sun corona +
@@ -1658,7 +1592,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   // untouched (GLX js/render/shaders/sky.js).
   let overcast = smoothstep(0.5, 1.0, cloud);
 
-  // --- Sky gradient ---
   var c : vec3<f32>;
   if (up >= 0.0) {
     // Overcast grey-shift, night-gated (GLX SKY_FS). A day overcast ceiling
@@ -1703,7 +1636,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     c = mix(U.horizon.xyz * 0.85, vec3<f32>(0.035, 0.030, 0.022), gnd * gnd);
   }
 
-  // --- Procedural cloud layer (basic) ---
   // covRay: cloud coverage seen along this ray, hoisted for the star-occlusion
   // term below (GLX parity — stars fade out behind the deck).
   var covRay = 0.0;
@@ -1754,7 +1686,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     c = c + vec3<f32>(0.10, 0.13, 0.20) * lightning * (1.0 - covRay * 0.6);
   }
 
-  // --- Mie forward scatter + sun corona/disc ---
   let upPos = max(up, 0.0);
   // MIE SCATTER knob (clamp keeps the mix blend valid past 1).
   c = mix(c, sunColor, clamp(pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieScatter, 0.0, 1.0));
@@ -1775,7 +1706,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     c = c + discCore * disc;
   }
 
-  // --- Stars ---
   if (stars > 0.5 && up > 0.05) {
     let SC = 180.0;
     let cell = floor(dir * SC);
@@ -1797,7 +1727,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     }
   }
 
-  // --- Moon disc + halo ---
   if (moon > 0.0 && stars > 0.5) {
     let moonDir = normalize(vec3<f32>(0.42, 0.72, 0.55));
     let md = dot(dir, moonDir);
@@ -1810,7 +1739,6 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     }
   }
 
-  // --- City skyglow ---
   if (U.cityGlow.x + U.cityGlow.y + U.cityGlow.z > 0.001) {
     let horiz = pow(clamp(1.0 - max(dir.y, 0.0) * 2.4, 0.0, 1.0), 3.0 * cityGlowReach);   // CITY GLOW REACH knob
     c = c + U.cityGlow.xyz * horiz;

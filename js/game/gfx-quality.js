@@ -1,26 +1,4 @@
-/* Apex 26 — GRAPHICS quality presets + the RENDERER picker. Owns the four
-   presets, their persistence, #pm-gfx, #pm-renderer (WEBGL2 / THREE.JS /
-   WEBGPU), ‹ › step buttons, #pm-three-path (tlxForceGL), #pm-screenshots
-   (wgxCapture 2D blit), #pm-save-shot, #pm-gfx-status, and
-   #pm-renderer-reset (forget the saved pick + crash flags). RENDERER lives
-   here so SETTINGS can show and flip it at DOMContentLoaded — js/game.js is
-   an async IIFE that awaits deferred backend scripts on an opt-in, and a
-   hidden control wired after that await is invisible for the whole load and
-   dead if the IIFE never reaches it.
-
-   THE INTERACTION RULE, which is the whole design: a preset sets the FLOOR of
-   degradation, never the ceiling. It is applied by handing PerfGov a user tier
-   that tier() folds in with max(), so the player can always ask for LESS than
-   the governor would run, and never for MORE than the device has measurably
-   earned. ULTRA on a thermally-throttled laptop must not re-enable a pass the
-   governor has just proved unaffordable, and the crash-sentinel floor stays
-   undefeatable because it is a term in the same max().
-
-   Self-initialising (no create(G)): it needs only PerfGov, GameStore and the
-   DOM, so it does not take the G facade. Runs at DOMContentLoaded, i.e. after
-   js/game.js has built the menu. Every global read is at CALL time, so this
-   file has NO eval-time dependencies and needs no HARD_EDGES pair — its
-   position in index.html is not load-bearing. */
+/* Apex 26 — GRAPHICS quality presets + the RENDERER picker. Owns the four presets, their persistence, #pm-gfx, #pm-renderer (WEBGL2 / THREE.JS / WEBGPU), ‹ › step… */
 const GfxQuality = (function () {
   "use strict";
 
@@ -172,8 +150,6 @@ function applyBackend(next, rb) {
     setTimeout(() => { paintRenderer(rb); }, 900);
     return false;
   }
-  // A tap is a live tab. Disarm any in-flight boot probe so this choice
-  // cannot be reverted by a title-screen refresh before the flyby presents.
   try { localStorage.setItem("apex26.gfxBackend", next); localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
   try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* next boot paints the new pick */ }
   // Landing on WEBGPU by hand is the retry signal (browser update, new
@@ -190,14 +166,6 @@ function applyBackend(next, rb) {
   return true;
 }
 
-// Keys the RESET RENDERER button drops. The GRAPHICS preset (apex26.gfxHigh
-// + GameStore gfxPreset) is a quality floor, not a backend pick — leave it.
-// Context-loss latches (envProbeOff / perChunkOff / ctxLostReloads) ARE
-// renderer crash state: GLX/TLX write them on a GPU reset, and leaving them
-// made RESET boot a "clean" WebGL2 with probe and per-chunk lamps still off.
-// Session flags are the iPhone recovery half: gfxClaimFail skips the opt-in
-// for the rest of the tab, and gfxBound is what the label reads after a
-// fallback, so a wipe that left them would reload into the same stuck state.
 const RENDERER_LS_KEYS = [
   "apex26.gfxBackend", "apex26.gfxBackendProbe",
   "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
@@ -225,9 +193,6 @@ function rendererSlot(el) {
   return (p && p.id === "pm-renderer-row") ? p : el;
 }
 
-// THREE PATH (apex26.tlxForceGL) and SCREENSHOTS (apex26.wgxCapture) are the
-// two knobs that decide whether a software GPU paints a visible #game.
-// Injected next to RESET RENDERER — same body-node reason as that button.
 const THREE_PATHS = ["auto", "webgl2", "webgpu"];
 const SHOT_MODES = ["auto", "blit", "native"];
 function cycleOf(list, cur) {
@@ -499,8 +464,6 @@ function initReset() {
     try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
     clearRendererStorage();
     btn.textContent = "RESET RENDERER — RELOADING…";
-    // A settings-driven reload with the crash sentinel armed looks like a
-    // jetsam kill (js/game/perf.js) and would cost a quality strike.
     try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
     setTimeout(() => { try { location.reload(); } catch (_) {} }, 350);
   };
@@ -520,8 +483,6 @@ function mountRendererPicker(old) {
   const prev = document.createElement("button");
   const sel = document.createElement("select");
   const next = document.createElement("button");
-  // Stub hosts (unit harnesses) only implement the bits they assert.
-  // Keep the original button and the one-way click fallback there.
   if (typeof row.appendChild !== "function" || typeof sel.appendChild !== "function") return old;
   row.id = "pm-renderer-row";
   prev.id = "pm-renderer-prev";
@@ -579,11 +540,6 @@ function set(id, opts) {
   const btn = typeof document !== "undefined" ? document.getElementById("pm-gfx") : null;
   if (btn) btn.textContent = needsReload ? label() + " — RELOADING…" : label();
   if (needsReload && !(opts && opts.noReload)) {
-    // Disarm the crash sentinel FIRST. It detects a jetsam/OOM kill by finding
-    // the in-race flag still set at the next boot (js/game/perf.js), so a
-    // settings-driven reload with the flag armed is indistinguishable from the
-    // phone dying — it would cost the player a crash strike and pre-degrade
-    // the very quality they just asked to raise.
     try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
     setTimeout(() => { try { location.reload(); } catch (_) {} }, 260);
   }
@@ -613,11 +569,6 @@ function init() {
 
   const btn = typeof document !== "undefined" ? document.getElementById("pm-gfx") : null;
   if (!btn) return;      // shell without the button: the tier floor still applied above
-  // Shown to EVERYONE now. It used to be mobile-only on the reasoning that
-  // "desktop is always full quality", but a desktop that cannot hold its
-  // budget is exactly the case the shedding ladder exists for, and before this
-  // the only desktop-visible control was RESOLUTION — which pins the scale and
-  // says nothing about which passes run.
   btn.hidden = false;
   btn.textContent = label();
   btn.onclick = () => {

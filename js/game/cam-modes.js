@@ -17,8 +17,6 @@ window.CamModes = (function () {
     function refreshCamBtn() {
       const b = $("btn-cam");
       if (b) b.textContent = CAM_MODES[G.camMode].label;
-      // Cockpit view: the gear/speed/rpm live ON the wheel LCD — hide the
-      // floating HUD duplicates (CSS keys off this class).
       document.body.classList.toggle("cockpit-cam", CAM_MODES[G.camMode].id === "cockpit");
     }
     function setCamMode(m) {
@@ -39,9 +37,6 @@ window.CamModes = (function () {
     }
     function cycleCam() { return setCamMode(G.camMode + 1); }
 
-    // CAM button: quick tap cycles (muscle memory preserved); press-and-hold (or
-    // right-click) opens a PICKER GRID of all modes — cycling one-by-one through
-    // 13 cameras to reach the one you want was the worst switch in the game.
     const camTrigger = $("btn-cam");
     const camPicker = (() => {
       let el = null;
@@ -50,8 +45,6 @@ window.CamModes = (function () {
         el.id = "campicker";
         el.setAttribute("role", "menu");
         el.setAttribute("aria-label", "Camera view");
-        // The shared balanced row derives its count from the available width;
-        // REAR CAM fills a lone final line without assuming three columns.
         el.className = "balanced-row";
         el.hidden = true;
         for (let i = 0; i < CAM_MODES.length; i++) {
@@ -128,9 +121,6 @@ window.CamModes = (function () {
       b.addEventListener("pointercancel", cancelHold);
       b.addEventListener("lostpointercapture", cancelHold);
       b.addEventListener("contextmenu", (e) => { e.preventDefault(); camPicker.show(); });
-      // Cycle on CLICK (not pointerup): synthetic .click() from tests/assistive tech
-      // works unchanged, and a real tap fires it after pointerup anyway. When the
-      // hold already opened the picker, swallow that one trailing click.
       b.onclick = () => {
         if (held) { held = false; return; }
         if (camPicker.visible()) { camPicker.hide(); return; }

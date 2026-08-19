@@ -1,17 +1,4 @@
-/* Apex 26 — the GARAGE screen UI for js/game.js (#carsetup): everything about
-   WHO you are and WHAT you drive. Stat bars, the tab column (TEAM & DRIVER,
-   the 12 parts categories, LIVERY), option rows + credits budget, livery
-   swatches and the inline livery creator. The select screen owns WHERE you
-   race and links here; race settings own HOW a race runs.
-   Pure DOM assembly; live state (sound, budget flag, selected team/driver,
-   livery draft override, preview-mesh key) is reached through the ctx façade
-   G handed to SetupUI.create(G); persistence helpers (getTeamParts,
-   getLiveries, …) and the shared team-picker/customize openers arrive by
-   destructure or off G. Consumes globals Parts, Teams, GameAudio, Career — the
-   last of those turns the same screen into the career garage (balance + fitted
-   cap in the header, R&D-locked rows), and answers "are we in one" via
-   G.careerOwned() rather than a second flow check that could drift.
-   Must load BEFORE js/game.js (see index.html). */
+/* Apex 26 — the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. Stat bars, the tab column (TEAM & DRIVER, the 12 par… */
 const SetupUI = (function () {
   "use strict";
 
@@ -29,21 +16,11 @@ const CS_STATS = [
   { key: "braking",   label: "BRAKING" },
 ];
 
-// Map a raw base×mods rating to the displayed stat. At/below 100 it's the raw
-// value; above 100 a soft asymptotic knee (→ ~120) compresses the top. The old
-// hard Math.min(110,…) pegged every strong part to the same number — a top
-// team's CORNERING read 110 for Diffuser, High-DF, Extreme-DF, Active Aero and
-// more alike, so swapping parts appeared to do nothing. This knee is strictly
-// increasing, so a stronger part always nudges the number up while an elite car
-// still reads "over 100". Display-only — physics uses statMult()×mods (see
-// recomputePlayerMods), which this does not touch.
 const STAT_KNEE = 100, STAT_CAP = 120, STAT_KNEE_SCALE = 26;
 function displayStat(raw) {
   if (raw <= STAT_KNEE) return raw;
   return STAT_KNEE + (STAT_CAP - STAT_KNEE) * (1 - Math.exp(-(raw - STAT_KNEE) / STAT_KNEE_SCALE));
 }
-// Render the four stat bars (base + part boost overlay) for a team into a
-// container. Shared by the select screen (always-on) and the setup panel.
 function renderStatBars(container, team) {
   const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
   const mods = Parts.getMods(getTeamParts(team.id), team);
@@ -94,8 +71,6 @@ let csLivCreating = false; // livery creator panel open?
 let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint job
 let csLivEditId = null;    // id of the custom livery being edited in-place (null = creating new)
 
-// The tabs that are not parts categories. Both render their own options body
-// and return early from buildSetup instead of running the option-row loop.
 const PSEUDO_CATS = ["team", "livery"];
 
 function csTabId(id) { return "cs-tab-" + String(id).replace(/[^a-z0-9_-]/gi, "-"); }
@@ -129,10 +104,6 @@ function csTabKey(id, e) {
   activateCsCat(tabs[next].dataset.csCat, true);
 }
 
-// One tab button, whatever kind. The three kinds (parts / TEAM & DRIVER /
-// LIVERY) were drifting into three near-identical copies of this block, so the
-// activation behaviour now lives in one place. `flagged` paints the "upgraded"
-// accent — a fitted non-default part, or a non-default paint job.
 function pseudoTab(id, label, sub, flagged) {
   const tab = document.createElement("button");
   tab.className = "cs-tab" + (csActiveCat === id ? " active" : "") + (flagged ? " upgraded" : "");
@@ -168,8 +139,6 @@ function buildTeamOptions(optsEl, team) {
   const careerLocked = typeof Career !== "undefined" && Career.inCareer && Career.inCareer();
   optsEl.appendChild(csLabel("TEAM"));
 
-  // The same sheet the select screen used to open (#teampicker), reached from
-  // here instead. It is told who opened it so the right screen gets rebuilt.
   const card = document.createElement("button");
   card.className = "team-card";
   card.id = "cs-team-card";
@@ -193,11 +162,6 @@ function buildTeamOptions(optsEl, team) {
   row.setAttribute("role", "group"); row.setAttribute("aria-label", "Driver");
   team.drivers.forEach((d, i) => {
     const b = document.createElement("button");
-    // A seat somebody else is already in cannot be taken. Disabled rather than
-    // hidden — hiding reflows the row so the next tap lands on the wrong chip,
-    // which is the same reason #pm-calib and #pm-gears are disabled and not
-    // removed. The native attribute is enough: button:disabled is already
-    // styled (css/tokens.css), so this needs no new class.
     const taken = (G.peerSeats ? G.peerSeats() : [])
       .some((s) => s.team === team.id && s.driver === i);
     b.className = "sel-chip" + (i === G.driverIdx ? " active" : "");
@@ -244,14 +208,7 @@ function buildSetup() {
   }
   if (partsChanged) saveTeamParts(team.id, parts);
 
-  // Career's R&D gate, or null in free play. Non-null is also the one test for "this
-  // is the career garage" — Career.owned() already answers "career rules apply AND
-  // the team on screen is the career team".
   const owned = G.careerOwned();
-  // Career measures the fitted build against its own cap (the team's works car,
-  // scaled by the budget upgrades bought so far) rather than the flat free-play
-  // 600 cr, and it does not offer FREE BUILD at all: an unlimited-budget cheat
-  // would hand away the economy the whole mode is built on.
   const cap = owned ? Career.budget() : Parts.BUDGET;
   const unlimited = !owned && G.unlimitedBudget;
 
@@ -268,8 +225,6 @@ function buildSetup() {
       budgetEl.textContent = "FREE BUILD — no budget limit";
       budgetEl.className = "unlimited";
     } else if (owned) {
-      // Two numbers because career runs two budgets: what you can SPEND developing
-      // parts (the balance) and what you may FIT on the car at once (the cap).
       budgetEl.textContent = "BALANCE " + Career.data().money.toLocaleString() + " cr · FITTED "
                            + spent.toLocaleString() + " / " + cap.toLocaleString() + " cr";
       budgetEl.className = remaining < 0 ? "over" : remaining < 100 ? "tight" : "";
@@ -287,9 +242,6 @@ function buildSetup() {
     unlimitedBtn.className = "cs-unlimited-btn" + (unlimited ? " on" : "");
   }
 
-  // Which category tab is open — persisted across rebuilds; default to the first.
-  // PSEUDO_CATS are the tabs that are not parts categories: who the car belongs
-  // to, and what it is painted.
   if (!csActiveCat || (!PSEUDO_CATS.includes(csActiveCat) && !Parts.CATALOG.some((c) => c.id === csActiveCat))) csActiveCat = Parts.CATALOG[0].id;
   const activeCat = Parts.CATALOG.find((c) => c.id === csActiveCat);
 
@@ -300,19 +252,10 @@ function buildSetup() {
         || cat.options.find((o) => o.id === Parts.DEFAULTS[cat.id]);
   };
 
-  // ---- Category tabs (one row, horizontally scrollable) ----
   const tabs = $("cs-tabs");
   tabs.textContent = "";
   tabs.setAttribute("role", "tablist");
   tabs.setAttribute("aria-label", "Garage categories");
-  // TEAM leads: it gates which parts are even offered (supplier exclusives, see
-  // Parts.isOptionAvailable) and which liveries exist, so it is genuinely
-  // upstream of everything below it.
-  //
-  // The label is one word because the rail is ~90px wide — "SUSPENSION" already
-  // nearly fills it and .cs-tab-lbl ellipsises, so "TEAM & DRIVER" rendered as
-  // "TEAM & DRI…". The sub-line carries the DRIVER rather than repeating the
-  // team, which the header (#cs-team) is already showing in full.
   {
     const d = team.drivers[G.driverIdx] || team.drivers[0];
     tabs.appendChild(pseudoTab("team", "TEAM", d ? d.name.split(" ").pop() : team.short));
@@ -322,19 +265,11 @@ function buildSetup() {
     tabs.appendChild(pseudoTab(cat.id, cat.label, cur ? cur.label : "",
                                cur && cur.id !== Parts.DEFAULTS[cat.id]));
   }
-  // LIVERY pseudo-tab (paint jobs) — appended after the parts categories.
-  // No sub-label: unlike a part option's fixed catalog string, a livery name
-  // is arbitrary text (stock names run long, and the creator lets a player
-  // type anything) and this rail is sized for a category label, not a proper
-  // noun — cs-tab-cur truncated "Kannapolis Compound" to "Kannapolis Comp…",
-  // telling the player less than the bare category would. The name is already
-  // shown in full on the option-list row below, which is 2-3x wider.
   {
     tabs.appendChild(pseudoTab("livery", "LIVERY", "",
                                getLiveryId(team.id) !== "default"));
   }
 
-  // ---- Options list for the active category ----
   const optsEl = $("cs-options");
   optsEl.textContent = "";
   optsEl.setAttribute("role", "tabpanel");
@@ -352,9 +287,6 @@ function buildSetup() {
   const factorySetup = Parts.getFactorySetup(team);
   for (const opt of activeCat.options) {
     if (!Parts.isOptionAvailable(opt, team)) continue;
-    // The R&D gate is a THIRD row state, not a filter: an unresearched part still
-    // lists, because "what could this car become" is most of what the garage is for
-    // in a career. Only the supplier/team gate above hides a row outright.
     const locked = !Parts.isOptionAvailable(opt, team, owned);
     const active = curOpt && curOpt.id === opt.id;
     const costDelta = (opt.cost || 0) - curCost;
@@ -364,8 +296,6 @@ function buildSetup() {
     const restricted = opt.supplier || opt.suppliers || opt.team || opt.teams;
     row.className = "cs-opt" + (active ? " active" : "") + (wouldExceed ? " over-budget" : "")
                   + (locked ? " locked" : "") + (restricted ? " exclusive" : "");
-    // Announce the fitted part like the driver chips already announce selection —
-    // otherwise a screen-reader user can't tell which of 12 categories' parts is on.
     row.setAttribute("aria-pressed", active ? "true" : "false");
     row.dataset.csOpt = opt.id;
     row.dataset.csCat = activeCat.id;
@@ -394,8 +324,6 @@ function buildSetup() {
     row.appendChild(main);
 
     const cost = document.createElement("span");
-    // A locked row is quoting a PRICE, not a spec, so it says what buying it costs
-    // rather than what fitting it would charge against the cap.
     cost.className = "cs-opt-cost" + (locked ? " research" : opt.cost > 0 ? "" : " free");
     cost.textContent = locked ? "RESEARCH · " + Career.researchCost(opt).toLocaleString() + " cr"
                      : opt.cost > 0 ? opt.cost + " cr" : "FREE";
@@ -409,11 +337,6 @@ function buildSetup() {
 
     row.onclick = () => {
       if (active) return;
-      // An unowned part is BOUGHT before it can be fitted, and the two draw on
-      // different budgets: research spends the balance, fitting spends the cap. So a
-      // research can succeed and the fit behind it still be refused — the rebuild in
-      // that branch is the feedback, since the money really did leave the account
-      // and shaking a row that just cost you 900 cr would read as "nothing happened".
       if (locked) {
         if (!Career.research(opt)) { reject(); return; }
         if (G.soundOn) GameAudio.uiSelect();
@@ -437,8 +360,6 @@ function buildSetup() {
   renderStatBars($("cs-stats-inner"), team);
 }
 
-// Small ▲/▼ stat-effect chips for an option row — reads the raw physics
-// multipliers off the option (absent field = no change). Purely informational.
 const CS_DELTA_DEFS = [
   { key: "speed",     label: "TOP" },
   { key: "accel",     label: "ACCEL" },
@@ -461,8 +382,6 @@ function statDeltaChips(opt) {
   return any ? wrap : null;
 }
 
-// A livery swatch: two-tone base + an optional centre racing-stripe band so the
-// picker previews exactly what renders on the car.
 function livSwatch(liv) {
   const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
   sw.style.background = "linear-gradient(120deg, " + cssCol(liv.c1) + " 0 56%, " + cssCol(liv.c2) + " 56% 100%)";
@@ -474,10 +393,6 @@ function livSwatch(liv) {
   return sw;
 }
 
-// Render the paint-job picker into the options list — each livery as a two-tone
-// (optionally striped) swatch + name; clicking repaints the live car preview
-// instantly. Player-created liveries get a delete affordance; a CREATE row opens
-// the inline creator.
 function buildLiveryOptions(container, team) {
   if (csLivCreating) {
     container.classList.remove("cs-liv-grid");
@@ -520,8 +435,6 @@ function buildLiveryOptions(container, team) {
     row.setAttribute("aria-label", "Select " + liv.name + " livery");
     row.title = liv.name;
     row.setAttribute("aria-pressed", active ? "true" : "false");
-    // Every row gets the wrap now: custom rows carry edit+delete, stock rows a
-    // duplicate ("start from this") button that prefills the creator.
     const rowWrap = document.createElement("div");
     rowWrap.className = "cs-liv-row";
     rowWrap.appendChild(row);
@@ -533,9 +446,6 @@ function buildLiveryOptions(container, team) {
     const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
     nameRow.appendChild(document.createTextNode(liv.name));
     if (isCustom) { const tg = document.createElement("span"); tg.className = "cs-opt-tag"; tg.textContent = "MINE"; nameRow.appendChild(tg); }
-    // A non-gloss FINISH is invisible in a flat two-tone swatch, so it gets a
-    // badge — otherwise a satin scheme is indistinguishable from its gloss twin
-    // until you fit it and look at the turntable.
     if (liv.finish && liv.finish !== "gloss") {
       const tg = document.createElement("span");
       tg.className = "cs-opt-tag";
@@ -584,9 +494,6 @@ function buildLiveryOptions(container, team) {
       tag.className = "cs-opt-cost free";
       tag.textContent = active ? "FITTED" : "PAINT";
       row.appendChild(tag);
-      // Duplicate: open the creator PREFILLED from this stock scheme (including
-      // its detail colours), so customising starts from a look the player likes
-      // instead of always from bare team colours. Saves as a new custom livery.
       const dup = document.createElement("button");
       dup.type = "button";
       dup.className = "cs-liv-edit"; dup.textContent = "⧉";
@@ -621,9 +528,6 @@ function buildLiveryOptions(container, team) {
   }
 }
 
-// Inline paint-job creator: three colour wells (primary / accent / stripe) + a
-// name field, previewing live on the car as the player drags. SAVE appends to
-// the team's custom list and fits it; CANCEL/back returns to the picker.
 function buildLiveryCreator(container, team) {
   const d = csLivDraft;   // colours held as hex strings; "" stripe = none
   const wrap = document.createElement("div");
@@ -663,24 +567,13 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("BODY STRIPE", "stripe", true));      // full spine: nose → engine cover
   wrap.appendChild(colorRow("NOSE STRIPE", "noseStripe", true));  // nose crown only: tip → bulkhead
   wrap.appendChild(colorRow("DETAIL", "accent", true));   // tertiary paint on flashes/trim/pinstripe
-  // Optional detail-part colours (see liveries.js header): nose-tip cap, sidepod
-  // panel, wing flap elements, halo hoop tint. NONE = today's default look.
   wrap.appendChild(colorRow("NOSE CAP", "nose", true));
   wrap.appendChild(colorRow("SIDEPOD", "pod", true));
   wrap.appendChild(colorRow("WINGS", "wing", true));
-  // The shark-fin plate and the tail GRAPHIC painted on it are two separate
-  // picks: the fin is one flat colour, so an art colour equal to it disappears.
-  // NONE on FIN ART keeps the automatic choice, which contrasts the fin paint.
   wrap.appendChild(colorRow("TAIL FIN", "fin", true));
-  // Three separate things people kept conflating: the fin PLATE, the abstract
-  // brush-stroke graphic painted on it, and the team EMBLEM sitting on top.
   wrap.appendChild(colorRow("TAIL GRAPHIC", "finArt", true));
   wrap.appendChild(colorRow("TEAM LOGO", "logo", true));
   wrap.appendChild(colorRow("HALO", "halo", true));
-  // FINISH is the paint MATERIAL rather than a colour, so it is a 3-way choice
-  // instead of a colour well: gloss (the clearcoat car paint every livery has
-  // always had), satin (flat matte wrap) and chrome (tinted mirror). Previews
-  // live on the turntable like every colour row does.
   {
     const r = document.createElement("div"); r.className = "cs-liv-ed-row";
     const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = "FINISH"; r.appendChild(lb);
@@ -750,18 +643,9 @@ function buildLiveryCreator(container, team) {
   applyPreview();
 }
 
-// Monotonic id source for custom liveries (Date.now is fine; avoids collisions
-// within a session even if the clock is coarse).
 let _livSeq = 0;
 function livIdCounter() { _livSeq = (_livSeq + 1) % 1000; return String(Date.now()) + _livSeq; }
 
-// Paint the live 3D preview with an uncommitted draft via the transient
-// override (no localStorage writes), then force a mesh rebuild.
-// Last draft actually pushed to the preview, so a colour well that fires `input`
-// per drag tick without changing value costs nothing. The decal ATLAS is keyed
-// by (team, liveryId) — neither of which moves while the creator is open — so it
-// has to be dropped explicitly or the painted marks (the fin's tail graphic
-// above all, which is FIN ART's whole point) keep showing the previous colours.
 let _livPreviewKey = "";
 function livePreviewDraft(team, d) {
   const key = team.id + "|" + JSON.stringify(d);
@@ -777,8 +661,6 @@ function livePreviewDraft(team, d) {
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
-// Leave the creator: drop the draft override AND the atlas built from it, so the
-// car goes back to (or arrives at) the livery that is actually fitted.
 function endLivPreview(team) {
   _livPreviewKey = "";
   G.livDraftOverride = null;
@@ -789,18 +671,6 @@ function endLivPreview(team) {
 function openSetup() {
   Log.info("ui", "SetupUI.openSetup");
   buildSetup();
-  // Hide every screen the garage can be opened FROM. They sit under #carsetup
-  // and are nearly opaque, so they block the live 3D preview behind the
-  // now-transparent, docked setup panel. cs-done restores whichever one the
-  // player came from (garageReturn).
-  //
-  // This list has been wrong twice, each time by one screen. First only #select
-  // was hidden, on the assumption that #overlay was gone by the time #select
-  // was reached — untrue of the title screen's GARAGE button, which opens setup
-  // straight off #overlay and then showed the APEX 26 title through the panel.
-  // Then the VS FRIEND waiting room grew its own GARAGE button and #vsfriend
-  // stayed up ON TOP, so choosing a car meant closing the lobby — which drops
-  // the connection.
   els.select.hidden = true;
   els.overlay.hidden = true;
   $("vsfriend").hidden = true;

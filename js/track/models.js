@@ -3,23 +3,6 @@
 const TrackModels = (function () {
   "use strict";
 
-  // ---- contextified-global aliases (see firstNonFinite below for the measurement)
-  // Under vm.createContext — tools/verify-track.cjs, tools/graph-parity.cjs, the
-  // float/clip/coplanar audits and the VM unit suites — every BARE global read
-  // (`Math`, `Number`) goes through the contextified global's C++ interceptor at
-  // ~140-220 ns, against ~3.3 ns for a scope-slot read. These aliases turn the
-  // per-vertex reads below into ordinary scope loads.
-  //
-  // HONEST SCOPE: this is a DEV-LOOP fix. In a browser there is no contextified
-  // global, so the same reads already cost ~3.3 ns and hoisting them is worth
-  // ~1-3 % of build time at most — it does not change anyone's framerate. Applied
-  // only where the read sits in a per-vertex or per-primitive loop; one-shot
-  // setup code keeps the plain `Math.`/`Number.` spelling on purpose.
-  //
-  // The ns figures above are inherited from the firstNonFinite finding, not
-  // re-timed for this pass — a shared 4-core box cannot produce a trustworthy
-  // wall time. What WAS verified here is EQUIVALENCE: all 40 circuits build
-  // bit-identical geometry before and after (tools/graph-parity.cjs --all).
   const __M = Math, __isFinite = Number.isFinite, __isInteger = Number.isInteger;
 
   const isNumList = (a) => Array.isArray(a) || !!(a && a.BYTES_PER_ELEMENT && typeof a.length === "number");
@@ -45,8 +28,6 @@ const TrackModels = (function () {
     }
     return {
       get length() { return n; },
-      // VM emitter wrappers (track-build-vm / clip-audit) read [i] while the
-      // fuse is still growing. Game-path emitters only use length + push.
       get _data() { return data; },
       push(a, b, c, d, e, f) {
         const add = f !== undefined ? 6 : e !== undefined ? 5 : d !== undefined ? 4
@@ -64,8 +45,6 @@ const TrackModels = (function () {
   }
   function scratch(verts) {
     const v = verts > 0 ? verts : 8192;
-    // pos/nrm/col/mat stay f64 so CPU audits match the previous Array fuse
-    // (GPU upload already goes through toF32). idx is Uint32 as required.
     return {
       pos: makeAccum(Float64Array, v * 3),
       nrm: makeAccum(Float64Array, v * 3),
@@ -87,26 +66,8 @@ const TrackModels = (function () {
 
   function appendBuffer(target, source, id) {
     const base = target.pos.length / 3;
-    // Record where this staged block landed in the target. modelGroup emits
-    // into a scratch buffer and copies it out, so a primitive recorded against
-    // the STAGE carries vertex indices that mean nothing in the shipped mesh —
-    // headless audits (float/clip) could not attribute any modelGroup geometry
-    // at all and silently skipped it. One entry per copy is enough to remap.
-    // `id` is what makes the remap ANSWERABLE rather than merely possible. A
-    // block used to say "vertices 1200..1450 came from some staged buffer",
-    // which is enough to skip them and not enough to name them — so a headless
-    // audit could report "4.79 m of prop over the racing line" and nothing
-    // could say WHICH emitter put it there. Every attribution attempt then went
-    // through prop AABBs, which is the wrong question: the audits test whether
-    // a TRIANGLE covers a track point, and one large triangle's centroid can
-    // sit 24 m from the point it covers.
     (target.__blocks || (target.__blocks = []))
       .push({ base, from: source, count: source.pos.length / 3, id: id || null });
-    // Indexed loops, not push(...source): spread-apply passes every element as a
-    // separate ARGUMENT, so a staged model group large enough (tens of thousands
-    // of vertices) blows the engine's argument limit and throws RangeError from
-    // what looks like an ordinary append. It also allocates an arguments array
-    // per call for no benefit.
     appendAll(target.pos, source.pos);
     appendAll(target.nrm, source.nrm);
     appendAll(target.col, source.col);
@@ -140,8 +101,6 @@ const TrackModels = (function () {
       if (eu > ou) ou = eu;
       if (ef > of) of = ef;
     }
-    // Authoring slack. Below this a box is "right" and the excess is rounding
-    // or a deliberate hairline; above it the declared shape is not the shape.
     const TOL = 0.05;
     if (or_ <= TOL && ou <= TOL && of <= TOL) return null;
     return { overRight: +or_.toFixed(2), overUp: +ou.toFixed(2), overFwd: +of.toFixed(2) };
@@ -170,9 +129,6 @@ const TrackModels = (function () {
   // comparison is unchanged.
   const POSINF = 1 / 0, NEGINF = -1 / 0;
 
-  // Tight oriented box of the vertices actually emitted, in `bounds.basis`.
-  // Used to re-run the road-footprint preflight on the real geometry rather
-  // than the box the author declared (see modelGroup).
   function emittedBox(stage, bounds) {
     const b = bounds && bounds.basis;
     const r = b ? b[0] : [1, 0, 0], u = b ? b[1] : [0, 1, 0], f = b ? b[2] : [0, 0, 1];
@@ -202,8 +158,6 @@ const TrackModels = (function () {
   function firstNonFinite(a) {
     for (let i = 0; i < a.length; i++) {
       const v = a[i];
-      // Cheap fast path: only fall back to the real predicate for values that
-      // fail a plain numeric comparison (NaN and both infinities do).
       if (!(v > NEGINF && v < POSINF)) return true;
     }
     return false;
@@ -338,14 +292,6 @@ const TrackModels = (function () {
       const depth = spec.depth != null ? spec.depth : 1.4;
       const supportGap = spec.supportGap != null ? spec.supportGap : 1.5;
       const span = spec.span != null ? spec.span : frame.hw * 2 + supportGap * 2 + 2;
-      // LATERAL OFFSET: shift the band sideways along the track's right vector.
-      // A single centred slab can only ever be a flat lid — an ARCHED soffit
-      // (a tunnel vault, a stepped portal) needs bands that sit beside the
-      // crown and leave the middle open, which a centred span cannot express.
-      // `clearance` still means "underside height above the ROAD DATUM at this
-      // node", so it is the offset band's own clearance, not a clearance over
-      // the centreline; on banked road the two differ by sin(bank)·offset,
-      // which is sub-decimetre at the ≤3° a street circuit carries.
       const offset = Number.isFinite(spec.offset) ? spec.offset : 0;
       const lift = clearance + thickness / 2;
       const center = [
@@ -353,27 +299,9 @@ const TrackModels = (function () {
         frame.c[1] + frame.r[1] * offset + frame.u[1] * lift,
         frame.c[2] + frame.r[2] * offset + frame.u[2] * lift,
       ];
-      // Intentional overhead geometry bypasses ordinary road-footprint rejection;
-      // its safety contract is explicit underside clearance.
       const stage = emptyBuffer();
       if (!box(stage, center, [span, thickness, depth], spec.color, [frame.r, frame.u, frame.t])) return false;
-      // The legs. supportClear() above already reserved and validated this
-      // exact footprint, and `supportGap`/`supportWidth` were part of the spec
-      // from the start — but nothing ever EMITTED them, so a span was a deck
-      // and nothing else. Circuits that wanted visible supports drew their own
-      // (cota, abudhabi); every span whose circuit did not was a slab hanging
-      // over the road on nothing, which is what the grounding audit reported
-      // across 7 circuits. Pass `supports: false` to keep the bare deck — the
-      // same opt-out supportClear() already honours — for spans that hang off
-      // a building or a tunnel mouth rather than standing on their own legs.
       if (spec.supports !== false && ctx.groundHeight && ctx.groundPoint) {
-        // Inset and narrowed a touch. Several circuits already draw their own
-        // piers at exactly supportGap + supportWidth/2 (that is what the spec
-        // reserves), so a leg emitted flush with one shares its faces: madrid
-        // 65 -> 66 and suzuka 8 -> 9 coplanar spots. Sitting 0.12 m inboard at
-        // 90% width keeps the leg inside the reserved footprint, still under
-        // the deck and still on the ground, without ever landing on a plane a
-        // circuit pier already occupies.
         const sw = (spec.supportWidth != null ? spec.supportWidth : 0.8) * 0.9;
         const lat = supportGap + sw / 2 + 0.12;
         const under = clearance;           // deck underside above the road datum
@@ -428,8 +356,6 @@ const TrackModels = (function () {
         diagnostics.invalid.push({ id: spec.id || "ground-patch", reason: "no finite ground samples" });
         return false;
       }
-      // Real vertex count (buffer delta), matching modelGroup/overheadSpan —
-      // recording the box count here under-reported size ~24x.
       diagnostics.emitted.push({ id: spec.id || "ground-patch", vertices: (out.pos.length - posBefore) / 3, groundPatch: true });
       return true;
     }
@@ -459,12 +385,6 @@ const TrackModels = (function () {
         const dx = pb[0] - pa[0], dy = pb[1] - pa[1], dz = pb[2] - pa[2];
         const length = Math.hypot(dx, dy, dz) || 0.1;
         const forward = [dx / length, dy / length, dz / length];
-        // right = [fz,0,-fx] (not [-fz,0,fx]) so the derived up = forward×right
-        // points +Y. With the old sign up.y = -(fx²+fz²) < 0 pointed DOWN, so the
-        // center offset (mid + up*height/2) sank the box below grade: the box
-        // spanned [mid.y-height, mid.y] — top flush with the ground, whole wall /
-        // cut-bank / banking buried and invisible. addBox's flip detection already
-        // tolerates the resulting basis handedness.
         let right = [forward[2], 0, -forward[0]];
         const rl = Math.hypot(right[0], right[2]) || 1;
         right = [right[0] / rl, 0, right[2] / rl];
@@ -500,13 +420,6 @@ const TrackModels = (function () {
         if (!pa || !pb) continue;
         const chord = Math.hypot(pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]) || 0.1;
         const sub = Math.max(1, Math.min(MAXSUB, Math.ceil(chord / TARGET)));
-        // Walk k the SHORT way around the loop. A wall that wraps the start line
-        // has consecutive points at k≈n-1 and k≈0 — adjacent in the world but a
-        // full lap apart in index. Interpolating k straight (n-1 → 0) sends the
-        // midpoint to node n/2, the FAR side of the circuit, and the sub-chord
-        // becomes a box spanning the whole track (hungaroring's pit trim read
-        // 5 m over the racing line 1 km away). ctx.n lets us take the ±1-node
-        // step across the seam instead; groundPoint() re-wraps the index.
         let dk = b.k - a.k;
         if (ctx.n && Math.abs(dk) > ctx.n / 2) dk -= Math.sign(dk) * ctx.n;
         let prev = pa;

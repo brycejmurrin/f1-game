@@ -1,15 +1,4 @@
-/* Apex 26 — CircuitMarkings: curated FIA-aligned sector splits + turn apexes.
-   Fractions are in RACING-LAP space (s=0 at the start/finish after startFrac/
-   reverse remapping). Consumed by Tracks.LIST, game.js sectorAt, HUD/selector
-   maps (TrackMaps + drawMinimap), and buildProps corner boards. Not used by
-   __apex.corners() (that still returns curvature peaks). Best-effort vs this
-   game's centreline — not GPS timing-loop coordinates.
-   sectors: [s1End, s2End] with 0 < s1 < s2 < 1; S3 wraps through the line.
-   turns: apex fractions T1..Tn in driving order (length = official turn count).
-*/
-// Wrapped in the project's standard IIFE. This was the only file of ~150 with
-// no "use strict" and the only bare-object-literal global — a fourth module
-// shape in a codebase that has three. Nothing about the data changes.
+/* Apex 26 — CircuitMarkings: curated FIA-aligned sector splits + turn apexes. Fractions are in RACING-LAP space (s=0 at the start/finish after startFrac/ reverse … */
 window.CircuitMarkings = (function () {
   "use strict";
   return {
@@ -71,10 +60,6 @@ window.CircuitMarkings = (function () {
   },
   monza: {
     sectors: [0.28, 0.62],
-    // FIA 11 turns: Rettifilo, Curva Grande (was missing — mild R~174 peak at
-    // ~0.129), Roggia, Lesmo 1/2, Ascari L/R/L, Parabolica. Dropped the
-    // Serraglio kink (0.432) and the dual Parabolica sample so the count stays
-    // 11 and T3 reads FAST. Sources: SI / Pit Lane / DIY Sim Monza guides.
     turns: [0.0962, 0.1022, 0.1288, 0.3057, 0.3122, 0.3692, 0.3827, 0.6177, 0.6309, 0.6497, 0.8387],
   },
   qatar: {
@@ -117,7 +102,7 @@ window.CircuitMarkings = (function () {
     sectors: [0.32, 0.68],
     turns: [0.0860, 0.1667, 0.2084, 0.2957, 0.3953, 0.4219, 0.4845, 0.5338, 0.5889, 0.7312, 0.7558, 0.8327, 0.8744, 0.9105],
   },
-  // ── Derived tables (no curated FIA source). These circuits had NO entry at
+  // These circuits had NO entry at
   // all, so buildProps fell back to findCorners() and numbered an arbitrary
   // count of curvature peaks from an arbitrary origin. Apexes here are the N
   // strongest curvature peaks of THIS centreline in lap order, with N set to

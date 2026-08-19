@@ -1,35 +1,8 @@
-/* Apex 26 — Binary glTF (.glb) loader.
- *
- * Self-contained glTF 2.0 *binary* (.glb) parser that bakes a model down to the
- * plain mesh data GLX.createMesh expects: {pos,nrm,col,idx}. The renderer is
- * vertex-colour only (no textures), so each material's baseColorFactor (and any
- * COLOR_0 attribute) is baked into the per-vertex colour. All primitives of all
- * meshes are merged into one buffer set, with node transforms applied.
- *
- * Usage:
- *   const mesh = GLX.createMesh(GLTF.toMesh(arrayBuffer));
- *   // ...later... GLX.draw(mesh, modelMat);
- *
- * The model's OWN baked colours are used. Team-tinting can be applied later by
- * passing { tint:[r,g,b] } via GLTF.toMesh opts (multiplies colour).
- *
- * API:
- *   GLTF.parseGLB(arrayBuffer)        -> parsed glTF object (throws on malformed)
- *   GLTF.toMesh(arrayBuffer, opts)    -> {pos,nrm,col,idx} for GLX.createMesh
- *
- * opts: { scale?:number (default 1), swapYZ?:bool, tint?:[r,g,b] }
- *
- * Intentionally NOT supported (kept tiny on purpose): textures/UVs, external
- * .bin or image URIs, Draco / meshopt compression, animations, skins/morphs,
- * sparse accessors, cameras, lights. The text .gltf form is not parsed (binary
- * .glb only). Such files throw / reject with a clear message so callers can fall
- * back to procedural geometry.
- */
+/* Apex 26 — Binary glTF (.glb) loader. Self-contained glTF 2.0 *binary* (.glb) parser that bakes a model down to the plain mesh data GLX.createMesh expects: {pos,… */
 "use strict";
 
 const GLTF = (function () {
 
-  // ---------- GLB container constants ----------
   const GLB_MAGIC = 0x46546c67;   // "glTF" little-endian
   const CHUNK_JSON = 0x4e4f534a;  // "JSON"
   const CHUNK_BIN = 0x004e4942;   // "BIN\0"
@@ -45,7 +18,6 @@ const GLTF = (function () {
   };
   const NUM_COMPONENTS = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT2: 4, MAT3: 9, MAT4: 16 };
 
-  // ---------- small column-major mat4 / quat helpers (self-contained) ----------
   function mIdentity() {
     return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
   }
@@ -93,8 +65,6 @@ const GLTF = (function () {
     ];
   }
 
-  // 3x3 inverse-transpose of a mat4's upper-left, applied to a normal vector.
-  // Returns the (unnormalised) transformed normal; caller normalises.
   function normalMatTransform(m, n) {
     // upper-left 3x3
     const a = m[0], b = m[1], c = m[2];
@@ -107,8 +77,6 @@ const GLTF = (function () {
       return [a * n[0] + d * n[1] + g * n[2], b * n[0] + e * n[1] + h * n[2], c * n[0] + f * n[1] + i * n[2]];
     }
     const id = 1 / det;
-    // inverse of 3x3 (cofactor / det), then transpose = multiply normal by inverse-transpose.
-    // inv = adj^T / det. Normal' = inv^T * n = (adj / det) * n  (adj is cofactor matrix).
     const c00 = (e * i - f * h) * id;
     const c01 = (f * g - d * i) * id;
     const c02 = (d * h - e * g) * id;
@@ -126,7 +94,6 @@ const GLTF = (function () {
     ];
   }
 
-  // ---------- base64 (data: URI buffers) ----------
   // atob in the browser; Buffer in Node (self-test). Returns a Uint8Array.
   function base64ToBytes(b64) {
     if (typeof atob === "function") {
@@ -142,7 +109,6 @@ const GLTF = (function () {
     throw new Error("GLTF: no base64 decoder available (need atob or Buffer)");
   }
 
-  // ---------- GLB container parse ----------
   function parseGLB(arrayBuffer) {
     if (!arrayBuffer || !(arrayBuffer instanceof ArrayBuffer)) {
       throw new Error("GLTF.parseGLB: expected an ArrayBuffer");
@@ -183,7 +149,6 @@ const GLTF = (function () {
     return { json, bin };
   }
 
-  // ---------- accessor reading ----------
   // Resolve a buffer (index) to a Uint8Array. Embedded BIN, or data: URI.
   function resolveBuffer(json, bin, index) {
     const buf = json.buffers[index];
@@ -247,7 +212,6 @@ const GLTF = (function () {
     return { data: out, count, numComponents: nc };
   }
 
-  // ---------- node hierarchy -> world matrices ----------
   function nodeLocalMatrix(node) {
     if (node.matrix) return node.matrix.slice(); // already column-major per spec
     const t = node.translation || [0, 0, 0];
@@ -256,9 +220,6 @@ const GLTF = (function () {
     return mFromTRS(t, q, s);
   }
 
-  // Walk the scene, accumulating a world matrix per node that has a mesh.
-  // Returns [{ mesh:meshIndex, world:mat4 }, ...]. If no scene/nodes, falls back
-  // to drawing every mesh at identity.
   function collectMeshInstances(json) {
     const instances = [];
     const nodes = json.nodes;
@@ -293,7 +254,6 @@ const GLTF = (function () {
     return instances;
   }
 
-  // ---------- main: bake to merged {pos,nrm,col,idx} ----------
   function toMesh(arrayBuffer, opts) {
     opts = opts || {};
     const scale = opts.scale !== undefined ? opts.scale : 1;
@@ -406,9 +366,6 @@ const GLTF = (function () {
     return { pos, nrm, col, idx };
   }
 
-  // Accumulate flat (per-face) normals for the triangles of one primitive into
-  // the global nrmOut array. vertBase is the global offset of this primitive's
-  // first vertex; positions for those verts already live in posOut.
   function computeFlatNormals(posOut, indices, vertBase, nrmOut) {
     for (let t = 0; t + 2 < indices.length; t += 3) {
       const ia = vertBase + indices[t];

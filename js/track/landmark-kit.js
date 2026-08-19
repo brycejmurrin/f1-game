@@ -92,8 +92,6 @@ const LandmarkKit = (function () {
             spec.color, spec.basis]);
       }
       for (let i = 0; i < levels; i++) {
-        // "stepped" alternates the setback side instead of shrinking evenly,
-        // which reads as offset slabs rather than a wedding cake.
         const scale = kind === "stepped"
           ? (i % 2 ? 0.78 : 1.0)
           : 1 - i / levels * 0.35;
@@ -163,13 +161,6 @@ const LandmarkKit = (function () {
     function canopy(stage, spec) {
       if (!ready(stage, spec)) return false;
       const mastHeight = spec.size[1] * 0.8;
-      // p.cylinder is BASE-anchored (geom.js: addCyl/addCone/addFrustum take a
-      // base centre, not a centroid), but this centred the mast inside the
-      // canopy's own height the way you would centre a box — leaving its foot
-      // 0.4 * size[1] above the canopy floor with nothing under it, and the
-      // ridge prism resting on the mast floating with it. Seat the foot on the
-      // floor; 0.8 * size[1] of mast then tops out exactly at the ridge's
-      // base (+0.30 * size[1]), which is where the prism expects it.
       const mastCenter = [
         spec.center[0],
         spec.center[1] - spec.size[1] / 2,
@@ -180,9 +171,6 @@ const LandmarkKit = (function () {
         stage, mastCenter, radius, mastHeight,
         spec.mastColor || spec.color, 8, spec.basis,
       ])) return false;
-      // Peaked marquee roof (a ridged prism, base-anchored on the eave line)
-      // plus a thin valance skirt under the eave — reads as a tent, not a flat
-      // slab lid. p.prism is already a kit dependency (sawtooth uses it).
       const ridge = spec.size[1] * 0.30;
       return emit(p.prism, [
         stage,

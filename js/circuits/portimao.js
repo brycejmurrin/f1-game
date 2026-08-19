@@ -14,9 +14,6 @@
     // Was 0.96, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.96,
     name: "PORTIMAO",
     gp: "Portuguese GP",
@@ -26,8 +23,6 @@
     lengthKm: 4.7,
     baseHW: 7.5,
     sceneryCoordinates: "racing",
-    // Portimão is cut into a steep hillside; the terrain ribbon has to be wide
-    // enough to carry the banks the circuit rides over.
     terrainOuter: 125,
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.93, s1: 0.08 },
@@ -46,10 +41,6 @@
       runoff:        [0.66, 0.44, 0.30],   // Algarve red earth
       sunDir:        [0.38, 0.72, 0.28],
     },
-    // THE defining feature: Portimão is a rollercoaster. Blind crests, sudden
-    // drops and a pit straight that plunges downhill into Turn 1. The most
-    // authored elevation bumps (six) and the largest summed rise of any circuit
-    // in this batch (Kyalami's single range is a touch larger).
     elevations: [
       { s: 0.045, halfM: 260, rise: -14.0 },  // the drop into Turn 1
       { s: 0.20, halfM: 300, rise: 11.0 },    // climb to the Turn 3 crest
@@ -78,18 +69,6 @@
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // ── MONTADO: CORK OAK AND OLIVE ──────────────────────────────────────
-      // The circuit is 22 km INLAND, on the rolling hills of the Algarve
-      // interior — not on the coast, which is why there is deliberately no
-      // Atlantic anywhere in this file. That interior is montado: open,
-      // grazed, sparsely treed country of cork oak and olive, and the lap had
-      // neither. Generic scatter gave it trees, but not THESE trees.
-      //
-      // The cork oak is the giveaway and it is nearly free to draw. Short
-      // thick trunk, a broad LOW spreading crown much wider than it is tall —
-      // and, where the bark has been stripped for cork, a bare rust-red lower
-      // trunk under the corky grey upper. That two-tone trunk exists nowhere
-      // else and reads at distance.
       {
         const CORK_LEAF  = [0.24, 0.34, 0.19];
         const CORK_LEAF2 = [0.29, 0.39, 0.22];
@@ -122,8 +101,6 @@
             addCyl(out, a.c, 0.52 + hv * 0.14, strip, STRIPPED, 6, b);
             addCyl(out, vadd(a.c, a.u, strip), 0.46 + hv * 0.12, h * 0.22, BARK, 6, b);
             out._mat = MAT.FOLIAGE;
-            // Broad and LOW — the crown is wider than the tree is tall. Two
-            // flattened lobes rather than one cone, so it spreads.
             const spread = h * 0.72;
             addFrustum(out, vadd(a.c, a.u, h * 0.46), spread * 0.55, spread, h * 0.20,
                        hv < 0.5 ? CORK_LEAF : CORK_LEAF2, 8, b);
@@ -133,10 +110,6 @@
           }
         }
 
-        // Olive terraces. Unlike the cork oaks these ARE ordered — olives are
-        // planted on the grid, and the contrast between the scattered montado
-        // and the regimented olive is what makes the hillside read as farmed
-        // rather than wild.
         for (const [sf, side, gap, rows] of [
           [0.140, -1, 118, 4], [0.410,  1, 126, 4],
           [0.630,  1, 108, 5], [0.860, -1, 122, 4],
@@ -173,11 +146,6 @@
       const TERRA = [0.68, 0.36, 0.26];         // terracotta pantile
       const CONC = [0.76, 0.74, 0.70];
 
-      // =====================================================================
-      // 1. ALGARVE HILLSIDE — sparse umbrella pine, dry scrub and bare red
-      //    earth banks. Deliberately thin: the elevation IS the view here, and
-      //    a wall of trees would hide every crest.
-      // =====================================================================
       const openArea = (s) => (s >= 0.93 || s <= 0.08) || (s >= 0.30 && s <= 0.42);
       every(32, (k) => {
         const s = k / n;
@@ -199,15 +167,6 @@
         tree(k, h < 0.5 ? -1 : 1, 44 + h * 26, 8 + h * 5, [0.26, 0.36, 0.20]);
       });
 
-      // =====================================================================
-      // 2. THE HILLSIDE TERRACES — Portimão barely has freestanding stands.
-      //    The circuit is cut into a hillside and the spectators are cut into it
-      //    with them: a low retaining wall at the track edge, then broad
-      //    concrete terraces stepping straight up the slope, with the raw red
-      //    escarpment showing above the top row. No roof, no back shell — the
-      //    hill IS the back shell, and it climbs so steeply that from the car
-      //    the crowd is stacked well above the barrier line.
-      // =====================================================================
       const hillsideTerrace = (s0, s1, side, gap, opts) => {
         opts = opts || {};
         const rows = opts.rows || 7, rise = opts.rise || 1.5, depth = opts.depth || 2.9;
@@ -231,8 +190,6 @@
               [0.55, 1.0, 0.6],
               h < 0.2 ? [0.86, 0.30, 0.24] : h < 0.38 ? [0.92, 0.90, 0.86] : [0.24, 0.36, 0.62], b);
           }
-          // Raw red cut face above the top terrace — the Algarve soil the whole
-          // hillside is made of, exposed wherever the terracing stops.
           out._mat = 0;
           const topBack = 1.2 + rows * depth, topUp = 1.6 + rows * rise;
           addPrism(out, vadd(vadd(a.c, a.r, side * (topBack + 2.4)), a.u, topUp),
@@ -242,22 +199,9 @@
       hillsideTerrace(0.035, 0.095, 1, 16, { rows: 8, density: 0.6 });   // Turn 1 amphitheatre
       hillsideTerrace(0.470, 0.530, -1, 18, { rows: 6 });
       hillsideTerrace(0.835, 0.890, 1, 16, { rows: 7 });
-      // The brief names 0.28-0.36 R and 0.62-0.70 L as terracing cut into the
-      // slope, not grass banks — broad concrete steps with the raw red cut face
-      // above the top row, on the opposing hillsides of the middle sector.
       hillsideTerrace(0.280, 0.360, 1, 15, { rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
       hillsideTerrace(0.620, 0.700, -1, 15, { rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
 
-      // =====================================================================
-      // 3. PIT COMPLEX — the pit building sits on the ridge at the top of the
-      //    hill, and its roof is the one thing that identifies Portimão from a
-      //    helicopter: a continuous white ribbon that RIDES UP AND DOWN along
-      //    its own length, echoing the circuit underneath it. Everything else
-      //    is whitewashed render and deep-shaded openings, the local vernacular
-      //    scaled up.
-      // =====================================================================
-      // Bay fractions stop short of s=0.002: the lap folds back close behind the
-      // ridge there and a 42 m footprint needs 26 m of setback to clear it.
       for (const [i, s] of [0.942, 0.960, 0.978, 0.996].entries()) {
         const a = anchor(K(s), 1, 20);
         const b = [a.r, a.u, a.t];
@@ -275,9 +219,6 @@
           addBox(stage, vadd(vadd(a.c, a.r, -3.0), a.u, 10.6), [0.4, 3.0, 36],
             [0.16, 0.26, 0.34], b);
           stage._mat = MAT.METAL;
-          // The wave: six roof panels whose ridge height follows a sine over the
-          // bay, with the phase carried across bays so the four read as one
-          // continuous undulation rather than four identical humps.
           for (let p = 0; p < 6; p++) {
             const ph = (i * 6 + p) / 5.5;
             const lift = 13.4 + Math.sin(ph * 1.15) * 1.7;
@@ -296,8 +237,6 @@
           stage._mat = 0;
         }, { required: true });
       }
-      // Race control: a slim white shaft with a dark cantilevered cab, standing
-      // proud of the ridge line so it is visible from the bottom of the hill.
       {
         const a = anchor(K(0.992), 1, 28);
         const b = [a.r, a.u, a.t];
@@ -325,8 +264,6 @@
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, -1, 11, 140, null, null,
         { livery: "terracotta", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
-      // The Algarve paddock is cut into a hillside, so its blocks STEP with the
-      // slope. A flat-topped box here would sit level against ground that isn't.
       for (let i = 0; i < 4; i++) {
         building(K(0.925 + i * 0.013), 1, 40, 25, 13, 17,
           { kind: "ziggurat", wall: LIME, window: [0.32, 0.36, 0.42], floor: 4.5 });
@@ -339,10 +276,6 @@
       broadcastCompound(K(0.916), 1, 74, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.16, 0.42, 0.24]);
 
-      // =====================================================================
-      // 4. RUNOFF AND CORNERS — Algarve red-earth gravel, which is what makes
-      //    an off at Portimão so recognisable on camera.
-      // =====================================================================
       groundPatch(K(0.050), -1, 6, [34, 0.18, 46], EARTH,
         { id: "portimao-t1-gravel", samples: 8 });
       tyreWall(0.035, 0.070, -1, 5, [0.86, 0.20, 0.18]);
@@ -362,12 +295,6 @@
         { id: "portimao-final-gravel", samples: 6 });
       marshalPost(K(0.895), -1, 9);
 
-      // Painted kerbs — the one splash of saturated colour on a red-earth lap,
-      // and Portimão paints them hard: alternating red/white at most apexes with
-      // blue/white and yellow/white kerbs mixed through the esses, the way the
-      // real circuit's rollercoaster corners are picked out for the cameras.
-      // No SAFER rail on these (safer:false); the armco already sits back at
-      // gap 7, and these are the flat/serrated painted kerbs at the road edge.
       {
         const RK = [0.86, 0.13, 0.14], WK = [0.95, 0.95, 0.93];
         const BK = [0.14, 0.28, 0.62], YK = [0.90, 0.72, 0.12];
@@ -387,10 +314,6 @@
         ]) bankedKerbStrip(s0, s1, side, { safer: false, step: 3.0, kerbRed: red, kerbWht: WK });
       }
 
-      // Between the traps, the verge is not grass either. The whole site is cut
-      // out of red Algarve soil, so a bare earth shoulder runs the length of the
-      // lap and the banks the circuit is carved into show the same colour — it
-      // is why an off here paints the car orange.
       for (const side of [-1, 1]) {
         let i = 0;
         along(0.10, 0.93, 26, (k, spacing) => {
@@ -398,8 +321,6 @@
             (i++ & 1) ? EARTH : EARTH_D);
         });
       }
-      // Cut banks on the uphill side of the two big climbs: a raw earth face
-      // stepping away from the road where the hillside was sliced through.
       for (const [id, s0, s1, side] of [
         ["portimao-cut-t3", 0.150, 0.235, 1],
         ["portimao-cut-t11", 0.560, 0.640, -1],
@@ -409,9 +330,6 @@
         groundedSegments({ id, points: pts, width: 9, height: 5.5, color: EARTH_D });
       }
 
-      // =====================================================================
-      // 5. BOUNDARIES
-      // =====================================================================
       for (const [s0, s1] of [[0.09, 0.28], [0.33, 0.48], [0.53, 0.62], [0.68, 0.85]]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
@@ -422,9 +340,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      // =====================================================================
-      // 6. BACKDROP — the Monchique foothills rolling away inland, dry and pale.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -442,11 +357,6 @@
         }
       }
 
-      // =====================================================================
-      // 7. BESPOKE IDENTITY — the crest marker boards. Portimão has more blind
-      //    brows than any other circuit here, and the boards standing on the
-      //    skyline at each one are how a driver knows what is coming.
-      // =====================================================================
       {
         const board = [0.94, 0.94, 0.90];
         for (const s of [0.19, 0.35, 0.55, 0.77, 0.92]) {
@@ -457,11 +367,6 @@
           }
         }
       }
-      // A whitewashed hillside hamlet above the circuit. The Algarve vernacular
-      // is very specific and very repeatable: small lime-rendered cubes with
-      // shallow terracotta pantile roofs, a squat chimney on every one, and a
-      // walled yard. Set on the high ground so it reads on the skyline above
-      // the crests rather than competing with the trackside dressing.
       const quinta = (id, s, side, gap, count) => {
         const a = anchor(K(s), side, gap);
         const b = [a.r, a.u, a.t];
@@ -476,8 +381,6 @@
             stage._mat = MAT.CONCRETE;
             addBox(stage, vadd(p, a.u, bh / 2), [w, bh, d], LIME, b);
             addPrism(stage, vadd(p, a.u, bh), [w + 0.5, 1.6, d + 0.5], TERRA, b);
-            // Squat whitewashed chimney — the silhouette detail that makes an
-            // Algarve roofline read as Algarve and not as any white box.
             addBox(stage, vadd(vadd(p, a.t, d * 0.28), a.u, bh + 1.9),
               [1.1, 2.0, 1.1], LIME, b);
             stage._mat = 0;
@@ -495,10 +398,6 @@
       quinta("portimao-quinta-north", 0.24, -1, 88, 4);
       quinta("portimao-quinta-south", 0.68, 1, 92, 3);
 
-      // An Algarve windmill on the ridge — the whitewashed drum with a conical
-      // cap and four bare sail arms. There is one on almost every hilltop
-      // between Portimão and Lagos, and nothing else on this lap has a
-      // silhouette anywhere near it.
       {
         const a = anchor(K(0.415), 1, 104);
         const b = [a.r, a.u, a.t];
@@ -509,16 +408,11 @@
           addFrustum(stage, a.c, 3.4, 2.6, 7.5, LIME, 10, b);
           stage._mat = MAT.WOOD;
           addCone(stage, vadd(a.c, a.u, 7.5), 3.0, 2.4, [0.46, 0.34, 0.26], 10, b);
-          // Four sails on a hub cantilevered off the cap, in the plane facing
-          // the prevailing coastal wind.
           const hub = vadd(vadd(a.c, a.u, 8.0), a.r, -3.0);
           addCyl(stage, hub, 0.28, 1.2, [0.40, 0.30, 0.22], 6, [a.r, a.t, a.u]);
           for (let i = 0; i < 4; i++) {
             const ang = i * Math.PI / 2 + 0.4;
             const cA = Math.cos(ang), sA = Math.sin(ang);
-            // dir is the sail's own long axis; perp completes an ORTHONORMAL
-            // basis with it. Passing a.t alongside dir would shear each sail,
-            // because the two are only perpendicular at ang = 0.
             const dir = [], perp = [];
             for (let axis = 0; axis < 3; axis++) {
               dir[axis] = a.u[axis] * cA + a.t[axis] * sA;
@@ -531,9 +425,6 @@
         });
       }
 
-      // The circuit's own hillside apartments: the Autódromo's accommodation
-      // blocks step DOWN the slope behind the paddock in staggered terraces,
-      // each one set back and dropped from the one above.
       for (let i = 0; i < 5; i++) {
         const a = anchor(K(0.905 + i * 0.012), 1, 54 + i * 9);
         const b = [a.r, a.u, a.t];
@@ -552,9 +443,6 @@
         });
       }
 
-      // Braking and corner boards: on a lap this blind they are half the
-      // information a driver gets, so they get proper signage rather than the
-      // plain white slabs above.
       for (let i = 0; i < 3; i++) signBoard(K(0.012 + i * 0.009), -1, 7, "braking", 3 - i);
       signBoard(K(0.055), 1, 7.5, "corner", 1);
       signBoard(K(0.300), -1, 7.5, "corner", 5);
@@ -564,9 +452,6 @@
       cameraTower(K(0.055), 1, 26, { h: 16 });
       cameraTower(K(0.500), -1, 28, { h: 18 });
       cameraTower(K(0.860), 1, 26, { h: 16 });
-      // ALGARVE PINE. The Autodromo is cut into hills carrying umbrella pine
-      // and eucalyptus; the elevation is the circuit's whole character and it
-      // only reads as elevation when something covers the slopes.
       for (const [s0, s1] of [[0.1, 0.28], [0.44, 0.91]]) {
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 16, { density: 0.52, hMin: 9, hMax: 16, pineFrac: 0.78, col: PINE, col2: PINE_D });

@@ -1,10 +1,4 @@
-/* Apex 26 — the LIGHTING TUNER panel UI for js/game.js: slider rows generated
-   from TUNE_DEFS, group tabs, preview time-of-day/weather chips, RESET/COPY
-   VALUES export, and close plumbing. The PROFILE STORE — which layer of
-   default/preset/player-edit wins, and persisting it — is js/game/light-store.js,
-   reached through the same G members this file already destructures.
-   Live state comes through the ctx façade G handed to TunerPanel.create(G).
-   Consumes globals LightTune (TUNE_DEFS/LT). Must load BEFORE js/game.js. */
+/* Apex 26 — the LIGHTING TUNER panel UI for js/game.js: slider rows generated from TUNE_DEFS, group tabs, preview time-of-day/weather chips, RESET/COPY VALUES exp… */
 const TunerPanel = (function () {
   "use strict";
 
@@ -17,33 +11,16 @@ const exitPhotoMode = (...a) => G.exitPhotoMode(...a);
 
 function fmtTune(d, v) {
   if (d.fmt === "auto" && v < 0) return "AUTO";
-  // SHOW AS MANY DECIMALS AS THE STEP CAN MOVE. The cap used to be 3, which
-  // silently lied on every knob with a finer step: shadowBias steps 0.00001 and
-  // bounceK 0.00025, so pressing arrow-right printed the SAME number for two,
-  // four, a hundred notches running — the readout said the control was dead
-  // when it was working perfectly. 16 knobs are finer than 3 dp today (4 of them
-  // were before the range pass ever ran). 5 is the floor that covers every
-  // shipped step; beyond that a step cannot exist without failing the grid
-  // invariant in tests/unit/light-grid.test.mjs.
   const dec = (String(d.step).split(".")[1] || "").length;
   const s = v.toFixed(Math.min(dec, 5));
   return (d.fmt === "signed" && v > 0 ? "+" + s : s) + gateNote(d, v);
 }
-// The gated-state suffix belongs to the READOUT ITSELF, not to one refresh path.
-// It used to be appended in refreshLightTunePanel only, but the slider's own
-// oninput rewrites textContent from fmtTune — so dragging the knob wiped the one
-// line explaining why the knob was doing nothing, and it stayed wiped until a
-// TIME/WEATHER chip or a panel reopen. Building it here means every writer of
-// this readout carries it by construction.
 function gateNote(d, v) {
   if (d.id !== "perChunkLights" || !(v > 0)) return "";
   let latched = false;
   try { latched = localStorage.getItem("apex26.perChunkOff") === "1"; } catch (_) { /* no storage: fall through to the tier check */ }
   if (latched) return " · held after a display reset — set to 0 and back on to retry";
   const tier = (typeof PerfGov !== "undefined" && PerfGov.tier) ? PerfGov.tier() : 0;
-  // Names the TIER, not just the GRAPHICS preset: tier() is max(floor, user,
-  // governor), so a player already on ULTRA whose governor has shed a tier is
-  // also held off, and "pick ULTRA" would be advice they have taken.
   return tier >= 1 ? " · held off by the graphics tier — needs HIGH or ULTRA, and a frame budget the governor has not shed" : "";
 }
 // PREVIEW conditions: the tuner tunes GLOBAL values that only take visible
@@ -76,8 +53,6 @@ function buildLtPreview() {
   const host = $("lt-preview");
   if (host.dataset.built) return;
   host.dataset.built = "1";
-  // Compact one-line-each preset rows: a small inline label + tight chips, so the
-  // condition switchers don't eat the top of the panel.
   const mkGroup = (title, ids, labels, onPick, prefix) => {
     const row = document.createElement("div");
     row.className = "lt-preview-row";
@@ -86,8 +61,6 @@ function buildLtPreview() {
     ids.forEach((id, i) => {
       const btn = document.createElement("button");
       btn.className = "opt-btn lt-preview-btn"; btn.id = prefix + id; btn.textContent = labels[i];
-      // Switching a condition re-applies that condition's profile (via
-      // applyRaceSettings→applyLightTune), so reload the sliders + label too.
       btn.onclick = () => { onPick(id); refreshLtPreviewActive(); refreshLightTunePanel(); };
       row.appendChild(btn);
     });
@@ -198,9 +171,6 @@ function buildLtSpread() {
   host.appendChild(help);
 }
 let _ltActiveGroup = null;   // currently-shown tuner category (tab)
-// Show one tuner category at a time (tab click). Toggles the .active class on the
-// matching group wrapper + its tab chip so only that group's sliders render —
-// the panel was an 82-slider scroll before this split it into 12 tabs.
 function setLtTab(group, focus) {
   _ltActiveGroup = group;
   const rows = $("lt-rows"), tabs = $("lt-tabs");
@@ -310,15 +280,7 @@ function refreshLightTunePanel() {
     if (inp) inp.value = LT[d.id];
     if (b) b.textContent = fmtTune(d, LT[d.id]);
   }
-  // PER-CHUNK LAMPS is force-disabled below the top graphics tier and after a
-  // display reset (js/game.js resolves frame.perChunkLights on PerfGov.tier()
-  // and a crash latch), so the slider can hold a positive value while changing
-  // nothing on screen. That note now lives in gateNote() beside fmtTune, so the
-  // loop above already wrote it and the slider's own oninput preserves it.
   updateLtProfileLabel();
-  // An armed COPY ALL is armed for the condition that was on screen when it was
-  // clicked. This runs on every time-of-day / weather switch, so cancelling here
-  // is what stops the second click landing on a different one.
   ltDisarm();
 }
 $("pm-lighting").onclick = () => {

@@ -1,43 +1,21 @@
-/* Apex 26 — Tracks engine: turns per-circuit definitions (js/circuits/<id>.js,
-   registered on the global TrackDefs list) into resampled closed Catmull-Rom
-   splines extruded into 3D meshes. Contract: docs/ARCHITECTURE.md.
-   Depends on globals TrackDefs + CircuitPaths (data). Mesh upload goes through
-   the renderer backend injected via Tracks.build's opts.gfx (the GLX/TLX/WGX
-   façade), falling back to the GLX global only for the Node-VM build guard. */
+/* Apex 26 — track engine: circuit defs (js/circuits/) → splines, meshes, scenery(api). */
 const Tracks = (function () {
   "use strict";
   let keepGeometry = false;
 
   const WORLD_UP = [0, 1, 0];
 
-  // Geometry primitives + the MAT material-id map live in js/track/geom.js
-  // (global TrackGeom, loaded before this file — index.html and
-  // tools/verify-track.cjs). MAT is re-exposed to per-track scenery() via
-  // api.MAT; buildProps shadows the raw emitters with on-track rejection
-  // guards (see RAW below).
   const { MAT, cross, norm, vadd, emit, addBox, addPrism, addPyramid,
           addCone, addCyl, addFrustum, addMountain } = TrackGeom;
-  // Centreline / spline math lives in js/track/spline.js (global TrackSpline,
-  // loaded before this file — HARD EDGE: destructured here at eval).
   const { centerline, cr, sample, curvatureRaw, curvature, project, wallAt } = TrackSpline;
-  // Kerb/banking band + road/terrain/floor mesh builders live in
-  // js/track/mesh.js (global TrackMesh, loaded before this file — HARD EDGE:
-  // destructured here at eval).
   const { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
           nodeGrid, buildRoad, buildTerrain, buildFloor } = TrackMesh;
   const lerp = M4.lerp, __M = Math, __isFinite = Number.isFinite;   // js/mat4.js helper + the contextified-global aliases measured above `firstNonFinite` in js/track/models.js (this file is AT its module-size ceiling — one line only)
 
-  // ---------- build ----------
-  // Cheap centreline-only build: runs just the spline engine (positions,
-  // tangents, banking, map, banking profile) WITHOUT generating the road /
-  // terrain / props meshes or uploading anything to the GPU. Used by TrackMaps
-  // to draw the 2D minimaps without paying the full 3D build cost (24 of those
-  // on the select screen was a ~16 s first-open stall).
   function buildCenterline(def) {
     ensurePoints(def);
     const P = def.points, N = P.length;
     const idx = (i) => ((i % N) + N) % N;
-    // dense sampling for arc-length parameterization
     const SUB = 16;
     const dx = [], dy = [], dz = [], dhw = [], dbank = [], dlen = [0];
     for (let i = 0; i < N; i++) {
@@ -55,16 +33,9 @@ const Tracks = (function () {
       }
     }
     const M = dx.length;
-    // close the gap length
     const closeGap = Math.hypot(dx[0] - dx[M - 1], dy[0] - dy[M - 1], dz[0] - dz[M - 1]);
     const total = dlen[M - 1] + closeGap;
 
-    // Where the SCENERY's old start line now sits, as an arc-length fraction of
-    // this lap. See TrackSpace.sceneryOriginDelta for why this cannot be
-    // `startFrac - sceneryStartFrac`: those are control-point index fractions
-    // and the control points are not arc-uniform. Here the arc-length table is
-    // in hand, so it is a direct lookup — control point j opens at dense
-    // sample j*SUB.
     if (def.sceneryStartFrac != null) {
       const offNew = Math.round(TrackSpace.wrap01(def.startFrac) * N) % N;
       const iOld = Math.round(TrackSpace.wrap01(def.sceneryStartFrac) * N) % N;
@@ -92,13 +63,6 @@ const Tracks = (function () {
       hw[k] = lerp(dhw[di], dhw[di + 1], f);
       bank[k] = lerp(dbank[di], dbank[di + 1], f);
     }
-    // Localized bridges (figure-8 crossovers): raise one section into a smooth
-    // deck so it passes OVER the lower section instead of clipping through it.
-    // The cosine bump returns to 0 at the window edges, so the rest of the lap
-    // stays flat — no global tilt.
-    // The dressing rotation, in the units this function works in. resolve()
-    // froze the elevation/bridge anchors at the authoring origin; here they are
-    // carried forward into the new lap, exactly as the scenery is.
     const dress = def._sceneryShift || 0;
     const bridges = def.bridges;
     if (bridges) for (const b of bridges) {
@@ -119,26 +83,8 @@ const Tracks = (function () {
         if (d < e.halfM) py[k] += e.rise * 0.5 * (1 + Math.cos(Math.PI * d / e.halfM));
       }
     }
-    // ---- fine surface undulation -------------------------------------------
-    // The authored profile is a handful of BROAD cosine bumps — Spa carries all
-    // 102 m of its elevation in four, with halfM 360-920 m. Between them the
-    // road is mathematically flat: measured over 20 m windows, the MEDIAN
-    // gradient on Suzuka and Monaco is 0.0%. Real circuits never are. That
-    // constant small compression-and-release is most of what makes a car feel
-    // alive under you, and its absence is why every circuit reads the same
-    // between corners.
-    //
-    // Add a low-amplitude ripple: three harmonics at 30-110 m wavelengths,
-    // summed so the result never repeats obviously. Written in CYCLES PER LAP
-    // (integer) rather than metres so the profile is continuous across the
-    // start/finish seam — a wavelength that does not divide the lap leaves a
-    // step there, and the car would hit it every lap.
-    //
-    // Amplitude scales with the track's own relief: a circuit that already
-    // climbs (Spa, Red Bull) gets a little more, a flat street circuit stays
-    // nearly smooth, and nothing exceeds the 0.42 cap applied below.
-    // Deterministic — seeded
-    // off the circuit id — so a lap is repeatable and ghosts stay valid.
+    // Low-amplitude ripple (3 harmonics, whole cycles/lap for seam continuity);
+    // amp scales with relief (0.14–0.42 m cap); seeded off circuit id for ghosts.
     if (def.undulate !== false) {
       let lo = Infinity, hi = -Infinity;
       for (let k = 0; k < n; k++) { if (py[k] < lo) lo = py[k]; if (py[k] > hi) hi = py[k]; }
@@ -153,17 +99,10 @@ const Tracks = (function () {
       for (let h = 0; h < 3; h++) {
         const targetLen = 30 + h * 38 + rnd(h) * 22;
         const cycles = Math.max(4, Math.round(total / targetLen));
-        // Weight RISES with wavelength: long swells carry the amplitude, short
-        // ripples are small. The other way round makes the peak GRADIENT scale
-        // with 1/wavelength and turns a gentle 0.4 m ripple into a 9% ramp.
         waves.push({ cycles, phase: rnd(h + 7) * Math.PI * 2, w: h + 1 });
       }
       const norm = waves.reduce((a, b) => a + b.w, 0) || 1;
       for (let k = 0; k < n; k++) {
-        // Phased by the dressing shift for the same reason the bumps are: the
-        // ripple is a function of lap fraction, so moving the line would slide
-        // 0.4 m of road up and down under scenery that did not move. Whole
-        // cycles per lap, so a constant phase offset keeps the seam continuous.
         const u = ((k / n - dress) % 1 + 1) % 1;
         let v = 0;
         for (const wv of waves) v += Math.sin(u * wv.cycles * Math.PI * 2 + wv.phase) * wv.w;
@@ -193,22 +132,14 @@ const Tracks = (function () {
     // it — findCorners/bankingProfile call curvature(), which now indexes this.
     track.curv = new Float32Array(n);
     { const cds = total / n; for (let k = 0; k < n; k++) track.curv[k] = curvatureRaw(track, k * cds); }
-    // Banking profile (outer-edge lift per node). Computed once and shared by the
-    // road/terrain meshes and the car/camera placement in game.js.
     track.bankP = bankingProfile(track);
     return track;
   }
 
-  // Full build: centreline + 3D meshes (road/terrain/props/gate) uploaded to the
-  // GPU. This is the heavy one — only needed to actually render/drive a circuit.
   function build(def, opts) {
     Log.info("track", "build start " + def.id + (opts && opts.night != null ? " night=" + !!opts.night : ""));
     const track = buildCenterline(def);
-    // One profile drives terrain generation, floor blending, and scenery
-    // grounding. Keeping it on the track also makes diagnostics deterministic.
     track.surface = TrackSurface.profile(def, track);
-    // Session darkness drives whether buildings/skyline light their windows.
-    // Falls back to the track's default (def.night) when not specified.
     track._night = opts && opts.night != null ? !!opts.night : !!def.night;
     // Façade wiring: the active renderer backend flows in through opts.gfx
     // (game.js passes `gfx`). This ends tracks.js's reliance on reaching the
@@ -217,8 +148,6 @@ const Tracks = (function () {
     // don't inject one: the Node-VM build guard (tools/verify-track.cjs) and the
     // VM tests, which install a stub GLX global instead of an opts.gfx.
     const G = (opts && opts.gfx) || (typeof GLX !== "undefined" ? GLX : null);
-    // Stash it so buildProps (which only takes `track`) can read mobileTier off
-    // the same backend rather than the GLX global.
     track._gfx = G;
     if (G && G.createMesh) {
       track.geometryDiagnostics = [];
@@ -255,15 +184,10 @@ const Tracks = (function () {
       const terrainSafe = safe("terrain", terrainGeo); terrainSafe._keepPositions = true; terrainSafe._keepFullGeometry = keepGeometry;
       track.terrainGeo = terrainSafe; buildRibbon(terrainSafe, "terrain"); // raw geometry kept for groundY/debug
       const _props = buildProps(track);
-      // Chunked + frustum-culled: the city/props mesh is huge (up to ~5 M verts),
-      // and most of it is off-screen each frame — drawing only visible XZ cells
-      // (and only shadow-casting cells inside the light frustum) is the big win.
       const propsGeo = safe("props", _props.out);
       track.propsGeo = propsGeo;
       propsGeo._keepPositions = propsGeo._keepFullGeometry = keepGeometry;
       track.meshes.props = G.createChunkedMesh ? G.createChunkedMesh(propsGeo, 72) : G.createMesh(propsGeo);
-      // S3: GPU batches for nodes that skipped the props fuse. Glass stays fused
-      // (reflective material). Fall back to empty if the backend has no consumer.
       track.meshes.propBatches = null;
       if (track.graph && G.createInstancedBatch) {
         const { batches } = track.graph.batches();
@@ -277,9 +201,6 @@ const Tracks = (function () {
       track.glassGeo = glassGeo;
       track.waterGeo = waterGeo;
       glassGeo._keepPositions = glassGeo._keepFullGeometry = keepGeometry;
-      // Glass rides the SAME chunk grid as the props: it was one un-culled
-      // createMesh draw of every window pane in the whole city, every frame —
-      // full clearcoat+env fill for panes behind the camera and past the fog.
       track.meshes.glass = G.createChunkedMesh ? G.createChunkedMesh(glassGeo, 72) : G.createMesh(glassGeo);
       track.meshes.water = G.createMesh(waterGeo);
       track.meshes.gate = G.createMesh(safe("gate", buildGate(track)));
@@ -298,29 +219,12 @@ const Tracks = (function () {
     const w = maxx - minx || 1, h = maxz - minz || 1, sc = 1 / Math.max(w, h);
     const ox = (1 - w * sc) / 2, oz = (1 - h * sc) / 2;
     const out = [], step = Math.max(1, Math.floor(n / 200));
-    // Minimap projection: flipped over the Y (vertical) axis — x = maxx-px — so the
-    // 2D outline reads the same handedness as the 3D drive view (e.g. Bahrain's
-    // long straight on the left with Turn 1 to the right). y = maxz-pz (north → top).
     for (let i = 0; i < n; i += step) out.push([ox + (maxx - px[i]) * sc, oz + (maxz - pz[i]) * sc]);
     return out;
   }
 
-
-  // ---------- mesh helpers ----------
-  // upOf/hash/findCorners/bankingProfile/buildKerbs/onKerb/bankAngle/banking
-  // (kerb + banking band) and nodeGrid/buildRoad/buildTerrain/buildFloor
-  // (road/terrain/floor band) live in js/track/mesh.js (TrackMesh) —
-  // destructured at the top of this module.
-
-
-  // Raw (unguarded) emitters, captured so buildProps can wrap them with the
-  // on-track rejection guard below while still reaching the real implementations.
   const RAW = { addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, addMountain };
 
-  // Wrap a scenery api so a bespoke scenery() authored for the forward lap places
-  // correctly on a REVERSED lap (optionally with the start rotated to fraction
-  // `phi`). Transforms: s-fraction s→phi-s, node index k→round(phi*n)-k, side
-  // ±1→∓1. Helpers are grouped by their leading-argument signature.
   function transformSceneryApi(api, def, n) {
     const RK = (k) => TrackSpace.sceneryNode(def, k, n);
     const RS = (s) => TrackSpace.sceneryFrac(def, s);
@@ -358,12 +262,7 @@ const Tracks = (function () {
     // (s, …): single fraction, no side (gantry / underpass portal)
     if (api.gantry) w.gantry = (s, ...r) => api.gantry(RS(s), ...r);
     if (api.underpassPortal) w.underpassPortal = (s, ...r) => api.underpassPortal(RS(s), ...r);
-    // floodMastRing places BOTH sides via every() — no remapping needed
-    // NOTE: node-index utilities (groundYAt, upOf) and the raw px/py/pz arrays are
-    // intentionally NOT remapped — the few direct px[k]/upOf(k) reads in bespoke
-    // scenery stay mutually consistent on the reversed centreline (cosmetic only).
 
-    // ── Origin-shift / lapMirror remaps for the six leftover emitters ─────────
     // Six more entry points take a node index or a lap fraction and are absent
     // from the lists above, so they never moved with the rest: `groundPatch`
     // (35 circuits), `overheadSpan` (16), `circuitKit` (16), `groundedSegments`
@@ -394,19 +293,10 @@ const Tracks = (function () {
       const SS = (s) => TrackSpace.wrap01(s + shiftS);
       const remapK = doMirror ? RK : SK;
       const remapS = doMirror ? RS : SS;
-      // groundPatch / waterField / groundedSegments stay SHIFT-ONLY even on
-      // lapMirror circuits — those defs authored dressing against the shift
-      // frame; flipping them with RS/RK lifts props off the terrain ribbon
-      // (singapore float-audit: 1 cluster @ frac 0.531 after a full remap).
       for (const name of ["groundPatch", "waterField"]) {
         const f = api[name]; if (f) w[name] = (k, side, ...r) => f(SK(k), side, ...r);
       }
       if (api.frameAt) w.frameAt = (frac, ...r) => api.frameAt(remapS(frac), ...r);
-      // `rawFrac: true` = "this frac is ALREADY final racing space — hands off".
-      // Monaco's tunnel derives k from the raw racing arrays and builds its
-      // walls off px/py/pz directly (deliberately unremapped); shifting only
-      // the roof tears the vault ~93.6 m off its own bore (0.0284 laps). The
-      // caller knows which space its frac is in; the wrapper cannot.
       if (api.overheadSpan) w.overheadSpan = (spec) => api.overheadSpan(
         spec && Number.isFinite(spec.frac) && !spec.rawFrac
           ? Object.assign({}, spec, { frac: remapS(spec.frac) }) : spec);
@@ -414,12 +304,6 @@ const Tracks = (function () {
         spec && Array.isArray(spec.points)
           ? Object.assign({}, spec, { points: spec.points.map((pt) => Object.assign({}, pt, { k: SK(pt.k) })) })
           : spec);
-      // Every CircuitKit method takes a spec keyed on `frac` (circuit-kit.js
-      // routes it through deps.frameAt RAW). Keep SHIFT-ONLY remap here even on
-      // lapMirror circuits — the kit's callers (singapore raceControl beacon via
-      // KOLD, etc.) are authored against shift space. Full RS on the kit moved
-      // the pit tower out from under its roof beacon (float gap ≈ beacon height).
-      // Portal decks still get RS via overheadSpan/frameAt above.
       if (api.circuitKit) {
         const kit = api.circuitKit, wk = {};
         for (const name of Object.keys(kit)) {
@@ -437,8 +321,6 @@ const Tracks = (function () {
 
   function buildProps(track) {
     Log.info("track", "buildProps start " + (track.def && track.def.id));
-    // Static dressing tables (barrier liveries, furniture, crowd/sign/city
-    // palettes, building styles) live in js/track/scenery-data.js.
     const { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS,
             MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, BARRIER, FURN, FURN_DEF,
             STYLES, THEME_DEF, ATM, COL } = TrackSceneryData;
@@ -455,24 +337,10 @@ const Tracks = (function () {
     const G = track._gfx || (typeof GLX !== "undefined" ? GLX : null);
     const CITY_LOD = (G && G.mobileTier) ? 0.72 : 1;
     const lod = (nn, floor) => Math.max(floor, Math.round(nn * CITY_LOD));
-    // `mat` holds a per-vertex procedural-material id (0 = FLAT). `_mat` is the
-    // CURRENT material register: emitters (addBox/emit) stamp it onto every vertex,
-    // so a model sets `out._mat = MAT.BRICK` around a block instead of threading a
-    // param through every call. Untagged geometry stays FLAT (unchanged look).
     const out = TrackModels.scratch();
-    // Separate GLASS buffer: reflective window panes are emitted here and drawn
-    // with a low-roughness material so the lit shader's env term mirrors the sky
-    // (real view-dependent reflection, not a faked colour). Day windows only.
     const glassBuf = TrackModels.scratch();
-    // Separate WATER buffer: lake/sea/marina surfaces emit here and draw with a
-    // low-roughness material so the lit shader's env term mirrors the live sky
-    // (real time-of-day reflection + sun glint), turning flat blue slabs into
-    // reflective water. Flagged via groundPlane(..., water=true).
     const waterBuf = TrackModels.scratch();
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
-    // Session darkness (set by Tracks.build from the chosen time of day) drives
-    // window/skyline lighting — so buildings respond to dusk/night even on a
-    // day-default circuit, and stay daytime on a night-default one raced by day.
     const NIGHT = track._night != null ? track._night : !!def.night;
 
     // Rendered-terrain raycast for exact prop anchoring: anchor-based props
@@ -483,8 +351,6 @@ const Tracks = (function () {
     // coarse XZ grid so each lookup is ~O(1); huge distant triangles are skipped
     // (props are never that far out — those fall back to groundYAt).
     const _tg = track.terrainGeo;
-    // Numeric packed cell key (no per-triangle/per-lookup string garbage), same
-    // scheme as glx.createChunkedMesh: (cx+OFFSET)*STRIDE + (cz+OFFSET).
     const _CELL = 6, _GOFF = 2048, _GSTR = 4096;
     const _gkey = (cx, cz) => (cx + _GOFF) * _GSTR + (cz + _GOFF);
     let _grid = null;
@@ -521,7 +387,6 @@ const Tracks = (function () {
       return best;
     };
 
-    // ===================================================================
     // Hard guarantee: NO scenery primitive may sit on the racing surface.
     // Every shape — the helpers below AND the raw emitters handed to each
     // circuit's bespoke scenery() — funnels through these guarded wrappers.
@@ -531,7 +396,6 @@ const Tracks = (function () {
     // circuits whose straights run close in world space) can never enclose the
     // chase camera or wall off the track. Sub-grade slabs (water, the universal
     // ground floor) sit below road level and are exempt via the topY check.
-    // ===================================================================
     let _culled = 0;
     const _suppressed = Object.create(null);
     const noteSuppressed = (kind, msg) => {
@@ -542,7 +406,6 @@ const Tracks = (function () {
       emitted: [], suppressed: [], invalid: [], unsafe: [],
     };
 
-    // ---------- semantic prop registry ----------
     // Everything buildProps places goes straight into vertex buffers and is then
     // anonymous: the footprint list and spatial hash below are function-local and
     // die with this call, so after a build nothing can answer "is there a
@@ -560,9 +423,6 @@ const Tracks = (function () {
     const PROP_CAP = 40000;
     const propList = [];
     let propDropped = 0;
-    // The placement currently claiming emitted primitives, and where it stands.
-    // A composite model is many primitives (a tree is a trunk plus four cones),
-    // so ownership runs until the next note() or until emission moves away.
     let curRec = null, curAnchor = null;
     const OWN_R = 20;
     const note = (kind, c, size, extra) => {
@@ -593,7 +453,6 @@ const Tracks = (function () {
       spanList.push(rec);
     };
 
-    // ---------- unnamed geometry ----------
     // The named emitters above cover the shared toolkit, but each circuit's
     // bespoke scenery() also calls the raw guarded emitters directly, and on a
     // street circuit that is most of the world: measured against the shipped
@@ -656,10 +515,6 @@ const Tracks = (function () {
                   || __M.max(x1, asm.x1) - __M.min(x0, asm.x0) > ASSEMBLY_EXTENT
                   || __M.max(z1, asm.z1) - __M.min(z0, asm.z0) > ASSEMBLY_EXTENT)) flushAsm();
       if (!asm) { asm = { x0, y0, z0, x1, y1, z1, cx, cz, count: 0, vol: 0 }; }
-      // Summed primitive volume vs the hull's. A real building fills its box; a
-      // scatter of lamp bases and fence posts spread over 30 m fills almost none
-      // of it. Consumers that treat the box as solid — frame()'s occlusion
-      // raster above all — need to know which they are holding.
       asm.vol += __M.max(x1 - x0, 0.05) * __M.max(y1 - y0, 0.05) * __M.max(z1 - z0, 0.05);
       if (x0 < asm.x0) asm.x0 = x0; if (x1 > asm.x1) asm.x1 = x1;
       if (y0 < asm.y0) asm.y0 = y0; if (y1 > asm.y1) asm.y1 = y1;
@@ -669,8 +524,6 @@ const Tracks = (function () {
       asm.cx += (cx - asm.cx) / asm.count;
       asm.cz += (cz - asm.cz) / asm.count;
     };
-    // A named placement ends whatever anonymous run was in progress, so its own
-    // primitives are not folded into the neighbouring structure.
     const absorbBox = (c, sz) => absorb(c[0] - sz[0] / 2, c[1] - sz[1] / 2, c[2] - sz[2] / 2,
                                         c[0] + sz[0] / 2, c[1] + sz[1] / 2, c[2] + sz[2] / 2);
     const absorbUp = (c, r, h) => absorb(c[0] - r, c[1], c[2] - r,
@@ -684,14 +537,7 @@ const Tracks = (function () {
       Array.isArray(v) && v.length === len && v.every((x) => __isFinite(x) && (!positive || x > 0));
     const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
     const _hitCand = new Array(n), _trkCand = new Array(n);   // reusable query scratch
-    // True if a footprint covers the tarmac at any node it rises above. A
-    // circular footprint is given by rad>0 at (cx,cz); otherwise an oriented
-    // rectangle with unit XZ axes (arx,arz)/(afx,afz) and half-extents hx,hz.
     const onRoadHit = (cx, cz, topY, rad, arx, arz, afx, afz, hx, hz) => {
-      // Only nodes within the footprint's max reach (evaluated at maxHw) can be
-      // covered — query the shared grid instead of scanning all n nodes. This is
-      // the O(prims·n) hot path (one call per emitted city pane). OR semantics,
-      // so candidate order is irrelevant; the per-node test below is unchanged.
       const mh = grid.maxHw;
       const R = (rad > 0 ? rad + mh : __M.hypot(hx + mh, hz + mh)) + 2;
       const _cn = grid.query(cx, cz, R, _hitCand, false);
@@ -708,16 +554,6 @@ const Tracks = (function () {
         // box's hit corner can sit at hypot(hx+w, hz+w) from centre).
         const reach = (rad > 0 ? rad + w : __M.hypot(hx + w, hz + w)) + 2;
         if (dxc * dxc + dzc * dzc > reach * reach) continue;   // cheap far reject
-        // Minkowski test: expand the footprint by the road half-width `w` and ask
-        // whether the road CENTRE-line node falls inside it. This catches a prop
-        // overhanging the tarmac even when the prop is THIN and oblique — e.g. a
-        // tall building's narrow side face (0.5 m across) that sweeps over a
-        // CURVING stretch of track. The previous version sampled five points
-        // ACROSS the road and tested point-in-box; a 0.5 m-wide slab crossing the
-        // road between those samples slipped through and walled the track off at
-        // corners (Miami back-straight cityFront, etc.). Expanding the box by the
-        // road radius and testing the single centre point is exact for that case
-        // and cheaper (one test per node instead of five).
         const ex = px[k] - cx, ez = pz[k] - cz;
         if (rad > 0) {
           // circle footprint vs road capsule of radius w
@@ -741,16 +577,10 @@ const Tracks = (function () {
       const topY = c[1] + __M.max(0, h * u[1]) + rad;     // generous top estimate
       return onRoadHit(c[0], c[2], topY, rad, 0, 0, 0, 0, 0, 0);
     };
-    // Guarded wrappers shadow the raw emitter names for the whole of buildProps
-    // (helpers + the api passed to def.scenery). Each returns false when dropped
-    // so a caller can also skip its barrier record (e.g. place/building).
     const badPrimitive = (kind, c, size) => {
       diagnostics.invalid.push({ id: kind, reason: "non-finite primitive dimensions", center: c, size });
       return false;
     };
-    // `_dryRun` / `_absorbOnly` honour graph.instance's prefer-instance path:
-    // dry = guard only (no cull tally — the real pass tallies); absorbOnly =
-    // terrain seating without triangles for GPU-instanced full nodes.
     const addBox = (o, c, sz, col, basis) => {
       if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("box", c, sz);
       if (rejBox(c, sz, basis)) { if (!o._dryRun) _culled++; return false; }
@@ -799,22 +629,9 @@ const Tracks = (function () {
       if (onRoadHit(c[0], c[2], c[1] + h, baseR, 0, 0, 0, 0, 0, 0)) { _culled++; return false; }
       RAW.addMountain(o, c, baseR, h, opts); absorbUp(c, baseR, h); return true;
     };
-    // ---------- scene graph ----------
-    // The model library + node list for this build (js/track/graph.js). A
-    // migrated helper calls instance() instead of emitting primitives inline:
-    // the model's ops are recorded ONCE in canonical space, then replayed here
-    // through the guarded emitters above. Same guards, same geometry — but the
-    // build now also leaves behind a description of WHAT stands WHERE, which is
-    // what an instanced renderer and the agent view both want and neither can
-    // recover from fused triangles.
     const graph = TrackGraph.create({ raw: RAW });
     track.graph = graph;
     const GUARDED = { addBox, addCyl, addCone, addFrustum, addPrism, addPyramid };
-    // Unguarded replay set, for emitters that already bypass the on-road test on
-    // purpose — crowd spectators are thousands of tiny boxes sitting safely
-    // behind a stand's shell, and testing each one is pure cost. RAW.* returns
-    // nothing, so wrap to report the primitive as landed; routing these through
-    // GUARDED instead would silently start culling geometry that ships today.
     const rawOk = (fn) => (o, ...rest) => {
       if (o && (o._dryRun || o._absorbOnly)) return true;
       fn(o, ...rest); return true;
@@ -841,12 +658,6 @@ const Tracks = (function () {
       return n;
     };
 
-    // Per-segment driving boundary (lateral limit from the centreline on each
-    // side). Initialised to the default runoff, then TIGHTENED wherever a solid
-    // barrier (wall/guardrail/tyre wall/grandstand) is actually placed, so the car
-    // always stops just before a model instead of clipping into it. WALL_CLEAR is
-    // the car's half-width + margin: the limit sits that far inside the barrier
-    // face. recordBarrier() fills the boundary along a barrier's node range.
     const WALL_CLEAR = 1.1;
     const RUNOFF_DEFAULT = 9;   // loose default; tightened wherever a barrier sits
     track.barL = new Float32Array(n);
@@ -858,27 +669,12 @@ const Tracks = (function () {
       const arr = side > 0 ? track.barR : track.barL;
       if (lim < arr[k]) arr[k] = lim;
     };
-    // Record a SOLID roadside model so the car stops before it: inner face at
-    // `innerGap` beyond the road edge, spanning ±halfM metres along the track.
-    // Only tightens where the model is within reach, so models out past the
-    // runoff have no effect.
     const blockAt = (k, side, innerGap, halfM) => {
       const half = Math.max(0, Math.round((halfM || 0) / ds));
       for (let d = -half; d <= half; d++) markBarrier(((k + d) % n + n) % n, side, innerGap);
     };
-    // Lowest track elevation. Large flat terrain planes (water, sand, lakes) and
-    // tall distant backdrops (dunes, ridges, hills) are anchored to this baseline
-    // rather than a single point's py — otherwise, on tracks with elevation
-    // changes, a plane anchored at a high point floats above the view as a
-    // "ceiling" or rises into the foreground as a wall when seen from a lower
-    // section. Anchoring the base low keeps terrain below the road everywhere.
     let pyMin = Infinity;
     for (let i = 0; i < n; i++) if (py[i] < pyMin) pyMin = py[i];
-    // Terrain surface height `dist` metres beyond the road edge at node k. Mirrors
-    // the ribbon built in buildTerrain: the inner verts hug the road, the outer
-    // ones ease (quadratically) down to the lap's low point. Roadside props anchor
-    // to THIS instead of the road height, so on an elevated or embanked section
-    // they sit on the sloping ground rather than floating at the old flat grade.
     const surface = track.surface || TrackSurface.profile(track.def, track);
     const groundYAt = (k, dist) => {
       return surface.heightAt(k, dist);
@@ -897,20 +693,10 @@ const Tracks = (function () {
       let grad = 0;
       for (let i = 0; i < n; i++) grad = Math.max(grad, Math.hypot(px[i] - gx, pz[i] - gz));
       const gc = pal.grass || [0.2, 0.38, 0.18];
-      // top sits at pyMin-3 — below the terrain ribbon's far edge and the water
-      // planes (~pyMin-2.4) so it fills the gap without hiding lakes/sea.
       addBox(out, [gx, pyMin - 5, gz], [grad * 2 + 1600, 4, grad * 2 + 1600],
              [gc[0] * 0.9, gc[1] * 0.9, gc[2] * 0.9]);
     }
-    // True if (x,z) lies on (or within `margin` of) the tarmac of ANY track
-    // segment. Uses segment lateral distance (closest point on centerline →
-    // perpendicular distance) rather than per-node circles, so hairpin interiors
-    // don't create false-positive blobs that swallow outside-of-corner scenery.
     const onTrack = (x, z, margin) => {
-      // A segment can only pass if one of its endpoints is within maxHw+margin+
-      // segLen (a chord ≤ ds) of (x,z); query that neighbourhood of the shared
-      // grid and test each candidate's forward segment. OR semantics — order
-      // irrelevant; the per-segment test is unchanged.
       const R = grid.maxHw + margin + ds + 1;
       const _cn = grid.query(x, z, R, _trkCand, false);
       for (let _ci = 0; _ci < _cn; _ci++) {
@@ -1001,18 +787,12 @@ const Tracks = (function () {
     }
     const modelGroup = (id, bounds, emit, opts) => models.modelGroup(id, bounds, emit, opts);
 
-    // ── Vertical placement helpers (docs/SCENERY-GROUNDING.md) ──────────────
     // Every guard in this file is HORIZONTAL (onTrack/rejBox/blockAt keep props
     // off the racing line); nothing asserted that a prop meets the ground, and
     // every floating-scenery defect found by tools/float-audit.cjs was vertical.
     // These three close that gap by expressing intent instead of arithmetic.
     const UPV = [0, 1, 0];
 
-    // seat.*: emit a primitive standing ON `foot` — the point it rests on.
-    // addBox/addPyramid centre their `c` while addPrism/addCyl/addCone/
-    // addFrustum anchor at the BASE, and callers treating them alike produced
-    // seven separate floating-roof defects. Going through seat.* makes that
-    // mistake unexpressible: one convention, every primitive.
     const seat = {
       box:     (o, foot, sz, col, b) => addBox(o, vadd(foot, (b ? b[1] : UPV), sz[1] / 2), sz, col, b),
       prism:   (o, foot, sz, col, b) => addPrism(o, foot, sz, col, b),
@@ -1036,12 +816,6 @@ const Tracks = (function () {
       for (const sx of [-0.5, 0, 0.5]) for (const sf of [-0.5, 0, 0.5]) {
         const x = c[0] + r[0] * sx * size[0] + f[0] * sf * size[1];
         const z = c[2] + r[2] * sx * size[0] + f[2] * sf * size[1];
-        // terrainYAt skips triangles wider than 30 m when it bins the ribbon.
-        // flatTerrain shelves (Montreal's 70 m island) are exactly that size,
-        // so the build-time lookup returns null and the caller fallback sits
-        // on the anchor — 2.7 m above the same mesh Tracks.terrainY / the
-        // foundation spec then samples. Prefer the public sampler when the
-        // coarse grid misses.
         let y = terrainYAt(x, z);
         if (y == null) y = terrainY(track, x, z);
         if (y != null && y < lo) lo = y;
@@ -1062,9 +836,6 @@ const Tracks = (function () {
       const rr = b ? b[0] : [1, 0, 0];
       const reach = Math.abs(outM);
       if (reach > 0.35)
-        // Overrun both ends by 0.25 m so the member genuinely meets the mast at
-        // one end and the head at the other — an arm that merely touches can
-        // still read (and audit) as a gap.
         addBox(o, vadd(top, rr, side * outM / 2), [reach + 0.5, 0.18, 0.22],
                armCol || [0.30, 0.30, 0.34], b);
       addBox(o, vadd(top, rr, side * outM), headSz, headCol, b);
@@ -1120,9 +891,6 @@ const Tracks = (function () {
           const o0 = side * (hw[k0] + d), o1 = side * (hw[k1] + d);
           const x0 = px[k0] + track.rx[k0] * o0, z0 = pz[k0] + track.rz[k0] * o0;
           const x1 = px[k1] + track.rx[k1] * o1, z1 = pz[k1] + track.rz[k1] * o1;
-          // Walk the gap to the NEXT node's ray. On a corner that gap is many
-          // times the centreline node spacing; subdividing it is what stops the
-          // fan from opening holes in the outer basin.
           const sub = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / step));
           for (let i = 0; i < sub; i++) {
             const t = i / sub;
@@ -1136,10 +904,6 @@ const Tracks = (function () {
     // Merge occupied cells into flat quad runs and emit them as the water sheet.
     const waterEmit = (cells, c, col, opts) => {
       opts = opts || {};
-      // Keep only the cells that clear the road. Margin is the cell's own
-      // half-width plus a small lip, NOT a fixed constant — that is what lets a
-      // fine grid close right up to the kerb where a 46 m slab needed 27 m of
-      // clearance and dropped out entirely.
       const rows = new Map();                   // iz -> sorted list of ix
       for (const key of cells.keys()) {
         const p = key.indexOf("|");
@@ -1148,12 +912,6 @@ const Tracks = (function () {
         let a = rows.get(iz); if (!a) rows.set(iz, a = []);
         a.push(ix);
       }
-      // Emit ONE merged sheet, not one box per cell. Per-cell boxes are what
-      // made this read as a grid: each carried its own side walls and its own
-      // shade, so every cell boundary was a visible edge. Runs of adjacent
-      // cells in a row collapse into a single flat quad at a single colour, so
-      // within a run there is no interior geometry at all and nothing to see
-      // but water. Coplanar neighbouring runs leave no seam either.
       const y = pyMin - 0.8;
       const vert0 = waterBuf.pos.length / 3;
       let placed = 0;
@@ -1170,13 +928,6 @@ const Tracks = (function () {
           i = j + 1;
         }
       }
-      // Record the SUCCESS too, not just the failure. This path only ever pushed
-      // to `suppressed`, so a water band that built perfectly left no trace in
-      // the ledger at all — it was neither emitted nor suppressed nor invalid.
-      // Anything asking "did this model ship?" therefore got `false` for every
-      // raster water body in the game, whatever happened. modelGroup and
-      // waterSurface both log an `emitted` entry; this is the same record, with
-      // the merged-run count that is this path's unit of work.
       if (placed && opts.id)
         diagnostics.emitted.push({ id: opts.id, required: !!opts.required,
                                    vertices: waterBuf.pos.length / 3 - vert0,
@@ -1191,11 +942,6 @@ const Tracks = (function () {
       const half = Math.max(1, Math.round(halfLen / ds));
       return waterEmit(waterRaster(k - half, k + half, side, gap0, gap1, c), c, col, opts);
     };
-    // A continuous band of water along a RANGE of lap, s0→s1. This is the right
-    // shape for a coastline: the old pattern of dropping N fixed panels at
-    // evenly spaced fractions left the sea in stripes whenever the station
-    // spacing exceeded the panel length (jeddah spaced 8 panels 278 m apart and
-    // made them 100 m long, so two thirds of its Red Sea frontage was bare).
     const waterBand = (s0, s1, side, gap0, gap1, cell, col, opts) => {
       const c = Math.max(4, cell || 12);
       const k0 = Math.round(s0 * n) % n, k1 = Math.round(s1 * n) % n;
@@ -1233,11 +979,6 @@ const Tracks = (function () {
       return emitted;
     };
     const groundedSegments = (spec) => models.groundedSegments(spec);
-    // Flat [x0,z0,x1,z1,halfW,…] run of every SOLID scenery footprint recorded
-    // this build, in world XZ. A barrier face is a bare line (halfW 0); a solid
-    // model — hedge, grandstand, building, placed prop — is the same line
-    // inflated by its own half-width, so a clearance query accounts for the
-    // obstacle's real bulk and not just the plane of one face.
     const barSegs = [];
     const SEG = 5;                      // stride of one barSegs record
     // (The widest-half-width accumulator that used to live here is gone —
@@ -1272,8 +1013,6 @@ const Tracks = (function () {
     // drives. indexBarrier() registers the geometry without touching physics.
     const scanBarrier = (s0, s1, side, gap, tighten) => {
       const k0 = Math.round(s0 * n) % n, k1 = Math.round(s1 * n) % n;
-      // 0→1 denotes a complete lap. Modulo node conversion maps both endpoints
-      // to zero, so preserve the authored full-range intent before wrapping.
       const span = Math.abs(s1 - s0) >= 1 - 1e-9 ? n - 1 : ((k1 - k0) + n) % n;
       const arr = side > 0 ? track.barR : track.barL;
       let prev = null;                  // previous recorded face point, for segments
@@ -1315,9 +1054,6 @@ const Tracks = (function () {
         prev = [cx, cz];
       }
     };
-    // Point form, for a single boxy prop at node k rather than a run. `halfLen`
-    // is its extent along the track, `halfW` across; the record is the box's
-    // own centre line inflated by halfW.
     const indexSolidAt = (k, side, dist, halfW, halfLen) => {
       const kk = ((k % n) + n) % n;
       const o = side * (hw[kk] + dist);
@@ -1326,7 +1062,6 @@ const Tracks = (function () {
       const tx = track.tx[kk] * L, tz = track.tz[kk] * L;
       pushSeg(cx - tx, cz - tz, cx + tx, cz + tz, Math.max(0, halfW || 0));
     };
-    // ── Building-mass occupancy ───────────────────────────────────────────
     // Buildings come from three independent producers — cityFront's row, the
     // neonTower front/back rows, and bespoke per-track calls — and none of them
     // knows what the others already placed. Each steps by CENTRELINE arc
@@ -1372,8 +1107,6 @@ const Tracks = (function () {
       const hw1 = w / 2 * (shrink || 1), hd1 = d / 2 * (shrink || 1);
       if (!massGrid) buildMassGrid();
       if (!massGrid.size) return false;
-      // Insert buckets by m.r; query by our half-extents — same inflated-AABB
-      // proof as barrierClear (reach = hw1+hd1 misses nothing that circle-rejects).
       const reach = hw1 + hd1;
       const cx0 = Math.floor((c[0] - reach) / MASS_CELL), cx1 = Math.floor((c[0] + reach) / MASS_CELL);
       const cz0 = Math.floor((c[2] - reach) / MASS_CELL), cz1 = Math.floor((c[2] + reach) / MASS_CELL);
@@ -1400,11 +1133,8 @@ const Tracks = (function () {
       const i = masses.length;
       masses.push({ c: [c[0], c[1], c[2]], hw: w / 2, hd: d / 2,
                     ax: b[0], az: b[2], r: Math.hypot(w / 2, d / 2) });
-      // Keep the grid CURRENT (massBlocked runs mid-scenery while rows keep
-      // landing) — same incremental contract as pushSeg → barGridInsert.
       if (massGrid) massGridInsert(i);
     };
-    // ── Spatial barrier index (world XZ) ──────────────────────────────────
     // Every existing guard in this engine is horizontal-vs-ROAD (onTrack,
     // rejBox, blockAt) or vertical (the support/grounding tests). None is
     // horizontal-vs-BARRIER — which is why tree crowns still grow through
@@ -1426,8 +1156,6 @@ const Tracks = (function () {
     // silently under-report for everything planted afterwards.
     let barGrid = null;
     const barCellKey = (cx, cz) => cx * 100003 + cz;
-    // Bucket ONE record. Shared by the full build and by pushSeg's incremental
-    // insert, so both place a segment in exactly the same cells.
     const barGridInsert = (i) => {
       const x0 = barSegs[i], z0 = barSegs[i + 1], x1 = barSegs[i + 2], z1 = barSegs[i + 3];
       // Bucket by the INFLATED bounds: a wide record (a grandstand, a
@@ -1460,30 +1188,6 @@ const Tracks = (function () {
     const barrierClear = (x, z, r) => {
       if (!barGrid) buildBarGrid();
       if (!barGrid.size) return true;
-      // Each record carries its own half-width, so the test is against the
-      // obstacle's SURFACE: clear iff distance to its centre line exceeds
-      // r + halfW.
-      //
-      // The sweep does NOT need widening by barMaxHalf, because barGridInsert
-      // already buckets every record by its INFLATED bounds (min-w .. max+w on
-      // both axes) — the widening was double-counting the same allowance on
-      // both sides of the lookup. Proof that reach = r misses nothing: suppose
-      // record i is a hit, segDist2(i,p) < (r+w)^2, and let q be the closest
-      // point on its centre line to p, so |q-p| < r+w. q lies within the
-      // segment's axis ranges, so the square [q +/- w] is contained in the
-      // record's inflated AABB and every cell it touches holds record i. Each
-      // axis component of q-p is < r+w, so that square overlaps the query
-      // square [p +/- r] on BOTH axes, hence they share a point, hence a cell —
-      // a cell that is inside the r-sweep and holds the record. The one
-      // precondition is that barGridInsert is the only writer of the grid,
-      // which the note above (and buildBarGrid / pushSeg being its only
-      // callers) already establishes.
-      //
-      // barMaxHalf is 6-10 m on the shipped scenery against BAR_CELL 24 and
-      // r 3-8, so the sweep goes from ~4-9 cells to 1-4 on every query. The
-      // callers are clearTreeDist (up to 9 walk-outs PER TREE) and hedge()'s
-      // per-along-step probe, i.e. the barrier-index path that already has one
-      // recorded second-scale defect against it (see the note at pushSeg).
       const reach = r;
       const cx0 = Math.floor((x - reach) / BAR_CELL), cx1 = Math.floor((x + reach) / BAR_CELL);
       const cz0 = Math.floor((z - reach) / BAR_CELL), cz1 = Math.floor((z + reach) / BAR_CELL);
@@ -1529,16 +1233,6 @@ const Tracks = (function () {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
-      // prop() places by CLEARANCE — it passes gap + sz[0]/2 — so two props at
-      // the same station with the same gap land their inner faces on exactly the
-      // same plane whatever their size. Same plane, same facing, zero gap: they
-      // flicker against each other at any distance, and roadside props sit close
-      // enough to the car to be very visible. Break the tie with a sub-decimetre
-      // nudge keyed to the BOX SIZE as well as the station, so two differently
-      // sized props at one station separate (two identical ones are a duplicate,
-      // not a tie). Always OUTWARD, so nothing moves nearer the track, and
-      // blockAt/indexSolidAt below keep the unnudged `dist` — the driving limit
-      // does not move and stays conservative.
       const jitter = hash(k * 7.7 + sz[0] * 3.1 + sz[1] * 5.3 + sz[2] * 1.9) * 0.09;
       const o = side * (hw[k] + dist + jitter);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
@@ -1547,13 +1241,6 @@ const Tracks = (function () {
         noteSuppressed("place", `place SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]} (need dist>${(sz[0]/2+1.5).toFixed(1)})`);
         return;
       }
-      // sink the base 0.8m below grade so prop bottoms tuck under the terrain
-      // apron instead of co-planar Z-fighting where box meets ground. Anchored to
-      // the terrain height at this lateral distance (not the road) so it sits on
-      // the ground on elevated/embanked sections.
-      // RENDERED terrain first: groundYAt is a closed-form cross-section and
-      // drifts metres from the ribbon where `elevations` bend it (madrid's dip
-      // at s=0.52 left the generic marshal post 4.3 m off its own ground).
       const gy = terrainYAt(cx, cz);
       const c = [cx, (gy !== null ? gy : groundYAt(k, dist)) + sz[1] / 2 - 0.8, cz];
       if (addBox(out, c, sz, col, [r, u, t]) === false) return;   // on-track: dropped, no phantom barrier
@@ -1567,8 +1254,6 @@ const Tracks = (function () {
     };
     // One lighting family: "lamps" canonical; "floodlights"/"lighting" aliases.
     const LIGHTING_KINDS = { lamps: 1, floodlights: 1, lighting: 1 };
-    // Origin-invariant alias for RANDOM DRAWS only (placement still uses k).
-    // Keeps scatter stable when startFrac moves — without it coplanar baselines jumped.
     const HKSHIFT = Math.round(TrackSpace.sceneryOriginDelta(def) * n);
     const HK = (k) => (((Math.round(k) - HKSHIFT) % n) + n) % n;
     // Phase every() by the same shift so the walk revisits the same places.
@@ -1580,10 +1265,6 @@ const Tracks = (function () {
       const rules = def.dressingExclusions;
       if (!rules || !rules.length) return false;
       const frac = (((k % n) + n) % n) / n;
-      // These spans are RACING-space fractions authored beside the scenery they
-      // protect ("no foliage across the pits"), so they travel with it when a
-      // corrected start line moves the origin — otherwise the exclusion stays
-      // put and the pit buildings it shielded grow trees again.
       const shift = TrackSpace.sceneryOriginDelta(def);
       for (const rule of rules) {
         const kinds = rule.kinds || (rule.kind ? [rule.kind] : ["all"]);
@@ -1601,7 +1282,6 @@ const Tracks = (function () {
       return false;
     };
 
-    // --- safe-placement helpers (the rules learned from Monaco/Vegas walls) ---
     // prop(): place a roadside object by CLEARANCE. `gap` is how far the box's
     // inner face sits beyond the road edge, so however wide the box is it can
     // never reach the tarmac and loom as a wall against the car. Inherits
@@ -1636,10 +1316,6 @@ const Tracks = (function () {
       // ribbon vert returns it), so a ridge/skyline never floats on a high section
       const cy0 = groundYAt(k, dist) + sz[1] / 2 - 2;
       const greenDom = col[1] > col[0] && col[1] > col[2] * 1.05;
-      // GREEN terrain → render as a ROUNDED organic mound (stacked frustums +
-      // dome cap) instead of a boxy slab, so wooded hills read as hills. Radius
-      // from the footprint; height from sz[1]. A small hash jitter keeps a run
-      // of mounds from looking like identical bumps.
       if (greenDom) {
         const foot = groundYAt(k, dist) - 2;
         const R = Math.max(sz[0], sz[2]) * 0.5 * (0.92 + hash(k * 2.3 + side) * 0.2);
@@ -1661,15 +1337,8 @@ const Tracks = (function () {
       out._mat = isBld ? MAT.CONCRETE : sandy ? MAT.SAND : 0;
       addBox(out, [cx, cy0, cz], sz, bcol, [t, u, r]);
       out._mat = 0;
-      // If this distant box reads as a BUILDING — tall, taller than it is deep,
-      // and not green terrain — give it window bands + a parapet so a city
-      // skyline doesn't render as flat dark planes. Wide/low/dune silhouettes
-      // (dunes, mesas) are left as plain masses.
       if (isBld) {
         const lit = NIGHT;
-        // Night skyline windows are HDR so the distant towers glow (and bloom)
-        // as a lit skyline rather than dim grey bands — matches the near-building
-        // glass curtain walls. Day keeps a reflective-glass tint.
         const win = lit ? [1.45, 1.28, 0.84]
                         : [Math.min(1, col[0] * 1.6 + 0.05), Math.min(1, col[1] * 1.6 + 0.05), Math.min(1, col[2] * 1.6 + 0.07)];
         const darkWin = [col[0] * 0.55, col[1] * 0.55, col[2] * 0.6];
@@ -1689,18 +1358,6 @@ const Tracks = (function () {
       }
     };
 
-    // ---------- composite scenery models: js/track/scenery-*.js ----------
-    // The composite trackside models are split into four Scenery*.create(ctx)
-    // modules — nature (anchor + vegetation/landforms/crowds), structures
-    // (along + barriers/gantry/marshals/signage/ferris wheel), city
-    // (neonFacade/building/neonTower/cityFront/…) and identity (the shared
-    // circuit-identity toolkit). ONE shared ctx per buildProps call carries
-    // the output buffers, per-build state, guarded emitters and the guard/
-    // grounding/boundary core; each module's returned helpers are assigned
-    // back onto ctx so modules (and the passes below) reach each other only
-    // through it. Creation order matters only for the create-time
-    // destructures: nature (anchor) -> structures (along) -> city (building)
-    // -> identity.
     const ctx = {
       // output buffers + per-build state
       out, glassBuf, waterBuf, track, def, theme, pal, n, ds, px, py, pz, hw,
@@ -1708,10 +1365,6 @@ const Tracks = (function () {
       // guarded emitters + the raw escape hatch
       addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, addMountain,
       emit, RAW, rejBox, rejRad,
-      // scene graph: model library + one node per placement. `instance()` is the
-      // migrated-emitter entry point — it defines a canonical model once and
-      // replays it through the GUARDED emitters above, so a migrated helper
-      // keeps the same suppression behaviour as its hand-written form.
       graph, instance,
       // guard / grounding / boundary core
       markBarrier, blockAt, recordBarrier, indexBarrier, clearTreeDist,
@@ -1724,10 +1377,6 @@ const Tracks = (function () {
       // semantic prop registry (see note() above) — scenery modules call this
       // after their own guards so only props that actually ship are recorded
       note, noteSpan, noteSuppressed,
-      // Per-circuit trackside-furniture FORM lookup, resolved the same way FURN
-      // and BARRIER already are: KIT[def.id] || KIT_DEF[theme] || fallback. The
-      // fallback the caller passes is always that emitter's CURRENT geometry,
-      // so an absent table leaves all 40 circuits exactly as they were.
       kitOf: (family, fallback) => {
         const K = TrackSceneryData.KIT || {};
         const D = TrackSceneryData.KIT_DEF || {};
@@ -1758,20 +1407,13 @@ const Tracks = (function () {
     const bt = BARRIER[def.id] || { a: [0.92, 0.92, 0.94], b: [0.85, 0.18, 0.16], c: [0.55, 0.57, 0.62], night: [0.18, 0.18, 0.22], tyre: [0.24, 0.22, 0.20] };
     const btSeq = [bt.a, bt.b, bt.c];
 
-    // continuous barrier wall hugging both edges on street circuits — going off
-    // means hitting a wall, not open grass. Day circuits get the track's armco
-    // livery; dark sessions get its tinted night rail.
     if (def.street) {
-      // Barriers are straight panels — span a few nodes each instead of one box
-      // per ~4 m node, roughly halving the barrier vertex cost on long street laps.
       const WH = 1.1, WT = 0.4, STEP = 2;
       const barrierOffset = def.barrierGap != null ? def.barrierGap : 0.35;
       const panel = (kA, kB, col, side) => {
         const rA = [track.rx[kA], track.ry[kA], track.rz[kA]];
         const rB = [track.rx[kB], track.ry[kB], track.rz[kB]];
         const oA = side * (hw[kA] + barrierOffset), oB = side * (hw[kB] + barrierOffset);
-        // py[] is the CENTRELINE height; on banked road the edge the barrier
-        // hugs is lifted/dropped by the banking pivot (see mesh.js bankOffsetAt).
         const ax = px[kA] + rA[0] * oA, ay = py[kA] + bankOffsetAt(track, kA, oA), az = pz[kA] + rA[2] * oA;
         const bx = px[kB] + rB[0] * oB, by = py[kB] + bankOffsetAt(track, kB, oB), bz = pz[kB] + rB[2] * oB;
         const cx = (ax + bx) / 2, cy = (ay + by) / 2, cz = (az + bz) / 2;
@@ -1816,15 +1458,9 @@ const Tracks = (function () {
           }
         }
       }
-      // Record the boundary for EVERY node (the geometry loop steps by 2, which
-      // would leave gaps), both sides, at the barrier offset.
       const off = def.barrierGap != null ? def.barrierGap : 0.35;
       for (let k = 0; k < n; k++) { markBarrier(k, -1, off); markBarrier(k, 1, off); }
     }
-    // floodlights for night tracks: generic mast ring (~22 m) covers these —
-    // the old every-70 poles duplicated geometry on Bahrain/Singapore/etc.
-    // (kept marker so night tracks still opt into buildTrackLights via def.night)
-    // tire barriers at outside of tight corners on permanent (non-street) circuits
     if (!def.street) {
       // findCorners returns every local curvature peak, and two peaks a few
       // nodes apart both survive its `sm[k] >= sm[a] && sm[k] > sm[b]` test. Their
@@ -1852,37 +1488,23 @@ const Tracks = (function () {
           const t = [track.tx[k], track.ty[k], track.tz[k]];
           const u = upOf(track, k);
           const o = outside * (hw[k] + 2.2);
-          // Banked road: py[k] is the centreline; the outside edge the wall
-          // stands beside is lifted by the banking pivot (mesh.js bankOffsetAt).
           const wy = py[k] + bankOffsetAt(track, k, o);
           const slen = ds * step * 1.1;
           addBox(out, [px[k] + r[0] * o, wy + 0.45, pz[k] + r[2] * o],
                  [1.0, 0.9, slen], [0.24, 0.22, 0.20], [r, u, t]);
-          // Themed conveyor-belt cap: a bright coloured stripe along the top of
-          // the tyre stack, giving the city's corner barriers its identity.
           if (BARRIER[def.id]) addBox(out, [px[k] + r[0] * o, wy + 0.94, pz[k] + r[2] * o],
                  [1.06, 0.18, slen], bt.tyre, [r, u, t]);
           // record the tyre barrier along its span so the car stops just short of it
           for (let d = 0; d < step; d++) markBarrier((k + d) % n, outside, 2.2);
         }
-        // markBarrier only moves the DRIVING limit; it does not tell the scenery
-        // engine that a metre-wide stack of tyres physically stands here. These
-        // corner barriers were the second-largest obstacle class in the
-        // surviving canopy hits, so register the geometry too.
         indexBarrier((((c.k - lo) % n + n) % n) / n, (((c.k + hi) % n + n) % n) / n, outside, 2.2);
       }
     }
 
-    // ── Trackside SIGNAGE: corner-number boards + braking markers + pit speed.
     // Prefer curated FIA turn apexes (def.turns from CircuitMarkings; all
     // shipped circuits have a table). Fall back to curvature-peak detection
     // only if a def somehow lacks turns.
     {
-      // NOTE: signBoard's `gap` forwards straight to anchor(k,side,gap), which
-      // already adds hw[k] internally (dist = "beyond the edge") — passing
-      // hw[k]+N here would double-count it and place every board ~2x too far
-      // out. Pass the clearance alone, matching every other gap-based call in
-      // this file (building/grandstand/marshalPost/…).
       let laneCorners;
       if (def.turns && def.turns.length) {
         laneCorners = def.turns.map((frac) => {
@@ -1894,13 +1516,8 @@ const Tracks = (function () {
         laneCorners = findCorners(track, 0.007).slice().sort((a, b) => a.k - b.k);
       }
       laneCorners.forEach((c, idx) => {
-        // Same convention fix as the tyre barriers above: outside of a
-        // c.sign>0 (LEFT) corner is the +x side.
         const outside = c.sign > 0 ? 1 : -1;
         signBoard(c.k, outside, 3.5, "corner", idx + 1);
-        // Braking trio (3->2->1 stripes counting down to the apex) on roughly
-        // half the corners, spaced back along the approach — avoids clutter on
-        // every single bend while still reading as a real trackside kit.
         if (hash(c.k * 3.1 + 7) > 0.5) {
           const lo = Math.max(6, c.lo || 14);
           const offs = [Math.round(lo * 0.85), Math.round(lo * 0.5), Math.round(lo * 0.18)];
@@ -1910,9 +1527,6 @@ const Tracks = (function () {
           });
         }
       });
-      // One pit-entry speed-limit disc near the end of the lap — real
-      // speed-limit signage is mostly a pit-lane feature, not scattered
-      // trackside, so a single instance per circuit is the honest amount.
       const spk = Math.round(n * 0.965) % n;
       signBoard(spk, -1, 4, "speed", def.street ? 60 : 80);
     }
@@ -1932,34 +1546,15 @@ const Tracks = (function () {
     const plantTree = (k, side, dist, h) => {
       const seed = k * 1.7 + side * 0.9 + dist;
       let col = folVary(fz.fol, seed);
-      // Autumn / flowering accent — a gold-rust or amber tree dotted through
-      // broadleaf stands (≈22%) so a treeline shows seasonal colour, not one green.
       if (fz.tree === "broad" && hash(seed * 5.5) < 0.22)
         col = [0.60 + hash(seed) * 0.28, 0.34 + hash(seed * 2.1) * 0.22, 0.10 + hash(seed * 3.3) * 0.10];
-      // `dist` is the clearance wanted for the canopy's INNER EDGE, matching
-      // forestEdge()'s contract — push the TRUNK out by the crown's reach. The
-      // scatter used to pass dist straight through as a trunk distance with no
-      // canopy allowance, so any tree it dropped within (barrier gap + crown
-      // radius) of a catch fence grew straight through it. Suzuka was worst hit:
-      // fences cover ~32% of its lap.
-      // FURN.tree used to resolve to exactly THREE silhouettes — palm, fir or
-      // broad — so 18 circuits shared one tree shape on the generic roadside
-      // scatter that runs on every lap. The species library grew to nine during
-      // the identity pass but nothing outside a circuit's own scenery() could
-      // reach it. SPECIES names now pass straight through.
       const SPECIES = { cypress: 1, stonePine: 1, broadleafFall: 1, acacia: 1, plane: 1 };
-      // FURN.treeCrown reshapes the broadleaf the scatter plants — the one
-      // foliage pass that runs on every circuit. canopyR keys off the same
-      // name so the fence guard clears what the crown actually spans.
       const CROWNS = { vase: 1, weeping: 1, columnar: 1 };
       const crownForm = CROWNS[fz.treeCrown] ? fz.treeCrown : "round";
       const kind = SPECIES[fz.tree] ? fz.tree
         : fz.tree === "palm" ? "palm" : fz.tree === "fir" ? "fir"
         : crownForm !== "round" ? crownForm : "broad";
       const crown = canopyR(kind, h);
-      // Spatial barrier guard — the canopy allowance above only clears the
-      // barrier belonging to THIS node, and the hits that survived it were with
-      // walls belonging to other parts of the lap.
       const d = clearTreeDist(k, side, dist + crown, crown);
       if (d == null) return;
       if (kind === "palm") palm(k, side, d, h, col);
@@ -1995,10 +1590,6 @@ const Tracks = (function () {
           : 2 + Math.floor(hash(HK(k) * 13) * 2);                      // green: 2–3 per stand
         for (let i = 0; i < cluster; i++) {
           const dist = (def.street ? 6 : 8) + hash(HK(k) * 3 + side + i * 4.4) * (def.street ? 4 : 14);
-          // Spread a stand over neighbouring nodes (k, k+1, k-1). WRAP it — the
-          // third tree of the stand at k=0 resolved to node -1, and an
-          // out-of-range index reads undefined off the typed arrays and NaNs
-          // the entire props buffer (see anchor()).
           const kt = ((k + (i % 2) - (i > 1 ? 1 : 0)) % n + n) % n;
           plantTree(kt, side, dist, baseH + hash(HK(k) * 5 + i * 2.7) * 6);
         }
@@ -2016,31 +1607,19 @@ const Tracks = (function () {
     }
 
     if (theme === "green") {
-      // FURN already plants real trees; legacy box trunk/canopy forest removed.
-      // occasional grandstand
       every(140, (k) => place(k, hash(HK(k)) < 0.5 ? -1 : 1, 14, [4, 6, 22], [0.5, 0.5, 0.55]));
     } else if (theme === "desert") {
       every(34, (k) => { for (const side of [-1, 1]) if (hash(HK(k) + side) > 0.6) place(k, side, 8 + hash(HK(k)) * 10, [2 + hash(HK(k)) * 3, 1.5, 2], [0.62, 0.5, 0.34]); });
     } else if (theme === "street_day" || theme === "street_night" || theme === "modern") {
       const style = STYLES[def.id] || THEME_DEF[theme] || THEME_DEF.modern;
       const cn = (k, s) => style.neon[Math.floor(hash(k * 3 + s) * style.neon.length) % style.neon.length];
-      // Per-building tone: keeps the track's single dark NIGHT tone, but picks a
-      // VARIED daytime facade colour from the style's dayPal so the city in
-      // daylight is a mix of stone/cream/terracotta/glass instead of flat grey.
       const dpal = style.dayPal;
       const toneFor = (k, s) => {
         if (!(dpal && dpal.length)) return { n: style.tone && style.tone.n, d: style.tone && style.tone.d };
-        // Cluster adjacent buildings into short colour RUNS (floor(k/…)) and bias
-        // the pick toward the palette's leading entries (cl²) so each track reads
-        // as a cohesive place with a signature material plus a few accents,
-        // rather than every building a different random colour.
         const cl = hash(Math.floor(k / 2.4) * 2.3 + s * 4.2);
         const idx = Math.floor(cl * cl * dpal.length) % dpal.length;
         return { n: style.tone && style.tone.n, d: dpal[idx] };
       };
-      // neonAmt per building: day = plain; night = neon buildings bright, the rest
-      // (general/regular buildings) get just a touch of neon so the city still
-      // sparkles without being a wall of neon.
       const naFor = (k, side) => {
         if (!NIGHT) return 0;
         return hash(k * 7.7 + side * 2.1) < style.bias
@@ -2088,13 +1667,6 @@ const Tracks = (function () {
       });
     }
 
-    // --- main grandstand + pit complex on the start/finish straight ---
-    // A crude 112 m fallback slab down each side of the first ~100 m of the lap.
-    // It predates the per-circuit scenery callbacks and is unconditional, so on
-    // any circuit that builds its own pit complex it lands ON TOP of the bespoke
-    // model (Monza's Tribuna Centrale and pit canopy, for one). Circuits that
-    // dress their own start/finish straight opt out with `ownPitStraight: true`;
-    // everything else keeps the fallback so no circuit loses its pit lane.
     const crowd = def.night ? [0.45, 0.28, 0.3] : [0.78, 0.42, 0.32];
     for (let i = 0; i < (def.ownPitStraight ? 0 : 7); i++) {
       const k = (i * 4) % n;
@@ -2102,18 +1674,12 @@ const Tracks = (function () {
       crowdBank(k, -1, 8, 16, 7, 4.2,                        // speckled tiered crowd
                 [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4]);
       place(k, 1, 12, [7, 5.5, 16], [0.83, 0.83, 0.86]);    // pit building
-      // Pit complex window bands: two glowing glass strips on the track-facing
-      // face after dark — garages work through the night at a race meeting.
       if (NIGHT) {
         const pa = anchor(k, 1, 8.35), pb = [pa.r, pa.u, pa.t];
         addBox(out, vadd(pa.c, pa.u, 2.0), [0.14, 1.3, 13], [1.34, 1.24, 0.96], pb);
         addBox(out, vadd(pa.c, pa.u, 3.9), [0.14, 0.9, 13], [1.10, 1.14, 1.22], pb);
       }
     }
-
-    // ── Shared scenery toolkit (identity pass) lives in
-    // js/track/scenery-identity.js (SceneryIdentity) — created above. ──
-
 
     // Place a BAKED MODEL from the asset pack (assets/pack, built by
     // `node tools/assets.mjs bake-model`) at a trackside anchor. This is the one
@@ -2136,8 +1702,6 @@ const Tracks = (function () {
       const o = opts || {};
       const a = anchor(k, side, dist);
       if (!a || !isFinite(a.c[0]) || !isFinite(a.c[1]) || !isFinite(a.c[2])) return false;
-      // Face the track by default: yaw from the track tangent, flipped on the
-      // right-hand side so a model authored facing +Z always looks at the road.
       const yaw = o.rotY != null ? o.rotY
                 : Math.atan2(a.t[0], a.t[2]) + (side < 0 ? Math.PI / 2 : -Math.PI / 2);
       return TrackGeom.addMesh(out, mesh, {
@@ -2147,26 +1711,8 @@ const Tracks = (function () {
       });
     }
 
-    // ---------- circuit-registered light fixtures ----------
-    // The generic mast pass below owns every ORDINARY lamp on every circuit, and
-    // js/game/lighting.js emits one point light per exported mast lens. That
-    // covers roadside posts and flood banks — but not a fixture the circuit
-    // builds itself, and there is exactly one shape of those that matters: a
-    // luminaire the circuit had to model by hand because no mast could stand
-    // there (a tunnel soffit, a canopy underside, a portal reveal). Without a
-    // registration path those fixtures are painted geometry that casts nothing.
-    //
-    // lampPost() lets a bespoke scenery() hand back the world position of a lens
-    // it has already drawn, and the light follows the same fixture-anchored rule
-    // as every other lamp: no light without something visible emitting it.
-    // Positions are RAW WORLD coordinates (like the px/py/pz arrays handed to
-    // scenery) and are deliberately NOT remapped by transformSceneryApi — a
-    // reversed lap's bespoke scenery computes them off the same arrays.
     const customLamps = [];
     const CUSTOM_LAMP_CAP = 96;
-    // floodMast / floodMastRing registrations — separate from lampPost's 96-cap
-    // tunnel/soffit budget. A full-lap Musco ring is hundreds of fixtures; the
-    // custom cap is for rare hand-placed luminaires.
     const mastLamps = [];
     const MAST_LAMP_CAP = 512;
     const lampPost = (spec) => {
@@ -2181,10 +1727,6 @@ const Tracks = (function () {
       const rec = { k, side: spec.side === -1 ? -1 : 1, x: p[0], y: p[1], z: p[2],
                     kind: typeof spec.kind === "string" ? spec.kind : "led",
                     custom: true };
-      // ALWAYS: this fixture burns in daylight too. Ordinary lamps only reach the
-      // shader once the session is dark; a tunnel's are on at noon, and the bore
-      // is in permanent shadow, so gating them on nightfall would leave the one
-      // place on the circuit that genuinely needs light as the one place without.
       if (spec.always) rec.always = true;
       if (finiteVec(spec.aim, 3, false)) rec.aim = [spec.aim[0], spec.aim[1], spec.aim[2]];
       if (Number.isFinite(spec.energy)) rec.energy = Math.max(0, spec.energy);
@@ -2192,9 +1734,6 @@ const Tracks = (function () {
       customLamps.push(rec);
       return true;
     };
-    // Called by SceneryIdentity.floodMast at draw time (looked up off ctx).
-    // Marks custom so buildTrackLights does not invent neon-spill washers on
-    // top of a modelled stadium bank.
     const registerMastLamp = (spec) => {
       spec = spec || {};
       const p = spec.pos;
@@ -2211,20 +1750,11 @@ const Tracks = (function () {
     };
     ctx.registerMastLamp = registerMastLamp;
 
-    // Per-circuit bespoke scenery lives in js/circuits/<id>.js (def.scenery).
     if (def.scenery) {
       let sceneryApi = {
         out, track, def, theme, pal, n, ds, px, py, pz, hw, pyMin,
-        // Session darkness (chosen time of day) — lets bespoke scenery render a lit
-        // night version vs a daytime version of the same structure.
         night: NIGHT,
-        // Procedural surface-material ids (js/render/glx.js applyMaterial/applyMaterialNormal).
-        // Tag a block of geometry by setting out._mat = MAT.<NAME> before the add*()
-        // calls that should carry it, then out._mat = 0 (MAT.FLAT) to stop. Applies to
-        // BOTH the day/night colour tint AND a real light-catching bump — no images,
-        // no UVs. See docs/SCENERY-API.md.
         MAT,
-        // Named atmosphere / colour packs (js/track/scenery-data.js)
         ATM, COL,
         place, prop, backdrop, groundPlane, groundYAt,
         // World-XZ ground query, exposed to circuits because its ABSENCE is
@@ -2234,43 +1764,25 @@ const Tracks = (function () {
         // across tens of metres of slope. Returns null off the rendered
         // ribbon; callers fall back to whatever they were using before.
         terrainYAt,
-        // ...and the same query WITH a fallback, which is what circuits want off
-        // the ribbon (long runs, distant landmarks). mugello and shanghai each
-        // hand-rolled this during the grounding sweep; it falls back to the same
-        // closed form tools/float-audit.cjs does, so engine and audit agree.
         groundUnder, frameAt,
         addBox, every, onTrack,
         modelGroup, overheadSpan, lampPost, waterSurface, waterField, waterBand, groundPatch, groundedSegments,
         seat, foundation, cantilever,
-        // Resolved data and opt-in architectural/facility helpers. Merely binding
-        // these does not emit geometry; each circuit remains responsible for calls.
         sceneryTheme, landmarkKit, circuitKit,
         modelDiagnostics: diagnostics,
         ferrisWheel, hash, upOf, cross, norm, lerp, vadd,
-        // richer primitives (world coords): non-cube shapes
         addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain, anchor, along,
-        // landscape + vegetation
         pine, tree, palm, bush, hedge, peak, mountain, ridge, forestEdge, conifer,
-        // ...plus the species the six above cannot shape (columnar / parasol /
-        // autumn-lobed / flat-topped thorn / pollarded avenue)
         cypress, stonePine, broadleafFall, acacia, plane,
-        // spectator terracing (informal grass banks — see docs/SCENERY-API.md)
         spectatorHill,
-        // open seating — the stand forms grandstandEx is not (no back shell)
         bleacher, scaffoldStand, terrace, tieredBowl,
-        // structures
         building, house, motorhome, tower, grandstand, grandstandEx, billboard,
         gantry, marshalPost, cameraTower, cityFront,
-        // seven-segment numerals on an arbitrary face. Takes raw basis vectors
-        // rather than (k, side), so — like addBox — it needs no reverse remap.
         signDigit,
-        // shared identity-pass toolkit
         underpassPortal, floodMast, floodMastRing, ledFacadeBands,
         concreteCanyon, sailCanopy, gridshellCanopy, runoffApron,
         bankedKerbStrip, bowlSeatWall, pastelStreetRow, broadcastCompound,
-        // signage
         signBoard, sponsorHoarding,
-        // barriers / track furniture
         wall, fence, guardrail, tyreWall, recordBarrier,
         // Footprint reservation. A circuit that builds a large prop from raw
         // primitives — a farmhouse, a campsite, a stand — has no way to tell
@@ -2289,19 +1801,6 @@ const Tracks = (function () {
         // baked asset pack — returns false (and emits nothing) with no pack
         bakedModel, bakedModels: () => (typeof Assets !== "undefined" ? Assets.models() : []),
       };
-      // Reversed lap: flip the s-fraction (s → 1-s), node index (k → n-k) and
-      // side (±1 → ∓1) of every placement helper so bespoke scenery authored for
-      // the original direction lands at the correct physical spot and side. This
-      // keeps barriers (recordBarrier fills barR/barL) aligned with the road.
-      // Direct px[k]/upOf(k) reads inside scenery (a handful, cosmetic only) are
-      // not remapped — they stay internally consistent on the reversed centreline.
-      // The third case is `sceneryStartFrac`: a FORWARD, racing-space def whose
-      // start line has been corrected still needs its scenery rotated back onto
-      // the origin it was authored against. Those defs took neither branch
-      // above — racing space is the identity remap — so without this they slid
-      // round the lap with the line, silently and by thousands of vertices.
-      // The wrap stays a no-op when the shift is zero, so untouched circuits
-      // are bit-for-bit unchanged.
       if (def.reverse || def.sceneryCoordinates === "source" || TrackSpace.sceneryOriginDelta(def))
         sceneryApi = transformSceneryApi(sceneryApi, def, n);
       def.scenery(sceneryApi);
@@ -2314,13 +1813,6 @@ const Tracks = (function () {
     for (const a of deferredFoliage) forestEdgeNow.apply(null, a);
     plantRoadsideTrees();
 
-    // Generic lamp masts — EVERY circuit gets them (visible day and night).
-    // Street posts and flood banks share one lampPosts list / buildTrackLights
-    // bake (same 22 m stride, hw+6 offset, side parity) so each pool reads as
-    // cast by a real mast. Street/modern circuits get slim posts with an arm
-    // over the track; open circuits get tall flood banks. The lens uses a bright
-    // albedo so the prop-emissive (ramped up as the sun drops) makes it glow at
-    // night. Theme tints the lens warm (desert) / cool (street/modern) / neutral.
     {
       const stTheme = theme === "street_night" || theme === "street_day" || theme === "modern";
       const mastH = stTheme ? 9 : 13;
@@ -2330,14 +1822,6 @@ const Tracks = (function () {
         ? LightTune.LT.lampDensity : 1;
       const mstride = Math.max(1, Math.round((22 / dens) / ds));  // matches buildTrackLights + LAMP DENSITY
       let mi = 0;
-      // ── LAMP KIND — decided HERE, once, per post (single source of truth) ──
-      // The visible lens albedo and the point light buildTrackLights emits (colour, cone,
-      // energy, volumetric weight, glare) all key off this kind, so the fixture
-      // you see always matches the light it casts. Authentic CCT spread:
-      // sodium 2100K / halogen 3000K / metal-halide 4300K / LED 5000K /
-      // heritage globe 2700K / broadcast flood bank 5700K / orange work lamp.
-      // Night lens albedos are HDR-ish (>1) so brighter kinds bloom bigger via
-      // the emissive path; day albedos stay ≤~1.05 so sun doesn't blow them out.
       const LENS_NIGHT = {
         flood_bank: [1.30, 1.33, 1.40], halide: [1.10, 1.20, 1.18],
         sodium:     [1.32, 0.86, 0.42], halogen: [1.26, 1.06, 0.62],
@@ -2350,9 +1834,6 @@ const Tracks = (function () {
         led:        [0.96, 1.00, 1.05], globe:   [1.04, 0.94, 0.70],
         work:       [0.98, 0.82, 0.58], fluor:   [0.92, 1.00, 0.90],
       };
-      // Heritage-globe streets (Monaco, Baku) run globes; other cities mix
-      // sodium/LED/halogen; open circuits mix metal-halide/halogen/sodium with
-      // the odd work lamp; the pit straight is always broadcast flood banks.
       const globeStreet = fz.lamp === "globe";
       const pickKind = (k, roll) => {
         const frac = k / n;
@@ -2366,10 +1847,6 @@ const Tracks = (function () {
         if (roll < 0.07) return "work";
         return roll < 0.50 ? "halide" : roll < 0.78 ? "halogen" : "sodium";
       };
-      // Export the EXACT world position + kind of every visible lens so game.js
-      // buildTrackLights emits its point light from the real fixture — glare
-      // halo, specular streak and volumetric beam all anchor to geometry.
-      // onTrack-suppressed masts are simply absent, so no light without a mast.
       track.lampPosts = [];
       for (let k = 0; k < n; k += mstride, mi++) {
         const side = (mi % 2 === 0) ? 1 : -1;
@@ -2379,17 +1856,6 @@ const Tracks = (function () {
         const kind = pickKind(k, hash(mi * 13.7 + 3.1));
         const lensCol = (NIGHT ? LENS_NIGHT : LENS_DAY)[kind];
         const b = [a.r, a.u, a.t];
-        // Radius bumped 0.17->0.26: at the shadow map's default texel density
-        // (~0.03-0.09m/texel across the 32-96m SHADOW DISTANCE range) a 0.34m
-        // pole was only ~3.6-11 texels wide — thin enough that its shadow
-        // silhouette pops in/out as it crosses texel boundaries while driving
-        // past, and masts repeat every ~22m (buildTrackLights' stride), so the
-        // aliasing reads as a regular "picket fence" of stripes sweeping toward
-        // the camera. Widening the footprint (~1.5x) reduces how often a
-        // texel-boundary crossing flips the whole silhouette; the visible pole
-        // is only modestly thicker (barely perceptible at driving distance).
-        // Does not fully eliminate thin-caster aliasing — a proper fix would
-        // need a separate, shadow-only fatter proxy mesh.
         addCyl(out, a.c, 0.26, mastH, poleCol, 6, b);
         const top = vadd(a.c, a.u, mastH);
         let lens;
@@ -2412,11 +1878,6 @@ const Tracks = (function () {
         track.lampPosts.push({ k, side, x: lens[0], y: lens[1], z: lens[2], kind });
       }
     }
-    // Circuit-registered fixtures ride the same export, so buildTrackLights needs
-    // no second code path — they are lamp posts that happened to be modelled by a
-    // scenery() callback instead of by the generic mast pass. Appended AFTER it
-    // because that pass assigns track.lampPosts fresh. Mast lamps from
-    // floodMast()/floodMastRing() follow the same rule (fixtures that emit).
     for (const lamp of customLamps) track.lampPosts.push(lamp);
     for (const lamp of mastLamps) track.lampPosts.push(lamp);
     track.hasAlwaysLamps = customLamps.some((lamp) => lamp.always);
@@ -2471,12 +1932,6 @@ const Tracks = (function () {
 
   function buildGate(track) {
     const out = { pos: [], nrm: [], col: [], idx: [] };
-    // Always-on red-leg start/finish arch (drawn every circuit). Per-track
-    // gantry() calls are separate scenery — both can coexist at the line.
-    // Sit the gate ~15 m BEFORE the start/finish along the lap centreline —
-    // NOT along node-0's tangent chord. On a curved pit straight the chord
-    // drifts off the racing line (COTA/Shanghai/Jeddah were 4–8 m sideways,
-    // planting one red leg on the asphalt).
     const backDist = 15;
     const tmp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
     sample(track, track.total - backDist, tmp);
@@ -2500,9 +1955,6 @@ const Tracks = (function () {
     return out;
   }
 
-  // Chequered start/finish line: a grid of black/white squares laid as a thin
-  // decal across the road at s=0, sitting a hair above the asphalt and following
-  // the local road basis (so it banks/slopes with the surface).
   function buildStartLine(track) {
     const out = { pos: [], nrm: [], col: [], idx: [] };
     const r = [track.rx[0], track.ry[0], track.rz[0]];
@@ -2540,7 +1992,6 @@ const Tracks = (function () {
     return out;
   }
 
-  // ---------- circuit layouts (turn += LEFT, lengths in meters pre-SCALE) ----------
   // palettes
   function dayPal(o) {
     const p = Object.assign({
@@ -2570,18 +2021,8 @@ const Tracks = (function () {
     return p;
   }
 
-  // Circuit definitions live in js/circuits/<id>.js — each registers itself on the
-  // global TrackDefs list (loaded before this engine). Palette is resolved here
-  // from the `night` flag; bridges/elevations/street travel with each def.
   const DEFS = (typeof window !== "undefined" && window.TrackDefs) || [];
 
-  // Surveyed elevation profile lookup. js/track/circuit-elevations.js (baked offline
-  // by tools/bake-elevation.mjs from SRTM) registers CircuitElevations[id] as an
-  // array of metres, relative to the start, sampled evenly by arc-fraction. When
-  // present it supersedes the authored cosine `elevations` bumps for that
-  // circuit. Returns null when no profile is loaded (the shipped default) —
-  // callers fall back to the authored bumps on null, so 0 would be a real
-  // elevation and would flatten the circuit instead.
   function elevationAt(id, frac) {
     const prof = (typeof CircuitElevations !== "undefined") && CircuitElevations[id];
     if (!prof || !prof.length) return null;
@@ -2593,20 +2034,12 @@ const Tracks = (function () {
     return (typeof CircuitElevations !== "undefined") && !!(CircuitElevations[id] && CircuitElevations[id].length);
   }
 
-  // Real circuit centerlines (js/track/geo-paths.js): projected OSM traces in metres.
-  // We use the real layout instead of the authored segment lists. Points are
-  // kept flat (y = 0) unless a surveyed elevation profile is loaded — the old
-  // per-segment elevation distributed a vertical residual that tilted the whole
-  // loop, which is the height glitch on Monaco; the profile path closes the
-  // elevation seam explicitly instead.
   function realPoints(id, baseHW) {
     const path = (typeof CircuitPaths !== "undefined") && CircuitPaths[id];
     if (!path) return null;
     const N = path.pts.length;
     const real = hasRealElevation(id);
     let pts = path.pts.map((p, i) => [p[0], real ? elevationAt(id, i / N) : 0, p[1], baseHW, 0]);
-    // light closed-loop smoothing to take the digitisation jitter off the
-    // raw trace so the Catmull-Rom pass doesn't overshoot at noisy vertices
     for (let it = 0; it < 2; it++) {
       const sx = pts.map((p) => p[0]), sz = pts.map((p) => p[2]);
       const L = 0.25;
@@ -2617,18 +2050,12 @@ const Tracks = (function () {
       }
     }
     if (real) {
-      // close the elevation loop: ramp out any start↔end residual so the lap
-      // meets itself seamlessly (same idea as the xz closure in centerline()).
       const eEnd = pts[N - 1][1] - pts[0][1];
       for (let i = 0; i < N; i++) pts[i][1] -= eEnd * (i / (N - 1));
     }
     return pts;
   }
 
-  // Overlay half-width zones onto control points (CircuitPaths traces ignore segs
-  // `w:` — this is how Castle Section / hairpin squeezes land on real layouts).
-  // zones: [{ s0, s1, hw, ease? }] — s0→s1 may wrap (s1 < s0). Soft edges via ease
-  // (lap fraction, default 0.025). Multiple zones: lowest hw wins at each node.
   function applyHwZones(pts, zones, baseHW) {
     if (!zones || !zones.length || !pts || !pts.length) return;
     const N = pts.length;
@@ -2665,18 +2092,8 @@ const Tracks = (function () {
   const LIST = DEFS.map((d) => {
     const def = {
       id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3,
-      // A REAL grand prix distance for this circuit, by the actual regulation:
-      // the fewest laps exceeding 305 km (Monaco alone runs to 260 km). Derived
-      // from lengthKm rather than authored as 40 numbers, so a circuit whose
-      // length is corrected gets the right race without a second edit — and so
-      // there is no table to fall out of step. Spa 44, Monza 53, Silverstone 52.
-      // lengthKm is stored to 1 dp, which can leave a circuit one lap off its
-      // real figure (Monaco reads 79 against a true 78); the shape of the race
-      // is what this is for, not the record book.
       gpLaps: Math.ceil((d.id === "monaco" ? 260 : 305) / (d.lengthKm || 5)),
       night: d.night, theme: d.theme, lengthKm: d.lengthKm,
-      // Retired / off-calendar circuit: playable everywhere, but NOT a
-      // championship round (see SEASON below).
       classic: !!d.classic,
       palette: (d.night ? nightPal : dayPal)(d.pal || {}),
       street: !!d.street, banked: !!d.banked, bankZones: d.bankZones || null, bridges: d.bridges || null,
@@ -2714,8 +2131,6 @@ const Tracks = (function () {
       undulate: d.undulate,
       // bespoke per-circuit scenery (js/circuits/<id>.js); run by buildProps
       scenery: d.scenery || null,
-      // surveyed elevation (if js/track/circuit-elevations.js is loaded) is baked into
-      // the points below and supersedes the authored cosine bumps.
       elevations: hasRealElevation(d.id) ? null : (d.elevations || null),
       // Half-width overlays for CircuitPaths traces (segs `w:` is ignored there).
       hwZones: d.hwZones || null,
@@ -2749,22 +2164,9 @@ const Tracks = (function () {
     return def;
   });
 
-  // Run the eager-LIST points pipeline once, then pin `def.points` as a plain
-  // array so later reads skip the accessor. Closed over by the LIST getter and
-  // by ensurePoints (buildCenterline).
   function materializeListPoints(def, d) {
     let pts = realPoints(d.id, d.baseHW) || centerline(d.segs, d.baseHW);
-    // Lap-direction + start-line transform.
-    //  • `reverse`   flips the traversal so the loop is driven the other way.
-    //  • `startFrac` rotates the start/finish line to a chosen fraction of the
-    //    ORIGINAL trace (0 = the trace's own first point).
-    // The centreline control points and the elevation/bridge s-anchors are
-    // remapped here; the matching scenery/barrier s-remap happens when the
-    // bespoke scenery() runs (buildProps), driven by def._startFrac/_reverse.
     const phi = TrackSpace.wrap01(def.startFrac || 0);
-    // The AUTHORING origin for anything that was tuned by eye against the
-    // rendered road — see below. Equals `phi` unless the def declares that its
-    // dressing predates a start-line correction.
     const phiAuthor = def.sceneryStartFrac != null
       ? TrackSpace.wrap01(def.sceneryStartFrac) : phi;
     if (def.reverse || phi || phiAuthor) {
@@ -2805,13 +2207,7 @@ const Tracks = (function () {
       const fmap = (s) => TrackSpace.toRacingFrac({ startFrac: phiAuthor, reverse: def.reverse }, s);
       if (def.elevations) def.elevations = def.elevations.map((e) => Object.assign({}, e, { s: fmap(e.s) }));
       if (def.bridges)    def.bridges    = def.bridges.map((b) => Object.assign({}, b, { s: fmap(b.s) }));
-      // hwZones stay on the NARROWER guard: they are a source-space index range
-      // applied to the control points by index, so they are already origin-
-      // independent, and running the remap on a def whose phi is 0 would still
-      // wrap an authored s1 of exactly 1 down to 0 and blank the zone.
       if (def.hwZones && (def.reverse || phi)) {
-        // Reverse flips endpoint order — swap so [s0,s1] stays a short forward arc
-        // (otherwise s1 < s0 wraps and the zone covers most of the lap).
         def.hwZones = def.hwZones.map((z) => {
           return Object.assign({}, z, TrackSpace.range(def, z.s0, z.s1, "source"));
         });
@@ -2826,37 +2222,17 @@ const Tracks = (function () {
   }
 
   // Touch-forces LIST points (and the coupled elevation/bridge/hwZones remaps).
-  // buildCenterline is the only build entry that needs the array; LIST.find
-  // metadata consumers never pay.
   function ensurePoints(def) {
     return def.points;
   }
 
-  // THE CHAMPIONSHIP CALENDAR. `LIST` is every playable circuit; `SEASON` is the
-  // subset that forms a season. They used to be the same array, which meant
-  // `season.round` doubled as a LIST index — so any circuit added to the game
-  // silently became a championship round. Classics are excluded here instead, and
-  // season code indexes SEASON (via seasonIndex) rather than LIST.
   const SEASON = LIST.filter((t) => !t.classic);
 
-  // LIST index of a season round (0-based). -1 once the calendar is exhausted,
-  // which is the same signal `round >= SEASON.length` gives the callers.
   function seasonIndex(round) {
     const t = SEASON[round];
     return t ? LIST.indexOf(t) : -1;
   }
 
-  // world -> track projection (project) and the barrier-derived driving
-  // boundary (wallAt) live in js/track/spline.js — destructured above.
-  // Rendered ground height at world (x,z): the max Y of any terrain triangle
-  // covering that point (vertical ray-cast against the stashed terrain geometry).
-  // Returns null if no terrain covers the point. Debug aid — finds where the
-  // carved terrain ends up so props can be checked for floating / gaps.
-  // Uniform XZ bucket grid over the terrain triangles, built once per track and
-  // keyed on the geometry object so a rebuild invalidates it. Every triangle is
-  // inserted into every cell its XZ bounding box touches, so querying one cell
-  // sees exactly the triangles the linear scan would have found containing the
-  // point — the answer is identical, not approximate.
   function terrainGrid(track) {
     const g = track.terrainGeo;
     if (!g || !g.pos || !g.idx) return null;
@@ -2891,10 +2267,6 @@ const Tracks = (function () {
     return track._terrGrid;
   }
 
-  // Rendered-terrain height at a world XZ, or null where the ribbon doesn't
-  // cover. Was a linear scan of EVERY terrain triangle — ~58k on Monza — and
-  // buildProps anchors every prop through it, so the cost landed on track build
-  // as well as on callers. The grid keeps the same answer 23-177x faster.
   function terrainY(track, x, z) {
     const g = track.terrainGeo; if (!g) return null;
     const pos = g.pos, idx = g.idx; let best = null;
@@ -2916,9 +2288,6 @@ const Tracks = (function () {
     return best;
   }
 
-  // Barycentric containment in XZ, returning the higher of `best` and this
-  // triangle's interpolated height. Shared by both terrainY paths so the grid
-  // cannot drift from the scan.
   function _triY(pos, a, b, c, x, z, best) {
     const ax = pos[a], az = pos[a + 2], bx = pos[b], bz = pos[b + 2], cx = pos[c], cz = pos[c + 2];
     const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = x - ax, v2z = z - az;

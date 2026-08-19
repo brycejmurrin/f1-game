@@ -1,6 +1,4 @@
-/* Apex 26 — LAS VEGAS circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — LAS VEGAS circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -11,9 +9,6 @@
     // Was 0.8575, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.9899,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.8575,
     name: "LAS VEGAS",
     gp: "Las Vegas GP",
@@ -26,11 +21,6 @@
     sceneryCoordinates: "racing",
     terrainOuter: 26,
     barrierGap: 1.0,
-    // The generic street-night city generator, boulevard lamps and foliage
-    // carry most of Vegas's density — the bespoke landmarks layer ON TOP of
-    // them, they don't replace them. Only carve out the curated sightlines:
-    // the open Sphere approach (mid-ground stays clear so the orb reads
-    // alone) and the floodlight gaps at the Sphere and the Bellagio lake.
     dressingExclusions: [
       { kinds: ["city", "foliage"], s0: 0.36, s1: 0.47 },
       { kind: "lamps", s0: 0.27, s1: 0.36, side: -1 },
@@ -42,14 +32,7 @@
       { t: -70, l: 60 }, { t: 55, l: 60 }, { t: 0, l: 360 }, { t: -90, l: 80 }, { t: 50, l: 70 }, { t: 0, l: 900, t2: 0 },
       { t: 20, l: 200 }, { t: -90, l: 90 }, { t: 60, l: 60 }, { t: -70, l: 70 }, { t: -65, l: 120 },
     ],
-    // Elevations are authored in SOURCE space. Source 0.2075 maps to racing
-    // s≈0.218 with startFrac 0.9899: a shallow Sphere-sector underpass dip,
-    // while the Strip remains essentially level as in the circuit brief.
     elevations: [{ s: 0.2075, halfM: 130, rise: -1.2 }],
-    // The Strip and Koval are enormous multi-lane boulevards; the Sphere-sector
-    // link roads and the last corner are ordinary city streets. s0/s1 are
-    // CONTROL-POINT index fractions in SOURCE space; the racing-lap arc each
-    // lands on is in the trailing comment.
     hwZones: [
       { s0: 0.2164, s1: 0.2374, hw: 6.2, ease: 0.012 },  // arc 0.400-0.432 T7
       { s0: 0.3139, s1: 0.4596, hw: 6.1, ease: 0.012 },  // arc 0.478-0.532 T9-T10
@@ -72,9 +55,6 @@
         bakedModel } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // High Roller: one atomic, fully-grounded vertical wheel. The old model
-      // used a wide horizontal cylinder as its "rim", which read as a floating
-      // platter and could be partially suppressed.
       const ferrisWheel = (k, side, dist, radius) => {
         const a = anchor(k, side, dist);
         const hub = vadd(a.c, a.u, radius + 5);
@@ -108,11 +88,6 @@
             const ang = i / seg * 6.2832;
             rim.push(vadd(vadd(hub, a.t, Math.cos(ang) * radius), a.u, Math.sin(ang) * radius));
           }
-          // Spring the spokes off the hub's SURFACE (its box below is 3.5 m), not
-          // its centre. From the centre all 16 pile through each other inside the
-          // hub, coplanar in the wheel plane at the same thickness -- the High
-          // Roller is the tallest thing on the circuit, so that knot flickers in
-          // frame for most of the lap. r = 2.0 leaves 0.77 m between neighbours.
           const HUB_R = 2.0;
           for (let i = 0; i < seg; i++) {
             const d = [rim[i][0] - hub[0], rim[i][1] - hub[1], rim[i][2] - hub[2]];
@@ -142,19 +117,9 @@
       const DARKROCK = [0.16, 0.06, 0.05];
       const NEON = [MAGENTA, CYAN, VIOLET, LIME, WARM, GOLD, ROSE, BLUE, RED];  // expanded palette
 
-      // ── PARKING-LOT BLEACHER ────────────────────────────────────────────
-      // Nothing at this race is built. The Strip stands go up on casino
-      // PARKING LOTS in October and come down in December: a striped asphalt
-      // pad, a jacked scaffold tower frame with X-bracing, bare aluminium
-      // planks, an open back, a bolt-on stair tower at one end — and, because
-      // this is Las Vegas, an LED ribbon down the fascia instead of a sponsor
-      // banner. grandstandEx's back shell and roof describe a permanent stand,
-      // which is the one thing this event has none of.
       const LOT_ASPHALT = [0.10, 0.10, 0.12];
       const LOT_STRIPE = [0.86, 0.82, 0.44];
       const TUBE = [0.62, 0.63, 0.66], PLANK = [0.74, 0.75, 0.78];
-      // Night crowd: mostly dark bodies, a scatter of phone screens, and the
-      // odd neon-lit jacket picking up the ribbon below them.
       const LOT_FANS = [
         [0.11, 0.12, 0.16], [0.16, 0.16, 0.21], [0.13, 0.14, 0.18], [0.20, 0.19, 0.24],
         [0.11, 0.12, 0.16], [2.4, 2.2, 1.9], [0.34, 0.20, 0.30], [0.18, 0.22, 0.32],
@@ -222,26 +187,18 @@
                 [7.6, 0.16, 3.6], TUBE, b);
           }
           stage._mat = 0;
-          // LED ribbon along the fascia — the stand advertises, like everything
-          // else on this street. Emissive, so it blooms at night.
           addBox(stage, vadd(vadd(a.c, a.r, IN * 5.4), a.u, 1.6), [0.2, 1.5, len], ribbon, b);
           addBox(stage, vadd(vadd(a.c, a.r, IN * 5.5), a.u, 0.55), [0.12, 0.3, len],
             [0.06, 0.06, 0.09], b);
         });
       };
 
-      // --- Street-circuit furniture: concrete walls, fences, marshal posts ---
-      // The engine emits a continuous dark barrier on both edges for street circuits.
-      // Add concrete top-rail accents, debris fences, and marshal posts to dress it.
       fence(0.0, 0.07, 1, 1.4, 3.6, [0.55, 0.56, 0.60]);             // pit/paddock straight
       fence(0.83, 0.91, -1, 1.4, 3.6, [0.55, 0.56, 0.60]);          // neon final straight
       guardrail(0.16, 0.21, 1, 1.0, [0.80, 0.80, 0.84]);            // T3 hard-right armco
       guardrail(0.45, 0.49, -1, 1.0, [0.80, 0.80, 0.84]);          // T8-T9 onto the Strip
       tyreWall(0.305, 0.345, -1, 1.2, MAGENTA);                     // Sphere chicane apex
       tyreWall(0.955, 0.985, 1, 1.2, CYAN);                        // Harmon chicane apex
-      // Debris fencing above the concrete barrier, right round the lap. The Strip
-      // race is screened end to end and the lap carried two short spans; this is
-      // also most of what the driver sees in the first 10 m of verge.
       for (const [s0, s1, side] of [
         [0.07, 0.30,  1], [0.30, 0.50,  1], [0.50, 0.72,  1], [0.72, 0.99,  1],
         [0.00, 0.25, -1], [0.25, 0.48, -1], [0.48, 0.70, -1], [0.70, 0.83, -1],
@@ -264,7 +221,6 @@
       gantry(0.50, 8.5, [0.12, 0.12, 0.16]);                       // DRS detection on Strip
       gantry(0.80, 8.5, [0.12, 0.12, 0.16]);
 
-      // --- Distant red-rock desert silhouette (far, dark, no snow) ---
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
@@ -276,16 +232,12 @@
         const a = i / desertN * 6.2832, h = hash(i * 7 + 3), h2 = hash(i * 13 + 2);
         const mx = cx + Math.cos(a) * ring, mz = cz + Math.sin(a) * ring;
         if (onTrack(mx, mz, 60)) continue;
-        // Distant desert mesa/butte: a broad SLOPED landform (wide base easing to a
-        // flatter top) plus a lower foothill skirt — reads as mountains on the
-        // horizon, not the flat black rectangular prisms boxes used to give.
         const mh = 34 + h * 56, baseR = 150 + h2 * 130;
         const rock = [DARKROCK[0] * (0.9 + h * 0.4), DARKROCK[1] * (0.9 + h * 0.4), DARKROCK[2] * (0.95 + h * 0.5)];
         addFrustum(out, [mx, pyMin - 4, mz], baseR * 1.5, baseR * 0.95, mh * 0.42, [rock[0] * 1.1, rock[1] * 1.1, rock[2] * 1.1], 6);
         addFrustum(out, [mx, pyMin - 4 + mh * 0.30, mz], baseR, baseR * 0.58, mh * 0.7, rock, 6);
       }
 
-      // --- DISTANT NIGHT SKYLINE: a dense glowing horizon wherever you look,
       //     with per-tower radius jitter so it never reads as a cloned ring. ---
       {
         const sky = trad + 300;
@@ -298,10 +250,6 @@
           if (onTrack(mx, mz, 80)) continue;
           const bh = 50 + h * 130, bw = 34 + h2 * 30, bd = 34 + h2 * 26;
           const tint = SKYTINT[i % SKYTINT.length];
-          // Glowing glass skin (continuous, not a checker of bands). Kept in a
-          // moderate band: above the shader's emissive glow gate (~0.55) so it
-          // reads as lit, but well below HDR so the distant ring doesn't bloom into
-          // the blown-out pink/cyan blobs it did before.
           const lvl = 0.46 + h2 * 0.16;
           const skin = [tint[0] * lvl + 0.06, tint[1] * lvl + 0.06, tint[2] * lvl + 0.08];
           const baseH = bh * 0.78;
@@ -324,11 +272,6 @@
         }
       }
 
-      // --- LAMP POST ROWS: freestanding tall poles along the Strip and key sections ---
-      // Tall Vegas-style cobra-head lamp posts at ~30 m intervals, set 12 m from the edge.
-      // Each post: a dark grey cylinder mast topped with a bright white-warm LED head box.
-      // These are the primary source of "track surface lit up" effect on the foreground.
-      // Posts appear on both sides from the pit straight all the way around the Strip.
       const lampPost = (k, side, dist) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         // Slim mast
@@ -361,10 +304,6 @@
         lampPost(K(s + 0.010), -1, 12);
       }
 
-      // --- VERGE-SAFE NEON WET-LOOK STRIPS (off tarmac) ---
-      // Centerline light pools sat on the racing line and were rejected/suppressed.
-      // Thin emissive strips hug the barrier verge only — wet neon reflection, not
-      // painted asphalt. Also dress pit + Harmon approaches the same way.
       {
         const stripNeon = (s0, s1, step, gap) => {
           let j = 0;
@@ -382,13 +321,6 @@
         stripNeon(0.83, 0.96, 0.028, 3.2);   // Harmon / final straight verge
       }
 
-      // --- s 0.00 R near: pit/paddock — Grand Prix Plaza + grandstands + facility kit ---
-      // Grand Prix Plaza: the one headline structure this circuit was missing —
-      // a permanent, 300,000 sq ft four-level glass landmark at start/finish
-      // (the Sphere, High Roller, Bellagio and Eiffel are all already modelled;
-      // this was the gap). One atomic hero — glass podium, two setback upper
-      // floors, lit roof deck — replaces what used to be six identical 10x7x24
-      // garage boxes with a fascia strip.
       const grandPrixPlaza = (k, side, gap) => {
         const W = 42, LEN = 118, H = 38;             // overall lateral / along-track / height envelope
         const dist = gap + W / 2;                    // podium CENTRE clearance (matches building()'s convention)
@@ -417,19 +349,13 @@
           addBox(stage, vadd(vadd(a.c, a.r, side * 6), a.u, 36), [W * 0.62, 0.5, l4 + 1], FRAME, b);
           for (const off of [-l4 * 0.42, 0, l4 * 0.42])
             addBox(stage, vadd(vadd(vadd(a.c, a.r, side * 6), a.u, 37), a.t, off), [1.4, 1.6, 1.4], GLASS_LIT, b);
-          // Bright fascia rim down both long edges — reads as one lit landmark
-          // at broadcast distance instead of six dark boxes with LED trim.
           for (const rs of [-1, 1])
             addBox(stage, vadd(vadd(a.c, a.r, rs * (W / 2 + 0.2)), a.u, 3), [0.6, 1.4, LEN], GLASS_LIT, b);
         }, { required: true });
       };
       grandPrixPlaza(K(0.012), 1, 15);
-      // Paddock grandstands: temporary multi-tier scaffold decks, not one grey
-      // template — livery + tiers from STAND_SETS.vegas (darkSteel/scaffold/alu).
       grandstandEx(0.05, 1, 20, 82, null, null,
         { livery: "darkSteel", tiers: 3, roof: "truss", suites: true, endWalls: true, pylons: true });
-      // Facing it across the paddock straight: rented scaffold on the lot,
-      // so the two sides of the same straight are not the same object twice.
       lotBleacher("vegas-lot-bleacher-paddock", 0.0745, -1, 16, 9,
         { rows: 8, ribbon: MAGENTA });
       // pit-lane light masts — bright LED headlights (supplement engine's generic posts)
@@ -438,10 +364,6 @@
         addCyl(out, a.c, 0.28, 15, [0.35, 0.35, 0.38], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 15), [3.5, 1.2, 1.2], LED, [a.r, a.u, a.t]); // bright light head
       }
-      // Densify the paddock/fan-zone sector — this 10% of the lap is the real
-      // event's densest zone but was the sparsest in-game. Facility kit fills
-      // in behind the plaza/grandstands: hospitality suites, service compound,
-      // broadcast compound and a camera tower.
       if (circuitKit) {
         circuitKit.hospitality({
           id: "kit:vegas:paddock-hospitality", frac: 0.045,
@@ -455,8 +377,6 @@
       broadcastCompound(K(0.09), 1, 44, { vans: 4, dishes: 3, mastH: 11 });
       cameraTower(K(0.002), -1, 15, { h: 20, boom: 1.4 });
 
-      // CC0 Kenney mid/hi-rise accents behind the paddock BOH strip — pack
-      // optional; procedural towers remain the Strip heroes above.
       {
         const pads = [
           ["kenney_com_building-f", 0.08, 1, 58],
@@ -472,29 +392,16 @@
         }
       }
 
-      // --- s 0.02–0.08 L: Fontainebleau + Resorts World (real, both absent) ---
-      // These stand across Koval from the paddock — background landmarks, not
-      // Strip-canyon foreground — so they replace what used to be two generic
-      // ad billboards at the T1 approach.
-      // Fontainebleau: a dark blue-glass mega-tower (the real one is ~68 storeys).
       building(K(0.03), -1, 52, 34, 128, 30, { kind: "notch", wall: [0.07, 0.08, 0.13], window: [0.10, 0.22, 0.42], floor: 11, lit: true });
       place(K(0.03), -1, 20, [10, 1.0, 26], [0.15, 0.30, 0.55]);   // cool blue base uplight
-      // Resorts World: the huge LED marquee facade is the real landmark here,
-      // not another neon ad board — a bright emissive screen on the tower face.
       building(K(0.062), -1, 60, 30, 90, 26, { kind: "screen", wall: [0.14, 0.14, 0.18], window: LED, floor: 15, lit: true });
       place(K(0.062), -1, 44, [2.5, 16, 30], LED);                // giant LED megascreen
 
-      // --- s 0.05–0.28: T1-T5 (Koval Ln / Sands Ave back-of-house) ---
-      // This is convention-centre service road, not Strip glitz — a cooler, dimmer,
-      // lower palette so the Strip payoff at s≈0.49 actually lands as a step up.
       const BOH_WALL = [0.16, 0.17, 0.20];   // flat concrete-grey, no warm cast
       const BOH_WIN  = [0.30, 0.38, 0.48];   // cool dim office glass, not neon
       // Prominent hotel towers either side of the start/finish straight approach
       building(K(0.10), -1, 22, 30, 46, 30, { kind: "twin", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
       building(K(0.14), 1, 20, 26, 40, 26, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
-      // cityFront fills the T3-T8 sector with a continuous but LOW, dim street-wall.
-      // Start at 0.12 (after the two explicit buildings at s 0.10/0.14) to avoid
-      // duplicate geometry on the same nodes. Gap 52 safely clears T3 apex.
       cityFront(0.12, 0.20, -1, 20, { minH: 20, maxH: 42, depth: 22, step: 30,
         palette: [[0.18, 0.18, 0.20], [0.19, 0.19, 0.20]], lit: true, windowCol: BOH_WIN });
       cityFront(0.12, 0.20,  1, 20, { minH: 18, maxH: 38, depth: 20, step: 30,
@@ -503,11 +410,6 @@
       building(K(0.22), 1, 26, 30, 40, 28, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
       building(K(0.28), -1, 30, 34, 46, 30, { kind: "notch", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
 
-      // --- s 0.30 L near: MSG Sphere — single-hue LED orb hero ---
-      // Open technical sector: one giant silhouette, not a rainbow onion. Venetian
-      // lives on the Strip (below), not crowding this sector.
-      // Note: api.ledFacadeBands is a tapering shaft (Flame Towers); Sphere needs
-      // a sin/cos radial profile, so we keep a lean inline band stack.
       {
         const a = anchor(K(0.30), -1, 145);
         const rad = 66;
@@ -536,39 +438,23 @@
         }, { required: true });
       }
 
-      // --- s 0.45 R far: extra red-rock silhouette ---
       backdrop(K(0.45), 1, 240, [180, 30, 120], DARKROCK);
 
-      // ═══════════════════════════════════════════════════════════════════
-      // STRIP LANDMARK CORRIDOR (southbound order, re-sided)
-      // Venetian L → High Roller L/east → Caesars R → Bellagio+lake R →
-      // Paris/Eiffel L → Harmon (stands below). Off-route Luxor / Welcome /
-      // MGM culled to reclaim verts for these silhouettes.
-      // ═══════════════════════════════════════════════════════════════════
-
-      // --- s ~0.49 L: Venetian / Palazzo at Strip entry ---
       building(K(0.49), -1, 20, 42, 98, 40, { kind: "pyramid", wall: [0.64, 0.60, 0.52], window: [1.0, 0.85, 0.35], floor: 8 });
       building(K(0.505), -1, 46, 32, 75, 32, { kind: "spire", wall: [0.62, 0.58, 0.50], window: [0.98, 0.80, 0.30], floor: 8 });
       tower(K(0.492), -1, 70, 18, 60, { col: [0.58, 0.54, 0.46], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
       place(K(0.49), -1, 9, [28, 1.8, 8], [1.0, 0.85, 0.25]); // golden uplighting
 
-      // --- s ~0.55 L/east: High Roller (LINQ) — world's tallest observation wheel ---
-      // East of Blvd = left when racing southbound. Rim clearance: dist 85 − r 65.
       ferrisWheel(K(0.55), -1, 85, 65);
       billboard(K(0.56), -1, 18, 16, 10, CYAN);
       building(K(0.55), -1, 22, 36, 18, 28, { kind: "screen", wall: [0.24, 0.24, 0.28], window: [0.15, 0.80, 1.00], floor: 4 });
       place(K(0.55), -1, 10, [24, 0.7, 24], [0.15, 0.45, 0.65]);
       place(K(0.55), -1, 10, [20, 0.5, 20], [0.10, 0.30, 0.50]);
 
-      // --- s ~0.62 R: Caesars Palace — wide cream box, gold up-lights ---
       building(K(0.62), 1, 22, 62, 75, 46, { kind: "drum", wall: [0.68, 0.64, 0.56], window: [1.0, 0.85, 0.40], floor: 8 });
       place(K(0.62), 1, 12, [44, 2.4, 8], [1.0, 0.88, 0.30]);
       place(K(0.62), 1, 9, [50, 1.2, 10], [0.95, 0.75, 0.15]);
 
-      // --- s ~0.66–0.71 R: Bellagio + fountains + reflective lake ---
-      // The real frontage is ~300 m; widen the hotel's along-track depth, the
-      // lake, and the jet run (was one 40 m-deep building, a 110x44 m patch and
-      // 8 jets bunched into 20 m) to actually span it.
       building(K(0.68), 1, 40, 60, 55, 62, { wall: [0.58, 0.55, 0.50], window: [1.0, 0.85, 0.40], floor: 7 });
       place(K(0.68), 1, 52, [95, 2.0, 12], [1.0, 0.75, 0.20]);   // dist cleared past sz[0]/2 — was silently suppressed
       // Jets spread and height-varied across the full frontage (was 8 jets in a
@@ -582,27 +468,15 @@
         const jetH = 8 + hash(i * 9.3 + 2) * 16;   // 8-24 m: varied reach, not one height
         addBox(out, vadd(a.c, a.u, jetH / 2), [0.8, jetH, 0.8], jetCols[i % jetCols.length], [a.r, a.u, a.t]);
       }
-      // Two overlapping basins follow the lakeshore across the widened frontage
-      // instead of one 44 m patch — a long single box this size would risk
-      // clipping the T13 apex the road carries through this stretch.
       waterSurface(K(0.672), 1, 20, [110, 1.2, 150], [0.05, 0.10, 0.18],
         { id: "vegas-bellagio-lake-east", required: true });
       waterSurface(K(0.702), 1, 20, [105, 1.2, 135], [0.05, 0.10, 0.18],
         { id: "vegas-bellagio-lake-west" });
 
-      // --- s ~0.74 L: Paris Las Vegas — Eiffel replica ---
       tower(K(0.74), -1, 68, 22, 130, { col: [0.55, 0.48, 0.35], seg: 4, cap: true, capCol: [1.0, 0.85, 0.4], mast: true });
       place(K(0.74), -1, 20, [10, 1.6, 10], [1.0, 0.80, 0.25]);
       place(K(0.74), -1, 22, [14, 0.7, 14], [0.95, 0.75, 0.20]);
       building(K(0.73), -1, 24, 36, 55, 34, { wall: [0.62, 0.58, 0.48], window: [1.0, 0.82, 0.30], floor: 7 });
-      // The MONTGOLFIER BALLOON. Paris Las Vegas is a two-landmark resort and
-      // the circuit only had one of them: the half-scale Eiffel above, and
-      // nothing for the enormous ornate hot-air balloon that sits at street
-      // level in front of it, carrying the marquee. On the Strip it reads
-      // BIGGER than the tower does, because it is right down at eye height on
-      // the pavement while the tower is 130 m up and half sky. Built as a
-      // stacked frustum envelope in Second-Empire red and gold, on the marquee
-      // box, with the basket slung under it.
       {
         const a = anchor(K(0.748), -1, 26), b = [a.r, a.u, a.t];
         const RED   = [0.72, 0.12, 0.14], RED_D = [0.56, 0.09, 0.11];
@@ -626,8 +500,6 @@
           for (const [y, r0, r1, h, col] of bands) {
             addFrustum(stage, vadd(bc, a.u, y), r0, r1, h, col, 16, b);
           }
-          // Vertical gore ribs — the thing that makes it read as a balloon and
-          // not a bulb. Thin blue strips up the widest part of the envelope.
           for (let i = 0; i < 8; i++) {
             const ang = (i / 8) * Math.PI * 2;
             const rr = 11.3;
@@ -648,7 +520,6 @@
         });
       }
 
-      // --- s 0.85 both near: Final neon gates ---
       for (const [side, col1, col2] of [[-1, MAGENTA, CYAN], [1, CYAN, MAGENTA]]) {
         billboard(K(0.85), side, 26, 20, 12, col1);
         billboard(K(0.87), side, 26, 18, 11, col2);
@@ -657,12 +528,8 @@
         place(K(0.88), side, 20, [12, 1.0, 8], col2);
       }
 
-      // --- s 0.90–0.97: Harmon Ave chicane grandstands + casino backdrop ---
-      // Temporary multi-tier decks — livery + tiers from STAND_SETS.vegas.
       grandstandEx(0.965, 1, 16, 70, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
-      // The Harmon inside deck is a lot bleacher too — it stands on the
-      // Cosmopolitan/CityCenter service lots, not on a built platform.
       lotBleacher("vegas-lot-bleacher-harmon", 0.90, -1, 16, 9, { rows: 8, ribbon: CYAN });
       grandstandEx(0.945, 1, 20, 40, null, null,
         { livery: "alu", tiers: 1, roof: "none" });
@@ -671,17 +538,10 @@
       billboard(K(0.94), -1, 18, 18, 11, CYAN);
       billboard(K(0.96), 1, 17, 16, 10, MAGENTA);
 
-      // --- CONTINUOUS STRIP SKYLINE CANYON (s ~0.49–0.81): packed neon walls on both sides ---
-      // Near wall: cityFront() for a proper aligned casino facade (not raw boxy slabs).
-      // Far wall: backdrop() gapless skyline blocks.  Signature towers punched through.
       {
         const s0 = 0.485, s1 = 0.815;
         const span = s1 - s0;
 
-        // FAR distant skyline backdrop — tall gapless bands, one per ~48 m step.
-        // These stay as backdrop() because they are truly far scenery (dist 170–190).
-        // (was a 0.0075 step / ~44 bands per side — thinned to pay for the Grand
-        // Prix Plaza hero and the widened Bellagio lake without net vertex growth)
         const STEP = 0.009;
         const backdropCols = [[0.20, 0.18, 0.24], [0.18, 0.16, 0.22], [0.22, 0.20, 0.20]];
         let idx = 0;
@@ -697,10 +557,6 @@
           }
         }
 
-        // NEAR/MID wall: cityFront() replaces the raw boxy place() slabs.
-        // gap 56: inner face 56 m out — clear of the road; buildings 20–30 m deep.
-        // Single pass per side at step=38 (~54 buildings total) keeps geometry lean.
-        // The backdrop loop above provides the far-distance density.
         const casinoPalL = [[0.22, 0.18, 0.22], [0.18, 0.17, 0.24], [0.24, 0.20, 0.20], [0.20, 0.18, 0.26]];
         const casinoPalR = [[0.20, 0.19, 0.26], [0.24, 0.20, 0.22], [0.18, 0.18, 0.22], [0.22, 0.21, 0.20]];
         // Near facade row — primary casino street-wall (gap 56, step 38)
@@ -708,17 +564,11 @@
           palette: casinoPalL, lit: true, windowCol: WARM });
         cityFront(s0, s1,  1, 19, { minH: 40, maxH: 85, depth: 20, step: 26,
           palette: casinoPalR, lit: true, windowCol: CYAN });
-        // The old setback row (gap 96) sat entirely outside the visible band and
-        // duplicated the shared street-night generator's own back row, which
-        // already fills 40-70 m on both sides. Dropped: the near canyon above
-        // now owns the foreground and the generator owns the depth.
 
         // Tall signature casino towers punched along the canyon (prominent landmarks)
         for (let j = 0; j < 8; j++) {
           const s = s0 + (j + 0.5) / 8 * span, side = (j % 2) ? -1 : 1;
           const windowCol = [WARM, CYAN, MAGENTA, GOLD, VIOLET][j % 5];
-          // On the street line with the rest of the canyon (they used to stand
-          // 62 m back, i.e. behind the shared generator's own back row).
           building(K(s), side, 17, 28, 120 + hash(j * 17) * 65, 36,
             { wall: [0.22, 0.20, 0.22], window: windowCol, floor: 16, lit: true });
         }
@@ -728,29 +578,15 @@
           const s = s0 + (j + 0.3) / 8 * span, side = (j % 2) ? 1 : -1;
           billboard(K(s), side, 16, 16 + hash(j * 3) * 6, 10, NEON[(j + 2) % NEON.length]);
         }
-        // Palm rows flanking the Strip edge (Vegas Boulevard is lined with palms)
-        // (thinned 44→34 pairs — plenty dense at Strip speed, frees verts for
-        // the new heroes elsewhere on the lap)
         for (let j = 0; j < 34; j++) {
           const s = s0 + (j + 0.2) / 34 * span, side = (j % 2) ? 1 : -1;
           palm(K(s), side, 15, 11 + hash(j * 23) * 4, LIME);
           palm(K(s + 0.004), -side, 15, 10 + hash(j * 29) * 3, LIME);
         }
-        // Continuous hoarding line on the barrier verge — the Strip is wall to
-        // wall signage, and the lap only carried eight boards down its longest
-        // straight. (thinned 54→40 — still reads continuous at speed)
         for (let j = 0; j < 40; j++) {
           const s = s0 + (j + 0.6) / 40 * span, side = (j % 2) ? -1 : 1;
           billboard(K(s), side, 9, 11 + hash(j * 7.3) * 5, 4.6, NEON[j % NEON.length]);
         }
-        // Grandstand ring down the Boulevard: the real event seats ~40 000 in
-        // temporary multi-tier stands along the Strip and at the Sphere — livery
-        // + tiers from STAND_SETS.vegas instead of one grey template. Thinned
-        // 14→10 stands (some now two-tier) to keep the vertex cost in check.
-        // Every third deck is the bespoke parking-lot bleacher instead of a
-        // grandstandEx shell, so the canyon reads as a mix of rented seating
-        // rather than one repeated silhouette — and the swap is roughly vertex
-        // neutral, which this already-heavy circuit needs it to be.
         const vegasStandLiveries = ["scaffold", "alu", "crimson"];
         for (let j = 0; j < 10; j++) {
           const s = s0 + (j + 0.35) / 10 * span, side = (j % 2) ? 1 : -1;
@@ -769,7 +605,6 @@
         }
       }
 
-      // --- Denser palms + neon accents around the paddock / Sphere / Strip approaches ---
       for (const [s, side] of [[0.02, 1], [0.08, -1], [0.42, 1], [0.46, 1], [0.72, 1], [0.78, -1],
                                [0.20, -1], [0.27, 1], [0.38, -1], [0.95, -1]]) {
         palm(K(s), side, 18, 10 + hash(s * 100) * 3, LIME);
@@ -781,34 +616,20 @@
       billboard(K(0.18), 1, 18, 14, 9, ROSE);
       billboard(K(0.26), -1, 18, 14, 9, BLUE);
 
-      // --- s 0.38–0.47: Sphere approach ---
-      // Keep this mid-ground open so the Sphere reads as a standalone landmark.
       building(K(0.40), -1, 34, 28, 66, 26, { wall: [0.20, 0.19, 0.20], window: ROSE, floor: 8, lit: true });
 
-      // --- Extra near red-rock desert outcrops (dark, denser silhouette layer) ---
       for (let j = 0; j < 6; j++) {
         const a = j / 6 * 6.2832 + 0.4, h = hash(j * 13 + 5);
         const mx = cx + Math.cos(a) * (ring - 180), mz = cz + Math.sin(a) * (ring - 180);
         if (onTrack(mx, mz, 60)) continue;
-        // Tapered mesa (was a flat rectangular addBox slab — inconsistent with
-        // the primary addFrustum desert ring; boxy black prisms on the horizon).
         const mw = 180 + h * 140, mh = 18 + h * 22;
         addFrustum(out, [mx, pyMin, mz], mw * 0.5, mw * 0.3, mh, DARKROCK, 5, null);
       }
-      // The finish halo intentionally crosses the track; declare the safe
-      // underside instead of relying on ordinary prop rejection.
       overheadSpan({
         id: "vegas-finish-halo", frac: 0.98, clearance: 7.2,
         thickness: 0.8, depth: 1.4, color: MAGENTA, required: true,
       });
 
-      // ═══════════════════════════════════════════════════════════════════
-      // BESPOKE STRIP ACCENTS (off-route Luxor / Welcome / MGM culled)
-      // ═══════════════════════════════════════════════════════════════════
-
-      // ── NEON GATEWAY ARCH over the Strip (barrel of light) ──────────────
-      // A grand neon arch spanning the Strip straight, voussoirs cycling
-      // through the Vegas palette — a "Glitter Gulch" gateway.
       {
         const k = K(0.66);
         const aL = anchor(k, -1, 3.5), aR = anchor(k, 1, 3.5);

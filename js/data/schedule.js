@@ -11,10 +11,6 @@ const DataSchedule = (function () {
         }
         const today = todayISO();
         let nextMarked = false;
-        // Clock-derived, exactly like the fetch under it: F1API.schedule()
-        // asks for the season the clock says (api.js season(), which uses
-        // getFullYear()), so a baked "2026" here would caption the 2027
-        // calendar as 2026 for the rest of time.
         wrap.appendChild(el("h3", "dh-section", new Date().getFullYear() + " CALENDAR"));
         const grid = el("div", "dh-race-grid");
         items.forEach(r => {
@@ -39,8 +35,6 @@ const DataSchedule = (function () {
           if (r.circuit) subParts.push(r.circuit);
           const place = [r.locality, r.country].filter(Boolean).join(", ");
           if (place) subParts.push(place);
-          // "Bahrain International Circuit · Sakhir, Bahrain" ellipsises at a
-          // phone width; title= is how the rest of it stays reachable.
           const subText = subParts.join(" · ") || "—";
           const subEl = el("div", "dh-race-sub", subText);
           subEl.title = subText;

@@ -1,37 +1,4 @@
-/*
- * NetSession — the layer between a transport and the game.
- *
- * It answers three questions that neither the wire nor the game can answer
- * alone:
- *
- * 1. WHAT TIME IS IT OVER THERE? Two browsers have unrelated clocks. Every
- *    snapshot is stamped with the SENDER's time, so before it can be placed in
- *    an interpolation buffer it has to be converted into ours. Done the
- *    NTP way: ping carries t0, the peer echoes it with its own t1, and the
- *    round trip gives both the delay and the offset.
- *
- *    The key detail is that we keep the sample with the LOWEST round-trip, not
- *    the average. A slow reply means the packet queued somewhere, and queuing
- *    is pure error in the offset estimate — averaging folds that error in,
- *    while the fastest exchange we have seen is the one least polluted by it.
- *
- * 2. IS ANYONE STILL THERE? WebRTC will eventually tell us a connection
- *    failed, but "eventually" can be tens of seconds, during which a rival sits
- *    frozen on track. Pings double as a heartbeat: if nothing has arrived for
- *    a couple of seconds we call it, so the game can hand the abandoned car to
- *    the AI and carry on rather than staring at a statue.
- *
- * 3. WHAT KIND OF MESSAGE IS THIS? Traffic is split across two channels with
- *    opposite guarantees, so routing is explicit. Anything on the unreliable
- *    channel is a binary packet identified by its first byte; anything on the
- *    reliable channel is a JSON event with a type. Events are low-volume
- *    (lobby, race settings, lap times, results) so JSON's overhead is
- *    irrelevant there, and its readability while debugging is not.
- *
- * Nothing here schedules itself. pump(now) drives the whole thing from the
- * game loop, for the same reason the transport works that way: a session whose
- * timing depends on setInterval is a session whose tests depend on wall-clock.
- */
+/* NetSession — the layer between a transport and the game. It answers three questions that neither the wire nor the game can answer alone: 1. WHAT TIME IS IT OVER… */
 "use strict";
 
 const NetSession = (function () {
@@ -41,18 +8,7 @@ const NetSession = (function () {
 
   const DEFAULTS = {
     pingEveryMs: 500,
-    // Silence after which we declare the peer gone. 2.5 s was a desktop
-    // number: ten missed pings is a long time on a wire and a short one on a
-    // phone that has just spent a moment on garbage collection.
     timeoutMs: 6000,
-    // ...and a gap in OUR OWN pumping is not silence from THEM. The game loop
-    // drives pump(), so anything that blocks the main thread — building a
-    // circuit at lights-out, a tab going to the background, a GC pause — stops
-    // us listening, and the first pump afterwards would see the whole stall as
-    // peer silence and hang up on a connection that is perfectly healthy. That
-    // is what happened half a second into a real race: the guest built the
-    // track, came back, and immediately announced RIVAL DISCONNECTED. A gap
-    // longer than this is credited back to the peer instead.
     stallForgiveMs: 400,
     clockSamples: 8,
   };
@@ -68,9 +24,6 @@ const NetSession = (function () {
     dv.setFloat64(5, t0); dv.setFloat64(13, t1);
     return new Uint8Array(dv.buffer);
   }
-  // Shared with NetSnapshot: one decode entry point for the channel. The two
-  // copies had already diverged — this one mishandled a DataView argument by
-  // reading .buffer off it — which is precisely why there should only be one.
   const view = (data) => NetSnapshot.toView(data);
 
   function create(opts) {
@@ -92,10 +45,6 @@ const NetSession = (function () {
     let best = null;                   // { rtt, offset } — lowest-RTT sample
     let samples = [];
     let alive = true;
-    // The clock the rest of the session reads. Set at the top of every pump so
-    // handlers invoked from transport.pump() stamp arrivals with the same
-    // `now` the caller passed in, rather than each reading a slightly
-    // different Date.now() and smearing the timeline.
     let lastNow = 0;
     // Last unreliable game STATE seen before the first PONG. Dropping those
     // bytes left the rival at the default pose until sync, then it warped
@@ -103,16 +52,8 @@ const NetSession = (function () {
     // exists; ping/pong still never reach the game.
     let heldState = null;
 
-    // ---- clock ------------------------------------------------------------
-    // offset = theirClock - ourClock. peerToLocal() is what lets a snapshot
-    // stamped over there be placed on our timeline.
     const MAX_PLAUSIBLE_RTT_MS = 4000;
     function addSample(rtt, offset) {
-      // A round trip this long is not a network measurement, it is a stalled
-      // tab or a starved CPU — and an offset derived from it would misplace
-      // every subsequent snapshot in the interpolation buffer. Observed for
-      // real: tools/net/rtc-e2e.mjs saw a 15 s RTT on a loaded box. Drop it and
-      // wait for a sane exchange; the previous best estimate keeps working.
       if (!(rtt >= 0) || rtt > MAX_PLAUSIBLE_RTT_MS) return;
       samples.push({ rtt, offset });
       if (samples.length > cfg.clockSamples) samples.shift();
@@ -121,23 +62,16 @@ const NetSession = (function () {
     }
     const offset = () => (best ? best.offset : 0);
     const rtt = () => (best ? best.rtt : 0);
-    // A real function, not just a key on the returned object: stats() below
-    // calls it, and as a bare property it was a ReferenceError the moment
-    // anything asked for stats — which nothing in the loopback tests ever did.
     const synced = () => best != null;
     const peerToLocal = (tPeer) => tPeer - offset();
     const localToPeer = (tLocal) => tLocal + offset();
 
-    // ---- incoming ---------------------------------------------------------
     function onStateBytes(data, now) {
       const dv = view(data);
       if (!dv || !dv.byteLength) return;
       const type = dv.getUint8(0);
 
       if (type === PING) {
-        // Reply immediately with our own clock reading. Cheap enough that
-        // there is no reason to batch or delay it — any delay we add here
-        // lands in the peer's offset estimate as error.
         if (dv.byteLength >= PING_BYTES) {
           transport.send(CH_STATE, encodePong(dv.getUint32(1), dv.getFloat64(5), now));
         }
@@ -157,12 +91,6 @@ const NetSession = (function () {
         }
         return;
       }
-      // Anything else is the game's: hand over the bytes plus the sender's
-      // clock translated onto ours, which is what the interp buffer wants.
-      // Until the first good PONG, offset is 0 and peerToLocal is a no-op —
-      // snapshots land on the wrong timeline and the rival warps once sync
-      // arrives. Hold the newest unreliable STATE and flush it on that PONG
-      // (events stay on the reliable channel and are not clock-stamped).
       if (!synced()) {
         heldState = { data: data, now: now };
         return;
@@ -206,9 +134,6 @@ const NetSession = (function () {
     }
 
     function pump(now) {
-      // Credit back any time we were not running (see stallForgiveMs). Done
-      // BEFORE the transport pumps, so a packet that arrives on this very pump
-      // still refreshes lastHeardAt to `now` afterwards.
       const gap = lastNow ? now - lastNow : 0;   // 0 = never pumped, not a stall
       if (gap > cfg.stallForgiveMs && lastHeardAt != null) lastHeardAt += gap;
       lastNow = now;
@@ -222,14 +147,6 @@ const NetSession = (function () {
       // a slow connect is never mistaken for a disconnect.
       if (alive && lastHeardAt != null && now - lastHeardAt > cfg.timeoutMs) {
         alive = false;
-        // Close the TRANSPORT too, not just this session's bookkeeping. The
-        // early `if (!alive) return;` in close() below means that once the
-        // death clock has fired, nothing can ever tear the transport down
-        // afterwards — so a peer that timed out (rather than saying BYE) left
-        // its RTCPeerConnection and both data channels open for the life of
-        // the tab, and every timed-out session added another. Same order as
-        // close(): transport first, handlers after, so a handler that inspects
-        // the connection sees it already gone either way.
         try { transport.close(); } catch (e) { /* ignored: a transport that
           throws on close is already gone, and this path exists precisely
           because the peer stopped answering. Nothing left to report to. */ }
@@ -241,12 +158,10 @@ const NetSession = (function () {
 
     return {
       pump,
-      // -- sending --
       sendState: (bytes) => transport.send(CH_STATE, bytes),
       sendEvent(type, data) {
         return transport.send(CH_EVENT, JSON.stringify({ t: type, d: data === undefined ? null : data }));
       },
-      // -- receiving --
       onState(fn) { stateHandlers.push(fn); return this; },
       onEvent(type, fn) {
         if (!eventHandlers.has(type)) eventHandlers.set(type, []);
@@ -254,14 +169,6 @@ const NetSession = (function () {
         return this;
       },
       onClose(fn) { closeHandlers.push(fn); return this; },
-      // Drop every registered handler. A session OUTLIVES the screen that opened
-      // it — the lobby creates one before a track exists and NetPlay adopts the
-      // same object once the race is up — so without a way to detach, the two
-      // owners' handlers stack: the lobby's GO could re-enter beginRace() mid-race,
-      // and a NetPlay start() that ran twice (its no_slot path used to return
-      // AFTER registering) fired peerLaps.push and stop("bye") once per attempt.
-      // Whoever takes ownership calls this first, so registration replaces rather
-      // than accumulates.
       clearHandlers() {
         stateHandlers.length = 0;
         closeHandlers.length = 0;

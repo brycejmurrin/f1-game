@@ -9,8 +9,6 @@
     classic: true,
     // Upstream us-1956 already runs clockwise, matching the racing direction.
     reverse: false,
-    // A ~670 m straight spans the trace's wrap point (source 0.938→0.061) —
-    // that is the pit straight. Not GPS-calibrated.
     startFrac: 0.0,
     name: "WATKINS GLEN",
     gp: "United States GP",
@@ -25,8 +23,6 @@
       { kinds: ["foliage"], s0: 0.93, s1: 0.08 },
       { kind: "foliage", s0: 0.24, s1: 0.34 },
     ],
-    // Upstate New York in autumn: cool clear light, deep hardwood greens
-    // turning, a slightly golden cast over the Finger Lakes.
     pal: {
       zenith:        [0.28, 0.46, 0.72],
       horizon:       [0.76, 0.74, 0.66],
@@ -38,9 +34,6 @@
       grass:         [0.20, 0.42, 0.19],
       sunDir:        [0.46, 0.58, 0.36],
     },
-    // The Glen runs over a hillside above Seneca Lake and its elevation change
-    // is large — the plunge into the Esses and the climb through the Boot are
-    // the circuit's identity. Authored, not surveyed.
     elevations: [
       { s: 0.11, halfM: 320, rise: 9.0 },    // climb out of Turn 1
       { s: 0.30, halfM: 380, rise: -12.0 },  // down through the Esses
@@ -75,21 +68,12 @@
       const GRAVEL = [0.66, 0.61, 0.48];
       const TIMBER = [0.46, 0.36, 0.26], WEATHERED = [0.56, 0.54, 0.50];
 
-      // =====================================================================
-      // 1. THE FALL WOODS — the Glen's whole identity is that the trees are
-      //    TURNING. A sugar maple carries a broad, lobed, low crown of scarlet
-      //    on a pale grey trunk; the generic tree() twin-cone reads as a
-      //    summer shade tree, so the front rank — the one you actually see at
-      //    speed — is built here instead, and the deeper ranks stay cheap.
-      // =====================================================================
       const FALL = [MAPLE, SCARLET, AMBER, OAK];
       const maple = (k, side, dist, h, col) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         out._mat = MAT.WOOD;
         seat.cyl(out, a.c, 0.22 + h * 0.012, h * 0.42, BARK, 5, b);
         out._mat = MAT.FOLIAGE;
-        // Three overlapping lobes, offset off-axis: a crown with a shape,
-        // rather than one solid cone of colour.
         for (let i = 0; i < 3; i++) {
           const ang = i * 2.094 + hash(k + i) * 1.2, rr = h * 0.16;
           const p = vadd(vadd(vadd(a.c, a.u, h * (0.40 + i * 0.09)),
@@ -124,8 +108,6 @@
         if (h < 0.36) return;
         pine(k, h < 0.5 ? -1 : 1, 52 + h * 28, 22 + h * 13, FIR);
       });
-      // Staghorn sumac along the verge — the first thing to turn, and it turns
-      // the loudest orange in the woods.
       every(26, (k) => {
         const s = k / n;
         if (openArea(s)) return;
@@ -134,13 +116,6 @@
         bush(k, h < 0.75 ? -1 : 1, 7 + h * 5, h < 0.68 ? [0.66, 0.28, 0.12] : [0.24, 0.32, 0.16]);
       });
 
-      // =====================================================================
-      // 2. PIT COMPLEX — American club racing, 1970s. Poured concrete garages
-      //    with roll-up doors and a flat roof the timers stand on, and an open
-      //    steel lattice tower beside it. There is no glass and no cladding
-      //    anywhere in this complex: it is a public-works building that races
-      //    happen to be run from.
-      // =====================================================================
       {
         const a = anchor(K(0.980), 1, 15), b = [a.r, a.u, a.t], inw = -1;
         const bays = 14, pitch = 6.6, len = bays * pitch;
@@ -168,9 +143,6 @@
           stage._mat = 0;
         }, { required: true });
       }
-      // Timing tower: four legs of angle iron with X-bracing all the way up
-      // and a plywood observation cabin bolted near the top. Open structure —
-      // you see sky through it, which no clad tower does.
       {
         const a = anchor(K(0.999), 1, 17), b = [a.r, a.u, a.t];
         modelGroup("glen-timing-tower", {
@@ -224,11 +196,6 @@
       sponsorHoarding(0.955, 0.045, -1, 6.5, { h: 2.2, step: 10,
         palette: [[0.20, 0.28, 0.54], [0.82, 0.18, 0.16], [0.92, 0.90, 0.86], [0.18, 0.36, 0.24]] });
 
-      // =====================================================================
-      // 3. SPECTATOR BLEACHERS — bare timber planks on posts, no roof and no
-      //    back wall, greyed by upstate winters. The Glen's stands were built
-      //    by the club out of lumber and they look it.
-      // =====================================================================
       const CROWD = [[0.30, 0.32, 0.36], [0.68, 0.24, 0.20], [0.84, 0.82, 0.78],
                      [0.22, 0.30, 0.48], [0.56, 0.44, 0.26], [0.20, 0.22, 0.24]];
       const bleacher = (id, k, side, dist, bays, rows) => {
@@ -273,15 +240,9 @@
       bleacher("glen-bleacher-pit-b", K(0.955), -1, 12, 10, 7);
       bleacher("glen-bleacher-t1", K(0.090), -1, 18, 10, 7);
       bleacher("glen-bleacher-anvil", K(0.900), 1, 18, 11, 8);
-      // One poured-concrete stand down the straight, uncovered, so the pit
-      // straight is not four repeats of the same timber frame.
       grandstandEx(0.030, -1, 13, 72, null, null,
         { livery: "scaffold", roof: "none", endWalls: true, h: 8 });
 
-      // =====================================================================
-      // 4. CORNERS — the Glen kept real gravel and real armco, and the crowd
-      //    stood on the banks rather than in stands for most of the lap.
-      // =====================================================================
       groundPatch(K(0.090), 1, 6, [34, 0.18, 46], GRAVEL,
         { id: "watkins-t1-gravel", samples: 8 });
       tyreWall(0.074, 0.108, 1, 5, [0.86, 0.20, 0.18]);
@@ -305,9 +266,6 @@
       spectatorHill(0.50, 0.60, -1, 16, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
       spectatorHill(0.72, 0.80, 1, 16, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
 
-      // =====================================================================
-      // 5. BOUNDARIES
-      // =====================================================================
       for (const [s0, s1] of [[0.12, 0.22], [0.27, 0.42], [0.48, 0.58], [0.63, 0.88]]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
@@ -318,12 +276,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 9);
       }
 
-      // =====================================================================
-      // 6. BACKDROP — the Finger Lakes. Wooded rolling hills all round, and
-      //    down one flank the long trench of Seneca Lake with its far shore
-      //    rising again beyond it: the near ridge rank is cut over that arc so
-      //    the water is actually visible, the far ranks are not.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -349,14 +301,6 @@
         }
       }
 
-      // =====================================================================
-      // 7. LANDMARKS — a covered bridge, the Bog, and a Finger Lakes dairy
-      //    farm. Upstate New York, not a motorsport facility.
-      // =====================================================================
-      // The covered bridge over the back straight: a red-painted timber barn
-      // on trestles. The deck, the eaves and the ridge are three stacked
-      // spans, because a cross-track model cannot go through the ordinary
-      // footprint test — only overheadSpan's explicit clearance contract.
       {
         const deck = 6.4, RED = [0.48, 0.19, 0.15], SHINGLE = [0.34, 0.30, 0.28];
         const spans = [
@@ -391,10 +335,6 @@
           }, { required: true });
         }
       }
-      // THE BOG — the Glen's woodland camping ground and its reputation. Mud,
-      // a ring of tents around a fire pit, and the burned-out hulk of a bus
-      // the crowd pushed in and torched, which is the story everyone tells
-      // about this place.
       {
         const a = anchor(K(0.66), -1, 52), b = [a.r, a.u, a.t];
         groundPatch(K(0.66), -1, 40, [34, 0.16, 60], [0.26, 0.22, 0.17],
@@ -427,9 +367,6 @@
           stage._mat = 0;
         });
       }
-      // Dairy farm on the ridge above the Esses: a weathered gambrel barn —
-      // the two-pitch roof is the shape that says northeastern US farm and not
-      // English or European agriculture — with a glazed-tile silo beside it.
       {
         const a = anchor(K(0.28), 1, 92), b = [a.r, a.u, a.t];
         modelGroup("glen-dairy-farm", {
@@ -438,8 +375,6 @@
           stage._mat = MAT.WOOD;
           seat.box(stage, a.c, [13, 5.5, 30], [0.52, 0.48, 0.44], b);
           stage._mat = MAT.ROOF;
-          // Gambrel: a steep lower pitch, then a shallow one, faked as two
-          // stacked prisms of decreasing width.
           seat.prism(stage, vadd(a.c, a.u, 5.5), [13.4, 3.0, 30.4], [0.40, 0.38, 0.36], b);
           seat.prism(stage, vadd(a.c, a.u, 8.5), [7.6, 2.2, 30.4], [0.40, 0.38, 0.36], b);
           stage._mat = MAT.WOOD;
@@ -489,32 +424,15 @@
         addCyl(out, a.c, 0.19, 16, [0.22, 0.22, 0.25], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 16.4), [1.3, 0.6, 2.6], [0.94, 0.92, 0.82], [a.r, a.u, a.t]);
       }
-      // FINGER LAKES HARDWOOD. The Glen is carved straight out of deciduous
-      // woodland that stands hard against the armco — closer to the track than
-      // anywhere else in the fleet, which is why the place feels enclosed.
       for (const [s0, s1] of [[0.1, 0.22], [0.36, 0.91]]) {
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 10, { density: 0.74, hMin: 12, hMax: 22, pineFrac: 0.22, col: FIR, col2: OAK });
       }
-      // A taller BACK RANK stepped off the front treeline through the Boot, so
-      // the wooded slopes read with depth rather than as one wall of trunks —
-      // this is the part of the lap that plunges into and climbs out of the
-      // forest, the Glen's enclosed-in-the-trees identity.
       for (const side of [-1, 1])
         forestEdge(0.50, 0.66, side, 24, { density: 0.25, hMin: 16, hMax: 27, pineFrac: 0.42, col: FIR, col2: SCARLET });
 
-      // =====================================================================
-      // 8. ENRICHMENT — a permanent stand at the 90, and the main gate.
-      // =====================================================================
-      // The permanent covered stand at Turn 1 ("the 90"), distinct from the
-      // club-built timber bleachers: a light steel deck with a cantilever roof,
-      // the one piece of proper grandstand infrastructure on the lap.
       grandstandEx(0.108, -1, 14, 48, null, null,
         { livery: "alu", roof: "cantilever", endWalls: true, pylons: true, h: 9 });
-      // THE MAIN GATE — the Glen's entrance off the county road: a pair of
-      // fieldstone piers carrying a green-painted timber sign board over the
-      // drive, with the little clapboard toll/ticket booth beside it where you
-      // paid to come in. Public-works stone and lumber, like everything here.
       {
         const a = anchor(K(0.935), 1, 78), b = [a.r, a.u, a.t];
         const STONE = [0.54, 0.51, 0.46], SIGN = [0.24, 0.34, 0.26];

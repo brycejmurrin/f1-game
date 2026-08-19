@@ -1,18 +1,10 @@
-/* Apex 26 — TrackSpline: pure centreline / spline math for the tracks engine.
-   centerline() integrates an authored segment list into closed control points,
-   cr() is the Catmull-Rom kernel, sample()/curvatureRaw()/curvature() read a
-   built track's node arrays, and project()/wallAt() map world points back onto
-   the lap. Everything here is a pure function of its arguments plus the SCALE
-   constant — no track state lives in this module.
-   Load order: BEFORE js/track/mesh.js and js/track/tracks.js — both
-   destructure TrackSpline at eval (hard edge, see tools/manifest.cjs). */
+/* Apex 26 — TrackSpline: pure centreline / spline math for the tracks engine. centerline() integrates an authored segment list into closed control points, cr() is… */
 const TrackSpline = (function () {
   "use strict";
 
   const SCALE = 1.45;            // scale authored lengths for arcade racing
-  const lerp = M4.lerp;                       // shared scalar helper (js/mat4.js)
+  const lerp = M4.lerp;
 
-  // ---------- authoring: segment list -> closed control points ----------
   // seg = {t:turnDeg(+left), l:len m, h:hillDelta m, b:bank rad, w:halfWidth}
   // Integrates a heading where direction = (sin t, cos t); +turn = LEFT —
   // the same measured convention curvatureRaw() documents below (a zero-steer
@@ -52,8 +44,6 @@ const TrackSpline = (function () {
       const f = i / (N - 1);
       pts[i][0] -= ex * f; pts[i][2] -= ez * f; pts[i][1] -= ey * f;
     }
-    // mild closed-loop Laplacian smoothing relaxes overshoot kinks at chicane
-    // reversals (raises effective min radius) while keeping the layout shape
     for (let it = 0; it < 2; it++) {
       const sx = pts.map((p) => p[0]), sz = pts.map((p) => p[2]);
       const L = 0.18;
@@ -72,7 +62,6 @@ const TrackSpline = (function () {
     return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
   }
 
-  // ---------- sampling ----------
   function sample(track, s, out) {
     const n = track.n, L = track.total;
     s %= L; if (s < 0) s += L;
@@ -108,9 +97,6 @@ const TrackSpline = (function () {
     let d = h1 - h2;
     while (d > Math.PI) d -= 2 * Math.PI;
     while (d < -Math.PI) d += 2 * Math.PI;
-    // rad per metre. + = LEFT-hand turn: game.js's racing line is -sign(k)
-    // ("k>0 curves toward screen-left"), and a zero-steer run through a +k
-    // corner drifts to POSITIVE lateral, i.e. wide to the right.
     return d / (2 * w);
   }
 
@@ -129,7 +115,6 @@ const TrackSpline = (function () {
     return cv[i] + (cv[j] - cv[i]) * f;
   }
 
-  // ---------- world -> track projection ----------
   // Project a world ground point (wx, wz) onto the centreline polyline and return
   // its arc-length s, signed lateral offset (along the local `right`, matching the
   // (s,x) model's x), the nearest node index, the tangent heading, and the
@@ -160,13 +145,6 @@ const TrackSpline = (function () {
     const py = track.py;
     const useY = (wy != null && isFinite(wy) && py && py.length === n);
     let bestD2 = Infinity, bestCost = Infinity, bestK = 0, bestT = 0, bestCx = 0, bestCz = 0;
-    // Continuity bias: when we have a hint (last frame's arc-length), prefer the
-    // segment closest to it ALONG THE LAP, not just in space. At a hairpin the
-    // inbound and outbound legs are only metres apart but far apart in s, so a car
-    // running slightly wide could otherwise snap onto the wrong leg and teleport
-    // its lap distance (phantom wrong-way / lost progress). Penalising arc-length
-    // jumps breaks that tie toward the continuous choice; it only changes the
-    // outcome when two segments are near-equidistant in space.
     const hs = (hint != null && isFinite(hint)) ? (((hint % L) + L) % L) : -1;
     const CONT = 0.08;                    // weight of the arc-length penalty
     function evalSeg(i) {
@@ -184,12 +162,6 @@ const TrackSpline = (function () {
         let da = Math.abs(((i + t) * ds) - hs); da = Math.min(da, L - da);
         cost += CONT * da * da;
       }
-      // Height mismatch, weighted 1:1 with the horizontal distance so the two
-      // read in the same units (metres squared). At Suzuka's crossover that
-      // turns a 1.43 m horizontal tie into an 8.07 m vertical separation —
-      // ~32x the cost — so the correct leg wins decisively rather than by
-      // rounding. On a flat or non-crossing track the term is ~0 for the
-      // nearest segment and changes nothing.
       if (useY) {
         const cy = py[i] + (py[j] - py[i]) * t;
         const ey = wy - cy;

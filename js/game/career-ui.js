@@ -1,46 +1,15 @@
-/* Apex 26 — the CAREER screen (#career). THREE states in one sheet: CAREER MODES
-   (both modes, their six save slots and their guides — the title button's one
-   door), the new-career setup, and the season hub. The hub replaces #select
-   entirely in career, because the calendar decides where you race — the only
-   thing left to choose is whether you are ready to go.
-
-   Rules and persistence live in js/game/career.js; this file is DOM only. Live
-   game state comes through the ctx façade handed to CareerUI.create(ctx) at boot
-   (see the `G` object in game.js): els, $, cssCol, openGarage,
-   openRaceSettings. Consumes globals Career, Teams, Tracks, Parts, GameAudio,
-   plus DriverRatings, Reliability and GameTables — but only from inside the
-   GUIDE builders, which run when a player opens the sheet rather than at eval
-   time, so none of them is a load-order dependency.
-
-   THE GUIDES QUOTE THE RULES, NEVER THEMSELVES. Every figure in #career-guide is
-   read from those globals (Career.PRIZE, RESEARCH_MULT, BUDGET_MULT, OBJ_BONUS,
-   START_MONEY, SLOTS, FACILITY_*, SPONSOR_KINDS, the free-agent asks, plus
-   Teams.POINTS, Tracks.SEASON, DriverRatings.AXES, Reliability.TIER_RISK) and
-   never typed into prose. A guide that hard-codes the economy goes stale the
-   first time the economy is tuned, and a wrong number in a rules screen is worse
-   than no number at all.
-
-   Must load BEFORE js/game.js (see index.html). */
+/* Apex 26 — the CAREER screen (#career). THREE states in one sheet: CAREER MODES (both modes, their six save slots and their guides — the title button's one door)… */
 const CareerUI = (function () {
   "use strict";
 
-// Which teams will take a rookie. A career that can start at Mercedes has nowhere
-// to go, so the opening choice is deliberately the back half of the grid — the
-// climb is the mode. Tier 3+ is seven teams, which is a real choice, not a token one.
 const STARTER_TIER_MIN = 3;
 
 function create(G) {
   Log.info("ui", "CareerUI.create");
   const { $, els } = G;
 
-  // The new-career form's working state. Not persisted — it only exists between
-  // opening the screen and pressing START, and Career.start() is what makes it real.
   let draft = null;
 
-  // Section heading. Uses the shared .sel-label from css/components.css — the same
-  // dim uppercase text with the skewed red tick that #select and the garage use —
-  // so the career pages read as part of the same family rather than a new screen
-  // with its own idea of what a heading looks like. h3, as elsewhere.
   function head(text, id) {
     const n = el("h3", "sel-label", text);
     if (id) n.id = id;
@@ -49,8 +18,6 @@ function create(G) {
   function slug(text) {
     return String(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   }
-  // Jump-nav sibling of the body, same DOM slot as #htp-contents: head, nav,
-  // body, foot. Wide sheets rail it; compact/stacked keep it as a strip.
   function mountContentsNav(bodyId, navId, label) {
     const body = $(bodyId);
     let nav = document.getElementById(navId);
@@ -90,26 +57,11 @@ function create(G) {
       teamId: teams.length ? teams[0].id : "haas",
       seat: 1,                 // the junior seat by default — you are the newcomer
       name: "Your Name", code: "YOU", num: 99,
-      // Mid-table by default: affordable on the starting balance, and not so slow
-      // that the constructors' championship is out of reach in year one.
       hire: "NKM",
     };
   }
 
-  // ---------- the slot picker ----------
-  // Three careers can exist at once (Career.SLOTS), so #career has a third state
-  // besides setup and the hub. A state rather than a new screen: it reuses
-  // #cr-left/#cr-right, so it needs no MenuNav/ScrollFade/AriaState registration
-  // of its own and inherits their behaviour for free.
-  //
-  // `picking` is what the player ASKED for. The dispatcher below also lands here
-  // on its own when the live slot is empty but another holds a save — pressing
-  // CONTINUE has to show you what there is to continue.
   let picking = false;
-  // Which DELETE is armed, as a "flavour:index" ADDRESS — an index alone would
-  // arm the same-numbered slot in both modes. Deleting a decade of career from
-  // one tap would be unforgivable, and a confirm modal for it would be a whole
-  // screen, so the button asks once in place and disarms on anything else.
   let armedDelete = "";
 
   function slotCard(s) {
@@ -137,9 +89,6 @@ function create(G) {
       armedDelete = "";
       picking = false;
       if (s.used) { Career.useSlot(s.flavour, s.i); G.openCareer(); return; }
-      // An empty slot goes to setup with BOTH halves of its address already
-      // decided — which mode's column it was in, and which slot. The setup form
-      // opens on that mode rather than asking again.
       Career.useSlot(s.flavour, s.i);
       draft = freshDraft();
       draft.flavour = s.flavour;
@@ -149,9 +98,6 @@ function create(G) {
     };
     card.appendChild(open);
     if (s.used) {
-      // Armed state is keyed by the FULL address. Keyed by index alone, arming
-      // driver slot 2 would also arm MY TEAM slot 2 — two DELETE? buttons for one
-      // press, on two different careers.
       const id = s.flavour + ":" + s.i;
       const armed = armedDelete === id;
       const del = el("button", "cr-slot-del" + (armed ? " armed" : ""), armed ? "DELETE?" : "DELETE");
@@ -163,8 +109,6 @@ function create(G) {
         if (!armed) { armedDelete = id; build(); return; }
         armedDelete = "";
         Career.deleteSlot(s.flavour, s.i);
-        // Deleting the live career leaves nothing engaged; reload picks up
-        // whatever is left, anywhere, so the title screen still has something.
         Career.load();
         G.refreshCareerButton();
         build();
@@ -174,9 +118,6 @@ function create(G) {
     return card;
   }
 
-  // One mode's column: its name, its three saves, and its guide. The two modes
-  // get one pane each, so "what have I got, and what is this?" is answered per
-  // mode instead of being pooled into a list that hides which is which.
   function modeColumn(pane, flavour) {
     const my = flavour === "myteam";
     pane.appendChild(head(my ? "MY TEAM" : "DRIVER CAREER"));
@@ -212,14 +153,11 @@ function create(G) {
     modeColumn(left, "driver");
     modeColumn(right, "myteam");
 
-    // Nothing in the foot to press: every action on this screen is a card. GO
-    // RACING would have to pick a career first, which is the thing being asked.
     $("cr-go").hidden = true;
     $("cr-go").disabled = false;
     $("cr-garage").hidden = true;
   }
 
-  // ---------- how it works ----------
   // TWO documents, not one with caveats. A driver career and MY TEAM share a
   // core but are different games — you are paid or you pay, you are hired or you
   // hire — and a guide that hedged between them would describe neither.
@@ -242,9 +180,6 @@ function create(G) {
 
   const cr = (n) => n.toLocaleString() + " cr";
 
-  // Sections that describe rules BOTH modes obey. Written once and pushed into
-  // each guide rather than duplicated: a shared rule described twice is a shared
-  // rule that will eventually be described two different ways.
   function sharedSections(my) {
     const out = [];
     out.push(guideSection("QUALIFYING", [
@@ -284,8 +219,6 @@ function create(G) {
     ]));
     out.push(guideSection("RELIABILITY", [
       "A race setting, and it ships OFF. Turn it on and cars stop — "
-      // a/an per reason, not one article baked into the join — "a accident"
-      // read like a typo next to the hand-written copy below, which gets it right.
       + (Reliability.REASONS.filter((r, i, a2) => a2.indexOf(r) === i)
           .map((r) => (/^[aeiou]/i.test(r) ? "an " : "a ") + r).join(", ")) + ".",
       ["Risk per race, best car to worst",
@@ -524,16 +457,12 @@ function create(G) {
     fillContents("cg-contents", body);
     ScrollFade.refresh();
   }
-  // `flavour` is optional: the hub knows which career is running, the setup
-  // screen passes the one being considered.
   function openGuide(flavour) {
     const c = Career.data();
     buildGuide(flavour || (c ? c.flavour : "driver"));
     $("career-guide").hidden = false;
   }
   function closeGuide() { $("career-guide").hidden = true; }
-
-  // ---------- new-career setup ----------
 
   function buildSetupPanes() {
     const left = $("cr-left"), right = $("cr-right");
@@ -617,7 +546,6 @@ function create(G) {
       left.appendChild(list);
     }
 
-    // ---- identity ----
     right.appendChild(head(draft.flavour === "myteam" ? "TEAM PRINCIPAL" : "YOUR DRIVER"));
     const form = el("div", "cr-form");
     const addField = (label, value, maxlen, onInput, type) => {
@@ -659,10 +587,6 @@ function create(G) {
       }
     }
 
-    // The guide, for the flavour being CONSIDERED rather than the one running —
-    // there is no career running yet. Reading what a mode actually is should not
-    // cost you a career to find out, which is the whole reason this is on the
-    // setup screen and not only in the hub.
     right.appendChild(head("BEFORE YOU START"));
     const learn = el("button", "cr-card cr-record");
     learn.id = "cr-learn";
@@ -682,8 +606,6 @@ function create(G) {
     $("cr-go").disabled = false;
     $("cr-garage").hidden = true;
   }
-
-  // ---------- season hub ----------
 
   function meter(label, value, cls) {
     const m = el("div", "cr-meter" + (cls ? " " + cls : ""));
@@ -718,9 +640,6 @@ function create(G) {
       meter("REPUTATION", Math.round(st.rep) + " / 100"),
       meter("ROUND", (Math.min(st.round + 1, st.rounds)) + " / " + st.rounds));
 
-    // ---- left: this round's brief, then the contract it sits inside ----
-    // The objective goes FIRST because it is the only thing on this screen that
-    // changes between one visit and the next; the contract is background.
     if (!Career.seasonDone()) {
       const obj = Career.objective();
       left.appendChild(head("THIS ROUND"));
@@ -731,10 +650,6 @@ function create(G) {
       left.appendChild(objCard);
     }
 
-    // THE SPONSOR. MY TEAM only: a driver is paid a salary, an owner is paid by
-    // sponsors. Sits with the round's brief because it is the same idea over a
-    // longer window — how the SEASON is going, which is what a principal is
-    // actually judged on.
     if (st.sponsor) {
       const sp = st.sponsor;
       left.appendChild(head("SPONSOR"));
@@ -769,8 +684,6 @@ function create(G) {
       // the car rather than in the economy: it is what late money buys.
       row("Facility", st.facility + " / " + Career.FACILITY_MAX
         + (st.facilityDiscount ? "  (−" + Math.round(st.facilityDiscount * 100) + "% research)" : "")),
-      // Reliability belongs on THE CAR: a DNF is the car letting you down, and
-      // team development plus a developed engine and gearbox are what buy it off.
       row("Retirements", st.dnfs + " this season"));
     left.appendChild(carCard);
 
@@ -789,11 +702,6 @@ function create(G) {
       left.appendChild(teamCard);
     }
 
-    // CAREER RECORD is a card at the foot of this column, not a fourth button in
-    // the action bar. At 844x390 the sheet's left column is ~370px wide and four
-    // buttons at the shared `.sheet-foot .bigbtn` 110px floor need ~440px, so a
-    // fourth wraps the bar and costs a button's height out of a 390px-tall
-    // screen. A card also states what it opens, which a fourth exit cannot.
     left.appendChild(head("CAREER RECORD"));
     const rec = careerTotals();
     const recBtn = el("button", "cr-card cr-record");
@@ -808,10 +716,6 @@ function create(G) {
     recBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openHistory(); };
     left.appendChild(recBtn);
 
-    // The way into the other slots. A card rather than a fourth button in the
-    // action bar, for the same reason CAREER RECORD is one: at 844x390 the left
-    // column is ~370px and four buttons at the shared 110px floor need ~440px, so
-    // a fourth wraps the bar and costs a button's height out of a 390px screen.
     const used = Career.slots().filter((s) => s.used).length;
     const slotBtn = el("button", "cr-card cr-record");
     slotBtn.id = "cr-slots";
@@ -824,9 +728,6 @@ function create(G) {
     slotBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openSlots(); };
     left.appendChild(slotBtn);
 
-    // The facility upgrade sits under THE CAR because that is what it buys: a
-    // permanent cut to what every future part costs. Hidden at the ceiling
-    // rather than shown disabled — there is nothing left to say about it.
     if (st.facilityCost != null) {
       const fac = el("button", "cr-card cr-record");
       fac.id = "cr-facility";
@@ -844,11 +745,6 @@ function create(G) {
       left.appendChild(fac);
     }
 
-    // RAISE THE CAP sits directly under the factory because the two are the
-    // career's only permanent sinks and they compete: the factory cuts what
-    // every future part costs, this raises how much of what you already own may
-    // be on the car at once. Same card shape, same hide-at-the-ceiling rule —
-    // three rungs and then there is nothing left to say.
     if (st.budgetCost != null) {
       const cap = el("button", "cr-card cr-record");
       cap.id = "cr-budget";
@@ -865,11 +761,6 @@ function create(G) {
       left.appendChild(cap);
     }
 
-    // WHO WOULD SIGN YOU. Reputation is a number on the header and means nothing
-    // on its own; offerBar() is already a visible ladder in the rules, so show
-    // it. A tier you clear is a seat that will talk to you at the end of the
-    // year, which turns a stat into a goal. MY TEAM has no ladder to climb —
-    // nobody signs an owner — so it gets the team's own standing instead.
     if (c.flavour !== "myteam") {
       left.appendChild(head("WHO WOULD SIGN YOU"));
       const mv = Math.round(Career.marketValue(Career.driverStandings()));
@@ -893,10 +784,6 @@ function create(G) {
       left.appendChild(ladder);
     }
 
-    // EXTRA FUNDS. A deliberate cheat, kept where it cannot be pressed by
-    // accident: below the car and the contract, not beside GO RACING. The
-    // unlimited toggle does not move the FITTED CAP, so even a bottomless
-    // balance still cannot put more on the car than the rules allow.
     left.appendChild(head("EXTRA FUNDS"));
     const cheat = el("div", "cr-card");
     const unlimited = Career.freeMoney();
@@ -924,10 +811,6 @@ function create(G) {
     cheat.appendChild(cheatRow);
     left.appendChild(cheat);
 
-    // The rules, in the player's words. A card for the same reason the two above
-    // are: the action bar has room for three buttons at 844x390 and it already
-    // has three. Named for the flavour actually being played — a MY TEAM owner
-    // pressing "HOW CAREER WORKS" would get a document about signing contracts.
     const guideBtn = el("button", "cr-card cr-record");
     guideBtn.id = "cr-guide";
     guideBtn.append(
@@ -938,10 +821,6 @@ function create(G) {
     guideBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openGuide(c.flavour); };
     left.appendChild(guideBtn);
 
-    // ---- right: next race + standings ----
-    // YOUR DRIVER'S CONTRACT, when it has run out. Outranks the calendar for the
-    // same reason a driver career's unsigned offers do: MY TEAM enters two cars,
-    // and a season cannot start with one of them empty.
     if (st.hire) {
       const h = st.hire;
       right.appendChild(head(h.kind === "left" ? "YOUR DRIVER HAS GONE" : "YOUR DRIVER IS OUT OF CONTRACT"));
@@ -1049,12 +928,6 @@ function create(G) {
     $("cr-garage").hidden = false;
   }
 
-  // ---------- end of season (#career-offers) ----------
-  // The year that was, and the seats on the table for the next one. Built from the
-  // ARCHIVE rather than the live season: by the time this is on screen the rollover
-  // has run, so career.season has already been reset to round 0 of the new year and
-  // the only record of what just happened is career.history's last entry.
-
   function buildOffers() {
     const c = Career.data();
     const body = $("co-body");
@@ -1073,10 +946,6 @@ function create(G) {
       body.appendChild(card);
     }
 
-    // HOW THE CONTRACT WAS SETTLED. The season goal is written into the deal and
-    // shown on the hub all year; this is where it is answered. Absent on a save
-    // that rolled over before the goal was resolved, and the block just does not
-    // draw — which is why it owes no CAREER_V rung.
     if (c.goalResult) {
       body.appendChild(head("YOUR CONTRACT"));
       const g = el("div", "cr-card");
@@ -1089,10 +958,6 @@ function create(G) {
       body.appendChild(g);
     }
 
-    // WHAT THE WINTER DID. The market has always moved 0-2 seats and the player
-    // only ever met the result — a driver they had raced all year was suddenly
-    // somewhere else, with nothing to say it had happened. This is the one
-    // screen between the two seasons, so it is where the news belongs.
     const moves = c.moves || [];
     if (moves.length) {
       body.appendChild(head("THE DRIVER MARKET"));
@@ -1127,9 +992,6 @@ function create(G) {
         if (G.soundOn) GameAudio.uiSelect();
         Career.acceptOffer(i);
         closeOffers();
-        // Back through openCareer() rather than straight to the hub: signing can
-        // change your team, and that is where teamIdx/driverIdx and the player's
-        // part mods are re-pointed at the contract.
         G.openCareer();
       };
       body.appendChild(b);
@@ -1139,12 +1001,6 @@ function create(G) {
 
   function openOffers() { Log.info("ui", "CareerUI.openOffers"); buildOffers(); $("career-offers").hidden = false; }
   function closeOffers() { Log.info("ui", "CareerUI.closeOffers"); $("career-offers").hidden = true; }
-
-  // ---------- career history (#career-history) ----------
-  // The record of everything a career has achieved: the running totals, then the
-  // years behind them. career.history is the archive rollover() writes — one
-  // entry per finished season, capped at ten, carrying year/team, the driver and
-  // constructor championship positions and points, the champion, wins, podiums.
 
   // DERIVED on demand, never stored. A totals block on the save would be another
   // rung on the migration ladder for numbers that are a sum over data already
@@ -1158,10 +1014,6 @@ function create(G) {
     const t = {
       // The year in progress counts: you are living a season, not waiting for one.
       seasons: hist.length + 1,
-      // Starts is the one figure the archive does not record. A season only
-      // reaches it once seasonDone() is true, so an archived year ran the whole
-      // calendar; the running year contributes exactly the rounds settled so far.
-      // Only __apex.careerRollover() can archive a short season, and it is a hook.
       starts: hist.length * Career.roundsTotal() + live.length,
       wins: live.filter((r) => r.p === 1).length,
       podiums: live.filter((r) => r.p <= 3).length,
@@ -1176,8 +1028,6 @@ function create(G) {
       t.points += h.pts || 0;
       if (h.pos === 1) t.titles++;
       if (h.cPos === 1) t.cTitles++;
-      // Best is over FINISHED seasons only — a championship still being run has
-      // no final position, and a mid-season standing is not a career best.
       if (h.pos && (!t.best || h.pos < t.best)) { t.best = h.pos; t.bestYear = h.year; }
       if (t.teams.indexOf(h.team) < 0) t.teams.push(h.team);
     }
@@ -1212,14 +1062,10 @@ function create(G) {
 
     body.appendChild(head("SEASON BY SEASON", "ch-seasons"));
     if (!c.history.length) {
-      // An empty box would read as a broken screen. A first season genuinely has
-      // no archive, and saying so is the honest answer to "what have I done".
       body.appendChild(el("div", "cr-note",
         c.year + " is your first season and it is still running — there is nothing "
         + "archived yet. Finish the calendar and close the year out, and it lands here."));
     } else {
-      // The cap is only worth mentioning once it has started throwing years away —
-      // "the last 10 seasons" over a list of two reads as a limit you have hit.
       if (c.history.length >= Career.HISTORY_MAX)
         body.appendChild(el("div", "cr-note",
           "This is localStorage, so the archive keeps the last " + Career.HISTORY_MAX +
@@ -1227,8 +1073,6 @@ function create(G) {
       // Newest first: the year you just closed out is the one you came to read.
       for (const h of c.history.slice().reverse()) {
         const team = Teams.LIST.find((x) => x.id === h.team);
-        // Podium classes are the shared gold/silver/bronze from css/components.css,
-        // so a title-winning year lights up without a vocabulary of its own.
         const r = el("div", "res-row" + (h.pos >= 1 && h.pos <= 3 ? " p" + h.pos : ""));
         const sw = el("span", "res-swatch");
         sw.style.background = G.cssCol(team ? team.color : [0.5, 0.5, 0.5]);
@@ -1258,21 +1102,6 @@ function create(G) {
     return (d > 0 ? "+" : "") + d + " (" + (d > 0 ? "gaining" : "slipping") + ")";
   }
 
-  // ---------- shell ----------
-
-  // THREE states in one sheet, in this order of precedence:
-  //
-  //   1. CAREER MODES — the entry. Both modes side by side with their saves and
-  //      their guides, which is the screen the title button opens.
-  //   2. the HUB, once a career has been picked
-  //   3. new-career SETUP, reached by pressing an empty slot (which is also what
-  //      decides the mode, so the form opens on it rather than asking again)
-  //
-  // The modes screen leads because "which career" is genuinely the first
-  // question once there can be six. It is also the only screen that says the two
-  // modes exist at all — the old entry went straight into whichever save was
-  // last touched, so a player with one driver career had no way to discover MY
-  // TEAM, their other saves, or the delete they needed to make room.
   function build() {
     if (picking) { draft = null; buildSlotPanes(); }
     else if (Career.active()) { draft = null; buildHubPanes(); }
@@ -1288,8 +1117,6 @@ function create(G) {
     build();
     $("career").hidden = false;
   }
-  // The title screen routes here when more than one career exists: with two or
-  // three on the go, "which one" is the first question, not an afterthought.
   function openSlots() {
     Log.info("ui", "CareerUI.openSlots");
     picking = true;
@@ -1299,11 +1126,7 @@ function create(G) {
   }
   function close() { Log.info("ui", "CareerUI.close"); $("career").hidden = true; }
 
-  // ---------- wiring ----------
-
   $("cr-back").onclick = () => {
-    // From the picker, BACK steps back into the career you were in — the picker
-    // is a detour, not the way out. Only from the hub (or setup) does it leave.
     if (picking && Career.active()) { picking = false; armedDelete = ""; build(); return; }
     close();
     els.overlay.hidden = false;
@@ -1324,30 +1147,20 @@ function create(G) {
       G.openCareer();          // re-enters the hub with the save in place
       return;
     }
-    // Three states, in order of precedence. Unsigned offers come FIRST, because
-    // the rollover has already reset the calendar to round 0 by the time they
-    // exist: without this gate a player who backed out of the offers sheet would
-    // find GO RACING live again and drive the new season with no contract.
     const c = Career.data();
     if (c.offers && c.offers.length) { openOffers(); return; }
     if (Career.seasonDone()) { Career.rollover(); build(); openOffers(); return; }
     G.openRaceSettings("career");
   };
-  // DECIDE LATER, not CANCEL. The offers survive on the save, so this returns to
-  // the hub with SIGN A CONTRACT still waiting rather than discarding the year.
   $("co-back").onclick = () => {
     closeOffers();
     build();
     if (G.soundOn) GameAudio.uiSelect();
   };
-  // History is read-only, so BACK simply drops the modal — nothing behind it can
-  // have changed and rebuilding the hub would only throw away its scroll position.
   $("ch-back").onclick = () => {
     closeHistory();
     if (G.soundOn) GameAudio.uiSelect();
   };
-  // The guide is read-only too, so BACK just drops the modal — whatever is
-  // behind it (the hub, or the setup form mid-edit) is exactly as it was left.
   $("cg-back").onclick = () => {
     closeGuide();
     if (G.soundOn) GameAudio.uiSelect();

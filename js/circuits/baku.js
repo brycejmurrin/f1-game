@@ -1,6 +1,4 @@
-/* Apex 26 — BAKU circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — BAKU circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -18,40 +16,22 @@
     baseHW: 6,
     sceneryCoordinates: "racing",
     dressingExclusions: [
-      // Baku's bespoke frontage is the NEAR wall; the generic neon city is the
-      // mid/far density behind it. Exclude it only from the curated zones: the
-      // Old City / castle section and the open Caspian side of Neftchilar Ave.
       { kinds: ["city", "foliage", "lighting"], s0: 0.36, s1: 0.56 },
       // Preserve the Caspian void on the left of Neftchilar Avenue.
       { kinds: ["city", "foliage", "lighting"], s0: 0.58, s1: 0.97, side: -1 },
     ],
     pal: { horizon: [0.10, 0.12, 0.22], zenith: [0.04, 0.05, 0.14], sunColor: [0.72, 0.74, 0.88], ambientSky: [0.24, 0.26, 0.36], ambientGround: [0.20, 0.20, 0.28], fogColor: [0.08, 0.10, 0.18], fogDensity: 0.0016 },
-    // Castle Section squeeze (~7.6 m full width). CircuitPaths ignores segs `w:`;
-    // hwZones overlays half-width onto the real trace (see applyHwZones in tracks.js).
-    // Neftchilar Ave is the widest thing on the calendar; the Old City approach
-    // and the T15/T16 seafront kink are noticeably tighter than the base 12 m.
     hwZones: [
       { s0: 0.42, s1: 0.50, hw: 3.8, ease: 0.02 },      // Castle Section
-      // NB s0/s1 are CONTROL-POINT index fractions (applyHwZones walks pts by
-      // index, and the OSM trace is not evenly spaced) — these are the values
-      // that land on racing-lap arc 0.075-0.098 / 0.32-0.345 / 0.735-0.775.
       { s0: 0.0874, s1: 0.1194, hw: 5.3, ease: 0.012 },  // T2 tight left
       { s0: 0.2577, s1: 0.3233, hw: 5.4, ease: 0.012 },  // T6/T7 into the Old City
       { s0: 0.8232, s1: 0.8825, hw: 5.4, ease: 0.012 },  // T15/T16 seafront kink
     ],
-    // No bankZones on purpose: Baku is flat city tarmac with a drainage crown
-    // and no measurable corner banking, and tilting the road edge here pushes the
-    // armco liveries (placed hard against the road edge) over the lowered inner
-    // verge — the props-over-road probe picks it up immediately.
-    // Castle Section (s≈0.42–0.50): narrow to ~7.6 m full width (w = half-width).
-    // segs `w:` still documents intent / applies if the CircuitPaths trace drops.
     segs: [
       { t: 0, l: 200 }, { t: -90, l: 80 }, { t: 80, l: 70 }, { t: 0, l: 725 },
       { t: 0, l: 75, w: 3.8 }, { t: -90, l: 80, w: 3.8 }, { t: 0, l: 50, w: 3.8 }, { t: 0, l: 350 },
       { t: 70, l: 70 }, { t: -60, l: 60 }, { t: 55, l: 60 }, { t: -60, l: 60 }, { t: 0, l: 600 }, { t: 80, l: 80 },
     ],
-    // Baku's castle section climbs from the Old City approach to a ~14 m crest
-    // at the gate, then returns smoothly to sea level before the long straight.
     elevations: [{ s: 0.46, halfM: 500, rise: 14 }],
     scenery: function (api) {
       const {
@@ -64,7 +44,6 @@
       } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // ---- Night street palette ----
       const SAND        = [0.62, 0.50, 0.34];        // Old-City sandstone
       const SAND_LIT    = [0.85, 0.62, 0.30];        // uplit sandstone
       const SAND_DARK   = [0.42, 0.34, 0.22];        // shadowed sandstone
@@ -82,13 +61,6 @@
       const TARMAC_AD   = [0.85, 0.20, 0.18];        // red ad accent
       const AZ_BLUE     = [0.10, 0.45, 0.78];        // Azerbaijan flag blue
       const LAMP_WARM   = [1.00, 0.96, 0.70];        // sodium lamp glow
-      // Azerbaijani carpet accents. The flag blue above is the STATE colour;
-      // the colours the country actually dresses an event in — and weaves its
-      // carpets and paints its buta motif in — are a green-shifted teal and a
-      // hot madder orange. Those two against sandstone are unmistakably
-      // Caucasian and are worn by none of the three Gulf circuits, which run
-      // teal-magenta-amber LED (Abu Dhabi), green-gold (Jeddah) and maroon
-      // (Qatar). Introduced here as the seafront/Old City accent pair.
       const AZ_TEAL     = [0.06, 0.66, 0.62];
       const AZ_ORANGE   = [0.94, 0.42, 0.10];
 
@@ -114,9 +86,6 @@
         [0.38, 0.37, 0.35],
       ];
 
-      // Proper street-race infrastructure at the flat-out finish approach.
-      // The pit building sits behind the existing pit-wall frontage; the bridge
-      // supplies one deliberate event beat without cluttering the castle climb.
       if (circuitKit) {
         circuitKit.pitBuilding({
           id: "kit:baku:pit-building", frac: 0.975, side: 1, gap: 30,
@@ -128,9 +97,6 @@
         });
       }
 
-      // ===================================================================
-      // Continuous concrete walls + catch-fence lining the whole lap
-      // ===================================================================
       wall(0.0, 0.65, 1, 2.0, 1.3, CONCRETE, 0.4);
       wall(0.82, 1.0, 1, 2.0, 1.3, CONCRETE, 0.4);
       wall(0.0, 0.62, -1, 2.0, 1.3, CONCRETE, 0.4);
@@ -142,10 +108,6 @@
       guardrail(0.63, 0.96, 1, 3.0, ARMCO);
       fence(0.63, 0.95, 1, 4.0, 3.0, FENCE_COL);
 
-      // ===================================================================
-      // FLOODLIGHT POLES — 22 poles around the lap, alternating sides.
-      // Each: slim steel post + lamp arm + warm sodium glow patch on ground.
-      // ===================================================================
       for (let i = 0; i < 22; i++) {
         const k = K(i / 22), side = (i % 2) ? 1 : -1;
         const a = anchor(k, side, 5);
@@ -168,9 +130,6 @@
         const a = anchor(k, side, 6);
         const b = [a.r, a.u, a.t];
         addCyl(out, a.c, 0.16, 10, [0.22, 0.22, 0.25], 5, b);
-        // Bracket bridging the 0.16m-radius pole to the lamp head 1.6m out —
-        // without it the head/bulb boxes sit past the pole with no overlapping
-        // geometry beneath them (float-audit found nothing to rest them on).
         addBox(out, vadd(vadd(a.c, a.u, 9.7), a.r, side * 0.8), [1.6, 0.2, 0.4], [0.24, 0.24, 0.28], b);
         addBox(out, vadd(vadd(a.c, a.u, 9.6), a.r, side * 1.6), [1.2, 0.4, 1.2], [0.26, 0.26, 0.30], b);
         addBox(out, vadd(vadd(a.c, a.u, 9.4), a.r, side * 1.6), [1.0, 0.2, 1.0], LAMP_WARM, b);
@@ -179,10 +138,6 @@
       // Marshal posts spaced around the lap
       for (let i = 0; i < 9; i++) marshalPost(K(0.05 + i * 0.105), (i % 2) ? 1 : -1, 3.0);
 
-      // Distant haze silhouette — differentiated by circuit section so the
-      // Caspian Sea (L side of seafront) reads dark/blue while the city (R)
-      // always has tall lit building masses.
-      // s 0.0–0.22: start / T1 — dense civic backdrop both sides
       for (let i = 0; i < 8; i++) {
         const kC = K(i / 8 * 0.22);
         backdrop(kC, 1,  140 + hash(i * 5)  * 60,  [28 + hash(i * 7)  * 18, 32 + hash(i * 11) * 44, 22], DARK2);
@@ -204,12 +159,6 @@
         backdrop(kS, -1, 220 + hash(i * 9 + 58) * 90, [16 + hash(i * 3 + 58) * 8, 12, 16], SEA);
         backdrop(kS, 1,  320 + hash(i * 15 + 58) * 180, [32 + hash(i * 17 + 58) * 26, 48 + hash(i * 19 + 58) * 92, 24], DARK);
       }
-
-      // ===================================================================
-      // s 0.0–0.12 R — GOVERNMENT HOUSE district: civic street canyon
-      // A continuous neoclassical facade lines the R side of the start straight,
-      // with the iconic Government House palace set back as the centrepiece.
-      // ===================================================================
 
       // Continuous civic facade — R side (gap=14 keeps it behind the concrete wall)
       cityFront(0.0, 0.12, 1, 14, {
@@ -234,8 +183,6 @@
         const aBase = anchor(k, 1, 68);
         addBox(out, vadd(aBase.c, aBase.u, 1.5), [58, 3, 32], SAND_LIT, [aBase.r, aBase.u, aBase.t]);
 
-        // Twin corner towers — set further back from road than the body so they
-        // don't clip through it.
         for (const tOff of [-20, 20]) {
           const aTow = anchor(k, 1, 75);
           const tc = vadd(aTow.c, aTow.t, tOff);
@@ -258,9 +205,6 @@
         addBox(out, vadd(aGov.c, aGov.u, 0.1), [80, 0.5, 40], [0.22, 0.18, 0.10], [aGov.r, aGov.u, aGov.t]);
       }
 
-      // ===================================================================
-      // START/FINISH — pit complex (R), grandstands (L), gantries
-      // ===================================================================
       for (let i = 0; i < 5; i++)
         building(K(0.95 + i * 0.012), 1, 5, 16, 9, 14, { kind: "hall", wall: [0.20, 0.21, 0.26], window: WIN_COOL, floor: 3, lit: true });
       wall(0.94, 0.02, 1, 1.0, 1.0, [0.85, 0.85, 0.88], 0.4);
@@ -270,19 +214,10 @@
       gantry(0.96, 7.0, [0.14, 0.14, 0.18]);
       billboard(K(0.01), 1, 9, 14, 5, FLAME);   // K(): billboard takes a NODE, not a fraction
 
-      // Broadcast/OB compound tucked behind the pit building (gap=55 clears the
-      // pit building's far face — circuitKit.pitBuilding sits at gap=30, size
-      // [18,11,76], so its outer edge is ~48m out) — every real paddock keeps
-      // its satellite trucks here and Baku had none.
       if (broadcastCompound) {
         broadcastCompound(K(0.975), 1, 55, { vans: 4, dishes: 2, mastH: 10 });
       }
 
-      // ===================================================================
-      // National flag poles — three tall flagpoles at the civic plaza.
-      // Azerbaijan flag (blue/red/green tricolour) represented as a lit
-      // panel. Placed on the L side behind the facade row.
-      // ===================================================================
       {
         const flagOffs = [-12, 0, 12];
         const flagCols = [AZ_BLUE, [0.80, 0.16, 0.16], [0.14, 0.55, 0.28]];
@@ -304,10 +239,6 @@
         addBox(out, vadd(a.c, a.u, 14), [1.0, 1.0, 1.0], WIN_WARM, [a.r, a.u, a.t]);
       }
 
-      // ===================================================================
-      // s 0.12–0.22 — T1/T2 STREET CANYON: both sides aligned city facades
-      // Replaces the old scattered `place()` flat boxes at this turn complex.
-      // ===================================================================
       cityFront(0.12, 0.22, 1, 14, {
         minH: 18, maxH: 40, depth: 18, step: 18,
         palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
@@ -317,11 +248,6 @@
         palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 3.5,
       });
 
-      // ===================================================================
-      // s 0.22 R far — FLAME TOWERS: three iconic tapered towers with
-      // full-height LED fire (stacked emissive orange/red/amber bands).
-      // Spacing: 50m between tower centres.
-      // ===================================================================
       {
         const k  = K(0.22);
         const aF = anchor(k, 1, 180);
@@ -354,8 +280,6 @@
               const col  = FIRE_BANDS[band % FIRE_BANDS.length];
               addFrustum(stage, vadd(tc, aF.u, yFr * H - (H / nBands) * 0.45),
                 rAtY * 1.08, rAtY * 0.96, (H / nBands) * 0.88, col, 8, b);
-              // A brighter road-facing fire core breaks up the ring silhouette
-              // and makes each tower read as an LED-clad flame rather than a cone.
               if (band % 2 === 0) {
                 const hot = vadd(vadd(tc, aF.u, yFr * H), aF.r, -rAtY * 1.10);
                 addBox(stage, hot, [0.7, (H / nBands) * 0.62, 4.2],
@@ -382,12 +306,6 @@
         }, { required: true });
       }
 
-      // ===================================================================
-      // s 0.22–0.36 — MAIN STRAIGHT city canyon (both sides)
-      // Continuous aligned glass tower facades on both sides of the long
-      // 800 m straight leading towards the Old City section.
-      // ===================================================================
-
       // R side: tall glass high-rises (the financial district facing the corniche)
       cityFront(0.22, 0.36, 1, 14, {
         minH: 30, maxH: 80, depth: 20, step: 22,
@@ -399,9 +317,6 @@
         minH: 18, maxH: 48, depth: 18, step: 20,
         palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
       });
-      // Repeating projecting balconies give the Boulevard frontage a specific
-      // Baku residential/hotel rhythm. Kept on the Caspian side so the Flame
-      // Towers remain unobstructed on the right-hand skyline.
       for (let i = 0; i < 6; i++) {
         const a = anchor(K(0.245 + i * 0.017), -1, 16.5);
         const b = [a.r, a.u, a.t];
@@ -412,17 +327,6 @@
           addBox(out, rail, [0.16, 1.0, 7.7], [0.78, 0.73, 0.64], b);
         }
       }
-      // BOULEVARD PLANTING — the one place Baku's latitude shows.
-      // This was a row of 14 date palms, which is the SAME silhouette Abu
-      // Dhabi, Jeddah and Qatar all line their straights with: four night
-      // races, one tree. Baku is on the Caspian at 40°N, not in the Gulf, and
-      // Dənizkənarı Milli Park (the Boulevard, planted 1909) is an avenue of
-      // pollarded PLANE trees with dark CYPRESS spires between them — a broad
-      // flat disc of a crown next to a narrow black column. Neither shape can
-      // be mistaken for a palm from a car, and together they say "temperate
-      // seafront promenade" before any building is in frame. A handful of the
-      // Boulevard's real palms stay in the mix; they are a minority here, not
-      // the whole row.
       const PLANE_LEAF = [0.24, 0.40, 0.20], CYPRESS_LEAF = [0.09, 0.20, 0.13];
       for (let i = 0; i < 14; i++) {
         const s = 0.23 + i * 0.009;
@@ -437,14 +341,6 @@
         }
       }
 
-      // ===================================================================
-      // s 0.36 R near — OLD CITY WALL: continuous crenellated sandstone
-      // rampart. The merlon boxes are placed AT wall height to avoid
-      // clipping into the wall body below. Dense old-town behind it.
-      // ===================================================================
-      // The main unbroken rampart — carved into two runs, leaving a ~0.537–0.553
-      // gap for the Icheri Sheher grandstand (below) to stand clear in front of
-      // the wall instead of clipping through its 1.2m-thick shell.
       wall(0.36, 0.537, 1, 20, 9, SAND, 1.2);
       wall(0.553, 0.56, 1, 20, 9, SAND, 1.2);
 
@@ -463,11 +359,6 @@
       for (let p = 0; p < 10; p++) {
         if (p === 9) continue;  // s=0.54 — inside the grandstand gap, no wall there to sit on
         const k = K(0.36 + p * 0.020);
-        // Merlons ON TOP of the 9m wall: y offset = 9 (top face) + 0.9 (half of merlon h).
-        // Each merlon re-anchors at its own node (k + a node offset derived from
-        // ds) instead of extrapolating along ONE anchor's straight tangent —
-        // the old single-anchor version drifted off the curved wall over the
-        // ~49m spread and floated wherever the rampart bent under it.
         for (let j = 0; j < 14; j++) {
           if (j % 2 === 0) {
             const kj = k + Math.round(((j - 6.5) * 3.8) / ds);
@@ -479,13 +370,6 @@
         }
       }
 
-      // BUTA BANNERS on the rampart. Every Baku GP hangs long vertical fabric
-      // panels down the Old City wall carrying the buta (paisley) motif in
-      // carpet teal and madder orange over a gold band. One box per banner
-      // plus its band, hung ON the existing 9 m wall face, so the whole run
-      // costs almost nothing — and it is the single cheapest way to make this
-      // stretch unmistakable: no other circuit in the fleet has a medieval
-      // stone wall, let alone one dressed in carpet colours.
       for (let i = 0; i < 22; i++) {
         const s = 0.362 + i * 0.0082;
         if (s > 0.535 && s < 0.556) continue;   // the terracing gap carved above
@@ -495,9 +379,6 @@
         addBox(out, vadd(a.c, a.u, 8.2), [0.18, 0.7, 2.1], [0.86, 0.72, 0.26], b);
       }
 
-      // Low buttresses and warm uplights articulate the long outer rampart.
-      // Fractions stop before 0.42 and resume after 0.50: the castle squeeze,
-      // gate sightline, and its close walls remain untouched.
       for (const s of [0.365, 0.385, 0.405, 0.515, 0.535, 0.555]) {
         const a = anchor(K(s), 1, 19.4);
         const b = [a.r, a.u, a.t];
@@ -507,8 +388,6 @@
           WIN_WARM, b);
       }
 
-      // Dense sandstone old-town behind the rampart — carved around the same
-      // 0.537–0.553 grandstand gap as the rampart above it.
       cityFront(0.36, 0.537, 1, 24, {
         minH: 6, maxH: 18, depth: 12, step: 16,
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
@@ -518,8 +397,6 @@
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
       });
 
-      // Old-town minaret shafts — slim cylinders + domed cap, spaced
-      // with enough distance so they don't overlap the rampart.
       for (let i = 0; i < 5; i++) {
         const dist = 34 + hash(i * 13) * 14;  // well behind the 10m wall gap
         const a    = anchor(K(0.38 + i * 0.032), 1, dist);
@@ -541,23 +418,13 @@
         addCyl(out, vadd(a.c, a.u, dH), 0.4, 2.5, SAND_LIT, 6, b);
       }
 
-      // ===================================================================
-      // s 0.36–0.56 L side — Old-town street facade (inside of the circuit)
-      // Continuous low sandstone buildings on the left of the old city section
-      // ===================================================================
       cityFront(0.36, 0.42, -1, 16, {
         minH: 6, maxH: 14, depth: 10, step: 14,
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 2.5,
       });
 
-      // ===================================================================
-      // s 0.42–0.50 — CASTLE SECTION squeeze: ~2 m clearance both sides
-      // (pairs with hwZones hw:3.8 ≈ 7.6 m full width on CircuitPaths)
-      // ===================================================================
       wall(0.42, 0.50, -1, 2.0, 11, SAND, 1.4);
       wall(0.42, 0.50,  1, 2.0, 11, SAND, 1.4);
-      // Follow the curved wall node-by-node. The former tangent-offset row was
-      // straight in world space and cut back across the road before the crest.
       along(0.42, 0.50, 7.2, (k) => {
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 2.0);
@@ -596,20 +463,6 @@
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 2.5,
       });
 
-      // ===================================================================
-      // s 0.52 L near — MAIDEN TOWER: rebuilt as a clean stack of non-
-      // intersecting primitives. Each part begins exactly where the
-      // previous part ends (no gaps, no overlaps).
-      //
-      // Heights (all from ground anchor a.c):
-      //   y=0..3   : square stone base platform (addBox)
-      //   y=3..5   : octagonal base ring flare (addFrustum, widens to 11)
-      //   y=5..33  : main cylindrical drum (addCyl, radius 9, height 28)
-      //   y=33..36 : cornice ring (addFrustum, slightly wider then back)
-      //   y=36..42 : upper tapering drum (addFrustum, 9→7)
-      //   y=42..48 : cone cap (addCone, r=7, h=6)
-      //   y=48..50 : finial ball (addBox, 1.5m cube)
-      // ===================================================================
       {
         const k = K(0.52);
         // The 24m-wide footprint needs a centre offset, not an edge clearance.
@@ -654,16 +507,10 @@
           addFrustum(stage, vadd(a.c, a.u, 3.2), 12.0, 11.5, 0.8, SAND_LIT, 8, b);
         }, { required: true });
 
-        // Terrain-conforming forecourt; unlike a raw slab this cannot float on
-        // the Old City descent or bridge a nearby foldback.
         groundPatch(k, -1, 1, [30, 0.5, 30], [0.20, 0.16, 0.08],
           { id: "baku-maiden-forecourt", samples: 6 });
       }
 
-      // ===================================================================
-      // s 0.50 R — PALACE OF THE SHIRVANSHAHS cluster.
-      // Central mass + crenellations ON TOP (not clipping into the body).
-      // ===================================================================
       {
         const PALACE      = [0.72, 0.66, 0.54];
         const PALACE_DARK = [0.62, 0.56, 0.44];
@@ -696,17 +543,10 @@
         addBox(out, vadd(a.c, a.u, 4), [20, 3, 1.5], [0.82, 0.76, 0.64], b);
       }
 
-      // ===================================================================
-      // s 0.50–0.58 EXTRA OLD CITY density — stone buildings at the exit
-      // of castle/old-city section on BOTH sides before the descent
-      // ===================================================================
       {
         const STONE = [0.58, 0.52, 0.42];
         const oldCityData = [
           [0.51, 1, 24, 10, 10, 14],
-          // Pushed from gap 26 -> 36: the Icheri Sheher grandstand below now
-          // occupies this stretch (reaches out to gap+12.5 = 28.5), so this
-          // building is moved back to stand behind it instead of through it.
           [0.54, 1, 36, 12, 12, 12],
           [0.56, 1, 22, 14,  8, 16],
         ];
@@ -718,23 +558,6 @@
         }
       }
 
-      // ===================================================================
-      // s≈0.545 R — ICHERI SHEHER TERRACING: the Old City castle-section exit.
-      // This was a two-tier roofed grandstandEx, i.e. the same modern shell
-      // Abu Dhabi and Jeddah field, parked directly in front of a 12th-century
-      // rampart. Baku is the ONLY circuit in this group with genuine historic
-      // architecture, and the way to show that is to make the seating itself
-      // historic: mass-stone stepped terracing, open front, no roof, no back
-      // shell, cut against the wall behind it. terrace() is the only stand
-      // form in the library that has no shell to hide behind, so the merlons
-      // and the old town stay visible OVER the crowd instead of behind a slab
-      // — which is the entire reason to have put a stand here.
-      // ===================================================================
-      // Confined to the 0.537-0.553 window the rampart and the old-town
-      // cityFront runs were already carved around for a stand here. A terrace
-      // is ~17 m deep (rows x depth), so straying past that window puts its
-      // back steps inside the old-town buildings at 0.51/0.56 — which the
-      // prop-clipping audit picks up immediately as two new severe spots.
       if (typeof terrace === "function") {
         terrace(0.538, 0.552, 1, 15, {
           rows: 6, rise: 1.45, depth: 2.4, step: 16, density: 0.5,
@@ -750,12 +573,6 @@
         grandstand(0.545, 1, 16, 60, [0.68, 0.60, 0.47], [0.70, 0.46, 0.28]);
       }
 
-      // ===================================================================
-      // s 0.58 L — Caspian void: keep near balustrade only; cull mid-ground
-      // (palms / cafes / pavilions / near piers) so reflective sea + far
-      // silhouettes read. Vert budget freed for Flame Towers LED bands.
-      // ===================================================================
-      // Ornate promenade balustrade wall (near-edge frame, not mid-ground)
       wall(0.58, 0.96, -1, 5, 1.4, [0.76, 0.72, 0.64], 0.6);
       // Sparse decorative balusters (thinned — was 32)
       for (let i = 0; i < 12; i++) {
@@ -764,10 +581,6 @@
         addCyl(out, vadd(a.c, a.u, 0.7), 0.16, 1.1, [0.80, 0.74, 0.62], 6, [a.r, a.u, a.t]);
       }
 
-      // ===================================================================
-      // s 0.65–0.95 — CASPIAN-FRONT straight: dark sea left, lit skyline R
-      // ===================================================================
-      // Distant cargo-vessel silhouettes on the water (far only)
       for (let i = 0; i < 5; i++) {
         const a = anchor(K(0.66 + i * 0.06), -1, 160 + hash(i * 5) * 100);
         addBox(out, vadd(a.c, a.u, 3), [14 + hash(i) * 8, 5 + hash(i * 2) * 3, 3.5],
@@ -781,9 +594,6 @@
         addBox(out, vadd(a.c, a.u, 0.5), [2.4, 1.0, 36], [0.40, 0.40, 0.46], b);
       }
 
-      // ===================================================================
-      // s 0.75 L — far fountain plume (pushed back; mid-ground plaza culled)
-      // ===================================================================
       {
         const aFt = anchor(K(0.75), -1, 72);
         const b   = [aFt.r, aFt.u, aFt.t];
@@ -792,10 +602,6 @@
         addCone(out, vadd(aFt.c, aFt.u, 4.5), 0.5, 3, WIN_COOL, 6, b);
       }
 
-      // Continuous modern Caspian-front skyline R: aligned glass tower facades
-      // (gap=14 keeps towers behind armco/fence combo at this section) — carved
-      // around 0.738–0.762 so the Filarmoniya/Azneft grandstand (below) has a
-      // clear stretch of its own instead of a tower row growing through it.
       cityFront(0.63, 0.738, 1, 14, {
         minH: 40, maxH: 100, depth: 20, step: 20,
         palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
@@ -805,12 +611,6 @@
         palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
       });
 
-      // ===================================================================
-      // s 0.70 R — CRYSTAL HALL: Baku's landmark elliptic concert venue.
-      // An ovoid steel-and-glass shell sitting on a low podium, lit in
-      // blue-white. Approximated with stacked frustums + a wide flat disc
-      // roof ring to suggest the distinctive roof canopy.
-      // ===================================================================
       {
         const k  = K(0.70);
         const aH = anchor(k, 1, 62);
@@ -831,12 +631,6 @@
         addBox(out, vadd(aH.c, aH.u, 0.1), [54, 0.4, 44], [0.10, 0.12, 0.20], b);
       }
 
-      // ===================================================================
-      // s≈0.75/0.755 — FILARMONIYA + AZNEFT GRANDSTAND PAIR at the seafront
-      // kink (T15/T16, hwZone-narrowed hw=5.4). The most photographed viewing
-      // point of the real GP and, until now, empty on both sides. Tall
-      // multi-tier temporary scaffold decks, per STAND_SETS.baku.
-      // ===================================================================
       if (grandstandEx) {
         // Filarmoniya side — inside of the kink, the larger of the pair.
         grandstandEx(0.75, 1, 14, 70, null, null, {
@@ -853,14 +647,6 @@
         grandstand(0.755, -1, 14, 70, [0.50, 0.52, 0.56], [0.60, 0.40, 0.36]);
       }
 
-      // ===================================================================
-      // s 0.78–0.86 R mid — prominent glass Caspian-front tower cluster
-      // Three distinct tower heights (stepped, tapered, tower archetypes)
-      // visible behind the continuous cityFront wall. i=2,3 (s 0.792/0.803)
-      // are singled out as the PORT BAKU TOWERS: a matched pair at equal
-      // height with a glass crown, distinguishing them from the other seven
-      // generic towers in the cluster.
-      // ===================================================================
       for (let i = 0; i < 9; i++) {
         const k   = K(0.77 + i * 0.011);
         const isPortBaku = i === 2 || i === 3;
@@ -872,9 +658,6 @@
         const a = anchor(k, 1, 52 + (i % 4) * 24);
         addFrustum(out, vadd(a.c, a.u, h - 6), bW * 0.32 * 1.1, bW * 0.32 * 0.9, 4,
           i % 3 ? WIN_COOL : WIN_WARM, 7, [a.r, a.u, a.t]);
-        // Port Baku Towers: an extra tapered glass crown on top of the lit
-        // ring — the detail that reads as a matched landmark pair rather
-        // than two more units in the generic cluster.
         if (isPortBaku) {
           addFrustum(out, vadd(a.c, a.u, h), bW * 0.30, bW * 0.14, 10, WIN_COOL, 7, [a.r, a.u, a.t]);
           addCone(out, vadd(a.c, a.u, h + 10), bW * 0.10, 6, WIN_COOL, 7, [a.r, a.u, a.t]);
@@ -886,10 +669,6 @@
         billboard(K(0.65 + i * 0.065), 1, 9, 14, 6, i % 2 ? AZ_ORANGE : AZ_TEAL);
       }
 
-      // Continuous sponsor hoarding along the ~2.2 km Neftchilar Ave straight
-      // (R side, just inside the guardrail/fence combo at gap 3–4) — the
-      // lap's defining feature had 800+ m of bare barrier. Carved around the
-      // 0.738–0.762 Filarmoniya grandstand window above.
       if (sponsorHoarding) {
         sponsorHoarding(0.655, 0.738, 1, 2.4, {
           h: 1.2, step: 14, postCol: [0.20, 0.21, 0.24],
@@ -901,9 +680,6 @@
         });
       }
 
-      // ===================================================================
-      // s 0.97 — braking zone into T1: tyre walls + striped barriers
-      // ===================================================================
       tyreWall(0.955, 0.99, 1, 3.0, TARMAC_AD);
       tyreWall(0.955, 0.99, -1, 3.0, [0.9, 0.9, 0.92]);
       for (const side of [-1, 1]) {
@@ -918,16 +694,6 @@
       // Seafront billboard (s≈0.15)
       billboard(K(0.15), -1, 20, 14, 5, [0.85, 0.35, 0.10]);
 
-      // ═══════════════════════════════════════════════════════════════════
-      // BESPOKE CASPIAN WATERFRONT MODELS
-      // ═══════════════════════════════════════════════════════════════════
-
-      // ── Reflective Caspian Sea ──────────────────────────────────────────
-      // A genuine reflective water buffer mirroring the night sky/skyline,
-      // laid across the seafront left of the long straight. Narrow overlapping
-      // panels avoid spanning the circuit's nearby foldbacks. Split around
-      // 0.748–0.762 so the water recedes (gap0 16 -> 32) behind the Azneft
-      // grandstand instead of the stand appearing to float on the sea.
       waterBand(0.63, 0.748, -1, 16, 236, 12, SEA, { id: "baku-caspian-a" });
       waterBand(0.748, 0.762, -1, 32, 236, 12, SEA, { id: "baku-caspian-b" });
       waterBand(0.762, 0.93, -1, 16, 236, 12, SEA, { id: "baku-caspian-c" });
@@ -972,19 +738,9 @@
       for (let i = 0; i < 5; i++) {
         if (i === 1) continue;  // s=0.705 — National Flag Square (below) takes this spot instead
         const k = K(0.65 + i * 0.055), a = anchor(k, -1, 110 + hash(k) * 40);
-        // addCyl is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js) — the old `a.u, 6`
-        // offset floated the mast 6m above the water, treating the base arg as
-        // if it were the centroid. Base sits directly on the anchor.
         addCyl(out, a.c, 0.2, 14 + hash(k * 3) * 8, [0.70, 0.72, 0.80], 4, [a.r, a.u, a.t]);
       }
 
-      // ===================================================================
-      // s≈0.705 L — NATIONAL FLAG SQUARE: the 162 m flagpole (one of the
-      // tallest in the world) flying a huge Azerbaijan tricolour, on the
-      // Caspian side. Cheap — one tall shaft + a flag panel — for outsized
-      // recognisability. Scaled up with the rest of Baku's skyline landmarks
-      // (Flame Towers 210–240m in this scene) rather than modelled literally.
-      // ===================================================================
       {
         const kFlag = K(0.705);
         const aFlag = anchor(kFlag, -1, 110);
@@ -994,19 +750,11 @@
           // Plaza plinth (addBox centres its arg — 0.3 is plinthH/2, correct)
           const plinthH = 0.6;
           addBox(out, vadd(aFlag.c, aFlag.u, plinthH / 2), [16, plinthH, 16], [0.30, 0.30, 0.32], bFlag);
-          // Tapered shaft (two stages — slightly narrower toward the top).
-          // addCyl is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js), not centroid —
-          // the old `poleH*0.42`/`poleH*0.84+poleH*0.08` args treated it as
-          // centroid-anchored (half the stage height), floating each stage by
-          // exactly half its own height. Stack bases instead, starting at the
-          // plinth top.
           const stage1H = poleH * 0.84, stage2H = poleH * 0.16;
           const stage1Base = plinthH, stage2Base = stage1Base + stage1H;
           const poleTop = stage2Base + stage2H;
           addCyl(out, vadd(aFlag.c, aFlag.u, stage1Base), 1.1, stage1H, [0.72, 0.73, 0.76], 8, bFlag);
           addCyl(out, vadd(aFlag.c, aFlag.u, stage2Base), 0.65, stage2H, [0.76, 0.77, 0.80], 8, bFlag);
-          // Huge tricolour flag panel near the top — three horizontal stripes
-          // (blue / red / green, per the real Azerbaijan flag) hung off the shaft.
           const flagY = plinthH + poleH * 0.86;
           const flagW = 22, flagH = 14;
           addBox(out, vadd(vadd(aFlag.c, aFlag.u, flagY + flagH / 3), aFlag.r, flagW / 2), [flagW, flagH / 3, 0.2], AZ_BLUE, bFlag);

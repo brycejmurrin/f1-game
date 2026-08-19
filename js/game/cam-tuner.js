@@ -1,23 +1,7 @@
-/* Apex 26 — the CAMERA TUNER pause-menu panel: a chip per player camera mode
-   plus a slider per knob from CamTune.defs(), so each of the 13 cameras carries
-   its own framing (a chase cam pulled back 2 m does not move the hood cam).
-   Docked right like the LIGHTING TUNER — the live view behind the panel IS the
-   preview, and every slider snaps the camera immediately so you see the angle
-   you are dialling instead of watching it damp there.
-
-   The mode being EDITED is always the mode you are looking through: the chips
-   switch the live camera (same call as the CAM button) and the sliders follow.
-   One thing on screen, one thing being tuned.
-
-   Values/store/apply live in js/game/cam-tune.js (CamTune); live state comes
-   through the ctx façade G handed to CamTunerPanel.create(G). Consumes globals
-   CamTune + GameTables. Must load BEFORE js/game.js. */
+/* Apex 26 — the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), so each of the 13 cameras carries its own… */
 const CamTunerPanel = (function () {
   "use strict";
 
-// Set by create(). Lets game.js nudge the panel (setCamMode) through the module
-// global instead of a const that would still be in its temporal dead zone when
-// setCamMode first runs at boot.
 let _refresh = null;
 
 function create(G) {
@@ -32,17 +16,10 @@ function curLabel() { return (CAM_MODES[G.camMode] || CAM_MODES[0]).label; }
 function fmtCt(d, v) {
   const dec = (String(d.step).split(".")[1] || "").length;
   const s = Math.abs(v).toFixed(Math.min(dec, 2));
-  // A bidirectional knob (min < 0) shows its sign; a 0..N knob (CORNER LEAD)
-  // reads as a plain magnitude.
   const sign = (v > 0 && d.min < 0) ? "+" : v < 0 ? "−" : "";
   return sign + s + d.unit;
 }
-// A knob may be limited to certain camera modes (CORNER LEAD → chase/far). No
-// `modes` list means it applies everywhere.
 function knobApplies(d, mode) { return !d.modes || d.modes.indexOf(mode) !== -1; }
-// Re-snap rather than let the damping walk there: at λ14 a slider drag would
-// read as a lag between the thumb and the picture, which is exactly the thing
-// you cannot judge a camera angle through.
 function applyLive() {
   if (G.player && G.track) G.snapGameCam();
 }
@@ -110,8 +87,6 @@ function buildCamTunePanel() {
   document.getElementById("camtune-inner").classList.toggle("lt-show-help", $("ct-help-on").checked);
   refreshCamTunePanel();
 }
-// Name the camera being edited and how many of its knobs are off default, so
-// "why does this slider do nothing" is answered before it is asked.
 function updateCtProfileLabel() {
   const host = $("ct-profile"); if (!host) return;
   const n = CamTune.count(curMode());
@@ -140,8 +115,6 @@ function refreshCamTunePanel() {
     const v = CamTune.get(mode, d.id);
     if (inp) inp.value = v;
     if (b) b.textContent = fmtCt(d, v);
-    // Hide a knob that doesn't apply to the mode under edit (CORNER LEAD is only
-    // meaningful on chase/far), so the panel only ever shows live controls.
     if (row) row.style.display = knobApplies(d, mode) ? "" : "none";
   }
   updateCtProfileLabel();

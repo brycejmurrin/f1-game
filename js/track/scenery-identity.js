@@ -1,12 +1,4 @@
-/* Apex 26 — SceneryIdentity: the shared circuit-identity toolkit of the
-   buildProps composite models — underpass portals, flood masts (+ ring),
-   LED facade bands, concrete canyons, sail/gridshell canopies, runoff
-   aprons, banked kerb strips, bowl seat walls and pastel street rows.
-   Split out of js/track/tracks.js buildProps; created once per build via
-   SceneryIdentity.create(ctx) with the shared scenery ctx. anchor
-   (SceneryNature), along (SceneryStructures) and building (SceneryCity)
-   come via ctx — this module is created last.
-   Load order: before js/track/tracks.js (which calls create() at build). */
+/* Apex 26 — SceneryIdentity: the shared circuit-identity toolkit of the buildProps composite models — underpass portals, flood masts (+ ring), LED facade bands, c… */
 const SceneryIdentity = (function () {
   "use strict";
 
@@ -17,14 +9,11 @@ const SceneryIdentity = (function () {
             anchor, along, building, indexSolid } = ctx;
     Log.info("scenery", "scenery-identity dress " + (ctx.def && ctx.def.id));
 
-    // ── Shared scenery toolkit (identity pass) ──────────────────────────────
     // Cross-track composite helpers. Footprints that must stay OFF the racing
     // line use rejBox / full-box tests. Overhead decks that cars intentionally
     // pass under (gantry beam, underpass slab, sail/gridshell spanning the
     // track) emit via RAW.addBox so the guarded wrappers do not cull them.
 
-    // Dark overhead portal: slab spanning the track + support piers off-edge.
-    // opts: { h, thick, col, pierGap, pierW, depth }
     const underpassPortal = (s, opts) => {
       opts = opts || {};
       const k = Math.round(s * n) % n;
@@ -61,15 +50,6 @@ const SceneryIdentity = (function () {
                  [span * 0.96, 0.18, depth * 0.92], soff, b);
     };
 
-    // Tall dual-arm cool-white flood mast + optional ground pool.
-    // dist = metres beyond road edge (mast centre).
-    // opts: { h, cool, pool, arms, light }
-    // `light` (default true): register a point light at the lens bank so the
-    // fixture actually lights the road. Pass light:false for accent-only masts
-    // that sit ON TOP of the generic lamps dressing pass — otherwise the
-    // same stretch gets two light sources. Circuits that exclude "lamps" /
-    // "lighting" and use floodMastRing as the race-lighting rig leave the
-    // default on.
     const floodMast = (k, side, dist, opts) => {
       opts = opts || {};
       const h = opts.h != null ? opts.h : 36;
@@ -107,8 +87,6 @@ const SceneryIdentity = (function () {
         addBox(out, vadd(a.c, a.u, 0.10), [7.5, 0.18, 7.5], poolCol, b);
       }
       blockAt(k, side, dist - 0.6, 2);
-      // Look up at CALL time — registerMastLamp is wired onto ctx just before
-      // def.scenery runs, after SceneryIdentity.create has already closed.
       const register = ctx.registerMastLamp;
       if (light && typeof register === "function" && lensPos) {
         // A stadium mast THROWS much further than a verge lamp, and the theme
@@ -129,16 +107,11 @@ const SceneryIdentity = (function () {
           pos: [lensPos[0], lensPos[1], lensPos[2]],
           k, side,
           kind: cool ? "flood_bank" : "halogen",
-          // x1.5 keeps the aim point well inside the window (at d = throw the
-          // window is 0.66 of peak, vs 0 today). Capped so a freak mast height
-          // cannot open a lap-wide pool.
           radius: Math.min(110, throwR * 1.5),
         });
       }
     };
 
-    // Ring of flood masts both sides every ~stepM metres. opts forwarded to floodMast;
-    // opts.dist defaults to 14 (beyond edge).
     const floodMastRing = (stepM, opts) => {
       opts = opts || {};
       const dist = opts.dist != null ? opts.dist : 14;
@@ -148,8 +121,6 @@ const SceneryIdentity = (function () {
       });
     };
 
-    // Stacked emissive colour bands on a vertical shaft (Flame Towers / Sphere).
-    // c = world centre of base, h = total height. opts: { r, bands, cols, seg, basis }
     const ledFacadeBands = (c, h, opts) => {
       opts = opts || {};
       const r0 = opts.r != null ? opts.r : 8;
@@ -173,8 +144,6 @@ const SceneryIdentity = (function () {
       }
     };
 
-    // Pale grey Jersey / canyon wall with optional accent stripe boxes.
-    // opts: { h, thick, col, stripeCol, stripeH, stripeEvery }
     const concreteCanyon = (s0, s1, side, gap, opts) => {
       opts = opts || {};
       const h = opts.h != null ? opts.h : 2.4;
@@ -199,8 +168,6 @@ const SceneryIdentity = (function () {
       });
     };
 
-    // Disc / ellipse sail canopy at world centre c with basis [r,u,t].
-    // opts: { rad, h, col, ribs, thick } — ribs are radial struts under a thin disc.
     const sailCanopy = (c, basis, opts) => {
       opts = opts || {};
       const rad = opts.rad != null ? opts.rad : 18;
@@ -237,8 +204,6 @@ const SceneryIdentity = (function () {
       }
     };
 
-    // LED lattice veil / gridshell canopy — arched node lattice over a span.
-    // opts: { w, depth, h, cols, rows, ledCols, strutCol }
     const gridshellCanopy = (c, basis, opts) => {
       opts = opts || {};
       const w = opts.w != null ? opts.w : 40;
@@ -282,8 +247,6 @@ const SceneryIdentity = (function () {
       }
     };
 
-    // Wide low asphalt/gravel apron beyond the verge.
-    // sz = [depth, thick, length] or number depth with default length.
     const runoffApron = (k, side, gap, sz, col) => {
       let depth, thick, len;
       if (Array.isArray(sz)) { depth = sz[0]; thick = sz[1] != null ? sz[1] : 0.35; len = sz[2] != null ? sz[2] : 24; }
@@ -298,9 +261,6 @@ const SceneryIdentity = (function () {
       addBox(out, vadd(a.c, a.u, thick / 2), box, col || [0.42, 0.40, 0.38], b);
     };
 
-    // Tilted red/white kerb ribbon + optional SAFER-style outer rail (Zandvoort bowls).
-    // Track basis already banks with the road, so boxes read the bank tilt.
-    // opts: { saferGap, safer, step, saferStep, kerbRed, kerbWht, saferCol }
     const bankedKerbStrip = (s0, s1, side, opts) => {
       opts = opts || {};
       const kerbRed = opts.kerbRed || [0.86, 0.12, 0.14];
@@ -314,11 +274,6 @@ const SceneryIdentity = (function () {
         const a = anchor(k, side, 1.35);
         if (onTrack(a.c[0], a.c[2], 1.1)) return;
         const b = [a.r, a.u, a.t];
-        // anchor() deliberately sinks its point 0.3 m so a flat-based model
-        // tucks under the terrain instead of z-fighting it. A kerb is 0.26 m
-        // tall, so that sink alone buries it completely — it has to sit ON the
-        // surface, not in it. Add the sink back for the ribbon pieces (the
-        // safer barrier below is 1.1 m tall and wants to stay embedded).
         const SINK = 0.3;
         addBox(out, vadd(a.c, a.u, 0.16 + SINK), [1.05, 0.26, spacing * 0.90], col, b);
         // INSET, not flush. At 0.38 this box's outer face landed at 1.890 while
@@ -343,8 +298,6 @@ const SceneryIdentity = (function () {
       });
     };
 
-    // Continuous eye-height seat/crowd wall (Foro Sol / baseball-bowl enclosure).
-    // opts: { h, thick, shell, step, crowdCols }
     const bowlSeatWall = (s0, s1, side, gap, opts) => {
       opts = opts || {};
       const h = opts.h != null ? opts.h : 5.8;
@@ -367,11 +320,6 @@ const SceneryIdentity = (function () {
       });
     };
 
-    // broadcastCompound(): the OB/TV compound every real circuit keeps behind
-    // its paddock — a row of outside-broadcast trucks, satellite uplink dishes
-    // and a short mast. No circuit modelled this and there was no dish primitive
-    // at all; a dish here is a shallow frustum bowl on a tilted pedestal.
-    //   opts: { vans, dishes, mastH, vanCol, dishCol, spacing }
     const broadcastCompound = (k, side, gap, opts) => {
       opts = opts || {};
       const vans = Math.max(1, Math.min(8, Math.round(opts.vans != null ? opts.vans : 3)));
@@ -381,8 +329,6 @@ const SceneryIdentity = (function () {
       const dishCol = opts.dishCol || [0.90, 0.90, 0.92];
       const dark = [0.20, 0.21, 0.24];
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
-      // Whole-compound footprint guard, up front — a long shallow mass swinging
-      // over a curving stretch is exactly what a single onTrack() point misses.
       const span = vans * spacing + dishes * 3.4 + 2;
       const mastH = opts.mastH != null ? opts.mastH : 9;
       if (rejBox(vadd(p.c, p.u, mastH / 2), [9, mastH, span], b)) {
@@ -405,8 +351,6 @@ const SceneryIdentity = (function () {
         const base = vadd(vadd(p.c, p.t, off), p.r, side * 3.4);
         addBox(out, vadd(base, p.u, 0.5), [2.0, 1.0, 2.0], dark, b);          // skid
         addCyl(out, vadd(base, p.u, 1.5), 0.18, 1.2, [0.42, 0.43, 0.46], 6, b); // pedestal
-        // Bowl: a shallow frustum tipped back toward the sky. Basis swapped so
-        // the frustum axis leans off vertical instead of standing straight up.
         const dc = vadd(base, p.u, 2.5);
         const tilt = [p.u[0] * 0.72 + p.r[0] * side * 0.69,
                       p.u[1] * 0.72,
@@ -416,16 +360,12 @@ const SceneryIdentity = (function () {
       }
       // Link mast with a warning lamp — the compound's vertical accent.
       const mast = vadd(vadd(p.c, p.t, -(vans * spacing) / 2 - 1.6), p.r, side * 2.6);
-      // addCyl is BASE-anchored (geom.js): seat the shaft at -0.4 so it spans
-      // -0.4 → mastH+0.4 and the lamp boxes below land ON it, not inside it.
       addCyl(out, vadd(mast, p.u, -0.4), 0.16, mastH + 0.8, [0.46, 0.47, 0.50], 5, b);
       addBox(out, vadd(mast, p.u, mastH), [0.9, 0.35, 0.7], dark, b);
       addBox(out, vadd(mast, p.u, mastH + 0.4), [0.26, 0.26, 0.26],
              NIGHT ? [1.60, 0.28, 0.20] : [0.72, 0.16, 0.12], b);
     };
 
-    // Sparse cream/ochre Med apartment boxes (Monaco canyon).
-    // opts: { palette, minH, maxH, depth, step, lit, windowCol, window, floor }
     const pastelStreetRow = (s0, s1, side, gap, opts) => {
       opts = opts || {};
       const pal = opts.palette || [[0.92, 0.86, 0.72], [0.86, 0.72, 0.48]];

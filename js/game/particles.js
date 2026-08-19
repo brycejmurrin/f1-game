@@ -1,15 +1,4 @@
-/* Apex 26 — shared transient-particle pool (tyre smoke, collision sparks,
-   gravel/grass kickup, rain spray) for js/game.js. A fixed CPU pool of
-   camera-facing soft billboards, drawn in TWO batches per frame via
-   gfx.drawParticles(): an alpha-blended group (smoke/dust/spray) and an
-   additive group (sparks — their HDR tints feed bloom for free). Emitters
-   only READ car state (world positions are handed in by the render loop);
-   update()/draw() run in the RENDER path only, never inside the physics
-   step, so headless obs/act runs are identical with FX on or off. Zero
-   steady-state allocation: struct-of-arrays Float32Array pool + prebuilt
-   interleaved vertex streams, swap-remove on particle death. The only
-   dependency is the renderer handle, injected once at boot via
-   Particles.init(gfx). Must load BEFORE js/game.js (see index.html). */
+/* Apex 26 — shared transient-particle pool (tyre smoke, collision sparks, gravel/grass kickup, rain spray) for js/game.js. A fixed CPU pool of camera-facing soft … */
 const Particles = (function () {
   "use strict";
 
@@ -27,8 +16,6 @@ let _drg, _grv;             // drag rate (1/s) + downward gravity (m/s²)
 let _add;                   // Uint8: 1 = additive (spark) group
 let _n = 0;                 // live count
 
-// Interleaved vertex streams handed to gfx.drawParticles():
-// [cornerX, cornerY, cx, cy, cz, r, g, b, size, alpha] × 6 verts/particle.
 const FLOATS_PER = 6 * 10;
 let _vertA = null;          // alpha-blended group (smoke / dust / spray)
 let _vertB = null;          // additive group (sparks)
@@ -55,8 +42,6 @@ function init(gfx) {
 function clear() { _n = 0; }
 function count() { return _n; }
 
-// PARTICLE FX tuner knob (TUNE_DEFS "particleMul"): 0 = off, 1 = as-shipped,
-// 2 = double. Read live so the slider reacts immediately.
 function mul() {
   if (typeof LightTune !== "undefined" && LightTune.LT && LightTune.LT.particleMul !== undefined)
     return LightTune.LT.particleMul;
@@ -65,10 +50,6 @@ function mul() {
 
 function rnd(k) { return (Math.random() * 2 - 1) * k; }
 
-// Fractional-count → integer emission (stochastic rounding), so a rate·dt of
-// e.g. 2.4 emits 2 particles plus a 40% chance of a third — emission stays
-// correct at ANY framerate (a 30 fps phone and a 1 fps software-GL runner both
-// integrate to the same particles-per-second). Capped so a hitch can't flood.
 function nOf(count) {
   if (!(count > 0)) return 0;
   if (count > 4) count = 4;
@@ -90,12 +71,6 @@ function spawn(x, y, z, vx, vy, vz, life, size, grow, r, g, b, alpha, drag, grav
   _add[i] = additive ? 1 : 0;
 }
 
-// ---------- Effect emitters (called from game.js render loop / collideFx) ----------
-
-// Tyre smoke puffs at a wheel contact patch. (bvx,bvz) = a backward-ish drift
-// velocity (already scaled by the caller); inten 0..1 sets density/whiteness —
-// light grey scrub haze at the threshold, dense near-white burnout smoke at
-// full intensity. `count` may be fractional (rate·dt from the caller).
 function tyreSmoke(x, y, z, bvx, bvz, inten, count) {
   const m = mul(); if (m <= 0) return;
   for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2)); n > 0; n--) {
@@ -112,9 +87,6 @@ function tyreSmoke(x, y, z, bvx, bvz, inten, count) {
   }
 }
 
-// Collision / wall-scrape sparks: a burst of tiny additive HDR embers thrown
-// roughly along (dirx,dirz) (unit-ish; typically backward along the car) at
-// `speed` m/s, pulled down by gravity. count is pre-tier; the knob scales it.
 function sparks(x, y, z, dirx, dirz, speed, count) {
   const m = mul(); if (m <= 0) return;
   let n = Math.round(count * Math.min(m, 2));
@@ -131,9 +103,6 @@ function sparks(x, y, z, dirx, dirz, speed, count) {
   }
 }
 
-// Gravel / grass kickup behind an off-track wheel: fast, low, surface-tinted
-// chunks with strong gravity and a short life, plus an occasional soft dust
-// puff that lingers behind the wheel. `count` may be fractional.
 function kickup(x, y, z, bvx, bvz, r, g, b, count) {
   const m = mul(); if (m <= 0) return;
   for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2)); n > 0; n--) {
@@ -159,10 +128,6 @@ function kickup(x, y, z, bvx, bvz, r, g, b, count) {
   }
 }
 
-// Rain spray plumes behind a rear tyre: soft white mist that balloons and
-// hangs, alpha scaled by the caller (speed × wetness, lighter on "wet" than
-// "rain"). (bvx,bvz) = backward drift velocity, pre-scaled by the caller.
-// `count` may be fractional (rate·dt).
 function spray(x, y, z, bvx, bvz, strength, count) {
   const m = mul(); if (m <= 0) return;
   for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2)); n > 0; n--) {
@@ -175,8 +140,6 @@ function spray(x, y, z, bvx, bvz, strength, count) {
       2.1, -0.6, 0);
   }
 }
-
-// ---------- Simulation + draw (render path ONLY — never the physics step) ----------
 
 function update(dt) {
   if (!_n || !(dt > 0)) return;
@@ -230,10 +193,6 @@ function draw() {
   if (pb) _gfx.drawParticles(_vertB, pb, true);
 }
 
-// ---------- 2D rain overlay (falling streaks on a DOM canvas) ----------
-// Extracted from js/game.js. Draws OVER the WebGL canvas on its own 2D canvas
-// (created lazily on first show). game.js decides the weather (drizzle vs
-// storm) and hands booleans in; live tuning comes from LightTune.LT.
 let _rainCanvas = null, _rainCtx = null, _rainDrops = [];
 
 const _clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -252,8 +211,6 @@ function _rainEnsure() {
 function rainShow(on) {
   _rainEnsure();
   if (!on && _rainCtx) {
-    // Clear any lingering streaks so a live rain→wet switch doesn't freeze the
-    // last rain frame on the (now hidden) overlay.
     _rainCtx.clearRect(0, 0, _rainCanvas.width, _rainCanvas.height);
   }
   _rainCanvas.style.display = on ? "block" : "none";
@@ -266,11 +223,6 @@ function rainSeed(drizzle) {
   const LT = _lt();
   _rainCanvas.width = window.innerWidth;
   _rainCanvas.height = window.innerHeight;
-  // DRIZZLE tier: "wet" (damp track, no storm) gets a sparse, shorter, slower
-  // field — light precipitation that reads as drizzle, not a downpour. "rain"
-  // keeps the full storm density.
-  // DRIZZLE ratios: count/length/fall-speed of a WET-road drizzle relative to a
-  // full storm, each a live knob (defs 0.3/0.5/0.6 reproduce the shipped drizzle).
   const dzCount = LT.drizzleCount != null ? LT.drizzleCount : 0.3;
   const dzLen   = LT.drizzleLen   != null ? LT.drizzleLen   : 0.5;
   const dzSpeed = LT.drizzleSpeed != null ? LT.drizzleSpeed : 0.6;
@@ -288,19 +240,12 @@ function rainDraw(dt, speed, raining) {
   const w = _rainCanvas.width, h = _rainCanvas.height;
   _rainCtx.clearRect(0, 0, w, h);
   _rainCtx.lineWidth = 1;
-  // Constant colour + a single averaged alpha so every drop rides ONE batched path
-  // (one beginPath/stroke instead of one per drop). The blur/motion of a rain field
-  // hides that the per-drop opacity is now uniform. Drizzle draws fainter.
   _rainCtx.strokeStyle = "#afc8e8";
-  // RAIN OPACITY knob (def 1) scales the streak-layer alpha; def reproduces the
-  // shipped 0.25/0.16 exactly. Clamped to canvas' valid 0..1 globalAlpha range.
   _rainCtx.globalAlpha = _clamp01((raining ? 0.25 : 0.16) * (LT.rainOpacity != null ? LT.rainOpacity : 1));   // ~mean of the 0.16..0.50 per-drop range
   // SPEED-REACTIVE streaks: at speed the rain shears toward the camera's motion
   // and stretches into driving streaks (apparent velocity = fall + car speed).
   // Render-only — reads the handed-in speed, never writes physics state.
   const vk = _clamp01((speed || 0) / 90);
-  // RAIN SPEED SHEAR: how much apparent wind slants (rainShearWind) and stretches
-  // (rainShearLen) the streaks at speed. Defs 0.9/2 reproduce the shipped shear.
   const wind = LT.rainWind + vk * (LT.rainShearWind != null ? LT.rainShearWind : 0.9);
   const lenMul = 1 + vk * (LT.rainShearLen != null ? LT.rainShearLen : 2);
   _rainCtx.beginPath();

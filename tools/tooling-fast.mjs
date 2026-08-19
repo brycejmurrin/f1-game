@@ -128,6 +128,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pause-hud-layout.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
+  "tests/unit/trim-comments.test.mjs",
   "tests/unit/metrics.test.mjs",
   "tests/unit/perf-try.test.mjs",
 ]);

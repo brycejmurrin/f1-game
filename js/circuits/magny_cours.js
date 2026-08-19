@@ -9,8 +9,6 @@
     classic: true,
     // Upstream fr-1960 already runs clockwise, matching the racing direction.
     reverse: false,
-    // The 242 m run ending at the trace's first vertex is the pit straight;
-    // place the line just before the wrap. Not GPS-calibrated.
     startFrac: 0.99,
     name: "MAGNY-COURS",
     gp: "French GP",
@@ -38,8 +36,6 @@
       grass:         [0.22, 0.44, 0.20],
       sunDir:        [0.42, 0.62, 0.36],
     },
-    // Nivernais farmland is gently rolling; Magny-Cours has real but modest
-    // relief, most of it through the Estoril/Lycée section.
     elevations: [
       { s: 0.24, halfM: 360, rise: 5.0 },
       { s: 0.52, halfM: 340, rise: -6.0 },
@@ -67,25 +63,12 @@
       const LEAF = [0.19, 0.44, 0.20], LEAF_D = [0.14, 0.35, 0.17];
       const POPLAR = [0.26, 0.48, 0.24], POPLAR_D = [0.20, 0.40, 0.20];
       const GRAVEL = [0.68, 0.62, 0.46];
-      // The Nivernais patchwork: whatever is in each field that season. Having
-      // several tints rather than one green is most of what makes flat
-      // farmland read as farmland instead of as mown verge.
       const PLOUGH = [0.36, 0.28, 0.20], STUBBLE = [0.62, 0.56, 0.30];
       const WHEAT = [0.44, 0.50, 0.24], COLZA = [0.72, 0.70, 0.20];
       const PASTURE = [0.26, 0.44, 0.20];
       const RENDER = [0.80, 0.79, 0.74], SLATE = [0.34, 0.35, 0.38];
 
-      // =====================================================================
-      // 1. FARMLAND HEDGEROWS AND POPLAR LINES — the Nivernais look. Trees in
-      //    ROWS along field boundaries, not scattered woodland.
-      // =====================================================================
       const openArea = (s) => (s >= 0.93 || s <= 0.08) || (s >= 0.40 && s <= 0.50);
-      // A poplar windbreak is a ROW: one species, one height, one spacing, in a
-      // dead-straight line along a field edge. Scattering broadleaf trees at a
-      // jittered distance — which is what this used to do — produces woodland,
-      // and woodland is the one thing the Nivernais plain does not have. So the
-      // poplar is built locally as a narrow spire (a broadleaf `tree` crown is
-      // far too round) and planted at a fixed pitch along fixed lines.
       const poplar = (k, side, dist, h) => {
         const a = anchor(k, side, dist);
         const b = [a.r, a.u, a.t];
@@ -98,9 +81,6 @@
         addCone(out, vadd(a.c, a.u, h * 0.80), 0.95, h * 0.26, col, 6, b);
         out._mat = 0;
       };
-      // Each entry is one field boundary: a single line of poplars at a fixed
-      // setback, planted every ~12 m. Uniform height per row — they were all
-      // put in the same year.
       for (const [s0, s1, side, dist, h] of [
         [0.10, 0.30, -1, 30, 17],
         [0.12, 0.32,  1, 34, 16],
@@ -128,10 +108,6 @@
       hedge(0.12, 0.30, -1, 34, 3.4, [0.16, 0.34, 0.17]);
       hedge(0.34, 0.52, 1, 36, 3.4, [0.16, 0.34, 0.17]);
       hedge(0.62, 0.84, -1, 34, 3.4, [0.16, 0.34, 0.17]);
-      // The patchwork. A dozen field parcels in different states of the
-      // rotation — ploughed, stubble, wheat, colza, pasture — is the whole
-      // visual content of this landscape, and a single olive-green slab was
-      // giving none of it. Sizes deliberately vary; real parcels are not a grid.
       for (const [id, s, side, gap, w, l, col] of [
         ["magny-field-plough-n", 0.20, -1, 74, 130, 190, PLOUGH],
         ["magny-field-wheat-n", 0.26, -1, 210, 150, 210, WHEAT],
@@ -145,8 +121,6 @@
       ]) {
         groundPatch(K(s), side, gap, [w, 0.18, l], col, { id, samples: 9 });
       }
-      // Plough furrows on the two bare parcels — a flat brown rectangle only
-      // reads as a worked field once it has lines running across it.
       for (const [s, side, gap] of [[0.20, -1, 84], [0.78, -1, 200]]) {
         for (let i = 0; i < 12; i++) {
           const a = anchor(K(s + (i - 6) * 0.004), side, gap);
@@ -154,12 +128,6 @@
             [0.30, 0.23, 0.16], [a.r, a.u, a.t]);
         }
       }
-      // Nivernais BOSQUETS — the tight tree copses that stand in the corner of
-      // a field where a plough can't turn, or over a spring the farmer leaves
-      // alone. The brief forbids scattered woodland, so these are the opposite:
-      // deliberately CLUSTERED (5-7 broadleaf on one field corner, then bare
-      // field again), which is exactly how a copse reads against the poplar
-      // ROWS. tree() self-rejects on tarmac and clears trackside barriers.
       const copse = (k0, side, dist0, cnt) => {
         for (let i = 0; i < cnt; i++) {
           const jk = k0 + (i - (cnt >> 1)) * 2;
@@ -172,15 +140,11 @@
       copse(K(0.36), -1, 60, 7);
       copse(K(0.66), -1, 54, 6);
       copse(K(0.86), 1, 58, 6);
-      // Two more parcels to thicken the outfield patchwork on the emptier left
-      // flank — a colza strip and a stubble field, brief §6 ("vary the field
-      // patches between green pasture and ploughed/stubble tone").
       groundPatch(K(0.34), -1, 96, [120, 0.18, 170], COLZA,
         { id: "magny-field-colza-n2", samples: 9 });
       groundPatch(K(0.64), -1, 92, [110, 0.18, 160], STUBBLE,
         { id: "magny-field-stubble-e2", samples: 9 });
 
-      // =====================================================================
       // 2. PIT COMPLEX — Magny-Cours was rebuilt in 1991 as the centrepiece of
       //    the Technopôle, a publicly funded motorsport industrial park, and it
       //    was built to look like one: pale render, a shallow CORRUGATED BARREL
@@ -191,7 +155,6 @@
       //    Bay fractions run 0.985 -> 0.045: s≈0.955-0.975 is the tight
       //    foldback behind the short pit straight and rejects anything longer
       //    than ~16 m inside 40 m of setback.
-      // =====================================================================
       for (const [i, s] of [0.985, 0.005, 0.025, 0.045].entries()) {
         const a = anchor(K(s), 1, 17);
         const b = [a.r, a.u, a.t];
@@ -204,8 +167,6 @@
           addBox(stage, vadd(vadd(a.c, a.r, -7.0), a.u, 2.8), [0.3, 5.0, 34],
             [0.22, 0.23, 0.26], b);                        // garage door band
           stage._mat = MAT.METAL;
-          // The vault: a half-cylinder laid along the building's length, ribbed
-          // with steel arch bands at every bay division.
           addCyl(stage, vadd(vadd(a.c, a.u, 7.2), a.t, -19), 8.2, 38,
             [0.72, 0.74, 0.78], 10, [a.r, a.t, a.u]);
           for (let rIdx = 0; rIdx < 5; rIdx++) {
@@ -248,8 +209,6 @@
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, -1, 11, 150, null, null,
         { livery: "navy", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
-      // The technopole units: a wide low podium with a set-back upper floor —
-      // the French business-park idiom the whole Magny-Cours site was built in.
       for (let i = 0; i < 4; i++) {
         building(K(0.925 + i * 0.013), 1, 40, 27, 10, 17,
           { kind: "podium", wall: RENDER, window: [0.32, 0.36, 0.44], floor: 4.5 });
@@ -262,14 +221,6 @@
       broadcastCompound(K(0.916), 1, 72, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.20, 0.32, 0.66]);
 
-      // =====================================================================
-      // 3. CORNERS — Adelaide is the one everybody remembers: a slow hairpin
-      //    at the end of the long straight, with a big stand on the outside.
-      // =====================================================================
-      // The corner stands carry the Technopôle's building language rather than
-      // the standard cantilever slab: the same shallow corrugated barrel vault
-      // as the pit garages, sat on open lattice trusses over a modest bank.
-      // Cheap to build, cheap to look at, and unmistakably the same architect.
       const vaultStand = (s0, s1, side, gap, opts) => {
         opts = opts || {};
         const rows = opts.rows || 7, rise = opts.rise || 0.8, depth = opts.depth || 1.2;
@@ -292,10 +243,6 @@
             out._mat = MAT.CONCRETE;
           }
           out._mat = MAT.METAL;
-          // Two lattice legs and the vault they carry. The vault is built from
-          // chords across the bank rather than a cylinder: a cylinder wide
-          // enough to span the seating also reaches DOWN into it, and a shallow
-          // segmental arc is what a corrugated span this cheap actually is.
           const backTop = rows * depth;
           const roofY = 1.4 + rows * rise + 2.2;
           for (const f of [0.02, 0.98]) {
@@ -342,9 +289,6 @@
       spectatorHill(0.24, 0.34, 1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
       spectatorHill(0.70, 0.80, -1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
 
-      // =====================================================================
-      // 4. BOUNDARIES
-      // =====================================================================
       for (const [s0, s1] of [[0.09, 0.15], [0.20, 0.40], [0.46, 0.55], [0.61, 0.89]]) {
         guardrail(s0, s1, -1, 8, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 8, [0.80, 0.81, 0.83]);
@@ -355,10 +299,6 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 9);
       }
 
-      // =====================================================================
-      // 5. BACKDROP — low farmland horizon. Deliberately shallow: Magny-Cours
-      //    sits in open country with nothing dramatic around it.
-      // =====================================================================
       const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
@@ -376,19 +316,7 @@
         }
       }
 
-      // =====================================================================
-      // 6. BESPOKE IDENTITY — a working Nivernais farm and, on the far horizon,
-      //    the village it belongs to. Nothing here is a landmark in the tourist
-      //    sense; that IS the identity. The tallest object for kilometres is a
-      //    grain silo, the second tallest is a church spire four fields away,
-      //    and the horizon line stays low enough that the sky does most of the
-      //    work — which is precisely what Magny-Cours looked like on television.
-      // =====================================================================
       {
-        // 46 m, not the 130 m this used to sit at: past ~60 m on this side the
-        // lap has come back round and the footprint lands on tarmac, so the
-        // whole farm was being dropped and the "only structures for miles"
-        // were nothing at all.
         const a = anchor(K(0.34), 1, 46);
         const b = [a.r, a.u, a.t];
         modelGroup("magny-cours-ferme", {
@@ -427,9 +355,6 @@
           }
         });
       }
-      // The village on the skyline: a huddle of pale rendered houses under grey
-      // slate, with a needle spire above them. One spire is enough — it is the
-      // only thing that breaks the horizon.
       {
         const a = anchor(K(0.62), 1, 235);
         const b = [a.r, a.u, a.t];
@@ -455,9 +380,6 @@
           addCone(stage, vadd(vadd(ch, a.t, -11), a.u, 18), 4.6, 13, SLATE, 4, b);
         });
       }
-      // Technopôle sheds behind the paddock: flat-roofed light-industrial units
-      // in the same pale render and blue trim as the pit garages. The circuit's
-      // real reason for existing, sat right there in the field behind it.
       for (let i = 0; i < 4; i++) {
         const a = anchor(K(0.062 + i * 0.016), 1, 30 + (i % 2) * 16);
         const b = [a.r, a.u, a.t];
@@ -485,9 +407,6 @@
       cameraTower(K(0.172), 1, 28, { h: 15 });
       cameraTower(K(0.580), -1, 30, { h: 17 });
       cameraTower(K(0.920), -1, 26, { h: 15 });
-      // FIELD BOUNDARIES. Nievre farmland is divided by hedgerow and poplar
-      // windbreak, not by open space — the field colours already laid down need
-      // edges, or the outfield reads as one continuous mown lawn.
       for (const [s0, s1] of [[0.1, 0.38], [0.52, 0.91]]) {
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 26, { density: 0.44, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });

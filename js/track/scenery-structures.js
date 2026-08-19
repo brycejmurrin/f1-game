@@ -1,11 +1,4 @@
-/* Apex 26 — SceneryStructures: the linear track furniture + race-infrastructure
-   band of the buildProps composite-model toolkit — the along() node walker,
-   the barrier family (wall/fence/guardrail/tyreWall), the overhead gantry,
-   marshal kit (flagQuad/marshalPost), signage (signDigit/signBoard) and the
-   ferris-wheel landmark. Split out of js/track/tracks.js buildProps; created
-   once per build via SceneryStructures.create(ctx) with the shared scenery
-   ctx. anchor comes from SceneryNature via ctx (created before this module).
-   Load order: before js/track/tracks.js (which calls create() at build). */
+/* Apex 26 — SceneryStructures: the linear track furniture + race-infrastructure band of the buildProps composite-model toolkit — the along() node walker, the barr… */
 const SceneryStructures = (function () {
   "use strict";
 
@@ -18,7 +11,6 @@ const SceneryStructures = (function () {
     Log.info("scenery", "scenery-structures dress " + (def && def.id));
     const { SIGN_SEG, SIGN_DIGIT, CROWD_DAY } = TrackSceneryData;
 
-    // ---------- linear track furniture (run along the track from s0→s1) ----------
     // Walk nodes from lap-fraction s0 to s1 (wrapping), ~stepM apart. Passes the
     // ACTUAL along-track spacing used (stepM rounds to a whole number of nodes,
     // so the real gap between consecutive k's is `step*ds`, not the requested
@@ -45,12 +37,6 @@ const SceneryStructures = (function () {
           ctx.noteSuppressed("wall", `wall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        // One model per (thickness, height, colour) — i.e. per wall SPAN, however
-        // long — with the along-track length carried by the node scale. base sunk
-        // 0.4 — no slope float. A proud coping rail along the top (a shade darker)
-        // gives the slab a cast shadow-line instead of a flat blank face; it is
-        // uniform per span so it rides the same baked model — no key change, no
-        // per-runtime cost.
         const wallCol = col || [0.78, 0.78, 0.80];
         const capCol = [wallCol[0] * 0.72, wallCol[1] * 0.72, wallCol[2] * 0.74];
         ctx.instance(`wall|${a}|${h}|${wallCol.join(",")}`,
@@ -62,26 +48,8 @@ const SceneryStructures = (function () {
           { kind: "wall", k, side });
       });
     };
-    // ── TRACKSIDE FURNITURE FORMS ────────────────────────────────────────────
-    // fence / guardrail / tyreWall / marshalPost / billboard / gantry /
-    // cameraTower / sponsorHoarding were ~870 calls of geometry that was
-    // byte-identical on all 40 circuits, varying only by tint. Each now takes a
-    // trailing `opts` with a `style`, and EVERY emitter keeps its current
-    // geometry as the default style — a call that passes nothing is unchanged,
-    // which is what makes 870 call sites safe to leave alone.
-    //
-    // The per-circuit assignment lives in TrackSceneryData.KIT (see
-    // scenery-data.js), resolved once per build like FURN and BARRIER already
-    // are. Style goes into the ctx.instance model KEY, so a circuit still
-    // collapses to one model per form — only the loaded track's models exist,
-    // so per-circuit variety costs nothing at runtime.
-    // kitOf is built once in tracks.js and shared across the scenery modules,
-    // so every emitter resolves the circuit's furniture row the same way.
     const kitOf = ctx.kitOf;
 
-    // Catch / debris fence: posts + a pale mesh panel (reads as see-through wire).
-    //   opts: { style: "mesh"(default) | "leaning" | "panelled" | "hoarding"
-    //                | "palisade" | "chainlink", postCol }
     const fence = (s0, s1, side, gap, h, col, opts) => {
       // Geometry-only registration: a catch fence is solid to scenery but must
       // not move the driving limit (it stands behind the runoff by design).
@@ -108,8 +76,6 @@ const SceneryStructures = (function () {
           ctx.noteSuppressed("fence", `fence SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        // Post is fixed for a given fence height; the mesh panel spans to the
-        // next post, so only it takes the along-track scale.
         const place = { o: p.c, r: p.r, u: p.u, t: p.t };
         ctx.instance(postKey, place,                                            // post, base sunk
           (rec) => {
@@ -120,9 +86,6 @@ const SceneryStructures = (function () {
         ctx.instance(meshKey, span,
           (rec) => {
             if (st === "chainlink") {
-              // Posts + top and bottom rail only, NO mesh panel. Deliberately
-              // the cheapest form in the set — it is the lever for buying back
-              // vertex budget on the heavy circuits.
               rec.box([0, h * 0.95, 0], [0.07, 0.07, 1], meshCol);
             } else if (st === "panelled") {
               for (const f of [0.30, 0.90])
@@ -136,9 +99,6 @@ const SceneryStructures = (function () {
                 rec.box([0, h * 0.55, (i - 1) * 0.30], [0.06, h * 0.9, 0.09], meshCol);
               rec.box([0, h * 0.95, 0], [0.08, 0.07, 1], postCol);
             } else if (st === "leaning") {
-              // A leaning catch fence cants its top third back over the track,
-              // which is what a real debris fence does and what makes it read
-              // as a catch fence rather than a garden boundary.
               rec.box([0, h * 0.50, 0], [0.05, h * 0.80, 1], meshCol);
               rec.box([-side * h * 0.09, h * 0.95, 0], [h * 0.20, 0.05, 1], meshCol);
             } else {
@@ -148,9 +108,6 @@ const SceneryStructures = (function () {
           { kind: "fence", k, side });
       });
     };
-    // Armco guardrail: a waist-high steel rail on posts (open-circuit edge).
-    //   opts: { style: "armco"(default) | "doubleArmco" | "wArmco" | "jersey"
-    //                | "cable" | "safer", postCol }
     const guardrail = (s0, s1, side, gap, col, opts) => {
       const st = (opts && opts.style) || kitOf("rail", "armco");
       ctx.noteSpan("guardrail", s0, s1, side, gap);
@@ -166,12 +123,6 @@ const SceneryStructures = (function () {
           ctx.noteSuppressed("guardrail", `guardrail SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        // Two models, not one: the post is fully fixed, while the rail's length
-        // follows `spacing`. Splitting them lets the post collapse to a SINGLE
-        // model for the whole circuit and the rail to one model per colour,
-        // scaled along the track. Fusing them would force a model per distinct
-        // spacing — and a node scale on a combined model would stretch the
-        // post's radius with the rail's length (radScale takes max(|sx|,|sz|)).
         const place = { o: p.c, r: p.r, u: p.u, t: p.t };
         // A jersey barrier has no posts at all — it is a poured profile.
         if (st !== "jersey")
@@ -185,18 +136,12 @@ const SceneryStructures = (function () {
               rec.box([0, 0.62, 0], [0.18, 0.38, 1], railCol);
               rec.box([0, 1.16, 0], [0.18, 0.38, 1], railCol);
             } else if (st === "wArmco") {                  // the W cross-section
-              // TWO boxes, not three: the proud centre rib is what reads as a W
-              // profile, and this emitter runs 127 times across 38 circuits, so
-              // a third box costs more than it shows.
               rec.box([0, 0.72, 0], [0.20, 0.44, 1], railCol);
               rec.box([-0.07, 0.72, 0], [0.09, 0.16, 1], railCol);
             } else if (st === "jersey") {                  // poured concrete profile
               rec.box([0, 0.26, 0], [0.60, 0.52, 1], railCol);
               rec.box([0, 0.72, 0], [0.30, 0.46, 1], railCol);
             } else if (st === "cable") {                   // 1970s wire rope
-              // Thin BOXES, not cylinders: a cyl's axis is vertical, so it
-              // cannot run along the track, and the [1,1,spacing] node scale
-              // would inflate its radius (radScale takes max(|sx|,|sz|)).
               for (const y of [0.58, 0.95])
                 rec.box([0, y, 0], [0.07, 0.07, 1], railCol);
             } else if (st === "safer") {                   // smooth tube over foam
@@ -235,9 +180,6 @@ const SceneryStructures = (function () {
         ctx.instance(stackKey, place,                                           // base sunk
           (rec) => {
             if (st === "tecpro") {
-              // Rented TecPro: rectangular polyethylene block modules with a
-              // strap band. Squarer and lighter than a tyre stack — the modern
-              // street-circuit barrier, and visibly not a pile of tyres.
               rec.box([0, 0.20, 0], [1.5, 1.2, 1.6], cap);
               rec.box([0, 0.86, 0], [1.5, 0.14, 1.6], tyre);
             } else if (st === "airfence") {
@@ -266,16 +208,6 @@ const SceneryStructures = (function () {
           { kind: "tyreWall", k, side });
       });
     };
-    // Overhead gantry spanning the track (start/scoring/DRS): two legs + a beam.
-    // Legs sit beyond the edge (guarded). Beam + under-beam lenses intentionally
-    // span the racing line so cars pass under — emit via RAW, same pattern as
-    // underpassPortal, or the footprint guard silently drops the span and leaves
-    // two lonely posts that no longer straddle the track.
-    //   opts: { style: "box"(default) | "truss" | "portal" | "cantilever"
-    //                | "scaffold", lightCol }
-    // The beam itself always goes through overheadSpan/RAW — a guarded emitter
-    // would silently drop the span and leave two lonely masts that no longer
-    // straddle the track. Style changes the MASTS and the beam dressing.
     const gantry = (s, h, col, opts) => {
       const st = (opts && opts.style) || kitOf("gantry", "box");
       const k = Math.round(s * n) % n, c = col || [0.16, 0.16, 0.19];
@@ -285,16 +217,8 @@ const SceneryStructures = (function () {
                [Math.hypot(aR.c[0] - aL.c[0], aR.c[2] - aL.c[2]), h, 1],
                { k, side: 0 });          // 0 = straddles the road
       const b = [aL.r, u, aL.t];
-      // Mast height is SOLVED to the beam, not assumed. The masts stand on the
-      // verge (anchor(), which sits on the terrain and sinks 0.3) while
-      // overheadSpan measures its clearance from the ROAD datum. Where the verge
-      // runs below the road — shanghai −1.5 m, zandvoort −1.7 m — a flat `h`
-      // leaves each mast over a metre short of the beam it is meant to carry.
-      // Solved per leg, since the two verges need not be at the same height.
       const uy = Math.max(0.5, u[1]);
       const legH = (aC) => (h - 0.45) + (py[k] - aC[1]) / uy + 0.3;   // +0.3 into the beam
-      // Mast form. Height stays SOLVED per leg in every style — that is what
-      // keeps the mast meeting its beam where the verge runs below the road.
       const mast = (aC, basis) => {
         const L = legH(aC);
         if (st === "truss") {
@@ -332,9 +256,6 @@ const SceneryStructures = (function () {
         thickness: 0.9, depth: 1.4, span: hw[k] * 2 + 5,
         color: c,
       });
-      // Visual lens fixtures under the beam. Matching point lights are placed
-      // near s=0 in buildTrackLights (js/game/lighting.js) — not parented to
-      // this mesh. Bright cool-white at night (emissive bloom), muted by day.
       const gl = NIGHT ? [1.28, 1.30, 1.38] : [0.80, 0.81, 0.85];
       const r0 = [track.rx[k], track.ry[k], track.rz[k]];
       for (const lat of [-hw[k] * 0.55, 0, hw[k] * 0.55]) {
@@ -344,11 +265,6 @@ const SceneryStructures = (function () {
                    [1.1, 0.35, 1.0], gl, b);
       }
     };
-    // Waving marshal flag: a two-sided quad hinged on the pole. Each vertex is
-    // stamped MAT.FLAG plus a fractional wave weight (0 at the hoist edge →
-    // 0.4 at the free edge); the lit VERTEX shader (LIT_VS) displaces FLAG
-    // verts along their normal with a travelling sine scaled by that weight,
-    // so the cloth flutters in the wind while the hoist stays pinned.
     const flagQuad = (c, t, u, w, h, col) => {
       const nv = norm(cross(t, u));   // face normal (shared by both sides)
       const push = (reverse) => {
@@ -366,9 +282,6 @@ const SceneryStructures = (function () {
       };
       push(false); push(true);   // both windings → visible from either side
     };
-    // Marshal post / flag bunker: a small orange-roofed box with a pole.
-    //   opts: { style: "hut"(default) | "cabin" | "container" | "kiosk"
-    //                | "bunker" | "tent" | "tower", roofCol }
     const marshalPost = (k, side, gap, opts) => {
       const st = (opts && opts.style) || kitOf("marshal", "hut");
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
@@ -377,16 +290,6 @@ const SceneryStructures = (function () {
         return;
       }
       ctx.note("marshalPost", [p.c[0], p.c[1] + 1.2, p.c[2]], [1.2, 2.4, 1.2], { k, side });
-      // Graph form: unlike pine, every dimension here is a CONSTANT — the only
-      // thing that varies between placements is which side of the track the pole
-      // stands on. So one model serves every marshal post on that side, and the
-      // whole circuit's marshal line collapses to two models. This is what an
-      // emitter looks like when it is already instanceable.
-      // The flag and the night beacon stay inline below: the flag is animated
-      // cloth (MAT.FLAG vertex wave, not a rigid primitive) and the beacon is
-      // emissive — both are their own node kinds in a full graph, and keeping
-      // them out here also preserves the original emission ORDER exactly.
-      // The pole is common to every form — the flag has to fly from something.
       const roof = (opts && opts.roofCol) || [0.95, 0.55, 0.08];
       ctx.instance(`marshalPost|${st}|${side}|${roof.join(",")}`,
         { o: p.c, r: p.r, u: p.u, t: p.t }, (rec) => {
@@ -429,19 +332,11 @@ const SceneryStructures = (function () {
         rec.cyl([side * 1.4, -0.35, 0], 0.08, 4.35, [0.4, 0.4, 0.42], 4);   // base sunk
       }, { kind: "marshalPost", k, side });
       const polePos = vadd(p.c, p.r, side * 1.4);
-      // Marshal flag on the pole — waving cloth (see flagQuad above). Mostly
-      // yellow (the flag a marshal post actually flies), occasionally blue.
       flagQuad(vadd(polePos, p.u, 3.3), p.t, p.u,
                1.05, 0.62, hash(k) < 0.72 ? [1.30, 1.02, 0.08] : [0.10, 0.42, 1.25]);
-      // Marshal watch-lamp: a small amber beacon on the flag pole after dark so
-      // the marshal line dots the circuit like real night-race infrastructure.
       if (NIGHT) addBox(out, vadd(polePos, p.u, 4.12), [0.24, 0.24, 0.24], [1.32, 0.72, 0.28], b);
       blockAt(k, side, gap, 1.3);   // solid hut
     };
-    // cameraTower(): lattice camera mast — four legs braced in X, a railed
-    // platform and a camera head on a short boom. Every circuit has these at its
-    // broadcast vantage points; only Silverstone had one, hand-rolled locally.
-    //   opts: { h, col, boom, railCol }
     const cameraTower = (k, side, gap, opts) => {
       opts = opts || {};
       const h = Math.max(5, Math.min(40, opts.h != null ? opts.h : 14));
@@ -459,11 +354,6 @@ const SceneryStructures = (function () {
         // One tapered shaft — the modern broadcast mast. Cheapest form here.
         addFrustum(out, vadd(p.c, p.u, -0.4), 0.46, 0.24, h + 0.8, col, 8, b);
       } else if (cst === "scaffold") {
-        // Tube-and-clamp: two standards per side plus ledgers, temporary look.
-        // addCyl is BASE-anchored (geom.js) like the monopole's addFrustum above:
-        // seat the standards at -0.4 so they span -0.4 → h+0.4. The h/2 - 0.4 that
-        // shipped here was the centre-anchored answer and left every leg hanging
-        // h/2 - 0.4 clear of the ground.
         for (const sr of [-1, 1]) for (const st of [-1, 1])
           addCyl(out, vadd(vadd(vadd(p.c, p.r, sr * legR * 0.7), p.t, st * legR * 0.7),
             p.u, -0.4), 0.09, h + 0.8, col, 4, b);
@@ -496,11 +386,6 @@ const SceneryStructures = (function () {
       blockAt(k, side, gap, legR + 0.4);
     };
 
-    // sponsorHoarding(): a continuous run of trackside advertising boards on
-    // short posts. Long straights (Monza, Spa's Kemmel, Baku, Bahrain's back
-    // straight, Jeddah) currently read empty over hundreds of metres; a real
-    // circuit lines every one of them with boards. Cheap: two boxes per panel.
-    //   opts: { h, step, palette, postCol, gapFrac }
     const sponsorHoarding = (s0, s1, side, gap, opts) => {
       opts = opts || {};
       const h = opts.h != null ? opts.h : 1.15;
@@ -514,8 +399,6 @@ const SceneryStructures = (function () {
       let idx = 0;
       along(s0, s1, step, (k, spacing) => {
         const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
-        // Panel length tracks the ACTUAL node spacing (see along()'s contract) —
-        // a padded constant makes adjacent panels share volume on curves.
         const panel = spacing * 0.92;
         const c = vadd(p.c, p.u, 0.45 + h / 2);
         if (rejBox(c, [0.16, h, panel], b)) return;
@@ -550,20 +433,6 @@ const SceneryStructures = (function () {
       });
     };
 
-    // ---------- open seating: the stand forms grandstandEx is NOT ----------
-    // grandstandEx models one thing: a roofed stand with a back shell. Every
-    // other kind of seating a circuit actually has — a bolted bleacher, rented
-    // scaffolding, mass-concrete terracing, a stepped bowl — was therefore
-    // hand-rolled circuit-side, and the SAME four models were independently
-    // reinvented across 14 files (a bleacher alone in ten). These four are those
-    // implementations generalised: one form each, an options bag so they vary,
-    // and the crowd discipline below baked in so a caller cannot get it wrong.
-    //
-    // All four are RANGE emitters — (s0, s1, side, gap, opts) — and walk the arc
-    // with along(). The hand-rolled versions were mostly point-anchored with a
-    // straight `len` box, which on a corner (a terrace at Curva Grande, a bowl at
-    // Parabolica) cuts the chord instead of following the road.
-
     // crowdBand(): the ONE crowd primitive these stands share. A crowd is a
     // continuous banded run plus SPARSE SPECKLE standing proud of it — never one
     // box per spectator. At the ~1 m seat pitch the hand-rolled versions used,
@@ -584,10 +453,6 @@ const SceneryStructures = (function () {
         : cols[Math.floor(t * cols.length) % cols.length];
       const prevMat = out._mat;
       out._mat = MAT.FABRIC;
-      // Band colour: at NIGHT clamp below pick()'s phone-screen branch
-      // (t > 0.945 → HDR [2.5,2.3,1.9]) — the whole band lighting up as one
-      // glowing slab is exactly the read the speckle exists to avoid. The HDR
-      // colour stays reachable only through the speckle pick(hp) calls below.
       const bt = hash(seed * 1.7);
       addBox(out, c, [thick, h, len], pick(NIGHT ? Math.min(0.94, bt) : bt), b);
       // One speckle head per ~6 m, capped — the same budget monza's tieredBowl
@@ -614,15 +479,8 @@ const SceneryStructures = (function () {
     // numeric literal — so the swap is output-identical, verified by
     // tools/verify-track.cjs. Migrated rather than left so the divergence
     // cannot be mistaken for intent later.
-    const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
+    const clamp = M4.clamp;
 
-    // bleacher(): open raked seating on a bolted frame — planks on posts, a back
-    // guard rail, and nothing else. No back shell, no roof, no fascia. This is
-    // the single most-duplicated model in the fleet (ten circuit files) and the
-    // reason is that grandstandEx({roof:"none"}) still builds a 12 m shell wall
-    // behind the crowd, which a bleacher does not have.
-    //   opts: { rows, rise, setback, frame:"steel"|"timber", frameCol, plankCol,
-    //           riserCol, crowd (palette), density, rail, step, lift }
     const bleacher = (s0, s1, side, gap, opts) => {
       opts = opts || {};
       const rows = clamp(Math.round(opts.rows || 7), 2, 16);
@@ -644,8 +502,6 @@ const SceneryStructures = (function () {
       along(s0, s1, step, (k, spacing) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
         const seg = spacing * 0.98;   // see along(): a padded constant interpenetrates on curves
-        // Guard the WHOLE rake, not the front-row point: a bleacher creeping
-        // toward the tarmac overhangs the road with its back rows first.
         if (rejBox(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2),
                    [depth, topH, seg], b)) return;
         const backLat = side * (rows - 0.5) * setback;
@@ -675,12 +531,6 @@ const SceneryStructures = (function () {
       });
     };
 
-    // scaffoldStand(): rented tube-and-plank temporary seating — the stand a
-    // circuit puts up for race week and takes down after. Scaffold tubes, a
-    // timber deck, benches, and (period circuits) a striped canvas awning
-    // instead of a cantilever roof.
-    //   opts: { rows, rise, setback, tubeCol, deckCol, bench (palette),
-    //           crowd (palette), density, awning, awningCols, step, legEvery }
     const scaffoldStand = (s0, s1, side, gap, opts) => {
       opts = opts || {};
       const rows = clamp(Math.round(opts.rows || 5), 2, 12);
@@ -712,8 +562,6 @@ const SceneryStructures = (function () {
                  bench[(bay + r) % bench.length], b);                                    // bench
           crowdBand(vadd(rc, a.u, 1.55), b, side, 0.55, 0.95, seg - 1.0,
                     opts.crowd, dens, k * 17.3 + r * 89.1 + side * 3.3);
-          // Legs under every `legEvery`-th bay: the frame reads as a frame only
-          // when the tubes are visible BELOW the rake.
           if (bay % legEvery === 0) {
             out._mat = MAT.METAL;
             addCyl(out, vadd(vadd(a.c, a.r, lat), a.u, -0.4), 0.09, y + 0.4, tube, 4, b);
@@ -740,12 +588,6 @@ const SceneryStructures = (function () {
       });
     };
 
-    // terrace(): mass-concrete stepped terracing — a poured flight of steps with
-    // an open front and no roof at all. The pre-1980s stand, and what a hillside
-    // amphitheatre (Portimão, Buenos Aires, Kyalami) is actually built from.
-    //   opts: { rows, rise, depth, conc, concAlt, crowd (palette), density,
-    //           retainer, backWall, cut (raw earth cut face above the top step),
-    //           cutCol, step }
     const terrace = (s0, s1, side, gap, opts) => {
       opts = opts || {};
       const rows = clamp(Math.round(opts.rows || 6), 2, 16);
@@ -765,8 +607,6 @@ const SceneryStructures = (function () {
         if (rejBox(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2),
                    [depth, topH, seg], b)) return;
         out._mat = MAT.CONCRETE;
-        // Retaining wall holding the first step off the run-off — without it a
-        // terrace on a slope reads as steps floating over the grass.
         if (opts.retainer !== false)
           addBox(out, vadd(a.c, a.u, 1.0), [0.9, 2.2, seg], concAlt, b);
         for (let r = 0; r < rows; r++) {
@@ -783,8 +623,6 @@ const SceneryStructures = (function () {
           addBox(out, vadd(vadd(a.c, a.r, topBack), a.u, topH * 0.5),
                  [0.7, topH, seg], concAlt, b);                                          // plain back wall
         }
-        // Raw cut face above the top step — a hillside terrace is carved INTO
-        // something, and the exposed soil is what says so.
         if (opts.cut) {
           out._mat = 0;
           addPrism(out, vadd(vadd(a.c, a.r, topBack), a.u, topH),
@@ -794,13 +632,6 @@ const SceneryStructures = (function () {
       });
     };
 
-    // tieredBowl(): a stepped bowl — tiers that climb AND recede in big
-    // concrete steps, each carrying a crowd band and a pale fascia lip, with an
-    // optional cantilever over the top tier. The silhouette of a historic
-    // tribuna (Monza, Imola): far taller and steeper than terrace(), and unlike
-    // grandstandEx it has no back shell to hide behind.
-    //   opts: { tiers, tierDepth, base, rise, shell ([colA,colB]), fascia,
-    //           crowd (palette), density, roof, roofCol, step }
     const tieredBowl = (s0, s1, side, gap, opts) => {
       opts = opts || {};
       const tiers = clamp(Math.round(opts.tiers || 4), 1, 8);
@@ -844,9 +675,6 @@ const SceneryStructures = (function () {
       });
     };
 
-    // Draw one digit centred at `c`, spanning [w,h] in the (t=horizontal,
-    // u=vertical) plane, raised `proud` along r toward the viewer so the
-    // segments sit visibly above the panel face instead of z-fighting it.
     const signDigit = (c, r, u, t, w, h, proud, col, digit) => {
       const segs = SIGN_DIGIT[digit] ?? SIGN_DIGIT[0];
       const base = vadd(c, r, proud);
@@ -856,11 +684,6 @@ const SceneryStructures = (function () {
         addBox(out, cc, [0.03, (y1 - y0) * h, (x1 - x0) * w], col, [r, u, t]);
       }
     };
-    // signBoard(k, side, gap, kind, value):
-    //   kind: "corner" (value = corner number, 1-99) — white board, black digits.
-    //   kind: "speed" (value = km/h, 10-99) — red-rimmed circular disc, black digits.
-    //   kind: "braking" (value = stripe count, 1-3) — white panel, diagonal red
-    //     stripes counting down to the corner (the real F1 100/50m board style).
     const signBoard = (k, side, gap, kind, value) => {
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
       if (onTrack(p.c[0], p.c[2], 1.5)) {
@@ -873,13 +696,6 @@ const SceneryStructures = (function () {
       addCyl(out, vadd(p.c, p.u, -0.3), 0.06, postH + 0.3, [0.55, 0.55, 0.58], 4, b);   // base sunk
       if (kind === "speed") {
         const R = 0.52, cc = vadd(p.c, p.u, postH + R);
-        // The disc stands VERTICAL facing the road: the ring spans (u,t) and
-        // the 5 cm depth runs along -side*r — the same toward-the-viewer axis
-        // the digit relief uses. addCyl, not addFrustum: the frustum emits
-        // side quads only (no caps), so face-on the disc would have no visible
-        // face; the cylinder's top cap IS the sign face, auto-oriented toward
-        // the track. (The old code passed [r,u,t], which laid both discs flat
-        // as horizontal open rings around the post — floating digits.)
         const fwd = [-side * p.r[0], -side * p.r[1], -side * p.r[2]];
         const db = [p.u, fwd, p.t];
         addCyl(out, cc, R, 0.05, [0.85, 0.16, 0.14], 12, db);                             // red rim disc
@@ -893,8 +709,6 @@ const SceneryStructures = (function () {
         const w2 = 1.3, h2 = 0.9, cc = vadd(p.c, p.u, postH + h2 / 2);
         addBox(out, cc, [0.05, h2, w2], [0.92, 0.92, 0.90], b);   // white panel face
         const nStripes = Math.max(1, Math.min(3, value || 2));
-        // Diagonal stripes: a proper unit tilt of (u,t) so a thin box reads as a
-        // 45deg diagonal band across the panel, not an axis-aligned rectangle.
         const diagU = norm([p.u[0] + p.t[0], p.u[1] + p.t[1], p.u[2] + p.t[2]]);
         for (let i = 0; i < nStripes; i++) {
           const sx = (i - (nStripes - 1) / 2) * (w2 / (nStripes + 0.4));
@@ -911,16 +725,12 @@ const SceneryStructures = (function () {
         });
       }
     };
-    // --- iconic landmark: a ferris wheel beside the track (Suzuka, Singapore) ---
     function ferrisWheel(k, side, dist, radius) {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const tl = Math.hypot(track.tx[k], track.tz[k]) || 1;
       const tn = [track.tx[k] / tl, 0, track.tz[k] / tl];   // horizontal tangent
       const o = side * (hw[k] + dist);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
-      // Ground the wheel on the TERRAIN at its own footprint, not the road
-      // height at k — at 60+ m out the park ground can sit well below the road,
-      // which left the support legs (and the whole wheel) floating.
       const gy = groundYAt(k, dist);
       const hubY = gy + radius + 5;
       const hub = [cx, hubY, cz];
@@ -931,8 +741,6 @@ const SceneryStructures = (function () {
       addBox(out, hub, [3, 3, 3], [0.3, 0.3, 0.34]);         // hub
       const seg = 16;
       const wheelCol = def.night ? [0.30, 0.31, 0.4] : [0.62, 0.63, 0.68];
-      // Rim points first, so we can lace SPOKES (hub→rim) and a RIM RING (rim→rim)
-      // through them — the wheel now reads as a real structure, not floating cabins.
       const rim = [];
       for (let i = 0; i < seg; i++) {
         const a = (i / seg) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
@@ -947,12 +755,6 @@ const SceneryStructures = (function () {
         addBox(out, [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2],
                [thick, L, thick], col, [rr, up, ff]);
       };
-      // Spokes start at the HUB'S SURFACE, not its centre. Run to the centre and
-      // all 16 pile through each other inside the 3 m hub cube, every one of them
-      // lying in the same wheel plane at the same thickness — a knot of exactly
-      // coplanar same-facing faces that flickers at any distance. Springing them
-      // from r = 1.7 leaves 0.6 m between neighbours there, well clear of the
-      // 0.28 m strut, and is how a real wheel is built anyway.
       const HUB_R = 1.7;
       for (let i = 0; i < seg; i++) {
         const d = [rim[i][0] - hub[0], rim[i][1] - hub[1], rim[i][2] - hub[2]];

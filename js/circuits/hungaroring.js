@@ -1,6 +1,4 @@
-/* Apex 26 — HUNGARORING circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — HUNGARORING circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -11,9 +9,6 @@
     // Was 0.9825, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // This circuit's RACING-space scenery, dressingExclusions and corner
-    // boards were authored against the OLD line. Naming it here moves the
-    // line without dragging the dressed world round the lap with it.
     sceneryStartFrac: 0.9825,
     name: "HUNGARORING",
     gp: "Hungarian GP",
@@ -23,32 +18,21 @@
     lengthKm: 4.4,
     baseHW: 7,
     sceneryCoordinates: "racing",
-    // Bespoke treelines and circuit lamps own the bowl; suppress generic copies
-    // that crowd the pit sightline and duplicate the day-only lighting furniture.
     dressingExclusions: [
       { kinds: ["foliage", "lighting"], s0: 0, s1: 1 },
     ],
-    // Keep the terrain ribbon inside the compact foldbacks. The default 120 m
-    // outer span chords from the raised T3 approach across the lower T2 basin.
     terrainOuter: 90,
-    // ATM.dustyBowl — bleached straw-olive grass/runoff, warm hazy sky (baked into pal
-    // so buildRoad/buildTerrain pick it up; scenery also Object.assigns for live lighting).
     pal: { zenith: [0.55, 0.62, 0.78], horizon: [0.78, 0.72, 0.58], fog: [0.72, 0.68, 0.55], fogDensity: 0.0022, grass: [0.42, 0.40, 0.22], runoff: [0.58, 0.50, 0.34], ambientSky: [0.62, 0.58, 0.50], ambientGround: [0.40, 0.36, 0.28], sunDir: [0.7401805851129838, 0.587790464648546, 0.3265502581380811], sun: [1.0, 0.94, 0.78], sunColor: [1.0, 0.94, 0.78] },
     segs: [
       { t: 0, l: 300 }, { t: 70, l: 90 }, { t: -50, l: 80 }, { t: 60, l: 80 }, { t: 0, l: 200 }, { t: -80, l: 100 },
       { t: 50, l: 80 }, { t: -60, l: 80 }, { t: 60, l: 80 }, { t: 70, l: 90 }, { t: 0, l: 200 }, { t: -90, l: 100 },
       { t: 70, l: 90 },
     ],
-    // Undulating amphitheatre (~38 m full range: mid crest +16 → T1 basin −22;
-    // SF plateau +14).
     elevations: [
       { s: 0.00, halfM: 240, rise: 14 },   // SF plateau high
       { s: 0.12, halfM: 340, rise: -22 },  // T1 plunge / T2–4 basin low
       { s: 0.52, halfM: 380, rise: 16 },   // mid-sector climb crest (T10–11)
     ],
-    // Hungaroring camber. T4 is the notably banked one (a genuinely dished left
-    // that lets the cars carry speed downhill); the rest of the amphitheatre
-    // sits on 3-3.5° of ordinary camber.
     bankZones: [
       { frac: 0.1888, angleDeg: 3.0, widthM: 100 },   // T1 downhill right
       { frac: 0.2961, angleDeg: 3.5, widthM: 150 },   // T2
@@ -68,22 +52,6 @@
               recordBarrier, circuitKit, pal, ATM } = api;
       const K = (s) => Math.round(s * n) % n;
 
-      // ── THE HUNGARIAN PLAIN: POPLAR WINDBREAKS AND ACÁC ──────────────────
-      // The Hungaroring sits in the Valley of the Three Springs at Mogyoród,
-      // and the bowl and the dust were already modelled. The PLANTING was not:
-      // the outfield used the generic broadleaf scatter, which could be any
-      // European circuit. Two species make the Pannonian plain unmistakable
-      // and the circuit had neither.
-      //
-      // 1. LOMBARDY POPLAR, planted in dead-straight WINDBREAK ROWS along
-      //    field edges and farm tracks. This is the defining line of the
-      //    Hungarian landscape and the silhouette is extreme: 20 m tall, 2 m
-      //    wide, a green exclamation mark. The row is the read — one poplar is
-      //    nothing, twelve in a line is Hungary.
-      // 2. AKÁC (Robinia pseudoacacia), the black locust, which is roughly a
-      //    fifth of all Hungarian forest. Open, irregular, airy crown carried
-      //    high on a bare forked trunk — nothing like the solid cone the
-      //    generic scatter plants.
       {
         const POP    = [0.34, 0.50, 0.24];
         const POP_L  = [0.42, 0.57, 0.28];
@@ -92,8 +60,6 @@
         const AKAC_D = [0.36, 0.47, 0.26];
         const BARK   = [0.34, 0.29, 0.23];
 
-        // Windbreak rows. Each runs along the arc so it reads as a planted
-        // line, not a clump; kept beyond the crowd banks at gap 56-78.
         for (const [s0, s1, side, gap] of [
           [0.075, 0.150, -1, 62],
           [0.245, 0.320,  1, 70],
@@ -113,8 +79,6 @@
             out._mat = MAT.WOOD;
             addCyl(out, a.c, 0.30, h * 0.30, POP_BK, 5, b);
             out._mat = MAT.FOLIAGE;
-            // Columnar crown: three tall narrow stacked cones, barely wider
-            // than the trunk. Width is what makes or breaks a poplar.
             addCone(out, vadd(a.c, a.u, h * 0.16), 1.75 + hv * 0.35, h * 0.42,
                     hv < 0.5 ? POP : POP_L, 6, b);
             addCone(out, vadd(a.c, a.u, h * 0.50), 1.45 + hv * 0.30, h * 0.36,
@@ -125,9 +89,6 @@
           }
         }
 
-        // Akác groves — scattered, not rowed, and deliberately airy: a bare
-        // forked trunk carrying two or three offset crown lobes with sky
-        // between them.
         for (const [sf, side, gap] of [
           [0.045,  1, 54], [0.180, -1, 68], [0.215,  1, 50],
           [0.355, -1, 60], [0.420,  1, 72], [0.520,  1, 56],
@@ -167,7 +128,6 @@
       // 1. Dry dusty Hungarian bowl — straw-olive grass/runoff, warm haze.
       if (ATM && ATM.dustyBowl) Object.assign(pal, ATM.dustyBowl);
 
-      // ---- Palette: dry dusty bowl (straw-olive; amph still G-dominant for rounded mounds) ----
       const GRASS  = [0.46, 0.50, 0.26];    // sun-baked straw-olive grass
       const AMPH   = [0.48, 0.54, 0.28];    // amphitheatre banking — G-dom → rounded mound
       const AMPH2  = [0.54, 0.58, 0.32];    // sun-bleached terrace variant
@@ -192,16 +152,12 @@
       const WIN_COOL = [0.78, 0.84, 0.96];
       const ROOF_DK  = [0.20, 0.21, 0.24];  // covered tribune dark roof
 
-      // ---- Track centre + radius ----
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
       let rad = 0;
       for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
 
-      // ====================================================================
-      // DISTANT HORIZON — haze-tinted far peaks ring the bowl
-      // ====================================================================
       const ringFar = rad + 460;
       for (let i = 0; i < 16; i++) {
         const a = i / 16 * 6.2832, h = hash(i * 13 + 200);
@@ -216,11 +172,6 @@
               a + Math.PI / 2, 340 + h * 160, 190 + h * 100, 38 + h * 22, HAZE2);
       }
 
-      // ====================================================================
-      // AMPHITHEATRE BOWL WALLS — straw-olive backdrop() rounded mounds
-      // G-dominant colours still trigger the ROUNDED ORGANIC MOUND path
-      // (frustum+dome), so banking reads as dusty hillsides, not boxes.
-      // ====================================================================
       const amphPts = [
         [0.05, 1, 180], [0.15, -1, 195], [0.25, 1, 185],
         [0.35, -1, 190], [0.48,  1, 185], [0.58, -1, 195],
@@ -243,13 +194,7 @@
                 h < 0.45 ? TREE : TREE2, 7, null);
       }
 
-      // ====================================================================
-      // STADIUM SECTION — Turns 1–4 + mid-lap stands (s=0 main tribune is bespoke below)
-      // ====================================================================
       billboard(K(0.00), 1, 38, 22, 6, RED);
-      // T1 grandstand group: outside of Turn 1 braking zone. grandstandEx with
-      // STAND_SETS.hungaroring liveries (steel/concrete/alu) so the ring varies
-      // circuit-to-circuit AND stand-to-stand instead of the old flat SHELL grey.
       grandstandEx(0.06,  1, 11,  70, SHELL, CROWD[0],
                    { livery: "steel", tiers: 2, roof: "cantilever", suites: true, pylons: true });
       // Stadium inside: Apex 1/2 banked stands inside Turn 1-2
@@ -258,7 +203,6 @@
       // Sector grandstands across the back of the circuit
       grandstandEx(0.12, -1, 10, 44, SHELL, CROWD[2],
                    { livery: "alu", tiers: 1, roof: "truss" });
-      // ---- Turn 5 (Mogyoród) → Turn 6/7 chicane ("Driving Centre") ----
       // s 0.12-0.30 was the clearest hole on the lap: no stand of any kind
       // across ~800 m of a documented, heavily tree-lined grandstand location.
       // Both new stands sit at generous `gap` so the deferred forestEdge() pass
@@ -275,13 +219,7 @@
                    { livery: "alu", tiers: 1, roof: "truss" });
       grandstandEx(0.90,  1, 10, 62, SHELL, CROWD[0],   // Club stand — final corner
                    { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
-      // s 0.35 / 0.68 / 0.80 are deliberately NOT grandstandEx — see
-      // bowlTerrace() below. Those three are the circuit's original 1986 open
-      // concrete terracing, and a roofed shell is the wrong silhouette for them.
 
-      // ====================================================================
-      // GRANDSTAND ACCENT STRIPS — lit fascia + concourse window bands
-      // ====================================================================
       const FASCIA  = [0.94, 0.92, 0.84];
       const FASCIA2 = [0.78, 0.80, 0.82];
       const standAccent = (s, side, gap, len) => {
@@ -299,8 +237,6 @@
       standAccent(0.40,  1, 13, 46);
       standAccent(0.55, -1, 10, 50);
       standAccent(0.90,  1, 10, 62);
-      // No accent strip at 0.35/0.68/0.80: those are open terraces with no
-      // shell to carry a fascia, so the band would hang in mid-air.
 
       // Grandstand lit-window concourse strips
       const gsLit = [
@@ -318,11 +254,6 @@
         addBox(out, vadd(a.c, a.u, 8.6), [0.22, 0.8, g.len - 6], WIN_COOL, [a.r, a.u, a.t]);
       }
 
-      // ====================================================================
-      // WOODED HILLSIDE TREELINES — forestEdge() covers the full circuit
-      // Gap=8 keeps all canopy safely behind the catch fences.
-      // ====================================================================
-      // Outside: continuous hillside, denser in the stadium section
       forestEdge(0.0,  0.18, 1, 8, { density: 0.58, hMin: 9, hMax: 15,
                                       col: TREE, col2: TREE2, pineFrac: 0.40 });
       forestEdge(0.18, 0.50, 1, 8, { density: 0.46, hMin: 7, hMax: 13,
@@ -348,10 +279,6 @@
         }
       });
 
-      // ====================================================================
-      // LAMP POSTS — double-arm, every ~80 m, full circuit.
-      // Generic lighting dressing is excluded; these posts register lampPosts
-      // so night pools anchor to the fixtures you see.
       every(80, (kk) => {
         for (const side of [-1, 1]) {
           const hh = hash(kk * 31 + side * 7);
@@ -396,11 +323,6 @@
         }
       }
 
-      // ====================================================================
-      // TRACK FURNITURE — guardrails, catch fences, tyre walls
-      // ====================================================================
-      // Permanent-circuit armco sits behind meaningful grass/asphalt runoff and
-      // only protects occupied spectator sectors; the remaining bowl stays open.
       guardrail(0.95, 0.20,  1, 8, STEEL);  // main straight + Turn 1
       guardrail(0.30, 0.45, -1, 8, STEEL);  // mid-sector inside
       guardrail(0.52, 0.62,  1, 8, STEEL);  // twisty-sector stands
@@ -413,18 +335,11 @@
       tyreWall(0.14,  0.17,  -1, 9, [0.95, 0.85, 0.15]);
       tyreWall(0.54,  0.57,   1, 9, [0.20, 0.40, 0.85]);
 
-      // ====================================================================
-      // MARSHAL POSTS
-      // ====================================================================
       for (const [s, side] of [[0.05, 1], [0.12, -1], [0.16, -1], [0.30, -1],
                                 [0.42, 1], [0.55, -1], [0.68, 1], [0.80, -1], [0.92, 1]]) {
         marshalPost(K(s), side, 8);
       }
 
-      // ====================================================================
-      // 3. MODERN s=0 PIT (L) + COVERED MAIN TRIBUNE (R) — 2024 rebuild silhouette
-      // ====================================================================
-      // Long low white/grey pit slab + tiered VIP terrace stacked on top (L).
       (function modernPit() {
         const a = anchor(K(0.00), -1, 20);
         const b = [a.r, a.u, a.t];
@@ -434,12 +349,6 @@
           stage._mat = MAT.CONCRETE;
           // Garage body — long low slab
           addBox(stage, vadd(a.c, a.u, 3.4), [11, 6.8, 78], WHITE, b);
-          // Garage-door rhythm — the real 2025 rebuild runs 40 garages (36 race +
-          // 4 technical) across this frontage; the old 9-bay loop (one door every
-          // 8.2 m) read as a generic warehouse. Tighten the pitch so 36 doors span
-          // the same 78 m slab, with the last 4 slots (the technical garages)
-          // picked out in a slightly darker tone so the rhythm still reads as
-          // "36 + 4", not just "40 identical doors".
           const DOOR_N = 36, DOOR_PITCH = 78 / DOOR_N;
           for (let i = 0; i < DOOR_N; i++) {
             const off = (i - (DOOR_N - 1) / 2) * DOOR_PITCH;
@@ -460,8 +369,6 @@
           // Warm VIP glass strip facing the straight
           addBox(stage, vadd(vadd(a.c, a.r, 4.6), a.u, 9.0), [0.2, 1.8, 60], WIN_WARM, b);
           addBox(stage, vadd(vadd(a.c, a.r, 4.6), a.u, 4.2), [0.2, 1.4, 64], WIN_COOL, b);
-          // Rooftop terrace — the 2025 rebuild's signature open-air roof deck
-          // above the VIP tier, with a glazed wind-rail around the perimeter.
           stage._mat = MAT.CONCRETE;
           addBox(stage, vadd(a.c, a.u, 11.15), [9.0, 0.3, 66], [0.86, 0.87, 0.90], b);
           stage._mat = MAT.METAL;
@@ -475,11 +382,6 @@
                   { id: "hungaroring-paddock", samples: 8 });
       // Rear hospitality — motorhome row behind the pit slab
       motorhome(K(0.03), -1, 34, 16, 8, 34, { wall: WHITE, window: WIN_WARM });
-      // Timing / press block. Was a generic tower() — the same tapered shaft
-      // with a cap and a mast that stands behind a dozen other paddocks in the
-      // fleet. The Hungaroring's is a squat 1986 concrete slab: three banded
-      // storeys, a stepped-back control deck and an EXTERNAL stair cage bolted
-      // to one flank. Same footprint, a silhouette that is this venue's.
       (function timingBlock() {
         const a = anchor(K(0.02), -1, 46);
         const b = [a.r, a.u, a.t], c = a.c;
@@ -507,10 +409,6 @@
         addCyl(out, vadd(st, a.r, 2.2), 0.11, 18, LAMP_POST, 5, b);
         out._mat = 0;
       })();
-      // Broadcast/OB compound — every real venue keeps satellite trucks behind
-      // the paddock; this circuit had none. Tucked at a clearance no other
-      // paddock facility uses (motorhome sits at 34, hospitality kit at 92,
-      // service compound at 112) so it reads as its own yard, not a collision.
       broadcastCompound(K(0.045), -1, 68, { vans: 4, dishes: 2, mastH: 10 });
       // Pit wall + kerb trim
       const pitWallPoints = [];
@@ -569,12 +467,6 @@
         }, { required: true });
       })();
 
-      // ── Pedestrian-tunnel stair-heads — the 2025 rebuild's two tunnels under
-      //    the start/finish straight are its other signature new feature.
-      //    Modelling the tunnels themselves is out of scope (they run under the
-      //    road mesh), but a stair-head kiosk at each end reads the same on the
-      //    surface: a low concrete block with a dark sunken stairwell mouth,
-      //    a flat canopy, and handrails. One at each end of the straight. ──
       function tunnelStairhead(s, side) {
         const a = anchor(K(s), side, 16);
         if (onTrack(a.c[0], a.c[2], 6)) return;
@@ -593,10 +485,6 @@
       tunnelStairhead(0.975, -1);   // start/finish straight, pit-exit end
       tunnelStairhead(0.028,  1);   // start/finish straight, Turn 1 end
 
-      // ====================================================================
-      // ACCENT FEATURES — water pond, hedge, Hungarian flags
-      // ====================================================================
-      // Water feature in the valley floor, beyond the compact T1/T2 foldback.
       waterSurface(K(0.08), 1, 75, [40, 1.0, 32], WATER,
                    { id: "hungaroring-lake", required: true });
       hedge(0.04, 0.11, 1, 32, 4, TREE);
@@ -605,9 +493,6 @@
       billboard(K(0.02), -1, 22, 10, 4, [0.20, 0.48, 0.20]);   // green
       billboard(K(0.04),  1, 22, 10, 4, [0.85, 0.20, 0.20]);   // red
 
-      // ====================================================================
-      // KERB ACCENTS at key corners
-      // ====================================================================
       for (const [s, side] of [[0.06, 1], [0.12, -1], [0.40, 1], [0.55, -1], [0.90, 1]]) {
         groundPatch(K(s), side, 2, [0.4, 0.25, 6], side > 0 ? RED : WHITE,
                     { id: `hungaroring-kerb-${s}`, samples: 2 });
@@ -615,13 +500,6 @@
                     { id: `hungaroring-runoff-${s}`, samples: 4 });
       }
 
-      // ====================================================================
-      // CROWD ON THE AMPHITHEATRE BANKING — the Hungaroring's famous grassy
-      // "hill-viewing" slopes. Spectators sit ON the banking, so these are LOW
-      // colour patches (a crowd blanket over the grass), NOT tall boxes — the
-      // old 2-3 m slabs read as random blocks littering the hills. Kept sparse
-      // and only on the inner amphitheatre stretches around the stadium/lake.
-      // ====================================================================
       every(26, (kk) => {
         const sf = kk / n;
         // Stadium bowl (T1-4, s0-0.10) + the lake/amphitheatre back sweeps.
@@ -679,12 +557,6 @@
         }
       });
 
-      // ====================================================================
-      // BESPOKE ENRICHMENT — terraced hillside stands packing the amphitheatre,
-      // a trackside jumbotron, and the Budapest countryside beyond the bowl.
-      // All models are LOCAL to this closure.
-      // ====================================================================
-
       // ── Grass-bank hillside crowd terracing behind each grandstand — the
       //    Hungaroring signature: informal stepped earth risers rising up the
       //    natural banking, wrapping the bowl. This used to be a hand-rolled
@@ -717,17 +589,6 @@
                       { rows, density: 0.35, step: 8, crowd: CROWD, grass: AMPH2, riser: HG_RISER });
       }
 
-      // ── OPEN CONCRETE TERRACE (1986 vintage) ────────────────────────────
-      //    The Hungaroring's original stands are not shells with roofs on
-      //    them — they are poured raked slabs sitting straight on the bank,
-      //    open to the sky, with square vomitory stair shafts punching up
-      //    through the back and a tube crush barrier down every row. That is
-      //    a silhouette grandstandEx cannot produce at any option setting: it
-      //    always builds a back shell and (unless roof:"none", which then
-      //    leaves the shell orphaned) a roof, and the shell is exactly the
-      //    thing that makes a socialist-era terrace read as a modern stand it
-      //    is not. Built from primitives, local to this closure, and cheaper
-      //    per metre than the stand it replaces.
       const TERR_CONC = [0.72, 0.70, 0.64];   // sun-bleached poured concrete
       const TERR_RAIL = [0.60, 0.58, 0.53];
       function bowlTerrace(s, side, gap, len, rows) {
@@ -749,8 +610,6 @@
           out._mat = MAT.CONCRETE;
           addBox(out, vadd(a.c, a.u, h * 0.5), [2.4, h, len], t % 2 ? TERR_CONC : CONC2, b);
           out._mat = MAT.METAL;
-          // Crush barrier — one continuous tube rail on stub posts. This detail
-          // dates a terrace more than the concrete does.
           addBox(out, vadd(a.c, a.u, h + 1.02), [0.13, 0.13, len - 1], TERR_RAIL, b);
           for (const sgn of [-1, 1])
             addCyl(out, vadd(vadd(a.c, a.t, sgn * (len * 0.5 - 3)), a.u, h),
@@ -766,8 +625,6 @@
           }
           out._mat = 0;
         }
-        // Vomitory stair shafts — the terrace's only vertical elements, set in
-        // the back row with an open dark stair mouth facing the track.
         const towers = Math.max(2, Math.round(len / 26));
         const a = anchor(k, side, gap + 1.2 + rows * 2.3);
         const b = [a.r, a.u, a.t];
@@ -801,27 +658,14 @@
         addBox(out, vadd(vadd(c, a.r, -0.7), a.u, 12.5), [0.4, 5, 9.5], [0.05, 0.07, 0.12], b); // screen — stays FLAT (video screen)
       })();
 
-      // ── Camera towers — lattice masts at the circuit's classic broadcast
-      //    vantage points: the Turn 1 downhill braking zone, the newly-dressed
-      //    Turn 5/T6-7 chicane, and the final-corner run to the line. ──
       cameraTower(K(0.065), -1, 42, { h: 16 });
       cameraTower(K(0.20),  -1, 44, { h: 14 });
       cameraTower(K(0.905),  -1, 40, { h: 14 });
 
-      // ── Budapest countryside — a distant rural cluster (farmhouses + a white
-      //    village church with a spire) on a hill beyond the far bank, plus
-      //    dusty sunflower / wheat field patches on the plain. ──
       (function countryside() {
         const a = anchor(K(0.62), 1, 260);
         const b = [a.r, a.u, a.t], base = a.c;
         const wallC = [0.82, 0.78, 0.68], roofC = [0.56, 0.30, 0.22];
-        // Scatter of farmhouses with pitched roofs. Each farmhouse re-anchors
-        // at its OWN (k, dist) rather than walking the single hilltop sample
-        // in a.t/a.r — a straight-line walk of up to 85 m off one ground
-        // reading left several houses floating tens of metres above the
-        // actual hillside. addPrism is also BASE-anchored (see the addPrism
-        // note in js/track/geom.js), not centred, so the roof sits directly
-        // on the wall top instead of at +1.6 (half the roof's own height).
         for (let i = 0; i < 6; i++) {
           const off = (i - 2.5) * 34, out2 = hash(i * 9) * 40;
           const ai = anchor(K(0.62) + Math.round(off / ds), 1, 260 + out2);
@@ -856,12 +700,6 @@
                     { id: `hungaroring-field-${s}`, samples: 6 });
       }
 
-      // ====================================================================
-      // AUTHENTIC DEPTH PASS — bounded hero-sector additions
-      // ====================================================================
-
-      // 1. Close bowl-viewing berms behind the T1/T2 and final-corner stands.
-      // Low crowd blankets sit well back on the bank and preserve corner sightlines.
       for (const [s, side, dist, len] of [
         [0.075,  1, 92, 46], [0.115, -1, 88, 40], [0.905, 1, 86, 48],
       ]) {
@@ -871,8 +709,6 @@
         prop(k, side, 62 + hh * 8, [14, 0.45, len], CROWD[(k + (side > 0 ? 1 : 0)) % CROWD.length]);
       }
 
-      // 2. A sparse second woodland layer on the quiet outer perimeter. Fixed
-      // fractions create depth without closing the fast S2 driver sightlines.
       for (const [s, side, dist] of [
         [0.205, 1, 32], [0.235, 1, 42], [0.275, 1, 35],
         [0.715, -1, 34], [0.755, -1, 44], [0.825, -1, 36],
@@ -882,9 +718,6 @@
         pine(k, side, dist + 9, 12 + h * 5, TREE);
       }
 
-      // 3–4. Deeper paddock/event operations and proper intervention points.
-      // CircuitKit stages each complete facility atomically and rejects unsafe
-      // footprints on this compact, tightly folded circuit.
       if (circuitKit) {
         circuitKit.hospitality({
           id: "kit:hungaroring:paddock-hospitality", frac: 0.012,
@@ -908,8 +741,6 @@
         });
       }
 
-      // 5. Localised Buda/Cserhát-style relief beyond the eastern bowl edge.
-      // A short, low ridge arc adds regional layering without making Hungary alpine.
       for (let i = 0; i < 5; i++) {
         const a = 0.15 + i * 0.16;
         const h = hash(730 + i * 29);

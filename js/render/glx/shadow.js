@@ -1,13 +1,4 @@
-/*
- * Apex 26 — GLX shadow subsystem (split out of js/render/glx.js).
- * Owns the static sun shadow map, the per-frame dynamic CAR map, the
- * nearest-floodlight spot map, and the PCSS-lite blocker-search plumbing.
- * Wired through the GLXCore ctx: glx.js calls GLXShadow.init(core) inside
- * GLX.init() and delegates the shadow-pass methods here; the shared state
- * the lit/post passes read (map textures, light VPs, armed flags) lives as
- * plain fields on the returned object.
- * Must load before js/render/glx.js (glx.js calls GLXShadow.init at init time).
- */
+/* Apex 26 — GLX shadow subsystem (split out of js/render/glx.js). Owns the static sun shadow map, the per-frame dynamic CAR map, the nearest-floodlight spot map, … */
 "use strict";
 
 const GLXShadow = (function () {
@@ -28,14 +19,8 @@ const GLXShadow = (function () {
     let shadowMapFBO = null;
     let carShadowFBO = null;
     let lampShadowFBO = null;
-    // Min-of-4 downsample of the shadow depth map (conservative nearest-blocker
-    // per cell) - the PCSS-lite blocker-search source.
-    // BLOCKER_FS lives in js/render/shaders/post.js (uSrcTexel-parameterised).
     let blockerProg = null, blockerU = null, blockerFBO = null, blockerSampler = null;
 
-    // Shared state the lit pass (GLX.begin), the post chain (GLXPost.present)
-    // and the chunked caster (GLXChunked) read directly. All the flags mirror
-    // the old glx.js closure variables 1:1.
     const S = {
       SIZE: SHADOW_SIZE,
       enabled: false,          // was shadowEnabled
@@ -53,18 +38,11 @@ const GLXShadow = (function () {
       // is buggy and laggy" report). Mirrors WGX, whose casts no-op when no pass
       // is open.
       depthPassOn: false,      // was _depthPassOn
-      // Light frustum the chunked shadow caster culls against: null = the static
-      // sun box (S.lightVP); lampShadowBegin points it at the lamp's frustum
-      // for the duration of that pass.
       castCullVP: null,        // was _castCullVP
-      // Dynamic per-frame CAR shadow map — separate from the snap-cached static
-      // map so moving cars get live sun shadows.
       carEnabled: false, carTex: null, carLightVP: new Float32Array(16),
       carBoxScale: 1,          // cBox / default-42m — see carShadowBegin
       carArmed: false,         // set by carShadowBegin, cleared each present()
       carArms: 0,              // lifetime carShadowBegin count (debug introspection)
-      // Nearest-FLOODLIGHT spot shadow map (night, desktop): per-frame depth
-      // render from the single nearest lamp (perspective VP down its beam).
       lampEnabled: false, lampTex: null, lampLightVP: new Float32Array(16),
       lampArmed: false,        // set by lampShadowBegin, cleared each present()
       lampIdx: -1,             // frame.lights record index of the mapped lamp
@@ -83,8 +61,6 @@ const GLXShadow = (function () {
       gl.bindTexture(gl.TEXTURE_2D, S.mapTex);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SHADOW_SIZE, SHADOW_SIZE, 0,
         gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
-      // LINEAR + COMPARE_REF_TO_TEXTURE = guaranteed hardware 2x2 PCF per tap in
-      // ES 3.0 (was NEAREST: every Poisson tap was a single hard compare).
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -125,11 +101,6 @@ const GLXShadow = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       }
 
-      // ── Nearest-floodlight spot shadow map: same creation pattern as the car
-      // map above (compare-mode depth texture = hardware PCF), but 512² and a
-      // PERSPECTIVE light — the depth render looks down the chosen lamp's beam.
-      // Desktop only, like the car map: per-frame depth passes and the extra
-      // sampler are exactly the discretionary cost the mobile tier sheds.
       S.lampEnabled = false;
       if (ok && !core.IS_MOBILE) {   // true desktop only - a per-frame pass is the HIGH-tier lag, not a memory cap
         S.lampTex = gl.createTexture();
@@ -149,13 +120,6 @@ const GLXShadow = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       }
 
-      // ── PCSS-lite blocker map: a 512-square R16F min-depth downsample of the
-      // shadow map, rebuilt only when the shadow map re-renders (the snap-grid
-      // cache means once per ~10 m of travel, not per frame). LIT_FS samples it
-      // as a plain sampler2D for the blocker search; the depth texture itself
-      // stays a sampler2DShadow. A compare-off SAMPLER OBJECT lets the blocker
-      // pass read the same depth texture without compare mode - the legal WebGL2
-      // way to view a depth texture two different ways.
       S.pcssEnabled = false;
       if (ok) {
         blockerProg = link(POST_VS, BLOCKER_FS);
@@ -195,13 +159,6 @@ const GLXShadow = (function () {
       gl.clear(gl.DEPTH_BUFFER_BIT);
       useProg(depthProg);
       gl.uniformMatrix4fv(S.depthU.uLightVP, false, lightVP);
-      // Instancing gate off ONCE per pass, not once per caster. castShadow used
-      // to re-upload this on every mesh — up to 46 uniform1f calls a night frame
-      // (car pass + lamp pass + the static two) for a value that provably could
-      // not have changed: castShadowInstanced is the only writer of 1 and it
-      // restores 0 on the line after its own draw. Uniform state is per-program
-      // and survives useProg, so setting it at the head of the pass is the same
-      // guarantee at 1/22nd the calls.
       if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
       gl.disable(gl.CULL_FACE);  // render back faces to avoid peter-panning
       S.depthPassOn = true;
@@ -214,9 +171,6 @@ const GLXShadow = (function () {
       gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
     }
 
-    // Instanced counterpart: one canonical mesh, N transforms, one draw. `count`
-    // optionally limits it to the first N instances, which is how a culled
-    // upload draws only the visible slice without reallocating the buffer.
     function castShadowInstanced(batch, count) {
       if (!S.depthPassOn || !batch || !batch.instances) return;
       const n = count === undefined ? batch.instances : Math.min(count, batch.instances);
@@ -227,8 +181,6 @@ const GLXShadow = (function () {
       if (count === undefined && batch.srcMatrices && batch.ibo) {
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, batch.srcMatrices);
-        // cullInstances may only hit when its packed transforms are still the
-        // buffer's resident contents; this upload replaces them with the full set.
         batch._cullPlanes = null;
       }
       bindVAO(batch.vao);
@@ -241,8 +193,6 @@ const GLXShadow = (function () {
       S.depthPassOn = false;
       if (!S.enabled) return;
       gl.enable(gl.CULL_FACE);
-      // Refresh the PCSS blocker map from the just-rendered shadow depth.
-      // Zero per-frame cost: shadowEnd only runs when the snap cell changed.
       if (S.pcssEnabled) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, blockerFBO);
         gl.viewport(0, 0, 512, 512);
@@ -273,13 +223,6 @@ const GLXShadow = (function () {
       gl.clear(gl.DEPTH_BUFFER_BIT);
       useProg(depthProg);
       gl.uniformMatrix4fv(S.depthU.uLightVP, false, lightVP);
-      // Instancing gate off ONCE per pass, not once per caster. castShadow used
-      // to re-upload this on every mesh — up to 46 uniform1f calls a night frame
-      // (car pass + lamp pass + the static two) for a value that provably could
-      // not have changed: castShadowInstanced is the only writer of 1 and it
-      // restores 0 on the line after its own draw. Uniform state is per-program
-      // and survives useProg, so setting it at the head of the pass is the same
-      // guarantee at 1/22nd the calls.
       if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
       gl.disable(gl.CULL_FACE);   // back faces too, like the static pass
       S.depthPassOn = true;
@@ -310,13 +253,6 @@ const GLXShadow = (function () {
       gl.clear(gl.DEPTH_BUFFER_BIT);
       useProg(depthProg);
       gl.uniformMatrix4fv(S.depthU.uLightVP, false, lightVP);
-      // Instancing gate off ONCE per pass, not once per caster. castShadow used
-      // to re-upload this on every mesh — up to 46 uniform1f calls a night frame
-      // (car pass + lamp pass + the static two) for a value that provably could
-      // not have changed: castShadowInstanced is the only writer of 1 and it
-      // restores 0 on the line after its own draw. Uniform state is per-program
-      // and survives useProg, so setting it at the head of the pass is the same
-      // guarantee at 1/22nd the calls.
       if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
       gl.disable(gl.CULL_FACE);   // back faces too, like the static pass
       S.castCullVP = S.lampLightVP;   // chunked casters cull to the lamp cone

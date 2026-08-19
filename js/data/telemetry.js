@@ -1,17 +1,10 @@
-/* Apex 26 — the data hub's TELEMETRY tab (trace viewer, delta, map, playback).
-   Split out of js/data/hub.js; instantiated once by the DataHub shell via
-   DataTelemetry.create(ctx) with the shell helpers it needs (el/clear/
-   emptyMsg/spinner DOM builders, sel selection state, ensureSession/
-   buildPicker/invalidateOther session plumbing, COMPOUND, findTeam).
-   Uses the F1API global directly.
-   Must load BEFORE js/data/hub.js (see index.html). */
+/* Apex 26 — the data hub's TELEMETRY tab (trace viewer, delta, map, playback). Split out of js/data/hub.js; instantiated once by the DataHub shell via DataTelemet… */
 const DataTelemetry = (function () {
   "use strict";
 
   function create(ctx) {
     const { el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
             invalidateOther, COMPOUND, findTeam, cssColor, textColorOn, NO_TELEM_MSG } = ctx;
-
 
   function driverColor(d) {
     if (d && d.color && /^[0-9a-fA-F]{6}$/.test(d.color)) {
@@ -23,11 +16,6 @@ const DataTelemetry = (function () {
     return t ? t.color : [0.6, 0.6, 0.6];
   }
 
-  // One distinct colour per lap on screen. Base is the driver's team colour, so
-  // team-mates — and, crucially, the SAME driver compared across sessions (race
-  // vs quali) — collide. Each successive lap that lands on an already-used base
-  // is ramped toward white so every lane stays tellable-apart. Returns a colour
-  // per entry, in order.
   function laneColors(entries) {
     const seen = {};
     return entries.map(function (e) {
@@ -42,15 +30,9 @@ const DataTelemetry = (function () {
     });
   }
   function dcode(d) { return d.code || ("#" + d.num); }
-  // Short session tag for a lane badge: Race->R, Qualifying->Q, Sprint->SPR,
-  // Practice 2->P2. Only shown when a lane needs disambiguating by session.
   function sessionShort(meta) {
     if (!meta) return "";
     const name = String(meta.name || meta.type || "");
-    // Test NAME and TYPE together, sprint before race: OpenF1 gives a Sprint
-    // session_type "Race" with session_name "Sprint", so a type-first check
-    // badged the Sprint lane "R" — identical to the Race lane it exists to
-    // disambiguate.
     const type = (name + " " + String(meta.type || "")).toLowerCase();
     if (type.indexOf("sprint") !== -1) return type.indexOf("qual") !== -1 ? "SQ" : "SPR";
     if (type.indexOf("qual") !== -1) return "Q";
@@ -62,34 +44,20 @@ const DataTelemetry = (function () {
   // OpenF1 DRS codes: 10/12/14 = wing open, everything else closed/eligible.
   function drsOpen(v) { return v === 10 || v === 12 || v === 14; }
 
-  // Plottable car-data channels. `norm:"speed"|"rpm"` scales by that channel's
-  // session peak; otherwise [lo,hi] maps linearly to the plot height. `step`
-  // draws a staircase (gear / DRS). `off` = hidden until toggled on.
   const CHANNELS = [
     { id: "speed",    label: "SPEED",    color: "#39d0ff", w: 2,   norm: "speed", get: function (c) { return c.speed; },    fmt: function (v) { return Math.round(v) + " km/h"; } },
     { id: "throttle", label: "THR",      color: "#3fb950", w: 1.5, lo: 0, hi: 100, get: function (c) { return c.throttle; }, fmt: function (v) { return Math.round(v) + "%"; } },
     { id: "brake",    label: "BRAKE",    color: "#ff4d4d", w: 1.5, lo: 0, hi: 100, get: function (c) { return c.brake; },    fmt: function (v) { return Math.round(v) + "%"; } },
     { id: "gear",     label: "GEAR",     color: "#f6d200", w: 1.5, lo: 0, hi: 8, step: true, get: function (c) { return c.gear; }, fmt: function (v) { return v ? "G" + v : "N"; } },
     { id: "rpm",      label: "RPM",      color: "#c084fc", w: 1.5, norm: "rpm", get: function (c) { return c.rpm; }, fmt: function (v) { return Math.round(v); } },
-    // DRS draws as a thick strip just below the chart's top edge, present only
-    // while the wing is OPEN (closed samples return null so nothing is drawn) —
-    // a full-height 0/1 square wave would bury every other trace.
     { id: "drs",      label: "DRS",      color: "#00e0c0", w: 3, lo: 0, hi: 1.1, step: true, get: function (c) { return c.drs === null || c.drs === undefined ? null : (drsOpen(c.drs) ? 1 : null); }, fmt: function (v) { return v ? "OPEN" : "—"; } }
   ];
 
-  // Chart plot-area insets: PADL leaves a gutter for the km/h axis labels,
-  // PADY is the vertical inset. Shared by the trace chart, the delta strip
-  // and the scrub mapping so the cursor stays aligned across all of them.
   const PADL = 36, PADR = 8, PADY = 6;
   function chartX(view, t, W) { return PADL + (t / view.tMax) * (W - PADL - PADR); }
-  // short-landscape phone: the popup splits into columns and vertical space
-  // is the scarce axis
   function shortLS() {
     return typeof window !== "undefined" && window.innerHeight < 520 && window.innerWidth > window.innerHeight;
   }
-  // chart canvas height for a given width — slightly shorter on narrow
-  // screens; in compare mode on a short-landscape phone, capped to the
-  // viewport so chart + delta strip + legend fit together
   function chartH(w, compact) {
     const base = Math.round(w * (w < 480 ? 190 : 220) / 600);
     if (compact && shortLS()) return Math.min(base, Math.round(window.innerHeight * 0.38));
@@ -105,7 +73,6 @@ const DataTelemetry = (function () {
     const v = ch.get(c);
     return (v === null || v === undefined || isNaN(v)) ? null : v;
   }
-  // normalize a sample to 0..1 of the plot height for the given channel
   function chanNorm(ch, c, view) {
     const v = chanRaw(ch, c);
     if (v === null) return null;
@@ -113,7 +80,6 @@ const DataTelemetry = (function () {
     if (ch.norm === "rpm") return clamp(v / view.rpmMax, 0, 1);
     return clamp((v - ch.lo) / (ch.hi - ch.lo), 0, 1);
   }
-  // nearest car sample (by lap time t) to a cursor time
   function sampleAt(car, t) {
     if (!car || !car.length) return null;
     let lo = 0, hi = car.length - 1;
@@ -144,12 +110,6 @@ const DataTelemetry = (function () {
 
   let driverGen = 0;
   const MAX_LANES = 4;
-  // The COMPARE TRAY. Module-scoped so it SURVIVES a session change in the
-  // picker — that is the whole mechanism behind cross-session comparison: pick a
-  // driver in the Race session, switch the SESSION dropdown to Qualifying, pick
-  // the same driver again, and both laps sit in the tray waiting to load. Each
-  // entry remembers its own session. Keyed by driver number + session key so the
-  // same driver from two sessions is two distinct lanes.
   let tray = [];
   function trayHas(num, sk) { return tray.some(function (e) { return e.d.num === num && e.sessionKey === sk; }); }
   function trayToggle(d, meta) {
@@ -167,8 +127,6 @@ const DataTelemetry = (function () {
     if (!meta || meta.meetingKey == null) return;
     tray = tray.filter(function (e) { return e.meetingKey == null || e.meetingKey === meta.meetingKey; });
   }
-  // Same driver appears from more than one session? then lanes need the session
-  // badge to be told apart; otherwise the driver code alone is unambiguous.
   function trayNeedsBadges() {
     const byNum = {};
     for (const e of tray) byNum[e.d.num] = (byNum[e.d.num] || 0) + 1;
@@ -230,8 +188,6 @@ const DataTelemetry = (function () {
           chip.style.color = textColorOn(col);
           row.appendChild(chip);
           row.appendChild(el("span", "dh-name", e.d.name || "—"));
-          // session badge — always shown once any driver is doubled up, so a
-          // race-vs-quali pair reads at a glance
           if (badges || tray.some(function (o) { return o.sessionKey !== e.sessionKey; })) {
             row.appendChild(el("span", "dh-lane-ses", e.sessionLabel || e.sessionName));
           }
@@ -281,8 +237,6 @@ const DataTelemetry = (function () {
       leftPane.appendChild(pick);
       rightPane.appendChild(detail);
     });
-    // No rejection arm: the .catch above resolves every failure to null, and
-    // the null/empty-drivers path already renders NO_TELEM_MSG.
   }
 
   // fetch one driver's fastest-lap bundle (extras = stints + pits for primary)
@@ -361,9 +315,6 @@ const DataTelemetry = (function () {
 
   function openTelemPopup(tels, returnFocus) {
     closeTelemPopup();
-    // Prefer the caller-supplied element (the driver chip): the activeElement
-    // here is usually the LOAD button, which syncChips/clear(detail) already
-    // removed from the DOM, so closing would drop focus onto <body>.
     telemReturnFocus = (returnFocus && returnFocus.isConnected)
       ? returnFocus : document.activeElement;
     const overlay = el("div", "dh-tpopup");
@@ -377,8 +328,6 @@ const DataTelemetry = (function () {
     const hdr = el("div", "dh-tpopup-hdr");
     const titleEl = el("div", "dh-tpopup-title");
     titleEl.id = "dh-tpopup-title";
-    // If one driver appears in more than one lane (race vs quali), tag each name
-    // with its session so "NORRIS vs NORRIS" reads as "NORRIS R vs NORRIS Q".
     const dupName = {};
     tels.forEach(function (t) { const k = t.d.num; dupName[k] = (dupName[k] || 0) + 1; });
     const label = tels.map(function (t) {
@@ -386,8 +335,6 @@ const DataTelemetry = (function () {
       return (dupName[t.d.num] > 1 && t.sessionLabel) ? nm + " " + t.sessionLabel : nm;
     }).join(" vs ");
     titleEl.appendChild(el("span", null, label));
-    // Cross-session comparison spans sessions, so a single session subtitle would
-    // be misleading — only show it when every lane came from the loaded session.
     const oneSession = tels.every(function (t) { return !t.sessionLabel || t.sessionLabel === tels[0].sessionLabel; });
     if (sel.meta && oneSession) {
       const sub = [sel.meta.name || sel.meta.type, sel.meta.circuit || sel.meta.country].filter(Boolean).join(" · ");
@@ -414,9 +361,6 @@ const DataTelemetry = (function () {
       if (e.target === overlay) closeTelemPopup();
     });
 
-    // Close on Escape. Stored so closeTelemPopup() can remove it however the
-    // popup is dismissed (Escape, backdrop click, ✕, or tab change) — otherwise
-    // a document keydown listener leaks on every non-Escape close.
     telemKeyHandler = function (e) {
       if (e.key === "Escape") { closeTelemPopup(); return; }
       if (e.key !== "Tab" || !telemPopup) return;
@@ -447,9 +391,6 @@ const DataTelemetry = (function () {
     }, 0);
   }
 
-  // Each lane fetches from its OWN session key — that is what makes a race lap
-  // and a qualifying lap loadable side by side. The lane's session label rides
-  // along on the returned tel for the header badge.
   function loadTelemetrySet(lanes, detail, syncChips, returnFocus) {
     const myGen = ++telGen;
     stopTelAnim();
@@ -484,25 +425,10 @@ const DataTelemetry = (function () {
 
   function buildTelemetryView(detail, tels) {
     stopTelAnim();
-    // N-LANE MODEL. The renderer used to hold a fixed primary + optional
-    // compare; it now holds a list of lanes (view.laps), with laps[0] as the
-    // REFERENCE that deltas and gauges read against. primary/compare stay as
-    // aliases so the dense 1- and 2-lane paths render exactly as before; lanes
-    // 3-4 add a speed line, a map dot and a delta line each.
-    // Every lane that actually has car telemetry, reference first. The extra
-    // lanes (index >= 2) are "multi" lanes: speed line + map dot + delta line.
-    // THE ALIASES COME OFF THIS FILTERED LIST, not off `tels`. Derived from the
-    // raw tray, a middle lane with no car telemetry (tels = [A, B-no-car, C])
-    // made compare = B, which the car-length test below then nulled — leaving C
-    // as neither compare (laps.length === 2, so `multi` is false) nor a multi
-    // lane. Its header and map dot rendered while its chart trace and the whole
-    // delta strip silently did not.
     const laps = tels.filter(function (t) { return t.car && t.car.length; });
     const primary = laps[0] || tels[0];
     const compare = laps[1] || null;
     const laneCols = laneColors(tels);
-    // Session badge on each lane header once a driver is doubled up across
-    // sessions (race vs quali), so the headers disambiguate too.
     const dupNum = {};
     tels.forEach(function (t) { dupNum[t.d.num] = (dupNum[t.d.num] || 0) + 1; });
     // stash for the gauge lane board (built later, out of this scope)
@@ -538,8 +464,6 @@ const DataTelemetry = (function () {
       mainArea.appendChild(ht);
     });
 
-    // NO lane has telemetry — not merely the first one. A tray whose first lane
-    // lacks it but whose second has it still has a chart to draw.
     if (!laps.length) {
       mainArea.appendChild(emptyMsg("Car telemetry isn't available for this lap."));
       detail.appendChild(mainArea);
@@ -561,8 +485,6 @@ const DataTelemetry = (function () {
       multi: laps.length > 2,
       visible: {}, cursorT: 0,
       tMax: 0, speedMax: 1, rpmMax: 1,
-      // Default to REAL TIME (1x): the dot goes round at the speed the driver
-      // actually did the lap. 2x/4x are there to skim; you opt into them.
       playing: false, rate: 1, _raf: 0, _last: 0, onboard: false,
       chart: null, map: null, delta: null,
       chartBase: null, mapBase: null, deltaBase: null, mapT: null,
@@ -571,10 +493,6 @@ const DataTelemetry = (function () {
     // per-driver visibility: visible = primary (solid), visibleC = compare (dashed)
     view.visibleC = {};
     CHANNELS.forEach(function (ch) { view.visible[ch.id] = view.visibleC[ch.id] = !ch.off; });
-    // The primary/compare trace colours are lanes 0 and 1 OF THE FILTERED list
-    // for the same reason view.laneCols is re-indexed above: taken off `tels`
-    // they painted the compare trace in a dropped lane's colour, disagreeing
-    // with the header swatch of the driver actually drawn.
     view.colP = view.laneCols[0]; view.colC = view.laneCols[1] || null;
     view._dup = _dupForView;
     function scan(car) {
@@ -588,8 +506,6 @@ const DataTelemetry = (function () {
     // off before the lap ended.
     laps.forEach(function (t) { scan(t.car); });
     view.tMax = view.tMax || 1;
-    // cumulative distance for every lane — the delta and the distance-based dot
-    // interpolation both read it.
     laps.forEach(function (t) { t.cum = cumDist(t.car); });
     if (primary.lap && primary.lap.s1 !== null && primary.lap.s2 !== null) {
       view.sectors = [primary.lap.s1, primary.lap.s1 + primary.lap.s2];
@@ -598,8 +514,6 @@ const DataTelemetry = (function () {
     // Transport bar → main
     mainArea.appendChild(buildTransport(view));
 
-    // Canvas width: detail is the popup body, already in DOM (called via setTimeout).
-    // In landscape the side panel takes 200px + 1px border + 24px padding = 225px.
     const isLS = shortLS();
     const sideW = isLS ? 225 : 0;
     const CW = detail.clientWidth > 40
@@ -659,8 +573,6 @@ const DataTelemetry = (function () {
         legend.appendChild(item);
         return;
       }
-      // Compare mode: one group per channel — the label toggles both lines,
-      // each driver's line (solid / dashed) has its own toggle chip.
       const cP = ch.id === "speed" ? cssColor(view.colP) : ch.color;
       const cC = ch.id === "speed" ? cssColor(view.colC) : ch.color;
       const grp = el("span", "dh-leg-group");
@@ -725,8 +637,6 @@ const DataTelemetry = (function () {
       sideArea.appendChild(mkey);
     }
 
-    // Stints/pits last (below the map), so the lap player — chart, gauges,
-    // map — stays together at the top on portrait phones
     appendStintsPits(sideArea, primary);
 
     detail.appendChild(mainArea);
@@ -739,13 +649,6 @@ const DataTelemetry = (function () {
 
     // Resize canvases when the popup is resized (e.g. orientation change)
     if (typeof ResizeObserver !== "undefined") {
-      // Defer the resize work to the NEXT frame. The callback resizes canvases
-      // that live INSIDE the observed element, so doing it synchronously makes
-      // the observer re-fire within the same delivery cycle — the browser then
-      // emits "ResizeObserver loop completed with undelivered notifications",
-      // which the on-screen error catcher was blowing up into a full-screen
-      // overlay the moment the compare popup opened on a wide (desktop) layout.
-      // rAF moves the DOM writes out of the delivery cycle, so no loop.
       let roPending = false;
       const ro = new ResizeObserver(() => {
         if (roPending) return;
@@ -848,8 +751,6 @@ const DataTelemetry = (function () {
   function buildGauges(view) {
     const card = el("div", "dh-dash");
     const cmp = view.compare;
-    // In compare mode every gauge is dual: primary first (driver colour /
-    // full-height bar), compare second (dimmed / thin bar).
     function valCell(cls, label) {
       const w = el("div", "dh-gcell " + cls);
       w.appendChild(el("div", "dh-glabel", label));
@@ -898,9 +799,6 @@ const DataTelemetry = (function () {
       g.delta = el("div", "dh-gval dh-gdelta", "—");
       dcell.appendChild(g.delta); card.appendChild(dcell);
     }
-    // LANE BOARD (3-4 lanes): the dual gauge only holds two, so list every lane
-    // with its live speed and gap to the reference — the at-a-glance answer to
-    // "who's fastest here?" across all the lanes at once.
     if (view.multi) {
       const board = el("div", "dh-laneboard");
       g.board = [];
@@ -964,8 +862,6 @@ const DataTelemetry = (function () {
   // drag the trace chart to scrub (pauses playback)
   function attachScrub(canvas, view) {
     function at(ev) {
-      // clientX is viewport; after .dh-card carries UI SIZE zoom, use the visual
-      // rect so the scrub tracks the pointer (CssZoom / A13).
       const r = (window.CssZoom && CssZoom.viewportRect(canvas)) || canvas.getBoundingClientRect();
       // map into bitmap px, then invert the plot-area (axis gutter) transform
       const bx = (ev.clientX - r.left) / (r.width || 1) * canvas.width;
@@ -1028,7 +924,6 @@ const DataTelemetry = (function () {
   // composite one frame: cached bases + moving cursor, car dots, delta, gauges
   function paintFrame(view) {
     const T = view.cursorT === null ? 0 : view.cursorT;
-    // ---- trace chart ----
     const cg = view.chart.getContext("2d");
     const W = view.chart.width, H = view.chart.height;
     cg.clearRect(0, 0, W, H);
@@ -1062,7 +957,6 @@ const DataTelemetry = (function () {
         cg.beginPath(); cg.arc(X, H - PADY - f * (H - 2 * PADY), 3.5, 0, Math.PI * 2); cg.fill();
       }
     }
-    // ---- delta strip ----
     if (view.delta) {
       const dgx = view.delta.getContext("2d");
       const DW = view.delta.width, DH = view.delta.height;
@@ -1072,7 +966,6 @@ const DataTelemetry = (function () {
       dgx.strokeStyle = "rgba(255,255,255,0.55)"; dgx.lineWidth = 1;
       dgx.beginPath(); dgx.moveTo(dx, 0); dgx.lineTo(dx, DH); dgx.stroke();
     }
-    // ---- track map (with optional onboard rotation) ----
     if (view.map) {
       const mg = view.map.getContext("2d");
       const MW = view.map.width, MH = view.map.height;
@@ -1106,8 +999,6 @@ const DataTelemetry = (function () {
     if (!best) return;
     const p = mapPoint(view, best);
     const rs = rscale || 1, r = 5.5 * rs;
-    // dark halo + white ring keep a team-coloured dot readable on any
-    // speed-coloured track segment
     g.strokeStyle = "rgba(0,0,0,0.65)"; g.lineWidth = 3.5 * rs;
     g.beginPath(); g.arc(p[0], p[1], r, 0, Math.PI * 2); g.stroke();
     g.fillStyle = fill; g.strokeStyle = "rgba(255,255,255,0.9)"; g.lineWidth = 1.5 * rs;
@@ -1164,8 +1055,6 @@ const DataTelemetry = (function () {
     if (view.delta) renderDelta(view.deltaBase.getContext("2d"), view.deltaBase.width, view.deltaBase.height, view);
   }
 
-  // multi-channel traces for the primary driver (+ dashed compare overlays),
-  // with a km/h axis, gear ticks and faint sector-boundary markers.
   function renderTraces(g, W, H, view) {
     g.clearRect(0, 0, W, H);
     const X = function (t) { return chartX(view, t, W); };
@@ -1173,9 +1062,6 @@ const DataTelemetry = (function () {
     g.font = "10px system-ui, sans-serif";
     // an axis shows while either driver's line for its unit is visible
     function anyVis(id) { return view.visible[id] || (view.compare && view.visibleC[id]); }
-    // Per-unit axes, each in its channel's colour:
-    //   left gutter = speed km/h · left inner = rpm · right gutter = gear ·
-    //   right inner = % (throttle/brake)
     if (anyVis("speed")) {
       const step = view.speedMax > 260 ? 100 : (view.speedMax > 130 ? 50 : 25);
       g.textAlign = "right"; g.textBaseline = "middle";
@@ -1244,9 +1130,6 @@ const DataTelemetry = (function () {
       }
       g.strokeStyle = color; g.lineWidth = width; g.lineJoin = "round"; g.stroke();
     }
-    // Compare mode: both drivers' SPEED traces in their own driver colours
-    // (matching the map dots / header swatches); the compare driver's other
-    // visible channels ghost underneath, dashed and dimmed, in the channel hue.
     if (view.compare) {
       g.setLineDash([5, 4]);
       g.globalAlpha = 0.5;
@@ -1266,9 +1149,6 @@ const DataTelemetry = (function () {
       if (view.visibleC.speed) line(view.compare.car, CHANNELS[0], cssColor(view.colC), 1.8);
       g.setLineDash([]);
     }
-    // Extra lanes (3-4): SPEED only, dashed, in the lane colour — the reference
-    // and compare keep their full multi-channel detail, the rest just show where
-    // the lap was faster or slower so the chart doesn't become a hairball.
     if (view.multi && view.visible.speed) {
       g.setLineDash([2, 3]);
       for (let i = 2; i < view.laps.length; i++) line(view.laps[i].car, CHANNELS[0], cssColor(view.laneCols[i]), 1.6);
@@ -1282,11 +1162,6 @@ const DataTelemetry = (function () {
     }
   }
 
-  // gap-to-compare across the lap: delta(t) = time for compare to reach the
-  // same track distance, minus t. Filled green where the primary is ahead.
-  // gap of `lane` to the REFERENCE across the lap: at each reference time t,
-  // how long the lane took to reach the same track distance, minus t. >0 = the
-  // lane is behind the reference there.
   function deltaSamplesFor(view, lane) {
     const car = view.primary.car, out = [];
     let mn = 0, mx = 0;
@@ -1302,8 +1177,6 @@ const DataTelemetry = (function () {
   function renderDelta(g, W, H, view) {
     const pad = 6, car = view.primary.car;
     g.clearRect(0, 0, W, H);
-    // one delta series per extra lane, all against the reference; the y-axis
-    // spans the widest of them so every line fits.
     const others = view.laps.slice(1);
     const series = others.map(function (lane) { return deltaSamplesFor(view, lane); });
     let mn = 0, mx = 0;
@@ -1315,8 +1188,6 @@ const DataTelemetry = (function () {
     // zero line
     g.strokeStyle = "rgba(255,255,255,0.25)"; g.lineWidth = 1;
     g.beginPath(); g.moveTo(PADL, y0); g.lineTo(W - PADR, y0); g.stroke();
-    // Two lanes: keep the familiar filled gap area under the single delta line.
-    // Three+: fills would overlap into mud, so each lane is a bare line.
     const fill = series.length === 1;
     series.forEach(function (ds, si) {
       const laneCol = cssColor(view.laneCols[si + 1]);
@@ -1394,18 +1265,12 @@ const DataTelemetry = (function () {
       while (ci < car.length - 1 && car[ci].date < date) ci++;
       return car[ci].speed;
     }
-    // The COMPARE driver's line first, underneath, in their own colour — the
-    // map is the one place you can see where the two laps actually diverge, and
-    // it used to draw the primary only however many drivers were loaded.
     if (view.compare && view.compare.loc && view.compare.loc.length > 1) {
       g.lineWidth = 5; g.lineCap = "round"; g.lineJoin = "round";
       g.strokeStyle = cssColor(view.colC);
       strokeLap(g, view, view.compare.loc);
     }
     g.lineWidth = 3; g.lineCap = "round"; g.lineJoin = "round";
-    // A LAP IS A LOOP, so the trace has to close. Drawing only i=1..n-1 left the
-    // start/finish junction open — a visible notch in the outline where the
-    // sampled lap window began and ended a few metres apart.
     const N = loc.length;
     const limit = gapLimitMs(loc);
     for (let i = 1; i <= N; i++) {
@@ -1439,17 +1304,11 @@ const DataTelemetry = (function () {
     }
   }
 
-
     return { loadTelemetry, closeTelemPopup };
   }
 
   const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
 
-  // ---- playback position: lap clock -> point on the GPS trace ----------
-  // Pure functions of a driver's own sample arrays, so they live at module
-  // scope (and are exported below for tests/unit/telemetry-trace.test.mjs).
-  // cumulative distance (m) along the lap, sampled at each car-data time, so we
-  // can compute a real position-based time delta between two laps.
   function cumDist(car) {
     const t = [], d = [];
     let acc = 0;
@@ -1475,18 +1334,10 @@ const DataTelemetry = (function () {
   function distAtT(cum, t) { return interp(cum.t, cum.d, t); }
   function timeAtDist(cum, dist) { return interp(cum.d, cum.t, dist); }
 
-  // nearest location sample to lap time t (matched on car-data timestamp)
-  // Point between two samples. GPS arrives at ~4 Hz but the player runs on a
-  // rAF clock, so anything that SNAPS to a sample steps ~15 times a second
-  // instead of moving.
   function lerpLoc(a, b, f) {
     if (!b) return a;
     return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
   }
-  // The exact wall-clock date for lap-time t, interpolated across car samples —
-  // the bridge between the chart's lap-relative clock and the GPS trace's
-  // absolute one. Snapping to the nearest car sample here was the first of the
-  // two quantisations that made the dots judder.
   function dateAtT(car, t) {
     if (!car || !car.length) return null;
     const n = car.length;
@@ -1522,18 +1373,6 @@ const DataTelemetry = (function () {
     const loc = own ? tel.loc : (view.primary.loc || []);
     if (!loc.length) return null;
     if (!own) {
-      // This driver has no GPS of their own, so they ride the primary's path.
-      // Place them by how far through their OWN lap they are — matching on the
-      // absolute timestamp (as this used to) looks a different lap's clock up in
-      // this array, lands at whichever end is nearest in time, and parks the dot
-      // there for the whole replay.
-      //
-      // "Their own lap" means their OWN duration, not view.tMax. tMax is the
-      // longer of the two laps on screen, so scaling by it made a faster driver
-      // cover only ownLap/tMax of the circuit in the time they actually drove
-      // all of it — a dot permanently short of where the driver was, still shy
-      // of the line when their lap had already ended (4.71 of 2pi rad for a 60 s
-      // lap shown against an 80 s one).
       const ownMax = (tel.car && tel.car.length) ? tel.car[tel.car.length - 1].t : 0;
       const f = clamp(t / (ownMax || view.tMax || 1), 0, 1) * (loc.length - 1);
       const i = Math.floor(f);
@@ -1544,8 +1383,6 @@ const DataTelemetry = (function () {
     const n = loc.length;
     if (target <= +loc[0].date) return loc[0];
     if (target >= +loc[n - 1].date) return loc[n - 1];
-    // bracketing GPS samples, then interpolate between them: continuous motion
-    // at the rAF clock instead of a ~4 Hz staircase
     let lo = 0, hi = n - 1;
     while (lo < hi - 1) {
       const mid = (lo + hi) >> 1;
@@ -1571,24 +1408,11 @@ const DataTelemetry = (function () {
     return lerpLoc(loc[lo], loc[hi], f);
   }
 
-  // ---- GPS sanity: strays, bounds, and gaps -------------------------------
-  // Everything the map draws is fitted to the samples, so a single bad sample
-  // is not a local blemish — it rescales and re-centres the whole circuit, and
-  // the same track then reads as a different shape in one session than another.
-  // The feed's own origin rows are dropped upstream (F1API.locationData); what
-  // is left to defend against here is a sample that is finite, non-zero and
-  // still nowhere near the track.
   function quantile(sorted, q) {
     if (!sorted.length) return 0;
     const i = (sorted.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i);
     return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
   }
-  // A lap's genuine extremes (the outermost corner, the end of the longest
-  // straight) are represented by only a handful of samples, so a plain
-  // percentile clip would cut real track off. Take the 2..98 % band as the
-  // CORE of the circuit, then accept anything within a generous margin of it —
-  // wide enough to keep every real extremity, far tighter than the distance a
-  // stray sample lands at.
   const STRAY_MARGIN = 0.35;
   function dropStrays(loc) {
     if (!loc || loc.length < 24) return loc || [];   // too few to judge a distribution
@@ -1600,9 +1424,6 @@ const DataTelemetry = (function () {
     const kept = loc.filter(function (p) {
       return p.x >= x0 - mx && p.x <= x1 + mx && p.y >= y0 - my && p.y <= y1 + my;
     });
-    // If this would throw away a meaningful share of the lap the assumption is
-    // wrong (not a stray — a real excursion, or a track this shape). Keep the
-    // original: a slightly odd map beats a truncated one.
     return kept.length >= loc.length * 0.9 ? kept : loc;
   }
   function locBounds(loc) {
@@ -1614,12 +1435,6 @@ const DataTelemetry = (function () {
     if (!isFinite(minx)) { minx = 0; maxx = 1; miny = 0; maxy = 1; }
     return { minx: minx, miny: miny, spanx: (maxx - minx) || 1, spany: (maxy - miny) || 1 };
   }
-  // Positioning drops out for seconds at a time. Consecutive samples either side
-  // of a gap are metres apart on the clock but a corner apart on the map, and
-  // joining them draws a straight line across the infield — a section of circuit
-  // that simply isn't there, in whichever session happened to lose coverage.
-  // Threshold is relative to the lap's OWN sample rate, so it survives a feed
-  // that runs at a different cadence.
   function gapLimitMs(loc) {
     if (!loc || loc.length < 8) return Infinity;
     const dts = [];
@@ -1637,11 +1452,6 @@ const DataTelemetry = (function () {
     return isFinite(dt) && dt > limit;
   }
 
-  // The GPS-sanity helpers are pure functions of a sample list, so they are
-  // exported for tests/unit/telemetry-trace.test.mjs — the rest of this module needs
-  // a DOM, a canvas and the network before it will do anything at all, and the
-  // bugs these fix (a stray sample rescaling the whole map, a coverage gap
-  // drawn as a straight) are exactly what wants asserting without one.
   return { create, _dropStrays: dropStrays, _locBounds: locBounds,
            _gapLimitMs: gapLimitMs, _isGap: isGap, _locAt: locAt, _cumDist: cumDist };
 })();

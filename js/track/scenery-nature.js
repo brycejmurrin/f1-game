@@ -1,13 +1,4 @@
-/* Apex 26 — SceneryNature: the nature/landscape band of the buildProps
-   composite-model toolkit — the shared trackside anchor() plus vegetation
-   (pine/tree/palm/conifer/bush/hedge/forestEdge), landforms (peak/mountain/
-   ridge) and the spectator models (crowdBank/grandstand). Split out of
-   js/track/tracks.js buildProps; created once per build via
-   SceneryNature.create(ctx) with the shared scenery ctx (buffers, guarded
-   emitters, grounding/guard core, math helpers). Helpers from OTHER scenery
-   modules are reached only through ctx (hedge/forestEdge read ctx.along at
-   call time — SceneryStructures is created after this module).
-   Load order: before js/track/tracks.js (which calls create() at build). */
+/* Apex 26 — SceneryNature: the nature/landscape band of the buildProps composite-model toolkit — the shared trackside anchor() plus vegetation (pine/tree/palm/con… */
 const SceneryNature = (function () {
   "use strict";
 
@@ -20,16 +11,6 @@ const SceneryNature = (function () {
     Log.info("scenery", "scenery-nature dress " + (def && def.id));
     const { CROWD_DAY } = TrackSceneryData;
 
-    // Ground height under an ARBITRARY world x/z, for geometry whose footing
-    // is not at a known (node, lateral) — anything run out along a tangent,
-    // which on a curve leaves the lateral distance it was authored with.
-    // Prefers the rendered terrain; off the ribbon terrainYAt returns null, so
-    // fall back to nearest-node + lateral distance, which is the SAME closed
-    // form tools/float-audit.cjs falls back to. Matching its model is the point:
-    // a footing resolved by any other route disagrees with the grounding audit
-    // exactly where the ribbon ends, which is where long stands actually sit.
-    // Scratch for nodeGrid.query — same nearest-node + lateral fallback as
-    // tools/float-audit.cjs (PERF-FINDINGS: was O(n) over every centreline node).
     const _guCand = new Array(n);
     const groundUnder = (x, z) => {
       const ty = terrainYAt(x, z);
@@ -37,9 +18,6 @@ const SceneryNature = (function () {
       let best = 0, bestD = Infinity;
       const grid = track._nodeGrid || (typeof TrackMesh !== "undefined" && TrackMesh.nodeGrid(track));
       if (grid && grid.query) {
-        // Expand R until a candidate lies inside the searched disc. query(R) is
-        // a cell-AABB SUPERSET of nodes within Euclidean R, so bestD ≤ R² means
-        // the true nearest cannot be outside the scan.
         let R = 40;
         for (;;) {
           const cnt = grid.query(x, z, R, _guCand, false);
@@ -62,21 +40,7 @@ const SceneryNature = (function () {
       return groundYAt(best, Math.max(0, Math.sqrt(bestD) - hw[best]));
     };
 
-    // Resolve a trackside anchor: ground position + the track basis [r,u,t] at
-    // node k, `dist` beyond the road edge on `side`. Shared by the model helpers.
     const anchor = (kRaw, side, dist) => {
-      // Normalise the node index. Callers derive k with arithmetic (k-1, k+1,
-      // k+step) and an out-of-range index reads `undefined` from the typed
-      // arrays, which turns the whole model into NaN. That is not a local
-      // failure: validateGeometry() rejects the buffer, safe() substitutes an
-      // empty one, and the circuit ships with NO PROPS AT ALL. Silverstone did
-      // exactly that — 783 066 vertices discarded because one roadside tree
-      // resolved to node -1.
-      // ROUND, don't just wrap. A caller passing a lap FRACTION where a node
-      // index belongs (billboard(0.01, …) instead of billboard(K(0.01), …))
-      // survived the modulo as 0.01, indexed the typed arrays fractionally,
-      // read undefined and turned the whole model into NaN — the primitive
-      // guard then dropped it silently. That is how Baku lost a billboard.
       const k = Math.round(((kRaw % n) + n) % n) % n;
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
@@ -118,12 +82,6 @@ const SceneryNature = (function () {
                    return ty != null ? ty : groundYAt(k, dist) + bankOffsetAt(track, k, o); })();
       return { c: [cx, base - 0.3, cz], r, u, t };
     };
-    // Conifer/pine: tapered trunk + stacked cones. col = needle green. Three
-    // silhouette variants selected per-instance so a treeline doesn't read as
-    // identical clones stretched to different sizes: FULL (dense 4-tier), LEAN
-    // (windswept — each tier offset sideways, increasing with height), SPARSE
-    // (thinner 3-tier, gappy — storm-thinned or younger tree).
-    //   opts: { tiers, lean, sparse, snow, deadTop }
     const pine = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
@@ -140,10 +98,6 @@ const SceneryNature = (function () {
         : (!sparse && vr > 0.55 ? (vr - 0.55) * 2.2 : 0);              // ~27% windswept lean
       const tiers = opts.tiers != null ? Math.max(2, Math.min(6, Math.round(opts.tiers)))
         : (sparse ? 3 : 4);
-      // S4 remesh (SCENE-GRAPH-PLAN): geometry is linear in a reference height
-      // so one model + uniform scale instances. World-space 0.5 m sink stays on
-      // the placement (not in the mesh) so scale cannot float/bury the trunk.
-      // lean/j quantize so the key is discrete; side flips +r; tint is NODE_COLOR.
       const PINE_REF_H = 12;
       const jQ = 0.85 + Math.round((j - 0.85) / 0.15) * 0.15;
       const leanQ = lean <= 0 ? 0 : Math.round(lean / 0.4) * 0.4;
@@ -169,16 +123,6 @@ const SceneryNature = (function () {
         { kind: "pine", k, side, h });
       out._mat = 0;
     };
-    // Broadleaf tree: short trunk + a rounded canopy (squat wide cone + cap cone).
-    // ~9% of instances are a bare DEAD/STORM tree (trunk + thin branch cylinders,
-    // no canopy) — breaks up monoculture stands and reads as a real weathered
-    // treeline rather than a cloned forest. Living trees get a per-instance
-    // ASYMMETRIC lean on the upper canopy (~35%) so not every crown is a perfect
-    // dome.
-    //   opts: { crown: "round"(default) | "vase" | "weeping" | "columnar",
-    //           spread, deadChance }
-    // "round" reproduces the pre-existing crown exactly, so the 57 direct calls
-    // and the generic roadside scatter are unchanged until a circuit asks.
     const tree = (k, side, dist, h, col, opts) => {
       const crown = (opts && opts.crown) || "round";
       const sp = (opts && opts.spread) || 1;
@@ -193,9 +137,6 @@ const SceneryNature = (function () {
       const vr = hash(k * 8.3 + side * 5.1 + dist + 4.7);
       const deadAt = 1 - ((opts && opts.deadChance != null) ? opts.deadChance : 0.09);
       if (vr > deadAt) {   // dead/storm tree: bare trunk + a few angled branch stubs.
-        // addCyl extends along basis[1] ("up"), so each branch needs its OWN
-        // tilted up-vector (mostly vertical, blended with an outward lean) —
-        // not the tree's vertical `a.u`, or the branches would draw straight up.
         const th = h * 0.7;
         out._mat = MAT.WOOD;
         addCyl(out, vadd(a.c, a.u, -0.5), 0.32, th + 0.5, [0.28, 0.22, 0.16], 6, b);   // sunk base — no slope float
@@ -219,15 +160,8 @@ const SceneryNature = (function () {
       const c2 = [col[0] * 0.88, col[1] * 0.9, col[2] * 0.84];   // sunlit upper foliage
       const lean = vr > 0.55 ? (vr - 0.55) * 1.4 : 0;   // asymmetric crown, ~35% of instances
       out._mat = MAT.WOOD;
-      // Trunk reaches well into the crown (0.55h): the skirt cone is nearly flat,
-      // so from road level its top surface backface-culls and the crown would
-      // otherwise appear to start at the SECOND cone — a floating canopy with a
-      // see-through band above a too-short trunk (Albert Park eucalyptus rows).
       addCyl(out, vadd(a.c, a.u, -0.5), 0.4, h * 0.55 + 0.5, [0.32, 0.23, 0.13], 6, b);   // sunk base — no slope float
       out._mat = MAT.FOLIAGE;
-      // Close the crown's UNDERSIDE: a shallow inverted skirt from the widest
-      // ring down to the trunk, faces oriented downward (ref sits above), so
-      // low/flat viewpoints see a shaded canopy bottom instead of a culled hole.
       {
         const usR = (3.5 + h * 0.135) * j;
         const ringY = h * 0.34, apexY = h * 0.20;
@@ -240,12 +174,6 @@ const SceneryNature = (function () {
           emit(out, [ring(a0), ring(a1), apex], usCol, uref);
         }
       }
-      // ROUNDED broadleaf canopy: bulges widest in the middle and is capped by a
-      // squat dome — a full, billowing crown that reads clearly as a deciduous
-      // tree rather than the narrow pointed cone-stack of conifer() (the two used
-      // to look near-identical). Top two layers are inverted/short cones so the
-      // crown rounds off instead of tapering to a spike, and lean into `a.r`
-      // increasingly with height on asymmetric instances.
       if (crown === "vase") {
         // Eucalyptus / elm: narrow at the fork, spreading upward and outward.
         addCone(out, vadd(a.c, a.u, h * 0.34), (2.1 + h * 0.07) * j * sp, h * 0.28, col, 8, b);
@@ -277,17 +205,11 @@ const SceneryNature = (function () {
         return;
       }
       ctx.note("palm", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.6, h, h * 0.6], { k, side });
-      // Gently curved trunk: three tapering segments each leaning a touch further
-      // (palms arc toward the light) instead of one dead-straight pole.
       const lean = (hash(k * 3.3 + side * 2.1 + dist) - 0.5) * 0.5;
       const seg = h / 3;
       out._mat = MAT.WOOD;
       // buried root stub: keeps the slim trunk grounded on sloped/uneven terrain
       addCyl(out, vadd(a.c, a.u, -0.6), 0.38, 0.75, [0.42, 0.34, 0.21], 6, b);
-      // Curved trunk as a CONNECTED chain: each segment runs joint-to-joint with
-      // its own tilted up-vector (like the dead-tree branches). The old form
-      // stacked vertical cylinders at per-segment lateral offsets — with any
-      // lean the top segment detached sideways and floated as a bare stick.
       const joint = (t) => vadd(vadd(a.c, a.u, t * seg), a.r, lean * t * t * 0.4 * side);
       for (let t = 0; t < 3; t++) {
         const p0 = joint(t), p1 = joint(t + 1);
@@ -298,17 +220,10 @@ const SceneryNature = (function () {
       }
       const base = joint(3);
       out._mat = MAT.FOLIAGE;
-      // Crown sits AT the trunk top (was seg/2 ≈ h/6 below it — a bare pole
-      // stuck up through the fronds, reading as a floating stick from distance).
-      // `base` (= joint(3)) already carries the full lean offset.
       const top = vadd(base, a.u, -0.35);
       const frCol = frond || [0.18, 0.40, 0.16];
       const frDark = [frCol[0] * 0.8, frCol[1] * 0.82, frCol[2] * 0.78];
-      // Solid crown core: thin fronds alias away at range, so keep a visible
-      // green mass at the hub — without it a distant palm is just a brown pole.
       addBox(out, top, [1.7, 1.2, 1.7], frDark, b);
-      // 9 drooping fronds: each arcs outward then down (own tilted up-vector),
-      // with per-frond length/droop jitter so the crown reads full, not a star.
       for (let i = 0; i < 9; i++) {
         const ang = (i / 9 + hash(k + i * 1.7) * 0.06) * 6.2832, dir = [Math.cos(ang), 0, Math.sin(ang)];
         const fr = [dir[0] * a.r[0] + dir[2] * a.t[0], 0, dir[0] * a.r[2] + dir[2] * a.t[2]];
@@ -327,17 +242,10 @@ const SceneryNature = (function () {
       }
       out._mat = 0;
     };
-    // Conifer / fir: a tall narrow stack of cones — alpine & northern forest
-    // circuits (Spa, Red Bull Ring, Zandvoort dunes, Montreal).
     const conifer = (k, side, dist, h, col) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       if (onTrack(a.c[0], a.c[2], 3)) return;
       const c2 = [col[0] * 0.86, col[1] * 0.92, col[2] * 0.82];
-      // Per-instance variety, so a treeline is a forest and not one fir stamped N
-      // times: a deterministic ±15% size jitter, a windswept lean on ~40% of
-      // trees, and a 4th spire tier. All from hash(k,side,dist) — no unique
-      // geometry, so the roadside scatter stays cheap. `lean` shifts each tier
-      // laterally in proportion to its height.
       const vr = hash(k * 6.7 + side * 2.3 + dist), j = 0.85 + hash(k * 3.1 + side * 1.7 + dist) * 0.3;
       const lean = vr > 0.6 ? (vr - 0.6) * 1.3 * side : 0;
       out._mat = MAT.WOOD;
@@ -349,19 +257,7 @@ const SceneryNature = (function () {
       addCone(out, vadd(vadd(a.c, a.u, h * 0.88), a.r, lean * 0.88), (0.6 + h * 0.03) * j, h * 0.28, c2, 5, b);
       out._mat = 0;
     };
-    // ---------- species: the silhouettes pine/tree/palm/conifer cannot make ----------
-    // Six species served forty circuits, so a Portuguese hillside, an Argentine
-    // avenue and a Highveld plain all planted the same rounded cone. The five
-    // below are the forms circuit authors kept rewriting locally; each is the
-    // best of those implementations plus an options bag, because a shared model
-    // that renders identically everywhere only moves the sameness up a level.
-    // All follow tree()'s contract: (k, side, dist, h, col, opts), anchored,
-    // on-track guarded, noted, MAT.WOOD trunk + MAT.FOLIAGE crown, base sunk so
-    // a single-point terrain sample cannot float them on a slope.
 
-    // cypress: the columnar dark-green spire of an Italian avenue — a stack of
-    // narrowing cones on a slim trunk, nothing like pine()'s wide tiers.
-    //   opts: { slim (crown-radius scale, default 1), trunkCol }
     const cypress = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
@@ -383,10 +279,6 @@ const SceneryNature = (function () {
       out._mat = 0;
     };
 
-    // stonePine: the Mediterranean parasol pine — a bare trunk carrying a flared
-    // underside and a shallow dome, i.e. a mushroom, not a spire.
-    //   opts: { lean (0 = upright, 1 = full windswept), spread (crown scale),
-    //           trunkCol }
     const stonePine = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
@@ -397,8 +289,6 @@ const SceneryNature = (function () {
       }
       ctx.note("stonePine", [a.c[0], a.c[1] + h * 0.7, a.c[2]],
                [h * 0.9 * spread, h, h * 0.9 * spread], { k, side });
-      // The Atlantic wind: the trunk's foot and its crown disagree, which is the
-      // whole read of a coastal pine. `lean` scales that disagreement.
       const amt = opts.lean != null ? Math.max(0, Math.min(1.5, opts.lean)) : 1;
       const lean = (hash(k * 13.1 + side * 3.7 + dist) - 0.5) * 0.9 * amt;
       const foot = vadd(a.c, a.r, lean * 0.6);
@@ -412,11 +302,6 @@ const SceneryNature = (function () {
       out._mat = 0;
     };
 
-    // broadleafFall: a turning autumn broadleaf — three overlapping off-axis
-    // lobes rather than one solid cone of colour, so the crown has a shape when
-    // the foliage is a bright non-green. Pass an autumn `col` (or a summer green;
-    // the form is what differs from tree(), not the palette).
-    //   opts: { lobes, spread (crown scale), barkCol }
     const broadleafFall = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
@@ -445,10 +330,6 @@ const SceneryNature = (function () {
       out._mat = 0;
     };
 
-    // acacia: the flat-topped thorn of the African veld — a bare trunk forking
-    // low into one wide, shallow, near-horizontal crown. The umbrella IS the
-    // silhouette; a rounded tree() canopy here reads as European parkland.
-    //   opts: { spread (crown width in metres, default 2.4x h*0.35), layers, barkCol }
     const acacia = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
@@ -477,14 +358,6 @@ const SceneryNature = (function () {
       // Flat slabs, not cones: the crown's top and bottom are both near-planar.
       for (let i = 0; i < layers; i++) {
         const f = 1 - i * 0.4;
-        // The lowest slab thickens on tall trees so its underside still reaches
-        // the fork top (h*0.68 + 0.35). That gap grows as h*0.12 - 0.80 and
-        // passes the 0.6 m the audit bridges at h > ~11.7 — the other half of
-        // the same defect. Thickening the slab rather than raising the fork is
-        // deliberate: the fork halves are 0.22 deep and share both large face
-        // planes with each other, so growing them pushed a pre-existing
-        // same-facing coincidence over the coplanar audit's area threshold
-        // (cota 12 -> 14 spots) for no visual gain.
         const t = i === 0 ? Math.max(0.9, 2 * (h * 0.12 - 0.90)) : 0.9 - i * 0.2;
         addBox(out, vadd(a.c, a.u, layerY(i)),
                [spread * f, t, spread * f], i % 2 ? c2 : col, b);
@@ -492,11 +365,6 @@ const SceneryNature = (function () {
       out._mat = 0;
     };
 
-    // plane: the pollarded avenue tree (plátano / London plane) — a pale mottled
-    // trunk under a BROAD FLATTENED crown of stacked cylinders. Pollarding is
-    // why it is cylindrical: the crown is cut back to a disc every winter, which
-    // no cone-stack species in this library can express.
-    //   opts: { stages (1-3 crown discs), spread, trunkCol }
     const plane = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
@@ -510,8 +378,6 @@ const SceneryNature = (function () {
       const stages = Math.max(1, Math.min(3, Math.round(opts.stages || 2)));
       const c2 = [col[0] * 0.80, col[1] * 0.84, col[2] * 0.80];
       out._mat = MAT.WOOD;
-      // Pale mottled bark is the plane tree's identity — built explicitly rather
-      // than through tree(), whose dark trunk colour is not overridable.
       addCyl(out, vadd(a.c, a.u, -0.5), 0.42, h * 0.48 + 0.5,
              opts.trunkCol || [0.72, 0.70, 0.62], 6, b);
       out._mat = MAT.FOLIAGE;
@@ -543,33 +409,17 @@ const SceneryNature = (function () {
       out._mat = MAT.ROCK;
       addPyramid(out, [x, baseY, z], [w, h, w], col, null);
       addPyramid(out, [x, baseY - 2, z], [w * 1.5, h * 0.45, w * 1.5], [col[0] * 0.9, col[1] * 0.92, col[2] * 0.9], null);
-      // A smaller off-axis sub-peak breaks the perfect-pyramid read. Offset in
-      // XZ, its own base Y and a NON-square base (w*0.6 × w*0.72) so its faces
-      // align with neither the summit nor the foot — no same-facing coplanar
-      // pair. Kept inside the w*1.061 guard footprint. Deterministic per (x,z).
       const pj = hash(x * 0.17 + z * 0.19), pa = pj * 6.2832, so = w * (0.25 + pj * 0.13);
       addPyramid(out, [x + Math.cos(pa) * so, baseY - 0.6, z + Math.sin(pa) * so],
         [w * 0.6, h * (0.5 + pj * 0.25), w * 0.72], [col[0] * 0.94, col[1] * 0.95, col[2] * 0.96], null);
       out._mat = 0;
     };
-    // Organic mountain (world coords): irregular craggy summit with height colour
-    // zones (forest → rock → snow). opts passes seed/snowline/colours — see
-    // addMountain. A low foot skirt blends the base into the ground.
     const mountain = (x, z, baseY, w, h, opts) => {
       opts = opts || {};
-      // The skirt is w*0.62, but addMountain displaces its base ring OUTWARD by
-      // `rough`: a base point reaches w*0.5*(1+0.7*rough)*(1+0.35*rough), which
-      // is ~w*0.70 at the default roughness. Guarding on the skirt alone let a
-      // big rough dune throw a ridge clean over the racing surface — Zandvoort's
-      // 58-100 m dunes reached 7.4 m INSIDE the tarmac edge, which reads on
-      // screen as the hillside eating the track.
       const rough = opts.rough != null ? opts.rough : 0.34;
       const reach = (ww) =>
         ROAD_SKIRT +
         Math.max(ww * 0.62, ww * 0.5 * (1 + 0.7 * rough) * (1 + 0.35 * rough));
-      // Shrink to fit before giving up. Suppressing punches a hole in the ridge
-      // line; a narrower dune in the same place keeps the horizon continuous,
-      // and the road always wins the overlap.
       let fit = w;
       for (let i = 0; i < 6 && onTrack(x, z, reach(fit)); i++) fit *= 0.88;
       if (onTrack(x, z, reach(fit))) {
@@ -583,8 +433,6 @@ const SceneryNature = (function () {
                  opts.forest || [0.20, 0.34, 0.20], 9, null);   // skirt
       addMountain(out, [x, baseY, z], w * 0.5, h, opts);
     };
-    // Mountain ridge segment (world coords) — a prism whose ridge runs along
-    // `ang` (radians, in the XZ plane). Chain these for a jagged range.
     const ridge = (x, z, baseY, ang, len, w, h, col) => {
       // Skip if footprint half-extent reaches tarmac.
       if (onTrack(x, z, Math.max(len, w) * 0.5 + ROAD_SKIRT)) {
@@ -609,12 +457,6 @@ const SceneryNature = (function () {
       // never got it.
       const SINK = 2;
       addPrism(out, [x, baseY - SINK, z], [w, h + SINK, len], col, [r, [0, 1, 0], f]);
-      // One subordinate crest breaks the single clean wedge into a small range.
-      // It gets its OWN heading (rotated ang) and a DEEPER buried base, so it
-      // shares no plane with the main prism — no same-facing coplanar pair
-      // (coplanar-faces.test.mjs counts those, and this helper fires 28× across
-      // 24 circuits). Kept small and inside the footprint the onTrack guard
-      // already cleared. Deterministic per (x,z) so a given ridge is stable.
       const jr = hash(x * 0.13 + z * 0.11 + ang);
       const a2 = ang + (jr - 0.5) * 0.6;
       const f2 = [Math.cos(a2), 0, Math.sin(a2)], r2 = [-f2[2], 0, f2[0]];
@@ -624,15 +466,6 @@ const SceneryNature = (function () {
         [w * 0.7, h * (0.42 + jr * 0.22) + SINK + dY, len * 0.4],
         col, [r2, [0, 1, 0], f2]);
     };
-    // Populate a raked seating bank with speckled spectators. Front row sits at
-    // clearance `gap` beyond the road edge and the bank rises `rise` m over
-    // `depth` m of recede, split into blocks by aisles. Empty seats + a dark
-    // riser behind each row read as shadow, not sky, through the gaps. At night
-    // most bodies go dark with a sparse scatter of phone-lights / camera flashes.
-    // Emitted with ctx.instance(..., {unguarded:true}) — spectators always sit
-    // safely behind the shell, so the per-box on-road test is skipped for speed.
-    // `lift` (optional) raises the whole bank on the up axis — used by
-    // grandstandEx to stack an upper deck above the lower rake.
     const crowdBank = (k, side, gap, len, rise, depth, riserCol, lift) => {
       const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
       const rows = Math.max(3, Math.round(rise / 1.4));
@@ -650,14 +483,7 @@ const SceneryNature = (function () {
         // safely behind the shell never trips it, so intended crowds are unchanged.
         out._mat = MAT.CONCRETE;
         const riserC = vadd(vadd(a.c, a.u, up), a.r, side * back);
-        // If the riser is rejected, this row has no seating — so skip its
-        // spectators too. The bodies below go out unguarded, so without this
-        // they stayed behind as a row of people sitting on thin air where the
-        // stand had been dropped.
         if (rejBox(riserC, [1.3, 1.5, len], b)) continue;
-        // The rejBox above stays explicit — it also decides whether this row's
-        // spectators are emitted at all — so the replay below is UNGUARDED, which
-        // is what this emitter already did before the graph migration.
         ctx.instance(`crowd-riser|${riser.join(",")}`,
           { o: riserC, r: a.r, u: a.u, t: a.t, s: [1, 1, len] },
           (rec) => { rec.mat(MAT.CONCRETE); rec.box([0, 0, 0], [1.3, 1.5, 1], riser); },
@@ -678,11 +504,6 @@ const SceneryNature = (function () {
           } else {
             col = CROWD_DAY[Math.floor(h1 * CROWD_DAY.length) % CROWD_DAY.length];
           }
-          // torso + head lump. One model for every spectator in the game: the
-          // per-person height jitter rides the node scale and the shirt colour
-          // the node colour, so a full grandstand costs one 24-vertex box plus a
-          // transform each. Crowds are the densest geometry the game emits —
-          // spectatorHill alone runs ~70 verts/metre.
           ctx.instance("crowd-body",
             { o: c, r: a.r, u: a.u, t: a.t, s: [1, 0.72 + h2 * 0.2, 1], col },
             (rec) => { rec.mat(MAT.FABRIC); rec.box([0, 0, 0], [0.55, 1, 0.5], TrackGraph.NODE_COLOR); },
@@ -691,37 +512,9 @@ const SceneryNature = (function () {
       }
       out._mat = 0;
     };
-    // grandstandEx(): the full raked-stand model. grandstand() below is the
-    // legacy 6-arg entry point and delegates here with `opts` empty — with no
-    // opts this emits byte-identical geometry to the pre-split implementation,
-    // so every existing call site is untouched.
-    //
-    // opts (all optional):
-    //   livery     name into TrackSceneryData.STAND_LIVERIES; supplies
-    //              shell/roof/fascia/crowd colours in one go. Explicit
-    //              shell/crowd args still win over the livery.
-    //   tiers      1..3 raked decks stacked with a concourse band between them
-    //   h          back-shell height (default 12)
-    //   roof       "cantilever" (default) | "flat" | "truss" | "none"
-    //   suites     glazed hospitality band under the roof
-    //   endWalls   closing walls at both ends of the stand
-    //   pylons     support columns under the roof's outer edge
-    //   roofCol / fasciaCol / suiteCol   explicit colour overrides
     const grandstandEx = (s, side, gap, len, shell, crowd, opts) => {
       opts = opts || {};
       const lib = TrackSceneryData.STAND_LIVERIES || {};
-      // STAND_SETS is the per-circuit stand FAMILY. It documented itself as the
-      // rotation grandstandEx uses, but nothing read it — the table was dead
-      // config and circuits hand-copied its values into local arrays instead.
-      // It is now the FALLBACK, and only the fallback: an explicit opts.livery
-      // or a positional `shell` colour still wins, so the call sites that
-      // specify one (nearly all of them) are untouched. In practice this governs the handful of
-      // calls that ask for a stand without saying what colour it is, which is
-      // exactly what a house style is for.
-      // Picked by HASH off the node index, not by a sequential cursor: a cursor
-      // would mean inserting one stand recolours every stand after it on that
-      // circuit, so an author adding a bleacher at Turn 2 silently repaints the
-      // main grandstand. Hashing off k keeps every other stand where it was.
       let liveryName = opts.livery;
       if (!liveryName && !shell) {
         const set = (TrackSceneryData.STAND_SETS || {})[def && def.id]
@@ -743,40 +536,24 @@ const SceneryNature = (function () {
       const k = Math.round(s * n) % n;
       const halfFrac = (len / 2) / track.total;
       recordBarrier(s - halfFrac, s + halfFrac, side, gap);
-      // recordBarrier only registers the stand's FRONT FACE. The stand itself
-      // is a ~12.5 m deep mass (crowd bank, back shell centred at gap+7.5 and
-      // 10 wide, roof over the top), and nothing told the scenery engine that —
-      // so treelines planted behind a stand grew straight up through it.
       ctx.indexSolid(s - halfFrac, s + halfFrac, side, gap, 12.5);
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
-      // Guard strategy: the stand uses addBox directly to avoid place()'s
-      // per-box onTrack guard, which fires false-positives at hairpins
-      // (La Source at Spa, etc.). One single guard instead, on the crowd inner
-      // face — skip only if the seating (= road edge + gap) literally sits on track.
       const oInner = side * (hw[k] + gap);
       const ifx = px[k] + r[0] * oInner, ifz = pz[k] + r[2] * oInner;
       if (onTrack(ifx, ifz, 0)) {
         ctx.noteSuppressed("grandstand", `grandstand SUPPRESSED at s=${s} side=${side}: gap=${gap} (inner face on track)`);
         return;
       }
-      // Past the inner-face guard — this stand ships. Size is the back shell
-      // (10 wide, 12 tall) run out to the stand's full length.
       ctx.note("grandstand", [px[k] + r[0] * oInner, groundYAt(k, gap) + 6, pz[k] + r[2] * oInner],
                [10, 12, len], { k, side });
       // Back shell — center at gap+7.5 beyond road edge
       const oShell = side * (hw[k] + gap + 7.5);
       const cShell = [px[k] + r[0] * oShell, groundYAt(k, gap + 7.5) + shellH / 2 - 0.8, pz[k] + r[2] * oShell];
       addBox(out, cShell, [10, shellH, len], shell || [0.40, 0.41, 0.46], [r, u, t]);
-      // Raked crowd: speckled spectators rising from the front toward the shell.
-      // (`crowd` colour, kept for call-site compatibility, tints the dark risers.)
       const riserTint = crowd ? [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4] : null;
       crowdBank(k, side, gap + 1.5, len - 2, 7, 4.2, riserTint);
-      // Upper decks: each extra tier is a shorter bank set back and lifted above
-      // the one below, with a dark concourse band closing the step between them.
-      // Two- and three-tier stands are how every large modern stand actually
-      // reads on camera; one flat rake cannot produce that silhouette.
       const tierLift = [];
       for (let ti = 1; ti < tiers; ti++) {
         const lift = 7.6 * ti, back = 4.6 * ti, tl = len - 2 - ti * 4;
@@ -796,13 +573,9 @@ const SceneryNature = (function () {
       const a = anchor(k, side, gap + 5);
       const roofY = 13 + topLift;
       const roofC = vadd(a.c, a.u, roofY);
-      // The roof's own width, so the rear fascia below can be sized from it
-      // rather than from a literal that has to be kept in step by hand.
       const roofW = roofKind === "truss" ? 12 : (roofKind === "flat" ? 10 : 12);
       if (roofKind !== "none") {
         if (roofKind === "truss") {
-          // Open lattice: a thin deck on repeated cross-braces — reads as an
-          // exposed steel roof rather than a solid slab.
           addBox(out, roofC, [12, 0.35, len + 2], roofCol, [a.r, a.u, a.t]);
           const bays = Math.max(2, Math.min(14, Math.round(len / 9)));
           for (let i = 0; i < bays; i++) {
@@ -840,14 +613,6 @@ const SceneryNature = (function () {
           for (let i = 0; i < posts; i++) {
             const off = ((i + 0.5) / posts - 0.5) * len;
             const pc = vadd(vadd(a.c, a.t, off), a.r, -side * 4.6);
-            // Ground under THIS post, queried by its actual WORLD x/z. A
-            // per-node lateral sample is not enough: `off` runs along the
-            // tangent at node k while the track curves away from it, so on a
-            // long curved stand the post's true lateral distance is nowhere
-            // near gap+0.4 and the terrain has eased metres further down by
-            // then. groundUnder resolves the surface at the foot's own world
-            // x/z, including off the terrain ribbon where these stands sit.
-            // 0.3 m of embed absorbs the residual sampling disagreement.
             const drop = Math.max(0, pc[1] - groundUnder(pc[0], pc[2])) + 0.3;
             addCyl(out, vadd(pc, a.u, -drop), 0.28, H + drop,
                    fasciaCol, 6, [a.r, a.u, a.t]);
@@ -862,13 +627,6 @@ const SceneryNature = (function () {
         if (!rejBox(suiteC, [3.2, 3.0, len - 3], [sc.r, sc.u, sc.t]))
           addBox(out, suiteC, [3.2, 3.0, len - 3], suiteCol, [sc.r, sc.u, sc.t]);
       }
-      // Closing walls at both ends — stops a stand reading as a slab cut off
-      // mid-air when seen from along the straight.
-      // Same single-sample trap the pylons above were fixed for, and missed
-      // here at the time: the wall is pushed +/-len/2 along the tangent from
-      // a.c — 75 m on a 150 m stand — and then based at a.c's height, so on a
-      // curved or sloping run it leaves the ground behind exactly as the posts
-      // did. Reach down to the surface under the wall's own x/z instead.
       if (opts.endWalls) {
         for (const sgn of [-1, 1]) {
           const base = vadd(a.c, a.t, sgn * (len / 2));
@@ -892,37 +650,17 @@ const SceneryNature = (function () {
       if (roofKind !== "none") {
         const shellTop = cShell[1] + shellH / 2, roofUnder = roofC[1] - 0.4;
         if (roofUnder > shellTop - 0.1) {
-          // Tuck the fascia's outer face just INSIDE the roof's rather than
-          // dead flush with it. At the old literal gap+9 the 4 m-wide fascia
-          // ended at gap+11 and so did the 12 m roof centred on gap+5 — two
-          // large same-facing faces at zero gap, which fight at any distance
-          // and were the widest-reach instance of it in the fleet. The fascia
-          // is hidden by the roof from trackside, so 8 cm inboard costs
-          // nothing; deriving it from roofW also keeps the "flat" roof (10 m,
-          // where the fascia used to protrude a metre) tidy.
           const oF = side * (hw[k] + gap + 5 + roofW / 2 - 0.08 - 2);
           addBox(out, [px[k] + r[0] * oF, (shellTop + roofUnder) / 2, pz[k] + r[2] * oF],
                  [4, roofUnder - shellTop + 0.2, len], fasciaCol, [r, u, t]);
         }
       }
-      // Under-roof lighting: a warm emissive strip beneath the roof slab so a
-      // night grandstand reads as a lit, occupied stand instead of a dark hulk.
       if (NIGHT && roofKind !== "none")
         addBox(out, vadd(a.c, a.u, roofY - 0.65), [8.5, 0.28, len - 1], [1.30, 1.12, 0.74], [a.r, a.u, a.t]);
     };
-    // Legacy 6-arg entry point — 33 call sites remain across js/circuits/*.js
-    // vs 230 migrated to grandstandEx (counted 2026-08). With no opts,
-    // grandstandEx reproduces the original geometry exactly.
     const grandstand = (s, side, gap, len, shell, crowd) =>
       grandstandEx(s, side, gap, len, shell, crowd, null);
 
-    // spectatorHill(): informal grass-bank terracing — stepped earth risers
-    // climbing away from the track with a sparse standing crowd on top. This is
-    // what general-admission viewing actually looks like at Monza's Lesmo, Spa's
-    // Pouhon banks, Suzuka's Spoon, COTA's Turn 1 and the Red Bull Ring's Green
-    // Hill; a roofed grandstand() is the wrong silhouette for all of them and
-    // costs far more geometry. Terrain-anchored per node, so it follows a slope.
-    //   opts: { rows, rise, depth, grass, riser, density, step, crowd }
     const spectatorHill = (s0, s1, side, gap, opts) => {
       opts = opts || {};
       const rows = Math.max(2, Math.min(8, Math.round(opts.rows || 4)));
@@ -954,11 +692,6 @@ const SceneryNature = (function () {
           out._mat = MAT.CONCRETE;
           addBox(out, tc, [depth, rise + 0.5, spacing], r % 2 ? riser : grass, b);
           out._mat = MAT.FABRIC;
-          // Standing spectators on the tread — sparser and more scattered than a
-          // seated crowdBank, which is what a grass bank reads like. Spaced at
-          // 1.8 m rather than crowdBank's 1.15 m seat pitch: people stand further
-          // apart on a bank, and the bodies are the bulk of this model's cost
-          // (a long hill is repeated furniture, budget 10k verts per sector).
           const perRow = Math.max(2, Math.round(spacing / 1.8));
           for (let i = 0; i < perRow; i++) {
             const h1 = hash(k * 3.3 + r * 7.1 + i * 2.3 + side * 1.9);
@@ -970,9 +703,6 @@ const SceneryNature = (function () {
             const col = NIGHT
               ? (h2 > 0.95 ? [2.4, 2.2, 1.9] : [0.12, 0.13, 0.17])
               : (opts.crowd || CROWD_DAY)[Math.floor(h2 * (opts.crowd || CROWD_DAY).length) % (opts.crowd || CROWD_DAY).length];
-            // Standing bodies share one model the same way the seated ones do —
-            // height on the node scale, shirt on the node colour. Unguarded, as
-            // this emitter already was.
             ctx.instance("crowd-standing",
               { o: c, r: a.r, u: a.u, t: a.t, s: [1, 0.86 + h1 * 0.2, 1], col },
               (rec) => { rec.mat(MAT.FABRIC); rec.box([0, 0, 0], [0.5, 1, 0.46], TrackGraph.NODE_COLOR); },
@@ -1011,10 +741,6 @@ const SceneryNature = (function () {
           ctx.noteSuppressed("hedge", `hedge SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
-        // Scalloped clipped top instead of a dead-flat wall: a ±10% per-node
-        // crest wobble on the base body, plus a narrower jittered lump riding the
-        // crest. All jitter stays INSIDE HEDGE_W, so the indexSolid footprint
-        // registered above is unchanged (no new clipping).
         const base = col || [0.18, 0.36, 0.16], hb = [p.r, p.u, p.t];
         const hj = h * (0.9 + hash(k * 5.1 + side) * 0.2);
         addBox(out, vadd(p.c, p.u, (hj - 0.4) / 2), [HEDGE_W, hj + 0.4, spacing], base, hb);   // base sunk 0.4
@@ -1042,29 +768,16 @@ const SceneryNature = (function () {
       if (kind === "pine") return 2.7 * jMax + 0.4;       // pine(): widest lower tier
       if (kind === "fir")  return (2.1 + h * 0.06) * 1.15 + 0.4;   // conifer(): +15% jitter on the base tier
       if (kind === "palm") return 5.2;                    // frond hub 2.4 + blade spread
-      // The five species emitters added for the identity pass. Each figure is
-      // the emitter's OWN on-track guard radius at the default spread, so the
-      // roadside scatter clears a fence by exactly what the species clears.
       if (kind === "cypress")       return 1.45 * jMax + 0.4;   // narrow column
       if (kind === "stonePine")     return h * 0.44 + 0.6;      // wide flat parasol
       if (kind === "broadleafFall") return h * 0.34 + 0.8;      // lobed crown
       if (kind === "acacia")        return h * 0.575 + 0.8;     // flat-topped thorn, spread = h*1.15
       if (kind === "plane")         return 4.2 + h * 0.12 + 0.6;  // pollarded avenue crown
-      // tree() crown forms: vase spreads WIDER than round, columnar much
-      // narrower. The roadside scatter's fence guard uses this, so it has to
-      // track the actual widest cone in each form.
       if (kind === "vase")          return (4.0 + h * 0.17) * jMax + 0.4;
       if (kind === "weeping")       return (3.9 + h * 0.16) * jMax + 0.4;
       if (kind === "columnar")      return (1.5 + h * 0.05) * jMax + 0.4;
       return (3.7 + h * 0.14) * jMax + 0.4;               // tree(): widest bulge cone
     };
-    // Queued, then flushed after def.scenery() returns. A track file is written
-    // in whatever order reads well — imola plants its treelines at the top and
-    // builds its catch fences 280 lines later — so a forestEdge() that consults
-    // the barrier index the moment it is called is usually consulting an empty
-    // one. Deferring every treeline to the end of the scenery pass makes the
-    // guard order-independent: authors keep writing scenery in any order they
-    // like, and the foliage always sees the finished barrier set.
     const deferredFoliage = [];
     const forestEdge = (...a) => { deferredFoliage.push(a); };
     const forestEdgeNow = (s0, s1, side, gap, opts) => {
@@ -1103,20 +816,12 @@ const SceneryNature = (function () {
         const dist = gap + canopy;
         // stagger a back row slightly for depth on the densest treelines
         const back = (dens > 0.6 && hash(k * 8.9 + side) < 0.4) ? canopy * 1.4 : 0;
-        // Same world-space guard the roadside scatter uses. The canopy sizing
-        // above only guarantees clearance from the ROAD EDGE; a treeline run
-        // alongside a stretch that also carries a catch fence still grows
-        // straight through it, which is every surviving hit on imola.
         const d = clearTreeDist(k, side, dist + back, canopy);
         if (d == null) return;
         if (isPine) pine(k, side, d, h, pineCol);
         else        tree(k, side, d, h, treeCol);
       });
     };
-    // Bush / shrub clump: 2-3 jittered cones offset around a centre so it reads
-    // as an irregular clump of foliage rather than one uniform cone (every bush
-    // on every track used to be geometrically identical).
-    //   opts: { form: "clump"(default) | "grass" | "agave", lobes }
     const bush = (k, side, dist, col, opts) => {
       const bform = (opts && opts.form) || "clump";
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
@@ -1152,8 +857,6 @@ const SceneryNature = (function () {
         const lx = Math.cos(ang) * off, lz = Math.sin(ang) * off;
         const lc = vadd(vadd(p.c, p.r, lx), p.t, lz);
         const rad = (1.1 + lh * 0.9) * (lobes > 1 ? 0.82 : 1.15);
-        // lobe base sits BELOW grade (was +0.25..0.45 → visibly hovering); the
-        // buried part is occluded, the crown height barely changes.
         addCone(out, vadd(lc, p.u, -0.3 + lh * 0.1), rad, 2.2 + lh * 1.0, i === 0 ? bc : c2, 6, b);
       }
     };
