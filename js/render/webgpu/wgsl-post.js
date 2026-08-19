@@ -284,12 +284,14 @@ fn ssaoDepth(uv : vec2<f32>) -> f32 {
   let px = clamp(vec2<i32>(uv * vec2<f32>(dims)), vec2<i32>(0), max(dims - vec2<i32>(1), vec2<i32>(0)));
   return textureLoad(depthTex, px, 0);
 }
-fn ssaoViewPos(uv : vec2<f32>) -> vec3<f32> {
-  let d = ssaoDepth(uv);
+fn ssaoViewPosFromD(uv : vec2<f32>, d : f32) -> vec3<f32> {
   // Texture-space uv -> WebGPU NDC (y flip), depth already 0..1.
   let ndc = vec3<f32>(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, d);
   let v = U.invProj * vec4<f32>(ndc, 1.0);
   return v.xyz / v.w;
+}
+fn ssaoViewPos(uv : vec2<f32>) -> vec3<f32> {
+  return ssaoViewPosFromD(uv, ssaoDepth(uv));
 }
 
 @fragment
@@ -302,14 +304,14 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // Derivatives (dpdx/dpdy) MUST run in uniform control flow, so compute the
   // view-space position + normal BEFORE the sky early-out (an early conditional
   // return makes everything after it non-uniform).
-  let P = ssaoViewPos(in.uv);
+  let dCentre = ssaoDepth(in.uv);
+  let P = ssaoViewPosFromD(in.uv, dCentre);
   // Guarded like GLX: at a depth silhouette the two derivatives can be parallel
   // or zero, and normalize(0) is NaN — one speckled AO pixel per silhouette
   // edge. Fall back to eye-facing.
   let crN = cross(dpdx(P), dpdy(P));
   let crL = length(crN);
   let N = select(vec3<f32>(0.0, 0.0, 1.0), crN / crL, crL > 1e-6);
-  let dCentre = ssaoDepth(in.uv);
   if (dCentre >= 0.99999) { return vec4<f32>(1.0); }   // sky: unoccluded
   // uStrength == 0 is supported: the pass still runs contact shadows
   // (haveAO arms on aoStr > 0 || contactStr > 0). Skip the 8 dependent
@@ -542,12 +544,18 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   }
   accum = accum / 16.0;
   lampAccum = lampAccum * U.p0.z * uLampStr * 2.0 / 16.0;
-  let cosT = max(dot(rd, U.sunDir.xyz), 0.0);
-  let g = clamp(U.p1.z, 0.0, 0.95);
-  let hgD = 1.0 + g * g - 2.0 * g * cosT;
-  let hg = (1.0 - g * g) / (hgD * sqrt(hgD));
-  let phase = hg * 0.16 + U.p1.w;
-  return vec4<f32>(U.sunColor.xyz * accum * phase * uStr + lampAccum, 1.0);
+  // HG phase's only consumer is * uStr (GLX GODRAY_FS). Night lamp-vol
+  // frames skip the sqrt — lampAccum is unchanged.
+  var sunTerm = vec3<f32>(0.0);
+  if (uStr > 0.0) {
+    let cosT = max(dot(rd, U.sunDir.xyz), 0.0);
+    let g = clamp(U.p1.z, 0.0, 0.95);
+    let hgD = 1.0 + g * g - 2.0 * g * cosT;
+    let hg = (1.0 - g * g) / (hgD * sqrt(hgD));
+    let phase = hg * 0.16 + U.p1.w;
+    sunTerm = U.sunColor.xyz * accum * phase * uStr;
+  }
+  return vec4<f32>(sunTerm + lampAccum, 1.0);
 }`;
 
   // ════════════════════════════════════════════════════════════════════════
@@ -593,7 +601,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      tone1       : vec4<f32>  off 160   (whites, toe, shoulder, hdrGradeOn)
   //                                          w = GLX uHdrGradeOn: 1 only when an
   //                                          HDR-grade knob is off-neutral
-  //      lift        : vec4<f32>  off 176   (RGB lift, wetness)
+  //      lift        : vec4<f32>  off 176   (RGB lift, haveGR)
   //      gamma       : vec4<f32>  off 192   (RGB gamma, reflect / wet-road SSR)
   //      gain        : vec4<f32>  off 208   (RGB gain, carReflect)
   //      aces        : vec4<f32>  off 224   (acesA, acesB, acesC, acesD) — ACES
@@ -838,8 +846,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
       aoW = aoW + w;
     }
     aoV = aoSum / aoW;
-  } else {
-    aoV = textureSampleLevel(ssaoTex, samp, in.uv, 0.0).r;
   }
   c = c * aoV;
 
@@ -850,10 +856,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let ssrWet = U.lift.w;
   let ssrRefl = U.gamma.w;
   let ssrCar = U.gain.w;
-  // Wetness already lives in the SSR pass .a (min(gateSrc/0.20)). Do not
-  // re-read lift.w — the ssrWet let was removed with the remul, and an
-  // undeclared name here is a Dawn compile error that sheds the whole
-  // COMPOSITE (godray/bloom/grade) back to a tonemap blit.
+  // Wetness already lives in the SSR pass .a (min(gateSrc/0.20)). Keep
+  // the ssrWet let so a leftover use still compiles (Dawn sheds COMPOSITE
+  // on an undeclared name). lift.w is now haveGR (leftover 6).
   if (ssrRefl > 0.001 || ssrCar > 0.001) {
     let ssr = textureSampleLevel(ssrPostTex, samp, in.uv, 0.0);
     if (ssr.a > 0.001) {
@@ -868,18 +873,26 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   }
 
   // Volumetric shafts (additive, unscaled — strength is in the GODRAY pass).
-  c = c + textureSampleLevel(godrayTex, samp, in.uv, 0.0).rgb;
+  // lift.w is haveGR (wetness already lives in SSR .a). Skip the fetch
+  // when the godray pass did not run — stale contents are unread.
+  if (U.lift.w > 0.5) {
+    c = c + textureSampleLevel(godrayTex, samp, in.uv, 0.0).rgb;
+  }
 
   // Exposure before tonemap.
   c = c * exposure;
 
   // Bloom: tone-aware mask so already-bright pixels don't over-wash.
-  let bloomSample = textureSampleLevel(bloomTex, samp, in.uv, 0.0).rgb;
-  let bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.7, 0.0, 0.3) / 0.3 * bloomKnee;
-  // Scale by exposure to match the scene (parity with GLX): the bright-pass is
-  // pre-exposure, but the scene above is already * exposure — so a driven
-  // exposure would otherwise leave the halos over-strong.
-  c = c + bloomSample * bloomAmt * bloomMask * exposure;
+  // Skip the fetch when bloomAmt is 0 (CPU shed the chain / cleared mip0).
+  var bloomSample = vec3<f32>(0.0);
+  if (bloomAmt > 0.001) {
+    bloomSample = textureSampleLevel(bloomTex, samp, in.uv, 0.0).rgb;
+    let bloomMask = 1.0 - clamp(max(c.r, max(c.g, c.b)) - 0.7, 0.0, 0.3) / 0.3 * bloomKnee;
+    // Scale by exposure to match the scene (parity with GLX): the bright-pass is
+    // pre-exposure, but the scene above is already * exposure — so a driven
+    // exposure would otherwise leave the halos over-strong.
+    c = c + bloomSample * bloomAmt * bloomMask * exposure;
+  }
 
   // LENS DIRT veil (GLX js/render/shaders/post.js): grime on the lens
   // scatters incoming light into a smudgy film. Driven by the blurred bright-pass

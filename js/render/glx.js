@@ -1829,7 +1829,7 @@ const GLX = (function () {
     castShadowChunked: (mesh, model) => CHK.castShadowChunked(mesh, model),
     // Cull-test helpers, so a caller outside the draw path (the agent world
     // view's visible()) runs the same frustum maths the GPU path runs.
-    makeFrustumPlanes: (viewProj) => CHK.makeFrustumPlanes(viewProj),
+    makeFrustumPlanes: (viewProj, out) => CHK.makeFrustumPlanes(viewProj, out),
     aabbInFrustum: (planes, mn, mx) => CHK.aabbInFrustum(planes, mn, mx),
     // WGX and TLX both export this; GLX had it in CHK but never forwarded it,
     // so a future gfx.aabbDist2 caller would die on the DEFAULT backend only —

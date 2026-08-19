@@ -136,6 +136,11 @@ void main() {
       float az = vnoise(vec2(atan(dir.z, dir.x) * 2.2, up * 6.0)) - 0.5;
       c *= 1.0 + az * 0.05 * daytime * (1.0 - overcast) * (1.0 - smoothstep(0.0, 0.5, up));
     }
+    // Golden-hour + low-sun band: first factor is (1-smoothstep(0, 0.72, sunE))
+    // / (1-smoothstep(0, 0.60, sunE)). Both are exactly 0 when sunE >= 0.72
+    // (default day ~0.95, night moon key ~1). Skip the two mixes — identity.
+    // sunE is a uniform (uSunDir.y). Dawn/dusk (low sun) still enter.
+    if (sunE < 0.72) {
     // Golden-hour: warm amber/orange overlay near the horizon when the sun is low.
     // Concentrated in the bottom 32% of sky; fades out as sun climbs past ~50°.
     // Damped under overcast so heavy cloud doesn't show warm colour.
@@ -154,6 +159,7 @@ void main() {
     vec3 lowColor = mix(vec3(0.90, 0.26, 0.03), vec3(1.0, 0.66, 0.12),
                         clamp(sunE * 3.0, 0.0, 1.0));
     c = mix(c, lowColor, lowBand * 0.70);
+    }
   } else {
     // Below the horizon: dark earth tone, smoothly blended from the horizon colour.
     float gnd = clamp(-up * 5.0, 0.0, 1.0);
@@ -240,7 +246,12 @@ void main() {
     lit += uSunColor * silver * (1.3 + twilight * 1.6) * uCloudSilver;
     // Twilight: a broad warm wash across the sun-facing cloud field (not just the
     // thin rim) so the whole sky catches fire at the magic hour.
+    // twilight is a uniform (sunE × !dayGate × !nightSky) — identically 0 on
+    // default day (~0.95) and night (moon-key). Default cloud is 0.4 so this
+    // block is live; skip the pow when the mix is identity. Dawn/dusk still enter.
+    if (twilight > 0.001) {
     lit += uSunColor * pow(sd, 2.5) * twilight * 0.30 * (1.0 - overcast * 0.6);
+    }
     // Moon tints nearby clouds faintly blue-silver.
     if (uMoon > 0.0) {
       float moonLit = uMoon * cov * (1.0 - thick * 0.6) * 0.18;

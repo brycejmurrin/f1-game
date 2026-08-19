@@ -208,13 +208,21 @@
         c.assign(mix(horizonO, zenithO, pow(up, U.skyGrad)));
         // Day gradient LIFE: deep saturated-blue low/mid band + faint
         // azimuthal variation. Day-only, faded under overcast.
-        const bandLM = smoothstep(0.06, 0.55, up).oneMinus().mul(smoothstep(0.0, 0.06, up));
-        const deepBlue = vec3(0.10, 0.30, 0.72);
-        c.assign(mix(c, mix(c, deepBlue, 0.30),
-          clamp(daytime.mul(overcast.oneMinus()).mul(bandLM).mul(U.daySkyBlue), 0.0, 1.0)));
-        const az = vnoise(vec2(atan(dir.z, dir.x).mul(2.2), up.mul(6.0))).sub(0.5);
-        c.mulAssign(az.mul(0.05).mul(daytime).mul(overcast.oneMinus())
-          .mul(smoothstep(0.0, 0.5, up).oneMinus()).add(1.0));
+        // GATED ON daytime (GLX SKY_FS): the atan + vnoise below are
+        // multiplied by daytime, which is 0 on every night frame and
+        // every dawn/dusk frame with the sun under ~14.5°.
+        If(daytime.greaterThan(0.0), () => {
+          const bandLM = smoothstep(0.06, 0.55, up).oneMinus().mul(smoothstep(0.0, 0.06, up));
+          const deepBlue = vec3(0.10, 0.30, 0.72);
+          c.assign(mix(c, mix(c, deepBlue, 0.30),
+            clamp(daytime.mul(overcast.oneMinus()).mul(bandLM).mul(U.daySkyBlue), 0.0, 1.0)));
+          const az = vnoise(vec2(atan(dir.z, dir.x).mul(2.2), up.mul(6.0))).sub(0.5);
+          c.mulAssign(az.mul(0.05).mul(daytime).mul(overcast.oneMinus())
+            .mul(smoothstep(0.0, 0.5, up).oneMinus()).add(1.0));
+        });
+        // Golden-hour + low-sun band: both amounts are 0 when sunE >= 0.72
+        // (GLX SKY_FS). Default day / night moon-key skip; dawn/dusk still enter.
+        If(sunE.lessThan(0.72), () => {
         // Golden-hour: warm overlay near the horizon when the sun is low.
         const goldenAmt = smoothstep(0.0, 0.72, sunE).oneMinus()
           .mul(smoothstep(0.0, 0.32, up).oneMinus())
@@ -230,6 +238,7 @@
         const lowColor = mix(vec3(0.90, 0.26, 0.03), vec3(1.0, 0.66, 0.12),
           clamp(sunE.mul(3.0), 0.0, 1.0));
         c.assign(mix(c, lowColor, lowBand.mul(0.70)));
+        });
       }).Else(() => {
         // Below the horizon: dark earth tone blended from the horizon colour.
         const gnd = clamp(up.negate().mul(5.0), 0.0, 1.0);
@@ -302,9 +311,12 @@
         const silver = pow(sd, 6.0).mul(thick.oneMinus()).mul(goldenC.add(0.55))
           .mul(overcast.mul(0.7).oneMinus());
         lit.addAssign(U.sunColor.mul(silver).mul(twilight.mul(1.6).add(1.3)).mul(U.cloudSilver));
-        // Twilight: broad warm wash across the sun-facing cloud field.
+        // Twilight: broad warm wash. twilight is a uniform — 0 on default
+        // day / night (GLX SKY_FS). Dawn/dusk still enter.
+        If(twilight.greaterThan(0.001), () => {
         lit.addAssign(U.sunColor.mul(pow(sd, 2.5)).mul(twilight).mul(0.30)
           .mul(overcast.mul(0.6).oneMinus()));
+        });
         // Moon tints nearby clouds faintly blue-silver.
         If(U.moon.greaterThan(0.0), () => {
           const moonLit = U.moon.mul(cov).mul(thick.mul(0.6).oneMinus()).mul(0.18);
@@ -351,23 +363,29 @@
 
       // --- Sun corona + disc (damped under overcast; nightSky gate folded in
       //     so a night session can never paint a sun disc among the stars) ---
-      const coronaDamp = overcast.mul(0.92).oneMinus().mul(nightSky.oneMinus()).toVar();
-      const golden = smoothstep(0.0, 0.45, sunE).oneMinus().toVar();
-      const sunWarm = mix(U.sunColor, U.sunColor.mul(vec3(1.18, 0.52, 0.24)), golden).toVar();
-      // Wide aureole: broader (lower exponent) + stronger at golden hour.
-      c.addAssign(sunWarm.mul(pow(sd, mix(float(20.0), float(8.0), golden)))
-        .mul(golden.mul(0.55).add(0.55)).mul(coronaDamp).mul(U.coronaAureole));
-      // Tight inner ring.
-      c.addAssign(sunWarm.mul(pow(sd, 300.0)).mul(0.95).mul(U.sunCorona).mul(coronaDamp));
-      // Disc, vertically squashed near the horizon (atmospheric refraction).
-      const dd = dir.sub(U.sunDir.mul(sd)).toVar();
-      const perp = length(vec2(length(dd.xz),
-        dd.y.mul(mix(float(1.0), mix(float(1.0), float(1.6), golden), U.sunSquash)))).toVar();
-      const disc = smoothstep(mix(float(0.018), float(0.028), golden).mul(U.sunDiscSize),
-        U.sunDiscSize.mul(0.006), perp).mul(coronaDamp).toVar();
-      // Bright HDR core (>1) so it blooms; warm-white high, deep amber low.
-      const discCore = mix(vec3(2.3, 2.2, 1.9), sunWarm.mul(2.8), golden);
-      c.addAssign(discCore.mul(disc));
+      // SKIP THE WHOLE BLOCK ON A NIGHT FRAME (GLX SKY_FS). coronaDamp's
+      // second factor is (1 - nightSky), so every addAssign below is * 0
+      // when nightSky == 1. 2 pow + length + smoothstep on every uncovered
+      // sky pixel. nightSky is a uniform (uStars) — no divergence.
+      If(nightSky.lessThan(0.5), () => {
+        const coronaDamp = overcast.mul(0.92).oneMinus().mul(nightSky.oneMinus()).toVar();
+        const golden = smoothstep(0.0, 0.45, sunE).oneMinus().toVar();
+        const sunWarm = mix(U.sunColor, U.sunColor.mul(vec3(1.18, 0.52, 0.24)), golden).toVar();
+        // Wide aureole: broader (lower exponent) + stronger at golden hour.
+        c.addAssign(sunWarm.mul(pow(sd, mix(float(20.0), float(8.0), golden)))
+          .mul(golden.mul(0.55).add(0.55)).mul(coronaDamp).mul(U.coronaAureole));
+        // Tight inner ring.
+        c.addAssign(sunWarm.mul(pow(sd, 300.0)).mul(0.95).mul(U.sunCorona).mul(coronaDamp));
+        // Disc, vertically squashed near the horizon (atmospheric refraction).
+        const dd = dir.sub(U.sunDir.mul(sd)).toVar();
+        const perp = length(vec2(length(dd.xz),
+          dd.y.mul(mix(float(1.0), mix(float(1.0), float(1.6), golden), U.sunSquash)))).toVar();
+        const disc = smoothstep(mix(float(0.018), float(0.028), golden).mul(U.sunDiscSize),
+          U.sunDiscSize.mul(0.006), perp).mul(coronaDamp).toVar();
+        // Bright HDR core (>1) so it blooms; warm-white high, deep amber low.
+        const discCore = mix(vec3(2.3, 2.2, 1.9), sunWarm.mul(2.8), golden);
+        c.addAssign(discCore.mul(disc));
+      });
 
       // --- Stars (night tracks): round anti-aliased point discs, brightness
       //     capped below the bloom threshold (no streak smear) ---

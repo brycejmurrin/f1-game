@@ -291,7 +291,14 @@ export function livePlan(opts, knob, def, root) {
     : (opts.track && TRACK_FRAC[track] != null && opts.track !== recipe.track
       ? TRACK_FRAC[track]
       : recipe.frac);
-  const levels = sampleLevels(def, opts);
+  // Recipe can supply from/to overrides (e.g. glareStr full-range 0→max).
+  // CLI opts win over recipe overrides; recipe overrides win over TUNE_DEFS defaults.
+  const levelOpts = {
+    from: opts.from != null ? opts.from : recipe.from,
+    to:   opts.to   != null ? opts.to   : recipe.to,
+    shots: opts.shots, levels: opts.levels,
+  };
+  const levels = sampleLevels(def, levelOpts);
   const from = levels[0];
   const to = levels[levels.length - 1];
   const out = opts.out || path.join(
@@ -570,7 +577,8 @@ function printResult(result) {
     + `  max ${result.pixels.max != null ? result.pixels.max : "?"}\n`
     + (result.files.ramp ? `ramp   ${result.files.ramp}\n` : "")
     + `sheet  ${result.files.sheet}\n`
-    + `filter ${result.files.filter}\n`,
+    + `filter ${result.files.filter}\n`
+    + `diff   ${result.files.diff}\n`,
   );
 }
 
@@ -609,6 +617,7 @@ async function capturePair(page, plan, opts) {
     frames: pngs,
     filter: path.join(plan.out, "filter.png"),
     heat: path.join(plan.out, "heat.png"),
+    diff: path.join(plan.out, "diff.png"),
     sheet: path.join(plan.out, "sheet.png"),
   };
   if (levels.length > 2) {
@@ -684,6 +693,12 @@ export async function runLiveBatch(opts, root, knobs, defs) {
     mkdirSync(path.dirname(index), { recursive: true });
     writeFileSync(index, JSON.stringify({ buckets, results }, null, 2) + "\n");
     if (opts.json) process.stdout.write(JSON.stringify({ buckets, results }, null, 2) + "\n");
+    // Stitch batch summary sheet (one row per knob: id | A | diff | B | MAD bar)
+    if (!opts.noSummary) {
+      const summary = spawnSync("python3", [VIEW, "--batch-summary", index], { encoding: "utf8" });
+      if (summary.status === 0) process.stderr.write(summary.stdout || "");
+      else process.stderr.write(`[summary skipped: ${summary.stderr?.slice(0, 120) || "no python3/pillow"}]\n`);
+    }
     return 0;
   } finally {
     await shutdown();

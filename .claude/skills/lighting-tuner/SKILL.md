@@ -44,6 +44,39 @@ node tools/test-bg.mjs ab       # lighting-ab only
 
 Related: **bake-lighting**, **webgl-debug**, **debug-cameras**.
 
+## Visual A/B with slider-effect
+
+`slider-effect` classifies all 183 knobs (no browser) and runs live Playwright
+A/B captures with pixel-diff outputs. Use it to confirm a knob is wired and to
+see *what region* of the frame it changes.
+
+```sh
+# Classify — no browser, instant
+node tools/slider-effect.mjs --group LAMPS
+node tools/slider-effect.mjs --risk inert --json
+
+# A/B a single knob — Playwright, ~20 s
+node tools/slider-effect.mjs --live saturation
+node tools/slider-effect.mjs --live lampLevel --from 0 --to 0.55
+
+# Full range ramp (5 shots)
+node tools/slider-effect.mjs --live contrast --shots 5
+
+# Batch (one park per shared condition bucket)
+node tools/slider-effect.mjs --live --ids bloomMul,glareStr,neonBoost
+node tools/slider-effect.mjs --live --group "NIGHT GLOW & BLOOM"
+
+# Dry-run: print recipes without launching browser
+node tools/slider-effect.mjs --live glareStr --dry-run
+```
+
+Outputs per knob: `a.png`, `b.png`, `filter.png` (changed pixels only),
+`diff.png` (red = B brighter, blue = B darker), `heat.png`, `sheet.png`,
+`result.json`. Batch runs also write `summary.png` — one row per knob.
+
+Do NOT run `--live` while `cdmcp-cli.py look-survey` holds the box.
+Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools.
+
 ## Load on demand
 
 - `lightState` fields, symptom → knob table, A/B capture, contract tests →

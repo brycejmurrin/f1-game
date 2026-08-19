@@ -274,7 +274,8 @@ const GLXChunked = (function () {
     }
 
     // Nearest lamps whose radius actually reaches a chunk's AABB, closest first,
-    // capped at the shader's 32. Runs ONCE per chunk (cached): lamps are baked
+    // capped at 24 (was 48 — each chunk binds its own set and runs a full LIT
+    // loop per draw). Runs ONCE per chunk (cached): lamps are baked
     // per track and chunk bounds never move, so this is build-time work paid
     // lazily on first draw, not a per-frame cull.
     function _pickChunkLamps(L, mn, mx) {
@@ -286,7 +287,10 @@ const GLXChunked = (function () {
         if (d2 <= rad * rad) hits.push({ i, d2 });
       }
       hits.sort((a, b) => a.d2 - b.d2);
-      const out = new Int32Array(Math.min(48, hits.length));
+      const cap = (F.perChunkLights > 0 && F.perChunkLights < 1)
+        ? Math.max(8, Math.round(24 * F.perChunkLights))
+        : 24;
+      const out = new Int32Array(Math.min(cap, hits.length));
       for (let k = 0; k < out.length; k++) out[k] = hits[k].i;
       return out;
     }

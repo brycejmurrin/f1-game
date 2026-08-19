@@ -804,9 +804,17 @@ function lampCap(carCount, mobileTier) {
   // paths to 24: the per-fragment lamp loop (GGX + clearcoat per lamp) is the
   // dominant night fill cost on phones, and clamping HERE (not the knob's def)
   // means a per-track preset can't push a phone back up to 48.
-  return Math.min(
+  let cap = Math.min(
     carCount > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 40) : 48,
     mobileTier ? 24 : 48);
+  // Shed the nearest-lamp budget under PerfGov load before the fragment loop
+  // pays for distant slots (tier 1 drops env probe; tier 2 drops lamp shadow).
+  if (typeof PerfGov !== "undefined") {
+    const tier = PerfGov.tier();
+    if (tier >= 2) cap = Math.min(cap, 24);
+    else if (tier >= 1) cap = Math.min(cap, 32);
+  }
+  return cap;
 }
 function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet) {
   // srcSet overrides the session light set (the daylight always-on subset);

@@ -1267,12 +1267,14 @@
         });
 
         // ── sun Cook-Torrance specular, soft-clipped (js/render/shaders/lit.js) ────────
-        const D = D_GGX(NoH, a);
-        const Vis = V_SmithGGX(NoV, NoL, a);
-        const F = F_Schlick(VoH, f0, clamp(rough.oneMinus(), 0.0, 1.0));
-        const specCol = F.mul(D.mul(Vis)).mul(vec3(U.sunColor)).mul(litNoL).toVar();
-        specCol.assign(specCol.div(specCol.add(1.0)));
-        color.addAssign(specCol);
+        If(NoL.greaterThan(0.0), () => {
+          const D = D_GGX(NoH, a);
+          const Vis = V_SmithGGX(NoV, NoL, a);
+          const F = F_Schlick(VoH, f0, clamp(rough.oneMinus(), 0.0, 1.0));
+          const specCol = F.mul(D.mul(Vis)).mul(vec3(U.sunColor)).mul(litNoL).toVar();
+          specCol.assign(specCol.div(specCol.add(1.0)));
+          color.addAssign(specCol);
+        });
 
         // ── clearcoat specular AA variance of Ngeo (js/render/shaders/lit.js) — gated
         //    on the UNIFORM so the derivative sits in uniform control flow ────
@@ -1288,14 +1290,16 @@
           const NoHg = max(dot(Ngeo, Hg), 0.0);
           const NoVg = max(dot(Ngeo, V), 1e-4);
           const NoLg = max(dot(Ngeo, L), 0.0);
-          const ccA = min(sqrt(ccSaaVar.mul(0.25).add(0.035 * 0.035)), 0.30);
-          const Dc = D_GGX(NoHg, ccA);
-          const Vc = V_SmithGGX(NoVg, NoLg, ccA);
-          const Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3(0.05), float(1.0)).x;
-          const ccCol = vec3(U.sunColor).mul(Dc.mul(Vc).mul(Fc)).mul(NoLg)
-            .mul(shadow).mul(U.keyMul).mul(clearcoat).toVar();
-          ccCol.assign(ccCol.mul(2.6).div(ccCol.add(2.6)));   // 2.6 HDR ceiling
-          color.addAssign(ccCol);
+          If(NoLg.greaterThan(0.0), () => {
+            const ccA = min(sqrt(ccSaaVar.mul(0.25).add(0.035 * 0.035)), 0.30);
+            const Dc = D_GGX(NoHg, ccA);
+            const Vc = V_SmithGGX(NoVg, NoLg, ccA);
+            const Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3(0.05), float(1.0)).x;
+            const ccCol = vec3(U.sunColor).mul(Dc.mul(Vc).mul(Fc)).mul(NoLg)
+              .mul(shadow).mul(U.keyMul).mul(clearcoat).toVar();
+            ccCol.assign(ccCol.mul(2.6).div(ccCol.add(2.6)));   // 2.6 HDR ceiling
+            color.addAssign(ccCol);
+          });
         });
 
         // ── clearcoat ENV mirror (the analytic-clearcoat-ENV block in lit.js).
@@ -1367,8 +1371,11 @@
           envColor.assign(mix(envColor, envColor.mul(U.sunColor).mul(1.15),
             envSunAlign.mul(envSunAlign).mul(rough.oneMinus())));
           // dry glossy glass sun flash (WINDOW SUN FLASH knob)
-          envColor.addAssign(vec3(U.sunColor).mul(pow(max(envSunAlign, 1e-4), 22.0))
-            .mul(wetSheen.oneMinus()).mul(envBlend).mul(0.6).mul(U.windowSunFlash).mul(U.keyMul));
+          // * (1-wetSheen): a fully-wet road paid pow(_,22) for a result of 0.
+          If(wetSheen.oneMinus().mul(U.windowSunFlash).mul(U.keyMul).greaterThan(0.001), () => {
+            envColor.addAssign(vec3(U.sunColor).mul(pow(max(envSunAlign, 1e-4), 22.0))
+              .mul(wetSheen.oneMinus()).mul(envBlend).mul(0.6).mul(U.windowSunFlash).mul(U.keyMul));
+          });
           const roughDamp = rough.mul(0.7).oneMinus();
           const envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), float(1.0)).x.toVar();
           envFresnel.assign(mix(envFresnel, envFresnel.mul(envFresnel), wetSheen.mul(0.35)));
@@ -1404,41 +1411,45 @@
         });
 
         // ── fog stack (js/render/shaders/lit.js) ─────────────────────────────────────
-        // squared-exponential height fog
-        const heightAtten = select(U.fogHeight.greaterThan(0.0),
-          exp(max(wp.y.sub(cameraPosition.y), 0.0).negate().mul(U.fogHeight)),
-          float(1.0));
-        const fd = vd.mul(U.fogDensity).mul(heightAtten);
-        const f = exp(fd.mul(fd).negate()).oneMinus();
-        // sun in-scatter: broad pow4 + tight pow16 core (FOG SUN CORE)
-        const rd = V.negate();
-        const sunAmount = max(dot(rd, U.sunDir), 0.0).toVar();
-        const sunAmt = max(sunAmount, 1e-4);
-        const fogCol = mix(vec3(U.fogColor), vec3(U.sunColor), pow(sunAmt, 4.0)).toVar();
-        fogCol.addAssign(vec3(U.sunColor).mul(pow(sunAmt, 16.0)).mul(U.fogSunCore));
-        // FOG WARM/COOL white-balance matrix
-        fogCol.mulAssign(vec3(
-          float(1.0).add(max(U.fogTint, 0.0).mul(0.25)).sub(max(U.fogTint.negate(), 0.0).mul(0.12)),
-          float(1.0).sub(abs(U.fogTint).mul(0.02)),
-          float(1.0).sub(max(U.fogTint, 0.0).mul(0.25)).add(max(U.fogTint.negate(), 0.0).mul(0.18))));
-        // glowing fog: lamp in-scatter, Reinhard-clipped (FOG GLOW CLIP)
-        const lampFogC = vec3(0.0).toVar();
-        If(U.lampFog.greaterThan(0.0), () => {
-          const lf = lampFogAcc.mul(U.lampFog);
-          lampFogC.assign(lf.div(max(max(lf.r, lf.g), lf.b).mul(U.lampFogClip).add(1.0)));
-          fogCol.addAssign(lampFogC);
-        });
-        color.assign(mix(color, fogCol, f));
-        // low-lying ground mist: drifting 2-oct cloudFBM band
-        If(U.groundMist.greaterThan(0.001), () => {
-          const lowH = max(wp.y.sub(cameraPosition.y.sub(5.0)), 0.0);
-          const band = exp(lowH.negate().mul(float(0.09).div(max(U.mistHeight, 0.05))));
-          const mp = wp.xz.mul(0.020).add(vec2(U.time.mul(0.010), U.time.mul(0.006)));
-          const dRamp = clamp(vd.sub(8.0).div(45.0), 0.0, 1.0);
-          const mist = U.groundMist.mul(band).mul(smoothstep(0.35, 0.72, cloudFBM(mp))).mul(dRamp);
-          const mistCol = mix(vec3(U.fogColor), vec3(U.sunColor), pow(max(sunAmount, 1e-4), 3.0))
-            .add(lampFogC.mul(U.mistShare));
-          color.assign(mix(color, mistCol, clamp(mist, 0.0, 0.45)));
+        // Skip pow/exp when density and mist are both off (setup / carview / tuner 0).
+        If(U.fogDensity.greaterThan(0.0).or(U.groundMist.greaterThan(0.001)), () => {
+          const rd = V.negate();
+          const sunAmount = max(dot(rd, U.sunDir), 0.0).toVar();
+          const lampFogC = vec3(0.0).toVar();
+          If(U.lampFog.greaterThan(0.0), () => {
+            const lf = lampFogAcc.mul(U.lampFog);
+            lampFogC.assign(lf.div(max(max(lf.r, lf.g), lf.b).mul(U.lampFogClip).add(1.0)));
+          });
+          If(U.fogDensity.greaterThan(0.0), () => {
+            // squared-exponential height fog
+            const heightAtten = select(U.fogHeight.greaterThan(0.0),
+              exp(max(wp.y.sub(cameraPosition.y), 0.0).negate().mul(U.fogHeight)),
+              float(1.0));
+            const fd = vd.mul(U.fogDensity).mul(heightAtten);
+            const f = exp(fd.mul(fd).negate()).oneMinus();
+            // sun in-scatter: broad pow4 + tight pow16 core (FOG SUN CORE)
+            const sunAmt = max(sunAmount, 1e-4);
+            const fogCol = mix(vec3(U.fogColor), vec3(U.sunColor), pow(sunAmt, 4.0)).toVar();
+            fogCol.addAssign(vec3(U.sunColor).mul(pow(sunAmt, 16.0)).mul(U.fogSunCore));
+            // FOG WARM/COOL white-balance matrix
+            fogCol.mulAssign(vec3(
+              float(1.0).add(max(U.fogTint, 0.0).mul(0.25)).sub(max(U.fogTint.negate(), 0.0).mul(0.12)),
+              float(1.0).sub(abs(U.fogTint).mul(0.02)),
+              float(1.0).sub(max(U.fogTint, 0.0).mul(0.25)).add(max(U.fogTint.negate(), 0.0).mul(0.18))));
+            fogCol.addAssign(lampFogC);
+            color.assign(mix(color, fogCol, f));
+          });
+          // low-lying ground mist: drifting 2-oct cloudFBM band
+          If(U.groundMist.greaterThan(0.001), () => {
+            const lowH = max(wp.y.sub(cameraPosition.y.sub(5.0)), 0.0);
+            const band = exp(lowH.negate().mul(float(0.09).div(max(U.mistHeight, 0.05))));
+            const mp = wp.xz.mul(0.020).add(vec2(U.time.mul(0.010), U.time.mul(0.006)));
+            const dRamp = clamp(vd.sub(8.0).div(45.0), 0.0, 1.0);
+            const mist = U.groundMist.mul(band).mul(smoothstep(0.35, 0.72, cloudFBM(mp))).mul(dRamp);
+            const mistCol = mix(vec3(U.fogColor), vec3(U.sunColor), pow(max(sunAmount, 1e-4), 3.0))
+              .add(lampFogC.mul(U.mistShare));
+            color.assign(mix(color, mistCol, clamp(mist, 0.0, 0.45)));
+          });
         });
 
         // ── output alpha ──────────────────────────────────────────────────────

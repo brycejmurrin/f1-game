@@ -137,17 +137,22 @@ const GLXPost = (function () {
         const ds = gl.getInternalformatParameter(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, gl.SAMPLES);
         const cMax = cs && cs.length ? cs[0] : 0;
         const dMax = ds && ds.length ? ds[0] : 0;
-        // Desktop: 4× to match WGX (WebGPU forbids 2, so WGX is 4 or 1). Fall
-        // back to 2 when the HDR format or the device cannot do 4, then 0.
-        // FXAA (full-res, below) still cleans leftover specular/edge shimmer.
+        // Desktop: 4× on GRAPHICS: ULTRA (apex26.gfxHigh=1); 2× on HIGH and
+        // below when the format supports it — halves MSAA fill vs the old
+        // always-4 path while FXAA still cleans specular shimmer.
         // Mobile: no MSAA — two extra full-res multisampled surfaces
         // (~20-30 MB) against a tight jetsam budget; FXAA alone carries the AA.
         // Phones used to inherit 2× when GRAPHICS: HIGH flipped the whole
         // memory tier; IS_MOBILE keeps that from coming back.
         msaaSamples = IS_MOBILE ? 0 : Math.min(4, cMax, dMax);
+        if (!IS_MOBILE) {
+          let _gfxHighOff = false;
+          try { _gfxHighOff = localStorage.getItem("apex26.gfxHigh") === "0"; } catch (_) { /* blocked storage: keep ULTRA MSAA cap */ }
+          if (_gfxHighOff && msaaSamples > 2) msaaSamples = 2;
+        }
         if (msaaSamples < 2) msaaSamples = 0;
       } catch (e) { msaaSamples = 0; }
-      compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uSsrTopUV", "uSsrNear", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uShaftSpread", "uFlareStreak", "uFlareStreak2"]);
+      compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uHaveGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uSsrTopUV", "uSsrNear", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uShaftSpread", "uFlareStreak", "uFlareStreak2"]);
       if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
       if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr", "uHgAniso", "uHgFloor", "uLampShadowMap", "uLampShadowVP", "uLampShadowIdx"]);
       // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -419,14 +424,32 @@ const GLXPost = (function () {
       const { width, height } = core.getSize();
       const threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
       const bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
+      const aoStr = opts && opts.ssao !== undefined ? opts.ssao : 0;
+      const contactStr = opts && opts.contact !== undefined ? opts.contact : 0;
+      const haveAO = ssaoProg && (aoStr > 0 || contactStr > 0) && F.invProj && ssaoFBO;
+      const grStrPre = opts && opts.godray !== undefined ? opts.godray : 0;
+      const lampVolPre = (opts && opts.lampVol) || 0;
+      const haveGRPre = godrayProg && F.invVP && godrayFBO && ((SH.enabled && grStrPre > 0) || lampVolPre > 0);
+      // Must match the composite upload: omitted carReflect means the 0.05
+      // tuner default, so car-paint SSR still marches (and still reads depth).
+      // `opts.carReflect > 0.001` is false for undefined and skipped the blit
+      // on a dry night with AO/godray/flare already off.
+      const _carReflPre = opts && opts.carReflect != null ? opts.carReflect
+        : (opts && opts.tune && opts.tune.carReflect != null ? opts.tune.carReflect : 0.05);
+      const ssrOn = ((opts && opts.reflect) > 0.001) || _carReflPre > 0.001;
+      const _slPre = F.sunColor ? Math.max(F.sunColor[0], F.sunColor[1], F.sunColor[2]) : 1;
+      const flareMaybe = !!(F.sunDir && F.sunDir[1] > -0.02 && _slPre > 0.35);
+      const needDepth = haveAO || haveGRPre || ssrOn || flareMaybe;
 
       // MSAA resolve: average the multisampled scene into sceneTex (and copy depth
-      // into sceneDepth for SSAO/god-rays/SSR) before any post pass samples them.
+      // into sceneDepth for SSAO/god-rays/SSR/flare) before any post pass samples
+      // them. Skip the depth blit when nothing will read sceneDepth — auto-tier
+      // 4 night sheds AO, contact, godray, SSR and flare together.
       if (msaaSamples > 1) {
         gl.bindFramebuffer(gl.READ_FRAMEBUFFER, msFBO);
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, sceneFBO);
         gl.blitFramebuffer(0, 0, width, height, 0, 0, width, height,
-          gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT, gl.NEAREST);
+          needDepth ? (gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT) : gl.COLOR_BUFFER_BIT, gl.NEAREST);
         // The multisampled surfaces are consumed — discard them so a tiled (mobile)
         // GPU never writes them back to memory (MDN WebGL best-practice; big
         // bandwidth/tile-store win, esp. for the multisampled DEPTH).
@@ -441,15 +464,12 @@ const GLXPost = (function () {
       gl.disable(gl.DEPTH_TEST);
       bindVAO(core.skyVAO);   // reuse the empty VAO for fullscreen triangles
 
-      const aoStr = opts && opts.ssao !== undefined ? opts.ssao : 0;
-      const contactStr = opts && opts.contact !== undefined ? opts.contact : 0;
       // 0) SSAO: raw AO from the depth texture, then a separable blur to denoise.
       // Runs when EITHER knob is live: contact shadows ride in this pass, and
       // gating on AO alone silently killed the independent-looking CONTACT
       // SHADOW slider whenever AMBIENT OCCLUSION was dialled to 0. uStrength=0
       // yields ao=1 in the shader, so an AO-off/contact-on pass darkens only
       // the sun-blocked contact pixels.
-      const haveAO = ssaoProg && (aoStr > 0 || contactStr > 0) && F.invProj && ssaoFBO;
       if (haveAO) {
         gl.viewport(0, 0, ssaoW, ssaoH);
         gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO);
@@ -483,10 +503,10 @@ const GLXPost = (function () {
 
       // 0b) Volumetric sun shafts: world-space march of the sun shadow map (half-res)
       // then a separable blur. Gated on the sun being up (grStr > 0) + shadows on.
-      const grStr = opts && opts.godray !== undefined ? opts.godray : 0;
-      const lampVol = (opts && opts.lampVol) || 0;
+      const grStr = grStrPre;
+      const lampVol = lampVolPre;
       const sunGR = SH.enabled && grStr > 0;
-      const haveGR = godrayProg && F.invVP && godrayFBO && (sunGR || lampVol > 0);
+      const haveGR = haveGRPre;
       if (haveGR) {
         gl.viewport(0, 0, godrayW, godrayH);
         gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
@@ -659,8 +679,9 @@ const GLXPost = (function () {
       // octaves) so the hand-tuned per-time-of-day bloom amounts keep their overall
       // energy — same brightness budget, spread over a wider, smoother halo.
       gl.uniform1f(compU.uBloomAmt, bloomAmt * 1.25 / Math.max(nLv - 1, 1));
-      // AO: post-blur result is in ssaoTex; when AO is off bind a white 1×1 so the
-      // shader's `c *= texture(uSSAO).r` is a no-op.
+      // AO: post-blur result is in ssaoTex; when AO is off bind a white 1×1
+      // so the unused sampler still has a complete texture (shader skips
+      // the fetch via uAOTexel == 0; aoV stays 1.0).
       gl.activeTexture(gl.TEXTURE2);
       gl.bindTexture(gl.TEXTURE_2D, haveAO ? ssaoTex : whiteTex);
       gl.uniform1i(compU.uSSAO, 2);
@@ -670,6 +691,7 @@ const GLXPost = (function () {
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D, haveGR ? godrayTex : blackTex);
       gl.uniform1i(compU.uGodray, 3);
+      uf1(compU.uHaveGodray, "haveGodray", haveGR ? 1 : 0);
       // Project sun direction to screen UV for lens flare
       let flareStr = 0, sunShaft = 0;
       _sunUV[0] = -2; _sunUV[1] = -2;

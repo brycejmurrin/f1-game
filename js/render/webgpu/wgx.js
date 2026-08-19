@@ -290,13 +290,13 @@ const WGX = (function () {
   const LAMP_SHADOW_SIZE = WGX_LITE ? 1 : 512;
   // WebGPU allows sampleCount 1 or 4 — ONLY. (w3.org/TR/webgpu: "sampleCount
   // must be either 1 or 4"; Dawn agrees, 4 being the one portable MSAA level.)
-  // This read 2 to mirror GLX's 2x WebGL MSAA and every real device rejected it
-  // — "Multisample count (2) is not supported", once per MS pipeline, then
-  // Invalid RenderPipeline / Invalid BindGroupLayout cascading off the first
-  // failure. Unit tests asserting msaa() === 2 passed throughout, because
-  // nothing in them ever asked a GPU.
+  // Desktop GRAPHICS: ULTRA (apex26.gfxHigh=1) keeps 4×; HIGH (gfxHigh=0) uses 1×
+  // — WebGPU cannot do 2×, so the savings mirror GLX capping HIGH at 2× MSAA.
+  // Missing key defaults to 4× (fresh install / harness) until gfx-quality runs.
   // `let` (not const): soft-adapter escape hatch may drop desktop 4 → 1.
-  let MSAA_COUNT = WGX_LITE ? 1 : 4;
+  let _wgxMsaa4 = true;
+  try { if (localStorage.getItem("apex26.gfxHigh") === "0") _wgxMsaa4 = false; } catch (_) { /* blocked storage: default 4× MSAA */ }
+  let MSAA_COUNT = WGX_LITE ? 1 : (_wgxMsaa4 ? 4 : 1);
 
   // ── Refusal bookkeeping ─────────────────────────────────────────────────────
   // Every path that makes create() return null records WHY, both on the console
@@ -2636,8 +2636,10 @@ const WGX = (function () {
     }
 
     // Chunked mesh: spatial XZ cells with AABBs (port of GLX.createChunkedMesh).
-    // Road (has trk) expands once, then bins the non-indexed triangle list so
-    // the camera can draw every cell (surfaceId 16) while shadow casts cull.
+    // Road (has trk) expands once, then bins the non-indexed triangle list.
+    // Camera + env now frustum-cull those cells the same way as terrain
+    // (near is GL clip w+z — the old WebGPU z>=0 extract is gone). Shadow
+    // casts already cull AABBs in castShadowChunked.
     // Props/glass share one IBO; chunks are ranges (firstIndex + count).
     function createChunkedMesh(data, cellSize) {
       const cell = cellSize > 0 ? cellSize : 72;
@@ -3311,9 +3313,11 @@ const WGX = (function () {
         _drawGeom(litPass, mesh);
         return;
       }
-      // Never frustum/radial-cull the road ribbon. A bad near-plane extract
-      // already hid the chase/park chunks once (terrain filled the holes).
-      const cull = !!frameViewProj && o.surfaceId !== 16;
+      // Road (surfaceId 16) uses the same frustum + radial cull as terrain.
+      // The skip existed because a WebGPU z>=0 extract on the raw GL VP hid
+      // chase/park chunks; near is now GL clip w+z (see _extractPlanes) so
+      // the exemption was leftover work — env-probe 300 m was thrown away.
+      const cull = !!frameViewProj;
       if (cull) _extractPlanes(frameViewProj, _fcPlanes);
       const cd = frameCullDist, cd2 = cd * cd;
       const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
@@ -3373,15 +3377,6 @@ const WGX = (function () {
       bp.setBindGroup(0, blitBindGroup);
       bp.draw(3, 1, 0, 0);
       bp.end();
-    }
-
-    // A clear-only render pass — used to reset an aux target (SSAO->white,
-    // godray/bloom->black) so the composite never samples a stale frame when a
-    // pass is skipped, mirroring GLX binding whiteTex/blackTex in those cases.
-    function _clearTarget(view, r, g, b) {
-      encoder.beginRenderPass({
-        colorAttachments: [{ view, clearValue: { r, g, b, a: 1 }, loadOp: "clear", storeOp: "store" }],
-      }).end();
     }
 
     // Separable 5-tap gaussian (GLX BLUR_FS). `times` = 1 for SSAO, 2 for god-ray.
@@ -3639,7 +3634,32 @@ const WGX = (function () {
         litPass = null; encoder = null; currentView = null; return;
       }
       _queueOutputProbe();
-      if (_passSamples > 1 && pDepthResolve && depthMSView && depthView) {
+      const o = opts || {};
+      // Depth resolve is only needed when a later pass samples scene depth
+      // (SSAO, godray, SSR, flare). Auto-tier 4 night sheds all four.
+      const _aoStrEarly = o.ssao != null ? o.ssao : 0;
+      const _contactEarly = (o.contact > 0 && frameSunVS) ? o.contact : 0;
+      const _haveAOEarly = frameHaveProj && ssaoBG && (_aoStrEarly > 0 || _contactEarly > 0);
+      const _grStrEarly = o.godray != null ? o.godray : 0;
+      const _lampVolEarly = o.lampVol != null ? o.lampVol : 0;
+      const _haveGREarly = !!(godrayBG && lastFrame && lastFrame.invViewProj
+        && ((!!shadowView && _grStrEarly > 0) || _lampVolEarly > 0));
+      // Same operands as the SSR pass below: wet-road OR car lacquer. Omitted
+      // carReflect is the 0.05 tuner default (game.js leaves it undefined on
+      // HIGH). The first hoist used `o.carReflect ?? 0` and required wetness
+      // for the road term, so a dry night skipped pDepthResolve while
+      // COMPOSITE still marched car-paint SSR against uncleared MSAA depth.
+      const _ssrStrEarly = o.reflect != null ? o.reflect : 0;
+      const _carReflEarly = o.carReflect != null ? o.carReflect
+        : ((o.tune && o.tune.carReflect != null) ? o.tune.carReflect : 0.05);
+      const _wetEarly = (lastFrame && lastFrame.wetness) || 0;
+      const _ssrEarly = !!(frameHaveProj && _ssrReady && (
+        (_wetEarly > 0.01 && _ssrStrEarly > 0.001) || _carReflEarly > 0.001));
+      const _slEarly = frameSunColor
+        ? Math.max(frameSunColor[0], frameSunColor[1], frameSunColor[2]) : 1;
+      const _flareEarly = !!(frameSunDir && frameSunDir[1] > -0.02 && _slEarly > 0.35);
+      const _needDepth = _haveAOEarly || _haveGREarly || _ssrEarly || _flareEarly;
+      if (_needDepth && _passSamples > 1 && pDepthResolve && depthMSView && depthView) {
         try {
           if (!depthResolveBG) {
             depthResolveBG = device.createBindGroup({
@@ -3658,7 +3678,6 @@ const WGX = (function () {
         } catch (_) { /* SSAO then samples uncleared resolved depth; AO stays white */ }
       }
       _passSamples = 1;
-      const o = opts || {};
       // Capture wet-road SSR strength (game.js po.reflect). COMPOSITE consumes
       // this frame's ssrTex in the same present(); _frameReflect still feeds
       // next begin() params4.w for anything that still reads the LIT lane.
@@ -3712,7 +3731,7 @@ const WGX = (function () {
       // player asked for not actually being taken.
       const _ssrStr = o.reflect != null ? o.reflect : 0;
       const _carRefl = o.carReflect != null ? o.carReflect
-        : ((T && T.carReflect != null) ? T.carReflect : 0);
+        : ((T && T.carReflect != null) ? T.carReflect : 0.05);
       // Run when wet-road SSR is live OR car lacquer needs a mirror (GLX composite
       // gates on either path). Dry days still get car-paint SSR.
       if (_ssrReady && ssrBG && frameHaveProj &&
@@ -3757,9 +3776,9 @@ const WGX = (function () {
         if (pBlur && ssaoBlurView && ssaoBlurSrcBG && ssaoBlurDstBG) {
           _blurSep(pBlur, ssaoView, ssaoBlurView, ssaoBlurSrcBG, ssaoBlurDstBG, 1 / halfW, 1 / halfH, 1);
         }
-      } else {
-        _clearTarget(ssaoView, 1, 1, 1);
       }
+      // Composite else-path is now aoV = 1.0 with no fetch (wgsl-post.js), so a
+      // skipped SSAO pass does not need a white clear. Stale contents are unread.
 
       // ── 1) GODRAY (half-res) — world-space march through depth + sun/lamp
       // CPU gates like GLX: sun shaft strength (no on-screen requirement — shafts
@@ -3838,8 +3857,6 @@ const WGX = (function () {
           _blurSep(pBlurHDR, godrayView, godrayBlurView, godrayBlurSrcBG, godrayBlurDstBG,
             1 / halfW, 1 / halfH, 2);
         }
-      } else {
-        _clearTarget(godrayView, 0, 0, 0);
       }
 
       // ── 2+3) BLOOM mip chain (down bright-pass+blur, then additive up).
@@ -3873,9 +3890,9 @@ const WGX = (function () {
             storeOp: "store" }] });
           p.setPipeline(pBloomUp); p.setBindGroup(0, bloomUpBG[i]); p.draw(3, 1, 0, 0); p.end();
         }
-      } else {
-        _clearTarget(bloomLv[0].view, 0, 0, 0);   // composite reads zero bloom
       }
+      // Composite gates bloom on bloomAmt > 0, so a shed chain does not need
+      // a black clear of mip0. Stale contents are unread.
 
       // ── 4) COMPOSITE (full-res) -> LDR intermediate.
       {
@@ -3886,9 +3903,9 @@ const WGX = (function () {
         // SCREEN SUN-SHAFT: p0.z scales ONLY the composite radial bloom shaft
         // (GLX uSunShaft). Volumetric god-ray is added unscaled in WGSL.
         // GATED ON bloomAmt: the shaft pass READS THE BLOOM CHAIN (GLX
-        // uSunShaft / TLX C.sunShaft). When bloom is shed we still clear
-        // mip0 to black, so 8 dependent taps accumulate vec3(0) unless
-        // the producer says zero here.
+        // uSunShaft / TLX C.sunShaft). When bloom is shed the composite
+        // does not fetch mip0, so shaftMul must also be 0 — otherwise
+        // 8 dependent taps would read stale mip0.
         const shaftMul = (bloomAmt > 0 && sun && sun.shaft > 0)
           ? ((T && T.sunShaftMul != null) ? T.sunShaftMul : 1.0) * sun.shaft
           : 0.0;
@@ -3951,7 +3968,7 @@ const WGX = (function () {
         s[44] = (T && T.liftR      != null) ? T.liftR      : 0;
         s[45] = (T && T.liftG      != null) ? T.liftG      : 0;
         s[46] = (T && T.liftB      != null) ? T.liftB      : 0;
-        s[47] = (lastFrame && lastFrame.wetness) || 0;                                    // lift.w = wetness (same-frame SSR)
+        s[47] = haveGR ? 1 : 0;                                                           // lift.w = haveGR (SSR wetness lives in .a)
         s[48] = (T && T.gammaR     != null) ? T.gammaR     : 1;
         s[49] = (T && T.gammaG     != null) ? T.gammaG     : 1;
         s[50] = (T && T.gammaB     != null) ? T.gammaB     : 1;
@@ -4565,14 +4582,6 @@ const WGX = (function () {
       if (!_fxReady || !litPass || !pSkid) return false;
       if (!(vertCount > 0)) return true;
       const floats9 = vertCount * 9;
-      if (!_skidScratch || _skidScratch.length < floats9) _skidScratch = new Float32Array(floats9);
-      const dst = _skidScratch;
-      for (let v = 0; v < vertCount; v++) {
-        const si = v * 5, di = v * 9;
-        dst[di] = verts[si]; dst[di+1] = verts[si+1]; dst[di+2] = verts[si+2];
-        dst[di+3] = verts[si+3]; dst[di+4] = verts[si+4];
-        dst[di+5] = 0; dst[di+6] = 0; dst[di+7] = 0; dst[di+8] = 1;
-      }
       const bytes = floats9 * 4;
       if (!skidVBO || _skidCap < bytes) {
         if (skidVBO) _retiredBufs.push(skidVBO);
@@ -4580,7 +4589,20 @@ const WGX = (function () {
         skidVBO = device.createBuffer({ size: (_skidCap + 3) & ~3, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
         dirty = true;
       }
-      if (dirty) device.queue.writeBuffer(skidVBO, 0, dst, 0, floats9);
+      // Expand stride 5→9 only when the VBO is dirty. The trail is rebuilt
+      // on add/evict; most frames the CPU walk was thrown away (GLX/TLX
+      // keep stride 5 and never expand).
+      if (dirty) {
+        if (!_skidScratch || _skidScratch.length < floats9) _skidScratch = new Float32Array(floats9);
+        const dst = _skidScratch;
+        for (let v = 0; v < vertCount; v++) {
+          const si = v * 5, di = v * 9;
+          dst[di] = verts[si]; dst[di+1] = verts[si+1]; dst[di+2] = verts[si+2];
+          dst[di+3] = verts[si+3]; dst[di+4] = verts[si+4];
+          dst[di+5] = 0; dst[di+6] = 0; dst[di+7] = 0; dst[di+8] = 1;
+        }
+        device.queue.writeBuffer(skidVBO, 0, dst, 0, floats9);
+      }
       device.queue.writeBuffer(skidUBO, 0, frameVPGpu);
       litPass.setPipeline(pSkid);
       litPass.setBindGroup(0, skidFxBG);

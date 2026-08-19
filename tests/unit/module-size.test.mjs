@@ -336,8 +336,29 @@ const CEILINGS = {
   // 8635 -> 8512: UI SIZE / HUD SIZE + RESOLUTION moved to js/game/ui-scale.js
   // (UiScale.create(G)). 0 new physics; one deferred G.updateTrackPreview
   // beside buildSelect. Comments moved with the block.
-  // 8512 -> 8528: G.setTimeOfDay + G.weather (lighting tuner must not call __apex on Pages).
-  "js/game.js": 8528,
+  // 8512 -> 8533: pool the 8 AiDrive ctx literals in updateCar onto reused
+  // scratches (_aiBoost / _aiOtFire / _aiBr / _aiLane / _aiWantX / _aiOtPull /
+  // _aiDefend / _aiBoxed). Same pairContact/_ct contract; ~8 × 20 cars × 60 Hz
+  // objects gone. simRnd() stays behind the otArmed short-circuit. The growth
+  // is the pooled declarations plus the field-fills that replace the literals
+  // — the ratchet-tolerated kind, since the alternative is a reader re-deriving
+  // that the callee is read-only.
+  // 8533 -> 8548: AI car 8 m frustum-sphere cull after the behind-camera /
+  // near-eye tests. Player never culled. Same planes as propBatches.
+  // 8548 -> 8550: side-frustum continue moved AFTER _shadowCount++ so an
+  // off-FOV rival still casts into the ±42 m car map (look-wrong the first
+  // hoist introduced). Growth is the relocated block plus the shadow-keep
+  // comment — bug-explaining, the ratchet-tolerated kind.
+  // Union with d6614cf (env probe 4-frame cadence, car/lamp shadow skip,
+  // drawGlow PerfGov gate): 8550 + 7 = 8557 on the merged tree.
+  // 8557 -> 8558: 0d973bf cadences instanced prop sun shadows (skip the
+  // snap-cached sun/moon `_castPropBatchesShadow` on odd frames at
+  // PerfGov.tier() >= 1). One gate line at the function it belongs to.
+  // Remeasured on the e9d847b union (split-newline count).
+  // 8558 -> 8574: merge of G.setTimeOfDay + G.weather on the façade (16 lines)
+  // into the deploy lineage (setTimeOfDay was already added on that side as the
+  // same fix; union takes the larger).
+  "js/game.js": 8574,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

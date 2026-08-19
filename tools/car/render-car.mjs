@@ -262,7 +262,7 @@ try {
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   page.on('pageerror', e => console.log('PAGEERR', e.message));
   await page.goto(pageUrl, { waitUntil: 'load' });
-  const ok = await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { timeout: WAIT_MS }).then(() => true).catch(() => false);
+  const ok = await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { polling: 100, timeout: WAIT_MS }).then(() => true).catch(() => false);
   if (!ok) { console.error(`carview did not become ready in ${WAIT_MS / 1000}s — is the server running and the car building? (--wait=SECONDS to allow longer)`); process.exit(2); }
 
   const boot = { team: TEAM, parts };
@@ -274,7 +274,7 @@ try {
     window.CARVIEW.set(p);
     return before;
   }, boot);
-  await page.waitForFunction((before) => window.CARVIEW.frame >= before + 8, bootFrame, { timeout: WAIT_MS })
+  await page.waitForFunction((before) => window.CARVIEW.frame >= before + 8, bootFrame, { polling: 100, timeout: WAIT_MS })
     .catch(async () => { await page.waitForTimeout(2_000); });
 
   let renderedTod = TOD, firstShot = true;
@@ -294,7 +294,7 @@ try {
     // A slow renderer must not abort the sheet: if eight frames do not land in
     // time, fall back to a wall-clock settle and carry on rather than throwing
     // away every shot after this one.
-    await page.waitForFunction((before) => window.CARVIEW.frame >= before + 8, frame, { timeout: WAIT_MS })
+    await page.waitForFunction((before) => window.CARVIEW.frame >= before + 8, frame, { polling: 100, timeout: WAIT_MS })
       .catch(async () => {
         console.log(`  (slow frame settle — falling back to a timed wait)`);
         await page.waitForTimeout(3_000);

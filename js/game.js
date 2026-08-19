@@ -3427,6 +3427,18 @@ function shiftLong(c, d) {
 // so nothing aliases across a pair and the relaxation loop stays allocation-free.
 const _sep = { iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5 };
 const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5, aSp: 0, bSp: 0, sideContact: false };  // shared like _sep: both pairContact call sites destructure at once, keeping the relaxation loop allocation-free as its own comment promises
+// Reused AiDrive ctxs — updateCar used to pass a fresh object literal to
+// wantBoost / otShouldFire / brakeDecision / wantX / adaptLane / otPull /
+// defendPull / isBoxed every physics step (~8 × 20 cars × 60 Hz). Same
+// read-before-next-call contract as _ct / AiDrive.traits.
+const _aiBoost = { traits: null, energy: 0, otActive: false, kAhead60: 0, towCar: false, towGap: 0, towSpeed: 0, speed: 0, chaser: false, chaserGap: 0, chaserSpeed: 0, team: null, seat: 0, stats: null, ersDeploy: 0, ersRegen: 0 };
+const _aiOtFire = { traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0, speed: 0, aheadSpeed: 0, kAhead: 0, street: false, team: null, seat: 0, stats: null, other: null };
+const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null };
+const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
+const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
+const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null };
+const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null };
+const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const LCAR = 4.8, WCAR = 2.0;
 // Arc-bucket broadphase for resolveCollisions. Bucket width = LCAR so any
 // contacting pair shares a bucket or sits in adjacent ones (wrap-aware).
@@ -3807,7 +3819,9 @@ function updateCar(c, dt, ranked) {
       if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < 3) { chaser = o; chaserGap = -dprog; }  // attacker behind
     }
     roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
-    const boxed = AiDrive.isBoxed({ contactT: c.contactT, roomL, roomR, blocker, blockerGap, street: !!track.street });
+    _aiBoxed.contactT = c.contactT; _aiBoxed.roomL = roomL; _aiBoxed.roomR = roomR;
+    _aiBoxed.blocker = blocker; _aiBoxed.blockerGap = blockerGap; _aiBoxed.street = !!track.street;
+    const boxed = AiDrive.isBoxed(_aiBoxed);
     if (state === "race" && c.speed < 7 && boxed) c.stuckT = (c.stuckT || 0) + dt;
     else c.stuckT = Math.max(0, (c.stuckT || 0) - dt * 1.5);
     unstuckActive = c.stuckT > AiDrive.stuckThreshold(aiT);
@@ -3819,13 +3833,17 @@ function updateCar(c, dt, ranked) {
   if (c.otT > 0) c.otT -= dt;
   if (c.isPlayer && Input.consumeBoostToggle()) c.boostOn = !c.boostOn;   // BOOST is a toggle
   // Short-circuit empty battery before the LUT sample AiDrive would ignore anyway.
-  const wantBoost = (c.human ? c.boostOn
-    : (c.energy > 0.02 && AiDrive.wantBoost({
-        traits: aiT, energy: c.energy, otActive: c.otT > 0,
-        kAhead60: Tracks.curvature(track, wrapS(c.s + 60)),
-        towCar: !!towCar, towGap, towSpeed: towCar ? towCar.speed : 0, speed: c.speed,
-        chaser: !!chaser, chaserGap, chaserSpeed: chaser ? chaser.speed : 0, team: c.team, seat: c.seat, stats: c.houseStats, ersDeploy: c.ersDeploy, ersRegen: c.ersRegen,
-      })))
+  let aiWantsBoost = false;
+  if (!c.human && c.energy > 0.02) {
+    _aiBoost.traits = aiT; _aiBoost.energy = c.energy; _aiBoost.otActive = c.otT > 0;
+    _aiBoost.kAhead60 = Tracks.curvature(track, wrapS(c.s + 60));
+    _aiBoost.towCar = !!towCar; _aiBoost.towGap = towGap; _aiBoost.towSpeed = towCar ? towCar.speed : 0; _aiBoost.speed = c.speed;
+    _aiBoost.chaser = !!chaser; _aiBoost.chaserGap = chaserGap; _aiBoost.chaserSpeed = chaser ? chaser.speed : 0;
+    _aiBoost.team = c.team; _aiBoost.seat = c.seat; _aiBoost.stats = c.houseStats;
+    _aiBoost.ersDeploy = c.ersDeploy; _aiBoost.ersRegen = c.ersRegen;
+    aiWantsBoost = AiDrive.wantBoost(_aiBoost);
+  }
+  const wantBoost = (c.human ? c.boostOn : aiWantsBoost)
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
   // costs nothing, fires on a flat ERS, and never competes with BOOST for charge.
@@ -3864,15 +3882,15 @@ function updateCar(c, dt, ranked) {
   c.otArmed = otEnabled() && gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0
               && !c.finished && vStd(c.speed) > OT_MIN_SPEED;
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
-                      : (c.otArmed && AiDrive.otShouldFire(simRnd(), dt, {
-                          traits: aiT,
-                          blockerGap: blocker ? blockerGap : gapAhead * (c.speed || 1),
-                          gapAhead: gapAhead * (c.speed || 1),
-                          roomL, roomR, speed: c.speed,
-                          aheadSpeed: blocker ? blocker.speed : (ahead ? ahead.speed : c.speed),
-                          kAhead: Tracks.curvature(track, wrapS(c.s + 40)),
-                          street: !!track.street, team: c.team, seat: c.seat, stats: c.houseStats, other: blocker,
-                        }));
+                      : (c.otArmed && (_aiOtFire.traits = aiT,
+                          _aiOtFire.blockerGap = blocker ? blockerGap : gapAhead * (c.speed || 1),
+                          _aiOtFire.gapAhead = gapAhead * (c.speed || 1),
+                          _aiOtFire.roomL = roomL, _aiOtFire.roomR = roomR, _aiOtFire.speed = c.speed,
+                          _aiOtFire.aheadSpeed = blocker ? blocker.speed : (ahead ? ahead.speed : c.speed),
+                          _aiOtFire.kAhead = Tracks.curvature(track, wrapS(c.s + 40)),
+                          _aiOtFire.street = !!track.street, _aiOtFire.team = c.team, _aiOtFire.seat = c.seat,
+                          _aiOtFire.stats = c.houseStats, _aiOtFire.other = blocker,
+                          AiDrive.otShouldFire(simRnd(), dt, _aiOtFire)));
   if (fire && c.otArmed) {
     c.otT = otTimeFor(c); c.otCool = otCoolFor(c) + c.otT;
     if (c.isPlayer && soundOn) GameAudio.deployBoost();
@@ -3918,12 +3936,12 @@ function updateCar(c, dt, ranked) {
       if (ak > kMax) kMax = ak;
       AiDrive.pushLook(d, kk, Tracks.bankAngle(track, ss));
     }
-    const br = AiDrive.brakeDecision({
-      traits: aiT, samples: AiDrive.endLook(), latMax: LAT_MAX, aeroLoad: c.aeroLoad, brake: BRAKE, grip: gripMult(),
-      speed: c.speed, blocker: !!blocker, blockerGap,
-      blockerSpeed: blocker ? blocker.speed : 0,
-      roomL, roomR, team: c.team, seat: c.seat, stats: c.houseStats,
-    });
+    _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX;
+    _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE; _aiBr.grip = gripMult();
+    _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
+    _aiBr.blockerSpeed = blocker ? blocker.speed : 0;
+    _aiBr.roomL = roomL; _aiBr.roomR = roomR; _aiBr.team = c.team; _aiBr.seat = c.seat; _aiBr.stats = c.houseStats;
+    const br = AiDrive.brakeDecision(_aiBr);
     braking = br.braking;
     brakeLvl = br.brakeLvl;
     // Slipstream: in the wake ahead on a straight, shed drag and gain top speed —
@@ -3967,7 +3985,9 @@ function updateCar(c, dt, ranked) {
   } else {
     // AI takes X when armed unless wantX banks Z (hold/empty battery). Catch
     // and OT still force the open wing so a pass does not sit in high drag.
-    c.xOn = c.xArmed && AiDrive.wantX({ armed: true, team: c.team, seat: c.seat, stats: c.houseStats, energy: c.energy, catching: !!(towCar && towGap < 28), otActive: c.otT > 0 });
+    _aiWantX.armed = true; _aiWantX.team = c.team; _aiWantX.seat = c.seat; _aiWantX.stats = c.houseStats;
+    _aiWantX.energy = c.energy; _aiWantX.catching = !!(towCar && towGap < 28); _aiWantX.otActive = c.otT > 0;
+    c.xOn = c.xArmed && AiDrive.wantX(_aiWantX);
   }
   {
     // The flap POSITION, not the switch, is what the physics reads: the mode
@@ -4150,10 +4170,9 @@ function updateCar(c, dt, ranked) {
   else {
     // Adaptive preferred lane: under traffic density, slowly bias toward the
     // freer side so midfield trains fan out instead of locking one line forever.
-    c.lane = AiDrive.adaptLane(c.lane, {
-      traits: aiT, nearby: nearbyN, roomL, roomR, street: !!track.street,
-      baseLane: c.lanePref != null ? c.lanePref : c.lane,
-    }, dt);
+    _aiLane.traits = aiT; _aiLane.nearby = nearbyN; _aiLane.roomL = roomL; _aiLane.roomR = roomR;
+    _aiLane.street = !!track.street; _aiLane.baseLane = c.lanePref != null ? c.lanePref : c.lane;
+    c.lane = AiDrive.adaptLane(c.lane, _aiLane, dt);
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
     // partly follow the racing line, partly hold the car's own lane, so the
     // field fans out across the track rather than collapsing onto one line.
@@ -4169,17 +4188,19 @@ function updateCar(c, dt, ranked) {
     // OT / defend pulls live in AiDrive (craft on permanents, awareness + open
     // inside-room on streets). Tow is no longer permanent-only.
     if (blocker) {
-      overtake = AiDrive.otPull({
-        street: !!track.street, traits: aiT, speed: c.speed, team: c.team, seat: c.seat, stats: c.houseStats,
-        blockerSpeed: blocker.speed, blockerGap, roomL, roomR, other: blocker,
-      });
+      _aiOtPull.street = !!track.street; _aiOtPull.traits = aiT; _aiOtPull.speed = c.speed;
+      _aiOtPull.team = c.team; _aiOtPull.seat = c.seat; _aiOtPull.stats = c.houseStats;
+      _aiOtPull.blockerSpeed = blocker.speed; _aiOtPull.blockerGap = blockerGap;
+      _aiOtPull.roomL = roomL; _aiOtPull.roomR = roomR; _aiOtPull.other = blocker;
+      overtake = AiDrive.otPull(_aiOtPull);
     }
     let defend = 0;
     if (chaser && !blocker) {
-      defend = AiDrive.defendPull({
-        street: !!track.street, traits: aiT, speed: c.speed, team: c.team, seat: c.seat, stats: c.houseStats,
-        chaser: true, chaserGap, chaserSpeed: chaser.speed, kA, roomL, roomR, other: chaser,
-      });
+      _aiDefend.street = !!track.street; _aiDefend.traits = aiT; _aiDefend.speed = c.speed;
+      _aiDefend.team = c.team; _aiDefend.seat = c.seat; _aiDefend.stats = c.houseStats;
+      _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser.speed;
+      _aiDefend.kA = kA; _aiDefend.roomL = roomL; _aiDefend.roomR = roomR; _aiDefend.other = chaser;
+      defend = AiDrive.defendPull(_aiDefend);
     }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
     // clearly-freer side, but when both sides are similar fall back to the car's
@@ -5548,14 +5569,16 @@ const _wmGateDry = { roughness: 0.45, metalness: 0.30, specular: 0.50 };
 // Instanced prop shadow cast: cull to the active light frustum (sun ortho or
 // lamp cone via gfx.shadowCullVP) before castShadowInstanced — shared by the
 // snap-cached sun pass and the per-frame lamp pass.
-function _castPropBatchesShadow() {
+function _castPropBatchesShadow(cadence) {
   const _pb = track.meshes.propBatches;
   if (!_pb || !gfx.castShadowInstanced) return;
+  if (cadence && PerfGov.tier() >= 1 && (_frameNo & 1) === 1) return;
   const planes = (gfx.shadowCullVP && gfx.makeFrustumPlanes)
     ? gfx.makeFrustumPlanes(gfx.shadowCullVP) : null;
   for (let i = 0; i < _pb.length; i++) {
     if (planes && gfx.cullInstances) {
-      gfx.castShadowInstanced(_pb[i], gfx.cullInstances(_pb[i], planes));
+      // TLX: CPU-pack only (own shadow mesh). GLX/WGX ignore the 3rd arg.
+      gfx.castShadowInstanced(_pb[i], gfx.cullInstances(_pb[i], planes, { upload: false }));
     } else gfx.castShadowInstanced(_pb[i]);
   }
 }
@@ -6136,7 +6159,7 @@ function render(dt) {
         gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
         // Cull instanced props to the light ortho before cast — same frustum
         // castShadowChunked already uses (shadowCullVP || sun lightVP).
-        _castPropBatchesShadow();
+        _castPropBatchesShadow(true);
       }
       gfx.shadowEnd();
     }
@@ -6152,8 +6175,12 @@ function render(dt) {
     // WGX mobile tiers may no-op the pass (blob fallback); menu/select skip
     // because the car loop doesn't run and its pooled AI matrices would be
     // stale race positions.
-    if (gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 && (_hasLivePlayerShadow || _shadowCount > 0) && player &&
-        state !== "menu") {
+    // Car shadow pass: skip odd frames at low speed — the 1024² map persists
+    // one frame and parked/slow driving does not need 60 Hz updates.
+    const _carSpd = player ? Math.abs(player.speed) : 0;
+    const _carShadowFrame = (_frameNo & 1) === 0 || _carSpd > vStd(0.15);
+    if (gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 && _carShadowFrame &&
+        (_hasLivePlayerShadow || _shadowCount > 0) && player && state !== "menu") {
       const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
       // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
       // the moonlight floor (or the knob's above-0.5 override) active, cars
@@ -6477,6 +6504,9 @@ function render(dt) {
         const _lsx = Math.round(camEye[0] / 12), _lsz = Math.round(camEye[2] / 12);
         if (flBest === _lampShBest && _lsx === _lampShSX && _lsz === _lampShSZ) {
           // Map from last rebuild still bound; skip the 512² props pass.
+        } else if ((_frameNo & 1) !== 0 && flBest === _lampShBest) {
+          // Defer a cell-only rebuild one frame — props are static; the prior
+          // map stays valid while the eye crosses a 12 m snap cell.
         } else {
         _lampShBest = flBest; _lampShSX = _lsx; _lampShSZ = _lsz;
         // Perspective frustum down the beam: fov spans the OUTER cone (plus
@@ -6520,7 +6550,7 @@ function render(dt) {
         }
         gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
         // Lamp pass: cull against the lamp perspective frustum (castCullVP).
-        _castPropBatchesShadow();
+        _castPropBatchesShadow(false);
         gfx.lampShadowEnd();
         } // end lamp-shadow snap rebuild
       }
@@ -6559,7 +6589,7 @@ function render(dt) {
   _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
   frameSky.lightning = _ltFlash || 0;
   // ── Live env probe: render ONE 64px cubemap face of the world around the
-  // player car every other frame (full refresh every 12 frames). The car-paint clearcoat
+  // player car every fourth frame on a live race (full refresh every 24 frames). The car-paint clearcoat
   // samples it for REAL reflections of the surroundings — trees, buildings,
   // track, sky — including everything behind the camera that SSR can't see.
   // CAR tuner ENV REFLECTION (carEnvCube) = 0 skips the pass entirely.
@@ -6567,13 +6597,13 @@ function render(dt) {
   // a second time each frame and is anchored to the player car, which isn't the
   // subject while flying the lighting-tuner free camera — dropping it here removes
   // the biggest per-frame load multiplier during the exact mode that OOM-crashes.
-  // Advance one face only every OTHER frame — a full 6-face cube cycle then takes
-  // 12 frames instead of 6, halving the probe's whole-world re-draw cost (imperceptible
-  // for a 64px blurred reflection probe).
-  // Every-other-frame on a live race (12 frames / cube). park() freezes
-  // physics for shots/tests — then one face per frame so a parked M9 cube
-  // goes ready in 6 presents, not 12 (SwiftShader is seconds-per-frame).
-  if (player && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & 1) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  // Advance one face every FOURTH frame on a live race — a full 6-face cube
+  // cycle then takes 24 frames instead of 6, cutting the probe's whole-world
+  // re-draw cost by ~75% (imperceptible on a 64px blurred reflection probe).
+  // park() freezes physics for shots/tests — then one face per frame so a
+  // parked M9 cube goes ready in 6 presents, not 24 (SwiftShader is
+  // seconds-per-frame).
+  if (player && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & 3) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
@@ -6615,7 +6645,7 @@ function render(dt) {
   //  LT.glareStr, default 0.12.)
   drawWorldMeshes(frame, night, wet, _floodEmit, false);
   gfx.drawSky(frameSky);
-  if (frame.lights && !_studioRig) gfx.drawGlow(frame.lights, LT.glareStr);
+  if (frame.lights && !_studioRig && PerfGov.tier() < 3) gfx.drawGlow(frame.lights, LT.glareStr);
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
@@ -6631,6 +6661,8 @@ function render(dt) {
   // Camera forward (horizontal) for the behind-camera AI cull below.
   let _camFwdX = camTgt[0] - camEye[0], _camFwdZ = camTgt[2] - camEye[2];
   { const l = Math.hypot(_camFwdX, _camFwdZ) || 1; _camFwdX /= l; _camFwdZ /= l; }
+  const _carCullPlanes = (gfx.makeFrustumPlanes && frame.viewProj)
+    ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
   // Glossy automotive paint is identical for every car this frame (depends only
   // on wet/night), and carPaintMat returns a shared scratch — so compute it ONCE
   // instead of 22× per frame. Wet adds a water film (sharper highlights).
@@ -6678,6 +6710,9 @@ function render(dt) {
       // Behind-camera cull: AI cars strictly behind the view are never visible
       // (no mirrors). Near-eye: origin within ~3.4 m fills the near plane — skip.
       // Local player is never culled. Y without bank is fine for the near-eye test.
+      // Side frustum is applied AFTER the car is queued for the shadow map —
+      // a rival just off a ~60° chase FOV can still throw a sun/car shadow
+      // onto the visible road (the car map is a ±42 m ortho around the player).
       if (!c.isPlayer) {
         const dx = tmpP[0] - camEye[0], dz = tmpP[2] - camEye[2];
         if (dx * _camFwdX + dz * _camFwdZ < -6) continue;   // 6 m grace behind the eye
@@ -6756,6 +6791,17 @@ function render(dt) {
     _shadowTeams[_shadowCount] = c.team;   // for next frame's AI car-shadow caster pass
     _shadowCars[_shadowCount] = c;
     _shadowCount++;
+    // Side frustum: 8 m sphere, same planes as propBatches. After the
+    // shadow enqueue so an off-camera rival still casts. Player never culled.
+    if (!c.isPlayer && _carCullPlanes) {
+      const x = tmpP[0], y = tmpP[1], z = tmpP[2], r = 8;
+      let _out = false;
+      for (let i = 0; i < 6; i++) {
+        const p = _carCullPlanes[i];
+        if (p[0] * x + p[1] * y + p[2] * z + p[3] < -r) { _out = true; break; }
+      }
+      if (_out) continue;
+    }
     // Cockpit view: the interior is a VIEWMODEL — anchored to the CAMERA, not to
     // the car's rendered position. Orientation is the stabilized track basis
     // (plain tangent/right at the car, no visual yaw/pitch/roll/lean), but the

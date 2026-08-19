@@ -1023,7 +1023,7 @@ const TLX = (function () {
         return batch;
       }
 
-      function cullInstances(batch, planes) {
+      function cullInstances(batch, planes, opts) {
         if (!batch || !batch.cells) return batch ? batch.instances : 0;
         // A batch has one physical instance buffer, so only the frustum whose
         // pack is resident can be cached. The old two-signature cache remembered
@@ -1060,6 +1060,13 @@ const TLX = (function () {
           }
         }
         batch.visible = n;
+        // upload:false — CPU pack only. The sun/lamp shadow path copies
+        // packMatrices into a SECOND InstancedMesh (tlx-shadow castInstanced);
+        // writing the lit imesh here was a full setMatrixAt walk discarded
+        // when the camera cull overwrote it later in the same frame.
+        // Do not touch _cullPlanes: that cache means "this pack is on the
+        // GPU", and we did not upload.
+        if (opts && opts.upload === false) return n;
         if (n && batch.imesh) _writeInstanceMatrices(batch.imesh, dst, dc, n);
         const snap = batch._cullPlanes || (batch._cullPlanes = new Float64Array(24));
         for (let pi = 0, po = 0; pi < 6; pi++) {
@@ -1926,8 +1933,8 @@ const TLX = (function () {
         // which is TRUE for a live-but-broken function, passes, and throws one
         // line later. WGX declares the same two for the same reason; TLX had
         // neither, so __apex.scene({visible}) threw on the three.js backend.
-        makeFrustumPlanes(viewProj) {
-          return TLXShaders.makeFrustumPlanes(viewProj);
+        makeFrustumPlanes(viewProj, out) {
+          return TLXShaders.makeFrustumPlanes(viewProj, out);
         },
         // Screenshot counterparts of WGX capturePixels / awaitSoftPresent.
         // WebGL2: readPixels from the canvas (Y-flip). WebGPU: three's
