@@ -218,6 +218,16 @@ test("--live --all --dry-run prints a plan for every knob, batched by condition"
   assert.ok(data.buckets.every((b) => b.ids.length >= 1));
 });
 
+test("--live --ids dry-run is an explicit subset and launches nothing", () => {
+  const r = run(["--live", "--ids", "fogWxMul,renderDistMul,starBright", "--dry-run"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.doesNotMatch(r.stderr, /PAGEERR|playwright|launchChromium/i);
+  const data = JSON.parse(r.stdout);
+  assert.equal(data.count, 3);
+  assert.deepEqual(data.plans.map((p) => p.id).sort(), ["fogWxMul", "renderDistMul", "starBright"]);
+  assert.equal(data.plans.find((p) => p.id === "fogWxMul").weather, "fog");
+});
+
 test("--live --group LAMPS --dry-run is a subset, still night-heavy", () => {
   const r = run(["--live", "--group", "LAMPS", "--dry-run"]);
   assert.equal(r.status, 0, r.stderr);

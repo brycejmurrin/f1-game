@@ -103,8 +103,8 @@ function blankRecipe() {
   return {
     track: "monaco", tod: "day", weather: "dry", frac: 0.16,
     camera: "chase", traffic: false, minDelta: 10,
-    companions: {}, settle: 20, pinClock: true, freeze: true, speed: 0,
-    snapCam: true, verdict: "auto", why: "gate default",
+    companions: {}, settle: 20,     pinClock: true, freeze: true, speed: 0,
+    snapCam: false, verdict: "auto", why: "gate default",
   };
 }
 
@@ -115,7 +115,8 @@ function applyPatch(base, patch) {
     out[k] = v;
   }
   if (out.frac == null) out.frac = TRACK_FRAC[out.track] ?? base.frac;
-  if (out.camera === "sky" || out.camera === "horizon") out.snapCam = false;
+  if (out.camera === "sky" || out.camera === "horizon" || out.camera === "chase")
+    out.snapCam = false;
   return out;
 }
 
@@ -352,8 +353,18 @@ async function setupCondition(page, plan) {
           const tgt = vs.tgt || [eye[0], eye[1], eye[2] - 20];
           const yaw = Math.atan2(tgt[0] - eye[0], -(tgt[2] - eye[2])) * 180 / Math.PI;
           A.view({ eye, yaw, pitch: 28, fov: 62 });
-        } else if (c.snapCam !== false) {
+        } else {
+          // Settle chase once, then lock with view() so A/B cannot drift
+          // (measured lampLevel eye delta 206 with snapCam on every shot).
           A.snapCam();
+          A.step(1 / 60, 8);
+          A.snapCam();
+          const cs = A.camState();
+          A.view({
+            eye: Array.from(cs.eye),
+            target: Array.from(cs.tgt),
+            fov: cs.fov,
+          });
         }
       }
     }

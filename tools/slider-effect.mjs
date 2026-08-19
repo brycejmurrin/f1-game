@@ -72,6 +72,7 @@ Visual A/B (Playwright via tools/harness.mjs — not Chrome MCP):
                  so you can see what the slider changed (lamp pools, fog, …)
   --live --all   every TUNE_DEFS knob; park ONCE per track|tod|wx|camera
   --live --group NAME   same, but only that TUNE_DEFS group
+  --live --ids a,b,c    same batch, but only those ids
   --from N --to N   slider values (default: shipped def → farther extreme)
   --track --tod --weather --frac   capture recipe (defaults from the knob's gates
                  plus the documented specials: fogWxMul→fog, moonShadow→night+wet,
@@ -474,7 +475,7 @@ export function parseArgs(argv) {
       if (argv[i + 1] && !argv[i + 1].startsWith("-")) opts.id = argv[++i];
     }
     else if (eq("group") || eq("class") || eq("gate") || eq("risk") || eq("tag")
-      || eq("id") || eq("track") || eq("tod") || eq("weather") || eq("out")
+      || eq("id") || eq("ids") || eq("track") || eq("tod") || eq("weather") || eq("out")
       || eq("a") || eq("b") || eq("from") || eq("to") || eq("frac") || eq("hud-crop"))
       continue;
     else if (a.startsWith("-")) throw new Error(`unknown flag: ${a}\n${HELP}`);
@@ -514,9 +515,12 @@ export async function main(argv = process.argv.slice(2), root = ROOT) {
     return r.status ?? 2;
   }
   if (opts.live) {
-    const batch = opts.all || (!opts.id && !!opts.group);
+    if (opts.ids) {
+      opts.idList = String(opts.ids).split(",").map((s) => s.trim()).filter(Boolean);
+    }
+    const batch = opts.all || (!opts.id && !!opts.group) || !!opts.idList;
     if (!opts.id && !batch) {
-      throw new Error("usage: --live <id> | --live --all | --live --group NAME   e.g. --live lampLevel --from 0 --to 0.55");
+      throw new Error("usage: --live <id> | --live --all | --live --group NAME | --live --ids a,b   e.g. --live lampLevel --from 0 --to 0.55");
     }
     const all = classifyKnobs(root);
     const defs = loadTuneDefs(root);
@@ -524,7 +528,13 @@ export async function main(argv = process.argv.slice(2), root = ROOT) {
       livePlan, runLive, runLiveBatch, plansForKnobs, summarizePlan,
     } = await import("./slider-effect-live.mjs");
     if (batch) {
-      const knobs = filterKnobs(all, opts);
+      let knobs = filterKnobs(all, opts);
+      if (opts.idList) {
+        const want = new Set(opts.idList);
+        knobs = knobs.filter((k) => want.has(k.id));
+        const missing = opts.idList.filter((id) => !knobs.some((k) => k.id === id));
+        if (missing.length) throw new Error(`unknown slider id(s): ${missing.join(", ")}`);
+      }
       if (!knobs.length) throw new Error("no knobs matched the live filter");
       const packed = plansForKnobs(knobs, defs, opts, root);
       if (opts.dryRun) {
