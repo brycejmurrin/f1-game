@@ -261,6 +261,8 @@
    height 0). Two wrapped rows beat a sideways pan on play-shape
    (compact already drops .cs-tab-cur). */
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   flex-wrap: wrap;
   overflow-x: hidden;
   overflow-y: auto;
@@ -269,6 +271,10 @@
   align-content: flex-start;
 }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab {
+  /* 14 tabs (TEAM + 12 parts + LIVERY). Flex wrap stayed content-sized
+     (play @115: 6+7+1, LIVERY on a clipped third Y). Seven equal grid
+     tracks put every tab on two rows inside the cap. */
+  min-width: 0;
   padding: calc(var(--gap) * 0.22) calc(var(--gap) * 0.42);
 }
 #cs-options {

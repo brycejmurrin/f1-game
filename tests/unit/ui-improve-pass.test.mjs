@@ -87,8 +87,8 @@ test("garage stacked categories are a horizontal strip", () => {
     "pair-on rail may still scroll vertically");
   assert.match(css, /#cs-inner\[data-density="compact"\]\s*\{\s*--pair-at:\s*2000px/,
     "compact garage stacks to the horizontal strip");
-  assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #cs-tabs \{[\s\S]*?flex-wrap:\s*wrap/,
-    "short wide stacked garage wraps the catalogue instead of hiding AERO behind a pan");
+  assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #cs-tabs \{[\s\S]*?grid-template-columns:\s*repeat\(7,\s*minmax\(0,\s*1fr\)\)/,
+    "short wide stacked garage packs fourteen tabs as two rows of seven");
   assert.match(css, /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #cs-tabs \{[\s\S]*?max-height:\s*calc\(var\(--chip-h\) \* 2/,
     "wrapped play-shape tabs cap at two rows so #cs-options keeps a list");
   assert.doesNotMatch(css, /#cs-inner:not\(\[data-pair="on"\]\):is\(\[data-shape="tall"\], \[data-density="compact"\]\) #cs-tabs \{[\s\S]*?flex-wrap:\s*wrap/,
@@ -496,6 +496,9 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   assert.match(menus, /:is\(#rs-diff-section, #rs-caution-section, #rs-reliab-section\) \{\s*grid-row:\s*3/);
   assert.match(menus, /#rs-body \{ overflow-y:\s*auto/);
   assert.match(menus, /#rs-reliab \{ flex-wrap:\s*nowrap/);
+  assert.match(menus, /#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) > :is\(#rs-diff-section, #rs-caution-section, #rs-reliab-section\) \{\s*grid-row:\s*3/);
+  assert.match(menus, /#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) :is\(#rs-laps, #rs-weather\) \{\s*flex-wrap:\s*nowrap/);
+  assert.match(menus, /@media \(orientation: portrait\) \{[\s\S]*?#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) #rs-reliab-section \{ grid-row:\s*4/);
   assert.match(read("css/components.css"), /#race-settings \.sheet \{ --compact-at:\s*760px/);
   assert.match(spotify, /if \(audio\) audio\.hidden = true/);
   assert.match(spotify, /if \(audio\) audio\.hidden = false/);

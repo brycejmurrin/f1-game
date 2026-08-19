@@ -1278,6 +1278,56 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
     grid-row: 1;
     margin-bottom: 0;
   }
+  /* ONE-OFF play-shape: keep the 3-col compact grid. QUALI sits with
+     LAPS/WEATHER; TIME spans. LAPS/WEATHER wrapping to two chip-rows
+     ate the last row (play @115: labels on the foot, chips 46px into
+     BACK/RACE). Pack those groups on one line like #rs-reliab. */
+  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) {
+    align-content: start;
+  }
+  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) > :is(.rs-row:nth-child(1), .rs-row:nth-child(2), #rs-quali-section) {
+    grid-row: 1;
+  }
+  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) #rs-time-section {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) > :is(#rs-diff-section, #rs-caution-section, #rs-reliab-section) {
+    grid-row: 3;
+  }
+  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) :is(#rs-laps, #rs-weather) {
+    flex-wrap: nowrap;
+    --balance-basis: 0rem;
+    --balance-min: 0rem;
+  }
+  :where(.sheet[data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) :is(#rs-laps, #rs-weather) > .sel-chip {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+/* ONE-OFF portrait: two columns. TIME spans; DIFF/QUALI then
+   CAUTION/RELIAB share the last two rows (port @115 was 22px into the
+   foot before this pin). Compact landscape keeps three columns above. */
+@media (orientation: portrait) {
+  #rs-body:not(:has(#rs-quali[hidden])) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--pad);
+    align-content: start;
+  }
+  #rs-body:not(:has(#rs-quali[hidden])) > .rs-row:nth-child(1),
+  #rs-body:not(:has(#rs-quali[hidden])) > .rs-row:nth-child(2) { grid-row: 1; }
+  #rs-body:not(:has(#rs-quali[hidden])) #rs-time-section {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  #rs-body:not(:has(#rs-quali[hidden])) #rs-diff-section,
+  #rs-body:not(:has(#rs-quali[hidden])) #rs-quali-section {
+    grid-column: auto;
+    grid-row: 3;
+  }
+  #rs-body:not(:has(#rs-quali[hidden])) #rs-caution-section,
+  #rs-body:not(:has(#rs-quali[hidden])) #rs-reliab-section { grid-row: 4; }
 }
 #race-settings .sel-chip {
   display: flex; align-items: center; justify-content: center; gap: 4px;
