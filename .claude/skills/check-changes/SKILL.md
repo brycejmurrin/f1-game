@@ -33,3 +33,14 @@ node tools/verify-change.mjs --wait       # every batch — ONLY when the parent
 `artifacts/logs/*.log` for `= run (passed|failed|timedout|interrupted)`.
 
 Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
+
+Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
+
+```sh
+./tools/apex-tools-mcp.sh call apex_verify_change_fast '{"dryRun":true}'
+./tools/apex-tools-mcp.sh call apex_pick_tests '{}'
+./tools/apex-tools-mcp.sh call apex_verify_track '{"id":"monza"}'
+./tools/apex-tools-mcp.sh smoke
+```
+
+Gate contracts and ratchet details: [`references/guards.md`](references/guards.md)

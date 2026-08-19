@@ -57,4 +57,34 @@ Descriptions say **when** to load the skill; bodies carry the workflow.
 | **webgpu-debug** | WGX black screen, NaN-white road, WGSL failures, device lost, MSAA/HDR. |
 | **webgpu-inspector** | GPU object inspection, validation errors, frame profiling on WebGPU. |
 
+| **agent-view** | Drive Apex 26 without screenshots — `world()`, `field()`, `rollout()`, headless lap, deterministic run reproduction. |
+| **ai-racecraft** | AI overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck, `js/game/ai-drive.js`. |
+| **asset-pack** | Baking or verifying `assets/pack`, `js/render/assets.js`, `matTexMix`/baked PBR blend, MAT layer mismatches. |
+| **audio-debug** | Engine sounds flat at high speed, sfx not triggering, gear-shift audio wrong, music cuts out, WebAudio debugging. |
+| **bake-lighting** | Baking a `window.LightPresets` blob or LIGHTING TUNER COPY VALUES output, saving lighting presets. |
+| **career-mode** | DRIVER CAREER, MY TEAM, career saves, contracts, sponsors, R&D economy, career qualifying, reliability/DNFs. |
+| **data-hub** | Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1, `js/data/*`. |
+| **debug-cameras** | Switch or check camera modes, cockpit/chase/orbit/cinematic/roadside shots, `camState`/`viewState`, camera lag. |
+| **debug-state** | Read telemetry, inspect slip/grip/physics state, dump field order/gaps, show sector/lap timing, headless control loop. |
+| **debug-tracks** | Track geometry, corners, elevation, curvature, map/bounds, wall/barrier audits, terrain-over-road gaps, `groundY`. |
+| **game-feel** | Screen shake, weak kerb/wall/gear-shift/collision hits, hit-stop, more responsive camera/particles/audio polish. |
+| **garage-parts-livery** | GARAGE parts catalog, livery/finish/shark fin, `ersProfile`/`aeroLoad`, career owned-part UI, Car3D visual recipes. |
+| **input-controls** | Steering, gamepad, touch steer, tilt/gyro, keyboard, on-screen steer buttons, driving-help/racing-line assists. |
+| **lighting-tuner** | Night looks washed out, dawn sun too high, floodlights/lamps not firing, day scene flat, `lightTune`/`applyRaceSettings`. |
+| **motion-capture** | Flicker while driving, z-fighting, geometry pop-in, texture shimmer, temporal artifacts, record a driven lap. |
+| **multiplayer-debug** | VS FRIEND, WebRTC connection, invite links/QR codes, room codes, Nostr signalling, TURN/ICE, replicated rivals. |
+| **perf-profile** | Profile the game loop, find frame-budget hogs, GC jitter/spikes, slow track load, measure physics/render CPU cost. |
+| **pixel-perfect** | Visual regression testing — pixel-by-pixel screenshot comparison, `toHaveScreenshot`, snapshot mismatch. |
+| **pwa-cache-service-worker** | `sw.js`, `version.json`, PWA offline install, cache invalidation, shell version guard, DEFERRED backend precache. |
+| **race-incidents-control** | Debris, Rapier side-worlds, incident takeovers, car launches/pileups, cautions, VSC, safety car, reliability retirements. |
+| **restructure-screens-css** | Restructuring screens, menus, dialogs, DOM, or CSS class/token system — collapsing duplicate component families. |
+| **scene-graph-instancing** | Migrating scenery emitters to TrackGraph.instance, graph parity or instancing reuse, batches()/bakeOnly, GLX instanced draws. |
+| **season-mode** | Standalone Season calendar, weekend format, sprint, quali-on/off, points table, `season-cal.js`, `season-ui.js`. |
+| **slim-bloat** | Fat SKILL.md, saturated module-size ceiling, dead or duplicate code, stale comments, extract/split candidates. |
+| **ui-menu-a11y** | Menus, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, scroll affordances, touch layout. |
+| **webapp-testing** | Playwright Python scripts for verifying frontend functionality, debugging UI behavior, capturing browser screenshots. |
+| **webgl-debug** | WebGL2 rendering issues, shader errors, texture/buffer problems, GLX backend failures. |
+| **webgpu-debug** | WebGPU boot failures, WGSL compile errors, WGX pipeline validation, GPU device lost. |
+| **webgpu-inspector** | Inspect GPU objects (buffers, textures, shaders, pipelines), profile frame performance, diagnose visual artifacts. |
+
 See individual `SKILL.md` files under this directory for full workflows.
