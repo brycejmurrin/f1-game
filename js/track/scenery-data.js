@@ -74,7 +74,6 @@ const TrackSceneryData = (function () {
     abudhabi:  { a: [0.90, 0.92, 0.94], b: [0.00, 0.72, 0.68], c: [0.92, 0.18, 0.55], night: [0.10, 0.18, 0.22], tyre: [1.00, 0.62, 0.18] },
   };
 
-  // ── Per-track street / scenery furniture: lamp posts + roadside trees ──
   // Every circuit — city, desert AND forest/green — gets its own incidental
   // models so no two tracks share trees and lighting. tree: palm|broad|fir|
   // none; lamp: arm|globe|post|none with a per-track tint. Green circuits get
@@ -134,7 +133,6 @@ const TrackSceneryData = (function () {
     modern:       { tree: "broad", fol: [0.26, 0.42, 0.20], lamp: "post",  lc: [0.95, 0.95, 1.0] },
   };
 
-  // ── PER-CIRCUIT TRACKSIDE FURNITURE FORMS ───────────────────────────────
   // FURN keys a circuit's planting and lighting; KIT keys its barriers,
   // signage and marshal kit. Same rule, same fallback shape:
   //   KIT[def.id] || KIT_DEF[theme] || KIT_DEF.green
@@ -152,7 +150,6 @@ const TrackSceneryData = (function () {
   // "hoarding"/"palisade" are heavier than mesh. They appear only on circuits
   // with measured headroom, never in KIT_DEF.
   const KIT = {
-    // ── street circuits: rented kit, tecpro, printed hoarding ──
     monaco:      { marshal: "tent",      rail: "armco",       fence: "hoarding",  tyre: "tecpro",  board: "fascia",    gantry: "cantilever", camera: "scaffold",  hoarding: "barrierTop" },
     vegas:       { marshal: "hut",       rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },
     singapore:   { marshal: "hut",       rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "truss",      camera: "scaffold",  hoarding: "led" },
@@ -160,11 +157,9 @@ const TrackSceneryData = (function () {
     jeddah:      { marshal: "hut",       rail: "armco",       fence: "chainlink",  tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "monopole",  hoarding: "led" },
     miami:       { marshal: "kiosk",     rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },
     madrid:      { marshal: "tent",      rail: "jersey",      fence: "hoarding",  tyre: "tecpro",  board: "led",       gantry: "cantilever", camera: "scaffold",  hoarding: "banner" },
-    // ── Gulf / desert: containers, sand-proof kit, monopole signage ──
     bahrain:     { marshal: "container", rail: "wArmco",      fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "panel" },
     qatar:       { marshal: "container", rail: "wArmco",      fence: "panelled",  tyre: "airfence", board: "monopole", gantry: "portal",     camera: "monopole",  hoarding: "led" },
     abudhabi:    { marshal: "kiosk",     rail: "safer",       fence: "panelled",  tyre: "airfence", board: "led",      gantry: "truss",      camera: "monopole",  hoarding: "led" },
-    // ── modern Tilke-era permanent ──
     shanghai:    { marshal: "kiosk",     rail: "wArmco",      fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "truss",      camera: "monopole",  hoarding: "panel" },
     cota:        { marshal: "kiosk",     rail: "safer",       fence: "panelled",  tyre: "tecpro",  board: "monopole",  gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     sochi:       { marshal: "kiosk",     rail: "jersey",      fence: "panelled",  tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "monopole",  hoarding: "led" },
@@ -174,7 +169,6 @@ const TrackSceneryData = (function () {
     portimao:    { marshal: "cabin",     rail: "wArmco",      fence: "leaning",   tyre: "stack",   board: "trivision", gantry: "box",        camera: "scaffold",  hoarding: "panel" },
     istanbul:    { marshal: "kiosk",     rail: "armco",       fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "panel" },
     magny_cours: { marshal: "cabin",     rail: "wArmco",      fence: "mesh",      tyre: "stack",   board: "trivision", gantry: "box",        camera: "lattice",   hoarding: "panel" },
-    // ── old-school permanent: armco, timber, lattice ──
     spa:         { marshal: "cabin",     rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     monza:       { marshal: "hut",       rail: "armco",       fence: "leaning",   tyre: "stack",   board: "arched",    gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     imola:       { marshal: "cabin",     rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "arched",    gantry: "box",        camera: "lattice",   hoarding: "panel" },
@@ -354,7 +348,6 @@ const TrackSceneryData = (function () {
     shanghai:    ["crimson", "alu", "darkSteel"],             // China red against modern steel
     albert_park: ["steel", "pastel", "alu"],                  // temporary park build, pale Melbourne palette
     madrid:      ["crimson", "sandstone", "steel"],         // the file hardcodes these at its own call sites
-    // ── retired / off-calendar circuits (def `classic: true`) ──
     hockenheim:    ["concrete", "darkSteel", "crimson"],        // Motodrom concrete bowl, German-GP red accents
     nurburgring:   ["darkSteel", "concrete", "alu"],        // cold Eifel steel and poured concrete
     catalunya:     ["pastel", "concrete", "terracotta"],    // bleached white render, warm Catalan trim

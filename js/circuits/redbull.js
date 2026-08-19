@@ -1,6 +1,4 @@
-/* Apex 26 — RED BULL RING circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — RED BULL RING circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -92,7 +90,6 @@
                  [0.14 + hv * 0.08, 0.32 + hv * 0.08, 0.15]);
       });
 
-      // --- Alpine forest edges: forestEdge() replaces raw pine() loops —
       // canopy-clearance aware so trees never clip through guardrails/fences.
       // Sector 1 (start straight + T1 climb): left side forest backing the climb.
       forestEdge(0.0, 0.18, -1, 10, { density: 0.55, hMin: 9, hMax: 16,
@@ -334,7 +331,6 @@
         addBox(out, vadd(a.c, a.u, 12.6), [0.22, 0.16, 28], [1.0, 0.92, 0.70], [a.r, a.u, a.t]);
       }
 
-      // --- Meadow foreground: pastoral hedges frame the lap in key zones ---
       every(36, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 113 + side) > 0.68) continue;
@@ -403,10 +399,8 @@
           col: [0.10, 0.24, 0.12], col2: [0.16, 0.32, 0.14], pineFrac: 0.78 });
       }
 
-      // --- Orange Army billboard near stadium bowl (s≈0.87, Dutch orange) ---
       billboard(Math.round(n * 0.87) % n, -1, 12, 8, 4, [1.0, 0.65, 0.0]);
 
-      // --- Styrian Alpine farmhouse silhouette (s≈0.55) ---
       // Reduced depth to avoid over-wide building warning (w=12, d=15 → 12<15*2.5).
       building(Math.round(n * 0.55) % n, -1, 18, 12, 6, 15,
         { wall: [0.48, 0.50, 0.52], window: [0.30, 0.35, 0.40], floor: 2 });

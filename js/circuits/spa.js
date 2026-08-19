@@ -1,6 +1,4 @@
-/* Apex 26 — SPA circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — SPA circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -241,7 +239,6 @@
       grandstandEx(0.848, 1, 12, 36, null, null,
         { livery: "concrete", tiers: 2, roof: "truss" });
 
-      // --- Yellow-capped marshal posts dotted around the lap.
       every(120, (k) => {
         const side = hash(k * 33) < 0.5 ? -1 : 1;
         marshalPost(k, side, 4);
@@ -255,7 +252,6 @@
         marshalPost(K(0.55 + ds), -1, 4.2);
       }
 
-      // --- Eau Rouge: thickened concrete runoff wall at the valley base (s≈0.055–0.075 L).
       wall(0.055, 0.075, -1, 3.6, 1.8, [0.55, 0.55, 0.52], 1.2);
       place(K(0.060), -1, 5.2, [1.6, 1.6, 28], [0.52, 0.52, 0.50]);
       place(K(0.068), -1, 4.8, [1.4, 1.5, 24], [0.54, 0.54, 0.51]);

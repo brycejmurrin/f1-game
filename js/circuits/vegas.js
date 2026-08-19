@@ -1,6 +1,4 @@
-/* Apex 26 — LAS VEGAS circuit definition (data only).
-   Registered on the global TrackDefs list; consumed by the js/track/tracks.js engine
-   (palette resolved there from `night`, geometry from js/track/geo-paths.js or `segs`). */
+/* Apex 26 — LAS VEGAS circuit definition (data only). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -223,7 +221,6 @@
       gantry(0.50, 8.5, [0.12, 0.12, 0.16]);                       // DRS detection on Strip
       gantry(0.80, 8.5, [0.12, 0.12, 0.16]);
 
-      // --- Distant red-rock desert silhouette (far, dark, no snow) ---
       let cx = 0, cz = 0;
       for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
       cx /= n; cz /= n;
@@ -241,7 +238,6 @@
         addFrustum(out, [mx, pyMin - 4 + mh * 0.30, mz], baseR, baseR * 0.58, mh * 0.7, rock, 6);
       }
 
-      // --- DISTANT NIGHT SKYLINE: a dense glowing horizon wherever you look,
       //     with per-tower radius jitter so it never reads as a cloned ring. ---
       {
         const sky = trad + 300;
@@ -442,10 +438,8 @@
         }, { required: true });
       }
 
-      // --- s 0.45 R far: extra red-rock silhouette ---
       backdrop(K(0.45), 1, 240, [180, 30, 120], DARKROCK);
 
-      // --- s ~0.49 L: Venetian / Palazzo at Strip entry ---
       building(K(0.49), -1, 20, 42, 98, 40, { kind: "pyramid", wall: [0.64, 0.60, 0.52], window: [1.0, 0.85, 0.35], floor: 8 });
       building(K(0.505), -1, 46, 32, 75, 32, { kind: "spire", wall: [0.62, 0.58, 0.50], window: [0.98, 0.80, 0.30], floor: 8 });
       tower(K(0.492), -1, 70, 18, 60, { col: [0.58, 0.54, 0.46], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
@@ -457,7 +451,6 @@
       place(K(0.55), -1, 10, [24, 0.7, 24], [0.15, 0.45, 0.65]);
       place(K(0.55), -1, 10, [20, 0.5, 20], [0.10, 0.30, 0.50]);
 
-      // --- s ~0.62 R: Caesars Palace — wide cream box, gold up-lights ---
       building(K(0.62), 1, 22, 62, 75, 46, { kind: "drum", wall: [0.68, 0.64, 0.56], window: [1.0, 0.85, 0.40], floor: 8 });
       place(K(0.62), 1, 12, [44, 2.4, 8], [1.0, 0.88, 0.30]);
       place(K(0.62), 1, 9, [50, 1.2, 10], [0.95, 0.75, 0.15]);
@@ -480,7 +473,6 @@
       waterSurface(K(0.702), 1, 20, [105, 1.2, 135], [0.05, 0.10, 0.18],
         { id: "vegas-bellagio-lake-west" });
 
-      // --- s ~0.74 L: Paris Las Vegas — Eiffel replica ---
       tower(K(0.74), -1, 68, 22, 130, { col: [0.55, 0.48, 0.35], seg: 4, cap: true, capCol: [1.0, 0.85, 0.4], mast: true });
       place(K(0.74), -1, 20, [10, 1.6, 10], [1.0, 0.80, 0.25]);
       place(K(0.74), -1, 22, [14, 0.7, 14], [0.95, 0.75, 0.20]);
@@ -528,7 +520,6 @@
         });
       }
 
-      // --- s 0.85 both near: Final neon gates ---
       for (const [side, col1, col2] of [[-1, MAGENTA, CYAN], [1, CYAN, MAGENTA]]) {
         billboard(K(0.85), side, 26, 20, 12, col1);
         billboard(K(0.87), side, 26, 18, 11, col2);
@@ -614,7 +605,6 @@
         }
       }
 
-      // --- Denser palms + neon accents around the paddock / Sphere / Strip approaches ---
       for (const [s, side] of [[0.02, 1], [0.08, -1], [0.42, 1], [0.46, 1], [0.72, 1], [0.78, -1],
                                [0.20, -1], [0.27, 1], [0.38, -1], [0.95, -1]]) {
         palm(K(s), side, 18, 10 + hash(s * 100) * 3, LIME);
@@ -628,7 +618,6 @@
 
       building(K(0.40), -1, 34, 28, 66, 26, { wall: [0.20, 0.19, 0.20], window: ROSE, floor: 8, lit: true });
 
-      // --- Extra near red-rock desert outcrops (dark, denser silhouette layer) ---
       for (let j = 0; j < 6; j++) {
         const a = j / 6 * 6.2832 + 0.4, h = hash(j * 13 + 5);
         const mx = cx + Math.cos(a) * (ring - 180), mz = cz + Math.sin(a) * (ring - 180);

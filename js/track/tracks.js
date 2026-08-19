@@ -16,7 +16,6 @@ const Tracks = (function () {
     ensurePoints(def);
     const P = def.points, N = P.length;
     const idx = (i) => ((i % N) + N) % N;
-    // dense sampling for arc-length parameterization
     const SUB = 16;
     const dx = [], dy = [], dz = [], dhw = [], dbank = [], dlen = [0];
     for (let i = 0; i < N; i++) {
@@ -34,7 +33,6 @@ const Tracks = (function () {
       }
     }
     const M = dx.length;
-    // close the gap length
     const closeGap = Math.hypot(dx[0] - dx[M - 1], dy[0] - dy[M - 1], dz[0] - dz[M - 1]);
     const total = dlen[M - 1] + closeGap;
 
@@ -85,25 +83,8 @@ const Tracks = (function () {
         if (d < e.halfM) py[k] += e.rise * 0.5 * (1 + Math.cos(Math.PI * d / e.halfM));
       }
     }
-    // The authored profile is a handful of BROAD cosine bumps — Spa carries all
-    // 102 m of its elevation in four, with halfM 360-920 m. Between them the
-    // road is mathematically flat: measured over 20 m windows, the MEDIAN
-    // gradient on Suzuka and Monaco is 0.0%. Real circuits never are. That
-    // constant small compression-and-release is most of what makes a car feel
-    // alive under you, and its absence is why every circuit reads the same
-    // between corners.
-    //
-    // Add a low-amplitude ripple: three harmonics at 30-110 m wavelengths,
-    // summed so the result never repeats obviously. Written in CYCLES PER LAP
-    // (integer) rather than metres so the profile is continuous across the
-    // start/finish seam — a wavelength that does not divide the lap leaves a
-    // step there, and the car would hit it every lap.
-    //
-    // Amplitude scales with the track's own relief: a circuit that already
-    // climbs (Spa, Red Bull) gets a little more, a flat street circuit stays
-    // nearly smooth, and nothing exceeds the 0.42 cap applied below.
-    // Deterministic — seeded
-    // off the circuit id — so a lap is repeatable and ghosts stay valid.
+    // Low-amplitude ripple (3 harmonics, whole cycles/lap for seam continuity);
+    // amp scales with relief (0.14–0.42 m cap); seeded off circuit id for ghosts.
     if (def.undulate !== false) {
       let lo = Infinity, hi = -Infinity;
       for (let k = 0; k < n; k++) { if (py[k] < lo) lo = py[k]; if (py[k] > hi) hi = py[k]; }
@@ -282,7 +263,6 @@ const Tracks = (function () {
     if (api.gantry) w.gantry = (s, ...r) => api.gantry(RS(s), ...r);
     if (api.underpassPortal) w.underpassPortal = (s, ...r) => api.underpassPortal(RS(s), ...r);
 
-    // ── Origin-shift / lapMirror remaps for the six leftover emitters ─────────
     // Six more entry points take a node index or a lap fraction and are absent
     // from the lists above, so they never moved with the rest: `groundPatch`
     // (35 circuits), `overheadSpan` (16), `circuitKit` (16), `groundedSegments`
@@ -416,7 +396,6 @@ const Tracks = (function () {
     // circuits whose straights run close in world space) can never enclose the
     // chase camera or wall off the track. Sub-grade slabs (water, the universal
     // ground floor) sit below road level and are exempt via the topY check.
-    // ===================================================================
     let _culled = 0;
     const _suppressed = Object.create(null);
     const noteSuppressed = (kind, msg) => {
@@ -808,7 +787,6 @@ const Tracks = (function () {
     }
     const modelGroup = (id, bounds, emit, opts) => models.modelGroup(id, bounds, emit, opts);
 
-    // ── Vertical placement helpers (docs/SCENERY-GROUNDING.md) ──────────────
     // Every guard in this file is HORIZONTAL (onTrack/rejBox/blockAt keep props
     // off the racing line); nothing asserted that a prop meets the ground, and
     // every floating-scenery defect found by tools/float-audit.cjs was vertical.
@@ -1084,7 +1062,6 @@ const Tracks = (function () {
       const tx = track.tx[kk] * L, tz = track.tz[kk] * L;
       pushSeg(cx - tx, cz - tz, cx + tx, cz + tz, Math.max(0, halfW || 0));
     };
-    // ── Building-mass occupancy ───────────────────────────────────────────
     // Buildings come from three independent producers — cityFront's row, the
     // neonTower front/back rows, and bespoke per-track calls — and none of them
     // knows what the others already placed. Each steps by CENTRELINE arc
@@ -1158,7 +1135,6 @@ const Tracks = (function () {
                     ax: b[0], az: b[2], r: Math.hypot(w / 2, d / 2) });
       if (massGrid) massGridInsert(i);
     };
-    // ── Spatial barrier index (world XZ) ──────────────────────────────────
     // Every existing guard in this engine is horizontal-vs-ROAD (onTrack,
     // rejBox, blockAt) or vertical (the support/grounding tests). None is
     // horizontal-vs-BARRIER — which is why tree crowns still grow through
@@ -1306,7 +1282,6 @@ const Tracks = (function () {
       return false;
     };
 
-    // --- safe-placement helpers (the rules learned from Monaco/Vegas walls) ---
     // prop(): place a roadside object by CLEARANCE. `gap` is how far the box's
     // inner face sits beyond the road edge, so however wide the box is it can
     // never reach the tarmac and loom as a wall against the car. Inherits
@@ -1526,7 +1501,6 @@ const Tracks = (function () {
       }
     }
 
-    // ── Trackside SIGNAGE: corner-number boards + braking markers + pit speed.
     // Prefer curated FIA turn apexes (def.turns from CircuitMarkings; all
     // shipped circuits have a table). Fall back to curvature-peak detection
     // only if a def somehow lacks turns.
@@ -1780,13 +1754,7 @@ const Tracks = (function () {
       let sceneryApi = {
         out, track, def, theme, pal, n, ds, px, py, pz, hw, pyMin,
         night: NIGHT,
-        // Procedural surface-material ids (js/render/glx.js applyMaterial/applyMaterialNormal).
-        // Tag a block of geometry by setting out._mat = MAT.<NAME> before the add*()
-        // calls that should carry it, then out._mat = 0 (MAT.FLAT) to stop. Applies to
-        // BOTH the day/night colour tint AND a real light-catching bump — no images,
-        // no UVs. See docs/SCENERY-API.md.
         MAT,
-        // Named atmosphere / colour packs (js/track/scenery-data.js)
         ATM, COL,
         place, prop, backdrop, groundPlane, groundYAt,
         // World-XZ ground query, exposed to circuits because its ABSENCE is
@@ -1803,26 +1771,18 @@ const Tracks = (function () {
         sceneryTheme, landmarkKit, circuitKit,
         modelDiagnostics: diagnostics,
         ferrisWheel, hash, upOf, cross, norm, lerp, vadd,
-        // richer primitives (world coords): non-cube shapes
         addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain, anchor, along,
-        // landscape + vegetation
         pine, tree, palm, bush, hedge, peak, mountain, ridge, forestEdge, conifer,
         cypress, stonePine, broadleafFall, acacia, plane,
-        // spectator terracing (informal grass banks — see docs/SCENERY-API.md)
         spectatorHill,
-        // open seating — the stand forms grandstandEx is not (no back shell)
         bleacher, scaffoldStand, terrace, tieredBowl,
-        // structures
         building, house, motorhome, tower, grandstand, grandstandEx, billboard,
         gantry, marshalPost, cameraTower, cityFront,
         signDigit,
-        // shared identity-pass toolkit
         underpassPortal, floodMast, floodMastRing, ledFacadeBands,
         concreteCanyon, sailCanopy, gridshellCanopy, runoffApron,
         bankedKerbStrip, bowlSeatWall, pastelStreetRow, broadcastCompound,
-        // signage
         signBoard, sponsorHoarding,
-        // barriers / track furniture
         wall, fence, guardrail, tyreWall, recordBarrier,
         // Footprint reservation. A circuit that builds a large prop from raw
         // primitives — a farmhouse, a campsite, a stand — has no way to tell
@@ -2262,8 +2222,6 @@ const Tracks = (function () {
   }
 
   // Touch-forces LIST points (and the coupled elevation/bridge/hwZones remaps).
-  // buildCenterline is the only build entry that needs the array; LIST.find
-  // metadata consumers never pay.
   function ensurePoints(def) {
     return def.points;
   }

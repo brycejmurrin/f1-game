@@ -429,7 +429,8 @@ const CEILINGS = {
   // the 40-circuit build INCLUDING their anti-vacuity guards, which assert the
   // baseline caps are tight — i.e. the placement counts are exactly unchanged.
   // 2940 -> 2350: comment-bloat pass (trim-comments.mjs).
-  "js/track/tracks.js": 2351,
+  // 2351 -> 2308: track/circuit comment trim (carves §4).
+  "js/track/tracks.js": 2308,
 };
 
 test("the big modules are not growing unnoticed", () => {

@@ -479,7 +479,7 @@ const SceneryStructures = (function () {
     // numeric literal — so the swap is output-identical, verified by
     // tools/verify-track.cjs. Migrated rather than left so the divergence
     // cannot be mistaken for intent later.
-    const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
+    const clamp = M4.clamp;
 
     const bleacher = (s0, s1, side, gap, opts) => {
       opts = opts || {};
@@ -725,7 +725,6 @@ const SceneryStructures = (function () {
         });
       }
     };
-    // --- iconic landmark: a ferris wheel beside the track (Suzuka, Singapore) ---
     function ferrisWheel(k, side, dist, radius) {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const tl = Math.hypot(track.tx[k], track.tz[k]) || 1;

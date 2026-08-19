@@ -3,7 +3,7 @@ const TrackSpline = (function () {
   "use strict";
 
   const SCALE = 1.45;            // scale authored lengths for arcade racing
-  const lerp = M4.lerp;                       // shared scalar helper (js/mat4.js)
+  const lerp = M4.lerp;
 
   // seg = {t:turnDeg(+left), l:len m, h:hillDelta m, b:bank rad, w:halfWidth}
   // Integrates a heading where direction = (sin t, cos t); +turn = LEFT —

@@ -4,11 +4,9 @@ const TrackMesh = (function () {
 
   const __M = Math;
 
-  // cross from js/track/geom.js; curvature (baked LUT reader) and cr (Catmull-Rom)
-  // from js/track/spline.js — eval-time destructures (hard edges).
   const { cross, MAT } = TrackGeom;
   const { curvature, cr: catmull } = TrackSpline;
-  const lerp = M4.lerp;                       // shared scalar helper (js/mat4.js)
+  const lerp = M4.lerp;
 
   function accumFaceN(nrm, pos, ia, ib, ic) {
     const ax = pos[ia * 3], ay = pos[ia * 3 + 1], az = pos[ia * 3 + 2];

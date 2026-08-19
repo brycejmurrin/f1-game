@@ -4,7 +4,7 @@ const TrackSurface = (function () {
   "use strict";
 
   const clamp01 = (v) => M4.clamp(v, 0, 1);
-  const lerp = M4.lerp;                       // shared scalar helper (js/mat4.js)
+  const lerp = M4.lerp;
 
   function monotonicRails(def, outerW, street, flat) {
     const seeds = street

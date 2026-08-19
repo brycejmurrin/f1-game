@@ -9,7 +9,6 @@ const SceneryIdentity = (function () {
             anchor, along, building, indexSolid } = ctx;
     Log.info("scenery", "scenery-identity dress " + (ctx.def && ctx.def.id));
 
-    // ── Shared scenery toolkit (identity pass) ──────────────────────────────
     // Cross-track composite helpers. Footprints that must stay OFF the racing
     // line use rejBox / full-box tests. Overhead decks that cars intentionally
     // pass under (gantry beam, underpass slab, sail/gridshell spanning the

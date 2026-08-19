@@ -102,7 +102,7 @@ window.CircuitMarkings = (function () {
     sectors: [0.32, 0.68],
     turns: [0.0860, 0.1667, 0.2084, 0.2957, 0.3953, 0.4219, 0.4845, 0.5338, 0.5889, 0.7312, 0.7558, 0.8327, 0.8744, 0.9105],
   },
-  // ── Derived tables (no curated FIA source). These circuits had NO entry at
+  // These circuits had NO entry at
   // all, so buildProps fell back to findCorners() and numbered an arbitrary
   // count of curvature peaks from an arbitrary origin. Apexes here are the N
   // strongest curvature peaks of THIS centreline in lap order, with N set to
