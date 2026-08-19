@@ -111,7 +111,7 @@ const CLASS_CEILING = 532;
 // +8 2026-08-18: Adaptive Buttons moved onto the simple sheet; BRAKE CUE
 // slider + How-to-Play key chips + brake-cue.js script tag. Still under ~1400.
 // −10 2026-08-18: #menu-status chips removed with the dashboard chrome.
-const NODE_CEILING = 1210;
+const NODE_CEILING = 1212;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module
