@@ -84,11 +84,14 @@ const RaceControl = (() => {
     }
 
     function update(dt) {
-      if (!G.netPlay.ownsRaceControl()) return;
+      // State reset BEFORE the ownership gate: a guest's caution mirror comes
+      // from host apply(), and returning early here left the last flag flown
+      // on its HUD after the race ended (reset() is local-only, safe for all).
       if (G.state !== "race") {
         if (caution.level !== 0 || capHoldT) reset();
         return;
       }
+      if (!G.netPlay.ownsRaceControl()) return;
       if (!enabled || !DebrisWorld.active()) return;
       if (caution.level !== 0) caution.sinceT += dt;
       queryT += dt;
@@ -103,7 +106,9 @@ const RaceControl = (() => {
         desired = 1; dsector = hz.worst.sector; dfrac = hz.worst.frac; dcause = "YELLOW";
       }
       caution.total = hz.total;
-      caution.sectors = hz.sectors.slice();
+      // in-place copy — this ran 4×/s and allocated a fresh 3-slot array each time
+      if (!caution.sectors || caution.sectors.length !== hz.sectors.length) caution.sectors = hz.sectors.slice();
+      else for (let i = 0; i < hz.sectors.length; i++) caution.sectors[i] = hz.sectors[i];
 
       // The HARD CAP the constants always promised ("a stuck hazard cannot
       // neutralise the race forever"): a flag flown for its full cap drops to

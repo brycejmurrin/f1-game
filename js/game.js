@@ -954,7 +954,7 @@ let ttNewRecord = false;    // set when the player takes provisional pole this s
 let ttLaps = [];            // completed lap times this time-trial session
 let ttSessionTs = 0;        // session start stamp; entries at/after it are "yours, just now"
 let sectorStartT = 0;        // lapTime when current sector started
-let sectorIdx = 0;           // 0, 1, 2 (current sector)
+let sectorIdx = 0, sectorValid = true;   // current sector + "entered it FORWARD" flag
 let sectorBests = [Infinity, Infinity, Infinity];  // best S1/S2/S3 times ever
 let sectorLast = [null, null, null];               // last lap's S1/S2/S3 times
 let frameSky = {}, frame = {};
@@ -2552,7 +2552,8 @@ function startRace() {
   if (session === "race") { raceIndex++; armReliability(cars); }
   resultT = 0;
   camRoll = 0; camSlipSm = 0;
-  sectorIdx = sectorAt(player.s); sectorStartT = 0;
+  // player can be null (roster/team resolution miss) — don't let startRace throw.
+  sectorIdx = player ? sectorAt(player.s) : 0; sectorStartT = 0; sectorValid = true;
   // The SPLITS reset here, with the rest of the session — not in loadTrack.
   // They used to sit inside loadTrack's `builtTrackId !== def.id ||
   // builtTrackNight !== sessionDark` rebuild gate, so racing the same circuit
@@ -3346,7 +3347,8 @@ function update(dt) {
 
   // Leading human, for the AI rubber-band. Once per step, not once per AI car.
   _leadHuman = null;
-  for (const c of cars) if (c.human && !c.retired && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c;
+  // !finished: a flagged human coasts on advancing prog — don't rubber-band toward it.
+  for (const c of cars) if (c.human && !c.retired && !c.finished && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c;
 
   for (const c of cars) updateCar(c, dt, ranked);
 
@@ -4809,16 +4811,17 @@ function updateCar(c, dt, ranked) {
   if (c.isPlayer && state === "race" && track) {
     const newSector = sectorAt(c.s);
     if (newSector !== sectorIdx) {
-      if (ds > 0 && (sectorIdx < newSector || (sectorIdx === 2 && newSector === 0))) {
-        // Grid sits just before the line (in S3). The first start/finish crossing
-        // only starts the flying lap (lap 0→1) — do NOT stamp that formation
-        // segment as an S3 split/best, or the HUD shows a bogus ~few-second S3
-        // the moment the race begins. And skip an incident-invalidated lap: a
-        // takeover freezes c.lapTime while Rapier walks c.s forward, so `elapsed`
-        // over the skipped sector is impossibly short — it would set a permanent
-        // bogus sector best, exactly the corruption the lap-best (4420) and ghost
-        // (4456) already guard against with this same flag.
-        if (c.lap >= 1 && !c.incidentInvalidLap) {
+      const fwd = ds > 0 && (sectorIdx < newSector || (sectorIdx === 2 && newSector === 0));
+      if (fwd) {
+        // Grid sits just before the line (in S3): the first start/finish crossing
+        // only starts the flying lap (lap 0→1), so don't stamp that formation
+        // segment as an S3 split/best. Skip an incident-invalidated lap too — a
+        // takeover freezes c.lapTime while Rapier walks c.s forward, making
+        // `elapsed` impossibly short (the lap-best and ghost recorders guard the
+        // same corruption with this flag). And sectorValid guards a REVERSED
+        // entry: a backward crossing skips the record but resets sectorStartT,
+        // so the next forward crossing times a fraction (measured: 0.217 s "S1").
+        if (c.lap >= 1 && !c.incidentInvalidLap && sectorValid) {
           const elapsed = c.lapTime - sectorStartT;
           const prevSector = sectorIdx;
           const prevBest = sectorBests[prevSector];
@@ -4833,6 +4836,7 @@ function updateCar(c, dt, ranked) {
           }
         }
       }
+      sectorValid = fwd;   // the NEXT split is trustworthy only after a forward entry
       sectorIdx = newSector;
       sectorStartT = c.lapTime;
     }
@@ -4908,7 +4912,7 @@ function updateCar(c, dt, ranked) {
   if (c.human && state === "race" && !c.finished) {
     // Moving backwards along the track at speed = going the wrong way. (A slow
     // reverse crawl to recover off a wall is fine and does NOT trip this.)
-    if (ds < -0.03 && c.speed > vStd(15)) c.wrongT = Math.min(2, (c.wrongT || 0) + dt);
+    if (ds < -0.03 && vStd(c.speed) > 15) c.wrongT = Math.min(2, (c.wrongT || 0) + dt);
     else c.wrongT = Math.max(0, (c.wrongT || 0) - dt * 2);
     c.wrongWay = c.wrongWay ? c.wrongT > 0.15 : c.wrongT > 0.4;
     if (c.wrongWay && (c.wrongCueT = (c.wrongCueT || 0) - dt) <= 0) {
@@ -5722,7 +5726,7 @@ function render(dt) {
     const bankCam = Tracks.banking(track, s, 0, _bankScratchCam, true);
     _vantExtra.bankDy = bankCam ? bankCam.dy : 0; _vantExtra.deploy = false;
     _vantExtra.slipLat = 0; _vantExtra.att = null; _vantExtra.carPos = null; _vantExtra.carHead = 0;
-    const vant = camVantage("cinematic", s, 0, vStd(40), performance.now(), _vantExtra);
+    const vant = camVantage("cinematic", s, 0, (40 / VMAX) * vTop(), performance.now(), _vantExtra);
     eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov; camAncNX = null;
   } else {
     if (!player) return;
@@ -6176,7 +6180,7 @@ function render(dt) {
     // Car shadow pass: skip odd frames at low speed — the 1024² map persists
     // one frame and parked/slow driving does not need 60 Hz updates.
     const _carSpd = player ? Math.abs(player.speed) : 0;
-    const _carShadowFrame = (_frameNo & 1) === 0 || _carSpd > vStd(0.15);
+    const _carShadowFrame = (_frameNo & 1) === 0 || vStd(_carSpd) > 0.15;
     if (gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 && _carShadowFrame &&
         (_hasLivePlayerShadow || _shadowCount > 0) && player && state !== "menu") {
       const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;

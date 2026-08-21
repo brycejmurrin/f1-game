@@ -174,9 +174,12 @@ function create(G) {
     // A provisional all-AI sheet is not a weekend result — writing it here is
     // what made every openQuali() throw away a driven grid. Friend races must
     // not stamp Career/season either: the lobby can sit on an active career
-    // save, and NetPlay.isOn() is the "this is a room, not a championship" bit.
+    // save, and netPlay.active() is the "this is a room, not a championship"
+    // bit. (This used to probe NetPlay.isOn(), which exists on neither the
+    // module nor the instance — the guard was dead and a VS FRIEND quali
+    // overwrote the real weekend's stored grid.)
     if (!classification.some((r) => r.human)) return;
-    if (typeof NetPlay !== "undefined" && NetPlay.isOn && NetPlay.isOn()) return;
+    if (G.netPlay && G.netPlay.active && G.netPlay.active()) return;
     if (typeof Career !== "undefined" && Career.conflicted && Career.conflicted()) return;
     s.qualiOrder = classification.map((r) => ({
       id: r.driverId, t: r.t, human: !!r.human,
