@@ -75,7 +75,10 @@ test("main camera cullDist contains the far-plane corners", () => {
 test("already-landed leftovers stay in the product path", () => {
   const game = read("js/game.js");
   assert.match(game, /Cheap reject before wrap — same pattern as pairContact/);
-  assert.match(game, /Cheap reject before wrap — pairContact form/);
+  // The second cheap-reject site (the lateral-separation loop) was subsumed:
+  // sep now accumulates inside the traffic scan. Pin the fusion instead so a
+  // second full-field pass can't quietly come back.
+  assert.match(game, /sep \(consumer below\) is fused into this scan/);
   const tracks = read("js/track/tracks.js");
   assert.match(tracks, /const MASS_CELL = 24/);
   assert.match(tracks, /massGridInsert/);

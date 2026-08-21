@@ -106,9 +106,7 @@ const RaceControl = (() => {
         desired = 1; dsector = hz.worst.sector; dfrac = hz.worst.frac; dcause = "YELLOW";
       }
       caution.total = hz.total;
-      // in-place copy — this ran 4×/s and allocated a fresh 3-slot array each time
-      if (!caution.sectors || caution.sectors.length !== hz.sectors.length) caution.sectors = hz.sectors.slice();
-      else for (let i = 0; i < hz.sectors.length; i++) caution.sectors[i] = hz.sectors[i];
+      caution.sectors = hz.sectors.slice();
 
       // The HARD CAP the constants always promised ("a stuck hazard cannot
       // neutralise the race forever"): a flag flown for its full cap drops to
