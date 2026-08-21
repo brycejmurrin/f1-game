@@ -45,6 +45,11 @@ const TrackModels = (function () {
   }
   function scratch(verts) {
     const v = verts > 0 ? verts : 8192;
+    // Float64 ON PURPOSE (an f32 conversion was tried 2026-08-21 and reverted):
+    // graph-parity holds the fused soup and the instanced canonical bake equal
+    // to 1e-6 m, and the canonical path accumulates in plain-array f64 — f32
+    // here put every circuit ~6e-5 m (f32 epsilon at world scale) off parity.
+    // Halving the accumulator footprint needs BOTH paths converted together.
     return {
       pos: makeAccum(Float64Array, v * 3),
       nrm: makeAccum(Float64Array, v * 3),
