@@ -655,7 +655,16 @@ function updateTrackPreview() {
   // Unmeasurable: draw at the CSS slot and DO NOT pin, leaving the stylesheet's
   // own caps authoritative for that frame. watchPreviewCard refits with real
   // numbers as soon as the card has a box.
-  const measurable = classified && !!(card && card.clientWidth > 0);
+  /* The planPreview path needs the SECTION measured too: with sectionH 0 it
+     takes its documented pre-layout fallback (height from cardInnerW/aspect
+     alone), which for a tall circuit is a map TALLER than the phone — and a
+     card with a width but a 0-height section is exactly what a half-laid-out
+     screen reports. Pinning that froze a 574px map into a 393-wide portrait
+     select (2026-08-21 sweep: every #sel-preview-* clipped past the section).
+     The stacked band branch never reads sectionH, so the card's own width is
+     enough evidence there. */
+  const sectionMeasured = (stacked && !tallSheet) || !!(section && section.clientHeight > 0);
+  const measurable = classified && sectionMeasured && !!(card && card.clientWidth > 0);
   const fit = TrackMaps.fitCanvas(map, plan.slotW, plan.slotH, t, measurable);
   watchPreviewCard(card);
   // CRISP CANVAS AT UI SIZE > 100%.

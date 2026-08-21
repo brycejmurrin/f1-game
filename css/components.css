@@ -588,6 +588,12 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   /* --vwz, not bare vw: .bigbtn lives inside .sheet and inside #overlay > *,
      both of which are zoomed. See the note in tokens.css. */
   width: min(calc(78 * var(--vwz)), 340px);
+  /* WCAG conformance floor, zoom-honest: padding gives these ~40px at 100%,
+     but at UI SIZE 40% RESUME painted 18px tall (2026-08-21 sweep, pause and
+     advanced @40 on every viewport). --tap-min is 24 local px at <=100% —
+     under every existing button height, so nothing moves — and grows as the
+     zoom shrinks so the PAINTED box never drops below 24px. */
+  min-height: var(--tap-min);
   margin: 10px auto;
   /* on the height ladder (css/tokens.css). The padding alone happened to land
      these on --tap at most sizes and a pixel or two off at others; stating the
