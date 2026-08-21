@@ -391,7 +391,11 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 }
 .dh-canvas.dh-map {
   cursor: default;
-  max-width: 320px; max-width: min(320px, 42dvh);
+  /* --svhz, not dvh: this canvas lives inside the zoomed .dh-card (the
+     card's own header says heights here use the compensated units), and dvh
+     is explicitly not the house unit (tokens.css). The plain 320px first
+     line stays as the no-var fallback. */
+  max-width: 320px; max-width: min(320px, calc(42 * var(--svhz)));
   margin: 0 auto;
   aspect-ratio: 1 / 1;
   object-fit: contain;
@@ -414,7 +418,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 /* Short local viewport: cap the track map so content doesn't overflow.
    Narrow (zoom-aware) portrait-ish cards use a slightly larger cap. Compact
    wins when both apply — height is the scarce axis. */
-body[data-width="narrow"] .dh-canvas.dh-map { max-width: min(256px, 34dvh); }
+body[data-width="narrow"] .dh-canvas.dh-map { max-width: min(256px, calc(34 * var(--svhz))); }
 body[data-density="compact"] .dh-canvas.dh-map { max-width: 220px; }
 .dh-legend { display: flex; flex-wrap: wrap; gap: 8px var(--gap); font-size: var(--fs-2); color: #9a9aa5; margin-top: -2px; }
 .dh-legend-item {
@@ -509,10 +513,14 @@ body[data-width="narrow"] .dh-thint { display: none; }
   padding: 1px 5px; border-radius: var(--r-pill); margin-left: 4px;
   background: rgba(255, 255, 255, 0.12); color: #cfe0ff; flex: 0 0 auto;
 }
-/* remove-lane button on a tray row */
+/* remove-lane button on a tray row.
+   max(20px, --tap-min): the bare 20px was under the WCAG 24px floor even at
+   100% (the only such control left in the 2026-08-21 sweep), and painted 8px
+   at UI SIZE 40% inside the zoomed .dh-card. The glyph stays --fs-4. */
 .dh-lane-x {
   margin-left: auto; flex: 0 0 auto;
-  width: 20px; height: 20px; line-height: 1; padding: 0;
+  width: max(20px, var(--tap-min)); height: max(20px, var(--tap-min));
+  line-height: 1; padding: 0;
   border-radius: var(--r-pill); border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.06); color: #f2f2f5; font-size: var(--fs-4);
 }
@@ -579,6 +587,11 @@ body[data-width="narrow"] .dh-thint { display: none; }
    Height only — the text still sets the width, so nothing reflows sideways. */
 .dh-pill, .dh-dchip, .dh-sortbtn, .dh-livebtn, .dh-tbtn, .dh-ratebtn, .dh-legend-item {
   min-height: var(--chip-h);
+  /* "Height only" (above) held at >=100%, but inside the zoomed .dh-card the
+     narrow chips (0.5x/1x/2x rate buttons) painted ~12px WIDE at UI SIZE 40%.
+     --tap-min is 24 local px at >=100% — under every current chip width, so
+     nothing reflows sideways there; it only grows as the zoom shrinks. */
+  min-width: var(--tap-min);
   display: inline-flex; align-items: center; justify-content: center;
 }
 /* the legend's colour swatches are decoration inside their button, not the

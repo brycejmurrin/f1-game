@@ -598,7 +598,10 @@ body[data-density="compact"] #campicker {
 
 #save-warning {
   position: fixed; z-index: 8500;
-  top: max(var(--gap), env(safe-area-inset-top)); left: 50%;
+  /* var(--sat), not raw env(): the last raw inset read outside tokens.css —
+     the notch simulation overrides --sa* and could never reach this banner
+     (same fix data.css documents twice). */
+  top: max(var(--gap), var(--sat)); left: 50%;
   transform: translateX(-50%);
   width: min(48rem, calc(100vw - 2 * var(--gap)));
   display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
@@ -806,6 +809,15 @@ body[data-density="compact"] #campicker {
   resize: vertical;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: var(--fs-micro);
+}
+/* 16px floor on the EDITABLE boxes only: iOS Safari auto-zooms the page when
+   a focused input's font-size is under 16px, and the zoom STICKS after the
+   keyboard closes (the rule this repo already states at menus.css and
+   tuner.css input rules) — landing mid-WebRTC-handshake on the one screen
+   whose whole job is pasting a code. The readonly boxes keep --fs-micro and
+   their height budget; they never focus a keyboard. */
+#vsfriend .vs-code:not([readonly]) {
+  font-size: 16px;
   line-height: 1.3;
   /* Codes have no spaces, so without this they force the sheet wide. */
   word-break: break-all;

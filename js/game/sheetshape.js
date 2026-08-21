@@ -406,6 +406,18 @@ window.SheetShape = (function () {
       // --sheet-scale under the keyboard; watchScale() ignores this write
       // (it compares --ui-scale only), hence the direct call.
       reclassify();
+      /* Then bring the field back. iOS pans the visual viewport to reveal
+         the focused input BEFORE --kb lands; the padding above then shrinks
+         and re-centres the sheet UNDER that pan, so the browser's own remedy
+         goes stale and the field can end up behind the foot. block:"nearest"
+         is a no-op when it is already visible, so the common case is free.
+         (scroll-padding on the pane would double-count: the pane is already
+         shortened by --kb, and scroll-padding is inert without a
+         scroll-into-view anyway — this call IS the missing half.) */
+      const ae = document.activeElement;
+      if (kb && ae && ae.matches && ae.matches("input,textarea,[contenteditable]")) {
+        ae.scrollIntoView({ block: "nearest" });
+      }
     };
     const onvv = () => { if (!raf) raf = requestAnimationFrame(apply); };
     vv.addEventListener("resize", onvv, { passive: true });

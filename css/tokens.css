@@ -128,6 +128,20 @@
    initial value is the generic sheet's 380, #lighting-inner/#camtune-inner
    declare 620, body declares 600, and none of them leak into the others. */
 @property --compact-at { syntax: "<length>"; inherits: false; initial-value: 380px; }
+/* THE TAP LADDER IS TYPED so JS can READ it. All three are max(Npx,
+   calc(24px / var(--ui-scale))) expressions; unregistered, getComputedStyle
+   returns the raw token stream and every parseFloat() on it is NaN — which
+   is how tools/layout-audit.mjs measured every tap against a hardcoded 44
+   for its whole life (its own comment block swears the opposite), and how
+   js/game/menus.js's chip-height read silently pinned the circuit preview
+   band to 40 at every scale and on every pointer. Registered <length>, the
+   computed value is a resolved px length and both readers work. `inherits:
+   true` (the default for plain custom properties) is load-bearing: consumers
+   read these anywhere in the tree, and the body:not(.desktop) touch override
+   must keep cascading down. */
+@property --tap { syntax: "<length>"; inherits: true; initial-value: 44px; }
+@property --chip-h { syntax: "<length>"; inherits: true; initial-value: 40px; }
+@property --tap-min { syntax: "<length>"; inherits: true; initial-value: 24px; }
 
 @layer base {
 /* Apex 26 — layout, HUD, menus. Data hub styles live in css/data.css */

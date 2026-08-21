@@ -45,7 +45,11 @@ body.desktop #pm-calib { display: none !important; }
   /* #sel-inner IS the sheet, so the condition goes ON it, not in front of it — a
    `:where(.sheet...) #sel-inner` prefix asks for the sheet to contain itself and
    matches nothing, which is exactly how the desktop select golden moved. */
-  #sel-inner:where(:not([data-density="compact"])) { height: min(100%, max(720px, 78svh)); }
+  /* --svhz, not bare svh: #sel-inner IS the sheet, so this height resolves
+     INSIDE `zoom: var(--ui-scale)` where raw viewport units multiply — at
+     40% the select sheet was getting 31.2svh of the intent's 78. Same trap
+     as the compensated-unit note in tokens.css. */
+  #sel-inner:where(:not([data-density="compact"])) { height: min(100%, max(720px, calc(78 * var(--svhz)))); }
 }
 
 /* Main menu on a large LANDSCAPE screen: branding left, buttons right — as ONE
@@ -96,7 +100,8 @@ body.desktop #pm-calib { display: none !important; }
   }
   :where(body:not([data-density="compact"])) #menu-buttons {
     grid-column: 2; grid-row: 1; align-self: center;
-    gap: clamp(8px, 1.2vw, 16px); justify-items: stretch;
+    /* --vwz like the widths two rules down — this element is zoomed. */
+    gap: clamp(8px, calc(1.2 * var(--vwz)), 16px); justify-items: stretch;
     /* Same skew gutter compact already uses — CAREER's -6deg hang measured
        418px against a 410px column without it. */
     padding-inline: var(--gap);
@@ -106,7 +111,7 @@ body.desktop #pm-calib { display: none !important; }
      the viewport and divides by --ui-scale so zoom does not overflow. */
   :where(body:not([data-density="compact"])) #menu-hero,
   :where(body:not([data-density="compact"])) #menu-primary,
-  :where(body:not([data-density="compact"])) #menu-secondary { width: 100%; gap: clamp(8px, 1vw, 12px); }
+  :where(body:not([data-density="compact"])) #menu-secondary { width: 100%; gap: clamp(8px, calc(1 * var(--vwz)), 12px); }
   :where(body:not([data-density="compact"])) #menu-buttons .bigbtn { width: 100%; }
   :where(body:not([data-density="compact"])) #menu-buttons .minibtn { font-size: var(--fs-micro); padding: 9px 8px; }
   /* Small print scales too. At a flat 11/12px it read as a stray line of text

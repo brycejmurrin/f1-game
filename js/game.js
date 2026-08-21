@@ -3118,12 +3118,15 @@ function clearMenuScreens() {
   garageReturn = "select";
 }
 
+// The mql is only the CHANGE TRIGGER; ACTIVE is read off computed display so
+// css/responsive.css owns the whole condition once — the duplicated 743px
+// query here could drift (blocker painting while aria-hidden). Cheap call rate.
 const rotateBlockMql = window.matchMedia ? window.matchMedia("(orientation: portrait) and (pointer: coarse) and (max-width: 743px)") : { matches: false };
 function syncRotateBlocker(moveFocus) {
   const box = $("rotate-device"); if (!box) return false;
-  const active = document.body.classList.contains("in-race") && rotateBlockMql.matches && !document.body.classList.contains("rotate-help-open");
+  const active = getComputedStyle(box).display !== "none";
   box.setAttribute("aria-hidden", active ? "false" : "true"); if (active && moveFocus) requestAnimationFrame(() => {
-    const first = $("rotate-controls"); if (first && document.body.classList.contains("in-race") && rotateBlockMql.matches) first.focus();
+    const first = $("rotate-controls"); if (first && getComputedStyle(box).display !== "none") first.focus();
   }); return active;
 }
 if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", () => syncRotateBlocker(true));

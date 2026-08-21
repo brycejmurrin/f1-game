@@ -360,7 +360,11 @@ const CEILINGS = {
   // same fix; union takes the larger).
   // 8574 -> 8577: pass slip/ax/onKerb/wet to GameAudio.setEngine for
   //   traction-load character, brake intake growl, and wet-surface tyre audio.
-  "js/game.js": 8577,
+  // 8577 -> 8580: syncRotateBlocker reads the blocker's computed display
+  //   instead of duplicating css/responsive.css's portrait+coarse+743px
+  //   condition — the two copies could drift (blocker painting while
+  //   aria-hidden). Three lines of why at the site of the de-duplication.
+  "js/game.js": 8580,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

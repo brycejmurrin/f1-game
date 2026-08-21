@@ -940,16 +940,24 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   align-items: stretch;
   --sel-map-w: 100%;
 }
-/* Full width, but CAPPED: the caption's height is roughly constant (name,
-   GP, meta, chips), so subtract it and give the map the rest; where the
-   map's own aspect height is smaller the cap does not bind, and object-fit
-   keeps the outline true when it does. Replaces `max-height: none`, which
-   is what let the map overrun the band. */
+/* THE MAP IS THE FLEX REMAINDER, THE CAPTION IS NOT NEGOTIABLE. A constant
+   caption reserve (the wide-tall branch's 9.5rem) is wrong on a PHONE: the
+   chips wrap to two rows at 150% and one-per-row at 200%, so any constant
+   either clips the facts or starves the map. Instead the caption (below)
+   keeps its natural height and the map takes exactly what is left of the
+   definite band — flex-basis 0 also means the JS pin's inline height is
+   ignored in the main axis, so a stale plan cannot overrun the band.
+   min-height keeps a sliver of outline visible when the caption is greedy;
+   object-fit keeps it undistorted at whatever share it gets. */
 #sel-inner[data-shape="tall"]:not([data-pair="on"]) > #sel-body > #sel-track-section #sel-preview-map {
-  max-height: calc(100% - 9.5rem);
+  flex: 1 1 0;
+  min-height: 40px;
   object-fit: contain;
   max-width: 100%;
   width: var(--sel-map-w, 100%);
+}
+#sel-inner[data-shape="tall"]:not([data-pair="on"]) > #sel-body > #sel-track-section #sel-preview-info {
+  flex: 0 0 auto;
 }
 #sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section > #sel-track-preview {
   flex: 1 1 auto; min-height: 0;
@@ -957,15 +965,21 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   align-items: stretch;
   --sel-map-w: 100%;
 }
-/* Compact tall hides meta (below), so the caption constant is smaller. */
 #sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section #sel-preview-map {
-  max-height: calc(100% - 7rem);
+  flex: 1 1 0;
+  min-height: 40px;
   object-fit: contain;
   max-width: 100%;
 }
-/* Restore caption elements hidden by compact stacked rules in tall compact view. */
-#sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] #sel-preview-meta,
-#sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] #sel-preview-facts { display: flex; }
+#sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section #sel-preview-info {
+  flex: 0 0 auto;
+}
+/* Restore META (one short line) in tall compact view; the FACTS stay hidden.
+   Compact tall means 200%+ on a phone, where the caption column is ~175
+   local px and each chip wraps to its own row — four chip rows ate the whole
+   band and pushed the caption past the section (2026-08-21 sweep, @200
+   clipped 5). The chips return the moment density is normal again. */
+#sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] #sel-preview-meta { display: block; }
 
 /* THE PREVIEW CARD IN THE TWO-COLUMN LAYOUT.
    Scoped through #sel-track-preview — two IDs — deliberately. A container query
@@ -1160,7 +1174,11 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   background: rgba(255, 255, 255, 0.055);
   color: var(--text);
   font: inherit;
-  font-size: var(--fs-2);
+  /* 16px, not --fs-2 (15): the iOS focused-input auto-zoom floor stated at
+     the customize/tuner input rules applies to every typeable field, and a
+     sticky page zoom from tapping the circuit SEARCH box is the worst
+     possible trade for one type rung. */
+  font-size: 16px;
 }
 #sel-track-search::placeholder { color: var(--dim); opacity: 1; }
 #sel-track-empty { padding: var(--pad); text-align: center; }
@@ -1398,7 +1416,10 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    in a different place and the columns read as misaligned rather than as a
    grid. */
 #customize input[type="color"] {
-  width: 48px; height: var(--chip-h); padding: 0; border: 1px solid rgba(255, 255, 255, 0.22);
+  /* Height was deliberately put on the floored token; the width literal was
+     the gap — eleven colour wells painted 19.2px wide at UI SIZE 40%. The
+     max() arm only wins below 100%. */
+  width: max(48px, var(--tap-min)); height: var(--chip-h); padding: 0; border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: var(--r-sm); background: none; cursor: pointer; flex: none;
 }
 /* NONE'd colour well (game.js toggles cz-off) dims like its inline-livery twin
@@ -1431,7 +1452,9 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      a bare class loses to any `... button { width: 100% }` rule. */
   /* --chip-h, not a bare 32: these sit beside the colour wells in a row of
      fifteen and were the one control in the form under the chip height. */
-  flex: none; width: auto; min-width: 56px; min-height: var(--chip-h);
+  /* max() with --tap-min: 56 painted 22.4px at UI SIZE 40%; only the
+     sub-100% arm ever wins. */
+  flex: none; width: auto; min-width: max(56px, var(--tap-min)); min-height: var(--chip-h);
   font: inherit; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.08em;
   padding: 6px 9px; border-radius: var(--r-sm); cursor: pointer; color: rgba(255,255,255,0.55);
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2);
@@ -1449,7 +1472,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* FINISH is a MATERIAL, not a colour, so its row carries a 3-way choice made of
    the same pill buttons instead of a colour well + NONE. Exactly one is active. */
 .cz-finish { display: flex; gap: 6px; flex: none; }
-.cz-finish .cz-liv-none { min-width: 52px; }
+.cz-finish .cz-liv-none { min-width: max(52px, var(--tap-min)); }
 /* Columns of rows once the sheet is wide, so all fifteen fit without the dialog
    becoming a long scroll. auto-fill rather than a hard two, so the count follows
    the room the sheet was given — on a landscape phone the sheet is now wide

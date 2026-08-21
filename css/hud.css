@@ -402,6 +402,10 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
 }
 .pc-btn {
   width: 64px; height: 58px; border-radius: var(--r-lg); margin: 0;
+  /* WCAG floor for the zoomed photo column: 64x58 paints 25.6x23.2 at UI
+     SIZE 40% and the lt-open 46x42 variant paints 18.4x16.8 (2026-08-21
+     sweep). Inert at >=100%. */
+  min-width: var(--tap-min); min-height: var(--tap-min);
   font-size: 18px; font-weight: 800;
   background: rgba(20,20,30,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.25);
   display: flex; align-items: center; justify-content: center;
@@ -446,7 +450,10 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
 }
 .pc-hint { font-size: var(--fs-micro); color: rgba(255,255,255,0.66); letter-spacing: 0.02em; }
 .pc-fovlab { display: flex; align-items: center; font-size: var(--fs-micro); font-weight: 700; color: var(--dim); }
-.pc-fovlab input[type="range"] { width: 110px; margin-left: calc(var(--gap) * 0.5); }
+/* The one range slider in the app with no height floor: the UA default
+   (~20 local px) painted ~8px at UI SIZE 40% inside the zoomed #pc-bar. Same
+   var(--tap-min) floor as .tune-row and .pm-group range inputs. */
+.pc-fovlab input[type="range"] { width: 110px; margin-left: calc(var(--gap) * 0.5); height: var(--tap-min); min-height: var(--tap-min); }
 #pc-exit, #pc-panel, #pc-hud {
   width: auto; margin: 0; padding: 7px 16px; border-radius: var(--r-md);
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.06em;
@@ -488,7 +495,11 @@ body.pc-uihidden .touchbtn { display: none !important; }
   zoom: var(--ui-scale);
   top: calc(8px + var(--sat) / var(--ui-scale));
   right: calc(10px + var(--sar) / var(--ui-scale));
-  width: 36px; height: 36px;
+  /* max() with the WCAG floor: this element zooms ITSELF, so the bare 36
+     painted 14.4px at UI SIZE 40% — and the note below about it being "the
+     one control between a touch-only user and a blank screen" argued the
+     size up for exactly the reachability reason the sub-100% case breaks. */
+  width: max(36px, var(--tap-min)); height: max(36px, var(--tap-min));
   padding: 0; margin: 0;
   border-radius: var(--r-md);
   font-size: 16px; line-height: 1;
@@ -506,7 +517,7 @@ body.pc-uihidden #hud-restore { display: none !important; }
    fly with while you aim at it. Only the box grows; the glyph and the low
    resting opacity stay, so the clean frame this mode exists for is unchanged. */
 @media (not (any-pointer: fine)) {
-  #pc-restore { width: 46px; height: 46px; font-size: 20px; }
+  #pc-restore { width: max(46px, var(--tap-min)); height: max(46px, var(--tap-min)); font-size: 20px; }
 }
 /* Hide the keyboard-shortcut hint where there is no keyboard — and ask that
    question of the WHOLE device, not just its primary pointer.

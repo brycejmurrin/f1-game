@@ -839,9 +839,12 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .music-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .music-size { flex: 0 0 auto; font-size: var(--fs-micro); opacity: 0.5; font-variant-numeric: tabular-nums; }
 .music-row button {
-  /* 30px keeps these inside the 44px touch target the rest of the panel uses
-     once the row's own padding is counted. */
-  flex: 0 0 auto; width: 30px; height: 30px; margin: 0; padding: 0;
+  /* max(30px, --tap-min): 30 keeps these inside the row's 44px budget at
+     >=100% (below), but painted 12px at UI SIZE 40%; the token arm only
+     wins under 100%. */
+  flex: 0 0 auto;
+  width: max(30px, var(--tap-min)); height: max(30px, var(--tap-min));
+  margin: 0; padding: 0;
   font-size: var(--fs-micro); line-height: 1; border-radius: var(--r-sm);
 }
 .music-del { opacity: 0.7; }
@@ -884,6 +887,9 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   width: 100%; margin-top: 6px; font: inherit; font-size: 16px;   /* 16px: iOS zoom floor */
   background: rgba(255, 255, 255, 0.08); color: var(--text);
   border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 6px 8px;
+  /* Same --chip-h floor as its twin #as-sp-id: padding-driven height painted
+     16px at UI SIZE 40% (2026-08-21 sweep). Inert at >=100%. */
+  min-height: var(--chip-h);
 }
 #sp-results:empty { display: none; }
 #as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 {

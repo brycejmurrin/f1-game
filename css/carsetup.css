@@ -446,7 +446,10 @@
    CREATE stays full-width; edit/del float over the swatch. */
 #cs-options.cs-liv-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  /* min(72px, 100%), not a bare 72px — the auto-fill floor policy stated at
+     the #sel-teams grid (a bare px floor is also a ceiling and overflows a
+     box narrower than itself). Last bare-px auto-fill floor in css/. */
+  grid-template-columns: repeat(auto-fill, minmax(min(72px, 100%), 1fr));
   gap: 6px;
   align-content: start;
 }
@@ -576,7 +579,9 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   flex: 0 0 68px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; color: var(--dim);
 }
 .cs-liv-ed-row input[type="color"] {
-  flex: 0 0 auto; width: 52px; height: var(--chip-h); padding: 0; border-radius: var(--r-sm);
+  /* Same shape as the customize wells: floored height, literal width —
+     20.8px painted at UI SIZE 40% before the max(). */
+  flex: 0 0 auto; width: max(52px, var(--tap-min)); height: var(--chip-h); padding: 0; border-radius: var(--r-sm);
   border: 1px solid rgba(255,255,255,0.2); background: none; cursor: pointer;
 }
 .cs-liv-ed-row input[type="color"].cs-liv-off { opacity: 0.35; }
@@ -599,7 +604,9 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 }
 .cs-liv-ed-name {
   flex: 1 1 auto; min-width: 0; min-height: var(--chip-h);
-  font-size: var(--fs-2); font-weight: 600; color: var(--text);
+  /* 16px, not --fs-2: iOS focused-input auto-zoom floor (see menus.css /
+     tuner.css input notes) — this is a typeable livery-name field. */
+  font-size: 16px; font-weight: 600; color: var(--text);
   padding: 6px 9px; border-radius: var(--r-sm);
   background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14);
 }
@@ -976,8 +983,10 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
      on the screen you sit on longest outside a race. Same call hud.css and
      overlays.css already make over the race canvas; the tinted bg, raised
      a little to compensate, carries the look. */
-  /* Touch targets: the visual chip stays small, the hit area does not. */
-  min-height: 30px;
+  /* Touch targets: the visual chip stays small, the hit area does not.
+     max() with the WCAG floor: touch re-floors these to --chip-h below, but
+     desktop kept the bare 30 — 12px painted at UI SIZE 40%. */
+  min-height: max(30px, var(--tap-min));
 }
 @media (hover: hover) {
   .cs-view-btn:hover { color: #fff; border-color: rgba(255,255,255,0.3); }

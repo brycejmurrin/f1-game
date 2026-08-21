@@ -131,7 +131,14 @@ function wirePhotoStick(id, vec) {
     let dx = (cx - (r.left + rad)) / rad, dy = (cy - (r.top + rad)) / rad;
     const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
     vec.x = dx; vec.y = dy;
-    if (nub) nub.style.transform = "translate(" + (dx * rad * 0.6) + "px," + (dy * rad * 0.6) + "px)";
+    /* Two coordinate spaces meet here. The VECTOR is a ratio of visual px
+       over visual px, so zoom cancels and the drive is correct. The nub's
+       translate() resolves in the element's LOCAL space, while `rad` is
+       VISUAL px (the stick sits inside .pc-stickwrap's zoom) — so the nub
+       travelled 40% of its throw at UI SIZE 40% and flew outside the ring
+       at 200%. Divide the throw back into local px. */
+    const localRad = rad / (el.currentCSSZoom || 1);
+    if (nub) nub.style.transform = "translate(" + (dx * localRad * 0.6) + "px," + (dy * localRad * 0.6) + "px)";
   };
   const end = () => { vec.x = 0; vec.y = 0; pid = null; if (nub) nub.style.transform = "translate(0,0)"; };
   const endIf = (e) => { if (pid === null || e.pointerId === pid) end(); };

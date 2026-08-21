@@ -263,7 +263,8 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
      ~54px of the ~230px the content has to live in.
      Floor 14px so 90% UI zoom still clears the 12px visual type floor. */
   font-size: clamp(14px, calc(3.6 * var(--vhz)), 20px);
-  padding: clamp(7px, 1.8vh, 14px) 16px;
+  /* --vhz like the font-size above — same zoomed element, one line apart. */
+  padding: clamp(7px, calc(1.8 * var(--vhz)), 14px) 16px;
 }
 /* A lone BACK / DONE / CLOSE is not a banner. Pairs (BACK + RACE!) still
    share the foot 1:1 via flex-grow. */
