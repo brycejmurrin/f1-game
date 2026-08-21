@@ -237,6 +237,38 @@ const GLXPost = (function () {
       } catch (e) { dirtTex = null; }   // no canvas 2D → knob becomes a no-op (black fallback)
     }
 
+    // Free every post target before disabling post. The textures/renderbuffers
+    // hold the memory (FBO objects are pennies); deletion only auto-detaches
+    // from the BOUND framebuffer (see the NOTE inside createTargets), so bind
+    // each one first — the disable paths used to leave the just-allocated
+    // scene/depth/MSAA surfaces resident for the context's whole life.
+    function abandonTargets() {
+      const drop = (fbo, a, b) => {
+        if (fbo) gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        if (a) gl.deleteTexture(a);
+        if (b) gl.deleteTexture(b);
+      };
+      drop(sceneFBO, sceneTex, sceneDepth); sceneTex = sceneDepth = null;
+      if (msFBO) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, msFBO);
+        if (msColorRB) gl.deleteRenderbuffer(msColorRB);
+        if (msDepthRB) gl.deleteRenderbuffer(msDepthRB);
+        msColorRB = msDepthRB = null;
+      }
+      for (const lv of bloomLv) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, lv.fbo);
+        if (lv.tex) gl.deleteTexture(lv.tex);
+        gl.deleteFramebuffer(lv.fbo);
+      }
+      bloomLv = [];
+      drop(ssaoFBO, ssaoTex); ssaoTex = null;
+      drop(ssaoBlurFBO, ssaoBlurTex); ssaoBlurTex = null;
+      drop(godrayFBO, godrayTex); godrayTex = null;
+      drop(godrayBlurFBO, godrayBlurTex); godrayBlurTex = null;
+      drop(ldrFBO, ldrTex); ldrTex = null;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
     // (Re)allocate the scene + bloom render targets at the current size.
     function createTargets() {
       if (!postEnabled) return;
@@ -289,7 +321,7 @@ const GLXPost = (function () {
       // postEnabled true and the whole view black — the designed fallback is
       // direct-to-screen rendering, so take it. (Same pattern as msFBO below.)
       if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        abandonTargets();
         postEnabled = false;
         return;
       }
@@ -334,7 +366,7 @@ const GLXPost = (function () {
         // deeper levels are the same format, so one check covers the chain.
         if (i === 0 && gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
           gl.deleteTexture(tex); gl.deleteFramebuffer(fbo);
-          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          abandonTargets();   // the scene/MSAA targets above must not stay resident
           postEnabled = false;
           return;
         }
@@ -393,7 +425,11 @@ const GLXPost = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, ldrFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ldrTex, 0);
       }
+      // Checks whichever optional FBO was configured LAST (ldr if FXAA linked,
+      // else godray blur, else ssao blur) — a completeness canary for the r8/
+      // hdr3 combos mk() itself never verifies, not a check of one named target.
       if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+        abandonTargets();
         postEnabled = false;     // unsupported combo: fall back to direct rendering
       }
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);

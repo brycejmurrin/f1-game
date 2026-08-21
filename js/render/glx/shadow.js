@@ -182,6 +182,9 @@ const GLXShadow = (function () {
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, batch.srcMatrices);
         batch._cullPlanes = null;
+        // The buffer now holds the FULL set in source order — a stale repack
+        // count would draw the wrong N props until the next cullInstances.
+        batch.visible = batch.instances;
       }
       bindVAO(batch.vao);
       if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 1);
@@ -197,6 +200,11 @@ const GLXShadow = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, blockerFBO);
         gl.viewport(0, 0, 512, 512);
         useProg(blockerProg);
+        // Attribute-less fullscreen triangle: bind the shared empty-ish VAO like
+        // every other fullscreen pass (post.js) — whatever VAO the last caster
+        // left bound may carry divisor-1 instanced attributes, and a strict
+        // driver can reject enabled arrays the program never reads.
+        bindVAO(core.skyVAO);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, S.mapTex);
         gl.bindSampler(0, blockerSampler);
