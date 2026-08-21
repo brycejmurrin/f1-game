@@ -927,7 +927,12 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    section that cannot scroll: every #sel-preview-* below it clipped, at
    every scale (2026-08-21 sweep, iPhone portrait, clipped 9). */
 #sel-inner[data-shape="tall"]:not([data-pair="on"]) > #sel-body > #sel-track-section {
-  flex: 0 0 55%;
+  /* 60, not the 55 authored for the old content-circular section: with the
+     band definite, the caption's own natural height (name/GP/meta/rec plus
+     two chip rows) measured 36 local px past a 55% band on a portrait phone
+     with the map already at its 40px sliver floor (2026-08-21). 60% seats
+     the caption and leaves the map whatever the circuit's shape affords. */
+  flex: 0 0 60%;
 }
 #sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section {
   flex: 0 0 62%;

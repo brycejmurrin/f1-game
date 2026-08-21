@@ -64,17 +64,21 @@ for (const [shapeName, viewport] of SHAPES) {
         await page.evaluate(() => window.__apex.headless(true));
         await page.emulateMedia({ reducedMotion: "reduce" });
         await open(page);
+        // HIDE THE CANVAS, do not mask it. "A pixel or two of dither"
+        // understated the backdrop problem: the 3D frame is rasterized by
+        // SwiftShader, and a different SwiftShader build renders a uniformly
+        // different frame — measured 2026-08-21, all six goldens diffed
+        // 19-21% on an UNTOUCHED tree in a fresh container, entirely in
+        // canvas pixels. And Playwright's `mask:` is no fix here: #game is
+        // position:fixed inset:0, so masking its BOX paints magenta over the
+        // whole viewport, menus included (reviewed goldens were solid
+        // magenta). visibility:hidden on the canvas is the house pattern
+        // (survey-ui-matrix setup) — the menus render over the body's own
+        // deterministic background and the suite finally measures what its
+        // header claims: IDENTITY — colour, type, weight, spacing.
+        await page.evaluate(() => { document.getElementById("game").style.visibility = "hidden"; });
         await page.waitForTimeout(600);   // let the sheet settle and measure
         await expect(page).toHaveScreenshot(`${screenName}-${shapeName}.png`, {
-          // MASK THE CANVAS. "A pixel or two of dither" understated it: the
-          // 3D frame is rasterized by SwiftShader, and a different SwiftShader
-          // build renders a uniformly different frame — measured 2026-08-21,
-          // all six goldens diffed 19-21% on an UNTOUCHED tree in a fresh
-          // container, entirely in canvas pixels. This suite's header says it
-          // measures IDENTITY (colour, type, weight, spacing); masking #game
-          // makes it measure exactly that and lets the goldens survive a
-          // SwiftShader upgrade.
-          mask: [page.locator("#game")],
           maxDiffPixelRatio: 0.01,
           animations: "disabled",
           // toHaveScreenshot's own expect timeout defaults to 5s, and a
