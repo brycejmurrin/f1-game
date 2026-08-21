@@ -280,7 +280,11 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 /* preview time/weather: one compact line each — small inline label + tight chips */
 .lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 3px 0; }
 .lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; color: var(--dim); }
-.lt-preview-row .opt-btn { flex: 1 1 0; min-width: 42px; min-height: var(--tap-min); margin: 0; padding: 4px 3px; font-size: var(--fs-micro); }
+/* min-width max(42px, --tap-min), not the bare literal: 42 local px is only
+   42 PAINTED px at 100% — at UI SIZE 40% the five chips painted 21px wide
+   (2026-08-21 sweep). The token arm wins only below 100%, so the dense
+   100% layout is untouched. Height was already floored. */
+.lt-preview-row .opt-btn { flex: 1 1 0; min-width: max(42px, var(--tap-min)); min-height: var(--tap-min); margin: 0; padding: 4px 3px; font-size: var(--fs-micro); }
 .lt-preview-row .opt-btn.on {
   background: var(--plate-on); color: var(--text); border-color: var(--red);
   box-shadow: var(--plate-on-glow);
@@ -291,7 +295,13 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   border-top: 1px solid rgba(255, 255, 255, 0.10);
 }
 #lighting-inner .sheet-foot button,
-#camtune-inner .sheet-foot button { margin: 0; }
+#camtune-inner .sheet-foot button {
+  margin: 0;
+  /* Same WCAG floor the compact rung already carries (see its note further
+     down): these are padding-driven (~45 local px), which is 19 painted px
+     at UI SIZE 40% (2026-08-21 sweep, RESET / COPY VALUES). Inert at 100%. */
+  min-height: var(--tap-min);
+}
 /* ---------- camera tuner ----------
    Shares the docked-panel shell, tab chips and slider rows with the lighting
    tuner above (the selectors are extended, not duplicated); only the bits that
@@ -538,7 +548,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
      precisely where they get tapped. 24 is the floor, and the row has the pixel
      to give — the panel does not get shorter for it. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row .opt-btn {
-    padding: 3px 2px; font-size: var(--fs-micro); min-width: 34px; min-height: var(--tap-min);
+    padding: 3px 2px; font-size: var(--fs-micro); min-width: max(34px, var(--tap-min)); min-height: var(--tap-min);
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-help-toggle { display: none; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .adv-help { display: none; }

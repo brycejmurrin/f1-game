@@ -1125,10 +1125,11 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
 }
-#pmsettings-inner[data-shape="wide"] .pm-group .tune-row,
-#pmsettings-inner[data-shape="wide"] .pm-group .pm-group-h,
-#pmsettings-inner[data-shape="wide"] .pm-group #pm-renderer-row,
-#pmsettings-inner[data-shape="wide"] .pm-group #pm-gfx-status { grid-column: 1 / -1; }
+/* Two rules, not one :is() — :is() takes its HIGHEST argument's specificity,
+   so folding the ids in with the classes would silently promote .tune-row
+   rules here to id weight. Classes with classes, ids with ids. */
+#pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
+#pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status) { grid-column: 1 / -1; }
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
 .sheet[data-density="compact"] .pm-doors { gap: 4px; }
 #pmsettings-inner.sheet[data-density="compact"] .pm-doors button {

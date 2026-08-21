@@ -66,8 +66,15 @@ for (const [shapeName, viewport] of SHAPES) {
         await open(page);
         await page.waitForTimeout(600);   // let the sheet settle and measure
         await expect(page).toHaveScreenshot(`${screenName}-${shapeName}.png`, {
-          // The canvas behind the sheet can still differ by a pixel or two of
-          // dither; the point of these is type and colour, not the backdrop.
+          // MASK THE CANVAS. "A pixel or two of dither" understated it: the
+          // 3D frame is rasterized by SwiftShader, and a different SwiftShader
+          // build renders a uniformly different frame — measured 2026-08-21,
+          // all six goldens diffed 19-21% on an UNTOUCHED tree in a fresh
+          // container, entirely in canvas pixels. This suite's header says it
+          // measures IDENTITY (colour, type, weight, spacing); masking #game
+          // makes it measure exactly that and lets the goldens survive a
+          // SwiftShader upgrade.
+          mask: [page.locator("#game")],
           maxDiffPixelRatio: 0.01,
           animations: "disabled",
           // toHaveScreenshot's own expect timeout defaults to 5s, and a

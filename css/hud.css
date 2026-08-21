@@ -458,6 +458,9 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
   width: auto; margin: 0; padding: 9px 14px; border-radius: var(--r-md);
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.04em;
   background: rgba(0,140,200,0.2); color: #6cf; border: 1px solid rgba(0,160,220,0.45);
+  /* Padding-driven (~40 local px) = 17 painted px at UI SIZE 40%
+     (2026-08-21 sweep). WCAG floor, inert at >=100%. */
+  min-height: var(--tap-min);
 }
 /* Tuner panel tucked away (body.pc-nopanel) → the right half of the screen is
    free, so switch to a classic dual-stick layout: LOOK stick under the right

@@ -723,6 +723,18 @@ body { --compact-at: 600px; --wide-at: 620px; }
   font-size: var(--fs-micro); letter-spacing: 0.04em; color: var(--dim);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* PICKER TILES WRAP INSTEAD OF ELLIPSIZING — the driver pairing IS the
+   information, and at UI SIZE 150% on a portrait phone the tile body is
+   ~151 local px against ~210 of text, so "#63 Russell · #12 Antonelli" lost
+   its second driver (2026-08-21 sweep: trunc 5 @150, 13 @200). Wrapping is
+   structurally free here: #sel-teams has implicit auto rows, no height
+   caps, and the pane already scrolls. Scoped to .team-tile so the select
+   screen's .team-card summary keeps its one-line ellipsis. Same precedent
+   as the narrow standings names in css/data.css. */
+.team-tile .tm-name, .team-tile .tm-sub {
+  white-space: normal; overflow: visible; text-overflow: clip;
+  overflow-wrap: break-word;
+}
 .tm-chev { flex: none; color: var(--red); font-size: var(--fs-micro); }
 .team-tile.active .tm-name { color: #fff; }
 /* Tiles fill the picker in as many columns as fit; each stays a big target.
@@ -905,30 +917,50 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    specificity to beat the two-ID stacked rule.
    Applies whenever the sheet is tall-shaped, regardless of zoom level — which
    is exactly what the old @media (orientation: portrait) failed to do. */
+/* THE BAND IS A DEFINITE HEIGHT, NOT A CAP — same fix as the wide-tall
+   branch above (see its 648-656 note): `flex: 0 1 auto` + a percentage
+   max-height sized the section to its own content, and the map cap below is
+   a percentage OF that content-derived height, so the circle either
+   resolved small or, with `max-height: none`, not at all — the map's
+   CSS-intrinsic height (width / circuit aspect) had NO ceiling, and a tall
+   circuit (Jeddah, aspect 0.5) painted ~626 local px inside a ~396px
+   section that cannot scroll: every #sel-preview-* below it clipped, at
+   every scale (2026-08-21 sweep, iPhone portrait, clipped 9). */
 #sel-inner[data-shape="tall"]:not([data-pair="on"]) > #sel-body > #sel-track-section {
-  max-height: 55%;
+  flex: 0 0 55%;
 }
 #sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section {
-  max-height: 62%;
+  flex: 0 0 62%;
 }
+/* The card FILLS the definite band so the map's percentage cap subtracts
+   from a real number — mirror of the wide-tall branch's 662-669 note. */
 #sel-inner[data-shape="tall"]:not([data-pair="on"]) > #sel-body > #sel-track-section > #sel-track-preview {
+  flex: 1 1 auto; min-height: 0;
   flex-direction: column;
   align-items: stretch;
   --sel-map-w: 100%;
 }
-/* Remove the chip-h*3.5 cap so the map fills the section budget. */
+/* Full width, but CAPPED: the caption's height is roughly constant (name,
+   GP, meta, chips), so subtract it and give the map the rest; where the
+   map's own aspect height is smaller the cap does not bind, and object-fit
+   keeps the outline true when it does. Replaces `max-height: none`, which
+   is what let the map overrun the band. */
 #sel-inner[data-shape="tall"]:not([data-pair="on"]) > #sel-body > #sel-track-section #sel-preview-map {
-  max-height: none;
+  max-height: calc(100% - 9.5rem);
+  object-fit: contain;
   max-width: 100%;
   width: var(--sel-map-w, 100%);
 }
 #sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section > #sel-track-preview {
+  flex: 1 1 auto; min-height: 0;
   flex-direction: column;
   align-items: stretch;
   --sel-map-w: 100%;
 }
+/* Compact tall hides meta (below), so the caption constant is smaller. */
 #sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section #sel-preview-map {
-  max-height: none;
+  max-height: calc(100% - 7rem);
+  object-fit: contain;
   max-width: 100%;
 }
 /* Restore caption elements hidden by compact stacked rules in tall compact view. */
