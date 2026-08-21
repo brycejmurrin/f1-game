@@ -43,7 +43,10 @@ window.ScrollFade = (function () {
     "#datahub,#track-detail,#vsfriend,#spotifypanel";
 
   const EDGE = 2;              // px of slack: sub-pixel layout must not flicker
-  const watched = new WeakSet();
+  // Strong Set, pruned in settle(): observers hold strong refs to observed
+  // nodes, so a WeakSet here couldn't stop a destroyed-and-rebuilt pane
+  // (garage/select/career lists) from being retained by ro/contentMo forever.
+  const watched = new Set();
   let timer = 0;
 
   const MIN_THUMB = 24;        // px: a 2px sliver would be unreadable as a position
@@ -141,8 +144,25 @@ window.ScrollFade = (function () {
   }
   // Layout after a screen opens settles over several frames (web fonts, the
   // view transition, canvas sizing), so re-measure once things stop moving.
+  // Drop watchers whose element left the DOM. ResizeObserver can unobserve one
+  // node; MutationObserver can only disconnect wholesale, so re-observe the
+  // survivors — a few dozen panes at most, and only on screen transitions.
+  function pruneWatched() {
+    let dropped = false;
+    for (const el of watched) {
+      if (el.isConnected) continue;
+      watched.delete(el); last.delete(el);
+      if (ro) ro.unobserve(el);
+      dropped = true;
+    }
+    if (dropped && contentMo) {
+      contentMo.disconnect();
+      for (const el of watched) contentMo.observe(el, { childList: true, subtree: true });
+    }
+  }
   let settleSoon = 0, settleLate = 0;
   function settle() {
+    pruneWatched();
     schedule();
     if (settleSoon) clearTimeout(settleSoon);
     if (settleLate) clearTimeout(settleLate);

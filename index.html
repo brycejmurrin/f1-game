@@ -199,7 +199,7 @@
   // evaluates, so nothing is lost by restarting here. sessionStorage bounds it
   // to a single attempt: if the file is genuinely absent from the build, the
   // second pass names it in the overlay instead of looping forever.
-  var RETRY_KEY = "__apex_script_retry";
+  var RETRY_KEY = "apex26.scriptRetry";   // house storage-key prefix (one-shot; a mid-deploy client just retries once more)
   var scriptFailed = false;
   window.addEventListener("error", function (e) {
     var el = e && e.target;

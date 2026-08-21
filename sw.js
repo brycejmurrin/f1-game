@@ -31,6 +31,13 @@ function currentCacheName() {
       const build = Number(v && v.build);
       if (!Number.isSafeInteger(build) || build <= 0) throw new Error("Invalid deployed build");
       return CACHE_PREFIX + build;
+    })
+    .catch((e) => {
+      // Never memoize a rejection: one offline/failed read poisoned the name
+      // for the worker's whole lifetime, and the cache-first branch then
+      // returned Response.error() even when the network response was fine.
+      _cacheNamePromise = null;
+      throw e;
     });
   return _cacheNamePromise;
 }
@@ -217,6 +224,9 @@ self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const name = await currentCacheName();
     const cache = await caches.open(name);
+    // No claim and no sweep for an incomplete generation — deliberate, and
+    // test-asserted (service-worker.test.mjs "activation preserves prior
+    // caches…"): don't seize clients onto a cache that never finished.
     if (!(await cache.match(INSTALL_COMPLETE_URL))) return;
     const keys = await caches.keys();
     await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== name).map((k) => caches.delete(k)));
@@ -301,6 +311,10 @@ self.addEventListener("fetch", (event) => {
     const cached = await caches.match(req);
     if (cached) return cached;
     const network = fetch(req);
+    // If the timeout wins the race below, a later network rejection has no
+    // handler — that surfaced as unhandledrejection in the worker. Same guard
+    // the navigate branch already carries.
+    network.catch(() => {});
     const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 4000));
     try {
       const res = await Promise.race([network, timeout]);

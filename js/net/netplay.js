@@ -476,11 +476,15 @@ const NetPlay = (function () {
       // mid-pump, so nothing here could have caught it.
       for (const s of sessionList()) s.pump(now);
       if (!active || !sessions.size) return;      // onClose already handled it
-      session = sessionList()[0];
+      // Only pump() needs the snapshot above — the reads below don't deliver
+      // events, so they iterate the live map (this ran 3 copies per frame).
+      session = sessions.values().next().value;
 
       if (armDeadline && now >= armDeadline) nameTheMoment();
 
-      if (!sessionList().some((s) => s.alive())) return;
+      let anyAlive = false;
+      for (const s of sessions.values()) if (s.alive()) { anyAlive = true; break; }
+      if (!anyAlive) return;
 
       // Publish our own car — and, as host, forward everyone else's.
       //
@@ -527,7 +531,9 @@ const NetPlay = (function () {
           }
         }
         const bytes = NetSnapshot.encodeSnapshot(Math.round(now), entries);
-        for (const s of sessionList()) { try { s.sendState(bytes); } catch (e) {} }
+        // Live map is safe here: sendState delivers nothing (Map iterators
+        // tolerate a removal, and only pump() can run onClose).
+        for (const s of sessions.values()) { try { s.sendState(bytes); } catch (e) {} }
       }
     }
 

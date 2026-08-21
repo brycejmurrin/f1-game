@@ -124,7 +124,10 @@ function fitHud() {
   const scale = +root.style.getPropertyValue("--hud-scale") || 1;
   const key = window.innerWidth + "x" + window.innerHeight + "@" + scale;
   if (key === _fitKey && --_fitWait > 0) return;
-  _fitKey = key; _fitWait = 30;   // ~0.5 s at 60 Hz tick — was 5 (~12 Hz layout thrash)
+  // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
+  // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
+  // tick ≈ 3 s between forced layout reads while nothing changed.
+  _fitKey = key; _fitWait = 30;
   const wide = (el) => {
     if (!el) return 0;
     const r = el.getBoundingClientRect();
