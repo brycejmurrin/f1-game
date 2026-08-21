@@ -584,6 +584,17 @@ function updateTrackPreview() {
   // caption and label from a 1x-sized column budget at UI SIZE 175%, drove the
   // budget negative and collapsed every map onto its floor (measured 36x72).
   const sheet = card && card.closest(".sheet");
+  /* CLASSIFIED means SheetShape has written data-pair ("on" or "off"). Before
+     that, `pair !== "on"` conflates "measured: single column" with "not
+     measured yet" — and under main-thread load (SwiftShader + parallel audit
+     pages, or a slow phone still running the title scene) classification can
+     lag this call by whole frames. Measured 2026-08-21, full-matrix audit at
+     jobs=3: this ran on a transitional box, took the stacked branch, pinned a
+     40x59 map into a 1280x800 two-column layout, and the RO key guard then
+     saw no further box change to refit on. An unclassified sheet is treated
+     like an unmeasurable card: draw at the CSS slot, pin nothing, let the
+     refit that follows classification write the real numbers. */
+  const classified = !!(sheet && sheet.dataset.pair);
   const stacked = !!(sheet && sheet.dataset.pair !== "on");
   const compact = !!(sheet && sheet.dataset.density === "compact");
   /* Use the sheet's measured shape (set by sheetshape.js in the sheet's own
@@ -619,7 +630,10 @@ function updateTrackPreview() {
       padY: cardCS ? px(cardCS.paddingTop) + px(cardCS.paddingBottom) : 0,
       gap: cardCS ? (px(cardCS.rowGap) || px(cardCS.gap)) : 0
     });
-  if (card && plan.shape === "beside") {
+  if (card && plan.shape === "beside" && classified) {
+    // Gated on `classified` like the pin below: a beside attribute written
+    // from a transitional measure sticks until the next full update, and the
+    // stylesheet default is the safe arrangement to hold in the meantime.
     card.setAttribute("data-map-shape", "beside");
     void map.offsetWidth;
   }
@@ -641,7 +655,7 @@ function updateTrackPreview() {
   // Unmeasurable: draw at the CSS slot and DO NOT pin, leaving the stylesheet's
   // own caps authoritative for that frame. watchPreviewCard refits with real
   // numbers as soon as the card has a box.
-  const measurable = !!(card && card.clientWidth > 0);
+  const measurable = classified && !!(card && card.clientWidth > 0);
   const fit = TrackMaps.fitCanvas(map, plan.slotW, plan.slotH, t, measurable);
   watchPreviewCard(card);
   // CRISP CANVAS AT UI SIZE > 100%.
@@ -771,8 +785,15 @@ function openTrackDetail() {
     // pixels and re-introduce stretch at UI SIZE ≠ 100%.
     const wrapW = wrap ? wrap.clientWidth : (window.innerWidth - 24);
     const wrapH = wrap ? wrap.clientHeight : (window.innerHeight - 80);
-    const maxW = Math.max(200, wrapW > 0 ? wrapW : Math.min(window.innerWidth - 24, 600));
-    const maxH = Math.max(150, wrapH > 0 ? wrapH : Math.round(maxW / 1.2));
+    // Floors apply ONLY to the unmeasured fallbacks. Flooring a MEASURED wrap
+    // at 200/150 pinned a canvas bigger than its box whenever the local wrap
+    // was smaller than the floor — fitCanvas writes an inline max-width, which
+    // beats the stylesheet's max-width:100% belt — so at UI SIZE 200% on a
+    // landscape phone the map overflowed its wrap by 98px a side (2026-08-21
+    // sweep). A measured wrap is the honest budget however small; fitCanvas's
+    // own 40px transient floor still guards the degenerate frame.
+    const maxW = wrapW > 0 ? wrapW : Math.max(200, Math.min(window.innerWidth - 24, 600));
+    const maxH = wrapH > 0 ? wrapH : Math.max(150, Math.round(maxW / 1.2));
     const key = maxW + "x" + maxH;
     if (key === lastFit) return;   // the observer below also fires on our own pin
     lastFit = key;

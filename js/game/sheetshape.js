@@ -146,6 +146,9 @@ window.SheetShape = (function () {
     const at = parseFloat(cs.getPropertyValue("--fit-at"));
     if (!at) {
       if (el.style.getPropertyValue("--sheet-scale")) el.style.removeProperty("--sheet-scale");
+      if (el.parentElement && el.parentElement.style.getPropertyValue("--sheet-eff-scale")) {
+        el.parentElement.style.removeProperty("--sheet-eff-scale");
+      }
       if (el.dataset.fit) delete el.dataset.fit;
       return;
     }
@@ -163,6 +166,16 @@ window.SheetShape = (function () {
     if (el.style.getPropertyValue("--sheet-scale") !== next) {
       if (next) el.style.setProperty("--sheet-scale", next);
       else el.style.removeProperty("--sheet-scale");
+      /* Mirror the EFFECTIVE scale onto the host. --sheet-scale lands inline
+         on the sheet, so a sibling OUTSIDE it (the garage's #cs-stack camera
+         bar) cannot read it — yet that sibling reserves space using the
+         sheet's painted width. Reserving with --ui-scale while the sheet
+         paints capped reserved 460x2=920px of an 852px viewport and parked
+         CAMERA/ACTIVE AERO off the left edge (2026-08-21 sweep, garage
+         @150/@200 landscape). Consumers read
+         var(--sheet-eff-scale, var(--ui-scale)) — absent means uncapped. */
+      if (next) host.style.setProperty("--sheet-eff-scale", next);
+      else host.style.removeProperty("--sheet-eff-scale");
     }
     const state = capped ? "on" : "off";
     if (el.dataset.fit !== state) el.dataset.fit = state;

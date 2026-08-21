@@ -56,6 +56,10 @@
   zoom: var(--ui-scale);
   background: #0a0a0e;
   display: flex; flex-direction: column;
+  /* See padding below: insets are divided back out of the zoom. This is the
+     one surface that carries BOTH the zoom and the safe-area padding —
+     components.css keeps them on different elements (.sheet vs .screen) for
+     exactly the reason handled here. */
   /* STRETCH, not the shared dialog base's `center`. On a column flex container
      `align-items: center` is a CROSS-axis rule, so it shrink-wrapped
      #track-detail-body to its content and centred it — 597px of a 1280px
@@ -66,8 +70,18 @@
   align-items: stretch;
   /* Full safe-area inset on every edge — this is a full-bleed overlay, so
      without the left/right insets the circuit name and close button sat under
-     the notch on a landscape phone (was `10px 12px` + only --sab). */
-  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+     the notch on a landscape phone (was `10px 12px` + only --sab).
+     DIVIDED BY THE ZOOM: this padding lives INSIDE `zoom: var(--ui-scale)`
+     (unlike .screen, which is unzoomed), so a raw var(--safe-t) paints at
+     safe-t x zoom — at UI SIZE 40% the notch pad painted 28px against a 59px
+     island and the close button sat 31px under hardware (measured
+     2026-08-21). Dividing keeps the PAINTED pad equal to the inset at every
+     scale. */
+  padding:
+    calc(var(--safe-t) / var(--ui-scale))
+    calc(var(--safe-r) / var(--ui-scale))
+    calc(var(--safe-b) / var(--ui-scale))
+    calc(var(--safe-l) / var(--ui-scale));
   box-sizing: border-box; gap: calc(var(--gap) * 0.5);
   overflow: hidden;
 }

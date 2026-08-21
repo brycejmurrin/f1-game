@@ -441,7 +441,10 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .preset-row { display: flex; gap: 8px; margin: 4px 0 6px; }
 .preset-row .preset-btn {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
-  flex: 1; width: auto; margin: 0; padding: 9px 6px; text-align: center;
+  /* min-width: 0 — a flex item's automatic minimum is min-content, so at
+     UI SIZE 200% on a portrait phone the PRO button's one-line small ran
+     59px past the pane instead of wrapping (measured 2026-08-21). */
+  flex: 1; min-width: 0; width: auto; margin: 0; padding: 9px 6px; text-align: center;
   letter-spacing: 0.06em; font-size: var(--fs-micro);
 }
 .preset-btn small {

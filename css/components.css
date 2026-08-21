@@ -886,7 +886,12 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    one full-width primary and QUIT stays the one full-width destructive. */
 #pausemenu .sheet-body.stack {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0,1fr), not bare 1fr: a bare 1fr floors at min-content, so at
+     UI SIZE 200% on a portrait phone the RESTART|SETTINGS row forced both
+     tracks to ~222px inside a 175px pane and every spanning button ran 105px
+     past the sheet (measured 2026-08-21). The 0 floor lets labels wrap
+     instead — same bug family as the auto-fill grids. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: calc(var(--gap) * 0.6);
 }
 #pm-resume,

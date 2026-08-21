@@ -510,9 +510,13 @@
      deletes a livery.
      Kept as an explicit min-width/min-height pair as well as width/height so a
      narrow grid column cannot shrink them back under the floor — the box is a
-     conformance floor, not a preference, which is why it is not --tap. */
-  width: 24px; height: 24px;
-  min-width: 24px; min-height: 24px;
+     conformance floor, not a preference, which is why it is not --tap.
+     --tap-min, not a literal 24px: the literal is only 24 PAINTED px at 100%.
+     At UI SIZE 40% it painted 10x10 (68 findings, the whole @40 tinyTaps
+     column of the 2026-08-21 sweep); the token divides by the zoom so the
+     painted box never drops below the conformance floor. */
+  width: var(--tap-min); height: var(--tap-min);
+  min-width: var(--tap-min); min-height: var(--tap-min);
   padding: 0;
   font-size: var(--fs-micro);
   z-index: 1;
@@ -812,9 +816,16 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
      §5b, and the fix is the one that section prescribes: the correction belongs
      at the CONSUMPTION site, because the two consumers are in different zoom
      spaces and no single declared value can be right for both. */
-  right: calc(var(--safe-r) + var(--cs-sheet-w) * var(--ui-scale) + var(--gap));
+  /* --sheet-eff-scale, falling back to --ui-scale: when SheetShape's fit cap
+     writes --sheet-scale on #cs-inner the panel PAINTS at that capped zoom,
+     not at the requested one — reserving --cs-sheet-w * --ui-scale then
+     reserves more than the panel paints, and at 200% on 852px the reservation
+     (920px) exceeds the viewport and parks CAMERA/ACTIVE AERO off the LEFT
+     edge (measured 2026-08-21: #cs-cam at x=-161). classifyFit mirrors the
+     effective scale onto the host for exactly this consumer. */
+  right: calc(var(--safe-r) + var(--cs-sheet-w) * var(--sheet-eff-scale, var(--ui-scale)) + var(--gap));
   width: max-content;
-  max-width: calc(100vw - var(--safe-l) - var(--safe-r) - var(--cs-sheet-w) * var(--ui-scale) - var(--gap) * 2);
+  max-width: calc(100vw - var(--safe-l) - var(--safe-r) - var(--cs-sheet-w) * var(--sheet-eff-scale, var(--ui-scale)) - var(--gap) * 2);
   z-index: 2;
   display: flex; flex-direction: column; align-items: stretch; gap: 6px;
 }
