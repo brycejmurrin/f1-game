@@ -351,6 +351,54 @@ window.SheetShape = (function () {
       { attributes: true, attributeFilter: ["style"] });
   }
 
+  /* THE FIFTH ANSWER: how much of the viewport bottom does the software
+     keyboard cover? No CSS unit can see it — svh/lvh/dvh all track browser
+     chrome, not the keyboard, and on both iOS Safari and Chromium-Android the
+     keyboard shrinks only the VISUAL viewport while the layout viewport (and
+     .screen's inset: 0) stays put — so a centred sheet's input rows and foot
+     sit under the keys. visualViewport is the one API that reports it.
+
+     Writes --kb (occluded band, LAYOUT px) inline on documentElement;
+     css/components.css consumes it as .screen padding-bottom. .screen is
+     unzoomed (zoom rides .sheet), so no scale division — the same coordinate
+     honesty rule as everything else here. Nothing stored => no inline
+     property, matching ui-scale.js.
+
+     The guards are load-bearing, do not simplify them out:
+       - vv.scale > 1.01: pinch zoom also shrinks vv.height; that is not a
+         keyboard and padding the screen for it would be wrong.
+       - kb < 15% of innerHeight: URL-bar show/hide and Safari's tab-bar
+         collapse arrive as small vv.height deltas; svh already owns those.
+         Every real keyboard is far taller than 15% of any phone viewport.
+       - "scroll" listener: iOS often PANS the visual viewport (offsetTop
+         moves) instead of resizing it when focusing an input near the bottom,
+         so resize alone misses the occlusion changing.
+       - rAF coalescing: iOS fires resize storms during the keyboard
+         animation; one write per frame is plenty. */
+  function watchKeyboard() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    let last = -1, raf = 0;
+    const apply = () => {
+      raf = 0;
+      let kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      if (vv.scale > 1.01 || kb < window.innerHeight * 0.15) kb = 0;
+      kb = Math.round(kb);
+      if (kb === last) return;
+      last = kb;
+      const st = document.documentElement.style;
+      if (kb) st.setProperty("--kb", kb + "px");
+      else st.removeProperty("--kb");
+      // Fit caps read the host's padding, so --fit-at sheets re-derive their
+      // --sheet-scale under the keyboard; watchScale() ignores this write
+      // (it compares --ui-scale only), hence the direct call.
+      reclassify();
+    };
+    const onvv = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    vv.addEventListener("resize", onvv, { passive: true });
+    vv.addEventListener("scroll", onvv, { passive: true });
+  }
+
   function init() {
     Log.info("ui", "SheetShape.init");
     if (typeof ResizeObserver === "function") {
@@ -386,6 +434,7 @@ window.SheetShape = (function () {
     addEventListener("orientationchange", reclassify, { passive: true });
     watchVisibility();
     watchScale();
+    watchKeyboard();
     // A screen that builds its sheet later (the data hub) still gets measured.
     if (typeof MutationObserver === "function") {
       new MutationObserver((muts) => {

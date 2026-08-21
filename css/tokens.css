@@ -178,6 +178,13 @@
   --safe-r: calc(var(--sar) + var(--gut));
   --safe-b: calc(var(--sab) + var(--gut));
   --safe-l: calc(var(--sal) + var(--gut));
+  /* Software-keyboard occlusion, LAYOUT px. env() cannot see the keyboard —
+     on iOS Safari and Chromium-Android it shrinks only the VISUAL viewport,
+     so svh/dvh/lvh all miss it too. js/game/sheetshape.js watches
+     visualViewport and overrides this inline on the root while a keyboard is
+     up; 0px here is the no-keyboard (and no-visualViewport-API) resting
+     state. Consumed by the screen host's bottom padding in components.css. */
+  --kb: 0px;
   /* ---- density ----
      The ONE thing a screen size is allowed to change. Every menu reads these
      instead of hard-coding its own padding/heights, so "make it fit a short
@@ -442,7 +449,7 @@ body:not(.desktop) {
 
    1.0 is the shipped default on every pointer. Touch used to ship at 1.15, and
    UI SIZE's floor briefly sat at 90% then 80% — players still pegged the
-   slider left and wanted more "zoom out". Floor is 50%; default stays 100%.
+   slider left and wanted more "zoom out". Floor is 40%; default stays 100%.
    SETTINGS ▸ DISPLAY ▸ UI SIZE still goes up to 200%.
 
    SHORT/NARROW VIEWPORTS NEED TWO ANSWERS. Scaling every gap, inset and target

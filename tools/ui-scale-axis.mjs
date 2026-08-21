@@ -3,7 +3,7 @@
 //
 // WHY. Those tools measure a matrix of screen x viewport, and that matrix
 // answered the right question right up until the player got a size slider.
-// SETTINGS > DISPLAY now runs UI SIZE and HUD SIZE from 50 % to 150 %, so
+// SETTINGS > DISPLAY now runs UI SIZE and HUD SIZE from 40 % to 200 %, so
 // "does this screen fit?" is no longer one question — it is one question per
 // size, and a layer that fits at the default can lose its primary button two
 // notches up. This axis turns each tool's matrix into screen x viewport x

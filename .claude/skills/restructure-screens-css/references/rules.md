@@ -113,12 +113,15 @@ into a single `data-density` attribute.** *Prevents:* N media queries asking the
 same question N slightly different ways, which is exactly how they drift.
 Material ships three height tiers from two breakpoints; this repo measured
 eight thresholds (500/520/560/599/600/620/640/700 across five files) when this
-rule was written (2026-08-08) — that consolidation has since happened: it now
-measures **two live `@media (max-height: ...)` thresholds (520px/560px) across
-three files** (`css/data.css`, `responsive.css`, `tokens.css`; `css/tuner.css`
-even carries a comment recording that a third, 620px, was deliberately
-removed), already at the target this rule argues for. Re-run the measurement
-before treating this as an open problem.
+rule was written (2026-08-08) — that consolidation has since happened: as of
+2026-08-21 the live set is **three height queries across three files**:
+`(orientation: landscape) and (max-height: 560px)` in `css/tokens.css`
+(spacing-only density), `max-height: 699px` in `css/menus.css` (title-screen
+compact zoom cap, paired with a width arm), and `min-height: 600px` in
+`css/track-detail.css`; `css/data.css` and `css/responsive.css` now carry
+none (`css/tuner.css` still records the deliberately removed 620px). Already
+at the target this rule argues for. Re-run the measurement before treating
+this as an open problem.
 
 **15. `container-type: size` IS usable when the element has an explicit block
 size — do not assume container queries are inline-only.** Baseline widely

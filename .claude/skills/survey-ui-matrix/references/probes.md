@@ -1,6 +1,6 @@
 # UI-matrix probes, routes, diagnosis, mistakes
 
-Load this when a measurement looks wrong, when reaching a screen, or when a CSS change 'did nothing'. Setup ritual + screen enumeration: [setup.md](setup.md). Axes live in SKILL.md.
+Load this when a measurement looks wrong, when reaching a screen, or when a CSS change 'did nothing'. Setup ritual + screen enumeration: [setup.md](setup.md). Axes live in code, not prose: viewports (with injected iPhone safe-area insets) in `tools/menu-screens.mjs` `VIEWPORTS`, screens in its `SCREENS`, and the scale axis (40–200 %) in `tools/ui-scale-axis.mjs`.
 
 ## 3. The probe — four questions, each with its trap
 

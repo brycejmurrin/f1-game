@@ -1104,7 +1104,7 @@ currently visible. Called with a boolean shows (`true`) or hides (`false`) the
 HUD overlay and returns the new state.
 
 ### `uiScale(v?) → {pct, stored, min, max}` · `hudScale(v?) → {pct, stored, min, max}`
-The two size sliders (pause ▸ SETTINGS ▸ DISPLAY), as **percentages**, 80–150.
+The two size sliders (pause ▸ SETTINGS ▸ DISPLAY), as **percentages**, 40–200.
 `uiScale` drives `--ui-scale`, which the menu sheets and the overlay children
 `zoom`; `hudScale` drives `--hud-scale`, which the in-race HUD clusters and the
 touch dock `zoom`. **They are independent and absolute** — UI 115 + HUD 130 means
@@ -1113,13 +1113,13 @@ exactly that, nothing multiplies.
 No argument reads; `pct` is the RESOLVED value and `stored` is what is actually
 persisted, which is `null` until the player moves the slider. That distinction
 matters: with nothing stored no inline custom property is set at all, so the
-`@media (pointer: coarse)` default in `css/tokens.css` (115 %) stands from the
+stylesheet default in `css/tokens.css` (100 % on every pointer) stands from the
 FIRST paint rather than from whenever `game.js` runs. Passing `null` clears back
 to that; a number sets and persists it (clamped to `min`/`max`).
 
 ```js
-__apex.hudScale(130)   // {pct:130, stored:130, min:80, max:150}
-__apex.uiScale()       // {pct:115, stored:null, …}  ← device default, nothing stored
+__apex.hudScale(130)   // {pct:130, stored:130, min:40, max:200}
+__apex.uiScale()       // {pct:100, stored:null, …}  ← device default, nothing stored
 __apex.hudScale(null)  // back to the device default
 ```
 

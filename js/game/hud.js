@@ -272,12 +272,30 @@ function updateHud(force) {
 
 function drawMinimap() {
   const player = G.player, cars = G.cars, track = G.track, timeTrial = G.timeTrial;
-  const W = els.minimap.width, H = els.minimap.height;
+  // Logical space = the element's LOCAL CSS box (clientWidth is pre-zoom px,
+  // the same convention sheetshape.js relies on). Bitmap = local x effective
+  // zoom x DPR so one drawn pixel is one physical pixel — mirroring the menu
+  // track preview (js/game/menus.js), which solved this exact blur first.
+  // currentCSSZoom, not the raw --hud-scale: the element rides the CAPPED
+  // --hud-z, and the raw slider would over-allocate on a capped band. Ratio
+  // capped at 3 to bound fill/memory on a DPR-3 phone at HUD SIZE 200%.
+  const cssW = els.minimap.clientWidth || 140, cssH = els.minimap.clientHeight || 140;
+  const ratio = Math.min(3, Math.max(1,
+    (els.minimap.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+  const W = Math.round(cssW * ratio), H = Math.round(cssH * ratio);
+  // Every CSS tier gives #minimap an explicit width/height, so the attribute
+  // change never moves the layout box (fitHud reads the same numbers).
+  if (els.minimap.width !== W || els.minimap.height !== H) {
+    els.minimap.width = W; els.minimap.height = H;
+  }
   // pre-render the static track outline once; reuse as a cheap blit every HUD frame
   if (!minimapBg || minimapBg.width !== W || minimapBg.height !== H) {
     minimapBg = document.createElement("canvas");
     minimapBg.width = W; minimapBg.height = H;
     const mc = minimapBg.getContext("2d");
+    // Path math below stays in the local px it was tuned in; the transform
+    // carries it to physical px.
+    mc.setTransform(ratio, 0, 0, ratio, 0, 0);
     const map = track.map, n = map.length;
     mc.lineWidth = 2; mc.lineJoin = "round"; mc.lineCap = "round";
     const SC = ["rgba(192,132,252,0.8)", "rgba(225,6,0,0.8)", "rgba(163,230,53,0.8)"];
@@ -291,12 +309,12 @@ function drawMinimap() {
       mc.beginPath();
       for (let i = from; i <= to; i++) {
         const p = map[i % n];
-        const x = 8 + p[0] * (W - 16), y = 8 + p[1] * (H - 16);
+        const x = 8 + p[0] * (cssW - 16), y = 8 + p[1] * (cssH - 16);
         i === from ? mc.moveTo(x, y) : mc.lineTo(x, y);
       }
       if (s === 2) {
         const p0 = map[0];
-        mc.lineTo(8 + p0[0] * (W - 16), 8 + p0[1] * (H - 16));
+        mc.lineTo(8 + p0[0] * (cssW - 16), 8 + p0[1] * (cssH - 16));
       }
       mc.stroke();
     }
@@ -309,19 +327,24 @@ function drawMinimap() {
         mc.beginPath();
         for (let i = from2; i <= to2; i++) {
           const p = map[i % n];
-          mc.lineTo(8 + p[0] * (W - 16), 8 + p[1] * (H - 16));
+          mc.lineTo(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16));
         }
         mc.stroke();
       }
     }
   }
-  mm.clearRect(0, 0, W, H);
-  mm.drawImage(minimapBg, 0, 0);
+  // Canvas resize resets 2D context state, so the transform is set every
+  // draw, not once. The blit destination is in local px: under the ratio
+  // transform the W-physical-px cache lands on exactly W physical px — a
+  // 1:1 copy, no resampling, same cost profile as before.
+  mm.setTransform(ratio, 0, 0, ratio, 0, 0);
+  mm.clearRect(0, 0, cssW, cssH);
+  mm.drawImage(minimapBg, 0, 0, cssW, cssH);
   const map = track.map, n = map.length;
   for (const c of cars) {
     if (c === player) continue;
     const p = map[Math.floor(c.s / track.total * n) % n];
-    const x = 6 + p[0] * (W - 16), y = 6 + p[1] * (H - 16);
+    const x = 6 + p[0] * (cssW - 16), y = 6 + p[1] * (cssH - 16);
     mm.fillStyle = c.team._cssColor || (c.team._cssColor = G.cssCol(c.team.color));   // team colours are static — compute once
     if (c.human && !c.local) {
       mm.fillRect(x - 1, y - 1, 6, 6);
@@ -341,14 +364,14 @@ function drawMinimap() {
       const gp = map[Math.floor((gh.s / track.total) * n) % n];
       mm.fillStyle = "rgba(120, 220, 255, 0.95)";
       mm.beginPath();
-      mm.arc(8 + gp[0] * (W - 16), 8 + gp[1] * (H - 16), 3.4, 0, 7);
+      mm.arc(8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 3.4, 0, 7);
       mm.fill();
     }
   }
   const p = map[Math.floor(player.s / track.total * n) % n];
   mm.fillStyle = "#fff";
   mm.beginPath();
-  mm.arc(8 + p[0] * (W - 16), 8 + p[1] * (H - 16), 4, 0, 7);
+  mm.arc(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16), 4, 0, 7);
   mm.fill();
 }
 

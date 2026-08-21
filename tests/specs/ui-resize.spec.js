@@ -52,10 +52,10 @@ const PHONE_LANDSCAPE = { width: 852, height: 393 };
 const PHONE_PORTRAIT = { width: 393, height: 852 };
 // 490, NOT 462. `--compact-at: 480` (css/carsetup.css) plus SHORT_HYST: 40 means
 // the garage's density classifier RELEASES from compact back to normal only
-// above 520 of its own units. At UI SIZE 50% (SCALE_MIN) a 490-tall
-// viewport is ~980 own units (solidly normal); at 100% it is 490 (compact
-// under 480). SCALE_MIN was briefly 90 then 80; with the floor at 50% the
-// round-trip (normal ↔ compact ↔ normal) has ample headroom.
+// above 520 of its own units. At UI SIZE 50% a 490-tall viewport is ~980 own
+// units (solidly normal); at 100% it is 490 (compact under 480). SCALE_MIN
+// was briefly 90, then 80, then 50, and now sits at 40 (js/game/ui-scale.js);
+// the round-trip (normal ↔ compact ↔ normal) has ample headroom either way.
 const SHORT_WIDE = { width: 1000, height: 490 };
 
 const SIZES = [
@@ -218,8 +218,9 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     // measured, that took the parts list from 1.5 cards to 3.1.
     // The case this test exists for is unchanged and still exercised: two scales
     // that classify differently, with no resize between them, proving the
-    // classifier answers to `zoom` alone. 50 is SCALE_MIN (js/game/ui-scale.js) — the
-    // lowest a player can actually reach, which is the honest floor to test.
+    // classifier answers to `zoom` alone. 50 was SCALE_MIN when this was
+    // written; the floor is now 40 (js/game/ui-scale.js), and 50 keeps the
+    // same normal-vs-compact contrast, so the value stays.
     await page.evaluate(() => window.__apex.uiScale(50));
     await page.waitForTimeout(400);
     const at100 = await readState(page);
@@ -271,6 +272,65 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     expect(state.effective).toBeLessThan(2);
     expect(state.optionsH).toBeGreaterThanOrEqual(24);
     expect(state.doneOnScreen).toBe(true);
+  });
+
+  test("the software-keyboard inset pads the screen and tightens the fit cap", async ({ page }) => {
+    // Playwright cannot raise a real software keyboard — headless Chromium's
+    // visualViewport never shrinks — so this asserts the CONSUMPTION path
+    // only: --kb written on documentElement (what SheetShape.watchKeyboard
+    // writes) must become bottom padding on the UNZOOMED .screen, and a
+    // --fit-at sheet must re-derive its --sheet-scale from the space that is
+    // left, because classifyFit reads the host's padding. The listener's own
+    // math (visualViewport deltas, the pinch/URL-bar guards) stays
+    // review-by-eye plus a real-device pass; a green here does not vouch for
+    // it, and this comment is what stops anyone citing it as if it did.
+    await page.setViewportSize({ width: 734, height: 343 });
+    await page.goto("/");
+    await waitReady(page);
+    await openGarage(page);
+    await page.evaluate(() => window.__apex.uiScale(200));
+    await page.waitForFunction(() => document.getElementById("cs-inner").dataset.fit === "on",
+      null, { polling: 50, timeout: 5_000 });
+
+    const read = () => page.evaluate(() => {
+      const screen = document.getElementById("carsetup");
+      const sheet = document.getElementById("cs-inner");
+      return {
+        padBottom: parseFloat(getComputedStyle(screen).paddingBottom),
+        effective: Number(getComputedStyle(sheet).zoom),
+        doneOnScreen: (() => {
+          const db = document.getElementById("cs-done").getBoundingClientRect();
+          return db.height > 0 && db.bottom <= window.innerHeight + 1;
+        })(),
+      };
+    });
+
+    const before = await read();
+    expect(before.padBottom, "no keyboard: the pad is just the safe-area gutter")
+      .toBeLessThan(120);
+
+    // Exactly the two things watchKeyboard does: write the property, reclassify.
+    await page.evaluate(() => {
+      document.documentElement.style.setProperty("--kb", "120px");
+      window.SheetShape.reclassify();
+    });
+    await page.waitForTimeout(100);
+    const withKb = await read();
+    expect(withKb.padBottom, "--kb reaches .screen as bottom padding").toBe(120);
+    expect(withKb.effective, "the fit cap tightens for the space the keyboard took")
+      .toBeLessThan(before.effective);
+    expect(withKb.doneOnScreen, "the action bar stays above the keyboard").toBe(true);
+
+    // And back, because a pad or cap that survives the keyboard closing is
+    // the same ratchet bug the rotation case guards against.
+    await page.evaluate(() => {
+      document.documentElement.style.removeProperty("--kb");
+      window.SheetShape.reclassify();
+    });
+    await page.waitForTimeout(100);
+    const after = await read();
+    expect(after.padBottom, "keyboard gone: pad returns").toBe(before.padBottom);
+    expect(after.effective, "keyboard gone: fit cap returns").toBeCloseTo(before.effective, 3);
   });
 
   test("the density tier reaches the spacing tokens, where a media query cannot",

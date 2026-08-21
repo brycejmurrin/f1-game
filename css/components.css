@@ -65,6 +65,13 @@
      the viewport includes the notch and the home indicator; anything centred
      without this padding is centred under hardware. */
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  /* The software keyboard covers the layout viewport's bottom without moving
+     it; --kb (layout px, written by SheetShape's keyboard watcher, resting
+     0px in tokens.css) is how much. max() with the safe-area pad: a keyboard
+     already clears the home indicator, so the two must never stack. The
+     screen host is unzoomed (zoom rides the sheet), so --kb needs no scale
+     division. Inert everywhere a keyboard isn't up. */
+  padding-bottom: max(var(--safe-b), var(--kb));
   overscroll-behavior: contain;
 }
 
