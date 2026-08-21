@@ -1474,8 +1474,10 @@ function setCarRole(c, human, local) {
 // exclusivity in js/net/lobby.js guarantees, and why it had to land first.
 function wireId(c) {
   if (!c || !c.team) return -1;
+  // Per-car cache — team/seat are fixed for a car's life; makeCars rebuilds the objects each race.
+  if (c._wireId !== undefined) return c._wireId;
   const ti = Teams.LIST.findIndex((t) => t.id === c.team.id);
-  return ti < 0 ? -1 : ti * 2 + (c.seat || 0);
+  return (c._wireId = ti < 0 ? -1 : ti * 2 + (c.seat || 0));
 }
 
 // Swap where two cars START. Multiplayer needs this and nothing else does:
@@ -1921,6 +1923,10 @@ const _marbleArg = { lock: 0, slip: 0, speed: 0 };
 // ...and a third for the camera, which asks once per frame from render() and
 // was the one call site still letting banking() allocate.
 const _bankScratchCam = { dy: 0, roll: 0 };
+// Pooled camVantage extras + damp anchors — vantage() reads synchronously, keeps no reference.
+const _vantCarPos = [0, 0];
+const _vantExtra = { bankDy: 0, deploy: false, slipLat: 0, att: null, carPos: null, carHead: 0 };
+const _camAP = [0, 0, 0], _camAN = [0, 0, 0];
 
 function cameraFollowsBank(mode) {
   return mode === "chase" || mode === "far" || mode === "drift" ||
@@ -3489,6 +3495,12 @@ function sepShares(a, b) {
   return _sep;
 }
 
+// Bucket-pair callbacks + per-pass inputs in module state — no closure per pass.
+let _colCbLast = false, _colCbRub = 1;
+const COL_SLOP = 0.05;   // separation slop — small, avoids a hard per-frame snap
+function _colResolveCB(a, b) { _colResolvePair(a, b, _colCbLast, _colCbRub); }
+function _colSepCB(a, b) { _colSepPair(a, b, COL_SLOP); }
+
 // Wrap-aware (prog, x) overlap + rear-vs-side decision. Hoisted out of
 // resolveCollisions so each phys step does not allocate a nested function.
 // Exact cheap-reject before wrap: |dProg| in (LCAR, L-LCAR) cannot contact.
@@ -3671,7 +3683,8 @@ function resolveCollisions(ranked, dt) {
     if (useBuckets) {
       // Re-bucket only when shiftLong moved someone — idle passes keep the grid.
       if (pass > 0 && _colShifted) { nB = _colFillBuckets(ranked); _colShifted = false; }
-      _colForBucketPairs(nB, (a, b) => _colResolvePair(a, b, last, rubScrub));
+      _colCbLast = last; _colCbRub = rubScrub;
+      _colForBucketPairs(nB, _colResolveCB);
     } else {
       const fwd = (pass & 1) === 0;
       for (let ii = 0; ii < ranked.length; ii++) {
@@ -3688,16 +3701,15 @@ function resolveCollisions(ranked, dt) {
   // overlap. A small slop is kept to avoid a hard per-frame snap (the proactive
   // steering separation now keeps cars spaced, so collisions rarely fire and a
   // tighter boundary no longer causes the old vibration).
-  const SLOP = 0.05;
   if (useBuckets) {
     if (_colShifted) nB = _colFillBuckets(ranked);
-    _colForBucketPairs(nB, (a, b) => _colSepPair(a, b, SLOP));
+    _colForBucketPairs(nB, _colSepCB);
   } else {
     for (let i = 0; i < ranked.length; i++) {
       const a = ranked[i];
       if (incidentSim.owns(a)) continue;   // Rapier owns this car's separation
       for (let j = i + 1; j < ranked.length; j++) {
-        _colSepPair(a, ranked[j], SLOP);
+        _colSepPair(a, ranked[j], COL_SLOP);
       }
     }
   }
@@ -3783,7 +3795,7 @@ function updateCar(c, dt, ranked) {
   let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false;
   let towCar = null, towGap = Infinity;   // nearest car ahead in the slipstream (wider than the blocker box)
   let chaser = null, chaserGap = Infinity; // nearest car close BEHIND in our lane (for defending)
-  let nearbyN = 0;                         // cars in the sep window — adaptive lane density
+  let nearbyN = 0, sep = 0;                // sep-window density + lateral-separation pull (traffic scan)
   const aiT = c.human ? null : AiDrive.traits(c);
   if (!c.human) {
     // AI keeps a tuned racing margin to the edge (not the hard barrier, so it
@@ -3791,16 +3803,14 @@ function updateCar(c, dt, ranked) {
     const edge = track.street ? hw - 0.8 : hw + 5;
     roomL = edge + c.x;            // clearance to the left edge from our position
     roomR = edge - c.x;            // clearance to the right edge
-    // FULL FIELD, and it has to be. This used to claim it walked outward from our
-    // rank and broke once the prog delta left the [-6, +18] window "mirroring
-    // resolveCollisions' break pattern" — but no such walk was ever written here,
-    // resolveCollisions has no break either, and neither could have one: `ranked`
-    // is sorted by CUMULATIVE prog while the window below is on the WRAPPED delta.
-    // A lapped car is a whole lap away in rank and right beside us on the road, so
-    // an outward walk would break long before reaching it — exactly the miss the
-    // lateral-separation loop further down and resolveCollisions both call out.
+    // FULL FIELD, and it has to be: `ranked` sorts by CUMULATIVE prog while the
+    // window below is on the WRAPPED delta — a lapped car is a whole lap away in
+    // rank yet right beside us on the road, so any rank-neighbour walk breaks
+    // long before reaching it (the same miss resolveCollisions calls out).
     // The O(n) pass is the price of seeing lapped traffic.
     const L = track.total;
+    // sep (consumer below) is fused into this scan — its window is a subset of [-13,+34].
+    const MIN_GAP = AiDrive.minLatGap(hw, !!track.street);
     for (let i = 0; i < ranked.length; i++) {
       const o = ranked[i];
       if (o === c || o.finished) continue;
@@ -3812,11 +3822,16 @@ function updateCar(c, dt, ranked) {
       dprog = ((dprog + L / 2) % L + L) % L - L / 2;
       if (dprog < -13 || dprog > 34) continue;   // extended both ways: slipstream ahead, chaser behind
       const dx = o.x - c.x;
-      if (Math.abs(dprog) < 5.5) {            // alongside: eats the room on its side
+      const adp = dprog < 0 ? -dprog : dprog;
+      if (adp < 5.5) {            // alongside: eats the room on its side
         if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
         else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
       }
-      if (Math.abs(dprog) < 6.5) nearbyN++;
+      if (adp < 6.5) {
+        nearbyN++;
+        const deficit = MIN_GAP - (dx < 0 ? -dx : dx);
+        if (deficit > 0) sep += (dx <= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);   // push AWAY from o
+      }
       if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < 2.2) { blocker = o; blockerGap = dprog; }
       if (dprog > 0.5 && dprog < towGap && Math.abs(dx) < 4) { towCar = o; towGap = dprog; }   // wake giver
       if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < 3) { chaser = o; chaserGap = -dprog; }  // attacker behind
@@ -4212,34 +4227,10 @@ function updateCar(c, dt, ranked) {
     const freer = roomR - roomL;
     const unstuckSide = Math.abs(freer) > 1 ? (freer > 0 ? 1 : -1) : (c.lane >= 0 ? 1 : -1);
     const unstuck = unstuckActive ? unstuckSide * AiDrive.unstuckPull(aiT, !!track.street) : 0;
-    // Proactive lateral separation: drive toward a minimum side-by-side gap so
-    // the field settles into clean, non-overlapping spacing instead of pulling
-    // onto one line, overlapping, and bouncing (the side-to-side vibration).
-    // Push is proportional to how far INSIDE the min gap a neighbour is, so it
-    // ramps up only when too close and fades to nothing once spaced — stable, no
-    // oscillation, and it doesn't fight the collision push (same direction).
-    const MIN_GAP = AiDrive.minLatGap(hw, !!track.street);
-    let sep = 0;
-    // Full field with wrapped Δprog — rank-neighbour walks miss lapped cars
-    // that share the same stretch of track.
-    const ci2 = (c.rank || 1) - 1;
-    const Ltrk = track.total;
-    for (let k = 0; k < ranked.length; k++) {
-      if (k === ci2 || ranked[k].finished) continue;
-      const o = ranked[k];
-      let dp = o.prog - c.prog;
-      if (!Number.isFinite(dp)) continue;
-      // Cheap reject before wrap — pairContact form (PERF-FINDINGS).
-      const adp0 = dp < 0 ? -dp : dp;
-      if (adp0 > 6.5 && adp0 < Ltrk - 6.5) continue;
-      dp = ((dp + Ltrk / 2) % Ltrk + Ltrk) % Ltrk - Ltrk / 2;
-      const adp = Math.abs(dp);
-      if (adp > 6.5) continue;
-      const dx = c.x - o.x, adx = Math.abs(dx);
-      const deficit = MIN_GAP - adx;
-      if (deficit <= 0) continue;
-      sep += (dx >= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);
-    }
+    // Proactive lateral separation, accumulated in the traffic scan above: push
+    // toward a minimum side-by-side gap, proportional to the deficit, fading to
+    // zero once spaced — the fused loop also excludes self by IDENTITY, where
+    // the old rank-index form could skip the leader on a stale c.rank.
     const sepMax = AiDrive.sepClamp(!!track.street);
     sep = clamp(sep, -sepMax, sepMax);
     // clamp the combined target to the drivable surface so overtake/unstuck/
@@ -4644,10 +4635,9 @@ function updateCar(c, dt, ranked) {
       // road, a pit entry) the car was straightened to a direction the wall does
       // not actually run in. wallAt() gives the boundary's lateral offset, so its
       // slope in s IS the barrier's heading in the road frame.
-      const wallXAt = (ss) => into > 0 ? Tracks.wallAt(track, ss, 1)
-                                       : -Tracks.wallAt(track, ss, -1);
-      const dW = 3;
-      const wSlope = clamp((wallXAt(wrapS(c.s + dW)) - wallXAt(wrapS(c.s - dW))) / (2 * dW), -2, 2);
+      const dW = 3, wSd = into > 0 ? 1 : -1;   // ±wallAt(side) folded to a sign — no per-contact closure
+      const wSlope = clamp((Tracks.wallAt(track, wrapS(c.s + dW), wSd)
+                          - Tracks.wallAt(track, wrapS(c.s - dW), wSd)) * wSd / (2 * dW), -2, 2);
       const wtx = smp.t[0] + smp.r[0] * wSlope, wtz = smp.t[2] + smp.r[2] * wSlope;
       const tHead = Math.atan2(wtx, wtz);
       let rel = c.head - tHead;
@@ -5576,8 +5566,9 @@ function _castPropBatchesShadow(cadence) {
   const _pb = track.meshes.propBatches;
   if (!_pb || !gfx.castShadowInstanced) return;
   if (cadence && PerfGov.tier() >= 1 && (_frameNo & 1) === 1) return;
+  // Sharing _pbPlanes with the camera cull is safe: backends snapshot CONTENTS.
   const planes = (gfx.shadowCullVP && gfx.makeFrustumPlanes)
-    ? gfx.makeFrustumPlanes(gfx.shadowCullVP) : null;
+    ? gfx.makeFrustumPlanes(gfx.shadowCullVP, _pbPlanes) : null;
   for (let i = 0; i < _pb.length; i++) {
     if (planes && gfx.cullInstances) {
       // TLX: CPU-pack only (own shadow mesh). GLX/WGX ignore the 3rd arg.
@@ -5729,7 +5720,9 @@ function render(dt) {
     _plOk = false; _plBodyOk = false;
     const s = wrapS((performance.now() * 0.012) % track.total);
     const bankCam = Tracks.banking(track, s, 0, _bankScratchCam, true);
-    const vant = camVantage("cinematic", s, 0, vStd(40), performance.now(), { bankDy: bankCam ? bankCam.dy : 0 });
+    _vantExtra.bankDy = bankCam ? bankCam.dy : 0; _vantExtra.deploy = false;
+    _vantExtra.slipLat = 0; _vantExtra.att = null; _vantExtra.carPos = null; _vantExtra.carHead = 0;
+    const vant = camVantage("cinematic", s, 0, vStd(40), performance.now(), _vantExtra);
     eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov; camAncNX = null;
   } else {
     if (!player) return;
@@ -5764,12 +5757,12 @@ function render(dt) {
     // interpolation the car body and playerAnchor already use.
     const rpCam = renderPosOf(player, pS, px);
     camAncNX = rpCam.world ? rpCam.x : null; camAncNZ = rpCam.world ? rpCam.z : 0;   // anchor for the car-frame camera damping below
-    const vant = camVantage(mode, pS, px, player.speed, performance.now(), {
-      bankDy, deploy: player.deploying, slipLat: player.vLat || 0, att: player,
-      // the car's real world pose, so the chase rig can follow the CAR
-      carPos: rpCam.world ? [rpCam.x, rpCam.z] : null,
-      carHead: headInterp(player),
-    });
+    _vantExtra.bankDy = bankDy; _vantExtra.deploy = player.deploying;
+    _vantExtra.slipLat = player.vLat || 0; _vantExtra.att = player;
+    // the car's real world pose, so the chase rig can follow the CAR
+    _vantExtra.carPos = rpCam.world ? (_vantCarPos[0] = rpCam.x, _vantCarPos[1] = rpCam.z, _vantCarPos) : null;
+    _vantExtra.carHead = headInterp(player);
+    const vant = camVantage(mode, pS, px, player.speed, performance.now(), _vantExtra);
     eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov;
     if (shake > 0) {
       shake = Math.max(0, shake - dt * 1.6);
@@ -5838,7 +5831,9 @@ function render(dt) {
   // inflating (13.2 m back to the intended 8.0 m at 320). y stays world-frame.
   const ancX = camAncNX, ancZ = camAncNZ;
   if (ancX === null || camAncX === null) { camAncX = ancX; camAncZ = ancZ; }   // first frame / no world pose: no jump
-  const aP = [camAncX === null ? 0 : camAncX, 0, camAncZ], aN = [ancX === null ? 0 : ancX, 0, ancZ];
+  const aP = _camAP, aN = _camAN;   // pooled, filled in place
+  aP[0] = camAncX === null ? 0 : camAncX; aP[2] = camAncZ;
+  aN[0] = ancX === null ? 0 : ancX; aN[2] = ancZ;
   for (let i = 0; i < 3; i++) {
     camEye[i] = aN[i] + damp(camEye[i] - aP[i], eyeT[i] - aN[i], lE, dt);
     camTgt[i] = aN[i] + damp(camTgt[i] - aP[i], tgtT[i] - aN[i], lT, dt);
@@ -7379,7 +7374,8 @@ function tickBody(now) {
   // desktop, and a janky frame — a long frame can never enlarge the integration
   // step (which would change the slip/grip behaviour). Leftover time carries to
   // the next frame; cap the substeps so a stall can't trigger a spiral of death.
-  if (!frozen) {
+  // Only where update() advances anyone — elsewhere it returns immediately.
+  if (!frozen && (state === "race" || state === "count")) {
     physAcc += simTime;
     let steps = 0;
     while (physAcc >= PHYS_DT && steps < 5) {
