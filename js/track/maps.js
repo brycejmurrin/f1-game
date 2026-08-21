@@ -241,8 +241,18 @@ const TrackMaps = (function () {
     if (pinCss) {
       canvas.style.width = w + "px";
       canvas.style.height = h + "px";
-      canvas.style.maxWidth = w + "px";
-      canvas.style.maxHeight = h + "px";
+      /* Pin width/height ONLY — never max-*. An inline max-width/max-height
+         replaces the stylesheet's own caps, and those caps are the layout's
+         last line of defence when this measurement is stale or floored:
+         #sel-preview-map yields via `max-height: 50%` in the pair layout and
+         #track-detail-canvas via `max-width/height: 100%`, and both were
+         defeated by the inline pins — a 240px-floored map painted over the
+         circuit list at UI SIZE 150% because its 50% cap could no longer
+         bind (2026-08-21 sweep). object-fit: contain on those elements keeps
+         the outline undistorted when a stylesheet cap is what binds. Stale
+         max pins from older builds are cleared either way. */
+      canvas.style.maxWidth = "";
+      canvas.style.maxHeight = "";
     } else {
       canvas.style.width = "";
       canvas.style.height = "";

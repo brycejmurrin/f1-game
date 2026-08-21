@@ -125,8 +125,11 @@ test("fitCanvas preserves circuit aspect inside a box (no stretch)", () => {
   assert.ok(wide.h <= 100 && wide.w <= 400);
   assert.equal(fake.style.width, wide.w + "px");
   assert.equal(fake.style.height, wide.h + "px");
-  assert.equal(fake.style.maxWidth, wide.w + "px");
-  assert.equal(fake.style.maxHeight, wide.h + "px");
+  // max-* stays UNPINNED: an inline max would replace the stylesheet caps
+  // (#sel-preview-map's 50%, #track-detail-canvas's 100%) that are the
+  // layout's defence when a plan is floored or stale — see fitCanvas.
+  assert.equal(fake.style.maxWidth, "");
+  assert.equal(fake.style.maxHeight, "");
   assert.equal(fake.style.aspectRatio, String(a));
 
   const tall = TrackMaps.fitCanvas(fake, 100, 400, monza, true);

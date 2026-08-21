@@ -18,5 +18,8 @@ test("pause dialog hides bottom HUD chrome while open mid-race", () => {
 test("compact pause stack tightens without changing type tokens", () => {
   const css = fs.readFileSync(path.join(ROOT, "css/components.css"), "utf8");
   assert.match(css, /#pausemenu\s+\.sheet\[data-density="compact"\]\s+\.stack/);
-  assert.match(css, /#pausemenu\s+\.sheet\[data-density="compact"\]\s+\.stack\s+button[^}]*min-height:\s*36px/);
+  // max(36px, --tap-min), not a bare 36px: the 36 floor is the compact tighten
+  // this test guards; the --tap-min arm only wins below 100% UI SIZE, where a
+  // flat 36 local px painted RESUME at 14-18px (2026-08-21 sweep, pause @40).
+  assert.match(css, /#pausemenu\s+\.sheet\[data-density="compact"\]\s+\.stack\s+button[^}]*min-height:\s*max\(36px,\s*var\(--tap-min\)\)/);
 });

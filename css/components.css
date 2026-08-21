@@ -716,6 +716,12 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 #advanced-inner :is(.opt-btn, .preset-btn),
 .cs-tab, .cs-opt, #campicker button, .cs-unlimited-btn, .adv-more-btn {
   min-height: var(--tap);
+  /* Width floor is the WCAG minimum only, not --tap: these sit in shared
+     rows where a 44px width floor would force wraps, but at UI SIZE 40% the
+     4-across steer-mode row painted 22px-wide targets (2026-08-21 sweep,
+     advanced @40 on every viewport). 24 local px at <=100% is under every
+     current width, so nothing moves. */
+  min-width: var(--tap-min);
 }
 /* Chips are text-sized boxes: they need the centring, and a one-character
    label ("3", "5" laps) still needs a thumb-sized box. */
@@ -871,7 +877,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   gap: 4px;
 }
 #pausemenu .sheet[data-density="compact"] .stack button {
-  min-height: 36px;
+  /* max() with the WCAG floor: the flat 36px was derived for scales >=100%
+     ("36 x 1.5 zoom still paints >=54px") and never considered <100% — the
+     pause sheet is compact by its own units at 40% too, where 36 local
+     painted RESUME at 14-18px (2026-08-21 sweep, pause @40, every
+     viewport). --tap-min only wins below 100%, so the 150% rationale above
+     is untouched. */
+  min-height: max(36px, var(--tap-min));
   padding-block: 6px;
 }
 #pausemenu .sheet[data-density="compact"] #pm-quit {
