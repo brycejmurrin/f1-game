@@ -51,6 +51,10 @@ function loadQuali(opts = {}) {
     },
     cssCol: () => "#000",
     fmtTime: (t) => String(t),
+    // The live instance: persistOrder's friend-race guard asks G.netPlay.active()
+    // (NetPlay.isOn() never existed on the module or the instance — the old
+    // guard was dead, and a VS FRIEND quali overwrote the stored grid).
+    netPlay: { active: () => !!opts.netOn },
   };
   const ctx = {
     console,
@@ -72,7 +76,7 @@ function loadQuali(opts = {}) {
     },
     Tracks: { curvature: () => 0.002 },
     ScrollFade: { refresh() {} },
-    NetPlay: { isOn: () => !!opts.netOn },
+    NetPlay: {},   // module global carries no instance state — the guard asks G.netPlay
   };
   vm.createContext(ctx);
   seedLog(ctx);
@@ -136,7 +140,7 @@ test("simulate(0) does not persist an all-AI provisional", () => {
   assert.equal(G.season.qualiOrder, undefined);
 });
 
-test("a driven simulate persists; NetPlay.isOn() does not", () => {
+test("a driven simulate persists; an active netPlay session does not", () => {
   const solo = loadQuali({ season: { round: 0 } });
   solo.q.simulate(new Map([["p1", 68.5]]));
   assert.ok(solo.G.season.qualiOrder, "a human lap is what makes the order worth keeping");
