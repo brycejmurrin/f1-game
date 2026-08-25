@@ -533,8 +533,7 @@ const Tracks = (function () {
                     get count() { return propList.length; },
                     get spanCount() { return spanList.length; },
                     get dropped() { return propDropped; } };
-    // Plain loop: the every() form allocated a closure (capturing `positive`)
-    // per call, and this runs per primitive per replay (~200k calls on vegas).
+    // Plain loop — the every() form allocated a closure per call (~200k calls/build).
     const finiteVec = (v, len, positive) => {
       if (!Array.isArray(v) || v.length !== len) return false;
       for (let i = 0; i < len; i++) {
@@ -591,18 +590,12 @@ const Tracks = (function () {
         center: Array.isArray(c) ? c.slice() : c, size });
       return false;
     };
-    // Tri-state verdict cache (1=pass 0=culled 2=invalid) for the graph's
-    // dry-run -> fuse double replay: the second replay of the SAME model+place
-    // consumes the dry run's verdicts instead of re-running finiteVec and the
-    // road-guard grid queries (deterministic in the same inputs, shared by
-    // construction). _culled and diagnostics counts stay exactly as before.
+    // Tri-state verdict cache (1=pass 0=culled 2=invalid): the graph's fuse
+    // replay reuses the dry run's guard verdicts — mechanism in graph.instance.
     const addBox = (o, c, sz, col, basis) => {
       const tv = o._replayVerdicts;
-      if (tv) {
-        const v = tv[o._vIdx++];
-        if (v === 0) { _culled++; return false; }
-        if (v === 2) return badPrimitive("box", c, sz);
-      } else {
+      if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("box", c, sz); }
+      else {
         if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("box", c, sz); }
         if (rejBox(c, sz, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
         if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
@@ -613,11 +606,8 @@ const Tracks = (function () {
     };
     const addCyl = (o, c, rad, h, col, seg, basis) => {
       const tv = o._replayVerdicts;
-      if (tv) {
-        const v = tv[o._vIdx++];
-        if (v === 0) { _culled++; return false; }
-        if (v === 2) return badPrimitive("cylinder", c, [rad, h]);
-      } else {
+      if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("cylinder", c, [rad, h]); }
+      else {
         if (!finiteVec(c, 3, false) || !__isFinite(rad) || rad <= 0 || !__isFinite(h) || h <= 0) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("cylinder", c, [rad, h]); }
         if (rejRad(c, rad, h, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
         if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
@@ -628,11 +618,8 @@ const Tracks = (function () {
     };
     const addCone = (o, c, rad, h, col, seg, basis) => {
       const tv = o._replayVerdicts;
-      if (tv) {
-        const v = tv[o._vIdx++];
-        if (v === 0) { _culled++; return false; }
-        if (v === 2) return badPrimitive("cone", c, [rad, h]);
-      } else {
+      if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("cone", c, [rad, h]); }
+      else {
         if (!finiteVec(c, 3, false) || !__isFinite(rad) || rad <= 0 || !__isFinite(h) || h <= 0) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("cone", c, [rad, h]); }
         if (rejRad(c, rad, h, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
         if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
@@ -643,11 +630,8 @@ const Tracks = (function () {
     };
     const addFrustum = (o, c, rB, rT, h, col, seg, basis) => {
       const tv = o._replayVerdicts;
-      if (tv) {
-        const v = tv[o._vIdx++];
-        if (v === 0) { _culled++; return false; }
-        if (v === 2) return badPrimitive("frustum", c, [rB, rT, h]);
-      } else {
+      if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("frustum", c, [rB, rT, h]); }
+      else {
         if (!finiteVec(c, 3, false) || !__isFinite(rB) || rB <= 0 || !__isFinite(rT) || rT <= 0 || !__isFinite(h) || h <= 0) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("frustum", c, [rB, rT, h]); }
         if (rejRad(c, __M.max(rB, rT), h, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
         if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
@@ -659,11 +643,8 @@ const Tracks = (function () {
     };
     const addPrism = (o, c, sz, col, basis) => {
       const tv = o._replayVerdicts;
-      if (tv) {
-        const v = tv[o._vIdx++];
-        if (v === 0) { _culled++; return false; }
-        if (v === 2) return badPrimitive("prism", c, sz);
-      } else {
+      if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("prism", c, sz); }
+      else {
         if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("prism", c, sz); }
         if (rejBox(c, sz, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
         if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
@@ -674,11 +655,8 @@ const Tracks = (function () {
     };
     const addPyramid = (o, c, sz, col, basis) => {
       const tv = o._replayVerdicts;
-      if (tv) {
-        const v = tv[o._vIdx++];
-        if (v === 0) { _culled++; return false; }
-        if (v === 2) return badPrimitive("pyramid", c, sz);
-      } else {
+      if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("pyramid", c, sz); }
+      else {
         if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("pyramid", c, sz); }
         if (rejBox(c, sz, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
         if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
