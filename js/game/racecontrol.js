@@ -84,11 +84,14 @@ const RaceControl = (() => {
     }
 
     function update(dt) {
-      if (!G.netPlay.ownsRaceControl()) return;
+      // State reset BEFORE the ownership gate: a guest's caution mirror comes
+      // from host apply(), and returning early here left the last flag flown
+      // on its HUD after the race ended (reset() is local-only, safe for all).
       if (G.state !== "race") {
         if (caution.level !== 0 || capHoldT) reset();
         return;
       }
+      if (!G.netPlay.ownsRaceControl()) return;
       if (!enabled || !DebrisWorld.active()) return;
       if (caution.level !== 0) caution.sinceT += dt;
       queryT += dt;

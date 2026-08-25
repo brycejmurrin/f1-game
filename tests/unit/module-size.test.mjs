@@ -454,7 +454,10 @@ const CEILINGS = {
   // the 40-circuit build INCLUDING their anti-vacuity guards, which assert the
   // baseline caps are tight — i.e. the placement counts are exactly unchanged.
   // Lowered after trim-comments pass (measured 2309).
-  "js/track/tracks.js": 2319,
+  // 2319 -> 2350: tri-state verdict cache on the six guarded emitters (the
+  // graph fuse replay reuses dry-run guard verdicts; vegas build 1.66 -> 1.51 s,
+  // 40/40 graph parity). Gates compressed to 2 lines each before raising.
+  "js/track/tracks.js": 2350,
 };
 
 test("the big modules are not growing unnoticed", () => {

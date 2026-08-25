@@ -100,9 +100,12 @@ const api = {
     if (!G.player || !G.track) return false;
     IncidentSim.release(G.player);
     const f01 = (((frac || 0) % 1) + 1) % 1;
-    G.player.s = wrapS(f01 * G.track.total);
-    G.player.prog = f01 * G.track.total;
-    G.player.angle = 0;   // teleport aligns the car with the track (deterministic)
+    const sNew = wrapS(f01 * G.track.total);
+    // prog is CUMULATIVE (lap*total + s, negative on the grid) — shift it by the
+    // arc delta rather than assigning the raw fraction, which erased whole laps
+    // from the ranked order on a mid-race jump (measured: lap 1, 5930 → 2889).
+    G.player.prog += sNew - G.player.s;
+    G.player.s = sNew;
     if (lateral !== undefined) G.player.x = lateral;
     if (speed !== undefined) G.player.speed = speed;
     Tracks.sample(G.track, G.player.s, smp);

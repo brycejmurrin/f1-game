@@ -200,9 +200,9 @@ const GLX = (function () {
   // behave exactly as the direct gl calls they replaced. Kept because the routing
   // is tidier and because resetDrawState() is a real invariant.
   // GL defaults: culling ON, all four colour channels writable,
-  // polygon offset disabled. resetDrawState() re-syncs to those, and is called
-  // from begin()/present() alongside the blend/depth pair so state can
-  // never outlive the frame that set it.
+  // polygon offset disabled. resetDrawState() re-syncs to those from begin()
+  // ONLY — present() does not call it, so a draw issued between present() and
+  // the next begin() inherits whatever cull/mask/offset the frame left behind.
   function setCull(on) {
     if (on) gl.enable(gl.CULL_FACE);
     else gl.disable(gl.CULL_FACE);
@@ -241,13 +241,21 @@ const GLX = (function () {
   function link(vsSrc, fsSrc) {
     const vs = compile(gl.VERTEX_SHADER, vsSrc);
     const fs = compile(gl.FRAGMENT_SHADER, fsSrc);
-    if (!vs || !fs) return null;
+    if (!vs || !fs) {
+      if (vs) gl.deleteShader(vs);
+      if (fs) gl.deleteShader(fs);
+      return null;
+    }
     const prog = gl.createProgram();
     gl.attachShader(prog, vs);
     gl.attachShader(prog, fs);
     gl.linkProgram(prog);
+    // Mark for deletion now (legal while attached) — freed with the program
+    // instead of leaking one VS+FS pair per linked program for the ctx's life.
+    gl.deleteShader(vs); gl.deleteShader(fs);
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
       Log.error("gfx", "GLX program link failed: " + gl.getProgramInfoLog(prog));
+      gl.deleteProgram(prog);
       return null;
     }
     return prog;
@@ -401,7 +409,10 @@ const GLX = (function () {
       // tail-light spill under per-chunk lamps) that nobody had until this
       // week. Re-land it WITH a repro of the crash it may or may not have
       // caused, not before.
-      uploadLightSet: (L, idx, n, L2, o2, n2) => uploadLightSet(L, idx, n, L2, o2, n2),
+      // (Re-applied 2026-08-21: the 6-arg forwarding reappeared in the build-
+      // 1496 squash merge with this decision record intact — the revert was
+      // lost in the merge, not overturned; no crash repro has landed.)
+      uploadLightSet: (L, idx, n) => uploadLightSet(L, idx, n),
       getSize: () => ({ width, height }),
       gpuTimerEnd: _gpuTimerEnd,
       get skyVAO() { return skyVAO; },
@@ -713,7 +724,11 @@ const GLX = (function () {
     // 4× anisotropy: decal atlases are read at grazing angles on the bodywork —
     // trilinear alone smears the sponsors/numbers into mip blur there.
     if (_anisoMax > 1) gl.texParameterf(gl.TEXTURE_2D, _anisoExt.TEXTURE_MAX_ANISOTROPY_EXT, _anisoMax);
-    gl.bindTexture(gl.TEXTURE_2D, null);
+    // Mid-frame uploads (a livery-atlas miss during the lit pass) run with
+    // unit 0 active, and unit 0 must stay bound to the shadow map (see
+    // drawDecal) — a bare null unbind here left every later lit draw sampling
+    // an empty unit as uShadowMap for one frame. Restore the invariant.
+    gl.bindTexture(gl.TEXTURE_2D, (SHD && SHD.enabled && SHD.mapTex) || null);
     return tex;
   }
   function freeTexture(t) { if (t) gl.deleteTexture(t); }
@@ -1748,11 +1763,17 @@ const GLX = (function () {
     }
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, glowData, 0, p);
     // Additive, depth-tested (halos occlude behind walls) but no depth write.
+    // Alpha is masked like drawParticles below: GLOW_FS writes a=1.0 under
+    // ONE/ONE blending, and unmasked that saturated the scene alpha — the SSR
+    // car-paint tag — wherever a halo overlapped bodywork, so the car's
+    // reflections dropped out exactly on floodlit night circuits.
     setBlend(true);
     gl.blendFunc(gl.ONE, gl.ONE);
     setDepthMask(false);
     setCull(false);
+    setAlphaWrite(false);
     gl.drawArrays(gl.TRIANGLES, 0, nDraw * 6);
+    setAlphaWrite(true);
     // Restore the default alpha-blend + culling for subsequent passes.
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     setCull(true);

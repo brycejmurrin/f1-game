@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1540">
+<meta name="apex-build" content="1542">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -199,7 +199,7 @@
   // evaluates, so nothing is lost by restarting here. sessionStorage bounds it
   // to a single attempt: if the file is genuinely absent from the build, the
   // second pass names it in the overlay instead of looping forever.
-  var RETRY_KEY = "__apex_script_retry";
+  var RETRY_KEY = "apex26.scriptRetry";   // house storage-key prefix (one-shot; a mid-deploy client just retries once more)
   var scriptFailed = false;
   window.addEventListener("error", function (e) {
     var el = e && e.target;
@@ -1707,10 +1707,10 @@
 <script crossorigin="anonymous" src="js/render/shaders/sky.js?v=baab42036af5"></script>
 <script crossorigin="anonymous" src="js/render/shaders/fx.js?v=4d9988f6e023"></script>
 <script crossorigin="anonymous" src="js/render/shaders/post.js?v=ddd9ef7abac7"></script>
-<script crossorigin="anonymous" src="js/render/glx/post.js?v=3e808c5dcc85"></script>
-<script crossorigin="anonymous" src="js/render/glx/shadow.js?v=48ccf914f593"></script>
-<script crossorigin="anonymous" src="js/render/glx/chunked.js?v=1afa33444a4a"></script>
-<script crossorigin="anonymous" src="js/render/glx.js?v=33d0625f4db9"></script>
+<script crossorigin="anonymous" src="js/render/glx/post.js?v=7afba613ba06"></script>
+<script crossorigin="anonymous" src="js/render/glx/shadow.js?v=c89be0d9caf8"></script>
+<script crossorigin="anonymous" src="js/render/glx/chunked.js?v=886b31f1363d"></script>
+<script crossorigin="anonymous" src="js/render/glx.js?v=b1497e6c7a0c"></script>
 <!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
      two OPT-IN renderer backends and are injected by js/game.js only when
      apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that
@@ -1729,8 +1729,8 @@
 <script crossorigin="anonymous" src="js/track/markings.js?v=f4fa828792f8"></script>
 <script crossorigin="anonymous" src="js/track/space.js?v=6a5ae14a9db5"></script>
 <script crossorigin="anonymous" src="js/track/surface.js?v=5c992e9071d8"></script>
-<script crossorigin="anonymous" src="js/track/models.js?v=413b985e7735"></script>
-<script crossorigin="anonymous" src="js/track/graph.js?v=77d11e3fe999"></script>
+<script crossorigin="anonymous" src="js/track/models.js?v=030179eedcd2"></script>
+<script crossorigin="anonymous" src="js/track/graph.js?v=6c2fc0512827"></script>
 <script crossorigin="anonymous" src="js/track/themes.js?v=846aede07be2"></script>
 <script crossorigin="anonymous" src="js/track/landmark-kit.js?v=b5a86310198b"></script>
 <script crossorigin="anonymous" src="js/track/circuit-kit.js?v=531fbdebf053"></script>
@@ -1781,7 +1781,7 @@
 <script crossorigin="anonymous" src="js/circuits/indianapolis.js?v=bc6ccec8ed47"></script>
 <script crossorigin="anonymous" src="js/circuits/buenos_aires.js?v=0a9def10b45a"></script>
 <script crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=87f687006e3a"></script>
-<script crossorigin="anonymous" src="js/track/tracks.js?v=5498a86e86dc"></script>
+<script crossorigin="anonymous" src="js/track/tracks.js?v=b371a105940a"></script>
 <script crossorigin="anonymous" src="js/track/maps.js?v=32efb5bf22a9"></script>
 <script crossorigin="anonymous" src="js/car/car3d.js?v=3aa3b11c7855"></script>
 <script crossorigin="anonymous" src="js/game/input.js?v=7463a05cb89c"></script>
@@ -1800,7 +1800,7 @@
 <script crossorigin="anonymous" src="js/car/parts.js?v=299db50b7f16"></script>
 <script crossorigin="anonymous" src="js/car/liveries.js?v=3c03d579e61e"></script>
 <script crossorigin="anonymous" src="js/car/liverytex.js?v=02d15bbad542"></script>
-<script crossorigin="anonymous" src="js/car/ghost.js?v=b8777e65ad76"></script>
+<script crossorigin="anonymous" src="js/car/ghost.js?v=a428eb7c9a73"></script>
 <script crossorigin="anonymous" src="js/game/light-presets.js?v=94cd2507f889"></script>
 <script crossorigin="anonymous" src="js/game/physics-consts.js?v=95ddf68ac644"></script>
 <script crossorigin="anonymous" src="js/game/tables.js?v=02a99fbba028"></script>
@@ -1820,7 +1820,7 @@
 <script crossorigin="anonymous" src="js/game/career-ui.js?v=211814be85a1"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=f0de928ac0d6"></script>
 <script crossorigin="anonymous" src="js/game/menus.js?v=06f3bc9aaa0f"></script>
-<script crossorigin="anonymous" src="js/game/scrollfade.js?v=c213148b2fd4"></script>
+<script crossorigin="anonymous" src="js/game/scrollfade.js?v=7134e489b866"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
 <script crossorigin="anonymous" src="js/game/sheetshape.js?v=423b0321c280"></script>
 <script crossorigin="anonymous" src="js/game/uilayers.js?v=fe49a193dea2"></script>
@@ -1830,7 +1830,7 @@
 <script crossorigin="anonymous" src="js/game/settings-nav.js?v=b08f88915465"></script>
 <script crossorigin="anonymous" src="js/game/aerozones.js?v=3918f5735cf7"></script>
 <script crossorigin="anonymous" src="js/game/skidmarks.js?v=445e60150252"></script>
-<script crossorigin="anonymous" src="js/game/racecontrol.js?v=329deff1767c"></script>
+<script crossorigin="anonymous" src="js/game/racecontrol.js?v=8129f6e24644"></script>
 <script crossorigin="anonymous" src="js/game/photomode.js?v=45c832b731ad"></script>
 <script crossorigin="anonymous" src="js/game/tuner.js?v=97d8133f20c4"></script>
 <script crossorigin="anonymous" src="js/game/cam-tuner.js?v=3f5f9f5075ed"></script>
@@ -1839,14 +1839,14 @@
 <script crossorigin="anonymous" src="js/game/perf.js?v=495da1c1cfe4"></script>
 <script crossorigin="anonymous" src="js/game/gfx-quality.js?v=6a49b31c1a10"></script>
 <script crossorigin="anonymous" src="js/game/ui-scale.js?v=71d20ad63b86"></script>
-<script crossorigin="anonymous" src="js/game/cockpit-opts.js?v=300fbf254884"></script>
+<script crossorigin="anonymous" src="js/game/cockpit-opts.js?v=1a6b85976ce9"></script>
 <script crossorigin="anonymous" src="js/game/metrics-panel-style.js?v=993e1d4e1e0b"></script>
-<script crossorigin="anonymous" src="js/game/metrics.js?v=6dcae398a3aa"></script>
+<script crossorigin="anonymous" src="js/game/metrics.js?v=9d9bdd157f9d"></script>
 <script crossorigin="anonymous" src="js/game/cameras.js?v=9a0b5d9b5eed"></script>
 <script crossorigin="anonymous" src="js/game/cam-modes.js?v=0ccbabb90f93"></script>
-<script crossorigin="anonymous" src="js/game/hud.js?v=597e26595fd8"></script>
+<script crossorigin="anonymous" src="js/game/hud.js?v=039f27131b14"></script>
 <script crossorigin="anonymous" src="js/game/results.js?v=40a2c4e24afe"></script>
-<script crossorigin="anonymous" src="js/game/quali.js?v=b2612a3fb892"></script>
+<script crossorigin="anonymous" src="js/game/quali.js?v=39eeca61e238"></script>
 <script crossorigin="anonymous" src="js/game/debrisworld.js?v=51060dc2bda8"></script>
 <script crossorigin="anonymous" src="js/game/incidentsim.js?v=8d348151205e"></script>
 <script crossorigin="anonymous" src="js/net/nostr.js?v=8d425220e84a"></script>
@@ -1858,7 +1858,7 @@
 <script crossorigin="anonymous" src="js/net/handshake.js?v=235f43f8bc4c"></script>
 <script crossorigin="anonymous" src="js/net/snapshot.js?v=7e15ac80cc3a"></script>
 <script crossorigin="anonymous" src="js/net/session.js?v=ab5f8dedabbc"></script>
-<script crossorigin="anonymous" src="js/net/netplay.js?v=b40763a2e674"></script>
+<script crossorigin="anonymous" src="js/net/netplay.js?v=8789d56bd774"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=a0d265295a26"></script>
-<script crossorigin="anonymous" src="js/game.js?v=14f30f5ee61a"></script>
+<script crossorigin="anonymous" src="js/game.js?v=d4095b705208"></script>
 </body></html>

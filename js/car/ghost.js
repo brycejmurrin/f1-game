@@ -98,17 +98,21 @@ const Ghost = (function () {
     return lo;
   }
 
+  // Pooled return — at() runs per HUD tick (minimap dot + gap delta); callers
+  // read it synchronously and never retain it.
+  const _atOut = { s: 0, x: 0, done: false };
   function at(t) {
     if (!best) return null;
     const ts = best.t, ss = best.s, xs = best.x, n = ts.length;
     if (n === 0) return null;
-    if (t >= ts[n - 1]) return { s: ss[n - 1], x: xs[n - 1], done: true };
-    if (t <= ts[0]) return { s: ss[0], x: xs[0], done: false };
+    if (t >= ts[n - 1]) { _atOut.s = ss[n - 1]; _atOut.x = xs[n - 1]; _atOut.done = true; return _atOut; }
+    if (t <= ts[0]) { _atOut.s = ss[0]; _atOut.x = xs[0]; _atOut.done = false; return _atOut; }
     const i = findFloorIndex(ts, t);
     const j = Math.min(i + 1, n - 1);
     const span = ts[j] - ts[i];
     const f = span > 1e-6 ? Math.max(0, Math.min(1, (t - ts[i]) / span)) : 0;
-    return { s: ss[i] + (ss[j] - ss[i]) * f, x: xs[i] + (xs[j] - xs[i]) * f, done: false };
+    _atOut.s = ss[i] + (ss[j] - ss[i]) * f; _atOut.x = xs[i] + (xs[j] - xs[i]) * f; _atOut.done = false;
+    return _atOut;
   }
 
   function timeAt(s) {

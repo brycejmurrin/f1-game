@@ -4,7 +4,8 @@ const TrackGraph = (function () {
 
   const __M = Math, __isFinite = Number.isFinite;
 
-  const isVec3 = (v) => Array.isArray(v) && v.length === 3 && v.every(__isFinite);
+  const isVec3 = (v) => Array.isArray(v) && v.length === 3 &&
+    __isFinite(v[0]) && __isFinite(v[1]) && __isFinite(v[2]);   // unrolled: every() paid an iterator per call at ~100k calls/build
 
   const NODE_COLOR = "@node";
   const WHITE = [1, 1, 1];
@@ -12,17 +13,20 @@ const TrackGraph = (function () {
     op.col === NODE_COLOR ? (place.col || WHITE) : op.col;
 
   // world = o + R * (local * scale), R the column basis [r,u,t].
+  // Pooled output: replay consumes each result synchronously before the next op
+  // (the one retention risk, badPrimitive's diagnostics center, copies) — a
+  // fresh triple per op was ~340k arrays per build across the two replays.
+  const _xfOut = [0, 0, 0];
   function xform(place, lc) {
     const s = place.s;
     const x = s ? lc[0] * s[0] : lc[0];
     const y = s ? lc[1] * s[1] : lc[1];
     const z = s ? lc[2] * s[2] : lc[2];
     const r = place.r, u = place.u, t = place.t, o = place.o;
-    return [
-      o[0] + r[0] * x + u[0] * y + t[0] * z,
-      o[1] + r[1] * x + u[1] * y + t[1] * z,
-      o[2] + r[2] * x + u[2] * y + t[2] * z,
-    ];
+    _xfOut[0] = o[0] + r[0] * x + u[0] * y + t[0] * z;
+    _xfOut[1] = o[1] + r[1] * x + u[1] * y + t[1] * z;
+    _xfOut[2] = o[2] + r[2] * x + u[2] * y + t[2] * z;
+    return _xfOut;
   }
 
   // Radial ops (cyl/cone/frustum) are round in the local XZ plane, so a
@@ -167,9 +171,15 @@ const TrackGraph = (function () {
       const prefer = !!(out && out._preferInstance && emit);
       let landed;
       if (prefer) {
+        // The dry run records a per-op verdict (1=pass 0=culled 2=invalid) into
+        // a per-model scratch; the fuse/absorb replay just below consumes it so
+        // the guarded emitters skip the second round of finiteVec + road-guard
+        // grid queries — deterministic in the same (model, place) by construction.
         out._dryRun = true;
+        out._recVerdicts = m._verd || (m._verd = new Uint8Array(m.ops.length));
+        out._vIdx = 0;
         landed = replay(m, place, emit, out);
-        out._dryRun = false;
+        out._dryRun = false; out._recVerdicts = null;
       } else {
         landed = emit ? replay(m, place, emit, out) : 0;
       }
@@ -189,11 +199,14 @@ const TrackGraph = (function () {
           meta: meta || null,
         });
         if (prefer && !skipFuse) {
+          out._replayVerdicts = m._verd; out._vIdx = 0;
           replay(m, place, emit, out);           // fuse bakeOnly into the soup
+          out._replayVerdicts = null;
         } else if (prefer && skipFuse) {
           out._absorbOnly = true;                // terrain seating, no triangles
+          out._replayVerdicts = m._verd; out._vIdx = 0;
           replay(m, place, emit, out);
-          out._absorbOnly = false;
+          out._absorbOnly = false; out._replayVerdicts = null;
         }
       }
       return landed;

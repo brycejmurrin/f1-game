@@ -874,7 +874,7 @@ const WGX = (function () {
     let pGlow = null, glowUBO = null, glowFxBG = null, glowVBO = null,
         _glowCap = 0, _glowScratch = null;
     let pDecal = null, decalUBO = null, fxDecalLayout = null;
-    let _fxQuadSlot = 0, _fxDecalSlot = 0;
+    let _fxQuadSlot = 0, _fxDecalSlot = 0, _fxQuadOverflow = 0;
     const FX_QUAD_SLOTS = 64, FX_DECAL_SLOTS = 128, FX_STRIDE = 256;
     const FX_F32_STRIDE = FX_STRIDE >> 2; // 64 — pad to minUniformBufferOffsetAlignment
     // CPU rings for blob/mark + decal. Filled per stamp; one writeBuffer each
@@ -1436,7 +1436,12 @@ const WGX = (function () {
               { shaderLocation: 2, offset: 20, format: "float32x3" },
               { shaderLocation: 3, offset: 32, format: "float32" },
             ] }] },
-          fragment: { module: glowMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ADD_BLEND }] },
+          // Alpha masked (GLX drawGlow parity): additive halos writing a=1.0
+          // saturated the scene-alpha SSR car-paint tag under lamp glow.
+          fragment: { module: glowMod, entryPoint: "fs_main", targets: [{
+            format: SCENE_FORMAT, blend: ADD_BLEND,
+            writeMask: GPUColorWrite.RED | GPUColorWrite.GREEN | GPUColorWrite.BLUE,
+          }] },
           primitive: { topology: "triangle-list", cullMode: "none" },
           depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },   // no bias
           ..._fxMS,
@@ -1493,10 +1498,15 @@ const WGX = (function () {
               buffer: { type: "uniform" } },
           ] });
           const pLayout = device.createPipelineLayout({ bindGroupLayouts: [particleBGL] });
+          // Both particle pipelines mask alpha — GLX brackets drawParticles in
+          // setAlphaWrite(false)/(true) precisely so smoke/sparks over the car
+          // can't drag the scene-alpha SSR paint tag off its value (pDecal
+          // above carries the same mask).
+          const pMask = GPUColorWrite.RED | GPUColorWrite.GREEN | GPUColorWrite.BLUE;
           pParticle = device.createRenderPipeline({
             layout: pLayout,
             vertex: pVert,
-            fragment: { module: pMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND }] },
+            fragment: { module: pMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND, writeMask: pMask }] },
             primitive: pPrim,
             depthStencil: pDepth,
             ..._fxMS,
@@ -1507,7 +1517,7 @@ const WGX = (function () {
           pParticleAdd = device.createRenderPipeline({
             layout: pLayout,
             vertex: pVert,
-            fragment: { module: pMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ADD_BLEND }] },
+            fragment: { module: pMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ADD_BLEND, writeMask: pMask }] },
             primitive: pPrim,
             depthStencil: pDepth,
             ..._fxMS,
@@ -3042,7 +3052,7 @@ const WGX = (function () {
         ensureTargets();
         if (!sceneView) return false;
         _drawSlot = 0;
-        _fxQuadSlot = 0; _fxDecalSlot = 0;
+        _fxQuadSlot = 0; _fxDecalSlot = 0; _fxQuadOverflow = 0;
         _activeFrameBG = frameBindGroup;   // main pass samples the real probe cube once live
         _writeFrame(frame || {});
         const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
@@ -3111,7 +3121,11 @@ const WGX = (function () {
     }
     function _flushQuadFxUBO() {
       if (!quadFxUBO || _fxQuadSlot <= 0) return;
-      device.queue.writeBuffer(quadFxUBO, 0, quadFxRing, 0, _fxQuadSlot * FX_F32_STRIDE);
+      // Clamp: _fxQuadSlot keeps counting past the ring on overflow frames, and
+      // an unclamped length would write past quadFxRing's end.
+      const nQ = Math.min(_fxQuadSlot, FX_QUAD_SLOTS);
+      device.queue.writeBuffer(quadFxUBO, 0, quadFxRing, 0, nQ * FX_F32_STRIDE);
+      if (_fxQuadOverflow) Log.warn("gfx", "WGX fx-quad ring overflow: " + _fxQuadOverflow + " stamp(s) dropped");
     }
     function _flushDecalUBO() {
       if (!decalUBO || _fxDecalSlot <= 0) return;
@@ -3357,7 +3371,7 @@ const WGX = (function () {
         depthStencilAttachment: { view: envDepthView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store" },
       });
       encoder = _envEncoder;
-      _drawSlot = 0; _fxQuadSlot = 0; _fxDecalSlot = 0;
+      _drawSlot = 0; _fxQuadSlot = 0; _fxDecalSlot = 0; _fxQuadOverflow = 0;
       _activeFrameBG = _envFrameBG;   // placeholder cube while rendering into the real one
       return _envInvVP;
     }
@@ -4395,6 +4409,9 @@ const WGX = (function () {
         }
         device.queue.writeBuffer(batch.instBuf, 0, dst, 0, n * 20);
         batch._cullPlanes = null;
+        // Buffer holds the full set again — a stale repack count would draw the
+        // wrong N until the next cullInstances (same contract as GLX shadow).
+        batch.visible = batch.instances;
       }
       if (_shadowSetModel(_shadowIdent) < 0) return;
       shadowPass.setVertexBuffer(0, batch.vbuf);
@@ -4445,7 +4462,10 @@ const WGX = (function () {
     function _drawQuadStamp(pipeline, model, w, l, p2, p3) {
       if (!_fxReady || !litPass || !pipeline) return;
       const slot = _fxQuadSlot++;
-      if (slot >= FX_QUAD_SLOTS) return;
+      // Count the drop (blob shadows/marks past the ring) — GLX has no cap, so
+      // a silently thinner WGX frame was undiagnosable (same idiom as the
+      // shadow caster ring's _shadowOverflow).
+      if (slot >= FX_QUAD_SLOTS) { _fxQuadOverflow++; return; }
       _writeQuadFx(slot, model, w, l, p2, p3);
       litPass.setPipeline(pipeline);
       _fxQuadDynOff[0] = slot * FX_STRIDE;

@@ -533,8 +533,15 @@ const Tracks = (function () {
                     get count() { return propList.length; },
                     get spanCount() { return spanList.length; },
                     get dropped() { return propDropped; } };
-    const finiteVec = (v, len, positive) =>
-      Array.isArray(v) && v.length === len && v.every((x) => __isFinite(x) && (!positive || x > 0));
+    // Plain loop — the every() form allocated a closure per call (~200k calls/build).
+    const finiteVec = (v, len, positive) => {
+      if (!Array.isArray(v) || v.length !== len) return false;
+      for (let i = 0; i < len; i++) {
+        const x = v[i];
+        if (!__isFinite(x) || (positive && !(x > 0))) return false;
+      }
+      return true;
+    };
     const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
     const _hitCand = new Array(n), _trkCand = new Array(n);   // reusable query scratch
     const onRoadHit = (cx, cz, topY, rad, arx, arz, afx, afz, hx, hz) => {
@@ -578,49 +585,83 @@ const Tracks = (function () {
       return onRoadHit(c[0], c[2], topY, rad, 0, 0, 0, 0, 0, 0);
     };
     const badPrimitive = (kind, c, size) => {
-      diagnostics.invalid.push({ id: kind, reason: "non-finite primitive dimensions", center: c, size });
+      // COPY c: graph.xform hands out a pooled triple, and this record outlives the op.
+      diagnostics.invalid.push({ id: kind, reason: "non-finite primitive dimensions",
+        center: Array.isArray(c) ? c.slice() : c, size });
       return false;
     };
+    // Tri-state verdict cache (1=pass 0=culled 2=invalid): the graph's fuse
+    // replay reuses the dry run's guard verdicts — mechanism in graph.instance.
     const addBox = (o, c, sz, col, basis) => {
-      if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("box", c, sz);
-      if (rejBox(c, sz, basis)) { if (!o._dryRun) _culled++; return false; }
-      if (o._dryRun) return true;
+      const tv = o._replayVerdicts;
+      if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("box", c, sz); }
+      else {
+        if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("box", c, sz); }
+        if (rejBox(c, sz, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
+        if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
+        if (o._dryRun) return true;
+      }
       if (o._absorbOnly) { absorbBox(c, sz); return true; }
       RAW.addBox(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addCyl = (o, c, rad, h, col, seg, basis) => {
-      if (!finiteVec(c, 3, false) || !__isFinite(rad) || rad <= 0 || !__isFinite(h) || h <= 0) return badPrimitive("cylinder", c, [rad, h]);
-      if (rejRad(c, rad, h, basis)) { if (!o._dryRun) _culled++; return false; }
-      if (o._dryRun) return true;
+      const tv = o._replayVerdicts;
+      if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("cylinder", c, [rad, h]); }
+      else {
+        if (!finiteVec(c, 3, false) || !__isFinite(rad) || rad <= 0 || !__isFinite(h) || h <= 0) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("cylinder", c, [rad, h]); }
+        if (rejRad(c, rad, h, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
+        if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
+        if (o._dryRun) return true;
+      }
       if (o._absorbOnly) { absorbUp(c, rad, h); return true; }
       RAW.addCyl(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
     };
     const addCone = (o, c, rad, h, col, seg, basis) => {
-      if (!finiteVec(c, 3, false) || !__isFinite(rad) || rad <= 0 || !__isFinite(h) || h <= 0) return badPrimitive("cone", c, [rad, h]);
-      if (rejRad(c, rad, h, basis)) { if (!o._dryRun) _culled++; return false; }
-      if (o._dryRun) return true;
+      const tv = o._replayVerdicts;
+      if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("cone", c, [rad, h]); }
+      else {
+        if (!finiteVec(c, 3, false) || !__isFinite(rad) || rad <= 0 || !__isFinite(h) || h <= 0) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("cone", c, [rad, h]); }
+        if (rejRad(c, rad, h, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
+        if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
+        if (o._dryRun) return true;
+      }
       if (o._absorbOnly) { absorbUp(c, rad, h); return true; }
       RAW.addCone(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
     };
     const addFrustum = (o, c, rB, rT, h, col, seg, basis) => {
-      if (!finiteVec(c, 3, false) || !__isFinite(rB) || rB <= 0 || !__isFinite(rT) || rT <= 0 || !__isFinite(h) || h <= 0) return badPrimitive("frustum", c, [rB, rT, h]);
-      if (rejRad(c, __M.max(rB, rT), h, basis)) { if (!o._dryRun) _culled++; return false; }
-      if (o._dryRun) return true;
+      const tv = o._replayVerdicts;
+      if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("frustum", c, [rB, rT, h]); }
+      else {
+        if (!finiteVec(c, 3, false) || !__isFinite(rB) || rB <= 0 || !__isFinite(rT) || rT <= 0 || !__isFinite(h) || h <= 0) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("frustum", c, [rB, rT, h]); }
+        if (rejRad(c, __M.max(rB, rT), h, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
+        if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
+        if (o._dryRun) return true;
+      }
       if (o._absorbOnly) { absorbUp(c, __M.max(rB, rT), h); return true; }
       RAW.addFrustum(o, c, rB, rT, h, col, seg, basis);
       absorbUp(c, __M.max(rB, rT), h); return true;
     };
     const addPrism = (o, c, sz, col, basis) => {
-      if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("prism", c, sz);
-      if (rejBox(c, sz, basis)) { if (!o._dryRun) _culled++; return false; }
-      if (o._dryRun) return true;
+      const tv = o._replayVerdicts;
+      if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("prism", c, sz); }
+      else {
+        if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("prism", c, sz); }
+        if (rejBox(c, sz, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
+        if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
+        if (o._dryRun) return true;
+      }
       if (o._absorbOnly) { absorbBox(c, sz); return true; }
       RAW.addPrism(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addPyramid = (o, c, sz, col, basis) => {
-      if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) return badPrimitive("pyramid", c, sz);
-      if (rejBox(c, sz, basis)) { if (!o._dryRun) _culled++; return false; }
-      if (o._dryRun) return true;
+      const tv = o._replayVerdicts;
+      if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("pyramid", c, sz); }
+      else {
+        if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("pyramid", c, sz); }
+        if (rejBox(c, sz, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
+        if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
+        if (o._dryRun) return true;
+      }
       if (o._absorbOnly) { absorbBox(c, sz); return true; }
       RAW.addPyramid(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };

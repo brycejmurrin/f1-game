@@ -88,10 +88,12 @@ function gapForm() {
     if (drop) root.dataset.gapDrop = "1";
     else delete root.dataset.gapDrop;
   }
-  return ratio <= GAP_SHORT_AT[k]
-    ? (arrow, code, t) => arrow + " " + t
-    : (arrow, code, t) => arrow + " " + code + " +" + t + "s";
+  return ratio <= GAP_SHORT_AT[k] ? _gapFormShort : _gapFormLong;
 }
+// Hoisted: gapForm runs every HUD tick — returning fresh arrows was 2 closures
+// per call for two constant formats.
+const _gapFormShort = (arrow, code, t) => arrow + " " + t;
+const _gapFormLong = (arrow, code, t) => arrow + " " + code + " +" + t + "s";
 
 // THE HUD FITS ITSELF TO THE VIEWPORT.
 //
@@ -122,7 +124,10 @@ function fitHud() {
   const scale = +root.style.getPropertyValue("--hud-scale") || 1;
   const key = window.innerWidth + "x" + window.innerHeight + "@" + scale;
   if (key === _fitKey && --_fitWait > 0) return;
-  _fitKey = key; _fitWait = 30;   // ~0.5 s at 60 Hz tick — was 5 (~12 Hz layout thrash)
+  // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
+  // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
+  // tick ≈ 3 s between forced layout reads while nothing changed.
+  _fitKey = key; _fitWait = 30;
   const wide = (el) => {
     if (!el) return 0;
     const r = el.getBoundingClientRect();
@@ -237,9 +242,12 @@ function updateHud(force) {
     }
     hText(els.gapB, isFinite(G.ttRecord) ? "REC " + G.fmtTime(G.ttRecord) : "REC —");
   } else {
-    // gaps — reuse the module-scope prog-sorted field from the update loop
+    // gaps — reuse the module-scope prog-sorted field from the update loop.
+    // rank is that array's 1-based position, refreshed every step; the identity
+    // check catches the stale case (e.g. player retired) and falls back.
     const ranked = G.ranked;
-    const i = ranked.indexOf(player);
+    let i = (player.rank || 0) - 1;
+    if (ranked[i] !== player) i = ranked.indexOf(player);
     const a = i > 0 ? ranked[i - 1] : null, b = i >= 0 ? ranked[i + 1] : null;
     const gap = gapForm();
     hText(els.gapA, a ? gap("▲", a.code, ((a.prog - player.prog) / Math.max(player.speed, 25)).toFixed(1)) : "");

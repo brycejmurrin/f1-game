@@ -395,9 +395,15 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
   assert.equal(reloaded, 1);
 });
 
-test("GLX forwards tail-lights through per-chunk uploadLightSet and no-ops when the context is lost", () => {
+test("GLX pins the per-chunk uploadLightSet revert (arity 3) and no-ops when the context is lost", () => {
+  // Arity 3 is the DECISION, not an oversight: the 6-arg tail-light forwarding
+  // was reverted pending a crash repro (see the decision record above
+  // uploadLightSet in glx.js core). This canary used to pin the 6-arg form —
+  // it was added with the fix and survived the revert being lost in the
+  // build-1496 squash merge. Re-land the forwarding WITH a repro, and flip
+  // this regex in the same commit.
   const glx = read("js/render/glx.js");
-  assert.match(glx, /uploadLightSet:\s*\(L, idx, n, L2, o2, n2\)\s*=>\s*uploadLightSet\(L, idx, n, L2, o2, n2\)/);
+  assert.match(glx, /uploadLightSet:\s*\(L, idx, n\)\s*=>\s*uploadLightSet\(L, idx, n\)/);
   assert.match(glx, /function ctxGone\(\)/);
   const draw = glx.slice(glx.indexOf("function draw(mesh, modelMat, opts)"), glx.indexOf("function drawSky"));
   assert.match(draw, /ctxGone\(\)/);

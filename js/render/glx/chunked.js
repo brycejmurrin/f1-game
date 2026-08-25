@@ -182,9 +182,12 @@ const GLXChunked = (function () {
           const ch = chunks[i];
           if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
           if (cd > 0 && _aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) continue;
-          if (ch._lampIdx === undefined || ch._lampSrc !== F.allLights) {
+          // Keyed on the knob too: the cap inside _pickChunkLamps derives from
+          // perChunkLights, so a slider move must invalidate — array identity
+          // alone froze the first draw's cap for the life of the track.
+          if (ch._lampIdx === undefined || ch._lampSrc !== F.allLights || ch._lampKnob !== F.perChunkLights) {
             ch._lampIdx = _pickChunkLamps(F.allLights, ch.min, ch.max);
-            ch._lampSrc = F.allLights;
+            ch._lampSrc = F.allLights; ch._lampKnob = F.perChunkLights;
           }
           core.uploadLightSet(F.allLights, ch._lampIdx, ch._lampIdx.length,
                               F.lights, F.tailStart, F.tailCount);

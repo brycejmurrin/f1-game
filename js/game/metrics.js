@@ -52,7 +52,7 @@ let _raisedBuffer = null;
 // offset), above the bottom HUD dock. The 80px * hud-scale term is clamped
 // to 120px so at 150% HUD the panel doesn't descend into the mid-screen.
 const HUD_TOP_OFFSET = "min(120px, calc(80px * var(--hud-scale, 1)))";
-const PANEL_STYLE = "position:fixed;right:8px;" +
+const PANEL_STYLE_FALLBACK = "position:fixed;right:8px;" +
   "top:calc(12px + var(--tap, 44px) + var(--sat, 0px) + " + HUD_TOP_OFFSET + ");" +
   "z-index:11;margin:0;padding:10px 12px;" +
   "font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;" +
@@ -63,6 +63,10 @@ const PANEL_STYLE = "position:fixed;right:8px;" +
     HUD_TOP_OFFSET + " - 70px);" +
   "overflow-y:auto;pointer-events:auto;text-shadow:0 1px 2px rgba(0,0,0,.9);" +
   "letter-spacing:.01em";
+// The safe-area-aware layout ships in metrics-panel-style.js (loaded before
+// this file); the fallback keeps headless/VM consumers position-correct.
+const PANEL_STYLE =
+  (typeof window !== "undefined" && window.__METRICS_PANEL_STYLE) || PANEL_STYLE_FALLBACK;
 
 // Adaptive density: same proxy as HUD gap — innerWidth / hudScale.
 // At < 480 use the compact (narrow) layout with 2 values per line.
@@ -337,11 +341,7 @@ function ensurePanel() {
   const el = document.createElement("pre");
   el.id = "game-metrics";
   el.setAttribute("aria-label", "Debug metrics");
-  // Prefer the safe-area-aware style computed at boot by
-  // js/game/metrics-panel-style.js (right/top offset by env(safe-area-*));
-  // PANEL_STYLE stays the plain fallback so the node test VM (no window)
-  // and the exported contract keep the un-inset numbers.
-  el.style.cssText = (typeof window !== "undefined" && window.__METRICS_PANEL_STYLE) || PANEL_STYLE;
+  el.style.cssText = PANEL_STYLE;
   document.body.appendChild(el);
   _panel = el;
   return el;
