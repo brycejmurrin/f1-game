@@ -628,9 +628,13 @@ body[data-density="compact"] #campicker {
   display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center; gap: var(--gap);
   padding: var(--gap);
-  border: 1px solid rgba(255, 209, 128, 0.72); border-radius: var(--r-card);
+  /* --r-lg and --edge/--lift-2, the real tokens: this banner shipped square
+     and shadowless because it read --r-card and --shadow-sheet, two names
+     defined NOWHERE — the one alert that appears when the player is about to
+     lose progress rendered as the least-finished surface in the app. */
+  border: 1px solid rgba(255, 209, 128, 0.72); border-radius: var(--r-lg);
   background: rgba(25, 18, 8, 0.96); color: #fff3d6;
-  box-shadow: var(--shadow-sheet);
+  box-shadow: var(--edge), var(--lift-2);
   font-size: var(--fs-micro);
 }
 #save-warning[hidden] { display: none; }

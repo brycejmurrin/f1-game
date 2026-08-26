@@ -375,7 +375,14 @@
   --plate-hover: rgba(255, 255, 255, 0.08);
   --plate-press: rgba(255, 255, 255, 0.11);
   --plate-on: color-mix(in oklab, var(--red) 18%, transparent);
-  --plate-on-glow: inset 3px 0 0 var(--red), 0 0 12px color-mix(in oklab, var(--red) 28%, transparent); */
+  /* NO trailing comment-closer here. A stray `*/` after this declaration's
+     `;` sat exactly where the parser expects the next declaration; CSS error
+     recovery then discards everything to the NEXT `;` — which was the end of
+     --edge below, skipping straight through the comment. --edge therefore
+     never existed, and every `box-shadow: var(--edge), var(--lift-2)`
+     consumer (all 21 sheets, .dh-card, the garage stack) computed to NONE:
+     the entire elevation ladder shipped visually inert until build 1548. */
+  --plate-on-glow: inset 3px 0 0 var(--red), 0 0 12px color-mix(in oklab, var(--red) 28%, transparent);
   /* A lit lip along the top AND the far edge falling into shade. The lip on
      its own reads as a sticker laid on the page; the pair reads as a slab with
      thickness, which is the whole point of an elevation system. */
