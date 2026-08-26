@@ -88,8 +88,17 @@ if ($("save-export")) $("save-export").onclick = exportRecovery;
 // appeared). The safety net applies the DOM change directly if the transition
 // has not run it within a couple of frames; the guard makes a double-fire a
 // no-op if the transition callback later runs after all.
+//
+// Reduced-motion skips the whole mechanism, not just the animation. The CSS in
+// css/tokens.css already cancels the crossfade, but startViewTransition still
+// SNAPSHOTS the page either way — and on a software rasteriser that capture
+// blocks the main thread for seconds (measured 3.2 s per swap on SwiftShader;
+// even the 60 ms direct-apply net below can't fire while the thread is held).
+// Under reduce the transition would contribute nothing visual anyway, so the
+// swap goes direct. The test suite pins reducedMotion:"reduce" and rides this.
+const vtReduce = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
 const vt = (fn) => {
-  if (!document.startViewTransition) { fn(); return; }
+  if (!document.startViewTransition || vtReduce.matches) { fn(); return; }
   let applied = false;
   const run = () => { if (applied) return; applied = true; fn(); };
   try {

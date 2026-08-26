@@ -373,7 +373,11 @@ const CEILINGS = {
   //   recorded UX defects at their existing sites. 8621 -> 8627: the vt()
   //   View-Transition wrap of the title/select/garage spine — the swap
   //   handlers live here, the helper in js/game/menus.js.
-  "js/game.js": 8627,
+  // 8627 -> 8635: syncRotateBlocker learns the pause-card/blocker exclusion
+  //   (one line + the bug comment): #pausemenu is a modal <dialog> now, so an
+  //   open card out-layers the z-9000 blocker and refuses focus to its
+  //   buttons — rotation-recovery's OPEN CONTROLS roundtrip caught it.
+  "js/game.js": 8635,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

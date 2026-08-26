@@ -3152,7 +3152,15 @@ const rotateBlockMql = window.matchMedia ? window.matchMedia("(orientation: port
 function syncRotateBlocker(moveFocus) {
   const box = $("rotate-device"); if (!box) return false;
   const active = getComputedStyle(box).display !== "none";
-  box.setAttribute("aria-hidden", active ? "false" : "true"); if (active && moveFocus) requestAnimationFrame(() => {
+  box.setAttribute("aria-hidden", active ? "false" : "true");
+  // The pause CARD and an active blocker never share the screen. #pausemenu is
+  // a modal <dialog> (TopModal), so left open it sits in the top layer ABOVE
+  // the z-9000 blocker — visually over it, and refusing focus to anything
+  // outside itself: the OPEN CONTROLS roundtrip landed on RESUME instead of
+  // back on the blocker's button. `paused` survives; the card returns the
+  // moment the blocker leaves (rotate to landscape mid-pause and it is there).
+  if (paused) els.pausemenu.hidden = active;
+  if (active && moveFocus) requestAnimationFrame(() => {
     const first = $("rotate-controls"); if (first && getComputedStyle(box).display !== "none") first.focus();
   }); return active;
 }

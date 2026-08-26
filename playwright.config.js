@@ -93,6 +93,14 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // Pin prefers-reduced-motion for every spec. Two reasons: determinism (the
+    // pulse/spinner animations stop mid-frame differences in screenshots), and
+    // View Transitions — menus.js's vt() goes direct under reduce, skipping
+    // startViewTransition's page SNAPSHOT, which on SwiftShader blocks the main
+    // thread ~3.2 s per screen swap (measured 2026-08-26; it starved the
+    // rAF-polled waits in menu-keyboard past their 8 s budgets). The crossfade
+    // is untestable here anyway — SwiftShader has no compositor fast path.
+    reducedMotion: "reduce",
   },
   projects: [
     {
