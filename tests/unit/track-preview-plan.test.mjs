@@ -130,6 +130,19 @@ test("the slot always honours the circuit's aspect and its own caps", () => {
   }
 });
 
+test("noScroll caps the slot at the measured ceiling — the floor cannot win", () => {
+  // The pair-on select section clips (overflow: hidden), so the 240px
+  // scroll-column floor cannot be spent there: it pinned a 162x240 bitmap
+  // into a 63px band (852x393 @200%) and object-fit painted a sliver.
+  const band = { aspect: BAHRAIN, cardInnerW: 162, sectionH: 96, labelH: 18,
+    infoH: 0, padY: 10, gap: 6, noScroll: true };
+  const p = planPreview(band);
+  const scrolly = planPreview({ ...band, noScroll: false });
+  assert.ok(p.slotH <= band.sectionH, `noScroll slot ${p.slotH} must fit the ${band.sectionH}px section`);
+  assert.ok(scrolly.slotH > band.sectionH, "without noScroll the floor exceeds the section (the old behaviour)");
+  assert.ok(p.slotH >= 40, "the 40px transient floor still guards degenerate frames");
+});
+
 test("a card measured before layout still gets a usable slot", () => {
   // First paint: no section height yet. The width and the aspect are all there
   // is, and the result must still be drawable rather than zero or NaN.

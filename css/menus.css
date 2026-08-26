@@ -591,8 +591,13 @@ body { --compact-at: 600px; --wide-at: 620px; }
   object-fit: contain;
 }
 #sel-inner[data-pair="on"]:not([data-shape="tall"])[data-density="compact"] #sel-track-preview #sel-preview-map {
-  /* Compact pair hides the caption, so the 50% facts reserve is empty column. */
-  max-height: 100%;
+  /* 80%, not the old 100%: compact pair now KEEPS the name beside the map, so
+     the full-card reserve is gone — and this cap is what bounds the one
+     TRANSITIONAL frame where the plan has not measured yet and the stylesheet
+     clamp+aspect sizes the map alone (measured 852x344 @100%: a 380px-tall
+     unpinned map pushed the caption 10px past the card). The measured pin is
+     far below this cap, so the settled layout is unchanged. */
+  max-height: 80%;
 }
 /* FIT THE PREVIEW, DO NOT SCROLL IT. Pair-on already gives this column a
    definite height (sheet grid row 2 is minmax(0, 1fr); body is display:contents).
@@ -692,7 +697,12 @@ body { --compact-at: 600px; --wide-at: 620px; }
    The picker is opened FROM the garage (#carsetup); it is a top-layer
    <dialog>, so showModal() stacks it above the garage without a z-index —
    the old "z-index 36 clears #carsetup's 35" dance is retired. */
-#teampicker { --sheet-w: 760px; }
+/* --fit-at like its siblings: this was the ONE --sheet-w sheet with no fit
+   threshold — head + 12-tile listbox is exactly the head-plus-scroller shape
+   the mechanism exists for, and a short window at high UI SIZE starved the
+   list while every other dialog auto-shrank. Values mirror #customize. */
+#teampicker { --sheet-w: 760px; --fit-at: 300px; }
+#teampicker .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
 .team-card, .team-tile {
   display: flex; align-items: center; gap: var(--gap);
   width: 100%; text-align: left; cursor: pointer;
@@ -1058,15 +1068,19 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 @container sheet (min-width: 820px) {
   #sel-preview-name { font-size: 18px; }
 }
-/* Compact pair-on: the active row already names the circuit. At 175–200% the
-   map needs the whole preview column; retaining even name + record put a
-   partially clipped caption under it. */
-#sel-inner[data-pair="on"][data-density="compact"] #sel-circuit-label,
-#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-info { display: none; }
+/* Compact pair-on: the extras go, the NAME stays — beside the map, not under
+   it. Hiding the whole caption left the band a row holding one small outline
+   with ~175 local px of dead width beside it (measured 852x393 @200%: a
+   42px-wide tall-circuit map alone in a 219px card). The card is a flex ROW
+   here, so a name beside the map costs no height — the clipped-caption
+   history this block used to cite was the stacked-under arrangement. */
+#sel-inner[data-pair="on"][data-density="compact"] #sel-circuit-label { display: none; }
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-gp,
-#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-meta { display: none; }
+#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-meta,
+#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-rec { display: none; }
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-facts,
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-elev { display: none; }
+#sel-inner[data-pair="on"][data-density="compact"] #sel-track-preview { align-items: center; }
 
 /* Season upcoming rounds list */
 .season-upcoming-head { font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.12em; color: var(--dim); margin-top: 10px; margin-bottom: 4px; padding: 0 4px; }

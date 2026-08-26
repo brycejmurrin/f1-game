@@ -237,8 +237,15 @@ window.SheetShape = (function () {
   /* Sheets are static markup, but they live inside screens that are hidden at
      boot — a hidden element measures 0x0, so the first useful measurement is the
      ResizeObserver callback when its screen is shown, not this scan. */
+  /* .fit-managed: a card that wants classifyFit without being a .sheet — the
+     data hub's .dh-card has its own grid and its zoom lives in @layer overlays
+     where the .sheet zoom rule can never reach it, so joining the class would
+     break its layout while joining the SCAN costs nothing. Such a card must
+     read var(--sheet-scale, --ui-scale) in its own zoom rule and declare
+     --fit-at, exactly like a sheet. */
+  const MANAGED = ".sheet, .fit-managed";
   function scan(root) {
-    (root || document).querySelectorAll(".sheet").forEach(observe);
+    (root || document).querySelectorAll(MANAGED).forEach(observe);
   }
 
   /* A SCREEN BECOMING VISIBLE MUST BE MEASURED IN THE SAME TICK.
@@ -258,7 +265,7 @@ window.SheetShape = (function () {
     new MutationObserver((muts) => {
       for (const m of muts) {
         if (m.attributeName !== "hidden" || m.target.hidden) continue;
-        m.target.querySelectorAll(".sheet").forEach((el) => {
+        m.target.querySelectorAll(MANAGED).forEach((el) => {
           const r = el.getBoundingClientRect();
           classify(el, r.width, r.height);
         });
@@ -465,7 +472,7 @@ window.SheetShape = (function () {
       new MutationObserver((muts) => {
         for (const m of muts) for (const n of m.addedNodes) {
           if (n.nodeType !== 1) continue;
-          if (n.classList && n.classList.contains("sheet")) observe(n);
+          if (n.classList && (n.classList.contains("sheet") || n.classList.contains("fit-managed"))) observe(n);
           if (n.querySelectorAll) scan(n);
         }
       }).observe(document.documentElement, { childList: true, subtree: true });

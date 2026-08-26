@@ -191,13 +191,21 @@
 @media (orientation: landscape) {
   #track-detail-body { flex-direction: row; align-items: stretch; gap: 10px; }
   #track-detail-canvas-wrap { flex: 1; min-width: 0; }
-  #track-detail-panel { display: flex; flex: 0 0 220px; max-width: 220px; overflow-y: auto; overscroll-behavior-y: contain; }
+  /* min(220px, 40%): the media query judges the PHYSICAL window but the rail
+     is spent in LOCAL px inside zoom: var(--ui-scale) — at 200% on an
+     852x393 phone the local box is 426 wide and a flat 220px rail took 52%
+     of it. Percentages resolve against the local width (the file's own
+     clamp note below), so the cap follows the zoom; at 100% nothing
+     changes (40% of any ≥550px local box exceeds 220). */
+  #track-detail-panel { display: flex; flex: 0 0 min(220px, 40%); max-width: min(220px, 40%); overflow-y: auto; overscroll-behavior-y: contain; }
 }
 
 @media (min-width: 900px) and (min-height: 600px) {
   #track-detail-body { flex-direction: row; align-items: stretch; gap: 14px; }
   #track-detail-canvas-wrap { flex: 1; min-width: 0; }
-  #track-detail-panel { display: flex; flex: 0 0 260px; max-width: 260px; overflow-y: auto; overscroll-behavior-y: contain; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.08); }
+  /* Same local-width cap as the landscape rail above: 1280x800 at 200% is a
+     640px LOCAL box where a flat 260px rail was 41% of the width. */
+  #track-detail-panel { display: flex; flex: 0 0 min(260px, 40%); max-width: min(260px, 40%); overflow-y: auto; overscroll-behavior-y: contain; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.08); }
   /* A tall circuit fits by HEIGHT, so the width it does not take is dead —
      measured at 1280x800: Jeddah 363px of a 982px wrap (37% fill) beside a
      260px rail holding 27 turn chips three to a row, while Baku fills 99% and

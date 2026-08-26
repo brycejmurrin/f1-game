@@ -32,7 +32,16 @@ body[data-density="compact"] .dh-overlay { align-items: stretch; }
      Same contract as `.sheet`: zoom on the card, not the full-bleed overlay,
      so safe-area insets on `.dh-overlay` stay in viewport px. Heights below
      use --svhz / --vwz so they stay a constant fraction of the screen. */
-  zoom: var(--ui-scale);
+  /* var(--sheet-scale, …): the card is fit-managed (js/game/sheetshape.js
+     scans .fit-managed alongside .sheet), so a short window at high UI SIZE
+     shrinks the card instead of leaving header+tabs ~45% of a 196px local
+     box. The overlays layer beats components, so the sheet's own zoom rule
+     could never reach this element — the var swap has to live here. */
+  zoom: var(--sheet-scale, var(--ui-scale));
+  --fit-at: 260px;
+  --vwz:  calc(1vw  / var(--sheet-scale, var(--ui-scale)));
+  --vhz:  calc(1vh  / var(--sheet-scale, var(--ui-scale)));
+  --svhz: calc(1svh / var(--sheet-scale, var(--ui-scale)));
   /* Always fill most of the viewport — content scrolls inside.
      THE MIN MAY NOT EXCEED THE MAX. `calc(100svh - 60px)` is 599px on an iPhone
      15 Pro upright, while the max below — the viewport less the real notch and
@@ -645,6 +654,15 @@ body[data-density="compact"] .dh-row { padding: 4px 4px; font-size: var(--fs-2);
 body[data-density="compact"] .dh-pts { min-width: 36px; }
 body[data-density="compact"] .dh-gap { min-width: 30px; }
 
+/* A 320px window (iPad Slide Over / Split View) leaves ~264 own px of row —
+   the 150+100px LIVE floors and the 200px constructors floor clip behind
+   .dh-content's overflow-x: hidden from ~110% UI SIZE up. Let the rows
+   negotiate: min-width: 0 defers to the ellipsis the names already carry. */
+body[data-width="narrow"] .dh-row { flex-wrap: wrap; }
+body[data-width="narrow"] .dh-live-row-main { min-width: 0; }
+body[data-width="narrow"] .dh-live-gapwrap { min-width: 60px; }
+body[data-width="narrow"] .dh-cons-main { min-width: 0; }
+
 /* NARROW/COMPACT STANDINGS: allow driver names to wrap instead of ellipsizing.
    Long names like "Andrea Kimi Antonelli" truncate in the narrow column. With
    white-space:normal the name wraps to 2 lines; the table-layout:fixed column
@@ -854,7 +872,10 @@ body[data-width="wide"][data-density="compact"] {
 body[data-width="wide"][data-density="normal"] {
   .dh-telem-main { padding: var(--gap) 14px; }
   .dh-telem-side { width: 340px; padding: var(--gap) 14px; }
-  .dh-telem-side .dh-canvas.dh-map { max-width: min(100%, 42dvh); }
+  /* --svhz, not dvh — same correction as the base rule this overrides: this
+     canvas lives inside the zoomed .dh-card, and a raw 42dvh at 200% painted
+     672 of 800 physical px for a sidebar mini-map (intended: 336). */
+  .dh-telem-side .dh-canvas.dh-map { max-width: min(100%, calc(42 * var(--svhz))); }
   .dh-telem-main .dh-canvas { max-width: none; }
   .dh-tpopup-card { width: min(1280px, 96vw); max-width: none; }
 }

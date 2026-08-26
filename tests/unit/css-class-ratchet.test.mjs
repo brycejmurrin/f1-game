@@ -89,7 +89,12 @@ export function shellNodes() {
 // title-screen dashboard chrome.
 // 532 → 534: ScrollFade's sideways "more this way" edges (.sf-l / .sf-r),
 // the horizontal twin of the existing .sf-t / .sf-b pair. No new host class.
-const CLASS_CEILING = 534;
+/* 535 (2026-08-26): +1 for .fit-managed — the opt-in marker that lets a
+   non-.sheet card (the data hub's .dh-card) join SheetShape's classifyFit
+   scan. It cannot be a custom property: the scan is a querySelectorAll and
+   a MutationObserver classList test (js/game/sheetshape.js), both of which
+   need a selector-addressable hook. */
+const CLASS_CEILING = 535;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under

@@ -429,8 +429,19 @@ function drawElevProfile(cv, t, showEl) {
   const py = TrackMaps.elevProfile(t);
   if (!(py && py.length > 2 && TrackMaps.elevRange(t) > 2)) { target.hidden = true; return false; }
   target.hidden = false;
-  const ew = cv.width, eh = cv.height;
+  // The HTML attributes (280x36 / 240x48) were the backing store forever while
+  // CSS stretched the element to width: 100% — a 600px panel scaled the buffer
+  // 2.5x horizontally and 1.0x vertically, smearing the 8px labels wide. Size
+  // the buffer to the measured box times the effective zoom x dpr (the house
+  // minimap pattern, capped at 3), and keep drawing in CSS px via the
+  // transform. Falls back to the attributes when hidden (zero box).
+  const boxW = cv.clientWidth || cv.width, boxH = cv.clientHeight || cv.height;
+  const ratio = Math.min(3, Math.max(1, (cv.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+  const bw = Math.max(1, Math.round(boxW * ratio)), bh = Math.max(1, Math.round(boxH * ratio));
+  if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+  const ew = boxW, eh = boxH;
   const eg = cv.getContext("2d");
+  eg.setTransform(ratio, 0, 0, ratio, 0, 0);
   eg.clearRect(0, 0, ew, eh);
   let mn = Infinity, mx = -Infinity;
   for (let i = 0; i < py.length; i++) { if (py[i] < mn) mn = py[i]; if (py[i] > mx) mx = py[i]; }
@@ -626,9 +637,15 @@ function updateTrackPreview() {
       // content, so bounding the map by the CARD's own height is circular.
       sectionH: section ? section.clientHeight : 0,
       labelH: label ? label.offsetHeight : 0,
-      infoH: info ? info.offsetHeight : 0,
+      // In the non-tall pair the caption sits BESIDE the map in a flex row —
+      // charging its height to the vertical budget is regression 2 of the
+      // planner's test file. Only a tall sheet stacks it underneath.
+      infoH: (tallSheet && info) ? info.offsetHeight : 0,
       padY: cardCS ? px(cardCS.paddingTop) + px(cardCS.paddingBottom) : 0,
-      gap: cardCS ? (px(cardCS.rowGap) || px(cardCS.gap)) : 0
+      gap: cardCS ? (px(cardCS.rowGap) || px(cardCS.gap)) : 0,
+      // Pair-on clips its section ("FIT THE PREVIEW, DO NOT SCROLL IT" in
+      // css/menus.css) — the 240px scroll-column floor cannot be spent there.
+      noScroll: !tallSheet
     });
   if (card && plan.shape === "beside" && classified) {
     // Gated on `classified` like the pin below: a beside attribute written
@@ -665,7 +682,22 @@ function updateTrackPreview() {
      enough evidence there. */
   const sectionMeasured = (stacked && !tallSheet) || !!(section && section.clientHeight > 0);
   const measurable = classified && sectionMeasured && !!(card && card.clientWidth > 0);
-  const fit = TrackMaps.fitCanvas(map, plan.slotW, plan.slotH, t, measurable);
+  let fit = TrackMaps.fitCanvas(map, plan.slotW, plan.slotH, t, measurable);
+  // SELF-HEAL A STALE PLAN. The stylesheet caps (max-height: 50%/100% in the
+  // pair band) are the layout's last line of defence, and when one BINDS the
+  // pinned bitmap and the granted box disagree: a 162x240 pin clamped to a
+  // 63px band displays the outline as a 42px sliver hugging the row start
+  // (measured 852x393 @200%, select opened after the zoom change — the RO
+  // key never fired again to refit). One refit against the box the cascade
+  // actually granted converges: the second pin matches the box, so the
+  // guard is quiet from then on.
+  if (measurable) {
+    void map.offsetWidth;
+    const gW = map.clientWidth, gH = map.clientHeight;
+    if (gW && gH && (fit.w - gW > 2 || fit.h - gH > 2)) {
+      fit = TrackMaps.fitCanvas(map, Math.min(fit.w, gW), Math.min(fit.h, gH), t, true);
+    }
+  }
   watchPreviewCard(card);
   // CRISP CANVAS AT UI SIZE > 100%.
   // fitCanvas sizes the buffer to local CSS px (pre-zoom). Inside
@@ -677,11 +709,14 @@ function updateTrackPreview() {
   // bitmap expands. TrackMaps.draw uses the CSS-px reference (fit.w/fit.h)
   // for marker scaling, so markers stay the right box-relative size even
   // though the buffer is larger.
-  const _uiZoom = parseFloat(
-    getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")
-  ) || 1;
-  const _dpr = window.devicePixelRatio || 1;
-  const _pxRatio = _uiZoom * _dpr;
+  // currentCSSZoom, NOT the raw --ui-scale slider: the sheet paints at the
+  // fit-CAPPED --sheet-scale (≈1.76 on an 852x393 phone asking for 200%), so
+  // the slider over-allocated the exact way the minimap fix in js/game/hud.js
+  // warns about. Capped at 3 like the minimap — DPR-3 phones at 200% were
+  // allocating 6x, and 200% browser zoom on a DPR-2 desktop 8x (~10 MB a
+  // redraw for a 260px slot).
+  const _pxRatio = Math.min(3, Math.max(1,
+    (map.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
   if (_pxRatio > 1.01) {
     map.width  = Math.round(fit.w * _pxRatio);
     map.height = Math.round(fit.h * _pxRatio);
@@ -695,12 +730,19 @@ function updateTrackPreview() {
   // blob. Scale every absolute-px draw param by how far the fitted buffer sits
   // below that 520x300 reference so markers keep the same box-relative size
   // the old fixed-buffer-plus-CSS-shrink rendering always had.
-  // NOTE: use fit.w/fit.h (CSS-px) as the reference, not the expanded buffer.
+  // NOTE: use fit.w/fit.h (CSS-px) as the reference, not the expanded buffer —
+  // but the PARAMS are consumed in BUFFER px (TrackMaps.draw reads
+  // canvas.width absolutely), so each one is scaled back up by the buffer
+  // ratio after the mk decision is made in CSS px. Without ×br every HiDPI
+  // screen halved the corner numbers, and raising UI SIZE to read the map
+  // made them smaller still (11px × mk 0.5 = 8 buffer px = 2.7 CSS px at
+  // ratio 3).
   const mk = Math.min(1, fit.w / 520, fit.h / 300);
+  const br = fit.w ? (map.width / fit.w) : 1;
   TrackMaps.draw(map, t, {
     color: TrackMaps.themeColor(t), startColor: "#e10600",
-    width: Math.max(2, Math.round(4 * mk)), pad: Math.max(10, Math.round(24 * mk)),
-    corners: true, cornerR: Math.max(4, Math.round(9 * mk)), cornerFont: Math.max(8, Math.round(11 * mk)),
+    width: Math.max(2 * br, Math.round(4 * mk * br)), pad: Math.max(10 * br, Math.round(24 * mk * br)),
+    corners: true, cornerR: Math.max(4 * br, Math.round(9 * mk * br)), cornerFont: Math.max(8 * br, Math.round(11 * mk * br)),
     sectors: true, drs: true
   });
 }
@@ -803,17 +845,29 @@ function openTrackDetail() {
     // own 40px transient floor still guards the degenerate frame.
     const maxW = wrapW > 0 ? wrapW : Math.max(200, Math.min(window.innerWidth - 24, 600));
     const maxH = wrapH > 0 ? wrapH : Math.max(150, Math.round(maxW / 1.2));
-    const key = maxW + "x" + maxH;
+    // Zoom×dpr joins the KEY as well as the buffer: with a CSS-px-only key a
+    // DPR change under an unchanged box (drag to another monitor, browser
+    // zoom) produced an identical key and the early return skipped the refit.
+    const ratio = Math.min(3, Math.max(1,
+      (cv.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+    const key = maxW + "x" + maxH + "@" + ratio.toFixed(2);
     if (key === lastFit) return;   // the observer below also fires on our own pin
     lastFit = key;
     const fit = TrackMaps.fitCanvas(cv, maxW, maxH, t, true);
-    // Same box-relative marker scaling as the picker preview: these radii were
-    // tuned against a 520x300 buffer and fitCanvas now sizes the buffer itself.
+    // The biggest circuit diagram in the game had NO dpr/zoom term: inside
+    // zoom: var(--ui-scale) at dpr 2 + 200% it painted at 4x its backing
+    // store. Same buffer expansion + buffer-ratio param scaling as the
+    // picker preview above; CSS size stays the local fit.
+    if (ratio > 1.01) {
+      cv.width = Math.round(fit.w * ratio);
+      cv.height = Math.round(fit.h * ratio);
+    }
     const mk = Math.min(1, fit.w / 520, fit.h / 300);
+    const br = fit.w ? (cv.width / fit.w) : 1;
     TrackMaps.draw(cv, t, {
       color: TrackMaps.themeColor(t), startColor: "#e10600",
-      width: Math.max(2, Math.round(5 * mk)), pad: Math.max(12, Math.round(42 * mk)),
-      corners: true, cornerR: Math.max(4, Math.round(6 * mk)), cornerFont: Math.max(8, Math.round(12 * mk)),
+      width: Math.max(2 * br, Math.round(5 * mk * br)), pad: Math.max(12 * br, Math.round(42 * mk * br)),
+      corners: true, cornerR: Math.max(4 * br, Math.round(6 * mk * br)), cornerFont: Math.max(8 * br, Math.round(12 * mk * br)),
       sectors: true, drs: true
     });
   };

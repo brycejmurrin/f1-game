@@ -126,7 +126,10 @@ const DataHub = (function () {
     root.setAttribute("aria-modal", "true");
     root.setAttribute("aria-labelledby", "dh-title");
 
-    const card = el("div", "dh-card");
+    // fit-managed: SheetShape scans this class alongside .sheet, so a short
+    // window at high UI SIZE shrinks the card via --fit-at (css/data.css)
+    // instead of leaving header+tabs most of the local box.
+    const card = el("div", "dh-card fit-managed");
 
     // header
     const header = el("div", "dh-header");

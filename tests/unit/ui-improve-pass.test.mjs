@@ -31,9 +31,14 @@ test("CssZoom API surface is documented in the file header and exports", () => {
   assert.match(src, /window\.CssZoom/);
 });
 
-test("data hub card carries UI SIZE zoom", () => {
+test("data hub card carries UI SIZE zoom (fit-capped like a sheet)", () => {
   const css = fs.readFileSync(path.join(ROOT, "css/data.css"), "utf8");
-  assert.match(css, /\.dh-card\s*\{[\s\S]*?zoom:\s*var\(--ui-scale\)/);
+  // var(--sheet-scale, var(--ui-scale)): the card is fit-managed, so
+  // SheetShape may cap the requested slider on a short window — the fallback
+  // keeps the plain UI SIZE contract this test originally pinned.
+  assert.match(css, /\.dh-card\s*\{[\s\S]*?zoom:\s*var\(--sheet-scale,\s*var\(--ui-scale\)\)/);
+  const js = fs.readFileSync(path.join(ROOT, "js/data/hub.js"), "utf8");
+  assert.match(js, /dh-card fit-managed/, "the card must join the classifyFit scan");
 });
 
 test("garage livery grid class is wired", () => {

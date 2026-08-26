@@ -50,6 +50,12 @@
 .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors,
 #lights, #announce { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
 .hud-bottom { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
+/* Re-derive the compensated vw against the band's EFFECTIVE zoom: the :root
+   token divides by the raw slider, but these subtrees paint at the fitHud-
+   capped --hud-z — two adjacent declarations on #announce used to divide by
+   two different numbers. */
+.hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors,
+#lights, #announce, .hud-bottom { --vwzh: calc(1vw / var(--hud-z)); }
 .hud-top {
   position: absolute;
   top: calc(8px + var(--sat) / var(--hud-z));
@@ -288,7 +294,14 @@ body[data-density="compact"] .hud-bottom { gap: calc(var(--gap) * 0.25); }
   font-weight: 800; font-style: italic;
   text-shadow: 0 0 24px rgba(225, 6, 0, 0.8);
   z-index: 15;
-  white-space: nowrap;
+  /* The 64px clamp ceiling re-breaks the divisor's reasoning above ~800px:
+     the type stops scaling while the string does not — 29 chars of
+     800-italic at 64px need ~950px against an 852px phone. Cap the box at
+     the visible width in this element's own zoom and let the longest banner
+     take a second centred line instead of running off both edges. */
+  max-width: calc(96 * var(--vwzh));
+  text-align: center;
+  text-wrap: balance;
 }
 
 /* ---------- photo mode (free-fly camera) ---------- */

@@ -98,7 +98,12 @@ return { KEY, KEY_TC, halo, setHalo, turnChase, setTurnChase, turnChaseLead };
       "#pm-metrics-details .pm-metrics-sub-body {",
       "  display: flex; flex-direction: column; gap: 4px;",
       "  padding: 6px 0 2px;",
-      "  max-height: min(280px, calc(100svh - 9rem));",
+      /* --svhz, not raw svh: this list lives inside the #pausemenu sheet's
+         zoom, where 100svh of LOCAL px paints zoom× that on screen — at 130%
+         the submenu took 324 of a 393px-tall phone. The zoom-compensated
+         token collapses the per-scale html[style*=…] hack this block used to
+         carry for exactly three slider values. */
+      "  max-height: min(280px, calc(100 * var(--svhz, 1svh) - 9rem));",
       "  overflow-y: auto;",
       "}",
       "#pm-metrics-details .pm-metrics-sub-body > button {",
@@ -110,21 +115,11 @@ return { KEY, KEY_TC, halo, setHalo, turnChase, setTurnChase, turnChaseLead };
       "@media (max-height: 420px) {",
       "  #pm-metrics-details .pm-metrics-sub-body {",
       "    display: grid; grid-template-columns: 1fr 1fr; gap: 4px 6px;",
-      "    max-height: min(160px, calc(100svh - 7rem));",
+      "    max-height: min(160px, calc(100 * var(--svhz, 1svh) - 7rem));",
       "  }",
       "  #pm-metrics-details .pm-metrics-sub-body > button { width: auto; }",
       "  #pm-metrics-details .pm-metrics-hint {",
       "    grid-column: 1 / -1; font-size: 10px; margin: 2px 0 0;",
-      "  }",
-      "}",
-      "@media (max-height: 480px) {",
-      "  html[style*='--ui-scale: 1.1'] #pm-metrics-details .pm-metrics-sub-body,",
-      "  html[style*='--ui-scale:1.1'] #pm-metrics-details .pm-metrics-sub-body,",
-      "  html[style*='--ui-scale: 1.15'] #pm-metrics-details .pm-metrics-sub-body,",
-      "  html[style*='--ui-scale:1.15'] #pm-metrics-details .pm-metrics-sub-body,",
-      "  html[style*='--ui-scale: 1.3'] #pm-metrics-details .pm-metrics-sub-body,",
-      "  html[style*='--ui-scale:1.3'] #pm-metrics-details .pm-metrics-sub-body {",
-      "    max-height: min(140px, calc(100svh - 8rem));",
       "  }",
       "}",
     ].join("\n");

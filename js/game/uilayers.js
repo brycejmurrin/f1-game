@@ -13,6 +13,17 @@ window.UiLayers = (function () {
      being closed would make the guard the thing under test. */
   const DEFS = [
     { id: "overlay", gate: false },
+    /* The rotate blocker: an opaque z-9000 fixed div shown MID-RACE (unique
+       among these layers), self-gated by CSS media queries rather than the
+       hidden attribute. gate: false is load-bearing three ways — Escape must
+       still pause the race (anyOpen() stays false), arrows must not be
+       swallowed as menu nav gating, and gateEls() must not pay a per-frame
+       measure for an element that never carries `hidden`. Being in DEFS at
+       all is what lets TopModal's focus containment see it as top(): before
+       this entry, Tab walked out of the blocker into #pausebtn and the
+       touch controls behind the opaque backdrop. No data-esc-close on the
+       element — onEscape returns without consuming, deliberately. */
+    { id: "rotate-device", gate: false },
     { id: "pausemenu" },
     { id: "pmsettings" },
     { id: "select" },

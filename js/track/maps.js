@@ -219,7 +219,15 @@ const TrackMaps = (function () {
       (cardInnerW - stackedW) / cardInnerW > BESIDE_DEAD_FRAC;
     const widthCap = Math.floor(beside ? cardInnerW - gap - CAPTION_MIN : cardInnerW);
     const floorH = Math.min(FLOOR_MAX_H, Math.round(widthCap / a));
-    const slotH = Math.max(floorH, Math.floor(ceilFor(!beside)));
+    // The floor belongs to a SCROLLING column, where height past the ceiling
+    // just scrolls into reach. A pair-on section clips (overflow: hidden), so
+    // there the floor must not outgrow the measured ceiling: the stylesheet
+    // cap then clamps the BOX while the pinned bitmap keeps the floor's
+    // aspect, and object-fit paints the outline as a sliver in a band it
+    // disagrees with (measured 852x393 @200%: 162x240 pinned into a 63px
+    // band). noScroll callers get the ceiling, floored only at 40px.
+    const ceil = Math.floor(ceilFor(!beside));
+    const slotH = (m.noScroll && sectionH) ? Math.max(40, ceil) : Math.max(floorH, ceil);
     const slotW = Math.max(MIN_SLOT_W, Math.min(widthCap, Math.round(slotH * a)));
     return { shape: beside ? "beside" : "stacked", slotW: slotW, slotH: slotH };
   }

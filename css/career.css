@@ -404,7 +404,12 @@
 .cr-slot-n {
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.12em; color: var(--red);
 }
-.cr-slot-who { font-size: var(--fs-2); font-weight: 700; letter-spacing: 0.02em; }
+.cr-slot-who {
+  font-size: var(--fs-2); font-weight: 700; letter-spacing: 0.02em;
+  /* An uppercased 22-char MY TEAM save name is one unbreakable token against
+     the fixed-width DELETE beside it — same clip family as .res-name. */
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .cr-slot-meta {
   font-size: var(--fs-micro); color: var(--dim); font-variant-numeric: tabular-nums;
 }

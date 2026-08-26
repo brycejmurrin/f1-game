@@ -237,6 +237,18 @@ function rainSeed(drizzle) {
 
 function rainDraw(dt, speed, raining) {
   const LT = _lt();
+  // The backing store was sized once at rainSeed and never again, while the
+  // element is CSS 100%x100% — rotating a 393x852 phone mid-shower stretched
+  // the stale bitmap 2.17x/0.46x and every streak smeared. A per-frame
+  // integer compare is free; on mismatch resize (which clears) and remap the
+  // live drops proportionally so the shower doesn't visibly restart.
+  if (_rainCanvas.width !== window.innerWidth || _rainCanvas.height !== window.innerHeight) {
+    const ow = _rainCanvas.width || 1, oh = _rainCanvas.height || 1;
+    _rainCanvas.width = window.innerWidth;
+    _rainCanvas.height = window.innerHeight;
+    const sx = _rainCanvas.width / ow, sy = _rainCanvas.height / oh;
+    for (const d of _rainDrops) { d.x *= sx; d.y *= sy; }
+  }
   const w = _rainCanvas.width, h = _rainCanvas.height;
   _rainCtx.clearRect(0, 0, w, h);
   _rainCtx.lineWidth = 1;

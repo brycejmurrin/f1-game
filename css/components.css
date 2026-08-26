@@ -147,6 +147,15 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
      on roomy screens but prevents chrome from reducing the actual content pane
      to zero on a short landscape phone. */
   zoom: var(--sheet-scale, var(--ui-scale));
+  /* The compensated viewport tokens must divide by the zoom this subtree
+     ACTUALLY paints at: the :root family divides by the requested slider,
+     but a --fit-at sheet paints at the capped --sheet-scale — on an 852x393
+     phone at 200% the cap lands ≈1.76, and a `78 * --vwz` button computed
+     against 2.0 painted 12% under-size (29% at the worst cap measured). Same
+     re-derivation the HUD bands do against --hud-z in css/hud.css. */
+  --vwz:  calc(1vw  / var(--sheet-scale, var(--ui-scale)));
+  --vhz:  calc(1vh  / var(--sheet-scale, var(--ui-scale)));
+  --svhz: calc(1svh / var(--sheet-scale, var(--ui-scale)));
   width: min(100%, var(--sheet-w, 520px));
   max-height: 100%;
   background: var(--panel);
@@ -567,7 +576,12 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 .res-row.p1 .res-pos, .res-row.p2 .res-pos, .res-row.p3 .res-pos { color: inherit; font-weight: 700; }
 .res-pos { width: 26px; text-align: right; color: var(--dim); }
 .res-swatch { width: 4px; height: 20px; border-radius: var(--r-xs); flex-shrink: 0; }
-.res-name { flex: 1; }
+/* min-width: 0 + ellipsis: a 22-char single-token MY TEAM name (the maxlength
+   the customize form allows) cannot line-break, and a flex item's default
+   min-width: auto refuses to shrink below it — pushing the fixed 62px points
+   column past the sheet edge, where .sheet's overflow: hidden clipped it
+   silently. The compact quali/history rules already wrap; this is the base. */
+.res-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .res-pts { width: 62px; text-align: right; white-space: nowrap; }
 
 /* ---------- section label ---------- */
