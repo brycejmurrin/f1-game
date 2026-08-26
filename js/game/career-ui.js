@@ -1107,6 +1107,11 @@ function create(G) {
     else if (Career.active()) { draft = null; buildHubPanes(); }
     else if (draft) buildSetupPanes();
     else buildSlotPanes();
+    // The foot button must say where it GOES: from the slot picker over an
+    // active career it returns to the HUB, and a button labelled MAIN MENU
+    // that lands you back in the career was the one lying label in the app.
+    const back = $("cr-back");
+    if (back) back.textContent = (picking && Career.active()) ? "BACK" : "MAIN MENU";
     ScrollFade.refresh();
   }
 
@@ -1128,6 +1133,7 @@ function create(G) {
 
   $("cr-back").onclick = () => {
     if (picking && Career.active()) { picking = false; armedDelete = ""; build(); return; }
+    // (build() retitles this button per state — see buildSlotPanes/buildHubPanes.)
     close();
     els.overlay.hidden = false;
     G.flow = "gp"; G.session = "race";

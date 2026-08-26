@@ -19,14 +19,14 @@ import { test, expect } from "../helpers/fixtures.js";
 const DESKTOP = { width: 1440, height: 760 };
 
 async function waitReady(page) {
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 15_000 });
 }
 
 async function openSelect(page) {
   await page.evaluate(() => document.getElementById("mb-race").click());
-  await page.waitForFunction(() => !document.getElementById("select").hidden, null, { timeout: 8_000 });
+  await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: 8_000 });
   // the circuit list is filled by menus.js; wait for rows before measuring
-  await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 5, null, { timeout: 8_000 });
+  await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 5, null, { polling: 100, timeout: 8_000 });
 }
 
 // Dispatch a wheel over the centre of `sel` and report what the track list did.

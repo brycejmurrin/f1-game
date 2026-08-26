@@ -98,6 +98,15 @@
      information, which is exactly the carve-out the spec provides. */
   .cs-liv-swatch, .tm-colour, .sel-chip .swatch, .res-swatch, .dh-swatch,
   input[type="color"] { forced-color-adjust: none; }
+  /* The race-control flag is the same carve-out: yellow vs VSC vs SC is
+     encoded in the badge's background colour (css/hud.css), and with it
+     forced to Canvas all three states render identically. */
+  #hud-flag { forced-color-adjust: none; }
+  /* Disabled controls dim via opacity, which forced-colors does NOT reset —
+     but nothing else distinguishes them there. GrayText is the platform's own
+     word for "present but unavailable" (RECALIBRATE TILT and GEARS disable
+     rather than hide, so the affordance must read). */
+  button:disabled { color: GrayText; opacity: 1; }
 }
 
 /* Scroll-fade custom properties. The fade is driven by JS, not a scroll
@@ -372,10 +381,23 @@
      one family instead of each inventing a slightly brighter glass. */
   --plate: rgba(255, 255, 255, 0.045);
   --plate-line: rgba(255, 255, 255, 0.16);
+  /* The card/panel hairline — the second de-facto edge in the codebase after
+     --plate-line's 0.16 control edge. A hairline audit found 0.12 repeated
+     verbatim on card surfaces across career/data/menus while only the token
+     band above was named; naming it lets the sweep converge on two edges
+     (control 0.16, card 0.12) instead of forty ad-hoc alphas. */
+  --card-line: rgba(255, 255, 255, 0.12);
   --plate-hover: rgba(255, 255, 255, 0.08);
   --plate-press: rgba(255, 255, 255, 0.11);
   --plate-on: color-mix(in oklab, var(--red) 18%, transparent);
-  --plate-on-glow: inset 3px 0 0 var(--red), 0 0 12px color-mix(in oklab, var(--red) 28%, transparent); */
+  /* NO trailing comment-closer here. A stray `*/` after this declaration's
+     `;` sat exactly where the parser expects the next declaration; CSS error
+     recovery then discards everything to the NEXT `;` — which was the end of
+     --edge below, skipping straight through the comment. --edge therefore
+     never existed, and every `box-shadow: var(--edge), var(--lift-2)`
+     consumer (all 21 sheets, .dh-card, the garage stack) computed to NONE:
+     the entire elevation ladder shipped visually inert until build 1548. */
+  --plate-on-glow: inset 3px 0 0 var(--red), 0 0 12px color-mix(in oklab, var(--red) 28%, transparent);
   /* A lit lip along the top AND the far edge falling into shade. The lip on
      its own reads as a sticker laid on the page; the pair reads as a slab with
      thickness, which is the whole point of an elevation system. */
@@ -624,7 +646,7 @@ button {
   color: var(--text);
   background: var(--plate);
   border: 1px solid var(--plate-line);
-  border-radius: 8px;
+  border-radius: var(--r-md);
   padding: 10px 18px;
   cursor: pointer;
   transition: background 0.14s, box-shadow 0.14s;

@@ -17,6 +17,11 @@ async function dataReady(page) {
   // index.html has always loaded mat4.js before js/data/*, so the app was
   // never affected; only this standalone harness was. The ordering is now
   // asserted too: HARD_EDGES carries mat4.js -> js/data/telemetry.js.
+  // log.js too: hub.js's open() logs through the Log global (index.html loads
+  // it before everything); without it this standalone harness threw
+  // "Log is not defined" the moment a test called DataHub.open — red since
+  // the logging landed, whenever the suite actually ran.
+  await page.addScriptTag({ url: "/js/log.js" });
   await page.addScriptTag({ url: "/js/mat4.js" });
   for (const u of ["api", "telemetry", "export", "schedule", "standings", "lastrace", "live", "hub"])
     await page.addScriptTag({ url: "/js/data/" + u + ".js" });

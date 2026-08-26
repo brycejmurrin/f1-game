@@ -628,9 +628,13 @@ body[data-density="compact"] #campicker {
   display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center; gap: var(--gap);
   padding: var(--gap);
-  border: 1px solid rgba(255, 209, 128, 0.72); border-radius: var(--r-card);
+  /* --r-lg and --edge/--lift-2, the real tokens: this banner shipped square
+     and shadowless because it read --r-card and --shadow-sheet, two names
+     defined NOWHERE — the one alert that appears when the player is about to
+     lose progress rendered as the least-finished surface in the app. */
+  border: 1px solid rgba(255, 209, 128, 0.72); border-radius: var(--r-lg);
   background: rgba(25, 18, 8, 0.96); color: #fff3d6;
-  box-shadow: var(--shadow-sheet);
+  box-shadow: var(--edge), var(--lift-2);
   font-size: var(--fs-micro);
 }
 #save-warning[hidden] { display: none; }
@@ -847,7 +851,7 @@ body[data-density="compact"] #campicker {
   word-break: break-all;
   overflow-wrap: anywhere;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-md);
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(0, 0, 0, 0.35);
   color: inherit;
@@ -896,7 +900,7 @@ body[data-density="compact"] #campicker {
   max-width: 100%;              /* the two-column layout can be narrower than 320 */
   height: auto;
   image-rendering: pixelated;   /* never blur module edges; that is what breaks a scan */
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   background: #fff;
 }
 /* ---- the two-step layout ----------------------------------------------
@@ -966,7 +970,7 @@ body[data-density="compact"] #campicker {
   align-items: center;
   gap: 8px;
   padding: calc(var(--gap) * 0.5) 8px;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   background: rgba(255, 255, 255, 0.05);
   font-size: var(--fs-micro);
 }
@@ -1065,7 +1069,7 @@ body[data-density="compact"] #campicker {
   width: min(320px, 90%);
   height: min(240px, calc(46 * var(--svhz)));
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--r-md);
   background: #000;
   transform: scaleX(-1);        /* a mirrored preview is what people expect */
 }

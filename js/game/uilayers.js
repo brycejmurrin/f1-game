@@ -157,7 +157,11 @@ window.UiLayers = (function () {
   function navOpen() {
     if (anyOpen()) return true;
     const t = top();
-    return !!(t && t.id === "overlay");
+    // rotate-device joins overlay here: both are gate:false layers whose
+    // buttons the pad must still reach. Without it, a pad-only player in
+    // portrait mid-race had d-pad/A spent on boost/shift behind the opaque
+    // blocker and NO reachable way to press OPEN CONTROLS or EXIT RACE.
+    return !!(t && (t.id === "overlay" || t.id === "rotate-device"));
   }
 
   /* IN A RACE means the game loop is simulating — `state === "race" || "count"`,

@@ -178,15 +178,25 @@ function create(G) {
 
   $("ss-back").onclick = () => { close(); if (G.soundOn) GameAudio.uiSelect(); };
   $("ss-apply").onclick = () => {
-    Log.info("ui", "SeasonUI.apply");
-    SeasonCal.setConfig(draft);
-    G.season = SeasonCal.restart();
-    G.store.set("season", G.season);
-    G.trackIdx = SeasonCal.trackIndex(0);
-    close();
-    G.buildSelect();
-    G.refreshCareerButton();
-    if (G.soundOn) GameAudio.uiSelect();
+    const apply = () => {
+      Log.info("ui", "SeasonUI.apply");
+      SeasonCal.setConfig(draft);
+      G.season = SeasonCal.restart();
+      G.store.set("season", G.season);
+      G.trackIdx = SeasonCal.trackIndex(0);
+      close();
+      G.buildSelect();
+      G.refreshCareerButton();
+      if (G.soundOn) GameAudio.uiSelect();
+    };
+    // Mid-season, APPLY wipes the standings — up to 23 raced rounds — and the
+    // label was the entire warning. Arm-then-confirm (the career DELETE?
+    // idiom) only when there is progress to lose; a fresh config applies
+    // directly. build() repaints the label, which is also the disarm.
+    if (SeasonCal.hasProgress(G.season)) {
+      if (G.soundOn) GameAudio.uiTick();
+      G.armConfirm($("ss-apply"), "RESTART? — SEASON IS LOST", apply);
+    } else apply();
   };
 
   return { open, close, build, refreshTitle };

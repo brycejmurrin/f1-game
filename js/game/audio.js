@@ -801,6 +801,14 @@ const GameAudio = (function () {
     blip(880, "square", 0.13, 0.005, 0.09);
   }
 
+  // "No" — a rejected purchase used to play the SAME 660 Hz uiTick as a
+  // successful tab switch, so an over-budget part sounded exactly like a
+  // fitted one. A short low sawtooth (the penalty() family's timbre, UI-
+  // sized) is unmistakably not a confirmation.
+  function uiReject() {
+    blip(220, "sawtooth", 0.12, 0.006, 0.14);
+  }
+
   function penalty() {
     blip(330, "sawtooth", 0.22, 0.01, 0.45, 116);
     blip(165, "square", 0.14, 0.01, 0.45, 58);
@@ -1086,6 +1094,7 @@ const GameAudio = (function () {
     uiTick,
     brakeCue,
     uiSelect,
+    uiReject,
     penalty,
     startRain,
     stopRain,

@@ -94,7 +94,12 @@ export function shellNodes() {
    scan. It cannot be a custom property: the scan is a querySelectorAll and
    a MutationObserver classList test (js/game/sheetshape.js), both of which
    need a selector-addressable hook. */
-const CLASS_CEILING = 535;
+/* 536 (2026-08-26): +1 for .sel-map-btn — the display:contents button that
+   makes CIRCUIT DETAIL keyboard/gamepad-reachable (the door used to be a
+   bare onclick on the preview canvas). It cannot reuse an existing family:
+   the boxless wrapper needs its own focus-ring/hover rules that target the
+   canvas inside it. */
+const CLASS_CEILING = 536;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under
@@ -121,7 +126,14 @@ const CLASS_CEILING = 535;
 // +1 2026-08-19: <script> block for iOS double-tap zoom cancel (gesturestart/
 // touchend handlers). Needed for Safari which ignores viewport maximum-scale.
 // +1 2026-08-19: four separate pm-metrics* buttons injected into DISPLAY panel.
-const NODE_CEILING = 1212;
+// +2 2026-08-26: #sel-map-btn (the display:contents button making CIRCUIT
+// DETAIL keyboard-reachable) + #sel-detail-chip (the fallback door on tiny
+// sheets where the canvas is display:none — hiding it used to make the whole
+// screen unreachable).
+// +4 2026-08-26: #pm-hud-sample and its hud-box — the HUD SIZE slider's live
+// sample; every real cluster is hidden while the settings sheet is open, so
+// the slider had zero visible effect.
+const NODE_CEILING = 1218;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module

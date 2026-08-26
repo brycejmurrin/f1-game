@@ -364,7 +364,20 @@ const CEILINGS = {
   //   instead of duplicating css/responsive.css's portrait+coarse+743px
   //   condition — the two copies could drift (blocker painting while
   //   aria-hidden). Three lines of why at the site of the de-duplication.
-  "js/game.js": 8580,
+  // 8580 -> 8621: the menus-UX round pays for three wiring sites that cannot
+  //   leave this file — armConfirm (the shared career DELETE? idiom, exposed
+  //   through G to setup-ui/season-ui, so the assembly and the helper both
+  //   live where G is built), czPreview's live-3D draft override plus its
+  //   clear on save/cancel (livDraftOverride is closure-local here), and the
+  //   quali .q-done Escape flash (the handler is here). All three fix
+  //   recorded UX defects at their existing sites. 8621 -> 8627: the vt()
+  //   View-Transition wrap of the title/select/garage spine — the swap
+  //   handlers live here, the helper in js/game/menus.js.
+  // 8627 -> 8635: syncRotateBlocker learns the pause-card/blocker exclusion
+  //   (one line + the bug comment): #pausemenu is a modal <dialog> now, so an
+  //   open card out-layers the z-9000 blocker and refuses focus to its
+  //   buttons — rotation-recovery's OPEN CONTROLS roundtrip caught it.
+  "js/game.js": 8635,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

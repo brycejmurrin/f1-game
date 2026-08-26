@@ -88,8 +88,17 @@ if ($("save-export")) $("save-export").onclick = exportRecovery;
 // appeared). The safety net applies the DOM change directly if the transition
 // has not run it within a couple of frames; the guard makes a double-fire a
 // no-op if the transition callback later runs after all.
+//
+// Reduced-motion skips the whole mechanism, not just the animation. The CSS in
+// css/tokens.css already cancels the crossfade, but startViewTransition still
+// SNAPSHOTS the page either way — and on a software rasteriser that capture
+// blocks the main thread for seconds (measured 3.2 s per swap on SwiftShader;
+// even the 60 ms direct-apply net below can't fire while the thread is held).
+// Under reduce the transition would contribute nothing visual anyway, so the
+// swap goes direct. The test suite pins reducedMotion:"reduce" and rides this.
+const vtReduce = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
 const vt = (fn) => {
-  if (!document.startViewTransition) { fn(); return; }
+  if (!document.startViewTransition || vtReduce.matches) { fn(); return; }
   let applied = false;
   const run = () => { if (applied) return; applied = true; fn(); };
   try {
@@ -104,10 +113,10 @@ const vt = (fn) => {
 // used to be reachable from a summary card on the select screen too; that card
 // is gone, and the garage is the one place a team is chosen.
 const teamPicker = () => $("teampicker");
-// Which screen opened the picker, so picking a team rebuilds the right one.
-// The sheet is shared; without this, choosing a team in the garage would
-// silently rebuild the select screen behind it and leave the garage stale.
-let pickerHost = "select";
+// The picker's ONE host is the garage's TEAM tab (the select screen's card
+// door was removed with the screen split). A pickerHost variable and a
+// select-host rebuild branch survived that removal for a year with no caller
+// able to reach them — removed 2026-08.
 let previewOpenRaf = 0;
 
 function teamSwatch(t) {
@@ -120,10 +129,8 @@ function teamSwatch(t) {
   return sw;
 }
 
-/* Open/close the team picker. `host` is the screen that opened it (see
-   pickerHost); omit it on close so the last host survives the rebuild. */
-function setTeamPicker(open, host) {
-  if (open && host) pickerHost = host;
+/* Open/close the team picker (the garage's TEAM tab is its one caller). */
+function setTeamPicker(open) {
   // Build on open, not on every buildSelect(). The tiles used to be filled in
   // by buildSelect alone, so opening the sheet from the garage straight off the
   // title screen — where buildSelect has never run — showed an empty sheet.
@@ -159,6 +166,9 @@ function buildTeamPicker() {
     body.append(name, sub);
     b.append(teamSwatch(t), body);
     b.onclick = () => {
+      // Same as the circuit row: the decision this sheet exists for clicked
+      // silently while the card that OPENED it did not.
+      if (G.soundOn && window.GameAudio) GameAudio.uiSelect();
       // The old team's driver index means nothing here, so this used to reset
       // to seat 0 flat. In a friend race seat 0 may be the seat the other
       // player is in, which dropped you straight into a taken seat with a
@@ -169,10 +179,9 @@ function buildTeamPicker() {
       G.teamIdx = i; G.driverIdx = seat; store.set("team", i);
       store.set("driver", seat);
       setTeamPicker(false);
-      // Rebuild whichever screen opened the sheet. The garage repaints its own
-      // 3D car for free — getSetupPreviewMesh() is keyed on the team id.
-      if (pickerHost === "garage") { G.buildSetup(); tickUi(); }
-      else vt(() => { buildSelect(); tickUi(); });
+      // The garage (the one host) repaints its own 3D car for free —
+      // getSetupPreviewMesh() is keyed on the team id.
+      G.buildSetup(); tickUi();
     };
     els.selTeams.appendChild(b);
   });
@@ -266,7 +275,10 @@ function buildSelect() {
   // foot button promises next.
   const room = !!G.netRoom;
   const seasonComplete = !room && G.seasonMode && G.season && !SeasonCal.canRace(G.season);
-  els.selGo.textContent = seasonComplete ? "VIEW FINAL STANDINGS" : room ? "NEXT" : "START";
+  // "NEXT: YOUR CAR", not "START": the button opens the GARAGE, and a label
+  // that promises lights-out while delivering a parts catalogue reads as a
+  // wrong turn. Same per-mode relabelling this line has always done.
+  els.selGo.textContent = seasonComplete ? "VIEW FINAL STANDINGS" : room ? "NEXT" : "NEXT: YOUR CAR";
   els.selGo.dataset.seasonComplete = seasonComplete ? "1" : "";
   els.selTitle.textContent = room ? "THE RACE"
     : seasonComplete ? "SEASON COMPLETE"
@@ -369,6 +381,9 @@ function buildSelect() {
       }
 
       row.onclick = () => {
+        // The headline choice of this screen was the one silent control on it
+        // (the filter chips beside it click) — a soundless tap reads as a miss.
+        if (G.soundOn && window.GameAudio) GameAudio.uiSelect();
         G.trackIdx = i;
         store.set("trackId", t.id);
         // Keep the legacy index warm for an older cached build opened after this
@@ -897,7 +912,7 @@ function closeTrackDetail() {
   if (detailRO) detailRO.disconnect();
   detailRO = null;
 }
-return { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch };
+return { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt };
 }
 
 return { create };
