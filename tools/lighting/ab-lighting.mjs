@@ -216,7 +216,10 @@ const KNOBS = [
 // lamp breathing (performance.now-driven) adds ~1 luma of A-vs-B noise that
 // has nothing to do with the knob under test.
 const FREEZE_FLICKER_FILE = "js/game/lighting.js";
-const FREEZE_FLICKER = ["const amp = hsh > 0.90 ? LT.lampFlicker : LT.lampFlicker * 0.2;", "const amp = 0.0;"];
+// The flicker refactor hoisted the closure (js/game/lighting.js _flLive):
+// the knob is now read once into the local `flick`. Same line, new spelling —
+// the 1-hit source pin in lighting-ab.spec is what catches this drifting.
+const FREEZE_FLICKER = ["const amp = hsh > 0.90 ? flick : flick * 0.2;", "const amp = 0.0;"];
 
 // ── Static server: serves ROOT, applying {file → [find,replace]} overrides ──
 function startServer(overrides) {
