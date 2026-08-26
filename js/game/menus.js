@@ -159,6 +159,9 @@ function buildTeamPicker() {
     body.append(name, sub);
     b.append(teamSwatch(t), body);
     b.onclick = () => {
+      // Same as the circuit row: the decision this sheet exists for clicked
+      // silently while the card that OPENED it did not.
+      if (G.soundOn && window.GameAudio) GameAudio.uiSelect();
       // The old team's driver index means nothing here, so this used to reset
       // to seat 0 flat. In a friend race seat 0 may be the seat the other
       // player is in, which dropped you straight into a taken seat with a
@@ -266,7 +269,10 @@ function buildSelect() {
   // foot button promises next.
   const room = !!G.netRoom;
   const seasonComplete = !room && G.seasonMode && G.season && !SeasonCal.canRace(G.season);
-  els.selGo.textContent = seasonComplete ? "VIEW FINAL STANDINGS" : room ? "NEXT" : "START";
+  // "NEXT: YOUR CAR", not "START": the button opens the GARAGE, and a label
+  // that promises lights-out while delivering a parts catalogue reads as a
+  // wrong turn. Same per-mode relabelling this line has always done.
+  els.selGo.textContent = seasonComplete ? "VIEW FINAL STANDINGS" : room ? "NEXT" : "NEXT: YOUR CAR";
   els.selGo.dataset.seasonComplete = seasonComplete ? "1" : "";
   els.selTitle.textContent = room ? "THE RACE"
     : seasonComplete ? "SEASON COMPLETE"
@@ -369,6 +375,9 @@ function buildSelect() {
       }
 
       row.onclick = () => {
+        // The headline choice of this screen was the one silent control on it
+        // (the filter chips beside it click) — a soundless tap reads as a miss.
+        if (G.soundOn && window.GameAudio) GameAudio.uiSelect();
         G.trackIdx = i;
         store.set("trackId", t.id);
         // Keep the legacy index warm for an older cached build opened after this

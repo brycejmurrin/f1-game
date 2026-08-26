@@ -31,6 +31,16 @@ test("portrait blocker explains rotation lock and opens controls safely", async 
   await expect(page.locator("#rotate-controls")).toBeFocused();
 });
 
+test("a gamepad routes to the blocker's buttons, not the car", async ({ page }) => {
+  // navOpen() is what js/game/input.js branches on: false meant d-pad/A were
+  // spent on boost/shift BEHIND the opaque blocker and a pad-only player had
+  // no reachable way to press OPEN CONTROLS or EXIT RACE.
+  await startPortraitRace(page);
+  const nav = await page.evaluate(() =>
+    window.UiLayers.navOpen() && (window.UiLayers.top() || {}).id);
+  expect(nav).toBe("rotate-device");
+});
+
 test("portrait blocker can exit the race", async ({ page }) => {
   await startPortraitRace(page);
   await page.locator("#rotate-exit").click();

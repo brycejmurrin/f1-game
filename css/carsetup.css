@@ -369,14 +369,17 @@
 .cs-opt.active .cs-opt-dot { border-color: var(--red); background: radial-gradient(circle, #fff 0 3px, var(--red) 4px); }
 .cs-opt.active .cs-opt-cost { color: #fff; }
 .cs-opt.over-budget { opacity: 0.5; }
-.cs-opt.budget-reject { animation: cs-shake 0.32s ease; }
+/* Unscoped from .cs-opt: the quali sheet shakes TO THE GRID when Escape is
+   pressed on a finished session (the old silent-dead-key), same "no" gesture
+   as an over-budget part. */
+.budget-reject { animation: cs-shake 0.32s ease; }
 @keyframes cs-shake {
   0%,100% { transform: translateX(0); }
   25%      { transform: translateX(-5px); }
   75%      { transform: translateX(5px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cs-opt.budget-reject { animation: none; }
+  .budget-reject { animation: none; }
   #cs-budget-fill { transition: none; }
 }
 .cs-opt-tag {
@@ -541,6 +544,12 @@
 }
 #cs-options.cs-liv-grid .cs-liv-edit { right: 2px; }
 #cs-options.cs-liv-grid .cs-liv-del { left: 2px; }
+/* Armed = the career DELETE? treatment (css/career.css): one-of-a-kind paint
+   now takes two presses to destroy, and the armed press must read as danger. */
+.cs-liv-del.armed {
+  color: #fff; border-color: var(--red); background: rgba(225, 6, 0, 0.35);
+  opacity: 1;
+}
 @media (hover: hover) {
   #cs-options.cs-liv-grid .cs-liv-edit,
   #cs-options.cs-liv-grid .cs-liv-del { opacity: 0; }

@@ -98,6 +98,15 @@
      information, which is exactly the carve-out the spec provides. */
   .cs-liv-swatch, .tm-colour, .sel-chip .swatch, .res-swatch, .dh-swatch,
   input[type="color"] { forced-color-adjust: none; }
+  /* The race-control flag is the same carve-out: yellow vs VSC vs SC is
+     encoded in the badge's background colour (css/hud.css), and with it
+     forced to Canvas all three states render identically. */
+  #hud-flag { forced-color-adjust: none; }
+  /* Disabled controls dim via opacity, which forced-colors does NOT reset —
+     but nothing else distinguishes them there. GrayText is the platform's own
+     word for "present but unavailable" (RECALIBRATE TILT and GEARS disable
+     rather than hide, so the affordance must read). */
+  button:disabled { color: GrayText; opacity: 1; }
 }
 
 /* Scroll-fade custom properties. The fade is driven by JS, not a scroll

@@ -450,11 +450,28 @@ body { --compact-at: 600px; --wide-at: 620px; }
   max-height: min(calc(var(--chip-h) * 3.5), 100%);
   max-width: min(48%, calc(var(--chip-h) * 5.2));
 }
+/* The map's button wrapper contributes NO box (display: contents) — the
+   preview card's flex layout and updateTrackPreview's measurements see the
+   canvas exactly as before the wrapper existed. Ring and hover land on the
+   canvas because a boxless element cannot paint them itself. */
+.sel-map-btn { display: contents; }
+.sel-map-btn:focus-visible > #sel-preview-map {
+  outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
+  outline-offset: -2px;
+}
+@media (hover: hover) {
+  .sel-map-btn:hover > #sel-preview-map { filter: brightness(1.25); }
+}
+/* The fallback door: hidden wherever the canvas shows... */
+#sel-detail-chip { display: none; }
 /* Truly tiny sheets cannot seat a thumbnail beside the name. data-fit and
    landscape-narrow used to hide the map on every zoomed / low-res phone;
-   those keep the outline and let the caps above bind. */
+   those keep the outline and let the caps above bind.
+   — and shown where it does not: hiding the canvas used to make the WHOLE
+   circuit-detail screen unreachable on a small/high-zoom sheet. */
 @container sheet (max-width: 300px) {
   #sel-inner[data-density="compact"] #sel-preview-map { display: none; }
+  #sel-inner[data-density="compact"] #sel-detail-chip { display: inline-flex; }
 }
 #sel-inner:not([data-pair="on"])[data-density="compact"] #sel-track-preview {
   /* A short/high-scale sheet cannot afford a map row followed by a caption
@@ -1158,6 +1175,10 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   flex: 1 1 calc(100% - 34px); min-width: 0; overflow-wrap: anywhere;
 }
 #ss-note { display: block; margin-block: calc(var(--gap) * 0.5); line-height: 1.4; }
+/* Armed APPLY on a live season — the career DELETE? treatment: the second
+   press is the one that wipes up to 23 raced rounds, so the first must
+   read as danger, not as the same primary button. */
+#ss-apply.armed { color: #fff; border-color: var(--red); background: rgba(225, 6, 0, 0.35); }
 
 /* ---------- track picker rows ---------- */
 #sel-tracks {

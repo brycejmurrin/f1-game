@@ -364,7 +364,14 @@ const CEILINGS = {
   //   instead of duplicating css/responsive.css's portrait+coarse+743px
   //   condition — the two copies could drift (blocker painting while
   //   aria-hidden). Three lines of why at the site of the de-duplication.
-  "js/game.js": 8580,
+  // 8580 -> 8621: the menus-UX round pays for three wiring sites that cannot
+  //   leave this file — armConfirm (the shared career DELETE? idiom, exposed
+  //   through G to setup-ui/season-ui, so the assembly and the helper both
+  //   live where G is built), czPreview's live-3D draft override plus its
+  //   clear on save/cancel (livDraftOverride is closure-local here), and the
+  //   quali .q-done Escape flash (the handler is here). All three fix
+  //   recorded UX defects at their existing sites.
+  "js/game.js": 8621,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

@@ -2916,6 +2916,7 @@ const G = {
   // Stable helpers consumed by js/game/setup-ui.js.
   arrToHex, hexToArr, getTeamParts, saveTeamParts, getLiveryId, saveLiveryId,
   getCustomLiveries, setCustomLiveries, getLiveries, invalidateDecalTextures,
+  armConfirm,
   // Mutable state + helpers consumed by js/game/menus.js.
   get driverIdx() { return driverIdx; }, set driverIdx(v) { driverIdx = v; },
   get difficulty() { return difficulty; }, set difficulty(v) { difficulty = v; },
@@ -3102,6 +3103,25 @@ function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) +
 // Convert between an <input type=color> hex string and a [r,g,b] 0..1 array.
 function hexToArr(h) { const n = parseInt(String(h).slice(1), 16) || 0; return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; }
 function arrToHex(a) { const f = (v) => ("0" + Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16)).slice(-2); return "#" + f(a[0]) + f(a[1]) + f(a[2]); }
+// Arm-then-confirm for destructive buttons — the career slot DELETE→DELETE?
+// pattern, lifted so the livery ✕ and a mid-season APPLY stop being the only
+// irreversible actions in the app with no confirmation. First press arms the
+// button in place (label swap + .armed, no modal, no reflow); the second runs
+// the action. Returns true when the action ran. Disarm is the caller's rebuild
+// or any other click path replacing the node.
+function armConfirm(btn, armedText, action) {
+  if (!btn.dataset.armed) {
+    btn.dataset.armed = "1";
+    btn.dataset.disarmText = btn.textContent;
+    btn.textContent = armedText;
+    btn.classList.add("armed");
+    return false;
+  }
+  delete btn.dataset.armed;
+  btn.classList.remove("armed");
+  action();
+  return true;
+}
 
 // Every menu layer, gone. Until multiplayer, startRace() could name the three
 // screens a race is reachable FROM (#overlay, #select, #results), because the
@@ -7595,7 +7615,10 @@ els.selBack.onclick = () => {
   if (netRoom) $("vsfriend").hidden = false; else els.overlay.hidden = false;
   if (soundOn) GameAudio.uiSelect();
 };
-els.selPreviewMap.onclick = openTrackDetail;
+// The button wrapper carries the semantics now (focusable, labelled); the
+// chip is the same door on tiny sheets where the canvas is display:none.
+$("sel-map-btn").onclick = openTrackDetail;
+$("sel-detail-chip").onclick = openTrackDetail;
 $("track-detail-close").onclick = closeTrackDetail;
 // ── SETTINGS sub-menu ── keeps the pause screen down to RESUME/RESTART/QUIT;
 // every tuning + toggle control lives on this page. Opening it hides the pause
@@ -7899,9 +7922,18 @@ $("q-go").onclick = () => {
 $("q-back").onclick = () => {
   // After the session ran (.q-done) this button is CSS-hidden and only TO THE
   // GRID shows — but Escape still routes here via data-esc-close="q-back", and
-  // clear() would silently throw the classification away. Ignore it: with a
-  // result on the sheet, leaving is TO THE GRID's job.
-  if ($("quali").classList.contains("q-done")) return;
+  // clear() would silently throw the classification away. With a result on
+  // the sheet, leaving is TO THE GRID's job — but a SILENT dead key read as
+  // broken, so point the player at the door instead of ignoring them.
+  if ($("quali").classList.contains("q-done")) {
+    if (soundOn) GameAudio.uiTick();
+    const go = $("q-go");
+    if (go) {
+      go.classList.add("budget-reject");
+      go.addEventListener("animationend", () => go.classList.remove("budget-reject"), { once: true });
+    }
+    return;
+  }
   if (soundOn) GameAudio.uiSelect();
   quali.close();
   quali.clear();          // nothing was run; the next visit draws its own sheet
@@ -7940,7 +7972,15 @@ function czPreview() {
   const code = ($("cz-code").value || "YOU").toUpperCase();
   $("cz-pvtext").textContent = "#" + ($("cz-num").value || "99") + " " + code + " · " + ($("cz-short").value || "YOU").toUpperCase();
   $("cz-pvtext").style.color = $("cz-color").value;
+  // Live 3D parity with the garage's livery creator, one tab over: that
+  // editor repaints the real car per colour-input event via livDraftOverride;
+  // this one committed blind against two 22px swatches. Same override, keyed
+  // "custom" — it shows on the turntable behind the dialog whenever MY TEAM
+  // is the selected team, exactly like the sibling editor.
+  livDraftOverride = { teamId: "custom", liv: { c1: hexToArr($("cz-color").value), c2: hexToArr($("cz-color2").value) } };
+  _spMeshKey = "";
 }
+function czClearPreview() { livDraftOverride = null; _spMeshKey = ""; }
 function openCustomize() {
   const ct = loadCustomTeam();
   $("cz-name").value = ct.name;
@@ -8187,7 +8227,7 @@ $("cs-unlimited").onclick = () => {
   store.set("unlimitedBudget", unlimitedBudget);
   buildSetup();
 };
-$("cz-cancel").onclick = () => { els.customize.hidden = true; };
+$("cz-cancel").onclick = () => { czClearPreview(); els.customize.hidden = true; };
 $("cz-save").onclick = () => {
   const clean = (v, fb, n) => { v = (v || "").trim(); return v ? v.slice(0, n) : fb; };
   const prev = loadCustomTeam();
@@ -8217,6 +8257,7 @@ $("cz-save").onclick = () => {
   els.customize.hidden = true;
   // MY TEAM is reachable from the garage now, so refresh that too — saving a
   // team switches you to it, and the garage is showing its car in 3D.
+  czClearPreview();   // the saved team supersedes the live draft
   buildSelect();
   if (!$("carsetup").hidden) buildSetup();
   if (soundOn) GameAudio.uiSelect();

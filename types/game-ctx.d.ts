@@ -412,6 +412,8 @@ interface GameCtx {
   // ── Livery/parts persistence helpers (js/game/setup-ui.js) ────────────────
   readonly arrToHex: (a: Vec3) => string;
   readonly hexToArr: (h: string) => Vec3;
+  /** Arm-then-confirm for destructive buttons (the career DELETE? idiom, shared): first call arms in place and returns false, second runs `action`; disarm = the caller rebuilding the node. */
+  readonly armConfirm: (btn: HTMLElement, armedText: string, action: () => void) => boolean;
   readonly getTeamParts: (teamId: string) => PartsSetup;
   readonly saveTeamParts: (teamId: string, parts: PartsSetup) => void;
   readonly getLiveryId: (teamId: string) => string;

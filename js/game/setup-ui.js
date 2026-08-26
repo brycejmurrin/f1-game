@@ -66,6 +66,11 @@ function renderStatBars(container, team) {
   }
 }
 
+// Persisted like the settings tab and the circuit filter (the other two
+// tab-strips), and defaulting to TEAM: the garage used to open on the first
+// PARTS category, so a player coming to change their team saw FRONT WING
+// options and had to notice the rail's selected tab was not the first one —
+// while LIVERY sat 14th behind a horizontal scroll.
 let csActiveCat = null;   // id of the tab currently open in the GARAGE
 let csLivCreating = false; // livery creator panel open?
 let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint job
@@ -78,6 +83,7 @@ function csTabId(id) { return "cs-tab-" + String(id).replace(/[^a-z0-9_-]/gi, "-
 function activateCsCat(id, focus) {
   if (csActiveCat !== id) {
     csActiveCat = id;
+    store.set("garageTab", id);
     if (G.soundOn) GameAudio.uiTick();
     buildSetup();
     const pane = $("cs-options"); if (pane) pane.scrollTop = 0;
@@ -242,7 +248,8 @@ function buildSetup() {
     unlimitedBtn.className = "cs-unlimited-btn" + (unlimited ? " on" : "");
   }
 
-  if (!csActiveCat || (!PSEUDO_CATS.includes(csActiveCat) && !Parts.CATALOG.some((c) => c.id === csActiveCat))) csActiveCat = Parts.CATALOG[0].id;
+  if (!csActiveCat) csActiveCat = store.get("garageTab", "team");
+  if (!PSEUDO_CATS.includes(csActiveCat) && !Parts.CATALOG.some((c) => c.id === csActiveCat)) csActiveCat = "team";
   const activeCat = Parts.CATALOG.find((c) => c.id === csActiveCat);
 
   // Resolve the currently-fitted option for a category (respecting supplier lock).
@@ -332,7 +339,10 @@ function buildSetup() {
     const reject = () => {
       row.classList.add("budget-reject");
       row.addEventListener("animationend", () => row.classList.remove("budget-reject"), { once: true });
-      if (G.soundOn) GameAudio.uiTick();
+      // uiReject, not uiTick: a refused purchase used to play the exact blip
+      // a successful fit plays — only the shake distinguished them, and only
+      // if you were looking at that row.
+      if (G.soundOn) GameAudio.uiReject();
     };
 
     row.onclick = () => {
@@ -483,10 +493,14 @@ function buildLiveryOptions(container, team) {
       del.title = "Delete this livery";
       del.setAttribute("aria-label", "Delete " + liv.name + " livery");
       del.onclick = () => {
-        setCustomLiveries(team.id, getCustomLiveries(team.id).filter((l) => l.id !== liv.id));
-        if (active) saveLiveryId(team.id, "default");
+        // Arm-then-confirm (G.armConfirm, the career DELETE? idiom): this was
+        // one tap from destroying a one-of-a-kind paint job with no undo.
         if (G.soundOn) GameAudio.uiTick();
-        buildSetup();
+        G.armConfirm(del, "✕?", () => {
+          setCustomLiveries(team.id, getCustomLiveries(team.id).filter((l) => l.id !== liv.id));
+          if (active) saveLiveryId(team.id, "default");
+          buildSetup();
+        });
       };
       rowWrap.appendChild(del);
     } else {

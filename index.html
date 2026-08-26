@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1549">
+<meta name="apex-build" content="1551">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -49,7 +49,7 @@
      Measured chrome-devtools LCPBreakdown: almost all element render delay
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
-<link rel="preload" href="css/tokens.css?v=b22c6cdaa5e7" as="style">
+<link rel="preload" href="css/tokens.css?v=f09f7b06adf5" as="style">
 <link rel="preload" href="css/components.css?v=2a6a05096105" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
@@ -68,11 +68,11 @@
 <!-- MANIFEST.CSS order preserved (cascade). Title-critical sheets stay
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
-<link rel="stylesheet" href="css/tokens.css?v=b22c6cdaa5e7">
+<link rel="stylesheet" href="css/tokens.css?v=f09f7b06adf5">
 <link rel="stylesheet" href="css/components.css?v=2a6a05096105">
 <link rel="stylesheet" href="css/tuner.css?v=c6e5201f3a11" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=e04d38939c02">
-<link rel="stylesheet" href="css/carsetup.css?v=671ba57dc1fe" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/menus.css?v=550e1244a0de">
+<link rel="stylesheet" href="css/carsetup.css?v=d6870be3d27f" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=f9c2134fab29" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=504f3ff0a101" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=821949606490">
@@ -498,7 +498,10 @@
     <button id="mb-data" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>F1 DATA HUB</button>
     <button id="mb-garage" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>GARAGE</button>
     <button id="mb-settings" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>SETTINGS</button>
-    <button id="mb-help" class="bigbtn alt minibtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>HOW TO PLAY</button>
+    <!-- Unhidden (2026-08): the handler was live the whole time while the
+         button carried a permanent `hidden` — the only tutorial door a
+         first-time player could find was SETTINGS ▸ MORE ▸ HOW TO PLAY. -->
+    <button id="mb-help" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>HOW TO PLAY</button>
     </div>
   </div>
 </div>
@@ -579,7 +582,16 @@
       <section class="pair-side" id="sel-track-section">
         <h3 class="sel-label" id="sel-circuit-label">CIRCUIT</h3>
         <div id="sel-track-preview">
-          <canvas id="sel-preview-map" width="520" height="300" role="img" aria-label="Circuit layout preview"></canvas>
+          <!-- A REAL BUTTON around the map: the only door to CIRCUIT DETAIL was
+               a bare onclick on this canvas — no tabindex, no role, no focus
+               ring — so a keyboard or gamepad player could never reach the
+               corner list or DRS metres. display: contents keeps the wrapper
+               out of the preview card's measured flex layout entirely
+               (updateTrackPreview's budget arithmetic sees the canvas as
+               before); the chip after it is the door on tiny sheets where the
+               canvas itself is display: none. -->
+          <button id="sel-map-btn" type="button" class="sel-map-btn" aria-label="Circuit detail"><canvas id="sel-preview-map" width="520" height="300" role="img" aria-label="Circuit layout preview"></canvas></button>
+          <button id="sel-detail-chip" type="button" class="sel-chip">CIRCUIT DETAIL ▸</button>
           <div id="sel-preview-info">
             <div id="sel-preview-name"></div>
             <div id="sel-preview-gp"></div>
@@ -1785,7 +1797,7 @@
 <script crossorigin="anonymous" src="js/track/maps.js?v=0d6c2cddd707"></script>
 <script crossorigin="anonymous" src="js/car/car3d.js?v=3aa3b11c7855"></script>
 <script crossorigin="anonymous" src="js/game/input.js?v=21c2c9f3aa14"></script>
-<script crossorigin="anonymous" src="js/game/audio.js?v=5f237ce3cd80"></script>
+<script crossorigin="anonymous" src="js/game/audio.js?v=fb14e03558ad"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=f43e998612b3"></script>
 <script crossorigin="anonymous" src="js/game/spotify.js?v=27c8d6373cac"></script>
 <script crossorigin="anonymous" src="js/game/audio-panel.js?v=97c5dd551254"></script>
@@ -1816,14 +1828,14 @@
 <script crossorigin="anonymous" src="js/game/reliability.js?v=9e717a04faeb"></script>
 <script crossorigin="anonymous" src="js/game/ai-drive.js?v=c92a9de051f6"></script>
 <script crossorigin="anonymous" src="js/game/cam-tune.js?v=6ee854005123"></script>
-<script crossorigin="anonymous" src="js/game/setup-ui.js?v=b498bd200cc5"></script>
-<script crossorigin="anonymous" src="js/game/career-ui.js?v=211814be85a1"></script>
-<script crossorigin="anonymous" src="js/game/season-ui.js?v=f0de928ac0d6"></script>
-<script crossorigin="anonymous" src="js/game/menus.js?v=ec2d248a3c5e"></script>
+<script crossorigin="anonymous" src="js/game/setup-ui.js?v=ef05dd31c220"></script>
+<script crossorigin="anonymous" src="js/game/career-ui.js?v=aaf7625fbd71"></script>
+<script crossorigin="anonymous" src="js/game/season-ui.js?v=3b13fcd7c763"></script>
+<script crossorigin="anonymous" src="js/game/menus.js?v=97bc1e96f8f4"></script>
 <script crossorigin="anonymous" src="js/game/scrollfade.js?v=7134e489b866"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
 <script crossorigin="anonymous" src="js/game/sheetshape.js?v=f44ef602cc23"></script>
-<script crossorigin="anonymous" src="js/game/uilayers.js?v=39f3dba7ae53"></script>
+<script crossorigin="anonymous" src="js/game/uilayers.js?v=6fdcb2735e56"></script>
 <script crossorigin="anonymous" src="js/game/topmodal.js?v=a919b357882c"></script>
 <script crossorigin="anonymous" src="js/game/menunav.js?v=96cdaabfd62f"></script>
 <script crossorigin="anonymous" src="js/game/ariastate.js?v=973a5889cce1"></script>
@@ -1860,5 +1872,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=ab5f8dedabbc"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=87e0eaf84c87"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=81b09256e218"></script>
-<script crossorigin="anonymous" src="js/game.js?v=d4095b705208"></script>
+<script crossorigin="anonymous" src="js/game.js?v=c4c6c084e13a"></script>
 </body></html>
