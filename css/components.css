@@ -1240,7 +1240,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 .cz-logo-wrap label { cursor: pointer; }
 #cz-logo-prev {
   width: 28px; height: 28px; object-fit: contain;
-  background: rgba(255,255,255,0.08); border-radius: 4px; padding: 2px;
+  background: rgba(255,255,255,0.08); border-radius: var(--r-xs); padding: 2px;
 }
 /* ---------- a screen that is a <dialog> ----------
    Migrated modals (js/game/topmodal.js) keep `.screen`/`.dim` and every rule
