@@ -1725,3 +1725,45 @@ test("drawParticles never destroys the VBO mid-frame (retire, flush after submit
   assert.match(WGX_SOURCE, /_retireFlush\(\)/,
     "present must flush retired buffers after submit");
 });
+
+test("every lit-ring flush clamps its slot counter to the ring capacity", () => {
+  // The slot counters keep counting past the ring on overflow frames (the
+  // draws beyond the cap are skipped, not recorded) — an unclamped
+  // writeBuffer length then reads past the ring and throws a synchronous
+  // OperationError inside present(), which the strike ladder reads as a
+  // dying device. The quad flush carried the clamp; the draw and decal
+  // flushes are its siblings.
+  const draw = WGX_SOURCE.match(/function _flushDrawUBO\(\)[\s\S]*?\n    \}/);
+  const quad = WGX_SOURCE.match(/function _flushQuadFxUBO\(\)[\s\S]*?\n    \}/);
+  const decal = WGX_SOURCE.match(/function _flushDecalUBO\(\)[\s\S]*?\n    \}/);
+  assert.ok(draw && quad && decal, "all three flushes exist");
+  assert.match(draw[0], /Math\.min\(_drawSlot, MAX_DRAWS\)/, "draw flush clamps");
+  assert.match(quad[0], /Math\.min\(_fxQuadSlot, FX_QUAD_SLOTS\)/, "quad flush clamps");
+  assert.match(decal[0], /Math\.min\(_fxDecalSlot, FX_DECAL_SLOTS\)/, "decal flush clamps");
+});
+
+test("freeMesh owns the road-LUT storage buffer and clears the global bind group", () => {
+  // On the createMesh road path the LUT sbuf was referenced only through the
+  // global _roadLutBG — every track rebuild leaked ~262 KB on exactly the
+  // memory-constrained tier that takes this path. The mesh now carries
+  // ownership, and freeing the owner must also drop the global bind group or
+  // the next draw binds a destroyed buffer.
+  const free = WGX_SOURCE.match(/function freeMesh\(m\)[\s\S]*?\n    \}/);
+  assert.ok(free, "freeMesh exists");
+  assert.match(free[0], /m\.lutSbuf/, "freeMesh destroys the owned LUT sbuf");
+  assert.match(free[0], /_roadLutBG = null/, "freeMesh clears the global LUT bind group when it owned it");
+  assert.match(WGX_SOURCE, /lutSbuf: lut && lut\.sbuf/, "createMesh attaches LUT ownership to the returned mesh");
+});
+
+test("zero-count meshes never reach the queue as draws", () => {
+  // Dawn warns "Draw with an index count of 0 is unusual" — measured on a
+  // clean boot via the live probe. A count-0 mesh (alloc-fail stub, empty
+  // piece head) must be rejected before recording, and a decal must not burn
+  // a ring slot on a dead draw.
+  const geom = WGX_SOURCE.match(/function _drawGeom\(pass, mesh, instCount\)[\s\S]*?\n    \}/);
+  assert.ok(geom, "_drawGeom exists");
+  assert.match(geom[0], /if \(!mesh \|\| !mesh\.count\) return;/, "_drawGeom rejects zero-count meshes");
+  const decal = WGX_SOURCE.match(/function drawDecal\(mesh, model, tex, opts\)[\s\S]*?\n      const slot/);
+  assert.ok(decal, "drawDecal head found");
+  assert.match(decal[0], /!mesh\.count/, "drawDecal rejects zero-count meshes before taking a slot");
+});
