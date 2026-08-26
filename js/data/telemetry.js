@@ -322,7 +322,9 @@ const DataTelemetry = (function () {
     overlay.setAttribute("aria-modal", "true");
     overlay.setAttribute("aria-labelledby", "dh-tpopup-title");
 
-    const card = el("div", "dh-tpopup-card");
+    // fit-managed: SheetShape scans this class alongside .sheet, so a short
+    // window at high UI SIZE shrinks the popup instead of starving the trace.
+    const card = el("div", "dh-tpopup-card fit-managed");
 
     // Header: driver name(s) + session context + close button
     const hdr = el("div", "dh-tpopup-hdr");
@@ -536,18 +538,26 @@ const DataTelemetry = (function () {
     const CH_CHART = chartH(CW, !!view.compare);
 
     const c1 = el("canvas", "dh-canvas");
-    c1.width = CW; c1.height = CH_CHART; c1.style.touchAction = "none";
+    c1.style.touchAction = "none";
     mainArea.appendChild(c1);
     view.chart = c1;
-    view.chartBase = makeOffscreen(CW, CH_CHART);
+    // Layout dims live on the view; the buffers carry layout x ratio. Every
+    // consumer below reads view.cw/ch/dw/dh/mw/mh, never canvas.width — the
+    // buffer dimension stopped being a layout number when DPR joined it.
+    view.ratio = viewRatio(c1);
+    view.cw = CW; view.ch = CH_CHART;
+    sizeCanvas(c1, CW, CH_CHART, view.ratio);
+    view.chartBase = makeOffscreen(CW, CH_CHART, view.ratio);
 
     if (view.compare) {
       const CD_H = deltaH(CW);
       const cd = el("canvas", "dh-canvas dh-delta");
-      cd.width = CW; cd.height = CD_H; cd.style.touchAction = "none";
+      cd.style.touchAction = "none";
       mainArea.appendChild(cd);
       view.delta = cd;
-      view.deltaBase = makeOffscreen(CW, CD_H);
+      view.dw = CW; view.dh = CD_H;
+      sizeCanvas(cd, CW, CD_H, view.ratio);
+      view.deltaBase = makeOffscreen(CW, CD_H, view.ratio);
       attachScrub(cd, view);
     }
 
@@ -625,10 +635,11 @@ const DataTelemetry = (function () {
 
     if (primary.loc && primary.loc.length > 8) {
       const c2 = el("canvas", "dh-canvas dh-map");
-      c2.width = 320; c2.height = 320;
       sideArea.appendChild(c2);
       view.map = c2;
-      view.mapBase = makeOffscreen(320, 320);
+      view.mw = 320; view.mh = 320;
+      sizeCanvas(c2, 320, 320, view.ratio);
+      view.mapBase = makeOffscreen(320, 320, view.ratio);
       // colour key for the car dots on the map
       const mkey = el("div", "dh-maplegend");
       function mchip(col, code) {
@@ -675,27 +686,32 @@ const DataTelemetry = (function () {
 
         const newCW = Math.min(800, mainW);
         const newCH = chartH(newCW, !!view.compare);
+        // The ratio joins the change test — the house lesson from the circuit
+        // detail canvas: a DPR/zoom change under an unchanged box produced an
+        // identical key and the early return skipped the refit.
+        const newR = viewRatio(view.chart);
 
         let resized = false;
-        if (view.chart.width !== newCW || view.chart.height !== newCH) {
-          view.chart.width = newCW;
-          view.chart.height = newCH;
-          view.chartBase = makeOffscreen(newCW, newCH);
+        if (view.cw !== newCW || view.ch !== newCH || view.ratio !== newR) {
+          view.ratio = newR;
+          view.cw = newCW; view.ch = newCH;
+          sizeCanvas(view.chart, newCW, newCH, newR);
+          view.chartBase = makeOffscreen(newCW, newCH, newR);
           if (view.delta) {
             const dh = deltaH(newCW);
-            view.delta.width = newCW;
-            view.delta.height = dh;
-            view.deltaBase = makeOffscreen(newCW, dh);
+            view.dw = newCW; view.dh = dh;
+            sizeCanvas(view.delta, newCW, dh, newR);
+            view.deltaBase = makeOffscreen(newCW, dh, newR);
           }
           resized = true;
         }
-        
+
         if (view.map && sideArea.isConnected) {
           const sideW = sideArea.clientWidth - 24;
-          if (sideW > 0 && view.map.width !== sideW) {
-            view.map.width = sideW;
-            view.map.height = sideW;
-            view.mapBase = makeOffscreen(sideW, sideW);
+          if (sideW > 0 && (view.mw !== sideW || view.ratio !== newR)) {
+            view.mw = sideW; view.mh = sideW;
+            sizeCanvas(view.map, sideW, sideW, newR);
+            view.mapBase = makeOffscreen(sideW, sideW, newR);
             resized = true;
           }
         }
@@ -711,10 +727,22 @@ const DataTelemetry = (function () {
     }
   }
 
-  function makeOffscreen(w, h) {
+  // The offscreen buffer allocates at layout x ratio and pre-transforms its
+  // context, so every renderer keeps drawing in LAYOUT px — the same house
+  // split the picker preview and minimap use (ratio = min(3, zoom x dpr)).
+  function makeOffscreen(w, h, r) {
     const c = document.createElement("canvas");
-    c.width = w; c.height = h;
+    r = r || 1;
+    c.width = Math.max(1, Math.round(w * r)); c.height = Math.max(1, Math.round(h * r));
+    c.getContext("2d").setTransform(r, 0, 0, r, 0, 0);
     return c;
+  }
+  function viewRatio(cv) {
+    return Math.min(3, Math.max(1, ((cv && cv.currentCSSZoom) || 1) * (window.devicePixelRatio || 1)));
+  }
+  function sizeCanvas(cv, w, h, r) {
+    cv.width = Math.max(1, Math.round(w * r));
+    cv.height = Math.max(1, Math.round(h * r));
   }
 
   function buildTransport(view) {
@@ -878,8 +906,10 @@ const DataTelemetry = (function () {
     function at(ev) {
       const r = (window.CssZoom && CssZoom.viewportRect(canvas)) || canvas.getBoundingClientRect();
       // map into bitmap px, then invert the plot-area (axis gutter) transform
-      const bx = (ev.clientX - r.left) / (r.width || 1) * canvas.width;
-      view.cursorT = clamp((bx - PADL) / ((canvas.width - PADL - PADR) || 1), 0, 1) * view.tMax;
+      // view.cw, NOT canvas.width: the buffer is layout x ratio now, while
+      // PADL/PADR and chartX speak layout px. Chart and delta share one width.
+      const bx = (ev.clientX - r.left) / (r.width || 1) * view.cw;
+      view.cursorT = clamp((bx - PADL) / ((view.cw - PADL - PADR) || 1), 0, 1) * view.tMax;
       paintFrame(view);
     }
     /* ONE POINTER OWNS THE SCRUB, AND IT HAS TO SURVIVE A CANCEL.
@@ -938,10 +968,12 @@ const DataTelemetry = (function () {
   // composite one frame: cached bases + moving cursor, car dots, delta, gauges
   function paintFrame(view) {
     const T = view.cursorT === null ? 0 : view.cursorT;
+    const R = view.ratio || 1;
     const cg = view.chart.getContext("2d");
-    const W = view.chart.width, H = view.chart.height;
+    const W = view.cw, H = view.ch;
+    cg.setTransform(R, 0, 0, R, 0, 0);
     cg.clearRect(0, 0, W, H);
-    cg.drawImage(view.chartBase, 0, 0);
+    cg.drawImage(view.chartBase, 0, 0, W, H);
     const X = chartX(view, T, W);
     cg.strokeStyle = "rgba(255,255,255,0.55)"; cg.lineWidth = 1;
     cg.beginPath(); cg.moveTo(X, PADY); cg.lineTo(X, H - PADY); cg.stroke();
@@ -973,16 +1005,18 @@ const DataTelemetry = (function () {
     }
     if (view.delta) {
       const dgx = view.delta.getContext("2d");
-      const DW = view.delta.width, DH = view.delta.height;
+      const DW = view.dw, DH = view.dh;
+      dgx.setTransform(R, 0, 0, R, 0, 0);
       dgx.clearRect(0, 0, DW, DH);
-      dgx.drawImage(view.deltaBase, 0, 0);
+      dgx.drawImage(view.deltaBase, 0, 0, DW, DH);
       const dx = chartX(view, T, DW);
       dgx.strokeStyle = "rgba(255,255,255,0.55)"; dgx.lineWidth = 1;
       dgx.beginPath(); dgx.moveTo(dx, 0); dgx.lineTo(dx, DH); dgx.stroke();
     }
     if (view.map) {
       const mg = view.map.getContext("2d");
-      const MW = view.map.width, MH = view.map.height;
+      const MW = view.mw, MH = view.mh;
+      mg.setTransform(R, 0, 0, R, 0, 0);
       mg.clearRect(0, 0, MW, MH);
       if (view.onboard && view.mapT) {
         const here = locAt(view, view.primary, T);
@@ -995,13 +1029,13 @@ const DataTelemetry = (function () {
         mg.scale(ZOOM, ZOOM);
         mg.rotate(-ang - Math.PI / 2);     // heading -> up
         mg.translate(-p0[0], -p0[1]);
-        mg.drawImage(view.mapBase, 0, 0);
+        mg.drawImage(view.mapBase, 0, 0, MW, MH);
         // extra lanes first, reference last so it stays on top
         for (let i = view.laps.length - 1; i >= 0; i--)
           drawCarDot(mg, view, view.laps[i], T, cssColor(view.laneCols[i]), 1 / ZOOM);
         mg.restore();
       } else {
-        mg.drawImage(view.mapBase, 0, 0);
+        mg.drawImage(view.mapBase, 0, 0, MW, MH);
         for (let i = view.laps.length - 1; i >= 0; i--)
           drawCarDot(mg, view, view.laps[i], T, cssColor(view.laneCols[i]), 1);
       }
@@ -1061,12 +1095,15 @@ const DataTelemetry = (function () {
 
   // rebuild the cached static layers (chart traces + coloured track map + delta)
   function buildBases(view) {
-    renderTraces(view.chartBase.getContext("2d"), view.chartBase.width, view.chartBase.height, view);
+    // Layout dims, never base.width: the offscreens allocate at layout x
+    // ratio with a pre-transformed context, so the renderers keep speaking
+    // layout px on a denser bitmap.
+    renderTraces(view.chartBase.getContext("2d"), view.cw, view.ch, view);
     if (view.map) {
       computeMapTransform(view);
-      renderMap(view.mapBase.getContext("2d"), view.mapBase.width, view.mapBase.height, view);
+      renderMap(view.mapBase.getContext("2d"), view.mw, view.mh, view);
     }
-    if (view.delta) renderDelta(view.deltaBase.getContext("2d"), view.deltaBase.width, view.deltaBase.height, view);
+    if (view.delta) renderDelta(view.deltaBase.getContext("2d"), view.dw, view.dh, view);
   }
 
   function renderTraces(g, W, H, view) {
@@ -1227,7 +1264,7 @@ const DataTelemetry = (function () {
   // screen transform for the track map (from the primary lap's x/y bounds)
   function computeMapTransform(view) {
     const b = locBounds(view.primary.loc);
-    const W = view.mapBase.width, H = view.mapBase.height, pad = 14;
+    const W = view.mw, H = view.mh, pad = 14;
     const spanx = b.spanx, spany = b.spany;
     const sc = Math.min((W - 2 * pad) / spanx, (H - 2 * pad) / spany);
     view.mapT = { minx: b.minx, miny: b.miny, sc: sc, ox: (W - spanx * sc) / 2, oy: (H - spany * sc) / 2,

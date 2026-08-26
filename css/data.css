@@ -776,13 +776,21 @@ body[data-density="compact"][data-width="wide"] {
 }
 .dh-tpopup-card {
   width: min(860px, 100%);
-  max-height: calc(100svh - var(--sat) - var(--sab) - 2 * var(--gut));
+  /* The .dh-card treatment this popup never got: it is appended to #datahub
+     (a SIBLING of the zoomed card), so SETTINGS ▸ UI SIZE silently did not
+     apply to the whole telemetry screen — the exact A13/A14 defect the hub
+     card fixed. Fit-managed with the capped zoom var, and the svh family
+     divides by the zoom so heights stay a constant fraction of the screen. */
+  zoom: var(--sheet-scale, var(--ui-scale));
+  --fit-at: 240px;
+  --svhz: calc(1svh / var(--sheet-scale, var(--ui-scale)));
+  max-height: calc(100 * var(--svhz) - (var(--sat) + var(--sab) + 2 * var(--gut)) / var(--ui-scale));
   background: #0d0d14;
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: var(--r-lg);
   overflow: hidden;
   display: flex; flex-direction: column;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+  box-shadow: var(--edge), var(--lift-2);
 }
 .dh-tpopup-hdr {
   display: flex; align-items: center; gap: 10px;
