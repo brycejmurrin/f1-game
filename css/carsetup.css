@@ -126,9 +126,9 @@
   gap: calc(var(--gap) * 0.6);
 }
 #cs-titlebar { display: flex; align-items: baseline; gap: calc(var(--gap) * 0.8); flex-wrap: wrap; min-width: 0; }
-#cs-titlebar h2 { margin: 0; letter-spacing: 0.12em; }
+#cs-titlebar h2 { margin: 0; letter-spacing: var(--ls-5); }
 #cs-team {
-  font-size: var(--label); font-weight: 800; font-style: italic; letter-spacing: 0.08em;
+  font-size: var(--label); font-weight: 800; font-style: italic; letter-spacing: var(--ls-4);
   color: color-mix(in srgb, var(--text) 70%, transparent);
 }
 
@@ -154,14 +154,14 @@
 }
 #cs-budget-row { display: flex; align-items: center; justify-content: space-between; gap: calc(var(--gap) * 0.8); }
 #cs-budget {
-  font-size: var(--label); letter-spacing: 0.06em; color: var(--dim); min-width: 0;
+  font-size: var(--label); letter-spacing: var(--ls-3); color: var(--dim); min-width: 0;
 }
 #cs-budget.tight { color: #f90; }
 #cs-budget.over  { color: var(--red); }
 #cs-budget.unlimited { color: #0c8; }
 .cs-unlimited-btn {
   flex: 0 0 auto; width: auto; margin: 0;
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
   padding: 4px 10px; border-radius: var(--r-sm);
   background: var(--plate); color: var(--dim);
   border: 1px solid var(--card-line);
@@ -183,7 +183,7 @@
 }
 .cs-stat-row {
   display: flex; align-items: center; gap: calc(var(--gap) * 0.8); margin: 0;
-  font-size: var(--label); letter-spacing: 0.08em; color: var(--dim);
+  font-size: var(--label); letter-spacing: var(--ls-4); color: var(--dim);
   min-height: 18px;
 }
 .cs-stat-label { width: 84px; flex-shrink: 0; }
@@ -350,7 +350,7 @@
 .cs-opt-name { font-size: var(--fs-2); font-weight: 700; color: var(--text); }
 .cs-opt-deltas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
 .cs-delta {
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.04em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-2);
   padding: 1px 5px; border-radius: var(--r-xs);
 }
 .cs-delta.up { background: rgba(80,210,255,0.16); color: #4df; }
@@ -384,7 +384,7 @@
 }
 .cs-opt-tag {
   display: inline-block; margin-left: 7px; vertical-align: middle;
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.08em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
   background: rgba(255,200,40,0.18); color: #f5c842;
   border-radius: var(--r-xs); padding: 1px 5px;
 }
@@ -413,7 +413,7 @@
 /* The pill is a PRICE tag, not the spec number the other rows carry there, so it
    gets a chip shape and the buy colour instead of plain dim text. */
 .cs-opt-cost.research {
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.06em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-3);
   padding: 3px 7px; border-radius: var(--r-sm);
   background: color-mix(in oklab, var(--red) 18%, transparent);
   border: 1px solid color-mix(in oklab, var(--red) 45%, transparent);
@@ -592,14 +592,14 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 /* ---------- inline livery creator ---------- */
 .cs-liv-editor { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.7); padding: 2px; }
 .cs-liv-ed-head {
-  font-size: var(--label); font-weight: 800; letter-spacing: 0.14em; color: var(--dim);
+  font-size: var(--label); font-weight: 800; letter-spacing: var(--ls-5); color: var(--dim);
 }
 .cs-liv-ed-prev {
   width: 100%; height: 44px; border-radius: var(--r-md); align-self: stretch;
 }
 .cs-liv-ed-row { display: flex; align-items: center; gap: calc(var(--gap) * 0.8); min-width: 0; }
 .cs-liv-ed-lbl {
-  flex: 0 0 68px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; color: var(--dim);
+  flex: 0 0 68px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); color: var(--dim);
 }
 .cs-liv-ed-row input[type="color"] {
   /* Same shape as the customize wells: floored height, literal width —
@@ -612,7 +612,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   flex: 0 0 auto; width: auto; margin: 0;
   min-height: var(--chip-h); min-width: var(--chip-h);
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.08em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
   padding: 4px 10px; border-radius: var(--r-sm);
   background: var(--plate); color: var(--dim);
   border: 1px solid var(--card-line);
@@ -636,7 +636,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 .cs-liv-ed-btns { display: flex; gap: calc(var(--gap) * 0.7); margin-top: 2px; }
 .cs-liv-ed-cancel, .cs-liv-ed-save {
   flex: 1 1 0; width: auto; margin: 0; min-height: var(--tap);
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.06em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-3);
   padding: 9px 0; border-radius: var(--r-md); cursor: pointer;
 }
 .cs-liv-ed-cancel { background: var(--plate); color: var(--dim); border: 1px solid var(--card-line); }
@@ -874,7 +874,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   flex: 0 0 auto; width: auto; margin: 0;
   display: flex; align-items: center; gap: 6px;
   padding: 5px 10px; border-radius: var(--r-sm);
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.12em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
   background: var(--plate-opaque); color: rgba(255,255,255,0.62);
   border: 1px solid var(--card-line);
   /* no backdrop-filter: these chips sit over the garage's LIVE turntable
@@ -922,7 +922,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 .cs-pan-row { display: flex; align-items: center; gap: 8px; }
 .cs-pan-lbl {
   flex: 0 0 40px;
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
   color: rgba(255,255,255,0.45); text-align: right;
 }
 .cs-pan-grp, #cs-view, #cs-wing-views {
@@ -963,11 +963,11 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   #cs-aero:hover { border-color: rgba(255,255,255,0.3); }
 }
 .cs-aero-lbl {
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.12em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
   color: rgba(255,255,255,0.42);
 }
 .cs-aero-val {
-  font-size: var(--fs-micro); font-weight: 800; font-style: italic; letter-spacing: 0.06em;
+  font-size: var(--fs-micro); font-weight: 800; font-style: italic; letter-spacing: var(--ls-3);
   color: var(--dim);
 }
 /* Lit state uses the same CYAN the in-race HUD chip uses for X-mode, so the
@@ -979,7 +979,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   /* Touch-ish widths: keep padding/type bumps; height floor is --tap-min /
      --chip-h from the base + body:not(.desktop) rules, not a narrower 34. */
   #cs-aero { padding: 6px 10px; gap: 5px; }
-  .cs-aero-lbl { font-size: var(--fs-micro); letter-spacing: 0.08em; }
+  .cs-aero-lbl { font-size: var(--fs-micro); letter-spacing: var(--ls-4); }
   .cs-aero-val { font-size: var(--fs-2); }
   #cs-cam { padding: 6px 10px; font-size: var(--fs-micro); }
   #cs-cam-panel { padding: 6px 8px; gap: 4px; }
@@ -996,7 +996,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
    camera presets and the two wing views — is exactly what it was. */
 .cs-view-btn {
   flex: 0 0 auto; width: auto; margin: 0;
-  font-size: var(--vb-fs, var(--fs-micro)); font-weight: 800; letter-spacing: 0.08em;
+  font-size: var(--vb-fs, var(--fs-micro)); font-weight: 800; letter-spacing: var(--ls-4);
   padding: var(--vb-pad, 5px 9px); border-radius: var(--r-sm);
   background: var(--plate-opaque); color: var(--dim);
   border: 1px solid var(--card-line);
@@ -1044,7 +1044,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   background: rgba(255,255,255,0.16);
 }
 .cs-view-hint {
-  font-size: var(--fs-micro); letter-spacing: 0.08em; text-transform: uppercase;
+  font-size: var(--fs-micro); letter-spacing: var(--ls-4); text-transform: uppercase;
   color: rgba(255,255,255,0.34); margin-left: 2px;
 }
 /* No mouse = no drag affordance to advertise, and no room for it either. */
@@ -1058,7 +1058,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 @media (max-width: 1000px) {
   #cs-view { gap: 3px; }
   .cs-view-btn {
-    letter-spacing: 0.05em;
+    letter-spacing: var(--ls-3);
     --vb-pad: 6px 9px; min-height: 34px;
   }
   #cs-view-in, #cs-view-out { --vb-fs: var(--fs-micro); --vb-pad: 2px 8px; }

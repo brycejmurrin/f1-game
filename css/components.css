@@ -591,7 +591,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 .sel-label {
   color: var(--dim);
   font-size: var(--label); font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: var(--ls-5);
   margin: 0 0 calc(var(--gap) * 0.5);
 }
 /* A short accent tick before every section label. Dim uppercase text at 10-12px
@@ -1000,7 +1000,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   color: var(--dim);
   font-size: clamp(var(--fs-1), calc(1.7 * var(--vwz)), var(--fs-3));
   font-weight: 750;
-  letter-spacing: .06em;
+  letter-spacing: var(--ls-3);
   text-align: center;
 }
 #pm-category-tabs > button.active,
@@ -1039,7 +1039,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 .pm-group-h {
   color: var(--red);
   font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
-  font-weight: 700; letter-spacing: 0.11em;
+  font-weight: 700; letter-spacing: var(--ls-5);
   line-height: 1.2;
   box-sizing: border-box;
   margin: 0; padding-bottom: 4px;
@@ -1068,7 +1068,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   padding-inline: calc(var(--pad) * 0.75);
   /* Grows with the viewport, never under the micro floor inside sheet zoom. */
   font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ls-2);
   background: var(--plate);
   border-color: var(--plate-line);
 }

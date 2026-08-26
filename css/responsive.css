@@ -207,14 +207,14 @@ body.desktop #pm-calib { display: none !important; }
   from { transform: rotate(-30deg); }
   to   { transform: rotate(30deg); }
 }
-.rotate-inner p { margin: 0; font-size: 1.1rem; letter-spacing: 0.05em; }
+.rotate-inner p { margin: 0; font-size: 1.1rem; letter-spacing: var(--ls-3); }
 .rotate-inner small { opacity: 0.6; font-size: 0.8rem; }
 .rotate-inner { display: grid; justify-items: center; gap: 0.8rem; max-width: 28rem; }
 #rotate-controls, #rotate-exit {
   min-height: var(--tap-min); padding: 0 1rem;
   border: 1px solid rgba(255,255,255,0.32); border-radius: var(--r-pill);
   background: rgba(255,255,255,0.1); color: #fff;
-  font: inherit; font-weight: 800; letter-spacing: 0.035em;
+  font: inherit; font-weight: 800; letter-spacing: var(--ls-2);
 }
 /* outline-offset takes a <length> only — the old `medium` here made the whole
    declaration invalid, silently dropping this rule since build 1496. 3px is

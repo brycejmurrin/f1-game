@@ -39,7 +39,7 @@
 #cr-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--gap); }
 #cr-titlebar { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 #cr-sub {
-  font-size: var(--label); letter-spacing: 0.12em; font-weight: 700;
+  font-size: var(--label); letter-spacing: var(--ls-5); font-weight: 700;
   color: var(--dim); text-transform: uppercase;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -47,7 +47,7 @@
    the title and wrap under it rather than squeezing the team name. */
 #cr-meters { display: flex; flex-wrap: wrap; gap: var(--gap); margin-left: auto; }
 .cr-meter { display: flex; flex-direction: column; gap: 1px; text-align: right; }
-.cr-meter-lbl { font-size: var(--fs-micro); letter-spacing: 0.14em; color: var(--dim); }
+.cr-meter-lbl { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--dim); }
 .cr-meter-val { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* ---------- body ---------- */
@@ -175,9 +175,9 @@
 }
 
 .cr-nextrace { align-items: flex-start; gap: 2px; }
-.cr-nr-round { font-size: var(--fs-micro); letter-spacing: 0.14em; color: var(--red); font-weight: 800; }
+.cr-nr-round { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--red); font-weight: 800; }
 .cr-nr-name { font-size: 18px; font-weight: 800; font-style: italic; }
-.cr-nr-country { font-size: var(--fs-micro); color: var(--dim); letter-spacing: 0.08em; }
+.cr-nr-country { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); }
 
 /* ---------- new-career setup ---------- */
 .cr-flavours { display: grid; gap: var(--gap); grid-template-columns: 1fr; }
@@ -199,7 +199,7 @@
 .cr-flavour.active .cr-flavour-blurb,
 .cr-teamtile.active .cr-teamtile-meta,
 .cr-seat.active .cr-seat-who { color: rgba(255, 255, 255, 0.82); }
-.cr-flavour-name { font-size: 14px; font-weight: 800; font-style: italic; letter-spacing: 0.06em; }
+.cr-flavour-name { font-size: 14px; font-weight: 800; font-style: italic; letter-spacing: var(--ls-3); }
 .cr-flavour-blurb { font-size: var(--fs-micro); line-height: 1.4; color: var(--dim); }
 
 .cr-teamgrid { display: grid; gap: 6px; grid-template-columns: 1fr; }
@@ -214,11 +214,11 @@
 
 .cr-teamtile-sw { grid-row: 1 / 3; width: 10px; height: 30px; border-radius: 2px; border: 2px solid transparent; }
 .cr-teamtile-name { font-size: var(--fs-2); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cr-teamtile-meta { font-size: var(--fs-micro); color: var(--dim); letter-spacing: 0.04em; }
+.cr-teamtile-meta { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-2); }
 
 .cr-form { display: flex; flex-direction: column; gap: 8px; }
 .cr-field { display: flex; align-items: center; gap: var(--gap); }
-.cr-field-lbl { font-size: var(--label); letter-spacing: 0.1em; color: var(--dim); width: 78px; flex: 0 0 auto; }
+.cr-field-lbl { font-size: var(--label); letter-spacing: var(--ls-4); color: var(--dim); width: 78px; flex: 0 0 auto; }
 .cr-input {
   flex: 1 1 auto; min-width: 0; min-height: var(--chip-h);
   background: var(--surf-1); border: 1px solid var(--card-line); border-radius: var(--r-sm);
@@ -236,7 +236,7 @@
   color: inherit; font: inherit; cursor: pointer;
 }
 
-.cr-seat-role { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.08em; }
+.cr-seat-role { font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); }
 .cr-seat-who { font-size: var(--fs-micro); color: var(--dim); }
 
 /* ---------- foot ---------- */
@@ -285,11 +285,11 @@
 .co-offer:focus-visible { border-color: var(--red); background: var(--plate-on); }
 .co-offer-sw { grid-row: 1 / 3; width: 10px; height: 34px; border-radius: 2px; border: 2px solid transparent; }
 .co-offer-team { font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.co-offer-terms { grid-column: 2 / 4; font-size: var(--fs-micro); color: var(--dim); letter-spacing: 0.04em; }
+.co-offer-terms { grid-column: 2 / 4; font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-2); }
 /* MOVE is the red one: leaving is the decision with consequences (a new works car,
    a garage reseeded), staying is the safe default and reads as such. */
 .co-offer-tag {
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.14em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
   padding: 2px 6px; border-radius: var(--r-pill);
   background: var(--red); color: #fff;
 }
@@ -319,7 +319,7 @@
 /* The affordance line: dim, tracked-out and red, so the card reads as a door
    rather than one more read-only summary in a column full of them. */
 .cr-record-cta {
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.12em; color: var(--red);
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5); color: var(--red);
 }
 
 /* The position column carries a "P" here, unlike the championship block on the
@@ -335,7 +335,7 @@
    numbers rather than drifting with the glyph widths. */
 #quali { --sheet-w: 560px; --fit-at: 300px; }
 #q-body { min-height: 0; }
-.q-time { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+.q-time { font-variant-numeric: tabular-nums; letter-spacing: var(--ls-1); }
 /* Pole gets the absolute lap time and everyone else a gap, so the two read
    differently on purpose — the gaps are dimmed to keep the eye on the leader. */
 .res-row:not(.p1) .q-time { color: var(--dim); }
@@ -348,7 +348,7 @@
 .res-row.q-real .q-real-tag {
   margin-left: 0.5em;
   font-size: 0.62rem;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ls-4);
   opacity: 0.75;
 }
 
@@ -402,10 +402,10 @@
   box-shadow: var(--lift-sel);
 }
 .cr-slot-n {
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.12em; color: var(--red);
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5); color: var(--red);
 }
 .cr-slot-who {
-  font-size: var(--fs-2); font-weight: 700; letter-spacing: 0.02em;
+  font-size: var(--fs-2); font-weight: 700; letter-spacing: var(--ls-1);
   /* An uppercased 22-char MY TEAM save name is one unbreakable token against
      the fixed-width DELETE beside it — same clip family as .res-name. */
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -418,7 +418,7 @@
    would be a screen, and a single-tap delete would be unforgivable. */
 .cr-slot-del {
   align-self: stretch; min-width: 62px; cursor: pointer;
-  font: inherit; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em;
+  font: inherit; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
   color: var(--dim); background: transparent;
   border: 1px solid var(--card-line); border-radius: var(--r-sm);
   transition: color 0.15s, border-color 0.15s, background 0.15s;
@@ -465,7 +465,7 @@
   border-left: 3px solid var(--red); border-radius: 0 var(--r-sm) var(--r-sm) 0;
 }
 .res-settle-head {
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.14em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
   color: var(--red); margin-bottom: 8px;
 }
 .res-settle-row {
@@ -498,12 +498,12 @@
 /* The teams sit under their tier's label rather than beside it: three or four
    short names would push the OPEN column out of alignment on a phone. */
 .cr-ladder-teams {
-  grid-column: 1; font-size: var(--fs-micro); letter-spacing: 0.04em; color: var(--dim);
+  grid-column: 1; font-size: var(--fs-micro); letter-spacing: var(--ls-2); color: var(--dim);
 }
 .cr-ladder-v {
   grid-column: 2; grid-row: 1 / span 2;
   font-variant-numeric: tabular-nums; font-size: var(--fs-micro);
-  font-weight: 800; letter-spacing: 0.08em; align-self: center;
+  font-weight: 800; letter-spacing: var(--ls-4); align-self: center;
 }
 /* A tier you clear is a seat that will talk to you at the end of the year. */
 .cr-ladder.open .cr-ladder-k { color: #fff; }
@@ -536,7 +536,7 @@
   padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.65);
   border: 1px solid var(--plate-line); border-radius: var(--r-pill);
   background: var(--plate); color: var(--dim);
-  font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.05em;
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
   text-decoration: none;
 }
 @media (hover: hover) {

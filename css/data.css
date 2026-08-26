@@ -128,7 +128,7 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   border: 1px solid var(--plate-line);
   border-radius: var(--r-md);
   padding: 7px 14px;
-  font-size: var(--fs-2); font-weight: 700; letter-spacing: 0.07em;
+  font-size: var(--fs-2); font-weight: 700; letter-spacing: var(--ls-3);
   color: var(--dim);
   white-space: nowrap;
   text-align: center;
@@ -204,7 +204,7 @@ body[data-width="narrow"] .dh-content { padding: var(--gap) 14px; }
 .dh-tabbody { display: flex; flex-direction: column; gap: var(--gap); }
 
 .dh-section {
-  font-size: var(--fs-2); letter-spacing: 0.14em; color: var(--red);
+  font-size: var(--fs-2); letter-spacing: var(--ls-5); color: var(--red);
   font-weight: 800; font-style: italic;
   margin: calc(var(--gap) * 0.5) 0 8px;
 }
@@ -251,8 +251,8 @@ body[data-density="compact"] .dh-error { padding: 14px var(--gap); }
 /* Hide local time on very narrow phones to save vertical space */
 body[data-width="narrow"] .dh-race-time { display: none; }
 .dh-race-next { background: color-mix(in oklab, var(--red) 10%, transparent); border-radius: var(--r-md); }
-.dh-chip-next { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; background: var(--red); color: #fff; padding: 2px calc(var(--gap) * 0.5); border-radius: var(--r-sm); }
-.dh-chip-sprint { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; background: #4a4a9a; color: #fff; padding: 2px calc(var(--gap) * 0.5); border-radius: var(--r-sm); }
+.dh-chip-next { font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); background: var(--red); color: #fff; padding: 2px calc(var(--gap) * 0.5); border-radius: var(--r-sm); }
+.dh-chip-sprint { font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); background: #4a4a9a; color: #fff; padding: 2px calc(var(--gap) * 0.5); border-radius: var(--r-sm); }
 
 /* standings */
 .dh-standings { gap: calc(var(--gap) * 1.5); }
@@ -292,7 +292,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-h2h-bar { display: flex; width: 100%; max-width: 160px; height: 6px; border-radius: var(--r-xs); background: rgba(255, 255, 255, 0.1); overflow: hidden; margin-top: 4px; }
 .dh-h2h-fill { height: 100%; background: #fff; transition: width 0.3s; }
 .dh-h2h-alt { background: rgba(255, 255, 255, 0.3); }
-.dh-h2h-labels { display: flex; width: 100%; max-width: 160px; justify-content: space-between; font-size: var(--fs-micro); color: var(--dim); font-weight: 700; letter-spacing: 0.05em; }
+.dh-h2h-labels { display: flex; width: 100%; max-width: 160px; justify-content: space-between; font-size: var(--fs-micro); color: var(--dim); font-weight: 700; letter-spacing: var(--ls-3); }
 
 .dh-pos { width: 24px; text-align: right; color: var(--dim); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .dh-codechip {
@@ -329,7 +329,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   border-collapse: collapse; font-size: var(--fs-3); font-variant-numeric: tabular-nums;
 }
 .dh-table thead th {
-  text-align: left; font-size: var(--fs-1); letter-spacing: 0.10em;
+  text-align: left; font-size: var(--fs-1); letter-spacing: var(--ls-4);
   color: var(--dim); font-weight: 700; padding: 4px calc(var(--gap) * 0.5) 8px;
   border-bottom: 1px solid var(--card-line);
 }
@@ -356,7 +356,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 /* live */
 .dh-livecard, .dh-card.dh-livecard { display: flex; flex-direction: column; gap: 4px; }
 .dh-live-title { font-size: 17px; font-weight: 800; font-style: italic; color: #fff; }
-.dh-live-type { font-size: var(--fs-2); color: var(--red); letter-spacing: 0.08em; }
+.dh-live-type { font-size: var(--fs-2); color: var(--red); letter-spacing: var(--ls-4); }
 .dh-live-sub { font-size: var(--fs-2); color: var(--dim); margin-top: 2px; }
 .dh-live-team { color: var(--dim); font-size: var(--fs-2); }
 .dh-live-row-main { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 150px; }
@@ -370,7 +370,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
    1fr)` still emits a 90px track in an 80px box, and overflows it. */
 .dh-wx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(90px, 100%), 1fr)); gap: 8px; }
 .dh-wx-cell { background: var(--plate); border-radius: var(--r-md); padding: 8px 10px; }
-.dh-wx-label { font-size: var(--fs-1); letter-spacing: 0.1em; color: var(--dim); }
+.dh-wx-label { font-size: var(--fs-1); letter-spacing: var(--ls-4); color: var(--dim); }
 .dh-wx-value { font-size: var(--fs-5); font-weight: 700; color: var(--text); margin-top: 2px; }
 
 /* ---------- telemetry tab ---------- */
@@ -433,7 +433,7 @@ body[data-density="compact"] .dh-canvas.dh-map { max-width: 220px; }
   display: inline-flex; align-items: center; gap: 5px;
   background: transparent; border: none; border-radius: var(--r-sm);
   padding: calc(var(--gap) * 0.25) calc(var(--gap) * 0.5); margin: 0; color: inherit; font: inherit;
-  letter-spacing: 0.04em; cursor: pointer; transition: opacity 0.12s;
+  letter-spacing: var(--ls-2); cursor: pointer; transition: opacity 0.12s;
 }
 @media (hover: hover) {
   button.dh-legend-item:hover { background: var(--plate); }
@@ -457,7 +457,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 /* ---------- lap-replay transport + gauge dashboard ---------- */
 .dh-transport { display: flex; align-items: center; gap: 8px; margin: calc(var(--gap) * 0.5) 0; flex-wrap: wrap; row-gap: calc(var(--gap) * 0.5); }
 .dh-tbtn {
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.05em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-3);
   padding: 7px 14px; border-radius: var(--r-pill);
   background: var(--plate);
   border: 1px solid var(--plate-line);
@@ -488,12 +488,12 @@ body[data-width="narrow"] .dh-thint { display: none; }
   border-radius: var(--r-md);
 }
 .dh-gcell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.dh-glabel { font-size: var(--fs-micro); letter-spacing: 0.1em; color: var(--dim); white-space: nowrap; }
+.dh-glabel { font-size: var(--fs-micro); letter-spacing: var(--ls-4); color: var(--dim); white-space: nowrap; }
 .dh-gval { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; line-height: 1; }
 .dh-gspeed .dh-gval { color: #39d0ff; }
 .dh-gbar { height: 8px; border-radius: var(--r-sm); background: rgba(255, 255, 255, 0.09); overflow: hidden; margin-top: auto; }
 .dh-gfill { height: 100%; width: 0%; border-radius: var(--r-sm); transition: width 0.05s linear; }
-.dh-gdrs-pill { font-size: var(--fs-4); font-weight: 800; letter-spacing: 0.05em; color: #5a5a65; line-height: 1; margin-top: 2px; display: inline-block; margin-right: 8px; }
+.dh-gdrs-pill { font-size: var(--fs-4); font-weight: 800; letter-spacing: var(--ls-3); color: #5a5a65; line-height: 1; margin-top: 2px; display: inline-block; margin-right: 8px; }
 .dh-gdrs-pill.dh-on { color: #00e0c0; text-shadow: 0 0 8px rgba(0, 224, 192, 0.6); }
 /* compare-mode dual gauges: primary value/bar first, compare second */
 .dh-gvalrow { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
@@ -507,7 +507,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 /* ---------- live controls + sortable classification ---------- */
 .dh-livecontrols { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .dh-livebtn {
-  font-size: var(--fs-2); font-weight: 800; letter-spacing: 0.06em;
+  font-size: var(--fs-2); font-weight: 800; letter-spacing: var(--ls-3);
   padding: calc(var(--gap) * 0.5) var(--gap); border-radius: var(--r-pill);
   background: var(--plate);
   border: 1px solid var(--plate-line);
@@ -517,7 +517,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 /* ---------- compare lanes (multi-driver + cross-session telemetry) ---------- */
 /* session badge on a lane row / header / legend chip (R, Q, P2, …) */
 .dh-lane-ses {
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.08em;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
   padding: 1px 5px; border-radius: var(--r-pill); margin-left: 4px;
   background: rgba(255, 255, 255, 0.12); color: #cfe0ff; flex: 0 0 auto;
 }
@@ -540,7 +540,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 /* the 3-4 lane readout board in the gauge column */
 .dh-laneboard { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.25); margin-top: 8px; grid-column: 1 / -1; }
 .dh-laneboard-row { display: flex; align-items: center; gap: calc(var(--gap) * 0.5); font-size: var(--fs-2); }
-.dh-laneboard-code { font-weight: 800; letter-spacing: 0.04em; min-width: 34px; }
+.dh-laneboard-code { font-weight: 800; letter-spacing: var(--ls-2); min-width: 34px; }
 .dh-laneboard-spd { margin-left: auto; font-variant-numeric: tabular-nums; opacity: 0.9; }
 .dh-laneboard-dl {
   min-width: 46px; text-align: right; font-variant-numeric: tabular-nums;
@@ -553,7 +553,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 .dh-class-head .dh-section { margin: calc(var(--gap) * 0.5) 0 8px; flex: 1; }
 .dh-sorts { display: flex; gap: 4px; flex: 0 0 auto; }
 .dh-sortbtn {
-  font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.06em;
+  font-size: var(--fs-1); font-weight: 800; letter-spacing: var(--ls-3);
   padding: 4px 9px; border-radius: var(--r-pill);
   background: var(--plate);
   border: 1px solid var(--plate-line);
@@ -621,7 +621,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   overscroll-behavior-y: contain; touch-action: pan-y;
 }
 .dh-pick-field { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.25); }
-.dh-pick-label { font-size: var(--fs-micro); letter-spacing: 0.12em; color: var(--dim); }
+.dh-pick-label { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--dim); }
 .dh-pick-select {
   background: #15151d; color: var(--text);
   border: 1px solid var(--plate-line); border-radius: var(--r-sm);
@@ -807,7 +807,7 @@ body[data-density="compact"][data-width="wide"] {
 }
 .dh-tpopup-sub {
   font-size: var(--fs-2); font-weight: 600; font-style: normal;
-  color: var(--dim); letter-spacing: 0.04em;
+  color: var(--dim); letter-spacing: var(--ls-2);
 }
 .dh-tpopup-body {
   flex: 1; min-height: 0;
@@ -841,7 +841,7 @@ body[data-density="compact"][data-width="wide"] {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   text-align: right;
   font-size: var(--fs-1); font-weight: 600; font-style: normal;
-  color: var(--dim); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+  color: var(--dim); font-variant-numeric: tabular-nums; letter-spacing: var(--ls-1);
 }
 .dh-tlap {
   flex: 0 0 auto;

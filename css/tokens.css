@@ -322,6 +322,22 @@
   --fs-4: 17px;
   --fs-5: 18px;
   --fs-6: 20px;
+  /* ---- TRACKING — five steps ----
+     127 letter-spacing declarations ran 17 distinct values; 110 of them sat
+     on the arithmetic run 0.02..0.14. Five rungs absorb 111 sites with no
+     fold over 0.02em, and every 0.02em fold is a TIGHTENING (0.10 -> ls-4,
+     0.14 -> ls-5) — widening is what truncates a label in a fixed column
+     (measured on .cs-tab-lbl: ~1.4px per 0.01em per 10 chars), so the folds
+     can never mint a new ellipsis. Stays literal: the zeros (measured fit
+     recoveries), the vs-friend room code (paired with text-indent), the
+     LOADING spacer (the tracking IS the effect), and everything in
+     css/hud.css — in-race type is calibrated as a unit and must not move
+     when a menu pass retunes a rung (hud.css:19-22). */
+  --ls-1: 0.02em;   /* tight — italic names, tabular numerics, body */
+  --ls-2: 0.04em;   /* base — headline italics, meta lines */
+  --ls-3: 0.06em;   /* label — dim uppercase labels, chips */
+  --ls-4: 0.08em;   /* caps — uppercase tags, badges, section chrome */
+  --ls-5: 0.12em;   /* display — section labels, eyebrows, meters */
   /* ---- CORNER RADIUS — four steps, plus a pill ----
      These tokens existed and had three users. Everything else hard-coded its
      own: fourteen distinct radii across the stylesheets (1, 2, 3, 4, 5, 6, 7,

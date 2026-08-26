@@ -90,7 +90,7 @@
   display: flex; align-items: center; justify-content: space-between;
   flex: none; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08);
 }
-#track-detail-name { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: 0.08em; text-transform: uppercase; }
+#track-detail-name { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: var(--ls-4); text-transform: uppercase; }
 .tdc-close-btn {
   /* The data hub's icon-close recipe (css/data.css .dh-close), verbatim: the
      two ✕ buttons were the app's only pair of same-role controls with nothing
@@ -131,13 +131,13 @@
   object-fit: contain;
 }
 #track-detail-panel { display: none; flex-direction: column; gap: 0; }
-#track-detail-meta { font-size: var(--fs-micro); color: #888; letter-spacing: 0.04em; line-height: 1.5; }
-.tds-subtitle { font-size: var(--fs-micro); color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
+#track-detail-meta { font-size: var(--fs-micro); color: #888; letter-spacing: var(--ls-2); line-height: 1.5; }
+.tds-subtitle { font-size: var(--fs-micro); color: #555; letter-spacing: var(--ls-4); text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
 #track-detail-elev { display: block; width: 100%; height: 48px; }
 #track-detail-drs-list { font-size: var(--fs-micro); color: #888; }
 .tdd-zone { padding: 2px 0; }
 #track-detail-corners { flex: 0 0 auto; }
-.tdc-title { font-size: var(--fs-micro); color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
+.tdc-title { font-size: var(--fs-micro); color: #555; letter-spacing: var(--ls-4); text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
 #track-detail-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .tdc-corner {
   display: flex; align-items: center; gap: 5px;
@@ -151,7 +151,7 @@
 .tdc-hairpin{ color: #f87171; font-size: var(--fs-micro); }
 #track-detail-flags { display: flex; gap: calc(var(--gap) * 0.5); flex-wrap: wrap; margin: calc(var(--gap) * 0.5) 0 2px; }
 .tdf-flag {
-  font-size: var(--fs-micro); letter-spacing: 0.1em; padding: 2px 7px;
+  font-size: var(--fs-micro); letter-spacing: var(--ls-4); padding: 2px 7px;
   border-radius: var(--r-xs); border: 1px solid var(--plate-line);
   color: var(--dim); background: var(--plate);
 }

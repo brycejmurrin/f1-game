@@ -20,6 +20,11 @@
    HUD's type is hard-coded px throughout (this file is deliberately OFF the
    --fs-micro scale — see the note in css/tokens.css), so a token knob would
    move the boxes and leave every number inside them where it was.
+   LETTER-SPACING here is literal for the same reason: the tracking is
+   calibrated with the px sizes above as one unit (0.16/0.2em glance-width
+   values exist nowhere in the menu distribution), so this file deliberately
+   does not read the --ls-* ladder — a menu pass retuning a rung must not
+   move in-race type.
    THE ANCHORS ARE COMPENSATED: in a zoomed element every length in its own
    top/right/bottom/left scales too, so each `var(--sa*)` term below is divided
    by the scale while the px terms are left to scale. A px offset encodes a
