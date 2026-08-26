@@ -377,6 +377,7 @@ const NetTransport = (function () {
     Log.info("net", "rtc create");
     const chans = {};
     const STATE_INBOX_CAP = 64;
+    const STATE_BUFFER_CAP = 16384;   // outbound SCTP queue bytes before STATE sends drop
     const EVENT_INBOX_CAP = 256;
     const INBOX_BYTE_CAP = 1024 * 1024;
     let inbox = [];
@@ -482,6 +483,12 @@ const NetTransport = (function () {
     ep.send = function (channel, data) {
       const ch = chans[channel];
       if (!ch || ch.readyState !== "open") return false;
+      // maxRetransmits:0 drops on the NETWORK — the local SCTP queue still
+      // buffers every send, so on a congested link the state channel stops
+      // dropping and starts queueing: stale snapshots arrive seconds late
+      // instead of lost, inverting the design. Refusing the send drops THIS
+      // frame's snapshot so the next fresh one goes out into a drained queue.
+      if (channel === STATE && ch.bufferedAmount > STATE_BUFFER_CAP) return false;
       try { ch.send(data); return true; } catch (e) { return false; }
     };
     ep.pump = function () {
