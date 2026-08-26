@@ -87,10 +87,11 @@ const CircuitKit = (function () {
       try {
         frame = deps.frameAt(spec.frac);
         if (!validFrame(frame)) return null;
-        ground = deps.groundHeight(
-          frame.k === undefined ? spec.frac : frame.k,
-          spec.gap + size[0] / 2,
-        );
+        // groundHeight takes a NODE INDEX — a frame without one cannot fall
+        // back to the raw lap fraction (that rounds to node 0/1: the start
+        // line's ground, anywhere on the lap).
+        if (frame.k === undefined) return null;
+        ground = deps.groundHeight(frame.k, spec.gap + size[0] / 2);
       } catch (_error) {
         return null;
       }

@@ -56,7 +56,7 @@
       { frac: 0.9417, angleDeg: 2.5, widthM: 100 },   // Rascasse
     ],
     scenery: function (api) {
-      const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, groundYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop, bakedModel } = api;
+      const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, terrainYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop, bakedModel } = api;
       const K = (s) => Math.round(s * n) % n;
       const KR = (s) => TrackSpace.sourceNodeToRacing(def, K(s), n);
       /* KOLD: OLD-RACING frac -> current racing node. Most of this file's raw
@@ -186,7 +186,7 @@
         const dist = 36;   // dist clears the 44-wide mass off the track (inner face ~14m back)
         const oo = -1 * (hw[k] + dist);
         const cxw = px[k] + rr[0] * oo, czw = pz[k] + rr[2] * oo;
-        const gy = groundYAt(cxw, czw);
+        const gy = terrainYAt(cxw, czw);
         const a = { c: [cxw, (gy == null ? py[k] : gy) - 0.3, czw], r: rr, u: uu, t: tt };
         if (!onTrack(a.c[0], a.c[2], 26)) {
           const b = [a.r, a.u, a.t];
@@ -262,8 +262,11 @@
           for (let f = 0; f < 4; f++) {
             addBox(out, vadd(a.c, a.u, 3.5 + f * 4), [16.3, 1.6, 34.3], WIN, b);
           }
-          addCyl(out, vadd(a.c, a.u, 21.4), 3.6, 32, [0.72, 0.80, 0.84], 9,
-            [a.u, a.r, a.t]);
+          // addCyl extrudes along basis[1]; the glazed barrel runs the roof's
+          // LENGTH (t), ring in the r-u plane — the old basis sent 32 m of
+          // glass across-track out of the facade.
+          addCyl(out, vadd(vadd(a.c, a.t, -16), a.u, 21.4), 3.6, 32, [0.72, 0.80, 0.84], 9,
+            [a.r, a.t, a.u]);
           out._mat = MAT.ROOF;
           addBox(out, vadd(a.c, a.u, 19.6), [17, 1.4, 35], OCHRE, b);
           for (let i = 0; i < 7; i++) {
@@ -568,17 +571,19 @@
         const rr = [track.rx[k], track.ry[k], track.rz[k]];
         const uu = upOf(track, k);
         const cxw = px[k] - rr[0] * gap, czw = pz[k] - rr[2] * gap;
-        const gy = groundYAt(cxw, czw);
+        const gy = terrainYAt(cxw, czw);
         const a = { c: [cxw, Math.min(gy == null ? py[k] : gy, py[k]) - 2, czw],
                     r: rr, u: uu, t: [track.tx[k], track.ty[k], track.tz[k]] };
         if (!onTrack(a.c[0], a.c[2], 30)) {
           const b = [a.r, a.u, a.t];
           const ROCK = [0.48, 0.46, 0.40], ROCK2 = [0.54, 0.52, 0.44];
           // Rock cliff climbing from the waterline (organic frustum tiers).
-          addFrustum(out, vadd(a.c, a.u, 21), 46, 32, 42, ROCK, 8, b);
-          addFrustum(out, vadd(a.c, a.u, 42), 32, 22, 16, ROCK2, 8, b);
+          // addFrustum/addBox anchor at the BASE (js/track/geom.js); these
+          // offsets were authored as centres, floating the whole stack 21 m.
+          addFrustum(out, vadd(a.c, a.u, 0), 46, 32, 42, ROCK, 8, b);
+          addFrustum(out, vadd(a.c, a.u, 21), 32, 22, 16, ROCK2, 8, b);
           // Palace fortress crowning the rock — everything within the r=22 top.
-          const py0 = 50;
+          const py0 = 29;
           addFrustum(out, vadd(a.c, a.u, py0 + 10), 18, 12, 20, CREAM, 8, b);
           for (const sd of [-1, 1]) {
             addBox(out, vadd(vadd(a.c, a.r, sd * 10), a.u, py0 + 8), [7, 16, 14], [0.92, 0.88, 0.82], b);
@@ -669,7 +674,7 @@
         const rr = [track.rx[k], track.ry[k], track.rz[k]];
         const uu = upOf(track, k);
         const cxw = px[k] - rr[0] * gap, czw = pz[k] - rr[2] * gap;
-        const gy = groundYAt(cxw, czw);
+        const gy = terrainYAt(cxw, czw);
         const a = { c: [cxw, (gy == null ? py[k] : gy) - 0.3, czw],
                     r: rr, u: uu, t: [track.tx[k], track.ty[k], track.tz[k]] };
         // EVERY corner of the 24x23 deck footprint, not just the centre. The
@@ -761,7 +766,7 @@
         const dist = 34;
         const oo = -1 * (hw[k] + dist);
         const cxw = px[k] + rr[0] * oo, czw = pz[k] + rr[2] * oo;
-        const gy = groundYAt(cxw, czw);
+        const gy = terrainYAt(cxw, czw);
         const a = { c: [cxw, (gy == null ? py[k] : gy) - 0.3, czw], r: rr, u: uu, t: tt };
         if (!onTrack(a.c[0], a.c[2], 28)) {
           const b = [a.r, a.u, a.t];

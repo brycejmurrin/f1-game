@@ -607,33 +607,10 @@ const TrackMesh = (function () {
     const ds = total / n;
     const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
     const _cand = new Array(n);                // reusable candidate scratch for the over-track clip
-    // Run-off aprons on permanent (non-street) circuits: a wide tan gravel/tarmac
-    // band where cars actually run wide — fast corners (high |curvature|) and the
-    // braking zone at the end of a straight (curvature rising ahead). Street
-    // circuits keep runoffAmt ~0 (their walls are right at the edge).
-    const runoffAmt = new Float32Array(n);
-    if (!track.def.street) {
-      const cur = new Float32Array(n);
-      for (let k = 0; k < n; k++) cur[k] = Math.abs(curvature(track, k * ds));
-      const aheadNodes = Math.max(1, Math.round(60 / ds));  // ~60 m look-ahead
-      for (let k = 0; k < n; k++) {
-        // fast-corner term: corners with moderate (not hairpin) curvature shed
-        // cars onto the run-off; peaks around 0.012 rad/m then tapers for slow turns
-        const corner = Math.max(0, Math.min(1, cur[k] / 0.012)) * Math.max(0, 1 - cur[k] / 0.06);
-        // braking-zone term: low curvature now but a corner soon ahead
-        const ahead = cur[(k + aheadNodes) % n];
-        const brake = Math.max(0, Math.min(1, ahead / 0.012)) * Math.max(0, 1 - cur[k] / 0.004);
-        runoffAmt[k] = Math.max(corner, brake);
-      }
-      // smooth (closed-loop box blur, a few passes) so aprons grow/shrink gently
-      for (let it = 0; it < 4; it++) {
-        const src = new Float32Array(runoffAmt);
-        for (let k = 0; k < n; k++) {
-          const a = (k - 1 + n) % n, b = (k + 1) % n;
-          runoffAmt[k] = 0.25 * src[a] + 0.5 * src[k] + 0.25 * src[b];
-        }
-      }
-    }
+    // (A per-node run-off-apron field was computed here for years — curvature
+    // term, brake-zone look-ahead, four blur passes — and read by nothing:
+    // the verge colour below grades on lateral fraction alone. It described a
+    // feature that never shipped; deleted, geometry bit-identical.)
     // The terrain baseline (the level distant verts settle toward) is owned by
     // TrackSurface.profile — ribbon() reads surface.heightAt, which derives from
     // the profile's own pyMin/floorY (surface.js).

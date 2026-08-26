@@ -44,9 +44,11 @@ const SceneryIdentity = (function () {
         id: `underpass-${k}`, frac: s, clearance: clearH,
         thickness: thick, depth, span, color: col,
       });
-      // Underside soffit — slightly lighter so the portal mouth reads.
+      // Underside soffit — slightly lighter so the portal mouth reads. It
+      // hangs just BELOW the deck (the deck occupies clearance..+thickness);
+      // centred inside the slab it could never render.
       const soff = [Math.min(1, col[0] * 1.35 + 0.04), Math.min(1, col[1] * 1.35 + 0.04), Math.min(1, col[2] * 1.4 + 0.05)];
-      RAW.addBox(out, [px[k] + u[0] * (clearH + 0.12), py[k] + u[1] * (clearH + 0.12), pz[k] + u[2] * (clearH + 0.12)],
+      RAW.addBox(out, [px[k] + u[0] * (clearH - 0.09), py[k] + u[1] * (clearH - 0.09), pz[k] + u[2] * (clearH - 0.09)],
                  [span * 0.96, 0.18, depth * 0.92], soff, b);
     };
 
