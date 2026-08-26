@@ -57,9 +57,12 @@ window.MenuNav = (function () {
     return (t && t.id === "photo-controls") ? null : t;
   }
 
-  function canScroll(el, dy) {
+  // `oyIn` lets onWheel's ancestor walk share ONE getComputedStyle between
+  // canScroll and isRegion — they used to each read it per ancestor per wheel
+  // event, in the scroll-latency path, at 60-120 Hz.
+  function canScroll(el, dy, oyIn) {
     if (!el || el.nodeType !== 1) return false;
-    const oy = getComputedStyle(el).overflowY;
+    const oy = oyIn != null ? oyIn : getComputedStyle(el).overflowY;
     if (oy !== "auto" && oy !== "scroll" && oy !== "overlay") return false;
     const max = el.scrollHeight - el.clientHeight;
     if (max <= 1) return false;
@@ -70,9 +73,9 @@ window.MenuNav = (function () {
   // A scroll REGION with content to scroll — regardless of where it is parked.
   // `canScroll` answers "can this move right now"; this answers "is this a pane
   // that owns the gesture", which is the question containment turns on.
-  function isRegion(el) {
+  function isRegion(el, oyIn) {
     if (!el || el.nodeType !== 1 || !el.matches || !el.matches(SCROLLERS)) return false;
-    const oy = getComputedStyle(el).overflowY;
+    const oy = oyIn != null ? oyIn : getComputedStyle(el).overflowY;
     if (oy !== "auto" && oy !== "scroll" && oy !== "overlay") return false;
     return el.scrollHeight - el.clientHeight > 1;
   }
@@ -146,8 +149,10 @@ window.MenuNav = (function () {
     // the circuit map — and that is all it should do.
     const stop = layer.parentNode;
     for (let el = e.target; el && el !== stop; el = el.parentElement) {
-      if (canScroll(el, dy)) return;
-      if (isRegion(el)) return;
+      if (el.nodeType !== 1) continue;
+      const oy = getComputedStyle(el).overflowY;
+      if (canScroll(el, dy, oy)) return;
+      if (isRegion(el, oy)) return;
     }
     const pane = nearestPane(layer, e.clientX, e.clientY, dy);
     if (pane && scrollPane(pane, dy)) e.preventDefault();
@@ -165,9 +170,18 @@ window.MenuNav = (function () {
     return out;
   }
 
+  // Boxes measured at most once per keydown: move()'s band pass and its
+  // sideways second pass both walk the full list, and a held arrow repeats
+  // ~30×/s — without the cache that was two gBCRs per item per repeat.
+  // Reset at each onKeyDown entry; never read across frames.
+  let _boxes = null;
   function centre(el) {
+    let b = _boxes && _boxes.get(el);
+    if (b) return b;
     const r = el.getBoundingClientRect();
-    return { l: r.left, r: r.right, t: r.top, b: r.bottom, x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    b = { l: r.left, r: r.right, t: r.top, b: r.bottom, x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    if (_boxes) _boxes.set(el, b);
+    return b;
   }
 
   function overlaps(a1, a2, b1, b2) { return Math.min(a2, b2) - Math.max(a1, b1) > 1; }
@@ -364,6 +378,7 @@ window.MenuNav = (function () {
 
     const list = items(layer);
     if (!list.length) return;
+    _boxes = new Map();   // fresh per press — see centre()
     const inLayer = active && layer.contains(active) && list.indexOf(active) >= 0;
 
     if (paging) {

@@ -46,6 +46,7 @@ function create(G) {
   const { $ } = G;
 
   let classification = null;
+  let _kCache = new Float64Array(0), _kCacheTrack = null;   // |curvature| per sample
 
   function lapTime(track, vCap, grip) {
     const n = track.n, total = track.total;
@@ -59,10 +60,17 @@ function create(G) {
     const accel = G.aTop() * grip;
     const brake = G.BRAKE * grip;
 
-    // 1. cornering limit at each sample
+    // 1. cornering limit at each sample. The |curvature| samples are pure
+    // track geometry — cached across the ~22 per-car calls of one sheet
+    // compute; only the grip/vCap-dependent v derivation stays per-car.
+    if (_kCacheTrack !== track || _kCache.length !== m) {
+      _kCacheTrack = track;
+      _kCache = new Float64Array(m);
+      for (let i = 0; i < m; i++) _kCache[i] = Math.abs(Tracks.curvature(track, (i / m) * total));
+    }
     const v = new Float64Array(m);
     for (let i = 0; i < m; i++) {
-      const k = Math.abs(Tracks.curvature(track, (i / m) * total));
+      const k = _kCache[i];
       v[i] = k > 1e-5 ? Math.min(vCap, Math.sqrt(latMax / k)) : vCap;
     }
 

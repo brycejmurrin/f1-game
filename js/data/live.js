@@ -69,8 +69,12 @@ const DataLive = (function () {
           const after = key.charAt(at + marker.length);
           if (after && after !== "&") continue;   // session_key=11 must not match =110
           if (!/\/(weather|position|drivers)\?/.test(key)) continue;
-          const obj = JSON.parse(localStorage.getItem(key));
-          if (obj && typeof obj.t === "number" && obj.t > newest) newest = obj.t;
+          // Per-entry: one corrupt cached payload must not abort the whole
+          // scan and report "never fetched" for entries after it.
+          try {
+            const obj = JSON.parse(localStorage.getItem(key));
+            if (obj && typeof obj.t === "number" && obj.t > newest) newest = obj.t;
+          } catch (e) { /* corrupt entry — skip it */ }
         }
       } catch (e) { /* no storage: every response was a real fetch */ }
       return newest || null;

@@ -51,6 +51,19 @@ const F1API = (function () {
   const sessionDates = {};              // sessionKey -> date_start ISO (seen sessions)
   const meetingDates = {};              // meetingKey -> date_start ISO (seen meetings)
 
+  // Cached payloads serialize as {"t":<ms>,"data":…} — t first — so sweeps can
+  // read the timestamp with a prefix match instead of JSON.parsing every
+  // multi-MB response body. Legacy/corrupt entries fall back to a full parse.
+  function cacheEntryT(raw) {
+    if (typeof raw !== "string") return null;
+    const m = /^\{"t":(\d+)[,}]/.exec(raw);
+    if (m) return +m[1];
+    try {
+      const obj = JSON.parse(raw);
+      return obj && typeof obj.t === "number" ? obj.t : null;
+    } catch (e) { return null; }
+  }
+
   function purgeExpiredCache(maxAge) {
     if (maxAge == null) maxAge = TTL_HISTORIC;
     let removed = 0;
@@ -63,10 +76,8 @@ const F1API = (function () {
       for (let i = 0; i < n; i++) {
         const key = localStorage.key(i);
         if (!key || key.indexOf(CACHE_PREFIX) !== 0) continue;
-        try {
-          const obj = JSON.parse(localStorage.getItem(key));
-          if (!obj || typeof obj.t !== "number" || (now - obj.t) > maxAge) doomed.push(key);
-        } catch (e) { doomed.push(key); }
+        const t = cacheEntryT(localStorage.getItem(key));
+        if (t == null || (now - t) > maxAge) doomed.push(key);
       }
       for (let i = 0; i < doomed.length; i++) {
         try { localStorage.removeItem(doomed[i]); removed++; } catch (e) { /* ignore */ }
@@ -82,12 +93,8 @@ const F1API = (function () {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (!key || key.indexOf(CACHE_PREFIX) !== 0) continue;
-        let t = 0;
-        try {
-          const obj = JSON.parse(localStorage.getItem(key));
-          if (obj && typeof obj.t === "number") t = obj.t;
-        } catch (e) { /* corrupt → treat as oldest */ }
-        entries.push({ key: key, t: t });
+        const t = cacheEntryT(localStorage.getItem(key));   // null (corrupt) → oldest
+        entries.push({ key: key, t: t || 0 });
       }
       entries.sort(function (a, b) { return a.t - b.t; });
       const n = Math.min(count || 8, entries.length);
@@ -112,9 +119,11 @@ const F1API = (function () {
     const key = CACHE_PREFIX + url;
     const payload = JSON.stringify({ t: Date.now(), data: data });
     const now = Date.now();
+    let swept = false;
     if (now - lastCacheSweepAt >= CACHE_SWEEP_MS) {
       purgeExpiredCache();
       lastCacheSweepAt = now;
+      swept = true;
     }
     try {
       localStorage.setItem(key, payload);
@@ -122,7 +131,7 @@ const F1API = (function () {
     } catch (e) {
       Log.warn("data", "apex26: api cache write failed (quota?)", e);
     }
-    purgeExpiredCache();
+    if (!swept) purgeExpiredCache();   // just ran above? once is enough
     purgeOldestCache(16);
     try {
       localStorage.setItem(key, payload);

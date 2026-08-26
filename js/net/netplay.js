@@ -504,9 +504,11 @@ const NetPlay = (function () {
       // the snapshot, guests received last tick's parked pose (or the grid
       // spawn) while this tick's interp sample sat unused.
       for (const r of remotes.values()) {
-        const st = r.interp.sample(now);
+        // Per-remote scratch (the ._smp precedent): poseRemote copies fields
+        // out and pred is consumed below, so neither object escapes the tick.
+        const st = r.interp.sample(now, r._smpSt || (r._smpSt = {}));
         if (st) poseRemote(r.car, st);
-        const pred = r.interp.predict(now);
+        const pred = r.interp.predict(now, r._smpPred || (r._smpPred = {}));
         const c = r.car;
         if (pred) {
           const total = (G.track && G.track.total) || 0;

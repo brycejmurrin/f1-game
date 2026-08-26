@@ -540,6 +540,12 @@ function updateTrackPreview() {
     }
     factsEl.innerHTML = facts.join("");
   }
+  // While #select is hidden (buildSelect's synchronous pass) the card measures
+  // 0×0 — planPreview would fit against placeholder geometry and every open is
+  // followed by the double-rAF / ResizeObserver refit anyway. The captions
+  // above are written (the refit measures them); the raster below is skipped.
+  const rasterCard = els.selPreviewMap.closest("#sel-track-preview");
+  if (!rasterCard || rasterCard.clientWidth <= 0 || rasterCard.clientHeight <= 0) return;
   drawElevProfile(document.getElementById("sel-preview-elev"), t);
 
   // Size the bitmap to the circuit's own aspect inside the CSS slot. A fixed

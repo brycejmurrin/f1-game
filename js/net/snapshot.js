@@ -134,51 +134,56 @@ const NetSnapshot = (function () {
       return { s: raw - laps * total, laps };
     }
 
-    function advance(st, dtMs) {
+    function advance(st, dtMs, out) {
       const dt = dtMs / 1000;
       const w = splitS(st.s + st.speed * dt);
       // Spread the source rather than re-listing its fields: a packet that
       // grows a field would otherwise silently lose it HERE ONLY, i.e. only
       // while extrapolating — invisible to any test that never stalls the
       // buffer. Only s moves; x is deliberately not extrapolated.
-      return Object.assign({}, st, {
-        s: w.s,
-        lap: Number.isFinite(st.lap) ? st.lap + w.laps : st.lap,
-        extrapolated: true,
-      });
+      const o = Object.assign(out || {}, st);
+      o.s = w.s;
+      o.lap = Number.isFinite(st.lap) ? st.lap + w.laps : st.lap;
+      o.extrapolated = true;
+      return o;
     }
 
-    function blend(a, b, u) {
-      const out = Object.assign({}, u < 0.5 ? a : b, {
-        x: a.x + (b.x - a.x) * u,
-        head: lerpWrapped(a.head, b.head, u, TAU),
-        speed: a.speed + (b.speed - a.speed) * u,
-        extrapolated: false,
-      });
+    function blend(a, b, u, out) {
+      const o = Object.assign(out || {}, u < 0.5 ? a : b);
+      o.x = a.x + (b.x - a.x) * u;
+      o.head = lerpWrapped(a.head, b.head, u, TAU);
+      o.speed = a.speed + (b.speed - a.speed) * u;
+      o.extrapolated = false;
       const d = M4.wrapDelta(b.s - a.s, total);   // shortest way round (js/mat4.js)
       const w = splitS(a.s + d * u);
-      out.s = w.s;
-      if (Number.isFinite(a.lap)) out.lap = a.lap + w.laps;
-      return out;
+      o.s = w.s;
+      if (Number.isFinite(a.lap)) o.lap = a.lap + w.laps;
+      return o;
     }
 
-    function sample(nowMs) {
+    // `out` (optional) is a caller-owned scratch object reused per remote per
+    // frame — sample/predict run for every rival every tick, and the fresh
+    // copies were the netplay loop's steadiest allocation. Omitted, each call
+    // returns a fresh object exactly as before. Assign-over-scratch relies on
+    // the packet shape being stable within a session (it is; the protocol is
+    // versioned) — fields never vanish mid-session, so no stale-key sweep.
+    function sample(nowMs, out) {
       if (!samples.length) return null;
       const target = nowMs - delayMs;
       const newest = samples[samples.length - 1];
       if (target >= newest.t) {
-        return advance(newest, Math.min(target - newest.t, maxExtrapMs));
+        return advance(newest, Math.min(target - newest.t, maxExtrapMs), out);
       }
       const oldest = samples[0];
-      if (target <= oldest.t) return Object.assign({}, oldest, { extrapolated: false });
+      if (target <= oldest.t) { const o = Object.assign(out || {}, oldest); o.extrapolated = false; return o; }
       for (let i = samples.length - 1; i > 0; i--) {
         const a = samples[i - 1], b = samples[i];
         if (target >= a.t && target <= b.t) {
           const span = b.t - a.t;
-          return blend(a, b, span > 0 ? (target - a.t) / span : 0);
+          return blend(a, b, span > 0 ? (target - a.t) / span : 0, out);
         }
       }
-      return Object.assign({}, newest, { extrapolated: false });
+      const o = Object.assign(out || {}, newest); o.extrapolated = false; return o;
     }
 
     return {
@@ -189,7 +194,7 @@ const NetSnapshot = (function () {
       // phantom collision at one end and a missed one at the other. Same code
       // path, just without the delay — so it extrapolates along the road and is
       // bounded exactly as sample() is.
-      predict: (nowMs) => sample(nowMs + delayMs),
+      predict: (nowMs, out) => sample(nowMs + delayMs, out),
       size: () => samples.length,
       newest: () => (samples.length ? samples[samples.length - 1] : null),
       oldest: () => (samples.length ? samples[0] : null),
