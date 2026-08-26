@@ -283,14 +283,6 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* --hud-scale, with the HUD: the dock is a control rather than a readout, but
      it is on screen only while driving and competes with the HUD for the same
      edges, so one slider owns everything you see during a race. */
-<<<<<<< HEAD
-  /* The dock rides zoom: --hud-scale, so a bare 54px is 21.6 VISUAL px at HUD
-     SIZE 40% — under the 24px floor the --tap-min ladder enforces everywhere
-     else (that ladder divides by --ui-scale, the wrong slider for the dock).
-     max() keeps the shipped size at 100% and holds 24 visual px under any
-     shrink. --hold (72/64px) clears the floor at every scale on its own. */
-  body:not(.desktop) .dock { --tap: max(54px, calc(24px / var(--hud-scale, 1))); --hold: 72px; zoom: var(--hud-scale); }
-=======
   /* max() on the HUD axis: these local values SHADOW the global floored
      --tap for the whole dock subtree, and the dock zooms by the RAW
      --hud-scale (not the capped --hud-z) — so the bare 54px painted
@@ -309,7 +301,6 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
        player's setting fits. */
     zoom: var(--hud-z-dock, var(--hud-scale));
   }
->>>>>>> origin/claude/f1-game-project-26h3ng
   body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: var(--fs-micro); }
   body:not(.desktop) .dock .pedal,
   body:not(.desktop) .dock .steerbtn,
@@ -331,15 +322,11 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body:not(.desktop) #grp-steer { padding-bottom: 14px; }
   /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
   @media (max-width: 700px) {
-<<<<<<< HEAD
-    body:not(.desktop) .dock { --tap: max(48px, calc(24px / var(--hud-scale, 1))); --hold: 64px; }
-=======
     /* Same HUD-axis floor as the base dock values above. */
     body:not(.desktop) .dock {
       --tap: max(48px, calc(24px / var(--hud-scale)));
       --hold: max(64px, calc(24px / var(--hud-scale)));
     }
->>>>>>> origin/claude/f1-game-project-26h3ng
     body:not(.desktop) .dock .touchbtn { font-size: var(--fs-micro); }
     body:not(.desktop) .dock .pedal,
     body:not(.desktop) .dock .steerbtn,
