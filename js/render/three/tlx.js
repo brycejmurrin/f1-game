@@ -660,10 +660,14 @@ const TLX = (function () {
             // texture bindGroups on Material.dispose() (issue #33952; PR
             // #33954 is slated for unpublished r186). Dropping the Map entry
             // lets the material stay alive for any drawList still holding it
-            // this frame; destroy() disposes the whole cache on teardown.
+            // this frame. Releasing the lit registry entry is what lets the
+            // JS object actually go — setSsrMrt held every minted material
+            // forever, so its loop grew and evictions freed nothing. A full
+            // dispose() pass lands with the r186 upgrade (same issue).
             for (const [k, v] of matCache) {
               if (v && v.__tlxFrame === _matFrame) continue;
               matCache.delete(k);
+              if (lit.releaseMaterial) lit.releaseMaterial(v);
               break;
             }
           }
@@ -1908,6 +1912,12 @@ const TLX = (function () {
             fx = null;
             for (let i = 0; i < poolUsed; i++) {
               if (meshPool[i]) meshPool[i].material = mat;
+            }
+            // Live InstancedMeshes hold their own material reference — leave
+            // them on a dead lit material and the retry render throws again,
+            // burning the remaining fallback rungs in one frame.
+            for (let i = 0; i < _instRegistry.length; i++) {
+              if (_instRegistry[i]) _instRegistry[i].material = mat;
             }
           };
           const refuseTab = () => {

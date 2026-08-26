@@ -1682,7 +1682,7 @@
       if (!SSR_TAG) return;
       for (let i = 0; i < _mats.length; i++) {
         const m = _mats[i];
-        const g = sharedFragment(!!m.userData.tlxChunked);
+        const g = sharedFragment(!!m.userData.tlxChunked, !!m.userData.tlxInstanced);
         m.mrtNode = on && g.mrt ? g.mrt : null;
       }
     }
@@ -1708,7 +1708,15 @@
       if (U.matTexScale.needsUpdate !== undefined) U.matTexScale.needsUpdate = true;
     }
 
-    return { makeMaterial, makeViz, uniforms: U, updateFrame, setEnvStr, setEnvCube,
+    // Drop a material from the setSsrMrt registry so an evicted cache entry
+    // can actually be released (JS-side; dispose() waits on the r186 upgrade
+    // per the eviction comment in tlx.js).
+    function releaseMaterial(m) {
+      const i = _mats.indexOf(m);
+      if (i >= 0) _mats.splice(i, 1);
+    }
+
+    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, updateFrame, setEnvStr, setEnvCube,
              setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS };
   }
 

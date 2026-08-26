@@ -235,7 +235,14 @@ const GLTF = (function () {
     if (json.scenes && json.scenes[sceneIndex] && json.scenes[sceneIndex].nodes) {
       roots = json.scenes[sceneIndex].nodes;
     } else {
-      roots = nodes.map((_, i) => i); // no scene def: treat all as roots
+      // No scene def: only UNPARENTED nodes are roots. Walking every node in
+      // index order visited a child listed before its parent at identity and
+      // then skipped it inside the parent's walk (shared visited set) —
+      // wrong transform, silently.
+      const parented = new Set();
+      for (const nd of nodes) if (nd && nd.children) for (const ch of nd.children) parented.add(ch);
+      roots = nodes.map((_, i) => i).filter((i) => !parented.has(i));
+      if (!roots.length) roots = nodes.map((_, i) => i); // cyclic garbage: old behavior
     }
 
     const visited = new Set();
@@ -344,13 +351,26 @@ const GLTF = (function () {
           colOut.push(cr, cg, cb);
         }
 
+        // A Y/Z swap is a reflection (determinant −1): triangle winding
+        // inverts, so with backface culling the model renders inside-out and
+        // flat normals computed from swapped positions point into the surface.
+        // Rewind each triangle so the flat-normal pass and the emitted indices
+        // both see the corrected winding.
+        let tri = indices;
+        if (swapYZ) {
+          tri = new Uint32Array(indices.length);
+          for (let i = 0; i + 2 < indices.length; i += 3) {
+            tri[i] = indices[i]; tri[i + 1] = indices[i + 2]; tri[i + 2] = indices[i + 1];
+          }
+        }
+
         // compute flat face normals if the primitive had none
         if (!normals) {
-          computeFlatNormals(posOut, indices, vertBase, nrmOut);
+          computeFlatNormals(posOut, tri, vertBase, nrmOut);
         }
 
         // emit indices, offset by this primitive's vertex base
-        for (let i = 0; i < indices.length; i++) idxOut.push(indices[i] + vertBase);
+        for (let i = 0; i < tri.length; i++) idxOut.push(tri[i] + vertBase);
         vertBase += vCount;
       }
     }

@@ -363,7 +363,9 @@
       let aoStr = o.ssao !== undefined ? o.ssao : 0;
       const contactStr = o.contact !== undefined ? o.contact : 0;
       let grStr = o.godray !== undefined ? o.godray : 0;
-      const lampVol = o.lampVol || 0;
+      // The godray march multiplies lamp in-scatter by the mist uniform, so
+      // with GROUND MIST at 0 it computes an exact 0 — skip arming it.
+      const lampVol = (o.mist || 0) > 0 ? (o.lampVol || 0) : 0;
       // ?viz= bisect: force the inspected block live so there is something
       // to look at even on a frame whose gate would be closed.
       if (viz === "ssao") aoStr = Math.max(aoStr, 0.95);

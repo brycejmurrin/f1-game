@@ -2,7 +2,7 @@
 "use strict";
 
 (function () {
-  const GR_MAX_LIGHTS = 12;
+  const GR_MAX_LIGHTS = 6;   // the march and the CPU fill are both bounded at 6
 
   function post(THREE, TSL, ctx) {
     const {
@@ -547,10 +547,15 @@
 
         // ── Wet-road + car-paint screen-space reflection js/render/shaders/post.js ──
         const carPx = smoothstep(0.42, 0.55, tagA).oneMinus().toVar();
+        // Gate ported exactly from COMPOSITE_FS (js/render/shaders/post.js):
+        // car-paint pixels only march when the CAR reflection knob is live,
+        // and the free top-UV compare runs before the depth fetch (generated
+        // GLSL short-circuits, so operand order is cost order).
         If(C.ssrOk.greaterThan(0.5)
-          .and(C.reflect.greaterThan(0.001).or(carPx.greaterThan(0.3)))
-          .and(depthAt(vUV).lessThan(0.9999))
-          .and(vUV.y.lessThan(C.ssrTopUV)), () => {   // sky/horizon seam gate
+          .and(C.reflect.greaterThan(0.001)
+            .or(carPx.greaterThan(0.3).and(C.carReflect.greaterThan(0.001))))
+          .and(vUV.y.lessThan(C.ssrTopUV))            // sky/horizon seam gate
+          .and(depthAt(vUV).lessThan(0.9999)), () => {
           const P = vec3(ssrViewPos(vUV)).toVar();
           const nT = C.reflTexel.mul(3.0).toVar();
           const dpx = ssrViewPos(vUV.add(vec2(nT.x, 0.0))).sub(P).toVar();
