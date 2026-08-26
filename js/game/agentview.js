@@ -1798,9 +1798,11 @@ const AgentView = (function () {
           for (const l of els.lights.children) l.classList.remove("on");
         }
       }
+      // savedInput is captured BEFORE the o.input write so a rollout is fully
+      // side-effect-free: a POLICY's last per-tick decision must not stay
+      // latched as the live loop's input after the rollout returns.
+      const savedPayload = lastPayload, savedSeq = lastSeq, savedCounter = seq, savedInput = G._testInput;
       if (o.input !== undefined) G._testInput = o.input || null;
-
-      const savedPayload = lastPayload, savedSeq = lastSeq, savedCounter = seq;
 
       const p = G.player;
       const list = corners();
@@ -1820,6 +1822,7 @@ const AgentView = (function () {
           try { inp = policy(world({ detail: "brief" })); }
           catch (e) {
             lastPayload = savedPayload; lastSeq = savedSeq; seq = savedCounter;
+            if (policy) G._testInput = savedInput;
             return fail("PolicyError", "the policy function threw: " + (e && e.message),
                         "fix the policy; it receives world({detail:'brief'}) and "
                         + "must return {steer,throttle,brake} or null");
@@ -1881,6 +1884,7 @@ const AgentView = (function () {
       }
 
       lastPayload = savedPayload; lastSeq = savedSeq; seq = savedCounter;
+      if (policy) G._testInput = savedInput;
 
       const elapsed = (G.raceT || 0) - startT;
       const lapsDone = (p.lap || 0) - startLap;

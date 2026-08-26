@@ -35,6 +35,16 @@ const DataLive = (function () {
       if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
     }
 
+    // Hub close: an in-flight refresh's settlement arm re-schedules through
+    // armAuto, and on CLOSE (unlike a tab switch) the live DOM stays attached
+    // under the hidden root — so every guard passed and the 30 s OpenF1 loop
+    // ran forever. Nulling armAuto fails the identity check in both the
+    // settlement arm and the timer; reopening re-arms via renderLiveBody.
+    function disarmLiveAuto() {
+      stopLiveAuto();
+      armAuto = null;
+    }
+
     function resumeLiveAuto() {
       if (!liveOpts.auto || liveTimer || !armAuto) return;
       armAuto();
@@ -349,7 +359,7 @@ const DataLive = (function () {
       renderRows();
     }
 
-    return { loadLive, stopLiveAuto };
+    return { loadLive, stopLiveAuto, disarmLiveAuto };
   }
   return { create, _mergePositionBatch: mergePositionBatch, _mergeIntervalBatch: mergeIntervalBatch };
 })();

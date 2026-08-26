@@ -299,6 +299,7 @@ const DataTelemetry = (function () {
   }
 
   function closeTelemPopup() {
+    ++telGen;   // a lap load in flight must not resurrect the popup after close
     const restore = telemPopup ? telemReturnFocus : null;
     stopTelAnim();
     if (telemKeyHandler) {
@@ -684,7 +685,11 @@ const DataTelemetry = (function () {
         const mainW = mainArea.clientWidth - 32; // minus padding
         if (mainW <= 0) return;
 
-        const newCW = Math.min(800, mainW);
+        // Mirror buildTelemetryView's cap and css .dh-canvas's 600 max-width:
+        // the old 800 cap allocated buffers the stylesheet then downscaled,
+        // softening the DPR-crisp charts, and the formula mismatch made the
+        // observer's first fire rebuild every layer a second time per open.
+        const newCW = Math.min(600, Math.max(260, mainW));
         const newCH = chartH(newCW, !!view.compare);
         // The ratio joins the change test — the house lesson from the circuit
         // detail canvas: a DPR/zoom change under an unchanged box produced an
@@ -903,8 +908,9 @@ const DataTelemetry = (function () {
 
   // drag the trace chart to scrub (pauses playback)
   function attachScrub(canvas, view) {
+    let srect = null;   // measured once per drag: the canvas is pointer-captured, it cannot move mid-gesture
     function at(ev) {
-      const r = (window.CssZoom && CssZoom.viewportRect(canvas)) || canvas.getBoundingClientRect();
+      const r = srect || (window.CssZoom && CssZoom.viewportRect(canvas)) || canvas.getBoundingClientRect();
       // map into bitmap px, then invert the plot-area (axis gutter) transform
       // view.cw, NOT canvas.width: the buffer is layout x ratio now, while
       // PADL/PADR and chartX speak layout px. Chart and delta share one width.
@@ -927,6 +933,7 @@ const DataTelemetry = (function () {
       pid = ev.pointerId;
       pauseAnim(view);
       try { canvas.setPointerCapture && canvas.setPointerCapture(pid); } catch (e) {}
+      srect = (window.CssZoom && CssZoom.viewportRect(canvas)) || canvas.getBoundingClientRect();
       at(ev);
     });
     canvas.addEventListener("pointermove", function (ev) {
@@ -936,7 +943,7 @@ const DataTelemetry = (function () {
     function endScrub(ev) {
       if (pid === null || (ev && ev.pointerId !== pid)) return;
       try { canvas.releasePointerCapture && canvas.releasePointerCapture(pid); } catch (e) {}
-      pid = null;
+      pid = null; srect = null;
     }
     canvas.addEventListener("pointerup", endScrub);
     canvas.addEventListener("pointercancel", endScrub);
