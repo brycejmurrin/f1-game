@@ -255,7 +255,8 @@ test("direct relay dedupe and decrypt work stay hard bounded", async () => {
 
   for (let i = 0; i < NetNostr.MAX_HEARD_ACTIVE; i++) assert.equal(inbox.accept("msg-" + i), true);
   assert.equal(inbox.accept("msg-0"), true, "a duplicate consumes no second decrypt slot");
-  assert.equal(inbox.accept("overflow"), false, "unique work beyond the concurrency cap closes that relay");
+  assert.equal(inbox.accept("overflow"), "busy",
+    "beyond the concurrency cap the message drops but the relay socket survives");
   assert.equal(inbox.stats().active, NetNostr.MAX_HEARD_ACTIVE);
   assert.equal(inbox.accept("x".repeat(NetNostr.MAX_CONTENT_CHARS + 1)), false);
 

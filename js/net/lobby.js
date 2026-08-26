@@ -153,6 +153,7 @@ const NetLobby = (function () {
         if (s) { try { s.close(); } catch (e) {} }
         sessions.delete(id);
         _peers.delete(id); _ready.delete(id);
+        clashSince.delete(id);
         Log.info("net", "peer leave " + id);
         session = [...sessions.values()][0] || null;
         if (!sessions.size) {
@@ -1420,7 +1421,7 @@ const NetLobby = (function () {
       try { if (NetTransport.prefetchIce) NetTransport.prefetchIce(); } catch (e) {}
       const e = els();
       if (!e.screen) return false;
-      _peers.clear(); _ready.clear();
+      _peers.clear(); _ready.clear(); clashSince.clear();
       show("pick");
       // inviteAnother() hides these; a fresh open must always offer all four
       // routes again, or a player who once invited a second guest can never
@@ -1478,7 +1479,7 @@ const NetLobby = (function () {
       codeReopen = null;
       teardown();
       role = null;
-      _peers.clear(); _ready.clear();
+      _peers.clear(); _ready.clear(); clashSince.clear();
       close();
     }
 
@@ -1507,7 +1508,7 @@ const NetLobby = (function () {
       on("vs-edit-car", () => { if (G.openGarageFrom) G.openGarageFrom("vsfriend"); });
       on("vs-ready", () => setReady(!selfReady));
       on("vs-invite-more", inviteAnother);
-      on("vs-code-host", codeHost);
+      on("vs-code-host", () => codeHost());   // never the click event as opts
       on("vs-code-join", () => {
         showCodeStep("input", "Enter their code", "Six letters and numbers.");
         const box = $("vs-code-in");

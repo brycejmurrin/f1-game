@@ -43,10 +43,14 @@ const NetRendezvous = (function () {
     return out;
   }
 
+  // ALPHABET has no 0/O/1/I/L at all, so no typed confusable can ever be
+  // valid — the collapse below just gives each confusable family ONE
+  // representative so valid() answers consistently. The old second chain
+  // (0→O, 1→I) mapped them back to characters equally outside the alphabet;
+  // dead in both directions, deleted.
   function normalise(code) {
-    const s = String(code || "").toUpperCase().replace(/[^0-9A-Z]/g, "")
+    return String(code || "").toUpperCase().replace(/[^0-9A-Z]/g, "")
       .replace(/O/g, "0").replace(/[IL]/g, "1");
-    return s.replace(/0/g, "O").replace(/1/g, "I");
   }
 
   const valid = (code) => {

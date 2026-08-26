@@ -51,6 +51,19 @@ const F1API = (function () {
   const sessionDates = {};              // sessionKey -> date_start ISO (seen sessions)
   const meetingDates = {};              // meetingKey -> date_start ISO (seen meetings)
 
+  // Cached payloads serialize as {"t":<ms>,"data":…} — t first — so sweeps can
+  // read the timestamp with a prefix match instead of JSON.parsing every
+  // multi-MB response body. Legacy/corrupt entries fall back to a full parse.
+  function cacheEntryT(raw) {
+    if (typeof raw !== "string") return null;
+    const m = /^\{"t":(\d+)[,}]/.exec(raw);
+    if (m) return +m[1];
+    try {
+      const obj = JSON.parse(raw);
+      return obj && typeof obj.t === "number" ? obj.t : null;
+    } catch (e) { return null; }
+  }
+
   function purgeExpiredCache(maxAge) {
     if (maxAge == null) maxAge = TTL_HISTORIC;
     let removed = 0;
@@ -63,10 +76,8 @@ const F1API = (function () {
       for (let i = 0; i < n; i++) {
         const key = localStorage.key(i);
         if (!key || key.indexOf(CACHE_PREFIX) !== 0) continue;
-        try {
-          const obj = JSON.parse(localStorage.getItem(key));
-          if (!obj || typeof obj.t !== "number" || (now - obj.t) > maxAge) doomed.push(key);
-        } catch (e) { doomed.push(key); }
+        const t = cacheEntryT(localStorage.getItem(key));
+        if (t == null || (now - t) > maxAge) doomed.push(key);
       }
       for (let i = 0; i < doomed.length; i++) {
         try { localStorage.removeItem(doomed[i]); removed++; } catch (e) { /* ignore */ }
@@ -82,12 +93,8 @@ const F1API = (function () {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (!key || key.indexOf(CACHE_PREFIX) !== 0) continue;
-        let t = 0;
-        try {
-          const obj = JSON.parse(localStorage.getItem(key));
-          if (obj && typeof obj.t === "number") t = obj.t;
-        } catch (e) { /* corrupt → treat as oldest */ }
-        entries.push({ key: key, t: t });
+        const t = cacheEntryT(localStorage.getItem(key));   // null (corrupt) → oldest
+        entries.push({ key: key, t: t || 0 });
       }
       entries.sort(function (a, b) { return a.t - b.t; });
       const n = Math.min(count || 8, entries.length);
@@ -112,9 +119,11 @@ const F1API = (function () {
     const key = CACHE_PREFIX + url;
     const payload = JSON.stringify({ t: Date.now(), data: data });
     const now = Date.now();
+    let swept = false;
     if (now - lastCacheSweepAt >= CACHE_SWEEP_MS) {
       purgeExpiredCache();
       lastCacheSweepAt = now;
+      swept = true;
     }
     try {
       localStorage.setItem(key, payload);
@@ -122,7 +131,7 @@ const F1API = (function () {
     } catch (e) {
       Log.warn("data", "apex26: api cache write failed (quota?)", e);
     }
-    purgeExpiredCache();
+    if (!swept) purgeExpiredCache();   // just ran above? once is enough
     purgeOldestCache(16);
     try {
       localStorage.setItem(key, payload);
@@ -169,25 +178,23 @@ const F1API = (function () {
     return Promise.race([network, timeout]).finally(function () { clearTimeout(timer); });
   }
 
-  function fetchRetry(url, attempt) {
+  // Single attempt: status/error handling only. Retries live in request(), where
+  // the backoff sleep happens OUTSIDE the serialized queue slot — inside it, one
+  // 429 stalled every other endpoint behind up to ~75 s of pure sleeping
+  // (2 × 10-20 s backoff + 3 × 15 s timeouts on the shared chain).
+  function fetchOnce(url) {
     lastNetAt = Date.now();
     return fetchTimed(url).then(function (res) {
-      if ((res.status === 429 || (res.status >= 500 && res.status < 600)) && attempt < MAX_RETRY) {
-        const ra = parseFloat(res.headers && res.headers.get && res.headers.get("retry-after"));
-        const back = isFinite(ra) && ra > 0
-          ? Math.min(ra * 1000, RETRY_CAP_MS)
-          : Math.min(RETRY_BASE_MS * Math.pow(2, attempt), RETRY_CAP_MS);
-        return new Promise(function (r) { setTimeout(r, back); }).then(function () {
-          return fetchRetry(url, attempt + 1);
-        });
-      }
       if (!res.ok) {
+        const ra = parseFloat(res.headers && res.headers.get && res.headers.get("retry-after"));
+        const raMs = isFinite(ra) && ra > 0 ? Math.min(ra * 1000, RETRY_CAP_MS) : 0;
         return res.text().then(function (txt) {
           try {
             const j = JSON.parse(txt);
             if (j.detail || j.error) {
               const err = new Error(j.detail || j.error);
               err.status = res.status;
+              err.retryAfterMs = raMs;
               throw err;
             }
           } catch (e) {
@@ -202,6 +209,7 @@ const F1API = (function () {
           }
           const httpErr = new Error("HTTP " + res.status + " for " + url);
           httpErr.status = res.status;
+          httpErr.retryAfterMs = raMs;
           throw httpErr;
         });
       }
@@ -223,15 +231,29 @@ const F1API = (function () {
     const hit = cache ? readCache(url) : null;
     if (ttl > 0 && hit && (Date.now() - hit.t) < ttl) return Promise.resolve(hit.data);
 
-    const job = queue
-      .then(function () {
-        const wait = lastNetAt + MIN_GAP_MS - Date.now();
-        if (wait > 0) return new Promise(function (res) { setTimeout(res, wait); });
-        return null;
-      })
-      .then(function () {
-        return fetchRetry(url, 0);
-      })
+    // Each attempt claims ONE queue slot (MIN_GAP pacing included) and releases
+    // it before any backoff sleep, so other endpoints proceed while this one
+    // waits out a 429 — the chain stays alive per-slot, not per-job.
+    function attempt(n) {
+      const slot = queue
+        .then(function () {
+          const wait = lastNetAt + MIN_GAP_MS - Date.now();
+          if (wait > 0) return new Promise(function (res) { setTimeout(res, wait); });
+          return null;
+        })
+        .then(function () { return fetchOnce(url); });
+      queue = slot.then(function () {}, function () {});
+      return slot.catch(function (err) {
+        const status = err && err.status;
+        if ((status === 429 || (status >= 500 && status < 600)) && n < MAX_RETRY) {
+          const back = err.retryAfterMs || Math.min(RETRY_BASE_MS * Math.pow(2, n), RETRY_CAP_MS);
+          return new Promise(function (r) { setTimeout(r, back); }).then(function () { return attempt(n + 1); });
+        }
+        throw err;
+      });
+    }
+
+    const job = attempt(0)
       .then(function (json) {
         if (cache) writeCache(url, json);
         if (!quiet) Log.info("data", "fetch " + name + " ok");
@@ -250,8 +272,6 @@ const F1API = (function () {
         throw err;
       });
 
-    // keep the chain alive whatever happens, without swallowing the caller's error
-    queue = job.then(function () {}, function () {});
     return job;
   }
 

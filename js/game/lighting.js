@@ -332,9 +332,15 @@ function lampRadius(post, themeRadius) {
 // Resolving from the position instead of trusting the caller's frame makes the
 // disagreement unexpressible, and needs no shift lookup here. Coarse scan then
 // a local refine — this runs once per bake over at most ~600 fixtures.
+const _postNodeMemo = new WeakMap();   // track -> { src, out } (LT-independent)
 function resolvePostNodes(track, posts) {
   const n = track.n, px = track.px, pz = track.pz;
   if (!n || !px || !pz) return posts;
+  // Pure function of (track geometry, posts) — a lamp-density knob drag
+  // rebuilds lights every tick and was re-running this ~124k-iteration scan
+  // each time. Keyed on both identities; a track rebuild replaces both.
+  const hit = _postNodeMemo.get(track);
+  if (hit && hit.src === posts) return hit.out;
   let out = null;
   for (let i = 0; i < posts.length; i++) {
     const p = posts[i];
@@ -355,7 +361,9 @@ function resolvePostNodes(track, posts) {
     if (!out) out = posts.slice();
     out[i] = { ...p, k: bk };
   }
-  return out || posts;
+  const res = out || posts;
+  _postNodeMemo.set(track, { src: posts, out: res });
+  return res;
 }
 function lampDensityFactor() {
   const d = LT.lampDensity;
@@ -424,7 +432,10 @@ function buildTrackLights(track, onlyAlways) {
   // empty so the caller's rebuild-if-empty retries next frame rather than caching
   // a bad empty result.
   if (!n || !total || !track.px || !track.rx) return lights;
-  Log.info("game", "LightTune.buildTrackLights track=" + ((track.def && track.def.id) || "?"));
+  // Debug-gated: a lamp-density knob drag rebuilds every frame and this line
+  // alone was flooding the ring buffer.
+  if (Log.enabled("game", Log.DEBUG))
+    Log.debug("game", "LightTune.buildTrackLights track=" + ((track.def && track.def.id) || "?"));
   const ds = total / n;
   const stride = lampStrideNodes(ds);   // matches buildProps mast stride (+ LAMP DENSITY)
   const { tint, intensity, radius, street } = floodColor(track.def.theme, track.def.id);
@@ -442,13 +453,14 @@ function buildTrackLights(track, onlyAlways) {
   // halos, specular streaks, volumetric beams and reflections all anchor to
   // geometry. Fallback: synthetic stride walk when lampPosts is absent.
   let posts = (track.lampPosts && track.lampPosts.length) ? track.lampPosts : null;
+  // BEFORE the always-filter, density and gap fill: they all walk `k`, so they
+  // need it to mean the place the fixture actually stands — and resolving the
+  // stable track.lampPosts array (not a fresh filter copy) lets the memo hit.
+  if (posts) posts = resolvePostNodes(track, posts);
   if (onlyAlways) {
     posts = posts ? posts.filter((p) => p && p.always) : null;
     if (!posts || !posts.length) return lights;
   }
-  // BEFORE density and gap fill: both walk `k`, so they need it to mean the
-  // place the fixture actually stands.
-  if (posts) posts = resolvePostNodes(track, posts);
   posts = applyLampDensity(posts, track, height, onlyAlways);
   // ── DARK-GAP FILL ─────────────────────────────────────────────────────────
   // Circuits suppress the generic mast pass over a stretch (dressingExclusions

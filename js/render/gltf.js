@@ -151,7 +151,7 @@ const GLTF = (function () {
 
   // Resolve a buffer (index) to a Uint8Array. Embedded BIN, or data: URI.
   function resolveBuffer(json, bin, index) {
-    const buf = json.buffers[index];
+    const buf = json.buffers && json.buffers[index];   // no buffers[] at all → same named error, not a bare TypeError
     if (!buf) throw new Error("GLTF: missing buffer " + index);
     if (buf.uri === undefined) {
       // embedded BIN chunk

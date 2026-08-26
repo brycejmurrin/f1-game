@@ -12,6 +12,10 @@ const els = G.els;
 const mm = els.minimap.getContext("2d");
 let hudT = 0;
 let minimapBg = null;         // offscreen canvas with pre-rendered track shape
+let minimapBgKey = "";        // cssW|cssH|ratio it was rendered for — NOT the
+                              // derived (W,H): 140css@2x and 280css@1x share a
+                              // bitmap size but need different path transforms
+let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
 let _flagShown = false;       // B1 caution-flag visibility cache (avoid layout thrash)
 let _teamSkin = null;         // last team id pushed to <html data-team> (skins the HUD accent)
 
@@ -322,9 +326,18 @@ function drawMinimap() {
   // currentCSSZoom, not the raw --hud-scale: the element rides the CAPPED
   // --hud-z, and the raw slider would over-allocate on a capped band. Ratio
   // capped at 3 to bound fill/memory on a DPR-3 phone at HUD SIZE 200%.
-  const cssW = els.minimap.clientWidth || 140, cssH = els.minimap.clientHeight || 140;
-  const ratio = Math.min(3, Math.max(1,
-    (els.minimap.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+  // Measure only when layout could have moved — same key discipline as
+  // fitHud (resize / HUD-scale), plus a track change (minimapBg null). A
+  // clientWidth read here lands right after the HUD's own DOM writes, so per
+  // frame it was a forced reflow ~10×/s for numbers that never change mid-race.
+  if (_mmKey !== _fitKey || _fitKey === "" || !minimapBg) {
+    _mmKey = _fitKey;
+    _mmCssW = els.minimap.clientWidth || 140;
+    _mmCssH = els.minimap.clientHeight || 140;
+    _mmRatio = Math.min(3, Math.max(1,
+      (els.minimap.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+  }
+  const cssW = _mmCssW, cssH = _mmCssH, ratio = _mmRatio;
   const W = Math.round(cssW * ratio), H = Math.round(cssH * ratio);
   // Every CSS tier gives #minimap an explicit width/height, so the attribute
   // change never moves the layout box (fitHud reads the same numbers).
@@ -332,7 +345,9 @@ function drawMinimap() {
     els.minimap.width = W; els.minimap.height = H;
   }
   // pre-render the static track outline once; reuse as a cheap blit every HUD frame
-  if (!minimapBg || minimapBg.width !== W || minimapBg.height !== H) {
+  const bgKey = cssW + "|" + cssH + "|" + ratio;
+  if (!minimapBg || minimapBgKey !== bgKey) {
+    minimapBgKey = bgKey;
     minimapBg = document.createElement("canvas");
     minimapBg.width = W; minimapBg.height = H;
     const mc = minimapBg.getContext("2d");
@@ -378,8 +393,9 @@ function drawMinimap() {
   }
   // Canvas resize resets 2D context state, so the transform is set every
   // draw, not once. The blit destination is in local px: under the ratio
-  // transform the W-physical-px cache lands on exactly W physical px — a
-  // 1:1 copy, no resampling, same cost profile as before.
+  // transform the W-physical-px cache lands on cssW·ratio physical px — a 1:1
+  // copy when that product is whole, and a sub-pixel resample of the rounding
+  // remainder when it is not. Either way one cheap blit per HUD frame.
   mm.setTransform(ratio, 0, 0, ratio, 0, 0);
   mm.clearRect(0, 0, cssW, cssH);
   mm.drawImage(minimapBg, 0, 0, cssW, cssH);

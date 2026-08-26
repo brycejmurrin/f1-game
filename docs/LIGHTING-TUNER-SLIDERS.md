@@ -732,7 +732,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
-| `particleMul` | PARTICLE FX | 0 … 3 | 1 | — |  | particles.js×3 |
+| `particleMul` | PARTICLE FX | 0 … 2 | 1 | — |  | particles.js×3 |
 
 ---
 

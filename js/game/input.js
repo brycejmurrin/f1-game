@@ -35,6 +35,7 @@ const Input = (function () {
   // paired PS5 / Xbox / MFi controller — no secure-context or permission gate,
   // so it runs anywhere the game is served (GitHub Pages included).
   let padConnected = false;
+  let _padReprobe = 0;      // frames since last disconnected-state re-probe
   let padPollWarned = false;
   let padSteer = 0;            // -1..1 from left stick / d-pad
   let padThrottle = false;
@@ -715,7 +716,18 @@ const Input = (function () {
   // never a second focus-mover. See padDispatchKey/padActivate/padEscape below
   // and their header comment for why B needs its own branch.
   function pollGamepad() {
-    if (!padConnected) return;
+    if (!padConnected) {
+      // Recovery re-probe, ~1 s throttle. gamepadconnected fires only on
+      // connection / first input (MDN) — it never re-fires for a pad that is
+      // still plugged in, so a transient getGamepads() hole (focus loss, a
+      // SECOND pad's unplug, a stale slot) used to kill gamepad input for the
+      // rest of the session. Polling is the only recovery path; the throttle
+      // keeps getGamepads()'s per-call array allocation off the frame budget.
+      if (++_padReprobe < 60) return;
+      _padReprobe = 0;
+      if (!activePad()) return;
+      padConnected = true;   // fall through and read it this frame
+    }
     const pad = activePad();
     if (!pad) {
       padConnected = false;

@@ -81,7 +81,7 @@ function applyRaceSettings() {
       G.frameSky.zenith  = [0.07 + _dwOvc * 0.09, 0.12 + _dwOvc * 0.09, 0.27 + _dwOvc * 0.04 - _dwClr * 0.03];
       G.frameSky.horizon = [0.88 - _dwOvc * 0.26 + _dwClr * 0.08, 0.50 - _dwOvc * 0.06, 0.40 + _dwOvc * 0.12 - _dwClr * 0.06];
       G.frameSky.sunColor = [1.0, 0.74 - _dwClr * 0.06 + _dwOvc * 0.10, 0.44 - _dwClr * 0.08 + _dwOvc * 0.16];
-      const _dawnAz = G.track && G.track.def ? ((_trackAtmoBias(G.track.def) * 0.28) - 0.14) : 0;
+      const _dawnAz = G.track && G.track.def ? ((_dwBias * 0.28) - 0.14) : 0;
       G.frameSky.sunDir  = _sunDirAz([-0.62, 0.08, 0.28], -_dawnAz);
       G.frame.sunDir     = G.frameSky.sunDir;
       G.frame.sunColor   = [1.0 - _dwOvc * 0.10, 0.80 - _dwClr * 0.04 + _dwOvc * 0.06, 0.50 - _dwClr * 0.08 + _dwOvc * 0.16];
@@ -103,7 +103,7 @@ function applyRaceSettings() {
       G.frameSky.zenith  = [0.08 + _dkOvc * 0.08, 0.10 + _dkOvc * 0.08, 0.28 + _dkOvc * 0.03];
       G.frameSky.horizon = [0.72 - _dkOvc * 0.20 + _dkClr * 0.10, 0.34 + _dkOvc * 0.02, 0.08 + _dkOvc * 0.14 - _dkClr * 0.02];
       G.frameSky.sunColor = [1.0, 0.55 + _dkOvc * 0.10 - _dkClr * 0.05, 0.18 + _dkOvc * 0.16 - _dkClr * 0.05];
-      const _duskAz = G.track && G.track.def ? ((_trackAtmoBias(G.track.def) * 0.28) - 0.14) : 0;
+      const _duskAz = G.track && G.track.def ? ((_dkBias * 0.28) - 0.14) : 0;
       G.frameSky.sunDir  = _sunDirAz([0.50, 0.10, 0.22], _duskAz);
       G.frame.sunDir     = G.frameSky.sunDir;
       G.frame.sunColor   = [1.0 - _dkOvc * 0.12, 0.62 + _dkOvc * 0.04 - _dkClr * 0.05, 0.22 + _dkOvc * 0.14 - _dkClr * 0.06];
@@ -420,11 +420,9 @@ function _sunDirAz(base, xBias) {
   return V3.norm([h * Math.sin(az), base[1], h * Math.cos(az)]);
 }
 
-function _trackAtmoBias(def) {
-  if (!def) return 0;
-  const id = def.id;
-  // Specific well-known circuits first (highest priority)
-  const _specific = {
+// Specific well-known circuits first (highest priority) — module const, not a
+// per-call literal: _trackAtmoBias runs several times per applyRaceSettings.
+const _ATMO_BIAS = {
     // Notoriously overcast / changeable
     spa:        0.85,
     silverstone: 0.70,
@@ -455,8 +453,10 @@ function _trackAtmoBias(def) {
     abudhabi:  -0.45,
     cota:       0.10,
     hungaroring: 0.15,
-  };
-  if (_specific[id] !== undefined) return _specific[id];
+};
+function _trackAtmoBias(def) {
+  if (!def) return 0;
+  if (_ATMO_BIAS[def.id] !== undefined) return _ATMO_BIAS[def.id];
   // Fall back to theme
   if (def.theme === "desert") return -0.45;
   if (def.theme === "street_night") return -0.10;

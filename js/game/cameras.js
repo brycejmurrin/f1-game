@@ -432,7 +432,10 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // this clamp simply never got the same treatment.
     const pos = (((s % track.total) + track.total) % track.total) / track.total * n;
     const k0 = Math.floor(pos) % n, kf = pos - Math.floor(pos);
-    const kA = (k0 - 1 + n) % n, k1 = (k0 + 1) % n, kB = (k0 + 2) % n;
+    // kPrev, NOT kA: this function's outer scope declares kA as a CURVATURE
+    // (1/m) ~200 lines up; reusing the name here for a node index was a
+    // landmine for any future edit wanting curvature inside this block.
+    const kPrev = (k0 - 1 + n) % n, k1 = (k0 + 1) % n, kB = (k0 + 2) % n;
     // Lateral offset of the eye, measured against the INTERPOLATED frame at s
     // (cvA still holds that sample) rather than one node's — same reason: a
     // per-node frame steps the lateral reading too.
@@ -440,7 +443,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const lat = ex * cvA.r[0] + ez * cvA.r[2];
     const beyond = Math.max(0, Math.abs(lat) - cvA.hw);
     const bank = Tracks.banking ? Tracks.banking(track, s, lat, _bankScr, true) : null;
-    const ground = crY(track.surface.heightAt(kA, beyond), track.surface.heightAt(k0, beyond),
+    const ground = crY(track.surface.heightAt(kPrev, beyond), track.surface.heightAt(k0, beyond),
                        track.surface.heightAt(k1, beyond), track.surface.heightAt(kB, beyond), kf)
                  + (bank ? bank.dy : 0);
     // SOFT floor, not a hard max(). `eye = max(eye, floor)` is continuous but its

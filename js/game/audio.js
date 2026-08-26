@@ -40,6 +40,7 @@ const GameAudio = (function () {
   let currentUrl = null;
   let musicToken = 0;
   const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
+  const _userBufKeys = [];                 // insertion order of non-builtin keys (cap 2)
   const MENU_TRACK = "assets/music/menu.mp3";
   const PLAYLIST = [
     { id: "builtin:menu", name: "menu", url: MENU_TRACK, builtin: true },
@@ -224,6 +225,7 @@ const GameAudio = (function () {
     rainPending = null;
     rainSrc = null; rainGain = null; rainHp = null; rainLp = null;
     for (const k in musicBuffers) delete musicBuffers[k];  // buffers are ctx-bound
+    _userBufKeys.length = 0;
     engBuf = accBuf = null; samplesReady = false;           // ctx-bound; reload for new ctx
     noisePoolBuf = null;                                    // ctx-bound too — a buffer from the
                                                             // old ctx throws on the new one
@@ -349,11 +351,10 @@ const GameAudio = (function () {
     engFilter.frequency.value = 600;
     engGain.gain.value = 0;
     engFilter.connect(engGain).connect(sfxBus);
-    // debug tap: lets tests read the engine's dominant output frequency (pitch)
-    dbgAnalyser = ctx.createAnalyser();
-    dbgAnalyser.fftSize = 16384;
-    dbgAnalyser.smoothingTimeConstant = 0;   // instantaneous spectrum for clean test reads
-    engGain.connect(dbgAnalyser);
+    // The debug analyser tap is created LAZILY in centroidHz() — a 16384-fft
+    // AnalyserNode copying every render quantum was shipping in every race for
+    // a hook whose only caller is a test (audio-smoke's expect.poll absorbs
+    // the first-read warm-up).
 
     usingSamples = !!(samplesReady && engBuf && accBuf);
     engA = engB = engC = null;
@@ -476,6 +477,13 @@ const GameAudio = (function () {
     skidSrc = null;
     // Disconnect the test analyser tap so it doesn't accumulate across restarts.
     if (dbgAnalyser) { try { dbgAnalyser.disconnect(); } catch (e) {} dbgAnalyser = null; }
+    // Tear the whole faded chain out of the graph once the 0.35 s source stops
+    // complete: stopped sources GC on their own, but Gain/Biquad nodes routed
+    // into sfxBus keep RENDERING until disconnect() (Web Audio contract) — a
+    // tab-hide/show cycle used to strand ~8 nodes each time, forever.
+    const dead = [engFilter, engGain, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG];
+    setTimeout(() => { for (const n of dead) { try { if (n) n.disconnect(); } catch (e) {} } }, 450);
+    engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = lfoG = null;
     idleGainRamped = false;
     engineOn = false;
   }
@@ -601,9 +609,13 @@ const GameAudio = (function () {
   let rainSrc = null, rainGain = null, rainHp = null, rainLp = null, rainStopping = false;
   let rainPending = null;   // gain a start asked for while stopRain's teardown was running
   let rainWanted = false;   // wanted even when nodes are torn down (rebuildCtx / tab hide)
+  let rainLastGain = 0.065; // last requested level, survives teardown/restore
 
   function startRain(gain) {
-    const g = gain == null ? 0.065 : gain;
+    // Remember the last requested level: the tab-return and ctx-rebuild paths
+    // call startRain() with no argument, and the bare 0.065 default reset a
+    // heavy-rain session to drizzle until the next weather flip.
+    const g = gain == null ? rainLastGain : (rainLastGain = gain);
     rainWanted = true;
     if (rainSrc) { if (rainGain) rainGain.gain.setTargetAtTime(g, now(), 0.8); return; }
     if (!sfxOk()) return;
@@ -886,13 +898,24 @@ const GameAudio = (function () {
     musicOn = true;
     currentUrl = url;
     const token = ++musicToken;
-    const cacheable = !!PLAYLIST[musicIndex].builtin;
+    const builtin = !!PLAYLIST[musicIndex].builtin;
     if (ctx.state !== "running") { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
     if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
     fetch(url)
       .then(r => r.arrayBuffer())
       .then(ab => new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); }))
-      .then(buf => { if (cacheable) musicBuffers[url] = buf; playMusicBuffer(buf, token); })
+      .then(buf => {
+        // Cache user tracks too — a single uploaded MP3 used to re-fetch and
+        // re-decode on EVERY repeat (loop only engages under 2 playlist
+        // entries, and only builtins were cached). Decoded PCM is big, so
+        // user-track buffers are bounded to the 2 most recent.
+        musicBuffers[url] = buf;
+        if (!builtin) {
+          _userBufKeys.push(url);
+          while (_userBufKeys.length > 2) delete musicBuffers[_userBufKeys.shift()];
+        }
+        playMusicBuffer(buf, token);
+      })
       .catch((err) => {
         // Music is optional and the game plays on without it. Retained rather
         // than printed: a soundtrack that never starts is otherwise invisible.
@@ -1090,7 +1113,15 @@ const GameAudio = (function () {
     volumes,
     rate() { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value.toFixed(4) : 0; },
     centroidHz() {
-      if (!dbgAnalyser || !ctx) return 0;
+      if (!ctx || !engineOn || !engGain) return 0;
+      if (!dbgAnalyser) {
+        // Lazy debug tap (test-only caller): created on first read, torn down
+        // with the engine in stopEngine like before.
+        dbgAnalyser = ctx.createAnalyser();
+        dbgAnalyser.fftSize = 16384;
+        dbgAnalyser.smoothingTimeConstant = 0;   // instantaneous spectrum for clean test reads
+        engGain.connect(dbgAnalyser);
+      }
       const n = dbgAnalyser.frequencyBinCount, arr = new Float32Array(n);
       dbgAnalyser.getFloatFrequencyData(arr);
       let num = 0, den = 0;

@@ -53,6 +53,9 @@ function load(over = {}) {
                           yawRateCur: 0, prog: s, finished: false, retired: false, human: false });
   const cars = [mkCar(100), mkCar(103)];
   const G = { cars, player: cars[0], track: { total: 5000 },
+              // Promotion thresholds and the rescue floor are pace-scaled now,
+              // so the façade stub carries the speed scale like the real G.
+              PACE: 1, vTop: () => 72,
               trackFrom: over.trackFrom || (() => ({ s: 100, x: 0 })),
               worldFromTrack: over.worldFromTrack || (() => ({ x: 0, z: 0 })),
               rescuePlayer: () => {}, smp: {} };

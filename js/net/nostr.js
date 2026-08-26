@@ -169,10 +169,14 @@ const NetNostr = (function () {
         seenChars -= oldest.length;
       }
     };
+    // Verdicts: true = handled (new or duplicate), "busy" = over the decrypt
+    // cap — DROP the message but keep the socket (a relay replaying history in
+    // a burst must not cost us every connection mid-handshake), false =
+    // poison (non-string / empty / oversize) — the caller closes that relay.
     const accept = (content) => {
       if (typeof content !== "string" || !content || content.length > MAX_CONTENT_CHARS) return false;
       if (seen.has(content)) return true;
-      if (active >= MAX_HEARD_ACTIVE) return false;
+      if (active >= MAX_HEARD_ACTIVE) return "busy";
       remember(content);
       active++;
       Promise.resolve().then(() => consume(content)).catch(() => {}).finally(() => { active--; });
@@ -243,10 +247,17 @@ const NetNostr = (function () {
         for (const w of sockets) { try { w.close(); } catch (e) {} }
         sockets.length = 0;
       };
+      // Every deadline goes through later() so finish() can reclaim it — an
+      // orphaned 2-min expiry timer otherwise retains this whole closure
+      // (sockets, module, payloads) long after the exchange settled.
+      const timers = [];
+      const later = (fn, ms) => timers.push(setTimeout(fn, ms));
       const finish = (r) => {
         if (done) return;
         done = true;
         clearInterval(tick); clearInterval(repost);
+        for (const id of timers) clearTimeout(id);
+        timers.length = 0;
         shut();
         nostrLog(r);
         if (!settled) { settled = true; resolve(r); return; }
@@ -304,7 +315,7 @@ const NetNostr = (function () {
           if (done || ++n > 3) { clearInterval(again); return; }
           await publish(out);
         }, 1200);
-        setTimeout(() => { clearInterval(again); finish({ ok: true, payload: text }); }, 5200);
+        later(() => { clearInterval(again); finish({ ok: true, payload: text }); }, 5200);
       };
       let answering = false;
       const inbox = createBoundedInbox(heard);
@@ -316,7 +327,7 @@ const NetNostr = (function () {
 
       const repost = setInterval(() => { if (!done && current) publish(current); }, REPOST_MS);
 
-      setTimeout(() => finish({ ok: false, error: "expired",
+      later(() => finish({ ok: false, error: "expired",
         message: "Nobody joined that code. Codes only last a couple of minutes." }),
         JOIN_TIMEOUT_MS);
 
@@ -349,14 +360,14 @@ const NetNostr = (function () {
             return;
           }
           if (m[0] === "EVENT" && m[2] && typeof m[2].content === "string" &&
-              !inbox.accept(m[2].content)) {
+              inbox.accept(m[2].content) === false) {
             try { w.close(); } catch (e) {}
           }
         };
         w.onerror = () => {};
       }
 
-      setTimeout(() => {
+      later(() => {
         if (done) return;
         const live = sockets.filter((w) => w.readyState === 1).length;
         if (live && rejectedBy.size >= live && onFail) {
@@ -376,7 +387,7 @@ const NetNostr = (function () {
         }).catch(() => {});
       }
 
-      setTimeout(() => {
+      later(() => {
         if (done) return;
         if (!sockets.some((w) => w.readyState === 1)) {
           finish({ ok: false, error: "no_relay",
@@ -514,11 +525,15 @@ const NetNostr = (function () {
                         + " Use the invite link instead." };
       };
 
+      const timers = [];
+      const later = (fn, ms) => timers.push(setTimeout(fn, ms));
       const finish = (r) => {
         if (done) return;
         done = true;
         clearInterval(tick);
         clearInterval(rebroadcast);
+        for (const id of timers) clearTimeout(id);
+        timers.length = 0;
         restoreWarn();
         leave();
         nostrLog(r);
@@ -531,7 +546,7 @@ const NetNostr = (function () {
         else if (onTick) { try { onTick(); } catch (e) {} }
       }, 1000);
 
-      setTimeout(() => finish({ ok: false, error: "expired",
+      later(() => finish({ ok: false, error: "expired",
         message: "Nobody joined that code. Codes only last a couple of minutes." }),
         JOIN_TIMEOUT_MS);
 
@@ -540,7 +555,7 @@ const NetNostr = (function () {
       // relay blocked — a captive portal, a corporate proxy, an offline
       // laptop — stares at "waiting for them to join" for two full minutes
       // before being told something that was knowable in five seconds.
-      setTimeout(() => {
+      later(() => {
         if (done || !room) return;
         let live = 0;
         try {
@@ -642,7 +657,7 @@ const NetNostr = (function () {
               if (done || ++tries > 4) { clearInterval(resend); return; }
               shout();
             }, 1200);
-            setTimeout(() => { clearInterval(resend); finish({ ok: true, payload: data }); }, 6500);
+            later(() => { clearInterval(resend); finish({ ok: true, payload: data }); }, 6500);
           });
 
           // Post on join AND immediately: whoever is already in the room gets

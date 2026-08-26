@@ -256,8 +256,9 @@ function start(opts) {
   // argument override that is how a MY TEAM ends up filling a driver slot.
   // WHICH SLOT is `o.slot`, or the first free one, or — when the set is full —
   // whichever is live there, which is the only remaining meaning of "start one".
+  const free = firstFree(flavour);   // once — each call walks the slot store
   const target = o.slot != null ? slotIn(o.slot)
-    : firstFree(flavour) >= 0 ? firstFree(flavour)
+    : free >= 0 ? free
     : (flavour === slotFlavour ? slotIdx : 0);
   // Save the career being left before the new one takes its place — starting a
   // career must not cost an unsaved change in the one you were playing.

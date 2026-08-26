@@ -4,6 +4,7 @@ const DataExport = (function () {
 
   function create(ctx) {
     const { el, clear } = ctx;
+    const hubOpen = ctx.isOpen || function () { return true; };
 
   /* Runs in the browser (where OpenF1 is reachable) and downloads a JSON file.
      For each circuit of the chosen season it pulls ONE clean fast-lap location
@@ -18,6 +19,14 @@ const DataExport = (function () {
     const GAP = 5000;
     const DRIVERS = 3;
 
+    // Cancel checkpoint: a gather must not keep hammering OpenF1 for ~10 min
+    // after the hub is closed. Checked around every pacing sleep; a quick
+    // close-and-reopen that spans no checkpoint deliberately survives.
+    function ck() {
+      if (!hubOpen()) { const e = new Error("cancelled"); e.cancelled = true; throw e; }
+    }
+    function sleepCk(ms) { ck(); return sleep(ms).then(ck); }
+
     function tryMeeting(m, retrying) {
       const key = m.circuit || m.name;
       return F1API.sessionsForMeeting(m.meetingKey).then(function (ss) {
@@ -25,7 +34,7 @@ const DataExport = (function () {
                   ss.find(function (x) { return /race/i.test(x.name || ""); }) ||
                   ss[ss.length - 1];
         if (!s) { log("· no session: " + key); return false; }
-        return sleep(2000).then(function () {
+        return sleepCk(2000).then(function () {
           return F1API.sessionDrivers(s.sessionKey);
         }).then(function (drv) {
           if (!drv || !drv.length) { log("· no drivers: " + key); return false; }
@@ -35,13 +44,13 @@ const DataExport = (function () {
             dc = dc.then(function (done) {
               if (done) return true;
               // 3 s before each laps request to stay within rate limit
-              return sleep(3000).then(function () {
+              return sleepCk(3000).then(function () {
                 return F1API.fastestLap(s.sessionKey, d.num);
               }).then(function (fl) {
                 if (!fl || !fl.dateStart) return false;
                 const endISO = new Date(Date.parse(fl.dateStart) + (fl.lapDuration + 1) * 1000).toISOString();
                 // 3 s before location (large response — give the server breathing room)
-                return sleep(3000).then(function () {
+                return sleepCk(3000).then(function () {
                   return F1API.locationData(s.sessionKey, d.num, fl.dateStart, endISO);
                 }).then(function (loc) {
                   if (!loc || loc.length < 20) return false;
@@ -55,17 +64,18 @@ const DataExport = (function () {
                   log("✓ " + key + "  pts=" + trace.length + " (" + (d.code || ("#" + d.num)) + ")");
                   return true;
                 });
-              }).catch(function () { return false; });
+              }).catch(function (e) { if (e && e.cancelled) throw e; return false; });
             });
           });
           return dc.then(function (done) { if (!done) log("· no lap/loc: " + key); return done; });
         });
       }).catch(function (e) {
+        if (e && e.cancelled) throw e;
         const msg = e && e.message || String(e);
         // On 429 wait 90 s then retry once — longer than OpenF1's sliding window
         if (!retrying && /429/.test(msg)) {
           log("· rate limited for " + key + " — waiting 90 s…");
-          return sleep(90000).then(function () { return tryMeeting(m, true); });
+          return sleepCk(90000).then(function () { return tryMeeting(m, true); });
         }
         log("· skip " + key + ": " + msg);
         return false;
@@ -78,7 +88,7 @@ const DataExport = (function () {
       list.forEach(function (m, i) {
         chain = chain.then(function () {
           return tryMeeting(m, false).then(function (ok) { if (!ok) missed.push(m); });
-        }).then(function () { return i < list.length - 1 ? sleep(GAP) : null; });
+        }).then(function () { return i < list.length - 1 ? sleepCk(GAP) : null; });
       });
       return chain.then(function () { return missed; });
     }
@@ -88,7 +98,7 @@ const DataExport = (function () {
       return pass(ms, "pass 1").then(function (missed) {
         if (!missed.length) return;
         log("retrying " + missed.length + " missed circuit(s) — waiting 2 min for rate limit to clear…");
-        return sleep(120000).then(function () { return pass(missed, "pass 2"); });
+        return sleepCk(120000).then(function () { return pass(missed, "pass 2"); });
       });
     }).then(function () {
       log("done — " + Object.keys(out.circuits).length + " circuits captured");
@@ -176,7 +186,10 @@ const DataExport = (function () {
     return new Promise(function (res) {
       cv.toBlob(function (blob) {
         if (!blob) { res(new Uint8Array(0)); return; }
-        blob.arrayBuffer().then(function (ab) { res(new Uint8Array(ab)); });
+        // A rejection here (detached buffer, OOM) must not hang the ZIP chain —
+        // that leaves `running` true and kills Download for the whole session.
+        blob.arrayBuffer().then(function (ab) { res(new Uint8Array(ab)); },
+                                function () { res(new Uint8Array(0)); });
       }, "image/png");
     });
   }
@@ -233,6 +246,7 @@ const DataExport = (function () {
         log("Ready to download.");
         Log.info("data", "export gather done");
       }).catch(function (e) {
+        if (e && e.cancelled) { log("Cancelled — data hub closed."); Log.info("data", "export gather cancelled"); return; }
         log("ERROR: " + (e && e.message || e));
         Log.warn("data", "export gather fail");
       }).then(function () { running = false; gatherBtn.textContent = "Gather"; });

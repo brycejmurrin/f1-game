@@ -197,9 +197,9 @@ function create(ctx) {
   try { _breakBarriers = (localStorage.getItem("apex26.breakBarriers") || "1") !== "0"; } catch (e) {}
   try { _marbleGripOn = (localStorage.getItem("apex26.marbleGrip") || "1") !== "0"; } catch (e) {}
   if (opt === "1") setEnabled(true);   // async load, never blocks boot (set "0" to disable)
-  return { active, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst, positions,
-           registerFurniture, tyreMarble, hazards, promoteBarrier, marbleGrip, groupBFlags,
-           rapierReady, worldGen, promoteCarDynamic, demoteCarKinematic, carBodyPose, isCarDynamic };
+  // No API return: the sole caller (game.js) discards it and everything goes
+  // through the module global — a hand-maintained duplicate list here had
+  // already diverged from the real export (it was missing prime).
 }
 
 // ── Incident-sim takeover interface (consumed by js/game/incidentsim.js) ─────
@@ -673,38 +673,45 @@ function _ageAndCullPool(pool, dt, px, pz, havePlayer, restLimit, farM) {
     if (s.restT > restLimit || far) { b.setEnabled(false); s.live = false; }
   }
 }
+let _cnx = new Float64Array(0), _cnz = new Float64Array(0);  // per-car XZ scratch
 function _carNearLiveDebris(track, cars) {
   // XZ, same metres as FURN_WAKE_M. A settled marble under the line must still
   // solve when a car is close enough to punt it — marbleGrip() reads those
   // sleeping live bodies, so a sleep-only gate without this wake is a grip bug.
   const r2 = FURN_WAKE_M * FURN_WAKE_M;
   const n = cars.length;
+  // Car positions once, not per (body × car) — headless fields without px/pz
+  // otherwise pay a Tracks.sample per pair (~1600 samples/frame worst case).
+  if (_cnx.length < n) { _cnx = new Float64Array(n); _cnz = new Float64Array(n); }
+  for (let k = 0; k < n; k++) {
+    const c = cars[k];
+    if (c.px == null) { Tracks.sample(track, c.s, _smp); _cnx[k] = _smp.p[0]; _cnz[k] = _smp.p[2]; }
+    else { _cnx[k] = c.px; _cnz[k] = c.pz; }
+  }
   for (const pool of [_slots, _marbles, _panels]) {
     for (let i = 0; i < pool.length; i++) {
       const s = pool[i];
       if (!s.live || !s.body) continue;
       const t = s.body.translation();
       for (let k = 0; k < n; k++) {
-        const c = cars[k];
-        let cx = c.px, cz = c.pz;
-        if (cx == null) {
-          Tracks.sample(track, c.s, _smp);
-          cx = _smp.p[0]; cz = _smp.p[2];
-        }
-        const dx = t.x - cx, dz = t.z - cz;
+        const dx = t.x - _cnx[k], dz = t.z - _cnz[k];
         if (dx * dx + dz * dz < r2) return true;
       }
     }
   }
   return false;
 }
-function _needSolve(track, cars) {
+// live / furnNear are the pool-liveness and furniture-proximity verdicts the
+// caller already computed for its skip-entirely gate — passed down so a debris
+// window doesn't re-scan every pool and the furniture twice per frame. Both
+// optional: called bare, this recomputes them.
+function _needSolve(track, cars, live, furnNear) {
   if (_queue.length || _dynCars.size) return true;
   if (_anyAwake(_slots) || _anyAwake(_marbles) || _anyAwake(_panels)) return true;
-  if ((_anyLive(_slots) || _anyLive(_marbles) || _anyLive(_panels))
-      && _carNearLiveDebris(track, cars)) return true;
-  if (_furn.length && _carNearFurn(track, cars)) return true;
-  return false;
+  if (live == null) live = _anyLive(_slots) || _anyLive(_marbles) || _anyLive(_panels);
+  if (live && _carNearLiveDebris(track, cars)) return true;
+  if (furnNear == null) furnNear = _furn.length > 0 && _carNearFurn(track, cars);
+  return !!furnNear;
 }
 function step(dt) {
   const track = G.track, cars = G.cars;
@@ -713,21 +720,25 @@ function step(dt) {
   if (world && (_worldTrack !== track || _mirrors.length !== cars.length)) destroyWorld();
   if (!world) buildWorld(track, cars);
   if (world.timestep !== dt) world.timestep = dt;
-  if (_queue.length === 0 && _dynCars.size === 0 && !_anyLive(_panels)
-      && !_anyLive(_slots) && !_anyLive(_marbles)
-      && (!_furn.length || !_carNearFurn(track, cars))) {
-    return;
-  }
-  if (!_needSolve(track, cars)) {
-    _stepSkips++;
-    for (let i = 0; i < _spallCool.length; i++)
-      if (_spallCool[i] > 0) _spallCool[i] = Math.max(0, _spallCool[i] - dt);
-    const pos = _playerSample(track);
-    _ageAndCullPool(_slots, dt, pos.px, pos.pz, pos.have, REST_DESPAWN_S, FAR_DESPAWN_M);
-    _ageAndCullPool(_marbles, dt, pos.px, pos.pz, pos.have, MARBLE_REST_DESPAWN_S, MARBLE_FAR_DESPAWN_M);
-    for (let i = 0; i < _panels.length; i++) _panels[i].force = 0;
-    if (_panels.length) updatePanels(dt, pos.px, pos.pz);
-    return;
+  // Queue or dynamic cars → straight to the solve, no pool scans at all.
+  // Otherwise scan pools/furniture ONCE and share the verdicts with
+  // _needSolve — the old pre-gate + _needSolve pair walked _anyLive×3 and
+  // _carNearFurn twice on every frame of a debris window.
+  if (_queue.length === 0 && _dynCars.size === 0) {
+    const live = _anyLive(_panels) || _anyLive(_slots) || _anyLive(_marbles);
+    const furnNear = _furn.length > 0 && _carNearFurn(track, cars);
+    if (!live && !furnNear) return;
+    if (!_needSolve(track, cars, live, furnNear)) {
+      _stepSkips++;
+      for (let i = 0; i < _spallCool.length; i++)
+        if (_spallCool[i] > 0) _spallCool[i] = Math.max(0, _spallCool[i] - dt);
+      const pos = _playerSample(track);
+      _ageAndCullPool(_slots, dt, pos.px, pos.pz, pos.have, REST_DESPAWN_S, FAR_DESPAWN_M);
+      _ageAndCullPool(_marbles, dt, pos.px, pos.pz, pos.have, MARBLE_REST_DESPAWN_S, MARBLE_FAR_DESPAWN_M);
+      for (let i = 0; i < _panels.length; i++) _panels[i].force = 0;
+      if (_panels.length) updatePanels(dt, pos.px, pos.pz);
+      return;
+    }
   }
   _tick++;
   // A1: decay per-car spall cooldowns.
