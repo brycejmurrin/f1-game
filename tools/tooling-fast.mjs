@@ -65,6 +65,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/docs-integrity.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
   "tests/unit/component-inventory.test.mjs",
+  "tests/unit/sheet-per-screen.test.mjs",
   "tests/unit/css-class-ratchet.test.mjs",
   "tests/unit/test-groups.test.mjs",
   "tests/unit/pick-tests.test.mjs",
