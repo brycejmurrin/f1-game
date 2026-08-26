@@ -370,8 +370,10 @@ const CEILINGS = {
   //   live where G is built), czPreview's live-3D draft override plus its
   //   clear on save/cancel (livDraftOverride is closure-local here), and the
   //   quali .q-done Escape flash (the handler is here). All three fix
-  //   recorded UX defects at their existing sites.
-  "js/game.js": 8621,
+  //   recorded UX defects at their existing sites. 8621 -> 8627: the vt()
+  //   View-Transition wrap of the title/select/garage spine — the swap
+  //   handlers live here, the helper in js/game/menus.js.
+  "js/game.js": 8627,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

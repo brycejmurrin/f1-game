@@ -130,7 +130,10 @@ const CLASS_CEILING = 536;
 // DETAIL keyboard-reachable) + #sel-detail-chip (the fallback door on tiny
 // sheets where the canvas is display:none — hiding it used to make the whole
 // screen unreachable).
-const NODE_CEILING = 1214;
+// +4 2026-08-26: #pm-hud-sample and its hud-box — the HUD SIZE slider's live
+// sample; every real cluster is hidden while the settings sheet is open, so
+// the slider had zero visible effect.
+const NODE_CEILING = 1218;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module

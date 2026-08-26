@@ -3050,7 +3050,7 @@ const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
 // CAR SETUP panel UI (js/game/setup-ui.js).
 const { buildSetup, openSetup } = SetupUI.create(G);
 // Select-screen UI (js/game/menus.js).
-const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch } = Menus.create(G);
+const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt } = Menus.create(G);
 // UI SIZE / HUD SIZE + RESOLUTION (js/game/ui-scale.js). After Menus so the
 // first applyUiScale can refresh an already-built select preview.
 const { setScale, applyResMode } = UiScale.create(G);
@@ -7489,7 +7489,7 @@ $("mb-race").onclick = () => {
   setFlow("gp"); session = "race";
   restoreFreePlaySelection();
   buildSelect();
-  els.overlay.hidden = true; els.select.hidden = false;
+  vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 };
@@ -7505,7 +7505,7 @@ $("mb-tt").onclick = () => {
   setFlow("gp"); session = "tt";
   restoreFreePlaySelection();
   buildSelect();
-  els.overlay.hidden = true; els.select.hidden = false;
+  vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 };
@@ -7523,7 +7523,7 @@ $("mb-season").onclick = () => {
   }
   trackIdx = ti;
   buildSelect();
-  els.overlay.hidden = true; els.select.hidden = false;
+  vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack();
 };
@@ -7611,8 +7611,10 @@ $("tp-close").onclick = () => { $("teampicker").hidden = true; };
 // was simply dead (surfaced by the button-walk audit; the wiring lived on an
 // unmerged branch).
 els.selBack.onclick = () => {
-  els.select.hidden = true;
-  if (netRoom) $("vsfriend").hidden = false; else els.overlay.hidden = false;
+  vt(() => {
+    els.select.hidden = true;
+    if (netRoom) $("vsfriend").hidden = false; else els.overlay.hidden = false;
+  });
   if (soundOn) GameAudio.uiSelect();
 };
 // The button wrapper carries the semantics now (focusable, labelled); the
@@ -8172,7 +8174,11 @@ function openGarage(from) {
   setupPreviewDist = SP_DIST_DEF;
   setSetupSpin(true);
   setSetupCamPanel(false);   // same reasoning: the front door is the turntable
-  openSetup();
+  // vt at the CALL site: SetupUI.create runs before Menus.create at boot, so
+  // the module cannot hold the helper itself. The build runs inside the
+  // transition callback — vt's 60 ms drop-safety applies it directly if the
+  // page is not compositing.
+  vt(openSetup);
 }
 $("mb-garage").onclick = () => openGarage("menu");
 // Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
@@ -8198,9 +8204,9 @@ function garageBack() {
     return;
   }
   if (garageReturn === "career") { careerUi.openHub(); return; }
-  if (garageReturn === "select") { buildSelect(); $("select").hidden = false; return; }
+  if (garageReturn === "select") { buildSelect(); vt(() => { $("select").hidden = false; }); return; }
   buildSelect();
-  els.overlay.hidden = false;   // came in from the title screen's GARAGE button
+  vt(() => { els.overlay.hidden = false; });   // came in from the title screen's GARAGE button
 }
 $("cs-back").onclick = garageBack;
 $("cs-done").onclick = () => {

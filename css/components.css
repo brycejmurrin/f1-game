@@ -77,8 +77,11 @@
 
 /* ---------- dialogs arrive, rather than appearing ----------
    Scoped to `.dim` — the modal sheets. The two full-screen flows (#select,
-   #carsetup) are swapped inside a View Transition by menus.js, and animating
-   those here would run two transitions over each other.
+   #carsetup) are swapped inside a View Transition (game.js wraps the title/
+   select/garage spine in Menus' vt()), and animating those here would run
+   two transitions over each other. This comment predated the wiring — the
+   spine swaps were bare hidden-flips for a year while it claimed otherwise;
+   the code now does what it says.
    A CSS animation, not @starting-style: these screens are toggled with the
    hidden attribute, so they come back from `display: none`, which restarts an
    animation by itself and needs no allow-discrete plumbing. */
@@ -758,6 +761,19 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    shrink the sheet at 200% UI size. Landscape is a viewport fact. */
 #pausemenu   { --sheet-w: 420px; --fit-at: 260px; }
 #pmsettings  { --sheet-w: 760px; }
+/* The HUD SIZE sample: a picture of a hud-box that zooms by the same RAW
+   --hud-scale the dock takes, so the slider's drag visibly resizes it —
+   every real cluster is hidden while this .dim sheet is open (css/hud.css's
+   measured overlap rule, deliberately untouched), and from the title there
+   is no HUD at all: the slider had zero feedback. Inside the sheet's own
+   --ui-scale zoom the multiplication is constant during a HUD drag, so the
+   relative change reads true. pointer-events none: it is not a control. */
+#pm-hud-sample {
+  zoom: var(--hud-scale);
+  align-self: start;
+  pointer-events: none;
+  margin-top: calc(var(--gap) * 0.5);
+}
 #results     { --sheet-w: 600px; --fit-at: 300px; }
 #standings   { --sheet-w: 560px; --fit-at: 300px; }
 /* Help uses a term rail beside a readable description column. At the old 700px

@@ -159,7 +159,7 @@ function buildTeamOptions(optsEl, team) {
   const chev = document.createElement("span");
   chev.className = "tm-chev"; chev.textContent = "▾"; chev.setAttribute("aria-hidden", "true");
   card.append(G.teamSwatch(team), body, chev);
-  card.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); G.setTeamPicker(true, "garage"); };
+  card.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); G.setTeamPicker(true); };
   optsEl.appendChild(card);
 
   optsEl.appendChild(csLabel("DRIVER"));

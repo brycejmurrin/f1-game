@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1551">
+<meta name="apex-build" content="1553">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -50,7 +50,7 @@
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
 <link rel="preload" href="css/tokens.css?v=f09f7b06adf5" as="style">
-<link rel="preload" href="css/components.css?v=2a6a05096105" as="style">
+<link rel="preload" href="css/components.css?v=3cf34073c66c" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -69,7 +69,7 @@
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=f09f7b06adf5">
-<link rel="stylesheet" href="css/components.css?v=2a6a05096105">
+<link rel="stylesheet" href="css/components.css?v=3cf34073c66c">
 <link rel="stylesheet" href="css/tuner.css?v=c6e5201f3a11" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/menus.css?v=550e1244a0de">
 <link rel="stylesheet" href="css/carsetup.css?v=d6870be3d27f" media="print" onload="this.media='all'">
@@ -426,6 +426,14 @@
             <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size"></label>
           <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
             <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
+          <!-- The slider's effect was invisible: css/hud.css hides every real
+               HUD cluster while a .dim screen is open, and from the title
+               there is no HUD at all — players dragged, saw nothing, and
+               overshot. This SAMPLE zooms by the same raw --hud-scale the
+               dock takes, so the drag resizes it live without touching the
+               measured hide rule. aria-hidden: it is a picture of a control,
+               not a control. -->
+          <div id="pm-hud-sample" aria-hidden="true"><div class="hud-box"><div class="hud-label">SPEED</div><div class="hud-value">312</div></div></div>
           <button id="pm-res">RESOLUTION: AUTO</button>
           <button id="pm-renderer">RENDERER: WEBGL2</button>
           <!-- THREE PATH / SCREENSHOTS / SAVE SCREENSHOT / status are injected
@@ -1828,10 +1836,10 @@
 <script crossorigin="anonymous" src="js/game/reliability.js?v=9e717a04faeb"></script>
 <script crossorigin="anonymous" src="js/game/ai-drive.js?v=c92a9de051f6"></script>
 <script crossorigin="anonymous" src="js/game/cam-tune.js?v=6ee854005123"></script>
-<script crossorigin="anonymous" src="js/game/setup-ui.js?v=ef05dd31c220"></script>
+<script crossorigin="anonymous" src="js/game/setup-ui.js?v=caa67fb4dacc"></script>
 <script crossorigin="anonymous" src="js/game/career-ui.js?v=aaf7625fbd71"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=3b13fcd7c763"></script>
-<script crossorigin="anonymous" src="js/game/menus.js?v=97bc1e96f8f4"></script>
+<script crossorigin="anonymous" src="js/game/menus.js?v=9541ee55d2d6"></script>
 <script crossorigin="anonymous" src="js/game/scrollfade.js?v=7134e489b866"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
 <script crossorigin="anonymous" src="js/game/sheetshape.js?v=f44ef602cc23"></script>
@@ -1872,5 +1880,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=ab5f8dedabbc"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=87e0eaf84c87"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=81b09256e218"></script>
-<script crossorigin="anonymous" src="js/game.js?v=c4c6c084e13a"></script>
+<script crossorigin="anonymous" src="js/game.js?v=deb7aadcf88b"></script>
 </body></html>

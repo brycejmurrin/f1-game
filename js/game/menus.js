@@ -104,10 +104,10 @@ const vt = (fn) => {
 // used to be reachable from a summary card on the select screen too; that card
 // is gone, and the garage is the one place a team is chosen.
 const teamPicker = () => $("teampicker");
-// Which screen opened the picker, so picking a team rebuilds the right one.
-// The sheet is shared; without this, choosing a team in the garage would
-// silently rebuild the select screen behind it and leave the garage stale.
-let pickerHost = "select";
+// The picker's ONE host is the garage's TEAM tab (the select screen's card
+// door was removed with the screen split). A pickerHost variable and a
+// select-host rebuild branch survived that removal for a year with no caller
+// able to reach them — removed 2026-08.
 let previewOpenRaf = 0;
 
 function teamSwatch(t) {
@@ -120,10 +120,8 @@ function teamSwatch(t) {
   return sw;
 }
 
-/* Open/close the team picker. `host` is the screen that opened it (see
-   pickerHost); omit it on close so the last host survives the rebuild. */
-function setTeamPicker(open, host) {
-  if (open && host) pickerHost = host;
+/* Open/close the team picker (the garage's TEAM tab is its one caller). */
+function setTeamPicker(open) {
   // Build on open, not on every buildSelect(). The tiles used to be filled in
   // by buildSelect alone, so opening the sheet from the garage straight off the
   // title screen — where buildSelect has never run — showed an empty sheet.
@@ -172,10 +170,9 @@ function buildTeamPicker() {
       G.teamIdx = i; G.driverIdx = seat; store.set("team", i);
       store.set("driver", seat);
       setTeamPicker(false);
-      // Rebuild whichever screen opened the sheet. The garage repaints its own
-      // 3D car for free — getSetupPreviewMesh() is keyed on the team id.
-      if (pickerHost === "garage") { G.buildSetup(); tickUi(); }
-      else vt(() => { buildSelect(); tickUi(); });
+      // The garage (the one host) repaints its own 3D car for free —
+      // getSetupPreviewMesh() is keyed on the team id.
+      G.buildSetup(); tickUi();
     };
     els.selTeams.appendChild(b);
   });
@@ -906,7 +903,7 @@ function closeTrackDetail() {
   if (detailRO) detailRO.disconnect();
   detailRO = null;
 }
-return { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch };
+return { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt };
 }
 
 return { create };
