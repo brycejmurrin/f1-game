@@ -488,6 +488,7 @@ const GameAudio = (function () {
     engineOn = false;
   }
 
+  const LOW_GEAR_RATE = [0.6, 0.72, 0.84];
   function setEngine(rev01, boost01, offroad, speed01, gear, physics) {
     if (!engineOn || !sfxOk()) return;
     const rev = clamp01(rev01 || 0);
@@ -521,7 +522,7 @@ const GameAudio = (function () {
 
     if (usingSamples) {
       const g = (typeof gear === "number" && isFinite(gear)) ? Math.max(1, Math.min(8, Math.round(gear))) : 8;
-      const gmul = g <= 3 ? [0.6, 0.72, 0.84][g - 1] : 1.0;
+      const gmul = g <= 3 ? LOW_GEAR_RATE[g - 1] : 1.0;
       const rate = (0.25 + rev * 0.45) * (1 + 0.04 * b) * gmul;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       // Single coherent voice: run only the steady idle loop, pitched. Crossfading

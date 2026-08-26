@@ -302,13 +302,13 @@ const IncidentSim = (function () {
           c.px = wx; c.pz = wz; c.head = head;
           const L = (G.track && G.track.total) || 1;
           let ds = tf.s - c.s; ds = ((ds + L / 2) % L + L) % L - L / 2;
-          if (fin(ds)) c.prog += ds;
+          if (fin(ds)) { c.prog += ds; _lapCross(c, ds, tf.s, L); }
           c.s = tf.s; c.x = tf.x;
           c.speed = speed; c.vLat = 0;
         } else {
           const L = (G.track && G.track.total) || 1;
           let ds = tf.s - c.s; ds = ((ds + L / 2) % L + L) % L - L / 2;
-          if (fin(ds)) c.prog += ds;
+          if (fin(ds)) { c.prog += ds; _lapCross(c, ds, tf.s, L); }
           c.s = tf.s; c.x = tf.x; c.speed = speed; c.head = head;
           c.px = wx; c.pz = wz;
           c.vLat = 0;   // same as the human branch — a stale vLat is not Rapier's
@@ -327,6 +327,24 @@ const IncidentSim = (function () {
       inc.elapsed = (inc.elapsed || 0) + (fin(dt) ? dt : 1 / 60);
     }
     _incidents = _incidents.filter((inc) => inc.cars.length);
+  }
+
+  // updateCar's line-crossing block is skipped while Rapier owns a car, and
+  // handback seeds _prevS = c.s, so a takeover that carries the car across
+  // s=0 would lose the lap for good — HUD one short forever, c.finished a
+  // whole lap late for a final-corner shunt. Count it here. Timing and PB
+  // stay invalidated (incidentInvalidLap is set at promote); classification
+  // must not be. Uses the same wrapped-ds crossing test as updateCar's.
+  function _lapCross(c, ds, newS, L) {
+    if (!(ds > 0) || !(c.s > L * 0.5 && newS < L * 0.5)) return;
+    c.lap++;
+    c._lapTimeAtLine = c.lapTime;
+    c.lapTime = 0;
+    const target = G.lapsTarget;
+    if (fin(target) && target > 0 && c.lap > target) {
+      c.finished = true;
+      c.finishT = fin(G.raceT) ? G.raceT : 0;
+    }
   }
 
   function yawOf(pose) {

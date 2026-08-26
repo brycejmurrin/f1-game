@@ -405,11 +405,35 @@ test("an online navigate timeout does not serve a stale cached shell", async () 
   assert.equal((await nav.responsePromise).status, 0);
 });
 
-test("an online cache-first miss timeout does not hang", async () => {
+test("an online cache-first miss rides a slow network instead of erroring", async () => {
+  // On a miss there is nothing to fall back to: a fail-fast timeout could only
+  // break requests a no-SW page would have completed (slow TTFB), and dropped
+  // the late response uncached. The SW now waits for the network on a miss.
+  let resolveFetch;
   const harness = createHarness({
-    immediateTimeoutMs: 4000,
     navigator: { onLine: true },
-    fetchImpl: () => new Promise(() => {}),
+    fetchImpl: (request) => {
+      const u = typeof request === "string" ? request : request.url;
+      if (u.includes("version.json")) return Promise.resolve(new Response('{"build":7}', { status: 200 }));
+      return new Promise((resolve) => { resolveFetch = resolve; });
+    },
+  });
+  const ev = harness.fetchEvent({
+    method: "GET",
+    mode: "same-origin",
+    url: `${ORIGIN}/js/game.js?v=1`,
+  });
+  while (!resolveFetch) await new Promise((r) => setImmediate(r));  // cache miss resolves first
+  resolveFetch(new Response("late asset", { status: 200 }));
+  const res = await ev.responsePromise;
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), "late asset");
+});
+
+test("an online cache-first miss with a dead network returns an error response", async () => {
+  const harness = createHarness({
+    navigator: { onLine: true },
+    fetchImpl: () => Promise.reject(new TypeError("network down")),
   });
   const ev = harness.fetchEvent({
     method: "GET",

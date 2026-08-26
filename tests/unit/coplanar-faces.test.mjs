@@ -90,6 +90,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // pairs, all `trk`, maxArea 3.5 m², minGap 0 — adjacent shorter-bay
 // tops on one plane. Same seam class as the previous 8-bay joints;
 // the extra spot is the extra joint. Trade for props-over-road.
+// paul_ricard 12→6, montreal 9→7, redbull 9→7 (2026-08-26): along()'s full-lap
+// walk revisited its start node (`|| n` span with i <= n) and emitted a second
+// byte-identical panel there — a coincident duplicate at the seam on every
+// circuit whose step divides n. Fixed in scenery-structures.js (span n-1 on a
+// full lap); these spots were those duplicates. Lowered to the measured counts.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "coplanar-baseline.json"), "utf8"),
 );

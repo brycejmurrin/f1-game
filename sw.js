@@ -310,22 +310,16 @@ self.addEventListener("fetch", (event) => {
   event.respondWith((async () => {
     const cached = await caches.match(req);
     if (cached) return cached;
-    const network = fetch(req);
-    // If the timeout wins the race below, a later network rejection has no
-    // handler — that surfaced as unhandledrejection in the worker. Same guard
-    // the navigate branch already carries.
-    network.catch(() => {});
-    const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 4000));
+    // On a miss there is nothing to fall back to, so a timeout race could only
+    // FAIL a slow-but-alive request (and drop its late response uncached) — a
+    // no-SW page would have loaded it. Ride the network; error only on reject.
     try {
-      const res = await Promise.race([network, timeout]);
+      const res = await fetch(req);
       if (res && res.ok) {
         const cache = await caches.open(await currentCacheName());
         await cache.put(req, res.clone());
-        return res;
       }
-      const online = typeof navigator !== "undefined" && navigator.onLine;
-      if (res == null && online) return Response.error();
-      if (res) return res;
+      return res;
     } catch (_) { /* network rejected */ }
     return Response.error();
   })());

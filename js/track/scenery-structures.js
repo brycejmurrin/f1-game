@@ -22,8 +22,16 @@ const SceneryStructures = (function () {
     // (worst on tight hairpins) the boxes are rotated relative to each other so
     // the shared volume shows as visible interpenetration/clipping.
     const along = (s0, s1, stepM, fn) => {
-      const k0 = Math.round(s0 * n) % n, k1 = Math.round(s1 * n) % n;
-      const span = ((k1 - k0) + n) % n || n, step = Math.max(1, Math.round(stepM / ds));
+      const k0 = ((Math.round(s0 * n) % n) + n) % n, k1 = ((Math.round(s1 * n) % n) + n) % n;
+      const wrapped = ((k1 - k0) + n) % n;
+      // Full lap = endpoints ~a whole lap apart that round to one node. Walk
+      // n-1, not n: the old `|| n` walked i===n back onto k0 and emitted a
+      // second byte-identical panel there — two coincident boxes, the purest
+      // z-fight (see the qatar tyre-pair note in tracks.js). It also promoted
+      // a genuinely sub-node authored span to a surprise full lap of geometry;
+      // that now stays a single emission at its own node.
+      const span = wrapped === 0 && Math.abs(s1 - s0) > 0.5 ? n - 1 : wrapped;
+      const step = Math.max(1, Math.round(stepM / ds));
       for (let i = 0; i <= span; i += step) fn((k0 + i) % n, step * ds);
     };
     // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.

@@ -345,12 +345,14 @@ const DataHub = (function () {
   const { loadLastRace } = DataLastRace.create({ el, emptyMsg, teamChip, fmtDate });
 
   const OPENF1_FIRST_YEAR = 2023;
-  const YEARS = (function () {
+  // Per call, not at boot — api.js's rule: a tab left open across New Year must
+  // roll over instead of pinning the season it booted in (export.js does the same).
+  function apiYears() {
     const now = new Date().getFullYear();
     const out = [];
     for (let y = Math.max(now, OPENF1_FIRST_YEAR); y >= OPENF1_FIRST_YEAR; y--) out.push(y);
     return out;
-  })();
+  }
   const sel = { year: null, meetingKey: null, sessionKey: null, meta: null, selAt: 0, pinned: false };
   const SESSION_STALE_MS = 120 * 1000;
 
@@ -369,7 +371,7 @@ const DataHub = (function () {
         sel.meta = ses;
         sel.sessionKey = ses.sessionKey;
         sel.meetingKey = ses.meetingKey;
-        sel.year = ses.year || YEARS[0];
+        sel.year = ses.year || apiYears()[0];
         sel.selAt = Date.now();
       } else if (!sel.pinned) {
         sel.meta = null;
@@ -402,7 +404,7 @@ const DataHub = (function () {
     let pickerGen = 0;
     const box = el("div", "dh-picker");
     const yearRow = el("div", "dh-pick-years");
-    YEARS.forEach(function (y) {
+    apiYears().forEach(function (y) {
       const b = el("button", "dh-pill" + (y === sel.year ? " dh-active" : ""), String(y));
       b.type = "button";
       b.addEventListener("click", function () {

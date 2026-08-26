@@ -377,7 +377,14 @@ const CEILINGS = {
   //   (one line + the bug comment): #pausemenu is a modal <dialog> now, so an
   //   open card out-layers the z-9000 blocker and refuses focus to its
   //   buttons — rotation-recovery's OPEN CONTROLS roundtrip caught it.
-  "js/game.js": 8635,
+  // 8635 -> 8658 for the perf/bug round: the race-start Input.clearEdges (the
+  // RESUME latch bug's menu→race seam), the pooled setEngine arg, the
+  // els.lighting/camtune cache, the shadow-basis up consts, the seam-sliver
+  // collision-bucket floor (with its adjacency-guarantee why), the endRace
+  // raceCtl.reset (the unreachable in-update reset), and the measured noseIn
+  // sign flip with its live-verification record — every line a fix plus the
+  // comment recording the bug at its site, not a feature.
+  "js/game.js": 8658,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
@@ -470,7 +477,9 @@ const CEILINGS = {
   // 2319 -> 2350: tri-state verdict cache on the six guarded emitters (the
   // graph fuse replay reuses dry-run guard verdicts; vegas build 1.66 -> 1.51 s,
   // 40/40 graph parity). Gates compressed to 2 lines each before raising.
-  "js/track/tracks.js": 2350,
+  // 2350 -> 2355 for the sign-safe seam wrap in scanBarrier/indexSolid and the
+  // comment recording the negative-k silent no-op it fixes (10 circuits hit it).
+  "js/track/tracks.js": 2355,
 };
 
 test("the big modules are not growing unnoticed", () => {
