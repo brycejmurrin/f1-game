@@ -2395,13 +2395,19 @@ const api = {
 
   async fetchTrackOutline(sessionKey, driverNumber) {
     const drv = driverNumber || 1;
-    const rows = await fetch(
+    const res = await fetch(
       "https://api.openf1.org/v1/location?session_key=" + sessionKey + "&driver_number=" + drv
-    ).then(r => r.json());
+    );
+    if (!res.ok) return null;
+    const rows = await res.json();
     if (!Array.isArray(rows) || !rows.length) return null;
-    const xs = rows.map(r => r.x), zs = rows.map(r => r.y);
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
-    const minZ = Math.min(...zs), maxZ = Math.max(...zs);
+    // Loop, not Math.min(...spread): a full-session location dump is >65k rows
+    // and spread blows the argument limit (RangeError).
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const r of rows) {
+      if (r.x < minX) minX = r.x; if (r.x > maxX) maxX = r.x;
+      if (r.y < minZ) minZ = r.y; if (r.y > maxZ) maxZ = r.y;
+    }
     const scale = Math.max(maxX - minX, maxZ - minZ) || 1;
     // Downsample to ≤400 points for readability
     const step = Math.max(1, Math.floor(rows.length / 400));

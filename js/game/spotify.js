@@ -458,7 +458,13 @@ window.SpotifyMusic = (function () {
       o.headers = Object.assign(
         { Authorization: "Bearer " + t, "Content-Type": "application/json" },
         o.headers || {});
-      return fetch(API + path, o).catch(() => null);   // offline is not an error worth shouting about
+      // 15 s cap — a hung /me/player request otherwise wedges the poll's
+      // in-flight guard until the tab dies. Offline stays a quiet null.
+      const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
+      if (ac) o.signal = ac.signal;
+      const timer = ac ? setTimeout(() => ac.abort(), 15000) : null;
+      return fetch(API + path, o).catch(() => null)
+        .then((r) => { if (timer) clearTimeout(timer); return r; });
     });
   }
 
@@ -584,8 +590,14 @@ window.SpotifyMusic = (function () {
     });
   }
 
+  let pollBusy = false;
   function pollNowPlaying() {
     if (mode() !== "remote" || state !== "connected") return Promise.resolve();
+    // One flight at a time, none while hidden — a slow /me/player otherwise
+    // stacks against the 10 s interval into a request pile-up.
+    if (pollBusy || document.hidden) return Promise.resolve();
+    pollBusy = true;
+    const done = () => { pollBusy = false; };
     return api("/me/player").then((r) => {
       if (!r) return;
       if (r.status === 204) { track = null; paused = true; emit(); return; }   // nothing playing
@@ -611,7 +623,7 @@ window.SpotifyMusic = (function () {
         }
         emit();
       }, () => {});
-    });
+    }).then(done, done);
   }
 
   function startPolling() {

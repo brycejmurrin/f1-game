@@ -354,7 +354,12 @@ const DataHub = (function () {
   function ensureSession(force) {
     const have = sel.sessionKey !== null;
     const fresh = have && sel.selAt && (Date.now() - sel.selAt) < SESSION_STALE_MS;
-    if (have && sel.pinned && !force) return Promise.resolve(sel.meta);
+    // A pin is an explicit user pick (buildPicker) — it outranks force, which
+    // only means "my cached view went stale". LIVE re-entry used to trample a
+    // pinned historic session with whatever latestSession() returned, nuking
+    // the telemetry tab with it. Only an explicit unpin (year/meeting change)
+    // releases it.
+    if (have && sel.pinned) return Promise.resolve(sel.meta);
     if (have && !force && fresh) return Promise.resolve(sel.meta);
     return F1API.latestSession(0).then(function (ses) {
       if (ses && ses.sessionKey !== null && ses.sessionKey !== undefined) {
@@ -498,6 +503,6 @@ const DataHub = (function () {
     invalidateOther: invalidateOther, COMPOUND: COMPOUND, findTeam: findTeam,
     cssColor: cssColor, textColorOn: textColorOn, NO_TELEM_MSG: NO_TELEM_MSG });
   // Implementation: js/data/export.js.
-  const { loadExport } = DataExport.create({ el: el, clear: clear });
+  const { loadExport } = DataExport.create({ el: el, clear: clear, isOpen: isOpen });
   return { init: init, open: open, close: close, isOpen: isOpen };
 })();

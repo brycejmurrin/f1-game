@@ -169,25 +169,23 @@ const F1API = (function () {
     return Promise.race([network, timeout]).finally(function () { clearTimeout(timer); });
   }
 
-  function fetchRetry(url, attempt) {
+  // Single attempt: status/error handling only. Retries live in request(), where
+  // the backoff sleep happens OUTSIDE the serialized queue slot — inside it, one
+  // 429 stalled every other endpoint behind up to ~75 s of pure sleeping
+  // (2 × 10-20 s backoff + 3 × 15 s timeouts on the shared chain).
+  function fetchOnce(url) {
     lastNetAt = Date.now();
     return fetchTimed(url).then(function (res) {
-      if ((res.status === 429 || (res.status >= 500 && res.status < 600)) && attempt < MAX_RETRY) {
-        const ra = parseFloat(res.headers && res.headers.get && res.headers.get("retry-after"));
-        const back = isFinite(ra) && ra > 0
-          ? Math.min(ra * 1000, RETRY_CAP_MS)
-          : Math.min(RETRY_BASE_MS * Math.pow(2, attempt), RETRY_CAP_MS);
-        return new Promise(function (r) { setTimeout(r, back); }).then(function () {
-          return fetchRetry(url, attempt + 1);
-        });
-      }
       if (!res.ok) {
+        const ra = parseFloat(res.headers && res.headers.get && res.headers.get("retry-after"));
+        const raMs = isFinite(ra) && ra > 0 ? Math.min(ra * 1000, RETRY_CAP_MS) : 0;
         return res.text().then(function (txt) {
           try {
             const j = JSON.parse(txt);
             if (j.detail || j.error) {
               const err = new Error(j.detail || j.error);
               err.status = res.status;
+              err.retryAfterMs = raMs;
               throw err;
             }
           } catch (e) {
@@ -202,6 +200,7 @@ const F1API = (function () {
           }
           const httpErr = new Error("HTTP " + res.status + " for " + url);
           httpErr.status = res.status;
+          httpErr.retryAfterMs = raMs;
           throw httpErr;
         });
       }
@@ -223,15 +222,29 @@ const F1API = (function () {
     const hit = cache ? readCache(url) : null;
     if (ttl > 0 && hit && (Date.now() - hit.t) < ttl) return Promise.resolve(hit.data);
 
-    const job = queue
-      .then(function () {
-        const wait = lastNetAt + MIN_GAP_MS - Date.now();
-        if (wait > 0) return new Promise(function (res) { setTimeout(res, wait); });
-        return null;
-      })
-      .then(function () {
-        return fetchRetry(url, 0);
-      })
+    // Each attempt claims ONE queue slot (MIN_GAP pacing included) and releases
+    // it before any backoff sleep, so other endpoints proceed while this one
+    // waits out a 429 — the chain stays alive per-slot, not per-job.
+    function attempt(n) {
+      const slot = queue
+        .then(function () {
+          const wait = lastNetAt + MIN_GAP_MS - Date.now();
+          if (wait > 0) return new Promise(function (res) { setTimeout(res, wait); });
+          return null;
+        })
+        .then(function () { return fetchOnce(url); });
+      queue = slot.then(function () {}, function () {});
+      return slot.catch(function (err) {
+        const status = err && err.status;
+        if ((status === 429 || (status >= 500 && status < 600)) && n < MAX_RETRY) {
+          const back = err.retryAfterMs || Math.min(RETRY_BASE_MS * Math.pow(2, n), RETRY_CAP_MS);
+          return new Promise(function (r) { setTimeout(r, back); }).then(function () { return attempt(n + 1); });
+        }
+        throw err;
+      });
+    }
+
+    const job = attempt(0)
       .then(function (json) {
         if (cache) writeCache(url, json);
         if (!quiet) Log.info("data", "fetch " + name + " ok");
@@ -250,8 +263,6 @@ const F1API = (function () {
         throw err;
       });
 
-    // keep the chain alive whatever happens, without swallowing the caller's error
-    queue = job.then(function () {}, function () {});
     return job;
   }
 
