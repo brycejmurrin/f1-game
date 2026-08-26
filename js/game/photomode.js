@@ -125,8 +125,12 @@ function wirePhotoStick(id, vec) {
   const el = $(id); if (!el) return;
   const nub = el.querySelector(".pc-nub");
   let pid = null;
+  // The box and zoom are measured ONCE per drag (pointerdown) — the stick
+  // only moves on resize/zoom-cap changes, never mid-hold, and gBCR +
+  // currentCSSZoom per pointermove is a style-system query at up to 240 Hz.
+  let _r = null, _zoom = 1;
   const set = (cx, cy) => {
-    const r = el.getBoundingClientRect();
+    const r = _r || el.getBoundingClientRect();
     const rad = r.width / 2;
     let dx = (cx - (r.left + rad)) / rad, dy = (cy - (r.top + rad)) / rad;
     const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
@@ -137,7 +141,7 @@ function wirePhotoStick(id, vec) {
        VISUAL px (the stick sits inside .pc-stickwrap's zoom) — so the nub
        travelled 40% of its throw at UI SIZE 40% and flew outside the ring
        at 200%. Divide the throw back into local px. */
-    const localRad = rad / (el.currentCSSZoom || 1);
+    const localRad = rad / _zoom;
     if (nub) nub.style.transform = "translate(" + (dx * localRad * 0.6) + "px," + (dy * localRad * 0.6) + "px)";
   };
   const end = () => { vec.x = 0; vec.y = 0; pid = null; if (nub) nub.style.transform = "translate(0,0)"; };
@@ -154,6 +158,8 @@ function wirePhotoStick(id, vec) {
        and the page keeps the gesture. Every other capture in this repo is
        wrapped (js/game/input.js, js/game.js); this was the one that was not. */
     try { el.setPointerCapture(pid); } catch (_) {}
+    _r = el.getBoundingClientRect();
+    _zoom = el.currentCSSZoom || 1;
     set(e.clientX, e.clientY);
     e.preventDefault();
   });

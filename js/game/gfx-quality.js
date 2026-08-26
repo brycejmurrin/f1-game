@@ -359,6 +359,7 @@ function saveScreenshot() {
       const soft = typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent();
       // Soft-present #game is the native WebGPU swapchain (often black). Prefer
       // capturePixels (LDR copyTextureToBuffer) when the 2D blit is armed.
+      let capFailed = false;
       if (soft && typeof GLX.capturePixels === "function") {
         try {
           const cap = await GLX.capturePixels();
@@ -369,12 +370,15 @@ function saveScreenshot() {
             ctx2.putImageData(new ImageData(cap.data, cap.width, cap.height), 0, 0);
             href = c.toDataURL("image/png");
           }
-        } catch (_) { href = null; /* fall through to #game */ }
+        } catch (_) { href = null; capFailed = true; /* fall through to #game */ }
       }
       if (!href && g && typeof g.toDataURL === "function") {
         try { href = g.toDataURL("image/png"); } catch (_) { href = null; }
       }
-      if (!href && typeof GLX !== "undefined" && typeof GLX.capturePixels === "function") {
+      // Never re-await a capturePixels() that just rejected — on software
+      // adapters the post-soft-present readback flake repeats, and the user
+      // would sit through two full GPU round-trips to reach the same FAILED.
+      if (!href && !capFailed && typeof GLX !== "undefined" && typeof GLX.capturePixels === "function") {
         const cap = await GLX.capturePixels();
         if (typeof document === "undefined" || typeof document.createElement !== "function") {
           done(false, "NO DOM"); return;

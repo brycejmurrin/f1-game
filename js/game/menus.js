@@ -59,7 +59,7 @@ const exportRecovery = () => {
   const payload = {
     format: "apex26-recovery-v1",
     exportedAt: new Date().toISOString(),
-    build: (window.__APEX_BUILD__ || null),
+    build: (window.__APEX_BUILD || null),
     career: typeof Career !== "undefined" && Career.data ? Career.data() : null,
     season: G.season || null,
     persistence: { durable: false, reason: store.broken || "unknown" },

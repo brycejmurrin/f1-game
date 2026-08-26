@@ -70,17 +70,20 @@ function buildSecRows() {
 // shorten band between 550 and 640 and drops below it; wide has no useful
 // shorten band at all and drops straight away at 800.
 //
-// Every read here is cheap and needs no cache. `documentElement.style` is the
-// INLINE declaration this game writes in applyScale() — a string read, not
-// getComputedStyle, so it forces no style or layout pass — and innerWidth is
-// free. That is the whole reason this is a handful of lines and not a
-// measure-and-hysteresis loop: nothing here asks the layout engine anything, so
-// it can simply run every tick and follow a window resize for free.
+// Every read here is cheap and needs no cache. Both custom properties are
+// INLINE declarations this file's own passes write (applyScale writes
+// --hud-scale; the fit pass writes --hud-z-top when its cap binds) — string
+// reads, not getComputedStyle, so they force no style or layout pass — and
+// innerWidth is free. The gaps strip PAINTS at the capped --hud-z-top, so
+// that is the divisor when present; the raw slider is only the fallback
+// before the first fit. Nothing here asks the layout engine anything, so it
+// can simply run every tick and follow a window resize for free.
 const GAP_SHORT_AT = { narrow: 640, wide: 800 };
 const GAP_DROP_AT  = { narrow: 550, wide: 800 };
 function gapForm() {
   const root = document.documentElement;
-  const s = +root.style.getPropertyValue("--hud-scale") || 1;
+  const s = +root.style.getPropertyValue("--hud-z-top") ||
+            +root.style.getPropertyValue("--hud-scale") || 1;
   const ratio = window.innerWidth / s;
   const k = window.innerWidth >= 1200 ? "wide" : "narrow";
   const drop = ratio <= GAP_DROP_AT[k];
@@ -289,8 +292,13 @@ function updateHud(force) {
     if (ranked[i] !== player) i = ranked.indexOf(player);
     const a = i > 0 ? ranked[i - 1] : null, b = i >= 0 ? ranked[i + 1] : null;
     const gap = gapForm();
-    hText(els.gapA, a ? gap("▲", a.code, ((a.prog - player.prog) / Math.max(player.speed, 25)).toFixed(1)) : "");
-    hText(els.gapB, b ? gap("▼", b.code, ((player.prog - b.prog) / Math.max(player.speed, 25)).toFixed(1)) : "");
+    // Divisor floor as a fraction of the speed envelope, not a raw m/s
+    // literal: PACE scales real speeds, so an absolute floor swallowed most
+    // of the envelope at low OVERALL SPEED and understated slow-corner gaps.
+    // 0.26 × vTop ≈ the old 25 m/s at default pace.
+    const vFloor = Math.max(player.speed, G.vTop() * 0.26);
+    hText(els.gapA, a ? gap("▲", a.code, ((a.prog - player.prog) / vFloor).toFixed(1)) : "");
+    hText(els.gapB, b ? gap("▼", b.code, ((player.prog - b.prog) / vFloor).toFixed(1)) : "");
   }
   // Sector split display (top-right) — cached span nodes, textContent per tick
   if (els.hudSectors) {
