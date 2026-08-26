@@ -120,6 +120,28 @@ test("disconnecting the pad clears its state", async ({ page }) => {
   expect(r.throttle).toBe(false);
 });
 
+test("a transient getGamepads() hole recovers WITHOUT a gamepadconnected event", async ({ page }) => {
+  // gamepadconnected only fires on connection / first input — it never
+  // re-fires for a pad that stayed plugged in. A one-frame null (focus loss,
+  // a second pad's unplug, a stale slot) therefore used to latch padConnected
+  // false for the rest of the session. The poll now re-probes on a ~1 s
+  // throttle while disconnected.
+  await poll(page, { axisX: -1 }, () => Input.steer());          // pad live
+  const r = await page.evaluate(() => {
+    navigator.getGamepads = () => [null, null, null, null];      // transient hole
+    Input.poll();
+    const dropped = Input.padConnected;
+    const pad = { connected: true, mapping: "standard", axes: [-1, 0, 0, 0],
+                  buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0, touched: false })) };
+    navigator.getGamepads = () => [pad, null, null, null];       // pad back, NO event
+    for (let i = 0; i < 65; i++) Input.poll();                   // > the 60-frame re-probe throttle
+    return { dropped, recovered: Input.padConnected, steer: Input.steer() };
+  });
+  expect(r.dropped).toBe(false);
+  expect(r.recovered).toBe(true);
+  expect(r.steer).toBeLessThan(-0.9);
+});
+
 test("keyboard driving remains active after using a HUD button", async ({ page }) => {
   await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
   await page.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 10_000 });

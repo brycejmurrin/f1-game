@@ -396,11 +396,13 @@ if ($("pm-adaptbtn")) $("pm-adaptbtn").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("adaptiveButtons", v);
   Input.setAdaptiveButtons(adaptMixFromSlider(v));
   $("pm-adaptbtn-v").textContent = adaptLabel(v);
+  clearPreset();   // preset-owned (PRESET_STORE) — the chip must stop claiming PRO
 };
 if ($("pm-brakecue")) $("pm-brakecue").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("brakeCue", v);
   if (window.BrakeCue) BrakeCue.setLevel(v);
   $("pm-brakecue-v").textContent = (window.BrakeCue && BrakeCue.labelOf) ? BrakeCue.labelOf(v) : (v <= 1 ? "OFF" : "CUE " + v);
+  clearPreset();   // preset-owned (PRESET_STORE), same as every sibling slider
 };
 $("pm-help").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("drivingHelp", v);
