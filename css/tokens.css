@@ -91,6 +91,13 @@
     outline-offset: -2px;
   }
   .sheet, .hud-box, dialog { border: 1px solid CanvasText; }
+  /* Colour IS the content on a swatch: per CSS Color Adjust 1 a non-url()
+     background-image computes to `none` under forced colors, so every team/
+     livery/result swatch (and the CUSTOMIZE colour wells) went blank. Opting
+     the swatches out keeps the author colour where removing it destroys the
+     information, which is exactly the carve-out the spec provides. */
+  .cs-liv-swatch, .tm-colour, .sel-chip .swatch, .res-swatch, .dh-swatch,
+  input[type="color"] { forced-color-adjust: none; }
 }
 
 /* Scroll-fade custom properties. The fade is driven by JS, not a scroll
@@ -658,8 +665,12 @@ button:disabled:active { background: var(--plate); }
    specificity. The generic default belongs in base, where a component can
    still override it. */
 :focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: -2px;
+  /* A FLOOR, like --tap-min: most focusables sit inside the .sheet zoom, and
+     a raw 2px paints 0.8 device px at UI SIZE 40% (WCAG 2.4.11 wants the
+     indicator area of a 2 CSS px perimeter). max() only grows, so at ≥100%
+     it is exactly the old 2px; the offset tracks the width to stay inset. */
+  outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
+  outline-offset: calc(-1 * max(2px, calc(2px / var(--ui-scale, 1))));
 }
 /* THE density switch. A landscape phone is ~390-430px tall and that is the
    whole constraint: the same menus, tighter. Nothing here changes layout —

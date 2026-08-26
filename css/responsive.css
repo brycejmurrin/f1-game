@@ -211,7 +211,11 @@ body.desktop #pm-calib { display: none !important; }
   background: rgba(255,255,255,0.1); color: #fff;
   font: inherit; font-weight: 800; letter-spacing: 0.035em;
 }
-#rotate-controls:focus-visible, #rotate-exit:focus-visible { outline: medium solid var(--focus); outline-offset: medium; }
+/* outline-offset takes a <length> only — the old `medium` here made the whole
+   declaration invalid, silently dropping this rule since build 1496. 3px is
+   what `medium` resolves to; the blocker is unzoomed and unclipped, so a
+   plain outset ring is fine (no inverse floor needed on this layer). */
+#rotate-controls:focus-visible, #rotate-exit:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 /* OPEN CONTROLS pauses the race and hides this blocker while How to Play is
    up. NOT a z-index yield: #howtoplay is a showModal() <dialog>, so it lives
    in the TOP LAYER, which outranks every z-index and inerts the document —

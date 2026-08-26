@@ -539,7 +539,8 @@
 }
 #cg-contents a:active, #ch-contents a:active { background: var(--plate-press); color: var(--text); }
 #cg-contents a:focus-visible, #ch-contents a:focus-visible {
-  outline: 2px solid var(--focus); outline-offset: -2px;
+  outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
+  outline-offset: calc(-1 * max(2px, calc(2px / var(--ui-scale, 1))));
 }
 #cg-body .sel-label[id], #ch-body .sel-label[id] { scroll-margin-block-start: var(--gap); }
 

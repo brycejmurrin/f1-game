@@ -375,7 +375,25 @@ window.MenuNav = (function () {
       // the layer when it is in none (the head, a foot button).
       const region = inLayer ? scrollerOf(active, layer) : null;
       if (key === "Home" || key === "End") {
-        const scope = region ? list.filter((el) => region.contains(el)) : list;
+        // Not list.filter: `list` came through shown()'s zero-rect gate, and a
+        // content-visibility:auto row outside the render margin has NO box —
+        // so End in the livery grid would stop at the render boundary, ~1.5
+        // viewports down, instead of the last row (the exact bug class the
+        // comment above records for the layer-wide version). checkVisibility
+        // still rejects display:none/visibility:hidden but sees through
+        // skipping, and focusItem renders the target: focus makes an element
+        // relevant per css-contain-2.
+        let scope = list;
+        if (region) {
+          scope = [];
+          for (const el of region.querySelectorAll(FOCUSABLE)) {
+            if (el.disabled || el.getAttribute("aria-hidden") === "true") continue;
+            if (el.checkVisibility) {
+              if (!el.checkVisibility({ visibilityProperty: true, checkVisibilityCSS: true })) continue;
+            } else if (!shown(el)) continue;
+            scope.push(el);
+          }
+        }
         if (!scope.length) return;
         focusItem(key === "Home" ? scope[0] : scope[scope.length - 1], layer);
         e.preventDefault();
@@ -384,7 +402,14 @@ window.MenuNav = (function () {
       const sign = key === "PageDown" ? 1 : -1;
       const pane = region ||
         nearestPane(layer, window.innerWidth / 2, window.innerHeight / 2, sign);
-      if (!pane || !scrollPane(pane, sign * pane.clientHeight * PAGE_FRAC)) return;
+      // scrollPane takes VIEWPORT px (it divides by the pane's zoom), but
+      // clientHeight is local — feed it local×zoom or a page step travels
+      // local/zoom² of the pane: 225% at UI SIZE 40% (1.35 pane-heights
+      // skipped unseen), 45% at 200%. Gamepad LT/RT land here too.
+      const page = pane &&
+        sign * pane.clientHeight * PAGE_FRAC *
+          ((window.CssZoom && CssZoom.of(pane)) || 1);
+      if (!pane || !scrollPane(pane, page)) return;
       e.preventDefault();
       // FOCUS TRAVELS WITH THE PAGE. Paging moved the pane and left focus behind,
       // stranded off the top or bottom of it — so the row the keyboard was on was

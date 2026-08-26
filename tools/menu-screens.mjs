@@ -16,6 +16,13 @@ export const VIEWPORTS = [
   ["ios-iphone-landscape",  { ...devices["iPhone 15 Pro landscape"], deviceScaleFactor: 2 },
     "the shape the game is PLAYED in — 343px of height for everything",
     { t: 0, r: 59, b: 21, l: 59 }],
+  // The device descriptor's 393px is the FULL-SCREEN/PWA height; landscape
+  // Safari with its collapsed toolbar leaves ~344px, and no cell sat between
+  // 344 and 393 — the matrix hole behind the 2026-08 teampicker arithmetic.
+  ["ios-iphone-landscape-safari", { ...devices["iPhone 15 Pro landscape"],
+      deviceScaleFactor: 2, viewport: { width: 852, height: 344 } },
+    "landscape Safari with the toolbar collapsed — the shortest real viewport",
+    { t: 0, r: 59, b: 21, l: 59 }],
   ["ios-ipad-portrait",     { ...devices["iPad Pro 11"], deviceScaleFactor: 1 },
     "wide sheet, tall window: the case that wants bands, not columns"],
   ["ios-ipad-landscape",    { ...devices["iPad Pro 11 landscape"], deviceScaleFactor: 1 },

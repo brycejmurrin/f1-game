@@ -141,6 +141,71 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     expect(await page.evaluate(() => document.getElementById("select").contains(document.activeElement))).toBe(true);
   });
 
+  test("PageDown travels about one pane-height at every UI scale", async ({ page }) => {
+    // scrollPane takes viewport px and divides by the pane's zoom; feeding it
+    // the local clientHeight uncorrected made a page step travel local/zoom²:
+    // 45% of the pane at UI SIZE 200%, 225% at 40% — 1.35 pane-heights of
+    // content skipped unseen. Relative assertion: the travel is PAGE_FRAC of
+    // the pane in the pane's own units, whatever the zoom. Gamepad LT/RT
+    // dispatch these same keys.
+    await page.goto("/"); await waitReady(page);
+    await openSelect(page);
+    for (const pct of [100, 150, 200]) {
+      await page.evaluate((p) => window.__apex.uiScale(p), pct);
+      await page.waitForTimeout(150);
+      const r = await page.evaluate(() => {
+        const list = document.getElementById("sel-tracks");
+        list.scrollTop = 0;
+        const row = list.querySelector(".track-row");
+        row.focus();
+        row.dispatchEvent(new KeyboardEvent("keydown", { key: "PageDown", bubbles: true, cancelable: true }));
+        return { moved: list.scrollTop, pane: list.clientHeight,
+                 max: list.scrollHeight - list.clientHeight };
+      });
+      if (r.max < r.pane) continue; // not enough content to measure a full page at this scale
+      expect(r.moved / r.pane, `travel at ${pct}% is ~0.9 pane-heights`).toBeGreaterThan(0.7);
+      expect(r.moved / r.pane, `travel at ${pct}% is not a double page`).toBeLessThan(1.05);
+    }
+    await page.evaluate(() => window.__apex.uiScale(null));
+  });
+
+  test("End reaches the last livery card, past the content-visibility render boundary", async ({ page }) => {
+    // The livery grid rows are content-visibility:auto; rows outside the
+    // render margin have zero rects, so a scope built through the shown()
+    // rect gate would stop End ~1.5 viewports down instead of the last card.
+    // 200% UI size, or on a desktop viewport the whole grid fits and there is
+    // no scroller (End then correctly addresses the layer, not the grid).
+    await page.goto("/"); await waitReady(page);
+    await page.evaluate(() => window.__apex.uiScale(200));
+    await page.evaluate(() => document.getElementById("mb-garage").click());
+    await page.waitForFunction(() => !document.getElementById("carsetup").hidden, null, { polling: 100, timeout: 8_000 });
+    await page.evaluate(() => {
+      [...document.querySelectorAll("#cs-tabs .cs-tab")].find((e) => /LIVERY/i.test(e.textContent))?.click();
+    });
+    await page.waitForFunction(() => document.querySelectorAll("#cs-options .cs-liv-row .cs-liv").length > 20, null, { polling: 100, timeout: 8_000 });
+    const r = await page.evaluate(() => {
+      const opts = document.getElementById("cs-options");
+      opts.scrollTop = 0;
+      const rows = [...opts.querySelectorAll(".cs-liv-row")];
+      const first = rows[0].querySelector(".cs-liv");
+      first.focus();
+      first.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+      const a = document.activeElement;
+      const box = a.getBoundingClientRect();
+      // The last focusable is the last row's focus-revealed EDIT affordance,
+      // not the card button itself — either way, focus must be in the LAST
+      // row, not stranded at the render boundary ~1.5 viewports down.
+      return { scrolls: opts.scrollHeight > opts.clientHeight + 1,
+               inLastRow: rows[rows.length - 1].contains(a),
+               count: rows.length, rendered: box.height > 0 };
+    });
+    await page.evaluate(() => window.__apex.uiScale(null));
+    test.skip(!r.scrolls, "the grid fits this viewport whole — no render boundary to cross");
+    expect(r.count).toBeGreaterThan(20);
+    expect(r.inLastRow, "End landed in the LAST row, not the render boundary").toBe(true);
+    expect(r.rendered, "focus made the skipped row render").toBe(true);
+  });
+
   test("left/right move along a chip row without leaving it", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSelect(page);
@@ -188,7 +253,13 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.locator('#sel-track-filter [data-filter="all"]').focus();
     await page.keyboard.press("ArrowRight");
     await expect(page.locator('#sel-track-filter [data-filter="season"]')).toBeFocused();
-    await expect(page.locator('#sel-track-filter [data-filter="season"]')).toHaveAttribute("aria-selected", "true");
+    // aria-pressed, NOT aria-selected: the chips are plain buttons in a
+    // role="group" (no listbox/tablist here — asserted above), and
+    // aria-selected is only valid on option/tab/row/gridcell. This line
+    // asserted aria-selected from its birth commit while menus.js has always
+    // set aria-pressed on the filter chips — red on the base since 1496.
+    await expect(page.locator('#sel-track-filter [data-filter="season"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator('#sel-track-filter [data-filter="season"]')).not.toHaveAttribute("aria-selected", /./);
     await expect(page.locator("#sel-tracks .trb-classic")).toHaveCount(0);
 
     await page.locator('.track-row[aria-label="MONZA"]').click();

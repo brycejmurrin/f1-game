@@ -684,7 +684,10 @@ body[data-density="compact"] #campicker {
   #htp-contents a:hover { background: var(--plate-hover); color: var(--text); }
 }
 #htp-contents a:active { background: var(--plate-press); color: var(--text); }
-#htp-contents a:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+#htp-contents a:focus-visible {
+  outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
+  outline-offset: calc(-1 * max(2px, calc(2px / var(--ui-scale, 1))));
+}
 #howtoplay:has(#htp-controls:target) #htp-contents a[href="#htp-controls"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
   box-shadow: var(--plate-on-glow);
@@ -849,7 +852,10 @@ body[data-density="compact"] #campicker {
   background: rgba(0, 0, 0, 0.35);
   color: inherit;
 }
-#vsfriend .vs-code:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+#vsfriend .vs-code:focus-visible {
+  outline: max(2px, calc(2px / var(--ui-scale, 1))) solid currentColor;
+  outline-offset: 2px;
+}
 /* SHARE and COPY side by side: they are two ways to do the same thing, and
    stacking them read as two separate steps. Equal basis rather than auto so
    the pair stays balanced when one label is longer ("SHARE LINK" becomes

@@ -668,6 +668,19 @@ async function worker() { while (queue.length) { const job = queue.shift(); if (
 async function sweepViewport([baseName, vpOpts, why, insets], scale) {
   const vpName = baseName + scaleTag(scale);
   const ctx = await browser.newContext({ ...vpOpts, colorScheme: "dark" });
+  // The probe's visible() gate is a zero-rect test, and a content-visibility:
+  // auto row outside Chrome's render margin has zero rects on every descendant
+  // — the livery grid's ~70 cards would shrink to the ~4 on screen and the
+  // tap/truncation sweeps would go blind to the rest. Neutralize skipping for
+  // the whole audit (an init script, not addStyleTag, so the reload recovery
+  // below keeps it). Geometry, not paint, is what these cells measure.
+  await ctx.addInitScript(() => {
+    document.addEventListener("DOMContentLoaded", () => {
+      const s = document.createElement("style");
+      s.textContent = "* { content-visibility: visible !important; }";
+      document.head.appendChild(s);
+    });
+  });
   const page = await ctx.newPage();
   let errors = [];
   page.on("pageerror", (e) => errors.push(String(e).slice(0, 120)));
