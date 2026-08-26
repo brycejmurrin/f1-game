@@ -73,7 +73,11 @@ const RaceControl = (() => {
     function publish() {
       const netPlay = G.netPlay;
       if (!netPlay.active() || !netPlay.ownsRaceControl()) return;
-      const key = caution.level + "|" + caution.sector + "|" + caution.cause;
+      // total/sectors ride in the payload, so they must be in the change key —
+      // an evolving hazard picture at a constant level went un-republished and
+      // froze the guest's counts.
+      const key = caution.level + "|" + caution.sector + "|" + caution.cause +
+        "|" + caution.total + "|" + (caution.sectors ? caution.sectors.join(",") : "");
       if (key === sent) return;
       sent = key;
       netPlay.reportCaution({
@@ -81,6 +85,22 @@ const RaceControl = (() => {
         cause: caution.cause, total: caution.total, sectors: caution.sectors,
         sinceT: caution.sinceT,
       });
+    }
+
+    // The hard-cap drop, shared by the live-query path and the debris-inactive
+    // freeze path. Returns true when the flag just dropped to GREEN.
+    function capDropIfExpired() {
+      if (caution.level === 0) return false;
+      const cap = caution.level >= 2 ? SC_MAX : YELLOW_MAX;
+      if (caution.sinceT < cap) return false;
+      capHoldLevel = caution.level;   // what capped — see the re-raise gate below
+      const prev = caution.level;
+      caution.level = 0; caution.sector = -1; caution.frac = 0;
+      caution.cause = ""; caution.sinceT = 0;
+      capHoldT = CAP_REARM_HOLD;
+      logFlag(prev, 0);
+      publish();
+      return true;
     }
 
     function update(dt) {
@@ -92,11 +112,22 @@ const RaceControl = (() => {
         return;
       }
       if (!G.netPlay.ownsRaceControl()) return;
-      if (!enabled || !DebrisWorld.active()) return;
+      if (!enabled) return;
       if (caution.level !== 0) caution.sinceT += dt;
+      if (!DebrisWorld.active()) {
+        // Debris inactive mid-flag: the LEVEL freezes (test-asserted — see
+        // "debris going inactive mid-race freezes a flying flag") but it keeps
+        // AGEING, so the hard cap still fires. Before this, a trapped Rapier
+        // world (debrisworld sets _active=false permanently) pinned a safety
+        // car — and disabled OVERTAKE — for the rest of the race.
+        capDropIfExpired();
+        return;
+      }
       queryT += dt;
       if (queryT < QUERY_EVERY) return;
-      queryT = 0;
+      // Subtract, don't zero: resetting to 0 made the real cadence
+      // ceil(0.25/dt)·dt and the capHold debit ~6% short at 60/30 fps.
+      queryT -= QUERY_EVERY;
 
       const hz = DebrisWorld.hazards();
       let desired = 0, dsector = -1, dfrac = 0, dcause = "";
@@ -117,19 +148,7 @@ const RaceControl = (() => {
       // piece of debris held a safety car for the rest of the race.
       // capHold suppresses an instant re-raise from the SAME stale picture;
       // genuinely new hazards re-arm after it expires.
-      if (caution.level !== 0) {
-        const cap = caution.level >= 2 ? SC_MAX : YELLOW_MAX;
-        if (caution.sinceT >= cap) {
-          capHoldLevel = caution.level;   // what capped — see the re-raise gate below
-          const prev = caution.level;
-          caution.level = 0; caution.sector = -1; caution.frac = 0;
-          caution.cause = ""; caution.sinceT = 0;
-          capHoldT = CAP_REARM_HOLD;
-          logFlag(prev, 0);
-          publish();
-          return;
-        }
-      }
+      if (capDropIfExpired()) return;
       if (capHoldT > 0) {
         capHoldT = Math.max(0, capHoldT - QUERY_EVERY);
         if (capHoldT === 0) capHoldLevel = 0;

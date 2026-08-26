@@ -221,6 +221,21 @@ test("debris going inactive mid-race freezes a flying flag", () => {
   assert.equal(rc.info().level, 3, "flag stays up while debris is off");
 });
 
+test("a frozen flag still AGES — the hard cap fires even with debris trapped", () => {
+  // DebrisWorld can go inactive permanently (a trapped world.step() sets
+  // _active=false with no re-arm). The freeze must not stop sinceT, or the
+  // SC_MAX cap can never fire and the race finishes under a safety car with
+  // OVERTAKE disabled. Freeze the LEVEL, keep the clock.
+  let active = true;
+  const rc = load({ active: () => active, hazards: () => hazards(10, 2) }).create(makeCtx());
+  run(rc, 1);
+  assert.equal(rc.info().level, 3, "safety car flies");
+  active = false;
+  run(rc, 95);                     // > SC_MAX (90 s) of trapped-world time
+  assert.equal(rc.info().level, 0,
+    "hard cap dropped the flag to green while debris stayed inactive");
+});
+
 test("switching the layer off DROPS a flag already flying", () => {
   // Not "stop computing" but "stop computing AND clear". Without the clear the
   // HUD keeps showing a safety car nothing maintains, which reads as a stuck

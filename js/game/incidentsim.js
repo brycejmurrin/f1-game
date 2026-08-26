@@ -17,8 +17,12 @@ const IncidentSim = (function () {
   let _promoted = 0, _handbacks = 0, _fallbacks = 0, _lastKind = "";
   let _forced = 0;          // one-shot manual trigger requested via __apex
 
-  const R3_CAR_V = 15;         // m/s closing → resolve this car-car pair via Rapier
-  const R2_CAR_V = 24;         // m/s closing → a launch (airborne 6-DoF)
+  // Closing speeds scale with OVERALL SPEED (PACE is a ground-speed scale), so
+  // both promotion thresholds are applied ×Math.max(G.PACE, 0.05) at their
+  // comparison sites — un-scaled, pace 10 turned every midfield tap into a
+  // launch and pace 0.5 never promoted a genuine shunt.
+  const R3_CAR_V = 15;         // m/s closing (at PACE 1) → resolve via Rapier
+  const R2_CAR_V = 24;         // m/s closing (at PACE 1) → a launch (airborne 6-DoF)
   // Wall hit severity (xOver*60 + speed*0.15, the DebrisWorld severity units) → a
   // launch. Genuinely hard hits only; ordinary scrapes never trigger.
   const R2_WALL_SEV = 34;
@@ -29,6 +33,8 @@ const IncidentSim = (function () {
   // time cap fires and forces a handback. It can never get stuck in Rapier.
   const WINDOW_MAX_S = 3.0;    // hard cap (s) — force handback past this
   const SETTLE_HOLD_S = 0.30;  // low-velocity / sleeping this long → settled
+  // SETTLE_V/SETTLE_W are DELIBERATELY absolute: they measure the Rapier body's
+  // own dynamics (has the wreck stopped tumbling), which do not pace-scale.
   const SETTLE_V = 3.0;        // m/s — linear speed below this counts as settling
   const SETTLE_W = 2.5;        // rad/s — angular speed below this counts as settling
   // Launch seeding (clamped — "clamp imparted roll energy at hand-to", DEEP-DIVE).
@@ -125,7 +131,7 @@ const IncidentSim = (function () {
   }
   function notifyCar(a, b, relV) {
     if (!active() || !(_r2 || _r3 || _c1) || !a || !b) return;
-    if (!fin(relV) || relV < R3_CAR_V) return;
+    if (!fin(relV) || relV < R3_CAR_V * Math.max(G.PACE, 0.05)) return;
     const cars = G.cars; if (!cars) return;
     const ia = cars.indexOf(a), ib = cars.indexOf(b);
     if (ia < 0 || ib < 0) return;
@@ -176,7 +182,7 @@ const IncidentSim = (function () {
       const relV = maxRelV.get(root) || 0;
       let kind;
       if (idxs.length >= C1_MIN_CARS) { if (!_c1) continue; kind = "c1"; }
-      else if (relV >= R2_CAR_V) { if (!_r2) continue; kind = "r2"; }
+      else if (relV >= R2_CAR_V * Math.max(G.PACE, 0.05)) { if (!_r2) continue; kind = "r2"; }
       else { if (!_r3) continue; kind = "r3"; }
       if (idxs.length > MAX_TAKEOVER) idxs = idxs.slice(0, MAX_TAKEOVER);
       startIncident(kind, idxs, relV, dt);
@@ -305,6 +311,7 @@ const IncidentSim = (function () {
           if (fin(ds)) c.prog += ds;
           c.s = tf.s; c.x = tf.x; c.speed = speed; c.head = head;
           c.px = wx; c.pz = wz;
+          c.vLat = 0;   // same as the human branch — a stale vLat is not Rapier's
         }
         // Advance the last-good snapshot to this validated pose.
         inc.good.set(i, snapOf(c));
@@ -382,7 +389,10 @@ const IncidentSim = (function () {
     try {
       Tracks.sample(track, c.s, G.smp);
       c.x = clamp(c.x || 0, -(G.smp.hw - 1.5), G.smp.hw - 1.5);
-      c.speed = Math.max(fin(c.speed) ? c.speed : 0, 14);
+      // Pace-scaled restore floor, capped at vTop() — the exact sibling of the
+      // rescue floors in game.js; a bare 14 was 39% of top speed at pace 0.5
+      // and effectively top speed at pace 0.2.
+      c.speed = Math.min(G.vTop(), Math.max(fin(c.speed) ? c.speed : 0, 14 * Math.max(G.PACE, 0.05)));
       c.head = Math.atan2(G.smp.t[0], G.smp.t[2]);
       if (G.worldFromTrack) {
         const w = G.worldFromTrack(c.s, c.x);

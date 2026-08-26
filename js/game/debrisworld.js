@@ -197,9 +197,9 @@ function create(ctx) {
   try { _breakBarriers = (localStorage.getItem("apex26.breakBarriers") || "1") !== "0"; } catch (e) {}
   try { _marbleGripOn = (localStorage.getItem("apex26.marbleGrip") || "1") !== "0"; } catch (e) {}
   if (opt === "1") setEnabled(true);   // async load, never blocks boot (set "0" to disable)
-  return { active, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst, positions,
-           registerFurniture, tyreMarble, hazards, promoteBarrier, marbleGrip, groupBFlags,
-           rapierReady, worldGen, promoteCarDynamic, demoteCarKinematic, carBodyPose, isCarDynamic };
+  // No API return: the sole caller (game.js) discards it and everything goes
+  // through the module global — a hand-maintained duplicate list here had
+  // already diverged from the real export (it was missing prime).
 }
 
 // ── Incident-sim takeover interface (consumed by js/game/incidentsim.js) ─────
