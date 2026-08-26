@@ -748,6 +748,7 @@ what it covers.
 | `track-preview-plan.test.mjs` | `TrackMaps.planPreview` — stacked vs beside, and the slot it sizes, over measured card geometry x circuit aspect. Holds shut the tall-circuit sliver, the caption charged to the wrong shape's budget, `beside` on a wide circuit, the 175% collapse, and two-column on a phone |
 | `circuit-axis.test.mjs` | `tools/circuit-axis.mjs` — the spread still spans tall to wide (and names circuits that exist), the axis stays off unless flagged, and a tagged cell id parses back to screen + circuit |
 | `track-graph.test.mjs` | the scenery model library + node graph, and `batches()` |
+| `godray-keep-nearest.test.mjs` | the god-ray nearest-k selection, cloned in all three backends: eviction must SWAP so the pooled objects stay a permutation (an overwrite aliased one object at two slots — a lamp beamed twice, another dropped); also pins the three clones in lockstep |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 111-member `scenery(api)` surface across the `js/track/scenery-*.js` split |

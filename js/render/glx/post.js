@@ -100,8 +100,15 @@ const GLXPost = (function () {
         let j = n - 2;
         while (j >= 0 && _grSel[j].d > cur.d) j--;
         const insertAt = j + 1;
+        // Swap, not overwrite: the shift orphans the evicted top-k object and
+        // left `cur` aliased at two indices — the next frame's by-index fill
+        // then wrote one lamp's data into both slots (a beam uploaded twice,
+        // another lamp permanently unselectable). Keeping the pool a
+        // permutation is the whole contract.
+        const evicted = _grSel[n - 1];
         for (let m = n - 1; m > insertAt; m--) _grSel[m] = _grSel[m - 1];
         _grSel[insertAt] = cur;
+        _grSel[i] = evicted;
       }
       return n;
     }
