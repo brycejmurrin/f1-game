@@ -425,6 +425,21 @@
      (0.42 light dim, 0.92 near-solid backdrop). */
   --scrim: rgba(6, 6, 10, 0.42);
   --scrim-heavy: rgba(6, 6, 10, 0.92);
+  /* Podium metals — the P1/P2/P3 rows in RESULTS and the data hub's LAST RACE
+     table each hand-wrote the same three colours with slightly different wash
+     alphas. The metals are named once; each site keeps its own wash strength
+     via color-mix. */
+  --gold: #ffd700;
+  --silver: #c0c0c0;
+  --bronze: #cd9b5a;
+  /* The livery list's two-verb palette: DELETE is the warm danger family,
+     EDIT the cool info family. Ink is the light readable tint, fill the
+     saturated base the wash/hover/press states mix from — was 12 raw rgba()
+     literals on two buttons. */
+  --del-ink: rgba(255, 120, 110, 0.85);
+  --del-fill: rgb(255, 60, 50);
+  --edit-ink: rgba(120, 200, 255, 0.9);
+  --edit-fill: rgb(60, 150, 255);
   /* A lit lip along the top AND the far edge falling into shade. The lip on
      its own reads as a sticker laid on the page; the pair reads as a slab with
      thickness, which is the whole point of an elevation system. */

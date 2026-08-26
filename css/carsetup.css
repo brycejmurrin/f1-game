@@ -572,21 +572,21 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   cursor: pointer; margin: 0; padding: 0;
 }
 .cs-liv-del {
-  color: rgba(255,120,110,0.85);
-  background: rgba(255,60,50,0.1); border: 1px solid rgba(255,80,70,0.25);
+  color: var(--del-ink);
+  background: color-mix(in srgb, var(--del-fill) 10%, transparent); border: 1px solid color-mix(in srgb, var(--del-fill) 25%, transparent);
 }
 @media (hover: hover) {
-  .cs-liv-del:hover { background: rgba(255,60,50,0.22); color: #fff; }
+  .cs-liv-del:hover { background: color-mix(in srgb, var(--del-fill) 22%, transparent); color: #fff; }
 }
-.cs-liv-del:active { background: rgba(255,60,50,0.3); color: #fff; }
+.cs-liv-del:active { background: color-mix(in srgb, var(--del-fill) 30%, transparent); color: #fff; }
 .cs-liv-edit {
-  color: rgba(120,200,255,0.9);
-  background: rgba(60,150,255,0.1); border: 1px solid rgba(80,170,255,0.28);
+  color: var(--edit-ink);
+  background: color-mix(in srgb, var(--edit-fill) 10%, transparent); border: 1px solid color-mix(in srgb, var(--edit-fill) 28%, transparent);
 }
 @media (hover: hover) {
-  .cs-liv-edit:hover { background: rgba(60,150,255,0.24); color: #fff; }
+  .cs-liv-edit:hover { background: color-mix(in srgb, var(--edit-fill) 24%, transparent); color: #fff; }
 }
-.cs-liv-edit:active { background: rgba(60,150,255,0.32); color: #fff; }
+.cs-liv-edit:active { background: color-mix(in srgb, var(--edit-fill) 32%, transparent); color: #fff; }
 .cs-liv-custom .cs-opt-tag { background: rgba(80,210,255,0.18); color: #4df; }
 
 /* ---------- inline livery creator ---------- */
