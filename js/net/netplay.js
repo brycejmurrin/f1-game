@@ -223,7 +223,12 @@ const NetPlay = (function () {
           if (name === EV.BYE) {
             lastReason = "bye";
             // A clean leave is one rival, not the session — same as onClose.
-            if (!(role === "host" && sessions.size > 1)) stop("bye");
+            // Close the leaver's session NOW rather than waiting for the
+            // ICE-level close to land: that wait left the departed rival's
+            // car a frozen human slot for seconds. onClose owns the
+            // hand-back + cleanup, so this stays a single path.
+            if (role === "host" && sessions.size > 1) { try { s.close(); } catch (e) { /* already gone */ } }
+            else stop("bye");
           }
           if (name === EV.START && d && d.at != null && !ownsRaceControl()) armStart(d.at, d.hold);
           if (name === EV.ARMED && role === "host") {

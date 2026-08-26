@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1556">
+<meta name="apex-build" content="1557">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -1727,10 +1727,10 @@
 <script crossorigin="anonymous" src="js/render/shaders/sky.js?v=baab42036af5"></script>
 <script crossorigin="anonymous" src="js/render/shaders/fx.js?v=4d9988f6e023"></script>
 <script crossorigin="anonymous" src="js/render/shaders/post.js?v=ddd9ef7abac7"></script>
-<script crossorigin="anonymous" src="js/render/glx/post.js?v=7afba613ba06"></script>
+<script crossorigin="anonymous" src="js/render/glx/post.js?v=70db40ea0da8"></script>
 <script crossorigin="anonymous" src="js/render/glx/shadow.js?v=c89be0d9caf8"></script>
-<script crossorigin="anonymous" src="js/render/glx/chunked.js?v=886b31f1363d"></script>
-<script crossorigin="anonymous" src="js/render/glx.js?v=b1497e6c7a0c"></script>
+<script crossorigin="anonymous" src="js/render/glx/chunked.js?v=d8e3e3a7ecea"></script>
+<script crossorigin="anonymous" src="js/render/glx.js?v=3bb58ba5d7c7"></script>
 <!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
      two OPT-IN renderer backends and are injected by js/game.js only when
      apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that
@@ -1739,7 +1739,7 @@
      parsing the tags below. -->
 
 <script crossorigin="anonymous" src="js/render/gfx.js?v=2b78de7e433c"></script>
-<script crossorigin="anonymous" src="js/render/gltf.js?v=540c33c15bb6"></script>
+<script crossorigin="anonymous" src="js/render/gltf.js?v=a68c67631936"></script>
 <script crossorigin="anonymous" src="js/render/assets.js?v=ed166b68b74b"></script>
 <script crossorigin="anonymous" src="js/car/teams.js?v=453435b9c847"></script>
 <script crossorigin="anonymous" src="js/car/driver-ratings.js?v=a7553359ad7c"></script>
@@ -1753,16 +1753,16 @@
 <script crossorigin="anonymous" src="js/track/graph.js?v=6c2fc0512827"></script>
 <script crossorigin="anonymous" src="js/track/themes.js?v=846aede07be2"></script>
 <script crossorigin="anonymous" src="js/track/landmark-kit.js?v=b5a86310198b"></script>
-<script crossorigin="anonymous" src="js/track/circuit-kit.js?v=531fbdebf053"></script>
+<script crossorigin="anonymous" src="js/track/circuit-kit.js?v=0ee249eee375"></script>
 <script crossorigin="anonymous" src="js/track/spline.js?v=72cf1bacbb58"></script>
-<script crossorigin="anonymous" src="js/track/mesh.js?v=bed946bd74ef"></script>
-<script crossorigin="anonymous" src="js/track/scenery-nature.js?v=6ed3498d6c2f"></script>
+<script crossorigin="anonymous" src="js/track/mesh.js?v=098c5a2a4e57"></script>
+<script crossorigin="anonymous" src="js/track/scenery-nature.js?v=a23f5cba7e76"></script>
 <script crossorigin="anonymous" src="js/track/scenery-structures.js?v=724d5faa8cd4"></script>
 <script crossorigin="anonymous" src="js/track/scenery-city.js?v=3a3f1278afaa"></script>
-<script crossorigin="anonymous" src="js/track/scenery-identity.js?v=6684360d2153"></script>
+<script crossorigin="anonymous" src="js/track/scenery-identity.js?v=930ed88778fa"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
 <script crossorigin="anonymous" src="js/circuits/bahrain.js?v=b4720e606096"></script>
-<script crossorigin="anonymous" src="js/circuits/monaco.js?v=f8c14f1be139"></script>
+<script crossorigin="anonymous" src="js/circuits/monaco.js?v=2e015089c389"></script>
 <script crossorigin="anonymous" src="js/circuits/silverstone.js?v=0697f0f2a503"></script>
 <script crossorigin="anonymous" src="js/circuits/spa.js?v=b613b02f1f37"></script>
 <script crossorigin="anonymous" src="js/circuits/monza.js?v=0f5b8e9f6548"></script>
@@ -1839,7 +1839,7 @@
 <script crossorigin="anonymous" src="js/game/setup-ui.js?v=caa67fb4dacc"></script>
 <script crossorigin="anonymous" src="js/game/career-ui.js?v=aaf7625fbd71"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=3b13fcd7c763"></script>
-<script crossorigin="anonymous" src="js/game/menus.js?v=34ec8a7c4280"></script>
+<script crossorigin="anonymous" src="js/game/menus.js?v=cfce54b5750b"></script>
 <script crossorigin="anonymous" src="js/game/scrollfade.js?v=7134e489b866"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
 <script crossorigin="anonymous" src="js/game/sheetshape.js?v=f44ef602cc23"></script>
@@ -1851,20 +1851,20 @@
 <script crossorigin="anonymous" src="js/game/aerozones.js?v=3918f5735cf7"></script>
 <script crossorigin="anonymous" src="js/game/skidmarks.js?v=445e60150252"></script>
 <script crossorigin="anonymous" src="js/game/racecontrol.js?v=7e3c00788b35"></script>
-<script crossorigin="anonymous" src="js/game/photomode.js?v=45c832b731ad"></script>
+<script crossorigin="anonymous" src="js/game/photomode.js?v=262984f179f6"></script>
 <script crossorigin="anonymous" src="js/game/tuner.js?v=97d8133f20c4"></script>
 <script crossorigin="anonymous" src="js/game/cam-tuner.js?v=3f5f9f5075ed"></script>
 <script crossorigin="anonymous" src="js/game/brake-cue.js?v=8f7e053da8f9"></script>
 <script crossorigin="anonymous" src="js/game/steer-tuning.js?v=072a417935f9"></script>
 <script crossorigin="anonymous" src="js/game/perf.js?v=495da1c1cfe4"></script>
-<script crossorigin="anonymous" src="js/game/gfx-quality.js?v=6a49b31c1a10"></script>
+<script crossorigin="anonymous" src="js/game/gfx-quality.js?v=10ecef8cb376"></script>
 <script crossorigin="anonymous" src="js/game/ui-scale.js?v=71d20ad63b86"></script>
 <script crossorigin="anonymous" src="js/game/cockpit-opts.js?v=fbd88d65fac7"></script>
 <script crossorigin="anonymous" src="js/game/metrics-panel-style.js?v=993e1d4e1e0b"></script>
 <script crossorigin="anonymous" src="js/game/metrics.js?v=9d9bdd157f9d"></script>
 <script crossorigin="anonymous" src="js/game/cameras.js?v=caf8fa2670cf"></script>
 <script crossorigin="anonymous" src="js/game/cam-modes.js?v=0ccbabb90f93"></script>
-<script crossorigin="anonymous" src="js/game/hud.js?v=c1ea2881b40e"></script>
+<script crossorigin="anonymous" src="js/game/hud.js?v=38921a8f481d"></script>
 <script crossorigin="anonymous" src="js/game/results.js?v=40a2c4e24afe"></script>
 <script crossorigin="anonymous" src="js/game/quali.js?v=00b1417f6183"></script>
 <script crossorigin="anonymous" src="js/game/debrisworld.js?v=44ac4fb0ed89"></script>
@@ -1874,11 +1874,11 @@
 <script crossorigin="anonymous" src="js/net/sdp.js?v=1d82f2230798"></script>
 <script crossorigin="anonymous" src="js/net/qr.js?v=69234de73182"></script>
 <script crossorigin="anonymous" src="js/net/scan.js?v=da29034793de"></script>
-<script crossorigin="anonymous" src="js/net/transport.js?v=449e7bf69997"></script>
+<script crossorigin="anonymous" src="js/net/transport.js?v=e6a4aaf95804"></script>
 <script crossorigin="anonymous" src="js/net/handshake.js?v=235f43f8bc4c"></script>
 <script crossorigin="anonymous" src="js/net/snapshot.js?v=29869772a40d"></script>
 <script crossorigin="anonymous" src="js/net/session.js?v=ab5f8dedabbc"></script>
-<script crossorigin="anonymous" src="js/net/netplay.js?v=87e0eaf84c87"></script>
+<script crossorigin="anonymous" src="js/net/netplay.js?v=c2db889f6db5"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=81b09256e218"></script>
 <script crossorigin="anonymous" src="js/game.js?v=3c43ef15f175"></script>
 </body></html>

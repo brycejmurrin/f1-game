@@ -194,6 +194,46 @@ test("RTC disconnects instead of dropping reliable events when its inbox overflo
   }
 });
 
+test("a congested outbound STATE queue drops the snapshot instead of buffering it", () => {
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    close() {}
+  }
+  // maxRetransmits:0 only drops on the network — the local SCTP queue still
+  // buffers, so a backed-up channel must refuse STATE sends (stale beats late)
+  // while reliable EVENTs keep queueing.
+  const channel = (label, buffered) => ({
+    label, readyState: "open", bufferedAmount: buffered, sent: [],
+    send(d) { this.sent.push(d); }, close() {},
+  });
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    const ep = fresh.rtc({ role: "guest" });
+    const state = channel("state", 999999), event = channel("event", 999999);
+    ep.pc.ondatachannel({ channel: state });
+    ep.pc.ondatachannel({ channel: event });
+    state.onopen(); event.onopen();
+
+    assert.equal(ep.send(fresh.STATE, "snap"), false, "backed-up STATE send must drop");
+    assert.equal(state.sent.length, 0);
+    assert.equal(ep.send(fresh.EVENT, "ev"), true, "reliable events still deliver");
+    assert.equal(event.sent.length, 1);
+
+    state.bufferedAmount = 0;
+    assert.equal(ep.send(fresh.STATE, "snap2"), true, "a drained queue accepts again");
+    assert.equal(state.sent.length, 1);
+  } finally {
+    delete global.RTCPeerConnection;
+    delete global.localStorage;
+  }
+});
+
 // ---------------------------------------------------------------------------
 // ICE configuration
 // ---------------------------------------------------------------------------

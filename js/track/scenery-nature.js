@@ -565,8 +565,10 @@ const SceneryNature = (function () {
         if (!rejBox(bandC, [5.2, 1.8, tl], cb)) {
           addBox(out, bandC, [5.2, 1.8, tl], fasciaCol, cb);
           crowdBank(k, side, gap + 1.5 + back, tl, 7, 4.2, riserTint, lift);
+          // Only a tier that actually BUILT raises the roof — a culled tier
+          // used to lift the slab a full rake above the surviving stand.
+          tierLift.push(lift);
         }
-        tierLift.push(lift);
       }
       const topLift = tierLift.length ? tierLift[tierLift.length - 1] : 0;
       // Roof slab cantilevered over the crowd, lifted on the up axis
