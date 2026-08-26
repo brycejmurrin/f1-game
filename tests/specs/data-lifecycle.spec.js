@@ -18,6 +18,12 @@ async function dataReady(page) {
   // the waitForFunction below, three links away from the cause. index.html has
   // always loaded mat4.js before js/data/*, so the app was never affected.
   // The ordering is now asserted: HARD_EDGES carries mat4.js -> telemetry.js.
+  // log.js too, same trap as telemetry-compare's harness: hub.js's open() and
+  // api.js's warnFetchFail log through the Log global (index.html loads it
+  // before everything); this standalone harness threw "Log is not defined"
+  // the moment either ran — red since the logging landed, whenever the suite
+  // actually ran.
+  await page.addScriptTag({ url: "/js/log.js" });
   await page.addScriptTag({ url: "/js/mat4.js" });
   await page.addScriptTag({ url: "/js/data/api.js" });
   await page.addScriptTag({ url: "/js/data/telemetry.js" });
@@ -159,6 +165,7 @@ test("meeting session lists refresh recent meetings but retain historic lists", 
 
   await page.goto("/version.json");
   await page.setContent("<div></div>");
+  await page.addScriptTag({ url: "/js/log.js" });   // warnFetchFail logs through Log
   await page.addScriptTag({ url: "/js/data/api.js" });
   await page.waitForFunction(() => typeof F1API !== "undefined");
   await page.evaluate(async () => {
