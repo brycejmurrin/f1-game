@@ -54,7 +54,7 @@
      that fits the canvas already measures in local px (clientWidth), which is
      the space zoom leaves those APIs reporting in. */
   zoom: var(--ui-scale);
-  background: #0a0a0e;
+  background: var(--bg);
   display: flex; flex-direction: column;
   /* See padding below: insets are divided back out of the zoom. This is the
      one surface that carries BOTH the zoom and the safe-area padding —
@@ -92,20 +92,24 @@
 }
 #track-detail-name { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: 0.08em; text-transform: uppercase; }
 .tdc-close-btn {
-  background: none; border: 1px solid rgba(255,255,255,0.2); color: #aaa;
-  border-radius: 50%;
+  /* The data hub's icon-close recipe (css/data.css .dh-close), verbatim: the
+     two ✕ buttons were the app's only pair of same-role controls with nothing
+     in common — this one a hollow grey circle, that one a plate square. One
+     recipe, the plate family. */
+  background: var(--plate); border: 1px solid var(--plate-line); color: var(--dim);
+  border-radius: var(--r-md);
   /* Same floor as every other door — 36px was under --tap on both pointers
      (measured 2026-08-18 Playwright MCP at 852x393: 36x36). WCAG 24 is met;
      the house ladder is not. */
-  width: var(--tap); height: var(--tap); font-size: 16px;
+  width: var(--tap); height: var(--tap); font-size: var(--fs-5);
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   flex-shrink: 0; padding: 0; line-height: 1;
-  transition: border-color 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 @media (hover: hover) {
-  .tdc-close-btn:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+  .tdc-close-btn:hover { background: var(--plate-hover); color: #fff; }
 }
-.tdc-close-btn:active { border-color: rgba(255,255,255,0.6); color: #fff; }
+.tdc-close-btn:active { background: var(--plate-press); color: #fff; }
 #track-detail-body {
   flex: 1; min-height: 0;
   display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5);
@@ -137,10 +141,10 @@
 #track-detail-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .tdc-corner {
   display: flex; align-items: center; gap: 5px;
-  background: rgba(255,255,255,0.06); border-radius: var(--r-sm);
+  background: var(--plate); border-radius: var(--r-sm);
   padding: calc(var(--gap) * 0.25) 8px; font-size: var(--fs-micro);
 }
-.tdc-num { font-weight: 700; color: #ddd; min-width: 22px; }
+.tdc-num { font-weight: 700; color: var(--text); min-width: 22px; }
 .tdc-fast   { color: #4ade80; font-size: var(--fs-micro); }
 .tdc-medium { color: #facc15; font-size: var(--fs-micro); }
 .tdc-slow   { color: #fb923c; font-size: var(--fs-micro); }
@@ -148,8 +152,8 @@
 #track-detail-flags { display: flex; gap: calc(var(--gap) * 0.5); flex-wrap: wrap; margin: calc(var(--gap) * 0.5) 0 2px; }
 .tdf-flag {
   font-size: var(--fs-micro); letter-spacing: 0.1em; padding: 2px 7px;
-  border-radius: var(--r-xs); border: 1px solid rgba(255,255,255,0.2);
-  color: #aaa; background: rgba(255,255,255,0.05);
+  border-radius: var(--r-xs); border: 1px solid var(--plate-line);
+  color: var(--dim); background: var(--plate);
 }
 .tdf-street { color: #f59e0b; border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.08); }
 .tdf-banked { color: #818cf8; border-color: rgba(129,140,248,0.4); background: rgba(129,140,248,0.08); }

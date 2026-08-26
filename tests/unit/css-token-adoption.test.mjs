@@ -123,7 +123,9 @@ const CEILING = {
   // onto --pad so the list rows follow the density ladder.
   // 2026-08-19: 466 → 467. adaptive-ui / audio work (build 1515) added one
   // raw px spacing decl (measured on deploy tip c3df0ee1).
-  rawSpacing: 467,
+  // 2026-08-26: 467 → 466. Round-7 consistency sweep — one raw spacing decl
+  // fell out with the token conversions (alpha-band / plate-family pass).
+  rawSpacing: 466,
 };
 
 test("no new font-size below the --fs-micro floor", () => {

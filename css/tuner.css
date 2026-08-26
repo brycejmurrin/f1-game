@@ -250,7 +250,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   gap: 4px;
   margin: 2px -18px 6px; padding: 6px 18px 8px;
   background: rgba(12, 14, 20, 0.94);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid var(--card-line);
   flex-shrink: 0;
 }
 #lt-tabs .lt-tab, #ct-modes .lt-tab {
@@ -308,7 +308,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 #lighting-inner .sheet-foot, #camtune-inner .sheet-foot {
   display: flex; gap: 8px; flex-shrink: 0;
   margin-top: 10px; padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.10);
+  border-top: 1px solid var(--card-line);
 }
 #lighting-inner .sheet-foot button,
 #camtune-inner .sheet-foot button {
@@ -340,14 +340,14 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   field-sizing: content; max-height: min(calc(28 * var(--svhz)), 120px);
   width: 100%; height: 72px; margin-top: 10px; resize: none;
   font: 10px/1.5 ui-monospace, monospace; color: #cfe0ff;
-  background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.5); border: 1px solid var(--card-line);
   border-radius: var(--r-sm); padding: 6px;
 }
 .adv-intro { font-size: var(--fs-micro); opacity: 0.7; margin: 0 0 6px; line-height: 1.45; }
 .adv-sec {
   color: var(--red); font-size: var(--fs-micro); letter-spacing: 0.08em;
   margin: 16px 0 8px; padding-bottom: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid var(--card-line);
 }
 .adv-sec span {
   color: rgba(255, 255, 255, 0.45); font-size: var(--fs-micro);
@@ -423,7 +423,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .as-now-card {
   display: flex; align-items: center; gap: var(--gap);
   margin-top: calc(var(--gap) * 0.6); padding: calc(var(--gap) * 0.7);
-  border: 1px solid rgba(255,255,255,0.10); border-radius: var(--r-md);
+  border: 1px solid var(--card-line); border-radius: var(--r-md);
   background: rgba(255,255,255,0.04);
 }
 .as-now-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
@@ -440,7 +440,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   width: var(--tap-sm); height: var(--tap-sm); min-height: var(--tap-sm);
   display: flex; align-items: center; justify-content: center;
   padding: 0; font-size: 14px; line-height: 1; border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.06);
+  border: 1px solid var(--plate-line); background: var(--plate);
   color: var(--text); cursor: pointer;
 }
 /* Play/pause is the primary action of the three, so it is bigger and filled. */
@@ -827,13 +827,13 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   display: flex; align-items: center; justify-content: center; gap: 6px;
   width: 100%; list-style: none; cursor: pointer;
   font: inherit; font-size: var(--fs-micro); letter-spacing: 0.08em; opacity: 0.85;
-  color: var(--text); background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: var(--r-md); padding: 10px 18px;
+  color: var(--text); background: var(--plate-hover);
+  border: 1px solid var(--plate-line); border-radius: var(--r-md); padding: 10px 18px;
 }
 .adv-more-btn::-webkit-details-marker { display: none; }
 .adv-more-btn::after { content: "\25BE"; }     /* ▾, flips to ▴ via [open] below */
 @media (hover: hover) {
-  .adv-more-btn:hover { background: rgba(255, 255, 255, 0.12); }
+  .adv-more-btn:hover { background: var(--plate-press); }
 }
 .adv-more-btn:active { background: rgba(255, 255, 255, 0.2); }
 #adv-details[open] > .adv-more-btn::after { content: "\25B4"; }
@@ -847,11 +847,11 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .music-row {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 8px; border-radius: var(--r-sm);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--plate);
+  border: 1px solid var(--card-line);
   font-size: var(--fs-micro);
 }
-.music-row.playing { border-color: var(--red); background: rgba(225, 6, 0, 0.14); }
+.music-row.playing { border-color: var(--red); background: var(--plate-on); }
 .music-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .music-size { flex: 0 0 auto; font-size: var(--fs-micro); opacity: 0.5; font-variant-numeric: tabular-nums; }
 .music-row button {
@@ -879,8 +879,8 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   /* 16px floor: iOS Safari zooms the page on focus under that, and the zoom
      sticks after the keyboard closes. */
   font: inherit; font-size: 16px;
-  background: rgba(255, 255, 255, 0.08); color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 6px 8px;
+  background: var(--plate-hover); color: var(--text);
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: 6px 8px;
 }
 /* The redirect URI exists to be COPIED — and tokens.css sets user-select:none on
    the whole app, so without this the one string the setup depends on cannot be
@@ -890,19 +890,19 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .sp-now { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .sp-art {
   flex: 0 0 auto; width: 56px; height: 56px; border-radius: var(--r-sm); object-fit: cover;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--plate);
 }
 .sp-now-txt { min-width: 0; }              /* lets the ellipsis below actually engage */
 .sp-title, .sp-artist, .sp-on { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-title { font-size: 14px; font-weight: 700; }
 .sp-artist { font-size: var(--fs-micro); opacity: 0.75; }
 .sp-on { font-size: var(--fs-micro); opacity: 0.5; letter-spacing: 0.04em; margin-top: 2px; }
-.sp-bar { height: 3px; border-radius: var(--r-xs); background: rgba(255, 255, 255, 0.14); overflow: hidden; margin: 2px 0 8px; }
+.sp-bar { height: 3px; border-radius: var(--r-xs); background: var(--card-line); overflow: hidden; margin: 2px 0 8px; }
 .sp-bar-fill { height: 100%; background: var(--red); width: 0; transition: width 0.4s linear; }
 #sp-search {
   width: 100%; margin-top: 6px; font: inherit; font-size: 16px;   /* 16px: iOS zoom floor */
-  background: rgba(255, 255, 255, 0.08); color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 6px 8px;
+  background: var(--plate-hover); color: var(--text);
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: 6px 8px;
   /* Same --chip-h floor as its twin #as-sp-id: padding-driven height painted
      16px at UI SIZE 40% (2026-08-21 sweep). Inert at >=100%. */
   min-height: var(--chip-h);
@@ -910,8 +910,8 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 #sp-results:empty { display: none; }
 #as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 {
   width: 100%; font: inherit; font-size: 16px;   /* 16px: iOS zooms a focused control under it */
-  background: rgba(255, 255, 255, 0.08); color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 6px 8px;
+  background: var(--plate-hover); color: var(--text);
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: 6px 8px;
 }
 #as-sp-playlist:disabled, #as-sp-device:disabled,
 #sp-playlist2:disabled, #sp-device2:disabled { opacity: 0.45; }

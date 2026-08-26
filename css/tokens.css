@@ -390,14 +390,41 @@
   --plate-hover: rgba(255, 255, 255, 0.08);
   --plate-press: rgba(255, 255, 255, 0.11);
   --plate-on: color-mix(in oklab, var(--red) 18%, transparent);
-  /* NO trailing comment-closer here. A stray `*/` after this declaration's
-     `;` sat exactly where the parser expects the next declaration; CSS error
-     recovery then discards everything to the NEXT `;` — which was the end of
-     --edge below, skipping straight through the comment. --edge therefore
-     never existed, and every `box-shadow: var(--edge), var(--lift-2)`
-     consumer (all 21 sheets, .dh-card, the garage stack) computed to NONE:
-     the entire elevation ladder shipped visually inert until build 1548. */
+  /* NO trailing comment-closer here. A stray star-slash after the semicolon
+     of the declaration above sat exactly where the parser expects the next
+     declaration; CSS error recovery then discards everything to the next
+     semicolon — which was the end of --edge below, skipping straight through
+     the comment. --edge therefore never existed, and every
+     `box-shadow: var(--edge), var(--lift-2)` consumer (all 21 sheets,
+     .dh-card, the garage stack) computed to NONE: the elevation ladder
+     shipped visually inert until build 1548.
+     WRITE THE CLOSER AS "star-slash" IN PROSE, never literally: the first
+     version of THIS comment quoted the two characters verbatim, which closed
+     the comment mid-sentence and fed the rest to error recovery — eating the
+     --plate-on-glow declaration below. The bug's own description reintroduced
+     the bug one line lower (caught live, round 7). */
   --plate-on-glow: inset 3px 0 0 var(--red), 0 0 12px color-mix(in oklab, var(--red) 28%, transparent);
+  /* The STRONG selected wash — the picker-tile tier (team tile, career
+     flavour/seat, career slot). Three sites hand-mixed 16/24/24% washes with
+     12/14/16px glows at 28/36/38%; one pair of tokens makes the three tiles
+     one family. Distinct from --plate-on (18%, chips/tabs) on purpose: a
+     full-card selection reads at a higher tint than a chip. */
+  --plate-on-strong: color-mix(in oklab, var(--red) 24%, transparent);
+  --lift-sel: 0 0 14px color-mix(in oklab, var(--red) 36%, transparent);
+  /* Armed destructive fill — the career DELETE? treatment, shared by the
+     livery ✕ and the mid-season APPLY. Was rgba(225,6,0,0.35) pasted at
+     three sites that cross-referenced each other by comment. */
+  --armed-fill: color-mix(in oklab, var(--red) 35%, transparent);
+  /* Opaque plate — controls floating OVER the live 3D canvas (garage camera
+     trio, cam picker, tuner rails). Translucent-but-opaque on purpose: no
+     backdrop-filter over a rendering turntable. Was rgba(12,12,16,0.74)
+     pasted three times in carsetup.css with the same six-line comment. */
+  --plate-opaque: rgba(12, 12, 16, 0.74);
+  /* Screen scrims — the dim wash behind raised UI. One colour, six ad-hoc
+     alphas across five sheets; the two named rungs cover the exact repeats
+     (0.42 light dim, 0.92 near-solid backdrop). */
+  --scrim: rgba(6, 6, 10, 0.42);
+  --scrim-heavy: rgba(6, 6, 10, 0.92);
   /* A lit lip along the top AND the far edge falling into shade. The lip on
      its own reads as a sticker laid on the page; the pair reads as a slab with
      thickness, which is the whole point of an elevation system. */

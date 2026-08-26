@@ -7,7 +7,7 @@
   display: flex; align-items: center; justify-content: center;
   background:
     radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
-    rgba(6, 6, 10, 0.42);
+    var(--scrim);
   /* Shared safe-area tokens, same as every other full-screen overlay — so the
      card clears the notch and home indicator identically (and the menu-fit
      notch simulation, which overrides --sa*, actually reaches this screen).
@@ -77,14 +77,13 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   max-height: min(880px, calc(100 * var(--svhz) - 2 * var(--gut) - var(--sat) / var(--ui-scale) - var(--sab) / var(--ui-scale)));
 }
 
-.dh-header {
-  display: flex; align-items: center; gap: var(--gap);
-  padding: 14px calc(var(--gap) * 1.5);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 24%, transparent), transparent 62%);
-  flex: 0 0 auto;
-}
-.dh-title { font-size: var(--fs-6); font-weight: 800; font-style: italic; letter-spacing: 0.05em; color: #fff; flex: 1; }
+/* The header is the canonical .sheet-head now (css/components.css) — one
+   recipe, the brand-red h2, the --grad-head paint and --grad-rule hairline.
+   Only the deltas the .sheet grid would otherwise supply live here: the card
+   is a flex column, so the head must not flex, and the compact tier below is
+   keyed on body density (the card publishes its own data-density, not the
+   .sheet selector the shared compact rule matches). */
+.dh-card > .sheet-head { flex: 0 0 auto; }
 .dh-close {
   /* Primary control — a thumb target, not a 34px glyph. */
   width: var(--tap); height: var(--tap); flex: 0 0 auto;
@@ -150,12 +149,12 @@ body[data-width="wide"][data-density="normal"] .dh-card {
    body[data-density] is measured in those same zoom-adjusted units; compact
    chrome keeps the destination strip and loading state from consuming the
    entire work area while every target still paints at least 24 CSS px. */
-body[data-density="compact"] .dh-header { padding: 0 var(--gap); }
+body[data-density="compact"] .dh-card .sheet-head { padding: 0 var(--gap); }
 body[data-density="compact"] .dh-card {
   min-height: 0; height: 100%; max-height: 100%;
   border-radius: var(--r-md);
 }
-body[data-density="compact"] .dh-title { font-size: var(--fs-4); }
+body[data-density="compact"] .dh-card .sheet-head h2 { font-size: var(--fs-4); }
 body[data-density="compact"] .dh-close {
   width: var(--tap-min); height: var(--tap-min); min-height: var(--tap-min);
 }
@@ -220,7 +219,7 @@ body[data-density="compact"] .dh-loading,
 body[data-density="compact"] .dh-error { padding: 14px var(--gap); }
 .dh-spinner {
   width: 34px; height: 34px; border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.15);
+  border: 3px solid var(--plate-line);
   border-top-color: var(--red);
   animation: dh-spin 0.8s linear infinite;
 }
@@ -234,7 +233,7 @@ body[data-density="compact"] .dh-error { padding: 14px var(--gap); }
    so it is the worst one to under-size. .dh-card now carries UI SIZE zoom, so
    --tap grows with the setting the same way sheet controls do. */
 .dh-retry { padding: 8px var(--pad); min-height: var(--tap); }
-.dh-empty { padding: 30px var(--gap); text-align: center; color: #8a8a95; font-size: var(--fs-4); }
+.dh-empty { padding: 30px var(--gap); text-align: center; color: var(--dim); font-size: var(--fs-4); }
 .dh-footnote { margin-top: 16px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); font-size: var(--fs-2); color: #6a6a75; text-align: right; }
 
 /* schedule rows */
@@ -246,7 +245,7 @@ body[data-density="compact"] .dh-error { padding: 14px var(--gap); }
 .dh-race-round { width: 30px; font-weight: 800; font-style: italic; color: var(--dim); flex: 0 0 auto; padding-top: 2px; }
 .dh-race-main { flex: 1; min-width: 0; }
 .dh-race-name { font-size: var(--fs-4); color: var(--text); display: flex; align-items: center; gap: calc(var(--gap) * 0.5); flex-wrap: wrap; line-height: 1.3; }
-.dh-race-sub { font-size: var(--fs-2); color: #8a8a95; margin-top: calc(var(--gap) * 0.25); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dh-race-sub { font-size: var(--fs-2); color: var(--dim); margin-top: calc(var(--gap) * 0.25); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dh-race-time { font-size: var(--fs-1); color: #7a7a85; margin-top: 2px; }
 .dh-race-date { font-size: var(--fs-2); color: #c4c4c8; flex: 0 0 auto; text-align: right; min-width: 50px; white-space: nowrap; }
 /* Hide local time on very narrow phones to save vertical space */
@@ -293,15 +292,15 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-h2h-bar { display: flex; width: 100%; max-width: 160px; height: 6px; border-radius: var(--r-xs); background: rgba(255, 255, 255, 0.1); overflow: hidden; margin-top: 4px; }
 .dh-h2h-fill { height: 100%; background: #fff; transition: width 0.3s; }
 .dh-h2h-alt { background: rgba(255, 255, 255, 0.3); }
-.dh-h2h-labels { display: flex; width: 100%; max-width: 160px; justify-content: space-between; font-size: var(--fs-micro); color: #8a8a95; font-weight: 700; letter-spacing: 0.05em; }
+.dh-h2h-labels { display: flex; width: 100%; max-width: 160px; justify-content: space-between; font-size: var(--fs-micro); color: var(--dim); font-weight: 700; letter-spacing: 0.05em; }
 
-.dh-pos { width: 24px; text-align: right; color: #8a8a95; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.dh-pos { width: 24px; text-align: right; color: var(--dim); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .dh-codechip {
   flex: 0 0 auto;
   font-size: var(--fs-2); font-weight: 800;
   padding: 2px calc(var(--gap) * 0.5); border-radius: var(--r-sm);
   color: #fff; min-width: 38px; text-align: center;
-  border-left: 3px solid rgba(255, 255, 255, 0.2);
+  border-left: 3px solid var(--plate-line);
   background: rgba(255, 255, 255, 0.07);
 }
 .dh-swatch { width: 12px; height: 12px; border-radius: var(--r-xs); flex: 0 0 auto; }
@@ -324,30 +323,30 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
    dh-pill\\|dh-tbtn\\|dh-td-time\\|dh-gval\\|dh-live-title data.css`) are
    left for whenever the scale gains an intermediate step, not before. */
 .dh-lr-name { font-size: 16px; font-weight: 800; font-style: italic; color: #fff; }
-.dh-lr-meta { font-size: var(--fs-2); color: #8a8a95; margin-top: 2px; }
+.dh-lr-meta { font-size: var(--fs-2); color: var(--dim); margin-top: 2px; }
 .dh-table {
   width: 100%; max-width: 100%; table-layout: fixed;
   border-collapse: collapse; font-size: var(--fs-3); font-variant-numeric: tabular-nums;
 }
 .dh-table thead th {
   text-align: left; font-size: var(--fs-1); letter-spacing: 0.10em;
-  color: #8a8a95; font-weight: 700; padding: 4px calc(var(--gap) * 0.5) 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.10);
+  color: var(--dim); font-weight: 700; padding: 4px calc(var(--gap) * 0.5) 8px;
+  border-bottom: 1px solid var(--card-line);
 }
 .dh-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
 @media (hover: hover) {
   .dh-table tbody tr:hover { background: rgba(255,255,255,0.03); }
 }
 .dh-table td { padding: 7px calc(var(--gap) * 0.5); vertical-align: middle; }
-.dh-td-pos { width: 26px; text-align: right; color: #8a8a95; }
+.dh-td-pos { width: 26px; text-align: right; color: var(--dim); }
 /* chip + driver name side by side in the driver cell */
 .dh-td-driver {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .dh-td-driver .dh-codechip { display: inline-flex; margin-right: calc(var(--gap) * 0.5); vertical-align: middle; }
 .dh-td-driver .dh-name { display: inline; min-width: 0; }
-.dh-td-team { color: #8a8a95; font-size: var(--fs-2); width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px; }
-.dh-td-grid { width: 30px; text-align: center; color: #8a8a95; }
+.dh-td-team { color: var(--dim); font-size: var(--fs-2); width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px; }
+.dh-td-grid { width: 30px; text-align: center; color: var(--dim); }
 .dh-td-time { width: 88px; text-align: right; color: #c4c4c8; font-size: var(--fs-micro); }
 .dh-td-pts  { width: 34px; text-align: right; font-weight: 700; }
 .dh-table tbody tr.dh-lr-p1 { color: #ffd700; background: rgba(255, 215, 0, 0.07); border-left: 3px solid #ffd700; }
@@ -358,20 +357,20 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-livecard, .dh-card.dh-livecard { display: flex; flex-direction: column; gap: 4px; }
 .dh-live-title { font-size: 17px; font-weight: 800; font-style: italic; color: #fff; }
 .dh-live-type { font-size: var(--fs-2); color: var(--red); letter-spacing: 0.08em; }
-.dh-live-sub { font-size: var(--fs-2); color: #8a8a95; margin-top: 2px; }
-.dh-live-team { color: #8a8a95; font-size: var(--fs-2); }
+.dh-live-sub { font-size: var(--fs-2); color: var(--dim); margin-top: 2px; }
+.dh-live-team { color: var(--dim); font-size: var(--fs-2); }
 .dh-live-row-main { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 150px; }
 .dh-live-gapwrap { display: flex; align-items: center; gap: calc(var(--gap) * 0.5); flex: 1; min-width: 100px; justify-content: flex-end; }
 .dh-live-gapbar { height: 4px; border-radius: var(--r-xs); max-width: 80px; }
-.dh-live-gaplbl { font-size: var(--fs-1); color: #8a8a95; font-variant-numeric: tabular-nums; width: 45px; text-align: right; }
+.dh-live-gaplbl { font-size: var(--fs-1); color: var(--dim); font-variant-numeric: tabular-nums; width: 45px; text-align: right; }
 
 /* weather */
 .dh-weather { margin: calc(var(--gap) * 0.5) 0 var(--gap); }
 /* min(...) floors throughout — see #sel-teams in css/menus.css: `minmax(90px,
    1fr)` still emits a 90px track in an 80px box, and overflows it. */
 .dh-wx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(90px, 100%), 1fr)); gap: 8px; }
-.dh-wx-cell { background: rgba(255, 255, 255, 0.05); border-radius: var(--r-md); padding: 8px 10px; }
-.dh-wx-label { font-size: var(--fs-1); letter-spacing: 0.1em; color: #8a8a95; }
+.dh-wx-cell { background: var(--plate); border-radius: var(--r-md); padding: 8px 10px; }
+.dh-wx-label { font-size: var(--fs-1); letter-spacing: 0.1em; color: var(--dim); }
 .dh-wx-value { font-size: var(--fs-5); font-weight: 700; color: var(--text); margin-top: 2px; }
 
 /* ---------- telemetry tab ---------- */
@@ -384,11 +383,11 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   border-left-width: 3px;
   color: var(--text);
 }
-.dh-dchip.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
+.dh-dchip.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
 .dh-telem-detail { display: flex; flex-direction: column; gap: 10px; }
 .dh-canvas {
   width: 100%; max-width: 600px; height: auto;
-  background: #07070c; border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #07070c; border: 1px solid var(--card-line);
   border-radius: var(--r-md); display: block;
   cursor: ew-resize;
   /* The trace is SCRUBBED by dragging it (js/data/telemetry.js attachScrub), and
@@ -437,7 +436,7 @@ body[data-density="compact"] .dh-canvas.dh-map { max-width: 220px; }
   letter-spacing: 0.04em; cursor: pointer; transition: opacity 0.12s;
 }
 @media (hover: hover) {
-  button.dh-legend-item:hover { background: rgba(255, 255, 255, 0.06); }
+  button.dh-legend-item:hover { background: var(--plate); }
 }
 button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-legend-item.dh-off { opacity: 0.35; }
@@ -470,11 +469,11 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-ratebtn {
   font-size: var(--fs-2); font-weight: 800;
   padding: calc(var(--gap) * 0.5) 10px; border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
   color: var(--dim);
 }
-.dh-ratebtn.dh-active { background: var(--plate-on); border-color: var(--red); color: #fff; }
+.dh-ratebtn.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
 .dh-thint { font-size: var(--fs-2); color: #7a7a85; font-style: italic; margin-left: auto; }
 /* On very narrow portrait, hide the scrub hint to keep transport on one row */
 body[data-width="narrow"] .dh-thint { display: none; }
@@ -489,7 +488,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   border-radius: var(--r-md);
 }
 .dh-gcell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.dh-glabel { font-size: var(--fs-micro); letter-spacing: 0.1em; color: #8a8a95; white-space: nowrap; }
+.dh-glabel { font-size: var(--fs-micro); letter-spacing: 0.1em; color: var(--dim); white-space: nowrap; }
 .dh-gval { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; line-height: 1; }
 .dh-gspeed .dh-gval { color: #39d0ff; }
 .dh-gbar { height: 8px; border-radius: var(--r-sm); background: rgba(255, 255, 255, 0.09); overflow: hidden; margin-top: auto; }
@@ -510,8 +509,8 @@ body[data-width="narrow"] .dh-thint { display: none; }
 .dh-livebtn {
   font-size: var(--fs-2); font-weight: 800; letter-spacing: 0.06em;
   padding: calc(var(--gap) * 0.5) var(--gap); border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
   color: var(--text);
 }
 .dh-livebtn.dh-active { background: var(--plate-on); border-color: var(--red); color: #fff; box-shadow: var(--plate-on-glow); }
@@ -530,8 +529,8 @@ body[data-width="narrow"] .dh-thint { display: none; }
   margin-left: auto; flex: 0 0 auto;
   width: max(20px, var(--tap-min)); height: max(20px, var(--tap-min));
   line-height: 1; padding: 0;
-  border-radius: var(--r-pill); border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.06); color: var(--text); font-size: var(--fs-4);
+  border-radius: var(--r-pill); border: 1px solid var(--plate-line);
+  background: var(--plate); color: var(--text); font-size: var(--fs-4);
 }
 /* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
 @media (hover: hover) {
@@ -545,7 +544,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 .dh-laneboard-spd { margin-left: auto; font-variant-numeric: tabular-nums; opacity: 0.9; }
 .dh-laneboard-dl {
   min-width: 46px; text-align: right; font-variant-numeric: tabular-nums;
-  color: #9aa0aa;
+  color: var(--dim);
 }
 .dh-laneboard-dl.dh-pos { color: #ff6b6b; }   /* behind the reference */
 .dh-laneboard-dl.dh-neg { color: #3fd06b; }   /* ahead of the reference */
@@ -560,7 +559,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   border: 1px solid var(--plate-line);
   color: var(--dim);
 }
-.dh-sortbtn.dh-active { background: var(--plate-on); border-color: var(--red); color: #fff; }
+.dh-sortbtn.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
 
 /* ---------- session picker (LIVE + TELEMETRY) ---------- */
 .dh-picker {
@@ -612,7 +611,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 .dh-export-row { display: flex; gap: calc(var(--gap) * 0.5); }
 .dh-export-status {
   margin: 0; padding: 8px 10px; border-radius: var(--r-sm);
-  background: #0d0d13; border: 1px solid var(--card-line);
+  background: var(--surf-1); border: 1px solid var(--card-line);
   color: #cfcfd6; font-size: var(--fs-2); line-height: 1.45;
   white-space: pre-wrap; word-break: break-word;
   /* One axis. The text already `pre-wrap`s and `break-word`s, so there is
@@ -622,10 +621,10 @@ body[data-width="narrow"] .dh-thint { display: none; }
   overscroll-behavior-y: contain; touch-action: pan-y;
 }
 .dh-pick-field { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.25); }
-.dh-pick-label { font-size: var(--fs-micro); letter-spacing: 0.12em; color: #8a8a95; }
+.dh-pick-label { font-size: var(--fs-micro); letter-spacing: 0.12em; color: var(--dim); }
 .dh-pick-select {
   background: #15151d; color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.2); border-radius: var(--r-sm);
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm);
   padding: calc(var(--gap) * 0.5) 8px; font: inherit; font-size: var(--fs-3);
   max-width: 220px; min-width: 0;
 }
@@ -785,8 +784,8 @@ body[data-density="compact"][data-width="wide"] {
   --fit-at: 240px;
   --svhz: calc(1svh / var(--sheet-scale, var(--ui-scale)));
   max-height: calc(100 * var(--svhz) - (var(--sat) + var(--sab) + 2 * var(--gut)) / var(--ui-scale));
-  background: #0d0d14;
-  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: var(--surf-1);
+  border: 1px solid var(--card-line);
   border-radius: var(--r-lg);
   overflow: hidden;
   display: flex; flex-direction: column;
@@ -795,17 +794,20 @@ body[data-density="compact"][data-width="wide"] {
 .dh-tpopup-hdr {
   display: flex; align-items: center; gap: 10px;
   padding: calc(var(--pad) * 0.5) 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
-  background: linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 20%, transparent), transparent 62%);
+  border-bottom: 1px solid var(--card-line);
+  /* Same paint as every .sheet-head — the popup keeps its denser padding and
+     its title+subtitle stack (the #cr-titlebar shape), but the wash is the
+     shared token, not a third hand-mixed gradient. */
+  background: var(--grad-head);
   flex: 0 0 auto;
 }
 .dh-tpopup-title {
   flex: 1; display: flex; flex-direction: column; gap: 2px;
-  font-size: var(--fs-5); font-weight: 800; font-style: italic; color: #fff;
+  font-size: var(--fs-5); font-weight: 800; font-style: italic; color: var(--red);
 }
 .dh-tpopup-sub {
   font-size: var(--fs-2); font-weight: 600; font-style: normal;
-  color: #8a8a95; letter-spacing: 0.04em;
+  color: var(--dim); letter-spacing: 0.04em;
 }
 .dh-tpopup-body {
   flex: 1; min-height: 0;
@@ -844,7 +846,7 @@ body[data-density="compact"][data-width="wide"] {
 .dh-tlap {
   flex: 0 0 auto;
   font-size: var(--fs-2); font-weight: 700; font-style: normal;
-  color: #e8e8ee; font-variant-numeric: tabular-nums;
+  color: var(--text); font-variant-numeric: tabular-nums;
 }
 .dh-telem-side {
   display: flex; flex-direction: column; gap: 10px;

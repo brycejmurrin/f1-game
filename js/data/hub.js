@@ -132,8 +132,11 @@ const DataHub = (function () {
     const card = el("div", "dh-card fit-managed");
 
     // header
-    const header = el("div", "dh-header");
-    const title = el("h2", "dh-title", "F1 DATA HUB");
+    // .sheet-head — the app's one header recipe (css/components.css); the h2
+    // gets the canonical brand-red title for free. The card is not a .sheet,
+    // so data.css carries the two flex/compact deltas the grid would provide.
+    const header = el("div", "sheet-head");
+    const title = el("h2", "", "F1 DATA HUB");
     title.id = "dh-title";
     header.appendChild(title);
     const closeBtn = el("button", "dh-close", "✕");

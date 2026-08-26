@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1555">
+<meta name="apex-build" content="1556">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -49,8 +49,8 @@
      Measured chrome-devtools LCPBreakdown: almost all element render delay
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
-<link rel="preload" href="css/tokens.css?v=f09f7b06adf5" as="style">
-<link rel="preload" href="css/components.css?v=3cf34073c66c" as="style">
+<link rel="preload" href="css/tokens.css?v=8cac2cdb6861" as="style">
+<link rel="preload" href="css/components.css?v=29d32b900b04" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -68,17 +68,17 @@
 <!-- MANIFEST.CSS order preserved (cascade). Title-critical sheets stay
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
-<link rel="stylesheet" href="css/tokens.css?v=f09f7b06adf5">
-<link rel="stylesheet" href="css/components.css?v=3cf34073c66c">
-<link rel="stylesheet" href="css/tuner.css?v=c6e5201f3a11" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=550e1244a0de">
-<link rel="stylesheet" href="css/carsetup.css?v=d6870be3d27f" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/hud.css?v=f9c2134fab29" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=504f3ff0a101" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/tokens.css?v=8cac2cdb6861">
+<link rel="stylesheet" href="css/components.css?v=29d32b900b04">
+<link rel="stylesheet" href="css/tuner.css?v=f86675136b91" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/menus.css?v=aa42fee69498">
+<link rel="stylesheet" href="css/carsetup.css?v=96aa6ff0149a" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/hud.css?v=f3278427c377" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/overlays.css?v=2ecda61dbe48" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=821949606490">
-<link rel="stylesheet" href="css/track-detail.css?v=5bd828ddc24f" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/career.css?v=3bffbf090c68" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/data.css?v=bffbb25e3078" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/track-detail.css?v=a9ff3a27cdfd" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/career.css?v=a85d42517128" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/data.css?v=d04ba1c4cbdd" media="print" onload="this.media='all'">
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
      parsers that scan every rel=stylesheet. -->
@@ -1816,7 +1816,7 @@
 <script crossorigin="anonymous" src="js/data/standings.js?v=420627476c88"></script>
 <script crossorigin="anonymous" src="js/data/lastrace.js?v=b7d043cba6a1"></script>
 <script crossorigin="anonymous" src="js/data/live.js?v=8a677f97aa0e"></script>
-<script crossorigin="anonymous" src="js/data/hub.js?v=43c7554c31be"></script>
+<script crossorigin="anonymous" src="js/data/hub.js?v=54dce62c6721"></script>
 <script crossorigin="anonymous" src="js/car/parts.js?v=299db50b7f16"></script>
 <script crossorigin="anonymous" src="js/car/liveries.js?v=3c03d579e61e"></script>
 <script crossorigin="anonymous" src="js/car/liverytex.js?v=02d15bbad542"></script>

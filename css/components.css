@@ -162,7 +162,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   width: min(100%, var(--sheet-w, 520px));
   max-height: 100%;
   background: var(--panel);
-  border: 1px solid color-mix(in oklab, var(--red) 20%, rgba(255, 255, 255, 0.12));
+  border: 1px solid color-mix(in oklab, var(--red) 20%, var(--card-line));
   border-radius: var(--r-lg);
   /* lightness + a top lip do the lifting here; the cast shadow only matters
      against the 3D scene (see the elevation notes in css/tokens.css) */
@@ -897,7 +897,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pm-quit {
   color: color-mix(in oklab, var(--red) 62%, #fff);
   margin-top: calc(var(--gap) * 0.5);
-  border-top-color: rgba(255, 255, 255, 0.18);
+  border-top-color: var(--plate-line);
   position: relative;
 }
 #pm-quit::before {
@@ -1256,7 +1256,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 .cz-logo-wrap label { cursor: pointer; }
 #cz-logo-prev {
   width: 28px; height: 28px; object-fit: contain;
-  background: rgba(255,255,255,0.08); border-radius: var(--r-xs); padding: 2px;
+  background: var(--plate-hover); border-radius: var(--r-xs); padding: 2px;
 }
 /* ---------- a screen that is a <dialog> ----------
    Migrated modals (js/game/topmodal.js) keep `.screen`/`.dim` and every rule

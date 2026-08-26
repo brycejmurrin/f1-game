@@ -568,7 +568,7 @@ body.hud-hidden #hud-restore { display: block; }
   gap: calc(var(--gap) * 0.5);
   padding: 8px;
   background: rgba(8, 8, 14, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--card-line);
   border-radius: var(--r-lg);
   /* No backdrop-filter, for the same reason .hud-box has none: this panel sits
      over the LIVE 3D canvas, so a blur here re-composites the frame behind it
@@ -584,12 +584,12 @@ body.hud-hidden #hud-restore { display: block; }
   font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.05em;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  color: #eef0f6;
+  background: var(--plate-hover);
+  border: 1px solid var(--card-line);
+  color: var(--text);
 }
 #campicker button.active {
-  background: rgba(225, 6, 0, 0.75);
+  background: color-mix(in srgb, var(--red) 75%, transparent);
   border-color: rgba(255, 255, 255, 0.35);
 }
 /* Compact: keep the grid in the CAM/pause corner. Density, not a viewport
@@ -641,8 +641,8 @@ body[data-density="compact"] #campicker {
 #save-warning strong { color: #ffd180; letter-spacing: 0.04em; }
 #save-warning-detail { min-width: 0; }
 #save-warning button {
-  min-height: var(--tap-min); padding: 0 var(--gap); border: 1px solid rgba(255,255,255,0.22);
-  border-radius: var(--r-pill); background: rgba(255,255,255,0.08); color: #fff;
+  min-height: var(--tap-min); padding: 0 var(--gap); border: 1px solid var(--plate-line);
+  border-radius: var(--r-pill); background: var(--plate-hover); color: #fff;
   font: inherit; font-weight: 800;
 }
 @media (max-width: 38.75rem) {
@@ -852,7 +852,7 @@ body[data-density="compact"] #campicker {
   overflow-wrap: anywhere;
   padding: 8px 10px;
   border-radius: var(--r-md);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--plate-line);
   background: rgba(0, 0, 0, 0.35);
   color: inherit;
 }
@@ -971,7 +971,7 @@ body[data-density="compact"] #campicker {
   gap: 8px;
   padding: calc(var(--gap) * 0.5) 8px;
   border-radius: var(--r-sm);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--plate);
   font-size: var(--fs-micro);
 }
 /* The other players, one row each. A column rather than more fixed elements,
@@ -1093,7 +1093,7 @@ body[data-density="compact"] #campicker {
      one wrapped list. */
   #vsfriend .vs-two > .vs-col + .vs-col {
     padding-left: 20px;
-    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    border-left: 1px solid var(--card-line);
   }
 }
 #vsfriend .vs-status {

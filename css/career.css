@@ -27,10 +27,10 @@
   z-index: 25;
   background:
     radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
-    rgba(6, 6, 10, 0.42);
+    var(--scrim);
 }
 @media (prefers-reduced-transparency: reduce) {
-  #career { background: rgba(6, 6, 10, 0.92); }
+  #career { background: var(--scrim-heavy); }
 }
 #cr-inner { --sheet-w: 1020px; --fit-at: 300px; }
 #cr-inner:not([data-shape="tall"]) { --fit-at: 220px; }
@@ -193,8 +193,8 @@
    at a glance — the first build of this screen looked like nothing was picked. */
 .cr-flavour.active, .cr-teamtile.active, .cr-seat.active {
   border-color: var(--red);
-  background: color-mix(in oklab, var(--red) 24%, transparent);
-  box-shadow: inset 0 0 0 2px var(--red), 0 0 14px color-mix(in oklab, var(--red) 38%, transparent);
+  background: var(--plate-on-strong);
+  box-shadow: inset 0 0 0 2px var(--red), var(--lift-sel);
 }
 .cr-flavour.active .cr-flavour-blurb,
 .cr-teamtile.active .cr-teamtile-meta,
@@ -280,9 +280,9 @@
 /* :hover gated per the tokens.css policy (a tap sticks :hover on iOS);
    :focus-visible stays outside the gate so keyboard focus works everywhere. */
 @media (hover: hover) {
-  .co-offer:hover { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
+  .co-offer:hover { border-color: var(--red); background: var(--plate-on); }
 }
-.co-offer:focus-visible { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
+.co-offer:focus-visible { border-color: var(--red); background: var(--plate-on); }
 .co-offer-sw { grid-row: 1 / 3; width: 10px; height: 34px; border-radius: 2px; border: 2px solid transparent; }
 .co-offer-team { font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .co-offer-terms { grid-column: 2 / 4; font-size: var(--fs-micro); color: var(--dim); letter-spacing: 0.04em; }
@@ -312,9 +312,9 @@
   gap: 4px;
 }
 @media (hover: hover) {
-  .cr-record:hover { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
+  .cr-record:hover { border-color: var(--red); background: var(--plate-on); }
 }
-.cr-record:focus-visible { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
+.cr-record:focus-visible { border-color: var(--red); background: var(--plate-on); }
 .cr-record-line { font-size: var(--fs-2); font-weight: 700; font-variant-numeric: tabular-nums; }
 /* The affordance line: dim, tracked-out and red, so the card reads as a door
    rather than one more read-only summary in a column full of them. */
@@ -384,10 +384,10 @@
   transition: border-color 0.15s, background 0.15s;
 }
 @media (hover: hover) {
-  .cr-slot-main:hover { border-color: var(--red); background: rgba(225, 6, 0, 0.12); }
+  .cr-slot-main:hover { border-color: var(--red); background: var(--plate-on); }
 }
 .cr-slot-main:focus-visible {
-  border-color: var(--red); background: rgba(225, 6, 0, 0.12);
+  border-color: var(--red); background: var(--plate-on);
 }
 /* An EMPTY slot is an invitation, not a result: dashed edge and dimmed text, so
    a column of three reads at a glance as "one career and two openings" without
@@ -398,8 +398,8 @@
    one am I in" has to be answerable without pressing anything. */
 .cr-slot.active .cr-slot-main {
   border-color: var(--red);
-  background: color-mix(in oklab, var(--red) 16%, transparent);
-  box-shadow: 0 0 12px color-mix(in oklab, var(--red) 28%, transparent);
+  background: var(--plate-on);
+  box-shadow: var(--lift-sel);
 }
 .cr-slot-n {
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.12em; color: var(--red);
@@ -428,7 +428,7 @@
 }
 .cr-slot-del:focus-visible { color: var(--red); border-color: var(--red); }
 .cr-slot-del.armed {
-  color: #fff; border-color: var(--red); background: rgba(225, 6, 0, 0.35);
+  color: #fff; border-color: var(--red); background: var(--armed-fill);
 }
 
 /* ---------- how it works (#career-guide) ---------- */
@@ -474,7 +474,7 @@
 }
 /* Money lines are read as a column, so they get tabular figures — otherwise
    "+900" and "+1,240" do not line up and the total looks unrelated to them. */
-.res-settle-v { font-variant-numeric: tabular-nums; font-weight: 700; color: #d8d8e0; }
+.res-settle-v { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
 .res-settle-row.missed .res-settle-v { color: var(--dim); font-weight: 600; }
 /* The total is the answer; everything above it is working. */
 .res-settle-row.total {
