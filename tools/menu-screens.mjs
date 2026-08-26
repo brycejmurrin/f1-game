@@ -16,6 +16,13 @@ export const VIEWPORTS = [
   ["ios-iphone-landscape",  { ...devices["iPhone 15 Pro landscape"], deviceScaleFactor: 2 },
     "the shape the game is PLAYED in — 343px of height for everything",
     { t: 0, r: 59, b: 21, l: 59 }],
+  // The device descriptor's 393px is the FULL-SCREEN/PWA height; landscape
+  // Safari with its collapsed toolbar leaves ~344px, and no cell sat between
+  // 344 and 393 — the matrix hole behind the 2026-08 teampicker arithmetic.
+  ["ios-iphone-landscape-safari", { ...devices["iPhone 15 Pro landscape"],
+      deviceScaleFactor: 2, viewport: { width: 852, height: 344 } },
+    "landscape Safari with the toolbar collapsed — the shortest real viewport",
+    { t: 0, r: 59, b: 21, l: 59 }],
   ["ios-ipad-portrait",     { ...devices["iPad Pro 11"], deviceScaleFactor: 1 },
     "wide sheet, tall window: the case that wants bands, not columns"],
   ["ios-ipad-landscape",    { ...devices["iPad Pro 11 landscape"], deviceScaleFactor: 1 },
@@ -353,6 +360,33 @@ export const SCREENS = [
       await p.evaluate(() => document.getElementById("pc-toggle")?.click());
       await p.waitForFunction(() => document.body.classList.contains("photo-mode"),
         null, { polling: 100, timeout: 15000 });
+      await p.waitForTimeout(500);
+    } },
+
+  // The fly-cam's OWN controls (sticks, climb/dive column, FOV bar, EXIT /
+  // PANEL / HUD). They live under #photo-controls, which was in OVERLAY_IDS
+  // for the reset but never a root — so none of them had ever been measured,
+  // which is how three of them missed the --tap-min floor pass. Same route as
+  // the cell above; only the measured root differs.
+  { id: "photocontrols", name: "Free camera — photo controls", root: "#photo-controls",
+    open: async (p) => {
+      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
+      await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
+      await p.evaluate(() => { document.getElementById("pausemenu").hidden = false; });
+      await p.waitForTimeout(200);
+      await p.evaluate(() => document.getElementById("pm-settings")?.click());
+      // 30s, not the fly cell's 15s: this cell always runs as the SECOND
+      // consecutive full race build in a sweep, and under that load the 15s
+      // waits timed out on every scale-axis viewport (6 skips, first run).
+      await p.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { timeout: 30000 });
+      await p.waitForTimeout(250);
+      await p.evaluate(() => document.getElementById("pm-lighting")?.click());
+      await p.waitForFunction(() => !document.querySelector("#lighting").hidden, null, { polling: 100, timeout: 30000 });
+      await p.waitForTimeout(400);
+      await p.evaluate(() => document.getElementById("pc-toggle")?.click());
+      await p.waitForFunction(() => document.body.classList.contains("photo-mode"),
+        null, { polling: 100, timeout: 30000 });
       await p.waitForTimeout(500);
     } },
 

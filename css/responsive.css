@@ -187,7 +187,11 @@ body.desktop #pm-calib { display: none !important; }
   justify-content: center;
   flex-direction: column;
   text-align: center;
-  padding: 2rem;
+  /* max() with the safe-area pads: this overlay is gated to notched portrait
+     phones (the media query below), where a flat 2rem sat under the 47-59px
+     top inset whenever the centred stack filled the height. Unzoomed layer,
+     so the raw tokens are the correct form. */
+  padding: max(2rem, var(--safe-t)) max(2rem, var(--safe-r)) max(2rem, var(--safe-b)) max(2rem, var(--safe-l));
   gap: 0.8rem;
 }
 .rotate-icon {
@@ -207,10 +211,19 @@ body.desktop #pm-calib { display: none !important; }
   background: rgba(255,255,255,0.1); color: #fff;
   font: inherit; font-weight: 800; letter-spacing: 0.035em;
 }
-#rotate-controls:focus-visible, #rotate-exit:focus-visible { outline: medium solid var(--focus); outline-offset: medium; }
-/* OPEN CONTROLS pauses the race and temporarily yields this z-9000 blocker to
-   the existing How to Play sheet. Closing help restores the blocker/focus if
-   the phone is still portrait. */
+/* outline-offset takes a <length> only — the old `medium` here made the whole
+   declaration invalid, silently dropping this rule since build 1496. 3px is
+   what `medium` resolves to; the blocker is unzoomed and unclipped, so a
+   plain outset ring is fine (no inverse floor needed on this layer). */
+#rotate-controls:focus-visible, #rotate-exit:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* OPEN CONTROLS pauses the race and hides this blocker while How to Play is
+   up. NOT a z-index yield: #howtoplay is a showModal() <dialog>, so it lives
+   in the TOP LAYER, which outranks every z-index and inerts the document —
+   the blocker could never paint over or intercept it. What this rule really
+   does is stop the opaque #000 backdrop from filling the screen AROUND the
+   help sheet, and let syncRotateBlocker (which reads computed display) report
+   inactive so focus is not sent behind the dialog. Closing help restores the
+   blocker/focus if the phone is still portrait. */
 body.rotate-help-open #rotate-device { display: none !important; }
 
 /* GUARDED ON THE DEVICE, NOT JUST THE SHAPE. `orientation: portrait` is nothing

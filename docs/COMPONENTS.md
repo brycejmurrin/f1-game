@@ -108,6 +108,12 @@ file changes a screen owned by another.
 - `.dh-card` / `.dh-tab` / `.dh-row` / `.dh-pill` / `.dh-dchip` / `.dh-sortbtn` / `.dh-race-sub` / `.dh-error-msg` — `data` + `components`
 - `.build-tag` — `components` + `menus`. The footer version tag: styled in
   `menus`, overridden by a compact-density selector in `components`.
+- `.cs-liv-swatch` / `.tm-colour` / `.swatch` / `.res-swatch` / `.dh-swatch` —
+  their owning files (`carsetup` / `menus` / `menus` / `components` / `data`)
+  + `tokens`. The whole swatch family appears once more in `tokens`' single
+  `forced-colors` block: colour IS the content on a swatch, so they all opt
+  out of forced-color-adjust together — one rule, deliberately, rather than
+  five copies of the same carve-out.
 
 **Cross-SCREEN reuse — a component borrowed by a screen that does not own it:**
 

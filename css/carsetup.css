@@ -462,6 +462,17 @@
   width: auto;
   flex-direction: column;
   gap: 0;
+  /* ~60-70 cards x 5-6 boxes and ~95% off screen at 200%: skip layout+paint
+     for the off-screen rows. BLOCK axis only — a length here would also become
+     the min-content width and blow the sheet's inline size (the exact failure
+     .sheet-body's min-width:0 comment records). 86px is exact, not averaged:
+     6+40+4+2lh(2x16.1)+4 with the name reserved at two lines below, so the
+     estimate equals the real height and scrollHeight never breathes under the
+     scroll-fade thumb. Keyboard End/Home reach past the render boundary via
+     menunav's checkVisibility scope; layout-audit neutralizes skipping at boot
+     so the tap sweep still sees every card. */
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 86px;
 }
 #cs-options.cs-liv-grid > .cs-liv-row > .cs-liv {
   flex: none;
@@ -490,6 +501,9 @@
   -webkit-line-clamp: 2;
   font-size: var(--fs-micro);
   line-height: 1.15;
+  /* Reserve both clamp lines even for one-line names: uniform card height is
+     what makes the row's contain-intrinsic-block-size exact (see .cs-liv-row). */
+  min-height: 2lh;
   text-align: center;
   overflow: hidden;
   max-width: 100%;

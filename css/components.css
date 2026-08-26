@@ -106,6 +106,13 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   .sheet, .dh-card { background: var(--surf-1); }
   .screen.dim { background: rgba(0, 0, 0, 0.92); }
 }
+/* prefers-contrast asks for the same remedy for the same reason: the
+   translucent panel over a moving 3D scene is the legibility risk
+   (css/tokens.css notes it at --panel). Same solid surfaces. */
+@media (prefers-contrast: more) {
+  .sheet, .dh-card { background: var(--surf-1); }
+  .screen.dim { background: rgba(0, 0, 0, 0.92); }
+}
 
 /* ---------- sheet: head / body / foot ---------- */
 .sheet {

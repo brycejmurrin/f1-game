@@ -86,6 +86,7 @@ some branch turns on or off at it.
 |---|---|
 | `ios-iphone-portrait` 393x852 | the phone as most people hold it |
 | `ios-iphone-landscape` 852x393 | the shape the game is PLAYED in — 343px of sheet height for everything |
+| `ios-iphone-landscape-safari` 852x344 | landscape Safari with the toolbar collapsed. The device descriptor's 393px is the FULL-SCREEN/PWA height; a browser tab is ~50px shorter, and until 2026-08 no cell sat between 344 and 393 — the hole that hid the fixed-chrome sheets' worst case |
 | `ios-ipad-portrait` 834x1194 | wide sheet, tall window: wants bands, not columns |
 | `ios-ipad-landscape` 1194x834 | the two-column case at its smallest |
 | `desktop-1280x800` | a small laptop |

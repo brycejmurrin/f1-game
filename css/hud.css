@@ -457,6 +457,10 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
 #pc-exit, #pc-panel, #pc-hud {
   width: auto; margin: 0; padding: 7px 16px; border-radius: var(--r-md);
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.06em;
+  /* The three pc-* controls the earlier --tap-min pass missed: padding-driven
+     (~32 local px, ~26 in the lt-open variant above) they painted ~12.8px /
+     ~10.4px at UI SIZE 40%. Same floor as #pc-toggle two rules up. */
+  min-height: var(--tap-min);
 }
 #pc-exit { background: var(--red); color: #fff; border: 1px solid var(--red); }
 #pc-panel, #pc-hud { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid rgba(255,255,255,0.22); }
