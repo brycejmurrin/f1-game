@@ -464,7 +464,11 @@ const GLXPost = (function () {
       const contactStr = opts && opts.contact !== undefined ? opts.contact : 0;
       const haveAO = ssaoProg && (aoStr > 0 || contactStr > 0) && F.invProj && ssaoFBO;
       const grStrPre = opts && opts.godray !== undefined ? opts.godray : 0;
-      const lampVolPre = (opts && opts.lampVol) || 0;
+      // GODRAY_FS multiplies the whole lamp accumulation by uMist (the lamp
+      // in-scatter needs particles to scatter off), so with GROUND MIST at 0
+      // the march computes an exact 0 — zeroing lampVol here sheds the
+      // half-res march + blurs + composite operand with bit-identical output.
+      const lampVolPre = ((opts && opts.mist) || 0) > 0 ? ((opts && opts.lampVol) || 0) : 0;
       const haveGRPre = godrayProg && F.invVP && godrayFBO && ((SH.enabled && grStrPre > 0) || lampVolPre > 0);
       // Must match the composite upload: omitted carReflect means the 0.05
       // tuner default, so car-paint SSR still marches (and still reads depth).

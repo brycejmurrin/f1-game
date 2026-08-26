@@ -178,6 +178,26 @@ const GLXChunked = (function () {
       const perChunk = F.perChunkLights > 0 && F.allLights;
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib);
       if (perChunk) {
+        // uLampShadowIdx is a SLOT in the bound set, chosen against the global
+        // frame.lights ordering — a per-chunk set reorders lamps, so without a
+        // retarget the PCF lands on whatever lamp occupies that slot number in
+        // the chunk's set (wrong pools shadowed, the real lamp's pool lost on
+        // all chunked geometry — the road included under PER-CHUNK ROAD). The
+        // godray pass remaps for the same reason. Resolve the mapped lamp's
+        // record in F.allLights ONCE per call by baked position (setFrame
+        // copies positions verbatim; flicker scales rgb only), then per chunk
+        // find its slot in that chunk's index list.
+        const SH = core.shadow;
+        let shadowAllIdx = -1;
+        if (SH && SH.lampEnabled && SH.lampArmed && SH.lampIdx >= 0 && F.lights &&
+            !(F.tailCount > 0 && SH.lampIdx >= F.tailStart)) {
+          const o = SH.lampIdx * 15, AL = F.allLights;
+          const lx = F.lights[o], ly = F.lights[o + 1], lz = F.lights[o + 2];
+          for (let p = 0; p < AL.length; p += 15) {
+            if (AL[p] === lx && AL[p + 1] === ly && AL[p + 2] === lz) { shadowAllIdx = p / 15; break; }
+          }
+        }
+        let lastSlot = null;
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
           if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
@@ -191,6 +211,12 @@ const GLXChunked = (function () {
           }
           core.uploadLightSet(F.allLights, ch._lampIdx, ch._lampIdx.length,
                               F.lights, F.tailStart, F.tailCount);
+          let slot = -1;
+          if (shadowAllIdx >= 0) {
+            const li = ch._lampIdx;
+            for (let j = 0; j < li.length; j++) if (li[j] === shadowAllIdx) { slot = j; break; }
+          }
+          if (slot !== lastSlot) { core.setLampShadowSlot(slot); lastSlot = slot; }
           gl.drawElements(gl.TRIANGLES, ch.count, ch.indexType, ch.byteOffset);
         }
       } else {
@@ -209,7 +235,12 @@ const GLXChunked = (function () {
         }
         if (runOff >= 0) gl.drawElements(gl.TRIANGLES, runCount, mesh.indexType, runOff);
       }
-      if (perChunk) core.uploadLightSet(F.lights, null, F.lights ? (F.lights.length / 15) | 0 : 0);
+      if (perChunk) {
+        core.uploadLightSet(F.lights, null, F.lights ? (F.lights.length / 15) | 0 : 0);
+        // Restore the global slot with the global set. Safe when the lamp map
+        // is disarmed: uLampShadowOn gates the shader branch.
+        core.setLampShadowSlot(core.shadow ? core.shadow.lampIdx : -1);
+      }
     }
 
     // Nearest lamps whose radius actually reaches a chunk's AABB, closest first,

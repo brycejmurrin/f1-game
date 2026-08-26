@@ -413,6 +413,13 @@ const GLX = (function () {
       // 1496 squash merge with this decision record intact — the revert was
       // lost in the merge, not overturned; no crash repro has landed.)
       uploadLightSet: (L, idx, n) => uploadLightSet(L, idx, n),
+      // Lamp-shadow SLOT retarget for per-chunk light sets (GLXChunked): the
+      // lit shader gates its lamp PCF on loop slot == uLampShadowIdx — a slot
+      // in the CURRENTLY BOUND set. A per-chunk set reorders lamps, so the
+      // caller must point the slot at the mapped lamp's position in ITS set
+      // (or -1) per draw, then restore the global slot. The lit program is
+      // already bound on every chunked draw path.
+      setLampShadowSlot: (i) => { gl.uniform1i(litU.uLampShadowIdx, i | 0); },
       getSize: () => ({ width, height }),
       gpuTimerEnd: _gpuTimerEnd,
       get skyVAO() { return skyVAO; },
@@ -1325,7 +1332,12 @@ const GLX = (function () {
       // TRACK lamps only. Car tail-lights ride the same uniform arrays (the
       // tail slice above nStatic) and are not per-chunk, so scaling them would
       // dim the field's lights for a reason that has nothing to do with them.
-      const s = fromTail ? 1 : _lampScale;
+      // The GLOBAL upload (idx == null, the whole frame set in order) carries
+      // the frame's appended tail slice inside L itself — those records must
+      // skip the knob too, or tails on cars/road go ~70% dim at knob 0.3
+      // while chunked scenery (which passes them as L2) keeps them at 1.
+      const inFrameTail = !idx && L === frameLights && frameTailCount > 0 && i >= frameTailStart;
+      const s = (fromTail || inFrameTail) ? 1 : _lampScale;
       A[i4] = src[o]; A[i4 + 1] = src[o + 1]; A[i4 + 2] = src[o + 2]; A[i4 + 3] = src[o + 6];
       B[i4] = src[o + 3] * s; B[i4 + 1] = src[o + 4] * s; B[i4 + 2] = src[o + 5] * s; B[i4 + 3] = src[o + 12];
       C[i4] = src[o + 7]; C[i4 + 1] = src[o + 8]; C[i4 + 2] = src[o + 9]; C[i4 + 3] = src[o + 10];
