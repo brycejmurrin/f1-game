@@ -290,6 +290,11 @@ function circuitHarness(overrides = {}) {
       budgets: { hero: 50000, facility: 25000, repeated: 10000 },
     },
     frameAt: () => ({
+      // k included per the real producer contract: tracks.js frameAt always
+      // supplies the node index, and placement() rejects a frame without one
+      // (groundHeight takes a node index — a raw lap fraction is not a
+      // usable fallback).
+      k: 40,
       c: [10, 2, 20],
       r: [1, 0, 0],
       u: [0, 1, 0],
