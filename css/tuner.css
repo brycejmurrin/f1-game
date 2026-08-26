@@ -168,7 +168,17 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
      container, and these override the sheet's centred sizing. */
   pointer-events: auto;
   position: fixed;
-  left: auto; top: calc(var(--sat) + 8px); right: calc(var(--sar) + 8px); bottom: calc(var(--sab) + 8px);
+  /* DIVIDE THE INSETS BY THE ZOOM. This panel is a .sheet, so these
+     top/right/bottom resolve INSIDE `zoom: var(--sheet-scale, --ui-scale)`
+     and a raw inset term is multiplied by it — at UI SIZE 40% the top pad
+     painted (59+8)*0.4 = 27px against a 59px notch, putting FREE CAMERA 7px
+     under the island and DONE 8px under the home bar (measured, 2026-08
+     sweep). Same doctrine as every other zoomed cluster (css/hud.css:23-32);
+     --sheet-eff-scale covers the fit-capped case. */
+  left: auto;
+  top: calc((var(--sat) + 8px) / var(--sheet-eff-scale, var(--ui-scale)));
+  right: calc((var(--sar) + 8px) / var(--sheet-eff-scale, var(--ui-scale)));
+  bottom: calc((var(--sab) + 8px) / var(--sheet-eff-scale, var(--ui-scale)));
   transform: none;
   width: var(--dock-w);
   max-height: none;
@@ -201,7 +211,13 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    is drawn on the content-box edge, which is where each row's VALUE sits — the
    0.55 beside KEY LIGHT had a red bar through it. */
 #lt-rows, #ct-rows {
-  flex: 1 1 auto; overflow-y: auto; overscroll-behavior-y: contain; min-height: 84px; touch-action: pan-y;
+  /* max() with a painted floor: the 84px local minimum shrank with the sheet
+     zoom to 33.6 painted px at UI SIZE 40% — the audit's `starved` finding
+     (a scroll region under its 44 device-px threshold). 44/scale keeps the
+     painted region at the threshold; at >=100% the 84 literal wins. */
+  flex: 1 1 auto; overflow-y: auto; overscroll-behavior-y: contain;
+  min-height: max(84px, calc(44px / var(--ui-scale)));
+  touch-action: pan-y;
   padding-right: 10px;
 }
 #lt-rows.sf-scroll::before, #ct-rows.sf-scroll::before { margin-right: -8px; }

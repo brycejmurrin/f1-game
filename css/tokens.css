@@ -142,6 +142,9 @@
 @property --tap { syntax: "<length>"; inherits: true; initial-value: 44px; }
 @property --chip-h { syntax: "<length>"; inherits: true; initial-value: 40px; }
 @property --tap-min { syntax: "<length>"; inherits: true; initial-value: 24px; }
+/* --tap-sm completes the set: unregistered it left the audit tool's floor
+   read non-deterministic between cells (44-fallback on most iPhone rows). */
+@property --tap-sm { syntax: "<length>"; inherits: true; initial-value: 30px; }
 
 @layer base {
 /* Apex 26 — layout, HUD, menus. Data hub styles live in css/data.css */

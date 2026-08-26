@@ -721,7 +721,13 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
         for (const id of ids) { const el = document.getElementById(id); if (el) el.hidden = true; }
         const ov = document.getElementById("overlay");
         if (ov) { ov.hidden = false; ov.style.removeProperty("display"); }
-        document.body.classList.remove("in-race");
+        // Remove EVERY route-set body class, not just in-race. lt-open and
+        // photo-mode survive `hidden = true` on their panels, and
+        // css/hud.css gates `#hud { display: none !important }` on them — so
+        // every hud* cell downstream of the fly-cam cell measured a hidden
+        // HUD and reported zero findings while reading as a pass
+        // (rootPresent:false on all 88 hud rows of the 2026-08 matrix).
+        document.body.classList.remove("in-race", "lt-open", "photo-mode", "pc-nopanel", "pc-uihidden", "rotate-help-open", "manual");
       }, OVERLAY_IDS);
       await page.waitForTimeout(200);
       // VERIFY THE RESET, DO NOT ASSUME IT. Hiding the overlays gets the title

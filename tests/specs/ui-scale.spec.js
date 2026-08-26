@@ -398,6 +398,7 @@ test.describe("UI scale", () => {
     await page.waitForTimeout(600);
 
     const CLUSTERS = [".hud-top", ".hud-bottom", "#minimap", ".dock"];
+    let dockSeen = false;
     for (const pct of SCALES) {
       await page.evaluate((p) => window.__apex.hudScale(p), pct);
       await page.waitForTimeout(200);
@@ -414,8 +415,35 @@ test.describe("UI scale", () => {
       }, CLUSTERS);
       for (const b of boxes) {
         if (b.missing || b.hidden) continue;
+        if (b.s === ".dock") dockSeen = true;
         expect(b.over, `${b.s} @${pct}% hangs off the ${b.over} edge`).toBe("");
       }
+      // THE HUD AXIS HAS ITS OWN WCAG FLOOR. The dock zooms by the RAW
+      // --hud-scale and its local --tap/--hold literals used to shadow the
+      // floored global token — BOOST painted 21.6px at HUD SIZE 40% and the
+      // matrix never saw it (the in-race audit cells were blind to a body-
+      // class leak). getBoundingClientRect is PAINTED px under zoom, which is
+      // exactly the space the 24px requirement lives in. Only asserted while
+      // the dock is visible; the dockSeen guard below stops that from ever
+      // becoming a silent skip of the whole feature.
+      const taps = await page.evaluate(() => {
+        const out = [];
+        for (const id of ["btn-boost", "btn-ot", "btn-brake", "shift-up", "btn-steer-left"]) {
+          const e = document.getElementById(id);
+          if (!e) continue;
+          const b = e.getBoundingClientRect();
+          if (b.width && b.height) out.push({ id, min: Math.min(b.width, b.height) });
+        }
+        return out;
+      });
+      for (const t of taps) {
+        expect(t.min, `#${t.id} @HUD ${pct}% paints ${t.min.toFixed(1)}px — under the 24px floor`)
+          .toBeGreaterThanOrEqual(23.5);
+      }
     }
+    // A dock that never rendered means this touch context stopped being a
+    // touch context and every tap assertion above was vacuous — the silent
+    // skip this sweep used to allow. Fail loudly instead.
+    expect(dockSeen, "the touch dock was never visible in a hasTouch context").toBe(true);
   });
 });

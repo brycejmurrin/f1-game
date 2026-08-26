@@ -122,7 +122,14 @@ let _fitKey = "", _fitWait = 0;
 function fitHud() {
   const root = document.documentElement;
   const scale = +root.style.getPropertyValue("--hud-scale") || 1;
-  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale;
+  // body.className is part of the key: cycling STEERING MODE re-parents the
+  // dock groups (layoutDocks), so the tallest column's height changes while
+  // viewport and scale do not — and the old key held the stale dock cap for
+  // the whole 3 s backoff (measured: the steer-cycling audit cells clipped at
+  // 150% while the plain hud cell, same everything, was clean). Every mode
+  // flip toggles a body class (manual / steer-buttons / steer-touch), so the
+  // class string is exactly the re-fit trigger needed, read without layout.
+  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "|" + document.body.className;
   if (key === _fitKey && --_fitWait > 0) return;
   // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
@@ -161,12 +168,40 @@ function fitHud() {
   // reported anywhere, which is how a wrong measurement hides.
   const bottom = span(document.querySelector(".hud-bottom"));
   const capBot = bottom ? (window.innerWidth - 2 * FIT_AIR) / bottom : Infinity;
+  // THE DOCKS GET THE SAME TREATMENT — they were the one cluster outside the
+  // fit budget (this comment block's own "bottom: one centred row" never
+  // counted them), and the dock zooms by the RAW slider, so at HUD SIZE 150%
+  // on a 390px-tall landscape phone the 2-high pedal column outgrew the
+  // viewport and BRAKE sat entirely off the top edge (measured 2026-08, the
+  // first sweep after the in-race audit cells were un-blinded: #btn-brake at
+  // y=-216, GAS 96px into the notch). Height, not width, is the binding
+  // axis: cap = the viewport height less top air over the tallest column's
+  // intrinsic (zoom-invariant) height.
+  const tall = (el) => {
+    if (!el) return 0;
+    const r = el.getBoundingClientRect();
+    if (!r.height) return 0;
+    return r.height / (el.currentCSSZoom || 1);
+  };
+  const dockH = Math.max(tall(document.getElementById("dock-left")),
+    tall(document.getElementById("dock-right")));
+  const capDock = dockH ? (window.innerHeight - 3 * FIT_AIR) / dockH : Infinity;
+  // An empty dock on a TOUCH body is "not populated yet", not "no dock" —
+  // showTouchControls lands a tick or two after the race starts, and latching
+  // the key here left the cap unwritten for the whole 3 s same-key backoff
+  // (measured: the un-blinded audit probes at ~0.6 s and saw the uncapped
+  // dock every time). Same retry-next-tick treatment as the !top guard
+  // above; a desktop body keeps the backoff, since its docks stay empty
+  // forever and re-measuring them every tick is the cost the backoff exists
+  // to avoid.
+  if (!dockH && !document.body.classList.contains("desktop")) _fitKey = "";
   const set = (prop, cap) => {
     if (cap >= scale) root.style.removeProperty(prop);   // fits: the player's number, untouched
     else root.style.setProperty(prop, String(Math.max(0.4, Math.round(cap * 1000) / 1000)));
   };
   set("--hud-z-top", capTop);
   set("--hud-z-bot", capBot);
+  set("--hud-z-dock", capDock);
 }
 
 function updateHud(force) {

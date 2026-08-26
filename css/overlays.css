@@ -283,7 +283,24 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* --hud-scale, with the HUD: the dock is a control rather than a readout, but
      it is on screen only while driving and competes with the HUD for the same
      edges, so one slider owns everything you see during a race. */
-  body:not(.desktop) .dock { --tap: 54px; --hold: 72px; zoom: var(--hud-scale); }
+  /* max() on the HUD axis: these local values SHADOW the global floored
+     --tap for the whole dock subtree, and the dock zooms by the RAW
+     --hud-scale (not the capped --hud-z) — so the bare 54px painted
+     BOOST/OT/AERO at 21.6px at HUD SIZE 40%, under the 24px WCAG floor for
+     every setting below ~44.5%. Dividing by --hud-scale (the dock's own
+     axis, NOT --ui-scale) keeps the painted floor at 24px; at >=100% the
+     literals win and nothing moves. The only tap targets inside any
+     HUD-zoom subtree (2026-08 axis audit). */
+  body:not(.desktop) .dock {
+    --tap: max(54px, calc(24px / var(--hud-scale)));
+    --hold: max(72px, calc(24px / var(--hud-scale)));
+    /* --hud-z-dock: fitHud's height cap for the pedal/shift columns — the
+       raw slider let the 2-high pedal stack outgrow a 390px landscape
+       viewport from 150% and put BRAKE off the top edge. Same mechanism as
+       the --hud-z-top/bot caps on the readout clusters; absent when the
+       player's setting fits. */
+    zoom: var(--hud-z-dock, var(--hud-scale));
+  }
   body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: var(--fs-micro); }
   body:not(.desktop) .dock .pedal,
   body:not(.desktop) .dock .steerbtn,
@@ -305,7 +322,11 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body:not(.desktop) #grp-steer { padding-bottom: 14px; }
   /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
   @media (max-width: 700px) {
-    body:not(.desktop) .dock { --tap: 48px; --hold: 64px; }
+    /* Same HUD-axis floor as the base dock values above. */
+    body:not(.desktop) .dock {
+      --tap: max(48px, calc(24px / var(--hud-scale)));
+      --hold: max(64px, calc(24px / var(--hud-scale)));
+    }
     body:not(.desktop) .dock .touchbtn { font-size: var(--fs-micro); }
     body:not(.desktop) .dock .pedal,
     body:not(.desktop) .dock .steerbtn,

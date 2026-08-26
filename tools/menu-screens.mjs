@@ -356,6 +356,33 @@ export const SCREENS = [
       await p.waitForTimeout(500);
     } },
 
+  // The fly-cam's OWN controls (sticks, climb/dive column, FOV bar, EXIT /
+  // PANEL / HUD). They live under #photo-controls, which was in OVERLAY_IDS
+  // for the reset but never a root — so none of them had ever been measured,
+  // which is how three of them missed the --tap-min floor pass. Same route as
+  // the cell above; only the measured root differs.
+  { id: "photocontrols", name: "Free camera — photo controls", root: "#photo-controls",
+    open: async (p) => {
+      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
+      await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
+      await p.evaluate(() => { document.getElementById("pausemenu").hidden = false; });
+      await p.waitForTimeout(200);
+      await p.evaluate(() => document.getElementById("pm-settings")?.click());
+      // 30s, not the fly cell's 15s: this cell always runs as the SECOND
+      // consecutive full race build in a sweep, and under that load the 15s
+      // waits timed out on every scale-axis viewport (6 skips, first run).
+      await p.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { timeout: 30000 });
+      await p.waitForTimeout(250);
+      await p.evaluate(() => document.getElementById("pm-lighting")?.click());
+      await p.waitForFunction(() => !document.querySelector("#lighting").hidden, null, { polling: 100, timeout: 30000 });
+      await p.waitForTimeout(400);
+      await p.evaluate(() => document.getElementById("pc-toggle")?.click());
+      await p.waitForFunction(() => document.body.classList.contains("photo-mode"),
+        null, { polling: 100, timeout: 30000 });
+      await p.waitForTimeout(500);
+    } },
+
   // ---- the sub-views the first pass documented as gaps and did not measure ----
 
   // The data hub's other four tabs. SCHEDULE and TELEMETRY were already covered;
