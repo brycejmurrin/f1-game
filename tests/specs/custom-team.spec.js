@@ -206,7 +206,9 @@ test("custom livery actions are independent keyboard buttons", async ({ page }) 
   await page.locator("#mb-race").click();
   await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
-  await page.getByRole("button", { name: /LIVERY/ }).click();
+  // LIVERY is a TAB since the garage grew its category tablist (adaptive-UI
+  // round) — the old button query matched nothing and hung the click forever.
+  await page.getByRole("tab", { name: "LIVERY" }).click();
 
   const select = page.getByRole("button", { name: "Select Test Paint livery" });
   const edit = page.getByRole("button", { name: "Edit Test Paint livery" });
@@ -226,6 +228,11 @@ test("custom livery actions are independent keyboard buttons", async ({ page }) 
 
   await page.locator(".cs-liv-ed-cancel").click();
   await page.getByRole("button", { name: "Delete Test Paint livery" }).focus();
+  // Delete is arm-then-confirm now (G.armConfirm, the career DELETE? idiom —
+  // one tap used to destroy a one-of-a-kind paint with no undo). First press
+  // ARMS the button; the row must survive it. Second press confirms.
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("button", { name: "Select Test Paint livery" })).toHaveCount(1);
   await page.keyboard.press("Space");
   await expect(page.getByRole("button", { name: "Select Test Paint livery" })).toHaveCount(0);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.livery.mclaren")))).toBe("default");
