@@ -20,7 +20,7 @@ node tools/pick-tests.mjs           # which test GROUPS does this change need?
 node tools/select-specs.mjs --since <ref>   # finer: per-SPEC selection, budgeted
 node tools/test-bg.mjs <groups>     # run browser groups in the background
 node tools/assets.mjs verify        # asset-pack licence + md5 + budget check
-tools/README.md                     # test-asserted index of all 60+ tools
+tools/README.md                     # test-asserted index of all 110+ tools
 docs/AGENT-SURFACE.md               # skills / MCP / tools / wrap map
 ```
 
@@ -50,7 +50,8 @@ Session shape — this is what controls both wall time and waiting:
    ships. "Cannot find module" means a missing `npm install`;
    `browserType.launch: Executable doesn't exist …chromium_headless_shell`
    means a missing browser. Either reads as a total-red run that looks like a
-   boot regression (measured 2026-08-17: 73/73 of `test:tiny`), and the cure is
+   boot regression (measured 2026-08-17: every `test:tiny` test red — 126 of
+   them today), and the cure is
    seconds. Read the FIRST failure's message before believing any red run.
 2. Make ALL source edits first, then verify ONCE. Tests serve `js/` and `css/`
    from the working tree, so a run in flight forbids source edits — run the
@@ -66,8 +67,10 @@ Session shape — this is what controls both wall time and waiting:
    log with a bounded read when a decision needs it; a session sitting in a
    foreground `npm test` is the failure mode this rule exists to kill.
 4. ONE Playwright process, ONE browser group per batch, started in the
-   background with `test-bg.mjs`. Anchor on the log's terminal line
-   `= run (passed|failed|timedout|interrupted)` — never a looser pattern,
+   background with `test-bg.mjs`. Anchor on the log's terminal line — the
+   reporter emits `= run <status>  (N/M done, K failed)`, so match it with
+   `grep -E '= run (passed|failed|timedout|interrupted)'` (ERE alternation;
+   a fixed-string or BRE grep never matches) — never a looser pattern,
    never the process table, never `| tail` on a live log. While it runs, do
    non-`js/`/`css/` work or end the turn; do not idle-watch the log.
 5. A timeout on a busy box measures the machine, not the code — budgets mean
@@ -214,8 +217,10 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
   plus `<meta name="apex-build">`; `sw.js` precache derives from the shell's tags
 - `types/game-ctx.d.ts` — the `G` façade contract, held by `tools/check-gctx.mjs`
 - `.claude/skills/` — the workflow references (`.claude/skills/README.md`);
-  `.claude/agents/` — scoped subagent definitions (verify-agent, track-surveyor)
-  that encode the flat prohibitions above so a subagent cannot un-know them
+  `.claude/agents/` — scoped subagent definitions (verify-agent, track-surveyor,
+  bloat-auditor, deploy-research, doc-drift-auditor, physics-contract-auditor,
+  worktree-regression-check) that encode the flat prohibitions above so a
+  subagent cannot un-know them
 
 ## Critical conventions
 

@@ -72,8 +72,9 @@ __apex.clearInput();
 
 ### `race(trackRef, timeOfDay?, weather?) → {track, timeOfDay, weather} | false`
 Load any circuit and start a normal race, skipping all menus. `trackRef` is a
-circuit **id** (`"monza"`) or its index in `Tracks.LIST`. `timeOfDay` is passed
-straight through to `setTimeOfDay()`, so it accepts any of
+circuit **id** (`"monza"`) or its index in `Tracks.LIST`. `timeOfDay` is stored
+raw (an unknown string only becomes `"default"` when `setTimeOfDay()` later
+coerces it), and accepts any of
 `"dawn" | "day" | "dusk" | "night" | "default"` (default uses the circuit's own
 setting); `weather` is `"dry" | "wet" | "rain" | "overcast" | "fog"` (`"wet"` =
 damp road no rain; `"rain"` = wet road + falling rain). The recommended entry
@@ -84,7 +85,7 @@ Load a circuit and start a **Time Trial** session (solo, no AI, `timeTrial: true
 Same `trackRef` and `timeOfDay` semantics as `race()`. Use this instead of `race()`
 when testing TT-specific behaviour (ghost delta, TT results, sector splits).
 
-### `info() → {state, track, n, total, timeTrial, seasonMode, sectors, turns}`
+### `info() → {state, track, n, total, timeTrial, seasonMode, raceQuali, lapsTarget, sectors, turns}`
 Snapshot of state: `state` is the state-machine value
 (`menu｜count｜race｜results`), `track` the loaded circuit id, `n` the
 sample count, `total` the lap length (m). `timeTrial` and `seasonMode` reflect the
@@ -388,7 +389,7 @@ and how many mast fixtures the scenery pass registered (`lampPosts`).
 **LAMP DENSITY** moves `bakedLights` (and poles on the next track load);
 **LAMP COUNT** / AI traffic moves `numLights`. Reading only `numLights` to
 check density is a false no-op — with a full grid it sticks near `lampCull`
-(def 28) even when density doubles the baked set.
+(def 40) even when density doubles the baked set.
 
 Lamp-slider probes (for Chromium MCP / `tools/cdmcp-lamps-tune.py`):
 - `meanLampRGB` — mean RGB of the **culled** `frame.lights` set this frame
@@ -643,7 +644,7 @@ const kMax = Math.max(...ahead.map(a => Math.abs(a.k)));
 const targetSpeed = Math.sqrt(24 / Math.max(kMax, 1e-4));   // v = sqrt(aLat/|k|)
 ```
 
-### `physState() → {s, x, speed, prog, head, vLat, yawRate, slipDeg, slope, wrongWay, rescueT, lap, axEstSm, axFrac, slipFactor}`
+### `physState() → {s, x, px, pz, speed, prog, head, vLat, yawRate, slipDeg, slope, wrongWay, rescueT, lap, axEstSm, axFrac, slipFactor}`
 Richer readout for the world-space / drift model: world `head`ing (rad), lateral
 slip velocity `vLat` (m/s), yaw rate `yawRate` (rad/s) and slip `slipDeg` (°),
 road pitch `slope` (+up/−down), `wrongWay` flag, auto-rescue timer `rescueT`,
@@ -741,7 +742,7 @@ OVERTAKE fields, alongside the aero ones:
 | `otT` | seconds of push remaining, 0 when not deployed |
 | `otCool` | seconds until it can arm again |
 
-### `camState() → {eye, tgt, fov, debug}`
+### `camState() → {eye, tgt, fov, roll, debug}`
 Raw camera geometry: `eye` `[x,y,z]`, `tgt` `[x,y,z]` (look-at point), `fov`
 (degrees), and `debug` (true when a `view()` free-cam is the active camera). The
 geometry reflects whichever camera is actually being rendered — the `view()`
@@ -754,7 +755,7 @@ state-machine value, and current camera geometry (`eye`, `tgt`, `fov`). The
 single call to check "what is the scene doing right now" before taking a
 screenshot — avoids calling `info()`, `camera()`, and `probe()` separately.
 
-### `garageCam() → {on, spin, az, el, dist}`
+### `garageCam() → {on, spin, az, el, dist, pan, xOn, aeroX}`
 The GARAGE (`#carsetup`) preview camera — **read-only**. `on` is false whenever
 the garage is closed (the rest is then just the parked state). `spin` is the
 auto-turntable toggle; `az`/`el` are radians (az 0 = ahead of the nose, PI =
@@ -1103,7 +1104,7 @@ Get or set HUD visibility. Called with no argument returns whether the HUD is
 currently visible. Called with a boolean shows (`true`) or hides (`false`) the
 HUD overlay and returns the new state.
 
-### `uiScale(v?) → {pct, stored, min, max}` · `hudScale(v?) → {pct, stored, min, max}`
+### `uiScale(v?) → {pct, stored, min, max, step}` · `hudScale(v?) → {pct, stored, min, max, step}`
 The two size sliders (pause ▸ SETTINGS ▸ DISPLAY), as **percentages**, 40–200.
 `uiScale` drives `--ui-scale`, which the menu sheets and the overlay children
 `zoom`; `hudScale` drives `--hud-scale`, which the in-race HUD clusters and the
@@ -1239,7 +1240,7 @@ __apex.carInput(4, { steer: 0.3, throttle: true });
 __apex.step(1 / 60, 60);
 ```
 
-### `net() → {active, role, localId, remoteId, remotes, slotFallback, net, buffered, events, reason}`
+### `net() → {active, role, localId, remoteId, remotes, slotFallback, net, buffered, events, reason, peerLaps, peerResult, startPending}`
 The live session, or `{active:false}` when racing solo. `net` is the
 clock/liveness snapshot (`rtt`, `offset`, `synced`, `alive`).
 
@@ -1439,7 +1440,7 @@ is fine and something downstream is discarding it. Check
 
 ## Timing & field
 
-### `timing() → {raceT, lapTime, best, lastLap, lap, pos, total, gapAhead, gapBehind, energy, gear, sector, sectorElapsed} | null`
+### `timing() → {raceT, lapTime, best, lastLap, lap, pos, total, gapAhead, gapBehind, energy, aeroX, gear, sector, sectorElapsed} | null`
 Compact race-clock + ERS snapshot in one call. Returns `null` if no race is
 loaded.
 
@@ -1541,12 +1542,14 @@ per livery); resolves `false` and keeps the procedural car on failure.
 
 ### `meshToggle(o) → overrides`
 Hide or show individual track meshes by name. `o` is an object of `{meshName:
-bool}` — `false` hides the mesh, `true` restores it. Keys are additive; omitted
-keys are unchanged. Returns the full current override map.
+bool}` — **truthy HIDES the mesh, falsy restores it** (the value marks the mesh
+as hidden). Keys are additive; omitted keys are unchanged. Returns the full
+current override map.
 
 ```js
-__apex.meshToggle({ props: false });       // hide track props (cones, barriers)
-__apex.meshToggle({ road: false });        // hide the road surface
+__apex.meshToggle({ props: true });        // hide track props (cones, barriers)
+__apex.meshToggle({ road: true });         // hide the road surface
+__apex.meshToggle({ props: false });       // show props again
 __apex.clearMeshes();                      // restore all meshes
 ```
 
@@ -2508,9 +2511,9 @@ twelve races first.
 ### `careerSim(n) → [round, …] | null`
 Settle `n` rounds with nobody driving, through the **same** `Career.settleRound()`
 the driven path uses — so prize money, objectives, reputation and the standings are
-genuinely exercised, not approximated. Each entry is `{pos, pts, prize, salary,
-bonus, wages, obj, dnf, money, rep}` — `dnf` is `null` for a finish and the
-failure reason for a retirement.
+genuinely exercised, not approximated. Each entry is `{round, podium, pos, pts,
+prize, salary, bonus, wages, obj, dnf, sponsorPay, money, rep, save, unsaved}` —
+`dnf` is `null` for a finish and the failure reason for a retirement.
 
 Needs a track and a grid loaded, because the qualifying model reads both: stage one
 weekend first. Every round is simulated on **that** circuit — the per-round

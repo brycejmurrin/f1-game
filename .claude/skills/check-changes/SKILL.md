@@ -29,8 +29,10 @@ node tools/verify-change.mjs --wait       # every batch — ONLY when the parent
 ```
 
 `--wait` blocks for the full queue. Subagents and the default loop use
-`--fast` or a single started batch, then read
-`artifacts/logs/*.log` for `= run (passed|failed|timedout|interrupted)`.
+`--fast` or a single started batch, then read `artifacts/logs/*.log` for the
+reporter's terminal line `= run <status>  (N/M done, K failed)` — match it with
+`grep -E '= run (passed|failed|timedout|interrupted)'` (ERE alternation; a
+fixed-string or BRE grep never matches).
 
 Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 

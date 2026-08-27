@@ -114,8 +114,8 @@ serializes the agent behind SwiftShader several times over.
 | track/scenery edit | `node tools/verify-track.cjs <id>` (2 s, headless) FIRST |
 | once, when the edits are done | `node tools/test-bg.mjs tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
 | before pushing | + `npm run test:sweeps` if you touched geometry |
-| single spec | `npm test -- tests/<file>.spec.js` |
-| single unit suite | `node --test tests/<file>.test.mjs` |
+| single spec | `npm test -- tests/specs/<file>.spec.js` |
+| single unit suite | `node --test tests/unit/<file>.test.mjs` |
 
 While a browser batch runs in the background, do work that does not touch
 `js/`/`css/` (docs, tools, unit tests) or end the turn — idle-watching the
@@ -146,9 +146,10 @@ whether the TLX backend happens to be installed.
 
 **Pass `{ polling: 100, timeout: N }` for any wait on a rendering page.**
 
-**382 `waitForFunction` calls across 123 files still carry a timeout without
-`polling`**, so those bounds are decoration — 312 of them under `tests/` (96
-files) and 70 under `tools/` (27 files, `layout-audit.mjs` alone holding 24).
+**367 `waitForFunction` calls across 116 files still carry a timeout without
+`polling`**, so those bounds are decoration — 310 of them under `tests/` (96
+files) and 57 under `tools/` (20 files; the 24 that used to live in
+`layout-audit.mjs` are now in `tools/menu-screens.mjs`).
 The count is a RATCHET, not a target — `tests/unit/wait-polling.test.mjs` fails
 if the population grows, and lowering the ceiling as sites are fixed is the
 intended direction. (Count by AST via `tools/wait-polling-lint.mjs`. A grep
@@ -368,7 +369,7 @@ separate processes with separate ports, and the sizing guidance above applies.
 | `artifacts/galleries-<port>/<suite>/` | screenshots and suite-emitted reports |
 | `artifacts/logs/` | background-run and shard logs |
 
-All gitignored. Tracked golden baselines live in `tests/*-snapshots/` and stay
+All gitignored. Tracked golden baselines live in `tests/specs/*-snapshots/` and stay
 outside these roots — but only ONE suite has any: `menu-baseline.spec.js` has
 six (title/select/garage × desktop/phone-landscape), so `npm run test:baseline`
 is a real gate. `tests/manual/tracks-visual.spec.js` has none, so it is PARKED
@@ -387,7 +388,7 @@ Import `test` and `expect` from `./fixtures.js` instead of `@playwright/test`:
 | `pageErrors` | `string[]` of uncaught JS exceptions — assert `toHaveLength(0)` after exercising game logic |
 | `consoleLines` | `string[]` of every console line and page error, type-prefixed, favicon noise stripped. Prefer this to a hand-rolled `page.on("console", …)` — the hand-rolled ones drifted into a dozen slightly different filters |
 | `racePage` | navigates to `/` and waits for `window.__apex` (10 s) |
-| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 61 of 113 specs import `tests/helpers/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
+| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 63 of 115 specs import `tests/helpers/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
 
 `tools/fixture-consumer-audit.mjs` enforces the import for the specs that depend
 on those guarantees (`audio-smoke`, `smoke`, `f1-track-accuracy`, `ui-audit`).
@@ -509,9 +510,9 @@ git clone --depth 1 file://$(pwd) /tmp/cisim   # no history, no artifacts/
 cd /tmp/cisim && node --test tests/<your-guard>.test.mjs
 ```
 
-If a guard needs history, the job needs `fetch-depth: 0` — today only the sweeps
-job has it, which is also why `pick-tests`' merge-base default cannot work in
-the guards job.
+If a guard needs history, the job needs `fetch-depth: 0` — today the sweeps,
+smoke and selected jobs have it; guards does not, which is also why
+`pick-tests`' merge-base default cannot work in the guards job.
 
 ### Never run two Playwright processes at once
 
@@ -988,7 +989,7 @@ queues inside tmux, where the queue survives the shell that spawned it.)
 `browserType.launch: Executable doesn't exist … chromium_headless_shell-1228`.
 `npm install` had run with `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` — which is the
 right flag for the install step and leaves the browser absent. The specs launch
-Playwright's headless SHELL, not the `/opt/google/chrome` this box also ships,
+Playwright's headless SHELL, not any system Chrome a box may ship,
 so nothing browser-driven can pass until
 `npx playwright install chromium-headless-shell` runs (2.3 MB, seconds). Read the
 FIRST failure's message before forming any hypothesis about a red run: when EVERY

@@ -57,8 +57,9 @@ street circuits, which build no ribbon). This matters wherever the ribbon is
 **carved or sags below the flat estimate** — corner-inside verges, and the
 channel cut where an elevation mound bulges over a lower part of the track
 (see `buildTerrain`'s over-track clip): without it, props anchored to `groundYAt`
-float over the lower ground. `place()`/`prop()` still anchor to `groundYAt` and
-sink their base ~0.8 m, which hides the small estimate-vs-ribbon gap.
+float over the lower ground. `place()` now anchors to the rendered-ribbon
+raycast first — `terrainYAt(cx, cz)`, falling back to `groundYAt` only where it
+returns null — and still sinks the base ~0.8 m against any residual gap.
 
 ### Coordinate contract
 
@@ -235,7 +236,9 @@ dressingExclusions: [
 The shared furniture `streetLamp()` dressing pass is retired — the generic mast
 pass draws street-style posts / flood banks (keyed off `fz.lamp`) and fills
 `track.lampPosts`. Bespoke `floodMast` / `lampPost` register into the same list.
-`streetLamp` remains on the scenery `api` for bespoke circuit calls. Tuner
+`streetLamp` is engine-internal only — it is NOT on the scenery `api`
+(destructuring it in a circuit's `scenery(api)` gets `undefined` and the call
+throws; bespoke posts go through `lampPost` / `floodMast`). Tuner
 **LAMP DENSITY** scales mast spacing (~22 m at 1.0).
 
 ## What `api` gives you
@@ -247,7 +250,8 @@ pass draws street-style posts / flood banks (keyed off `fz.lamp`) and fills
 
 Also on the 111-member contract but not detailed in this doc: `MAT` (material
 ids), the math utilities `lerp` / `norm` / `cross` / `upOf`, the `night`
-session flag, the grounding helpers `seat` / `foundation` / `frameAt` / `cantilever` and
+session flag, `groundUnder` (world-XZ ground query — ribbon-aware, distinct
+from `terrainYAt`/`groundYAt`), the grounding helpers `seat` / `foundation` / `frameAt` / `cantilever` and
 `recordBarrier` (see SCENERY-GROUNDING.md), the emitters `cityFront`, `house`,
 `motorhome`, `forestEdge`, `signBoard`, `signDigit`, `waterBand`,
 `waterField`, and `modelDiagnostics` (also exposed as
@@ -408,14 +412,14 @@ delegates to it, so existing calls are unchanged.
 | `tiers` | 1–3 raked decks; each upper deck is set back and lifted with a concourse band closing the step |
 | `h` | back-shell height (default 12) |
 | `roof` | `"cantilever"` (default), `"flat"` (tight over the shell), `"truss"` (open lattice deck on cross-braces), `"none"` (uncovered bleacher) |
-| `suites` | glazed hospitality band under the roof (default ON when `len ≥ 48` and there is a roof; pass `false` to opt out) |
-| `endWalls` | closing walls at both ends (default ON when `len ≥ 40` and there is a roof; pass `false` to opt out) |
-| `pylons` | support columns under the roof's trackside edge (default ON when `len ≥ 36`; pass `false` to opt out) |
+| `suites` | glazed hospitality band under the roof (strictly opt-in — pass `true`) |
+| `endWalls` | closing walls at both ends (strictly opt-in — pass `true`) |
+| `pylons` | support columns under the roof's trackside edge (strictly opt-in — pass `true`) |
 | `roofCol` / `fasciaCol` / `suiteCol` | explicit colour overrides |
 
-Roofed stands also always get underside ribs + nose trim (cantilever/flat), a
-trackside sponsor fascia band, and back-shell panel seams — additive detail so
-a blank slab-with-lid no longer reads as the default silhouette.
+Cantilever/flat roofs are a single slab. The only added bands are a rear
+gap-closing fascia at the roof's outer edge (over the shell, behind the crowd —
+not trackside) and a night under-roof light strip.
 
 Liveries live in `js/track/scenery-data.js`: `STAND_LIVERIES` holds the named
 families (`steel`, `darkSteel`, `concrete`, `alu`, `scaffold`, `sandstone`,

@@ -206,7 +206,7 @@ delta in stat points (±8 → ±2% pace, a little over one `TIER_V` step), folde
 one new per-car field baked in `makeCars()`:
 
 ```js
-tierV: TIER_V[team.tier] * Career.paceMult(team.id),   // paceMult() is exactly 1 outside career
+tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : 1),   // paceMult() is exactly 1 outside career; the mate factor is MY TEAM's second car (below)
 ```
 
 The per-car update reads `c.tierV * c.skill * dd.ai`. `team.tier` itself is never
@@ -435,8 +435,9 @@ tier alone: an AI runs its team's works car, which is what `tier` already says.
 
 ### The draw touches no stream
 
-`makeCars()` spends exactly one `simRnd()` per driver through `driverSkill()`, and
-the stream position after it is a hard contract (see the rule in Driver ratings
+`makeCars()` spends exactly two `simRnd()` per driver — the lane-jitter draw plus
+`driverSkill()`'s roll — and
+the stream position after them is a hard contract (see the rule in Driver ratings
 above). So reliability draws from **nothing**: `Reliability.arm()` hashes
 `(seed, "dnf", round, driverId)` through `Career.hash` — the stateless draw `rnd`
 is built on, with the seed passed in, because a Grand Prix has no career seed.
@@ -464,7 +465,9 @@ the AI stops treating it as a blocker, `resolveCollisions` leaves it where it wa
 put, and the overtake target walks past it.
 
 `endRace()` classifies `fin.concat(run, out)`, retirements last and ordered among
-themselves by progress, and awards `c.retired ? 0 : Teams.POINTS[i]` — explicit
+themselves by progress, then delegates awarding to `SeasonCal.award()`, which
+pays `c.retired ? 0 : (table[i] || 0)` from `pointsTable()` — `Teams.POINTS` in
+career, `CLASSIC_POINTS`/`SPRINT_POINTS` under a season weekend format — explicit
 rather than relying on a DNF landing outside the ten scoring slots, so every car
 above keeps what its position earns.
 
@@ -502,7 +505,7 @@ come last.
    gains ~+2.7 a year, a 100-rated veteran loses 1.5), `form = clamp((tierFinish(team)
    - champPos) * 0.25, ±3)`, `noise = ±2` from `rnd(year, "dev", driverId)`. Pace takes
    the whole drift, craft and consistency half. Per-axis deltas, clamped **±12**.
-   Experience is bumped +4 a year against its **own ±40 cap**, because it is cumulative:
+   Experience is bumped +4 a year against its **own 0..40 cap** (per-axis dev deltas carry the ± clamp), because it is cumulative:
    at ±12 a rookie would stall four seasons in and freeze the growth term forever.
 3. **Team development.** `tdev = clamp(round(tdev * 0.5 + shove), ±8)`, where
    `shove = clamp((expectedConstructorPos - actualPos) * 0.5, ±2)`. Without the halving
@@ -645,7 +648,8 @@ The rest of the field is **modelled**, not driven — twenty-one AI cars round a
 lap costs a second or more of frozen UI on a phone. `Quali.lapTime()` is a
 quasi-steady lap simulation: the cornering limit at each sample, a forward pass for
 what the car could accelerate to, a backward pass for what it must brake for. It
-reads the same `LAT_MAX`/`ACCEL`/`BRAKE` the driving model uses and the same
+reads the same `LAT_MAX`/`BRAKE` the driving model uses (acceleration through
+`G.aTop()`, the pace-scaled ceiling, so it matches `G.vTop()`) and the same
 curvature the road is built from, so a simulated time and a driven one land on one
 scale without a per-track fudge factor.
 
@@ -656,8 +660,11 @@ over places cars nobody is driving and leaves the real field at `prog: 0`, where
 `fieldState()` reports `Teams.LIST` order and looks plausible enough to fool a
 careless check. `Quali.order(live)` returns `null` unless every car maps.
 
-A one-off Grand Prix skips qualifying and keeps its hardcoded P12 start — that mode
-is a quick blast, not a weekend. SEASON gets qualifying as well as career.
+A one-off Grand Prix defaults to its hardcoded P12 start, but the persisted
+`raceQuali` race-settings chip can qualify one (`gridFromQuali` accepts either a
+championship with `SeasonCal.quali()` on, or `raceQuali` outside time trial).
+SEASON quali is format-gated — a weekend format can turn quali off or add a
+sprint.
 
 **Every round qualifies, and the classification never outlives its weekend.** Two
 bugs came out of getting that wrong, and both looked like working grids:
@@ -666,14 +673,17 @@ bugs came out of getting that wrong, and both looked like working grids:
   entered through race settings was ever qualified for. Rounds 2–24 of a season
   lined up on round 1's classification — which `Quali.order()` dutifully remapped
   onto the new cars by `driverId`, producing a plausible grid for a session that
-  never happened. NEXT ROUND opens the sheet for a championship now, and
-  `openQuali()` clears the previous classification.
+  never happened. NEXT ROUND opens the sheet for a championship now;
+  `openQuali()` clears the previous classification, then `quali.begin()`
+  restores a persisted driven order from `season.qualiOrder` (the sheet-reopen
+  fix) — the weekend's order is dropped by `SeasonCal.award()` at round close.
 - `gridUp()` accepts any `preOrder` whose length matches the field, and the
   classification survived `quitToMenu()` — so the next **Grand Prix** started on a
   season's qualifying order, silently losing the P12 climb that mode exists for.
-  The read is gated on `isChampionship()` rather than on every exit having
-  remembered to clear: a Grand Prix holds no qualifying session, so it has no grid
-  to inherit, by construction. `quitToMenu()` clears it as well.
+  The read is gated on `gridFromQuali()` rather than on every exit having
+  remembered to clear (that gate includes the GP `raceQuali` path above).
+  `quitToMenu()` clears the in-memory classification only — the persisted one
+  stays until award/abort, so CONTINUE keeps the grid.
 
 ## Debug hooks
 

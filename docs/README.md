@@ -5,7 +5,10 @@ Three kinds of docs live here.
 - **Engineering reference** — how the shipped game works today. Read it before
   touching the matching subsystem.
 - **Research** (`research/`) — design notes and investigations still cited from
-  source or from AGENTS.md. Not a description of current behaviour, but load-bearing.
+  source or from AGENTS.md. Not a description of current behaviour, but
+  load-bearing. Dated by design: when a path or number a research doc cites has
+  since moved, add a one-line `> Errata:` under its title rather than rewriting
+  the record.
 - **Archive** (`archive/`) — finished plans, superseded designs and build logs.
   Kept for provenance. **Never read these for current structure**; they were
   written against layouts that have since moved.
@@ -37,7 +40,7 @@ Three kinds of docs live here.
 | [PERF-FINDINGS.md](PERF-FINDINGS.md) | **Start at §0: which instrument answers which perf question, and the three that lie on this box** (an idle render profile, frame timing under SwiftShader, and local-server cache/compression insights). Then the four-way audit: what was measured, taken, reverted, and the recorded negative results. Its real content is which KINDS of finding survived measurement — mechanism-provable ones held up, operation-count estimates came in at a fraction. |
 | [TRACK-MIGRATION-CHECKLIST.md](TRACK-MIGRATION-CHECKLIST.md) | Steps for moving a circuit onto the shared track foundation. |
 | [TESTING.md](TESTING.md) | How to run tests (background + tail, picking groups), every `test:*` group, the fixtures, the full spec coverage table, the philosophy. |
-| [research/MENU-REVIEW-2026-08.md](research/MENU-REVIEW-2026-08.md) | Every menu, page and pop-up reviewed in one pass — 1990 measured cells across 40 screens x 10 viewport shapes x 4 UI sizes — with an explicit verdict each: leave, change, or blocked and why. Records that 19 screens need nothing, separates deep scroll into long-by-nature / constrained-by-physics / genuinely improvable, names `<details name>` as the mechanism for the third group and the `<summary>`-with-toggles blocker on audioset, and lists the six layout predictions that measurement reversed. |
+| [research/MENU-REVIEW-2026-08.md](research/MENU-REVIEW-2026-08.md) | Every menu, page and pop-up reviewed in one pass — 1990 measured cells across 40 screens x 10 viewport shapes x 4 UI sizes — with an explicit verdict each: leave, change, or blocked and why. Records that 19 screens need nothing, separates deep scroll into long-by-nature / constrained-by-physics / genuinely improvable, REJECTS `<details name>` exclusivity in favour of independent `<details>` (each with its own default open/closed state), records audioset's `<summary>`-with-toggles blocker as UNBLOCKED (stopPropagation, nothing relocated), and lists the six layout predictions that measurement reversed. |
 | [research/CHROME-DEVTOOLS-MCP.md](research/CHROME-DEVTOOLS-MCP.md) | Playbook for the 40 chrome-devtools MCP tools against Apex: roots/`/tmp` file writes, snapshot uids, cold-boot LCP (script wall), clean heap cycles, track-switch heaps, lighthouse snapshot scores. Companion to `.claude/skills/mcp-probe`. |
 | [research/UI-DESIGN-PRINCIPLES.md](research/UI-DESIGN-PRINCIPLES.md) | Why the UI is sized the way it is, and the two rules governing the component restructure: size for the PHONE at arm's length (the hardest legibility case, and the one this codebase got backwards), and collapse a primitive only when it passes the three-places-plus-generic test. |
 | [PARALLEL-WORK.md](PARALLEL-WORK.md) | Where to spend concurrency: read-only agent fan-out is free, worktrees isolate FILES but not CPU, and the browser suite is serial on 4 cores — the bottleneck every plan has to respect. Written after parallelism produced ten confident, entirely fake test failures. |
@@ -84,6 +87,10 @@ sit in this table was indexed by nothing and moved to
 | [research/PHASE-C-SLIDER-DESIGN.md](research/PHASE-C-SLIDER-DESIGN.md) | The slider recalibration with the numbers: the arithmetic defects behind "I always end up at the bottom", computed from the shipped mappings in `js/game/steer-tuning.js`. |
 | [research/UI-DESIGN-PRINCIPLES.md](research/UI-DESIGN-PRINCIPLES.md) | Why the UI is sized the way it is: size for the phone at arm's length, collapse a primitive only when it passes the three-places-plus-generic test. (Also indexed under Engineering reference above.) |
 | [research/ARCHITECTURE-REDESIGN-2026-08.md](research/ARCHITECTURE-REDESIGN-2026-08.md) | Three competing redesigns (zero-build ESM, TypeScript+esbuild, harden-IIFE-in-place) scored by two judges; Bedrock-with-grafts adopted as the direction, ESM kept as the documented escalation path. |
+| [research/STRUCTURE-REDECISION-2026-08.md](research/STRUCTURE-REDECISION-2026-08.md) | Six structural questions re-opened on user request and re-decided from fresh measurement (surveyor → three analysts → two judges; flip only on judge agreement). |
+| [research/TLX-PCSS-RESEARCH.md](research/TLX-PCSS-RESEARCH.md) | How to close TLX's one deliberately-stubbed subsystem (PCSS): GLX's blocker-map approach vs three's sampler limitations, with the recommended slice. |
+| [research/UI-REDESIGN-2026-08-18.md](research/UI-REDESIGN-2026-08-18.md) | UI redesign implementation plan + acceptance contract: catalogue screens (Circuit Select, Garage) restructured around one dominant scroller; the visual identity kept. |
+| [research/UI-SCALE-EXTERNAL-VS-APEX-2026-08-19.md](research/UI-SCALE-EXTERNAL-VS-APEX-2026-08-19.md) | External (2024–2026) adaptive-UI/zoom/safe-area practice cross-checked against the Apex implementation. |
 | [research/SURVEY-BUGS-PERF-2026-08-17.md](research/SURVEY-BUGS-PERF-2026-08-17.md) | Parallel fleet survey at tip 46554737. **Leftovers after 1421:** next row. |
 | [research/CLEANUP-SWEEP-2026-08-18.md](research/CLEANUP-SWEEP-2026-08-18.md) | Six-agent dead-code / bug / split sweep: what was removed, what looked dead and is not, next `game.js` extractions. |
 | [research/PERF-HUNT-2026-08-18.md](research/PERF-HUNT-2026-08-18.md) | 08-17 board re-walk; union banner at cache 1421. WGX UBO flushes, `LAZY_AGENT` (`apex.js` / `agentview*`), DebrisWorld asleep-skip taken 2026-08-18. |

@@ -1,8 +1,9 @@
 # Apex 26 — Architecture & Module Contract
 
 Pure JS/CSS/HTML, **no build step**. The **runtime has zero dependencies**;
-every `devDependency` is test-only (Playwright the harness, jsQR to verify the
-QR encoder, espree/eslint-scope for the source audits — never shipped). Served as
+every `devDependency` is test- or tooling-only (Playwright the harness, jsQR to
+verify the QR encoder, espree/eslint-scope for the source audits, sharp and
+typescript for tooling — never shipped). Served as
 static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 
 > This file is the module **contract** — what each module is and what it may
@@ -57,7 +58,7 @@ The July 2026 architecture reorg moved every module into a domain directory
 `buildProps` → four scenery modules).
 
 **That 4,700 is a historical measurement, not a current one.** `game.js` grew
-back toward 8,000 — extraction moved code out once and nothing stopped it
+back past 8,600 — extraction moved code out once and nothing stopped it
 accumulating again until `tests/unit/module-size.test.mjs` put a ratcheted ceiling on
 the file (lowered with each extraction). Treat the number as a record of what
 the reorg achieved, and `wc -l js/game.js` against the current ceiling as the
@@ -84,9 +85,11 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
 ### Deferred follow-ups (known debt, in rough priority order)
 
 - **game.js pass 2** — promote the remaining closure `let`s to a shared state
-  object. Six modules are out (`js/game/aerozones.js`, `js/game/skidmarks.js`,
+  object. The early extractions were `js/game/aerozones.js`, `js/game/skidmarks.js`,
   `js/game/light-store.js`, `js/game/racecontrol.js`, and from the 2026-08
-  cleanup `js/game/physics-consts.js` and `js/game/cam-modes.js`); the current
+  cleanup `js/game/physics-consts.js` and `js/game/cam-modes.js` — more have
+  landed since (e.g. `js/game/ai-drive.js`); `tools/manifest.cjs` is the roster
+  truth and `module-size.test.mjs` the tally. The current
   count and its ratcheted ceiling live in `tests/unit/module-size.test.mjs`, and the
   remaining extraction candidates are ranked in ARCHITECTURE-REVIEW.md §8.
 
@@ -94,7 +97,7 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   case: 118 lines in the middle of `game.js` had exactly one assertion anywhere
   in the suite, because the only way to reach the machine was to stage real
   settled debris in a browser. As a module taking its hazard picture through a
-  seam, it gets `tests/unit/race-control.test.mjs` — ten tests in milliseconds
+  seam, it gets `tests/unit/race-control.test.mjs` — sixteen tests in milliseconds
   covering the hysteresis, the time caps and the storage-format migration. None
   of that was reachable before, and nobody had chosen for it not to be.
 
@@ -402,6 +405,7 @@ One concern per file, all loaded before `tracks.js`:
 | File | Global | Owns |
 |---|---|---|
 | `spline.js` | `TrackSpline` | closed Catmull-Rom sampling, curvature |
+| `graph.js` | `TrackGraph` | the scenery model library + node graph (HARD_EDGES pair with `tracks.js`) |
 | `mesh.js` | `TrackMesh` | road/terrain mesh extrusion (`buildRoad`/`buildTerrain`) |
 | `space.js` | `TrackSpace` | world↔track (Frenet) projection used by physics |
 | `surface.js` | `TrackSurface` | road-surface build details, per-track tarmac/verge tints |
@@ -420,7 +424,7 @@ floodmasts), identity (per-circuit landmark passes) — each instantiated with a
 ctx of the placement helpers and accumulators. Together they serve the
 **111-member `scenery(api)` contract**, frozen by
 `tests/unit/scenery-api-contract.test.mjs`: a circuit's `scenery(api)` callback can
-destructure any of those 107 names, so removing/renaming one is a breaking
+destructure any of those 111 names, so removing/renaming one is a breaking
 change the test catches. See [SCENERY-API.md](SCENERY-API.md).
 
 ## js/circuits/<id>.js — `TrackDefs` (circuit data)
@@ -685,15 +689,14 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `aerozones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `xStraightAhead()`/`aeroDfMult()` stay in game.js because they read car state |
 | `skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
 | `sheetshape.js` | `SheetShape` | self-initialising: measures every `.sheet` with a ResizeObserver and writes `data-shape="tall\|wide"` / `data-pair`. **Its consumer is CSS**, not JS — which is why a JS-only reference scan reports it as orphaned |
-| `topmodal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 16 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheetshape.js` |
+| `topmodal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 18 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheetshape.js` |
 | `ariastate.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |
 
 The table lists the modules whose contracts need prose; the rest of `js/game/`
-(input, audio, lighting/light-store/light-presets, particles, carmesh,
-bodyattitude, debrisworld, incidentsim, racecontrol, agentview,
-agentview-raster, music-lib, spotify, cam-tune, cam-tuner, tables, uilayers)
-is one-line-summarised in AGENTS.md's file layout, which the docs-integrity
-guard keeps complete.
+(56 files today — input, audio, lighting, particles, ai-drive, season-cal,
+ui-scale, gfx-quality, metrics and the rest) is enumerated by
+`tools/manifest.cjs`, which is the roster truth AGENTS.md's layout defers to
+(the docs-integrity guard asserts the deferral, not a per-file list).
 
 ## js/game.js — main
 
