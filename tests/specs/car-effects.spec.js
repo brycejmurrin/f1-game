@@ -84,6 +84,13 @@ test.describe("Car runtime effects", () => {
     // separates the switch from the deployment, so hold the switch on that.
     await startCar(page, 60);
     await page.evaluate(() => {
+      // HOLD THE THROTTLE. A coasting car regens (game.js integrate-speed
+      // coast branch), so a battery zeroed here is worth >0 by the second
+      // step and the held switch legitimately deploys again — the test was
+      // measuring the regen loop, not the lamp. Only the on-throttle branch
+      // adds no charge, which is also the scenario the lamp contract is
+      // about: on the power, battery flat, switch held, nothing comes out.
+      window.__apex.setInput({ steer: 0, throttle: true, brake: false });
       window.__apex.setEnergy(0);
       window.__apex.setBoost(true);
       window.__apex.step(1 / 60, 2);
