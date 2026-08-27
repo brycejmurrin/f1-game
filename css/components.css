@@ -1080,8 +1080,6 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   /* Grows with the viewport, never under the micro floor inside sheet zoom. */
   font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
   letter-spacing: var(--ls-2);
-  background: var(--plate);
-  border-color: var(--plate-line);
 }
 .pm-group .tune-row {
   margin: 0;

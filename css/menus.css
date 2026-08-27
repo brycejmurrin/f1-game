@@ -737,15 +737,11 @@ body { --compact-at: 600px; --wide-at: 620px; }
   width: 100%; text-align: left; cursor: pointer;
   padding: calc(var(--gap) * 0.7) var(--gap);
   border-radius: var(--r-md);
-  border: 1px solid var(--plate-line);
-  background: var(--plate);
+  /* both are <button>s: plate fill + line come from the base; the card then
+     tints both red below, and hover/press fills are the base's too */
   transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
 .team-card { border-color: color-mix(in srgb, var(--red) 55%, transparent); background: color-mix(in srgb, var(--red) 10%, transparent); }
-@media (hover: hover) {
-  .team-card:hover, .team-tile:hover { background: var(--plate-hover); }
-}
-.team-card:active, .team-tile:active { background: var(--plate-press); }
 .team-tile.active {
   border-color: var(--red); background: var(--plate-on-strong);
   box-shadow: var(--lift-sel);
@@ -822,10 +818,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   transition: background 0.12s, box-shadow 0.12s;
   cursor: pointer;
 }
-@media (hover: hover) {
-  .sel-chip:hover { background: var(--plate-hover); }
-}
-.sel-chip:active { background: var(--plate-press); }
+/* hover/press fills come from the button base (css/tokens.css) */
 /* Selected mark is the settings-tab recipe (left inset bar + glow), never an
    `outline`. An outline paints outside the border box, and these chips sit
    flush against the inline-start edge of a hidden-overflow scroller — so an

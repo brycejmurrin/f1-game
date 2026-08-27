@@ -264,17 +264,18 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   display: inline-flex; align-items: center; justify-content: center;
   width: auto; margin: 0; min-width: 0;
   padding: 5px 9px; font-size: var(--fs-micro); letter-spacing: var(--ls-2);
-  border: 1px solid var(--plate-line); border-radius: var(--r-pill);
-  background: var(--plate); color: var(--dim);
-  cursor: pointer; transition: background 0.12s, color 0.12s;
+  /* plate fill + line come from the button base; the pill radius is ours */
+  border-radius: var(--r-pill);
+  color: var(--dim);
+  transition: background 0.12s, color 0.12s;
   /* wraps rather than truncates: at rail width a column is ~100px and the
      longest label needs two lines. Grid rows stretch, so both cells match. */
   white-space: normal; text-align: center; line-height: 1.15;
 }
 @media (hover: hover) {
-  #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover { background: var(--plate-hover); color: #fff; }
+  #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover { color: #fff; }
 }
-#lt-tabs .lt-tab:active, #ct-modes .lt-tab:active { background: var(--plate-press); color: #fff; }
+#lt-tabs .lt-tab:active, #ct-modes .lt-tab:active { color: #fff; }
 #lt-tabs .lt-tab.on, #ct-modes .lt-tab.on {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
   box-shadow: var(--plate-on-glow);
@@ -886,17 +887,22 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .music-del:focus-visible { opacity: 1; border-color: var(--red); color: var(--red); }
 
 /* ---------- MUSIC & SOUND: Spotify (personal use) ---------- */
+/* THE PANEL'S FIELD RECIPE, once. All six inputs/selects here wrote the same
+   seven declarations byte for byte; this is their one statement. The 16px is
+   the iOS zoom floor: Safari zooms the page when a focused control sits under
+   it, and the zoom sticks after the keyboard closes. */
+#as-sp-id, #sp-search, #as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 {
+  font: inherit; font-size: 16px;
+  background: var(--plate-hover); color: var(--text);
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm);
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
+}
 #as-sp-id {
   /* Full width, not the 56-60% the customise-screen fields use: this one takes
      a pasted 32-character id and a field that shows a third of it makes a
      mistyped character impossible to spot. */
   flex: 1 1 100%; min-width: 0; width: 100%;
   min-height: var(--chip-h);   /* on the ladder, like every other field */
-  /* 16px floor: iOS Safari zooms the page on focus under that, and the zoom
-     sticks after the keyboard closes. */
-  font: inherit; font-size: 16px;
-  background: var(--plate-hover); color: var(--text);
-  border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
 }
 /* The redirect URI exists to be COPIED — and tokens.css sets user-select:none on
    the whole app, so without this the one string the setup depends on cannot be
@@ -916,19 +922,13 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .sp-bar { height: 3px; border-radius: var(--r-xs); background: var(--card-line); overflow: hidden; margin: calc(var(--gap) / 6) 0 calc(var(--gap) * 2 / 3); }
 .sp-bar-fill { height: 100%; background: var(--red); width: 0; transition: width 0.4s linear; }
 #sp-search {
-  width: 100%; margin-top: calc(var(--gap) * 0.5); font: inherit; font-size: 16px;   /* 16px: iOS zoom floor */
-  background: var(--plate-hover); color: var(--text);
-  border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
+  width: 100%; margin-top: calc(var(--gap) * 0.5);
   /* Same --chip-h floor as its twin #as-sp-id: padding-driven height painted
      16px at UI SIZE 40% (2026-08-21 sweep). Inert at >=100%. */
   min-height: var(--chip-h);
 }
 #sp-results:empty { display: none; }
-#as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 {
-  width: 100%; font: inherit; font-size: 16px;   /* 16px: iOS zooms a focused control under it */
-  background: var(--plate-hover); color: var(--text);
-  border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
-}
+#as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 { width: 100%; }
 #as-sp-playlist:disabled, #as-sp-device:disabled,
 #sp-playlist2:disabled, #sp-device2:disabled { opacity: 0.45; }
 .sp-uri {
