@@ -602,7 +602,11 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] {
     display: grid; grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    /* Four rows: head/tabs, the scrolling rows, COPY ALL, foot. The spread
+       row must be PLACED — display:contents lifts it into this grid, and an
+       unplaced item lands in an implicit row BELOW the foot, hanging off the
+       panel edge (seen live the day it was un-hidden). */
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
     overflow: hidden;
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(#lt-rail, #ct-rail) {
@@ -624,15 +628,24 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(#lt-rows, #ct-rows) {
     grid-column: 1 / -1; grid-row: 2; min-height: 0;
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] #lt-spread {
     grid-column: 1 / -1; grid-row: 3;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot {
+    grid-column: 1 / -1; grid-row: 4;
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot button {
     min-width: 0; width: 100%; min-height: var(--tap-min); padding: 0;
     font-size: var(--fs-micro); white-space: nowrap;
   }
+  /* #lt-spread is NOT in this hide list: hiding it here removed the panel's
+     only copy-across-tracks door on exactly the device a player tunes on
+     (field report, 2026-08). The row rides .lt-preview-row, which this tier
+     already tightens, and its long help is already gone via the compact
+     .adv-help rule — one ~24px row, and #lt-rows scrolls. Photo-mode still
+     stands it down (setup vs framing, see the top of this file). */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(
-    #lt-profile, #lt-preview, #lt-spread, #ct-profile, .lt-help-toggle
+    #lt-profile, #lt-preview, #ct-profile, .lt-help-toggle
   ) {
     display: none;
   }
