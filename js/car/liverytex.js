@@ -98,16 +98,28 @@ const LiveryTex = (function () {
     text = String(text).toUpperCase();
 
     // Find a font size that fits both width (with spacing) and height.
-    let size = Math.min(maxH, 160);
-    for (; size > 8; size--) {
-      ctx.font = "900 " + size + "px Arial, sans-serif";
+    // Canvas text advance scales linearly with font px, so ONE reference
+    // measurement gives the fitting size in closed form; the +-1 walk absorbs
+    // hinting rounding and lands on exactly what the old px-by-px descent
+    // chose. (The descent re-measured every character at every candidate size
+    // — tens of thousands of measureText calls in the first grid frame.)
+    const REF = 100;
+    ctx.font = "900 " + REF + "px Arial, sans-serif";
+    let refW = 0;
+    for (let i = 0; i < text.length; i++) refW += ctx.measureText(text[i]).width;
+    const perPx = refW / REF + spacing * Math.max(0, text.length - 1);
+    let size = Math.max(8, Math.min(Math.min(maxH, 160), Math.floor(maxW / (perPx || 1))));
+    const fitsAt = (px) => {
+      ctx.font = "900 " + px + "px Arial, sans-serif";
       let w = 0;
       for (let i = 0; i < text.length; i++) {
         w += ctx.measureText(text[i]).width;
-        if (i < text.length - 1) w += size * spacing;
+        if (i < text.length - 1) w += px * spacing;
       }
-      if (w <= maxW) break;
-    }
+      return w <= maxW;
+    };
+    while (size > 8 && !fitsAt(size)) size--;
+    while (size < Math.min(maxH, 160) && fitsAt(size + 1)) size++;
     ctx.font = "900 " + size + "px Arial, sans-serif";
 
     // Measure final width for alignment.
@@ -171,11 +183,12 @@ const LiveryTex = (function () {
     const maxW = R.w - pad * 2;
     const text = String(n);
     const font = (px) => "italic 900 " + px + "px 'Arial Narrow', Arial, sans-serif";
-    let size = maxH;
-    for (; size > 8; size--) {
-      ctx.font = font(size);
-      if (ctx.measureText(text).width <= maxW) break;
-    }
+    // Same closed-form + walk as drawWordmark: advance is linear in px.
+    ctx.font = font(100);
+    const refW = ctx.measureText(text).width / 100;
+    let size = Math.max(8, Math.min(maxH, Math.floor(maxW / (refW || 1))));
+    while (size > 8 && (ctx.font = font(size), ctx.measureText(text).width > maxW)) size--;
+    while (size < maxH && (ctx.font = font(size + 1), ctx.measureText(text).width <= maxW)) size++;
     ctx.save();
     ctx.beginPath();
     ctx.rect(R.x, R.y, R.w, R.h);

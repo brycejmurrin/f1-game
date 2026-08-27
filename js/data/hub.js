@@ -230,7 +230,7 @@ const DataHub = (function () {
   function close() {
     if (!root) return;
     Log.info("data", "hub close");
-    stopLiveAuto();
+    disarmLiveAuto();
     closeTelemPopup();
     state.live = null;
     state.telemetry = null;
@@ -497,7 +497,7 @@ const DataHub = (function () {
     return box;
   }
 
-  const { loadLive, stopLiveAuto } = DataLive.create({
+  const { loadLive, stopLiveAuto, disarmLiveAuto } = DataLive.create({
     el, clear, emptyMsg, spinner, ensureSession, sel, buildPicker,
     invalidateOther, fmtDateTime, findTeam, cssColor, textColorOn, NO_LIVE_MSG
   });
