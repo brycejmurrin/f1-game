@@ -122,8 +122,8 @@ const DataHub = (function () {
     if (root || !rootEl) return;
     root = rootEl;
     root.classList.add("dh-overlay");
-    root.setAttribute("role", "dialog");
-    root.setAttribute("aria-modal", "true");
+    // A real <dialog> (index.html): the platform asserts role and modality,
+    // so only the label is written here.
     root.setAttribute("aria-labelledby", "dh-title");
 
     // fit-managed: SheetShape scans this class alongside .sheet, so a short
@@ -141,6 +141,7 @@ const DataHub = (function () {
     header.appendChild(title);
     const closeBtn = el("button", "dh-close", "✕");
     closeBtn.type = "button";
+    closeBtn.id = "dh-close-btn";   // the dialog's data-esc-close target
     closeBtn.setAttribute("aria-label", "Close data hub");
     closeBtn.addEventListener("click", close);
     header.appendChild(closeBtn);
@@ -172,9 +173,14 @@ const DataHub = (function () {
 
     root.appendChild(card);
 
+    // Roving-tablist arrows only. Escape and Tab containment left with the
+    // dialog migration: Escape is the dialog's cancel (TopModal presses
+    // data-esc-close), Tab is platform focus containment, and the old
+    // "is the telemetry popup open" guard went with them — while the popup
+    // (a nested modal dialog) is topmost, tab focus cannot reach these
+    // buttons at all.
     document.addEventListener("keydown", function (ev) {
-      if (!openFlag || document.querySelector(".dh-tpopup")) return;
-      if (ev.key === "Escape") { close(); return; }
+      if (!openFlag) return;
       const target = ev.target;
       if (target && target.getAttribute && target.getAttribute("role") === "tab") {
         const ids = TABS.map(function (t) { return t.id; });
@@ -191,30 +197,7 @@ const DataHub = (function () {
           return;
         }
       }
-      if (ev.key === "Tab") trapFocus(root, ev);
     });
-  }
-
-  function focusables(scope) {
-    return Array.prototype.filter.call(
-      scope.querySelectorAll("button, select, input, textarea, [href], [tabindex]"),
-      function (node) {
-        if (node.disabled || node.tabIndex < 0 || node.hidden || !node.getClientRects().length) return false;
-        const style = window.getComputedStyle(node);
-        return style.display !== "none" && style.visibility !== "hidden";
-      }
-    );
-  }
-
-  function trapFocus(scope, ev) {
-    const items = focusables(scope);
-    if (!items.length) { ev.preventDefault(); return; }
-    const first = items[0], last = items[items.length - 1];
-    if (ev.shiftKey && document.activeElement === first) {
-      ev.preventDefault(); last.focus();
-    } else if (!ev.shiftKey && document.activeElement === last) {
-      ev.preventDefault(); first.focus();
-    }
   }
 
   function open() {
@@ -224,7 +207,14 @@ const DataHub = (function () {
     root.hidden = false;
     openFlag = true;
     showTab(active);
-    if (tabButtons[active]) tabButtons[active].focus();
+    // AFTER the showModal seam, not synchronously: the dialog has no boxes
+    // until TopModal's observer (a microtask queued by the hidden flip above)
+    // opens it, and focus() on a display:none element dies silently. This
+    // microtask is queued later in the same checkpoint, so it runs once the
+    // dialog is open and steals focus back from showModal's default pick.
+    queueMicrotask(function () {
+      if (openFlag && tabButtons[active]) tabButtons[active].focus();
+    });
   }
 
   function close() {

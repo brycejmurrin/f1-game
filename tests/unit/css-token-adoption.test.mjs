@@ -165,13 +165,19 @@ const CEILING = {
   // .dh-canvas), gradient RAMP stops chosen against each other (tach,
   // energy), and the BOOST/OT/AERO ladder whose alphas are measured
   // compositing arithmetic. Set 2026-08-27 with the guard.
-  rawColor: 379,
+  // 2026-08-27: 379 -> 376. Round-11 de-buttoning: .trb-* and .tdf-* lost
+  // their borders (three 0.3/0.4-alpha border tints left with them), .spf-dir
+  // stepped under the hover fill, .spf-corner moved off --plate-on onto a
+  // color-mix tint (no literal), .tdc-corner gained one sub-floor neutral.
+  rawColor: 376,
   // distinct colour VALUES after normalising spelling: space-after-comma,
   // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
   // canonical form. This is the fork guard — identical paint must not hide
   // behind different spellings, because grep-based dedup is how conversions
   // get planned. Set 2026-08-27 with the guard.
-  rawColorDistinct: 194,
+  // 2026-08-27: 194 -> 190 in the same pass — the deleted border tints were
+  // the only users of their values.
+  rawColorDistinct: 190,
 };
 
 test("no new font-size below the --fs-micro floor", () => {
