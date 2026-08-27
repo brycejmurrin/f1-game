@@ -58,7 +58,9 @@ test("one flap is a closed foil, not a 48-triangle plank", () => {
 test("default body and cockpit stay under the absolute triangle ceilings", () => {
   const body = tris(Car3D.build(C1, C2, { noWheels: true }));
   const cockpit = tris(Car3D.build(C1, C2, { noWheels: true, noDriver: true, cockpit: true }));
-  assert.ok(body <= 2400, `default body ${body} > 2400`);
+  // 2400 -> 2490: the round-halo tube (13 rings x 6 sides = 144 tris) replaced
+  // the 64-tri beveled-span chevron. Measured 2472 on the raise.
+  assert.ok(body <= 2490, `default body ${body} > 2490`);
   assert.ok(cockpit <= 1500, `cockpit ${cockpit} > 1500`);
 });
 
@@ -113,13 +115,18 @@ test("2026 duct/board/slot knobs are inert at 0 and each deforms the mesh", () =
   }
 });
 
-test("2026 body keeps a scooped pod, floor teeth, under-fences and a beveled halo", () => {
+test("2026 body keeps a scooped pod, floor teeth, under-fences and a round halo", () => {
   assert.match(SRC, /z: 0\.50, inner: 0\.298/);
   assert.match(SRC, /z: -0\.38, inner: 0\.28/);
   assert.match(SRC, /z: -1\.05, inner: 0\.25/);
   assert.match(SRC, /\[-0\.48, -0\.24, 0, 0\.24, 0\.48\]/);
   assert.match(SRC, /fwHalf \* 0\.52/);
-  assert.match(SRC, /addBeveledSpan\(out, \{ z: 0\.49, x: 0/);
+  // The halo is a smooth swept TUBE through the regulation datums, not a
+  // chevron of beveled box spans: pin the primitive and the apex/mid datums.
+  assert.match(SRC, /function addTube\(/);
+  assert.match(SRC, /addTube\(out, hoop, hr, 6/);
+  assert.match(SRC, /\[0, apexY, 0\.49\]/);
+  assert.match(SRC, /\[0\.30, 0\.845, 0\.02\], \[0\.235, 0\.505, -0\.46\]/);
   assert.match(SRC, /inlet\.width \* 0\.48/);
 });
 
@@ -144,6 +151,13 @@ test("recipe-gated part knobs are inert at 0 and each deforms the mesh", () => {
     ["floor", { plank: 0, gurney: 0, scroll: 0 }, { scroll: 1 }],
     ["ers", { led: null, conduit: 0, blister: 0 }, { blister: 2 }],
     ["suspension", { heave: 0, rocker: 0, push: 0, pull: 0 }, { heave: 1 }],
+    ["cockpit", { halo: 0, headrest: 0 }, { halo: 2 }],
+    ["cockpit", { halo: 0, headrest: 0 }, { headrest: 1 }],
+    ["cockpit", { halo: 0, headrest: 0 }, { headrest: 2 }],
+    ["ers", { led: null, conduit: 0, blister: 0, coolerIntake: 0 }, { coolerIntake: 1 }],
+    ["ers", { led: null, conduit: 0, blister: 0, coolerIntake: 0 }, { coolerIntake: 2 }],
+    ["fuel", { filler: 0, hatch: 0, vent: 0, breather: 0 }, { breather: 1 }],
+    ["fuel", { filler: 0, hatch: 0, vent: 0, breather: 0 }, { breather: 2 }],
   ];
   for (const [cat, off, on] of knobs) {
     assert.ok(same(probe(cat, off), bare), `${cat} ${JSON.stringify(off)} must match default body`);
