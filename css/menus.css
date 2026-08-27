@@ -1085,16 +1085,21 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 @container sheet (min-width: 820px) {
   #sel-preview-name { font-size: 18px; }
 }
-/* Compact pair-on: the extras go, the NAME stays — beside the map, not under
-   it. Hiding the whole caption left the band a row holding one small outline
-   with ~175 local px of dead width beside it (measured 852x393 @200%: a
-   42px-wide tall-circuit map alone in a 219px card). The card is a flex ROW
-   here, so a name beside the map costs no height — the clipped-caption
-   history this block used to cite was the stacked-under arrangement. */
+/* Compact pair-on: the extras go, the NAME AND ONE FACT LINE stay — beside
+   the map, not under it. Hiding the whole caption left the band a row holding
+   one small outline with ~175 local px of dead width beside it (measured
+   852x393 @200%: a 42px-wide tall-circuit map alone in a 219px card). The
+   card is a flex ROW here, so a name beside the map costs no height — and a
+   bare name in that much room read as a missing feature (a phone screenshot
+   showed MONACO floating alone in a half-empty card). The meta line
+   (country · km · turns) is the one caption row cheap enough to keep: it is
+   already --fs-micro/dim, and the column's min-width:0 + overflow:hidden
+   truncate it before it can push the card. GP name, record, the chip row and
+   the elevation strip stay hidden — those are the bulk. */
 #sel-inner[data-pair="on"][data-density="compact"] #sel-circuit-label { display: none; }
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-gp,
-#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-meta,
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-rec { display: none; }
+#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-meta { margin-top: calc(var(--gap) / 6); }
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-facts,
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-elev { display: none; }
 #sel-inner[data-pair="on"][data-density="compact"] #sel-track-preview { align-items: center; }

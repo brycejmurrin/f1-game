@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1561">
+<meta name="apex-build" content="1567">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -50,7 +50,7 @@
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
 <link rel="preload" href="css/tokens.css?v=1b9a8c41c2e5" as="style">
-<link rel="preload" href="css/components.css?v=cf4d53e04714" as="style">
+<link rel="preload" href="css/components.css?v=e1b6d9618fbf" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -69,14 +69,14 @@
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=1b9a8c41c2e5">
-<link rel="stylesheet" href="css/components.css?v=cf4d53e04714">
-<link rel="stylesheet" href="css/tuner.css?v=78e7316cce7b" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=f3b0077e9ccb">
+<link rel="stylesheet" href="css/components.css?v=e1b6d9618fbf">
+<link rel="stylesheet" href="css/tuner.css?v=2c2758916173" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/menus.css?v=d06ec4d98947">
 <link rel="stylesheet" href="css/carsetup.css?v=9515695e72a1" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=7c1252968366" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=0e8a19088984" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=6e90ca36cead">
-<link rel="stylesheet" href="css/track-detail.css?v=72e49cbaa045" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/track-detail.css?v=8efcb9072715" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=c61021027676" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=6ce8f33b48ac" media="print" onload="this.media='all'">
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
@@ -843,9 +843,15 @@
      tests/specs/menu-keyboard.spec.js ":modal" — which was RED while this shipped
      as a div, because the conversion commit lost this hunk in a merge. -->
 <dialog id="track-detail" class="screen dim" aria-labelledby="track-detail-name" data-esc-close="track-detail-close" hidden>
-  <div id="track-detail-header">
-    <div id="track-detail-name"></div>
-    <button id="track-detail-close" autofocus class="tdc-close-btn" aria-label="Close">&#x2715;</button>
+  <!-- The canonical .sheet-head on a full-bleed dialog — the .dh-card
+       precedent (css/data.css): the class delivers the paint and the red h2;
+       track-detail.css keeps only the flex/padding deltas the .sheet grid
+       would otherwise supply. The h2 keeps its id (aria-labelledby target;
+       menus.js sets textContent). Close is the shared .dh-close icon recipe —
+       .tdc-close-btn had become a byte-identical copy of it in round 7. -->
+  <div id="track-detail-header" class="sheet-head">
+    <h2 id="track-detail-name"></h2>
+    <button id="track-detail-close" autofocus class="dh-close" aria-label="Close">&#x2715;</button>
   </div>
   <div id="track-detail-body">
     <div id="track-detail-canvas-wrap">
@@ -1755,9 +1761,9 @@
 <script crossorigin="anonymous" src="js/track/landmark-kit.js?v=b5a86310198b"></script>
 <script crossorigin="anonymous" src="js/track/circuit-kit.js?v=0ee249eee375"></script>
 <script crossorigin="anonymous" src="js/track/spline.js?v=72cf1bacbb58"></script>
-<script crossorigin="anonymous" src="js/track/mesh.js?v=69acd552e991"></script>
+<script crossorigin="anonymous" src="js/track/mesh.js?v=098c5a2a4e57"></script>
 <script crossorigin="anonymous" src="js/track/scenery-nature.js?v=a23f5cba7e76"></script>
-<script crossorigin="anonymous" src="js/track/scenery-structures.js?v=2b278080b824"></script>
+<script crossorigin="anonymous" src="js/track/scenery-structures.js?v=724d5faa8cd4"></script>
 <script crossorigin="anonymous" src="js/track/scenery-city.js?v=3a3f1278afaa"></script>
 <script crossorigin="anonymous" src="js/track/scenery-identity.js?v=930ed88778fa"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
@@ -1801,22 +1807,22 @@
 <script crossorigin="anonymous" src="js/circuits/indianapolis.js?v=bc6ccec8ed47"></script>
 <script crossorigin="anonymous" src="js/circuits/buenos_aires.js?v=0a9def10b45a"></script>
 <script crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=87f687006e3a"></script>
-<script crossorigin="anonymous" src="js/track/tracks.js?v=5e8cbbee1e4d"></script>
+<script crossorigin="anonymous" src="js/track/tracks.js?v=b371a105940a"></script>
 <script crossorigin="anonymous" src="js/track/maps.js?v=0d6c2cddd707"></script>
 <script crossorigin="anonymous" src="js/car/car3d.js?v=2e2b18bccbb6"></script>
 <script crossorigin="anonymous" src="js/game/input.js?v=21c2c9f3aa14"></script>
-<script crossorigin="anonymous" src="js/game/audio.js?v=acd491776855"></script>
+<script crossorigin="anonymous" src="js/game/audio.js?v=fb14e03558ad"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=f43e998612b3"></script>
 <script crossorigin="anonymous" src="js/game/spotify.js?v=27c8d6373cac"></script>
 <script crossorigin="anonymous" src="js/game/audio-panel.js?v=97c5dd551254"></script>
-<script crossorigin="anonymous" src="js/data/api.js?v=fa976f9613d8"></script>
+<script crossorigin="anonymous" src="js/data/api.js?v=65ae9f07d673"></script>
 <script crossorigin="anonymous" src="js/data/telemetry.js?v=5bc597bc1bfb"></script>
 <script crossorigin="anonymous" src="js/data/export.js?v=2ce05569b764"></script>
 <script crossorigin="anonymous" src="js/data/schedule.js?v=6ccedb2bf1a0"></script>
 <script crossorigin="anonymous" src="js/data/standings.js?v=420627476c88"></script>
 <script crossorigin="anonymous" src="js/data/lastrace.js?v=b7d043cba6a1"></script>
-<script crossorigin="anonymous" src="js/data/live.js?v=97171ff8e873"></script>
-<script crossorigin="anonymous" src="js/data/hub.js?v=777b32ed2a71"></script>
+<script crossorigin="anonymous" src="js/data/live.js?v=fc509a1b158f"></script>
+<script crossorigin="anonymous" src="js/data/hub.js?v=7735cc12637a"></script>
 <script crossorigin="anonymous" src="js/car/parts.js?v=299db50b7f16"></script>
 <script crossorigin="anonymous" src="js/car/liveries.js?v=3c03d579e61e"></script>
 <script crossorigin="anonymous" src="js/car/liverytex.js?v=0026e82d9924"></script>
@@ -1854,7 +1860,7 @@
 <script crossorigin="anonymous" src="js/game/photomode.js?v=262984f179f6"></script>
 <script crossorigin="anonymous" src="js/game/tuner.js?v=97d8133f20c4"></script>
 <script crossorigin="anonymous" src="js/game/cam-tuner.js?v=3f5f9f5075ed"></script>
-<script crossorigin="anonymous" src="js/game/brake-cue.js?v=9268cbc97ff5"></script>
+<script crossorigin="anonymous" src="js/game/brake-cue.js?v=8f7e053da8f9"></script>
 <script crossorigin="anonymous" src="js/game/steer-tuning.js?v=072a417935f9"></script>
 <script crossorigin="anonymous" src="js/game/perf.js?v=495da1c1cfe4"></script>
 <script crossorigin="anonymous" src="js/game/gfx-quality.js?v=10ecef8cb376"></script>
@@ -1864,11 +1870,11 @@
 <script crossorigin="anonymous" src="js/game/metrics.js?v=9d9bdd157f9d"></script>
 <script crossorigin="anonymous" src="js/game/cameras.js?v=caf8fa2670cf"></script>
 <script crossorigin="anonymous" src="js/game/cam-modes.js?v=0ccbabb90f93"></script>
-<script crossorigin="anonymous" src="js/game/hud.js?v=38921a8f481d"></script>
+<script crossorigin="anonymous" src="js/game/hud.js?v=eacd49ad774b"></script>
 <script crossorigin="anonymous" src="js/game/results.js?v=40a2c4e24afe"></script>
 <script crossorigin="anonymous" src="js/game/quali.js?v=00b1417f6183"></script>
-<script crossorigin="anonymous" src="js/game/debrisworld.js?v=f0ce5d9dccf7"></script>
-<script crossorigin="anonymous" src="js/game/incidentsim.js?v=d39ff2c91040"></script>
+<script crossorigin="anonymous" src="js/game/debrisworld.js?v=44ac4fb0ed89"></script>
+<script crossorigin="anonymous" src="js/game/incidentsim.js?v=52fbdf14b264"></script>
 <script crossorigin="anonymous" src="js/net/nostr.js?v=6f1fe4bd415a"></script>
 <script crossorigin="anonymous" src="js/net/rendezvous.js?v=15dffef87577"></script>
 <script crossorigin="anonymous" src="js/net/sdp.js?v=1d82f2230798"></script>
@@ -1880,5 +1886,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=ab5f8dedabbc"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=c2db889f6db5"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=81b09256e218"></script>
-<script crossorigin="anonymous" src="js/game.js?v=776667c0c8ef"></script>
+<script crossorigin="anonymous" src="js/game.js?v=4ab35af5904d"></script>
 </body></html>

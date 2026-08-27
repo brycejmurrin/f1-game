@@ -774,6 +774,17 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   pointer-events: none;
   margin-top: calc(var(--gap) * 0.5);
 }
+/* Say what it is. A bare SPEED 312 box under the slider read as a real,
+   stuck readout ("why does the pause menu show speed?"). The caption is a
+   ::before so it costs no shell node; dividing by the zoom keeps its painted
+   size constant while the sample itself scales with the slider. */
+#pm-hud-sample::before {
+  content: "HUD SIZE PREVIEW";
+  display: block;
+  font-size: calc(var(--fs-micro) / var(--hud-scale));
+  font-weight: 700; letter-spacing: var(--ls-4); color: var(--dim);
+  margin-bottom: calc(var(--gap) / 3 / var(--hud-scale));
+}
 #results     { --sheet-w: 600px; --fit-at: 300px; }
 #standings   { --sheet-w: 560px; --fit-at: 300px; }
 /* Help uses a term rail beside a readable description column. At the old 700px
