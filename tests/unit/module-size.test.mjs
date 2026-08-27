@@ -507,7 +507,9 @@ const CEILINGS = {
   // three.js TSL lit-material port; tracks lit.js feature-for-feature.
   "js/render/three/tsl-lit.js": 1725,
   // Multiplayer lobby UI + flow; all of js/net/'s DOM lives here.
-  "js/net/lobby.js": 1618,
+  // 1618 -> 1624 (R8): the peer-close handler closes the transport BEFORE the
+  // map delete, with the leak-class comment — bug-explaining growth.
+  "js/net/lobby.js": 1624,
 };
 
 test("the big modules are not growing unnoticed", () => {

@@ -148,6 +148,12 @@ const NetLobby = (function () {
       }
       const id = pendingId;
       transport.onClose(() => {
+        // Belt and braces: the transport that emitted close has already
+        // released itself, but close it BEFORE the map delete so a future
+        // close-emitter that does not self-release cannot leak past
+        // teardown()'s sweep.
+        const tGone = transports.get(id);
+        if (tGone) { try { tGone.close(); } catch (e) {} }
         transports.delete(id);
         const s = sessions.get(id);
         if (s) { try { s.close(); } catch (e) {} }
