@@ -153,7 +153,13 @@ const CEILING = {
   // 2026-08-26: 419 → 418. The track-detail close button's bespoke rule
   // (its padding: 0 among them) was deleted when the button joined the
   // shared .dh-close recipe.
-  rawSpacing: 418,
+  // 2026-08-27: 418 -> 363. css/data.css executed the division-form policy
+  // (55 declarations; the hub was the largest single-file share). The three
+  // negative pull-up margins (-2/-4 on the map legend, legend and delta
+  // readouts) stay raw deliberately: they are optical anchors against a
+  // canvas edge, the exclusion the policy names for anchors, and the tree
+  // has no negative-division precedent to copy.
+  rawSpacing: 363,
   // colour declarations carrying a raw literal (rgb()/rgba()/#hex in any
   // declaration value; tokens.css custom-property DEFINITIONS excluded — the
   // definition site is the system, not drift; url() interiors excluded).
