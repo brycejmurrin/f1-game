@@ -358,24 +358,31 @@ const Car3D = (function () {
     }
   }
 
-  // Catmull-Rom through pts (clamped ends), n samples inclusive of both ends.
-  // Control points land exactly on the curve, so the halo datums stay datums.
-  function sampleCurve(pts, n) {
-    const P = [pts[0]].concat(pts, [pts[pts.length - 1]]);
-    const res = [];
-    for (let i = 0; i < n; i++) {
-      const t = (i / (n - 1)) * (pts.length - 1);
-      const seg = Math.min(pts.length - 2, Math.floor(t)), f = t - seg;
-      const p0 = P[seg], p1 = P[seg + 1], p2 = P[seg + 2], p3 = P[seg + 3];
-      const q = [];
-      for (let k = 0; k < 3; k++) {
-        q.push(0.5 * (2 * p1[k] + (-p0[k] + p2[k]) * f +
-          (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * f * f +
-          (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * f * f * f));
-      }
-      res.push(q);
+  // Halo hoop centreline. The real halo's TOP BAR IS LEVEL — only the plan
+  // view is round — so the path is three sections: a rear leg easing up from
+  // each collar (quadratic, zero slope where it meets the crown), and a front
+  // bar at CONSTANT crownY swept as a half-ellipse in x-z from mid-left
+  // through the front apex to mid-right. Never re-curve the bar in y: a spline
+  // through apex+mids is what read as "triangular to the middle".
+  function haloHoopPath(rearX, rearY, rearZ, midX, midZ, crownY, apexZ) {
+    const LEG = 3, BAR = 6, pts = [];
+    for (let i = 0; i < LEG; i++) {          // left leg: collar -> crown
+      const t = i / LEG;
+      pts.push([-(rearX + (midX - rearX) * t),
+                rearY + (crownY - rearY) * t * (2 - t),
+                rearZ + (midZ - rearZ) * t]);
     }
-    return res;
+    for (let i = 0; i <= BAR; i++) {         // flat bar, round in plan only
+      const a = Math.PI * (1 - i / BAR);
+      pts.push([Math.cos(a) * midX, crownY, midZ + (apexZ - midZ) * Math.sin(a)]);
+    }
+    for (let i = 1; i <= LEG; i++) {         // right leg: crown -> collar
+      const t = i / LEG;
+      pts.push([midX + (rearX - midX) * t,
+                crownY + (rearY - crownY) * t * t,
+                midZ + (rearZ - midZ) * t]);
+    }
+    return pts;
   }
 
   function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
@@ -2091,12 +2098,12 @@ const Car3D = (function () {
         }
       }
     } else if (opts && opts.halo) {
-      // First-person hoop: same round-tube treatment as the exterior halo, one
-      // continuous curve through the old loft endpoints (±0.30, 0.92, -0.15)
-      // and the apex (0, 0.98, 0.62).
-      addTube(out, sampleCurve([
-        [-0.30, 0.92, -0.15], [0, 0.98, 0.62], [0.30, 0.92, -0.15],
-      ], 13), 0.025, 6, HALO, SURFACES.metal);
+      // First-person hoop: same round-tube, LEVEL-bar treatment as the
+      // exterior halo — the driver sees a flat bar across the top of the
+      // frame (crown constant at 0.96), not tubes converging at the centre.
+      // Legs rise from the old loft endpoints (±0.30, 0.92, -0.15).
+      addTube(out, haloHoopPath(0.30, 0.92, -0.15, 0.28, 0.18, 0.96, 0.62),
+              0.025, 6, HALO, SURFACES.metal);
       addBox(out, 0, 0.79, 0.62, 0.045, 0.38, 0.045, HALO, SURFACES.metal); // front pillar
     }
     const haloBlade = Math.max(0, Math.min(2, Math.round(ckpt ? 0 : cockpitStyle.haloBlade || 0)));
@@ -2105,8 +2112,11 @@ const Car3D = (function () {
       const bh = haloBlade === 2 ? 0.038 : 0.028;
       const bladeC = haloTint || HALO;
       for (const s of [-1, 1]) {
+        // The fairing rides the LEVEL bar: both stations at the same height —
+        // a blade that descended to the old low front end would bury itself
+        // inside the flat-topped tube.
         addBeveledSpan(out,
-          { z: 0.49, x: 0, y: 0.828, w: bw, h: bh, t: 0.62 },
+          { z: 0.49, x: 0, y: 0.858, w: bw, h: bh, t: 0.62 },
           { z: 0.02, x: s * 0.30, y: 0.858, w: bw * 0.92, h: bh * 0.92, t: 0.62 },
           0.010, bladeC, null, SURFACES.metal);
         addBeveledSpan(out,
@@ -2116,8 +2126,8 @@ const Car3D = (function () {
       }
       if (haloBlade === 2) {
         addBeveledSpan(out,
-          { z: 0.50, x: 0, y: 0.835, w: bw * 1.15, h: bh * 0.85, t: 0.50 },
-          { z: 0.30, x: 0, y: 0.850, w: bw * 0.70, h: bh * 0.70, t: 0.55 },
+          { z: 0.50, x: 0, y: 0.886, w: bw * 1.15, h: bh * 0.85, t: 0.50 },
+          { z: 0.30, x: 0, y: 0.880, w: bw * 0.70, h: bh * 0.70, t: 0.55 },
           0.008, bladeC, null, SURFACES.metal);
       }
     }
@@ -2210,24 +2220,23 @@ const Car3D = (function () {
     part("halo");
     if (!ckpt) {
       const haloC = haloTint || HALO;   // livery-tinted hoop, else brushed titanium
-      // Round titanium hoop: ONE continuous tube rear-left collar -> mid-left ->
-      // front apex -> mid-right -> rear-right, Catmull-sampled so the old
-      // (±0.30, 0.845) kink is a curve. Datums unchanged: apex (0, 0.815, 0.49),
-      // mids (±0.30, 0.845, 0.02), collars (±0.235, 0.505, -0.46). r 0.028 keeps
-      // the outer envelope of the old 0.050-0.055 square section, so the
-      // haloBlade/haloWing/camPods attachments above still land on the hoop and
-      // the pillar top (y 0.800) still overlaps the arc underside (0.787).
+      // Round titanium hoop with a LEVEL top bar: one continuous tube, collars
+      // (±0.235, 0.505, -0.46) rising to a crown that stays FLAT at y 0.845
+      // from mid to mid while sweeping to the front apex (z 0.49) — round in
+      // plan, never dipping toward the centre. r 0.028 keeps the old square
+      // section's outer envelope, so the haloBlade/haloWing/camPods
+      // attachments above still land on the hoop.
       const haloSty = Math.max(0, Math.min(2, Math.round(cockpitStyle.halo || 0)));
       const hr = haloSty === 1 ? 0.024 : 0.028;
-      const apexY = 0.815 - (haloSty === 1 ? 0.008 : 0);
-      addBox(out, 0, 0.665, 0.47, 0.035, 0.27, 0.05, haloC, SURFACES.metal);   // front centre pillar
-      const hoop = sampleCurve([
-        [-0.235, 0.505, -0.46], [-0.30, 0.845, 0.02], [0, apexY, 0.49],
-        [0.30, 0.845, 0.02], [0.235, 0.505, -0.46],
-      ], 13);
+      const crownY = 0.845 - (haloSty === 1 ? 0.008 : 0);
+      // Front centre pillar rises to y 0.83 — overlapping the flat bar's
+      // underside (0.845 - 0.028 = 0.817) by ~1.3 cm, never stopping short.
+      addBox(out, 0, 0.68, 0.47, 0.035, 0.30, 0.05, haloC, SURFACES.metal);
+      const hoop = haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49);
       addTube(out, hoop, hr, 6, haloC, SURFACES.metal);
       if (haloSty === 2) {
-        // Fenced hoop: three small crest vanes riding the front-arc crown.
+        // Fenced hoop: three small crest vanes riding the flat bar (hoop
+        // indices 4/6/8 = mid-left, apex, mid-right of the 7-point bar).
         for (const hi of [4, 6, 8]) {
           const p = hoop[hi];
           addBox(out, p[0], p[1] + hr + 0.012, p[2], 0.012, 0.026, 0.055,

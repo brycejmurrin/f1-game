@@ -121,12 +121,14 @@ test("2026 body keeps a scooped pod, floor teeth, under-fences and a round halo"
   assert.match(SRC, /z: -1\.05, inner: 0\.25/);
   assert.match(SRC, /\[-0\.48, -0\.24, 0, 0\.24, 0\.48\]/);
   assert.match(SRC, /fwHalf \* 0\.52/);
-  // The halo is a smooth swept TUBE through the regulation datums, not a
-  // chevron of beveled box spans: pin the primitive and the apex/mid datums.
+  // The halo is a smooth swept TUBE with a LEVEL top bar — round in plan,
+  // never dipping toward the centre: pin the primitive, the path builder
+  // (constant-crownY bar), and the collar/apex datums at the call site.
   assert.match(SRC, /function addTube\(/);
+  assert.match(SRC, /function haloHoopPath\(/);
+  assert.match(SRC, /pts\.push\(\[Math\.cos\(a\) \* midX, crownY, midZ/);
+  assert.match(SRC, /haloHoopPath\(0\.235, 0\.505, -0\.46, 0\.30, 0\.02, crownY, 0\.49\)/);
   assert.match(SRC, /addTube\(out, hoop, hr, 6/);
-  assert.match(SRC, /\[0, apexY, 0\.49\]/);
-  assert.match(SRC, /\[0\.30, 0\.845, 0\.02\], \[0\.235, 0\.505, -0\.46\]/);
   assert.match(SRC, /inlet\.width \* 0\.48/);
 });
 
