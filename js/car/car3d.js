@@ -392,7 +392,10 @@ const Car3D = (function () {
   function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
                     grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle) {
     const RC = rimColor || RIM;
-    const SEG = 18;
+    // 18 -> 24: an 18-gon tyre reads visibly polygonal in any close shot.
+    // +29% wheel tris, same draw-call count; ceilings in parts-physics raised
+    // with the measurement (480 per wheel).
+    const SEG = 24;
     const x0 = cx - w/2, x1 = cx + w/2;
     const rimR = r * 0.68;
     const coverOpen = brakeStyle && brakeStyle.coverOpen || 0;
@@ -2194,9 +2197,25 @@ const Car3D = (function () {
       // Glass goes on the face TOWARD the viewer (-z). It used to sit at
       // mz+0.066 — 8mm BEYOND the housing's own back face, so the driver AND
       // the chase camera both saw carbon and never the reflective surface.
-      addBox(out, s*mx, mY, mz, mW, mH, 0.06, [0.09, 0.09, 0.11], SURFACES.carbon); // dark carbon housing
+      // Housing as an 8-corner block with the outboard face pulled BACK in z —
+      // the C14.2.2 d i inboard toe (~25°): real mirrors angle at the driver,
+      // and the cant is what stops the housing reading as a shoebox.
+      const toe = ckpt ? 0 : 0.045;
+      const hy0 = mY - mH / 2, hy1 = mY + mH / 2;
+      const xIn = s * (mx - mW / 2), xOut = s * (mx + mW / 2);
+      addBlock(out, [
+        [xIn, hy0, mz - 0.03], [xOut, hy0, mz - 0.03 + toe], [xOut, hy1, mz - 0.03 + toe], [xIn, hy1, mz - 0.03],
+        [xIn, hy0, mz + 0.03], [xOut, hy0, mz + 0.03 + toe], [xOut, hy1, mz + 0.03 + toe], [xIn, hy1, mz + 0.03],
+      ], [0.09, 0.09, 0.11], null, SURFACES.carbon);
       addBox(out, s*mx, mY, mz - 0.032, mW * 0.97, mH * 0.80, 0.012, [0.10, 0.11, 0.14], SURFACES.glass); // bezel / surround
       addBox(out, s*mx, mY, mz - 0.038, 0.200, 0.050, 0.008, [0.46, 0.56, 0.78], SURFACES.glass); // reflective surface, C14.2.2b
+      if (!ckpt) {
+        // Top winglet + the C3.7.5 OUTER stay down to the tub shoulder — the
+        // two details every 2026 housing carries.
+        addBox(out, s*mx, hy1 + 0.008, mz + 0.01, mW * 0.9, 0.008, 0.055, DARK, SURFACES.carbon);
+        addBeamBetween(out, [s * (mx + mW * 0.38), hy0, mz + 0.02],
+                            [s * (msx + 0.06), 0.60, mz + 0.10], 0.012, DARK, SURFACES.carbon);
+      }
     }
 
     part("helmet");
@@ -2398,12 +2417,15 @@ const Car3D = (function () {
         attachHalf: fwHalf + 0.03,
       }, i === 0 ? c1 : wingC, SURFACES.paint);
     }
-    const aPlate = Math.max(0, Math.min(2, Math.round(
+    const aPlate = Math.max(0, Math.min(3, Math.round(
       aeroStyle.plate != null ? aeroStyle.plate : 1)));
     const PLATE = [
       { hF: 0.16, hR: 0.30, kick: 0.020, footW: 0.09, footZ: 0.46, arch: 0 },
       { hF: 0.22, hR: 0.40, kick: 0.060, footW: 0.13, footZ: 0.54, arch: 0 },
       { hF: 0.30, hR: 0.54, kick: 0.100, footW: 0.19, footZ: 0.62, arch: 1 },
+      // 3: outwash spec — tall plate whose TOP EDGE ROLLS OUTBOARD (roll: 1
+      // adds the curled lip below), the 2026 field's signature endplate.
+      { hF: 0.28, hR: 0.50, kick: 0.120, footW: 0.16, footZ: 0.58, arch: 0, roll: 1 },
     ][aPlate];
     const aCasc = Math.max(0, Math.min(3, Math.round(aeroStyle.casc != null ? aeroStyle.casc
       : (aLvl >= 4 ? 3 : (aLvl >= 3 ? 2 : (aLvl >= 1 ? 1 : 0))))));
@@ -2424,6 +2446,14 @@ const Car3D = (function () {
           { z: 2.60, x: epX + s*0.012, y: 0.135 + PLATE.hF * 0.5 + 0.010, w: 0.030, h: 0.018 },
           { z: 2.06, x: epX + s*(PLATE.kick + 0.012), y: 0.245 + PLATE.hR * 0.5 + 0.010, w: 0.026, h: 0.016 },
           0.008, c1);
+      }
+      if (PLATE.roll) {
+        // Rolled top edge: a lip leaning OUTBOARD off the plate crown, wider
+        // and more canted at the rear — the outwash curl, not a straight rail.
+        addBeveledSpan(out,
+          { z: 2.58, x: epX + s * 0.020, y: 0.135 + PLATE.hF * 0.5 + 0.006, w: 0.040, h: 0.014, t: 0.45 },
+          { z: 2.02, x: epX + s * (PLATE.kick + 0.048), y: 0.245 + PLATE.hR * 0.5 - 0.004, w: 0.062, h: 0.012, t: 0.40 },
+          0.006, c2);
       }
       // Canard / dive-plane cascade on the outer face of the endplate.
       const nCan = aCasc;
