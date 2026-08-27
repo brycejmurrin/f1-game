@@ -473,7 +473,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*off 368/);
   assert.match(CHUNKS_SOURCE, /params7\s*:\s*vec4<f32>.*off 448/);
   assert.match(CHUNKS_SOURCE, /params9\s*:\s*vec4<f32>.*ambContactDark/);
-  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*560/);
+  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*576/);
   assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*256/);
   assert.match(POST_SOURCE, /SSR_UNIFORM_BYTES:\s*208/,
     "SsrU must keep the carGloss vec4 (192 was the pre-streak layout)");
@@ -484,7 +484,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   gfx.resize();
   assert.equal(gfx.begin({ tune: {}, shadowCtr: [11, 22, 33] }), true);
   gfx.present({ tune: {} });
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 560);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 576);
   const compositeBuffer = h.buffers.find((buffer) => buffer.desc.size === 256);
   let frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
   assert.deepEqual(frame.slice(88, 92), [11, 22, 33, 80], "shadowCtr must occupy floats 88..91");
@@ -696,7 +696,7 @@ test("lamp shadow arm does not leak into the next frame", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
   gfx.resize();
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 560);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 576);
   gfx.lampShadowBegin(new Float32Array([
     1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
   ]), 2);
@@ -1766,4 +1766,48 @@ test("zero-count meshes never reach the queue as draws", () => {
   const decal = WGX_SOURCE.match(/function drawDecal\(mesh, model, tex, opts\)[\s\S]*?\n      const slot/);
   assert.ok(decal, "drawDecal head found");
   assert.match(decal[0], /!mesh\.count/, "drawDecal rejects zero-count meshes before taking a slot");
+});
+
+test("per-chunk lamps: buffers, bindings, and the runtime-sized track set", () => {
+  // The WGX per-chunk port keeps the per-frame set at binding 1 and adds the
+  // FULL baked track set + the LampChunks concat index table as read-only
+  // storage at group-0 bindings 15/16. trackLights must stay RUNTIME-sized
+  // (array<Light> with no literal bound) so the buffer's 1024-light capacity
+  // is not baked into the WGSL, and DrawU grows exactly one vec4 (lampRange)
+  // with all three coupled size sites moving through the one constant.
+  assert.match(CHUNKS_SOURCE, /DRAW_UNIFORM_BYTES:\s*128/, "DrawU used bytes incl. lampRange");
+  assert.match(CHUNKS_SOURCE, /lampRange : vec4<f32>/, "DrawU carries the lamp range");
+  assert.match(CHUNKS_SOURCE, /params10\s*:\s*vec4<f32>/, "FrameU carries the absolute shadow index lane");
+  assert.match(CHUNKS_SOURCE, /@binding\(15\) var<storage, read> trackLights : array<Light>;/,
+    "trackLights is runtime-sized read-only storage at binding 15");
+  assert.match(CHUNKS_SOURCE, /@binding\(16\) var<storage, read> chunkLampIdx : array<u32>;/,
+    "chunkLampIdx at binding 16");
+  assert.match(WGX_SOURCE, /binding: 15,[\s\S]{0,120}read-only-storage/, "g0Layout declares binding 15");
+  assert.match(WGX_SOURCE, /binding: 16,[\s\S]{0,120}read-only-storage/, "g0Layout declares binding 16");
+  assert.match(WGX_SOURCE, /TRACK_LIGHT_CAP = 1024/, "track-light capacity above the bake ceiling");
+});
+
+test("per-chunk lamps: the chunked loop uses absolute shadow indices and zeroed slot lanes", () => {
+  // The per-chunk shadow gate compares the baked ABSOLUTE index
+  // (F.params10.x) — the structural fix for GLX's per-chunk slot remap — and
+  // the global loop keeps its slot semantics untouched. drawRing slots are
+  // reused across frames, so _writeDraw must zero the lampRange lanes for
+  // EVERY draw or a stale chunked range leaks into unrelated draws.
+  assert.match(CHUNKS_SOURCE, /i32\(idx\) == sIdx/, "chunked loop compares absolute indices");
+  assert.match(CHUNKS_SOURCE, /i == i32\(F\.params8\.z\)/, "global loop keeps slot semantics");
+  assert.match(CHUNKS_SOURCE, /D\.lampRange\.z > 0\.5/, "per-chunk mode is the draw's own flag");
+  const wd = WGX_SOURCE.match(/function _writeDraw\(slot, model, opts\)[\s\S]*?\n    \}/);
+  assert.ok(wd, "_writeDraw exists");
+  assert.match(wd[0], /d\[base \+ 28\] = 0; d\[base \+ 29\] = 0; d\[base \+ 30\] = 0;/,
+    "_writeDraw zeroes the lampRange lanes for every draw");
+});
+
+test("per-chunk lamps: a device loss while visible writes the crash latch", () => {
+  // Mirrors GLX webglcontextlost (glx.js) and TLX onDeviceLost: a real WGX
+  // device loss while the tab is visible must disarm the per-chunk opt-in so
+  // the next boot does not repeat the configuration that killed the device.
+  const lost = WGX_SOURCE.match(/device\.lost\.then\(function \(info\)[\s\S]*?\n    \}\);/);
+  assert.ok(lost, "device.lost handler exists");
+  assert.match(lost[0], /apex26\.perChunkOff/, "device.lost writes the perChunkOff latch");
+  assert.match(lost[0], /document\.hidden/, "the latch keeps the visibility guard");
 });

@@ -134,6 +134,13 @@ const WGX = (function () {
   // valid multiple, so we stride slots at 256 B.
   const DRAW_STRIDE = 256;
   const MAX_DRAWS = 4096;                               // per-frame draw slots
+  // Per-chunk lamps (bindings 15/16). TRACK_LIGHT_CAP sits above the ~800-lamp
+  // bake ceiling in js/game/lighting.js; CHUNK_IDX_CAP bounds the concatenated
+  // per-chunk index table across every chunked mesh in a bake generation
+  // (measured visible-chunk counts are ~150 worst; whole-table sizes are far
+  // smaller than 16384 at CAP 24 — overflow warns and falls back to global).
+  const TRACK_LIGHT_CAP = 1024;                         // lights (64 B each -> 65536 B)
+  const CHUNK_IDX_CAP = 16384;                          // u32 indices (65536 B)
   const BLIT_BYTES = _CH.BLIT_UNIFORM_BYTES | 0;        // 16
 
   // Keyed on the DEVICE (IS_MOBILE), not the memory tier — the same key
@@ -662,6 +669,16 @@ const WGX = (function () {
     }
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;
+      // Crash latches, mirroring GLX webglcontextlost / TLX onDeviceLost: a
+      // real loss while visible disarms the expensive opt-ins so the next boot
+      // does not repeat the configuration that killed the device. Same
+      // visibility guard — a backgrounding-driven loss is benign and must not
+      // disable a feature the player deliberately turned on.
+      try {
+        if (typeof document !== "undefined" && !document.hidden) {
+          try { localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* no storage: the tier gate is the only defence left; nothing here may throw */ }
+        }
+      } catch (_) { /* no document (harness) */ }
       _wgxEscalate("device lost (" + ((info && info.reason) || "unknown") + ")");
     });
 
@@ -752,6 +769,13 @@ const WGX = (function () {
 
     // Culling frame state.
     let frameViewProj = null, frameEye = null, frameCullDist = 0;
+    // Per-chunk lamp state: knob + full baked set (frame fields, cleared by
+    // day), the trackLightSBO generation, and the chunkIdxSBO segment
+    // allocator (WeakMap chunks-array -> {base, table} + append cursor).
+    let framePerChunk = 0, frameAllLights = null;
+    let _tlSrc = null, _tlKnob = -1;
+    let _ciCursor = 0, _ciSeg = new WeakMap();
+    const _tlScratch = new Float32Array(TRACK_LIGHT_CAP * 16);
     // Post-chain + FX frame extras.
     // frameVPGpu is the Z01-remapped
     // view-proj the depth buffer was rasterised with — every FX embeds it so its
@@ -767,6 +791,7 @@ const WGX = (function () {
     // GPU objects assembled below (fail -> return null).
     let g0Layout, g1Layout, g2Layout, litLayout, litModule, skyModule, blitModule;
     let frameUBO, lightSBO, grLightSBO, drawUBO, blitUBO, skyUBO;
+    let trackLightSBO, chunkIdxSBO;   // per-chunk lamps: full baked set + concat index table
     let frameBindGroup, drawBindGroup, skyBindGroup;
     let skyPipeline, blitPipeline, linearSampler, envCubeSamp;
     const _litPipelines = new Map();
@@ -996,6 +1021,10 @@ const WGX = (function () {
             buffer: { type: "uniform" } },
           { binding: 14, visibility: GPUShaderStage.FRAGMENT,
             sampler: { type: "filtering" } },                            // env cube 4× aniso (GLX)
+          { binding: 15, visibility: GPUShaderStage.FRAGMENT,
+            buffer: { type: "read-only-storage" } },                     // baked track lights (per-chunk)
+          { binding: 16, visibility: GPUShaderStage.FRAGMENT,
+            buffer: { type: "read-only-storage" } },                     // concat per-chunk lamp indices
         ],
       });
       g1Layout = device.createBindGroupLayout({
@@ -1021,6 +1050,12 @@ const WGX = (function () {
       // God-ray march reads nearest-N lamps (GLX sorts by eye). Must NOT reuse
       // lightSBO — LIT consumes frame.lights in record order.
       grLightSBO = device.createBuffer({ size: LIGHT_BYTES, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+      // Per-chunk lamps: the WHOLE baked track set (uploaded once per bake with
+      // the knob dimmer applied — per-chunk sets render raw records × knob, the
+      // twilight ramp/flicker scale only the per-frame copy) + the LampChunks
+      // concat index table. Static between bakes; zero per-frame upload.
+      trackLightSBO = device.createBuffer({ size: TRACK_LIGHT_CAP * LIGHT_STRIDE, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+      chunkIdxSBO = device.createBuffer({ size: CHUNK_IDX_CAP * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
       drawUBO  = device.createBuffer({ size: MAX_DRAWS * DRAW_STRIDE, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       blitUBO  = device.createBuffer({ size: BLIT_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       skyUBO   = device.createBuffer({ size: WGSLChunks.SKY_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -1900,6 +1935,8 @@ const WGX = (function () {
           { binding: 12, resource: lampShadowView },
           { binding: 13, resource: { buffer: matScaleUBO } },
           { binding: 14, resource: envCubeSamp },
+          { binding: 15, resource: { buffer: trackLightSBO } },
+          { binding: 16, resource: { buffer: chunkIdxSBO } },
         ],
       });
       // Main group binds the real cube once the probe is live; the env-render group
@@ -2991,6 +3028,22 @@ const WGX = (function () {
       d[137] = (T && T.lampWallSpill  != null) ? T.lampWallSpill  : 1.0;
       d[138] = (T && T.windowSunFlash != null) ? T.windowSunFlash : 1.0;
       d[139] = (T && T.skyRimGlow     != null) ? T.skyRimGlow     : 1.0;
+      // params10.x — the armed shadow lamp as an ABSOLUTE index into the baked
+      // track set (frame.allLights), so the per-chunk loop's shadow gate is a
+      // plain integer compare with no slot remap. Same baked-position match
+      // GLX chunked does: setFrameLights copies positions verbatim (flicker
+      // scales rgb only), and the appended tail range is excluded.
+      let _absShadowIdx = -1;
+      const _AL = f.allLights;
+      if (_lampShadowArmed && _lampIdx >= 0 && L && _AL &&
+          !(f.tailCount > 0 && _lampIdx >= f.tailStart)) {
+        const so = _lampIdx * 15;
+        const lx = L[so], ly = L[so + 1], lz = L[so + 2];
+        for (let p = 0; p < _AL.length; p += 15) {
+          if (_AL[p] === lx && _AL[p + 1] === ly && _AL[p + 2] === lz) { _absShadowIdx = p / 15; break; }
+        }
+      }
+      d[140] = _absShadowIdx;
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
@@ -3009,6 +3062,28 @@ const WGX = (function () {
       frameViewProj = f.viewProj || null;
       frameEye = f.eye || null;
       frameCullDist = f.cullDist || 0;
+      framePerChunk = +f.perChunkLights || 0;
+      frameAllLights = f.allLights || null;
+      // (Re)upload the baked track set when the (lights identity, knob) pair
+      // moves — rgb × knob applied here ONCE (per-chunk sets render raw baked
+      // records × the knob dimmer; no twilight ramp/flicker, GLX parity), so
+      // the buffer is static until the next bake. A moved pair also resets
+      // the chunkIdx segment allocator: every mesh re-appends on next draw.
+      if (framePerChunk > 0 && frameAllLights &&
+          (_tlSrc !== frameAllLights || _tlKnob !== framePerChunk)) {
+        const AL = frameAllLights, k = framePerChunk;
+        const tn = Math.min(TRACK_LIGHT_CAP, (AL.length / 15) | 0), td = _tlScratch;
+        for (let i = 0; i < tn; i++) {
+          const o = i * 15, b = i * 16;
+          td[b]    = AL[o];        td[b+1]  = AL[o+1];      td[b+2]  = AL[o+2];  td[b+3]  = AL[o+6];
+          td[b+4]  = AL[o+3] * k;  td[b+5]  = AL[o+4] * k;  td[b+6]  = AL[o+5] * k;  td[b+7]  = AL[o+12];
+          td[b+8]  = AL[o+7];      td[b+9]  = AL[o+8];      td[b+10] = AL[o+9];  td[b+11] = AL[o+13];
+          td[b+12] = AL[o+10];     td[b+13] = AL[o+11];     td[b+14] = AL[o+14]; td[b+15] = 0;
+        }
+        if (tn > 0) device.queue.writeBuffer(trackLightSBO, 0, td, 0, tn * 16);
+        _tlSrc = frameAllLights; _tlKnob = framePerChunk;
+        _ciCursor = 0; _ciSeg = new WeakMap();
+      }
     }
 
     // Sky uniform upload (SkyU; consumed by drawSky). Accepts a frame or sky obj.
@@ -3132,6 +3207,11 @@ const WGX = (function () {
       // Floor/terrain over the ribbon: WGX depth loses the road, so fs_main
       // discards the LUT footprint. Never set this on cars/props (mat2.w).
       d[base + 27] = o.buryRibbon ? 1 : 0;
+      // lampRange (lanes 28-30): zeroed for EVERY draw — drawRing slots are
+      // reused across frames, so a stale per-chunk range from a prior chunked
+      // draw would silently rebind that chunk's lamp slice. drawChunked
+      // overwrites these after the call when per-chunk mode is active.
+      d[base + 28] = 0; d[base + 29] = 0; d[base + 30] = 0;
     }
     // One (or ranged) writeBuffer for every slot filled this pass — call before
     // litPass.end(). writeBuffer is queue-ordered before submit, so draws
@@ -3262,6 +3342,51 @@ const WGX = (function () {
           _drawGeom(litPass, ch);
         }
         return;
+      }
+      // Per-chunk lamps: one DrawU slot per visible chunk carrying that chunk's
+      // (offset, count) slice of the baked chunkIdxSBO table. The adjacent-run
+      // merge is deliberately forfeited here — adjacent chunks almost never
+      // share an index list, exactly as GLX gives up its merged drawElements
+      // runs in this mode; MAX_DRAWS 4096 has ample headroom (~150 visible
+      // chunks measured worst-case). Table segments append per chunks-array;
+      // a bake-generation move (_writeFrame) resets the allocator.
+      if (framePerChunk > 0 && frameAllLights && typeof LampChunks !== "undefined") {
+        let seg = _ciSeg.get(chunks);
+        const table = LampChunks.resolve(frameAllLights, chunks, framePerChunk);
+        if (!seg || seg.table !== table) {
+          const need = table.concat.length;
+          if (_ciCursor + need > CHUNK_IDX_CAP) {
+            // Overflow (extreme lampDensity): warn once per generation and let
+            // this mesh fall through to the global-set merge path below.
+            try { Log.warn("gfx", "WGX per-chunk lamp table overflow (" + (_ciCursor + need) + " > " + CHUNK_IDX_CAP + ") — mesh keeps the global set"); } catch (_) { /* harness */ }
+            seg = null;
+          } else {
+            if (need > 0) device.queue.writeBuffer(chunkIdxSBO, _ciCursor * 4, table.concat);
+            seg = { base: _ciCursor, table };
+            _ciSeg.set(chunks, seg);
+            _ciCursor += need;
+          }
+        }
+        if (seg) {
+          const tbl = seg.table;
+          for (let i = 0; i < chunks.length; i++) {
+            const ch = chunks[i];
+            const dist2 = _aabbDist2(ch.min, ch.max, ex, ey, ez);
+            if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max) || (cd > 0 && dist2 > cd2)) continue;
+            const cslot = _drawSlot++;
+            if (cslot >= MAX_DRAWS) break;
+            _writeDraw(cslot, model, o);
+            const cbase = cslot * DRAW_F32_STRIDE;
+            drawRing[cbase + 28] = seg.base + tbl.offsets[i];
+            drawRing[cbase + 29] = tbl.counts[i];
+            drawRing[cbase + 30] = 1;
+            _dynOff[0] = cslot * DRAW_STRIDE;
+            litPass.setBindGroup(1, drawBindGroup, _dynOff);
+            _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG, o.surfaceId === 16);
+            _drawGeom(litPass, ch);
+          }
+          return;
+        }
       }
       // Merge runs of adjacent visible chunks that share vbuf/ibuf/attrBG.
       // Map insertion order is IBO order, so summing count from the run's
