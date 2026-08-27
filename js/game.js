@@ -2596,7 +2596,7 @@ function startRace() {
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges
   // mashed on the title (navOpen() false) would fire at lights-out.
   Input.clearEdges();
-  if (soundOn) { GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
+  if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
   if (soundOn && isRaining()) GameAudio.startRain();   // rain patter — a damp "wet" track is silent
   DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
 }
@@ -3299,7 +3299,8 @@ function tickWeatherArc(dt) {
   }
 }
 
-const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false };  // setEngine reads synchronously
+const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false,
+                  deploy: 0, energy: 1, ersDeploy: 0.5 };  // setEngine reads synchronously
 function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
@@ -3435,6 +3436,9 @@ function update(dt) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0;
     _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetRoad();
+    // ERS state for the deploy whine: continuous, charge-scaled, part-flavoured.
+    _engArg.deploy = player.deploying ? 1 : 0; _engArg.energy = player.energy ?? 1;
+    _engArg.ersDeploy = player.ersDeploy ?? 0.5;
     GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad,
       clamp(player.speed / vTop(), 0, 1), player.gear, _engArg);
     // Squeal from the CAR's slip, via the same skidIntensity the marks and smoke
@@ -4060,6 +4064,12 @@ function updateCar(c, dt, ranked) {
     // has to travel, and the travel is asymmetric (see X_CLOSE_RATE). Holding
     // the button through a corner therefore buys nothing — the flap is shut.
     const want = (c.xOn && c.xArmed) ? 1 : 0;
+    // Audible latch for the LOCAL car only: the moment the flap command flips,
+    // not the (slower) travel — the click is the switch, the drag is the flap.
+    if (c.human && c.local && soundOn && want !== (c._xSndWant ?? 0)) {
+      GameAudio.xMode(want === 1);
+      c._xSndWant = want;
+    }
     const rate = want > (c.aeroX || 0) ? X_OPEN_RATE : X_CLOSE_RATE;
     c.aeroX = clamp((c.aeroX || 0) + Math.sign(want - (c.aeroX || 0)) * rate * dt,
                     Math.min(c.aeroX || 0, want), Math.max(c.aeroX || 0, want));
@@ -8348,7 +8358,7 @@ function setPaused(p) {
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); $("pm-restart").disabled = !!(netPlay.active() || qualiNetDone); }
-  else if (soundOn) GameAudio.startEngine();
+  else if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); }
   lastFrame = performance.now(); syncRotateBlocker(false);   // the pause card yields to an active rotate blocker on EVERY entry
 }
 els.pausebtn.onclick = () => setPaused(true);
