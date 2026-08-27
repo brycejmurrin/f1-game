@@ -764,15 +764,30 @@ body[data-density="compact"][data-width="wide"] {
 }
 
 /* ── Telemetry player popup ───────────────────────────── */
+/* A runtime <dialog> since round 11 — the SCRIM STAYS ON THE ELEMENT: the
+   dialog is stretched full-viewport (the UA sizes a dialog fit-content with
+   auto margins, hence the explicit margin/width/height, same lesson as
+   #track-detail), so backdrop-click targets the dialog itself and the paint
+   is identical to the old fixed div. ::backdrop is therefore silenced.
+   The closed-state rule is restated HERE because this file is @layer
+   overlays, which outranks components' generic dialog.screen:not([open])
+   guard — without it a closed-but-unhidden dialog lays out in the seam and
+   Chromium drops boxes on top-layer re-attach (the round-10 #customize bug). */
 .dh-tpopup {
   position: fixed; inset: 0; z-index: 60;
+  margin: 0; border: 0;
+  width: 100%; height: 100%;
+  max-width: none; max-height: none;
   background: rgba(4, 4, 8, 0.88);
+  color: inherit;
   display: flex; align-items: center; justify-content: center;
   /* Shared safe tokens, same as the hub and every other overlay — the raw
      env() here could not be reached by the notch simulation and, paired with a
      98vw card, left the trace panel poking under a landscape notch. */
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
 }
+.dh-tpopup:not([open]) { display: none; }
+.dh-tpopup::backdrop { background: none; }
 .dh-tpopup-card {
   width: min(860px, 100%);
   /* The .dh-card treatment this popup never got: it is appended to #datahub

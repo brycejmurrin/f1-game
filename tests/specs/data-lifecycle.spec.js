@@ -396,7 +396,11 @@ test("telemetry popup is a labelled modal and restores driver focus", async ({ p
   await page.getByRole("button", { name: "LOAD LAP" }).click();
 
   const popup = page.getByRole("dialog", { name: /Initial Driver/ });
-  await expect(popup).toHaveAttribute("aria-modal", "true");
+  // A real <dialog> since round 11: the platform asserts the role and the
+  // modality, so the old aria-modal attribute pin is replaced by the thing
+  // it stood for — the dialog actually being modal.
+  await expect(popup).toBeVisible();
+  expect(await popup.evaluate((d) => d.matches(":modal"))).toBe(true);
   const close = page.getByRole("button", { name: "Close telemetry" });
   await expect(close).toBeFocused();
   await page.keyboard.press("Tab");
