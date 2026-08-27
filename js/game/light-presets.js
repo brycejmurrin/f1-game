@@ -1,5 +1,15 @@
 "use strict";
 window.LightPresets = {
+  // "*|night" is the CONDITIONAL shipped layer (js/game/light-store.js
+  // condLayer): resolved only on the ULTRA preset with a per-chunk-capable
+  // backend (GLX/WGX), off mobile — the quality-ladder rung that ships
+  // per-chunk lamps by default at night. A/B-gated 2026-08-27 on vegas +
+  // singapore, both backends (docs/PERF-FINDINGS.md §R5): GLX 18.6%/23.5%
+  // FASTER at 0.3, WGX CPU-neutral with 0 GPU errors and no watchdog shape.
+  // Player edits (including an explicit 0) always win.
+  "*|night": {
+    "perChunkLights": 0.3
+  },
   "*": {
     "carGloss": 0.35,
     "blacks": -0.06,

@@ -1192,3 +1192,35 @@ are in `tests/`. Fix before wiring `TrackGraph.batches()` up.
 > (`game.js` → `propBatches`); GLX/WGX/TLX element-copy (no `.subarray`);
 > dual-sig cull cache skips redundant GPU uploads when the frustum is unchanged.
 > Do not defer work based on the “tests only” line above.
+
+## R5 — per-chunk lamps: shared bake, WGX native, ULTRA-night default (2026-08-27)
+
+SwiftShader is the CPU oracle throughout; wall-clock rAF means GPU-blocking
+cost on GLX (GL blocks in draw calls) but only CPU-side cadence on WGX
+(Dawn queues asynchronously — its truth is validation + pixels).
+
+| circuit | backend | off ms/f | perChunk 0.3 ms/f | delta | first-on (bake) |
+|---|---|---|---|---|---|
+| vegas | GLX | 7910.6 | 6441.8 | **-18.6%** | 7874 ms (≤ one off-frame — bake is free) |
+| singapore | GLX | 7478.1 | 5719.1 | **-23.5%** | 7034 ms (ditto) |
+| vegas | WGX | 16.6 (rAF) | 16.1 | CPU-neutral | 37.3 ms |
+| singapore | WGX | 16.8 (rAF) | 16.7 | CPU-neutral | 25.9 ms |
+
+- Look: GLX luma 70.2→73.8 (vegas), 60.1→65.2 (singapore) — brighter as
+  designed (more lamps genuinely reach), no wash-out.
+- WGX: gpuErrors 0 at knob 0.3 AND 1.0; watchdog guard (cockpit + knob=1,
+  10 frames) completed in 181 ms both circuits — the round-1 380%-CPU /
+  22-minute shape did not reproduce. Pixel gate: gfx-probe webgpu vegas
+  PASS (#game road coverage 43.6%, roadLutReady).
+- Commands: mcp-cli raw batches (detached page-side measurement + pollers,
+  MCP_CLI_TIMEOUT_MS=170000) in artifacts/r5-{glx,wgx}-ab*.log;
+  node tools/gfx-probe.mjs --backend webgpu --lite vegas.
+- DECISION: ULTRA-night conditional layer ships `perChunkLights: 0.3`
+  (light-presets.js "*|night"), predicate in light-store condLayer.
+
+roadChunkLamps def->1 decision input (next round): reachable lamps per
+72 m road cell at default knobs — abudhabi 12, jeddah 14, vegas 10,
+qatar 25 (ONE cell over CAP 24 by one lamp), baku 10, singapore 12,
+bahrain 16 (artifacts/r5-road-lamp-count.txt; harness in the session
+scratchpad). Capacity says def->1 is safe everywhere except one qatar
+cell dropping its single FARTHEST-reaching lamp at a boundary.
