@@ -358,23 +358,27 @@ const Car3D = (function () {
     }
   }
 
-  // Halo hoop centreline. The real halo's TOP BAR IS LEVEL — only the plan
-  // view is round — so the path is three sections: a rear leg easing up from
-  // each collar (quadratic, zero slope where it meets the crown), and a front
-  // bar at CONSTANT crownY swept as a half-ellipse in x-z from mid-left
-  // through the front apex to mid-right. Never re-curve the bar in y: a spline
-  // through apex+mids is what read as "triangular to the middle".
+  // Halo hoop centreline, matched to the real halo's front view: the top bar
+  // reads LEVEL but is gently ROUNDED — a shallow arch that rises RISE toward
+  // the centre and blends into the legs through tangent shoulders — never a
+  // peak or a dip toward the middle (the two failure modes this replaced).
+  // Three sections: a rear leg easing up from each collar (quadratic, zero
+  // slope where it meets the crown), and the crown bar swept as a
+  // half-ellipse in x-z with the sin-shaped RISE on top.
+  const HALO_RISE = 0.012;                   // shallow arch: ~1.2 cm at centre
   function haloHoopPath(rearX, rearY, rearZ, midX, midZ, crownY, apexZ) {
-    const LEG = 3, BAR = 6, pts = [];
+    const LEG = 4, BAR = 6, pts = [];
     for (let i = 0; i < LEG; i++) {          // left leg: collar -> crown
       const t = i / LEG;
       pts.push([-(rearX + (midX - rearX) * t),
                 rearY + (crownY - rearY) * t * (2 - t),
                 rearZ + (midZ - rearZ) * t]);
     }
-    for (let i = 0; i <= BAR; i++) {         // flat bar, round in plan only
+    for (let i = 0; i <= BAR; i++) {         // crown bar: level, gently arched
       const a = Math.PI * (1 - i / BAR);
-      pts.push([Math.cos(a) * midX, crownY, midZ + (apexZ - midZ) * Math.sin(a)]);
+      pts.push([Math.cos(a) * midX,
+                crownY + HALO_RISE * Math.sin(a),
+                midZ + (apexZ - midZ) * Math.sin(a)]);
     }
     for (let i = 1; i <= LEG; i++) {         // right leg: crown -> collar
       const t = i / LEG;
@@ -2112,11 +2116,11 @@ const Car3D = (function () {
       const bh = haloBlade === 2 ? 0.038 : 0.028;
       const bladeC = haloTint || HALO;
       for (const s of [-1, 1]) {
-        // The fairing rides the LEVEL bar: both stations at the same height —
-        // a blade that descended to the old low front end would bury itself
-        // inside the flat-topped tube.
+        // The fairing rides the level crown bar, its front station lifted
+        // with the bar's shallow arch so it blends into the tube rather than
+        // descending into it.
         addBeveledSpan(out,
-          { z: 0.49, x: 0, y: 0.858, w: bw, h: bh, t: 0.62 },
+          { z: 0.49, x: 0, y: 0.868, w: bw, h: bh, t: 0.62 },
           { z: 0.02, x: s * 0.30, y: 0.858, w: bw * 0.92, h: bh * 0.92, t: 0.62 },
           0.010, bladeC, null, SURFACES.metal);
         addBeveledSpan(out,
@@ -2126,8 +2130,8 @@ const Car3D = (function () {
       }
       if (haloBlade === 2) {
         addBeveledSpan(out,
-          { z: 0.50, x: 0, y: 0.886, w: bw * 1.15, h: bh * 0.85, t: 0.50 },
-          { z: 0.30, x: 0, y: 0.880, w: bw * 0.70, h: bh * 0.70, t: 0.55 },
+          { z: 0.50, x: 0, y: 0.896, w: bw * 1.15, h: bh * 0.85, t: 0.50 },
+          { z: 0.30, x: 0, y: 0.884, w: bw * 0.70, h: bh * 0.70, t: 0.55 },
           0.008, bladeC, null, SURFACES.metal);
       }
     }
@@ -2220,12 +2224,13 @@ const Car3D = (function () {
     part("halo");
     if (!ckpt) {
       const haloC = haloTint || HALO;   // livery-tinted hoop, else brushed titanium
-      // Round titanium hoop with a LEVEL top bar: one continuous tube, collars
-      // (±0.235, 0.505, -0.46) rising to a crown that stays FLAT at y 0.845
-      // from mid to mid while sweeping to the front apex (z 0.49) — round in
-      // plan, never dipping toward the centre. r 0.028 keeps the old square
-      // section's outer envelope, so the haloBlade/haloWing/camPods
-      // attachments above still land on the hoop.
+      // Round titanium hoop with a LEVEL, gently arched top bar: one
+      // continuous tube, collars (±0.235, 0.505, -0.46) rising to a crown
+      // that holds y 0.845 (+HALO_RISE shallow arch) from mid to mid while
+      // sweeping to the front apex (z 0.49) — round in plan, never peaking or
+      // dipping toward the centre. r 0.028 keeps the old square section's
+      // outer envelope, so the haloBlade/haloWing/camPods attachments above
+      // still land on the hoop.
       const haloSty = Math.max(0, Math.min(2, Math.round(cockpitStyle.halo || 0)));
       const hr = haloSty === 1 ? 0.024 : 0.028;
       const crownY = 0.845 - (haloSty === 1 ? 0.008 : 0);
@@ -2235,9 +2240,9 @@ const Car3D = (function () {
       const hoop = haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49);
       addTube(out, hoop, hr, 6, haloC, SURFACES.metal);
       if (haloSty === 2) {
-        // Fenced hoop: three small crest vanes riding the flat bar (hoop
-        // indices 4/6/8 = mid-left, apex, mid-right of the 7-point bar).
-        for (const hi of [4, 6, 8]) {
+        // Fenced hoop: three small crest vanes riding the crown bar (hoop
+        // indices 5/7/9 = mid-left, apex, mid-right of the 7-point bar).
+        for (const hi of [5, 7, 9]) {
           const p = hoop[hi];
           addBox(out, p[0], p[1] + hr + 0.012, p[2], 0.012, 0.026, 0.055,
                  haloC, SURFACES.metal);

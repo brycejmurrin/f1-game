@@ -58,9 +58,10 @@ test("one flap is a closed foil, not a 48-triangle plank", () => {
 test("default body and cockpit stay under the absolute triangle ceilings", () => {
   const body = tris(Car3D.build(C1, C2, { noWheels: true }));
   const cockpit = tris(Car3D.build(C1, C2, { noWheels: true, noDriver: true, cockpit: true }));
-  // 2400 -> 2490: the round-halo tube (13 rings x 6 sides = 144 tris) replaced
-  // the 64-tri beveled-span chevron. Measured 2472 on the raise.
-  assert.ok(body <= 2490, `default body ${body} > 2490`);
+  // 2400 -> 2505: the round-halo tube (15 rings x 6 sides = 168 tris, the two
+  // extra rings buying the rounded shoulders) replaced the 64-tri
+  // beveled-span chevron. Measured 2496 on the raise.
+  assert.ok(body <= 2505, `default body ${body} > 2505`);
   assert.ok(cockpit <= 1500, `cockpit ${cockpit} > 1500`);
 });
 
@@ -121,12 +122,13 @@ test("2026 body keeps a scooped pod, floor teeth, under-fences and a round halo"
   assert.match(SRC, /z: -1\.05, inner: 0\.25/);
   assert.match(SRC, /\[-0\.48, -0\.24, 0, 0\.24, 0\.48\]/);
   assert.match(SRC, /fwHalf \* 0\.52/);
-  // The halo is a smooth swept TUBE with a LEVEL top bar — round in plan,
-  // never dipping toward the centre: pin the primitive, the path builder
-  // (constant-crownY bar), and the collar/apex datums at the call site.
+  // The halo is a smooth swept TUBE whose top bar reads LEVEL with a shallow
+  // arch — round in plan, never peaking or dipping toward the centre: pin the
+  // primitive, the path builder (crownY + HALO_RISE arch), and the
+  // collar/apex datums at the call site.
   assert.match(SRC, /function addTube\(/);
   assert.match(SRC, /function haloHoopPath\(/);
-  assert.match(SRC, /pts\.push\(\[Math\.cos\(a\) \* midX, crownY, midZ/);
+  assert.match(SRC, /crownY \+ HALO_RISE \* Math\.sin\(a\)/);
   assert.match(SRC, /haloHoopPath\(0\.235, 0\.505, -0\.46, 0\.30, 0\.02, crownY, 0\.49\)/);
   assert.match(SRC, /addTube\(out, hoop, hr, 6/);
   assert.match(SRC, /inlet\.width \* 0\.48/);
