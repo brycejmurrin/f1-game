@@ -377,23 +377,27 @@ const CEILINGS = {
   //   (one line + the bug comment): #pausemenu is a modal <dialog> now, so an
   //   open card out-layers the z-9000 blocker and refuses focus to its
   //   buttons — rotation-recovery's OPEN CONTROLS roundtrip caught it.
-  // 8635 -> 8638: the per-chunk frame fields (allLights/perChunkLights/
-  //   tailStart/tailCount) are cleared every frame before the flood branch
-  //   (one line + the bug comment): `frame` outlives a night->day ToD flip,
-  //   so chunked geometry kept binding per-chunk night lamps in daylight.
-  // 8635 -> 8658 on the deploy side for their perf/bug round: the race-start
-  // Input.clearEdges (the RESUME latch bug's menu→race seam), the pooled
-  // setEngine arg, the els.lighting/camtune cache, the shadow-basis up
-  // consts, the seam-sliver collision-bucket floor, the endRace
-  // raceCtl.reset, and the measured noseIn sign flip — every line a fix
-  // plus its comment.
-  // 8658 -> 8662 on the TLX-fix side: the claim-fail reload learns its
-  // ONE-reload bound (a latch already set at boot start means the previous
-  // reload's GLX.init failed too — measured 236 reloads/64 s before the
-  // guard; falls through to #nogl).
-  // Both lineages grew the file, so neither number fits the union —
-  // re-measured on the merged tree (split-newline count): 8665.
-  "js/game.js": 8665,
+  // 8635 -> 8658 for the perf/bug round: the race-start Input.clearEdges (the
+  // RESUME latch bug's menu→race seam), the pooled setEngine arg, the
+  // els.lighting/camtune cache, the shadow-basis up consts, the seam-sliver
+  // collision-bucket floor (with its adjacency-guarantee why), the endRace
+  // raceCtl.reset (the unreachable in-update reset), and the measured noseIn
+  // sign flip with its live-verification record — every line a fix plus the
+  // comment recording the bug at its site, not a feature.
+  // 8658 -> 8670: the audio-identity round — GameAudio.setVoice(player.team
+  //   .engine) at both engine-start seams, ERS deploy/energy/ersDeploy through
+  //   the pooled setEngine arg (the continuous deploy whine + low-battery sag
+  //   live in audio.js), and the X-mode latch click on the local flap command.
+  // + the deploy side's per-chunk frame-fields clear (allLights/perChunkLights/
+  //   tailStart/tailCount reset every frame before the flood branch: `frame`
+  //   outlives a night->day ToD flip, so chunked geometry kept binding
+  //   per-chunk night lamps in daylight).
+  // + the TLX-fix side's claim-fail ONE-reload bound (a latch already set at
+  //   boot start means the previous reload's GLX.init failed too — measured
+  //   236 reloads/64 s before the guard; falls through to #nogl).
+  // Three lineages grew the file, so no side's number fits the union —
+  // re-measured on the merged tree (split-newline count): 8675.
+  "js/game.js": 8675,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -456,7 +460,13 @@ const CEILINGS = {
   // gearbox casing, floor plank/gurney/scroll, ERS blister, engine scoopLip,
   // faired wishbones, wheel gun-nut / tyre fillet, Brembo caliper).
   // Lowered after trim-comments pass (measured 2652).
-  "js/car/car3d.js": 2662,
+  // 2662 -> 2850: the ROUND halo — addTube (smooth swept tube, the addDome
+  // pattern along a polyline) + sampleCurve (Catmull through the regulation
+  // datums), both hoops (chase + first-person) rebuilt as tubes, and six new
+  // recipe-gated knobs (cockpit halo profile/fences, headrest, front-wheel
+  // deflector, ERS cooler intake, fuel breather, tyre sidewall rings).
+  // Defaults stay 0; measured 2834 on the raise. Raised deliberately.
+  "js/car/car3d.js": 2850,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
