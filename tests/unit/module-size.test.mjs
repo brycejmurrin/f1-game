@@ -382,8 +382,9 @@ const CEILINGS = {
   //   (one line + the bug comment): `frame` outlives a night->day ToD flip,
   //   so chunked geometry kept binding per-chunk night lamps in daylight.
   "js/game.js": 8638,
-  // The next three largest. Each is cohesive today (a dev API, an agent view, a
-  // procedural mesh), so these are drift alarms rather than extraction targets.
+  // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
+  // these are drift alarms rather than extraction targets. Note game.js is NOT
+  // the largest file in the repo — js/game/light-presets.js is (see below).
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
   // — a dev-API hook growing the dev API is the file doing its job.
   // 3055 -> 3060 for lightState.bakedLights/lampPosts — MCP dens=1 vs dens=2 was
@@ -474,7 +475,27 @@ const CEILINGS = {
   // 2319 -> 2350: tri-state verdict cache on the six guarded emitters (the
   // graph fuse replay reuses dry-run guard verdicts; vegas build 1.66 -> 1.51 s,
   // 40/40 graph parity). Gates compressed to 2 lines each before raising.
-  "js/track/tracks.js": 2350,
+  // 2350 -> 2349: R6 truth pass deleted the dead `remapK` (the sceneryLapMirror
+  // helpers that stay shift-only do so ON PURPOSE — singapore's KOLD legend).
+  "js/track/tracks.js": 2349,
+  // ── Round-6 additions: the unguarded giants, set AT measured (test metric,
+  // split-newline count) so any growth is a deliberate raise here. Each line
+  // says why the file is its size today; none is an extraction target yet.
+  // THE largest file in the repo: ~8.6k lines of it are data (per-track
+  // lighting presets exported by the bake-lighting skill), not logic.
+  "js/game/light-presets.js": 8683,
+  // The whole WGX backend in one IIFE by design (deferred inject, no tag).
+  "js/render/webgpu/wgx.js": 5179,
+  // TLX backend shell; grows only with GLX-parity features.
+  "js/render/three/tlx.js": 2095,
+  // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
+  "js/render/glx.js": 1929,
+  // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
+  "js/render/webgpu/wgsl-chunks.js": 1855,
+  // three.js TSL lit-material port; tracks lit.js feature-for-feature.
+  "js/render/three/tsl-lit.js": 1725,
+  // Multiplayer lobby UI + flow; all of js/net/'s DOM lives here.
+  "js/net/lobby.js": 1618,
 };
 
 test("the big modules are not growing unnoticed", () => {
