@@ -196,7 +196,11 @@ const CEILING = {
   // 2026-08-27: 376 -> 377, deliberate. The season calendar rows adopt the
   // circuit-list hairline (the .track-row separator spelling, so distinct
   // stays flat); the rows they replace carried tokens only, nothing to trade.
-  rawColor: 377,
+  // 2026-08-27: 377 -> 378, deliberate. The track-detail full-bleed header
+  // restates --grad-head's sheen layer (the token's own 0.07 white, an
+  // existing spelling — distinct stays flat) to run the red bleed to 100%
+  // on the one sheet head wider than the token was tuned for.
+  rawColor: 378,
   // distinct colour VALUES after normalising spelling: space-after-comma,
   // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
   // canonical form. This is the fork guard — identical paint must not hide

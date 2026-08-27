@@ -259,7 +259,11 @@ function trackFilterBar() {
   search.id = "sel-track-search";
   search.type = "search";
   search.value = trackQuery;
-  search.placeholder = "Search circuit or country";
+  // "Search circuit or country" truncated inside the pinned 12rem compact
+  // width ("Search circuit or countr"). The short form fits every shape;
+  // country search still works (data-search carries it) and the aria-label
+  // below still says circuits.
+  search.placeholder = "Search circuit";
   search.setAttribute("aria-label", "Search circuits");
   search.autocomplete = "off";
   search.oninput = () => applyTrackSearch(search.value);

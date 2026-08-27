@@ -1272,8 +1272,10 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) .track-group-head {
   display: none;
 }
-/* Compact: hide the meta line so rows pack tighter without losing the name. */
-.sheet[data-density="compact"] .track-row-meta { display: none; }
+/* Compact keeps the meta: it rides the SAME flex line as the name (baseline
+   row, right-aligned), so hiding it saved no height — it only cost the
+   country and length on the screens players pick circuits from most. The
+   row already dims it (--dim at micro size); nothing tighter to trade. */
 .sheet[data-density="compact"] .track-row { padding-block: 7px; }
 .track-row {
   display: flex; align-items: baseline; gap: 8px;
