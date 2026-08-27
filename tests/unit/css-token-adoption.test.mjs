@@ -123,7 +123,16 @@ const CEILING = {
   // onto --pad so the list rows follow the density ladder.
   // 2026-08-19: 466 → 467. adaptive-ui / audio work (build 1515) added one
   // raw px spacing decl (measured on deploy tip c3df0ee1).
-  rawSpacing: 467,
+  // 2026-08-26: 467 → 466. Round-7 consistency sweep — one raw spacing decl
+  // fell out with the token conversions (alpha-band / plate-family pass).
+  // 2026-08-26: 466 → 453. Tuner spacing migration, the policy-safe set only:
+  // 13 declarations with exact token ratios (6/3/9 -> --gap halves, quarters,
+  // three-quarters) converted so the density ladder finally reaches the
+  // lighting/camera panel's own layout. The hairline set (2/4/5/8/10px), the
+  // measured pairs, the compact/rail tiers (already at --gap:8, so a 12-based
+  // multiple is wrong at their only operating point), and the .lt-tabs
+  // full-bleed triple stay raw per the policy note below.
+  rawSpacing: 453,
 };
 
 test("no new font-size below the --fs-micro floor", () => {

@@ -20,6 +20,11 @@
    HUD's type is hard-coded px throughout (this file is deliberately OFF the
    --fs-micro scale — see the note in css/tokens.css), so a token knob would
    move the boxes and leave every number inside them where it was.
+   LETTER-SPACING here is literal for the same reason: the tracking is
+   calibrated with the px sizes above as one unit (0.16/0.2em glance-width
+   values exist nowhere in the menu distribution), so this file deliberately
+   does not read the --ls-* ladder — a menu pass retuning a rung must not
+   move in-race type.
    THE ANCHORS ARE COMPENSATED: in a zoomed element every length in its own
    top/right/bottom/left scales too, so each `var(--sa*)` term below is divided
    by the scale while the px terms are left to scale. A px offset encodes a
@@ -112,7 +117,7 @@
      rendered as a slab about as wide as the minimap — a banner, not telemetry.
      Now it grows 12 -> 16px screen across 100 -> 150% and then holds. */
   text-align: left; font-size: min(12px, calc(16px / var(--hud-z)));
-  font-weight: 700; letter-spacing: 0.02em; color: #ddd;
+  font-weight: 700; letter-spacing: 0.02em; color: var(--text);
   line-height: 1.3;
   font-family: var(--font-hud); font-variant-numeric: tabular-nums;
   /* The background and padding stay on the CONTAINER rather than moving to the
@@ -143,7 +148,7 @@
 }
 #hud-speed { font-family: var(--font-hud); font-size: 34px; font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; text-shadow: 0 2px 12px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.9); }
 .hud-unit { font-size: var(--fs-micro); color: var(--dim); margin-left: 4px; }
-#hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: 2px; background: rgba(8,8,14,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--r-md); padding: 5px 8px; }
+#hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: 2px; background: rgba(8,8,14,0.6); border: 1px solid var(--card-line); border-radius: var(--r-md); padding: 5px 8px; }
 #hud-gear {
   font-family: var(--font-hud);
   font-size: 58px; font-weight: 800; font-style: italic; line-height: 0.85;
@@ -158,7 +163,7 @@
 }
 #hud-tach::after {           /* redline zone marker */
   content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 12%;
-  background: rgba(225, 6, 0, 0.55);
+  background: color-mix(in srgb, var(--red) 55%, transparent);
 }
 #hud-rpm-fill {
   height: 100%; width: 0%; position: relative; z-index: 1;
@@ -184,23 +189,23 @@
    sitting above a green button reads as two unrelated systems, which is what
    made the old palette hard to learn: the state you were in and the control
    you press for it were never the same colour. */
-#hud-ot.ot-off { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); }
+#hud-ot.ot-off { color: var(--dim); border: 1px solid var(--plate-line); }
 #hud-ot.ot-armed { color: #2b2400; background: #ffd21a; animation: pulse 0.8s infinite; }
 #hud-ot.ot-active { color: #ffeeae; background: #7e5c00; box-shadow: 0 0 14px rgba(225,175,20,0.55); }
-#hud-ot.ot-cool { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); opacity: 0.5; }
+#hud-ot.ot-cool { color: var(--dim); border: 1px solid var(--plate-line); opacity: 0.5; }
 /* Same chip metrics as #hud-ot so the pair stacks evenly in the cluster. */
 #hud-aero {
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;
   padding: 5px 10px; border-radius: var(--r-sm);
 }
-#hud-aero.ax-off { color: var(--dim); border: 1px solid rgba(255,255,255,0.15); }
+#hud-aero.ax-off { color: var(--dim); border: 1px solid var(--plate-line); }
 #hud-aero.ax-armed { color: #04202e; background: #26a5f5; }
 #hud-aero.ax-open { color: #d6efff; background: #083e78; box-shadow: 0 0 14px rgba(50,175,255,0.55); }
 /* A circuit with no qualifying straight has no activation zone and therefore no
    active aero at all — Monaco. Struck through, because the difference between
    "not here, yet" and "not on this track" is the difference between waiting and
    never pressing the button again. */
-#hud-aero.ax-none { color: rgba(255,255,255,0.28); border: 1px dashed rgba(255,255,255,0.18); text-decoration: line-through; }
+#hud-aero.ax-none { color: rgba(255,255,255,0.28); border: 1px dashed var(--plate-line); text-decoration: line-through; }
 @keyframes pulse { 50% { opacity: 0.55; } }
 #minimap {
   position: absolute;
@@ -256,7 +261,7 @@
 }
 .sec-row { display: flex; gap: calc(var(--gap) * 0.5); align-items: baseline; }
 .sec-lbl { font-weight: 800; font-size: var(--fs-micro); letter-spacing: 0.1em; min-width: 16px; }
-.sec-val { color: #e8e8ee; text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
+.sec-val { color: var(--text); text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
 
 /* Short local height (UI SIZE included): tighten HUD clusters so 200% HUD on
    852×393 does not stack minimap, chips, and pause. Viewport max-height cannot
@@ -292,7 +297,7 @@ body[data-density="compact"] .hud-bottom { gap: calc(var(--gap) * 0.25); }
      phone. The `top` above has always divided; the type had not. */
   font-size: clamp(30px, calc(8 * var(--vwzh)), 64px);
   font-weight: 800; font-style: italic;
-  text-shadow: 0 0 24px rgba(225, 6, 0, 0.8);
+  text-shadow: 0 0 24px color-mix(in srgb, var(--red) 80%, transparent);
   z-index: 15;
   /* The 64px clamp ceiling re-breaks the divisor's reasoning above ~800px:
      the type stops scaling while the string does not — 29 chars of
@@ -405,7 +410,7 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
 }
 .pc-nub {
   position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px;
-  border-radius: 50%; background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 50%; background: rgba(255, 255, 255, 0.22); border: 1px solid rgba(255,255,255,0.4);
   will-change: transform;
 }
 .pc-altcol {
@@ -429,7 +434,7 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
   zoom: var(--ui-scale);
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   padding: 8px 14px; border-radius: var(--r-lg);
-  background: rgba(10,10,16,0.55); border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(10,10,16,0.55); border: 1px solid var(--card-line);
   /* --vwz, not bare vw: this box is zoomed now, and a viewport unit inside a
      zoomed element still measures the WHOLE viewport, so `70vw` would ask for
      70% of the screen and then be painted 1.5x larger again. --vwz is
@@ -476,7 +481,7 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
   min-height: var(--tap-min);
 }
 #pc-exit { background: var(--red); color: #fff; border: 1px solid var(--red); }
-#pc-panel, #pc-hud { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid rgba(255,255,255,0.22); }
+#pc-panel, #pc-hud { background: var(--plate-hover); color: var(--text); border: 1px solid var(--plate-line); }
 /* the FREE CAMERA launch button in the tuner actions */
 #pc-toggle {
   width: auto; margin: 0; padding: 9px 14px; border-radius: var(--r-md);

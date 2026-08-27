@@ -85,10 +85,10 @@
   box-shadow: 0 0 18px color-mix(in oklab, var(--red) 78%, transparent);
 }
 #subtitle {
-  color: rgba(242, 242, 245, 0.78);
+  color: color-mix(in srgb, var(--text) 78%, transparent);
   margin: 10px 0 0;
   font-size: clamp(var(--fs-micro), calc(1.15 * var(--vwz)), var(--fs-4));
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ls-2);
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7);
 }
 /* THREE TIERS, by how much of your evening the thing costs.
@@ -146,7 +146,7 @@
    label competing with CAREER. Empty (and therefore zero-height) until a save
    exists, so a first-time title screen is exactly as it was. */
 #mb-career-sub {
-  font-size: var(--fs-micro); font-weight: 600; letter-spacing: 0.08em;
+  font-size: var(--fs-micro); font-weight: 600; letter-spacing: var(--ls-4);
   font-style: normal; color: rgba(255, 255, 255, 0.72);
   text-transform: none;
 }
@@ -167,7 +167,7 @@
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
 .minibtn {
-  font-size: var(--fs-micro); letter-spacing: 0.02em;
+  font-size: var(--fs-micro); letter-spacing: var(--ls-1);
   padding: 9px 10px;
   box-shadow: none;
 }
@@ -375,10 +375,10 @@ body { --compact-at: 600px; --wide-at: 620px; }
   z-index: 25;
   background:
     radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
-    rgba(6, 6, 10, 0.42);
+    var(--scrim);
 }
 @media (prefers-reduced-transparency: reduce) {
-  #select { background: rgba(6, 6, 10, 0.92); }
+  #select { background: var(--scrim-heavy); }
 }
 #sel-inner { --sheet-w: 1020px; }
 /* STACKED: ONE LIST SCROLLER. The circuit map is context — a compact band —
@@ -725,29 +725,29 @@ body { --compact-at: 600px; --wide-at: 620px; }
   width: 100%; text-align: left; cursor: pointer;
   padding: calc(var(--gap) * 0.7) var(--gap);
   border-radius: var(--r-md);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--plate-line);
+  background: var(--plate);
   transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
-.team-card { border-color: rgba(225, 6, 0, 0.55); background: rgba(225, 6, 0, 0.10); }
+.team-card { border-color: color-mix(in srgb, var(--red) 55%, transparent); background: color-mix(in srgb, var(--red) 10%, transparent); }
 @media (hover: hover) {
-  .team-card:hover, .team-tile:hover { background: rgba(255, 255, 255, 0.10); }
+  .team-card:hover, .team-tile:hover { background: var(--plate-hover); }
 }
-.team-card:active, .team-tile:active { background: rgba(255, 255, 255, 0.14); }
+.team-card:active, .team-tile:active { background: var(--plate-press); }
 .team-tile.active {
-  border-color: var(--red); background: color-mix(in oklab, var(--red) 24%, transparent);
-  box-shadow: 0 0 16px color-mix(in oklab, var(--red) 36%, transparent);
+  border-color: var(--red); background: var(--plate-on-strong);
+  box-shadow: var(--lift-sel);
 }
 /* Two-tone block: several 2026 liveries are near-black, so the accent stripe is
    what actually tells them apart at a glance. */
 .tm-colour { flex: none; width: 26px; height: 26px; border-radius: var(--r-sm); border: 1px solid rgba(255,255,255,0.28); }
 .tm-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
 .tm-name {
-  font-size: var(--fs-micro); font-weight: 800; font-style: italic; letter-spacing: 0.02em;
+  font-size: var(--fs-micro); font-weight: 800; font-style: italic; letter-spacing: var(--ls-1);
   color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tm-sub {
-  font-size: var(--fs-micro); letter-spacing: 0.04em; color: var(--dim);
+  font-size: var(--fs-micro); letter-spacing: var(--ls-2); color: var(--dim);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* PICKER TILES WRAP INSTEAD OF ELLIPSIZING — the driver pairing IS the
@@ -828,13 +828,13 @@ body { --compact-at: 600px; --wide-at: 620px; }
   min-height: var(--chip-h);
   display: inline-flex; align-items: center; justify-content: center;
   font-size: var(--fs-micro); padding: 6px 12px;
-  border: 1px solid var(--red); background: rgba(225, 6, 0, 0.12); border-radius: var(--r-sm);
+  border: 1px solid var(--red); background: var(--plate-on); border-radius: var(--r-sm);
   transition: background 0.12s, box-shadow 0.12s; cursor: pointer;
 }
 @media (hover: hover) {
-  .sel-edit:hover { background: rgba(225,6,0,0.22); box-shadow: 0 0 10px rgba(225,6,0,0.25); }
+  .sel-edit:hover { background: var(--plate-on-strong); box-shadow: var(--lift-sel); }
 }
-.sel-edit:active { background: rgba(225,6,0,0.3); }
+.sel-edit:active { background: color-mix(in oklab, var(--red) 30%, transparent); }
 h3.sel-label { font-size: var(--label); font-weight: 700; }
 
 /* ---------- circuit preview ---------- */
@@ -842,7 +842,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   display: flex; gap: var(--gap); align-items: flex-start;
   margin-bottom: calc(var(--gap) * 0.6); padding: calc(var(--gap) * 0.8);
   border-radius: var(--r-lg);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--card-line);
   /* The card that says WHICH TEAM YOU ARE now shows it: --grad-accent is a
      wash of the live --accent, so picking McLaren turns this papaya and Alpine
      turns it blue, without a single per-team rule here. */
@@ -1064,17 +1064,17 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    #sel-preview-elev { display: none }` (two IDs, inside the layer) lost to
    `#sel-preview-elev { display: block }` (one ID, unlayered), so the elevation
    strip the phone layout explicitly removes was on screen the whole time. */
-#sel-preview-name { font-size: 15px; font-weight: 800; font-style: italic; color: #fff; letter-spacing: 0.02em; }
+#sel-preview-name { font-size: 15px; font-weight: 800; font-style: italic; color: #fff; letter-spacing: var(--ls-1); }
 #sel-preview-gp { font-size: var(--fs-micro); color: var(--red); font-weight: 700; margin-top: 2px; }
 #sel-preview-meta { font-size: var(--fs-micro); color: var(--dim); margin-top: 6px; line-height: 1.5; }
 #sel-preview-rec { font-size: var(--fs-micro); color: #f6d200; font-weight: 700; margin-top: 5px; font-variant-numeric: tabular-nums; }
 #sel-preview-facts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
 #sel-preview-elev { display: block; width: 100%; height: 30px; margin-top: 6px; border-radius: var(--r-sm); opacity: 0.85; }
-.spf-fact { font-size: var(--fs-micro); font-weight: 700; padding: 2px 7px; border-radius: var(--r-lg); letter-spacing: 0.03em; }
-.spf-dir { background: rgba(255,255,255,0.1); color: #e0e0e8; }
+.spf-fact { font-size: var(--fs-micro); font-weight: 700; padding: 2px 7px; border-radius: var(--r-lg); letter-spacing: var(--ls-1); }
+.spf-dir { background: rgba(255,255,255,0.1); color: var(--text); }
 .spf-elev { background: rgba(56,183,240,0.18); color: #39b7f0; }
 .spf-drs { background: rgba(0,220,180,0.15); color: #00dcb4; }
-.spf-corner { background: rgba(225,6,0,0.18); color: #e10600; }
+.spf-corner { background: var(--plate-on); color: var(--red); }
 /* A roomier preview once the sheet is wide. This used to widen the map to ~52%
    of the card, which was right when the card sat above a full-width list and
    its map and facts were side by side. In the two-column layout the map already
@@ -1100,13 +1100,13 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 #sel-inner[data-pair="on"][data-density="compact"] #sel-track-preview { align-items: center; }
 
 /* Season upcoming rounds list */
-.season-upcoming-head { font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.12em; color: var(--dim); margin-top: 10px; margin-bottom: 4px; padding: 0 4px; }
-.season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid rgba(255,255,255,0.10); margin-bottom: 4px; background: rgba(255,255,255,0.04); transition: border-color 0.15s, background 0.15s; cursor: default; }
+.season-upcoming-head { font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-5); color: var(--dim); margin-top: 10px; margin-bottom: 4px; padding: 0 4px; }
+.season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--card-line); margin-bottom: 4px; background: rgba(255,255,255,0.04); transition: border-color 0.15s, background 0.15s; cursor: default; }
 @media (hover: hover) {
-  .season-upcoming-row:hover { border-color: rgba(255,255,255,0.20); background: rgba(255,255,255,0.07); }
+  .season-upcoming-row:hover { border-color: var(--plate-line); background: rgba(255,255,255,0.07); }
 }
-.sur-rnd { font-size: var(--fs-micro); font-weight: 700; color: #e10600; letter-spacing: 0.06em; min-width: 24px; }
-.sur-name { font-size: var(--fs-micro); font-weight: 700; color: #e0e0e0; flex: 1; font-style: italic; letter-spacing: 0.02em; }
+.sur-rnd { font-size: var(--fs-micro); font-weight: 700; color: var(--red); letter-spacing: var(--ls-3); min-width: 24px; }
+.sur-name { font-size: var(--fs-micro); font-weight: 700; color: var(--text); flex: 1; font-style: italic; letter-spacing: var(--ls-1); }
 .sur-country { font-size: var(--fs-micro); color: var(--dim); }
 
 /* ---------- season setup (#season-setup) ----------
@@ -1178,11 +1178,11 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* Armed APPLY on a live season — the career DELETE? treatment: the second
    press is the one that wipes up to 23 raced rounds, so the first must
    read as danger, not as the same primary button. */
-#ss-apply.armed { color: #fff; border-color: var(--red); background: rgba(225, 6, 0, 0.35); }
+#ss-apply.armed { color: #fff; border-color: var(--red); background: var(--armed-fill); }
 
 /* ---------- track picker rows ---------- */
 #sel-tracks {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--card-line);
   border-radius: var(--r-md);
   overflow-x: hidden;
 }
@@ -1201,7 +1201,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   justify-content: center;
   font-size: var(--fs-micro);
   padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.83);
-  letter-spacing: 0.06em;
+  letter-spacing: var(--ls-3);
 }
 #sel-track-search {
   flex: 1 0 100%;
@@ -1209,9 +1209,9 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   min-height: var(--chip-h);
   box-sizing: border-box;
   padding: 6px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--plate-line);
   border-radius: var(--r-sm);
-  background: rgba(255, 255, 255, 0.055);
+  background: var(--plate);
   color: var(--text);
   font: inherit;
   /* 16px, not --fs-2 (15): the iOS focused-input auto-zoom floor stated at
@@ -1279,19 +1279,19 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    was not sliced by #sel-tracks. The base ring is inset for every control now,
    so that override is redundant — see :focus-visible in css/tokens.css.) */
 @media (hover: hover) {
-  .track-row:hover { background: rgba(255, 255, 255, 0.06); }
+  .track-row:hover { background: var(--plate); }
 }
 .track-row:active { background: rgba(255, 255, 255, 0.09); }
 .track-row.active { background: color-mix(in oklab, var(--red) 16%, transparent); border-left: 3px solid var(--red); padding-left: 9px; }
 .track-row-name {
   flex: 1;
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;
-  color: #fff; letter-spacing: 0.02em;
+  color: #fff; letter-spacing: var(--ls-1);
 }
 .track-row.active .track-row-name { color: var(--red); }
 .track-row-meta { font-size: var(--fs-micro); color: var(--dim); }
 .track-row-rec { font-size: var(--fs-micro); color: #f6d200; font-variant-numeric: tabular-nums; font-weight: 700; }
-.trb { display: inline-block; font-size: var(--fs-micro); letter-spacing: 0.08em; padding: 1px 5px; border-radius: var(--r-xs); margin-left: 5px; vertical-align: middle; font-weight: 700; }
+.trb { display: inline-block; font-size: var(--fs-micro); letter-spacing: var(--ls-4); padding: 1px 5px; border-radius: var(--r-xs); margin-left: 5px; vertical-align: middle; font-weight: 700; }
 .trb-night { background: rgba(129,140,248,0.15); color: #818cf8; border: 1px solid rgba(129,140,248,0.3); }
 .trb-street { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
 .trb-classic { background: rgba(180,150,90,0.14); color: #c8a862; border: 1px solid rgba(180,150,90,0.32); }
@@ -1299,7 +1299,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    Sticky so the group stays identifiable while the list scrolls under it. */
 .track-group-head {
   position: sticky; top: 0; z-index: 1;
-  font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.12em;
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-5);
   color: var(--dim); padding: 7px 12px 5px;
   background: var(--surf-1);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -1436,7 +1436,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 #customize .cz-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--gap); margin: 6px 0;
-  font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.1em; color: rgba(255,255,255,0.5);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-4); color: rgba(255,255,255,0.5);
 }
 #customize .cz-row label { flex: 1 1 auto; min-width: 0; }
 #customize input[type="text"], #customize input[type="number"] {
@@ -1448,8 +1448,8 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   /* 16px floor: iOS Safari auto-zooms the whole page when a focused input's
      font-size is under 16px, and the zoom sticks after the keyboard closes. */
   font: inherit; font-size: 16px;
-  background: rgba(255, 255, 255, 0.08); color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 7px 10px;
+  background: var(--plate-hover); color: var(--text);
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: 7px 10px;
 }
 /* ONE well size for all eleven. PRIMARY/ACCENT were 56px and the seven paint
    layers 48px, so in the multi-column form the right edge of every row landed
@@ -1459,7 +1459,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   /* Height was deliberately put on the floored token; the width literal was
      the gap — eleven colour wells painted 19.2px wide at UI SIZE 40%. The
      max() arm only wins below 100%. */
-  width: max(48px, var(--tap-min)); height: var(--chip-h); padding: 0; border: 1px solid rgba(255, 255, 255, 0.22);
+  width: max(48px, var(--tap-min)); height: var(--chip-h); padding: 0; border: 1px solid var(--plate-line);
   border-radius: var(--r-sm); background: none; cursor: pointer; flex: none;
 }
 /* NONE'd colour well (game.js toggles cz-off) dims like its inline-livery twin
@@ -1468,14 +1468,14 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 #customize input[type="color"].cz-off { opacity: 0.35; }
 #cz-preview {
   display: flex; align-items: center; gap: 8px; margin-top: var(--gap);
-  padding: 10px; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.05);
+  padding: 10px; border-radius: var(--r-md); background: var(--plate);
 }
 #cz-swatch1, #cz-swatch2 { width: 26px; height: 26px; border-radius: var(--r-sm); border: 1px solid rgba(255,255,255,0.3); }
-#cz-pvtext { font-weight: 800; font-style: italic; letter-spacing: 0.04em; }
+#cz-pvtext { font-weight: 800; font-style: italic; letter-spacing: var(--ls-2); }
 #customize .cz-sep {
-  margin: var(--gap) 0 6px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.14em;
+  margin: var(--gap) 0 6px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
   color: rgba(255,255,255,0.4); text-transform: uppercase;
-  border-top: 1px solid rgba(255,255,255,0.12); padding-top: var(--gap);
+  border-top: 1px solid var(--card-line); padding-top: var(--gap);
 }
 /* EXTRA PAINT's <summary> keeps the .cz-sep look (the class carries over onto
    any tag) — display:block/list-style:none only replace the parts a <summary>
@@ -1495,9 +1495,9 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   /* max() with --tap-min: 56 painted 22.4px at UI SIZE 40%; only the
      sub-100% arm ever wins. */
   flex: none; width: auto; min-width: max(56px, var(--tap-min)); min-height: var(--chip-h);
-  font: inherit; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.08em;
-  padding: 6px 9px; border-radius: var(--r-sm); cursor: pointer; color: rgba(255,255,255,0.55);
-  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2);
+  font: inherit; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
+  padding: 6px 9px; border-radius: var(--r-sm); cursor: pointer; color: var(--dim);
+  background: var(--plate); border: 1px solid var(--plate-line);
 }
 /* Engaged = a lighter SURFACE, not a colour. This was a blue fill, and blue
    already means "stat gain" in this UI (the ▲ACCEL badges on CAR SETUP), so

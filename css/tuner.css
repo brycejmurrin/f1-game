@@ -250,7 +250,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   gap: 4px;
   margin: 2px -18px 6px; padding: 6px 18px 8px;
   background: rgba(12, 14, 20, 0.94);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid var(--card-line);
   flex-shrink: 0;
 }
 #lt-tabs .lt-tab, #ct-modes .lt-tab {
@@ -260,7 +260,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   min-height: var(--tap-min);
   display: inline-flex; align-items: center; justify-content: center;
   width: auto; margin: 0; min-width: 0;
-  padding: 5px 9px; font-size: var(--fs-micro); letter-spacing: 0.04em;
+  padding: 5px 9px; font-size: var(--fs-micro); letter-spacing: var(--ls-2);
   border: 1px solid var(--plate-line); border-radius: var(--r-pill);
   background: var(--plate); color: var(--dim);
   cursor: pointer; transition: background 0.12s, color 0.12s;
@@ -287,15 +287,15 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
   font-size: var(--fs-micro);
   font-weight: 800;
-  letter-spacing: .12em;
+  letter-spacing: var(--ls-5);
 }
-.lt-group .lt-section:first-of-type { margin-top: 6px; }
+.lt-group .lt-section:first-of-type { margin-top: calc(var(--gap) * 0.5); }
 /* panel header: title + FREE CAMERA button on one line */
 #lt-head, #ct-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
 #lt-head h2, #ct-head h2 { margin: 0; }
 /* preview time/weather: one compact line each — small inline label + tight chips */
-.lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 3px 0; }
-.lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em; color: var(--dim); }
+.lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: calc(var(--gap) * 0.25) 0; }
+.lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); color: var(--dim); }
 /* min-width max(42px, --tap-min), not the bare literal: 42 local px is only
    42 PAINTED px at 100% — at UI SIZE 40% the five chips painted 21px wide
    (2026-08-21 sweep). The token arm wins only below 100%, so the dense
@@ -308,7 +308,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 #lighting-inner .sheet-foot, #camtune-inner .sheet-foot {
   display: flex; gap: 8px; flex-shrink: 0;
   margin-top: 10px; padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.10);
+  border-top: 1px solid var(--card-line);
 }
 #lighting-inner .sheet-foot button,
 #camtune-inner .sheet-foot button {
@@ -323,7 +323,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    tuner above (the selectors are extended, not duplicated); only the bits that
    are camera-specific live here. */
 #ct-profile {
-  font-size: var(--fs-micro); letter-spacing: 0.06em; font-weight: 700;
+  font-size: var(--fs-micro); letter-spacing: var(--ls-3); font-weight: 700;
   color: var(--red); margin: 2px 0 4px;
 }
 /* A mode whose framing has been changed keeps a red outline even when it is not
@@ -340,21 +340,21 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   field-sizing: content; max-height: min(calc(28 * var(--svhz)), 120px);
   width: 100%; height: 72px; margin-top: 10px; resize: none;
   font: 10px/1.5 ui-monospace, monospace; color: #cfe0ff;
-  background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: var(--r-sm); padding: 6px;
+  background: rgba(0, 0, 0, 0.5); border: 1px solid var(--card-line);
+  border-radius: var(--r-sm); padding: calc(var(--gap) * 0.5);
 }
-.adv-intro { font-size: var(--fs-micro); opacity: 0.7; margin: 0 0 6px; line-height: 1.45; }
+.adv-intro { font-size: var(--fs-micro); opacity: 0.7; margin: 0 0 calc(var(--gap) * 0.5); line-height: 1.45; }
 .adv-sec {
-  color: var(--red); font-size: var(--fs-micro); letter-spacing: 0.08em;
+  color: var(--red); font-size: var(--fs-micro); letter-spacing: var(--ls-4);
   margin: 16px 0 8px; padding-bottom: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid var(--card-line);
 }
 .adv-sec span {
   color: rgba(255, 255, 255, 0.45); font-size: var(--fs-micro);
-  letter-spacing: 0.02em; margin-left: 6px;
+  letter-spacing: var(--ls-1); margin-left: calc(var(--gap) * 0.5);
 }
 .adv-item { margin: 11px 0; }
-.adv-help { font-size: var(--fs-micro); opacity: 0.6; margin: 3px 0 0; line-height: 1.4; }
+.adv-help { font-size: var(--fs-micro); opacity: 0.6; margin: calc(var(--gap) * 0.25) 0 0; line-height: 1.4; }
 .tune-row { display: block; margin: 0; }
 /* Name on the left, value on the right — and the VALUE IS THE PART THAT MUST
    NOT BE LOST. `space-between` alone puts the name and the number on one line
@@ -372,7 +372,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline;
   /* --fs-micro (14px): at UI SIZE 90% painted type stays ≥12px. Was 12px/13px
      on the label/value; chrome-devtools measured 10.8 / 11.7 visual. */
-  font-size: var(--fs-micro); letter-spacing: 0.04em; opacity: 0.9; margin-bottom: 2px;
+  font-size: var(--fs-micro); letter-spacing: var(--ls-2); opacity: 0.9; margin-bottom: 2px;
 }
 .tune-label b { color: var(--red); font-size: var(--fs-micro); flex: none; margin-left: auto; }
 .tune-row input[type="range"] {
@@ -400,7 +400,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    flex row (label, switch) with space-between, and a marker as a third flex
    child there would get its own evenly-spaced slot instead of sitting next to
    the text it belongs to. */
-.as-head .adv-sec::before { content: "\25BE"; font-size: var(--fs-micro); opacity: 0.6; margin-right: 6px; display: inline-block; }
+.as-head .adv-sec::before { content: "\25BE"; font-size: var(--fs-micro); opacity: 0.6; margin-right: calc(var(--gap) * 0.5); display: inline-block; }
 details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 /* Qualified with .opt-row on purpose: the generic `.opt-row .opt-btn` rule below
    has the same specificity and comes later in the file, so an unqualified
@@ -409,7 +409,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .opt-row.as-toggle .opt-btn {
   flex: 0 0 auto; width: auto;
   min-width: 52px; min-height: var(--tap-sm);
-  padding: 4px 12px; font-size: var(--fs-micro); letter-spacing: 0.06em;
+  padding: 4px 12px; font-size: var(--fs-micro); letter-spacing: var(--ls-3);
 }
 @container sheet (max-width: 240px) {
   #audioset-inner .as-head { flex-wrap: wrap; }
@@ -423,11 +423,11 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .as-now-card {
   display: flex; align-items: center; gap: var(--gap);
   margin-top: calc(var(--gap) * 0.6); padding: calc(var(--gap) * 0.7);
-  border: 1px solid rgba(255,255,255,0.10); border-radius: var(--r-md);
+  border: 1px solid var(--card-line); border-radius: var(--r-md);
   background: rgba(255,255,255,0.04);
 }
 .as-now-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
-.as-now-cap { font-size: var(--fs-micro); letter-spacing: 0.14em; color: var(--dim); text-transform: uppercase; }
+.as-now-cap { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--dim); text-transform: uppercase; }
 /* The title is the one thing worth reading here, so it gets the size. It also
    has to truncate — uploaded file names are arbitrarily long. */
 .as-now-title {
@@ -435,12 +435,12 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .as-now-sub { font-size: var(--fs-micro); color: var(--dim); }
-.as-transport { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.as-transport { display: flex; align-items: center; gap: calc(var(--gap) * 0.5); flex: 0 0 auto; }
 .as-tbtn {
   width: var(--tap-sm); height: var(--tap-sm); min-height: var(--tap-sm);
   display: flex; align-items: center; justify-content: center;
   padding: 0; font-size: 14px; line-height: 1; border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.06);
+  border: 1px solid var(--plate-line); background: var(--plate);
   color: var(--text); cursor: pointer;
 }
 /* Play/pause is the primary action of the three, so it is bigger and filled. */
@@ -466,17 +466,17 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .tune-row.tune-off .tune-label b { color: var(--dim); }
 .preset-row { display: flex; gap: 8px; margin: 4px 0 6px; }
 .preset-row .preset-btn {
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--gap) * 0.25);
   /* min-width: 0 — a flex item's automatic minimum is min-content, so at
      UI SIZE 200% on a portrait phone the PRO button's one-line small ran
      59px past the pane instead of wrapping (measured 2026-08-21). */
-  flex: 1; min-width: 0; width: auto; margin: 0; padding: 9px 6px; text-align: center;
+  flex: 1; min-width: 0; width: auto; margin: 0; padding: calc(var(--gap) * 0.75) calc(var(--gap) * 0.5); text-align: center;
   /* Same zoom-honest WCAG floor as .bigbtn — 16px painted at UI SIZE 40%. */
   min-height: var(--tap-min);
-  letter-spacing: 0.06em; font-size: var(--fs-micro);
+  letter-spacing: var(--ls-3); font-size: var(--fs-micro);
 }
 .preset-btn small {
-  font-size: var(--fs-micro); letter-spacing: 0.01em; opacity: 0.6; font-weight: normal;
+  font-size: var(--fs-micro); letter-spacing: var(--ls-1); opacity: 0.6; font-weight: normal;
   text-transform: none; line-height: 1.2;
 }
 .preset-btn.active {
@@ -485,7 +485,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 }
 .preset-btn.active small { opacity: 0.85; }
 /* segmented option groups (STEERING / DRIVING HELP / RACING LINE) */
-.opt-row { display: flex; gap: 6px; margin-top: 4px; }
+.opt-row { display: flex; gap: calc(var(--gap) * 0.5); margin-top: 4px; }
 .opt-row .opt-btn {
   /* min-width:0 defeats the flex default of min-width:auto, which floors an
      item at its longest word. The 4-way STEERING row (SUPER EASY / ASSISTED /
@@ -496,7 +496,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
      heights for controls of the same rank */
   min-height: var(--chip-h);
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: var(--fs-micro); letter-spacing: 0.03em; text-align: center;
+  font-size: var(--fs-micro); letter-spacing: var(--ls-1); text-align: center;
 }
 .opt-btn.active {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
@@ -824,16 +824,16 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
    since the built-in marker cannot be positioned to match the old glyph. */
 #adv-details { margin: 14px 0 2px; }
 .adv-more-btn {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
+  display: flex; align-items: center; justify-content: center; gap: calc(var(--gap) * 0.5);
   width: 100%; list-style: none; cursor: pointer;
-  font: inherit; font-size: var(--fs-micro); letter-spacing: 0.08em; opacity: 0.85;
-  color: var(--text); background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: var(--r-md); padding: 10px 18px;
+  font: inherit; font-size: var(--fs-micro); letter-spacing: var(--ls-4); opacity: 0.85;
+  color: var(--text); background: var(--plate-hover);
+  border: 1px solid var(--plate-line); border-radius: var(--r-md); padding: 10px 18px;
 }
 .adv-more-btn::-webkit-details-marker { display: none; }
 .adv-more-btn::after { content: "\25BE"; }     /* ▾, flips to ▴ via [open] below */
 @media (hover: hover) {
-  .adv-more-btn:hover { background: rgba(255, 255, 255, 0.12); }
+  .adv-more-btn:hover { background: var(--plate-press); }
 }
 .adv-more-btn:active { background: rgba(255, 255, 255, 0.2); }
 #adv-details[open] > .adv-more-btn::after { content: "\25B4"; }
@@ -847,11 +847,11 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .music-row {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 8px; border-radius: var(--r-sm);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--plate);
+  border: 1px solid var(--card-line);
   font-size: var(--fs-micro);
 }
-.music-row.playing { border-color: var(--red); background: rgba(225, 6, 0, 0.14); }
+.music-row.playing { border-color: var(--red); background: var(--plate-on); }
 .music-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .music-size { flex: 0 0 auto; font-size: var(--fs-micro); opacity: 0.5; font-variant-numeric: tabular-nums; }
 .music-row button {
@@ -879,8 +879,8 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   /* 16px floor: iOS Safari zooms the page on focus under that, and the zoom
      sticks after the keyboard closes. */
   font: inherit; font-size: 16px;
-  background: rgba(255, 255, 255, 0.08); color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 6px 8px;
+  background: var(--plate-hover); color: var(--text);
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: 6px 8px;
 }
 /* The redirect URI exists to be COPIED — and tokens.css sets user-select:none on
    the whole app, so without this the one string the setup depends on cannot be
@@ -890,19 +890,19 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .sp-now { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .sp-art {
   flex: 0 0 auto; width: 56px; height: 56px; border-radius: var(--r-sm); object-fit: cover;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--plate);
 }
 .sp-now-txt { min-width: 0; }              /* lets the ellipsis below actually engage */
 .sp-title, .sp-artist, .sp-on { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-title { font-size: 14px; font-weight: 700; }
 .sp-artist { font-size: var(--fs-micro); opacity: 0.75; }
-.sp-on { font-size: var(--fs-micro); opacity: 0.5; letter-spacing: 0.04em; margin-top: 2px; }
-.sp-bar { height: 3px; border-radius: var(--r-xs); background: rgba(255, 255, 255, 0.14); overflow: hidden; margin: 2px 0 8px; }
+.sp-on { font-size: var(--fs-micro); opacity: 0.5; letter-spacing: var(--ls-2); margin-top: 2px; }
+.sp-bar { height: 3px; border-radius: var(--r-xs); background: var(--card-line); overflow: hidden; margin: 2px 0 8px; }
 .sp-bar-fill { height: 100%; background: var(--red); width: 0; transition: width 0.4s linear; }
 #sp-search {
-  width: 100%; margin-top: 6px; font: inherit; font-size: 16px;   /* 16px: iOS zoom floor */
-  background: rgba(255, 255, 255, 0.08); color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 6px 8px;
+  width: 100%; margin-top: calc(var(--gap) * 0.5); font: inherit; font-size: 16px;   /* 16px: iOS zoom floor */
+  background: var(--plate-hover); color: var(--text);
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: 6px 8px;
   /* Same --chip-h floor as its twin #as-sp-id: padding-driven height painted
      16px at UI SIZE 40% (2026-08-21 sweep). Inert at >=100%. */
   min-height: var(--chip-h);
@@ -910,8 +910,8 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 #sp-results:empty { display: none; }
 #as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 {
   width: 100%; font: inherit; font-size: 16px;   /* 16px: iOS zooms a focused control under it */
-  background: rgba(255, 255, 255, 0.08); color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--r-sm); padding: 6px 8px;
+  background: var(--plate-hover); color: var(--text);
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: 6px 8px;
 }
 #as-sp-playlist:disabled, #as-sp-device:disabled,
 #sp-playlist2:disabled, #sp-device2:disabled { opacity: 0.45; }
