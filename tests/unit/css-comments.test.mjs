@@ -93,6 +93,26 @@ test("no stylesheet has a prelude long enough to be prose", () => {
     "`.adv-*` followed by `/` is the way it happens here — or a block missing its opening `/*`");
 });
 
+test("no orphaned comment-closer survives stripping", () => {
+  // The shape the prelude check CANNOT see: a comment that quotes the closer
+  // pair literally (tokens.css round 7: prose said `*/` in backticks) closes
+  // itself mid-sentence. When the garbage lands inside a DECLARATION BLOCK,
+  // error recovery eats to the next `;` — no long prelude ever forms, and the
+  // eaten declaration was --plate-on-glow: every selected-state glow in the
+  // app, gone silently. But the comment's INTENDED closer is still in the
+  // file, and after tokenizer-faithful stripping it survives as an orphaned
+  // `*` `/` pair — which a healthy stylesheet never contains.
+  const bad = [];
+  for (const f of FILES) {
+    const s = stripComments(fs.readFileSync(path.join(CSS_DIR, f), "utf8"));
+    const at = s.indexOf("*/");
+    if (at >= 0) bad.push(`css/${f}: orphaned comment closer (line ~${s.slice(0, at).split("\n").length})`);
+  }
+  assert.deepEqual(bad, [],
+    "an orphaned comment closer means an earlier comment ended before its author intended — " +
+    "usually prose quoting the closer pair literally. Write it as 'star-slash' in prose.");
+});
+
 test("braces balance once comments are stripped", () => {
   // The cheap companion check: an unterminated comment swallows the rest of the
   // file, which shows up here rather than as a prelude.

@@ -75,10 +75,11 @@ test.describe("Season — mode flags", () => {
     await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
     await page.evaluate(() => window.__apex.headless(true));
     await page.locator("#mb-season").click();
-    await expect(page.locator("#sel-preview-name")).toContainText("Monaco");
+    // the canonical circuit name is "MONACO" (js/circuits/monaco.js)
+    await expect(page.locator("#sel-preview-name")).toContainText("MONACO");
     await page.locator("#sel-back").click();
     await page.locator("#mb-race").click();
-    await expect(page.locator('.track-row[aria-label="Monza"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator('.track-row[aria-label="MONZA"]')).toHaveAttribute("aria-pressed", "true");
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.trackId")))).toBe("monza");
   });
 });

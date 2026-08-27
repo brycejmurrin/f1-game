@@ -273,8 +273,14 @@ self.addEventListener("fetch", (event) => {
     // offline fallback below reads.
     const network = fetch(req, { cache: "no-store" }).then(async (res) => {
       if (res && res.ok && !isVersion) {
-        const cache = await caches.open(await currentCacheName());
-        await cache.put(req, res.clone());
+        // The write is awaited (the waitUntil below depends on that) but must
+        // never reject the chain: a version.json hiccup (deploy window,
+        // captive portal) or a quota-refused put was turning a SUCCESSFUL
+        // navigation into Response.error() through the online check below.
+        try {
+          const cache = await caches.open(await currentCacheName());
+          await cache.put(req, res.clone());
+        } catch (_) { /* a failed cache write must not fail a good response */ }
       }
       return res;
     });
@@ -316,8 +322,10 @@ self.addEventListener("fetch", (event) => {
     try {
       const res = await fetch(req);
       if (res && res.ok) {
-        const cache = await caches.open(await currentCacheName());
-        await cache.put(req, res.clone());
+        try {
+          const cache = await caches.open(await currentCacheName());
+          await cache.put(req, res.clone());
+        } catch (_) { /* a failed cache write must not fail a good response */ }
       }
       return res;
     } catch (_) { /* network rejected */ }

@@ -629,7 +629,12 @@ function buildLiveryCreator(container, team) {
   cancel.onclick = () => { csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team); if (G.soundOn) GameAudio.uiTick(); buildSetup(); };
   const save = document.createElement("button"); save.type = "button"; save.className = "cs-liv-ed-save"; save.textContent = "SAVE & FIT";
   save.onclick = () => {
-    const id = csLivEditId || ("custom_" + livIdCounter());
+    // ALWAYS a fresh id, edits included: every body-mesh and decal-atlas
+    // cache keys on the livery id, so reusing it on edit served the pre-edit
+    // meshes with the new atlas — a mismatched car with no error. A new id
+    // makes every id-keyed cache miss naturally; bounded caches evict the
+    // orphans, and saveLiveryId below re-points the selection.
+    const id = "custom_" + livIdCounter();
     const liv = { id, name: (d.name || "").trim() || "Custom", c1: hexToArr(d.c1), c2: hexToArr(d.c2) };
     if (d.stripe) liv.stripe = hexToArr(d.stripe);
     if (d.noseStripe) liv.noseStripe = hexToArr(d.noseStripe);
@@ -643,8 +648,8 @@ function buildLiveryCreator(container, team) {
     if (d.halo) liv.halo = hexToArr(d.halo);
     if (d.finish && d.finish !== "gloss") liv.finish = d.finish;
     const existing = getCustomLiveries(team.id);
-    // Edit-in-place replaces the matching entry (same id); create appends.
-    setCustomLiveries(team.id, csLivEditId ? existing.map((l) => (l.id === id ? liv : l)) : existing.concat([liv]));
+    // Edit-in-place replaces the entry that carried the OLD id; create appends.
+    setCustomLiveries(team.id, csLivEditId ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
     saveLiveryId(team.id, id);
     csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team);
     if (G.soundOn) GameAudio.uiSelect();

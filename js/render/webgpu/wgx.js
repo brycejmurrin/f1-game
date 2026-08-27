@@ -728,8 +728,15 @@ const WGX = (function () {
         let j = n - 2;
         while (j >= 0 && _grSel[j].d > cur.d) j--;
         const insertAt = j + 1;
+        // Swap, not overwrite: the shift orphans the evicted top-k object and
+        // left `cur` aliased at two indices — the next frame's by-index fill
+        // then wrote one lamp's data into both slots (a beam uploaded twice,
+        // another lamp permanently unselectable). Keeping the pool a
+        // permutation is the whole contract.
+        const evicted = _grSel[n - 1];
         for (let m = n - 1; m > insertAt; m--) _grSel[m] = _grSel[m - 1];
         _grSel[insertAt] = cur;
+        _grSel[i] = evicted;
       }
       return n;
     }
@@ -2453,6 +2460,10 @@ const WGX = (function () {
       return 0;
     }
     function _drawGeom(pass, mesh, instCount) {
+      // A count-0 mesh (alloc-fail stub, empty piece head) is a dead draw —
+      // Dawn warns "Draw with an index count of 0 is unusual" on every boot
+      // it reaches the queue (measured via the live probe).
+      if (!mesh || !mesh.count) return;
       if (mesh.ibuf) {
         pass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
         const firstIndex = _chunkFirstIndex(mesh);
@@ -2494,10 +2505,14 @@ const WGX = (function () {
             return {
               _wgx: "mesh", vbuf: head.vbuf, ibuf: null, sbuf: head.sbuf, attrBG: head.attrBG,
               count: head.count, indexFormat: b.indexFormat, chunks: null, pieces,
+              // Road-LUT ownership: on this path the LUT sbuf is referenced
+              // only through the global bind group — without an owner it
+              // leaked ~262 KB per track rebuild. freeMesh destroys it.
+              lutSbuf: lut && lut.sbuf, lutAttrBG: lut && lut.attrBG,
             };
           }
           const m = _meshFromPull(pulled.vert, pulled.attr, pulled.count, b.indexFormat);
-          return Object.assign({ _wgx: "mesh" }, m);
+          return Object.assign({ _wgx: "mesh", lutSbuf: lut && lut.sbuf, lutAttrBG: lut && lut.attrBG }, m);
         }
         vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
         ibuf = _mkBuffer(b.idx, GPUBufferUsage.INDEX);
@@ -2781,6 +2796,14 @@ const WGX = (function () {
 
     function freeMesh(m) {
       if (!m) return;
+      // Road-LUT owner (createMesh road path): destroy the LUT sbuf and, if
+      // the global bind group still points at it, clear that too — binding a
+      // destroyed buffer is a per-draw validation error.
+      if (m.lutSbuf) {
+        try { m.lutSbuf.destroy(); } catch (_) { /* already destroyed */ }
+        if (m.lutAttrBG && m.lutAttrBG === _roadLutBG) { _roadLutBG = null; _roadLutReady = false; }
+        m.lutSbuf = null;
+      }
       if (m.pieces) {
         for (let i = 0; i < m.pieces.length; i++) freeMesh(m.pieces[i]);
         return;
@@ -3117,7 +3140,11 @@ const WGX = (function () {
     // recorded earlier still see the data.
     function _flushDrawUBO() {
       if (!drawUBO || _drawSlot <= 0) return;
-      device.queue.writeBuffer(drawUBO, 0, drawRing, 0, _drawSlot * DRAW_F32_STRIDE);
+      // Clamp: the slot counter keeps counting past the ring on overflow
+      // frames (draws beyond the cap are skipped, not recorded), and an
+      // unclamped length would write past drawRing's end — a synchronous
+      // OperationError inside present() reads as a device strike.
+      device.queue.writeBuffer(drawUBO, 0, drawRing, 0, Math.min(_drawSlot, MAX_DRAWS) * DRAW_F32_STRIDE);
     }
     function _flushQuadFxUBO() {
       if (!quadFxUBO || _fxQuadSlot <= 0) return;
@@ -3129,7 +3156,8 @@ const WGX = (function () {
     }
     function _flushDecalUBO() {
       if (!decalUBO || _fxDecalSlot <= 0) return;
-      device.queue.writeBuffer(decalUBO, 0, decalFxRing, 0, _fxDecalSlot * FX_F32_STRIDE);
+      // Same clamp as the quad flush above — the counter outruns the ring.
+      device.queue.writeBuffer(decalUBO, 0, decalFxRing, 0, Math.min(_fxDecalSlot, FX_DECAL_SLOTS) * FX_F32_STRIDE);
     }
     // All three lit-pass rings share one encoder. Flush together before end()
     // so a future End site cannot upload draws and forget FX (or the reverse).
@@ -4562,7 +4590,7 @@ const WGX = (function () {
     // Textured team/sponsor decal over the car body (createTexMesh + createTexture).
     // opts: { glow, uvRect:[u0,v0,uScale,vScale], tint:[r,g,b] }.
     function drawDecal(mesh, model, tex, opts) {
-      if (!_fxReady || !litPass || !pDecal || !mesh || !mesh.vbuf || !tex || !tex.view) return;
+      if (!_fxReady || !litPass || !pDecal || !mesh || !mesh.count || !mesh.vbuf || !tex || !tex.view) return;
       const slot = _fxDecalSlot++;
       if (slot >= FX_DECAL_SLOTS) return;
       const base = slot * FX_F32_STRIDE;

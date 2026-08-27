@@ -972,8 +972,9 @@ let _thunderT = -1;          // seconds until queued thunder fires (<0 = none)
 // Cloud cover target for the current session: set once in applyRaceSettings()
 // and held constant so the sky doesn't shift mid-race (only the shader animates).
 let _cloudBase = 0.4;
-const teamMeshes = {};   // factory full mesh (shadows / ghost / glb)
-const teamBodies = {};   // factory body-only (visible AI — wheels drawn planted)
+const teamMeshes = {}, teamMeshOrder = [];   // factory full mesh (shadows / ghost / glb)
+const teamBodies = {}, teamBodyOrder = [];   // factory body-only (visible AI — wheels drawn planted)
+const TEAM_MESH_CACHE_MAX = 24, DECAL_TEX_CACHE_MAX = 48;   // > the concurrently drawn set, or eviction thrashes rebuilds
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60 Hz-stepped)
@@ -1764,14 +1765,10 @@ function teamMeshKey(team) {
   return val;
 }
 function teamMesh(team) {
-  const key = teamMeshKey(team);
-  if (!teamMeshes[key]) teamMeshes[key] = gfx.createMesh(buildCarData(team));
-  return teamMeshes[key];
+  return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team), () => gfx.createMesh(buildCarData(team)), TEAM_MESH_CACHE_MAX);
 }
 function teamBodyMesh(team) {
-  const key = teamMeshKey(team);
-  if (!teamBodies[key]) teamBodies[key] = gfx.createMesh(buildCarData(team, { noWheels: true }));
-  return teamBodies[key];
+  return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKey(team), () => gfx.createMesh(buildCarData(team, { noWheels: true })), TEAM_MESH_CACHE_MAX);
 }
 
 // Car decal / effect-quad / cockpit-instrument geometry lives in
@@ -1784,7 +1781,7 @@ const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
         getBrakeRing, getRainLight, getExhaustFlame, getErsLight,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
         getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
-const _decalTexCache = {}, _decalTexFail = {};
+const _decalTexCache = {}, _decalTexFail = {}, _decalTexOrder = [];
 function invalidateDecalTextures(teamId) {
   const prefix = teamId + ":";
   Object.keys(_decalTexCache).forEach(function (key) {
@@ -1792,6 +1789,7 @@ function invalidateDecalTextures(teamId) {
     const tex = _decalTexCache[key];
     if (tex && gfx.freeTexture) gfx.freeTexture(tex);
     delete _decalTexCache[key]; delete _decalTexFail[key];
+    const oi = _decalTexOrder.indexOf(key); if (oi >= 0) _decalTexOrder.splice(oi, 1);
   });
 }
 function getCarDecalTexture(team, num, isPlayer) {
@@ -1811,7 +1809,12 @@ function getCarDecalTexture(team, num, isPlayer) {
       if (n === 1) Log.warn("gfx", "decal atlas build failed for " + key, e);
       if (n < 3) return null;
     }
-    _decalTexCache[key] = t;
+    _decalTexCache[key] = t; _decalTexOrder.push(key);
+    while (_decalTexOrder.length > DECAL_TEX_CACHE_MAX) {   // FIFO: browsing liveries minted page-lifetime ~5 MB atlases
+      const old = _decalTexOrder.shift(), ot = _decalTexCache[old];
+      if (ot && gfx.freeTexture) gfx.freeTexture(ot);
+      delete _decalTexCache[old]; delete _decalTexFail[old];
+    }
   }
   return _decalTexCache[key];
 }
@@ -2010,6 +2013,7 @@ const _rigR = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _rigA = new Float32Array(16), _rigB = new Float32Array(16);
 const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _digM = new Float32Array(16);
+const _rigFx = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
 function drawCockpitRig(c, base, dt, paint) {
   const nite = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
   _cockpitOpts.emissive = nite ? 0.16 : 0;
@@ -2051,7 +2055,7 @@ function drawCockpitRig(c, base, dt, paint) {
   // Live telemetry ON the wheel (all ride the wheel matrix, like the real LCD):
   // gear (auto or manual — c.gear is maintained by both paths), RPM shift
   // lights, speed, pedal bars, ERS energy.
-  const fx = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true };
+  const fx = _rigFx;
   gfx.draw(getGearDigit(clamp(c.gear || 1, 0, 9)), _rigB, fx);
   const rpmF = clamp(((c.rpm || IDLE_RPM) - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
   gfx.draw(getLedStrip(rpmF > 0.965 ? (raceT * 14 % 1 < 0.5 ? 9 : 0) : Math.round(rpmF * 8)), _rigB, fx);
@@ -2072,15 +2076,12 @@ function drawCockpitRig(c, base, dt, paint) {
     _digT[12] = 0.048; _digT[13] = 0.001; _digT[14] = -0.0315;
     M4.mulTo(_digM, _rigB, _digT);
     _digM[4] *= en; _digM[5] *= en; _digM[6] *= en;
-    gfx.draw(getErsBar(), _digM, c.deploying
-      ? { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.75 + 0.25 * Math.sin(raceT * 22) }
-      : fx);
+    gfx.draw(getErsBar(), _digM, c.deploying ? (_rigFxA.alpha = 0.75 + 0.25 * Math.sin(raceT * 22), _rigFxA) : fx);
   }
   // OVERTAKE lamp on the wheel: white when armed, pulsing purple while active
   // (the floating HUD OVERTAKE text is hidden in cockpit view).
   if (c.otT > 0) {
-    gfx.draw(getOtLamp(true), _rigB, { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true,
-      alpha: 0.7 + 0.3 * Math.sin(raceT * 18) });
+    gfx.draw(getOtLamp(true), _rigB, (_rigFxA.alpha = 0.7 + 0.3 * Math.sin(raceT * 18), _rigFxA));
   } else if (c.otArmed) {
     gfx.draw(getOtLamp(false), _rigB, fx);
   }
@@ -2140,7 +2141,7 @@ function getPlayerWheelMeshes() {
 // cannot evict the field (WHEEL_MESH_CACHE_MAX is a player-parts bound).
 const fieldWheelCache = {};
 function getFieldWheelMeshes(team) {
-  const vt = Parts.getVisualTiers(Parts.getFactorySetup(team), team);
+  const vt = teamDecalState(team, false).parts;   // permanently cached factory resolve — was ~1260 resolveSetup/s across the drawn field
   const key = "field:" + (vt._ids ? vt._ids.tyres + ":" + vt._ids.brakes + ":" + vt._ids.wheels : "1:1:1");
   let mesh = fieldWheelCache[key];
   if (mesh) return mesh;
@@ -3121,7 +3122,6 @@ function arrToHex(a) { const f = (v) => ("0" + Math.round(Math.max(0, Math.min(1
 function armConfirm(btn, armedText, action) {
   if (!btn.dataset.armed) {
     btn.dataset.armed = "1";
-    btn.dataset.disarmText = btn.textContent;
     btn.textContent = armedText;
     btn.classList.add("armed");
     return false;
@@ -7673,7 +7673,7 @@ function openSettings() {
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
 }
-function closeSettings() { els.pmsettings.hidden = true; if (paused) els.pausemenu.hidden = false; }
+function closeSettings() { els.pmsettings.hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }
 $("pm-settings").onclick = openSettings;
 $("pm-settings-close").onclick = closeSettings;
 // The same settings screen from the TITLE menu, so steering, audio and the
@@ -8349,7 +8349,7 @@ function setPaused(p) {
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); $("pm-restart").disabled = !!(netPlay.active() || qualiNetDone); }
   else if (soundOn) GameAudio.startEngine();
-  lastFrame = performance.now();
+  lastFrame = performance.now(); syncRotateBlocker(false);   // the pause card yields to an active rotate blocker on EVERY entry
 }
 els.pausebtn.onclick = () => setPaused(true);
 

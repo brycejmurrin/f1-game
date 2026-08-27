@@ -492,3 +492,39 @@ test("activation removes prior caches after a complete successful install", asyn
   assert.equal(harness.stores.has("apex26-321"), true);
   assert.equal(harness.claimed, 1);
 });
+
+test("a deploy-window cache-name failure must not discard a good response", async () => {
+  // currentCacheName() reads version.json; during a Pages deploy window (or
+  // behind a captive portal) that read rejects while the actual asset fetch
+  // succeeded. The old shape awaited the cache write inside the same try as
+  // the response return, so one flaky version.json hard-failed every uncached
+  // GET and navigation with a 200 in hand.
+  const harness = createHarness({
+    fetchImpl: async (request) => {
+      const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+      if (url.pathname.endsWith("/version.json")) throw new Error("deploy window");
+      return new Response("fresh", { status: 200 });
+    },
+    navigator: { onLine: true },
+  });
+
+  const asset = await harness.fetchEvent(new Request(`${ORIGIN}/assets/sfx.ogg`)).responsePromise;
+  assert.equal(await asset.text(), "fresh", "cache-first GET must return the good response");
+
+  const nav = await harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/race` }).responsePromise;
+  assert.equal(await nav.text(), "fresh", "navigation must return the good response");
+});
+
+test("a quota-refused cache write must not discard a good response", async () => {
+  const harness = createHarness({
+    fetchImpl: async (request) => {
+      const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+      if (url.pathname.endsWith("/version.json")) return new Response('{"build":321}', { status: 200 });
+      return new Response("fresh", { status: 200 });
+    },
+    putImpl: async () => { throw new Error("QuotaExceededError"); },
+    navigator: { onLine: true },
+  });
+  const asset = await harness.fetchEvent(new Request(`${ORIGIN}/assets/sfx.ogg`)).responsePromise;
+  assert.equal(await asset.text(), "fresh");
+});

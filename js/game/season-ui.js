@@ -142,7 +142,12 @@ function create(G) {
     buildCalendar();
     buildPool();
     const live = SeasonCal.hasProgress(G.season);
-    $("ss-apply").textContent = live ? "APPLY — RESTART SEASON" : "APPLY";
+    // #ss-apply is a STATIC shell node — unlike the rebuilt-per-paint confirm
+    // buttons, node replacement never disarms it, so an armed RESTART could
+    // survive close/reopen and fire without its warning. Every path repaints
+    // through build(), so this is the one true disarm point.
+    const ab = $("ss-apply"); delete ab.dataset.armed; ab.classList.remove("armed");
+    ab.textContent = live ? "APPLY — RESTART SEASON" : "APPLY";
     if (window.ScrollFade) ScrollFade.refresh();
   }
 

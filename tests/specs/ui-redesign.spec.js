@@ -215,15 +215,25 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(compactWideGarage.pair).toBe("off");
   expect(compactWideGarage.density).toBe("compact");
   expect(["auto", "scroll"]).not.toContain(compactWideGarage.tabsOY);
-  expect(["auto", "scroll"]).toContain(compactWideGarage.tabsOX);
+  // Compact non-tall tabs are a 7×2 GRID, not a sideways strip — both axes
+  // clip (css/carsetup.css "#cs-tabs … display: grid"). That rule and this
+  // assertion's old strip expectation landed in the SAME 1496 all-PR merge,
+  // contradicting each other from birth; the suite had not actually run
+  // since, so the stale half survived until the round-7 batch.
+  expect(compactWideGarage.tabsOX).toBe("hidden");
   expect(["auto", "scroll", "overlay"]).toContain(compactWideGarage.optsOY);
 
   // Garage stacked: portrait sheet is under --pair-at 400 — a strip, not a grid.
   await page.setViewportSize({ width: 390, height: 844 });
+  // Wait for the SHAPE to settle, not just the pair flag: pair was already
+  // "off" in the compact-wide state above, so a pair-only wait passes before
+  // SheetShape's ResizeObserver reclassifies — and the measure below then
+  // still sees the compact 7×2 grid (overflow hidden) instead of the strip.
   await page.waitForFunction(() => {
     const setup = document.getElementById("carsetup");
     const inner = document.getElementById("cs-inner");
-    return setup && !setup.hidden && inner && inner.dataset.pair !== "on";
+    return setup && !setup.hidden && inner && inner.dataset.pair !== "on" &&
+      inner.dataset.shape === "tall";
   }, null, { polling: 100, timeout: 10_000 });
   const tabs = await page.evaluate(() => {
     const all = [...document.querySelectorAll('#cs-tabs [role="tab"]')];
@@ -642,7 +652,12 @@ test("balanced control rows derive their shape from local room", async ({ page }
   await page.evaluate(() => { document.getElementById("mb-standings").hidden = false; });
   const title = await report("#menu-secondary");
   expect(title.display).toBe("flex");
-  expect(title.rowCounts).toEqual([2, 2, 1]);
+  // 3+2, not the old 2+2+1: HOW TO PLAY joined the group when its permanent
+  // `hidden` came off (round 6 — the handler had been live the whole time),
+  // and the five buttons' widths now pack three on the first row. The shape
+  // is the flex wrap's business; what this test guards is that the group
+  // wraps into full rows instead of leaving a sliver.
+  expect(title.rowCounts).toEqual([3, 2]);
   expect(title.lastFill).toBeGreaterThan(0.9);
 
   // The same primitive makes three settings categories 2 + a full-width final
@@ -652,6 +667,9 @@ test("balanced control rows derive their shape from local room", async ({ page }
   await page.waitForSelector("#pmsettings:not([hidden])");
   const settings = await report("#pm-category-tabs");
   expect(settings.display).toBe("flex");
-  expect(settings.rowCounts).toEqual([2, 1]);
+  // One row now, not the old 2 + full-width final: the category tabs have
+  // tightened across the adaptive-UI rounds and three fit 390px. The guard
+  // this test keeps is full rows with no sliver, which lastFill still holds.
+  expect(settings.rowCounts).toEqual([3]);
   expect(settings.lastFill).toBeGreaterThan(0.9);
 });
