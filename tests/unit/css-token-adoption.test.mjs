@@ -167,7 +167,9 @@ const CEILING = {
   // converting it would make the dock slot pitch density-dependent — a
   // behaviour change, not a spelling one. The centring anchors
   // (margin: -17px style) stay as anchors.
-  rawSpacing: 325,
+  // 2026-08-27: 325 -> 324. The career pressable-card carve deduplicated the
+  // teamtile/seat padding pair into one shared declaration.
+  rawSpacing: 324,
   // colour declarations carrying a raw literal (rgb()/rgba()/#hex in any
   // declaration value; tokens.css custom-property DEFINITIONS excluded — the
   // definition site is the system, not drift; url() interiors excluded).

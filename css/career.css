@@ -157,8 +157,20 @@
 .cr-note { font-size: var(--fs-2); line-height: 1.45; color: var(--dim); margin-bottom: 8px; }
 
 /* ---------- cards ---------- */
-.cr-card {
+/* THE PRESSABLE-CARD CORE, once. Five card classes wrote the same surface
+   trio byte for byte, and the five pressable ones the same button-undo
+   quintet; each class below keeps only its own layout. The record card is
+   not in the surface list because its markup composes it with the card
+   class and inherits the surface there. */
+.cr-card, .cr-flavour, .cr-teamtile, .cr-seat, .co-offer {
   background: var(--surf-1); border: 1px solid var(--card-line); border-radius: var(--r-sm);
+}
+.cr-flavour, .cr-teamtile, .cr-seat, .co-offer, .cr-record {
+  min-height: var(--tap); text-align: left;
+  color: inherit; font: inherit; cursor: pointer;
+}
+.cr-teamtile, .cr-seat { padding: 8px calc(var(--pad) * 0.6); }
+.cr-card {
   padding: calc(var(--pad) * 0.7); display: flex; flex-direction: column; gap: 5px;
 }
 .cr-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--gap); font-size: var(--fs-2); }
@@ -183,10 +195,8 @@
 .cr-flavours { display: grid; gap: var(--gap); grid-template-columns: 1fr; }
 @container sheet (min-width: 460px) { .cr-flavours { grid-template-columns: 1fr 1fr; } }
 .cr-flavour {
-  display: flex; flex-direction: column; gap: 4px; text-align: left;
-  min-height: var(--tap); padding: calc(var(--pad) * 0.7);
-  background: var(--surf-1); border: 1px solid var(--card-line); border-radius: var(--r-sm);
-  color: inherit; font: inherit; cursor: pointer;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: calc(var(--pad) * 0.7);
 }
 /* Selection reuses the .sel-chip.active / .team-tile.active treatment: an inset
    red rule plus a red wash and glow. A border-colour swap alone reads as noise
@@ -206,10 +216,7 @@
 @container sheet (min-width: 460px) { .cr-teamgrid { grid-template-columns: 1fr 1fr; } }
 .cr-teamtile {
   display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto;
-  column-gap: 8px; align-items: center; text-align: left;
-  min-height: var(--tap); padding: 8px calc(var(--pad) * 0.6);
-  background: var(--surf-1); border: 1px solid var(--card-line); border-radius: var(--r-sm);
-  color: inherit; font: inherit; cursor: pointer;
+  column-gap: 8px; align-items: center;
 }
 
 .cr-teamtile-sw { grid-row: 1 / 3; width: 10px; height: 30px; border-radius: 2px; border: 2px solid transparent; }
@@ -230,10 +237,7 @@
 
 .cr-seats { display: flex; flex-wrap: wrap; gap: 6px; }
 .cr-seat {
-  flex: 1 1 140px; display: flex; flex-direction: column; gap: 2px; text-align: left;
-  min-height: var(--tap); padding: 8px calc(var(--pad) * 0.6);
-  background: var(--surf-1); border: 1px solid var(--card-line); border-radius: var(--r-sm);
-  color: inherit; font: inherit; cursor: pointer;
+  flex: 1 1 140px; display: flex; flex-direction: column; gap: 2px;
 }
 
 .cr-seat-role { font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); }
@@ -272,17 +276,16 @@
 .co-offer {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-rows: auto auto; column-gap: 10px; align-items: center;
-  width: 100%; text-align: left; margin-bottom: 6px;
-  min-height: var(--tap); padding: 10px calc(var(--pad) * 0.6);
-  background: var(--surf-1); border: 1px solid var(--card-line); border-radius: var(--r-sm);
-  color: inherit; font: inherit; cursor: pointer;
+  width: 100%; margin-bottom: 6px;
+  padding: 10px calc(var(--pad) * 0.6);
 }
 /* :hover gated per the tokens.css policy (a tap sticks :hover on iOS);
-   :focus-visible stays outside the gate so keyboard focus works everywhere. */
+   :focus-visible stays outside the gate so keyboard focus works everywhere.
+   The record card shares the pair — the two are the same gesture. */
 @media (hover: hover) {
-  .co-offer:hover { border-color: var(--red); background: var(--plate-on); }
+  .co-offer:hover, .cr-record:hover { border-color: var(--red); background: var(--plate-on); }
 }
-.co-offer:focus-visible { border-color: var(--red); background: var(--plate-on); }
+.co-offer:focus-visible, .cr-record:focus-visible { border-color: var(--red); background: var(--plate-on); }
 .co-offer-sw { grid-row: 1 / 3; width: 10px; height: 34px; border-radius: 2px; border: 2px solid transparent; }
 .co-offer-team { font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .co-offer-terms { grid-column: 2 / 4; font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-2); }
@@ -302,19 +305,11 @@
    and a wide sheet would strand the points column half a screen from the year. */
 #career-history { --sheet-w: 520px; --fit-at: 300px; }
 
-/* The way in, at the foot of the hub's left column. A .cr-card that happens to be
-   a button, so it inherits the card's surface and rhythm and only has to undo the
-   things a <button> brings with it. Hover/focus borrows .co-offer's red edge —
-   the two are the same gesture (a card you press), and they should feel it. */
-.cr-record {
-  width: 100%; text-align: left; cursor: pointer;
-  color: inherit; font: inherit; min-height: var(--tap);
-  gap: 4px;
-}
-@media (hover: hover) {
-  .cr-record:hover { border-color: var(--red); background: var(--plate-on); }
-}
-.cr-record:focus-visible { border-color: var(--red); background: var(--plate-on); }
+/* The way in, at the foot of the hub's left column. A .cr-card that happens to
+   be a button: the surface rides the card class, the button-undo quintet rides
+   the shared pressable rule above, and its hover/focus pair is merged onto
+   .co-offer's — the two are the same gesture (a card you press). */
+.cr-record { width: 100%; gap: 4px; }
 .cr-record-line { font-size: var(--fs-2); font-weight: 700; font-variant-numeric: tabular-nums; }
 /* The affordance line: dim, tracked-out and red, so the card reads as a door
    rather than one more read-only summary in a column full of them. */
