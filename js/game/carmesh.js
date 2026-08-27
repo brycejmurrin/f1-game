@@ -317,6 +317,20 @@ function getCockpitWheel() {
   const PADL = [0.11, 0.11, 0.125];
   _rigBox(out, -0.150, -0.01, 0.052, 0.085, 0.135, 0.015, PADL);
   _rigBox(out,  0.150, -0.01, 0.052, 0.085, 0.135, 0.015, PADL);
+  // DRIVER HANDS at 9-and-3, gripping the rim. They live in THIS mesh so they
+  // ride _rigB and turn 1:1 with the wheel for free — no extra draw, and the
+  // 1500-tri cockpit ceiling never sees them (it measures the body build
+  // only). Driver side is -z (the LCD faces that way); fingers wrap the +z
+  // far side, thumbs sit inboard, and a short wrist stub angles down toward
+  // the driver — kept shallow so it never nears the 0.3 m cockpit near plane.
+  const GLOVE = [0.10, 0.095, 0.095], PAD = [0.16, 0.15, 0.15];
+  for (const s of [-1, 1]) {
+    _rigBox(out, s * 0.192, 0.0, -0.010, 0.052, 0.145, 0.052, GLOVE);   // palm/back
+    _rigBox(out, s * 0.168, 0.0, 0.030, 0.048, 0.165, 0.026, GLOVE);    // fingers over the rim
+    _rigBox(out, s * 0.132, 0.024, -0.022, 0.030, 0.058, 0.034, GLOVE); // thumb, inboard
+    _rigBox(out, s * 0.196, 0.012, -0.030, 0.040, 0.050, 0.016, PAD);   // knuckle pad
+    _rigBox(out, s * 0.196, -0.100, -0.042, 0.052, 0.115, 0.055, GLOVE); // wrist stub
+  }
   cockpitWheelMesh = _gfx.createMesh(out);
   return cockpitWheelMesh;
 }
