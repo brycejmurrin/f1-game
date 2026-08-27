@@ -205,7 +205,13 @@ body[data-density="compact"] #track-detail-header {
   #track-detail-panel { display: flex; flex: 0 0 min(220px, 40%); max-width: min(220px, 40%); overflow-y: auto; overscroll-behavior-y: contain; }
 }
 
-@media (min-width: 900px) and (min-height: 600px) {
+/* ORIENTATION is part of the condition: without it this block also matched
+   LARGE PORTRAIT (an upright iPad Pro at 1024x1366, a rotated 1080x1920
+   monitor — both ≥900x600) and forced the side-by-side row there, squeezing
+   the canvas beside a rail on a screen whose spare axis is HEIGHT. Portrait
+   of any size keeps the stacked base layout; this branch is strictly an
+   upgrade of the landscape rail above (220px -> 260px). */
+@media (orientation: landscape) and (min-width: 900px) and (min-height: 600px) {
   #track-detail-body { flex-direction: row; align-items: stretch; gap: 14px; }
   #track-detail-canvas-wrap { flex: 1; min-width: 0; }
   /* Same local-width cap as the landscape rail above: 1280x800 at 200% is a

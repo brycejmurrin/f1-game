@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 136 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 137 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -937,6 +937,7 @@ what it covers.
 | `component-inventory.test.mjs` | the class families in `css/` match `docs/COMPONENTS.md` — a class defined in one file and used from another is the drift this catches |
 | `span-kinds.test.mjs` | the agent view's span vocabulary matches the `ctx.noteSpan(...)` emitters — the list had fallen four kinds behind, so any circuit placing a tiered bowl failed `agent-view.spec.js` with a message that pointed nowhere near the cause |
 | `css-layers.test.mjs` | every rule in a `@layer`-wrapped stylesheet stays inside its declared layer — an unlayered rule (a stray brace closing the layer early) silently outranks every layered rule regardless of specificity, with no parse error and no console warning |
+| `css-media-disjoint.test.mjs` | the media ladders stay disjoint: every row-layout branch in track-detail.css requires `(orientation: landscape)` (large portrait must keep the stack), and both large-screen menu blocks in responsive.css guard every selector with the compact-density `:where()` |
 | `scroll-strips.test.mjs` | every sideways-scrolling strip (garage category rail, data-hub tab strip, lighting-tuner chip tiers) declares the full `overflow-x`/`touch-action`/`scrollbar-gutter` pattern, not a partial hand-rolled copy |
 | `source-integrity.test.mjs` | three cheap syntax/structure checks (an unopened comment block, an early-closed `@layer`, …) that the ~350 behavioural guards don't catch because a `SyntaxError` or a silently reordered layer fails nothing loud — each is a real 2026-08 incident that every other green guard sailed through |
 | `deploy-staging.test.mjs` | the Pages workflow uploads an allow-list of directories — every path the shipped code can fetch must be inside it, or it 404s in production while passing every local run |
