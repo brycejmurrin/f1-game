@@ -770,8 +770,26 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
 5. **Render bundles** for the static chunk sequence (needs FIXED draw-ring
    slots per chunk so the bundle survives culling changes; knob-gated, keep
    the culled path for WGX_LITE/software).
-6. **Submit consolidation** (5 → fewer; the soft-present
-   onSubmittedWorkDone fencing must stay after the LAST submit).
+6. ~~Submit consolidation~~ **LANDED (2026-08-27)**: the frame's shadow
+   passes (sun/car/lamp) record into ONE deferred encoder submitted ahead
+   of the main encoder in the same queue.submit (`_frameSubmitList`), so
+   queue order still executes shadow-before-lit and the soft-present
+   fencing stays behind the last submit. The shared caster ring became
+   per-pass REGIONS (slots count across Begins, `_flushShadowModelUBO`
+   uploads from the `_shadowFlushed` watermark, reset at the frame submit;
+   spill guard submits early if a capture path skips present). Measured
+   live: 1.8 → 1.33 submits/frame (remainder = env probe + its mips).
+7. **Static post-UBO writes** (bloom chain ~10 small writeBuffers/frame
+   carrying resize/knob-only values) — still open; deliberately deferred:
+   the win is noise next to the landed items and the stale-knob wiring
+   risk is real.
+8. **Shared road vertex buffer / indexed road** — REASSESSED as blocked on
+   this adapter class: the 4095-vert piece split exists because LARGE
+   non-indexed draws break vertex_index (wgx.js createMesh comment), and
+   merged runs or firstVertex offsets recreate exactly that (offsets also
+   shift vertex_index under the per-piece authored storage). Needs its own
+   investigation round with live dash/marking verification before any
+   merge attempt.
 7. `trkFromWorld` gating looked free but is NOT semantics-preserving: the
    LUT result feeds `classified`/`vMatId` on every draw over the ribbon
    (props/cars with matId 0 classify as asphalt by design there), so a

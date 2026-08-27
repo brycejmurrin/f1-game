@@ -1657,10 +1657,21 @@ test("shadow model UBO flushes once per pass (not per cast)", () => {
     assert.ok(idx >= 0, name + " exists");
     const body = WGX_SOURCE.slice(idx, idx + 900);
     assert.match(body, /_flushShadowModelUBO\(\)/, name + " must flush the shadow model ring");
+    // Deferred-submit shape: the End flushes its ring REGION, then stashes the
+    // shared encoder for the frame submit (writeBuffer is queue-ordered, so
+    // the flush still lands before the submit that consumes it). A raw
+    // queue.submit here would resurrect the 3-extra-submits-per-frame shape.
     const flushAt = body.indexOf("_flushShadowModelUBO()");
-    const submitAt = body.indexOf("queue.submit");
-    assert.ok(flushAt >= 0 && submitAt > flushAt, name + " must flush before submit");
+    const stashAt = body.indexOf("_pendingShadowEnc = shadowEncoder");
+    assert.ok(flushAt >= 0 && stashAt > flushAt, name + " must flush before stashing the encoder");
+    assert.doesNotMatch(body, /queue\.submit/, name + " must not submit — the frame submit carries it");
   }
+  // The frame submit must put the shadow encoder AHEAD of the main encoder,
+  // and the region watermark must reset with the slot counter.
+  assert.match(WGX_SOURCE, /\[sh\.finish\(\), mainEnc\.finish\(\)\]/,
+    "frame submit orders shadow work before the main encoder");
+  assert.match(WGX_SOURCE, /_shadowFlushed \* SHADOW_MODEL_STRIDE/,
+    "shadow flush must be a region write at the watermark offset");
   const set = WGX_SOURCE.match(/function _shadowSetModel\([\s\S]*?\n    \}/);
   assert.ok(set, "_shadowSetModel exists");
   assert.doesNotMatch(set[0], /setBindGroup\([^)]*\[slot/,
