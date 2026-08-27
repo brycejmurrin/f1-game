@@ -464,7 +464,11 @@ struct DrawU {
   mat0  : vec4<f32>,          // off 64  (emissive, alpha, roughness, metalness)
   mat1  : vec4<f32>,          // off 80  (specular, detail, clearcoat, carPaint)
   mat2  : vec4<f32>,          // off 96  (sparkle, instanced, surfaceId, buryRibbon)
-};                            // size 112
+  mat3  : vec4<f32>,          // off 112 (lampMask lo24, lampMask hi24, 0, 0) — chunk-AABB
+                              //         lamp cull, bit-exact (see the lamp loop); each mask
+                              //         float holds a 24-bit integer exactly. All-ones
+                              //         (16777215) = unmasked, the default for every draw.
+};                            // size 128
 struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(0) var<uniform> F : FrameU;
 @group(0) @binding(1) var<storage, read> lights : array<Light, 48>;
@@ -1134,7 +1138,20 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // the light. The nearest floodlight also 4-tap-PCF-samples lampShadowTex.
   var lampFog = vec3<f32>(0.0);   // lamp irradiance reaching the fog column (Block 6)
   let nL = i32(F.params0.w);
+  // Chunk-AABB lamp cull (bit-exact): drawChunked sets a bit only for lights
+  // whose radius reaches the chunk's AABB, so a cleared bit is precisely a
+  // light the ld2 > rad*rad reject below would discard for EVERY fragment of
+  // this draw — same output, ~3 ALU instead of the distance math per culled
+  // light. Non-chunked draws carry all-ones masks (no cull).
+  let lampM0 = u32(D.mat3.x);
+  let lampM1 = u32(D.mat3.y);
   for (var i = 0; i < nL; i = i + 1) {
+    // Both select arms evaluate — mask the shift amounts so the unselected
+    // arm's underflowed count stays a defined shift (WGSL: >=32 is indeterminate).
+    let lampBit = u32(i);
+    let masked = select((lampM1 >> ((lampBit - 24u) & 31u)) & 1u,
+                        (lampM0 >> (lampBit & 31u)) & 1u, i < 24);
+    if (masked == 0u) { continue; }
     let LP = lights[i].posRad.xyz - in.wpos;
     let rad = lights[i].posRad.w;
     // Squared-distance reject before the sqrt — the godray loop's shape
@@ -1759,7 +1776,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light
     MAX_LIGHTS: 48,
-    DRAW_UNIFORM_BYTES: 112,    // DrawU used bytes (dynamic-offset stride is 256)
+    DRAW_UNIFORM_BYTES: 128,    // DrawU used bytes (dynamic-offset stride is 256)
     BLIT_UNIFORM_BYTES: 16,     // BlitU
     DEPTH_RESOLVE: `
 @group(0) @binding(0) var src : texture_depth_multisampled_2d;
