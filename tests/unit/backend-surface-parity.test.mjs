@@ -83,10 +83,10 @@ test("the scanner actually finds a surface in each backend", () => {
   // A scanner that matches nothing would report perfect parity. These are
   // deliberately loose floors — they catch "the regex broke", not growth.
   const glx = surfaceOf(GLX_FILE);
-  assert.ok(glx.size >= 40, `GLX surface scan found only ${glx.size} keys`);
+  assert.ok(glx.size >= 50, `GLX surface scan found only ${glx.size} keys`);   // actual 54 (2026-08-27)
   for (const [name, file] of BACKENDS) {
     const s = surfaceOf(file);
-    assert.ok(s.size >= 40, `${name} surface scan found only ${s.size} keys`);
+    assert.ok(s.size >= 55, `${name} surface scan found only ${s.size} keys`);   // actuals 64/61 (2026-08-27)
   }
 });
 

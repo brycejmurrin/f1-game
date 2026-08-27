@@ -300,14 +300,23 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   seedLog(ctx);
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
-  assert.ok(G.RENDERER_LS_KEYS.includes("apex26.gfxBackend"));
-  assert.ok(G.RENDERER_LS_KEYS.includes("apex26.gfxTlxFail"));
-  assert.ok(G.RENDERER_LS_KEYS.includes("apex26.envProbeOff"), "context-loss latches are renderer crash state");
-  assert.ok(G.RENDERER_LS_KEYS.includes("apex26.perChunkOff"));
-  assert.ok(G.RENDERER_SS_KEYS.includes("apex26.ctxLostReloads"));
-  assert.ok(G.RENDERER_LS_KEYS.includes("apex26.wgxCapture"), "SCREENSHOTS pref is renderer state");
-  assert.ok(G.RENDERER_SS_KEYS.includes("apex26.wgxCapture"));
-  assert.ok(G.RENDERER_SS_KEYS.includes("apex26.tlxAutoGL"), "AUTO stay-GL latch is renderer state");
+  // Frozen deepEqual, not spot includes(): a round-6 audit found 7 of 12 keys
+  // unasserted — a new crash latch omitted from the list would fail nothing
+  // and then survive RESET RENDERER. Adding a key now REQUIRES updating this
+  // frozen copy and saying what the key holds. apex26.gfxHigh stays out on
+  // purpose: GRAPHICS quality is a player pref, not renderer crash state.
+  assert.deepEqual(Array.from(G.RENDERER_LS_KEYS), [   // Array.from: vm arrays are another realm's Array
+    "apex26.gfxBackend", "apex26.gfxBackendProbe",
+    "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
+    "apex26.gfxTlxFail",
+    "apex26.envProbeOff", "apex26.perChunkOff",
+    "apex26.tlxForceGL", "apex26.tlxViz",
+    "apex26.wgxCapture",
+  ]);
+  assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
+    "apex26.wgxCapture", "apex26.tlxAutoGL",
+  ]);
   assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
   const removed = G.clearRendererStorage();
   assert.ok(removed.includes("apex26.gfxBackend"));

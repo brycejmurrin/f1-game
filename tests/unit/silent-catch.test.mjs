@@ -14,7 +14,8 @@
  * catches into ERR("timeout"|"offline"|…) so the lobby can fall back rather than
  * throw). The real numbers, by parsing each catch body:
  *
- *     344  catch blocks in js/
+ *     344  catch blocks in js/          (2026-08 census — the ratchet below
+ *                                        holds the live bare-catch number)
  *     151  do something with the error
  *      26  are empty but carry a COMMENT saying why
  *     167  are bare `catch (e) {}`

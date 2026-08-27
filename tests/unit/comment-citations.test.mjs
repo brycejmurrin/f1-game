@@ -49,7 +49,8 @@ function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) walk(p, out);
-    else if (e.name.endsWith(".js") || e.name.endsWith(".css")) out.push(p);
+    else if (e.name.endsWith(".js") || e.name.endsWith(".css") ||
+             e.name.endsWith(".d.ts")) out.push(p);
   }
   return out;
 }
@@ -64,7 +65,12 @@ function walk(dir, out = []) {
 // literally it is itself a citation, and tests/unit/docs-integrity.test.mjs — which
 // sweeps the whole repo — flagged this very line for it. Two guards, one
 // correctly catching the other's paperwork.)
-const FILES = [...walk(path.join(ROOT, "js")), ...walk(path.join(ROOT, "css"))];
+// types/ joined the walk after a round-6 audit found the whole surviving rot
+// population there: four js/game.js line citations in game-ctx.d.ts had drifted
+// by up to 140 lines while js/ itself was clean — the rot lives exactly where
+// the ratchet does not reach.
+const FILES = [...walk(path.join(ROOT, "js")), ...walk(path.join(ROOT, "css")),
+               ...walk(path.join(ROOT, "types"))];
 
 // Index every js/ file by full repo-relative path AND by basename, so both
 // `js/render/shaders/lit.js:344` and a bare `lit.js:344` resolve. A basename
@@ -128,7 +134,11 @@ test("cross-file line citations are not multiplying", () => {
     "(\"LIT_FS in js/render/shaders/lit.js\") instead, or raise the ceiling here and say why.");
 });
 
-test("the citation ceiling has not been left far above the real count", () => {
+test("the citation ceiling has not been left far above the real count", (t) => {
+  // At ceiling 0 this subtraction is always <= slack — the assertion only has
+  // teeth once the ceiling is raised above zero, so skip instead of passing
+  // vacuously (a round-6 audit flagged the always-true form).
+  if (CITATION_CEILING === 0) { t.skip("ceiling is 0 — the anti-slack check is moot"); return; }
   assert.ok(CITATION_CEILING - ALL.length <= CITATION_SLACK,
     `${ALL.length} citations but the ceiling is ${CITATION_CEILING} — lower it, or the ratchet ` +
     "silently stops ratcheting and the next batch of rot lands under the gap.");

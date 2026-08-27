@@ -1,7 +1,8 @@
 /* test-groups.test.mjs — keep the test TAXONOMY honest.
  *
- * The suite is navigated by npm `test:<group>` scripts, not by directory: 98
- * specs sit flat in tests/ and the groups are what say which ones matter for a
+ * The suite is navigated by npm `test:<group>` scripts, not by directory: the
+ * specs (115 at the 2026-08 census; the count test below holds the live number,
+ * now under tests/specs/) and the groups are what say which ones matter for a
  * given change. That only works while three things agree — package.json, the
  * routing rules in tools/pick-tests.mjs, and docs/TESTING.md. Nothing forces
  * them to, and each has drifted: TESTING.md advertised 69 specs against 98 on

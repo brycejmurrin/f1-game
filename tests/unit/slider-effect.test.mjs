@@ -50,7 +50,7 @@ test("--json lists ~183 knobs with id/group", () => {
   const data = json(["--json"]);
   const knobs = data.knobs;
   assert.ok(Array.isArray(knobs), "expected { knobs: [...] }");
-  assert.ok(knobs.length >= 170 && knobs.length <= 200,
+  assert.ok(knobs.length >= 178 && knobs.length <= 188,   // actual 183; the 30-wide band could lose 7 knobs silently
     `expected ~183 knobs, got ${knobs.length}`);
   for (const k of knobs) {
     assert.equal(typeof k.id, "string");
@@ -220,7 +220,7 @@ test("--live --all --dry-run prints a plan for every knob, batched by condition"
   assert.equal(r.status, 0, r.stderr);
   assert.doesNotMatch(r.stderr, /PAGEERR|playwright|launchChromium/i);
   const data = JSON.parse(r.stdout);
-  assert.ok(data.count >= 170 && data.count <= 200, `count=${data.count}`);
+  assert.ok(data.count >= 178 && data.count <= 188, `count=${data.count}`);
   assert.equal(data.plans.length, data.count);
   assert.ok(data.bucketCount >= 4, `bucketCount=${data.bucketCount} (one recipe is not enough)`);
   assert.ok(data.bucketCount < data.count, "should park once per condition, not per knob");
@@ -320,11 +320,14 @@ test("glareStr recipe uses night + full 0→max range", async () => {
   assert.equal(plan.to, glareMax, `glareStr to should be max (${glareMax})`);
 });
 
-test("slider-effect-view.py --batch-summary produces summary.png", () => {
+test("slider-effect-view.py --batch-summary produces summary.png", (t) => {
   const VIEW = path.join(ROOT, "tools/slider-effect-view.py");
   const batchJson = path.join(ROOT, "artifacts/lighting/slider-effect/batch.json");
   if (!existsSync(batchJson)) {
-    console.log("[slider-effect] batch.json not present — skipping batch-summary test");
+    // t.skip, not a bare return: a return REPORTS PASS, so in CI (artifacts/
+    // is gitignored and absent) the whole image pipeline read as covered
+    // while never running — a round-6 audit flagged the silent green.
+    t.skip("artifacts/lighting/slider-effect/batch.json not present (gitignored input)");
     return;
   }
   console.log("[slider-effect] running --batch-summary on", batchJson);
@@ -340,11 +343,11 @@ test("slider-effect-view.py --batch-summary produces summary.png", () => {
   assert.ok(existsSync(summaryPath), `summary.png not written to ${summaryPath}`);
 });
 
-test("slider-effect-view.py produces diff.png alongside filter/heat/sheet", () => {
+test("slider-effect-view.py produces diff.png alongside filter/heat/sheet", (t) => {
   const VIEW = path.join(ROOT, "tools/slider-effect-view.py");
   const sampleDir = path.join(ROOT, "artifacts/lighting/slider-effect/bahrain-night-dry-lampLevel");
   if (!existsSync(path.join(sampleDir, "a.png"))) {
-    console.log("[slider-effect] no live run artifacts in", sampleDir, "— skipping view test");
+    t.skip("no live slider-effect artifacts (gitignored input) — the view pipeline needs a prior batch run");
     return;
   }
   const tmp = mkdtempSync(path.join(tmpdir(), "se-view-"));

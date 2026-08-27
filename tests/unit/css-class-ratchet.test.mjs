@@ -14,7 +14,8 @@
  *
  * The class count is the repo's headline structural cost. Measured against Pico
  * CSS (a complete design system in 2,835 lines / 16 classes / 251 custom
- * properties), this repo runs ~7,800 lines / 543 classes / 75 properties —
+ * properties), this repo ran ~7,800 lines / 543 classes / 75 properties at
+ * the 2026-08 census (the ratchets below hold the LIVE numbers) —
  * 34x the classes on 2.8x the lines with 0.3x the tokens. SKILL.md rule 8's
  * answer is `--sheet-w`: one primitive class plus N one-line `--property`
  * contexts, which is already the shape used by fourteen dialogs here. Every
