@@ -1113,8 +1113,15 @@ test("WGX car-paint flake and orange-peel key in object space like GLX", () => {
 
 test("WGX SAA mixes geometric N with a uniform-CF peel hoist", () => {
   const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(chunks, /let Npeel = paintPeelN\(topNgeo, in\.objPos, vDist, 1\.0\)/,
+  assert.match(chunks, /let Npeel = paintPeelN\(topNgeo, in\.objPos, vDist, peelAmt\)/,
     "peel normal for SAA must be computed at fs_main top (uniform CF)");
+  // The peel's cost gate is a uniform early return INSIDE paintPeelN (amt from
+  // D.mat1.w), so non-paint draws skip the 6-svnoise body while the caller's
+  // derivatives stay at fs_main top level.
+  assert.match(chunks, /let peelAmt = select\(0\.0, 1\.0, D\.mat1\.w > 0\.001\)/,
+    "peel amt gates on the per-draw carPaint uniform");
+  assert.match(chunks, /fn paintPeelN[\s\S]{0,600}?if \(amt <= 0\.0\) \{ return N; \}/,
+    "paintPeelN early-returns (uniform) when the peel is mixed by 0 anyway");
   assert.match(chunks, /let saaDxPeel = dpdx\(Npeel\)/,
     "SAA must take peel derivatives, not only geometric N");
   assert.match(chunks, /mix\(saaVarGeo, saaVarPeel, saturate\(carPaint\)\)/,
@@ -1125,12 +1132,18 @@ test("WGX hoists every pack layer with textureSample so walls match GLX aniso", 
   const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(chunks, /fn matUvLit\(/,
     "constant-layer UV helper for the fs_main hoist");
-  assert.match(chunks, /textureSample\(matAlbedoTex, matSamp, uv1, 1\)/,
-    "CONCRETE must use textureSample, not SampleLevel");
-  assert.match(chunks, /textureSample\(matAlbedoTex, matSamp, uv2, 2\)/,
-    "BRICK must use textureSample, not SampleLevel");
-  assert.match(chunks, /textureSample\(matAlbedoTex, matSamp, uv14, 14\)/,
-    "RUST/corrugated must use textureSample, not SampleLevel");
+  // The per-layer hoist collapsed to ONE dynamic-layer tap (WGSL allows
+  // non-uniform layer/UV expressions; only the CALL must sit in uniform CF —
+  // GLX's texture() path exactly). The invariant that matters is unchanged:
+  // implicit-LOD textureSample, never SampleLevel, so walls keep aniso.
+  assert.match(chunks, /textureSample\(matAlbedoTex, matSamp, uvSel, midClamp\)/,
+    "pack albedo must use implicit-LOD textureSample, not SampleLevel");
+  assert.match(chunks, /textureSample\(matNormalTex, matSamp, uvSel, midClamp\)/,
+    "pack normal must use implicit-LOD textureSample, not SampleLevel");
+  assert.match(chunks, /let uvSel = matUvLit\(midClamp, topNgeo, in\.wpos\)/,
+    "the tap's UV keeps matUvLit's wall-vs-ground plane selection");
+  // (glass/flag — mids 3/15 — keep their explicit-LOD fallback inside
+  // applyMaterial's non-uniform branch; that path is deliberate.)
   assert.match(chunks, /let hoisted = packOn && mid >= 1 && mid <= 16 && mid != 3 && mid != 15/,
     "glass/flag stay off the hoist; everything else picks the hoisted tap");
   const peelLit = chunks.indexOf("N = paintPeelN(N, in.objPos, vDist, carPaint)");

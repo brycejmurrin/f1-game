@@ -687,3 +687,79 @@ slice that adds a method must declare it (real or `undefined`) before
 - [gpuweb#1924 — reading MSAA depth](https://github.com/gpuweb/gpuweb/issues/1924)
 - [PlayCanvas #5714 — MSAA + depth on WebGPU](https://github.com/playcanvas/engine/issues/5714)
   — allocate MS depth, resolve color via `resolveTarget`, resolve depth by hand
+
+## Perf round (2026-08-27) — measured wins + deferred roadmap
+
+Live per-frame WebGPU call counts (probe MCP, Monza race, ~414 draws, 23
+passes, prototype-wrapped counters over 30 rAF frames):
+
+| metric | before | after |
+|---|---|---|
+| setPipeline | 336 | 35 |
+| setBindGroup | 970 | 351 (≈ the mandatory per-draw dynamic-offset group-1 sets) |
+| setVertexBuffer | 745 | 368 |
+| createBindGroup | 3.1 | 0.7 |
+
+Landed (all Dawn-validated via wgx-validate, lifecycle suites 71/71):
+
+- **Redundant-state elision** — `_setPipe`/`_setBG0`/`_setVB0`/`_setVB1`
+  cache on the ENCODER as expandos (a new pass = a new wrapper, so the cache
+  self-resets). Every state call on lit/shadow passes routes through them; a
+  raw `pass.setPipeline` beside them would silently desync the cache.
+- **`_litOpts` pooled** (the per-draw `Object.assign` fired on road + every
+  detail mesh); `drawInstanced`'s bag clears by `undefined`-assign, not
+  `delete` (dictionary-mode). `model.subarray(0,16)` view allocs skipped for
+  the exact-16 mat4 case at all six sites.
+- **LIT fs_main samples 30 → 2**: one dynamic-layer `textureSample` pair
+  (albedo+normal) — WGSL only requires the CALL in uniform CF; layer/UV may
+  be non-uniform expressions, which is GLX's `texture()` path exactly (same
+  implicit LOD, aniso, quad divergence at seams). `matUvLit(16)` ≡ the old
+  `roadUv`, so the road folds in.
+- **paintPeelN gated** by a uniform early return on `amt` (caller passes a
+  `D.mat1.w` gate); the peel's 6 svnoise now cost paint draws only, while
+  `dpdx(Npeel)` stays at fs_main top level (the derivative lint's structural
+  rule holds).
+- **Lamp loop rejects on squared distance** before the sqrt (godray's shape);
+  `applyMaterialTexNormal`'s select() no longer evaluates the unused
+  dependent sample; composite `sunVis` depth fetch is an `if`, not both
+  arms of a select().
+- **Soft-present classification**: empty `adapter.info` no longer means
+  software (Firefox/privacy UAs paid full staging readback + CPU blit on
+  real GPUs); a true hidden-info software adapter degrades through the
+  output-probe ladder to GLX. `soft(ware|pipe)` anchored — bare `soft`
+  substring-matched "Microsoft".
+- **Pipeline warmup**: the known-shipping lit variants (alpha, noAlphaWrite,
+  doubleSided, three bias pairs, decal — ×MSAA counts) compile deferred
+  after boot instead of as mid-race hitches. Boot-gate pipelines stay sync
+  (refusal detection needs their errors).
+- **Env-mip ladder cached on the texture** (was 72 createView + 36
+  createBindGroup per 6-face env cycle); camera frustum planes extracted
+  once per frame, not per chunked mesh (`_fcPlanesIsFrame`, invalidated by
+  begin() and the shadow extracts that share the scratch).
+
+Deferred (audited, sketched, NOT landed — each needs its own verified round):
+
+1. **Per-chunk lamp sets** (biggest night-street win): pack a 48-bit lamp
+   mask into the spare u32s of the 64-float draw-ring slot, port GLX's
+   `_pickChunkLamps` against the existing chunk AABBs, OR masks over merged
+   runs, mask-continue in the WGSL lamp loop. `perChunkLights` /
+   `roadChunkLamps` stay honest no-ops until then.
+2. **Shared road vertex buffer**: road pieces each own a vbuf (≤4095 pulled
+   verts, Dawn workaround), so drawChunked's run merge — keyed on vbuf
+   identity — can never fire for the road. One vbuf + `firstVertex` offsets
+   restores GLX's adjacent-run merging.
+3. **Indexed road drawing**: `_expandPull` triples road vertex shading vs
+   GLX's indexed ribbon; group-2 storage is already addressed by
+   vertex_index.
+4. **SSR at half-res** (GLX runs it inline at 12 steps; WGX pays a full-res
+   rgba16float target + 24 steps, then blurs the result anyway) and the
+   mat4 inverse-projection per march step where only view-z is needed.
+5. **Render bundles** for the static chunk sequence (needs FIXED draw-ring
+   slots per chunk so the bundle survives culling changes; knob-gated, keep
+   the culled path for WGX_LITE/software).
+6. **Submit consolidation** (5 → fewer; the soft-present
+   onSubmittedWorkDone fencing must stay after the LAST submit).
+7. `trkFromWorld` gating looked free but is NOT semantics-preserving: the
+   LUT result feeds `classified`/`vMatId` on every draw over the ribbon
+   (props/cars with matId 0 classify as asphalt by design there), so a
+   road-only gate changes material selection. Left alone deliberately.
