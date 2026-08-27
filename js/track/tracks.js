@@ -265,8 +265,8 @@ const Tracks = (function () {
 
     // Six more entry points take a node index or a lap fraction and are absent
     // from the lists above, so they never moved with the rest: `groundPatch`
-    // (35 circuits), `overheadSpan` (16), `circuitKit` (16), `groundedSegments`
-    // (10), `waterField`, and the `frameAt` lookup itself. That gap is why
+    // (34 circuits), `overheadSpan` (18), `circuitKit` (16), `groundedSegments`
+    // (9), `waterField`, and the `frameAt` lookup itself. That gap is why
     // Miami's Turnpike overpass and Singapore's kit-built pit building were the
     // last two required models left in the road after the origin move.
     //
@@ -275,11 +275,11 @@ const Tracks = (function () {
     // reverse-only circuits (monaco, kyalami, paul_ricard) TODAY, so giving
     // them the full treatment here would silently move already-shipped geometry.
     //
-    // Exception: `sceneryLapMirror` circuits (singapore). Their racing anchors
-    // already get mirror+shift via sceneryNode/sceneryFrac, and portal decks
-    // via shift-only overheadSpan/frameAt landed ~half a lap from hand supports
-    // that went through anchor(). For those defs only, apply the full RS/RK
-    // remap so every fraction-keyed helper agrees with the standard group.
+    // Exception: `sceneryLapMirror` circuits (singapore): ONLY frameAt and
+    // overheadSpan take the mirrored remapS — the portal-deck case that landed
+    // ~half a lap from anchor()-placed supports. The k-keyed helpers and
+    // circuitKit stay SHIFT-ONLY on purpose: singapore's authored fracs are
+    // tuned against shift-only (the KOLD legend in js/circuits/singapore.js).
     //
     // `frameAt` is wrapped at the API BOUNDARY rather than at its definition on
     // purpose. models/ and the kits hold the RAW frameAt and resolve fractions
@@ -291,7 +291,6 @@ const Tracks = (function () {
       const shiftK = Math.round(shiftS * n);
       const SK = (k) => (((Math.round(k) + shiftK) % n) + n) % n;
       const SS = (s) => TrackSpace.wrap01(s + shiftS);
-      const remapK = doMirror ? RK : SK;
       const remapS = doMirror ? RS : SS;
       for (const name of ["groundPatch", "waterField"]) {
         const f = api[name]; if (f) w[name] = (k, side, ...r) => f(SK(k), side, ...r);
