@@ -388,9 +388,16 @@ const CEILINGS = {
   //   .engine) at both engine-start seams, ERS deploy/energy/ersDeploy through
   //   the pooled setEngine arg (the continuous deploy whine + low-battery sag
   //   live in audio.js), and the X-mode latch click on the local flap command.
-  "js/game.js": 8670,
-  // The next three largest. Each is cohesive today (a dev API, an agent view, a
-  // procedural mesh), so these are drift alarms rather than extraction targets.
+  // + the deploy side's per-chunk frame-fields clear (allLights/perChunkLights/
+  //   tailStart/tailCount reset every frame before the flood branch: `frame`
+  //   outlives a night->day ToD flip, so chunked geometry kept binding
+  //   per-chunk night lamps in daylight). Both lineages grew the file, so
+  //   neither side's number fits the union — re-measured on the merged tree
+  //   (split-newline count): 8671.
+  "js/game.js": 8675,
+  // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
+  // these are drift alarms rather than extraction targets. Note game.js is NOT
+  // the largest file in the repo — js/game/light-presets.js is (see below).
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
   // — a dev-API hook growing the dev API is the file doing its job.
   // 3055 -> 3060 for lightState.bakedLights/lampPosts — MCP dens=1 vs dens=2 was
@@ -487,9 +494,32 @@ const CEILINGS = {
   // 2319 -> 2350: tri-state verdict cache on the six guarded emitters (the
   // graph fuse replay reuses dry-run guard verdicts; vegas build 1.66 -> 1.51 s,
   // 40/40 graph parity). Gates compressed to 2 lines each before raising.
-  // 2350 -> 2355 for the sign-safe seam wrap in scanBarrier/indexSolid and the
-  // comment recording the negative-k silent no-op it fixes (10 circuits hit it).
-  "js/track/tracks.js": 2355,
+  // 2350 -> 2349: R6 truth pass deleted the dead `remapK` (the sceneryLapMirror
+  // helpers that stay shift-only do so ON PURPOSE — singapore's KOLD legend).
+  // 2350 -> 2355 on the deploy side for the sign-safe seam wrap in
+  // scanBarrier/indexSolid (the negative-k silent no-op, 10 circuits hit it).
+  // Union re-measured: 2354.
+  "js/track/tracks.js": 2354,
+  // ── Round-6 additions: the unguarded giants, set AT measured (test metric,
+  // split-newline count) so any growth is a deliberate raise here. Each line
+  // says why the file is its size today; none is an extraction target yet.
+  // THE largest file in the repo: ~8.6k lines of it are data (per-track
+  // lighting presets exported by the bake-lighting skill), not logic.
+  "js/game/light-presets.js": 8683,
+  // The whole WGX backend in one IIFE by design (deferred inject, no tag).
+  // 5179 -> 5365 on the deploy union: their half-res SSR + chunk-AABB
+  // lamp-mask cull rounds landed on the other lineage (re-measured).
+  "js/render/webgpu/wgx.js": 5365,
+  // TLX backend shell; grows only with GLX-parity features.
+  "js/render/three/tlx.js": 2095,
+  // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
+  "js/render/glx.js": 1929,
+  // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
+  "js/render/webgpu/wgsl-chunks.js": 1855,
+  // three.js TSL lit-material port; tracks lit.js feature-for-feature.
+  "js/render/three/tsl-lit.js": 1725,
+  // Multiplayer lobby UI + flow; all of js/net/'s DOM lives here.
+  "js/net/lobby.js": 1618,
 };
 
 test("the big modules are not growing unnoticed", () => {

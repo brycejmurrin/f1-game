@@ -2385,7 +2385,7 @@ const api = {
       // for the one-liner that installs a collector BEFORE reproducing a bug.
       errors: safe(() => (window.__apexErrors || []).slice(-40), []),
     };
-    try { console.log(d); } catch (_) {}
+    try { Log.info("apex", d); } catch (_) {}
     if (o.download !== false) {
       const bytes = this.save(d, o.filename || "apex-diag.json");
       try { Log.info("apex", "downloaded apex-diag.json (" + bytes + " bytes)"); } catch (_) {}

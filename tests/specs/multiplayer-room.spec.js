@@ -27,7 +27,7 @@ const EV = { HELLO: "hello", SETTINGS: "settings", READY: "ready", GO: "go", QUA
 // connection takes into onConnected().
 async function enterRoom(page, role = "host") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate(() => window.__apex.lobbyFake(true));
   await page.click("#mb-vs");
   await page.click(role === "host" ? "#vs-host" : "#vs-join");
@@ -280,7 +280,7 @@ test.describe("qualifying in a friend race", () => {
     await peerSays(page, EV.QUALI, { driverId: "peer-driver", t: 62.5 });
     await expect(page.locator("#q-go")).toBeEnabled({ timeout: 10000 });
     await tap("q-go");
-    await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), null, { timeout: 60000 });
+    await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), null, { polling: 100, timeout: 60000 });
     await expect(page.locator("#quali")).toBeHidden();
   });
 });

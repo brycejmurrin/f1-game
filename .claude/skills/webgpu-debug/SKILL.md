@@ -6,7 +6,8 @@ paths: js/render/webgpu/**
 
 # Debug WebGPU / WGX renderer issues
 
-WGX lives in `js/render/webgpu/` — `wgx.js`, `wgsl-chunks.js`, `wgsl-post.js`.
+WGX lives in `js/render/webgpu/` — `wgx.js`, `wgsl-chunks.js`, `wgsl-fx.js`,
+`wgsl-post.js`.
 DEFERRED: no `<script>` tag; `js/game.js` injects it when
 `apex26.gfxBackend === "webgpu"`. GLX stays the shipped default; every WGX
 failure must degrade to GLX, never a dead canvas.

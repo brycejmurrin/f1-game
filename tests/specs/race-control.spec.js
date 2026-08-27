@@ -42,18 +42,18 @@ test.describe("race control in a page", () => {
     // who had turned them off. Only a real round trip through a real
     // localStorage catches that.
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 10000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
     await page.evaluate(() => window.__apex.caution(false));
 
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 10000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
     expect(await page.evaluate(() => window.__apex.caution().enabled)).toBe(false);
 
     // …and back, so the spec leaves no state behind for whatever runs next in
     // this worker's storage origin.
     await page.evaluate(() => window.__apex.caution(true));
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 10000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
     expect(await page.evaluate(() => window.__apex.caution().enabled)).toBe(true);
   });
 

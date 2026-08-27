@@ -55,10 +55,10 @@ function silentWav(seconds = 5, sampleRate = 8000) {
 
 async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
   await page.waitForFunction(
     () => typeof MusicLib !== "undefined" && typeof GameAudio !== "undefined",
-    null, { timeout: 10000 }
+    null, { polling: 100, timeout: 10000 }
   );
 }
 
@@ -388,7 +388,7 @@ test("redirectUri() is origin + pathname with no query or hash", async ({ page }
 
 test("redirectUri() strips a query and hash the game was launched with", async ({ page }) => {
   await page.goto("/?track=monza#hash");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
   const got = await page.evaluate(() => ({
     uri: SpotifyMusic.redirectUri(),
     href: location.href,

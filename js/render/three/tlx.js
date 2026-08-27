@@ -1322,6 +1322,12 @@ const TLX = (function () {
 
         // resources
         chunkedTrackCoords: false, // chunked TSL variant deliberately omits road `trk` / markings
+        // MUST be an explicit false, not an absence: game.js installs backends
+        // by descriptor-copy onto GLX, so a missing name would inherit GLX's
+        // `true` and the game would feed TLX a per-chunk bake it cannot bind
+        // (shared node-material uniforms — per-chunk sets would mint a program
+        // per chunk, the pinProgram lesson).
+        hasPerChunkLights: false,
         createMesh(data) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
           _meshMade.mesh++;

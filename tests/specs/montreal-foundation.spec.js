@@ -4,12 +4,12 @@ import { test, expect } from "@playwright/test";
 test("Montreal island foundation stays grounded, clear, and bounded", async ({ page }) => {
   test.setTimeout(300000);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
   await page.evaluate(() => {
     window.__apex.trackGeometry(true);
     window.__apex.race("montreal", "day", "dry");
   });
-  await page.waitForFunction(() => window.__apex.info().track === "montreal", null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex.info().track === "montreal", null, { polling: 100, timeout: 15000 });
 
   const result = await page.evaluate(() => {
     const def = Tracks.LIST.find((track) => track.id === "montreal");

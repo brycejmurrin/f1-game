@@ -10,9 +10,9 @@ import { test, expect } from "../helpers/fixtures.js";
 
 async function startRace(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate(() => window.__apex.go());
 }
 const step = (page, n) => page.evaluate((n) => { for (let i = 0; i < n; i++) window.__apex.step(1 / 60, 1); }, n);

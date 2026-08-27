@@ -7,7 +7,7 @@ test("GameAudio initialises without console errors", async ({ page, pageErrors }
     if (msg.type() === "error") errors.push(msg.text());
   });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
   const defined = await page.evaluate(
     () =>
       typeof GameAudio === "object" || typeof GameAudio === "function"
@@ -38,7 +38,7 @@ test("persisted SOUND OFF stays off and defers WebAudio until a trusted enable c
   });
 
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
 
   // This is a genuine first pointer gesture and also exercises the Settings
   // button's formerly unconditional GameAudio.init().
@@ -68,7 +68,7 @@ test("persisted SOUND OFF stays off and defers WebAudio until a trusted enable c
 
 test("re-enabling sound during a race restarts race music", async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
   const monzaIdx = await page.evaluate(() => {
     const calls = [];
     const startMusic = GameAudio.startMusic;
@@ -125,7 +125,7 @@ test("an out-of-range stored volume clamps both the audio gain and the panel's o
     localStorage.setItem("apex26.volSfx", "-3");       // way under it
   });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
   expect(await page.evaluate(() => GameAudio.volumes())).toEqual({ music: 1, sfx: 0 });
 
   await page.locator("#mb-settings").click();

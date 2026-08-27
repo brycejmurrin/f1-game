@@ -145,7 +145,9 @@ const TrackMesh = (function () {
     // the winner from one node to the next — must cross THROUGH flat rather
     // than snap between ±full lift, or the road edge gains a step no car can
     // track (measured 0.15 m/m at Mugello and 0.12 at Shanghai before this;
-    // the cap is 0.08). Runs once on the assembled profile, so it catches
+    // the code's cap is BANK_MAX_EDGE_GRADE = 0.05 — the 0.08 elsewhere is
+    // the elevation-tracks spec's looser TOLERANCE, a different number).
+    // Runs once on the assembled profile, so it catches
     // every transition regardless of which zone produced it. Each crossing
     // gets just enough run to hold BANK_MAX_EDGE_GRADE, and the blend may only
     // ever REDUCE a node's lift — it never invents banking anywhere.

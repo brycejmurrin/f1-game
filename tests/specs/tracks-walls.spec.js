@@ -111,7 +111,7 @@ test.describe("Apex 26 — track boundaries", () => {
      removes the whole question. */
   freshTest("driving hard into either edge stops bounded and recovers (sampled tracks)", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     for (const id of ["monaco", "monza", "baku", "spa"]) {
       const r = await page.evaluate((tid) => {
         const ok = window.__apex.race(tid, "day", "dry");

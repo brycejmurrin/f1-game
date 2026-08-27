@@ -27,7 +27,7 @@ const LANDSCAPE = { width: 844, height: 390 };
 
 async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
 }
 
 // A career started through the hook rather than the setup screen — most specs
@@ -45,7 +45,7 @@ async function goRacing(page) {
   await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
   await page.locator("#q-sim").click();
   await page.locator("#q-go").click();
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 20_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 20_000 });
 }
 
 // ── mode axes ────────────────────────────────────────────────────────────────
@@ -108,7 +108,7 @@ test.describe("Career — save", () => {
     await startCareer(page);
     const before = await page.evaluate(() => window.__apex.careerState());
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const after = await page.evaluate(() => window.__apex.careerState());
     expect(after.team).toBe(before.team);
     expect(after.money).toBe(before.money);
@@ -141,7 +141,7 @@ test.describe("Career — save", () => {
     const legacy = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career")));
     expect(legacy).toBeNull();
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career")))).toBeNull();
     expect(await page.evaluate(() => window.__apex.career().team)).toBe("williams");
   });
@@ -750,7 +750,7 @@ test.describe("Career — objectives", () => {
     await startCareer(page);
     const before = await page.evaluate(() => window.__apex.careerState().obj);
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     await page.evaluate(() => window.__apex.career(true));
     expect(await page.evaluate(() => window.__apex.careerState().obj)).toEqual(before);
   });
@@ -1115,7 +1115,7 @@ test.describe("Career — determinism", () => {
     await page.locator("#q-sim").click();
     await page.evaluate(() => window.__apex.seed(99));
     await page.locator("#q-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 20_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 20_000 });
     return page.evaluate(() => {
       const rounds = window.__apex.careerSim(24);
       const roll = window.__apex.careerRollover();
@@ -1448,7 +1448,7 @@ test.describe("Career — reliability", () => {
     await expect(chips.nth(2)).toHaveAttribute("aria-pressed", "true");
     expect(await page.evaluate(() => localStorage.getItem("apex26.reliability"))).toContain("real");
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     expect(await page.evaluate(() => window.__apex.reliability())).toBe("real");
   });
 });
@@ -1529,7 +1529,7 @@ test.describe("Career — slots", () => {
     await fourCareers(page);
     await page.evaluate(() => window.__apex.careerSlots("myteam", 1));
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const st = await page.evaluate(() => ({
       slot: window.__apex.careerState().slot,
       flavour: window.__apex.careerState().slotFlavour,
@@ -1834,7 +1834,7 @@ test.describe("Career — the settlement", () => {
     await page.locator("#sel-go").click();
     await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
     await page.locator("#rs-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 20_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 20_000 });
     await page.evaluate(() => { window.__apex.park(0.9); window.__apex.finishRace(); });
     await expect(page.locator("#results")).toBeVisible({ timeout: 10_000 });
     await expect(page.locator(".res-settle")).toHaveCount(0);
@@ -1886,7 +1886,7 @@ test.describe("Career — extra funds", () => {
     // Not in the career object — it is a preference, not a fact about a career.
     expect(await page.evaluate(() => window.__apex.career().freeMoney)).toBeUndefined();
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     expect(await page.evaluate(() => window.__apex.careerFreeMoney())).toBe(true);
   });
 });
@@ -2020,7 +2020,7 @@ test.describe("Career — sponsors", () => {
     await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 7 }));
     const a = await page.evaluate(() => window.__apex.careerState().sponsor.label);
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     expect(await page.evaluate(() => window.__apex.careerState().sponsor.label)).toBe(a);
   });
 

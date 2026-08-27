@@ -29,6 +29,16 @@ const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
 const ROOT = new URL("../..", import.meta.url).pathname;
 
+// Extracted list blocks carry inline comments, and a bare /"…"/g pull treats a
+// quoted phrase INSIDE a comment as a listed file — a round-6 audit measured
+// the sw.js optional set capturing 'no side world' from a comment, meaning a
+// DEFERRED file named only in prose would satisfy the precache lockstep (the
+// exact build-895 failure this guard exists to prevent). Strip comments first.
+function stripComments(block) {
+  return block.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+}
+
+
 const indexHtml = readFileSync(join(ROOT, "index.html"), "utf8");
 
 // Same double-quoted attribute parse sw.js relies on at install time.
@@ -147,7 +157,7 @@ test("js/game.js BACKEND_FILES equals MANIFEST.DEFERRED, group for group", () =>
   for (const [name, files] of Object.entries(MANIFEST.DEFERRED)) {
     const group = block[1].match(new RegExp(`\\b${name}:\\s*\\[([\\s\\S]*?)\\]`));
     assert.ok(group, `BACKEND_FILES is missing the "${name}" group`);
-    const listed = [...group[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    const listed = [...stripComments(group[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
     assert.deepEqual(listed, files, `BACKEND_FILES.${name} must match MANIFEST.DEFERRED.${name} exactly, in order`);
   }
 });
@@ -156,7 +166,7 @@ test("js/game.js BACKEND_EDGES equals MANIFEST.DEFERRED_EDGES", () => {
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
   const block = src.match(/const BACKEND_EDGES = \[([\s\S]*?)\n\];/);
   assert.ok(block, "js/game.js must declare BACKEND_EDGES for the DAG loader");
-  const listed = [...block[1].matchAll(/\["([^"]+)",\s*"([^"]+)"\]/g)].map((m) => [m[1], m[2]]);
+  const listed = [...stripComments(block[1]).matchAll(/\["([^"]+)",\s*"([^"]+)"\]/g)].map((m) => [m[1], m[2]]);
   assert.deepEqual(listed, MANIFEST.DEFERRED_EDGES);
 });
 
@@ -176,7 +186,7 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   const sw = readFileSync(join(ROOT, "sw.js"), "utf8");
   const optional = sw.match(/const optional = new Set\(\[([\s\S]*?)\]\);/);
   assert.ok(optional, "sw.js must declare an `optional` precache Set");
-  const seeded = new Set([...optional[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]));
+  const seeded = new Set([...stripComments(optional[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]));
   for (const f of deferredFiles()) {
     assert.ok(seeded.has(f), `${f} is DEFERRED, so sw.js must seed it (the tag parser cannot find it)`);
   }
@@ -203,7 +213,7 @@ test("js/game.js AGENT_FILES equals MANIFEST.LAZY_AGENT", () => {
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
   const block = src.match(/const AGENT_FILES = \[([\s\S]*?)\n\];/);
   assert.ok(block, "js/game.js must declare AGENT_FILES for the lazy agent surface");
-  const listed = [...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  const listed = [...stripComments(block[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(listed, MANIFEST.LAZY_AGENT);
 });
 
@@ -211,7 +221,7 @@ test("js/game.js AGENT_EDGES equals MANIFEST.LAZY_EDGES", () => {
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
   const block = src.match(/const AGENT_EDGES = \[([\s\S]*?)\n\];/);
   assert.ok(block, "js/game.js must declare AGENT_EDGES for the lazy agent DAG");
-  const listed = [...block[1].matchAll(/\["([^"]+)",\s*"([^"]+)"\]/g)].map((m) => [m[1], m[2]]);
+  const listed = [...stripComments(block[1]).matchAll(/\["([^"]+)",\s*"([^"]+)"\]/g)].map((m) => [m[1], m[2]]);
   assert.deepEqual(listed, MANIFEST.LAZY_EDGES);
 });
 
@@ -221,7 +231,7 @@ test("sw.js optional precache does not include LAZY_AGENT", () => {
   const sw = readFileSync(join(ROOT, "sw.js"), "utf8");
   const optional = sw.match(/const optional = new Set\(\[([\s\S]*?)\]\);/);
   assert.ok(optional, "sw.js must declare an `optional` precache Set");
-  const seeded = new Set([...optional[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]));
+  const seeded = new Set([...stripComments(optional[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]));
   for (const f of lazyFiles()) {
     assert.ok(!seeded.has(f), `${f} is LAZY_AGENT — must not be SW-optional`);
     assert.ok(![...seeded].some((u) => u.includes(f)), `${f} must not appear in sw.js optional`);

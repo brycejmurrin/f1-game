@@ -12,7 +12,7 @@ import { test, expect } from "@playwright/test";
 
 async function load(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
 }
 
 // WCAG contrast, computed in the page against the SAME helpers the atlas uses.

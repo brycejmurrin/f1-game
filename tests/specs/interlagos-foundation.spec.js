@@ -3,9 +3,9 @@ import { test, expect } from "@playwright/test";
 
 async function loadInterlagos(page, time = "day") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate((tod) => window.__apex.race("interlagos", tod, "dry"), time);
-  await page.waitForFunction(() => window.__apex.info().track === "interlagos", null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track === "interlagos", null, { polling: 100, timeout: 10_000 });
 }
 
 test.describe("Interlagos track-owned foundation migration", () => {

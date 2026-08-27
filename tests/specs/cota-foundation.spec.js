@@ -14,7 +14,7 @@ const REQUIRED_MODELS = [
 
 async function loadCota(page, timeOfDay = "day") {
   await page.evaluate((tod) => window.__apex.race("cota", tod, "dry"), timeOfDay);
-  await page.waitForFunction(() => window.__apex.info().track === "cota", null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex.info().track === "cota", null, { polling: 100, timeout: 15000 });
 }
 
 test.describe("COTA shared-foundation migration", () => {

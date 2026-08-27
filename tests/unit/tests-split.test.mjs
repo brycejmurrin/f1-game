@@ -31,6 +31,15 @@ import { moveMap, importRewrites, textRewrites, plan } from "../../tools/tests-s
 
 test("the split is COMPLETE — the planner finds nothing left to move", () => {
   const p = plan();
+  // Anti-vacuity anchor on the LIVE tree (the scratch-tree tests below prove
+  // the derivation; this proves the walk saw the real tree): a broken walk
+  // also returns an empty map, so require the split dirs to actually hold
+  // the suite population before trusting "nothing to move".
+  const root = new URL("../..", import.meta.url).pathname;
+  const liveCount = fs.readdirSync(path.join(root, "tests/unit")).length +
+                    fs.readdirSync(path.join(root, "tests/specs")).length;
+  assert.ok(liveCount > 200,
+    `only ${liveCount} files under tests/unit + tests/specs — the empty plan may be a broken walk`);
   assert.deepEqual([...p.map], [],
     "a test file sits at tests/ root — run `node tools/tests-split.mjs --apply` to file it");
   assert.deepEqual(p.imports.filter((r) => !r.parseError).map((r) => `${r.file}:${r.line} ${r.from}`), [],

@@ -36,7 +36,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { scanRepo, buildGraph, checkGraph } from "../../tools/scan-globals.mjs";
 
-// One scan serves every test below (~2 s for the 159 files).
+// One scan serves every test below (~2 s for the ~170 files).
 const scan = scanRepo();
 const graph = buildGraph(scan);
 const report = checkGraph(scan);

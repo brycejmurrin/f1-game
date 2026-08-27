@@ -6,10 +6,10 @@ const CEIL = 5.0;
 
 async function loadZandvoort(page, timeOfDay = "day") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
   await page.evaluate(() => window.__apex.trackGeometry(true));
   await page.evaluate((tod) => window.__apex.race("zandvoort", tod, "dry"), timeOfDay);
-  await page.waitForFunction(() => window.__apex.info().track === "zandvoort", null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex.info().track === "zandvoort", null, { polling: 100, timeout: 15000 });
   await page.waitForTimeout(1200);
 }
 

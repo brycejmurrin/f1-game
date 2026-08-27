@@ -218,11 +218,15 @@ srv.stdout.on("data", (d) => {
 srv.stderr.on("data", (d) => { const s = d.toString().trim(); if (s) console.error("[srv]", s.slice(0, 300)); });
 
 let nextId = 1;
+// Per-call ceiling. A SwiftShader measurement eval (cold boot + track build +
+// timed frame blocks) can legitimately run past 180 s — override with
+// MCP_CLI_TIMEOUT_MS for those runs; the default stays the safe ceiling.
+const CALL_TIMEOUT_MS = Math.max(10000, parseInt(process.env.MCP_CLI_TIMEOUT_MS, 10) || 180000);
 const send = (method, params) => new Promise((res, rej) => {
   const id = nextId++;
   pending.set(id, res);
   srv.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
-  setTimeout(() => { if (pending.has(id)) { pending.delete(id); rej(new Error(`timeout on ${method}`)); } }, 180000);
+  setTimeout(() => { if (pending.has(id)) { pending.delete(id); rej(new Error(`timeout on ${method}`)); } }, CALL_TIMEOUT_MS);
 });
 const notify = (method, params) =>
   srv.stdin.write(JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n");

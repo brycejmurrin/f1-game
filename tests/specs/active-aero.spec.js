@@ -19,9 +19,9 @@ const LANDSCAPE = { width: 844, height: 390 };
 
 async function load(page, trackId = "monza") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => {
     window.__apex.headless(true);
     window.__apex.go();
@@ -108,7 +108,7 @@ test.describe("active aero — state surface", () => {
 
   test("aero() returns null with no player on track", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     expect(await page.evaluate(() => window.__apex.aero())).toBeNull();
   });
 });

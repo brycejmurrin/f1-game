@@ -25,7 +25,7 @@ const LANDSCAPE = { width: 844, height: 390 };
 
 async function menu(page, fakeTransport = true) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   if (fakeTransport) await page.evaluate(() => window.__apex.lobbyFake(true));
 }
 
@@ -200,7 +200,7 @@ test.describe("VS FRIEND lobby", () => {
       // A guest opening the link genuinely loads the page, so the test must too.
       await page.goto("about:blank");
       await page.goto(url);
-      await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
       await expect(page.locator("#vsfriend")).toBeVisible();
       await expect(page.locator("#vs-joining")).toBeVisible();
       await expect(page.locator("#vs-invite-in")).toHaveValue(code);

@@ -5,9 +5,9 @@ const LANDSCAPE = { width: 844, height: 390 };
 
 async function loadVegas(page, time = "night") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
   await page.evaluate((tod) => window.__apex.race("vegas", tod, "dry"), time);
-  await page.waitForFunction(() => window.__apex.info().track === "vegas", null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex.info().track === "vegas", null, { polling: 100, timeout: 15000 });
 }
 
 test.describe("Las Vegas track foundation migration", () => {

@@ -52,7 +52,7 @@ async function mockWakeLock(page) {
 
 async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
 }
 
 test.describe("Screen wake lock — held for the duration of a race", () => {

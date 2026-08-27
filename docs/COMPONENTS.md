@@ -1,6 +1,6 @@
 # The component inventory — what exists, who owns it, what is shared
 
-`css/` holds **505 classes in 53 families**, and until this document there was no
+`css/` holds **507 classes in 53 families**, and until this document there was no
 list of them. That absence has a cost, and it has already been paid: `.res-*` is
 defined in `components.css` *and* `career.css`, which is something I found by
 grepping in the middle of fixing an unrelated cascade-layer bug rather than by
@@ -172,7 +172,7 @@ most-shared class in the project and had no entry at all:
 
 ## Dead classes
 
-None, out of 505 — a class defined in `css/` and referenced from neither
+None, out of 507 — a class defined in `css/` and referenced from neither
 `index.html` nor any `js/` file. The three this section used to name
 (`dh-leg-swatch`, `dh-sectors`, `foot-end`) have since been deleted from `css/`,
 and the last of them took its whole class family with it — which is why no

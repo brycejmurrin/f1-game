@@ -63,6 +63,7 @@ const FULL = [
   "js/render/shaders/post.js",
   "js/render/glx/post.js",
   "js/render/glx/shadow.js",
+  "js/render/lamp-chunks.js",
   "js/render/glx/chunked.js",
   "js/render/glx.js",
   // NB: js/render/webgpu/* and js/render/three/* are NOT here — they are
@@ -197,6 +198,7 @@ const CARVIEW = [
   "js/render/shaders/post.js",
   "js/render/glx/post.js",
   "js/render/glx/shadow.js",
+  "js/render/lamp-chunks.js",
   "js/render/glx/chunked.js",
   "js/render/glx.js",
   "js/car/teams.js",
@@ -287,6 +289,7 @@ const HARD_EDGES = [
   // ordering explicit)
   ["js/render/glx/post.js", "js/render/glx.js"],
   ["js/render/glx/shadow.js", "js/render/glx.js"],
+  ["js/render/lamp-chunks.js", "js/render/glx/chunked.js"], // drawChunked resolves LampChunks tables (call-time; keep explicit)
   ["js/render/glx/chunked.js", "js/render/glx.js"],
   ["js/render/glx.js", "js/render/assets.js"],         // Assets feature-detects the backend's createTextureArray
   ["js/track/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
@@ -426,6 +429,7 @@ const DEFERRED_EDGES = [
 const PATHS = {
   TRACKS_ENGINE: "js/track/tracks.js",
   GLX_CHUNKS: "js/render/shaders/chunks.js",
+  LAMP_CHUNKS: "js/render/lamp-chunks.js",
   GLX_SHADERS_LIT: "js/render/shaders/lit.js",
   GLX_SHADERS_POST: "js/render/shaders/post.js", // grade/composite GLSL (image-grade-shaders.test.mjs)
   WGSL_CHUNKS: "js/render/webgpu/wgsl-chunks.js",

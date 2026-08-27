@@ -369,12 +369,11 @@ Verified after all four fixes: **5/5 pass** solo on a quiet box at
 177.8 / 175.4 / 155.0 / 140.7 / 52.3 s.
 
 **Why it rotted:** `tools/pick-tests.mjs` maps `js/game/lighting.js` to the
-`webgl` group correctly, so a local `pick-tests` run would have named it. But no
-browser group GATES in CI — the change-aware job is advisory — so a red
-`lighting-tuner-grade` can sit on the deploy branch indefinitely with every CI
-run green. Same shape as the `test:api` entry above. That is a deliberate
-speed trade-off, not an oversight; the cost is that these suites need a human to
-run them.
+`webgl` group correctly, so a local `pick-tests` run would have named it.
+(SUPERSEDED since: ci.yml's `selected` job is now the change-aware gate and is
+BLOCKING on branch pushes and pull requests, so this class of red no longer
+sits invisibly — but only for specs the selector picks; unselected suites still
+need a human to run them, and the `test:api` entry above keeps that caveat.)
 
 ### Before believing ANY red run
 
@@ -669,7 +668,7 @@ else if (…) { /* shed a feature */ }
 Step 1.0 down by 0.1 in IEEE doubles and you get
 `1 → 0.9 → 0.8 → 0.7000000000000001 → 0.6000000000000001 → 0.5000000000000001`.
 That last value is **one ULP ABOVE 0.5**, so `cur > 0.5` is true forever. The
-request then clamps to 0.5 and `js/render/glx.js:589` rejects it against its own
+request then clamps to 0.5 and `setRenderScale` (`js/render/glx.js`) rejects it against its own
 `Math.abs(s - renderScale) < 0.02` dead zone — and because the outer `if` was
 ENTERED, the `else if` that sheds a feature was **never evaluated**. Only the
 GRAPHICS preset's `_userTier` still bit, because that is a separate term in
@@ -699,7 +698,8 @@ return false` — **not the shipped contract**, which rejects any change under
 the real dead zone and outside `s === scale`. A second fake pinned the floor at
 exactly `0.5`, a value the real down-chain never produces, so the test written to
 cover "scale floor hit" tested a state that cannot occur. Both fakes now mirror
-`glx.js:587-593` verbatim, and the recovery test fails on the old code.
+`setRenderScale`'s dead-zone clamp in `js/render/glx.js` verbatim, and the
+recovery test fails on the old code.
 **A fake that is easier than the contract will hide exactly the bugs the
 contract's hard edges cause.**
 
@@ -720,15 +720,15 @@ honestly as a side effect.
 `docs/PERF-FINDINGS.md` §3 (and an audit pass) described
 `track.meshes.roadChunked` as "a fix that exists in the tree and is unreachable".
 That is wrong and the correction matters, because the suggested action was to
-reach it. `createChunkedMesh` (`js/render/glx/chunked.js`) **never carries
-`data.trk`** — the fifth attribute `createMesh` builds at `js/render/glx.js:622`
+reach it. `createChunkedMesh` (`js/render/glx/chunked.js`) **never carried
+`data.trk`** — the fifth attribute `createMesh` builds (`js/render/glx.js`)
 for road-marking coordinates. Without it the shader reads the generic default,
-`float hw = vTrk.z` is 0, and `lit.js:533`'s `if (hw <= 0.5) return;` fires — its
+`float hw = vTrk.z` is 0, and `lit.js`'s `if (hw <= 0.5) return;` guard fires — its
 own comment even says *"(or no trk attribute)"*. **Every edge line, centre dash
-and marking would silently disappear.** It is invisible today only because
-`LT.roadChunkLamps` defaults to 0 and `perChunkLights` is tier-shed. Teaching
-`createChunkedMesh` about `trk` is step 0 of any ribbon-cull work and is a
-standalone bug fix worth landing on its own.
+and marking would silently disappear.** (SUPERSEDED: this fix SHIPPED —
+`chunked.js` now reads and interleaves `data.trk`, and GLX/WGX publish
+`chunkedTrackCoords: true`; only TLX remains `false`, which the 08-19 banners'
+"still open: TLX road trk" reflects.)
 
 ### Stale entry corrected: the env-probe cull already shipped
 
@@ -1094,7 +1094,9 @@ EVERY `?v=N` after ANY js/css change, so a one-line CSS edit costs every
 returning player a full re-download and a cold compile of the whole wall.
 Per-file content hashing would fix it and is a convention change, not a code
 change — but it touches the index.html/manifest guard and the `version.json`
-shell guard, so it is its own commit.
+shell guard, so it is its own commit. (SUPERSEDED: SHIPPED — index.html now
+carries per-file `?v=<12-hex-sha>` on every src tag; only edited files go cold
+per deploy, exactly the fix this paragraph asks for.)
 
 **And the same article reframes the 97.3 ms figure.** `sw.js` precaches inside
 the `install` event, and V8 treats that path specially: "the code cache is
@@ -1130,7 +1132,9 @@ initialise **mid-wall**, so a module at tag 50 can init before one it reads at
 tag 100 exists. The prepared form of the change is
 `readyState !== "complete"`, which is behaviour-preserving today and correct
 under `defer` — do that first, separately, and prove it green before touching a
-single tag.
+single tag. (SUPERSEDED: the prepared form SHIPPED — all eight named modules
+now read `readyState !== "complete"`, and the quoted grep matches only
+`cockpit-opts.js` and `metrics.js`. `defer` itself remains untaken.)
 
 **And the boot A/B run to settle it was VOID — recorded because the way it
 failed is reusable.** Interleaved base / defer / no-script arms, fresh
@@ -1192,3 +1196,35 @@ are in `tests/`. Fix before wiring `TrackGraph.batches()` up.
 > (`game.js` → `propBatches`); GLX/WGX/TLX element-copy (no `.subarray`);
 > dual-sig cull cache skips redundant GPU uploads when the frustum is unchanged.
 > Do not defer work based on the “tests only” line above.
+
+## R5 — per-chunk lamps: shared bake, WGX native, ULTRA-night default (2026-08-27)
+
+SwiftShader is the CPU oracle throughout; wall-clock rAF means GPU-blocking
+cost on GLX (GL blocks in draw calls) but only CPU-side cadence on WGX
+(Dawn queues asynchronously — its truth is validation + pixels).
+
+| circuit | backend | off ms/f | perChunk 0.3 ms/f | delta | first-on (bake) |
+|---|---|---|---|---|---|
+| vegas | GLX | 7910.6 | 6441.8 | **-18.6%** | 7874 ms (≤ one off-frame — bake is free) |
+| singapore | GLX | 7478.1 | 5719.1 | **-23.5%** | 7034 ms (ditto) |
+| vegas | WGX | 16.6 (rAF) | 16.1 | CPU-neutral | 37.3 ms |
+| singapore | WGX | 16.8 (rAF) | 16.7 | CPU-neutral | 25.9 ms |
+
+- Look: GLX luma 70.2→73.8 (vegas), 60.1→65.2 (singapore) — brighter as
+  designed (more lamps genuinely reach), no wash-out.
+- WGX: gpuErrors 0 at knob 0.3 AND 1.0; watchdog guard (cockpit + knob=1,
+  10 frames) completed in 181 ms both circuits — the round-1 380%-CPU /
+  22-minute shape did not reproduce. Pixel gate: gfx-probe webgpu vegas
+  PASS (#game road coverage 43.6%, roadLutReady).
+- Commands: mcp-cli raw batches (detached page-side measurement + pollers,
+  MCP_CLI_TIMEOUT_MS=170000) in artifacts/r5-{glx,wgx}-ab*.log;
+  node tools/gfx-probe.mjs --backend webgpu --lite vegas.
+- DECISION: ULTRA-night conditional layer ships `perChunkLights: 0.3`
+  (light-presets.js "*|night"), predicate in light-store condLayer.
+
+roadChunkLamps def->1 decision input (next round): reachable lamps per
+72 m road cell at default knobs — abudhabi 12, jeddah 14, vegas 10,
+qatar 25 (ONE cell over CAP 24 by one lamp), baku 10, singapore 12,
+bahrain 16 (artifacts/r5-road-lamp-count.txt; harness in the session
+scratchpad). Capacity says def->1 is safe everywhere except one qatar
+cell dropping its single FARTHEST-reaching lamp at a boundary.

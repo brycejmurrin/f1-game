@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// tests-split — plan and perform the tests/ split as ONE reproducible commit.
+// tests-split — the tests/ split, DONE and shipped; kept for provenance and
+// as the move-map source for cross-file-paths. The layout below is the
+// CURRENT tree, not a pending plan:
 //
 //     tests/*.spec.js            -> tests/specs/
 //     tests/*.test.{mjs,cjs}     -> tests/unit/

@@ -33,7 +33,7 @@ test.use({ viewport: LANDSCAPE });
 
 test("custom-team color save frees and rebuilds its decal texture", async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
 
   // Every atlas is tagged with the team it was built FOR. getCarDecalTexture
   // calls LiveryTex.buildAtlas(teamId, …) as the argument to createTexture, so
@@ -98,7 +98,7 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
 
   await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
-  await page.waitForFunction(() => window.__customAtlases().length > 1, null, { timeout: 45_000 });
+  await page.waitForFunction(() => window.__customAtlases().length > 1, null, { polling: 100, timeout: 45_000 });
 
   const probe = await page.evaluate(() => window.__customTeamTextureProbe);
   const customIds = await page.evaluate(() => window.__customAtlases());
@@ -121,7 +121,7 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
   // which reads like a UI defect and is not one. Give it room to be slow.
   test.setTimeout(240_000);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
 
   await page.evaluate(() => {
     const customData = new WeakSet();
@@ -162,7 +162,7 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
   await page.locator("#sel-go").click();
   await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
   await page.locator("#rs-go").click();
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => window.__apex.park(0.1));
   await page.waitForFunction(() => window.__customTeamMeshProbe.customMeshes.length >= 1);
   await page.evaluate(() => window.__apex.camera("cockpit"));
@@ -202,11 +202,13 @@ test("custom livery actions are independent keyboard buttons", async ({ page }) 
     localStorage.setItem("apex26.livery.mclaren", JSON.stringify("default"));
   });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
   await page.locator("#mb-race").click();
   await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
-  await page.getByRole("button", { name: /LIVERY/ }).click();
+  // LIVERY is a TAB since the garage grew its category tablist (adaptive-UI
+  // round) — the old button query matched nothing and hung the click forever.
+  await page.getByRole("tab", { name: "LIVERY" }).click();
 
   const select = page.getByRole("button", { name: "Select Test Paint livery" });
   const edit = page.getByRole("button", { name: "Edit Test Paint livery" });
@@ -226,6 +228,11 @@ test("custom livery actions are independent keyboard buttons", async ({ page }) 
 
   await page.locator(".cs-liv-ed-cancel").click();
   await page.getByRole("button", { name: "Delete Test Paint livery" }).focus();
+  // Delete is arm-then-confirm now (G.armConfirm, the career DELETE? idiom —
+  // one tap used to destroy a one-of-a-kind paint with no undo). First press
+  // ARMS the button; the row must survive it. Second press confirms.
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("button", { name: "Select Test Paint livery" })).toHaveCount(1);
   await page.keyboard.press("Space");
   await expect(page.getByRole("button", { name: "Select Test Paint livery" })).toHaveCount(0);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.livery.mclaren")))).toBe("default");

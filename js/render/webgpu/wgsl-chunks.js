@@ -452,7 +452,9 @@ struct FrameU {
   lampLightVP: mat4x4<f32>,   // off 464  Z01-remapped nearest-floodlight spot VP
   params8    : vec4<f32>,     // off 528  (lampFog, lampShadowOn, lampIdx, matTexMix)
   params9    : vec4<f32>,     // off 544  (ambContactDark, lampWallSpill, windowSunFlash, skyRimGlow)
-};                            // size 560
+  params10   : vec4<f32>,     // off 560  (chunkShadowIdx — ABSOLUTE index of the armed shadow
+                              //           lamp in the baked trackLights array, -1 unarmed; yzw pad)
+};                            // size 576
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -468,7 +470,8 @@ struct DrawU {
                               //         lamp cull, bit-exact (see the lamp loop); each mask
                               //         float holds a 24-bit integer exactly. All-ones
                               //         (16777215) = unmasked, the default for every draw.
-};                            // size 128
+  lampRange : vec4<f32>,      // off 128 (chunkLampIdx offset, count, per-chunk-active flag, pad)
+};                            // size 144
 struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(0) var<uniform> F : FrameU;
 @group(0) @binding(1) var<storage, read> lights : array<Light, 48>;
@@ -494,6 +497,12 @@ struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(12) var lampShadowTex : texture_depth_2d;
 @group(0) @binding(13) var<uniform> MatS : MatScaleU;
 @group(0) @binding(14) var envCubeSamp : sampler;            // 4× aniso, GLX env cube
+// Per-chunk lamps: the WHOLE baked track-lamp set (runtime-sized — legal for
+// read-only storage) + the concatenated per-chunk index table from LampChunks.
+// Chunked draws with D.lampRange.z > 0.5 loop their slice of chunkLampIdx over
+// trackLights; everything else keeps the per-frame lights set at binding 1.
+@group(0) @binding(15) var<storage, read> trackLights : array<Light>;
+@group(0) @binding(16) var<storage, read> chunkLampIdx : array<u32>;
 @group(1) @binding(0) var<uniform> D : DrawU;
 @group(2) @binding(0) var<storage, read> matTrkArr : array<vec4<f32>>;
 // Reconstruct (mat, s, x, hw) from world XZ via the 32×32×16 centerline LUT
@@ -654,6 +663,95 @@ fn vs_main(
   o.objPos = aPos;              // object space: paint flake / orange-peel (GLX vObjPos)
   o.clip = F.viewProj * wp;
   return o;
+}
+
+// One punctual lamp's full contribution (diffuse pool + bounce fill + GGX spec
+// + clearcoat glint + fog in-scatter) — verbatim the loop body that lived in
+// fs_main, factored so the global per-frame loop and the per-chunk baked loop
+// share it. Takes the Light BY VALUE (storage-pointer params are an extension);
+// isShadowLamp replaces the loop-index compare so the caller decides slot vs
+// absolute-index semantics. textureSampleCompareLevel takes an explicit level,
+// so calling this in non-uniform control flow is legal — keep derivatives out.
+struct LampAcc { col : vec3<f32>, fog : vec3<f32> };
+fn lampContrib(Lt : Light, isShadowLamp : bool, wpos : vec3<f32>, N : vec3<f32>, V : vec3<f32>,
+               albedo : vec3<f32>, metalness : f32, wetSheen : f32, rough : f32, a : f32,
+               f0 : vec3<f32>, NoV : f32, clearcoat : f32) -> LampAcc {
+  var acc : LampAcc;
+  acc.col = vec3<f32>(0.0);
+  acc.fog = vec3<f32>(0.0);
+  let LP = Lt.posRad.xyz - wpos;
+  let rad = Lt.posRad.w;
+  // Squared-distance reject before the sqrt — the godray loop's shape
+  // (wgsl-post.js); saves a sqrt per rejected light per fragment, and most
+  // of up to 48 lights reject here on night circuits.
+  let ld2 = dot(LP, LP);
+  if (ld2 > rad * rad) { return acc; }
+  let dist = sqrt(ld2);
+  let Ld = LP / max(dist, 1e-3);
+  let dn = dist / rad;
+  let win = clamp(1.0 - dn * dn * dn * dn, 0.0, 1.0);
+  let distC = max(dist, F.params7.w);   // LAMP NEAR CLAMP knob (uLampNearClamp, def 4.0)
+  let att = (win * win) / (distC * distC + 1.0);
+  if (att < 1e-6) { return acc; }
+  let lcol  = Lt.colBleed.xyz;
+  let bleed = Lt.colBleed.w;
+  let cd = dot(-Ld, Lt.dirVol.xyz);
+  let beam = smoothstep(Lt.cone.y, Lt.cone.x, cd);
+  // F.params8.x = uLampFog is 0 in daylight, so skip the accumulate on
+  // day frames. Uniform CF (params8.x), safe for WGSL.
+  if (F.params8.x > 0.0) {
+    acc.fog = acc.fog + lcol * (att * mix(0.35, 1.0, beam));   // Block 6 in-scatter
+  }
+  let spotD = mix(bleed, 1.0, beam);
+  let NoLl = max(dot(N, Ld), 0.0);
+  var lampSh = 1.0;
+  if (F.params8.y > 0.5 && isShadowLamp && NoLl > 0.0) {
+    let lpc = F.lampLightVP * vec4<f32>(wpos, 1.0);
+    if (lpc.w > 0.0) {
+      let lps = lpc.xyz / lpc.w;
+      let luv = vec2<f32>(lps.x * 0.5 + 0.5, 0.5 - lps.y * 0.5);
+      if (luv.x > 0.002 && luv.x < 0.998 && luv.y > 0.002 && luv.y < 0.998 && lps.z < 1.0) {
+        let lpz = lps.z - (0.0012 + 0.004 * (1.0 - NoLl));
+        let lpt = 1.5 / 512.0;
+        lampSh = ( textureSampleCompareLevel(lampShadowTex, shadowSamp, luv + vec2<f32>(-lpt, -lpt), lpz)
+                 + textureSampleCompareLevel(lampShadowTex, shadowSamp, luv + vec2<f32>( lpt, -lpt), lpz)
+                 + textureSampleCompareLevel(lampShadowTex, shadowSamp, luv + vec2<f32>(-lpt,  lpt), lpz)
+                 + textureSampleCompareLevel(lampShadowTex, shadowSamp, luv + vec2<f32>( lpt,  lpt), lpz) ) * 0.25;
+      }
+    }
+  }
+  acc.col = acc.col + albedo * lcol * (att * spotD * lampSh) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
+  // Bounce fill: pool light bounced off the road washes nearby surfaces (walls,
+  // kerbs, car flanks) with the lamp tint even outside the beam — a near-free
+  // stand-in for local ambient probes, with a soft NoL floor (mirrors GLX
+  // js/render/shaders/lit.js; BOUNCE = params3.x = uBounceK, default 0.04).
+  if (F.params3.x > 0.0) {
+    acc.col = acc.col + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
+  }
+  // GGX specular from the lamp (same microfacet BRDF as the sun).
+  // LAMP WALL SPILL (params9.y = uLampWallSpill): out-of-beam reflection floor
+  // so wet roads / walls still streak a lamp you can see, not only the pool.
+  let spotS = mix(mix(0.16, 0.30, wetSheen) * F.params9.y, 1.0, beam);
+  let Hl = normalize(Ld + V);
+  let NoHl = max(dot(N, Hl), 0.0);
+  let VoHl = max(dot(V, Hl), 0.0);
+  let Dl = D_GGX(NoHl, a);
+  let Vl = V_SmithGGX(NoV, NoLl, a);
+  let Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
+  let radianceS = lcol * (att * spotS * lampSh);
+  var lspec = (Dl * Vl) * Fll * radianceS * NoLl;
+  lspec = lspec / (1.0 + lspec);
+  acc.col = acc.col + lspec;
+  // [Block 2 — lamp portion] The clearcoat lacquer catches the floodlights too: a
+  // crisp low-roughness lens glint over the softer base highlight (GLX js/render/shaders/lit.js).
+  if (clearcoat > 0.001) {
+    let Dcc = D_GGX(NoHl, 0.03);
+    let Vcc = V_SmithGGX(NoV, NoLl, 0.01);
+    let Fcc = F_Schlick(VoHl, vec3<f32>(0.05), 1.0).x;
+    var ccl = vec3<f32>(Dcc * Vcc * Fcc) * radianceS * NoLl * clearcoat;
+    acc.col = acc.col + 2.2 * ccl / (2.2 + ccl);
+  }
+  return acc;
 }
 
 @fragment
@@ -1133,96 +1231,47 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   }
 
   // Physically-based punctual lights (floodlights / street lamps) — verbatim
-  // math from GLX LIT_FS (js/render/shaders/lit.js): windowed 1/d² falloff, aimed spot
-  // cone, diffuse pool + GGX spec. No per-light shadows (cost); the cone shapes
-  // the light. The nearest floodlight also 4-tap-PCF-samples lampShadowTex.
+  // math from GLX LIT_FS (js/render/shaders/lit.js), factored into lampContrib
+  // above: windowed 1/d² falloff, aimed spot cone, diffuse pool + GGX spec. No
+  // per-light shadows (cost); the cone shapes the light. The nearest floodlight
+  // also 4-tap-PCF-samples lampShadowTex.
   var lampFog = vec3<f32>(0.0);   // lamp irradiance reaching the fog column (Block 6)
-  let nL = i32(F.params0.w);
-  // Chunk-AABB lamp cull (bit-exact): drawChunked sets a bit only for lights
-  // whose radius reaches the chunk's AABB, so a cleared bit is precisely a
-  // light the ld2 > rad*rad reject below would discard for EVERY fragment of
-  // this draw — same output, ~3 ALU instead of the distance math per culled
-  // light. Non-chunked draws carry all-ones masks (no cull).
-  let lampM0 = u32(D.mat3.x);
-  let lampM1 = u32(D.mat3.y);
-  for (var i = 0; i < nL; i = i + 1) {
-    // Both select arms evaluate — mask the shift amounts so the unselected
-    // arm's underflowed count stays a defined shift (WGSL: >=32 is indeterminate).
-    let lampBit = u32(i);
-    let masked = select((lampM1 >> ((lampBit - 24u) & 31u)) & 1u,
-                        (lampM0 >> (lampBit & 31u)) & 1u, i < 24);
-    if (masked == 0u) { continue; }
-    let LP = lights[i].posRad.xyz - in.wpos;
-    let rad = lights[i].posRad.w;
-    // Squared-distance reject before the sqrt — the godray loop's shape
-    // (wgsl-post.js); saves a sqrt per rejected light per fragment, and most
-    // of up to 48 lights reject here on night circuits.
-    let ld2 = dot(LP, LP);
-    if (ld2 > rad * rad) { continue; }
-    let dist = sqrt(ld2);
-    let Ld = LP / max(dist, 1e-3);
-    let dn = dist / rad;
-    let win = clamp(1.0 - dn * dn * dn * dn, 0.0, 1.0);
-    let distC = max(dist, F.params7.w);   // LAMP NEAR CLAMP knob (uLampNearClamp, def 4.0)
-    let att = (win * win) / (distC * distC + 1.0);
-    if (att < 1e-6) { continue; }
-    let lcol  = lights[i].colBleed.xyz;
-    let bleed = lights[i].colBleed.w;
-    let cd = dot(-Ld, lights[i].dirVol.xyz);
-    let beam = smoothstep(lights[i].cone.y, lights[i].cone.x, cd);
-    // F.params8.x = uLampFog is 0 in daylight, so skip the accumulate on
-    // day frames. Uniform CF (params8.x), safe for WGSL.
-    if (F.params8.x > 0.0) {
-      lampFog = lampFog + lcol * (att * mix(0.35, 1.0, beam));   // Block 6 in-scatter
+  if (D.lampRange.z > 0.5) {
+    // Per-chunk mode (chunked draws only): this draw's lamps are its slice of
+    // the baked chunkLampIdx table over the full trackLights set. The shadow
+    // compare is an ABSOLUTE track-light index (F.params10.x), so the
+    // per-chunk reorder needs no slot remap — GLX's setLampShadowSlot dance
+    // is structural here. Uniform CF: lampRange is uniform per draw.
+    let lrOff = u32(D.lampRange.x);
+    let lrCnt = u32(D.lampRange.y);
+    let sIdx = i32(F.params10.x);
+    for (var i = 0u; i < lrCnt; i = i + 1u) {
+      let idx = chunkLampIdx[lrOff + i];
+      let r = lampContrib(trackLights[idx], i32(idx) == sIdx, in.wpos, N, V,
+                          albedo, metalness, wetSheen, rough, a, f0, NoV, clearcoat);
+      color = color + r.col;
+      lampFog = lampFog + r.fog;
     }
-    let spotD = mix(bleed, 1.0, beam);
-    let NoLl = max(dot(N, Ld), 0.0);
-    var lampSh = 1.0;
-    if (F.params8.y > 0.5 && i == i32(F.params8.z) && NoLl > 0.0) {
-      let lpc = F.lampLightVP * vec4<f32>(in.wpos, 1.0);
-      if (lpc.w > 0.0) {
-        let lps = lpc.xyz / lpc.w;
-        let luv = vec2<f32>(lps.x * 0.5 + 0.5, 0.5 - lps.y * 0.5);
-        if (luv.x > 0.002 && luv.x < 0.998 && luv.y > 0.002 && luv.y < 0.998 && lps.z < 1.0) {
-          let lpz = lps.z - (0.0012 + 0.004 * (1.0 - NoLl));
-          let lpt = 1.5 / 512.0;
-          lampSh = ( textureSampleCompareLevel(lampShadowTex, shadowSamp, luv + vec2<f32>(-lpt, -lpt), lpz)
-                   + textureSampleCompareLevel(lampShadowTex, shadowSamp, luv + vec2<f32>( lpt, -lpt), lpz)
-                   + textureSampleCompareLevel(lampShadowTex, shadowSamp, luv + vec2<f32>(-lpt,  lpt), lpz)
-                   + textureSampleCompareLevel(lampShadowTex, shadowSamp, luv + vec2<f32>( lpt,  lpt), lpz) ) * 0.25;
-        }
-      }
-    }
-    color = color + albedo * lcol * (att * spotD * lampSh) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
-    // Bounce fill: pool light bounced off the road washes nearby surfaces (walls,
-    // kerbs, car flanks) with the lamp tint even outside the beam — a near-free
-    // stand-in for local ambient probes, with a soft NoL floor (mirrors GLX
-    // js/render/shaders/lit.js; BOUNCE = params3.x = uBounceK, default 0.04).
-    if (F.params3.x > 0.0) {
-      color = color + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
-    }
-    // GGX specular from the lamp (same microfacet BRDF as the sun).
-    // LAMP WALL SPILL (params9.y = uLampWallSpill): out-of-beam reflection floor
-    // so wet roads / walls still streak a lamp you can see, not only the pool.
-    let spotS = mix(mix(0.16, 0.30, wetSheen) * F.params9.y, 1.0, beam);
-    let Hl = normalize(Ld + V);
-    let NoHl = max(dot(N, Hl), 0.0);
-    let VoHl = max(dot(V, Hl), 0.0);
-    let Dl = D_GGX(NoHl, a);
-    let Vl = V_SmithGGX(NoV, NoLl, a);
-    let Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
-    let radianceS = lcol * (att * spotS * lampSh);
-    var lspec = (Dl * Vl) * Fll * radianceS * NoLl;
-    lspec = lspec / (1.0 + lspec);
-    color = color + lspec;
-    // [Block 2 — lamp portion] The clearcoat lacquer catches the floodlights too: a
-    // crisp low-roughness lens glint over the softer base highlight (GLX js/render/shaders/lit.js).
-    if (clearcoat > 0.001) {
-      let Dcc = D_GGX(NoHl, 0.03);
-      let Vcc = V_SmithGGX(NoV, NoLl, 0.01);
-      let Fcc = F_Schlick(VoHl, vec3<f32>(0.05), 1.0).x;
-      var ccl = vec3<f32>(Dcc * Vcc * Fcc) * radianceS * NoLl * clearcoat;
-      color = color + 2.2 * ccl / (2.2 + ccl);
+  } else {
+    let nL = i32(F.params0.w);
+    // Chunk-AABB lamp cull (bit-exact): drawChunked sets a bit only for lights
+    // whose radius reaches the chunk's AABB, so a cleared bit is precisely a
+    // light lampContrib's ld2 > rad*rad reject would discard for EVERY
+    // fragment of this draw — same output, ~3 ALU instead of the distance
+    // math per culled light. Non-chunked draws carry all-ones masks (no cull).
+    let lampM0 = u32(D.mat3.x);
+    let lampM1 = u32(D.mat3.y);
+    for (var i = 0; i < nL; i = i + 1) {
+      // Both select arms evaluate — mask the shift amounts so the unselected
+      // arm's underflowed count stays a defined shift (WGSL: >=32 is indeterminate).
+      let lampBit = u32(i);
+      let masked = select((lampM1 >> ((lampBit - 24u) & 31u)) & 1u,
+                          (lampM0 >> (lampBit & 31u)) & 1u, i < 24);
+      if (masked == 0u) { continue; }
+      let r = lampContrib(lights[i], i == i32(F.params8.z), in.wpos, N, V,
+                          albedo, metalness, wetSheen, rough, a, f0, NoV, clearcoat);
+      color = color + r.col;
+      lampFog = lampFog + r.fog;
     }
   }
 
@@ -1771,12 +1820,12 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY_UNIFORM_BYTES: 240,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-        FRAME_UNIFORM_BYTES: 560,   // FrameU + lampLightVP + params8 + params9 (LIT tuner knobs)
+    FRAME_UNIFORM_BYTES: 576,   // FrameU + lampLightVP + params8..10 (params10 = chunk shadow idx)
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light
     MAX_LIGHTS: 48,
-    DRAW_UNIFORM_BYTES: 128,    // DrawU used bytes (dynamic-offset stride is 256)
+    DRAW_UNIFORM_BYTES: 144,    // DrawU used bytes: mat3 lamp masks at 112 + lampRange at 128 (dynamic-offset stride is 256)
     BLIT_UNIFORM_BYTES: 16,     // BlitU
     DEPTH_RESOLVE: `
 @group(0) @binding(0) var src : texture_depth_multisampled_2d;

@@ -423,6 +423,15 @@ test("AGENTS.md's layout names the module-roster truth it defers to", () => {
   assert.ok(manifest.length > 0, "tools/manifest.cjs unreadable");
   assert.ok(/tools\/manifest\.cjs/.test(agents),
     "AGENTS.md no longer points readers at tools/manifest.cjs for the module roster");
+  // The no-ghosts half, implemented (round 6 — this header claimed it for a
+  // year while the body was one line): any js/ module the layout section still
+  // singles out by name must exist in the manifest.
+  const layout = agents.split(/^## Layout$/m)[1].split(/^## /m)[0];
+  const named = [...new Set([...layout.matchAll(/\bjs\/[\w./-]+\.js\b/g)].map((m) => m[0]))];
+  assert.ok(named.length >= 3, `layout names ${named.length} js modules — extraction broke`);
+  const ghosts = named.filter((n) => !manifest.includes(n));
+  assert.deepEqual(ghosts, [],
+    "AGENTS.md's layout names a module absent from tools/manifest.cjs (a ghost)");
 });
 
 test("AGENTS.md names the deploy branch", () => {
@@ -570,6 +579,17 @@ test("docs/README indexes every live engineering doc", () => {
   const missing = ls("docs", /\.md$/)
     .filter((f) => f !== "README.md" && !index.includes(f));
   assert.deepEqual(missing, [], "a doc under docs/ is not linked from docs/README.md");
+});
+
+test("docs/README indexes every research doc too", () => {
+  // The walk above covers docs/ top level only, so four research docs sat
+  // unindexed for weeks (round-6 finding) — a doc nobody can find is a doc
+  // nobody reads before re-doing its work.
+  const index = read("docs/README.md");
+  const missing = ls("docs/research", /\.md$/)
+    .filter((f) => !index.includes(`research/${f}`));
+  assert.deepEqual(missing, [],
+    "a doc under docs/research/ is not linked from docs/README.md");
 });
 
 test("every relative link in EVERY live doc resolves", () => {

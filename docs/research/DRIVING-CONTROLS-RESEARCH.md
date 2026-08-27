@@ -1,6 +1,9 @@
 > **Dated record (2026-08).** Research notes from the driving-controls
 > recalibration, kept for the negative decisions and citations. The status
 > column below is as of writing — the code is the authority on what shipped.
+>
+> Errata: `tools/tune-sweep.mjs` has since been renamed
+> `tools/physics-tune-sweep.mjs`.
 
 # Driving controls & assists — what shipped games do, and what it means here
 

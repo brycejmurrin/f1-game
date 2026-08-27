@@ -8,9 +8,9 @@ const LANDSCAPE = { width: 844, height: 390 };
 
 async function loadRace(page, trackId = "monza") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => window.__apex.jump(0.1, 40, 0));
   await page.waitForTimeout(100);
 }

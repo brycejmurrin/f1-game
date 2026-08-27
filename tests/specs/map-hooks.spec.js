@@ -5,7 +5,7 @@ import { test, expect } from "@playwright/test";
 test("mapPts and trackBounds hooks", async ({ page }) => {
   await page.setViewportSize({ width: 844, height: 390 });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 15000 });
 
   // A default track pre-loads on startup, so mapPts() is already populated here
   // (it is NOT null before an explicit race() — the old comment claimed otherwise).

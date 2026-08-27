@@ -4,7 +4,7 @@ import { test, expect } from "@playwright/test";
 test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ page }) => {
   test.setTimeout(300_000);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15_000 });
 
   const result = await page.evaluate(() => {
     const definition = window.TrackDefs.find((entry) => entry.id === "monaco");
@@ -145,7 +145,7 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
 test("Monaco remains within the 1.4 m prop-over-road cap", async ({ page }) => {
   test.setTimeout(180_000);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15_000 });
   const max = await page.evaluate(() => {
     window.__apex.trackGeometry(true);
     window.__apex.race("monaco", "day", "dry");

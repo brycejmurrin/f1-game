@@ -69,7 +69,7 @@ function tuning(page) {
 
 async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.tuning, null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.tuning, null, { polling: 100, timeout: 10000 });
 }
 
 test.describe("steering-store schema migration", () => {
@@ -212,7 +212,7 @@ test.describe("steering-store schema migration", () => {
         localStorage.setItem("apex26.pace", String(f));
       }, from);
       await page.reload();
-      await page.waitForFunction(() => window.__apex && window.__apex.tuning, null, { timeout: 10000 });
+      await page.waitForFunction(() => window.__apex && window.__apex.tuning, null, { polling: 100, timeout: 10000 });
       got.push((await readStore(page, ["pace"])).pace);
     }
     expect(got).toEqual(TABLE.map(([, to]) => to));

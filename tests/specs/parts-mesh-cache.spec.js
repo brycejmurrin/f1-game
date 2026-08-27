@@ -7,7 +7,7 @@ import { test, expect } from "@playwright/test";
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function waitReady(page) {
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
 }
 
 async function installMeshProbe(page) {
@@ -119,7 +119,7 @@ async function applyPartsAndPark(page) {
     window.__apex.park(0.1);
     window.__apex.camera("chase");
   });
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15_000 });
 }
 
 async function quitRace(page) {
@@ -255,13 +255,13 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       await page.waitForFunction(
         (min) => window.__partsMeshProbe.bodyMeshes.length >= min,
         i + 1,
-        { timeout: 20_000 }
+        { polling: 100, timeout: 20_000 }
       );
       await page.evaluate(() => window.__apex.camera("cockpit"));
       await page.waitForFunction(
         (min) => window.__partsMeshProbe.cockpitMeshes.length >= min,
         i + 1,
-        { timeout: 20_000 }
+        { polling: 100, timeout: 20_000 }
       );
       await quitRace(page);
     }
@@ -329,7 +329,7 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       await page.waitForFunction(
         (min) => window.__partsMeshProbe.wheelMeshes.length >= min,
         (i + 1) * 4,
-        { timeout: 20_000 }
+        { polling: 100, timeout: 20_000 }
       );
       await quitRace(page);
     }
@@ -385,7 +385,7 @@ test.describe("Parts mesh caches — eviction bounds", () => {
     });
 
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 15_000 });
+    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: 15_000 });
     await page.evaluate(() => {
       window.__apex.go();
       window.__apex.jump(0.10, 35, 0);
@@ -404,12 +404,35 @@ test.describe("Parts mesh caches — eviction bounds", () => {
 
     const probe = await page.evaluate(() => {
       const st = window.__apex.physState();
+      const total = window.__apex.info().total;
+      const f0 = st.s / total;
+      // Height ABOVE THE ROAD UNDER EACH WHEEL, not raw world Y: the wheelbase
+      // spans ~3.6 m of road, and monza's gradient near this stop puts the
+      // front and rear contact patches at genuinely different world heights —
+      // a raw-Y spread reads that slope as "a wheel left the road" (the 2026-08
+      // 0.010-0.011 standing red). Project each wheel onto the centreline by
+      // local search and subtract its own road height.
+      const roadUnder = (wx, wz) => {
+        let best = null;
+        for (let df = -8; df <= 8; df += 0.25) {
+          const f = ((f0 + df / total) % 1 + 1) % 1;
+          const g0 = window.__apex.groundY(f, 0), g1 = window.__apex.groundY(f, 1);
+          let rx = g1.x - g0.x, rz = g1.z - g0.z;
+          const rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl;
+          const dx = wx - g0.x, dz = wz - g0.z;
+          const lat = dx * rx + dz * rz;
+          const along = Math.hypot(dx - lat * rx, dz - lat * rz);
+          if (!best || along < best.along) best = { along, roadY: g0.roadY };
+        }
+        return best.roadY;
+      };
+      const wheels = window.__wheelGroundProbe.slice(-4);
       return {
-        centreYs: window.__wheelGroundProbe.slice(-4).map((centre) => centre[1]),
-        roadY: window.__apex.groundY(st.s / window.__apex.info().total, st.x).roadY,
+        heights: wheels.map((c) => c[1] - roadUnder(c[0], c[2])),
+        roadY: window.__apex.groundY(f0, st.x).roadY,
       };
     });
-    expect(Math.max(...probe.centreYs) - Math.min(...probe.centreYs)).toBeLessThan(0.005);
+    expect(Math.max(...probe.heights) - Math.min(...probe.heights)).toBeLessThan(0.005);
     // AGAINST THE ROAD UNDER THE CAR, not against sea level. This compared the
     // WORLD y to a bare 0.34 — AXLES.wheelY (js/car/car3d.js:47), which is the
     // wheel centre height ABOVE THE ROAD — and so silently assumed monza's
@@ -420,8 +443,8 @@ test.describe("Parts mesh caches — eviction bounds", () => {
     // wheels were grounded to the millimetre and the test was measuring the
     // elevation profile. A +-0.005 window on that profile was a coin flip on
     // where the car came to rest, under any braking model.
-    for (const y of probe.centreYs)
-      expect(y - probe.roadY, `wheel centre above the road at s (roadY ${probe.roadY})`)
+    for (const h of probe.heights)
+      expect(h, `wheel centre above the road under that wheel (roadY at car ${probe.roadY})`)
         .toBeCloseTo(0.34, 2);
   });
 });

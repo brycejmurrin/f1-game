@@ -56,17 +56,17 @@ const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors"]
 
 async function race(page, steer, manual, ins) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
   await page.evaluate(([s, m]) => {
     localStorage.setItem("apex26.steerMode", JSON.stringify(s));
     localStorage.setItem("apex26.manual", JSON.stringify(m));
   }, [steer, manual]);
   await page.reload();
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
   await page.addStyleTag({ content:
     `:root{--sal:${ins.sal}px;--sar:${ins.sar}px;--sat:${ins.sat}px;--sab:${ins.sab}px;}` });
   await page.evaluate(() => window.__apex.race("monza"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 40_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 40_000 });
   await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 60, 0); });
   await page.waitForTimeout(300);
 }

@@ -18,9 +18,9 @@ const TOL = 0.18;
 
 test("Hungaroring terrain stays below the racing surface through the T2 basin", async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
   await page.evaluate(() => window.__apex.race("hungaroring", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15000 });
   await page.waitForTimeout(1500);
 
   const gaps = await page.evaluate(() =>
@@ -36,9 +36,9 @@ test("Hungaroring terrain stays below the racing surface through the T2 basin", 
 
 test("Red Bull Ring terrain stays below both nearby road sections", async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
   await page.evaluate(() => window.__apex.race("redbull", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15000 });
   await page.waitForTimeout(1200);
 
   const probes = await page.evaluate(() =>
@@ -54,9 +54,9 @@ test("Red Bull Ring terrain stays below both nearby road sections", async ({ pag
 
 test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overhead", async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
   await page.evaluate(() => window.__apex.race("mexico", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track === "mexico", null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex.info().track === "mexico", null, { polling: 100, timeout: 15000 });
   await page.waitForTimeout(1200);
 
   const audit = await page.evaluate(() => {
@@ -132,7 +132,7 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
 
 test("Madrid terrain drops away from the road instead of forming a raised floor", async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
   const terrain = await page.evaluate(() => {
     const def = Tracks.LIST.find((entry) => entry.id === "madrid");
     const track = Tracks.buildCenterline(def);
@@ -153,12 +153,12 @@ test("Madrid terrain drops away from the road instead of forming a raised floor"
 test("no terrain/road faces over the racing line (all circuits)", async ({ page }) => {
   test.setTimeout(1500000);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
 
   const offenders = [];
   for (const trk of TRACKS) {
     await page.evaluate((t) => __apex.race(t, "day", "dry"), trk);
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15000 });
     await page.waitForTimeout(1500);
     const r = await page.evaluate((knownCrossover) => {
       const caps = window.__apex.trackGeometry();

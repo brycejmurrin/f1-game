@@ -32,9 +32,9 @@ const X_ZONE_MIN = 210;   // m — X_STRAIGHT_T * X_ZONE_VREF in js/game/aerozon
 
 async function loadTrack(page, id) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate((t) => window.__apex.race(t), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 30_000 });
 }
 
 test.describe("active aero — activation zones", () => {
@@ -266,7 +266,7 @@ test.describe("active aero — downforce traded for top speed", () => {
     const rows = [];
     for (const aero of ["minimal", "medium", "ground_effect"]) {
       await page.goto("/");
-      await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
       const teamId = await page.evaluate(() => window.__apex.teams()[0].id);
       await page.evaluate(([a, id]) => {
         const key = "apex26.parts." + id;
@@ -276,9 +276,9 @@ test.describe("active aero — downforce traded for top speed", () => {
         localStorage.setItem("apex26.unlimitedBudget", "true");   // `extreme` blows the 600 cr cap
       }, [aero, teamId]);
       await page.reload();
-      await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
       await page.evaluate((t) => window.__apex.race(t), "monza");
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 40_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 40_000 });
       rows.push(await page.evaluate(() => {
         const A = window.__apex;
         A.headless(true); A.go();

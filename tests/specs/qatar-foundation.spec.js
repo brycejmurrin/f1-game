@@ -6,7 +6,7 @@ const HERO_MODELS = ["qatar-pit-slab", "qatar-t1-vvip-canopy"];
 test("Qatar uses the shared track foundation contracts", async ({ page }) => {
   test.setTimeout(180_000);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15_000 });
 
   const metadata = await page.evaluate(() => {
     const def = window.TrackDefs.find((track) => track.id === "qatar");
@@ -41,11 +41,11 @@ test("Qatar uses the shared track foundation contracts", async ({ page }) => {
   await page.waitForFunction(() => {
     const lights = window.__apex.lightState();
     return window.__apex.info().track === "qatar" && lights.builtNight;
-  }, null, { timeout: 15_000 });
+  }, null, { polling: 100, timeout: 15_000 });
   const night = await collectSession();
 
   await page.evaluate(() => window.__apex.race("qatar", "day", "dry"));
-  await page.waitForFunction(() => !window.__apex.lightState().builtNight, null, { timeout: 15_000 });
+  await page.waitForFunction(() => !window.__apex.lightState().builtNight, null, { polling: 100, timeout: 15_000 });
   const day = await collectSession();
 
   expect(metadata.sceneryCoordinates).toBe("racing");

@@ -4,9 +4,9 @@ import { test, expect } from "../helpers/fixtures.js";
 test("Suzuka keeps its elevation, crossover, and track-owned models aligned", async ({ page, pageErrors }) => {
   test.setTimeout(180_000);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
   await page.evaluate(() => window.__apex.race("suzuka", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track === "suzuka", null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex.info().track === "suzuka", null, { polling: 100, timeout: 15000 });
 
   const audit = await page.evaluate(() => {
     const raw = window.TrackDefs.find((definition) => definition.id === "suzuka");

@@ -21,13 +21,13 @@ async function boot(page) {
   const live = await page.evaluate(() => window.__apex != null).catch(() => false);
   if (live) return;
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
 }
 
 async function load(page, trackId = "monza", frac = 0.05, speed = 60) {
   await boot(page);
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15_000 });
   await page.evaluate(([f, v]) => {
     window.__apex.go();
     window.__apex.jump(f, v, 0);
@@ -58,7 +58,7 @@ test.describe("world() typed errors", () => {
   test("player not placed names the hook that fixes it", async ({ page }) => {
     await boot(page);
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15_000 });
     const r = await page.evaluate(() => window.__apex.world());
     if (r.ok === false) {
       expect(r.error).toBe("PlayerNotPlacedError");

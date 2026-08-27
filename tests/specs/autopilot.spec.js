@@ -22,9 +22,9 @@ import { test, expect } from "../helpers/fixtures.js";
 
 async function load(page, id) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate((t) => window.__apex.race(t, "day", "dry"), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate(() => window.__apex.go());
   // PACE pinned here, at the one place every test stages its lap. The autopilot's
   // controller is written in absolute units (VMAX 94 m/s, aLat 13 m/s², A_BRAKE 24

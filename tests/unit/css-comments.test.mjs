@@ -40,8 +40,10 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CSS_DIR = path.join(ROOT, "css");
 
-// Comfortably above the real maximum (173) and far below the failures (275+).
-const MAX_PRELUDE = 220;
+// Above the real maximum and far below the failures (275+). Re-evidenced
+// 2026-08-27: the measured max is 218 (css/tuner.css) — the old "173" note
+// had left 2 characters of headroom without anyone noticing.
+const MAX_PRELUDE = 230;
 
 /** Strip comments exactly as a CSS tokenizer does — the FIRST `*␑/` closes. */
 function stripComments(src) {

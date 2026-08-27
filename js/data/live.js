@@ -317,7 +317,7 @@ const DataLive = (function () {
           const d = byNum[p.num] || {};
           const row = el("div", "dh-row");
           
-          const mainInfo = el("div", "dh-live-row-main");
+          const mainInfo = el("div", "dh-cons-main");
           mainInfo.appendChild(el("span", "dh-pos", p.pos !== null && p.pos !== undefined ? p.pos : "—"));
           const chip = el("span", "dh-codechip", d.code || (p.num !== null && p.num !== undefined ? "#" + p.num : "—"));
           let col = null;

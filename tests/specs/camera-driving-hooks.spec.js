@@ -14,7 +14,7 @@ async function loadTrack(page, track = "monza") {
   const live = await page.evaluate(() => window.__apex != null).catch(() => false);
   if (!live) {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex, null, { timeout: 15000 });
+    await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 15000 });
   }
   // Wait for the BUILD, not for a stopwatch. This was `await new Promise(r =>
   // setTimeout(r, 3000))` inside the evaluate — wrong in both directions at
@@ -22,7 +22,7 @@ async function loadTrack(page, track = "monza") {
   // races a half-built track, and on a quiet box it burns most of 3 s per call
   // for nothing. waitForFunction polls, so it costs what the build costs.
   await page.evaluate((t) => { __apex.race(t); }, track);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 20000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 20000 });
   await page.evaluate(() => {
     __apex.headless(true);
     __apex.reset(0.1, 30);
@@ -202,7 +202,7 @@ test("setSpeed clamps to 200 maximum", async ({ page }) => {
 
 test("setSpeed false without initialised player", async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 15000 });
   const res = await page.evaluate(() => __apex.setSpeed(40));
   expect(res).toBeFalsy();
 });
@@ -256,7 +256,7 @@ test("spin zeroes vLat and yawRate", async ({ page }) => {
 
 test("spin false without initialised player", async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 15000 });
   const res = await page.evaluate(() => __apex.spin(45));
   expect(res).toBeFalsy();
 });
@@ -299,7 +299,7 @@ test("nudge both args", async ({ page }) => {
 
 test("nudge false without initialised player", async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 15000 });
   const res = await page.evaluate(() => __apex.nudge(5, 5));
   expect(res).toBeFalsy();
 });

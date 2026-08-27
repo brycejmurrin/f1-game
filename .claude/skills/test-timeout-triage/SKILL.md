@@ -55,7 +55,9 @@ order dependence — `docs/TESTING.md` §Field notes has the worked example.
   source of the entire 120 s class.
 - Everything long runs in the BACKGROUND with a log (`AGENTS.md`); check
   `node tools/test-bg.mjs --status` and `/proc/loadavg < 3` before starting.
-- Verdicts come from the log's terminal line
-  `= run (passed|failed|timedout|interrupted)` — never the process table.
+- Verdicts come from the log's terminal line `= run <status>  (N/M done,
+  K failed)` — match with `grep -E '= run (passed|failed|timedout|interrupted)'`
+  (ERE alternation; fixed-string/BRE grep never matches) — never the process
+  table.
 - `tools/verify-change.mjs` runs the whole selection serialized correctly and
   labels timeout outcomes with the triage command.

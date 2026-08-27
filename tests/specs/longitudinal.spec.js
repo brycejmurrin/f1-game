@@ -18,9 +18,9 @@ const pinPace = (page) => page.evaluate(() => window.__apex.setPhysics({ pace: 1
 
 async function startRace(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate(() => window.__apex.go());
   await pinPace(page);
 }
@@ -116,7 +116,7 @@ test.describe("Apex 26 — longitudinal & grip", () => {
 
   test("slope gravity: descents don't overspeed past top speed; climbs aren't a barrier", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     await page.evaluate(() => { window.__apex.race("spa", "day", "dry"); window.__apex.go(); });
     await pinPace(page);   // climbGain is in m/s — see pinPace
     const r = await page.evaluate(() => {
