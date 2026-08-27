@@ -1,8 +1,22 @@
 @layer overlays {
 /* Apex 26 — F1 Data Hub overlay. All classes prefixed dh-. */
 
+/* #datahub is a real <dialog> since round 11. Same two load-bearing dialog
+   blocks as the telemetry popup below: the UA sizes a dialog fit-content and
+   auto-margined, so the full-viewport scrim needs the explicit stretch; and
+   the closed state must be restated in THIS layer, because overlays outranks
+   the components-layer dialog.screen:not([open]) guard — without it the
+   closed-but-unhidden seam lays out and Chromium drops boxes on top-layer
+   re-attach (the round-10 customize bug). Scrim stays on the element, so the
+   ::backdrop is silenced and there is no double-scrim under the nested
+   telemetry dialog. */
+#datahub:not([open]) { display: none; }
+#datahub::backdrop { background: none; }
 .dh-overlay {
   position: fixed; inset: 0; z-index: 50;
+  margin: 0; border: 0;
+  width: 100%; max-width: none; max-height: none;
+  color: inherit;
   height: 100vh; height: 100svh;
   display: flex; align-items: center; justify-content: center;
   background:

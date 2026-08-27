@@ -4,7 +4,11 @@ const OPENF1 = "https://api.openf1.org/v1";
 
 async function dataReady(page) {
   await page.goto("/version.json");
-  await page.setContent("<div id=\"datahub\" hidden></div>");
+  // The real shell markup: #datahub is a <dialog> (round 11), and its open
+  // state is driven by TopModal mirroring `hidden` onto showModal() — so the
+  // harness carries topmodal.js too (loaded below), or every open() here
+  // would leave a UA-hidden closed dialog.
+  await page.setContent("<dialog id=\"datahub\" class=\"screen\" data-esc-close=\"dh-close-btn\" hidden></dialog>");
   await page.evaluate(() => {
     window.Teams = { LIST: [] };
   });
@@ -24,6 +28,7 @@ async function dataReady(page) {
   // the moment either ran — red since the logging landed, whenever the suite
   // actually ran.
   await page.addScriptTag({ url: "/js/log.js" });
+  await page.addScriptTag({ url: "/js/game/topmodal.js" });
   await page.addScriptTag({ url: "/js/mat4.js" });
   await page.addScriptTag({ url: "/js/data/api.js" });
   await page.addScriptTag({ url: "/js/data/telemetry.js" });
@@ -358,7 +363,10 @@ test("data hub exposes modal tabs, traps focus, and restores its opener", async 
   });
 
   const dialog = page.getByRole("dialog", { name: "F1 DATA HUB" });
-  await expect(dialog).toHaveAttribute("aria-modal", "true");
+  // A real <dialog> since round 11 — assert the modality itself, not an
+  // aria-modal attribute nobody writes any more.
+  await expect(dialog).toBeVisible();
+  expect(await dialog.evaluate((d) => d.matches(":modal"))).toBe(true);
   await expect(page.getByRole("tablist")).toBeVisible();
   const schedule = page.getByRole("tab", { name: "SCHEDULE" });
   const standings = page.getByRole("tab", { name: "STANDINGS" });
