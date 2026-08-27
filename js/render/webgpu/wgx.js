@@ -5065,6 +5065,7 @@ const WGX = (function () {
       mobileTier: MOBILE_TIER,
 
       chunkedTrackCoords: true,
+      hasPerChunkLights: true,       // consumes the LampChunks bake (trackLightSBO/chunkIdxSBO)
       createMesh,
       createTexMesh,                 // textured decals
       createChunkedMesh,

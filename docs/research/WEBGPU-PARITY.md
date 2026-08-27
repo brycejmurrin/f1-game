@@ -29,8 +29,11 @@ Remaining honest look deltas (audited 2026-08-18 against source):
   reopens terrain-over-road on SwiftShader.
 - **Tuner sliders (183 / 73 `u:`)** — every uniform knob is named on GLX,
   WGX, and TLX (`tests/unit/light-grid.test.mjs`). CPU knobs bake through
-  `frame.*` / `present()` opts. Honest no-ops: `perChunkLights` +
-  `roadChunkLamps` (WebGL2 only — WGX/TLX have no per-draw lamp upload).
+  `frame.*` / `present()` opts. `perChunkLights` + `roadChunkLamps` ship
+  natively on WGX (the LampChunks bake in `trackLightSBO`/`chunkIdxSBO`,
+  group-0 bindings 15/16, one DrawU slot per visible chunk with an absolute
+  shadow index in `params10.x`); the honest no-op remains TLX only (shared
+  node-material uniforms — the pinProgram lesson).
   `pcssPen` on three.js phones / software WebGL2, and on a desktop
   PCSS-off fallback, now scales the fixed Poisson R (identity at 80);
   true PCSS still needs the blocker.

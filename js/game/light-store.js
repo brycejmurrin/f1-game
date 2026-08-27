@@ -46,10 +46,33 @@ const LightStore = (() => {
       return track.def.id + "|" + tod + "|" + G.raceWeather;
     }
 
+    // Conditional shipped layer: the wildcard-condition key "*|<tod>" of
+    // window.LightPresets (e.g. "*|night"), resolved ONLY on the ULTRA preset
+    // with a backend that has per-chunk lamp support, off mobile. This is the
+    // quality-ladder rung for condition-scoped defaults (the ULTRA-night
+    // per-chunk lamps flip ships here): HIGH and ULTRA share PerfGov tier 0,
+    // so this predicate — not the tier ladder — is the one place that can
+    // tell them apart. It sits BETWEEN the shipped per-condition layer and
+    // the player layers, so a player edit (including an explicit 0) always
+    // wins. Lazy typeof reads — GfxQuality may be absent in a node harness.
+    function condLayer(F) {
+      if (!F) return null;
+      const track = G.track;
+      if (!track || !track.def) return null;
+      let tod = G.raceTimeOfDay;
+      if (tod === "default") tod = track.def.night ? "night" : "day";
+      const c = F["*|" + tod];
+      if (!c) return null;
+      const gfx = G.gfx;
+      if (!gfx || !gfx.hasPerChunkLights || gfx.isMobile) return null;
+      if (typeof GfxQuality === "undefined" || GfxQuality.current().id !== "ultra") return null;
+      return c;
+    }
+
     function layers() {
       const F = window.LightPresets || null;
       const k = key();
-      return [F && F["*"], F && k && F[k], profiles["*"], k && profiles[k]];
+      return [F && F["*"], F && k && F[k], condLayer(F), profiles["*"], k && profiles[k]];
     }
 
     function base(k, d) {
@@ -57,6 +80,8 @@ const LightStore = (() => {
       const F = window.LightPresets || null;
       if (F && F["*"] && typeof F["*"][d.id] === "number") v = F["*"][d.id];
       if (F && k && F[k] && typeof F[k][d.id] === "number") v = F[k][d.id];
+      const c = condLayer(F);
+      if (c && typeof c[d.id] === "number") v = c[d.id];
       if (profiles["*"] && typeof profiles["*"][d.id] === "number") v = profiles["*"][d.id];
       return clamp(v, d.min, d.max);
     }
@@ -189,11 +214,18 @@ const LightStore = (() => {
 
     function persist() { store.set("lightTune", profiles); }
 
-    return {
+    const api = {
       key, apply, set, persist, copyToTracks, restore,
       get profiles() { return profiles; },
       set profiles(v) { profiles = v || {}; },
     };
+    _live = api;   // game.js creates exactly one store; reapply() targets it
+    return api;
   }
-  return { create };
+  // The conditional shipped layer resolves through GfxQuality, so a preset
+  // flip must re-run apply() for it to engage live. GfxQuality.set() calls
+  // this lazily (typeof-guarded) — a soft hook, not an eval-time edge.
+  let _live = null;
+  function reapply() { if (_live) _live.apply(); }
+  return { create, reapply };
 })();

@@ -1853,6 +1853,10 @@ const GLX = (function () {
     freeTexture,
     drawDecal,
     chunkedTrackCoords: true,
+    // Per-chunk lamp support (the LampChunks bake). Capability read, never a
+    // backend string match: absent on TLX (shared node-material uniforms —
+    // per-chunk sets would mint a program per chunk, the pinProgram lesson).
+    hasPerChunkLights: true,
     createChunkedMesh: (data, cellSize) => CHK.createChunkedMesh(data, cellSize),
     freeMesh,
     freeChunkedMesh: (mesh) => CHK.freeChunkedMesh(mesh),

@@ -5661,7 +5661,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // env-probe radial cull is live (frustum + 300 m reach — counted ~70%
     // index drop). Lamp path still needs tier < 1; the cull-only path keeps
     // chunking through tier 2 so SSR/shadow sheds do not re-fuse the road.
-    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && !_perChunkOff && PerfGov.tier() < 1)
+    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && gfx.hasPerChunkLights && !_perChunkOff && PerfGov.tier() < 1)
       || (PerfGov.tier() < 3));
     if (_wantRoadChunk) {
       if (track.meshes.roadChunked === undefined) {
@@ -6477,7 +6477,7 @@ function render(dt) {
     // already hit a hard failure comes back at a floored tier, which now has
     // the feature off, so the sentinel can actually rescue this case instead of
     // watching it repeat.
-    frame.perChunkLights = (_perChunkOff || PerfGov.tier() >= 1) ? 0 : (+LT.perChunkLights || 0);
+    frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || PerfGov.tier() >= 1) ? 0 : (+LT.perChunkLights || 0);
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
     // They are appended to frame.lights AFTER the static cull, so they sit
     // outside track._lights and a per-chunk set built from allLights would drop
