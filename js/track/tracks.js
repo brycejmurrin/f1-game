@@ -1053,7 +1053,11 @@ const Tracks = (function () {
     // moving the driving limit out to meet it would change how the circuit
     // drives. indexBarrier() registers the geometry without touching physics.
     const scanBarrier = (s0, s1, side, gap, tighten) => {
-      const k0 = Math.round(s0 * n) % n, k1 = Math.round(s1 * n) % n;
+      // Sign-safe wrap: callers hand in `s - halfFrac`, which goes negative for
+      // a span crossing the start line, and JS % keeps the sign — a negative k
+      // read undefined rx/ry (NaN face) and wrote arr[-k] as a silent no-op, so
+      // the pre-seam part of the span got no limit tightening and no index.
+      const k0 = ((Math.round(s0 * n) % n) + n) % n, k1 = ((Math.round(s1 * n) % n) + n) % n;
       const span = Math.abs(s1 - s0) >= 1 - 1e-9 ? n - 1 : ((k1 - k0) + n) % n;
       const arr = side > 0 ? track.barR : track.barL;
       let prev = null;                  // previous recorded face point, for segments
@@ -1083,7 +1087,8 @@ const Tracks = (function () {
     // never touches barL/barR, exactly like indexBarrier().
     const indexSolid = (s0, s1, side, gap, width) => {
       const halfW = Math.max(0, (width || 0) / 2);
-      const k0 = Math.round(s0 * n) % n, k1 = Math.round(s1 * n) % n;
+      // Same sign-safe wrap as scanBarrier — negative s0 crossed the seam.
+      const k0 = ((Math.round(s0 * n) % n) + n) % n, k1 = ((Math.round(s1 * n) % n) + n) % n;
       const span = Math.abs(s1 - s0) >= 1 - 1e-9 ? n - 1 : ((k1 - k0) + n) % n;
       let prev = null;
       for (let i = 0; i <= span; i++) {
