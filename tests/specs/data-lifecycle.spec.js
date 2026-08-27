@@ -4,7 +4,11 @@ const OPENF1 = "https://api.openf1.org/v1";
 
 async function dataReady(page) {
   await page.goto("/version.json");
-  await page.setContent("<div id=\"datahub\" hidden></div>");
+  // The real shell markup: #datahub is a <dialog> (round 11), and its open
+  // state is driven by TopModal mirroring `hidden` onto showModal() — so the
+  // harness carries topmodal.js too (loaded below), or every open() here
+  // would leave a UA-hidden closed dialog.
+  await page.setContent("<dialog id=\"datahub\" class=\"screen\" data-esc-close=\"dh-close-btn\" hidden></dialog>");
   await page.evaluate(() => {
     window.Teams = { LIST: [] };
   });
@@ -24,6 +28,7 @@ async function dataReady(page) {
   // the moment either ran — red since the logging landed, whenever the suite
   // actually ran.
   await page.addScriptTag({ url: "/js/log.js" });
+  await page.addScriptTag({ url: "/js/game/topmodal.js" });
   await page.addScriptTag({ url: "/js/mat4.js" });
   await page.addScriptTag({ url: "/js/data/api.js" });
   await page.addScriptTag({ url: "/js/data/telemetry.js" });
@@ -358,7 +363,10 @@ test("data hub exposes modal tabs, traps focus, and restores its opener", async 
   });
 
   const dialog = page.getByRole("dialog", { name: "F1 DATA HUB" });
-  await expect(dialog).toHaveAttribute("aria-modal", "true");
+  // A real <dialog> since round 11 — assert the modality itself, not an
+  // aria-modal attribute nobody writes any more.
+  await expect(dialog).toBeVisible();
+  expect(await dialog.evaluate((d) => d.matches(":modal"))).toBe(true);
   await expect(page.getByRole("tablist")).toBeVisible();
   const schedule = page.getByRole("tab", { name: "SCHEDULE" });
   const standings = page.getByRole("tab", { name: "STANDINGS" });
@@ -369,12 +377,27 @@ test("data hub exposes modal tabs, traps focus, and restores its opener", async 
   await expect(standings).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", await standings.getAttribute("id"));
 
-  const close = page.getByRole("button", { name: "Close data hub" });
+  // Containment, platform-shaped: what Tab reaches next depends on whether
+  // the tab panel has settled (an error panel carries a RETRY button, a
+  // spinner carries nothing), so pinning "close is next" was a race the old
+  // hand-rolled trap happened to win. And a native modal dialog does not
+  // hard-wrap the way that trap did — sequential focus may hop through the
+  // UA chrome (activeElement === body in headless) between cycles. The
+  // platform's actual promise, the same one menu-keyboard asserts for
+  // #track-detail, is that the BACKGROUND stays inert: Tab can never reach
+  // the opener page's controls while the dialog is up.
   await standings.focus();
-  await page.keyboard.press("Tab");
-  await expect(close).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(standings).toBeFocused();
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press("Tab");
+    const where = await page.evaluate(() => {
+      const ae = document.activeElement;
+      const d = document.getElementById("datahub");
+      if (d.contains(ae)) return "in";
+      if (ae === document.body || ae === document.documentElement) return "chrome";
+      return ae.id || ae.className || ae.tagName;
+    });
+    expect(["in", "chrome"]).toContain(where);
+  }
 
   await page.keyboard.press("Escape");
   await expect(page.locator("#data-opener")).toBeFocused();
@@ -396,11 +419,25 @@ test("telemetry popup is a labelled modal and restores driver focus", async ({ p
   await page.getByRole("button", { name: "LOAD LAP" }).click();
 
   const popup = page.getByRole("dialog", { name: /Initial Driver/ });
-  await expect(popup).toHaveAttribute("aria-modal", "true");
+  // A real <dialog> since round 11: the platform asserts the role and the
+  // modality, so the old aria-modal attribute pin is replaced by the thing
+  // it stood for — the dialog actually being modal.
+  await expect(popup).toBeVisible();
+  expect(await popup.evaluate((d) => d.matches(":modal"))).toBe(true);
   const close = page.getByRole("button", { name: "Close telemetry" });
   await expect(close).toBeFocused();
+  // Background inertness, not hard-wrap (see the hub test above): the hub's
+  // tabs and the page's buttons must be unreachable while the nested modal
+  // is topmost; a UA-chrome hop (body) between cycles is platform behavior.
   await page.keyboard.press("Tab");
-  await expect(close).toBeFocused();
+  const where = await page.evaluate(() => {
+    const ae = document.activeElement;
+    const p = document.querySelector("dialog.dh-tpopup");
+    if (p && p.contains(ae)) return "in";
+    if (ae === document.body || ae === document.documentElement) return "chrome";
+    return ae.id || ae.className || ae.tagName;
+  });
+  expect(["in", "chrome"]).toContain(where);
   await close.click();
   await expect(driver).toBeFocused();
 });

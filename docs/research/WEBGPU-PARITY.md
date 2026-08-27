@@ -690,3 +690,139 @@ slice that adds a method must declare it (real or `undefined`) before
 - [gpuweb#1924 — reading MSAA depth](https://github.com/gpuweb/gpuweb/issues/1924)
 - [PlayCanvas #5714 — MSAA + depth on WebGPU](https://github.com/playcanvas/engine/issues/5714)
   — allocate MS depth, resolve color via `resolveTarget`, resolve depth by hand
+
+## Perf round (2026-08-27) — measured wins + deferred roadmap
+
+Live per-frame WebGPU call counts (probe MCP, Monza race, ~414 draws, 23
+passes, prototype-wrapped counters over 30 rAF frames):
+
+| metric | before | after |
+|---|---|---|
+| setPipeline | 336 | 35 |
+| setBindGroup | 970 | 351 (≈ the mandatory per-draw dynamic-offset group-1 sets) |
+| setVertexBuffer | 745 | 368 |
+| createBindGroup | 3.1 | 0.7 |
+
+Landed (all Dawn-validated via wgx-validate, lifecycle suites 71/71):
+
+- **Redundant-state elision** — `_setPipe`/`_setBG0`/`_setVB0`/`_setVB1`
+  cache on the ENCODER as expandos (a new pass = a new wrapper, so the cache
+  self-resets). Every state call on lit/shadow passes routes through them; a
+  raw `pass.setPipeline` beside them would silently desync the cache.
+- **`_litOpts` pooled** (the per-draw `Object.assign` fired on road + every
+  detail mesh); `drawInstanced`'s bag clears by `undefined`-assign, not
+  `delete` (dictionary-mode). `model.subarray(0,16)` view allocs skipped for
+  the exact-16 mat4 case at all six sites.
+- **LIT fs_main samples 30 → 2**: one dynamic-layer `textureSample` pair
+  (albedo+normal) — WGSL only requires the CALL in uniform CF; layer/UV may
+  be non-uniform expressions, which is GLX's `texture()` path exactly (same
+  implicit LOD, aniso, quad divergence at seams). `matUvLit(16)` ≡ the old
+  `roadUv`, so the road folds in.
+- **paintPeelN gated** by a uniform early return on `amt` (caller passes a
+  `D.mat1.w` gate); the peel's 6 svnoise now cost paint draws only, while
+  `dpdx(Npeel)` stays at fs_main top level (the derivative lint's structural
+  rule holds).
+- **Lamp loop rejects on squared distance** before the sqrt (godray's shape);
+  `applyMaterialTexNormal`'s select() no longer evaluates the unused
+  dependent sample; composite `sunVis` depth fetch is an `if`, not both
+  arms of a select().
+- **Soft-present classification**: empty `adapter.info` no longer means
+  software (Firefox/privacy UAs paid full staging readback + CPU blit on
+  real GPUs); a true hidden-info software adapter degrades through the
+  output-probe ladder to GLX. `soft(ware|pipe)` anchored — bare `soft`
+  substring-matched "Microsoft".
+- **Pipeline warmup**: the known-shipping lit variants (alpha, noAlphaWrite,
+  doubleSided, three bias pairs, decal — ×MSAA counts) compile deferred
+  after boot instead of as mid-race hitches. Boot-gate pipelines stay sync
+  (refusal detection needs their errors).
+- **Env-mip ladder cached on the texture** (was 72 createView + 36
+  createBindGroup per 6-face env cycle); camera frustum planes extracted
+  once per frame, not per chunked mesh (`_fcPlanesIsFrame`, invalidated by
+  begin() and the shadow extracts that share the scratch).
+
+Deferred (audited, sketched, NOT landed — each needs its own verified round):
+
+1. ~~Per-chunk lamp masks~~ **LANDED (2026-08-27)** as the chunk-AABB lamp
+   cull: DrawU grew mat3 (two f32-exact 24-bit masks, all-ones default from
+   `_writeDraw`), drawChunked gives each merged run its own draw slot whose
+   mask ORs the run's chunk bits, and the WGSL lamp loop mask-continues
+   before the distance math. OUTPUT-PRESERVING by construction — a cleared
+   bit is precisely a light whose radius cannot reach the chunk AABB, i.e.
+   one the per-fragment `ld2 > rad*rad` reject would discard — so this is a
+   cull, NOT the GLX perChunkLights REACH feature (per-chunk nearest sets
+   from allLights, which deliberately relights the scene and ships off).
+   `perChunkLights`/`roadChunkLamps` remain honest no-ops on WGX. Masks are
+   recomputed per call (the global set re-ranks as the player moves);
+   frames with ≤8 lights skip the machinery. A/B night captures (vegas,
+   flicker+warmup pinned to 0, renderClock pinned per frame) diff BELOW the
+   same-code capture noise floor with no lamp-shaped regions in the diff
+   map — the capture pipeline itself is not bit-stable (edge jitter +
+   dither), so the exactness claim rests on the radius-reject argument.
+   Road pieces (no chunk AABBs) keep all-ones masks until the shared-vbuf
+   work below gives them bounds.
+2. **Shared road vertex buffer**: road pieces each own a vbuf (≤4095 pulled
+   verts, Dawn workaround), so drawChunked's run merge — keyed on vbuf
+   identity — can never fire for the road. One vbuf + `firstVertex` offsets
+   restores GLX's adjacent-run merging.
+3. **Indexed road drawing**: `_expandPull` triples road vertex shading vs
+   GLX's indexed ribbon; group-2 storage is already addressed by
+   vertex_index.
+4. **SSR at half-res**. CORRECTED 2026-08-27: the "GLX inline 12 steps" /
+   "then blurs the result anyway" claims were stale comments — GLX's
+   COMPOSITE_FS march is ALSO 24 steps (post.js `for (int i = 0; i < 24`)
+   and WGX has no SSR blur pass. The real deltas are the dedicated
+   full-res rgba16float target + separate pass; the fix is resolution
+   only (march constants are canary-asserted and match GLX). The mat4
+   inverse-projection per march step (only view-z needed) remains a
+   separate open micro-item.
+5. **Render bundles** for the static chunk sequence (needs FIXED draw-ring
+   slots per chunk so the bundle survives culling changes; knob-gated, keep
+   the culled path for WGX_LITE/software).
+6. ~~Submit consolidation~~ **LANDED (2026-08-27)**: the frame's shadow
+   passes (sun/car/lamp) record into ONE deferred encoder submitted ahead
+   of the main encoder in the same queue.submit (`_frameSubmitList`), so
+   queue order still executes shadow-before-lit and the soft-present
+   fencing stays behind the last submit. The shared caster ring became
+   per-pass REGIONS (slots count across Begins, `_flushShadowModelUBO`
+   uploads from the `_shadowFlushed` watermark, reset at the frame submit;
+   spill guard submits early if a capture path skips present). Measured
+   live: 1.8 → 1.33 submits/frame (remainder = env probe + its mips).
+7. **Static post-UBO writes** (bloom chain ~10 small writeBuffers/frame
+   carrying resize/knob-only values) — still open; deliberately deferred:
+   the win is noise next to the landed items and the stale-knob wiring
+   risk is real.
+8. **Shared road vertex buffer / indexed road — UNBLOCKED by measurement
+   (2026-08-27), implementation scheduled for its own round.** The block
+   rested on a 2026-08-17 "vertex_index stays 0 on large non-indexed
+   draws (and drawIndexed)" finding whose origin commit is beyond the
+   shallow-clone graft. `tools/wgx-vid-repro.mjs` (committed as the
+   re-runnable primary evidence) now measures the actual matrix: draw
+   shapes {draw(N) whole, 4095-piece control, draw(n,1,firstVertex) over
+   one shared vbuf, drawIndexed(N) identity} × N ∈ {4092, 4095, 4098,
+   8190, 12285, 24576} × {storage-read arr[vid], builtin vid→color},
+   probe triangles read back via flat provoking-vertex color, ribbon-
+   exact vertex layout (stride 36, 3×float32x3) held constant. Verdict on
+   this container's SwiftShader-Dawn (Chromium 1194 build): **every cell
+   OK, stable across two full runs** — vertex_index is correct for all
+   four shapes, including the two "blocked" ones. Caveats recorded
+   honestly: (a) the Lavapipe leg falls back to SwiftShader in this
+   container even headed-under-Xvfb (the tool flags the fallback and the
+   leg does not count) — a second Vulkan stack and real hardware remain
+   unverified, which is what the committed tool is for; (b) the historical
+   symptom may have been version-specific Dawn behavior since fixed, or
+   entangled with the SEPARATE 4th-attribute bug (wgx.js:163-165) —
+   the repro deliberately does not test that one.
+   Two supporting findings from the same investigation: the per-piece
+   authored `matTrkArr[vid]` storage read is EFFECTIVELY DEAD in the
+   shipping config (`_bindLitVerts` binds the global world LUT for every
+   lit draw once a track builds — wgx.js `void authored`; the VS vid read
+   executes only pre-LUT/menu frames), and road markings come from
+   `trkFromWorld(wpos)` in the fragment shader. Next-round scope:
+   shared road vbuf + firstVertex runs (restores drawChunked merging),
+   road chunk AABBs so the lamp-mask cull covers the road, both
+   shadow-cast piece loops, dash/marking verification with live captures
+   at speed plus the pre-LUT menu window.
+9. `trkFromWorld` gating looked free but is NOT semantics-preserving: the
+   LUT result feeds `classified`/`vMatId` on every draw over the ribbon
+   (props/cars with matId 0 classify as asphalt by design there), so a
+   road-only gate changes material selection. Left alone deliberately.

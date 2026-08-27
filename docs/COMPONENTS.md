@@ -62,11 +62,14 @@ not.
 The long tail (`sf-`, `q-`, `cg-`, `tm-`, `spf-`, `ot-`, `ax-`, `flag-`, `sec-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `rs-`, `balanced-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
-`season-`, `pair-`, `build-`) is one file each and needs no map.
+`season-`, `pair-`, `build-`, `mb-`) is one file each and needs no map.
 
 **A family leaves this list when it leaves `css/`.** The title screen's old
 `.mb-stack` / `.mb-sub` pair was replaced by `#mb-career > span` and
-`#mb-career-sub`; `.mb-label` is a span hook with no stylesheet rule.
+`#mb-career-sub` when each dressed one element in one button; `.mb-sub`
+RETURNED in round 10 as the shared door sub-line recipe — five uses (the
+hero's save line plus the four static mode answers), which is the reuse the
+original pair lacked. `.mb-label` is a span hook with no stylesheet rule.
 The season-status chips on `#menu-status` left with that dashboard chrome.
 Unused `.ui-panel` / `.ui-kicker` / `.ui-value` /
 `.ui-muted` placeholders were removed rather than inventoried as dead.

@@ -128,7 +128,9 @@ const WGX = (function () {
   const MAX_LIGHTS = _CH.MAX_LIGHTS | 0;                // 48
   const LIGHT_BYTES = LIGHT_STRIDE * MAX_LIGHTS;        // 3072
   const LIGHT_FLOATS = LIGHT_BYTES / 4;                 // 768
-  const DRAW_USED_BYTES = _CH.DRAW_UNIFORM_BYTES | 0;   // 128
+  const DRAW_USED_BYTES = _CH.DRAW_UNIFORM_BYTES | 0;   // 144
+  const DRAW_FLOATS = DRAW_USED_BYTES / 4;              // 36
+  const LAMP_MASK_ALL = 16777215;                       // 2^24-1: f32-exact all-ones lamp mask
   // Dynamic uniform-buffer offsets must be a multiple of
   // minUniformBufferOffsetAlignment (<=256 on all adapters); 256 is always a
   // valid multiple, so we stride slots at 256 B.
@@ -270,6 +272,7 @@ const WGX = (function () {
   //    Gribb–Hartmann from a COLUMN-MAJOR view-proj; inside = a*x+b*y+c*z+d >= 0.
   const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
                      new Float32Array(4), new Float32Array(4), new Float32Array(4)];
+  let _fcPlanesIsFrame = false;   // _fcPlanes currently holds this frame's camera planes
   function _setPlane(p, a, b, c, d) {
     const inv = 1 / (Math.hypot(a, b, c) || 1);
     p[0] = a * inv; p[1] = b * inv; p[2] = c * inv; p[3] = d * inv;
@@ -344,11 +347,17 @@ const WGX = (function () {
         const arch = info && info.architecture;
         const desc = info && info.description;
         const infoBlob = [dev, ven, arch, desc].filter(Boolean).join(" ").toLowerCase();
-        const infoEmpty = !info || !(dev || ven || arch);
+        // NOT infoEmpty: browsers that withhold adapter.info fields (Firefox,
+        // privacy-reduced UAs) were classified software on real hardware and
+        // paid the full soft-present path — per-frame staging readback + CPU
+        // blit — while the native swapchain worked. A true software adapter
+        // that hides info AND lacks every marker below degrades through the
+        // runtime output probe's loss ladder to GLX, which renders fine.
+        // `soft(ware|pipe)` not bare `soft` — that substring matched any
+        // "Microsoft" description.
         _softAdapterLocal = !!(adapter.isFallbackAdapter
-            || infoEmpty
             || /HeadlessChrome/i.test(ua)
-            || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob));
+            || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft(ware|pipe)/.test(infoBlob));
       } catch (_) { /* treat as hardware */ }
       _softAdapter = _softAdapterLocal;
       // sampleCount 4 resolveTarget frames come back blank on software —
@@ -776,6 +785,7 @@ const WGX = (function () {
     let _tlSrc = null, _tlKnob = -1;
     let _ciCursor = 0, _ciSeg = new WeakMap();
     const _tlScratch = new Float32Array(TRACK_LIGHT_CAP * 16);
+    let frameLights = null, frameNL = 0;   // this frame's stride-15 light array (lamp-mask cull)
     // Post-chain + FX frame extras.
     // frameVPGpu is the Z01-remapped
     // view-proj the depth buffer was rasterised with — every FX embeds it so its
@@ -831,6 +841,13 @@ const WGX = (function () {
     const shadowModelRing = new Float32Array(SHADOW_SLOTS * SHADOW_MODEL_F32_STRIDE);
     const _shadowDynOff = [0];   // reused dynamic-offset scratch (was a fresh [slot*stride] per cast)
     let shadowEncoder = null, shadowPass = null, _shadowSlot = 0, _shadowOverflow = 0;
+    // Deferred shadow submit: the (up to three) shadow passes of a frame record
+    // into ONE encoder, stashed here by their End and submitted WITH the frame
+    // (queue order within one submit keeps shadow-before-lit execution) — was
+    // up to 3 extra queue.submits per frame. The model ring is shared across
+    // the passes as REGIONS: slots keep counting across Begins and reset only
+    // at the frame submit; _flushShadowModelUBO uploads each pass's new region.
+    let _pendingShadowEnc = null, _shadowFlushed = 0;
     // Dynamic per-frame CAR shadow map (GLX parity — see carShadowBegin).
     let carShadowTex = null, carShadowView = null, carShadowUBO = null, carShadowG0BindGroup = null;
     let _carShadowArmed = false, _carArms = 0, _carBoxScale = 1;
@@ -2026,15 +2043,19 @@ const WGX = (function () {
           next.godrayView = next.godrayTex.createView();
           next.godrayBlurView = next.godrayBlurTex.createView();
           next.ldrView = next.ldrTex.createView();
-          // Wet-road SSR gets its own FULL-RES rgba16float target — 8 B/px that
-          // GLX never allocates at all (its SSR is inline in the composite
-          // shader). On the mobile tier that is the single largest discretionary
-          // allocation here, so skip it: binding 6 keeps the 1×1 placeholder,
-          // whose .a is 0, and the LIT SSR block documents that as the exact
-          // no-op case ("masked-out texels, incl. the 1×1 placeholder"). Wet
-          // road on a phone falls back to the analytic sky reflection.
+          // Wet-road SSR renders at HALF RES (the SSAO/godray pattern): the
+          // 24-step march runs on 4× fewer pixels and the target costs a
+          // quarter of the old full-res allocation — GLX never allocates one
+          // at all (its SSR is inline in the composite shader), and COMPOSITE
+          // reads binding 8 through linearSampler, so the upsample is the
+          // same free bilinear the godray add already uses. The march reads
+          // the FULL-res scene + depth (correct — half-res output, full-res
+          // inputs). On the mobile tier skip it entirely: binding 6 keeps the
+          // 1×1 placeholder, whose .a is 0, and the LIT SSR block documents
+          // that as the exact no-op case. Wet road on a phone falls back to
+          // the analytic sky reflection.
           if (!WGX_LITE) {
-            next.ssrTex = device.createTexture({ size: [width, height], format: SCENE_FORMAT,
+            next.ssrTex = device.createTexture({ size: [halfW, halfH], format: SCENE_FORMAT,
               usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
             next.ssrView = next.ssrTex.createView();
           }
@@ -2274,23 +2295,33 @@ const WGX = (function () {
           _mipPipes.set(tex.format, pipe);
           if (!_mipSamp) _mipSamp = device.createSampler({ magFilter: "linear", minFilter: "linear" });
         }
-        const enc = device.createCommandEncoder();
-        for (let layer = 0; layer < nLay; layer++) {
-          let w = w0, h = h0;
-          for (let level = 1; level < levels; level++) {
-            w = Math.max(1, w >> 1); h = Math.max(1, h >> 1);
-            const srcView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
-              baseMipLevel: level - 1, mipLevelCount: 1 });
-            const dstView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
-              baseMipLevel: level, mipLevelCount: 1 });
-            const bg = device.createBindGroup({
-              layout: pipe.getBindGroupLayout(0),
-              entries: [{ binding: 0, resource: srcView }, { binding: 1, resource: _mipSamp }],
-            });
-            const p = enc.beginRenderPass({ colorAttachments: [{ view: dstView, loadOp: "clear",
-              clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
-            p.setPipeline(pipe); p.setBindGroup(0, bg); p.draw(3); p.end();
+        // Views + bind groups on an immutable texture are stable. Rebuilding
+        // the full ladder every call was 72 createView + 36 createBindGroup
+        // per 6-face env cycle (~every 6 frames with CAR ENV REFLECTION on).
+        // Cache the ladder on the texture — it dies with the texture.
+        let ladder = tex.__wgxMipLadder;
+        if (!ladder || ladder.length !== nLay * (levels - 1)) {
+          ladder = [];
+          for (let layer = 0; layer < nLay; layer++) {
+            for (let level = 1; level < levels; level++) {
+              const srcView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
+                baseMipLevel: level - 1, mipLevelCount: 1 });
+              const dstView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
+                baseMipLevel: level, mipLevelCount: 1 });
+              ladder.push({ dstView, bg: device.createBindGroup({
+                layout: pipe.getBindGroupLayout(0),
+                entries: [{ binding: 0, resource: srcView }, { binding: 1, resource: _mipSamp }],
+              }) });
+            }
           }
+          tex.__wgxMipLadder = ladder;
+        }
+        const enc = device.createCommandEncoder();
+        for (let i = 0; i < ladder.length; i++) {
+          const st = ladder[i];
+          const p = enc.beginRenderPass({ colorAttachments: [{ view: st.dstView, loadOp: "clear",
+            clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
+          p.setPipeline(pipe); p.setBindGroup(0, st.bg); p.draw(3); p.end();
         }
         device.queue.submit([enc.finish()]);
       } catch (_) { /* mip blit is best-effort; caller still has mip 0 */ }
@@ -3084,12 +3115,15 @@ const WGX = (function () {
         _tlSrc = frameAllLights; _tlKnob = framePerChunk;
         _ciCursor = 0; _ciSeg = new WeakMap();
       }
+      frameLights = nL > 0 ? L : null;
+      frameNL = nL;
+      _fcPlanesIsFrame = false;   // viewProj (re)written — the shared plane scratch is stale
     }
 
     // Sky uniform upload (SkyU; consumed by drawSky). Accepts a frame or sky obj.
     function _writeSky(f) {
       const ivp = f.invViewProj || IDENT;
-      skyData.set(ivp.length >= 16 ? (ivp.subarray ? ivp.subarray(0, 16) : ivp) : IDENT, 0);
+      skyData.set(ivp.length === 16 ? ivp : (ivp.length > 16 && ivp.subarray ? ivp.subarray(0, 16) : IDENT), 0);
       const z = f.zenith || f.skyZenith || [0.18, 0.40, 0.78];
       const h = f.horizon || f.skyHorizon || [0.62, 0.74, 0.88];
       const sd = f.sunDir || [0.3, 0.6, 0.5];
@@ -3182,8 +3216,8 @@ const WGX = (function () {
     function drawSky(sky) {
       if (!litPass) return;
       _writeSky(sky || lastFrame || {});
-      litPass.setPipeline((_passSamples > 1 && skyPipelineMS) ? skyPipelineMS : skyPipeline);
-      litPass.setBindGroup(0, skyBindGroup);
+      _setPipe(litPass, (_passSamples > 1 && skyPipelineMS) ? skyPipelineMS : skyPipeline);
+      _setBG0(litPass, skyBindGroup);
       litPass.draw(3, 1, 0, 0);
     }
 
@@ -3191,7 +3225,7 @@ const WGX = (function () {
     function _writeDraw(slot, model, opts) {
       const base = slot * DRAW_F32_STRIDE;
       const d = drawRing;
-      d.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, base);
+      d.set(model && model.length === 16 ? model : (model && model.length > 16 && model.subarray ? model.subarray(0, 16) : IDENT), base);
       const o = opts || {};
       d[base + 16] = o.emissive  != null ? o.emissive  : 0;
       d[base + 17] = o.alpha     != null ? o.alpha     : 1;
@@ -3207,11 +3241,15 @@ const WGX = (function () {
       // Floor/terrain over the ribbon: WGX depth loses the road, so fs_main
       // discards the LUT footprint. Never set this on cars/props (mat2.w).
       d[base + 27] = o.buryRibbon ? 1 : 0;
-      // lampRange (lanes 28-30): zeroed for EVERY draw — drawRing slots are
-      // reused across frames, so a stale per-chunk range from a prior chunked
-      // draw would silently rebind that chunk's lamp slice. drawChunked
-      // overwrites these after the call when per-chunk mode is active.
-      d[base + 28] = 0; d[base + 29] = 0; d[base + 30] = 0;
+      // Lamp masks (DrawU.mat3.xy, lanes 28-29): all-ones = no cull. Ring
+      // slots are reused across frames, so every writer must set them — a
+      // stale chunk mask on a car draw would silently unlight it. drawChunked
+      // overwrites per run.
+      d[base + 28] = LAMP_MASK_ALL; d[base + 29] = LAMP_MASK_ALL;
+      // lampRange (DrawU lanes 32-34): zeroed for EVERY draw — a stale
+      // per-chunk range from a prior chunked draw would silently rebind that
+      // chunk's lamp slice. drawChunked overwrites when per-chunk is active.
+      d[base + 32] = 0; d[base + 33] = 0; d[base + 34] = 0;
     }
     // One (or ranged) writeBuffer for every slot filled this pass — call before
     // litPass.end(). writeBuffer is queue-ordered before submit, so draws
@@ -3244,38 +3282,83 @@ const WGX = (function () {
       _flushQuadFxUBO();
       _flushDecalUBO();
     }
+    // Redundant-state filter. Consecutive draws nearly always share the
+    // pipeline, group 0, and vertex buffers, but every call was recorded and
+    // Dawn-validated anyway — measured live (Monza race frame): 251
+    // setPipeline / 720 setBindGroup / 568 setVertexBuffer for ~320 draws.
+    // The cache lives as expandos on the ENCODER: a new pass is a new wrapper
+    // object, so state resets itself and no per-pass bookkeeping can go
+    // stale. Every state call on a cached pass MUST route through these
+    // helpers — a raw pass.setPipeline beside them would silently desync.
+    function _setPipe(pass, p) {
+      if (pass.__pipe !== p) { pass.setPipeline(p); pass.__pipe = p; }
+    }
+    function _setBG0(pass, bg, dyn) {
+      // A dynamic-offset group 0 (fx quad/decal rings) re-sets every call and
+      // poisons the cache so the next plain group 0 always re-binds.
+      if (dyn) { pass.setBindGroup(0, bg, dyn); pass.__bg0 = null; return; }
+      if (pass.__bg0 !== bg) { pass.setBindGroup(0, bg); pass.__bg0 = bg; }
+    }
+    function _setVB0(pass, buf) {
+      if (pass.__vb0 !== buf) { pass.setVertexBuffer(0, buf); pass.__vb0 = buf; }
+    }
+    function _setVB1(pass, buf) {
+      if (pass.__vb1 !== buf) { pass.setVertexBuffer(1, buf); pass.__vb1 = buf; }
+    }
     // Slot 0 = pos/nrm/col (stride 36), slot 1 = instance.
     // Group 2 = mat+trk storage (vertex_index). Road draws bind the piece's
     // authored buffer; bury/floor keep the world LUT (magic 12345).
     function _bindLitVerts(pass, vbuf, instBuf, attrBG, authored) {
-      pass.setVertexBuffer(0, vbuf);
-      pass.setVertexBuffer(1, instBuf || identInstanceBuf);
+      _setVB0(pass, vbuf);
+      _setVB1(pass, instBuf || identInstanceBuf);
       // Always the world LUT when one exists. Authored storage[vid] + a
       // location-3 interpolator shards dashes on Dawn (measured). Floor
       // bury and road markings both read trkFromWorld(wpos). `authored`
       // stays in the signature so call sites do not drift.
-      pass.setBindGroup(2, _roadLutBG || attrBG || zeroAttrBG);
+      const bg2 = _roadLutBG || attrBG || zeroAttrBG;
+      if (pass.__bg2 !== bg2) { pass.setBindGroup(2, bg2); pass.__bg2 = bg2; }
       void authored;
     }
 
     // Coplanar terrain wins depth on SwiftShader-Dawn even when the road ribbon
     // draws second with negative bias. Push detail-bearing ground draws away.
+    // Pooled: the allocating branch fired on exactly the most common draws
+    // (road forces doubleSided, every detail>0.2 mesh gets a bias), so a city
+    // track paid 2-3 fresh objects × hundreds of draws × 60 fps — the same GC
+    // class the instanced path's _instDrawOpts pooling already fixed. The bag
+    // is consumed synchronously by _writeDraw/_litPipeline within the call.
+    const _litOptsBag = {
+      emissive: 0, alpha: 1, roughness: 0.7, metalness: 0, specular: 0.5,
+      detail: 0, clearcoat: 0, carPaint: 0, sparkle: 1, _instanced: false,
+      surfaceId: 0, buryRibbon: false, depthBias: null, doubleSided: false,
+      noAlphaWrite: false, decal: false, depthCompare: undefined,
+    };
+    const _BIAS_BURY = [5, 10], _BIAS_DETAIL = [3, 6];
     function _litOpts(opts) {
       const o = opts || {};
-      const extra = {};
-      if (o.buryRibbon) extra.depthBias = [5, 10];
-      if (!extra.depthBias && !o.depthBias && !o.surfaceId && (o.detail || 0) > 0.2)
-        extra.depthBias = [3, 6];
+      let bias = o.depthBias !== undefined ? o.depthBias : null;
+      let dbl = !!o.doubleSided;
+      if (o.buryRibbon) bias = _BIAS_BURY;
+      else if (!o.depthBias && !o.surfaceId && (o.detail || 0) > 0.2) bias = _BIAS_DETAIL;
       if (o.surfaceId === 16) {
         // Winding is already swapped in _expandPull; doubleSided lets the
         // underside/skirts z-fight the top (chopped asphalt). Do NOT mark
         // decal/always-pass and do NOT keep GL [-8,-16] — those bury tyres.
         // No road bias: later car draws win the contact; buryRibbon terrain
         // sits behind so LUT misses cannot punch holes in the tarmac.
-        extra.doubleSided = true;
-        extra.depthBias = null;
+        dbl = true;
+        bias = null;
       }
-      return Object.keys(extra).length ? Object.assign({}, o, extra) : o;
+      if (bias === (o.depthBias !== undefined ? o.depthBias : null) && dbl === !!o.doubleSided) return o;
+      const b = _litOptsBag;
+      b.emissive = o.emissive; b.alpha = o.alpha; b.roughness = o.roughness;
+      b.metalness = o.metalness; b.specular = o.specular; b.detail = o.detail;
+      b.clearcoat = o.clearcoat; b.carPaint = o.carPaint; b.sparkle = o.sparkle;
+      b._instanced = o._instanced; b.surfaceId = o.surfaceId;
+      b.buryRibbon = o.buryRibbon; b.noAlphaWrite = o.noAlphaWrite;
+      b.decal = o.decal; b.depthCompare = o.depthCompare;
+      b.depthBias = bias; b.doubleSided = dbl;
+      return b;
     }
 
     function draw(mesh, model, opts) {
@@ -3284,8 +3367,8 @@ const WGX = (function () {
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
       _writeDraw(slot, model, o);
-      litPass.setPipeline(_litPipeline(o));
-      litPass.setBindGroup(0, _activeFrameBG);
+      _setPipe(litPass, _litPipeline(o));
+      _setBG0(litPass, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
       if (mesh.pieces) {
@@ -3306,8 +3389,8 @@ const WGX = (function () {
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
       _writeDraw(slot, model, o);
-      litPass.setPipeline(_litPipeline(o));
-      litPass.setBindGroup(0, _activeFrameBG);
+      _setPipe(litPass, _litPipeline(o));
+      _setBG0(litPass, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
       if (!mesh.chunks) {
@@ -3331,7 +3414,10 @@ const WGX = (function () {
       // chase/park chunks; near is now GL clip w+z (see _extractPlanes) so
       // the exemption was leftover work — env-probe 300 m was thrown away.
       const cull = !!frameViewProj;
-      if (cull) _extractPlanes(frameViewProj, _fcPlanes);
+      // _fcPlanes is scratch shared with the shadow extracts below; the flag
+      // says it currently holds THIS frame's camera planes. Terrain, road,
+      // props, glass and water each re-derived the same six planes per frame.
+      if (cull && !_fcPlanesIsFrame) { _extractPlanes(frameViewProj, _fcPlanes); _fcPlanesIsFrame = true; }
       const cd = frameCullDist, cd2 = cd * cd;
       const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
       const chunks = mesh.chunks;
@@ -3377,9 +3463,10 @@ const WGX = (function () {
             if (cslot >= MAX_DRAWS) break;
             _writeDraw(cslot, model, o);
             const cbase = cslot * DRAW_F32_STRIDE;
-            drawRing[cbase + 28] = seg.base + tbl.offsets[i];
-            drawRing[cbase + 29] = tbl.counts[i];
-            drawRing[cbase + 30] = 1;
+            // lampRange lives at lanes 32-34 (lanes 28-29 are the lamp masks).
+            drawRing[cbase + 32] = seg.base + tbl.offsets[i];
+            drawRing[cbase + 33] = tbl.counts[i];
+            drawRing[cbase + 34] = 1;
             _dynOff[0] = cslot * DRAW_STRIDE;
             litPass.setBindGroup(1, drawBindGroup, _dynOff);
             _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG, o.surfaceId === 16);
@@ -3391,9 +3478,35 @@ const WGX = (function () {
       // Merge runs of adjacent visible chunks that share vbuf/ibuf/attrBG.
       // Map insertion order is IBO order, so summing count from the run's
       // first firstIndex submits the same triangles as the per-chunk loop.
+      //
+      // Chunk-AABB lamp cull: with a night light set bound, each run gets its
+      // OWN draw slot whose mask has a bit only for lights whose radius
+      // reaches some chunk of the run — bit-exact vs the shader's radius
+      // reject (see the WGSL lamp loop), it just skips the distance math for
+      // lights that cannot touch this geometry. The set is re-ranked as the
+      // player moves, so masks are computed per call (visible chunks × nL
+      // cheap AABB tests); small sets skip the machinery — the reject is
+      // already cheap. Run overflow rebinds the base slot (all-ones mask).
+      const maskL = frameNL > 8 ? frameLights : null;
       let run = null;
       const flush = () => {
         if (!run) return;
+        if (maskL) {
+          const s2 = _drawSlot < MAX_DRAWS ? _drawSlot++ : -1;
+          const use = s2 >= 0 ? s2 : slot;
+          if (s2 >= 0) {
+            const db = s2 * DRAW_F32_STRIDE, sb = slot * DRAW_F32_STRIDE;
+            drawRing.copyWithin(db, sb, sb + 28);
+            drawRing[db + 28] = run.m0;
+            drawRing[db + 29] = run.m1;
+            // The copy stops at lane 28, so clear the relocated lampRange
+            // lanes explicitly — ring slots are reused and a stale
+            // lampRange.z=1 from a per-chunk frame would reroute the shader.
+            drawRing[db + 32] = 0; drawRing[db + 33] = 0; drawRing[db + 34] = 0;
+          }
+          _dynOff[0] = use * DRAW_STRIDE;
+          litPass.setBindGroup(1, drawBindGroup, _dynOff);
+        }
         _bindLitVerts(litPass, run.vbuf, identInstanceBuf, run.attrBG, o.surfaceId === 16);
         _drawGeom(litPass, run);
         run = null;
@@ -3405,21 +3518,37 @@ const WGX = (function () {
           flush();
           continue;
         }
+        if (maskL) _chunkLampMask(ch.min, ch.max, maskL, frameNL);
         const vbuf = ch.vbuf || mesh.vbuf;
         const ibuf = ch.ibuf || mesh.ibuf || null;
         const attrBG = ch.attrBG || mesh.attrBG;
         if (run && run.vbuf === vbuf && run.ibuf === ibuf && run.attrBG === attrBG) {
           run.count += ch.count;
+          if (maskL) { run.m0 |= _lm0; run.m1 |= _lm1; }
         } else {
           flush();
           run = {
             vbuf, ibuf, attrBG, count: ch.count,
             firstIndex: _chunkFirstIndex(ch),
             indexFormat: ch.indexFormat || mesh.indexFormat,
+            m0: maskL ? _lm0 : LAMP_MASK_ALL, m1: maskL ? _lm1 : LAMP_MASK_ALL,
           };
         }
       }
       flush();
+    }
+    // Two 24-bit mask halves for the lights whose radius reaches an AABB.
+    // Written to module scratch (_lm0/_lm1) — one caller, synchronous.
+    let _lm0 = 0, _lm1 = 0;
+    function _chunkLampMask(mn, mx, L, n) {
+      let m0 = 0, m1 = 0;
+      for (let i = 0; i < n; i++) {
+        const o = i * 15, rad = L[o + 6];
+        if (rad > 0 && _aabbDist2(mn, mx, L[o], L[o + 1], L[o + 2]) <= rad * rad) {
+          if (i < 24) m0 |= (1 << i); else m1 |= (1 << (i - 24));
+        }
+      }
+      _lm0 = m0; _lm1 = m1;
     }
 
     // Fallback path: tonemap blit (HDR scene -> swapchain). Used when
@@ -3744,7 +3873,7 @@ const WGX = (function () {
         _tonemapBlit(exposure);
         const disp = _softDisplayEncode();
         const cap = _capEncode();
-        try { device.queue.submit([encoder.finish()]); }
+        try { device.queue.submit(_frameSubmitList(encoder)); }
         catch (e) { _softDisplayAbort(disp); throw e; }
         _retireFlush();
         _capFinish(cap);
@@ -3797,7 +3926,11 @@ const WGX = (function () {
         s[32] = up[0]; s[33] = up[1]; s[34] = up[2];
         s[35] = _carRefl;   // upVS.w = carReflect (SSR car-paint gate)
         const ssrThick = (T && T.ssrThick != null) ? T.ssrThick : 0.20;
-        s[36] = 1 / tw; s[37] = 1 / th; s[38] = ssrThick; s[39] = _ssrStr;   // texel, thick, strength
+        // texel = one OUTPUT (half-res) texel: it drives the UV-space march
+        // steps AND the nT finite-difference normal stride / self-hit taps
+        // against the still-full-res depth — one output texel is the correct
+        // stride for both at half res.
+        s[36] = 1 / halfW; s[37] = 1 / halfH; s[38] = ssrThick; s[39] = _ssrStr;   // texel, thick, strength
         const skz = (lastFrame && lastFrame.skyZenith) || [0.18, 0.40, 0.78];
         const skh = (lastFrame && lastFrame.skyHorizon) || [0.62, 0.74, 0.88];
         const topUV = (o.ssrTopUV != null) ? o.ssrTopUV : 0.62;
@@ -3846,7 +3979,7 @@ const WGX = (function () {
         const s = postScratch;
         const invVP = lastFrame && lastFrame.invViewProj;
         if (invVP && invVP.length >= 16) {
-          _grInvTmp.set(invVP.length >= 16 ? (invVP.subarray ? invVP.subarray(0, 16) : invVP) : IDENT);
+          _grInvTmp.set(invVP.length === 16 ? invVP : (invVP.length > 16 && invVP.subarray ? invVP.subarray(0, 16) : IDENT));
           _mul4(s.subarray(0, 16), _grInvTmp, Z01INV);
         } else s.set(IDENT, 0);
         s.set(_shadowRendered ? shadowLVPData : IDENT, 16);
@@ -4072,7 +4205,7 @@ const WGX = (function () {
       }
       const disp = _softDisplayEncode();
       const _cap = _capEncode();
-      try { device.queue.submit([encoder.finish()]); }
+      try { device.queue.submit(_frameSubmitList(encoder)); }
       catch (e) { _softDisplayAbort(disp); throw e; }
       _retireFlush();
       _capFinish(_cap);
@@ -4099,21 +4232,50 @@ const WGX = (function () {
       }
     }
 
-    // Runs BEFORE begin() each frame (matches game.js render order): its own
-    // command encoder, submitted in shadowEnd() so the depth map is ready for
-    // the later lit pass that samples it. All current casters use MAT_IDENT, but
-    // model is honoured via a dynamic-offset ring (one slot per castShadow* call).
+    // Runs BEFORE begin() each frame (matches game.js render order): one
+    // shared shadow encoder for the frame's passes, submitted ahead of the
+    // main encoder in the SAME queue.submit (see _frameSubmitList) — queue
+    // order keeps the depth maps ready for the lit pass that samples them.
+    // All current casters use MAT_IDENT, but model is honoured via a
+    // dynamic-offset ring (one slot per castShadow* call, regioned per pass).
     function _writeShadowModel(slot, model) {
-      const src = model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT;
+      const src = model && model.length === 16 ? model : (model && model.length > 16 && model.subarray ? model.subarray(0, 16) : IDENT);
       shadowModelRing.set(src, slot * SHADOW_MODEL_F32_STRIDE);
     }
     // One writeBuffer for every slot filled this pass — call before
     // shadowPass.end(). writeBuffer is queue-ordered before submit, so
     // draws recorded earlier still see the data (same rule as _flushDrawUBO).
     function _flushShadowModelUBO() {
-      if (!shadowModelUBO || _shadowSlot <= 0) return;
-      device.queue.writeBuffer(shadowModelUBO, 0, shadowModelRing, 0, _shadowSlot * SHADOW_MODEL_F32_STRIDE);
+      if (!shadowModelUBO || _shadowSlot <= _shadowFlushed) return;
+      // Region flush: only this pass's new slots — earlier passes' slots are
+      // already uploaded and must not be rewritten (their draws are recorded,
+      // and writeBuffer is queue-ordered, so a rewrite would clobber them).
+      device.queue.writeBuffer(shadowModelUBO,
+        _shadowFlushed * SHADOW_MODEL_STRIDE, shadowModelRing,
+        _shadowFlushed * SHADOW_MODEL_F32_STRIDE,
+        (_shadowSlot - _shadowFlushed) * SHADOW_MODEL_F32_STRIDE);
+      _shadowFlushed = _shadowSlot;
       if (_shadowOverflow) Log.warn("gfx", "WGX shadow caster ring overflow: " + _shadowOverflow + " draw(s) skipped");
+    }
+    // One encoder for all of a frame's shadow passes; a Begin resumes the
+    // pending encoder. Spill guard: if the frame submit never ran (a capture
+    // path bailed) the ring would keep growing — submit and reset instead.
+    function _shadowEncoderBegin() {
+      if (_pendingShadowEnc && _shadowSlot > SHADOW_SLOTS - 512) {
+        try { device.queue.submit([_pendingShadowEnc.finish()]); } catch (_) { /* device error surfaces later */ }
+        _pendingShadowEnc = null;
+        _shadowSlot = 0; _shadowFlushed = 0; _shadowOverflow = 0;
+      }
+      shadowEncoder = _pendingShadowEnc || device.createCommandEncoder();
+      _pendingShadowEnc = null;
+    }
+    // The frame submit: shadow encoder (when any pass recorded) rides in front
+    // of the main encoder, then the ring resets for the next frame.
+    function _frameSubmitList(mainEnc) {
+      const sh = _pendingShadowEnc;
+      _pendingShadowEnc = null;
+      _shadowSlot = 0; _shadowFlushed = 0; _shadowOverflow = 0;
+      return sh ? [sh.finish(), mainEnc.finish()] : [mainEnc.finish()];
     }
     function _shadowSetModel(model) {
       if (_shadowSlot >= SHADOW_SLOTS) { _shadowOverflow++; return -1; }
@@ -4128,24 +4290,23 @@ const WGX = (function () {
       _shadowLightVP = (lightVP && lightVP.length >= 16) ? lightVP : IDENT;  // raw — CPU chunk cull
       _mul4(shadowLVPData, Z01, _shadowLightVP);   // Z01-remapped — depth store + LIT lookup
       device.queue.writeBuffer(shadowUBO, 0, shadowLVPData);
-      _shadowSlot = 0; _shadowOverflow = 0;
-      shadowEncoder = device.createCommandEncoder();
+      _shadowEncoderBegin();
       shadowPass = shadowEncoder.beginRenderPass({
         colorAttachments: [],
         depthStencilAttachment: { view: shadowView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store" },
       });
       shadowPass.setPipeline(shadowPipeline);
       shadowPass.setBindGroup(0, shadowG0BindGroup);
-      if (lightVP) _extractPlanes(lightVP, _fcPlanes);   // light frustum for chunk cull
+      if (lightVP) { _extractPlanes(lightVP, _fcPlanes); _fcPlanesIsFrame = false; }   // light frustum for chunk cull
     }
     function castShadow(mesh, model) {
       if (!shadowPass || !mesh || !mesh.vbuf) return;
       if (_shadowSetModel(model) < 0) return;
-      shadowPass.setVertexBuffer(1, identInstanceBuf);
+      _setVB1(shadowPass, identInstanceBuf);
       if (mesh.pieces) {
         for (let i = 0; i < mesh.pieces.length; i++) {
           const p = mesh.pieces[i];
-          shadowPass.setVertexBuffer(0, p.vbuf);
+          _setVB0(shadowPass, p.vbuf);
           _drawGeom(shadowPass, p);
         }
         return;
@@ -4153,28 +4314,28 @@ const WGX = (function () {
       if (mesh.chunks) {   // a chunked mesh cast without cull — draw every chunk
         for (let i = 0; i < mesh.chunks.length; i++) {
           const ch = mesh.chunks[i];
-          shadowPass.setVertexBuffer(0, ch.vbuf || mesh.vbuf);
+          _setVB0(shadowPass, ch.vbuf || mesh.vbuf);
           _drawGeom(shadowPass, ch);
         }
         return;
       }
-      shadowPass.setVertexBuffer(0, mesh.vbuf);
+      _setVB0(shadowPass, mesh.vbuf);
       _drawGeom(shadowPass, mesh);
     }
     function castShadowChunked(mesh, model) {
       if (!shadowPass || !mesh || !mesh.vbuf) return;
       if (_shadowSetModel(model) < 0) return;
-      shadowPass.setVertexBuffer(1, identInstanceBuf);
+      _setVB1(shadowPass, identInstanceBuf);
       if (!mesh.chunks) {
         if (mesh.pieces) {
           for (let i = 0; i < mesh.pieces.length; i++) {
             const p = mesh.pieces[i];
-            shadowPass.setVertexBuffer(0, p.vbuf);
+            _setVB0(shadowPass, p.vbuf);
             _drawGeom(shadowPass, p);
           }
           return;
         }
-        shadowPass.setVertexBuffer(0, mesh.vbuf);
+        _setVB0(shadowPass, mesh.vbuf);
         _drawGeom(shadowPass, mesh);
         return;
       }
@@ -4182,7 +4343,7 @@ const WGX = (function () {
       let run = null;
       const flush = () => {
         if (!run) return;
-        shadowPass.setVertexBuffer(0, run.vbuf);
+        _setVB0(shadowPass, run.vbuf);
         _drawGeom(shadowPass, run);
         run = null;
       };
@@ -4226,13 +4387,15 @@ const WGX = (function () {
         blockerPass.end();
       }
 
-      device.queue.submit([shadowEncoder.finish()]);
+      _pendingShadowEnc = shadowEncoder;   // rides the frame submit
       shadowEncoder = null;
       _shadowRendered = true;
     }
 
     // Shares the depth pipeline and the dynamic-offset model ring with the
-    // static pass (safe: shadowEnd submits before this Begin rewrites slots).
+    // static pass (safe: the ring is REGIONED per pass — slots keep counting
+    // across Begins and reset only at the frame submit, so this Begin never
+    // rewrites slots an earlier recorded pass still references).
     // PHONES keep blob-only shadows, matching GLX — which gates on IS_MOBILE, the
     // device, not MOBILE_TIER: GRAPHICS: HIGH buys quality, not a per-frame extra
     // depth pass on a phone GPU. The map itself is 1×1 there, so this gate is also
@@ -4244,8 +4407,7 @@ const WGX = (function () {
       _shadowLightVP = null;   // castShadowChunked must NOT frustum-cull with stale static planes
       _mul4(carShadowLVPData, Z01, (lightVP && lightVP.length >= 16) ? lightVP : IDENT);
       device.queue.writeBuffer(carShadowUBO, 0, carShadowLVPData);
-      _shadowSlot = 0; _shadowOverflow = 0;
-      shadowEncoder = device.createCommandEncoder();
+      _shadowEncoderBegin();
       shadowPass = shadowEncoder.beginRenderPass({
         colorAttachments: [],
         depthStencilAttachment: { view: carShadowView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store" },
@@ -4257,7 +4419,7 @@ const WGX = (function () {
       if (!shadowPass) return;
       _flushShadowModelUBO();
       shadowPass.end(); shadowPass = null;
-      device.queue.submit([shadowEncoder.finish()]);
+      _pendingShadowEnc = shadowEncoder;   // rides the frame submit
       shadowEncoder = null;
       _carShadowArmed = true;
     }
@@ -4273,9 +4435,8 @@ const WGX = (function () {
       _shadowLightVP = raw;
       _mul4(lampShadowLVPData, Z01, raw);
       device.queue.writeBuffer(lampShadowUBO, 0, lampShadowLVPData);
-      if (lightVP) _extractPlanes(raw, _fcPlanes);
-      _shadowSlot = 0; _shadowOverflow = 0;
-      shadowEncoder = device.createCommandEncoder();
+      if (lightVP) { _extractPlanes(raw, _fcPlanes); _fcPlanesIsFrame = false; }
+      _shadowEncoderBegin();
       shadowPass = shadowEncoder.beginRenderPass({
         colorAttachments: [],
         depthStencilAttachment: { view: lampShadowView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store" },
@@ -4287,7 +4448,7 @@ const WGX = (function () {
       if (!shadowPass) return;
       _flushShadowModelUBO();
       shadowPass.end(); shadowPass = null;
-      device.queue.submit([shadowEncoder.finish()]);
+      _pendingShadowEnc = shadowEncoder;   // rides the frame submit
       shadowEncoder = null;
       _lampShadowArmed = true;
     }
@@ -4515,17 +4676,16 @@ const WGX = (function () {
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
       // Reuse a single opts bag — Object.assign every batch was GC on city tracks.
+      // undefined-assign, not delete: per-key delete pushed the bag into
+      // dictionary mode, partially defeating the pooling. Consumers all test
+      // != null / !== undefined, so a cleared key reads identically.
       const o = _instDrawOpts;
-      if (opts) {
-        for (const k in o) { if (k !== "_instanced") delete o[k]; }
-        for (const k in opts) o[k] = opts[k];
-      } else {
-        for (const k in o) { if (k !== "_instanced") delete o[k]; }
-      }
+      for (const k in o) { if (k !== "_instanced") o[k] = undefined; }
+      if (opts) { for (const k in opts) o[k] = opts[k]; }
       o._instanced = true;
       _writeDraw(slot, IDENT, o);
-      litPass.setPipeline(_litPipeline(o));
-      litPass.setBindGroup(0, _activeFrameBG);
+      _setPipe(litPass, _litPipeline(o));
+      _setBG0(litPass, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
       _bindLitVerts(litPass, batch.vbuf, batch.instBuf || identInstanceBuf, batch.attrBG);
@@ -4565,8 +4725,8 @@ const WGX = (function () {
         batch.visible = batch.instances;
       }
       if (_shadowSetModel(_shadowIdent) < 0) return;
-      shadowPass.setVertexBuffer(0, batch.vbuf);
-      shadowPass.setVertexBuffer(1, batch.instBuf || identInstanceBuf);
+      _setVB0(shadowPass, batch.vbuf);
+      _setVB1(shadowPass, batch.instBuf || identInstanceBuf);
       _drawGeom(shadowPass, batch, n);
     }
 
@@ -4592,9 +4752,9 @@ const WGX = (function () {
       const eye = frameEye || [0, 0, 0];
       s[16] = eye[0]; s[17] = eye[1]; s[18] = eye[2]; s[19] = additive ? 1 : 0;
       device.queue.writeBuffer(particleUBO[i], 0, s, 0, 20);
-      litPass.setPipeline(additive && pParticleAdd ? pParticleAdd : pParticle);
-      if (_particleBG[i]) litPass.setBindGroup(0, _particleBG[i]);
-      litPass.setVertexBuffer(0, particleVBO[i]);
+      _setPipe(litPass, additive && pParticleAdd ? pParticleAdd : pParticle);
+      if (_particleBG[i]) _setBG0(litPass, _particleBG[i]);
+      _setVB0(litPass, particleVBO[i]);
       litPass.draw(nVert);
     }
 
@@ -4607,7 +4767,7 @@ const WGX = (function () {
       const base = slot * FX_F32_STRIDE;
       const s = quadFxRing;
       s.set(frameVPGpu, base);
-      s.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, base + 16);
+      s.set(model && model.length === 16 ? model : (model && model.length > 16 && model.subarray ? model.subarray(0, 16) : IDENT), base + 16);
       s[base + 32] = w; s[base + 33] = l; s[base + 34] = p2; s[base + 35] = p3;
     }
     function _drawQuadStamp(pipeline, model, w, l, p2, p3) {
@@ -4618,10 +4778,10 @@ const WGX = (function () {
       // shadow caster ring's _shadowOverflow).
       if (slot >= FX_QUAD_SLOTS) { _fxQuadOverflow++; return; }
       _writeQuadFx(slot, model, w, l, p2, p3);
-      litPass.setPipeline(pipeline);
+      _setPipe(litPass, pipeline);
       _fxQuadDynOff[0] = slot * FX_STRIDE;
-      litPass.setBindGroup(0, quadFxBG, _fxQuadDynOff);
-      litPass.setVertexBuffer(0, quadFxVBO);
+      _setBG0(litPass, quadFxBG, _fxQuadDynOff);
+      _setVB0(litPass, quadFxVBO);
       litPass.draw(6, 1, 0, 0);
     }
     function drawShadow(model, w, l) { _drawQuadStamp(pBlob, model, w, l, 0.25, 0.45); }
@@ -4656,9 +4816,9 @@ const WGX = (function () {
         device.queue.writeBuffer(skidVBO, 0, dst, 0, floats9);
       }
       device.queue.writeBuffer(skidUBO, 0, frameVPGpu);
-      litPass.setPipeline(pSkid);
-      litPass.setBindGroup(0, skidFxBG);
-      litPass.setVertexBuffer(0, skidVBO);
+      _setPipe(litPass, pSkid);
+      _setBG0(litPass, skidFxBG);
+      _setVB0(litPass, skidVBO);
       litPass.draw(vertCount, 1, 0, 0);
       return true;
     }
@@ -4704,9 +4864,9 @@ const WGX = (function () {
       gu.set(frameVPGpu, 0);
       gu[16] = ex; gu[17] = ey; gu[18] = ez; gu[19] = str;
       device.queue.writeBuffer(glowUBO, 0, gu, 0, 20);
-      litPass.setPipeline(pGlow);
-      litPass.setBindGroup(0, glowFxBG);
-      litPass.setVertexBuffer(0, glowVBO);
+      _setPipe(litPass, pGlow);
+      _setBG0(litPass, glowFxBG);
+      _setVB0(litPass, glowVBO);
       litPass.draw(nDraw * 6, 1, 0, 0);
     }
 
@@ -4718,7 +4878,7 @@ const WGX = (function () {
       if (slot >= FX_DECAL_SLOTS) return;
       const base = slot * FX_F32_STRIDE;
       const s = decalFxRing, o = opts || {};
-      s.set(model && model.length >= 16 ? (model.subarray ? model.subarray(0, 16) : model) : IDENT, base);
+      s.set(model && model.length === 16 ? model : (model && model.length > 16 && model.subarray ? model.subarray(0, 16) : IDENT), base);
       s.set(frameVPGpu, base + 16);
       const sd = frameSunDir || [0.3,0.6,0.5];
       const Td = frameTune || null;
@@ -4747,10 +4907,10 @@ const WGX = (function () {
         ] });
         tex._wgxDecalBG = bg;
       }
-      litPass.setPipeline(pDecal);
+      _setPipe(litPass, pDecal);
       _fxDecalDynOff[0] = slot * FX_STRIDE;
-      litPass.setBindGroup(0, bg, _fxDecalDynOff);
-      litPass.setVertexBuffer(0, mesh.vbuf);
+      _setBG0(litPass, bg, _fxDecalDynOff);
+      _setVB0(litPass, mesh.vbuf);
       litPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
       litPass.drawIndexed(mesh.count);
     }
@@ -5049,6 +5209,32 @@ const WGX = (function () {
     const noop = function () {};
     _runtimeReady = true;
     try { Log.info("gfx", "WGX bind ok"); } catch (_) { /* harness */ }
+    // Warm the known-shipping lit-pipeline variants off the boot path. They
+    // compiled synchronously on first use — the first ghost-car alpha draw,
+    // first decal, first biased detail draw each landed a mid-race
+    // createRenderPipeline hitch. The boot-gate pipelines above stay sync
+    // (refusal detection depends on their errors surfacing); anything not in
+    // this list still lazy-compiles exactly as before.
+    try {
+      setTimeout(function () {
+        if (_lost || !_runtimeReady) return;
+        const warm = [
+          { alpha: 0.5 }, { alpha: 0.5, noAlphaWrite: true },
+          { doubleSided: true }, { depthBias: [3, 6] }, { depthBias: [5, 10] },
+          { depthBias: [-1, -2] }, { decal: true },
+        ];
+        const save = _passSamples;
+        const counts = MSAA_COUNT > 1 ? [1, MSAA_COUNT] : [1];
+        try {
+          for (let c = 0; c < counts.length; c++) {
+            _passSamples = counts[c];
+            for (let i = 0; i < warm.length; i++) {
+              try { _litPipeline(warm[i]); } catch (_) { /* lazy path still covers it */ }
+            }
+          }
+        } finally { _passSamples = save; }
+      }, 0);
+    } catch (_) { /* harness without setTimeout */ }
 
     return {
       init() { return true; },

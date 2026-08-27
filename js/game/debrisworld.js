@@ -649,12 +649,15 @@ function _carNearFurn(track, cars) {
   }
   return false;
 }
+const _psOut = { have: false, px: 0, pz: 0 };   // consumed synchronously each step
 function _playerSample(track) {
   const p = G.player;
-  if (!p) return { have: false, px: 0, pz: 0 };
-  if (p.px != null) return { have: true, px: p.px, pz: p.pz };
+  if (!p) { _psOut.have = false; _psOut.px = 0; _psOut.pz = 0; return _psOut; }
+  _psOut.have = true;
+  if (p.px != null) { _psOut.px = p.px; _psOut.pz = p.pz; return _psOut; }
   Tracks.sample(track, p.s, _smp);
-  return { have: true, px: _smp.p[0], pz: _smp.p[2] };
+  _psOut.px = _smp.p[0]; _psOut.pz = _smp.p[2];
+  return _psOut;
 }
 // Shared by the WASM path and the asleep-skip path so despawn stays bit-identical.
 function _ageAndCullPool(pool, dt, px, pz, havePlayer, restLimit, farM) {
@@ -688,15 +691,17 @@ function _carNearLiveDebris(track, cars) {
     if (c.px == null) { Tracks.sample(track, c.s, _smp); _cnx[k] = _smp.p[0]; _cnz[k] = _smp.p[2]; }
     else { _cnx[k] = c.px; _cnz[k] = c.pz; }
   }
-  for (const pool of [_slots, _marbles, _panels]) {
-    for (let i = 0; i < pool.length; i++) {
-      const s = pool[i];
-      if (!s.live || !s.body) continue;
-      const t = s.body.translation();
-      for (let k = 0; k < n; k++) {
-        const dx = t.x - _cnx[k], dz = t.z - _cnz[k];
-        if (dx * dx + dz * dz < r2) return true;
-      }
+  return _poolNearCars(_slots, n, r2) || _poolNearCars(_marbles, n, r2) ||
+         _poolNearCars(_panels, n, r2);
+}
+function _poolNearCars(pool, n, r2) {
+  for (let i = 0; i < pool.length; i++) {
+    const s = pool[i];
+    if (!s.live || !s.body) continue;
+    const t = s.body.translation();
+    for (let k = 0; k < n; k++) {
+      const dx = t.x - _cnx[k], dz = t.z - _cnz[k];
+      if (dx * dx + dz * dz < r2) return true;
     }
   }
   return false;

@@ -748,7 +748,7 @@ const TrackMesh = (function () {
           nrm.push(0, 0, 0);
           const nz = (hash(k * 3 + v) - 0.5) * 0.04;
           // gravel/runoff verge at the road edge, grading out to grass (no apron)
-          const gt = v / (NTV - 1);                          // 0 inner edge → 1 far
+          const gt = NTV <= 1 ? 1 : v / (NTV - 1);          // 0 inner edge → 1 far (same 1-rail guard as the position path)
           const tc = [lerp(runoff[0], grass[0], gt), lerp(runoff[1], grass[1], gt), lerp(runoff[2], grass[2], gt)];
           col.push(tc[0] + nz, tc[1] + nz, tc[2] + nz);
           mat.push(gt < 0.22 ? MAT.ROCK : MAT.GRASS);

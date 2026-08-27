@@ -836,19 +836,19 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
   // Phone WGX: markings mip must NOT key off the clamped AA width (mip→0 at 0.30).
   assert.match(CHUNKS_SOURCE, /let fwX = max\(fwTrk\.y, 1e-4\);/);
   assert.match(CHUNKS_SOURCE, /let mip = clamp\(1\.0 - \(fwX - 0\.10\) \/ 0\.55, 0\.0, 1\.0\);/);
-  // ASPHALT pack is hoisted to fs_main (uniform CF) so textureSample can use
-  // implicit LOD + anisotropy — GLX texture() parity. Must sit BEFORE the
-  // front_facing branch (that is already non-uniform).
-  const roadSample = CHUNKS_SOURCE.indexOf("textureSample(matAlbedoTex, matSamp, roadUv, 16)");
+  // The MAT pack sample (ONE dynamic-layer textureSample since the 30-sample
+  // hoist was collapsed — WGSL allows non-uniform layer/UV expressions, only
+  // the CALL must sit in uniform CF) keeps implicit LOD + anisotropy — GLX
+  // texture() parity. Must sit BEFORE the front_facing branch (non-uniform).
+  const packSample = CHUNKS_SOURCE.indexOf("textureSample(matAlbedoTex, matSamp, uvSel, midClamp)");
   const ffBranch = CHUNKS_SOURCE.indexOf("if (!ff && !isRoadDraw) { N = -N; }");
-  assert.ok(roadSample > 0 && ffBranch > roadSample,
-    "asphalt textureSample must be hoisted before the front_facing branch");
+  assert.ok(packSample > 0 && ffBranch > packSample,
+    "MAT pack textureSample must be hoisted before the front_facing branch");
   assert.match(CHUNKS_SOURCE, /albedo \* litPack\.rgb \* 2\.0/);
-  assert.match(CHUNKS_SOURCE, /textureSample\(matAlbedoTex, matSamp, uv1, 1\)/,
-    "CONCRETE (wall) pack must hoist textureSample like asphalt");
-  const wallSample = CHUNKS_SOURCE.indexOf("textureSample(matAlbedoTex, matSamp, uv1, 1)");
-  assert.ok(wallSample > 0 && ffBranch > wallSample,
-    "wall textureSample must be hoisted before the front_facing branch");
+  // The normal-pack sample rides the same UV/layer selection (walls included).
+  const packNrmSample = CHUNKS_SOURCE.indexOf("textureSample(matNormalTex, matSamp, uvSel, midClamp)");
+  assert.ok(packNrmSample > 0 && ffBranch > packNrmSample,
+    "normal pack textureSample must be hoisted before the front_facing branch");
   assert.doesNotMatch(
     CHUNKS_SOURCE,
     /let aaX = clamp\(fwTrk\.y, 1e-4, 0\.30\);\s*[\s\S]{0,400}?let mip = clamp\(1\.0 - \(aaX/,
@@ -919,15 +919,18 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /hasTrk roads are createMesh pieces/);
   assert.match(WGX_SOURCE, /g2Layout/);
   assert.match(WGX_SOURCE, /read-only-storage/);
-  assert.match(WGX_SOURCE, /setBindGroup\(2, _roadLutBG \|\| attrBG \|\| zeroAttrBG\)/);
+  // LUT-first priority survives the redundant-state cache in _bindLitVerts.
+  assert.match(WGX_SOURCE, /const bg2 = _roadLutBG \|\| attrBG \|\| zeroAttrBG;/);
+  assert.match(WGX_SOURCE, /pass\.setBindGroup\(2, bg2\)/);
   assert.match(WGX_SOURCE, /pieces.push\(_meshFromPull\(vert, attr, n, b.indexFormat\)\)/);
   assert.match(CHUNKS_SOURCE, /else if \(D\.mat2\.z > 15\.5 && D\.mat2\.z < 16\.5\)/);
   assert.match(WGX_SOURCE, /roadLutReady/);
   assert.match(WGX_SOURCE, /function _litOpts/);
   assert.match(WGX_SOURCE, /o\.surfaceId === 16/);
-  assert.match(WGX_SOURCE, /extra\.doubleSided = true;/);
-  assert.match(WGX_SOURCE, /extra\.depthBias = null;/);
-  assert.match(WGX_SOURCE, /o\.buryRibbon\) extra\.depthBias = \[5, 10\]/);
+  assert.match(WGX_SOURCE, /dbl = true;/);   // road forces doubleSided in _litOpts (pooled bag)
+  assert.match(WGX_SOURCE, /dbl = true;\s*\n\s*bias = null;/);   // road: doubleSided, NO bias (pooled _litOpts)
+  assert.match(WGX_SOURCE, /o\.buryRibbon\) bias = _BIAS_BURY/);   // bury keeps its [5,10] push-back (pooled _litOpts)
+  assert.match(WGX_SOURCE, /_BIAS_BURY = \[5, 10\]/);
   assert.match(WGX_SOURCE, /Raw RGB\. Packing MAT into col\.x/);
   assert.match(WGX_SOURCE, /const GW = 32, GH = 32, SLOT = 16/);
   assert.match(WGX_SOURCE, /const MAX_S = 2000/);
@@ -1654,10 +1657,21 @@ test("shadow model UBO flushes once per pass (not per cast)", () => {
     assert.ok(idx >= 0, name + " exists");
     const body = WGX_SOURCE.slice(idx, idx + 900);
     assert.match(body, /_flushShadowModelUBO\(\)/, name + " must flush the shadow model ring");
+    // Deferred-submit shape: the End flushes its ring REGION, then stashes the
+    // shared encoder for the frame submit (writeBuffer is queue-ordered, so
+    // the flush still lands before the submit that consumes it). A raw
+    // queue.submit here would resurrect the 3-extra-submits-per-frame shape.
     const flushAt = body.indexOf("_flushShadowModelUBO()");
-    const submitAt = body.indexOf("queue.submit");
-    assert.ok(flushAt >= 0 && submitAt > flushAt, name + " must flush before submit");
+    const stashAt = body.indexOf("_pendingShadowEnc = shadowEncoder");
+    assert.ok(flushAt >= 0 && stashAt > flushAt, name + " must flush before stashing the encoder");
+    assert.doesNotMatch(body, /queue\.submit/, name + " must not submit — the frame submit carries it");
   }
+  // The frame submit must put the shadow encoder AHEAD of the main encoder,
+  // and the region watermark must reset with the slot counter.
+  assert.match(WGX_SOURCE, /\[sh\.finish\(\), mainEnc\.finish\(\)\]/,
+    "frame submit orders shadow work before the main encoder");
+  assert.match(WGX_SOURCE, /_shadowFlushed \* SHADOW_MODEL_STRIDE/,
+    "shadow flush must be a region write at the watermark offset");
   const set = WGX_SOURCE.match(/function _shadowSetModel\([\s\S]*?\n    \}/);
   assert.ok(set, "_shadowSetModel exists");
   assert.doesNotMatch(set[0], /setBindGroup\([^)]*\[slot/,
@@ -1775,7 +1789,7 @@ test("per-chunk lamps: buffers, bindings, and the runtime-sized track set", () =
   // (array<Light> with no literal bound) so the buffer's 1024-light capacity
   // is not baked into the WGSL, and DrawU grows exactly one vec4 (lampRange)
   // with all three coupled size sites moving through the one constant.
-  assert.match(CHUNKS_SOURCE, /DRAW_UNIFORM_BYTES:\s*128/, "DrawU used bytes incl. lampRange");
+  assert.match(CHUNKS_SOURCE, /DRAW_UNIFORM_BYTES:\s*144/, "DrawU used bytes incl. lampRange");
   assert.match(CHUNKS_SOURCE, /lampRange : vec4<f32>/, "DrawU carries the lamp range");
   assert.match(CHUNKS_SOURCE, /params10\s*:\s*vec4<f32>/, "FrameU carries the absolute shadow index lane");
   assert.match(CHUNKS_SOURCE, /@binding\(15\) var<storage, read> trackLights : array<Light>;/,
@@ -1798,8 +1812,12 @@ test("per-chunk lamps: the chunked loop uses absolute shadow indices and zeroed 
   assert.match(CHUNKS_SOURCE, /D\.lampRange\.z > 0\.5/, "per-chunk mode is the draw's own flag");
   const wd = WGX_SOURCE.match(/function _writeDraw\(slot, model, opts\)[\s\S]*?\n    \}/);
   assert.ok(wd, "_writeDraw exists");
-  assert.match(wd[0], /d\[base \+ 28\] = 0; d\[base \+ 29\] = 0; d\[base \+ 30\] = 0;/,
+  // lampRange moved to lanes 32-34 on the deploy union (lanes 28-29 became
+  // the chunk-AABB lamp masks); the zero-every-draw contract is unchanged.
+  assert.match(wd[0], /d\[base \+ 32\] = 0; d\[base \+ 33\] = 0; d\[base \+ 34\] = 0;/,
     "_writeDraw zeroes the lampRange lanes for every draw");
+  assert.match(wd[0], /d\[base \+ 28\] = LAMP_MASK_ALL; d\[base \+ 29\] = LAMP_MASK_ALL;/,
+    "_writeDraw defaults the lamp masks to all-ones for every draw");
 });
 
 test("per-chunk lamps: a device loss while visible writes the crash latch", () => {

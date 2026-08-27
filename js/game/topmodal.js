@@ -112,7 +112,7 @@ window.TopModal = (function () {
     const layer = window.UiLayers && window.UiLayers.top();
     if (!layer || layer.tagName === "DIALOG") return;
     const t = e.target;
-    if (t && (layer.contains(t) || (t.closest && t.closest(".dh-tpopup")))) return;
+    if (t && layer.contains(t)) return;
     const focusable = layer.querySelector(
       "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
     );

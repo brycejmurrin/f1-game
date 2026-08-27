@@ -98,12 +98,21 @@ const CEILING = {
   // sub-floor literal (measured on deploy tip c3df0ee1).
   subFloorFontSize: 4,
   // padding / gap / margin declarations containing a raw px literal.
+  // POLICY (rewritten 2026-08-26, deliberately — user-approved): a raw px
+  // spacing value converts when it has an EXACT token form, including
+  // division forms (22/11 -> --pad; 12/24/18/9/6/3 -> --gap multiples;
+  // 2/4/8/14/16 -> --gap sixths, thirds, two-thirds, 7/6, 4/3 written as
+  // calc(var(--gap) / 3) style divisions so the arithmetic stays exact).
+  // What stays literal: values with NO exact form (5/7/10px), measured
+  // pairs whose comments record px arithmetic, position ANCHORS, and any
+  // declaration inside a compact/rail-tier rule — those operate at
+  // --gap: 8, where a 12-derived multiple is wrong at the rule's only
+  // operating point. The old "a hairline should stay a hairline" rule was
+  // retired when the tuner migration showed the density ladder SHOULD
+  // tighten hairlines with everything else — that was the goal, not noise.
   // 2026-08-13: 529 -> 479. The four sheets that read NO spacing token at all
-  // (data, hud, overlays, track-detail) were migrated in the same pass — but
-  // only for values with an exact ratio to the token (22/11 -> --pad, 12/24/18/
-  // 6/3 -> --gap). The remainder are 2/4/5/8/10px hairline nudges, and turning
-  // those into calc(var(--gap) * 0.41) noise would be worse than leaving them:
-  // a hairline should stay a hairline when the density ladder tightens.
+  // (data, hud, overlays, track-detail) were migrated in the same pass, for
+  // exact simple ratios only (the division forms came 2026-08-26).
   // 2026-08-14: 475 -> 474. `.hud-gaps` lost an inert `gap: 4px` (it was never
   // a flex container) when the widget was resized in the HUD SIZE pass.
   // 2026-08-18: 471 -> 470. Data Hub Last Race column-hide rules lost a
@@ -132,7 +141,59 @@ const CEILING = {
   // measured pairs, the compact/rail tiers (already at --gap:8, so a 12-based
   // multiple is wrong at their only operating point), and the .lt-tabs
   // full-bleed triple stay raw per the policy note below.
-  rawSpacing: 453,
+  // 2026-08-26: 453 → 422. The 1b division set under the rewritten policy
+  // above: 29 more tuner declarations onto exact --gap fractions (thirds,
+  // sixths, two-thirds, 7/6, 4/3). Still raw in tuner.css: the .lt-tabs
+  // full-bleed triple (next commit, atomic), the measured pairs, the
+  // .adv-item 11px/7px inversion pair, and every compact/rail-tier value.
+  // 2026-08-26: 422 → 419. The .lt-tabs full-bleed triple, atomically: the
+  // panel's 18px inline pad and the strip's -18px margin + 18px re-pad are
+  // ONE number three ways; all three are calc(var(--gap) * 1.5) now, so the
+  // bleed stays exact at every density instead of only at --gap: 12.
+  // 2026-08-26: 419 → 418. The track-detail close button's bespoke rule
+  // (its padding: 0 among them) was deleted when the button joined the
+  // shared .dh-close recipe.
+  // 2026-08-27: 418 -> 363. css/data.css executed the division-form policy
+  // (55 declarations; the hub was the largest single-file share). The three
+  // negative pull-up margins (-2/-4 on the map legend, legend and delta
+  // readouts) stay raw deliberately: they are optical anchors against a
+  // canvas edge, the exclusion the policy names for anchors, and the tree
+  // has no negative-division precedent to copy.
+  // 2026-08-27: 363 -> 325. css/hud.css and css/overlays.css in one pass —
+  // they share the HUD component (the hud-unit and gearbox sibling overrides
+  // live across both), so migrating one alone would have split a single
+  // widget's ladder across two densities. --btn-gap stays literal: it is a
+  // token DEFINITION inside the measured --btn-pitch touch-dock pair, and
+  // converting it would make the dock slot pitch density-dependent — a
+  // behaviour change, not a spelling one. The centring anchors
+  // (margin: -17px style) stay as anchors.
+  // 2026-08-27: 325 -> 324. The career pressable-card carve deduplicated the
+  // teamtile/seat padding pair into one shared declaration.
+  rawSpacing: 324,
+  // colour declarations carrying a raw literal (rgb()/rgba()/#hex in any
+  // declaration value; tokens.css custom-property DEFINITIONS excluded — the
+  // definition site is the system, not drift; url() interiors excluded).
+  // POLICY: a literal converts when an existing token IS that value and that
+  // meaning. What stays literal, with reasons in place: the mask-image alpha
+  // stencils (a stencil's black is not a colour), the QR raster's pure
+  // white/black (scanners), FIA flag signal colours (externally defined),
+  // canvas-matched values whose comments record the pairing (.dh-gradbar,
+  // .dh-canvas), gradient RAMP stops chosen against each other (tach,
+  // energy), and the BOOST/OT/AERO ladder whose alphas are measured
+  // compositing arithmetic. Set 2026-08-27 with the guard.
+  // 2026-08-27: 379 -> 376. Round-11 de-buttoning: .trb-* and .tdf-* lost
+  // their borders (three 0.3/0.4-alpha border tints left with them), .spf-dir
+  // stepped under the hover fill, .spf-corner moved off --plate-on onto a
+  // color-mix tint (no literal), .tdc-corner gained one sub-floor neutral.
+  rawColor: 376,
+  // distinct colour VALUES after normalising spelling: space-after-comma,
+  // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
+  // canonical form. This is the fork guard — identical paint must not hide
+  // behind different spellings, because grep-based dedup is how conversions
+  // get planned. Set 2026-08-27 with the guard.
+  // 2026-08-27: 194 -> 190 in the same pass — the deleted border tints were
+  // the only users of their values.
+  rawColorDistinct: 190,
 };
 
 test("no new font-size below the --fs-micro floor", () => {
@@ -190,6 +251,84 @@ test("no new raw px spacing", () => {
   assert.equal(offenders.length, CEILING.rawSpacing,
     `raw spacing declarations are now ${offenders.length}, below the ${CEILING.rawSpacing} ceiling — ` +
     `lower CEILING.rawSpacing in this file to ${offenders.length} to lock the win in.`);
+});
+
+/* ---- colours: the same ratchet, one structural difference. Colours appear
+   across many properties (color, background, border-*, shadows, gradients),
+   so the counter iterates declaration VALUES generically instead of anchoring
+   on a property list — [^;{}] confines each match to one declaration, which
+   is what keeps selectors out (verified: no selector in this tree contains a
+   3/4/6/8-hex token or an rgb() call). Gradient and color-mix interiors are
+   deliberately IN scope: they are where #fff and #000 hide. */
+const COLOR_DECL = /(--[a-zA-Z0-9-]+|[a-z-]+)\s*:\s*([^;{}]*)/g;
+const COLOR_LIT = /rgba?\([^)]*\)|#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/g;
+const URL_VALUE = /url\((?:"[^"]*"|'[^']*'|[^)]*)\)/g;
+
+function colorLiterals() {
+  const found = [];
+  for (const { name, src } of sheets()) {
+    for (const d of src.matchAll(COLOR_DECL)) {
+      if (name === "tokens.css" && d[1].startsWith("--")) continue;
+      const lits = d[2].replace(URL_VALUE, "").match(COLOR_LIT);
+      if (lits) for (const v of lits) found.push({ file: name, v });
+    }
+  }
+  return found;
+}
+
+/* One canonical spelling per paint value, so a fork cannot read as two
+   colours: expand short hex, fold hex and rgb()/rgba() to the same rendering,
+   parseFloat every channel (kills trailing zeros and leading dots). */
+function normColor(v) {
+  if (v[0] === "#") {
+    let h = v.slice(1).toLowerCase();
+    if (h.length <= 4) h = [...h].map((c) => c + c).join("");
+    const ch = [0, 1, 2].map((i) => parseInt(h.slice(i * 2, i * 2 + 2), 16));
+    const a = h.length === 8 ? Math.round(parseInt(h.slice(6, 8), 16) / 255 * 1000) / 1000 : 1;
+    return `rgb(${ch.join()},${a})`;
+  }
+  const parts = v.slice(v.indexOf("(") + 1, -1).split(/[\s,/]+/).filter(Boolean).map(parseFloat);
+  const [r = 0, g = 0, b = 0, a = 1] = parts;
+  return `rgb(${[r, g, b].join()},${Math.round(a * 1000) / 1000})`;
+}
+
+test("no new raw colour literals", () => {
+  const offenders = colorLiterals();
+  const byFile = {};
+  for (const o of offenders) byFile[o.file] = (byFile[o.file] || 0) + 1;
+
+  assert.ok(offenders.length <= CEILING.rawColor,
+    `${offenders.length} declarations carry a raw colour literal, ceiling is ${CEILING.rawColor}. ` +
+    `Read a css/tokens.css colour (or mint one if the value has 4+ uses and one meaning); ` +
+    `if the literal is deliberate (stencil, ramp stop, canvas-matched, signal colour), ` +
+    `say why in a comment and raise the ceiling deliberately.\n` +
+    JSON.stringify(byFile, null, 2));
+
+  assert.equal(offenders.length, CEILING.rawColor,
+    `raw colour declarations are now ${offenders.length}, below the ${CEILING.rawColor} ceiling — ` +
+    `lower CEILING.rawColor in this file to ${offenders.length} to lock the win in.`);
+});
+
+test("colour spelling forks only ever fold", () => {
+  const byNorm = new Map();
+  for (const { v } of colorLiterals()) {
+    const n = normColor(v);
+    if (!byNorm.has(n)) byNorm.set(n, new Set());
+    byNorm.get(n).add(v);
+  }
+  const distinct = byNorm.size;
+
+  assert.ok(distinct <= CEILING.rawColorDistinct,
+    `${distinct} distinct colour values after normalisation, ceiling is ${CEILING.rawColorDistinct}. ` +
+    `A new distinct value means a colour outside the system — use a token or an existing value.\n` +
+    "Largest fork groups (one value, several spellings):\n" +
+    [...byNorm.entries()].filter(([, s]) => s.size > 1)
+      .sort((a, b) => b[1].size - a[1].size).slice(0, 8)
+      .map(([n, s]) => `  ${n} <- ${[...s].join(" | ")}`).join("\n"));
+
+  assert.equal(distinct, CEILING.rawColorDistinct,
+    `distinct colour values are now ${distinct}, below the ${CEILING.rawColorDistinct} ceiling — ` +
+    `lower CEILING.rawColorDistinct in this file to ${distinct} to lock the win in.`);
 });
 
 /* The four sheets that read no spacing token at all. This is the list the

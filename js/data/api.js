@@ -708,6 +708,7 @@ const F1API = (function () {
     carData: carData,
     locationData: locationData,
     stints: stints,
-    pits: pits
+    pits: pits,
+    cacheEntryT: cacheEntryT
   };
 })();

@@ -919,7 +919,9 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 /* Label column + controls. The labels are a fixed column so the three rows of
    chips line up on one left edge instead of stepping in and out with the label
    width. */
-.cs-pan-row { display: flex; align-items: center; gap: 8px; }
+/* the camera panel rows are its only direct div children — the id scopes
+   them without a class the shell had to repeat five times */
+#cs-cam-panel > div { display: flex; align-items: center; gap: 8px; }
 .cs-pan-lbl {
   flex: 0 0 40px;
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);

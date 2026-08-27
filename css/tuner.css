@@ -184,7 +184,9 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   max-height: none;
   z-index: 42;
   background: rgba(12, 14, 20, 0.86);
-  padding: 14px 18px;
+  /* Inline pad is ONE number with .lt-tabs' bleed below: the strip's
+     negative margin and re-padding must cancel this exactly. */
+  padding: calc(var(--gap) * 7 / 6) calc(var(--gap) * 1.5);
   /* Fixed head (title / preview chips / tabs) + scrolling #lt-rows + fixed
      RESET/COPY/DONE footer — with 80+ sliders the actions used to live at the
      end of the scroll, a full panel-length swipe away. */
@@ -233,7 +235,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    on a phone. min-height buys the target without moving anything, since the row
    already centres its contents and had ~12px of margin to spend. */
 .lt-help-toggle {
-  display: flex; align-items: center; gap: 7px; margin: 8px 0 4px;
+  display: flex; align-items: center; gap: 7px; margin: calc(var(--gap) * 2 / 3) 0 calc(var(--gap) / 3);
   min-height: var(--tap-min);
   font-size: var(--fs-micro); opacity: 0.8; cursor: pointer;
 }
@@ -247,8 +249,9 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .lt-tabs {
   display: flex; flex-wrap: wrap;
   --balance-basis: 8rem; --balance-min: 7rem;
-  gap: 4px;
-  margin: 2px -18px 6px; padding: 6px 18px 8px;
+  gap: calc(var(--gap) / 3);
+  margin: calc(var(--gap) / 6) calc(var(--gap) * -1.5) calc(var(--gap) * 0.5);
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 1.5) calc(var(--gap) * 2 / 3);
   background: rgba(12, 14, 20, 0.94);
   border-bottom: 1px solid var(--card-line);
   flex-shrink: 0;
@@ -261,17 +264,18 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   display: inline-flex; align-items: center; justify-content: center;
   width: auto; margin: 0; min-width: 0;
   padding: 5px 9px; font-size: var(--fs-micro); letter-spacing: var(--ls-2);
-  border: 1px solid var(--plate-line); border-radius: var(--r-pill);
-  background: var(--plate); color: var(--dim);
-  cursor: pointer; transition: background 0.12s, color 0.12s;
+  /* plate fill + line come from the button base; the pill radius is ours */
+  border-radius: var(--r-pill);
+  color: var(--dim);
+  transition: background 0.12s, color 0.12s;
   /* wraps rather than truncates: at rail width a column is ~100px and the
      longest label needs two lines. Grid rows stretch, so both cells match. */
   white-space: normal; text-align: center; line-height: 1.15;
 }
 @media (hover: hover) {
-  #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover { background: var(--plate-hover); color: #fff; }
+  #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover { color: #fff; }
 }
-#lt-tabs .lt-tab:active, #ct-modes .lt-tab:active { background: var(--plate-press); color: #fff; }
+#lt-tabs .lt-tab:active, #ct-modes .lt-tab:active { color: #fff; }
 #lt-tabs .lt-tab.on, #ct-modes .lt-tab.on {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
   box-shadow: var(--plate-on-glow);
@@ -282,7 +286,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .lt-group .adv-sec { display: none; }
 .lt-section {
   margin: 16px 0 7px;
-  padding: 0 0 4px;
+  padding: 0 0 calc(var(--gap) / 3);
   color: rgba(255,255,255,.72);
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
   font-size: var(--fs-micro);
@@ -291,22 +295,22 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 }
 .lt-group .lt-section:first-of-type { margin-top: calc(var(--gap) * 0.5); }
 /* panel header: title + FREE CAMERA button on one line */
-#lt-head, #ct-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+#lt-head, #ct-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: calc(var(--gap) / 3); }
 #lt-head h2, #ct-head h2 { margin: 0; }
 /* preview time/weather: one compact line each — small inline label + tight chips */
-.lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: calc(var(--gap) * 0.25) 0; }
+.lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 3); margin: calc(var(--gap) * 0.25) 0; }
 .lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); color: var(--dim); }
 /* min-width max(42px, --tap-min), not the bare literal: 42 local px is only
    42 PAINTED px at 100% — at UI SIZE 40% the five chips painted 21px wide
    (2026-08-21 sweep). The token arm wins only below 100%, so the dense
    100% layout is untouched. Height was already floored. */
-.lt-preview-row .opt-btn { flex: 1 1 0; min-width: max(42px, var(--tap-min)); min-height: var(--tap-min); margin: 0; padding: 4px 3px; font-size: var(--fs-micro); }
+.lt-preview-row .opt-btn { flex: 1 1 0; min-width: max(42px, var(--tap-min)); min-height: var(--tap-min); margin: 0; padding: calc(var(--gap) / 3) calc(var(--gap) * 0.25); font-size: var(--fs-micro); }
 .lt-preview-row .opt-btn.on {
   background: var(--plate-on); color: var(--text); border-color: var(--red);
   box-shadow: var(--plate-on-glow);
 }
 #lighting-inner .sheet-foot, #camtune-inner .sheet-foot {
-  display: flex; gap: 8px; flex-shrink: 0;
+  display: flex; gap: calc(var(--gap) * 2 / 3); flex-shrink: 0;
   margin-top: 10px; padding-top: 10px;
   border-top: 1px solid var(--card-line);
 }
@@ -324,7 +328,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    are camera-specific live here. */
 #ct-profile {
   font-size: var(--fs-micro); letter-spacing: var(--ls-3); font-weight: 700;
-  color: var(--red); margin: 2px 0 4px;
+  color: var(--red); margin: calc(var(--gap) / 6) 0 calc(var(--gap) / 3);
 }
 /* A mode whose framing has been changed keeps a red outline even when it is not
    the selected chip — the panel shows one camera at a time, so this is the only
@@ -346,7 +350,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .adv-intro { font-size: var(--fs-micro); opacity: 0.7; margin: 0 0 calc(var(--gap) * 0.5); line-height: 1.45; }
 .adv-sec {
   color: var(--red); font-size: var(--fs-micro); letter-spacing: var(--ls-4);
-  margin: 16px 0 8px; padding-bottom: 4px;
+  margin: calc(var(--gap) * 4 / 3) 0 calc(var(--gap) * 2 / 3); padding-bottom: calc(var(--gap) / 3);
   border-bottom: 1px solid var(--card-line);
 }
 .adv-sec span {
@@ -372,7 +376,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline;
   /* --fs-micro (14px): at UI SIZE 90% painted type stays ≥12px. Was 12px/13px
      on the label/value; chrome-devtools measured 10.8 / 11.7 visual. */
-  font-size: var(--fs-micro); letter-spacing: var(--ls-2); opacity: 0.9; margin-bottom: 2px;
+  font-size: var(--fs-micro); letter-spacing: var(--ls-2); opacity: 0.9; margin-bottom: calc(var(--gap) / 6);
 }
 .tune-label b { color: var(--red); font-size: var(--fs-micro); flex: none; margin-left: auto; }
 .tune-row input[type="range"] {
@@ -405,11 +409,11 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 /* Qualified with .opt-row on purpose: the generic `.opt-row .opt-btn` rule below
    has the same specificity and comes later in the file, so an unqualified
    `.as-toggle .opt-btn` loses and the buttons collapse to their flex basis. */
-.opt-row.as-toggle { flex: 0 0 auto; width: auto; gap: 4px; margin-top: 0; }
+.opt-row.as-toggle { flex: 0 0 auto; width: auto; gap: calc(var(--gap) / 3); margin-top: 0; }
 .opt-row.as-toggle .opt-btn {
   flex: 0 0 auto; width: auto;
   min-width: 52px; min-height: var(--tap-sm);
-  padding: 4px 12px; font-size: var(--fs-micro); letter-spacing: var(--ls-3);
+  padding: calc(var(--gap) / 3) var(--gap); font-size: var(--fs-micro); letter-spacing: var(--ls-3);
 }
 @container sheet (max-width: 240px) {
   #audioset-inner .as-head { flex-wrap: wrap; }
@@ -426,7 +430,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   border: 1px solid var(--card-line); border-radius: var(--r-md);
   background: rgba(255,255,255,0.04);
 }
-.as-now-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.as-now-meta { display: flex; flex-direction: column; gap: calc(var(--gap) / 6); min-width: 0; flex: 1 1 auto; }
 .as-now-cap { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--dim); text-transform: uppercase; }
 /* The title is the one thing worth reading here, so it gets the size. It also
    has to truncate — uploaded file names are arbitrarily long. */
@@ -464,16 +468,21 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .tune-row.tune-off { opacity: 0.75; }
 .tune-row.tune-off .tune-label { color: var(--dim); }
 .tune-row.tune-off .tune-label b { color: var(--dim); }
-.preset-row { display: flex; gap: 8px; margin: 4px 0 6px; }
+.preset-row { display: flex; gap: calc(var(--gap) * 2 / 3); margin: calc(var(--gap) / 3) 0 calc(var(--gap) * 0.5); }
+/* THE SHRINK CONTRACT, shared by the tuner's two flexible button rows.
+   min-width: 0 defeats flex's min-content floor — without it the PRO preset's
+   one-line small ran 59px past the pane at UI SIZE 200% (measured), and the
+   4-way STEERING row pushed SIM past the panel edge on a landscape phone. */
+.preset-row .preset-btn, .opt-row .opt-btn {
+  flex: 1; min-width: 0; width: auto; margin: 0;
+  font-size: var(--fs-micro); text-align: center;
+}
 .preset-row .preset-btn {
   display: flex; flex-direction: column; align-items: center; gap: calc(var(--gap) * 0.25);
-  /* min-width: 0 — a flex item's automatic minimum is min-content, so at
-     UI SIZE 200% on a portrait phone the PRO button's one-line small ran
-     59px past the pane instead of wrapping (measured 2026-08-21). */
-  flex: 1; min-width: 0; width: auto; margin: 0; padding: calc(var(--gap) * 0.75) calc(var(--gap) * 0.5); text-align: center;
+  padding: calc(var(--gap) * 0.75) calc(var(--gap) * 0.5);
   /* Same zoom-honest WCAG floor as .bigbtn — 16px painted at UI SIZE 40%. */
   min-height: var(--tap-min);
-  letter-spacing: var(--ls-3); font-size: var(--fs-micro);
+  letter-spacing: var(--ls-3);
 }
 .preset-btn small {
   font-size: var(--fs-micro); letter-spacing: var(--ls-1); opacity: 0.6; font-weight: normal;
@@ -485,18 +494,14 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 }
 .preset-btn.active small { opacity: 0.85; }
 /* segmented option groups (STEERING / DRIVING HELP / RACING LINE) */
-.opt-row { display: flex; gap: calc(var(--gap) * 0.5); margin-top: 4px; }
+.opt-row { display: flex; gap: calc(var(--gap) * 0.5); margin-top: calc(var(--gap) / 3); }
 .opt-row .opt-btn {
-  /* min-width:0 defeats the flex default of min-width:auto, which floors an
-     item at its longest word. The 4-way STEERING row (SUPER EASY / ASSISTED /
-     NORMAL / SIM) could not shrink below that sum and pushed SIM past the
-     panel's right edge on a landscape phone. */
-  flex: 1; min-width: 0; width: auto; margin: 0; padding: 8px 4px;
+  padding: calc(var(--gap) * 2 / 3) calc(var(--gap) / 3);
   /* on the ladder (css/tokens.css): these measured 37px, one of ten different
      heights for controls of the same rank */
   min-height: var(--chip-h);
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: var(--fs-micro); letter-spacing: var(--ls-1); text-align: center;
+  letter-spacing: var(--ls-1);
 }
 .opt-btn.active {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
@@ -599,7 +604,11 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] {
     display: grid; grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    /* Four rows: head/tabs, the scrolling rows, COPY ALL, foot. The spread
+       row must be PLACED — display:contents lifts it into this grid, and an
+       unplaced item lands in an implicit row BELOW the foot, hanging off the
+       panel edge (seen live the day it was un-hidden). */
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
     overflow: hidden;
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(#lt-rail, #ct-rail) {
@@ -621,15 +630,24 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(#lt-rows, #ct-rows) {
     grid-column: 1 / -1; grid-row: 2; min-height: 0;
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] #lt-spread {
     grid-column: 1 / -1; grid-row: 3;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot {
+    grid-column: 1 / -1; grid-row: 4;
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot button {
     min-width: 0; width: 100%; min-height: var(--tap-min); padding: 0;
     font-size: var(--fs-micro); white-space: nowrap;
   }
+  /* #lt-spread is NOT in this hide list: hiding it here removed the panel's
+     only copy-across-tracks door on exactly the device a player tunes on
+     (field report, 2026-08). The row rides .lt-preview-row, which this tier
+     already tightens, and its long help is already gone via the compact
+     .adv-help rule — one ~24px row, and #lt-rows scrolls. Photo-mode still
+     stands it down (setup vs framing, see the top of this file). */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(
-    #lt-profile, #lt-preview, #lt-spread, #ct-profile, .lt-help-toggle
+    #lt-profile, #lt-preview, #ct-profile, .lt-help-toggle
   ) {
     display: none;
   }
@@ -822,7 +840,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
    apply to <summary>, so the button chrome is repeated here explicitly), and
    the default triangle marker is replaced with one that flips on [open]
    since the built-in marker cannot be positioned to match the old glyph. */
-#adv-details { margin: 14px 0 2px; }
+#adv-details { margin: calc(var(--gap) * 7 / 6) 0 calc(var(--gap) / 6); }
 .adv-more-btn {
   display: flex; align-items: center; justify-content: center; gap: calc(var(--gap) * 0.5);
   width: 100%; list-style: none; cursor: pointer;
@@ -837,16 +855,16 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 }
 .adv-more-btn:active { background: rgba(255, 255, 255, 0.2); }
 #adv-details[open] > .adv-more-btn::after { content: "\25B4"; }
-#adv-extra { margin-top: 4px; }
+#adv-extra { margin-top: calc(var(--gap) / 3); }
 
 /* ---------- MUSIC & SOUND: the player's own uploaded tracks ----------
    One row per stored file. The name is the only elastic column so a long
    filename truncates instead of pushing the play/delete buttons off the sheet —
    they are the two things a thumb is aiming for. */
-.music-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.music-list { margin-top: calc(var(--gap) * 2 / 3); display: flex; flex-direction: column; gap: calc(var(--gap) / 3); }
 .music-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 8px; border-radius: var(--r-sm);
+  display: flex; align-items: center; gap: calc(var(--gap) * 2 / 3);
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3); border-radius: var(--r-sm);
   background: var(--plate);
   border: 1px solid var(--card-line);
   font-size: var(--fs-micro);
@@ -870,24 +888,29 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .music-del:focus-visible { opacity: 1; border-color: var(--red); color: var(--red); }
 
 /* ---------- MUSIC & SOUND: Spotify (personal use) ---------- */
+/* THE PANEL'S FIELD RECIPE, once. All six inputs/selects here wrote the same
+   seven declarations byte for byte; this is their one statement. The 16px is
+   the iOS zoom floor: Safari zooms the page when a focused control sits under
+   it, and the zoom sticks after the keyboard closes. */
+#as-sp-id, #sp-search, #as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 {
+  font: inherit; font-size: 16px;
+  background: var(--plate-hover); color: var(--text);
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm);
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
+}
 #as-sp-id {
   /* Full width, not the 56-60% the customise-screen fields use: this one takes
      a pasted 32-character id and a field that shows a third of it makes a
      mistyped character impossible to spot. */
   flex: 1 1 100%; min-width: 0; width: 100%;
   min-height: var(--chip-h);   /* on the ladder, like every other field */
-  /* 16px floor: iOS Safari zooms the page on focus under that, and the zoom
-     sticks after the keyboard closes. */
-  font: inherit; font-size: 16px;
-  background: var(--plate-hover); color: var(--text);
-  border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: 6px 8px;
 }
 /* The redirect URI exists to be COPIED — and tokens.css sets user-select:none on
    the whole app, so without this the one string the setup depends on cannot be
    selected. It has to match the Spotify dashboard byte for byte, which is why
    it is monospace and wraps rather than being ellipsised. */
 /* ---------- SPOTIFY player panel ---------- */
-.sp-now { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.sp-now { display: flex; align-items: center; gap: 10px; margin-bottom: calc(var(--gap) * 2 / 3); }
 .sp-art {
   flex: 0 0 auto; width: 56px; height: 56px; border-radius: var(--r-sm); object-fit: cover;
   background: var(--plate);
@@ -896,23 +919,17 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .sp-title, .sp-artist, .sp-on { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-title { font-size: 14px; font-weight: 700; }
 .sp-artist { font-size: var(--fs-micro); opacity: 0.75; }
-.sp-on { font-size: var(--fs-micro); opacity: 0.5; letter-spacing: var(--ls-2); margin-top: 2px; }
-.sp-bar { height: 3px; border-radius: var(--r-xs); background: var(--card-line); overflow: hidden; margin: 2px 0 8px; }
+.sp-on { font-size: var(--fs-micro); opacity: 0.5; letter-spacing: var(--ls-2); margin-top: calc(var(--gap) / 6); }
+.sp-bar { height: 3px; border-radius: var(--r-xs); background: var(--card-line); overflow: hidden; margin: calc(var(--gap) / 6) 0 calc(var(--gap) * 2 / 3); }
 .sp-bar-fill { height: 100%; background: var(--red); width: 0; transition: width 0.4s linear; }
 #sp-search {
-  width: 100%; margin-top: calc(var(--gap) * 0.5); font: inherit; font-size: 16px;   /* 16px: iOS zoom floor */
-  background: var(--plate-hover); color: var(--text);
-  border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: 6px 8px;
+  width: 100%; margin-top: calc(var(--gap) * 0.5);
   /* Same --chip-h floor as its twin #as-sp-id: padding-driven height painted
      16px at UI SIZE 40% (2026-08-21 sweep). Inert at >=100%. */
   min-height: var(--chip-h);
 }
 #sp-results:empty { display: none; }
-#as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 {
-  width: 100%; font: inherit; font-size: 16px;   /* 16px: iOS zooms a focused control under it */
-  background: var(--plate-hover); color: var(--text);
-  border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: 6px 8px;
-}
+#as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 { width: 100%; }
 #as-sp-playlist:disabled, #as-sp-device:disabled,
 #sp-playlist2:disabled, #sp-device2:disabled { opacity: 0.45; }
 .sp-uri {
@@ -920,5 +937,5 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   word-break: break-all; opacity: 0.9;
   -webkit-user-select: text; user-select: text; cursor: text;
 }
-#as-sp-wrap .opt-row { margin-top: 8px; }
+#as-sp-wrap .opt-row { margin-top: calc(var(--gap) * 2 / 3); }
 } /* @layer components */

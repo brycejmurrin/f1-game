@@ -142,15 +142,21 @@
    that touches these two elements (there is one, the touch floor at the end of
    this file, and one in css/responsive.css, which wins on LAYER either way). */
 #mb-career > span { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-/* The live save line. Dim and small: it is what the button will DO, not a second
-   label competing with CAREER. Empty (and therefore zero-height) until a save
-   exists, so a first-time title screen is exactly as it was. */
-#mb-career-sub {
+/* The sub line under a door's label: what the button will DO, dim and small so
+   it never competes with the label. Five uses — the hero's live save line and
+   the four static mode answers — which is the reuse that justifies a class
+   where the mb- family's one-off pair did not (rule 12 note above). */
+.mb-sub {
   font-size: var(--fs-micro); font-weight: 600; letter-spacing: var(--ls-4);
   font-style: normal; color: rgba(255, 255, 255, 0.72);
   text-transform: none;
 }
+/* The live save line is empty (and therefore zero-height) until a save
+   exists, so a first-time title screen is exactly as it was. */
 #mb-career-sub:empty { display: none; }
+/* The 2x2 modes stack label over sub. No span for the label itself: a bare
+   text node is already an anonymous flex item, so only the stack needs a box. */
+#menu-primary .bigbtn > span { display: inline-flex; flex-direction: column; align-items: center; gap: calc(var(--gap) / 6); }
 #menu-secondary {
   display: flex;
   flex-wrap: wrap;
@@ -171,6 +177,9 @@
   padding: 9px 10px;
   box-shadow: none;
 }
+/* Micro type over a translucent plate over a moving 3D scene needs more ink
+   than --dim gives it; resting below --text keeps hover's step-up visible. */
+#menu-secondary .minibtn { color: rgba(255, 255, 255, 0.78); }
 .minibtn .btn-ico { margin-right: 0.35em; }
 /* Branding and small print as blocks — portrait stacks them centred, exactly as
    the loose elements did. */
@@ -321,6 +330,9 @@ body { --compact-at: 600px; --wide-at: 620px; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-hero .bigbtn { padding-block: 12px; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn { width: 100%; padding: 11px 10px; font-size: 17px; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .minibtn { padding: 7px 10px; font-size: var(--fs-micro); }
+/* The static mode subs are the first thing to go when height is short — the
+   hero's save line stays, it is state the player came back for. */
+:where(body[data-density="compact"]) #menu-primary .mb-sub { display: none; }
 
 /* HIGH UI SIZE ON A CONSTRAINED VIEWPORT
    --------------------------------------
@@ -365,7 +377,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   :where(body[data-density="compact"]) :is(#subtitle, #audiostate, #disclaimer, #soundbtn) {
     font-size: calc(var(--fs-micro) * var(--ui-compact-brand-text));
   }
-  :where(body[data-density="compact"]) :is(#mb-career-sub, #menu-buttons .minibtn) {
+  :where(body[data-density="compact"]) :is(.mb-sub, #menu-buttons .minibtn) {
     font-size: calc(var(--fs-micro) * var(--ui-compact-text));
   }
 }
@@ -725,15 +737,11 @@ body { --compact-at: 600px; --wide-at: 620px; }
   width: 100%; text-align: left; cursor: pointer;
   padding: calc(var(--gap) * 0.7) var(--gap);
   border-radius: var(--r-md);
-  border: 1px solid var(--plate-line);
-  background: var(--plate);
+  /* both are <button>s: plate fill + line come from the base; the card then
+     tints both red below, and hover/press fills are the base's too */
   transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
 .team-card { border-color: color-mix(in srgb, var(--red) 55%, transparent); background: color-mix(in srgb, var(--red) 10%, transparent); }
-@media (hover: hover) {
-  .team-card:hover, .team-tile:hover { background: var(--plate-hover); }
-}
-.team-card:active, .team-tile:active { background: var(--plate-press); }
 .team-tile.active {
   border-color: var(--red); background: var(--plate-on-strong);
   box-shadow: var(--lift-sel);
@@ -810,10 +818,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   transition: background 0.12s, box-shadow 0.12s;
   cursor: pointer;
 }
-@media (hover: hover) {
-  .sel-chip:hover { background: var(--plate-hover); }
-}
-.sel-chip:active { background: var(--plate-press); }
+/* hover/press fills come from the button base (css/tokens.css) */
 /* Selected mark is the settings-tab recipe (left inset bar + glow), never an
    `outline`. An outline paints outside the border box, and these chips sit
    flush against the inline-start edge of a hidden-overflow scroller — so an
@@ -1071,10 +1076,13 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 #sel-preview-facts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
 #sel-preview-elev { display: block; width: 100%; height: 30px; margin-top: 6px; border-radius: var(--r-sm); opacity: 0.85; }
 .spf-fact { font-size: var(--fs-micro); font-weight: 700; padding: 2px 7px; border-radius: var(--r-lg); letter-spacing: var(--ls-1); }
-.spf-dir { background: rgba(255,255,255,0.1); color: var(--text); }
+/* 0.05, under --plate-hover's 0.08: a readout must not wear the hover fill */
+.spf-dir { background: rgba(255,255,255,0.05); color: var(--text); }
 .spf-elev { background: rgba(56,183,240,0.18); color: #39b7f0; }
 .spf-drs { background: rgba(0,220,180,0.15); color: #00dcb4; }
-.spf-corner { background: var(--plate-on); color: var(--red); }
+/* a red TINT, deliberately not --plate-on: that token is the SELECTED state
+   (sel-chips, tabs), and "T7 slowest" is information, not a pressed chip */
+.spf-corner { background: color-mix(in oklab, var(--red) 10%, transparent); color: var(--red); }
 /* A roomier preview once the sheet is wide. This used to widen the map to ~52%
    of the card, which was right when the card sat above a full-width list and
    its map and facts were side by side. In the two-column layout the map already
@@ -1085,26 +1093,30 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 @container sheet (min-width: 820px) {
   #sel-preview-name { font-size: 18px; }
 }
-/* Compact pair-on: the extras go, the NAME stays — beside the map, not under
-   it. Hiding the whole caption left the band a row holding one small outline
-   with ~175 local px of dead width beside it (measured 852x393 @200%: a
-   42px-wide tall-circuit map alone in a 219px card). The card is a flex ROW
-   here, so a name beside the map costs no height — the clipped-caption
-   history this block used to cite was the stacked-under arrangement. */
+/* Compact pair-on: the extras go, the NAME AND ONE FACT LINE stay — beside
+   the map, not under it. Hiding the whole caption left the band a row holding
+   one small outline with ~175 local px of dead width beside it (measured
+   852x393 @200%: a 42px-wide tall-circuit map alone in a 219px card). The
+   card is a flex ROW here, so a name beside the map costs no height — and a
+   bare name in that much room read as a missing feature (a phone screenshot
+   showed MONACO floating alone in a half-empty card). The meta line
+   (country · km · turns) is the one caption row cheap enough to keep: it is
+   already --fs-micro/dim, and the column's min-width:0 + overflow:hidden
+   truncate it before it can push the card. GP name, record, the chip row and
+   the elevation strip stay hidden — those are the bulk. */
 #sel-inner[data-pair="on"][data-density="compact"] #sel-circuit-label { display: none; }
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-gp,
-#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-meta,
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-rec { display: none; }
+#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-meta { margin-top: calc(var(--gap) / 6); }
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-facts,
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-elev { display: none; }
 #sel-inner[data-pair="on"][data-density="compact"] #sel-track-preview { align-items: center; }
 
 /* Season upcoming rounds list */
 .season-upcoming-head { font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-5); color: var(--dim); margin-top: 10px; margin-bottom: 4px; padding: 0 4px; }
-.season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--card-line); margin-bottom: 4px; background: rgba(255,255,255,0.04); transition: border-color 0.15s, background 0.15s; cursor: default; }
-@media (hover: hover) {
-  .season-upcoming-row:hover { border-color: var(--plate-line); background: rgba(255,255,255,0.07); }
-}
+/* No hover: the row declares cursor:default and nothing happens on click —
+   lighting up with the button hover fill promised an interaction it refused */
+.season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--card-line); margin-bottom: 4px; background: var(--plate); cursor: default; }
 .sur-rnd { font-size: var(--fs-micro); font-weight: 700; color: var(--red); letter-spacing: var(--ls-3); min-width: 24px; }
 .sur-name { font-size: var(--fs-micro); font-weight: 700; color: var(--text); flex: 1; font-style: italic; letter-spacing: var(--ls-1); }
 .sur-country { font-size: var(--fs-micro); color: var(--dim); }
@@ -1292,9 +1304,12 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 .track-row-meta { font-size: var(--fs-micro); color: var(--dim); }
 .track-row-rec { font-size: var(--fs-micro); color: #f6d200; font-variant-numeric: tabular-nums; font-weight: 700; }
 .trb { display: inline-block; font-size: var(--fs-micro); letter-spacing: var(--ls-4); padding: 1px 5px; border-radius: var(--r-xs); margin-left: 5px; vertical-align: middle; font-weight: 700; }
-.trb-night { background: rgba(129,140,248,0.15); color: #818cf8; border: 1px solid rgba(129,140,248,0.3); }
-.trb-street { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
-.trb-classic { background: rgba(180,150,90,0.14); color: #c8a862; border: 1px solid rgba(180,150,90,0.32); }
+/* Borderless: these sit INSIDE the .track-row button, and fill+border+radius
+   is the app's button recipe — a bordered badge read as a nested control on a
+   control. The tint alone says night/street/classic. */
+.trb-night { background: rgba(129,140,248,0.15); color: #818cf8; }
+.trb-street { background: rgba(245,158,11,0.12); color: #f59e0b; }
+.trb-classic { background: rgba(180,150,90,0.14); color: #c8a862; }
 /* Section header inside the picker list (CURRENT SEASON / CLASSIC CIRCUITS).
    Sticky so the group stays identifiable while the list scrolls under it. */
 .track-group-head {

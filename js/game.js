@@ -17,6 +17,7 @@ const els = {
   flag: $("hud-flag"), minimap: $("minimap"),
   lights: $("lights"), announce: $("announce"),
   overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
+  lighting: $("lighting"), camtune: $("camtune"),
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
   selTracks: $("sel-tracks"),
   selPreviewMap: $("sel-preview-map"), selPreviewName: $("sel-preview-name"),
@@ -1250,6 +1251,7 @@ const _sunVS = new Float32Array(3);
 const _upVS = new Float32Array(3);   // the ROAD PLANE's normal in view space (wet-road SSR)
 const _smpRoad = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };   // its own scratch: smp/smp2 are live elsewhere in the frame
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
+const _upX = [1, 0, 0], _upY = [0, 1, 0];   // shadow-basis up choices (read-only)
 let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
 let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
 // Lamp-spot shadow snap: skip full rebuild when nearest flood + eye cell hold.
@@ -2591,6 +2593,9 @@ function startRace() {
   dbgCam = null;              // fresh race — drop any leftover debug free-cam
   snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
+  // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges
+  // mashed on the title (navOpen() false) would fire at lights-out.
+  Input.clearEdges();
   if (soundOn) { GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
   if (soundOn && isRaining()) GameAudio.startRain();   // rain patter — a damp "wet" track is silent
   DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
@@ -2712,6 +2717,10 @@ function netOrder(order) {
 
 function endRace(forcedOrder) {
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
+  // raceCtl.update's own not-in-race reset is unreachable (update() only calls
+  // it in state "race"), so without this a flying flag survives into results
+  // for anything reading raceCtl.info()/level between races.
+  raceCtl.reset();
   state = "results";
   document.body.classList.remove("in-race");
   dropRaceWake();
@@ -3290,6 +3299,7 @@ function tickWeatherArc(dt) {
   }
 }
 
+const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false };  // setEngine reads synchronously
 function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
@@ -3423,10 +3433,10 @@ function update(dt) {
 
   if (soundOn) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
+    _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0;
+    _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetRoad();
     GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad,
-      clamp(player.speed / vTop(), 0, 1), player.gear,
-      { slip: player.slipFactor ?? 1, ax: player.axEstSm ?? 0,
-        onKerb: !!player.onKerb, wet: isWetRoad() });
+      clamp(player.speed / vTop(), 0, 1), player.gear, _engArg);
     // Squeal from the CAR's slip, via the same skidIntensity the marks and smoke
     // use. This was a SECOND, independent copy of the old curvature formula
     // (|k| * speed), so the tyres you HEAR still screamed at the road's arc —
@@ -3501,7 +3511,12 @@ function _colClearBuckets() {
 function _colFillBuckets(ranked) {
   _colClearBuckets();
   const L = track.total || 1;
-  const nB = Math.max(1, Math.ceil(L / COL_BUCKET_M) | 0);
+  // floor, not ceil: ceil made the LAST bucket a sliver (L mod width < LCAR),
+  // so a touching pair straddling the seam could sit two buckets apart and the
+  // (id+1)%nB neighbour walk never met them — no contact resolution right at
+  // the line. floor folds the tail into bucket 0 (the trailing %nB below),
+  // keeping every bucket >= a car length and the seam pair adjacent.
+  const nB = Math.max(1, Math.floor(L / COL_BUCKET_M) | 0);
   for (let i = 0; i < ranked.length; i++) {
     const c = ranked[i];
     const prog = c._nOk ? c._nProg : c.prog;
@@ -4676,7 +4691,15 @@ function updateCar(c, dt, ranked) {
       let rel = c.head - tHead;
       while (rel > Math.PI) rel -= 2 * Math.PI;
       while (rel < -Math.PI) rel += 2 * Math.PI;
-      const noseIn = into > 0 ? rel > 0 : rel < 0;        // nose pointing into wall?
+      // Sign per the file's own psi convention ("+ = nose turned right (+x)",
+      // psi = tHead − head, so rel = −psi): nose toward the +x wall ⟺ rel < 0.
+      // The old `into > 0 ? rel > 0 : rel < 0` was inverted on BOTH sides —
+      // measured live (30° nose-in at 47 m/s, either wall): no first-frame
+      // incidence scrub, no straightening; the car ground along pinned at
+      // speed. Flipped and re-measured: the
+      // ~14% bite at the pin frame and the nose walks onto the wall tangent,
+      // on both walls.
+      const noseIn = into > 0 ? rel < 0 : rel > 0;        // nose pointing into wall?
       const incidence = Math.min(1, Math.abs(Math.sin(rel)));  // 0 graze … 1 head-on
       // Kill the slip while scraping a barrier, in BOTH directions.
       //
@@ -6070,7 +6093,7 @@ function render(dt) {
   // shadow edge each 16 m of driving.
   if (track) {
     const sd = frame.sunDir;
-    const up = Math.abs(sd[1]) > 0.98 ? [1, 0, 0] : [0, 1, 0];
+    const up = Math.abs(sd[1]) > 0.98 ? _upX : _upY;
     // Light basis exactly as lookAtTo derives it: z = sd, x = norm(up×z), y = z×x.
     const zx = sd[0], zy = sd[1], zz = sd[2];
     let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx;
@@ -7386,7 +7409,7 @@ function tickBody(now) {
     // tuner is only reachable from the pause menu. Resuming tears it down
     // (setPaused -> closeLightTuner -> exitPhotoMode), so there is no unpaused
     // state in which it should still be flying.
-    if ((state === "race" || state === "count") && (!$("lighting").hidden || !$("camtune").hidden)) {
+    if ((state === "race" || state === "count") && (!els.lighting.hidden || !els.camtune.hidden)) {
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it

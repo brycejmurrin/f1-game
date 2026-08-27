@@ -37,20 +37,20 @@ const BrakeCue = (function () {
 
   function create(G) {
     let level = 6;          // slider notch; 1 = OFF
+    let cfg = fromSlider(level);   // recomputed only when the slider moves
     let nextT = 0;
     let lastMs = 0;
     let lastU = 0;
 
     function setLevel(v) {
-      if (typeof v === "number" && isFinite(v)) level = clamp(v, 1, 10);
+      if (typeof v === "number" && isFinite(v)) { level = clamp(v, 1, 10); cfg = fromSlider(level); }
     }
 
     function tick() {
+      if (!cfg.on || !G || G.paused || G.state !== "race") { nextT = 0; lastU = 0; lastMs = 0; return; }
       const now = (typeof performance !== "undefined" ? performance.now() : Date.now());
       const dt = lastMs ? Math.min(0.1, (now - lastMs) / 1000) : 1 / 60;
       lastMs = now;
-      const cfg = fromSlider(level);
-      if (!cfg.on || !G || G.paused || G.state !== "race") { nextT = 0; lastU = 0; return; }
       const p = G.player, track = G.track;
       if (!p || !track || typeof Tracks === "undefined" || p.finished || p.retired) {
         lastU = 0; return;

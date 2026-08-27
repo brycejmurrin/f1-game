@@ -381,7 +381,14 @@ const CEILINGS = {
   //   tailStart/tailCount) are cleared every frame before the flood branch
   //   (one line + the bug comment): `frame` outlives a night->day ToD flip,
   //   so chunked geometry kept binding per-chunk night lamps in daylight.
-  "js/game.js": 8638,
+  // 8635 -> 8658 on the deploy side for their perf/bug round: the race-start
+  // Input.clearEdges (the RESUME latch bug's menu→race seam), the pooled
+  // setEngine arg, the els.lighting/camtune cache, the shadow-basis up
+  // consts, the seam-sliver collision-bucket floor, the endRace
+  // raceCtl.reset, and the measured noseIn sign flip — every line a fix
+  // plus its comment. Both lineages grew the file, so neither number fits
+  // the union — re-measured on the merged tree (split-newline count).
+  "js/game.js": 8661,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -477,7 +484,10 @@ const CEILINGS = {
   // 40/40 graph parity). Gates compressed to 2 lines each before raising.
   // 2350 -> 2349: R6 truth pass deleted the dead `remapK` (the sceneryLapMirror
   // helpers that stay shift-only do so ON PURPOSE — singapore's KOLD legend).
-  "js/track/tracks.js": 2349,
+  // 2350 -> 2355 on the deploy side for the sign-safe seam wrap in
+  // scanBarrier/indexSolid (the negative-k silent no-op, 10 circuits hit it).
+  // Union re-measured: 2354.
+  "js/track/tracks.js": 2354,
   // ── Round-6 additions: the unguarded giants, set AT measured (test metric,
   // split-newline count) so any growth is a deliberate raise here. Each line
   // says why the file is its size today; none is an extraction target yet.
@@ -485,7 +495,9 @@ const CEILINGS = {
   // lighting presets exported by the bake-lighting skill), not logic.
   "js/game/light-presets.js": 8683,
   // The whole WGX backend in one IIFE by design (deferred inject, no tag).
-  "js/render/webgpu/wgx.js": 5179,
+  // 5179 -> 5365 on the deploy union: their half-res SSR + chunk-AABB
+  // lamp-mask cull rounds landed on the other lineage (re-measured).
+  "js/render/webgpu/wgx.js": 5365,
   // TLX backend shell; grows only with GLX-parity features.
   "js/render/three/tlx.js": 2095,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.

@@ -79,12 +79,10 @@ const DataLive = (function () {
           const after = key.charAt(at + marker.length);
           if (after && after !== "&") continue;   // session_key=11 must not match =110
           if (!/\/(weather|position|drivers)\?/.test(key)) continue;
-          // Per-entry: one corrupt cached payload must not abort the whole
-          // scan and report "never fetched" for entries after it.
-          try {
-            const obj = JSON.parse(localStorage.getItem(key));
-            if (obj && typeof obj.t === "number" && obj.t > newest) newest = obj.t;
-          } catch (e) { /* corrupt entry — skip it */ }
+          // Prefix-read the timestamp (F1API.cacheEntryT) — position payloads
+          // run multi-MB, and this sweep repeats every refresh under AUTO.
+          const t = F1API.cacheEntryT(localStorage.getItem(key));
+          if (t != null && t > newest) newest = t;
         }
       } catch (e) { /* no storage: every response was a real fetch */ }
       return newest || null;
@@ -319,7 +317,7 @@ const DataLive = (function () {
           const d = byNum[p.num] || {};
           const row = el("div", "dh-row");
           
-          const mainInfo = el("div", "dh-live-row-main");
+          const mainInfo = el("div", "dh-cons-main");
           mainInfo.appendChild(el("span", "dh-pos", p.pos !== null && p.pos !== undefined ? p.pos : "—"));
           const chip = el("span", "dh-codechip", d.code || (p.num !== null && p.num !== undefined ? "#" + p.num : "—"));
           let col = null;

@@ -86,30 +86,25 @@
   overflow: hidden;
 }
 #track-detail[hidden] { display: none; }
-#track-detail-header {
-  display: flex; align-items: center; justify-content: space-between;
-  flex: none; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08);
+/* The CLOSED state too, and [hidden] above is not it: hidden is app state,
+   open is platform state, and TopModal's observer leaves a seam where neither
+   matches. This file is a higher layer than the generic dialog closed-state
+   guard, so without this line the display:flex above wins in that seam and a
+   forced layout there makes Chromium drop child boxes on top-layer re-attach
+   (the customize head/foot bug). The css-layers guard test enforces this. */
+#track-detail:not([open]) { display: none; }
+/* The header is the canonical .sheet-head (css/components.css) — the paint,
+   the ::after hairline (now edge-to-edge, an upgrade over the old flat
+   border-bottom) and the brand-red h2 all come from the class. Only the
+   deltas the .sheet grid would otherwise supply live here, the .dh-card
+   precedent verbatim: the dialog is a flex column (flex: none) and already
+   carries the zoom-divided safe-area padding, so the head's own inline pad
+   goes to zero. The close button is the shared .dh-close recipe (its
+   local copy became byte-identical in round 7 and is gone). */
+#track-detail-header { flex: none; padding-inline: 0; }
+body[data-density="compact"] #track-detail-header {
+  padding-top: 0; padding-bottom: calc(var(--pad) * 0.2);
 }
-#track-detail-name { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: var(--ls-4); text-transform: uppercase; }
-.tdc-close-btn {
-  /* The data hub's icon-close recipe (css/data.css .dh-close), verbatim: the
-     two ✕ buttons were the app's only pair of same-role controls with nothing
-     in common — this one a hollow grey circle, that one a plate square. One
-     recipe, the plate family. */
-  background: var(--plate); border: 1px solid var(--plate-line); color: var(--dim);
-  border-radius: var(--r-md);
-  /* Same floor as every other door — 36px was under --tap on both pointers
-     (measured 2026-08-18 Playwright MCP at 852x393: 36x36). WCAG 24 is met;
-     the house ladder is not. */
-  width: var(--tap); height: var(--tap); font-size: var(--fs-5);
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; padding: 0; line-height: 1;
-  transition: background 0.15s, color 0.15s;
-}
-@media (hover: hover) {
-  .tdc-close-btn:hover { background: var(--plate-hover); color: #fff; }
-}
-.tdc-close-btn:active { background: var(--plate-press); color: #fff; }
 #track-detail-body {
   flex: 1; min-height: 0;
   display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5);
@@ -131,17 +126,19 @@
   object-fit: contain;
 }
 #track-detail-panel { display: none; flex-direction: column; gap: 0; }
-#track-detail-meta { font-size: var(--fs-micro); color: #888; letter-spacing: var(--ls-2); line-height: 1.5; }
-.tds-subtitle { font-size: var(--fs-micro); color: #555; letter-spacing: var(--ls-4); text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
+#track-detail-meta { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-2); line-height: 1.5; }
+.tds-subtitle { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
 #track-detail-elev { display: block; width: 100%; height: 48px; }
-#track-detail-drs-list { font-size: var(--fs-micro); color: #888; }
+#track-detail-drs-list { font-size: var(--fs-micro); color: var(--dim); }
 .tdd-zone { padding: 2px 0; }
 #track-detail-corners { flex: 0 0 auto; }
-.tdc-title { font-size: var(--fs-micro); color: #555; letter-spacing: var(--ls-4); text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
+.tdc-title { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
 #track-detail-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .tdc-corner {
   display: flex; align-items: center; gap: 5px;
-  background: var(--plate); border-radius: var(--r-sm);
+  /* below the button plate's 0.045: 27 identical plates in a wrap grid read
+     as a keypad; a readout row rests under the interactive floor */
+  background: rgba(255, 255, 255, 0.028); border-radius: var(--r-sm);
   padding: calc(var(--gap) * 0.25) 8px; font-size: var(--fs-micro);
 }
 .tdc-num { font-weight: 700; color: var(--text); min-width: 22px; }
@@ -150,13 +147,17 @@
 .tdc-slow   { color: #fb923c; font-size: var(--fs-micro); }
 .tdc-hairpin{ color: #f87171; font-size: var(--fs-micro); }
 #track-detail-flags { display: flex; gap: calc(var(--gap) * 0.5); flex-wrap: wrap; margin: calc(var(--gap) * 0.5) 0 2px; }
+/* READOUTS, not controls: the base flag wore the button recipe verbatim
+   (plate fill + plate-line border), so NIGHT read as a tappable chip. The
+   borders go, and the base takes the same indigo tint .trb-night uses in the
+   circuit list — NIGHT means one thing on both screens. */
 .tdf-flag {
   font-size: var(--fs-micro); letter-spacing: var(--ls-4); padding: 2px 7px;
-  border-radius: var(--r-xs); border: 1px solid var(--plate-line);
-  color: var(--dim); background: var(--plate);
+  border-radius: var(--r-xs);
+  color: #818cf8; background: rgba(129,140,248,0.15);
 }
-.tdf-street { color: #f59e0b; border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.08); }
-.tdf-banked { color: #818cf8; border-color: rgba(129,140,248,0.4); background: rgba(129,140,248,0.08); }
+.tdf-street { color: #f59e0b; background: rgba(245,158,11,0.08); }
+.tdf-banked { background: rgba(129,140,248,0.08); }
 #sel-preview-map { cursor: pointer; }
 
 /* Portrait: canvas fills top portion, info panel scrolls below */

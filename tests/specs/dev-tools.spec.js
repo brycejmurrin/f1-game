@@ -18,7 +18,13 @@ async function load(page, trackId = "monza") {
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   }
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+  // race()->loadTrack() is synchronous, so this predicate is usually already
+  // true — but an unpolled wait is rAF-clocked and SwiftShader can starve rAF
+  // to ~2/s mid-build, so the default polling missed a true predicate for 10s
+  // (measured 2026-08-27: 9-10/56 shifting failures, identical at the
+  // pre-round SHA). polling:100 is the fix; 30s is the measured half-budget
+  // headroom (docs/TESTING.md), not the expectation.
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 30_000 });
 }
 
 async function loadParked(page, frac = 0.1, trackId = "monza") {
@@ -197,7 +203,7 @@ test.describe("__apex.info()", () => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     await page.evaluate(() => window.__apex.tt("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 30_000 });
     const info = await page.evaluate(() => window.__apex.info());
     expect(info.timeTrial).toBe(true);
     expect(info.track).toBe("monza");

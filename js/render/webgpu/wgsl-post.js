@@ -837,9 +837,13 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // Occlusion: procedural flare would bleed through geometry; sample depth at sunUV.
   // Skip the depth fetch when the flare is off or the sun is off-screen
   // (uniform CF). Matches GLX post.js sunVis.
-  var sunVis: f32 = select(0.0,
-    smoothstep(0.9990, 0.9999, loadCompDepth(sunUV)),
-    flareStr > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 && sunUV.y >= 0.0 && sunUV.y <= 1.0);
+  // if, not select(): both select arms evaluate, so the depth fetch ran with
+  // the flare off — contradicting the "skip the depth fetch" intent above.
+  // loadCompDepth is a textureLoad (no derivatives), legal in the branch.
+  var sunVis: f32 = 0.0;
+  if (flareStr > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 && sunUV.y >= 0.0 && sunUV.y <= 1.0) {
+    sunVis = smoothstep(0.9990, 0.9999, loadCompDepth(sunUV));
+  }
   if (flareStr > 0.0 && sunVis > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 &&
       sunUV.y >= 0.0 && sunUV.y <= 1.0) {
     var flare = vec3<f32>(0.0);
@@ -953,10 +957,15 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(rB, 1.0);
 }`;
 
-  // 7. SSR — wet-road + car-paint screen-space reflection (its own full-res pass).
-  //    Port of the GLX COMPOSITE_FS wet-road SSR block (js/render/shaders/post.js COMPOSITE_FS),
-  //    reduced for mobile: road + car-paint (.a tag) paths, SHORT 12-step reflected-
-  //    ray march + 4-step binary refine.
+  // 7. SSR — wet-road + car-paint screen-space reflection (its own HALF-RES
+  //    pass; COMPOSITE bilinear-upsamples it through linearSampler, the same
+  //    free path the godray add uses). Port of the GLX COMPOSITE_FS wet-road
+  //    SSR block (js/render/shaders/post.js COMPOSITE_FS): road + car-paint
+  //    (.a tag) paths, 24-step reflected-ray march + 4-step binary refine —
+  //    the SAME march GLX runs (its `for (int i = 0; i < 24…)`); an older
+  //    comment here claimed "SHORT 12-step", which was never what either
+  //    backend shipped. The march reads the FULL-res scene + depth; U.p0.xy
+  //    is one OUTPUT (half-res) texel.
   //    Reconstructs view position from depth, a view-space normal from depth
   //    finite differences (NOT dpdx/dpdy — safe past the early sky/road-mask
   //    returns), masks to up-facing foreground road OR car bodywork, marches the
@@ -1228,7 +1237,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     "GODRAY",      // half-res  <- depth + sun/lamp shadows
     "BLOOM_DOWN",  // mip chain (mip0 bright-pass, mips 1..N plain) <- sceneHDR
     "BLOOM_UP",    // mip chain upsample, additive blend -> bloom mip0
-    "SSR",         // full-res  <- sceneHDR + sceneDepth  -> ssrTex (rgba, .a=mix)
+    "SSR",         // HALF-res  <- sceneHDR + sceneDepth (full-res)  -> ssrTex (rgba, .a=mix)
     "COMPOSITE",   // full-res LDR <- sceneHDR, bloom, ssao, godray (+ image FX; ssrTex optional)
     "FXAA",        // full-res -> swapchain <- LDR composite
   ];

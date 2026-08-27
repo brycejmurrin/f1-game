@@ -91,10 +91,13 @@ if (staticOnly) {
 try {
   const srv = await startStaticServer(ROOT);
   // The FULL Chromium build: the headless shell playwright launches by default
-  // has no navigator.gpu at all.
-  const { chromium } = require("playwright");
+  // has no navigator.gpu at all. launchChromium's pickChromium() already
+  // resolves the sandbox's full build; passing chromium.executablePath() here
+  // OVERRODE it with playwright's registry path for whatever build the npm
+  // pin wants — which broke the moment playwright 1.61 pinned chromium-1228
+  // in a container whose egress allowlist blocks cdn.playwright.dev, while
+  // /opt/pw-browsers/chromium (full 1194, navigator.gpu present) sat unused.
   const browser = await launchChromium({
-    executablePath: chromium.executablePath(),
     headless: true,
     args: WEBGPU_CHROMIUM_ARGS,
   });

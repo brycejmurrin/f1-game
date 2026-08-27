@@ -569,10 +569,10 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   align-items: center; border-radius: var(--r-sm);
 }
 .res-row:nth-child(even) { background: rgba(255, 255, 255, 0.03); }
-.res-row.you { color: #aeea00; font-weight: 700; background: rgba(174, 234, 0, 0.08); padding-left: 5px; }
+.res-row.you { color: var(--you); font-weight: 700; background: color-mix(in srgb, var(--you) 8%, transparent); padding-left: 5px; }
 /* A podium class already supplies the left rule, so only a non-podium player row
    draws its own — otherwise P1-and-you would stack two borders. */
-.res-row.you:not(.p1):not(.p2):not(.p3) { border-left: 3px solid #aeea00; }
+.res-row.you:not(.p1):not(.p2):not(.p3) { border-left: 3px solid var(--you); }
 .res-row.p1 { color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, transparent); border-left: 3px solid var(--gold); padding-left: 5px; }
 .res-row.p2 { color: var(--silver); background: color-mix(in srgb, var(--silver) 7%, transparent); border-left: 3px solid var(--silver); padding-left: 5px; }
 .res-row.p3 { color: var(--bronze); background: color-mix(in srgb, var(--bronze) 7%, transparent); border-left: 3px solid var(--bronze); padding-left: 5px; }
@@ -774,6 +774,17 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   pointer-events: none;
   margin-top: calc(var(--gap) * 0.5);
 }
+/* Say what it is. A bare SPEED 312 box under the slider read as a real,
+   stuck readout ("why does the pause menu show speed?"). The caption is a
+   ::before so it costs no shell node; dividing by the zoom keeps its painted
+   size constant while the sample itself scales with the slider. */
+#pm-hud-sample::before {
+  content: "HUD SIZE PREVIEW";
+  display: block;
+  font-size: calc(var(--fs-micro) / var(--hud-scale));
+  font-weight: 700; letter-spacing: var(--ls-4); color: var(--dim);
+  margin-bottom: calc(var(--gap) / 3 / var(--hud-scale));
+}
 #results     { --sheet-w: 600px; --fit-at: 300px; }
 #standings   { --sheet-w: 560px; --fit-at: 300px; }
 /* Help uses a term rail beside a readable description column. At the old 700px
@@ -845,10 +856,9 @@ body:has(#teampicker:not([hidden])) #career {
   opacity: 0;
   pointer-events: none;
 }
-body:has(#datahub:not([hidden])) #overlay {
-  opacity: 0;
-  pointer-events: none;
-}
+/* #datahub is dialog.screen since round 11, so the generic rule above owns
+   fading the title under it — its bespoke copy of that rule left with the
+   migration. */
 body:has(#advanced:not([hidden])) #pmsettings,
 body:has(#audioset:not([hidden])) #pmsettings {
   opacity: 0;
@@ -1069,8 +1079,6 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   /* Grows with the viewport, never under the micro floor inside sheet zoom. */
   font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
   letter-spacing: var(--ls-2);
-  background: var(--plate);
-  border-color: var(--plate-line);
 }
 .pm-group .tune-row {
   margin: 0;
@@ -1280,6 +1288,19 @@ dialog.screen {
   color: inherit;
   overflow: hidden;
 }
+/* CLOSED MEANS NO BOXES. The base .screen display:grid is author-origin, so it
+   beat the UA's dialog:not([open]) display:none — a closed-but-unhidden dialog
+   had full layout. That state is real: TopModal mirrors `hidden` onto
+   showModal() from a MutationObserver, so between `hidden = false` and that
+   microtask any forced read (SheetShape's visibility observer registers
+   earlier, fires first, and takes one) lays the dialog out closed. Entering
+   the top layer then re-attaches the subtree, and Chromium drops some
+   children's boxes and never rebuilds them — measured on #customize: sheet
+   head and foot at 0x0 with display:flex computed, healed only by a display
+   flip or a clone, never by style invalidation. No layout until [open] closes
+   the whole bug class; the .dim entrance animation still restarts, since its
+   return from display:none now happens at open instead of at unhide. */
+dialog.screen:not([open]) { display: none; }
 dialog.screen[open] { display: grid; }
 dialog.screen.dim::backdrop {
   background:

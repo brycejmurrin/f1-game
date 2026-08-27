@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1563">
+<meta name="apex-build" content="1590">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -49,8 +49,8 @@
      Measured chrome-devtools LCPBreakdown: almost all element render delay
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
-<link rel="preload" href="css/tokens.css?v=1b9a8c41c2e5" as="style">
-<link rel="preload" href="css/components.css?v=cf4d53e04714" as="style">
+<link rel="preload" href="css/tokens.css?v=91a977fea4eb" as="style">
+<link rel="preload" href="css/components.css?v=1fbc7a9ae725" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -68,17 +68,17 @@
 <!-- MANIFEST.CSS order preserved (cascade). Title-critical sheets stay
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
-<link rel="stylesheet" href="css/tokens.css?v=1b9a8c41c2e5">
-<link rel="stylesheet" href="css/components.css?v=cf4d53e04714">
-<link rel="stylesheet" href="css/tuner.css?v=78e7316cce7b" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=f3b0077e9ccb">
-<link rel="stylesheet" href="css/carsetup.css?v=9515695e72a1" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/hud.css?v=7c1252968366" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=0e8a19088984" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/tokens.css?v=91a977fea4eb">
+<link rel="stylesheet" href="css/components.css?v=1fbc7a9ae725">
+<link rel="stylesheet" href="css/tuner.css?v=dfc16ebe4560" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/menus.css?v=b55d6dd79bca">
+<link rel="stylesheet" href="css/carsetup.css?v=051dedb8821a" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/hud.css?v=09eec5dfd7e7" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/overlays.css?v=5f267a1e2625" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=6e90ca36cead">
-<link rel="stylesheet" href="css/track-detail.css?v=72e49cbaa045" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/career.css?v=c61021027676" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/data.css?v=6ce8f33b48ac" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/track-detail.css?v=02ba1aa9b7dd" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/career.css?v=dab85626d73c" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/data.css?v=2e723024c38d" media="print" onload="this.media='all'">
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
      parsers that scan every rel=stylesheet. -->
@@ -489,15 +489,15 @@
          carries the live save (team, year, round) so CONTINUE says what it is
          continuing; refreshCareerButton() fills both it and the label. -->
     <div id="menu-hero">
-    <button id="mb-career" class="bigbtn" data-menu-default><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub"></span></span></button>
+    <button id="mb-career" class="bigbtn" data-menu-default><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub" class="mb-sub"></span></span></button>
     </div>
     <!-- PLAY NOW: the four one-sitting modes, 2x2 so four entries cost two rows
          rather than four. Same red family as the hero, one step down in size. -->
     <div id="menu-primary" class="balanced-row">
-    <button id="mb-race" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></svg>RACE</button>
-    <button id="mb-tt" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></svg>TIME TRIAL</button>
-    <button id="mb-vs" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>RACE A FRIEND</button>
-    <button id="mb-season" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2"/><path d="M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2"/><path d="M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3"/><path d="M4 22h16"/><path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/><path d="M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"/></svg>SEASON</button>
+    <button id="mb-race" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></svg><span>RACE<span class="mb-sub">ONE GRAND PRIX</span></span></button>
+    <button id="mb-tt" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></svg><span>TIME TRIAL<span class="mb-sub">YOU AGAINST THE CLOCK</span></span></button>
+    <button id="mb-vs" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>RACE A FRIEND<span class="mb-sub">PRIVATE 2&ndash;4 PLAYER RACE</span></span></button>
+    <button id="mb-season" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2"/><path d="M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2"/><path d="M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3"/><path d="M4 22h16"/><path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/><path d="M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"/></svg><span>SEASON<span class="mb-sub">A CHAMPIONSHIP, YOUR RULES</span></span></button>
     </div>
     <!-- SECONDARY: everything that is not a way to play. Half-height,
          two across, so the rooms never compete with the modes for the eye. -->
@@ -843,9 +843,15 @@
      tests/specs/menu-keyboard.spec.js ":modal" — which was RED while this shipped
      as a div, because the conversion commit lost this hunk in a merge. -->
 <dialog id="track-detail" class="screen dim" aria-labelledby="track-detail-name" data-esc-close="track-detail-close" hidden>
-  <div id="track-detail-header">
-    <div id="track-detail-name"></div>
-    <button id="track-detail-close" autofocus class="tdc-close-btn" aria-label="Close">&#x2715;</button>
+  <!-- The canonical .sheet-head on a full-bleed dialog — the .dh-card
+       precedent (css/data.css): the class delivers the paint and the red h2;
+       track-detail.css keeps only the flex/padding deltas the .sheet grid
+       would otherwise supply. The h2 keeps its id (aria-labelledby target;
+       menus.js sets textContent). Close is the shared .dh-close icon recipe —
+       .tdc-close-btn had become a byte-identical copy of it in round 7. -->
+  <div id="track-detail-header" class="sheet-head">
+    <h2 id="track-detail-name"></h2>
+    <button id="track-detail-close" autofocus class="dh-close" aria-label="Close">&#x2715;</button>
   </div>
   <div id="track-detail-body">
     <div id="track-detail-canvas-wrap">
@@ -1063,7 +1069,7 @@
        as unpressed toggles. -->
   <div id="cs-stack">
     <div id="cs-cam-panel" hidden>
-      <div class="cs-pan-row">
+      <div>
         <span class="cs-pan-lbl" aria-hidden="true">VIEW</span>
         <div id="cs-view" role="group" aria-label="Camera presets">
           <button type="button" class="cs-view-btn" data-cs-view="hero" title="Three-quarter view">3/4</button>
@@ -1077,7 +1083,7 @@
            the flaps rotate about the car's X axis, so FRONT and REAR stare
            straight down that axis and show nothing moving. These are the angles
            that do, and the label is what says so. -->
-      <div class="cs-pan-row">
+      <div>
         <span class="cs-pan-lbl" aria-hidden="true">WINGS</span>
         <div id="cs-wing-views" role="group" aria-label="Wing framings">
           <button type="button" id="cs-wing-front" class="cs-view-btn" data-cs-view="wingFront"
@@ -1091,7 +1097,7 @@
       <!-- Drive the orbit directly, not just to fixed presets. These repeat
            while held, so they pan/tilt/zoom continuously rather than stepping —
            which is also why picking one does NOT close the panel. -->
-      <div class="cs-pan-row">
+      <div>
         <span class="cs-pan-lbl" aria-hidden="true">MOVE</span>
         <div class="cs-pan-grp" role="group" aria-label="Move the camera">
           <button type="button" id="cs-view-left" class="cs-view-btn" title="Rotate left" aria-label="Rotate left">&#9664;</button>
@@ -1109,7 +1115,7 @@
            the flank and past either end. Thin arrows, not the solid triangles
            the MOVE row uses — they do different things and must not read as the
            same control twice. -->
-      <div class="cs-pan-row">
+      <div>
         <span class="cs-pan-lbl" aria-hidden="true">PAN</span>
         <div class="cs-pan-grp" role="group" aria-label="Pan the camera">
           <button type="button" id="cs-pan-left" class="cs-view-btn" title="Slide left" aria-label="Pan left">&larr;</button>
@@ -1119,7 +1125,7 @@
           <button type="button" id="cs-pan-back" class="cs-view-btn" title="Slide back, toward the rear wing" aria-label="Pan back">&darr;</button>
         </div>
       </div>
-      <div class="cs-pan-row">
+      <div>
         <span class="cs-pan-lbl" aria-hidden="true"></span>
         <div class="cs-pan-grp">
           <span class="cs-view-grp">
@@ -1696,7 +1702,12 @@
 </div>
 
 <!-- data hub -->
-<div id="datahub" hidden></div>
+<!-- A REAL dialog element since round 11 (was a div claiming role=dialog):
+     TopModal mirrors `hidden` onto showModal()/close(), Escape routes through
+     the close button via data-esc-close, and the platform owns focus
+     containment — the hub's hand-rolled trap is gone. The chrome inside is
+     still built at runtime by js/data/hub.js. -->
+<dialog id="datahub" class="screen" data-esc-close="dh-close-btn" hidden></dialog>
 
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
@@ -1756,9 +1767,9 @@
 <script crossorigin="anonymous" src="js/track/landmark-kit.js?v=b5a86310198b"></script>
 <script crossorigin="anonymous" src="js/track/circuit-kit.js?v=0ee249eee375"></script>
 <script crossorigin="anonymous" src="js/track/spline.js?v=72cf1bacbb58"></script>
-<script crossorigin="anonymous" src="js/track/mesh.js?v=20e190a129db"></script>
+<script crossorigin="anonymous" src="js/track/mesh.js?v=728ac8a4d62b"></script>
 <script crossorigin="anonymous" src="js/track/scenery-nature.js?v=a23f5cba7e76"></script>
-<script crossorigin="anonymous" src="js/track/scenery-structures.js?v=724d5faa8cd4"></script>
+<script crossorigin="anonymous" src="js/track/scenery-structures.js?v=2b278080b824"></script>
 <script crossorigin="anonymous" src="js/track/scenery-city.js?v=3a3f1278afaa"></script>
 <script crossorigin="anonymous" src="js/track/scenery-identity.js?v=930ed88778fa"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
@@ -1802,22 +1813,22 @@
 <script crossorigin="anonymous" src="js/circuits/indianapolis.js?v=bc6ccec8ed47"></script>
 <script crossorigin="anonymous" src="js/circuits/buenos_aires.js?v=0a9def10b45a"></script>
 <script crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=87f687006e3a"></script>
-<script crossorigin="anonymous" src="js/track/tracks.js?v=fca2b7a09c7f"></script>
+<script crossorigin="anonymous" src="js/track/tracks.js?v=2f5b4c3927f6"></script>
 <script crossorigin="anonymous" src="js/track/maps.js?v=0d6c2cddd707"></script>
 <script crossorigin="anonymous" src="js/car/car3d.js?v=2e2b18bccbb6"></script>
 <script crossorigin="anonymous" src="js/game/input.js?v=6d9477b5a3e6"></script>
-<script crossorigin="anonymous" src="js/game/audio.js?v=fb14e03558ad"></script>
+<script crossorigin="anonymous" src="js/game/audio.js?v=acd491776855"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=f43e998612b3"></script>
 <script crossorigin="anonymous" src="js/game/spotify.js?v=27c8d6373cac"></script>
 <script crossorigin="anonymous" src="js/game/audio-panel.js?v=97c5dd551254"></script>
-<script crossorigin="anonymous" src="js/data/api.js?v=65ae9f07d673"></script>
-<script crossorigin="anonymous" src="js/data/telemetry.js?v=5bc597bc1bfb"></script>
+<script crossorigin="anonymous" src="js/data/api.js?v=fa976f9613d8"></script>
+<script crossorigin="anonymous" src="js/data/telemetry.js?v=72c13d9f7d44"></script>
 <script crossorigin="anonymous" src="js/data/export.js?v=2ce05569b764"></script>
 <script crossorigin="anonymous" src="js/data/schedule.js?v=6ccedb2bf1a0"></script>
 <script crossorigin="anonymous" src="js/data/standings.js?v=420627476c88"></script>
 <script crossorigin="anonymous" src="js/data/lastrace.js?v=b7d043cba6a1"></script>
-<script crossorigin="anonymous" src="js/data/live.js?v=fc509a1b158f"></script>
-<script crossorigin="anonymous" src="js/data/hub.js?v=7735cc12637a"></script>
+<script crossorigin="anonymous" src="js/data/live.js?v=c33a77e10480"></script>
+<script crossorigin="anonymous" src="js/data/hub.js?v=41dd4a45ca6e"></script>
 <script crossorigin="anonymous" src="js/car/parts.js?v=299db50b7f16"></script>
 <script crossorigin="anonymous" src="js/car/liveries.js?v=3c03d579e61e"></script>
 <script crossorigin="anonymous" src="js/car/liverytex.js?v=0026e82d9924"></script>
@@ -1845,7 +1856,7 @@
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
 <script crossorigin="anonymous" src="js/game/sheetshape.js?v=f44ef602cc23"></script>
 <script crossorigin="anonymous" src="js/game/uilayers.js?v=6fdcb2735e56"></script>
-<script crossorigin="anonymous" src="js/game/topmodal.js?v=a919b357882c"></script>
+<script crossorigin="anonymous" src="js/game/topmodal.js?v=c1f6b969822f"></script>
 <script crossorigin="anonymous" src="js/game/menunav.js?v=96cdaabfd62f"></script>
 <script crossorigin="anonymous" src="js/game/ariastate.js?v=973a5889cce1"></script>
 <script crossorigin="anonymous" src="js/game/settings-nav.js?v=b08f88915465"></script>
@@ -1855,7 +1866,7 @@
 <script crossorigin="anonymous" src="js/game/photomode.js?v=262984f179f6"></script>
 <script crossorigin="anonymous" src="js/game/tuner.js?v=97d8133f20c4"></script>
 <script crossorigin="anonymous" src="js/game/cam-tuner.js?v=3f5f9f5075ed"></script>
-<script crossorigin="anonymous" src="js/game/brake-cue.js?v=8f7e053da8f9"></script>
+<script crossorigin="anonymous" src="js/game/brake-cue.js?v=9268cbc97ff5"></script>
 <script crossorigin="anonymous" src="js/game/steer-tuning.js?v=072a417935f9"></script>
 <script crossorigin="anonymous" src="js/game/perf.js?v=495da1c1cfe4"></script>
 <script crossorigin="anonymous" src="js/game/gfx-quality.js?v=793314c6aa39"></script>
@@ -1865,11 +1876,11 @@
 <script crossorigin="anonymous" src="js/game/metrics.js?v=9d9bdd157f9d"></script>
 <script crossorigin="anonymous" src="js/game/cameras.js?v=caf8fa2670cf"></script>
 <script crossorigin="anonymous" src="js/game/cam-modes.js?v=0ccbabb90f93"></script>
-<script crossorigin="anonymous" src="js/game/hud.js?v=38921a8f481d"></script>
+<script crossorigin="anonymous" src="js/game/hud.js?v=eacd49ad774b"></script>
 <script crossorigin="anonymous" src="js/game/results.js?v=40a2c4e24afe"></script>
 <script crossorigin="anonymous" src="js/game/quali.js?v=00b1417f6183"></script>
-<script crossorigin="anonymous" src="js/game/debrisworld.js?v=44ac4fb0ed89"></script>
-<script crossorigin="anonymous" src="js/game/incidentsim.js?v=52fbdf14b264"></script>
+<script crossorigin="anonymous" src="js/game/debrisworld.js?v=f0ce5d9dccf7"></script>
+<script crossorigin="anonymous" src="js/game/incidentsim.js?v=d39ff2c91040"></script>
 <script crossorigin="anonymous" src="js/net/nostr.js?v=6f1fe4bd415a"></script>
 <script crossorigin="anonymous" src="js/net/rendezvous.js?v=15dffef87577"></script>
 <script crossorigin="anonymous" src="js/net/sdp.js?v=1d82f2230798"></script>
@@ -1881,5 +1892,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=ab5f8dedabbc"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=c2db889f6db5"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=81b09256e218"></script>
-<script crossorigin="anonymous" src="js/game.js?v=a9902253ee43"></script>
+<script crossorigin="anonymous" src="js/game.js?v=cdabaf630717"></script>
 </body></html>
