@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 132 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 135 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -750,6 +750,9 @@ what it covers.
 | `track-graph.test.mjs` | the scenery model library + node graph, and `batches()` |
 | `godray-keep-nearest.test.mjs` | the god-ray nearest-k selection, cloned in all three backends: eviction must SWAP so the pooled objects stay a permutation (an overwrite aliased one object at two slots — a lamp beamed twice, another dropped); also pins the three clones in lockstep |
 | `light-store-cond-layer.test.mjs` | the conditional shipped lighting layer ("*|tod" in LightPresets): resolves only on ULTRA + a per-chunk-capable backend off mobile; player edits (incl. explicit 0) always win; dedup against base() includes the layer |
+| `curvature-channels.test.mjs` | the arc-must-not-reach-the-driver table: every Tracks.curvature consumer file appears in docs/PHYSICS.md §Curvature channels (and no ghost rows) — a new consumer must be classified before it lands |
+| `storage-key-prefix.test.mjs` | every literal localStorage/sessionStorage key is apex26.-prefixed (GameStore-routed keys exempt by construction; allowlist entries need a written reason) |
+| `no-bare-console.test.mjs` | logging goes through Log — no bare console.* in js/ outside log.js (the nostr interception seam allowlisted with its reason) |
 | `lamp-chunks.test.mjs` | the shared per-chunk lamp bake (LampChunks): nearest-first reach-filtered selection, the knob→cap formula (floor 8, CAP 24), concat/offsets/counts ≡ the per-chunk lists, and the bake-once invalidation contract (lights array identity + knob value) |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |

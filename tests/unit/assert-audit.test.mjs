@@ -14,7 +14,12 @@
 // first two tests below.
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { scanSource, audit, CAPTURE_HARNESSES } from "../../tools/assert-audit.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const one = (src) => scanSource(src).tests[0];
 
@@ -145,4 +150,27 @@ test("an alias of something that is NOT a test function is not a test", () => {
   const src = `import { expect as check } from "./fixtures.js";
     check("not a test", 1);`;
   assert.deepEqual(scanSource(src).tests, []);
+});
+
+// ── tests/unit joins the vacuity ratchet (round 6) ───────────────────────────
+// audit() defaulted to tests/specs for the tool's whole life, so the 130+ unit
+// suites were never vacuity-scanned — a blind spot in the repo's own
+// truth-instrument. Measured on joining: 1,376 unit tests, ALL asserting,
+// zero swallows. This test keeps it that way.
+test("every tests/unit suite is scanned and none is vacuous or swallowing", () => {
+  const dir = path.join(ROOT, "tests/unit");
+  const rows = [];
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".test.mjs")).sort()) {
+    rows.push(scanSource(fs.readFileSync(path.join(dir, f), "utf8"), "tests/unit/" + f));
+  }
+  const all = rows.flatMap((r) => r.tests);
+  assert.ok(rows.length > 120 && all.length > 1200,
+    `unit scan looks broken: ${rows.length} files / ${all.length} tests`);
+  const bad = all.filter((t) => !t.skipped && t.verdict !== "asserting")
+    .map((t) => `${t.title} [${t.verdict}]`);
+  assert.deepEqual(bad, [],
+    "a tests/unit test asserts nothing — give it a real assertion or skip-with-reason");
+  const swallows = rows.flatMap((r) => r.tests.filter((t) => t.swallow > 0)
+    .map((t) => `${r.file}:${t.line} ${t.title}`));
+  assert.deepEqual(swallows, [], "a tests/unit test swallows a rejection");
 });

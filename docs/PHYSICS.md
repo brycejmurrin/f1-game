@@ -1,8 +1,12 @@
 # Apex 26 — physics
 
-The driving model, the pace discipline, active aero and overtake. Extracted from
-the agent brief. `AGENTS.md` keeps the two things that constrain code elsewhere: the
-`vTop()`/`vStd()` rule and the "arc must not reach the driver" channel table.
+The driving model, the pace discipline, active aero and overtake. Extracted
+from the agent brief. `AGENTS.md` states the two rules that constrain code
+elsewhere — the `vTop()`/`vStd()` rule and "the arc must not reach the
+driver" — and THIS doc owns the curvature channel table (§Curvature
+channels below; `tests/unit/curvature-channels.test.mjs` asserts every
+consumer file appears in it). For years each doc deferred the table to the
+other and it existed nowhere.
 
 ---
 
@@ -205,3 +209,33 @@ its own target, and every key a step rewrites is logged through `Log.info` —
 a migration quietly rewriting someone's settings should leave a record.
 `tests/specs/steer-migration.spec.js` pins all of it, including that a store at the
 current schema is left completely alone.
+
+---
+
+## Curvature channels — the "arc must not reach the driver" table
+
+Every consumer of `Tracks.curvature()` (direct calls plus the two
+destructured aliases in `js/track/mesh.js` and `js/track/tracks.js`)
+classified into its legitimate channel. Audited 2026-08-27 by the
+physics-contract-auditor: ZERO violations — every player-path read is
+behind an assist knob that defaults to 0, or reaches only render / audio /
+telemetry. `tests/unit/curvature-channels.test.mjs` asserts every file that
+reads curvature appears here, so a new consumer must be classified before
+it lands.
+
+| file | sites (symbol) | channel | why it never reaches the player with assists off |
+|---|---|---|---|
+| `js/game.js` | `updateCar` k/`c.kCur` cache | **assist-gated** | every player-path use is multiplied by `ROAD_FOLLOW` (def 0) or sits inside `if (raceLineAssist !== 0)` (def 0); `c.kCur` feeds only BodyAttitude (render-only) |
+| `js/game.js` | `updateCar` ERS boost / OT fire / brake look / lane target | **AI-only** | each inside the `!c.human` arm |
+| `js/game.js` | `updateCar` RACING LINE assist | **assist-gated** | inside `if (raceLineAssist !== 0)`; slider def 0 |
+| `js/game.js` | `coast` | **broadcast-only** | runs only on `c.finished` cars — driving control is already disconnected. Any future reuse of `coast()` on a live car is a BLOCKER |
+| `js/game/aerozones.js` | `build` | **surface** | fixed FIA-style activation zones computed once per circuit; gates the driver-INITIATED X-mode button identically for all cars; no steer torque |
+| `js/game/debrisworld.js` | `registerFurniture` | **broadcast-only** | apex-kerb cones in the one-way cosmetic Rapier side-world |
+| `js/game/cameras.js` | `vantage` | **broadcast-only** | only heli/side/cinematic broadcast cams; 0 in every driven mode |
+| `js/game/quali.js` | `lapTime` | **AI-only** | offline lap-time model for the simulated field; a player-driven lap always overrides it |
+| `js/game/brake-cue.js` | `tick` | **assist-gated** | behind the BRAKE CUE slider (notch 1 = OFF); audio/haptic pulse only, no force path. NOTE: ships defaulted ON (notch 6) — sensory-only, but a fresh install does hear a curvature-derived cue |
+| `js/game/apex.js` | probe/scan/cinematic/tourShots/corners/obs/trackShape/trackProfile | **broadcast-only** | `__apex` dev/telemetry reads; nothing writes into the driving model |
+| `js/game/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |
+| `js/track/maps.js` | measureApex/detectDRS/detectCorners | **broadcast-only** | 2D picker/popup/minimap outlines (menus + HUD drawing only) |
+| `js/track/mesh.js` | findCorners, bankingProfile, banked-corner pick | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself |
+| `js/track/tracks.js` | build LUT bake, signboard side pick | **surface** | the producer itself, plus static scenery placement |
