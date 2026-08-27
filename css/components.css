@@ -1291,6 +1291,19 @@ dialog.screen {
   color: inherit;
   overflow: hidden;
 }
+/* CLOSED MEANS NO BOXES. The base .screen display:grid is author-origin, so it
+   beat the UA's dialog:not([open]) display:none — a closed-but-unhidden dialog
+   had full layout. That state is real: TopModal mirrors `hidden` onto
+   showModal() from a MutationObserver, so between `hidden = false` and that
+   microtask any forced read (SheetShape's visibility observer registers
+   earlier, fires first, and takes one) lays the dialog out closed. Entering
+   the top layer then re-attaches the subtree, and Chromium drops some
+   children's boxes and never rebuilds them — measured on #customize: sheet
+   head and foot at 0x0 with display:flex computed, healed only by a display
+   flip or a clone, never by style invalidation. No layout until [open] closes
+   the whole bug class; the .dim entrance animation still restarts, since its
+   return from display:none now happens at open instead of at unhide. */
+dialog.screen:not([open]) { display: none; }
 dialog.screen[open] { display: grid; }
 dialog.screen.dim::backdrop {
   background:
