@@ -146,7 +146,11 @@ const CEILING = {
   // sixths, two-thirds, 7/6, 4/3). Still raw in tuner.css: the .lt-tabs
   // full-bleed triple (next commit, atomic), the measured pairs, the
   // .adv-item 11px/7px inversion pair, and every compact/rail-tier value.
-  rawSpacing: 422,
+  // 2026-08-26: 422 → 419. The .lt-tabs full-bleed triple, atomically: the
+  // panel's 18px inline pad and the strip's -18px margin + 18px re-pad are
+  // ONE number three ways; all three are calc(var(--gap) * 1.5) now, so the
+  // bleed stays exact at every density instead of only at --gap: 12.
+  rawSpacing: 419,
 };
 
 test("no new font-size below the --fs-micro floor", () => {

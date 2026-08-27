@@ -184,7 +184,9 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   max-height: none;
   z-index: 42;
   background: rgba(12, 14, 20, 0.86);
-  padding: 14px 18px;
+  /* Inline pad is ONE number with .lt-tabs' bleed below: the strip's
+     negative margin and re-padding must cancel this exactly. */
+  padding: calc(var(--gap) * 7 / 6) calc(var(--gap) * 1.5);
   /* Fixed head (title / preview chips / tabs) + scrolling #lt-rows + fixed
      RESET/COPY/DONE footer — with 80+ sliders the actions used to live at the
      end of the scroll, a full panel-length swipe away. */
@@ -248,7 +250,8 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   display: flex; flex-wrap: wrap;
   --balance-basis: 8rem; --balance-min: 7rem;
   gap: calc(var(--gap) / 3);
-  margin: 2px -18px 6px; padding: 6px 18px 8px;
+  margin: calc(var(--gap) / 6) calc(var(--gap) * -1.5) calc(var(--gap) * 0.5);
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 1.5) calc(var(--gap) * 2 / 3);
   background: rgba(12, 14, 20, 0.94);
   border-bottom: 1px solid var(--card-line);
   flex-shrink: 0;
