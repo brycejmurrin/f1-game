@@ -133,7 +133,12 @@ const CLASS_CEILING = 536;
 // +4 2026-08-26: #pm-hud-sample and its hud-box — the HUD SIZE slider's live
 // sample; every real cluster is hidden while the settings sheet is open, so
 // the slider had zero visible effect.
-const NODE_CEILING = 1218;
+// +8 2026-08-27: mode sublines on the title 2x2 (RACE / TIME TRIAL / RACE A
+// FRIEND / SEASON each gain a stack span + sub span answering "what is
+// this?"), the round-10 judged ask. The label itself is an anonymous flex
+// item — no third span. Hidden at compact density, so the measured 390px
+// landscape clearance is untouched.
+const NODE_CEILING = 1226;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module

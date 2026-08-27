@@ -448,6 +448,11 @@
   --gold: #ffd700;
   --silver: #c0c0c0;
   --bronze: #cd9b5a;
+  /* The fourth metal: the HUD's lime marks THE PLAYER wherever a table has a
+     "you" row. Named for the same reason as the metals; the tach gradient's
+     matching stop stays literal — a ramp's stops are chosen against each
+     other, not from the palette (see css/hud.css). */
+  --you: #aeea00;
   /* The livery list's two-verb palette: DELETE is the warm danger family,
      EDIT the cool info family. Ink is the light readable tint, fill the
      saturated base the wash/hover/press states mix from — was 12 raw rgba()
@@ -721,7 +726,10 @@ button:active { background: var(--plate-press); }
 /* Mode-dependent menu toggles (RECALIBRATE TILT, GEARS) disable instead of
    hiding: removing them reflowed the settings grid under the player's finger,
    so the next tap hit the wrong button. Dim, keep the slot. */
-button:disabled { opacity: 0.35; cursor: default; }
+/* 0.55, raised from 0.35: at 0.35 a disabled door's label fell below
+   readable contrast on the translucent plates, so the slot kept its place
+   but lost its name. Still clearly a step below --dim resting text. */
+button:disabled { opacity: 0.55; cursor: default; }
 button:disabled:active { background: var(--plate); }
 
 /* ---- KEYBOARD FOCUS RING (WCAG 2.4.7 Focus Visible) --------------------

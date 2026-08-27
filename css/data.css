@@ -85,16 +85,18 @@ body[data-width="wide"][data-density="normal"] .dh-card {
    .sheet selector the shared compact rule matches). */
 .dh-card > .sheet-head { flex: 0 0 auto; }
 .dh-close {
-  /* Primary control — a thumb target, not a 34px glyph. */
+  /* Primary control — a thumb target, not a 34px glyph. Plate fill, line and
+     radius come from the button base (css/tokens.css); only the ink flip on
+     hover/press is this rule's own. */
   width: var(--tap); height: var(--tap); flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
-  border-radius: var(--r-md); padding: 0; font-size: var(--fs-5);
-  background: var(--plate); border: 1px solid var(--plate-line); color: var(--dim); cursor: pointer;
+  padding: 0; font-size: var(--fs-5);
+  color: var(--dim);
 }
 @media (hover: hover) {
-  .dh-close:hover { background: var(--plate-hover); color: #fff; }
+  .dh-close:hover { color: #fff; }
 }
-.dh-close:active { background: var(--plate-press); color: #fff; }
+.dh-close:active { color: #fff; }
 
 /* A SIDEWAYS SCROLL REGION IS NOT FINISHED AT `overflow-x: auto`. Two more
    declarations decide whether a thumb-drag actually pans it, and this strip had
@@ -124,9 +126,7 @@ body[data-width="wide"][data-density="normal"] .dh-card {
 .dh-tab {
   flex: 0 0 auto;
   min-height: var(--tap);         /* primary nav — full thumb height */
-  background: var(--plate);
-  border: 1px solid var(--plate-line);
-  border-radius: var(--r-md);
+  /* Plate fill, line and radius come from the button base (css/tokens.css). */
   padding: 7px 14px;
   font-size: var(--fs-2); font-weight: 700; letter-spacing: var(--ls-3);
   color: var(--dim);
@@ -135,9 +135,9 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 @media (hover: hover) {
-  .dh-tab:hover { background: var(--plate-hover); color: var(--text); border-color: var(--plate-line); }
+  .dh-tab:hover { color: var(--text); }
 }
-.dh-tab:active { background: var(--plate-press); color: var(--text); }
+.dh-tab:active { color: var(--text); }
 .dh-tab.dh-active {
   background: var(--plate-on);
   border-color: var(--red);
@@ -278,7 +278,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   border-radius: 0 var(--r-xs) var(--r-xs) 0;
 }
 @media (hover: hover) {
-  .dh-row:hover { background: rgba(255, 255, 255, 0.045); }
+  .dh-row:hover { background: var(--plate); }
 }
 /* The leader gets the faintest possible wash — enough that the top of the table
    reads as the top without needing a badge. */

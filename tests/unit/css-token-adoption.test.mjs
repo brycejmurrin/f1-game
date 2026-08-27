@@ -154,6 +154,24 @@ const CEILING = {
   // (its padding: 0 among them) was deleted when the button joined the
   // shared .dh-close recipe.
   rawSpacing: 418,
+  // colour declarations carrying a raw literal (rgb()/rgba()/#hex in any
+  // declaration value; tokens.css custom-property DEFINITIONS excluded — the
+  // definition site is the system, not drift; url() interiors excluded).
+  // POLICY: a literal converts when an existing token IS that value and that
+  // meaning. What stays literal, with reasons in place: the mask-image alpha
+  // stencils (a stencil's black is not a colour), the QR raster's pure
+  // white/black (scanners), FIA flag signal colours (externally defined),
+  // canvas-matched values whose comments record the pairing (.dh-gradbar,
+  // .dh-canvas), gradient RAMP stops chosen against each other (tach,
+  // energy), and the BOOST/OT/AERO ladder whose alphas are measured
+  // compositing arithmetic. Set 2026-08-27 with the guard.
+  rawColor: 379,
+  // distinct colour VALUES after normalising spelling: space-after-comma,
+  // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
+  // canonical form. This is the fork guard — identical paint must not hide
+  // behind different spellings, because grep-based dedup is how conversions
+  // get planned. Set 2026-08-27 with the guard.
+  rawColorDistinct: 194,
 };
 
 test("no new font-size below the --fs-micro floor", () => {
@@ -211,6 +229,84 @@ test("no new raw px spacing", () => {
   assert.equal(offenders.length, CEILING.rawSpacing,
     `raw spacing declarations are now ${offenders.length}, below the ${CEILING.rawSpacing} ceiling — ` +
     `lower CEILING.rawSpacing in this file to ${offenders.length} to lock the win in.`);
+});
+
+/* ---- colours: the same ratchet, one structural difference. Colours appear
+   across many properties (color, background, border-*, shadows, gradients),
+   so the counter iterates declaration VALUES generically instead of anchoring
+   on a property list — [^;{}] confines each match to one declaration, which
+   is what keeps selectors out (verified: no selector in this tree contains a
+   3/4/6/8-hex token or an rgb() call). Gradient and color-mix interiors are
+   deliberately IN scope: they are where #fff and #000 hide. */
+const COLOR_DECL = /(--[a-zA-Z0-9-]+|[a-z-]+)\s*:\s*([^;{}]*)/g;
+const COLOR_LIT = /rgba?\([^)]*\)|#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/g;
+const URL_VALUE = /url\((?:"[^"]*"|'[^']*'|[^)]*)\)/g;
+
+function colorLiterals() {
+  const found = [];
+  for (const { name, src } of sheets()) {
+    for (const d of src.matchAll(COLOR_DECL)) {
+      if (name === "tokens.css" && d[1].startsWith("--")) continue;
+      const lits = d[2].replace(URL_VALUE, "").match(COLOR_LIT);
+      if (lits) for (const v of lits) found.push({ file: name, v });
+    }
+  }
+  return found;
+}
+
+/* One canonical spelling per paint value, so a fork cannot read as two
+   colours: expand short hex, fold hex and rgb()/rgba() to the same rendering,
+   parseFloat every channel (kills trailing zeros and leading dots). */
+function normColor(v) {
+  if (v[0] === "#") {
+    let h = v.slice(1).toLowerCase();
+    if (h.length <= 4) h = [...h].map((c) => c + c).join("");
+    const ch = [0, 1, 2].map((i) => parseInt(h.slice(i * 2, i * 2 + 2), 16));
+    const a = h.length === 8 ? Math.round(parseInt(h.slice(6, 8), 16) / 255 * 1000) / 1000 : 1;
+    return `rgb(${ch.join()},${a})`;
+  }
+  const parts = v.slice(v.indexOf("(") + 1, -1).split(/[\s,/]+/).filter(Boolean).map(parseFloat);
+  const [r = 0, g = 0, b = 0, a = 1] = parts;
+  return `rgb(${[r, g, b].join()},${Math.round(a * 1000) / 1000})`;
+}
+
+test("no new raw colour literals", () => {
+  const offenders = colorLiterals();
+  const byFile = {};
+  for (const o of offenders) byFile[o.file] = (byFile[o.file] || 0) + 1;
+
+  assert.ok(offenders.length <= CEILING.rawColor,
+    `${offenders.length} declarations carry a raw colour literal, ceiling is ${CEILING.rawColor}. ` +
+    `Read a css/tokens.css colour (or mint one if the value has 4+ uses and one meaning); ` +
+    `if the literal is deliberate (stencil, ramp stop, canvas-matched, signal colour), ` +
+    `say why in a comment and raise the ceiling deliberately.\n` +
+    JSON.stringify(byFile, null, 2));
+
+  assert.equal(offenders.length, CEILING.rawColor,
+    `raw colour declarations are now ${offenders.length}, below the ${CEILING.rawColor} ceiling — ` +
+    `lower CEILING.rawColor in this file to ${offenders.length} to lock the win in.`);
+});
+
+test("colour spelling forks only ever fold", () => {
+  const byNorm = new Map();
+  for (const { v } of colorLiterals()) {
+    const n = normColor(v);
+    if (!byNorm.has(n)) byNorm.set(n, new Set());
+    byNorm.get(n).add(v);
+  }
+  const distinct = byNorm.size;
+
+  assert.ok(distinct <= CEILING.rawColorDistinct,
+    `${distinct} distinct colour values after normalisation, ceiling is ${CEILING.rawColorDistinct}. ` +
+    `A new distinct value means a colour outside the system — use a token or an existing value.\n` +
+    "Largest fork groups (one value, several spellings):\n" +
+    [...byNorm.entries()].filter(([, s]) => s.size > 1)
+      .sort((a, b) => b[1].size - a[1].size).slice(0, 8)
+      .map(([n, s]) => `  ${n} <- ${[...s].join(" | ")}`).join("\n"));
+
+  assert.equal(distinct, CEILING.rawColorDistinct,
+    `distinct colour values are now ${distinct}, below the ${CEILING.rawColorDistinct} ceiling — ` +
+    `lower CEILING.rawColorDistinct in this file to ${distinct} to lock the win in.`);
 });
 
 /* The four sheets that read no spacing token at all. This is the list the

@@ -142,15 +142,21 @@
    that touches these two elements (there is one, the touch floor at the end of
    this file, and one in css/responsive.css, which wins on LAYER either way). */
 #mb-career > span { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-/* The live save line. Dim and small: it is what the button will DO, not a second
-   label competing with CAREER. Empty (and therefore zero-height) until a save
-   exists, so a first-time title screen is exactly as it was. */
-#mb-career-sub {
+/* The sub line under a door's label: what the button will DO, dim and small so
+   it never competes with the label. Five uses — the hero's live save line and
+   the four static mode answers — which is the reuse that justifies a class
+   where the mb- family's one-off pair did not (rule 12 note above). */
+.mb-sub {
   font-size: var(--fs-micro); font-weight: 600; letter-spacing: var(--ls-4);
   font-style: normal; color: rgba(255, 255, 255, 0.72);
   text-transform: none;
 }
+/* The live save line is empty (and therefore zero-height) until a save
+   exists, so a first-time title screen is exactly as it was. */
 #mb-career-sub:empty { display: none; }
+/* The 2x2 modes stack label over sub. No span for the label itself: a bare
+   text node is already an anonymous flex item, so only the stack needs a box. */
+#menu-primary .bigbtn > span { display: inline-flex; flex-direction: column; align-items: center; gap: calc(var(--gap) / 6); }
 #menu-secondary {
   display: flex;
   flex-wrap: wrap;
@@ -171,6 +177,9 @@
   padding: 9px 10px;
   box-shadow: none;
 }
+/* Micro type over a translucent plate over a moving 3D scene needs more ink
+   than --dim gives it; resting below --text keeps hover's step-up visible. */
+#menu-secondary .minibtn { color: rgba(255, 255, 255, 0.78); }
 .minibtn .btn-ico { margin-right: 0.35em; }
 /* Branding and small print as blocks — portrait stacks them centred, exactly as
    the loose elements did. */
@@ -321,6 +330,9 @@ body { --compact-at: 600px; --wide-at: 620px; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-hero .bigbtn { padding-block: 12px; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn { width: 100%; padding: 11px 10px; font-size: 17px; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .minibtn { padding: 7px 10px; font-size: var(--fs-micro); }
+/* The static mode subs are the first thing to go when height is short — the
+   hero's save line stays, it is state the player came back for. */
+:where(body[data-density="compact"]) #menu-primary .mb-sub { display: none; }
 
 /* HIGH UI SIZE ON A CONSTRAINED VIEWPORT
    --------------------------------------
@@ -365,7 +377,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   :where(body[data-density="compact"]) :is(#subtitle, #audiostate, #disclaimer, #soundbtn) {
     font-size: calc(var(--fs-micro) * var(--ui-compact-brand-text));
   }
-  :where(body[data-density="compact"]) :is(#mb-career-sub, #menu-buttons .minibtn) {
+  :where(body[data-density="compact"]) :is(.mb-sub, #menu-buttons .minibtn) {
     font-size: calc(var(--fs-micro) * var(--ui-compact-text));
   }
 }
@@ -725,15 +737,11 @@ body { --compact-at: 600px; --wide-at: 620px; }
   width: 100%; text-align: left; cursor: pointer;
   padding: calc(var(--gap) * 0.7) var(--gap);
   border-radius: var(--r-md);
-  border: 1px solid var(--plate-line);
-  background: var(--plate);
+  /* both are <button>s: plate fill + line come from the base; the card then
+     tints both red below, and hover/press fills are the base's too */
   transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
 .team-card { border-color: color-mix(in srgb, var(--red) 55%, transparent); background: color-mix(in srgb, var(--red) 10%, transparent); }
-@media (hover: hover) {
-  .team-card:hover, .team-tile:hover { background: var(--plate-hover); }
-}
-.team-card:active, .team-tile:active { background: var(--plate-press); }
 .team-tile.active {
   border-color: var(--red); background: var(--plate-on-strong);
   box-shadow: var(--lift-sel);
@@ -810,10 +818,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   transition: background 0.12s, box-shadow 0.12s;
   cursor: pointer;
 }
-@media (hover: hover) {
-  .sel-chip:hover { background: var(--plate-hover); }
-}
-.sel-chip:active { background: var(--plate-press); }
+/* hover/press fills come from the button base (css/tokens.css) */
 /* Selected mark is the settings-tab recipe (left inset bar + glow), never an
    `outline`. An outline paints outside the border box, and these chips sit
    flush against the inline-start edge of a hidden-overflow scroller — so an
@@ -1106,9 +1111,9 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 
 /* Season upcoming rounds list */
 .season-upcoming-head { font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-5); color: var(--dim); margin-top: 10px; margin-bottom: 4px; padding: 0 4px; }
-.season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--card-line); margin-bottom: 4px; background: rgba(255,255,255,0.04); transition: border-color 0.15s, background 0.15s; cursor: default; }
+.season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--card-line); margin-bottom: 4px; background: var(--plate); transition: border-color 0.15s, background 0.15s; cursor: default; }
 @media (hover: hover) {
-  .season-upcoming-row:hover { border-color: var(--plate-line); background: rgba(255,255,255,0.07); }
+  .season-upcoming-row:hover { border-color: var(--plate-line); background: var(--plate-hover); }
 }
 .sur-rnd { font-size: var(--fs-micro); font-weight: 700; color: var(--red); letter-spacing: var(--ls-3); min-width: 24px; }
 .sur-name { font-size: var(--fs-micro); font-weight: 700; color: var(--text); flex: 1; font-style: italic; letter-spacing: var(--ls-1); }
