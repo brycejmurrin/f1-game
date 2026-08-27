@@ -73,8 +73,10 @@ function get(code, tier, deltas) {
   return r;
 }
 
-// A single headline number, weighted the way F1 25 weights it — mostly pace, with
-// racecraft second. Display only; nothing in the sim reads it.
+// A single headline number, weighted the way F1 25 weights it — mostly pace,
+// with racecraft second. NOT display-only: career's silly season ranks the
+// grid with it (the seat-swap gate and weakerSeat() in js/game/career.js), so
+// a weighting change moves who changes teams in a saved career.
 function overall(r) {
   if (!r) return 0;
   return Math.round(r.pace * 0.46 + r.craft * 0.26 + r.awareness * 0.12

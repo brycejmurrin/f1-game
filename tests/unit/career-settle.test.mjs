@@ -124,7 +124,7 @@ test("the retired flag is the ONLY discriminator between the two rounds", () => 
 // not, so this loader stubs it flat — every driver rates the same, which parks
 // the market (a swap needs a midfielder to out-rate a top-team seat) and leaves
 // the contract and budget rules the only things moving.
-function loadDriver() {
+function loadDriver(ratings) {
   const stored = new Map();
   const flatRating = { pace: 80, craft: 75, awareness: 75, consistency: 75, experience: 50 };
   const ctx = vm.createContext({
@@ -160,8 +160,10 @@ function loadDriver() {
     Parts: { getFactorySetup: () => ({}), getCost: () => 600 },
     Tracks: { LIST: [], SEASON: [] },
     DriverRatings: {
-      get: () => Object.assign({}, flatRating),
-      overall: () => 80,
+      // ratings, when supplied, keys per-driver overall() by code — the market
+      // pin below uses it; every other test keeps the flat 80 that parks swaps.
+      get: (code) => Object.assign({ code }, flatRating),
+      overall: (r) => (ratings && r && ratings[r.code] != null ? ratings[r.code] : 80),
       AXES: ["pace", "craft", "awareness", "consistency", "experience"],
     },
   });
@@ -333,4 +335,24 @@ test("objective is null and trackIndex clamps once the season is done", () => {
   assert.equal(Career.objective(), null, "no phantom brief after the last race");
   assert.equal(Career.trackIndex(), 1, "clamps to last valid LIST index, never -1");
   assert.notEqual(Career.trackIndex(), -1);
+});
+
+// ── overall() is a SIM INPUT, not a readout ──────────────────────────────────
+// driver-ratings.js used to claim "Display only; nothing in the sim reads it";
+// this pins the real consumer: rolloverMarket() ranks the grid with overall()
+// and swaps the out-rating midfielder into the top team's weaker seat. If the
+// weighting (or this wiring) changes, a saved career's silly season changes.
+test("silly season moves the driver overall() rates highest, not a coin flip", () => {
+  // Vega's VG1 out-rates both Apex seats; everyone else is mid. The market
+  // must record VG1 moving vega -> apex. Flat-80 loaders park this by design.
+  const Career = loadDriver({ VG1: 95, AP1: 60, AP2: 62 });
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.rep = 50;
+  Career.rollover();
+  const move = (career.moves || []).find((m) => m.code === "VG1");
+  assert.ok(move, "the top-rated midfielder must be the one who moves");
+  assert.equal(move.from, "vega");
+  assert.equal(move.to, "apex");
 });
