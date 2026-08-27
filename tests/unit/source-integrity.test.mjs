@@ -281,6 +281,29 @@ test("portrait race blocker is an actionable accessible dialog", () => {
     "Exit Race must use the real session cleanup path");
 });
 
+test("no screen fakes modality with a div claiming dialog semantics", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const FAKE_MODAL_OK = new Set([
+    // The blocker is a viewport-gated sheet over a RUNNING race — it must NOT
+    // be a real dialog, because showModal() inerts the document and the race
+    // canvas and pause switch have to stay live behind it. Its semantics are
+    // pinned positively in the test above.
+    "rotate-device",
+  ]);
+  const fakes = [];
+  for (const m of html.matchAll(/<div\s[^>]*id="([a-z0-9-]+)"[^>]*>/g)) {
+    if (FAKE_MODAL_OK.has(m[1])) continue;
+    if (/role="dialog"|aria-modal="true"/.test(m[0])) fakes.push(m[1]);
+  }
+  assert.deepEqual(fakes, [],
+    "a <div> claiming role=\"dialog\" or aria-modal is a promise the platform " +
+    "never honours: no top layer, no focus containment, no Escape, no :modal. " +
+    "Every modal here is a real <dialog> mirrored by js/game/topmodal.js — the " +
+    "data hub and the telemetry popup were the last two fakes to convert. Use " +
+    "one, or add the id to FAKE_MODAL_OK with the reason it cannot be modal: " +
+    fakes.join(", "));
+});
+
 test("Circuit filters are not nested in a listbox and circuits expose button state", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const menus = fs.readFileSync(path.join(ROOT, "js/game/menus.js"), "utf8");
