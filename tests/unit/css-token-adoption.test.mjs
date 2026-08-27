@@ -150,7 +150,10 @@ const CEILING = {
   // panel's 18px inline pad and the strip's -18px margin + 18px re-pad are
   // ONE number three ways; all three are calc(var(--gap) * 1.5) now, so the
   // bleed stays exact at every density instead of only at --gap: 12.
-  rawSpacing: 419,
+  // 2026-08-26: 419 → 418. The track-detail close button's bespoke rule
+  // (its padding: 0 among them) was deleted when the button joined the
+  // shared .dh-close recipe.
+  rawSpacing: 418,
 };
 
 test("no new font-size below the --fs-micro floor", () => {
