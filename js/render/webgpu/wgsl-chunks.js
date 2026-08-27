@@ -80,6 +80,12 @@ fn ignoise(p: vec2<f32>) -> f32 {
 // which redefines vnoise. amt=1 is the full wobble; SAA hoists that at
 // fs_main top (uniform CF) then mixes by per-fragment carPaint.
 fn paintPeelN(N: vec3<f32>, objPos: vec3<f32>, vDist: f32, amt: f32) -> vec3<f32> {
+  // amt is uniform per draw (the caller gates on D.mat1.w), so this early
+  // return is uniform control flow: road/terrain/building draws — where the
+  // peel is mixed by 0 anyway — skip 6 svnoise + 2 normalize + 2 cross per
+  // fragment. The caller's dpdx(Npeel) stays at fs_main top level (legal:
+  // a uniform-return callee does not poison the call site).
+  if (amt <= 0.0) { return N; }
   let pFade = clamp(1.0 - (vDist - 18.0) / 50.0, 0.0, 1.0);
   let puv = objPos.xz * 34.0 + objPos.y * 29.0;
   let fuv = objPos.xz * 130.0 + objPos.y * 111.0;
@@ -182,9 +188,13 @@ fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wp
   // textureSample — implicit LOD + aniso 4, GLX texture() parity.
   // textureSampleLevel cannot use aniso (washed walls / ribbon).
   let hoisted = packOn && mid >= 1 && mid <= 16 && mid != 3 && mid != 15;
-  let nrmSample = select(
-    textureSampleLevel(matNormalTex, matSamp, uv, mid, matTexLod(fwUv)),
-    litNrm, hoisted);
+  // if, not select(): both select arms evaluate, so hoisted materials (nearly
+  // all) still paid this dependent sample + matTexLod's log2/sqrt.
+  // textureSampleLevel (explicit LOD) is legal in non-uniform control flow.
+  var nrmSample = litNrm;
+  if (!hoisted) {
+    nrmSample = textureSampleLevel(matNormalTex, matSamp, uv, mid, matTexLod(fwUv));
+  }
   let dxy = (nrmSample.xy - 0.5) * 2.0;
   let T = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), *N_ptr) + vec3<f32>(1e-5, 0.0, 0.0));
   let B = cross(*N_ptr, T);
@@ -667,74 +677,43 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let vMatId = select(D.mat2.z, classified, isRoadDraw || classified > 0.5);
   let fwTrk = select(fwTrkAttr, fwWorld, useWorldTrk);
   let vDist = length(in.wpos - F.eye.xyz);
-  // Every baked MAT layer is sampled here in uniform CF with a CONSTANT
-  // array index so textureSample can use implicit LOD + anisotropy — the
-  // GLX texture() path. textureSampleLevel cannot use aniso (washed walls
-  // / ribbon). scale=0 / mix=0 still samples the 128-grey placeholder
-  // (identity * 2). No branch around these samples.
+  // ONE dynamic-layer sample replaces the old 30-sample hoist (13 albedo +
+  // 13 normal + 2 road layers sampled, 28 discarded per fragment). WGSL only
+  // requires that textureSample (implicit LOD + aniso) sit in UNIFORM CONTROL
+  // FLOW — the layer index and UV may be non-uniform EXPRESSIONS. That is
+  // exactly GLX's texture(matTex, vec3(uv, layer)) path: same implicit LOD,
+  // same aniso, same quad divergence at material seams (GLX ships it).
+  // matUvLit(16) == the old roadUv (road is not wall-like, same wpos.xz/sc),
+  // so the road folds into the same lookup. Identity layers (0/3/15) still
+  // sample — the result is select()ed away, keeping the call unconditional.
   let topNgeo = normalize(in.nrm);
-  let roadSc = max(matScale(16), 1e-4);
-  let roadUv = in.wpos.xz / roadSc;
-  let roadPack = textureSample(matAlbedoTex, matSamp, roadUv, 16);
-  let roadNrmPack = textureSample(matNormalTex, matSamp, roadUv, 16);
-  let uv1 = matUvLit(1, topNgeo, in.wpos);
-  let uv2 = matUvLit(2, topNgeo, in.wpos);
-  let uv4 = matUvLit(4, topNgeo, in.wpos);
-  let uv5 = matUvLit(5, topNgeo, in.wpos);
-  let uv6 = matUvLit(6, topNgeo, in.wpos);
-  let uv7 = matUvLit(7, topNgeo, in.wpos);
-  let uv8 = matUvLit(8, topNgeo, in.wpos);
-  let uv9 = matUvLit(9, topNgeo, in.wpos);
-  let uv10 = matUvLit(10, topNgeo, in.wpos);
-  let uv11 = matUvLit(11, topNgeo, in.wpos);
-  let uv12 = matUvLit(12, topNgeo, in.wpos);
-  let uv13 = matUvLit(13, topNgeo, in.wpos);
-  let uv14 = matUvLit(14, topNgeo, in.wpos);
-  let a1 = textureSample(matAlbedoTex, matSamp, uv1, 1);
-  let a2 = textureSample(matAlbedoTex, matSamp, uv2, 2);
-  let a4 = textureSample(matAlbedoTex, matSamp, uv4, 4);
-  let a5 = textureSample(matAlbedoTex, matSamp, uv5, 5);
-  let a6 = textureSample(matAlbedoTex, matSamp, uv6, 6);
-  let a7 = textureSample(matAlbedoTex, matSamp, uv7, 7);
-  let a8 = textureSample(matAlbedoTex, matSamp, uv8, 8);
-  let a9 = textureSample(matAlbedoTex, matSamp, uv9, 9);
-  let a10 = textureSample(matAlbedoTex, matSamp, uv10, 10);
-  let a11 = textureSample(matAlbedoTex, matSamp, uv11, 11);
-  let a12 = textureSample(matAlbedoTex, matSamp, uv12, 12);
-  let a13 = textureSample(matAlbedoTex, matSamp, uv13, 13);
-  let a14 = textureSample(matAlbedoTex, matSamp, uv14, 14);
-  let n1 = textureSample(matNormalTex, matSamp, uv1, 1);
-  let n2 = textureSample(matNormalTex, matSamp, uv2, 2);
-  let n4 = textureSample(matNormalTex, matSamp, uv4, 4);
-  let n5 = textureSample(matNormalTex, matSamp, uv5, 5);
-  let n6 = textureSample(matNormalTex, matSamp, uv6, 6);
-  let n7 = textureSample(matNormalTex, matSamp, uv7, 7);
-  let n8 = textureSample(matNormalTex, matSamp, uv8, 8);
-  let n9 = textureSample(matNormalTex, matSamp, uv9, 9);
-  let n10 = textureSample(matNormalTex, matSamp, uv10, 10);
-  let n11 = textureSample(matNormalTex, matSamp, uv11, 11);
-  let n12 = textureSample(matNormalTex, matSamp, uv12, 12);
-  let n13 = textureSample(matNormalTex, matSamp, uv13, 13);
-  let n14 = textureSample(matNormalTex, matSamp, uv14, 14);
   let identPack = vec4<f32>(0.5, 0.5, 0.5, 0.5);
-  let packAlbedo = array<vec4<f32>, 17>(
-    identPack, a1, a2, identPack, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, identPack, roadPack);
-  let packNormal = array<vec4<f32>, 17>(
-    identPack, n1, n2, identPack, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, identPack, roadNrmPack);
   let packOn = F.params8.w > 0.001;
   let midClamp = clamp(i32(vMatId + 0.5), 0, 16);
-  let litPack = packAlbedo[midClamp];
-  let litNrm = packNormal[midClamp];
+  let isIdentMat = midClamp == 0 || midClamp == 3 || midClamp == 15;
+  let uvSel = matUvLit(midClamp, topNgeo, in.wpos);
+  let sampAlbedo = textureSample(matAlbedoTex, matSamp, uvSel, midClamp);
+  let sampNormal = textureSample(matNormalTex, matSamp, uvSel, midClamp);
+  let litPack = select(sampAlbedo, identPack, isIdentMat);
+  let litNrm = select(sampNormal, identPack, isIdentMat);
   // GLX takes dFdx(N) AFTER orange-peel + applyMaterialNormal. The matId
   // bump is non-uniform — a dpdx after that branch is the NaN-white-road
   // class. Peel is a function of interpolators only, so hoist it here
   // (uniform CF), take both geometric and peel derivatives, then mix SAA
   // by per-fragment carPaint. Clearcoat stays on geometric N (GLX Ngeo).
-  let Npeel = paintPeelN(topNgeo, in.objPos, vDist, 1.0);
   let ccDx = dpdx(topNgeo);
   let ccDy = dpdy(topNgeo);
-  let saaDxGeo = dpdx(topNgeo);
-  let saaDyGeo = dpdy(topNgeo);
+  // Same value — the old second dpdx/dpdy pair of topNgeo relied on the
+  // compiler to CSE across divergent later uses; reuse explicitly.
+  let saaDxGeo = ccDx;
+  let saaDyGeo = ccDy;
+  // Paint peel ran for EVERY fragment — road, terrain, buildings — feeding a
+  // mix whose factor (carPaint, D.mat1.w) is 0 on all of them. The gate lives
+  // INSIDE paintPeelN as a uniform early return (see its header) so these
+  // derivatives stay at fs_main top level, before any branch. Non-paint
+  // draws get Npeel == topNgeo, so saaDxPeel == ccDx — mixed by 0 regardless.
+  let peelAmt = select(0.0, 1.0, D.mat1.w > 0.001);
+  let Npeel = paintPeelN(topNgeo, in.objPos, vDist, peelAmt);
   let saaDxPeel = dpdx(Npeel);
   let saaDyPeel = dpdy(Npeel);
   // Floor + terrain only. The 1600 m scenery slab is skipped on WGX
@@ -1157,9 +1136,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let nL = i32(F.params0.w);
   for (var i = 0; i < nL; i = i + 1) {
     let LP = lights[i].posRad.xyz - in.wpos;
-    let dist = length(LP);
     let rad = lights[i].posRad.w;
-    if (dist > rad) { continue; }
+    // Squared-distance reject before the sqrt — the godray loop's shape
+    // (wgsl-post.js); saves a sqrt per rejected light per fragment, and most
+    // of up to 48 lights reject here on night circuits.
+    let ld2 = dot(LP, LP);
+    if (ld2 > rad * rad) { continue; }
+    let dist = sqrt(ld2);
     let Ld = LP / max(dist, 1e-3);
     let dn = dist / rad;
     let win = clamp(1.0 - dn * dn * dn * dn, 0.0, 1.0);

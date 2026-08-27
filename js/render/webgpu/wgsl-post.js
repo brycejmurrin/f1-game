@@ -837,9 +837,13 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // Occlusion: procedural flare would bleed through geometry; sample depth at sunUV.
   // Skip the depth fetch when the flare is off or the sun is off-screen
   // (uniform CF). Matches GLX post.js sunVis.
-  var sunVis: f32 = select(0.0,
-    smoothstep(0.9990, 0.9999, loadCompDepth(sunUV)),
-    flareStr > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 && sunUV.y >= 0.0 && sunUV.y <= 1.0);
+  // if, not select(): both select arms evaluate, so the depth fetch ran with
+  // the flare off — contradicting the "skip the depth fetch" intent above.
+  // loadCompDepth is a textureLoad (no derivatives), legal in the branch.
+  var sunVis: f32 = 0.0;
+  if (flareStr > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 && sunUV.y >= 0.0 && sunUV.y <= 1.0) {
+    sunVis = smoothstep(0.9990, 0.9999, loadCompDepth(sunUV));
+  }
   if (flareStr > 0.0 && sunVis > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0 &&
       sunUV.y >= 0.0 && sunUV.y <= 1.0) {
     var flare = vec3<f32>(0.0);
