@@ -377,7 +377,11 @@ const CEILINGS = {
   //   (one line + the bug comment): #pausemenu is a modal <dialog> now, so an
   //   open card out-layers the z-9000 blocker and refuses focus to its
   //   buttons — rotation-recovery's OPEN CONTROLS roundtrip caught it.
-  "js/game.js": 8635,
+  // 8635 -> 8638: the per-chunk frame fields (allLights/perChunkLights/
+  //   tailStart/tailCount) are cleared every frame before the flood branch
+  //   (one line + the bug comment): `frame` outlives a night->day ToD flip,
+  //   so chunked geometry kept binding per-chunk night lamps in daylight.
+  "js/game.js": 8638,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL

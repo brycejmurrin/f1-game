@@ -127,9 +127,8 @@ const WGX = (function () {
   const LIGHT_STRIDE = _CH.LIGHT_STRIDE_BYTES | 0;      // 64
   const MAX_LIGHTS = _CH.MAX_LIGHTS | 0;                // 48
   const LIGHT_BYTES = LIGHT_STRIDE * MAX_LIGHTS;        // 3072
-  const LIGHT_FLOATS = LIGHT_BYTES / 4;                 // 512
+  const LIGHT_FLOATS = LIGHT_BYTES / 4;                 // 768
   const DRAW_USED_BYTES = _CH.DRAW_UNIFORM_BYTES | 0;   // 112
-  const DRAW_FLOATS = DRAW_USED_BYTES / 4;              // 28
   // Dynamic uniform-buffer offsets must be a multiple of
   // minUniformBufferOffsetAlignment (<=256 on all adapters); 256 is always a
   // valid multiple, so we stride slots at 256 B.
@@ -744,7 +743,6 @@ const WGX = (function () {
     // one writeBuffer before litPass.end() replaces hundreds of per-draw uploads.
     const DRAW_F32_STRIDE = DRAW_STRIDE >> 2;   // 64
     const drawRing = new Float32Array(MAX_DRAWS * DRAW_F32_STRIDE);
-    const drawData = drawRing;   // _writeDraw indexes via slot base; alias keeps call sites short
     const blitData  = new Float32Array(BLIT_BYTES / 4);
     const skyData   = new Float32Array(WGSLChunks.SKY_UNIFORM_BYTES / 4);
     const _vpGpu    = new Float32Array(16);   // Z01-remapped viewProj upload scratch
