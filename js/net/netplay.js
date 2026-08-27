@@ -24,6 +24,7 @@ const NetPlay = (function () {
   function create(G) {
     const sessions = new Map();
     const sessionList = () => [...sessions.values()];
+    const _pumpBuf = [];               // tick()'s per-frame snapshot, refilled in place
     const PEER_ONE = "peer";
     let session = null;
     function broadcast(type, data) {
@@ -232,6 +233,14 @@ const NetPlay = (function () {
           }
           if (name === EV.START && d && d.at != null && !ownsRaceControl()) armStart(d.at, d.hold);
           if (name === EV.ARMED && role === "host") {
+            // Only a peer that actually HOLDS a car may arm the start:
+            // armedPeers counts session ids while allArmed() compares against
+            // remotes (wireId-keyed), and a joiner that got no grid slot
+            // (start()'s `if (!car) continue`) still has a bound session — its
+            // ARMED alone used to satisfy allArmed() while the seated peer
+            // was still building its circuit, re-creating the skipped-
+            // countdown bug the comment below nameTheMoment() records.
+            if (!peerCar.has(id)) return;
             armedPeers.add(id);
             if (armDeadline && allArmed()) nameTheMoment();
           }
@@ -467,6 +476,12 @@ const NetPlay = (function () {
       armDeadline = 0;
       holdUntil = 0;
       G.netNow = null;              // a session's clock, not the page's
+      // Same argument for the armed start: game.js clears netStart only when
+      // a countdown runs to COMPLETION, so a friend race quit mid-lights left
+      // a past-dated netStart behind and the NEXT solo race lit all five
+      // lamps in one frame and skipped its countdown entirely.
+      G.netStart = null;
+      armedPeers.clear();
       return true;
     }
 
@@ -475,11 +490,16 @@ const NetPlay = (function () {
       G.netNow = now;
       if (!holdUntil) holdUntil = now + HOLD_MAX_MS;
       // pump() can deliver the close that ends a session — onClose removes it
-      // from the map and may call stop() — so iterate a SNAPSHOT (sessionList
-      // copies) and re-check afterwards rather than dereferencing again. Found
-      // by the first real two-peer connection: a loopback session never closes
-      // mid-pump, so nothing here could have caught it.
-      for (const s of sessionList()) s.pump(now);
+      // from the map and may call stop() — so iterate a SNAPSHOT and re-check
+      // afterwards rather than dereferencing again. Found by the first real
+      // two-peer connection: a loopback session never closes mid-pump, so
+      // nothing here could have caught it. The snapshot refills a module
+      // scratch instead of spreading a fresh array (this ran at 60 Hz for the
+      // whole race — the last per-frame copy of the pass that removed the
+      // other two, see the comment below).
+      _pumpBuf.length = 0;
+      for (const s of sessions.values()) _pumpBuf.push(s);
+      for (let i = 0; i < _pumpBuf.length; i++) _pumpBuf[i].pump(now);
       if (!active || !sessions.size) return;      // onClose already handled it
       // Only pump() needs the snapshot above — the reads below don't deliver
       // events, so they iterate the live map (this ran 3 copies per frame).
