@@ -50,8 +50,8 @@ Session shape — this is what controls both wall time and waiting:
    ships. "Cannot find module" means a missing `npm install`;
    `browserType.launch: Executable doesn't exist …chromium_headless_shell`
    means a missing browser. Either reads as a total-red run that looks like a
-   boot regression (measured 2026-08-17: every `test:tiny` test red — 126 of
-   them today), and the cure is
+   boot regression (measured 2026-08-17: every `test:tiny` test red — 73 of
+   them, re-confirmed live 2026-08-27), and the cure is
    seconds. Read the FIRST failure's message before believing any red run.
 2. Make ALL source edits first, then verify ONCE. Tests serve `js/` and `css/`
    from the working tree, so a run in flight forbids source edits — run the

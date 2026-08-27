@@ -1721,7 +1721,8 @@ __apex.world({ detail: "brief" })
 //          headingErrDeg, onTrack, halfWidthM, clearLeftM, clearRightM,
 //          energy, grip:{slipFactor, longUsedPct, state, surface, gripMult} },
 //   nextCorner: { turn, dir, radiusM, severity, distM, timeS, apexSpeedKph,
-//                 straightAfterM, exitsOntoStraight, suggestBrakeM, status, note },
+//                 straightAfterM, exitsOntoStraight, bankingDeg, camber,
+//                 gradientPct, elevation, kerbs, suggestBrakeM, status, note },
 //   brief: "Lap 3, P4, 218 km/h in 6, T7 L in 84 m — BRAKE NOW for T7, …" }
 ```
 
@@ -2601,7 +2602,7 @@ mode**, not just career — the grid has personality in a one-off Grand Prix too
 pace rather than raising it. An unknown code resolves through a deterministic tier
 hash, so a custom or generated driver still has a stable personality.
 
-### `qualiSim(playerTime?) → [{pos, driverId, code, name, team, t, gap, isPlayer}, …] | null`
+### `qualiSim(playerTime?) → [{pos, driverId, code, name, team, t, gap, isPlayer, human}, …] | null`
 The qualifying model's times for the **loaded** track, fastest first, **without**
 running a session — a real weekend's classification is left alone. Pass a lap time
 to substitute it for the player's row.
