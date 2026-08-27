@@ -14,6 +14,7 @@ const NetLobby = (function () {
     // The room code we closed to get out of Trystero's way, and must reopen
     // once our own connection is up. Null when we are not hosting a room.
     let codeReopen = null;
+    let codeReopenTimer = null;        // the pending 250 ms reopen — owned, cancellable
     const mintGuestId = () => "g" + (++nextGuestId);
     let pendingId = null;
     const MAX_GUESTS = 3;
@@ -53,7 +54,9 @@ const NetLobby = (function () {
 
     function say(msg, isError) {
       statusText = msg || "";
-      const e = els().status;
+      // Direct lookup: els() rebuilds a 36-element map per call, and say()
+      // fires from 4 Hz polls and 1 Hz relay ticks during every connect.
+      const e = document.getElementById("vs-status");
       if (!e) return;
       e.textContent = statusText;
       e.classList.toggle("vs-error", !!isError);
@@ -159,7 +162,7 @@ const NetLobby = (function () {
         if (s) { try { s.close(); } catch (e) {} }
         sessions.delete(id);
         _peers.delete(id); _ready.delete(id);
-        clashSince.delete(id);
+        clashDrop(id);
         Log.info("net", "peer leave " + id);
         session = [...sessions.values()][0] || null;
         if (!sessions.size) {
@@ -201,6 +204,7 @@ const NetLobby = (function () {
       clearInterval(pollTimer);
       clearInterval(pumpTimer);
       pumpTimer = null;
+      clearTimeout(codeReopenTimer); codeReopenTimer = null;
       for (const s of sessions.values()) { try { s.close(); } catch (e) {} }
       sessions.clear();
       session = null;
@@ -288,7 +292,17 @@ const NetLobby = (function () {
         if (!watched) {
           watched = transport;
           watchedId = pendingId;
-          if (!watched) return;                 // still being built; wait
+          if (!watched) {
+            // Still being built — but the deadline must apply HERE too: a
+            // transport that never materialises (factory failure, host()
+            // bailing) used to escape the timeout check below and this poll
+            // spun at 4 Hz forever with no message and no failure text.
+            if (Date.now() - started > CONNECT_TIMEOUT_MS) {
+              clearInterval(pollTimer);
+              say(failureMsg(null, Math.round((Date.now() - started) / 1000)), true);
+            }
+            return;
+          }
         }
         if (transport !== watched && !transports.has(watchedId)) { clearInterval(pollTimer); return; }
         if (watched.status === "open") {
@@ -328,7 +342,19 @@ const NetLobby = (function () {
       if (codeReopen && transports.size < MAX_GUESTS) {
         const again = codeReopen;
         codeReopen = null;
-        setTimeout(() => { codeHost({ code: again, quiet: true }).catch(() => {}); }, 250);
+        // OWNED timer + generation guard: the handle used to be discarded, so
+        // cancel()/sealRoom() could not stop it — and the late codeHost()
+        // begins its OWN generation, so invalidateOperations() could not
+        // stale it either. 250 ms after leaving the lobby it minted a fresh
+        // RTCPeerConnection and six relay sockets — the exact zombie
+        // sealRoom()'s comment says it exists to kill.
+        const gen = operationGeneration;
+        clearTimeout(codeReopenTimer);
+        codeReopenTimer = setTimeout(() => {
+          codeReopenTimer = null;
+          if (!operationCurrent(gen)) return;
+          codeHost({ code: again, quiet: true }).catch(() => {});
+        }, 250);
       } else {
         codeReopen = null;
       }
@@ -601,8 +627,13 @@ const NetLobby = (function () {
       if (ti < 0) return false;
       const was = seatName(mine.team, mine.driver);
       const now = seatName(move.team, move.driver);
-      G.teamIdx = ti; G.store.set("team", ti);
-      G.driverIdx = move.driver; G.store.set("driver", move.driver);
+      // IN-MEMORY only, deliberately: the lobby imposes this move, the player
+      // did not choose it, so persisting it silently rewrote the saved
+      // solo/career team for every session after the friend race. The race
+      // itself only needs G.teamIdx/driverIdx; a reload mid-lobby comes back
+      // on the saved seat and re-resolves on the next HELLO.
+      G.teamIdx = ti;
+      G.driverIdx = move.driver;
 
       // Announced, never silent. #vs-status is already role="status"
       // aria-live="polite", so this reaches a screen reader too. A notice, not
@@ -647,11 +678,20 @@ const NetLobby = (function () {
     // hiding their car stops being early and starts being a lie. Their row
     // would sit blank for ever while they sat in a car we refused to draw.
     const YIELD_GRACE_MS = 2000;
-    const clashSince = new Map();          // peer id -> when we first saw it
+    const clashSince = new Map();          // peer id -> { at, timer } (owned re-render timer)
+    function clashDrop(id) {
+      const rec = clashSince.get(id);
+      if (rec && rec.timer) clearTimeout(rec.timer);
+      clashSince.delete(id);
+    }
+    function clashClear() {
+      for (const rec of clashSince.values()) if (rec.timer) clearTimeout(rec.timer);
+      clashSince.clear();
+    }
 
     function willYield(id) {
       if (outranked(id)) return grace(id);
-      clashSince.delete(id);               // no clash, or this peer wins it
+      clashDrop(id);                       // no clash, or this peer wins it
       return false;
     }
 
@@ -674,10 +714,16 @@ const NetLobby = (function () {
     function grace(id) {
       const now = performance.now();
       if (!clashSince.has(id)) {
-        clashSince.set(id, now);
-        setTimeout(() => { if (clashSince.has(id)) renderRoom(); }, YIELD_GRACE_MS + 50);
+        // Owned re-render timer (was the only timer in this file with no
+        // owner): clashDrop/clashClear clear the handle on every teardown
+        // path, so a lobby closed into a race cannot fire renderRoom later.
+        const timer = setTimeout(() => {
+          const rec = clashSince.get(id);
+          if (rec) { rec.timer = null; renderRoom(); }
+        }, YIELD_GRACE_MS + 50);
+        clashSince.set(id, { at: now, timer });
       }
-      return now - clashSince.get(id) < YIELD_GRACE_MS;
+      return now - clashSince.get(id).at < YIELD_GRACE_MS;
     }
 
     function span(className, text) {
@@ -807,6 +853,7 @@ const NetLobby = (function () {
     // race that has already started, so stop advertising one.
     function sealRoom() {
       codeReopen = null;     // no silent reopen on some later, unrelated connect
+      clearTimeout(codeReopenTimer); codeReopenTimer = null;   // incl. one already in flight
       stopCodeWait();        // cancel the poll loop AND close the Nostr room
       dropPending();         // and the half-built invite transport it minted
     }
@@ -1427,7 +1474,7 @@ const NetLobby = (function () {
       try { if (NetTransport.prefetchIce) NetTransport.prefetchIce(); } catch (e) {}
       const e = els();
       if (!e.screen) return false;
-      _peers.clear(); _ready.clear(); clashSince.clear();
+      _peers.clear(); _ready.clear(); clashClear();
       show("pick");
       // inviteAnother() hides these; a fresh open must always offer all four
       // routes again, or a player who once invited a second guest can never
@@ -1483,9 +1530,10 @@ const NetLobby = (function () {
       stopScan();
       stopCodeWait();
       codeReopen = null;
+      clearTimeout(codeReopenTimer); codeReopenTimer = null;
       teardown();
       role = null;
-      _peers.clear(); _ready.clear(); clashSince.clear();
+      _peers.clear(); _ready.clear(); clashClear();
       close();
     }
 

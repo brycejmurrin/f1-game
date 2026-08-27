@@ -509,7 +509,12 @@ const CEILINGS = {
   // Multiplayer lobby UI + flow; all of js/net/'s DOM lives here.
   // 1618 -> 1624 (R8): the peer-close handler closes the transport BEFORE the
   // map delete, with the leak-class comment — bug-explaining growth.
-  "js/net/lobby.js": 1624,
+  // 1624 -> 1672 (R8): every lobby timer gained an owner (codeReopen stored +
+  // cleared with its generation captured outside; the connect deadline applies
+  // while the transport never materialises; grace timers tracked via
+  // clashDrop/clashClear) and the seat-clash move is pinned in-memory-only —
+  // bug-explaining growth, no new features.
+  "js/net/lobby.js": 1672,
 };
 
 test("the big modules are not growing unnoticed", () => {

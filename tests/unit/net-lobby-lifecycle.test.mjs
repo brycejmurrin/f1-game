@@ -176,3 +176,38 @@ test("an old wake sentinel's release event cannot clear the current sentinel", a
   assert.equal(requests, 2);
   h.lobby.cancel();
 });
+
+// ── round 8: every timer has an owner; the lobby writes no storage ───────────
+test("the reopen, watch and clash timers are all owned and cancellable", () => {
+  // The 250 ms codeReopen timer's handle used to be discarded — and the late
+  // codeHost() begins its OWN generation, so invalidateOperations() could not
+  // stale it: 250 ms after leaving the lobby it minted a fresh
+  // RTCPeerConnection and six relay sockets. Now: stored handle, cleared on
+  // sealRoom/cancel/teardown, generation captured OUTSIDE the callback.
+  assert.match(SOURCE, /codeReopenTimer = setTimeout\(/);
+  assert.match(SOURCE, /const gen = operationGeneration;\s*\n\s*clearTimeout\(codeReopenTimer\);/);
+  assert.ok(SOURCE.split("clearTimeout(codeReopenTimer)").length >= 4,
+    "sealRoom, cancel and teardown must all clear the reopen timer");
+  // waitForOpen: the deadline applies even while the transport is still being
+  // built — the old early return skipped the timeout check and the poll spun
+  // at 4 Hz forever with no message.
+  assert.match(SOURCE,
+    /if \(!watched\) \{\s*\n[\s\S]{0,700}?CONNECT_TIMEOUT_MS\) \{\s*\n\s*clearInterval\(pollTimer\);\s*\n\s*say\(failureMsg\(null,/,
+    "the never-materialised branch must hit the deadline");
+  // grace(): the re-render timer rides the clashSince record and every
+  // teardown path goes through clashDrop/clashClear.
+  assert.match(SOURCE, /clashSince\.set\(id, \{ at: now, timer \}\)/);
+  assert.match(SOURCE, /function clashClear\(\) \{\s*\n\s*for \(const rec of clashSince\.values\(\)\) if \(rec\.timer\) clearTimeout\(rec\.timer\);/);
+  assert.ok(!/clashSince\.clear\(\);/.test(SOURCE.replace(/function clashClear[\s\S]{0,200}?\n    \}/, "")),
+    "no caller bypasses clashClear()");
+});
+
+test("a seat-clash move is in-memory only — the lobby never writes the saved team", () => {
+  // resolveSeatClash() used to persist the imposed move (G.store.set("team"…/
+  // "driver"…)), silently rewriting the saved solo/career team for every
+  // session after the friend race. The move the race needs is G.teamIdx/
+  // driverIdx; the store is the player's, not the room's.
+  assert.ok(!/G\.store\.set\("team"/.test(SOURCE), "no store.set(\"team\") in the lobby");
+  assert.ok(!/G\.store\.set\("driver"/.test(SOURCE), "no store.set(\"driver\") in the lobby");
+  assert.match(SOURCE, /IN-MEMORY only, deliberately/);
+});
