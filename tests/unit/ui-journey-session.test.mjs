@@ -71,3 +71,16 @@ test("standings body uses local leftover height, not a viewport svh cap", () => 
   assert.ok(noCap && canShrink,
     "#standings-body must yield leftover sheet-grid height (min-height:0, no svh cap)");
 });
+
+test("the garage stands down under its own dialogs: customize/teampicker fade #carsetup", () => {
+  // The fade family in css/components.css (the "fade the menu under a dim
+  // dialog" block) covered select, career and pmsettings hosts but missed the
+  // garage — the one host whose own chrome sits close enough behind a
+  // translucent sheet to composite into its form fields ("DRIVER" ghosting
+  // inside CUSTOMIZE's CODE input). opacity, not hidden, so the turntable
+  // canvas keeps its frustum while the dialog is up.
+  const css = read("css/components.css");
+  assert.match(css,
+    /body:has\(#customize:not\(\[hidden\]\)\) #carsetup,\s*\nbody:has\(#teampicker:not\(\[hidden\]\)\) #carsetup \{\s*\n\s*opacity:\s*0;\s*\n\s*pointer-events:\s*none;/,
+    "#carsetup must fade under #customize and #teampicker like every other dialog host");
+});

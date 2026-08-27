@@ -270,15 +270,16 @@
   align-items: stretch;
 }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab-lbl {
-  /* Tighter font so labels fit inside the 7-column grid without ellipsis.
-     "SUSPENSION" at 11px needs ~61px; at 9.5px needs ~53px — matching the
-     ~53px column interior. --label is 10px in compact; 9.5px stays legible
-     at that size and avoids truncation on the longest labels. */
-  /* 8px own px = 9.2px rendered at 115% — SUSPENSION needs 46px at this size
-     which fits inside the 53px column interior (tab 58px - 2×border - 2×pad). */
-  /* 3px below --fs-micro (11px → 8px own px = 9.2px rendered at 115%).
-     SUSPENSION at 8px needs ~46px, inside the 53px column interior. */
-  font-size: calc(var(--fs-micro) - 3px);
+  /* Tighter font so the longest label fits the 7-column grid without
+     ellipsis. The arithmetic is CAPPED because it is relative: "-3px" meant
+     8px when --fs-micro was 11px, and when the token later moved to 14px it
+     silently became 11px — wider than the column, so the long labels
+     ellipsised ("SUSPE…"), which is exactly what the subtraction was meant
+     to prevent. 8px is measured, not aesthetic: SUSPENSION is the widest
+     label and at 852x393 it needs 47px against a 47px column interior —
+     9.5px needs 55px and still clips. min() restores the measured size and
+     still shrinks if the token ever drops below 11px. */
+  font-size: min(8px, calc(var(--fs-micro) - 3px));
   letter-spacing: 0;
 }
 #cs-options {
@@ -745,7 +746,11 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
    are about the header, not the pair. */
 @container sheet (min-width: 400px) {
   #cs-header {
-    flex-flow: row wrap; align-items: center;
+    /* flex-start, not center: the budget row beside the title wraps to two
+       lines on a narrow container, and centring then floated the GARAGE
+       title into the middle of the taller neighbour — reading as BUDGET
+       above GARAGE (the phone header inversion). First lines align. */
+    flex-flow: row wrap; align-items: flex-start;
     column-gap: var(--gap); row-gap: calc(var(--gap) * 0.5);
   }
   #cs-titlebar { flex: 0 0 auto; }

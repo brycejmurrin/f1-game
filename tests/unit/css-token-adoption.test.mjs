@@ -96,7 +96,13 @@ const CEILING = {
   // and locked the win back to the pre-redesign floor.
   // 2026-08-19: 3 → 4. adaptive-ui / audio work (build 1515) added one more
   // sub-floor literal (measured on deploy tip c3df0ee1).
-  subFloorFontSize: 4,
+  // 2026-08-27: 4 → 5, deliberate. The garage stacked-grid chip labels cap
+  // at min(8px, --fs-micro - 3px): the relative form alone was written
+  // against an 11px token and broke to 11px when the token moved to 14px
+  // (labels ellipsised below tap size). 8px is measured against the 7-column
+  // grid — SUSPENSION needs 47px in a 47px column interior at 852x393. The
+  // comment at the declaration carries the measurement.
+  subFloorFontSize: 5,
   // padding / gap / margin declarations containing a raw px literal.
   // POLICY (rewritten 2026-08-26, deliberately — user-approved): a raw px
   // spacing value converts when it has an EXACT token form, including

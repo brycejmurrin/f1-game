@@ -861,6 +861,16 @@ body:has(#teampicker:not([hidden])) #career {
   opacity: 0;
   pointer-events: none;
 }
+/* The garage was the one host this family missed: CUSTOMIZE and the team
+   picker open OVER #carsetup, whose own chrome (unlike the race scene the
+   sheet translucency is tuned for) composited straight through the panel —
+   "DRIVER" ghosting inside the paint dialog's CODE field was this rule's
+   absence. opacity, not hidden, so the turntable canvas keeps its frustum. */
+body:has(#customize:not([hidden])) #carsetup,
+body:has(#teampicker:not([hidden])) #carsetup {
+  opacity: 0;
+  pointer-events: none;
+}
 /* #datahub is dialog.screen since round 11, so the generic rule above owns
    fading the title under it — its bespoke copy of that rule left with the
    migration. */
