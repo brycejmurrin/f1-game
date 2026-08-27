@@ -26,13 +26,13 @@ const SUPPORT_IDS = [
 
 async function loadAbuDhabi(page, timeOfDay) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, undefined, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex?.race, undefined, { polling: 100, timeout: 15000 });
   await page.evaluate((tod) => {
     window.__apex.headless(true);
     window.__apex.race("abudhabi", tod, "dry");
   }, timeOfDay);
   await page.waitForFunction(() => window.__apex.info().track != null,
-    undefined, { timeout: 15000 });
+    undefined, { polling: 100, timeout: 15000 });
 }
 
 for (const timeOfDay of ["day", "night"]) {

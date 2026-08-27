@@ -11,9 +11,9 @@ import { test, expect } from "../helpers/fixtures.js";
 
 async function startRace(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate(() => window.__apex.go());
   // PACE pinned: the progress assertion below is in METRES ("ds > 35 in 1 s") and
   // PACE is a ground-speed scale, so the OVERALL SPEED default moving would make a

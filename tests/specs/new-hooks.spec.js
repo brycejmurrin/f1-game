@@ -14,10 +14,10 @@ async function load(page, trackId = "monza") {
   const live = await page.evaluate(() => window.__apex != null).catch(() => false);
   if (!live) {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   }
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
   // go() advances past countdown; jump() initialises player.px so obs()/physState() work
   await page.evaluate(() => {
     window.__apex.go();
@@ -32,7 +32,7 @@ test.describe("__apex.timing()", () => {
 
   test("returns null before a track is loaded", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const result = await page.evaluate(() => window.__apex.timing());
     expect(result).toBeNull();
   });
@@ -101,7 +101,7 @@ test.describe("__apex.sectorState()", () => {
 
   test("returns null before a track is loaded", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const result = await page.evaluate(() => window.__apex.sectorState());
     expect(result).toBeNull();
   });
@@ -157,7 +157,7 @@ test.describe("__apex.lapHistory()", () => {
 
   test("returns null before a track is loaded", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const result = await page.evaluate(() => window.__apex.lapHistory());
     expect(result).toBeNull();
   });
@@ -173,9 +173,9 @@ test.describe("__apex.lapHistory()", () => {
 
   test("TT mode has mode:'tt'", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     await page.evaluate(() => window.__apex.tt("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
     await page.evaluate(() => window.__apex.go());
     const h = await page.evaluate(() => window.__apex.lapHistory());
     expect(h.mode).toBe("tt");
@@ -190,7 +190,7 @@ test.describe("__apex.fieldState()", () => {
 
   test("returns null before a track is loaded", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const result = await page.evaluate(() => window.__apex.fieldState());
     expect(result).toBeNull();
   });
@@ -251,7 +251,7 @@ test.describe("__apex.aiPlace()", () => {
 
   test("returns false before a track is loaded", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const result = await page.evaluate(() => window.__apex.aiPlace(0, 0.5));
     expect(result).toBe(false);
   });
@@ -307,7 +307,7 @@ test.describe("__apex.setEnergy()", () => {
 
   test("returns false before a track is loaded", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     expect(await page.evaluate(() => window.__apex.setEnergy(0.5))).toBe(false);
   });
 
@@ -346,7 +346,7 @@ test.describe("__apex.setLap()", () => {
 
   test("returns false before a track is loaded", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     expect(await page.evaluate(() => window.__apex.setLap(3))).toBe(false);
   });
 
@@ -386,7 +386,7 @@ test.describe("__apex.trackProfile()", () => {
   test("works on the default track loaded at startup (no race() call)", async ({ page }) => {
     // The game pre-loads a track on startup; trackProfile() should work immediately.
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const pts = await page.evaluate(() => window.__apex.trackProfile(10));
     expect(Array.isArray(pts)).toBe(true);
     expect(pts.length).toBe(10);
@@ -702,7 +702,7 @@ test.describe("shared track foundation diagnostics", () => {
 
   test("night rebuilds expose a distinct validated props manifest", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const counts = await page.evaluate(() => {
       window.__apex.race("singapore", "day", "dry");
       const day = window.__apex.geometryDiagnostics().find((entry) => entry.name === "props").vertices;
@@ -717,7 +717,7 @@ test.describe("shared track foundation diagnostics", () => {
 
   test("Singapore migration keeps models, walls, terrain, and elevation intentional", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const result = await page.evaluate(() => {
       window.__apex.race("singapore", "day", "dry");
       const day = {

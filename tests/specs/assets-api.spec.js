@@ -15,7 +15,7 @@ import { test, expect } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => !!window.__apex, null, { timeout: 30000 });
+  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 30000 });
 });
 
 test("assets() reports a coherent state", async ({ page }) => {

@@ -7,7 +7,7 @@ import { test, expect } from "@playwright/test";
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function waitReady(page) {
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
 }
 
 async function installMeshProbe(page) {
@@ -119,7 +119,7 @@ async function applyPartsAndPark(page) {
     window.__apex.park(0.1);
     window.__apex.camera("chase");
   });
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15_000 });
 }
 
 async function quitRace(page) {
@@ -255,13 +255,13 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       await page.waitForFunction(
         (min) => window.__partsMeshProbe.bodyMeshes.length >= min,
         i + 1,
-        { timeout: 20_000 }
+        { polling: 100, timeout: 20_000 }
       );
       await page.evaluate(() => window.__apex.camera("cockpit"));
       await page.waitForFunction(
         (min) => window.__partsMeshProbe.cockpitMeshes.length >= min,
         i + 1,
-        { timeout: 20_000 }
+        { polling: 100, timeout: 20_000 }
       );
       await quitRace(page);
     }
@@ -329,7 +329,7 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       await page.waitForFunction(
         (min) => window.__partsMeshProbe.wheelMeshes.length >= min,
         (i + 1) * 4,
-        { timeout: 20_000 }
+        { polling: 100, timeout: 20_000 }
       );
       await quitRace(page);
     }
@@ -385,7 +385,7 @@ test.describe("Parts mesh caches — eviction bounds", () => {
     });
 
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 15_000 });
+    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: 15_000 });
     await page.evaluate(() => {
       window.__apex.go();
       window.__apex.jump(0.10, 35, 0);

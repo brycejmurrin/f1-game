@@ -11,7 +11,7 @@ const LANDSCAPE = { width: 844, height: 390 };
 
 async function openGarage(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
   await page.locator("#mb-garage").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
 }

@@ -11,9 +11,9 @@ import { test, expect } from "../helpers/fixtures.js";
 
 async function startRace(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate(() => window.__apex.go());
 }
 const player = (page) => page.evaluate(() => window.__apex.probe());
@@ -139,9 +139,9 @@ test.describe("Apex 26 — collisions (deep)", () => {
 
   test("street-circuit wall: hard barrier pins the player and scrubs speed", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     await page.evaluate(() => window.__apex.race("monaco", "day", "dry"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
     await page.evaluate(() => window.__apex.go());
     const r = await page.evaluate(() => {
       // R2 launch bypasses wallAt — recorded 2026-08-13; these tests pin the
@@ -268,9 +268,9 @@ test.describe("Apex 26 — collisions (deep)", () => {
 
   test("AI shoving the player toward the wall can't push them through it", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     await page.evaluate(() => window.__apex.race("monaco", "day", "dry"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
     await page.evaluate(() => window.__apex.go());
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
@@ -361,9 +361,9 @@ test.describe("Apex 26 — collisions (deep)", () => {
   // player grinds to a crawl ("stuck after hitting another car").
   test("closing into a traffic nest does not speed-death via perpetual side-rub", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     await page.evaluate(() => window.__apex.race("monaco", "day", "dry"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
     await page.evaluate(() => window.__apex.go());
     const r = await page.evaluate(() => {
       window.__apex.headless(true);

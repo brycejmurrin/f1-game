@@ -7,9 +7,9 @@ const LANDSCAPE = { width: 844, height: 390 };
 
 async function enterTT(page, trackId = "monza") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate((id) => window.__apex.tt(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
 }
 
 // ── Mode flags ────────────────────────────────────────────────────────────────

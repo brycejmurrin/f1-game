@@ -9,7 +9,7 @@ test("Red Bull Ring owns a safe migrated alpine foundation", async ({ page }) =>
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
 
   const result = await page.evaluate(() => {
     const inspectSession = (time) => {

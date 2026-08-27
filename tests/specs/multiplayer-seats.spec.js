@@ -36,7 +36,7 @@ async function seatedAs(page, teamIdx, driverIdx) {
 
 async function enterRoom(page, role = "host") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate(() => window.__apex.lobbyFake(true));
   await page.click("#mb-vs");
   await page.click(role === "host" ? "#vs-host" : "#vs-join");
@@ -199,7 +199,7 @@ test.describe("seat exclusivity — solo is untouched", () => {
   test("no session means no held seats and no disabled chips", async ({ page }) => {
     await seatedAs(page, RBR, 0);
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     await page.locator("#mb-garage").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.locator('#cs-tabs [data-cs-cat="team"]').click();
@@ -214,7 +214,7 @@ test.describe("seat exclusivity — solo is untouched", () => {
     // change it when nobody holds anything.
     await seatedAs(page, 1, 1);
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     await page.locator("#mb-garage").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.locator('#cs-tabs [data-cs-cat="team"]').click();

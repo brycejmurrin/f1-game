@@ -28,7 +28,7 @@ test.describe.configure({ mode: "serial" });
 
 async function startScanning(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate(() => window.__apex.lobbyFake(true));
   await page.click("#mb-vs");
   await page.click("#vs-join");
@@ -41,7 +41,7 @@ async function startScanning(page) {
     const v = document.getElementById("vs-scan-video");
     const s = v && v.srcObject;
     return !!s && s.getTracks().some((t) => t.readyState === "live");
-  }, null, { timeout: 20000 });
+  }, null, { polling: 100, timeout: 20000 });
 }
 
 const liveTracks = (page) => page.evaluate(() => {

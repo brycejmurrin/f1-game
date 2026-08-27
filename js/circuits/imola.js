@@ -197,8 +197,12 @@
       SANTERNO.forEach(([s, gap, sz], i) =>
         riverSurface(`santerno-water-${i}`, s, 1, gap, sz, RIVER, { required: true }));
       const SANTERNO_BANK = [
+        // bank-3 is 40 m, not ~120 like its siblings: the Acque Minerali
+        // return leg crosses the river valley ~0.3 m above this bank at
+        // b ≈ −43/+28 m along it, and a longer patch reaches under that road
+        // — the emitted-footprint guard (rightly) suppressed the whole group.
         [0.95, 9,  [12, 120]], [0.00, 9,  [12, 140]], [0.04, 9,  [12, 130]],
-        [0.08, 10, [12, 120]], [0.12, 10, [11, 110]], [0.16, 10, [11, 90]],
+        [0.08, 10, [12, 40]], [0.12, 10, [11, 110]], [0.16, 10, [11, 90]],
       ];
       SANTERNO_BANK.forEach(([s, gap, sz], i) =>
         terrainPatch(`santerno-bank-${i}`, s, 1, gap, sz, BANK));

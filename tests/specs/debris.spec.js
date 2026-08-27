@@ -8,18 +8,18 @@ import { test, expect } from "@playwright/test";
 
 async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
 }
 
 async function startRace(page, id) {
   await page.evaluate((t) => window.__apex.race(t, "day", "dry"), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 20000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 20000 });
   await page.evaluate(() => window.__apex.go());
 }
 
 async function startTT(page, id) {
   await page.evaluate((t) => window.__apex.tt(t, "day"), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 20000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 20000 });
   await page.evaluate(() => window.__apex.go());
 }
 
@@ -30,7 +30,7 @@ async function enableDebris(page) {
   await page.waitForFunction(() => {
     const st = window.__apex.debris();
     return st.ready || st.loadState === -1;
-  }, null, { timeout: 30000 });
+  }, null, { polling: 100, timeout: 30000 });
   const st = await page.evaluate(() => window.__apex.debris());
   if (!st.ready) throw new Error("rapier load failed: " + st.error);
 }
@@ -45,7 +45,7 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
     await page.waitForFunction(() => {
       const st = window.__apex.debris();
       return st.ready || st.loadState === -1;
-    }, null, { timeout: 30000 });
+    }, null, { polling: 100, timeout: 30000 });
     const r = await page.evaluate(() => {
       window.__apex.jump(0.1, 40, 0);
       // The world runs the WASM solve only when something dynamic is in play

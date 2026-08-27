@@ -146,10 +146,12 @@ whether the TLX backend happens to be installed.
 
 **Pass `{ polling: 100, timeout: N }` for any wait on a rendering page.**
 
-**367 `waitForFunction` calls across 116 files still carry a timeout without
-`polling`**, so those bounds are decoration — 310 of them under `tests/` (96
-files) and 57 under `tools/` (20 files; the 24 that used to live in
-`layout-audit.mjs` are now in `tools/menu-screens.mjs`).
+**Every `waitForFunction` under `tests/` now carries `{ polling: 100 }`**
+(2026-08-27 sweep — the rAF-starved timeouts were the recurring red class in
+every loaded run). 57 sites under `tools/` still carry a timeout without
+polling (run `node tools/wait-polling-lint.mjs` for the live census; the 24
+that used to live in `layout-audit.mjs` are now in `tools/menu-screens.mjs`) —
+fix those as they are touched.
 The count is a RATCHET, not a target — `tests/unit/wait-polling.test.mjs` fails
 if the population grows, and lowering the ceiling as sites are fixed is the
 intended direction. (Count by AST via `tools/wait-polling-lint.mjs`. A grep

@@ -8,9 +8,9 @@ test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true
 
 async function startPortraitRace(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => window.__apex.race("bahrain"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => window.__apex.go());
   await expect(page.locator("#rotate-device")).toBeVisible();
 }

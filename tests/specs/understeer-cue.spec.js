@@ -59,9 +59,9 @@ const MAX_GAP_TICKS = 10;
  */
 async function loadRig(page, id = "monza") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
   await page.evaluate((t) => window.__apex.race(t), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 30_000 });
 
   const rig = await page.evaluate(() => {
     window.__cue = [];

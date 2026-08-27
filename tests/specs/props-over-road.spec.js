@@ -62,13 +62,13 @@ test("no prop geometry on/above the racing line (all circuits)", async ({ page }
   // fail as a timeout and be mistaken for a geometry regression.
   test.setTimeout(1500000);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
   await page.evaluate(() => __apex.trackGeometry(true));
 
   const offenders = [];
   for (const trk of TRACKS) {
     await page.evaluate((t) => __apex.race(t, "day", "dry"), trk);
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15000 });
     await page.waitForTimeout(1200);
     const r = await page.evaluate(({ CEIL, TOL }) => {
       const caps = window.__apex.trackGeometry();

@@ -5,9 +5,9 @@ test.describe("Monza track-owned foundation migration", () => {
   test("keeps terrain, landmarks, water, barriers, and overhead intent valid", async ({ page }) => {
     test.setTimeout(240_000);
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15_000 });
+    await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15_000 });
     await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 15_000 });
+    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: 15_000 });
     const result = await page.evaluate(() => {
       const def = window.TrackDefs.find((entry) => entry.id === "monza");
       const profile = window.__apex.trackProfile(240);

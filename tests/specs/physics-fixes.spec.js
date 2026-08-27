@@ -10,9 +10,9 @@ import { test, expect } from "../helpers/fixtures.js";
 
 async function start(page, circuit) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate((c) => window.__apex.race(c, "day", "dry"), circuit);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate(() => window.__apex.go());
 }
 
