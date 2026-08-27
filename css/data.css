@@ -278,7 +278,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   border-radius: 0 var(--r-xs) var(--r-xs) 0;
 }
 @media (hover: hover) {
-  .dh-row:hover { background: rgba(255, 255, 255, 0.045); }
+  .dh-row:hover { background: var(--plate); }
 }
 /* The leader gets the faintest possible wash — enough that the top of the table
    reads as the top without needing a badge. */

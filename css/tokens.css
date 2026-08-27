@@ -448,6 +448,11 @@
   --gold: #ffd700;
   --silver: #c0c0c0;
   --bronze: #cd9b5a;
+  /* The fourth metal: the HUD's lime marks THE PLAYER wherever a table has a
+     "you" row. Named for the same reason as the metals; the tach gradient's
+     matching stop stays literal — a ramp's stops are chosen against each
+     other, not from the palette (see css/hud.css). */
+  --you: #aeea00;
   /* The livery list's two-verb palette: DELETE is the warm danger family,
      EDIT the cool info family. Ink is the light readable tint, fill the
      saturated base the wash/hover/press states mix from — was 12 raw rgba()

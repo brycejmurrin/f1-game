@@ -1118,9 +1118,9 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 
 /* Season upcoming rounds list */
 .season-upcoming-head { font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-5); color: var(--dim); margin-top: 10px; margin-bottom: 4px; padding: 0 4px; }
-.season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--card-line); margin-bottom: 4px; background: rgba(255,255,255,0.04); transition: border-color 0.15s, background 0.15s; cursor: default; }
+.season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--card-line); margin-bottom: 4px; background: var(--plate); transition: border-color 0.15s, background 0.15s; cursor: default; }
 @media (hover: hover) {
-  .season-upcoming-row:hover { border-color: var(--plate-line); background: rgba(255,255,255,0.07); }
+  .season-upcoming-row:hover { border-color: var(--plate-line); background: var(--plate-hover); }
 }
 .sur-rnd { font-size: var(--fs-micro); font-weight: 700; color: var(--red); letter-spacing: var(--ls-3); min-width: 24px; }
 .sur-name { font-size: var(--fs-micro); font-weight: 700; color: var(--text); flex: 1; font-style: italic; letter-spacing: var(--ls-1); }
