@@ -391,9 +391,12 @@ const CEILINGS = {
   // + the deploy side's per-chunk frame-fields clear (allLights/perChunkLights/
   //   tailStart/tailCount reset every frame before the flood branch: `frame`
   //   outlives a night->day ToD flip, so chunked geometry kept binding
-  //   per-chunk night lamps in daylight). Both lineages grew the file, so
-  //   neither side's number fits the union — re-measured on the merged tree
-  //   (split-newline count): 8671.
+  //   per-chunk night lamps in daylight).
+  // + the TLX-fix side's claim-fail ONE-reload bound (a latch already set at
+  //   boot start means the previous reload's GLX.init failed too — measured
+  //   236 reloads/64 s before the guard; falls through to #nogl).
+  // Three lineages grew the file, so no side's number fits the union —
+  // re-measured on the merged tree (split-newline count): 8675.
   "js/game.js": 8675,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
@@ -514,7 +517,14 @@ const CEILINGS = {
   // lamp-mask cull rounds landed on the other lineage (re-measured).
   "js/render/webgpu/wgx.js": 5365,
   // TLX backend shell; grows only with GLX-parity features.
-  "js/render/three/tlx.js": 2095,
+  // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
+  // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
+  // instanced-rung retarget with its fallbackMat-contract comment.
+  // 2099 -> 2111: the deferred material dispose() unlocked by the vendored
+  // #33952 backport (_matDispose queue + present() flush + the PATCHES.md
+  // pointer note) — the eviction paths stopped leaking instead of skipping
+  // dispose, each line beside the eviction it completes.
+  "js/render/three/tlx.js": 2111,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   "js/render/glx.js": 1929,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
