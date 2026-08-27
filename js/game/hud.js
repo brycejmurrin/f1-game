@@ -136,7 +136,14 @@ function fitHud() {
   // 150% while the plain hud cell, same everything, was clean). Every mode
   // flip toggles a body class (manual / steer-buttons / steer-touch), so the
   // class string is exactly the re-fit trigger needed, read without layout.
-  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "|" + document.body.className;
+  // The gap chip's TEXT is part of the key: its width follows the live gap
+  // string ("+2.1s" -> "+14.6s" is ~15px at 150%), and with only the 3 s
+  // same-key re-measure a mid-window growth overlapped the POS tile until
+  // the next forced read (seen on a phone at HUD 152%). textContent.length
+  // is layout-free; a length change re-fits on the next tick.
+  const gapLen = (els.gapA ? els.gapA.textContent.length : 0) * 100 +
+    (els.gapB ? els.gapB.textContent.length : 0);
+  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "|" + gapLen + "|" + document.body.className;
   if (key === _fitKey && --_fitWait > 0) return;
   // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
