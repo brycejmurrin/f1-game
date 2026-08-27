@@ -301,7 +301,11 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
     color-mix(in oklab, var(--row-team, var(--red)) 16%, transparent), transparent 58%);
 }
 .dh-row-cons { flex-wrap: wrap; }
+/* One main-info recipe for both row kinds. The standings and live rows wrote
+   the same four declarations twice, differing only in the wrap floor — the
+   live tab's rows (inside the live card) keep their tighter one below. */
 .dh-cons-main { display: flex; align-items: center; gap: calc(var(--gap) * 2 / 3); flex: 1; min-width: 200px; }
+.dh-livecard .dh-cons-main { min-width: 150px; }
 .dh-h2h-wrap { display: flex; flex-direction: column; gap: calc(var(--gap) / 6); flex: 1; min-width: 140px; align-items: flex-end; }
 .dh-h2h-bar { display: flex; width: 100%; max-width: 160px; height: 6px; border-radius: var(--r-xs); background: rgba(255, 255, 255, 0.1); overflow: hidden; margin-top: calc(var(--gap) / 3); }
 .dh-h2h-fill { height: 100%; background: #fff; transition: width 0.3s; }
@@ -373,7 +377,6 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-live-type { font-size: var(--fs-2); color: var(--red); letter-spacing: var(--ls-4); }
 .dh-live-sub { font-size: var(--fs-2); color: var(--dim); margin-top: calc(var(--gap) / 6); }
 .dh-live-team { color: var(--dim); font-size: var(--fs-2); }
-.dh-live-row-main { display: flex; align-items: center; gap: calc(var(--gap) * 2 / 3); flex: 1; min-width: 150px; }
 .dh-live-gapwrap { display: flex; align-items: center; gap: calc(var(--gap) * 0.5); flex: 1; min-width: 100px; justify-content: flex-end; }
 .dh-live-gapbar { height: 4px; border-radius: var(--r-xs); max-width: 80px; }
 .dh-live-gaplbl { font-size: var(--fs-1); color: var(--dim); font-variant-numeric: tabular-nums; width: 45px; text-align: right; }
@@ -469,7 +472,9 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-legend-dot { width: 10px; height: 3px; border-radius: var(--r-xs); display: inline-block; }
 
 /* ---------- lap-replay transport + gauge dashboard ---------- */
-.dh-transport { display: flex; align-items: center; gap: calc(var(--gap) * 2 / 3); margin: calc(var(--gap) * 0.5) 0; flex-wrap: wrap; row-gap: calc(var(--gap) * 0.5); }
+/* the three live-tab control strips share one flex-centre statement */
+.dh-transport, .dh-livecontrols, .dh-class-head { display: flex; align-items: center; }
+.dh-transport { gap: calc(var(--gap) * 2 / 3); margin: calc(var(--gap) * 0.5) 0; flex-wrap: wrap; row-gap: calc(var(--gap) * 0.5); }
 .dh-tbtn {
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-3);
   padding: 7px 14px; border-radius: var(--r-pill);
@@ -519,7 +524,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 .dh-gdelta.dh-neg { color: #ff6b6b; }
 
 /* ---------- live controls + sortable classification ---------- */
-.dh-livecontrols { display: flex; align-items: center; gap: calc(var(--gap) * 2 / 3); margin-bottom: 10px; }
+.dh-livecontrols { gap: calc(var(--gap) * 2 / 3); margin-bottom: 10px; }
 .dh-livebtn {
   font-size: var(--fs-2); font-weight: 800; letter-spacing: var(--ls-3);
   padding: calc(var(--gap) * 0.5) var(--gap); border-radius: var(--r-pill);
@@ -563,7 +568,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 .dh-laneboard-dl.dh-pos { color: #ff6b6b; }   /* behind the reference */
 .dh-laneboard-dl.dh-neg { color: #3fd06b; }   /* ahead of the reference */
 .dh-live-updated { font-size: var(--fs-2); color: #7a7a85; margin-left: auto; }
-.dh-class-head { display: flex; align-items: center; gap: 10px; }
+.dh-class-head { gap: 10px; }
 .dh-class-head .dh-section { margin: calc(var(--gap) * 0.5) 0 calc(var(--gap) * 2 / 3); flex: 1; }
 .dh-sorts { display: flex; gap: calc(var(--gap) / 3); flex: 0 0 auto; }
 .dh-sortbtn {
@@ -672,7 +677,6 @@ body[data-density="compact"] .dh-gap { min-width: 30px; }
    .dh-content's overflow-x: hidden from ~110% UI SIZE up. Let the rows
    negotiate: min-width: 0 defers to the ellipsis the names already carry. */
 body[data-width="narrow"] .dh-row { flex-wrap: wrap; }
-body[data-width="narrow"] .dh-live-row-main { min-width: 0; }
 body[data-width="narrow"] .dh-live-gapwrap { min-width: 60px; }
 body[data-width="narrow"] .dh-cons-main { min-width: 0; }
 

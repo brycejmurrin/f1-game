@@ -99,7 +99,11 @@ export function shellNodes() {
    bare onclick on the preview canvas). It cannot reuse an existing family:
    the boxless wrapper needs its own focus-ring/hover rules that target the
    canvas inside it. */
-const CLASS_CEILING = 536;
+// 2026-08-27 round 12: 536 -> 533. The live tab's row-main class folded into
+// the standings' identical .dh-cons-main (the wrap floor became a context
+// override on the class board), buying real headroom instead of sitting as
+// a duplicate recipe.
+const CLASS_CEILING = 533;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under
