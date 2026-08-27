@@ -80,7 +80,10 @@ async function precacheAssetLists() {
     "vendor/three-0.185.1/three.webgpu.min.js",
     "vendor/three-0.185.1/three.core.min.js",
     "vendor/three-0.185.1/three.tsl.min.js",
-    "vendor/three-0.185.1/addons/tsl/display/BloomNode.js",
+    // addons/tsl/display/BloomNode.js is deliberately NOT precached: nothing
+    // imports it today (TLX bloom lives in tsl-post.js) — it stays on disk and
+    // in the importmap's three/addons/ prefix for a future consumer, but 16 KB
+    // in every PWA install with zero readers earns no cache slot.
     // The QR reader (js/net/scan.js) injects this ON DEMAND the first time
     // someone scans an answer code, so the tag parser below never sees it.
     // OPTIONAL for the same reason as three.js: most sessions never scan, and

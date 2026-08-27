@@ -788,6 +788,31 @@ const GLX = read("js/render/glx.js");
 const TSL_LIT = read("js/render/three/tsl-lit.js");
 const THREE_BUNDLE = read("vendor/three-0.185.1/three.webgpu.min.js");
 
+// ── The two LOCAL PATCHES carried on the vendored bundle (vendor/three-0.185.1/
+// PATCHES.md). A vendor re-drop that silently reverts either one must fail HERE,
+// not in production. Upstream has fixed neither as of 186dev (2026-08-27).
+test("the vendored three carries the swizzle patch — Chromium 141 rejects r185's string swizzle", () => {
+  // r185's pooled GPUTextureViewDescriptor stamps swizzle:"rgba" (constructor +
+  // reset()) into EVERY createView; Chromium 141 validates the member as a
+  // GPUTextureComponentSwizzle dictionary, so the pristine bundle throws on
+  // every render pass — shadows dead, env probe dead, present() throws on the
+  // first race frame, TLX refuses the tab and reloads. The patch omits the
+  // member (identity swizzle carries no information). Re-apply per PATCHES.md.
+  assert.doesNotMatch(THREE_BUNDLE, /this\.swizzle="rgba"/,
+    "pristine swizzle default is back — the vendor bundle was re-dropped without the patch (see vendor/three-0.185.1/PATCHES.md §1)");
+  assert.equal(THREE_BUNDLE.split('this.swizzle=void 0').length - 1, 2,
+    "the swizzle patch must cover BOTH sites (constructor + reset())");
+});
+test("the vendored three carries the #33952 bind-group leak backport (PR #33954)", () => {
+  // _destroyBindings must delete the destroyed bind group from the shared
+  // texture's bindGroups Set, or the Set grows unboundedly holding
+  // NodeSampledTexture refs — TLX's shared-texture-node pattern. The deferred
+  // material dispose() in tlx.js/tsl-fx.js is only leak-free WITH this patch.
+  // Drop the assertion (and the patch) on the first release containing #33954.
+  assert.match(THREE_BUNDLE, /bindGroups\.delete\(\w+\)\}\)\(this\.textures\.get\(\w+\.texture\)\)/,
+    "the #33952 backport is missing from the vendor bundle — evicted-material dispose() now leaks (see vendor/three-0.185.1/PATCHES.md §2)");
+});
+
 /** The object literal passed to `new THREE.WebGPURenderer({...})`, brace-matched
  *  (it spans ~40 lines of comment, so a regex over one line cannot see it). */
 function rendererParams() {

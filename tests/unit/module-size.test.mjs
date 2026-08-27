@@ -504,7 +504,14 @@ const CEILINGS = {
   // lamp-mask cull rounds landed on the other lineage (re-measured).
   "js/render/webgpu/wgx.js": 5365,
   // TLX backend shell; grows only with GLX-parity features.
-  "js/render/three/tlx.js": 2095,
+  // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
+  // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
+  // instanced-rung retarget with its fallbackMat-contract comment.
+  // 2099 -> 2111: the deferred material dispose() unlocked by the vendored
+  // #33952 backport (_matDispose queue + present() flush + the PATCHES.md
+  // pointer note) — the eviction paths stopped leaking instead of skipping
+  // dispose, each line beside the eviction it completes.
+  "js/render/three/tlx.js": 2111,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   "js/render/glx.js": 1929,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
