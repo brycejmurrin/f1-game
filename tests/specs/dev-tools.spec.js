@@ -15,10 +15,16 @@ async function load(page, trackId = "monza") {
   const live = await page.evaluate(() => window.__apex != null).catch(() => false);
   if (!live) {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   }
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 10_000 });
+  // race()->loadTrack() is synchronous, so this predicate is usually already
+  // true — but an unpolled wait is rAF-clocked and SwiftShader can starve rAF
+  // to ~2/s mid-build, so the default polling missed a true predicate for 10s
+  // (measured 2026-08-27: 9-10/56 shifting failures, identical at the
+  // pre-round SHA). polling:100 is the fix; 30s is the measured half-budget
+  // headroom (docs/TESTING.md), not the expectation.
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 30_000 });
 }
 
 async function loadParked(page, frac = 0.1, trackId = "monza") {
@@ -34,7 +40,7 @@ test.describe("__apex.tracks()", () => {
 
   test("returns array with at least 20 circuits", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const list = await page.evaluate(() => window.__apex.tracks());
     expect(Array.isArray(list)).toBe(true);
     expect(list.length).toBeGreaterThanOrEqual(20);
@@ -42,7 +48,7 @@ test.describe("__apex.tracks()", () => {
 
   test("each entry has id, name, and sequential index", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const list = await page.evaluate(() => window.__apex.tracks());
     for (let i = 0; i < list.length; i++) {
       expect(typeof list[i].id).toBe("string");
@@ -53,7 +59,7 @@ test.describe("__apex.tracks()", () => {
 
   test("bahrain is in the list", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const list = await page.evaluate(() => window.__apex.tracks());
     expect(list.some((t) => t.id === "bahrain")).toBe(true);
   });
@@ -64,7 +70,7 @@ test.describe("__apex.teams()", () => {
 
   test("returns at least 10 teams with engine field", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const list = await page.evaluate(() => window.__apex.teams());
     expect(list.length).toBeGreaterThanOrEqual(10);
     for (const t of list) {
@@ -75,7 +81,7 @@ test.describe("__apex.teams()", () => {
 
   test("Mercedes team has engine 'Mercedes'", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const teams = await page.evaluate(() => window.__apex.teams());
     const merc = teams.find((t) => t.id === "mercedes");
     expect(merc).toBeTruthy();
@@ -90,7 +96,7 @@ test.describe("__apex.race()", () => {
 
   test("loads a track by id and returns metadata", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const r = await page.evaluate(() => window.__apex.race("spa"));
     expect(r.track).toBe("spa");
     expect(r.weather).toBe("dry");
@@ -98,14 +104,14 @@ test.describe("__apex.race()", () => {
 
   test("returns false for unknown track id", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const r = await page.evaluate(() => window.__apex.race("notatrack"));
     expect(r).toBe(false);
   });
 
   test("race() with wet sets weather", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const r = await page.evaluate(() => window.__apex.race("bahrain", "day", "wet"));
     expect(r.weather).toBe("wet");
     expect(await page.evaluate(() => window.__apex.weather())).toBe("wet");
@@ -127,7 +133,7 @@ test.describe("__apex.finishRace()", () => {
 
   test("returns false when no race is loaded", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const r = await page.evaluate(() => window.__apex.finishRace());
     expect(r).toBe(false);
   });
@@ -165,7 +171,7 @@ test.describe("__apex.info()", () => {
 
   test("track is null before race loads", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const info = await page.evaluate(() => window.__apex.info());
     expect(info.track).toBeNull();
   });
@@ -195,9 +201,9 @@ test.describe("__apex.info()", () => {
 
   test("tt() sets timeTrial:true", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     await page.evaluate(() => window.__apex.tt("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 30_000 });
     const info = await page.evaluate(() => window.__apex.info());
     expect(info.timeTrial).toBe(true);
     expect(info.track).toBe("monza");

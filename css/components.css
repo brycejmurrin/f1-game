@@ -856,10 +856,9 @@ body:has(#teampicker:not([hidden])) #career {
   opacity: 0;
   pointer-events: none;
 }
-body:has(#datahub:not([hidden])) #overlay {
-  opacity: 0;
-  pointer-events: none;
-}
+/* #datahub is dialog.screen since round 11, so the generic rule above owns
+   fading the title under it — its bespoke copy of that rule left with the
+   migration. */
 body:has(#advanced:not([hidden])) #pmsettings,
 body:has(#audioset:not([hidden])) #pmsettings {
   opacity: 0;

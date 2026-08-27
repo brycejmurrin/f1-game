@@ -225,6 +225,21 @@ test("tools/menu-screens.mjs knows about every screen in the shell", () => {
   const shell = new Set([
     ...[...html.matchAll(/<dialog id="([a-z0-9-]+)"/g)].map((m) => m[1]),
     ...[...html.matchAll(/<div id="([a-z0-9-]+)"[^>]*class="[^"]*\bscreen\b/g)].map((m) => m[1]),
+    // The third arm: a modal that is neither a <dialog> nor a .screen div.
+    // #rotate-device hid from this scan for months exactly this way — a bare
+    // <div role="dialog"> with no class at all is still a screen the survey
+    // should know about (or explicitly refuse below).
+    ...[...html.matchAll(/<div id="([a-z0-9-]+)"[^>]*role="dialog"/g)].map((m) => m[1]),
+  ]);
+  // Screens the survey deliberately does NOT open, each with its reason —
+  // an entry here is a written decision, not a gap.
+  const EXEMPT = new Set([
+    // CSS-media-gated (portrait + coarse + <=743w + <=950h) AND mid-race
+    // only: reachable in one of the twelve survey viewports and never from a
+    // menu, so a SCREENS entry would report eleven skips per run. Covered
+    // instead by tests/specs/ui-audit.spec.js "23 portrait rotate-device
+    // overlay" and tests/specs/rotation-recovery.spec.js.
+    "rotate-device",
   ]);
   // The audit names a screen either by its root selector or by an id: entry
   // whose spelling drops the hyphens (trackdetail for #track-detail).
@@ -232,12 +247,14 @@ test("tools/menu-screens.mjs knows about every screen in the shell", () => {
     ...[...audit.matchAll(/root:\s*"#([a-z0-9-]+)"/g)].map((m) => m[1]),
     ...[...audit.matchAll(/id:\s*"([a-z0-9-]+)"/g)].map((m) => m[1]),
   ]);
-  const missing = [...shell].filter((id) => !known.has(id) && !known.has(id.replace(/-/g, "")));
+  const missing = [...shell].filter((id) =>
+    !EXEMPT.has(id) && !known.has(id) && !known.has(id.replace(/-/g, "")));
 
   assert.deepEqual(missing, [],
     "a screen exists in index.html that tools/layout-audit.mjs never opens, so the " +
     "layout survey silently does not cover it. Add it to SCREENS in menu-screens.mjs — or, if it " +
-    "genuinely cannot be surveyed, say why here rather than leaving the gap unstated");
+    "genuinely cannot be surveyed, add it to EXEMPT above with the reason, " +
+    "rather than leaving the gap unstated");
 });
 
 test("Settings uses labelled category tabs with matching panels", () => {

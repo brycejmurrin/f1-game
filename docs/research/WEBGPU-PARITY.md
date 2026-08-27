@@ -764,9 +764,14 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
 3. **Indexed road drawing**: `_expandPull` triples road vertex shading vs
    GLX's indexed ribbon; group-2 storage is already addressed by
    vertex_index.
-4. **SSR at half-res** (GLX runs it inline at 12 steps; WGX pays a full-res
-   rgba16float target + 24 steps, then blurs the result anyway) and the
-   mat4 inverse-projection per march step where only view-z is needed.
+4. **SSR at half-res**. CORRECTED 2026-08-27: the "GLX inline 12 steps" /
+   "then blurs the result anyway" claims were stale comments — GLX's
+   COMPOSITE_FS march is ALSO 24 steps (post.js `for (int i = 0; i < 24`)
+   and WGX has no SSR blur pass. The real deltas are the dedicated
+   full-res rgba16float target + separate pass; the fix is resolution
+   only (march constants are canary-asserted and match GLX). The mat4
+   inverse-projection per march step (only view-z needed) remains a
+   separate open micro-item.
 5. **Render bundles** for the static chunk sequence (needs FIXED draw-ring
    slots per chunk so the bundle survives culling changes; knob-gated, keep
    the culled path for WGX_LITE/software).
@@ -783,14 +788,38 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
    carrying resize/knob-only values) — still open; deliberately deferred:
    the win is noise next to the landed items and the stale-knob wiring
    risk is real.
-8. **Shared road vertex buffer / indexed road** — REASSESSED as blocked on
-   this adapter class: the 4095-vert piece split exists because LARGE
-   non-indexed draws break vertex_index (wgx.js createMesh comment), and
-   merged runs or firstVertex offsets recreate exactly that (offsets also
-   shift vertex_index under the per-piece authored storage). Needs its own
-   investigation round with live dash/marking verification before any
-   merge attempt.
-7. `trkFromWorld` gating looked free but is NOT semantics-preserving: the
+8. **Shared road vertex buffer / indexed road — UNBLOCKED by measurement
+   (2026-08-27), implementation scheduled for its own round.** The block
+   rested on a 2026-08-17 "vertex_index stays 0 on large non-indexed
+   draws (and drawIndexed)" finding whose origin commit is beyond the
+   shallow-clone graft. `tools/wgx-vid-repro.mjs` (committed as the
+   re-runnable primary evidence) now measures the actual matrix: draw
+   shapes {draw(N) whole, 4095-piece control, draw(n,1,firstVertex) over
+   one shared vbuf, drawIndexed(N) identity} × N ∈ {4092, 4095, 4098,
+   8190, 12285, 24576} × {storage-read arr[vid], builtin vid→color},
+   probe triangles read back via flat provoking-vertex color, ribbon-
+   exact vertex layout (stride 36, 3×float32x3) held constant. Verdict on
+   this container's SwiftShader-Dawn (Chromium 1194 build): **every cell
+   OK, stable across two full runs** — vertex_index is correct for all
+   four shapes, including the two "blocked" ones. Caveats recorded
+   honestly: (a) the Lavapipe leg falls back to SwiftShader in this
+   container even headed-under-Xvfb (the tool flags the fallback and the
+   leg does not count) — a second Vulkan stack and real hardware remain
+   unverified, which is what the committed tool is for; (b) the historical
+   symptom may have been version-specific Dawn behavior since fixed, or
+   entangled with the SEPARATE 4th-attribute bug (wgx.js:163-165) —
+   the repro deliberately does not test that one.
+   Two supporting findings from the same investigation: the per-piece
+   authored `matTrkArr[vid]` storage read is EFFECTIVELY DEAD in the
+   shipping config (`_bindLitVerts` binds the global world LUT for every
+   lit draw once a track builds — wgx.js `void authored`; the VS vid read
+   executes only pre-LUT/menu frames), and road markings come from
+   `trkFromWorld(wpos)` in the fragment shader. Next-round scope:
+   shared road vbuf + firstVertex runs (restores drawChunked merging),
+   road chunk AABBs so the lamp-mask cull covers the road, both
+   shadow-cast piece loops, dash/marking verification with live captures
+   at speed plus the pre-LUT menu window.
+9. `trkFromWorld` gating looked free but is NOT semantics-preserving: the
    LUT result feeds `classified`/`vMatId` on every draw over the ribbon
    (props/cars with matId 0 classify as asphalt by design there), so a
    road-only gate changes material selection. Left alone deliberately.

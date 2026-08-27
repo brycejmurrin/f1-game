@@ -283,8 +283,7 @@ const DataTelemetry = (function () {
 
   let telGen = 0;
   let telView = null;                 // the live telemetry view (for animation cleanup)
-  let telemPopup = null;              // the full-screen player popup element
-  let telemKeyHandler = null;         // the Escape-to-close keydown listener (for cleanup)
+  let telemPopup = null;              // the full-screen player popup <dialog>
   let telemReturnFocus = null;
 
   function stopTelAnim() {
@@ -302,13 +301,14 @@ const DataTelemetry = (function () {
     ++telGen;   // a lap load in flight must not resurrect the popup after close
     const restore = telemPopup ? telemReturnFocus : null;
     stopTelAnim();
-    if (telemKeyHandler) {
-      document.removeEventListener("keydown", telemKeyHandler);
-      telemKeyHandler = null;
-    }
     if (telemPopup) {
-      if (telemPopup.parentNode) telemPopup.parentNode.removeChild(telemPopup);
+      // Null the tracker FIRST: close() fires the dialog's close event, whose
+      // listener re-enters here — with telemPopup already null that pass is a
+      // no-op, which is what makes cancel/close/backdrop all safe to overlap.
+      const node = telemPopup;
       telemPopup = null;
+      if (node.open) { try { node.close(); } catch (_) {} }
+      if (node.parentNode) node.parentNode.removeChild(node);
     }
     telemReturnFocus = null;
     if (restore && restore.isConnected && restore.focus) restore.focus();
@@ -318,9 +318,10 @@ const DataTelemetry = (function () {
     closeTelemPopup();
     telemReturnFocus = (returnFocus && returnFocus.isConnected)
       ? returnFocus : document.activeElement;
-    const overlay = el("div", "dh-tpopup");
-    overlay.setAttribute("role", "dialog");
-    overlay.setAttribute("aria-modal", "true");
+    // A REAL <dialog>, not a div claiming role=dialog: showModal() gives the
+    // top layer, focus containment, inert background and Escape for free —
+    // the platform asserts the role and aria-modal, so neither is written.
+    const overlay = el("dialog", "dh-tpopup");
     overlay.setAttribute("aria-labelledby", "dh-tpopup-title");
 
     // fit-managed: SheetShape scans this class alongside .sheet, so a short
@@ -349,6 +350,9 @@ const DataTelemetry = (function () {
     hdr.appendChild(titleEl);
     const closeBtn = el("button", "dh-close", "✕");
     closeBtn.type = "button";
+    // autofocus: showModal's focusing steps then GUARANTEE initial focus here,
+    // instead of racing whatever the async body build makes focusable first.
+    closeBtn.autofocus = true;
     closeBtn.setAttribute("aria-label", "Close telemetry");
     closeBtn.addEventListener("click", closeTelemPopup);
     hdr.appendChild(closeBtn);
@@ -359,31 +363,28 @@ const DataTelemetry = (function () {
     card.appendChild(body);
     overlay.appendChild(card);
 
-    // Close on backdrop click
+    // Close on backdrop click — the dialog element is styled full-viewport
+    // (the scrim IS the element, css/data.css), so a press outside the card
+    // targets the dialog itself.
     overlay.addEventListener("pointerdown", function (e) {
       if (e.target === overlay) closeTelemPopup();
     });
-
-    telemKeyHandler = function (e) {
-      if (e.key === "Escape") { closeTelemPopup(); return; }
-      if (e.key !== "Tab" || !telemPopup) return;
-      const items = Array.prototype.filter.call(
-        telemPopup.querySelectorAll("button, select, input, textarea, [href], [tabindex]"),
-        function (node) { return !node.disabled && node.tabIndex >= 0; }
-      );
-      if (!items.length) { e.preventDefault(); return; }
-      const first = items[0], last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault(); last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault(); first.focus();
-      }
-    };
-    document.addEventListener("keydown", telemKeyHandler);
+    // Escape arrives as `cancel`; route it through the real teardown (a bare
+    // native close would leak the animation, the ResizeObserver and an
+    // in-flight lap load — see closeTelemPopup). `close` is the backstop for
+    // any other native close path; re-entry is a no-op by construction.
+    overlay.addEventListener("cancel", function (e) {
+      e.preventDefault();
+      closeTelemPopup();
+    });
+    overlay.addEventListener("close", function () {
+      if (telemPopup === overlay) closeTelemPopup();
+    });
 
     const host = document.getElementById("datahub") || document.body;
     host.appendChild(overlay);
     telemPopup = overlay;
+    overlay.showModal();
     closeBtn.focus();
 
     // Build after layout so clientWidth measurements are real

@@ -129,7 +129,9 @@ body[data-density="compact"] #track-detail-header {
 #track-detail-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .tdc-corner {
   display: flex; align-items: center; gap: 5px;
-  background: var(--plate); border-radius: var(--r-sm);
+  /* below the button plate's 0.045: 27 identical plates in a wrap grid read
+     as a keypad; a readout row rests under the interactive floor */
+  background: rgba(255, 255, 255, 0.028); border-radius: var(--r-sm);
   padding: calc(var(--gap) * 0.25) 8px; font-size: var(--fs-micro);
 }
 .tdc-num { font-weight: 700; color: var(--text); min-width: 22px; }
@@ -138,13 +140,17 @@ body[data-density="compact"] #track-detail-header {
 .tdc-slow   { color: #fb923c; font-size: var(--fs-micro); }
 .tdc-hairpin{ color: #f87171; font-size: var(--fs-micro); }
 #track-detail-flags { display: flex; gap: calc(var(--gap) * 0.5); flex-wrap: wrap; margin: calc(var(--gap) * 0.5) 0 2px; }
+/* READOUTS, not controls: the base flag wore the button recipe verbatim
+   (plate fill + plate-line border), so NIGHT read as a tappable chip. The
+   borders go, and the base takes the same indigo tint .trb-night uses in the
+   circuit list — NIGHT means one thing on both screens. */
 .tdf-flag {
   font-size: var(--fs-micro); letter-spacing: var(--ls-4); padding: 2px 7px;
-  border-radius: var(--r-xs); border: 1px solid var(--plate-line);
-  color: var(--dim); background: var(--plate);
+  border-radius: var(--r-xs);
+  color: #818cf8; background: rgba(129,140,248,0.15);
 }
-.tdf-street { color: #f59e0b; border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.08); }
-.tdf-banked { color: #818cf8; border-color: rgba(129,140,248,0.4); background: rgba(129,140,248,0.08); }
+.tdf-street { color: #f59e0b; background: rgba(245,158,11,0.08); }
+.tdf-banked { background: rgba(129,140,248,0.08); }
 #sel-preview-map { cursor: pointer; }
 
 /* Portrait: canvas fills top portion, info panel scrolls below */
