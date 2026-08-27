@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1561">
+<meta name="apex-build" content="1562">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -76,7 +76,7 @@
 <link rel="stylesheet" href="css/hud.css?v=7c1252968366" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=0e8a19088984" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=6e90ca36cead">
-<link rel="stylesheet" href="css/track-detail.css?v=72e49cbaa045" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/track-detail.css?v=8efcb9072715" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=c61021027676" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=6ce8f33b48ac" media="print" onload="this.media='all'">
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
@@ -843,9 +843,15 @@
      tests/specs/menu-keyboard.spec.js ":modal" — which was RED while this shipped
      as a div, because the conversion commit lost this hunk in a merge. -->
 <dialog id="track-detail" class="screen dim" aria-labelledby="track-detail-name" data-esc-close="track-detail-close" hidden>
-  <div id="track-detail-header">
-    <div id="track-detail-name"></div>
-    <button id="track-detail-close" autofocus class="tdc-close-btn" aria-label="Close">&#x2715;</button>
+  <!-- The canonical .sheet-head on a full-bleed dialog — the .dh-card
+       precedent (css/data.css): the class delivers the paint and the red h2;
+       track-detail.css keeps only the flex/padding deltas the .sheet grid
+       would otherwise supply. The h2 keeps its id (aria-labelledby target;
+       menus.js sets textContent). Close is the shared .dh-close icon recipe —
+       .tdc-close-btn had become a byte-identical copy of it in round 7. -->
+  <div id="track-detail-header" class="sheet-head">
+    <h2 id="track-detail-name"></h2>
+    <button id="track-detail-close" autofocus class="dh-close" aria-label="Close">&#x2715;</button>
   </div>
   <div id="track-detail-body">
     <div id="track-detail-canvas-wrap">

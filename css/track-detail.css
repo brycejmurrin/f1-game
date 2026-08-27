@@ -86,30 +86,18 @@
   overflow: hidden;
 }
 #track-detail[hidden] { display: none; }
-#track-detail-header {
-  display: flex; align-items: center; justify-content: space-between;
-  flex: none; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08);
+/* The header is the canonical .sheet-head (css/components.css) — the paint,
+   the ::after hairline (now edge-to-edge, an upgrade over the old flat
+   border-bottom) and the brand-red h2 all come from the class. Only the
+   deltas the .sheet grid would otherwise supply live here, the .dh-card
+   precedent verbatim: the dialog is a flex column (flex: none) and already
+   carries the zoom-divided safe-area padding, so the head's own inline pad
+   goes to zero. The close button is the shared .dh-close recipe (its
+   local copy became byte-identical in round 7 and is gone). */
+#track-detail-header { flex: none; padding-inline: 0; }
+body[data-density="compact"] #track-detail-header {
+  padding-top: 0; padding-bottom: calc(var(--pad) * 0.2);
 }
-#track-detail-name { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: var(--ls-4); text-transform: uppercase; }
-.tdc-close-btn {
-  /* The data hub's icon-close recipe (css/data.css .dh-close), verbatim: the
-     two ✕ buttons were the app's only pair of same-role controls with nothing
-     in common — this one a hollow grey circle, that one a plate square. One
-     recipe, the plate family. */
-  background: var(--plate); border: 1px solid var(--plate-line); color: var(--dim);
-  border-radius: var(--r-md);
-  /* Same floor as every other door — 36px was under --tap on both pointers
-     (measured 2026-08-18 Playwright MCP at 852x393: 36x36). WCAG 24 is met;
-     the house ladder is not. */
-  width: var(--tap); height: var(--tap); font-size: var(--fs-5);
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; padding: 0; line-height: 1;
-  transition: background 0.15s, color 0.15s;
-}
-@media (hover: hover) {
-  .tdc-close-btn:hover { background: var(--plate-hover); color: #fff; }
-}
-.tdc-close-btn:active { background: var(--plate-press); color: #fff; }
 #track-detail-body {
   flex: 1; min-height: 0;
   display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5);
