@@ -521,9 +521,14 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.deepEqual(composite.slice(36, 44), [0, 0, 0, 0, 0, 0, 0, 0]);
   assert.deepEqual(composite.slice(44, 48), [0, 0, 0, 0], "lift RGB + wetness pad");
   assert.deepEqual(composite.slice(48, 52), [1, 1, 1, 0], "gamma RGB + reflect pad");
+  // gain.w (carReflect) is 0 HERE, not its 0.05 tuner default: the R8 F5 gate
+  // zeroes both SSR consume lanes whenever the SSR pass did not run this
+  // frame (this harness never runs it) — otherwise the composite marches
+  // LAST frame's ssrTex onto this frame's paint. The source-shape pin on
+  // _ssrRan below holds the gate itself.
   assert.ok(Math.abs(composite[52] - 1) < 1e-6 && Math.abs(composite[53] - 1) < 1e-6 &&
-            Math.abs(composite[54] - 1) < 1e-6 && Math.abs(composite[55] - 0.05) < 1e-6,
-    "gain RGB + carReflect default 0.05 in gain.w");
+            Math.abs(composite[54] - 1) < 1e-6 && Math.abs(composite[55]) < 1e-6,
+    "gain RGB + carReflect gated to 0 in gain.w when the SSR pass skipped");
   // aces vec4 (floats 56..59) = shipped Narkowicz coefficients a,b,c,d.
   // (f32 rounding: none of these are exactly representable, so compare with a tol.)
   const ACES_DEF = [2.51, 0.03, 2.43, 0.59];
@@ -586,7 +591,10 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.deepEqual(composite.slice(48, 51), [11, 12, 13], "gamma RGB must occupy floats 48..50");
   assert.equal(composite[51], 0, "gamma.w is opts.reflect — harness present() has none");
   assert.deepEqual(composite.slice(52, 55), [14, 15, 16], "gain RGB must occupy floats 52..54");
-  assert.ok(Math.abs(composite[55] - 0.05) < 1e-6, "gain.w is carReflect (TUNE default 0.05)");
+  // 0, not the 0.05 TUNE default: this harness present() never runs the SSR
+  // pass, and the R8 F5 gate zeroes gain.w whenever ssrTex was not written
+  // this frame (see the pin on _ssrRan in the source-gates test).
+  assert.ok(Math.abs(composite[55]) < 1e-6, "gain.w is carReflect, gated to 0 with the SSR pass skipped");
 });
 
 test("WebGPU SkyU packs GLX-parity sky knobs at the expected lanes", async () => {
@@ -779,6 +787,28 @@ test("WGX source keeps the proven parity fixes", () => {
 // far-plane holes (GLX LEQUAL parity). depthCompare "always" was correct for
 // sky-FIRST and catastrophic for skyLate: late sky overwrote the lit buffer
 // (hall-of-mirrors / melted scenery; cars still visible because they draw after).
+
+test("WGX R8 correctness gates hold (overflow sentinel, per-chunk hoist, SSR consume, mist)", () => {
+  // F2: a per-chunk lamp table overflow is REMEMBERED (base -1 sentinel) so
+  // the warn fires once per table, not 60x/s, and the write is not re-tried
+  // every frame until the bake regenerates.
+  assert.match(WGX_SOURCE, /seg = \{ base: -1, table \};/);
+  assert.match(WGX_SOURCE, /if \(seg\.base >= 0\)/);
+  // F12: the per-chunk lamp branch sits ABOVE the !cull fast path (a frame
+  // without a viewProj still lights per-chunk — it just draws every chunk),
+  // and a freed mesh drops its segment.
+  assert.match(WGX_SOURCE, /This branch sits ABOVE the !cull fast path/);
+  assert.match(WGX_SOURCE, /if \(m\.chunks\) _ciSeg\.delete\(m\.chunks\);/);
+  // F5: the composite's SSR consume lanes are gated on the SSR pass having
+  // RUN this frame — a skipped pass leaves last frame's ssrTex bound.
+  assert.match(WGX_SOURCE, /const _ssrRan = !!\(_ssrReady && ssrBG && frameHaveProj/);
+  assert.match(WGX_SOURCE, /s\[51\] = _ssrRan && o\.reflect != null \? o\.reflect : 0/);
+  assert.match(WGX_SOURCE, /s\[55\] = _ssrRan \? \(o\.carReflect != null/);
+  // C-7: lampVol requires mist > 0 (GLX lampVolPre / TLX lampVol parity) at
+  // BOTH the early depth-need predicate and the godray arm.
+  const mistGates = WGX_SOURCE.match(/\(\(o\.mist \|\| 0\) > 0 && o\.lampVol != null\)/g) || [];
+  assert.ok(mistGates.length >= 2, `expected the mist gate at _lampVolEarly AND the godray arm — found ${mistGates.length}`);
+});
 
 test("WGX ground mist matches GLX band/strength", () => {
   // lit.js: exp(-lowH * (0.09 / mh)), no *0.5, clamp 0.45 — not exp(-lowH/(mh*20)).

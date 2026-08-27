@@ -2880,6 +2880,9 @@ const WGX = (function () {
     }
     function freeChunkedMesh(m) {
       if (!m) return;
+      // Drop the lamp-table segment (and any overflow sentinel) keyed on this
+      // chunks array — a rebuilt mesh must re-resolve, not inherit stale state.
+      if (m.chunks) _ciSeg.delete(m.chunks);
       if (m.vbuf) m.vbuf.destroy();
       if (m.ibuf) m.ibuf.destroy();
       if (m.sbuf) m.sbuf.destroy();
@@ -3421,14 +3424,6 @@ const WGX = (function () {
       const cd = frameCullDist, cd2 = cd * cd;
       const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
       const chunks = mesh.chunks;
-      if (!cull) {
-        for (let i = 0; i < chunks.length; i++) {
-          const ch = chunks[i];
-          _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG, o.surfaceId === 16);
-          _drawGeom(litPass, ch);
-        }
-        return;
-      }
       // Per-chunk lamps: one DrawU slot per visible chunk carrying that chunk's
       // (offset, count) slice of the baked chunkIdxSBO table. The adjacent-run
       // merge is deliberately forfeited here — adjacent chunks almost never
@@ -3436,16 +3431,22 @@ const WGX = (function () {
       // runs in this mode; MAX_DRAWS 4096 has ample headroom (~150 visible
       // chunks measured worst-case). Table segments append per chunks-array;
       // a bake-generation move (_writeFrame) resets the allocator.
+      // This branch sits ABOVE the !cull fast path: a frame without a
+      // viewProj (menu orbit, headless) must still light per-chunk when the
+      // mode is on — it just draws every chunk instead of the visible ones.
       if (framePerChunk > 0 && frameAllLights && typeof LampChunks !== "undefined") {
         let seg = _ciSeg.get(chunks);
         const table = LampChunks.resolve(frameAllLights, chunks, framePerChunk);
         if (!seg || seg.table !== table) {
           const need = table.concat.length;
           if (_ciCursor + need > CHUNK_IDX_CAP) {
-            // Overflow (extreme lampDensity): warn once per generation and let
-            // this mesh fall through to the global-set merge path below.
+            // Overflow (extreme lampDensity): warn ONCE per table — the
+            // sentinel (base -1) is remembered so the next frame neither
+            // re-warns nor re-attempts the write; the mesh falls through to
+            // the global-set merge path below until the bake regenerates.
             try { Log.warn("gfx", "WGX per-chunk lamp table overflow (" + (_ciCursor + need) + " > " + CHUNK_IDX_CAP + ") — mesh keeps the global set"); } catch (_) { /* harness */ }
-            seg = null;
+            seg = { base: -1, table };
+            _ciSeg.set(chunks, seg);
           } else {
             if (need > 0) device.queue.writeBuffer(chunkIdxSBO, _ciCursor * 4, table.concat);
             seg = { base: _ciCursor, table };
@@ -3453,12 +3454,14 @@ const WGX = (function () {
             _ciCursor += need;
           }
         }
-        if (seg) {
+        if (seg.base >= 0) {
           const tbl = seg.table;
           for (let i = 0; i < chunks.length; i++) {
             const ch = chunks[i];
-            const dist2 = _aabbDist2(ch.min, ch.max, ex, ey, ez);
-            if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max) || (cd > 0 && dist2 > cd2)) continue;
+            if (cull) {
+              const dist2 = _aabbDist2(ch.min, ch.max, ex, ey, ez);
+              if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max) || (cd > 0 && dist2 > cd2)) continue;
+            }
             const cslot = _drawSlot++;
             if (cslot >= MAX_DRAWS) break;
             _writeDraw(cslot, model, o);
@@ -3474,6 +3477,14 @@ const WGX = (function () {
           }
           return;
         }
+      }
+      if (!cull) {
+        for (let i = 0; i < chunks.length; i++) {
+          const ch = chunks[i];
+          _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG, o.surfaceId === 16);
+          _drawGeom(litPass, ch);
+        }
+        return;
       }
       // Merge runs of adjacent visible chunks that share vbuf/ibuf/attrBG.
       // Map insertion order is IBO order, so summing count from the run's
@@ -3825,7 +3836,12 @@ const WGX = (function () {
       const _contactEarly = (o.contact > 0 && frameSunVS) ? o.contact : 0;
       const _haveAOEarly = frameHaveProj && ssaoBG && (_aoStrEarly > 0 || _contactEarly > 0);
       const _grStrEarly = o.godray != null ? o.godray : 0;
-      const _lampVolEarly = o.lampVol != null ? o.lampVol : 0;
+      // The godray march multiplies lamp in-scatter by the mist uniform (the
+      // in-scatter needs particles to scatter off), so with GROUND MIST at 0
+      // it computes an exact 0 — zeroing lampVol sheds the half-res march +
+      // blurs + composite operand with bit-identical output (GLX/TLX parity:
+      // glx/post.js lampVolPre, tlx-post.js lampVol).
+      const _lampVolEarly = ((o.mist || 0) > 0 && o.lampVol != null) ? o.lampVol : 0;
       const _haveGREarly = !!(godrayBG && lastFrame && lastFrame.invViewProj
         && ((!!shadowView && _grStrEarly > 0) || _lampVolEarly > 0));
       // Same operands as the SSR pass below: wet-road OR car lacquer. Omitted
@@ -3917,8 +3933,13 @@ const WGX = (function () {
         : ((T && T.carReflect != null) ? T.carReflect : 0.05);
       // Run when wet-road SSR is live OR car lacquer needs a mirror (GLX composite
       // gates on either path). Dry days still get car-paint SSR.
-      if (_ssrReady && ssrBG && frameHaveProj &&
-          ((_wet > 0.01 && _ssrStr > 0.001) || _carRefl > 0.001)) {
+      // _ssrRan is REMEMBERED for the composite below: when this pass skips
+      // (no viewProj this frame, bind group not built yet), ssrTex still holds
+      // LAST frame's reflections — the consume lanes must read 0, not march
+      // stale mirror data onto this frame's road and paint.
+      const _ssrRan = !!(_ssrReady && ssrBG && frameHaveProj &&
+          ((_wet > 0.01 && _ssrStr > 0.001) || _carRefl > 0.001));
+      if (_ssrRan) {
         const s = postScratch;
         s.set(frameInvProjW, 0);
         s.set(frameProjRaw && frameProjRaw.length >= 16 ? frameProjRaw : IDENT, 16);
@@ -3969,7 +3990,9 @@ const WGX = (function () {
       // CPU gates like GLX: sun shaft strength (no on-screen requirement — shafts
       // still light the mist when the sun sits just off-frame) or lamp volumetric.
       const grStr = o.godray != null ? o.godray : 0;
-      const lampVol = o.lampVol != null ? o.lampVol : 0;
+      // mist gate: see _lampVolEarly above — zero mist makes the lamp march an
+      // exact 0, so drop the operand and the passes it would arm.
+      const lampVol = ((o.mist || 0) > 0 && o.lampVol != null) ? o.lampVol : 0;
       const sunGR = !!shadowView && grStr > 0;
       // GLX/TLX require invViewProj — without it the march uses IDENT and
       // paints garbage shafts on the first / odd present.
@@ -4155,12 +4178,12 @@ const WGX = (function () {
         s[48] = (T && T.gammaR     != null) ? T.gammaR     : 1;
         s[49] = (T && T.gammaG     != null) ? T.gammaG     : 1;
         s[50] = (T && T.gammaB     != null) ? T.gammaB     : 1;
-        s[51] = (o.reflect != null) ? o.reflect : 0;                                      // gamma.w = wet-road SSR
+        s[51] = _ssrRan && o.reflect != null ? o.reflect : 0;                             // gamma.w = wet-road SSR (0 when the pass skipped — ssrTex is stale)
         s[52] = (T && T.gainR      != null) ? T.gainR      : 1;
         s[53] = (T && T.gainG      != null) ? T.gainG      : 1;
         s[54] = (T && T.gainB      != null) ? T.gainB      : 1;
-        s[55] = o.carReflect != null ? o.carReflect
-          : ((T && T.carReflect != null) ? T.carReflect : 0.05);                           // gain.w = carReflect
+        s[55] = _ssrRan ? (o.carReflect != null ? o.carReflect
+          : ((T && T.carReflect != null) ? T.carReflect : 0.05)) : 0;                      // gain.w = carReflect (same stale-ssrTex gate)
         // aces (off 224): TONE CURVE coeffs a,b,c,d (GLX parity). Always packed —
         // defaults reproduce the shipped Narkowicz curve byte-for-byte.
         s[56] = (T && T.acesA != null) ? T.acesA : 2.51;

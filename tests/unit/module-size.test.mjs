@@ -497,7 +497,10 @@ const CEILINGS = {
   // The whole WGX backend in one IIFE by design (deferred inject, no tag).
   // 5179 -> 5365 on the deploy union: their half-res SSR + chunk-AABB
   // lamp-mask cull rounds landed on the other lineage (re-measured).
-  "js/render/webgpu/wgx.js": 5365,
+  // 5365 -> 5388 (R8): overflow sentinel remembered, per-chunk hoisted above
+  // the !cull fast path, SSR consume lanes gated on _ssrRan, lampVol mist
+  // gate ported from GLX/TLX — bug-explaining growth.
+  "js/render/webgpu/wgx.js": 5388,
   // TLX backend shell; grows only with GLX-parity features.
   "js/render/three/tlx.js": 2095,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
