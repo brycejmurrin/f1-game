@@ -259,17 +259,38 @@ test.describe("TLX — boot", () => {
     // as the variable. park() is the shipped hook that shoves the field 600 m
     // back (js/game/apex.js) and pins state to "race" — the stint is then solo
     // and the outcome no longer depends on frame pacing.
+    //
+    // THE STINT LENGTH IS LOAD-BEARING TOO. 30 frames only ever laid marks
+    // because the seam-wall bug (fixed in 32b6c55: scanBarrier's sign-lossy
+    // node wrap read undefined spans just before the start line) left this
+    // wall MISSING, so the burst flew straight into the grass. With the wall
+    // restored, frame 30 has the car pinned against it at x=7.9 with monza
+    // hw=8.0 — on-road by 10 cm, slip killed by the barrier scrub — and the
+    // gate above is deterministically unsatisfiable (measured byte-identical:
+    // vLat=0, x=7.900000095367432 across runs). Held longer, the burst walks
+    // OVER the low barrier onto the grass: step-walked on current physics,
+    // the stamp gate holds for steps 47..80 (x 8.2→9.2 offroad, speed 38→10).
+    // 55 frames stops mid-window — x=9.21, speed 29 — margin on both sides.
+    //
+    // freeze() IN THE SAME evaluate as the stint. An off-road end state is
+    // TRANSIENT: each spec round trip lets live rAF frames run, and one
+    // SwiftShader frame is seconds of sim time — grass drag and the wrong-way/
+    // beached recovery mangle the slide before a separate freeze() call lands
+    // (measured: premise green, then the wait died on a recovered car). Atomic
+    // stint+freeze pins the measured window state exactly; the premise reads
+    // AFTER freeze, from state that can no longer move.
     await page.evaluate(() => {
       window.__apex.park(0.1);
       window.__apex.jump(0.1, 70);
-      window.__apex.act({ steer: 1, throttle: true }, 1 / 60, 30);
+      window.__apex.act({ steer: 1, throttle: true }, 1 / 60, 55);
+      window.__apex.freeze(true);
     });
     // Assert the PREMISE before waiting 60 s on its consequence: a car that is
-    // no longer driving reports that in a second, instead of as a timeout whose
-    // message names the renderer.
+    // no longer driving (or that never left the road) reports that in a second,
+    // instead of as a timeout whose message names the renderer.
     const drive = await page.evaluate(() => window.__apex.physState());
     expect(drive.speed).toBeGreaterThan(10);
-    await page.evaluate(() => window.__apex.freeze(true));
+    expect(Math.abs(drive.x)).toBeGreaterThan(8);
     // Two presented frames, and a TLX frame on a built Monza under SwiftShader
     // is seconds, not milliseconds — so this bound is generous on purpose.
     await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.fxState().skidVerts > 0, null, { polling: 100, timeout: 60_000 });

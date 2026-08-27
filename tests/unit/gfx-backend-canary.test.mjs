@@ -141,8 +141,11 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   assert.match(game, /armed && !skipClaim/);
   // The claim-fail reload must READ THE SKIP BACK first: with sessionStorage
   // blocked, removing the probe + reloading replays the claim-and-die boot
-  // forever (the probe was the only other escape).
-  assert.match(game, /skipped = sessionStorage\.getItem\("apex26\.gfxClaimFail"\) === "1"/);
+  // forever (the probe was the only other escape). And it must reload at most
+  // ONCE — a latch already set when the boot started means the previous
+  // reload's GLX.init failed too, and reloading again loops forever
+  // (measured 236 reloads/64 s under a Vulkan-only browser config).
+  assert.match(game, /skipped = prev !== "1" && sessionStorage\.getItem\("apex26\.gfxClaimFail"\) === "1"/);
   assert.match(game, /Live tab, create\(\) refused[\s\S]{0,400}removeItem\("apex26\.gfxBackendProbe"\)/);
   assert.match(game, /gfxClaimFail[\s\S]{0,220}removeItem\("apex26\.gfxBackendProbe"\)/);
   assert.doesNotMatch(game, /create\(\) refused[\s\S]{0,250}setItem\("apex26\.gfxBackend", "webgl2"\)/);

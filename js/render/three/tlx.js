@@ -1915,9 +1915,13 @@ const TLX = (function () {
             }
             // Live InstancedMeshes hold their own material reference — leave
             // them on a dead lit material and the retry render throws again,
-            // burning the remaining fallback rungs in one frame.
+            // burning the remaining fallback rungs in one frame. They get the
+            // fallbackMat contract's instanced rung (per-instance tint attribute)
+            // — plain unlitMat has no instanceTint read and paints every
+            // TrackGraph batch flat.
+            const instMat = mode >= 2 ? mat : unlitInstancedMat;
             for (let i = 0; i < _instRegistry.length; i++) {
-              if (_instRegistry[i]) _instRegistry[i].material = mat;
+              if (_instRegistry[i]) _instRegistry[i].material = instMat;
             }
           };
           const refuseTab = () => {

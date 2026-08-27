@@ -384,7 +384,10 @@ const CEILINGS = {
   // raceCtl.reset (the unreachable in-update reset), and the measured noseIn
   // sign flip with its live-verification record — every line a fix plus the
   // comment recording the bug at its site, not a feature.
-  "js/game.js": 8658,
+  // 8658 -> 8662: the claim-fail reload learns its ONE-reload bound (a latch
+  // already set at boot start means the previous reload's GLX.init failed too
+  // — measured 236 reloads/64 s before the guard; falls through to #nogl).
+  "js/game.js": 8662,
   // The next three largest. Each is cohesive today (a dev API, an agent view, a
   // procedural mesh), so these are drift alarms rather than extraction targets.
   // 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
