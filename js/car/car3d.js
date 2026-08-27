@@ -2109,28 +2109,29 @@ const Car3D = (function () {
               0.025, 6, HALO, SURFACES.metal);
       addBox(out, 0, 0.79, 0.62, 0.045, 0.38, 0.045, HALO, SURFACES.metal); // front pillar
     }
+    // The hoop centreline is computed HERE (shared by the blade fairing below
+    // and part("halo") further down — the sections run in one function scope).
+    const haloSty = Math.max(0, Math.min(2, Math.round(cockpitStyle.halo || 0)));
+    const hr = haloSty === 1 ? 0.024 : 0.028;
+    const crownY = 0.845 - (haloSty === 1 ? 0.008 : 0);
+    const hoop = ckpt ? null : haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49);
     const haloBlade = Math.max(0, Math.min(2, Math.round(ckpt ? 0 : cockpitStyle.haloBlade || 0)));
     if (haloBlade > 0) {
-      const bw = haloBlade === 2 ? 0.072 : 0.048;
-      const bh = haloBlade === 2 ? 0.038 : 0.028;
       const bladeC = haloTint || HALO;
-      for (const s of [-1, 1]) {
-        // The fairing rides the level crown bar, its front station lifted
-        // with the bar's shallow arch so it blends into the tube rather than
-        // descending into it.
+      // The fairing is a CO-AXIAL TUBE over the hoop's own centreline — a
+      // fairing thickens the hoop it wraps. The old four straight spans
+      // chorded the curve and read as the pre-tube triangle laid over the
+      // round halo. Radii sit 8-11 mm proud of the hoop: no coplanar faces.
+      if (haloBlade === 1) {
+        // Low fairing: shoulders + crown bar only (path pts 3..11 of 15).
+        addTube(out, hoop.slice(3, 12), hr + 0.008, 6, bladeC, SURFACES.metal);
+      } else {
+        // Full shroud: the whole hoop, plus the centre spine riding clear of
+        // the fatter tube.
+        addTube(out, hoop, hr + 0.011, 6, bladeC, SURFACES.metal);
         addBeveledSpan(out,
-          { z: 0.49, x: 0, y: 0.868, w: bw, h: bh, t: 0.62 },
-          { z: 0.02, x: s * 0.30, y: 0.858, w: bw * 0.92, h: bh * 0.92, t: 0.62 },
-          0.010, bladeC, null, SURFACES.metal);
-        addBeveledSpan(out,
-          { z: 0.02, x: s * 0.30, y: 0.858, w: bw * 0.92, h: bh * 0.92, t: 0.62 },
-          { z: -0.44, x: s * 0.235, y: 0.530, w: bw * 0.85, h: bh * 0.80, t: 0.55 },
-          0.010, bladeC, null, SURFACES.metal);
-      }
-      if (haloBlade === 2) {
-        addBeveledSpan(out,
-          { z: 0.50, x: 0, y: 0.896, w: bw * 1.15, h: bh * 0.85, t: 0.50 },
-          { z: 0.30, x: 0, y: 0.884, w: bw * 0.70, h: bh * 0.70, t: 0.55 },
+          { z: 0.50, x: 0, y: 0.904, w: 0.083, h: 0.032, t: 0.50 },
+          { z: 0.30, x: 0, y: 0.892, w: 0.050, h: 0.027, t: 0.55 },
           0.008, bladeC, null, SURFACES.metal);
       }
     }
@@ -2229,14 +2230,13 @@ const Car3D = (function () {
       // sweeping to the front apex (z 0.49) — round in plan, never peaking or
       // dipping toward the centre. r 0.028 keeps the old square section's
       // outer envelope, so the haloBlade/haloWing/camPods attachments above
-      // still land on the hoop.
-      const haloSty = Math.max(0, Math.min(2, Math.round(cockpitStyle.halo || 0)));
-      const hr = haloSty === 1 ? 0.024 : 0.028;
-      const crownY = 0.845 - (haloSty === 1 ? 0.008 : 0);
+      // still land on the hoop. haloSty/hr/crownY and the hoop path itself
+      // (haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49)) are
+      // computed once beside the blade fairing above, which wraps the SAME
+      // centreline as a co-axial tube.
       // Front centre pillar rises to y 0.83 — overlapping the flat bar's
       // underside (0.845 - 0.028 = 0.817) by ~1.3 cm, never stopping short.
       addBox(out, 0, 0.68, 0.47, 0.035, 0.30, 0.05, haloC, SURFACES.metal);
-      const hoop = haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49);
       addTube(out, hoop, hr, 6, haloC, SURFACES.metal);
       // The real strut SPLITS into a V at the top, meeting the ring at two
       // points either side of the apex — the wishbone silhouette head-on.
