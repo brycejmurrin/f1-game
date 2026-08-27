@@ -128,8 +128,9 @@ const WGX = (function () {
   const MAX_LIGHTS = _CH.MAX_LIGHTS | 0;                // 48
   const LIGHT_BYTES = LIGHT_STRIDE * MAX_LIGHTS;        // 3072
   const LIGHT_FLOATS = LIGHT_BYTES / 4;                 // 512
-  const DRAW_USED_BYTES = _CH.DRAW_UNIFORM_BYTES | 0;   // 112
-  const DRAW_FLOATS = DRAW_USED_BYTES / 4;              // 28
+  const DRAW_USED_BYTES = _CH.DRAW_UNIFORM_BYTES | 0;   // 128
+  const DRAW_FLOATS = DRAW_USED_BYTES / 4;              // 32
+  const LAMP_MASK_ALL = 16777215;                       // 2^24-1: f32-exact all-ones lamp mask
   // Dynamic uniform-buffer offsets must be a multiple of
   // minUniformBufferOffsetAlignment (<=256 on all adapters); 256 is always a
   // valid multiple, so we stride slots at 256 B.
@@ -761,6 +762,7 @@ const WGX = (function () {
 
     // Culling frame state.
     let frameViewProj = null, frameEye = null, frameCullDist = 0;
+    let frameLights = null, frameNL = 0;   // this frame's stride-15 light array (lamp-mask cull)
     // Post-chain + FX frame extras.
     // frameVPGpu is the Z01-remapped
     // view-proj the depth buffer was rasterised with — every FX embeds it so its
@@ -3028,6 +3030,8 @@ const WGX = (function () {
       frameViewProj = f.viewProj || null;
       frameEye = f.eye || null;
       frameCullDist = f.cullDist || 0;
+      frameLights = nL > 0 ? L : null;
+      frameNL = nL;
       _fcPlanesIsFrame = false;   // viewProj (re)written — the shared plane scratch is stale
     }
 
@@ -3152,6 +3156,10 @@ const WGX = (function () {
       // Floor/terrain over the ribbon: WGX depth loses the road, so fs_main
       // discards the LUT footprint. Never set this on cars/props (mat2.w).
       d[base + 27] = o.buryRibbon ? 1 : 0;
+      // Lamp masks (DrawU.mat3.xy): all-ones = no cull. Ring slots are reused
+      // across frames, so every writer must set them — a stale chunk mask on a
+      // car draw would silently unlight it. drawChunked overwrites per run.
+      d[base + 28] = LAMP_MASK_ALL; d[base + 29] = LAMP_MASK_ALL;
     }
     // One (or ranged) writeBuffer for every slot filled this pass — call before
     // litPass.end(). writeBuffer is queue-ordered before submit, so draws
@@ -3334,9 +3342,31 @@ const WGX = (function () {
       // Merge runs of adjacent visible chunks that share vbuf/ibuf/attrBG.
       // Map insertion order is IBO order, so summing count from the run's
       // first firstIndex submits the same triangles as the per-chunk loop.
+      //
+      // Chunk-AABB lamp cull: with a night light set bound, each run gets its
+      // OWN draw slot whose mask has a bit only for lights whose radius
+      // reaches some chunk of the run — bit-exact vs the shader's radius
+      // reject (see the WGSL lamp loop), it just skips the distance math for
+      // lights that cannot touch this geometry. The set is re-ranked as the
+      // player moves, so masks are computed per call (visible chunks × nL
+      // cheap AABB tests); small sets skip the machinery — the reject is
+      // already cheap. Run overflow rebinds the base slot (all-ones mask).
+      const maskL = frameNL > 8 ? frameLights : null;
       let run = null;
       const flush = () => {
         if (!run) return;
+        if (maskL) {
+          const s2 = _drawSlot < MAX_DRAWS ? _drawSlot++ : -1;
+          const use = s2 >= 0 ? s2 : slot;
+          if (s2 >= 0) {
+            const db = s2 * DRAW_F32_STRIDE, sb = slot * DRAW_F32_STRIDE;
+            drawRing.copyWithin(db, sb, sb + 28);
+            drawRing[db + 28] = run.m0;
+            drawRing[db + 29] = run.m1;
+          }
+          _dynOff[0] = use * DRAW_STRIDE;
+          litPass.setBindGroup(1, drawBindGroup, _dynOff);
+        }
         _bindLitVerts(litPass, run.vbuf, identInstanceBuf, run.attrBG, o.surfaceId === 16);
         _drawGeom(litPass, run);
         run = null;
@@ -3348,21 +3378,37 @@ const WGX = (function () {
           flush();
           continue;
         }
+        if (maskL) _chunkLampMask(ch.min, ch.max, maskL, frameNL);
         const vbuf = ch.vbuf || mesh.vbuf;
         const ibuf = ch.ibuf || mesh.ibuf || null;
         const attrBG = ch.attrBG || mesh.attrBG;
         if (run && run.vbuf === vbuf && run.ibuf === ibuf && run.attrBG === attrBG) {
           run.count += ch.count;
+          if (maskL) { run.m0 |= _lm0; run.m1 |= _lm1; }
         } else {
           flush();
           run = {
             vbuf, ibuf, attrBG, count: ch.count,
             firstIndex: _chunkFirstIndex(ch),
             indexFormat: ch.indexFormat || mesh.indexFormat,
+            m0: maskL ? _lm0 : LAMP_MASK_ALL, m1: maskL ? _lm1 : LAMP_MASK_ALL,
           };
         }
       }
       flush();
+    }
+    // Two 24-bit mask halves for the lights whose radius reaches an AABB.
+    // Written to module scratch (_lm0/_lm1) — one caller, synchronous.
+    let _lm0 = 0, _lm1 = 0;
+    function _chunkLampMask(mn, mx, L, n) {
+      let m0 = 0, m1 = 0;
+      for (let i = 0; i < n; i++) {
+        const o = i * 15, rad = L[o + 6];
+        if (rad > 0 && _aabbDist2(mn, mx, L[o], L[o + 1], L[o + 2]) <= rad * rad) {
+          if (i < 24) m0 |= (1 << i); else m1 |= (1 << (i - 24));
+        }
+      }
+      _lm0 = m0; _lm1 = m1;
     }
 
     // Fallback path: tonemap blit (HDR scene -> swapchain). Used when

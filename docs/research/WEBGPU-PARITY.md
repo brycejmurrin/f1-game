@@ -739,11 +739,24 @@ Landed (all Dawn-validated via wgx-validate, lifecycle suites 71/71):
 
 Deferred (audited, sketched, NOT landed — each needs its own verified round):
 
-1. **Per-chunk lamp sets** (biggest night-street win): pack a 48-bit lamp
-   mask into the spare u32s of the 64-float draw-ring slot, port GLX's
-   `_pickChunkLamps` against the existing chunk AABBs, OR masks over merged
-   runs, mask-continue in the WGSL lamp loop. `perChunkLights` /
-   `roadChunkLamps` stay honest no-ops until then.
+1. ~~Per-chunk lamp masks~~ **LANDED (2026-08-27)** as the chunk-AABB lamp
+   cull: DrawU grew mat3 (two f32-exact 24-bit masks, all-ones default from
+   `_writeDraw`), drawChunked gives each merged run its own draw slot whose
+   mask ORs the run's chunk bits, and the WGSL lamp loop mask-continues
+   before the distance math. OUTPUT-PRESERVING by construction — a cleared
+   bit is precisely a light whose radius cannot reach the chunk AABB, i.e.
+   one the per-fragment `ld2 > rad*rad` reject would discard — so this is a
+   cull, NOT the GLX perChunkLights REACH feature (per-chunk nearest sets
+   from allLights, which deliberately relights the scene and ships off).
+   `perChunkLights`/`roadChunkLamps` remain honest no-ops on WGX. Masks are
+   recomputed per call (the global set re-ranks as the player moves);
+   frames with ≤8 lights skip the machinery. A/B night captures (vegas,
+   flicker+warmup pinned to 0, renderClock pinned per frame) diff BELOW the
+   same-code capture noise floor with no lamp-shaped regions in the diff
+   map — the capture pipeline itself is not bit-stable (edge jitter +
+   dither), so the exactness claim rests on the radius-reject argument.
+   Road pieces (no chunk AABBs) keep all-ones masks until the shared-vbuf
+   work below gives them bounds.
 2. **Shared road vertex buffer**: road pieces each own a vbuf (≤4095 pulled
    verts, Dawn workaround), so drawChunked's run merge — keyed on vbuf
    identity — can never fire for the road. One vbuf + `firstVertex` offsets
