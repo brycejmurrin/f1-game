@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1578">
+<meta name="apex-build" content="1579">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -1702,9 +1702,9 @@
 </div>
 
 <!-- data hub -->
-<!-- A REAL <dialog> since round 11 (was a div claiming role=dialog): TopModal
-     mirrors `hidden` onto showModal()/close(), Escape routes through the
-     close button below via data-esc-close, and the platform owns focus
+<!-- A REAL dialog element since round 11 (was a div claiming role=dialog):
+     TopModal mirrors `hidden` onto showModal()/close(), Escape routes through
+     the close button via data-esc-close, and the platform owns focus
      containment — the hub's hand-rolled trap is gone. The chrome inside is
      still built at runtime by js/data/hub.js. -->
 <dialog id="datahub" class="screen" data-esc-close="dh-close-btn" hidden></dialog>
