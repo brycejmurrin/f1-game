@@ -88,8 +88,16 @@ test.describe("Apex 26 — dynamic bicycle model", () => {
     // Kinematic models spin faster the faster you go (yaw ∝ speed). A grip-limited
     // tyre model caps the path: steady heading yaw at full lock should be roughly
     // flat — certainly not growing with speed.
-    const slow = await corner(page, 0.0, 1, 25, 60);
-    const fast = await corner(page, 0.0, 1, 65, 60);
+    // 36 frames, not 60: at full lock the fast run reaches the right barrier
+    // at ~frame 39 (measured per-frame via __apex.probe: x crosses the road
+    // edge near frame 30 and pins at 16.9 by 39), so the old last-12 yaw
+    // window measured WALL rotation, not cornering. It passed only while the
+    // inverted noseIn gate silently skipped the straighten-to-tangent; with
+    // that gate fixed, the wall-align (correct, documented) dominated the
+    // window. At 36 frames the window (24-36) ends before any wall contact
+    // for both speeds; the slow run never walls (x 8.2 max at frame 60).
+    const slow = await corner(page, 0.0, 1, 25, 36);
+    const fast = await corner(page, 0.0, 1, 65, 36);
     expect(fast.finite && slow.finite).toBe(true);
     expect(fast.steadyYaw).toBeLessThan(slow.steadyYaw * 1.3);
   });
