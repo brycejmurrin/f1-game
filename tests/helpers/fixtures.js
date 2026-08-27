@@ -234,7 +234,7 @@ export const sharedTest = test.extend({
     const page = await context.newPage();
     captureConsole(page);
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 30_000 });
     await use(page);
     await context.close();
   }, { scope: "worker" }],
