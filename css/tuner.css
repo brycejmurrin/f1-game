@@ -469,15 +469,20 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .tune-row.tune-off .tune-label { color: var(--dim); }
 .tune-row.tune-off .tune-label b { color: var(--dim); }
 .preset-row { display: flex; gap: calc(var(--gap) * 2 / 3); margin: calc(var(--gap) / 3) 0 calc(var(--gap) * 0.5); }
+/* THE SHRINK CONTRACT, shared by the tuner's two flexible button rows.
+   min-width: 0 defeats flex's min-content floor — without it the PRO preset's
+   one-line small ran 59px past the pane at UI SIZE 200% (measured), and the
+   4-way STEERING row pushed SIM past the panel edge on a landscape phone. */
+.preset-row .preset-btn, .opt-row .opt-btn {
+  flex: 1; min-width: 0; width: auto; margin: 0;
+  font-size: var(--fs-micro); text-align: center;
+}
 .preset-row .preset-btn {
   display: flex; flex-direction: column; align-items: center; gap: calc(var(--gap) * 0.25);
-  /* min-width: 0 — a flex item's automatic minimum is min-content, so at
-     UI SIZE 200% on a portrait phone the PRO button's one-line small ran
-     59px past the pane instead of wrapping (measured 2026-08-21). */
-  flex: 1; min-width: 0; width: auto; margin: 0; padding: calc(var(--gap) * 0.75) calc(var(--gap) * 0.5); text-align: center;
+  padding: calc(var(--gap) * 0.75) calc(var(--gap) * 0.5);
   /* Same zoom-honest WCAG floor as .bigbtn — 16px painted at UI SIZE 40%. */
   min-height: var(--tap-min);
-  letter-spacing: var(--ls-3); font-size: var(--fs-micro);
+  letter-spacing: var(--ls-3);
 }
 .preset-btn small {
   font-size: var(--fs-micro); letter-spacing: var(--ls-1); opacity: 0.6; font-weight: normal;
@@ -491,16 +496,12 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 /* segmented option groups (STEERING / DRIVING HELP / RACING LINE) */
 .opt-row { display: flex; gap: calc(var(--gap) * 0.5); margin-top: calc(var(--gap) / 3); }
 .opt-row .opt-btn {
-  /* min-width:0 defeats the flex default of min-width:auto, which floors an
-     item at its longest word. The 4-way STEERING row (SUPER EASY / ASSISTED /
-     NORMAL / SIM) could not shrink below that sum and pushed SIM past the
-     panel's right edge on a landscape phone. */
-  flex: 1; min-width: 0; width: auto; margin: 0; padding: calc(var(--gap) * 2 / 3) calc(var(--gap) / 3);
+  padding: calc(var(--gap) * 2 / 3) calc(var(--gap) / 3);
   /* on the ladder (css/tokens.css): these measured 37px, one of ten different
      heights for controls of the same rank */
   min-height: var(--chip-h);
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: var(--fs-micro); letter-spacing: var(--ls-1); text-align: center;
+  letter-spacing: var(--ls-1);
 }
 .opt-btn.active {
   background: var(--plate-on); border-color: var(--red); color: var(--text);

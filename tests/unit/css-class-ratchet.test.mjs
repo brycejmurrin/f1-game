@@ -103,7 +103,10 @@ export function shellNodes() {
 // the standings' identical .dh-cons-main (the wrap floor became a context
 // override on the class board), buying real headroom instead of sitting as
 // a duplicate recipe.
-const CLASS_CEILING = 533;
+// 2026-08-27 round 12 (second lowering): 533 -> 532. The camera panel's row
+// class left the shell — its five rows are the panel's only direct div
+// children, so the id scopes them without a class repeated five times.
+const CLASS_CEILING = 532;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under
