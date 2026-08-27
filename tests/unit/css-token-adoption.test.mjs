@@ -159,7 +159,15 @@ const CEILING = {
   // readouts) stay raw deliberately: they are optical anchors against a
   // canvas edge, the exclusion the policy names for anchors, and the tree
   // has no negative-division precedent to copy.
-  rawSpacing: 363,
+  // 2026-08-27: 363 -> 325. css/hud.css and css/overlays.css in one pass —
+  // they share the HUD component (the hud-unit and gearbox sibling overrides
+  // live across both), so migrating one alone would have split a single
+  // widget's ladder across two densities. --btn-gap stays literal: it is a
+  // token DEFINITION inside the measured --btn-pitch touch-dock pair, and
+  // converting it would make the dock slot pitch density-dependent — a
+  // behaviour change, not a spelling one. The centring anchors
+  // (margin: -17px style) stay as anchors.
+  rawSpacing: 325,
   // colour declarations carrying a raw literal (rgb()/rgba()/#hex in any
   // declaration value; tokens.css custom-property DEFINITIONS excluded — the
   // definition site is the system, not drift; url() interiors excluded).

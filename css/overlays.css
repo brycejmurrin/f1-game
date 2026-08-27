@@ -195,12 +195,12 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      cluster is WIDER now (262px vs 201px), so this buys legibility out of the
      axis landscape actually has, and the block still stands at ~2/3 of the
      height it had. Measured after: see the table in docs/archive/research/UI-LAYOUT-RESEARCH.md. */
-  #hud-gearbox { gap: 2px; padding: calc(var(--gap) * 0.25) calc(var(--gap) * 0.5); }
+  #hud-gearbox { gap: calc(var(--gap) / 6); padding: calc(var(--gap) * 0.25) calc(var(--gap) * 0.5); }
   #hud-gear { font-size: 48px; min-width: 44px; }
   #hud-tach { width: 96px; height: 13px; }
   #hud-speed { font-size: 28px; }
   #hud-energy { width: 132px; height: 15px; }
-  .hud-unit { font-size: var(--fs-micro); margin-left: 2px; }
+  .hud-unit { font-size: var(--fs-micro); margin-left: calc(var(--gap) / 6); }
   /* THE LAP BOXES ARE PART OF THE HUD TOO. POS/LAP/TIME/BEST sat at the 9px
      label / 19px value the stylesheet uses everywhere, with NO touch override
      at all — so the one place they are read at arm's length, on a phone, in
@@ -243,7 +243,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     pointer-events: none;          /* the middle must pass drags to the canvas */
   }
   body:not(.desktop) .dock {
-    display: flex; gap: 8px;
+    display: flex; gap: calc(var(--gap) * 2 / 3);
     /* wrap-reverse so an overflowing dock grows UPWARD into empty sky rather
        than pushing the bottom row off the screen. */
     flex-wrap: wrap-reverse;
@@ -263,7 +263,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      Pedals and shifts are COLUMNS because that is where those controls are in
      a real car and where a thumb expects them: brake above gas, up above down.
      Steer and the three taps are ROWS. */
-  body:not(.desktop) .dock-grp { display: flex; gap: 8px; pointer-events: auto; }
+  body:not(.desktop) .dock-grp { display: flex; gap: calc(var(--gap) * 2 / 3); pointer-events: auto; }
   body:not(.desktop) .dock-grp.col { flex-direction: column; align-items: center; }
   body:not(.desktop) .dock-grp.row { flex-direction: row; align-items: flex-end; }
   /* `display:flex` above outranks the UA's [hidden] rule, so restate it — an
@@ -319,7 +319,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body:not(.desktop) #grp-taps { padding-bottom: 0; }
   body:not(.desktop) #grp-pedals,
   body:not(.desktop) #grp-shifts,
-  body:not(.desktop) #grp-steer { padding-bottom: 14px; }
+  body:not(.desktop) #grp-steer { padding-bottom: calc(var(--gap) * 7 / 6); }
   /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
   @media (max-width: 700px) {
     /* Same HUD-axis floor as the base dock values above. */
@@ -358,7 +358,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
       "gear speed  ot"
       "gear energy aero";
     align-items: center; justify-items: center;
-    gap: calc(var(--gap) * 0.25) 8px;
+    gap: calc(var(--gap) * 0.25) calc(var(--gap) * 2 / 3);
     min-width: 0;                  /* may shrink before it pushes a dock */
     pointer-events: none;
   }
@@ -406,8 +406,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     body.desktop #hud-tach { width: 172px; height: 18px; }
     body.desktop #hud-energy { width: auto; justify-self: stretch; height: 18px; }
     body.desktop #hud-speed { font-size: 42px; }
-    body.desktop .hud-unit { font-size: var(--fs-micro); margin-left: 4px; }
-    body.desktop #hud-ot, body.desktop #hud-aero { font-size: 15px; padding: 8px 14px; }
+    body.desktop .hud-unit { font-size: var(--fs-micro); margin-left: calc(var(--gap) / 3); }
+    body.desktop #hud-ot, body.desktop #hud-aero { font-size: 15px; padding: calc(var(--gap) * 2 / 3) calc(var(--gap) * 7 / 6); }
   }
   /* console steer: arrows bottom-left, side by side (left thumb home) */
   #btn-steer-left  { left: calc(16px + var(--sal)); bottom: calc(12px + var(--sab)); }
@@ -485,7 +485,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     body:not(.desktop) #hud-energy { width: 108px; }
     body:not(.desktop) #hud-speed { font-size: 24px; }
     body:not(.desktop) #hud-ot,
-    body:not(.desktop) #hud-aero { font-size: var(--fs-micro); padding: 4px 8px; }
+    body:not(.desktop) #hud-aero { font-size: var(--fs-micro); padding: calc(var(--gap) / 3) calc(var(--gap) * 2 / 3); }
     body:not(.desktop) .hud-label { font-size: var(--fs-micro); }
     body:not(.desktop) .hud-value { font-size: 20px; }
   }
@@ -566,7 +566,7 @@ body.hud-hidden #hud-restore { display: block; }
   --balance-basis: 84px; --balance-min: 84px;
   width: min(360px, calc(100vw - var(--sal) - var(--sar) - 20px));
   gap: calc(var(--gap) * 0.5);
-  padding: 8px;
+  padding: calc(var(--gap) * 2 / 3);
   background: rgba(8, 8, 14, 0.92);
   border: 1px solid var(--card-line);
   border-radius: var(--r-lg);
@@ -579,7 +579,7 @@ body.hud-hidden #hud-restore { display: block; }
 }
 #campicker button {
   height: var(--chip-h);
-  padding: 0 8px;
+  padding: 0 calc(var(--gap) * 2 / 3);
   border-radius: var(--r-md);
   font-size: var(--fs-micro);
   font-weight: 700;
@@ -759,7 +759,7 @@ body[data-density="compact"] #campicker {
 }
 #howtoplay dt {
   color: var(--red); font-weight: 700; font-size: var(--fs-micro);
-  letter-spacing: var(--ls-4); padding: calc(var(--gap) * 0.5) 0 2px;
+  letter-spacing: var(--ls-4); padding: calc(var(--gap) * 0.5) 0 calc(var(--gap) / 6);
   border-top: 1px solid rgba(255,255,255,0.06);
   white-space: normal; overflow-wrap: anywhere;
 }
@@ -767,7 +767,7 @@ body[data-density="compact"] #campicker {
 #howtoplay dt[id] { scroll-margin-block-start: var(--gap); }
 #howtoplay dd {
   color: var(--text); font-size: var(--fs-micro); margin-left: 0; line-height: 1.45;
-  padding: calc(var(--gap) * 0.5) 0 2px;
+  padding: calc(var(--gap) * 0.5) 0 calc(var(--gap) / 6);
   border-top: 1px solid rgba(255,255,255,0.06);
 }
 #howtoplay dd:first-of-type { border-top: none; }
@@ -826,7 +826,7 @@ body[data-density="compact"] #campicker {
   width: 100%; max-width: none; margin: 0; box-sizing: border-box;
 }
 #vsfriend .vs-hint {
-  margin: 4px 0 0;
+  margin: calc(var(--gap) / 3) 0 0;
   font-size: var(--fs-micro);
   line-height: 1.35;
   opacity: 0.75;
@@ -865,7 +865,7 @@ body[data-density="compact"] #campicker {
    the pair stays balanced when one label is longer ("SHARE LINK" becomes
    "COPY LINK" with no share sheet). They wrap on a narrow phone rather than
    squeezing the text to unreadable. */
-#vsfriend .vs-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+#vsfriend .vs-actions { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 2 / 3); }
 #vsfriend .vs-actions > .bigbtn {
   flex: 1 1 44%;
   margin: 0;
@@ -878,7 +878,7 @@ body[data-density="compact"] #campicker {
    it keeps its white quiet zone whatever the page theme is doing. An inverted
    QR is unreadable to a large share of scanners. */
 #vsfriend .vs-qr-wrap {
-  margin: 4px 0 0;
+  margin: calc(var(--gap) / 3) 0 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -910,11 +910,11 @@ body[data-density="compact"] #campicker {
    happens". Side by side, the exchange is visible in one glance. Falls back
    to a single column below 620px, where two columns would be too narrow to
    read a code in. */
-#vsfriend .vs-two { display: flex; flex-direction: column; gap: 14px; }
+#vsfriend .vs-two { display: flex; flex-direction: column; gap: calc(var(--gap) * 7 / 6); }
 #vsfriend .vs-col {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(var(--gap) * 2 / 3);
   min-width: 0;                 /* let the code box shrink instead of overflowing */
   box-sizing: border-box;
 }
@@ -922,12 +922,12 @@ body[data-density="compact"] #campicker {
    menu, not for a column. Left alone it shoots straight out of the sheet. */
 #vsfriend .vs-col > .bigbtn {
   width: 100%;
-  margin: 2px 0 0;
+  margin: calc(var(--gap) / 6) 0 0;
 }
 #vsfriend .vs-col-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(var(--gap) * 2 / 3);
   margin: 0;
   font-size: var(--fs-micro);
   letter-spacing: var(--ls-3);
@@ -950,11 +950,11 @@ body[data-density="compact"] #campicker {
 /* A definition list, because that is what this is: four labelled facts about
    the race. Grid rather than the default dl flow so label and value sit on one
    line and the column stays narrow. */
-#vsfriend .vs-summary { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+#vsfriend .vs-summary { margin: 0; display: flex; flex-direction: column; gap: calc(var(--gap) / 3); }
 #vsfriend .vs-summary > div {
   display: grid;
   grid-template-columns: 5.5em 1fr;
-  gap: 8px;
+  gap: calc(var(--gap) * 2 / 3);
   align-items: baseline;
 }
 #vsfriend .vs-summary dt {
@@ -968,8 +968,8 @@ body[data-density="compact"] #campicker {
 #vsfriend .vs-driver {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: calc(var(--gap) * 0.5) 8px;
+  gap: calc(var(--gap) * 2 / 3);
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
   border-radius: var(--r-sm);
   background: var(--plate);
   font-size: var(--fs-micro);
@@ -982,7 +982,7 @@ body[data-density="compact"] #campicker {
 #vsfriend .vs-others {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(var(--gap) / 3);
   max-height: calc(28 * var(--svhz));
   overflow-y: auto; overscroll-behavior-y: contain;
 }
@@ -1062,7 +1062,7 @@ body[data-density="compact"] #campicker {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: calc(var(--gap) * 2 / 3);
   margin-top: 10px;
 }
 #vsfriend .vs-scan video {
@@ -1078,7 +1078,7 @@ body[data-density="compact"] #campicker {
   cursor: pointer;
   font-size: var(--fs-micro);
   opacity: 0.7;
-  padding: 2px 0;
+  padding: calc(var(--gap) / 6) 0;
 }
 #vsfriend .vs-raw[open] > summary { margin-bottom: calc(var(--gap) * 0.5); }
 
