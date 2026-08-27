@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1594">
+<meta name="apex-build" content="1595">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -71,7 +71,7 @@
 <link rel="stylesheet" href="css/tokens.css?v=b130f34ed812">
 <link rel="stylesheet" href="css/components.css?v=740c13224a8c">
 <link rel="stylesheet" href="css/tuner.css?v=dfc16ebe4560" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=ca8cffef55fa">
+<link rel="stylesheet" href="css/menus.css?v=b722c4fc57b6">
 <link rel="stylesheet" href="css/carsetup.css?v=dc8081fe75b6" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=09eec5dfd7e7" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=5f267a1e2625" media="print" onload="this.media='all'">
@@ -476,7 +476,7 @@
            are in SETTINGS > MUSIC & SOUND), so it belongs on the title screen,
            where it hides and shows with #overlay for free. -->
       <p id="audiostate"></p>
-      <button id="soundbtn" class="minibtn" aria-pressed="true">&#9834; ON</button>
+      <button id="soundbtn" class="minibtn" aria-pressed="true">&#9834; SOUND ON</button>
       <p id="disclaimer">Unofficial fan project &mdash; not affiliated with FIA or Formula 1</p>
     </div>
   </div>
@@ -503,7 +503,7 @@
          two across, so the rooms never compete with the modes for the eye. -->
     <div id="menu-secondary" class="balanced-row">
     <button id="mb-standings" class="bigbtn alt minibtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/></svg>STANDINGS</button>
-    <button id="mb-data" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>F1 DATA HUB</button>
+    <button id="mb-data" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>DATA HUB</button>
     <button id="mb-garage" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>GARAGE</button>
     <button id="mb-settings" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>SETTINGS</button>
     <!-- Unhidden (2026-08): the handler was live the whole time while the
@@ -1819,7 +1819,7 @@
 <script crossorigin="anonymous" src="js/game/audio.js?v=acd491776855"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=f43e998612b3"></script>
 <script crossorigin="anonymous" src="js/game/spotify.js?v=27c8d6373cac"></script>
-<script crossorigin="anonymous" src="js/game/audio-panel.js?v=97c5dd551254"></script>
+<script crossorigin="anonymous" src="js/game/audio-panel.js?v=12b308c3d8e4"></script>
 <script crossorigin="anonymous" src="js/data/api.js?v=fa976f9613d8"></script>
 <script crossorigin="anonymous" src="js/data/telemetry.js?v=72c13d9f7d44"></script>
 <script crossorigin="anonymous" src="js/data/export.js?v=2ce05569b764"></script>

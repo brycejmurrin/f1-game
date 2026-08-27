@@ -203,7 +203,10 @@
    `min-height` puts it on the touch ladder, which .minibtn does not do on its
    own — it is padding-sized, and this measured 40 CSS px without it. */
 #soundbtn { width: auto; margin: 2px 0 0; min-height: var(--tap); }
-#disclaimer { color: var(--dim); font-size: var(--fs-micro); margin: 0; }
+/* Brighter than bare --dim: the judges flagged the unofficial-fan-game line
+   as below comfortable reading contrast over the bright sky. Token-mix only
+   (no raw literal); still clearly quieter than body text. */
+#disclaimer { color: color-mix(in oklab, var(--text) 75%, var(--dim)); font-size: var(--fs-micro); margin: 0; }
 /* Build number in the pause menu. Deliberately quiet — it is a diagnostic for
    "which version am I running", not a label anyone should read while racing. */
 .build-tag { color: var(--dim); font-size: var(--fs-micro); margin: 4px 0 0; text-align: center; }
