@@ -463,7 +463,10 @@ const CEILINGS = {
   // recipe-gated knobs (cockpit halo profile/fences, headrest, front-wheel
   // deflector, ERS cooler intake, fuel breather, tyre sidewall rings).
   // Defaults stay 0; measured 2834 on the raise. Raised deliberately.
-  "js/car/car3d.js": 2850,
+  // 2850 -> 2860: the pillar V-brace — the real halo strut splits into a V
+  // at the top, meeting the ring either side of the apex (two beams + the
+  // why). Measured 2853.
+  "js/car/car3d.js": 2860,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

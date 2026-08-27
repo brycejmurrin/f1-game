@@ -2238,6 +2238,11 @@ const Car3D = (function () {
       addBox(out, 0, 0.68, 0.47, 0.035, 0.30, 0.05, haloC, SURFACES.metal);
       const hoop = haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49);
       addTube(out, hoop, hr, 6, haloC, SURFACES.metal);
+      // The real strut SPLITS into a V at the top, meeting the ring at two
+      // points either side of the apex — the wishbone silhouette head-on.
+      for (const s of [-1, 1])
+        addBeamBetween(out, [0, 0.775, 0.468], [s * 0.105, crownY - hr * 0.4, 0.474],
+                       0.015, haloC, SURFACES.metal);
       if (haloSty === 2) {
         // Fenced hoop: three small crest vanes riding the crown bar (hoop
         // indices 5/7/9 = mid-left, apex, mid-right of the 7-point bar).

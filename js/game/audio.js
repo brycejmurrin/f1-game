@@ -784,12 +784,15 @@ const GameAudio = (function () {
     f.type = "bandpass";
     f.Q.value = 1.2;
     const dur = isUp ? 0.085 : 0.11;
-    const f0 = isUp ? 520 : 300;
-    const f1 = isUp ? 300 : 360;     // up: cut down; down: small blip up
+    // The shift crack carries the manufacturer's voice too: pitch rides
+    // rateTrim (Ferrari's blip sits ~3% up, Audi's ~2% down, matching the
+    // engine core) and the click's bandpass brightness rides cutTrim.
+    const f0 = (isUp ? 520 : 300) * voice.rateTrim;
+    const f1 = (isUp ? 300 : 360) * voice.rateTrim;     // up: cut down; down: small blip up
     osc.frequency.setValueAtTime(f0, t0);
     osc.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
-    f.frequency.setValueAtTime(isUp ? 1400 : 900, t0);
-    f.frequency.exponentialRampToValueAtTime(isUp ? 600 : 700, t0 + dur);
+    f.frequency.setValueAtTime((isUp ? 1400 : 900) * voice.cutTrim, t0);
+    f.frequency.exponentialRampToValueAtTime((isUp ? 600 : 700) * voice.cutTrim, t0 + dur);
     env(g, t0, isUp ? 0.12 : 0.1, 0.004, dur);
     osc.connect(f).connect(g).connect(sfxBus);
     osc.start(t0);
@@ -797,7 +800,7 @@ const GameAudio = (function () {
     osc.onended = () => { osc.disconnect(); f.disconnect(); g.disconnect(); };
 
     // a touch of mechanical click via short filtered noise
-    noise(isUp ? 0.05 : 0.045, 0.05, isUp ? 2600 : 1800);
+    noise(isUp ? 0.05 : 0.045, 0.05, (isUp ? 2600 : 1800) * voice.cutTrim);
   }
 
   // i 0..4 — each start light a touch higher than the last
