@@ -39,9 +39,9 @@ const CLIMB_LAUNCH = 10;   // m/s, low-speed run at the steepest climb
 
 async function startRace(page, id) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate((t) => window.__apex.race(t, "day", "dry"), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
   // info().track goes non-null as soon as the track OBJECT exists, which is before
   // its elevation is necessarily in place. Scanning that window reads the flat
   // default tangent, so the "this track really does descend" assertion saw dn = 0
@@ -54,7 +54,7 @@ async function startRace(page, id) {
     if (!p || !p.length) return false;
     const ys = p.map((q) => q.y);
     return Math.max(...ys) - Math.min(...ys) > 0.5;   // metres of elevation range
-  }, null, { timeout: 20000 });
+  }, null, { polling: 100, timeout: 20000 });
   await page.evaluate(() => window.__apex.go());
 }
 
@@ -79,7 +79,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
 
   test("banking pivots around the centreline with smooth edge transitions", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const audits = await page.evaluate(() => {
       return ["zandvoort", "madrid"].map((id) => {
         const def = Tracks.LIST.find((entry) => entry.id === id);
@@ -108,7 +108,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
 
   test("Zandvoort banking peaks at Hugenholtz and Arie Luyendyk", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const result = await page.evaluate(() => {
       const def = Tracks.LIST.find((entry) => entry.id === "zandvoort");
       const track = Tracks.buildCenterline(def);
@@ -138,7 +138,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
 
   test("Madrid converts La Monumental's 24 percent bank to degrees", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const rollDeg = await page.evaluate(() => {
       const def = Tracks.LIST.find((entry) => entry.id === "madrid");
       const track = Tracks.buildCenterline(def);
@@ -152,7 +152,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
 
   test("bank roll matches the road surface slope", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const result = await page.evaluate(() => {
       const def = Tracks.LIST.find((entry) => entry.id === "madrid");
       const track = Tracks.buildCenterline(def);

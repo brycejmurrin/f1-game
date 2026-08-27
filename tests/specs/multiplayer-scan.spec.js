@@ -38,7 +38,7 @@ test.describe.configure({ mode: "serial" });
 // this environment, so a test that built one would HANG rather than fail.
 async function openJoin(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate(() => window.__apex.lobbyFake(true));
   await page.click("#mb-vs");
   await page.click("#vs-join");

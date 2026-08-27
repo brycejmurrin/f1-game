@@ -90,9 +90,9 @@ test.describe("baked materials — temporal stability", () => {
 
   test("baked tarmac does not crawl relative to procedural", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => !!window.__apex, null, { timeout: 30000 });
+    await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 30000 });
     await page.evaluate(() => window.Assets.load());
-    await page.waitForFunction(() => window.__apex.assets().uploaded === true, null, { timeout: 30000 });
+    await page.waitForFunction(() => window.__apex.assets().uploaded === true, null, { polling: 100, timeout: 30000 });
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForTimeout(1500);
 

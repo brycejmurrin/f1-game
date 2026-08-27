@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1583">
+<meta name="apex-build" content="1590">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -70,15 +70,15 @@
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=91a977fea4eb">
 <link rel="stylesheet" href="css/components.css?v=1fbc7a9ae725">
-<link rel="stylesheet" href="css/tuner.css?v=27ba096ee203" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/tuner.css?v=dfc16ebe4560" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/menus.css?v=b55d6dd79bca">
-<link rel="stylesheet" href="css/carsetup.css?v=9515695e72a1" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/hud.css?v=7c1252968366" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=0e8a19088984" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/carsetup.css?v=051dedb8821a" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/hud.css?v=09eec5dfd7e7" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/overlays.css?v=5f267a1e2625" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=6e90ca36cead">
-<link rel="stylesheet" href="css/track-detail.css?v=79eceb3d0ae8" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/career.css?v=c61021027676" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/data.css?v=fc353b273092" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/track-detail.css?v=02ba1aa9b7dd" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/career.css?v=dab85626d73c" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/data.css?v=2e723024c38d" media="print" onload="this.media='all'">
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
      parsers that scan every rel=stylesheet. -->
@@ -1069,7 +1069,7 @@
        as unpressed toggles. -->
   <div id="cs-stack">
     <div id="cs-cam-panel" hidden>
-      <div class="cs-pan-row">
+      <div>
         <span class="cs-pan-lbl" aria-hidden="true">VIEW</span>
         <div id="cs-view" role="group" aria-label="Camera presets">
           <button type="button" class="cs-view-btn" data-cs-view="hero" title="Three-quarter view">3/4</button>
@@ -1083,7 +1083,7 @@
            the flaps rotate about the car's X axis, so FRONT and REAR stare
            straight down that axis and show nothing moving. These are the angles
            that do, and the label is what says so. -->
-      <div class="cs-pan-row">
+      <div>
         <span class="cs-pan-lbl" aria-hidden="true">WINGS</span>
         <div id="cs-wing-views" role="group" aria-label="Wing framings">
           <button type="button" id="cs-wing-front" class="cs-view-btn" data-cs-view="wingFront"
@@ -1097,7 +1097,7 @@
       <!-- Drive the orbit directly, not just to fixed presets. These repeat
            while held, so they pan/tilt/zoom continuously rather than stepping —
            which is also why picking one does NOT close the panel. -->
-      <div class="cs-pan-row">
+      <div>
         <span class="cs-pan-lbl" aria-hidden="true">MOVE</span>
         <div class="cs-pan-grp" role="group" aria-label="Move the camera">
           <button type="button" id="cs-view-left" class="cs-view-btn" title="Rotate left" aria-label="Rotate left">&#9664;</button>
@@ -1115,7 +1115,7 @@
            the flank and past either end. Thin arrows, not the solid triangles
            the MOVE row uses — they do different things and must not read as the
            same control twice. -->
-      <div class="cs-pan-row">
+      <div>
         <span class="cs-pan-lbl" aria-hidden="true">PAN</span>
         <div class="cs-pan-grp" role="group" aria-label="Pan the camera">
           <button type="button" id="cs-pan-left" class="cs-view-btn" title="Slide left" aria-label="Pan left">&larr;</button>
@@ -1125,7 +1125,7 @@
           <button type="button" id="cs-pan-back" class="cs-view-btn" title="Slide back, toward the rear wing" aria-label="Pan back">&darr;</button>
         </div>
       </div>
-      <div class="cs-pan-row">
+      <div>
         <span class="cs-pan-lbl" aria-hidden="true"></span>
         <div class="cs-pan-grp">
           <span class="cs-view-grp">
@@ -1740,8 +1740,9 @@
 <script crossorigin="anonymous" src="js/render/shaders/post.js?v=ddd9ef7abac7"></script>
 <script crossorigin="anonymous" src="js/render/glx/post.js?v=c486a3f04d37"></script>
 <script crossorigin="anonymous" src="js/render/glx/shadow.js?v=c89be0d9caf8"></script>
-<script crossorigin="anonymous" src="js/render/glx/chunked.js?v=d8e3e3a7ecea"></script>
-<script crossorigin="anonymous" src="js/render/glx.js?v=3bb58ba5d7c7"></script>
+<script crossorigin="anonymous" src="js/render/lamp-chunks.js?v=afe9c629b28f"></script>
+<script crossorigin="anonymous" src="js/render/glx/chunked.js?v=30efabbea5bc"></script>
+<script crossorigin="anonymous" src="js/render/glx.js?v=c62dc2d5778b"></script>
 <!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
      two OPT-IN renderer backends and are injected by js/game.js only when
      apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that
@@ -1749,11 +1750,11 @@
      them into its OPTIONAL precache set, since it discovers everything else by
      parsing the tags below. -->
 
-<script crossorigin="anonymous" src="js/render/gfx.js?v=2b78de7e433c"></script>
+<script crossorigin="anonymous" src="js/render/gfx.js?v=c43fc4270889"></script>
 <script crossorigin="anonymous" src="js/render/gltf.js?v=a68c67631936"></script>
 <script crossorigin="anonymous" src="js/render/assets.js?v=ed166b68b74b"></script>
 <script crossorigin="anonymous" src="js/car/teams.js?v=453435b9c847"></script>
-<script crossorigin="anonymous" src="js/car/driver-ratings.js?v=a7553359ad7c"></script>
+<script crossorigin="anonymous" src="js/car/driver-ratings.js?v=b4e275ef92f9"></script>
 <script crossorigin="anonymous" src="js/track/geo-paths.js?v=d748206b17ab"></script>
 <script crossorigin="anonymous" src="js/track/geom.js?v=4d52510dc682"></script>
 <script crossorigin="anonymous" src="js/track/scenery-data.js?v=4877dcd9d6a3"></script>
@@ -1766,7 +1767,7 @@
 <script crossorigin="anonymous" src="js/track/landmark-kit.js?v=b5a86310198b"></script>
 <script crossorigin="anonymous" src="js/track/circuit-kit.js?v=0ee249eee375"></script>
 <script crossorigin="anonymous" src="js/track/spline.js?v=72cf1bacbb58"></script>
-<script crossorigin="anonymous" src="js/track/mesh.js?v=69acd552e991"></script>
+<script crossorigin="anonymous" src="js/track/mesh.js?v=728ac8a4d62b"></script>
 <script crossorigin="anonymous" src="js/track/scenery-nature.js?v=a23f5cba7e76"></script>
 <script crossorigin="anonymous" src="js/track/scenery-structures.js?v=2b278080b824"></script>
 <script crossorigin="anonymous" src="js/track/scenery-city.js?v=3a3f1278afaa"></script>
@@ -1788,7 +1789,7 @@
 <script crossorigin="anonymous" src="js/circuits/albert_park.js?v=451b0398cfc0"></script>
 <script crossorigin="anonymous" src="js/circuits/shanghai.js?v=46328eb4f443"></script>
 <script crossorigin="anonymous" src="js/circuits/miami.js?v=75ac63f9e281"></script>
-<script crossorigin="anonymous" src="js/circuits/imola.js?v=849fc2133f7f"></script>
+<script crossorigin="anonymous" src="js/circuits/imola.js?v=9b98100136db"></script>
 <script crossorigin="anonymous" src="js/circuits/montreal.js?v=850806cc2b11"></script>
 <script crossorigin="anonymous" src="js/circuits/redbull.js?v=cf9160da6d99"></script>
 <script crossorigin="anonymous" src="js/circuits/hungaroring.js?v=d9ea04342703"></script>
@@ -1812,10 +1813,10 @@
 <script crossorigin="anonymous" src="js/circuits/indianapolis.js?v=bc6ccec8ed47"></script>
 <script crossorigin="anonymous" src="js/circuits/buenos_aires.js?v=0a9def10b45a"></script>
 <script crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=87f687006e3a"></script>
-<script crossorigin="anonymous" src="js/track/tracks.js?v=5e8cbbee1e4d"></script>
+<script crossorigin="anonymous" src="js/track/tracks.js?v=2f5b4c3927f6"></script>
 <script crossorigin="anonymous" src="js/track/maps.js?v=0d6c2cddd707"></script>
 <script crossorigin="anonymous" src="js/car/car3d.js?v=2e2b18bccbb6"></script>
-<script crossorigin="anonymous" src="js/game/input.js?v=21c2c9f3aa14"></script>
+<script crossorigin="anonymous" src="js/game/input.js?v=6d9477b5a3e6"></script>
 <script crossorigin="anonymous" src="js/game/audio.js?v=acd491776855"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=f43e998612b3"></script>
 <script crossorigin="anonymous" src="js/game/spotify.js?v=27c8d6373cac"></script>
@@ -1826,17 +1827,17 @@
 <script crossorigin="anonymous" src="js/data/schedule.js?v=6ccedb2bf1a0"></script>
 <script crossorigin="anonymous" src="js/data/standings.js?v=420627476c88"></script>
 <script crossorigin="anonymous" src="js/data/lastrace.js?v=b7d043cba6a1"></script>
-<script crossorigin="anonymous" src="js/data/live.js?v=97171ff8e873"></script>
+<script crossorigin="anonymous" src="js/data/live.js?v=c33a77e10480"></script>
 <script crossorigin="anonymous" src="js/data/hub.js?v=41dd4a45ca6e"></script>
 <script crossorigin="anonymous" src="js/car/parts.js?v=299db50b7f16"></script>
 <script crossorigin="anonymous" src="js/car/liveries.js?v=3c03d579e61e"></script>
 <script crossorigin="anonymous" src="js/car/liverytex.js?v=0026e82d9924"></script>
 <script crossorigin="anonymous" src="js/car/ghost.js?v=a428eb7c9a73"></script>
-<script crossorigin="anonymous" src="js/game/light-presets.js?v=94cd2507f889"></script>
+<script crossorigin="anonymous" src="js/game/light-presets.js?v=e58bf672ca27"></script>
 <script crossorigin="anonymous" src="js/game/physics-consts.js?v=95ddf68ac644"></script>
 <script crossorigin="anonymous" src="js/game/tables.js?v=02a99fbba028"></script>
-<script crossorigin="anonymous" src="js/game/lighting.js?v=3e31da926966"></script>
-<script crossorigin="anonymous" src="js/game/light-store.js?v=96b0ed6e1f7c"></script>
+<script crossorigin="anonymous" src="js/game/lighting.js?v=d002bf116d73"></script>
+<script crossorigin="anonymous" src="js/game/light-store.js?v=665ea8e0359e"></script>
 <script crossorigin="anonymous" src="js/game/carmesh.js?v=b1136756cc1e"></script>
 <script crossorigin="anonymous" src="js/game/bodyattitude.js?v=7d125d9a7b2a"></script>
 <script crossorigin="anonymous" src="js/game/particles.js?v=c8d55abb6f14"></script>
@@ -1868,7 +1869,7 @@
 <script crossorigin="anonymous" src="js/game/brake-cue.js?v=9268cbc97ff5"></script>
 <script crossorigin="anonymous" src="js/game/steer-tuning.js?v=072a417935f9"></script>
 <script crossorigin="anonymous" src="js/game/perf.js?v=495da1c1cfe4"></script>
-<script crossorigin="anonymous" src="js/game/gfx-quality.js?v=10ecef8cb376"></script>
+<script crossorigin="anonymous" src="js/game/gfx-quality.js?v=793314c6aa39"></script>
 <script crossorigin="anonymous" src="js/game/ui-scale.js?v=71d20ad63b86"></script>
 <script crossorigin="anonymous" src="js/game/cockpit-opts.js?v=fbd88d65fac7"></script>
 <script crossorigin="anonymous" src="js/game/metrics-panel-style.js?v=993e1d4e1e0b"></script>
@@ -1891,5 +1892,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=ab5f8dedabbc"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=c2db889f6db5"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=81b09256e218"></script>
-<script crossorigin="anonymous" src="js/game.js?v=25f990257bc8"></script>
+<script crossorigin="anonymous" src="js/game.js?v=cdabaf630717"></script>
 </body></html>

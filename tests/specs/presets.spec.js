@@ -9,7 +9,7 @@ import { test, expect } from "../helpers/fixtures.js";
 
 async function load(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
 }
 const clickPreset = (page, name) =>
   page.evaluate((n) => document.getElementById("pm-preset-" + n).click(), name);

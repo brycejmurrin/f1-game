@@ -21,9 +21,9 @@ test.describe.configure({ timeout: 360_000 });
 
 async function openImageTuner(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15_000 });
   await page.evaluate(() => window.__apex.race("bahrain"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 20_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 20_000 });
   await page.evaluate(() => window.__apex.park(0.1));
   await page.locator("#pausebtn").click();
   await page.locator("#pm-settings").click();

@@ -56,7 +56,7 @@ for (const [shapeName, viewport] of SHAPES) {
       test(`${screenName} looks like itself`, async ({ page }) => {
         await page.goto("/");
         await page.waitForFunction(() => window.__apex && window.__apex.race,
-          null, { timeout: 15_000 });
+          null, { polling: 100, timeout: 15_000 });
         // Stop the render loop: the 3D scene behind the menus is different every
         // frame, so a baseline that includes it can never match. It also unblocks
         // Playwright's actionability checks, which wait on animation frames this

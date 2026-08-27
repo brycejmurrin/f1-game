@@ -86,6 +86,13 @@
   overflow: hidden;
 }
 #track-detail[hidden] { display: none; }
+/* The CLOSED state too, and [hidden] above is not it: hidden is app state,
+   open is platform state, and TopModal's observer leaves a seam where neither
+   matches. This file is a higher layer than the generic dialog closed-state
+   guard, so without this line the display:flex above wins in that seam and a
+   forced layout there makes Chromium drop child boxes on top-layer re-attach
+   (the customize head/foot bug). The css-layers guard test enforces this. */
+#track-detail:not([open]) { display: none; }
 /* The header is the canonical .sheet-head (css/components.css) — the paint,
    the ::after hairline (now edge-to-edge, an upgrade over the old flat
    border-bottom) and the brand-red h2 all come from the class. Only the

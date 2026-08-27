@@ -129,6 +129,11 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   now snapshot the same pre-material N — wall bump stays out of SAA
   on all three backends. Every baked MAT layer is hoisted with
   `textureSample` (aniso 4) so brick/concrete match GLX `texture()`.
+  Per-chunk lamps ship natively: the shared `LampChunks` bake
+  (`js/render/lamp-chunks.js`) uploads the full baked track set +
+  concatenated index table to storage bindings 15/16, one DrawU slot per
+  visible chunk, absolute shadow index in `params10.x` (no slot remap);
+  `gfx.hasPerChunkLights` is the capability read (GLX + WGX; absent TLX).
   Names that used
   to be absent (`gpuTimer`, texture arrays, lamp shadows, instancing,
   particles, …) are real functions on the backend object; they stay listed

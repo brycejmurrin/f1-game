@@ -98,8 +98,14 @@
  *   noEnv:bool                     disable env-cube sheen (menu preview)
  *   tune:object                    live LIGHTING TUNER knobs (LT.*); defaults in
  *                                  the backend MUST mirror LightTune.TUNE_DEFS
- *   lights:Float32Array            flat stride-15 point lights, pre-culled <=32:
+ *   lights:Float32Array            flat stride-15 point lights, pre-culled <=48:
  *     [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner,cosOuter, bleed, volW, glareW]
+ *   allLights:Float32Array         FULL baked track-lamp set (same stride) for
+ *                                  per-chunk lamp binding; null by day
+ *   perChunkLights:number          0..1 per-chunk lamp amount (0 = off); also
+ *                                  the track-lamp intensity scale in that mode
+ *   tailStart, tailCount:number    car tail-light range appended to `lights`
+ *                                  after the static cull (outside allLights)
  *
  * `sky` object consumed by drawSky() (see GLX.drawSky):
  *   invViewProj, zenith:vec3, horizon:vec3, sunDir:vec3, sunColor:vec3,

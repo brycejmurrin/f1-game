@@ -105,9 +105,9 @@ test.describe("Apex 26 — player camera modes", () => {
   // and the camera slides sideways the instant lights-out runs the first tick.
   test("the player has a world pose on the grid, so the chase rig doesn't switch at lights-out", async ({ page, loadTrack }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
     const r = await page.evaluate(() => {
       window.__apex.freeze(true);        // hold the countdown: state must stay "count"
       // physState() returns null while player.px is unset, and no car physics has

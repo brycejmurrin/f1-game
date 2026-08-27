@@ -14,10 +14,10 @@ async function loadRace(page, trackId = "monza") {
   const live = await page.evaluate(() => window.__apex != null).catch(() => false);
   if (!live) {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   }
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
   // jump to mid-track at racing speed so obs() has valid world-space position
   await page.evaluate(() => { window.__apex.jump(0.1, 40, 0); });
   await page.waitForTimeout(100);
@@ -57,7 +57,7 @@ test.describe("__apex.obs()", () => {
 
   test("returns null before track load", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const v = await page.evaluate(() => window.__apex.obs());
     expect(v).toBeNull();
   });
@@ -296,7 +296,7 @@ test.describe("__apex.reset()", () => {
 
   test("returns false when player not yet initialised", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     // reset() requires both track and player; on a fresh page either may be null
     // depending on race between track load and player initialisation.
     // Verify: it either returns false (safe) or a valid obs (also fine).

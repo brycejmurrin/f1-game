@@ -540,6 +540,10 @@ function set(id, opts) {
   Log.info("game", "GfxQuality.set " + _cur);
   const st = gstore(); if (st) st.set("gfxPreset", _cur);
   applyLive();
+  // The lighting store's conditional shipped layer (the ULTRA-night per-chunk
+  // rung) resolves through the CURRENT preset, so a flip must re-run the
+  // lighting apply to engage live. Lazy, like the PerfGov poke above.
+  try { if (typeof LightStore !== "undefined" && LightStore.reapply) LightStore.reapply(); } catch (_) { /* pre-boot: the first apply() resolves it */ }
   const needsReload = syncBootTier();
   const btn = typeof document !== "undefined" ? document.getElementById("pm-gfx") : null;
   if (btn) btn.textContent = needsReload ? label() + " — RELOADING…" : label();

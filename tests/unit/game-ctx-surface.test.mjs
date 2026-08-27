@@ -16,7 +16,7 @@
  * TWO LEGS, DELIBERATELY UNEQUAL. Parity — the .d.ts member set against the real
  * `const G = {…}` — needs nothing but espree, which is already a devDependency,
  * so it is unconditional and is what actually holds the line. The tsc leg checks
- * all ~1740 G reference sites in js/game|net against the interface and is SKIPPED
+ * all ~1900 G reference sites in js/game|net against the interface and is SKIPPED
  * when no TypeScript is resolvable, because a guard that fails on a machine
  * without an optional toolchain teaches people to ignore it. Skipped is reported,
  * never silent.
@@ -63,7 +63,7 @@ test("the writability of every member is transcribed, not guessed", () => {
   const writable = [...real.members.values()].filter((m) => m.writable).length;
   const readonly = real.members.size - writable;
   assert.ok(writable > 50, `only ${writable} writable G members found`);
-  assert.ok(readonly > 50, `only ${readonly} read-only G members found`);
+  assert.ok(readonly > 120, `only ${readonly} read-only G members found`);   // actual 144 (2026-08-27); a loose floor hid a 94-member gap
   assert.deepEqual(real.dupes, [], "a key appears twice in the G literal — one of the two is dead");
 });
 
@@ -78,7 +78,7 @@ test("every module that receives the ctx is a declared GameModuleFactory", () =>
 
 test("the usage extractor finds the G reference sites it is supposed to check", () => {
   const shadow = emitShadow();
-  assert.ok(shadow.sites > 1200, `only ${shadow.sites} G reference sites extracted — the scope walk broke`);
+  assert.ok(shadow.sites > 1700, `only ${shadow.sites} G reference sites extracted — the scope walk broke`);   // actual 1914 (2026-08-27)
   const writes = (shadow.text.match(/= __never;/g) || []).length;
   const destructures = (shadow.text.match(/^ {2}\{ const \{/gm) || []).length;
   assert.ok(writes > 100, `only ${writes} write sites extracted`);

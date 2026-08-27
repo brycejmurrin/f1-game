@@ -180,7 +180,7 @@ deliberately NOT moved — their consumers hardcode the flat paths):
   when present; otherwise Playwright's bundled browser. Servers bind a free
   port (or `:3456`).
 - **Two Playwright packages on purpose:** the spec suite runs on
-  `@playwright/test`, while ~20 tools here import bare `playwright` (the
+  `@playwright/test`, while ~10 tools here import bare `playwright` (the
   library) at module scope for direct browser control. Removing either breaks
   the other's consumers, so `package.json` carries both.
 - Anything that edits `js/*`/`css/*` still needs a content-hash refresh (`node tools/bump-cache.mjs --apply`).

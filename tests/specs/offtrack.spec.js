@@ -169,9 +169,9 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
   // inside corner barrier on an incline. The catch-all rescue must dig it out.
   test("stopped on-track: throttle held is never stuck at 0; gas released is left parked", async ({ page, loadTrack }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     await page.evaluate(() => window.__apex.race("bahrain", "day", "dry"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
     await page.evaluate(() => window.__apex.go());
     const r = await page.evaluate(() => {
       // Current rescue contract: stoppedOnTrack only fires while the THROTTLE is

@@ -18,9 +18,9 @@ const ROOT = new URL("../..", import.meta.url).pathname;
 
 async function boot(page, track, tod, wx, frac) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
   await page.evaluate((t) => window.__apex.race(t), track);
-  await page.waitForFunction(() => window.__apex.info && window.__apex.info().track != null, null, { timeout: 25000 });
+  await page.waitForFunction(() => window.__apex.info && window.__apex.info().track != null, null, { polling: 100, timeout: 25000 });
   if (tod) await page.evaluate((t) => window.__apex.setTimeOfDay(t), tod);
   if (wx) await page.evaluate((w) => window.__apex.weather(w), wx);
   if (frac != null) {
@@ -112,7 +112,7 @@ test("night light budget: lamps on at night, off by day, exposure per table", as
   // actual state (same pattern as the day-flip below) instead of racing the
   // first post-rebuild frame. A genuine lights-out regression still fails here,
   // as the timeout.
-  await page.waitForFunction(() => window.__apex.lightState().numLights > 0, null, { timeout: 60000 });
+  await page.waitForFunction(() => window.__apex.lightState().numLights > 0, null, { polling: 100, timeout: 60000 });
   const night = await page.evaluate(() => window.__apex.lightState());
   expect(night.numLights).toBeGreaterThan(0);
   expect(night.numLights).toBeLessThanOrEqual(48);
@@ -121,7 +121,7 @@ test("night light budget: lamps on at night, off by day, exposure per table", as
   await page.evaluate(() => window.__apex.setTimeOfDay("day"));
   // The night->day flip rebuilds track props; wait on the actual state instead
   // of a fixed sleep (the rebuild time varies under test-worker contention).
-  await page.waitForFunction(() => window.__apex.lightState().numLights === 0, null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__apex.lightState().numLights === 0, null, { polling: 100, timeout: 30000 });
   const day = await page.evaluate(() => window.__apex.lightState());
   expect(day.numLights).toBe(0);
 });

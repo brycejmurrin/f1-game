@@ -61,7 +61,7 @@ const OVERLAY_IDS = ["select", "carsetup", "career", "teampicker", "race-setting
 
 async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 30_000 });
 }
 
 async function toTitle(page) {
@@ -382,7 +382,7 @@ test.describe("UI scale", () => {
     // 16.4 s with both fixed. The wait was the dominant term by a long way —
     // far more than the 30 s it costs when driven outside the runner, because
     // Playwright's own polling is on the same starved rAF clock.
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => {
       // HEADLESS, because this test measures getBoundingClientRect on four DOM
       // clusters and never looks at a pixel. Leaving the GL draw on made it cost

@@ -128,7 +128,7 @@ export const test = base.extend({
    */
   racePage: async ({ page }, use) => {
     await page.goto('/');
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 10000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
     await use(page);
   },
 
@@ -144,9 +144,9 @@ export const test = base.extend({
   loadTrack: async ({ page }, use) => {
     await use(async (id = "monza", tod = "day", wx = "dry") => {
       await page.goto("/");
-      await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10000 });
+      await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10000 });
       await page.evaluate(({ i, t, w }) => window.__apex.race(i, t, w), { i: id, t: tod, w: wx });
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15000 });
       await page.evaluate(() => window.__apex.go());
       return page;
     });
@@ -280,7 +280,7 @@ export const sharedTest = test.extend({
     await use(async (id = "monza", tod = "day", wx = "dry") => {
       await ensureLive(page);
       await page.evaluate(({ i, t, w }) => window.__apex.race(i, t, w), { i: id, t: tod, w: wx });
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15000 });
       await page.evaluate(() => window.__apex.go());
     });
   },
@@ -291,7 +291,7 @@ async function ensureLive(page) {
   const live = await page.evaluate(() => window.__apex != null).catch(() => false);
   if (live) return;
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
 }
 
 export { expect };

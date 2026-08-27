@@ -16,7 +16,7 @@
  *   node tools/slider-effect.mjs --class apply-only
  *   node tools/slider-effect.mjs --gate night
  *   node tools/slider-effect.mjs --risk inert|conditional|reapply|rebuild
- *   node tools/slider-effect.mjs --tag saturate|glx-only|sparse-pixels
+ *   node tools/slider-effect.mjs --tag saturate|chunk-lamps|sparse-pixels
  *   node tools/slider-effect.mjs --live lampLevel --from 0 --to 0.55
  *   node tools/slider-effect.mjs --live lampLevel --shots 5
  *   node tools/slider-effect.mjs --live lampLevel --levels 0,0.13,0.26,0.55,0.687
@@ -48,7 +48,7 @@ Usage:
   node tools/slider-effect.mjs --class apply-only
   node tools/slider-effect.mjs --gate night
   node tools/slider-effect.mjs --risk inert|conditional|reapply|rebuild
-  node tools/slider-effect.mjs --tag saturate|glx-only|sparse-pixels
+  node tools/slider-effect.mjs --tag saturate|chunk-lamps|sparse-pixels
   node tools/slider-effect.mjs --live lampLevel --from 0 --to 0.55
   node tools/slider-effect.mjs --live lampLevel --shots 5
   node tools/slider-effect.mjs --live lampLevel --levels 0,0.13,0.26,0.55,0.687
@@ -65,7 +65,7 @@ Filters (no browser):
   --gate NAME    night | wet | rain | fog | overcast | day
   --risk NAME    inert | conditional | reapply | rebuild
   --tag NAME     night-only | overcast-only | fog-only | rain-only | wet-drizzle
-                 | traffic | far-scenery | bloom-tier | glx-only | saturate
+                 | traffic | far-scenery | bloom-tier | chunk-lamps | saturate
                  | sparse-pixels
   --json         JSON on stdout (knobs + counts)
 
@@ -127,13 +127,13 @@ const RISKS = new Set(["inert", "conditional", "reapply", "rebuild"]);
 const GATES = new Set(["night", "wet", "rain", "fog", "overcast", "day"]);
 const TAGS = new Set([
   "night-only", "overcast-only", "fog-only", "rain-only", "wet-drizzle",
-  "traffic", "far-scenery", "bloom-tier", "glx-only", "saturate", "sparse-pixels",
+  "traffic", "far-scenery", "bloom-tier", "chunk-lamps", "saturate", "sparse-pixels",
 ]);
 const TAG_BY_ID = {
   lampCull: "traffic",
   renderDistMul: "far-scenery",
-  perChunkLights: "glx-only",
-  roadChunkLamps: "glx-only",
+  perChunkLights: "chunk-lamps",
+  roadChunkLamps: "chunk-lamps",
   lampFogBase: "saturate",
   vignetteSoft: "saturate",
   godrayAniso: "saturate",

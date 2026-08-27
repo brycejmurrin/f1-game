@@ -270,7 +270,7 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
   test("with a race running the arrow keys drive the car, not the menu", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { timeout: 20_000 });
+    await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { polling: 100, timeout: 20_000 });
     await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
     await page.waitForTimeout(300);
 
@@ -306,7 +306,7 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
   test("an open modal is the active layer, not the screen behind it", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { timeout: 20_000 });
+    await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { polling: 100, timeout: 20_000 });
     await page.evaluate(() => {
       window.__apex.park(0.1);
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
@@ -406,7 +406,7 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
   test("with the pause menu up the arrow keys stop reaching the car", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { timeout: 20_000 });
+    await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { polling: 100, timeout: 20_000 });
     await page.evaluate(() => {
       window.__apex.park(0.1);
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
@@ -511,7 +511,7 @@ test.describe("Escape is BACK", () => {
   test("Escape closes a sheet without resuming the race under it", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { timeout: 20_000 });
+    await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { polling: 100, timeout: 20_000 });
     await page.evaluate(() => {
       window.__apex.park(0.1);
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;

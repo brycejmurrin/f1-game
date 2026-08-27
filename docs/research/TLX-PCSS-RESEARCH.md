@@ -1,5 +1,8 @@
 # TLX PCSS — how to close the one stubbed shadow gap (research, 2026-08-17)
 
+> Errata: the vendored three has since moved to `vendor/three-0.185.1/`;
+> read `three-0.184.0` below as the version at research time.
+
 TLX's only deliberately-stubbed subsystem is PCSS (`TODO M4-PCSS`,
 `js/render/three/tlx-shadow.js` header): GLX builds a 512² R16F min-of-4
 blocker map by re-reading the sun depth map through a COMPARE-OFF sampler

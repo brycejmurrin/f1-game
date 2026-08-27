@@ -6,10 +6,12 @@
 // across releases. version.json and <meta name="apex-build"> still advance as a
 // monotonic shell/service-worker generation.
 //
-//   node tools/bump-cache.mjs --check
-//   node tools/bump-cache.mjs --check --since <ref>
+//   node tools/bump-cache.mjs                  # check (the default mode)
+//   node tools/bump-cache.mjs --since <ref>    # check incl. "assets changed since ref"
 //   node tools/bump-cache.mjs --apply [--at N] [--merge <ref>]
 //   ... --json
+// (--check is accepted for readability but not parsed — checking IS the
+// no-flag default; only --apply changes anything.)
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";

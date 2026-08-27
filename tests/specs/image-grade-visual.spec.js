@@ -66,13 +66,13 @@ async function boot(page, {
 } = {}) {
   await page.setViewportSize({ width: 640, height: 360 });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15_000 });
   await page.evaluate(({ track, tod, weather }) =>
     window.__apex.race(track, tod, weather), { track, tod, weather });
   await page.waitForFunction((id) => {
     const info = window.__apex.info();
     return info.track === id;
-  }, track, { timeout: 30_000 });
+  }, track, { polling: 100, timeout: 30_000 });
   await page.evaluate(({ frac }) => {
     window.__apex.park(frac);
     window.__apex.hud(false);
@@ -86,7 +86,7 @@ async function boot(page, {
       window.__apex.weather() === weather &&
       window.__apex.setTimeOfDay() === tod &&
       window.__apex.camState().debug === true;
-  }, { tod, weather }, { timeout: 45_000 });
+  }, { tod, weather }, { polling: 100, timeout: 45_000 });
   if (neutralGrade) await setTune(page, GRADE_NEUTRAL);
 }
 

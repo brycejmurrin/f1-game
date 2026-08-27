@@ -72,7 +72,7 @@
   /* Team-skinned accent stripe (--accent falls back to --red when no team set;
      set on <html> by the HUD). */
   border-left: 3px solid var(--accent);
-  padding: 4px var(--gap);
+  padding: calc(var(--gap) / 3) var(--gap);
   border-radius: var(--r-sm);
   text-align: center;
   /* no backdrop-filter: this panel sits over the live 3D canvas, and a blur
@@ -144,11 +144,11 @@
   bottom: calc(12px + var(--sab) / var(--hud-z));
   left: 50%; transform: translateX(-50%);
   /* compact centred stack so it never collides with the corner buttons */
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--gap) / 3);
 }
 #hud-speed { font-family: var(--font-hud); font-size: 34px; font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; text-shadow: 0 2px 12px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.9); }
-.hud-unit { font-size: var(--fs-micro); color: var(--dim); margin-left: 4px; }
-#hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: 2px; background: rgba(8,8,14,0.6); border: 1px solid var(--card-line); border-radius: var(--r-md); padding: 5px 8px; }
+.hud-unit { font-size: var(--fs-micro); color: var(--dim); margin-left: calc(var(--gap) / 3); }
+#hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: calc(var(--gap) / 6); background: rgba(8,8,14,0.6); border: 1px solid var(--card-line); border-radius: var(--r-md); padding: 5px 8px; }
 #hud-gear {
   font-family: var(--font-hud);
   font-size: 58px; font-weight: 800; font-style: italic; line-height: 0.85;
@@ -175,7 +175,7 @@
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--r-sm);
   position: relative; overflow: hidden;
-  margin-bottom: 8px;
+  margin-bottom: calc(var(--gap) * 2 / 3);
 }
 #hud-energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg in oklab, #00c853, #aeea00); }
 .hud-energy-label { position: absolute; inset: 0; font-size: var(--fs-micro); letter-spacing: 0.2em; display: flex; align-items: center; justify-content: center; color: rgba(0,0,0,0.55); }
@@ -217,7 +217,7 @@
 }
 #hud-flag {
   position: absolute; top: calc(100px + var(--sat) / var(--hud-z)); left: 50%; transform: translateX(-50%);
-  padding: calc(var(--gap) * 0.5) 16px; border-radius: var(--r-sm); font-weight: 800;
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 4 / 3); border-radius: var(--r-sm); font-weight: 800;
   background: #ffd600; color: #000;
   letter-spacing: 0.06em; white-space: nowrap;
   box-shadow: 0 2px 10px rgba(0,0,0,0.55);
@@ -281,7 +281,7 @@ body[data-density="compact"] .hud-bottom { gap: calc(var(--gap) * 0.25); }
   left: 50%; transform: translateX(-50%);
   display: flex; gap: var(--gap);
   background: rgba(8, 8, 12, 0.85);
-  padding: 14px calc(var(--gap) * 1.5);
+  padding: calc(var(--gap) * 7 / 6) calc(var(--gap) * 1.5);
   border-radius: var(--r-md);
   z-index: 15;
 }
@@ -432,8 +432,8 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
 #pc-bar {
   position: fixed; top: calc(14px + var(--sat) / var(--ui-scale)); left: calc(20px + var(--sal) / var(--ui-scale));
   zoom: var(--ui-scale);
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  padding: 8px 14px; border-radius: var(--r-lg);
+  display: flex; align-items: center; gap: calc(var(--gap) * 7 / 6); flex-wrap: wrap;
+  padding: calc(var(--gap) * 2 / 3) calc(var(--gap) * 7 / 6); border-radius: var(--r-lg);
   background: rgba(10,10,16,0.55); border: 1px solid var(--card-line);
   /* --vwz, not bare vw: this box is zoomed now, and a viewport unit inside a
      zoomed element still measures the WHOLE viewport, so `70vw` would ask for
@@ -453,7 +453,7 @@ body.lt-open:not(.pc-nopanel) #pc-bar {
      .pc-altcol offsets above. --sal is hardware, so it divides too. */
   max-width: max(160px, min(calc(70 * var(--vwz)), 720px,
     calc(100 * var(--vwz) - var(--dock-px) / var(--ui-scale) - 40px - var(--sal) / var(--ui-scale))));
-  gap: 8px; padding: calc(var(--gap) * 0.5) 10px;
+  gap: calc(var(--gap) * 2 / 3); padding: calc(var(--gap) * 0.5) 10px;
 }
 /* Same context: the tuner panel already carries plenty of on-screen text, so
    drop the keyboard hint and shrink the FOV slider/buttons — a compact bar
@@ -484,7 +484,7 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
 #pc-panel, #pc-hud { background: var(--plate-hover); color: var(--text); border: 1px solid var(--plate-line); }
 /* the FREE CAMERA launch button in the tuner actions */
 #pc-toggle {
-  width: auto; margin: 0; padding: 9px 14px; border-radius: var(--r-md);
+  width: auto; margin: 0; padding: calc(var(--gap) * 0.75) calc(var(--gap) * 7 / 6); border-radius: var(--r-md);
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.04em;
   background: rgba(0,140,200,0.2); color: #6cf; border: 1px solid rgba(0,160,220,0.45);
   /* Padding-driven (~40 local px) = 17 painted px at UI SIZE 40%

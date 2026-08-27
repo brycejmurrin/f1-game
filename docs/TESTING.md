@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 130 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 135 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -114,8 +114,8 @@ serializes the agent behind SwiftShader several times over.
 | track/scenery edit | `node tools/verify-track.cjs <id>` (2 s, headless) FIRST |
 | once, when the edits are done | `node tools/test-bg.mjs tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
 | before pushing | + `npm run test:sweeps` if you touched geometry |
-| single spec | `npm test -- tests/<file>.spec.js` |
-| single unit suite | `node --test tests/<file>.test.mjs` |
+| single spec | `npm test -- tests/specs/<file>.spec.js` |
+| single unit suite | `node --test tests/unit/<file>.test.mjs` |
 
 While a browser batch runs in the background, do work that does not touch
 `js/`/`css/` (docs, tools, unit tests) or end the turn — idle-watching the
@@ -146,9 +146,12 @@ whether the TLX backend happens to be installed.
 
 **Pass `{ polling: 100, timeout: N }` for any wait on a rendering page.**
 
-**382 `waitForFunction` calls across 123 files still carry a timeout without
-`polling`**, so those bounds are decoration — 312 of them under `tests/` (96
-files) and 70 under `tools/` (27 files, `layout-audit.mjs` alone holding 24).
+**Every `waitForFunction` under `tests/` now carries `{ polling: 100 }`**
+(2026-08-27 sweep — the rAF-starved timeouts were the recurring red class in
+every loaded run). 57 sites under `tools/` still carry a timeout without
+polling (run `node tools/wait-polling-lint.mjs` for the live census; the 24
+that used to live in `layout-audit.mjs` are now in `tools/menu-screens.mjs`) —
+fix those as they are touched.
 The count is a RATCHET, not a target — `tests/unit/wait-polling.test.mjs` fails
 if the population grows, and lowering the ceiling as sites are fixed is the
 intended direction. (Count by AST via `tools/wait-polling-lint.mjs`. A grep
@@ -368,7 +371,7 @@ separate processes with separate ports, and the sizing guidance above applies.
 | `artifacts/galleries-<port>/<suite>/` | screenshots and suite-emitted reports |
 | `artifacts/logs/` | background-run and shard logs |
 
-All gitignored. Tracked golden baselines live in `tests/*-snapshots/` and stay
+All gitignored. Tracked golden baselines live in `tests/specs/*-snapshots/` and stay
 outside these roots — but only ONE suite has any: `menu-baseline.spec.js` has
 six (title/select/garage × desktop/phone-landscape), so `npm run test:baseline`
 is a real gate. `tests/manual/tracks-visual.spec.js` has none, so it is PARKED
@@ -387,7 +390,7 @@ Import `test` and `expect` from `./fixtures.js` instead of `@playwright/test`:
 | `pageErrors` | `string[]` of uncaught JS exceptions — assert `toHaveLength(0)` after exercising game logic |
 | `consoleLines` | `string[]` of every console line and page error, type-prefixed, favicon noise stripped. Prefer this to a hand-rolled `page.on("console", …)` — the hand-rolled ones drifted into a dozen slightly different filters |
 | `racePage` | navigates to `/` and waits for `window.__apex` (10 s) |
-| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 61 of 113 specs import `tests/helpers/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
+| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 63 of 115 specs import `tests/helpers/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
 
 `tools/fixture-consumer-audit.mjs` enforces the import for the specs that depend
 on those guarantees (`audio-smoke`, `smoke`, `f1-track-accuracy`, `ui-audit`).
@@ -509,9 +512,9 @@ git clone --depth 1 file://$(pwd) /tmp/cisim   # no history, no artifacts/
 cd /tmp/cisim && node --test tests/<your-guard>.test.mjs
 ```
 
-If a guard needs history, the job needs `fetch-depth: 0` — today only the sweeps
-job has it, which is also why `pick-tests`' merge-base default cannot work in
-the guards job.
+If a guard needs history, the job needs `fetch-depth: 0` — today the sweeps,
+smoke and selected jobs have it; guards does not, which is also why
+`pick-tests`' merge-base default cannot work in the guards job.
 
 ### Never run two Playwright processes at once
 
@@ -749,6 +752,11 @@ what it covers.
 | `circuit-axis.test.mjs` | `tools/circuit-axis.mjs` — the spread still spans tall to wide (and names circuits that exist), the axis stays off unless flagged, and a tagged cell id parses back to screen + circuit |
 | `track-graph.test.mjs` | the scenery model library + node graph, and `batches()` |
 | `godray-keep-nearest.test.mjs` | the god-ray nearest-k selection, cloned in all three backends: eviction must SWAP so the pooled objects stay a permutation (an overwrite aliased one object at two slots — a lamp beamed twice, another dropped); also pins the three clones in lockstep |
+| `light-store-cond-layer.test.mjs` | the conditional shipped lighting layer ("*|tod" in LightPresets): resolves only on ULTRA + a per-chunk-capable backend off mobile; player edits (incl. explicit 0) always win; dedup against base() includes the layer |
+| `curvature-channels.test.mjs` | the arc-must-not-reach-the-driver table: every Tracks.curvature consumer file appears in docs/PHYSICS.md §Curvature channels (and no ghost rows) — a new consumer must be classified before it lands |
+| `storage-key-prefix.test.mjs` | every literal localStorage/sessionStorage key is apex26.-prefixed (GameStore-routed keys exempt by construction; allowlist entries need a written reason) |
+| `no-bare-console.test.mjs` | logging goes through Log — no bare console.* in js/ outside log.js (the nostr interception seam allowlisted with its reason) |
+| `lamp-chunks.test.mjs` | the shared per-chunk lamp bake (LampChunks): nearest-first reach-filtered selection, the knob→cap formula (floor 8, CAP 24), concat/offsets/counts ≡ the per-chunk lists, and the bake-once invalidation contract (lights array identity + knob value) |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 111-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
@@ -983,7 +991,7 @@ queues inside tmux, where the queue survives the shell that spawned it.)
 `browserType.launch: Executable doesn't exist … chromium_headless_shell-1228`.
 `npm install` had run with `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` — which is the
 right flag for the install step and leaves the browser absent. The specs launch
-Playwright's headless SHELL, not the `/opt/google/chrome` this box also ships,
+Playwright's headless SHELL, not any system Chrome a box may ship,
 so nothing browser-driven can pass until
 `npx playwright install chromium-headless-shell` runs (2.3 MB, seconds). Read the
 FIRST failure's message before forming any hypothesis about a red run: when EVERY

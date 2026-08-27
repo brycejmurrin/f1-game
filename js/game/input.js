@@ -692,7 +692,8 @@ const Input = (function () {
   // button/axis changes — you must read a fresh snapshot each frame — so this is
   // called at the top of the game loop, before the physics step, to keep input
   // latency to a single frame. Standard mapping WHILE DRIVING (UiLayers.navOpen()
-  // false — anyOpen() stays false on the title overlay):
+  // false — note the TITLE overlay counts as a nav layer, so a freshly loaded
+  // page routes pad buttons to menu-nav, not these latches):
   //   axis 0  left-stick X (steer)      btn 7 RT / btn 0 A  throttle
   //   btn 14/15 d-pad left/right        btn 6 LT / btn 1 B  brake
   //   btn 2 X  boost toggle             btn 3 Y  overtake

@@ -5688,7 +5688,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // env-probe radial cull is live (frustum + 300 m reach — counted ~70%
     // index drop). Lamp path still needs tier < 1; the cull-only path keeps
     // chunking through tier 2 so SSR/shadow sheds do not re-fuse the road.
-    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && !_perChunkOff && PerfGov.tier() < 1)
+    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && gfx.hasPerChunkLights && !_perChunkOff && PerfGov.tier() < 1)
       || (PerfGov.tier() < 3));
     if (_wantRoadChunk) {
       if (track.meshes.roadChunked === undefined) {
@@ -6408,6 +6408,10 @@ function render(dt) {
   // Daytime lamps: only when the session isn't already a dark one AND the knob is
   // up. Brightness = floodDay × LAMP LEVEL (neutral white, no twilight warmth ramp).
   const _floodDayLvl = (!_floodActive && LT.floodDay > 0) ? LT.floodDay : 0;
+  // Cleared every frame, set only by the flood branch: `frame` outlives a
+  // night->day time-of-day flip (rebuilt only in loadTrack), and a stale
+  // allLights kept chunked geometry binding per-chunk night lamps in daylight.
+  frame.allLights = null; frame.perChunkLights = 0; frame.tailStart = 0; frame.tailCount = 0;
   if (_floodActive || _floodDayLvl > 0) {
     // Rebuild if empty (not just undefined): a light set built before the track
     // centreline finished is empty; retry until it yields lights. Tracks always
@@ -6464,14 +6468,14 @@ function render(dt) {
     setFrameLights(camEye, _floodRGB, _lightFwd);
     // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list
     // alongside the globally-culled frame.lights, so GLXChunked can bind each
-    // chunk its own nearest-32 instead of every chunk sharing this one set.
+    // chunk its own nearest-24 instead of every chunk sharing this one set.
     // frame.lights stays authoritative for the car and everything non-chunked.
     frame.allLights = track._lights || null;
     // Pass the knob's VALUE, not a flag. PER-CHUNK LAMPS is a 0..1 amount: > 0
     // turns per-chunk lamp sets on and doubles as the track-lamp intensity
     // scale, because the feature genuinely delivers more light per fragment
-    // (each chunk gets 32 lamps that actually reach it instead of sharing one
-    // global 32) and needs a dimmer to be usable at the shipped LAMP LEVEL.
+    // (each chunk gets up to 24 lamps that actually reach it instead of sharing
+    // one global cull) and needs a dimmer to be usable at the shipped LAMP LEVEL.
     // SHEDS AT TIER 1 — the ladder every other expensive feature is already on
     // (SSR at 2, car shadows at 3, SSAO/god-rays/bloom/lampVol at 4). PER-CHUNK
     // LAMPS was the one discretionary renderer feature with NO tier gate at
@@ -6480,7 +6484,7 @@ function render(dt) {
     //
     // It needs the EARLIEST rung, not the latest, because its cost is
     // per-fragment and unbounded rather than a fixed pass. The lit shader loops
-    // 32 lamp slots per fragment; without per-chunk most slots hold lamps
+    // the bound lamp slots per fragment; without per-chunk most slots hold lamps
     // nowhere near it, so the range reject fires at once and they cost almost
     // nothing. Per-chunk deliberately fills those slots with lamps that DO
     // reach — the whole point of the feature — so far more iterations run the
@@ -6500,13 +6504,12 @@ function render(dt) {
     // already hit a hard failure comes back at a floored tier, which now has
     // the feature off, so the sentinel can actually rescue this case instead of
     // watching it repeat.
-    frame.perChunkLights = (_perChunkOff || PerfGov.tier() >= 1) ? 0 : (+LT.perChunkLights || 0);
+    frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || PerfGov.tier() >= 1) ? 0 : (+LT.perChunkLights || 0);
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
     // They are appended to frame.lights AFTER the static cull, so they sit
     // outside track._lights and a per-chunk set built from allLights would drop
     // them. Record the appended range so GLXChunked can add them to every chunk.
-    frame.tailStart = 0; frame.tailCount = 0;   // appendCarTailLights sets the real range
-    if (_floodActive) appendCarTailLights();
+    if (_floodActive) appendCarTailLights();   // sets the real tailStart/tailCount range
   } else if (track.hasAlwaysLamps) {
     // ALWAYS-ON FIXTURES in a bright session. A circuit can register lamps that
     // burn regardless of the hour (lampPost({always:true}) — Monaco's tunnel

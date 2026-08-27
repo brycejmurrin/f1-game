@@ -14,7 +14,8 @@
  *
  * The class count is the repo's headline structural cost. Measured against Pico
  * CSS (a complete design system in 2,835 lines / 16 classes / 251 custom
- * properties), this repo runs ~7,800 lines / 543 classes / 75 properties —
+ * properties), this repo ran ~7,800 lines / 543 classes / 75 properties at
+ * the 2026-08 census (the ratchets below hold the LIVE numbers) —
  * 34x the classes on 2.8x the lines with 0.3x the tokens. SKILL.md rule 8's
  * answer is `--sheet-w`: one primitive class plus N one-line `--property`
  * contexts, which is already the shape used by fourteen dialogs here. Every
@@ -99,7 +100,14 @@ export function shellNodes() {
    bare onclick on the preview canvas). It cannot reuse an existing family:
    the boxless wrapper needs its own focus-ring/hover rules that target the
    canvas inside it. */
-const CLASS_CEILING = 536;
+// 2026-08-27 round 12: 536 -> 533. The live tab's row-main class folded into
+// the standings' identical .dh-cons-main (the wrap floor became a context
+// override on the class board), buying real headroom instead of sitting as
+// a duplicate recipe.
+// 2026-08-27 round 12 (second lowering): 533 -> 532. The camera panel's row
+// class left the shell — its five rows are the panel's only direct div
+// children, so the id scopes them without a class repeated five times.
+const CLASS_CEILING = 532;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under
@@ -133,12 +141,16 @@ const CLASS_CEILING = 536;
 // +4 2026-08-26: #pm-hud-sample and its hud-box — the HUD SIZE slider's live
 // sample; every real cluster is hidden while the settings sheet is open, so
 // the slider had zero visible effect.
+// +1 2026-08-27: the js/render/lamp-chunks.js script tag (new-file lockstep —
+// the shared per-chunk lamp bake consumed by GLX and WGX).
 // +8 2026-08-27: mode sublines on the title 2x2 (RACE / TIME TRIAL / RACE A
 // FRIEND / SEASON each gain a stack span + sub span answering "what is
 // this?"), the round-10 judged ask. The label itself is an anonymous flex
 // item — no third span. Hidden at compact density, so the measured 390px
 // landscape clearance is untouched.
-const NODE_CEILING = 1226;
+// 1227 on the deploy union (both lineages' adds; re-measured per the
+// deploy-merge rule).
+const NODE_CEILING = 1227;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module

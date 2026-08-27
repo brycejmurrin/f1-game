@@ -3,7 +3,7 @@
 Copy-paste blocks for debugging the **real, deployed** game from a browser
 console, plus the browser gotchas that make console work fail in confusing ways.
 
-## Why bother, when there are 160 test files
+## Why bother, when there are 250 test files
 
 The Playwright suite is better at regression. The console is the only thing that
 can reach four situations the suite **structurally cannot**:

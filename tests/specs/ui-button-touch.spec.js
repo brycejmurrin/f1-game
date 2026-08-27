@@ -23,12 +23,12 @@ const LANDSCAPE = { width: 844, height: 390 };
 // reports no-preference).
 async function waitReady(page) {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
 }
 
 async function openPauseMenu(page) {
   await page.evaluate(() => window.__apex.race("bahrain"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => window.__apex.park(0.1));
   await page.waitForTimeout(1000);
   await page.locator("#pausebtn").click();
@@ -137,7 +137,7 @@ test.describe("Lighting tuner — pause lifecycle", () => {
     await page.goto("/");
     await waitReady(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
     await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40, 0); });
     await page.waitForTimeout(400);
     // focus must be off the pause BUTTON, or this measures the button's own key
@@ -576,7 +576,7 @@ test.describe("Race settings — landscape layout", () => {
 // the guard that a mode added later gets a line here too.
 test("HOW TO PLAY names every way to play", async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.locator("#mb-help").click();
   await expect(page.locator("#howtoplay")).toBeVisible();
   const body = await page.locator("#howtoplay .sheet-body").innerText();

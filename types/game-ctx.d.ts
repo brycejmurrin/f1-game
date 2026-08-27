@@ -4,7 +4,7 @@
    js/game.js owns the closure state of the whole game and hands ONE object of
    live getters/setters + stable helpers to every extracted module
    (`Module.create(G)`). That object is declared in exactly one place —
-   `const G = { … }` at js/game.js:2643 — and until this file existed nothing
+   the `const G = { … }` literal in js/game.js — and until this file existed nothing
    checked that a module's read of `G.foo` corresponded to anything there. The
    defect class that costs is FAÇADE DRIFT: a member written but never declared
    (the old `countT` expando), a member declared but dead (the duplicate
@@ -83,7 +83,7 @@ interface TeamDef {
 /** Per-car performance multipliers (human cars only) — modsFor(). */
 interface CarMods { speed: number; accel: number; cornering: number; braking: number; }
 
-/** One grid car, as built by makeCars() at js/game.js:1511. Fields listed are the
+/** One grid car, as built by makeCars() in js/game.js. Fields listed are the
     ones the façade's own signatures depend on; the rest is physics/AI state. */
 interface CarState {
   team: TeamDef;
@@ -279,7 +279,7 @@ type AeroMode = string;
 // ══ The façade ═══════════════════════════════════════════════════════════════
 
 /** The one object js/game.js hands to every extracted module. Member order and
-    grouping follow `const G = {…}` at js/game.js:2643-2896 exactly. */
+    grouping follow the `const G = {…}` literal in js/game.js exactly. */
 interface GameCtx {
   // ── DOM + formatting helpers ───────────────────────────────────────────────
   readonly $: (id: string) => HTMLElement | null;
@@ -589,7 +589,7 @@ interface GameModuleFactory<TApi = Record<string, unknown>> {
    tools/check-gctx.mjs resolves every `X.create(<ctx>)` call site through
    eslint-scope and asserts the two lists agree, so a new ctx module that is not
    declared here fails the surface test. NOT here, deliberately: AgentRaster
-   (js/game/agentview.js:1103 hands it a bespoke bag, not the ctx) and
+   (the AgentRaster.create call in js/game/agentview.js hands it a bespoke bag, not the ctx) and
    NetSession (js/net/session.js takes {transport}) — same `create()` spelling,
    different contract. */
 declare const AeroZones: GameModuleFactory;

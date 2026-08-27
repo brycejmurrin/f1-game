@@ -22,9 +22,9 @@ const LANDSCAPE = { width: 844, height: 390 };
 
 async function boot(page, trackId) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15_000 });
 }
 
 // Run one episode headlessly with the named policy and return the forward

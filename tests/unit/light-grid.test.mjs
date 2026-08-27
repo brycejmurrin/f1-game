@@ -301,16 +301,20 @@ test("every TUNE_DEFS uniform lives on GLX, WGX, and TLX", () => {
     missing.join("\n  "));
 });
 
-test("GLX-only lamp-chunk sliders stay documented as WebGL2-only", () => {
-  // Honest gaps, not forgotten ports: per-chunk lamp upload is a GLX uniform
-  // path WGX/TLX do not have. Help must keep saying that so a dead three.js /
-  // WebGPU thumb is not filed as a backend-parity bug.
+test("lamp-chunk sliders name their backend support honestly", () => {
+  // Honest gaps, not forgotten ports: per-chunk lamps ship on GLX (uniform
+  // upload) and WGX (storage-buffer bake); TLX cannot have them (shared
+  // node-material uniforms — per-chunk sets would mint a program per chunk,
+  // the pinProgram lesson). Help must keep naming the unsupported backend so
+  // a dead three.js thumb is not filed as a backend-parity bug.
   const byId = new Map(defs().map((d) => [d.id, d]));
   for (const id of ["perChunkLights", "roadChunkLamps"]) {
     const d = byId.get(id);
     assert.ok(d, `${id} missing from TUNE_DEFS`);
-    assert.match(d.help || "", /WebGL2 only/,
-      `${id} help must keep naming the GLX-only upload so the other backends are not a mystery`);
+    assert.match(d.help || "", /WebGL2 and WebGPU/,
+      `${id} help must name the supported backends`);
+    assert.match(d.help || "", /three\.js/,
+      `${id} help must keep naming the unsupported backend so it is not a mystery`);
   }
 });
 

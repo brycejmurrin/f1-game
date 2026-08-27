@@ -14,6 +14,7 @@
 //   node tools/verify-change.mjs --fast           # fast phase only, no browser
 //   node tools/verify-change.mjs --since <ref>    # diff base for file selection
 //   node tools/verify-change.mjs --staged         # staged files only
+//   ... --keep-going                              # don't stop the chain on a red batch
 //   ... --json                                    # machine-readable verdict
 //
 // Phases:

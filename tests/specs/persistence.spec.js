@@ -43,7 +43,7 @@ async function bootBroken(page, name = "QuotaExceededError") {
     };
   }, [name]);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
 }
 
 test.describe("persistence failure is visible", () => {

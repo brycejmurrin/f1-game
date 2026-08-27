@@ -26,7 +26,12 @@ import { lintSource, lintAll, count } from "../../tools/wait-polling-lint.mjs";
 // three: 370 correctly-positioned timeouts still use rAF polling. LOWER this as
 // call sites are fixed; raising it needs a reason, and "I added a new wait" is
 // not one.
-const CEILING = 370;
+// 370 -> 57 (2026-08-27): EVERY waitForFunction under tests/ now carries
+// { polling: 100 } — the rAF-starved timeouts were the recurring red class in
+// every loaded run (dev-tools, new-hooks, camera-driving-hooks, the
+// foundation specs, tiny). The 57 that remain are all tools/ CLIs, which
+// never gate a suite; fix them as they are touched.
+const CEILING = 57;
 // Far enough below and the ratchet has stopped ratcheting — the same trap
 // tools/fixture-consumer-audit.mjs records, where a floor sat at 31 while real
 // adoption was 54.
@@ -99,8 +104,11 @@ test("the population does not grow", () => {
 
 test("the tool finds real sites — anti-vacuity", () => {
   // If the analysis broke, the count would collapse to zero and the ratchet
-  // would read as a clean repo rather than failing.
-  assert.ok(count() > 100, `expected 100+ sites, got ${count()}`);
+  // would read as a clean repo rather than failing. The floor tracks the
+  // remaining tools/ population (tests/ went to zero in the 2026-08-27
+  // sweep); detection itself is proven by the synthetic lintSource cases
+  // above, and the walk by the file count here.
+  assert.ok(count() > 20, `expected 20+ sites (tools/ backlog), got ${count()}`);
 });
 
 test("check-physics.mjs does not declare a timeout without polling", () => {

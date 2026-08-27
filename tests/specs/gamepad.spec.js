@@ -36,7 +36,7 @@ async function poll(page, { axisX = 0, axisY = 0, axisRX = 0, axisRY = 0, button
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => typeof Input !== "undefined" && !!Input.poll);
+  await page.waitForFunction(() => typeof Input !== "undefined" && !!Input.poll, null, { polling: 100, timeout: 15000 });
   // clear any latched edges / held keys between cases
   await page.evaluate(() => Input.reset());
 });
@@ -82,6 +82,17 @@ test("triggers and face buttons drive throttle / brake", async ({ page }) => {
 });
 
 test("face/shoulder buttons fire edge-triggered actions exactly once", async ({ page }) => {
+  // The driving latches are nav-gated: since the menus rounds made the TITLE
+  // overlay a nav layer, UiLayers.navOpen() is true on a freshly loaded page
+  // and Input.poll() routes pad buttons to menu navigation instead of the
+  // consume* latches. Start a race (same boilerplate as the "drives the car
+  // normally" regression guard below) so the latches are actually reachable.
+  await page.evaluate(() => window.__apex.race("monza"));
+  await page.waitForFunction(() => {
+    try { return window.__apex.info().track === "monza"; } catch (_) { return false; }
+  }, null, { polling: 100, timeout: 20_000 });
+  await page.evaluate(() => { window.__apex.go(); Input.reset(); });
+  expect(await page.evaluate(() => window.UiLayers.navOpen())).toBe(false);
   // establish the released baseline so the next poll sees a rising edge
   await poll(page, { buttons: {} }, () => true);
   // press X (boost) — one rising edge
@@ -106,6 +117,17 @@ test("face/shoulder buttons fire edge-triggered actions exactly once", async ({ 
   await poll(page, { buttons: {} }, () => true);
   const cam = await poll(page, { buttons: { 8: 1 } }, () => Input.consumeCameraCycle());
   expect(cam).toBe(true);
+});
+
+test("on the title overlay the pad routes to menu-nav, never the driving latches", async ({ page }) => {
+  // The routing truth the test above works around: a fresh page sits on the
+  // title overlay, which IS a nav layer, so a face-button edge must arm no
+  // driving latch. This is what keeps a pad press on the menu from also
+  // firing a boost/shift the moment a race later starts.
+  expect(await page.evaluate(() => window.UiLayers.navOpen())).toBe(true);
+  await poll(page, { buttons: {} }, () => true);
+  const boost = await poll(page, { buttons: { 2: 1 } }, () => Input.consumeBoostToggle());
+  expect(boost).toBe(false);
 });
 
 test("disconnecting the pad clears its state", async ({ page }) => {
@@ -144,7 +166,7 @@ test("a transient getGamepads() hole recovers WITHOUT a gamepadconnected event",
 
 test("keyboard driving remains active after using a HUD button", async ({ page }) => {
   await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => {
     window.__apex.go();
     Input.reset();
@@ -218,8 +240,8 @@ test("document becoming hidden releases held keyboard, pointer, and touch input"
 
 async function openSelectForPad(page) {
   await page.evaluate(() => document.getElementById("mb-race").click());
-  await page.waitForFunction(() => !document.getElementById("select").hidden, null, { timeout: 8_000 });
-  await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 5, null, { timeout: 8_000 });
+  await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: 8_000 });
+  await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 5, null, { polling: 100, timeout: 8_000 });
 }
 
 // test.beforeEach (top of file) already did page.goto + Input.reset for every
@@ -316,7 +338,7 @@ test.describe("Gamepad menu navigation", () => {
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => {
       try { return window.__apex.info().track === "monza"; } catch (_) { return false; }
-    }, null, { timeout: 20_000 });
+    }, null, { polling: 100, timeout: 20_000 });
     await page.evaluate(() => {
       window.__apex.park(0.1);
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
@@ -363,7 +385,7 @@ test.describe("Gamepad menu navigation", () => {
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => {
       try { return window.__apex.info().track === "monza"; } catch (_) { return false; }
-    }, null, { timeout: 20_000 });
+    }, null, { polling: 100, timeout: 20_000 });
     await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); Input.reset(); });
     await page.waitForTimeout(200);
     expect(await page.evaluate(() => window.UiLayers.anyOpen())).toBe(false);

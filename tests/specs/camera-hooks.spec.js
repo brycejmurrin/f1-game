@@ -5,7 +5,7 @@ import { test, expect } from "@playwright/test";
 async function loadMonaco(page) {
   await page.setViewportSize({ width: 844, height: 390 });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 15000 });
   await page.evaluate(async () => {
     __apex.race("monaco");
     await new Promise(r => setTimeout(r, 3000));

@@ -68,13 +68,13 @@ export const LAP_FRACTIONS = [0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6];
 async function waitForTrack(page, timeout = 10_000) {
   await page.waitForFunction(
     () => window.__apex && window.__apex.info().track != null,
-    null, { timeout }
+    null, { polling: 100, timeout }
   );
 }
 
 async function goToRace(page, circuit) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
   await page.evaluate((c) => window.__apex.race(c), circuit);
   await waitForTrack(page);
   // race() leaves the game in "count" (countdown) state; go() skips to "race"

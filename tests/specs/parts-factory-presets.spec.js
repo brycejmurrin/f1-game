@@ -4,7 +4,7 @@ import { test, expect } from "@playwright/test";
 
 test("AI full-body meshes use deterministic factory presets instead of saved setups", async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
 
   await page.evaluate(() => {
     const teamIndex = Teams.LIST.findIndex((team) => team.id === "mclaren");
@@ -21,7 +21,7 @@ test("AI full-body meshes use deterministic factory presets instead of saved set
     }));
   });
   await page.reload();
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
 
   await page.evaluate(() => {
     const captures = {};
@@ -44,7 +44,7 @@ test("AI full-body meshes use deterministic factory presets instead of saved set
 
   await page.waitForFunction(() =>
     Object.keys(window.__factoryMeshCaptures).length >= 11,
-    null, { timeout: 30_000 }
+    null, { polling: 100, timeout: 30_000 }
   );
 
   const result = await page.evaluate(() => {
