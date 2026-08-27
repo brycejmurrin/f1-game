@@ -169,7 +169,9 @@ const CEILING = {
   // (margin: -17px style) stay as anchors.
   // 2026-08-27: 325 -> 324. The career pressable-card carve deduplicated the
   // teamtile/seat padding pair into one shared declaration.
-  rawSpacing: 324,
+  // 2026-08-27: 324 -> 323. Round-13 season-row de-buttoning dropped the
+  // rows' raw margin-bottom (the hairline grammar needs no stacking gap).
+  rawSpacing: 323,
   // colour declarations carrying a raw literal (rgb()/rgba()/#hex in any
   // declaration value; tokens.css custom-property DEFINITIONS excluded — the
   // definition site is the system, not drift; url() interiors excluded).
@@ -185,7 +187,10 @@ const CEILING = {
   // their borders (three 0.3/0.4-alpha border tints left with them), .spf-dir
   // stepped under the hover fill, .spf-corner moved off --plate-on onto a
   // color-mix tint (no literal), .tdc-corner gained one sub-floor neutral.
-  rawColor: 376,
+  // 2026-08-27: 376 -> 377, deliberate. The season calendar rows adopt the
+  // circuit-list hairline (the .track-row separator spelling, so distinct
+  // stays flat); the rows they replace carried tokens only, nothing to trade.
+  rawColor: 377,
   // distinct colour VALUES after normalising spelling: space-after-comma,
   // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
   // canonical form. This is the fork guard — identical paint must not hide

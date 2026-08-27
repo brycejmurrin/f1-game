@@ -1115,8 +1115,14 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* Season upcoming rounds list */
 .season-upcoming-head { font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-5); color: var(--dim); margin-top: 10px; margin-bottom: 4px; padding: 0 4px; }
 /* No hover: the row declares cursor:default and nothing happens on click —
-   lighting up with the button hover fill promised an interaction it refused */
-.season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--card-line); margin-bottom: 4px; background: var(--plate); cursor: default; }
+   lighting up with the button hover fill promised an interaction it refused.
+   LIST GRAMMAR, NOT BUTTON CHROME: plate + border + radius is this app's
+   button recipe, and both round-12 judges read these rows as controls that
+   refused to press. .track-row (below) is the named model — full-bleed rows
+   split by a hairline — and these rows now follow it, so the calendar reads
+   as the circuit list does everywhere else. */
+.season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); cursor: default; }
+.season-upcoming-row:last-child { border-bottom: none; }
 .sur-rnd { font-size: var(--fs-micro); font-weight: 700; color: var(--red); letter-spacing: var(--ls-3); min-width: 24px; }
 .sur-name { font-size: var(--fs-micro); font-weight: 700; color: var(--text); flex: 1; font-style: italic; letter-spacing: var(--ls-1); }
 .sur-country { font-size: var(--fs-micro); color: var(--dim); }
