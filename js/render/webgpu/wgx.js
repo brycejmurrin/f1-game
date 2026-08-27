@@ -817,6 +817,13 @@ const WGX = (function () {
     const shadowModelRing = new Float32Array(SHADOW_SLOTS * SHADOW_MODEL_F32_STRIDE);
     const _shadowDynOff = [0];   // reused dynamic-offset scratch (was a fresh [slot*stride] per cast)
     let shadowEncoder = null, shadowPass = null, _shadowSlot = 0, _shadowOverflow = 0;
+    // Deferred shadow submit: the (up to three) shadow passes of a frame record
+    // into ONE encoder, stashed here by their End and submitted WITH the frame
+    // (queue order within one submit keeps shadow-before-lit execution) — was
+    // up to 3 extra queue.submits per frame. The model ring is shared across
+    // the passes as REGIONS: slots keep counting across Begins and reset only
+    // at the frame submit; _flushShadowModelUBO uploads each pass's new region.
+    let _pendingShadowEnc = null, _shadowFlushed = 0;
     // Dynamic per-frame CAR shadow map (GLX parity — see carShadowBegin).
     let carShadowTex = null, carShadowView = null, carShadowUBO = null, carShadowG0BindGroup = null;
     let _carShadowArmed = false, _carArms = 0, _carBoxScale = 1;
@@ -3733,7 +3740,7 @@ const WGX = (function () {
         _tonemapBlit(exposure);
         const disp = _softDisplayEncode();
         const cap = _capEncode();
-        try { device.queue.submit([encoder.finish()]); }
+        try { device.queue.submit(_frameSubmitList(encoder)); }
         catch (e) { _softDisplayAbort(disp); throw e; }
         _retireFlush();
         _capFinish(cap);
@@ -4061,7 +4068,7 @@ const WGX = (function () {
       }
       const disp = _softDisplayEncode();
       const _cap = _capEncode();
-      try { device.queue.submit([encoder.finish()]); }
+      try { device.queue.submit(_frameSubmitList(encoder)); }
       catch (e) { _softDisplayAbort(disp); throw e; }
       _retireFlush();
       _capFinish(_cap);
@@ -4088,10 +4095,12 @@ const WGX = (function () {
       }
     }
 
-    // Runs BEFORE begin() each frame (matches game.js render order): its own
-    // command encoder, submitted in shadowEnd() so the depth map is ready for
-    // the later lit pass that samples it. All current casters use MAT_IDENT, but
-    // model is honoured via a dynamic-offset ring (one slot per castShadow* call).
+    // Runs BEFORE begin() each frame (matches game.js render order): one
+    // shared shadow encoder for the frame's passes, submitted ahead of the
+    // main encoder in the SAME queue.submit (see _frameSubmitList) — queue
+    // order keeps the depth maps ready for the lit pass that samples them.
+    // All current casters use MAT_IDENT, but model is honoured via a
+    // dynamic-offset ring (one slot per castShadow* call, regioned per pass).
     function _writeShadowModel(slot, model) {
       const src = model && model.length === 16 ? model : (model && model.length > 16 && model.subarray ? model.subarray(0, 16) : IDENT);
       shadowModelRing.set(src, slot * SHADOW_MODEL_F32_STRIDE);
@@ -4100,9 +4109,36 @@ const WGX = (function () {
     // shadowPass.end(). writeBuffer is queue-ordered before submit, so
     // draws recorded earlier still see the data (same rule as _flushDrawUBO).
     function _flushShadowModelUBO() {
-      if (!shadowModelUBO || _shadowSlot <= 0) return;
-      device.queue.writeBuffer(shadowModelUBO, 0, shadowModelRing, 0, _shadowSlot * SHADOW_MODEL_F32_STRIDE);
+      if (!shadowModelUBO || _shadowSlot <= _shadowFlushed) return;
+      // Region flush: only this pass's new slots — earlier passes' slots are
+      // already uploaded and must not be rewritten (their draws are recorded,
+      // and writeBuffer is queue-ordered, so a rewrite would clobber them).
+      device.queue.writeBuffer(shadowModelUBO,
+        _shadowFlushed * SHADOW_MODEL_STRIDE, shadowModelRing,
+        _shadowFlushed * SHADOW_MODEL_F32_STRIDE,
+        (_shadowSlot - _shadowFlushed) * SHADOW_MODEL_F32_STRIDE);
+      _shadowFlushed = _shadowSlot;
       if (_shadowOverflow) Log.warn("gfx", "WGX shadow caster ring overflow: " + _shadowOverflow + " draw(s) skipped");
+    }
+    // One encoder for all of a frame's shadow passes; a Begin resumes the
+    // pending encoder. Spill guard: if the frame submit never ran (a capture
+    // path bailed) the ring would keep growing — submit and reset instead.
+    function _shadowEncoderBegin() {
+      if (_pendingShadowEnc && _shadowSlot > SHADOW_SLOTS - 512) {
+        try { device.queue.submit([_pendingShadowEnc.finish()]); } catch (_) { /* device error surfaces later */ }
+        _pendingShadowEnc = null;
+        _shadowSlot = 0; _shadowFlushed = 0; _shadowOverflow = 0;
+      }
+      shadowEncoder = _pendingShadowEnc || device.createCommandEncoder();
+      _pendingShadowEnc = null;
+    }
+    // The frame submit: shadow encoder (when any pass recorded) rides in front
+    // of the main encoder, then the ring resets for the next frame.
+    function _frameSubmitList(mainEnc) {
+      const sh = _pendingShadowEnc;
+      _pendingShadowEnc = null;
+      _shadowSlot = 0; _shadowFlushed = 0; _shadowOverflow = 0;
+      return sh ? [sh.finish(), mainEnc.finish()] : [mainEnc.finish()];
     }
     function _shadowSetModel(model) {
       if (_shadowSlot >= SHADOW_SLOTS) { _shadowOverflow++; return -1; }
@@ -4117,8 +4153,7 @@ const WGX = (function () {
       _shadowLightVP = (lightVP && lightVP.length >= 16) ? lightVP : IDENT;  // raw — CPU chunk cull
       _mul4(shadowLVPData, Z01, _shadowLightVP);   // Z01-remapped — depth store + LIT lookup
       device.queue.writeBuffer(shadowUBO, 0, shadowLVPData);
-      _shadowSlot = 0; _shadowOverflow = 0;
-      shadowEncoder = device.createCommandEncoder();
+      _shadowEncoderBegin();
       shadowPass = shadowEncoder.beginRenderPass({
         colorAttachments: [],
         depthStencilAttachment: { view: shadowView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store" },
@@ -4215,13 +4250,15 @@ const WGX = (function () {
         blockerPass.end();
       }
 
-      device.queue.submit([shadowEncoder.finish()]);
+      _pendingShadowEnc = shadowEncoder;   // rides the frame submit
       shadowEncoder = null;
       _shadowRendered = true;
     }
 
     // Shares the depth pipeline and the dynamic-offset model ring with the
-    // static pass (safe: shadowEnd submits before this Begin rewrites slots).
+    // static pass (safe: the ring is REGIONED per pass — slots keep counting
+    // across Begins and reset only at the frame submit, so this Begin never
+    // rewrites slots an earlier recorded pass still references).
     // PHONES keep blob-only shadows, matching GLX — which gates on IS_MOBILE, the
     // device, not MOBILE_TIER: GRAPHICS: HIGH buys quality, not a per-frame extra
     // depth pass on a phone GPU. The map itself is 1×1 there, so this gate is also
@@ -4233,8 +4270,7 @@ const WGX = (function () {
       _shadowLightVP = null;   // castShadowChunked must NOT frustum-cull with stale static planes
       _mul4(carShadowLVPData, Z01, (lightVP && lightVP.length >= 16) ? lightVP : IDENT);
       device.queue.writeBuffer(carShadowUBO, 0, carShadowLVPData);
-      _shadowSlot = 0; _shadowOverflow = 0;
-      shadowEncoder = device.createCommandEncoder();
+      _shadowEncoderBegin();
       shadowPass = shadowEncoder.beginRenderPass({
         colorAttachments: [],
         depthStencilAttachment: { view: carShadowView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store" },
@@ -4246,7 +4282,7 @@ const WGX = (function () {
       if (!shadowPass) return;
       _flushShadowModelUBO();
       shadowPass.end(); shadowPass = null;
-      device.queue.submit([shadowEncoder.finish()]);
+      _pendingShadowEnc = shadowEncoder;   // rides the frame submit
       shadowEncoder = null;
       _carShadowArmed = true;
     }
@@ -4263,8 +4299,7 @@ const WGX = (function () {
       _mul4(lampShadowLVPData, Z01, raw);
       device.queue.writeBuffer(lampShadowUBO, 0, lampShadowLVPData);
       if (lightVP) { _extractPlanes(raw, _fcPlanes); _fcPlanesIsFrame = false; }
-      _shadowSlot = 0; _shadowOverflow = 0;
-      shadowEncoder = device.createCommandEncoder();
+      _shadowEncoderBegin();
       shadowPass = shadowEncoder.beginRenderPass({
         colorAttachments: [],
         depthStencilAttachment: { view: lampShadowView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store" },
@@ -4276,7 +4311,7 @@ const WGX = (function () {
       if (!shadowPass) return;
       _flushShadowModelUBO();
       shadowPass.end(); shadowPass = null;
-      device.queue.submit([shadowEncoder.finish()]);
+      _pendingShadowEnc = shadowEncoder;   // rides the frame submit
       shadowEncoder = null;
       _lampShadowArmed = true;
     }
