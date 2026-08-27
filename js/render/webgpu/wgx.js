@@ -122,13 +122,13 @@ const WGX = (function () {
   })();
   const _CH = _Chunks || {};   // sizes below fall back to 0 when absent; create() refuses first
 
-  const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 560
-  const FRAME_FLOATS = FRAME_BYTES / 4;                 // 140
+  const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 576
+  const FRAME_FLOATS = FRAME_BYTES / 4;                 // 144
   const LIGHT_STRIDE = _CH.LIGHT_STRIDE_BYTES | 0;      // 64
   const MAX_LIGHTS = _CH.MAX_LIGHTS | 0;                // 48
   const LIGHT_BYTES = LIGHT_STRIDE * MAX_LIGHTS;        // 3072
   const LIGHT_FLOATS = LIGHT_BYTES / 4;                 // 768
-  const DRAW_USED_BYTES = _CH.DRAW_UNIFORM_BYTES | 0;   // 112
+  const DRAW_USED_BYTES = _CH.DRAW_UNIFORM_BYTES | 0;   // 128
   // Dynamic uniform-buffer offsets must be a multiple of
   // minUniformBufferOffsetAlignment (<=256 on all adapters); 256 is always a
   // valid multiple, so we stride slots at 256 B.
@@ -3865,12 +3865,12 @@ const WGX = (function () {
         s[65] = lastFrame && lastFrame.cloudSpeed != null ? lastFrame.cloudSpeed : 1;
         s[66] = (T && T.godrayAniso != null) ? T.godrayAniso : 0.60;
         s[67] = (T && T.godrayFloor != null) ? T.godrayFloor : 0.020;
-        // Nearest-N to the eye (GLX glx/post.js). GLX uploads 12 slots
-        // (GR_MAX_LIGHTS) but GODRAY_FS only marches the nearest 6
-        // ("was 12" — 16 steps × 6 is the measured cost cap; slots 6-11
-        // are unused headroom). Match the consumer, not the upload pad:
-        // raising this loop to 12 would make WGX show more beams than
-        // GLX. The shadowed floodlight is remapped into that nearest-N
+        // Nearest-N to the eye (GLX glx/post.js). GLX uploads AND marches
+        // exactly GR_MAX_LIGHTS=6 — its old upload-12/march-6 split was
+        // REMOVED (the removal note in glx/post.js: the mismatch broke the
+        // beam shadow), so 6 here is upload parity, not a consumer-side
+        // trim. Raising this loop alone would make WGX show more beams
+        // than GLX. The shadowed floodlight is remapped into that nearest-N
         // order — using frame.lights[0..5] + the raw frame index missed
         // distant-but-first records and carved the wrong cone.
         let nL = 0, grLampIdx = -1;

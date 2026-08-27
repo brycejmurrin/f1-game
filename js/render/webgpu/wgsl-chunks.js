@@ -1820,7 +1820,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY_UNIFORM_BYTES: 240,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-        FRAME_UNIFORM_BYTES: 576,   // FrameU + lampLightVP + params8..10 (params10 = chunk shadow idx)
+    FRAME_UNIFORM_BYTES: 576,   // FrameU + lampLightVP + params8..10 (params10 = chunk shadow idx)
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light
