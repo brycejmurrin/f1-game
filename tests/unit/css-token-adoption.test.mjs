@@ -98,12 +98,21 @@ const CEILING = {
   // sub-floor literal (measured on deploy tip c3df0ee1).
   subFloorFontSize: 4,
   // padding / gap / margin declarations containing a raw px literal.
+  // POLICY (rewritten 2026-08-26, deliberately — user-approved): a raw px
+  // spacing value converts when it has an EXACT token form, including
+  // division forms (22/11 -> --pad; 12/24/18/9/6/3 -> --gap multiples;
+  // 2/4/8/14/16 -> --gap sixths, thirds, two-thirds, 7/6, 4/3 written as
+  // calc(var(--gap) / 3) style divisions so the arithmetic stays exact).
+  // What stays literal: values with NO exact form (5/7/10px), measured
+  // pairs whose comments record px arithmetic, position ANCHORS, and any
+  // declaration inside a compact/rail-tier rule — those operate at
+  // --gap: 8, where a 12-derived multiple is wrong at the rule's only
+  // operating point. The old "a hairline should stay a hairline" rule was
+  // retired when the tuner migration showed the density ladder SHOULD
+  // tighten hairlines with everything else — that was the goal, not noise.
   // 2026-08-13: 529 -> 479. The four sheets that read NO spacing token at all
-  // (data, hud, overlays, track-detail) were migrated in the same pass — but
-  // only for values with an exact ratio to the token (22/11 -> --pad, 12/24/18/
-  // 6/3 -> --gap). The remainder are 2/4/5/8/10px hairline nudges, and turning
-  // those into calc(var(--gap) * 0.41) noise would be worse than leaving them:
-  // a hairline should stay a hairline when the density ladder tightens.
+  // (data, hud, overlays, track-detail) were migrated in the same pass, for
+  // exact simple ratios only (the division forms came 2026-08-26).
   // 2026-08-14: 475 -> 474. `.hud-gaps` lost an inert `gap: 4px` (it was never
   // a flex container) when the widget was resized in the HUD SIZE pass.
   // 2026-08-18: 471 -> 470. Data Hub Last Race column-hide rules lost a
@@ -132,7 +141,12 @@ const CEILING = {
   // measured pairs, the compact/rail tiers (already at --gap:8, so a 12-based
   // multiple is wrong at their only operating point), and the .lt-tabs
   // full-bleed triple stay raw per the policy note below.
-  rawSpacing: 453,
+  // 2026-08-26: 453 → 422. The 1b division set under the rewritten policy
+  // above: 29 more tuner declarations onto exact --gap fractions (thirds,
+  // sixths, two-thirds, 7/6, 4/3). Still raw in tuner.css: the .lt-tabs
+  // full-bleed triple (next commit, atomic), the measured pairs, the
+  // .adv-item 11px/7px inversion pair, and every compact/rail-tier value.
+  rawSpacing: 422,
 };
 
 test("no new font-size below the --fs-micro floor", () => {
