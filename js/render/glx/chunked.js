@@ -197,23 +197,22 @@ const GLXChunked = (function () {
             if (AL[p] === lx && AL[p + 1] === ly && AL[p + 2] === lz) { shadowAllIdx = p / 15; break; }
           }
         }
+        // The whole per-chunk table is baked ONCE per (lights, knob) by the
+        // shared LampChunks module (build-time work, invalidated by lights
+        // array identity + knob value — a rebuild:true tuner edit nulls
+        // track._lights and the next build mints a new array); this loop only
+        // binds each visible chunk's pre-baked list.
+        const _tbl = LampChunks.resolve(F.allLights, chunks, F.perChunkLights);
         let lastSlot = null;
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
           if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
           if (cd > 0 && _aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) continue;
-          // Keyed on the knob too: the cap inside _pickChunkLamps derives from
-          // perChunkLights, so a slider move must invalidate — array identity
-          // alone froze the first draw's cap for the life of the track.
-          if (ch._lampIdx === undefined || ch._lampSrc !== F.allLights || ch._lampKnob !== F.perChunkLights) {
-            ch._lampIdx = _pickChunkLamps(F.allLights, ch.min, ch.max);
-            ch._lampSrc = F.allLights; ch._lampKnob = F.perChunkLights;
-          }
-          core.uploadLightSet(F.allLights, ch._lampIdx, ch._lampIdx.length,
+          const li = _tbl.lists[i];
+          core.uploadLightSet(F.allLights, li, li.length,
                               F.lights, F.tailStart, F.tailCount);
           let slot = -1;
           if (shadowAllIdx >= 0) {
-            const li = ch._lampIdx;
             for (let j = 0; j < li.length; j++) if (li[j] === shadowAllIdx) { slot = j; break; }
           }
           if (slot !== lastSlot) { core.setLampShadowSlot(slot); lastSlot = slot; }
@@ -243,27 +242,6 @@ const GLXChunked = (function () {
       }
     }
 
-    // Nearest lamps whose radius actually reaches a chunk's AABB, closest first,
-    // capped at 24 (was 48 — each chunk binds its own set and runs a full LIT
-    // loop per draw). Runs ONCE per chunk (cached): lamps are baked
-    // per track and chunk bounds never move, so this is build-time work paid
-    // lazily on first draw, not a per-frame cull.
-    function _pickChunkLamps(L, mn, mx) {
-      const n = (L.length / 15) | 0, hits = [];
-      for (let i = 0; i < n; i++) {
-        const o = i * 15, rad = L[o + 6];
-        if (!(rad > 0)) continue;
-        const d2 = _aabbDist2(mn, mx, L[o], L[o + 1], L[o + 2]);
-        if (d2 <= rad * rad) hits.push({ i, d2 });
-      }
-      hits.sort((a, b) => a.d2 - b.d2);
-      const cap = (F.perChunkLights > 0 && F.perChunkLights < 1)
-        ? Math.max(8, Math.round(24 * F.perChunkLights))
-        : 24;
-      const out = new Int32Array(Math.min(cap, hits.length));
-      for (let k = 0; k < out.length; k++) out[k] = hits[k].i;
-      return out;
-    }
 
     function castShadowChunked(mesh, model) {
       const SH = core.shadow;
