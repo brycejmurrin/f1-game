@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 135 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 136 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -842,6 +842,7 @@ what it covers.
 | `data-lifecycle.spec.js` | data hub session plumbing — meeting/year/session/driver responses own their option lists |
 | `telemetry-compare.spec.js` | TELEMETRY multi-lane compare and cross-session (one driver's race vs quali) |
 | `telemetry-trace.test.mjs` | GPS-trace sanity and the playback dot's motion |
+| `data-api-status.test.mjs` | a `"null"` error body still throws with `.status` attached, so a 401/403 lockout can never serve stale cache |
 | `audio-smoke.spec.js` | the WebAudio engine/sfx initialise and respond, objectively |
 | `music-library.spec.js` | the bring-your-own-music library and the Spotify backend |
 | `spotify-refresh.test.mjs` | Spotify refresh single-flight, retry preservation, rotated-token ownership, and terminal revocation |
