@@ -350,6 +350,9 @@ const DataTelemetry = (function () {
     hdr.appendChild(titleEl);
     const closeBtn = el("button", "dh-close", "✕");
     closeBtn.type = "button";
+    // autofocus: showModal's focusing steps then GUARANTEE initial focus here,
+    // instead of racing whatever the async body build makes focusable first.
+    closeBtn.autofocus = true;
     closeBtn.setAttribute("aria-label", "Close telemetry");
     closeBtn.addEventListener("click", closeTelemPopup);
     hdr.appendChild(closeBtn);

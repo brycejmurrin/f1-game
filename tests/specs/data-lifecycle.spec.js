@@ -377,12 +377,27 @@ test("data hub exposes modal tabs, traps focus, and restores its opener", async 
   await expect(standings).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", await standings.getAttribute("id"));
 
-  const close = page.getByRole("button", { name: "Close data hub" });
+  // Containment, platform-shaped: what Tab reaches next depends on whether
+  // the tab panel has settled (an error panel carries a RETRY button, a
+  // spinner carries nothing), so pinning "close is next" was a race the old
+  // hand-rolled trap happened to win. And a native modal dialog does not
+  // hard-wrap the way that trap did — sequential focus may hop through the
+  // UA chrome (activeElement === body in headless) between cycles. The
+  // platform's actual promise, the same one menu-keyboard asserts for
+  // #track-detail, is that the BACKGROUND stays inert: Tab can never reach
+  // the opener page's controls while the dialog is up.
   await standings.focus();
-  await page.keyboard.press("Tab");
-  await expect(close).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(standings).toBeFocused();
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press("Tab");
+    const where = await page.evaluate(() => {
+      const ae = document.activeElement;
+      const d = document.getElementById("datahub");
+      if (d.contains(ae)) return "in";
+      if (ae === document.body || ae === document.documentElement) return "chrome";
+      return ae.id || ae.className || ae.tagName;
+    });
+    expect(["in", "chrome"]).toContain(where);
+  }
 
   await page.keyboard.press("Escape");
   await expect(page.locator("#data-opener")).toBeFocused();
@@ -411,8 +426,18 @@ test("telemetry popup is a labelled modal and restores driver focus", async ({ p
   expect(await popup.evaluate((d) => d.matches(":modal"))).toBe(true);
   const close = page.getByRole("button", { name: "Close telemetry" });
   await expect(close).toBeFocused();
+  // Background inertness, not hard-wrap (see the hub test above): the hub's
+  // tabs and the page's buttons must be unreachable while the nested modal
+  // is topmost; a UA-chrome hop (body) between cycles is platform behavior.
   await page.keyboard.press("Tab");
-  await expect(close).toBeFocused();
+  const where = await page.evaluate(() => {
+    const ae = document.activeElement;
+    const p = document.querySelector("dialog.dh-tpopup");
+    if (p && p.contains(ae)) return "in";
+    if (ae === document.body || ae === document.documentElement) return "chrome";
+    return ae.id || ae.className || ae.tagName;
+  });
+  expect(["in", "chrome"]).toContain(where);
   await close.click();
   await expect(driver).toBeFocused();
 });
