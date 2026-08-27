@@ -282,20 +282,46 @@ function _rigBox(out, cx, cy, cz, sx, sy, sz, col) {
     out.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
   }
 }
-let cockpitWheelMesh = null;
-function getCockpitWheel() {
+// Keyed like _cockpitDecalMesh: the player's livery colours join the key, so
+// a garage livery edit (resolveLivery is store.rev-invalidated upstream)
+// frees and rebuilds the wheel with the new accents. liv may be null — the
+// wheel then falls back to the neutral carbon look.
+let cockpitWheelMesh = null, _cockpitWheelKey = "";
+const _wheelTint = (c, k) => c ? [c[0] * k, c[1] * k, c[2] * k] : null;
+function getCockpitWheel(liv) {
+  // Livery colours are display-range; against the near-black rig they glare,
+  // so team colour lands at ~45% (grips/straps) and ~55% (the 12-o'clock
+  // stripe, which is SUPPOSED to pop).
+  const c1 = _wheelTint(liv && liv.c1, 0.45);
+  const acc = _wheelTint(liv && (liv.accent || liv.c2), 0.55);
+  const c2 = _wheelTint(liv && liv.c2, 0.40);
+  const kc = (c) => c ? c.map((v) => v.toFixed(2)).join(",") : "-";
+  const wantKey = kc(c1) + "|" + kc(acc) + "|" + kc(c2);
+  if (cockpitWheelMesh && _cockpitWheelKey !== wantKey) {
+    if (_gfx.freeMesh) _gfx.freeMesh(cockpitWheelMesh);
+    cockpitWheelMesh = null;
+  }
   if (cockpitWheelMesh) return cockpitWheelMesh;
+  _cockpitWheelKey = wantKey;
   const out = { pos: [], nrm: [], col: [], idx: [] };
   const CARB = [0.04, 0.04, 0.05], RUB = [0.085, 0.085, 0.095], KNOB = [0.75, 0.72, 0.15];
+  const GRIP = c1 || RUB;
   _rigBox(out, -0.165, 0.0, 0, 0.05, 0.20, 0.062, RUB);        // hand grips
   _rigBox(out,  0.165, 0.0, 0, 0.05, 0.20, 0.062, RUB);
+  _rigBox(out, -0.165, 0.0, -0.002, 0.054, 0.09, 0.062, GRIP); // grip sleeves, team c1
+  _rigBox(out,  0.165, 0.0, -0.002, 0.054, 0.09, 0.062, GRIP);
   _rigBox(out, -0.118, 0.112, 0, 0.06, 0.045, 0.05, CARB);     // upper corners
   _rigBox(out,  0.118, 0.112, 0, 0.06, 0.045, 0.05, CARB);
   _rigBox(out, 0, 0.128, 0, 0.18, 0.038, 0.05, CARB);          // top bar
+  if (acc) _rigBox(out, 0, 0.130, -0.004, 0.05, 0.040, 0.05, acc); // 12-o'clock marker stripe
   _rigBox(out, -0.122, -0.118, 0, 0.055, 0.045, 0.05, CARB);   // lower corners
   _rigBox(out,  0.122, -0.118, 0, 0.055, 0.045, 0.05, CARB);
   _rigBox(out, 0, -0.138, 0, 0.17, 0.038, 0.05, CARB);         // bottom bar
   _rigBox(out, 0, 0.0, 0.014, 0.215, 0.16, 0.042, CARB);       // fascia plate
+  if (c2) {
+    _rigBox(out, -0.104, 0.0, 0.010, 0.010, 0.155, 0.044, c2); // fascia edge trim
+    _rigBox(out,  0.104, 0.0, 0.010, 0.010, 0.155, 0.044, c2);
+  }
   _rigBox(out, 0, 0.024, -0.016, 0.125, 0.080, 0.02, [0.025, 0.025, 0.035]);  // display bezel
   _rigBox(out, 0, 0.024, -0.028, 0.112, 0.068, 0.006, [0.012, 0.018, 0.028]); // LCD
   _rigBox(out, 0.048, 0.024, -0.0295, 0.012, 0.050, 0.003, [0.03, 0.035, 0.04]); // energy slot (vertical, centred)
@@ -323,13 +349,18 @@ function getCockpitWheel() {
   // only). Driver side is -z (the LCD faces that way); fingers wrap the +z
   // far side, thumbs sit inboard, and a short wrist stub angles down toward
   // the driver — kept shallow so it never nears the 0.3 m cockpit near plane.
-  const GLOVE = [0.10, 0.095, 0.095], PAD = [0.16, 0.15, 0.15];
+  // Base glove is a clear grey so hands read as hands against the dark rig;
+  // knuckle pads take the team accent and the wrist strap takes team c1, so
+  // the gloves also say WHOSE hands they are.
+  const GLOVE = [0.17, 0.16, 0.16], PAD = acc || [0.24, 0.23, 0.23];
+  const STRAP = c1 || [0.12, 0.11, 0.11];
   for (const s of [-1, 1]) {
     _rigBox(out, s * 0.192, 0.0, -0.010, 0.052, 0.145, 0.052, GLOVE);   // palm/back
     _rigBox(out, s * 0.168, 0.0, 0.030, 0.048, 0.165, 0.026, GLOVE);    // fingers over the rim
     _rigBox(out, s * 0.132, 0.024, -0.022, 0.030, 0.058, 0.034, GLOVE); // thumb, inboard
     _rigBox(out, s * 0.196, 0.012, -0.030, 0.040, 0.050, 0.016, PAD);   // knuckle pad
     _rigBox(out, s * 0.196, -0.100, -0.042, 0.052, 0.115, 0.055, GLOVE); // wrist stub
+    _rigBox(out, s * 0.196, -0.052, -0.043, 0.054, 0.020, 0.057, STRAP); // wrist strap
   }
   cockpitWheelMesh = _gfx.createMesh(out);
   return cockpitWheelMesh;
