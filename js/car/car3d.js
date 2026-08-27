@@ -2078,12 +2078,11 @@ const Car3D = (function () {
     // a dark bar across the middle of the frame. The chase car keeps all of it.
     if (!ckpt) {
       addBox(out, 0, 0.60, 0.12, 0.40, 0.045, 0.78, [0.04, 0.04, 0.05], SURFACES.carbon);
-      for (const s of [-1, 1]) {
-        addLoft(out, -0.15, s*0.27, 0.74, 0.06, 0.06,
-                 0.62,     0,      0.70, 0.06, 0.06, DARK);
-      }
+      // The dark converging beams + front post that used to sit here were the
+      // pre-tube inner halo frame. With the real titanium hoop and centre
+      // pillar in part("halo"), they were duplicate structure reading as a
+      // black chevron directly under the level crown bar — removed.
       addBox(out, 0, 0.74, -0.18, 0.60, 0.06, 0.07, DARK); // rear hoop
-      addBox(out, 0, 0.60,  0.62, 0.05, 0.20, 0.05, DARK); // front pillar
       // Recipe-gated HEADREST behind the helmet: 0 flat rim (shipped) / 1 raised
       // horseshoe pad / 2 winged pad. Front face z -0.25 sits just behind the
       // helmet dome (centre z -0.08, r 0.145 -> rear extent -0.225); pad tops
