@@ -9,6 +9,11 @@ async function startCar(page, speed = 30) {
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 10_000 });
   await page.evaluate((initialSpeed) => {
     window.__apex.race("monza");
+    // go() skips the countdown: in "count" state update() runs only the light
+    // sequence and RETURNS — no car physics. Without it a short step() run
+    // never computes deploy state (docs/DEBUG-HOOKS.md: race()+go() first);
+    // only the long-stepping tests here survived, by outlasting the countdown.
+    window.__apex.go();
     window.__apex.jump(0.1, initialSpeed, 0);
     window.__apex.freeze(true);
     window.__apex.setEnergy(1);
