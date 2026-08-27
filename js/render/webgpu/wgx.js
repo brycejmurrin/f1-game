@@ -2007,15 +2007,19 @@ const WGX = (function () {
           next.godrayView = next.godrayTex.createView();
           next.godrayBlurView = next.godrayBlurTex.createView();
           next.ldrView = next.ldrTex.createView();
-          // Wet-road SSR gets its own FULL-RES rgba16float target — 8 B/px that
-          // GLX never allocates at all (its SSR is inline in the composite
-          // shader). On the mobile tier that is the single largest discretionary
-          // allocation here, so skip it: binding 6 keeps the 1×1 placeholder,
-          // whose .a is 0, and the LIT SSR block documents that as the exact
-          // no-op case ("masked-out texels, incl. the 1×1 placeholder"). Wet
-          // road on a phone falls back to the analytic sky reflection.
+          // Wet-road SSR renders at HALF RES (the SSAO/godray pattern): the
+          // 24-step march runs on 4× fewer pixels and the target costs a
+          // quarter of the old full-res allocation — GLX never allocates one
+          // at all (its SSR is inline in the composite shader), and COMPOSITE
+          // reads binding 8 through linearSampler, so the upsample is the
+          // same free bilinear the godray add already uses. The march reads
+          // the FULL-res scene + depth (correct — half-res output, full-res
+          // inputs). On the mobile tier skip it entirely: binding 6 keeps the
+          // 1×1 placeholder, whose .a is 0, and the LIT SSR block documents
+          // that as the exact no-op case. Wet road on a phone falls back to
+          // the analytic sky reflection.
           if (!WGX_LITE) {
-            next.ssrTex = device.createTexture({ size: [width, height], format: SCENE_FORMAT,
+            next.ssrTex = device.createTexture({ size: [halfW, halfH], format: SCENE_FORMAT,
               usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
             next.ssrView = next.ssrTex.createView();
           }
@@ -3793,7 +3797,11 @@ const WGX = (function () {
         s[32] = up[0]; s[33] = up[1]; s[34] = up[2];
         s[35] = _carRefl;   // upVS.w = carReflect (SSR car-paint gate)
         const ssrThick = (T && T.ssrThick != null) ? T.ssrThick : 0.20;
-        s[36] = 1 / tw; s[37] = 1 / th; s[38] = ssrThick; s[39] = _ssrStr;   // texel, thick, strength
+        // texel = one OUTPUT (half-res) texel: it drives the UV-space march
+        // steps AND the nT finite-difference normal stride / self-hit taps
+        // against the still-full-res depth — one output texel is the correct
+        // stride for both at half res.
+        s[36] = 1 / halfW; s[37] = 1 / halfH; s[38] = ssrThick; s[39] = _ssrStr;   // texel, thick, strength
         const skz = (lastFrame && lastFrame.skyZenith) || [0.18, 0.40, 0.78];
         const skh = (lastFrame && lastFrame.skyHorizon) || [0.62, 0.74, 0.88];
         const topUV = (o.ssrTopUV != null) ? o.ssrTopUV : 0.62;
