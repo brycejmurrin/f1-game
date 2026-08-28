@@ -103,6 +103,18 @@ Session shape — this is what controls both wall time and waiting:
    live poking use the `mcp-probe` skill; the Playwright suite itself always
    runs script-driven, never through an MCP.
 
+### A real GPU IS reachable — `macos-latest`
+
+Measured 2026-08-28 (`docs/research/CI-RENDERING-PERFORMANCE.md` §There IS a
+real GPU): GitHub's Apple-silicon image reports a HARDWARE adapter (`apple`,
+`ANGLE Metal Renderer`, 2 GiB maxBufferSize, `shader-f16`/`subgroups`) on stock
+flags. ubuntu-latest is SwiftShader, windows-latest is WARP, this container is
+llvmpipe. Dispatch `.github/workflows/gpu-census.yml` — `census_only: true` for
+the adapter answer in seconds, without it to run `tools/gpu-game-check.mjs`
+(the portable `gfx-probe`: `gpuErrors()`, env-probe state, `?gfxdebug=1` text).
+**Never pass `--use-angle=vulkan` on macOS** — it drops WebGPU to SwiftShader
+and `requestAdapter()` returns null, silently turning a real-GPU run software.
+
 ### Software pixels in this container (no real GPU)
 
 On SwiftShader/Lavapipe the **native WebGPU swapchain never composites** to the
