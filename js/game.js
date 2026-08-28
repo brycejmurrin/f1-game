@@ -5596,7 +5596,7 @@ function renderSetupPreview(dt) {
   spMat.specular = 0.22;
   spMat.roughness = clamp(spMat.roughness * 2.4, 0.02, 1);   // spread + dim the speculars
   spMat.metalness = Math.min(spMat.metalness, 0.05);
-  GarageScene.draw(Teams.LIST[teamIdx], _spLiv(), eye);
+  GarageScene.draw(Teams.LIST[teamIdx], _spLiv(), eye, getTeamParts, driverIdx);
   gfx.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
   // The moveable wings, so a player can watch active aero work before ever
   // driving — and see what their own AERO parts choice did to the flap size.

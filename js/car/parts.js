@@ -637,6 +637,23 @@ const Parts = (function () {
     return 0.85 + (stat / 100) * 0.15;
   }
 
+  // The four headline stats and the curve that turns a raw (base * mods) figure
+  // into the number a player is shown. It lives HERE rather than in the garage
+  // panel because it now has two readers — the DOM panel and the in-world stats
+  // board on the bay wall — and two copies of a display curve is exactly how
+  // the same car ends up quoting two different numbers.
+  const STAT_KEYS = Object.freeze([
+    Object.freeze({ key: "speed", label: "SPEED" }),
+    Object.freeze({ key: "accel", label: "ACCEL" }),
+    Object.freeze({ key: "cornering", label: "CORNERING" }),
+    Object.freeze({ key: "braking", label: "BRAKING" }),
+  ]);
+  const STAT_KNEE = 100, STAT_CAP = 120, STAT_KNEE_SCALE = 26;
+  function displayStat(raw) {
+    if (raw <= STAT_KNEE) return raw;
+    return STAT_KNEE + (STAT_CAP - STAT_KNEE) * (1 - Math.exp(-(raw - STAT_KNEE) / STAT_KNEE_SCALE));
+  }
+
   const AERO_SPAN = (function () {
     const cat = CATALOG.find((c) => c.id === "aero");
     let lo = Infinity, hi = -Infinity;
@@ -697,6 +714,6 @@ const Parts = (function () {
     CATALOG, DEFAULTS, FACTORY_PRESETS, VISUAL_FIELD_REGISTRY, BUDGET,
     resolveSetup, isOptionAvailable,
     getFactorySetup, factoryKey,
-    getMods, getCost, getVisualTiers, statMult, aeroLoad, ersProfile,
+    getMods, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile,
   };
 })();
