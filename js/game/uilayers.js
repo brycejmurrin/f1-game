@@ -99,12 +99,32 @@ window.UiLayers = (function () {
      expresses that order — but a showModal() dialog is in the TOP LAYER, above
      every z-index there is, so it wins outright. DOM order breaks the ties. */
   function top() {
-    let best = null, bestRank = -Infinity;
+    // TOP-LAYER ORDER IS NOT DOM ORDER. Every open showModal() dialog used to
+    // rank Infinity and the `>=` tie-break then took the LAST IN DOM ORDER —
+    // which is only ever right by luck. The spec orders the result of
+    // `querySelectorAll(":modal")` by top-layer position (bottom first), and
+    // the top layer is a STACK: the most recently shown dialog is last. So
+    // rank a modal by its index there, which is the browser's own answer to
+    // "which dialog is on top", and one a caller cannot get wrong by opening
+    // two dialogs out of DOM order. Non-modal layers keep the z-index
+    // ranking, always below any modal (the +1 base clears a 0-index modal).
+    let modals = null;
+    try { modals = document.querySelectorAll(":modal"); } catch (_) { modals = null; }
+    const modalRank = (el) => {
+      if (!modals) return Infinity;             // no :modal support — old behaviour
+      for (let i = 0; i < modals.length; i++) if (modals[i] === el) return i + 1;
+      return Infinity;                          // matched :modal but absent here
+    };
+    let best = null, bestRank = -Infinity, bestModal = false;
     for (const el of document.querySelectorAll(ALL_SEL)) {
       if (!shownLayer(el)) continue;
-      const z = parseInt(getComputedStyle(el).zIndex, 10);
-      const rank = isModal(el) ? Infinity : (isFinite(z) ? z : 0);
-      if (rank >= bestRank) { bestRank = rank; best = el; }
+      const modal = isModal(el);
+      const rank = modal ? modalRank(el) : (parseInt(getComputedStyle(el).zIndex, 10) || 0);
+      // A modal always outranks a non-modal; between two modals (or two
+      // non-modals) the higher rank wins, ties going to the later element.
+      if (modal !== bestModal ? modal : rank >= bestRank) {
+        bestRank = rank; best = el; bestModal = modal;
+      }
     }
     return best;
   }

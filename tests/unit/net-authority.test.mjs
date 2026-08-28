@@ -491,3 +491,49 @@ test("LOBBY phase: SETTINGS is validated atomically before guest state changes",
     });
   } finally { lobby.cancel(); }
 });
+
+// ── round 8: session-scoped state and the arming population ─────────────────
+
+test("stop() clears the armed start — a quit mid-countdown must not leak into the next race", () => {
+  // game.js clears netStart only when a countdown runs to COMPLETION, so a
+  // friend race quit during the lights left a past-dated netStart behind and
+  // the NEXT solo race lit all five lamps in one frame and skipped its
+  // countdown. stop() owns the session's clock (it already nulls G.netNow);
+  // the armed start is the same clock's state.
+  const { G, net, s } = started("guest");
+  s.deliver("start", { at: 12345, hold: 1.0 });
+  assert.ok(G.netStart, "precondition: the guest armed the start");
+  net.stop("local");
+  assert.equal(G.netStart, null, "stop() must clear the armed start with the session");
+});
+
+test("a peer WITHOUT a grid slot cannot arm the start", () => {
+  // armedPeers counts session ids while allArmed() compares against remotes
+  // (wireId-keyed). A joiner that got no car (start()'s `if (!car) continue`)
+  // still has a bound session — its ARMED alone used to satisfy allArmed()
+  // and the host named lights-out while the SEATED peer was still building
+  // its circuit: the skipped-countdown bug, reintroduced through the side
+  // door. stubG(2) has exactly one free car, so peer 2 goes slotless.
+  const G = stubG(2);
+  const net = NetPlay.create(G);
+  const seated = fakeSession(), slotless = fakeSession();
+  const r = net.start({
+    role: "host",
+    session: seated,   // satisfies the no_transport gate; `sessions` wins below
+    sessions: [{ id: 1, session: seated }, { id: 2, session: slotless }],
+    peers: [{ id: 1, profile: null }, { id: 2, profile: null }],
+  });
+  assert.equal(r.ok, true, `host start must succeed: ${r.error || ""}`);
+  assert.equal(net.hostStart(), true, "no one armed yet — the host waits");
+  assert.equal(G.netStart, null, "precondition: the moment is not yet named");
+
+  slotless.deliver("armed", {});
+  assert.equal(G.netStart, null,
+    "a slotless peer's ARMED must not name the moment while the seated peer builds");
+  assert.deepEqual(seated.sent.filter((m) => m.t === "start"), [],
+    "no START goes out on the slotless peer's word");
+
+  seated.deliver("armed", {});
+  assert.ok(G.netStart, "the SEATED peer's ARMED names the moment");
+  assert.equal(seated.sent.filter((m) => m.t === "start").length, 1);
+});

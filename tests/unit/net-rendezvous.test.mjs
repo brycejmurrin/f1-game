@@ -354,3 +354,29 @@ test("the topic does not leak the room code", async () => {
   // ...but it must be stable, or the two peers would never meet.
   assert.equal(await NetRendezvous.topicFor(code.toLowerCase(), "offer"), topic);
 });
+
+// ── round 8: the key derives once per code ───────────────────────────────────
+test("repeated seals and opens of one code run PBKDF2 exactly once", async () => {
+  // 120 000 rounds per derivation, and the callers are hot (repost every 5 s,
+  // one per relay onopen, one per inbound frame). The memo keys on the
+  // normalised code; the wrong-code test above already proves a DIFFERENT
+  // code cannot be served the cached key.
+  const orig = crypto.subtle.deriveKey.bind(crypto.subtle);
+  let derives = 0;
+  Object.defineProperty(crypto.subtle, "deriveKey", {
+    configurable: true,
+    value: (...args) => { derives++; return orig(...args); },
+  });
+  try {
+    const code = "APEX1.z.MEMOCODE";
+    const s1 = await NetRendezvous.seal(code, "one");
+    const s2 = await NetRendezvous.seal(code, "two");
+    assert.equal(await NetRendezvous.open(code, s1), "one");
+    assert.equal(await NetRendezvous.open(code, s2), "two");
+    assert.equal(derives, 1, `PBKDF2 ran ${derives}× for one code`);
+    await NetRendezvous.seal("APEX1.z.OTHERCODE", "x");
+    assert.equal(derives, 2, "a new code derives a new key");
+  } finally {
+    delete crypto.subtle.deriveKey;
+  }
+});

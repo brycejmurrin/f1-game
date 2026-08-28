@@ -117,7 +117,9 @@ window.TopModal = (function () {
       "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
     );
     if (focusable) {
-      e.preventDefault();
+      // No preventDefault: `focusin` is NOT cancelable, so the call was a
+      // no-op that read as if it were suppressing the stray focus. The
+      // focus() below is what actually pulls focus back into the layer.
       try { focusable.focus(); } catch (_) { /* detached */ }
     }
   }

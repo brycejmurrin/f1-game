@@ -129,7 +129,17 @@ const WGX = (function () {
   const LIGHT_BYTES = LIGHT_STRIDE * MAX_LIGHTS;        // 3072
   const LIGHT_FLOATS = LIGHT_BYTES / 4;                 // 768
   const DRAW_USED_BYTES = _CH.DRAW_UNIFORM_BYTES | 0;   // 144
-  const DRAW_FLOATS = DRAW_USED_BYTES / 4;              // 36
+  // DOCTRINE (F7, deferred): DRAW_USED_BYTES is what the DrawU struct actually
+  // USES (144 B = 36 floats); DRAW_F32_STRIDE below is what a ring slot COSTS
+  // (256 B = 64 floats), because dynamic offsets must be 256-aligned. Every
+  // upload therefore writes whole 256 B slots and ships 112 B of padding per
+  // draw. Packing the used bytes contiguously and binding with one offset per
+  // batch would cut the per-frame upload by ~44%, but it means giving up
+  // dynamic offsets for a per-batch bind-group carousel — a redesign of the
+  // draw path, not a patch, so it is NOT attempted here. A `DRAW_FLOATS =
+  // DRAW_USED_BYTES / 4` const used to sit on this line as the beginning of
+  // that work; nothing ever read it (writeBuffer uses DRAW_F32_STRIDE), and a
+  // dead const that LOOKS like the stride is a trap, so it is gone.
   const LAMP_MASK_ALL = 16777215;                       // 2^24-1: f32-exact all-ones lamp mask
   // Dynamic uniform-buffer offsets must be a multiple of
   // minUniformBufferOffsetAlignment (<=256 on all adapters); 256 is always a
@@ -2895,6 +2905,9 @@ const WGX = (function () {
     }
     function freeChunkedMesh(m) {
       if (!m) return;
+      // Drop the lamp-table segment (and any overflow sentinel) keyed on this
+      // chunks array — a rebuilt mesh must re-resolve, not inherit stale state.
+      if (m.chunks) _ciSeg.delete(m.chunks);
       if (m.vbuf) m.vbuf.destroy();
       if (m.ibuf) m.ibuf.destroy();
       if (m.sbuf) m.sbuf.destroy();
@@ -3098,10 +3111,17 @@ const WGX = (function () {
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
+      // Piggyback the lamp-mask generation on this pack: the chunk masks
+      // depend only on pos.xyz + radius per ranked slot (flicker scales rgb),
+      // and those lanes are compared against last frame's pack right before
+      // being overwritten — 4 compares × nL, vs the visibleChunks × nL AABB
+      // tests the generation lets drawChunked's cache skip.
+      let _lmMoved = nL !== frameNL;
       if (nL > 0) {
         const ld = lightData;
         for (let i = 0; i < nL; i++) {
           const o = i * 15, b = i * 16;
+          if (!_lmMoved && (ld[b] !== L[o] || ld[b+1] !== L[o+1] || ld[b+2] !== L[o+2] || ld[b+3] !== L[o+6])) _lmMoved = true;
           ld[b]    = L[o];    ld[b+1]  = L[o+1];  ld[b+2]  = L[o+2];  ld[b+3]  = L[o+6];  // pos.xyz, rad
           ld[b+4]  = L[o+3];  ld[b+5]  = L[o+4];  ld[b+6]  = L[o+5];  ld[b+7]  = L[o+12]; // col.rgb, bleed
           ld[b+8]  = L[o+7];  ld[b+9]  = L[o+8];  ld[b+10] = L[o+9];  ld[b+11] = L[o+13]; // dir.xyz, volW
@@ -3109,6 +3129,7 @@ const WGX = (function () {
         }
         device.queue.writeBuffer(lightSBO, 0, lightData, 0, nL * 16);
       }
+      if (_lmMoved) _lmGen++;
 
       frameViewProj = f.viewProj || null;
       frameEye = f.eye || null;
@@ -3441,14 +3462,6 @@ const WGX = (function () {
       const cd = frameCullDist, cd2 = cd * cd;
       const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
       const chunks = mesh.chunks;
-      if (!cull) {
-        for (let i = 0; i < chunks.length; i++) {
-          const ch = chunks[i];
-          _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG, o.surfaceId === 16);
-          _drawGeom(litPass, ch);
-        }
-        return;
-      }
       // Per-chunk lamps: one DrawU slot per visible chunk carrying that chunk's
       // (offset, count) slice of the baked chunkIdxSBO table. The adjacent-run
       // merge is deliberately forfeited here — adjacent chunks almost never
@@ -3456,16 +3469,22 @@ const WGX = (function () {
       // runs in this mode; MAX_DRAWS 4096 has ample headroom (~150 visible
       // chunks measured worst-case). Table segments append per chunks-array;
       // a bake-generation move (_writeFrame) resets the allocator.
+      // This branch sits ABOVE the !cull fast path: a frame without a
+      // viewProj (menu orbit, headless) must still light per-chunk when the
+      // mode is on — it just draws every chunk instead of the visible ones.
       if (framePerChunk > 0 && frameAllLights && typeof LampChunks !== "undefined") {
         let seg = _ciSeg.get(chunks);
         const table = LampChunks.resolve(frameAllLights, chunks, framePerChunk);
         if (!seg || seg.table !== table) {
           const need = table.concat.length;
           if (_ciCursor + need > CHUNK_IDX_CAP) {
-            // Overflow (extreme lampDensity): warn once per generation and let
-            // this mesh fall through to the global-set merge path below.
+            // Overflow (extreme lampDensity): warn ONCE per table — the
+            // sentinel (base -1) is remembered so the next frame neither
+            // re-warns nor re-attempts the write; the mesh falls through to
+            // the global-set merge path below until the bake regenerates.
             try { Log.warn("gfx", "WGX per-chunk lamp table overflow (" + (_ciCursor + need) + " > " + CHUNK_IDX_CAP + ") — mesh keeps the global set"); } catch (_) { /* harness */ }
-            seg = null;
+            seg = { base: -1, table };
+            _ciSeg.set(chunks, seg);
           } else {
             if (need > 0) device.queue.writeBuffer(chunkIdxSBO, _ciCursor * 4, table.concat);
             seg = { base: _ciCursor, table };
@@ -3473,12 +3492,14 @@ const WGX = (function () {
             _ciCursor += need;
           }
         }
-        if (seg) {
+        if (seg.base >= 0) {
           const tbl = seg.table;
           for (let i = 0; i < chunks.length; i++) {
             const ch = chunks[i];
-            const dist2 = _aabbDist2(ch.min, ch.max, ex, ey, ez);
-            if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max) || (cd > 0 && dist2 > cd2)) continue;
+            if (cull) {
+              const dist2 = _aabbDist2(ch.min, ch.max, ex, ey, ez);
+              if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max) || (cd > 0 && dist2 > cd2)) continue;
+            }
             const cslot = _drawSlot++;
             if (cslot >= MAX_DRAWS) break;
             _writeDraw(cslot, model, o);
@@ -3495,6 +3516,14 @@ const WGX = (function () {
           return;
         }
       }
+      if (!cull) {
+        for (let i = 0; i < chunks.length; i++) {
+          const ch = chunks[i];
+          _bindLitVerts(litPass, ch.vbuf || mesh.vbuf, identInstanceBuf, ch.attrBG || mesh.attrBG, o.surfaceId === 16);
+          _drawGeom(litPass, ch);
+        }
+        return;
+      }
       // Merge runs of adjacent visible chunks that share vbuf/ibuf/attrBG.
       // Map insertion order is IBO order, so summing count from the run's
       // first firstIndex submits the same triangles as the per-chunk loop.
@@ -3508,37 +3537,27 @@ const WGX = (function () {
       // cheap AABB tests); small sets skip the machinery — the reject is
       // already cheap. Run overflow rebinds the base slot (all-ones mask).
       const maskL = frameNL > 8 ? frameLights : null;
-      let run = null;
-      const flush = () => {
-        if (!run) return;
-        if (maskL) {
-          const s2 = _drawSlot < MAX_DRAWS ? _drawSlot++ : -1;
-          const use = s2 >= 0 ? s2 : slot;
-          if (s2 >= 0) {
-            const db = s2 * DRAW_F32_STRIDE, sb = slot * DRAW_F32_STRIDE;
-            drawRing.copyWithin(db, sb, sb + 28);
-            drawRing[db + 28] = run.m0;
-            drawRing[db + 29] = run.m1;
-            // The copy stops at lane 28, so clear the relocated lampRange
-            // lanes explicitly — ring slots are reused and a stale
-            // lampRange.z=1 from a per-chunk frame would reroute the shader.
-            drawRing[db + 32] = 0; drawRing[db + 33] = 0; drawRing[db + 34] = 0;
-          }
-          _dynOff[0] = use * DRAW_STRIDE;
-          litPass.setBindGroup(1, drawBindGroup, _dynOff);
-        }
-        _bindLitVerts(litPass, run.vbuf, identInstanceBuf, run.attrBG, o.surfaceId === 16);
-        _drawGeom(litPass, run);
-        run = null;
-      };
+      _mrMaskL = maskL; _mrSlot = slot; _mrPass = litPass; _mrRoad = o.surfaceId === 16;
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
         const dist2 = _aabbDist2(ch.min, ch.max, ex, ey, ez);
         if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max) || (cd > 0 && dist2 > cd2)) {
-          flush();
+          _mrFlush();
           continue;
         }
-        if (maskL) _chunkLampMask(ch.min, ch.max, maskL, frameNL);
+        if (maskL) {
+          // Generation-keyed cache (the LampChunks WeakMap shape): the ranked
+          // set is stable for many frames at a time — while _lmGen holds, the
+          // chunk's mask is a lookup, not nL AABB tests.
+          let cm = _lmCache.get(ch);
+          if (cm && cm.gen === _lmGen) {
+            _lm0 = cm.m0; _lm1 = cm.m1;
+          } else {
+            _chunkLampMask(ch.min, ch.max, maskL, frameNL);
+            if (cm) { cm.gen = _lmGen; cm.m0 = _lm0; cm.m1 = _lm1; }
+            else _lmCache.set(ch, { gen: _lmGen, m0: _lm0, m1: _lm1 });
+          }
+        }
         const vbuf = ch.vbuf || mesh.vbuf;
         const ibuf = ch.ibuf || mesh.ibuf || null;
         const attrBG = ch.attrBG || mesh.attrBG;
@@ -3571,27 +3590,74 @@ const WGX = (function () {
         const chFirst = indexed ? _chunkFirstIndex(ch) : (ch.first | 0);
         const vidDead = indexed || !!_roadLutBG;
         const nightOK = indexed || !maskL;
-        const contig = run && (indexed ? run.firstIndex : (run.first | 0)) + run.count === chFirst;
-        if (run && run.vbuf === vbuf && run.ibuf === ibuf && run.attrBG === attrBG
+        // Pooled bag (see _mrRun): `run.active` is what `run &&` used to be.
+        const run = _mrRun;
+        const contig = run.active && (indexed ? run.firstIndex : (run.first | 0)) + run.count === chFirst;
+        if (run.active && run.vbuf === vbuf && run.ibuf === ibuf && run.attrBG === attrBG
             && contig && vidDead && nightOK) {
           run.count += ch.count;
           if (maskL) { run.m0 |= _lm0; run.m1 |= _lm1; }
         } else {
-          flush();
-          run = {
-            vbuf, ibuf, attrBG, count: ch.count,
-            first: ch.first | 0,
-            firstIndex: _chunkFirstIndex(ch),
-            indexFormat: ch.indexFormat || mesh.indexFormat,
-            m0: maskL ? _lm0 : LAMP_MASK_ALL, m1: maskL ? _lm1 : LAMP_MASK_ALL,
-          };
+          _mrFlush();
+          run.active = true;
+          run.vbuf = vbuf; run.ibuf = ibuf; run.attrBG = attrBG;
+          run.count = ch.count;
+          // `first` IS LOAD-BEARING: _drawGeom draws pass.draw(count, 1,
+          // mesh.first | 0) on the non-indexed path, so a pooled bag without
+          // it would send every road run from vertex 0. No unit test can see
+          // that (the device is a mock) — only real pixels can.
+          run.first = ch.first | 0;
+          run.firstIndex = _chunkFirstIndex(ch);
+          run.indexFormat = ch.indexFormat || mesh.indexFormat;
+          run.m0 = maskL ? _lm0 : LAMP_MASK_ALL;
+          run.m1 = maskL ? _lm1 : LAMP_MASK_ALL;
         }
       }
-      flush();
+      _mrFlush();
+      // Release the GPU-object refs — the bag survives between calls.
+      _mrPass = null; _mrMaskL = null;
+      _mrRun.vbuf = _mrRun.ibuf = _mrRun.attrBG = _mrRun.indexFormat = null;
+    }
+    // Merge-run state for drawChunked, hoisted to module scope and POOLED —
+    // the per-call closure + a fresh run object per state change were the same
+    // GC class the instanced path's _instDrawOpts pooling (and _litOptsBag)
+    // already fixed: hundreds of allocations per frame on a city track. The
+    // bag is consumed synchronously within one drawChunked call; refs are
+    // nulled at the end of each call.
+    const _mrRun = {
+      active: false, vbuf: null, ibuf: null, attrBG: null,
+      count: 0, first: 0, firstIndex: 0, indexFormat: null, m0: 0, m1: 0,
+    };
+    let _mrMaskL = null, _mrSlot = 0, _mrPass = null, _mrRoad = false;
+    function _mrFlush() {
+      const run = _mrRun;
+      if (!run.active) return;
+      if (_mrMaskL) {
+        const s2 = _drawSlot < MAX_DRAWS ? _drawSlot++ : -1;
+        const use = s2 >= 0 ? s2 : _mrSlot;
+        if (s2 >= 0) {
+          const db = s2 * DRAW_F32_STRIDE, sb = _mrSlot * DRAW_F32_STRIDE;
+          drawRing.copyWithin(db, sb, sb + 28);
+          drawRing[db + 28] = run.m0;
+          drawRing[db + 29] = run.m1;
+          // The copy stops at lane 28, so clear the relocated lampRange
+          // lanes explicitly — ring slots are reused and a stale
+          // lampRange.z=1 from a per-chunk frame would reroute the shader.
+          drawRing[db + 32] = 0; drawRing[db + 33] = 0; drawRing[db + 34] = 0;
+        }
+        _dynOff[0] = use * DRAW_STRIDE;
+        _mrPass.setBindGroup(1, drawBindGroup, _dynOff);
+      }
+      _bindLitVerts(_mrPass, run.vbuf, identInstanceBuf, run.attrBG, _mrRoad);
+      _drawGeom(_mrPass, run);
+      run.active = false;
     }
     // Two 24-bit mask halves for the lights whose radius reaches an AABB.
     // Written to module scratch (_lm0/_lm1) — one caller, synchronous.
-    let _lm0 = 0, _lm1 = 0;
+    // _lmGen advances in _writeFrame when any ranked slot's pos/radius moves;
+    // _lmCache keys per-chunk masks on it (entries die with their chunk).
+    let _lm0 = 0, _lm1 = 0, _lmGen = 0;
+    const _lmCache = new WeakMap();
     function _chunkLampMask(mn, mx, L, n) {
       let m0 = 0, m1 = 0;
       for (let i = 0; i < n; i++) {
@@ -3877,7 +3943,12 @@ const WGX = (function () {
       const _contactEarly = (o.contact > 0 && frameSunVS) ? o.contact : 0;
       const _haveAOEarly = frameHaveProj && ssaoBG && (_aoStrEarly > 0 || _contactEarly > 0);
       const _grStrEarly = o.godray != null ? o.godray : 0;
-      const _lampVolEarly = o.lampVol != null ? o.lampVol : 0;
+      // The godray march multiplies lamp in-scatter by the mist uniform (the
+      // in-scatter needs particles to scatter off), so with GROUND MIST at 0
+      // it computes an exact 0 — zeroing lampVol sheds the half-res march +
+      // blurs + composite operand with bit-identical output (GLX/TLX parity:
+      // glx/post.js lampVolPre, tlx-post.js lampVol).
+      const _lampVolEarly = ((o.mist || 0) > 0 && o.lampVol != null) ? o.lampVol : 0;
       const _haveGREarly = !!(godrayBG && lastFrame && lastFrame.invViewProj
         && ((!!shadowView && _grStrEarly > 0) || _lampVolEarly > 0));
       // Same operands as the SSR pass below: wet-road OR car lacquer. Omitted
@@ -3969,8 +4040,13 @@ const WGX = (function () {
         : ((T && T.carReflect != null) ? T.carReflect : 0.05);
       // Run when wet-road SSR is live OR car lacquer needs a mirror (GLX composite
       // gates on either path). Dry days still get car-paint SSR.
-      if (_ssrReady && ssrBG && frameHaveProj &&
-          ((_wet > 0.01 && _ssrStr > 0.001) || _carRefl > 0.001)) {
+      // _ssrRan is REMEMBERED for the composite below: when this pass skips
+      // (no viewProj this frame, bind group not built yet), ssrTex still holds
+      // LAST frame's reflections — the consume lanes must read 0, not march
+      // stale mirror data onto this frame's road and paint.
+      const _ssrRan = !!(_ssrReady && ssrBG && frameHaveProj &&
+          ((_wet > 0.01 && _ssrStr > 0.001) || _carRefl > 0.001));
+      if (_ssrRan) {
         const s = postScratch;
         s.set(frameInvProjW, 0);
         s.set(frameProjRaw && frameProjRaw.length >= 16 ? frameProjRaw : IDENT, 16);
@@ -3990,6 +4066,11 @@ const WGX = (function () {
         s[40] = skz[0]; s[41] = skz[1]; s[42] = skz[2]; s[43] = topUV;
         s[44] = skh[0]; s[45] = skh[1]; s[46] = skh[2]; s[47] = ssrNear;
         s[48] = (T && T.carGloss != null) ? T.carGloss : 1.0;   // gloss.x = uCarGloss
+        // gloss.yz = FULL-res depth texel: the shader's finite-difference
+        // normal strides read depthTex (full res); feeding them the half-res
+        // OUTPUT texel doubled the stride the edge/self-hit thresholds were
+        // tuned at. gloss.w zeroed — postScratch is shared and uploads as-is.
+        s[49] = 1 / tw; s[50] = 1 / th; s[51] = 0;
         device.queue.writeBuffer(ssrUBO, 0, s, 0, _Post.SSR_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ssrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 0 }, storeOp: "store" }] });
@@ -4021,7 +4102,9 @@ const WGX = (function () {
       // CPU gates like GLX: sun shaft strength (no on-screen requirement — shafts
       // still light the mist when the sun sits just off-frame) or lamp volumetric.
       const grStr = o.godray != null ? o.godray : 0;
-      const lampVol = o.lampVol != null ? o.lampVol : 0;
+      // mist gate: see _lampVolEarly above — zero mist makes the lamp march an
+      // exact 0, so drop the operand and the passes it would arm.
+      const lampVol = ((o.mist || 0) > 0 && o.lampVol != null) ? o.lampVol : 0;
       const sunGR = !!shadowView && grStr > 0;
       // GLX/TLX require invViewProj — without it the march uses IDENT and
       // paints garbage shafts on the first / odd present.
@@ -4207,12 +4290,12 @@ const WGX = (function () {
         s[48] = (T && T.gammaR     != null) ? T.gammaR     : 1;
         s[49] = (T && T.gammaG     != null) ? T.gammaG     : 1;
         s[50] = (T && T.gammaB     != null) ? T.gammaB     : 1;
-        s[51] = (o.reflect != null) ? o.reflect : 0;                                      // gamma.w = wet-road SSR
+        s[51] = _ssrRan && o.reflect != null ? o.reflect : 0;                             // gamma.w = wet-road SSR (0 when the pass skipped — ssrTex is stale)
         s[52] = (T && T.gainR      != null) ? T.gainR      : 1;
         s[53] = (T && T.gainG      != null) ? T.gainG      : 1;
         s[54] = (T && T.gainB      != null) ? T.gainB      : 1;
-        s[55] = o.carReflect != null ? o.carReflect
-          : ((T && T.carReflect != null) ? T.carReflect : 0.05);                           // gain.w = carReflect
+        s[55] = _ssrRan ? (o.carReflect != null ? o.carReflect
+          : ((T && T.carReflect != null) ? T.carReflect : 0.05)) : 0;                      // gain.w = carReflect (same stale-ssrTex gate)
         // aces (off 224): TONE CURVE coeffs a,b,c,d (GLX parity). Always packed —
         // defaults reproduce the shipped Narkowicz curve byte-for-byte.
         s[56] = (T && T.acesA != null) ? T.acesA : 2.51;
@@ -4392,16 +4475,13 @@ const WGX = (function () {
         return;
       }
       const cull = !!_shadowLightVP;   // planes were extracted into _fcPlanes in shadowBegin
-      let run = null;
-      const flush = () => {
-        if (!run) return;
-        _setVB0(shadowPass, run.vbuf);
-        _drawGeom(shadowPass, run);
-        run = null;
-      };
+      // Same pooling as drawChunked's _mrRun/_mrFlush below: this ran the
+      // identical per-call closure + per-state-change run object, once per
+      // shadow-casting mesh per shadow pass per frame.
+      const run = _srRun;
       for (let i = 0; i < mesh.chunks.length; i++) {
         const ch = mesh.chunks[i];
-        if (cull && !_aabbInFrustum(_fcPlanes, ch.min, ch.max)) { flush(); continue; }
+        if (cull && !_aabbInFrustum(_fcPlanes, ch.min, ch.max)) { _srFlush(); continue; }
         const vbuf = ch.vbuf || mesh.vbuf;
         const ibuf = ch.ibuf || mesh.ibuf || null;
         const attrBG = ch.attrBG || mesh.attrBG;
@@ -4409,20 +4489,33 @@ const WGX = (function () {
         // the shadow VS declares no @builtin(vertex_index) at all, so which
         // vertices share a draw cannot reach its output.
         const chFirst = ibuf ? _chunkFirstIndex(ch) : (ch.first | 0);
-        const contig = run && (ibuf ? run.firstIndex : (run.first | 0)) + run.count === chFirst;
-        if (run && run.vbuf === vbuf && run.ibuf === ibuf && run.attrBG === attrBG && contig) {
+        const contig = run.active && (ibuf ? run.firstIndex : (run.first | 0)) + run.count === chFirst;
+        if (run.active && run.vbuf === vbuf && run.ibuf === ibuf && run.attrBG === attrBG && contig) {
           run.count += ch.count;
         } else {
-          flush();
-          run = {
-            vbuf, ibuf, attrBG, count: ch.count,
-            first: ch.first | 0,
-            firstIndex: _chunkFirstIndex(ch),
-            indexFormat: ch.indexFormat || mesh.indexFormat,
-          };
+          _srFlush();
+          run.active = true;
+          run.vbuf = vbuf; run.ibuf = ibuf; run.attrBG = attrBG;
+          run.count = ch.count;
+          run.first = ch.first | 0;          // see the note in drawChunked
+          run.firstIndex = _chunkFirstIndex(ch);
+          run.indexFormat = ch.indexFormat || mesh.indexFormat;
         }
       }
-      flush();
+      _srFlush();
+      // Release the GPU-object refs — the bag survives between calls.
+      run.vbuf = run.ibuf = run.attrBG = run.indexFormat = null;
+    }
+    // Pooled merge-run state for castShadowChunked (see _mrRun for the doctrine).
+    const _srRun = {
+      active: false, vbuf: null, ibuf: null, attrBG: null,
+      count: 0, first: 0, firstIndex: 0, indexFormat: null,
+    };
+    function _srFlush() {
+      if (!_srRun.active) return;
+      _setVB0(shadowPass, _srRun.vbuf);
+      _drawGeom(shadowPass, _srRun);
+      _srRun.active = false;
     }
     function shadowEnd() {
       if (!shadowPass) return;
