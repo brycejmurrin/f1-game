@@ -1,0 +1,151 @@
+name: GPU census
+
+# Find a real GPU this project can actually reach.
+#
+# Every rendering verdict the agent container can produce is a SOFTWARE verdict:
+# `vulkaninfo --summary` there reports one PHYSICAL_DEVICE_TYPE_CPU (llvmpipe)
+# and /dev/dri does not exist, so no Chrome flag, Xvfb run or MCP can conjure
+# hardware. That is fine for validation — llvmpipe is a conformant Vulkan 1.3
+# implementation, so Dawn rejects exactly what it would reject on a player's
+# machine, which is how the env-probe attachment-state defect was found — and
+# useless for anything that only appears on real silicon.
+#
+# The published answers about GitHub's images contradict each other: the M1
+# macOS announcement says GPU hardware acceleration is on by default,
+# actions/runner-images#7085 asks for Metal passthrough as a missing feature.
+# Rather than believe either, ASK each image:
+#
+#   census     — is there an adapter behind navigator.gpu, and does its identity
+#                look like a known software rasteriser? Four flag sets, because
+#                "stock" (what a player runs) and "--enable-unsafe-webgpu" do
+#                not agree even in the agent container: stock returns NO adapter
+#                there at all.
+#   game-check — boot the ACTUAL GAME on the three.js/WebGPU path and report
+#                GLX.gpuErrors(), the env-probe state and the ?gfxdebug=1
+#                overlay. Same hooks the overlay prints for a player, so a CI
+#                answer and a pasted player answer compare directly.
+#
+# Dispatch-only. It costs runner minutes on images the normal gate never uses
+# (macOS bills at a multiplier), so it runs when someone asks a question, not on
+# every push.
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: "Circuit for the game check"
+        required: false
+        default: "montreal"
+      images:
+        description: "Runner images, comma-separated (ubuntu-latest, macos-latest, macos-13, windows-latest)"
+        required: false
+        default: "ubuntu-latest,macos-latest,windows-latest"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpu-census-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The input is a string; turn it into the matrix the next job fans out over,
+  # so a dispatcher can drop macOS (the expensive one) without editing the file.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.split.outputs.images }}
+    steps:
+      - id: split
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          raw = os.environ["IMAGES"]
+          allow = {"ubuntu-latest", "ubuntu-24.04", "macos-latest", "macos-15", "macos-14",
+                   "macos-13", "windows-latest", "windows-2022"}
+          picked = [i.strip() for i in raw.split(",") if i.strip() in allow]
+          print("images=" + json.dumps(picked or ["ubuntu-latest"]))
+          PY
+        env:
+          IMAGES: ${{ inputs.images }}
+
+  census:
+    needs: plan
+    runs-on: ${{ matrix.image }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.plan.outputs.images) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: npm ci
+
+      # The FULL browser, not the headless shell: the shell ships without
+      # navigator.gpu, and censusing it answers a question about the binary
+      # rather than about the machine.
+      - name: Install Chromium
+        run: npx playwright install chromium
+
+      - name: Install Chromium OS deps (Linux only)
+        if: runner.os == 'Linux'
+        run: npx playwright install-deps chromium
+
+      - name: What does the OS think it has
+        continue-on-error: true
+        shell: bash
+        run: |
+          echo "--- platform ---"; uname -a || true
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            ls -la /dev/dri 2>&1 || echo "no /dev/dri"
+            (command -v vulkaninfo >/dev/null && vulkaninfo --summary 2>&1 | head -30) || echo "no vulkaninfo"
+          fi
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            system_profiler SPDisplaysDataType 2>&1 | head -40 || true
+          fi
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell -c "Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,AdapterRAM | Format-List" || true
+          fi
+
+      - name: WebGPU adapter census
+        id: census
+        shell: bash
+        run: node tools/gpu-census.mjs --json "census-${{ matrix.image }}.json"
+
+      # Runs whatever the census said: a software answer here is still the
+      # cross-check that the portable path works, and if an image DOES have
+      # hardware this is the first real-GPU run this project has ever had.
+      - name: Game check — three.js / WebGPU
+        continue-on-error: true
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          node tools/gpu-game-check.mjs "${{ inputs.track }}" \
+            --backend three --path webgpu \
+            --json "game-webgpu-${{ matrix.image }}.json" \
+            --shot "game-webgpu-${{ matrix.image }}.png"
+
+      - name: Game check — three.js / WebGL2 (control)
+        continue-on-error: true
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          node tools/gpu-game-check.mjs "${{ inputs.track }}" \
+            --backend three --path webgl2 \
+            --json "game-webgl2-${{ matrix.image }}.json" \
+            --shot "game-webgl2-${{ matrix.image }}.png"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gpu-census-${{ matrix.image }}
+          path: |
+            census-*.json
+            game-*.json
+            game-*.png
+          if-no-files-found: warn
+          retention-days: 14
