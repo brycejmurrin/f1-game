@@ -158,7 +158,7 @@ const CLASS_CEILING = 533;
 // 1228 -> 1229: one <script> tag for js/game/gfx-debug.js, the ?gfxdebug=1
 // overlay. A node is the honest price of the only channel a player with no
 // console has for telling us what their GPU did.
-const NODE_CEILING = 1229;
+const NODE_CEILING = 1230;   // +1: js/car/crest-paths.js needs a script tag
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module

@@ -219,7 +219,8 @@ export function loadCrests() {
   };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  for (const f of ["js/log.js", "js/car/teams.js", "js/car/liveries.js", "js/car/liverytex.js"])
+  for (const f of ["js/log.js", "js/car/teams.js", "js/car/liveries.js",
+                   "js/car/crest-paths.js", "js/car/liverytex.js"])
     vm.runInContext(read(f), sandbox, { filename: f });
   // Every one of these files is `const X = (function(){...})()` at script level,
   // which is a LEXICAL binding — it never becomes a property of the vm's global
@@ -317,7 +318,7 @@ function main() {
     if (r.bbox[0] < -0.02 || r.bbox[1] < -0.02 || r.bbox[2] > 1.02 || r.bbox[3] > 1.02) flags.push("BLEED");
     if (r.cov40 > 0 && Math.abs(r.cov40 - r.cov430) / Math.max(r.cov430, 1e-6) > 0.35) flags.push("MIP");
     if (r.mark430 > 0.62) flags.push("BLOB");
-    if (r.cov430 < 0.12) flags.push("FAINT");
+    if (r.cov430 < 0.10) flags.push("FAINT");
     console.log(F(r.id, 13) + F(r.at, 7) + F(r.span.join(","), 16) +
                 F(r.minStroke == null ? "-" : r.minStroke, 11) + F(r.colours, 6) +
                 F(r.cov430, 9) + F(r.cov40, 9) + F(r.mark430, 10) + (r.text.join(" ") || "-") +
