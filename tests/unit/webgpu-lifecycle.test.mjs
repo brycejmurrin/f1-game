@@ -370,6 +370,37 @@ test("chunked uploads release production source channels and preserve debug sour
   for (const key of ["pos", "nrm", "col", "idx", "mat", "trk"]) assert.equal(debug[key], refs[key]);
 });
 
+test("the chunked road is one vertex buffer of contiguous (first, count) ranges", async () => {
+  // This is the invariant drawChunked's run merge rests on. Per-piece buffers
+  // made the merge dead code (it is keyed on buffer identity), so the road
+  // paid one setVertexBuffer + one draw per visible chunk in every pass that
+  // drew it. Asserting the layout here makes the merge safe BY TEST rather
+  // than by argument about emission order.
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  const quads = 1001, pos = [], nrm = [], col = [], idx = [], mat = [], trk = [];
+  for (let q = 0, v = 0; q < quads; q++, v += 4) {
+    const x = q * 0.1;
+    pos.push(x,0,0, x+1,0,0, x+1,0,1, x,0,1);
+    idx.push(v,v+1,v+2, v,v+2,v+3);
+    for (let i = 0; i < 4; i++) { nrm.push(0,1,0); col.push(1,1,1); mat.push(1); trk.push(x,0,6); }
+  }
+  const m = gfx.createChunkedMesh({ pos, nrm, col, idx, mat, trk, _keepPositions: true }, 72);
+  const c = m.chunks;
+  assert.ok(c && c.length > 1, "the fixture spans several chunks");
+  assert.ok(c.every((k) => k.vbuf === c[0].vbuf), "one vertex buffer for the whole ribbon");
+  assert.equal(c[0].first, 0, "the first chunk starts at vertex 0");
+  for (let i = 1; i < c.length; i++) {
+    assert.equal(c[i].first, c[i - 1].first + c[i - 1].count,
+      "chunk " + i + " starts exactly where chunk " + (i - 1) + " ends");
+  }
+  // Head-mesh contract unchanged: a stray gfx.draw() on the chunked mesh still
+  // draws what it drew before (chunk 0's range from vertex 0).
+  assert.equal(m.vbuf, c[0].vbuf);
+  assert.equal(m.count, c[0].count);
+  assert.equal(m.first, undefined, "the head carries no first — mesh.first | 0 is 0 there");
+});
+
 test("bloom texture is cleaned when its createView allocation fails", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
@@ -915,7 +946,20 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.doesNotMatch(WGX_SOURCE, /shaderLocation: 3, offset: 36/);
   assert.match(WGX_SOURCE, /_expandPull/);
   assert.match(WGX_SOURCE, /hasTrk/);
+  // PIECE still bounds each staged piece, but NOT the draw shape any more: on
+  // the chunked road the run merge submits contiguous pieces as one large
+  // non-indexed draw. That is safe because the road binds the magic-12345 LUT,
+  // so its WGSL reads trkFromWorld(wpos) and never matTrkArr[vid] — and the
+  // merge refuses when no LUT is bound. Evidence for the draw shapes on this
+  // container's stacks: tools/wgx-vid-repro.mjs (30/30 OK incl. firstVertex
+  // and whole draw(N) to 24576, three runs).
   assert.match(WGX_SOURCE, /const PIECE = 4095/);
+  assert.match(WGX_SOURCE, /const vidDead = indexed \|\| !!_roadLutBG;/,
+    "the non-indexed merge is gated on vertex_index being provably dead");
+  assert.match(WGX_SOURCE, /&& contig && vidDead && nightOK\) \{/,
+    "and on contiguity, and on the night stand-down");
+  assert.match(WGX_SOURCE, /const nightOK = indexed \|\| !maskL;/,
+    "the night stand-down is ROAD-only — indexed meshes keep merging as today");
   assert.match(WGX_SOURCE, /hasTrk roads are createMesh pieces/);
   assert.match(WGX_SOURCE, /g2Layout/);
   assert.match(WGX_SOURCE, /read-only-storage/);
@@ -1777,6 +1821,15 @@ test("zero-count meshes never reach the queue as draws", () => {
   const geom = WGX_SOURCE.match(/function _drawGeom\(pass, mesh, instCount\)[\s\S]*?\n    \}/);
   assert.ok(geom, "_drawGeom exists");
   assert.match(geom[0], /if \(!mesh \|\| !mesh\.count\) return;/, "_drawGeom rejects zero-count meshes");
+  // The road's chunks are (first, count) ranges into ONE shared buffer, so the
+  // non-indexed draw MUST carry the range's first vertex. Reading it off the
+  // record (not a new parameter) is what fixes castShadow's unculled chunk
+  // loop too — that path draws every chunk with no run merge, and without a
+  // first-vertex it would stamp chunk 0's vertices N times.
+  assert.match(geom[0], /pass\.draw\(mesh\.count, 1, mesh\.first \| 0\)/,
+    "_drawGeom passes the chunk's first vertex on the non-indexed path");
+  assert.match(geom[0], /pass\.draw\(mesh\.count, instCount, mesh\.first \| 0\)/,
+    "the instanced non-indexed draw carries it too");
   const decal = WGX_SOURCE.match(/function drawDecal\(mesh, model, tex, opts\)[\s\S]*?\n      const slot/);
   assert.ok(decal, "drawDecal head found");
   assert.match(decal[0], /!mesh\.count/, "drawDecal rejects zero-count meshes before taking a slot");
