@@ -525,7 +525,11 @@ const CEILINGS = {
   // 2350 -> 2355 on the deploy side for the sign-safe seam wrap in
   // scanBarrier/indexSolid (the negative-k silent no-op, 10 circuits hit it).
   // Union re-measured: 2354.
-  "js/track/tracks.js": 2354,
+  // 2354 -> 2358 (R9): the pit-straight crowd tint read the AUTHORED def.night
+  // instead of the build's NIGHT override that every neighbouring branch uses,
+  // so a day race at a night circuit (or the reverse) wore the wrong tint. The
+  // four lines are the comment recording it at the site — bug-explaining growth.
+  "js/track/tracks.js": 2359,
   // ── Round-6 additions: the unguarded giants, set AT measured (test metric,
   // split-newline count) so any growth is a deliberate raise here. Each line
   // says why the file is its size today; none is an extraction target yet.

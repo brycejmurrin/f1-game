@@ -1712,7 +1712,12 @@ const Tracks = (function () {
       });
     }
 
-    const crowd = def.night ? [0.45, 0.28, 0.3] : [0.78, 0.42, 0.32];
+    // NIGHT, not def.night: `track._night` carries the BUILD's override (a
+    // day race at a night circuit, or the reverse), and every other branch in
+    // buildProps — including the neon two lines up — reads it. This one kept
+    // the authored default, so the pit-straight crowd wore the wrong tint
+    // whenever the override disagreed with the def.
+    const crowd = NIGHT ? [0.45, 0.28, 0.3] : [0.78, 0.42, 0.32];
     for (let i = 0; i < (def.ownPitStraight ? 0 : 7); i++) {
       const k = (i * 4) % n;
       place(k, -1, 14, [6, 11, 16], [0.5, 0.5, 0.56]);     // grandstand shell
