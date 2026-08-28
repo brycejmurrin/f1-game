@@ -410,7 +410,12 @@ const CEILINGS = {
   // studio backdrop colour, the floor draw and its material opts. The floor
   // MESH itself went to js/game/carmesh.js, which is where the geometry
   // belongs and which this ratchet does not bound. Measured 8709.
-  "js/game.js": 8715,
+  // 8715 -> 8721: frame.roadChunkLamps, the RESOLVED per-chunk-road state.
+  // PER-CHUNK ROAD could not change any outcome before it: the road is drawn
+  // chunked on most devices for the cull alone, and chunked.js bound per-chunk
+  // lamps to anything chunked. The field carries the knob to the backends so
+  // the lamps follow it while the culling stays put.
+  "js/game.js": 8721,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -442,7 +447,13 @@ const CEILINGS = {
   // of fetching a garbage URL / throwing on HTML 404) + fetchTrackOutline
   // comment moved onto the function it describes.
   // Lowered after trim-comments pass (measured 2419 / 2433).
-  "js/game/apex.js": 2429,
+  // 2429 -> 2444: lightState now reports the RESOLVED per-chunk lamp state and
+  // names the gate holding it (backend / tier / latch / day). Three gates could
+  // each silently zero the feature and nothing outside the renderer could see
+  // which — "per-chunk lamps do nothing on my machine" was undiagnosable, and
+  // the probe written to verify the PER-CHUNK ROAD fix could not observe it
+  // either. The hook is the assertable surface the repo prefers over pixels.
+  "js/game/apex.js": 2444,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
@@ -558,7 +569,9 @@ const CEILINGS = {
   // and the F7 packed-upload deferral written where dead DRAW_FLOATS used to be.
   // UNION: the file carries BOTH sets, so neither lineage's number fits it.
   // Re-measured on the merged tree (AGENTS.md: re-measure, never max).
-  "js/render/webgpu/wgx.js": 5516,
+  // 5516 -> 5523: the road half of the PER-CHUNK ROAD gate (frameRoadChunkLamps
+  // + the surfaceId-16 test), mirroring the GLX side.
+  "js/render/webgpu/wgx.js": 5523,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -580,7 +593,17 @@ const CEILINGS = {
   // ?viz= bisect reads the RT the frame actually wrote — viz writes its image
   // to the blit dest and never touches ldrRT, so every viz mode showed a stale
   // frame on the one backend the bisect exists to debug.
-  "js/render/three/tlx.js": 2159,
+  // 2159 -> 2232 (R6): the whole reason a real-GPU black frame was
+  // unreproducible in CI. apex26.tlxForceHw=<sky|env|chunked|batches|shadow>
+  // turns each software CONTENT skip back into the path a player's GPU takes,
+  // one gate at a time; the env-probe face that throws is no longer counted
+  // (six swallowed throws latched envReady over a cube nothing wrote); and
+  // attachKey() puts the fragment-output count back into the node cache key
+  // the compile-storm fix had stripped — without it Dawn rejected the
+  // 2-target scene program in the 1-target probe pass (290 uncaptured errors,
+  // measured 2026-08-28) and every probe face came back black. Each addition
+  // carries the measurement that found it.
+  "js/render/three/tlx.js": 2232,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   "js/render/glx.js": 1929,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.

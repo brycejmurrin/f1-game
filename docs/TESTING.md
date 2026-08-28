@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 138 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 139 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -757,6 +757,7 @@ what it covers.
 | `storage-key-prefix.test.mjs` | every literal localStorage/sessionStorage key is apex26.-prefixed (GameStore-routed keys exempt by construction; allowlist entries need a written reason) |
 | `no-bare-console.test.mjs` | logging goes through Log — no bare console.* in js/ outside log.js (the nostr interception seam allowlisted with its reason) |
 | `lamp-chunks.test.mjs` | the shared per-chunk lamp bake (LampChunks): nearest-first reach-filtered selection, the knob→cap formula (floor 8, CAP 24), concat/offsets/counts ≡ the per-chunk lists, and the bake-once invalidation contract (lights array identity + knob value) |
+| `cockpit-pale-surfaces.test.mjs` | nothing in the COCKPIT build reads as a blank pale slab: ray-casts every team's cockpit mesh from the driver's eye and fails on a pale ACCENT (the car's own body colour is exempt — racingbulls really is a white car). Proven to fail on ferrari + williams with the `_ckAcc` dimming disabled |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 111-member `scenery(api)` surface across the `js/track/scenery-*.js` split |

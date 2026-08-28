@@ -6461,7 +6461,7 @@ function render(dt) {
   // Cleared every frame, set only by the flood branch: `frame` outlives a
   // night->day time-of-day flip (rebuilt only in loadTrack), and a stale
   // allLights kept chunked geometry binding per-chunk night lamps in daylight.
-  frame.allLights = null; frame.perChunkLights = 0; frame.tailStart = 0; frame.tailCount = 0;
+  frame.allLights = null; frame.perChunkLights = 0; frame.roadChunkLamps = 0; frame.tailStart = 0; frame.tailCount = 0;
   if (_floodActive || _floodDayLvl > 0) {
     // Rebuild if empty (not just undefined): a light set built before the track
     // centreline finished is empty; retry until it yields lights. Tracks always
@@ -6555,6 +6555,12 @@ function render(dt) {
     // the feature off, so the sentinel can actually rescue this case instead of
     // watching it repeat.
     frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || PerfGov.tier() >= 1) ? 0 : (+LT.perChunkLights || 0);
+    // PER-CHUNK ROAD, resolved. The road is drawn chunked on most devices for
+    // CULLING alone (the tier<3 term above), and chunked.js binds per-chunk
+    // lamps to anything chunked — so the road took them whether or not the
+    // player asked, and the knob could not change any outcome. Backends read
+    // this to keep the road on the global set while still culling by chunk.
+    frame.roadChunkLamps = (frame.perChunkLights > 0 && LT.roadChunkLamps) ? 1 : 0;
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
     // They are appended to frame.lights AFTER the static cull, so they sit
     // outside track._lights and a per-chunk set built from allLights would drop
