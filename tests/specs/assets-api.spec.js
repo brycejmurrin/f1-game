@@ -3,7 +3,7 @@
 //
 // The contract under test WAS "a pack must never change the render until asked"
 // — correct while the pack was procedural noise, but it meant shipping ~5 MB
-// that nothing sampled. With real CC0 photoscans in the pack the default is ON,
+// that nothing sampled. With the 5 MB baked pack shipping, the default is ON,
 // and the safety property moved to js/render/assets.js: no pack, a malformed
 // pack, or a backend without createTextureArray all fall back to the procedural
 // look. Most of what follows is that failure-mode coverage, because all three
@@ -52,8 +52,10 @@ test("the committed pack loads and uploads its material layers", async ({ page }
 });
 
 test("the baked materials are ON by default", async ({ page }) => {
-  // Inverted deliberately when real CC0 photoscans replaced the procedural
-  // pack: shipping 5 MB of scans that nothing sampled was pure cost.
+  // Inverted deliberately when the baked pack started shipping ON: 5 MB that
+  // nothing sampled was pure cost. (The shipped layers are PROCEDURAL — see
+  // assets/pack/CREDITS.md; webbake.js can swap in Poly Haven CC0 scans, but
+  // that bake is opt-in and has never been the committed pack.)
   const r = await page.evaluate(async () => {
     await window.Assets.load();
     return { mix: window.__apex.matTex(), state: window.__apex.assets() };

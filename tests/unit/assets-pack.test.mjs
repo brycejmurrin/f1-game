@@ -600,3 +600,33 @@ test("credits cover every asset in the pack", { skip: !hasPack && "no pack insta
   assert.ok(fs.existsSync(path.join(PACK, "CREDITS.md")),
     "assets/pack/CREDITS.md missing — run `node tools/assets.mjs credits`");
 });
+
+// WHAT THE GAME TELLS THE PLAYER ABOUT PROVENANCE MUST MATCH THE MANIFEST.
+//
+// The BAKED MATERIALS slider help in js/game/lighting.js described the shipped
+// pack as "real CC0 photoscans" while all 14 committed layers record
+// `procedural:tools/assets.mjs` / `Apex26-Procedural`. Nothing connected the
+// two, so the string outlived the pack it described: assets/pack/webbake.js CAN
+// composite Poly Haven CC0 scans, but it is a manual browser tool whose output
+// has to be hand-imported (`assets.mjs import-pack`), and it was never run for
+// the committed pack.
+//
+// That is a claim about ORIGIN and REUSE RIGHTS shown to players, so it gets a
+// guard rather than a promise to remember. The rule is one-directional: the UI
+// may not assert third-party/scan provenance while every shipped layer is the
+// project's own procedural output. Re-bake with real scans and the manifest
+// licences change to CC0 first — then the string is free to say so.
+test("the UI never claims a provenance the pack contradicts", { skip: !hasPack && "no pack installed" }, () => {
+  const help = fs.readFileSync(path.join(ROOT, "js", "game", "lighting.js"), "utf8");
+  const matTex = help.split("\n").find((l) => l.includes('id: "matTexMix"')) || "";
+  assert.ok(matTex, "the BAKED MATERIALS slider disappeared — update this guard");
+
+  const licences = new Set(manifest.materials.layers.map((L) => L.licence));
+  const allProcedural = [...licences].every((l) => l === "Apex26-Procedural");
+  if (allProcedural) {
+    assert.doesNotMatch(matTex, /photoscan|CC0/i,
+      "every shipped material layer is Apex26-Procedural, so the BAKED MATERIALS help " +
+      "must not describe the pack as a CC0 photoscan. Re-bake first (assets/pack/webbake.js " +
+      "+ `assets.mjs import-pack`), which rewrites the manifest licences, and this guard relaxes.");
+  }
+});
