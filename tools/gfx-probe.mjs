@@ -277,22 +277,34 @@ async function runProbeAttempt(attemptNum) {
           throw new Error("no GLX.awaitSoftPresent on software-WebGPU backend");
         }
         await GLX.awaitSoftPresent(60000);
-        const g = document.getElementById("game");
+        // WGX blits onto #game itself; TLX inserts a SEPARATE #game-soft 2D
+        // sibling and leaves #game as the WebGPU-claimed node (see tlx.js
+        // "Soft-present overlay"). Looking only at #game therefore measured the
+        // wrong element on the TLX-WebGPU path — a blank read there said
+        // nothing about whether a frame was presented.
+        const soft = document.getElementById("game-soft");
+        const g = soft || document.getElementById("game");
+        const which = soft ? "#game-soft" : "#game";
         const ctx = g && g.getContext("2d");
-        if (!ctx) throw new Error("#game has no 2D display context");
+        if (!ctx) throw new Error(which + " has no 2D display context");
         const id = ctx.getImageData(0, 0, Math.min(64, g.width), Math.min(64, g.height));
         let max = 0;
         for (let i = 0; i < id.data.length; i += 4) {
           const l = id.data[i] + id.data[i + 1] + id.data[i + 2];
           if (l > max) max = l;
         }
-        if (max < 8) throw new Error("visible #game canvas blank after soft-present (maxLuma=" + max + ")");
+        if (max < 8) {
+          throw new Error("visible " + which + " blank after soft-present (maxLuma=" + max +
+            ", size=" + g.width + "x" + g.height +
+            ", softPresent=" + (GLX.softPresent ? GLX.softPresent() : "n/a") + ")");
+        }
       }), { attempts: 2, delayMs: 2000 });
       // putImageData keeps mutating #game — Playwright's locator screenshot
       // waits for "stability" and times out. Dump the 2D bitmap instead.
       const canvasB64 = await page.evaluate(() => {
-        const g = document.getElementById("game");
-        if (!g || typeof g.toDataURL !== "function") throw new Error("#game has no toDataURL");
+        // Same element the blank-check read — see the #game-soft note above.
+        const g = document.getElementById("game-soft") || document.getElementById("game");
+        if (!g || typeof g.toDataURL !== "function") throw new Error("presented canvas has no toDataURL");
         return g.toDataURL("image/png").split(",")[1];
       });
       writeFileSync(canvasPath, Buffer.from(canvasB64, "base64"));

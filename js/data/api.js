@@ -191,7 +191,12 @@ const F1API = (function () {
         return res.text().then(function (txt) {
           try {
             const j = JSON.parse(txt);
-            if (j.detail || j.error) {
+            // j must be object-ish: JSON.parse("null") is a legal parse whose
+            // .detail read would throw a TypeError — NOT a SyntaxError, so the
+            // filter below would rethrow it as the request error, and that
+            // error carries no .status and no "HTTP 401"/"HTTP 403" text,
+            // letting a lockout serve stale cache after all.
+            if (j && (j.detail || j.error)) {
               const err = new Error(j.detail || j.error);
               err.status = res.status;
               err.retryAfterMs = raMs;

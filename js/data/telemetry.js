@@ -669,6 +669,19 @@ const DataTelemetry = (function () {
     detail.appendChild(mainArea);
     detail.appendChild(sideArea);
 
+    // currentCSSZoom reads 1 on a detached tree, so the ratio derived above
+    // missed any ancestor zoom. Re-derive it now that the canvases are live —
+    // otherwise the first paint is wrong-sized and the observer's initial fire
+    // rebuilds every layer a second time (the double-build it exists to avoid).
+    const liveRatio = viewRatio(c1);
+    if (liveRatio !== view.ratio) {
+      view.ratio = liveRatio;
+      sizeCanvas(c1, view.cw, view.ch, liveRatio);
+      view.chartBase = makeOffscreen(view.cw, view.ch, liveRatio);
+      if (view.delta) { sizeCanvas(view.delta, view.dw, view.dh, liveRatio); view.deltaBase = makeOffscreen(view.dw, view.dh, liveRatio); }
+      if (view.map) { sizeCanvas(view.map, view.mw, view.mh, liveRatio); view.mapBase = makeOffscreen(view.mw, view.mh, liveRatio); }
+    }
+
     attachScrub(c1, view);
     buildBases(view);
     paintFrame(view);

@@ -54,7 +54,12 @@ const NetSession = (function () {
 
     const MAX_PLAUSIBLE_RTT_MS = 4000;
     function addSample(rtt, offset) {
+      // Both halves are wire-derived. rtt was guarded from the start; offset
+      // was not, and it is the one that converts every peer timestamp into
+      // local time — a single NaN-bearing PONG becomes `best.offset` and
+      // poisons the conversion for the whole session.
       if (!(rtt >= 0) || rtt > MAX_PLAUSIBLE_RTT_MS) return;
+      if (!Number.isFinite(offset)) return;
       samples.push({ rtt, offset });
       if (samples.length > cfg.clockSamples) samples.shift();
       // Lowest RTT wins: it is the exchange least distorted by queuing.
@@ -116,12 +121,28 @@ const NetSession = (function () {
       }
     }
 
-    transport.onMessage((channel, data) => {
-      lastHeardAt = lastNow;
-      if (channel === CH_STATE) onStateBytes(data, lastNow);
+    transport.onMessage((channel, data, at) => {
+      // Prefer the transport's ARRIVAL stamp (rtc supplies it; loopback does
+      // not — its wire time is epoch-relative, a different clock domain).
+      // Pump-time stamping put up to a frame of scheduling into every RTT
+      // sample and PONG t1 (the C-12 skew).
+      const t = at != null ? at : lastNow;
+      lastHeardAt = t;
+      if (channel === CH_STATE) onStateBytes(data, t);
       else onEventJson(data);
     });
+    // `released` latches "the transport is closed" SEPARATELY from `alive`
+    // ("this session's bookkeeping is over"). Conflating them was the leak
+    // class this file keeps re-finding: any path that flipped `alive` first
+    // made close() a no-op and the transport could never be torn down.
+    let released = false;
+    function release() {
+      if (released) return;
+      released = true;
+      try { transport.close(); } catch (e) { /* already gone */ }
+    }
     transport.onClose(() => {
+      released = true;                 // it closed itself — nothing to release
       if (alive) {
         alive = false;
         Log.info("net", "session close transport");
@@ -147,9 +168,9 @@ const NetSession = (function () {
       // a slow connect is never mistaken for a disconnect.
       if (alive && lastHeardAt != null && now - lastHeardAt > cfg.timeoutMs) {
         alive = false;
-        try { transport.close(); } catch (e) { /* ignored: a transport that
-          throws on close is already gone, and this path exists precisely
-          because the peer stopped answering. Nothing left to report to. */ }
+        release();   // idempotent — a transport that throws is already gone,
+                     // and this path exists precisely because the peer
+                     // stopped answering. Nothing left to report to.
         Log.info("net", "session close timeout");
         fire(closeHandlers, "timeout");
       }
@@ -184,9 +205,12 @@ const NetSession = (function () {
       alive: () => alive,
       lastHeard: () => lastHeardAt,
       close() {
+        // Release BEFORE the alive check: a path that flipped `alive` first
+        // (transport-close event, timeout) used to make close() a no-op and
+        // netplay.stop() could never reach transport.close().
+        release();
         if (!alive) return;
         alive = false;
-        try { transport.close(); } catch (e) {}
         Log.info("net", "session close");
         fire(closeHandlers, "local");
       },

@@ -2454,6 +2454,23 @@ const Car3D = (function () {
           { z: 2.06, x: epX + s*(PLATE.kick + 0.012), y: 0.245 + PLATE.hR * 0.5 + 0.010, w: 0.026, h: 0.016 },
           0.008, c1);
       }
+      if (aPlate >= 2) {
+        // GILLS. The rear endplate has had its louvre stack for ages; the
+        // front plate — the one a chase camera actually fills the frame with —
+        // had a blank outboard face. Three recessed slots, proud of the plate
+        // so they read as cuts rather than z-fighting decals.
+        for (let i = 0; i < 3; i++) {
+          const gz = 2.42 - i * 0.15;
+          addBox(out, epX + s * 0.010, 0.185 + PLATE.hF * 0.30 + i * 0.026, gz,
+                 0.014, 0.020, 0.11, INTAKE, SURFACES.carbon);
+        }
+        // FILLET at the plate-to-main-plane junction: the hard 90 deg corner
+        // there is the last unfaired intersection on the front wing.
+        addBeveledSpan(out,
+          { z: 2.60, x: epX - s * 0.030, y: 0.150, w: 0.060, h: 0.030, t: 0.35 },
+          { z: 2.26, x: epX - s * 0.026, y: 0.178, w: 0.050, h: 0.024, t: 0.30 },
+          0.006, c1);
+      }
       if (PLATE.roll) {
         // Rolled top edge: a lip leaning OUTBOARD off the plate crown, wider
         // and more canted at the rear — the outwash curl, not a straight rail.
@@ -2703,6 +2720,19 @@ const Car3D = (function () {
     const heaveOn = Math.max(0, Math.min(1, Math.round(suspStyle.heave || 0)));
     const fairArms = !!(wbPush || wbPull || rockerLvl || heaveOn);
     const drawArm = fairArms ? addFairedArm : addBeamBetween;
+    // Inboard damper barrel + rocker link, the mechanism a real tub carries
+    // under its blister. Gated on the existing `rocker` knob, so the default
+    // car (rocker 0) is untouched and only fitted suspension gains hardware.
+    function suspHardware(y, px) {
+      for (const sd of [-1, 1]) {
+        addBox(out, sd * px, y + 0.020, 1.02, 0.030, 0.030, 0.115,
+               [0.30, 0.30, 0.34], SURFACES.metal);            // damper barrel
+        addBox(out, sd * px, y + 0.020, 0.955, 0.022, 0.022, 0.028,
+               [0.55, 0.52, 0.20], SURFACES.metal);            // spring collar
+        addBeamBetween(out, [sd * px, y + 0.020, 1.08], [sd * (px + 0.055), y - 0.012, 1.13],
+                       0.013, suspC, SURFACES.carbon);          // rocker link
+      }
+    }
     if (rockerLvl === 1) {
       for (const s of [-1, 1]) {
         addLoft(out, 0.88, s * 0.11, 0.545 + rideDY, 0.10, 0.036,
@@ -2710,6 +2740,7 @@ const Car3D = (function () {
       }
       addBeamBetween(out, [-0.10, 0.545 + rideDY, 0.98],
         [0.10, 0.545 + rideDY, 0.98], 0.016, suspC, SURFACES.carbon);
+      suspHardware(0.545 + rideDY, 0.11);
     } else if (rockerLvl === 2) {
       addLoft(out, 0.72, 0, 0.555 + rideDY, 0.28, 0.050,
               1.18, 0, 0.515 + rideDY, 0.22, 0.038, CARBON);
@@ -2719,6 +2750,7 @@ const Car3D = (function () {
         addBox(out, s * 0.12, 0.568 + rideDY, 0.96, 0.055, 0.012, 0.08,
                CARBON, SURFACES.carbon);
       }
+      suspHardware(0.575 + rideDY, 0.075);
       if (!ckpt) {
         addLoft(out, -1.38, 0, 0.520 + rideDY, 0.18, 0.042,
                 -1.14, 0, 0.500 + rideDY, 0.14, 0.032, CARBON);

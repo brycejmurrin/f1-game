@@ -287,3 +287,27 @@ test("a session that times out CLOSES ITS TRANSPORT, not just its bookkeeping", 
   a.close();
   assert.equal(closedTimes, 1, "close() after a timeout must not close the transport again");
 });
+
+// ── round 8: release is latched separately from alive ────────────────────────
+test("after the transport closes itself, session.close() neither throws nor re-closes", () => {
+  // The transport's close event marks it RELEASED — it closed itself, there
+  // is nothing left to release. A later session.close() must be a clean
+  // no-op: the old shape (`if (!alive) return` before any transport work)
+  // hid the opposite bug, where close() could never reach the transport at
+  // all once an event had flipped `alive` first.
+  const [ta, tb] = NetTransport.loopback({ latencyMs: 0, rnd: seededRnd(21) });
+  let closedTimes = 0;
+  const spy = Object.create(ta);
+  spy.close = () => { closedTimes++; ta.close(); };
+  const a = NetSession.create({ transport: spy, pingEveryMs: 100 });
+  const whys = [];
+  a.onClose((w) => whys.push(w));
+  a.pump(0); tb.pump(0);
+  tb.close();                          // peer side pulls the plug
+  a.pump(1);                           // deliver the close
+  assert.equal(a.alive(), false);
+  assert.deepEqual(whys, ["transport"]);
+  a.close();                           // must not re-close or re-fire
+  assert.equal(closedTimes, 0, "the transport closed itself; nothing to release");
+  assert.deepEqual(whys, ["transport"], "close handlers fire once");
+});

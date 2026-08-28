@@ -533,3 +533,89 @@ test("the invite link keeps the code in the fragment", () => {
   assert.equal(NetHandshake.inviteFromUrl("https://x.dev/?vs=nope"), null,
     "a query-string code must NOT be honoured — that one does reach the server");
 });
+
+// ── round 8: teardown really tears down ──────────────────────────────────────
+// A peer-initiated close used to flip ep.status directly, which turned
+// shutdown() — the ONLY caller of pc.close() — into a permanent no-op: every
+// normal "the other player closed the tab" leaked a live RTCPeerConnection,
+// its ICE agent, and up to 1 MiB of inbox. These pin the routed-through-
+// shutdown contract from every close origin, and its idempotency.
+
+function pcHarness() {
+  let closed = 0;
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    close() { closed++; }
+  }
+  const channel = (label) => ({ label, readyState: "open", close() {} });
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  const fresh = load("js/net/transport.js", "NetTransport");
+  const ep = fresh.rtc({ role: "guest" });
+  const state = channel("state"), event = channel("event");
+  ep.pc.ondatachannel({ channel: state });
+  ep.pc.ondatachannel({ channel: event });
+  state.onopen(); event.onopen();
+  const done = () => { delete global.RTCPeerConnection; delete global.localStorage; };
+  return { ep, state, event, pcClosed: () => closed, done };
+}
+
+test("a peer channel close releases the RTCPeerConnection, exactly once", () => {
+  const h = pcHarness();
+  try {
+    const reasons = [];
+    h.ep.onClose((r) => reasons.push(r));
+    h.state.onclose();
+    assert.equal(h.ep.status, "closed");
+    assert.equal(h.pcClosed(), 1, "pc.close() must run on a peer-initiated close");
+    assert.deepEqual(reasons, ["peer"]);
+    h.ep.close();                       // a later local close must not double-release
+    h.event.onclose();                  // nor the second channel's close event
+    assert.equal(h.pcClosed(), 1, "shutdown must stay idempotent");
+    assert.deepEqual(reasons, ["peer"], "close fires once");
+  } finally { h.done(); }
+});
+
+test("a connectionState failure releases the RTCPeerConnection too", () => {
+  const h = pcHarness();
+  try {
+    const reasons = [];
+    h.ep.onClose((r) => reasons.push(r));
+    h.ep.pc.connectionState = "failed";
+    h.ep.pc.onconnectionstatechange();
+    assert.equal(h.pcClosed(), 1, "pc.close() must run on a connection failure");
+    assert.deepEqual(reasons, ["failed"]);
+  } finally { h.done(); }
+});
+
+test("rtc stamps message ARRIVAL and hands it to onMessage; loopback stays unstamped", () => {
+  // The clock-sync PONG math reads the third argument: rtc supplies a
+  // performance.now() arrival stamp recorded at inbox push (pump-time
+  // stamping put up to a frame of scheduling into every RTT sample — C-12).
+  // Loopback deliberately passes none: its wire time is epoch-relative,
+  // a different clock domain the session must not mix in.
+  const h = pcHarness();
+  try {
+    const stamps = [];
+    h.ep.onMessage((ch, data, at) => stamps.push(at));
+    const before = performance.now();
+    h.state.onmessage({ data: "x" });
+    const after = performance.now();
+    h.ep.pump();
+    assert.equal(stamps.length, 1);
+    assert.ok(stamps[0] >= before && stamps[0] <= after,
+      `arrival stamp ${stamps[0]} outside [${before}, ${after}]`);
+  } finally { h.done(); }
+
+  const [a, b] = NetTransport.loopback({ latencyMs: 0, rnd: seededRnd(7) });
+  const atArgs = [];
+  b.onMessage((ch, d, at) => atArgs.push(at));
+  a.pump(0); b.pump(0);
+  a.send(NetTransport.STATE, "y");
+  b.pump(1);
+  assert.deepEqual(atArgs, [undefined], "loopback must not invent an arrival clock");
+});

@@ -397,7 +397,20 @@ const CEILINGS = {
   //   236 reloads/64 s before the guard; falls through to #nogl).
   // Three lineages grew the file, so no side's number fits the union —
   // re-measured on the merged tree (split-newline count): 8675.
-  "js/game.js": 8675,
+  // 8675 -> 8694 for the total-audit fix train (all bug-explaining comments at
+  // the site of the bug, the one growth this ratchet tolerates): the pace-0
+  // NaN floor on the throttle integrator, DebrisWorld.reset() in startRace so
+  // a same-circuit restart stops inheriting last race's shards, the stranded
+  // netStart cleared in quitToMenu (a solo race after an aborted countdown ran
+  // with no lamps), Array.isArray on the host's RESULT payload, and the
+  // paused-at-the-flag clear in endRace.
+  // 8694 -> 8715: the garage-preview fix — SP_CAR_CTR (orbit and aim were
+  // DIFFERENT points, so the turntable swung the car across the frame instead
+  // of rotating it, and both sat behind the measured car centre), plus the
+  // studio backdrop colour, the floor draw and its material opts. The floor
+  // MESH itself went to js/game/carmesh.js, which is where the geometry
+  // belongs and which this ratchet does not bound. Measured 8709.
+  "js/game.js": 8715,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -469,10 +482,14 @@ const CEILINGS = {
   // 2850 -> 2860: the pillar V-brace — the real halo strut splits into a V
   // at the top, meeting the ring either side of the apex (two beams + the
   // why). Measured 2853.
+  // 2895 -> 2925: the endplate/suspension detail round — front-plate gills and
+  // the plate-to-plane fillet (both gated on plate >= 2, so the DEFAULT body is
+  // untouched) and the inboard damper/rocker-link hardware on the existing
+  // `rocker` knob. Measured 2915.
   // 2860 -> 2895: the accuracy round — SEG 24 tyres (comment), regulation
   // mirror housing (toe cant block, winglet, outer stay), and the PLATE
   // rolled-top outwash row with its curled-lip span. Measured 2883.
-  "js/car/car3d.js": 2895,
+  "js/car/car3d.js": 2925,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
@@ -518,13 +535,20 @@ const CEILINGS = {
   // The whole WGX backend in one IIFE by design (deferred inject, no tag).
   // 5179 -> 5365 on the deploy union: their half-res SSR + chunk-AABB
   // lamp-mask cull rounds landed on the other lineage (re-measured).
-  // 5365 -> 5423: the road's shared vertex buffer. Per-piece buffers made
-  // drawChunked's run merge (keyed on buffer identity) dead code for the road,
-  // so it paid one setVertexBuffer + one draw per visible chunk in every pass.
-  // The added lines are the single-buffer staging loop and the three reasons
-  // the merge is allowed to fire (contiguous, vertex_index dead, no lamp mask
-  // bound) — each one is load-bearing and documented where it sits.
-  "js/render/webgpu/wgx.js": 5423,
+  // 5365 -> 5423 (deploy lineage): the road's shared vertex buffer. Per-piece
+  // buffers made drawChunked's run merge (keyed on buffer identity) dead code
+  // for the road, so it paid one setVertexBuffer + one draw per visible chunk
+  // in every pass. The added lines are the single-buffer staging loop and the
+  // three reasons the merge is allowed to fire (contiguous, vertex_index dead,
+  // no lamp mask bound) — each one is load-bearing and documented where it sits.
+  // 5365 -> 5453 (R8 lineage): overflow sentinel remembered, per-chunk hoisted
+  // above the !cull fast path, SSR consume lanes gated on _ssrRan, lampVol mist
+  // gate ported from GLX/TLX, full-res depth texel for the SSR normal stride,
+  // both merge-run paths pooled to module scope, lamp masks generation-cached,
+  // and the F7 packed-upload deferral written where dead DRAW_FLOATS used to be.
+  // UNION: the file carries BOTH sets, so neither lineage's number fits it.
+  // Re-measured on the merged tree (AGENTS.md: re-measure, never max).
+  "js/render/webgpu/wgx.js": 5516,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -541,7 +565,14 @@ const CEILINGS = {
   // three.js TSL lit-material port; tracks lit.js feature-for-feature.
   "js/render/three/tsl-lit.js": 1725,
   // Multiplayer lobby UI + flow; all of js/net/'s DOM lives here.
-  "js/net/lobby.js": 1618,
+  // 1618 -> 1624 (R8): the peer-close handler closes the transport BEFORE the
+  // map delete, with the leak-class comment — bug-explaining growth.
+  // 1624 -> 1672 (R8): every lobby timer gained an owner (codeReopen stored +
+  // cleared with its generation captured outside; the connect deadline applies
+  // while the transport never materialises; grace timers tracked via
+  // clashDrop/clashClear) and the seat-clash move is pinned in-memory-only —
+  // bug-explaining growth, no new features.
+  "js/net/lobby.js": 1672,
 };
 
 test("the big modules are not growing unnoticed", () => {

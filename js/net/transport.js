@@ -17,11 +17,11 @@ const NetTransport = (function () {
       onMessage(fn) { handlers.message.push(fn); return this; },
       onOpen(fn) { handlers.open.push(fn); return this; },
       onClose(fn) { handlers.close.push(fn); return this; },
-      _emit(kind, a, b) {
+      _emit(kind, a, b, c) {
         // A throwing handler must not take down the transport or stop the
         // remaining handlers — a rendering bug upstream would otherwise read
-        // as a dropped connection.
-        for (const fn of handlers[kind]) { try { fn(a, b); } catch (e) { /* handler's problem */ } }
+        // as a dropped connection. (Third slot: rtc's message arrival stamp.)
+        for (const fn of handlers[kind]) { try { fn(a, b, c); } catch (e) { /* handler's problem */ } }
       },
     };
   }
@@ -209,7 +209,13 @@ const NetTransport = (function () {
       const ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
       const bail = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, FETCH_TIMEOUT_MS);
       fetchingIce = fetch(url, ctl ? { signal: ctl.signal } : undefined).then((r) => r.json()).then((body) => {
-        const list = Array.isArray(body) ? body : (body && (body.iceServers || body.ice_servers)) || null;
+        const raw = Array.isArray(body) ? body : (body && (body.iceServers || body.ice_servers)) || null;
+        // PER-ENTRY validation, not just "is an array". This list is
+        // third-party and is spread straight into `new PC(cfg)`: one entry
+        // without `urls` throws there, and the throw brick-walls every
+        // connection attempt for as long as the fetch stays cached (55 min).
+        // The two localStorage-sourced lists already validate per entry.
+        const list = Array.isArray(raw) ? raw.filter((e) => e && e.urls) : null;
         if (Array.isArray(list) && list.length) {
           fetchedIce = list;
           fetchedIceAt = Date.now();
@@ -433,8 +439,11 @@ const NetTransport = (function () {
         }
       };
       ch.onclose = () => {
-        if (ep.status === "closed") return;
-        ep.status = "closed"; ep._emit("close", "peer");
+        // Route through shutdown(): flipping ep.status here used to make
+        // shutdown() — the ONLY caller of pc.close() — a permanent no-op, so
+        // every peer-initiated disconnect leaked a live RTCPeerConnection,
+        // its ICE agent, and up to INBOX_BYTE_CAP of buffered messages.
+        shutdown("peer");
       };
       ch.onmessage = (e) => {
         if (ep.status === "closed") return;
@@ -445,7 +454,10 @@ const NetTransport = (function () {
           shutdown("overflow");
           return;
         }
-        inbox.push({ channel: kind, data: e.data, bytes });
+        // `at` stamps ARRIVAL, not pump time: the clock-sync PONG math reads
+        // it, and a pump-time stamp put up to a frame of local scheduling
+        // into every RTT sample (the C-12 skew).
+        inbox.push({ channel: kind, data: e.data, bytes, at: performance.now() });
         queuedBytes += bytes;
         if (kind === STATE) queuedState++;
         else queuedEvents++;
@@ -475,7 +487,7 @@ const NetTransport = (function () {
       if (Log.enabled("net", Log.DEBUG)) Log.debug("net", "pc state -> " + s);
       if ((s === "failed" || s === "disconnected" || s === "closed") && ep.status !== "closed") {
         Log.info("net", "connection closed (" + s + ")");
-        ep.status = "closed"; ep._emit("close", s);
+        shutdown(s);   // releases the pc — see ch.onclose
       }
     };
 
@@ -494,12 +506,22 @@ const NetTransport = (function () {
     ep.pump = function () {
       const count = inbox.length;
       if (!count) return 0;
-      for (let i = 0; i < count; i++) {
-        const m = inbox[i];
-        ep._emit("message", m.channel, m.data);
-      }
+      // DETACH, THEN EMIT. _emit runs handlers synchronously, and one of them
+      // empties this very array mid-walk: EV.BYE → stop() → shutdown() →
+      // `inbox.length = 0`. The old index walk then read inbox[i] as undefined
+      // and threw on `.channel` — out of pump(), out of the game loop, on the
+      // one frame a peer says goodbye. Clearing BEFORE the loop also means a
+      // handler that queues a fresh message keeps it for the next pump instead
+      // of having it wiped by a trailing reset.
+      const batch = inbox.slice(0);
       inbox.length = 0;
       queuedState = queuedEvents = queuedBytes = 0;
+      for (let i = 0; i < batch.length; i++) {
+        const m = batch[i];
+        // m.at is the arrival stamp taken at inbox push — session.js does the
+        // PONG clock math on it rather than on handler-run time.
+        ep._emit("message", m.channel, m.data, m.at);
+      }
       return count;
     };
     ep.close = function () { shutdown("local"); };

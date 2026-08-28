@@ -61,6 +61,13 @@ let cfg = null;          // resolved lazily: Tracks.LIST is not ready at eval ti
 let resolved = null;     // trackIds -> circuit defs, invalidated with cfg
 
 if (store.subscribe) store.subscribe((change) => {
+  // FOREIGN WRITES ONLY — the guard career.js's store subscriber already
+  // carries. Without it this also fired on our OWN store.set: setConfig()
+  // builds `cfg = normalize(next)`, then `store.set(CFG_KEY, cfg)` re-entered
+  // here synchronously and nulled the cfg it had just built, so the very next
+  // statement threw on `cfg.trackIds` — SEASON SETUP ▸ APPLY died before
+  // restart(), before the save, and before the sheet could close.
+  if (!change.foreign) return;
   if (change.clear || change.key === CFG_KEY) { cfg = null; resolved = null; }
 });
 
