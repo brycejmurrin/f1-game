@@ -383,9 +383,21 @@ function buildLed(g, liv) {
       cyl(w, s * 5.05, 0.02, i * 3.5, 0.11, 0.22, scale(STEEL, 0.6), 8);
       cyl(w, s * 5.05, 0.24, i * 3.5, 0.09, 0.02, scale(c1, 1.5), 8);
     }
-    // A continuous lit strip at the dado line, the length of the bay. Emissive
-    // above 1.0 or the shader's glow gate never fires and it reads as plastic.
-    block(w, s * 5.33, 1.56, 0, 0.05, 0.045, 6.30, scale(c1, 1.35));
+    // The dado line. This was ONE bare emissive bar 12.6 m long standing 0.07
+    // proud of a near-black wall, and it read as a floating line rather than as
+    // a light — there was no fixture around it and nothing to give it a length.
+    // Now it is four segments in a recessed channel, which is what a real bay
+    // has: the housing is dark enough that the shader's glow gate
+    // (smoothstep(0.50, 0.95, max(albedo))) never fires on it, so it can share
+    // this emissive mesh with the lit face, exactly as the ceiling fixtures do.
+    for (let k = 0; k < 4; k++) {
+      const cz = -4.65 + k * 3.10;
+      block(w, s * 5.37, 1.56, cz, 0.05, 0.085, 1.475, scale(STEEL, 0.5));   // channel
+      block(w, s * 5.34, 1.56, cz, 0.03, 0.038, 1.44, scale(c1, 1.35));      // lit face
+      // End caps, so a segment terminates in a fitting instead of just stopping.
+      for (let e = -1; e <= 1; e += 2)
+        block(w, s * 5.36, 1.56, cz + e * 1.50, 0.045, 0.075, 0.035, scale(STEEL, 0.7));
+    }
   }
   // Lit fascia over the door, behind the D_SIGN wordmark.
   block(g.door, 0, 4.89, Z_DOOR - 0.14, 3.05, 0.13, 0.05, scale(c1, 0.55));
