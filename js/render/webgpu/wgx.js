@@ -2535,8 +2535,8 @@ const WGX = (function () {
         const firstIndex = _chunkFirstIndex(mesh);
         if (instCount) pass.drawIndexed(mesh.count, instCount, firstIndex);
         else pass.drawIndexed(mesh.count, 1, firstIndex);
-      } else if (instCount) pass.draw(mesh.count, instCount);
-      else pass.draw(mesh.count);
+      } else if (instCount) pass.draw(mesh.count, instCount, mesh.first | 0);
+      else pass.draw(mesh.count, 1, mesh.first | 0);
     }
     function _meshFromPull(vert, attr, count, indexFormat, shared) {
       const vbuf = _mkBuffer(vert, GPUBufferUsage.VERTEX);
@@ -2658,7 +2658,23 @@ const WGX = (function () {
         }
         const PIECE = 4095;
         const chunks = [];
+        // ONE vertex buffer for the whole ribbon, chunks are (first, count)
+        // ranges into it — GLX has always done this (glx/chunked.js) and it is
+        // what lets drawChunked's run merge fire for the road at all: the merge
+        // test is keyed on buffer IDENTITY, so per-piece buffers made it dead
+        // code. Size is exact: every bk.idx length and PIECE are multiples of
+        // 3, so `n -= n % 3` never trims and the pieces sum to pulled.count.
+        // Pieces are still staged one at a time (<=147 KB each) through
+        // queue.writeBuffer at a byte offset — never mappedAtCreation, and
+        // never one big CPU copy: bounded staging is what fixed the mappable
+        // pool exhaustion, and the peak here matches the per-piece shape.
+        let cv = null;
         try {
+          cv = device.createBuffer({
+            size: pulled.count * VF * 4,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+          });
+          let first = 0;
           buckets.forEach((bk) => {
             const nAll = bk.idx.length;
             for (let off = 0; off < nAll; off += PIECE) {
@@ -2670,17 +2686,16 @@ const WGX = (function () {
                 const src = bk.idx[off + j] * VF;
                 for (let k = 0; k < VF; k++) vert[j * VF + k] = pv[src + k];
               }
-              const cv = _mkBuffer(vert, GPUBufferUsage.VERTEX);
+              device.queue.writeBuffer(cv, first * VF * 4, vert);
               chunks.push({
-                vbuf: cv, ibuf: null, count: n, min: bk.mn, max: bk.mx,
+                vbuf: cv, ibuf: null, first, count: n, min: bk.mn, max: bk.mx,
                 sbuf: lut.sbuf, attrBG: lut.attrBG,
               });
+              first += n;
             }
           });
         } catch (e) {
-          for (const c of chunks) {
-            try { if (c.vbuf) c.vbuf.destroy(); } catch (_) { /* already invalid */ }
-          }
+          try { if (cv) cv.destroy(); } catch (_) { /* already invalid */ }
           try { if (lut && lut.sbuf) lut.sbuf.destroy(); } catch (_) { /* already invalid */ }
           _allocFail("createChunkedMesh", e);
           return { _wgx: "chunked", vbuf: null, ibuf: null, sbuf: null, attrBG: null, chunks: [], count: 0, indexFormat: b.indexFormat };
@@ -2883,6 +2898,11 @@ const WGX = (function () {
       if (m.vbuf) m.vbuf.destroy();
       if (m.ibuf) m.ibuf.destroy();
       if (m.sbuf) m.sbuf.destroy();
+      // The `!== m.vbuf` guards below now skip EVERY road chunk, not just the
+      // head: the ribbon shares one buffer, which the m.vbuf.destroy() above
+      // already freed. Still exactly one destroy per buffer, but the guard's
+      // meaning changed with the shared buffer — do not read it as "skip the
+      // head". Meshes that really do own per-chunk buffers still free here.
       if (m.chunks) {
         for (let i = 0; i < m.chunks.length; i++) {
           const c = m.chunks[i];
@@ -3522,13 +3542,45 @@ const WGX = (function () {
         const vbuf = ch.vbuf || mesh.vbuf;
         const ibuf = ch.ibuf || mesh.ibuf || null;
         const attrBG = ch.attrBG || mesh.attrBG;
-        if (run && run.vbuf === vbuf && run.ibuf === ibuf && run.attrBG === attrBG) {
+        // Merge only what is provably safe to merge:
+        //  - contiguous: the next run vertex/index is exactly this chunk's
+        //    first. Emission order already guarantees it (write order ==
+        //    push order == bucket first-touch == arc order, and a culled
+        //    chunk flushes above), so this term never rejects a merge that
+        //    used to happen — it makes the merge provable instead of
+        //    order-dependent, and is a no-op on the indexed path, which packs
+        //    firstIndex monotonically.
+        //  - vertex_index is dead: a merged run is a large non-indexed draw,
+        //    the exact shape the PIECE=4095 split exists to avoid. Indexed
+        //    draws take vid from the index value (order-independent); the road
+        //    binds the world LUT (magic 12345), so its WGSL reads
+        //    trkFromWorld(wpos), never matTrkArr[vid]. If no LUT is bound the
+        //    authored storage read is live and merging could shift it, so the
+        //    merge refuses rather than relying on the argument holding.
+        //    Evidence for the shapes themselves: tools/wgx-vid-repro.mjs.
+        //  - no lamp mask, ROAD ONLY: a run ORs its chunks' masks, so merging
+        //    the ribbon at night would hand a long run the UNION and turn
+        //    cheap mask-skips back into full lamp evaluations over the road's
+        //    large screen coverage. The road stands down at night and keeps
+        //    one draw per chunk (still winning the setVertexBuffer elision,
+        //    the buffer is shared). Indexed meshes — terrain, props, glass —
+        //    keep merging exactly as they do today: union masks there are
+        //    pre-existing behaviour, and narrowing them is a separate change
+        //    with its own measurement, not a rider on this one.
+        const indexed = !!ibuf;
+        const chFirst = indexed ? _chunkFirstIndex(ch) : (ch.first | 0);
+        const vidDead = indexed || !!_roadLutBG;
+        const nightOK = indexed || !maskL;
+        const contig = run && (indexed ? run.firstIndex : (run.first | 0)) + run.count === chFirst;
+        if (run && run.vbuf === vbuf && run.ibuf === ibuf && run.attrBG === attrBG
+            && contig && vidDead && nightOK) {
           run.count += ch.count;
           if (maskL) { run.m0 |= _lm0; run.m1 |= _lm1; }
         } else {
           flush();
           run = {
             vbuf, ibuf, attrBG, count: ch.count,
+            first: ch.first | 0,
             firstIndex: _chunkFirstIndex(ch),
             indexFormat: ch.indexFormat || mesh.indexFormat,
             m0: maskL ? _lm0 : LAMP_MASK_ALL, m1: maskL ? _lm1 : LAMP_MASK_ALL,
@@ -4353,12 +4405,18 @@ const WGX = (function () {
         const vbuf = ch.vbuf || mesh.vbuf;
         const ibuf = ch.ibuf || mesh.ibuf || null;
         const attrBG = ch.attrBG || mesh.attrBG;
-        if (run && run.vbuf === vbuf && run.ibuf === ibuf && run.attrBG === attrBG) {
+        // Contiguity as in drawChunked. No vertex_index gate is needed here:
+        // the shadow VS declares no @builtin(vertex_index) at all, so which
+        // vertices share a draw cannot reach its output.
+        const chFirst = ibuf ? _chunkFirstIndex(ch) : (ch.first | 0);
+        const contig = run && (ibuf ? run.firstIndex : (run.first | 0)) + run.count === chFirst;
+        if (run && run.vbuf === vbuf && run.ibuf === ibuf && run.attrBG === attrBG && contig) {
           run.count += ch.count;
         } else {
           flush();
           run = {
             vbuf, ibuf, attrBG, count: ch.count,
+            first: ch.first | 0,
             firstIndex: _chunkFirstIndex(ch),
             indexFormat: ch.indexFormat || mesh.indexFormat,
           };

@@ -760,13 +760,46 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
    dither), so the exactness claim rests on the radius-reject argument.
    Road pieces (no chunk AABBs) keep all-ones masks until the shared-vbuf
    work below gives them bounds.
-2. **Shared road vertex buffer**: road pieces each own a vbuf (≤4095 pulled
-   verts, Dawn workaround), so drawChunked's run merge — keyed on vbuf
-   identity — can never fire for the road. One vbuf + `firstVertex` offsets
-   restores GLX's adjacent-run merging.
+2. ~~Shared road vertex buffer~~ **LANDED (2026-08-28)**. The ribbon is now
+   ONE buffer whose chunks are contiguous `(first, count)` ranges;
+   `_drawGeom` reads `mesh.first` off the record (not a new parameter — the
+   signature is guard-pinned, and reading the record fixes all five
+   chunk-drawing sites at once, including `castShadow`'s unculled loop, which
+   would otherwise have stamped chunk 0 N times). The merge fires only when
+   it is provably safe: contiguous (`run.first + run.count === ch.first`),
+   `vertex_index` dead (`indexed || _roadLutBG` — the road binds the
+   magic-12345 LUT so its WGSL reads `trkFromWorld(wpos)`, never
+   `matTrkArr[vid]`; without a LUT the authored read is live and the merge
+   refuses rather than trusting the argument), and — ROAD ONLY — no lamp
+   mask set bound. That last gate is deliberate: a run ORs its chunks' masks,
+   so merging the ribbon at night would hand a long run the UNION and turn
+   cheap mask-skips back into full lamp evaluations. Indexed meshes (terrain,
+   props, glass) keep merging at night exactly as before — narrowing THEIR
+   union masks is a separate change with its own measurement.
+   Measured live, monza noon, script-driven Playwright on the same box, same
+   payload, 427/429 lit passes (`artifacts/r6-drawcount.mjs`):
+   road `draw` 31.2 -> **2.67** per pass, road `setVertexBuffer` 31.2 ->
+   **0.97**, ALL draws 65.44 -> **36.93** (the road fell from ~48% of the
+   frame's draws to ~7%). Merged run length: median 1425 -> **22968** verts,
+   max 24801 — that max is marginally above the largest N the repro tested
+   (24576), a small extrapolation inside the same regime.
+   Evidence, in descending strength: (a) `tools/wgx-vid-repro.mjs` 30/30 OK
+   on SwiftShader-Dawn incl. `firstVertex` and whole `draw(N)` to 24576 —
+   a third run agreeing with round 4's two; (b) real-Dawn `wgx-validate`
+   before vs after: `ok`, 0 GPU errors, 0 WGSL parse errors, and the
+   scene-coverage classifier IDENTICAL in all ten bins to 0.0 pp (road
+   44.2 -> 44.2, kerb 2.8, player 3.7, tree 24.1, sky 13.5…); (c) the
+   structural `vidDead` gate above. A screenshot A/B is NOT in that list and
+   could not be: on this container the PINNED capture (flicker/warmup 0,
+   renderClock pinned every warm frame, park+snapCam, soft-present awaited)
+   diffs a tree against ITSELF at 59.5% of channels — at or above the 58.2%
+   before/after delta, so the method cannot discriminate here. The vegas
+   night pair (17.3%) sits near its 12.0% control floor, consistent with the
+   road standing down at night. Real-GPU pixel sign-off remains unavailable
+   in-container and is not claimed.
 3. **Indexed road drawing**: `_expandPull` triples road vertex shading vs
    GLX's indexed ribbon; group-2 storage is already addressed by
-   vertex_index.
+   vertex_index. Still open, and now the biggest remaining road item.
 4. **SSR at half-res**. CORRECTED 2026-08-27: the "GLX inline 12 steps" /
    "then blurs the result anyway" claims were stale comments — GLX's
    COMPOSITE_FS march is ALSO 24 steps (post.js `for (int i = 0; i < 24`)
@@ -817,11 +850,18 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
    shipping config (`_bindLitVerts` binds the global world LUT for every
    lit draw once a track builds — wgx.js `void authored`; the VS vid read
    executes only pre-LUT/menu frames), and road markings come from
-   `trkFromWorld(wpos)` in the fragment shader. Next-round scope:
-   shared road vbuf + firstVertex runs (restores drawChunked merging),
-   road chunk AABBs so the lamp-mask cull covers the road, both
-   shadow-cast piece loops, dash/marking verification with live captures
-   at speed plus the pre-LUT menu window.
+   `trkFromWorld(wpos)` in the fragment shader. Next-round scope —
+   SETTLED 2026-08-28: the shared road vbuf + firstVertex runs landed
+   (item 2 above), and both shadow-cast piece loops went with it
+   (`castShadowChunked` took the same contiguity term; plain `castShadow`'s
+   unculled chunk loop is covered by `_drawGeom` reading `mesh.first`). Road
+   chunk AABBs for the lamp-mask cull turned out to be ALREADY DONE before
+   the round: the road's cull exemption had been deleted, so `_chunkLampMask`
+   already covered it, and the other lineage's `js/render/lamp-chunks.js`
+   bake supersedes it per-chunk whenever `perChunkLights > 0`. Dash/marking
+   verification by live capture is the one piece that did NOT land — see
+   item 2 on the capture pipeline's noise floor; the Dawn coverage classifier
+   stood in for it.
 9. `trkFromWorld` gating looked free but is NOT semantics-preserving: the
    LUT result feeds `classified`/`vMatId` on every draw over the ribbon
    (props/cars with matId 0 classify as asphalt by design there), so a

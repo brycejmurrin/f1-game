@@ -525,7 +525,13 @@ const CEILINGS = {
   // The whole WGX backend in one IIFE by design (deferred inject, no tag).
   // 5179 -> 5365 on the deploy union: their half-res SSR + chunk-AABB
   // lamp-mask cull rounds landed on the other lineage (re-measured).
-  "js/render/webgpu/wgx.js": 5365,
+  // 5365 -> 5423: the road's shared vertex buffer. Per-piece buffers made
+  // drawChunked's run merge (keyed on buffer identity) dead code for the road,
+  // so it paid one setVertexBuffer + one draw per visible chunk in every pass.
+  // The added lines are the single-buffer staging loop and the three reasons
+  // the merge is allowed to fire (contiguous, vertex_index dead, no lamp mask
+  // bound) — each one is load-bearing and documented where it sits.
+  "js/render/webgpu/wgx.js": 5423,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo

@@ -2055,7 +2055,7 @@ function drawCockpitRig(c, base, dt, paint) {
   _rigR[0] = ca; _rigR[1] = sa; _rigR[4] = -sa; _rigR[5] = ca;
   M4.mulTo(_rigA, base, _rigT);
   M4.mulTo(_rigB, _rigA, _rigR);
-  gfx.draw(getCockpitWheel(), _rigB, opt);
+  gfx.draw(getCockpitWheel(resolveLivery(c.team)), _rigB, opt);   // livery-keyed: team grips/marker/gloves
   // Live telemetry ON the wheel (all ride the wheel matrix, like the real LCD):
   // gear (auto or manual — c.gear is maintained by both paths), RPM shift
   // lights, speed, pedal bars, ERS energy.

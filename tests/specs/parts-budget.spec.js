@@ -17,15 +17,30 @@ async function pickOpt(page, catId, optId) {
 }
 
 async function openSetup(page) {
-  await page.goto("/");
-  await waitReady(page);
-  // Clear any stored parts / unlimited state to start fresh
-  await page.evaluate(() => {
-    const team = Teams.LIST[parseInt(localStorage.getItem("apex26.team") ?? "2")];
-    if (team) localStorage.removeItem("apex26.parts." + team.id);
+  // ONE BOOT, NOT TWO. This used to goto, wait for the game, clear storage,
+  // then RELOAD and wait again — two full game boots (track build included)
+  // for every test in the file, purely to start from clean storage. On
+  // SwiftShader that second boot is most of the test: measured 62-103 s per
+  // test solo against a 120 s budget, so at two workers the whole file
+  // timed out while asserting nothing about reloads. addInitScript runs
+  // before any page script, so the storage is already clean on the first
+  // boot and the end state is identical.
+  await page.addInitScript(() => {
+    // FIRST NAVIGATION ONLY. addInitScript reruns on every navigation, and
+    // "unlimited state persists after page reload" sets the flag, reloads,
+    // and expects it back — an unguarded reset would wipe the very thing
+    // that test asserts. sessionStorage survives the reload in-tab, so this
+    // marker makes the reset a once-per-page-object thing.
+    if (sessionStorage.getItem("__budgetSpecReset")) return;
+    sessionStorage.setItem("__budgetSpecReset", "1");
+    // Teams isn't loaded yet at init time, so clear every stored parts key
+    // rather than resolving the one team id — the same reset, with no
+    // dependency on game code having run.
+    for (const k of Object.keys(localStorage))
+      if (k.startsWith("apex26.parts.")) localStorage.removeItem(k);
     localStorage.removeItem("apex26.unlimitedBudget");
   });
-  await page.reload();
+  await page.goto("/");
   await waitReady(page);
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
