@@ -78,6 +78,7 @@ TSL post chain; stamps `renderOrder` for FX/glass.
 | `apex26.gfxWgxLevel` / `gfxWgxLite` / `gfxWgxOk` / `gfxWgxFail` | WGX quality ladder / refuse reason |
 | `apex26.gfxTlxFail`, `apex26.tlxForceGL` | TLX fail / THREE PATH (`1`=WebGL2, `0`=WebGPU, unset=AUTO) |
 | `apex26.wgxCapture` | SCREENSHOTS: `1`=2D blit, `0`=native swapchain, unset=AUTO (session overrides local) |
+| `apex26.tlxForceBatches`, `apex26.tlxForceHw` | DEBUG: run the code a real GPU runs, on a software adapter. `tlxForceHw` is a comma list — `sky\|env\|chunked\|batches\|shadow`, or `1`/`all`. Every software skip in TLX is a BUDGET guard, so an unforced CI run never executes the player's path; `env` is how the black-frame Dawn defect was found. Presentation stays soft. Set them with `gfx-probe --ls key=value` |
 
 Canary + session claim-fail recover from claim-and-die / jetsam by falling
 back to WebGL2 without always wiping the user’s pick. WGX climbs

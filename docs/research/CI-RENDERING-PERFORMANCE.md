@@ -83,6 +83,87 @@ APEX_CHROME_ARGS="…lavapipe flags…" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d
 5. **Real GPU + `xvfb-run`** remains the path for hardware WebGL/WebGPU visuals;
    GitHub GPU runners still need driver load — see §1 point 3.
 
+### There is no hardware adapter here — and it was never the limit (2026-08-28)
+
+Settled, so nobody spends another session hunting for a GPU flag:
+
+```
+$ vulkaninfo --summary
+GPU0: deviceName = llvmpipe (LLVM 20.1.2, 256 bits)
+      deviceType = PHYSICAL_DEVICE_TYPE_CPU
+      driverID   = DRIVER_ID_MESA_LLVMPIPE
+      conformanceVersion = 1.3.1.1
+$ ls /dev/dri
+ls: cannot access '/dev/dri': No such file or directory
+```
+
+One CPU device, no DRM node. This is a Firecracker microVM with no GPU
+passthrough, so **no Chrome flag, no Xvfb headed run, and no MCP server can
+produce a hardware adapter.** `--enable-unsafe-webgpu`,
+`--use-angle=vulkan`, `--enable-features=Vulkan`,
+`--enable-dawn-features=disable_adapter_blocklist` all change *which software
+stack* answers; none of them conjure silicon.
+
+Research surface, while here: the egress proxy allows `github.com` (and the
+npm registry) and refuses `developer.chrome.com`, `threejs.org`,
+`discourse.threejs.org`, `chromium.googlesource.com` with a 403 CONNECT. So
+upstream research is WebSearch result snippets plus `github.com` fetches of
+three.js sources, issues and PRs — not doc-site reads.
+
+**But llvmpipe is a CONFORMANT Vulkan 1.3 implementation, so Dawn on top of it
+validates exactly like Dawn on a player's GPU.** The reason a real-GPU bug was
+unreproducible here was never the adapter. It was that TLX takes a *different
+code path* on a software adapter: `softGpu()` / `softwareGL` gates skip the
+env-probe world capture, the chunked city inside the probe, the real TSL sky
+node, the instanced batches, and the authored shadow-map sizes. Those skips are
+**budget** guards, not correctness fixes — so every in-container measurement ran
+the half of the renderer no player runs, and a black player frame was
+unreproducible *by construction*.
+
+`apex26.tlxForceHw=<parts>` puts the hardware side back, one gate at a time
+(`sky | env | chunked | batches | shadow`, or `1`/`all`); presentation stays
+soft, which is the only part software genuinely cannot do. Force them
+individually — forcing all of them at once costs more llvmpipe seconds than the
+`awaitSoftPresent` budget has, and the timeout does not say which path did it
+(measured: `tlxForceHw=1` timed out at 60 s twice; each single gate presents in
+10–25 s). `tools/gfx-probe.mjs --ls key=value` sets any `apex26.*` knob before
+boot.
+
+Bisect on montreal, TLX + Dawn + Lavapipe, `GLX.gpuErrors()` after `park()`:
+
+| forced gate | present | uncaptured Dawn errors |
+|---|---|---|
+| *(none — the CI default)* | ok | 0 |
+| `sky` | ok | 0 |
+| **`env`** | ok | **290** |
+| `batches` | ok | 0 |
+| `chunked` | ok | 0 |
+| `shadow` | ok | 0 |
+
+The env-probe path, and only it:
+
+```
+Attachment state of [RenderPipeline "renderPipeline_Background.material_48"]
+is not compatible with [RenderPassEncoder].
+  pass expects   { colorTargets: [0=RGBA16Float] }
+  pipeline has   { colorTargets: [0=RGBA16Float, 1=RGBA16Float] }
+```
+
+Cause: `tlx.js` replaces three's `_nodes.getForRenderCacheKey` to kill a
+593-program compile storm, and three's own key folds the attachment state in
+through `contextNode.id`/`.version` — which the replacement dropped. A WGSL
+fragment entry writes `@location(0..n-1)` for the pass it was built for, so the
+2-target scene-pass Background program is not usable in the 1-target env-probe
+pass. Dawn rejects the `SetPipeline`, discards the command buffer, and every
+probe face comes back black — then the black cube is bound as the environment
+for every lit surface. Fix: the key carries the fragment output
+count (`attachKey()`: colour-target count + MRT flag) — that, and only that, is
+what forks the WGSL, since formats/samples/blend really are pipeline state on
+the separate pipeline cache. Keying on format and sample count as well re-opened
+the compile storm and the default soft-present run then missed its 60 s budget
+twice; count + MRT is two variants (the 2-target scene pass, and everything
+else).
+
 ### Cursor Cloud agent environment (2026-08-17)
 
 Cloud Agents here boot a **personal / dashboard-managed** environment (no
