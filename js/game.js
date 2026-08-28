@@ -5479,19 +5479,21 @@ function resetSetupCam() {
 // Rebuild-on-change only (not per-frame): keyed by team + resolved parts tiers,
 // mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. gfx.freeMesh
 // releases the previous mesh's GL buffers so repeated chip clicks don't leak.
-let _spMesh = null, _spMeshKey = "";
+let _spMesh = null, _spMeshKey = "", _spHull = null;
 function getSetupPreviewMesh() {
   const team = Teams.LIST[teamIdx];
   const key = team.id + ":" + partsVisualKey(team.id);
   if (key !== _spMeshKey) {
     if (_spMesh) gfx.freeMesh(_spMesh);
     const liv = resolveLivery(team);
-    _spMesh = gfx.createMesh(Car3D.build(liv.c1, liv.c2, {
+    const spData = Car3D.build(liv.c1, liv.c2, {
       livery: liv,
       teamId: team.id,   // per-team chassis style shows in the setup turntable too
       num: team.drivers && team.drivers[0] && team.drivers[0].num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team),
-    }));
+    });
+    _spHull = GarageScene.framingHull(spData);   // silhouette proxy for the turntable re-centre
+    _spMesh = gfx.createMesh(spData);
     _spMeshKey = key;
   }
   return _spMesh;
@@ -5562,6 +5564,7 @@ function renderSetupPreview(dt) {
   _spAim[2] = setupPreviewTgt[2] + setupPreviewPan[2];
   M4.lookAtTo(_spView, eye, _spAim, [0, 1, 0]);
   M4.mulTo(_spVP, _spProj, _spView);
+  GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, setupPreviewSpin, _spHull);
   M4.invertTo(_spInvProj, _spProj);
   if (gfx.begin({
     // Sun with NO sideways component. The shark fin is a thin blade whose two

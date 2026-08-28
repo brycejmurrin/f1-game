@@ -215,6 +215,60 @@ function buildProps(g, liv) {
   for (let i = 0; i < 11; i++)
     block(g.door, 0, 2.05 + i * 0.26, Z_DOOR - 0.10, HALF_W * 0.72, 0.12, (i % 2) ? 0.035 : 0.05, scale(STEEL, 0.75));
   block(g.door, 0, 1.98, Z_DOOR - 0.10, HALF_W * 0.74, 0.07, 0.07, scale(STEEL, 1.1));
+  // Spare front wings on a rack — the most recognisable thing in a real bay
+  // after the tyres, and the reason a garage reads as a WORKSHOP.
+  const wingRack = (out, x, z, sgn) => {
+    for (let r = 0; r < 2; r++) cyl(out, x, 0, z + (r ? 0.85 : -0.85), 0.035, 1.15, STEEL, 6);
+    block(out, x, 1.16, z, 0.05, 0.03, 0.95, STEEL);
+    for (let w = 0; w < 2; w++) {                      // two wings leaning on it
+      const y = 0.52 + w * 0.46;
+      block(out, x + sgn * 0.16, y, z, 0.30, 0.02, 0.86, scale(c1, 0.62));
+      block(out, x + sgn * 0.34, y + 0.10, z, 0.06, 0.09, 0.84, scale(c1, 0.45));
+      for (let e = -1; e <= 1; e += 2)                 // endplates
+        block(out, x + sgn * 0.16, y + 0.07, z + e * 0.84, 0.26, 0.13, 0.02, DARK);
+    }
+  };
+  wingRack(g.nx, -4.30, 1.2, 1);
+  wingRack(g.px, 4.30, 2.6, -1);
+  // Wheel guns on a wall rack, hoses coiled on a reel above them.
+  for (let i = 0; i < 3; i++) {
+    const z = -1.9 + i * 0.55;
+    block(g.px, 5.16, 1.34, z, 0.07, 0.07, 0.10, [0.85, 0.62, 0.10]);
+    cyl(g.px, 5.16, 0.98, z, 0.045, 0.34, scale(STEEL, 0.7), 6);
+  }
+  block(g.px, 5.20, 1.62, -1.35, 0.06, 0.03, 1.15, STEEL);
+  for (let i = 0; i < 2; i++) {
+    cyl(g.px, 5.14, 2.30 + i * 0.02, 0.9 + i * 0.8, 0.22, 0.10, scale(DARK, 1.5), 10);
+    cyl(g.px, 5.14, 2.28 + i * 0.02, 0.9 + i * 0.8, 0.07, 0.14, STEEL, 6);
+  }
+  // Shelving of parts crates on the back wall, and a workbench under it.
+  for (let sh = 0; sh < 3; sh++) {
+    const y = 0.95 + sh * 0.62;
+    block(g.back, -3.1, y, -6.15, 1.25, 0.025, 0.22, STEEL);
+    for (let bx = 0; bx < 3; bx++)
+      block(g.back, -4.15 + bx * 0.86, y + 0.17, -6.15, 0.32, 0.15, 0.17,
+        scale(bx % 2 ? c1 : STEEL, bx % 2 ? 0.5 : 0.75));
+  }
+  block(g.back, -3.1, 0.42, -6.05, 1.30, 0.04, 0.32, scale(STEEL, 0.85));
+  for (let lg = -1; lg <= 1; lg += 2) cyl(g.back, -3.1 + lg * 1.15, 0, -6.05, 0.035, 0.42, DARK, 6);
+  // Fire extinguishers — every real garage wall has a pair.
+  for (let f = 0; f < 2; f++) {
+    cyl(g.nx, -5.22, 0.32, -4.4 + f * 0.42, 0.075, 0.44, [0.72, 0.09, 0.07], 8);
+    cyl(g.nx, -5.22, 0.76, -4.4 + f * 0.42, 0.028, 0.09, scale(STEEL, 0.6), 6);
+  }
+  // A bin and a wheeled stool by the desk.
+  cyl(g.nx, -4.75, 0, 4.7, 0.20, 0.52, scale(STEEL, 0.5), 8);
+  cyl(g.nx, -4.10, 0.52, 3.0, 0.20, 0.06, scale(c1, 0.5), 8);
+  cyl(g.nx, -4.10, 0, 3.0, 0.045, 0.52, STEEL, 6);
+  // Barrier stanchions across the pit-lane opening, chain height only.
+  for (let i = -1; i <= 1; i += 2) {
+    cyl(g.door, i * 2.2, 0, Z_DOOR - 0.55, 0.05, 0.95, scale(STEEL, 0.8), 8);
+    cyl(g.door, i * 2.2, 0.95, Z_DOOR - 0.55, 0.075, 0.05, [0.80, 0.70, 0.12], 8);
+  }
+  block(g.door, 0, 0.92, Z_DOOR - 0.55, 2.2, 0.02, 0.02, [0.80, 0.70, 0.12]);
+  // Overhead cable tray running the length of the bay, under the truss.
+  for (let sd = -1; sd <= 1; sd += 2)
+    block(g.mid, sd * 4.6, 3.62, 0, 0.16, 0.05, 6.2, scale(STEEL, 0.6));
   // Floor level, inboard of every wall, so it is never on the wrong side of one.
   for (let s = -1; s <= 1; s += 2) {
     block(g.mid, s * 3.9, 0.035, 0.5, 0.09, 0.035, 5.4, DARK);
@@ -612,10 +666,79 @@ function draw(team, liv, eye) {
         _gfx.drawDecal(dressMesh[SIDES[i]], MAT_I, dressTex, DRESS_OPTS);
 }
 
+// ── preview framing ────────────────────────────────────────────────────────
+// The turntable orbits and AIMS at one point, so THAT POINT is pinned on screen
+// — but the car's SILHOUETTE is not. The car is 5.95 m long orbited at 8.5 m, so
+// whichever end swings toward the camera is magnified by perspective and the
+// silhouette centre swings with it: measured 0.158 NDC of drift, ~79 px on a
+// 1000 px canvas, which is exactly what reads as "the rotation is not centred on
+// the car". No choice of pivot fixes it — the drift is perspective, not a wrong
+// aim point (the aim sat within 4 cm of the footprint's enclosing-circle centre
+// and still drifted). So measure the silhouette each frame and shift the lens.
+//
+// framingHull is the cheap stand-in for that silhouette: the convex hull of the
+// car's XZ footprint, duplicated at its Y extremes. A projected x-extreme is
+// always attained on the 3D hull, and this ~32-point stack tracked the true
+// centre to within 0.005 NDC (~2 px) in a sweep where the 8 bbox corners were
+// out by 0.027 (~13 px). x is negated at build time because the preview draws
+// the car through MAT_REFLECT_X.
+function framingHull(data) {
+  const p = data && data.pos;
+  if (!p || !p.length) return null;
+  const pts = [];
+  let ylo = 1e9, yhi = -1e9;
+  for (let i = 0; i < p.length; i += 3) {
+    pts.push([-p[i], p[i + 2]]);
+    if (p[i + 1] < ylo) ylo = p[i + 1];
+    if (p[i + 1] > yhi) yhi = p[i + 1];
+  }
+  pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross2 = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const half = (arr) => {
+    const h = [];
+    for (let i = 0; i < arr.length; i++) {
+      const q = arr[i];
+      while (h.length >= 2 && cross2(h[h.length - 2], h[h.length - 1], q) <= 0) h.pop();
+      h.push(q);
+    }
+    h.pop();
+    return h;
+  };
+  const rev = pts.slice().reverse();
+  const ring = half(pts).concat(half(rev));
+  const out = [];
+  for (let i = 0; i < ring.length; i++) {
+    out.push(ring[i][0], ylo, ring[i][1]);
+    out.push(ring[i][0], yhi, ring[i][1]);
+  }
+  return out;
+}
+// Re-centre the silhouette in the visible region by nudging the lens shift.
+// proj[8] adds a CONSTANT offset to NDC.x (the clip-space term is proj[8]*z_view
+// and w is -z_view, so the shift is exactly -proj[8]) — which is why one pass is
+// exact rather than iterative, and why the extents' relative spacing is
+// untouched. Gated on `on` (the auto-turntable) for the same reason the fit
+// distance is: once a player picks a preset or pans, the framing is theirs.
+function recentre(proj, view, vp, panelFrac, on, hull) {
+  if (!on || !hull) return;
+  let lo = 1e9, hi = -1e9;
+  for (let i = 0; i < hull.length; i += 3) {
+    const x = hull[i], y = hull[i + 1], z = hull[i + 2];
+    const w = vp[3] * x + vp[7] * y + vp[11] * z + vp[15];
+    if (w <= 0.001) continue;               // behind the eye: no screen position
+    const nx = (vp[0] * x + vp[4] * y + vp[8] * z + vp[12]) / w;
+    if (nx < lo) lo = nx;
+    if (nx > hi) hi = nx;
+  }
+  if (lo > hi) return;
+  proj[8] += (lo + hi) / 2 + panelFrac;     // target is -panelFrac, the visible centre
+  M4.mulTo(vp, proj, view);
+}
+
 function debug() {
   return { bay: [HALF_W * 2, Z_DOOR - Z_BACK, CEIL_Y], lights: lights(null).length / 15, key: cacheKey };
 }
 
-  return { init, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, glareStr, draw, debug };
+  return { init, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, glareStr, draw, framingHull, recentre, debug };
 })();
 if (typeof window !== "undefined") window.GarageScene = GarageScene;

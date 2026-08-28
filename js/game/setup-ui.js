@@ -558,7 +558,47 @@ function buildLiveryCreator(container, team) {
     prev.style.background = "linear-gradient(120deg, " + d.c1 + " 0 56%, " + d.c2 + " 56% 100%)";
     prev.textContent = "";
     if (d.stripe) { const st = document.createElement("span"); st.className = "cs-liv-stripe"; st.style.background = d.stripe; prev.appendChild(st); }
+    refreshPalettes();   // a slot's new colour becomes matchable from every other slot
     livePreviewDraft(team, d);
+  };
+
+  // MATCHING PALETTE. Twelve slots paint one car, and most paint jobs reuse the
+  // same three or four colours across them — but every slot was a bare OS colour
+  // dialog, so "the same red as the nose" meant eyeballing hex by hand and
+  // getting it nearly right. These chips are the colours already in play: every
+  // distinct value in the draft, then the team's own two stock colours. Click
+  // one and the slot takes it EXACTLY.
+  const PAL_KEYS = ["c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod",
+                    "wing", "fin", "finArt", "logo", "halo"];
+  const paletteColours = () => {
+    const seen = [];
+    const add = (v) => {
+      if (!/^#[0-9a-fA-F]{6}$/.test(v || "")) return;
+      const u = v.toLowerCase();
+      if (seen.indexOf(u) < 0) seen.push(u);
+    };
+    for (let i = 0; i < PAL_KEYS.length; i++) add(d[PAL_KEYS[i]]);
+    add(arrToHex(team.color)); add(arrToHex(team.color2));
+    return seen;
+  };
+  const palRows = [];   // rebuilt on every edit: the palette IS the other slots
+  const refreshPalettes = () => {
+    const cols = paletteColours();
+    for (let i = 0; i < palRows.length; i++) {
+      const pr = palRows[i];
+      pr.el.textContent = "";
+      for (let c = 0; c < cols.length; c++) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "cs-liv-ed-none";
+        chip.style.background = cols[c];
+        chip.title = "Use " + cols[c];
+        chip.setAttribute("aria-label", "Use colour " + cols[c] + " for " + pr.label);
+        if ((d[pr.key] || "").toLowerCase() === cols[c]) chip.classList.add("active");
+        chip.onclick = () => { pr.set(cols[c]); };
+        pr.el.appendChild(chip);
+      }
+    }
   };
 
   const colorRow = (label, key, allowNone) => {
@@ -574,6 +614,10 @@ function buildLiveryCreator(container, team) {
       off.onclick = () => { d[key] = ""; inp.classList.add("cs-liv-off"); applyPreview(); };
       r.appendChild(off);
     }
+    const pal = document.createElement("span"); pal.className = "cs-liv-pal";
+    palRows.push({ el: pal, key, label,
+      set: (hex) => { d[key] = hex; inp.value = hex; inp.classList.remove("cs-liv-off"); applyPreview(); } });
+    r.appendChild(pal);
     return r;
   };
   wrap.appendChild(colorRow("PRIMARY", "c1", false));

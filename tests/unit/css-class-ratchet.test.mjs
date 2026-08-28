@@ -107,7 +107,12 @@ export function shellNodes() {
 // 2026-08-27 round 12 (second lowering): 533 -> 532. The camera panel's row
 // class left the shell — its five rows are the panel's only direct div
 // children, so the id scopes them without a class repeated five times.
-const CLASS_CEILING = 532;
+// 2026-08-28: 532 -> 533. +1 for .cs-liv-pal, the strip of already-used colours
+// under each livery colour row. It cannot be a custom property on a context
+// selector (SKILL.md rule 8's usual answer): this is a NEW flex container with
+// its own wrap behaviour, not a variation of an existing box. The chips inside
+// it deliberately reuse .cs-liv-ed-none rather than adding a second class.
+const CLASS_CEILING = 533;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under
