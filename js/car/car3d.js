@@ -315,10 +315,87 @@ const Car3D = (function () {
     }
   }
 
+  // Smooth swept tube (the halo hoop): shared ring verts + radial normals — the
+  // addDome pattern along an arbitrary polyline. The ring "up" vector carries
+  // forward from ring to ring (parallel transport) so frames never flip where
+  // the tangent crosses the hoop apex. No end caps: both halo ends bury in the
+  // pillar / collar. Cost: path.length*sides verts, (path.length-1)*sides*2 tris.
+  function addTube(out, path, r, sides, col, surface) {
+    const i0 = out.pos.length / 3;
+    const material = surfaceOf(col, surface);
+    const rgb = material === SURFACES.paint
+      ? [Math.min(col[0], 1), Math.min(col[1], 1), Math.min(col[2], 1)]
+      : col;
+    let ux = 0, uy = 1, uz = 0;
+    for (let i = 0; i < path.length; i++) {
+      const a = path[Math.max(0, i - 1)], b = path[Math.min(path.length - 1, i + 1)];
+      let tx = b[0] - a[0], ty = b[1] - a[1], tz = b[2] - a[2];
+      const tl = Math.hypot(tx, ty, tz) || 1; tx /= tl; ty /= tl; tz /= tl;
+      const d = ux * tx + uy * ty + uz * tz;
+      ux -= d * tx; uy -= d * ty; uz -= d * tz;
+      let ul = Math.hypot(ux, uy, uz);
+      if (ul < 1e-5) { ux = -tz; uy = 0; uz = tx; ul = Math.hypot(ux, uy, uz) || 1; }
+      ux /= ul; uy /= ul; uz /= ul;
+      const vx = ty * uz - tz * uy, vy = tz * ux - tx * uz, vz = tx * uy - ty * ux;
+      const p = path[i];
+      for (let s = 0; s < sides; s++) {
+        const ang = (s / sides) * Math.PI * 2;
+        const c = Math.cos(ang), sn = Math.sin(ang);
+        const nx = ux * c + vx * sn, ny = uy * c + vy * sn, nz = uz * c + vz * sn;
+        out.pos.push(p[0] + nx * r, p[1] + ny * r, p[2] + nz * r);
+        out.nrm.push(nx, ny, nz);
+        out.col.push(rgb[0], rgb[1], rgb[2]);
+        out.mat.push(material);
+      }
+    }
+    for (let i = 0; i < path.length - 1; i++) {
+      for (let s = 0; s < sides; s++) {
+        const s2 = (s + 1) % sides;
+        const A = i0 + i * sides + s, B = i0 + i * sides + s2;
+        const C = i0 + (i + 1) * sides + s2, D = i0 + (i + 1) * sides + s;
+        out.idx.push(A, B, C, A, C, D);
+      }
+    }
+  }
+
+  // Halo hoop centreline, matched to the real halo's front view: the top bar
+  // reads LEVEL but is gently ROUNDED — a shallow arch that rises RISE toward
+  // the centre and blends into the legs through tangent shoulders — never a
+  // peak or a dip toward the middle (the two failure modes this replaced).
+  // Three sections: a rear leg easing up from each collar (quadratic, zero
+  // slope where it meets the crown), and the crown bar swept as a
+  // half-ellipse in x-z with the sin-shaped RISE on top.
+  const HALO_RISE = 0.012;                   // shallow arch: ~1.2 cm at centre
+  function haloHoopPath(rearX, rearY, rearZ, midX, midZ, crownY, apexZ) {
+    const LEG = 4, BAR = 6, pts = [];
+    for (let i = 0; i < LEG; i++) {          // left leg: collar -> crown
+      const t = i / LEG;
+      pts.push([-(rearX + (midX - rearX) * t),
+                rearY + (crownY - rearY) * t * (2 - t),
+                rearZ + (midZ - rearZ) * t]);
+    }
+    for (let i = 0; i <= BAR; i++) {         // crown bar: level, gently arched
+      const a = Math.PI * (1 - i / BAR);
+      pts.push([Math.cos(a) * midX,
+                crownY + HALO_RISE * Math.sin(a),
+                midZ + (apexZ - midZ) * Math.sin(a)]);
+    }
+    for (let i = 1; i <= LEG; i++) {         // right leg: crown -> collar
+      const t = i / LEG;
+      pts.push([midX + (rearX - midX) * t,
+                crownY + (rearY - crownY) * t * t,
+                midZ + (rearZ - midZ) * t]);
+    }
+    return pts;
+  }
+
   function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
                     grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle) {
     const RC = rimColor || RIM;
-    const SEG = 18;
+    // 18 -> 24: an 18-gon tyre reads visibly polygonal in any close shot.
+    // +29% wheel tris, same draw-call count; ceilings in parts-physics raised
+    // with the measurement (480 per wheel).
+    const SEG = 24;
     const x0 = cx - w/2, x1 = cx + w/2;
     const rimR = r * 0.68;
     const coverOpen = brakeStyle && brakeStyle.coverOpen || 0;
@@ -445,6 +522,22 @@ const Car3D = (function () {
         const outer = 0.96 * edgeRm, inner = Math.max(0.76 * edgeRm, outer - bandWidth);
         const A = P(r * outer, a0), B = P(r * outer, a1), C = P(r * inner, a1), D = P(r * inner, a0);
         addQuad(out, A, B, C, D, BAND, SURFACES.rubber);   // single face (wheel drawn cull-off → shows both sides, no z-fight)
+      }
+    }
+    // Raised sidewall lettering ring(s): proud dark annulus inboard of the band
+    // (0.006 out vs the band's 0.004, so the two faces never share a plane).
+    const sidewall = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.sidewall) || 0)));
+    if (sidewall > 0) {
+      const SW = [0.16, 0.16, 0.17];
+      const rings = sidewall === 2 ? [[0.700, 0.740], [0.775, 0.805]] : [[0.700, 0.740]];
+      for (const bs of [[x0, -1], [x1, 1]]) {
+        const xb = bs[0] + bs[1] * 0.006;
+        for (const ring of rings) for (let i = 0; i < SEG; i++) {
+          const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+          const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+          addQuad(out, P(r * ring[1], a0), P(r * ring[1], a1),
+                       P(r * ring[0], a1), P(r * ring[0], a0), SW, SURFACES.rubber);
+        }
       }
     }
 
@@ -1062,11 +1155,14 @@ const Car3D = (function () {
     }, recipe);
   }
   function buildTyreParts(recipe, tier) {
-    return mergeRecipe({ band: TYRE_BAND[tier], grooved: false, shoulder: 0 }, recipe);
+    // sidewall: raised lettering ring(s) on the tyre face. 0 flush / 1 ring / 2 double.
+    return mergeRecipe({ band: TYRE_BAND[tier], grooved: false, shoulder: 0,
+      sidewall: 0 }, recipe);
   }
   function buildErsParts(recipe, tier, accent) {
+    // coolerIntake: pack cooling mouth on the pod shoulder. 0 none / 1 NACA lip / 2 lip + louvres.
     return mergeRecipe({ led: tier === 2 ? accent : null, pack: 1,
-      cells: tier === 2 ? 6 : 3, conduit: 0, blister: 0 }, recipe);
+      cells: tier === 2 ? 6 : 3, conduit: 0, blister: 0, coolerIntake: 0 }, recipe);
   }
   function buildGearboxParts(recipe, tier) {
     return mergeRecipe({
@@ -1083,6 +1179,8 @@ const Car3D = (function () {
       flame: [1.15, 0.42, 0.14],
       line: 1, filler: 0,
       hatch: 0, vent: 0,
+      // breather: NACA duct beside the filler. 0 none / 1 duct / 2 duct + standpipe.
+      breather: 0,
     }, recipe);
   }
   function buildExhaustParts(recipe) {
@@ -1096,10 +1194,15 @@ const Car3D = (function () {
       plank: 0, gurney: 0, scroll: 0 }, recipe);
   }
   function buildWheelParts(recipe) {
-    return mergeRecipe({ spokes: 0, tape: 0, dish: 0, nut: null, gunNut: 0 }, recipe);
+    // deflector: 2026 over-wheel deflector above each FRONT wheel. 0 none / 1 plane / 2 biplane + endplate.
+    return mergeRecipe({ spokes: 0, tape: 0, dish: 0, nut: null, gunNut: 0,
+      deflector: 0 }, recipe);
   }
   function buildCockpitParts(recipe) {
-    return mergeRecipe({ haloBlade: 0, haloWing: 0, camPods: 0, screen: 0 }, recipe);
+    // halo: hoop profile. 0 regulation round tube / 1 slim low-profile / 2 fenced crown.
+    // headrest: 0 flat rim / 1 raised horseshoe / 2 winged pad.
+    return mergeRecipe({ haloBlade: 0, haloWing: 0, camPods: 0, screen: 0,
+      halo: 0, headrest: 0 }, recipe);
   }
   function buildPartRecipes(T, accent) {
     const tier = (id) => T[id] != null ? T[id] : 1;
@@ -1645,6 +1748,23 @@ const Car3D = (function () {
         addBox(out, 0.205, 0.940, -0.50, 0.014, 0.012, 0.014,
                [0.10, 0.10, 0.12], SURFACES.carbon);
       }
+      // Tank breather across the spine from the filler (filler x +0.12, vent
+      // x +0.205 — the breather mirrors at -0.185 so nothing overlaps):
+      // 0 none / 1 sunk NACA duct / 2 duct + overflow standpipe.
+      const fuelBreather = Math.max(0, Math.min(2, Math.round(fuelStyle.breather || 0)));
+      if (fuelBreather > 0) {
+        const cb = anchors.coverAt(-0.56);
+        addBox(out, -0.185, cb.top + 0.004, -0.56, 0.052, 0.012, 0.085, INTAKE);
+        addBox(out, -0.185, cb.top + 0.012, -0.61, 0.058, 0.006, 0.020, CARBON, SURFACES.carbon);
+        if (fuelBreather >= 2) {
+          addSpan(out,
+            { z: -0.62, x: -0.185, y: cb.top + 0.010, w: 0.014, h: 0.014 },
+            { z: -0.62, x: -0.185, y: cb.top + 0.078, w: 0.011, h: 0.011 },
+            fuelDisplay, null, fuelSurface);
+          addBox(out, -0.185, cb.top + 0.088, -0.62, 0.016, 0.012, 0.016,
+                 [0.10, 0.10, 0.12], SURFACES.carbon);
+        }
+      }
       if (fuelStyle.line) {
         const lineRear = anchors.coverAt(-1.30);
         addSpan(out,
@@ -1748,6 +1868,24 @@ const Car3D = (function () {
             const p = anchors.coverAt(z);
             addBox(out, side * (p.x + 0.022), p.top - 0.050, z,
               0.028, 0.036, 0.044, [0.10, 0.10, 0.12], SURFACES.carbon);
+          }
+        }
+      }
+    }
+    // Pack cooling mouth on the pod shoulder ahead of the energy-cell strip:
+    // 0 none / 1 low NACA lip / 2 lip + louvre grille behind it.
+    const ersIntake = Math.max(0, Math.min(2, Math.round((ersStyle && ersStyle.coolerIntake) || 0)));
+    if (ersIntake > 0 && !ckpt) {
+      for (const side of [-1, 1]) {
+        const p = anchors.podAt(-0.30);
+        addBox(out, side * (p.x - 0.02), p.top + 0.008, -0.30, 0.11, 0.016, 0.14, INTAKE);
+        addBox(out, side * (p.x - 0.02), p.top + 0.020, -0.38, 0.12, 0.010, 0.030,
+               CARBON, SURFACES.carbon);
+        if (ersIntake >= 2) {
+          for (let i = 0; i < 3; i++) {
+            const z = -0.46 - i * 0.05, pl = anchors.podAt(z);
+            addBox(out, side * (pl.x - 0.02), pl.top + 0.012, z, 0.10, 0.008, 0.028,
+                   CARBON, SURFACES.carbon);
           }
         }
       }
@@ -1943,38 +2081,60 @@ const Car3D = (function () {
     // a dark bar across the middle of the frame. The chase car keeps all of it.
     if (!ckpt) {
       addBox(out, 0, 0.60, 0.12, 0.40, 0.045, 0.78, [0.04, 0.04, 0.05], SURFACES.carbon);
-      for (const s of [-1, 1]) {
-        addLoft(out, -0.15, s*0.27, 0.74, 0.06, 0.06,
-                 0.62,     0,      0.70, 0.06, 0.06, DARK);
-      }
+      // The dark converging beams + front post that used to sit here were the
+      // pre-tube inner halo frame. With the real titanium hoop and centre
+      // pillar in part("halo"), they were duplicate structure reading as a
+      // black chevron directly under the level crown bar — removed.
       addBox(out, 0, 0.74, -0.18, 0.60, 0.06, 0.07, DARK); // rear hoop
-      addBox(out, 0, 0.60,  0.62, 0.05, 0.20, 0.05, DARK); // front pillar
-    } else if (opts && opts.halo) {
-      for (const s of [-1, 1]) {
-        addLoft(out, -0.15, s*0.30, 0.92, 0.05, 0.05,
-                 0.62,     0,       0.98, 0.05, 0.05, HALO, SURFACES.metal);
+      // Recipe-gated HEADREST behind the helmet: 0 flat rim (shipped) / 1 raised
+      // horseshoe pad / 2 winged pad. Front face z -0.25 sits just behind the
+      // helmet dome (centre z -0.08, r 0.145 -> rear extent -0.225); pad tops
+      // stay under the airbox intake underside (y 0.715).
+      const headrest = Math.max(0, Math.min(2, Math.round(cockpitStyle.headrest || 0)));
+      const PAD = [0.08, 0.08, 0.10];
+      if (headrest === 1) {
+        addBox(out, 0, 0.655, -0.30, 0.34, 0.075, 0.10, PAD, SURFACES.carbon);
+        for (const s of [-1, 1])
+          addBox(out, s * 0.20, 0.645, -0.16, 0.06, 0.065, 0.24, PAD, SURFACES.carbon);
+      } else if (headrest === 2) {
+        addBox(out, 0, 0.665, -0.31, 0.36, 0.095, 0.11, PAD, SURFACES.carbon);
+        for (const s of [-1, 1]) {
+          addBox(out, s * 0.21, 0.675, -0.22, 0.05, 0.075, 0.16, PAD, SURFACES.carbon);
+          addBox(out, s * 0.215, 0.700, -0.13, 0.04, 0.028, 0.10, PAD, SURFACES.carbon);
+        }
       }
+    } else if (opts && opts.halo) {
+      // First-person hoop: same round-tube, LEVEL-bar treatment as the
+      // exterior halo — the driver sees a flat bar across the top of the
+      // frame (crown constant at 0.96), not tubes converging at the centre.
+      // Legs rise from the old loft endpoints (±0.30, 0.92, -0.15).
+      addTube(out, haloHoopPath(0.30, 0.92, -0.15, 0.28, 0.18, 0.96, 0.62),
+              0.025, 6, HALO, SURFACES.metal);
       addBox(out, 0, 0.79, 0.62, 0.045, 0.38, 0.045, HALO, SURFACES.metal); // front pillar
     }
+    // The hoop centreline is computed HERE (shared by the blade fairing below
+    // and part("halo") further down — the sections run in one function scope).
+    const haloSty = Math.max(0, Math.min(2, Math.round(cockpitStyle.halo || 0)));
+    const hr = haloSty === 1 ? 0.024 : 0.028;
+    const crownY = 0.845 - (haloSty === 1 ? 0.008 : 0);
+    const hoop = ckpt ? null : haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49);
     const haloBlade = Math.max(0, Math.min(2, Math.round(ckpt ? 0 : cockpitStyle.haloBlade || 0)));
     if (haloBlade > 0) {
-      const bw = haloBlade === 2 ? 0.072 : 0.048;
-      const bh = haloBlade === 2 ? 0.038 : 0.028;
       const bladeC = haloTint || HALO;
-      for (const s of [-1, 1]) {
+      // The fairing is a CO-AXIAL TUBE over the hoop's own centreline — a
+      // fairing thickens the hoop it wraps. The old four straight spans
+      // chorded the curve and read as the pre-tube triangle laid over the
+      // round halo. Radii sit 8-11 mm proud of the hoop: no coplanar faces.
+      if (haloBlade === 1) {
+        // Low fairing: shoulders + crown bar only (path pts 3..11 of 15).
+        addTube(out, hoop.slice(3, 12), hr + 0.008, 6, bladeC, SURFACES.metal);
+      } else {
+        // Full shroud: the whole hoop, plus the centre spine riding clear of
+        // the fatter tube.
+        addTube(out, hoop, hr + 0.011, 6, bladeC, SURFACES.metal);
         addBeveledSpan(out,
-          { z: 0.49, x: 0, y: 0.828, w: bw, h: bh, t: 0.62 },
-          { z: 0.02, x: s * 0.30, y: 0.858, w: bw * 0.92, h: bh * 0.92, t: 0.62 },
-          0.010, bladeC, null, SURFACES.metal);
-        addBeveledSpan(out,
-          { z: 0.02, x: s * 0.30, y: 0.858, w: bw * 0.92, h: bh * 0.92, t: 0.62 },
-          { z: -0.44, x: s * 0.235, y: 0.530, w: bw * 0.85, h: bh * 0.80, t: 0.55 },
-          0.010, bladeC, null, SURFACES.metal);
-      }
-      if (haloBlade === 2) {
-        addBeveledSpan(out,
-          { z: 0.50, x: 0, y: 0.835, w: bw * 1.15, h: bh * 0.85, t: 0.50 },
-          { z: 0.30, x: 0, y: 0.850, w: bw * 0.70, h: bh * 0.70, t: 0.55 },
+          { z: 0.50, x: 0, y: 0.904, w: 0.083, h: 0.032, t: 0.50 },
+          { z: 0.30, x: 0, y: 0.892, w: 0.050, h: 0.027, t: 0.55 },
           0.008, bladeC, null, SURFACES.metal);
       }
     }
@@ -2037,9 +2197,25 @@ const Car3D = (function () {
       // Glass goes on the face TOWARD the viewer (-z). It used to sit at
       // mz+0.066 — 8mm BEYOND the housing's own back face, so the driver AND
       // the chase camera both saw carbon and never the reflective surface.
-      addBox(out, s*mx, mY, mz, mW, mH, 0.06, [0.09, 0.09, 0.11], SURFACES.carbon); // dark carbon housing
+      // Housing as an 8-corner block with the outboard face pulled BACK in z —
+      // the C14.2.2 d i inboard toe (~25°): real mirrors angle at the driver,
+      // and the cant is what stops the housing reading as a shoebox.
+      const toe = ckpt ? 0 : 0.045;
+      const hy0 = mY - mH / 2, hy1 = mY + mH / 2;
+      const xIn = s * (mx - mW / 2), xOut = s * (mx + mW / 2);
+      addBlock(out, [
+        [xIn, hy0, mz - 0.03], [xOut, hy0, mz - 0.03 + toe], [xOut, hy1, mz - 0.03 + toe], [xIn, hy1, mz - 0.03],
+        [xIn, hy0, mz + 0.03], [xOut, hy0, mz + 0.03 + toe], [xOut, hy1, mz + 0.03 + toe], [xIn, hy1, mz + 0.03],
+      ], [0.09, 0.09, 0.11], null, SURFACES.carbon);
       addBox(out, s*mx, mY, mz - 0.032, mW * 0.97, mH * 0.80, 0.012, [0.10, 0.11, 0.14], SURFACES.glass); // bezel / surround
       addBox(out, s*mx, mY, mz - 0.038, 0.200, 0.050, 0.008, [0.46, 0.56, 0.78], SURFACES.glass); // reflective surface, C14.2.2b
+      if (!ckpt) {
+        // Top winglet + the C3.7.5 OUTER stay down to the tub shoulder — the
+        // two details every 2026 housing carries.
+        addBox(out, s*mx, hy1 + 0.008, mz + 0.01, mW * 0.9, 0.008, 0.055, DARK, SURFACES.carbon);
+        addBeamBetween(out, [s * (mx + mW * 0.38), hy0, mz + 0.02],
+                            [s * (msx + 0.06), 0.60, mz + 0.10], 0.012, DARK, SURFACES.carbon);
+      }
     }
 
     part("helmet");
@@ -2067,14 +2243,33 @@ const Car3D = (function () {
     part("halo");
     if (!ckpt) {
       const haloC = haloTint || HALO;   // livery-tinted hoop, else brushed titanium
-      addBox(out, 0, 0.665, 0.47, 0.035, 0.27, 0.05, haloC, SURFACES.metal);   // front centre pillar — tall enough to meet the front arc's base (y 0.7875) instead of stopping 5.8cm short
-      for (const s of [-1, 1]) {
-        addBeveledSpan(out, { z: 0.49, x: 0,       y: 0.815, w: 0.055, h: 0.055 },
-                            { z: 0.02, x: s*0.30,  y: 0.845, w: 0.050, h: 0.050 },
-                      0.012, haloC, null, SURFACES.metal);  // front arc
-        addBeveledSpan(out, { z: 0.02, x: s*0.30,  y: 0.845, w: 0.050, h: 0.050 },
-                            { z: -0.46, x: s*0.235, y: 0.505, w: 0.050, h: 0.050 },
-                      0.012, haloC, null, SURFACES.metal); // rear arc to collar
+      // Round titanium hoop with a LEVEL, gently arched top bar: one
+      // continuous tube, collars (±0.235, 0.505, -0.46) rising to a crown
+      // that holds y 0.845 (+HALO_RISE shallow arch) from mid to mid while
+      // sweeping to the front apex (z 0.49) — round in plan, never peaking or
+      // dipping toward the centre. r 0.028 keeps the old square section's
+      // outer envelope, so the haloBlade/haloWing/camPods attachments above
+      // still land on the hoop. haloSty/hr/crownY and the hoop path itself
+      // (haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49)) are
+      // computed once beside the blade fairing above, which wraps the SAME
+      // centreline as a co-axial tube.
+      // Front centre pillar rises to y 0.83 — overlapping the flat bar's
+      // underside (0.845 - 0.028 = 0.817) by ~1.3 cm, never stopping short.
+      addBox(out, 0, 0.68, 0.47, 0.035, 0.30, 0.05, haloC, SURFACES.metal);
+      addTube(out, hoop, hr, 6, haloC, SURFACES.metal);
+      // The real strut SPLITS into a V at the top, meeting the ring at two
+      // points either side of the apex — the wishbone silhouette head-on.
+      for (const s of [-1, 1])
+        addBeamBetween(out, [0, 0.775, 0.468], [s * 0.105, crownY - hr * 0.4, 0.474],
+                       0.015, haloC, SURFACES.metal);
+      if (haloSty === 2) {
+        // Fenced hoop: three small crest vanes riding the crown bar (hoop
+        // indices 5/7/9 = mid-left, apex, mid-right of the 7-point bar).
+        for (const hi of [5, 7, 9]) {
+          const p = hoop[hi];
+          addBox(out, p[0], p[1] + hr + 0.012, p[2], 0.012, 0.026, 0.055,
+                 haloC, SURFACES.metal);
+        }
       }
     }
 
@@ -2222,12 +2417,15 @@ const Car3D = (function () {
         attachHalf: fwHalf + 0.03,
       }, i === 0 ? c1 : wingC, SURFACES.paint);
     }
-    const aPlate = Math.max(0, Math.min(2, Math.round(
+    const aPlate = Math.max(0, Math.min(3, Math.round(
       aeroStyle.plate != null ? aeroStyle.plate : 1)));
     const PLATE = [
       { hF: 0.16, hR: 0.30, kick: 0.020, footW: 0.09, footZ: 0.46, arch: 0 },
       { hF: 0.22, hR: 0.40, kick: 0.060, footW: 0.13, footZ: 0.54, arch: 0 },
       { hF: 0.30, hR: 0.54, kick: 0.100, footW: 0.19, footZ: 0.62, arch: 1 },
+      // 3: outwash spec — tall plate whose TOP EDGE ROLLS OUTBOARD (roll: 1
+      // adds the curled lip below), the 2026 field's signature endplate.
+      { hF: 0.28, hR: 0.50, kick: 0.120, footW: 0.16, footZ: 0.58, arch: 0, roll: 1 },
     ][aPlate];
     const aCasc = Math.max(0, Math.min(3, Math.round(aeroStyle.casc != null ? aeroStyle.casc
       : (aLvl >= 4 ? 3 : (aLvl >= 3 ? 2 : (aLvl >= 1 ? 1 : 0))))));
@@ -2248,6 +2446,14 @@ const Car3D = (function () {
           { z: 2.60, x: epX + s*0.012, y: 0.135 + PLATE.hF * 0.5 + 0.010, w: 0.030, h: 0.018 },
           { z: 2.06, x: epX + s*(PLATE.kick + 0.012), y: 0.245 + PLATE.hR * 0.5 + 0.010, w: 0.026, h: 0.016 },
           0.008, c1);
+      }
+      if (PLATE.roll) {
+        // Rolled top edge: a lip leaning OUTBOARD off the plate crown, wider
+        // and more canted at the rear — the outwash curl, not a straight rail.
+        addBeveledSpan(out,
+          { z: 2.58, x: epX + s * 0.020, y: 0.135 + PLATE.hF * 0.5 + 0.006, w: 0.040, h: 0.014, t: 0.45 },
+          { z: 2.02, x: epX + s * (PLATE.kick + 0.048), y: 0.245 + PLATE.hR * 0.5 - 0.004, w: 0.062, h: 0.012, t: 0.40 },
+          0.006, c2);
       }
       // Canard / dive-plane cascade on the outer face of the endplate.
       const nCan = aCasc;
@@ -2592,6 +2798,28 @@ const Car3D = (function () {
           tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle, wheelStyle);
         addWheel(out, s*0.76, AXLES.wheelY, AXLES.rearZ, 0.34, 0.38,
           tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle, wheelStyle);
+      }
+      // 2026 over-wheel deflector above each FRONT wheel (tyre crown y 0.68):
+      // 0 none / 1 single plane on a stalk / 2 biplane + outboard endplate.
+      const wDefl = Math.max(0, Math.min(2, Math.round((wheelStyle && wheelStyle.deflector) || 0)));
+      if (wDefl > 0) {
+        for (const s of [-1, 1]) {
+          addBeveledSpan(out,
+            { z: AXLES.frontZ + 0.20, x: s * 0.79, y: 0.745, w: 0.30, h: 0.012, t: 0.70 },
+            { z: AXLES.frontZ - 0.16, x: s * 0.77, y: 0.775, w: 0.26, h: 0.010, t: 0.70 },
+            0.004, CARBON, null, SURFACES.carbon);
+          addBeamBetween(out, [s * 0.66, 0.46, AXLES.frontZ + 0.17],
+                              [s * 0.72, 0.740, AXLES.frontZ + 0.16], 0.016,
+                         [0.11, 0.11, 0.13], SURFACES.carbon);
+          if (wDefl >= 2) {
+            addBeveledSpan(out,
+              { z: AXLES.frontZ + 0.14, x: s * 0.80, y: 0.805, w: 0.24, h: 0.010, t: 0.70 },
+              { z: AXLES.frontZ - 0.12, x: s * 0.78, y: 0.828, w: 0.20, h: 0.009, t: 0.70 },
+              0.004, CARBON, null, SURFACES.carbon);
+            addBox(out, s * 0.935, 0.775, AXLES.frontZ + 0.02, 0.012, 0.085, 0.30,
+                   CARBON, SURFACES.carbon);
+          }
+        }
       }
     }
 

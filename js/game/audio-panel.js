@@ -25,7 +25,11 @@ const AudioPanel = (() => {
       // iOS/Safari may leave it suspended. Setting the master first also makes
       // createCtx() build the gain graph at the right level immediately.
       if (b && fromGesture) GameAudio.init();
-      els.soundbtn.textContent = b ? "♪ ON" : "♪ OFF";
+      // "♪ ON" read as ambiguous — the state of what? The word makes it a
+      // labelled state (this is the MASTER gate: engine and SFX too, so
+      // SOUND, not MUSIC). index.html's static markup is the other writer
+      // and must carry the same strings.
+      els.soundbtn.textContent = b ? "♪ SOUND ON" : "♪ SOUND OFF";
       els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
       if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); GameAudio.stopRain(); }
       else {

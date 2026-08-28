@@ -1119,8 +1119,12 @@ test.describe("Parts module — visual recipes", () => {
     expect(sources.wgsl).toContain(
       "let envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;"
     );
+    // BOTH read `if (envSurface) {` now. WGSL used to gate on
+    // `envSurface && clearcoat > 0.001` — a tautology, since envSurface
+    // already carries that term — which was the only textual drift between
+    // the backends this test exists to pin.
     expect(sources.glsl).toContain("if (envSurface) {");
-    expect(sources.wgsl).toContain("&& envSurface) {");
+    expect(sources.wgsl).toContain("if (envSurface) {");
   });
 
   test("canonical mesh streams remain structurally valid without freezing topology", async ({ page }) => {
@@ -1183,10 +1187,15 @@ test.describe("Parts module — visual recipes", () => {
       rearWheel: Car3D.buildWheel(0.38).idx.length / 3,
       decals: CarMesh.carDecalData(2).idx.length / 3,
     }));
-    expect(triangles.body).toBeLessThanOrEqual(2400);
+    // 2400 -> 2545: the round-halo tube + pillar V-brace + regulation
+    // mirrors — mirrors the raises (and their measurements) recorded in
+    // tests/unit/car-wing-foil.test.mjs.
+    expect(triangles.body).toBeLessThanOrEqual(2545);
     expect(triangles.cockpit).toBeLessThanOrEqual(1500);
-    expect(triangles.frontWheel).toBeLessThanOrEqual(400);
-    expect(triangles.rearWheel).toBeLessThanOrEqual(400);
+    // 400 -> 500: tyres at SEG 24 (18-gon tyres read visibly polygonal in any
+    // close shot; measured 480 at the raise).
+    expect(triangles.frontWheel).toBeLessThanOrEqual(500);
+    expect(triangles.rearWheel).toBeLessThanOrEqual(500);
     // 48, FROM A MEASUREMENT. This said 32 and the decal sheet has been 36
     // triangles (18 quads over LiveryTex's 8 regions) at EVERY revision of
     // js/game/carmesh.js — bisected, not assumed. So the ceiling was never
@@ -1234,7 +1243,14 @@ test.describe("Parts module — visual recipes", () => {
         wheels: { spokes: 0, tape: 0, dish: 0, nut: null, gunNut: 0 },
       };
       // The conduit hangs off the lit ERS strip, so probing it needs a lit pack.
-      const ACTIVE = Object.assign({}, NEUTRAL, { ers: { led: [0.15, 0.55, 1.6], pack: 1, cells: 3 } });
+      // Same shape for brakes: the caliper BODY is drawn only when the recipe
+      // names a caliper colour (`if (caliperColor)` in addWheel), so with the
+      // neutral `cal: null` the caliper knob had nothing to reshape and could
+      // never deform — it reported broken while the geometry was fine.
+      const ACTIVE = Object.assign({}, NEUTRAL, {
+        ers: { led: [0.15, 0.55, 1.6], pack: 1, cells: 3 },
+        brakes: { ...NEUTRAL.brakes, cal: [0.85, 0.15, 0.10] },
+      });
       // THE WHOLE CAR, WHEELS INCLUDED. This built with `noWheels: true`, and
       // five of the twenty-seven knobs below are wheel-side — tyres.shoulder
       // and brakes.discFace reach only addWheel in js/car/car3d.js, and

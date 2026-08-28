@@ -23,6 +23,11 @@ const TLX = (function () {
 
       THREE.ColorManagement.enabled = false;
 
+      // The vendored bundle carries TWO local patches (swizzle omission for
+      // Chromium 141, the #33952 bind-group-leak backport) — recipe and
+      // rationale in vendor/three-0.185.1/PATCHES.md, guarded by
+      // gfx-backend-canary. Re-apply both on any vendor bump.
+
       // ── WHICH three BACKEND: apex26.tlxForceGL "1" = pin WebGL2, "0" =
       // pin WebGPU, UNSET = AUTO. AUTO may land on three's WebGL2 — that
       // is success, not a silent fall to game GLX. Decision:
@@ -613,6 +618,7 @@ const TLX = (function () {
       const defaultMatChunked = lit ? lit.makeMaterial({ chunked: true }) : null;
       const defaultMatInstanced = lit ? lit.makeMaterial({ instanced: true }) : null;
       const matCache = new Map();
+      const _matDispose = [];   // evicted materials; disposed in present() after paint
       const MAT_CACHE_CAP = 64;
       // Frame stamp per cached material, so eviction can never dispose one that
       // is still queued to draw. drawList holds `mat` REFERENCES and is flushed
@@ -656,18 +662,19 @@ const TLX = (function () {
             // exceeding a soft cap costs some variants, disposing a material
             // that drawList still points at costs the object on screen.
             //
-            // Do NOT call dispose() here: three r185.1 still leaks shared
-            // texture bindGroups on Material.dispose() (issue #33952; PR
-            // #33954 is slated for unpublished r186). Dropping the Map entry
-            // lets the material stay alive for any drawList still holding it
-            // this frame. Releasing the lit registry entry is what lets the
-            // JS object actually go — setSsrMrt held every minted material
-            // forever, so its loop grew and evictions freed nothing. A full
-            // dispose() pass lands with the r186 upgrade (same issue).
+            // dispose() is DEFERRED, not skipped: the vendored bundle carries
+            // the #33952 backport (PR #33954, vendor PATCHES.md) so disposing
+            // no longer leaks shared texture bindGroups — but drawList may
+            // still point at the evicted material until present() flushes, so
+            // it goes on _matDispose and present() disposes it after paint.
+            // Releasing the lit registry entry is what lets the JS object go
+            // — setSsrMrt held every minted material forever, so its loop
+            // grew and evictions freed nothing.
             for (const [k, v] of matCache) {
               if (v && v.__tlxFrame === _matFrame) continue;
               matCache.delete(k);
               if (lit.releaseMaterial) lit.releaseMaterial(v);
+              if (v) _matDispose.push(v);
               break;
             }
           }
@@ -1921,9 +1928,13 @@ const TLX = (function () {
             }
             // Live InstancedMeshes hold their own material reference — leave
             // them on a dead lit material and the retry render throws again,
-            // burning the remaining fallback rungs in one frame.
+            // burning the remaining fallback rungs in one frame. They get the
+            // fallbackMat contract's instanced rung (per-instance tint attribute)
+            // — plain unlitMat has no instanceTint read and paints every
+            // TrackGraph batch flat.
+            const instMat = mode >= 2 ? mat : unlitInstancedMat;
             for (let i = 0; i < _instRegistry.length; i++) {
-              if (_instRegistry[i]) _instRegistry[i].material = mat;
+              if (_instRegistry[i]) _instRegistry[i].material = instMat;
             }
           };
           const refuseTab = () => {
@@ -1992,6 +2003,11 @@ const TLX = (function () {
           _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
           for (let i = 0; i < _mirrorRelease.length; i++) chunkedSys.releaseMirrors(_mirrorRelease[i]);
           _mirrorRelease.length = 0;
+          // Evicted materials dispose only now — after paint, when no drawList
+          // record can still reference them (safe since the #33952 backport).
+          for (let i = 0; i < _matDispose.length; i++) { try { _matDispose[i].dispose(); } catch (_) { /* already disposed */ } }
+          _matDispose.length = 0;
+          if (fx && fx.flushEvicted) fx.flushEvicted();
           _fxLast.shadows = _fxFrame.shadows; _fxLast.marks = _fxFrame.marks;
           _fxLast.skidVerts = _fxFrame.skidVerts; _fxLast.glow = _fxFrame.glow;
           _fxLast.particles = _fxFrame.particles; _fxLast.decals = _fxFrame.decals;

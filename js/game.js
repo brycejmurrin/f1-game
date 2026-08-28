@@ -225,12 +225,16 @@ if (!gfx) {
     try { const p = localStorage.getItem("apex26.gfxBackend"); backendTried = p === "webgpu" || p === "three"; } catch (_) {}
     let skipped = false;
     if (backendTried) {
-      // READ THE SKIP BACK before reloading. With sessionStorage blocked the
-      // write fails silently and the reload replays this exact claim-and-die
-      // boot forever; leaving the probe ARMED instead lets the next boot's
-      // canary revert the pick to webgl2 (the wgx.js device-lost idiom).
-      try { sessionStorage.setItem("apex26.gfxClaimFail", "1");
-        skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } catch (_) {}
+      // READ THE SKIP BACK before reloading (with sessionStorage blocked the
+      // write fails silently and the reload replays this claim-and-die boot
+      // forever; the ARMED probe then lets the next boot revert to webgl2 —
+      // the wgx.js device-lost idiom). And reload ONCE: a latch already set
+      // when THIS boot started means the previous reload's GLX.init failed
+      // too — WebGL2 is gone from this tab, and reloading again loops forever
+      // (measured 236 reloads/64 s, Vulkan-only config). Fall through to #nogl.
+      try { const prev = sessionStorage.getItem("apex26.gfxClaimFail");
+        sessionStorage.setItem("apex26.gfxClaimFail", "1");
+        skipped = prev !== "1" && sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } catch (_) { /* blocked storage: no skip, no reload */ }
     }
     if (skipped) {
       try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
@@ -2051,7 +2055,7 @@ function drawCockpitRig(c, base, dt, paint) {
   _rigR[0] = ca; _rigR[1] = sa; _rigR[4] = -sa; _rigR[5] = ca;
   M4.mulTo(_rigA, base, _rigT);
   M4.mulTo(_rigB, _rigA, _rigR);
-  gfx.draw(getCockpitWheel(), _rigB, opt);
+  gfx.draw(getCockpitWheel(resolveLivery(c.team)), _rigB, opt);   // livery-keyed: team grips/marker/gloves
   // Live telemetry ON the wheel (all ride the wheel matrix, like the real LCD):
   // gear (auto or manual — c.gear is maintained by both paths), RPM shift
   // lights, speed, pedal bars, ERS energy.
@@ -2499,6 +2503,11 @@ function startRace() {
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
   raceCtl.reset();   // and the caution machine — no stale flag/capHoldT into this race
+  // …and the debris side-world. prime() below only REBUILDS when the track or
+  // car count changed, so a restart on the same circuit kept last race's
+  // shards, marbles and knocked-over cones — visible on the grid, and
+  // RaceControl can fly a caution for debris nobody produced this race.
+  DebrisWorld.reset();
   loadTrack(trackIdx);
   makeCars();
   // Qualifying keeps the full field for simulation, then drives one standing lap.
@@ -2596,7 +2605,7 @@ function startRace() {
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges
   // mashed on the title (navOpen() false) would fire at lights-out.
   Input.clearEdges();
-  if (soundOn) { GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
+  if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
   if (soundOn && isRaining()) GameAudio.startRain();   // rain patter — a damp "wet" track is silent
   DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
 }
@@ -2699,7 +2708,11 @@ function netOrder(order) {
     return order;
   }
   const verdict = netPlay.peerResult();
-  if (!verdict || !verdict.length) return order;          // never arrived
+  // Array.isArray, not just a truthy .length: this is the HOST's payload off
+  // the wire, and `{length:1}` passes the old test then throws on .map —
+  // straight into index.html's error overlay, which eats the classification
+  // the guest is waiting on.
+  if (!Array.isArray(verdict) || !verdict.length) return order;   // never arrived
   const byId = new Map(cars.map((c) => [c.driverId, c]));
   const sorted = verdict.map((e) => byId.get(e.d)).filter(Boolean);
   // Only adopt an order accounting for the WHOLE grid; a partial one would
@@ -2721,6 +2734,11 @@ function endRace(forcedOrder) {
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
   raceCtl.reset();
+  // The flag can fall while the player is PAUSED — a networked guest is ended
+  // by the host's RESULT, not by their own input. Leaving `paused` set stranded
+  // the pause dialog on top of the results with a RESUME that resolves to
+  // nothing, because resuming is only reachable from state "race".
+  paused = false; els.pausemenu.hidden = true;
   state = "results";
   document.body.classList.remove("in-race");
   dropRaceWake();
@@ -3181,6 +3199,11 @@ function quitToMenu() {
   closeLightTuner(false);
   closeCamTuner(false); exitPhotoMode();
   state = "menu"; paused = false;
+  // A netplay lights-out instant is consumed by the countdown (the
+  // `netStart = null` at its end). Quitting BEFORE that consumption stranded
+  // it, and the next SOLO race read an `at` already in the past: countT
+  // jumped past the lamps and the race began with no countdown at all.
+  netStart = null;
   $("quali").classList.remove("q-done"); document.body.classList.remove("in-race", "rotate-help-open");
   syncRotateBlocker(false);
   dropRaceWake();
@@ -3299,7 +3322,8 @@ function tickWeatherArc(dt) {
   }
 }
 
-const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false };  // setEngine reads synchronously
+const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false,
+                  deploy: 0, energy: 1, ersDeploy: 0.5 };  // setEngine reads synchronously
 function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
@@ -3435,6 +3459,9 @@ function update(dt) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0;
     _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetRoad();
+    // ERS state for the deploy whine: continuous, charge-scaled, part-flavoured.
+    _engArg.deploy = player.deploying ? 1 : 0; _engArg.energy = player.energy ?? 1;
+    _engArg.ersDeploy = player.ersDeploy ?? 0.5;
     GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad,
       clamp(player.speed / vTop(), 0, 1), player.gear, _engArg);
     // Squeal from the CAR's slip, via the same skidIntensity the marks and smoke
@@ -4060,6 +4087,12 @@ function updateCar(c, dt, ranked) {
     // has to travel, and the travel is asymmetric (see X_CLOSE_RATE). Holding
     // the button through a corner therefore buys nothing — the flap is shut.
     const want = (c.xOn && c.xArmed) ? 1 : 0;
+    // Audible latch for the LOCAL car only: the moment the flap command flips,
+    // not the (slower) travel — the click is the switch, the drag is the flap.
+    if (c.human && c.local && soundOn && want !== (c._xSndWant ?? 0)) {
+      GameAudio.xMode(want === 1);
+      c._xSndWant = want;
+    }
     const rate = want > (c.aeroX || 0) ? X_OPEN_RATE : X_CLOSE_RATE;
     c.aeroX = clamp((c.aeroX || 0) + Math.sign(want - (c.aeroX || 0)) * rate * dt,
                     Math.min(c.aeroX || 0, want), Math.max(c.aeroX || 0, want));
@@ -4121,7 +4154,7 @@ function updateCar(c, dt, ranked) {
     else if (c.speed < 0) c.speed = Math.min(0, c.speed + cd * dt);
     c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   } else {
-    const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
     c.speed = Math.min(speedCap, c.speed + a * dt);
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   }
@@ -8351,7 +8384,7 @@ function setPaused(p) {
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); $("pm-restart").disabled = !!(netPlay.active() || qualiNetDone); }
-  else if (soundOn) GameAudio.startEngine();
+  else if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); }
   lastFrame = performance.now(); syncRotateBlocker(false);   // the pause card yields to an active rotate blocker on EVERY entry
 }
 els.pausebtn.onclick = () => setPaused(true);

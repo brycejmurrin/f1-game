@@ -19,6 +19,27 @@ const GameAudio = (function () {
   let harvSrc = null, harvFilter = null, harvGain = null; // MGU-K harvest whirr
   let lfo = null, lfoG = null;                    // offroad pitch wobble (8 Hz)
   let skidSrc = null, skidFilter = null, skidGain = null;
+  let voiceFormant = null;                       // per-manufacturer peaking EQ
+  let ersOsc = null, ersHp = null, ersGain = null; // continuous ERS deploy whine
+
+  // Per-manufacturer engine character, keyed by team.engine (js/car/teams.js).
+  // Every field is CONSTANT TIMBRE — a fixed multiplier or filter, never a
+  // function of rev — so tools/audio-test.cjs's invariants (pitch monotonic in
+  // rev per gear, gear1 < gear4 at redline) hold for every voice by
+  // construction. rateTrim ±3% pitch offset · detune cents on the sample ·
+  // formantHz/Gain a peaking EQ between engFilter and engGain (0 gain = no
+  // node) · cutTrim scales the lowpass (bright vs muffled) · whineHz/Lvl the
+  // turbo/MGU character · synthSpread/subLvl shape the oscillator fallback.
+  const ENGINE_VOICES = {
+    "default":       { rateTrim: 1.00, detune: 0,   formantHz: 0,    formantGain: 0, cutTrim: 1.00, whineHz: 1500, whineLvl: 1.0, synthSpread: 1.009, subLvl: 1.0 },
+    "Mercedes":      { rateTrim: 1.00, detune: 0,   formantHz: 1250, formantGain: 3, cutTrim: 1.05, whineHz: 1600, whineLvl: 0.9, synthSpread: 1.007, subLvl: 0.9 },
+    "Ferrari":       { rateTrim: 1.03, detune: 25,  formantHz: 1900, formantGain: 5, cutTrim: 1.12, whineHz: 1500, whineLvl: 0.8, synthSpread: 1.013, subLvl: 0.8 },
+    "Red Bull Ford": { rateTrim: 0.99, detune: -15, formantHz: 800,  formantGain: 4, cutTrim: 0.96, whineHz: 1350, whineLvl: 0.7, synthSpread: 1.018, subLvl: 1.2 },
+    "Honda":         { rateTrim: 1.01, detune: 10,  formantHz: 1500, formantGain: 2, cutTrim: 1.04, whineHz: 1750, whineLvl: 1.1, synthSpread: 1.005, subLvl: 0.95 },
+    "Audi":          { rateTrim: 0.98, detune: -20, formantHz: 950,  formantGain: 3, cutTrim: 0.92, whineHz: 2100, whineLvl: 1.5, synthSpread: 1.010, subLvl: 1.1 },
+  };
+  let voice = ENGINE_VOICES["default"];
+  let voiceName = "default";
   let engineOn = false;
   let lastSpeed = 0, lastEngT = 0, harvLevel = 0;
   let shiftDuck = 0, shiftDuckT = 0;   // transient engine-gain dip from a gear shift
@@ -344,13 +365,25 @@ const GameAudio = (function () {
   function startEngine() {
     if (!ctx || engineOn) return;
 
-    // shared lowpass + master gain for the engine core (samples or synth)
+    // shared lowpass + master gain for the engine core (samples or synth).
+    // The per-manufacturer voice inserts one peaking EQ (its formant) between
+    // the lowpass and the gain when the voice asks for one.
     engFilter = ctx.createBiquadFilter();
     engGain = ctx.createGain();
     engFilter.type = "lowpass";
     engFilter.frequency.value = 600;
     engGain.gain.value = 0;
-    engFilter.connect(engGain).connect(sfxBus);
+    if (voice.formantGain > 0) {
+      voiceFormant = ctx.createBiquadFilter();
+      voiceFormant.type = "peaking";
+      voiceFormant.frequency.value = voice.formantHz;
+      voiceFormant.Q.value = 1.1;
+      voiceFormant.gain.value = voice.formantGain;
+      engFilter.connect(voiceFormant).connect(engGain).connect(sfxBus);
+    } else {
+      voiceFormant = null;
+      engFilter.connect(engGain).connect(sfxBus);
+    }
     // The debug analyser tap is created LAZILY in centroidHz() — a 16384-fft
     // AnalyserNode copying every render quantum was shipping in every race for
     // a hook whose only caller is a test (audio-smoke's expect.poll absorbs
@@ -363,6 +396,9 @@ const GameAudio = (function () {
     if (usingSamples) {
       engSrcIdle = ctx.createBufferSource(); engSrcIdle.buffer = engBuf; engSrcIdle.loop = true;
       engSrcAcc = ctx.createBufferSource(); engSrcAcc.buffer = accBuf; engSrcAcc.loop = true;
+      // Voice detune is a base offset in cents; the offroad LFO adds on top.
+      engSrcIdle.detune.value = voice.detune;
+      engSrcAcc.detune.value = voice.detune;
       const li = findStableLoop(engBuf), la = findStableLoop(accBuf);
       engSrcIdle.loopStart = li.start; engSrcIdle.loopEnd = li.end;
       engSrcAcc.loopStart = la.start; engSrcAcc.loopEnd = la.end;
@@ -383,7 +419,12 @@ const GameAudio = (function () {
       engC.frequency.value = 35;
       engA.connect(engFilter);
       engB.connect(engFilter);
-      engC.connect(engFilter);
+      // Sub-octave square rides through its own gain so a voice can weight it
+      // (Red Bull Ford gravel vs Ferrari shriek). Torn down with engFilter.
+      const sub = ctx.createGain();
+      sub.gain.value = voice.subLvl;
+      engC.connect(sub).connect(engFilter);
+      engC._apexSubGain = sub;
     }
 
     // turbo whine: faint high sine riding above the core
@@ -405,6 +446,19 @@ const GameAudio = (function () {
     harvGain = ctx.createGain();
     harvGain.gain.value = 0;
     harvSrc.connect(harvFilter).connect(harvGain).connect(sfxBus);
+
+    // ERS deploy whine: electric-motor rise while the battery is actually
+    // deploying. Triangle through a highpass — a different waveform and a
+    // higher register than the turbo sine, so the two never read as one layer.
+    ersOsc = ctx.createOscillator();
+    ersHp = ctx.createBiquadFilter();
+    ersGain = ctx.createGain();
+    ersOsc.type = "triangle";
+    ersOsc.frequency.value = 2400;
+    ersHp.type = "highpass";
+    ersHp.frequency.value = 1600;
+    ersGain.gain.value = 0;
+    ersOsc.connect(ersHp).connect(ersGain).connect(sfxBus);
 
     // offroad wobble: 8 Hz LFO into oscillator detune (cents)
     lfo = ctx.createOscillator();
@@ -438,6 +492,7 @@ const GameAudio = (function () {
     else { engA.start(); engB.start(); engC.start(); }
     whineOsc.start();
     harvSrc.start();
+    ersOsc.start();
     lfo.start();
     skidSrc.start();
 
@@ -456,6 +511,7 @@ const GameAudio = (function () {
     engGain.gain.setTargetAtTime(0, t0, 0.06);
     whineGain.gain.setTargetAtTime(0, t0, 0.06);
     harvGain.gain.setTargetAtTime(0, t0, 0.06);
+    ersGain.gain.setTargetAtTime(0, t0, 0.04);
     skidGain.gain.setTargetAtTime(0, t0, 0.04);
     if (usingSamples) {
       if (engGainIdle) engGainIdle.gain.setTargetAtTime(0, t0, 0.06);
@@ -468,11 +524,14 @@ const GameAudio = (function () {
     engSrcIdle = engSrcAcc = engGainIdle = engGainAcc = null;
     whineOsc.stop(t0 + 0.35);
     harvSrc.stop(t0 + 0.35);
+    ersOsc.stop(t0 + 0.35);
     lfo.stop(t0 + 0.35);
     skidSrc.stop(t0 + 0.35);
+    const deadSub = (engC && engC._apexSubGain) || null;   // synth sub-osc gain
     engA = engB = engC = null;
     whineOsc = null;
     harvSrc = null;
+    ersOsc = null;
     lfo = null;
     skidSrc = null;
     // Disconnect the test analyser tap so it doesn't accumulate across restarts.
@@ -481,9 +540,11 @@ const GameAudio = (function () {
     // complete: stopped sources GC on their own, but Gain/Biquad nodes routed
     // into sfxBus keep RENDERING until disconnect() (Web Audio contract) — a
     // tab-hide/show cycle used to strand ~8 nodes each time, forever.
-    const dead = [engFilter, engGain, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG];
+    const dead = [engFilter, engGain, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG,
+                  voiceFormant, ersHp, ersGain, deadSub];
     setTimeout(() => { for (const n of dead) { try { if (n) n.disconnect(); } catch (e) {} } }, 450);
     engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = lfoG = null;
+    voiceFormant = ersHp = ersGain = null;
     idleGainRamped = false;
     engineOn = false;
   }
@@ -523,7 +584,9 @@ const GameAudio = (function () {
     if (usingSamples) {
       const g = (typeof gear === "number" && isFinite(gear)) ? Math.max(1, Math.min(8, Math.round(gear))) : 8;
       const gmul = g <= 3 ? LOW_GEAR_RATE[g - 1] : 1.0;
-      const rate = (0.25 + rev * 0.45) * (1 + 0.04 * b) * gmul;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
+      // rateTrim is a CONSTANT per-manufacturer offset: pitch stays monotonic
+      // in rev and the gear ordering is unchanged (same trim on both sides).
+      const rate = (0.25 + rev * 0.45) * (1 + 0.04 * b) * gmul * voice.rateTrim;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       // Single coherent voice: run only the steady idle loop, pitched. Crossfading
       // in the second (different) recording made the output incoherent — its
@@ -544,9 +607,9 @@ const GameAudio = (function () {
       if (!idleGainRamped) { engGainIdle.gain.setTargetAtTime(0.9, t, 0.05); idleGainRamped = true; }
     } else {
       // synth fallback: detuned saws + sub follow the per-gear frequency
-      const base = (gIdle + rev * gSpan) * (1 + 0.12 * b);
+      const base = (gIdle + rev * gSpan) * (1 + 0.12 * b) * voice.rateTrim;
       engA.frequency.setTargetAtTime(base * 0.994, t, 0.025);
-      engB.frequency.setTargetAtTime(base * 1.009, t, 0.025);
+      engB.frequency.setTargetAtTime(base * voice.synthSpread, t, 0.025);
       engC.frequency.setTargetAtTime(base * 0.5, t, 0.025);
     }
 
@@ -557,9 +620,10 @@ const GameAudio = (function () {
     const brakeLoad = brakeFrac * 0.08;        // up to +8% under hard braking
     const kerbLoad  = onKerb ? 0.04 : 0;      // small gain bump over a kerb
 
-    const cut = usingSamples
+    const cut = (usingSamples
       ? Math.min(11000, 2600 + s * 5800 + rev * 2400 + b * 1500 + slipLoad * 2000 + brakeLoad * 1200)
-      : Math.min(7200,  600  + s * 4200 + rev * 700  + b * 1400 + slipLoad * 1000 + brakeLoad * 600);
+      : Math.min(7200,  600  + s * 4200 + rev * 700  + b * 1400 + slipLoad * 1000 + brakeLoad * 600))
+      * voice.cutTrim;
     engFilter.frequency.setTargetAtTime(cut, t, 0.05);
     const lvl = usingSamples
       ? (0.3 + s * 0.3 + rev * 0.08 + b * 0.08 + (offroad ? 0.03 : 0) + slipLoad * 0.8 + kerbLoad)
@@ -569,9 +633,10 @@ const GameAudio = (function () {
     // Turbo whine: in low gears (1-3) mechanical supercharger character — the
     // frequency climbs faster but levels off earlier than at high speed.
     const lowGearFactor = g01 < 0.35 ? 0.85 + g01 * 0.43 : 1;   // compressed range in low gears
-    whineOsc.frequency.setTargetAtTime((1500 + rev * 2000) * lowGearFactor, t, 0.05);
+    whineOsc.frequency.setTargetAtTime((voice.whineHz + rev * 2000) * lowGearFactor, t, 0.05);
     whineGain.gain.setTargetAtTime(
-      (0.004 + rev * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0) * (usingSamples ? 0.50 : 1), t, 0.08);
+      (0.004 + rev * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0) * (usingSamples ? 0.50 : 1)
+      * voice.whineLvl, t, 0.08);
 
     const dt = lastEngT ? Math.max(0.001, t - lastEngT) : 0;
     let target = 0;
@@ -582,10 +647,27 @@ const GameAudio = (function () {
     lastEngT = t;
     lastSpeed = s;
     harvLevel += (target - harvLevel) * Math.min(1, (dt || 0.016) / 0.12);
-    if (!usingSamples) {
-      harvGain.gain.setTargetAtTime(harvLevel * 0.06, t, 0.06);
-      harvFilter.frequency.setTargetAtTime(700 + s * 1600, t, 0.08);
-    }
+    // MGU-K harvest is audible on BOTH cores now. It was created and started on
+    // the sample path too but gated silent here — quieter over the recording,
+    // which already carries some off-throttle character of its own.
+    harvGain.gain.setTargetAtTime(harvLevel * (usingSamples ? 0.035 : 0.06), t, 0.06);
+    harvFilter.frequency.setTargetAtTime(700 + s * 1600, t, 0.08);
+
+    // ERS deploy whine: only while the battery is actually deploying (game.js
+    // passes deploy/energy through the physics arg). Level scales with charge —
+    // a full pack screams, a sagging one fades — and below 20% the pitch drops
+    // ~12% so the driver HEARS the pack die before the HUD bar empties. The
+    // fitted ERS part's deploy bias (ersDeploy 0..1) adds ±20% character.
+    const deploy = clamp01(ph.deploy || 0);
+    const energy = ph.energy != null ? clamp01(ph.energy) : 1;
+    const low = energy < 0.2 ? energy / 0.2 : 1;
+    const partBias = ph.ersDeploy != null ? 0.8 + 0.4 * clamp01(ph.ersDeploy) : 1;
+    const ersLvl = deploy > 0
+      ? (0.010 + 0.018 * deploy * (0.35 + 0.65 * energy)) * (0.4 + 0.6 * low) * partBias
+      : 0;
+    ersGain.gain.setTargetAtTime(ersLvl, t, deploy > 0 ? 0.05 : 0.10);
+    if (deploy > 0)
+      ersOsc.frequency.setTargetAtTime((2400 + rev * 900) * (0.88 + 0.12 * low), t, 0.06);
 
     // offroad: ~8 Hz pitch wobble via the LFO (gain is cents of detune)
     // THE SIXTH CONSTANT setTargetAtTime, missed by the pass that removed five
@@ -702,12 +784,15 @@ const GameAudio = (function () {
     f.type = "bandpass";
     f.Q.value = 1.2;
     const dur = isUp ? 0.085 : 0.11;
-    const f0 = isUp ? 520 : 300;
-    const f1 = isUp ? 300 : 360;     // up: cut down; down: small blip up
+    // The shift crack carries the manufacturer's voice too: pitch rides
+    // rateTrim (Ferrari's blip sits ~3% up, Audi's ~2% down, matching the
+    // engine core) and the click's bandpass brightness rides cutTrim.
+    const f0 = (isUp ? 520 : 300) * voice.rateTrim;
+    const f1 = (isUp ? 300 : 360) * voice.rateTrim;     // up: cut down; down: small blip up
     osc.frequency.setValueAtTime(f0, t0);
     osc.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
-    f.frequency.setValueAtTime(isUp ? 1400 : 900, t0);
-    f.frequency.exponentialRampToValueAtTime(isUp ? 600 : 700, t0 + dur);
+    f.frequency.setValueAtTime((isUp ? 1400 : 900) * voice.cutTrim, t0);
+    f.frequency.exponentialRampToValueAtTime((isUp ? 600 : 700) * voice.cutTrim, t0 + dur);
     env(g, t0, isUp ? 0.12 : 0.1, 0.004, dur);
     osc.connect(f).connect(g).connect(sfxBus);
     osc.start(t0);
@@ -715,7 +800,7 @@ const GameAudio = (function () {
     osc.onended = () => { osc.disconnect(); f.disconnect(); g.disconnect(); };
 
     // a touch of mechanical click via short filtered noise
-    noise(isUp ? 0.05 : 0.045, 0.05, isUp ? 2600 : 1800);
+    noise(isUp ? 0.05 : 0.045, 0.05, (isUp ? 2600 : 1800) * voice.cutTrim);
   }
 
   // i 0..4 — each start light a touch higher than the last
@@ -732,6 +817,28 @@ const GameAudio = (function () {
   function overtakeReady() {
     blip(880, "square", 0.16, 0.008, 0.08);
     blip(1109, "square", 0.16, 0.008, 0.14, null, 0.09);
+  }
+
+  // Active-aero X-mode latch: rising pair when the wing sheds load, falling
+  // pair when it re-arms. Softer than overtakeReady — a mechanical latch, not
+  // an alert.
+  function xMode(on) {
+    if (on) {
+      blip(740, "triangle", 0.10, 0.006, 0.06);
+      blip(988, "triangle", 0.10, 0.006, 0.10, null, 0.07);
+    } else {
+      blip(988, "triangle", 0.08, 0.006, 0.06);
+      blip(740, "triangle", 0.08, 0.006, 0.10, null, 0.07);
+    }
+  }
+
+  // Per-manufacturer engine voice. Safe to call any time — the constant trims
+  // (rateTrim/cutTrim/whine) apply on the next setEngine frame; the graph-shape
+  // fields (formant, detune, subLvl) apply at the next startEngine. game.js
+  // calls this right before startEngine, so in practice both land together.
+  function setVoice(engineName) {
+    voice = ENGINE_VOICES[engineName] || ENGINE_VOICES["default"];
+    voiceName = ENGINE_VOICES[engineName] ? engineName : "default";
   }
 
   // whoosh: filtered noise sweeping up + a rising saw underneath
@@ -1086,6 +1193,8 @@ const GameAudio = (function () {
     lightsOut,
     overtakeReady,
     deployBoost,
+    xMode,
+    setVoice,
     collision,
     offtrack,
     rumble,
@@ -1139,6 +1248,6 @@ const GameAudio = (function () {
       return den > 0 ? Math.round(num / den) : 0;
     },
     // debug/telemetry: lets tests confirm the recorded engine samples loaded
-    debug() { return { contextState: ctx ? ctx.state : "uninitialised", samplesReady, usingSamples, engineOn, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2) } : null }; },
+    debug() { return { contextState: ctx ? ctx.state : "uninitialised", samplesReady, usingSamples, engineOn, voice: voiceName, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2) } : null }; },
   };
 })();

@@ -377,18 +377,34 @@ const CEILINGS = {
   //   (one line + the bug comment): #pausemenu is a modal <dialog> now, so an
   //   open card out-layers the z-9000 blocker and refuses focus to its
   //   buttons — rotation-recovery's OPEN CONTROLS roundtrip caught it.
-  // 8635 -> 8638: the per-chunk frame fields (allLights/perChunkLights/
-  //   tailStart/tailCount) are cleared every frame before the flood branch
-  //   (one line + the bug comment): `frame` outlives a night->day ToD flip,
-  //   so chunked geometry kept binding per-chunk night lamps in daylight.
-  // 8635 -> 8658 on the deploy side for their perf/bug round: the race-start
-  // Input.clearEdges (the RESUME latch bug's menu→race seam), the pooled
-  // setEngine arg, the els.lighting/camtune cache, the shadow-basis up
-  // consts, the seam-sliver collision-bucket floor, the endRace
-  // raceCtl.reset, and the measured noseIn sign flip — every line a fix
-  // plus its comment. Both lineages grew the file, so neither number fits
-  // the union — re-measured on the merged tree (split-newline count).
-  "js/game.js": 8661,
+  // 8635 -> 8658 for the perf/bug round: the race-start Input.clearEdges (the
+  // RESUME latch bug's menu→race seam), the pooled setEngine arg, the
+  // els.lighting/camtune cache, the shadow-basis up consts, the seam-sliver
+  // collision-bucket floor (with its adjacency-guarantee why), the endRace
+  // raceCtl.reset (the unreachable in-update reset), and the measured noseIn
+  // sign flip with its live-verification record — every line a fix plus the
+  // comment recording the bug at its site, not a feature.
+  // 8658 -> 8670: the audio-identity round — GameAudio.setVoice(player.team
+  //   .engine) at both engine-start seams, ERS deploy/energy/ersDeploy through
+  //   the pooled setEngine arg (the continuous deploy whine + low-battery sag
+  //   live in audio.js), and the X-mode latch click on the local flap command.
+  // + the deploy side's per-chunk frame-fields clear (allLights/perChunkLights/
+  //   tailStart/tailCount reset every frame before the flood branch: `frame`
+  //   outlives a night->day ToD flip, so chunked geometry kept binding
+  //   per-chunk night lamps in daylight).
+  // + the TLX-fix side's claim-fail ONE-reload bound (a latch already set at
+  //   boot start means the previous reload's GLX.init failed too — measured
+  //   236 reloads/64 s before the guard; falls through to #nogl).
+  // Three lineages grew the file, so no side's number fits the union —
+  // re-measured on the merged tree (split-newline count): 8675.
+  // 8675 -> 8694 for the total-audit fix train (all bug-explaining comments at
+  // the site of the bug, the one growth this ratchet tolerates): the pace-0
+  // NaN floor on the throttle integrator, DebrisWorld.reset() in startRace so
+  // a same-circuit restart stops inheriting last race's shards, the stranded
+  // netStart cleared in quitToMenu (a solo race after an aborted countdown ran
+  // with no lamps), Array.isArray on the host's RESULT payload, and the
+  // paused-at-the-flag clear in endRace.
+  "js/game.js": 8694,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -451,7 +467,19 @@ const CEILINGS = {
   // gearbox casing, floor plank/gurney/scroll, ERS blister, engine scoopLip,
   // faired wishbones, wheel gun-nut / tyre fillet, Brembo caliper).
   // Lowered after trim-comments pass (measured 2652).
-  "js/car/car3d.js": 2662,
+  // 2662 -> 2850: the ROUND halo — addTube (smooth swept tube, the addDome
+  // pattern along a polyline) + sampleCurve (Catmull through the regulation
+  // datums), both hoops (chase + first-person) rebuilt as tubes, and six new
+  // recipe-gated knobs (cockpit halo profile/fences, headrest, front-wheel
+  // deflector, ERS cooler intake, fuel breather, tyre sidewall rings).
+  // Defaults stay 0; measured 2834 on the raise. Raised deliberately.
+  // 2850 -> 2860: the pillar V-brace — the real halo strut splits into a V
+  // at the top, meeting the ring either side of the apex (two beams + the
+  // why). Measured 2853.
+  // 2860 -> 2895: the accuracy round — SEG 24 tyres (comment), regulation
+  // mirror housing (toe cant block, winglet, outer stay), and the PLATE
+  // rolled-top outwash row with its curled-lip span. Measured 2883.
+  "js/car/car3d.js": 2895,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
@@ -497,16 +525,29 @@ const CEILINGS = {
   // The whole WGX backend in one IIFE by design (deferred inject, no tag).
   // 5179 -> 5365 on the deploy union: their half-res SSR + chunk-AABB
   // lamp-mask cull rounds landed on the other lineage (re-measured).
-  // 5365 -> 5388 (R8): overflow sentinel remembered, per-chunk hoisted above
-  // the !cull fast path, SSR consume lanes gated on _ssrRan, lampVol mist
-  // gate ported from GLX/TLX — bug-explaining growth.
-  // 5388 -> 5453 (R8 perf): full-res depth texel for the SSR normal stride,
-  // both merge-run paths (draw + shadow) pooled to module scope, lamp masks
-  // generation-cached, and the F7 packed-upload deferral written down where
-  // the dead DRAW_FLOATS const used to sit.
-  "js/render/webgpu/wgx.js": 5453,
+  // 5365 -> 5423 (deploy lineage): the road's shared vertex buffer. Per-piece
+  // buffers made drawChunked's run merge (keyed on buffer identity) dead code
+  // for the road, so it paid one setVertexBuffer + one draw per visible chunk
+  // in every pass. The added lines are the single-buffer staging loop and the
+  // three reasons the merge is allowed to fire (contiguous, vertex_index dead,
+  // no lamp mask bound) — each one is load-bearing and documented where it sits.
+  // 5365 -> 5453 (R8 lineage): overflow sentinel remembered, per-chunk hoisted
+  // above the !cull fast path, SSR consume lanes gated on _ssrRan, lampVol mist
+  // gate ported from GLX/TLX, full-res depth texel for the SSR normal stride,
+  // both merge-run paths pooled to module scope, lamp masks generation-cached,
+  // and the F7 packed-upload deferral written where dead DRAW_FLOATS used to be.
+  // UNION: the file carries BOTH sets, so neither lineage's number fits it.
+  // Re-measured on the merged tree (AGENTS.md: re-measure, never max).
+  "js/render/webgpu/wgx.js": 5516,
   // TLX backend shell; grows only with GLX-parity features.
-  "js/render/three/tlx.js": 2095,
+  // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
+  // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
+  // instanced-rung retarget with its fallbackMat-contract comment.
+  // 2099 -> 2111: the deferred material dispose() unlocked by the vendored
+  // #33952 backport (_matDispose queue + present() flush + the PATCHES.md
+  // pointer note) — the eviction paths stopped leaking instead of skipping
+  // dispose, each line beside the eviction it completes.
+  "js/render/three/tlx.js": 2111,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   "js/render/glx.js": 1929,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.

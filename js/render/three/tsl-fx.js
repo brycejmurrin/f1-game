@@ -171,19 +171,25 @@
       return packed;
     }
     let _decalFrame = 0;
+    const _evicted = [];   // evicted decal materials; tlx present() flushes after paint
+    function flushEvicted() {
+      for (let i = 0; i < _evicted.length; i++) { try { _evicted[i].dispose(); } catch (_) { /* already disposed */ } }
+      _evicted.length = 0;
+    }
     function decalMaterialFor(tex, glow) {
       const key = tex.id + "|" + glow;
       let m = decalCache.get(key);
       if (!m) {
         if (decalCache.size >= DECAL_CACHE_CAP) {
-          // Same eviction as tlx.js materialFor: drop the Map entry, do NOT
-          // dispose(). three r185.1 leaks shared texture bindGroups on
-          // Material.dispose() (#33952; fixed unpublished r186), and
-          // drawList still holds this material until present() flushes.
+          // Same eviction as tlx.js materialFor: dispose is DEFERRED to
+          // present() (tlx.js calls flushEvicted after paint) — drawList
+          // still holds this material until then, and the vendored #33952
+          // backport (vendor PATCHES.md) makes the dispose itself leak-free.
           // The texture itself is game-owned either way.
           for (const [k, v] of decalCache) {
             if (v && v.__tlxFrame === _decalFrame) continue;
             decalCache.delete(k);
+            if (v) _evicted.push(v);
             break;
           }
         }
@@ -216,7 +222,7 @@
     }
 
     return { shadowMat, markMat, skidMat, glowMat, glowStr, particleMats, setSsrMrt,
-             decalMaterialFor, updateFrame };
+             decalMaterialFor, updateFrame, flushEvicted };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { fx });

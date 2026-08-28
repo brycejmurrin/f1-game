@@ -1188,3 +1188,83 @@ directories from a crashed reify are not usable — `--no-audit
 packages are already present).
 Allowlist `registry.npmjs.org`, `archive.ubuntu.com`, `security.ubuntu.com`,
 and `cdn.playwright.dev` if a cold snapshot must actually download.
+
+**Deploy-union review, zero regressions in ~340 union-run tests
+(2026-08-27).** Deploy-union review at bd9c875 / shell 1582. Five rounds from
+two lineages (perf/WGX branch; adaptive-ui-devices incl. the dialog
+migration) cross-merged through builds 1557–1582; this entry is the union's
+first browser-level verification (CI's change-aware selection never runs on
+deploy pushes — deploy tips are gated by smoke + characterization + guards
++ conditional sweeps only). Static review, three subagents: merge topology
+CLEAN (only index.html/version.json ever hand-resolved; 166/166 `?v=` hashes
+recompute at tip; line-survival regrep of every cross-lineage commit lost 0
+lines; use `git diff-tree --cc`, never `--stat`, for merge resolutions —
+first-parent diffstat reads as phantom resolutions); semantic audit CLEAN
+(hub.js dialog × data-fix union, sw.js dual rewrite, game.js A+B edits, all
+four WGX rounds present exactly once with no raw litPass state calls; unit
+suite 1366/0). Stale LOCAL deploy-branch ref (223f4cb, 44 builds behind)
+fast-forwarded to origin — anything reading the local name had been seeing
+an ancient tree. Live probe on the union: GLX default boot + race clean
+(console: only the three known-benign warns), WGX boot + race clean with
+every round's counters holding (setPipeline 41/frame, submit 1.3/frame,
+createBindGroup 0). Browser batches on the union, serial, one Playwright:
+
+- ui: `= run failed` (115/115, 3 failed) → all three triaged: ui-redesign +
+  ui-resize green solo (machine); rotation-recovery failed the 2-worker
+  solo file run too but passes at `--workers=1` on BOTH the union and the
+  pre-union baseline 4fc1167 (worktree A/B), and the live probe repro
+  (touch-emulated portrait) shows the blocker up with `#rotate-controls`
+  focused and no open top-layer dialogs — 2-worker contention flake of
+  the documented rAF-starvation family, NOT a union regression.
+- api: `= run failed` (140/140, 8 failed) → obs-act-edge pair green solo
+  (machine). headless-api's 5–6 reds REPRODUCE solo — but the pre-union
+  baseline worktree fails the same file the same way (5/24, same ~15 s
+  wait-timeout signature, wandering test subset): PRE-EXISTING
+  budget-vs-box (10 s waits vs ~21 s SwiftShader boot), not a union
+  regression. Candidate for a waits fix in the ce68d3f pattern, its own
+  change.
+- physics: `= run failed` (20/20, 2 failed) → projection spec 3/3 green
+  solo (machine). Characterization green — the re-blessed baseline holds
+  on the union.
+- collision: 45/46 → the one red (offtrack "stopped on-track throttle")
+  failed solo with the exact headless-api signature (8 s boot-wait
+  timeout at grid state, zero assertion failures) but PASSES at
+  `--workers=1`: contention family, not a union regression.
+- season + season-format: 18/18 green.
+- webgl: `= run failed` (32/32, 4 failed) at loadavg 6.5–8 during the run —
+  all four long-duration timeout-family (lighting-ab night fog 191.8 s;
+  lighting-tuner-grade COPY ALL 337.3 s; webgl-probes monaco tunnel bake
+  57.0 s; webgl-probes night ≤48 lights 74.9 s). Solo verdicts:
+  webgl-probes whole-file at `--workers=1` passed 6/6 (incl. both former
+  reds at 62/66 s vs their 57/75 s red durations); lighting-ab night-fog
+  1/1 solo (98.3 s vs 191.8 s red); lighting-tuner-grade solo 2/2 (COPY
+  ALL 148.6 s vs 337.3 s red). All four cleared — machine contention.
+- tlx: the deploy branch moved DURING the review (bd9c875..d5180be, shell
+  1582→1594: TLX hardening + car-parts/audio + the standing-reds fix
+  train incl. the rAF-starved-waits fix this review kept rediscovering as
+  contention). HEAD was an ancestor ⇒ pure fast-forward, and tlx — never
+  union-run and now carrying fresh vendored-three patches — ran on the NEW
+  tip d5180be instead of the stale one, after tooling-fast on the same tip
+  (112/112 green, 139.5 s): `= run failed` (16/16, 5 failed) at 2 workers —
+  all five in tlx-probes.spec.js, 84–124 s durations, first error a bare
+  60 s `page.waitForFunction` timeout. Whole-file solo at `--workers=1`:
+  `= run passed` (16/16, 0 failed) — the entire red set was 2-worker
+  contention on the heavier hardened TLX boots, not a regression.
+
+Operational: the container restarted THREE times mid-review, each time
+killing the background test chain (`test-bg --wait` chains die with the
+box; `artifacts/` logs and the scratchpad survive). Lesson: on this host
+run each browser group as its OWN background task so a restart costs at
+most one group, and re-read surviving logs for `= run` lines before
+re-running anything. Two watchers ALSO re-proved the self-match trap above
+in new clothes: a `while pgrep -f 'playwright test'` wait-loop matches its
+own command line and never exits, and a compound kill-then-relaunch whose
+pkill pattern appears later in the same command line kills its own shell
+(exit 144) — check (`pgrep -af 'playwright[ ]test'`) and launch in SEPARATE
+shell invocations, and anchor waits on the LOG's terminal line, never the
+process table. NOT RUN this review (named per AGENTS): foundation, sweeps
+(no track delta since last green), behaviour, debris, steering, camera,
+audio, parts, net (untouched in range), scenery, gallery, baseline,
+shimmer, map, paths, hooks, agent, circuit, fast, headless, ab, render.
+shared-road-vbuf (unblocked by the wgx-vid-repro measurement) deliberately
+deferred to its own round — a review reviews a fixed tree.
