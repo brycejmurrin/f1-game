@@ -40,6 +40,11 @@ on:
         description: "Runner images, comma-separated (ubuntu-latest, macos-latest, macos-13, windows-latest)"
         required: false
         default: "ubuntu-latest,macos-latest,windows-latest"
+      census_only:
+        description: "Skip the game checks — just the adapter answer (seconds, not tens of minutes)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -116,10 +121,35 @@ jobs:
         shell: bash
         run: node tools/gpu-census.mjs --json "census-${{ matrix.image }}.json"
 
+      # Put the verdict in the job summary, not just the log. A job's log is a
+      # 404 until the whole job ends, so a 20-minute game check hides a census
+      # that finished in 15 seconds — which is exactly what happened on the
+      # first run, on the one image whose answer was in doubt.
+      - name: Census → job summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## ${{ matrix.image }}"
+            echo '```'
+            node -e '
+              const r = require("./census-${{ matrix.image }}.json");
+              console.log("anyHardware:", r.anyHardware, "| platform:", r.platform, r.arch);
+              for (const x of r.runs) {
+                const a = x.adapter || {};
+                console.log([x.flags.padEnd(12), String(x.verdict).padEnd(12),
+                  "adapter=" + [a.vendor, a.architecture, a.device, a.description].filter(Boolean).join("/"),
+                  "webgl=" + ((x.webgl && x.webgl.renderer) || "-")].join("  "));
+              }
+            '
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # Runs whatever the census said: a software answer here is still the
       # cross-check that the portable path works, and if an image DOES have
       # hardware this is the first real-GPU run this project has ever had.
       - name: Game check — three.js / WebGPU
+        if: ${{ !inputs.census_only }}
         continue-on-error: true
         timeout-minutes: 20
         shell: bash
@@ -130,6 +160,7 @@ jobs:
             --shot "game-webgpu-${{ matrix.image }}.png"
 
       - name: Game check — three.js / WebGL2 (control)
+        if: ${{ !inputs.census_only }}
         continue-on-error: true
         timeout-minutes: 20
         shell: bash
