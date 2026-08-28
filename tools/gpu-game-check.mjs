@@ -100,6 +100,12 @@ try {
     } catch (_) { /* blocked storage: the defaults still boot */ }
   }, [backend, path3]);
 
+  // Bounded: a wedged renderer must not turn the diagnosis into another blank.
+  const bounded = (fn, ms, label) => Promise.race([
+    fn(),
+    new Promise((_, rj) => setTimeout(() => rj(new Error(label + " timeout")), ms)),
+  ]).catch((err) => ({ error: String((err && err.message) || err).slice(0, 120) }));
+
   await page.goto(`http://127.0.0.1:${port}/index.html?gfxdebug=1`,
     { waitUntil: "domcontentloaded", timeout: 120000 });
   checkpoint("navigated");
@@ -119,9 +125,19 @@ try {
     } catch (e) { return { hasGpu: true, error: String((e && e.message) || e) }; }
   });
 
-  await page.evaluate((t) => window.__apex.race(t), track);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 300000 });
-  await page.evaluate(() => window.__apex.park(0.1));
+  // race() and park() were the last unbounded evaluates. A renderer that
+  // wedges DURING the track load hangs them forever, and then the beats below
+  // — the whole diagnosis — never run at all.
+  out.raceCall = await bounded(() => page.evaluate((t) => window.__apex.race(t), track), 60000, "race");
+  checkpoint("race-called");
+  // 300 s was a guess made against a software rasteriser; on a real GPU the
+  // load is seconds, so a long wait here only delays the beats that carry the
+  // answer. Fail fast and let the beat trace speak.
+  out.trackReady = await bounded(
+    () => page.waitForFunction(() => window.__apex.info().track != null, null,
+      { polling: 100, timeout: 120000 }), 130000, "track-ready");
+  checkpoint("track-ready");
+  out.parkCall = await bounded(() => page.evaluate(() => window.__apex.park(0.1)), 60000, "park");
   checkpoint("racing", { track });
   // Poll instead of one blind sleep. The question after park() is whether the
   // page is STILL ANSWERING, and a single waitForTimeout cannot tell a healthy
@@ -148,12 +164,6 @@ try {
     await new Promise((r) => setTimeout(r, 1000));
   }
   checkpoint("settled");
-
-  // Bounded: a wedged renderer must not turn the diagnosis into another blank.
-  const bounded = (fn, ms, label) => Promise.race([
-    fn(),
-    new Promise((_, rj) => setTimeout(() => rj(new Error(label + " timeout")), ms)),
-  ]).catch((err) => ({ error: String((err && err.message) || err).slice(0, 120) }));
 
   out.overlay = await bounded(() => page.evaluate(() => {
     const el = document.getElementById("gfx-debug");
