@@ -392,7 +392,10 @@ const Car3D = (function () {
   function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
                     grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle) {
     const RC = rimColor || RIM;
-    const SEG = 18;
+    // 18 -> 24: an 18-gon tyre reads visibly polygonal in any close shot.
+    // +29% wheel tris, same draw-call count; ceilings in parts-physics raised
+    // with the measurement (480 per wheel).
+    const SEG = 24;
     const x0 = cx - w/2, x1 = cx + w/2;
     const rimR = r * 0.68;
     const coverOpen = brakeStyle && brakeStyle.coverOpen || 0;
@@ -2109,28 +2112,29 @@ const Car3D = (function () {
               0.025, 6, HALO, SURFACES.metal);
       addBox(out, 0, 0.79, 0.62, 0.045, 0.38, 0.045, HALO, SURFACES.metal); // front pillar
     }
+    // The hoop centreline is computed HERE (shared by the blade fairing below
+    // and part("halo") further down — the sections run in one function scope).
+    const haloSty = Math.max(0, Math.min(2, Math.round(cockpitStyle.halo || 0)));
+    const hr = haloSty === 1 ? 0.024 : 0.028;
+    const crownY = 0.845 - (haloSty === 1 ? 0.008 : 0);
+    const hoop = ckpt ? null : haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49);
     const haloBlade = Math.max(0, Math.min(2, Math.round(ckpt ? 0 : cockpitStyle.haloBlade || 0)));
     if (haloBlade > 0) {
-      const bw = haloBlade === 2 ? 0.072 : 0.048;
-      const bh = haloBlade === 2 ? 0.038 : 0.028;
       const bladeC = haloTint || HALO;
-      for (const s of [-1, 1]) {
-        // The fairing rides the level crown bar, its front station lifted
-        // with the bar's shallow arch so it blends into the tube rather than
-        // descending into it.
+      // The fairing is a CO-AXIAL TUBE over the hoop's own centreline — a
+      // fairing thickens the hoop it wraps. The old four straight spans
+      // chorded the curve and read as the pre-tube triangle laid over the
+      // round halo. Radii sit 8-11 mm proud of the hoop: no coplanar faces.
+      if (haloBlade === 1) {
+        // Low fairing: shoulders + crown bar only (path pts 3..11 of 15).
+        addTube(out, hoop.slice(3, 12), hr + 0.008, 6, bladeC, SURFACES.metal);
+      } else {
+        // Full shroud: the whole hoop, plus the centre spine riding clear of
+        // the fatter tube.
+        addTube(out, hoop, hr + 0.011, 6, bladeC, SURFACES.metal);
         addBeveledSpan(out,
-          { z: 0.49, x: 0, y: 0.868, w: bw, h: bh, t: 0.62 },
-          { z: 0.02, x: s * 0.30, y: 0.858, w: bw * 0.92, h: bh * 0.92, t: 0.62 },
-          0.010, bladeC, null, SURFACES.metal);
-        addBeveledSpan(out,
-          { z: 0.02, x: s * 0.30, y: 0.858, w: bw * 0.92, h: bh * 0.92, t: 0.62 },
-          { z: -0.44, x: s * 0.235, y: 0.530, w: bw * 0.85, h: bh * 0.80, t: 0.55 },
-          0.010, bladeC, null, SURFACES.metal);
-      }
-      if (haloBlade === 2) {
-        addBeveledSpan(out,
-          { z: 0.50, x: 0, y: 0.896, w: bw * 1.15, h: bh * 0.85, t: 0.50 },
-          { z: 0.30, x: 0, y: 0.884, w: bw * 0.70, h: bh * 0.70, t: 0.55 },
+          { z: 0.50, x: 0, y: 0.904, w: 0.083, h: 0.032, t: 0.50 },
+          { z: 0.30, x: 0, y: 0.892, w: 0.050, h: 0.027, t: 0.55 },
           0.008, bladeC, null, SURFACES.metal);
       }
     }
@@ -2193,9 +2197,25 @@ const Car3D = (function () {
       // Glass goes on the face TOWARD the viewer (-z). It used to sit at
       // mz+0.066 — 8mm BEYOND the housing's own back face, so the driver AND
       // the chase camera both saw carbon and never the reflective surface.
-      addBox(out, s*mx, mY, mz, mW, mH, 0.06, [0.09, 0.09, 0.11], SURFACES.carbon); // dark carbon housing
+      // Housing as an 8-corner block with the outboard face pulled BACK in z —
+      // the C14.2.2 d i inboard toe (~25°): real mirrors angle at the driver,
+      // and the cant is what stops the housing reading as a shoebox.
+      const toe = ckpt ? 0 : 0.045;
+      const hy0 = mY - mH / 2, hy1 = mY + mH / 2;
+      const xIn = s * (mx - mW / 2), xOut = s * (mx + mW / 2);
+      addBlock(out, [
+        [xIn, hy0, mz - 0.03], [xOut, hy0, mz - 0.03 + toe], [xOut, hy1, mz - 0.03 + toe], [xIn, hy1, mz - 0.03],
+        [xIn, hy0, mz + 0.03], [xOut, hy0, mz + 0.03 + toe], [xOut, hy1, mz + 0.03 + toe], [xIn, hy1, mz + 0.03],
+      ], [0.09, 0.09, 0.11], null, SURFACES.carbon);
       addBox(out, s*mx, mY, mz - 0.032, mW * 0.97, mH * 0.80, 0.012, [0.10, 0.11, 0.14], SURFACES.glass); // bezel / surround
       addBox(out, s*mx, mY, mz - 0.038, 0.200, 0.050, 0.008, [0.46, 0.56, 0.78], SURFACES.glass); // reflective surface, C14.2.2b
+      if (!ckpt) {
+        // Top winglet + the C3.7.5 OUTER stay down to the tub shoulder — the
+        // two details every 2026 housing carries.
+        addBox(out, s*mx, hy1 + 0.008, mz + 0.01, mW * 0.9, 0.008, 0.055, DARK, SURFACES.carbon);
+        addBeamBetween(out, [s * (mx + mW * 0.38), hy0, mz + 0.02],
+                            [s * (msx + 0.06), 0.60, mz + 0.10], 0.012, DARK, SURFACES.carbon);
+      }
     }
 
     part("helmet");
@@ -2229,14 +2249,13 @@ const Car3D = (function () {
       // sweeping to the front apex (z 0.49) — round in plan, never peaking or
       // dipping toward the centre. r 0.028 keeps the old square section's
       // outer envelope, so the haloBlade/haloWing/camPods attachments above
-      // still land on the hoop.
-      const haloSty = Math.max(0, Math.min(2, Math.round(cockpitStyle.halo || 0)));
-      const hr = haloSty === 1 ? 0.024 : 0.028;
-      const crownY = 0.845 - (haloSty === 1 ? 0.008 : 0);
+      // still land on the hoop. haloSty/hr/crownY and the hoop path itself
+      // (haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49)) are
+      // computed once beside the blade fairing above, which wraps the SAME
+      // centreline as a co-axial tube.
       // Front centre pillar rises to y 0.83 — overlapping the flat bar's
       // underside (0.845 - 0.028 = 0.817) by ~1.3 cm, never stopping short.
       addBox(out, 0, 0.68, 0.47, 0.035, 0.30, 0.05, haloC, SURFACES.metal);
-      const hoop = haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49);
       addTube(out, hoop, hr, 6, haloC, SURFACES.metal);
       // The real strut SPLITS into a V at the top, meeting the ring at two
       // points either side of the apex — the wishbone silhouette head-on.
@@ -2398,12 +2417,15 @@ const Car3D = (function () {
         attachHalf: fwHalf + 0.03,
       }, i === 0 ? c1 : wingC, SURFACES.paint);
     }
-    const aPlate = Math.max(0, Math.min(2, Math.round(
+    const aPlate = Math.max(0, Math.min(3, Math.round(
       aeroStyle.plate != null ? aeroStyle.plate : 1)));
     const PLATE = [
       { hF: 0.16, hR: 0.30, kick: 0.020, footW: 0.09, footZ: 0.46, arch: 0 },
       { hF: 0.22, hR: 0.40, kick: 0.060, footW: 0.13, footZ: 0.54, arch: 0 },
       { hF: 0.30, hR: 0.54, kick: 0.100, footW: 0.19, footZ: 0.62, arch: 1 },
+      // 3: outwash spec — tall plate whose TOP EDGE ROLLS OUTBOARD (roll: 1
+      // adds the curled lip below), the 2026 field's signature endplate.
+      { hF: 0.28, hR: 0.50, kick: 0.120, footW: 0.16, footZ: 0.58, arch: 0, roll: 1 },
     ][aPlate];
     const aCasc = Math.max(0, Math.min(3, Math.round(aeroStyle.casc != null ? aeroStyle.casc
       : (aLvl >= 4 ? 3 : (aLvl >= 3 ? 2 : (aLvl >= 1 ? 1 : 0))))));
@@ -2424,6 +2446,14 @@ const Car3D = (function () {
           { z: 2.60, x: epX + s*0.012, y: 0.135 + PLATE.hF * 0.5 + 0.010, w: 0.030, h: 0.018 },
           { z: 2.06, x: epX + s*(PLATE.kick + 0.012), y: 0.245 + PLATE.hR * 0.5 + 0.010, w: 0.026, h: 0.016 },
           0.008, c1);
+      }
+      if (PLATE.roll) {
+        // Rolled top edge: a lip leaning OUTBOARD off the plate crown, wider
+        // and more canted at the rear — the outwash curl, not a straight rail.
+        addBeveledSpan(out,
+          { z: 2.58, x: epX + s * 0.020, y: 0.135 + PLATE.hF * 0.5 + 0.006, w: 0.040, h: 0.014, t: 0.45 },
+          { z: 2.02, x: epX + s * (PLATE.kick + 0.048), y: 0.245 + PLATE.hR * 0.5 - 0.004, w: 0.062, h: 0.012, t: 0.40 },
+          0.006, c2);
       }
       // Canard / dive-plane cascade on the outer face of the endplate.
       const nCan = aCasc;

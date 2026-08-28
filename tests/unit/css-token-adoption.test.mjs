@@ -96,7 +96,13 @@ const CEILING = {
   // and locked the win back to the pre-redesign floor.
   // 2026-08-19: 3 → 4. adaptive-ui / audio work (build 1515) added one more
   // sub-floor literal (measured on deploy tip c3df0ee1).
-  subFloorFontSize: 4,
+  // 2026-08-27: 4 → 5, deliberate. The garage stacked-grid chip labels cap
+  // at min(8px, --fs-micro - 3px): the relative form alone was written
+  // against an 11px token and broke to 11px when the token moved to 14px
+  // (labels ellipsised below tap size). 8px is measured against the 7-column
+  // grid — SUSPENSION needs 47px in a 47px column interior at 852x393. The
+  // comment at the declaration carries the measurement.
+  subFloorFontSize: 5,
   // padding / gap / margin declarations containing a raw px literal.
   // POLICY (rewritten 2026-08-26, deliberately — user-approved): a raw px
   // spacing value converts when it has an EXACT token form, including
@@ -169,7 +175,9 @@ const CEILING = {
   // (margin: -17px style) stay as anchors.
   // 2026-08-27: 325 -> 324. The career pressable-card carve deduplicated the
   // teamtile/seat padding pair into one shared declaration.
-  rawSpacing: 324,
+  // 2026-08-27: 324 -> 323. Round-13 season-row de-buttoning dropped the
+  // rows' raw margin-bottom (the hairline grammar needs no stacking gap).
+  rawSpacing: 323,
   // colour declarations carrying a raw literal (rgb()/rgba()/#hex in any
   // declaration value; tokens.css custom-property DEFINITIONS excluded — the
   // definition site is the system, not drift; url() interiors excluded).
@@ -185,7 +193,14 @@ const CEILING = {
   // their borders (three 0.3/0.4-alpha border tints left with them), .spf-dir
   // stepped under the hover fill, .spf-corner moved off --plate-on onto a
   // color-mix tint (no literal), .tdc-corner gained one sub-floor neutral.
-  rawColor: 376,
+  // 2026-08-27: 376 -> 377, deliberate. The season calendar rows adopt the
+  // circuit-list hairline (the .track-row separator spelling, so distinct
+  // stays flat); the rows they replace carried tokens only, nothing to trade.
+  // 2026-08-27: 377 -> 378, deliberate. The track-detail full-bleed header
+  // restates --grad-head's sheen layer (the token's own 0.07 white, an
+  // existing spelling — distinct stays flat) to run the red bleed to 100%
+  // on the one sheet head wider than the token was tuned for.
+  rawColor: 378,
   // distinct colour VALUES after normalising spelling: space-after-comma,
   // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
   // canonical form. This is the fork guard — identical paint must not hide

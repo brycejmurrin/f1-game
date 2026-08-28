@@ -259,7 +259,11 @@ function trackFilterBar() {
   search.id = "sel-track-search";
   search.type = "search";
   search.value = trackQuery;
-  search.placeholder = "Search circuit or country";
+  // "Search circuit or country" truncated inside the pinned 12rem compact
+  // width ("Search circuit or countr"). The short form fits every shape;
+  // country search still works (data-search carries it) and the aria-label
+  // below still says circuits.
+  search.placeholder = "Search circuit";
   search.setAttribute("aria-label", "Search circuits");
   search.autocomplete = "off";
   search.oninput = () => applyTrackSearch(search.value);
@@ -310,10 +314,14 @@ function buildSelect() {
     custom.textContent = seasonComplete ? "START NEW SEASON" : "CUSTOMISE SEASON";
     custom.onclick = (e) => { e.stopPropagation(); G.openSeasonSetup(); };
     els.selTracks.appendChild(custom);
-    // Upcoming rounds list (next 5 circuits after current). Indexes SEASON, not
-    // LIST — classics are playable but never a championship round.
+    // Upcoming rounds list — EVERY remaining round, not a preview. A hard cap
+    // of 5 made "UPCOMING" end in void: the judges read the cut as the list
+    // being 5 rounds long (round 1 of 24 showed 5 of 23 remaining, no fade, no
+    // count). The pane scrolls and now carries the fade + position indicator,
+    // so length is not a cost. Indexes SEASON, not LIST — classics are
+    // playable but never a championship round.
     const upcoming = [];
-    for (let i = rnd; i < Math.min(rnd + 5, SeasonCal.rounds()); i++) upcoming.push({ n: i + 1, t: SeasonCal.track(i) });
+    for (let i = rnd; i < SeasonCal.rounds(); i++) upcoming.push({ n: i + 1, t: SeasonCal.track(i) });
     if (upcoming.length) {
       const upHead = document.createElement("div");
       upHead.className = "season-upcoming-head";

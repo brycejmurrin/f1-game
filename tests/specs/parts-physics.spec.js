@@ -1183,10 +1183,15 @@ test.describe("Parts module — visual recipes", () => {
       rearWheel: Car3D.buildWheel(0.38).idx.length / 3,
       decals: CarMesh.carDecalData(2).idx.length / 3,
     }));
-    expect(triangles.body).toBeLessThanOrEqual(2400);
+    // 2400 -> 2545: the round-halo tube + pillar V-brace + regulation
+    // mirrors — mirrors the raises (and their measurements) recorded in
+    // tests/unit/car-wing-foil.test.mjs.
+    expect(triangles.body).toBeLessThanOrEqual(2545);
     expect(triangles.cockpit).toBeLessThanOrEqual(1500);
-    expect(triangles.frontWheel).toBeLessThanOrEqual(400);
-    expect(triangles.rearWheel).toBeLessThanOrEqual(400);
+    // 400 -> 500: tyres at SEG 24 (18-gon tyres read visibly polygonal in any
+    // close shot; measured 480 at the raise).
+    expect(triangles.frontWheel).toBeLessThanOrEqual(500);
+    expect(triangles.rearWheel).toBeLessThanOrEqual(500);
     // 48, FROM A MEASUREMENT. This said 32 and the decal sheet has been 36
     // triangles (18 quads over LiveryTex's 8 regions) at EVERY revision of
     // js/game/carmesh.js — bisected, not assumed. So the ceiling was never

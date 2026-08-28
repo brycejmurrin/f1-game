@@ -61,7 +61,9 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
   // 2400 -> 2505: the round-halo tube (15 rings x 6 sides = 168 tris, the two
   // extra rings buying the rounded shoulders) replaced the 64-tri
   // beveled-span chevron. Measured 2496 on the raise.
-  assert.ok(body <= 2505, `default body ${body} > 2505`);
+  // 2505 -> 2545: regulation mirrors — the C14.2.2 inboard-toe housing cant,
+  // top winglet, and C3.7.5 outer stay (+48 tris). Measured 2532.
+  assert.ok(body <= 2545, `default body ${body} > 2545`);
   assert.ok(cockpit <= 1500, `cockpit ${cockpit} > 1500`);
 });
 
