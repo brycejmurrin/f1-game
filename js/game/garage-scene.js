@@ -574,23 +574,22 @@ function paintDress(team, liv, info) {
   ctx.clearRect(0, 0, DRESS, DRESS);
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
   const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
-  let usedPng = false;
   // Crest lightbox. The FIELD is chosen for contrast against the mark, and a
   // halo is added ONLY when the mark still lacks separation — the same rule
-  // buildAtlas applies on the car (js/car/liverytex.js markHalo). The first
-  // version passed the team's own c1 as the halo unconditionally, which put a
-  // same-hue glow behind a mark sitting on a c1-derived field and softened it
-  // instead of separating it.
+  // buildAtlas applies on the car. The first version passed the team's own c1
+  // as the halo unconditionally, which put a same-hue glow behind a mark
+  // sitting on a c1-derived field and softened it instead of separating it.
   const img = LiveryTex.LOGOS && LiveryTex.LOGOS[team.id];
-  const avg = img && img._avg;
+  // The mark's own colour, whichever path draws it: the uploaded PNG's average
+  // for the custom team, the resolved vector base for the eleven shipped ones.
+  // Keying this on img._avg ALONE is what made the flip below dead code the
+  // moment the roster stopped shipping logo PNGs — avg would be null for every
+  // team, the ternary would always take `tinted`, and every crest would land on
+  // a dark field whether or not that is the readable choice.
+  const avg = (img && img._avg) ||
+    (LiveryTex.markBase ? LiveryTex.markBase(team.id, liv) : null);
   const tinted = scale(c1, 0.30);
   // A dark team field reads best, unless the mark itself is dark against it.
-  // Raising this threshold does NOT fix the Haas crest, which is what it looks
-  // like it should do: measured, Haas's mark averages a saturated red that
-  // scores about 4.1 against its own graphite-derived field, so the flip does
-  // not fire and would not help if it did. The mark is unreadable because
-  // assets/logos/haas.png is a traced blob with the H's counters filled in —
-  // a source-art defect no field colour can repair. Leave the threshold alone.
   const field = (avg && LiveryTex.contrast && LiveryTex.contrast(avg, tinted) < 2.2)
     ? (LiveryTex.inkOn ? LiveryTex.inkOn([avg]) : [0.93, 0.94, 0.96]) : tinted;
   ctx.fillStyle = css(field); ctx.fillRect(D_CREST.x, D_CREST.y, D_CREST.w, D_CREST.h);
@@ -598,13 +597,11 @@ function paintDress(team, liv, info) {
   ctx.strokeRect(D_CREST.x + 12, D_CREST.y + 12, D_CREST.w - 24, D_CREST.h - 24);
   const inner = { x: D_CREST.x + 40, y: D_CREST.y + 40, w: D_CREST.w - 80, h: D_CREST.h - 80 };
   if (img && LiveryTex.drawLogoImage) {
-    const halo = (avg && LiveryTex.contrast && LiveryTex.contrast(avg, field) < 2.6 && LiveryTex.inkOn)
-      ? LiveryTex.inkOn([avg]) : null;
+    const halo = (img._avg && LiveryTex.contrast && LiveryTex.contrast(img._avg, field) < 2.6 && LiveryTex.inkOn)
+      ? LiveryTex.inkOn([img._avg]) : null;
     LiveryTex.drawLogoImage(ctx, img, inner, null, halo);
-    usedPng = true;
   } else {
-    LiveryTex.drawCrest(ctx, team.id, inner, [0.95, 0.95, 0.96], c2, false,
-      (liv && liv.logo) || null, field);
+    LiveryTex.drawCrest(ctx, team.id, inner, { liv, field, bare: false });
   }
   // Team wordmark strip.
   ctx.fillStyle = css(scale(c1, 0.55)); ctx.fillRect(D_WORD.x, D_WORD.y, D_WORD.w, D_WORD.h);
@@ -719,7 +716,7 @@ function paintDress(team, liv, info) {
       ctx.textAlign = "center";
     }
   }
-  return { canvas: cv, usedPng };
+  return { canvas: cv };
 }
 
 // UV rect for an atlas region. v is flipped because createTexture uploads with
@@ -843,12 +840,12 @@ function buildDress() {
   dquad(g.door, [[2.3, 2.60, 6.24], [-2.3, 2.60, 6.24], [-2.3, 3.20, 6.24], [2.3, 3.20, 6.24]], [0, 0, -1], D_WORD);
   return g;
 }
-// Logos arrive asynchronously. Bump a generation counter when they land and put
-// it in the cache key, so the first paint uses the vector crest and the PNG
-// swaps in on the very next frame instead of leaving a blank wall.
+// The custom team's uploaded emblem arrives asynchronously. Bump a generation
+// counter when it changes and put it in the cache key, so the wall repaints on
+// the very next frame instead of holding the previous mark.
 let logoGen = 0;
-if (typeof LiveryTex !== "undefined" && LiveryTex.onLogosReady)
-  LiveryTex.onLogosReady(() => { logoGen++; });
+if (typeof LiveryTex !== "undefined" && LiveryTex.onMarkChange)
+  LiveryTex.onMarkChange(() => { logoGen++; });
 const DRESS_OPTS = { glow: 0.62 };
 
 // ── caches ─────────────────────────────────────────────────────────────────
@@ -892,7 +889,6 @@ function rebuild(team, liv, info) {
     if (dressMesh[SIDES[i]]) { _gfx.freeMesh(dressMesh[SIDES[i]]); dressMesh[SIDES[i]] = null; }
   if (dressFail < 3 && _gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined") {
     try {
-      if (LiveryTex.ensureLogos) LiveryTex.ensureLogos();
       dressTex = _gfx.createTexture(paintDress(team, liv, info).canvas);
       const dg = buildDress();
       for (let i = 0; i < SIDES.length; i++)
