@@ -13,7 +13,7 @@
  * player's copy-pasted answer are directly comparable.
  *
  * Run: node tools/gpu-game-check.mjs [track] [--json out.json] [--shot out.png]
- *      [--backend three|webgpu] [--path webgpu|webgl2]
+ *      [--backend three|webgpu] [--path webgpu|webgl2] [--boot-timeout MS]
  */
 import { chromium } from "playwright";
 import http from "node:http";
@@ -79,7 +79,12 @@ try {
 
   await page.goto(`http://127.0.0.1:${port}/index.html?gfxdebug=1`,
     { waitUntil: "domcontentloaded", timeout: 120000 });
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 120000 });
+  // 120 s is not enough on a software rasteriser that is ALSO a slow disk:
+  // windows-latest (WARP + "Microsoft Basic Render Driver") timed out here on
+  // both backends while ubuntu booted the same tree in 3 s. A boot timeout on
+  // an image with no GPU says nothing about the renderer, so give it room.
+  await page.waitForFunction(() => window.__apex != null, null,
+    { polling: 100, timeout: Number(flag("--boot-timeout", 300000)) });
   log("booted");
   out.adapter = await page.evaluate(async () => {
     if (!navigator.gpu) return { hasGpu: false };
