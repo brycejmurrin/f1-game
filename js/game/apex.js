@@ -1181,6 +1181,18 @@ const api = {
       exposure: G.frame.exposure != null ? G.frame.exposure : 1,
       numLights: L ? L.length / 15 : 0,
       meanLampRGB,
+      // The per-chunk twin of meanLampRGB: the mean colour of the lamp set the
+      // CHUNKED meshes are lit from. It used to be the raw baked list — no LAMP
+      // LEVEL, TEMPERATURE, FLICKER, WARM-UP or twilight ramp — which is what
+      // made those sliders look broken on everything chunked. Now it tracks
+      // them, and the two means should move together.
+      meanPerChunkRGB: (() => {
+        const A = G.frame.allLights;
+        if (!A || A.length < 15) return null;
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let i = 0; i < A.length; i += 15) { r += A[i+3]; g += A[i+4]; b += A[i+5]; n++; }
+        return n ? [r / n, g / n, b / n] : null;
+      })(),
       bakedLights: ((G.track && (G.track._lights && G.track._lights.length ? G.track._lights : G.track._alwaysLights)) || []).length / 15,
       lampPosts: G.track && G.track.lampPosts ? G.track.lampPosts.length : 0,
       // RESOLVED per-chunk lamp state, not the raw knobs. Three gates can zero

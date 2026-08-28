@@ -415,7 +415,11 @@ const CEILINGS = {
   // chunked on most devices for the cull alone, and chunked.js bound per-chunk
   // lamps to anything chunked. The field carries the knob to the backends so
   // the lamps follow it while the culling stays put.
-  "js/game.js": 8721,
+  // 8721 -> 8727: the LAMPS controls now reach chunked geometry — the per-chunk
+  // knob is resolved BEFORE setFrameLights (it feeds the scaled full-set build)
+  // and allLights is left null when the feature is off instead of handing out
+  // the raw baked list.
+  "js/game.js": 8727,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -453,7 +457,11 @@ const CEILINGS = {
   // which — "per-chunk lamps do nothing on my machine" was undiagnosable, and
   // the probe written to verify the PER-CHUNK ROAD fix could not observe it
   // either. The hook is the assertable surface the repo prefers over pixels.
-  "js/game/apex.js": 2444,
+  // 2444 -> 2456: lightState reports the RESOLVED per-chunk lamp state and
+  // which of the three gates is holding it, plus meanPerChunkRGB — the twin of
+  // meanLampRGB for the set chunked meshes are lit from. Both exist because
+  // 'the sliders do nothing' was undiagnosable from outside the renderer.
+  "js/game/apex.js": 2456,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
@@ -568,7 +576,10 @@ const CEILINGS = {
   // Re-measured on the merged tree (AGENTS.md: re-measure, never max).
   // 5516 -> 5523: the road half of the PER-CHUNK ROAD gate (frameRoadChunkLamps
   // + the surfaceId-16 test), mirroring the GLX side.
-  "js/render/webgpu/wgx.js": 5523,
+  // 5523 -> 5532: the per-chunk light upload separates a SET change (identity or
+  // knob — may reset the chunk-segment allocator) from a VALUES change
+  // (allLightsGen — flicker/sliders — must not), plus the road lamp gate.
+  "js/render/webgpu/wgx.js": 5532,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -602,7 +613,10 @@ const CEILINGS = {
   // carries the measurement that found it.
   "js/render/three/tlx.js": 2232,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
-  "js/render/glx.js": 1929,
+  // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
+  // brightness multiplier — it was compensating for the missing lamp transform
+  // and, applied to the global set, made a tier shed step the whole night.
+  "js/render/glx.js": 1936,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   "js/render/webgpu/wgsl-chunks.js": 1855,
   // three.js TSL lit-material port; tracks lit.js feature-for-feature.

@@ -791,8 +791,8 @@ const WGX = (function () {
     // Per-chunk lamp state: knob + full baked set (frame fields, cleared by
     // day), the trackLightSBO generation, and the chunkIdxSBO segment
     // allocator (WeakMap chunks-array -> {base, table} + append cursor).
-    let framePerChunk = 0, frameAllLights = null, frameRoadChunkLamps = 0;
-    let _tlSrc = null, _tlKnob = -1;
+    let framePerChunk = 0, frameAllLights = null, frameRoadChunkLamps = 0, frameAllLightsGen = -1;
+    let _tlSrc = null, _tlKnob = -1, _tlGen = -1;
     let _ciCursor = 0, _ciSeg = new WeakMap();
     const _tlScratch = new Float32Array(TRACK_LIGHT_CAP * 16);
     let frameLights = null, frameNL = 0;   // this frame's stride-15 light array (lamp-mask cull)
@@ -3136,26 +3136,35 @@ const WGX = (function () {
       frameCullDist = f.cullDist || 0;
       framePerChunk = +f.perChunkLights || 0;
       frameRoadChunkLamps = +f.roadChunkLamps || 0;
+      frameAllLightsGen = +f.allLightsGen || 0;
       frameAllLights = f.allLights || null;
       // (Re)upload the baked track set when the (lights identity, knob) pair
       // moves — rgb × knob applied here ONCE (per-chunk sets render raw baked
       // records × the knob dimmer; no twilight ramp/flicker, GLX parity), so
       // the buffer is static until the next bake. A moved pair also resets
       // the chunkIdx segment allocator: every mesh re-appends on next draw.
+      // Re-upload when the SET changes (identity/knob) or when its VALUES change
+      // (allLightsGen — flicker, warm-up, a LAMPS slider). The two are kept
+      // apart deliberately: the segment allocator below may only be reset for
+      // the former. Gen moves every frame while flicker runs, and resetting the
+      // allocator there would re-bake every chunk table every frame.
+      const _tlSetMoved = _tlSrc !== frameAllLights || _tlKnob !== framePerChunk;
       if (framePerChunk > 0 && frameAllLights &&
-          (_tlSrc !== frameAllLights || _tlKnob !== framePerChunk)) {
-        const AL = frameAllLights, k = framePerChunk;
+          (_tlSetMoved || _tlGen !== frameAllLightsGen)) {
+        const AL = frameAllLights;
         const tn = Math.min(TRACK_LIGHT_CAP, (AL.length / 15) | 0), td = _tlScratch;
         for (let i = 0; i < tn; i++) {
           const o = i * 15, b = i * 16;
           td[b]    = AL[o];        td[b+1]  = AL[o+1];      td[b+2]  = AL[o+2];  td[b+3]  = AL[o+6];
-          td[b+4]  = AL[o+3] * k;  td[b+5]  = AL[o+4] * k;  td[b+6]  = AL[o+5] * k;  td[b+7]  = AL[o+12];
+          td[b+4]  = AL[o+3];      td[b+5]  = AL[o+4];      td[b+6]  = AL[o+5];  td[b+7]  = AL[o+12];
           td[b+8]  = AL[o+7];      td[b+9]  = AL[o+8];      td[b+10] = AL[o+9];  td[b+11] = AL[o+13];
           td[b+12] = AL[o+10];     td[b+13] = AL[o+11];     td[b+14] = AL[o+14]; td[b+15] = 0;
         }
         if (tn > 0) device.queue.writeBuffer(trackLightSBO, 0, td, 0, tn * 16);
-        _tlSrc = frameAllLights; _tlKnob = framePerChunk;
-        _ciCursor = 0; _ciSeg = new WeakMap();
+        _tlSrc = frameAllLights; _tlKnob = framePerChunk; _tlGen = frameAllLightsGen;
+        // Tables are keyed on lamp POSITIONS, which a colour-only change never
+        // moves — so only a real set change invalidates the allocator.
+        if (_tlSetMoved) { _ciCursor = 0; _ciSeg = new WeakMap(); }
       }
       frameLights = nL > 0 ? L : null;
       frameNL = nL;

@@ -748,6 +748,18 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
 // `frame.lights`. Called each frame only when floodlights are lit.
 const _lightCullBuf = [];
 const _lightScaleBuf = [];
+// FULL-SET twin of _lightScaleBuf, for the per-chunk lamp path. Per-chunk
+// consumers used to read the RAW baked list, so none of the LAMPS controls
+// (LAMP LEVEL / TEMPERATURE / FLICKER / WARM-UP / the twilight ramp) reached a
+// chunked mesh — drag LAMP LEVEL to 0 and the cars went dark while the city
+// stayed lit. This carries the same per-lamp transform the culled set gets.
+// REUSED AND MUTATED IN PLACE, never reallocated: LampChunks.resolve memoises
+// its per-chunk tables on this array's IDENTITY, and positions/radii never
+// change here, so a fresh array frame would re-bake every table every frame.
+// _allLightsGen is the change signal for consumers that cache by identity
+// (WGX's trackLightSBO upload) — it moves when the VALUES move.
+const _allLightsBuf = [];
+let _allLightsGen = 0;
 const _lightHeap = [];         // pooled max-heap (≤CAP entries) for nearest-N selection
 const _gHeap = [];             // pooled max-heap of GEOMETRIC squared distances (see gCap)
 const _byDistAsc = (a, b) => a.d - b.d;   // hoisted sort comparator (no per-frame closure)
@@ -828,6 +840,27 @@ function lampCap(carCount, mobileTier) {
   }
   return cap;
 }
+// Scale the WHOLE baked set for the per-chunk path with the same transform the
+// culled set receives. Only runs when per-chunk lamps are actually on.
+function _fillAllLights(frame, src, sr, sg, sb, fl) {
+  const out = _allLightsBuf;
+  const n = src.length;
+  let changed = out.length !== n;
+  for (let i = 0; i < n; i += 15) {
+    const f = fl(i);
+    const r = src[i+3] * sr * f[0], g = src[i+4] * sg * f[1], b = src[i+5] * sb * f[2];
+    if (!changed && (out[i+3] !== r || out[i+4] !== g || out[i+5] !== b)) changed = true;
+    out[i] = src[i]; out[i+1] = src[i+1]; out[i+2] = src[i+2];
+    out[i+3] = r; out[i+4] = g; out[i+5] = b; out[i+6] = src[i+6];
+    out[i+7] = src[i+7]; out[i+8] = src[i+8]; out[i+9] = src[i+9]; out[i+10] = src[i+10];
+    out[i+11] = src[i+11]; out[i+12] = src[i+12]; out[i+13] = src[i+13]; out[i+14] = src[i+14];
+  }
+  if (out.length !== n) out.length = n;
+  if (changed) _allLightsGen++;
+  frame.allLights = out;
+  frame.allLightsGen = _allLightsGen;
+}
+
 function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet) {
   // srcSet overrides the session light set (the daylight always-on subset);
   // absent, the baked full set is used exactly as before.
@@ -882,6 +915,7 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
         src[i+7], src[i+8], src[i+9], src[i+10], src[i+11], src[i+12], src[i+13], src[i+14]);
     }
     frame.lights = out;
+    if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl);
     return;
   }
   // Distance-rank: select the nearest CAP. Reuse a pooled object array + the
@@ -1048,6 +1082,7 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
       src[o+14] * cullF);
   }
   frame.lights = out;
+  if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl);
 }
 
   return { TUNE_DEFS, LT, buildTrackLights, lampStrideNodes,

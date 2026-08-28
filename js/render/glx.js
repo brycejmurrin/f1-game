@@ -1062,9 +1062,16 @@ const GLX = (function () {
     // strongly they light. Kept numeric all the way through — coercing to 1
     // here is what made it a toggle.
     framePerChunkLights = +frame.perChunkLights || 0;
-    // Track-lamp intensity scale. 1 when the feature is off, so nothing about
-    // the shipped look changes; the knob's own value once it is on.
-    _lampScale = framePerChunkLights > 0 ? framePerChunkLights : 1;
+    // The knob is NO LONGER a brightness multiplier. It used to dim every track
+    // lamp to compensate for chunked scenery reading too bright — and the reason
+    // it read too bright is that the per-chunk path was fed the RAW baked list,
+    // with none of LAMP LEVEL / TEMPERATURE / FLICKER / WARM-UP / the twilight
+    // ramp applied. setFrameLights now scales that set exactly like the culled
+    // one, so the compensation is not needed and actively harmed: applied to the
+    // GLOBAL set too, it meant a governor tier shed (which zeroes the knob)
+    // stepped the whole night ~3.3x brighter and back. The knob keeps its real
+    // jobs — enabling per-chunk sets and setting their cap via capFor.
+    _lampScale = 1;
     frameTailStart = frame.tailStart | 0;
     frameTailCount = frame.tailCount | 0;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
