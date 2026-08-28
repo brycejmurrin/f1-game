@@ -302,6 +302,14 @@ const TLX = (function () {
         try { _displayCtx = _displayCanvas.getContext("2d", { alpha: false, willReadFrequently: true }); }
         catch (_) { _displayCtx = null; /* capturePixels can still read the RT */ }
       }
+      // PRESENTATION needs the 2D blit whenever the native swapchain does not
+      // composite — software adapter OR headless. CONTENT is a different
+      // question and must not inherit that: headless Chromium on a REAL GPU is
+      // hardware, and gating content on the blit is what made the macOS runner
+      // (Apple/Metal, verified `anyHardware: true`) run the software half of
+      // every skip — env probe cleared, batches dropped, fallback sky — so the
+      // one machine that could test the player's path tested the other one.
+      // softOutRT asks softGpu(); the content gates ask _softAdapter.
       function softGpu() { return !!(_softAdapter || _softBlit); }
       // apex26.tlxForceBatches=1 — run the INSTANCED draws (and their shadow
       // casters) even on a software adapter. The skips below exist for a Dawn
@@ -336,8 +344,8 @@ const TLX = (function () {
         return { on: all || set.size > 0, has: (part) => all || set.has(part) };
       })();
       // Content skips ask these, not softGpu()/softwareGL, so the switches reach them.
-      function skipBatches() { return softGpu() && !_forceBatches && !_forceHw.has("batches"); }
-      function softContent(part) { return (softwareGL || softGpu()) && !_forceHw.has(part); }
+      function skipBatches() { return _softAdapter && !_forceBatches && !_forceHw.has("batches"); }
+      function softContent(part) { return (softwareGL || _softAdapter) && !_forceHw.has(part); }
       function softOutRT() { return softGpu() ? _ensureBlitRT(W, H) : null; }
       // r185.1 keys the TSL node-builder cache on RenderObject.initialCacheKey,
       // which folds in renderer.contextNode.version + the scene lights hash.

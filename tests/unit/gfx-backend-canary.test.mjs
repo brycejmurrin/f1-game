@@ -1007,8 +1007,16 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // switch exists because gating the workaround on softGpu() meant the code
   // path REAL GPUs take was the one CI never executed — which is how a black
   // three.js WebGPU screen shipped. Keep both halves: default skips, opt-in runs.
-  assert.match(src, /function skipBatches\(\)\s*\{\s*return softGpu\(\)\s*&&\s*!_forceBatches\s*&&\s*!_forceHw\.has\("batches"\);/,
-    "the batch skip must remain softGpu()-by-default — the escapes are opt-in only");
+  // CONTENT gates ask _softAdapter, never softGpu(): softGpu() folds in
+  // _softBlit, which is a PRESENTATION need (headless has no compositing
+  // swapchain even on real hardware). Conflating them made the Apple/Metal
+  // runner — the project's only real GPU — run the software half of every
+  // skip, so the machine that could finally test a player's path tested the
+  // other one instead. softOutRT keeps asking softGpu(); these must not.
+  assert.match(src, /function skipBatches\(\)\s*\{\s*return _softAdapter\s*&&\s*!_forceBatches\s*&&\s*!_forceHw\.has\("batches"\);/,
+    "the batch skip is _softAdapter-by-default — not the presentation blit");
+  assert.match(src, /function softOutRT\(\)\s*\{\s*return softGpu\(\)/,
+    "presentation still follows softGpu() — the blit is needed whenever the swapchain is not composited");
   assert.match(src, /apex26\.tlxForceBatches/,
     "the real-GPU code path must stay reachable from a software run for debugging");
   // apex26.tlxForceHw is the same argument generalised: EVERY software skip in
@@ -1018,7 +1026,7 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // would not say which path did it.
   assert.match(src, /apex26\.tlxForceHw/,
     "the per-gate hardware-path switch must stay reachable from a software run");
-  assert.match(src, /function softContent\(part\)\s*\{\s*return \(softwareGL \|\| softGpu\(\)\) && !_forceHw\.has\(part\);/,
+  assert.match(src, /function softContent\(part\)\s*\{\s*return \(softwareGL \|\| _softAdapter\) && !_forceHw\.has\(part\);/,
     "content skips must route through softContent(part) — software by default, forceable per gate");
   assert.doesNotMatch(src, /softContent\(\)/,
     "softContent() must never be called without a part name");

@@ -613,7 +613,12 @@ const CEILINGS = {
   // when errors landed during the capture, standing down after three passes
   // instead of lighting the world from black forever. envState() reports it,
   // because the overlay is the only way a player can tell us.
-  "js/render/three/tlx.js": 2270,
+  // 2270 -> 2278 (R8): PRESENTATION and CONTENT stop sharing a gate. softGpu()
+  // folds in _softBlit — a blit is needed whenever the swapchain is not
+  // composited, headless included — and content skips inherited it, so headless
+  // Chromium on a REAL Apple/Metal GPU ran the software half of every skip. The
+  // one machine that could test a player's path was testing the other one.
+  "js/render/three/tlx.js": 2278,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   "js/render/glx.js": 1929,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.

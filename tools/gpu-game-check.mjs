@@ -197,9 +197,18 @@ try {
   out.error = String((e && e.message) || e);
   checkpoint("failed");
 } finally {
-  await browser.close().catch(() => {});
+  // browser.close() HANGS after a WebGPU/Metal session: run 4's WebGPU check
+  // reached phase "done" at +42.4s and the step was then killed at 20 minutes
+  // with the process still in this line. A teardown hang must not masquerade
+  // as a renderer hang — bound it and let the reported phases stand.
+  await Promise.race([
+    browser.close().catch(() => {}),
+    new Promise((r) => setTimeout(() => { out.closeHung = true; r(); }, 20000)),
+  ]);
   server.close();
 }
 console.log(JSON.stringify(out, null, 2));
 if (jsonAt) writeFileSync(jsonAt, JSON.stringify(out, null, 2));
+// A lingering GPU-process handle keeps node alive after close() gives up, so
+// exit explicitly rather than waiting on the event loop.
 process.exit(out.ok ? 0 : 1);
