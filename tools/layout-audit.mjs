@@ -122,7 +122,7 @@ const PROBE = (rootSel) => {
   const vw = innerWidth, vh = innerHeight;
   const root = document.querySelector(rootSel);
   const px = (n) => Math.round(n);
-  const SCROLLERS = ".pane,.panel-scroll,.scroll-y,.dh-content,#track-detail-body";
+  const SCROLLERS = ".pane,.panel-scroll,.scroll-y,.dh-content,#track-detail-panel,#track-detail";
   const FOCUSABLE = "button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
 
   // A COLLAPSED <details> STILL HAS GEOMETRY, and that is not the same as being

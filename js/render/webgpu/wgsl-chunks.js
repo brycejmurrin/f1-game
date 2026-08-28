@@ -1200,7 +1200,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // SSR). envProbeStr scales probeLive (baseRefl 0.14→0.72); probe 0 still gets
   // a gentle analytic sheen. Energy-conserving: darken base under envW, then add.
   let envProbeStr = max(F.params5.x, 0.0);
-  if (envSurface && clearcoat > 0.001) {
+  if (envSurface) {
     let Rg = reflect(-V, Ngeo);
     let NoVc = max(dot(Ngeo, V), 1e-4);
     let ccFb = 1.0 - NoVc;

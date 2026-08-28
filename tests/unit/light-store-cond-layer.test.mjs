@@ -52,7 +52,14 @@ function loadStore({ presets = {}, tod = "night", track = "vegas",
   const ctx = vm.createContext({
     window: { LightPresets: presets },
     LightTune: { TUNE_DEFS: DEFS, LT: {} },
-    GfxQuality: { current: () => ({ id: preset }) },
+    // MIRROR THE REAL EXPORT: js/game/gfx-quality.js ends with
+    // `current: () => current().id`, so current() IS the id STRING, not a
+    // preset object. This stub used to return { id } — the same mistake
+    // light-store.js made at its call site, so the two cancelled out and this
+    // test passed green while the *|night rung was dead in production for
+    // everyone. A stub that invents an API the module does not have proves
+    // nothing about the code it stands in for.
+    GfxQuality: { current: () => preset },
     Math, JSON, Object, Array, Number, isFinite, console,
   });
   seedLog(ctx);
