@@ -200,7 +200,11 @@
       along(0.96, 0.08, 60, (k) => {
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 3.8);
-          if (onTrack(a.c[0], a.c[2], 2)) return;
+          // continue, NOT return: `return` leaves the whole along() callback, so
+          // a pole rejected on side -1 silently took side +1 with it — half the
+          // lamps on this stretch never existed. Same shape as the hash guard
+          // in the hedge loop below, which got this right.
+          if (onTrack(a.c[0], a.c[2], 2)) continue;
           // pole
           addCyl(out, a.c, 0.12, 9.5, [0.74, 0.74, 0.78], 5, [a.r, a.u, a.t]);
           // cross-arm
@@ -215,7 +219,7 @@
       along(0.70, 0.96, 80, (k) => {
         for (const side of [-1, 1]) {
           const a = anchor(k, side, 18);
-          if (onTrack(a.c[0], a.c[2], 3)) return;
+          if (onTrack(a.c[0], a.c[2], 3)) continue;   // per-side reject, not per-node (see above)
           addCyl(out, a.c, 0.18, 20, [0.70, 0.70, 0.74], 5, [a.r, a.u, a.t]);
           // floodlight head cluster
           addBox(out, vadd(a.c, a.u, 20), [4.5, 0.5, 1.2], [0.95, 0.92, 0.78], [a.r, a.u, a.t]);
@@ -336,7 +340,7 @@
           if (hash(k * 113 + side) > 0.68) continue;
           const d = 22 + hash(k * 127 + side) * 18;
           const p = anchor(k, side, d);
-          if (onTrack(p.c[0], p.c[2], 10)) return;
+          if (onTrack(p.c[0], p.c[2], 10)) continue;   // per-side reject, not per-node (see above)
           hedge(k / n, k / n + 0.004, side, d, 0.9 + hash(k * 131 + side) * 0.3, [0.20, 0.44, 0.18]);
         }
       });

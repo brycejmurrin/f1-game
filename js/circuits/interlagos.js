@@ -128,8 +128,14 @@
       const crowdBank = (s, side, gap, len, rows) => {
         const k = K(s), a = anchor(k, side, gap);
         const bv = [a.r, a.u, a.t], step = 2.4, rise = 1.8, seats = Math.floor(len / 2.0);
+        // OUTWARD IS `side * a.r`, not bare `+a.r`. Every call site passes
+        // side=-1, so the bank stepped TOWARD the track as it rose: highest row
+        // nearest the tarmac, the rake inverted. The sibling arquibancada in
+        // this same file states the idiom (`const IN = -side` — +a.r faces the
+        // track), so rows walk away along `side`. The declared bounds move with
+        // the seats, or the group no longer covers what it carries.
         modelGroup(`interlagos-crowd-${k}`, {
-          center: vadd(vadd(a.c, a.r, rows * step / 2), a.u, rows * rise / 2),
+          center: vadd(vadd(a.c, a.r, side * rows * step / 2), a.u, rows * rise / 2),
           size: [len + 3, rows * rise + 3, rows * step + 3],
           basis: [a.t, a.u, a.r],
         }, (stage) => {
@@ -149,13 +155,13 @@
           // modelGroup bounds above already offset their centre forward by
           // rows*step/2 to span the real seating footprint; the mass box itself
           // never got the same offset. Match it.
-          addBox(stage, vadd(vadd(a.c, a.r, rows * step * 0.5), a.u, rows * rise * 0.5),
+          addBox(stage, vadd(vadd(a.c, a.r, side * rows * step * 0.5), a.u, rows * rise * 0.5),
                  [len, rows * rise, rows * step], [0.42, 0.43, 0.47], [a.t, a.u, a.r]);
           stage._mat = 0;
           for (let r = 0; r < rows; r++)
             for (let c = 0; c < seats; c++) {
               const off = (c - seats / 2) * 2.0 + (hash(k * 7 + r * 13 + c) - 0.5) * 0.7;
-              const p = vadd(vadd(vadd(a.c, a.r, r * step), a.u, r * rise + 1.1), a.t, off);
+              const p = vadd(vadd(vadd(a.c, a.r, side * r * step), a.u, r * rise + 1.1), a.t, off);
               addBox(stage, p, [0.9, 1.1, 0.8], crowdCols[(r * 5 + c * 3) % crowdCols.length], bv);
             }
         });
