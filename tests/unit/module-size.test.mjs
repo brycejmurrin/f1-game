@@ -590,7 +590,17 @@ const CEILINGS = {
   // ?viz= bisect reads the RT the frame actually wrote — viz writes its image
   // to the blit dest and never touches ldrRT, so every viz mode showed a stale
   // frame on the one backend the bisect exists to debug.
-  "js/render/three/tlx.js": 2159,
+  // 2159 -> 2232 (R6): the whole reason a real-GPU black frame was
+  // unreproducible in CI. apex26.tlxForceHw=<sky|env|chunked|batches|shadow>
+  // turns each software CONTENT skip back into the path a player's GPU takes,
+  // one gate at a time; the env-probe face that throws is no longer counted
+  // (six swallowed throws latched envReady over a cube nothing wrote); and
+  // attachKey() puts the fragment-output count back into the node cache key
+  // the compile-storm fix had stripped — without it Dawn rejected the
+  // 2-target scene program in the 1-target probe pass (290 uncaptured errors,
+  // measured 2026-08-28) and every probe face came back black. Each addition
+  // carries the measurement that found it.
+  "js/render/three/tlx.js": 2232,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   "js/render/glx.js": 1929,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.

@@ -48,6 +48,7 @@ function parseArgs(argv) {
     outDir: null,
     retries: 2,
     retryDelayMs: 3000,
+    ls: [],
   };
   const skip = new Set();
   for (let i = 0; i < argv.length; i++) {
@@ -63,6 +64,7 @@ function parseArgs(argv) {
     else if (a === "--iphone") o.iphone = true;
     else if (a === "--tlx-webgpu") o.tlxWebgpu = true;
     else if (a === "--lavapipe") o.lavapipe = true;
+    else if (a === "--ls") { const kv = next(); skip.add(kv); if (kv) o.ls.push(kv); }
     else if (a === "--help" || a === "-h") {
       console.log(`gfx-probe — WEBGPU/THREE screenshot probe with logging + retry
 
@@ -73,6 +75,7 @@ function parseArgs(argv) {
 
   --tlx-webgpu  with --backend three, unpin tlxForceGL (three's WebGPU path)
   --lavapipe    Dawn via Mesa Lavapipe ICD (pair with --tlx-webgpu on Cloud)
+  --ls k=v      set a localStorage key before boot (repeatable)
 
   stderr + <out>/probe.log: phased progress; stdout: final JSON result.`);
       process.exit(0);
@@ -195,7 +198,7 @@ async function runProbeAttempt(attemptNum) {
       consoleLines.push(`[pageerror] ${String(e).slice(0, 400)}`);
     });
 
-    await page.addInitScript(([be, wantLite, wantTlxGpu]) => {
+    await page.addInitScript(([be, wantLite, wantTlxGpu, extraLs]) => {
       localStorage.removeItem("apex26.gfxWgxFail");
       localStorage.removeItem("apex26.gfxWgxLevel");
       localStorage.removeItem("apex26.gfxBackendProbe");
@@ -213,7 +216,13 @@ async function runProbeAttempt(attemptNum) {
         localStorage.setItem("apex26.tlxForceGL", wantTlxGpu ? "0" : "1");
         if (wantTlxGpu) sessionStorage.setItem("apex26.wgxCapture", "1");
       }
-    }, [opts.backend, opts.lite, opts.tlxWebgpu]);
+      // --ls key=value (repeatable): any apex26.* knob, set AFTER the backend
+      // pins so a probe can drive a switch the pins do not know about.
+      for (const kv of extraLs || []) {
+        const i = kv.indexOf("=");
+        if (i > 0) localStorage.setItem(kv.slice(0, i), kv.slice(i + 1));
+      }
+    }, [opts.backend, opts.lite, opts.tlxWebgpu, opts.ls]);
 
     const url = srv.url + "index.html";
     await retryStep("goto", () => page.goto(url, { waitUntil: "domcontentloaded", timeout: 90000 }));

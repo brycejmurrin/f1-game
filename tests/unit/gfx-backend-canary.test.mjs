@@ -948,7 +948,9 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
   assert.notEqual(drawSky, -1, "drawSky moved");
   assert.match(src.slice(drawSky, drawSky + 1100), /frameSky\.zenith\s*\|\|\s*frameSky\.skyZenith/,
     "drawSky must keep the Color fallback in lockstep with the sky node");
-  assert.match(src.slice(drawSky, drawSky + 1100), /\(softwareGL \|\| softGpu\(\)\) && sky\.fallbackNode/,
+  // softContent("sky") IS (softwareGL || softGpu()), with the apex26.tlxForceHw
+  // escape folded in — the fallback stays the software default for players.
+  assert.match(src.slice(drawSky, drawSky + 1100), /softContent\("sky"\) && sky\.fallbackNode/,
     "software GL and software WebGPU must arm the zenith-only fallback, not the full SKY_FS node");
   assert.match(read("js/render/three/tsl-sky.js"), /fallbackNode/,
     "tsl-sky must publish a zenith-only fallbackNode for the software-GL path");
@@ -1005,17 +1007,42 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // switch exists because gating the workaround on softGpu() meant the code
   // path REAL GPUs take was the one CI never executed — which is how a black
   // three.js WebGPU screen shipped. Keep both halves: default skips, opt-in runs.
-  assert.match(src, /function skipBatches\(\)\s*\{\s*return softGpu\(\)\s*&&\s*!_forceBatches;/,
-    "the batch skip must remain softGpu()-by-default — the escape is opt-in only");
+  assert.match(src, /function skipBatches\(\)\s*\{\s*return softGpu\(\)\s*&&\s*!_forceBatches\s*&&\s*!_forceHw\.has\("batches"\);/,
+    "the batch skip must remain softGpu()-by-default — the escapes are opt-in only");
   assert.match(src, /apex26\.tlxForceBatches/,
     "the real-GPU code path must stay reachable from a software run for debugging");
+  // apex26.tlxForceHw is the same argument generalised: EVERY software skip in
+  // this file hides a path only a player's GPU executes, so each one needs a
+  // switch that puts it back. softContent() must always take a part name —
+  // a bare softContent() would force all the gates together and a timeout
+  // would not say which path did it.
+  assert.match(src, /apex26\.tlxForceHw/,
+    "the per-gate hardware-path switch must stay reachable from a software run");
+  assert.match(src, /function softContent\(part\)\s*\{\s*return \(softwareGL \|\| softGpu\(\)\) && !_forceHw\.has\(part\);/,
+    "content skips must route through softContent(part) — software by default, forceable per gate");
+  assert.doesNotMatch(src, /softContent\(\)/,
+    "softContent() must never be called without a part name");
+  for (const part of ["sky", "env", "chunked", "shadow"]) {
+    assert.ok(src.includes(`softContent("${part}")`),
+      `the ${part} software skip must be forceable — it is a path only real GPUs take`);
+  }
   assert.match(src, /renderer\.setRenderTarget\(softOutRT/,
     "env / post restore must rebind the blit RT, not the native swapchain");
   const envEnd = src.indexOf("envFaceEnd(face)");
   assert.notEqual(envEnd, -1, "envFaceEnd moved");
-  const envBody = src.slice(envEnd, envEnd + 2800);
+  const envBody = src.slice(envEnd, envEnd + 4200);
   assert.doesNotMatch(envBody, /setRenderTarget\(\s*null\s*\)/,
     "envFaceEnd must not restore the swapchain on the software-WebGPU path");
+  // A probe face that throws must NOT be counted: six swallowed throws used to
+  // latch envReady over a cube nothing wrote, and every lit surface sampled
+  // black. That is invisible on software (the faces are skipped there), which
+  // is exactly why it needs a static pin.
+  assert.match(envBody, /catch \(e\) \{[\s\S]{0,400}faceOk = false;/,
+    "envFaceEnd must record a failed probe face, not swallow it silently");
+  assert.match(envBody, /if \(faceOk\) envFacesMask \|= 1 << \(face & 7\);/,
+    "a failed probe face must not be counted towards the six");
+  assert.match(envBody, /if \(faceOk && envFacesMask === 63\)/,
+    "envReady must not latch on a face that threw");
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(post, /ctx\.softDest/,
     "tlx-post must honour ctx.softDest for the FXAA / viz dest");
