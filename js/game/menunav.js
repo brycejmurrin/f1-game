@@ -32,7 +32,7 @@ window.MenuNav = (function () {
 
   // Scroll regions, same list ScrollFade watches — `.pane` first and by class,
   // because that is the design system's own name for "a scroll region".
-  const SCROLLERS = ".pane,.panel-scroll,.scroll-y,.dh-content,#track-detail-body";
+  const SCROLLERS = ".pane,.panel-scroll,.scroll-y,.dh-content,#track-detail-panel,#track-detail";
 
   const FOCUSABLE = "button:not([disabled]),a[href],input:not([disabled])," +
     "select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";

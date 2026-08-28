@@ -27,7 +27,12 @@ window.ScrollFade = (function () {
   // strips (garage tabs are already `.pane`; the others are not).
   const SEL = [
     ".pane", ".panel-scroll", ".scroll-y",
-    ".dh-content", "#track-detail-body",
+    ".dh-content",
+    // track-detail: the BODY is overflow:hidden in every shape — the real
+    // scrollers are the PANEL (landscape/desktop) and the dialog itself
+    // (portrait). The old entry pointed at the one element that never scrolls,
+    // so this screen had no fade, no thumb, and no keyboard scrolling at all.
+    "#track-detail-panel", "#track-detail",
     // The TITLE screen. Zoom sits on `#overlay > *`, so #overlay's own
     // overflow-y is a dead letter; #menu-buttons is the node that actually
     // scrolls when the door column outgrows a short / high-scale window.

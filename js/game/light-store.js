@@ -65,7 +65,12 @@ const LightStore = (() => {
       if (!c) return null;
       const gfx = G.gfx;
       if (!gfx || !gfx.hasPerChunkLights || gfx.isMobile) return null;
-      if (typeof GfxQuality === "undefined" || GfxQuality.current().id !== "ultra") return null;
+      // GfxQuality.current() IS the id string (gfx-quality.js exports
+      // `current: () => current().id`), so the old `.current().id` read
+      // undefined on every call and this gate never opened — the ULTRA-night
+      // per-chunk rung was dead for everyone, including the set() path that
+      // deliberately calls LightStore.reapply() to engage it live.
+      if (typeof GfxQuality === "undefined" || GfxQuality.current() !== "ultra") return null;
       return c;
     }
 

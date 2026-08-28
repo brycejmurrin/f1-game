@@ -429,13 +429,14 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
       #000 calc(100% - var(--sfade-r)), transparent 100%);
   -webkit-mask-composite: source-in;
 }
-/* 26px, not 20. These lists are rows of ~40px, and a fade shorter than half a
-   row leaves the last one looking cut off rather than continuing — which is
-   exactly how the standings and schedule tabs read. */
-.sf-t { --sfade-t: 26px; }
-.sf-b { --sfade-b: 26px; }
-.sf-l { --sfade-l: 26px; }
-.sf-r { --sfade-r: 26px; }
+/* 36px, raised from 26 after two judge panels read the fade as "the container
+   clipped my content": at ~⅔ of one 40px row, a pure alpha ramp on a dark
+   plate over a dark sheet was under the noise floor. A fade close to one full
+   row is what converts "cut off" into "continues below". */
+.sf-t { --sfade-t: 36px; }
+.sf-b { --sfade-b: 36px; }
+.sf-l { --sfade-l: 36px; }
+.sf-r { --sfade-r: 36px; }
 
 /* ---------- scroll POSITION INDICATOR ----------
    A scrollbar thumb down the right edge, like a web page has. The fade above
@@ -467,7 +468,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   z-index: 3;
   display: block;
   grid-column: 1 / -1;
-  width: 4px;
+  width: 6px;
   height: var(--sf-h, 24px);
   /* NEVER SHRINK. In a flex-column scroll region (#cs-options, .dh-content) the
      thumb is a flex ITEM, and flex-shrink defaults to 1 — so with 891px of
@@ -482,7 +483,11 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   margin-bottom: calc(-1 * var(--sf-h, 24px));
   border-radius: var(--r-xs);
   background: var(--accent);
-  opacity: 0.55;
+  /* 0.8, raised from 0.55: dark red at 55% on a dark panel was below the
+     noise floor of the UI — and for most of this indicator's life it also
+     never moved (the sf token registration severed its var() access, fixed
+     in the same round), so nobody had ever judged it at its real job. */
+  opacity: 0.8;
   pointer-events: none;
 }
 /* Give the thumb its own LANE inside a sheet body's right padding. `margin-left:
@@ -494,7 +499,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    pixel of content. Scoped to .sheet-body on purpose: a region with no padding
    (the bare track/team lists) would push the thumb past its own scrollport and
    have it clipped away. */
-.sheet-body.sf-scroll::before { margin-right: calc(4px - var(--pad)); }
+.sheet-body.sf-scroll::before { margin-right: calc(6px - var(--pad)); }
 
 /* ---------- STATE HAS DURATION ----------
    Selection used to be instant everywhere: tap a chip and the ring simply
@@ -853,6 +858,16 @@ body:has(#career-offers:not([hidden])) #career,
 body:has(#career-history:not([hidden])) #career,
 body:has(#career-guide:not([hidden])) #career,
 body:has(#teampicker:not([hidden])) #career {
+  opacity: 0;
+  pointer-events: none;
+}
+/* The garage was the one host this family missed: CUSTOMIZE and the team
+   picker open OVER #carsetup, whose own chrome (unlike the race scene the
+   sheet translucency is tuned for) composited straight through the panel —
+   "DRIVER" ghosting inside the paint dialog's CODE field was this rule's
+   absence. opacity, not hidden, so the turntable canvas keeps its frustum. */
+body:has(#customize:not([hidden])) #carsetup,
+body:has(#teampicker:not([hidden])) #carsetup {
   opacity: 0;
   pointer-events: none;
 }
