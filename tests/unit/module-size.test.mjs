@@ -569,7 +569,11 @@ const CEILINGS = {
   // take was the one nothing in CI ever executed — the three.js WebGPU black
   // screen shipped through that hole. The switch lets a software run exercise
   // the real-GPU path against the same Dawn, with the comment recording why.
-  "js/render/three/tlx.js": 2123,
+  // 2123 -> 2155 for the GPU error capture WGX has always had and this backend
+  // never did: onuncapturederror + the tally + gpuErrors()/gpuFirstError()
+  // exports, with the comment recording that a black WebGPU frame was chased
+  // for a session against probes that could only ever report null.
+  "js/render/three/tlx.js": 2155,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   "js/render/glx.js": 1929,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.

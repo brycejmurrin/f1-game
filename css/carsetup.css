@@ -626,6 +626,24 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 .cs-liv-ed-none.active {
   background: var(--surf-3); color: var(--text); border-color: rgba(255,255,255,0.42);
 }
+/* MATCHING PALETTE: the colours already used elsewhere in this paint job, so a
+   slot can take one EXACTLY instead of being eyeballed in the OS colour dialog.
+   The chips reuse .cs-liv-ed-none (same pill, same tap target, same active
+   ring) with the colour set inline — only the strip needed a class of its own.
+   It wraps because a busy livery can reach a dozen distinct colours. */
+/* Its OWN line, not the tail of the colour row: label + well + NONE already eat
+   the panel's width, so inline chips wrapped one-per-line and made every row
+   three deep. flex-basis 100% puts the strip under them with the full width to
+   wrap into, which holds a dozen colours in two lines. */
+.cs-liv-ed-row { flex-wrap: wrap; }
+.cs-liv-pal { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.5); flex: 1 0 100%; min-width: 0; }
+.cs-liv-pal:empty { display: none; }
+/* Square wells the size of the colour input's own chip, so a swatch and the
+   picker it fills read as the same control. The colour is set inline per chip;
+   the border is the only chrome, which keeps this free of colour literals. */
+.cs-liv-pal .cs-liv-ed-none {
+  min-width: var(--chip-h); width: var(--chip-h); padding: 0;
+}
 .cs-liv-ed-name {
   flex: 1 1 auto; min-width: 0; min-height: var(--chip-h);
   /* 16px, not --fs-2: iOS focused-input auto-zoom floor (see menus.css /

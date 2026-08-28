@@ -971,6 +971,9 @@ const LiveryTex = (function () {
     return canvas;
   }
 
-  return { SIZE, REGIONS, buildAtlas, drawCrest, loadLogos, ensureLogos, onLogosReady, setTeamLogo, LOGOS };
+  // drawLogoImage is exported for the GARAGE back-wall crest (js/game/garage-scene.js):
+  // aspect-fit + tint + halo is exactly the same job there, and reimplementing
+  // the fit maths in a second place is how the two drift apart.
+  return { SIZE, REGIONS, buildAtlas, drawCrest, drawLogoImage, loadLogos, ensureLogos, onLogosReady, setTeamLogo, LOGOS };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;
