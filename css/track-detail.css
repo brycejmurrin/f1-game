@@ -102,6 +102,17 @@
    goes to zero. The close button is the shared .dh-close recipe (its
    local copy became byte-identical in round 7 and is gone). */
 #track-detail-header { flex: none; padding-inline: 0; }
+/* This is the app's ONE full-bleed sheet head: --grad-head's red bleed is
+   tuned for card-width sheets and ends at 56%, which here is mid-band — the
+   red died exactly at the desktop column seam, stranding the close button
+   on bare black while the title sat on the most saturated stop. Locally the
+   bleed runs the full width instead; the sheen layer is unchanged, and the
+   shared token stays tuned for the normal sheets. */
+#track-detail-header {
+  background:
+    linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 26%, transparent), transparent 100%),
+    linear-gradient(180deg in oklab, rgba(255, 255, 255, 0.07), transparent 72%);
+}
 body[data-density="compact"] #track-detail-header {
   padding-top: 0; padding-bottom: calc(var(--pad) * 0.2);
 }

@@ -49,8 +49,8 @@
      Measured chrome-devtools LCPBreakdown: almost all element render delay
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
-<link rel="preload" href="css/tokens.css?v=91a977fea4eb" as="style">
-<link rel="preload" href="css/components.css?v=1fbc7a9ae725" as="style">
+<link rel="preload" href="css/tokens.css?v=b130f34ed812" as="style">
+<link rel="preload" href="css/components.css?v=740c13224a8c" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -68,15 +68,15 @@
 <!-- MANIFEST.CSS order preserved (cascade). Title-critical sheets stay
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
-<link rel="stylesheet" href="css/tokens.css?v=91a977fea4eb">
-<link rel="stylesheet" href="css/components.css?v=1fbc7a9ae725">
+<link rel="stylesheet" href="css/tokens.css?v=b130f34ed812">
+<link rel="stylesheet" href="css/components.css?v=740c13224a8c">
 <link rel="stylesheet" href="css/tuner.css?v=dfc16ebe4560" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=b55d6dd79bca">
-<link rel="stylesheet" href="css/carsetup.css?v=051dedb8821a" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/menus.css?v=b722c4fc57b6">
+<link rel="stylesheet" href="css/carsetup.css?v=dc8081fe75b6" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=09eec5dfd7e7" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=5f267a1e2625" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=6e90ca36cead">
-<link rel="stylesheet" href="css/track-detail.css?v=02ba1aa9b7dd" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/track-detail.css?v=1def0fb9ead7" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=dab85626d73c" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=2e723024c38d" media="print" onload="this.media='all'">
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
@@ -476,7 +476,7 @@
            are in SETTINGS > MUSIC & SOUND), so it belongs on the title screen,
            where it hides and shows with #overlay for free. -->
       <p id="audiostate"></p>
-      <button id="soundbtn" class="minibtn" aria-pressed="true">&#9834; ON</button>
+      <button id="soundbtn" class="minibtn" aria-pressed="true">&#9834; SOUND ON</button>
       <p id="disclaimer">Unofficial fan project &mdash; not affiliated with FIA or Formula 1</p>
     </div>
   </div>
@@ -503,7 +503,7 @@
          two across, so the rooms never compete with the modes for the eye. -->
     <div id="menu-secondary" class="balanced-row">
     <button id="mb-standings" class="bigbtn alt minibtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/></svg>STANDINGS</button>
-    <button id="mb-data" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>F1 DATA HUB</button>
+    <button id="mb-data" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>DATA HUB</button>
     <button id="mb-garage" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>GARAGE</button>
     <button id="mb-settings" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>SETTINGS</button>
     <!-- Unhidden (2026-08): the handler was live the whole time while the
@@ -1820,7 +1820,7 @@
 <script crossorigin="anonymous" src="js/game/audio.js?v=343b34f9851b"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=f43e998612b3"></script>
 <script crossorigin="anonymous" src="js/game/spotify.js?v=27c8d6373cac"></script>
-<script crossorigin="anonymous" src="js/game/audio-panel.js?v=97c5dd551254"></script>
+<script crossorigin="anonymous" src="js/game/audio-panel.js?v=12b308c3d8e4"></script>
 <script crossorigin="anonymous" src="js/data/api.js?v=fa976f9613d8"></script>
 <script crossorigin="anonymous" src="js/data/telemetry.js?v=72c13d9f7d44"></script>
 <script crossorigin="anonymous" src="js/data/export.js?v=2ce05569b764"></script>
@@ -1851,13 +1851,13 @@
 <script crossorigin="anonymous" src="js/game/setup-ui.js?v=00668d4c63ce"></script>
 <script crossorigin="anonymous" src="js/game/career-ui.js?v=aaf7625fbd71"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=aaae55bb9780"></script>
-<script crossorigin="anonymous" src="js/game/menus.js?v=cfce54b5750b"></script>
-<script crossorigin="anonymous" src="js/game/scrollfade.js?v=7134e489b866"></script>
+<script crossorigin="anonymous" src="js/game/menus.js?v=1d686610029b"></script>
+<script crossorigin="anonymous" src="js/game/scrollfade.js?v=677da4848e82"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
 <script crossorigin="anonymous" src="js/game/sheetshape.js?v=f44ef602cc23"></script>
 <script crossorigin="anonymous" src="js/game/uilayers.js?v=6fdcb2735e56"></script>
 <script crossorigin="anonymous" src="js/game/topmodal.js?v=c1f6b969822f"></script>
-<script crossorigin="anonymous" src="js/game/menunav.js?v=96cdaabfd62f"></script>
+<script crossorigin="anonymous" src="js/game/menunav.js?v=ed1731c5ddbb"></script>
 <script crossorigin="anonymous" src="js/game/ariastate.js?v=973a5889cce1"></script>
 <script crossorigin="anonymous" src="js/game/settings-nav.js?v=b08f88915465"></script>
 <script crossorigin="anonymous" src="js/game/aerozones.js?v=3918f5735cf7"></script>

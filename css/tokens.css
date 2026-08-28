@@ -122,12 +122,19 @@
 @property --sfade-b { syntax: "<length>"; inherits: false; initial-value: 0px; }
 /* Scroll-thumb geometry, written by js/game/scrollfade.js on each scroll region.
    `inherits: false` is the load-bearing part, not the typing: a plain custom
-   property inherits, so setting one on a scroll container invalidates style for
-   its WHOLE subtree — and these are set on containers holding 80+ rows (the
-   lighting tuner), on every scroll. Declared non-inherited, a change touches
-   only the element and the ::before that draws the thumb. */
-@property --sf-h { syntax: "<length>"; inherits: false; initial-value: 24px; }
-@property --sf-y { syntax: "<length>"; inherits: false; initial-value: 0px; }
+   property inherits, so setting one on a scroll container invalidates style
+   for its WHOLE subtree — and these are set on containers holding 80+ rows
+   (the lighting tuner), on every scroll. `inherits: false` was tried for
+   that reason, with the belief that "a change touches only the element and
+   the ::before that draws the thumb" — MEASURED FALSE (round-13 probe): a
+   pseudo-element inherits from its originating element by the normal rules,
+   so a non-inheriting property never reaches the ::before at all. The thumb
+   read the INITIAL values everywhere — pinned at the top, always 24px, on
+   every scroller, for as long as the registration stood. Inheriting is the
+   price of the thumb existing; ScrollFade already bounds the writes (it
+   skips when the thumb has not moved), which is the real perf control. */
+@property --sf-h { syntax: "<length>"; inherits: true; initial-value: 24px; }
+@property --sf-y { syntax: "<length>"; inherits: true; initial-value: 0px; }
 /* Where the specular band sits across a primary button, 0% = off the leading
    edge, 100% = off the trailing one. REGISTERED because an unregistered custom
    property animates DISCRETELY — it would jump rather than sweep, which is the
