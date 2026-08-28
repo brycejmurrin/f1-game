@@ -630,7 +630,7 @@ function buildLiveryCreator(container, team) {
     const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = "FINISH"; r.appendChild(lb);
     const group = document.createElement("span"); group.className = "cs-liv-ed-finish";
     const btns = [];
-    for (const f of ["gloss", "satin", "chrome"]) {
+    for (const f of ["gloss", "satin", "chrome", "matte", "carbon", "brushed", "pearl"]) {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "cs-liv-ed-none" + ((d.finish || "gloss") === f ? " active" : "");

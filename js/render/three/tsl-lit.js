@@ -973,7 +973,7 @@
 
         // ── car surface ids 20-27 (car3d.js SURFACES; js/render/shaders/lit.js) ───────
         const surfaceId = floor(matA.add(0.5)).toVar();
-        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(27.0)).toVar();
+        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(31.0)).toVar();
         const paintSurface = surfaceId.equal(20.0).toVar();
         const carbonSurface = surfaceId.equal(21.0).toVar();
         const rubberSurface = surfaceId.equal(22.0).toVar();
@@ -984,32 +984,48 @@
         // MIRROR: chrome livery finish (FINISH_SURFACE.chrome). Paint-like
         // (keeps clearcoat + env lobe) but metallic and nearly smooth.
         const mirrorSurface = surfaceId.equal(27.0).toVar();
+        // Three more livery finishes, mirroring js/render/shaders/lit.js. A
+        // finish costs a SURFACE ID, not a uniform: car3d.js FINISH_SURFACE
+        // remaps a painted vertex. Carbon needs no id — 21 already exists.
+        const matteSurface = surfaceId.equal(28.0).toVar();
+        const satinMetalSurface = surfaceId.equal(29.0).toVar();
+        const iriSurface = surfaceId.equal(30.0).toVar();
+        const carbonFinish = surfaceId.equal(31.0).toVar();   // bare weave OVER the livery colour
+        const paintLike = paintSurface.or(mirrorSurface).or(iriSurface).or(satinMetalSurface).toVar();
         const carPaint = select(classifiedCar,
-          select(paintSurface.or(mirrorSurface), matU.carPaint, float(0.0)), matU.carPaint).toVar();
+          select(paintLike, matU.carPaint, float(0.0)), matU.carPaint).toVar();
         const clearcoat = select(classifiedCar,
           select(paintSurface, matU.clearcoat,
             select(mirrorSurface, max(matU.clearcoat, 0.85),
-              select(glassSurface, matU.clearcoat.mul(0.45), float(0.0)))),
+              select(iriSurface, max(matU.clearcoat, 0.70),
+                select(satinMetalSurface, min(matU.clearcoat, 0.25),
+                  select(matteSurface, float(0.0),
+                    select(glassSurface, matU.clearcoat.mul(0.45), float(0.0))))))),
           matU.clearcoat).toVar();
         const metalness = select(classifiedCar,
           select(metalSurface, max(matU.metalness, 0.78),
             select(mirrorSurface, max(matU.metalness, 0.55),
+              select(satinMetalSurface, max(matU.metalness, 0.60),
+                select(matteSurface, float(0.0),
+                  select(iriSurface, max(matU.metalness, 0.25),
               // PAINT gets metalness instead of falling through to 0.0 — mirrors
               // js/render/shaders/lit.js. tables.js sets 0.12 on every PAINT_*
               // and describes the flake it is meant to produce; the 0.0 discarded
               // it and made CAR METALLIC dead on every car pixel.
               select(carbonSurface, float(0.08),
-                select(paintSurface, matU.metalness, float(0.0))))),
+                select(paintSurface, matU.metalness, float(0.0)))))))),
           matU.metalness).toVar();
         const specular = select(classifiedCar,
           select(rubberSurface, float(0.18),
             select(metalSurface.or(mirrorSurface), float(1.0),
-              select(carbonSurface, float(0.48),
-                select(panelSurface, float(0.35), matU.specular)))),
+              select(satinMetalSurface, float(0.82),
+                select(matteSurface, float(0.16),
+                  select(carbonSurface.or(carbonFinish), float(0.48),
+                    select(panelSurface, float(0.35), matU.specular)))))),
           matU.specular).toVar();
         const emissive = select(classifiedCar,
           select(emissiveSurface, max(matU.emissive, 1.0),
-            select(paintSurface, matU.emissive, float(0.0))),
+            select(paintLike, matU.emissive, float(0.0))),
           matU.emissive).toVar();
         const envSurface = carPaint.greaterThan(0.001).or(glassSurface)
           .and(clearcoat.greaterThan(0.001)).toVar();
@@ -1076,13 +1092,35 @@
 
         // ── roughness resolution + car-surface clamps (js/render/shaders/lit.js) ──────
         const rough = clamp(matU.roughness, 0.04, 1.0).toVar();
-        If(carbonSurface, () => { rough.assign(max(rough, 0.56)); });
+        If(carbonSurface.or(carbonFinish), () => { rough.assign(max(rough, 0.56)); });
         If(rubberSurface, () => { rough.assign(max(rough, 0.90)); });
         If(metalSurface, () => { rough.assign(min(rough, 0.16)); });
         If(glassSurface, () => { rough.assign(min(rough, 0.13)); });
         If(emissiveSurface, () => { rough.assign(max(rough, 0.32)); });
         If(panelSurface, () => { rough.assign(max(rough, 0.72)); });
         If(mirrorSurface, () => { rough.assign(min(rough, 0.09)); });
+        If(matteSurface, () => { rough.assign(max(rough, 0.88)); });
+        If(satinMetalSurface, () => { rough.assign(clamp(rough, 0.24, 0.40)); });
+        If(iriSurface, () => { rough.assign(min(rough, 0.22)); });
+        // PEARLESCENT / FLIP PAINT (mirrors js/render/shaders/lit.js): rotate
+        // albedo through a cosine palette driven by the Fresnel term, so the
+        // panel flips colour with view angle and returns to the livery's own
+        // colour face-on. No derivative, so it is safe in any control flow.
+        // CARBON FINISH (mirrors js/render/shaders/lit.js).
+        If(carbonFinish, () => {
+          const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
+          const weave = wv.x.sin().mul(wv.y.sin()).mul(0.5).add(0.5).toVar();
+          albedo.assign(mix(albedo.mul(0.16).add(vec3(0.030, 0.031, 0.035)), albedo.mul(0.28), 0.25));
+          albedo.assign(albedo.mul(weave.mul(0.28).add(0.86)));
+        });
+        If(iriSurface, () => {
+          const fres = clamp(dot(N, V), 0.0, 1.0).oneMinus().toVar();
+          const shift = vec3(0.0, 0.33, 0.67).add(fres.mul(1.4)).mul(6.2831853)
+            .cos().mul(0.5).add(0.5).toVar();
+          // MULTIPLY the base colour — a pearl coat tints what is under it.
+          albedo.assign(albedo.mul(mix(vec3(1.0), shift.mul(0.80).add(0.60),
+            smoothstep(0.30, 0.92, fres).mul(0.40))));
+        });
         If(matU.detail.greaterThan(0.0), () => {   // glossier repair patches
           rough.assign(clamp(rough.add(patchM.sub(0.5).mul(0.16).mul(min(matU.detail.mul(4.0), 1.0))), 0.04, 1.0));
         });
