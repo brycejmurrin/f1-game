@@ -1489,11 +1489,18 @@ const Car3D = (function () {
                     : { z: 0.08, y: 0.585, w: 0.44, h: 0.15, t: 0.58 };
     addSpan(out, hF, hR, c1, c1);
     addTopBevel(out, hF, hR, 0.026, c1);
-    // Accent stripe down the vanity deck crown (team colour). Cockpit: it must
-    // START AHEAD OF THE WHEEL (game.js _rigT z 0.26) — at centre 0.95 x length
-    // 1.75 it began at z 0.075, behind the wheel, and drew across its face.
-    addBox(out, 0, ckpt ? 0.585 : 0.665, ckpt ? 1.10 : 0.45, 0.10, 0.02, ckpt ? 1.30 : 0.80,
-           ersC2, SURFACES.paint);
+    // Accent stripe down the vanity deck crown (team colour) — CHASE ONLY.
+    // It was pushed ahead of the wheel once already (at centre 0.95 x length
+    // 1.75 it began at z 0.075, behind the wheel, and drew across its face),
+    // but ahead of the wheel is no better: in cockpit the bar starts 0.65 m
+    // from the eye (0, 0.82, -0.20) and runs 1.30 m straight down the centre
+    // of the view, so it foreshortens into a flat slab rather than reading as
+    // a stripe. On a livery whose accent is white it is a bright grey box
+    // sitting in front of the wheel — measured: the centre ray at the cockpit
+    // tuner's -20.5 deg pitch hits it at 0.69 m, and ferrari's c2 is [1,1,1].
+    // The driver of a real car does not see their own spine stripe; the chase
+    // cameras still do, so only the cockpit build drops it.
+    if (!ckpt) addBox(out, 0, 0.665, 0.45, 0.10, 0.02, 0.80, ersC2, SURFACES.paint);
 
     part("bolsters");
     if (ckpt) {
