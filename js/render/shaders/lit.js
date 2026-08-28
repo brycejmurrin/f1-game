@@ -782,7 +782,7 @@ void main() {
   // Car3D surface ids occupy 20..26, above TrackGeom's 0..15 material range.
   // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
   int surfaceId = int(vMat + 0.5);
-  bool classifiedCar = surfaceId >= 20 && surfaceId <= 27;
+  bool classifiedCar = surfaceId >= 20 && surfaceId <= 31;
   bool paintSurface = surfaceId == 20;
   bool carbonSurface = surfaceId == 21;
   bool rubberSurface = surfaceId == 22;
@@ -794,11 +794,23 @@ void main() {
   // env lobe, which is what actually makes a mirror) but metallic and nearly
   // smooth, so the body reflects its surroundings instead of going matte-dark.
   bool mirrorSurface = surfaceId == 27;
-  float carPaint = classifiedCar ? ((paintSurface || mirrorSurface) ? uCarPaint : 0.0) : uCarPaint;
+  // Three more livery finishes, on the SAME mechanism the existing ones use:
+  // car3d.js FINISH_SURFACE remaps a painted vertex's id, so a finish costs a
+  // surface id here rather than a new uniform. CARBON needs no id at all — 21
+  // already exists and the carbon finish simply points at it.
+  bool matteSurface = surfaceId == 28;       // flat, chalky, no clearcoat
+  bool satinMetalSurface = surfaceId == 29;  // brushed-alloy sheen, half-metal
+  bool iriSurface = surfaceId == 30;         // pearlescent: hue swings with view angle
+  bool carbonFinish = surfaceId == 31;       // bare weave OVER the livery colour
+  bool paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface;
+  float carPaint = classifiedCar ? (paintLike ? uCarPaint : 0.0) : uCarPaint;
   float clearcoat = classifiedCar
     ? (paintSurface ? uClearcoat
       : (mirrorSurface ? max(uClearcoat, 0.85)
-      : (glassSurface ? uClearcoat * 0.45 : 0.0)))
+      : (iriSurface ? max(uClearcoat, 0.70)
+      : (satinMetalSurface ? min(uClearcoat, 0.25)
+      : (matteSurface ? 0.0
+      : (glassSurface ? uClearcoat * 0.45 : 0.0))))))
     : uClearcoat;
   // PAINT gets uMetalness. It used to fall through to a literal 0.0, which made
   // CAR METALLIC a 100% dead slider: every car pixel is classified (car3d.js
@@ -816,13 +828,18 @@ void main() {
   float metalness = classifiedCar
     ? (metalSurface ? max(uMetalness, 0.78)
       : (mirrorSurface ? max(uMetalness, 0.55)
-      : (carbonSurface ? 0.08 : (paintSurface ? uMetalness : 0.0))))
+      : (satinMetalSurface ? max(uMetalness, 0.60)
+      : (matteSurface ? 0.0
+      : (iriSurface ? max(uMetalness, 0.25)
+      : ((carbonSurface || carbonFinish) ? 0.08 : (paintSurface ? uMetalness : 0.0)))))))
     : uMetalness;
   float specular = classifiedCar
-    ? (rubberSurface ? 0.18 : ((metalSurface || mirrorSurface) ? 1.0 : (carbonSurface ? 0.48 : (panelSurface ? 0.35 : uSpecular))))
+    ? (rubberSurface ? 0.18 : ((metalSurface || mirrorSurface) ? 1.0
+      : (satinMetalSurface ? 0.82 : (matteSurface ? 0.16
+      : ((carbonSurface || carbonFinish) ? 0.48 : (panelSurface ? 0.35 : uSpecular))))))
     : uSpecular;
   float emissive = classifiedCar
-    ? (emissiveSurface ? max(uEmissive, 1.0) : (paintSurface ? uEmissive : 0.0))
+    ? (emissiveSurface ? max(uEmissive, 1.0) : (paintLike ? uEmissive : 0.0))
     : uEmissive;
   bool envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;
   if (carPaint > 0.001) {
@@ -914,14 +931,42 @@ void main() {
     }
     albedo = max(albedo, vec3(0.0));
   }
+  // PEARLESCENT / FLIP PAINT. A real pearl coat holds interference flakes whose
+  // reflected wavelength depends on the angle you view them at, so the panel
+  // reads one colour face-on and another at a graze. Approximated by rotating
+  // the albedo through a cosine palette driven by the view angle: cheap, stable
+  // under motion (no derivative, no texture) and it degrades to the base colour
+  // when viewed square-on, so the livery a player picked is still what they see
+  // from the front.
+  // CARBON FINISH: bodywork in bare weave. Crush the livery colour toward the
+  // dark resin and lay a fine cross-hatch over it, keeping a trace of the team
+  // tint so a red car is still identifiably that team's car in carbon.
+  if (carbonFinish) {
+    vec2 wv = vObjPos.xz * 190.0 + vObjPos.y * 190.0;
+    float weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y);
+    albedo = mix(albedo * 0.16 + vec3(0.030, 0.031, 0.035), albedo * 0.28, 0.25);
+    albedo *= 0.86 + 0.28 * weave;
+  }
+  if (iriSurface) {
+    float fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
+    vec3 shift = 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + fres * 1.4));
+    // MULTIPLY the base colour rather than mixing toward the interference
+    // colour: a pearl coat tints what is under it, it does not replace it. The
+    // first pass mixed at 0.75 from fres 0.05 and turned a Ferrari mint green.
+    // Weighted to genuinely grazing angles only, so face-on stays team colour.
+    albedo *= mix(vec3(1.0), 0.60 + 0.80 * shift, smoothstep(0.30, 0.92, fres) * 0.40);
+  }
   float rough = clamp(uRoughness, 0.04, 1.0);
-  if (carbonSurface) rough = max(rough, 0.56);
+  if (carbonSurface || carbonFinish) rough = max(rough, 0.56);
   if (rubberSurface) rough = max(rough, 0.90);
   if (metalSurface) rough = min(rough, 0.16);
   if (glassSurface) rough = min(rough, 0.13);
   if (emissiveSurface) rough = max(rough, 0.32);
   if (panelSurface) rough = max(rough, 0.72);
   if (mirrorSurface) rough = min(rough, 0.09);
+  if (matteSurface) rough = max(rough, 0.88);
+  if (satinMetalSurface) rough = clamp(rough, 0.24, 0.40);
+  if (iriSurface) rough = min(rough, 0.22);
   // Repair patches read glossier: fold the patch mask into roughness (max
   // +-0.08) before the specular AA below widens it.
   if (uDetail > 0.0) rough = clamp(rough + (patchM - 0.5) * 0.16 * min(uDetail * 4.0, 1.0), 0.04, 1.0);

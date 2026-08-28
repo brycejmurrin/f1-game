@@ -77,7 +77,15 @@ const SceneryStructures = (function () {
       const postCol = (opts && opts.postCol) || [0.28, 0.28, 0.30];
       const meshCol = col || [0.72, 0.74, 0.78];
       const postKey = `fence-post|${h}|${st}|${postCol.join(",")}`;
-      const meshKey = `fence-mesh|${h}|${st}|${meshCol.join(",")}`;
+      // SIDE JOINS THE KEY, BUT ONLY WHERE THE MESH ACTUALLY USES IT. The
+      // "leaning" top rail is offset by `-side * h * 0.09`, so its geometry
+      // differs per side while the key did not — the first caller's side was
+      // baked into the shared instance and the other side's catch-fence leaned
+      // AWAY from the track (Monza, Imola, Catalunya). The other styles are
+      // side-independent, and the duplicate-string note above is why they keep
+      // sharing one key instead of paying for a second family.
+      const meshKey = `fence-mesh|${h}|${st}|${meshCol.join(",")}`
+        + (st === "leaning" ? `|${side}` : "");
       along(s0, s1, 5, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 0.5)) {

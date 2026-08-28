@@ -49,6 +49,7 @@ function parseArgs(argv) {
     retries: 2,
     retryDelayMs: 3000,
     ls: [],
+    presentMs: 60000,
   };
   const skip = new Set();
   for (let i = 0; i < argv.length; i++) {
@@ -65,6 +66,7 @@ function parseArgs(argv) {
     else if (a === "--tlx-webgpu") o.tlxWebgpu = true;
     else if (a === "--lavapipe") o.lavapipe = true;
     else if (a === "--ls") { const kv = next(); skip.add(kv); if (kv) o.ls.push(kv); }
+    else if (a === "--present-timeout") { const v = next(); skip.add(v); o.presentMs = Math.max(1000, parseInt(v, 10) || 60000); }
     else if (a === "--help" || a === "-h") {
       console.log(`gfx-probe — WEBGPU/THREE screenshot probe with logging + retry
 
@@ -76,6 +78,7 @@ function parseArgs(argv) {
   --tlx-webgpu  with --backend three, unpin tlxForceGL (three's WebGPU path)
   --lavapipe    Dawn via Mesa Lavapipe ICD (pair with --tlx-webgpu on Cloud)
   --ls k=v      set a localStorage key before boot (repeatable)
+  --present-timeout MS   awaitSoftPresent budget (default 60000)
 
   stderr + <out>/probe.log: phased progress; stdout: final JSON result.`);
       process.exit(0);
@@ -96,6 +99,18 @@ const opts = parseArgs(process.argv.slice(2));
 if (opts.backend !== "webgpu" && opts.backend !== "three") {
   console.error("gfx-probe: --backend must be webgpu or three");
   process.exit(1);
+}
+
+// --lavapipe launches Chromium with the Mesa Vulkan ICD, which is a WebGPU
+// stack; pairing it with the WebGL2 pin (--backend three WITHOUT --tlx-webgpu)
+// produces a browser that never finishes booting the page — three 90 s
+// waitForFunction timeouts that read exactly like a boot regression in the
+// game. Measured 2026-08-28: the same tree boots in 9 s once --lavapipe is
+// dropped. Refuse the combination instead of letting it look like a bug.
+if (opts.lavapipe && opts.backend === "three" && !opts.tlxWebgpu) {
+  console.error("gfx-probe: --lavapipe needs --tlx-webgpu (it is a WebGPU stack); " +
+    "for the WebGL2 pin run: --backend three  [no --lavapipe]");
+  process.exit(2);
 }
 
 mkdirSync(opts.outDir, { recursive: true });
@@ -152,6 +167,9 @@ async function retryStep(label, fn, { attempts = 3, delayMs = 1500 } = {}) {
 }
 
 async function runProbeAttempt(attemptNum) {
+  // Brightness of the presented frame, filled in by whichever soft-present
+  // branch runs; null when the backend never took one.
+  let frameStats = null;
   const srv = await startStaticServer(ROOT);
   log("attempt", `${attemptNum}/${opts.retries} — server ${srv.url}`);
 
@@ -281,11 +299,14 @@ async function runProbeAttempt(attemptNum) {
       // Visible #game is the 2D soft-present blit — check it BEFORE capturePixels
       // (concurrent mapAsync readbacks on SwiftShader can poison the device).
       // TLX WebGPU uses the same WGX-style blit (softOutRT → putImageData).
-      await retryStep("soft-present", () => page.evaluate(async () => {
+      frameStats = await retryStep("soft-present", () => page.evaluate(async (ms) => {
         if (typeof GLX === "undefined" || !GLX.awaitSoftPresent) {
           throw new Error("no GLX.awaitSoftPresent on software-WebGPU backend");
         }
-        await GLX.awaitSoftPresent(60000);
+        // A forced hardware-path run (--ls apex26.tlxForceHw=...) does far more
+        // llvmpipe work per frame than the software default; --present-timeout
+        // keeps a SLOW-but-correct run from being reported as a broken one.
+        await GLX.awaitSoftPresent(ms);
         // WGX blits onto #game itself; TLX inserts a SEPARATE #game-soft 2D
         // sibling and leaves #game as the WebGPU-claimed node (see tlx.js
         // "Soft-present overlay"). Looking only at #game therefore measured the
@@ -316,7 +337,11 @@ async function runProbeAttempt(attemptNum) {
             ", size=" + g.width + "x" + g.height +
             ", softPresent=" + (GLX.softPresent ? GLX.softPresent() : "n/a") + ")");
         }
-      }), { attempts: 2, delayMs: 2000 });
+        // Report the frame's brightness, not just "not blank". A dark frame is
+        // the symptom this tool exists to catch, and a pass/fail bit cannot
+        // compare two runs.
+        return { el: which, maxLuma: max, meanLuma: +(mean / 3).toFixed(1), w: g.width, h: g.height };
+      }, opts.presentMs), { attempts: 2, delayMs: 2000 });
       // putImageData keeps mutating #game — Playwright's locator screenshot
       // waits for "stability" and times out. Dump the 2D bitmap instead.
       const canvasB64 = await page.evaluate(() => {
@@ -462,7 +487,7 @@ async function runProbeAttempt(attemptNum) {
       log("console", `${consoleLines.length} lines → console.txt`);
     }
 
-    return payload;
+    return { ...payload, frame: frameStats };
   } finally {
     await browser.close();
   }

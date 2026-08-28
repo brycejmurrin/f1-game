@@ -515,7 +515,10 @@ const CEILINGS = {
   // mirror face. Each carries the measurement that justifies it — cockpit view
   // rays landing on a pale surface went 96 -> 0 (artifacts/pale-sweep.mjs) and
   // every EXTERNAL build hashes byte-identical (artifacts/build-parity.mjs).
-  "js/car/car3d.js": 2947,
+  // 2947 -> 2960: FINISH_SURFACE grew from two rows to six (matte, brushed,
+  // pearl, carbon) plus the note explaining that a finish costs a SURFACE ID
+  // in the shaders' 20-30 classification chain rather than a material uniform.
+  "js/car/car3d.js": 2960,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
@@ -551,7 +554,11 @@ const CEILINGS = {
   // 2350 -> 2355 on the deploy side for the sign-safe seam wrap in
   // scanBarrier/indexSolid (the negative-k silent no-op, 10 circuits hit it).
   // Union re-measured: 2354.
-  "js/track/tracks.js": 2354,
+  // 2354 -> 2358 (R9): the pit-straight crowd tint read the AUTHORED def.night
+  // instead of the build's NIGHT override that every neighbouring branch uses,
+  // so a day race at a night circuit (or the reverse) wore the wrong tint. The
+  // four lines are the comment recording it at the site — bug-explaining growth.
+  "js/track/tracks.js": 2359,
   // ── Round-6 additions: the unguarded giants, set AT measured (test metric,
   // split-newline count) so any growth is a deliberate raise here. Each line
   // says why the file is its size today; none is an extraction target yet.
@@ -611,16 +618,30 @@ const CEILINGS = {
   // 2-target scene program in the 1-target probe pass (290 uncaptured errors,
   // measured 2026-08-28) and every probe face came back black. Each addition
   // carries the measurement that found it.
-  "js/render/three/tlx.js": 2232,
+  // 2232 -> 2270 (R7): Dawn does not THROW when it rejects a pipeline, so the
+  // faceOk guard above cannot see a discarded probe. The probe now baselines
+  // the uncaptured-error tally at its first face and refuses to bind the cube
+  // when errors landed during the capture, standing down after three passes
+  // instead of lighting the world from black forever. envState() reports it,
+  // because the overlay is the only way a player can tell us.
+  "js/render/three/tlx.js": 2270,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
   // and, applied to the global set, made a tier shed step the whole night.
   "js/render/glx.js": 1936,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
-  "js/render/webgpu/wgsl-chunks.js": 1855,
+  // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
+  // carbon 31)
+  // added to the surface-classification chain, plus the pearlescent albedo
+  // term. Mirrors the same edit in js/render/shaders/lit.js and tsl-lit.js — a
+  // finish implemented on one backend only is invisible on the other two and
+  // nothing in the suite would catch it.
+  "js/render/webgpu/wgsl-chunks.js": 1902,
   // three.js TSL lit-material port; tracks lit.js feature-for-feature.
-  "js/render/three/tsl-lit.js": 1725,
+  // 1725 -> 1768: the same four finishes, the pearlescent term and the carbon
+  // weave, in TSL.
+  "js/render/three/tsl-lit.js": 1768,
   // Multiplayer lobby UI + flow; all of js/net/'s DOM lives here.
   // 1618 -> 1624 (R8): the peer-close handler closes the transport BEFORE the
   // map delete, with the leak-class comment — bug-explaining growth.

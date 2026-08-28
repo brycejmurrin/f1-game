@@ -1085,6 +1085,14 @@ const TLX = (function () {
       // surface then samples black. Count the failures instead, and keep the
       // last good cube bound.
       let _envFailN = 0, _envFailMsg = "";
+      // Dawn does not THROW when it rejects a pipeline: renderer.render()
+      // returns normally and the command buffer is discarded, so a face can
+      // come back unwritten with faceOk still true. That is exactly how a
+      // black env cube got bound and lit the whole world from black. Watch the
+      // uncaptured-error tally across the six faces instead — errors during a
+      // probe mean the probe's own commands did not run.
+      let _envErrBase = -1, _envBadProbes = 0, _envGaveUp = false;
+      const ENV_PROBE_TRIES = 3;
       let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
       const _envInvArr = new Float32Array(16);
       const _envVPArr = new Float32Array(16);
@@ -1683,6 +1691,8 @@ const TLX = (function () {
           }
           for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
           const prevSky = scene.backgroundNode;
+          // Baseline at the first face of each probe pass.
+          if (envFacesMask === 0) _envErrBase = _gpuErrors;
           let faceOk = true;
           try {
             if (lit && lit.setEnvCube && envDummy) lit.setEnvCube(envDummy.texture);
@@ -1713,8 +1723,25 @@ const TLX = (function () {
           poolUsed = 0;
           _envActive = false;
           if (faceOk) envFacesMask |= 1 << (face & 7);
-          if (faceOk && envFacesMask === 63) {
-            envFacesMask = 0; envReady = true; _envBlank = false;
+          const probeErrored = _envErrBase >= 0 && _gpuErrors > _envErrBase;
+          if (faceOk && envFacesMask === 63 && probeErrored) {
+            // The GPU rejected something while the six faces were drawn, so at
+            // least one of them holds nothing. Binding that cube would light
+            // every surface from black — the symptom this guard exists to stop
+            // shipping. Keep the dummy, and retry a bounded number of times
+            // before standing down for good: a probe that fails three passes
+            // running will not start working on the fourth, and re-probing
+            // forever costs a player frames on top of the wrong image.
+            envFacesMask = 0;
+            _envBadProbes++;
+            if (_envBadProbes >= ENV_PROBE_TRIES) { _envGaveUp = true; envReady = false; }
+            if (lit && lit.setEnvCube && envDummy) lit.setEnvCube(envDummy.texture);
+            try {
+              Log.warn("gfx", "[TLX] env probe discarded — GPU errors during capture",
+                _gpuErrors - _envErrBase, "pass", _envBadProbes);
+            } catch (_) { /* logging must never cost the frame */ }
+          } else if (faceOk && envFacesMask === 63) {
+            envFacesMask = 0; envReady = true; _envBlank = false; _envBadProbes = 0;
             // WebGPU does not gl.generateMipmap a CubeRenderTarget the way
             // WebGL2 does (three.js #31143 / #31639). Without an explicit
             // pass, cubeTexture(..., rough*2.5) samples empty mips and chrome
@@ -1727,8 +1754,15 @@ const TLX = (function () {
           }
           _restoreEnvFrame();
         },
-        envProbeReady() { return envReady; },
-        envProbeReset() { envFacesMask = 0; envReady = false; _envBlank = false; _envFailN = 0; _envFailMsg = ""; },
+        // _envGaveUp reads as READY on purpose: the caller polls this to stop
+        // re-probing, and a probe that cannot succeed must stop being asked.
+        // The cube stays unbound — envState() is where the difference shows.
+        envProbeReady() { return envReady || _envGaveUp; },
+        envProbeReset() {
+          envFacesMask = 0; envReady = false; _envBlank = false;
+          _envFailN = 0; _envFailMsg = ""; _envErrBase = -1;
+          _envBadProbes = 0; _envGaveUp = false;
+        },
 
         // ── Cull-test helpers (GLX parity) ──────────────────────────────────
         // js/game/agentview.js calls GLX.makeFrustumPlanes/aabbInFrustum
@@ -2187,7 +2221,11 @@ const TLX = (function () {
           envState() {
             let face = 0;
             while (face < 6 && (envFacesMask & (1 << face))) face++;
-            return { on: !!envRT, face, size: ENV_SIZE, ready: envReady, blank: _envBlank };
+            return {
+              on: !!envRT, face, size: ENV_SIZE, ready: envReady, blank: _envBlank,
+              fail: _envFailN, failMsg: _envFailMsg,
+              badProbes: _envBadProbes, gaveUp: _envGaveUp,
+            };
           },
           viz: vizMode,
           // Which three backend actually came up, and why — the one question a

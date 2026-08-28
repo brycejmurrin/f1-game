@@ -17,4 +17,5 @@ is **Apex26-Procedural**.
 | `atlas-variety-normal.png` | matching grain / weave / drift relief |
 
 Tile → `MAT` mapping lives in `ATLAS_PRESETS.generated` in `tools/assets.mjs`.
-**ASPHALT stays on the Poly Haven photoscan** — these sheets have no tarmac.
+**ASPHALT is not in these sheets** — it comes from the baked pack's own layer
+(MAT 16, procedural; `assets/pack/CREDITS.md`). These atlases carry no tarmac.

@@ -25,12 +25,15 @@
    halo?:[r,g,b] optional cockpit-HALO hoop tint (defaults to brushed titanium).
      All four are additive and fully optional — a livery without them renders
      exactly as before.
-   finish?:"gloss"|"satin"|"chrome" optional paint FINISH — the material rather
-     than the colour. Absent (or "gloss") is the clearcoat-and-flake car paint
-     every livery has always had; "satin" renders the bodywork as a flat matte
-     wrap and "chrome" as a tinted mirror. Car3D.build applies it by remapping
-     the body-paint surface id (see Car3D.FINISH_SURFACE) — decals, carbon,
-     rubber and glass are untouched, and it costs no extra geometry. }.
+   finish? optional paint FINISH — the material rather than the colour. Absent
+     (or "gloss") is the clearcoat-and-flake car paint every livery has always
+     had. The rest: "satin" a flat wrap, "chrome" a tinted mirror, "matte" a
+     chalky flat with no clearcoat at all, "carbon" exposed weave, "brushed" a
+     half-metal alloy sheen, and "pearl" an interference coat whose hue swings
+     with view angle and settles back to the livery's own colour face-on.
+     Car3D.build applies it by remapping the body-paint surface id (see
+     Car3D.FINISH_SURFACE) — decals, carbon, rubber and glass are untouched, and
+     it costs no extra geometry. }.
    UNIVERSAL apply to every team; BY_TEAM are team-specific specials. A team's own
    colours are the synthesized "default" livery. Consumed by game.js
    (resolveLivery + the LIVERY tab in car setup). Colours are [r,g,b] 0..1. */

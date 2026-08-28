@@ -166,23 +166,29 @@
         wall: [0.72, 0.74, 0.78], window: litWin, floor: 2, roof: cotaBlue,
       });
 
+      // DEFAULT BASIS, not [t,u,r]. These five carry their LONG dimension last
+      // (60, 72, 48, 64, 64 m), which the default basis [r,u,t] runs ALONG the
+      // track — the shape of a bank beside a straight. Swapped, that length ran
+      // ACROSS the circuit, so every one of them overlapped the road and was
+      // culled: Big Red and the esses mounds have never rendered. (The tent
+      // ridges at :331 swap deliberately for variety — they are 2.6 m, and stay.)
       {
         const k1 = K(0.10);
         const a1 = anchor(k1, 1, 16);
-        addPrism(out, vadd(a1.c, a1.u, 4), [20, 12, 60], redSoil, [a1.t, a1.u, a1.r]);
+        addPrism(out, vadd(a1.c, a1.u, 4), [20, 12, 60], redSoil, [a1.r, a1.u, a1.t]);
         // large outer mound on the left side of the hill
         const a1L = anchor(k1, -1, 26);
-        addPrism(out, vadd(a1L.c, a1L.u, 3), [28, 8, 72], [0.58, 0.36, 0.26], [a1L.t, a1L.u, a1L.r]);
+        addPrism(out, vadd(a1L.c, a1L.u, 3), [28, 8, 72], [0.58, 0.36, 0.26], [a1L.r, a1L.u, a1L.t]);
         // extra red-soil apron on the climb apex (outside) — sells the Big Red bank
         const a1R = anchor(K(0.085), 1, 22);
-        addPrism(out, vadd(a1R.c, a1R.u, 2.5), [16, 7, 48], redSoil, [a1R.t, a1R.u, a1R.r]);
+        addPrism(out, vadd(a1R.c, a1R.u, 2.5), [16, 7, 48], redSoil, [a1R.r, a1R.u, a1R.t]);
       }
 
       const ke = K(0.18);
       const me = anchor(ke, -1, 32);
-      addPrism(out, vadd(me.c, me.u, 2), [34, 6, 64], scrub, [me.t, me.u, me.r]);
+      addPrism(out, vadd(me.c, me.u, 2), [34, 6, 64], scrub, [me.r, me.u, me.t]);
       const me2 = anchor(ke, 1, 32);
-      addPrism(out, vadd(me2.c, me2.u, 2), [34, 6, 64], scrub, [me2.t, me2.u, me2.r]);
+      addPrism(out, vadd(me2.c, me2.u, 2), [34, 6, 64], scrub, [me2.r, me2.u, me2.t]);
 
       const ALU_FRAME = [0.70, 0.71, 0.75], ALU_PLANK = [0.78, 0.79, 0.82];
       const t1Rake = { rows: 8, rise: 1.45, setback: 2.1, step: 10,
