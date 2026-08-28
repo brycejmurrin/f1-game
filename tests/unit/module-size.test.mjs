@@ -476,10 +476,14 @@ const CEILINGS = {
   // 2850 -> 2860: the pillar V-brace — the real halo strut splits into a V
   // at the top, meeting the ring either side of the apex (two beams + the
   // why). Measured 2853.
+  // 2895 -> 2925: the endplate/suspension detail round — front-plate gills and
+  // the plate-to-plane fillet (both gated on plate >= 2, so the DEFAULT body is
+  // untouched) and the inboard damper/rocker-link hardware on the existing
+  // `rocker` knob. Measured 2915.
   // 2860 -> 2895: the accuracy round — SEG 24 tyres (comment), regulation
   // mirror housing (toe cant block, winglet, outer stay), and the PLATE
   // rolled-top outwash row with its curled-lip span. Measured 2883.
-  "js/car/car3d.js": 2895,
+  "js/car/car3d.js": 2925,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

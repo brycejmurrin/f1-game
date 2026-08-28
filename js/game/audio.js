@@ -21,6 +21,7 @@ const GameAudio = (function () {
   let skidSrc = null, skidFilter = null, skidGain = null;
   let voiceFormant = null;                       // per-manufacturer peaking EQ
   let ersOsc = null, ersHp = null, ersGain = null; // continuous ERS deploy whine
+  let windSrc = null, windFilter = null, windGain = null; // airflow over the car
 
   // Per-manufacturer engine character, keyed by team.engine (js/car/teams.js).
   // Every field is CONSTANT TIMBRE — a fixed multiplier or filter, never a
@@ -488,6 +489,22 @@ const GameAudio = (function () {
     skidGain.gain.value = 0;
     skidSrc.connect(skidFilter).connect(skidGain).connect(sfxBus);
 
+    // AIRFLOW. The only speed-coupled continuous sounds were the engine and
+    // the skid, so a 320 km/h straight sounded like a 120 km/h one with a
+    // higher engine note. Broadband noise through a bandpass that opens with
+    // speed: own buffer, because a LOOPING source needs one (the shared
+    // noisePool is for one-shots — see its comment).
+    windSrc = ctx.createBufferSource();
+    windSrc.buffer = noiseBuf(0.5);
+    windSrc.loop = true;
+    windFilter = ctx.createBiquadFilter();
+    windFilter.type = "bandpass";
+    windFilter.frequency.value = 450;
+    windFilter.Q.value = 0.7;                 // wide: air, not a whistle
+    windGain = ctx.createGain();
+    windGain.gain.value = 0;
+    windSrc.connect(windFilter).connect(windGain).connect(sfxBus);
+
     if (usingSamples) { engSrcIdle.start(0, engSrcIdle.loopStart); engSrcAcc.start(0, engSrcAcc.loopStart); }
     else { engA.start(); engB.start(); engC.start(); }
     whineOsc.start();
@@ -495,6 +512,7 @@ const GameAudio = (function () {
     ersOsc.start();
     lfo.start();
     skidSrc.start();
+    windSrc.start();
 
     lastSpeed = 0;
     lastEngT = 0;
@@ -512,6 +530,7 @@ const GameAudio = (function () {
     whineGain.gain.setTargetAtTime(0, t0, 0.06);
     harvGain.gain.setTargetAtTime(0, t0, 0.06);
     ersGain.gain.setTargetAtTime(0, t0, 0.04);
+    windGain.gain.setTargetAtTime(0, t0, 0.06);
     skidGain.gain.setTargetAtTime(0, t0, 0.04);
     if (usingSamples) {
       if (engGainIdle) engGainIdle.gain.setTargetAtTime(0, t0, 0.06);
@@ -525,6 +544,7 @@ const GameAudio = (function () {
     whineOsc.stop(t0 + 0.35);
     harvSrc.stop(t0 + 0.35);
     ersOsc.stop(t0 + 0.35);
+    windSrc.stop(t0 + 0.35);
     lfo.stop(t0 + 0.35);
     skidSrc.stop(t0 + 0.35);
     const deadSub = (engC && engC._apexSubGain) || null;   // synth sub-osc gain
@@ -532,6 +552,7 @@ const GameAudio = (function () {
     whineOsc = null;
     harvSrc = null;
     ersOsc = null;
+    windSrc = null;
     lfo = null;
     skidSrc = null;
     // Disconnect the test analyser tap so it doesn't accumulate across restarts.
@@ -541,10 +562,10 @@ const GameAudio = (function () {
     // into sfxBus keep RENDERING until disconnect() (Web Audio contract) — a
     // tab-hide/show cycle used to strand ~8 nodes each time, forever.
     const dead = [engFilter, engGain, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG,
-                  voiceFormant, ersHp, ersGain, deadSub];
+                  voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub];
     setTimeout(() => { for (const n of dead) { try { if (n) n.disconnect(); } catch (e) {} } }, 450);
     engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = lfoG = null;
-    voiceFormant = ersHp = ersGain = null;
+    voiceFormant = ersHp = ersGain = windFilter = windGain = null;
     idleGainRamped = false;
     engineOn = false;
   }
@@ -668,6 +689,22 @@ const GameAudio = (function () {
     ersGain.gain.setTargetAtTime(ersLvl, t, deploy > 0 ? 0.05 : 0.10);
     if (deploy > 0)
       ersOsc.frequency.setTargetAtTime((2400 + rev * 900) * (0.88 + 0.12 * low), t, 0.06);
+
+    // AIRFLOW. Quadratic in speed (drag goes with v^2, and it keeps the layer
+    // out of the way at pit-lane pace while it swells down a straight), gated
+    // like the turbo whine so a stationary car is silent. Kerbs and grass add
+    // buffeting, rain adds spray hiss, and a hard lift/brake gusts briefly as
+    // the air unloads — that decel term IS harvLevel, the smoothed derivative
+    // the harvest layer just computed (lastSpeed is overwritten above, so
+    // recomputing it here would read a difference of exactly zero). Peak stays ~0.04, an order under the
+    // engine core, per the level budget the other bus layers keep to.
+    const windOpen = s > 0.04 ? 1 : 0;
+    const gust = harvLevel;   // already the smoothed decel signal, computed above
+    const rough = (offroad ? 0.5 : 0) + (onKerb ? 0.35 : 0);
+    windGain.gain.setTargetAtTime(
+      (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * windOpen,
+      t, 0.10);
+    windFilter.frequency.setTargetAtTime(450 + s * 1450 + rough * 260, t, 0.12);
 
     // offroad: ~8 Hz pitch wobble via the LFO (gain is cents of detune)
     // THE SIXTH CONSTANT setTargetAtTime, missed by the pass that removed five
@@ -1230,6 +1267,10 @@ const GameAudio = (function () {
     setSfxEnabled,
     setMusicVolume,
     volumes,
+    // Test hook: the airflow layer's live gain. It sits on sfxBus, so
+    // centroidHz() (which taps engGain, upstream of the bus) cannot see it —
+    // this is the only way to assert the layer actually tracks speed.
+    windLevel() { return windGain ? +windGain.gain.value : 0; },
     rate() { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value.toFixed(4) : 0; },
     centroidHz() {
       if (!ctx || !engineOn || !engGain) return 0;

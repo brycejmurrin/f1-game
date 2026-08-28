@@ -558,16 +558,25 @@ left/right steer halves on the lower screen when tilt off; `#btn-boost`,
 
 ## js/game/audio.js — `GameAudio`
 
-All synthesized, no assets. Engine = 2026 hybrid turbo: saw+square pair
-~90–700 Hz with lowpass following speed + a soft turbo whine (high sine)
-+ harvest whirr when braking. Must init from a user gesture.
+Engine = a looping recorded drone pitched by revs (assets/sfx/f1_engine.mp3),
+with a saw+square synth pair ~90–700 Hz as the fallback when decode fails.
+Continuous layers over it, all on `sfxBus`: turbo whine (high sine), MGU-K
+harvest whirr under deceleration, ERS deploy whine while the battery is
+deploying (level tracks charge, pitch sags under 20%), AIRFLOW (broadband
+bandpass rising with speed², plus kerb/offroad buffeting and wet spray), an
+offroad pitch LFO, and the tyre screech. Per-manufacturer timbre comes from
+`ENGINE_VOICES` keyed by `team.engine` — `setVoice()` before `startEngine()`.
+Must init from a user gesture.
 
 ```
 GameAudio.init()  GameAudio.setEnabled(b)  GameAudio.enabled() -> bool
-GameAudio.startEngine() / stopEngine() / setEngine(rev01, boost01, offroad, speed01, gear)
+GameAudio.setVoice(engineName)   // "Mercedes" | "Ferrari" | "Red Bull Ford" | "Honda" | "Audi"
+GameAudio.startEngine() / stopEngine()
+GameAudio.setEngine(rev01, boost01, offroad, speed01, gear, physics?)
+  // physics (optional): { slip, ax, onKerb, wet, deploy, energy, ersDeploy }
 GameAudio.setSkid(x 0..1)
-SFX: lightOn(i 0..4), lightsOut(), overtakeReady(), deployBoost(), collision(),
-     offtrack(), lap(), finish(), uiTick(), uiSelect(), penalty()
+SFX: lightOn(i 0..4), lightsOut(), overtakeReady(), deployBoost(), xMode(on),
+     collision(), offtrack(), lap(), finish(), uiTick(), uiSelect(), penalty()
 GameAudio.startMusic(trackIdx) / stopMusic()   // menu uses startMusic(-1)
 // lookahead scheduler (300 ms, timer + rAF), 2-3 short loops reused across tracks ok
 ```
