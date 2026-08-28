@@ -587,7 +587,13 @@ const CEILINGS = {
   // 2-target scene program in the 1-target probe pass (290 uncaptured errors,
   // measured 2026-08-28) and every probe face came back black. Each addition
   // carries the measurement that found it.
-  "js/render/three/tlx.js": 2232,
+  // 2232 -> 2270 (R7): Dawn does not THROW when it rejects a pipeline, so the
+  // faceOk guard above cannot see a discarded probe. The probe now baselines
+  // the uncaptured-error tally at its first face and refuses to bind the cube
+  // when errors landed during the capture, standing down after three passes
+  // instead of lighting the world from black forever. envState() reports it,
+  // because the overlay is the only way a player can tell us.
+  "js/render/three/tlx.js": 2270,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   "js/render/glx.js": 1929,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
