@@ -404,7 +404,13 @@ const CEILINGS = {
   // netStart cleared in quitToMenu (a solo race after an aborted countdown ran
   // with no lamps), Array.isArray on the host's RESULT payload, and the
   // paused-at-the-flag clear in endRace.
-  "js/game.js": 8694,
+  // 8694 -> 8715: the garage-preview fix — SP_CAR_CTR (orbit and aim were
+  // DIFFERENT points, so the turntable swung the car across the frame instead
+  // of rotating it, and both sat behind the measured car centre), plus the
+  // studio backdrop colour, the floor draw and its material opts. The floor
+  // MESH itself went to js/game/carmesh.js, which is where the geometry
+  // belongs and which this ratchet does not bound. Measured 8709.
+  "js/game.js": 8715,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).

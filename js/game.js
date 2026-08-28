@@ -1783,7 +1783,7 @@ CarMesh.init(gfx);
 Particles.init(gfx);
 const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
         getBrakeRing, getRainLight, getExhaustFlame, getErsLight,
-        getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
+        getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getStudioFloor,
         getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 const _decalTexCache = {}, _decalTexFail = {}, _decalTexOrder = [];
 function invalidateDecalTextures(teamId) {
@@ -5279,6 +5279,13 @@ const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.5;
 // 1440x900) plus ~12% margin. renderSetupPreview holds the auto-turntable at
 // whatever distance keeps this inside the visible half-width.
 const SP_FIT_HALF_W = 3.35;
+// The garage used to render the car against pure black — no ground, no scale,
+// just a floating body. SP_BACKDROP is the frame clear colour (gfx reads
+// fogColor as the clear) and the studio floor's rim fades into exactly it, so
+// the disc has no visible edge. Matte and unlit-ish: this is a backdrop, not a
+// surface anyone should read detail off.
+const SP_BACKDROP = [0.055, 0.058, 0.072];
+const _spFloorOpts = { roughness: 0.95, metalness: 0, specular: 0.03, clearcoat: 0 };
 let setupPreviewEl = SP_EL_DEF, setupPreviewDist = SP_DIST_DEF;
 let setupPreviewSpin = true;
 // GARAGE active-aero demo. `setupPreviewXOn` is the button; `setupPreviewAeroX`
@@ -5319,7 +5326,14 @@ const SP_VIEWS = {
 // The point the preview camera ORBITS and LOOKS AT. The defaults reproduce the
 // previous hard-coded numbers exactly (eye was offset -1.0 in z from a target at
 // z 0), so every existing view is unchanged; only the wing presets move them.
-const SP_ORBIT_DEF = [0, 0.35, -1.0], SP_TGT_DEF = [0, 0.35, 0];
+// ORBIT AND AIM ARE THE SAME POINT, AND IT IS THE CAR'S CENTRE. These were
+// [0, 0.35, -1.0] and [0, 0.35, 0]: the camera circled a point 1 m BEHIND the
+// one it looked at, so the turntable swung the car across the frame instead of
+// rotating it in place — at some angles the nose left the visible region
+// entirely. Both were also behind the car: the drawn body spans z -2.69..3.18
+// (measured), so its centre is z +0.245, not 0 and not -1.
+const SP_CAR_CTR = [0, 0.45, 0.245];
+const SP_ORBIT_DEF = SP_CAR_CTR.slice(), SP_TGT_DEF = SP_CAR_CTR.slice();
 let setupPreviewOrbit = SP_ORBIT_DEF.slice(), setupPreviewTgt = SP_TGT_DEF.slice();
 let setupPreviewMinDist = 0;   // 0 = use the global SP_DIST_MIN
 // PAN — a translation of the whole rig (orbit centre AND look-at) in car-local
@@ -5569,7 +5583,7 @@ function renderSetupPreview(dt) {
     // studio lamps below is already symmetric) without favouring a side.
     viewProj: _spVP, eye, sunDir: [0, 0.86, 0.51], sunColor: [1, 1, 1],
     ambientSky: [0.28, 0.30, 0.34], ambientGround: [0.18, 0.17, 0.16],
-    fogColor: [0.05, 0.05, 0.07], fogDensity: 0, lights: buildSetupPreviewLights(),
+    fogColor: SP_BACKDROP, fogDensity: 0, lights: buildSetupPreviewLights(),
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
   }) === false) return;
   const spMat = carPaintMat(PAINT_DRY_DAY);
@@ -5583,6 +5597,7 @@ function renderSetupPreview(dt) {
   spMat.specular = 0.22;
   spMat.roughness = clamp(spMat.roughness * 2.4, 0.02, 1);   // spread + dim the speculars
   spMat.metalness = Math.min(spMat.metalness, 0.05);
+  gfx.draw(getStudioFloor(), MAT_IDENT, _spFloorOpts);   // studio floor, under the car
   gfx.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
   // The moveable wings, so a player can watch active aero work before ever
   // driving — and see what their own AERO parts choice did to the flap size.
