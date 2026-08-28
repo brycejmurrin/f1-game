@@ -287,14 +287,23 @@ async function runProbeAttempt(attemptNum) {
         const which = soft ? "#game-soft" : "#game";
         const ctx = g && g.getContext("2d");
         if (!ctx) throw new Error(which + " has no 2D display context");
-        const id = ctx.getImageData(0, 0, Math.min(64, g.width), Math.min(64, g.height));
-        let max = 0;
+        // SAMPLE THE WHOLE FRAME, not the top-left 64x64. That corner is SKY on
+        // every circuit, and a dusk/night sky is near-black — so the old read
+        // reported maxLuma=0 for frames that were fully rendered everywhere
+        // else. It cost this session several rounds of chasing a "black" frame
+        // that measured mean-luma 32.6 with 0.5% near-black pixels once the
+        // whole canvas was measured. Stride the full canvas instead.
+        const id = ctx.getImageData(0, 0, g.width, g.height);
+        let max = 0, sum = 0, n = 0;
         for (let i = 0; i < id.data.length; i += 4) {
           const l = id.data[i] + id.data[i + 1] + id.data[i + 2];
           if (l > max) max = l;
+          sum += l; n++;
         }
+        const mean = n ? sum / n : 0;
         if (max < 8) {
           throw new Error("visible " + which + " blank after soft-present (maxLuma=" + max +
+            ", meanLuma=" + mean.toFixed(1) +
             ", size=" + g.width + "x" + g.height +
             ", softPresent=" + (GLX.softPresent ? GLX.softPresent() : "n/a") + ")");
         }

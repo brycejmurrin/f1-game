@@ -90,6 +90,8 @@
     // at phone resolution). Documented, accepted, not silently unnoticed.
     const shadow = ctx.shadow || null;
     const viz = (ctx.viz && POST_VIZ.indexOf(ctx.viz) >= 0) ? ctx.viz : null;
+    // The RT the viz branch last wrote — see presentedTarget().
+    let _vizDest = null;
 
     // ── HDR capability. RGBA16F needs a *renderable* half-float colour
     // buffer. iOS Safari WebGL2 typically exposes EXT_color_buffer_half_float
@@ -622,6 +624,7 @@
           : viz === "bloom" ? (haveBloom ? bloomLv[0].rt.texture : blackTex)
           : (viz === "shafts" || viz === "godray") ? (haveGR ? godrayRT.texture : blackTex)
           : sceneRT.texture;   // composite-off | scene: the raw HDR world
+        _vizDest = dest;   // the blit must read what this pass wrote, not ldrRT
         runPass(B.mat, dest);
       } else {
         runPass(P.composite.mat, ldrRT);
@@ -651,6 +654,13 @@
       // source. three's readRenderTargetPixelsAsync → backend.copyTextureToBuffer
       // + mapAsync (WebGPU Fundamentals / Explainer). Never getCurrentTexture.
       ldrTarget: () => ldrRT,
+      // WHAT THE LAST FRAME ACTUALLY WROTE. The soft-present blit and
+      // capturePixels used to read ldrTarget() unconditionally — but the ?viz=
+      // branch below writes the bisect image to `dest` and never touches ldrRT,
+      // so on the software-WebGPU path every viz mode showed a stale frame no
+      // matter what the stage contained. That made the repo's own bisect tool
+      // blind on the one backend that needs bisecting. Ask this instead.
+      presentedTarget: () => (viz ? _vizDest : ldrRT),
       resize,
       present,
       dispose,
