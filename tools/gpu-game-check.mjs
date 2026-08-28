@@ -86,6 +86,12 @@ try {
   const console_ = [];
   page.on("console", (m) => { if (console_.length < 200) console_.push(`${m.type()}: ${m.text()}`.slice(0, 300)); });
   page.on("pageerror", (e) => console_.push("pageerror: " + String(e && e.message).slice(0, 300)));
+  // A renderer crash makes every later page.evaluate hang FOREVER rather than
+  // throw — which is how two macOS runs burned 20 minutes each and reported
+  // nothing but "timed out". Playwright emits this; nobody was listening.
+  page.on("crash", () => { out.crashed = true; checkpoint("renderer-crashed"); });
+  page.on("close", () => { out.pageClosed = true; });
+  browser.on("disconnected", () => { out.browserGone = true; });
   await page.addInitScript(([be, p]) => {
     try {
       localStorage.setItem("apex26.gfxBackend", be);
@@ -117,17 +123,43 @@ try {
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 300000 });
   await page.evaluate(() => window.__apex.park(0.1));
   checkpoint("racing", { track });
-  // Give the env probe its six faces and the post chain a few frames. On real
-  // hardware this is fast; the wait is generous so a slow image is not read as
-  // a failure.
-  await page.waitForTimeout(15000);
+  // Poll instead of one blind sleep. The question after park() is whether the
+  // page is STILL ANSWERING, and a single waitForTimeout cannot tell a healthy
+  // wait from a wedged renderer — on Apple Metal both three paths went silent
+  // here and the run learned nothing for twenty minutes. Each poll carries its
+  // own short timeout, so the last successful beat is recorded either way.
+  out.beats = [];
+  for (let i = 0; i < 15; i++) {
+    if (out.crashed || out.browserGone) break;
+    try {
+      const beat = await Promise.race([
+        page.evaluate(() => ({
+          t: (window.__apex && window.__apex.info && window.__apex.info().track) || null,
+          f: (window.__apex && window.__apex.info && Math.round(window.__apex.info().fps || 0)) || 0,
+        })),
+        new Promise((_, rj) => setTimeout(() => rj(new Error("beat timeout")), 8000)),
+      ]);
+      out.beats.push({ s: +((Date.now() - t0) / 1000).toFixed(1), ...beat });
+    } catch (e) {
+      out.beats.push({ s: +((Date.now() - t0) / 1000).toFixed(1), dead: String((e && e.message) || e).slice(0, 80) });
+      checkpoint("page-stopped-answering");
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
   checkpoint("settled");
 
-  out.overlay = await page.evaluate(() => {
+  // Bounded: a wedged renderer must not turn the diagnosis into another blank.
+  const bounded = (fn, ms, label) => Promise.race([
+    fn(),
+    new Promise((_, rj) => setTimeout(() => rj(new Error(label + " timeout")), ms)),
+  ]).catch((err) => ({ error: String((err && err.message) || err).slice(0, 120) }));
+
+  out.overlay = await bounded(() => page.evaluate(() => {
     const el = document.getElementById("gfx-debug");
     return el ? el.innerText : null;
-  });
-  out.gfx = await page.evaluate(() => {
+  }), 20000, "overlay");
+  out.gfx = await bounded(() => page.evaluate(() => {
     const g = typeof GLX !== "undefined" ? GLX : null;
     if (!g) return { glx: false };
     const r = { glx: true, gpuErrors: g.gpuErrors ? g.gpuErrors() : null,
@@ -139,9 +171,14 @@ try {
     }
     try { r.engine = document.getElementById("game").getAttribute("data-engine"); } catch (_) { /* no canvas */ }
     return r;
-  });
+  }), 20000, "gfx");
+  checkpoint("gfx-read");
   const shot = flag("--shot", null);
-  if (shot) { await page.screenshot({ path: shot, fullPage: false }); out.shot = shot; }
+  if (shot) {
+    const r = await bounded(() => page.screenshot({ path: shot, fullPage: false }), 30000, "screenshot");
+    out.shot = (r && r.error) ? null : shot;
+    if (r && r.error) out.shotError = r.error;
+  }
   out.console = console_.filter((l) => /error|warn|refus|fail|WGX|TLX/i.test(l)).slice(0, 40);
   out.ok = true;
   checkpoint("done");
