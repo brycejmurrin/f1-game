@@ -353,8 +353,15 @@ const FIXTURES = [
 const E = 0.55;   // the same physical energy factor the track lamps use
 const LED_DROP = 0.06;   // light record sits under its panel so the halo clears the housing
 
-let ledMesh = null;
-function buildLed(out, liv) {
+const ledMesh = {};
+// PER SIDE, like the props and the dress, and for the same reason: a wall the
+// eye is outside of is not drawn, and anything mounted ON that wall must go
+// with it. This mesh used to be one unculled blob, so stepping the camera
+// outside a side wall left its dado strip hanging in mid-air across the frame,
+// in front of the car — a glowing bar attached to nothing. Ceiling fixtures
+// stay in `mid`: they hang from the truss, not from a wall.
+function buildLed(g, liv) {
+  const out = g.mid;
   for (let i = 0; i < FIXTURES.length; i++) {
     const F = FIXTURES[i], x = F[0], y = F[1] + LED_DROP, z = F[2];
     const hw = F[13] ? 1.20 : 0.26, hd = F[13] ? 0.17 : 0.12;
@@ -371,16 +378,17 @@ function buildLed(out, liv) {
   // per side now — one pair at z 0 left the walls past |z| 3 on spill only.
   const c1 = rgb(liv && liv.c1, [0.4, 0.45, 0.55]);
   for (let s = -1; s <= 1; s += 2) {
+    const w = s < 0 ? g.nx : g.px;          // mounted on THAT wall, culled with it
     for (let i = -1; i <= 1; i++) {
-      cyl(out, s * 5.05, 0.02, i * 3.5, 0.11, 0.22, scale(STEEL, 0.6), 8);
-      cyl(out, s * 5.05, 0.24, i * 3.5, 0.09, 0.02, scale(c1, 1.5), 8);
+      cyl(w, s * 5.05, 0.02, i * 3.5, 0.11, 0.22, scale(STEEL, 0.6), 8);
+      cyl(w, s * 5.05, 0.24, i * 3.5, 0.09, 0.02, scale(c1, 1.5), 8);
     }
     // A continuous lit strip at the dado line, the length of the bay. Emissive
     // above 1.0 or the shader's glow gate never fires and it reads as plastic.
-    block(out, s * 5.33, 1.56, 0, 0.05, 0.045, 6.30, scale(c1, 1.35));
+    block(w, s * 5.33, 1.56, 0, 0.05, 0.045, 6.30, scale(c1, 1.35));
   }
   // Lit fascia over the door, behind the D_SIGN wordmark.
-  block(out, 0, 4.89, Z_DOOR - 0.14, 3.05, 0.13, 0.05, scale(c1, 0.55));
+  block(g.door, 0, 4.89, Z_DOOR - 0.14, 3.05, 0.13, 0.05, scale(c1, 0.55));
 }
 const LED_OPTS = { emissive: 1.0, roughness: 1.0, specular: 0, noAlphaWrite: true };
 
@@ -864,16 +872,19 @@ function rebuild(team, liv, info) {
               "|" + boardKey(info);
   if (key === cacheKey && shellMesh) return;
   if (shellMesh) _gfx.freeMesh(shellMesh);
-  if (ledMesh) _gfx.freeMesh(ledMesh);
+  for (let i = 0; i < SIDES.length; i++)
+    if (ledMesh[SIDES[i]]) { _gfx.freeMesh(ledMesh[SIDES[i]]); ledMesh[SIDES[i]] = null; }
   if (floorMesh) _gfx.freeMesh(floorMesh);
   for (let i = 0; i < SIDES.length; i++)
     if (propMesh[SIDES[i]]) { _gfx.freeMesh(propMesh[SIDES[i]]); propMesh[SIDES[i]] = null; }
   const shell = acc();
   buildShell(shell, liv);
   shellMesh = _gfx.createMesh(shell);
-  const led = acc();
+  const led = {};
+  for (let i = 0; i < SIDES.length; i++) led[SIDES[i]] = acc();
   buildLed(led, liv);
-  ledMesh = _gfx.createMesh(led);
+  for (let i = 0; i < SIDES.length; i++)
+    if (led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(led[SIDES[i]]);
   const flr = acc();
   buildApron(flr); buildBayFloor(flr, liv);
   floorMesh = _gfx.createMesh(flr);
@@ -913,15 +924,17 @@ function draw(team, liv, eye, getParts, driverIdx) {
   rebuild(team, liv, boardInfo(team, getParts, driverIdx));
   _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
   _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
-  _gfx.draw(ledMesh, MAT_I, LED_OPTS);
-  // Each wall's furniture, only while the eye is inside that wall — the same
-  // decision back-face culling makes for the wall itself. A camera at
-  // SP_DIST_MAX (15 m) is outside the bay on at least one axis nearly always,
-  // so this test fires constantly and is what keeps the cutaway clean.
+  // Each wall's furniture AND its lighting, only while the eye is inside that
+  // wall — the same decision back-face culling makes for the wall itself. A
+  // camera at SP_DIST_MAX (15 m) is outside the bay on at least one axis nearly
+  // always, so this test fires constantly and is what keeps the cutaway clean.
   const ex = eye ? eye[0] : 0, ez = eye ? eye[2] : 0;
   const inside = { nx: ex > -HALF_W, px: ex < HALF_W, back: ez > Z_BACK, door: ez < Z_DOOR, mid: true };
-  for (let i = 0; i < SIDES.length; i++)
-    if (inside[SIDES[i]]) _gfx.draw(propMesh[SIDES[i]], MAT_I, SHELL_OPTS);
+  for (let i = 0; i < SIDES.length; i++) {
+    if (!inside[SIDES[i]]) continue;
+    _gfx.draw(propMesh[SIDES[i]], MAT_I, SHELL_OPTS);
+    if (ledMesh[SIDES[i]]) _gfx.draw(ledMesh[SIDES[i]], MAT_I, LED_OPTS);
+  }
   // Dress LAST of the environment: drawDecal depth-tests but does not depth
   // write, so every opaque surface it sits on has to be down first.
   if (dressTex)
