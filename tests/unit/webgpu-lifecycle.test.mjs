@@ -810,6 +810,33 @@ test("WGX R8 correctness gates hold (overflow sentinel, per-chunk hoist, SSR con
   assert.ok(mistGates.length >= 2, `expected the mist gate at _lampVolEarly AND the godray arm — found ${mistGates.length}`);
 });
 
+test("WGX R8 perf changes hold (SSR depth stride, pooled merge-run, lamp-mask cache)", () => {
+  // F4: the finite-difference normal strides march depthTex (FULL res), so
+  // the shader takes the full-res texel through the gloss.yz pad lanes — the
+  // half-res OUTPUT texel doubled the stride that edgeGrad (0.35/0.9) and the
+  // hN self-hit reject were tuned at.
+  assert.match(POST_SOURCE, /let dTexel = select\(texel, U\.gloss\.yz/);
+  assert.match(POST_SOURCE, /let nT = dTexel \* 3\.0;/);
+  assert.match(WGX_SOURCE, /s\[49\] = 1 \/ tw; s\[50\] = 1 \/ th; s\[51\] = 0;/);
+  // F8: drawChunked's flush closure + per-state-change run object are hoisted
+  // to module scope and pooled (the file's own _instDrawOpts / _litOptsBag
+  // doctrine) — they were allocated per call, hundreds of times per frame.
+  assert.match(WGX_SOURCE, /const _mrRun = \{/);
+  assert.match(WGX_SOURCE, /function _mrFlush\(\) \{/);
+  assert.doesNotMatch(WGX_SOURCE, /const flush = \(\) => \{/,
+    "the per-call flush closure must stay hoisted");
+  // F10: per-chunk lamp masks are cached on a generation that only advances
+  // when a ranked light's position or radius moves, instead of re-running
+  // visibleChunks x nL AABB tests every frame.
+  assert.match(WGX_SOURCE, /const _lmCache = new WeakMap\(\);/);
+  assert.match(WGX_SOURCE, /if \(_lmMoved\) _lmGen\+\+;/);
+  assert.match(WGX_SOURCE, /if \(cm && cm\.gen === _lmGen\)/);
+  // F7-lite: the dead DRAW_FLOATS const is gone (it looked like the stride but
+  // nothing read it); the deferral doctrine stays written down.
+  assert.doesNotMatch(WGX_SOURCE, /const DRAW_FLOATS\b/);
+  assert.match(WGX_SOURCE, /DOCTRINE \(F7, deferred\)/);
+});
+
 test("WGX ground mist matches GLX band/strength", () => {
   // lit.js: exp(-lowH * (0.09 / mh)), no *0.5, clamp 0.45 — not exp(-lowH/(mh*20)).
   assert.match(CHUNKS_SOURCE, /exp\(-lowH \* \(0\.09 \/ mh\)\)/);
