@@ -14,6 +14,9 @@
  *
  * Run: node tools/gpu-game-check.mjs [track] [--json out.json] [--shot out.png]
  *      [--backend three|webgpu] [--path webgpu|webgl2] [--boot-timeout MS]
+ *
+ * It checkpoints the --json file after every phase, so a step timeout leaves a
+ * diagnosis on disk rather than nothing at all.
  */
 import { chromium } from "playwright";
 import http from "node:http";
@@ -56,13 +59,27 @@ function serve() {
   });
 }
 
+const jsonAt = flag("--json", null);
+const t0 = Date.now();
+// A killed step leaves NOTHING behind: no log (a job's log is a 404 until the
+// job ends) and no artifact. So write the JSON after every phase — whatever
+// phase the run reached is then on disk when the step timeout fires, and a
+// hang becomes evidence instead of a blank. `phase` is the load-bearing field.
+function checkpoint(phase, extra) {
+  out.phase = phase;
+  out.elapsedMs = Date.now() - t0;
+  if (extra) Object.assign(out, extra);
+  if (jsonAt) { try { writeFileSync(jsonAt, JSON.stringify(out, null, 2)); } catch (_) { /* disk */ } }
+  console.log(`[game-check] ${phase} +${((Date.now() - t0) / 1000).toFixed(1)}s`);
+}
 const log = (m) => console.log(`[game-check] ${m}`);
+const out = { platform: process.platform, arch: process.arch, track, backend, path: path3 };
 const { server, port } = await serve();
 const browser = await chromium.launch({
   ...(PINNED ? { executablePath: PINNED } : { channel: "chromium" }),
   args: ["--enable-unsafe-webgpu", ...(process.platform === "linux" ? ["--no-sandbox"] : [])],
 });
-const out = { platform: process.platform, arch: process.arch, track, backend, path: path3 };
+checkpoint("browser-launched");
 try {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await ctx.newPage();
@@ -79,13 +96,14 @@ try {
 
   await page.goto(`http://127.0.0.1:${port}/index.html?gfxdebug=1`,
     { waitUntil: "domcontentloaded", timeout: 120000 });
+  checkpoint("navigated");
   // 120 s is not enough on a software rasteriser that is ALSO a slow disk:
   // windows-latest (WARP + "Microsoft Basic Render Driver") timed out here on
   // both backends while ubuntu booted the same tree in 3 s. A boot timeout on
   // an image with no GPU says nothing about the renderer, so give it room.
   await page.waitForFunction(() => window.__apex != null, null,
     { polling: 100, timeout: Number(flag("--boot-timeout", 300000)) });
-  log("booted");
+  checkpoint("booted");
   out.adapter = await page.evaluate(async () => {
     if (!navigator.gpu) return { hasGpu: false };
     try {
@@ -98,11 +116,12 @@ try {
   await page.evaluate((t) => window.__apex.race(t), track);
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 300000 });
   await page.evaluate(() => window.__apex.park(0.1));
-  log("racing " + track);
+  checkpoint("racing", { track });
   // Give the env probe its six faces and the post chain a few frames. On real
   // hardware this is fast; the wait is generous so a slow image is not read as
   // a failure.
   await page.waitForTimeout(15000);
+  checkpoint("settled");
 
   out.overlay = await page.evaluate(() => {
     const el = document.getElementById("gfx-debug");
@@ -125,14 +144,15 @@ try {
   if (shot) { await page.screenshot({ path: shot, fullPage: false }); out.shot = shot; }
   out.console = console_.filter((l) => /error|warn|refus|fail|WGX|TLX/i.test(l)).slice(0, 40);
   out.ok = true;
+  checkpoint("done");
 } catch (e) {
   out.ok = false;
   out.error = String((e && e.message) || e);
+  checkpoint("failed");
 } finally {
   await browser.close().catch(() => {});
   server.close();
 }
 console.log(JSON.stringify(out, null, 2));
-const jsonAt = flag("--json", null);
 if (jsonAt) writeFileSync(jsonAt, JSON.stringify(out, null, 2));
 process.exit(out.ok ? 0 : 1);
