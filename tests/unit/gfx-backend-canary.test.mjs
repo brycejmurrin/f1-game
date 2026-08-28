@@ -990,6 +990,14 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "backend must expose capturePixels for gfx-probe frame.png");
   assert.match(src, /readRenderTargetPixelsAsync/,
     "blit must go through three's copyTextureToBuffer + mapAsync, not the swapchain");
+  // TLX must hear Dawn. WGX has hooked onuncapturederror since it shipped; TLX
+  // hooked nothing, so a black three-on-WebGPU frame was chased for a whole
+  // session against probes reporting `gpuErrors: null` — which read as "no
+  // errors" and meant "no reader". An unheard backend is an undebuggable one.
+  assert.match(src, /onuncapturederror/,
+    "the three backend must hook device.onuncapturederror — WGX has always had it");
+  assert.match(src, /gpuErrors\(\)\s*\{\s*return _gpuErrors;/,
+    "the error tally must be exposed (GLX.gpuErrors() after the descriptor-copy)");
   assert.match(src, /function drawInstanced[\s\S]{0,400}if \(skipBatches/,
     "software WebGPU must skip InstancedMesh draws — they poison the frame encoder");
   // skipBatches() is softGpu() AND NOT the apex26.tlxForceBatches escape. The

@@ -402,7 +402,17 @@ async function runProbeAttempt(attemptNum) {
         fail: (() => { try { return localStorage.getItem("apex26.gfxWgxFail"); } catch { return null; } })(),
         msaa: env.msaa,
         mobile: env.mobile,
-        gpuErrors: (typeof WGX !== "undefined" && WGX.gpuErrors) ? WGX.gpuErrors() : null,
+        // Ask the BOUND backend, not just WGX. This read was WGX-only, so on
+        // the three backend the field could never be anything but null — and a
+        // black TLX-WebGPU frame was reported for a whole session as
+        // "gpuErrors: null", which read as "no errors" and meant "no reader".
+        // GLX carries the bound backend's methods (game.js descriptor-copy).
+        gpuErrors:
+          (typeof GLX !== "undefined" && GLX.gpuErrors) ? GLX.gpuErrors()
+          : (typeof WGX !== "undefined" && WGX.gpuErrors) ? WGX.gpuErrors()
+          : null,
+        gpuFirstError:
+          (typeof GLX !== "undefined" && GLX.gpuFirstError) ? GLX.gpuFirstError() : null,
         hasWGX: typeof WGX !== "undefined",
         hasTLX: typeof TLX !== "undefined",
         hasGpu: !!navigator.gpu,
