@@ -117,6 +117,7 @@ const FULL = [
   "js/game/lighting.js",
   "js/game/light-store.js",
   "js/game/carmesh.js",
+  "js/game/garage-scene.js",
   "js/game/bodyattitude.js",
   "js/game/particles.js",
   "js/game/atmosphere.js",
