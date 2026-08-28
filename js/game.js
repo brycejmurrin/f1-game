@@ -2010,7 +2010,7 @@ function cockpitBodyMesh(team) {
 }
 // Hub transform (translate + upscale) + scratch matrices for the steering roll
 // and per-element LCD offsets. The rig z is NOT cosmetic: the cockpit near
-// plane is 0.30 m (_nearM below) and the eye sits at car-local z -0.18, so any
+// plane is 0.30 m (_nearM below) and the eye sits at car-local z -0.20, so any
 // hub nearer than z ~0.14 puts the whole dash INSIDE it — measured at z 0.10
 // the wheel projected at w 0.276 and EVERY instrument at 0.274: LCD, LED strip,
 // digits and aero lamp all clipped, the wheel a washed-out near-clipped shell.
@@ -2026,7 +2026,7 @@ function drawCockpitRig(c, base, dt, paint) {
   const opt = _cockpitOpts;
   // The actual car around you: body (minus helmet) with the real paint, plus
   // the steering/spinning FRONT wheels (the rears sit right beside the camera
-  // in the wide FOV and blob the bottom corners — skipped). Nudged 0.35 m
+  // in the wide FOV and blob the bottom corners — skipped). Nudged 0.30 m
   // forward of their real physics position so they read further out ahead of
   // the driver instead of hugging the cockpit edge (cosmetic-only offset —
   // the actual wheel/contact-patch physics is untouched).
@@ -5996,13 +5996,13 @@ function render(dt) {
   // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
   // precision across the scene — the biggest single lever against z-fighting /
   // shadow flicker. Capped at 0.3 (not higher): the cockpit rig keeps the wheel /
-  // dash fascia a proven 0.39 m from the eye (COCKPIT_EYE_FWD + _rigT), so 0.3
+  // dash fascia a proven 0.46 m from the eye (COCKPIT_EYE_FWD + _rigT), so 0.3
   // still clears it with ~9 cm to spare while raising the far/near precision
   // floor ~1.5x vs 0.2.
   // Per-camera near plane. Depth precision is governed by the near:far RATIO,
   // and a 0.3 m near against a 900 m far spends almost all of it in the first
   // few metres — which is why distant coplanar geometry z-fights. The near
-  // plane CANNOT simply be raised globally: the cockpit rig sits 0.39 m from
+  // plane CANNOT simply be raised globally: the cockpit rig sits 0.46 m from
   // the eye (see _rigT), so anything above ~0.35 slices the steering wheel and
   // fascia out of frame. Only cockpit/hood views have geometry that close, so
   // they keep 0.3 and every other view takes a near plane that buys back a lot
@@ -6935,7 +6935,7 @@ function render(dt) {
     // (sF.x/sF.z for forward, +Y for up) only inverts the basis when the road is
     // FLAT: sF is the full 3-D tangent, so on a gradient θ the 0.99 m up-offset
     // leaks into forward and the eye creeps to rig z = FWD·cos²θ + UP·sinθ. At
-    // ~4° of climb that closes the proven 0.39 m eye-to-fascia gap past the 0.3 m
+    // ~4° of climb that closes the proven 0.46 m eye-to-fascia gap past the 0.3 m
     // near plane and the plane eats the wheel face — the instrument slab (LEDs,
     // LCD, digits, buttons) is 3-12 mm thin and sits at the driver-facing extreme,
     // so it vanished whole while the 25-62 mm body boxes behind it kept drawing.

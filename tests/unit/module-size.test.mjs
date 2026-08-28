@@ -489,7 +489,14 @@ const CEILINGS = {
   // 2860 -> 2895: the accuracy round — SEG 24 tyres (comment), regulation
   // mirror housing (toe cant block, winglet, outer stay), and the PLATE
   // rolled-top outwash row with its curled-lip span. Measured 2883.
-  "js/car/car3d.js": 2925,
+  // 2925 -> 2947: the cockpit pale-surface round. A near-white livery accent
+  // (ferrari c2 is [1,1,1]) turned every cockpit trim element into a flat pale
+  // slab; the fix is _ckAcc at the one point livery colours are derived, plus
+  // a !ckpt gate on the pale sponsor board and dark glass for the cockpit
+  // mirror face. Each carries the measurement that justifies it — cockpit view
+  // rays landing on a pale surface went 96 -> 0 (artifacts/pale-sweep.mjs) and
+  // every EXTERNAL build hashes byte-identical (artifacts/build-parity.mjs).
+  "js/car/car3d.js": 2947,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
