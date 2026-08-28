@@ -1,0 +1,621 @@
+/* Apex 26 — GarageScene: the room the setup preview happens in. Bay shell, roof truss, LED fixtures, pit equipment, the floor and the light rig — everything in the garage that is not the car. */
+const GarageScene = (function () {
+  "use strict";
+
+let _gfx = null;            // renderer handle, set once by init()
+function init(gfx) { Log.info("game", "GarageScene.init"); _gfx = gfx; }
+
+// The frame clear colour (gfx reads fogColor as the clear) — the "outside" the
+// bay is silhouetted against, and what the apron disc's rim fades into.
+const BACKDROP = [0.035, 0.038, 0.046];
+
+// SKYLIGHT replaces the preview's old sunColor:[1,1,1]. It has to come down for
+// this room to work at all: a lamp's shading is att = win^2/(distC^2+1) with
+// distC = max(dist, uLampNearClamp) and the clamp defaulting to 4, so NO lamp
+// can ever contribute more than 1/17 = 0.059 of albedo. The preview's old rig
+// (energy 0.88) was therefore delivering ~5% of the picture and the sun was
+// delivering the rest — which is exactly why it read as a product shot on a
+// seamless rather than a room. Ten fixtures at ~10x that energy, against a sun
+// dimmed to a roof-light fill, is what puts the lighting back in the lamps.
+const SKYLIGHT = [0.55, 0.55, 0.58];
+const AMB_SKY = [0.200, 0.215, 0.250], AMB_GROUND = [0.130, 0.125, 0.118];
+
+// Interior, metres. The car spans z -2.69..3.18 and x +/-0.95; its nose is +Z,
+// so +Z is the pit-lane end and the deep end of the bay is behind it.
+const HALF_W = 5.4, Z_BACK = -6.4, Z_DOOR = 6.4, CEIL_Y = 5.0;
+
+const PANEL  = [0.150, 0.156, 0.170];   // upper wall panels
+const STEEL  = [0.230, 0.235, 0.250];
+const DARK   = [0.055, 0.058, 0.066];
+
+// ── mesh helpers ───────────────────────────────────────────────────────────
+// A flat rectangle spanned by uVec/vVec from origin, subdivided nu x nv and
+// shaded per-vertex by colAt(u01, v01). Winding is derived from the requested
+// normal rather than assumed, which is what lets the same helper build a wall
+// seen from INSIDE and a prop face seen from outside.
+function panelGrid(out, origin, uVec, vVec, nu, nv, nrm, colAt) {
+  const base = out.pos.length / 3;
+  for (let j = 0; j <= nv; j++) {
+    for (let i = 0; i <= nu; i++) {
+      const u = i / nu, v = j / nv, c = colAt(u, v);
+      out.pos.push(origin[0] + uVec[0] * u + vVec[0] * v,
+                   origin[1] + uVec[1] * u + vVec[1] * v,
+                   origin[2] + uVec[2] * u + vVec[2] * v);
+      out.nrm.push(nrm[0], nrm[1], nrm[2]);
+      out.col.push(c[0], c[1], c[2]);
+    }
+  }
+  const cr = [uVec[1] * vVec[2] - uVec[2] * vVec[1],
+              uVec[2] * vVec[0] - uVec[0] * vVec[2],
+              uVec[0] * vVec[1] - uVec[1] * vVec[0]];
+  // (a,d,c)/(a,b,d) is the order that is CCW about +cr, where cr = uVec x vVec:
+  // in (u,v) the quad is a(0,0) b(1,0) c(0,1) d(1,1), and a->d->c turns the same
+  // way as u->v. So when cr already points along the wanted normal, THAT is the
+  // order to emit; the other one faces the wall the wrong way and a room built
+  // from it is a solid box that hides its own interior.
+  const along = cr[0] * nrm[0] + cr[1] * nrm[1] + cr[2] * nrm[2] > 0;
+  const row = nu + 1;
+  for (let j = 0; j < nv; j++) {
+    for (let i = 0; i < nu; i++) {
+      const a = base + j * row + i, b = a + 1, c = a + row, d = c + 1;
+      if (along) out.idx.push(a, d, c, a, b, d);
+      else out.idx.push(a, c, d, a, d, b);
+    }
+  }
+}
+
+// Solid axis-aligned block, outward-wound, one flat colour. Props are SOLIDS,
+// never planes: a camera that wanders inside one then sees only back faces and
+// the prop silently vanishes instead of smearing across the frame.
+const BOX_F = [[0, 0, 1], [0, 0, -1], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0]];
+function block(out, cx, cy, cz, hx, hy, hz, col) {
+  const c = [cx, cy, cz], h = [hx, hy, hz];
+  for (let f = 0; f < 6; f++) {
+    const n = BOX_F[f];
+    const i0 = n[0] ? 1 : 0, i1 = n[2] ? 1 : 2;   // the two in-plane axes
+    const base = out.pos.length / 3;
+    for (let s = 0; s < 4; s++) {
+      const p = [c[0] + n[0] * h[0], c[1] + n[1] * h[1], c[2] + n[2] * h[2]];
+      p[i0] += ((s === 1 || s === 2) ? 1 : -1) * h[i0];
+      p[i1] += (s >= 2 ? 1 : -1) * h[i1];
+      out.pos.push(p[0], p[1], p[2]);
+      out.nrm.push(n[0], n[1], n[2]);
+      out.col.push(col[0], col[1], col[2]);
+    }
+    const e = [0, 0, 0]; e[i0] = 1;
+    const g = [0, 0, 0]; g[i1] = 1;
+    const cr = [e[1] * g[2] - e[2] * g[1], e[2] * g[0] - e[0] * g[2], e[0] * g[1] - e[1] * g[0]];
+    if (cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] > 0)
+      out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    else out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+  }
+}
+
+function cyl(out, cx, cy, cz, rad, h, col, seg) {
+  seg = seg || 10;
+  const base = out.pos.length / 3;
+  for (let i = 0; i < seg; i++) {
+    const a = (i / seg) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+    for (let k = 0; k < 2; k++) {
+      out.pos.push(cx + ca * rad, cy + k * h, cz + sa * rad);
+      out.nrm.push(ca, 0, sa); out.col.push(col[0], col[1], col[2]);
+    }
+  }
+  for (let i = 0; i < seg; i++) {
+    const a = base + i * 2, b = base + ((i + 1) % seg) * 2;
+    out.idx.push(a, b, b + 1, a, b + 1, a + 1);
+  }
+  const top = out.pos.length / 3;
+  for (let i = 0; i < seg; i++) {
+    const a = (i / seg) * Math.PI * 2;
+    out.pos.push(cx + Math.cos(a) * rad, cy + h, cz + Math.sin(a) * rad);
+    out.nrm.push(0, 1, 0); out.col.push(col[0], col[1], col[2]);
+  }
+  for (let i = 1; i < seg - 1; i++) out.idx.push(top, top + i, top + i + 1);
+}
+
+const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+const scale = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
+const rgb = (c, dflt) => (c && c.length === 3 ? c : dflt);
+
+// ── the bay shell ──────────────────────────────────────────────────────────
+// A CLOSED six-sided room whose every face is wound to be seen from INSIDE.
+// That one decision is what lets the preview camera keep its full range: it
+// orbits to SP_DIST_MAX (15 m) and to SP_EL_MAX (1.30 rad, eye y ~ 14.9 m), so
+// it spends real time outside any room small enough to read as a pit bay. With
+// inward faces, a wall the eye has passed is simply back-facing and culls, and
+// what you get is a doll's-house cutaway rather than a black screen. The
+// transition costs nothing and cannot pop, because the eye crosses a face's
+// plane exactly when that face is edge-on and covers zero pixels.
+let shellMesh = null;
+function buildShell(out, liv) {
+  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.55, 0.57, 0.62]);
+  const dado = scale(c1, 0.45), stripe = scale(c2, 0.8);
+  // Wall colour by height: team dado to 1.5 m, an accent band, grey panel above.
+  const wallAt = (y01, hgt) => {
+    const y = y01 * hgt;
+    if (y < 1.50) return dado;
+    if (y < 1.62) return stripe;
+    return PANEL;
+  };
+  // Battens are BAKED INTO THE WALL's vertex colour rather than modelled as
+  // solid posts. A solid post is a prop, and props do not cull with the shell:
+  // stood outside the bay you would see a row of dark bars hanging in front of
+  // the room whose wall had already culled away. Shading them into the wall
+  // means they are the wall, and they come and go exactly when it does.
+  const seamed = (col, u, n) => (Math.abs((u * n) % 1 - 0.5) > 0.42 ? scale(col, 0.62) : col);
+  // walls: [origin, uVec, vVec, inward normal, u-divisions]
+  const W = HALF_W;
+  const walls = [
+    [[-W, 0, Z_BACK], [W * 2, 0, 0], [0, CEIL_Y, 0], [0, 0, 1], 8],
+    [[-W, 0, Z_DOOR], [W * 2, 0, 0], [0, CEIL_Y, 0], [0, 0, -1], 8],
+    [[-W, 0, Z_BACK], [0, 0, Z_DOOR - Z_BACK], [0, CEIL_Y, 0], [1, 0, 0], 9],
+    [[W, 0, Z_BACK], [0, 0, Z_DOOR - Z_BACK], [0, CEIL_Y, 0], [-1, 0, 0], 9],
+  ];
+  for (let i = 0; i < walls.length; i++) {
+    const w = walls[i];
+    panelGrid(out, w[0], w[1], w[2], w[4], 6, w[3],
+      (u, v) => seamed(wallAt(v, CEIL_Y), u, w[4]));
+  }
+  panelGrid(out, [-W, CEIL_Y, Z_BACK], [W * 2, 0, 0], [0, 0, Z_DOOR - Z_BACK], 4, 4,
+    [0, -1, 0], () => DARK);
+  // Roof truss. It lives in the shell because the ceiling culls from above and
+  // looking down THROUGH the truss into the bay is the view we want up there.
+  for (let s = -1; s <= 1; s += 2)
+    block(out, s * 2.6, CEIL_Y - 0.42, 0, 0.06, 0.06, (Z_DOOR - Z_BACK) / 2, STEEL);
+  for (let i = 0; i <= 4; i++)
+    block(out, 0, CEIL_Y - 0.42, Z_BACK + (Z_DOOR - Z_BACK) * (i / 4), 2.7, 0.05, 0.06, STEEL);
+}
+
+// ── props ──────────────────────────────────────────────────────────────────
+// Grouped BY WALL, and each group is drawn only while the eye is on the inside
+// of its wall. The shell gets this for free from back-face culling; a solid
+// prop does not, so without the grouping a tyre stack would hang in mid-air in
+// front of a wall that had already culled away. The test is one sign compare.
+//
+// Everything sits outboard of x +/-3.6: SP_FIT_HALF_W (3.35) is the framing
+// radius the auto-turntable holds, so anything inside that band crops into the
+// car's frame at the default distance.
+const SIDES = ["nx", "px", "back", "door", "mid"];
+function buildProps(g, liv) {
+  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  const COMPOUND = [[0.85, 0.12, 0.12], [0.92, 0.80, 0.10], [0.88, 0.88, 0.90]];
+  const stack = (out, x, z, seed) => {
+    for (let t = 0; t < 4; t++) {
+      const y = t * 0.345;
+      cyl(out, x, y, z, 0.36, 0.33, [0.045, 0.045, 0.050], 10);
+      cyl(out, x, y + 0.30, z, 0.305, 0.025, COMPOUND[(seed + t) % 3], 10);
+    }
+  };
+  const toolbox = (out, x, z) => {
+    const sgn = x > 0 ? -1 : 1;
+    block(out, x, 0.62, z, 0.36, 0.52, 0.80, scale(c1, 0.55));
+    block(out, x, 1.16, z, 0.38, 0.03, 0.82, STEEL);
+    for (let d = 0; d < 4; d++)
+      block(out, x + sgn * 0.37, 0.26 + d * 0.24, z, 0.012, 0.09, 0.72, scale(STEEL, 0.8));
+    for (let w = 0; w < 4; w++)
+      cyl(out, x + (w % 2 ? 0.26 : -0.26), 0, z + (w < 2 ? 0.6 : -0.6), 0.05, 0.10, DARK, 6);
+  };
+  // -X wall: the engineers' monitor bank and desk, plus a tyre stack.
+  toolbox(g.nx, -4.92, 3.6);
+  stack(g.nx, -4.55, -5.4, 0); stack(g.nx, -4.55, -3.1, 2);
+  block(g.nx, -5.30, 1.90, 0.6, 0.05, 0.80, 1.60, DARK);
+  for (let m = 0; m < 6; m++)
+    block(g.nx, -5.22, 1.45 + (m < 3 ? 0 : 0.90), 0.6 + ((m % 3) - 1) * 0.98, 0.03, 0.36, 0.46, scale(STEEL, 0.55));
+  block(g.nx, -5.02, 0.86, 0.6, 0.30, 0.03, 1.30, scale(STEEL, 0.9));
+  for (let s = -1; s <= 1; s += 2) cyl(g.nx, -5.02, 0, 0.6 + s * 1.15, 0.04, 0.86, STEEL, 6);
+  // +X wall: the tool trolleys.
+  toolbox(g.px, 4.92, -3.4); toolbox(g.px, 4.92, -1.5); toolbox(g.px, 4.92, 0.4);
+  stack(g.px, 4.55, -5.4, 1); stack(g.px, 4.55, 4.6, 2);
+  // Back wall: the pit board.
+  cyl(g.back, 3.3, 0, -6.15, 0.03, 1.80, STEEL, 6);
+  block(g.back, 3.3, 2.30, -6.12, 0.45, 0.62, 0.03, DARK);
+  // Door wall: the roller shutter, parked half open.
+  for (let i = 0; i < 11; i++)
+    block(g.door, 0, 2.05 + i * 0.26, Z_DOOR - 0.10, HALF_W * 0.72, 0.12, (i % 2) ? 0.035 : 0.05, scale(STEEL, 0.75));
+  block(g.door, 0, 1.98, Z_DOOR - 0.10, HALF_W * 0.74, 0.07, 0.07, scale(STEEL, 1.1));
+  // Floor level, inboard of every wall, so it is never on the wrong side of one.
+  for (let s = -1; s <= 1; s += 2) {
+    block(g.mid, s * 3.9, 0.035, 0.5, 0.09, 0.035, 5.4, DARK);
+    block(g.mid, s * 4.6, 0.035, -5.9, 0.75, 0.035, 0.09, DARK);
+  }
+  // Front jack, parked BESIDE the nose rather than on the centreline: dead
+  // ahead it draws a post straight up the middle of the FRONT camera preset,
+  // which is the one view whose whole job is an unobstructed head-on car.
+  block(g.mid, 1.55, 0.12, 4.35, 0.55, 0.05, 0.12, scale(STEEL, 0.8));
+  cyl(g.mid, 1.55, 0.12, 4.55, 0.03, 0.85, STEEL, 6);
+}
+
+// ── LED ceiling fixtures ───────────────────────────────────────────────────
+// The VISIBLE source for every lamp in the rig that has a glare weight. A halo
+// painted where there is no lamp reads as a smudge on the lens, which is what
+// drawGlow's per-record glareW field exists to prevent — so fixture geometry
+// and light record are built from ONE table.
+const KEY_TINT = [1.16, 1.00, 0.78];    // ~3200 K
+const FILL_TINT = [0.86, 0.95, 1.14];   // ~5600 K
+const WASH_TINT = [0.90, 0.97, 1.10];
+// [x, y, z, tint, energy, radius, aimX, aimY, aimZ, cosIn, cosOut, bleed, glareW, wide]
+const FIXTURES = [
+  [ 0.00, 4.30,  1.60, KEY_TINT, 15.0, 11, 0, -1, 0,      0.72, 0.28, 0.10, 1.1, 1],
+  [ 0.00, 4.30, -1.10, KEY_TINT, 15.0, 11, 0, -1, 0,      0.72, 0.28, 0.10, 1.1, 1],
+  [-3.90, 4.25,  3.40, FILL_TINT, 9.5, 12, 0.62, -0.62, -0.48, 0.80, 0.42, 0.14, 0.8, 1],
+  [ 3.90, 4.25,  3.40, FILL_TINT, 9.5, 12, -0.62, -0.62, -0.48, 0.80, 0.42, 0.14, 0.8, 1],
+  [-3.90, 4.25, -3.40, FILL_TINT, 9.5, 12, 0.62, -0.62, 0.48, 0.80, 0.42, 0.14, 0.8, 1],
+  [ 3.90, 4.25, -3.40, FILL_TINT, 9.5, 12, -0.62, -0.62, 0.48, 0.80, 0.42, 0.14, 0.8, 1],
+  // Back-wall washers. Pulled forward to z -5.20 on purpose: at -6.05 the N.L
+  // on the wall (normal +Z) is ~0.10, a dead graze; here it is ~0.31, which is
+  // what gives the branded wall a top-down gradient instead of flat fill.
+  [-2.60, 4.60, -5.20, WASH_TINT, 8.0,  9, -0.10, -0.72, -0.69, 0.86, 0.50, 0.06, 0, 0],
+  [ 2.60, 4.60, -5.20, WASH_TINT, 8.0,  9, 0.10, -0.72, -0.69, 0.86, 0.50, 0.06, 0, 0],
+];
+const E = 0.55;   // the same physical energy factor the track lamps use
+const LED_DROP = 0.06;   // light record sits under its panel so the halo clears the housing
+
+let ledMesh = null;
+function buildLed(out, liv) {
+  for (let i = 0; i < FIXTURES.length; i++) {
+    const F = FIXTURES[i], x = F[0], y = F[1] + LED_DROP, z = F[2];
+    const hw = F[13] ? 1.20 : 0.26, hd = F[13] ? 0.17 : 0.12;
+    block(out, x, y + 0.06, z, hw, 0.05, hd, scale(STEEL, 0.55));   // housing
+    // The lit face must be brighter than 1.0 or the shader's glow gate
+    // (smoothstep(0.50, 0.95, max(albedo)) plus an HDR push on max(bright-1,0))
+    // never fires and it reads as white plastic instead of a light.
+    block(out, x, y, z, hw * 0.95, 0.02, hd * 0.8, scale(F[3], 1.14));
+    for (let s = -1; s <= 1; s += 2)
+      block(out, x + s * hw * 0.8, y + 0.30, z, 0.02, 0.26, 0.02, STEEL);
+  }
+  // Team-colour dado uplights: two cans grazing up the side walls. These are
+  // what make the bay read as THIS team's garage before you notice any logo.
+  const c1 = rgb(liv && liv.c1, [0.4, 0.45, 0.55]);
+  for (let s = -1; s <= 1; s += 2) {
+    cyl(out, s * 5.05, 0.02, 0, 0.11, 0.22, scale(STEEL, 0.6), 8);
+    cyl(out, s * 5.05, 0.24, 0, 0.09, 0.02, scale(c1, 1.5), 8);
+  }
+}
+const LED_OPTS = { emissive: 1.0, roughness: 1.0, specular: 0, noAlphaWrite: true };
+
+// ── light rig ──────────────────────────────────────────────────────────────
+// Stride-15 records: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner, cosOuter,
+// bleed, volW, glareW] — see js/render/gfx.js. volW stays 0 (godrays are off).
+const _rig = [];
+let _rigKey = "";
+function lights(liv) {
+  const c1 = rgb(liv && liv.c1, [0.4, 0.45, 0.55]);
+  const key = c1.join(",");
+  if (_rig.length && key === _rigKey) return _rig;
+  _rig.length = 0;
+  for (let i = 0; i < FIXTURES.length; i++) {
+    const F = FIXTURES[i], e = F[4] * E, t = F[3];
+    _rig.push(F[0], F[1], F[2], t[0] * e, t[1] * e, t[2] * e, F[5],
+              F[6], F[7], F[8], F[9], F[10], F[11], 0, F[12]);
+  }
+  const m = Math.max(c1[0], c1[1], c1[2]) || 1, ue = (3.0 / m) * E;
+  for (let s = -1; s <= 1; s += 2)
+    _rig.push(s * 5.05, 0.25, 0, c1[0] * ue, c1[1] * ue, c1[2] * ue, 6,
+              -s * 0.26, 0.97, 0, 0.90, 0.55, 0.05, 0, 0.5);
+  _rigKey = key;
+  return _rig;
+}
+// GLOW_FS peaks at (0.75 + 0.28) * uStr, and LT.glareStr ships at 0.12 for
+// distant track masts. A garage has its fixtures IN frame, so half a stop up.
+const GLARE_STR = 0.18;
+function glareStr() { return GLARE_STR; }
+
+// ── floor ──────────────────────────────────────────────────────────────────
+// Two surfaces. The APRON is a disc at y = -0.04 whose vertex colours fade to
+// exactly BACKDROP at the rim, so the ground has no visible edge — the trick
+// the preview already relied on. The BAY floor is a gapless TILING at y = 0,
+// which is what the wheels sit on. The 4 cm step between them is a real garage
+// detail (a resin bay laid over the pit apron) and it is also why nothing here
+// needs a depth bias: no two floor surfaces are ever coplanar.
+const BOX_HW = 2.20, BOX_ZF = 4.25, BOX_ZB = -4.00;
+function buildApron(out) {
+  const RINGS = 7, SEG = 40, R = 18, Y = -0.04;
+  const HOT = [0.105, 0.107, 0.115];
+  const push = (x, z, t) => {
+    const k = smooth(t);
+    out.pos.push(x, Y, z); out.nrm.push(0, 1, 0);
+    out.col.push(HOT[0] + (BACKDROP[0] - HOT[0]) * k,
+                 HOT[1] + (BACKDROP[1] - HOT[1]) * k,
+                 HOT[2] + (BACKDROP[2] - HOT[2]) * k);
+  };
+  const base = out.pos.length / 3;
+  push(0, 0, 0);
+  for (let r = 1; r <= RINGS; r++) {
+    const t = r / RINGS, rad = R * t * t;
+    for (let i = 0; i < SEG; i++) {
+      const a = (i / SEG) * Math.PI * 2;
+      push(Math.cos(a) * rad, Math.sin(a) * rad, t);
+    }
+  }
+  // CCW seen from ABOVE (gl.frontFace(CCW) + cull BACK): the ring walks +a =
+  // (cos a, sin a) in (x, z), and a downward-looking camera maps world z to
+  // SCREEN-DOWN, so the naive order comes out clockwise and the whole disc is
+  // culled — an invisible floor that still passes every mesh assertion.
+  for (let i = 0; i < SEG; i++) out.idx.push(base, base + 1 + ((i + 1) % SEG), base + 1 + i);
+  for (let r = 0; r < RINGS - 1; r++) {
+    const a0 = base + 1 + r * SEG, b0 = a0 + SEG;
+    for (let i = 0; i < SEG; i++) {
+      const j = (i + 1) % SEG;
+      out.idx.push(a0 + i, b0 + j, b0 + i, a0 + i, a0 + j, b0 + j);
+    }
+  }
+}
+// One bay-floor rectangle at y = 0. The markings are REAL GEOMETRY in a gapless
+// tiling, not decals: overlapping coplanar quads z-fight at grazing elevation,
+// and a decal would miss the lamp pools entirely (the decal shader sees sun and
+// ambient only, never the point lights).
+function tile(out, x0, x1, z0, z1, col) {
+  const base = out.pos.length / 3;
+  const p = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
+  for (let k = 0; k < 4; k++) {
+    out.pos.push(p[k][0], 0, p[k][1]); out.nrm.push(0, 1, 0);
+    out.col.push(col[0], col[1], col[2]);
+  }
+  out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+}
+function buildBayFloor(out, liv) {
+  const SLAB = [0.088, 0.090, 0.098], IN = [0.115, 0.118, 0.126];
+  const PAINT = [0.66, 0.67, 0.70], WALK = [0.70, 0.60, 0.12];
+  const band = scale(rgb(liv && liv.c1, [0.3, 0.32, 0.36]), 0.7);
+  const L = -HALF_W, R = HALF_W, B = Z_BACK, F = Z_DOOR, W = 0.11;
+  tile(out, L, R, B, B + 0.8, band);                       // team band, deep end
+  tile(out, L, R, B + 0.8, BOX_ZB - W, SLAB);
+  tile(out, L, R, BOX_ZB - W, BOX_ZB, PAINT);              // pit box, back edge
+  tile(out, L, -BOX_HW - W, BOX_ZB, BOX_ZF, SLAB);
+  tile(out, -BOX_HW - W, -BOX_HW, BOX_ZB, BOX_ZF, PAINT);  // pit box, left edge
+  tile(out, -BOX_HW, BOX_HW, BOX_ZB, BOX_ZF, IN);          // the box itself
+  tile(out, BOX_HW, BOX_HW + W, BOX_ZB, BOX_ZF, PAINT);    // right edge
+  tile(out, BOX_HW + W, R, BOX_ZB, BOX_ZF, SLAB);
+  tile(out, L, R, BOX_ZF, BOX_ZF + W, PAINT);              // front edge
+  tile(out, L, R, BOX_ZF + W, F, SLAB);
+  for (let s = -1; s <= 1; s += 2) {                       // walkway lines
+    tile(out, s * 4.25, s * 4.25 + 0.09, B + 0.8, BOX_ZB - W, WALK);
+    tile(out, s * 4.25, s * 4.25 + 0.09, BOX_ZF + W, F, WALK);
+  }
+  // Expansion joints, 3 cm, laid ON TOP of the tiling at +2 mm — the one place
+  // a tiny lift is simpler than splitting every band again, and 2 mm at 4-15 m
+  // is far above this depth buffer's resolution.
+  const J = [0.042, 0.043, 0.048];
+  for (let i = -2; i <= 2; i++) {
+    const x = i * 2.4;
+    const b2 = out.pos.length / 3;
+    const p = [[x - 0.015, B], [x + 0.015, B], [x + 0.015, F], [x - 0.015, F]];
+    for (let k = 0; k < 4; k++) { out.pos.push(p[k][0], 0.002, p[k][1]); out.nrm.push(0, 1, 0); out.col.push(J[0], J[1], J[2]); }
+    out.idx.push(b2, b2 + 2, b2 + 1, b2, b2 + 3, b2 + 2);
+  }
+}
+
+// ── team dress ─────────────────────────────────────────────────────────────
+// One canvas atlas, one texture, one texMesh, one drawDecal: the same shape as
+// the car's own decal path (js/game/carmesh.js carDecalData), which is what
+// keeps this to a single extra draw call however many branded surfaces there
+// are. The crest is the real team PNG where LiveryTex has one and its
+// hand-drawn vector crest where it does not — which is also the permanent path
+// for a custom MY TEAM entry, since those never have a PNG.
+const DRESS = 1024;
+const D_CREST = { x: 0, y: 0, w: 512, h: 512 };
+const D_WORD  = { x: 512, y: 0, w: 512, h: 128 };
+const D_BOARD = { x: 512, y: 160, w: 256, h: 352 };
+const D_SCREEN = { x: 0, y: 512, w: 512, h: 256 };
+const css = (c) => "rgb(" + Math.round(Math.min(1, Math.max(0, c[0])) * 255) + "," +
+  Math.round(Math.min(1, Math.max(0, c[1])) * 255) + "," +
+  Math.round(Math.min(1, Math.max(0, c[2])) * 255) + ")";
+
+// The decal shader sees sun + ambient + uGlow only — never the point lights. So
+// rather than fight that, everything here is painted as SIGNAGE and lit by
+// glow: a modern garage's crest wall IS a lightbox, the pit board IS an LED
+// panel and the monitors ARE emissive. Relative brightness between surfaces is
+// baked into the canvas, because glow is per-draw and there is only one draw.
+function paintDress(team, liv) {
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = DRESS;
+  const ctx = cv.getContext("2d");
+  ctx.clearRect(0, 0, DRESS, DRESS);
+  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
+  let usedPng = false;
+  // Crest lightbox.
+  ctx.fillStyle = css(scale(c1, 0.30)); ctx.fillRect(D_CREST.x, D_CREST.y, D_CREST.w, D_CREST.h);
+  ctx.strokeStyle = css(c2); ctx.lineWidth = 7;
+  ctx.strokeRect(D_CREST.x + 10, D_CREST.y + 10, D_CREST.w - 20, D_CREST.h - 20);
+  const img = LiveryTex.LOGOS && LiveryTex.LOGOS[team.id];
+  const inner = { x: D_CREST.x + 46, y: D_CREST.y + 46, w: D_CREST.w - 92, h: D_CREST.h - 92 };
+  if (img && LiveryTex.drawLogoImage) {
+    LiveryTex.drawLogoImage(ctx, img, inner, null, c1);
+    usedPng = true;
+  } else {
+    LiveryTex.drawCrest(ctx, team.id, inner, [0.95, 0.95, 0.96], c2, false,
+      (liv && liv.logo) || null, scale(c1, 0.30));
+  }
+  // Team wordmark strip.
+  ctx.fillStyle = css(scale(c1, 0.55)); ctx.fillRect(D_WORD.x, D_WORD.y, D_WORD.w, D_WORD.h);
+  ctx.fillStyle = css(c2); ctx.fillRect(D_WORD.x, D_WORD.y + D_WORD.h - 9, D_WORD.w, 9);
+  ctx.fillStyle = "#f2f3f5";
+  ctx.font = "700 62px system-ui, sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(String(team.name || team.short || "").toUpperCase(),
+    D_WORD.x + D_WORD.w / 2, D_WORD.y + D_WORD.h / 2 - 4, D_WORD.w - 30);
+  // Pit board: team header, then the two drivers' numbers and codes.
+  ctx.fillStyle = "#0a0b0d"; ctx.fillRect(D_BOARD.x, D_BOARD.y, D_BOARD.w, D_BOARD.h);
+  ctx.fillStyle = css(c1); ctx.fillRect(D_BOARD.x, D_BOARD.y, D_BOARD.w, 56);
+  ctx.fillStyle = "#f4f5f7"; ctx.font = "700 34px system-ui, sans-serif";
+  ctx.fillText(String(team.short || ""), D_BOARD.x + D_BOARD.w / 2, D_BOARD.y + 29);
+  const drv = (team && team.drivers) || [];
+  for (let i = 0; i < 2; i++) {
+    const d = drv[i] || {}, top = D_BOARD.y + 78 + i * 140;
+    ctx.fillStyle = "#f4f5f7"; ctx.font = "700 88px system-ui, sans-serif";
+    ctx.fillText(d.num == null ? "--" : String(d.num), D_BOARD.x + D_BOARD.w / 2, top + 46);
+    ctx.fillStyle = css(c2); ctx.font = "700 30px system-ui, sans-serif";
+    ctx.fillText(String(d.code || ""), D_BOARD.x + D_BOARD.w / 2, top + 108);
+  }
+  // Engineer screens: six tiles of plausible telemetry.
+  ctx.fillStyle = "#05070a"; ctx.fillRect(D_SCREEN.x, D_SCREEN.y, D_SCREEN.w, D_SCREEN.h);
+  for (let t = 0; t < 6; t++) {
+    const tx = D_SCREEN.x + (t % 3) * (D_SCREEN.w / 3), ty = D_SCREEN.y + ((t / 3) | 0) * (D_SCREEN.h / 2);
+    const tw = D_SCREEN.w / 3 - 6, th = D_SCREEN.h / 2 - 6;
+    ctx.fillStyle = "#0b1016"; ctx.fillRect(tx + 3, ty + 3, tw, th);
+    ctx.strokeStyle = t % 2 ? "#3fd8c8" : "#e2a33c"; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let k = 0; k <= 22; k++) {
+      const px = tx + 8 + (tw - 16) * (k / 22);
+      const py = ty + th * 0.55 - Math.sin(k * 0.9 + t) * th * 0.24 - (k % 5) * 1.6;
+      if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(120,150,175,0.22)"; ctx.lineWidth = 1;
+    for (let gl = 1; gl < 4; gl++) {
+      ctx.beginPath(); ctx.moveTo(tx + 6, ty + th * (gl / 4)); ctx.lineTo(tx + tw, ty + th * (gl / 4)); ctx.stroke();
+    }
+  }
+  return { canvas: cv, usedPng };
+}
+
+// UV rect for an atlas region. v is flipped because createTexture uploads with
+// FLIP_Y, exactly as carDecalData's uvOf does — but U is NOT pre-flipped here:
+// that flip exists to un-mirror the car, which draws through MAT_REFLECT_X
+// (det -1). These quads are world-space on the identity, so flipping U would
+// mirror every logo in the bay.
+function uvOf(r) {
+  return { uL: r.x / DRESS, uR: (r.x + r.w) / DRESS, vT: 1 - r.y / DRESS, vB: 1 - (r.y + r.h) / DRESS };
+}
+// corners in [BL, BR, TR, TL] as seen from the front of the quad.
+function dquad(out, c, n, region) {
+  const u = uvOf(region), i = out.pos.length / 3;
+  const uvs = [[u.uL, u.vB], [u.uR, u.vB], [u.uR, u.vT], [u.uL, u.vT]];
+  for (let k = 0; k < 4; k++) {
+    out.pos.push(c[k][0], c[k][1], c[k][2]);
+    out.nrm.push(n[0], n[1], n[2]);
+    out.uv.push(uvs[k][0], uvs[k][1]);
+  }
+  out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+}
+// Grouped by wall, exactly like the props and for a sharper reason: drawDecal
+// calls setCull(false), so a decal is DOUBLE-SIDED and does NOT cull with the
+// wall it is painted on. Without this split, standing outside the bay you read
+// the near wall's wordmark through the culled-away wall, mirrored.
+function buildDress() {
+  const g = {};
+  for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = { pos: [], nrm: [], uv: [], idx: [] };
+  const zb = Z_BACK + 0.03, zd = Z_DOOR - 0.03, xw = HALF_W - 0.03;
+  // Back wall: the crest lightbox, the wordmark under it, and the pit board.
+  // Height is framing, not decoration: the preview's vertical half-FOV is 18 deg
+  // about an aim point at y 0.45 and the back wall is ~14 m out at the default
+  // distance, so anything above ~y 4 there is already at the top of the frame.
+  dquad(g.back, [[-1.15, 1.80, zb], [1.15, 1.80, zb], [1.15, 3.80, zb], [-1.15, 3.80, zb]], [0, 0, 1], D_CREST);
+  dquad(g.back, [[-2.3, 1.05, zb], [2.3, 1.05, zb], [2.3, 1.62, zb], [-2.3, 1.62, zb]], [0, 0, 1], D_WORD);
+  dquad(g.back, [[2.86, 1.70, -6.08], [3.74, 1.70, -6.08], [3.74, 2.90, -6.08], [2.86, 2.90, -6.08]], [0, 0, 1], D_BOARD);
+  // Side walls: the wordmark repeated. Corner order is built per side so the
+  // text reads the right way round from inside each wall.
+  for (let i = 0; i < 3; i++) {
+    const z0 = -4.6 + i * 3.5, z1 = z0 + 2.2;
+    dquad(g.nx, [[-xw, 2.42, z1], [-xw, 2.42, z0], [-xw, 2.92, z0], [-xw, 2.92, z1]], [1, 0, 0], D_WORD);
+    dquad(g.px, [[xw, 2.42, z0], [xw, 2.42, z1], [xw, 2.92, z1], [xw, 2.92, z0]], [-1, 0, 0], D_WORD);
+  }
+  // Engineer screens above the desk, and the notice board by the door.
+  dquad(g.nx, [[-5.18, 1.10, 2.15], [-5.18, 1.10, -0.95], [-5.18, 2.65, -0.95], [-5.18, 2.65, 2.15]], [1, 0, 0], D_SCREEN);
+  dquad(g.door, [[-3.5, 1.30, zd], [-2.6, 1.30, zd], [-2.6, 2.50, zd], [-3.5, 2.50, zd]], [0, 0, -1], D_BOARD);
+  // A wordmark over the shutter. The REAR preset puts the eye behind the back
+  // wall, which culls — so the door wall is the whole backdrop from there, and
+  // without this it is the one framing with no branding in it at all.
+  dquad(g.door, [[2.3, 3.35, zd], [-2.3, 3.35, zd], [-2.3, 3.95, zd], [2.3, 3.95, zd]], [0, 0, -1], D_WORD);
+  return g;
+}
+// Logos arrive asynchronously. Bump a generation counter when they land and put
+// it in the cache key, so the first paint uses the vector crest and the PNG
+// swaps in on the very next frame instead of leaving a blank wall.
+let logoGen = 0;
+if (typeof LiveryTex !== "undefined" && LiveryTex.onLogosReady)
+  LiveryTex.onLogosReady(() => { logoGen++; });
+const DRESS_OPTS = { glow: 0.62 };
+
+// ── caches ─────────────────────────────────────────────────────────────────
+// Single-slot, keyed on team + store revision + the resolved primary colour, so
+// a team chip click or a livery edit rebuilds and the old GL buffers are freed
+// on the spot. One slot cannot leak more than one generation.
+let floorMesh = null, cacheKey = "";
+const dressMesh = {};
+let dressTex = null, dressFail = 0;
+const propMesh = {};
+const acc = () => ({ pos: [], nrm: [], col: [], idx: [] });
+function rebuild(team, liv) {
+  const drv = (team && team.drivers) || [];
+  const key = (team && team.id) + "|" + (rgb(liv && liv.c1, [0, 0, 0])).join(",") +
+              "|" + logoGen + "|" + ((drv[0] && drv[0].num) + "-" + (drv[1] && drv[1].num));
+  if (key === cacheKey && shellMesh) return;
+  if (shellMesh) _gfx.freeMesh(shellMesh);
+  if (ledMesh) _gfx.freeMesh(ledMesh);
+  if (floorMesh) _gfx.freeMesh(floorMesh);
+  for (let i = 0; i < SIDES.length; i++)
+    if (propMesh[SIDES[i]]) { _gfx.freeMesh(propMesh[SIDES[i]]); propMesh[SIDES[i]] = null; }
+  const shell = acc();
+  buildShell(shell, liv);
+  shellMesh = _gfx.createMesh(shell);
+  const led = acc();
+  buildLed(led, liv);
+  ledMesh = _gfx.createMesh(led);
+  const flr = acc();
+  buildApron(flr); buildBayFloor(flr, liv);
+  floorMesh = _gfx.createMesh(flr);
+  const g = {};
+  for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
+  buildProps(g, liv);
+  for (let i = 0; i < SIDES.length; i++) propMesh[SIDES[i]] = _gfx.createMesh(g[SIDES[i]]);
+  // Team dress. Three strikes then stop trying: an unbranded bay is far better
+  // than a canvas that throws once a frame forever.
+  if (dressTex && _gfx.freeTexture) _gfx.freeTexture(dressTex);
+  dressTex = null;
+  for (let i = 0; i < SIDES.length; i++)
+    if (dressMesh[SIDES[i]]) { _gfx.freeMesh(dressMesh[SIDES[i]]); dressMesh[SIDES[i]] = null; }
+  if (dressFail < 3 && _gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined") {
+    try {
+      if (LiveryTex.ensureLogos) LiveryTex.ensureLogos();
+      dressTex = _gfx.createTexture(paintDress(team, liv).canvas);
+      const dg = buildDress();
+      for (let i = 0; i < SIDES.length; i++)
+        if (dg[SIDES[i]].idx.length) dressMesh[SIDES[i]] = _gfx.createTexMesh(dg[SIDES[i]]);
+    } catch (e) {
+      dressFail++; dressTex = null;
+      Log.warn("game", "GarageScene dress failed: " + (e && e.message));
+    }
+  }
+  cacheKey = key;
+}
+
+// Squeegeed resin: matte enough to read as concrete, glossy enough that ten
+// real spot lights streak across it. The sheen is emergent from the lamp
+// energies above — it does not appear at the old rig's levels.
+const FLOOR_OPTS = { roughness: 0.34, metalness: 0, specular: 0.46, clearcoat: 0 };
+const SHELL_OPTS = { roughness: 0.86, metalness: 0.05, specular: 0.16, clearcoat: 0 };
+
+const MAT_I = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+function draw(team, liv, eye) {
+  if (!_gfx) return;
+  rebuild(team, liv);
+  _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
+  _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
+  _gfx.draw(ledMesh, MAT_I, LED_OPTS);
+  // Each wall's furniture, only while the eye is inside that wall — the same
+  // decision back-face culling makes for the wall itself. A camera at
+  // SP_DIST_MAX (15 m) is outside the bay on at least one axis nearly always,
+  // so this test fires constantly and is what keeps the cutaway clean.
+  const ex = eye ? eye[0] : 0, ez = eye ? eye[2] : 0;
+  const inside = { nx: ex > -HALF_W, px: ex < HALF_W, back: ez > Z_BACK, door: ez < Z_DOOR, mid: true };
+  for (let i = 0; i < SIDES.length; i++)
+    if (inside[SIDES[i]]) _gfx.draw(propMesh[SIDES[i]], MAT_I, SHELL_OPTS);
+  // Dress LAST of the environment: drawDecal depth-tests but does not depth
+  // write, so every opaque surface it sits on has to be down first.
+  if (dressTex)
+    for (let i = 0; i < SIDES.length; i++)
+      if (inside[SIDES[i]] && dressMesh[SIDES[i]])
+        _gfx.drawDecal(dressMesh[SIDES[i]], MAT_I, dressTex, DRESS_OPTS);
+}
+
+function debug() {
+  return { bay: [HALF_W * 2, Z_DOOR - Z_BACK, CEIL_Y], lights: lights(null).length / 15, key: cacheKey };
+}
+
+  return { init, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, glareStr, draw, debug };
+})();
+if (typeof window !== "undefined") window.GarageScene = GarageScene;
