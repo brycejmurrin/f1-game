@@ -17,11 +17,11 @@ const NetTransport = (function () {
       onMessage(fn) { handlers.message.push(fn); return this; },
       onOpen(fn) { handlers.open.push(fn); return this; },
       onClose(fn) { handlers.close.push(fn); return this; },
-      _emit(kind, a, b) {
+      _emit(kind, a, b, c) {
         // A throwing handler must not take down the transport or stop the
         // remaining handlers — a rendering bug upstream would otherwise read
-        // as a dropped connection.
-        for (const fn of handlers[kind]) { try { fn(a, b); } catch (e) { /* handler's problem */ } }
+        // as a dropped connection. (Third slot: rtc's message arrival stamp.)
+        for (const fn of handlers[kind]) { try { fn(a, b, c); } catch (e) { /* handler's problem */ } }
       },
     };
   }
@@ -439,8 +439,11 @@ const NetTransport = (function () {
         }
       };
       ch.onclose = () => {
-        if (ep.status === "closed") return;
-        ep.status = "closed"; ep._emit("close", "peer");
+        // Route through shutdown(): flipping ep.status here used to make
+        // shutdown() — the ONLY caller of pc.close() — a permanent no-op, so
+        // every peer-initiated disconnect leaked a live RTCPeerConnection,
+        // its ICE agent, and up to INBOX_BYTE_CAP of buffered messages.
+        shutdown("peer");
       };
       ch.onmessage = (e) => {
         if (ep.status === "closed") return;
@@ -451,7 +454,10 @@ const NetTransport = (function () {
           shutdown("overflow");
           return;
         }
-        inbox.push({ channel: kind, data: e.data, bytes });
+        // `at` stamps ARRIVAL, not pump time: the clock-sync PONG math reads
+        // it, and a pump-time stamp put up to a frame of local scheduling
+        // into every RTT sample (the C-12 skew).
+        inbox.push({ channel: kind, data: e.data, bytes, at: performance.now() });
         queuedBytes += bytes;
         if (kind === STATE) queuedState++;
         else queuedEvents++;
@@ -481,7 +487,7 @@ const NetTransport = (function () {
       if (Log.enabled("net", Log.DEBUG)) Log.debug("net", "pc state -> " + s);
       if ((s === "failed" || s === "disconnected" || s === "closed") && ep.status !== "closed") {
         Log.info("net", "connection closed (" + s + ")");
-        ep.status = "closed"; ep._emit("close", s);
+        shutdown(s);   // releases the pc — see ch.onclose
       }
     };
 
@@ -512,7 +518,9 @@ const NetTransport = (function () {
       queuedState = queuedEvents = queuedBytes = 0;
       for (let i = 0; i < batch.length; i++) {
         const m = batch[i];
-        ep._emit("message", m.channel, m.data);
+        // m.at is the arrival stamp taken at inbox push — session.js does the
+        // PONG clock math on it rather than on handler-run time.
+        ep._emit("message", m.channel, m.data, m.at);
       }
       return count;
     };

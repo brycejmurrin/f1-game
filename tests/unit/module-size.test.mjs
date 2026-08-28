@@ -535,13 +535,20 @@ const CEILINGS = {
   // The whole WGX backend in one IIFE by design (deferred inject, no tag).
   // 5179 -> 5365 on the deploy union: their half-res SSR + chunk-AABB
   // lamp-mask cull rounds landed on the other lineage (re-measured).
-  // 5365 -> 5423: the road's shared vertex buffer. Per-piece buffers made
-  // drawChunked's run merge (keyed on buffer identity) dead code for the road,
-  // so it paid one setVertexBuffer + one draw per visible chunk in every pass.
-  // The added lines are the single-buffer staging loop and the three reasons
-  // the merge is allowed to fire (contiguous, vertex_index dead, no lamp mask
-  // bound) — each one is load-bearing and documented where it sits.
-  "js/render/webgpu/wgx.js": 5423,
+  // 5365 -> 5423 (deploy lineage): the road's shared vertex buffer. Per-piece
+  // buffers made drawChunked's run merge (keyed on buffer identity) dead code
+  // for the road, so it paid one setVertexBuffer + one draw per visible chunk
+  // in every pass. The added lines are the single-buffer staging loop and the
+  // three reasons the merge is allowed to fire (contiguous, vertex_index dead,
+  // no lamp mask bound) — each one is load-bearing and documented where it sits.
+  // 5365 -> 5453 (R8 lineage): overflow sentinel remembered, per-chunk hoisted
+  // above the !cull fast path, SSR consume lanes gated on _ssrRan, lampVol mist
+  // gate ported from GLX/TLX, full-res depth texel for the SSR normal stride,
+  // both merge-run paths pooled to module scope, lamp masks generation-cached,
+  // and the F7 packed-upload deferral written where dead DRAW_FLOATS used to be.
+  // UNION: the file carries BOTH sets, so neither lineage's number fits it.
+  // Re-measured on the merged tree (AGENTS.md: re-measure, never max).
+  "js/render/webgpu/wgx.js": 5516,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -558,7 +565,14 @@ const CEILINGS = {
   // three.js TSL lit-material port; tracks lit.js feature-for-feature.
   "js/render/three/tsl-lit.js": 1725,
   // Multiplayer lobby UI + flow; all of js/net/'s DOM lives here.
-  "js/net/lobby.js": 1618,
+  // 1618 -> 1624 (R8): the peer-close handler closes the transport BEFORE the
+  // map delete, with the leak-class comment — bug-explaining growth.
+  // 1624 -> 1672 (R8): every lobby timer gained an owner (codeReopen stored +
+  // cleared with its generation captured outside; the connect deadline applies
+  // while the transport never materialises; grace timers tracked via
+  // clashDrop/clashClear) and the seat-clash move is pinned in-memory-only —
+  // bug-explaining growth, no new features.
+  "js/net/lobby.js": 1672,
 };
 
 test("the big modules are not growing unnoticed", () => {

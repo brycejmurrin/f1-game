@@ -1006,9 +1006,14 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //                                          w = near-fade start in view-space z,
   //                                          GLX uSsrNear, def -2.5; the low
   //                                          onboard eye passes -1.0)
-  //      gloss     : vec4<f32>    off 192   (x = carGloss, GLX uCarGloss def 1.0;
-  //                                          yzw pad). Drives the car SSR streak
-  //                                          width: carSoft = clamp((1.4-gloss)*0.5).
+  //      gloss     : vec4<f32>    off 192   (x = carGloss, GLX uCarGloss def 1.0,
+  //                                          drives the car SSR streak width:
+  //                                          carSoft = clamp((1.4-gloss)*0.5);
+  //                                          yz = FULL-res depth texel — the
+  //                                          finite-difference normal strides
+  //                                          march depthTex, which is full res,
+  //                                          while p0.xy is the half-res OUTPUT
+  //                                          texel; w pad).
   const SSR = `
 struct SsrU {
   invProj   : mat4x4<f32>,
@@ -1074,7 +1079,13 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // safe below the early returns above.
   // 3-TEXEL baseline (GLX build 746): at phone resolution a 1-texel step at a
   // grazing road angle is quantization-dominated and the normal turns to noise.
-  let nT = texel * 3.0;
+  // The stride is 3 texels OF THE DEPTH TEXTURE (full res, gloss.yz) — the
+  // half-res output texel doubled it, which doubled |dpx|/|dpy| and pushed
+  // edgeGrad (tuned 0.35/0.9 at full res) and the hN self-hit reject past
+  // their calibration. Fallback to the output texel if the lanes are unset
+  // (pre-first-alloc frame, harnesses that zero-fill uniforms).
+  let dTexel = select(texel, U.gloss.yz, U.gloss.y > 0.0 && U.gloss.z > 0.0);
+  let nT = dTexel * 3.0;
   let dpx = ssrViewPos(in.uv + vec2<f32>(nT.x, 0.0)) - P;
   let dpy = ssrViewPos(in.uv + vec2<f32>(0.0, nT.y)) - P;
   // upVS is the ROAD PLANE's normal (game.js builds it from r x t), not world-up:

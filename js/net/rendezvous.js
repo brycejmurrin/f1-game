@@ -93,12 +93,25 @@ const NetRendezvous = (function () {
 
   const SALT = enc().encode("apex26-rendezvous-v1");
 
-  async function keyFor(code) {
-    const base = await crypto.subtle.importKey(
-      "raw", enc().encode(normalise(code)), "PBKDF2", false, ["deriveKey"]);
-    return crypto.subtle.deriveKey(
-      { name: "PBKDF2", salt: SALT, iterations: 120000, hash: "SHA-256" },
-      base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  // One-entry memo: the key depends ONLY on the code, which is fixed for a
+  // whole exchange — but seal() and open() both derived it per call, and their
+  // callers are hot (publish per 5 s repost AND per relay onopen, heard per
+  // inbound frame). That was a 120 000-round PBKDF2 every few seconds for the
+  // full join window, on exactly the phone the room-code path exists for. The
+  // CryptoKey is extractable:false, so caching it discloses nothing new.
+  let _keyCode = null, _keyP = null;
+  function keyFor(code) {
+    const norm = normalise(code);
+    if (_keyP && _keyCode === norm) return _keyP;
+    _keyCode = norm;
+    _keyP = (async () => {
+      const base = await crypto.subtle.importKey(
+        "raw", enc().encode(norm), "PBKDF2", false, ["deriveKey"]);
+      return crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt: SALT, iterations: 120000, hash: "SHA-256" },
+        base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+    })();
+    return _keyP;
   }
 
   // The topic must not reveal the code, so it is a truncated hash of it. 80
