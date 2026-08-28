@@ -6515,21 +6515,23 @@ function render(dt) {
       _floodRGB[0] = lvl * _ltr; _floodRGB[1] = lvl * _ltg; _floodRGB[2] = lvl * _ltb;
     }
     _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
-    // RESOLVED BEFORE setFrameLights, not after: setFrameLights now builds the
-    // scaled full-set for the per-chunk path, and it can only know to do that
-    // if the resolved value is already on the frame. The field is cleared every
-    // frame above, so reading it there before this ran always saw 0.
-    frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || PerfGov.tier() >= 1) ? 0 : (+LT.perChunkLights || 0);
+    // Resolved BEFORE setFrameLights: it builds the scaled full set for the
+    // per-chunk path and needs these already on the frame (they are cleared
+    // above, so reading them earlier always saw 0).
+    // ADAPTIVE: autoTier() is the crash floor + the governor's MEASURED shed
+    // WITHOUT the GRAPHICS user floor (perf.js), so LOW no longer disables this
+    // while a device missing frames still sheds it. The old tier()>=1 rested on
+    // one un-reproduced scare at knob 1 — the shipped 0.3 measured 18.6%/23.5%
+    // FASTER (docs/PERF-FINDINGS.md §R5) and locked out MEDIUM, every phone.
+    frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || PerfGov.autoTier() >= 1) ? 0 : (+LT.perChunkLights || 0);
     frame.roadChunkLamps = (frame.perChunkLights > 0 && LT.roadChunkLamps) ? 1 : 0;
     setFrameLights(camEye, _floodRGB, _lightFwd);
     // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list
     // alongside the globally-culled frame.lights, so GLXChunked can bind each
     // chunk its own nearest-24 instead of every chunk sharing this one set.
     // frame.lights stays authoritative for the car and everything non-chunked.
-    // setFrameLights fills frame.allLights with the SCALED full set whenever
-    // per-chunk lamps are on (so every LAMPS control reaches chunked geometry).
-    // Off, nothing consumes it — leave it null rather than handing out the raw
-    // baked list, which is what used to make the sliders look broken.
+    // setFrameLights fills allLights with the SCALED full set when per-chunk is
+    // on; off, nothing consumes it, so leave it null rather than the raw list.
     if (!(frame.perChunkLights > 0)) { frame.allLights = null; frame.allLightsGen = 0; }
     // Pass the knob's VALUE, not a flag. PER-CHUNK LAMPS is a 0..1 amount: > 0
     // turns per-chunk lamp sets on and doubles as the track-lamp intensity
@@ -6564,9 +6566,7 @@ function render(dt) {
     // already hit a hard failure comes back at a floored tier, which now has
     // the feature off, so the sentinel can actually rescue this case instead of
     // watching it repeat.
-    // (frame.perChunkLights and frame.roadChunkLamps are resolved above, before
-    // setFrameLights — PER-CHUNK ROAD keeps the road on the global lamp set
-    // while it still culls by chunk.)
+    // (both resolved above, before setFrameLights.)
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
     // They are appended to frame.lights AFTER the static cull, so they sit
     // outside track._lights and a per-chunk set built from allLights would drop

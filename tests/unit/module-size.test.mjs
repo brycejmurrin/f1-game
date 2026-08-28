@@ -564,7 +564,10 @@ const CEILINGS = {
   // says why the file is its size today; none is an extraction target yet.
   // THE largest file in the repo: ~8.6k lines of it are data (per-track
   // lighting presets exported by the bake-lighting skill), not logic.
-  "js/game/light-presets.js": 8683,
+  // 8683 -> 8689: per-chunk lamps went from the ULTRA-night-only rung to every
+  // lit condition, so the conditional layer gained dusk/dawn/day keys beside
+  // night. Data, not logic — this file is ~8.6k lines of baked per-track values.
+  "js/game/light-presets.js": 8689,
   // The whole WGX backend in one IIFE by design (deferred inject, no tag).
   // 5179 -> 5365 on the deploy union: their half-res SSR + chunk-AABB
   // lamp-mask cull rounds landed on the other lineage (re-measured).
