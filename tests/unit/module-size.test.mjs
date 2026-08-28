@@ -397,7 +397,14 @@ const CEILINGS = {
   //   236 reloads/64 s before the guard; falls through to #nogl).
   // Three lineages grew the file, so no side's number fits the union —
   // re-measured on the merged tree (split-newline count): 8675.
-  "js/game.js": 8675,
+  // 8675 -> 8694 for the total-audit fix train (all bug-explaining comments at
+  // the site of the bug, the one growth this ratchet tolerates): the pace-0
+  // NaN floor on the throttle integrator, DebrisWorld.reset() in startRace so
+  // a same-circuit restart stops inheriting last race's shards, the stranded
+  // netStart cleared in quitToMenu (a solo race after an aborted countdown ran
+  // with no lamps), Array.isArray on the host's RESULT payload, and the
+  // paused-at-the-flag clear in endRace.
+  "js/game.js": 8694,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).

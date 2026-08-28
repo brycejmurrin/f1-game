@@ -2503,6 +2503,11 @@ function startRace() {
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
   raceCtl.reset();   // and the caution machine — no stale flag/capHoldT into this race
+  // …and the debris side-world. prime() below only REBUILDS when the track or
+  // car count changed, so a restart on the same circuit kept last race's
+  // shards, marbles and knocked-over cones — visible on the grid, and
+  // RaceControl can fly a caution for debris nobody produced this race.
+  DebrisWorld.reset();
   loadTrack(trackIdx);
   makeCars();
   // Qualifying keeps the full field for simulation, then drives one standing lap.
@@ -2703,7 +2708,11 @@ function netOrder(order) {
     return order;
   }
   const verdict = netPlay.peerResult();
-  if (!verdict || !verdict.length) return order;          // never arrived
+  // Array.isArray, not just a truthy .length: this is the HOST's payload off
+  // the wire, and `{length:1}` passes the old test then throws on .map —
+  // straight into index.html's error overlay, which eats the classification
+  // the guest is waiting on.
+  if (!Array.isArray(verdict) || !verdict.length) return order;   // never arrived
   const byId = new Map(cars.map((c) => [c.driverId, c]));
   const sorted = verdict.map((e) => byId.get(e.d)).filter(Boolean);
   // Only adopt an order accounting for the WHOLE grid; a partial one would
@@ -2725,6 +2734,11 @@ function endRace(forcedOrder) {
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
   raceCtl.reset();
+  // The flag can fall while the player is PAUSED — a networked guest is ended
+  // by the host's RESULT, not by their own input. Leaving `paused` set stranded
+  // the pause dialog on top of the results with a RESUME that resolves to
+  // nothing, because resuming is only reachable from state "race".
+  paused = false; els.pausemenu.hidden = true;
   state = "results";
   document.body.classList.remove("in-race");
   dropRaceWake();
@@ -3185,6 +3199,11 @@ function quitToMenu() {
   closeLightTuner(false);
   closeCamTuner(false); exitPhotoMode();
   state = "menu"; paused = false;
+  // A netplay lights-out instant is consumed by the countdown (the
+  // `netStart = null` at its end). Quitting BEFORE that consumption stranded
+  // it, and the next SOLO race read an `at` already in the past: countT
+  // jumped past the lamps and the race began with no countdown at all.
+  netStart = null;
   $("quali").classList.remove("q-done"); document.body.classList.remove("in-race", "rotate-help-open");
   syncRotateBlocker(false);
   dropRaceWake();
@@ -4135,7 +4154,7 @@ function updateCar(c, dt, ranked) {
     else if (c.speed < 0) c.speed = Math.min(0, c.speed + cd * dt);
     c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   } else {
-    const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / vmax, 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
     c.speed = Math.min(speedCap, c.speed + a * dt);
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   }

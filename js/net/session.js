@@ -54,7 +54,12 @@ const NetSession = (function () {
 
     const MAX_PLAUSIBLE_RTT_MS = 4000;
     function addSample(rtt, offset) {
+      // Both halves are wire-derived. rtt was guarded from the start; offset
+      // was not, and it is the one that converts every peer timestamp into
+      // local time — a single NaN-bearing PONG becomes `best.offset` and
+      // poisons the conversion for the whole session.
       if (!(rtt >= 0) || rtt > MAX_PLAUSIBLE_RTT_MS) return;
+      if (!Number.isFinite(offset)) return;
       samples.push({ rtt, offset });
       if (samples.length > cfg.clockSamples) samples.shift();
       // Lowest RTT wins: it is the exchange least distorted by queuing.
