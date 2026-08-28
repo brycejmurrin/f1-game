@@ -1177,3 +1177,45 @@ directories from a crashed reify are not usable — `--no-audit
 packages are already present).
 Allowlist `registry.npmjs.org`, `archive.ubuntu.com`, `security.ubuntu.com`,
 and `cdn.playwright.dev` if a cold snapshot must actually download.
+
+**A view transition can hide a fix for seconds (2026-08-28).** Round 13
+moved `#track-detail`'s ScrollFade registration and the probe read the panel
+900 ms after opening the screen: no `sf-scroll` class, no thumb — a fix that
+looked dead. It was not. `menus.js`'s `vt()` skips `startViewTransition`
+under reduced motion precisely because the transition SNAPSHOTS the page
+either way, and on a software rasteriser that capture holds the main thread
+(~3.2 s measured, and the wrapper's own 60 ms direct-apply net cannot fire
+while it is held). Under the probe daemon motion is NOT reduced, so the
+screen was still mid-snapshot when the read landed. Same read at 5 s:
+`sf-b sf-scroll`, thumb 207 px. Give any probe-after-open on this box at
+least 4 s before believing an absence — and prefer a positive assertion over
+one, since "the class is missing" is exactly what a stalled thread looks
+like.
+
+**The unbumped-URL cache trap (2026-08-28).** A CSS edit verified through
+the chrome daemon on the same probe URL read the OLD value back (chip
+`font-size` reported 9.5 px after the file said 8 px) — heuristic caching on
+an asset whose `?v=` hash had not moved, and the cache bump is deliberately
+the LAST edit before commit, so mid-round probes always run against stale
+tags. Do not bump early to work around it. Re-point the one sheet instead:
+`link.href = link.href.split("?")[0] + "?v=probe-fresh-N"`, wait a beat, then
+re-read. A same-file second edit needs a new N.
+
+**`boot-guard`'s PERMANENT-404 case is load-sensitive (2026-08-28).** It
+failed once inside a 687 s `test:tiny` batch at loadavg 7.6 (`overlayText`
+null — the overlay had not been written yet within the 45 s poll), then
+passed 2/2 in 26 s when re-run alone on an idle box. Same class as the
+dev-tools / menu-keyboard timeouts above: a timeout on a busy box measures
+the machine. The confirmation is one solo re-run, not a widened timeout.
+
+**TinyFish egress blocked, and the deploy oracle that replaced it
+(2026-08-28).** `tools/tinyfish-mcp.sh deploy-check` returned HTTP 403 `Host
+not in allowlist: agent.tinyfish.ai` on every retry — an environment change,
+not a key problem. With `github.io` also proxy-blocked, the live check has no
+fetch path at all from inside the container. What still works, and is
+authoritative for "the build published": the Pages workflow-run conclusion
+for the exact head SHA via the GitHub API. Note `actions_list` returns one
+~62 KB line that overruns the tool cap — it is saved to a file, and
+`python3 -c "import json; ..."` on that file gets `head_sha`/`status`/
+`conclusion` in one command. Allowlist `agent.tinyfish.ai` to restore the
+`version.json` check itself.
