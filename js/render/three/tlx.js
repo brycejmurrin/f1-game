@@ -1213,6 +1213,10 @@ const TLX = (function () {
       const noopMesh = () => ({ __tlx: true, count: 0 });
 
       function _captureRT() {
+        // presentedTarget() follows ?viz= (it returns ldrRT normally, the viz
+        // dest in viz mode) — ldrTarget() alone made every viz bisect read a
+        // stale RT on the soft path. Fall back for an older post module.
+        if (post && typeof post.presentedTarget === "function") return post.presentedTarget();
         if (post && typeof post.ldrTarget === "function") return post.ldrTarget();
         return _blitRT;
       }
@@ -2019,7 +2023,7 @@ const TLX = (function () {
                 if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
                 if (_hadMrt) renderer.setMRT(_prevMrt || null);
               }
-              if (_softBlit && post.ldrTarget) _queueSoftBlit(post.ldrTarget());
+              if (_softBlit && post.presentedTarget) _queueSoftBlit(post.presentedTarget());
             } else {
               paintCanvas();
             }
