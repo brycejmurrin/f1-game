@@ -478,52 +478,5 @@ function getOtLamp(active) {
   return m;
 }
 
-// GARAGE STUDIO FLOOR. The setup preview drew the car and nothing else, so it
-// floated in a void — no ground plane, no sense of scale, and the black frame
-// read as "unfinished" rather than "studio". A disc under the car with a
-// RADIAL GRADIENT baked into its vertex colours: a lit pool beneath the wheels
-// fading to the frame's clear colour at the rim, so the floor has no visible
-// edge to give the trick away. Vertex colours mean no shader or material work,
-// and it is one static mesh built once.
-let studioFloorMesh = null;
-function getStudioFloor() {
-  if (studioFloorMesh) return studioFloorMesh;
-  const out = { pos: [], nrm: [], col: [], idx: [] };
-  const RINGS = 7, SEG = 40, R = 16;
-  const HOT = [0.290, 0.300, 0.335];   // under the car
-  const RIM = [0.055, 0.058, 0.072];   // meets the clear colour, so no seam
-  // Centre vertex, then RINGS rings out to R. Radius grows quadratically so the
-  // bright pool stays tight around the car and the fade owns the distance.
-  const push = (x, z, t) => {
-    const k = t * t * (3 - 2 * t);     // smoothstep: no banding at the rim
-    out.pos.push(x, 0, z); out.nrm.push(0, 1, 0);
-    out.col.push(HOT[0] + (RIM[0] - HOT[0]) * k,
-                 HOT[1] + (RIM[1] - HOT[1]) * k,
-                 HOT[2] + (RIM[2] - HOT[2]) * k);
-  };
-  push(0, 0, 0);
-  for (let r = 1; r <= RINGS; r++) {
-    const t = r / RINGS, rad = R * t * t;
-    for (let i = 0; i < SEG; i++) {
-      const a = (i / SEG) * Math.PI * 2;
-      push(Math.cos(a) * rad, Math.sin(a) * rad, t);
-    }
-  }
-  // CCW seen from ABOVE (gl.frontFace(CCW) + cull BACK): the ring walks +a =
-  // (cos a, sin a) in (x, z), and a downward-looking camera maps world z to
-  // SCREEN-DOWN, so the naive order comes out clockwise and the whole disc is
-  // culled — an invisible floor that still passes every mesh assertion.
-  for (let i = 0; i < SEG; i++) out.idx.push(0, 1 + ((i + 1) % SEG), 1 + i);
-  for (let r = 0; r < RINGS - 1; r++) {
-    const a0 = 1 + r * SEG, b0 = a0 + SEG;
-    for (let i = 0; i < SEG; i++) {
-      const j = (i + 1) % SEG;
-      out.idx.push(a0 + i, b0 + j, b0 + i, a0 + i, a0 + j, b0 + j);
-    }
-  }
-  studioFloorMesh = _gfx.createMesh(out);
-  return studioFloorMesh;
-}
-
-  return { init, carDecalData, getStudioFloor, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getRainLight, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras };
+  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getRainLight, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras };
 })();

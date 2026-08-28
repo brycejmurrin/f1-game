@@ -48,6 +48,7 @@ function parseArgs(argv) {
     outDir: null,
     retries: 2,
     retryDelayMs: 3000,
+    ls: [],
   };
   const skip = new Set();
   for (let i = 0; i < argv.length; i++) {
@@ -63,6 +64,7 @@ function parseArgs(argv) {
     else if (a === "--iphone") o.iphone = true;
     else if (a === "--tlx-webgpu") o.tlxWebgpu = true;
     else if (a === "--lavapipe") o.lavapipe = true;
+    else if (a === "--ls") { const kv = next(); skip.add(kv); if (kv) o.ls.push(kv); }
     else if (a === "--help" || a === "-h") {
       console.log(`gfx-probe — WEBGPU/THREE screenshot probe with logging + retry
 
@@ -73,6 +75,7 @@ function parseArgs(argv) {
 
   --tlx-webgpu  with --backend three, unpin tlxForceGL (three's WebGPU path)
   --lavapipe    Dawn via Mesa Lavapipe ICD (pair with --tlx-webgpu on Cloud)
+  --ls k=v      set a localStorage key before boot (repeatable)
 
   stderr + <out>/probe.log: phased progress; stdout: final JSON result.`);
       process.exit(0);
@@ -195,7 +198,7 @@ async function runProbeAttempt(attemptNum) {
       consoleLines.push(`[pageerror] ${String(e).slice(0, 400)}`);
     });
 
-    await page.addInitScript(([be, wantLite, wantTlxGpu]) => {
+    await page.addInitScript(([be, wantLite, wantTlxGpu, extraLs]) => {
       localStorage.removeItem("apex26.gfxWgxFail");
       localStorage.removeItem("apex26.gfxWgxLevel");
       localStorage.removeItem("apex26.gfxBackendProbe");
@@ -213,7 +216,13 @@ async function runProbeAttempt(attemptNum) {
         localStorage.setItem("apex26.tlxForceGL", wantTlxGpu ? "0" : "1");
         if (wantTlxGpu) sessionStorage.setItem("apex26.wgxCapture", "1");
       }
-    }, [opts.backend, opts.lite, opts.tlxWebgpu]);
+      // --ls key=value (repeatable): any apex26.* knob, set AFTER the backend
+      // pins so a probe can drive a switch the pins do not know about.
+      for (const kv of extraLs || []) {
+        const i = kv.indexOf("=");
+        if (i > 0) localStorage.setItem(kv.slice(0, i), kv.slice(i + 1));
+      }
+    }, [opts.backend, opts.lite, opts.tlxWebgpu, opts.ls]);
 
     const url = srv.url + "index.html";
     await retryStep("goto", () => page.goto(url, { waitUntil: "domcontentloaded", timeout: 90000 }));
@@ -277,22 +286,43 @@ async function runProbeAttempt(attemptNum) {
           throw new Error("no GLX.awaitSoftPresent on software-WebGPU backend");
         }
         await GLX.awaitSoftPresent(60000);
-        const g = document.getElementById("game");
+        // WGX blits onto #game itself; TLX inserts a SEPARATE #game-soft 2D
+        // sibling and leaves #game as the WebGPU-claimed node (see tlx.js
+        // "Soft-present overlay"). Looking only at #game therefore measured the
+        // wrong element on the TLX-WebGPU path — a blank read there said
+        // nothing about whether a frame was presented.
+        const soft = document.getElementById("game-soft");
+        const g = soft || document.getElementById("game");
+        const which = soft ? "#game-soft" : "#game";
         const ctx = g && g.getContext("2d");
-        if (!ctx) throw new Error("#game has no 2D display context");
-        const id = ctx.getImageData(0, 0, Math.min(64, g.width), Math.min(64, g.height));
-        let max = 0;
+        if (!ctx) throw new Error(which + " has no 2D display context");
+        // SAMPLE THE WHOLE FRAME, not the top-left 64x64. That corner is SKY on
+        // every circuit, and a dusk/night sky is near-black — so the old read
+        // reported maxLuma=0 for frames that were fully rendered everywhere
+        // else. It cost this session several rounds of chasing a "black" frame
+        // that measured mean-luma 32.6 with 0.5% near-black pixels once the
+        // whole canvas was measured. Stride the full canvas instead.
+        const id = ctx.getImageData(0, 0, g.width, g.height);
+        let max = 0, sum = 0, n = 0;
         for (let i = 0; i < id.data.length; i += 4) {
           const l = id.data[i] + id.data[i + 1] + id.data[i + 2];
           if (l > max) max = l;
+          sum += l; n++;
         }
-        if (max < 8) throw new Error("visible #game canvas blank after soft-present (maxLuma=" + max + ")");
+        const mean = n ? sum / n : 0;
+        if (max < 8) {
+          throw new Error("visible " + which + " blank after soft-present (maxLuma=" + max +
+            ", meanLuma=" + mean.toFixed(1) +
+            ", size=" + g.width + "x" + g.height +
+            ", softPresent=" + (GLX.softPresent ? GLX.softPresent() : "n/a") + ")");
+        }
       }), { attempts: 2, delayMs: 2000 });
       // putImageData keeps mutating #game — Playwright's locator screenshot
       // waits for "stability" and times out. Dump the 2D bitmap instead.
       const canvasB64 = await page.evaluate(() => {
-        const g = document.getElementById("game");
-        if (!g || typeof g.toDataURL !== "function") throw new Error("#game has no toDataURL");
+        // Same element the blank-check read — see the #game-soft note above.
+        const g = document.getElementById("game-soft") || document.getElementById("game");
+        if (!g || typeof g.toDataURL !== "function") throw new Error("presented canvas has no toDataURL");
         return g.toDataURL("image/png").split(",")[1];
       });
       writeFileSync(canvasPath, Buffer.from(canvasB64, "base64"));
@@ -390,7 +420,17 @@ async function runProbeAttempt(attemptNum) {
         fail: (() => { try { return localStorage.getItem("apex26.gfxWgxFail"); } catch { return null; } })(),
         msaa: env.msaa,
         mobile: env.mobile,
-        gpuErrors: (typeof WGX !== "undefined" && WGX.gpuErrors) ? WGX.gpuErrors() : null,
+        // Ask the BOUND backend, not just WGX. This read was WGX-only, so on
+        // the three backend the field could never be anything but null — and a
+        // black TLX-WebGPU frame was reported for a whole session as
+        // "gpuErrors: null", which read as "no errors" and meant "no reader".
+        // GLX carries the bound backend's methods (game.js descriptor-copy).
+        gpuErrors:
+          (typeof GLX !== "undefined" && GLX.gpuErrors) ? GLX.gpuErrors()
+          : (typeof WGX !== "undefined" && WGX.gpuErrors) ? WGX.gpuErrors()
+          : null,
+        gpuFirstError:
+          (typeof GLX !== "undefined" && GLX.gpuFirstError) ? GLX.gpuFirstError() : null,
         hasWGX: typeof WGX !== "undefined",
         hasTLX: typeof TLX !== "undefined",
         hasGpu: !!navigator.gpu,

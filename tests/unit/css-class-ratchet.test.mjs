@@ -107,7 +107,12 @@ export function shellNodes() {
 // 2026-08-27 round 12 (second lowering): 533 -> 532. The camera panel's row
 // class left the shell — its five rows are the panel's only direct div
 // children, so the id scopes them without a class repeated five times.
-const CLASS_CEILING = 532;
+// 2026-08-28: 532 -> 533. +1 for .cs-liv-pal, the strip of already-used colours
+// under each livery colour row. It cannot be a custom property on a context
+// selector (SKILL.md rule 8's usual answer): this is a NEW flex container with
+// its own wrap behaviour, not a variation of an existing box. The chips inside
+// it deliberately reuse .cs-liv-ed-none rather than adding a second class.
+const CLASS_CEILING = 533;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under
@@ -150,7 +155,7 @@ const CLASS_CEILING = 532;
 // landscape clearance is untouched.
 // 1227 on the deploy union (both lineages' adds; re-measured per the
 // deploy-merge rule).
-const NODE_CEILING = 1227;
+const NODE_CEILING = 1228;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module
@@ -175,6 +180,9 @@ const NODE_CEILING = 1227;
 // keep-the-monolith ruling rests on.
 // +1 2026-08-18: <script> for js/game/metrics.js (SETTINGS METRICS overlay).
 // The button and <pre> are injected at runtime — the tag is the whole +1.
+// +1 2026-08-28: <script> for js/game/garage-scene.js (the setup preview's pit
+// bay — shell, props, team dress, light rig). All of it is geometry built in
+// the module and drawn to the canvas, so again the tag is the whole +1.
 
 test("the distinct CSS class count is not growing unnoticed", () => {
   const n = classTokens().size;

@@ -1183,6 +1183,22 @@ const api = {
       meanLampRGB,
       bakedLights: ((G.track && (G.track._lights && G.track._lights.length ? G.track._lights : G.track._alwaysLights)) || []).length / 15,
       lampPosts: G.track && G.track.lampPosts ? G.track.lampPosts.length : 0,
+      // RESOLVED per-chunk lamp state, not the raw knobs. Three gates can zero
+      // these independently (backend capability, the live graphics tier the
+      // governor can shed mid-race, and the persisted post-context-loss latch),
+      // and nothing used to report which one fired — so "per-chunk lamps do
+      // nothing on my machine" was undiagnosable from outside. perChunkHeld
+      // names the gate when the knob is up but the frame resolved to 0.
+      perChunkLights: G.frame.perChunkLights || 0,
+      roadChunkLamps: G.frame.roadChunkLamps || 0,
+      perChunkHeld: (() => {
+        if (!(+LT.perChunkLights > 0)) return null;          // player has it off
+        if (G.frame.perChunkLights > 0) return null;         // actually running
+        if (gfx && gfx.hasPerChunkLights === false) return "backend";
+        try { if (localStorage.getItem("apex26.perChunkOff") === "1") return "latch"; } catch (_) { /* no storage */ }
+        if (typeof PerfGov !== "undefined" && PerfGov.tier && PerfGov.tier() >= 1) return "tier";
+        return "day";   // the flood branch never ran: daylight with no daytime lamps
+      })(),
       sunY: G.frame.sunDir ? G.frame.sunDir[1] : null,
       builtNight: G.builtTrackNight, trackNight: G.track && G.track._night,
       floodEmit: G._lastFloodEmit,   // actual prop-emissive ramp value this frame

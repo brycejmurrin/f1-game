@@ -16,12 +16,26 @@ function fmtTune(d, v) {
   return (d.fmt === "signed" && v > 0 ? "+" + s : s) + gateNote(d, v);
 }
 function gateNote(d, v) {
-  if (d.id !== "perChunkLights" || !(v > 0)) return "";
+  // Both LAMPS chunk knobs answer here. They share every gate, so a note on
+  // only one of them left the other silently doing nothing — which is exactly
+  // how a held-off feature reads as a broken slider.
+  const isChunk = d.id === "perChunkLights" || d.id === "roadChunkLamps";
+  if (!isChunk || !(v > 0)) return "";
+  // The BACKEND gate first: three.js has no per-chunk lamp binding at all, so
+  // on TLX the knob can never do anything however the tier and latch sit.
+  const g = G.gfx;
+  if (g && g.hasPerChunkLights === false) return " · not supported by the three.js renderer — switch to WebGL2 or WebGPU";
   let latched = false;
   try { latched = localStorage.getItem("apex26.perChunkOff") === "1"; } catch (_) { /* no storage: fall through to the tier check */ }
   if (latched) return " · held after a display reset — set to 0 and back on to retry";
   const tier = (typeof PerfGov !== "undefined" && PerfGov.tier) ? PerfGov.tier() : 0;
-  return tier >= 1 ? " · held off by the graphics tier — needs HIGH or ULTRA, and a frame budget the governor has not shed" : "";
+  if (tier >= 1) return " · held off by the graphics tier — needs HIGH or ULTRA, and a frame budget the governor has not shed";
+  // PER-CHUNK ROAD is a rider on PER-CHUNK LAMPS and does nothing on its own.
+  if (d.id === "roadChunkLamps") {
+    const pcl = (typeof LT !== "undefined" && +LT.perChunkLights) || 0;
+    if (!(pcl > 0)) return " · needs PER-CHUNK LAMPS above 0 to do anything";
+  }
+  return "";
 }
 // PREVIEW conditions: the tuner tunes GLOBAL values that only take visible
 // effect under the right conditions (night sliders do nothing on a day track,

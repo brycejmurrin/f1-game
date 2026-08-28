@@ -1778,12 +1778,14 @@ function teamBodyMesh(team) {
 // Car decal / effect-quad / cockpit-instrument geometry lives in
 // js/game/carmesh.js (CarMesh; renderer handle injected below at boot).
 CarMesh.init(gfx);
+// The garage/setup-preview environment — js/game/garage-scene.js, same pattern.
+GarageScene.init(gfx);
 // Transient FX particle pool (tyre smoke / sparks / kickup / rain spray) —
 // js/game/particles.js; same injected-renderer pattern as CarMesh above.
 Particles.init(gfx);
 const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
         getBrakeRing, getRainLight, getExhaustFlame, getErsLight,
-        getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getStudioFloor,
+        getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
         getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 const _decalTexCache = {}, _decalTexFail = {}, _decalTexOrder = [];
 function invalidateDecalTextures(teamId) {
@@ -2008,7 +2010,7 @@ function cockpitBodyMesh(team) {
 }
 // Hub transform (translate + upscale) + scratch matrices for the steering roll
 // and per-element LCD offsets. The rig z is NOT cosmetic: the cockpit near
-// plane is 0.30 m (_nearM below) and the eye sits at car-local z -0.18, so any
+// plane is 0.30 m (_nearM below) and the eye sits at car-local z -0.20, so any
 // hub nearer than z ~0.14 puts the whole dash INSIDE it — measured at z 0.10
 // the wheel projected at w 0.276 and EVERY instrument at 0.274: LCD, LED strip,
 // digits and aero lamp all clipped, the wheel a washed-out near-clipped shell.
@@ -2024,7 +2026,7 @@ function drawCockpitRig(c, base, dt, paint) {
   const opt = _cockpitOpts;
   // The actual car around you: body (minus helmet) with the real paint, plus
   // the steering/spinning FRONT wheels (the rears sit right beside the camera
-  // in the wide FOV and blob the bottom corners — skipped). Nudged 0.35 m
+  // in the wide FOV and blob the bottom corners — skipped). Nudged 0.30 m
   // forward of their real physics position so they read further out ahead of
   // the driver instead of hugging the cockpit edge (cosmetic-only offset —
   // the actual wheel/contact-patch physics is untouched).
@@ -5279,13 +5281,10 @@ const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.5;
 // 1440x900) plus ~12% margin. renderSetupPreview holds the auto-turntable at
 // whatever distance keeps this inside the visible half-width.
 const SP_FIT_HALF_W = 3.35;
-// The garage used to render the car against pure black — no ground, no scale,
-// just a floating body. SP_BACKDROP is the frame clear colour (gfx reads
-// fogColor as the clear) and the studio floor's rim fades into exactly it, so
-// the disc has no visible edge. Matte and unlit-ish: this is a backdrop, not a
-// surface anyone should read detail off.
-const SP_BACKDROP = [0.055, 0.058, 0.072];
-const _spFloorOpts = { roughness: 0.95, metalness: 0, specular: 0.03, clearcoat: 0 };
+// The garage environment — bay shell, truss, LED fixtures, pit equipment, team
+// dress, floor and light rig — lives in js/game/garage-scene.js. It owns the
+// frame clear colour too: every surface in there fades to exactly BACKDROP at
+// its far edge, so the room has no silhouette against the void.
 let setupPreviewEl = SP_EL_DEF, setupPreviewDist = SP_DIST_DEF;
 let setupPreviewSpin = true;
 // GARAGE active-aero demo. `setupPreviewXOn` is the button; `setupPreviewAeroX`
@@ -5295,7 +5294,7 @@ let setupPreviewSpin = true;
 let setupPreviewXOn = false, setupPreviewAeroX = 0;
 // Orbit limits: never underneath the floor plane, never past straight down, and
 // close enough to read a decal without clipping into the nose.
-const SP_EL_MIN = -0.12, SP_EL_MAX = 1.30, SP_DIST_MIN = 4.6, SP_DIST_MAX = 15;
+const SP_EL_MIN = 0, SP_EL_MAX = 1.30, SP_DIST_MIN = 4.6, SP_DIST_MAX = 15;
 // az 0 = ahead of the nose (+Z), PI = behind the wing; see the eye vector below.
 // Distances are per-view because the car is 5.4 m long and 1.9 m wide, and the
 // sheet takes the right ~40% of the canvas: head-on it fits close, broadside it
@@ -5477,43 +5476,35 @@ function resetSetupCam() {
   setupPreviewPan[0] = setupPreviewPan[1] = setupPreviewPan[2] = 0;
   setSetupSpin(true);
 }
-const _spLights = [];
-function buildSetupPreviewLights() {
-  _spLights.length = 0;
-  const n = 6, dist = 6, h = 3.2, intensity = 1.6, radius = 14;
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2;
-    const lx = Math.cos(a) * dist, lz = Math.sin(a) * dist, ly = h;
-    let ax = -lx, ay = 0.5 - ly, az = -lz;
-    const al = Math.hypot(ax, ay, az) || 1; ax /= al; ay /= al; az /= al;
-    const e = intensity * 0.55;   // same physical energy factor as track lamps
-    _spLights.push(lx, ly, lz, e, e, e, radius, ax, ay, az, 0.88, 0.60, 0.12, 0, 1);
-  }
-  const ek = intensity * 0.55 * 1.4;   // overhead key: straight-down softbox
-  _spLights.push(0, h + 2.5, 0, ek, ek, ek, radius, 0, -1, 0, 0.80, 0.45, 0.15, 0, 1);
-  return _spLights;
-}
 // Rebuild-on-change only (not per-frame): keyed by team + resolved parts tiers,
 // mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. gfx.freeMesh
 // releases the previous mesh's GL buffers so repeated chip clicks don't leak.
-let _spMesh = null, _spMeshKey = "";
+let _spMesh = null, _spMeshKey = "", _spHull = null;
 function getSetupPreviewMesh() {
   const team = Teams.LIST[teamIdx];
   const key = team.id + ":" + partsVisualKey(team.id);
   if (key !== _spMeshKey) {
     if (_spMesh) gfx.freeMesh(_spMesh);
     const liv = resolveLivery(team);
-    _spMesh = gfx.createMesh(Car3D.build(liv.c1, liv.c2, {
+    const spData = Car3D.build(liv.c1, liv.c2, {
       livery: liv,
       teamId: team.id,   // per-team chassis style shows in the setup turntable too
       num: team.drivers && team.drivers[0] && team.drivers[0].num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team),
-    }));
+    });
+    _spHull = GarageScene.framingHull(spData);   // silhouette proxy for the turntable re-centre
+    _spMesh = gfx.createMesh(spData);
     _spMeshKey = key;
   }
   return _spMesh;
 }
 const _spProj = new Float32Array(16), _spView = new Float32Array(16), _spVP = new Float32Array(16);
+const _spInvProj = new Float32Array(16);
+const _spLiv = () => resolveLivery(Teams.LIST[teamIdx]);   // memoised on store.rev
+// Bloom lower and hotter than the race default: the ceiling panels ARE the
+// subject. ssao needs the proj/invProj pair passed to begin(); contact shadows
+// would additionally need sunViewDir, and the sun is now only a fill.
+const SP_PRESENT = { exposure: 1.28, bloom: 0.70, threshold: 0.62, contact: 0 };
 function renderSetupPreview(dt) {
   gfx.resize();
   applyHeldSetupCam(dt);                               // held on-screen controls
@@ -5573,6 +5564,8 @@ function renderSetupPreview(dt) {
   _spAim[2] = setupPreviewTgt[2] + setupPreviewPan[2];
   M4.lookAtTo(_spView, eye, _spAim, [0, 1, 0]);
   M4.mulTo(_spVP, _spProj, _spView);
+  GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, setupPreviewSpin, _spHull);
+  M4.invertTo(_spInvProj, _spProj);
   if (gfx.begin({
     // Sun with NO sideways component. The shark fin is a thin blade whose two
     // flanks carry opposite normals (+X and -X), so any X in the sun direction
@@ -5581,9 +5574,15 @@ function renderSetupPreview(dt) {
     // body that asymmetry is correct; on a blade being inspected in a showroom
     // it just reads as a bug. Front-and-above keeps the modelling (the ring of
     // studio lamps below is already symmetric) without favouring a side.
-    viewProj: _spVP, eye, sunDir: [0, 0.86, 0.51], sunColor: [1, 1, 1],
-    ambientSky: [0.28, 0.30, 0.34], ambientGround: [0.18, 0.17, 0.16],
-    fogColor: SP_BACKDROP, fogDensity: 0, lights: buildSetupPreviewLights(),
+    // The sun is now a SKYLIGHT — a soft roof fill, not the key. See
+    // GarageScene.SKYLIGHT: no lamp can contribute more than 1/17 of albedo, so
+    // as long as the sun stayed at full white it owned the picture and the bay's
+    // ten fixtures were decoration. proj/invProj are what unlock SSAO in
+    // present(), and an interior lives or dies on its corner darkening.
+    viewProj: _spVP, eye, sunDir: [0, 0.86, 0.51], sunColor: GarageScene.SKYLIGHT,
+    ambientSky: GarageScene.AMB_SKY, ambientGround: GarageScene.AMB_GROUND,
+    fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: GarageScene.lights(_spLiv()),
+    proj: _spProj, invProj: _spInvProj,
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
   }) === false) return;
   const spMat = carPaintMat(PAINT_DRY_DAY);
@@ -5597,7 +5596,7 @@ function renderSetupPreview(dt) {
   spMat.specular = 0.22;
   spMat.roughness = clamp(spMat.roughness * 2.4, 0.02, 1);   // spread + dim the speculars
   spMat.metalness = Math.min(spMat.metalness, 0.05);
-  gfx.draw(getStudioFloor(), MAT_IDENT, _spFloorOpts);   // studio floor, under the car
+  GarageScene.draw(Teams.LIST[teamIdx], _spLiv(), eye);
   gfx.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
   // The moveable wings, so a player can watch active aero work before ever
   // driving — and see what their own AERO parts choice did to the flap size.
@@ -5606,9 +5605,16 @@ function renderSetupPreview(dt) {
     drawAeroFlaps(Teams.LIST[teamIdx], aSt.val, setupPreviewAeroX, MAT_REFLECT_X, spMat,
       aSt.aero);
   }
-  drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, false,
+  // `night` here means "the sun is not the key" — which in a garage it is not.
+  // The decal shader is sun + ambient + glow only, so without this the liveries'
+  // logos and numbers would darken with the skylight and nothing would lift them.
+  drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, true,
     carDecalNum(Teams.LIST[teamIdx], null), false, true);
-  gfx.present();
+  // AFTER the car: glare billboards are additive with depth-write off, so drawn
+  // any earlier the opaque car would paint straight over them — and at high
+  // elevation the ceiling fixtures sit between the eye and the car.
+  gfx.drawGlow(GarageScene.lights(_spLiv()), GarageScene.glareStr());
+  gfx.present(SP_PRESENT);
 }
 
 // Static world draws (floor → terrain → road → startline → [lamp glow] → props
@@ -5990,13 +5996,13 @@ function render(dt) {
   // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
   // precision across the scene — the biggest single lever against z-fighting /
   // shadow flicker. Capped at 0.3 (not higher): the cockpit rig keeps the wheel /
-  // dash fascia a proven 0.39 m from the eye (COCKPIT_EYE_FWD + _rigT), so 0.3
+  // dash fascia a proven 0.46 m from the eye (COCKPIT_EYE_FWD + _rigT), so 0.3
   // still clears it with ~9 cm to spare while raising the far/near precision
   // floor ~1.5x vs 0.2.
   // Per-camera near plane. Depth precision is governed by the near:far RATIO,
   // and a 0.3 m near against a 900 m far spends almost all of it in the first
   // few metres — which is why distant coplanar geometry z-fights. The near
-  // plane CANNOT simply be raised globally: the cockpit rig sits 0.39 m from
+  // plane CANNOT simply be raised globally: the cockpit rig sits 0.46 m from
   // the eye (see _rigT), so anything above ~0.35 slices the steering wheel and
   // fascia out of frame. Only cockpit/hood views have geometry that close, so
   // they keep 0.3 and every other view takes a near plane that buys back a lot
@@ -6455,7 +6461,7 @@ function render(dt) {
   // Cleared every frame, set only by the flood branch: `frame` outlives a
   // night->day time-of-day flip (rebuilt only in loadTrack), and a stale
   // allLights kept chunked geometry binding per-chunk night lamps in daylight.
-  frame.allLights = null; frame.perChunkLights = 0; frame.tailStart = 0; frame.tailCount = 0;
+  frame.allLights = null; frame.perChunkLights = 0; frame.roadChunkLamps = 0; frame.tailStart = 0; frame.tailCount = 0;
   if (_floodActive || _floodDayLvl > 0) {
     // Rebuild if empty (not just undefined): a light set built before the track
     // centreline finished is empty; retry until it yields lights. Tracks always
@@ -6549,6 +6555,12 @@ function render(dt) {
     // the feature off, so the sentinel can actually rescue this case instead of
     // watching it repeat.
     frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || PerfGov.tier() >= 1) ? 0 : (+LT.perChunkLights || 0);
+    // PER-CHUNK ROAD, resolved. The road is drawn chunked on most devices for
+    // CULLING alone (the tier<3 term above), and chunked.js binds per-chunk
+    // lamps to anything chunked — so the road took them whether or not the
+    // player asked, and the knob could not change any outcome. Backends read
+    // this to keep the road on the global set while still culling by chunk.
+    frame.roadChunkLamps = (frame.perChunkLights > 0 && LT.roadChunkLamps) ? 1 : 0;
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
     // They are appended to frame.lights AFTER the static cull, so they sit
     // outside track._lights and a per-chunk set built from allLights would drop
@@ -6929,7 +6941,7 @@ function render(dt) {
     // (sF.x/sF.z for forward, +Y for up) only inverts the basis when the road is
     // FLAT: sF is the full 3-D tangent, so on a gradient θ the 0.99 m up-offset
     // leaks into forward and the eye creeps to rig z = FWD·cos²θ + UP·sinθ. At
-    // ~4° of climb that closes the proven 0.39 m eye-to-fascia gap past the 0.3 m
+    // ~4° of climb that closes the proven 0.46 m eye-to-fascia gap past the 0.3 m
     // near plane and the plane eats the wheel face — the instrument slab (LEDs,
     // LCD, digits, buttons) is 3-12 mm thin and sits at the driver-facing extreme,
     // so it vanished whole while the 25-62 mm body boxes behind it kept drawing.

@@ -19,20 +19,22 @@ const _bankScr = { dy: 0, roll: 0 };   // pooled Tracks.banking out-param (groun
 // Shared by vantage() and the camera-anchored cockpit-rig draw in render() —
 // the rig origin is derived by SUBTRACTING these from the live camEye, so the
 // two must stay identical or the driver's eye drifts out of the cockpit.
-// 0.06, not 0.32: the rig origin IS the car origin (game.js derives it as
+// -0.20, not 0.32: the rig origin IS the car origin (game.js derives it as
 // camEye − fwd·FWD − up·UP), so FWD is literally where the driver's head sits in
 // CAR-LOCAL z — and the tub is built around z 0. At 0.32 the eye sat forward of
 // the dash coaming (car3d.js builds it at z 0.60) with the survival-cell walls,
 // the halo pillar and the mirrors all BEHIND the camera: measured on Monza, the
 // "cockpit" view rendered no cockpit at all, just the nose from above, which is
-// a hood cam by another name. 0.06 puts the head back between the tub shoulders
+// a hood cam by another name. -0.20 puts the head back between the tub shoulders
 // where it belongs, with the coaming, halo and mirrors ahead of it in frame.
 // UP is metres above the ROAD, and car3d.js builds the tub around it: dash
 // coaming y 0.62, halo hoop 0.74-0.81, survival-cell walls topping out at 0.88.
-// At 0.99 the eye floated ABOVE all of it — above the halo, above the shoulders
+// At 0.99 the eye floated ABOVE all of it (live value is 0.82) — above the halo, above the shoulders
 // — which is why the "cockpit" rendered as a hovering hood cam with no car in
 // frame however far back it was pulled. 0.72 seats the driver where the tub
 // says the seat is: just over the coaming, inside the halo, between the walls.
+// (Live values today: COCKPIT_EYE_FWD -0.20, COCKPIT_EYE_UP 0.82 — the prose
+// above records why the pair moved, not the current numbers.)
 // Eye height is set by how far the driver sits ABOVE THE DECK, not by taste:
 // at 0.72 the monocoque crest (y 0.545 at z 1.05) was only 0.17 m below the
 // sightline, so the car's own nose occupied 0.7% of the frame and an onboard

@@ -175,7 +175,11 @@ const GLXChunked = (function () {
       const eye = F.eye;
       const cd = F.cullDist, cd2 = cd * cd,
             ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
-      const perChunk = F.perChunkLights > 0 && F.allLights;
+      // The ROAD (surfaceId 16) only takes per-chunk lamp sets when PER-CHUNK
+      // ROAD asks for it. It is drawn chunked on most devices for the frustum
+      // + radial cull regardless, so this gates the LAMPS, never the culling.
+      const perChunk = F.perChunkLights > 0 && F.allLights &&
+        !(opts && opts.surfaceId === 16 && !F.roadChunkLamps);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib);
       if (perChunk) {
         // uLampShadowIdx is a SLOT in the bound set, chosen against the global

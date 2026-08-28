@@ -61,6 +61,9 @@ const TLX = (function () {
       // Phones / WebKit take the same WebGPU path with WGX-lite caps
       // (8-bit canvas, no MSAA 4, low-power) when AUTO tries WebGPU.
       let _softAdapter = false;
+      // GPU error tally — see the onuncapturederror hook below.
+      let _gpuErrors = 0, _gpuFirstError = null;
+      const GPU_ERR_LOG_CAP = 8;
       try {
         if (navigator.gpu && navigator.gpu.requestAdapter) {
           const ad = await navigator.gpu.requestAdapter();
@@ -226,6 +229,31 @@ const TLX = (function () {
             };
             _dev.__apexWriteBuf = true;
           }
+          // GPU ERROR CAPTURE — the instrument this backend never had. WGX has
+          // hooked onuncapturederror since it shipped; TLX hooked nothing, so
+          // Dawn could reject work on every frame and say it to nobody. That is
+          // not hypothetical: a black three-on-WebGPU frame was chased for a
+          // whole session with `gpuErrors: null` on every probe, which meant
+          // "no reader", not "no errors". Count, log a bounded prefix (a flood
+          // would evict Log's ring buffer and destroy the rest of the
+          // evidence), and expose the total. Diagnosis only — deliberately NOT
+          // WGX's escalate-and-fall-back ladder, which would hide the signal.
+          if (!_dev.__apexErrHook) {
+            try {
+              _dev.onuncapturederror = function (ev) {
+                const msg = (ev && ev.error && ev.error.message) || "gpu error";
+                if (!_gpuFirstError) _gpuFirstError = msg;
+                _gpuErrors++;
+                if (_gpuErrors <= GPU_ERR_LOG_CAP) {
+                  try { Log.warn("gfx", "TLX GPU error #" + _gpuErrors + ":", msg); } catch (_) { /* no Log in the node VM harness: the count is the load-bearing part */ }
+                  if (_gpuErrors === GPU_ERR_LOG_CAP) {
+                    try { Log.warn("gfx", "TLX: further GPU errors suppressed — read the count from GLX.gpuErrors()"); } catch (_) { /* same */ }
+                  }
+                }
+              };
+              _dev.__apexErrHook = true;
+            } catch (_) { /* optional hook; _gpuErrors stays 0 if the build refuses it */ }
+          }
           if (_liteGpu) {
             try { renderer.samples = 1; } catch (_) { /* samples is a three setter; ignore a frozen build */ }
           }
@@ -275,6 +303,41 @@ const TLX = (function () {
         catch (_) { _displayCtx = null; /* capturePixels can still read the RT */ }
       }
       function softGpu() { return !!(_softAdapter || _softBlit); }
+      // apex26.tlxForceBatches=1 — run the INSTANCED draws (and their shadow
+      // casters) even on a software adapter. The skips below exist for a Dawn
+      // binding defect, but Dawn is Chrome's WebGPU implementation on real GPUs
+      // too, so gating the workaround on softGpu() means the path real hardware
+      // takes is the one nothing here ever executes. This switch lets a
+      // software run exercise the REAL-GPU code path against the same Dawn, so
+      // the defect is reproducible where it can be debugged.
+      const _forceBatches = (function () {
+        try { return localStorage.getItem("apex26.tlxForceBatches") === "1"; } catch (_) { return false; }
+      })();
+      // apex26.tlxForceHw — run the CONTENT paths a real GPU takes, on a
+      // software adapter. The skips below are BUDGET guards for
+      // SwiftShader/Lavapipe, not correctness fixes, so a software session
+      // takes the software side of every one of them and never executes the
+      // code a player's GPU runs — which makes a black real-GPU frame
+      // unreproducible here by construction. llvmpipe reports
+      // conformanceVersion 1.3.1.1, so Dawn on top of it is a valid
+      // correctness oracle; it is only slow. PRESENTATION stays soft
+      // (softOutRT / the 2D blit): that is the only part software genuinely
+      // cannot do.
+      //
+      // Value is a comma list so ONE gate can be forced at a time — forcing
+      // them all at once costs more llvmpipe seconds than a present budget
+      // has, and a timeout would not say which path did it:
+      //   sky | env | chunked | batches | shadow   (or "1" / "all")
+      const _forceHw = (function () {
+        let raw = "";
+        try { raw = localStorage.getItem("apex26.tlxForceHw") || ""; } catch (_) { raw = ""; }
+        const set = new Set(String(raw).split(",").map((p) => p.trim()).filter(Boolean));
+        const all = set.has("1") || set.has("all");
+        return { on: all || set.size > 0, has: (part) => all || set.has(part) };
+      })();
+      // Content skips ask these, not softGpu()/softwareGL, so the switches reach them.
+      function skipBatches() { return softGpu() && !_forceBatches && !_forceHw.has("batches"); }
+      function softContent(part) { return (softwareGL || softGpu()) && !_forceHw.has(part); }
       function softOutRT() { return softGpu() ? _ensureBlitRT(W, H) : null; }
       // r185.1 keys the TSL node-builder cache on RenderObject.initialCacheKey,
       // which folds in renderer.contextNode.version + the scene lights hash.
@@ -296,8 +359,40 @@ const TLX = (function () {
             ? Object.keys(geo.attributes).sort().join(",") : "";
           const idx = geo && geo.index ? "i" : "n";
           const inst = ro.object && ro.object.isInstancedMesh ? "I" : "M";
-          return fam + "|" + attrs + "|" + idx + "|" + inst;
+          return fam + "|" + attrs + "|" + idx + "|" + inst + "|" + attachKey();
         };
+      }
+      // ...but the ATTACHMENT STATE has to stay in the key. A WGSL fragment
+      // entry writes @location(0..n-1) for the pass it was built for and the
+      // pipeline bakes those formats in, so a program is not portable between
+      // targets. three's own key carries this through contextNode.id/version —
+      // which is exactly what the replacement above drops. Without it the
+      // 2-target scene pass's Background program is reused in the 1-target
+      // env-probe pass, Dawn rejects the SetPipeline, the whole command
+      // buffer is discarded, and every probe face comes back black. Measured
+      // 2026-08-28 with the probe forced on (apex26.tlxForceHw=env): 290
+      // uncaptured errors, "Attachment state of [RenderPipeline
+      // renderPipeline_Background.material_48] is not compatible with
+      // [RenderPassEncoder]" — pass expects 1 colorTarget, pipeline has 2.
+      // Dawn validates the same on real hardware, so this is a PLAYER bug and
+      // not a software-adapter artifact; it is invisible in CI only because
+      // the probe is skipped there. The distinct targets are a small fixed set
+      // (scene MRT / env cube / shadow / blit), so this costs a handful of
+      // programs, not the 593 the lights hash cost.
+      // Only the OUTPUT COUNT belongs here. What forks the WGSL is how many
+      // `@location(n)` the fragment entry writes; formats, sample count and
+      // blend really are pipeline state on the separate pipeline cache, as the
+      // note above says. Keying on format/samples as well re-opened the
+      // compile storm — the default soft-present run then missed its 60 s
+      // budget twice (measured 2026-08-28). Count + MRT flag is two variants:
+      // the 2-target scene pass, and everything else.
+      function attachKey() {
+        try {
+          const rt = renderer.getRenderTarget();
+          const n = rt ? (rt.textures ? rt.textures.length : 1) : 1;
+          const mrt = renderer.getMRT ? renderer.getMRT() : null;
+          return n + (mrt ? "m" : "");
+        } catch (_) { return "?"; }
       }
       // SwiftShader / llvmpipe / WARP: shrink shadow maps (tlx-shadow.js).
       // Real GPUs keep the authored 2048/1024/512.
@@ -464,7 +559,7 @@ const TLX = (function () {
           // Shrink maps on software WebGPU too (detectSoftwareGL is WebGL-only
           // and returns false once the hidden canvas is a WebGPU context).
           shadowSys = TLXShaders.shadowSys(THREE, TSL, {
-            renderer, mobileTier, isMobile, softwareGL: softwareGL || softGpu(),
+            renderer, mobileTier, isMobile, softwareGL: softContent("shadow"),
           });
         }
       } catch (e) {
@@ -852,7 +947,7 @@ const TLX = (function () {
         // and a 1-instance dummy at slot 5. One failed draw invalidates the
         // whole encoder — car/road/sky never land in softOutRT. Skip the
         // instanced scenery on that path; real GPUs keep the batches.
-        if (softGpu()) return;
+        if (skipBatches()) return;
         if (!batch || !batch.imesh || !batch.instances) return;
         const n = batch.visible === undefined ? batch.instances : batch.visible;
         if (n <= 0) return;
@@ -875,7 +970,7 @@ const TLX = (function () {
       }
 
       function castShadowInstanced(batch, count) {
-        if (softGpu()) return;
+        if (skipBatches()) return;
         if (shadowSys && shadowSys.castInstanced) shadowSys.castInstanced(batch, count);
       }
 
@@ -985,6 +1080,11 @@ const TLX = (function () {
       // still latches (M9 parked-race hook), but uEnvStr must stay 0 — a
       // ready black cube darkens clearcoat (envW absorb) and kills chrome.
       let _envBlank = false;
+      // A probe face that THREW used to be counted like a good one: six of
+      // them latch envReady over a cube nothing ever wrote, and every lit
+      // surface then samples black. Count the failures instead, and keep the
+      // last good cube bound.
+      let _envFailN = 0, _envFailMsg = "";
       let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
       const _envInvArr = new Float32Array(16);
       const _envVPArr = new Float32Array(16);
@@ -1173,6 +1273,10 @@ const TLX = (function () {
       const noopMesh = () => ({ __tlx: true, count: 0 });
 
       function _captureRT() {
+        // presentedTarget() follows ?viz= (it returns ldrRT normally, the viz
+        // dest in viz mode) — ldrTarget() alone made every viz bisect read a
+        // stale RT on the soft path. Fall back for an older post module.
+        if (post && typeof post.presentedTarget === "function") return post.presentedTarget();
         if (post && typeof post.ldrTarget === "function") return post.ldrTarget();
         return _blitRT;
       }
@@ -1537,7 +1641,7 @@ const TLX = (function () {
           // each waitForFunction poll sat behind a SwiftShader frame).
           // Clear the face and count it; the main present still paints the
           // canvas. Real GPUs keep the full world capture.
-          if (softwareGL || softGpu()) {
+          if (softContent("env")) {
             try {
               renderer.setRenderTarget(envRT, face & 7);
               renderer.setClearColor(0x000000, 1);
@@ -1569,7 +1673,7 @@ const TLX = (function () {
               // the chunked cull+draw is the fill that made M9 miss 360 s
               // (measured 2026-08-17: six full Monza presents into the cube
               // after M5 had already left the GPU process at 387%).
-              if (softwareGL || !chunkedSys) continue;
+              if (softContent("chunked") || !chunkedSys) continue;
               const n = chunkedSys.cull(rec.chunked, faceVP, faceEye, faceCull);
               const vis = chunkedSys.visList;
               for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
@@ -1579,25 +1683,37 @@ const TLX = (function () {
           }
           for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
           const prevSky = scene.backgroundNode;
+          let faceOk = true;
           try {
             if (lit && lit.setEnvCube && envDummy) lit.setEnvCube(envDummy.texture);
             // Software GL: the procedural sky is a second full TSL compile+
             // fill per face. Reflections stay road/terrain; the 64px cube
             // never resolved the sky disc anyway.
-            if (softwareGL) scene.backgroundNode = null;
+            if (softContent("env")) scene.backgroundNode = null;
             else pinSkyMaterial();
             renderer.setRenderTarget(envRT, face & 7);
             renderer.render(scene, faceCam);
-          } catch (_) { /* a probe face must never strand the frame */ }
-          if (softwareGL) scene.backgroundNode = prevSky;
+          } catch (e) {
+            // A probe face must never strand the frame — and it must never
+            // silently darken the world either. Drop the face rather than
+            // counting it, so envReady cannot latch over an unwritten cube.
+            faceOk = false;
+            _envFailN++;
+            if (!_envFailMsg) _envFailMsg = (e && e.message) || String(e);
+          }
+          if (softContent("env")) scene.backgroundNode = prevSky;
           renderer.setRenderTarget(softOutRT());
-          if (lit && lit.setEnvCube) lit.setEnvCube(envRT.texture);
+          if (lit && lit.setEnvCube) {
+            // envReady means a PREVIOUS full probe wrote envRT; that stale cube
+            // still beats the black dummy. Nothing ready yet -> stay on dummy.
+            lit.setEnvCube((faceOk || envReady) || !envDummy ? envRT.texture : envDummy.texture);
+          }
           drawList.length = 0;   // the main pass re-issues its own draws
           _dMatUsed = 0;
           poolUsed = 0;
           _envActive = false;
-          envFacesMask |= 1 << (face & 7);
-          if (envFacesMask === 63) {
+          if (faceOk) envFacesMask |= 1 << (face & 7);
+          if (faceOk && envFacesMask === 63) {
             envFacesMask = 0; envReady = true; _envBlank = false;
             // WebGPU does not gl.generateMipmap a CubeRenderTarget the way
             // WebGL2 does (three.js #31143 / #31639). Without an explicit
@@ -1612,7 +1728,7 @@ const TLX = (function () {
           _restoreEnvFrame();
         },
         envProbeReady() { return envReady; },
-        envProbeReset() { envFacesMask = 0; envReady = false; _envBlank = false; },
+        envProbeReset() { envFacesMask = 0; envReady = false; _envBlank = false; _envFailN = 0; _envFailMsg = ""; },
 
         // ── Cull-test helpers (GLX parity) ──────────────────────────────────
         // js/game/agentview.js calls GLX.makeFrustumPlanes/aabbInFrustum
@@ -1681,6 +1797,10 @@ const TLX = (function () {
           });
         },
         softPresent() { return !!_softBlit; },
+        // Dawn's own verdict on this backend. Mirrors WGX.gpuErrors(); reachable
+        // as GLX.gpuErrors() after game.js copies the backend onto GLX.
+        gpuErrors() { return _gpuErrors; },
+        gpuFirstError() { return _gpuFirstError; },
         aabbInFrustum: (planes, mn, mx) => TLXShaders.aabbInFrustum(planes, mn, mx),
         aabbDist2: (mn, mx, ex, ey, ez) => TLXShaders.aabbDist2(mn, mx, ex, ey, ez),
 
@@ -1759,7 +1879,7 @@ const TLX = (function () {
           // is still zenith, not leftover fog from a previous menu frame.
           const z = frameSky.zenith || frameSky.skyZenith;
           if (z && z.length >= 3) scene.background.setRGB(z[0], z[1], z[2]);
-          scene.backgroundNode = ((softwareGL || softGpu()) && sky.fallbackNode)
+          scene.backgroundNode = (softContent("sky") && sky.fallbackNode)
             ? sky.fallbackNode : sky.node;
           pinSkyMaterial();
         },
@@ -1975,7 +2095,7 @@ const TLX = (function () {
                 if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
                 if (_hadMrt) renderer.setMRT(_prevMrt || null);
               }
-              if (_softBlit && post.ldrTarget) _queueSoftBlit(post.ldrTarget());
+              if (_softBlit && post.presentedTarget) _queueSoftBlit(post.presentedTarget());
             } else {
               paintCanvas();
             }
@@ -2078,7 +2198,8 @@ const TLX = (function () {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
               forceWebGL, pin: _glPin, autoStayGL: _autoStayGL, hasGpu: _hasGpu,
               isMobile, mobileTier, isWebKit, liteGpu: _liteGpu,
-              softwareGL, softAdapter: _softAdapter,
+              softwareGL, softAdapter: _softAdapter, forceHw: _forceHw.on, forceBatches: _forceBatches,
+              envFail: _envFailN, envFailMsg: _envFailMsg,
               softBlit: _softBlit, capPref: _capPref,
             };
           },
