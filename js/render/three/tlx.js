@@ -61,6 +61,9 @@ const TLX = (function () {
       // Phones / WebKit take the same WebGPU path with WGX-lite caps
       // (8-bit canvas, no MSAA 4, low-power) when AUTO tries WebGPU.
       let _softAdapter = false;
+      // GPU error tally — see the onuncapturederror hook below.
+      let _gpuErrors = 0, _gpuFirstError = null;
+      const GPU_ERR_LOG_CAP = 8;
       try {
         if (navigator.gpu && navigator.gpu.requestAdapter) {
           const ad = await navigator.gpu.requestAdapter();
@@ -225,6 +228,31 @@ const TLX = (function () {
               return buf;
             };
             _dev.__apexWriteBuf = true;
+          }
+          // GPU ERROR CAPTURE — the instrument this backend never had. WGX has
+          // hooked onuncapturederror since it shipped; TLX hooked nothing, so
+          // Dawn could reject work on every frame and say it to nobody. That is
+          // not hypothetical: a black three-on-WebGPU frame was chased for a
+          // whole session with `gpuErrors: null` on every probe, which meant
+          // "no reader", not "no errors". Count, log a bounded prefix (a flood
+          // would evict Log's ring buffer and destroy the rest of the
+          // evidence), and expose the total. Diagnosis only — deliberately NOT
+          // WGX's escalate-and-fall-back ladder, which would hide the signal.
+          if (!_dev.__apexErrHook) {
+            try {
+              _dev.onuncapturederror = function (ev) {
+                const msg = (ev && ev.error && ev.error.message) || "gpu error";
+                if (!_gpuFirstError) _gpuFirstError = msg;
+                _gpuErrors++;
+                if (_gpuErrors <= GPU_ERR_LOG_CAP) {
+                  try { Log.warn("gfx", "TLX GPU error #" + _gpuErrors + ":", msg); } catch (_) { /* no Log in the node VM harness: the count is the load-bearing part */ }
+                  if (_gpuErrors === GPU_ERR_LOG_CAP) {
+                    try { Log.warn("gfx", "TLX: further GPU errors suppressed — read the count from GLX.gpuErrors()"); } catch (_) { /* same */ }
+                  }
+                }
+              };
+              _dev.__apexErrHook = true;
+            } catch (_) { /* optional hook; _gpuErrors stays 0 if the build refuses it */ }
           }
           if (_liteGpu) {
             try { renderer.samples = 1; } catch (_) { /* samples is a three setter; ignore a frozen build */ }
@@ -1693,6 +1721,10 @@ const TLX = (function () {
           });
         },
         softPresent() { return !!_softBlit; },
+        // Dawn's own verdict on this backend. Mirrors WGX.gpuErrors(); reachable
+        // as GLX.gpuErrors() after game.js copies the backend onto GLX.
+        gpuErrors() { return _gpuErrors; },
+        gpuFirstError() { return _gpuFirstError; },
         aabbInFrustum: (planes, mn, mx) => TLXShaders.aabbInFrustum(planes, mn, mx),
         aabbDist2: (mn, mx, ex, ey, ez) => TLXShaders.aabbDist2(mn, mx, ex, ey, ez),
 
