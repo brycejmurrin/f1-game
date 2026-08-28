@@ -365,7 +365,17 @@ window.MenuNav = (function () {
     ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
   };
 
+  // The measurement cache below is scoped to ONE press (see centre()), but it
+  // was only ever REPLACED at the top of the next press — so between presses a
+  // Map of element -> box sat retained, holding a strong reference to every
+  // focusable row it measured, including rows of a layer since torn down. The
+  // finally is what makes "fresh per press" also mean "gone after the press",
+  // across the handler's dozen early returns.
   function onKeyDown(e) {
+    try { navKey(e); } finally { _boxes = null; }
+  }
+
+  function navKey(e) {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
     const key = e.key;
     const dir = DIRS[key];
