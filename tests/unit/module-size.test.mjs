@@ -404,7 +404,13 @@ const CEILINGS = {
   // netStart cleared in quitToMenu (a solo race after an aborted countdown ran
   // with no lamps), Array.isArray on the host's RESULT payload, and the
   // paused-at-the-flag clear in endRace.
-  "js/game.js": 8694,
+  // 8694 -> 8715: the garage-preview fix — SP_CAR_CTR (orbit and aim were
+  // DIFFERENT points, so the turntable swung the car across the frame instead
+  // of rotating it, and both sat behind the measured car centre), plus the
+  // studio backdrop colour, the floor draw and its material opts. The floor
+  // MESH itself went to js/game/carmesh.js, which is where the geometry
+  // belongs and which this ratchet does not bound. Measured 8709.
+  "js/game.js": 8715,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -476,10 +482,14 @@ const CEILINGS = {
   // 2850 -> 2860: the pillar V-brace — the real halo strut splits into a V
   // at the top, meeting the ring either side of the apex (two beams + the
   // why). Measured 2853.
+  // 2895 -> 2925: the endplate/suspension detail round — front-plate gills and
+  // the plate-to-plane fillet (both gated on plate >= 2, so the DEFAULT body is
+  // untouched) and the inboard damper/rocker-link hardware on the existing
+  // `rocker` knob. Measured 2915.
   // 2860 -> 2895: the accuracy round — SEG 24 tyres (comment), regulation
   // mirror housing (toe cant block, winglet, outer stay), and the PLATE
   // rolled-top outwash row with its curled-lip span. Measured 2883.
-  "js/car/car3d.js": 2895,
+  "js/car/car3d.js": 2925,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
