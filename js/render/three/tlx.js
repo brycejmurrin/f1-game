@@ -275,6 +275,18 @@ const TLX = (function () {
         catch (_) { _displayCtx = null; /* capturePixels can still read the RT */ }
       }
       function softGpu() { return !!(_softAdapter || _softBlit); }
+      // apex26.tlxForceBatches=1 — run the INSTANCED draws (and their shadow
+      // casters) even on a software adapter. The skips below exist for a Dawn
+      // binding defect, but Dawn is Chrome's WebGPU implementation on real GPUs
+      // too, so gating the workaround on softGpu() means the path real hardware
+      // takes is the one nothing here ever executes. This switch lets a
+      // software run exercise the REAL-GPU code path against the same Dawn, so
+      // the defect is reproducible where it can be debugged.
+      const _forceBatches = (function () {
+        try { return localStorage.getItem("apex26.tlxForceBatches") === "1"; } catch (_) { return false; }
+      })();
+      // Content skips ask this, not softGpu(), so the switch reaches them.
+      function skipBatches() { return softGpu() && !_forceBatches; }
       function softOutRT() { return softGpu() ? _ensureBlitRT(W, H) : null; }
       // r185.1 keys the TSL node-builder cache on RenderObject.initialCacheKey,
       // which folds in renderer.contextNode.version + the scene lights hash.
@@ -852,7 +864,7 @@ const TLX = (function () {
         // and a 1-instance dummy at slot 5. One failed draw invalidates the
         // whole encoder — car/road/sky never land in softOutRT. Skip the
         // instanced scenery on that path; real GPUs keep the batches.
-        if (softGpu()) return;
+        if (skipBatches()) return;
         if (!batch || !batch.imesh || !batch.instances) return;
         const n = batch.visible === undefined ? batch.instances : batch.visible;
         if (n <= 0) return;
@@ -875,7 +887,7 @@ const TLX = (function () {
       }
 
       function castShadowInstanced(batch, count) {
-        if (softGpu()) return;
+        if (skipBatches()) return;
         if (shadowSys && shadowSys.castInstanced) shadowSys.castInstanced(batch, count);
       }
 

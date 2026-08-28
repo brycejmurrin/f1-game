@@ -990,8 +990,17 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "backend must expose capturePixels for gfx-probe frame.png");
   assert.match(src, /readRenderTargetPixelsAsync/,
     "blit must go through three's copyTextureToBuffer + mapAsync, not the swapchain");
-  assert.match(src, /function drawInstanced[\s\S]{0,400}if \(softGpu/,
+  assert.match(src, /function drawInstanced[\s\S]{0,400}if \(skipBatches/,
     "software WebGPU must skip InstancedMesh draws — they poison the frame encoder");
+  // skipBatches() is softGpu() AND NOT the apex26.tlxForceBatches escape. The
+  // skip stays the default, so the assertion above still holds for players; the
+  // switch exists because gating the workaround on softGpu() meant the code
+  // path REAL GPUs take was the one CI never executed — which is how a black
+  // three.js WebGPU screen shipped. Keep both halves: default skips, opt-in runs.
+  assert.match(src, /function skipBatches\(\)\s*\{\s*return softGpu\(\)\s*&&\s*!_forceBatches;/,
+    "the batch skip must remain softGpu()-by-default — the escape is opt-in only");
+  assert.match(src, /apex26\.tlxForceBatches/,
+    "the real-GPU code path must stay reachable from a software run for debugging");
   assert.match(src, /renderer\.setRenderTarget\(softOutRT/,
     "env / post restore must rebind the blit RT, not the native swapchain");
   const envEnd = src.indexOf("envFaceEnd(face)");
