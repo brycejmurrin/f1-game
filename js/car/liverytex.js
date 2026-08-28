@@ -974,6 +974,9 @@ const LiveryTex = (function () {
   // drawLogoImage is exported for the GARAGE back-wall crest (js/game/garage-scene.js):
   // aspect-fit + tint + halo is exactly the same job there, and reimplementing
   // the fit maths in a second place is how the two drift apart.
-  return { SIZE, REGIONS, buildAtlas, drawCrest, drawLogoImage, loadLogos, ensureLogos, onLogosReady, setTeamLogo, LOGOS };
+  // contrast/inkOn are exported for the GARAGE crest wall (js/game/garage-scene.js),
+  // which has to make the same "is this mark legible on this field, and if not
+  // what ink separates it" decision buildAtlas makes for the car.
+  return { SIZE, REGIONS, buildAtlas, drawCrest, drawLogoImage, contrast, inkOn, loadLogos, ensureLogos, onLogosReady, setTeamLogo, LOGOS };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;
