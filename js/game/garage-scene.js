@@ -209,8 +209,8 @@ function buildProps(g, liv) {
   toolbox(g.px, 4.92, -3.4); toolbox(g.px, 4.92, -1.5); toolbox(g.px, 4.92, 0.4);
   stack(g.px, 4.55, -5.4, 1); stack(g.px, 4.55, 4.6, 2);
   // Back wall: the pit board.
-  cyl(g.back, 3.3, 0, -6.15, 0.03, 1.80, STEEL, 6);
-  block(g.back, 3.3, 2.30, -6.12, 0.45, 0.62, 0.03, DARK);
+  cyl(g.back, 4.70, 0, -6.15, 0.03, 1.80, STEEL, 6);
+  block(g.back, 4.70, 2.30, -6.12, 0.45, 0.62, 0.03, DARK);
   // Door wall: the roller shutter, parked half open.
   for (let i = 0; i < 11; i++)
     block(g.door, 0, 2.05 + i * 0.26, Z_DOOR - 0.10, HALF_W * 0.72, 0.12, (i % 2) ? 0.035 : 0.05, scale(STEEL, 0.75));
@@ -241,16 +241,18 @@ function buildProps(g, liv) {
     cyl(g.px, 5.14, 2.30 + i * 0.02, 0.9 + i * 0.8, 0.22, 0.10, scale(DARK, 1.5), 10);
     cyl(g.px, 5.14, 2.28 + i * 0.02, 0.9 + i * 0.8, 0.07, 0.14, STEEL, 6);
   }
-  // Shelving of parts crates on the back wall, and a workbench under it.
+  // Shelving of parts crates and a workbench. These live on the DOOR wall, not
+  // the back wall: the back wall is where the information boards go, and a
+  // prop stood 0.3 m proud of a board is a prop that hides it.
   for (let sh = 0; sh < 3; sh++) {
     const y = 0.95 + sh * 0.62;
-    block(g.back, -3.1, y, -6.15, 1.25, 0.025, 0.22, STEEL);
+    block(g.door, -3.5, y, 6.15, 1.25, 0.025, 0.22, STEEL);
     for (let bx = 0; bx < 3; bx++)
-      block(g.back, -4.15 + bx * 0.86, y + 0.17, -6.15, 0.32, 0.15, 0.17,
+      block(g.door, -4.55 + bx * 0.86, y + 0.17, 6.15, 0.32, 0.15, 0.17,
         scale(bx % 2 ? c1 : STEEL, bx % 2 ? 0.5 : 0.75));
   }
-  block(g.back, -3.1, 0.42, -6.05, 1.30, 0.04, 0.32, scale(STEEL, 0.85));
-  for (let lg = -1; lg <= 1; lg += 2) cyl(g.back, -3.1 + lg * 1.15, 0, -6.05, 0.035, 0.42, DARK, 6);
+  block(g.door, -3.5, 0.42, 6.05, 1.30, 0.04, 0.32, scale(STEEL, 0.85));
+  for (let lg = -1; lg <= 1; lg += 2) cyl(g.door, -3.5 + lg * 1.15, 0, 6.05, 0.035, 0.42, DARK, 6);
   // Fire extinguishers — every real garage wall has a pair.
   for (let f = 0; f < 2; f++) {
     cyl(g.nx, -5.22, 0.32, -4.4 + f * 0.42, 0.075, 0.44, [0.72, 0.09, 0.07], 8);
@@ -448,11 +450,58 @@ function buildBayFloor(out, liv) {
 // are. The crest is the real team PNG where LiveryTex has one and its
 // hand-drawn vector crest where it does not — which is also the permanent path
 // for a custom MY TEAM entry, since those never have a PNG.
+// Everything the boards report, gathered in one place from the SAME calls the
+// 2D panel makes. getParts is passed in rather than read from the store because
+// career mode substitutes its own fitted set (js/game.js getTeamParts), and a
+// direct store read would quietly show the wrong car.
+function boardInfo(team, getParts, driverIdx) {
+  if (typeof Parts === "undefined" || typeof getParts !== "function") return null;
+  try {
+    // ONE resolveSetup call carries everything: it already returns the stat
+    // `mods`, the total `cost`, and `options` (the RESOLVED option per category,
+    // which is what a supplier-locked fallback actually fitted — not the id the
+    // save asked for).
+    const r = Parts.resolveSetup(getParts(team.id), team);
+    const base = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
+    const stats = Parts.STAT_KEYS.map((k) => {
+      const b = base[k.key] || 75;
+      const value = Math.round(Parts.displayStat(b * r.mods[k.key]));
+      return { value, delta: value - b };
+    });
+    const spec = Parts.CATALOG.map((cat) => {
+      const opt = r.options[cat.id];
+      return { cat: String(cat.label || cat.id).toUpperCase(), label: (opt && opt.label) || "Stock" };
+    });
+    const drv = (team.drivers || [])[driverIdx | 0] || (team.drivers || [])[0] || {};
+    return { stats, spec, driver: drv, budget: Parts.BUDGET,
+             left: Math.max(0, Parts.BUDGET - (r.cost || 0)) };
+  } catch (e) {
+    Log.warn("game", "GarageScene boardInfo failed: " + (e && e.message));
+    return null;
+  }
+}
+// A signature of everything the boards render, for the dress cache key. Without
+// the parts and the seat in here the numbers freeze the instant you fit a part
+// — the texture would never be repainted.
+function boardKey(info) {
+  if (!info) return "-";
+  let k = info.left + "|" + (info.driver.num == null ? "-" : info.driver.num);
+  for (let i = 0; i < info.stats.length; i++) k += "|" + info.stats[i].value;
+  for (let i = 0; i < info.spec.length; i++) k += "|" + info.spec[i].label;
+  return k;
+}
+
 const DRESS = 1024;
 const D_CREST = { x: 0, y: 0, w: 512, h: 512 };
 const D_WORD  = { x: 512, y: 0, w: 512, h: 128 };
 const D_BOARD = { x: 512, y: 160, w: 256, h: 352 };
 const D_SCREEN = { x: 0, y: 512, w: 512, h: 256 };
+// The information boards. Everything a player is deciding on lived only in the
+// 2D panel; these put it in the room, on the wall you are already looking at.
+const D_STATS  = { x: 512, y: 512, w: 512, h: 256 };
+const D_DRIVER = { x: 768, y: 128, w: 256, h: 256 };
+const D_SPEC   = { x: 0, y: 768, w: 512, h: 256 };
+const D_BUDGET = { x: 512, y: 768, w: 512, h: 128 };
 const css = (c) => "rgb(" + Math.round(Math.min(1, Math.max(0, c[0])) * 255) + "," +
   Math.round(Math.min(1, Math.max(0, c[1])) * 255) + "," +
   Math.round(Math.min(1, Math.max(0, c[2])) * 255) + ")";
@@ -462,7 +511,7 @@ const css = (c) => "rgb(" + Math.round(Math.min(1, Math.max(0, c[0])) * 255) + "
 // glow: a modern garage's crest wall IS a lightbox, the pit board IS an LED
 // panel and the monitors ARE emissive. Relative brightness between surfaces is
 // baked into the canvas, because glow is per-draw and there is only one draw.
-function paintDress(team, liv) {
+function paintDress(team, liv, info) {
   const cv = document.createElement("canvas");
   cv.width = cv.height = DRESS;
   const ctx = cv.getContext("2d");
@@ -523,6 +572,72 @@ function paintDress(team, liv) {
       ctx.beginPath(); ctx.moveTo(tx + 6, ty + th * (gl / 4)); ctx.lineTo(tx + tw, ty + th * (gl / 4)); ctx.stroke();
     }
   }
+  // ── information boards ───────────────────────────────────────────────────
+  // `info` is what the player is actually deciding on. Null (no parts handle
+  // yet, or Parts absent) leaves these regions transparent, and the quads then
+  // paint nothing rather than showing a board full of zeroes.
+  const panel = (R, title) => {
+    ctx.fillStyle = "#0a0c10"; ctx.fillRect(R.x, R.y, R.w, R.h);
+    ctx.fillStyle = css(scale(c1, 0.75)); ctx.fillRect(R.x, R.y, R.w, 44);
+    ctx.fillStyle = "#f2f3f5"; ctx.font = "700 27px system-ui, sans-serif";
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillText(title, R.x + 18, R.y + 23);
+    ctx.textAlign = "center";
+  };
+  if (info) {
+    // STATS — the same four numbers the panel quotes, from the same curve
+    // (Parts.displayStat), so the wall and the panel can never disagree.
+    panel(D_STATS, "CAR PERFORMANCE");
+    const keys = Parts.STAT_KEYS;
+    for (let i = 0; i < keys.length; i++) {
+      const st = info.stats[i], y = D_STATS.y + 74 + i * 46;
+      ctx.textAlign = "left"; ctx.fillStyle = "#9aa4b2"; ctx.font = "700 21px system-ui, sans-serif";
+      ctx.fillText(keys[i].label, D_STATS.x + 18, y);
+      const bx = D_STATS.x + 168, bw = 250;
+      ctx.fillStyle = "#191d24"; ctx.fillRect(bx, y - 11, bw, 22);
+      ctx.fillStyle = css(c2);
+      ctx.fillRect(bx, y - 11, Math.max(2, bw * Math.min(1, st.value / 120)), 22);
+      ctx.textAlign = "right"; ctx.fillStyle = "#f2f3f5"; ctx.font = "700 24px system-ui, sans-serif";
+      ctx.fillText(String(st.value), D_STATS.x + D_STATS.w - 66, y);
+      // The delta against the bare chassis is the whole point of a parts screen.
+      ctx.font = "700 18px system-ui, sans-serif";
+      ctx.fillStyle = st.delta > 0 ? "#4ad07a" : st.delta < 0 ? "#e2645a" : "#6b7480";
+      ctx.fillText(st.delta > 0 ? "+" + st.delta : String(st.delta), D_STATS.x + D_STATS.w - 14, y);
+      ctx.textAlign = "center";
+    }
+    // BUDGET — spent against the cap, with a bar that empties as you spend.
+    panel(D_BUDGET, "BUDGET");
+    ctx.textAlign = "left"; ctx.fillStyle = "#f2f3f5"; ctx.font = "700 40px system-ui, sans-serif";
+    ctx.fillText(info.left + " cr", D_BUDGET.x + 18, D_BUDGET.y + 84);
+    ctx.fillStyle = "#8f98a6"; ctx.font = "700 20px system-ui, sans-serif";
+    ctx.fillText("OF " + info.budget + " REMAINING", D_BUDGET.x + 190, D_BUDGET.y + 88);
+    const rw = D_BUDGET.w - 36;
+    ctx.fillStyle = "#191d24"; ctx.fillRect(D_BUDGET.x + 18, D_BUDGET.y + 104, rw, 12);
+    ctx.fillStyle = css(c2);
+    ctx.fillRect(D_BUDGET.x + 18, D_BUDGET.y + 104, rw * Math.max(0, Math.min(1, info.left / info.budget)), 12);
+    ctx.textAlign = "center";
+    // DRIVER — the SELECTED seat, not simply the first one on the entry list.
+    panel(D_DRIVER, "DRIVER");
+    ctx.fillStyle = css(c2); ctx.font = "700 96px system-ui, sans-serif";
+    ctx.fillText(info.driver.num == null ? "--" : String(info.driver.num),
+      D_DRIVER.x + D_DRIVER.w / 2, D_DRIVER.y + 122);
+    ctx.fillStyle = "#f2f3f5"; ctx.font = "700 30px system-ui, sans-serif";
+    ctx.fillText(String(info.driver.code || ""), D_DRIVER.x + D_DRIVER.w / 2, D_DRIVER.y + 180);
+    ctx.fillStyle = "#9aa4b2"; ctx.font = "600 19px system-ui, sans-serif";
+    ctx.fillText(String(info.driver.name || ""), D_DRIVER.x + D_DRIVER.w / 2, D_DRIVER.y + 218, D_DRIVER.w - 20);
+    // SPEC — every fitted component, two columns of six.
+    panel(D_SPEC, "FITTED SPEC");
+    for (let i = 0; i < info.spec.length && i < 12; i++) {
+      const col = i < 6 ? 0 : 1, row = i % 6;
+      const sx = D_SPEC.x + 16 + col * (D_SPEC.w / 2), sy = D_SPEC.y + 74 + row * 30;
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#79828f"; ctx.font = "700 15px system-ui, sans-serif";
+      ctx.fillText(info.spec[i].cat, sx, sy);
+      ctx.fillStyle = "#e8eaee"; ctx.font = "600 17px system-ui, sans-serif";
+      ctx.fillText(info.spec[i].label, sx + 92, sy, D_SPEC.w / 2 - 112);
+      ctx.textAlign = "center";
+    }
+  }
   return { canvas: cv, usedPng };
 }
 
@@ -558,7 +673,7 @@ function buildDress() {
   // about an aim point at y 0.45 and the back wall is ~14 m out at the default
   // distance, so anything above ~y 4 there is already at the top of the frame.
   dquad(g.back, [[-1.15, 1.80, zb], [1.15, 1.80, zb], [1.15, 3.80, zb], [-1.15, 3.80, zb]], [0, 0, 1], D_CREST);
-  dquad(g.back, [[-2.3, 1.05, zb], [2.3, 1.05, zb], [2.3, 1.62, zb], [-2.3, 1.62, zb]], [0, 0, 1], D_WORD);
+  dquad(g.back, [[-1.5, 0.92, zb], [1.5, 0.92, zb], [1.5, 1.40, zb], [-1.5, 1.40, zb]], [0, 0, 1], D_WORD);
   dquad(g.back, [[2.86, 1.70, -6.08], [3.74, 1.70, -6.08], [3.74, 2.90, -6.08], [2.86, 2.90, -6.08]], [0, 0, 1], D_BOARD);
   // Side walls: the wordmark repeated. Corner order is built per side so the
   // text reads the right way round from inside each wall.
@@ -567,6 +682,20 @@ function buildDress() {
     dquad(g.nx, [[-xw, 2.42, z1], [-xw, 2.42, z0], [-xw, 2.92, z0], [-xw, 2.92, z1]], [1, 0, 0], D_WORD);
     dquad(g.px, [[xw, 2.42, z0], [xw, 2.42, z1], [xw, 2.92, z1], [xw, 2.92, z0]], [-1, 0, 0], D_WORD);
   }
+  // The information boards. STATS, BUDGET and DRIVER go on the BACK wall
+  // because that is the wall the default and FRONT framings look straight at,
+  // and they sit in the SAME y 1.3-3.8 band as the crest for the same reason it
+  // does: the preview's vertical half-FOV is 18 deg about an aim point at
+  // y 0.45 and the back wall is ~14 m out, so a board above ~y 4 is already
+  // cropped by the top of the frame. (Placed higher first, and duly cut off.)
+  // The shelving and pit board that used to stand here moved for them.
+  // SPEC goes on the +X wall, above the trolleys, which top out around y 1.4.
+  dquad(g.back, [[-4.90, 2.05, zb], [-1.60, 2.05, zb], [-1.60, 3.70, zb], [-4.90, 3.70, zb]], [0, 0, 1], D_STATS);
+  dquad(g.back, [[-4.90, 1.30, zb], [-1.60, 1.30, zb], [-1.60, 2.00, zb], [-4.90, 2.00, zb]], [0, 0, 1], D_BUDGET);
+  // Square, because D_DRIVER is a square atlas region and a stretched quad would
+  // squash the number.
+  dquad(g.back, [[1.70, 1.75, zb], [3.70, 1.75, zb], [3.70, 3.75, zb], [1.70, 3.75, zb]], [0, 0, 1], D_DRIVER);
+  dquad(g.px, [[xw, 1.62, -5.40], [xw, 1.62, -2.40], [xw, 3.12, -2.40], [xw, 3.12, -5.40]], [-1, 0, 0], D_SPEC);
   // Engineer screens above the desk, and the notice board by the door.
   dquad(g.nx, [[-5.18, 1.10, 2.15], [-5.18, 1.10, -0.95], [-5.18, 2.65, -0.95], [-5.18, 2.65, 2.15]], [1, 0, 0], D_SCREEN);
   dquad(g.door, [[-3.5, 1.30, zd], [-2.6, 1.30, zd], [-2.6, 2.50, zd], [-3.5, 2.50, zd]], [0, 0, -1], D_BOARD);
@@ -593,10 +722,11 @@ const dressMesh = {};
 let dressTex = null, dressFail = 0;
 const propMesh = {};
 const acc = () => ({ pos: [], nrm: [], col: [], idx: [] });
-function rebuild(team, liv) {
+function rebuild(team, liv, info) {
   const drv = (team && team.drivers) || [];
   const key = (team && team.id) + "|" + (rgb(liv && liv.c1, [0, 0, 0])).join(",") +
-              "|" + logoGen + "|" + ((drv[0] && drv[0].num) + "-" + (drv[1] && drv[1].num));
+              "|" + logoGen + "|" + ((drv[0] && drv[0].num) + "-" + (drv[1] && drv[1].num)) +
+              "|" + boardKey(info);
   if (key === cacheKey && shellMesh) return;
   if (shellMesh) _gfx.freeMesh(shellMesh);
   if (ledMesh) _gfx.freeMesh(ledMesh);
@@ -625,7 +755,7 @@ function rebuild(team, liv) {
   if (dressFail < 3 && _gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined") {
     try {
       if (LiveryTex.ensureLogos) LiveryTex.ensureLogos();
-      dressTex = _gfx.createTexture(paintDress(team, liv).canvas);
+      dressTex = _gfx.createTexture(paintDress(team, liv, info).canvas);
       const dg = buildDress();
       for (let i = 0; i < SIDES.length; i++)
         if (dg[SIDES[i]].idx.length) dressMesh[SIDES[i]] = _gfx.createTexMesh(dg[SIDES[i]]);
@@ -644,9 +774,9 @@ const FLOOR_OPTS = { roughness: 0.34, metalness: 0, specular: 0.46, clearcoat: 0
 const SHELL_OPTS = { roughness: 0.86, metalness: 0.05, specular: 0.16, clearcoat: 0 };
 
 const MAT_I = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
-function draw(team, liv, eye) {
+function draw(team, liv, eye, getParts, driverIdx) {
   if (!_gfx) return;
-  rebuild(team, liv);
+  rebuild(team, liv, boardInfo(team, getParts, driverIdx));
   _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
   _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
   _gfx.draw(ledMesh, MAT_I, LED_OPTS);

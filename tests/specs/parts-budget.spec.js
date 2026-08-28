@@ -1,6 +1,7 @@
 // @ts-check
 // Tests for car setup budget system:
-// - Budget display at 600cr default
+// - Budget display at the Parts.BUDGET default (read from the page, not
+//   hardcoded: the cap moves when the catalog grows)
 // - Budget decrements on part selection
 // - Over-budget parts show visual warning and can't be selected (without unlimited)
 // - Unlimited toggle removes cap and persists via localStorage
@@ -49,13 +50,15 @@ async function openSetup(page) {
 }
 
 test.describe("Budget system — display", () => {
-  test("shows full 600 cr at all defaults", async ({ page }) => {
+  test("shows the full cap at all defaults", async ({ page }) => {
     await openSetup(page);
+    // Read the cap from Parts rather than hardcoding it — the budget rises when
+    // the catalog gains options, and a literal here just breaks on that.
+    const cap = await page.evaluate(() => Parts.BUDGET);
     const text = await page.locator("#cs-budget").textContent();
-    expect(text).toContain("600");
     // Nothing is spent at defaults, so remaining equals the cap (setup-ui.js
     // renders "BUDGET: <remaining> / <cap> cr remaining").
-    expect(text).toContain("600 / 600 cr remaining");
+    expect(text).toContain(cap + " / " + cap + " cr remaining");
     await page.screenshot({ path: galleryPath("parts-budget", "budget-default.png") });
   });
 
@@ -89,17 +92,18 @@ test.describe("Budget system — part selection", () => {
     const transform = await page.locator("#cs-budget-fill").evaluate((el) =>
       el.style.transform
     );
-    // 160/600 ≈ 0.267 — must be a scaleX > 0
+    // A paid part must move the bar off zero (160 cr against the cap).
     expect(transform).toMatch(/scaleX\(0\.[1-9]/);
   });
 
   test("parts that exceed budget show over-budget class", async ({ page }) => {
     await openSetup(page);
-    // Spend 450cr: Overcharge ERS (230) + F1 Spec gearbox (180) + High Octane fuel (40)
-    // — with 150cr remaining, expensive options like Race engine (160cr) become over-budget
+    // Spend enough that the dearest engine no longer fits: Overcharge ERS (230)
+    // + Seamless gearbox (210) + Custom Formula fuel (200) = 640, leaving less
+    // than the 220 cr Plenum Max engine against a 780 cap.
     await pickOpt(page, "ers", "overcharge");
-    await pickOpt(page, "gearbox", "f1_spec");
-    await pickOpt(page, "fuel", "high_octane");
+    await pickOpt(page, "gearbox", "seamless_shift");
+    await pickOpt(page, "fuel", "custom_formula");
     // Switch to engine so over-budget options are visible in #cs-options
     await page.locator('#cs-tabs [data-cs-cat="engine"]').click();
     const overBudgetCount = await page.locator("#cs-options .cs-opt.over-budget").count();
@@ -107,14 +111,15 @@ test.describe("Budget system — part selection", () => {
     await page.screenshot({ path: galleryPath("parts-budget", "budget-over-budget.png") });
   });
 
-  test("budget label gets 'over' class when spending exceeds 600", async ({ page }) => {
+  test("budget label gets 'over' class when spending exceeds the cap", async ({ page }) => {
     await openSetup(page);
-    // Use unlimited mode to select a combo totalling 610cr, then disable to reveal "over" state
+    // Unlimited mode to select a combo past the cap, then disable to reveal it.
     await page.locator("#cs-unlimited").click();
     await pickOpt(page, "ers", "overcharge");
-    await pickOpt(page, "gearbox", "f1_spec");
+    await pickOpt(page, "gearbox", "seamless_shift");
     await pickOpt(page, "fuel", "custom_formula");
-    // Disable unlimited — 610cr > 600 so budget label becomes "over"
+    await pickOpt(page, "engine", "quali_engine");
+    // 230 + 210 + 200 + 220 = 860 > the 780 cap, so the label goes "over".
     await page.locator("#cs-unlimited").click();
     const cls = await page.locator("#cs-budget").getAttribute("class");
     expect(cls).toContain("over");
@@ -187,8 +192,9 @@ test.describe("Budget system — unlimited toggle", () => {
     await openSetup(page);
     await page.locator("#cs-unlimited").click(); // ON
     await page.locator("#cs-unlimited").click(); // OFF
+    const cap = await page.evaluate(() => Parts.BUDGET);
     const budgetText = await page.locator("#cs-budget").textContent();
-    expect(budgetText).toContain("600");
+    expect(budgetText).toContain(String(cap));
     const cls = await page.locator("#cs-unlimited").getAttribute("class");
     expect(cls).not.toContain(" on");
   });

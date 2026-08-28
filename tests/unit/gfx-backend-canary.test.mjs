@@ -1041,8 +1041,21 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "envFaceEnd must record a failed probe face, not swallow it silently");
   assert.match(envBody, /if \(faceOk\) envFacesMask \|= 1 << \(face & 7\);/,
     "a failed probe face must not be counted towards the six");
-  assert.match(envBody, /if \(faceOk && envFacesMask === 63\)/,
+  assert.match(envBody, /if \(faceOk && envFacesMask === 63 && probeErrored\)/,
     "envReady must not latch on a face that threw");
+  // Dawn does NOT throw when it rejects a pipeline — render() returns normally
+  // and the command buffer is discarded, so faceOk alone cannot see it. The
+  // uncaptured-error tally across the six faces is the only in-page signal
+  // that the probe's own commands never ran, and binding that cube is what
+  // lights a whole world from black.
+  assert.match(envBody, /_envErrBase = _gpuErrors;/,
+    "the probe must baseline the GPU error tally at its first face");
+  assert.match(envBody, /const probeErrored = _envErrBase >= 0 && _gpuErrors > _envErrBase;/,
+    "and compare it at the latch — a silent rejection has no other tell");
+  assert.match(envBody, /_envGaveUp = true; envReady = false;/,
+    "a probe that keeps erroring must stand down instead of binding the cube");
+  assert.match(src, /envProbeReady\(\) \{ return envReady \|\| _envGaveUp; \}/,
+    "standing down must read as ready so the caller stops re-probing forever");
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(post, /ctx\.softDest/,
     "tlx-post must honour ctx.softDest for the FXAA / viz dest");

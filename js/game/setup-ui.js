@@ -9,18 +9,11 @@ const { $, els, cssCol, store, arrToHex, hexToArr,
         getTeamParts, saveTeamParts, getLiveryId, saveLiveryId,
         getCustomLiveries, setCustomLiveries, getLiveries, invalidateDecalTextures } = G;
 
-const CS_STATS = [
-  { key: "speed",     label: "SPEED" },
-  { key: "accel",     label: "ACCEL" },
-  { key: "cornering", label: "CORNERING" },
-  { key: "braking",   label: "BRAKING" },
-];
-
-const STAT_KNEE = 100, STAT_CAP = 120, STAT_KNEE_SCALE = 26;
-function displayStat(raw) {
-  if (raw <= STAT_KNEE) return raw;
-  return STAT_KNEE + (STAT_CAP - STAT_KNEE) * (1 - Math.exp(-(raw - STAT_KNEE) / STAT_KNEE_SCALE));
-}
+// The stat list and the display curve now live in Parts, because the in-world
+// stats board on the garage wall reads the same numbers and a second copy of
+// the curve would let the two disagree.
+const CS_STATS = Parts.STAT_KEYS;
+const displayStat = Parts.displayStat;
 function renderStatBars(container, team) {
   const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
   const mods = Parts.getMods(getTeamParts(team.id), team);
@@ -637,7 +630,7 @@ function buildLiveryCreator(container, team) {
     const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = "FINISH"; r.appendChild(lb);
     const group = document.createElement("span"); group.className = "cs-liv-ed-finish";
     const btns = [];
-    for (const f of ["gloss", "satin", "chrome"]) {
+    for (const f of ["gloss", "satin", "chrome", "matte", "carbon", "brushed", "pearl"]) {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "cs-liv-ed-none" + ((d.finish || "gloss") === f ? " active" : "");

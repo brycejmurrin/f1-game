@@ -149,6 +149,7 @@ const FULL = [
   "js/game/steer-tuning.js",
   "js/game/perf.js",
   "js/game/gfx-quality.js",
+  "js/game/gfx-debug.js",
   "js/game/ui-scale.js",
   "js/game/cockpit-opts.js",
   "js/game/metrics-panel-style.js",

@@ -12,6 +12,7 @@
 
   Drive it by URL params (headless-friendly) or by mouse/keys:
     ?team=ferrari&livery=fer_matte&num=16
+    ?team=ferrari&finish=pearl        (gloss|satin|chrome|matte|carbon|brushed|pearl)
     &engine=race&aero=high_downforce&brakes=ceramic&gearbox=f1_spec&tyres=soft&ers=full_attack
     &az=40&el=16&dist=4.6&tod=day&studio=1&bg=101014
   Mouse: drag = orbit, wheel = zoom.  Keys: 1-5 tod presets, [ ] spin, r reset.
@@ -156,6 +157,8 @@
   const S = {
     team: qp("team", "mclaren"),
     livery: qp("livery", null),
+    finish: qp("finish", null),   // paint FINISH override: gloss|satin|chrome|matte|carbon|brushed|pearl
+
     colors: null,
     num: qp("num", null),
     parts: {},
@@ -214,7 +217,10 @@
     return { c1: S.colors ? S.colors[0] : l.c1, c2: S.colors ? S.colors[1] : l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              fin: l.fin || null, finArt: l.finArt || null,
-             noseStripe: l.noseStripe || null };
+             noseStripe: l.noseStripe || null,
+             // ?finish= overrides the livery's own, so a finish can be inspected
+             // without authoring a livery for it (Car3D.FINISH_SURFACE).
+             finish: S.finish || l.finish || null };
   }
   function driverNum(team) {
     if (S.num != null) return parseInt(S.num, 10) || 0;

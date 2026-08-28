@@ -155,7 +155,10 @@ const CLASS_CEILING = 533;
 // landscape clearance is untouched.
 // 1227 on the deploy union (both lineages' adds; re-measured per the
 // deploy-merge rule).
-const NODE_CEILING = 1228;
+// 1228 -> 1229: one <script> tag for js/game/gfx-debug.js, the ?gfxdebug=1
+// overlay. A node is the honest price of the only channel a player with no
+// console has for telling us what their GPU did.
+const NODE_CEILING = 1229;
 // +4 2026-08-13: title font preload links (measured ~126ms, CLS work) joined the
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module
