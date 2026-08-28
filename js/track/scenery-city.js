@@ -740,7 +740,12 @@ const SceneryCity = (function () {
       if (NIGHT) face = [Math.min(1.45, face[0] * 1.30 + 0.10),
                          Math.min(1.45, face[1] * 1.30 + 0.10),
                          Math.min(1.45, face[2] * 1.30 + 0.10)];
-      ctx.instance(`billboard-face|${h}|${st}`,
+      // side AND postCol belong in the key: the panel branch places its rear
+      // support strut at `side * 0.5` (so a shared template put the strut on
+      // the TRACK-facing front of every mixed-side board — Silverstone,
+      // Montreal), and four branches paint with postCol, which two callers
+      // with different post colours were silently sharing.
+      ctx.instance(`billboard-face|${h}|${st}|${side}|${postCol.join(",")}`,
         Object.assign({ s: [1, 1, w], col: face }, place),
         (rec) => {
           const NC = TrackGraph.NODE_COLOR;

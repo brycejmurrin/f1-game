@@ -67,7 +67,14 @@
       const IRON = [0.72, 0.71, 0.68], OXIDE = [0.56, 0.26, 0.18];
       const DUMP = [0.76, 0.70, 0.48];          // cyanided reef sand
 
-      const IN = (side) => side;
+      // -side, matching the fleet idiom (albert_park:608, estoril:195,
+      // interlagos:171, madrid, shanghai all write `const IN = -side`):
+      // +1 along a.r points AT the track. This file had the sign inverted, so
+      // everything built through it faced away — garages, race-control windows
+      // and all five iron terraces, whose rows step `inw * (5.4 - t * 1.35)`
+      // while y rises: with the wrong sign they climb TOWARD the tarmac and
+      // the terrace rakes backwards.
+      const IN = (side) => -side;
 
       // 1. HIGHVELD VELD — flat-topped acacia thorn trees scattered over open
       //    golden grass, plus the ranks of imported blue-gum along the

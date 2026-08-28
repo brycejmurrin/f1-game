@@ -1088,8 +1088,9 @@ test.describe("carView()", () => {
     const cats = c.parts.chosen.map((p) => p.category);
     expect(cats).toContain("engine");
     expect(cats).toContain("aero");
-    expect(c.parts.budget).toBe(600);
-    expect(c.parts.spent + c.parts.remaining).toBe(600);
+    const cap = await page.evaluate(() => Parts.BUDGET);
+    expect(c.parts.budget).toBe(cap);
+    expect(c.parts.spent + c.parts.remaining).toBe(cap);
     for (const k of ["speed", "accel", "cornering", "braking"]) {
       expect(typeof c.parts.mods[k]).toBe("number");
     }

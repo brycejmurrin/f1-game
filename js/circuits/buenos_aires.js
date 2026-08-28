@@ -103,18 +103,24 @@
           size: [tiers * 3.4 + 4, tiers * 3.2, len + 4],
           basis: b,
         }, (stage) => {
+          // STEP AWAY FROM THE TRACK, WHICHEVER SIDE THIS IS. The tiers rise
+          // with t, so they must also walk outward with t — but the offset was
+          // a bare `+a.r` for both sides, which only walks outward on side +1.
+          // The two side=-1 terraces (main, back) therefore climbed back over
+          // the road and were culled, so the main grandstand of this circuit
+          // has never been on screen.
           for (let t = 0; t < tiers; t++) {
             const hgt = 1.6 + t * 2.2;
-            addBox(stage, vadd(vadd(a.c, a.r, t * 3.2), a.u, hgt * 0.5),
+            addBox(stage, vadd(vadd(a.c, a.r, side * t * 3.2), a.u, hgt * 0.5),
               [3.1, hgt, len], t % 2 ? [0.72, 0.71, 0.67] : [0.66, 0.65, 0.61], b);
             stage._mat = MAT.FABRIC;
-            addBox(stage, vadd(vadd(a.c, a.r, t * 3.2), a.u, hgt + 0.55),
+            addBox(stage, vadd(vadd(a.c, a.r, side * t * 3.2), a.u, hgt + 0.55),
               [2.6, 1.1, len - 2],
               [CELESTE, [0.94, 0.93, 0.90], [0.86, 0.30, 0.24]][t % 3], b);
             stage._mat = 0;
           }
           // Plain concrete back wall — no roof, no fascia. That is the look.
-          addBox(stage, vadd(vadd(a.c, a.r, tiers * 3.2), a.u, tiers * 1.5),
+          addBox(stage, vadd(vadd(a.c, a.r, side * tiers * 3.2), a.u, tiers * 1.5),
             [0.6, tiers * 3.0, len + 2], [0.62, 0.61, 0.58], b);
         });
       }

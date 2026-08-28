@@ -431,10 +431,18 @@ test("TLX wet analytic mirror and chrome MIRROR id 27 match GLX", () => {
   const tsl = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
   assert.match(lit, /wetSheen \* 0\.55/);
   assert.match(tsl, /wetSheen\.mul\(0\.55\)/);
-  assert.match(lit, /surfaceId <= 27/);
+  // The classification RANGE and every finish id in it must agree across the
+  // backends, or a finish silently does nothing on two of the three renderers
+  // and no other test would notice. Range grew to 31 with matte/brushed/pearl
+  // and the carbon finish; mirror stays 27.
+  assert.match(lit, /surfaceId <= 31/);
   assert.match(lit, /mirrorSurface = surfaceId == 27/);
-  assert.match(tsl, /lessThanEqual\(27\.0\)/);
+  assert.match(tsl, /lessThanEqual\(31\.0\)/);
   assert.match(tsl, /surfaceId\.equal\(27\.0\)/);
+  for (const id of [28, 29, 30, 31]) {
+    assert.match(lit, new RegExp("surfaceId == " + id), "GLX is missing surface " + id);
+    assert.match(tsl, new RegExp("equal\\(" + id + "\\.0\\)"), "TLX is missing surface " + id);
+  }
 });
 
 test("changing preset drops a pending TIER verify", () => {

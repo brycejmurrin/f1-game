@@ -848,7 +848,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Car3D surface ids are isolated above TrackGeom's 0..15 range. Keep id 0 on
   // the legacy whole-draw path for imported/custom meshes.
   let surfaceId = i32(vMatId + 0.5);
-  let classifiedCar = surfaceId >= 20 && surfaceId <= 27;
+  let classifiedCar = surfaceId >= 20 && surfaceId <= 31;
   let paintSurface = surfaceId == 20;
   let carbonSurface = surfaceId == 21;
   let rubberSurface = surfaceId == 22;
@@ -859,13 +859,25 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // MIRROR: chrome livery finish (car3d.js SURFACES.mirror = 27). Paint-like
   // (keeps clearcoat + env lobe) but metallic and nearly smooth.
   let mirrorSurface = surfaceId == 27;
+  // Three more livery finishes, mirroring js/render/shaders/lit.js. A finish
+  // costs a SURFACE ID, not a uniform: car3d.js FINISH_SURFACE remaps a painted
+  // vertex. Carbon needs no id — 21 already exists and the finish points at it.
+  let matteSurface = surfaceId == 28;
+  let satinMetalSurface = surfaceId == 29;
+  let iriSurface = surfaceId == 30;
+  let carbonFinish = surfaceId == 31;   // bare weave OVER the livery colour
+  let paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface;
   if (classifiedCar) {
-    if (paintSurface || mirrorSurface) {
+    if (paintLike) {
       carPaint = D.mat1.w;
-      clearcoat = select(max(D.mat1.z, 0.85), D.mat1.z, paintSurface);
+      clearcoat = D.mat1.z;
+      if (mirrorSurface) { clearcoat = max(D.mat1.z, 0.85); }
+      if (iriSurface) { clearcoat = max(D.mat1.z, 0.70); }
+      if (satinMetalSurface) { clearcoat = min(D.mat1.z, 0.25); }
     } else {
       carPaint = 0.0;
       clearcoat = select(0.0, D.mat1.z * 0.45, glassSurface);
+      if (matteSurface) { clearcoat = 0.0; }
     }
   }
   let envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;
@@ -924,24 +936,32 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (classifiedCar) {
     metalness = select(0.0, max(D.mat0.w, 0.78), metalSurface);
     if (mirrorSurface) { metalness = max(D.mat0.w, 0.55); }
-    if (carbonSurface) { metalness = 0.08; }
+    if (carbonSurface || carbonFinish) { metalness = 0.08; }
     // PAINT gets metalness rather than the 0.0 base — mirrors
     // js/render/shaders/lit.js. tables.js sets 0.12 on every PAINT_* for the
     // metallic-flake tint; the 0.0 discarded it and left CAR METALLIC dead.
     if (paintSurface) { metalness = D.mat0.w; }
+    if (satinMetalSurface) { metalness = max(D.mat0.w, 0.60); }
+    if (iriSurface) { metalness = max(D.mat0.w, 0.25); }
+    if (matteSurface) { metalness = 0.0; }
     if (rubberSurface) { specular = 0.18; }
     if (metalSurface || mirrorSurface) { specular = 1.0; }
-    if (carbonSurface) { specular = 0.48; }
+    if (carbonSurface || carbonFinish) { specular = 0.48; }
     if (panelSurface) { specular = 0.35; }
-    emissive = select(0.0, D.mat0.x, paintSurface);
+    if (satinMetalSurface) { specular = 0.82; }
+    if (matteSurface) { specular = 0.16; }
+    emissive = select(0.0, D.mat0.x, paintLike);
     if (emissiveSurface) { emissive = max(D.mat0.x, 1.0); }
-    if (carbonSurface) { rough = max(rough, 0.56); }
+    if (carbonSurface || carbonFinish) { rough = max(rough, 0.56); }
     if (rubberSurface) { rough = max(rough, 0.90); }
     if (metalSurface) { rough = min(rough, 0.16); }
     if (glassSurface) { rough = min(rough, 0.13); }
     if (emissiveSurface) { rough = max(rough, 0.32); }
     if (panelSurface) { rough = max(rough, 0.72); }
     if (mirrorSurface) { rough = min(rough, 0.09); }
+    if (matteSurface) { rough = max(rough, 0.88); }
+    if (satinMetalSurface) { rough = clamp(rough, 0.24, 0.40); }
+    if (iriSurface) { rough = min(rough, 0.22); }
   }
   // [Block 1b] Procedural ground ALBEDO grain (mirrors GLX LIT_FS js/render/shaders/lit.js):
   // coarse+fine value-noise grain + repair-patch tint/roughness + sparse crack lines.
@@ -965,6 +985,28 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
               * smoothstep(0.40, 0.70, svnoise(wp * 0.11 + vec2<f32>(7.7)));
     albedo = albedo * (1.0 - crack * 0.30 * crackFade * min(detail * 4.0, 1.0));
     albedo = max(albedo, vec3<f32>(0.0));
+  }
+  // PEARLESCENT / FLIP PAINT (mirrors js/render/shaders/lit.js). Interference
+  // flakes reflect a wavelength that depends on view angle, approximated by
+  // rotating albedo through a cosine palette driven by the Fresnel term. No
+  // derivative and no texture, so it is uniform-control-flow safe and stable
+  // under motion; face-on it returns the livery's own colour.
+  // CARBON FINISH (mirrors js/render/shaders/lit.js): crush the livery colour
+  // toward dark resin and lay a fine cross-hatch over it, keeping a trace of
+  // the team tint. sin*sin, so no derivative and no control-flow hazard.
+  if (carbonFinish) {
+    let wv = in.objPos.xz * 190.0 + vec2<f32>(in.objPos.y * 190.0);
+    let weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y);
+    albedo = mix(albedo * 0.16 + vec3<f32>(0.030, 0.031, 0.035), albedo * 0.28, vec3<f32>(0.25));
+    albedo = albedo * (0.86 + 0.28 * weave);
+  }
+  if (iriSurface) {
+    let fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
+    let shift = 0.5 + 0.5 * cos(6.2831853 * (vec3<f32>(0.0, 0.33, 0.67) + vec3<f32>(fres * 1.4)));
+    // MULTIPLY the base colour, do not mix toward the interference colour — a
+    // pearl coat tints what is under it. Mixing at 0.75 turned a Ferrari mint.
+    albedo = albedo * mix(vec3<f32>(1.0), 0.60 + 0.80 * shift,
+                          vec3<f32>(smoothstep(0.30, 0.92, fres) * 0.40));
     rough = clamp(rough + (patchM - 0.5) * 0.16 * min(detail * 4.0, 1.0), 0.04, 1.0);
   }
   applyMaterial(i32(vMatId + 0.5), &albedo, &rough, vDist, in.wpos, in.nrm, fwWpos, litPack, packOn);

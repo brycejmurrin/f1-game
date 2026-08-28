@@ -89,8 +89,12 @@
             addBox(stage, vadd(a.c, a.u, 5.6), [34, 11.2, 92], PALE, b);
             addBox(stage, vadd(vadd(a.c, a.r, -17.2), a.u, 6.2), [0.6, 7.2, 78], GLASS, b);
             addBox(stage, vadd(vadd(a.c, a.r, -17.6), a.u, 2.2), [0.5, 1.0, 80], TRIM, b);
+            // The vault runs ALONG the 92 m hall, so its axis — addCyl's SECOND
+            // basis vector, the one a vertical pole puts on a.u — must be a.t.
+            // As [a.u, a.r, a.t] the axis was a.r and the tube extruded 92 m
+            // sideways across the park instead of roofing the hall under it.
             addCyl(stage, vadd(a.c, a.u, 10.4), 8.2, 92, PALE_D, 12,
-                   [a.u, a.r, a.t]);
+                   [a.u, a.t, a.r]);
             addBox(stage, vadd(a.c, a.u, 11.4), [36, 0.5, 93], PALE_D, b);
             // Diving hall — the tall blank box breaking the roofline.
             const dc = vadd(a.c, a.t, -38);

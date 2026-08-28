@@ -1,7 +1,13 @@
 "use strict";
 /* Apex 26 — Parts catalog and stat helpers. Twelve upgrade categories; supplier-locked options fall back via getMods/getCost; statMult() maps 0–100 team stats to 0.85–1.00; visualTier drives Car3D geometry only; SIGNATURE options clone `equivalent` for mesh identity — see FACTORY_PRESETS. */
 const Parts = (function () {
-  const BUDGET = 600;
+  // 600 held while the catalog was 285 options; the thin categories have since
+  // been filled out (floor, cockpit, exhaust and wheels gained three each), and
+  // more chips competing for the same spend just crowds the existing ones out.
+  // 780 is ~30% more room, which is NOT enough to fit a good part everywhere —
+  // one top option per category still totals ~2340 — so the choice stays a real
+  // trade-off rather than becoming a shopping list.
+  const BUDGET = 780;
 
   const CATALOG = [
     {
@@ -306,7 +312,7 @@ const Parts = (function () {
         { id: "sig_audi_gbox", label: "Neuburg Gearcase", cost: 90, teams: ["audi"], tag: "SIGNATURE", equivalent: "sequential_pro",
           desc: "Audi signature gearcase — Sequential Pro performance with a 5-strake diffuser", speed: 1.02, accel: 1.07, visual: { strakes: 5, fin: 1, strakeH: 0.18, finSY: 0.17, finSZ: 0.32, casing: 2, louvres: 4, heat: 1, caseWidth: 1.12 , heatFins: 2, ribs: 2}, visualTier: 2 },
         { id: "sig_astonmartin_gbox", label: "Silverstone Gearcase", cost: 180, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "f1_spec",
-          desc: "Aston Martin signature gearcase — F1 Spec performance with a 5-strake diffuser", speed: 1.04, accel: 1.1, cornering: 1.03, visual: { strakes: 5, fin: 1, strakeH: 0.224, finSY: 0.22, finSZ: 0.4, casing: 3, louvres: 5, heat: 1, caseWidth: 1.04 }, visualTier: 2 },
+          desc: "Aston Martin signature gearcase — F1 Spec performance with a 5-strake diffuser", speed: 1.04, accel: 1.1, cornering: 1.03, visual: { strakes: 5, fin: 1, strakeH: 0.224, finSY: 0.24, finSZ: 0.36, casing: 2, louvres: 6, heat: 1, caseWidth: 1.04, heatFins: 4, ribs: 2 }, visualTier: 2 },
         { id: "sig_cadillac_gbox", label: "Detroit Gearcase", cost: 130, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "carbon_case",
           desc: "Cadillac signature gearcase — Carbon Case performance with a 3-strake diffuser", speed: 1.02, accel: 1.08, cornering: 1.02, visual: { strakes: 3, fin: 1, strakeH: 0.205, finSY: 0.15, finSZ: 0.3, casing: 3, louvres: 2, heat: 1, caseWidth: 1.16 }, visualTier: 2 },
       ],
@@ -359,6 +365,9 @@ const Parts = (function () {
         { id: "twin_gate",  label: "Twin Wastegate", cost: 110, desc: "Twin wastegate stacks — sharper boost response out of slow corners",          speed: 1.01, accel: 1.07, visual: { pipes: null, bore: 1.10, flare: 0, wastegate: 2, wrap: 1 , lip: 1}, visualTier: 2 },
         { id: "inconel",    label: "Inconel Race",   cost: 140, desc: "Thin-wall Inconel system — mass saving with a broad power gain",              speed: 1.04, accel: 1.05, visual: { pipes: 3, bore: 1.05, flare: 0, wastegate: 0, wrap: 1 , lip: 2, shield: 1}, visualTier: 2 },
         { id: "tri_exit",   label: "Tri-Exit",       cost: 170, desc: "Three-pipe exit — the classic scavenging layout in race trim",                speed: 1.04, accel: 1.07, visual: { pipes: 3, bore: 1.16, flare: 0.5, wastegate: 2, wrap: 0 , lip: 1, shield: 1}, visualTier: 2 },
+        { id: "wrapped_single", label: "Wrapped Single",  cost:  45, desc: "Single wrapped pipe — heat kept off the bodywork, modest gain", accel: 1.04, visual: { pipes: 1, bore: 1.04, flare: 0, wastegate: 0, wrap: 1, shield: 1 }, visualTier: 1 },
+        { id: "flared_gate",   label: "Flared Wastegate", cost: 125, desc: "Flared tailpipe over a twin wastegate — strong mid-range, noisy and hot", speed: 1.03, accel: 1.07, visual: { pipes: 1, bore: 1.206, flare: 1, wastegate: 2, wrap: 0, lip: 2, shield: 1 }, visualTier: 2 },
+        { id: "shielded_tri",  label: "Shielded Tri-Exit", cost: 185, desc: "Three shielded exits on a wide bore — top-end power without cooking the floor", speed: 1.05, accel: 1.06, cornering: 1.01, visual: { pipes: 3, bore: 1.378, flare: 0.5, wastegate: 2, wrap: 1, lip: 2, shield: 1 }, visualTier: 2 },
         { id: "hyper_scav", label: "Hyper Scavenge", cost: 200, desc: "Pulse-tuned scavenging — peak flow at every point in the rev range",          speed: 1.05, accel: 1.08, visual: { pipes: 3, bore: 1.30, flare: 1, wastegate: 2, wrap: 1 }, visualTier: 2 },
         { id: "sig_mercedes_exh", label: "Brackley Exhaust", cost: 60, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "free_flow",
           desc: "Mercedes signature exhaust — Free Flow performance with a flared megaphone tip", speed: 1.03, accel: 1.03, visual: { pipes: 1, bore: 1.121, flare: 0.5, wastegate: 0, wrap: 0 , lip: 2, shield: 1}, visualTier: 1 },
@@ -393,11 +402,14 @@ const Parts = (function () {
         { id: "ti_skids",    label: "Titanium Skids", cost:  60, desc: "Titanium skid blocks — run the plank lower without wearing it through",        cornering: 1.04, braking: 1.04, visual: { fences: 5, fenceH: 1, skid: 2, edgeLip: 0 }, visualTier: 1 },
         { id: "fence_array", label: "Fence Array",    cost:  90, desc: "Full fence array — keeps the floor sealed when the car is yawed",              speed: 0.98, cornering: 1.10, visual: { fences: 6, fenceH: 1.3, skid: 0, edgeLip: 0.3 , plank: 1, gurney: 1, scroll: 1}, visualTier: 2 },
         { id: "edge_wing",   label: "Edge Wing",      cost: 120, desc: "Floor-edge wing — extra load for a modest drag penalty",                       speed: 0.98, cornering: 1.13, braking: 1.02, visual: { fences: 5, fenceH: 1.2, skid: 1, edgeLip: 1 , gurney: 1}, visualTier: 2 },
+        { id: "step_plank",    label: "Stepped Plank",   cost:  35, desc: "Thicker plank on a stepped reference — kinder to a bumpy kerb, a touch of drag", cornering: 1.03, braking: 1.02, speed: 0.99, visual: { fences: 4, fenceH: 1.05, skid: 1, edgeLip: 0.3, plank: 1 }, visualTier: 1 },
+        { id: "gurney_edge",   label: "Gurney Edge",     cost:  80, desc: "A gurney along the floor edge — cheap rear load at the cost of straight-line speed", cornering: 1.09, speed: 0.97, visual: { fences: 5, fenceH: 1.24, skid: 1, edgeLip: 0.55, gurney: 1, plank: 1 }, visualTier: 2 },
+        { id: "scroll_floor",  label: "Scrolled Floor",  cost: 145, desc: "Rolled outer floor with a scrolled leading edge — high load, fragile in dirty air", cornering: 1.14, braking: 1.05, speed: 0.965, visual: { fences: 6, fenceH: 1.40, skid: 2, edgeLip: 0.75, scroll: 1, gurney: 1, plank: 1 }, visualTier: 2 },
         { id: "venturi",     label: "Venturi Floor",  cost: 190, desc: "Full venturi package — maximum underbody load at every speed",                 speed: 0.96, cornering: 1.16, braking: 1.04, visual: { fences: 6, fenceH: 1.45, skid: 2, edgeLip: 1 , plank: 1, scroll: 1}, visualTier: 2 },
         { id: "sig_mercedes_floor", label: "Brackley Floor", cost: 120, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "edge_wing",
           desc: "Mercedes signature floor — Edge Wing performance with a 5-fence floor edge on titanium skids", speed: 0.98, cornering: 1.13, braking: 1.02, visual: { fences: 5, fenceH: 1.164, skid: 1, edgeLip: 1 , plank: 1}, visualTier: 2 },
         { id: "sig_ferrari_floor", label: "Maranello Floor", cost: 190, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "venturi",
-          desc: "Ferrari signature floor — Venturi Floor performance with a 6-fence floor edge on titanium skids", speed: 0.96, cornering: 1.16, braking: 1.04, visual: { fences: 6, fenceH: 1.523, skid: 2, edgeLip: 1 , plank: 1}, visualTier: 2 },
+          desc: "Ferrari signature floor — Venturi Floor performance with a 6-fence floor edge on titanium skids", speed: 0.96, cornering: 1.16, braking: 1.04, visual: { fences: 6, fenceH: 1.523, skid: 2, edgeLip: 0.75, plank: 1, gurney: 1 }, visualTier: 2 },
         { id: "sig_mclaren_floor", label: "Woking Floor", cost: 190, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "venturi",
           desc: "McLaren signature floor — Venturi Floor performance with a 6-fence floor edge on titanium skids", speed: 0.96, cornering: 1.16, braking: 1.04, visual: { fences: 6, fenceH: 1.378, skid: 1, edgeLip: 1 , plank: 1}, visualTier: 2 },
         { id: "sig_redbull_floor", label: "Milton Keynes Floor", cost: 90, teams: ["redbull"], tag: "SIGNATURE", equivalent: "fence_array",
@@ -409,7 +421,7 @@ const Parts = (function () {
         { id: "sig_haas_floor", label: "Kannapolis Floor", cost: 0, teams: ["haas"], tag: "SIGNATURE", equivalent: "stripped",
           desc: "Haas signature floor — Stripped performance with bare titanium skids and no fences", speed: 1.04, cornering: 0.9, visual: { fences: 0, fenceH: 1.04, skid: 2, edgeLip: 0 , plank: 1, gurney: 1}, visualTier: 0 },
         { id: "sig_williams_floor", label: "Grove Floor", cost: 0, teams: ["williams"], tag: "SIGNATURE", equivalent: "stripped",
-          desc: "Williams signature floor — Stripped performance with a stripped floor edge", speed: 1.04, cornering: 0.9, visual: { fences: 0, fenceH: 0.94, skid: 1, edgeLip: 0 }, visualTier: 0 },
+          desc: "Williams signature floor — Stripped performance with a stripped floor edge", speed: 1.04, cornering: 0.9, visual: { fences: 4, fenceH: 0.94, skid: 1, edgeLip: 0.3, plank: 1 }, visualTier: 0 },
         { id: "sig_audi_floor", label: "Neuburg Floor", cost: 50, teams: ["audi"], tag: "SIGNATURE", equivalent: "sealed_edge",
           desc: "Audi signature floor — Sealed Edge performance with a 5-fence floor edge on titanium skids", speed: 0.99, cornering: 1.06, visual: { fences: 5, fenceH: 1.253, skid: 2, edgeLip: 0.75 }, visualTier: 1 },
         { id: "sig_astonmartin_floor", label: "Silverstone Floor", cost: 120, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "edge_wing",
@@ -427,11 +439,14 @@ const Parts = (function () {
         { id: "deflector",  label: "Deflector",     cost:  60, desc: "Cockpit deflector — steadier air over the driver at speed",                  speed: 1.03, braking: 1.02, visual: { headrest: 1, haloBlade: 1, haloWing: 0, camPods: 1, screen: 1 }, visualTier: 2 },
         { id: "halo_wing",  label: "Halo Wing",     cost: 110, desc: "Upper halo flap — real downforce from the cockpit structure itself",         speed: 0.99, cornering: 1.07, visual: { headrest: 2, haloBlade: 1, haloWing: 1, camPods: 1, screen: 0 }, visualTier: 2 },
         { id: "full_shroud",label: "Full Shroud",   cost: 160, desc: "Fully faired halo with flap and deflector — the complete cockpit package",   speed: 1.01, cornering: 1.08, braking: 1.02, visual: { halo: 2, headrest: 2, haloBlade: 2, haloWing: 1, camPods: 2, screen: 1 }, visualTier: 2 },
+        { id: "open_cell",     label: "Open Cell",       cost:  20, desc: "Stripped surround — the lightest legal cockpit, no shrouding at all", accel: 1.03, cornering: 0.99, visual: { halo: 1, headrest: 0, haloBlade: 0, haloWing: 0, camPods: 0, screen: 0 }, visualTier: 0 },
+        { id: "twin_pod_screen", label: "Twin Pod Screen", cost:  75, desc: "Twin camera pods either side of a raised screen — steadier air over the airbox", speed: 1.02, cornering: 1.03, visual: { halo: 1, headrest: 1, haloBlade: 1, haloWing: 0, camPods: 2, screen: 1 }, visualTier: 1 },
+        { id: "winged_shroud", label: "Winged Shroud",   cost: 140, desc: "Faired halo with an upper flap and a deep headrest — the most worked cockpit on the grid", speed: 1.03, cornering: 1.07, braking: 1.02, visual: { halo: 2, headrest: 2, haloBlade: 2, haloWing: 1, camPods: 1, screen: 1 }, visualTier: 2 },
         { id: "halo_fence", label: "Fenced Halo",   cost:  90, desc: "Crest vanes along the halo crown — conditions the flow into the airbox",   speed: 0.98, cornering: 1.05, visual: { halo: 2, headrest: 1, haloBlade: 0, haloWing: 0, camPods: 0, screen: 0 }, visualTier: 2 },
         { id: "sig_mercedes_cpit", label: "Brackley Cockpit", cost: 110, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "halo_wing",
           desc: "Mercedes signature cockpit — Halo Wing performance with a bladed halo", speed: 0.99, cornering: 1.07, visual: { halo: 1, headrest: 1, haloBlade: 2, haloWing: 1, camPods: 1, screen: 0 }, visualTier: 2 },
         { id: "sig_ferrari_cpit", label: "Maranello Cockpit", cost: 160, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "full_shroud",
-          desc: "Ferrari signature cockpit — Full Shroud performance with a fully faired halo and an upper flap", speed: 1.01, cornering: 1.08, braking: 1.02, visual: { halo: 2, headrest: 2, haloBlade: 2, haloWing: 1, camPods: 0, screen: 1 }, visualTier: 2 },
+          desc: "Ferrari signature cockpit — Full Shroud performance with a fully faired halo and an upper flap", speed: 1.01, cornering: 1.08, braking: 1.02, visual: { halo: 2, headrest: 1, haloBlade: 2, haloWing: 1, camPods: 0, screen: 0 }, visualTier: 2 },
         { id: "sig_mclaren_cpit", label: "Woking Cockpit", cost: 110, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "halo_wing",
           desc: "McLaren signature cockpit — Halo Wing performance with a bladed halo and an upper flap", speed: 0.99, cornering: 1.07, visual: { halo: 0, headrest: 2, haloBlade: 1, haloWing: 1, camPods: 2, screen: 1 }, visualTier: 2 },
         { id: "sig_redbull_cpit", label: "Milton Keynes Cockpit", cost: 60, teams: ["redbull"], tag: "SIGNATURE", equivalent: "deflector",
@@ -445,7 +460,7 @@ const Parts = (function () {
         { id: "sig_williams_cpit", label: "Grove Cockpit", cost: 40, teams: ["williams"], tag: "SIGNATURE", equivalent: "faired_halo",
           desc: "Williams signature cockpit — Faired Halo performance with a bladed halo", speed: 1.02, visual: { halo: 2, headrest: 0, haloBlade: 1, haloWing: 0, camPods: 2, screen: 1 }, visualTier: 1 },
         { id: "sig_audi_cpit", label: "Neuburg Cockpit", cost: 60, teams: ["audi"], tag: "SIGNATURE", equivalent: "deflector",
-          desc: "Audi signature cockpit — Deflector performance with a fully faired halo", speed: 1.03, braking: 1.02, visual: { halo: 2, headrest: 1, haloBlade: 2, haloWing: 0, camPods: 1, screen: 1 }, visualTier: 2 },
+          desc: "Audi signature cockpit — Deflector performance with a fully faired halo", speed: 1.03, braking: 1.02, visual: { halo: 2, headrest: 2, haloBlade: 2, haloWing: 1, camPods: 2, screen: 0 }, visualTier: 2 },
         { id: "sig_astonmartin_cpit", label: "Silverstone Cockpit", cost: 160, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "full_shroud",
           desc: "Aston Martin signature cockpit — Full Shroud performance with a fully faired halo and an upper flap", speed: 1.01, cornering: 1.08, braking: 1.02, visual: { halo: 1, headrest: 1, haloBlade: 2, haloWing: 1, camPods: 1, screen: 1 }, visualTier: 2 },
         { id: "sig_cadillac_cpit", label: "Detroit Cockpit", cost: 30, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "twin_cam",
@@ -462,11 +477,14 @@ const Parts = (function () {
         { id: "mag_forged",label: "Forged Mag",   cost: 110, desc: "Forged magnesium rim — real unsprung mass saved at every corner",           accel: 1.05, braking: 1.05, cornering: 1.03, visual: { deflector: 1, spokes: 8, tape: 0, dish: 1, nut: [0.60, 0.55, 0.30] }, visualTier: 2 },
         { id: "aero_disc", label: "Aero Disc",    cost: 130, desc: "Fully dished aero disc — top speed at the cost of brake cooling",           speed: 1.05, braking: 0.98, visual: { deflector: 1, spokes: 0, tape: 1, dish: 2, nut: [0.15, 0.60, 0.95] , gunNut: 1}, visualTier: 2 },
         { id: "works_rim", label: "Works Rim",    cost: 170, desc: "Works-spec rim package — the complete wheel, and it looks it",              speed: 1.03, accel: 1.04, cornering: 1.04, braking: 1.04, visual: { deflector: 2, spokes: 6, tape: 1, dish: 2, nut: [0.98, 0.62, 0.05] , gunNut: 1}, visualTier: 2 },
+        { id: "open_spoke",    label: "Open Spoke",      cost:  35, desc: "Eight open spokes — brake cooling at the price of a little wake", braking: 1.05, speed: 0.99, visual: { spokes: 8, tape: 0, dish: 0, gunNut: 1, deflector: 0 }, visualTier: 1 },
+        { id: "taped_dish",    label: "Taped Dish",      cost:  85, desc: "Fully taped dished face — clean outwash, runs the brakes hotter", speed: 1.04, cornering: 1.02, braking: 0.98, visual: { spokes: 0, tape: 1, dish: 2, gunNut: 1, deflector: 1 }, visualTier: 2 },
+        { id: "deflector_max", label: "Deflector Max",   cost: 155, desc: "Full deflector set over a taped rim — the most aero wheel available", speed: 1.05, cornering: 1.05, braking: 0.985, visual: { spokes: 0, tape: 1, dish: 1, gunNut: 1, deflector: 2 }, visualTier: 2 },
         { id: "deflector_kit", label: "Deflector Kit", cost: 100, desc: "Biplane over-wheel deflectors with endplates — tames the front tyre wake", speed: 0.99, cornering: 1.04, braking: 1.02, visual: { deflector: 2, spokes: 3, tape: 0, dish: 0, nut: [0.30, 0.85, 0.45], gunNut: 1 }, visualTier: 2 },
         { id: "sig_mercedes_rim", label: "Brackley Rim", cost: 110, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "mag_forged",
           desc: "Mercedes signature rim — Forged Mag performance with a 7-spoke rim with a banded shoulder", accel: 1.05, cornering: 1.03, braking: 1.05, visual: { deflector: 1, spokes: 7, tape: 1, dish: 1, nut: [0, 0.75, 0.7] , gunNut: 1}, visualTier: 2 },
         { id: "sig_ferrari_rim", label: "Maranello Rim", cost: 170, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "works_rim",
-          desc: "Ferrari signature rim — Works Rim performance with a plain rim with a banded shoulder", speed: 1.03, accel: 1.04, cornering: 1.04, braking: 1.04, visual: { deflector: 2, spokes: 0, tape: 1, dish: 2, nut: [0.95, 0.05, 0.04] , gunNut: 1}, visualTier: 2 },
+          desc: "Ferrari signature rim — Works Rim performance with a plain rim with a banded shoulder", speed: 1.03, accel: 1.04, cornering: 1.04, braking: 1.04, visual: { deflector: 1, spokes: 0, tape: 0, dish: 1, nut: [0.95, 0.05, 0.04], gunNut: 1 }, visualTier: 2 },
         { id: "sig_mclaren_rim", label: "Woking Rim", cost: 170, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "works_rim",
           desc: "McLaren signature rim — Works Rim performance with a 8-spoke rim with a banded shoulder", speed: 1.03, accel: 1.04, cornering: 1.04, braking: 1.04, visual: { deflector: 2, spokes: 8, tape: 1, dish: 1, nut: [1, 0.5, 0] , gunNut: 1}, visualTier: 2 },
         { id: "sig_redbull_rim", label: "Milton Keynes Rim", cost: 40, teams: ["redbull"], tag: "SIGNATURE", equivalent: "spoked",
@@ -637,6 +655,23 @@ const Parts = (function () {
     return 0.85 + (stat / 100) * 0.15;
   }
 
+  // The four headline stats and the curve that turns a raw (base * mods) figure
+  // into the number a player is shown. It lives HERE rather than in the garage
+  // panel because it now has two readers — the DOM panel and the in-world stats
+  // board on the bay wall — and two copies of a display curve is exactly how
+  // the same car ends up quoting two different numbers.
+  const STAT_KEYS = Object.freeze([
+    Object.freeze({ key: "speed", label: "SPEED" }),
+    Object.freeze({ key: "accel", label: "ACCEL" }),
+    Object.freeze({ key: "cornering", label: "CORNERING" }),
+    Object.freeze({ key: "braking", label: "BRAKING" }),
+  ]);
+  const STAT_KNEE = 100, STAT_CAP = 120, STAT_KNEE_SCALE = 26;
+  function displayStat(raw) {
+    if (raw <= STAT_KNEE) return raw;
+    return STAT_KNEE + (STAT_CAP - STAT_KNEE) * (1 - Math.exp(-(raw - STAT_KNEE) / STAT_KNEE_SCALE));
+  }
+
   const AERO_SPAN = (function () {
     const cat = CATALOG.find((c) => c.id === "aero");
     let lo = Infinity, hi = -Infinity;
@@ -697,6 +732,6 @@ const Parts = (function () {
     CATALOG, DEFAULTS, FACTORY_PRESETS, VISUAL_FIELD_REGISTRY, BUDGET,
     resolveSetup, isOptionAvailable,
     getFactorySetup, factoryKey,
-    getMods, getCost, getVisualTiers, statMult, aeroLoad, ersProfile,
+    getMods, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile,
   };
 })();

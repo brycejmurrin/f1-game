@@ -791,7 +791,7 @@ const WGX = (function () {
     // Per-chunk lamp state: knob + full baked set (frame fields, cleared by
     // day), the trackLightSBO generation, and the chunkIdxSBO segment
     // allocator (WeakMap chunks-array -> {base, table} + append cursor).
-    let framePerChunk = 0, frameAllLights = null;
+    let framePerChunk = 0, frameAllLights = null, frameRoadChunkLamps = 0;
     let _tlSrc = null, _tlKnob = -1;
     let _ciCursor = 0, _ciSeg = new WeakMap();
     const _tlScratch = new Float32Array(TRACK_LIGHT_CAP * 16);
@@ -3135,6 +3135,7 @@ const WGX = (function () {
       frameEye = f.eye || null;
       frameCullDist = f.cullDist || 0;
       framePerChunk = +f.perChunkLights || 0;
+      frameRoadChunkLamps = +f.roadChunkLamps || 0;
       frameAllLights = f.allLights || null;
       // (Re)upload the baked track set when the (lights identity, knob) pair
       // moves — rgb × knob applied here ONCE (per-chunk sets render raw baked
@@ -3472,7 +3473,13 @@ const WGX = (function () {
       // This branch sits ABOVE the !cull fast path: a frame without a
       // viewProj (menu orbit, headless) must still light per-chunk when the
       // mode is on — it just draws every chunk instead of the visible ones.
-      if (framePerChunk > 0 && frameAllLights && typeof LampChunks !== "undefined") {
+      // The ROAD (surfaceId 16) only takes per-chunk lamp SETS when PER-CHUNK
+      // ROAD asks for it — it is chunked on most devices for the cull alone.
+      // The AABB lamp-mask path below is unaffected: that is an output-
+      // preserving cull, not a change of which lamps light the road.
+      const _perChunkOK = framePerChunk > 0 &&
+        !(o.surfaceId === 16 && !frameRoadChunkLamps);
+      if (_perChunkOK && frameAllLights && typeof LampChunks !== "undefined") {
         let seg = _ciSeg.get(chunks);
         const table = LampChunks.resolve(frameAllLights, chunks, framePerChunk);
         if (!seg || seg.table !== table) {
