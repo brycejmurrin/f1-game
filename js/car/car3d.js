@@ -1433,13 +1433,28 @@ const Car3D = (function () {
       sections.push({ name, from: at, to: at });
     };
     const c1 = color  || [0.8, 0.05, 0.05];
-    const c2 = color2 || [0.9, 0.9, 0.1];
+    // COCKPIT accent dimming — the wheel has always done this (getCockpitWheel
+    // tints livery to 40-45%); the body trim needs it too. Accent elements sit
+    // 0.8-2.9 m from the eye over a big solid angle, so a near-white accent
+    // (ferrari's c2 IS [1,1,1]) stops reading as a stripe and becomes a flat
+    // pale slab: 75 of 6095 view rays landed on pure white before this
+    // (artifacts/pale-sweep.mjs). The darkest channel decides, so a SATURATED
+    // accent keeps its identity and only white/silver comes down. External
+    // cameras always get the full-strength livery.
+    const _ckAcc = (c) => {
+      if (!(opts && opts.cockpit) || !c) return c;
+      const mn = Math.min(c[0], c[1], c[2]);
+      if (mn < 0.45) return c;
+      const k = 0.42 / mn;
+      return [c[0] * k, c[1] * k, c[2] * k];
+    };
+    const c2 = _ckAcc(color2 || [0.9, 0.9, 0.1]);
     const liv = (opts && opts.livery) || {};
-    const accentC = liv.accent || c2;
+    const accentC = _ckAcc(liv.accent) || c2;
     const noseC = liv.nose || null;
     const podC  = liv.pod  || null;
-    const wingC = liv.wing || c2;   // flap colour (front + rear) — c2 keeps today's look
-    const finC  = liv.fin  || c2;   // shark-fin plate — c2 keeps today's look
+    const wingC = _ckAcc(liv.wing) || c2;   // flap colour (front + rear) — c2 keeps today's look
+    const finC  = _ckAcc(liv.fin) || c2;   // shark-fin plate — c2 keeps today's look
     const haloTint = liv.halo || null;
     const T = (opts && opts.parts) || {};
     const tier = (id) => T[id] != null ? T[id] : 1;
@@ -1793,7 +1808,11 @@ const Car3D = (function () {
     // the accent band holds the strip (yFrac 0.08..0.30), the board holds titleA
     // (0.32..0.80), and the accentC flash below sits at 0.88 with its lower edge
     // no deeper than 0.8195 at any station. Clean gaps at every station.
-    addPodFlankSpan(0.46, -0.34, 0.56, 0.48, PANEL, null, 0.008, true);
+    // PANEL is a fixed pale grey and in cockpit the board carries NO decal
+    // (drawCarDecals swaps in the nose-number quad), so it is a bare light
+    // panel on the near plane. Its sibling flash is !ckpt-gated; this was not.
+    // External keeps it — it is the substrate titleA is inked on.
+    if (!ckpt) addPodFlankSpan(0.46, -0.34, 0.56, 0.48, PANEL, null, 0.008, true);
     addPodFlankSpan(0.46, -0.34, 0.19, 0.22, c2, null, 0.008, true);
 
     // ERS: a color-coded ENERGY-CELL strip on the coke-bottle shoulder, plus a
@@ -2215,7 +2234,13 @@ const Car3D = (function () {
         [xIn, hy0, mz + 0.03], [xOut, hy0, mz + 0.03 + toe], [xOut, hy1, mz + 0.03 + toe], [xIn, hy1, mz + 0.03],
       ], [0.09, 0.09, 0.11], null, SURFACES.carbon);
       addBox(out, s*mx, mY, mz - 0.032, mW * 0.97, mH * 0.80, 0.012, [0.10, 0.11, 0.14], SURFACES.glass); // bezel / surround
-      addBox(out, s*mx, mY, mz - 0.038, 0.200, 0.050, 0.008, [0.46, 0.56, 0.78], SURFACES.glass); // reflective surface, C14.2.2b
+      // glass clamps roughness <=0.13 and adds an env lobe, so this colour is a
+      // FLOOR the sky stacks on. From chase the periwinkle reads as a bright
+      // mirror (wanted); from the cockpit the pair sits 1.2 m out at +-30 deg
+      // and the same wash reads as two blank pale boxes flanking the wheel
+      // (21 of 6095 view rays). Dark glass keeps the sheen, drops the slab.
+      addBox(out, s*mx, mY, mz - 0.038, 0.200, 0.050, 0.008,
+             ckpt ? [0.10, 0.12, 0.17] : [0.46, 0.56, 0.78], SURFACES.glass); // reflective surface, C14.2.2b
       if (!ckpt) {
         // Top winglet + the C3.7.5 OUTER stay down to the tub shoulder — the
         // two details every 2026 housing carries.
