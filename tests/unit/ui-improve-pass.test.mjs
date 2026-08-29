@@ -283,8 +283,15 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
   assert.match(tuner, /\[data-density="compact"\]\[data-rail="off"\] #lt-head \{[^}]*display: block/);
   assert.match(tuner, /\[data-density="compact"\]\s*\{[^}]*overflow:\s*hidden/);
   assert.match(tuner, /\[data-density="compact"\] \.adv-help\s*\{\s*display:\s*none/);
-  assert.match(tuner, /max-height:\s*min\(calc\(28 \* var\(--svhz\)/,
+  // The invariant is the UNIT, not the number: this box lives inside
+  // `zoom: var(--ui-scale)`, so a viewport svh max ate slider rows at UI SIZE
+  // 200%. The multiplier is free to move with the payload — it went 28 -> 38
+  // when COPY VALUES stopped exporting 182,569 characters and started
+  // exporting only the player's own overrides, which the box can now show.
+  assert.match(tuner, /max-height:\s*min\(calc\(\d+ \* var\(--svhz\)/,
     "COPY VALUES box uses local --svhz, not 40svh");
+  assert.doesNotMatch(tuner, /#lt-json[\s\S]{0,400}?max-height:[^;]*\d+svh/,
+    "and never a raw viewport svh");
   assert.match(tuner, /#lt-head h2, #ct-head/);
   assert.match(career, /#cr-inner\[data-density="compact"\] #cr-foot[\s\S]*?grid-template-columns/);
   assert.match(data, /body\[data-density="compact"\] \.dh-tab[\s\S]*?min-height:\s*var\(--tap-min\)/);
@@ -583,4 +590,75 @@ test("tool doors and lone foot actions do not stretch into banners", () => {
   assert.match(components, /#pmsettings-inner \.pm-groups > \[role="tabpanel"\] button \{[\s\S]*?white-space:\s*normal/);
   assert.match(read("css/overlays.css"), /@container sheet \(max-width: 360px\) \{\s*#howtoplay dl/);
   assert.match(read("css/career.css"), /\.cr-cheats \.sel-chip \{[\s\S]*?min-width:\s*0/);
+});
+
+/* LIGHTING TUNER → COPY VALUES: what it copies, and that the copy can succeed.
+ *
+ * Reported: the button leaves you trying to hand-select the text. Two causes,
+ * and the obvious one was not the main one.
+ *
+ * The payload was the file+local MERGE — measured at 805 conditions, 7,071
+ * knobs, 182,569 characters against the shipped light-presets.js. In a 10px
+ * textarea capped at 120px that is ~4,500 lines behind a 120px window: not hard
+ * to select, impossible. And it could never be pasted into a message either,
+ * which is the whole point of the button.
+ *
+ * The fallback was also engine-dependent, which is worse than broken because it
+ * works on the machine you test on. execCommand("copy") was only reached from
+ * the clipboard promise's REJECTION handler, a microtask later. Measured:
+ * Chromium keeps transient activation ~5 s, so the late call still copied and
+ * the OLD handler passed a clipboard read-back there. WebKit is documented as
+ * requiring the copy during gesture processing, which would make that the path
+ * that cannot fire on an iPhone — UNVERIFIED, this container's proxy blocks the
+ * WebKit download. Ordering the synchronous attempt first takes the engine out
+ * of the question without depending on which story is right. */
+test("COPY VALUES exports the player's edits under a name bake.mjs will refuse", () => {
+  const src = read("js/game/photomode.js");
+  const h = src.slice(src.indexOf('$("lt-copy").onclick'));
+  assert.match(h, /window\.LightEdits = \{/,
+    "the export must be a LightEdits DELTA — the name is the interlock that stops " +
+    "bake.mjs (a FULL REPLACE) from writing it and deleting every profile it omits");
+  assert.doesNotMatch(h, /window\.LightPresets\s*=/,
+    "and it must never wear the snapshot's name");
+  assert.match(h, /G\._ltStore/, "built from the local overrides, not the shipped file");
+  assert.doesNotMatch(h, /window\.LightPresets \|\| \{\}/,
+    "re-sending the shipped presets is 182,569 characters of noise — they are already in the repo");
+  // The player asked for their current condition first, then the rest.
+  assert.ok(h.indexOf("THIS CONDITION") > -1 && h.indexOf("EVERYTHING ELSE") > -1,
+    "both blocks are labelled for whoever reads the paste");
+  assert.ok(h.indexOf("THIS CONDITION") < h.indexOf("EVERYTHING ELSE"),
+    "the condition just tuned is emitted first");
+});
+
+test("COPY VALUES tries the synchronous copy while the click still has activation", () => {
+  const src = read("js/game/photomode.js");
+  const h = src.slice(src.indexOf('$("lt-copy").onclick'));
+  const sync = h.indexOf('document.execCommand("copy")');
+  const async_ = h.indexOf("navigator.clipboard");
+  assert.ok(sync > -1 && async_ > -1, "both copy paths must exist");
+  assert.ok(sync < async_,
+    "execCommand(\"copy\") must run BEFORE the clipboard promise. From inside its " +
+    "rejection handler it runs a microtask later — which Chromium still allows (~5 s of " +
+    "transient activation, measured) and WebKit is documented not to. Ordering it first " +
+    "is what stops the answer depending on the engine.");
+  assert.doesNotMatch(h, /\.then\([^)]*,\s*\(\)\s*=>\s*\{[\s\S]{0,120}execCommand/,
+    "and it must not go back into the rejection handler");
+});
+
+test("a lighting DELTA merges and an agent PROPOSAL replaces", () => {
+  // The two inputs mean different things inside one condition and conflating
+  // them loses data either way: a proposal is a considered whole profile (so it
+  // may drop a knob it decided against), a delta is the handful of sliders a
+  // person moved (so it may not delete the seven they did not touch).
+  const mp = read(".claude/skills/bake-lighting/merge-proposals.mjs");
+  assert.match(mp, /merged\[key\] = delta \? Object\.assign\(\{\}, merged\[key\], clean\) : clean;/,
+    "delta merges into the shipped map, proposal replaces it");
+  assert.match(mp, /if \(!delta\) delete merged\[key\];/,
+    "only a proposal may empty a condition — a paste must never wipe a profile it never mentioned");
+  assert.match(mp, /window\.LightPresets && !window\.LightEdits|w\.LightPresets && !w\.LightEdits/,
+    "a snapshot fed to the merge tool is named as such, not merged as a delta");
+  const bake = read(".claude/skills/bake-lighting/bake.mjs");
+  assert.match(bake, /LightEdits\\s\*=/,
+    "bake.mjs must detect a delta by name and refuse it — it is a full replace");
+  assert.match(bake, /merge-proposals\.mjs/, "and point at the tool that does take one");
 });
