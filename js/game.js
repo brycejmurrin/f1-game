@@ -7701,9 +7701,10 @@ function refreshCareerButton() {
   // line under it says what is behind it.
   if (label) label.textContent = "CAREER MODES";
   // The second line says WHICH career, because with up to three saved,
-  // "CONTINUE" on its own does not answer the only question that matters. Blank
-  // when there is nothing to continue — #mb-career-sub:empty collapses, so a first-time
-  // title screen is unchanged.
+  // "CONTINUE" on its own does not answer the only question that matters. The
+  // shell ships the no-save text so this only ever REWRITES a line that is
+  // already laid out — it used to ship empty and grow on boot, which was the
+  // menu's whole layout shift. docs/PERF-FINDINGS.md 4a.
   const sub = $("mb-career-sub");
   if (!sub) return;
   if (!c) { sub.textContent = "DRIVER CAREER  ·  MY TEAM"; return; }

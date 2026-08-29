@@ -1309,6 +1309,52 @@ shadow pass, same ring as `_flushDrawUBO`. Same pass also batched
 ~350 KB). DebrisWorld skips `world.step` when live bodies are asleep and
 no car is in `FURN_WAKE_M`, with JS despawn + panel `force = 0` hoisted.
 
+## 4a. The main-menu layout shift was a CSS rule defending a state that never happens (2026-08-29)
+
+Measured earlier this session: a **0.0681 layout shift at +784 ms** on the title
+screen, on top of the one already fixed by pre-painting `data-shape`.
+
+The culprit was `#mb-career-sub:empty { display: none; }` (`css/menus.css`),
+whose own comment explained it:
+
+> The live save line is empty (and therefore zero-height) until a save
+> exists, so a first-time title screen is exactly as it was.
+
+**That comment was stale against the code beside it.** `refreshCareerButton`
+(`js/game.js`) never leaves the line empty — a player with no save gets a
+literal:
+
+```js
+if (!c) { sub.textContent = "DRIVER CAREER  ·  MY TEAM"; return; }
+```
+
+So the "first-time player sees a blank line" state the rule was defending
+**does not exist for any player**. The rule could only ever apply in the window
+between first paint and game.js's tail running, where it collapsed the button —
+which then grew when the text arrived. The rule produced the exact shift it was
+written to prevent, and the stale comment is why it survived: reading it, the
+fix looked like it needed a design call about the first-time look.
+
+The fix needed no invention, because **the sibling button already did it
+right**. `#mb-season`, in the same row, ships its sub-label statically
+(`<span class="mb-sub">A CHAMPIONSHIP, YOUR RULES</span>`) and
+`seasonUi.refreshTitle()` only rewrites the button's own text node — a width
+change on one line, never a height change. CAREER was the only button in the
+row shipping an empty sub, and the `:empty` rule was written for it
+specifically (`#mb-career-sub`, not `.mb-sub`). Making CAREER match SEASON:
+
+- shell ships `DRIVER CAREER  ·  MY TEAM` inside the existing span (no new DOM
+  nodes, so the `NODE_CEILING` ratchet is untouched);
+- the `:empty` rule is replaced by one-line containment (`nowrap` + ellipsis),
+  so the longer returning-player string (`YOU · MERCEDES · 2026 R5 · 2 SAVED`)
+  cannot wrap and reintroduce a smaller shift.
+
+**The transferable lesson is about the comment, not the CSS.** A rule justified
+by a state the code makes unreachable is invisible to every test — nothing
+asserts "this selector still matches something" — and its comment actively
+argues against investigating it. When a comment explains why a defensive rule
+exists, check that the state it defends is still reachable.
+
 ## 4. Recorded negative results
 
 Do not re-investigate these; they were checked and are fine.
