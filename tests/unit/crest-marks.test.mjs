@@ -198,7 +198,16 @@ test("every mark clears MARK_FLOOR on every livery, on every surface it lands on
           if (best < LT.MARK_FLOOR)
             bad.push(`${team.id}/${liv.id}/${where} mark+halo ${best.toFixed(2)} on ${f.join()}`);
         }
-        if (LT.contrast(P.alt, under[0]) < 2.0 || LT.contrast(P.alt, P.mark) < 2.0)
+        // `alt` must separate from the MARK always, and from the surface only
+        // when it actually touches it. Cadillac's detail layers land 99.4% of
+        // their area inside its crest (measured over the traced paths), so the
+        // field half of this test was demanding separation from a colour the
+        // ink never meets — and the grey ramp answered, putting grey inner
+        // detail in a gold crest on 44 of its 140 car surfaces. LT.ALT_INSIDE
+        // is read, not restated, so the exemption cannot outlive the geometry.
+        const altOnField = !LT.ALT_INSIDE[team.id];
+        if ((altOnField && LT.contrast(P.alt, under[0]) < 2.0) ||
+            LT.contrast(P.alt, P.mark) < 2.0)
           bad.push(`${team.id}/${liv.id}/${where} alt ${LT.contrast(P.alt, under[0]).toFixed(2)}` +
                    `/${LT.contrast(P.alt, P.mark).toFixed(2)}`);
         // A backing PANEL must separate from the paint or the mark floats on it.
@@ -519,4 +528,44 @@ test("the OUTLINE row is opt-in on every mark", () => {
       }
     }
   }
+});
+
+test("the garage lightbox shows the brand lockup, not a re-fitted one", () => {
+  // The garage wall crest is a BACKLIT SIGN: it picks its own field, so unlike
+  // the car it is free to show the emblem as designed. It was not doing that.
+  // paintDress asked markBase what lands on the wall — the HORSE — and a
+  // near-black horse chose a white lightbox, which then rejected Ferrari's own
+  // yellow shield (1.07, under the 1.6 plate floor) and painted it red. The
+  // wall showed a white horse on a red shield beside a car showing the real
+  // black-on-yellow.
+  //
+  // This replays paintDress's field choice against LiveryTex.markOnField (the
+  // function it now calls) and asserts the outcome: on its OWN livery, a mark
+  // with a brand backing shows THAT backing, and a mark with a second colour
+  // shows a real one rather than a grey-ramp fallback.
+  const scale = (c, k) => c.map((v) => v * k);
+  const isGrey = (c) => Math.abs(c[0] - c[1]) < 0.01 && Math.abs(c[1] - c[2]) < 0.01 &&
+                        c[0] > 0.08 && c[0] < 0.92;
+  const bad = [];
+  for (const team of Teams.LIST) {
+    const liv = Liveries.forTeam(team)[0];          // the team's own livery
+    const on = LT.markOnField(team.id, liv);
+    const tinted = scale(liv.c1, 0.30);
+    const worst = (f) => Math.min(...on.map((c) => LT.contrast(c, f)));
+    const field = worst(tinted) < 2.2 ? LT.inkOn(on) : tinted;
+    const P = LT.markPalette(team.id, liv, field, false);
+    const B = LT.markPalette(team.id, liv, [liv.c1, liv.c2], false);   // the car
+    // A brand backing survives to the wall. This is the Ferrari case, and it
+    // also holds Red Bull's sun, which must not regress to a livery-derived
+    // disc just because the wall picks a different field than the car.
+    if (B.plate && (!P.plate || P.plate.join() !== B.plate.join()))
+      bad.push(`${team.id} wall plate ${P.plate ? P.plate.join() : "none"} vs car ${B.plate.join()}`);
+    // And the second colour is a colour, not the grey the ramp reaches for when
+    // nothing in the pool clears. Only asserted where a crest actually PAINTS
+    // alt — Mercedes' ring and Audi's rings are `part`, so their alt is
+    // computed and never drawn, and greying it harms nothing.
+    if (LT.ALT_INSIDE[team.id] && isGrey(P.alt))
+      bad.push(`${team.id} wall inner detail is grey ${P.alt.map((v) => v.toFixed(2)).join()}`);
+  }
+  assert.deepEqual(bad, [], "the garage wall drifted from the brand lockup");
 });
