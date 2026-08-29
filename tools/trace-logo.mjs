@@ -62,7 +62,14 @@ const SOURCES = {
   //       is exactly what Red Bull's badge became: bulls and disc fused solid.
   //       Without a hint the biggest cluster leads, which is right when the
   //       dominant colour IS the backdrop (Ferrari's shield).
-  redbull:     { layers: 2, roles: ["plate", "mark"], base: [0.95, 0.77, 0.21],
+  // The gold cluster does NOT trace to the sun. Layer 0's mask is the whole
+  // silhouette, so the gold island comes back as the UNION of the disc and both
+  // bulls — painting it with the SUN DISC colour drew a gold rim around the
+  // bulls and no sun at all, which is what a player sees and reports. Drop it:
+  // a circle is authored geometry, and LiveryTex's CREST_DISC carries the one
+  // this trace measures (centre 0.494/0.498, r 0.190 in the fit box).
+  redbull:     { layers: 2, roles: ["plate", "mark"], parts: ["drop", "mark", "mark"],
+                 base: [0.95, 0.77, 0.21],
                  alpha: 0.45, eps: 0.005, minArea: 0.0016 },
   ferrari:     { layers: 2, roles: ["plate", "mark"], base: [0.94, 0.89, 0.12],
                  alpha: 0.45, eps: 0.004, minArea: 0.0012 },
@@ -412,13 +419,16 @@ function main() {
     if (authored && authored.length !== groups.length)
       throw new Error(`${id}: SOURCES.parts has ${authored.length} entries, ` +
         `the trace has ${groups.length} islands — re-run with --parts and re-author`);
-    out[id] = { roles: groups.map((g, i) => (authored ? authored[i] : layerRole[g.li] || "mark")),
-                d: groups.map((g) => toPathData(g.loops)) };
+    // "drop" is a role the CREST never sees: the island is real in the bitmap
+    // but wrong as art, and the mark carries authored geometry in its place.
+    const roles = groups.map((g, i) => (authored ? authored[i] : layerRole[g.li] || "mark"));
+    out[id] = { roles: roles.filter((r) => r !== "drop"),
+                d: groups.filter((g, i) => roles[i] !== "drop").map((g) => toPathData(g.loops)) };
     if (args.includes("--parts")) {
       console.error(`  ${id}: ${groups.length} island(s)`);
       groups.forEach((g, i) => {
         const xs = g.loops.flat().map(([x]) => x), ys = g.loops.flat().map(([, y]) => y);
-        console.error(`    [${i}] layer ${g.li} role ${out[id].roles[i]} ` +
+        console.error(`    [${i}] layer ${g.li} role ${roles[i]} ` +
           `loops ${g.loops.length} x ${Math.min(...xs).toFixed(3)}-${Math.max(...xs).toFixed(3)} ` +
           `y ${Math.min(...ys).toFixed(3)}-${Math.max(...ys).toFixed(3)}`);
       });
@@ -444,10 +454,14 @@ function main() {
    hand-edit, regenerate.
 
    Each entry is { roles, d }: d holds SVG-style path strings BACK TO FRONT, and
-   roles[i] names which markPalette colour paints layer i ("mark", "alt" or
-   "plate"; a plate layer is dropped on the fin badge). Coordinates are in the
-   0..1 fit box every crest draws in (see fit() in js/car/liverytex.js), and only
-   M/L/Z are used, so LiveryTex's tracePath needs no curve support.
+   roles[i] names which markPalette colour paints layer i ("mark", "alt", "part"
+   or "plate"; a plate layer is dropped on the fin badge unless the mark's
+   backing is an authored disc). An island whose SOURCES role is "drop" is not
+   emitted at all — Red Bull's gold cluster traces to the UNION of the sun and
+   the two bulls rather than to a disc, so that island is dropped here and
+   LiveryTex draws the sun as the circle it is (CREST_DISC). Coordinates are in
+   the 0..1 fit box every crest draws in (see fit() in js/car/liverytex.js), and
+   only M/L/Z are used, so LiveryTex's tracePath needs no curve support.
 
    These are traced from the bitmaps that used to live in assets/logos, read out
    of commit ${DEFAULT_REV}. The bitmaps were unusable as art — filled counters,

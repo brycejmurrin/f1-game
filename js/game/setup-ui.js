@@ -420,7 +420,7 @@ function buildLiveryOptions(container, team) {
     row.onclick = () => {
       csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "",
                      noseStripe: "", nose: "", pod: "", wing: "", fin: "", finArt: "", logo: "", logo2: "",
-                     halo: "", finish: "gloss" };
+                     logo3: "", halo: "", finish: "gloss" };
       csLivEditId = null;
       csLivCreating = true;
       if (G.soundOn) GameAudio.uiSelect();
@@ -473,6 +473,7 @@ function buildLiveryOptions(container, team) {
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
           logo: liv.logo ? arrToHex(liv.logo) : "",
           logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
+          logo3: liv.logo3 ? arrToHex(liv.logo3) : "",
           finish: liv.finish || "gloss",
         };
         csLivEditId = liv.id;
@@ -517,6 +518,7 @@ function buildLiveryOptions(container, team) {
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
           logo: liv.logo ? arrToHex(liv.logo) : "",
           logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
+          logo3: liv.logo3 ? arrToHex(liv.logo3) : "",
           finish: liv.finish || "gloss",
         };
         csLivEditId = null;   // create-new: never overwrites the stock scheme
@@ -564,7 +566,7 @@ function buildLiveryCreator(container, team) {
   // distinct value in the draft, then the team's own two stock colours. Click
   // one and the slot takes it EXACTLY.
   const PAL_KEYS = ["c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod",
-                    "wing", "fin", "finArt", "logo", "logo2", "halo"];
+                    "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo"];
   const paletteColours = () => {
     const seen = [];
     const add = (v) => {
@@ -625,14 +627,16 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("WINGS", "wing", true));
   wrap.appendChild(colorRow("TAIL FIN", "fin", true));
   wrap.appendChild(colorRow("TAIL GRAPHIC", "finArt", true));
-  // Per-team labels: LiveryTex.markSlots names the shape each picker paints on
-  // THIS mark, so a player choosing Racing Bulls sees RB LETTERS and BULL rather
-  // than two rows that could mean anything.
+  // Per-team mark rows: LiveryTex.markSlots names the shape each picker paints
+  // on THIS mark, so a player choosing Racing Bulls sees RB LETTERS, BULL and
+  // OUTLINE rather than rows that could mean anything. The LENGTH is the mark's
+  // to decide — two rows for a single-loop silhouette that has no second shape,
+  // three for a mark that does — so this loops rather than indexing.
   const mSlots = (window.LiveryTex && LiveryTex.markSlots)
     ? LiveryTex.markSlots(team.id)
-    : [{ key: "logo", label: "TEAM LOGO" }, { key: "logo2", label: "LOGO DETAIL" }];
-  wrap.appendChild(colorRow(mSlots[0].label, "logo", true));
-  wrap.appendChild(colorRow(mSlots[1].label, "logo2", true));
+    : [{ key: "logo", label: "TEAM LOGO" }, { key: "logo2", label: "LOGO DETAIL" },
+       { key: "logo3", label: "OUTLINE" }];
+  for (const slot of mSlots) wrap.appendChild(colorRow(slot.label, slot.key, true));
   wrap.appendChild(colorRow("HALO", "halo", true));
   {
     const r = document.createElement("div"); r.className = "cs-liv-ed-row";
@@ -692,6 +696,7 @@ function buildLiveryCreator(container, team) {
     if (d.finArt) liv.finArt = hexToArr(d.finArt);
     if (d.logo) liv.logo = hexToArr(d.logo);
     if (d.logo2) liv.logo2 = hexToArr(d.logo2);
+    if (d.logo3) liv.logo3 = hexToArr(d.logo3);
     if (d.halo) liv.halo = hexToArr(d.halo);
     if (d.finish && d.finish !== "gloss") liv.finish = d.finish;
     const existing = getCustomLiveries(team.id);
@@ -723,6 +728,7 @@ function livePreviewDraft(team, d) {
     fin: d.fin ? hexToArr(d.fin) : null, finArt: d.finArt ? hexToArr(d.finArt) : null,
     logo: d.logo ? hexToArr(d.logo) : null,
     logo2: d.logo2 ? hexToArr(d.logo2) : null,
+    logo3: d.logo3 ? hexToArr(d.logo3) : null,
     noseStripe: d.noseStripe ? hexToArr(d.noseStripe) : null,
     finish: d.finish && d.finish !== "gloss" ? d.finish : null } };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
