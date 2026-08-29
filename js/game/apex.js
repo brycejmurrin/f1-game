@@ -1953,7 +1953,16 @@ const api = {
   // interpolation reproducible here, the same way step() does for physics.
   netTick(nowMs) {
     if (!G.netPlay) return false;
-    G.netPlay.tick(nowMs != null ? nowMs : performance.now());
+    const now = nowMs != null ? nowMs : performance.now();
+    // PUMP THE FAKE PEER TOO. transport.js is explicit that both endpoints must
+    // pump every frame or the wire clock does not line up, and a live peer does
+    // (it is running its own loop). Only netPeerSend/netPeerEvent pumped it, so
+    // a test that merely ticks — a clock warm-up, an idle stretch — delivered
+    // nothing to the far end, its autoPong never saw a PING, and the session
+    // could not sync. The peer goes first so anything it answers is on the wire
+    // before the session's own pump collects.
+    if (_netPeer && _netPeer.pump) { try { _netPeer.pump(now); } catch (e) {} }
+    G.netPlay.tick(now);
     return G.netPlay.status();
   },
 

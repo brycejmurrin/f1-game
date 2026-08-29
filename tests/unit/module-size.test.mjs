@@ -473,7 +473,13 @@ const CEILINGS = {
   // lossy-link spec fails a few runs in a hundred because the clock handshake
   // loses both legs of every attempt — indistinguishable from the defect it is
   // meant to catch.
-  "js/game/apex.js": 2475,
+  // 2475 -> 2484: netTick pumps the FAKE PEER as well as the session. Only
+  // netPeerSend/netPeerEvent did, so a test that merely ticks — a clock
+  // warm-up, an idle stretch — delivered nothing to the far end and its
+  // responder never saw a PING. transport.js is explicit that both endpoints
+  // must pump every frame; a live peer does, because it is running its own
+  // loop. Nine lines, eight of them the why.
+  "js/game/apex.js": 2484,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and

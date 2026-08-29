@@ -201,7 +201,10 @@ test.describe("multiplayer session", () => {
       // is about. A real session pumps from the moment it connects and races
       // seconds later; asserting on packets sent while synced() is still false
       // measures the handshake instead.
-      while (T < 1600 && !A.net().net.synced) { T += 25; A.netTick(T); }
+      // 4 s of virtual warm-up: measured offline over 500 seeded links at 50%
+      // loss, 1 s syncs 473 and 4 s syncs 500 of 500. Virtual time, so this
+      // costs nothing but loop iterations.
+      while (T < 5000 && !A.net().net.synced) { T += 25; A.netTick(T); }
       const synced = A.net().net.synced;
       const first = total * 0.20;
       for (let i = 0; i < 40; i++) {
