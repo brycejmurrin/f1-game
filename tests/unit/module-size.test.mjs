@@ -640,7 +640,14 @@ const CEILINGS = {
   // to change three lanes each. The split needs its own branch plus the note
   // recording that the UPLOAD cannot shrink with it (rgb is interleaved
   // 3-in-16, so the changed bytes are not a contiguous range).
-  "js/render/webgpu/wgx.js": 5567,
+  // 5567 -> 5574: a measured verdict replaces an unmeasured assertion at the
+  // per-chunk merge site. The sentence "adjacent chunks almost never share an
+  // index list" justified BOTH backends forfeiting a 76-87% draw reduction and
+  // had never been counted; it holds (3 shared non-empty pairs of 909), but the
+  // 79.5% that share by being EMPTY are a trap worth naming in place. Detail is
+  // in docs/PERF-FINDINGS.md 2b — only the pointer and the headline live here,
+  // which is why this is +7 and not the +15 the first draft cost.
+  "js/render/webgpu/wgx.js": 5574,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
