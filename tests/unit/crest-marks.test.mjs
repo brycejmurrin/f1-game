@@ -123,7 +123,8 @@ test("a crest paints only palette colours", () => {
   // drawn in a baked BRAND constant reached through module-level state, so a
   // livery could recolour some of a crest and silently skip the rest.
   every(({ team, name, P, m }) => {
-    const ok = new Set([cssOf(P.mark), cssOf(P.alt), cssOf(P.plate), cssOf(P.halo), ...HARDCODED_OK]);
+    const ok = new Set([cssOf(P.mark), cssOf(P.alt), cssOf(P.plate), cssOf(P.part),
+                        cssOf(P.halo), ...HARDCODED_OK]);
     for (const c of m.colours)
       assert.ok(ok.has(c), `${team.id} ${name} paints ${c}, which is not in its palette`);
   });
@@ -200,6 +201,7 @@ test("every mark clears MARK_FLOOR on every livery, on every surface it lands on
                    `/${LT.contrast(P.alt, P.mark).toFixed(2)}`);
         if (P.plate && LT.contrast(P.plate, fields[0]) < 1.6)
           bad.push(`${team.id}/${liv.id}/${where} plate ${LT.contrast(P.plate, fields[0]).toFixed(2)}`);
+
       }
     }
   }
@@ -361,4 +363,49 @@ test("an UPLOADED emblem takes LOGO DETAIL as a rim, tinted or not", () => {
     // Opt-in, here too.
     assert.deepEqual(shadows(tint, null, null), [null], `${label}: painted a rim nobody asked for`);
   }
+});
+
+test("an authored SAME-INK island stays legible and is opt-in", () => {
+  // `part` is a shape the trace found to share no pixel with the rest of its
+  // layer — Racing Bulls' bull beside its RB letters. It is the one slot that
+  // lets a single-INK mark take a second colour, so it needs its own floor.
+  //
+  // This test drives logo2 itself rather than riding the shipped-livery grid.
+  // It has to: NO shipped livery authors logo2, so a `P.part` rule placed in
+  // that grid scores 0 of 1514 palettes and asserts nothing at all. Measured
+  // before writing this — the count guard below is what keeps it honest.
+  const { LiveryTex: LT, Teams, Liveries } = loadCrests();
+  const PICKS = [[1, 0.55, 0], [0.1, 0.1, 0.12], [0.95, 0.95, 0.96],
+                 [0.8, 0.1, 0.12], [0.15, 0.5, 0.9], [0.5, 0.5, 0.5]];
+  const bad = [], unset = [];
+  let scored = 0;
+  for (const team of Teams.LIST) {
+    for (const liv of Liveries.forTeam(team)) {
+      for (const field of [[0.1, 0.1, 0.12], [0.9, 0.9, 0.92], [0.8, 0.1, 0.1]]) {
+        for (const bare of [false, true]) {
+          // Opt-in: with logo2 absent the island must resolve to null, which is
+          // what makes crestTraced fall back to the mark and keeps every
+          // shipped crest pixel-identical to what it was before parts existed.
+          if (LT.markPalette(team.id, liv, field, bare).part !== null)
+            unset.push(`${team.id}/${liv.id}`);
+          for (const pick of PICKS) {
+            const P = LT.markPalette(team.id, { ...liv, logo2: pick }, field, bare);
+            if (!P.part) continue;          // this mark spends logo2 elsewhere
+            scored++;
+            // Same test the mark answers: the ink OR its outline must carry it.
+            // Wherever the fill fails, the halo does not.
+            const best = Math.max(LT.contrast(P.part, field),
+                                  P.halo ? LT.contrast(P.halo, field) : 0);
+            if (best < 2.0)
+              bad.push(`${team.id}/${liv.id} part+halo ${best.toFixed(2)} on ${field.join()}`);
+          }
+        }
+      }
+    }
+  }
+  assert.deepEqual(unset, [], "an unset LOGO DETAIL left a same-ink island painted");
+  assert.ok(scored > 0,
+    "no mark has a `part` island, so this test scored nothing — if the crest " +
+    "data lost its per-island roles, that is the bug, not this assertion");
+  assert.deepEqual(bad, [], "an authored same-ink island vanished into the field");
 });
