@@ -667,7 +667,10 @@ const CEILINGS = {
   // 79.5% that share by being EMPTY are a trap worth naming in place. Detail is
   // in docs/PERF-FINDINGS.md 2b — only the pointer and the headline live here,
   // which is why this is +7 and not the +15 the first draft cost.
-  "js/render/webgpu/wgx.js": 5574,
+  // 5574 -> 5581: WGX gains gpuErrors/gpuFirstError on its INSTANCE surface
+  // (it had them only on the module factory), so the backend-parity contract
+  // holds now that GLX has a real counter. PERF-FINDINGS 2e.
+  "js/render/webgpu/wgx.js": 5581,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -752,7 +755,11 @@ const CEILINGS = {
   // instead of four. The ratchet follows the file down (PERF-FINDINGS 2d).
   // 1961 -> 1958: the instancing gate stops being bracketed per instanced draw
   // and is declared through the redundancy cache in litMaterial (PERF-FINDINGS 2e).
-  "js/render/glx.js": 1958,
+  // 1958 -> 1975: GLX gains a real gpuErrors()/gpuFirstError() counter. The
+  // real-GPU workflow gated on gpuErrors and GLX never defined it, so that
+  // clause read null and passed forever (PERF-FINDINGS 2e). A deliberate
+  // raise: the gate is worth more than the lines.
+  "js/render/glx.js": 1975,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)

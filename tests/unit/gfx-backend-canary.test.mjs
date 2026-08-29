@@ -423,6 +423,24 @@ test("GLX pins the per-chunk uploadLightSet revert (arity 3) and no-ops when the
   assert.match(present, /ctxGone\(\)/);
 });
 
+test("GLX exports a real gpuErrors counter and the workflow fails on a missing one", () => {
+  // The real-GPU gate checked `(gfx.gpuErrors || 0) > 0` while ONLY WGX defined
+  // gpuErrors, so on the GLX leg it read null and passed vacuously from the day
+  // that leg was added (PERF-FINDINGS 2e). Both halves of the fix are pinned
+  // here because either alone restores the hole.
+  const glx = read("js/render/glx.js");
+  assert.match(glx, /gpuErrors: \(\) => _glErrors,/);
+  assert.match(glx, /gpuFirstError: \(\) => _glFirstError \|\| null,/);
+  assert.match(glx, /function drainGlErrors\(/);
+  assert.match(glx, /drainGlErrors\("present"\)/, "the counter must be drained once per present");
+
+  const wf = read(".github/workflows/gpu-census.yml");
+  assert.match(wf, /gfx\.gpuErrors == null/,
+    "the Verdict must FAIL on a missing count, not read absent as clean");
+  assert.doesNotMatch(wf, /if \(\(gfx\.gpuErrors \|\| 0\) > 0\)/,
+    "the || 0 form treats an absent counter as zero — that was the bug");
+});
+
 test("the instancing gate is declared through the cache, never bracketed per draw", () => {
   // uInstanced was 54.8 uniform1f/frame for a value that changes 3.1 times: the
   // 1/0 bracket around each instanced draw alternates, so a redundancy cache

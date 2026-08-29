@@ -52,6 +52,21 @@ const GLX = (function () {
   // key off this, so HIGH restores full quality (a reload re-runs init with it).
   const MOBILE_TIER = IS_MOBILE && !_gfxHigh;
   let _ctxLost = false;   // true between webglcontextlost and the reload on restore
+  // GPU error counter — WebGL has no onuncapturederror, so drain getError() once
+  // per present. Exists because the real-GPU gate read null here and passed
+  // vacuously: docs/PERF-FINDINGS.md 2e.
+  let _glErrors = 0, _glFirstError = "";
+  const GL_ERR_NAMES = { 1280: "INVALID_ENUM", 1281: "INVALID_VALUE", 1282: "INVALID_OPERATION",
+                         1285: "OUT_OF_MEMORY", 1286: "INVALID_FRAMEBUFFER_OPERATION", 37442: "CONTEXT_LOST" };
+  function drainGlErrors(where) {
+    if (!gl || _ctxLost) return;
+    for (let i = 0; i < 8; i++) {          // bounded: a wedged context can loop
+      const e = gl.getError();
+      if (!e) return;
+      _glErrors++;
+      if (!_glFirstError) _glFirstError = (GL_ERR_NAMES[e] || ("0x" + e.toString(16))) + " @ " + where;
+    }
+  }
   function ctxGone() { return _ctxLost || !!(gl && gl.isContextLost && gl.isContextLost()); }
 
   // ── GPU frame timer (opt-in via gpuTimer(true); __apex.gpuTimer()) ──
@@ -1907,7 +1922,9 @@ const GLX = (function () {
     drawSkidBatch,
     drawGlow,
     drawParticles,
-    present: (opts) => { if (ctxGone()) return; return PST.present(opts); },
+    present: (opts) => { if (ctxGone()) return; const r = PST.present(opts); drainGlErrors("present"); return r; },
+    gpuErrors: () => _glErrors,
+    gpuFirstError: () => _glFirstError || null,
     envFaceBegin,
     envFaceEnd,
     envProbeReady() { return envReady; },

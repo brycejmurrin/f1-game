@@ -246,7 +246,12 @@ jobs:
                 `envBlank=${env.blank} gaveUp=${env.gaveUp} softAdapter=${be.softAdapter} ` +
                 `headless=${be.headless} meanLuma=${frame.meanLuma != null ? frame.meanLuma : "n/a"}`);
               if (g.ok !== true || g.phase !== "done") bad.push(`${path3}: did not finish (phase=${g.phase}, ok=${g.ok})`);
-              if ((gfx.gpuErrors || 0) > 0) bad.push(`${path3}: ${gfx.gpuErrors} uncaptured GPU errors — ${String(gfx.gpuFirstError || "").slice(0, 160)}`);
+            // An ABSENT count must not read as clean. gpuErrors was defined only
+            // on WGX, so this clause was vacuous on the GLX leg from the day that
+            // leg was added — it reported null and passed forever. GLX has a real
+            // counter now; a missing one means the backend stopped reporting.
+              if (gfx.gpuErrors == null) bad.push(`${path3}: NO gpuErrors count reported — the error check would pass vacuously (see docs/PERF-FINDINGS.md 2e)`);
+              else if (gfx.gpuErrors > 0) bad.push(`${path3}: ${gfx.gpuErrors} uncaptured GPU errors — ${String(gfx.gpuFirstError || "").slice(0, 160)}`);
               if ((env.fail || 0) > 0) bad.push(`${path3}: ${env.fail} env-probe faces FAILED — ${String(env.failMsg || "").slice(0, 160)}`);
               if (env.gaveUp) bad.push(`${path3}: the env probe stood down — it could not succeed`);
               if (hardware && be.softAdapter === true) bad.push(`${path3}: softAdapter TRUE on an adapter the census called hardware — the classification regressed and the game is running the degraded content path`);

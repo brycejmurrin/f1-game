@@ -1035,8 +1035,23 @@ a success test is not a test — the same shape as `sessionStorage["apex26.gfxBo
 being an ABSENCE signal, which AGENTS.md already warns needs a positive
 confirmation beside it.
 
-Fix (next): give GLX a real uncaptured-error counter mirroring WGX's, and make
-the Verdict fail on a MISSING count rather than treat it as zero.
+**Fixed.** GLX now drains `getError()` once per `present()` into
+`GLX.gpuErrors()` / `gpuFirstError()` (WebGL has no `onuncapturederror`), and
+the Verdict fails on a MISSING count instead of reading absent as clean.
+
+Proven to be an assertion rather than another absence
+(`scratch/glx-error-counter.mjs`) — a counter that never counts would be the
+same bug wearing a different hat:
+
+| | methodExists | count | firstError |
+|---|---|---|---|
+| clean run | **true** | **0** | null |
+| after a deliberate `bindBuffer(0x0BAD, …)` | true | **1** | `INVALID_ENUM @ present` |
+
+The `methodExists` column is the one that matters: the original trap was
+`(GLX.gpuErrors && GLX.gpuErrors()) || 0`, which yields 0 for a method that is
+not there. A clean GLX run now genuinely reports zero GPU errors — including
+for the two changes in this round.
 
 ### Pixels were the wrong oracle here; the invariant is the right one
 
