@@ -542,7 +542,14 @@ const CEILINGS = {
   // and the HOOD accent stripe was a flat bar cantilevered up to 124 mm above
   // the deck it is meant to lie on. Both fixes are comment-heavy because the
   // fin one is only safe in the lowering direction.
-  "js/car/car3d.js": 3121,   // +44: wheel cover is a rim lip, a dish and a boss
+  // 3121 -> 3164. Two NEW part knobs, both measured live against the range the
+  // catalog ships (tools/parts-sweep.mjs --clamp-scan): cockpit.mirror moves the
+  // widest element of the upper body 170 mm, and aero.fin 291 mm on the largest
+  // flat plate at the highest point of the car. Neither section read a recipe at
+  // all before. The fin comment carries its weight: its scale has to reach the
+  // livery decal AND keep the crown level, and getting either wrong walks the
+  // graphic off the blade.
+  "js/car/car3d.js": 3164,   // +44: wheel cover is a rim lip, a dish and a boss
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

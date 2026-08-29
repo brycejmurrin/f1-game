@@ -70,7 +70,11 @@ function carDecalData(aLvl, parts, legacyBody, teamId) {
   const cr = anchors ? anchors.coverAt(-1.28) : { x: 0.20, top: 0.69 };
   quad([[-cf.x*0.72, cf.top+0.008, -0.62], [cf.x*0.72, cf.top+0.008, -0.62],
         [cr.x*0.72, cr.top+0.008, -1.28], [-cr.x*0.72, cr.top+0.008, -1.28]], [0, 1, 0.06], R.crest);
-  const fp = Car3D.sharkFinPanel ? Car3D.sharkFinPanel()
+  // The fin's blade height is a recipe knob, so the decal has to be placed on
+  // the SAME outline the mesh used. sharkFinPanel/sharkFinBadge default to a
+  // scale of 1 when this is absent, which is what every legacy caller gets.
+  const finS = (parts && parts._visual && parts._visual.aero && parts._visual.aero.fin) || 1;
+  const fp = Car3D.sharkFinPanel ? Car3D.sharkFinPanel(null, null, finS)
     : [{ x: 0.023, y: 0.655, z: -0.82 }, { x: 0.023, y: 0.655, z: -1.56 },
        { x: 0.023, y: 0.945, z: -1.56 }, { x: 0.023, y: 0.945, z: -0.82 }];
   const FIN_N = 0.78, FIN_NY = 0.62;      // normalised: 0.78² + 0.62² ≈ 1
@@ -80,7 +84,7 @@ function carDecalData(aLvl, parts, legacyBody, teamId) {
     quad([v(1, -1), v(0, -1), v(3, -1), v(2, -1)], [-FIN_N, FIN_NY, 0], region);
   };
   face(fp, R.fin);
-  if (Car3D.sharkFinBadge && R.finBadge) face(Car3D.sharkFinBadge(), R.finBadge);
+  if (Car3D.sharkFinBadge && R.finBadge) face(Car3D.sharkFinBadge(null, finS), R.finBadge);
   const nR = anchors ? anchors.noseAt(1.72) : { top: 0.45, topSide: 0.16 };
   const nF = anchors ? anchors.noseAt(2.10) : { top: 0.43, topSide: 0.14 };
   quad([[-nF.topSide*0.84, nF.top+0.020, 2.10], [nF.topSide*0.84, nF.top+0.020, 2.10],
@@ -126,7 +130,11 @@ function getCarDecalMesh(aLvl, parts, legacyBody, teamId) {
   const anchorParts = legacyBody ? null : parts;
   const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId) : { key: "legacy" };
   const level = aLvl == null ? 2 : Number(aLvl);
-  const k = level + "|" + (legacyBody ? "imported|" : "") + anchors.key;
+  // anchors.key covers the engine-cover fields and the team, NOT the aero
+  // recipe — so a fin-height change alone would hit a cached decal mesh built
+  // for the old blade and paint the graphic off the fin. It joins the key.
+  const finK = (parts && parts._visual && parts._visual.aero && parts._visual.aero.fin) || 1;
+  const k = level + "|" + (legacyBody ? "imported|" : "") + finK + "|" + anchors.key;
   if (!_carDecalMeshes[k]) {
     _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(level, parts, legacyBody, teamId));
     _carDecalOrder.push(k);
