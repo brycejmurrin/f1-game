@@ -546,6 +546,18 @@ const Car3D = (function () {
     const carbonDisc = rotorDetail >= 2 || discFaceRotor > 0;
     const rotorCol = carbonDisc ? [0.12, 0.12, 0.13] : [0.24, 0.24, 0.26];
     const rotorSurf = carbonDisc ? SURFACES.carbon : SURFACES.metal;
+    // THE DISC HAD NO EDGE. It was two flat annuli at x0+8mm and x1-8mm with
+    // nothing joining them — not a solid, just two floating rings. A flat
+    // annulus has zero silhouette, which is why `rotorScale` measures 12.66 mm
+    // WEAK on a change that moves rotorOuter by 13.1 mm: the radius grows and
+    // no camera can tell. A cylindrical band between the two faces is the
+    // surface that actually catches a rim light through the spokes.
+    for (let i = 0; i < SEG; i++) {
+      const a0 = i / SEG * Math.PI * 2, a1 = (i + 1) / SEG * Math.PI * 2;
+      const E = (a, xx) => [xx, cy + rotorOuter * Math.cos(a), cz + rotorOuter * Math.sin(a)];
+      addQuad(out, E(a0, x0 + 0.008), E(a1, x0 + 0.008), E(a1, x1 - 0.008), E(a0, x1 - 0.008),
+        rotorCol, rotorSurf);
+    }
     for (const face of [[x0 + 0.008, -1], [x1 - 0.008, 1]]) {
       for (let i = 0; i < SEG; i++) {
         const a0 = i / SEG * Math.PI * 2, a1 = (i + 1) / SEG * Math.PI * 2;
@@ -785,7 +797,11 @@ const Car3D = (function () {
     addWheel(rotating, 0, 0, 0, 0.34, width, bandColor, caliperColor, rimColor,
       grooved, tyreStyle, fixed, brakeStyle, wheelStyle);
     // Upright and hub carrier give the wishbones/caliper a visible termination.
-    addBox(fixed, 0, 0, 0, width * 0.72, 0.12, 0.12, [0.18, 0.18, 0.20], SURFACES.metal);
+    // The hub carrier the wishbones and caliper terminate in. It was a cube
+    // sitting inside the rim, visible through the spokes from every angle.
+    addSpan(fixed, { z: 0.06, x: 0, y: 0, w: width * 0.72, h: 0.125, t: 0.60 },
+                   { z: -0.06, x: 0, y: 0, w: width * 0.66, h: 0.110, t: 0.70 },
+            [0.18, 0.18, 0.20], null, SURFACES.metal);
     return { rotating, fixed };
   }
 
@@ -2538,7 +2554,12 @@ const Car3D = (function () {
     const exhDia = (cx, cy, z, r) => [
       [cx, cy - r, z], [cx + r, cy, z], [cx, cy + r, z], [cx - r, cy, z],
     ];
-    addBox(out, 0, 0.40, -2.12, exhR, exhR, 0.16, exhMetal, SURFACES.metal);
+    // The single tailpipe was an `addBox` — a SQUARE pipe, dead centre of every
+    // chase shot — while the TWIN pipes 60 lines down already got a round loft.
+    // Same car, two answers to "is an exhaust round". An 8-sided `addTube` is
+    // 16 triangles against the box's 12, and `addTube` is the primitive the
+    // halo already uses, so nothing new is introduced.
+    addTube(out, [[0, 0.40, -2.04], [0, 0.40, -2.20]], exhR, 8, exhMetal, SURFACES.metal);
     const exhFlare = Math.max(0, Math.min(1, exhStyle.flare || 0));
     if (exhFlare > 0) {
       const tip = exhR * (1 + 0.55 * exhFlare);
@@ -2589,7 +2610,8 @@ const Car3D = (function () {
       return [exhMetal[0]*0.55 + g[0]*0.45, exhMetal[1]*0.55 + g[1]*0.45,
               exhMetal[2]*0.55 + g[2]*0.45];
     };
-    addBox(out, 0, 0.40, -2.155, exhR*1.06, exhR*1.06, 0.075, heatOf(fuelFlame), SURFACES.metal);
+    addTube(out, [[0, 0.40, -2.118], [0, 0.40, -2.193]], exhR * 1.06, 8,
+            heatOf(fuelFlame), SURFACES.metal);
     if (exhTwin) {
       for (const s of [-1, 1]) {
         addBox(out, s*0.15, 0.40, -2.10, 0.045, 0.045, 0.14, exhMetal, SURFACES.metal);
@@ -2836,8 +2858,16 @@ const Car3D = (function () {
           { z: _ep.rear.z, x: s*0.50, y: _ep.rear.cy, w: 0.040, h: _ep.rear.sy, t: 0.72 },
           0.012, DARK);
         // Louvre detail: a stack of thin recessed slots near the top-rear corner.
-        for (let i = 0; i < 4; i++)
-          addBox(out, s*0.515, epCY + epSY*0.5 - 0.07 - i*0.06, -2.30, 0.018, 0.016, 0.18, INTAKE);
+        // Four flat slots. A louvre is a RAKED cut — outboard and high at the
+        // front, inboard and low at the back — and `addSpan` gives that for the
+        // same 12 triangles a box costs, so the stack finally catches light
+        // across its length instead of reading as four painted lines.
+        for (let i = 0; i < 4; i++) {
+          const ly = epCY + epSY * 0.5 - 0.07 - i * 0.06;
+          addSpan(out, { z: -2.21, x: s * 0.519, y: ly + 0.010, w: 0.018, h: 0.016, t: 0.85 },
+                       { z: -2.39, x: s * 0.509, y: ly - 0.010, w: 0.015, h: 0.013, t: 0.70 },
+                  INTAKE, null, SURFACES.carbon);
+        }
         addBeveledSpan(out,
           { z: _ep.front.z, x: s*0.50, y: _ep.front.top, w: 0.046, h: 0.018, t: 0.70 },
           { z: _ep.rear.z, x: s*0.50, y: _ep.rear.top, w: 0.046, h: 0.018, t: 0.85 },
@@ -2891,9 +2921,20 @@ const Car3D = (function () {
         rearWing(-2.44, crownY - 0.050, -2.60, crownY, 0.49, 0.016, c2, 1.15);
       }
       const drsSX = aLvl >= 3 ? 0.13 : 0.10;
-      addBox(out, 0, epCY + 0.265, -2.52, drsSX, 0.05, 0.18, DARK); // DRS actuator pod
+      // DRS actuator pod. A plain box sat on the wing crown at the top of the
+    // chase frame; `addSpan` costs the identical 12 triangles and buys a raked,
+    // tapered fairing — `t` narrows the top, so the section is a trapezoid and
+    // the pod reads as a moulded housing rather than a brick.
+    addSpan(out, { z: -2.43, x: 0, y: epCY + 0.258, w: drsSX, h: 0.052, t: 0.72 },
+                 { z: -2.61, x: 0, y: epCY + 0.276, w: drsSX * 0.78, h: 0.040, t: 0.55 },
+            DARK);
 
-      addBox(out, 0, 0.50, -2.52, 0.13, 0.18, 0.10, DARK);
+      // The tail cap: three nested slabs on the rearmost centreline, the second
+      // most centred object in a chase shot after the exhaust. A crash
+      // structure tapers to its rain light; `addSpan` says that for the same 12
+      // triangles the box cost.
+      addSpan(out, { z: -2.47, x: 0, y: 0.50, w: 0.14, h: 0.19, t: 0.78 },
+                   { z: -2.57, x: 0, y: 0.50, w: 0.115, h: 0.155, t: 0.62 }, DARK);
       addBox(out, 0, 0.50, -2.585, 0.10, 0.13, 0.03,
              [2.6, 0.08, 0.06], SURFACES.emissive);
       addBox(out, 0, 0.50, -2.60, 0.04, 0.05, 0.02,
@@ -3020,6 +3061,17 @@ const Car3D = (function () {
       brakeStyle && brakeStyle.scoop != null ? brakeStyle.scoop : (ductMul >= 1.3 ? 1 : 0))));
     for (const s of [-1, 1]) {
       addBox(out, s*0.60, 0.28, AXLES.frontZ + 0.19, 0.06, 0.20 * ductMul, 0.13 * ductMul, DARK);
+      // The duct was a plain prism with no MOUTH — the same flat-dark-face
+      // defect the radiator inlet had, and addInletMouth() was written for it
+      // this session and never applied here. No lip: a brake duct's leading
+      // edge is a knife, not a flange, and the lip bars are what make the
+      // helper dear.
+      // Not in the COCKPIT build: from the seat the front ducts are behind the
+      // wheels and outside the visor, so 120 triangles of throat would render
+      // where nothing can look at them — and the cockpit ceiling is the tighter
+      // of the two.
+      if (!ckpt) addInletMouth(out, s * 0.60, 0.28, AXLES.frontZ + 0.19 + 0.065 * ductMul,
+                               0.05, 0.15 * ductMul, DARK, 0.045 * ductMul, 0);
       // Big-brake spec: a horizontal duct winglet scooping over each front wheel.
       if (brakeScoop >= 1) addBox(out, s*0.65, 0.42, AXLES.frontZ + 0.16, 0.11, 0.02, 0.15, CARBON);
       if (brakeScoop >= 1) {
@@ -3117,8 +3169,12 @@ const Car3D = (function () {
       drawArm(out, [s*0.33, 0.34 + rideDY, AXLES.frontZ - 0.16],
         [s*0.69, 0.35 + rideDY, AXLES.frontZ - 0.04*toeScale],
         armTh*0.72*toeScale, suspC, SURFACES.carbon);
-      addBox(out, s*0.69, 0.35 + rideDY, AXLES.frontZ, 0.055, 0.23, 0.10,
-        [0.18,0.18,0.20], SURFACES.metal);
+      // An upright is a CASTING: wide at the lower wishbone pickup, narrow at
+      // the top. `addSpan` with a tapered front frame is the same 12 triangles
+      // as the cube it replaces.
+      addSpan(out, { z: AXLES.frontZ + 0.05, x: s * 0.69, y: 0.35 + rideDY, w: 0.055, h: 0.23, t: 0.55 },
+                   { z: AXLES.frontZ - 0.05, x: s * 0.69, y: 0.35 + rideDY, w: 0.048, h: 0.21, t: 0.62 },
+              [0.18, 0.18, 0.20], null, SURFACES.metal);
       if (wbPush) {
         const outer = wbPull ? fUpper : fLower;
         const inner = wbPull ? [s*0.30,0.20+rideDY,AXLES.frontZ-0.05]
@@ -3142,8 +3198,9 @@ const Car3D = (function () {
         drawArm(out, [s*0.31, 0.36 + rideDY, AXLES.rearZ + 0.16],
           [s*0.67, 0.36 + rideDY, AXLES.rearZ + 0.04*toeScale],
           armTh*0.72*toeScale, suspC, SURFACES.carbon);
-        addBox(out, s*0.67, 0.36 + rideDY, AXLES.rearZ, 0.055, 0.23, 0.10,
-          [0.18,0.18,0.20], SURFACES.metal);
+      addSpan(out, { z: AXLES.rearZ + 0.05, x: s * 0.67, y: 0.36 + rideDY, w: 0.055, h: 0.23, t: 0.55 },
+                   { z: AXLES.rearZ - 0.05, x: s * 0.67, y: 0.36 + rideDY, w: 0.048, h: 0.21, t: 0.62 },
+              [0.18, 0.18, 0.20], null, SURFACES.metal);
         if (wbPush) {
           const outer = wbPull ? rUpper : rLower;
           const inner = wbPull ? [s*0.29,0.22+rideDY,AXLES.rearZ+0.04]

@@ -33,7 +33,7 @@ const DARK   = [0.055, 0.058, 0.066];
 // shaded per-vertex by colAt(u01, v01). Winding is derived from the requested
 // normal rather than assumed, which is what lets the same helper build a wall
 // seen from INSIDE and a prop face seen from outside.
-function panelGrid(out, origin, uVec, vVec, nu, nv, nrm, colAt) {
+function panelGrid(out, origin, uVec, vVec, nu, nv, nrm, colAt, mid) {
   const base = out.pos.length / 3;
   for (let j = 0; j <= nv; j++) {
     for (let i = 0; i <= nu; i++) {
@@ -45,6 +45,7 @@ function panelGrid(out, origin, uVec, vVec, nu, nv, nrm, colAt) {
       out.col.push(c[0], c[1], c[2]);
     }
   }
+  pushMat(out, (nu + 1) * (nv + 1), mid);
   const cr = [uVec[1] * vVec[2] - uVec[2] * vVec[1],
               uVec[2] * vVec[0] - uVec[0] * vVec[2],
               uVec[0] * vVec[1] - uVec[1] * vVec[0]];
@@ -68,7 +69,17 @@ function panelGrid(out, origin, uVec, vVec, nu, nv, nrm, colAt) {
 // never planes: a camera that wanders inside one then sees only back faces and
 // the prop silently vanishes instead of smearing across the frame.
 const BOX_F = [[0, 0, 1], [0, 0, -1], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0]];
-function block(out, cx, cy, cz, hx, hy, hz, col) {
+// A WALL-KEYED material must never land on a horizontal face. matWallLike()
+// (matWallLike() in js/render/shaders/lit.js) makes CONCRETE/BRICK/METAL/WOOD/FABRIC/ROOF/
+// STONE/RUST key their triplanar UV off `(an.x > an.z ? worldZ : worldX,
+// worldY)`; on a face whose normal is +-Y, worldY is constant, so the UV
+// collapses to one axis and the material renders as streaks smeared down it.
+// A box cannot know which of its faces a caller cared about, so it decides per
+// face: the four sides take the id, the top and bottom drop to FLAT. That kills
+// the whole class of bug at the primitive instead of at ~150 call sites.
+const WALL_KEYED = [1, 2, 4, 5, 7, 12, 13, 14];
+const sideOnly = (mid, ny) => (ny !== 0 && WALL_KEYED.indexOf(mid) >= 0 ? 0 : mid);
+function block(out, cx, cy, cz, hx, hy, hz, col, mid) {
   const c = [cx, cy, cz], h = [hx, hy, hz];
   for (let f = 0; f < 6; f++) {
     const n = BOX_F[f];
@@ -82,6 +93,7 @@ function block(out, cx, cy, cz, hx, hy, hz, col) {
       out.nrm.push(n[0], n[1], n[2]);
       out.col.push(col[0], col[1], col[2]);
     }
+    pushMat(out, 4, sideOnly(mid, n[1]));
     const e = [0, 0, 0]; e[i0] = 1;
     const g = [0, 0, 0]; g[i1] = 1;
     const cr = [e[1] * g[2] - e[2] * g[1], e[2] * g[0] - e[0] * g[2], e[0] * g[1] - e[1] * g[0]];
@@ -91,7 +103,7 @@ function block(out, cx, cy, cz, hx, hy, hz, col) {
   }
 }
 
-function cyl(out, cx, cy, cz, rad, h, col, seg) {
+function cyl(out, cx, cy, cz, rad, h, col, seg, mid) {
   seg = seg || 10;
   const base = out.pos.length / 3;
   for (let i = 0; i < seg; i++) {
@@ -101,6 +113,7 @@ function cyl(out, cx, cy, cz, rad, h, col, seg) {
       out.nrm.push(ca, 0, sa); out.col.push(col[0], col[1], col[2]);
     }
   }
+  pushMat(out, seg * 2, mid);
   for (let i = 0; i < seg; i++) {
     const a = base + i * 2, b = base + ((i + 1) % seg) * 2;
     out.idx.push(a, b, b + 1, a, b + 1, a + 1);
@@ -111,8 +124,16 @@ function cyl(out, cx, cy, cz, rad, h, col, seg) {
     out.pos.push(cx + Math.cos(a) * rad, cy + h, cz + Math.sin(a) * rad);
     out.nrm.push(0, 1, 0); out.col.push(col[0], col[1], col[2]);
   }
+  pushMat(out, seg, sideOnly(mid, 1));      // the cap is horizontal, same rule
   for (let i = 1; i < seg - 1; i++) out.idx.push(top, top + i, top + i + 1);
 }
+
+// The shared material ids, so the bay names the same surfaces the track does
+// rather than keeping a second copy that can drift. Read lazily: every use is
+// inside a build function, so TrackGeom (manifest position 77, this file 121)
+// is always up by then and this needs no HARD_EDGES pair.
+const MAT = (typeof TrackGeom !== "undefined" && TrackGeom.MAT)
+  ? TrackGeom.MAT : { FLAT: 0, CONCRETE: 1, METAL: 4, ASPHALT: 16 };
 
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 const scale = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
@@ -140,7 +161,16 @@ function buildShell(out, liv) {
   // away, which is why the team dado read as an 83 cm wash instead of a line.
   // The walls are now built as three stacked grids whose seams ARE the band
   // edges, so the row exists by construction.
-  const wallAt = (y) => (y < 1.4995 ? dado : y < 1.6205 ? stripe : PANEL);
+  // The upper band is the LARGEST surface in the room — 3.38 m of every wall,
+  // ~143 m2 across four — and it was one frozen grey for all eleven teams while
+  // the 1.5 m of dado below it carried the livery. A bay should read as the
+  // team's from any camera, not only below waist height. Held to 12% of c1 over
+  // the grey: it has to stay a BACKDROP for a car that is itself team-coloured,
+  // and a saturated wall would fight the thing it is behind.
+  const panelC = [PANEL[0] + (c1[0] - PANEL[0]) * 0.12,
+                  PANEL[1] + (c1[1] - PANEL[1]) * 0.12,
+                  PANEL[2] + (c1[2] - PANEL[2]) * 0.12];
+  const wallAt = (y) => (y < 1.4995 ? dado : y < 1.6205 ? stripe : panelC);
   // Battens are BAKED INTO THE WALL's vertex colour rather than modelled as
   // solid posts. A solid post is a prop, and props do not cull with the shell:
   // stood outside the bay you would see a row of dark bars hanging in front of
@@ -175,7 +205,7 @@ function buildShell(out, liv) {
       if (y1 <= y0Lo || y0 >= y1Hi) continue;
       const a = Math.max(y0, y0Lo), b = Math.min(y1, y1Hi);
       panelGrid(out, [o0[0], o0[1] + a, o0[2]], uVec, [0, b - a, 0], nu, nv, nrm,
-        (u, v) => seamed(wallAt(a + (b - a) * v), u, nu));
+        (u, v) => seamed(wallAt(a + (b - a) * v), u, nu), MAT.CONCRETE);
     }
   };
   for (let i = 0; i < walls.length; i++) {
@@ -197,14 +227,32 @@ function buildShell(out, liv) {
   for (const sx of [-1, 1])
     wallBands([sx > 0 ? APX : -W, 0, Z_DOOR], [W - APX, 0, 0], 4, walls[1][3], 0, CEIL_Y);
   wallBands([-APX, 0, Z_DOOR], [APX * 2, 0, 0], 8, walls[1][3], APY, CEIL_Y);
+  // THE OPENING HAD NO THICKNESS. The wall is a zero-thickness grid, so the
+  // aperture edge was a bare polygon boundary — no reveal, no lintel, no jamb
+  // return, no threshold — and it is the backdrop of the REAR preset, seen
+  // through 5.4 x 4.8 m of clear air. A door in a real building is a hole in
+  // something 30 cm thick, and that returned edge is the single strongest "this
+  // is a building" cue in the room. 0.30 m of reveal, in the shell so it culls
+  // with its own wall.
+  const RV = 0.30, revC = scale(PANEL, 0.72);
+  for (const sx of [-1, 1])                                  // jamb returns
+    block(out, sx * APX, APY / 2, Z_DOOR - RV / 2, 0.02, APY / 2, RV / 2, revC);
+  block(out, 0, APY, Z_DOOR - RV / 2, APX, 0.02, RV / 2, revC);   // lintel soffit
+  // Threshold: a raised sill across the opening, the join between the resin bay
+  // floor and the pit apron 4 cm below it.
+  block(out, 0, 0.022, Z_DOOR - 0.10, APX, 0.022, 0.10, scale(STEEL, 0.62), MAT.METAL);
+  // No material id: the ceiling is HORIZONTAL, and every wall-like id (CONCRETE
+  // included) keys its UV off world Y, which is constant here — see the note in
+  // buildBayFloor. It is also dark, culled from `top` and above the frame in
+  // `front`/`rear`, so there is nothing to gain by finding it a flat-keyed one.
   panelGrid(out, [-W, CEIL_Y, Z_BACK], [W * 2, 0, 0], [0, 0, Z_DOOR - Z_BACK], 4, 4,
     [0, -1, 0], () => DARK);
   // Roof truss. It lives in the shell because the ceiling culls from above and
   // looking down THROUGH the truss into the bay is the view we want up there.
   for (let s = -1; s <= 1; s += 2)
-    block(out, s * 2.6, CEIL_Y - 0.42, 0, 0.06, 0.06, (Z_DOOR - Z_BACK) / 2, STEEL);
+    block(out, s * 2.6, CEIL_Y - 0.42, 0, 0.06, 0.06, (Z_DOOR - Z_BACK) / 2, STEEL, MAT.METAL);
   for (let i = 0; i <= 4; i++)
-    block(out, 0, CEIL_Y - 0.42, Z_BACK + (Z_DOOR - Z_BACK) * (i / 4), 2.7, 0.05, 0.06, STEEL);
+    block(out, 0, CEIL_Y - 0.42, Z_BACK + (Z_DOOR - Z_BACK) * (i / 4), 2.7, 0.05, 0.06, STEEL, MAT.METAL);
 }
 
 // ── props ──────────────────────────────────────────────────────────────────
@@ -260,16 +308,26 @@ function buildProps(g, liv) {
   // junction box under each hanger — the two things every real garage wall has
   // and the cheapest way to give 41% of a frame something to look at.
   cyl(g.back, -4.70, 0, -6.15, 0.03, 1.80, STEEL, 6);
-  block(g.back, -4.70, 2.30, -6.12, 0.45, 0.62, 0.03, DARK);
+  // Landscape, not a mirror of the +X board: this one carries the strategy
+  // strip (D_STRAT), which is 4:1, and a portrait panel would letterbox it.
+  block(g.back, -4.70, 2.42, -6.12, 0.52, 0.20, 0.03, DARK);
+  block(g.back, -4.70, 1.92, -6.12, 0.44, 0.16, 0.025, scale(STEEL, 0.45));
   block(g.back, 0, 4.22, -6.20, 5.10, 0.035, 0.10, scale(STEEL, 0.8));
   block(g.back, 0, 4.34, -6.20, 5.10, 0.030, 0.08, scale(STEEL, 0.65));
   for (let i = -4; i <= 4; i++) {
     block(g.back, i * 1.15, 4.28, -6.20, 0.025, 0.10, 0.085, scale(STEEL, 0.55));
     if (i % 2) block(g.back, i * 1.15, 3.92, -6.17, 0.16, 0.20, 0.09, scale(STEEL, 0.45));
   }
-  // Door wall: the roller shutter, parked half open.
+  // Door wall: the roller shutter, parked half open. 22 m2, and the entire
+  // backdrop of the REAR preset — it was grey steel for every team with one
+  // wordmark decal floating on it. The slats now alternate steel and a dark
+  // team tint, which is what a sponsored roller door actually looks like and
+  // costs nothing but a colour.
+  const shutA = scale(STEEL, 0.75), shutB = [
+    STEEL[0] * 0.42 + c1[0] * 0.34, STEEL[1] * 0.42 + c1[1] * 0.34, STEEL[2] * 0.42 + c1[2] * 0.34];
   for (let i = 0; i < 11; i++)
-    block(g.door, 0, 2.05 + i * 0.26, Z_DOOR - 0.10, HALF_W * 0.72, 0.12, (i % 2) ? 0.035 : 0.05, scale(STEEL, 0.75));
+    block(g.door, 0, 2.05 + i * 0.26, Z_DOOR - 0.10, HALF_W * 0.72, 0.12,
+          (i % 2) ? 0.035 : 0.05, (i % 3) ? shutA : shutB, MAT.METAL);
   block(g.door, 0, 1.98, Z_DOOR - 0.10, HALF_W * 0.74, 0.07, 0.07, scale(STEEL, 1.1));
   // Guide rails up both jambs, so the shutter runs in something. In g.door with
   // the wall, not in g.mid: a rail left standing after its wall culled is the
@@ -310,8 +368,11 @@ function buildProps(g, liv) {
   // Wheel guns on a wall rack, hoses coiled on a reel above them.
   for (let i = 0; i < 3; i++) {
     const z = -1.9 + i * 0.55;
-    block(g.px, 5.16, 1.34, z, 0.07, 0.07, 0.10, [0.85, 0.62, 0.10]);
-    cyl(g.px, 5.16, 0.98, z, 0.045, 0.34, scale(STEEL, 0.7), 6);
+    // The gun bodies were a hard yellow on all eleven grids. Real crews run
+    // them in team colours, and they sit 1.3 m up on the wall the SIDE preset
+    // looks straight at.
+    block(g.px, 5.16, 1.34, z, 0.07, 0.07, 0.10, scale(c1, 0.92));
+    cyl(g.px, 5.16, 0.98, z, 0.045, 0.34, scale(STEEL, 0.7), 6, MAT.METAL);
   }
   block(g.px, 5.20, 1.62, -1.35, 0.06, 0.03, 1.15, STEEL);
   for (let i = 0; i < 2; i++) {
@@ -555,18 +616,55 @@ function buildPitLane(out, liv) {
   // makes an open door look open.
   const ASPHALT = [0.20, 0.205, 0.215], LINE = [0.88, 0.89, 0.91];
   const WALL = [0.30, 0.31, 0.34], WALL_TOP = [0.46, 0.47, 0.50];
-  tile(out, -PIT_HW, PIT_HW, PIT_Z0, PIT_Z1, ASPHALT, APRON_Y + 0.004);
+  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  // 21 x 5.45 m — 114 m2, the entire backdrop of the REAR preset, seen through
+  // a 5.4 x 4.8 m aperture — used to be ONE `tile()`: two triangles and one
+  // flat colour, so ten spot lights had nothing to fall on and the lane read as
+  // a painted backdrop rather than a surface. Subdivided 12 x 4 with a little
+  // vertex-colour mottle, it costs 96 triangles and starts taking light.
+  panelGrid(out, [-PIT_HW, APRON_Y + 0.004, PIT_Z0], [PIT_HW * 2, 0, 0],
+    [0, 0, PIT_Z1 - PIT_Z0], 12, 4, [0, 1, 0], (u, v) => {
+      // Deterministic per-vertex wear: darker in the working lane against the
+      // garages, and a hash so the mottle is not a gradient.
+      const h = ((u * 977 + v * 613) * 4093) % 1;
+      const k = 0.94 + h * 0.10 + (1 - v) * 0.05;
+      return [ASPHALT[0] * k, ASPHALT[1] * k, ASPHALT[2] * k];
+    }, MAT.ASPHALT);
   // Fast lane outside, working lane against the garages — the two boundary
   // lines every pit straight has.
   for (const z of [8.95, 11.70])
-    tile(out, -PIT_HW, PIT_HW, z, z + 0.13, LINE, APRON_Y + 0.008);
+    tile(out, -PIT_HW, PIT_HW, z, z + 0.13, LINE, APRON_Y + 0.008, MAT.ASPHALT);
+  // THE PIT BOX. A garage without its own box painted outside the door is a
+  // shed: this is the one marking that says which bay this is. Team-coloured
+  // outline on the lane, centred on the door.
+  // The box sits in the WORKING lane (z 6.45..8.95), never across the fast lane.
+  const BX0 = PIT_Z0 + 0.30, BX1 = 8.80;
+  for (const q of [[-1.9, -1.78, BX0, BX1], [1.78, 1.9, BX0, BX1],
+                   [-1.9, 1.9, BX0, BX0 + 0.12], [-1.9, 1.9, BX1 - 0.12, BX1]])
+    tile(out, q[0], q[1], q[2], q[3], c1, APRON_Y + 0.010, MAT.ASPHALT);
+  // Bollards along the FAR edge, between the outer line and the wall — never
+  // mid-lane, which is where a car drives. The vertical marks are what give the
+  // lane depth from the low REAR camera.
+  for (let i = -3; i <= 3; i++)
+    cyl(out, i * 2.9, APRON_Y + 0.008, 11.82, 0.055, 0.62,
+        i % 2 ? [0.80, 0.80, 0.84] : [0.72, 0.30, 0.10], 6, MAT.METAL);
+  // The garages opposite: a low run of blocks with lit fascias, so the far side
+  // of the lane is a row of buildings rather than the end of the mesh.
+  for (let i = -3; i <= 3; i++) {
+    block(out, i * 3.0, APRON_Y + 1.60, PIT_Z1 + 1.30, 1.42, 1.10, 0.60,
+          scale(WALL, i % 2 ? 0.92 : 1.06), MAT.CONCRETE);
+    // A fascia BAND on the front face, not a roof slab: 0.16 m deep, so its
+    // horizontal caps stay small. A wide flat cap of wall-keyed metal streaks
+    // for the same reason a concrete floor does.
+    block(out, i * 3.0, APRON_Y + 2.78, PIT_Z1 + 0.78, 1.46, 0.10, 0.08,
+          scale(WALL_TOP, 1.1), MAT.METAL);
+  }
   // A wall to stop the eye. Without it the lane runs to the apron rim and
   // fades into the clear colour, which reads as fog rather than as somewhere.
-  block(out, 0, APRON_Y + 0.50, PIT_Z1 + 0.18, PIT_HW, 0.50, 0.16, WALL);
-  block(out, 0, APRON_Y + 1.03, PIT_Z1 + 0.18, PIT_HW, 0.05, 0.20, WALL_TOP);
+  block(out, 0, APRON_Y + 0.50, PIT_Z1 + 0.18, PIT_HW, 0.50, 0.16, WALL, MAT.CONCRETE);
+  block(out, 0, APRON_Y + 1.03, PIT_Z1 + 0.18, PIT_HW, 0.05, 0.20, WALL_TOP, MAT.METAL);
   // A team-coloured hoarding along it, so the far side of the lane is a place
   // rather than a grey slab.
-  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
   for (let i = -2; i <= 2; i++)
     block(out, i * 3.6, APRON_Y + 0.62, PIT_Z1 + 0.02, 1.55, 0.26, 0.05,
           scale(c1, i % 2 ? 0.55 : 0.9));
@@ -580,6 +678,7 @@ function buildApron(out) {
     out.col.push(HOT[0] + (BACKDROP[0] - HOT[0]) * k,
                  HOT[1] + (BACKDROP[1] - HOT[1]) * k,
                  HOT[2] + (BACKDROP[2] - HOT[2]) * k);
+    pushMat(out, 1, MAT.ASPHALT);
   };
   const base = out.pos.length / 3;
   push(0, 0, 0);
@@ -607,13 +706,14 @@ function buildApron(out) {
 // tiling, not decals: overlapping coplanar quads z-fight at grazing elevation,
 // and a decal would miss the lamp pools entirely (the decal shader sees sun and
 // ambient only, never the point lights).
-function tile(out, x0, x1, z0, z1, col, y) {
+function tile(out, x0, x1, z0, z1, col, y, mid) {
   const base = out.pos.length / 3;
   const p = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
   for (let k = 0; k < 4; k++) {
     out.pos.push(p[k][0], y || 0, p[k][1]); out.nrm.push(0, 1, 0);
     out.col.push(col[0], col[1], col[2]);
   }
+  pushMat(out, 4, mid);
   out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
 }
 function buildBayFloor(out, liv) {
@@ -621,12 +721,29 @@ function buildBayFloor(out, liv) {
   const PAINT = [0.66, 0.67, 0.70], WALK = [0.70, 0.60, 0.12];
   const band = scale(rgb(liv && liv.c1, [0.3, 0.32, 0.36]), 0.7);
   const L = -HALF_W, R = HALF_W, B = Z_BACK, F = Z_DOOR, W = 0.11;
-  tile(out, L, R, B, B + 0.8, band);                       // team band, deep end
-  tile(out, L, R, B + 0.8, BOX_ZB - W, SLAB);
-  tile(out, L, -BOX_HW - W, BOX_ZB, BOX_ZF, SLAB);
-  tile(out, -BOX_HW, BOX_HW, BOX_ZB, BOX_ZF, IN);          // the box itself
-  tile(out, BOX_HW + W, R, BOX_ZB, BOX_ZF, SLAB);
-  tile(out, L, R, BOX_ZF + W, F, SLAB);
+  // ASPHALT, not CONCRETE, on a HORIZONTAL surface — and this is not a naming
+  // preference. matWallLike() in js/render/shaders/lit.js returns true for
+  // CONCRETE, so its triplanar UV is (an.x > an.z ? z : x, worldY). On a floor
+  // the normal is (0,1,0), `an.x > an.z` is false, and worldY is 0 everywhere:
+  // the UV collapses to a 1-D function of x and the "concrete" renders as
+  // longitudinal streaks smeared down -Z. ASPHALT is not wall-like, keys off
+  // world xz, and carries the most restrained relief in the table — which is
+  // what a squeegeed resin bay floor actually looks like.
+  const C = MAT.ASPHALT;
+  const key = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.55, 0.57, 0.62]);
+  tile(out, L, R, B, B + 0.8, band, 0, C);                 // team band, deep end
+  tile(out, L, R, B + 0.8, BOX_ZB - W, SLAB, 0, C);
+  tile(out, L, -BOX_HW - W, BOX_ZB, BOX_ZF, SLAB, 0, C);
+  tile(out, -BOX_HW, BOX_HW, BOX_ZB, BOX_ZF, IN, 0, C);    // the box itself
+  tile(out, BOX_HW + W, R, BOX_ZB, BOX_ZF, SLAB, 0, C);
+  tile(out, L, R, BOX_ZF + W, F, SLAB, 0, C);
+  // A team keyline just outside the box edge. 130 of the 138 m2 of floor was
+  // team-agnostic grey and the box — the thing the car is parked in, and 100%
+  // of the TOP preset — was the greyest part of it.
+  for (const q of [[L, R, BOX_ZB - W - 0.05, BOX_ZB - W], [L, R, BOX_ZF + W, BOX_ZF + W + 0.05],
+                   [-BOX_HW - W - 0.05, -BOX_HW - W, BOX_ZB - W, BOX_ZF + W],
+                   [BOX_HW + W, BOX_HW + W + 0.05, BOX_ZB - W, BOX_ZF + W]])
+    tile(out, q[0], q[1], q[2], q[3], key, 0.001, C);
   // The four pit-box edges were FLAT — a painted colour on the same plane as
   // the slab. The floor is the biggest surface in every camera preset (100% of
   // top, ~60% of hero/rear/front) and carried 36 triangles for 138 m2, so it
@@ -652,6 +769,7 @@ function buildBayFloor(out, liv) {
     const b2 = out.pos.length / 3;
     const p = [[x - 0.015, B], [x + 0.015, B], [x + 0.015, F], [x - 0.015, F]];
     for (let k = 0; k < 4; k++) { out.pos.push(p[k][0], 0.002, p[k][1]); out.nrm.push(0, 1, 0); out.col.push(J[0], J[1], J[2]); }
+    pushMat(out, 4, MAT.ASPHALT);
     out.idx.push(b2, b2 + 2, b2 + 1, b2, b2 + 3, b2 + 2);
   }
 }
@@ -718,6 +836,13 @@ const D_BUDGET = { x: 512, y: 768, w: 512, h: 128 };
 // The free 256x128 block below DRIVER: a wide team wordmark for the floor and
 // the lit sign over the door, drawn light-on-dark so it works on both.
 const D_SIGN = { x: 768, y: 384, w: 256, h: 128 };
+// The last free block, 512x128 under BUDGET. The -X pit board has existed since
+// the back wall was mirrored but no dress quad was ever placed on it, so a
+// team-branded panel rendered as a blank dark box in 41% of the FRONT frame.
+// It gets its OWN graphic rather than a second copy of the driver board: two
+// identical boards on one wall read as a copy-paste, and a real garage's second
+// board is the strategy call, not the drivers again.
+const D_STRAT = { x: 512, y: 896, w: 512, h: 128 };
 const css = (c) => "rgb(" + Math.round(Math.min(1, Math.max(0, c[0])) * 255) + "," +
   Math.round(Math.min(1, Math.max(0, c[1])) * 255) + "," +
   Math.round(Math.min(1, Math.max(0, c[2])) * 255) + ")";
@@ -734,6 +859,13 @@ function paintDress(team, liv, info) {
   ctx.clearRect(0, 0, DRESS, DRESS);
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
   const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
+  // ONE team signature, shared by everything on this atlas that must differ
+  // between bays but has no data of its own to differ by — the strategy board's
+  // stint plan and the engineers' trace shapes. team.id is already in the dress
+  // cache key, so nothing extra has to be folded in.
+  let sig = 0;
+  for (let i = 0; i < String(team && team.id || "").length; i++)
+    sig = (sig * 31 + String(team.id).charCodeAt(i)) & 0xffff;
   // Crest lightbox. The FIELD is chosen for contrast against the mark, and a
   // halo is added ONLY when the mark still lacks separation — the same rule
   // buildAtlas applies on the car. The first version passed the team's own c1
@@ -800,17 +932,55 @@ function paintDress(team, liv, info) {
     const tx = D_SCREEN.x + (t % 3) * (D_SCREEN.w / 3), ty = D_SCREEN.y + ((t / 3) | 0) * (D_SCREEN.h / 2);
     const tw = D_SCREEN.w / 3 - 6, th = D_SCREEN.h / 2 - 6;
     ctx.fillStyle = "#0b1016"; ctx.fillRect(tx + 3, ty + 3, tw, th);
-    ctx.strokeStyle = t % 2 ? "#3fd8c8" : "#e2a33c"; ctx.lineWidth = 2;
+    // Six identical sine traces in two fixed colours, for eleven teams. The
+    // engineers' bank is the -X wall's centrepiece and the SIDE preset looks
+    // straight at it, so every bay was quoting the same telemetry. One trace
+    // colour now comes from the livery accent, and the waveform is seeded off
+    // the team id: same idiom as the strategy board above, and the reason is
+    // the same — a shared graphic is a bay that could belong to anyone.
+    const tSeed = (sig + t * 7) % 32;
+    ctx.strokeStyle = t % 2 ? css(c2) : "#e2a33c"; ctx.lineWidth = 2;
     ctx.beginPath();
     for (let k = 0; k <= 22; k++) {
       const px = tx + 8 + (tw - 16) * (k / 22);
-      const py = ty + th * 0.55 - Math.sin(k * 0.9 + t) * th * 0.24 - (k % 5) * 1.6;
+      const py = ty + th * 0.55
+        - Math.sin(k * (0.55 + tSeed * 0.035) + t + tSeed) * th * 0.20
+        - Math.sin(k * 0.31 + tSeed) * th * 0.07
+        - (k % (3 + (tSeed % 4))) * 1.4;
       if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py);
     }
     ctx.stroke();
     ctx.strokeStyle = "rgba(120,150,175,0.22)"; ctx.lineWidth = 1;
     for (let gl = 1; gl < 4; gl++) {
       ctx.beginPath(); ctx.moveTo(tx + 6, ty + th * (gl / 4)); ctx.lineTo(tx + tw, ty + th * (gl / 4)); ctx.stroke();
+    }
+  }
+  // Strategy strip: the stint plan, in the team's own colours. Three rows of
+  // compound + laps, which is what the second board in a real bay shows.
+  {
+    const R = D_STRAT;
+    ctx.fillStyle = "#07090c"; ctx.fillRect(R.x, R.y, R.w, R.h);
+    ctx.fillStyle = css(c1); ctx.fillRect(R.x, R.y, R.w, 26);
+    // Light-on-dark or dark-on-light by luminance. The older boards here pin a
+    // fixed near-white, which disappears on a pale livery (Haas is white).
+    const hi = c1[0] * 0.30 + c1[1] * 0.59 + c1[2] * 0.11 > 0.55;
+    ctx.fillStyle = hi ? "#0a0b0d" : "#f4f5f7";
+    ctx.font = "700 18px system-ui, sans-serif";
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillText("RACE PLAN", R.x + 12, R.y + 13);
+    ctx.textAlign = "right";
+    ctx.fillText(String(team.short || team.name || "").toUpperCase(), R.x + R.w - 12, R.y + 13);
+    const h = sig;
+    const COMP = [["SOFT", "#d8443c"], ["MED", "#d8b23c"], ["HARD", "#d8d8d8"]];
+    for (let r = 0; r < 3; r++) {
+      const y = R.y + 44 + r * 28, c = COMP[(h + r * 2 + (r === 1 ? 1 : 0)) % 3];
+      ctx.fillStyle = "#101720"; ctx.fillRect(R.x + 10, y - 11, R.w - 20, 22);
+      ctx.fillStyle = c[1]; ctx.beginPath(); ctx.arc(R.x + 28, y, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#c8d4de"; ctx.font = "600 15px system-ui, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("STINT " + (r + 1) + "   " + c[0], R.x + 46, y);
+      ctx.textAlign = "right"; ctx.fillStyle = css(c2);
+      ctx.fillText(String(12 + ((h >> (r * 3)) & 7) * 3) + " LAPS", R.x + R.w - 18, y);
     }
   }
   // ── information boards ───────────────────────────────────────────────────
@@ -935,6 +1105,9 @@ function buildDress() {
   // graphic hung 0.29 m proud of the wall in open air AND covered the right
   // third of the driver board next to it.
   dquad(g.back, [[4.30, 1.74, -6.085], [5.10, 1.74, -6.085], [5.10, 2.86, -6.085], [4.30, 2.86, -6.085]], [0, 0, 1], D_BOARD);
+  // The -X board, which carried no graphic at all until now. Inset inside the
+  // 0.52 x 0.20 half-extent panel above, front face at z -6.09.
+  dquad(g.back, [[-5.16, 2.26, -6.085], [-4.24, 2.26, -6.085], [-4.24, 2.58, -6.085], [-5.16, 2.58, -6.085]], [0, 0, 1], D_STRAT);
   // Side walls: the wordmark repeated. Corner order is built per side so the
   // text reads the right way round from inside each wall.
   // Side-wall wordmarks, in the y 3.10-3.60 band that both walls have free.
@@ -1047,7 +1220,20 @@ let floorMesh = null, cacheKey = "";
 const dressMesh = {};
 let dressTex = null, dressFail = 0;
 const propMesh = {};
-const acc = () => ({ pos: [], nrm: [], col: [], idx: [] });
+// `mat` is a PER-VERTEX MATERIAL ID, and its absence is why this whole room was
+// untextured. GLX wires the attribute only when `data.mat.length === vCount`
+// (createMesh() in js/render/glx.js); without it every vertex reads the generic default
+// aMat = 0 = MAT.FLAT and applyMaterial early-outs on `mid <= 0`
+// (applyMaterial() in js/render/shaders/lit.js). So the bay was flat vertex colour while the
+// car standing in it sampled the baked PBR arrays. One float per vertex buys
+// concrete, asphalt and metal at ZERO extra triangles and ZERO extra draw
+// calls. Every primitive below takes an optional trailing `mid` defaulting to
+// 0, so the ~150 call sites that do not care are unchanged.
+const acc = () => ({ pos: [], nrm: [], col: [], mat: [], idx: [] });
+const pushMat = (out, n, mid) => {
+  if (!out.mat) return;
+  for (let i = 0; i < n; i++) out.mat.push(mid || 0);
+};
 function rebuild(team, liv, info) {
   const drv = (team && team.drivers) || [];
   // Same idiom as getCockpitWheel's _cockpitWheelKey (js/game/carmesh.js): fold

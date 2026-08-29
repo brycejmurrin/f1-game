@@ -78,8 +78,34 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
   // (the lower and inboard bars are cut — they face the undercut and the
   // chassis), and a dark core face at the back. +130 tris for both pods.
   // Measured 2820.
-  assert.ok(body <= 2830, `default body ${body} > 2830`);
+  // 2830 -> 2960: the DETAIL PASS. Most of it was free — a box, a tapered/raked
+  // `addSpan` and a 2-station `addStationLoft` are all 6 quads, so the DRS pod,
+  // the four rear-endplate louvres, all four uprights, the hub carriers and the
+  // crash-structure tail cap changed SHAPE at zero triangles, and the square
+  // single tailpipe became an 8-sided `addTube` for +4. The +120 is the front
+  // brake ducts: they were plain prisms with no mouth, the same flat-dark-face
+  // defect the radiator inlet had, and `addInletMouth` (written for that, never
+  // applied here) costs 4 throat walls a side with the lip suppressed. The
+  // COCKPIT build skips those mouths — from the seat they are behind the wheels
+  // — which is why the cockpit figure did not move at all. Measured 2948.
+  assert.ok(body <= 2960, `default body ${body} > 2960`);
   assert.ok(cockpit <= 1500, `cockpit ${cockpit} > 1500`);
+  // THE WHEELS LIVE HERE NOW. tests/specs/parts-physics.spec.js carried a second
+  // copy of the body/cockpit/wheel ceilings, drifted from these by two raises,
+  // and was red without anyone seeing it — a ratchet with two owners has none.
+  // That copy is gone; this file is the sole owner, so the wheel numbers had to
+  // come with it or they would have had no owner at all. 500 -> 750: the 500 was
+  // written for SEG 18 tyres and never followed the SEG 18 -> 24 raise that made
+  // 18-gon tyres stop reading polygonal in a close shot. Measured 692.
+  const frontWheel = tris(Car3D.buildWheel(0.32));
+  const rearWheel = tris(Car3D.buildWheel(0.38));
+  // 750 -> 800: the brake disc gained its OUTER EDGE. It was two flat annuli
+  // 16 mm apart with nothing joining them, so `rotorScale` moved rotorOuter by
+  // 13.1 mm and measured 12.66 mm WEAK — a flat annulus has no silhouette, so
+  // the radius grew and no camera could tell. One SEG-segment cylindrical band
+  // per wheel, +48. Measured 740.
+  assert.ok(frontWheel <= 800, `front wheel ${frontWheel} > 800`);
+  assert.ok(rearWheel <= 800, `rear wheel ${rearWheel} > 800`);
 });
 
 test("single-option recipes stay within 1.6x the default triangle budget", () => {

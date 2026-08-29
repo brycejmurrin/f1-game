@@ -20,6 +20,7 @@
     "test:parts": "node tools/run-playwright.mjs tests/specs/parts-*.spec.js tests/specs/car-effects.spec.js tests/specs/carview-parts.spec.js tests/specs/custom-team.spec.js tests/specs/garage-aero.spec.js",
     "test:steering": "node tools/run-playwright.mjs tests/specs/presets.spec.js tests/specs/sliders.spec.js tests/specs/steering.spec.js tests/specs/gamepad.spec.js tests/specs/touch-steer.spec.js tests/specs/tilt-pipeline.spec.js tests/specs/steer-migration.spec.js",
     "test:parts-unit": "node --test tests/unit/parts-ladder.test.mjs",
+    "test:garage-unit": "node --test tests/unit/garage-mesh.test.mjs",
     "test:steering-unit": "node --test tests/unit/brake-cue.test.mjs",
     "test:camera": "node tools/run-playwright.mjs tests/specs/camera.spec.js tests/specs/camera-hooks.spec.js tests/specs/camera-driving-hooks.spec.js tests/specs/camera-tuner.spec.js",
     "test:ui": "node tools/run-playwright.mjs tests/specs/ui-button-touch.spec.js tests/specs/ui-resize.spec.js tests/specs/ui-scale.spec.js tests/specs/ui-redesign.spec.js tests/specs/hud-layout.spec.js tests/specs/hud-audit.spec.js tests/specs/menu-survey.spec.js tests/specs/menu-keyboard.spec.js tests/specs/rotation-recovery.spec.js",

@@ -1183,25 +1183,22 @@ test.describe("Parts module — visual recipes", () => {
     expect(size[2]).toBeLessThan(6.2);
   });
 
-  test("car mesh layers stay below absolute triangle ceilings", async ({ page }) => {
+  test("the decal sheet stays below its absolute triangle ceiling", async ({ page }) => {
     await load(page);
     const triangles = await page.evaluate(() => ({
-      body: Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { noWheels: true }).idx.length / 3,
-      cockpit: Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1],
-        { noWheels: true, noDriver: true, cockpit: true }).idx.length / 3,
-      frontWheel: Car3D.buildWheel(0.32).idx.length / 3,
-      rearWheel: Car3D.buildWheel(0.38).idx.length / 3,
       decals: CarMesh.carDecalData(2).idx.length / 3,
     }));
-    // 2400 -> 2545: the round-halo tube + pillar V-brace + regulation
-    // mirrors — mirrors the raises (and their measurements) recorded in
-    // tests/unit/car-wing-foil.test.mjs.
-    expect(triangles.body).toBeLessThanOrEqual(2545);
-    expect(triangles.cockpit).toBeLessThanOrEqual(1500);
-    // 400 -> 500: tyres at SEG 24 (18-gon tyres read visibly polygonal in any
-    // close shot; measured 480 at the raise).
-    expect(triangles.frontWheel).toBeLessThanOrEqual(500);
-    expect(triangles.rearWheel).toBeLessThanOrEqual(500);
+    // THE BODY / COCKPIT / WHEEL CEILINGS USED TO BE HERE TOO, and they were a
+    // verbatim second copy of tests/unit/car-wing-foil.test.mjs's — same pure-JS
+    // `Car3D.build`/`buildWheel`, so this copy could never catch anything the
+    // node one missed, and it sat in a 20-minute browser group instead of the
+    // edit loop. Predictably it drifted: it still read `body <= 2545` after the
+    // node test had been raised twice (2545 -> 2690 -> 2830), and `wheel <= 500`
+    // after tyres went SEG 18 -> 24. Measured 2820 / 692 on the tree where this
+    // comment was written — RED, and unnoticed for exactly as long as it took to
+    // run this group. car-wing-foil.test.mjs is now the sole owner of those
+    // three. The decal count stays here because CarMesh's sheet is not what that
+    // file measures.
     // 48, FROM A MEASUREMENT. This said 32 and the decal sheet has been 36
     // triangles (18 quads over LiveryTex's 8 regions) at EVERY revision of
     // js/game/carmesh.js — bisected, not assumed. So the ceiling was never

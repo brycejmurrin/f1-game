@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 144 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 145 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -242,6 +242,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | `debris` | the Rapier debris side-world |
 | `steering` | presets, sliders, steering modes, gamepad |
 | `parts-unit` | the catalog LADDER in Node — no paid option dominated by a cheaper one, no row that is never optimal at any price (bar the two wet compounds), no flat category stat, and a career budget cap that clears the dearest works car without reaching the top shelf |
+| `garage-unit` | the garage bay's per-vertex material column — present, right length, and not uniformly FLAT |
 | `steering-unit` | braking CUE math in Node — slider 1 is OFF, urgency is 0..1 never a brake command |
 
 ### Track & scenery
@@ -763,6 +764,7 @@ what it covers.
 | `crest-marks.test.mjs` | every team mark is READABLE, measured rather than eyeballed: extent inside the fit box and filling it, no limb under `STROKE_MIN` (1.9 px at the 34 px the mobile-AI fin badge gets), lettering floored and absent when `bare`, a colour census that fails on any paint outside `markPalette`, no alpha or `destination-out`, ink coverage in band and stable between 430 px and 40 px, and the 4.2:1 contrast floor over every team x livery x the four surfaces a mark lands on. Measures through `tools/crest-sweep.mjs`. Would have failed on the traced logo PNGs this replaced |
 | `parts-visual-distinctness.test.mjs` | every catalog option is VISIBLY different from the one it replaces, measured rather than hashed: builds all 297 options offline and gates on surface distance, moved area, palette transport and a 14-view visibility mask. INVISIBLE / BROKEN / SLIDE / INTERNAL must be empty, COLOUR-ONLY is an exact allow-list, WEAK is a downward-only ratchet; plus the census (12/297/121) and the SIGNATURE invariant that a reskin keeps its equivalent's cost and all four stat multipliers. Measures through `tools/parts-sweep.mjs`. ~4 min, so it runs in `test:sweeps`, never in the edit loop |
 | `parts-ladder.test.mjs` | every catalog option is one a rational player could ever want to BUY — the other half of the promise `parts-visual-distinctness` makes. An option is LIVE when it maximises `sum w_i*log(stat_i) - lambda*cost` for some positive taste and some price (the upper convex hull of the (cost, log-stat) set, solved exactly per weight vector, no lambda grid). Gates: no PAID option strictly dominated by a cheaper one; the never-optimal list is exact in BOTH directions against a named exemption list (the two wet compounds, which the four DRY stats cannot score); no category flat on a stat; SIGNATURE cost/stat parity; and the career budget cap clears the dearest works car while staying under the whole top shelf. Measured 2026-08-29: 67 of 169 rows never optimal before the re-space, 2 after. Measures through `tools/parts-ladder.mjs`. ~0.3 s, node-only — cheap enough for the edit loop |
+| `garage-mesh.test.mjs` | the bay's meshes carry a per-vertex MATERIAL column of exactly one float per vertex, and the big surfaces are not all left on `MAT.FLAT`. A silent-failure guard: GLX wires the attribute only when `data.mat.length === vCount` (`glx.js:647`) and drops a wrong-length column with no warning, which is how the whole garage shipped untextured while the car standing in it sampled the baked PBR arrays. Runs the real module in a `node:vm` against a recording Gfx — no browser, ~0.15 s |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 111-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
