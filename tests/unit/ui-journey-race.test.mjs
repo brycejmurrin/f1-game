@@ -100,3 +100,51 @@ test("sector box still clears unscaled #pausebtn via --tap / --hud-z", () => {
   assert.match(hud,
     /#hud-sectors \{[\s\S]*?top:\s*calc\(\(8px \+ var\(--tap\) \+ 4px \+ var\(--sat\)\) \/ var\(--hud-z\)\)/);
 });
+
+/* THE TOUCH-CONTROL TRANSPARENCY LADDER, and the specificity trap under it.
+ *
+ * Reported from a live race, both in one message: the five action buttons did
+ * not agree on transparency (pedals 0.42, OT/AERO 0.82, BOOST 0.9), and BRAKE
+ * lit up under the thumb while GAS did not. The second one was not a missing
+ * rule — `#btn-throttle:active` has always been there. `body.steer-buttons
+ * #btn-throttle` is (1,1,1) and `#btn-throttle:active` is (1,1,0), so an idle
+ * fill restated in the buttons-mode block won in EVERY state and the pressed
+ * colour was unreachable. It shipped because BRAKE carried no such restatement,
+ * so exactly one of the two pedals was broken and only in one steering mode. */
+test("no layout-mode rule restates a pedal fill over its pressed colour", () => {
+  const css = stripComments(read("css/overlays.css"));
+  for (const id of ["btn-throttle", "btn-brake"]) {
+    assert.match(css, new RegExp(`#${id}:active \\{[^}]*background:`),
+      `#${id} must have a pressed fill at all`);
+    for (const m of css.matchAll(new RegExp(`body\\.[a-z-]+ #${id}\\s*\\{([^}]*)\\}`, "g"))) {
+      assert.doesNotMatch(m[1], /background/,
+        `a body-class rule for #${id} sets a background; it outranks #${id}:active ` +
+        "(1,1,1 vs 1,1,0) and silently deletes the pressed state. Position only here.");
+    }
+  }
+});
+
+test("the five action buttons share one transparency and the arrows keep theirs", () => {
+  const css = stripComments(read("css/overlays.css"));
+  assert.match(css, /--btn-a:\s*0?\.\d+/, "the shared idle transparency is one named number");
+  const shared = css.match(/:where\(([^)]*)\)\s*\{\s*opacity:\s*var\(--btn-a\)/);
+  assert.ok(shared, "one :where() rule carries the shared idle opacity — :where() so " +
+    "every state rule below outranks it without restating an id");
+  const ids = shared[1].split(",").map((s) => s.trim()).sort();
+  assert.deepEqual(ids,
+    ["#btn-aero", "#btn-boost", "#btn-brake", "#btn-ot", "#btn-throttle"],
+    "exactly the five action buttons — the steering arrows are held for a whole " +
+    "lap over the road, not glanced at over the cockpit, and stay as they are");
+  assert.doesNotMatch(css, /\.steerbtn[^{]*\{[^}]*opacity/,
+    ".steerbtn must not join the ladder");
+  // The rungs that mean "this is live NOW" are the fully opaque ones — the
+  // behaviour the reporter singled out as correct on OT, generalised.
+  for (const sel of ["#btn-boost.on", "#btn-ot.armed", "#btn-ot.on",
+    "#btn-aero.armed", "#btn-aero.on", "#btn-throttle:active", "#btn-brake:active"]) {
+    const rule = css.match(new RegExp(`${sel.replace(/[.#]/g, "\\$&")}\\s*\\{([^}]*)\\}`));
+    assert.ok(rule && /opacity:\s*1\b/.test(rule[1]),
+      `${sel} is a live state and must restore full opacity over --btn-a`);
+  }
+  assert.match(css, /\.touchbtn\.dead \{\s*opacity:\s*0\.3/,
+    "dead stays the bottom rung, below idle");
+});

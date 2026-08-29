@@ -200,7 +200,14 @@ const CEILING = {
   // restates --grad-head's sheen layer (the token's own 0.07 white, an
   // existing spelling — distinct stays flat) to run the red bleed to 100%
   // on the one sheet head wider than the token was tuned for.
-  rawColor: 378,
+  // 2026-08-29: 378 -> 376. The touch-button transparency pass: two BYTE-
+  // IDENTICAL restatements of #btn-throttle's idle fill came out of the
+  // buttons-mode blocks in overlays.css. They were not decoration — at
+  // (1,1,1) they outranked #btn-throttle:active (1,1,0), so GAS could not
+  // light up under a thumb in the one steering mode that used them. The
+  // ladder's own alphas moved with it (pedals to 0.85, presses to 0.95) but
+  // traded one spelling for another, so distinct stays flat.
+  rawColor: 376,
   // distinct colour VALUES after normalising spelling: space-after-comma,
   // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
   // canonical form. This is the fork guard — identical paint must not hide

@@ -29,6 +29,10 @@
   --btn-gap: 8px;
   --btn-pitch: calc(var(--btn) + var(--btn-gap));      /* one slot up the column */
   --steer: 84px;                                       /* steering arrow diameter */
+  /* ONE TRANSPARENCY FOR THE FIVE ACTION BUTTONS. See the ladder note above
+     #btn-boost: this is the IDLE rung, and it is applied as element opacity
+     rather than as a fill alpha so it can never touch a label's contrast. */
+  --btn-a: 0.68;
 }
 .touchbtn {
   position: fixed;
@@ -44,13 +48,42 @@
   padding: 0;
   touch-action: none;
 }
+/* THE FIVE ACTION BUTTONS SHARE ONE TRANSPARENCY, and it is `opacity`, not a
+   fill alpha. Reported from a live race: the five did not agree — the pedals
+   sat at 0.42, OT and AERO at 0.82, BOOST at 0.9 — so a control pad that is one
+   object read as five unrelated circles.
+   Alpha could not fix it. Three of these carry DARK labels on LIGHT fills
+   (#3a3208, #0d2b3d, #04240f), and a fill alpha composites the label's
+   background against the scene: drop AERO from 0.82 to 0.4 over a near-black
+   cockpit and the fill lands near rgb(92,100,107), putting its navy label at
+   ~2.2:1. That contrast floor is why 0.82 was picked (see the block above
+   #btn-ot); it was never a preference.
+   `opacity` fades fill, border and label TOGETHER, so label-against-fill is
+   preserved exactly and only button-against-scene drops — which is what "more
+   transparent" actually means. It is also the mechanism that already produced
+   the one state a player pointed at as correct: `.dead`.
+   THE LADDER, low to high: dead 0.3 (cannot be used) -> idle --btn-a (0.68)
+   -> armed / engaged / pressed 1.0. Every rung that means "this is live NOW"
+   is fully opaque, so the state a thumb is looking for is the brightest thing
+   in the group. :where() so this carries ZERO specificity and every state rule
+   below outranks it without having to restate an id.
+   THE STEERING ARROWS ARE DELIBERATELY NOT HERE: they are held for a whole lap
+   rather than glanced at, and they sit over the road rather than over the
+   cockpit. .steerbtn keeps its own fill. */
+:where(#btn-throttle, #btn-brake, #btn-boost, #btn-ot, #btn-aero) { opacity: var(--btn-a); }
+
 /* LEFT thumb column: GAS (bottom) + BRAKE (above) — always.
    RIGHT thumb column: BOOST + OT by default; in MANUAL mode the gearbox
    takes the right column (DN bottom, UP above) and BOOST/OT move to centre. */
-#btn-throttle { left: calc(16px + var(--sal)); bottom: calc(16px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
-#btn-throttle:active { background: rgba(0, 210, 90, 0.75); }
-#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); background: rgba(180, 35, 35, 0.42); }
-#btn-brake:active { background: rgba(230, 45, 45, 0.75); }
+/* The pedal fills are near-opaque and the shared --btn-a above does the seeing
+   through. At 0.42 they were not really translucent so much as WASHED: over the
+   black cockpit that is most of what sits behind them, a 0.42 fill just reads
+   as a darker flat colour, which is why they looked like the SOLID pair next to
+   OT and AERO rather than the transparent one. */
+#btn-throttle { left: calc(16px + var(--sal)); bottom: calc(16px + var(--sab)); background: rgba(0, 170, 70, 0.85); }
+#btn-throttle:active { background: rgba(0, 210, 90, 0.95); opacity: 1; }
+#btn-brake    { left: calc(16px + var(--sal)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); background: rgba(180, 35, 35, 0.85); }
+#btn-brake:active { background: rgba(230, 45, 45, 0.95); opacity: 1; }
 
 /* BOOST IS THE BATTERY, so it is GREEN and its colour IS the charge. `--e` is
    written each frame by hud.js from player.energy (0..1) and mixed between a
@@ -70,7 +103,7 @@
                                                rgba(200, 210, 205, 0.4));
              color: #04240f; }
 #btn-boost.on { background: rgba(13, 84, 40, 0.96); color: #d8ffe4; border-color: #35c96c;
-                box-shadow: 0 0 20px rgba(40, 200, 100, 0.85); }
+                box-shadow: 0 0 20px rgba(40, 200, 100, 0.85); opacity: 1; }
 /* OT is YELLOW and AERO is GREEN, and each DARKENS when it is doing something.
    One hue per control, brightness for state: you can tell what a button is by
    its colour without reading it, and whether it is live without comparing it to
@@ -90,13 +123,19 @@
    cannot use this" and "use this NOW" was the smallest difference on the screen.
    Washing idle toward white costs nothing (you never need to read it quickly:
    its whole message is "not yet") and buys the armed state a step in SATURATION
-   on top of the glow and the pulse. Engaged is then the dark fill. */
+   on top of the glow and the pulse. Engaged is then the dark fill.
+   ALL OF THAT STILL HOLDS, and it is now the reason these fills are LEFT alone:
+   the group's shared see-through (--btn-a, top of the file) is element opacity,
+   so the fill an idle label sits on is still the near-opaque one this paragraph
+   argues for. Lowering these alphas to match the pedals would have re-run the
+   olive/sage arithmetic above AND dropped the dark labels toward 2:1. */
 #btn-ot    { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab));
              background: rgba(251, 241, 186, 0.82); border-color: rgba(255, 251, 220, 0.75); color: #3a3208; }
 #btn-ot.armed { background: rgba(255, 210, 26, 1); color: #2b2400; border-color: #ffe98a;
-                box-shadow: 0 0 20px rgba(250, 195, 20, 0.85); animation: pulse 0.8s infinite; }
+                box-shadow: 0 0 20px rgba(250, 195, 20, 0.85); animation: pulse 0.8s infinite;
+                opacity: 1; }
 #btn-ot.on { background: rgba(122, 88, 0, 0.96); color: #ffeeae; border-color: #f0c419;
-             box-shadow: 0 0 18px rgba(225, 175, 20, 0.8); }
+             box-shadow: 0 0 18px rgba(225, 175, 20, 0.8); opacity: 1; }
 /* ACTIVE AERO is BLUE. Green belongs to BOOST now, and the two must not share a
    hue: they are the only pair that can be lit at the same moment, and telling
    "I have charge" from "the wing is open" at a glance is the entire point of
@@ -106,9 +145,9 @@
 #btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: var(--fs-micro);
              background: rgba(200, 230, 252, 0.82); border-color: rgba(233, 245, 255, 0.75); color: #0d2b3d; }
 #btn-aero.armed { background: rgba(38, 165, 245, 1); color: #04202e; border-color: #b3e2ff;
-                  box-shadow: 0 0 20px rgba(40, 165, 245, 0.8); }
+                  box-shadow: 0 0 20px rgba(40, 165, 245, 0.8); opacity: 1; }
 #btn-aero.on { background: rgba(8, 62, 120, 0.96); color: #d6efff; border-color: #3fb6ff;
-               box-shadow: 0 0 18px rgba(50, 175, 255, 0.8); }
+               box-shadow: 0 0 18px rgba(50, 175, 255, 0.8); opacity: 1; }
 /* No activation zone anywhere on this circuit: the control cannot do anything,
    so it says so rather than sitting there inviting taps. Faded, not hidden —
    hiding it would reflow the touch-control stack and move every OTHER button
@@ -151,7 +190,12 @@ body.manual #btn-aero  { bottom: calc(16px + 4 * var(--btn-pitch) + var(--sab));
    block at the bottom of this file. In portrait 428px fits with 239px to spare
    on the shortest screen the suite tests, and racing in portrait is blocked
    outright (#rotate-device) besides. */
-body.steer-buttons #btn-throttle { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); background: rgba(0, 170, 70, 0.42); }
+/* POSITION ONLY, NEVER A FILL. `body.steer-buttons #btn-throttle` is (1,1,1)
+   and `#btn-throttle:active` is (1,1,0), so a background restated here beats
+   the pressed colour and the pedal stops lighting up under the thumb — in
+   buttons mode only, which is why it shipped: BRAKE has no such restatement,
+   so BRAKE lit and GAS did not. Guarded in tests/unit/ui-journey-race.test.mjs. */
+body.steer-buttons #btn-throttle { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); }
 body.steer-buttons #btn-brake    { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); }
 body.steer-buttons #btn-boost    { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); }
 body.steer-buttons #btn-ot       { left: auto; right: calc(16px + var(--sar)); bottom: calc(16px + 3 * var(--btn-pitch) + var(--sab)); }
@@ -416,7 +460,6 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   #btn-ot   { bottom: calc(12px + var(--btn-pitch) + var(--sab)); }
   #btn-boost { bottom: calc(12px + var(--sab)); }
   #btn-aero { bottom: calc(12px + 2 * var(--btn-pitch) + var(--sab)); }
-  body.steer-buttons #btn-throttle { background: rgba(0, 170, 70, 0.42); }
   /* ---- BUTTONS MODE: THE CLUSTER DROPS TO TWO COLUMNS ----
      Buttons mode is the only layout with TWO steer arrows on the left, and that
      one extra 72px circle is what takes the bottom bar over the width it has.
