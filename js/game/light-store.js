@@ -64,13 +64,20 @@ const LightStore = (() => {
       const c = F["*|" + tod];
       if (!c) return null;
       const gfx = G.gfx;
-      if (!gfx || !gfx.hasPerChunkLights || gfx.isMobile) return null;
-      // GfxQuality.current() IS the id string (gfx-quality.js exports
-      // `current: () => current().id`), so the old `.current().id` read
-      // undefined on every call and this gate never opened — the ULTRA-night
-      // per-chunk rung was dead for everyone, including the set() path that
-      // deliberately calls LightStore.reapply() to engage it live.
-      if (typeof GfxQuality === "undefined" || GfxQuality.current() !== "ultra") return null;
+      // CAPABILITY only. The preset-id and isMobile tests that used to live
+      // here were POLICY, and both were wrong:
+      //   - "ultra only": HIGH is the same PerfGov tier 0 and the desktop
+      //     DEFAULT preset, so the rung shipped to almost nobody. Nothing
+      //     measured separated the two.
+      //   - "not mobile": never measured at all (docs/LIGHTING-TUNER-SLIDERS.md
+      //     says so in as many words), and it meant a phone read 0 at every
+      //     preset and every hour — the feature simply did not exist there.
+      // What actually bounds the cost now lives where the cost is: the resolved
+      // gate in game.js sheds on the GOVERNOR's measured tier and the crash
+      // floor, so a device that cannot afford it loses it by evidence rather
+      // than by device class. hasPerChunkLights stays — three.js genuinely
+      // cannot bind per-chunk sets without minting a program per chunk.
+      if (!gfx || !gfx.hasPerChunkLights) return null;
       return c;
     }
 

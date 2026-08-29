@@ -419,7 +419,7 @@ function buildLiveryOptions(container, team) {
     const tag = document.createElement("span"); tag.className = "cs-opt-cost free"; tag.textContent = "NEW"; row.appendChild(tag);
     row.onclick = () => {
       csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "",
-                     noseStripe: "", nose: "", pod: "", wing: "", fin: "", finArt: "", logo: "",
+                     noseStripe: "", nose: "", pod: "", wing: "", fin: "", finArt: "", logo: "", logo2: "",
                      halo: "", finish: "gloss" };
       csLivEditId = null;
       csLivCreating = true;
@@ -472,6 +472,7 @@ function buildLiveryOptions(container, team) {
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
           logo: liv.logo ? arrToHex(liv.logo) : "",
+          logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
           finish: liv.finish || "gloss",
         };
         csLivEditId = liv.id;
@@ -515,6 +516,7 @@ function buildLiveryOptions(container, team) {
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
           logo: liv.logo ? arrToHex(liv.logo) : "",
+          logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
           finish: liv.finish || "gloss",
         };
         csLivEditId = null;   // create-new: never overwrites the stock scheme
@@ -562,7 +564,7 @@ function buildLiveryCreator(container, team) {
   // distinct value in the draft, then the team's own two stock colours. Click
   // one and the slot takes it EXACTLY.
   const PAL_KEYS = ["c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod",
-                    "wing", "fin", "finArt", "logo", "halo"];
+                    "wing", "fin", "finArt", "logo", "logo2", "halo"];
   const paletteColours = () => {
     const seen = [];
     const add = (v) => {
@@ -624,6 +626,11 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("TAIL FIN", "fin", true));
   wrap.appendChild(colorRow("TAIL GRAPHIC", "finArt", true));
   wrap.appendChild(colorRow("TEAM LOGO", "logo", true));
+  // The mark's SECOND colour. What that is depends on the mark — a backing
+  // disc for Red Bull and Ferrari, the second layer for Cadillac and Haas, and
+  // a rim for the seven single-colour silhouettes (Audi's rings among them).
+  // markPalette resolves which; NONE keeps every mark exactly as it ships.
+  wrap.appendChild(colorRow("LOGO DETAIL", "logo2", true));
   wrap.appendChild(colorRow("HALO", "halo", true));
   {
     const r = document.createElement("div"); r.className = "cs-liv-ed-row";
@@ -682,6 +689,7 @@ function buildLiveryCreator(container, team) {
     if (d.fin)  liv.fin  = hexToArr(d.fin);
     if (d.finArt) liv.finArt = hexToArr(d.finArt);
     if (d.logo) liv.logo = hexToArr(d.logo);
+    if (d.logo2) liv.logo2 = hexToArr(d.logo2);
     if (d.halo) liv.halo = hexToArr(d.halo);
     if (d.finish && d.finish !== "gloss") liv.finish = d.finish;
     const existing = getCustomLiveries(team.id);
@@ -712,6 +720,7 @@ function livePreviewDraft(team, d) {
     nose: d.nose ? hexToArr(d.nose) : null, pod: d.pod ? hexToArr(d.pod) : null, wing: d.wing ? hexToArr(d.wing) : null, halo: d.halo ? hexToArr(d.halo) : null,
     fin: d.fin ? hexToArr(d.fin) : null, finArt: d.finArt ? hexToArr(d.finArt) : null,
     logo: d.logo ? hexToArr(d.logo) : null,
+    logo2: d.logo2 ? hexToArr(d.logo2) : null,
     noseStripe: d.noseStripe ? hexToArr(d.noseStripe) : null,
     finish: d.finish && d.finish !== "gloss" ? d.finish : null } };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints

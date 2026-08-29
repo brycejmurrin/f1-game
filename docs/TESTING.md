@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 140 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 141 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -758,6 +758,7 @@ what it covers.
 | `no-bare-console.test.mjs` | logging goes through Log — no bare console.* in js/ outside log.js (the nostr interception seam allowlisted with its reason) |
 | `lamp-chunks.test.mjs` | the shared per-chunk lamp bake (LampChunks): nearest-first reach-filtered selection, the knob→cap formula (floor 8, CAP 24), concat/offsets/counts ≡ the per-chunk lists, and the bake-once invalidation contract (lights array identity + knob value) |
 | `cockpit-pale-surfaces.test.mjs` | nothing in the COCKPIT build reads as a blank pale slab: ray-casts every team's cockpit mesh from the driver's eye and fails on a pale ACCENT (the car's own body colour is exempt — racingbulls really is a white car). Proven to fail on ferrari + williams with the `_ckAcc` dimming disabled |
+| `crest-marks.test.mjs` | every team mark is READABLE, measured rather than eyeballed: extent inside the fit box and filling it, no limb under `STROKE_MIN` (1.9 px at the 34 px the mobile-AI fin badge gets), lettering floored and absent when `bare`, a colour census that fails on any paint outside `markPalette`, no alpha or `destination-out`, ink coverage in band and stable between 430 px and 40 px, and the 4.2:1 contrast floor over every team x livery x the four surfaces a mark lands on. Measures through `tools/crest-sweep.mjs`. Would have failed on the traced logo PNGs this replaced |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 111-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
@@ -977,6 +978,28 @@ what it covers.
 
 The measured history behind the testing gates. AGENTS.md carries the rules;
 this section carries the evidence so the rules survive re-litigation.
+
+**A probe that returns "no change" is guilty until proven innocent (2026-08-29).**
+The report was that the editor's TEAM LOGO colour did nothing on the Audi tail.
+Three offline probes ran before one of them was trustworthy. The first hashed
+every 97th byte of the atlas region — fine for a full-region tint, useless for
+Audi's mark, which is four thin ring STROKES, so it reported "no change" for a
+region that changed. The second hashed every byte but tested against a livery
+whose paint no candidate colour could clear, so all three test colours collapsed
+to the SAME `inkOn(under)` fallback and it again reported "no change" — a true
+statement about a rigged input. Only the third, on a field both marks could
+clear, separated the real answer: the fin BADGE responds to `liv.logo`, the fin
+GRAPHIC never does (that is the TAIL GRAPHIC row, `liv.finArt`), and the actual
+defect was upstream of both — `markPalette` substituted a different colour for
+the authored one whenever it fell under `MARK_FLOOR`, which for Audi's
+`[0.96,0.02,0.22]` fin is nearly every mid-tone in the picker. Measured with
+`tools/logo-authored-sweep.mjs`: 9015 of 12112 authored colours were overruled;
+after the authored-halo path, the shark-fin badge keeps 91.2% (was 33.9%). The
+engine cover stays lower (37.4%, was 17.2%) and that is geometry, not a bug —
+`drawTailGraphic` washes it with an alpha gradient of `stripe||c2`, so the mark
+is scored against c1 AND c2 at once, and for a near-black-plus-bright-red pair
+NO colour clears 4.2 against both. Lesson: a negative result from a probe you
+wrote is a claim about the probe until an independent positive control passes.
 
 **`child exited on SIGTERM` is a WORKER line, not the run (2026-08-17).** A
 `test:tiny` log showed `[playwright] child exited on SIGTERM` at 28/73 while

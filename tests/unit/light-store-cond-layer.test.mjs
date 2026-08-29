@@ -86,16 +86,27 @@ test("'default' time-of-day resolves through track.def.night before matching the
   assert.equal(day.LT.perChunkLights, 0, "default on a day circuit is day — no layer");
 });
 
-test("HIGH does not get the layer — the preset predicate is what separates it from ULTRA", () => {
-  const h = loadStore({ presets: NIGHT_LAYER, preset: "high" });
-  assert.equal(h.LT.perChunkLights, 0);
+test("EVERY preset gets the layer — the ULTRA-only predicate is gone", () => {
+  // It used to be ULTRA-only, which shipped the rung to almost nobody: HIGH is
+  // the same PerfGov tier 0 AND the desktop default preset, and nothing
+  // measured ever separated the two. What bounds the cost now is the resolved
+  // gate in game.js, which sheds on the governor's MEASURED tier instead of on
+  // which preset the player picked.
+  for (const preset of ["low", "medium", "high", "ultra"]) {
+    const st = loadStore({ presets: NIGHT_LAYER, preset });
+    assert.equal(st.LT.perChunkLights, 0.3, preset + " must resolve the layer");
+  }
 });
 
-test("a backend without the capability, or mobile, never resolves the layer", () => {
+test("MOBILE gets the layer too — capability is the only gate left", () => {
+  // The isMobile exclusion was never measured (docs/LIGHTING-TUNER-SLIDERS.md
+  // says so outright) and meant a phone read 0 at every preset and every hour,
+  // i.e. the feature did not exist on mobile at all.
+  const mob = loadStore({ presets: NIGHT_LAYER, gfx: { hasPerChunkLights: true, isMobile: true } });
+  assert.equal(mob.LT.perChunkLights, 0.3);
+  // Capability still gates: three.js cannot bind per-chunk sets.
   const tlx = loadStore({ presets: NIGHT_LAYER, gfx: { hasPerChunkLights: undefined, isMobile: false } });
   assert.equal(tlx.LT.perChunkLights, 0);
-  const mob = loadStore({ presets: NIGHT_LAYER, gfx: { hasPerChunkLights: true, isMobile: true } });
-  assert.equal(mob.LT.perChunkLights, 0);
   const none = loadStore({ presets: NIGHT_LAYER, gfx: null });
   assert.equal(none.LT.perChunkLights, 0);
 });

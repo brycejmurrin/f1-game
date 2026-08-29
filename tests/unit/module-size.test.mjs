@@ -415,7 +415,11 @@ const CEILINGS = {
   // chunked on most devices for the cull alone, and chunked.js bound per-chunk
   // lamps to anything chunked. The field carries the knob to the backends so
   // the lamps follow it while the culling stays put.
-  "js/game.js": 8721,
+  // 8721 -> 8727: the LAMPS controls now reach chunked geometry — the per-chunk
+  // knob is resolved BEFORE setFrameLights (it feeds the scaled full-set build)
+  // and allLights is left null when the feature is off instead of handing out
+  // the raw baked list.
+  "js/game.js": 8727,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -453,7 +457,11 @@ const CEILINGS = {
   // which — "per-chunk lamps do nothing on my machine" was undiagnosable, and
   // the probe written to verify the PER-CHUNK ROAD fix could not observe it
   // either. The hook is the assertable surface the repo prefers over pixels.
-  "js/game/apex.js": 2444,
+  // 2444 -> 2456: lightState reports the RESOLVED per-chunk lamp state and
+  // which of the three gates is holding it, plus meanPerChunkRGB — the twin of
+  // meanLampRGB for the set chunked meshes are lit from. Both exist because
+  // 'the sliders do nothing' was undiagnosable from outside the renderer.
+  "js/game/apex.js": 2456,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
@@ -513,10 +521,11 @@ const CEILINGS = {
   // 2960 -> 2966: the cockpit accent dimming reaches every livery paint that
   // lands in the driver's view (nose, pod, halo, stripe, noseStripe), not just
   // c2/accent/wing/fin. 32 of 152 shipped liveries put a pale non-body surface
-  // in the cockpit before this; 0 after. The added lines are the comment
-  // recording which paint is dimmed and why c1 stays exempt — bug-explaining
-  // growth at the site of the bug.
-  "js/car/car3d.js": 2966,
+  // in the cockpit before this; 0 after.
+  // 2960 -> 3004 on the other lineage: +44 for the wheel cover becoming a rim
+  // lip, a dish and a boss.
+  // UNION: the file carries both, so neither number fits — re-measured here.
+  "js/car/car3d.js": 3014,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
@@ -562,7 +571,10 @@ const CEILINGS = {
   // says why the file is its size today; none is an extraction target yet.
   // THE largest file in the repo: ~8.6k lines of it are data (per-track
   // lighting presets exported by the bake-lighting skill), not logic.
-  "js/game/light-presets.js": 8683,
+  // 8683 -> 8689: per-chunk lamps went from the ULTRA-night-only rung to every
+  // lit condition, so the conditional layer gained dusk/dawn/day keys beside
+  // night. Data, not logic — this file is ~8.6k lines of baked per-track values.
+  "js/game/light-presets.js": 8689,
   // The whole WGX backend in one IIFE by design (deferred inject, no tag).
   // 5179 -> 5365 on the deploy union: their half-res SSR + chunk-AABB
   // lamp-mask cull rounds landed on the other lineage (re-measured).
@@ -581,7 +593,10 @@ const CEILINGS = {
   // Re-measured on the merged tree (AGENTS.md: re-measure, never max).
   // 5516 -> 5523: the road half of the PER-CHUNK ROAD gate (frameRoadChunkLamps
   // + the surfaceId-16 test), mirroring the GLX side.
-  "js/render/webgpu/wgx.js": 5523,
+  // 5523 -> 5532: the per-chunk light upload separates a SET change (identity or
+  // knob — may reset the chunk-segment allocator) from a VALUES change
+  // (allLightsGen — flicker/sliders — must not), plus the road lamp gate.
+  "js/render/webgpu/wgx.js": 5532,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -619,9 +634,36 @@ const CEILINGS = {
   // when errors landed during the capture, standing down after three passes
   // instead of lighting the world from black forever. envState() reports it,
   // because the overlay is the only way a player can tell us.
-  "js/render/three/tlx.js": 2270,
+  // 2270 -> 2278 (R8): PRESENTATION and CONTENT stop sharing a gate. softGpu()
+  // folds in _softBlit — a blit is needed whenever the swapchain is not
+  // composited, headless included — and content skips inherited it, so headless
+  // Chromium on a REAL Apple/Metal GPU ran the software half of every skip. The
+  // one machine that could test a player's path was testing the other one.
+  // 2278 -> 2296 (R9): _softAdapter classifies the ADAPTER again. Headless was
+  // treated as software — but headless Chromium on a real GPU is hardware, and
+  // that clause made macos-latest (Apple/Metal, measured anyHardware:true) take
+  // the software half of every content skip, so the only machine that can test
+  // a player's path tested the other one. Headless moved to _softBlit, where a
+  // non-compositing swapchain is the actual reason. And an empty adapter.info
+  // is no longer a software verdict on its own: browsers trim those fields, so
+  // a player with no vendor string was being handed the degraded path on real
+  // hardware. The tie-break is measured limits (8192/1 GiB software vs
+  // 16384/2 GiB Apple), and each addition carries that measurement.
+  // 2296 -> 2322 (R9): the real-GPU reproduction. releaseMirrors() nulls
+  // attribute.array once a lit present has drawn a chunk, on the premise that
+  // nothing walks the arrays later — true of drawing, false of three's node
+  // builder, which types attributes from array.constructor whenever it
+  // compiles a program for a NEW pass. The env probe is a new pass, so every
+  // face threw on hardware (41 WebGL2 / 81 WebGPU on macos-latest/Metal) and
+  // the world had no environment reflections at all. The release now waits for
+  // the probe to latch, and a probe that cannot succeed gives up instead of
+  // throwing once a frame forever.
+  "js/render/three/tlx.js": 2322,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
-  "js/render/glx.js": 1929,
+  // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
+  // brightness multiplier — it was compensating for the missing lamp transform
+  // and, applied to the global set, made a tier shed step the whole night.
+  "js/render/glx.js": 1936,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)

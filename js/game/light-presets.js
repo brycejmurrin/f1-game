@@ -1,15 +1,21 @@
 "use strict";
 window.LightPresets = {
-  // "*|night" is the CONDITIONAL shipped layer (js/game/light-store.js
-  // condLayer): resolved only on the ULTRA preset with a per-chunk-capable
-  // backend (GLX/WGX), off mobile — the quality-ladder rung that ships
-  // per-chunk lamps by default at night. A/B-gated 2026-08-27 on vegas +
-  // singapore, both backends (docs/PERF-FINDINGS.md §R5): GLX 18.6%/23.5%
-  // FASTER at 0.3, WGX CPU-neutral with 0 GPU errors and no watchdog shape.
-  // Player edits (including an explicit 0) always win.
-  "*|night": {
-    "perChunkLights": 0.3
-  },
+  // CONDITIONAL shipped layer (js/game/light-store.js condLayer), now on for
+  // every lit condition and every preset with a per-chunk-capable backend
+  // (GLX/WGX — three.js declares hasPerChunkLights false and cannot).
+  // A/B-gated 2026-08-27 on vegas + singapore, both backends
+  // (docs/PERF-FINDINGS.md §R5): GLX 18.6%/23.5% FASTER at 0.3, WGX
+  // CPU-neutral, 0 GPU errors, and the 2026-08-14 watchdog shape did not
+  // reproduce even at knob 1 (181 ms for 10 cockpit frames).
+  // 0.3 is the CHEAP configuration, not a dim: LampChunks.capFor maps it to 8
+  // lamps per chunk (any knob <= 0.33 floors there), a third of the 24 at 1.0.
+  // Listed per condition rather than wildcarded because condLayer resolves
+  // "*|<tod>" exactly; day is inert while no lamps are lit, so it costs
+  // nothing and keeps the rule simple. Player edits (including 0) always win.
+  "*|night": { "perChunkLights": 0.3 },
+  "*|dusk":  { "perChunkLights": 0.3 },
+  "*|dawn":  { "perChunkLights": 0.3 },
+  "*|day":   { "perChunkLights": 0.3 },
   "*": {
     "carGloss": 0.35,
     "blacks": -0.06,

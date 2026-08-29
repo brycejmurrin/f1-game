@@ -116,7 +116,7 @@ const TUNE_DEFS = [
   { id: "lampGapFill",   label: "DARK-GAP FILL",   group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 150, step: 5, def: 60, rebuild: true, help: "Longest stretch of road (m) allowed with no lamp before fill lights are inserted. Circuits that exclude the generic mast pass (dressingExclusions kind \"lamps\", or aliases \"floodlights\" / \"lighting\") can leave a stretch unlit — fill lights restore pools without mast geometry (no lens halo). 0 = off." },
   { id: "lampBehindBias",label: "BEHIND-CAM BIAS", group: "LAMPS", section: "BEHAVIOUR", min: 0.2, max: 8, step: 0.025, def: 5.25, help: "How strongly lamps behind the camera are deprioritised in the nearest-lamp cull, so the budget favours the road ahead. Also widens the radius the fade above is measured against, by the same amount, so the extra forward reach this buys stays lit instead of fading out. Low = lamps ranked closer to pure distance (the lit road ends in a hard line ahead); high = the lit zone pushes much further forward past the fog." },
   { id: "roadChunkLamps", label: "PER-CHUNK ROAD", group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 1, step: 1, def: 0, help: "EXPERIMENTAL, and needs PER-CHUNK LAMPS on to do anything. Extends the same per-chunk lamp binding to the ROAD, which is otherwise drawn as one mesh and so can only ever carry the single global set of 48. That is why the far road stays dark on a dense night circuit while the buildings beside it light up: the global cull picks the 48 lamps nearest the CAMERA, which covers the tarmac around the car and starves the road ahead. Splitting the road into spatial chunks lets each stretch carry its own lamps, and frustum-culls the ribbon as a side effect (today every metre of it is drawn every frame). Costs a second copy of the road geometry, built once on first use. WebGL2 and WebGPU — three.js has no per-chunk lamp binding." },
-  { id: "perChunkLights", label: "PER-CHUNK LAMPS", group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 1, step: 0.001, def: 0, help: "EXPERIMENTAL. 0 = off. ABOVE 0 it turns the feature on AND sets how strongly the per-chunk lamps light the scene \u2014 it is an amount, not a switch, because turning it on genuinely delivers more light: a fragment that used to see the handful of the global 48 that actually reach it now sees up to 24 that all do, so the whole night reads far too hot at the same LAMP LEVEL. Start around 0.2-0.4 and raise it; 1.0 is the original un-dimmed behaviour. Car tail-lights are NOT scaled by this.  Gives every chunk of scenery its OWN nearest-24 lamps instead of making the whole visible scene share one set of 48. The 48-lamp ceiling is the fragment shader\'s uniform-array size, so it limits lamps per DRAW, not per scene — and because lamps are baked per track and chunk bounds are fixed, the whole per-chunk table is baked once per track. On a dense night circuit this lights the far road without LAMP COUNT / LAMP REACH AHEAD having to ration slots, and per-fragment cost drops (a chunk binds only lamps that reach it). Costs one uniform upload per chunk draw, so it trades a little CPU for a lot of reach. 0 = as-shipped single global set. WebGL2 and WebGPU — three.js keeps the single global set. HELD OFF automatically below the top graphics tier (GRAPHICS must be HIGH or ULTRA) and after a display reset, because at full amount it can stall a weaker GPU — the slider then stores a value that takes effect once the tier allows it." },
+  { id: "perChunkLights", label: "PER-CHUNK LAMPS", group: "LAMPS", section: "BEHAVIOUR", min: 0, max: 1, step: 0.001, def: 0, help: "0 = off. ABOVE 0 it turns the feature on AND sets how many lamps each chunk may bind: the value maps to a per-chunk cap of 8 lamps at 0.33 and below, rising to 24 at 1.0. It is NOT a brightness control — every LAMP control (LAMP LEVEL, TEMPERATURE, FLICKER, WARM-UP, the twilight ramp) applies to per-chunk lamps exactly as it does to the global set, so use LAMP LEVEL to set brightness and this to set reach. Gives every chunk of scenery its OWN nearest lamps instead of making the whole visible scene share one set of 48. The 48-lamp ceiling is the fragment shader's uniform-array size, so it limits lamps per DRAW, not per scene — and because lamps are baked per track and chunk bounds are fixed, the per-chunk table is baked once per track. On a dense night circuit this lights the far road without LAMP COUNT / LAMP REACH AHEAD having to ration slots, and per-fragment cost DROPS (a chunk binds only lamps that reach it — measured 18-23% faster at 0.3). The cost it does carry is one uniform upload per chunk draw on WebGL2; WebGPU pays a draw-ring slot instead. WebGL2 and WebGPU — three.js keeps the single global set. Available at every GRAPHICS preset: it is held off only after a display reset, or while the performance governor has shed a tier because this device is actually missing frames." },
   { id: "lampReach",     label: "LAMP REACH AHEAD", group: "LAMPS", section: "BEHAVIOUR", min: 1, max: 4, step: 0.01, def: 1.0, help: "How much extra priority lamps AHEAD of the camera get in the nearest-lamp cull, so the lit zone reaches further down the road before a dense track's lamp budget runs out. The number is the REACH MULTIPLIER for a lamp dead ahead: 4 = a lamp four times further away still wins a slot (lamps to the side are unaffected, and 1 = as-shipped, pure distance + BEHIND-CAM BIAS). Only matters once a track has more lamps in range than the LAMP COUNT budget (48 shader slots, 40 with traffic) — where it does, expect the far end of a lit straight to extend rather than the near road to brighten. Ceiling is 4: measured Singapore/Vegas sightlines saturate by reach 3 (no further lamps left to promote), so 4–12 was leftover-wide dead travel." },
   { id: "lampNearClamp", label: "LAMP NEAR CLAMP", group: "LAMPS", section: "BEHAVIOUR", min: 1, max: 8.5, step: 0.025, def: 4.0, u: "uLampNearClamp", help: "Minimum distance (m) used in each lamp's inverse-square falloff, so a surface right under a fixture can't blow out to infinite brightness. 4 = as-shipped, lower = a hot, tight pool with a fierce hotspot directly beneath the lamp, higher = a softer, flatter pool that never over-brightens up close. All three renderers (WebGL2, three.js and WebGPU)." },
   // ── NIGHT GLOW & BLOOM ──
@@ -748,6 +748,18 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
 // `frame.lights`. Called each frame only when floodlights are lit.
 const _lightCullBuf = [];
 const _lightScaleBuf = [];
+// FULL-SET twin of _lightScaleBuf, for the per-chunk lamp path. Per-chunk
+// consumers used to read the RAW baked list, so none of the LAMPS controls
+// (LAMP LEVEL / TEMPERATURE / FLICKER / WARM-UP / the twilight ramp) reached a
+// chunked mesh — drag LAMP LEVEL to 0 and the cars went dark while the city
+// stayed lit. This carries the same per-lamp transform the culled set gets.
+// REUSED AND MUTATED IN PLACE, never reallocated: LampChunks.resolve memoises
+// its per-chunk tables on this array's IDENTITY, and positions/radii never
+// change here, so a fresh array frame would re-bake every table every frame.
+// _allLightsGen is the change signal for consumers that cache by identity
+// (WGX's trackLightSBO upload) — it moves when the VALUES move.
+const _allLightsBuf = [];
+let _allLightsGen = 0;
 const _lightHeap = [];         // pooled max-heap (≤CAP entries) for nearest-N selection
 const _gHeap = [];             // pooled max-heap of GEOMETRIC squared distances (see gCap)
 const _byDistAsc = (a, b) => a.d - b.d;   // hoisted sort comparator (no per-frame closure)
@@ -828,6 +840,27 @@ function lampCap(carCount, mobileTier) {
   }
   return cap;
 }
+// Scale the WHOLE baked set for the per-chunk path with the same transform the
+// culled set receives. Only runs when per-chunk lamps are actually on.
+function _fillAllLights(frame, src, sr, sg, sb, fl) {
+  const out = _allLightsBuf;
+  const n = src.length;
+  let changed = out.length !== n;
+  for (let i = 0; i < n; i += 15) {
+    const f = fl(i);
+    const r = src[i+3] * sr * f[0], g = src[i+4] * sg * f[1], b = src[i+5] * sb * f[2];
+    if (!changed && (out[i+3] !== r || out[i+4] !== g || out[i+5] !== b)) changed = true;
+    out[i] = src[i]; out[i+1] = src[i+1]; out[i+2] = src[i+2];
+    out[i+3] = r; out[i+4] = g; out[i+5] = b; out[i+6] = src[i+6];
+    out[i+7] = src[i+7]; out[i+8] = src[i+8]; out[i+9] = src[i+9]; out[i+10] = src[i+10];
+    out[i+11] = src[i+11]; out[i+12] = src[i+12]; out[i+13] = src[i+13]; out[i+14] = src[i+14];
+  }
+  if (out.length !== n) out.length = n;
+  if (changed) _allLightsGen++;
+  frame.allLights = out;
+  frame.allLightsGen = _allLightsGen;
+}
+
 function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet) {
   // srcSet overrides the session light set (the daylight always-on subset);
   // absent, the baked full set is used exactly as before.
@@ -882,6 +915,7 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
         src[i+7], src[i+8], src[i+9], src[i+10], src[i+11], src[i+12], src[i+13], src[i+14]);
     }
     frame.lights = out;
+    if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl);
     return;
   }
   // Distance-rank: select the nearest CAP. Reuse a pooled object array + the
@@ -1048,6 +1082,7 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
       src[o+14] * cullF);
   }
   frame.lights = out;
+  if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl);
 }
 
   return { TUNE_DEFS, LT, buildTrackLights, lampStrideNodes,

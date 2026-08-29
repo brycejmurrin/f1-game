@@ -164,6 +164,71 @@ the compile storm and the default soft-present run then missed its 60 s budget
 twice; count + MRT is two variants (the 2-target scene pass, and everything
 else).
 
+### There IS a real GPU in reach: `macos-latest` (2026-08-28)
+
+The agent container has none (previous section) — but GitHub's Apple-silicon
+image does, and the published answers about it contradict each other (the M1
+runner announcement says GPU acceleration is on by default;
+`actions/runner-images#7085` asks for Metal passthrough as a missing feature).
+`tools/gpu-census.mjs` + `.github/workflows/gpu-census.yml` asked the images
+instead of believing either:
+
+| image | stock | `--enable-unsafe-webgpu` | `+Vulkan` | `+disable_adapter_blocklist` | anyHardware |
+|---|---|---|---|---|---|
+| `ubuntu-latest` | **no adapter** | swiftshader | swiftshader | swiftshader | false |
+| `windows-latest` | **no adapter** | warp | warp | warp | false |
+| `macos-latest` | **apple / Metal** | apple / Metal | **no adapter** | apple / Metal | **true** |
+
+macOS WebGL string: `ANGLE (Apple, ANGLE Metal Renderer: Apple Paravirtual
+device)`. Not a string-match fluke — the capabilities separate it from every
+software stack measured here:
+
+| | SwiftShader / llvmpipe | macos-latest (Metal) |
+|---|---|---|
+| `maxBufferSize` | 1 GiB | **2 GiB** |
+| `maxTextureDimension2D` | 8192 | **16384** |
+| features | — | `shader-f16`, `dual-source-blending`, `texture-formats-tier2`, `subgroups` |
+
+Two traps the census caught on the way, both of which would silently turn a
+real-GPU run into a software one:
+
+1. **`--use-angle=vulkan` BREAKS WebGPU on macOS.** It forces ANGLE onto
+   SwiftShader and `requestAdapter()` returns null. That flag set is what most
+   CI guides recommend; on this image it is the one combination that throws the
+   GPU away. Use stock flags (or `--enable-unsafe-webgpu`) on macOS.
+2. **Playwright's default browser is the headless SHELL, which has no
+   `navigator.gpu` at all.** Census it and every machine on earth answers
+   "no WebGPU" — a fact about the binary, not the machine. `channel:"chromium"`
+   (or an explicit `executablePath`) is required.
+
+And one fact worth carrying into the renderer: on `ubuntu-latest`, on
+`windows-latest` and in this container, **stock Chrome — no flags — returns NO
+adapter**. `navigator.gpu` exists and `requestAdapter()` resolves null. "WebGPU
+is present" and "a usable adapter exists" are different questions, and the AUTO
+backend pick has to survive the gap between them.
+
+Practical consequence: `macos-latest` is the project's real-GPU surface. Dispatch
+`gpu-census.yml` with `census_only: true` for the adapter answer in seconds, or
+without it to run `tools/gpu-game-check.mjs` — the portable sibling of
+`gfx-probe` that reports `GLX.gpuErrors()`, the env-probe state and the
+`?gfxdebug=1` overlay text from the game itself.
+
+**It GATES, it does not merely report** (2026-08-29). The workflow's Verdict step
+fails the job on: a check that did not finish, `gpuErrors > 0`, any failed
+env-probe face, a probe that stood down, or `softAdapter` true on an image the
+census called hardware. Before it existed the job was green whatever the game
+said — run `33228195259` concluded "success" on the commit where this same
+macOS job reported `envFail: 81`. Appearance is reported and NOT gated:
+`meanLuma` goes to the job summary, because a brightness floor is the kind of
+threshold that goes flaky and then gets widened to pass.
+
+What the real GPU has found so far, none of it visible to any software test:
+
+| defect | signal | fixed in |
+|---|---|---|
+| `_softAdapter` read headless (and empty `adapter.info`) as software, so real hardware ran the degraded content path | `softAdapter: true` with `softwareGL: false` | `67d5616` |
+| `releaseMirrors()` freed attribute arrays the node builder still needed, so every env-probe face threw | `envFail` 81 (WebGPU) / 41 (WebGL2), `env ready=false` | `69836ca` |
+
 ### Cursor Cloud agent environment (2026-08-17)
 
 Cloud Agents here boot a **personal / dashboard-managed** environment (no

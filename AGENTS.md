@@ -38,7 +38,7 @@ idle agent. Reference (groups, fixtures, field notes): `docs/TESTING.md`.
 | one circuit (`js/circuits/<id>.js`) | `node tools/verify-track.cjs <id>`, then that circuit's foundation spec ALONE |
 | one subsystem with its own spec | that spec — `npm test -- tests/specs/<file>.spec.js`; prefer single specs over their whole group |
 | WGX / `js/render/webgpu/` | `node tools/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU (`docs/TESTING.md` §Field notes) |
-| TLX / `js/render/three/` | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the SAME command with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched). `gpuErrors` must be 0 in every run: the unforced run takes the SOFTWARE half of every `softContent()` gate, which is not the code a player's GPU runs |
+| TLX / `js/render/three/`, WGX / `js/render/webgpu/` | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the SAME command with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. **THEN DISPATCH THE REAL GPU**: `gpu-census.yml` on `macos-latest` (Apple/Metal, ~3 min) and read its Verdict step, which FAILS on GPU errors, failed env-probe faces, or `softAdapter` true on hardware. A software probe run is not evidence about a player's machine — that mistake cost this project two shipped defects (the `_softAdapter` misclassification and an env probe that threw on every face), both invisible to every software test and both found the hour a real GPU was first used |
 | engine / physics / `js/game.js` | the groups `pick-tests` names, CAPPED at two browser groups: run the two most specific, name the rest as not-run in the PR |
 | geometry pushed to the deploy branch | the above + `npm run test:sweeps` |
 
@@ -102,6 +102,18 @@ Session shape — this is what controls both wall time and waiting:
 4. Pixel screenshot — visual sign-off only, never an assertion source. For
    live poking use the `mcp-probe` skill; the Playwright suite itself always
    runs script-driven, never through an MCP.
+
+### A real GPU IS reachable — `macos-latest`
+
+Measured 2026-08-28 (`docs/research/CI-RENDERING-PERFORMANCE.md` §There IS a
+real GPU): GitHub's Apple-silicon image reports a HARDWARE adapter (`apple`,
+`ANGLE Metal Renderer`, 2 GiB maxBufferSize, `shader-f16`/`subgroups`) on stock
+flags. ubuntu-latest is SwiftShader, windows-latest is WARP, this container is
+llvmpipe. Dispatch `.github/workflows/gpu-census.yml` — `census_only: true` for
+the adapter answer in seconds, without it to run `tools/gpu-game-check.mjs`
+(the portable `gfx-probe`: `gpuErrors()`, env-probe state, `?gfxdebug=1` text).
+**Never pass `--use-angle=vulkan` on macOS** — it drops WebGPU to SwiftShader
+and `requestAdapter()` returns null, silently turning a real-GPU run software.
 
 ### Software pixels in this container (no real GPU)
 

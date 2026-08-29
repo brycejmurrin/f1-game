@@ -109,6 +109,7 @@ const FULL = [
   "js/data/hub.js",
   "js/car/parts.js",
   "js/car/liveries.js",
+  "js/car/crest-paths.js",
   "js/car/liverytex.js",
   "js/car/ghost.js",
   "js/game/light-presets.js",
@@ -207,6 +208,7 @@ const CARVIEW = [
   "js/car/parts.js",
   "js/car/car3d.js",
   "js/car/liveries.js",
+  "js/car/crest-paths.js",
   "js/car/liverytex.js",
   "js/game/carmesh.js",
 ];
@@ -324,6 +326,11 @@ const HARD_EDGES = [
   // carry its own copy of the roster (a SHORT table that had drifted), and
   // reading the real one makes the order load-bearing rather than tidy.
   ["js/car/teams.js", "js/car/liverytex.js"],
+  // crestTraced reads CrestPaths at DRAW time, not eval time, so this is not
+  // strictly a hard edge — but a mark that silently falls back to the generic
+  // monogram because a tag moved is exactly the kind of quiet regression the
+  // load-order guard exists to prevent.
+  ["js/car/crest-paths.js", "js/car/liverytex.js"],
   ["js/game/store.js", "js/game/cam-tune.js"],  // cam-tune destructures GameStore at eval
   ["js/game/store.js", "js/game/career.js"],    // career destructures GameStore at eval
   ["js/game/store.js", "js/game/season-cal.js"], // season-cal destructures GameStore at eval

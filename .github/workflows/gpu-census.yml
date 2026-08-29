@@ -45,6 +45,10 @@ on:
         type: boolean
         required: false
         default: false
+      force:
+        description: "apex26.tlxForceHw for the game checks (sky,env,chunked,batches,shadow or 1) — exercise gates that never run on software"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -154,8 +158,10 @@ jobs:
         timeout-minutes: 20
         shell: bash
         run: |
+          FORCE="${{ inputs.force }}"
           node tools/gpu-game-check.mjs "${{ inputs.track }}" \
             --backend three --path webgpu \
+            ${FORCE:+--ls apex26.tlxForceHw=$FORCE} \
             --json "game-webgpu-${{ matrix.image }}.json" \
             --shot "game-webgpu-${{ matrix.image }}.png"
 
@@ -165,10 +171,66 @@ jobs:
         timeout-minutes: 20
         shell: bash
         run: |
+          FORCE="${{ inputs.force }}"
           node tools/gpu-game-check.mjs "${{ inputs.track }}" \
             --backend three --path webgl2 \
+            ${FORCE:+--ls apex26.tlxForceHw=$FORCE} \
             --json "game-webgl2-${{ matrix.image }}.json" \
             --shot "game-webgl2-${{ matrix.image }}.png"
+
+      # THE GATE. Before this step the job was green whatever the game said:
+      # both checks above are continue-on-error and nothing read the JSON they
+      # write, so run 33228195259 concluded "success" while this same macOS job
+      # reported envFail 81 — an exception on every env-probe face, no
+      # environment reflections in the world at all. A surface that reports and
+      # does not gate catches a regression exactly once, by hand, and this one
+      # is dispatch-only so nothing else will notice.
+      #
+      # Errors gate; APPEARANCE is only reported. A brightness floor is the kind
+      # of threshold that goes flaky and then gets widened to pass, which
+      # AGENTS.md forbids outright — meanLuma goes in the summary for a human.
+      - name: Verdict — fail the job on what the game reported
+        if: ${{ always() && !inputs.census_only }}
+        shell: bash
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          set -eu
+          node -e '
+            const fs = require("fs");
+            const image = process.env.IMAGE;
+            const read = (p) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) { return null; } };
+            const census = read(`census-${image}.json`);
+            // Only a machine the census called hardware can be held to the
+            // hardware expectations; a software image legitimately reports
+            // softAdapter true and a skipped (blank) env probe.
+            const hardware = !!(census && census.anyHardware);
+            const bad = [];
+            const rows = [`## ${image} — real-GPU verdict`, "", "```",
+              `census anyHardware: ${hardware}`];
+            for (const path3 of ["webgpu", "webgl2"]) {
+              const file = `game-${path3}-${image}.json`;
+              const g = read(file);
+              if (!g) { bad.push(`${path3}: ${file} missing — the check produced nothing`); continue; }
+              const gfx = g.gfx || {}, env = gfx.envState || {}, be = gfx.backendState || {};
+              const frame = g.frame || {};
+              rows.push(`${path3.padEnd(7)} phase=${g.phase} ok=${g.ok} ` +
+                `gpuErrors=${gfx.gpuErrors} envFail=${env.fail} envReady=${env.ready} ` +
+                `envBlank=${env.blank} gaveUp=${env.gaveUp} softAdapter=${be.softAdapter} ` +
+                `headless=${be.headless} meanLuma=${frame.meanLuma != null ? frame.meanLuma : "n/a"}`);
+              if (g.ok !== true || g.phase !== "done") bad.push(`${path3}: did not finish (phase=${g.phase}, ok=${g.ok})`);
+              if ((gfx.gpuErrors || 0) > 0) bad.push(`${path3}: ${gfx.gpuErrors} uncaptured GPU errors — ${String(gfx.gpuFirstError || "").slice(0, 160)}`);
+              if ((env.fail || 0) > 0) bad.push(`${path3}: ${env.fail} env-probe faces FAILED — ${String(env.failMsg || "").slice(0, 160)}`);
+              if (env.gaveUp) bad.push(`${path3}: the env probe stood down — it could not succeed`);
+              if (hardware && be.softAdapter === true) bad.push(`${path3}: softAdapter TRUE on an adapter the census called hardware — the classification regressed and the game is running the degraded content path`);
+            }
+            rows.push("```", "");
+            if (bad.length) rows.push("**FAILED**", "", ...bad.map((b) => `- ${b}`));
+            try { fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, rows.join("\n") + "\n"); } catch (_) { /* summary is best-effort */ }
+            console.log(rows.join("\n"));
+            for (const b of bad) console.error(`::error::REAL-GPU GATE: ${b}`);
+            process.exit(bad.length ? 1 : 0);
+          '
 
       - uses: actions/upload-artifact@v4
         if: always()
