@@ -1164,6 +1164,18 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
       `${file}: compare x/y/z/d, not the old x/d-only collision-prone hash`);
     assert.match(body, /_cullN\b/,
       `${file}: the resident pack's count should be cached with it`);
+    // The cell-set key (apex26.instCellCache) identifies the resident pack by
+    // WHICH CELLS produced it. Its hit path must NOT stamp the plane snapshot:
+    // _cullPlanes has to keep describing the frustum that PHYSICALLY wrote the
+    // buffer, or the cheap plane compare above starts claiming a pack it never
+    // produced — the same "right count, wrong transforms" defect the _cullSig
+    // assertion above exists to prevent, reintroduced through the side door.
+    const cellHit = body.indexOf("_cellKeyN === k");
+    if (cellHit !== -1) {
+      const hitBlock = body.slice(cellHit, cellHit + 600);
+      assert.doesNotMatch(hitBlock, /_cullPlanes\s*(=|\[)/,
+        `${file}: a cell-set cache HIT must not write the plane snapshot`);
+    }
   }
   const glShadow = read("js/render/glx/shadow.js");
   const wgx = read("js/render/webgpu/wgx.js");

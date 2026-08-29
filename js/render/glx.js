@@ -32,6 +32,7 @@ const GLX = (function () {
   // backends load last, so the value is always there to read. Any new consumer
   // does the same — do not re-sniff navigator.
   let _forceMobile = false;
+  let _instCellCache = false;
   try { _forceMobile = localStorage.getItem("apex26.forceMobileTier") === "1"; } catch (_) {}
   const IS_MOBILE = _forceMobile ||
     /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
@@ -41,6 +42,12 @@ const GLX = (function () {
   // Default OFF — the safe tier is what keeps memory-limited devices alive.
   let _gfxHigh = false;
   try { _gfxHigh = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}
+  // INSTANCE CELL-SET CULL CACHE — opt-in, default OFF. Keys the resident pack
+  // on the surviving CELL SET instead of the frustum, which the plane cache
+  // below cannot do while driving. Measured -23.4% instance upload bytes;
+  // numbers, soundness argument and the flip criteria are in
+  // docs/PERF-FINDINGS.md 2c. Off by default until a real-GPU pixel run.
+  try { _instCellCache = localStorage.getItem("apex26.instCellCache") === "1"; } catch (_) {}
   // MOBILE TIER = a phone NOT opted into high quality. All the memory downgrades
   // key off this, so HIGH restores full quality (a reload re-runs init with it).
   const MOBILE_TIER = IS_MOBILE && !_gfxHigh;
@@ -1501,6 +1508,27 @@ const GLX = (function () {
       }
     }
     if (samePack) { batch.visible = batch._cullN; return batch._cullN; }
+    // CELL-SET KEY (apex26.instCellCache, off by default; docs/PERF-FINDINGS 2c).
+    // The pack is a deterministic function of the surviving cell set, so this
+    // is a strictly stronger key than the frustum. Skips the copy loop and the
+    // upload, not the AABB sweep.
+    let cellKeyN = -1;
+    if (_instCellCache) {
+      const cs = batch.cells, cn = cs.length;
+      let ks = batch._cellKeyScratch;
+      if (!ks || ks.length < cn) ks = batch._cellKeyScratch = new Int32Array(cn);
+      let k = 0;
+      for (let ci = 0; ci < cn; ci++) if (CHK.aabbInFrustum(planes, cs[ci].mn, cs[ci].mx)) ks[k++] = ci;
+      cellKeyN = k;
+      const res = batch._cellKey;
+      if (res && batch._cellKeyN === k) {
+        let same = true;
+        for (let i = 0; i < k; i++) if (res[i] !== ks[i]) { same = false; break; }
+        // NOT writing _cullPlanes here is load-bearing: it must keep describing
+        // whichever frustum physically wrote the buffer (canary-pinned).
+        if (same) { batch.visible = batch._cullN; return batch._cullN; }
+      }
+    }
     const src = batch.srcMatrices, dst = batch.packMatrices;
     const sc = batch.srcColors, dc = batch.packColors;
     let n = 0;
@@ -1534,6 +1562,13 @@ const GLX = (function () {
       for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
     }
     batch._cullN = n;
+    if (_instCellCache && cellKeyN >= 0) {
+      // Record the cell set that produced the bytes now resident.
+      let res = batch._cellKey;
+      if (!res || res.length < cellKeyN) res = batch._cellKey = new Int32Array(batch.cells.length);
+      res.set(batch._cellKeyScratch.subarray(0, cellKeyN));
+      batch._cellKeyN = cellKeyN;
+    }
     return n;
   }
 
