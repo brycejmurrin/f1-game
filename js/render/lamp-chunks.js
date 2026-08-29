@@ -66,18 +66,61 @@ const LampChunks = (function () {
     return { lists, concat, offsets, counts };
   }
 
+  // Re-cap an existing bake WITHOUT re-testing a single lamp.
+  //
+  // The cap can only ever TRUNCATE: `hits` was sorted nearest-first before the
+  // cap was applied, and capFor() never exceeds CAP, so the list for cap N is
+  // exactly the first N entries of the list baked at CAP. Slicing a sorted
+  // prefix is precisely what buildTable already does with its `Math.min(cap,
+  // hits.length)` — this is the same operation without the O(chunks x lamps)
+  // distance tests and the per-chunk sort that produced the order.
+  function _reCap(full, cap) {
+    const nc = full.lists.length, lists = new Array(nc);
+    let total = 0;
+    for (let c = 0; c < nc; c++) {
+      const src = full.lists[c], m = Math.min(cap, src.length);
+      // slice(), not subarray(): a view would share the full bake's buffer, so
+      // any consumer writing through it would corrupt the master copy. m <= 24.
+      lists[c] = m === src.length ? src : src.slice(0, m);
+      total += m;
+    }
+    const concat = new Uint32Array(total);
+    const offsets = new Uint32Array(nc), counts = new Uint32Array(nc);
+    let off = 0;
+    for (let c = 0; c < nc; c++) {
+      offsets[c] = off; counts[c] = lists[c].length;
+      concat.set(lists[c], off); off += lists[c].length;
+    }
+    return { lists, concat, offsets, counts };
+  }
+
   // Cached bake. Keyed on the chunks array (WeakMap) plus lights ARRAY
-  // IDENTITY and the knob VALUE — the exact invalidation the per-chunk
-  // expandos used: rebuild:true tuner knobs null track._lights, the next
-  // build mints a new array, and the stale table falls out for free; a
-  // knob move changes the cap, so it must re-bake too.
+  // IDENTITY — the exact invalidation the per-chunk expandos used: rebuild:true
+  // tuner knobs null track._lights, the next build mints a new array, and the
+  // stale table falls out for free.
+  //
+  // The knob is NOT part of that key, and used to be. The PER-CHUNK LAMPS
+  // slider is `step: 0.001` over 0..1 (js/game/lighting.js), so it has 1000
+  // distinct values — but capFor() maps all of them onto at most 17 distinct
+  // caps, and the bake depends on the knob ONLY through that cap. Keying on the
+  // raw float meant dragging 0.300 -> 0.301 re-ran the whole
+  // O(chunks x lamps) bake — object literal per hit, Array.sort per chunk — to
+  // produce a byte-identical table, once per input event, on the render thread
+  // with the pass open. Measured first-on bake: 37.3 ms vegas / 25.9 ms
+  // singapore (docs/PERF-FINDINGS.md); a drag paid that per frame. The
+  // slider's own help text already promises the table is "baked once per
+  // track", which is now true again.
   const _cache = new WeakMap();
   function resolve(lights, chunks, knob) {
+    const cap = capFor(knob);
     let e = _cache.get(chunks);
-    if (!e || e.src !== lights || e.knob !== knob) {
-      e = { src: lights, knob, table: buildTable(lights, chunks, knob) };
+    if (!e || e.src !== lights) {
+      // Bake at the FULL cap once; every narrower cap is a prefix of it.
+      const full = buildTable(lights, chunks, CAP);
+      e = { src: lights, full, cap: CAP, table: full };
       _cache.set(chunks, e);
     }
+    if (e.cap !== cap) { e.table = cap === CAP ? e.full : _reCap(e.full, cap); e.cap = cap; }
     return e.table;
   }
 

@@ -87,13 +87,13 @@ test("concat/offsets/counts are exactly the per-chunk lists back to back", () =>
   assert.equal(t.counts[2], 0);          // the unreachable chunk is present, empty
 });
 
-test("resolve bakes once per (lights identity, knob) and re-bakes on either change", () => {
+test("resolve bakes once per lights identity, and re-caps rather than re-baking", () => {
   const lights = lampSet([[0, 0, 0, 50]]);
   const chunks = [chunk([-1, -1, -1], [1, 1, 1])];
   const a = LampChunks.resolve(lights, chunks, 1);
-  assert.equal(LampChunks.resolve(lights, chunks, 1), a, "same triple must return the cached table");
+  assert.equal(LampChunks.resolve(lights, chunks, 1), a, "same pair must return the cached table");
   const b = LampChunks.resolve(lights, chunks, 0.5);
-  assert.notEqual(b, a, "a knob move must re-bake (the cap depends on it)");
+  assert.notEqual(b, a, "a knob move that changes the CAP must hand back a re-capped table");
   const relit = lampSet([[0, 0, 0, 50]]);   // equal content, NEW identity
   const c = LampChunks.resolve(relit, chunks, 0.5);
   assert.notEqual(c, b, "a rebuilt lights array must re-bake (rebuild knobs null track._lights)");
@@ -117,4 +117,71 @@ test("the bake is deterministic — two builds of the same triple agree byte for
   const t2 = LampChunks.buildTable(lights, chunks, 0.7);
   assert.deepEqual(Array.from(t1.concat), Array.from(t2.concat));
   assert.deepEqual(Array.from(t1.offsets), Array.from(t2.offsets));
+});
+
+// ── the drag hitch ─────────────────────────────────────────────────────────
+// PER-CHUNK LAMPS is `step: 0.001` over 0..1, so a drag walks 1000 distinct
+// knob values. The bake depends on the knob ONLY through capFor(), which has
+// at most 17 distinct outputs — so re-baking per input event was producing
+// byte-identical tables at 26-37 ms each, synchronously, mid-pass.
+
+test("a knob move inside one cap does not re-bake at all", () => {
+  const lights = lampSet(Array.from({ length: 40 }, (_, i) => [i * 3, 0, 0, 60]));
+  const chunks = Array.from({ length: 12 }, (_, c) => chunk([c * 10, -1, -1], [c * 10 + 9, 1, 1]));
+  // capFor(0.5) === capFor(0.52) === 12: every value in this band is one cap.
+  assert.equal(LampChunks.capFor(0.5), LampChunks.capFor(0.52));
+  const a = LampChunks.resolve(lights, chunks, 0.5);
+  for (const k of [0.501, 0.505, 0.51, 0.515, 0.52])
+    assert.equal(LampChunks.resolve(lights, chunks, k), a,
+      `knob ${k} handed back a different table for the same cap`);
+});
+
+test("every cap re-caps to a table byte-identical to a fresh bake", () => {
+  // The whole optimisation rests on one claim: a narrower cap is a PREFIX of
+  // the full bake, because hits were sorted nearest-first before the cap was
+  // applied. If that were ever false the picture would change silently, so it
+  // is asserted across the entire knob range rather than at a sample point.
+  const lights = lampSet(Array.from({ length: 60 }, (_, i) => [i * 2.5, 0, 0, 70]));
+  const chunks = Array.from({ length: 16 }, (_, c) => chunk([c * 8, -1, -1], [c * 8 + 7, 1, 1]));
+  const caps = new Set();
+  for (let k = 0; k <= 1.0001; k += 0.001) {
+    const knob = Math.round(k * 1000) / 1000;
+    caps.add(LampChunks.capFor(knob));
+    // A FRESH lights identity each time, so `resolve` cannot serve a cache hit
+    // and must produce the table through the re-cap path.
+    const viaResolve = LampChunks.resolve(lights, chunks, knob);
+    const fresh = LampChunks.buildTable(lights, chunks, knob);
+    assert.deepEqual(Array.from(viaResolve.concat), Array.from(fresh.concat), `concat differs at knob ${knob}`);
+    assert.deepEqual(Array.from(viaResolve.counts), Array.from(fresh.counts), `counts differ at knob ${knob}`);
+    assert.deepEqual(Array.from(viaResolve.offsets), Array.from(fresh.offsets), `offsets differ at knob ${knob}`);
+    assert.equal(viaResolve.lists.length, fresh.lists.length);
+    for (let c = 0; c < fresh.lists.length; c++)
+      assert.deepEqual(Array.from(viaResolve.lists[c]), Array.from(fresh.lists[c]),
+        `list ${c} differs at knob ${knob}`);
+  }
+  // Sanity on the premise: 1000 slider positions really do collapse to ~17.
+  assert.ok(caps.size <= 17, `expected <=17 distinct caps, got ${caps.size}`);
+  assert.ok(caps.size >= 10, `only ${caps.size} caps — the slider range is not being covered`);
+});
+
+test("a full drag costs ONE bake, not one per input event", () => {
+  // The hitch, stated as a number. buildTable is the O(chunks x lamps) worker;
+  // count how many times a 1000-step drag reaches it.
+  const lights = lampSet(Array.from({ length: 50 }, (_, i) => [i * 3, 0, 0, 60]));
+  const chunks = Array.from({ length: 20 }, (_, c) => chunk([c * 9, -1, -1], [c * 9 + 8, 1, 1]));
+  const real = LampChunks.buildTable;
+  let bakes = 0;
+  // Count through the module's own export surface: resolve() closes over the
+  // inner binding, so wrap by re-running the source with a counting shim.
+  const src = readFileSync(join(ROOT, SRC_PATH), "utf8");
+  const Counted = new Function(
+    src.replace("function buildTable(lights, chunks, knob) {",
+                "function buildTable(lights, chunks, knob) { globalThis.__bakes = (globalThis.__bakes || 0) + 1;")
+    + "; return LampChunks;")();
+  globalThis.__bakes = 0;
+  for (let k = 0; k <= 1.0001; k += 0.001) Counted.resolve(lights, chunks, Math.round(k * 1000) / 1000);
+  bakes = globalThis.__bakes;
+  delete globalThis.__bakes;
+  assert.equal(bakes, 1, `a 1001-step drag ran buildTable ${bakes} times; it must bake once`);
+  assert.equal(typeof real, "function");
 });

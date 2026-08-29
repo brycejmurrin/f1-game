@@ -394,6 +394,8 @@ const TrackMesh = (function () {
   // framing: worst vertical acceleration 27x its own rms, i.e. plainly
   // discontinuous, and 60x the size of the residue left on Monaco's climb after
   // the elevation was smoothed. Camera call sites opt in; nothing else changes.
+  // Signed cross-track lift at node i. Hoisted out of banking() — see the call.
+  function _signedLift(bp, i) { return bp.lift[i] * bp.bsign[i]; }
   function banking(track, s, x, out, smooth) {
     const bp = track.bankP;
     if (!bp) return null;
@@ -402,10 +404,15 @@ const TrackMesh = (function () {
     const k = Math.floor(pos) % n, j = (k + 1) % n, f = pos - Math.floor(pos);
     // Interpolate the signed cross-track lift so cars and cameras do not jump
     // between the road mesh's ~4 m longitudinal nodes.
-    const sl = (i) => bp.lift[i] * bp.bsign[i];
+    // Module-level, not a closure over `bp`. This runs once per car per physics
+    // step AND once per car in the render loop, plus both camera sites and
+    // currentCarGroundMat — ~45 calls a frame, so a per-call arrow was ~2700
+    // short-lived closures a second. The `out` scratch above was pooled for
+    // exactly this reason; this was the allocation it left behind.
     const signedLift = smooth
-      ? catmull(sl((k - 1 + n) % n), sl(k), sl(j), sl((k + 2) % n), f)
-      : lerp(sl(k), sl(j), f);
+      ? catmull(_signedLift(bp, (k - 1 + n) % n), _signedLift(bp, k),
+                _signedLift(bp, j), _signedLift(bp, (k + 2) % n), f)
+      : lerp(_signedLift(bp, k), _signedLift(bp, j), f);
     if (!signedLift) return null;
     const w = smooth
       ? catmull(track.hw[(k - 1 + n) % n], track.hw[k], track.hw[j], track.hw[(k + 2) % n], f)
