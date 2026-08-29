@@ -132,19 +132,30 @@ function buildShell(out, liv) {
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
   const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.55, 0.57, 0.62]);
   const dado = scale(c1, 0.45), stripe = scale(c2, 0.8);
-  // Wall colour by height: team dado to 1.5 m, an accent band, grey panel above.
-  const wallAt = (y01, hgt) => {
-    const y = y01 * hgt;
-    if (y < 1.50) return dado;
-    if (y < 1.62) return stripe;
-    return PANEL;
-  };
+  // Wall colour by ABSOLUTE height. This used to take a 0..1 v and multiply by
+  // the wall height, which was fine — the bug was that no vertex row ever
+  // landed in the accent band: nv was 6 over a 5 m wall, so the rows sat at
+  // 0, 0.833, 1.667, 2.5, 3.333, 4.167, 5.0 and the 1.50-1.62 band fell
+  // between two of them. `stripe` was computed on every rebuild and thrown
+  // away, which is why the team dado read as an 83 cm wash instead of a line.
+  // The walls are now built as three stacked grids whose seams ARE the band
+  // edges, so the row exists by construction.
+  const wallAt = (y) => (y < 1.4995 ? dado : y < 1.6205 ? stripe : PANEL);
   // Battens are BAKED INTO THE WALL's vertex colour rather than modelled as
   // solid posts. A solid post is a prop, and props do not cull with the shell:
   // stood outside the bay you would see a row of dark bars hanging in front of
   // the room whose wall had already culled away. Shading them into the wall
   // means they are the wall, and they come and go exactly when it does.
-  const seamed = (col, u, n) => (Math.abs((u * n) % 1 - 0.5) > 0.42 ? scale(col, 0.62) : col);
+  // Battens are BAKED INTO THE WALL's vertex colour rather than modelled as
+  // solid posts, so they come and go exactly when the wall does.
+  //
+  // This never worked. It was keyed on `u * n` where n was the grid's OWN
+  // column count, and panelGrid samples u at i/nu — so `u * n` was always an
+  // integer, `(u*n)%1` always 0, and `|0 - 0.5| > 0.42` TRUE at every vertex of
+  // every wall. The bright branch was unreachable: all four walls rendered as
+  // one flat 62%-scaled tint with no battens at all. Key it off the column
+  // INDEX instead, which is what it meant to say.
+  const seamed = (col, u, n) => (Math.round(u * n) % 2 ? scale(col, 0.62) : col);
   // walls: [origin, uVec, vVec, inward normal, u-divisions]
   const W = HALF_W;
   const walls = [
@@ -153,11 +164,39 @@ function buildShell(out, liv) {
     [[-W, 0, Z_BACK], [0, 0, Z_DOOR - Z_BACK], [0, CEIL_Y, 0], [1, 0, 0], 9],
     [[W, 0, Z_BACK], [0, 0, Z_DOOR - Z_BACK], [0, CEIL_Y, 0], [-1, 0, 0], 9],
   ];
+  // Three stacked bands per wall — dado / accent / panel — instead of one grid
+  // with a colour ramp. The seams ARE the band edges, so the accent line is a
+  // line rather than an 83 cm gradient between whichever rows happened to fall
+  // either side of it. Column count doubled so a batten is a batten and not a
+  // half-wall-wide stripe: with 8 columns the alternation reads as panelling.
+  const BANDS = [[0, 1.50, 2], [1.50, 1.62, 1], [1.62, CEIL_Y, 4]];
+  const wallBands = (o0, uVec, nu, nrm, y0Lo, y1Hi) => {
+    for (const [y0, y1, nv] of BANDS) {
+      if (y1 <= y0Lo || y0 >= y1Hi) continue;
+      const a = Math.max(y0, y0Lo), b = Math.min(y1, y1Hi);
+      panelGrid(out, [o0[0], o0[1] + a, o0[2]], uVec, [0, b - a, 0], nu, nv, nrm,
+        (u, v) => seamed(wallAt(a + (b - a) * v), u, nu));
+    }
+  };
   for (let i = 0; i < walls.length; i++) {
     const w = walls[i];
-    panelGrid(out, w[0], w[1], w[2], w[4], 6, w[3],
-      (u, v) => seamed(wallAt(v, CEIL_Y), u, w[4]));
+    if (i === 1) continue;                       // the door wall, below
+    wallBands(w[0], w[1], w[4] * 2, w[3], 0, CEIL_Y);
   }
+  // THE DOOR IS A HOLE. The roller shutter is modelled parked half open, but
+  // this wall used to be a full-height opaque grid, so the "opening" under the
+  // slats was interior wall paint — on the REAR preset, whose entire backdrop
+  // is this wall, that painted band is 23% of the frame.
+  //
+  // The aperture edges sit on COLUMN BOUNDARIES (pitch 10.8/16 = 0.675 m) and
+  // each jamb is an EVEN number of columns, so the batten alternation keeps its
+  // phase across the split instead of stepping at the seam. y stops at 4.80,
+  // just under the parked slats' 4.77, so the shutter reads as filling the top
+  // of its own opening.
+  const APX = 2.70, APY = 4.80;                  // k=4 and k=12 of 16
+  for (const sx of [-1, 1])
+    wallBands([sx > 0 ? APX : -W, 0, Z_DOOR], [W - APX, 0, 0], 4, walls[1][3], 0, CEIL_Y);
+  wallBands([-APX, 0, Z_DOOR], [APX * 2, 0, 0], 8, walls[1][3], APY, CEIL_Y);
   panelGrid(out, [-W, CEIL_Y, Z_BACK], [W * 2, 0, 0], [0, 0, Z_DOOR - Z_BACK], 4, 4,
     [0, -1, 0], () => DARK);
   // Roof truss. It lives in the shell because the ceiling culls from above and
@@ -219,6 +258,13 @@ function buildProps(g, liv) {
   for (let i = 0; i < 11; i++)
     block(g.door, 0, 2.05 + i * 0.26, Z_DOOR - 0.10, HALF_W * 0.72, 0.12, (i % 2) ? 0.035 : 0.05, scale(STEEL, 0.75));
   block(g.door, 0, 1.98, Z_DOOR - 0.10, HALF_W * 0.74, 0.07, 0.07, scale(STEEL, 1.1));
+  // Guide rails up both jambs, so the shutter runs in something. In g.door with
+  // the wall, not in g.mid: a rail left standing after its wall culled is the
+  // floating-strip defect this file already fixed once for the dado lights.
+  for (const sx of [-1, 1]) {
+    block(g.door, sx * 2.79, 2.50, Z_DOOR - 0.10, 0.09, 5.00, 0.13, scale(STEEL, 0.9));
+    block(g.door, sx * 2.79, 0.10, Z_DOOR - 0.16, 0.13, 0.20, 0.26, scale(STEEL, 0.6));
+  }
   // Spare front wings on a rack — the most recognisable thing in a real bay
   // after the tyres, and the reason a garage reads as a WORKSHOP.
   const wingRack = (out, x, z, sgn) => {
@@ -250,13 +296,13 @@ function buildProps(g, liv) {
   // prop stood 0.3 m proud of a board is a prop that hides it.
   for (let sh = 0; sh < 3; sh++) {
     const y = 0.95 + sh * 0.62;
-    block(g.door, -3.5, y, 6.15, 1.25, 0.025, 0.22, STEEL);
+    block(g.door, -4.02, y, 6.15, 1.25, 0.025, 0.22, STEEL);
     for (let bx = 0; bx < 3; bx++)
-      block(g.door, -4.55 + bx * 0.86, y + 0.17, 6.15, 0.32, 0.15, 0.17,
+      block(g.door, -5.07 + bx * 0.86, y + 0.17, 6.15, 0.32, 0.15, 0.17,
         scale(bx % 2 ? c1 : STEEL, bx % 2 ? 0.5 : 0.75));
   }
-  block(g.door, -3.5, 0.42, 6.05, 1.30, 0.04, 0.32, scale(STEEL, 0.85));
-  for (let lg = -1; lg <= 1; lg += 2) cyl(g.door, -3.5 + lg * 1.15, 0, 6.05, 0.035, 0.42, DARK, 6);
+  block(g.door, -4.02, 0.42, 6.05, 1.30, 0.04, 0.32, scale(STEEL, 0.85));
+  for (let lg = -1; lg <= 1; lg += 2) cyl(g.door, -4.02 + lg * 1.15, 0, 6.05, 0.035, 0.42, DARK, 6);
   // Fire extinguishers — every real garage wall has a pair.
   for (let f = 0; f < 2; f++) {
     cyl(g.nx, -5.22, 0.32, -4.4 + f * 0.42, 0.075, 0.44, [0.72, 0.09, 0.07], 8);
@@ -439,6 +485,38 @@ function glareStr() { return GLARE_STR; }
 // detail (a resin bay laid over the pit apron) and it is also why nothing here
 // needs a depth bias: no two floor surfaces are ever coplanar.
 const BOX_HW = 2.20, BOX_ZF = 4.25, BOX_ZB = -4.00;
+// The pit lane, seen through the open door. It lives in the FLOOR mesh, which
+// draws unconditionally — the one thing it must not do is cull with the door
+// wall, because you are looking through that wall's aperture exactly when the
+// wall itself has back-faced away. Laid on the apron plane (y -0.04), not the
+// bay floor (y 0): the 4 cm step between them is the resin bay over the pit
+// apron, and through the doorway it reads as the threshold it is.
+const PIT_HW = 10.5, PIT_Z0 = 6.45, PIT_Z1 = 11.9;
+function buildPitLane(out, liv) {
+  const APRON_Y = -0.04;
+  // LIGHTER than the bay floor, not darker. The first pass used 0.072, below
+  // the apron's own 0.105, so the lane read as a black void through the
+  // doorway — which is the exact failure the door risked in the first place.
+  // Outside is the bright side: daylight asphalt against a dim bay is what
+  // makes an open door look open.
+  const ASPHALT = [0.20, 0.205, 0.215], LINE = [0.88, 0.89, 0.91];
+  const WALL = [0.30, 0.31, 0.34], WALL_TOP = [0.46, 0.47, 0.50];
+  tile(out, -PIT_HW, PIT_HW, PIT_Z0, PIT_Z1, ASPHALT, APRON_Y + 0.004);
+  // Fast lane outside, working lane against the garages — the two boundary
+  // lines every pit straight has.
+  for (const z of [8.95, 11.70])
+    tile(out, -PIT_HW, PIT_HW, z, z + 0.13, LINE, APRON_Y + 0.008);
+  // A wall to stop the eye. Without it the lane runs to the apron rim and
+  // fades into the clear colour, which reads as fog rather than as somewhere.
+  block(out, 0, APRON_Y + 0.50, PIT_Z1 + 0.18, PIT_HW, 0.50, 0.16, WALL);
+  block(out, 0, APRON_Y + 1.03, PIT_Z1 + 0.18, PIT_HW, 0.05, 0.20, WALL_TOP);
+  // A team-coloured hoarding along it, so the far side of the lane is a place
+  // rather than a grey slab.
+  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  for (let i = -2; i <= 2; i++)
+    block(out, i * 3.6, APRON_Y + 0.62, PIT_Z1 + 0.02, 1.55, 0.26, 0.05,
+          scale(c1, i % 2 ? 0.55 : 0.9));
+}
 function buildApron(out) {
   const RINGS = 7, SEG = 40, R = 18, Y = -0.04;
   const HOT = [0.105, 0.107, 0.115];
@@ -475,11 +553,11 @@ function buildApron(out) {
 // tiling, not decals: overlapping coplanar quads z-fight at grazing elevation,
 // and a decal would miss the lamp pools entirely (the decal shader sees sun and
 // ambient only, never the point lights).
-function tile(out, x0, x1, z0, z1, col) {
+function tile(out, x0, x1, z0, z1, col, y) {
   const base = out.pos.length / 3;
   const p = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
   for (let k = 0; k < 4; k++) {
-    out.pos.push(p[k][0], 0, p[k][1]); out.nrm.push(0, 1, 0);
+    out.pos.push(p[k][0], y || 0, p[k][1]); out.nrm.push(0, 1, 0);
     out.col.push(col[0], col[1], col[2]);
   }
   out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
@@ -491,14 +569,22 @@ function buildBayFloor(out, liv) {
   const L = -HALF_W, R = HALF_W, B = Z_BACK, F = Z_DOOR, W = 0.11;
   tile(out, L, R, B, B + 0.8, band);                       // team band, deep end
   tile(out, L, R, B + 0.8, BOX_ZB - W, SLAB);
-  tile(out, L, R, BOX_ZB - W, BOX_ZB, PAINT);              // pit box, back edge
   tile(out, L, -BOX_HW - W, BOX_ZB, BOX_ZF, SLAB);
-  tile(out, -BOX_HW - W, -BOX_HW, BOX_ZB, BOX_ZF, PAINT);  // pit box, left edge
   tile(out, -BOX_HW, BOX_HW, BOX_ZB, BOX_ZF, IN);          // the box itself
-  tile(out, BOX_HW, BOX_HW + W, BOX_ZB, BOX_ZF, PAINT);    // right edge
   tile(out, BOX_HW + W, R, BOX_ZB, BOX_ZF, SLAB);
-  tile(out, L, R, BOX_ZF, BOX_ZF + W, PAINT);              // front edge
   tile(out, L, R, BOX_ZF + W, F, SLAB);
+  // The four pit-box edges were FLAT — a painted colour on the same plane as
+  // the slab. The floor is the biggest surface in every camera preset (100% of
+  // top, ~60% of hero/rear/front) and carried 36 triangles for 138 m2, so it
+  // had nothing for the ten spot lights to catch. 2 cm of height turns each
+  // edge into a lit top face and a shadowed side for 48 triangles total, which
+  // is what makes a painted box read as a kerb instead of a decal.
+  const EH = 0.02;
+  block(out, 0, EH / 2, BOX_ZB - W / 2, (R - L) / 2, EH / 2, W / 2, PAINT);   // back edge
+  block(out, 0, EH / 2, BOX_ZF + W / 2, (R - L) / 2, EH / 2, W / 2, PAINT);   // front edge
+  for (const sx of [-1, 1])
+    block(out, sx * (BOX_HW + W / 2), EH / 2, (BOX_ZB + BOX_ZF) / 2,
+          W / 2, EH / 2, (BOX_ZF - BOX_ZB) / 2, PAINT);                       // side edges
   for (let s = -1; s <= 1; s += 2) {                       // walkway lines
     tile(out, s * 4.25, s * 4.25 + 0.09, B + 0.8, BOX_ZB - W, WALK);
     tile(out, s * 4.25, s * 4.25 + 0.09, BOX_ZF + W, F, WALK);
@@ -827,11 +913,19 @@ function buildDress() {
   // preset also looks straight at this wall (the eye is outside +X, which culls
   // it), so the live stats get the one dead-on reading in the whole set.
   dquad(g.nx, [[-xw, 1.60, -2.40], [-xw, 1.60, -5.40], [-xw, 3.10, -5.40], [-xw, 3.10, -2.40]], [1, 0, 0], D_STATS);
-  dquad(g.px, [[xw, 0.72, -5.40], [xw, 0.72, -2.40], [xw, 1.44, -2.40], [xw, 1.44, -5.40]], [-1, 0, 0], D_BUDGET);
+  // BUDGET and FITTED SPEC used to live on +X, which NO camera preset frames:
+  // `side` puts the eye at x +11.1 and back-face culls +X entirely, `front`
+  // projects that wall to NDC.x ~ +0.43 which is behind the docked setup
+  // sheet, and `hero` is ~84 deg off axis. Two boards a player is meant to
+  // read while spending money were reachable only by manually spinning the
+  // turntable. BUDGET goes under STATS on -X (the wall `side` looks straight
+  // at), FITTED SPEC onto the bare left half of the back wall, which is 41%
+  // of the `front` frame and already carries the crest and driver boards.
+  dquad(g.nx, [[-xw, 0.69, -2.40], [-xw, 0.69, -5.40], [-xw, 1.44, -5.40], [-xw, 1.44, -2.40]], [1, 0, 0], D_BUDGET);
   // Square, because D_DRIVER is a square atlas region and a stretched quad would
   // squash the number.
   dquad(g.back, [[1.70, 1.75, zb], [3.70, 1.75, zb], [3.70, 3.75, zb], [1.70, 3.75, zb]], [0, 0, 1], D_DRIVER);
-  dquad(g.px, [[xw, 1.62, -5.40], [xw, 1.62, -2.40], [xw, 3.12, -2.40], [xw, 3.12, -5.40]], [-1, 0, 0], D_SPEC);
+  dquad(g.back, [[-4.10, 2.15, zb], [-1.70, 2.15, zb], [-1.70, 3.35, zb], [-4.10, 3.35, zb]], [0, 0, 1], D_SPEC);
   // FLOOR WORDMARK at the deep end — the TOP framing is a bare grey expanse and
   // it is the one view where every wall mark is edge-on. D_SIGN, not D_CREST:
   // the crest carries a dark team-colour FIELD, and a dark field on a dark
@@ -924,7 +1018,7 @@ function rebuild(team, liv, info) {
   for (let i = 0; i < SIDES.length; i++)
     if (led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(led[SIDES[i]]);
   const flr = acc();
-  buildApron(flr); buildBayFloor(flr, liv);
+  buildApron(flr); buildPitLane(flr, liv); buildBayFloor(flr, liv);
   floorMesh = _gfx.createMesh(flr);
   const g = {};
   for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();

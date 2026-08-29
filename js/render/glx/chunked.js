@@ -2,6 +2,26 @@
 "use strict";
 
 const GLXChunked = (function () {
+  // Which record in F.allLights IS the shadow-mapped lamp? Resolved by baked
+  // POSITION, which is stable: setFrame copies positions verbatim and flicker
+  // scales rgb only. The scan is O(all baked lamps) — up to ~1000 records — and
+  // drawChunked is called once per chunked mesh (props, glass, terrain, road),
+  // so it ran 4-5x a frame, and again per env-probe face, to recompute a value
+  // that is identical for the whole frame and usually for many frames: the
+  // mapped lamp only changes when the shadow caster does. Keyed on the array
+  // identity plus the position, so a rebuilt lamp set or a new caster misses
+  // exactly once.
+  let _saAL = null, _saX = 0, _saY = 0, _saZ = 0, _saIdx = -1;
+  function _shadowAllIdx(AL, lx, ly, lz) {
+    if (AL === _saAL && lx === _saX && ly === _saY && lz === _saZ) return _saIdx;
+    let r = -1;
+    for (let p = 0; p < AL.length; p += 15) {
+      if (AL[p] === lx && AL[p + 1] === ly && AL[p + 2] === lz) { r = p / 15; break; }
+    }
+    _saAL = AL; _saX = lx; _saY = ly; _saZ = lz; _saIdx = r;
+    return r;
+  }
+
 
   function init(core) {
     const gl = core.gl;
@@ -195,11 +215,8 @@ const GLXChunked = (function () {
         let shadowAllIdx = -1;
         if (SH && SH.lampEnabled && SH.lampArmed && SH.lampIdx >= 0 && F.lights &&
             !(F.tailCount > 0 && SH.lampIdx >= F.tailStart)) {
-          const o = SH.lampIdx * 15, AL = F.allLights;
-          const lx = F.lights[o], ly = F.lights[o + 1], lz = F.lights[o + 2];
-          for (let p = 0; p < AL.length; p += 15) {
-            if (AL[p] === lx && AL[p + 1] === ly && AL[p + 2] === lz) { shadowAllIdx = p / 15; break; }
-          }
+          const o = SH.lampIdx * 15;
+          shadowAllIdx = _shadowAllIdx(F.allLights, F.lights[o], F.lights[o + 1], F.lights[o + 2]);
         }
         // The whole per-chunk table is baked ONCE per (lights, knob) by the
         // shared LampChunks module (build-time work, invalidated by lights

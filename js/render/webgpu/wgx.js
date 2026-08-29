@@ -792,7 +792,9 @@ const WGX = (function () {
     // day), the trackLightSBO generation, and the chunkIdxSBO segment
     // allocator (WeakMap chunks-array -> {base, table} + append cursor).
     let framePerChunk = 0, frameAllLights = null, frameRoadChunkLamps = 0, frameAllLightsGen = -1;
-    let _tlSrc = null, _tlKnob = -1, _tlGen = -1;
+    let _tlSrc = null, _tlCapPrev = -1, _tlGen = -1;
+    // Memo for the armed-shadow-lamp position -> absolute index scan in _writeFrame.
+    let _asAL = null, _asX = 0, _asY = 0, _asZ = 0, _asIdx = -1;
     let _ciCursor = 0, _ciSeg = new WeakMap();
     const _tlScratch = new Float32Array(TRACK_LIGHT_CAP * 16);
     let frameLights = null, frameNL = 0;   // this frame's stride-15 light array (lamp-mask cull)
@@ -3097,14 +3099,22 @@ const WGX = (function () {
       // plain integer compare with no slot remap. Same baked-position match
       // GLX chunked does: setFrameLights copies positions verbatim (flicker
       // scales rgb only), and the appended tail range is excluded.
+      // Memoised on (identity, position): an O(all baked lamps) scan, up to 1024
+      // records, run every frame and per env-probe face for a value that moves
+      // only when the CASTER does. Positions are stable per the comment above.
       let _absShadowIdx = -1;
       const _AL = f.allLights;
       if (_lampShadowArmed && _lampIdx >= 0 && L && _AL &&
           !(f.tailCount > 0 && _lampIdx >= f.tailStart)) {
         const so = _lampIdx * 15;
         const lx = L[so], ly = L[so + 1], lz = L[so + 2];
-        for (let p = 0; p < _AL.length; p += 15) {
-          if (_AL[p] === lx && _AL[p + 1] === ly && _AL[p + 2] === lz) { _absShadowIdx = p / 15; break; }
+        if (_AL === _asAL && lx === _asX && ly === _asY && lz === _asZ) {
+          _absShadowIdx = _asIdx;
+        } else {
+          for (let p = 0; p < _AL.length; p += 15) {
+            if (_AL[p] === lx && _AL[p + 1] === ly && _AL[p + 2] === lz) { _absShadowIdx = p / 15; break; }
+          }
+          _asAL = _AL; _asX = lx; _asY = ly; _asZ = lz; _asIdx = _absShadowIdx;
         }
       }
       d[140] = _absShadowIdx;
@@ -3148,7 +3158,11 @@ const WGX = (function () {
       // apart deliberately: the segment allocator below may only be reset for
       // the former. Gen moves every frame while flicker runs, and resetting the
       // allocator there would re-bake every chunk table every frame.
-      const _tlSetMoved = _tlSrc !== frameAllLights || _tlKnob !== framePerChunk;
+      // The knob is NOT in this key, and used to be: the loop below copies AL
+      // verbatim, so a knob move cannot change one byte here. It moves only the
+      // per-chunk TABLES, and only via capFor() — 1000 slider steps, <=17 caps.
+      const _tlCap = (typeof LampChunks !== "undefined") ? LampChunks.capFor(framePerChunk) : 0;
+      const _tlSetMoved = _tlSrc !== frameAllLights;
       if (framePerChunk > 0 && frameAllLights &&
           (_tlSetMoved || _tlGen !== frameAllLightsGen)) {
         const AL = frameAllLights;
@@ -3161,10 +3175,13 @@ const WGX = (function () {
           td[b+12] = AL[o+10];     td[b+13] = AL[o+11];     td[b+14] = AL[o+14]; td[b+15] = 0;
         }
         if (tn > 0) device.queue.writeBuffer(trackLightSBO, 0, td, 0, tn * 16);
-        _tlSrc = frameAllLights; _tlKnob = framePerChunk; _tlGen = frameAllLightsGen;
-        // Tables are keyed on lamp POSITIONS, which a colour-only change never
-        // moves — so only a real set change invalidates the allocator.
-        if (_tlSetMoved) { _ciCursor = 0; _ciSeg = new WeakMap(); }
+        _tlSrc = frameAllLights; _tlGen = frameAllLightsGen;
+      }
+      // Allocator tracks the TABLES: reset on a set or CAP change, never on a
+      // colour-only gen bump (tables key on positions, which flicker leaves
+      // alone). OUTSIDE the block above — a cap-only change no longer enters it.
+      if (framePerChunk > 0 && frameAllLights && (_tlSetMoved || _tlCapPrev !== _tlCap)) {
+        _ciCursor = 0; _ciSeg = new WeakMap(); _tlCapPrev = _tlCap;
       }
       frameLights = nL > 0 ? L : null;
       frameNL = nL;
