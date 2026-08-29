@@ -24,6 +24,20 @@ function readInput() {
 
 let raw = readInput().trim();
 if (!raw) { console.error("No input. Pass a file path or pipe the copied settings on stdin."); process.exit(1); }
+// A DELTA IS NOT A SNAPSHOT, AND THIS TOOL IS A FULL REPLACE. The LIGHTING
+// TUNER's COPY VALUES button exports only the player's own overrides now, as
+// `window.LightEdits = {…}` — a handful of conditions where the shipped file
+// has 800. Baking that would write those few and DELETE every other profile in
+// the file, silently, which is the exact failure the skill's CRITICAL note
+// warns about. The distinct name exists so the tool can refuse instead of
+// relying on whoever is pasting to notice.
+if (/^\s*(window\.)?LightEdits\s*=/.test(raw)) {
+  console.error("This is a window.LightEdits DELTA (the tuner's COPY VALUES export), not a full\n" +
+    "window.LightPresets snapshot. bake.mjs REPLACES the whole literal, so baking a delta\n" +
+    "would delete every profile it does not mention. Merge it instead:\n\n" +
+    "  node .claude/skills/bake-lighting/merge-proposals.mjs <this file>\n");
+  process.exit(1);
+}
 // Isolate the object literal from a full `window.LightPresets = {…};` assignment.
 raw = raw.replace(/^\s*(window\.)?LightPresets\s*=\s*/, "").replace(/;\s*$/, "").trim();
 

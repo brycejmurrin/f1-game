@@ -307,10 +307,14 @@ condition on screen to every other circuit at the same time-of-day and weather
 | `MY EDITS` | only the knobs tuned on this condition, merged over each target's own | a change of INTENT for that condition — every circuit keeps its own character underneath |
 | `FULL LOOK` | every live value, overriding each target's shipped per-condition preset | levelling a condition you want identical everywhere, or re-basing it before per-track work |
 
-Then `COPY VALUES` and bake as usual — the export merges the shipped file with
-every local profile, so a spread condition arrives in `light-presets.js` as one
-`"track|tod|wx"` entry per circuit. Both chips arm on the first click and fire on
-the second, and `UNDO` reverts the whole fan-out while the panel is open.
+Then `COPY VALUES` and bake as usual. The export is `window.LightEdits` — the
+LOCAL profiles only, current condition first — so a spread condition arrives as
+one `"track|tod|wx"` entry per circuit and `merge-proposals.mjs` folds them into
+`light-presets.js` without touching anything else. Note that a `FULL LOOK`
+spread writes every live knob on 39 circuits, so the export after one is the
+largest a delta gets; `MY EDITS` stays small. Both chips arm on the first click
+and fire on the second, and `UNDO` reverts the whole fan-out while the panel is
+open.
 
 **`FULL LOOK` is the destructive one.** It writes a local profile that outranks
 the shipped preset for every knob on 39 circuits, which is exactly what makes the

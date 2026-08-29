@@ -1,22 +1,34 @@
 # Bake-lighting capture, review, ship
 
-Load this when you have a full COPY VALUES blob and are ready to write
-`js/game/light-presets.js`. The index's CRITICAL full-replace rule still
-applies — a partial object wipes every other key.
+Load this when you have a blob and are ready to write
+`js/game/light-presets.js`. Check the first line first: `window.LightEdits` is a
+delta and goes through the merge path below; only `window.LightPresets` reaches
+`bake.mjs`. The index's CRITICAL full-replace rule still applies — a partial
+object handed to `bake.mjs` wipes every other key.
 
-## Per-track proposal merge (no bake.mjs)
+## The merge path (no bake.mjs) — proposals AND player pastes
 
-When many tracks propose in parallel, each writes
-`artifacts/lighting/proposals/<id>.json` (schema in `docs/LIGHTING-PRESETS.md`).
-Parent merges — this is the only safe multi-agent path:
+`merge-proposals.mjs` takes two shapes and validates both the same way (ids /
+ranges / slider-grid against live `TUNE_DEFS`), leaving every key it was not
+given alone. It does **not** bump cache.
 
 ```sh
-node .claude/skills/bake-lighting/merge-proposals.mjs
+node .claude/skills/bake-lighting/merge-proposals.mjs                      # the proposals dir
+node .claude/skills/bake-lighting/merge-proposals.mjs artifacts/tmp/edits.js   # one pasted export
 ```
 
-It Object.assigns only the proposed `"track|tod|wx"` keys, validates ids /
-ranges / slider-grid against live `TUNE_DEFS`, and leaves `"*"` plus every
-other track alone. It does **not** bump cache.
+- **Agent proposal** — `artifacts/lighting/proposals/<id>.json`, shape
+  `{track, combos:{"dusk|dry":{…}}}` (schema in `docs/LIGHTING-PRESETS.md`).
+  Parent merges; this is the only safe multi-agent path. Within a condition a
+  proposal **REPLACES**: it is a considered whole profile, so dropping a knob is
+  how it decides against one, and an empty map resets the condition.
+- **Player paste** — `window.LightEdits = {…}` from COPY VALUES, keyed by the
+  full `"track|tod|wx"` plus the `"*"` / `"*|tod"` layers a proposal cannot
+  express. Within a condition a delta **MERGES**: two sliders moved is two knobs
+  added, not the other eight deleted. A delta may never delete a condition.
+
+Save the paste to a file and pass the path — it is read with `vm`, so the `//`
+comments the export writes between blocks are fine.
 
 ## One-key hand-merge (no bake.mjs)
 
@@ -36,8 +48,10 @@ If a merge mode is ever added it must be an explicit opt-in flag.
 
 Keys are `"trackId|timeOfDay|weather"` (or `"*"`);
 `timeOfDay` ∈ dawn|day|dusk|night, `weather` ∈ dry|wet|rain|fog|overcast.
-Values are partial `{knobId: number}` maps (only non-default knobs). A real
-COPY VALUES export is a FULL snapshot and REPLACES the whole literal.
+Values are partial `{knobId: number}` maps (only non-default knobs). A
+`window.LightPresets` blob is a FULL snapshot and REPLACES the whole literal;
+a `window.LightEdits` blob (what COPY VALUES emits) is a DELTA and must go
+through the merge path above.
 
 ## Steps
 
