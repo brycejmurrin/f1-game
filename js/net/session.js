@@ -8,6 +8,16 @@ const NetSession = (function () {
 
   const DEFAULTS = {
     pingEveryMs: 500,
+    // UNTIL THE CLOCK LANDS, PING HARDER. Ping/pong ride the same unreliable
+    // channel as snapshots, and a snapshot is not handed to the game until
+    // synced() — so on a lossy link the rival simply does not appear, with no
+    // error and nothing on screen, for as long as the handshake keeps failing.
+    // At 500 ms and 50% loss each round trip needs both legs to survive (25%),
+    // so a full second is a coin flip: measured over 500 seeded links, 1 s of
+    // pumping synced 221 of them. At 100 ms it is ~10 attempts in that second
+    // instead of ~2. A ping is 13 bytes; the cost of the faster cadence is
+    // nothing, and it stops the moment the first PONG lands.
+    syncPingEveryMs: 100,
     timeoutMs: 6000,
     stallForgiveMs: 400,
     clockSamples: 8,
@@ -160,7 +170,8 @@ const NetSession = (function () {
       lastNow = now;
       if (transport.pump) transport.pump(now);
 
-      if (alive && now - lastPingAt >= cfg.pingEveryMs) {
+      const pingGap = synced() ? cfg.pingEveryMs : cfg.syncPingEveryMs;
+      if (alive && now - lastPingAt >= pingGap) {
         lastPingAt = now;
         transport.send(CH_STATE, encodePing(++pingId, now));
       }

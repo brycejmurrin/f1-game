@@ -468,7 +468,12 @@ const CEILINGS = {
   // pump the session at t0); the rest is the comment saying why a stand-in for
   // a peer has to speak the clock protocol and why the first PING cannot wait
   // for the caller's first netTick. Bug-explaining growth at the site.
-  "js/game/apex.js": 2471,
+  // 2471 -> 2475: a `seed` on netLoopback, threading NetTransport.seededRnd, so
+  // a spec that configures packet loss can re-run the SAME loss. Unseeded, the
+  // lossy-link spec fails a few runs in a hundred because the clock handshake
+  // loses both legs of every attempt — indistinguishable from the defect it is
+  // meant to catch.
+  "js/game/apex.js": 2475,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and

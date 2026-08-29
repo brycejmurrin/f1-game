@@ -190,19 +190,30 @@ test.describe("multiplayer session", () => {
     await race(page);
     const out = await page.evaluate(() => {
       const A = window.__apex;
-      const s = A.netLoopback({ nowMs: 1000, latencyMs: 20, loss: 0.5, interpDelayMs: 50 });
+      // SEEDED: without `seed` the loss pattern is Math.random, and this spec
+      // then fails a few runs in a hundred for a reason that has nothing to do
+      // with tracking — the clock handshake happens to lose both legs of every
+      // round trip. Ping/pong ride the same lossy channel as the snapshots.
+      const s = A.netLoopback({ nowMs: 1000, latencyMs: 20, loss: 0.5, interpDelayMs: 50, seed: 7 });
       const total = A.info().total;
       let T = 1000;
+      // Let the clock land before measuring TRACKING, which is what this test
+      // is about. A real session pumps from the moment it connects and races
+      // seconds later; asserting on packets sent while synced() is still false
+      // measures the handshake instead.
+      while (T < 1600 && !A.net().net.synced) { T += 25; A.netTick(T); }
+      const synced = A.net().net.synced;
       const first = total * 0.20;
       for (let i = 0; i < 40; i++) {
         A.netPeerSend({ s: total * (0.20 + i * 0.002), x: 0, speed: 0 }, T);
         T += 25;
         A.netTick(T);
       }
-      return { first, last: A.carAt(s.remoteId).s, active: A.net().active, total };
+      return { first, synced, last: A.carAt(s.remoteId).s, active: A.net().active, total };
     });
 
     expect(out.active).toBe(true);
+    expect(out.synced).toBe(true);
     // Half the packets never arrived, but it should still have tracked most of
     // the ~0.078 of a lap that was sent.
     expect(out.last).toBeGreaterThan(out.first + out.total * 0.04);
@@ -401,9 +412,14 @@ test.describe("multiplayer session", () => {
     await race(page);
     const out = await page.evaluate(() => {
       const A = window.__apex;
-      A.netLoopback({ nowMs: 1000, latencyMs: 20, loss: 0.9, interpDelayMs: 0 });
-      A.netPeerEvent("lap", { lap: 1, time: 81.23, code: "XYZ" }, 1000);
-      A.netPeerEvent("lap", { lap: 2, time: 80.11, code: "XYZ" }, 1020);
+      const s = A.netLoopback({ nowMs: 1000, latencyMs: 20, loss: 0.9, interpDelayMs: 0, seed: 5 });
+      // The lap must carry the identity of the driver the SENDER owns. A host
+      // accepts a lap time only from the peer that holds that seat
+      // (sendersOwnDriver in js/net/netplay.js) — a placeholder code is
+      // spoofing, and is rejected exactly as it should be.
+      const rival = A.carAt(s.remoteId);
+      A.netPeerEvent("lap", { lap: 1, time: 81.23, driverId: rival.driverId, code: rival.code }, 1000);
+      A.netPeerEvent("lap", { lap: 2, time: 80.11, driverId: rival.driverId, code: rival.code }, 1020);
       for (let t = 1040; t <= 1400; t += 20) A.netTick(t);
       return { laps: A.netPeerLaps(), count: A.net().peerLaps };
     });
@@ -411,6 +427,25 @@ test.describe("multiplayer session", () => {
     expect(out.count).toBe(2);
     expect(out.laps[0].time).toBeCloseTo(81.23, 2);
     expect(out.laps[1].lap).toBe(2);
+  });
+
+  test("a lap time for a driver the peer does not own is refused", async ({ page }) => {
+    // The other half of the rule above, and the reason the previous version of
+    // that test could never pass: a host must not take a lap time attributed
+    // to a driver its peer does not hold, or a peer could write results for
+    // anyone on the grid. Same shape, one field changed.
+    await race(page);
+    const out = await page.evaluate(() => {
+      const A = window.__apex;
+      const s = A.netLoopback({ nowMs: 1000, latencyMs: 20, interpDelayMs: 0, seed: 5 });
+      const rival = A.carAt(s.remoteId);
+      A.netPeerEvent("lap", { lap: 1, time: 81.23, driverId: rival.driverId, code: rival.code }, 1000);
+      A.netPeerEvent("lap", { lap: 2, time: 60.00, driverId: "not-theirs", code: "XYZ" }, 1020);
+      for (let t = 1040; t <= 1400; t += 20) A.netTick(t);
+      return { count: A.net().peerLaps, laps: A.netPeerLaps() };
+    });
+    expect(out.count).toBe(1);
+    expect(out.laps[0].lap).toBe(1);
   });
 
   test("the guest adopts the host's classification, not its own", async ({ page }) => {

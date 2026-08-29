@@ -1628,6 +1628,10 @@ const api = {
       latencyMs: o.latencyMs != null ? o.latencyMs : 0,
       jitterMs: o.jitterMs || 0,
       loss: o.loss || 0,
+      // `seed` makes loss and jitter REPRODUCIBLE. Without it a lossy spec is
+      // a coin flip that re-runs differently, which is indistinguishable from
+      // the defect it is meant to catch.
+      rnd: o.seed != null ? NetTransport.seededRnd(o.seed) : undefined,
     });
     _netPeer = pair[1];
     // THE FAR END MUST ANSWER PINGS. A bare transport endpoint is not a peer:
