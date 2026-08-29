@@ -1327,3 +1327,29 @@ The durable guard is in `tests/unit/ui-journey-race.test.mjs`: no `body.<class>
 #btn-throttle` / `#btn-brake` rule may declare a `background` at all. That is a
 narrower claim than "the pressed state works", and it is the one a file can
 actually hold.
+
+**Measure the fallback before you call it broken (2026-08-29).** COPY VALUES in
+the LIGHTING TUNER reached `execCommand("copy")` only from inside the clipboard
+promise's REJECTION handler. That reads like a guaranteed failure — the copy
+command needs user activation and a rejection handler runs a microtask after the
+click — and it was written up as one. A clipboard READ-BACK said otherwise:
+with `navigator.clipboard.writeText` stubbed to reject, the shipped handler
+still put all 182,631 characters on the clipboard in Chromium, which keeps
+transient activation for about five seconds. WebKit is documented to require the
+copy during gesture processing rather than merely soon after, so the iPhone
+story may well hold — but it is UNVERIFIED here and was labelled as such in the
+code: this container's proxy blocks `cdn.playwright.dev`, so
+`npx playwright install webkit` 403s and nobody can run it. The fix (attempt the
+synchronous copy first) is right either way; the CLAIM had to be corrected.
+
+The measurable half was the payload: 182,631 characters, against 146 for the
+same tune once the export carried only the player's overrides.
+
+**A saturated main thread looks exactly like a missing element.** Driving the
+tuner in that probe, `page.locator("#lt-copy").click()` timed out with
+`waiting for locator('#lt-copy')` while `page.evaluate` in the same page
+answered instantly and reported the element present, visible and 145x46. Nothing
+was wrong with the DOM: the game's rAF loop on llvmpipe was starving
+Playwright's actionability poll. `__apex.headless(true)` before touching the
+panel fixed it outright. Reach for that before believing a locator that cannot
+find what `getElementById` can.
