@@ -518,7 +518,7 @@ const CEILINGS = {
   // 2947 -> 2960: FINISH_SURFACE grew from two rows to six (matte, brushed,
   // pearl, carbon) plus the note explaining that a finish costs a SURFACE ID
   // in the shaders' 20-30 classification chain rather than a material uniform.
-  "js/car/car3d.js": 2960,
+  "js/car/car3d.js": 3004,   // +44: wheel cover is a rim lip, a dish and a boss
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
