@@ -132,19 +132,30 @@ function buildShell(out, liv) {
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
   const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.55, 0.57, 0.62]);
   const dado = scale(c1, 0.45), stripe = scale(c2, 0.8);
-  // Wall colour by height: team dado to 1.5 m, an accent band, grey panel above.
-  const wallAt = (y01, hgt) => {
-    const y = y01 * hgt;
-    if (y < 1.50) return dado;
-    if (y < 1.62) return stripe;
-    return PANEL;
-  };
+  // Wall colour by ABSOLUTE height. This used to take a 0..1 v and multiply by
+  // the wall height, which was fine — the bug was that no vertex row ever
+  // landed in the accent band: nv was 6 over a 5 m wall, so the rows sat at
+  // 0, 0.833, 1.667, 2.5, 3.333, 4.167, 5.0 and the 1.50-1.62 band fell
+  // between two of them. `stripe` was computed on every rebuild and thrown
+  // away, which is why the team dado read as an 83 cm wash instead of a line.
+  // The walls are now built as three stacked grids whose seams ARE the band
+  // edges, so the row exists by construction.
+  const wallAt = (y) => (y < 1.4995 ? dado : y < 1.6205 ? stripe : PANEL);
   // Battens are BAKED INTO THE WALL's vertex colour rather than modelled as
   // solid posts. A solid post is a prop, and props do not cull with the shell:
   // stood outside the bay you would see a row of dark bars hanging in front of
   // the room whose wall had already culled away. Shading them into the wall
   // means they are the wall, and they come and go exactly when it does.
-  const seamed = (col, u, n) => (Math.abs((u * n) % 1 - 0.5) > 0.42 ? scale(col, 0.62) : col);
+  // Battens are BAKED INTO THE WALL's vertex colour rather than modelled as
+  // solid posts, so they come and go exactly when the wall does.
+  //
+  // This never worked. It was keyed on `u * n` where n was the grid's OWN
+  // column count, and panelGrid samples u at i/nu — so `u * n` was always an
+  // integer, `(u*n)%1` always 0, and `|0 - 0.5| > 0.42` TRUE at every vertex of
+  // every wall. The bright branch was unreachable: all four walls rendered as
+  // one flat 62%-scaled tint with no battens at all. Key it off the column
+  // INDEX instead, which is what it meant to say.
+  const seamed = (col, u, n) => (Math.round(u * n) % 2 ? scale(col, 0.62) : col);
   // walls: [origin, uVec, vVec, inward normal, u-divisions]
   const W = HALF_W;
   const walls = [
@@ -153,10 +164,19 @@ function buildShell(out, liv) {
     [[-W, 0, Z_BACK], [0, 0, Z_DOOR - Z_BACK], [0, CEIL_Y, 0], [1, 0, 0], 9],
     [[W, 0, Z_BACK], [0, 0, Z_DOOR - Z_BACK], [0, CEIL_Y, 0], [-1, 0, 0], 9],
   ];
+  // Three stacked bands per wall — dado / accent / panel — instead of one grid
+  // with a colour ramp. The seams ARE the band edges, so the accent line is a
+  // line rather than an 83 cm gradient between whichever rows happened to fall
+  // either side of it. Column count doubled so a batten is a batten and not a
+  // half-wall-wide stripe: with 8 columns the alternation reads as panelling.
+  const BANDS = [[0, 1.50, 2], [1.50, 1.62, 1], [1.62, CEIL_Y, 4]];
   for (let i = 0; i < walls.length; i++) {
-    const w = walls[i];
-    panelGrid(out, w[0], w[1], w[2], w[4], 6, w[3],
-      (u, v) => seamed(wallAt(v, CEIL_Y), u, w[4]));
+    const w = walls[i], nu = w[4] * 2;
+    for (const [y0, y1, nv] of BANDS) {
+      const o = [w[0][0], w[0][1] + y0, w[0][2]];
+      panelGrid(out, o, w[1], [0, y1 - y0, 0], nu, nv, w[3],
+        (u, v) => seamed(wallAt(y0 + (y1 - y0) * v), u, nu));
+    }
   }
   panelGrid(out, [-W, CEIL_Y, Z_BACK], [W * 2, 0, 0], [0, 0, Z_DOOR - Z_BACK], 4, 4,
     [0, -1, 0], () => DARK);
@@ -491,14 +511,22 @@ function buildBayFloor(out, liv) {
   const L = -HALF_W, R = HALF_W, B = Z_BACK, F = Z_DOOR, W = 0.11;
   tile(out, L, R, B, B + 0.8, band);                       // team band, deep end
   tile(out, L, R, B + 0.8, BOX_ZB - W, SLAB);
-  tile(out, L, R, BOX_ZB - W, BOX_ZB, PAINT);              // pit box, back edge
   tile(out, L, -BOX_HW - W, BOX_ZB, BOX_ZF, SLAB);
-  tile(out, -BOX_HW - W, -BOX_HW, BOX_ZB, BOX_ZF, PAINT);  // pit box, left edge
   tile(out, -BOX_HW, BOX_HW, BOX_ZB, BOX_ZF, IN);          // the box itself
-  tile(out, BOX_HW, BOX_HW + W, BOX_ZB, BOX_ZF, PAINT);    // right edge
   tile(out, BOX_HW + W, R, BOX_ZB, BOX_ZF, SLAB);
-  tile(out, L, R, BOX_ZF, BOX_ZF + W, PAINT);              // front edge
   tile(out, L, R, BOX_ZF + W, F, SLAB);
+  // The four pit-box edges were FLAT — a painted colour on the same plane as
+  // the slab. The floor is the biggest surface in every camera preset (100% of
+  // top, ~60% of hero/rear/front) and carried 36 triangles for 138 m2, so it
+  // had nothing for the ten spot lights to catch. 2 cm of height turns each
+  // edge into a lit top face and a shadowed side for 48 triangles total, which
+  // is what makes a painted box read as a kerb instead of a decal.
+  const EH = 0.02;
+  block(out, 0, EH / 2, BOX_ZB - W / 2, (R - L) / 2, EH / 2, W / 2, PAINT);   // back edge
+  block(out, 0, EH / 2, BOX_ZF + W / 2, (R - L) / 2, EH / 2, W / 2, PAINT);   // front edge
+  for (const sx of [-1, 1])
+    block(out, sx * (BOX_HW + W / 2), EH / 2, (BOX_ZB + BOX_ZF) / 2,
+          W / 2, EH / 2, (BOX_ZF - BOX_ZB) / 2, PAINT);                       // side edges
   for (let s = -1; s <= 1; s += 2) {                       // walkway lines
     tile(out, s * 4.25, s * 4.25 + 0.09, B + 0.8, BOX_ZB - W, WALK);
     tile(out, s * 4.25, s * 4.25 + 0.09, BOX_ZF + W, F, WALK);
@@ -827,11 +855,19 @@ function buildDress() {
   // preset also looks straight at this wall (the eye is outside +X, which culls
   // it), so the live stats get the one dead-on reading in the whole set.
   dquad(g.nx, [[-xw, 1.60, -2.40], [-xw, 1.60, -5.40], [-xw, 3.10, -5.40], [-xw, 3.10, -2.40]], [1, 0, 0], D_STATS);
-  dquad(g.px, [[xw, 0.72, -5.40], [xw, 0.72, -2.40], [xw, 1.44, -2.40], [xw, 1.44, -5.40]], [-1, 0, 0], D_BUDGET);
+  // BUDGET and FITTED SPEC used to live on +X, which NO camera preset frames:
+  // `side` puts the eye at x +11.1 and back-face culls +X entirely, `front`
+  // projects that wall to NDC.x ~ +0.43 which is behind the docked setup
+  // sheet, and `hero` is ~84 deg off axis. Two boards a player is meant to
+  // read while spending money were reachable only by manually spinning the
+  // turntable. BUDGET goes under STATS on -X (the wall `side` looks straight
+  // at), FITTED SPEC onto the bare left half of the back wall, which is 41%
+  // of the `front` frame and already carries the crest and driver boards.
+  dquad(g.nx, [[-xw, 0.69, -2.40], [-xw, 0.69, -5.40], [-xw, 1.44, -5.40], [-xw, 1.44, -2.40]], [1, 0, 0], D_BUDGET);
   // Square, because D_DRIVER is a square atlas region and a stretched quad would
   // squash the number.
   dquad(g.back, [[1.70, 1.75, zb], [3.70, 1.75, zb], [3.70, 3.75, zb], [1.70, 3.75, zb]], [0, 0, 1], D_DRIVER);
-  dquad(g.px, [[xw, 1.62, -5.40], [xw, 1.62, -2.40], [xw, 3.12, -2.40], [xw, 3.12, -5.40]], [-1, 0, 0], D_SPEC);
+  dquad(g.back, [[-4.10, 2.15, zb], [-1.70, 2.15, zb], [-1.70, 3.35, zb], [-4.10, 3.35, zb]], [0, 0, 1], D_SPEC);
   // FLOOR WORDMARK at the deep end — the TOP framing is a bare grey expanse and
   // it is the one view where every wall mark is edge-on. D_SIGN, not D_CREST:
   // the crest carries a dark team-colour FIELD, and a dark field on a dark

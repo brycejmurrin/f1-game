@@ -1597,7 +1597,22 @@ const Car3D = (function () {
     // tuner's -20.5 deg pitch hits it at 0.69 m, and ferrari's c2 is [1,1,1].
     // The driver of a real car does not see their own spine stripe; the chase
     // cameras still do, so only the cockpit build drops it.
-    if (!ckpt) addBox(out, 0, 0.665, 0.45, 0.10, 0.02, 0.80, ersC2, SURFACES.paint);
+    //
+    // It also has to FOLLOW the deck. As a single flat addBox at y 0.665 it did
+    // not: the chase crown runs 0.48 at z 1.15 to 0.66 at z 0.08, so the bar's
+    // underside sat 124 mm above the surface at its forward end (z 0.85), 57 mm
+    // at mid-length, and only met the deck at the very back — a cantilevered
+    // rail with daylight under it, not a stripe. A span between two stations on
+    // the crown line costs the same twelve triangles and lies on the paint.
+    if (!ckpt) {
+      const deckTop = (z) => {
+        const t = Math.max(0, Math.min(1, (hF.z - z) / (hF.z - hR.z)));
+        return (hF.y + hF.h / 2) + ((hR.y + hR.h / 2) - (hF.y + hF.h / 2)) * t + 0.026;
+      };
+      addSpan(out, { z: 0.85, y: deckTop(0.85) + 0.008, w: 0.09, h: 0.016 },
+                   { z: 0.05, y: deckTop(0.05) + 0.008, w: 0.11, h: 0.016 },
+              ersC2, null, SURFACES.paint);
+    }
 
     part("bolsters");
     if (ckpt) {
@@ -2499,10 +2514,29 @@ const Car3D = (function () {
     part("sharkFin");
     if (!ckpt) {
       const fb = FIN.halfBase, ft = FIN.halfTop;
+      // The fin's base was FROZEN at y 0.7935 while the engine cover it stands
+      // on moves with engine.coverHeight, which the catalog ships from 0.90 to
+      // 1.272. Measured against anchors.coverAt(-0.65).top: at 0.90 the cover
+      // top is 0.776, so the fin floated 17 mm with a strip of DAYLIGHT under
+      // its leading edge (three pixels at the review camera); at 1.272 the
+      // cover is 121 mm above the base and swallows a third of the blade.
+      //
+      // Root the base into the cover, and only ever DOWNWARD. Raising it would
+      // walk the fin out from under its livery decal: sharkFinPanel() and
+      // sharkFinBadge() below place that decal off the frozen FIN with no
+      // arguments, and js/game/carmesh.js calls Car3D.sharkFinPanel() and
+      // Car3D.sharkFinBadge() exactly that way. Lowering only grows the blade under the decal, which keeps
+      // every graphic exactly where it was.
+      const root = (z, y0) => {
+        const c = anchors.coverAt(z);
+        return c && c.top != null ? Math.min(y0, c.top - 0.010) : y0;
+      };
+      const bLE = root(FIN.baseLE[0], FIN.baseLE[1]);
+      const bTE = root(FIN.baseTE[0], FIN.baseTE[1]);
       addBlock(out, [
-        [-fb, FIN.baseLE[1], FIN.baseLE[0]], [fb, FIN.baseLE[1], FIN.baseLE[0]],
+        [-fb, bLE, FIN.baseLE[0]], [fb, bLE, FIN.baseLE[0]],
         [ft, FIN.topLE[1], FIN.topLE[0]],    [-ft, FIN.topLE[1], FIN.topLE[0]],
-        [-fb, FIN.baseTE[1], FIN.baseTE[0]], [fb, FIN.baseTE[1], FIN.baseTE[0]],
+        [-fb, bTE, FIN.baseTE[0]], [fb, bTE, FIN.baseTE[0]],
         [ft, FIN.topTE[1], FIN.topTE[0]],    [-ft, FIN.topTE[1], FIN.topTE[0]],
       ], finC);
     }
