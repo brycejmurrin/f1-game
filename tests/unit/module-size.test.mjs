@@ -525,7 +525,14 @@ const CEILINGS = {
   // 2960 -> 3004 on the other lineage: +44 for the wheel cover becoming a rim
   // lip, a dish and a boss.
   // UNION: the file carries both, so neither number fits — re-measured here.
-  "js/car/car3d.js": 3014,
+  // 3014 -> 3027: the SECOND cockpit slab report, and not a pale one — with a
+  // red car the monocoque span under the wheel is one unbroken block of body
+  // paint (rear cap a closed wall 0.65 m from the eye, deck running out under
+  // the hood). Carbon for the ckpt branch only, +1 line of code and the twelve
+  // that record why the tub is dark while the hood above it stays painted —
+  // the distinction the next reader will otherwise undo. Measured on ferrari:
+  // lower-field rays on body paint under the wheel 1073 -> 658 of 13430.
+  "js/car/car3d.js": 3027,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
