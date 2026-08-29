@@ -285,7 +285,13 @@ function buildSetup() {
   const curOpt = resolveOpt(activeCat);
   const curCost = curOpt ? (curOpt.cost || 0) : 0;
   const factorySetup = Parts.getFactorySetup(team);
-  for (const opt of activeCat.options) {
+  // Cheapest first, so a category reads as the ladder it now is. The CATALOG
+  // is in authoring order — McLaren's aero tab ran 0, 80, 40, 60, 0, 50 … 110,
+  // 95, 185, and its own signature wing was row 18 of 18. Stable within a
+  // price: `slice()` first, and ties keep authoring order.
+  const shownOpts = activeCat.options.slice()
+    .sort((a, b) => (a.cost || 0) - (b.cost || 0));
+  for (const opt of shownOpts) {
     if (!Parts.isOptionAvailable(opt, team)) continue;
     const locked = !Parts.isOptionAvailable(opt, team, owned);
     const active = curOpt && curOpt.id === opt.id;
@@ -320,7 +326,9 @@ function buildSetup() {
     main.appendChild(nameRow);
     const deltas = statDeltaChips(opt);
     if (deltas) main.appendChild(deltas);
-    if (active && opt.desc) { const d = document.createElement("div"); d.className = "cs-opt-desc"; d.textContent = opt.desc; main.appendChild(d); }
+    // The description used to appear only once the part was FITTED, which is
+    // the one moment the player no longer needs it to decide.
+    if (opt.desc) { const d = document.createElement("div"); d.className = "cs-opt-desc"; d.textContent = opt.desc; main.appendChild(d); }
     row.appendChild(main);
 
     const cost = document.createElement("span");
@@ -379,7 +387,12 @@ function statDeltaChips(opt) {
     any = true;
     const chip = document.createElement("span");
     chip.className = "cs-delta " + (v > 1 ? "up" : "down");
-    chip.textContent = (v > 1 ? "▲" : "▼") + d.label;
+    // The magnitude, not just the direction. `tyres/branded_wall` (+2% grip,
+    // 30 cr) and `tyres/hypersoft` (+36% grip, 200 cr) both rendered one plain
+    // "▲GRIP", so the whole ladder read as a flat list of the same upgrade and
+    // the only number on the row was its price.
+    const pct = Math.round(Math.abs(v - 1) * 100);
+    chip.textContent = (v > 1 ? "▲" : "▼") + d.label + " " + (v > 1 ? "+" : "−") + pct + "%";
     wrap.appendChild(chip);
   }
   return any ? wrap : null;

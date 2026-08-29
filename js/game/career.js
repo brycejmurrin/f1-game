@@ -415,10 +415,38 @@ function worksCost(teamId) {
   _worksCost.set(teamId, c);
   return c;
 }
+// The dearest build the catalog can express, and the ceiling every career budget
+// obeys. BUDGET_MULT compounds off worksCost, and a front-running works car is
+// already ~86% of the whole top shelf — so McLaren at budgetLvl 1 could buy the
+// dearest option in all twelve categories and the economy stopped constraining
+// anything (measured before the ladder re-space: 2035 * 1.15 = 2340 = the whole
+// top shelf, exactly). The cap keeps at least the dearest SINGLE part out of
+// reach, so a career build is always a choice and RAISE THE CAP always buys
+// something short of everything. It is DERIVED from the catalog, not a number,
+// so adding or repricing a part moves it. Call-time, like worksCost: parts.js
+// loads first, but nothing here reads Parts at eval.
+let _budgetCap = null;
+function budgetCap() {
+  if (_budgetCap == null) {
+    let all = 0, top = 0;
+    for (const cat of Parts.CATALOG) {
+      let hi = 0;
+      for (const o of cat.options) hi = Math.max(hi, o.cost || 0);
+      all += hi;
+      top = Math.max(top, hi);
+    }
+    _budgetCap = all - top;
+  }
+  return _budgetCap;
+}
 function budget() {
   if (!career) return 0;
   const lvl = Math.max(0, Math.min(career.budgetLvl | 0, BUDGET_MULT.length - 1));
-  return Math.round(worksCost(career.team) * BUDGET_MULT[lvl]);
+  const raw = Math.round(worksCost(career.team) * BUDGET_MULT[lvl]);
+  // A team can always afford to rebuild its own works car, cap or no cap — the
+  // guard test asserts the cap clears the dearest preset, so this only bites if
+  // a future preset outgrows it.
+  return Math.min(raw, Math.max(budgetCap(), worksCost(career.team)));
 }
 function budgetUpgradeCost() {
   return career && career.budgetLvl < BUDGET_UPGRADE.length ? BUDGET_UPGRADE[career.budgetLvl] : null;
@@ -1071,7 +1099,7 @@ return {
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
   paceMult, teamStats,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,
-  objective, objectiveFor, objectiveLabel, prizeFor, settleRound, worksCost,
+  objective, objectiveFor, objectiveLabel, prizeFor, settleRound, worksCost, budgetCap,
   driverStandings, teamStandings, rollover, offers, acceptOffer, marketValue, offerBar,
   round, roundsTotal, seasonDone, trackIndex,
 };

@@ -78,11 +78,16 @@ test.describe("Budget system — display", () => {
 });
 
 test.describe("Budget system — part selection", () => {
-  test("selecting race engine (160cr) reduces budget to 440", async ({ page }) => {
+  test("selecting the race engine spends exactly its catalog price", async ({ page }) => {
     await openSetup(page);
     await pickOpt(page, "engine", "race");
+    // Read the price from the catalog, like the cap above. Hardcoding it pinned
+    // 160 cr, and the ladder re-space repriced the row — a spec that fails
+    // because a part is cheaper is measuring the number, not the behaviour.
+    const left = await page.evaluate(() => Parts.BUDGET -
+      Parts.CATALOG.find((c) => c.id === "engine").options.find((o) => o.id === "race").cost);
     const text = await page.locator("#cs-budget").textContent();
-    expect(text).toContain("440");
+    expect(text).toContain(String(left));
     await page.screenshot({ path: galleryPath("parts-budget", "budget-race-engine.png") });
   });
 
@@ -92,15 +97,15 @@ test.describe("Budget system — part selection", () => {
     const transform = await page.locator("#cs-budget-fill").evaluate((el) =>
       el.style.transform
     );
-    // A paid part must move the bar off zero (160 cr against the cap).
+    // A paid part must move the bar off zero (the race engine against the cap).
     expect(transform).toMatch(/scaleX\(0\.[1-9]/);
   });
 
   test("parts that exceed budget show over-budget class", async ({ page }) => {
     await openSetup(page);
-    // Spend enough that the dearest engine no longer fits: Overcharge ERS (230)
-    // + Seamless gearbox (210) + Custom Formula fuel (200) = 640, leaving less
-    // than the 220 cr Plenum Max engine against a 780 cap.
+    // Spend enough that the dearest engine no longer fits: the top ERS, gearbox
+    // and fuel rows together leave well under the dearest engine against the
+    // 780 cap. Prices move with the ladder; the three dearest rows do not.
     await pickOpt(page, "ers", "overcharge");
     await pickOpt(page, "gearbox", "seamless_shift");
     await pickOpt(page, "fuel", "custom_formula");
@@ -119,7 +124,8 @@ test.describe("Budget system — part selection", () => {
     await pickOpt(page, "gearbox", "seamless_shift");
     await pickOpt(page, "fuel", "custom_formula");
     await pickOpt(page, "engine", "quali_engine");
-    // 230 + 210 + 200 + 220 = 860 > the 780 cap, so the label goes "over".
+    // The four dearest rows together clear the 780 cap by a wide margin, so the
+    // label goes "over" whatever the ladder prices them at.
     await page.locator("#cs-unlimited").click();
     const cls = await page.locator("#cs-budget").getAttribute("class");
     expect(cls).toContain("over");

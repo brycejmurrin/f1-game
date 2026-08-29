@@ -146,37 +146,38 @@ test.describe("Parts module — getMods()", () => {
 });
 
 test.describe("Parts module — getCost()", () => {
+  // Prices come from the catalog, never from a literal here. Four of these
+  // tests pinned 160 / 180 / 200 / 490 and the ladder re-space moved three of
+  // them — a red run that says nothing about getCost(), which is what this
+  // block exists to measure.
+  const price = (page, cat, id) => page.evaluate(([c, o]) =>
+    Parts.CATALOG.find((x) => x.id === c).options.find((y) => y.id === o).cost, [cat, id]);
+
   test("all defaults cost 0", async ({ page }) => {
     await load(page);
     const cost = await page.evaluate(() => Parts.getCost({}, ""));
     expect(cost).toBe(0);
   });
 
-  test("race engine costs 160", async ({ page }) => {
+  test("one fitted part costs exactly its catalog price", async ({ page }) => {
     await load(page);
-    const cost = await page.evaluate(() => Parts.getCost({ engine: "race" }, ""));
-    expect(cost).toBe(160);
-  });
-
-  test("f1_spec gearbox costs 180", async ({ page }) => {
-    await load(page);
-    const cost = await page.evaluate(() => Parts.getCost({ gearbox: "f1_spec" }, ""));
-    expect(cost).toBe(180);
-  });
-
-  test("custom_formula fuel costs 200", async ({ page }) => {
-    await load(page);
-    const cost = await page.evaluate(() => Parts.getCost({ fuel: "custom_formula" }, ""));
-    expect(cost).toBe(200);
+    for (const [cat, id] of [["engine", "race"], ["gearbox", "f1_spec"], ["fuel", "custom_formula"]]) {
+      const want = await price(page, cat, id);
+      expect(want).toBeGreaterThan(0);
+      const cost = await page.evaluate(([c, o]) => Parts.getCost({ [c]: o }, ""), [cat, id]);
+      expect(cost).toBe(want);
+    }
   });
 
   test("costs add up correctly across multiple categories", async ({ page }) => {
     await load(page);
-    // race(160) + active suspension(190) + ceramic brakes(140) = 490
+    const parts = [["engine", "race"], ["suspension", "active"], ["brakes", "ceramic"]];
+    let want = 0;
+    for (const [c, o] of parts) want += await price(page, c, o);
     const cost = await page.evaluate(() =>
       Parts.getCost({ engine: "race", suspension: "active", brakes: "ceramic" }, "")
     );
-    expect(cost).toBe(490);
+    expect(cost).toBe(want);
   });
 
   test("max setup exceeds the budget", async ({ page }) => {
@@ -208,7 +209,8 @@ test.describe("Parts module — resolveSetup()", () => {
     expect(resolved.setup.engine).toBe("race");
     expect(resolved.setup.aero).toBe("minimal");
     expect(resolved.ids.engine).toBe("race");
-    expect(resolved.cost).toBe(160);
+    expect(resolved.cost).toBe(await page.evaluate(() =>
+      Parts.CATALOG.find((c) => c.id === "engine").options.find((o) => o.id === "race").cost));
     expect(resolved.mods.speed).toBeGreaterThan(1);
     expect(resolved.tiers.aero).toBe(0);
     expect(resolved.visual.engine.id).toBe("race");
