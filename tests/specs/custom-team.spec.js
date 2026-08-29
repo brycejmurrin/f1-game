@@ -32,6 +32,14 @@ const LANDSCAPE = { width: 844, height: 390 };
 test.use({ viewport: LANDSCAPE });
 
 test("custom-team color save frees and rebuilds its decal texture", async ({ page }) => {
+  // Two full trips through the garage and the custom-team editor under
+  // SwiftShader, same as the mesh-variant test below and for the same reason:
+  // the 120 s default expires mid-flow and reports as a dead click. Measured
+  // 126 s ALONE on an idle box (loadavg 2, one worker) and 128 s inside the
+  // parts group — it has been over budget since before this line existed, on
+  // the deploy tip as well, so the number was measuring the machine and
+  // failing the code. The assertions below are untouched.
+  test.setTimeout(240_000);
   await page.goto("/");
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
 

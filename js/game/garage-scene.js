@@ -765,11 +765,12 @@ function paintDress(team, liv, info) {
     // and the halo keeps it legible against the new backing either way.
     const halo = (img._avg && LiveryTex.contrast && LiveryTex.contrast(img._avg, field) < 2.6 && LiveryTex.inkOn)
       ? LiveryTex.inkOn([img._avg]) : null;
-    // LOGO DETAIL rims the emblem here for the same reason it rims the seven
-    // single-colour crests: an uploaded mark is arbitrary art with no second
-    // element to recolour, so an outline is the only honest place for it.
+    // The OUTLINE row rims the emblem here for the same reason it rims a
+    // single-loop crest: an uploaded mark is arbitrary art with no second
+    // element to recolour, so a rim is the only honest place for it. logo2 is
+    // the pre-OUTLINE-row fallback, exactly as in buildAtlas.
     LiveryTex.drawLogoImage(ctx, img, inner, (liv && liv.logo) || null, halo,
-                            (liv && liv.logo2) || null);
+                            (liv && (liv.logo3 || liv.logo2)) || null);
   } else {
     LiveryTex.drawCrest(ctx, team.id, inner, { liv, field, bare: false });
   }
@@ -1055,7 +1056,7 @@ function rebuild(team, liv, info) {
   const kc = (c) => (c ? rgb(c, [0, 0, 0]).map((v) => v.toFixed(3)).join(",") : "-");
   const livKey = kc(liv && liv.c1) + "/" + kc(liv && (liv.accent || liv.stripe || liv.c2)) +
                  "/" + kc(liv && liv.c2) + "/" + kc(liv && liv.logo) +
-                 "/" + kc(liv && liv.logo2);
+                 "/" + kc(liv && liv.logo2) + "/" + kc(liv && liv.logo3);
   const key = (team && team.id) + "|" + livKey +
               "|" + logoGen + "|" + ((drv[0] && drv[0].num) + "-" + (drv[1] && drv[1].num)) +
               "|" + boardKey(info);

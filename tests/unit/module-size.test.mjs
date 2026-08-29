@@ -605,7 +605,18 @@ const CEILINGS = {
   // 8683 -> 8689: per-chunk lamps went from the ULTRA-night-only rung to every
   // lit condition, so the conditional layer gained dusk/dawn/day keys beside
   // night. Data, not logic — this file is ~8.6k lines of baked per-track values.
-  "js/game/light-presets.js": 8689,
+  // 2026-08-29: 8689 -> 15508, the largest single raise this pin has taken, and
+  // all of it DATA: a player's hand-tuned dusk-wet and dawn-wet look (plus two
+  // Monaco nights) baked in from a COPY VALUES paste — 82 conditions, 7,447
+  // knobs, 183 KB -> 346 KB. The condition count did not move (805 before and
+  // after); the existing profiles simply went from ~8 knobs each to ~90.
+  // THE DUPLICATION IS FORCED, not sloppy. ~34 of those conditions are the same
+  // look repeated per circuit, which belongs in one "*|<tod>" key — except
+  // LightStore.condLayer gates that layer on gfx.hasPerChunkLights, and three.js
+  // cannot bind per-chunk sets, so a wildcard key is invisible on the default
+  // backend. An ungated "*|<tod>|<wx>" layer is where these lines come back;
+  // until then per-track keys are the only encoding that reaches every player.
+  "js/game/light-presets.js": 15508,
   // The whole WGX backend in one IIFE by design (deferred inject, no tag).
   // 5179 -> 5365 on the deploy union: their half-res SSR + chunk-AABB
   // lamp-mask cull rounds landed on the other lineage (re-measured).
