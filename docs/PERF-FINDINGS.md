@@ -833,10 +833,45 @@ never mutated. Measured A/B, same box, same instrument, flag the only change:
 
 The residual 326.8 KiB is real work: the shadow ortho, the probe faces and the
 camera genuinely select different cells, so only same-caller-across-frames
-hits. DEFAULT OFF pending a real-GPU pixel run — the failure mode is props
-drawn from the wrong resident pack, which is why the hit path deliberately does
-NOT stamp `_cullPlanes` (that snapshot must keep describing whichever frustum
-physically wrote the buffer). `gfx-backend-canary.test.mjs` now pins that.
+hits. The failure mode is props drawn from the wrong resident pack, which is
+why the hit path deliberately does NOT stamp `_cullPlanes` (that snapshot must
+keep describing whichever frustum physically wrote the buffer).
+`gfx-backend-canary.test.mjs` now pins that.
+
+**Now ON by default (2026-08-29), on real-GPU evidence.** It shipped default
+OFF pending a hardware run, and the workflow that was supposed to gate it could
+not: both `gpu-census.yml` game-check steps passed `--backend three`, and their
+only `--ls` was hardcoded to `apex26.tlxForceHw`, so **GLX — the default
+backend, and the one this change lives in — was never exercised on real
+hardware at all**. The tool was always capable (`tools/gpu-game-check.mjs`
+takes `--backend webgl2` and repeatable `--ls apex26.k=v`); only the workflow
+was hardcoded. So the gate was built first: a GLX leg plus a generic `ls`
+dispatch input threaded to all three legs, and the Verdict loop widened to
+`["webgpu", "webgl2", "glx"]`. Run **9** (id 33262100579) on `macos-latest`
+(Apple/Metal), commit `da82104`, GLX leg with `apex26.instCellCache=1`:
+conclusion **success**, `gpuErrors` 0 — and that Verdict step exits non-zero on
+missing JSON, `ok !== true`, `phase !== "done"`, or any GPU error, so a green
+run is a real assertion and not an absent one. The localStorage key stays as
+the OFF switch (`=0`), the escape-hatch shape `__apex.matTex(0)` already gives
+the baked-material path.
+
+Second measurement, the `pack` scenario (field bunched around the player, where
+the instance work is highest) rather than `jump(0.30)`'s empty-track start —
+see the note in §2b about the first wheel measurement being meaningless for
+exactly this reason:
+
+| vegas night, `pack` | off | on |
+|---|---|---|
+| bufferSubData calls | 36.4 | **14.5** (-60%) |
+| bufferSubData KiB | 948 | **489.2** (-48.4%) |
+| bindBuffer | 41.6 | 19.8 (-52%) |
+| drawElements | 163 | 162.8 (jitter) |
+| uniforms | 277.7 / 197.2 | 277.7 / 196.6 (jitter) |
+
+The win is roughly twice the size it looked on the empty-track start, and that
+is the expected direction: bunched traffic keeps more cells resident across
+frames, so more of the repacking is redundant. This is now the default path for
+every WebGL2 player.
 
 **CORRECTION (2026-08-29).** The sentence that stood here — "`uniform1f` 167.4
 is the ~30 frame-scalars in `begin()` times the 5-6 passes a frame" — was an

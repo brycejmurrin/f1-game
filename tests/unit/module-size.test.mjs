@@ -744,9 +744,9 @@ const CEILINGS = {
   // memoises on frustum-plane equality and three callers use three frusta a
   // frame, so while driving it never hits and props are repacked and
   // re-uploaded 2-3x — measured 426.7 KiB/frame (tools/glx-call-census.mjs).
-  // Keying on the surviving cell set takes -23.4% of that. The existing plane
-  // path is left intact beside it (the canary pins it, and the flag defaults
-  // OFF), which is why this ADDS rather than replaces. Detail: PERF-FINDINGS 2c.
+  // Keying on the surviving cell set takes -23.4% of that (-48% in a pack). The
+  // existing plane path is left intact beside it (the canary pins it), which is
+  // why this ADDS rather than replaces. Detail: PERF-FINDINGS 2c.
   "js/render/glx.js": 1963,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,

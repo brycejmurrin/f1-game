@@ -32,7 +32,7 @@ const GLX = (function () {
   // backends load last, so the value is always there to read. Any new consumer
   // does the same — do not re-sniff navigator.
   let _forceMobile = false;
-  let _instCellCache = false;
+  let _instCellCache = true;
   try { _forceMobile = localStorage.getItem("apex26.forceMobileTier") === "1"; } catch (_) {}
   const IS_MOBILE = _forceMobile ||
     /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
@@ -42,12 +42,12 @@ const GLX = (function () {
   // Default OFF — the safe tier is what keeps memory-limited devices alive.
   let _gfxHigh = false;
   try { _gfxHigh = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}
-  // INSTANCE CELL-SET CULL CACHE — opt-in, default OFF. Keys the resident pack
-  // on the surviving CELL SET instead of the frustum, which the plane cache
-  // below cannot do while driving. Measured -23.4% instance upload bytes;
-  // numbers, soundness argument and the flip criteria are in
-  // docs/PERF-FINDINGS.md 2c. Off by default until a real-GPU pixel run.
-  try { _instCellCache = localStorage.getItem("apex26.instCellCache") === "1"; } catch (_) {}
+  // INSTANCE CELL-SET CULL CACHE — ON; apex26.instCellCache=0 is the escape
+  // hatch, the shape __apex.matTex(0) gives the baked-material path. Keys the
+  // resident pack on the surviving CELL SET instead of the frustum, which the
+  // plane cache below cannot do while driving. -48% instance upload bytes in a
+  // pack; numbers, soundness and the real-GPU gate: docs/PERF-FINDINGS.md 2c.
+  try { if (localStorage.getItem("apex26.instCellCache") === "0") _instCellCache = false; } catch (_) {}
   // MOBILE TIER = a phone NOT opted into high quality. All the memory downgrades
   // key off this, so HIGH restores full quality (a reload re-runs init with it).
   const MOBILE_TIER = IS_MOBILE && !_gfxHigh;
