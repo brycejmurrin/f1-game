@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 141 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 142 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -759,6 +759,7 @@ what it covers.
 | `lamp-chunks.test.mjs` | the shared per-chunk lamp bake (LampChunks): nearest-first reach-filtered selection, the knob→cap formula (floor 8, CAP 24), concat/offsets/counts ≡ the per-chunk lists, and the bake-once invalidation contract (lights array identity + knob value) |
 | `cockpit-pale-surfaces.test.mjs` | nothing in the COCKPIT build reads as a blank pale slab: ray-casts every team's cockpit mesh from the driver's eye and fails on a pale ACCENT (the car's own body colour is exempt — racingbulls really is a white car). Proven to fail on ferrari + williams with the `_ckAcc` dimming disabled |
 | `crest-marks.test.mjs` | every team mark is READABLE, measured rather than eyeballed: extent inside the fit box and filling it, no limb under `STROKE_MIN` (1.9 px at the 34 px the mobile-AI fin badge gets), lettering floored and absent when `bare`, a colour census that fails on any paint outside `markPalette`, no alpha or `destination-out`, ink coverage in band and stable between 430 px and 40 px, and the 4.2:1 contrast floor over every team x livery x the four surfaces a mark lands on. Measures through `tools/crest-sweep.mjs`. Would have failed on the traced logo PNGs this replaced |
+| `parts-visual-distinctness.test.mjs` | every catalog option is VISIBLY different from the one it replaces, measured rather than hashed: builds all 297 options offline and gates on surface distance, moved area, palette transport and a 14-view visibility mask. INVISIBLE / BROKEN / SLIDE / INTERNAL must be empty, COLOUR-ONLY is an exact allow-list, WEAK is a downward-only ratchet; plus the census (12/297/121) and the SIGNATURE invariant that a reskin keeps its equivalent's cost and all four stat multipliers. Measures through `tools/parts-sweep.mjs`. ~4 min, so it runs in `test:sweeps`, never in the edit loop |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 111-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
@@ -1293,3 +1294,35 @@ audio, parts, net (untouched in range), scenery, gallery, baseline,
 shimmer, map, paths, hooks, agent, circuit, fast, headless, ab, render.
 shared-road-vbuf (unblocked by the wgx-vid-repro measurement) deliberately
 deferred to its own round — a review reviews a fixed tree.
+
+**A CSS specificity defeat is invisible to every string match (2026-08-29).** A
+player reported that BRAKE lit up under the thumb and GAS did not. Both
+`:active` rules existed and had for as long as the file has, so every grep and
+every unit assertion for "the pressed rule is present" was green — and the
+pressed colour was still unreachable. `body.steer-buttons #btn-throttle` is
+(1,1,1) and `#btn-throttle:active` is (1,1,0), so two byte-identical
+restatements of the idle fill in the buttons-mode blocks beat the pressed rule
+in EVERY state. It shipped because BRAKE carried no such restatement: exactly
+one of a symmetric pair was broken, in one steering mode.
+
+The only instrument that sees this is a REAL POINTER on a REAL BROWSER —
+`page.mouse.down()` over the box, then `getComputedStyle`. `:active` cannot be
+forced from page script and cannot be matched from a file. A fixture built from
+the shell's own `<link>` order (`tools/manifest.cjs` CSS) plus the shell's own
+dock markup is enough; it needs no game boot, so it costs ~10 s rather than a
+browser group. Run it against `git show HEAD:css/overlays.css` first — an
+assertion never seen to fail is not an assertion, and this one reproduced the
+reported symptom exactly, GAS red and BRAKE green.
+
+One trap inside the instrument, which cost it a false red of its own:
+`button { transition: background 0.14s }` (css/tokens.css) means the computed
+background the instant the pointer lands is the START of the animation, so a
+working pressed colour reads identical to a missing one. Settle ~300 ms before
+reading. `opacity` carries no transition and jumped immediately, which is what
+gave the contradiction away — the same rule had applied one of its two
+declarations and apparently not the other.
+
+The durable guard is in `tests/unit/ui-journey-race.test.mjs`: no `body.<class>
+#btn-throttle` / `#btn-brake` rule may declare a `background` at all. That is a
+narrower claim than "the pressed state works", and it is the one a file can
+actually hold.

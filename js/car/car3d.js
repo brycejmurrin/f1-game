@@ -412,7 +412,16 @@ const Car3D = (function () {
 
   function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
                     grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle) {
-    const RC = rimColor || RIM;
+    // `rimColor` is the brakes recipe's `rim` key. It reached this line and then
+    // DIED here: RC was computed and never read once, so the nine catalog
+    // options that set a rim colour painted nothing. The clamp scan
+    // (tools/parts-sweep.mjs --clamp-scan) measured brakes/rim at 0.0000 m2 of
+    // colour over its entire range, which is what a key with no consumer looks
+    // like. The rim faces below take RC now. RIM_DEF reproduces the hardcoded
+    // value those faces used before, so a car with no `rim` set is byte-identical.
+    const RIM_DEF = [0.31, 0.31, 0.34];
+    const RC = rimColor || RIM_DEF;
+    const RC_DEEP = [RC[0] * 0.39, RC[1] * 0.39, RC[2] * 0.41];   // dish floor, in shadow
     // 18 -> 24: an 18-gon tyre reads visibly polygonal in any close shot.
     // +29% wheel tris, same draw-call count; ceilings in parts-physics raised
     // with the measurement (480 per wheel).
@@ -424,6 +433,12 @@ const Car3D = (function () {
     const tyreShoulder = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.shoulder) || 0)));
     const edgeRm = tyreShoulder === 2 ? 0.90 : tyreShoulder === 1 ? 0.945 : 1;
     const grooveCount = tyreStyle && tyreStyle.grooves != null
+      // `grooved` is the legacy BOOLEAN ARGUMENT, kept for callers that build a
+      // wheel with no recipe at all (Car3D.buildWheel(0.34, band)). It is no
+      // longer a recipe key: every tyre recipe set BOTH `grooved` and `grooves`,
+      // which meant `grooved` was always shadowed here, and --clamp-scan
+      // measured it flat over its whole range. Registry, merge default and all
+      // 27 recipes dropped it together.
       ? tyreStyle.grooves : grooved ? 3 : 0;
     const grooveDepth = tyreStyle && tyreStyle.grooveDepth || 0.045;
     const PROFILE = [];
@@ -622,7 +637,7 @@ const Car3D = (function () {
         }
       }
     }
-    const HUBCAP = [0.31, 0.31, 0.34];   // raised boss: lighter than the dish floor
+    const HUBCAP = RC;                   // raised boss: lighter than the dish floor
     const NUT = caliperColor || bandColor || [0.85, 0.72, 0.10];
     for (const ss of [[x0, -1], [x1, 1]]) {
       const dir = ss[1], xc0 = ss[0] - dir * 0.014, hcR = rimR * 0.46, ctr = [xc0, cy, cz];
@@ -707,7 +722,7 @@ const Car3D = (function () {
             HUBCAP, SURFACES.metal);
           addQuad(out,
             [dxOut, iy0, iz0], [dxOut, iy1, iz1], [dxIn, iy1, iz1], [dxIn, iy0, iz0],
-            [0.12, 0.12, 0.14], SURFACES.metal);
+            RC_DEEP, SURFACES.metal);
           addTri(out, [dxIn, cy, cz],
                  [dxIn, iy0, iz0],
                  [dxIn, iy1, iz1], HUBCAP, SURFACES.metal);
@@ -1213,7 +1228,7 @@ const Car3D = (function () {
   }
   function buildTyreParts(recipe, tier) {
     // sidewall: raised lettering ring(s) on the tyre face. 0 flush / 1 ring / 2 double.
-    return mergeRecipe({ band: TYRE_BAND[tier], grooved: false, shoulder: 0,
+    return mergeRecipe({ band: TYRE_BAND[tier], shoulder: 0,
       sidewall: 0 }, recipe);
   }
   function buildErsParts(recipe, tier, accent) {
@@ -1508,11 +1523,21 @@ const Car3D = (function () {
     const c2 = _ckAcc(color2 || [0.9, 0.9, 0.1]);
     const liv = (opts && opts.livery) || {};
     const accentC = _ckAcc(liv.accent) || c2;
-    const noseC = liv.nose || null;
-    const podC  = liv.pod  || null;
+    // EVERY livery paint that lands in the driver's view goes through _ckAcc,
+    // not just the accent. The first pass dimmed c2/accent/wing/fin and left
+    // nose, pod, halo, stripe and noseStripe at full strength — 72 pale values
+    // across the shipped liveries, and the ones that matter most are the
+    // closest: `pod` is the sidepod shoulders left and right of the eye, and
+    // `halo` is 0.5 m in front of the face. Only the BODY (c1) stays exempt,
+    // deliberately — a white car really is white, and dimming it would
+    // misreport the livery (see tests/unit/cockpit-pale-surfaces.test.mjs).
+    // _ckAcc is a no-op outside the cockpit build and on any colour whose
+    // darkest channel is under 0.45, so saturated paint keeps its identity.
+    const noseC = _ckAcc(liv.nose) || null;
+    const podC  = _ckAcc(liv.pod)  || null;
     const wingC = _ckAcc(liv.wing) || c2;   // flap colour (front + rear) — c2 keeps today's look
     const finC  = _ckAcc(liv.fin) || c2;   // shark-fin plate — c2 keeps today's look
-    const haloTint = liv.halo || null;
+    const haloTint = _ckAcc(liv.halo) || null;
     const T = (opts && opts.parts) || {};
     const tier = (id) => T[id] != null ? T[id] : 1;
     const ersC2 = tier("ers") === 2 ? [c2[0]*1.8, c2[1]*1.8, c2[2]*1.8] : c2;
@@ -1616,6 +1641,15 @@ const Car3D = (function () {
 
     part("sidepods");
     const podGeom = buildSidepodBodywork(out, c1, engStyle, anchors);
+    // TRAP: `proud` is measured off anchors.podAt(z).x, which is the LOFT
+    // CONTROL width, NOT the rendered pod surface. Measured, the two diverge by
+    // 18 mm at z 0.2 and 99 mm at z -0.4, so a thin line laid the default 8 mm
+    // proud is BURIED inside the bodywork over most of the pod's length. That
+    // is fine for the callers below — they are tall panels whose top or bottom
+    // edge clears the surface — but a flank CREASE anchored this way renders
+    // identically to no change at all (two attempts:
+    // scratch/renders/car/pod2-pod-inlet.png, pod3-pod-inlet.png). Anything
+    // that has to sit ON the flank must sample the built surface instead.
     function addPodFlankSpan(zFront, zRear, yFrac, height, col, surface, proud, fracH) {
       // Never bridge a detail across a loft crease: each segment follows the
       // same station interval as the underlying sidepod surface.
@@ -2101,7 +2135,7 @@ const Car3D = (function () {
     }
     if (!ckpt) addPodFlankSpan(0.425, -0.025, 0.88, 0.035, accentC, SURFACES.paint, 0.012);
 
-    const stripeC = liv.stripe || null;
+    const stripeC = _ckAcc(liv.stripe) || null;   // monocoque crest runs z 0.05..1.05 — right under the eye
     // Nose TIP z moves per team (TEAM_STYLE.noseTipZ, ±0.10): the cap and both
     // stripes must end at the STYLED tip, not the shared 3.18 datum, or the
     // paint floats past a short nose (haas) / stops short of a long one
@@ -2125,7 +2159,7 @@ const Car3D = (function () {
         addLoft(out, -1.95, 0, 0.600, 0.060, 0.02, -0.94, 0, 0.775, 0.075, 0.02, stripeC); // engine-cover ridge run to the tail
       }
     }
-    const noseStripeC = liv.noseStripe || null;
+    const noseStripeC = _ckAcc(liv.noseStripe) || null;
     if (noseStripeC) {
       const ns155 = anchors.noseAt(1.55), ns270 = anchors.noseAt(2.70), ns314 = anchors.noseAt(stripeTipZ);
       addLoft(out, 1.55, 0, ns155.top + 0.016, 0.115, 0.014,
@@ -2416,11 +2450,25 @@ const Car3D = (function () {
     addBox(out, 0, 0.40, -2.185, exhR*0.72, exhR*0.72, 0.03, [0.05, 0.04, 0.04], SURFACES.carbon);
     addBox(out, 0, 0.40, -2.198, exhR*0.55, exhR*0.55, 0.012,
            glazeOf(fuelFlame), SURFACES.metal);
+    // HEAT STAIN. Before this the `flame` recipe key reached only three ~2 cm
+    // glaze pips deep in the pipe mouths — 0.0028 m2, which --clamp-scan reads
+    // as a dead key, so the one place a fuel grade is supposed to show was too
+    // small to see. A discoloured sleeve on the last stretch of every pipe
+    // carries the same colour at a size a camera can resolve. Blended
+    // half-and-half with the pipe metal so it reads as bluing, not as paint.
+    const heatOf = (c) => {
+      const g = glazeOf(c);
+      return [exhMetal[0]*0.55 + g[0]*0.45, exhMetal[1]*0.55 + g[1]*0.45,
+              exhMetal[2]*0.55 + g[2]*0.45];
+    };
+    addBox(out, 0, 0.40, -2.155, exhR*1.06, exhR*1.06, 0.075, heatOf(fuelFlame), SURFACES.metal);
     if (exhTwin) {
       for (const s of [-1, 1]) {
         addBox(out, s*0.15, 0.40, -2.10, 0.045, 0.045, 0.14, exhMetal, SURFACES.metal);
         addBox(out, s*0.15, 0.40, -2.172, 0.026, 0.026, 0.012,
                glazeOf(fTwin), SURFACES.metal);
+        addBox(out, s*0.15, 0.40, -2.135, 0.049, 0.049, 0.070,
+               heatOf(fTwin), SURFACES.metal);
         addStationLoft(out, [
           exhDia(s * 0.15, 0.40, -2.03, 0.045),
           exhDia(s * 0.15, 0.40, -2.17, 0.045),
@@ -2692,8 +2740,44 @@ const Car3D = (function () {
       const diffW  = (0.72 + aLvl * 0.145) * Math.max(0.78, Math.min(1.3, aeroStyle.floorEdge));
       const diffH1 = (0.40 + aLvl * 0.325) *
         Math.max(0.72, Math.min(1.4, aeroStyle.diffuserRise));
-      addLoft(out, -2.52, 0, 0.34, 1.12 * diffW, 0.30, -1.90, 0, 0.17, 0.92 * diffW, 0.14 * diffH1,
-              [0.06, 0.06, 0.07], SURFACES.carbon);
+      // THE DIFFUSER. This was one closed loft, and from directly behind — the
+      // view a chase camera holds for most of a lap — it read as a featureless
+      // grey slab the full width of the car with the brake light floating on it
+      // (scratch/renders/car/rb4-diffuser.png). The diffuser is the most
+      // recognisable thing about the back of an F1 car and none of it was there.
+      //
+      // Built as two tunnels either side of the crash structure: a ramped
+      // ceiling, an outer wall, strakes, and a gurney across the trailing edge.
+      // Every piece is a thin CLOSED solid rather than an open quad, so the
+      // winding cannot come out inside-out on a surface you only ever see from
+      // one side. Both knobs still drive it — floorEdge the width, diffuserRise
+      // the ceiling — so the sweep's amplitude for them goes up, not down.
+      const dHalf = 0.56 * diffW;                    // half-width at the exit
+      const dThr  = 0.46 * diffW;                    // half-width at the throat
+      const dKeel = 0.12;                            // crash structure half-width
+      const dFloor = 0.105;
+      const dRise = 0.30 * Math.max(0.72, Math.min(1.4, aeroStyle.diffuserRise));
+      const yCE = dFloor + dRise, yCT = dFloor + 0.055 * diffH1 / 0.4;
+      const DIFF_IN = [0.045, 0.045, 0.055];
+      for (const s of [-1, 1]) {
+        const cxE = s * (dKeel + dHalf) / 2, cxT = s * (dKeel + dThr) / 2;
+        const wE = dHalf - dKeel, wT = dThr - dKeel;
+        addLoft(out, -2.52, cxE, yCE, wE, 0.035, -1.95, cxT, yCT, wT, 0.035,
+                DIFF_IN, SURFACES.carbon);                              // ramped ceiling
+        addLoft(out, -2.52, s * dHalf, (dFloor + yCE) / 2, 0.030, yCE - dFloor,
+                     -1.95, s * dThr,  (dFloor + yCT) / 2, 0.030, yCT - dFloor,
+                CARBON, SURFACES.carbon);                               // outer wall
+        addBox(out, cxE, dFloor, -2.235, wE, 0.028, 0.57, CARBON, SURFACES.carbon);
+        for (let k = 0; k < 2; k++) {
+          const f = 0.36 + k * 0.34;
+          addLoft(out, -2.50, s * (dKeel + wE * f), (dFloor + yCE) / 2, 0.016, (yCE - dFloor) * 0.86,
+                       -2.02, s * (dKeel + wT * f), (dFloor + yCT) / 2, 0.014, (yCT - dFloor) * 0.86,
+                  DIFF_IN, SURFACES.carbon);                            // strake
+        }
+      }
+      addLoft(out, -2.58, 0, 0.195, 2 * dKeel * 0.82, 0.15,
+                   -1.95, 0, 0.170, 2 * dKeel * 1.10, 0.13, DARK, SURFACES.carbon);
+      addBox(out, 0, yCE + 0.030, -2.525, 2 * dHalf, 0.030, 0.020, c2, SURFACES.paint);
 
       const gbStrakes = gbStyle ? gbStyle.strakes : (tier("gearbox") === 2 ? 5 : 0);
       const gbFin = gbStyle ? gbStyle.fin : (tier("gearbox") === 2 ? 1 : 0);
@@ -2913,12 +2997,11 @@ const Car3D = (function () {
       // Per-option caliper accent peeking through the rim spokes, else tier.
       const caliperColor = brakeStyle ? brakeStyle.cal : BRAKE_CALIPER[brakesT];
       const rimColor = brakeStyle && brakeStyle.rim;   // premium alloy rims (else default dark)
-      const grooved = !!(tyreStyle && tyreStyle.grooved);
       for (const s of [-1, 1]) {
         addWheel(out, s*0.79, AXLES.wheelY, AXLES.frontZ, 0.34, 0.32,
-          tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle, wheelStyle);
+          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle);
         addWheel(out, s*0.76, AXLES.wheelY, AXLES.rearZ, 0.34, 0.38,
-          tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle, wheelStyle);
+          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle);
       }
       // 2026 over-wheel deflector above each FRONT wheel (tyre crown y 0.68):
       // 0 none / 1 single plane on a stalk / 2 biplane + outboard endplate.

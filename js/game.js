@@ -2126,10 +2126,9 @@ function getPlayerWheelMeshes() {
     const band = playerTyreVisual && playerTyreVisual.band || Car3D.TYRE_BAND[playerTyreTier];
     const caliper = playerBrakeVisual ? playerBrakeVisual.cal : Car3D.BRAKE_CALIPER[playerBrakesTier];
     const rim = playerBrakeVisual && playerBrakeVisual.rim;
-    const grooved = !!(playerTyreVisual && playerTyreVisual.grooved);
-    const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, grooved,
+    const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false,
       playerTyreVisual, playerBrakeVisual, playerWheelVisual);
-    const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, grooved,
+    const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false,
       playerTyreVisual, playerBrakeVisual, playerWheelVisual);
     return {
       F: gfx.createMesh(front.rotating),
@@ -2157,9 +2156,8 @@ function getFieldWheelMeshes(team) {
   const band = (tyre && tyre.band) || Car3D.TYRE_BAND[vt.tyres] || Car3D.TYRE_BAND[1];
   const caliper = brake ? brake.cal : Car3D.BRAKE_CALIPER[vt.brakes];
   const rim = brake && brake.rim;
-  const grooved = !!(tyre && tyre.grooved);
-  const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, grooved, tyre, brake, wheel);
-  const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, grooved, tyre, brake, wheel);
+  const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false, tyre, brake, wheel);
+  const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false, tyre, brake, wheel);
   mesh = {
     F: gfx.createMesh(front.rotating),
     R: gfx.createMesh(rear.rotating),
