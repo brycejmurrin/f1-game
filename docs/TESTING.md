@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 142 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 143 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -757,6 +757,7 @@ what it covers.
 | `storage-key-prefix.test.mjs` | every literal localStorage/sessionStorage key is apex26.-prefixed (GameStore-routed keys exempt by construction; allowlist entries need a written reason) |
 | `no-bare-console.test.mjs` | logging goes through Log — no bare console.* in js/ outside log.js (the nostr interception seam allowlisted with its reason) |
 | `lamp-chunks.test.mjs` | the shared per-chunk lamp bake (LampChunks): nearest-first reach-filtered selection, the knob→cap formula (floor 8, CAP 24), concat/offsets/counts ≡ the per-chunk lists, and the bake-once invalidation contract (lights array identity + knob value) |
+| `all-lights-fill.test.mjs` | `_fillAllLights` writes the same bytes a full rewrite would: only rgb can move per frame, so the twelve static lanes are copied once per source array — asserted across a flicker sequence AND a source swap, plus the `_allLightsGen` contract LampChunks and WGX both cache on (including a new set whose colours match but whose positions moved, the case that hides) |
 | `cockpit-pale-surfaces.test.mjs` | nothing in the COCKPIT build reads as a blank pale slab: ray-casts every team's cockpit mesh from the driver's eye and fails on a pale ACCENT (the car's own body colour is exempt — racingbulls really is a white car). Proven to fail on ferrari + williams with the `_ckAcc` dimming disabled |
 | `crest-marks.test.mjs` | every team mark is READABLE, measured rather than eyeballed: extent inside the fit box and filling it, no limb under `STROKE_MIN` (1.9 px at the 34 px the mobile-AI fin badge gets), lettering floored and absent when `bare`, a colour census that fails on any paint outside `markPalette`, no alpha or `destination-out`, ink coverage in band and stable between 430 px and 40 px, and the 4.2:1 contrast floor over every team x livery x the four surfaces a mark lands on. Measures through `tools/crest-sweep.mjs`. Would have failed on the traced logo PNGs this replaced |
 | `parts-visual-distinctness.test.mjs` | every catalog option is VISIBLY different from the one it replaces, measured rather than hashed: builds all 297 options offline and gates on surface distance, moved area, palette transport and a 14-view visibility mask. INVISIBLE / BROKEN / SLIDE / INTERNAL must be empty, COLOUR-ONLY is an exact allow-list, WEAK is a downward-only ratchet; plus the census (12/297/121) and the SIGNATURE invariant that a reskin keeps its equivalent's cost and all four stat multipliers. Measures through `tools/parts-sweep.mjs`. ~4 min, so it runs in `test:sweeps`, never in the edit loop |
@@ -1326,3 +1327,29 @@ The durable guard is in `tests/unit/ui-journey-race.test.mjs`: no `body.<class>
 #btn-throttle` / `#btn-brake` rule may declare a `background` at all. That is a
 narrower claim than "the pressed state works", and it is the one a file can
 actually hold.
+
+**Measure the fallback before you call it broken (2026-08-29).** COPY VALUES in
+the LIGHTING TUNER reached `execCommand("copy")` only from inside the clipboard
+promise's REJECTION handler. That reads like a guaranteed failure — the copy
+command needs user activation and a rejection handler runs a microtask after the
+click — and it was written up as one. A clipboard READ-BACK said otherwise:
+with `navigator.clipboard.writeText` stubbed to reject, the shipped handler
+still put all 182,631 characters on the clipboard in Chromium, which keeps
+transient activation for about five seconds. WebKit is documented to require the
+copy during gesture processing rather than merely soon after, so the iPhone
+story may well hold — but it is UNVERIFIED here and was labelled as such in the
+code: this container's proxy blocks `cdn.playwright.dev`, so
+`npx playwright install webkit` 403s and nobody can run it. The fix (attempt the
+synchronous copy first) is right either way; the CLAIM had to be corrected.
+
+The measurable half was the payload: 182,631 characters, against 146 for the
+same tune once the export carried only the player's overrides.
+
+**A saturated main thread looks exactly like a missing element.** Driving the
+tuner in that probe, `page.locator("#lt-copy").click()` timed out with
+`waiting for locator('#lt-copy')` while `page.evaluate` in the same page
+answered instantly and reported the element present, visible and 145x46. Nothing
+was wrong with the DOM: the game's rAF loop on llvmpipe was starving
+Playwright's actionability poll. `__apex.headless(true)` before touching the
+panel fixed it outright. Reach for that before believing a locator that cannot
+find what `getElementById` can.

@@ -340,8 +340,14 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
      instead of scrolling inside a fixed 72px; the height stays as the fallback
      where it is unsupported, and the max keeps it from swallowing the panel.
      Local `--svhz`, not `svh`: this box lives inside `zoom: var(--ui-scale)`,
-     so a viewport max at UI SIZE 200% ate slider rows. */
-  field-sizing: content; max-height: min(calc(28 * var(--svhz)), 120px);
+     so a viewport max at UI SIZE 200% ate slider rows.
+     THE CAP GREW WITH THE PAYLOAD. 120px was sized around an export nobody
+     could read anyway — the full file+local merge, measured at 182,569
+     characters, roughly 4,500 lines behind a 120px window. COPY VALUES now
+     emits only the player's own overrides (a few hundred bytes, ~12 lines), so
+     the box can actually SHOW its contents, which is what makes the one
+     remaining hand-select path viable on a browser that blocks the clipboard. */
+  field-sizing: content; max-height: min(calc(38 * var(--svhz)), 260px);
   width: 100%; height: 72px; margin-top: 10px; resize: none;
   font: 10px/1.5 ui-monospace, monospace; color: #cfe0ff;
   background: rgba(0, 0, 0, 0.5); border: 1px solid var(--card-line);
@@ -591,7 +597,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
      DONE were the last three controls under the WCAG floor in the 1900-cell run. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot button { padding: 6px 10px; font-size: var(--fs-micro); min-height: var(--tap-min); }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .adv-item { margin: 5px 0; }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-json { height: 54px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-json { height: 96px; }
 
   /* At extreme local widths a wrapped 2+1 footer becomes the largest thing in
      the panel and its sticky position covers the tab strip. Rail-off compact

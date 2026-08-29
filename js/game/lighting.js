@@ -842,20 +842,39 @@ function lampCap(carCount, mobileTier) {
 }
 // Scale the WHOLE baked set for the per-chunk path with the same transform the
 // culled set receives. Only runs when per-chunk lamps are actually on.
+// Which source array the static lanes in _allLightsBuf were copied from. The
+// same invalidation LampChunks uses: a rebuild:true tuner knob nulls
+// track._lights and the next build mints a NEW array, so identity is the whole
+// key. Length is checked too, so a set that grows in place cannot slip through.
+let _alSrc = null, _alLen = -1;
+// Of the 15 lanes per lamp, TWELVE are baked-static — position, radius, cone
+// dir/cos, bleed, volW, glareW. The comment on setFrameLights says so outright:
+// positions are copied verbatim and flicker scales rgb only. This function
+// nevertheless rewrote all fifteen every frame, for every baked lamp on the
+// track, on BOTH backends, whenever per-chunk lamps are on — which after the
+// round-6 work is every preset in every condition. Copy the statics once per
+// source array; write the three that can actually move.
 function _fillAllLights(frame, src, sr, sg, sb, fl) {
   const out = _allLightsBuf;
   const n = src.length;
+  const fresh = _alSrc !== src || _alLen !== n;
   let changed = out.length !== n;
+  if (fresh) {
+    if (out.length !== n) out.length = n;
+    for (let i = 0; i < n; i += 15) {
+      out[i] = src[i]; out[i+1] = src[i+1]; out[i+2] = src[i+2]; out[i+6] = src[i+6];
+      out[i+7] = src[i+7]; out[i+8] = src[i+8]; out[i+9] = src[i+9]; out[i+10] = src[i+10];
+      out[i+11] = src[i+11]; out[i+12] = src[i+12]; out[i+13] = src[i+13]; out[i+14] = src[i+14];
+    }
+    _alSrc = src; _alLen = n;
+    changed = true;   // a new set is a change even if every colour matches
+  }
   for (let i = 0; i < n; i += 15) {
     const f = fl(i);
     const r = src[i+3] * sr * f[0], g = src[i+4] * sg * f[1], b = src[i+5] * sb * f[2];
     if (!changed && (out[i+3] !== r || out[i+4] !== g || out[i+5] !== b)) changed = true;
-    out[i] = src[i]; out[i+1] = src[i+1]; out[i+2] = src[i+2];
-    out[i+3] = r; out[i+4] = g; out[i+5] = b; out[i+6] = src[i+6];
-    out[i+7] = src[i+7]; out[i+8] = src[i+8]; out[i+9] = src[i+9]; out[i+10] = src[i+10];
-    out[i+11] = src[i+11]; out[i+12] = src[i+12]; out[i+13] = src[i+13]; out[i+14] = src[i+14];
+    out[i+3] = r; out[i+4] = g; out[i+5] = b;
   }
-  if (out.length !== n) out.length = n;
   if (changed) _allLightsGen++;
   frame.allLights = out;
   frame.allLightsGen = _allLightsGen;

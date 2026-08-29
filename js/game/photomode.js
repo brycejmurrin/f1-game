@@ -247,46 +247,94 @@ $("lt-reset").onclick = () => {
   refreshLightTunePanel();
   $("lt-json").hidden = true;
 };
+/* COPY VALUES HANDS OVER THE EDITS, NOT THE WHOLE FILE. This used to export the
+   file+local MERGE — every shipped preset plus the local overrides — which
+   measured 805 conditions, 7071 knobs and 182,569 characters against the
+   shipped light-presets.js. That is the right input for bake.mjs (a full
+   REPLACE needs a full snapshot) and the wrong thing entirely for the person
+   holding the phone: it cannot be pasted into a message, and #lt-json is a
+   10px box capped at 120px, so hand-selecting ~4,500 lines through it is not
+   hard, it is impossible. The shipped half already lives in the repo, so
+   sending it back is pure noise — only the overrides carry information.
+
+   window.LightEdits, NEVER window.LightPresets. The name is a safety
+   interlock, not a preference: bake.mjs replaces the entire LightPresets
+   literal, so a delta wearing that name would silently wipe every condition it
+   did not mention. The distinct name lets the tools tell a delta from a
+   snapshot instead of trusting whoever pastes it — merge-proposals.mjs takes
+   this one and merges, bake.mjs refuses it by name.
+
+   A JS assignment with // comments rather than bare JSON: the dividers below
+   are for a human reading the paste, and the blob still loads in a single
+   vm.runInContext the way merge-proposals.mjs already reads light-presets.js. */
 $("lt-copy").onclick = () => {
-  const merged = {};
-  const F = window.LightPresets || {};
+  const btn = $("lt-copy");
   const S = G._ltStore || {};
-  for (const k in F) merged[k] = Object.assign({}, F[k]);
-  for (const k in S) if (!merged[k]) merged[k] = {};
-  // PRESERVE THE LIVE PRECEDENCE. light-store.js resolves
-  //   def -> F["*"] -> F[key] -> store["*"] -> store[key]
-  // so the local GLOBAL layer outranks the file's per-condition maps. A baked
-  // preset file has only two layers and there the per-key map always wins, so
-  // assigning store["*"] into merged["*"] inverts the order: every knob present
-  // in both store["*"] and some F[key] would come back as the shipped value the
-  // next time the file loaded — a silent revert on up to 254 conditions. Folding
-  // the global layer DOWN onto each condition is the only shape that round-trips.
-  // Harmless today (the 17 knobs in F["*"] are disjoint from every per-condition
-  // map) and load-bearing the moment either side gains an overlapping knob.
-  const glob = S["*"];
-  if (glob) for (const k in merged) if (k !== "*") Object.assign(merged[k], glob);
-  for (const k in S) merged[k] = Object.assign(merged[k] || {}, S[k]);
-  // Drop any now-empty condition maps for a clean file.
-  for (const k in merged) if (!Object.keys(merged[k]).length) delete merged[k];
-  const json = "window.LightPresets = " + JSON.stringify(merged, null, 2) + ";";
+  const here = ltKey();
+  const keys = Object.keys(S).filter((k) => Object.keys(S[k] || {}).length);
+  if (!keys.length) {
+    btn.textContent = "NOTHING TUNED";
+    setTimeout(() => { btn.textContent = "COPY VALUES"; }, 1800);
+    return;
+  }
+  const entry = (k) => '  "' + k + '": ' +
+    JSON.stringify(S[k], null, 2).replace(/\n/g, "\n  ");
+  const lines = ["window.LightEdits = {"];
+  // THE CURRENT CONDITION FIRST, always: it is the one just tuned and the one a
+  // reader checks. Key order is insertion order, so first here is first out.
+  if (here && keys.includes(here)) {
+    const [id, tod, wx] = here.split("|");
+    const name = (G.track && G.track.def && G.track.def.name) || id;
+    lines.push("  // THIS CONDITION — " + [name, tod, wx].join(" · ").toUpperCase() +
+      "  (" + Object.keys(S[here]).length + " tuned)");
+    lines.push(entry(here) + (keys.length > 1 ? "," : ""));
+  } else {
+    lines.push("  // THIS CONDITION — nothing tuned here yet");
+  }
+  const rest = keys.filter((k) => k !== here);
+  if (rest.length) {
+    lines.push("  // EVERYTHING ELSE YOU HAVE TUNED — " + rest.length +
+      (rest.length === 1 ? " condition" : " conditions"));
+    rest.forEach((k, i) => lines.push(entry(k) + (i < rest.length - 1 ? "," : "")));
+  }
+  lines.push("};");
+  const json = lines.join("\n");
+
   const ta = $("lt-json");
   ta.value = json; ta.hidden = false;
-  ta.focus(); ta.select(); ta.setSelectionRange(0, json.length);   // iOS needs the explicit range
-  const btn = $("lt-copy");
-  const flash = (ok) => {
-    btn.textContent = ok ? "COPIED ✓" : "SELECT & COPY ↑";
+  // readOnly stays ON: it is what keeps iOS from raising the keyboard, and
+  // setSelectionRange is the select idiom that works on a readonly field where
+  // select() alone does not.
+  ta.focus(); ta.setSelectionRange(0, json.length);
+
+  // THE SYNCHRONOUS ATTEMPT COMES FIRST. execCommand("copy") needs user
+  // activation, and the old handler only reached it from inside the clipboard
+  // promise's REJECTION handler — a microtask later. MEASURED, and the obvious
+  // story turned out wrong on the browser nearest to hand: Chromium keeps
+  // transient activation ~5 s, so the late call still copied there (verified by
+  // reading the clipboard back, both with the API working and with it stubbed
+  // to reject). WebKit is documented as the strict one — the copy must happen
+  // while the gesture is being processed, not merely soon after — but that half
+  // is UNVERIFIED here: this container's proxy blocks the WebKit download, so
+  // nobody has run it. Ordering the synchronous attempt first costs nothing and
+  // takes the engine out of the question either way. Do NOT read it as a claim
+  // that the old order was broken everywhere: on Chromium it demonstrably was
+  // not, and the payload size below is what a player was actually hitting.
+  let ok = false;
+  try { ok = !!(document.execCommand && document.execCommand("copy")); } catch (_) { /* not available */ }
+  const flash = (good) => {
+    btn.textContent = good ? "COPIED ✓" : "SELECT & COPY ↑";
     setTimeout(() => { btn.textContent = "COPY VALUES"; }, 1800);
   };
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(json).then(() => flash(true), () => {
-      let ok = false; try { ok = document.execCommand && document.execCommand("copy"); } catch (e) {}
-      flash(ok);
-    });
-  } else {
-    let ok = false; try { ok = document.execCommand && document.execCommand("copy"); } catch (e) {}
-    flash(ok);
+    // Still preferred where it works — the only path that survives a browser
+    // with execCommand removed. Either success is a success.
+    navigator.clipboard.writeText(json).then(() => flash(true), () => flash(ok));
+    return;
   }
+  flash(ok);
 };
+
 return { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode };
 }
 
