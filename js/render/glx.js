@@ -1358,9 +1358,12 @@ const GLX = (function () {
   // bind the lit program, upload the model matrix, and set the material
   // scalars through the redundancy cache. Returns the resolved alpha for the
   // caller's blend/depth-mask decisions.
-  function litMaterial(modelMat, opts) {
+  function litMaterial(modelMat, opts, instanced) {
     useProg(litProg);
     gl.uniformMatrix4fv(litU.uModel, false, modelMat);
+    // The instancing gate rides the redundancy cache: 54.8 uniform1f/frame for a
+    // value that changes 3.1 times. docs/PERF-FINDINGS.md 2e.
+    uf1(litU.uInstanced, _litUf, "instanced", instanced ? 1 : 0);
     // The instancing gate is NOT re-uploaded here. It used to be defaulted off on
     // every lit draw, and litMaterial is the funnel for all of them — 150-300 a
     // frame (world meshes, car bodies, wheels, aero flaps, brake rings, LEDs,
@@ -1580,23 +1583,17 @@ const GLX = (function () {
     // IDENTITY model matrix: the transform lives entirely in the instance
     // columns. Passing anything else would be silently ignored by the shader and
     // mislead the next reader.
-    const alpha = litMaterial(IDENT4, opts);
+    const alpha = litMaterial(IDENT4, opts, 1);
     setDepthMask(alpha >= 1);
     setBlend(alpha < 1);
     bindVAO(batch.vao);
     const dbl = opts && opts.doubleSided;
     if (dbl) setCull(false);
     const n = batch.visible === undefined ? batch.instances : batch.visible;
-    // Bracket the gate around THIS draw — the shape castShadowInstanced already
-    // uses — instead of asking every one of the frame's other lit draws to clear
-    // it afterwards. Set inside the n > 0 guard so a zero-instance batch leaves
-    // the uniform exactly as it found it. (This also drops the per-call
-    // Object.assign that existed only to smuggle the _instanced flag through.)
-    if (n > 0) {
-      if (litU.uInstanced) gl.uniform1f(litU.uInstanced, 1);
-      gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
-      if (litU.uInstanced) gl.uniform1f(litU.uInstanced, 0);
-    }
+    // The gate is declared by litMaterial above, NOT bracketed here: 1,0,1,0
+    // alternates and a cache collapses none of it. Why, and why a zero-instance
+    // batch claiming the gate is harmless: docs/PERF-FINDINGS.md 2e.
+    if (n > 0) gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
     if (dbl) setCull(true);
   }
 

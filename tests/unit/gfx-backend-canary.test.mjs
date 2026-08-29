@@ -423,6 +423,28 @@ test("GLX pins the per-chunk uploadLightSet revert (arity 3) and no-ops when the
   assert.match(present, /ctxGone\(\)/);
 });
 
+test("the instancing gate is declared through the cache, never bracketed per draw", () => {
+  // uInstanced was 54.8 uniform1f/frame for a value that changes 3.1 times: the
+  // 1/0 bracket around each instanced draw alternates, so a redundancy cache
+  // collapses none of it (PERF-FINDINGS 2e — the same shape as the doubleSided
+  // toggles retired near setCull). litMaterial declares the kind instead, and
+  // that only stays correct while EVERY lit draw funnels through litMaterial.
+  const glx = read("js/render/glx.js");
+  assert.match(glx, /function litMaterial\(modelMat, opts, instanced\)/);
+  assert.match(glx, /uf1\(litU\.uInstanced, _litUf, "instanced", instanced \? 1 : 0\);/);
+  assert.match(glx, /litMaterial\(IDENT4, opts, 1\)/, "drawInstanced must declare its kind");
+
+  // The bracket must be GONE — a re-added raw write re-enables the alternation.
+  assert.doesNotMatch(glx, /gl\.uniform1f\(litU\.uInstanced/,
+    "uInstanced must go through uf1, not a raw uniform1f");
+
+  // litProg may be bound in exactly two places: begin() (frame setup, no draw)
+  // and litMaterial. A third would be a lit draw that skips the declaration.
+  const binds = glx.match(/useProg\(litProg\)/g) || [];
+  assert.equal(binds.length, 2,
+    "a new useProg(litProg) site must also declare uInstanced — see PERF-FINDINGS 2e");
+});
+
 test("the interleaved uLight[] lanes agree between glx.js and shaders/lit.js", () => {
   // ONE uniform4fv per chunk instead of four (PERF-FINDINGS 2d) only works if
   // both halves agree on the stride-16 lane order. A swapped lane keeps the GL

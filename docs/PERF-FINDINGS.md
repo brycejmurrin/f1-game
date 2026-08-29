@@ -954,6 +954,113 @@ proven by swapping lane +7 for +11 and watching it fail, then restoring. A
 guard for an invisible failure mode is worth nothing until it has been made to
 bite.
 
+## 2e. The material-grouping ceiling is 8.7 — the win was the instancing gate (2026-08-29)
+
+Planned as "sort draws by material": `litMaterial` already caches every scalar
+and uploads only on change, so `uniform1f` ~197/frame looked like alternation
+between consecutive draws, and grouping looked like the lever.
+
+**Measured the ceiling first, and the premise was wrong.** Per frame, vegas
+night, full field in a pack (`scratch/material-headroom.mjs` — replays each
+frame's draws grouped by material signature and counts the uploads that would
+remain):
+
+| | per frame |
+|---|---|
+| draws | 176.4 |
+| distinct material signatures | 16.1 |
+| lane changes, actual order | 126.4 |
+| lane changes, PERFECTLY grouped | 117.6 |
+| **ceiling saving** | **8.7** (4.8 %) |
+
+176 draws already collapse into ~16 material runs — the draws are close to
+grouped as they stand. There is no alternation to fix, and the planned reorder
+was abandoned on this number, per the abort condition written before measuring.
+(The neighbouring precedent at `glx.js` §setCull — the doubleSided toggles that
+"MEASURED and found to save NOTHING" — was the right prior.)
+
+**But naming the uniforms found the real one.** Resolving each location back to
+its name (wrap `getUniformLocation` in an init script — locations are opaque and
+may be fresh objects per call, so the map must be built as GLX fetches them):
+
+| uniform | uploads/frame |
+|---|---|
+| **uInstanced** (lit + depth programs) | **54.8** |
+| uRoughness | 15.1 |
+| uSpecular | 15.1 |
+| uEmissive | 12.6 |
+
+`uInstanced` alone was 30 % of the class — and it is a value that changes **3.1
+times a frame**: 26.4 instanced draws arrive in ~2 contiguous runs. It cost 54.8
+uploads because `drawInstanced` bracketed each draw with 1-then-0.
+
+That bracket was itself a fix (it replaced clearing the flag on every lit draw),
+but 1,0,1,0 alternates, so a redundancy cache collapses **none** of it — exactly
+the shape retired near `setCull`. The fix is to stop bracketing and let
+`litMaterial` — the funnel every lit draw already passes through — declare its
+kind through the cached setter. A run of instanced draws then costs one call,
+and the next ordinary draw one more.
+
+| | before | after |
+|---|---|---|
+| **uniform1f** | **197.2** | **153.1** (-22.4 %) |
+| every other counter | — | identical |
+
+### The GLX real-GPU gate cannot see GPU errors — corrected
+
+While reading run 10's macOS verdict for this change, the GLX row said:
+
+```
+glx  phase=done ok=true gpuErrors=null
+```
+
+**`null`, not `0`.** `gpuErrors` is defined only on WGX (`webgpu/wgx.js`); plain
+GLX has no error counter at all. `gpu-game-check.mjs` reads
+`g.gpuErrors ? g.gpuErrors() : null`, and the Verdict tests
+`(gfx.gpuErrors || 0) > 0` — so on the GLX leg that clause can never fire. It
+passes vacuously, forever.
+
+That matters because round 11 flipped the instance cell-set cache citing
+"gpuErrors 0" from this leg, and AGENTS.md's renderer row tells agents to
+require `gpuErrors` 0 from the dispatch. For GLX that has never been an
+assertion. What the leg DOES prove is real and not nothing — `ok=true`,
+`phase=done` means the game booted, raced and parked on Metal without wedging,
+which is what caught the two defects that justified building the surface — but
+the error check specifically is a hole.
+
+The same trap bit the local probe: `(window.GLX && GLX.gpuErrors &&
+GLX.gpuErrors()) || 0` yields 0 when the method is ABSENT, so its reported
+"gpuErrors 0" was equally empty. An absence test that reports the same value as
+a success test is not a test — the same shape as `sessionStorage["apex26.gfxBound"]`
+being an ABSENCE signal, which AGENTS.md already warns needs a positive
+confirmation beside it.
+
+Fix (next): give GLX a real uncaptured-error counter mirroring WGX's, and make
+the Verdict fail on a MISSING count rather than treat it as zero.
+
+### Pixels were the wrong oracle here; the invariant is the right one
+
+The PNG statistics were inconclusive: cross-build max |Δmean RGB| 0.0135 against
+same-build noise floors of 0.0051 and 0.0026 — above both, with a consistent
+sign. Undersampled noise, but not something to wave through.
+
+The change has an exact correctness property instead, so assert that:
+**at every instanced draw the gate must read 1, at every ordinary lit draw 0.**
+If that holds, the GPU saw the same value at every draw as it did when the
+value was bracketed — pixel-identical by construction, whatever the PNG says.
+Measured over 20 frames: **528 instanced draws, 2914 plain, zero violations**
+(`scratch/instanced-gate-invariant.mjs`), and the probe was proven non-vacuous
+by sabotaging the clear and watching it report 181.
+
+The invariant holds only while EVERY lit draw funnels through `litMaterial`, so
+`gfx-backend-canary` pins that too: `useProg(litProg)` must appear exactly twice
+(frame setup, and litMaterial). A third bind is a lit draw that skips the
+declaration, and the guard says so by name.
+
+One accepted cost: a zero-instance batch now claims the gate, because
+`litMaterial` runs before the `n > 0` check. It can never reach a draw — the
+next lit draw re-declares — so it is at most one extra call, never a wrong pixel.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.

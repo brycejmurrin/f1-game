@@ -750,7 +750,9 @@ const CEILINGS = {
   // 1963 -> 1961: the four uLightA..D arrays and their four scratch buffers
   // collapse into one interleaved uLight[]/_luL — one uniform4fv per chunk
   // instead of four. The ratchet follows the file down (PERF-FINDINGS 2d).
-  "js/render/glx.js": 1961,
+  // 1961 -> 1958: the instancing gate stops being bracketed per instanced draw
+  // and is declared through the redundancy cache in litMaterial (PERF-FINDINGS 2e).
+  "js/render/glx.js": 1958,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)
