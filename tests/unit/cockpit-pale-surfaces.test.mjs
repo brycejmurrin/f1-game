@@ -118,3 +118,55 @@ test("no shipped LIVERY puts a pale non-body surface in the driver's view", () =
     "a livery paint reads as a pale slab in the cockpit — route it through _ckAcc " +
     "in js/car/car3d.js (as nose/pod/halo/stripe/noseStripe now are), not around it");
 });
+
+// THE SECOND REPORT WAS NOT ABOUT PALENESS AT ALL. With a red car (ferrari c1
+// [0.86,0,0]) a player pointed at "the slab just below the wheel": the cockpit
+// monocoque span, whose rear cap is a closed wall the eye looks straight into
+// 0.65 m away and whose deck runs out under the vanity hood. In body paint that
+// is one unbroken block of colour filling the bottom of the frame the moment
+// the aim pitches down — invisible to both guards above, because on ferrari it
+// is the BODY colour and the body is deliberately exempt there.
+//
+// The tub the driver sits IN is carbon on a real car, and the pieces bracketing
+// it here already are (inner tub wall, instrument shroud — both INTAKE). This
+// pins that: the rear cap of CKPT_MONO_REAR carries no body paint. The vanity
+// hood on top of it and the nose beyond it are NOT covered — they are the
+// livery the driver looks along, and they must stay painted.
+test("the cockpit tub wall under the wheel is not body paint", () => {
+  const C1 = [0.86, 0, 0], C2 = [0.10, 0.40, 0.90];
+  const m = Car3D.build(C1, C2,
+    { teamId: "ferrari", noWheels: true, noDriver: true, cockpit: true, halo: true });
+  // CKPT_MONO_REAR sits at z 0.45, y 0.24..0.40, |x| <= 0.28 (car3d.js). Nothing
+  // else in the build has a vertex in that slice, so the box needs no exclusions.
+  const near = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 0.02);
+  let inBox = 0, painted = 0;
+  for (let i = 0; i < m.pos.length; i += 3) {
+    const x = m.pos[i], y = m.pos[i + 1], z = m.pos[i + 2];
+    if (!(z >= 0.44 && z <= 0.46 && y >= 0.20 && y <= 0.42 && Math.abs(x) <= 0.30)) continue;
+    inBox++;
+    if (near([m.col[i], m.col[i + 1], m.col[i + 2]], C1)) painted++;
+  }
+  assert.ok(inBox >= 12, `the monocoque rear cap moved — ${inBox} vertices in the slice, expected 24`);
+  assert.equal(painted, 0,
+    `${painted} of ${inBox} vertices on the cockpit tub wall carry the body colour — ` +
+    "that is the slab under the steering wheel; keep the ckpt monocoque span CARBON (car3d.js buildSharedChassis)");
+});
+
+// The other half of the same change: what the driver looks ALONG must keep the
+// livery. If a later pass darkens the hood or the nose too, the cockpit stops
+// showing the player which car they are in — a different bug, equally reported.
+test("the cockpit hood and nose keep the livery", () => {
+  const C1 = [0.86, 0, 0], C2 = [0.10, 0.40, 0.90];
+  const m = Car3D.build(C1, C2,
+    { teamId: "ferrari", noWheels: true, noDriver: true, cockpit: true, halo: true });
+  const near = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 0.02);
+  let painted = 0;
+  for (let i = 0; i < m.pos.length; i += 3) {
+    // The vanity hood spans z 0.58..1.10 at y 0.36..0.55 (hF/hR in car3d.js).
+    const y = m.pos[i + 1], z = m.pos[i + 2];
+    if (!(z >= 0.58 && z <= 1.10 && y >= 0.36 && y <= 0.56)) continue;
+    if (near([m.col[i], m.col[i + 1], m.col[i + 2]], C1)) painted++;
+  }
+  assert.ok(painted >= 8,
+    `only ${painted} hood vertices carry the body colour — the driver has lost the livery ahead of them`);
+});

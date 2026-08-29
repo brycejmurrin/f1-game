@@ -535,7 +535,28 @@ const CEILINGS = {
   // noseStripe), not just c2/accent/wing/fin: 32 of 152 shipped liveries put a
   // pale non-body surface in the cockpit before it, 0 after. Neither lineage's
   // number fits the file that carries both, so this is RE-MEASURED on the union.
-  "js/car/car3d.js": 3087,   // +44: wheel cover is a rim lip, a dish and a boss
+  // 3087 -> 3121. Two shipping defects, both found by measuring rather than
+  // looking: the SHARK FIN base was frozen at y 0.7935 while the engine cover
+  // it stands on moves 0.776-0.915 with engine.coverHeight, so it floated 17 mm
+  // with daylight under it on a low cover and was buried 121 mm on a high one;
+  // and the HOOD accent stripe was a flat bar cantilevered up to 124 mm above
+  // the deck it is meant to lie on. Both fixes are comment-heavy because the
+  // fin one is only safe in the lowering direction.
+  // 3121 -> 3164. Two NEW part knobs, both measured live against the range the
+  // catalog ships (tools/parts-sweep.mjs --clamp-scan): cockpit.mirror moves the
+  // widest element of the upper body 170 mm, and aero.fin 291 mm on the largest
+  // flat plate at the highest point of the car. Neither section read a recipe at
+  // all before. The fin comment carries its weight: its scale has to reach the
+  // livery decal AND keep the crown level, and getting either wrong walks the
+  // graphic off the blade.
+  // UNION with the session branch, which added +13 for the SECOND cockpit slab
+  // report — and not a pale one. With a red car the monocoque span under the
+  // wheel is one unbroken block of body paint (rear cap a closed wall 0.65 m
+  // from the eye, deck running out under the hood); CARBON on the ckpt branch
+  // only, +1 line of code and the twelve recording why the tub is dark while
+  // the hood above it stays painted. Measured on ferrari: lower-field rays on
+  // body paint under the wheel 1073 -> 658 of 13430. Re-measured on the union.
+  "js/car/car3d.js": 3177,   // +44: wheel cover is a rim lip, a dish and a boss
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
