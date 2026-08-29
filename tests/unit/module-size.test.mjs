@@ -461,7 +461,14 @@ const CEILINGS = {
   // which of the three gates is holding it, plus meanPerChunkRGB — the twin of
   // meanLampRGB for the set chunked meshes are lit from. Both exist because
   // 'the sliders do nothing' was undiagnosable from outside the renderer.
-  "js/game/apex.js": 2456,
+  // 2456 -> 2471: netLoopback's far end was a BARE transport endpoint, which
+  // answers no PINGs, so the game's session never reached synced(), every
+  // snapshot sat in heldState and net().buffered stayed 0 — six of the fourteen
+  // reds in the `net` browser group. The fix is two lines (autoPong the peer,
+  // pump the session at t0); the rest is the comment saying why a stand-in for
+  // a peer has to speak the clock protocol and why the first PING cannot wait
+  // for the caller's first netTick. Bug-explaining growth at the site.
+  "js/game/apex.js": 2471,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and

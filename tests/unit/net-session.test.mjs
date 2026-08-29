@@ -311,3 +311,79 @@ test("after the transport closes itself, session.close() neither throws nor re-c
   assert.equal(closedTimes, 0, "the transport closed itself; nothing to release");
   assert.deepEqual(whys, ["transport"], "close handlers fire once");
 });
+
+// EVERY TEST ABOVE WIRES TWO SESSIONS TOGETHER, which is the one arrangement
+// that cannot expose this bug: both ends run session.js, so a PING is always
+// answered. __apex.netLoopback builds a different shape — a session on the
+// game's side and a BARE NetTransport endpoint as the far end — and a bare
+// endpoint answers nothing. synced() never becomes true, so every snapshot
+// lands in heldState and the game is handed nothing, while the session still
+// reports alive with a fresh lastHeard: connected, no rival, no error.
+//
+// That is exactly what the multiplayer-session browser specs were failing on
+// (buffered: 0 on every one of them), and no unit test could see it because
+// the only harness here was session-to-session. These two are the missing
+// shape: bare endpoint without the responder, and with it.
+function bareFarEnd({ latency = 0 } = {}) {
+  const [ta, tb] = NetTransport.loopback({ latencyMs: latency, rnd: seededRnd(31) });
+  const T0 = 1000;
+  ta.pump(T0); tb.pump(T0);                       // both epochs, as netLoopback does
+  return { near: ta, far: tb, T0 };
+}
+// A REAL-LENGTH snapshot, not a 4-byte stub: PING_BYTES is 13, so a short
+// stub is rejected by the length check alone and the type check below never
+// gets to prove itself (checked — with the type check removed a 4-byte body
+// still passes, a 24-byte one does not).
+const snapshotBytes = () => { const u = new Uint8Array(24); u[0] = 1; u[1] = 2; u[2] = 3; u[3] = 4; return u; };
+
+test("a session talking to a BARE endpoint never syncs, and the game gets nothing", () => {
+  const { near, far, T0 } = bareFarEnd();
+  const session = NetSession.create({ transport: near });
+  const got = [];
+  session.onState((bytes) => got.push(bytes));
+  session.pump(T0);                               // sends the first PING
+  far.pump(T0);                                   // the far end receives it and ignores it
+  far.send(NetTransport.STATE, snapshotBytes());
+  session.pump(T0 + 10);
+
+  assert.equal(session.synced(), false, "nothing can answer the PING, so no clock sample exists");
+  assert.equal(got.length, 0, "the snapshot is held, not delivered");
+  // The trap that makes this silent: none of the obvious health signals move.
+  assert.equal(session.alive(), true, "the session still reports itself alive");
+  assert.equal(session.lastHeard(), T0 + 10, "and still reports hearing the peer");
+});
+
+test("autoPong makes a bare endpoint stand in for a peer, and state flows", () => {
+  const { near, far, T0 } = bareFarEnd();
+  assert.equal(NetSession.autoPong(far), true, "autoPong attaches to a transport endpoint");
+  const session = NetSession.create({ transport: near });
+  const got = [];
+  session.onState((bytes) => got.push(bytes));
+  session.pump(T0);                               // PING out at t0
+  far.pump(T0);                                   // PONG queued, stamped with the far clock
+  far.send(NetTransport.STATE, snapshotBytes());
+  session.pump(T0 + 10);                          // PONG then snapshot, in send order
+
+  assert.equal(session.synced(), true, "one round trip is enough");
+  assert.equal(session.rtt(), 10, "the round trip is the two pumps' separation");
+  assert.equal(got.length, 1, "the snapshot reaches the game on the same pump");
+  assert.deepEqual(Array.from(new Uint8Array(got[0].buffer || got[0])).slice(0, 4), [1, 2, 3, 4],
+    "the bytes the game receives are the bytes the peer sent");
+});
+
+test("autoPong answers only PINGs, and refuses a transport it cannot use", () => {
+  const { near, far, T0 } = bareFarEnd();
+  NetSession.autoPong(far);
+  const session = NetSession.create({ transport: near });
+  const seen = [];
+  session.onState((bytes) => seen.push(bytes));
+  session.pump(T0); far.pump(T0);
+  // A snapshot arriving at the far end must not be answered as if it were a
+  // ping — a PONG built from snapshot bytes poisons offset for the session.
+  near.send(NetTransport.STATE, snapshotBytes());
+  far.pump(T0 + 5);
+  session.pump(T0 + 10);
+  assert.equal(session.stats().samples, 1, "exactly one clock sample: the PING's, not the snapshot's");
+  assert.equal(NetSession.autoPong(null), false);
+  assert.equal(NetSession.autoPong({}), false, "a thing with no onMessage/send is not a transport");
+});

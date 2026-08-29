@@ -39,6 +39,8 @@ node -e '
     console.log(`EXCLUDED (declares ${s.ownTimeoutSec}s timeout): ${s.file} (${s.tests} tests)`);
   for (const s of r.coveredByFixedGates)
     console.log(`COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
+  for (const s of (r.unreachable || []))
+    console.log(`::warning::UNREACHABLE by this gate (declares ${s.tests} tests > the whole ${r.testsFit}-test cap): ${s.file}`);
   for (const s of r.skipped) console.log(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
   require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `specs=${specs}\n`);
 '

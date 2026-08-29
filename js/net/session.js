@@ -221,5 +221,38 @@ const NetSession = (function () {
     };
   }
 
-  return { create, PING, PONG };
+  // autoPong(transport) — give a BARE transport endpoint the one peer
+  // behaviour the near end cannot do without: answering PING with PONG.
+  //
+  // In a real connection both ends run this file, so a PING is always answered
+  // and the near end reaches synced() inside one round trip. A bare endpoint —
+  // which is what __apex.netLoopback hands the game as the far end — answers
+  // nothing, so synced() stays false forever, every state packet lands in
+  // heldState instead of the game, and the session still reports alive with a
+  // fresh lastHeard. That is a silent "connected, no rival": no error, no
+  // close, nothing on screen. Measured offline (scratch, no browser): 0 of 1
+  // state packets delivered, stats {synced:false, samples:0, alive:true}.
+  //
+  // t1 must be the far end's own clock, not wire time, because the near end
+  // computes offset = t1 - (t0 + rtt/2) to convert every peer timestamp. The
+  // loopback delivers no arrival stamp, so pump() is wrapped to remember the
+  // caller's `now` — the same fallback the session itself uses (lastNow).
+  //
+  // Lives here, not at the call site, because the PING/PONG wire format does.
+  function autoPong(transport) {
+    if (!transport || !transport.onMessage || !transport.send) return false;
+    let lastNow = 0;
+    const pump = transport.pump;
+    if (pump) transport.pump = function (now) { lastNow = now; return pump.call(transport, now); };
+    transport.onMessage((channel, data, at) => {
+      if (channel !== NetTransport.STATE) return;
+      const dv = view(data);
+      if (!dv || dv.byteLength < PING_BYTES || dv.getUint8(0) !== PING) return;
+      transport.send(NetTransport.STATE,
+        encodePong(dv.getUint32(1), dv.getFloat64(5), at != null ? at : lastNow));
+    });
+    return true;
+  }
+
+  return { create, autoPong, PING, PONG };
 })();

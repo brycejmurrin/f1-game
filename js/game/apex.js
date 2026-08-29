@@ -1630,6 +1630,14 @@ const api = {
       loss: o.loss || 0,
     });
     _netPeer = pair[1];
+    // THE FAR END MUST ANSWER PINGS. A bare transport endpoint is not a peer:
+    // in a real connection the other browser runs NetSession too, so the near
+    // end reaches synced() inside one round trip and starts handing snapshots
+    // to the game. Without a responder synced() is false for ever, every
+    // packet lands in heldState, and net().buffered stays 0 while the session
+    // reports itself alive — which is precisely what the multiplayer-session
+    // specs were failing on (14 reds, six of them this).
+    NetSession.autoPong(_netPeer);
     // Both endpoints must be pumped from the same moment for the loopback's
     // wire clock to line up (see js/net/transport.js). A test passes its own
     // t0 so the whole session runs on a virtual clock it controls.
@@ -1641,7 +1649,14 @@ const api = {
       peerProfile: o.peer || null,
       interpDelayMs: o.interpDelayMs,
     });
-    if (!res.ok) _netPeer = null;
+    if (!res.ok) { _netPeer = null; return res; }
+    // ...and the near end must PING at t0, not on the caller's first netTick.
+    // start() does not pump, so without this the first PING and the first
+    // snapshot ride the same pump: the snapshot arrives while synced() is
+    // still false and is held, so the very first assertion after one packet
+    // sees 0. A live session pumps every frame from the moment it connects
+    // (transport.js says so in as many words); this is that first frame.
+    G.netPlay.tick(t0);
     return res;
   },
 

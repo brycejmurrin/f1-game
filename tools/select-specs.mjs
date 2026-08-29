@@ -107,13 +107,22 @@ export function fit(specs, budgetMin) {
     counted.push({ file, tests });
   }
   counted.sort((a, b) => a.tests - b.tests);
-  const selected = [], skipped = [];
+  const selected = [], skipped = [], unreachable = [];
   let used = 0;
   for (const r of counted) {
+    // A spec bigger than the WHOLE cap can never be selected — not "did not fit
+    // today", but "cannot fit on any change, ever", because the cut is greedy
+    // smallest-first. Naming it as merely skipped is what let
+    // multiplayer-session.spec.js (19 tests against a 10-test cap) sit red for
+    // weeks: every js/net change listed it as skipped and nobody read a routine
+    // line. Separating the two turns a permanent hole into a visible one — the
+    // spec still does not run here, so this is a REPORT, not a fix: it belongs
+    // in a fixed gate, or split, or its invariant needs a cheap unit home.
+    if (r.tests > cap.tests) { unreachable.push(r); continue; }
     if (used + r.tests <= cap.tests) { selected.push(r); used += r.tests; }
     else skipped.push(r);
   }
-  return { selected, skipped, overBudgetSpecs, coveredByFixedGates,
+  return { selected, skipped, unreachable, overBudgetSpecs, coveredByFixedGates,
     testsSelected: used, testsFit: cap.tests, cap };
 }
 
@@ -247,6 +256,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `EXCLUDED (declares ${s.ownTimeoutSec}s test budget > gate ${SELECTED_GATE.perTestTimeoutSec}s): ${s.file}`);
   for (const s of r.coveredByFixedGates) console.error(
     `COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
+  for (const s of r.unreachable) console.error(
+    `UNREACHABLE (declares ${s.tests} tests > the whole ${r.testsFit}-test cap — this gate can ` +
+    `NEVER run it): ${s.file}`);
   for (const s of r.skipped) console.error(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
   for (const s of r.selected) console.log(s.file);
 }
