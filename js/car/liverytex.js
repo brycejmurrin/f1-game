@@ -307,7 +307,11 @@ const LiveryTex = (function () {
     const spec = typeof CrestPaths !== "undefined" && CrestPaths[teamId];
     const roles = spec && spec.roles;
     let slot;
+    // `part` ranks above `plate` and below `alt`: a mark that has a real
+    // same-ink island to paint should spend LOGO DETAIL on that island rather
+    // than on a shadow rim, which is all `outline` ever was.
     if (roles) slot = roles.includes("alt") ? "alt"
+                    : roles.includes("part") ? "part"
                     : roles.includes("plate") ? "plate" : "outline";
     else slot = SECOND_DRAWN[teamId] || "alt";   // the monogram's box is `alt`
     if (!bare) return slot;
@@ -451,15 +455,39 @@ const LiveryTex = (function () {
     // second colour actually occupies. `alt` is taken as given for the same
     // reason `plate` is — it is a colour the player chose, and the shapes it
     // paints (counters, a ring, a keyline) are secondary by construction.
+    let part = null;
     if (liv && liv.logo2) {
       if (slot2 === "alt") alt = liv.logo2;
+      // A same-ink island. Null unless authored, and crestTraced falls back to
+      // the mark for it, so an unset LOGO DETAIL leaves the crest exactly as it
+      // ships — the same opt-in bargain `outline` makes below.
+      if (slot2 === "part") part = liv.logo2.slice();
       // slot2 === "plate" was handled where the plate is resolved.
     }
     return {
-      mark: mark.slice(), alt: alt.slice(), plate: plate,
+      mark: mark.slice(), alt: alt.slice(), plate: plate, part,
       brandPair,
-      halo: authoredHalo ||
-        (!brandPair && cMin(mark, under) < INK_TARGET ? haloFor(mark).slice() : null),
+      // The halo answers for the PART as well as the mark. An authored colour
+      // is taken as given — that is the bargain for every authored slot — so
+      // the only thing standing between a player's pick and an invisible bull
+      // is this: if either ink is short of target against the field, the crest
+      // gets an outline, and it is built from whichever of the two is worse.
+      // Measured need: a same-ink island picked dark grey scores 1.00 on a dark
+      // field, and nothing else in the pipeline would have caught it.
+      halo: authoredHalo || (() => {
+        const mNeed = !brandPair && cMin(mark, under) < INK_TARGET;
+        const pNeed = !!part && cMin(part, under) < INK_TARGET;
+        if (!mNeed && !pNeed) return null;
+        // When an authored PART needs the outline, pick the halo against the
+        // FIELDS rather than against an ink. One halo serves the whole crest,
+        // and haloFor(mark) optimises it for the mark's worst background — on
+        // Racing Bulls that came out white, which is nothing behind an orange
+        // bull on a white car (measured 1.17). inkOn() already chooses by
+        // worst-case over the backgrounds, which is the question actually being
+        // asked. The mark keeps its own ink-or-halo test either way.
+        if (pNeed) return inkOn(under).slice();
+        return haloFor(mark).slice();
+      })(),
       // Non-null ONLY for a mark with no plate and no alt layer: a rim stroked
       // under the shape so a second colour has somewhere to read. Null keeps
       // every shipped mark pixel-identical, which is why it is opt-in.
@@ -515,7 +543,13 @@ const LiveryTex = (function () {
     for (let i = 0; i < spec.d.length; i++) {
       const role = spec.roles[i] || "mark";
       if (role === "plate" && (bare || !P.plate)) continue;
-      ctx.fillStyle = css(role === "plate" ? P.plate : role === "alt" ? P.alt : P.mark);
+      // `part` is a SAME-INK island — a shape the trace found to share no pixel
+      // with the rest of its layer, like Racing Bulls' bull beside its letters.
+      // Unset it IS the mark, so the crest ships pixel-identical; authored, it
+      // is the one place a single-ink mark can take a second colour.
+      ctx.fillStyle = css(role === "plate" ? P.plate
+                        : role === "alt" ? P.alt
+                        : role === "part" ? (P.part || P.mark) : P.mark);
       tracePath(ctx, f, spec.d[i]);
       // evenodd, so a counter walked as its own loop punches a HOLE rather than
       // filling solid — the whole reason the bitmaps had to go.
@@ -682,6 +716,33 @@ const LiveryTex = (function () {
   // landed together — a name that would be a lie now that only one mark can
   // ever change, and only when a player picks a file.
   function onMarkChange(cb) { if (typeof cb === "function") _markReady.push(cb); }
+
+  // What the two logo pickers actually PAINT on this team's mark, so the editor
+  // can say so. "LOGO DETAIL" is true but useless: on Racing Bulls it paints the
+  // bull, on Red Bull the sun disc between the bulls, on Ferrari the shield, and
+  // on a single-loop mark like McLaren's there is no second shape at all and it
+  // can only tint an outline. A label that names the shape is the difference
+  // between a colour picker and a guess.
+  const MARK_PARTS = Object.freeze({
+    redbull:     ["BULLS", "SUN DISC"],
+    ferrari:     ["HORSE", "SHIELD"],
+    racingbulls: ["RB LETTERS", "BULL"],
+    cadillac:    ["CREST", "INNER DETAIL"],
+    haas:        ["MONOGRAM", "RING"],
+    mercedes:    ["STAR", "OUTLINE"],
+    audi:        ["RINGS", "OUTLINE"],
+    // The custom team's mark is the generic monogram, whose second colour is
+    // the box stroke around the letters — not an outline. MY TEAM keeps its own
+    // static labels because that dialog only ever edits this one mark.
+    custom:      ["MONOGRAM", "MONOGRAM BOX"],
+  });
+  function markSlots(teamId) {
+    const named = MARK_PARTS[teamId];
+    // Everything else is a single-loop silhouette whose second colour has
+    // nowhere to go but a rim — say that rather than implying a part exists.
+    return [{ key: "logo", label: (named && named[0]) || "TEAM LOGO" },
+            { key: "logo2", label: (named && named[1]) || "LOGO OUTLINE" }];
+  }
   function _markChanged() { for (const cb of _markReady) { try { cb(); } catch (_) {} } }
 
   function setTeamLogo(id, src) {
@@ -988,7 +1049,7 @@ const LiveryTex = (function () {
   // what ink separates it" decision buildAtlas makes for the car.
   return { SIZE, REGIONS, buildAtlas, drawCrest, markBase, markPalette,
            MARK_FLOOR, INK_FLOOR,
-           drawLogoImage, contrast, inkOn, onMarkChange, setTeamLogo, LOGOS,
+           drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            CRESTS, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;

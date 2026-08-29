@@ -67,7 +67,24 @@ const SOURCES = {
   ferrari:     { layers: 2, roles: ["plate", "mark"], base: [0.94, 0.89, 0.12],
                  alpha: 0.45, eps: 0.004, minArea: 0.0012 },
   cadillac:    { layers: 2, roles: ["mark", "alt"],   alpha: 0.45, eps: 0.004, minArea: 0.0008 },
-  racingbulls: { layers: 1, roles: ["mark"], alpha: 0.50, eps: 0.006, minArea: 0.0030 },
+  // parts  the palette role of each INDEPENDENT ISLAND, left to right, once the
+  //        layer has been split by groupLoops. This is what gives a
+  //        single-ink mark a second colour: Racing Bulls' source is monochrome
+  //        white (all three k-means clusters come back 0.96-0.98), so there is
+  //        no second INK to find — but the bull and the two letters are three
+  //        loops that share no pixel, so they are three PARTS. Naming the bull
+  //        `alt` is what lets LOGO DETAIL paint it, instead of landing on the
+  //        shadow outline that is all a single-island mark can offer.
+  //        Island order here is [bull, R, B]: the sort is by leftmost x and the
+  //        bull spans the full width. Re-run with --parts after any retrace.
+  //        The role is "part", NOT "alt": `alt` is a genuinely different INK in
+  //        the source (Cadillac's inner detail) and markPalette auto-scores it
+  //        to contrast with the mark, so calling the bull `alt` would repaint
+  //        every shipped Racing Bulls car by default. `part` means "same ink as
+  //        the mark unless the player says otherwise" — unset, it IS the mark
+  //        and the crest is pixel-identical to what ships today.
+  racingbulls: { layers: 1, roles: ["mark"], parts: ["part", "mark", "mark"],
+                 alpha: 0.50, eps: 0.006, minArea: 0.0030 },
   astonmartin: { layers: 1, roles: ["mark"], alpha: 0.45, eps: 0.006, minArea: 0.0020 },
   mclaren:     { layers: 1, roles: ["mark"], alpha: 0.45, eps: 0.006, minArea: 0.0030 },
   williams:    { layers: 1, roles: ["mark"], alpha: 0.45, eps: 0.006, minArea: 0.0030 },
@@ -270,6 +287,60 @@ const f2 = (v) => {
   const s = v.toFixed(3);
   return s.replace(/0+$/, "").replace(/\.$/, "") || "0";
 };
+// Split a layer's loops into INDEPENDENT ISLANDS. A layer is filled with one
+// `ctx.fill("evenodd")`, so loops that overlap are a counter-and-container pair
+// — the hole in Ferrari's shield, the eye in a bull — and MUST stay in one fill
+// or the knockout is lost and the shape floods solid. Loops whose bounding
+// boxes are disjoint never interact under evenodd, so they can be split into
+// separate fills and painted separately with pixel-identical output.
+//
+// That is what makes per-part crest colour possible without re-tracing
+// anything: Racing Bulls' R, B and bull are already three disjoint loops, and
+// Red Bull's two bulls likewise. Measured on the shipped data, the eight traced
+// crests hold 24 independent islands between them.
+export function groupLoops(loops, N) {
+  // INTERIOR overlap, not bounding-box overlap. A bbox test welds shapes that
+  // never touch: Racing Bulls' bull spans the full width, so its box overlaps
+  // both letters and the whole mark collapses to one island — measured, that is
+  // exactly what a bbox test returns. Rasterise each loop's interior instead
+  // and group only loops that actually share pixels.
+  const n = N || 200;
+  const mask = loops.map((L) => {
+    const m = new Uint8Array(n * n);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [x, y] of L) {
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    const i0 = Math.max(0, Math.floor(x0 * n)), i1 = Math.min(n - 1, Math.ceil(x1 * n));
+    const j0 = Math.max(0, Math.floor(y0 * n)), j1 = Math.min(n - 1, Math.ceil(y1 * n));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++)
+      if (inLoops([L], (i + 0.5) / n, (j + 0.5) / n)) m[j * n + i] = 1;
+    return m;
+  });
+  const owner = loops.map((_, i) => i);
+  const find = (i) => (owner[i] === i ? i : (owner[i] = find(owner[i])));
+  const meets = (a, b) => {
+    for (let k = 0; k < a.length; k++) if (a[k] && b[k]) return true;
+    return false;
+  };
+  for (let i = 0; i < loops.length; i++)
+    for (let j = i + 1; j < loops.length; j++)
+      if (meets(mask[i], mask[j])) owner[find(i)] = find(j);
+  const by = new Map();
+  for (let i = 0; i < loops.length; i++) {
+    const r = find(i);
+    if (!by.has(r)) by.set(r, []);
+    by.get(r).push(loops[i]);
+  }
+  // Left to right, so the authored `parts` order in SOURCES is stable and
+  // readable: for Racing Bulls that is R, then B, then the bull.
+  return [...by.values()].sort((a, b) => {
+    const lx = (g) => Math.min(...g.map((L) => Math.min(...L.map(([x]) => x))));
+    return lx(a) - lx(b);
+  });
+}
+
 export function toPathData(loops) {
   return loops.map((L) =>
     "M" + L.map(([x, y]) => f2(x) + " " + f2(y)).join("L") + "Z").join("");
@@ -329,8 +400,29 @@ function main() {
   const out = {};
   for (const id of list) {
     const t = traceTeam(id, { rev, ...(layers ? { layers: +layers } : {}) });
-    out[id] = { roles: t.cfg.roles || t.layers.map(() => "mark"),
-                d: t.layers.map((L) => toPathData(L.loops)) };
+    // One entry per INDEPENDENT ISLAND, not per layer. `parts` in SOURCES names
+    // the palette role of each island in left-to-right order; without it every
+    // island inherits its layer's role, which reproduces the old output exactly.
+    const layerRole = t.cfg.roles || t.layers.map(() => "mark");
+    const groups = [];
+    t.layers.forEach((L, li) => {
+      for (const g of groupLoops(L.loops)) groups.push({ li, loops: g });
+    });
+    const authored = t.cfg.parts;
+    if (authored && authored.length !== groups.length)
+      throw new Error(`${id}: SOURCES.parts has ${authored.length} entries, ` +
+        `the trace has ${groups.length} islands — re-run with --parts and re-author`);
+    out[id] = { roles: groups.map((g, i) => (authored ? authored[i] : layerRole[g.li] || "mark")),
+                d: groups.map((g) => toPathData(g.loops)) };
+    if (args.includes("--parts")) {
+      console.error(`  ${id}: ${groups.length} island(s)`);
+      groups.forEach((g, i) => {
+        const xs = g.loops.flat().map(([x]) => x), ys = g.loops.flat().map(([, y]) => y);
+        console.error(`    [${i}] layer ${g.li} role ${out[id].roles[i]} ` +
+          `loops ${g.loops.length} x ${Math.min(...xs).toFixed(3)}-${Math.max(...xs).toFixed(3)} ` +
+          `y ${Math.min(...ys).toFixed(3)}-${Math.max(...ys).toFixed(3)}`);
+      });
+    }
     if (pv) {
       const { W, H, rgba } = preview(t, +flag("size", 240));
       fs.mkdirSync(path.join(ROOT, "scratch/renders"), { recursive: true });
