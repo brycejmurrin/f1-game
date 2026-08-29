@@ -63,7 +63,14 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
   // beveled-span chevron. Measured 2496 on the raise.
   // 2505 -> 2545: regulation mirrors — the C14.2.2 inboard-toe housing cant,
   // top winglet, and C3.7.5 outer stay (+48 tris). Measured 2532.
-  assert.ok(body <= 2545, `default body ${body} > 2545`);
+  // 2545 -> 2690: the DIFFUSER. It was one closed loft, so from directly behind
+  // — the view a chase camera holds for most of a lap — the back of the car was
+  // a featureless grey slab with the brake light floating on it
+  // (scratch/renders/car/rb4-diffuser.png). Two tunnels either side of the
+  // crash structure, each with a ramped ceiling, an outer wall and two strakes,
+  // plus a trailing gurney: +131 tris on the single largest unmodelled surface
+  // the car had. Measured 2676.
+  assert.ok(body <= 2690, `default body ${body} > 2690`);
   assert.ok(cockpit <= 1500, `cockpit ${cockpit} > 1500`);
 });
 

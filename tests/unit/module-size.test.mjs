@@ -522,7 +522,11 @@ const CEILINGS = {
   // the fuel `flame` key reached only three ~2 cm glaze pips (0.0028 m2), which
   // tools/parts-sweep.mjs --clamp-scan reads as a dead key. +8 for threading the
   // brakes `rim` colour into the rim faces, which was computed and never read.
-  "js/car/car3d.js": 3032,   // +44: wheel cover is a rim lip, a dish and a boss
+  // 3032 -> 3068. +36 for the DIFFUSER, which was one closed loft and read as
+  // a featureless grey slab from directly behind — the view a chase camera
+  // holds for most of a lap (scratch/renders/car/rb4-diffuser.png). Now two
+  // tunnels with a ramped ceiling, outer walls, strakes and a trailing gurney.
+  "js/car/car3d.js": 3068,   // +44: wheel cover is a rim lip, a dish and a boss
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

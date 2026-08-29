@@ -2721,8 +2721,44 @@ const Car3D = (function () {
       const diffW  = (0.72 + aLvl * 0.145) * Math.max(0.78, Math.min(1.3, aeroStyle.floorEdge));
       const diffH1 = (0.40 + aLvl * 0.325) *
         Math.max(0.72, Math.min(1.4, aeroStyle.diffuserRise));
-      addLoft(out, -2.52, 0, 0.34, 1.12 * diffW, 0.30, -1.90, 0, 0.17, 0.92 * diffW, 0.14 * diffH1,
-              [0.06, 0.06, 0.07], SURFACES.carbon);
+      // THE DIFFUSER. This was one closed loft, and from directly behind — the
+      // view a chase camera holds for most of a lap — it read as a featureless
+      // grey slab the full width of the car with the brake light floating on it
+      // (scratch/renders/car/rb4-diffuser.png). The diffuser is the most
+      // recognisable thing about the back of an F1 car and none of it was there.
+      //
+      // Built as two tunnels either side of the crash structure: a ramped
+      // ceiling, an outer wall, strakes, and a gurney across the trailing edge.
+      // Every piece is a thin CLOSED solid rather than an open quad, so the
+      // winding cannot come out inside-out on a surface you only ever see from
+      // one side. Both knobs still drive it — floorEdge the width, diffuserRise
+      // the ceiling — so the sweep's amplitude for them goes up, not down.
+      const dHalf = 0.56 * diffW;                    // half-width at the exit
+      const dThr  = 0.46 * diffW;                    // half-width at the throat
+      const dKeel = 0.12;                            // crash structure half-width
+      const dFloor = 0.105;
+      const dRise = 0.30 * Math.max(0.72, Math.min(1.4, aeroStyle.diffuserRise));
+      const yCE = dFloor + dRise, yCT = dFloor + 0.055 * diffH1 / 0.4;
+      const DIFF_IN = [0.045, 0.045, 0.055];
+      for (const s of [-1, 1]) {
+        const cxE = s * (dKeel + dHalf) / 2, cxT = s * (dKeel + dThr) / 2;
+        const wE = dHalf - dKeel, wT = dThr - dKeel;
+        addLoft(out, -2.52, cxE, yCE, wE, 0.035, -1.95, cxT, yCT, wT, 0.035,
+                DIFF_IN, SURFACES.carbon);                              // ramped ceiling
+        addLoft(out, -2.52, s * dHalf, (dFloor + yCE) / 2, 0.030, yCE - dFloor,
+                     -1.95, s * dThr,  (dFloor + yCT) / 2, 0.030, yCT - dFloor,
+                CARBON, SURFACES.carbon);                               // outer wall
+        addBox(out, cxE, dFloor, -2.235, wE, 0.028, 0.57, CARBON, SURFACES.carbon);
+        for (let k = 0; k < 2; k++) {
+          const f = 0.36 + k * 0.34;
+          addLoft(out, -2.50, s * (dKeel + wE * f), (dFloor + yCE) / 2, 0.016, (yCE - dFloor) * 0.86,
+                       -2.02, s * (dKeel + wT * f), (dFloor + yCT) / 2, 0.014, (yCT - dFloor) * 0.86,
+                  DIFF_IN, SURFACES.carbon);                            // strake
+        }
+      }
+      addLoft(out, -2.58, 0, 0.195, 2 * dKeel * 0.82, 0.15,
+                   -1.95, 0, 0.170, 2 * dKeel * 1.10, 0.13, DARK, SURFACES.carbon);
+      addBox(out, 0, yCE + 0.030, -2.525, 2 * dHalf, 0.030, 0.020, c2, SURFACES.paint);
 
       const gbStrakes = gbStyle ? gbStyle.strakes : (tier("gearbox") === 2 ? 5 : 0);
       const gbFin = gbStyle ? gbStyle.fin : (tier("gearbox") === 2 ? 1 : 0);
