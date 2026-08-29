@@ -625,7 +625,11 @@ function paintDress(team, liv, info) {
     // and the halo keeps it legible against the new backing either way.
     const halo = (img._avg && LiveryTex.contrast && LiveryTex.contrast(img._avg, field) < 2.6 && LiveryTex.inkOn)
       ? LiveryTex.inkOn([img._avg]) : null;
-    LiveryTex.drawLogoImage(ctx, img, inner, (liv && liv.logo) || null, halo);
+    // LOGO DETAIL rims the emblem here for the same reason it rims the seven
+    // single-colour crests: an uploaded mark is arbitrary art with no second
+    // element to recolour, so an outline is the only honest place for it.
+    LiveryTex.drawLogoImage(ctx, img, inner, (liv && liv.logo) || null, halo,
+                            (liv && liv.logo2) || null);
   } else {
     LiveryTex.drawCrest(ctx, team.id, inner, { liv, field, bare: false });
   }

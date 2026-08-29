@@ -329,3 +329,36 @@ test("LOGO DETAIL is opt-in — an unset one leaves every shipped mark untouched
     }
   }
 });
+
+test("an UPLOADED emblem takes LOGO DETAIL as a rim, tinted or not", () => {
+  // The custom team can upload its own mark, and that is the ONE logo path
+  // that never reaches markPalette — arbitrary art has no second element to
+  // recolour, so its second colour can only be an outline. This grid is not
+  // reachable from Teams.LIST (the custom team is not in it), which is exactly
+  // how the gap survived the census above: the palette guard cannot see a path
+  // that has no palette.
+  const OUT = [1, 0.55, 0], HALO = [0.97, 0.97, 0.98], TINT = [0.1, 0.8, 0.9];
+  const img = { naturalWidth: 64, naturalHeight: 64, _avg: [0.5, 0.5, 0.5] };
+  const shadows = (tint, halo, outline) => {
+    const ctx = new RecCtx();
+    LT.drawLogoImage(ctx, img, LT.REGIONS.crest, tint, halo, outline);
+    return ctx.imageOps.map((o) => o.shadow);
+  };
+  for (const tint of [null, TINT]) {
+    const label = tint ? "tinted" : "untinted";
+    // The rim must be painted, and the final unshadowed draw must still land
+    // on top of it — an outline that covers the mark is not an outline.
+    const rim = shadows(tint, null, OUT);
+    assert.ok(rim.includes(cssOf(OUT)), `${label}: LOGO DETAIL never painted`);
+    assert.equal(rim[rim.length - 1], null, `${label}: the emblem itself is under its own rim`);
+    // The halo used to be dropped on the tinted branch, which returned before
+    // any halo pass existed — so a tinted emblem got no legibility rescue at
+    // all, and the argument was accepted and ignored.
+    const both = shadows(tint, HALO, OUT);
+    assert.ok(both.includes(cssOf(HALO)), `${label}: the halo was accepted and ignored`);
+    assert.ok(both.indexOf(cssOf(HALO)) < both.indexOf(cssOf(OUT)),
+      `${label}: the rim must sit INSIDE the halo, as it does on a vector crest`);
+    // Opt-in, here too.
+    assert.deepEqual(shadows(tint, null, null), [null], `${label}: painted a rim nobody asked for`);
+  }
+});

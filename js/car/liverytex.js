@@ -718,30 +718,44 @@ const LiveryTex = (function () {
       return w ? [r / w / 255, g / w / 255, b / w / 255] : null;
     } catch (_) { return null; }
   }
-  function drawLogoImage(ctx, img, R, tint, halo) {
+  // An UPLOADED emblem is the one mark that never goes through markPalette —
+  // it is arbitrary art, so there is no second element to recolour. Its LOGO
+  // DETAIL colour is therefore an outline, the same meaning the seven
+  // single-colour crests give it.
+  //
+  // Resolving the painted source FIRST also closes a hole this function had:
+  // the tinted path used to `return` from its own branch before any halo pass
+  // existed, so a tinted emblem got no legibility halo at all — the halo
+  // argument was silently ignored for exactly the uploads most likely to need
+  // it. One source, one set of passes, both cases.
+  function drawLogoImage(ctx, img, R, tint, halo, outline) {
     const pad = 0.015, bw = R.w * (1 - pad * 2), bh = R.h * (1 - pad * 2);
     const sc = Math.min(bw / img.naturalWidth, bh / img.naturalHeight);
     const w = img.naturalWidth * sc, h = img.naturalHeight * sc;
     const x = R.x + (R.w - w) / 2, y = R.y + (R.h - h) / 2;
-    if (!tint) {
-      if (halo) {
-        ctx.save();
-        ctx.shadowColor = css(halo);
-        ctx.shadowBlur = Math.max(4, w * 0.085);
-        for (let i = 0; i < 5; i++) ctx.drawImage(img, x, y, w, h);
-        ctx.restore();
-      }
-      ctx.drawImage(img, x, y, w, h);
-      return;
+    let src = img;
+    if (tint) {
+      const off = document.createElement("canvas");
+      off.width = Math.max(1, Math.round(w)); off.height = Math.max(1, Math.round(h));
+      const oc = off.getContext("2d");
+      oc.drawImage(img, 0, 0, off.width, off.height);
+      oc.globalCompositeOperation = "source-in";
+      oc.fillStyle = css(tint);
+      oc.fillRect(0, 0, off.width, off.height);
+      src = off;
     }
-    const off = document.createElement("canvas");
-    off.width = Math.max(1, Math.round(w)); off.height = Math.max(1, Math.round(h));
-    const oc = off.getContext("2d");
-    oc.drawImage(img, 0, 0, off.width, off.height);
-    oc.globalCompositeOperation = "source-in";
-    oc.fillStyle = css(tint);
-    oc.fillRect(0, 0, off.width, off.height);
-    ctx.drawImage(off, x, y, w, h);
+    // Halo outside, outline inside — the same order and the same reason as
+    // drawCrest, so an emblem needing both reads the way a crest does.
+    const pass = (col, blur, n) => {
+      ctx.save();
+      ctx.shadowColor = css(col);
+      ctx.shadowBlur = blur;
+      for (let i = 0; i < n; i++) ctx.drawImage(src, x, y, w, h);
+      ctx.restore();
+    };
+    if (halo) pass(halo, Math.max(4, w * 0.085), 5);
+    if (outline) pass(outline, Math.max(2, w * 0.030), 3);
+    ctx.drawImage(src, x, y, w, h);
   }
 
   // drawCrest(ctx, teamId, R, { liv, field, bare, palette })
@@ -922,14 +936,14 @@ const LiveryTex = (function () {
       (img && img._avg && contrast(img._avg, bg) < 2.6 ? ink : null);
     if (LOGOS[teamId]) {
       drawLogoImage(ctx, LOGOS[teamId], REGIONS.crest, logo,
-                    markHalo(LOGOS[teamId], c1, inkCrest));
+                    markHalo(LOGOS[teamId], c1, inkCrest), colors.logo2 || null);
     } else drawCrest(ctx, teamId, REGIONS.crest, { liv: colors, field: [c1, c2], bare: false });
     const finWash = finArt || [stripe, c1, accent, inkFin].filter(Boolean)
       .find((c) => contrast(c, finPaint) >= 1.8) || inkFin;
     drawTailGraphic(ctx, teamId, REGIONS.fin, c1, finPaint, finWash);
     if (LOGOS[teamId]) {
       drawLogoImage(ctx, LOGOS[teamId], REGIONS.finBadge, logo,
-                    markHalo(LOGOS[teamId], finPaint, inkFin));
+                    markHalo(LOGOS[teamId], finPaint, inkFin), colors.logo2 || null);
     } else drawCrest(ctx, teamId, REGIONS.finBadge, { liv: colors, field: finPaint, bare: true });
 
     // Sponsor wordmarks.
