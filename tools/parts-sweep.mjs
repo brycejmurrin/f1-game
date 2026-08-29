@@ -69,7 +69,16 @@ export const THRESHOLDS = Object.freeze({
   MOVED_AREA_M2: 0.010,   // a 10 cm patch
   INVISIBLE_AREA_M2: 0.002,
   COLOUR_DELTA: 0.06,     // ~15/255 in sRGB, the smallest flat-patch difference
-  COLOUR_AREA_M2: 0.005,  // colour is easier to see than shape, so a lower floor
+  // "This option is genuinely a different COLOUR." Raised from 0.005 once the
+  // full sweep showed 0.005 sits INSIDE the noise: palette transport has a
+  // floor proportional to the geometry change (areas move between buckets when
+  // triangles move), and the measured floor for options that recolour nothing
+  // runs 0.008-0.031 m2 — suspension/sport 0.010, tyres/sig_haas_tyre 0.031.
+  // Everything that really does recolour lands an order up: the fuel grades at
+  // 0.102, an ERS LED at 0.126, a brake caliper at 0.947, a tyre band at 0.749.
+  // 0.05 is the middle of that gap and a 22 cm patch. RAISING this makes the
+  // INVISIBLE gate stricter, never laxer.
+  COLOUR_AREA_M2: 0.05,
   SLIDE_RATIO: 3,
 });
 
@@ -613,6 +622,17 @@ export function classify(row, TH = THRESHOLDS) {
   }
   // Moved enough to matter, but only where nobody can see it.
   if (vis < TH.INVISIBLE_MM && !colour) return "INTERNAL";
+  // A large, separately measured RECOLOUR settles distinctness on its own.
+  // Without this the whole `tyres` category reads WEAK — 25 rows pinned at
+  // 15.0-15.2 mm — because every tyre knob it owns tops out near 15 mm at full
+  // range, which is not a thin catalog but the shape of the part: F1 compounds
+  // ARE geometrically identical and differ by sidewall colour. Checked against
+  // renders rather than asserted: scratch/renders/parts/tyres/compound_c4.png
+  // (bold orange band) beside hard.png (thin white) is not a marginal
+  // difference, and the band alone transports 0.749 m2. The threshold is the
+  // same COLOUR_AREA_M2 the INVISIBLE gate uses, so nothing is rescued that the
+  // noise analysis above could not tell from a geometry artefact.
+  if (colour) return "OK";
   if (mm < TH.WEAK_MM || row.movedArea < TH.MOVED_AREA_M2) return "WEAK";
   return "OK";
 }

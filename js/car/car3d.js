@@ -412,7 +412,16 @@ const Car3D = (function () {
 
   function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
                     grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle) {
-    const RC = rimColor || RIM;
+    // `rimColor` is the brakes recipe's `rim` key. It reached this line and then
+    // DIED here: RC was computed and never read once, so the nine catalog
+    // options that set a rim colour painted nothing. The clamp scan
+    // (tools/parts-sweep.mjs --clamp-scan) measured brakes/rim at 0.0000 m2 of
+    // colour over its entire range, which is what a key with no consumer looks
+    // like. The rim faces below take RC now. RIM_DEF reproduces the hardcoded
+    // value those faces used before, so a car with no `rim` set is byte-identical.
+    const RIM_DEF = [0.31, 0.31, 0.34];
+    const RC = rimColor || RIM_DEF;
+    const RC_DEEP = [RC[0] * 0.39, RC[1] * 0.39, RC[2] * 0.41];   // dish floor, in shadow
     // 18 -> 24: an 18-gon tyre reads visibly polygonal in any close shot.
     // +29% wheel tris, same draw-call count; ceilings in parts-physics raised
     // with the measurement (480 per wheel).
@@ -424,6 +433,12 @@ const Car3D = (function () {
     const tyreShoulder = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.shoulder) || 0)));
     const edgeRm = tyreShoulder === 2 ? 0.90 : tyreShoulder === 1 ? 0.945 : 1;
     const grooveCount = tyreStyle && tyreStyle.grooves != null
+      // `grooved` is the legacy BOOLEAN ARGUMENT, kept for callers that build a
+      // wheel with no recipe at all (Car3D.buildWheel(0.34, band)). It is no
+      // longer a recipe key: every tyre recipe set BOTH `grooved` and `grooves`,
+      // which meant `grooved` was always shadowed here, and --clamp-scan
+      // measured it flat over its whole range. Registry, merge default and all
+      // 27 recipes dropped it together.
       ? tyreStyle.grooves : grooved ? 3 : 0;
     const grooveDepth = tyreStyle && tyreStyle.grooveDepth || 0.045;
     const PROFILE = [];
@@ -622,7 +637,7 @@ const Car3D = (function () {
         }
       }
     }
-    const HUBCAP = [0.31, 0.31, 0.34];   // raised boss: lighter than the dish floor
+    const HUBCAP = RC;                   // raised boss: lighter than the dish floor
     const NUT = caliperColor || bandColor || [0.85, 0.72, 0.10];
     for (const ss of [[x0, -1], [x1, 1]]) {
       const dir = ss[1], xc0 = ss[0] - dir * 0.014, hcR = rimR * 0.46, ctr = [xc0, cy, cz];
@@ -707,7 +722,7 @@ const Car3D = (function () {
             HUBCAP, SURFACES.metal);
           addQuad(out,
             [dxOut, iy0, iz0], [dxOut, iy1, iz1], [dxIn, iy1, iz1], [dxIn, iy0, iz0],
-            [0.12, 0.12, 0.14], SURFACES.metal);
+            RC_DEEP, SURFACES.metal);
           addTri(out, [dxIn, cy, cz],
                  [dxIn, iy0, iz0],
                  [dxIn, iy1, iz1], HUBCAP, SURFACES.metal);
@@ -1213,7 +1228,7 @@ const Car3D = (function () {
   }
   function buildTyreParts(recipe, tier) {
     // sidewall: raised lettering ring(s) on the tyre face. 0 flush / 1 ring / 2 double.
-    return mergeRecipe({ band: TYRE_BAND[tier], grooved: false, shoulder: 0,
+    return mergeRecipe({ band: TYRE_BAND[tier], shoulder: 0,
       sidewall: 0 }, recipe);
   }
   function buildErsParts(recipe, tier, accent) {
@@ -2416,11 +2431,25 @@ const Car3D = (function () {
     addBox(out, 0, 0.40, -2.185, exhR*0.72, exhR*0.72, 0.03, [0.05, 0.04, 0.04], SURFACES.carbon);
     addBox(out, 0, 0.40, -2.198, exhR*0.55, exhR*0.55, 0.012,
            glazeOf(fuelFlame), SURFACES.metal);
+    // HEAT STAIN. Before this the `flame` recipe key reached only three ~2 cm
+    // glaze pips deep in the pipe mouths — 0.0028 m2, which --clamp-scan reads
+    // as a dead key, so the one place a fuel grade is supposed to show was too
+    // small to see. A discoloured sleeve on the last stretch of every pipe
+    // carries the same colour at a size a camera can resolve. Blended
+    // half-and-half with the pipe metal so it reads as bluing, not as paint.
+    const heatOf = (c) => {
+      const g = glazeOf(c);
+      return [exhMetal[0]*0.55 + g[0]*0.45, exhMetal[1]*0.55 + g[1]*0.45,
+              exhMetal[2]*0.55 + g[2]*0.45];
+    };
+    addBox(out, 0, 0.40, -2.155, exhR*1.06, exhR*1.06, 0.075, heatOf(fuelFlame), SURFACES.metal);
     if (exhTwin) {
       for (const s of [-1, 1]) {
         addBox(out, s*0.15, 0.40, -2.10, 0.045, 0.045, 0.14, exhMetal, SURFACES.metal);
         addBox(out, s*0.15, 0.40, -2.172, 0.026, 0.026, 0.012,
                glazeOf(fTwin), SURFACES.metal);
+        addBox(out, s*0.15, 0.40, -2.135, 0.049, 0.049, 0.070,
+               heatOf(fTwin), SURFACES.metal);
         addStationLoft(out, [
           exhDia(s * 0.15, 0.40, -2.03, 0.045),
           exhDia(s * 0.15, 0.40, -2.17, 0.045),
@@ -2913,12 +2942,11 @@ const Car3D = (function () {
       // Per-option caliper accent peeking through the rim spokes, else tier.
       const caliperColor = brakeStyle ? brakeStyle.cal : BRAKE_CALIPER[brakesT];
       const rimColor = brakeStyle && brakeStyle.rim;   // premium alloy rims (else default dark)
-      const grooved = !!(tyreStyle && tyreStyle.grooved);
       for (const s of [-1, 1]) {
         addWheel(out, s*0.79, AXLES.wheelY, AXLES.frontZ, 0.34, 0.32,
-          tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle, wheelStyle);
+          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle);
         addWheel(out, s*0.76, AXLES.wheelY, AXLES.rearZ, 0.34, 0.38,
-          tyreBand, caliperColor, rimColor, grooved, tyreStyle, null, brakeStyle, wheelStyle);
+          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle);
       }
       // 2026 over-wheel deflector above each FRONT wheel (tyre crown y 0.68):
       // 0 none / 1 single plane on a stalk / 2 biplane + outboard endplate.

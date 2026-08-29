@@ -100,18 +100,14 @@ test("COLOUR-ONLY is confined to its declared allow-list", () => {
   // whose bodywork is unchanged. Anything else that lands here is an option
   // whose geometry recipe is not reaching the builder.
   const ALLOWED = [
-    // A different fuel grade on unchanged bodywork IS a filler-cap and
-    // fuel-line recolour. These three are the only legitimate members.
+    // A different fuel grade on unchanged bodywork IS a filler-cap, fuel-line
+    // and tailpipe recolour. These three are the whole list; everything else
+    // that once sat here (ers/regen_plus, ers/harvest, brakes/sig_haas_carbonmag,
+    // tyres/sig_alpine_tyre) was a geometry recipe that reached the builder and
+    // moved nothing, and has been given real shape instead of an exemption.
     "fuel/high_octane",
     "fuel/biofuel",
     "fuel/race_blend",
-    // MEASURED 2026-08-29, and all three are DEFECTS awaiting a fix, not
-    // exemptions: each is a geometry recipe that reaches the builder and moves
-    // nothing anyone can see. Delete the line when the recipe is deepened.
-    "ers/regen_plus",            // 4.8 mm; only `pack` moves and only by 4.8 mm
-    "ers/harvest",               // 4.5 mm; same
-    "brakes/sig_haas_carbonmag", // 3.0 mm on a SIGNATURE whose whole job is looks
-    "tyres/sig_alpine_tyre",     // 2.4 mm, 0.0 mm VISIBLE: the band clamp eats it
   ];
   assert.deepEqual(of("COLOUR-ONLY").sort(), [...ALLOWED].sort(),
     "a COLOUR-ONLY option appeared or disappeared — if it is new, its geometry " +
@@ -123,10 +119,11 @@ test("WEAK is a downward-only ratchet", () => {
   // pixels) OR under 0.010 m2 of moved area: real but marginal. This number may
   // only ever go DOWN. Raising it to accommodate a new thin option is the
   // tolerance-widening AGENTS.md prohibits — deepen the recipe instead.
-  // MEASURED 2026-08-29 on the full catalog: 40. 25 of those are `tyres`,
-  // almost all pinned at 15.0-15.2 mm by the band clamp at js/car/car3d.js:579
-  // — one clamp, not twenty-five thin recipes.
-  const CEILING = 40;
+  // ZERO, and it may never go up. The first full sweep measured 40, of which 25
+  // were `tyres` pinned at 15.0-15.2 mm; that was the classifier refusing to
+  // count a recolour, not 25 thin recipes, and it is fixed in classify(). The
+  // other 15 were real and were given real shape.
+  const CEILING = 0;
   const weak = of("WEAK");
   assert.ok(weak.length <= CEILING,
     `${weak.length} WEAK options, ceiling ${CEILING}: ${weak.join(", ")}`);
