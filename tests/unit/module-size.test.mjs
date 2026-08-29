@@ -613,7 +613,13 @@ const CEILINGS = {
   // (a cap-only change must still reset it). Plus a memo for the
   // armed-shadow-lamp scan, which walked up to 1024 baked records every
   // frame and again per env-probe face for a value only the caster moves.
-  "js/render/webgpu/wgx.js": 5549,
+  // 5549 -> 5567: _tlScratch packs its THIRTEEN static lanes once per source
+  // array instead of all sixteen every frame. Gen moves every frame under
+  // flicker or the warm-up ramp, so up to 1024 records were being rewritten
+  // to change three lanes each. The split needs its own branch plus the note
+  // recording that the UPLOAD cannot shrink with it (rgb is interleaved
+  // 3-in-16, so the changed bytes are not a contiguous range).
+  "js/render/webgpu/wgx.js": 5567,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -680,7 +686,13 @@ const CEILINGS = {
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
   // and, applied to the global set, made a tier shed step the whole night.
-  "js/render/glx.js": 1936,
+  // 1936 -> 1928: the per-chunk lamp DIMMER is gone. setFrameLights already
+  // scaled the baked set like the culled one, so _lampScale was pinned at 1
+  // and its three multiplies were identity — but the machinery survived the
+  // retirement: a per-lamp inFrameTail test, four comparisons for every lamp
+  // of every chunk of every chunked mesh, feeding a scale that could not
+  // matter. Lowered per the rule above: the ratchet follows the file down.
+  "js/render/glx.js": 1928,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)
