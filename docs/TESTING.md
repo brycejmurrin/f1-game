@@ -980,6 +980,28 @@ what it covers.
 The measured history behind the testing gates. AGENTS.md carries the rules;
 this section carries the evidence so the rules survive re-litigation.
 
+**A probe that returns "no change" is guilty until proven innocent (2026-08-29).**
+The report was that the editor's TEAM LOGO colour did nothing on the Audi tail.
+Three offline probes ran before one of them was trustworthy. The first hashed
+every 97th byte of the atlas region — fine for a full-region tint, useless for
+Audi's mark, which is four thin ring STROKES, so it reported "no change" for a
+region that changed. The second hashed every byte but tested against a livery
+whose paint no candidate colour could clear, so all three test colours collapsed
+to the SAME `inkOn(under)` fallback and it again reported "no change" — a true
+statement about a rigged input. Only the third, on a field both marks could
+clear, separated the real answer: the fin BADGE responds to `liv.logo`, the fin
+GRAPHIC never does (that is the TAIL GRAPHIC row, `liv.finArt`), and the actual
+defect was upstream of both — `markPalette` substituted a different colour for
+the authored one whenever it fell under `MARK_FLOOR`, which for Audi's
+`[0.96,0.02,0.22]` fin is nearly every mid-tone in the picker. Measured with
+`tools/logo-authored-sweep.mjs`: 9015 of 12112 authored colours were overruled;
+after the authored-halo path, the shark-fin badge keeps 91.2% (was 33.9%). The
+engine cover stays lower (37.4%, was 17.2%) and that is geometry, not a bug —
+`drawTailGraphic` washes it with an alpha gradient of `stripe||c2`, so the mark
+is scored against c1 AND c2 at once, and for a near-black-plus-bright-red pair
+NO colour clears 4.2 against both. Lesson: a negative result from a probe you
+wrote is a claim about the probe until an independent positive control passes.
+
 **`child exited on SIGTERM` is a WORKER line, not the run (2026-08-17).** A
 `test:tiny` log showed `[playwright] child exited on SIGTERM` at 28/73 while
 `test-bg.mjs --status` still said `running`. The log line won the argument and a

@@ -1026,6 +1026,29 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // would not say which path did it.
   assert.match(src, /apex26\.tlxForceHw/,
     "the per-gate hardware-path switch must stay reachable from a software run");
+  // _softAdapter must classify the ADAPTER. Headless is a presentation fact —
+  // headless Chromium on a real GPU is hardware — and putting it here made the
+  // Apple/Metal runner, the project's only real GPU, take the software half of
+  // every content skip. It belongs to _softBlit, which exists precisely because
+  // a headless swapchain does not composite.
+  const sniff = src.slice(src.indexOf("let _softAdapter = false;"),
+    src.indexOf("let forceWebGL"));
+  // The VERDICT expression itself, not the surrounding block: _headless is
+  // declared in this region on purpose (the blit needs it), so slicing wider
+  // would assert against its own definition.
+  const verdict = src.slice(src.indexOf("_softAdapter = !!("),
+    src.indexOf("} catch (_) { _softAdapter = false;"));
+  assert.doesNotMatch(verdict, /HeadlessChrome/,
+    "the adapter verdict must not treat headless as software — that is a presentation fact");
+  assert.match(src, /_softBlit = !forceWebGL && _capPref !== "0" && !!\(_softAdapter \|\| _headless \|\| _capPref === "1"\);/,
+    "the blit must follow headless: a headless swapchain does not composite even on real silicon");
+  // An empty adapter.info is UNKNOWN, not software. Browsers trim those fields
+  // for fingerprinting reasons, so a player with no vendor string must not be
+  // handed the degraded path on real hardware.
+  assert.doesNotMatch(verdict, /infoEmpty/,
+    "empty adapter.info must not be a software verdict on its own");
+  assert.match(sniff, /maxTextureDimension2D <= 8192/,
+    "the tie-break is measured LIMITS — SwiftShader/llvmpipe 8192, Apple 16384");
   assert.match(src, /function softContent\(part\)\s*\{\s*return \(softwareGL \|\| _softAdapter\) && !_forceHw\.has\(part\);/,
     "content skips must route through softContent(part) — software by default, forceable per gate");
   assert.doesNotMatch(src, /softContent\(\)/,
@@ -1064,6 +1087,15 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "a probe that keeps erroring must stand down instead of binding the cube");
   assert.match(src, /envProbeReady\(\) \{ return envReady \|\| _envGaveUp; \}/,
     "standing down must read as ready so the caller stops re-probing forever");
+  // releaseMirrors() nulls attribute.array. three's node builder reads
+  // attribute.array.constructor to type an attribute whenever it compiles a
+  // program for a pass it has not seen before, so a chunk freed before the env
+  // probe's first face makes EVERY face throw. Measured on real hardware
+  // (macos-latest/Metal): 41 failed faces on WebGL2, 81 on WebGPU.
+  assert.match(src, /!rec\.chunked\._mirrorsFreed && !vizMat\s*\n?\s*&& \(envReady \|\| _envGaveUp \|\| !envRT\)/,
+    "the CPU mirrors must not be freed while the env probe still has passes to compile");
+  assert.match(src, /if \(_envFailN >= ENV_FAIL_CAP\) _envGaveUp = true;/,
+    "a probe that cannot succeed must stop retrying — it threw every frame forever");
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(post, /ctx\.softDest/,
     "tlx-post must honour ctx.softDest for the FXAA / viz dest");

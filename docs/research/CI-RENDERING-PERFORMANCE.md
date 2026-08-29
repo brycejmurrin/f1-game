@@ -213,6 +213,22 @@ without it to run `tools/gpu-game-check.mjs` — the portable sibling of
 `gfx-probe` that reports `GLX.gpuErrors()`, the env-probe state and the
 `?gfxdebug=1` overlay text from the game itself.
 
+**It GATES, it does not merely report** (2026-08-29). The workflow's Verdict step
+fails the job on: a check that did not finish, `gpuErrors > 0`, any failed
+env-probe face, a probe that stood down, or `softAdapter` true on an image the
+census called hardware. Before it existed the job was green whatever the game
+said — run `33228195259` concluded "success" on the commit where this same
+macOS job reported `envFail: 81`. Appearance is reported and NOT gated:
+`meanLuma` goes to the job summary, because a brightness floor is the kind of
+threshold that goes flaky and then gets widened to pass.
+
+What the real GPU has found so far, none of it visible to any software test:
+
+| defect | signal | fixed in |
+|---|---|---|
+| `_softAdapter` read headless (and empty `adapter.info`) as software, so real hardware ran the degraded content path | `softAdapter: true` with `softwareGL: false` | `67d5616` |
+| `releaseMirrors()` freed attribute arrays the node builder still needed, so every env-probe face threw | `envFail` 81 (WebGPU) / 41 (WebGL2), `env ready=false` | `69836ca` |
+
 ### Cursor Cloud agent environment (2026-08-17)
 
 Cloud Agents here boot a **personal / dashboard-managed** environment (no

@@ -14,6 +14,7 @@
  *
  * Run: node tools/gpu-game-check.mjs [track] [--json out.json] [--shot out.png]
  *      [--backend three|webgpu] [--path webgpu|webgl2] [--boot-timeout MS]
+ *      [--ls apex26.key=value ...]
  *
  * It checkpoints the --json file after every phase, so a step timeout leaves a
  * diagnosis on disk rather than nothing at all.
@@ -40,6 +41,10 @@ const track = argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] 
   && argv[argv.indexOf(a) - 1] !== "--shot" && argv[argv.indexOf(a) - 1] !== "--backend"
   && argv[argv.indexOf(a) - 1] !== "--path") || "montreal";
 const backend = flag("--backend", "three");
+// --ls key=value (repeatable), same contract as gfx-probe: drive a knob the
+// pins do not know about — apex26.tlxForceHw above all, which is how the
+// real-GPU content path is reproduced on a software adapter.
+const extraLs = argv.reduce((acc, a2, i) => (a2 === "--ls" && argv[i + 1] ? acc.concat(argv[i + 1]) : acc), []);
 const path3 = flag("--path", "webgpu");
 
 function serve() {
@@ -92,13 +97,17 @@ try {
   page.on("crash", () => { out.crashed = true; checkpoint("renderer-crashed"); });
   page.on("close", () => { out.pageClosed = true; });
   browser.on("disconnected", () => { out.browserGone = true; });
-  await page.addInitScript(([be, p]) => {
+  await page.addInitScript(([be, p, ls]) => {
     try {
       localStorage.setItem("apex26.gfxBackend", be);
       if (be === "three") localStorage.setItem("apex26.tlxForceGL", p === "webgl2" ? "1" : "0");
       localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
     } catch (_) { /* blocked storage: the defaults still boot */ }
-  }, [backend, path3]);
+    for (const kv of ls || []) {
+      const i = kv.indexOf("=");
+      if (i > 0) { try { localStorage.setItem(kv.slice(0, i), kv.slice(i + 1)); } catch (_) { /* blocked */ } }
+    }
+  }, [backend, path3, extraLs]);
 
   // Bounded: a wedged renderer must not turn the diagnosis into another blank.
   const bounded = (fn, ms, label) => Promise.race([
@@ -177,6 +186,7 @@ try {
     if (g.__tlx) {
       try { r.backendState = g.__tlx.backendState(); } catch (e) { r.backendStateError = String(e && e.message); }
       try { r.envState = g.__tlx.envState(); } catch (_) { /* pre-probe */ }
+      try { r.envFailStack = g.__tlx.envFailStack ? g.__tlx.envFailStack() : null; } catch (_) { /* older build */ }
       try { r.skyState = g.__tlx.skyState(); } catch (_) { /* no sky yet */ }
     }
     try { r.engine = document.getElementById("game").getAttribute("data-engine"); } catch (_) { /* no canvas */ }

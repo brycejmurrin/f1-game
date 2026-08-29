@@ -1321,7 +1321,7 @@ function resolveLivery(team) {
     const l = livDraftOverride.liv;
     return { id: l.id || null, c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
-             fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null,
+             fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null, logo2: l.logo2 || null,
              noseStripe: l.noseStripe || null, finish: l.finish || null };
   }
   const c = _livResolveCache.get(team.id);
@@ -1331,7 +1331,7 @@ function resolveLivery(team) {
   // — additive, so an unmodified livery still resolves to today's exact object shape.
   const val = liv ? { id: liv.id, c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
-                      fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null,
+                      fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null, logo2: liv.logo2 || null,
                       noseStripe: liv.noseStripe || null, finish: liv.finish || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
@@ -8048,6 +8048,7 @@ const CZ_LIV_FIELDS = [
   ["cz-stripe", "stripe"], ["cz-nosestripe", "noseStripe"], ["cz-detail", "accent"],
   ["cz-nose", "nose"], ["cz-pod", "pod"], ["cz-wing", "wing"],
   ["cz-fin", "fin"], ["cz-finart", "finArt"], ["cz-logo", "logo"],
+  ["cz-logo2", "logo2"],
   ["cz-halo", "halo"],
 ];
 // The custom team's paint FINISH ("gloss" = the default clearcoat car paint, so
