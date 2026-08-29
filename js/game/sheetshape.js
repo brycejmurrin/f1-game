@@ -34,7 +34,16 @@
  * changeover happens once and stays put.
  */
 window.SheetShape = (function () {
-  const TALL_ON = 1.05, TALL_OFF = 0.95;
+  // Declared in css/tokens.css as --tall-at so the pre-paint inline script in
+  // index.html reads the SAME number; these are the fallbacks for a context
+  // where the property is missing. TALL_OFF keeps the 0.10 hysteresis band.
+  const TALL_FALLBACK = 1.05, TALL_HYST = 0.10;
+  function tallOn() {
+    const b = document.body;
+    const raw = b ? getComputedStyle(b).getPropertyValue("--tall-at") : "";
+    const v = parseFloat(raw);
+    return v > 0 ? v : TALL_FALLBACK;
+  }
 
   /* THE SECOND ANSWER: is the LIST/DETAIL pair on?
    * `.pane-pair` (css/components.css) is the shared list-detail layout, and the
@@ -200,8 +209,9 @@ window.SheetShape = (function () {
     classifyFit(el);
     const ratio = h / w;
     const was = el.dataset.shape;
-    const now = was === "tall" ? (ratio <= TALL_OFF ? "wide" : "tall")
-      : (ratio >= TALL_ON ? "tall" : "wide");
+    const on = tallOn(), off = on - TALL_HYST;
+    const now = was === "tall" ? (ratio <= off ? "wide" : "tall")
+      : (ratio >= on ? "tall" : "wide");
     if (now !== was) el.dataset.shape = now;
     /* BOTH THRESHOLDS ARE IN THE SHEET'S OWN UNITS. Prefer clientWidth/Height
        (always local) over gBCR÷zoom — on pre-26.4 WebKit gBCR was already local,
@@ -329,8 +339,9 @@ window.SheetShape = (function () {
        it with data-density in a single selector without a media query. */
     const ratio = hOwn / wOwn;
     const wasShape = b.dataset.shape;
-    const nowShape = wasShape === "tall" ? (ratio <= TALL_OFF ? "wide" : "tall")
-      : (ratio >= TALL_ON ? "tall" : "wide");
+    const onB = tallOn(), offB = onB - TALL_HYST;
+    const nowShape = wasShape === "tall" ? (ratio <= offB ? "wide" : "tall")
+      : (ratio >= onB ? "tall" : "wide");
     if (nowShape !== wasShape) b.dataset.shape = nowShape;
   }
 

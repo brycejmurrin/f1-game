@@ -151,6 +151,15 @@
    initial value is the generic sheet's 380, #lighting-inner/#camtune-inner
    declare 620, body declares 600, and none of them leak into the others. */
 @property --compact-at { syntax: "<length>"; inherits: false; initial-value: 380px; }
+/* THE TALL RATIO, declared ONCE here so the pre-paint inline script in
+   index.html and js/game/sheetshape.js cannot disagree about it — the same
+   rule --compact-at already follows. body[data-shape="tall"] combines with
+   data-density to restructure #overlay and move #menu-brand (css/menus.css),
+   so a first answer that arrives AFTER paint moves the whole menu. Registered
+   as <number> for the same reason as the tap ladder: unregistered,
+   getComputedStyle hands back a raw token stream and parseFloat gives NaN.
+   Hysteresis (the "wide" edge) stays in sheetshape.js, derived from this. */
+@property --tall-at { syntax: "<number>"; inherits: false; initial-value: 1.05; }
 /* THE TAP LADDER IS TYPED so JS can READ it. All three are max(Npx,
    calc(24px / var(--ui-scale))) expressions; unregistered, getComputedStyle
    returns the raw token stream and every parseFloat() on it is NaN — which

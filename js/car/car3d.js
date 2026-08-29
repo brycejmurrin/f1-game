@@ -1147,30 +1147,61 @@ const Car3D = (function () {
     halfBase: 0.022, halfTop: 0.014,
   });
   const finMix = (a, b, t) => a + (b - a) * t;
-  function finXAt(z, y, proud) {
+  // `fin` is the aero recipe's blade-height scale, applied about the base line
+  // so the fin grows upward and its root stays where the engine cover put it.
+  // EVERY reader of the fin outline goes through here, because the livery decal
+  // is placed off the same numbers: sharkFinPanel() and sharkFinBadge() bilinear
+  // between base and top, so a top that moves without them detaches the graphic
+  // from the blade it is painted on.
+  // Scaled about the FROZEN base line, not the cover-rooted one, so the mesh and
+  // the decal agree on where the top is. The mesh's real root may sit lower
+  // (part("sharkFin") drops it into the engine cover); that only grows the blade
+  // BELOW the decal, which is why lowering is safe and raising is not.
+  // ONE height for both ends, so the crown stays LEVEL. Scaling each end about
+  // its own base does not: the trailing base sits 174 mm below the leading one,
+  // so at fin 1.44 the trailing top would come out 76 mm ABOVE the leading top
+  // and the fin would grow a wedge crown — measured, and it walked the livery
+  // decal off the blade. topLE and topTE are equal at stock for exactly this
+  // reason; the scale keeps them equal.
+  const finTop = (fin) => {
+    const f = Math.max(0.55, Math.min(1.45, fin || 1));
+    return FIN.baseLE[1] + (FIN.topLE[1] - FIN.baseLE[1]) * f;
+  };
+  function finXAt(z, y, proud, fin) {
+    const tp = finTop(fin);
     const u = (z - FIN.baseLE[0]) / (FIN.baseTE[0] - FIN.baseLE[0]);   // along the base edge
     const yBase = finMix(FIN.baseLE[1], FIN.baseTE[1], Math.max(0, Math.min(1, u)));
-    const v = Math.max(0, Math.min(1, (y - yBase) / (FIN.topLE[1] - yBase)));
+    const v = Math.max(0, Math.min(1, (y - yBase) / (tp - yBase)));
     return finMix(FIN.halfBase, FIN.halfTop, v) + proud;
   }
-  function sharkFinPanel(inset, proud) {
+  function sharkFinPanel(inset, proud, fin) {
     const i = inset != null ? inset : 0.05;
     const p = proud != null ? proud : 0.002;
+    const tp = finTop(fin);
     const vBase = Math.max(i, 0.18);
     const at = (u, v) => {
       // bilinear over the outline: u = 0 leading → 1 trailing, v = 0 base → 1 top.
       const bz = finMix(FIN.baseLE[0], FIN.baseTE[0], u), by = finMix(FIN.baseLE[1], FIN.baseTE[1], u);
-      const tz = finMix(FIN.topLE[0],  FIN.topTE[0],  u), ty = finMix(FIN.topLE[1],  FIN.topTE[1],  u);
+      const tz = finMix(FIN.topLE[0],  FIN.topTE[0],  u), ty = tp;
       return { x: finMix(FIN.halfBase, FIN.halfTop, v) + p,
                y: finMix(by, ty, v), z: finMix(bz, tz, v) };
     };
     return [at(i, vBase), at(1 - i, vBase), at(1 - i, 1 - i), at(i, 1 - i)];
   }
-  const FIN_BADGE = Object.freeze({ z0: -1.235, z1: -1.465, y0: 0.725, y1: 0.955 });
-  function sharkFinBadge(proud) {
+  // v0/v1 are FRACTIONS of the blade, not absolute heights: at fin 0.55 the top
+  // is at y 0.890, and the old fixed 0.725..0.955 window would have hung the
+  // badge off the end of the fin.
+  const FIN_BADGE = Object.freeze({ z0: -1.235, z1: -1.465, v0: 0.32, v1: 0.88 });
+  function sharkFinBadge(proud, fin) {
     const p = proud != null ? proud : 0.0022;   // just outside the graphic panel
-    const B = FIN_BADGE, at = (z, y) => ({ x: finXAt(z, y, p), y, z });
-    return [at(B.z0, B.y0), at(B.z1, B.y0), at(B.z1, B.y1), at(B.z0, B.y1)];
+    const B = FIN_BADGE, tp = finTop(fin);
+    const yAt = (z, v) => {
+      const u = Math.max(0, Math.min(1, (z - FIN.baseLE[0]) / (FIN.baseTE[0] - FIN.baseLE[0])));
+      const yB = finMix(FIN.baseLE[1], FIN.baseTE[1], u);
+      return yB + (tp - yB) * v;
+    };
+    const at = (z, v) => { const y = yAt(z, v); return { x: finXAt(z, y, p, fin), y, z }; };
+    return [at(B.z0, B.v0), at(B.z1, B.v0), at(B.z1, B.v1), at(B.z0, B.v1)];
   }
   function mergeRecipe(defaults, recipe) {
     return Object.assign(defaults, recipe || {});
@@ -1198,7 +1229,7 @@ const Car3D = (function () {
       duct: 0, board: 0, slot: 0,
       frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
       rearSweep: 0.03, rearTaper: 0.98,
-      floorEdge: 1, floorCut: 0.04, diffuserRise: 1,
+      floorEdge: 1, floorCut: 0.04, diffuserRise: 1, fin: 1,
     }, recipe);
   }
   function buildSuspensionParts(recipe, tier) {
@@ -1273,8 +1304,9 @@ const Car3D = (function () {
   function buildCockpitParts(recipe) {
     // halo: hoop profile. 0 regulation round tube / 1 slim low-profile / 2 fenced crown.
     // headrest: 0 flat rim / 1 raised horseshoe / 2 winged pad.
+    // mirror: outboard span scale for the mirror stalks and housings, 1 = stock.
     return mergeRecipe({ haloBlade: 0, haloWing: 0, camPods: 0, screen: 0,
-      halo: 0, headrest: 0 }, recipe);
+      halo: 0, headrest: 0, mirror: 1 }, recipe);
   }
   function buildPartRecipes(T, accent) {
     const tier = (id) => T[id] != null ? T[id] : 1;
@@ -1610,7 +1642,22 @@ const Car3D = (function () {
     // tuner's -20.5 deg pitch hits it at 0.69 m, and ferrari's c2 is [1,1,1].
     // The driver of a real car does not see their own spine stripe; the chase
     // cameras still do, so only the cockpit build drops it.
-    if (!ckpt) addBox(out, 0, 0.665, 0.45, 0.10, 0.02, 0.80, ersC2, SURFACES.paint);
+    //
+    // It also has to FOLLOW the deck. As a single flat addBox at y 0.665 it did
+    // not: the chase crown runs 0.48 at z 1.15 to 0.66 at z 0.08, so the bar's
+    // underside sat 124 mm above the surface at its forward end (z 0.85), 57 mm
+    // at mid-length, and only met the deck at the very back — a cantilevered
+    // rail with daylight under it, not a stripe. A span between two stations on
+    // the crown line costs the same twelve triangles and lies on the paint.
+    if (!ckpt) {
+      const deckTop = (z) => {
+        const t = Math.max(0, Math.min(1, (hF.z - z) / (hF.z - hR.z)));
+        return (hF.y + hF.h / 2) + ((hR.y + hR.h / 2) - (hF.y + hF.h / 2)) * t + 0.026;
+      };
+      addSpan(out, { z: 0.85, y: deckTop(0.85) + 0.008, w: 0.09, h: 0.016 },
+                   { z: 0.05, y: deckTop(0.05) + 0.008, w: 0.11, h: 0.016 },
+              ersC2, null, SURFACES.paint);
+    }
 
     part("bolsters");
     if (ckpt) {
@@ -2305,8 +2352,15 @@ const Car3D = (function () {
     // RV-MIRROR-BODY, Y 470..680 x Z 640..720. At x 0.44 / y 0.735 ours sat
     // inboard of that volume AND above its ceiling — reported as "floating".
     const mz = ckpt ? 0.92 : 0.24;
-    const mx = (ckpt ? 0.60 : 0.34) + (mSty === 1 ? 0.035 : 0);
-    const msx = ckpt ? 0.54 : 0.30;
+    // `mirror` is the recipe's outboard-span scale. No part recipe reached this
+    // section at all before it — the only variation was the three team styles —
+    // yet the mirrors are the WIDEST element of the upper body and sit against
+    // open sky in every three-quarter shot, so a knob here buys more silhouette
+    // per line than anywhere else on the car. Clamped to the span the RV-MIRROR
+    // -BODY volume above constrains in Y and Z but not in X.
+    const mScale = Math.max(0.85, Math.min(1.35, cockpitStyle.mirror || 1));
+    const mx = ((ckpt ? 0.60 : 0.34) + (mSty === 1 ? 0.035 : 0)) * mScale;
+    const msx = (ckpt ? 0.54 : 0.30) * mScale;
     const mY = (ckpt ? 0.678 : 0.735) + (mSty === 2 ? -0.032 : 0);
     const mW = mSty === 1 ? 0.235 : 0.215;   // swept style: wider housing
     const mH = mSty === 1 ? 0.065 : 0.075;
@@ -2512,11 +2566,34 @@ const Car3D = (function () {
     part("sharkFin");
     if (!ckpt) {
       const fb = FIN.halfBase, ft = FIN.halfTop;
+      // The fin's base was FROZEN at y 0.7935 while the engine cover it stands
+      // on moves with engine.coverHeight, which the catalog ships from 0.90 to
+      // 1.272. Measured against anchors.coverAt(-0.65).top: at 0.90 the cover
+      // top is 0.776, so the fin floated 17 mm with a strip of DAYLIGHT under
+      // its leading edge (three pixels at the review camera); at 1.272 the
+      // cover is 121 mm above the base and swallows a third of the blade.
+      //
+      // Root the base into the cover, and only ever DOWNWARD. Raising it would
+      // walk the fin out from under its livery decal: sharkFinPanel() and
+      // sharkFinBadge() below place that decal off the frozen FIN with no
+      // arguments, and js/game/carmesh.js calls Car3D.sharkFinPanel() and
+      // Car3D.sharkFinBadge() exactly that way. Lowering only grows the blade under the decal, which keeps
+      // every graphic exactly where it was.
+      const root = (z, y0) => {
+        const c = anchors.coverAt(z);
+        return c && c.top != null ? Math.min(y0, c.top - 0.010) : y0;
+      };
+      const bLE = root(FIN.baseLE[0], FIN.baseLE[1]);
+      const bTE = root(FIN.baseTE[0], FIN.baseTE[1]);
+      // Blade height. The fin is 12 triangles carrying the largest flat plate at
+      // the highest point on the car, so this is the cheapest silhouette on the
+      // whole body — and it had no recipe at all.
+      const tp = finTop(aeroStyle && aeroStyle.fin);
       addBlock(out, [
-        [-fb, FIN.baseLE[1], FIN.baseLE[0]], [fb, FIN.baseLE[1], FIN.baseLE[0]],
-        [ft, FIN.topLE[1], FIN.topLE[0]],    [-ft, FIN.topLE[1], FIN.topLE[0]],
-        [-fb, FIN.baseTE[1], FIN.baseTE[0]], [fb, FIN.baseTE[1], FIN.baseTE[0]],
-        [ft, FIN.topTE[1], FIN.topTE[0]],    [-ft, FIN.topTE[1], FIN.topTE[0]],
+        [-fb, bLE, FIN.baseLE[0]], [fb, bLE, FIN.baseLE[0]],
+        [ft, tp, FIN.topLE[0]],    [-ft, tp, FIN.topLE[0]],
+        [-fb, bTE, FIN.baseTE[0]], [fb, bTE, FIN.baseTE[0]],
+        [ft, tp, FIN.topTE[0]],    [-ft, tp, FIN.topTE[0]],
       ], finC);
     }
 
