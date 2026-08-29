@@ -423,6 +423,47 @@ test("GLX pins the per-chunk uploadLightSet revert (arity 3) and no-ops when the
   assert.match(present, /ctxGone\(\)/);
 });
 
+test("the interleaved uLight[] lanes agree between glx.js and shaders/lit.js", () => {
+  // ONE uniform4fv per chunk instead of four (PERF-FINDINGS 2d) only works if
+  // both halves agree on the stride-16 lane order. A swapped lane keeps the GL
+  // CALL COUNTS byte-identical and the render statistically indistinguishable
+  // on a coarse metric — it moves or recolours lamp pools, which no counter
+  // and no unit test would catch. This is the guard for that.
+  const glx = read("js/render/glx.js");
+  const lit = read("js/render/shaders/lit.js");
+
+  // The four arrays must be GONE from both halves, or a stale reader survives.
+  for (const n of ["uLightA", "uLightB", "uLightC", "uLightD"]) {
+    assert.doesNotMatch(glx, new RegExp(n), `glx.js still references ${n}`);
+    assert.doesNotMatch(lit, new RegExp(n), `lit.js still references ${n}`);
+  }
+
+  // Shader side: one array, 4 vec4s per light, read at li+0..3 off i*4.
+  assert.match(lit, /uniform vec4 uLight\[MAX_LIGHTS \* 4\];/);
+  assert.match(lit, /int li = i \* 4;/);
+  assert.match(lit, /vec4 la = uLight\[li\], lb = uLight\[li \+ 1\], lc = uLight\[li \+ 2\];/);
+  assert.match(lit, /smoothstep\(uLight\[li \+ 3\]\.x,/);
+
+  // JS side: stride 16, and each lane group lands where the shader reads it.
+  // src is the flat stride-15 record; these offsets ARE the contract.
+  assert.match(glx, /const i4 = i \* 16;/);
+  const lanes = [
+    [0, "src\\[o\\]"], [3, "src\\[o \\+ 6\\]"],          // +0  la = pos.xyz | radius
+    [4, "src\\[o \\+ 3\\]"], [7, "src\\[o \\+ 12\\]"],   // +1  lb = rgb    | bleed
+    [8, "src\\[o \\+ 7\\]"], [11, "src\\[o \\+ 10\\]"],  // +2  lc = aim.xyz| cosInner
+    [12, "src\\[o \\+ 11\\]"],                            // +3  x  = cosOuter
+  ];
+  for (const [slot, rhs] of lanes) {
+    const lhs = slot === 0 ? "L4\\[i4\\]" : `L4\\[i4 \\+ ${slot}\\]`;
+    assert.match(glx, new RegExp(`${lhs} = ${rhs};`),
+      `uLight lane +${slot} must be fed by ${rhs.replace(/\\/g, "")}`);
+  }
+
+  // Exactly ONE upload, sized in whole lights.
+  const ups = glx.match(/gl\.uniform4fv\(litU\["uLight\[0\]"\], L4, 0, nL \* 16\)/g) || [];
+  assert.equal(ups.length, 1, "expected exactly one uLight upload of nL*16 floats");
+});
+
 test("WGX sky ports GLX overcast grey-shift, horizon bank, and azimuthal variation", () => {
   const sky = read("js/render/webgpu/wgsl-chunks.js");
   assert.match(sky, /nightLid/);

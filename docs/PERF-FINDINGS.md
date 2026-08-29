@@ -891,6 +891,69 @@ source:
 So the whole `begin()` class is worth ~3 calls/frame, not 165. Left here as a
 correction rather than an edit because the wrong number was acted on.
 
+## 2d. One interleaved lamp array: uniform4fv 277.7 -> 69.4 (2026-08-29)
+
+`uniform4fv` was the largest single call class on the default backend — 277.7 a
+frame, vegas night, full field in a pack. The cause was arithmetic, not
+algorithmic: `uploadLightSet` issued **exactly four** calls per chunk, one per
+scratch array (`uLightA/B/C/D`), and ~69 chunks upload a frame.
+
+**The obvious fix was the wrong instrument.** The plan of record was to port
+WGX's storage-buffer lamp table + `(offset,count)` addressing to WebGL2. That
+was dropped on a measurement: there is **zero** UBO precedent in this tree —
+`uniformBlockBinding`, `bindBufferBase`, `UNIFORM_BUFFER`,
+`getUniformBlockIndex`, `std140` and data-texture `texelFetch` all return no
+hits across `js/`. The port would have invented a GL concept the codebase has
+never used, inside the shader every surface renders through, for the last 25 %.
+
+Interleaving the four arrays into one `vec4[MAX_LIGHTS * 4]` (stride 4 vec4s
+per light) makes it **one** call per chunk:
+
+| | before | after |
+|---|---|---|
+| **uniform4fv** | **277.7** | **69.4** (-75.0 %) |
+| every other counter | — | byte-identical |
+
+Free in uniform pressure: `4 x vec4[48]` and `vec4[192]` are the same 192
+default-block rows (the WebGL2 fragment floor is 224), which the shader's own
+header comment already noted. GLX-only — TLX (`three/tsl-lit.js`) and WGX
+(`webgpu/wgx.js`) carry their own light paths and never read these names. The
+godray pass's `uLightPos/Col/Rad/Dir/Cone` at `GR_MAX_LIGHTS = 6` is a separate
+system and is untouched.
+
+### Verifying it needed a real oracle, and the first two were not
+
+Call counts cannot see this change's failure mode. A mis-indexed lane keeps
+every counter byte-identical and simply moves or recolours the lamp pools. Two
+attempts at an oracle were wrong before one worked, and both failure modes are
+worth knowing:
+
+1. **`drawImage` of the WebGL canvas into a 2D canvas read solid black** (mean
+   RGB 0,0,0). That is the drawing buffer being invalid outside the frame, not
+   a broken shader. Reading it as evidence either way would have been wrong.
+   Use Playwright's element screenshot (the compositor path) instead.
+2. **Byte-comparing the PNGs is invalid here.** Two runs of the *identical*
+   build produce different bytes — the scene is time-dependent. Checked before
+   trusting it; otherwise the cross-build difference would have been reported
+   as a regression that does not exist. **Always shoot the same build twice
+   first and let that pair be the noise floor.**
+
+The working oracle is image statistics against that floor (`sharp`, mean RGB +
+16-bucket luminance histogram, `scratch/png-stats.mjs`):
+
+| pair | max abs Δmean RGB | histogram L1 |
+|---|---|---|
+| same build, two runs (**noise floor**) | 0.0026 | 0.00015 |
+| **before vs after** | **0.0011** | **0.00011** |
+
+The cross-build delta is *smaller than the same-build noise*, with mean RGB
+agreeing to two decimals (19.61, 7.12, 11.10) and `gpuErrors` 0. Pixel-neutral.
+
+`gfx-backend-canary.test.mjs` now pins the lane order across both halves —
+proven by swapping lane +7 for +11 and watching it fail, then restoring. A
+guard for an invisible failure mode is worth nothing until it has been made to
+bite.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.
