@@ -838,8 +838,23 @@ drawn from the wrong resident pack, which is why the hit path deliberately does
 NOT stamp `_cullPlanes` (that snapshot must keep describing whichever frustum
 physically wrote the buffer). `gfx-backend-canary.test.mjs` now pins that.
 
-`uniform1f` 167.4 is the ~30 frame-scalars in `begin()` times the 5-6 passes a
-frame; low value, named so it is not mistaken for a per-draw leak.
+**CORRECTION (2026-08-29).** The sentence that stood here — "`uniform1f` 167.4
+is the ~30 frame-scalars in `begin()` times the 5-6 passes a frame" — was an
+arithmetic guess written up as if measured, and it is wrong. `begin()` runs
+**~1.25x/frame**, not 5-6: the shadow passes bind `depthProg` and their own FBO
+and never call it (`js/render/glx/shadow.js:151,224,254`), and the env probe is
+one face every 4th frame (`js/game.js:6729`). The real distribution, traced to
+source:
+
+- `uniform1f` 167.4 is dominated by **`litMaterial`** (`glx.js:1385-1393`) — up
+  to 9 scalars per lit draw against 144.2 `drawElements`. `begin()` contributes
+  ~19 of it. Reducing this means SORTING DRAWS BY MATERIAL, not more caching.
+- `uniform4fv` 147.3 and a quarter of `uniform1i` 142.5 are **`uploadLightSet`**
+  per visible chunk (`chunked.js:233`) — 147.3/4 = ~37 calls. That is the
+  structural item in 2b, not a caching problem.
+
+So the whole `begin()` class is worth ~3 calls/frame, not 165. Left here as a
+correction rather than an edit because the wrong number was acted on.
 
 ## 3. Left on the table
 

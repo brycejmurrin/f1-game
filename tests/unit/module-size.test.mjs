@@ -419,7 +419,16 @@ const CEILINGS = {
   // knob is resolved BEFORE setFrameLights (it feeds the scaled full-set build)
   // and allLights is left null when the feature is off instead of handing out
   // the raw baked list.
-  "js/game.js": 8727,
+  // 8727 -> 8760: the per-wheel draw loop drew rotating-then-fixed per wheel,
+  // giving the VAO sequence F,FFixed,F,FFixed,R,RFixed,R,RFixed — every
+  // consecutive pair different, so bindVAO collapsed NOTHING. Two runs now,
+  // measured 92 -> 84.2 bindVertexArray/frame in a pack with drawElements
+  // unchanged. The same restructure FIXES A RENDERING BUG: brake rings are
+  // blended with no depth write and were interleaved with opaque geometry, so
+  // a later car's opaque draw passed LEQUAL and painted over a ring already
+  // drawn. Bug-explaining growth at the site of the bug — the one growth the
+  // note at the top of this entry tolerates.
+  "js/game.js": 8760,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
