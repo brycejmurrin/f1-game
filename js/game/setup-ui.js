@@ -625,12 +625,14 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("WINGS", "wing", true));
   wrap.appendChild(colorRow("TAIL FIN", "fin", true));
   wrap.appendChild(colorRow("TAIL GRAPHIC", "finArt", true));
-  wrap.appendChild(colorRow("TEAM LOGO", "logo", true));
-  // The mark's SECOND colour. What that is depends on the mark — a backing
-  // disc for Red Bull and Ferrari, the second layer for Cadillac and Haas, and
-  // a rim for the seven single-colour silhouettes (Audi's rings among them).
-  // markPalette resolves which; NONE keeps every mark exactly as it ships.
-  wrap.appendChild(colorRow("LOGO DETAIL", "logo2", true));
+  // Per-team labels: LiveryTex.markSlots names the shape each picker paints on
+  // THIS mark, so a player choosing Racing Bulls sees RB LETTERS and BULL rather
+  // than two rows that could mean anything.
+  const mSlots = (window.LiveryTex && LiveryTex.markSlots)
+    ? LiveryTex.markSlots(team.id)
+    : [{ key: "logo", label: "TEAM LOGO" }, { key: "logo2", label: "LOGO DETAIL" }];
+  wrap.appendChild(colorRow(mSlots[0].label, "logo", true));
+  wrap.appendChild(colorRow(mSlots[1].label, "logo2", true));
   wrap.appendChild(colorRow("HALO", "halo", true));
   {
     const r = document.createElement("div"); r.className = "cs-liv-ed-row";

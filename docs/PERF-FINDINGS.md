@@ -758,6 +758,46 @@ eye than `farPlane` (`far / cos(halfFov)`).
 > a sphere that contains the frustum. Fog / tier-3 still win when tighter.
 > Not 300 m.
 
+## 2b. Closed by measurement: the per-chunk adjacent-run merge (2026-08-29)
+
+Recorded because **two independent audits have now proposed it**, and a third
+would too. In per-chunk lamp mode both backends give up the adjacent-run draw
+merge that is worth 76-87 % fewer scenery draws in the normal path, on the
+strength of one sentence in `js/render/webgpu/wgx.js`: *"adjacent chunks almost
+never share an index list"*. That sentence was load-bearing and unmeasured.
+
+It is now measured, `tools/chunk-share-census.mjs` (vegas night, LOW, knob 0.3):
+
+| mesh | chunks | empty | adjacent-equal pairs | of which BOTH empty | genuinely shared | longest run |
+|---|---|---|---|---|---|---|
+| props | 909 | 723 (79.5 %) | 714 | 711 | **3** | 577 |
+| glass | 195 | 55 (28.2 %) | 43 | 43 | **0** | 18 |
+
+So the claim is TRUE for chunks that actually bind lamps. The seductive part is
+the other column: 79.5 % of chunks share a list by being EMPTY, one run is 577
+long, and empty chunks merge with no baked identity signal at all. That looks
+like a large free win and is not one — **those chunks are the outfield the
+frustum never draws.**
+
+The visible side, counted at the GL calls (`artifacts/perchunk-cost.mjs`,
+same circuit and preset):
+
+| | uniform4fv / frame | drawElements / frame |
+|---|---|---|
+| knob 0 | 4 | 55.1 |
+| knob 0.3 | 148 | 94 |
+
+`148 / 4 = 37` visible chunks bind a NON-empty list, against `94 - 55.1 ≈ 39`
+extra chunk draws — so **visible empty chunks are about two a frame** and
+merging them saves two draws. Both merge variants are dead. Do not re-open
+either without re-running the census first; the whole-track empty fraction is
+the trap.
+
+What remains real on this path is the structural option: port WGX's addressing
+model (lamp table + index table in a UBO or float texture, `(offset,count)` per
+chunk) to WebGL2, which removes the per-chunk upload rather than avoiding it.
+That is a shader change mirrored across three backends and wants its own round.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.

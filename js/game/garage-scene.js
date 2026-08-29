@@ -254,6 +254,19 @@ function buildProps(g, liv) {
   // Back wall: the pit board.
   cyl(g.back, 4.70, 0, -6.15, 0.03, 1.80, STEEL, 6);
   block(g.back, 4.70, 2.30, -6.12, 0.45, 0.62, 0.03, DARK);
+  // The back wall is 41% of the FRONT preset's frame and carried 56 triangles:
+  // one pit board and a radio post, both on +X, with the whole -X half bare.
+  // Mirror the board, then run a cable ladder across at truss height with a
+  // junction box under each hanger — the two things every real garage wall has
+  // and the cheapest way to give 41% of a frame something to look at.
+  cyl(g.back, -4.70, 0, -6.15, 0.03, 1.80, STEEL, 6);
+  block(g.back, -4.70, 2.30, -6.12, 0.45, 0.62, 0.03, DARK);
+  block(g.back, 0, 4.22, -6.20, 5.10, 0.035, 0.10, scale(STEEL, 0.8));
+  block(g.back, 0, 4.34, -6.20, 5.10, 0.030, 0.08, scale(STEEL, 0.65));
+  for (let i = -4; i <= 4; i++) {
+    block(g.back, i * 1.15, 4.28, -6.20, 0.025, 0.10, 0.085, scale(STEEL, 0.55));
+    if (i % 2) block(g.back, i * 1.15, 3.92, -6.17, 0.16, 0.20, 0.09, scale(STEEL, 0.45));
+  }
   // Door wall: the roller shutter, parked half open.
   for (let i = 0; i < 11; i++)
     block(g.door, 0, 2.05 + i * 0.26, Z_DOOR - 0.10, HALF_W * 0.72, 0.12, (i % 2) ? 0.035 : 0.05, scale(STEEL, 0.75));
@@ -265,6 +278,20 @@ function buildProps(g, liv) {
     block(g.door, sx * 2.79, 2.50, Z_DOOR - 0.10, 0.09, 5.00, 0.13, scale(STEEL, 0.9));
     block(g.door, sx * 2.79, 0.10, Z_DOOR - 0.16, 0.13, 0.20, 0.26, scale(STEEL, 0.6));
   }
+  // The upper side walls carry 2.2 m2 of wordmark over 29 m2 of wall, and that
+  // band is 22% of the SIDE preset — the one view that looks straight at them.
+  // A service gantry per side: a shelf, its brackets, and a rail.
+  for (const sd of [-1, 1]) {
+    const w = sd < 0 ? g.nx : g.px, x = sd * 5.20;
+    block(w, x, 3.42, 0, 0.20, 0.04, 5.00, scale(STEEL, 0.7));
+    block(w, x - sd * 0.20, 3.70, 0, 0.03, 0.28, 5.00, scale(STEEL, 0.5));
+    for (let i = -2; i <= 2; i++) {
+      block(w, x - sd * 0.09, 3.24, i * 2.30, 0.11, 0.20, 0.05, scale(STEEL, 0.45));
+      if (i % 2 === 0)
+        block(w, x - sd * 0.06, 3.56, i * 2.30, 0.14, 0.24, 0.34, scale(STEEL, 0.55));
+    }
+  }
+
   // Spare front wings on a rack — the most recognisable thing in a real bay
   // after the tyres, and the reason a garage reads as a WORKSHOP.
   const wingRack = (out, x, z, sgn) => {
@@ -408,6 +435,33 @@ const ledMesh = {};
 // stay in `mid`: they hang from the truss, not from a wall.
 function buildLed(g, liv) {
   const out = g.mid;
+  // THE CREST LIGHTBOX. The comment by the dress atlas says a modern garage's
+  // crest wall IS a lightbox; it was one flat quad flush to the wall. The bezel
+  // belongs HERE, in the LED group, not in the shell: dress quads draw through
+  // drawDecal at glow 0.62 while this mesh draws emissive 1.0, so a bezel built
+  // as ordinary lit geometry would be shaded by the back-wall washers and read
+  // as a different material from the crest sitting inside it.
+  //
+  // Depth is the trap. The dress plane is only 3 cm proud of the wall, and
+  // drawDecal depth-TESTS without depth-writing, so anything in front of the
+  // crest quad deletes it silently — the shutter slats did exactly that to a
+  // door-wall quad once. The frame is therefore built at the WALL, stopping
+  // short of the crest's own z.
+  {
+    const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+    const zf = Z_BACK + 0.015;                 // behind the dress plane at +0.03
+    const X = 1.60, Y0 = 1.24, Y1 = 3.56, T = 0.06;
+    const FRAME = scale(c1, 1.15), WELL = [0.03, 0.032, 0.038];
+    // Recessed well first, so the crest reads as sitting IN something.
+    block(g.back, 0, (Y0 + Y1) / 2, Z_BACK + 0.008, X, (Y1 - Y0) / 2, 0.008, WELL);
+    // Sill 1.21-1.27, clear of the wordmark's 1.15 top; head 3.53-3.59, under
+    // the 3.76 frame edge. Measured, not eyeballed — the first pass put the
+    // sill at 1.05 and it landed inside the wordmark band.
+    for (const sy of [-1, 1])                  // head and sill
+      block(g.back, 0, sy > 0 ? Y1 : Y0, zf, X + T, T / 2, 0.05, FRAME);
+    for (const sx of [-1, 1])                  // jambs
+      block(g.back, sx * X, (Y0 + Y1) / 2, zf, T / 2, (Y1 - Y0) / 2 + T, 0.05, FRAME);
+  }
   for (let i = 0; i < FIXTURES.length; i++) {
     const F = FIXTURES[i], x = F[0], y = F[1] + LED_DROP, z = F[2];
     const hw = F[13] ? 1.20 : 0.26, hd = F[13] ? 0.17 : 0.12;
@@ -871,7 +925,10 @@ function buildDress() {
   // is what three successive "lower it a bit" passes kept rediscovering.
   // 3.40 is the same mark with a visible margin above it, and a fully visible
   // crest reads BIGGER than a taller one whose frame is sliced.
-  dquad(g.back, [[-1.45, 1.20, zb], [1.45, 1.20, zb], [1.45, 3.40, zb], [-1.45, 3.40, zb]], [0, 0, 1], D_CREST);
+  // Raised 1.20-3.40 -> 1.30-3.50 to open a gap for the lightbox sill. The
+  // wordmark below tops out at 1.15 and the FRONT frame tops out at 3.76, so
+  // this is the whole budget: 15 cm under the crest, 26 cm over it.
+  dquad(g.back, [[-1.45, 1.30, zb], [1.45, 1.30, zb], [1.45, 3.50, zb], [-1.45, 3.50, zb]], [0, 0, 1], D_CREST);
   dquad(g.back, [[-2.6, 0.42, zb], [2.6, 0.42, zb], [2.6, 1.15, zb], [-2.6, 1.15, zb]], [0, 0, 1], D_WORD);
   // ON the pit-board panel (x 4.25..5.15, y 1.68..2.92, front face z -6.09).
   // The panel moved from x 3.3 to x 4.70 and this quad did not follow it, so the

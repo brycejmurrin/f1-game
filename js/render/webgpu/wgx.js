@@ -3512,7 +3512,14 @@ const WGX = (function () {
       // merge is deliberately forfeited here — adjacent chunks almost never
       // share an index list, exactly as GLX gives up its merged drawElements
       // runs in this mode; MAX_DRAWS 4096 has ample headroom (~150 visible
-      // chunks measured worst-case). Table segments append per chunks-array;
+      // chunks measured worst-case).
+      // That sentence was load-bearing and unmeasured; it is measured now, and
+      // it holds: 3 shared non-empty adjacent pairs of 909, 0 of 195
+      // (tools/chunk-share-census.mjs). Empty chunks DO share constantly and
+      // still do not merge — they are outfield the frustum never draws, ~2
+      // visible a frame. Two audits have proposed this merge; both numbers and
+      // the trap are in docs/PERF-FINDINGS.md §2b. Do not re-open it.
+      // Table segments append per chunks-array;
       // a bake-generation move (_writeFrame) resets the allocator.
       // This branch sits ABOVE the !cull fast path: a frame without a
       // viewProj (menu orbit, headless) must still light per-chunk when the
