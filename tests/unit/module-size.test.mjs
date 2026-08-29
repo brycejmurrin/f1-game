@@ -526,7 +526,11 @@ const CEILINGS = {
   // a featureless grey slab from directly behind — the view a chase camera
   // holds for most of a lap (scratch/renders/car/rb4-diffuser.png). Now two
   // tunnels with a ramped ceiling, outer walls, strakes and a trailing gurney.
-  "js/car/car3d.js": 3068,   // +44: wheel cover is a rim lip, a dish and a boss
+  // 3068 -> 3077 for the addPodFlankSpan TRAP note: its `proud` offset is
+  // measured off the loft control width, not the rendered pod surface, and
+  // the two diverge by up to 99 mm. Two flank-crease attempts rendered as no
+  // change at all before that was measured; the next person gets the answer.
+  "js/car/car3d.js": 3077,   // +44: wheel cover is a rim lip, a dish and a boss
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

@@ -1631,6 +1631,15 @@ const Car3D = (function () {
 
     part("sidepods");
     const podGeom = buildSidepodBodywork(out, c1, engStyle, anchors);
+    // TRAP: `proud` is measured off anchors.podAt(z).x, which is the LOFT
+    // CONTROL width, NOT the rendered pod surface. Measured, the two diverge by
+    // 18 mm at z 0.2 and 99 mm at z -0.4, so a thin line laid the default 8 mm
+    // proud is BURIED inside the bodywork over most of the pod's length. That
+    // is fine for the callers below — they are tall panels whose top or bottom
+    // edge clears the surface — but a flank CREASE anchored this way renders
+    // identically to no change at all (two attempts:
+    // scratch/renders/car/pod2-pod-inlet.png, pod3-pod-inlet.png). Anything
+    // that has to sit ON the flank must sample the built surface instead.
     function addPodFlankSpan(zFront, zRear, yFrac, height, col, surface, proud, fracH) {
       // Never bridge a detail across a loft crease: each segment follows the
       // same station interval as the underlying sidepod surface.
