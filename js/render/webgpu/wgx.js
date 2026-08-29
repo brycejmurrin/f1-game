@@ -795,6 +795,8 @@ const WGX = (function () {
     let _tlSrc = null, _tlCapPrev = -1, _tlGen = -1;
     // Memo for the armed-shadow-lamp position -> absolute index scan in _writeFrame.
     let _asAL = null, _asX = 0, _asY = 0, _asZ = 0, _asIdx = -1;
+    // Which source array _tlScratch's STATIC lanes were packed from.
+    let _tlFullPack = null;
     let _ciCursor = 0, _ciSeg = new WeakMap();
     const _tlScratch = new Float32Array(TRACK_LIGHT_CAP * 16);
     let frameLights = null, frameNL = 0;   // this frame's stride-15 light array (lamp-mask cull)
@@ -3167,13 +3169,29 @@ const WGX = (function () {
           (_tlSetMoved || _tlGen !== frameAllLightsGen)) {
         const AL = frameAllLights;
         const tn = Math.min(TRACK_LIGHT_CAP, (AL.length / 15) | 0), td = _tlScratch;
+        // THIRTEEN of the sixteen lanes are baked-static — the same split
+        // js/game/lighting.js makes upstream, where only rgb can move. _tlScratch
+        // is module-scope and written nowhere else, so its static lanes survive
+        // between frames and only need writing when the SET changes. Gen moves
+        // every frame under flicker or the warm-up ramp, and that used to rewrite
+        // all 16 lanes of up to TRACK_LIGHT_CAP 1024 records to change three.
+        if (_tlFullPack !== AL) {
+          for (let i = 0; i < tn; i++) {
+            const o = i * 15, b = i * 16;
+            td[b]    = AL[o];        td[b+1]  = AL[o+1];      td[b+2]  = AL[o+2];  td[b+3]  = AL[o+6];
+            td[b+7]  = AL[o+12];
+            td[b+8]  = AL[o+7];      td[b+9]  = AL[o+8];      td[b+10] = AL[o+9];  td[b+11] = AL[o+13];
+            td[b+12] = AL[o+10];     td[b+13] = AL[o+11];     td[b+14] = AL[o+14]; td[b+15] = 0;
+          }
+          _tlFullPack = AL;
+        }
         for (let i = 0; i < tn; i++) {
           const o = i * 15, b = i * 16;
-          td[b]    = AL[o];        td[b+1]  = AL[o+1];      td[b+2]  = AL[o+2];  td[b+3]  = AL[o+6];
-          td[b+4]  = AL[o+3];      td[b+5]  = AL[o+4];      td[b+6]  = AL[o+5];  td[b+7]  = AL[o+12];
-          td[b+8]  = AL[o+7];      td[b+9]  = AL[o+8];      td[b+10] = AL[o+9];  td[b+11] = AL[o+13];
-          td[b+12] = AL[o+10];     td[b+13] = AL[o+11];     td[b+14] = AL[o+14]; td[b+15] = 0;
+          td[b+4] = AL[o+3];  td[b+5] = AL[o+4];  td[b+6] = AL[o+5];
         }
+        // The rgb lanes are interleaved 3-in-16, so the changed bytes are not a
+        // contiguous range and the upload itself cannot shrink. Only the CPU
+        // pack does — which is the half that scales with lamp count.
         if (tn > 0) device.queue.writeBuffer(trackLightSBO, 0, td, 0, tn * 16);
         _tlSrc = frameAllLights; _tlGen = frameAllLightsGen;
       }

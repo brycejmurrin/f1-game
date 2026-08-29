@@ -117,7 +117,6 @@ const GLX = (function () {
   let frameAllLights = null, framePerChunkLights = 0, frameTailStart = 0, frameTailCount = 0;
   // Track-lamp intensity scale applied in uploadLightSet. 1 unless PER-CHUNK
   // LAMPS is on, in which case it is that knob's value — see begin().
-  let _lampScale = 1;
   // Point-light upload scratch (lit program). Sized for MAX_LIGHTS (48) and
   // reused every frame — .subarray(0, nL*stride) is uploaded to avoid per-frame
   // typed-array allocs (GC jitter on dense night grids). Mirrors the _gr*
@@ -397,8 +396,9 @@ const GLX = (function () {
       // perChunkLights at 1 / 0.3, roadChunkLamps, and four track changes
       // including a free+rebuild of vegas all run clean under SwiftShader, and
       // test:tiny is 71/71. But with the knob at 1 the other three changes in
-      // that build are provably no-ops (_lampScale computes to exactly 1, so
-      // col*1 is bit-identical; the knob ranges change no runtime behaviour;
+      // that build are provably no-ops (the per-chunk dimmer computed to exactly
+      // 1, so col*1 was bit-identical — that scale and its per-lamp inFrameTail
+      // test have since been removed as dead; the knob ranges change no runtime behaviour;
       // envCull was default-off), which leaves this as the only live behavioural
       // delta reaching that player.
       //
@@ -1071,7 +1071,6 @@ const GLX = (function () {
     // GLOBAL set too, it meant a governor tier shed (which zeroes the knob)
     // stepped the whole night ~3.3x brighter and back. The knob keeps its real
     // jobs — enabling per-chunk sets and setting their cap via capFor.
-    _lampScale = 1;
     frameTailStart = frame.tailStart | 0;
     frameTailCount = frame.tailCount | 0;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
@@ -1328,25 +1327,18 @@ const GLX = (function () {
       const o = fromTail ? (((o2 | 0) + (i - nStatic)) * 15)
                          : ((idx ? idx[i] : i) * 15);
       const i4 = i * 4;
-      // PER-CHUNK LAMPS intensity. The knob is now a 0..1 amount, not a
-      // toggle: turning it on gives every chunk its OWN nearest-N lamps
-      // instead of making the whole visible scene share one set, so a fragment
-      // that previously saw a handful of lamps that actually reach it now sees
-      // up to MAX_LIGHTS — and the scene reads far brighter at the same LAMP LEVEL.
-      // That is not a bug in the feature, it is more light genuinely arriving;
-      // the knob's value is the dimmer that makes it usable.
-      //
-      // TRACK lamps only. Car tail-lights ride the same uniform arrays (the
-      // tail slice above nStatic) and are not per-chunk, so scaling them would
-      // dim the field's lights for a reason that has nothing to do with them.
-      // The GLOBAL upload (idx == null, the whole frame set in order) carries
-      // the frame's appended tail slice inside L itself — those records must
-      // skip the knob too, or tails on cars/road go ~70% dim at knob 0.3
-      // while chunked scenery (which passes them as L2) keeps them at 1.
-      const inFrameTail = !idx && L === frameLights && frameTailCount > 0 && i >= frameTailStart;
-      const s = (fromTail || inFrameTail) ? 1 : _lampScale;
+      // NO PER-CHUNK DIMMER HERE, and do not reintroduce one. The knob was once
+      // a brightness multiplier applied at this point; setFrameLights now scales
+      // the baked set exactly like the culled one, so this had already been
+      // reduced to a guaranteed identity (see the retirement note at the
+      // _lampScale assignment site, removed with it). What survived the
+      // retirement was the machinery: a per-lamp `inFrameTail` test — four
+      // comparisons for every lamp of every chunk of every chunked mesh, five
+      // times a frame — feeding a scale that was provably 1, and three
+      // multiplies by it. The knob's real jobs are enabling per-chunk sets and
+      // setting their cap via capFor; neither is a factor on rgb.
       A[i4] = src[o]; A[i4 + 1] = src[o + 1]; A[i4 + 2] = src[o + 2]; A[i4 + 3] = src[o + 6];
-      B[i4] = src[o + 3] * s; B[i4 + 1] = src[o + 4] * s; B[i4 + 2] = src[o + 5] * s; B[i4 + 3] = src[o + 12];
+      B[i4] = src[o + 3]; B[i4 + 1] = src[o + 4]; B[i4 + 2] = src[o + 5]; B[i4 + 3] = src[o + 12];
       C[i4] = src[o + 7]; C[i4 + 1] = src[o + 8]; C[i4 + 2] = src[o + 9]; C[i4 + 3] = src[o + 10];
       D[i4] = src[o + 11]; D[i4 + 1] = 0; D[i4 + 2] = 0; D[i4 + 3] = 0;
     }
