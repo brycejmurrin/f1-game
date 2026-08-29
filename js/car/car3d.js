@@ -1324,8 +1324,21 @@ const Car3D = (function () {
     addSpan(out, nose[1], nose[2], c1);
     addTopBevel(out, nose[1], nose[2], 0.028, c1);
     const monoR = ckpt ? CKPT_MONO_REAR : CHASSIS.monocoque[1];
-    addSpan(out, CHASSIS.monocoque[0], monoR, c1);
-    addTopBevel(out, CHASSIS.monocoque[0], monoR, 0.032, c1);
+    // COCKPIT: this span is the tub the driver sits IN — the deck under the
+    // wheel and the rear wall above it, 0.65 m from the eye. In body paint it
+    // is the flat slab players report below the steering wheel: on ferrari
+    // (c1 [0.86,0,0]) the largest unbroken one-colour surface in the lower
+    // field, hidden by the wheel only while the aim is level and filling the
+    // bottom of the frame the moment it pitches down. Carbon is what a real
+    // tub is and what the pieces bracketing it already use (inner tub wall,
+    // instrument shroud — both INTAKE). The vanity hood ON TOP of this span
+    // and the nose beyond keep the livery; external builds never take this
+    // branch. Measured on ferrari at the widest shipped framing (78 deg, 2.17):
+    // lower-field rays landing on body paint under the wheel (|yaw| < 25 deg)
+    // 1073 -> 658 of 13430; the flanks the driver SHOULD see keep their paint.
+    const monoC = ckpt ? CARBON : c1;
+    addSpan(out, CHASSIS.monocoque[0], monoR, monoC);
+    addTopBevel(out, CHASSIS.monocoque[0], monoR, 0.032, monoC);
     if (ckpt) return;
     addSpan(out, CHASSIS.cockpit[0], CHASSIS.cockpit[1], c1);
     addTopBevel(out, CHASSIS.cockpit[0], CHASSIS.cockpit[1], 0.028, c1);

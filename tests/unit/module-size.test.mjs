@@ -535,7 +535,14 @@ const CEILINGS = {
   // noseStripe), not just c2/accent/wing/fin: 32 of 152 shipped liveries put a
   // pale non-body surface in the cockpit before it, 0 after. Neither lineage's
   // number fits the file that carries both, so this is RE-MEASURED on the union.
-  "js/car/car3d.js": 3087,   // +44: wheel cover is a rim lip, a dish and a boss
+  // UNION with the session branch, which added +13 for the SECOND cockpit slab
+  // report — and not a pale one. With a red car the monocoque span under the
+  // wheel is one unbroken block of body paint (rear cap a closed wall 0.65 m
+  // from the eye, deck running out under the hood); CARBON on the ckpt branch
+  // only, +1 line of code and the twelve recording why the tub is dark while
+  // the hood above it stays painted. Measured on ferrari: lower-field rays on
+  // body paint under the wheel 1073 -> 658 of 13430. Re-measured on the union.
+  "js/car/car3d.js": 3100,   // +44: wheel cover is a rim lip, a dish and a boss
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
