@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1644">
+<meta name="apex-build" content="1645">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -49,7 +49,7 @@
      Measured chrome-devtools LCPBreakdown: almost all element render delay
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
-<link rel="preload" href="css/tokens.css?v=b130f34ed812" as="style">
+<link rel="preload" href="css/tokens.css?v=8188cb77b276" as="style">
 <link rel="preload" href="css/components.css?v=740c13224a8c" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
@@ -68,7 +68,7 @@
 <!-- MANIFEST.CSS order preserved (cascade). Title-critical sheets stay
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
-<link rel="stylesheet" href="css/tokens.css?v=b130f34ed812">
+<link rel="stylesheet" href="css/tokens.css?v=8188cb77b276">
 <link rel="stylesheet" href="css/components.css?v=740c13224a8c">
 <link rel="stylesheet" href="css/tuner.css?v=dfc16ebe4560" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/menus.css?v=b722c4fc57b6">
@@ -258,8 +258,21 @@
         .getPropertyValue("--ui-scale")) || 1;
       var at = parseFloat(getComputedStyle(b)
         .getPropertyValue("--compact-at")) || 380;
-      b.setAttribute("data-density",
-        (window.innerHeight / scale) < at ? "compact" : "normal");
+      var hOwn = window.innerHeight / scale, wOwn = window.innerWidth / scale;
+      b.setAttribute("data-density", hOwn < at ? "compact" : "normal");
+      // data-shape, for the same reason and from the same place. It was the
+      // half of this pair that stayed on the far side of first paint: measured
+      // 2026-08-29, body[data-shape] landed at +419 ms against FCP at +262 ms,
+      // and because menus.css combines it with data-density to restructure
+      // #overlay and move #menu-brand, a tall/compact viewport turned that
+      // 157 ms gap into a single 0.61 layout shift. Same no-duplicated-
+      // threshold rule as above: --tall-at is declared in css/tokens.css and
+      // js/game/sheetshape.js reads it too. First answer only — sheetshape
+      // owns every later one, including the hysteresis this deliberately omits
+      // (there is no previous shape to be sticky about).
+      var tallAt = parseFloat(getComputedStyle(b)
+        .getPropertyValue("--tall-at")) || 1.05;
+      b.setAttribute("data-shape", (hOwn / wOwn) >= tallAt ? "tall" : "wide");
     } catch (e) { /* a wrong first shape is survivable; a boot failure is not */ }
   })();
 </script>
@@ -1857,7 +1870,7 @@
 <script crossorigin="anonymous" src="js/game/menus.js?v=1d686610029b"></script>
 <script crossorigin="anonymous" src="js/game/scrollfade.js?v=677da4848e82"></script>
 <script crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
-<script crossorigin="anonymous" src="js/game/sheetshape.js?v=f44ef602cc23"></script>
+<script crossorigin="anonymous" src="js/game/sheetshape.js?v=1b543273272e"></script>
 <script crossorigin="anonymous" src="js/game/uilayers.js?v=55a0a6ecb836"></script>
 <script crossorigin="anonymous" src="js/game/topmodal.js?v=d548ebd77e4b"></script>
 <script crossorigin="anonymous" src="js/game/menunav.js?v=13a97bca2ac3"></script>
