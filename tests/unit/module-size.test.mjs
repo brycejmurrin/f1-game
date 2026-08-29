@@ -620,7 +620,14 @@ const CEILINGS = {
   // 5523 -> 5532: the per-chunk light upload separates a SET change (identity or
   // knob — may reset the chunk-segment allocator) from a VALUES change
   // (allLightsGen — flicker/sliders — must not), plus the road lamp gate.
-  "js/render/webgpu/wgx.js": 5532,
+  // 5532 -> 5549: the same upload stops keying on the raw knob. PER-CHUNK
+  // LAMPS is step 0.001 over 0..1 but capFor() has <=17 outputs, so a drag
+  // re-packed and re-uploaded 64 KB per input event for identical bytes;
+  // keying on the cap splits the allocator reset out of the upload block
+  // (a cap-only change must still reset it). Plus a memo for the
+  // armed-shadow-lamp scan, which walked up to 1024 baked records every
+  // frame and again per env-probe face for a value only the caster moves.
+  "js/render/webgpu/wgx.js": 5549,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo

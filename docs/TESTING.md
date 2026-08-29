@@ -1294,3 +1294,35 @@ audio, parts, net (untouched in range), scenery, gallery, baseline,
 shimmer, map, paths, hooks, agent, circuit, fast, headless, ab, render.
 shared-road-vbuf (unblocked by the wgx-vid-repro measurement) deliberately
 deferred to its own round — a review reviews a fixed tree.
+
+**A CSS specificity defeat is invisible to every string match (2026-08-29).** A
+player reported that BRAKE lit up under the thumb and GAS did not. Both
+`:active` rules existed and had for as long as the file has, so every grep and
+every unit assertion for "the pressed rule is present" was green — and the
+pressed colour was still unreachable. `body.steer-buttons #btn-throttle` is
+(1,1,1) and `#btn-throttle:active` is (1,1,0), so two byte-identical
+restatements of the idle fill in the buttons-mode blocks beat the pressed rule
+in EVERY state. It shipped because BRAKE carried no such restatement: exactly
+one of a symmetric pair was broken, in one steering mode.
+
+The only instrument that sees this is a REAL POINTER on a REAL BROWSER —
+`page.mouse.down()` over the box, then `getComputedStyle`. `:active` cannot be
+forced from page script and cannot be matched from a file. A fixture built from
+the shell's own `<link>` order (`tools/manifest.cjs` CSS) plus the shell's own
+dock markup is enough; it needs no game boot, so it costs ~10 s rather than a
+browser group. Run it against `git show HEAD:css/overlays.css` first — an
+assertion never seen to fail is not an assertion, and this one reproduced the
+reported symptom exactly, GAS red and BRAKE green.
+
+One trap inside the instrument, which cost it a false red of its own:
+`button { transition: background 0.14s }` (css/tokens.css) means the computed
+background the instant the pointer lands is the START of the animation, so a
+working pressed colour reads identical to a missing one. Settle ~300 ms before
+reading. `opacity` carries no transition and jumped immediately, which is what
+gave the contradiction away — the same rule had applied one of its two
+declarations and apparently not the other.
+
+The durable guard is in `tests/unit/ui-journey-race.test.mjs`: no `body.<class>
+#btn-throttle` / `#btn-brake` rule may declare a `background` at all. That is a
+narrower claim than "the pressed state works", and it is the one a file can
+actually hold.
