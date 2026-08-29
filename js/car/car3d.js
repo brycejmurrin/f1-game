@@ -1523,11 +1523,21 @@ const Car3D = (function () {
     const c2 = _ckAcc(color2 || [0.9, 0.9, 0.1]);
     const liv = (opts && opts.livery) || {};
     const accentC = _ckAcc(liv.accent) || c2;
-    const noseC = liv.nose || null;
-    const podC  = liv.pod  || null;
+    // EVERY livery paint that lands in the driver's view goes through _ckAcc,
+    // not just the accent. The first pass dimmed c2/accent/wing/fin and left
+    // nose, pod, halo, stripe and noseStripe at full strength — 72 pale values
+    // across the shipped liveries, and the ones that matter most are the
+    // closest: `pod` is the sidepod shoulders left and right of the eye, and
+    // `halo` is 0.5 m in front of the face. Only the BODY (c1) stays exempt,
+    // deliberately — a white car really is white, and dimming it would
+    // misreport the livery (see tests/unit/cockpit-pale-surfaces.test.mjs).
+    // _ckAcc is a no-op outside the cockpit build and on any colour whose
+    // darkest channel is under 0.45, so saturated paint keeps its identity.
+    const noseC = _ckAcc(liv.nose) || null;
+    const podC  = _ckAcc(liv.pod)  || null;
     const wingC = _ckAcc(liv.wing) || c2;   // flap colour (front + rear) — c2 keeps today's look
     const finC  = _ckAcc(liv.fin) || c2;   // shark-fin plate — c2 keeps today's look
-    const haloTint = liv.halo || null;
+    const haloTint = _ckAcc(liv.halo) || null;
     const T = (opts && opts.parts) || {};
     const tier = (id) => T[id] != null ? T[id] : 1;
     const ersC2 = tier("ers") === 2 ? [c2[0]*1.8, c2[1]*1.8, c2[2]*1.8] : c2;
@@ -2125,7 +2135,7 @@ const Car3D = (function () {
     }
     if (!ckpt) addPodFlankSpan(0.425, -0.025, 0.88, 0.035, accentC, SURFACES.paint, 0.012);
 
-    const stripeC = liv.stripe || null;
+    const stripeC = _ckAcc(liv.stripe) || null;   // monocoque crest runs z 0.05..1.05 — right under the eye
     // Nose TIP z moves per team (TEAM_STYLE.noseTipZ, ±0.10): the cap and both
     // stripes must end at the STYLED tip, not the shared 3.18 datum, or the
     // paint floats past a short nose (haas) / stops short of a long one
@@ -2149,7 +2159,7 @@ const Car3D = (function () {
         addLoft(out, -1.95, 0, 0.600, 0.060, 0.02, -0.94, 0, 0.775, 0.075, 0.02, stripeC); // engine-cover ridge run to the tail
       }
     }
-    const noseStripeC = liv.noseStripe || null;
+    const noseStripeC = _ckAcc(liv.noseStripe) || null;
     if (noseStripeC) {
       const ns155 = anchors.noseAt(1.55), ns270 = anchors.noseAt(2.70), ns314 = anchors.noseAt(stripeTipZ);
       addLoft(out, 1.55, 0, ns155.top + 0.016, 0.115, 0.014,

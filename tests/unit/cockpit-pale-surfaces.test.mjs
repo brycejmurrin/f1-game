@@ -29,7 +29,7 @@ const ALLOWED = [
 ];
 const allowed = (rgb) => ALLOWED.some((a) => a.rgb.every((v, i) => Math.abs(v - rgb[i]) < 0.02));
 
-const { Car3D, Teams } = loadCar3D();
+const { Car3D, Teams, Liveries } = loadCar3D();
 const LIST = (Teams && (Teams.LIST || Teams.ALL || Teams.teams)) || [];
 
 test("no team's cockpit ACCENT reads as a pale slab in the driver's view", () => {
@@ -77,4 +77,44 @@ test("isPale ignores saturated colours however bright", () => {
   assert.equal(isPale([0.9, 0.9, 0.1]), false, "yellow is an accent, not a pale slab");
   assert.equal(isPale([0, 0.71, 0.67]), false, "teal");
   assert.equal(isPale([0.1, 0.1, 0.12]), false, "dark");
+});
+
+// THE GUARD ABOVE SWEPT TEAM BASE COLOURS WITH NO LIVERY, so it could only ever
+// see c1/c2 — and `opts.livery` is where nose, pod, halo, stripe and noseStripe
+// come from. All five reached the cockpit undimmed: 32 of the 152 shipped
+// liveries put a pale non-body surface in the driver's view, Cadillac's at 181
+// rays apiece. A player racing one of those saw exactly the reported slab.
+//
+// Ray-casting all 152 is too slow for this suite, and unnecessary: a livery
+// with no pale field cannot produce a pale surface, so the cheap colour
+// pre-filter picks the only candidates and those get the real cast.
+test("no shipped LIVERY puts a pale non-body surface in the driver's view", () => {
+  assert.ok(Liveries && Liveries.BY_TEAM, "Liveries loaded");
+  const near = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 0.02);
+  // Every livery field that reaches the cockpit build. c1 is the BODY and is
+  // deliberately exempt (see the note above); it is not in this list.
+  const FIELDS = ["c2", "accent", "wing", "fin", "nose", "pod", "halo", "stripe", "noseStripe"];
+  const candidates = [];
+  for (const [team, arr] of Object.entries(Liveries.BY_TEAM)) {
+    (Array.isArray(arr) ? arr : [arr]).forEach((liv, i) => {
+      if (!liv || !liv.c1 || !liv.c2) return;
+      if (FIELDS.some((f) => Array.isArray(liv[f]) && isPale(liv[f]))) candidates.push([`${team}[${i}]`, team, liv]);
+    });
+  }
+  assert.ok(candidates.length > 0,
+    "no livery carries a pale field — the pre-filter broke, or the palette changed");
+
+  const offenders = [];
+  for (const [label, team, liv] of candidates) {
+    const m = Car3D.build(liv.c1, liv.c2,
+      { teamId: team, noWheels: true, noDriver: true, cockpit: true, halo: true, livery: liv });
+    for (const [rgb, e] of sweep(m).buckets) {
+      const c = rgb.split(",").map(Number);
+      if (near(c, liv.c1) || allowed(c)) continue;
+      offenders.push(`${label}: rgb=[${rgb}] on ${e.n} rays at ${e.tMin.toFixed(2)}m`);
+    }
+  }
+  assert.deepEqual(offenders, [],
+    "a livery paint reads as a pale slab in the cockpit — route it through _ckAcc " +
+    "in js/car/car3d.js (as nose/pod/halo/stripe/noseStripe now are), not around it");
 });

@@ -530,7 +530,12 @@ const CEILINGS = {
   // measured off the loft control width, not the rendered pod surface, and
   // the two diverge by up to 99 mm. Two flank-crease attempts rendered as no
   // change at all before that was measured; the next person gets the answer.
-  "js/car/car3d.js": 3077,   // +44: wheel cover is a rim lip, a dish and a boss
+  // UNION with the deploy tip, which added +6 for the cockpit accent dimming
+  // reaching every livery paint in the driver's view (nose, pod, halo, stripe,
+  // noseStripe), not just c2/accent/wing/fin: 32 of 152 shipped liveries put a
+  // pale non-body surface in the cockpit before it, 0 after. Neither lineage's
+  // number fits the file that carries both, so this is RE-MEASURED on the union.
+  "js/car/car3d.js": 3087,   // +44: wheel cover is a rim lip, a dish and a boss
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
