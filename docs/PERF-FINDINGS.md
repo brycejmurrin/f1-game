@@ -798,6 +798,49 @@ model (lamp table + index table in a UBO or float texture, `(offset,count)` per
 chunk) to WebGL2, which removes the per-chunk upload rather than avoiding it.
 That is a shader change mirrored across three backends and wants its own round.
 
+## 2c. GLX per-frame call baseline, and the instance cell-set cache (2026-08-29)
+
+First full GL-call census of a RUNNING race (`tools/glx-call-census.mjs`,
+vegas night, full field, driving — not parked):
+
+| call | per frame |
+|---|---|
+| drawElements | 144.2 |
+| uniform1f | 167.4 |
+| uniform4fv | 147.3 |
+| uniform1i | 142.5 |
+| uniformMatrix4fv | 103 |
+| bindVertexArray | 80.1 |
+| **bufferSubData** | **27.9 calls / 426.7 KiB** |
+
+426.7 KiB a frame is ~25.6 MB/s of CPU->GPU traffic for props that mostly did
+not move. Cause: `cullInstances` memoises on frustum-plane equality, and three
+callers use three different frusta inside one frame, so while driving it never
+hits (see §2b's neighbour — this is the same "the condition no longer holds"
+shape).
+
+`apex26.instCellCache=1` keys the resident pack on the surviving CELL SET
+instead. Sound because the pack is a deterministic function of that set:
+`batch.cells` order and each cell's `idx` order are fixed at build time and
+never mutated. Measured A/B, same box, same instrument, flag the only change:
+
+| | off | on |
+|---|---|---|
+| bufferSubData calls | 27.9 | **17.8** (-36%) |
+| bufferSubData KiB | 426.7 | **326.8** (-23.4%) |
+| bindBuffer | 33.4 | 23.4 (-30%) |
+| draws / uniforms | — | identical |
+
+The residual 326.8 KiB is real work: the shadow ortho, the probe faces and the
+camera genuinely select different cells, so only same-caller-across-frames
+hits. DEFAULT OFF pending a real-GPU pixel run — the failure mode is props
+drawn from the wrong resident pack, which is why the hit path deliberately does
+NOT stamp `_cullPlanes` (that snapshot must keep describing whichever frustum
+physically wrote the buffer). `gfx-backend-canary.test.mjs` now pins that.
+
+`uniform1f` 167.4 is the ~30 frame-scalars in `begin()` times the 5-6 passes a
+frame; low value, named so it is not mistaken for a per-draw leak.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.
