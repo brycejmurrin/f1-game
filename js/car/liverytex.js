@@ -354,6 +354,34 @@ const LiveryTex = (function () {
     return slot;
   }
 
+  // Which marks paint their `alt` INSIDE the mark rather than beside it.
+  // Cadillac's eight detail layers land 99.4% of their area on its crest
+  // (measured over a 900x900 sample of the traced paths), so the field is a
+  // surface that alt never touches — and scoring it against the field is how a
+  // gold crest on the garage's dark lightbox came back with GREY inner detail:
+  // brand near-black failed the field test, nothing else in the pool cleared
+  // 2.4, and the grey ramp answered. Haas's ring and the generic monogram's box
+  // DO stand on the field beside their letters, so they stay scored against it.
+  const ALT_INSIDE = { cadillac: true };
+
+  // What actually LANDS on the surface behind a crest. A backlit sign picks its
+  // field for contrast, and the honest question is not "what colour is the
+  // mark" but "what touches the wall": Ferrari's horse stands on a yellow
+  // shield, so asking about the HORSE chose a white lightbox, and a white field
+  // then rejected the shield itself (1.07, under the 1.6 plate floor) and
+  // painted it red. A DISC answers with the pair — Red Bull's bulls hang off
+  // the sun, so both land on the field.
+  // Only meaningful on a team's OWN livery, where the backing is brand data;
+  // any other paint job derives its plate INSIDE markPalette, scored against
+  // the very field this would be choosing.
+  function markOnField(teamId, liv) {
+    const own = !liv || liv.id === "default";
+    const B = (own && MARK_BRAND[teamId]) || null;
+    const mark = markBase(teamId, liv);
+    if (!B || !B.plate) return [mark];
+    return CREST_DISC[teamId] ? [B.plate.slice(), mark] : [B.plate.slice()];
+  }
+
   function markBase(teamId, liv) {
     if (liv && liv.logo) return liv.logo.slice();
     const own = !liv || liv.id === "default";
@@ -501,7 +529,10 @@ const LiveryTex = (function () {
     //    that makes this total: no pair of colours is close to all nine.
     // Scored against the primary surface, which is the one alt is asserted on:
     // optimising for a worst case nobody checks just makes alt duller.
-    const score = (c) => Math.min(contrast(c, under[0]), contrast(c, mark));
+    // An alt drawn INSIDE the mark answers to the mark alone — see ALT_INSIDE.
+    const score = ALT_INSIDE[teamId]
+      ? (c) => contrast(c, mark)
+      : (c) => Math.min(contrast(c, under[0]), contrast(c, mark));
     let alt = null, best = -1;
     const pool = [B && B.alt, liv && liv.accent, liv && liv.stripe, liv && liv.c2,
                   liv && liv.c1, INK_LIGHT, INK_DARK];
@@ -1164,6 +1195,7 @@ const LiveryTex = (function () {
   return { SIZE, REGIONS, buildAtlas, drawCrest, markBase, markPalette,
            MARK_FLOOR, INK_FLOOR,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
+           markOnField, ALT_INSIDE,
            CRESTS, CREST_DISC, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;
