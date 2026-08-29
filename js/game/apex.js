@@ -22,6 +22,7 @@ const { TUNE_DEFS, LT } = LightTune;
 const agentView = AgentView.create(G);
 
 let _netPeer = null;
+let _lobbyPeerTimer = null;   // keeps the fake lobby peer pumping (see lobbyFake)
 // The far end of a faked lobby connection — see lobbyFake().
 let _lobbyPeer = null;
 
@@ -1715,10 +1716,30 @@ const api = {
   // a boolean reader.)
   lobbyFake(on) {
     if (!G.netLobby) return false;
-    if (!on) { _lobbyPeer = null; G.netLobby.setTransportFactory(null); return false; }
+    if (!on) {
+      if (_lobbyPeerTimer != null) { clearInterval(_lobbyPeerTimer); _lobbyPeerTimer = null; }
+      _lobbyPeer = null; G.netLobby.setTransportFactory(null); return false;
+    }
     G.netLobby.setTransportFactory((o) => {
       const pair = NetTransport.loopback({ latencyMs: 0 });
       _lobbyPeer = pair[1];
+      // THE FAKE PEER HAS TO STAY ALIVE. A bare endpoint answers no PINGs and
+      // sends none, so the lobby's session hears nothing after the last thing
+      // the test pushed and closes on its own 6 s timeout — the room then loses
+      // the peer with no user action at all. Measured with a probe that only
+      // watched: peerReady held true through t+5.5 s and went false at t+6.0 s.
+      // Every room/seat spec that takes more than six seconds to reach its
+      // assertion failed on that, which is why they fail on a slow box and pass
+      // on a fast one. autoPong answers the lobby's own 500 ms pings, and the
+      // 25 ms pump is what lets the far end SEE them — lobbyPeerEvent only
+      // pumps when the test happens to send something, and a real peer is
+      // running its own loop the whole time.
+      NetSession.autoPong(_lobbyPeer);
+      if (_lobbyPeerTimer != null) clearInterval(_lobbyPeerTimer);
+      _lobbyPeerTimer = setInterval(() => {
+        if (!_lobbyPeer) return;
+        try { _lobbyPeer.pump(performance.now()); } catch (e) {}
+      }, 25);
       return Object.assign(pair[0], { role: o && o.role });
     });
     return true;

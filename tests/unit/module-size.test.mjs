@@ -479,7 +479,15 @@ const CEILINGS = {
   // responder never saw a PING. transport.js is explicit that both endpoints
   // must pump every frame; a live peer does, because it is running its own
   // loop. Nine lines, eight of them the why.
-  "js/game/apex.js": 2484,
+  // 2484 -> 2505: the FAKE LOBBY PEER now stays alive — autoPong plus a 25 ms
+  // pump, torn down with lobbyFake(false). A bare endpoint answers no pings and
+  // sends none, so the lobby's session heard nothing after the last thing a
+  // test pushed and closed on its own 6 s timeout, losing the peer with no user
+  // action: a watch-only probe held peerReady true through t+5.5 s and lost it
+  // at t+6.0 s. Four room/seat specs failed on exactly that. Same shape as the
+  // netLoopback fix above; the comment records the measurement so the next
+  // reader does not have to re-find the six seconds.
+  "js/game/apex.js": 2505,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
