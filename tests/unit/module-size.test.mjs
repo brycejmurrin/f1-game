@@ -510,7 +510,13 @@ const CEILINGS = {
   // 2947 -> 2960: FINISH_SURFACE grew from two rows to six (matte, brushed,
   // pearl, carbon) plus the note explaining that a finish costs a SURFACE ID
   // in the shaders' 20-30 classification chain rather than a material uniform.
-  "js/car/car3d.js": 2960,
+  // 2960 -> 2966: the cockpit accent dimming reaches every livery paint that
+  // lands in the driver's view (nose, pod, halo, stripe, noseStripe), not just
+  // c2/accent/wing/fin. 32 of 152 shipped liveries put a pale non-body surface
+  // in the cockpit before this; 0 after. The added lines are the comment
+  // recording which paint is dimmed and why c1 stays exempt — bug-explaining
+  // growth at the site of the bug.
+  "js/car/car3d.js": 2966,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
