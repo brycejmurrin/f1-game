@@ -237,3 +237,48 @@ test("the roster no longer reaches for a logo PNG", () => {
     assert.ok(!fs.existsSync(f), `${t.id}.png is back on disk and would override the vector crest`);
   }
 });
+
+test("an authored TEAM LOGO colour is painted, or no halo could have carried it", () => {
+  // The editor's TEAM LOGO row writes liv.logo. markPalette used to overrule it
+  // whenever it fell under MARK_FLOOR against the paint, which on Audi is
+  // almost every mid-tone in the picker — its fin is [0.96,0.02,0.22], and only
+  // near-white and near-black clear 4.2 against that. The player set a colour
+  // and the car came back in a different one, with no way to tell why.
+  //
+  // The rule now: keep the colour and outline it. This asserts the rule EXACTLY
+  // rather than as a percentage — every substitution has to be one no halo
+  // could have rescued, so the fallback cannot quietly widen again.
+  const PICKS = [
+    [0.97, 0.97, 0.98], [0.06, 0.06, 0.08], [1.00, 0.55, 0.00], [0.10, 0.80, 0.90],
+    [0.55, 0.90, 0.20], [0.90, 0.20, 0.70], [0.90, 0.72, 0.20], [0.10, 0.16, 0.45],
+  ];
+  const INK_LIGHT = [0.97, 0.97, 0.98], INK_DARK = [0.06, 0.06, 0.08];
+  const bad = [];
+  let scored = 0, kept = 0;
+  for (const team of Teams.LIST) {
+    for (const liv of Liveries.forTeam(team)) {
+      for (const logo of PICKS) {
+        for (const [where, bare] of [["cover", false], ["badge", true]]) {
+          const L = { ...liv, logo };
+          const under = fieldsFor(L, bare).filter(Boolean);
+          const P = LT.markPalette(team.id, L, fieldsFor(L, bare), bare);
+          scored++;
+          if (P.mark.every((v, i) => Math.abs(v - logo[i]) < 1e-6)) { kept++; continue; }
+          // Substituted. That is only allowed when NEITHER ink can serve as a
+          // halo that clears the field and still separates from the mark.
+          const rescuable = [INK_LIGHT, INK_DARK].some((h) => {
+            const f = Math.min(...under.map((u) => LT.contrast(h, u)));
+            return f >= LT.MARK_FLOOR && LT.contrast(h, logo) >= LT.INK_FLOOR;
+          });
+          if (rescuable)
+            bad.push(`${team.id}/${liv.id}/${where} dropped ${logo.join()} a halo could carry`);
+        }
+      }
+    }
+  }
+  assert.ok(scored > 8000, "expected the full grid, scored " + scored);
+  assert.equal(bad.length, 0, `${bad.length} authored colours overruled: ` + bad.slice(0, 6).join(" | "));
+  // And the badge — the shark-fin surface the report was about — has to keep
+  // the great majority, or the "keep it" path has stopped being reached at all.
+  assert.ok(kept / scored > 0.6, `only ${(100 * kept / scored).toFixed(1)}% of authored colours survive`);
+});

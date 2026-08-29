@@ -357,12 +357,40 @@ const LiveryTex = (function () {
     let mark = markBase(teamId, liv);
     const brandPair = !!(B && plate && B.plate &&
       plate.join() === B.plate.join() && mark.join() === B.mark.join());
+    // An AUTHORED logo colour is a decision the player made in the editor's
+    // TEAM LOGO row, and the substitution below used to overrule it in silence:
+    // 9015 of 12112 team x livery x pick x surface combinations came back
+    // painted in something OTHER than the colour that was picked (measured
+    // 2026-08-29, tools/logo-authored-sweep.mjs). Audi is the reported case —
+    // its fin is [0.96,0.02,0.22], which only near-white and near-black clear
+    // 4.2, so every mid-tone in the picker collapsed to the same fallback and
+    // TEAM LOGO looked dead on the tail. Outline the colour instead of
+    // replacing it: mark+halo is the same bargain crest-marks.test.mjs scores,
+    // so legibility is unchanged and the player's choice survives.
+    let authoredHalo = null;
     if (!brandPair && cMin(mark, under) < MARK_FLOOR) {
-      const alts = [liv && liv.logo, B && B.mark, liv && liv.stripe,
-                    liv && liv.accent, liv && liv.c2, liv && liv.c1];
-      mark = null;
-      for (const c of alts) if (c && cMin(c, under) >= MARK_FLOOR) { mark = c.slice(); break; }
-      if (!mark) mark = inkOn(under).slice();
+      if (liv && liv.logo) {
+        // The halo has to clear the FIELD — it is what carries legibility once
+        // the mark cannot — AND separate from the mark, because an outline the
+        // mark sinks into is not an outline. Among the pair that qualify, take
+        // the one that reads hardest against the paint.
+        let best = null, bestField = -1;
+        for (const h of [INK_LIGHT, INK_DARK]) {
+          const f = cMin(h, under);
+          if (f < MARK_FLOOR || contrast(h, mark) < INK_FLOOR) continue;
+          if (f > bestField) { bestField = f; best = h; }
+        }
+        if (best) authoredHalo = best.slice();
+      }
+      // No halo can carry it: substitute, as before. `liv.logo` is NOT in this
+      // list — when it is set it IS `mark`, and it just failed this same test.
+      if (!authoredHalo) {
+        const alts = [B && B.mark, liv && liv.stripe,
+                      liv && liv.accent, liv && liv.c2, liv && liv.c1];
+        mark = null;
+        for (const c of alts) if (c && cMin(c, under) >= MARK_FLOOR) { mark = c.slice(); break; }
+        if (!mark) mark = inkOn(under).slice();
+      }
     }
     // 3. alt, scored against `under` AND `mark` — a second colour that vanishes
     //    into either one is not a second colour. The grey ramp is the fallback
@@ -381,7 +409,8 @@ const LiveryTex = (function () {
     return {
       mark: mark.slice(), alt: alt.slice(), plate: plate,
       brandPair,
-      halo: !brandPair && cMin(mark, under) < INK_TARGET ? haloFor(mark).slice() : null,
+      halo: authoredHalo ||
+        (!brandPair && cMin(mark, under) < INK_TARGET ? haloFor(mark).slice() : null),
     };
   }
 
@@ -878,7 +907,8 @@ const LiveryTex = (function () {
   // contrast/inkOn are exported for the GARAGE crest wall (js/game/garage-scene.js),
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
-  return { SIZE, REGIONS, buildAtlas, drawCrest, markBase, markPalette, MARK_FLOOR,
+  return { SIZE, REGIONS, buildAtlas, drawCrest, markBase, markPalette,
+           MARK_FLOOR, INK_FLOOR,
            drawLogoImage, contrast, inkOn, onMarkChange, setTeamLogo, LOGOS,
            CRESTS, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN };
 })();
