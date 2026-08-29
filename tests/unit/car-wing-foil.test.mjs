@@ -70,7 +70,15 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
   // crash structure, each with a ramped ceiling, an outer wall and two strakes,
   // plus a trailing gurney: +131 tris on the single largest unmodelled surface
   // the car had. Measured 2676.
-  assert.ok(body <= 2690, `default body ${body} > 2690`);
+  // 2690 -> 2830: the RADIATOR INLET. It was one flat dark slab pinned on the
+  // pod face — two triangles — so at the audit camera's ~6 mm per pixel the
+  // biggest opening on the car had no relief at all and every engine tier
+  // photographed the same rectangle at a different size. Now a duct: four
+  // throat walls raking to 70% of the mouth over 55 mm, a two-bar proud lip
+  // (the lower and inboard bars are cut — they face the undercut and the
+  // chassis), and a dark core face at the back. +130 tris for both pods.
+  // Measured 2820.
+  assert.ok(body <= 2830, `default body ${body} > 2830`);
   assert.ok(cockpit <= 1500, `cockpit ${cockpit} > 1500`);
 });
 

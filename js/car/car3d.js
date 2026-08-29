@@ -873,7 +873,31 @@ const Car3D = (function () {
   // baked top flap already passes within ~12 mm of it, so an unconditional bite
   // swings that element straight through the nose. Outside this z band nothing
   // overhangs the wing, hence the Infinity guards.
-  const NOSE_UNDER = [[1.96, Infinity], [2.00, 0.294], [2.10, 0.414], [2.16, Infinity]];
+  // The ceiling the front-wing flap solve clears. Its two numbers were frozen
+  // copies of the DEFAULT nose underside, and styledNoseStations() moves the
+  // real one per team — the mid station drops by noseDroop * 0.4 — so on
+  // astonmartin (-0.030) the surface the wing must clear sat ~14 mm BELOW what
+  // this table reported, against ~14 mm of margin at aLvl 4. Threading the team
+  // into solveFlapsGeom would put it in that memo's key for a correction
+  // smaller than one 0.01 rad step of the search; the WORST droop over every
+  // shipped style is one number, can only make the solver back off MORE, and is
+  // DERIVED, so it cannot go stale the way the copies did.
+  const NOSE_DROOP_FLOOR = (function () {
+    const zMid = CHASSIS.nose[1].z, zTip = CHASSIS.nose[0].z;
+    let worst = 0;
+    for (const k of Object.keys(TEAM_STYLE)) {
+      const st = TEAM_STYLE[k], d = st.noseDroop || 0;
+      if (d >= 0) continue;                       // a raised nose only adds room
+      const tipZ = zTip + (st.noseTipZ || 0);
+      for (const z of [2.00, 2.16]) {             // the window NOSE_UNDER covers
+        const t = Math.max(0, Math.min(1, (z - zMid) / (tipZ - zMid)));
+        worst = Math.min(worst, d * (0.4 + 0.6 * t));
+      }
+    }
+    return worst;                                 // <= 0, metres
+  })();
+  const NOSE_UNDER = [[1.96, Infinity], [2.00, 0.294 + NOSE_DROOP_FLOOR],
+                      [2.10, 0.414 + NOSE_DROOP_FLOOR], [2.16, Infinity]];
   const NOSE_GAP = 0.005;        // m of daylight to keep under it
   function noseUnderAt(z) {
     if (z <= NOSE_UNDER[0][0] || z >= NOSE_UNDER[NOSE_UNDER.length - 1][0]) return Infinity;
@@ -1489,6 +1513,36 @@ const Car3D = (function () {
     };
   }
 
+  // A radiator mouth that reads as a HOLE. The shipped inlet was one flat dark
+  // slab pinned on the pod face — two triangles, no relief — and at the audit
+  // camera's ~6 mm per pixel a 5 mm proud box is under one pixel, so every
+  // engine tier photographed the same rectangle in a slightly different size.
+  // This is a proud lip ring, four throat walls raking to 70% of the opening
+  // over `depth`, and a dark core face at the back of the duct: 55 mm of throat
+  // is ~9 px of visible recession from any camera that is not dead astern.
+  function addInletMouth(out, x, y, z, w, h, lipC, depth, lip) {
+    const D = depth == null ? 0.055 : depth;
+    const L = lip == null ? 0.012 : lip;
+    const T = 0.010, K = 0.70;
+    // Two bars, not four: the lower edge sits into the undercut and the inboard
+    // edge faces the chassis, so a full ring costs 24 tris a side for two
+    // surfaces no camera on this car ever sees.
+    if (L > 0) {
+      addBox(out, x, y + (h + L) * 0.5, z + 0.008, w + L * 2, L, 0.020, lipC, SURFACES.paint);
+      addBox(out, x + Math.sign(x) * (w + L) * 0.5, y, z + 0.008, L, h + L * 2, 0.020,
+             lipC, SURFACES.paint);
+    }
+    for (const u of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+      addSpan(out,
+        { z, x: x + u[0] * w * 0.5, y: y + u[1] * h * 0.5,
+          w: u[0] ? T : w, h: u[1] ? T : h },
+        { z: z - D, x: x + u[0] * w * 0.5 * K, y: y + u[1] * h * 0.5 * K,
+          w: u[0] ? T : w * K, h: u[1] ? T : h * K },
+        INTAKE, null, SURFACES.carbon);
+    }
+    addBox(out, x, y, z - D - 0.008, w * K, h * K, 0.016, DARK);
+  }
+
   function buildSidepodBodywork(out, c1, eng, anchors) {
     const data = anchors || bodyAnchors({ engine: 1, _visual: { engine: eng } });
     const stations = data.podStations;
@@ -2074,18 +2128,25 @@ const Car3D = (function () {
     for (const s of [-1, 1]) {
       const inlet = podGeom.inlet;
       if (engInlet === 0) {
-        addBox(out, s*inlet.x, inlet.y, inlet.z, inlet.width * 0.75, inlet.height * 0.38, 0.05, INTAKE);
+        // Letterbox: the shallowest duct on the grid, and no lip at all.
+        addInletMouth(out, s * inlet.x, inlet.y, inlet.z,
+                      inlet.width * 0.75, inlet.height * 0.38, c1, 0.034, 0);
       } else if (engInlet === 2) {
-        addBox(out, s*inlet.x, inlet.y, inlet.z + 0.005, inlet.width * 0.92, inlet.height * 0.82, 0.06, INTAKE);
-        addBox(out, s*inlet.x, inlet.y, inlet.z + 0.023, inlet.width * 0.84, inlet.height * 0.62, 0.03, DARK);
+        addInletMouth(out, s * inlet.x, inlet.y, inlet.z,
+                      inlet.width * 0.92, inlet.height * 0.82, c1, 0.075, 0.016);
+        // Splitter bar across the throat — a wide mouth needs one or it reads
+        // as a missing panel rather than a radiator.
+        addBox(out, s * inlet.x, inlet.y, inlet.z - 0.030,
+               inlet.width * 0.86, 0.012, 0.014, CARBON, SURFACES.carbon);
       } else if (engInlet === 3) {
         for (const dx of [-1, 1])
-          addBox(out, s*(inlet.x + dx*inlet.width*0.22), inlet.y, inlet.z + 0.003,
-                 inlet.width * 0.34, inlet.height * 0.88, 0.06, INTAKE);
+          addInletMouth(out, s * (inlet.x + dx * inlet.width * 0.22), inlet.y, inlet.z,
+                        inlet.width * 0.34, inlet.height * 0.88, c1, 0.060, 0.010);
       } else {
         // Reverse-P (2026 field majority): tall inboard stem, not a square scoop.
-        addBox(out, s * (inlet.x - s * inlet.width * 0.12), inlet.y + inlet.height * 0.08,
-               inlet.z, inlet.width * 0.48, inlet.height * 0.88, 0.05, INTAKE);
+        addInletMouth(out, s * (inlet.x - s * inlet.width * 0.12),
+                      inlet.y + inlet.height * 0.08, inlet.z,
+                      inlet.width * 0.48, inlet.height * 0.88, c1, 0.055, 0.012);
       }
       const fenceN = Math.max(0, Math.min(6, Math.round(floorStyle.fences)));
       const fenceH = Math.max(0.6, Math.min(1.6, floorStyle.fenceH));
@@ -2654,6 +2715,10 @@ const Car3D = (function () {
       // adds the curled lip below), the 2026 field's signature endplate.
       { hF: 0.28, hR: 0.50, kick: 0.120, footW: 0.16, footZ: 0.58, arch: 0, roll: 1 },
     ][aPlate];
+    const aArch = aeroStyle.arch != null
+      ? Math.max(0, Math.min(1, Math.round(aeroStyle.arch))) : (PLATE.arch || 0);
+    const aGill = aeroStyle.gill != null
+      ? Math.max(0, Math.min(4, Math.round(aeroStyle.gill))) : (aPlate >= 2 ? 3 : 0);
     const aCasc = Math.max(0, Math.min(3, Math.round(aeroStyle.casc != null ? aeroStyle.casc
       : (aLvl >= 4 ? 3 : (aLvl >= 3 ? 2 : (aLvl >= 1 ? 1 : 0))))));
     for (const s of [-1, 1]) {
@@ -2668,24 +2733,31 @@ const Car3D = (function () {
         { z: 2.58, x: s * (fwHalf * 0.52), y: 0.058, w: 0.012, h: 0.050, t: 0.50 },
         { z: 2.20, x: s * (fwHalf * 0.70), y: 0.066, w: 0.010, h: 0.044, t: 0.68 },
         0.005, CARBON);
-      if (PLATE.arch) {
+      // ARCH and GILL were welded to the plate tier: an arch existed only on
+      // plate 2 and gills only on plate >= 2, so four plate profiles were four
+      // fixed combinations rather than a plate crossed with two choices. Null
+      // keeps every shipped recipe exactly where it was.
+      if (aArch) {
         addBeveledSpan(out,
           { z: 2.60, x: epX + s*0.012, y: 0.135 + PLATE.hF * 0.5 + 0.010, w: 0.030, h: 0.018 },
           { z: 2.06, x: epX + s*(PLATE.kick + 0.012), y: 0.245 + PLATE.hR * 0.5 + 0.010, w: 0.026, h: 0.016 },
           0.008, c1);
       }
-      if (aPlate >= 2) {
+      if (aGill > 0) {
         // GILLS. The rear endplate has had its louvre stack for ages; the
         // front plate — the one a chase camera actually fills the frame with —
-        // had a blank outboard face. Three recessed slots, proud of the plate
-        // so they read as cuts rather than z-fighting decals.
-        for (let i = 0; i < 3; i++) {
+        // had a blank outboard face. Recessed slots, proud of the plate so they
+        // read as cuts rather than z-fighting decals.
+        for (let i = 0; i < aGill; i++) {
           const gz = 2.42 - i * 0.15;
           addBox(out, epX + s * 0.010, 0.185 + PLATE.hF * 0.30 + i * 0.026, gz,
                  0.014, 0.020, 0.11, INTAKE, SURFACES.carbon);
         }
+      }
+      if (aPlate >= 2) {
         // FILLET at the plate-to-main-plane junction: the hard 90 deg corner
-        // there is the last unfaired intersection on the front wing.
+        // there is the last unfaired intersection on the front wing. This one
+        // IS a property of the plate, so it stays on the plate tier.
         addBeveledSpan(out,
           { z: 2.60, x: epX - s * 0.030, y: 0.150, w: 0.060, h: 0.030, t: 0.35 },
           { z: 2.26, x: epX - s * 0.026, y: 0.178, w: 0.050, h: 0.024, t: 0.30 },

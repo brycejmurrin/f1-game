@@ -556,7 +556,7 @@ const CEILINGS = {
   // only, +1 line of code and the twelve recording why the tub is dark while
   // the hood above it stays painted. Measured on ferrari: lower-field rays on
   // body paint under the wheel 1073 -> 658 of 13430. Re-measured on the union.
-  "js/car/car3d.js": 3177,   // +44: wheel cover is a rim lip, a dish and a boss
+  "js/car/car3d.js": 3249,   // +35: inlet duct, derived nose-droop floor, arch/gill knobs
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
