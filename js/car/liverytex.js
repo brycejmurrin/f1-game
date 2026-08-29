@@ -37,7 +37,6 @@ const LiveryTex = (function () {
     const t = (typeof Teams !== "undefined" && Teams.LIST || []).find((x) => x.id === id);
     return (t && t.short) || String(id || "").slice(0, 3).toUpperCase();
   };
-  const teamIds = () => (typeof Teams !== "undefined" && Teams.LIST || []).map((t) => t.id);
 
   const SPONSORS = {
     redbull:     ["SKYSTRIKE", "ADRENYX", "VOLTRUSH", "AEROBOLT", "NITROX", "THUNDERA"],
@@ -227,6 +226,24 @@ const LiveryTex = (function () {
     };
   }
 
+  // ── one visual language for every mark ─────────────────────────────────────
+  // These four numbers are set by the SMALLEST place a crest is ever drawn, and
+  // that is not the shark fin at 160 px. buildAtlas downscales the whole atlas
+  // to 512 for the player and 256 for AI cars on the mobile tier, so the fin
+  // badge bottoms out at 40 px and the fit box at 34. Every floor below is that
+  // 34 px case expressed as a fraction of the box:
+  //   engine cover / garage lightbox 361-363 | cover mobile player 181
+  //   fin desktop 134 | cover mobile AI 90 | fin mobile player 67 | fin AI 34
+  const CREST_MARGIN = 0.08;   // ONE margin for all twelve (was 0.04 .. 0.10)
+  const STROKE_MIN = 0.055;    // 1.9 px at 34: below this a limb does not get
+                               // thinner, it disappears
+  const GAP_MIN = 0.07;        // 2.4 px at 34, survives one mip level. This is
+                               // the H-versus-red-blob threshold, literally:
+                               // assets/logos/haas.png failed exactly here
+  const TEXT_MIN = 0.22;       // 20 px at the mobile-AI cover. Lettering is
+                               // banned outright when `bare`, so 34 never
+                               // has to carry any
+
   const BRAND = {
     rbRed:    [0.855, 0.043, 0.086],
     rbGold:   [1.0,   0.788, 0.024],
@@ -239,44 +256,214 @@ const LiveryTex = (function () {
     cadGold:  [0.788, 0.643, 0.353],
   };
 
-  function drawBull(ctx, f, x0, y0, w, h, dir, style) {
-    const U = (u) => f.X(x0 + (dir > 0 ? u : 1 - u) * w);
-    const V = (v) => f.Y(y0 + v * h);
-    ctx.beginPath();
-    ctx.moveTo(U(0.02), V(0.34));                              // tail tip (up)
-    ctx.quadraticCurveTo(U(0.12), V(0.30), U(0.16), V(0.42));  // tail down to rump
-    ctx.quadraticCurveTo(U(0.30), V(0.24), U(0.46), V(0.24));  // back to shoulder hump
-    ctx.quadraticCurveTo(U(0.58), V(0.26), U(0.64), V(0.36));  // neck lowered
-    ctx.lineTo(U(0.72), V(0.10));                              // horn (sweeps up-fwd)
-    ctx.lineTo(U(0.80), V(0.12));
-    ctx.lineTo(U(0.78), V(0.34));                              // horn base
-    ctx.quadraticCurveTo(U(0.94), V(0.40), U(0.96), V(0.48));  // brow to muzzle
-    ctx.quadraticCurveTo(U(0.90), V(0.56), U(0.74), V(0.56));  // jaw to chest
-    ctx.lineTo(U(0.74), V(0.92));                              // front leg (lunging)
-    ctx.lineTo(U(0.64), V(0.92));
-    ctx.lineTo(U(0.62), V(0.60));                              // belly
-    ctx.lineTo(U(0.28), V(0.62));
-    ctx.lineTo(U(0.28), V(0.92));                              // rear leg
-    ctx.lineTo(U(0.18), V(0.92));
-    ctx.lineTo(U(0.12), V(0.55));                              // rump underside
-    ctx.closePath();
-    ctx.fillStyle = style;
-    ctx.fill();
+  // ── the mark palette ───────────────────────────────────────────────────────
+  // A team's OWN mark colours. These apply on ONE livery: the team's own, which
+  // Liveries.forTeam synthesizes as { id: "default", c1: team.color, ... }. Pick
+  // any other paint job and the mark re-colours from THAT livery instead,
+  // because a Petronas-teal star on a Candy Flip car is not a livery, it is a
+  // sticker someone forgot to change. `plate` is the backing shield/disc the
+  // mark sits on, or null for the marks that have none.
+  const MARK_BRAND = {
+    mercedes:    { mark: [0.85, 0.86, 0.88],   alt: [0.0, 0.706, 0.671],   plate: null },
+    ferrari:     { mark: [0.05, 0.05, 0.06],   alt: [0.05, 0.05, 0.06],    plate: BRAND.ferYellow },
+    mclaren:     { mark: BRAND.papaya,         alt: [0.06, 0.06, 0.08],    plate: null },
+    redbull:     { mark: BRAND.rbRed,          alt: BRAND.rbNavy,          plate: BRAND.rbGold },
+    alpine:      { mark: [0.0, 0.576, 0.8],    alt: [1.0, 0.529, 0.737],   plate: null },
+    racingbulls: { mark: [0.086, 0.204, 0.796], alt: BRAND.rbRed,          plate: null },
+    haas:        { mark: [0.97, 0.97, 0.98],   alt: BRAND.haasRed,         plate: null },
+    williams:    { mark: [0.97, 0.97, 0.98],   alt: [0.059, 0.235, 0.788], plate: null },
+    audi:        { mark: [0.93, 0.93, 0.95],   alt: [0.98, 0.28, 0.05],    plate: null },
+    astonmartin: { mark: [0.718, 0.882, 0.106], alt: [0.0, 0.349, 0.31],   plate: null },
+    cadillac:    { mark: BRAND.cadGold,        alt: [0.05, 0.05, 0.06],    plate: null },
+  };
+  // The floor every mark clears against whatever it lands on. 4.2 and not
+  // INK_FLOOR's 3.0 because it is also the bound parts-livery-contrast.spec.js
+  // proves for the sponsor inks, and two legibility guards that disagree drift.
+  // It is always reachable: the worst field for inkOn() is luminance 0.182,
+  // where black and white tie at 4.25.
+  const MARK_FLOOR = 4.2;
+  // 25 rungs, not 9. The windows this has to hit are narrow: a teal mark on a
+  // near-black field leaves only luminance 0.143..0.199 for a neutral that
+  // separates from both, and a coarse ramp steps straight over it.
+  const GREYS = [];
+  for (let i = 0; i < 25; i++) GREYS.push(0.02 + i * (0.96 / 24));
+
+  // PHASE 1, field-blind: what colour does this team's mark WANT to be on this
+  // livery? Exported because the garage lightbox has to choose its field BEFORE
+  // it can ask for a palette, and it used to key that choice on the logo PNG's
+  // average pixel — which is null the moment a team has no PNG.
+  function markBase(teamId, liv) {
+    if (liv && liv.logo) return liv.logo.slice();
+    const own = !liv || liv.id === "default";
+    const b = own && MARK_BRAND[teamId];
+    if (b) return b.mark.slice();
+    return ((liv && (liv.stripe || liv.accent || liv.c2)) || INK_LIGHT).slice();
   }
 
-  // Mercedes — three-point star inside a ring.
-  function crestMercedes(ctx, R, ink, accent) {
-    const f = fit(R, 0.1);
-    const cx = f.X(0.5), cy = f.Y(0.5), r = f.S(0.48), rin = f.S(0.4);
+  // PHASE 2, field-aware: ONE source of truth for every colour a crest paints.
+  //   mark  the dominant shape — what a reader calls "the logo"
+  //   alt   counters, the second colour, keylines, lettering. Separates from
+  //         BOTH `mark` and whatever is behind it
+  //   plate the backing shield/disc/panel, or null. Never a shape that has to
+  //         read on its own. Always null when `bare`
+  //   halo  a colour to stroke UNDER the mark, or null. Non-null only when the
+  //         mark cannot reach INK_TARGET — which is how an authored liv.logo is
+  //         honoured instead of being silently overruled
+  // ALL FOUR ARE OPAQUE. A crest may not paint with alpha: behind the atlas is
+  // drawTailGraphic's gradient, so an alpha fill's effective colour is
+  // unprovable and no contrast guarantee survives it.
+  function markPalette(teamId, liv, field, bare) {
+    const own = !liv || liv.id === "default";
+    const B = (own && MARK_BRAND[teamId]) || null;
+    // `field` may be ONE paint or a list of them, and the engine cover needs a
+    // list: drawTailGraphic washes that region with an ALPHA gradient of
+    // stripe||c2, so what the mark actually lands on runs from c1 to a c2 tint
+    // across the panel. This is the same pair INKED_FOR declares in
+    // parts-livery-contrast.spec.js. Score against the WORST of them.
+    const flds = (Array.isArray(field) && Array.isArray(field[0])) ? field.filter(Boolean)
+      : [field || INK_DARK];
+    const cMin = (c, list) => {
+      let m = Infinity;
+      for (const f of list) m = Math.min(m, contrast(c, f));
+      return m;
+    };
+    // 1. plate first — when there is one, it is what the mark actually lands on.
+    //    WHETHER there is one is a property of the MARK, not of the livery: four
+    //    crests are drawn on a shield or a disc and seven are not. Deriving a
+    //    plate from the livery for all of them put a lime panel behind the Aston
+    //    wings, which then had to flip colour to contrast a plate it never asked
+    //    for. A null brand plate means "this mark has no backing", permanently.
+    const wantsPlate = !!(MARK_BRAND[teamId] && MARK_BRAND[teamId].plate);
+    let plate = null;
+    if (!bare && wantsPlate) {
+      const cands = [B && B.plate, liv && liv.pod, liv && liv.c1, liv && liv.c2];
+      // Against the PRIMARY paint only. A plate is opaque and covers whatever
+      // wash is on top of the panel, so asking it to separate from the wash
+      // colour too rejects the Red Bull gold disc on a gold-accented livery and
+      // leaves the bulls floating with nothing behind them.
+      for (const c of cands) if (c && contrast(c, flds[0]) >= 1.6) { plate = c.slice(); break; }
+    }
+    // An opaque plate REPLACES everything behind it, so it becomes the only
+    // surface that matters; without one the mark still faces the whole list.
+    const under = plate ? [plate] : flds;
+    // 2. mark, floored against `under` — EXCEPT on a team's own brand pairing.
+    //    Red Bull's red bulls on their gold disc score 3.25, so the floor threw
+    //    the red away and painted the bulls navy: a legibility rule that had
+    //    destroyed the one thing it was protecting. A brand mark on its own
+    //    brand plate is a pairing someone designed, and the plate exists to
+    //    carry it; the floor is there to defend against ARBITRARY livery paint,
+    //    which is still every other case below. The plate itself must still
+    //    clear the field, so the lockup can never vanish as a whole.
+    let mark = markBase(teamId, liv);
+    const brandPair = !!(B && plate && B.plate &&
+      plate.join() === B.plate.join() && mark.join() === B.mark.join());
+    if (!brandPair && cMin(mark, under) < MARK_FLOOR) {
+      const alts = [liv && liv.logo, B && B.mark, liv && liv.stripe,
+                    liv && liv.accent, liv && liv.c2, liv && liv.c1];
+      mark = null;
+      for (const c of alts) if (c && cMin(c, under) >= MARK_FLOOR) { mark = c.slice(); break; }
+      if (!mark) mark = inkOn(under).slice();
+    }
+    // 3. alt, scored against `under` AND `mark` — a second colour that vanishes
+    //    into either one is not a second colour. The grey ramp is the fallback
+    //    that makes this total: no pair of colours is close to all nine.
+    // Scored against the primary surface, which is the one alt is asserted on:
+    // optimising for a worst case nobody checks just makes alt duller.
+    const score = (c) => Math.min(contrast(c, under[0]), contrast(c, mark));
+    let alt = null, best = -1;
+    const pool = [B && B.alt, liv && liv.accent, liv && liv.stripe, liv && liv.c2,
+                  liv && liv.c1, INK_LIGHT, INK_DARK];
+    for (const c of pool) { if (!c) continue; const v = score(c); if (v > best) { best = v; alt = c; } }
+    if (best < 2.4) for (const g of GREYS) {
+      const c = [g, g, g], v = score(c);
+      if (v > best) { best = v; alt = c; }
+    }
+    return {
+      mark: mark.slice(), alt: alt.slice(), plate: plate,
+      brandPair,
+      halo: !brandPair && cMin(mark, under) < INK_TARGET ? haloFor(mark).slice() : null,
+    };
+  }
+
+  // Narrowest limb any crest may draw. Every stroke goes through this, so the
+  // 34 px worst case is enforced by construction rather than by review.
+  const swMin = (f, k) => f.S(Math.max(STROKE_MIN, k));
+
+  // ── traced marks ───────────────────────────────────────────────────────────
+  // Eight of the eleven marks are path data in js/car/crest-paths.js, traced
+  // from the bitmaps that used to ship in assets/logos (tools/trace-logo.mjs).
+  // Hand-drawing them from memory as chained canvas calls did not work: Red
+  // Bull's two charging bulls came out as a pair of pigs and Aston's spread
+  // wings as three chevrons. A silhouette is data, and the bitmaps had it even
+  // though they were useless as art.
+  //
+  // Only M, L and Z — the tracer emits polylines, because a contour walked at
+  // 384 px and simplified to a few tenths of a percent is already smoother than
+  // a curve anyone would fit to it, and a straight-line path needs no curve
+  // support here or in the offline rasteriser that measures these.
+  function tracePath(ctx, f, d) {
+    let i = 0, cmd = "";
+    const num = () => {
+      while (i < d.length && (d[i] === " " || d[i] === ",")) i++;
+      const st = i;
+      while (i < d.length && "-+.0123456789eE".indexOf(d[i]) >= 0) i++;
+      return parseFloat(d.slice(st, i));
+    };
+    ctx.beginPath();
+    while (i < d.length) {
+      const c = d[i];
+      if (c === " " || c === ",") { i++; continue; }
+      if (c >= "A" && c <= "Z") { cmd = c; i++; }
+      if (cmd === "Z") { ctx.closePath(); continue; }
+      const x = num(), y = num();
+      if (cmd === "M") { ctx.moveTo(f.X(x), f.Y(y)); cmd = "L"; }
+      else ctx.lineTo(f.X(x), f.Y(y));
+    }
+  }
+
+  // One crest function for every traced mark. Layers paint back to front and
+  // each takes the palette colour its role names; "plate" layers are dropped on
+  // the fin badge, which is why bare mode needs no special case — drop
+  // Ferrari's yellow shield and its horse is left standing on its own.
+  function crestTraced(ctx, R, P, bare, teamId) {
+    const spec = typeof CrestPaths !== "undefined" && CrestPaths[teamId];
+    if (!spec) { crestGeneric(ctx, R, P, bare, teamId); return; }
+    const f = fit(R, CREST_MARGIN);
     ctx.save();
-    ctx.fillStyle = css(ink);
-    // solid ring (outer circle minus inner circle, evenodd)
+    for (let i = 0; i < spec.d.length; i++) {
+      const role = spec.roles[i] || "mark";
+      if (role === "plate" && (bare || !P.plate)) continue;
+      ctx.fillStyle = css(role === "plate" ? P.plate : role === "alt" ? P.alt : P.mark);
+      tracePath(ctx, f, spec.d[i]);
+      // evenodd, so a counter walked as its own loop punches a HOLE rather than
+      // filling solid — the whole reason the bitmaps had to go.
+      ctx.fill("evenodd");
+    }
+    ctx.restore();
+  }
+
+  // ── the eleven team marks + the custom fallback ────────────────────────────
+  // Every one takes the SAME five arguments and paints only from P (see
+  // markPalette): P.mark for the dominant shape, P.alt for counters, second
+  // colour and lettering, P.plate for a backing shield. No baked colours except
+  // the two national bands called out below, no alpha, no destination-out.
+  // `bare` is the shark-fin badge: no plates, no lettering, and for three marks
+  // a genuinely simpler silhouette, because that badge bottoms out at 34 px.
+
+  // Mercedes — three-point star inside a ring.
+  function crestMercedes(ctx, R, P, bare, teamId) {
+    const f = fit(R, CREST_MARGIN);
+    const cx = f.X(0.5), cy = f.Y(0.5), r = f.S(0.48), rin = f.S(0.39);
+    ctx.save();
+    ctx.fillStyle = css(P.mark);
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.arc(cx, cy, rin, 0, Math.PI * 2, true);
     ctx.fill("evenodd");
-    // three-point star: three tapered spokes meeting at centre, 120° apart.
-    const tip = rin * 0.99, baseW = f.S(0.11);
+    // Star tips stop at 0.34, not at 0.99 of the ring's inner radius. That left
+    // a 0.004 counter — right for the real mark at print size, and a filled
+    // disc the moment the atlas drops to the AI tier.
+    const tip = f.S(0.34), baseW = f.S(0.115);
     for (let i = 0; i < 3; i++) {
       const a = -Math.PI / 2 + i * (Math.PI * 2 / 3);
       const px = cx + Math.cos(a) * tip, py = cy + Math.sin(a) * tip;
@@ -288,443 +475,148 @@ const LiveryTex = (function () {
       ctx.closePath();
       ctx.fill();
     }
-    // small centre hub to tidy the star junction
-    ctx.beginPath(); ctx.arc(cx, cy, f.S(0.05), 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, f.S(0.055), 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
-  function crestFerrari(ctx, R, ink, accent, bare) {
-    const f = fit(R, 0.06);
+  // Haas — slashed H inside a ring. The ring goes on the fin badge.
+  function crestHaas(ctx, R, P, bare, teamId) {
+    const f = fit(R, CREST_MARGIN);
     ctx.save();
     if (!bare) {
-      ctx.fillStyle = css(BRAND.ferYellow);
+      ctx.strokeStyle = css(P.alt);
+      ctx.lineWidth = swMin(f, 0.085);
       ctx.beginPath();
-      ctx.moveTo(f.X(0.16), f.Y(0.06));
-      ctx.lineTo(f.X(0.84), f.Y(0.06));
-      ctx.lineTo(f.X(0.84), f.Y(0.6));
-      ctx.quadraticCurveTo(f.X(0.84), f.Y(0.9), f.X(0.5), f.Y(1.0));
-      ctx.quadraticCurveTo(f.X(0.16), f.Y(0.9), f.X(0.16), f.Y(0.6));
-      ctx.closePath();
-      ctx.fill();
-      // Tricolore band across the TOP of the shield — green / white / red.
-      const bandY = f.Y(0.06), bandH = f.S(0.085), x0 = 0.16, w = (0.84 - 0.16) / 3;
-      const tri = [[0.00, 0.55, 0.25], [0.95, 0.95, 0.96], [0.80, 0.10, 0.12]];
-      for (let i = 0; i < 3; i++) {
-        ctx.fillStyle = css(tri[i]);
-        ctx.fillRect(f.X(x0 + i * w), bandY, f.S(w) + 1, bandH);
-      }
-    }
-    const col = bare ? css(ink) : css(brandMark([0.05, 0.05, 0.06]));
-    ctx.fillStyle = col; ctx.strokeStyle = col;
-    ctx.lineCap = "round"; ctx.lineJoin = "round";
-
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.60), f.Y(0.47));
-    ctx.quadraticCurveTo(f.X(0.84), f.Y(0.55), f.X(0.80), f.Y(0.90));   // outer edge
-    ctx.quadraticCurveTo(f.X(0.74), f.Y(0.74), f.X(0.72), f.Y(0.58));   // inner edge back
-    ctx.quadraticCurveTo(f.X(0.68), f.Y(0.52), f.X(0.60), f.Y(0.52));
-    ctx.closePath();
-    ctx.fill();
-    // HIND legs — planted; these are the only ground contact.
-    ctx.lineWidth = f.S(0.070);
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.58), f.Y(0.62));
-    ctx.quadraticCurveTo(f.X(0.64), f.Y(0.78), f.X(0.58), f.Y(0.94));
-    ctx.moveTo(f.X(0.50), f.Y(0.66));
-    ctx.quadraticCurveTo(f.X(0.49), f.Y(0.80), f.X(0.44), f.Y(0.94));
-    ctx.stroke();
-    // FORELEGS — lifted clear and pawing forward-left.
-    ctx.lineWidth = f.S(0.055);
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.41), f.Y(0.46));
-    ctx.quadraticCurveTo(f.X(0.30), f.Y(0.46), f.X(0.22), f.Y(0.38));   // upper, tucked
-    ctx.moveTo(f.X(0.42), f.Y(0.54));
-    ctx.quadraticCurveTo(f.X(0.32), f.Y(0.61), f.X(0.26), f.Y(0.70));   // lower, reaching
-    ctx.stroke();
-
-    // BARREL — an ellipse on the body's own axis (chest high-left, rump low-right).
-    ctx.beginPath();
-    ctx.ellipse(f.X(0.505), f.Y(0.555), f.S(0.180), f.S(0.122), 0.85, 0, Math.PI * 2);
-    ctx.fill();
-    // NECK — a column tapering from the withers up to the poll.
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.375), f.Y(0.475));                                 // chest side, base
-    ctx.quadraticCurveTo(f.X(0.375), f.Y(0.30), f.X(0.395), f.Y(0.185));// throat line
-    ctx.lineTo(f.X(0.495), f.Y(0.165));                                 // poll
-    ctx.quadraticCurveTo(f.X(0.525), f.Y(0.33), f.X(0.575), f.Y(0.475));// mane / crest
-    ctx.closePath();
-    ctx.fill();
-    // HEAD — a slim wedge angled down-left off the poll, with a small ear.
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.215), f.Y(0.325));                                 // muzzle
-    ctx.quadraticCurveTo(f.X(0.33), f.Y(0.20), f.X(0.435), f.Y(0.145)); // face
-    ctx.lineTo(f.X(0.455), f.Y(0.085));                                 // ear (small — a tall one is a cat's)
-    ctx.lineTo(f.X(0.510), f.Y(0.155));
-    ctx.quadraticCurveTo(f.X(0.44), f.Y(0.245), f.X(0.315), f.Y(0.305));// cheek
-    ctx.quadraticCurveTo(f.X(0.265), f.Y(0.305), f.X(0.215), f.Y(0.325));// jaw to muzzle
-    ctx.closePath();
-    ctx.fill();
-    if (!bare) {
-      ctx.font = "700 " + Math.round(f.S(0.13)) + "px Georgia, serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText("S F", f.X(0.5), f.Y(0.885));
-    }
-    ctx.restore();
-  }
-
-  function crestMclaren(ctx, R, ink, accent) {
-    const f = fit(R, 0.08);
-    ctx.save();
-    ctx.fillStyle = css(brandMark(BRAND.papaya));
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.07), f.Y(0.42));                                    // top of the thick end
-    ctx.quadraticCurveTo(f.X(0.46), f.Y(0.27), f.X(0.98), f.Y(0.16));    // top edge to the tip
-    ctx.quadraticCurveTo(f.X(0.60), f.Y(0.45), f.X(0.31), f.Y(0.66));    // concave underside
-    ctx.quadraticCurveTo(f.X(0.17), f.Y(0.76), f.X(0.07), f.Y(0.73));    // to the base of the end
-    ctx.quadraticCurveTo(f.X(0.01), f.Y(0.58), f.X(0.07), f.Y(0.42));    // rounded cap
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // Red Bull — two charging bulls facing off over a gold disc.
-  function crestRedbull(ctx, R, ink, accent, bare) {
-    const f = fit(R, 0.06);
-    const cx = f.X(0.5), cy = f.Y(0.46);
-    ctx.save();
-    // gold sun disc (skipped in bare/fin mode — just the charging bulls painted on)
-    if (!bare) {
-      ctx.fillStyle = css(BRAND.rbGold);
-      ctx.beginPath(); ctx.arc(cx, cy, f.S(0.3), 0, Math.PI * 2); ctx.fill();
-    }
-    const red = css(brandMark(!bare ? BRAND.rbRed
-      : (lum(ink) < 0.5 ? BRAND.rbRed : BRAND.rbGold)));
-    drawBull(ctx, f, 0.02, 0.16, 0.5, 0.62, +1, red);   // left bull, head to right
-    drawBull(ctx, f, 0.48, 0.16, 0.5, 0.62, -1, red);   // right bull, head to left
-    ctx.restore();
-  }
-
-  // Alpine — bold stylised "A" with a tricolore hint.
-  function crestAlpine(ctx, R, ink, accent) {
-    const f = fit(R, 0.08);
-    ctx.save();
-    // the A silhouette (outer triangle with an inner cut leg-gap)
-    ctx.fillStyle = css(ink);
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.5), f.Y(0.06));
-    ctx.lineTo(f.X(0.96), f.Y(0.94));
-    ctx.lineTo(f.X(0.74), f.Y(0.94));
-    ctx.lineTo(f.X(0.5), f.Y(0.44));
-    ctx.lineTo(f.X(0.26), f.Y(0.94));
-    ctx.lineTo(f.X(0.04), f.Y(0.94));
-    ctx.closePath();
-    // inner apex triangle cut-out (evenodd) for a cleaner A
-    ctx.moveTo(f.X(0.5), f.Y(0.30));
-    ctx.lineTo(f.X(0.40), f.Y(0.52));
-    ctx.lineTo(f.X(0.60), f.Y(0.52));
-    ctx.closePath();
-    ctx.fill("evenodd");
-    // tricolore slash across the A (blue / white / red diagonal stripes)
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.5), f.Y(0.06));
-    ctx.lineTo(f.X(0.96), f.Y(0.94));
-    ctx.lineTo(f.X(0.74), f.Y(0.94));
-    ctx.lineTo(f.X(0.5), f.Y(0.44));
-    ctx.lineTo(f.X(0.26), f.Y(0.94));
-    ctx.lineTo(f.X(0.04), f.Y(0.94));
-    ctx.closePath();
-    ctx.clip();
-    const stripes = [BRAND.triBlue, [0.97, 0.97, 0.98], BRAND.triRed];
-    for (let i = 0; i < 3; i++) {
-      ctx.fillStyle = css(stripes[i]);
-      ctx.beginPath();
-      const x = 0.30 + i * 0.115;
-      ctx.moveTo(f.X(x), f.Y(0.60));
-      ctx.lineTo(f.X(x + 0.11), f.Y(0.60));
-      ctx.lineTo(f.X(x + 0.11 + 0.06), f.Y(0.74));
-      ctx.lineTo(f.X(x + 0.06), f.Y(0.74));
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
-    ctx.restore();
-  }
-
-  // Racing Bulls — compact bull head with horns + "RB" energy mark.
-  function crestRacingbulls(ctx, R, ink, accent, bare) {
-    const f = fit(R, 0.08);
-    ctx.save();
-    // shield-ish rounded plate (skipped in bare/fin mode)
-    if (!bare) {
-      ctx.fillStyle = cssA(BRAND.rbNavy, 0.9);
-      ctx.beginPath();
-      ctx.moveTo(f.X(0.1), f.Y(0.12));
-      ctx.lineTo(f.X(0.9), f.Y(0.12));
-      ctx.lineTo(f.X(0.9), f.Y(0.56));
-      ctx.lineTo(f.X(0.5), f.Y(0.94));
-      ctx.lineTo(f.X(0.1), f.Y(0.56));
-      ctx.closePath();
-      ctx.fill();
-    }
-    // bold front-facing bull head with sweeping horns
-    ctx.fillStyle = css(brandMark(BRAND.rbRed));
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.16), f.Y(0.22));                              // left horn tip
-    ctx.quadraticCurveTo(f.X(0.30), f.Y(0.16), f.X(0.42), f.Y(0.28)); // horn to brow
-    ctx.quadraticCurveTo(f.X(0.5), f.Y(0.22), f.X(0.58), f.Y(0.28));  // brow peak
-    ctx.quadraticCurveTo(f.X(0.70), f.Y(0.16), f.X(0.84), f.Y(0.22)); // right horn tip
-    ctx.quadraticCurveTo(f.X(0.72), f.Y(0.30), f.X(0.68), f.Y(0.42)); // right side of face
-    ctx.lineTo(f.X(0.60), f.Y(0.58));                              // cheek to muzzle
-    ctx.quadraticCurveTo(f.X(0.5), f.Y(0.66), f.X(0.40), f.Y(0.58)); // muzzle base
-    ctx.lineTo(f.X(0.32), f.Y(0.42));                              // left cheek
-    ctx.quadraticCurveTo(f.X(0.28), f.Y(0.30), f.X(0.16), f.Y(0.22));
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = css(brandMark([0.97, 0.97, 0.98]));
-    ctx.font = "900 " + Math.round(f.S(0.2)) + "px Arial, sans-serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("RB", f.X(0.5), f.Y(0.76));
-    ctx.restore();
-  }
-
-  function crestHaas(ctx, R, ink, accent) {
-    const f = fit(R, 0.06);
-    const red = css(brandMark(BRAND.haasRed));
-    ctx.save();
-    // ring
-    ctx.strokeStyle = red;
-    ctx.lineWidth = f.S(0.085);
-    ctx.beginPath();
-    ctx.arc(f.X(0.5), f.Y(0.5), f.S(0.42), 0, Math.PI * 2);
-    ctx.stroke();
-    // the H: two uprights + a diagonal spanning them
-    ctx.fillStyle = red;
-    ctx.fillRect(f.X(0.24), f.Y(0.20), f.S(0.13), f.S(0.60));   // left upright
-    ctx.fillRect(f.X(0.63), f.Y(0.20), f.S(0.13), f.S(0.60));   // right upright
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.35), f.Y(0.36));
-    ctx.lineTo(f.X(0.65), f.Y(0.56));
-    ctx.lineTo(f.X(0.65), f.Y(0.70));
-    ctx.lineTo(f.X(0.35), f.Y(0.50));
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
-
-  function crestWilliams(ctx, R, ink, accent) {
-    const f = fit(R, 0.08);
-    ctx.save();
-    ctx.lineJoin = "miter";
-    ctx.lineCap = "butt";
-    ctx.miterLimit = 8;
-    const w = (dx, style, lw) => {
-      ctx.strokeStyle = style;
-      ctx.lineWidth = f.S(lw);
-      ctx.beginPath();
-      ctx.moveTo(f.X(0.02 + dx), f.Y(0.16));
-      ctx.lineTo(f.X(0.26 + dx), f.Y(0.86));
-      ctx.lineTo(f.X(0.50 + dx), f.Y(0.16));   // centre peak, full height
-      ctx.lineTo(f.X(0.74 + dx), f.Y(0.86));
-      ctx.lineTo(f.X(0.98 + dx), f.Y(0.16));
+      ctx.arc(f.X(0.5), f.Y(0.5), f.S(0.42), 0, Math.PI * 2);
       ctx.stroke();
-    };
-    w(0.03, css(accent), 0.09);   // accent shadow, offset
-    w(-0.01, css(ink), 0.135);    // the mark itself
+    }
+    // The H used to CROSS the ring: uprights spanned y 0.20..0.80 with outer
+    // edges at 0.24 and 0.76, and at y 0.20 the ring's inner half-width is only
+    // 0.229 (x 0.271..0.729). These bounds are the inscribed box instead —
+    // corner distance 0.33 against an inner radius of 0.3775.
+    const xa = bare ? 0.06 : 0.27, xb = bare ? 0.235 : 0.38;
+    const y0 = bare ? 0.06 : 0.26, y1 = bare ? 0.94 : 0.74;
+    ctx.fillStyle = css(P.mark);
+    ctx.fillRect(f.X(xa), f.Y(y0), f.S(xb - xa), f.S(y1 - y0));            // left upright
+    ctx.fillRect(f.X(1 - xb), f.Y(y0), f.S(xb - xa), f.S(y1 - y0));        // right upright
+    // Slashed crossbar, anchored ON the uprights' inner edges so it joins them
+    // rather than floating between them.
+    // A bar this steep runs corner to corner and the letter reads as an N.
+    // Keep it in the middle third with a shallow rise: 0.18 over the span, not
+    // 0.33, and centred on the uprights' midline.
+    const h = y0 + (y1 - y0) * 0.33, d = (y1 - y0) * 0.18, t = (y1 - y0) * 0.24;
+    ctx.beginPath();
+    ctx.moveTo(f.X(xb), f.Y(h));
+    ctx.lineTo(f.X(1 - xb), f.Y(h + d));
+    ctx.lineTo(f.X(1 - xb), f.Y(h + d + t));
+    ctx.lineTo(f.X(xb), f.Y(h + t));
+    ctx.closePath();
+    ctx.fill();
     ctx.restore();
   }
 
-  // Audi — four interlocking rings.
-  function crestAudi(ctx, R, ink, accent) {
-    const f = fit(R, 0.05);
+  // Audi — four interlocking rings. Monochrome by design; P.alt is unused.
+  function crestAudi(ctx, R, P, bare, teamId) {
+    const f = fit(R, CREST_MARGIN);
     ctx.save();
-    ctx.strokeStyle = css(ink);
-    ctx.lineWidth = f.S(0.07);
-    const r = f.S(0.17);
-    const cy = f.Y(0.5);
-    const xs = [0.19, 0.39, 0.59, 0.79];   // overlapping spacing (< 2r apart) → interlocked
-    for (let i = 0; i < 4; i++) {
+    ctx.strokeStyle = css(P.mark);
+    // r 0.135 is the MAXIMUM four rings fit in a unit box at the real ~1.62 r
+    // pitch (6.815r + w <= 1). The old r 0.17 at a 0.20 pitch used 26% of the
+    // box and buried the weave. This lockup is inherently ~3.6:1, so it is the
+    // one mark that cannot fill a square box vertically — a written exception,
+    // not an oversight.
+    const r = f.S(0.135), cy = f.Y(0.5), xs = [0.16, 0.3767, 0.5933, 0.81];
+    ctx.lineWidth = swMin(f, 0.075);
+    const ring = (i) => {
       ctx.beginPath();
       ctx.arc(f.X(xs[i]), cy, r, 0, Math.PI * 2);
       ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  // Aston Martin — outstretched eagle wings with a central "AM".
-  function crestAstonmartin(ctx, R, ink, accent) {
-    const f = fit(R, 0.05);
-    ctx.save();
-    ctx.fillStyle = css(ink);
-    // spread wings: layered feathers sweeping up-and-out from the centre.
-    for (let s = -1; s <= 1; s += 2) {
-      for (let layer = 0; layer < 4; layer++) {
-        const yv = 0.34 + layer * 0.1;                    // each feather row lower
-        const reach = 0.46 - layer * 0.06;                // upper feathers reach further
-        const tipY = yv - 0.14 + layer * 0.03;            // tips angle upward
-        ctx.beginPath();
-        ctx.moveTo(f.X(0.5), f.Y(yv));
-        ctx.quadraticCurveTo(
-          f.X(0.5 + s * reach * 0.6), f.Y(tipY),
-          f.X(0.5 + s * reach), f.Y(tipY + 0.02));
-        ctx.lineTo(f.X(0.5 + s * reach * 0.9), f.Y(tipY + 0.09));
-        ctx.quadraticCurveTo(
-          f.X(0.5 + s * reach * 0.4), f.Y(yv + 0.02),
-          f.X(0.5), f.Y(yv + 0.08));
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
-    // central banner/shield carrying the letters
-    ctx.fillStyle = css(accent);
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.40), f.Y(0.30));
-    ctx.lineTo(f.X(0.60), f.Y(0.30));
-    ctx.lineTo(f.X(0.58), f.Y(0.66));
-    ctx.quadraticCurveTo(f.X(0.5), f.Y(0.80), f.X(0.42), f.Y(0.66));
-    ctx.closePath();
-    ctx.fill();
-    // "AM" monogram
-    ctx.fillStyle = css(ink);
-    ctx.font = "900 " + Math.round(f.S(0.18)) + "px Arial, sans-serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("AM", f.X(0.5), f.Y(0.5));
-    ctx.restore();
-  }
-
-  function crestCadillac(ctx, R, ink, accent, bare) {
-    const f = fit(R, 0.04);
-    const gold = css(brandMark(BRAND.cadGold));
-    // Shield: flat top with clipped corners, sides falling to a broad point.
-    const shield = (inset) => {
-      const i = inset;
-      ctx.beginPath();
-      ctx.moveTo(f.X(0.06 + i), f.Y(0.26 + i * 0.5));
-      ctx.lineTo(f.X(0.94 - i), f.Y(0.26 + i * 0.5));
-      ctx.lineTo(f.X(0.94 - i), f.Y(0.46));
-      ctx.quadraticCurveTo(f.X(0.90 - i), f.Y(0.62), f.X(0.50), f.Y(0.78 - i));
-      ctx.quadraticCurveTo(f.X(0.10 + i), f.Y(0.62), f.X(0.06 + i), f.Y(0.46));
-      ctx.closePath();
     };
-    ctx.save();
-    ctx.fillStyle = gold;
-    shield(0);
-    ctx.fill();
-    ctx.save();
-    shield(0.035);
-    ctx.clip();
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.fillStyle = "#000";
-    const rows = [0.315, 0.395, 0.475, 0.555];
-    const cuts = [[0.10, 0.26], [0.30, 0.44], [0.48, 0.62], [0.66, 0.86]];
-    for (let r = 0; r < rows.length; r++) {
-      for (let c = 0; c < cuts.length; c++) {
-        if ((r + c) % 2) continue;                       // alternating, like the real grid
-        ctx.fillRect(f.X(cuts[c][0]), f.Y(rows[r]), f.S(cuts[c][1] - cuts[c][0]), f.S(0.045));
-      }
+    for (let i = 0; i < 4; i++) ring(i);
+    // Weave: re-stroke the OVER ring inside each overlap, alternating which one
+    // that is. Four independent arcs lie flat on each other and never interlock.
+    if (!bare) for (let i = 0; i < 3; i++) {
+      const mid = (xs[i] + xs[i + 1]) / 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(f.X(mid - 0.055), f.Y(0.30), f.S(0.11), f.S(0.40));
+      ctx.clip();
+      ring(i % 2 === 0 ? i + 1 : i);
+      ctx.restore();
     }
     ctx.restore();
-    ctx.restore();
   }
 
-  // Generic fallback — monogram of the team short code on a rounded plate.
-  function crestGeneric(ctx, R, ink, accent, teamId) {
-    const f = fit(R, 0.08);
+  // Generic fallback — monogram of the team short code. The custom team's mark
+  // whenever it has no uploaded emblem.
+  function crestGeneric(ctx, R, P, bare, teamId) {
+    const f = fit(R, CREST_MARGIN);
+    const box = bare
+      ? { x: f.X(0.02), y: f.Y(0.20), w: f.S(0.96), h: f.S(0.60) }
+      : { x: f.X(0.06), y: f.Y(0.22), w: f.S(0.88), h: f.S(0.56) };
     ctx.save();
-    ctx.strokeStyle = css(accent);
-    ctx.lineWidth = f.S(0.05);
-    ctx.strokeRect(f.X(0.06), f.Y(0.2), f.S(0.88), f.S(0.6));
-    drawWordmark(ctx, teamShort(teamId),
-      { x: f.X(0.06), y: f.Y(0.2), w: f.S(0.88), h: f.S(0.6) }, ink,
-      { align: "center", pad: f.S(0.06) });
+    if (!bare) {
+      ctx.strokeStyle = css(P.alt);
+      ctx.lineWidth = swMin(f, 0.055);
+      ctx.strokeRect(box.x, box.y, box.w, box.h);
+    }
+    drawWordmark(ctx, teamShort(teamId), box, P.mark, { align: "center", pad: f.S(0.06) });
     ctx.restore();
   }
 
+  // The eleven marks. Eight are traced path data (js/car/crest-paths.js); the
+  // other three are drawn, because for those three a construction beats a trace:
+  // Mercedes is a ring and a three-point star, Audi four interlocking rings, and
+  // Haas an H inside a ring. Those are exact as maths, and their source bitmaps
+  // were the WORST of the set — haas.png traces to a plain red disc and audi.png
+  // to four filled blobs, because both had their counters filled in.
   const CRESTS = {
     mercedes: crestMercedes,
-    ferrari: crestFerrari,
-    mclaren: crestMclaren,
-    redbull: crestRedbull,
-    alpine: crestAlpine,
-    racingbulls: crestRacingbulls,
+    ferrari: crestTraced,
+    mclaren: crestTraced,
+    redbull: crestTraced,
+    alpine: crestTraced,
+    racingbulls: crestTraced,
     haas: crestHaas,
-    williams: crestWilliams,
+    williams: crestTraced,
     audi: crestAudi,
-    astonmartin: crestAstonmartin,
-    cadillac: crestCadillac,
+    astonmartin: crestTraced,
+    cadillac: crestTraced,
   };
 
-  // A livery's `logo` colour, live only for the duration of one drawCrest call.
-  // Most crests paint their mark in `ink`, but several are drawn in a baked
-  // BRAND colour (McLaren's papaya swoosh, the bulls, Haas's girder, Cadillac's
-  // crest) — an override that only replaced `ink` would recolour half the grid
-  // and silently skip the rest. brandMark() is applied at the FOREGROUND mark
-  // sites only; backing plates and discs (Ferrari's yellow shield, the Red Bull
-  // sun disc, the Racing Bulls plate) keep their own colour so the mark still
-  // has something to sit on. Those are skipped in `bare` (shark-fin) mode
-  // anyway, which is where a hand-picked logo colour matters most.
-  // ── real team marks ────────────────────────────────────────────────────────
-  // assets/logos/<teamId>.png — the actual team emblems, drawn straight into the
-  // atlas. Loaded ONCE, asynchronously, and entirely optional: until they land
-  // (or if a file is missing) every crest falls back to the hand-drawn vector
-  // mark below, so boot never waits on them and a stripped build still renders.
+  // ── the custom team's uploaded emblem ──────────────────────────────────────
+  // ONE entry, "custom", set by MY TEAM's file picker (js/game.js) through
+  // setTeamLogo. The eleven shipped teams no longer come through here: they used
+  // to be prefetched from assets/logos/<id>.png, and those files were traced
+  // auto-conversions — haas.png was a solid red disc with the H's counters
+  // filled in, audi.png four filled blobs, four more were near-white and one
+  // near-black. A mark whose shape is gone cannot be repaired by lighting, a
+  // field colour or a halo, so the roster draws the vector crests above, which
+  // scale to any size and take the livery's own colours.
   const LOGOS = Object.create(null);
-  let _logosPending = 0;
-  const _logosReady = [];
-  function onLogosReady(cb) { if (typeof cb === "function") _logosReady.push(cb); }
-  function loadLogos(ids) {
-    if (typeof Image === "undefined") return;
-    let base = "", v = "";
-    try {
-      const own = document.querySelector('script[src*="liverytex.js"]');
-      if (own) {
-        const q = own.getAttribute("src").match(/\?v=\d+/);
-        if (q) v = q[0];
-        base = new URL(own.src, document.baseURI).href.replace(/js\/car\/liverytex\.js.*$/, "");
-      }
-    } catch (_) {}
-    for (const id of ids) {
-      const img = new Image();
-      _logosPending++;
-      img.onload = () => {
-        img._avg = avgColour(img);
-        LOGOS[id] = img;
-        done();
-      };
-      img.onerror = done;
-      img.src = base + "assets/logos/" + id + ".png" + v;
-    }
-    function done() {
-      if (--_logosPending > 0) return;
-      for (const cb of _logosReady) { try { cb(); } catch (_) {} }
-    }
-  }
-  // Deferred — do NOT kick off at module eval (boot sand). ensureLogos() is the
-  // one entry point: first buildAtlas, garage open, or game.js after boot. The
-  // team ids come from Teams.LIST — the roster is canonical, and js/car/teams.js
-  // loads before this file (manifest HARD_EDGES). Calling twice is a no-op.
-  let _logosStarted = false;
-  function ensureLogos() {
-    if (_logosStarted) return;
-    _logosStarted = true;
-    try { loadLogos(teamIds()); } catch (_) { /* ignored: a roster that is not
-      loaded yet just means no marks prefetch here; onLogosReady still fires for
-      any later registerMark, and every crest falls back to the vector form. */ }
-  }
+  const _markReady = [];
+  // Named for what it now means: the CUSTOM mark changed, drop your cached
+  // textures. It was onLogosReady, fired once when eleven prefetched PNGs
+  // landed together — a name that would be a lie now that only one mark can
+  // ever change, and only when a player picks a file.
+  function onMarkChange(cb) { if (typeof cb === "function") _markReady.push(cb); }
+  function _markChanged() { for (const cb of _markReady) { try { cb(); } catch (_) {} } }
 
   function setTeamLogo(id, src) {
-    if (!src) {
-      delete LOGOS[id];
-      for (const cb of _logosReady) { try { cb(); } catch (_) {} }
-      return;
-    }
+    if (!src) { delete LOGOS[id]; _markChanged(); return; }
     if (typeof Image === "undefined") return;
     const img = new Image();
     img.onload = () => {
       img._avg = avgColour(img);
       LOGOS[id] = img;
-      for (const cb of _logosReady) { try { cb(); } catch (_) {} }
+      _markChanged();
     };
+    // A corrupt or oversized data URL used to leave the PREVIOUS emblem in
+    // place and notify nobody, so the picker looked like it had done nothing.
+    // That was survivable while eleven PNGs also came through here; this is now
+    // the only image path in the file, so it is the whole failure mode of the
+    // custom-emblem feature. Drop the stale mark and tell the caches.
+    img.onerror = () => { delete LOGOS[id]; _markChanged(); };
     img.src = src;
   }
 
@@ -770,21 +662,33 @@ const LiveryTex = (function () {
     ctx.drawImage(off, x, y, w, h);
   }
 
-  let _logoInk = null, _crestBg = null, _crestInk = null;
-  function brandMark(c) {
-    if (_logoInk) return _logoInk;
-    if (_crestBg && _crestInk && contrast(c, _crestBg) < 2.2) return _crestInk;
-    return c;
-  }
-  function drawCrest(ctx, teamId, R, ink, accent, bare, logo, bg) {
-    _logoInk = logo || null;
-    _crestBg = bg || null;
-    _crestInk = ink || null;
-    const fn = CRESTS[teamId];
-    try {
-      if (fn) fn(ctx, R, logo || ink, accent, bare);
-      else crestGeneric(ctx, R, logo || ink, accent, teamId);
-    } finally { _logoInk = _crestBg = _crestInk = null; }
+  // drawCrest(ctx, teamId, R, { liv, field, bare, palette })
+  //   liv     the resolved livery — needs its `id`, which is how the brand-vs-
+  //           livery decision is made (see markPalette)
+  //   field   the paint the mark lands on: c1 on the engine cover, fin||c2 on
+  //           the badge, the lightbox field in the garage
+  //   bare    shark-fin mode
+  //   palette pre-resolved, for the sweep tool
+  // This replaces an (ink, accent, bare, logo, bg) quintet that reached the
+  // crests through three module-level variables and a try/finally, because
+  // several marks painted in a baked BRAND colour that no argument could
+  // override. Now every colour a crest can paint comes from P, which is what
+  // makes the census in tests/unit/crest-marks.test.mjs possible at all.
+  function drawCrest(ctx, teamId, R, opts) {
+    const o = opts || {};
+    const P = o.palette || markPalette(teamId, o.liv, o.field, !!o.bare);
+    const fn = CRESTS[teamId] || crestGeneric;
+    // The halo is generic on purpose: the same repeated-draw-under-shadow trick
+    // drawLogoImage uses, so a mark that cannot reach INK_TARGET gets separated
+    // without every crest having to grow its own outline pass.
+    if (P.halo) {
+      ctx.save();
+      ctx.shadowColor = css(P.halo);
+      ctx.shadowBlur = Math.max(3, Math.min(R.w, R.h) * 0.05);
+      for (let i = 0; i < 3; i++) fn(ctx, R, P, !!o.bare, teamId);
+      ctx.restore();
+    }
+    fn(ctx, R, P, !!o.bare, teamId);
   }
 
   const TAIL_STYLE = {
@@ -871,7 +775,6 @@ const LiveryTex = (function () {
 
   // ── main ─────────────────────────────────────────────────────────────────
   function buildAtlas(teamId, colors, numberOverride, isPlayer) {
-    ensureLogos();   // first atlas (race start / garage) kicks logo prefetch
     Log.info("car", "livery " + (teamId || "?"));
     const canvas = document.createElement("canvas");
     canvas.width = SIZE;
@@ -926,16 +829,14 @@ const LiveryTex = (function () {
     if (LOGOS[teamId]) {
       drawLogoImage(ctx, LOGOS[teamId], REGIONS.crest, logo,
                     markHalo(LOGOS[teamId], c1, inkCrest));
-    } else drawCrest(ctx, teamId, REGIONS.crest, inkCrest, accent, false, logo, c1);
+    } else drawCrest(ctx, teamId, REGIONS.crest, { liv: colors, field: [c1, c2], bare: false });
     const finWash = finArt || [stripe, c1, accent, inkFin].filter(Boolean)
       .find((c) => contrast(c, finPaint) >= 1.8) || inkFin;
     drawTailGraphic(ctx, teamId, REGIONS.fin, c1, finPaint, finWash);
-    const finAccent = contrast(accent, inkFin) >= 2.0 ? accent
-      : (contrast(c1, inkFin) >= 2.0 ? c1 : haloFor(inkFin));
     if (LOGOS[teamId]) {
       drawLogoImage(ctx, LOGOS[teamId], REGIONS.finBadge, logo,
                     markHalo(LOGOS[teamId], finPaint, inkFin));
-    } else drawCrest(ctx, teamId, REGIONS.finBadge, inkFin, finAccent, true, logo, finPaint);
+    } else drawCrest(ctx, teamId, REGIONS.finBadge, { liv: colors, field: finPaint, bare: true });
 
     // Sponsor wordmarks.
     const names = SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
@@ -974,6 +875,11 @@ const LiveryTex = (function () {
   // drawLogoImage is exported for the GARAGE back-wall crest (js/game/garage-scene.js):
   // aspect-fit + tint + halo is exactly the same job there, and reimplementing
   // the fit maths in a second place is how the two drift apart.
-  return { SIZE, REGIONS, buildAtlas, drawCrest, drawLogoImage, loadLogos, ensureLogos, onLogosReady, setTeamLogo, LOGOS };
+  // contrast/inkOn are exported for the GARAGE crest wall (js/game/garage-scene.js),
+  // which has to make the same "is this mark legible on this field, and if not
+  // what ink separates it" decision buildAtlas makes for the car.
+  return { SIZE, REGIONS, buildAtlas, drawCrest, markBase, markPalette, MARK_FLOOR,
+           drawLogoImage, contrast, inkOn, onMarkChange, setTeamLogo, LOGOS,
+           CRESTS, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;

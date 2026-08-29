@@ -174,9 +174,11 @@ function buildShell(out, liv) {
 // prop does not, so without the grouping a tyre stack would hang in mid-air in
 // front of a wall that had already culled away. The test is one sign compare.
 //
-// Everything sits outboard of x +/-3.6: SP_FIT_HALF_W (3.35) is the framing
-// radius the auto-turntable holds, so anything inside that band crops into the
-// car's frame at the default distance.
+// Everything at FLOOR level sits outboard of x +/-3.6: SP_FIT_HALF_W (3.35) is
+// the framing radius the auto-turntable holds, so anything inside that band
+// crops into the car's frame at the default distance. It is a floor rule, not
+// an absolute one — the ceiling LED housings reach x 2.70 and are fine, because
+// they sit at y 4.3, above the top of the frame.
 const SIDES = ["nx", "px", "back", "door", "mid"];
 function buildProps(g, liv) {
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
@@ -184,16 +186,18 @@ function buildProps(g, liv) {
   const stack = (out, x, z, seed) => {
     for (let t = 0; t < 4; t++) {
       const y = t * 0.345;
-      cyl(out, x, y, z, 0.36, 0.33, [0.045, 0.045, 0.050], 10);
-      cyl(out, x, y + 0.30, z, 0.305, 0.025, COMPOUND[(seed + t) % 3], 10);
+      cyl(out, x, y, z, 0.36, 0.33, [0.045, 0.045, 0.050], 14);
+      cyl(out, x, y + 0.30, z, 0.305, 0.025, COMPOUND[(seed + t) % 3], 14);
     }
   };
   const toolbox = (out, x, z) => {
     const sgn = x > 0 ? -1 : 1;
     block(out, x, 0.62, z, 0.36, 0.52, 0.80, scale(c1, 0.55));
     block(out, x, 1.16, z, 0.38, 0.03, 0.82, STEEL);
-    for (let d = 0; d < 4; d++)
+    for (let d = 0; d < 4; d++) {
       block(out, x + sgn * 0.37, 0.26 + d * 0.24, z, 0.012, 0.09, 0.72, scale(STEEL, 0.8));
+      block(out, x + sgn * 0.39, 0.26 + d * 0.24, z, 0.010, 0.02, 0.20, scale(STEEL, 1.15));   // drawer pull
+    }
     for (let w = 0; w < 4; w++)
       cyl(out, x + (w % 2 ? 0.26 : -0.26), 0, z + (w < 2 ? 0.6 : -0.6), 0.05, 0.10, DARK, 6);
   };
@@ -271,6 +275,41 @@ function buildProps(g, liv) {
   // Overhead cable tray running the length of the bay, under the truss.
   for (let sd = -1; sd <= 1; sd += 2)
     block(g.mid, sd * 4.6, 3.62, 0, 0.16, 0.05, 6.2, scale(STEEL, 0.6));
+  // Fuel rig and a wheel trolley in the +X/door corner (x 3.6..5.4, z 5.0..6.4),
+  // the emptiest floor in the bay.
+  block(g.px, 4.55, 0.62, 5.55, 0.42, 0.62, 0.36, scale(c1, 0.5));
+  block(g.px, 4.55, 1.28, 5.55, 0.44, 0.05, 0.38, STEEL);
+  cyl(g.px, 4.55, 1.30, 5.55, 0.14, 0.46, scale(STEEL, 0.75), 8);
+  for (let w = 0; w < 4; w++)
+    cyl(g.px, 4.55 + (w % 2 ? 0.3 : -0.3), 0, 5.55 + (w < 2 ? 0.26 : -0.26), 0.05, 0.10, DARK, 6);
+  block(g.px, 4.30, 0.30, 4.35, 0.55, 0.03, 0.34, STEEL);          // wheel trolley
+  for (let w = 0; w < 4; w++)
+    cyl(g.px, 4.30 + (w % 2 ? 0.42 : -0.42), 0, 4.35 + (w < 2 ? 0.24 : -0.24), 0.05, 0.27, scale(STEEL, 0.7), 6);
+  // Laptop bench beside the engineers' desk, in the -X mid-wall gap.
+  block(g.nx, -5.00, 0.74, -1.85, 0.32, 0.04, 0.62, scale(STEEL, 0.9));
+  for (let l = -1; l <= 1; l += 2) cyl(g.nx, -5.00, 0, -1.85 + l * 0.5, 0.035, 0.74, DARK, 6);
+  for (let l = 0; l < 2; l++) {
+    block(g.nx, -4.94, 0.78, -2.10 + l * 0.5, 0.16, 0.012, 0.14, scale(STEEL, 1.05));
+    block(g.nx, -4.80, 0.90, -2.10 + l * 0.5, 0.015, 0.11, 0.14, DARK);
+  }
+  // Jack stands and a floor fan in the extinguisher run.
+  for (let j = 0; j < 2; j++) {
+    cyl(g.nx, -4.60, 0, -4.6 + j * 0.7, 0.16, 0.09, scale(STEEL, 0.65), 6);
+    cyl(g.nx, -4.60, 0.09, -4.6 + j * 0.7, 0.05, 0.40, STEEL, 6);
+  }
+  cyl(g.nx, -4.35, 0, -3.05, 0.26, 0.06, DARK, 10);                 // fan base
+  cyl(g.nx, -4.35, 0.06, -3.05, 0.05, 0.46, scale(STEEL, 0.7), 6);
+  cyl(g.nx, -4.35, 0.52, -3.05, 0.30, 0.12, scale(STEEL, 0.55), 10);
+  // Radio post at the deep end, and ceiling ducting above the truss.
+  cyl(g.back, -4.60, 0, -5.95, 0.04, 1.45, STEEL, 6);
+  block(g.back, -4.60, 1.45, -5.95, 0.18, 0.12, 0.10, DARK);
+  // OUTBOARD, at x +/-4.4 beside the cable trays. At x +/-1.55 these ran
+  // straight between an overhead camera and the car, and g.mid is drawn
+  // unconditionally (unlike the per-wall groups), so the TOP preset had two
+  // grey bars laid across the bay. Ceiling clutter has to live outside the
+  // framing radius for the same reason floor clutter does.
+  for (let d = -1; d <= 1; d += 2)
+    block(g.mid, d * 4.40, 4.80, 0, 0.26, 0.18, 6.10, scale(STEEL, 0.5));
   // Floor level, inboard of every wall, so it is never on the wrong side of one.
   for (let s = -1; s <= 1; s += 2) {
     block(g.mid, s * 3.9, 0.035, 0.5, 0.09, 0.035, 5.4, DARK);
@@ -304,12 +343,25 @@ const FIXTURES = [
   // what gives the branded wall a top-down gradient instead of flat fill.
   [-2.60, 4.60, -5.20, WASH_TINT, 8.0,  9, -0.10, -0.72, -0.69, 0.86, 0.50, 0.06, 0, 0],
   [ 2.60, 4.60, -5.20, WASH_TINT, 8.0,  9, 0.10, -0.72, -0.69, 0.86, 0.50, 0.06, 0, 0],
+  // Door-end pair. Everything past z +4 — shutter, shelving, workbench, jack,
+  // stanchions and the new lit sign — sat on spill only: the fills are at
+  // z 3.40 and aim AWAY from the door, and the keys are 5 m off against a
+  // 1/d^2 falloff.
+  [-2.60, 4.55,  5.10, WASH_TINT, 7.5,  9, -0.08, -0.70, 0.71, 0.86, 0.50, 0.08, 0, 0],
+  [ 2.60, 4.55,  5.10, WASH_TINT, 7.5,  9, 0.08, -0.70, 0.71, 0.86, 0.50, 0.08, 0, 0],
 ];
 const E = 0.55;   // the same physical energy factor the track lamps use
 const LED_DROP = 0.06;   // light record sits under its panel so the halo clears the housing
 
-let ledMesh = null;
-function buildLed(out, liv) {
+const ledMesh = {};
+// PER SIDE, like the props and the dress, and for the same reason: a wall the
+// eye is outside of is not drawn, and anything mounted ON that wall must go
+// with it. This mesh used to be one unculled blob, so stepping the camera
+// outside a side wall left its dado strip hanging in mid-air across the frame,
+// in front of the car — a glowing bar attached to nothing. Ceiling fixtures
+// stay in `mid`: they hang from the truss, not from a wall.
+function buildLed(g, liv) {
+  const out = g.mid;
   for (let i = 0; i < FIXTURES.length; i++) {
     const F = FIXTURES[i], x = F[0], y = F[1] + LED_DROP, z = F[2];
     const hw = F[13] ? 1.20 : 0.26, hd = F[13] ? 0.17 : 0.12;
@@ -321,13 +373,34 @@ function buildLed(out, liv) {
     for (let s = -1; s <= 1; s += 2)
       block(out, x + s * hw * 0.8, y + 0.30, z, 0.02, 0.26, 0.02, STEEL);
   }
-  // Team-colour dado uplights: two cans grazing up the side walls. These are
-  // what make the bay read as THIS team's garage before you notice any logo.
+  // Team-colour dado uplights: cans grazing up the side walls. These are what
+  // make the bay read as THIS team's garage before you notice any logo. Three
+  // per side now — one pair at z 0 left the walls past |z| 3 on spill only.
   const c1 = rgb(liv && liv.c1, [0.4, 0.45, 0.55]);
   for (let s = -1; s <= 1; s += 2) {
-    cyl(out, s * 5.05, 0.02, 0, 0.11, 0.22, scale(STEEL, 0.6), 8);
-    cyl(out, s * 5.05, 0.24, 0, 0.09, 0.02, scale(c1, 1.5), 8);
+    const w = s < 0 ? g.nx : g.px;          // mounted on THAT wall, culled with it
+    for (let i = -1; i <= 1; i++) {
+      cyl(w, s * 5.05, 0.02, i * 3.5, 0.11, 0.22, scale(STEEL, 0.6), 8);
+      cyl(w, s * 5.05, 0.24, i * 3.5, 0.09, 0.02, scale(c1, 1.5), 8);
+    }
+    // The dado line. This was ONE bare emissive bar 12.6 m long standing 0.07
+    // proud of a near-black wall, and it read as a floating line rather than as
+    // a light — there was no fixture around it and nothing to give it a length.
+    // Now it is four segments in a recessed channel, which is what a real bay
+    // has: the housing is dark enough that the shader's glow gate
+    // (smoothstep(0.50, 0.95, max(albedo))) never fires on it, so it can share
+    // this emissive mesh with the lit face, exactly as the ceiling fixtures do.
+    for (let k = 0; k < 4; k++) {
+      const cz = -4.65 + k * 3.10;
+      block(w, s * 5.37, 1.56, cz, 0.05, 0.085, 1.475, scale(STEEL, 0.5));   // channel
+      block(w, s * 5.34, 1.56, cz, 0.03, 0.038, 1.44, scale(c1, 1.35));      // lit face
+      // End caps, so a segment terminates in a fitting instead of just stopping.
+      for (let e = -1; e <= 1; e += 2)
+        block(w, s * 5.36, 1.56, cz + e * 1.50, 0.045, 0.075, 0.035, scale(STEEL, 0.7));
+    }
   }
+  // Lit fascia over the door, behind the D_SIGN wordmark.
+  block(g.door, 0, 4.89, Z_DOOR - 0.14, 3.05, 0.13, 0.05, scale(c1, 0.55));
 }
 const LED_OPTS = { emissive: 1.0, roughness: 1.0, specular: 0, noAlphaWrite: true };
 
@@ -502,6 +575,9 @@ const D_STATS  = { x: 512, y: 512, w: 512, h: 256 };
 const D_DRIVER = { x: 768, y: 128, w: 256, h: 256 };
 const D_SPEC   = { x: 0, y: 768, w: 512, h: 256 };
 const D_BUDGET = { x: 512, y: 768, w: 512, h: 128 };
+// The free 256x128 block below DRIVER: a wide team wordmark for the floor and
+// the lit sign over the door, drawn light-on-dark so it works on both.
+const D_SIGN = { x: 768, y: 384, w: 256, h: 128 };
 const css = (c) => "rgb(" + Math.round(Math.min(1, Math.max(0, c[0])) * 255) + "," +
   Math.round(Math.min(1, Math.max(0, c[1])) * 255) + "," +
   Math.round(Math.min(1, Math.max(0, c[2])) * 255) + ")";
@@ -518,24 +594,40 @@ function paintDress(team, liv, info) {
   ctx.clearRect(0, 0, DRESS, DRESS);
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
   const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
-  let usedPng = false;
-  // Crest lightbox.
-  ctx.fillStyle = css(scale(c1, 0.30)); ctx.fillRect(D_CREST.x, D_CREST.y, D_CREST.w, D_CREST.h);
-  ctx.strokeStyle = css(c2); ctx.lineWidth = 7;
-  ctx.strokeRect(D_CREST.x + 10, D_CREST.y + 10, D_CREST.w - 20, D_CREST.h - 20);
+  // Crest lightbox. The FIELD is chosen for contrast against the mark, and a
+  // halo is added ONLY when the mark still lacks separation — the same rule
+  // buildAtlas applies on the car. The first version passed the team's own c1
+  // as the halo unconditionally, which put a same-hue glow behind a mark
+  // sitting on a c1-derived field and softened it instead of separating it.
   const img = LiveryTex.LOGOS && LiveryTex.LOGOS[team.id];
-  const inner = { x: D_CREST.x + 46, y: D_CREST.y + 46, w: D_CREST.w - 92, h: D_CREST.h - 92 };
+  // The mark's own colour, whichever path draws it: the uploaded PNG's average
+  // for the custom team, the resolved vector base for the eleven shipped ones.
+  // Keying this on img._avg ALONE is what made the flip below dead code the
+  // moment the roster stopped shipping logo PNGs — avg would be null for every
+  // team, the ternary would always take `tinted`, and every crest would land on
+  // a dark field whether or not that is the readable choice.
+  const avg = (img && img._avg) ||
+    (LiveryTex.markBase ? LiveryTex.markBase(team.id, liv) : null);
+  const tinted = scale(c1, 0.30);
+  // A dark team field reads best, unless the mark itself is dark against it.
+  const field = (avg && LiveryTex.contrast && LiveryTex.contrast(avg, tinted) < 2.2)
+    ? (LiveryTex.inkOn ? LiveryTex.inkOn([avg]) : [0.93, 0.94, 0.96]) : tinted;
+  ctx.fillStyle = css(field); ctx.fillRect(D_CREST.x, D_CREST.y, D_CREST.w, D_CREST.h);
+  ctx.strokeStyle = css(c2); ctx.lineWidth = 9;
+  ctx.strokeRect(D_CREST.x + 12, D_CREST.y + 12, D_CREST.w - 24, D_CREST.h - 24);
+  const inner = { x: D_CREST.x + 40, y: D_CREST.y + 40, w: D_CREST.w - 80, h: D_CREST.h - 80 };
   if (img && LiveryTex.drawLogoImage) {
-    // Pass the livery's logo colour as the TINT, exactly as the car's own crest
-    // does (js/car/liverytex.js buildAtlas). Hardcoding null here meant TEAM
-    // LOGO could not recolour the wall crest on any team that ships a PNG mark
-    // — only the vector fallback below honoured it. null still means "keep the
-    // mark's own colours", so a livery that sets no logo colour is unchanged.
-    LiveryTex.drawLogoImage(ctx, img, inner, (liv && liv.logo) || null, c1);
-    usedPng = true;
+    // Their contrast-derived halo, and the livery's logo colour as the TINT.
+    // tint=null was the defect: every team ships a PNG mark, so the vector
+    // branch below (which does honour the livery) never ran and TEAM LOGO
+    // could not recolour the wall crest at all. null still means "keep the
+    // mark's own colours", so a livery that sets no logo colour is unchanged,
+    // and the halo keeps it legible against the new backing either way.
+    const halo = (img._avg && LiveryTex.contrast && LiveryTex.contrast(img._avg, field) < 2.6 && LiveryTex.inkOn)
+      ? LiveryTex.inkOn([img._avg]) : null;
+    LiveryTex.drawLogoImage(ctx, img, inner, (liv && liv.logo) || null, halo);
   } else {
-    LiveryTex.drawCrest(ctx, team.id, inner, [0.95, 0.95, 0.96], c2, false,
-      (liv && liv.logo) || null, scale(c1, 0.30));
+    LiveryTex.drawCrest(ctx, team.id, inner, { liv, field, bare: false });
   }
   // Team wordmark strip.
   ctx.fillStyle = css(scale(c1, 0.55)); ctx.fillRect(D_WORD.x, D_WORD.y, D_WORD.w, D_WORD.h);
@@ -630,6 +722,13 @@ function paintDress(team, liv, info) {
     ctx.fillText(String(info.driver.code || ""), D_DRIVER.x + D_DRIVER.w / 2, D_DRIVER.y + 180);
     ctx.fillStyle = "#9aa4b2"; ctx.font = "600 19px system-ui, sans-serif";
     ctx.fillText(String(info.driver.name || ""), D_DRIVER.x + D_DRIVER.w / 2, D_DRIVER.y + 218, D_DRIVER.w - 20);
+    // SIGN — the team wordmark on its own, for the floor mark and the lit sign
+    // over the door. Transparent field so it reads on whatever it is laid on.
+    ctx.clearRect(D_SIGN.x, D_SIGN.y, D_SIGN.w, D_SIGN.h);
+    ctx.fillStyle = "#e9ecef"; ctx.font = "700 30px system-ui, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(String(team.name || team.short || "").toUpperCase(),
+      D_SIGN.x + D_SIGN.w / 2, D_SIGN.y + D_SIGN.h / 2, D_SIGN.w - 16);
     // SPEC — every fitted component, two columns of six.
     panel(D_SPEC, "FITTED SPEC");
     for (let i = 0; i < info.spec.length && i < 12; i++) {
@@ -643,7 +742,7 @@ function paintDress(team, liv, info) {
       ctx.textAlign = "center";
     }
   }
-  return { canvas: cv, usedPng };
+  return { canvas: cv };
 }
 
 // UV rect for an atlas region. v is flipped because createTexture uploads with
@@ -674,18 +773,34 @@ function buildDress() {
   for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = { pos: [], nrm: [], uv: [], idx: [] };
   const zb = Z_BACK + 0.03, zd = Z_DOOR - 0.03, xw = HALF_W - 0.03;
   // Back wall: the crest lightbox, the wordmark under it, and the pit board.
-  // Height is framing, not decoration: the preview's vertical half-FOV is 18 deg
-  // about an aim point at y 0.45 and the back wall is ~14 m out at the default
-  // distance, so anything above ~y 4 there is already at the top of the frame.
-  dquad(g.back, [[-1.15, 1.80, zb], [1.15, 1.80, zb], [1.15, 3.80, zb], [-1.15, 3.80, zb]], [0, 0, 1], D_CREST);
-  dquad(g.back, [[-1.5, 0.92, zb], [1.5, 0.92, zb], [1.5, 1.40, zb], [-1.5, 1.40, zb]], [0, 0, 1], D_WORD);
-  dquad(g.back, [[2.86, 1.70, -6.08], [3.74, 1.70, -6.08], [3.74, 2.90, -6.08], [2.86, 2.90, -6.08]], [0, 0, 1], D_BOARD);
+  // Height is framing, not decoration, and the ceiling here is MEASURED, not
+  // guessed. The FRONT preset puts the eye at (0, 2.08, 8.28) looking at
+  // SP_CAR_CTR through a 36 deg vertical fov; solving NDC.y = 1 on the plane
+  // z = Z_BACK gives y = 3.76 as the exact top of the frame. A crest topped at
+  // 3.75 is therefore touching the edge — its border reads as cut off — which
+  // is what three successive "lower it a bit" passes kept rediscovering.
+  // 3.40 is the same mark with a visible margin above it, and a fully visible
+  // crest reads BIGGER than a taller one whose frame is sliced.
+  dquad(g.back, [[-1.45, 1.20, zb], [1.45, 1.20, zb], [1.45, 3.40, zb], [-1.45, 3.40, zb]], [0, 0, 1], D_CREST);
+  dquad(g.back, [[-2.6, 0.42, zb], [2.6, 0.42, zb], [2.6, 1.15, zb], [-2.6, 1.15, zb]], [0, 0, 1], D_WORD);
+  // ON the pit-board panel (x 4.25..5.15, y 1.68..2.92, front face z -6.09).
+  // The panel moved from x 3.3 to x 4.70 and this quad did not follow it, so the
+  // graphic hung 0.29 m proud of the wall in open air AND covered the right
+  // third of the driver board next to it.
+  dquad(g.back, [[4.30, 1.74, -6.085], [5.10, 1.74, -6.085], [5.10, 2.86, -6.085], [4.30, 2.86, -6.085]], [0, 0, 1], D_BOARD);
   // Side walls: the wordmark repeated. Corner order is built per side so the
   // text reads the right way round from inside each wall.
-  for (let i = 0; i < 3; i++) {
-    const z0 = -4.6 + i * 3.5, z1 = z0 + 2.2;
-    dquad(g.nx, [[-xw, 2.42, z1], [-xw, 2.42, z0], [-xw, 2.92, z0], [-xw, 2.92, z1]], [1, 0, 0], D_WORD);
-    dquad(g.px, [[xw, 2.42, z0], [xw, 2.42, z1], [xw, 2.92, z1], [xw, 2.92, z0]], [-1, 0, 0], D_WORD);
+  // Side-wall wordmarks, in the y 3.10-3.60 band that both walls have free.
+  // They used to sit at y 2.42-2.92, which put the -X one behind the monitor
+  // bank (0.19 m proud) and made the +X one COPLANAR with the spec board. The
+  // +X wall now carries the three data boards over z -5.40..-2.40, so its
+  // wordmarks only take the two bays forward of that.
+  const wordZ = [[-4.6, -2.4], [-1.1, 1.1], [2.4, 4.6]];
+  for (let i = 0; i < wordZ.length; i++) {
+    const z0 = wordZ[i][0], z1 = wordZ[i][1];
+    // i 0 is the deep bay, which now carries a data board on EACH wall.
+    if (i > 0) dquad(g.nx, [[-xw, 3.10, z1], [-xw, 3.10, z0], [-xw, 3.60, z0], [-xw, 3.60, z1]], [1, 0, 0], D_WORD);
+    if (i > 0) dquad(g.px, [[xw, 3.10, z0], [xw, 3.10, z1], [xw, 3.60, z1], [xw, 3.60, z0]], [-1, 0, 0], D_WORD);
   }
   // The information boards. STATS, BUDGET and DRIVER go on the BACK wall
   // because that is the wall the default and FRONT framings look straight at,
@@ -695,27 +810,68 @@ function buildDress() {
   // cropped by the top of the frame. (Placed higher first, and duly cut off.)
   // The shelving and pit board that used to stand here moved for them.
   // SPEC goes on the +X wall, above the trolleys, which top out around y 1.4.
-  dquad(g.back, [[-4.90, 2.05, zb], [-1.60, 2.05, zb], [-1.60, 3.70, zb], [-4.90, 3.70, zb]], [0, 0, 1], D_STATS);
-  dquad(g.back, [[-4.90, 1.30, zb], [-1.60, 1.30, zb], [-1.60, 2.00, zb], [-4.90, 2.00, zb]], [0, 0, 1], D_BUDGET);
+  // PERFORMANCE DATA ON THE SIDE WALL, IDENTITY ON THE BACK WALL. These two
+  // boards used to flank the crest, which left the mark ~100 px tall on a
+  // 1000 px canvas with a board hard against each side of it. Stacked above the
+  // spec sheet on +X they read just as well and the back wall becomes the team's.
+  // STATS goes on the -X wall, not stacked above SPEC on +X. Solving the FRONT
+  // preset's frustum on the plane x = HALF_W puts NDC.y = 1 at about y 3.2
+  // there, so a board at y 3.28..4.78 showed nothing but its bottom edge; and
+  // the two walls are not symmetric in this framing either, because the docked
+  // sheet shifts the visible centre to the LEFT, which pulls -X content toward
+  // the middle of the frame and pushes +X content off its right edge. The SIDE
+  // preset also looks straight at this wall (the eye is outside +X, which culls
+  // it), so the live stats get the one dead-on reading in the whole set.
+  dquad(g.nx, [[-xw, 1.60, -2.40], [-xw, 1.60, -5.40], [-xw, 3.10, -5.40], [-xw, 3.10, -2.40]], [1, 0, 0], D_STATS);
+  dquad(g.px, [[xw, 0.72, -5.40], [xw, 0.72, -2.40], [xw, 1.44, -2.40], [xw, 1.44, -5.40]], [-1, 0, 0], D_BUDGET);
   // Square, because D_DRIVER is a square atlas region and a stretched quad would
   // squash the number.
   dquad(g.back, [[1.70, 1.75, zb], [3.70, 1.75, zb], [3.70, 3.75, zb], [1.70, 3.75, zb]], [0, 0, 1], D_DRIVER);
   dquad(g.px, [[xw, 1.62, -5.40], [xw, 1.62, -2.40], [xw, 3.12, -2.40], [xw, 3.12, -5.40]], [-1, 0, 0], D_SPEC);
+  // FLOOR WORDMARK at the deep end — the TOP framing is a bare grey expanse and
+  // it is the one view where every wall mark is edge-on. D_SIGN, not D_CREST:
+  // the crest carries a dark team-colour FIELD, and a dark field on a dark
+  // floor lit only by sun+ambient+glow (drawDecal never sees the lamps) is
+  // invisible, which is exactly how it rendered. D_SIGN is bright letters on
+  // transparent, so it reads as paint on concrete the way a real bay does.
+  // y 0.004 clears the floor (0) and the expansion joints (0.002).
+  dquad(g.mid, [[-2.30, 0.004, -4.15], [2.30, 0.004, -4.15], [2.30, 0.004, -5.95], [-2.30, 0.004, -5.95]],
+    [0, 1, 0], D_SIGN);
+  // A SECOND floor mark at the door end. The deep-end one reads in the FRONT
+  // framing (NDC.y about +0.14, on the floor behind the car) but not in the TOP
+  // one: there the camera's right axis is -Z, so negative z lands on the RIGHT
+  // of the canvas, under the docked sheet. z +4.1..+5.9 maps to NDC.x about
+  // -0.57 — the open floor to the left of the car, which is the one part of the
+  // TOP framing that was still bare grey. Corner order keeps U along +X and V
+  // along -Z exactly as above, so the winding stays +Y-facing and the letters
+  // run the same way; naively translating the first quad forward flips both.
+  dquad(g.mid, [[-2.30, 0.004, 5.90], [2.30, 0.004, 5.90], [2.30, 0.004, 4.10], [-2.30, 0.004, 4.10]],
+    [0, 1, 0], D_SIGN);
+  // Lit team sign over the garage door, above the shutter travel (slats top at
+  // y 4.77) — the first thing the REAR and door-side framings see.
+  dquad(g.door, [[2.9, 4.80, 6.30], [-2.9, 4.80, 6.30], [-2.9, 4.98, 6.30], [2.9, 4.98, 6.30]], [0, 0, -1], D_SIGN);
   // Engineer screens above the desk, and the notice board by the door.
   dquad(g.nx, [[-5.18, 1.10, 2.15], [-5.18, 1.10, -0.95], [-5.18, 2.65, -0.95], [-5.18, 2.65, 2.15]], [1, 0, 0], D_SCREEN);
-  dquad(g.door, [[-3.5, 1.30, zd], [-2.6, 1.30, zd], [-2.6, 2.50, zd], [-3.5, 2.50, zd]], [0, 0, -1], D_BOARD);
-  // A wordmark over the shutter. The REAR preset puts the eye behind the back
-  // wall, which culls — so the door wall is the whole backdrop from there, and
-  // without this it is the one framing with no branding in it at all.
-  dquad(g.door, [[2.3, 3.35, zd], [-2.3, 3.35, zd], [-2.3, 3.95, zd], [2.3, 3.95, zd]], [0, 0, -1], D_WORD);
+  // Clear of the shelving (x -4.87..-2.51, up to y 2.06) and the shutter rail.
+  dquad(g.door, [[4.20, 1.40, zd], [5.20, 1.40, zd], [5.20, 2.75, zd], [4.20, 2.75, zd]], [0, 0, -1], D_BOARD);
+  // A wordmark ON THE SHUTTER, not on the wall behind it. The REAR preset puts
+  // the eye behind the back wall (which culls), so the door wall is the whole
+  // backdrop from there — but the shutter slats stand at z 6.25..6.35 and the
+  // dress plane is z 6.37, so a quad on the wall is depth-tested away by the
+  // slats and was never visible. z 6.24 puts it on the roller door's face,
+  // which is where a real garage brands it anyway.
+  // y 2.60..3.20, not 3.30..3.90: the REAR preset's eye is (0, 2.28, -7.95) and
+  // the same frustum solve on the plane z = Z_DOOR tops the frame out at y 3.62,
+  // so the taller band lost its upper third off the top of the canvas.
+  dquad(g.door, [[2.3, 2.60, 6.24], [-2.3, 2.60, 6.24], [-2.3, 3.20, 6.24], [2.3, 3.20, 6.24]], [0, 0, -1], D_WORD);
   return g;
 }
-// Logos arrive asynchronously. Bump a generation counter when they land and put
-// it in the cache key, so the first paint uses the vector crest and the PNG
-// swaps in on the very next frame instead of leaving a blank wall.
+// The custom team's uploaded emblem arrives asynchronously. Bump a generation
+// counter when it changes and put it in the cache key, so the wall repaints on
+// the very next frame instead of holding the previous mark.
 let logoGen = 0;
-if (typeof LiveryTex !== "undefined" && LiveryTex.onLogosReady)
-  LiveryTex.onLogosReady(() => { logoGen++; });
+if (typeof LiveryTex !== "undefined" && LiveryTex.onMarkChange)
+  LiveryTex.onMarkChange(() => { logoGen++; });
 const DRESS_OPTS = { glow: 0.62 };
 
 // ── caches ─────────────────────────────────────────────────────────────────
@@ -749,16 +905,19 @@ function rebuild(team, liv, info) {
               "|" + boardKey(info);
   if (key === cacheKey && shellMesh) return;
   if (shellMesh) _gfx.freeMesh(shellMesh);
-  if (ledMesh) _gfx.freeMesh(ledMesh);
+  for (let i = 0; i < SIDES.length; i++)
+    if (ledMesh[SIDES[i]]) { _gfx.freeMesh(ledMesh[SIDES[i]]); ledMesh[SIDES[i]] = null; }
   if (floorMesh) _gfx.freeMesh(floorMesh);
   for (let i = 0; i < SIDES.length; i++)
     if (propMesh[SIDES[i]]) { _gfx.freeMesh(propMesh[SIDES[i]]); propMesh[SIDES[i]] = null; }
   const shell = acc();
   buildShell(shell, liv);
   shellMesh = _gfx.createMesh(shell);
-  const led = acc();
+  const led = {};
+  for (let i = 0; i < SIDES.length; i++) led[SIDES[i]] = acc();
   buildLed(led, liv);
-  ledMesh = _gfx.createMesh(led);
+  for (let i = 0; i < SIDES.length; i++)
+    if (led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(led[SIDES[i]]);
   const flr = acc();
   buildApron(flr); buildBayFloor(flr, liv);
   floorMesh = _gfx.createMesh(flr);
@@ -774,7 +933,6 @@ function rebuild(team, liv, info) {
     if (dressMesh[SIDES[i]]) { _gfx.freeMesh(dressMesh[SIDES[i]]); dressMesh[SIDES[i]] = null; }
   if (dressFail < 3 && _gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined") {
     try {
-      if (LiveryTex.ensureLogos) LiveryTex.ensureLogos();
       dressTex = _gfx.createTexture(paintDress(team, liv, info).canvas);
       const dg = buildDress();
       for (let i = 0; i < SIDES.length; i++)
@@ -799,15 +957,17 @@ function draw(team, liv, eye, getParts, driverIdx) {
   rebuild(team, liv, boardInfo(team, getParts, driverIdx));
   _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
   _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
-  _gfx.draw(ledMesh, MAT_I, LED_OPTS);
-  // Each wall's furniture, only while the eye is inside that wall — the same
-  // decision back-face culling makes for the wall itself. A camera at
-  // SP_DIST_MAX (15 m) is outside the bay on at least one axis nearly always,
-  // so this test fires constantly and is what keeps the cutaway clean.
+  // Each wall's furniture AND its lighting, only while the eye is inside that
+  // wall — the same decision back-face culling makes for the wall itself. A
+  // camera at SP_DIST_MAX (15 m) is outside the bay on at least one axis nearly
+  // always, so this test fires constantly and is what keeps the cutaway clean.
   const ex = eye ? eye[0] : 0, ez = eye ? eye[2] : 0;
   const inside = { nx: ex > -HALF_W, px: ex < HALF_W, back: ez > Z_BACK, door: ez < Z_DOOR, mid: true };
-  for (let i = 0; i < SIDES.length; i++)
-    if (inside[SIDES[i]]) _gfx.draw(propMesh[SIDES[i]], MAT_I, SHELL_OPTS);
+  for (let i = 0; i < SIDES.length; i++) {
+    if (!inside[SIDES[i]]) continue;
+    _gfx.draw(propMesh[SIDES[i]], MAT_I, SHELL_OPTS);
+    if (ledMesh[SIDES[i]]) _gfx.draw(ledMesh[SIDES[i]], MAT_I, LED_OPTS);
+  }
   // Dress LAST of the environment: drawDecal depth-tests but does not depth
   // write, so every opaque surface it sits on has to be down first.
   if (dressTex)

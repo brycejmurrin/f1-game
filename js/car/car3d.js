@@ -24,6 +24,18 @@ const Car3D = (function () {
   const TYRE   = [0.06, 0.06, 0.07];
   const RIM    = [0.11, 0.11, 0.13];
   const HUB    = [0.28, 0.28, 0.31];
+  // Wheel-cover profile. The three tones have to SEPARATE — the old cover and
+  // hubcap were 0.28 and 0.15 of the same neutral under a studio key and washed
+  // into one flat disc.
+  // Value ORDER matters more than the values: a covered F1 wheel is a bright
+  // machined rim around a DARK dish, and the first pass had it the other way up
+  // — a pale face with a dark ring, which reads as a hubcap off a road car.
+  const LIP      = [0.40, 0.41, 0.44];     // machined rim, the brightest ring
+  const COVER    = [0.24, 0.245, 0.27];    // dish wall
+  const COVER_IN = [0.14, 0.14, 0.16];     // its floor, deepest in shadow
+  const LIP_R  = 0.90;    // rim lip runs rimR*0.90 .. rimR
+  const DISH_R = 0.46;    // dish wall ends here, where the hubcap starts
+  const DISH_D = 0.030;   // and is recessed this far INBOARD
   const INTAKE = [0.03, 0.03, 0.04];          // radiator inlet void
   const HALO   = [0.17, 0.17, 0.19];          // brushed-titanium cockpit-protection hoop
   // Category-neutral chassis datums. Parts may dress and reshape bodywork around
@@ -452,7 +464,6 @@ const Car3D = (function () {
         out.idx.push(A, B, C, A, C, D);
       }
     }
-    const hub0 = [x0-0.012, cy, cz], hub1 = [x1+0.012, cy, cz];
     const outerR = r * edgeRm;
     for (let i = 0; i < SEG; i++) {
       const a0 = (i / SEG) * Math.PI * 2, a1 = ((i+1) / SEG) * Math.PI * 2;
@@ -469,12 +480,49 @@ const Car3D = (function () {
       // "translucent tyre" bug: double-wound coincident faces flickering on real
       // mobile depth precision (SwiftShader tolerated it, so it looked solid headless).
       addQuad(out, B0, B1, R1, R0, TYRE, SURFACES.rubber);
-      if (!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0)
-        addTri(out, hub1, R0, R1, HUB, SURFACES.metal);   // right (+X)
       const L0=[x0,rya0,rza0], L1=[x0,rya1,rza1];
       addQuad(out, A0, A1, L1, L0, TYRE, SURFACES.rubber);
-      if (!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0)
-        addTri(out, hub0, L0, L1, HUB, SURFACES.metal);   // left (−X)
+      // The COVER, in three rings instead of one flat fan from the rim to a
+      // point. The fan was geometrically fine and read as a plain grey disc at
+      // every distance: it ran straight into the tyre with no edge, and its apex
+      // sat 12 mm OUTBOARD, so it was a cone pointing at the camera — the one
+      // shape a single light cannot shade. A 2022-on covered wheel is a dark rim
+      // lip, a face dished INWARD behind it, and a raised hub boss; that is three
+      // depth planes, and it is the depth that makes the wheel read, not the
+      // number of triangles.
+      if (!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0) {
+        for (const sd of [[x1, 1], [x0, -1]]) {
+          const xw = sd[0], dir = sd[1];
+          const P = (rad, a, dx) => [xw + dir * dx,
+            cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+          // 1. rim lip: a dark annulus at the wall plane, framing the cover.
+          addQuad(out, P(rimR, a0, 0), P(rimR, a1, 0),
+                       P(rimR * LIP_R, a1, 0), P(rimR * LIP_R, a0, 0), LIP, SURFACES.metal);
+          // 2. dish: falls INBOARD as it goes in, so the light gradient across it
+          //    reads as a bowl rather than a disc.
+          addQuad(out, P(rimR * LIP_R, a0, 0), P(rimR * LIP_R, a1, 0),
+                       P(rimR * DISH_R, a1, DISH_D), P(rimR * DISH_R, a0, DISH_D),
+                       COVER, SURFACES.carbon);
+          // 3. floor of the dish, out to the hubcap that already sits on it.
+          addTri(out, [xw + dir * DISH_D, cy, cz],
+                       P(rimR * DISH_R, a0, DISH_D), P(rimR * DISH_R, a1, DISH_D),
+                       COVER_IN, SURFACES.carbon);
+        }
+      }
+    }
+    // Five raised spoke ribs across each dish. Proud of the floor by a third of
+    // the dish depth, so they catch the key and give the face something to
+    // rotate against — a wheel with no angular feature looks stationary.
+    for (const sd of [[x1, 1], [x0, -1]]) {
+      const xw = sd[0], dir = sd[1];
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * Math.PI * 2 + 0.31, hw = 0.13;
+        const P = (rad, aa, dx) => [xw + dir * dx,
+          cy + rad * Math.cos(aa), cz + rad * Math.sin(aa)];
+        addQuad(out, P(rimR * DISH_R, a - hw, DISH_D * 0.66), P(rimR * DISH_R, a + hw, DISH_D * 0.66),
+                     P(rimR * 0.30, a + hw * 1.8, DISH_D * 0.66), P(rimR * 0.30, a - hw * 1.8, DISH_D * 0.66),
+                     COVER, SURFACES.carbon);
+      }
     }
     const rotorOuter = r * Math.min(0.40, 0.32 * rotorScale);
     const rotorInner = r * 0.17;
@@ -574,10 +622,10 @@ const Car3D = (function () {
         }
       }
     }
-    const HUBCAP = [0.15, 0.15, 0.18];
+    const HUBCAP = [0.31, 0.31, 0.34];   // raised boss: lighter than the dish floor
     const NUT = caliperColor || bandColor || [0.85, 0.72, 0.10];
     for (const ss of [[x0, -1], [x1, 1]]) {
-      const dir = ss[1], xc0 = ss[0] + dir * 0.020, hcR = rimR * 0.46, ctr = [xc0, cy, cz];
+      const dir = ss[1], xc0 = ss[0] - dir * 0.014, hcR = rimR * 0.46, ctr = [xc0, cy, cz];
       for (let i = 0; i < SEG; i++) {
         const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
         addTri(out, ctr, [xc0, cy + hcR*Math.cos(a0), cz + hcR*Math.sin(a0)],
@@ -586,9 +634,9 @@ const Car3D = (function () {
       const nutCol = (wheelStyle && wheelStyle.nut) || NUT;
       const gunNut = wheelStyle && wheelStyle.gunNut ? 1 : 0;
       if (!gunNut) {
-        addBox(out, ss[0] + dir * 0.032, cy, cz, 0.026, hcR * 0.42, hcR * 0.42, nutCol, SURFACES.metal);
+        addBox(out, ss[0] - dir * 0.002, cy, cz, 0.026, hcR * 0.42, hcR * 0.42, nutCol, SURFACES.metal);
       } else {
-        const nx = ss[0] + dir * 0.034;
+        const nx = ss[0] - dir * 0.001;
         const nR = hcR * 0.38;
         const nDeep = 0.018;
         const HEX = 6;

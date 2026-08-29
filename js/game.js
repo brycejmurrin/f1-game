@@ -1319,7 +1319,7 @@ const _livResolveCache = new Map();
 function resolveLivery(team) {
   if (livDraftOverride && livDraftOverride.teamId === team.id) {
     const l = livDraftOverride.liv;
-    return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
+    return { id: l.id || null, c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null,
              noseStripe: l.noseStripe || null, finish: l.finish || null };
@@ -1329,11 +1329,11 @@ function resolveLivery(team) {
   const liv = getLiveries(team).find((l) => l.id === getLiveryId(team.id));
   // Optional livery detail colours (nose cap, sidepod panel, wing flaps, halo tint)
   // — additive, so an unmodified livery still resolves to today's exact object shape.
-  const val = liv ? { c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
+  const val = liv ? { id: liv.id, c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
                       fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null,
                       noseStripe: liv.noseStripe || null, finish: liv.finish || null }
-                  : { c1: team.color, c2: team.color2, stripe: null, accent: null };
+                  : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
 }
@@ -8608,15 +8608,13 @@ $("cz-logo-clear").onclick = () => {
   if (soundOn) GameAudio.uiTick();
 };
 
-// Real team marks (assets/logos/<id>.png). Optional and async: every atlas built
-// before they land uses the hand-drawn vector crest, so this drops those cached
-// textures once the images arrive and the cars repaint with the real emblems.
-// Prefetch is deferred off module-eval sand — ensureLogos() (also kicked by the
-// first buildAtlas) starts the loads; we only subscribe for cache invalidation.
-if (typeof LiveryTex !== "undefined" && LiveryTex.ensureLogos) {
-  LiveryTex.ensureLogos();
-  LiveryTex.onLogosReady(() => {
-    for (const t of Teams.LIST) invalidateDecalTextures(t.id);
+// The MY TEAM emblem is the only mark that arrives asynchronously now — the
+// eleven shipped teams draw vector crests, which are ready at eval. So this
+// drops ONE team's cached textures, not the whole roster's, when a player picks
+// a file or clears one.
+if (typeof LiveryTex !== "undefined" && LiveryTex.onMarkChange) {
+  LiveryTex.onMarkChange(() => {
+    invalidateDecalTextures("custom");
     _spMeshKey = "";   // force the garage turntable to repaint too
   });
   applyCustomLogo(loadCustomLogo());

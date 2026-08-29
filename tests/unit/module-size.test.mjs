@@ -518,7 +518,7 @@ const CEILINGS = {
   // 2947 -> 2960: FINISH_SURFACE grew from two rows to six (matte, brushed,
   // pearl, carbon) plus the note explaining that a finish costs a SURFACE ID
   // in the shaders' 20-30 classification chain rather than a material uniform.
-  "js/car/car3d.js": 2960,
+  "js/car/car3d.js": 3004,   // +44: wheel cover is a rim lip, a dish and a boss
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
@@ -627,7 +627,31 @@ const CEILINGS = {
   // when errors landed during the capture, standing down after three passes
   // instead of lighting the world from black forever. envState() reports it,
   // because the overlay is the only way a player can tell us.
-  "js/render/three/tlx.js": 2270,
+  // 2270 -> 2278 (R8): PRESENTATION and CONTENT stop sharing a gate. softGpu()
+  // folds in _softBlit — a blit is needed whenever the swapchain is not
+  // composited, headless included — and content skips inherited it, so headless
+  // Chromium on a REAL Apple/Metal GPU ran the software half of every skip. The
+  // one machine that could test a player's path was testing the other one.
+  // 2278 -> 2296 (R9): _softAdapter classifies the ADAPTER again. Headless was
+  // treated as software — but headless Chromium on a real GPU is hardware, and
+  // that clause made macos-latest (Apple/Metal, measured anyHardware:true) take
+  // the software half of every content skip, so the only machine that can test
+  // a player's path tested the other one. Headless moved to _softBlit, where a
+  // non-compositing swapchain is the actual reason. And an empty adapter.info
+  // is no longer a software verdict on its own: browsers trim those fields, so
+  // a player with no vendor string was being handed the degraded path on real
+  // hardware. The tie-break is measured limits (8192/1 GiB software vs
+  // 16384/2 GiB Apple), and each addition carries that measurement.
+  // 2296 -> 2322 (R9): the real-GPU reproduction. releaseMirrors() nulls
+  // attribute.array once a lit present has drawn a chunk, on the premise that
+  // nothing walks the arrays later — true of drawing, false of three's node
+  // builder, which types attributes from array.constructor whenever it
+  // compiles a program for a NEW pass. The env probe is a new pass, so every
+  // face threw on hardware (41 WebGL2 / 81 WebGPU on macos-latest/Metal) and
+  // the world had no environment reflections at all. The release now waits for
+  // the probe to latch, and a probe that cannot succeed gives up instead of
+  // throwing once a frame forever.
+  "js/render/three/tlx.js": 2322,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

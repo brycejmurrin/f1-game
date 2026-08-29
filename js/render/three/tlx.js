@@ -64,6 +64,13 @@ const TLX = (function () {
       // GPU error tally — see the onuncapturederror hook below.
       let _gpuErrors = 0, _gpuFirstError = null;
       const GPU_ERR_LOG_CAP = 8;
+      // Headless is a fact about PRESENTATION, not about silicon: headless
+      // Chromium on a real GPU IS hardware. It belongs to _softBlit (which
+      // exists because a headless swapchain does not composite) and never
+      // here. This clause is what made the one machine that can test a
+      // player's path — macos-latest, Apple/Metal, measured anyHardware:true —
+      // take the software half of every content skip instead.
+      const _headless = /HeadlessChrome/i.test(ua);
       try {
         if (navigator.gpu && navigator.gpu.requestAdapter) {
           const ad = await navigator.gpu.requestAdapter();
@@ -74,11 +81,21 @@ const TLX = (function () {
             const arch = info && info.architecture;
             const desc = info && info.description;
             const infoBlob = [dev, ven, arch, desc].filter(Boolean).join(" ").toLowerCase();
-            const infoEmpty = !info || !(dev || ven || arch);
-            _softAdapter = !!(ad.isFallbackAdapter
-              || infoEmpty
-              || /HeadlessChrome/i.test(ua)
-              || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob));
+            // An EMPTY adapter.info is UNKNOWN, not software. Browsers trim
+            // these fields to limit fingerprinting — Chrome already reports
+            // architecture and device as "" on the Apple adapter, and only
+            // vendor:"apple" kept it clear of the old infoEmpty clause. A
+            // player whose browser returns no vendor string would have been
+            // handed the degraded path on real hardware, which is this bug
+            // reachable with no CI involved. Break the tie on LIMITS, measured
+            // 2026-08-28: SwiftShader and llvmpipe both report
+            // maxTextureDimension2D 8192 / maxBufferSize 1 GiB; the Apple
+            // adapter reports 16384 / 2 GiB.
+            const lim = ad.limits || null;
+            const smallLimits = !!(lim && (lim.maxTextureDimension2D <= 8192
+              || lim.maxBufferSize <= 1073741824));
+            const named = /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob);
+            _softAdapter = !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
           }
         }
       } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still tries WebGPU when gpu exists */ }
@@ -101,7 +118,7 @@ const TLX = (function () {
         } catch (_) { /* AUTO */ }
         return null;
       })();
-      let _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _capPref === "1");
+      let _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
       let _blitRT = null, _softImg = null, _softBlitGen = 0;
       let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
@@ -279,7 +296,7 @@ const TLX = (function () {
         }
       }
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
-      _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _capPref === "1");
+      _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
       // or call getContext("2d"|"webgl2") on three's node — init() has not
       // claimed #game yet (see detectSoftwareGL). SAVE SCREENSHOT reads
@@ -302,6 +319,14 @@ const TLX = (function () {
         try { _displayCtx = _displayCanvas.getContext("2d", { alpha: false, willReadFrequently: true }); }
         catch (_) { _displayCtx = null; /* capturePixels can still read the RT */ }
       }
+      // PRESENTATION needs the 2D blit whenever the native swapchain does not
+      // composite — software adapter OR headless. CONTENT is a different
+      // question and must not inherit that: headless Chromium on a REAL GPU is
+      // hardware, and gating content on the blit is what made the macOS runner
+      // (Apple/Metal, verified `anyHardware: true`) run the software half of
+      // every skip — env probe cleared, batches dropped, fallback sky — so the
+      // one machine that could test the player's path tested the other one.
+      // softOutRT asks softGpu(); the content gates ask _softAdapter.
       function softGpu() { return !!(_softAdapter || _softBlit); }
       // apex26.tlxForceBatches=1 — run the INSTANCED draws (and their shadow
       // casters) even on a software adapter. The skips below exist for a Dawn
@@ -336,8 +361,8 @@ const TLX = (function () {
         return { on: all || set.size > 0, has: (part) => all || set.has(part) };
       })();
       // Content skips ask these, not softGpu()/softwareGL, so the switches reach them.
-      function skipBatches() { return softGpu() && !_forceBatches && !_forceHw.has("batches"); }
-      function softContent(part) { return (softwareGL || softGpu()) && !_forceHw.has(part); }
+      function skipBatches() { return _softAdapter && !_forceBatches && !_forceHw.has("batches"); }
+      function softContent(part) { return (softwareGL || _softAdapter) && !_forceHw.has(part); }
       function softOutRT() { return softGpu() ? _ensureBlitRT(W, H) : null; }
       // r185.1 keys the TSL node-builder cache on RenderObject.initialCacheKey,
       // which folds in renderer.contextNode.version + the scene lights hash.
@@ -1084,7 +1109,7 @@ const TLX = (function () {
       // them latch envReady over a cube nothing ever wrote, and every lit
       // surface then samples black. Count the failures instead, and keep the
       // last good cube bound.
-      let _envFailN = 0, _envFailMsg = "";
+      let _envFailN = 0, _envFailMsg = "", _envFailStack = "";
       // Dawn does not THROW when it rejects a pipeline: renderer.render()
       // returns normally and the command buffer is discarded, so a face can
       // come back unwritten with faceOk still true. That is exactly how a
@@ -1093,6 +1118,7 @@ const TLX = (function () {
       // probe mean the probe's own commands did not run.
       let _envErrBase = -1, _envBadProbes = 0, _envGaveUp = false;
       const ENV_PROBE_TRIES = 3;
+      const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
       let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
       const _envInvArr = new Float32Array(16);
       const _envVPArr = new Float32Array(16);
@@ -1709,7 +1735,17 @@ const TLX = (function () {
             // counting it, so envReady cannot latch over an unwritten cube.
             faceOk = false;
             _envFailN++;
+            // A probe that cannot succeed must stop being retried: on real
+            // hardware this threw on EVERY face, so the cost was an exception
+            // per frame for the life of the session, and the mirror release
+            // above would be held forever with it. Four probes' worth of
+            // faces is enough evidence.
+            if (_envFailN >= ENV_FAIL_CAP) _envGaveUp = true;
             if (!_envFailMsg) _envFailMsg = (e && e.message) || String(e);
+            // The message alone ("Cannot read properties of null") names no
+            // site. Keep the first STACK too: on real hardware this throws on
+            // every face and there is no console to read it out of.
+            if (!_envFailStack) _envFailStack = String((e && e.stack) || "").slice(0, 600);
           }
           if (softContent("env")) scene.backgroundNode = prevSky;
           renderer.setRenderTarget(softOutRT());
@@ -1760,7 +1796,7 @@ const TLX = (function () {
         envProbeReady() { return envReady || _envGaveUp; },
         envProbeReset() {
           envFacesMask = 0; envReady = false; _envBlank = false;
-          _envFailN = 0; _envFailMsg = ""; _envErrBase = -1;
+          _envFailN = 0; _envFailMsg = ""; _envFailStack = ""; _envErrBase = -1;
           _envBadProbes = 0; _envGaveUp = false;
         },
 
@@ -2033,7 +2069,21 @@ const TLX = (function () {
               for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
               _chunkFrame.total += rec.chunked.chunks.length;
               _chunkFrame.visible += n;
-              if (n > 0 && !rec.chunked._mirrorsFreed && !vizMat) _mirrorRelease.push(rec.chunked);
+              // Hold the release until the env probe has LATCHED.
+              // releaseMirrors() nulls attribute.array on the stated premise
+              // that "nothing walks the arrays later" — true of the DRAW path,
+              // false of three's NODE BUILDER, which reads
+              // attribute.array.constructor to type an attribute every time it
+              // compiles a program for a pass it has not compiled for before.
+              // The env probe is such a pass, so freeing first makes every
+              // probe face throw "Cannot read properties of null (reading
+              // 'constructor')": measured 2026-08-29 on macos-latest/Metal,
+              // 41 failed faces on WebGL2 and 81 on WebGPU in ~40 s — no
+              // environment reflections at all, and a thrown exception every
+              // frame forever. Invisible on a software adapter only because
+              // the probe skips chunks there.
+              if (n > 0 && !rec.chunked._mirrorsFreed && !vizMat
+                && (envReady || _envGaveUp || !envRT)) _mirrorRelease.push(rec.chunked);
               continue;
             }
             acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
@@ -2227,6 +2277,7 @@ const TLX = (function () {
               badProbes: _envBadProbes, gaveUp: _envGaveUp,
             };
           },
+          envFailStack() { return _envFailStack; },
           viz: vizMode,
           // Which three backend actually came up, and why — the one question a
           // "TLX looks wrong on my phone" report has to answer first, since the
@@ -2236,7 +2287,8 @@ const TLX = (function () {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
               forceWebGL, pin: _glPin, autoStayGL: _autoStayGL, hasGpu: _hasGpu,
               isMobile, mobileTier, isWebKit, liteGpu: _liteGpu,
-              softwareGL, softAdapter: _softAdapter, forceHw: _forceHw.on, forceBatches: _forceBatches,
+              softwareGL, softAdapter: _softAdapter, headless: _headless,
+              forceHw: _forceHw.on, forceBatches: _forceBatches,
               envFail: _envFailN, envFailMsg: _envFailMsg,
               softBlit: _softBlit, capPref: _capPref,
             };

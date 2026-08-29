@@ -322,6 +322,40 @@ test.describe("Livery atlas — ink contrast", () => {
       .toBeLessThan(0.02);
   });
 
+  // The cross-check between the two implementations. tests/unit/crest-marks
+  // asserts this floor against a vm-loaded copy of liverytex; this asserts it
+  // against the SHIPPED module in a real browser, using this file's own local
+  // ratio() rather than the one markPalette uses. Same 4.2 bound on purpose:
+  // two legibility guards that disagree drift apart.
+  test("every team mark clears the same 4.2 floor the sponsor inks do", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(`(() => {
+      ${CONTRAST_FN}
+      const bad = [];
+      let scored = 0;
+      for (const team of Teams.LIST) {
+        for (const liv of Liveries.forTeam(team)) {
+          const cases = [
+            ["cover", [liv.c1, liv.c2], false],
+            ["badge", [liv.fin || liv.c2], true],
+          ];
+          for (const [name, fields, bare] of cases) {
+            const P = LiveryTex.markPalette(team.id, liv, fields, bare);
+            const under = P.plate ? [P.plate] : fields.filter(Boolean);
+            scored++;
+            for (const bg of under) {
+              const covered = Math.max(ratio(P.mark, bg), P.halo ? ratio(P.halo, bg) : 0);
+              if (covered < 4.2) bad.push(team.id + "/" + liv.id + ":" + name + ":" + covered.toFixed(2));
+            }
+          }
+        }
+      }
+      return { bad, scored };
+    })()`);
+    expect(result.scored).toBeGreaterThan(300);
+    expect(result.bad, "a team mark is illegible on the paint it lands on").toEqual([]);
+  });
+
   test("the wing sponsor band is mapped onto geometry, not drawn into nothing", async ({ page }) => {
     await load(page);
     const hit = await page.evaluate(() => {

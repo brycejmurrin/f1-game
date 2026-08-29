@@ -149,7 +149,7 @@ const CRC_TABLE = (() => {
   return t;
 })();
 
-function crc32(buf) {
+export function crc32(buf) {
   let c = -1;
   for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
   return (c ^ -1) >>> 0;
@@ -164,7 +164,7 @@ function pngChunk(type, data) {
   return Buffer.concat([len, body, crc]);
 }
 
-function encodePNG(w, h, rgba) {
+export function encodePNG(w, h, rgba) {
   // ADAPTIVE per-scanline filtering: try all five and keep the one with the
   // smallest sum of absolute signed deviations — the standard heuristic, and
   // the one libpng uses. Sub-only (the original) is fine for synthetic noise
@@ -220,7 +220,7 @@ function encodePNG(w, h, rgba) {
 // well over the commit budget. This decodes it so `import-pack` can downsample
 // and re-encode. Only what canvas emits: 8-bit RGB/RGBA, non-interlaced.
 
-function decodePNG(buf) {
+export function decodePNG(buf) {
   if (buf.readUInt32BE(0) !== 0x89504e47) throw new Error("not a PNG");
   let off = 8, w = 0, h = 0, depth = 0, colour = 0;
   const idat = [];
@@ -1679,4 +1679,8 @@ async function main() {
   }
 }
 
-main().catch((e) => fail(e && e.stack ? e.stack : String(e)));
+// Only when RUN, not when imported. tools/trace-logo.mjs reuses decodePNG and
+// tools/crest-sweep.mjs reuses encodePNG rather than adding a third copy of
+// each to the tree (there is already a second decoder in import-models.mjs).
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  main().catch((e) => fail(e && e.stack ? e.stack : String(e)));

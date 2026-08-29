@@ -72,6 +72,7 @@
 <script src="../js/car/parts.js"></script>
 <script src="../js/car/car3d.js"></script>
 <script src="../js/car/liveries.js"></script>
+<script src="../js/car/crest-paths.js"></script>
 <script src="../js/car/liverytex.js"></script>
 <script src="../js/game/carmesh.js"></script>
 <script>
@@ -82,9 +83,9 @@
   const fail = (m) => { errEl.style.display = "grid"; errEl.textContent = m; };
   if (!GLX.init(canvas)) { fail("WebGL2 unavailable"); return; }
   CarMesh.init(GLX);
-  // The real team marks load asynchronously; rebuild once they land or the
-  // viewer shows the fallback vector crests forever.
-  if (LiveryTex.onLogosReady) LiveryTex.onLogosReady(() => rebuild());   // rebuild() frees the old atlas itself
+  // The custom team's uploaded emblem loads asynchronously; rebuild when it
+  // changes. The eleven shipped marks are vector and need no wait.
+  if (LiveryTex.onMarkChange) LiveryTex.onMarkChange(() => rebuild());   // rebuild() frees the old atlas itself
 
   // Car is drawn through an X-reflection: the in-race car model matrix is a
   // reflection (det −1), and the decal UVs are authored for that handedness, so
