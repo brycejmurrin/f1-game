@@ -39,6 +39,12 @@ const SEG = 16;   // curve flattening; 16 is well under the error a mip hides
 class RecCtx {
   constructor() {
     this.ops = [];
+    // Image draws are recorded SEPARATELY from `ops`. They carry no path, and
+    // the op loop in replay() walks `op.pts` on every entry — a shapeless op in
+    // that list would throw, and its undefined style would pollute the colour
+    // census. drawLogoImage is the only caller and it needs exactly one fact:
+    // which shadow colour was live for each pass.
+    this.imageOps = [];
     this.sub = [];
     this.cur = null;
     this.st = { lw: 1, fill: "#000", stroke: "#000", font: "10px sans-serif",
@@ -150,7 +156,7 @@ class RecCtx {
                     font: this.st.font, shadow: this.st.shadow });
   }
   strokeText() {}
-  drawImage() { this.imageUsed = true; }
+  drawImage() { this.imageUsed = true; this.imageOps.push({ shadow: this.st.shadow }); }
   createLinearGradient() { const g = { addColorStop() {} }; return g; }
   createRadialGradient() { const g = { addColorStop() {} }; return g; }
   clearRect() {}

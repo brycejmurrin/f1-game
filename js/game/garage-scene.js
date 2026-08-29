@@ -617,9 +617,19 @@ function paintDress(team, liv, info) {
   ctx.strokeRect(D_CREST.x + 12, D_CREST.y + 12, D_CREST.w - 24, D_CREST.h - 24);
   const inner = { x: D_CREST.x + 40, y: D_CREST.y + 40, w: D_CREST.w - 80, h: D_CREST.h - 80 };
   if (img && LiveryTex.drawLogoImage) {
+    // Their contrast-derived halo, and the livery's logo colour as the TINT.
+    // tint=null was the defect: every team ships a PNG mark, so the vector
+    // branch below (which does honour the livery) never ran and TEAM LOGO
+    // could not recolour the wall crest at all. null still means "keep the
+    // mark's own colours", so a livery that sets no logo colour is unchanged,
+    // and the halo keeps it legible against the new backing either way.
     const halo = (img._avg && LiveryTex.contrast && LiveryTex.contrast(img._avg, field) < 2.6 && LiveryTex.inkOn)
       ? LiveryTex.inkOn([img._avg]) : null;
-    LiveryTex.drawLogoImage(ctx, img, inner, null, halo);
+    // LOGO DETAIL rims the emblem here for the same reason it rims the seven
+    // single-colour crests: an uploaded mark is arbitrary art with no second
+    // element to recolour, so an outline is the only honest place for it.
+    LiveryTex.drawLogoImage(ctx, img, inner, (liv && liv.logo) || null, halo,
+                            (liv && liv.logo2) || null);
   } else {
     LiveryTex.drawCrest(ctx, team.id, inner, { liv, field, bare: false });
   }
@@ -869,9 +879,19 @@ if (typeof LiveryTex !== "undefined" && LiveryTex.onMarkChange)
 const DRESS_OPTS = { glow: 0.62 };
 
 // ── caches ─────────────────────────────────────────────────────────────────
-// Single-slot, keyed on team + store revision + the resolved primary colour, so
-// a team chip click or a livery edit rebuilds and the old GL buffers are freed
-// on the spot. One slot cannot leak more than one generation.
+// Single-slot, keyed on team + EVERY livery colour the bay consumes, so a team
+// chip click or a livery edit rebuilds and the old GL buffers are freed on the
+// spot. One slot cannot leak more than one generation.
+//
+// The key used to carry liv.c1 ALONE (and this comment used to claim a "store
+// revision" term that was never there). The correct colours reached rebuild()
+// on every frame — resolveLivery returns a fresh object including the unsaved
+// draft — and were thrown away by the key compare, so editing ACCENT, BODY
+// STRIPE, DETAIL or TEAM LOGO left the whole bay on its old paint: shell,
+// props, floor band and the dress atlas with the crest and boards. The car
+// repainted (setup-ui.js livePreviewDraft busts the decal atlas and the
+// preview mesh key) and the bay did not, which is exactly how it was reported.
+// A slot that any future dressing reads MUST be added here too.
 let floorMesh = null, cacheKey = "";
 const dressMesh = {};
 let dressTex = null, dressFail = 0;
@@ -879,7 +899,13 @@ const propMesh = {};
 const acc = () => ({ pos: [], nrm: [], col: [], idx: [] });
 function rebuild(team, liv, info) {
   const drv = (team && team.drivers) || [];
-  const key = (team && team.id) + "|" + (rgb(liv && liv.c1, [0, 0, 0])).join(",") +
+  // Same idiom as getCockpitWheel's _cockpitWheelKey (js/game/carmesh.js): fold
+  // every colour the build consumes, rounded, into one string.
+  const kc = (c) => (c ? rgb(c, [0, 0, 0]).map((v) => v.toFixed(3)).join(",") : "-");
+  const livKey = kc(liv && liv.c1) + "/" + kc(liv && (liv.accent || liv.stripe || liv.c2)) +
+                 "/" + kc(liv && liv.c2) + "/" + kc(liv && liv.logo) +
+                 "/" + kc(liv && liv.logo2);
+  const key = (team && team.id) + "|" + livKey +
               "|" + logoGen + "|" + ((drv[0] && drv[0].num) + "-" + (drv[1] && drv[1].num)) +
               "|" + boardKey(info);
   if (key === cacheKey && shellMesh) return;

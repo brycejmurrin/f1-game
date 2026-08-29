@@ -292,6 +292,35 @@ const LiveryTex = (function () {
   // livery? Exported because the garage lightbox has to choose its field BEFORE
   // it can ask for a palette, and it used to key that choice on the logo PNG's
   // average pixel — which is null the moment a team has no PNG.
+  // WHERE does a mark's second colour live? Every mark has a dominant shape and
+  // at most one other coloured element, but that element is a different thing
+  // per mark, so one editor row has to resolve to three different slots:
+  //   plate    redbull's gold disc, ferrari's yellow shield — a backing
+  //   alt      cadillac's second traced layer, haas's ring, the monogram box
+  //   outline  the seven single-colour silhouettes, which have nowhere for a
+  //            second colour to GO until one is drawn — Audi's four rings are
+  //            the case that was asked for by name
+  // Derived from the traced role data where there is any, so re-running
+  // tools/trace-logo.mjs cannot leave this table lying.
+  const SECOND_DRAWN = { haas: "alt", mercedes: "outline", audi: "outline" };
+  function secondSlot(teamId, bare) {
+    const spec = typeof CrestPaths !== "undefined" && CrestPaths[teamId];
+    const roles = spec && spec.roles;
+    let slot;
+    if (roles) slot = roles.includes("alt") ? "alt"
+                    : roles.includes("plate") ? "plate" : "outline";
+    else slot = SECOND_DRAWN[teamId] || "alt";   // the monogram's box is `alt`
+    if (!bare) return slot;
+    // The fin badge DROPS second elements: crestTraced skips every "plate"
+    // role there, and crestHaas's ring and crestGeneric's box are both gated
+    // on !bare. A slot nothing paints is a dead colour picker, so those fall
+    // through to the outline — measured, not assumed: haas/badge came back
+    // MISSING from the paint census until this line existed.
+    if (slot === "plate") return "outline";
+    if (slot === "alt" && !(roles && roles.includes("alt"))) return "outline";
+    return slot;
+  }
+
   function markBase(teamId, liv) {
     if (liv && liv.logo) return liv.logo.slice();
     const own = !liv || liv.id === "default";
@@ -334,14 +363,26 @@ const LiveryTex = (function () {
     //    wings, which then had to flip colour to contrast a plate it never asked
     //    for. A null brand plate means "this mark has no backing", permanently.
     const wantsPlate = !!(MARK_BRAND[teamId] && MARK_BRAND[teamId].plate);
+    const slot2 = secondSlot(teamId, bare);
     let plate = null;
     if (!bare && wantsPlate) {
-      const cands = [B && B.plate, liv && liv.pod, liv && liv.c1, liv && liv.c2];
-      // Against the PRIMARY paint only. A plate is opaque and covers whatever
-      // wash is on top of the panel, so asking it to separate from the wash
-      // colour too rejects the Red Bull gold disc on a gold-accented livery and
-      // leaves the bulls floating with nothing behind them.
-      for (const c of cands) if (c && contrast(c, flds[0]) >= 1.6) { plate = c.slice(); break; }
+      // An authored LOGO DETAIL colour IS the plate for the two marks that have
+      // one, and it wins OUTRIGHT rather than being layered over a resolved
+      // candidate. Gating it on a candidate having resolved first left the
+      // colour homeless on the `pastel` livery, where nothing clears 1.6
+      // against the paint and `plate` stays null — measured, both plate marks.
+      // Taken as given, like the paint rows: the mark is still floored against
+      // whatever the player chose (`under`, below), so the lockup cannot go
+      // unreadable — only the player's own disc can go quiet.
+      if (slot2 === "plate" && liv && liv.logo2) plate = liv.logo2.slice();
+      else {
+        const cands = [B && B.plate, liv && liv.pod, liv && liv.c1, liv && liv.c2];
+        // Against the PRIMARY paint only. A plate is opaque and covers whatever
+        // wash is on top of the panel, so asking it to separate from the wash
+        // colour too rejects the Red Bull gold disc on a gold-accented livery
+        // and leaves the bulls floating with nothing behind them.
+        for (const c of cands) if (c && contrast(c, flds[0]) >= 1.6) { plate = c.slice(); break; }
+      }
     }
     // An opaque plate REPLACES everything behind it, so it becomes the only
     // surface that matters; without one the mark still faces the whole list.
@@ -357,12 +398,40 @@ const LiveryTex = (function () {
     let mark = markBase(teamId, liv);
     const brandPair = !!(B && plate && B.plate &&
       plate.join() === B.plate.join() && mark.join() === B.mark.join());
+    // An AUTHORED logo colour is a decision the player made in the editor's
+    // TEAM LOGO row, and the substitution below used to overrule it in silence:
+    // 9015 of 12112 team x livery x pick x surface combinations came back
+    // painted in something OTHER than the colour that was picked (measured
+    // 2026-08-29, tools/logo-authored-sweep.mjs). Audi is the reported case —
+    // its fin is [0.96,0.02,0.22], which only near-white and near-black clear
+    // 4.2, so every mid-tone in the picker collapsed to the same fallback and
+    // TEAM LOGO looked dead on the tail. Outline the colour instead of
+    // replacing it: mark+halo is the same bargain crest-marks.test.mjs scores,
+    // so legibility is unchanged and the player's choice survives.
+    let authoredHalo = null;
     if (!brandPair && cMin(mark, under) < MARK_FLOOR) {
-      const alts = [liv && liv.logo, B && B.mark, liv && liv.stripe,
-                    liv && liv.accent, liv && liv.c2, liv && liv.c1];
-      mark = null;
-      for (const c of alts) if (c && cMin(c, under) >= MARK_FLOOR) { mark = c.slice(); break; }
-      if (!mark) mark = inkOn(under).slice();
+      if (liv && liv.logo) {
+        // The halo has to clear the FIELD — it is what carries legibility once
+        // the mark cannot — AND separate from the mark, because an outline the
+        // mark sinks into is not an outline. Among the pair that qualify, take
+        // the one that reads hardest against the paint.
+        let best = null, bestField = -1;
+        for (const h of [INK_LIGHT, INK_DARK]) {
+          const f = cMin(h, under);
+          if (f < MARK_FLOOR || contrast(h, mark) < INK_FLOOR) continue;
+          if (f > bestField) { bestField = f; best = h; }
+        }
+        if (best) authoredHalo = best.slice();
+      }
+      // No halo can carry it: substitute, as before. `liv.logo` is NOT in this
+      // list — when it is set it IS `mark`, and it just failed this same test.
+      if (!authoredHalo) {
+        const alts = [B && B.mark, liv && liv.stripe,
+                      liv && liv.accent, liv && liv.c2, liv && liv.c1];
+        mark = null;
+        for (const c of alts) if (c && cMin(c, under) >= MARK_FLOOR) { mark = c.slice(); break; }
+        if (!mark) mark = inkOn(under).slice();
+      }
     }
     // 3. alt, scored against `under` AND `mark` — a second colour that vanishes
     //    into either one is not a second colour. The grey ramp is the fallback
@@ -378,10 +447,23 @@ const LiveryTex = (function () {
       const c = [g, g, g], v = score(c);
       if (v > best) { best = v; alt = c; }
     }
+    // An authored LOGO DETAIL colour, landed in whichever slot this mark's
+    // second colour actually occupies. `alt` is taken as given for the same
+    // reason `plate` is — it is a colour the player chose, and the shapes it
+    // paints (counters, a ring, a keyline) are secondary by construction.
+    if (liv && liv.logo2) {
+      if (slot2 === "alt") alt = liv.logo2;
+      // slot2 === "plate" was handled where the plate is resolved.
+    }
     return {
       mark: mark.slice(), alt: alt.slice(), plate: plate,
       brandPair,
-      halo: !brandPair && cMin(mark, under) < INK_TARGET ? haloFor(mark).slice() : null,
+      halo: authoredHalo ||
+        (!brandPair && cMin(mark, under) < INK_TARGET ? haloFor(mark).slice() : null),
+      // Non-null ONLY for a mark with no plate and no alt layer: a rim stroked
+      // under the shape so a second colour has somewhere to read. Null keeps
+      // every shipped mark pixel-identical, which is why it is opt-in.
+      outline: (liv && liv.logo2 && slot2 === "outline") ? liv.logo2.slice() : null,
     };
   }
 
@@ -636,30 +718,44 @@ const LiveryTex = (function () {
       return w ? [r / w / 255, g / w / 255, b / w / 255] : null;
     } catch (_) { return null; }
   }
-  function drawLogoImage(ctx, img, R, tint, halo) {
+  // An UPLOADED emblem is the one mark that never goes through markPalette —
+  // it is arbitrary art, so there is no second element to recolour. Its LOGO
+  // DETAIL colour is therefore an outline, the same meaning the seven
+  // single-colour crests give it.
+  //
+  // Resolving the painted source FIRST also closes a hole this function had:
+  // the tinted path used to `return` from its own branch before any halo pass
+  // existed, so a tinted emblem got no legibility halo at all — the halo
+  // argument was silently ignored for exactly the uploads most likely to need
+  // it. One source, one set of passes, both cases.
+  function drawLogoImage(ctx, img, R, tint, halo, outline) {
     const pad = 0.015, bw = R.w * (1 - pad * 2), bh = R.h * (1 - pad * 2);
     const sc = Math.min(bw / img.naturalWidth, bh / img.naturalHeight);
     const w = img.naturalWidth * sc, h = img.naturalHeight * sc;
     const x = R.x + (R.w - w) / 2, y = R.y + (R.h - h) / 2;
-    if (!tint) {
-      if (halo) {
-        ctx.save();
-        ctx.shadowColor = css(halo);
-        ctx.shadowBlur = Math.max(4, w * 0.085);
-        for (let i = 0; i < 5; i++) ctx.drawImage(img, x, y, w, h);
-        ctx.restore();
-      }
-      ctx.drawImage(img, x, y, w, h);
-      return;
+    let src = img;
+    if (tint) {
+      const off = document.createElement("canvas");
+      off.width = Math.max(1, Math.round(w)); off.height = Math.max(1, Math.round(h));
+      const oc = off.getContext("2d");
+      oc.drawImage(img, 0, 0, off.width, off.height);
+      oc.globalCompositeOperation = "source-in";
+      oc.fillStyle = css(tint);
+      oc.fillRect(0, 0, off.width, off.height);
+      src = off;
     }
-    const off = document.createElement("canvas");
-    off.width = Math.max(1, Math.round(w)); off.height = Math.max(1, Math.round(h));
-    const oc = off.getContext("2d");
-    oc.drawImage(img, 0, 0, off.width, off.height);
-    oc.globalCompositeOperation = "source-in";
-    oc.fillStyle = css(tint);
-    oc.fillRect(0, 0, off.width, off.height);
-    ctx.drawImage(off, x, y, w, h);
+    // Halo outside, outline inside — the same order and the same reason as
+    // drawCrest, so an emblem needing both reads the way a crest does.
+    const pass = (col, blur, n) => {
+      ctx.save();
+      ctx.shadowColor = css(col);
+      ctx.shadowBlur = blur;
+      for (let i = 0; i < n; i++) ctx.drawImage(src, x, y, w, h);
+      ctx.restore();
+    };
+    if (halo) pass(halo, Math.max(4, w * 0.085), 5);
+    if (outline) pass(outline, Math.max(2, w * 0.030), 3);
+    ctx.drawImage(src, x, y, w, h);
   }
 
   // drawCrest(ctx, teamId, R, { liv, field, bare, palette })
@@ -685,6 +781,18 @@ const LiveryTex = (function () {
       ctx.save();
       ctx.shadowColor = css(P.halo);
       ctx.shadowBlur = Math.max(3, Math.min(R.w, R.h) * 0.05);
+      for (let i = 0; i < 3; i++) fn(ctx, R, P, !!o.bare, teamId);
+      ctx.restore();
+    }
+    // The outline sits INSIDE the halo: tighter blur, drawn second, so a mark
+    // that needs both shows a legibility halo with the player's rim on top of
+    // it rather than one swallowing the other. Same repeated-draw trick — a
+    // crest paints fills, not strokes, and does not hand its path back, so
+    // there is nothing here to stroke directly.
+    if (P.outline) {
+      ctx.save();
+      ctx.shadowColor = css(P.outline);
+      ctx.shadowBlur = Math.max(2, Math.min(R.w, R.h) * 0.022);
       for (let i = 0; i < 3; i++) fn(ctx, R, P, !!o.bare, teamId);
       ctx.restore();
     }
@@ -828,14 +936,14 @@ const LiveryTex = (function () {
       (img && img._avg && contrast(img._avg, bg) < 2.6 ? ink : null);
     if (LOGOS[teamId]) {
       drawLogoImage(ctx, LOGOS[teamId], REGIONS.crest, logo,
-                    markHalo(LOGOS[teamId], c1, inkCrest));
+                    markHalo(LOGOS[teamId], c1, inkCrest), colors.logo2 || null);
     } else drawCrest(ctx, teamId, REGIONS.crest, { liv: colors, field: [c1, c2], bare: false });
     const finWash = finArt || [stripe, c1, accent, inkFin].filter(Boolean)
       .find((c) => contrast(c, finPaint) >= 1.8) || inkFin;
     drawTailGraphic(ctx, teamId, REGIONS.fin, c1, finPaint, finWash);
     if (LOGOS[teamId]) {
       drawLogoImage(ctx, LOGOS[teamId], REGIONS.finBadge, logo,
-                    markHalo(LOGOS[teamId], finPaint, inkFin));
+                    markHalo(LOGOS[teamId], finPaint, inkFin), colors.logo2 || null);
     } else drawCrest(ctx, teamId, REGIONS.finBadge, { liv: colors, field: finPaint, bare: true });
 
     // Sponsor wordmarks.
@@ -878,7 +986,8 @@ const LiveryTex = (function () {
   // contrast/inkOn are exported for the GARAGE crest wall (js/game/garage-scene.js),
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
-  return { SIZE, REGIONS, buildAtlas, drawCrest, markBase, markPalette, MARK_FLOOR,
+  return { SIZE, REGIONS, buildAtlas, drawCrest, markBase, markPalette,
+           MARK_FLOOR, INK_FLOOR,
            drawLogoImage, contrast, inkOn, onMarkChange, setTeamLogo, LOGOS,
            CRESTS, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN };
 })();

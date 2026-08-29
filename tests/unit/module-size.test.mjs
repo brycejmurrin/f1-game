@@ -518,7 +518,24 @@ const CEILINGS = {
   // 2947 -> 2960: FINISH_SURFACE grew from two rows to six (matte, brushed,
   // pearl, carbon) plus the note explaining that a finish costs a SURFACE ID
   // in the shaders' 20-30 classification chain rather than a material uniform.
-  "js/car/car3d.js": 3004,   // +44: wheel cover is a rim lip, a dish and a boss
+  // 3004 -> 3032. +20 for the exhaust heat-stain sleeve and its heatOf() blend:
+  // the fuel `flame` key reached only three ~2 cm glaze pips (0.0028 m2), which
+  // tools/parts-sweep.mjs --clamp-scan reads as a dead key. +8 for threading the
+  // brakes `rim` colour into the rim faces, which was computed and never read.
+  // 3032 -> 3068. +36 for the DIFFUSER, which was one closed loft and read as
+  // a featureless grey slab from directly behind — the view a chase camera
+  // holds for most of a lap (scratch/renders/car/rb4-diffuser.png). Now two
+  // tunnels with a ramped ceiling, outer walls, strakes and a trailing gurney.
+  // 3068 -> 3077 for the addPodFlankSpan TRAP note: its `proud` offset is
+  // measured off the loft control width, not the rendered pod surface, and
+  // the two diverge by up to 99 mm. Two flank-crease attempts rendered as no
+  // change at all before that was measured; the next person gets the answer.
+  // UNION with the deploy tip, which added +6 for the cockpit accent dimming
+  // reaching every livery paint in the driver's view (nose, pod, halo, stripe,
+  // noseStripe), not just c2/accent/wing/fin: 32 of 152 shipped liveries put a
+  // pale non-body surface in the cockpit before it, 0 after. Neither lineage's
+  // number fits the file that carries both, so this is RE-MEASURED on the union.
+  "js/car/car3d.js": 3087,   // +44: wheel cover is a rim lip, a dish and a boss
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

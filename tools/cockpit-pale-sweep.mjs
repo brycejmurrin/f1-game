@@ -31,9 +31,17 @@ export const EYE = [0, 0.82, -0.20];
 export function loadCar3D() {
   const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN };
   ctx.globalThis = ctx; vm.createContext(ctx);
-  for (const f of ["js/log.js", "js/mat4.js", "js/car/teams.js", "js/car/parts.js", "js/car/car3d.js"])
+  // liveries.js joins the load so callers can sweep the ACTUAL paint a player
+  // races in. The first version of this loader stopped at teams.js, which is
+  // why the guard built on it swept every team with `opts.livery` absent — and
+  // therefore could not see nose/pod/halo/stripe/noseStripe at all.
+  for (const f of ["js/log.js", "js/mat4.js", "js/car/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/car3d.js"])
     vm.runInContext(readFileSync(f, "utf8"), ctx, { filename: f });
-  return { Car3D: vm.runInContext("Car3D", ctx), Teams: vm.runInContext("typeof Teams !== 'undefined' ? Teams : null", ctx) };
+  return {
+    Car3D: vm.runInContext("Car3D", ctx),
+    Teams: vm.runInContext("typeof Teams !== 'undefined' ? Teams : null", ctx),
+    Liveries: vm.runInContext("typeof Liveries !== 'undefined' ? Liveries : null", ctx),
+  };
 }
 
 export function buildCockpit(Car3D, c1, c2, teamId) {
