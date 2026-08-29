@@ -1026,6 +1026,29 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // would not say which path did it.
   assert.match(src, /apex26\.tlxForceHw/,
     "the per-gate hardware-path switch must stay reachable from a software run");
+  // _softAdapter must classify the ADAPTER. Headless is a presentation fact —
+  // headless Chromium on a real GPU is hardware — and putting it here made the
+  // Apple/Metal runner, the project's only real GPU, take the software half of
+  // every content skip. It belongs to _softBlit, which exists precisely because
+  // a headless swapchain does not composite.
+  const sniff = src.slice(src.indexOf("let _softAdapter = false;"),
+    src.indexOf("let forceWebGL"));
+  // The VERDICT expression itself, not the surrounding block: _headless is
+  // declared in this region on purpose (the blit needs it), so slicing wider
+  // would assert against its own definition.
+  const verdict = src.slice(src.indexOf("_softAdapter = !!("),
+    src.indexOf("} catch (_) { _softAdapter = false;"));
+  assert.doesNotMatch(verdict, /HeadlessChrome/,
+    "the adapter verdict must not treat headless as software — that is a presentation fact");
+  assert.match(src, /_softBlit = !forceWebGL && _capPref !== "0" && !!\(_softAdapter \|\| _headless \|\| _capPref === "1"\);/,
+    "the blit must follow headless: a headless swapchain does not composite even on real silicon");
+  // An empty adapter.info is UNKNOWN, not software. Browsers trim those fields
+  // for fingerprinting reasons, so a player with no vendor string must not be
+  // handed the degraded path on real hardware.
+  assert.doesNotMatch(verdict, /infoEmpty/,
+    "empty adapter.info must not be a software verdict on its own");
+  assert.match(sniff, /maxTextureDimension2D <= 8192/,
+    "the tie-break is measured LIMITS — SwiftShader/llvmpipe 8192, Apple 16384");
   assert.match(src, /function softContent\(part\)\s*\{\s*return \(softwareGL \|\| _softAdapter\) && !_forceHw\.has\(part\);/,
     "content skips must route through softContent(part) — software by default, forceable per gate");
   assert.doesNotMatch(src, /softContent\(\)/,

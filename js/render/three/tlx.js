@@ -64,6 +64,13 @@ const TLX = (function () {
       // GPU error tally — see the onuncapturederror hook below.
       let _gpuErrors = 0, _gpuFirstError = null;
       const GPU_ERR_LOG_CAP = 8;
+      // Headless is a fact about PRESENTATION, not about silicon: headless
+      // Chromium on a real GPU IS hardware. It belongs to _softBlit (which
+      // exists because a headless swapchain does not composite) and never
+      // here. This clause is what made the one machine that can test a
+      // player's path — macos-latest, Apple/Metal, measured anyHardware:true —
+      // take the software half of every content skip instead.
+      const _headless = /HeadlessChrome/i.test(ua);
       try {
         if (navigator.gpu && navigator.gpu.requestAdapter) {
           const ad = await navigator.gpu.requestAdapter();
@@ -74,11 +81,21 @@ const TLX = (function () {
             const arch = info && info.architecture;
             const desc = info && info.description;
             const infoBlob = [dev, ven, arch, desc].filter(Boolean).join(" ").toLowerCase();
-            const infoEmpty = !info || !(dev || ven || arch);
-            _softAdapter = !!(ad.isFallbackAdapter
-              || infoEmpty
-              || /HeadlessChrome/i.test(ua)
-              || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob));
+            // An EMPTY adapter.info is UNKNOWN, not software. Browsers trim
+            // these fields to limit fingerprinting — Chrome already reports
+            // architecture and device as "" on the Apple adapter, and only
+            // vendor:"apple" kept it clear of the old infoEmpty clause. A
+            // player whose browser returns no vendor string would have been
+            // handed the degraded path on real hardware, which is this bug
+            // reachable with no CI involved. Break the tie on LIMITS, measured
+            // 2026-08-28: SwiftShader and llvmpipe both report
+            // maxTextureDimension2D 8192 / maxBufferSize 1 GiB; the Apple
+            // adapter reports 16384 / 2 GiB.
+            const lim = ad.limits || null;
+            const smallLimits = !!(lim && (lim.maxTextureDimension2D <= 8192
+              || lim.maxBufferSize <= 1073741824));
+            const named = /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob);
+            _softAdapter = !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
           }
         }
       } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still tries WebGPU when gpu exists */ }
@@ -101,7 +118,7 @@ const TLX = (function () {
         } catch (_) { /* AUTO */ }
         return null;
       })();
-      let _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _capPref === "1");
+      let _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
       let _blitRT = null, _softImg = null, _softBlitGen = 0;
       let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
@@ -279,7 +296,7 @@ const TLX = (function () {
         }
       }
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
-      _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _capPref === "1");
+      _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
       // or call getContext("2d"|"webgl2") on three's node — init() has not
       // claimed #game yet (see detectSoftwareGL). SAVE SCREENSHOT reads
@@ -2244,7 +2261,8 @@ const TLX = (function () {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
               forceWebGL, pin: _glPin, autoStayGL: _autoStayGL, hasGpu: _hasGpu,
               isMobile, mobileTier, isWebKit, liteGpu: _liteGpu,
-              softwareGL, softAdapter: _softAdapter, forceHw: _forceHw.on, forceBatches: _forceBatches,
+              softwareGL, softAdapter: _softAdapter, headless: _headless,
+              forceHw: _forceHw.on, forceBatches: _forceBatches,
               envFail: _envFailN, envFailMsg: _envFailMsg,
               softBlit: _softBlit, capPref: _capPref,
             };
