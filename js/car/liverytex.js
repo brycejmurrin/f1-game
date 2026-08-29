@@ -269,7 +269,7 @@ const LiveryTex = (function () {
     mclaren:     { mark: BRAND.papaya,         alt: [0.06, 0.06, 0.08],    plate: null },
     redbull:     { mark: BRAND.rbRed,          alt: BRAND.rbNavy,          plate: BRAND.rbGold },
     alpine:      { mark: [0.0, 0.576, 0.8],    alt: [1.0, 0.529, 0.737],   plate: null },
-    racingbulls: { mark: [0.97, 0.97, 0.98],   alt: BRAND.rbRed,           plate: [0.086, 0.204, 0.796] },
+    racingbulls: { mark: [0.086, 0.204, 0.796], alt: BRAND.rbRed,          plate: null },
     haas:        { mark: [0.97, 0.97, 0.98],   alt: BRAND.haasRed,         plate: null },
     williams:    { mark: [0.97, 0.97, 0.98],   alt: [0.059, 0.235, 0.788], plate: null },
     audi:        { mark: [0.93, 0.93, 0.95],   alt: [0.98, 0.28, 0.05],    plate: null },
@@ -346,9 +346,18 @@ const LiveryTex = (function () {
     // An opaque plate REPLACES everything behind it, so it becomes the only
     // surface that matters; without one the mark still faces the whole list.
     const under = plate ? [plate] : flds;
-    // 2. mark, floored against `under`.
+    // 2. mark, floored against `under` — EXCEPT on a team's own brand pairing.
+    //    Red Bull's red bulls on their gold disc score 3.25, so the floor threw
+    //    the red away and painted the bulls navy: a legibility rule that had
+    //    destroyed the one thing it was protecting. A brand mark on its own
+    //    brand plate is a pairing someone designed, and the plate exists to
+    //    carry it; the floor is there to defend against ARBITRARY livery paint,
+    //    which is still every other case below. The plate itself must still
+    //    clear the field, so the lockup can never vanish as a whole.
     let mark = markBase(teamId, liv);
-    if (cMin(mark, under) < MARK_FLOOR) {
+    const brandPair = !!(B && plate && B.plate &&
+      plate.join() === B.plate.join() && mark.join() === B.mark.join());
+    if (!brandPair && cMin(mark, under) < MARK_FLOOR) {
       const alts = [liv && liv.logo, B && B.mark, liv && liv.stripe,
                     liv && liv.accent, liv && liv.c2, liv && liv.c1];
       mark = null;
@@ -371,7 +380,8 @@ const LiveryTex = (function () {
     }
     return {
       mark: mark.slice(), alt: alt.slice(), plate: plate,
-      halo: cMin(mark, under) < INK_TARGET ? haloFor(mark).slice() : null,
+      brandPair,
+      halo: !brandPair && cMin(mark, under) < INK_TARGET ? haloFor(mark).slice() : null,
     };
   }
 
@@ -379,33 +389,57 @@ const LiveryTex = (function () {
   // 34 px worst case is enforced by construction rather than by review.
   const swMin = (f, k) => f.S(Math.max(STROKE_MIN, k));
 
-  // One charging bull. `dir` mirrors it; the caller places it in the fit box.
-  // Legs are 0.13 of the bull's own width, not the 0.10 they were: at the pair
-  // layout that made them 0.05 of the fit box, under STROKE_MIN, so the bull
-  // lost its legs before it lost anything else.
-  function drawBull(ctx, f, x0, y0, w, h, dir, style) {
-    const U = (u) => f.X(x0 + (dir > 0 ? u : 1 - u) * w);
-    const V = (v) => f.Y(y0 + v * h);
+  // ── traced marks ───────────────────────────────────────────────────────────
+  // Eight of the eleven marks are path data in js/car/crest-paths.js, traced
+  // from the bitmaps that used to ship in assets/logos (tools/trace-logo.mjs).
+  // Hand-drawing them from memory as chained canvas calls did not work: Red
+  // Bull's two charging bulls came out as a pair of pigs and Aston's spread
+  // wings as three chevrons. A silhouette is data, and the bitmaps had it even
+  // though they were useless as art.
+  //
+  // Only M, L and Z — the tracer emits polylines, because a contour walked at
+  // 384 px and simplified to a few tenths of a percent is already smoother than
+  // a curve anyone would fit to it, and a straight-line path needs no curve
+  // support here or in the offline rasteriser that measures these.
+  function tracePath(ctx, f, d) {
+    let i = 0, cmd = "";
+    const num = () => {
+      while (i < d.length && (d[i] === " " || d[i] === ",")) i++;
+      const st = i;
+      while (i < d.length && "-+.0123456789eE".indexOf(d[i]) >= 0) i++;
+      return parseFloat(d.slice(st, i));
+    };
     ctx.beginPath();
-    ctx.moveTo(U(0.02), V(0.34));                              // tail tip (up)
-    ctx.quadraticCurveTo(U(0.12), V(0.30), U(0.16), V(0.42));  // tail down to rump
-    ctx.quadraticCurveTo(U(0.30), V(0.24), U(0.46), V(0.24));  // back to shoulder hump
-    ctx.quadraticCurveTo(U(0.58), V(0.26), U(0.64), V(0.36));  // neck lowered
-    ctx.lineTo(U(0.72), V(0.10));                              // horn (sweeps up-fwd)
-    ctx.lineTo(U(0.80), V(0.12));
-    ctx.lineTo(U(0.78), V(0.34));                              // horn base
-    ctx.quadraticCurveTo(U(0.94), V(0.40), U(0.96), V(0.48));  // brow to muzzle
-    ctx.quadraticCurveTo(U(0.90), V(0.56), U(0.775), V(0.56)); // jaw to chest
-    ctx.lineTo(U(0.775), V(0.92));                             // front leg (lunging)
-    ctx.lineTo(U(0.645), V(0.92));
-    ctx.lineTo(U(0.62), V(0.60));                              // belly
-    ctx.lineTo(U(0.315), V(0.62));
-    ctx.lineTo(U(0.315), V(0.92));                             // rear leg
-    ctx.lineTo(U(0.185), V(0.92));
-    ctx.lineTo(U(0.12), V(0.55));                              // rump underside
-    ctx.closePath();
-    ctx.fillStyle = style;
-    ctx.fill();
+    while (i < d.length) {
+      const c = d[i];
+      if (c === " " || c === ",") { i++; continue; }
+      if (c >= "A" && c <= "Z") { cmd = c; i++; }
+      if (cmd === "Z") { ctx.closePath(); continue; }
+      const x = num(), y = num();
+      if (cmd === "M") { ctx.moveTo(f.X(x), f.Y(y)); cmd = "L"; }
+      else ctx.lineTo(f.X(x), f.Y(y));
+    }
+  }
+
+  // One crest function for every traced mark. Layers paint back to front and
+  // each takes the palette colour its role names; "plate" layers are dropped on
+  // the fin badge, which is why bare mode needs no special case — drop
+  // Ferrari's yellow shield and its horse is left standing on its own.
+  function crestTraced(ctx, R, P, bare, teamId) {
+    const spec = typeof CrestPaths !== "undefined" && CrestPaths[teamId];
+    if (!spec) { crestGeneric(ctx, R, P, bare, teamId); return; }
+    const f = fit(R, CREST_MARGIN);
+    ctx.save();
+    for (let i = 0; i < spec.d.length; i++) {
+      const role = spec.roles[i] || "mark";
+      if (role === "plate" && (bare || !P.plate)) continue;
+      ctx.fillStyle = css(role === "plate" ? P.plate : role === "alt" ? P.alt : P.mark);
+      tracePath(ctx, f, spec.d[i]);
+      // evenodd, so a counter walked as its own loop punches a HOLE rather than
+      // filling solid — the whole reason the bitmaps had to go.
+      ctx.fill("evenodd");
+    }
+    ctx.restore();
   }
 
   // ── the eleven team marks + the custom fallback ────────────────────────────
@@ -445,222 +479,6 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  // Ferrari — prancing horse, on the yellow shield when there is room for one.
-  function crestFerrari(ctx, R, P, bare, teamId) {
-    const f = fit(R, CREST_MARGIN);
-    const plate = !bare && P.plate;
-    ctx.save();
-    if (plate) {
-      ctx.fillStyle = css(P.plate);
-      ctx.beginPath();
-      ctx.moveTo(f.X(0.16), f.Y(0.06));
-      ctx.lineTo(f.X(0.84), f.Y(0.06));
-      ctx.lineTo(f.X(0.84), f.Y(0.6));
-      ctx.quadraticCurveTo(f.X(0.84), f.Y(0.9), f.X(0.5), f.Y(1.0));
-      ctx.quadraticCurveTo(f.X(0.16), f.Y(0.9), f.X(0.16), f.Y(0.6));
-      ctx.closePath();
-      ctx.fill();
-      // Tricolore band. HARDCODED ON PURPOSE and one of only two exceptions in
-      // the file: this is a national flag, not a livery colour, and re-tinting
-      // it from the paint job would make it a different flag.
-      const bandY = f.Y(0.06), bandH = f.S(0.085), x0 = 0.16, w = (0.84 - 0.16) / 3;
-      const tri = [[0.00, 0.55, 0.25], [0.95, 0.95, 0.96], [0.80, 0.10, 0.12]];
-      for (let i = 0; i < 3; i++) {
-        ctx.fillStyle = css(tri[i]);
-        ctx.fillRect(f.X(x0 + i * w), bandY, f.S(w) + 1, bandH);
-      }
-    }
-    // BARE re-frames the horse instead of drawing it small in an empty square.
-    // The path was authored for the shield's inset (x 0.215..0.84, y
-    // 0.085..0.94); with no shield to sit in it has the whole box, so map that
-    // bbox onto it — uniformly, or the horse gets fat.
-    const k = plate ? 1 : 1.06;
-    const HX = plate ? f.X : (u) => f.X(0.170 + (u - 0.215) * k);
-    const HY = plate ? f.Y : (v) => f.Y(0.035 + (v - 0.085) * k);
-    const col = css(P.mark);
-    ctx.fillStyle = col; ctx.strokeStyle = col;
-    ctx.lineCap = "round"; ctx.lineJoin = "round";
-
-    ctx.beginPath();
-    ctx.moveTo(HX(0.60), HY(0.47));
-    ctx.quadraticCurveTo(HX(0.84), HY(0.55), HX(0.80), HY(0.90));   // outer edge
-    ctx.quadraticCurveTo(HX(0.74), HY(0.74), HX(0.72), HY(0.58));   // inner edge back
-    ctx.quadraticCurveTo(HX(0.68), HY(0.52), HX(0.60), HY(0.52));
-    ctx.closePath();
-    ctx.fill();
-    // HIND legs — planted; these are the only ground contact.
-    ctx.lineWidth = swMin(f, 0.078 * k);
-    ctx.beginPath();
-    ctx.moveTo(HX(0.58), HY(0.62));
-    ctx.quadraticCurveTo(HX(0.64), HY(0.78), HX(0.58), HY(0.94));
-    ctx.moveTo(HX(0.50), HY(0.66));
-    ctx.quadraticCurveTo(HX(0.49), HY(0.80), HX(0.44), HY(0.94));
-    ctx.stroke();
-    // FORELEGS — lifted clear and pawing forward-left. 0.055 put these at 1.9 px
-    // on the AI badge, so the horse lost its front half first.
-    ctx.lineWidth = swMin(f, 0.070 * k);
-    ctx.beginPath();
-    ctx.moveTo(HX(0.41), HY(0.46));
-    ctx.quadraticCurveTo(HX(0.30), HY(0.46), HX(0.22), HY(0.38));   // upper, tucked
-    ctx.moveTo(HX(0.42), HY(0.54));
-    ctx.quadraticCurveTo(HX(0.32), HY(0.61), HX(0.26), HY(0.70));   // lower, reaching
-    ctx.stroke();
-
-    // BARREL — an ellipse on the body's own axis (chest high-left, rump low-right).
-    ctx.beginPath();
-    ctx.ellipse(HX(0.505), HY(0.555), f.S(0.180 * k), f.S(0.122 * k), 0.85, 0, Math.PI * 2);
-    ctx.fill();
-    // NECK — a column tapering from the withers up to the poll.
-    ctx.beginPath();
-    ctx.moveTo(HX(0.375), HY(0.475));                                 // chest side, base
-    ctx.quadraticCurveTo(HX(0.375), HY(0.30), HX(0.395), HY(0.185));  // throat line
-    ctx.lineTo(HX(0.495), HY(0.165));                                 // poll
-    ctx.quadraticCurveTo(HX(0.525), HY(0.33), HX(0.575), HY(0.475));  // mane / crest
-    ctx.closePath();
-    ctx.fill();
-    // HEAD — a slim wedge angled down-left off the poll, with a small ear.
-    ctx.beginPath();
-    ctx.moveTo(HX(0.215), HY(0.325));                                 // muzzle
-    ctx.quadraticCurveTo(HX(0.33), HY(0.20), HX(0.435), HY(0.145));   // face
-    ctx.lineTo(HX(0.455), HY(0.085));                                 // ear (small — a tall one is a cat's)
-    ctx.lineTo(HX(0.510), HY(0.155));
-    ctx.quadraticCurveTo(HX(0.44), HY(0.245), HX(0.315), HY(0.305));  // cheek
-    ctx.quadraticCurveTo(HX(0.265), HY(0.305), HX(0.215), HY(0.325)); // jaw to muzzle
-    ctx.closePath();
-    ctx.fill();
-    if (!bare) {
-      ctx.fillStyle = css(P.alt);
-      ctx.font = "700 " + Math.ceil(f.S(TEXT_MIN)) + "px Georgia, serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText("S F", f.X(0.5), f.Y(0.90));
-    }
-    ctx.restore();
-  }
-
-  // McLaren — the speedmark. Monochrome by design, so P.alt goes unused.
-  function crestMclaren(ctx, R, P, bare, teamId) {
-    const f = fit(R, CREST_MARGIN);
-    ctx.save();
-    ctx.fillStyle = css(P.mark);
-    ctx.beginPath();
-    ctx.moveTo(f.X(0.07), f.Y(0.50));                                    // top of the thick end
-    ctx.quadraticCurveTo(f.X(0.46), f.Y(0.35), f.X(0.94), f.Y(0.24));    // top edge to the tip
-    ctx.lineTo(f.X(0.885), f.Y(0.325));                                  // blunt tip: a point here
-    ctx.quadraticCurveTo(f.X(0.58), f.Y(0.53), f.X(0.31), f.Y(0.74));    // was 0.02 thick, 0.7 px
-    ctx.quadraticCurveTo(f.X(0.17), f.Y(0.84), f.X(0.07), f.Y(0.81));    // on the AI badge
-    ctx.quadraticCurveTo(f.X(0.01), f.Y(0.66), f.X(0.07), f.Y(0.50));    // rounded cap
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // Red Bull — two charging bulls over a gold disc; ONE bull on the fin badge.
-  function crestRedbull(ctx, R, P, bare, teamId) {
-    const f = fit(R, CREST_MARGIN);
-    ctx.save();
-    if (!bare && P.plate) {
-      ctx.fillStyle = css(P.plate);
-      ctx.beginPath(); ctx.arc(f.X(0.5), f.Y(0.46), f.S(0.31), 0, Math.PI * 2); ctx.fill();
-    }
-    const red = css(P.mark);
-    if (bare) {
-      // Two half-size bulls at 34 px is the worst case in the whole set — the
-      // muzzles alone are a couple of pixels. One bull at full size is the same
-      // mark and twice the detail budget.
-      drawBull(ctx, f, 0.02, 0.08, 0.96, 0.84, +1, red);
-    } else {
-      // 0.02/0.48 overlapped by 0.04 and both muzzles reach 0.96 of their own
-      // box, so the two heads fused into one lump in the middle.
-      drawBull(ctx, f, 0.01, 0.16, 0.45, 0.62, +1, red);   // left bull, head to right
-      drawBull(ctx, f, 0.54, 0.16, 0.45, 0.62, -1, red);   // right bull, head to left
-    }
-    ctx.restore();
-  }
-
-  // Alpine — bold stylised "A" with a single accent band across the legs.
-  function crestAlpine(ctx, R, P, bare, teamId) {
-    const f = fit(R, CREST_MARGIN);
-    const A = () => {
-      ctx.beginPath();
-      ctx.moveTo(f.X(0.5), f.Y(0.06));
-      ctx.lineTo(f.X(0.96), f.Y(0.94));
-      ctx.lineTo(f.X(0.74), f.Y(0.94));
-      ctx.lineTo(f.X(0.5), f.Y(0.44));
-      ctx.lineTo(f.X(0.26), f.Y(0.94));
-      ctx.lineTo(f.X(0.04), f.Y(0.94));
-      ctx.closePath();
-    };
-    ctx.save();
-    ctx.fillStyle = css(P.mark);
-    A();
-    ctx.moveTo(f.X(0.5), f.Y(0.30));      // inner apex cut-out (evenodd)
-    ctx.lineTo(f.X(0.40), f.Y(0.52));
-    ctx.lineTo(f.X(0.60), f.Y(0.52));
-    ctx.closePath();
-    ctx.fill("evenodd");
-    // ONE band, not the three-stripe tricolore this had. Clipped to the A, each
-    // 0.11 stripe became two disconnected slivers across 0.22-wide legs, and the
-    // white middle one vanished outright on any light mark.
-    if (!bare) {
-      ctx.save();
-      A();
-      ctx.clip();
-      ctx.fillStyle = css(P.alt);
-      ctx.fillRect(f.X(0.02), f.Y(0.62), f.S(0.96), f.S(0.12));
-      ctx.restore();
-    }
-    ctx.restore();
-  }
-
-  // Racing Bulls — front-facing bull head on a plate, "RB" beneath it.
-  function crestRacingbulls(ctx, R, P, bare, teamId) {
-    const f = fit(R, CREST_MARGIN);
-    const plate = !bare && P.plate;
-    ctx.save();
-    if (plate) {
-      // Opaque. This was cssA(navy, 0.9): behind the atlas is the tail
-      // gradient, so an alpha plate has no knowable colour and nothing drawn on
-      // it can be contrast-checked.
-      ctx.fillStyle = css(P.plate);
-      ctx.beginPath();
-      ctx.moveTo(f.X(0.06), f.Y(0.06));
-      ctx.lineTo(f.X(0.94), f.Y(0.06));
-      ctx.lineTo(f.X(0.94), f.Y(0.60));
-      ctx.lineTo(f.X(0.50), f.Y(0.99));
-      ctx.lineTo(f.X(0.06), f.Y(0.60));
-      ctx.closePath();
-      ctx.fill();
-    }
-    // Grow the head into whatever space there is, and blunt both horn tips —
-    // a quadratic ending in a cusp is the first thing a mip level eats.
-    const k = bare ? 1.40 : 1.10, y0 = bare ? 0.08 : 0.10;
-    const HX = (u) => f.X(0.5 + (u - 0.5) * k);
-    const HY = (v) => f.Y(y0 + (v - 0.16) * k);
-    ctx.fillStyle = css(P.mark);
-    ctx.beginPath();
-    ctx.moveTo(HX(0.135), HY(0.185));                                  // left horn tip, upper
-    ctx.quadraticCurveTo(HX(0.26), HY(0.20), HX(0.36), HY(0.31));      // horn upper edge, inward
-    ctx.quadraticCurveTo(HX(0.50), HY(0.24), HX(0.64), HY(0.31));      // forehead crown BETWEEN
-    ctx.quadraticCurveTo(HX(0.74), HY(0.20), HX(0.865), HY(0.185));    // the horns, so they read
-    ctx.lineTo(HX(0.815), HY(0.285));                                  // as two. Without this dip
-    ctx.quadraticCurveTo(HX(0.72), HY(0.36), HX(0.70), HY(0.46));      // the outline is one
-    ctx.lineTo(HX(0.62), HY(0.64));                                    // unbroken sweep and the
-    ctx.quadraticCurveTo(HX(0.50), HY(0.76), HX(0.38), HY(0.64));      // whole mark is a chevron
-    ctx.lineTo(HX(0.30), HY(0.46));                                    // left cheek
-    ctx.quadraticCurveTo(HX(0.28), HY(0.36), HX(0.185), HY(0.285));    // to left tip, lower
-    ctx.closePath();                                                   // blunt chord, left
-    ctx.fill();
-    if (!bare) {
-      // Was f.S(0.2) unconditionally — 7 px on the desktop badge, 2.7 on the
-      // mobile-AI cover. Lettering is now floored, and gone entirely when bare.
-      ctx.fillStyle = css(P.alt);
-      ctx.font = "900 " + Math.ceil(f.S(TEXT_MIN)) + "px Arial, sans-serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText("RB", f.X(0.5), f.Y(0.80));
-    }
-    ctx.restore();
-  }
-
   // Haas — slashed H inside a ring. The ring goes on the fin badge.
   function crestHaas(ctx, R, P, bare, teamId) {
     const f = fit(R, CREST_MARGIN);
@@ -697,34 +515,6 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  // Williams — the zig-zag W, offset shadow behind it.
-  function crestWilliams(ctx, R, P, bare, teamId) {
-    const f = fit(R, CREST_MARGIN);
-    ctx.save();
-    ctx.lineJoin = "miter";
-    ctx.lineCap = "butt";
-    // 2, not 8. At the 0.24-run/0.70-rise vertices a miter limit of 8 let the
-    // peaks grow long spikes instead of bevelling.
-    ctx.miterLimit = 2;
-    const w = (dx, style, lw) => {
-      ctx.strokeStyle = style;
-      ctx.lineWidth = swMin(f, lw);
-      ctx.beginPath();
-      ctx.moveTo(f.X(0.06 + dx), f.Y(0.16));
-      ctx.lineTo(f.X(0.27 + dx), f.Y(0.86));
-      ctx.lineTo(f.X(0.48 + dx), f.Y(0.16));   // centre peak, full height
-      ctx.lineTo(f.X(0.69 + dx), f.Y(0.86));
-      ctx.lineTo(f.X(0.90 + dx), f.Y(0.16));
-      ctx.stroke();
-    };
-    // The shadow used to sit 0.03 behind a 0.135 stroke — under half its width,
-    // so it read as a fringe — and its right end reached x 1.055, outside the
-    // fit box and into the atlas gutter.
-    if (!bare) w(0.055, css(P.alt), 0.09);
-    w(bare ? 0 : -0.005, css(P.mark), bare ? 0.15 : 0.135);
-    ctx.restore();
-  }
-
   // Audi — four interlocking rings. Monochrome by design; P.alt is unused.
   function crestAudi(ctx, R, P, bare, teamId) {
     const f = fit(R, CREST_MARGIN);
@@ -757,87 +547,6 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  // Aston Martin — outstretched wings, "AM" beneath them.
-  function crestAstonmartin(ctx, R, P, bare, teamId) {
-    const f = fit(R, CREST_MARGIN);
-    ctx.save();
-    ctx.fillStyle = css(P.mark);
-    // THREE feather rows, not four. At a 0.10 pitch and 0.09 tall they left
-    // ~0.01 of gap, so the four layers touched and rendered as one solid
-    // triangle — the traced-PNG failure, reproduced in vector.
-    const yv0 = bare ? 0.24 : 0.32, pitch = bare ? 0.20 : 0.145;
-    const hh = bare ? 0.105 : 0.075, dip = bare ? 0.22 : 0.16;
-    for (let s = -1; s <= 1; s += 2) {
-      for (let L = 0; L < 3; L++) {
-        const yv = yv0 + L * pitch;
-        const reach = 0.46 - L * 0.07;               // upper feathers reach further
-        const tipY = yv - dip + L * 0.03;            // tips angle upward
-        ctx.beginPath();
-        ctx.moveTo(f.X(0.5), f.Y(yv));
-        ctx.quadraticCurveTo(
-          f.X(0.5 + s * reach * 0.6), f.Y(tipY),
-          f.X(0.5 + s * reach), f.Y(tipY + 0.025));
-        ctx.lineTo(f.X(0.5 + s * reach * 0.9), f.Y(tipY + hh + 0.02));
-        ctx.quadraticCurveTo(
-          f.X(0.5 + s * reach * 0.4), f.Y(yv + 0.03),
-          f.X(0.5), f.Y(yv + hh));
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
-    if (!bare) {
-      // The banner this used to sit on was a third foreground colour that no
-      // palette could guarantee. The letters sit under the wings instead.
-      ctx.fillStyle = css(P.alt);
-      ctx.font = "900 " + Math.ceil(f.S(TEXT_MIN)) + "px Arial, sans-serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText("AM", f.X(0.5), f.Y(0.84));
-    }
-    ctx.restore();
-  }
-
-  // Cadillac — crest shield with the grid picked out on it.
-  function crestCadillac(ctx, R, P, bare, teamId) {
-    const f = fit(R, CREST_MARGIN);
-    // Flat top with clipped corners, sides falling to a broad point. Grown from
-    // y 0.26..0.78 — half the box — to 0.14..0.92.
-    const shield = (i) => {
-      ctx.beginPath();
-      ctx.moveTo(f.X(0.06 + i), f.Y(0.14 + i * 0.5));
-      ctx.lineTo(f.X(0.94 - i), f.Y(0.14 + i * 0.5));
-      ctx.lineTo(f.X(0.94 - i), f.Y(0.44));
-      ctx.quadraticCurveTo(f.X(0.90 - i), f.Y(0.68), f.X(0.50), f.Y(0.92 - i));
-      ctx.quadraticCurveTo(f.X(0.10 + i), f.Y(0.68), f.X(0.06 + i), f.Y(0.44));
-      ctx.closePath();
-    };
-    ctx.save();
-    ctx.fillStyle = css(!bare && P.plate ? P.plate : P.mark);
-    shield(0);
-    ctx.fill();
-    ctx.save();
-    shield(0.035);
-    ctx.clip();
-    // POSITIVE fills, not destination-out. A knockout punches to transparent,
-    // and what shows through is the tail gradient on the car and the lightbox
-    // field in the garage — a colour no palette can reason about.
-    ctx.fillStyle = css(P.alt);
-    if (bare) {
-      ctx.fillRect(f.X(0.20), f.Y(0.39), f.S(0.60), f.S(0.075));
-    } else {
-      // 3 rows at a 0.15 pitch: bar 0.075 and gap 0.075 both clear GAP_MIN,
-      // where 4 rows of 0.045 at 0.08 did not.
-      const rows = [0.24, 0.39, 0.54];
-      const cuts = [[0.10, 0.26], [0.30, 0.44], [0.48, 0.62], [0.66, 0.86]];
-      for (let r = 0; r < rows.length; r++)
-        for (let c = 0; c < cuts.length; c++) {
-          if ((r + c) % 2) continue;                     // alternating, like the real grid
-          ctx.fillRect(f.X(cuts[c][0]), f.Y(rows[r]), f.S(cuts[c][1] - cuts[c][0]), f.S(0.075));
-        }
-    }
-    ctx.restore();
-    ctx.restore();
-  }
-
   // Generic fallback — monogram of the team short code. The custom team's mark
   // whenever it has no uploaded emblem.
   function crestGeneric(ctx, R, P, bare, teamId) {
@@ -855,18 +564,24 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
+  // The eleven marks. Eight are traced path data (js/car/crest-paths.js); the
+  // other three are drawn, because for those three a construction beats a trace:
+  // Mercedes is a ring and a three-point star, Audi four interlocking rings, and
+  // Haas an H inside a ring. Those are exact as maths, and their source bitmaps
+  // were the WORST of the set — haas.png traces to a plain red disc and audi.png
+  // to four filled blobs, because both had their counters filled in.
   const CRESTS = {
     mercedes: crestMercedes,
-    ferrari: crestFerrari,
-    mclaren: crestMclaren,
-    redbull: crestRedbull,
-    alpine: crestAlpine,
-    racingbulls: crestRacingbulls,
+    ferrari: crestTraced,
+    mclaren: crestTraced,
+    redbull: crestTraced,
+    alpine: crestTraced,
+    racingbulls: crestTraced,
     haas: crestHaas,
-    williams: crestWilliams,
+    williams: crestTraced,
     audi: crestAudi,
-    astonmartin: crestAstonmartin,
-    cadillac: crestCadillac,
+    astonmartin: crestTraced,
+    cadillac: crestTraced,
   };
 
   // ── the custom team's uploaded emblem ──────────────────────────────────────
