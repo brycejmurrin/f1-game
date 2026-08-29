@@ -186,8 +186,18 @@
     /** Drop the CPU mirrors of the SHARED vertex attributes (see header —
      * only after the renderer has provably created their GPU buffers: a lit
      * present() that drew >= 1 chunk consumed all four attributes). Bounding
-     * volumes were precomputed at build, so nothing walks the arrays later.
-     * Idempotent; index mirrors are deliberately kept. */
+     * volumes were precomputed at build, so nothing in the DRAW path walks the
+     * arrays later. Idempotent; index mirrors are deliberately kept.
+     *
+     * "Nothing walks the arrays later" is true of drawing and FALSE of three's
+     * node builder, which reads attribute.array.constructor to type an
+     * attribute whenever it compiles a program for a pass it has not compiled
+     * for before. Any pass that first draws a chunk AFTER this call throws
+     * "Cannot read properties of null (reading 'constructor')" — which is what
+     * the env probe did on every face on real hardware (measured 2026-08-29,
+     * macos-latest/Metal: 41 faces WebGL2, 81 WebGPU). The caller in tlx.js
+     * therefore holds the release until the probe has latched; a NEW pass that
+     * can draw chunks must be given the same consideration. */
     function releaseMirrors(mesh) {
       if (!mesh || !mesh.chunks || !mesh.chunks.length || mesh._mirrorsFreed) return;
       mesh._mirrorsFreed = true;

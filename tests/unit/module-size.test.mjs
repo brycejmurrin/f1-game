@@ -642,7 +642,16 @@ const CEILINGS = {
   // a player with no vendor string was being handed the degraded path on real
   // hardware. The tie-break is measured limits (8192/1 GiB software vs
   // 16384/2 GiB Apple), and each addition carries that measurement.
-  "js/render/three/tlx.js": 2296,
+  // 2296 -> 2322 (R9): the real-GPU reproduction. releaseMirrors() nulls
+  // attribute.array once a lit present has drawn a chunk, on the premise that
+  // nothing walks the arrays later — true of drawing, false of three's node
+  // builder, which types attributes from array.constructor whenever it
+  // compiles a program for a NEW pass. The env probe is a new pass, so every
+  // face threw on hardware (41 WebGL2 / 81 WebGPU on macos-latest/Metal) and
+  // the world had no environment reflections at all. The release now waits for
+  // the probe to latch, and a probe that cannot succeed gives up instead of
+  // throwing once a frame forever.
+  "js/render/three/tlx.js": 2322,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

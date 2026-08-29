@@ -1087,6 +1087,15 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "a probe that keeps erroring must stand down instead of binding the cube");
   assert.match(src, /envProbeReady\(\) \{ return envReady \|\| _envGaveUp; \}/,
     "standing down must read as ready so the caller stops re-probing forever");
+  // releaseMirrors() nulls attribute.array. three's node builder reads
+  // attribute.array.constructor to type an attribute whenever it compiles a
+  // program for a pass it has not seen before, so a chunk freed before the env
+  // probe's first face makes EVERY face throw. Measured on real hardware
+  // (macos-latest/Metal): 41 failed faces on WebGL2, 81 on WebGPU.
+  assert.match(src, /!rec\.chunked\._mirrorsFreed && !vizMat\s*\n?\s*&& \(envReady \|\| _envGaveUp \|\| !envRT\)/,
+    "the CPU mirrors must not be freed while the env probe still has passes to compile");
+  assert.match(src, /if \(_envFailN >= ENV_FAIL_CAP\) _envGaveUp = true;/,
+    "a probe that cannot succeed must stop retrying — it threw every frame forever");
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(post, /ctx\.softDest/,
     "tlx-post must honour ctx.softDest for the FXAA / viz dest");

@@ -1109,7 +1109,7 @@ const TLX = (function () {
       // them latch envReady over a cube nothing ever wrote, and every lit
       // surface then samples black. Count the failures instead, and keep the
       // last good cube bound.
-      let _envFailN = 0, _envFailMsg = "";
+      let _envFailN = 0, _envFailMsg = "", _envFailStack = "";
       // Dawn does not THROW when it rejects a pipeline: renderer.render()
       // returns normally and the command buffer is discarded, so a face can
       // come back unwritten with faceOk still true. That is exactly how a
@@ -1118,6 +1118,7 @@ const TLX = (function () {
       // probe mean the probe's own commands did not run.
       let _envErrBase = -1, _envBadProbes = 0, _envGaveUp = false;
       const ENV_PROBE_TRIES = 3;
+      const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
       let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
       const _envInvArr = new Float32Array(16);
       const _envVPArr = new Float32Array(16);
@@ -1734,7 +1735,17 @@ const TLX = (function () {
             // counting it, so envReady cannot latch over an unwritten cube.
             faceOk = false;
             _envFailN++;
+            // A probe that cannot succeed must stop being retried: on real
+            // hardware this threw on EVERY face, so the cost was an exception
+            // per frame for the life of the session, and the mirror release
+            // above would be held forever with it. Four probes' worth of
+            // faces is enough evidence.
+            if (_envFailN >= ENV_FAIL_CAP) _envGaveUp = true;
             if (!_envFailMsg) _envFailMsg = (e && e.message) || String(e);
+            // The message alone ("Cannot read properties of null") names no
+            // site. Keep the first STACK too: on real hardware this throws on
+            // every face and there is no console to read it out of.
+            if (!_envFailStack) _envFailStack = String((e && e.stack) || "").slice(0, 600);
           }
           if (softContent("env")) scene.backgroundNode = prevSky;
           renderer.setRenderTarget(softOutRT());
@@ -1785,7 +1796,7 @@ const TLX = (function () {
         envProbeReady() { return envReady || _envGaveUp; },
         envProbeReset() {
           envFacesMask = 0; envReady = false; _envBlank = false;
-          _envFailN = 0; _envFailMsg = ""; _envErrBase = -1;
+          _envFailN = 0; _envFailMsg = ""; _envFailStack = ""; _envErrBase = -1;
           _envBadProbes = 0; _envGaveUp = false;
         },
 
@@ -2058,7 +2069,21 @@ const TLX = (function () {
               for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
               _chunkFrame.total += rec.chunked.chunks.length;
               _chunkFrame.visible += n;
-              if (n > 0 && !rec.chunked._mirrorsFreed && !vizMat) _mirrorRelease.push(rec.chunked);
+              // Hold the release until the env probe has LATCHED.
+              // releaseMirrors() nulls attribute.array on the stated premise
+              // that "nothing walks the arrays later" — true of the DRAW path,
+              // false of three's NODE BUILDER, which reads
+              // attribute.array.constructor to type an attribute every time it
+              // compiles a program for a pass it has not compiled for before.
+              // The env probe is such a pass, so freeing first makes every
+              // probe face throw "Cannot read properties of null (reading
+              // 'constructor')": measured 2026-08-29 on macos-latest/Metal,
+              // 41 failed faces on WebGL2 and 81 on WebGPU in ~40 s — no
+              // environment reflections at all, and a thrown exception every
+              // frame forever. Invisible on a software adapter only because
+              // the probe skips chunks there.
+              if (n > 0 && !rec.chunked._mirrorsFreed && !vizMat
+                && (envReady || _envGaveUp || !envRT)) _mirrorRelease.push(rec.chunked);
               continue;
             }
             acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
@@ -2252,6 +2277,7 @@ const TLX = (function () {
               badProbes: _envBadProbes, gaveUp: _envGaveUp,
             };
           },
+          envFailStack() { return _envFailStack; },
           viz: vizMode,
           // Which three backend actually came up, and why — the one question a
           // "TLX looks wrong on my phone" report has to answer first, since the
