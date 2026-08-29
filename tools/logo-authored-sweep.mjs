@@ -16,6 +16,10 @@
  * is scored against c1 AND c2 at once, and for Audi (near-black + bright red)
  * NO colour clears 4.2 against both — a halo included.
  *
+ * The companion row is LOGO DETAIL (`liv.logo2`), scored the same way: it
+ * lands in whichever slot that mark's second colour occupies, so "kept"
+ * means it reached plate, alt or outline, not one fixed field.
+ *
  * Run: node tools/logo-authored-sweep.mjs
  */
 import { loadCrests } from "./crest-sweep.mjs";
@@ -32,6 +36,7 @@ const PICKS = [
 let kept = 0, dropped = 0;
 const byTeam = {};
 const bySurface = { cover: [0, 0], badge: [0, 0] };
+const second = [0, 0];
 for (const team of Teams.LIST) {
   for (const liv of Liveries.forTeam(team)) {
     for (const [name, logo] of PICKS) {
@@ -40,6 +45,11 @@ for (const team of Teams.LIST) {
         const P = LT.markPalette(team.id, L, fieldsFor(L, bare), bare);
         const same = P.mark.every((v, i) => Math.abs(v - logo[i]) < 1e-6);
         bySurface[where][same ? 0 : 1]++;
+        // LOGO DETAIL, scored on the same grid: did the second colour reach
+        // any slot at all? A slot is per-mark, so compare against all three.
+        const P2 = LT.markPalette(team.id, { ...L, logo2: logo }, fieldsFor(L, bare), bare);
+        const eq = (c) => c && c.every((v, i) => Math.abs(v - logo[i]) < 1e-6);
+        second[eq(P2.plate) || eq(P2.alt) || eq(P2.outline) ? 0 : 1]++;
         if (same) kept++;
         else {
           dropped++;
@@ -54,6 +64,7 @@ console.log(JSON.stringify({
   total, kept, dropped, keptPct: +(100 * kept / total).toFixed(1),
   bySurface: Object.fromEntries(Object.entries(bySurface).map(([k, [a, b]]) =>
     [k, { kept: a, dropped: b, keptPct: +(100 * a / (a + b)).toFixed(1) }])),
+  logoDetail: { kept: second[0], dropped: second[1] },
   audiDropped: (byTeam.audi || []).length,
   audiBadgeDropped: (byTeam.audi || []).filter((s) => s.includes("/badge/")).length,
   audiSample: (byTeam.audi || []).slice(0, 10),

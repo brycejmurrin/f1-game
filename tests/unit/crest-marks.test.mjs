@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import { loadCrests, replay, cssOf } from "../../tools/crest-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const { LiveryTex: LT, Teams, Liveries } = loadCrests();
+const { LiveryTex: LT, Teams, Liveries, RecCtx } = loadCrests();
 
 // The ONLY colours a crest may paint that do not come from the palette, each
 // with a reason. A national flag is not a livery colour: re-tinting it from the
@@ -281,4 +281,51 @@ test("an authored TEAM LOGO colour is painted, or no halo could have carried it"
   // And the badge — the shark-fin surface the report was about — has to keep
   // the great majority, or the "keep it" path has stopped being reached at all.
   assert.ok(kept / scored > 0.6, `only ${(100 * kept / scored).toFixed(1)}% of authored colours survive`);
+});
+
+test("the LOGO DETAIL colour reaches the canvas on every mark, on both surfaces", () => {
+  // One editor row, three destinations: a mark's second colour is a backing
+  // plate (redbull, ferrari), a second painted layer (cadillac, haas, the
+  // monogram box), or — for the seven single-colour silhouettes, Audi's four
+  // rings among them — an outline that only exists once the player asks for
+  // one. markPalette picks the slot; this asserts the colour actually lands in
+  // PIXELS rather than merely in the palette object, which is a different
+  // claim: haas resolved a perfectly good `alt` for the fin badge while
+  // crestHaas was dropping the ring that would have painted it.
+  const D = [1, 0.55, 0];          // nothing else in any palette resolves to it
+  const want = cssOf(D);
+  const paints = (teamId, liv, bare) => {
+    const R = bare ? LT.REGIONS.finBadge : LT.REGIONS.crest;
+    const fields = bare ? [(liv.fin || liv.c2)] : [liv.c1, liv.c2];
+    const ctx = new RecCtx();
+    LT.drawCrest(ctx, teamId, R, { palette: LT.markPalette(teamId, liv, fields, bare), bare });
+    return ctx.ops.some((o) => o.style === want || o.shadow === want);
+  };
+  const dead = [];
+  for (const team of Teams.LIST) {
+    for (const liv of Liveries.forTeam(team)) {
+      for (const bare of [false, true]) {
+        const where = `${team.id}/${liv.id}/${bare ? "badge" : "cover"}`;
+        // The control: without the colour set, nothing may already be this
+        // orange, or "it paints" would prove nothing at all.
+        if (paints(team.id, liv, bare)) { dead.push(where + " painted D with logo2 UNSET"); continue; }
+        if (!paints(team.id, { ...liv, logo2: D }, bare)) dead.push(where + " swallowed LOGO DETAIL");
+      }
+    }
+  }
+  assert.deepEqual(dead, [], "a mark takes the second colour and paints nothing with it");
+});
+
+test("LOGO DETAIL is opt-in — an unset one leaves every shipped mark untouched", () => {
+  // The outline slot adds a pass no mark had before. If it could fire without
+  // the player asking, every crest in the game would change on this commit.
+  for (const team of Teams.LIST) {
+    for (const liv of Liveries.forTeam(team)) {
+      for (const bare of [false, true]) {
+        const fields = bare ? [(liv.fin || liv.c2)] : [liv.c1, liv.c2];
+        const P = LT.markPalette(team.id, liv, fields, bare);
+        assert.equal(P.outline, null, `${team.id}/${liv.id} outlines with no LOGO DETAIL set`);
+      }
+    }
+  }
 });

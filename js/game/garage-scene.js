@@ -899,7 +899,8 @@ function rebuild(team, liv, info) {
   // every colour the build consumes, rounded, into one string.
   const kc = (c) => (c ? rgb(c, [0, 0, 0]).map((v) => v.toFixed(3)).join(",") : "-");
   const livKey = kc(liv && liv.c1) + "/" + kc(liv && (liv.accent || liv.stripe || liv.c2)) +
-                 "/" + kc(liv && liv.c2) + "/" + kc(liv && liv.logo);
+                 "/" + kc(liv && liv.c2) + "/" + kc(liv && liv.logo) +
+                 "/" + kc(liv && liv.logo2);
   const key = (team && team.id) + "|" + livKey +
               "|" + logoGen + "|" + ((drv[0] && drv[0].num) + "-" + (drv[1] && drv[1].num)) +
               "|" + boardKey(info);

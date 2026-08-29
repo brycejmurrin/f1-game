@@ -17,6 +17,10 @@ only**. ERS/aero axes derive from the catalog (`ersProfile` / `aeroLoad`); a
 car with no parts (every AI) sits at the midpoint. Livery finish is
 `finish: "gloss" | "satin" | "chrome"` via `Car3D.FINISH_SURFACE`. Shark fin:
 `fin` (plate, defaults to `c2`) and `finArt` (must contrast or it vanishes).
+The mark takes TWO livery colours: `logo` is the dominant shape, `logo2` its
+second colour — and `logo2` resolves to a different SLOT per mark (a backing
+plate, a second painted layer, or an outline that exists only once set), so
+read `secondSlot` in `js/car/liverytex.js` before assuming which.
 
 ## When to Use
 
