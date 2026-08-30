@@ -872,18 +872,28 @@ function paintDress(team, liv, info) {
   // as the halo unconditionally, which put a same-hue glow behind a mark
   // sitting on a c1-derived field and softened it instead of separating it.
   const img = LiveryTex.LOGOS && LiveryTex.LOGOS[team.id];
-  // The mark's own colour, whichever path draws it: the uploaded PNG's average
-  // for the custom team, the resolved vector base for the eleven shipped ones.
+  // What LANDS on this field, whichever path draws the mark: the uploaded PNG's
+  // average for the custom team, else LiveryTex.markOnField — which answers
+  // with the BACKING when the mark has one. Asking markBase (the horse, the
+  // bulls) was the older question and the wrong one for a plated mark: Ferrari
+  // returned a near-black horse, the flip below chose a white lightbox, and a
+  // white field then rejected Ferrari's own yellow shield at 1.07 against the
+  // 1.6 plate floor — so the wall showed a white horse on a RED shield while
+  // the car showed the real black-on-yellow.
   // Keying this on img._avg ALONE is what made the flip below dead code the
-  // moment the roster stopped shipping logo PNGs — avg would be null for every
+  // moment the roster stopped shipping logo PNGs — it would be null for every
   // team, the ternary would always take `tinted`, and every crest would land on
   // a dark field whether or not that is the readable choice.
-  const avg = (img && img._avg) ||
-    (LiveryTex.markBase ? LiveryTex.markBase(team.id, liv) : null);
+  const onField = (img && img._avg) ? [img._avg]
+    : (LiveryTex.markOnField ? LiveryTex.markOnField(team.id, liv) : null);
   const tinted = scale(c1, 0.30);
-  // A dark team field reads best, unless the mark itself is dark against it.
-  const field = (avg && LiveryTex.contrast && LiveryTex.contrast(avg, tinted) < 2.2)
-    ? (LiveryTex.inkOn ? LiveryTex.inkOn([avg]) : [0.93, 0.94, 0.96]) : tinted;
+  // A dark team field reads best, unless what sits on it is dark against it.
+  // WORST-case over the list: a disc-backed mark hands back both the sun and
+  // the bulls, because the bulls hang off the sun and land here too.
+  const worstOn = (f) => onField.reduce(
+    (m, c) => Math.min(m, LiveryTex.contrast(c, f)), Infinity);
+  const field = (onField && onField.length && LiveryTex.contrast && worstOn(tinted) < 2.2)
+    ? (LiveryTex.inkOn ? LiveryTex.inkOn(onField) : [0.93, 0.94, 0.96]) : tinted;
   ctx.fillStyle = css(field); ctx.fillRect(D_CREST.x, D_CREST.y, D_CREST.w, D_CREST.h);
   ctx.strokeStyle = css(c2); ctx.lineWidth = 9;
   ctx.strokeRect(D_CREST.x + 12, D_CREST.y + 12, D_CREST.w - 24, D_CREST.h - 24);
@@ -897,11 +907,12 @@ function paintDress(team, liv, info) {
     // and the halo keeps it legible against the new backing either way.
     const halo = (img._avg && LiveryTex.contrast && LiveryTex.contrast(img._avg, field) < 2.6 && LiveryTex.inkOn)
       ? LiveryTex.inkOn([img._avg]) : null;
-    // LOGO DETAIL rims the emblem here for the same reason it rims the seven
-    // single-colour crests: an uploaded mark is arbitrary art with no second
-    // element to recolour, so an outline is the only honest place for it.
+    // The OUTLINE row rims the emblem here for the same reason it rims a
+    // single-loop crest: an uploaded mark is arbitrary art with no second
+    // element to recolour, so a rim is the only honest place for it. logo2 is
+    // the pre-OUTLINE-row fallback, exactly as in buildAtlas.
     LiveryTex.drawLogoImage(ctx, img, inner, (liv && liv.logo) || null, halo,
-                            (liv && liv.logo2) || null);
+                            (liv && (liv.logo3 || liv.logo2)) || null);
   } else {
     LiveryTex.drawCrest(ctx, team.id, inner, { liv, field, bare: false });
   }
@@ -1241,7 +1252,7 @@ function rebuild(team, liv, info) {
   const kc = (c) => (c ? rgb(c, [0, 0, 0]).map((v) => v.toFixed(3)).join(",") : "-");
   const livKey = kc(liv && liv.c1) + "/" + kc(liv && (liv.accent || liv.stripe || liv.c2)) +
                  "/" + kc(liv && liv.c2) + "/" + kc(liv && liv.logo) +
-                 "/" + kc(liv && liv.logo2);
+                 "/" + kc(liv && liv.logo2) + "/" + kc(liv && liv.logo3);
   const key = (team && team.id) + "|" + livKey +
               "|" + logoGen + "|" + ((drv[0] && drv[0].num) + "-" + (drv[1] && drv[1].num)) +
               "|" + boardKey(info);

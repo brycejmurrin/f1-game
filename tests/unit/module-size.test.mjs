@@ -424,7 +424,39 @@ const CEILINGS = {
   // braking gets the tread ratio it never had. Net +2 code lines and +3 comment
   // for a whole system, because the rationale went to docs/PHYSICS.md "Weather
   // and tyres" instead of into the file.
-  "js/game.js": 8728,
+  // 8727 -> 8760: the per-wheel draw loop drew rotating-then-fixed per wheel,
+  // giving the VAO sequence F,FFixed,F,FFixed,R,RFixed,R,RFixed — every
+  // consecutive pair different, so bindVAO collapsed NOTHING. Two runs now,
+  // measured 92 -> 84.2 bindVertexArray/frame in a pack with drawElements
+  // unchanged. The same restructure FIXES A RENDERING BUG: brake rings are
+  // blended with no depth write and were interleaved with opaque geometry, so
+  // a later car's opaque draw passed LEQUAL and painted over a ring already
+  // drawn. Bug-explaining growth at the site of the bug — the one growth the
+  // note at the top of this entry tolerates.
+  // 8727 -> 8760 for czSyncMarkRows and its two callers: MY TEAM's mark rows
+  // now describe whichever mark is ACTUALLY drawn. Uploading an emblem takes
+  // buildAtlas down the drawLogoImage branch, whose signature is
+  // (ctx, img, R, tint, halo, outline) — no parameter for a monogram box — so
+  // the dialog was showing a MONOGRAM BOX picker that could not reach a pixel,
+  // and a MONOGRAM label over what is really a tint on arbitrary art. Hiding
+  // the row then had to surface the legacy `logo3 || logo2` rim, or the
+  // fallback would paint from a row nobody can see.
+  // Bug-explaining growth at the site of the bug, with the labelling RULE in
+  // js/car/liverytex.js markSlots where both editors read it — the garage
+  // builds its rows from that function and needed no lines at all. What is
+  // left here is this dialog's static markup being told the answer.
+  // MERGED: both sides raised this to 8760 for different work — their
+  // two-pass wheel draws, this side's czSyncMarkRows — and the file now
+  // carries BOTH sets of lines, so neither number fits it. Re-measured on
+  // the merged tree at 8793, as the ACTIVE AERO merge above had to be.
+  // (`lines()` splits on \n, so it reads one MORE than wc -l on a
+  // newline-terminated file — 8792 there is 8793 here.)
+  // MERGED AGAIN (this session): their 8760 and this side's 8728 were raised for
+  // different work — their two-pass wheel draws and czSyncMarkRows, this side's
+  // wet-tyre grip path — and the union carries both sets of lines, so neither
+  // number fits. Re-measured on the merged tree at 8797, the same way the
+  // ACTIVE AERO and czSyncMarkRows merges above had to be.
+  "js/game.js": 8797,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -466,7 +498,33 @@ const CEILINGS = {
   // which of the three gates is holding it, plus meanPerChunkRGB — the twin of
   // meanLampRGB for the set chunked meshes are lit from. Both exist because
   // 'the sliders do nothing' was undiagnosable from outside the renderer.
-  "js/game/apex.js": 2456,
+  // 2456 -> 2471: netLoopback's far end was a BARE transport endpoint, which
+  // answers no PINGs, so the game's session never reached synced(), every
+  // snapshot sat in heldState and net().buffered stayed 0 — six of the fourteen
+  // reds in the `net` browser group. The fix is two lines (autoPong the peer,
+  // pump the session at t0); the rest is the comment saying why a stand-in for
+  // a peer has to speak the clock protocol and why the first PING cannot wait
+  // for the caller's first netTick. Bug-explaining growth at the site.
+  // 2471 -> 2475: a `seed` on netLoopback, threading NetTransport.seededRnd, so
+  // a spec that configures packet loss can re-run the SAME loss. Unseeded, the
+  // lossy-link spec fails a few runs in a hundred because the clock handshake
+  // loses both legs of every attempt — indistinguishable from the defect it is
+  // meant to catch.
+  // 2475 -> 2484: netTick pumps the FAKE PEER as well as the session. Only
+  // netPeerSend/netPeerEvent did, so a test that merely ticks — a clock
+  // warm-up, an idle stretch — delivered nothing to the far end and its
+  // responder never saw a PING. transport.js is explicit that both endpoints
+  // must pump every frame; a live peer does, because it is running its own
+  // loop. Nine lines, eight of them the why.
+  // 2484 -> 2505: the FAKE LOBBY PEER now stays alive — autoPong plus a 25 ms
+  // pump, torn down with lobbyFake(false). A bare endpoint answers no pings and
+  // sends none, so the lobby's session heard nothing after the last thing a
+  // test pushed and closed on its own 6 s timeout, losing the peer with no user
+  // action: a watch-only probe held peerReady true through t+5.5 s and lost it
+  // at t+6.0 s. Four room/seat specs failed on exactly that. Same shape as the
+  // netLoopback fix above; the comment records the measurement so the next
+  // reader does not have to re-find the six seconds.
+  "js/game/apex.js": 2505,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
@@ -628,7 +686,18 @@ const CEILINGS = {
   // 8683 -> 8689: per-chunk lamps went from the ULTRA-night-only rung to every
   // lit condition, so the conditional layer gained dusk/dawn/day keys beside
   // night. Data, not logic — this file is ~8.6k lines of baked per-track values.
-  "js/game/light-presets.js": 8689,
+  // 2026-08-29: 8689 -> 15508, the largest single raise this pin has taken, and
+  // all of it DATA: a player's hand-tuned dusk-wet and dawn-wet look (plus two
+  // Monaco nights) baked in from a COPY VALUES paste — 82 conditions, 7,447
+  // knobs, 183 KB -> 346 KB. The condition count did not move (805 before and
+  // after); the existing profiles simply went from ~8 knobs each to ~90.
+  // THE DUPLICATION IS FORCED, not sloppy. ~34 of those conditions are the same
+  // look repeated per circuit, which belongs in one "*|<tod>" key — except
+  // LightStore.condLayer gates that layer on gfx.hasPerChunkLights, and three.js
+  // cannot bind per-chunk sets, so a wildcard key is invisible on the default
+  // backend. An ungated "*|<tod>|<wx>" layer is where these lines come back;
+  // until then per-track keys are the only encoding that reaches every player.
+  "js/game/light-presets.js": 15508,
   // The whole WGX backend in one IIFE by design (deferred inject, no tag).
   // 5179 -> 5365 on the deploy union: their half-res SSR + chunk-AABB
   // lamp-mask cull rounds landed on the other lineage (re-measured).
@@ -663,7 +732,17 @@ const CEILINGS = {
   // to change three lanes each. The split needs its own branch plus the note
   // recording that the UPLOAD cannot shrink with it (rgb is interleaved
   // 3-in-16, so the changed bytes are not a contiguous range).
-  "js/render/webgpu/wgx.js": 5567,
+  // 5567 -> 5574: a measured verdict replaces an unmeasured assertion at the
+  // per-chunk merge site. The sentence "adjacent chunks almost never share an
+  // index list" justified BOTH backends forfeiting a 76-87% draw reduction and
+  // had never been counted; it holds (3 shared non-empty pairs of 909), but the
+  // 79.5% that share by being EMPTY are a trap worth naming in place. Detail is
+  // in docs/PERF-FINDINGS.md 2b — only the pointer and the headline live here,
+  // which is why this is +7 and not the +15 the first draft cost.
+  // 5574 -> 5581: WGX gains gpuErrors/gpuFirstError on its INSTANCE surface
+  // (it had them only on the module factory), so the backend-parity contract
+  // holds now that GLX has a real counter. PERF-FINDINGS 2e.
+  "js/render/webgpu/wgx.js": 5581,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -736,7 +815,23 @@ const CEILINGS = {
   // retirement: a per-lamp inFrameTail test, four comparisons for every lamp
   // of every chunk of every chunked mesh, feeding a scale that could not
   // matter. Lowered per the rule above: the ratchet follows the file down.
-  "js/render/glx.js": 1928,
+  // 1928 -> 1963: the opt-in instance CELL-SET cull cache. cullInstances
+  // memoises on frustum-plane equality and three callers use three frusta a
+  // frame, so while driving it never hits and props are repacked and
+  // re-uploaded 2-3x — measured 426.7 KiB/frame (tools/glx-call-census.mjs).
+  // Keying on the surviving cell set takes -23.4% of that (-48% in a pack). The
+  // existing plane path is left intact beside it (the canary pins it), which is
+  // why this ADDS rather than replaces. Detail: PERF-FINDINGS 2c.
+  // 1963 -> 1961: the four uLightA..D arrays and their four scratch buffers
+  // collapse into one interleaved uLight[]/_luL — one uniform4fv per chunk
+  // instead of four. The ratchet follows the file down (PERF-FINDINGS 2d).
+  // 1961 -> 1958: the instancing gate stops being bracketed per instanced draw
+  // and is declared through the redundancy cache in litMaterial (PERF-FINDINGS 2e).
+  // 1958 -> 1975: GLX gains a real gpuErrors()/gpuFirstError() counter. The
+  // real-GPU workflow gated on gpuErrors and GLX never defined it, so that
+  // clause read null and passed forever (PERF-FINDINGS 2e). A deliberate
+  // raise: the gate is worth more than the lines.
+  "js/render/glx.js": 1975,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)

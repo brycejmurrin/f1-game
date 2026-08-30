@@ -158,7 +158,15 @@ const CLASS_CEILING = 533;
 // 1228 -> 1229: one <script> tag for js/game/gfx-debug.js, the ?gfxdebug=1
 // overlay. A node is the honest price of the only channel a player with no
 // console has for telling us what their GPU did.
-const NODE_CEILING = 1234;   // +4: the MY TEAM customizer's LOGO DETAIL row
+// 1234 -> 1238: +4 for the MY TEAM customizer's LOGO OUTLINE row (label +
+// colour input + NONE button + their row div). The outline stopped sharing a
+// picker with the mark's second SHAPE — on Red Bull that one row was labelled
+// SUN DISC and moved a rim, which is the report this raise answers — so it
+// needs a row of its own in both editors. The GARAGE editor builds its rows
+// from LiveryTex.markSlots at runtime and costs the shell nothing; this dialog
+// is static markup, and two editors disagreeing about a paint slot is worse
+// than four nodes.
+const NODE_CEILING = 1238;   // +4: the MY TEAM customizer's LOGO DETAIL row
 // (label + colour input + NONE button + their row div). Raised deliberately:
 // the livery editor grew a second logo colour and a paint slot the two editors
 // disagree about is worse than four nodes — see js/car/liverytex.js secondSlot.

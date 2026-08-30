@@ -26,6 +26,17 @@ const NetTransport = (function () {
     };
   }
 
+  // A REPRODUCIBLE `rnd` for loopback's loss/jitter. Math.random makes a lossy
+  // link a coin flip the caller cannot re-run — measured at 50% loss, one
+  // second of pumping syncs the clock on 473 of 500 seeded links, so a spec
+  // built on the unseeded default fails a few runs in a hundred for reasons
+  // that have nothing to do with what it asserts. Same LCG the net unit suite
+  // already uses, published so the BROWSER hook can reach it too.
+  function seededRnd(seed) {
+    let s = (seed >>> 0) || 1;
+    return () => { s = (Math.imul(s, 1103515245) + 12345) >>> 0; return s / 0x100000000; };
+  }
+
   function loopback(opts) {
     opts = opts || {};
     const latency = opts.latencyMs != null ? opts.latencyMs : 50;
@@ -543,7 +554,7 @@ const NetTransport = (function () {
   }
 
   return {
-    STATE, EVENT, loopback, rtc, supported,
+    STATE, EVENT, loopback, rtc, supported, seededRnd,
     STUN, prefetchIce, iceServers, hasRelay,
   };
 })();

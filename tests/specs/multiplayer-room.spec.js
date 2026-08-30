@@ -168,12 +168,14 @@ test.describe("the waiting room", () => {
     // by name and had never heard of #vsfriend.
     await enterRoom(page, "guest");
     await page.click("#vs-edit-car");
-    await expect(page.locator("#carsetup")).toBeVisible();
+    // 8.10 s measured on an idle box (see the note on EDIT RACE above): the
+    // garage swap cannot make Playwright's default 5 s expect timeout.
+    await expect(page.locator("#carsetup")).toBeVisible({ timeout: 30000 });
     await expect(page.locator("#vsfriend")).toBeHidden();
     // ...and DONE brings the room back, because the session never went away.
     await page.click("#cs-done");
-    await expect(page.locator("#vs-room")).toBeVisible();
-    await expect(page.locator("#carsetup")).toBeHidden();
+    await expect(page.locator("#vs-room")).toBeVisible({ timeout: 30000 });
+    await expect(page.locator("#carsetup")).toBeHidden({ timeout: 30000 });
   });
 
   test("the host's EDIT RACE is a circuit picker, not a second garage", async ({ page }) => {
@@ -184,18 +186,27 @@ test.describe("the waiting room", () => {
     // competing place to choose a team.
     await enterRoom(page, "host");
     await page.click("#vs-edit-race");
-    await expect(page.locator("#select")).toBeVisible();
-    await expect(page.locator("#sel-tracks")).toBeVisible();
+    // SCREEN SWAPS OUT OF THE ROOM COST EIGHT SECONDS HERE, so the default 5 s
+    // expect timeout fails this on an IDLE box, never mind a loaded one —
+    // measured 8.03 s for #vs-edit-race -> #select and 8.10 s for
+    // #vs-edit-car -> #carsetup, on a box at rest with nothing else running.
+    // That is not the room being slow: playwright.config.js already records
+    // View Transitions blocking ~3.2 s per screen swap on SwiftShader, and the
+    // select screen builds its circuit previews on top of that. The assertion
+    // is unchanged — the screen must still appear — it just gets a budget cut
+    // from the measurement rather than from Playwright's default.
+    await expect(page.locator("#select")).toBeVisible({ timeout: 30000 });
+    await expect(page.locator("#sel-tracks")).toBeVisible({ timeout: 30000 });
     await expect(page.locator("#sel-left")).toHaveCount(0);
     await expect(page.locator("#sel-setup")).toHaveCount(0);   // ...and no way into the garage
     // START does not start anything here — it goes on to laps/weather.
     await expect(page.locator("#sel-go")).toHaveText("NEXT");
 
     await page.click("#sel-go");
-    await expect(page.locator("#race-settings")).toBeVisible();
-    await expect(page.locator("#rs-go")).toHaveText("CONFIRM");
+    await expect(page.locator("#race-settings")).toBeVisible({ timeout: 30000 });
+    await expect(page.locator("#rs-go")).toHaveText("CONFIRM", { timeout: 30000 });
     await page.click("#rs-go");
-    await expect(page.locator("#vs-room")).toBeVisible();
+    await expect(page.locator("#vs-room")).toBeVisible({ timeout: 30000 });
     expect(await page.evaluate(() => window.__apex.info().state)).not.toBe("race");
   });
 
@@ -209,7 +220,9 @@ test.describe("the waiting room", () => {
     await enterRoom(page, "guest");
     await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day" });
     await page.click("#vs-edit-car");
-    await expect(page.locator("#carsetup")).toBeVisible();
+    // 8.10 s measured on an idle box (see the note on EDIT RACE above): the
+    // garage swap cannot make Playwright's default 5 s expect timeout.
+    await expect(page.locator("#carsetup")).toBeVisible({ timeout: 30000 });
 
     await peerSays(page, EV.GO, {});
     await expect(page.locator("#hud")).toBeVisible({ timeout: 60000 });
@@ -257,6 +270,14 @@ test.describe("qualifying in a friend race", () => {
     // guessed — the one thing a qualifying session exists to prevent.
     test.slow();
     await enterRoom(page, "guest");
+    // THE RIVAL INTRODUCES ITSELF FIRST, as a real peer does the moment it
+    // connects. Without a HELLO the room holds a connection but no profile,
+    // and qualiRivalDriverIds() — which before NetPlay hands off reads the
+    // lobby's peer profiles — has nobody to wait for, so TO THE GRID is
+    // enabled from the start and the rule under test never engages. The lap
+    // below then has to carry the SAME identity the profile implies
+    // (team:seat), or it is a lap for a driver nobody is waiting on.
+    await peerSays(page, EV.HELLO, { team: "ferrari", driver: 0 });
     await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day", quali: true });
     await peerSays(page, EV.GO, {});
     await expect(page.locator("#quali")).toBeVisible({ timeout: 60000 });
@@ -277,7 +298,7 @@ test.describe("qualifying in a friend race", () => {
     expect(await page.evaluate(() => window.__apex.info().state)).not.toBe("race");
 
     // Their lap lands; now the grid can be built from two real times.
-    await peerSays(page, EV.QUALI, { driverId: "peer-driver", t: 62.5 });
+    await peerSays(page, EV.QUALI, { driverId: "ferrari:0", t: 62.5 });
     await expect(page.locator("#q-go")).toBeEnabled({ timeout: 10000 });
     await tap("q-go");
     await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), null, { polling: 100, timeout: 60000 });

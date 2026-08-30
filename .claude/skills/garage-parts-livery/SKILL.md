@@ -17,10 +17,19 @@ only**. ERS/aero axes derive from the catalog (`ersProfile` / `aeroLoad`); a
 car with no parts (every AI) sits at the midpoint. Livery finish is
 `finish: "gloss" | "satin" | "chrome"` via `Car3D.FINISH_SURFACE`. Shark fin:
 `fin` (plate, defaults to `c2`) and `finArt` (must contrast or it vanishes).
-The mark takes TWO livery colours: `logo` is the dominant shape, `logo2` its
-second colour — and `logo2` resolves to a different SLOT per mark (a backing
-plate, a second painted layer, or an outline that exists only once set), so
-read `secondSlot` in `js/car/liverytex.js` before assuming which.
+The mark takes up to THREE livery colours and the editor asks
+`LiveryTex.markSlots(teamId)` how many and what to call them — never assume a
+length. `logo` is the dominant shape; `logo2` is the mark's second SHAPE and
+resolves to a different slot per mark (a backing plate/disc, a second traced
+layer, or a same-ink island — `secondSlot` in `js/car/liverytex.js` decides,
+and the four single-loop silhouettes offer no `logo2` row at all); `logo3` is
+the OUTLINE, offered on every mark and opt-in everywhere. Red Bull's backing is
+authored geometry (`CREST_DISC`), not traced: the gold cluster traces to the
+union of the sun and both bulls, so painting it drew a rim and no sun.
+The garage wall crest is the same `drawCrest`, but it picks its OWN field, so
+it asks `LiveryTex.markOnField` what lands there — the BACKING when a mark has
+one, never just the mark. `ALT_INSIDE` names the marks whose second colour is
+drawn inside the mark and so answers to the mark alone.
 
 ## When to Use
 

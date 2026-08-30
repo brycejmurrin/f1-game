@@ -37,10 +37,34 @@ test("fit cuts at the budget and names every skipped spec", () => {
   // so the cut provably happens.
   const specs = ["tests/specs/smoke.spec.js", "tests/specs/logging.spec.js"];
   const r = fit(specs, 5);
-  assert.equal(r.selected.length + r.skipped.length + r.coveredByFixedGates.length, 2,
-    "every spec lands in selected, skipped, or an independent fixed gate");
+  assert.equal(r.selected.length + r.skipped.length + r.unreachable.length + r.coveredByFixedGates.length, 2,
+    "every spec lands in selected, skipped, unreachable, or an independent fixed gate");
   assert.ok(r.testsSelected <= r.testsFit, `${r.testsSelected} selected into ${r.testsFit}`);
   for (const s of r.skipped) assert.ok(s.tests > 0, "a skipped spec carries its cost");
+});
+
+test("a spec bigger than the whole cap is UNREACHABLE, not merely skipped", () => {
+  // The hole this exists for: the cut is greedy smallest-first, so a spec whose
+  // declared test count exceeds the ENTIRE cap can never be selected — not
+  // "did not fit this time", but "cannot fit on any change, ever". Every
+  // js/net/ change duly listed multiplayer-session.spec.js (19 tests against a
+  // 10-test cap) as skipped, which reads as routine, and it sat red for weeks
+  // with nothing running it. Two categories, so the permanent one is legible.
+  const big = "tests/specs/multiplayer-session.spec.js";
+  const r = fit([big, "tests/specs/boot-guard.spec.js"], 15);
+  assert.ok(r.unreachable.some((s) => s.file === big),
+    `${big} declares ${r.unreachable.concat(r.skipped, r.selected).find((s) => s.file === big)?.tests} ` +
+    `tests against a ${r.testsFit}-test cap and must be reported as unreachable`);
+  assert.ok(!r.skipped.some((s) => s.file === big), "unreachable is not double-counted as skipped");
+  assert.deepEqual(r.selected.map((s) => s.file), ["tests/specs/boot-guard.spec.js"],
+    "a spec that does fit is still selected alongside the report");
+  // A spec that fits the cap ON ITS OWN is ordinary skipping, never
+  // unreachable — 9 tests + 4 tests against a 10-test cap takes the 4 and
+  // skips the 9, which a later change with fewer candidates would pick up.
+  const small = fit(["tests/specs/multiplayer-seats.spec.js", "tests/specs/multiplayer-npeer.spec.js"], 15);
+  assert.deepEqual(small.unreachable.map((s) => s.file), [],
+    "a spec smaller than the cap is skipped, not unreachable");
+  assert.deepEqual(small.skipped.map((s) => s.file), ["tests/specs/multiplayer-seats.spec.js"]);
 });
 
 test("a spec that reserves more than the selected-gate timeout is EXCLUDED by name", () => {

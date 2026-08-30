@@ -1323,7 +1323,7 @@ function resolveLivery(team) {
     return { id: l.id || null, c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null, logo2: l.logo2 || null,
-             noseStripe: l.noseStripe || null, finish: l.finish || null };
+             logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1333,7 +1333,7 @@ function resolveLivery(team) {
   const val = liv ? { id: liv.id, c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
                       fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null, logo2: liv.logo2 || null,
-                      noseStripe: liv.noseStripe || null, finish: liv.finish || null }
+                      logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -1894,6 +1894,11 @@ const _ringWorld = new Float32Array(16);
 // Scratch opts for AI brake rings — mutated in place per frame so the car loop
 // doesn't allocate a fresh literal per ring (up to ~40/frame in a braking pack).
 const _ringOpts = { emissive: 0, roughness: 0.9, specular: 0, alpha: 1, noAlphaWrite: true };
+// Deferred wheel/ring queues for drawPlayerWheels — the _shadowMats/_decalMats
+// shape (parallel arrays, Float32Array(16) pool grown on demand, counter reset
+// by the consumer). Bounded at 4 each: one car's wheels, drained before return.
+const _wq = [], _wqMesh = [], _rq = [], _rqEmis = [], _rqAlpha = [];
+let _wqN = 0, _rqN = 0;
 // Deferred blob-shadow batch: instead of interleaving shadow↔body per car (which
 // flips program+VAO+blend+depthMask twice each car), accumulate every drawn car's
 // shadow matrix and flush them all in one state block after the body loop. Shadows
@@ -2196,7 +2201,16 @@ function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
     F[8] = ss; F[9] = 0; F[10] = cs; F[11] = 0;
     F[12] = L[12]; F[13] = L[13]; F[14] = L[14]; F[15] = 1;
     M4.mulTo(_fixedWheelWorld, base, F);
-    gfx.draw(wd.rear ? wm.RFixed : wm.FFixed, _fixedWheelWorld, opt);
+    // DEFERRED, not drawn here. Interleaving rotating/fixed per wheel gives the
+    // VAO sequence F,FFixed,F,FFixed,R,RFixed,R,RFixed — every consecutive pair
+    // differs, so bindVAO's cache collapses NOTHING (the alternating-toggle
+    // shape PERF-FINDINGS 1 already documents). Queued and flushed below in two
+    // runs, the wheels are opaque (alpha 1 => depth write on, blend off) and
+    // non-coplanar, so any order resolves identically under LEQUAL.
+    _wq[_wqN] || (_wq[_wqN] = new Float32Array(16));
+    _wq[_wqN].set(_fixedWheelWorld);
+    _wqMesh[_wqN] = wd.rear ? wm.RFixed : wm.FFixed;
+    _wqN++;
     // Hot brake discs: an emissive ring floating just off the outer wheel face,
     // ramping with the render-only brakeHeat (bright orange → blooms when hot).
     const heat = c.brakeHeat || 0;
@@ -2211,11 +2225,30 @@ function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
       W.set(_wheelWorld);
       W[12] += W[0] * tx; W[13] += W[1] * tx; W[14] += W[2] * tx;
       // Pooled, like the AI ring path: this allocated a literal per hot wheel.
-      const ro = _ringOpts;
-      ro.emissive = 0.30 + 0.70 * heat; ro.alpha = Math.min(1, 0.25 + heat * 0.9);
-      gfx.draw(getBrakeRing(), W, ro);
+      // Rings are BLENDED with no alpha write and alpha 0.295..1.0, and they
+      // were drawn interleaved with opaque car geometry. A ring writes no
+      // depth, so a LATER car's opaque draw sitting behind it still passes
+      // LEQUAL and paints over it — a live artifact, not just a bind cost.
+      // Queued with the same emissive/alpha it would have had and flushed
+      // after all the opaque wheels, which is both correct and one VAO bind
+      // for the whole car instead of one per ring (getBrakeRing is a single
+      // shared mesh).
+      _rq[_rqN] || (_rq[_rqN] = new Float32Array(16));
+      _rq[_rqN].set(W);
+      _rqEmis[_rqN] = 0.30 + 0.70 * heat;
+      _rqAlpha[_rqN] = Math.min(1, 0.25 + heat * 0.9);
+      _rqN++;
     }
   }
+  // Run 1: the fixed wheel layers, one bind for up to four draws.
+  for (let i = 0; i < _wqN; i++) gfx.draw(_wqMesh[i], _wq[i], opt);
+  // Run 2: the blended rings, after every opaque wheel of this car.
+  const ro = _ringOpts;
+  for (let i = 0; i < _rqN; i++) {
+    ro.emissive = _rqEmis[i]; ro.alpha = _rqAlpha[i];
+    gfx.draw(getBrakeRing(), _rq[i], ro);
+  }
+  _wqN = 0; _rqN = 0;
 }
 
 // Load an optional .glb car model at runtime. On success, rebuilds every team
@@ -7672,9 +7705,10 @@ function refreshCareerButton() {
   // line under it says what is behind it.
   if (label) label.textContent = "CAREER MODES";
   // The second line says WHICH career, because with up to three saved,
-  // "CONTINUE" on its own does not answer the only question that matters. Blank
-  // when there is nothing to continue — #mb-career-sub:empty collapses, so a first-time
-  // title screen is unchanged.
+  // "CONTINUE" on its own does not answer the only question that matters. The
+  // shell ships the no-save text so this only ever REWRITES a line that is
+  // already laid out — it used to ship empty and grow on boot, which was the
+  // menu's whole layout shift. docs/PERF-FINDINGS.md 4a.
   const sub = $("mb-career-sub");
   if (!sub) return;
   if (!c) { sub.textContent = "DRIVER CAREER  ·  MY TEAM"; return; }
@@ -8052,7 +8086,7 @@ const CZ_LIV_FIELDS = [
   ["cz-stripe", "stripe"], ["cz-nosestripe", "noseStripe"], ["cz-detail", "accent"],
   ["cz-nose", "nose"], ["cz-pod", "pod"], ["cz-wing", "wing"],
   ["cz-fin", "fin"], ["cz-finart", "finArt"], ["cz-logo", "logo"],
-  ["cz-logo2", "logo2"],
+  ["cz-logo2", "logo2"], ["cz-logo3", "logo3"],
   ["cz-halo", "halo"],
 ];
 // The custom team's paint FINISH ("gloss" = the default clearcoat car paint, so
@@ -8587,6 +8621,38 @@ function refreshCustomLogoUi(dataUrl) {
   if (!prev) return;
   prev.hidden = !dataUrl;
   if (dataUrl) prev.src = dataUrl;
+  czSyncMarkRows();
+}
+// The mark rows describe whichever mark is ACTUALLY drawn — markSlots in
+// js/car/liverytex.js decides and says why. The GARAGE editor builds its rows
+// from it and gets this for free; this dialog is static markup, so it asks the
+// same function and follows the answer. A hidden row keeps its stored colour,
+// so clearing an emblem brings the monogram and its box colour straight back.
+function czSyncMarkRows() {
+  const slots = (typeof LiveryTex !== "undefined" && LiveryTex.markSlots)
+    ? LiveryTex.markSlots("custom") : null;
+  if (!slots) return;
+  const shown = new Map(slots.map((s) => [s.key, s.label]));
+  for (const [domId, key] of CZ_LIV_FIELDS) {
+    if (key !== "logo" && key !== "logo2" && key !== "logo3") continue;
+    const input = $(domId), row = input && input.closest(".cz-row");
+    if (!row) continue;
+    row.hidden = !shown.has(key);
+    const label = row.querySelector("label");
+    if (label && shown.has(key)) label.textContent = shown.get(key);
+  }
+  // buildAtlas rims an uploaded emblem with `logo3 || logo2`, logo2 being the
+  // pre-OUTLINE-row fallback. Hiding that row without this would turn the
+  // fallback into a rim the player can neither see nor change — the dead-picker
+  // bug wearing the other face. Move it to the row that IS shown; saving
+  // migrates it.
+  const box = $("cz-logo2"), out = $("cz-logo3"), none = $("cz-logo3-none");
+  if (box && out && !shown.has("logo2") && !box.classList.contains("cz-off") &&
+      out.classList.contains("cz-off")) {
+    out.value = box.value;
+    out.classList.remove("cz-off");
+    if (none) none.classList.remove("active");
+  }
 }
 $("cz-logofile").addEventListener("change", (e) => {
   const f = e.target.files && e.target.files[0];
@@ -8619,6 +8685,9 @@ if (typeof LiveryTex !== "undefined" && LiveryTex.onMarkChange) {
   LiveryTex.onMarkChange(() => {
     invalidateDecalTextures("custom");
     _spMeshKey = "";   // force the garage turntable to repaint too
+    // setTeamLogo decodes ASYNCHRONOUSLY, so LOGOS is still empty in the file
+    // picker's own handler — this is the moment the answer actually changes.
+    czSyncMarkRows();
   });
   applyCustomLogo(loadCustomLogo());
 }
