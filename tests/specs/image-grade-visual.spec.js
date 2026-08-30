@@ -196,7 +196,15 @@ function histogramStats(data) {
 
 test.describe("rendered image grade", () => {
   test.describe.configure({ mode: "serial" });
-  test.setTimeout(180_000);
+  // NO test.setTimeout HERE. It used to say 180_000, and a per-test setTimeout
+  // OVERRIDES the file's describe.configure cap rather than being bounded by it
+  // — so this block was capped at 180 s while the file declared 480 s, and the
+  // first test timed out at exactly 180.0 s having needed 198.9 s. Because the
+  // block is `serial`, that one timeout SKIPPED the four tests after it, which
+  // is how a budget miss reads as five lost tests. MEASURED in that run: boot
+  // alone reached 51165 ms under two-worker contention (`pack loaded
+  // layers=14`), before a single pixel was read. Same defect and same cure as
+  // the three overrides removed from lighting-ab.spec.js.
 
   test("blacks visibly change the deepest image detail", async ({ page }) => {
     await boot(page);
@@ -279,7 +287,8 @@ const REPRESENTATIVE_CONDITIONS = [
 
 for (const condition of REPRESENTATIVE_CONDITIONS) {
   test(`${condition.track} ${condition.tod} ${condition.weather} retains broad tonal range`, async ({ page }) => {
-    test.setTimeout(180_000);
+    // Also no override — see the note on the serial block above. These measured
+    // 131.7-164.5 s in the same group run, i.e. inside 180 s only by margin.
     await boot(page, { ...condition, neutralGrade: false });
     if (CAPTURE_DIR) {
       await page.screenshot({
