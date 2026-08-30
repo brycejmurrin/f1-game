@@ -43,9 +43,21 @@ async function openSetup(page) {
   });
   await page.goto("/");
   await waitReady(page);
-  await page.locator("#mb-race").click();
-  await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-go").click();
+  // THE GARAGE DOOR, not the race flow. This used to walk mb-race -> select ->
+  // sel-go, which builds the circuit picker and then the track itself before it
+  // ever reaches the screen these tests are about. Measured on this box:
+  // boot 18.8 s, then the race flow 27.6 s vs `mb-garage` 11.1 s — the same
+  // #carsetup either way, because openGarage("menu") only sets the camera and
+  // where DONE returns to (js/game.js openGarage), and no test in this file
+  // clicks DONE. 16 s a test back, across 14 tests, on a file whose own header
+  // records 62-103 s against a 120 s budget and which had five tests cross it.
+  //
+  // A SHARED PAGE was the other candidate and is NOT worth it: measured, one
+  // boot plus a leave-and-re-enter is ~25 s against ~30 s for a fresh page
+  // through this door, because re-entering rebuilds the car and the bay anyway.
+  // Five seconds is not worth making fourteen tests serial and turning one
+  // failure into nine skips.
+  await page.locator("#mb-garage").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
 }
 
@@ -182,12 +194,12 @@ test.describe("Budget system — unlimited toggle", () => {
   test("unlimited state persists after page reload", async ({ page }) => {
     await openSetup(page);
     await page.locator("#cs-unlimited").click();
-    // Reload page and re-open setup
+    // Reload, then back in through the garage door. This test pays for TWO
+    // openings and was the longest in the file at 169 s; the flag surviving a
+    // reload is what it is about, not the route back to the screen.
     await page.reload();
     await waitReady(page);
-    await page.locator("#mb-race").click();
-    await page.locator("#select").waitFor({ state: "visible" });
-    await page.locator("#sel-go").click();
+    await page.locator("#mb-garage").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     const budgetText = await page.locator("#cs-budget").textContent();
     expect(budgetText).toContain("no budget limit");

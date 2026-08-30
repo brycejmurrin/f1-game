@@ -183,8 +183,14 @@ test.describe("Liveries — creator", () => {
     await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
     await page.locator(".cs-liv-create").click();
 
+    // Counted from Car3D.FINISH_SURFACE, which is what setup-ui builds the row
+    // from, plus gloss (the default, which remaps no surface and so has no
+    // entry). This asserted a bare 3, the finishes round took the row to 7, and
+    // the spec sat red for as long as it took to run a 2.5-hour browser group.
     const finish = page.locator(".cs-liv-ed-finish [data-cs-finish]");
-    await expect(finish).toHaveCount(3);
+    const wantFinishes = await page.evaluate(() => 1 + Object.keys(Car3D.FINISH_SURFACE).length);
+    expect(wantFinishes).toBeGreaterThan(3);
+    await expect(finish).toHaveCount(wantFinishes);
     await expect(page.locator('.cs-liv-ed-finish [data-cs-finish="gloss"]')).toHaveClass(/active/);
 
     await page.locator('.cs-liv-ed-finish [data-cs-finish="chrome"]').click();

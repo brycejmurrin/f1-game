@@ -652,7 +652,9 @@ function buildLiveryCreator(container, team) {
     const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = "FINISH"; r.appendChild(lb);
     const group = document.createElement("span"); group.className = "cs-liv-ed-finish";
     const btns = [];
-    for (const f of ["gloss", "satin", "chrome", "matte", "carbon", "brushed", "pearl"]) {
+    // From Car3D, not a local list: this array and FINISH_SURFACE were two
+    // copies of the same set and the specs held a third.
+    for (const f of ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)]) {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "cs-liv-ed-none" + ((d.finish || "gloss") === f ? " active" : "");

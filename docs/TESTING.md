@@ -123,6 +123,33 @@ log converts the whole batch cost into agent wall time. Shipping with a
 named, deliberate gap ("group X not run, here is why") is an allowed
 outcome; silently skipping is not.
 
+### Reaching the GARAGE: use the door, not the race flow
+
+Measured on this container, one worker, per test:
+
+```
+goto                   3.4 s
+boot (__apex.race)    18.8-22.6 s
+mb-race -> select     15.9 s     |  mb-garage -> #carsetup   11.1 s
+sel-go  -> #carsetup  11.7 s     |
+                      ------                                 ------
+race flow total       27.6 s        garage door total        11.1 s
+```
+
+`#mb-garage` calls `openGarage("menu")` -> `openSetup()` (js/game.js), which
+shows `#carsetup` directly. The race flow builds the circuit picker and then the
+TRACK before it gets to the same screen. Any spec whose subject is the garage —
+budget, parts rows, liveries, the preview — should take the door and save 16 s a
+test. Only take the race flow when the flow itself is the subject (where DONE
+returns to, the select screen), because `openGarage` sets `garageReturn`.
+
+`parts-budget.spec.js` did this and got its five timeouts back under budget.
+
+A SHARED page across a describe is the obvious next step and is NOT worth it:
+measured, one boot plus a leave-and-re-enter is ~25 s against ~30 s for a fresh
+page through the door, because re-entering rebuilds the car and the bay anyway.
+Five seconds does not buy making a file serial, where one failure skips the rest.
+
 ### A `waitForFunction` timeout does not bound the wait
 
 Playwright polls a `waitForFunction` predicate on `requestAnimationFrame` by

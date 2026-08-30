@@ -14,8 +14,14 @@ const Car3D = (function () {
   // SURFACES.carbon (21): 21 keeps the vertex colour, so pointing the finish at
   // it just rendered flatter TEAM-COLOURED paint. 31 darkens the albedo to bare
   // weave, and leaving 21 alone keeps genuinely carbon PARTS looking as they did.
+  // Also the ORDER the garage's finish chips render in: setup-ui.js builds that
+  // row as ["gloss", ...Object.keys(FINISH_SURFACE)] rather than keeping its own
+  // copy, because the copy drifted — the row grew from three finishes to seven
+  // and the spec asserting a count of 3 stayed behind, red and unnoticed for as
+  // long as it took to run a 2.5-hour browser group. Gloss is absent by design:
+  // it is the default and remaps nothing.
   const FINISH_SURFACE = Object.freeze({
-    satin: 26, chrome: 27, matte: 28, brushed: 29, pearl: 30, carbon: 31,
+    satin: 26, chrome: 27, matte: 28, carbon: 31, brushed: 29, pearl: 30,
   });
   const DARK   = [0.05, 0.05, 0.05];
   const CARBON = [0.07, 0.07, 0.08];
