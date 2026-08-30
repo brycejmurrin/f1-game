@@ -419,7 +419,19 @@ const CEILINGS = {
   // knob is resolved BEFORE setFrameLights (it feeds the scaled full-set build)
   // and allLights is left null when the feature is off instead of handing out
   // the raw baked list.
-  "js/game.js": 8727,
+  // 8727 -> 8760 for czSyncMarkRows and its two callers: MY TEAM's mark rows
+  // now describe whichever mark is ACTUALLY drawn. Uploading an emblem takes
+  // buildAtlas down the drawLogoImage branch, whose signature is
+  // (ctx, img, R, tint, halo, outline) — no parameter for a monogram box — so
+  // the dialog was showing a MONOGRAM BOX picker that could not reach a pixel,
+  // and a MONOGRAM label over what is really a tint on arbitrary art. Hiding
+  // the row then had to surface the legacy `logo3 || logo2` rim, or the
+  // fallback would paint from a row nobody can see.
+  // Bug-explaining growth at the site of the bug, with the labelling RULE in
+  // js/car/liverytex.js markSlots where both editors read it — the garage
+  // builds its rows from that function and needed no lines at all. What is
+  // left here is this dialog's static markup being told the answer.
+  "js/game.js": 8760,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).

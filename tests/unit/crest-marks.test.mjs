@@ -569,3 +569,40 @@ test("the garage lightbox shows the brand lockup, not a re-fitted one", () => {
   }
   assert.deepEqual(bad, [], "the garage wall drifted from the brand lockup");
 });
+
+test("an uploaded emblem offers no picker it cannot paint", () => {
+  // The custom team can upload arbitrary art, and buildAtlas then takes the
+  // drawLogoImage branch — where the monogram is never drawn and the function
+  // signature has no parameter for its box: (ctx, img, R, tint, halo, outline).
+  // markSlots still offered MONOGRAM BOX, so MY TEAM and the garage editor both
+  // showed a colour picker that could not reach a pixel. That is the same
+  // defect this file was opened for, one screen over.
+  const img = { naturalWidth: 64, naturalHeight: 64, _avg: [0.5, 0.5, 0.5] };
+  // join(), not deepEqual: markSlots builds its array inside the vm realm, so a
+  // deepStrictEqual against a host array fails on prototype identity alone —
+  // the same cross-realm trap the header of this file warns about.
+  const rowsFor = () => LT.markSlots("custom").map((r) => r.key).join(",");
+
+  // Without an emblem the monogram IS the mark, so its box is a real shape.
+  assert.ok(!LT.LOGOS.custom, "LOGOS.custom is dirty before this test runs");
+  assert.equal(rowsFor(), "logo,logo2,logo3");
+
+  try {
+    LT.LOGOS.custom = img;
+    // Every row the emblem path offers has to land in drawLogoImage's pixels.
+    // tint is `logo`, outline is `logo3`; there is no third argument, which is
+    // exactly why logo2 must not be offered.
+    assert.equal(rowsFor(), "logo,logo3",
+      "an uploaded emblem still offers a row drawLogoImage cannot paint");
+    const TINT = [0.1, 0.8, 0.9], OUT = [1, 0.55, 0];
+    const ctx = new RecCtx();
+    LT.drawLogoImage(ctx, img, LT.REGIONS.crest, TINT, null, OUT);
+    // The rim is painted as a shadow pass; the emblem itself lands on top.
+    const shadows = ctx.imageOps.map((o) => o.shadow);
+    assert.ok(shadows.includes(cssOf(OUT)), "OUTLINE never reached the canvas");
+    assert.equal(shadows[shadows.length - 1], null, "the emblem is under its own rim");
+  } finally {
+    delete LT.LOGOS.custom;            // module-level state: never leak it
+  }
+  assert.equal(rowsFor(), "logo,logo2,logo3", "the monogram row did not come back");
+});
