@@ -2333,14 +2333,14 @@ section of `Car3D.build` emitted — 19 sections including `chassis`, `sidepods`
 
 ```js
 __apex.carView({ detail: "parts" }).partGeometry
-// [{ name:"frontWing", vertices:486, sizeM:[2.09,0.42,1.91],
-//    centreM:[0,0.3,1.77], boundsZ:[0.81,2.72] }, …]
+// [{ name:"frontWing", vertices:486, sizeM:[1.89,0.42,1.91],
+//    centreM:[0,0.24,1.77], boundsZ:[0.81,2.72] }, …]
 ```
 
 Instrumentation only — the mesh is vertex-identical with or without it (10,992
 either way on the default car), and the sections partition the mesh exactly, so
 their vertex counts sum to the whole. Per-team silhouette shows up in the
-measurements: the nose tip sits at z 3.12 / 3.18 / 3.26 for McLaren / Ferrari /
+measurements: the nose tip sits at z 2.54 / 2.60 / 2.68 for McLaren / Ferrari /
 Mercedes, tracking each team's `noseTipZ`.
 
 Caveat: sections are **ranges between markers**, so a section can carry a little

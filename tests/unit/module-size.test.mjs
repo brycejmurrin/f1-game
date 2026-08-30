@@ -563,7 +563,23 @@ const CEILINGS = {
   // body paint under the wheel 1073 -> 658 of 13430. Re-measured on the union.
   // 3320 -> 3378: second detail pass — T-cam pod, driveshafts, splitter/tea-tray,
   // turning-vane footplates, six-point harness. Measured 3372 on the raise.
-  "js/car/car3d.js": 3378,
+  // 3378 -> 3510: the PROPORTIONS pass, and it is nearly all comment. Seven
+  // measured defects, each fixed by moving numbers rather than adding geometry
+  // (the body and cockpit triangle counts did not move at all): the nose tip
+  // overhung the front wing's leading edge by 460 mm and made the car 5.87 m
+  // long on a 3.30 m wheelbase; the front-wing endplate cluster measured
+  // x 1.045, outside the 1900 mm width the tyres are already drawn to; the
+  // principal roll structure (C12.4.1, Z 968) did not exist, so the car's
+  // highest point was its rear wing; the sidepod had no undercut aft of the
+  // inlet; the engine cover was a zero-width knife ridge with every
+  // cover-mounted detail floating up to 0.21 m off it; and every suspension arm
+  // started 0.10-0.16 m outboard of the chassis it bolts to. The comments carry
+  // the regulation citations and the measured before/after, which is the only
+  // way the next pass can argue with them. Plus the tyre-shoulder ladder, the
+  // one change that did add triangles and the one that had to be re-spaced when
+  // the sweep caught its first rung collapsing under the optical floor.
+  // Measured 3512 on the raise.
+  "js/car/car3d.js": 3520,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

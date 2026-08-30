@@ -115,8 +115,16 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
   // 13.1 mm and measured 12.66 mm WEAK — a flat annulus has no silhouette, so
   // the radius grew and no camera could tell. One SEG-segment cylindrical band
   // per wheel, +48. Measured 740.
-  assert.ok(frontWheel <= 800, `front wheel ${frontWheel} > 800`);
-  assert.ok(rearWheel <= 800, `rear wheel ${rearWheel} > 800`);
+  // 800 -> 840: the TYRE SHOULDER. The default profile was [[0,1],[1,1]] — a
+  // perfectly cylindrical tread meeting the sidewall at a hard 90 deg corner,
+  // i.e. a can, on the object closest to both the chase and the cockpit camera.
+  // A real slick rounds off over roughly the outer 30 mm of a 355 mm tread and
+  // gives up ~12 mm of its 360 mm radius doing it; TYRE_CROWN/CROWN_W are that
+  // measurement at this model's scale. Two extra profile rings = two extra
+  // tread bands = +2 x SEG x 2 = +96. The `shoulder` recipe keeps its
+  // exaggerated 0.945 / 0.90 balloons above the new default. Measured 836.
+  assert.ok(frontWheel <= 840, `front wheel ${frontWheel} > 840`);
+  assert.ok(rearWheel <= 840, `rear wheel ${rearWheel} > 840`);
 });
 
 test("single-option recipes stay within 1.6x the default triangle budget", () => {

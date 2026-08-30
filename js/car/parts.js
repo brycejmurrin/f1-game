@@ -12,17 +12,39 @@ const Parts = (function () {
   const CATALOG = [
     {
       id: "engine", label: "ENGINE",
+      // THE CORE POWER LADDER WAS ONE BODY AT THIRTEEN SCALES. Measured
+      // 2026-08-30 over the resolved recipes: `servicePanel` (0-4 cover-flank
+      // panels) and `heatShield` (a tail plate whose width scales with it) were
+      // set by `stock` and by NOTHING else, and `chimney` (0-3 pod-shoulder
+      // cooling stacks a side — the loudest silhouette element this category
+      // owns) was reached only by the three options named for it further down,
+      // never by stock/lean_burn/performance/v_power/turbo/highrev/evo_kit/
+      // sprint/race/split_turbo/torque_curve/hybrid_max/quali_engine. What was
+      // left to tell those thirteen apart was a MONOTONE BODY SCALE — podWidth
+      // and shoulderHeight up together, undercut and coke down together — which
+      // is why `performance` and `evo_kit` scored 0.332 on a range-normalised
+      // key distance whose category median was 1.6: the same car, 4% bigger,
+      // for 45 more credits.
+      //
+      // Each of those rungs now carries its own COOLING PACKAGE, and the
+      // packages do not track the price: `lean_burn` is the bare cover (no
+      // chimneys, no shield, no panels — an efficiency unit that does not need
+      // them), `highrev` runs three chimneys a side and zero panels,
+      // `performance` is the opposite (four panels, no chimneys, a double-width
+      // shield). The (chimney, servicePanel, heatShield) tuple is unique across
+      // every universal option. Costs and stats are untouched, so the ladder is
+      // bit-identical and no SIGNATURE needed propagating.
       options: [
         { id: "stock",        label: "Stock",          cost:   0, desc: "Factory spec power unit",                                           visual: { in: 0.85, inlet: 1, outlet: 1, podWidth: 1, shoulderHeight: 1, undercut: 1, coke: 1, tailWidth: 1, coverHeight: 1, servicePanel: 1, heatShield: 1 }, visualTier: 1 },
-        { id: "lean_burn",    label: "Lean Burn",      cost:  35, desc: "Efficiency-tuned mapping — fuel saving with surprising torque",     accel: 1.05, braking: 1.02, visual: {"in": 0.72, "inlet": 0, "outlet": 0, podWidth: 0.88, shoulderHeight: 0.92, undercut: 1.18, coke: 1.15, tailWidth: 0.88, coverHeight: 0.90}, visualTier: 1 },
-        { id: "performance",  label: "Performance",    cost:  60, desc: "Optimised mapping — peak acceleration gains",                       accel: 1.09, visual: {"in": 1.15, "twin": 1, "inlet": 2, "outlet": 1, podWidth: 1.08, shoulderHeight: 1.12, undercut: 0.90, coke: 0.94, tailWidth: 1.08, coverHeight: 1.07}, visualTier: 2 },
-        { id: "v_power",      label: "V-Power Spec",   cost:  60, desc: "Premium fuel-optimised mapping — balanced speed and accel",        speed: 1.02, accel: 1.07, visual: {"in": 1.1, "twin": 1, "inlet": 2, "outlet": 1, podWidth: 1.04, shoulderHeight: 1.08, undercut: 0.96, coke: 1.02, tailWidth: 1.04, coverHeight: 1.03}, visualTier: 2 },
-        { id: "turbo",        label: "Turbo",          cost:  80, desc: "Broader power band — balanced speed and accel",                    speed: 1.04, accel: 1.06, braking: 0.99, visual: {"in": 1.35, "snork": 1, "inlet": 2, "outlet": 2, podWidth: 1.13, shoulderHeight: 1.18, undercut: 0.86, coke: 0.92, tailWidth: 1.12, coverHeight: 1.12}, visualTier: 1 },
-        { id: "highrev",      label: "High-Rev",       cost: 115, desc: "High-RPM spec — top speed focus, mild accel gain",                 speed: 1.07, accel: 1.03, braking: 0.98, visual: {"in": 1.25, "snork": 1, "inlet": 3, "outlet": 2, podWidth: 1.06, shoulderHeight: 1.14, undercut: 0.92, coke: 1.08, tailWidth: 0.96, coverHeight: 1.16}, visualTier: 1 },
-        { id: "evo_kit",      label: "EVO Kit",        cost: 105, desc: "Engine evolution package — well-rounded gains across all metrics", speed: 1.04, accel: 1.07, cornering: 1.02, braking: 1.02, visual: {"in": 1.2, "twin": 1, "inlet": 2, "outlet": 1, podWidth: 1.10, shoulderHeight: 1.10, undercut: 0.88, coke: 0.98, tailWidth: 1.06, coverHeight: 1.09}, visualTier: 2 },
-        { id: "sprint",       label: "Sprint",         cost: 125, desc: "Torque-focused unit — explosive accel, lower top speed",           speed: 0.97, accel: 1.14, visual: {"in": 1.15, "twin": 1, "inlet": 3, "outlet": 2, podWidth: 1.12, shoulderHeight: 1.16, undercut: 0.84, coke: 0.90, tailWidth: 1.10, coverHeight: 1.11}, visualTier: 2 },
-        { id: "race",         label: "Race",           cost: 145, desc: "Maximum power output across the rev range",                        speed: 1.06, accel: 1.11, visual: {"in": 1.55, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.16, shoulderHeight: 1.20, undercut: 0.82, coke: 0.88, tailWidth: 1.14, coverHeight: 1.18}, visualTier: 2 },
-        { id: "split_turbo",  label: "Split Turbo",    cost: 165, desc: "Separated compressor layout — sharp response with strong terminal speed",   speed: 1.06, accel: 1.13, braking: 1.01, visual: { in: 1.42, snork: 1, twin: 0, inlet: 3, outlet: 2, podWidth: 1.09, shoulderHeight: 1.13, undercut: 1.04, coke: 0.86, tailWidth: 1.02, coverHeight: 1.14 }, visualTier: 2 },
+        { id: "lean_burn",    label: "Lean Burn",      cost:  35, desc: "Efficiency-tuned mapping — fuel saving with surprising torque",     accel: 1.05, braking: 1.02, visual: {"in": 0.72, "inlet": 0, "outlet": 0, podWidth: 0.88, shoulderHeight: 0.92, undercut: 1.18, coke: 1.15, tailWidth: 0.88, coverHeight: 0.90, chimney: 0, servicePanel: 0, heatShield: 0}, visualTier: 1 },
+        { id: "performance",  label: "Performance",    cost:  60, desc: "Optimised mapping — peak acceleration gains",                       accel: 1.09, visual: {"in": 1.15, "twin": 1, "inlet": 2, "outlet": 1, podWidth: 1.08, shoulderHeight: 1.12, undercut: 0.90, coke: 0.94, tailWidth: 1.08, coverHeight: 1.07, chimney: 0, servicePanel: 4, heatShield: 2}, visualTier: 2 },
+        { id: "v_power",      label: "V-Power Spec",   cost:  60, desc: "Premium fuel-optimised mapping — balanced speed and accel",        speed: 1.02, accel: 1.07, visual: {"in": 1.1, "twin": 1, "inlet": 2, "outlet": 1, podWidth: 1.04, shoulderHeight: 1.08, undercut: 0.96, coke: 1.02, tailWidth: 1.04, coverHeight: 1.03, chimney: 1, servicePanel: 1, heatShield: 1}, visualTier: 2 },
+        { id: "turbo",        label: "Turbo",          cost:  80, desc: "Broader power band — balanced speed and accel",                    speed: 1.04, accel: 1.06, braking: 0.99, visual: {"in": 1.35, "snork": 1, "inlet": 2, "outlet": 2, podWidth: 1.13, shoulderHeight: 1.18, undercut: 0.86, coke: 0.92, tailWidth: 1.12, coverHeight: 1.12, chimney: 2, servicePanel: 2, heatShield: 1}, visualTier: 1 },
+        { id: "highrev",      label: "High-Rev",       cost: 115, desc: "High-RPM spec — top speed focus, mild accel gain",                 speed: 1.07, accel: 1.03, braking: 0.98, visual: {"in": 1.25, "snork": 1, "inlet": 3, "outlet": 2, podWidth: 1.06, shoulderHeight: 1.14, undercut: 0.92, coke: 1.08, tailWidth: 0.96, coverHeight: 1.16, chimney: 3, servicePanel: 0, heatShield: 1}, visualTier: 1 },
+        { id: "evo_kit",      label: "EVO Kit",        cost: 105, desc: "Engine evolution package — well-rounded gains across all metrics", speed: 1.04, accel: 1.07, cornering: 1.02, braking: 1.02, visual: {"in": 1.2, "twin": 1, "inlet": 2, "outlet": 1, podWidth: 1.10, shoulderHeight: 1.10, undercut: 0.88, coke: 0.98, tailWidth: 1.06, coverHeight: 1.09, chimney: 1, servicePanel: 3, heatShield: 2}, visualTier: 2 },
+        { id: "sprint",       label: "Sprint",         cost: 125, desc: "Torque-focused unit — explosive accel, lower top speed",           speed: 0.97, accel: 1.14, visual: {"in": 1.15, "twin": 1, "inlet": 3, "outlet": 2, podWidth: 1.12, shoulderHeight: 1.16, undercut: 0.84, coke: 0.90, tailWidth: 1.10, coverHeight: 1.11, chimney: 0, servicePanel: 3, heatShield: 0}, visualTier: 2 },
+        { id: "race",         label: "Race",           cost: 145, desc: "Maximum power output across the rev range",                        speed: 1.06, accel: 1.11, visual: {"in": 1.55, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.16, shoulderHeight: 1.20, undercut: 0.82, coke: 0.88, tailWidth: 1.14, coverHeight: 1.18, chimney: 2, servicePanel: 4, heatShield: 2}, visualTier: 2 },
+        { id: "split_turbo",  label: "Split Turbo",    cost: 165, desc: "Separated compressor layout — sharp response with strong terminal speed",   speed: 1.06, accel: 1.13, braking: 1.01, visual: { in: 1.42, snork: 1, twin: 0, inlet: 3, outlet: 2, podWidth: 1.09, shoulderHeight: 1.13, undercut: 1.04, coke: 0.86, tailWidth: 1.02, coverHeight: 1.14, chimney: 2, servicePanel: 1, heatShield: 2}, visualTier: 2 },
         // Manufacturer-exclusive power units — shown only when team.engine matches
         { id: "manu_mercedes", label: "AMG HPP",        cost: 200, supplier: "Mercedes",      tag: "FACTORY",
           desc: "Mercedes-AMG High Performance Powertrains — 2026 peak spec",                   speed: 1.08, accel: 1.14, visual: {"in": 1.55, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 0.78, shoulderHeight: 0.96, undercut: 1.28, coke: 1.28, tailWidth: 0.76, coverHeight: 0.94, scoopLip: 2}, visualTier: 2 },
@@ -35,11 +57,11 @@ const Parts = (function () {
         { id: "manu_audi",     label: "Audi P.U.",      cost: 200, supplier: "Audi",          tag: "FACTORY",
           desc: "Audi 2026 power unit — strong braking recovery and mid-range punch",            speed: 1.07, accel: 1.12, braking: 1.06, visual: {"in": 1.48, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 1.07, shoulderHeight: 1.13, undercut: 0.94, coke: 1.00, tailWidth: 0.98, coverHeight: 1.12, scoopLip: 2}, visualTier: 2 },
         // Non-exclusive upgrades above factory level
-        { id: "torque_curve",  label: "Torque Curve",  cost:  40, desc: "Rebalanced mapping — strong traction out of slow corners",        accel: 1.06, cornering: 1.03, visual: {"in": 1.0, "inlet": 1, "outlet": 1, podWidth: 0.98, shoulderHeight: 1.04, undercut: 1.02, coke: 1.06, tailWidth: 0.95, coverHeight: 1.00}, visualTier: 1 },
-        { id: "hybrid_max",    label: "Hybrid Max",    cost: 150, desc: "Full MGU-K/H synergy — broad power gains across all four metrics", speed: 1.05, accel: 1.08, cornering: 1.03, braking: 1.02, visual: {"in": 1.3, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 1.08, shoulderHeight: 1.15, undercut: 0.89, coke: 0.95, tailWidth: 1.06, coverHeight: 1.13}, visualTier: 2 },
+        { id: "torque_curve",  label: "Torque Curve",  cost:  40, desc: "Rebalanced mapping — strong traction out of slow corners",        accel: 1.06, cornering: 1.03, visual: {"in": 1.0, "inlet": 1, "outlet": 1, podWidth: 0.98, shoulderHeight: 1.04, undercut: 1.02, coke: 1.06, tailWidth: 0.95, coverHeight: 1.00, chimney: 0, servicePanel: 2, heatShield: 1}, visualTier: 1 },
+        { id: "hybrid_max",    label: "Hybrid Max",    cost: 150, desc: "Full MGU-K/H synergy — broad power gains across all four metrics", speed: 1.05, accel: 1.08, cornering: 1.03, braking: 1.02, visual: {"in": 1.3, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 1.08, shoulderHeight: 1.15, undercut: 0.89, coke: 0.95, tailWidth: 1.06, coverHeight: 1.13, chimney: 1, servicePanel: 2, heatShield: 0}, visualTier: 2 },
         { id: "sig_mercedes_zero", label: "Zero-Sidepod PU", cost: 150, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "hybrid_max",
           desc: "Mercedes signature compact installation — Hybrid Max performance in a tighter cooling form", speed: 1.05, accel: 1.08, cornering: 1.03, braking: 1.02, visual: { in: 1.38, snork: 1, twin: 1, inlet: 2, outlet: 3, podWidth: 0.72, shoulderHeight: 0.90, undercut: 1.35, coke: 1.34, tailWidth: 0.70, coverHeight: 0.90 , scoopLip: 2}, visualTier: 2 },
-        { id: "quali_engine",  label: "Quali Mode",    cost: 195, desc: "Unrestricted qualifying spec — peak power, no thermal limits",    speed: 1.10, accel: 1.09, braking: 0.97, visual: {"in": 1.65, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.20, shoulderHeight: 1.24, undercut: 0.78, coke: 0.84, tailWidth: 1.18, coverHeight: 1.22}, visualTier: 2 },
+        { id: "quali_engine",  label: "Quali Mode",    cost: 195, desc: "Unrestricted qualifying spec — peak power, no thermal limits",    speed: 1.10, accel: 1.09, braking: 0.97, visual: {"in": 1.65, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.20, shoulderHeight: 1.24, undercut: 0.78, coke: 0.84, tailWidth: 1.18, coverHeight: 1.22, chimney: 3, servicePanel: 4, heatShield: 2}, visualTier: 2 },
         // Cooling-layout units — the `chimney` stacks are the visual tell.
         { id: "chimney_spec",  label: "Chimney Spec",  cost:  90, desc: "Open-cooling installation — runs hot mappings safely for strong acceleration", speed: 1.01, accel: 1.08, braking: 1.03, visual: { in: 1.22, snork: 0, twin: 0, inlet: 2, outlet: 2, podWidth: 1.03, shoulderHeight: 1.05, undercut: 0.97, coke: 1.05, tailWidth: 1.01, coverHeight: 1.06, chimney: 3 }, visualTier: 1 },
         { id: "sealed_pod",    label: "Sealed Bodywork", cost: 95, desc: "Fully closed cooling — minimum drag from a tightly packaged installation", speed: 1.06, accel: 1.02, visual: { in: 0.96, snork: 0, twin: 0, inlet: 1, outlet: 1, podWidth: 0.84, shoulderHeight: 0.94, undercut: 1.22, coke: 1.20, tailWidth: 0.82, coverHeight: 0.96, chimney: 0 }, visualTier: 1 },
@@ -151,23 +173,60 @@ const Parts = (function () {
     },
     {
       id: "brakes", label: "BRAKES",
+      // EVERY PAID RUNG USED TO BE THE SAME WHEEL WITH A BIGGER DUCT. Measured
+      // 2026-08-30 (scratch pairwise over the resolved recipes): of the eight
+      // geometry keys this category registers, the universal ladder left FOUR —
+      // `caliperPos`, `coverOpen`, `rotor` and `rotorScale` — at the tier
+      // default on every single option and varied `duct` (0.55 -> 1.75)
+      // monotonically with price, so all twelve tier-2 brakes rendered an
+      // IDENTICAL wheel face — caliper at 12 o'clock, cover open one-in-three,
+      // rotor 2 at scale 1.12, on every one of them. The closest
+      // pairs scored 0.083 on a range-normalised key distance where the
+      // category median was 0.9. `six_piston` — the 180 cr option whose entire
+      // identity is its caliper — did not set `caliper` at all and drew the
+      // stock three-box peek, while `brembo_evo` got the six-piston radial.
+      //
+      // So each rung now owns a HARDWARE SIGNATURE instead of a duct size: the
+      // caliper sits at its own clock position (the arc radius is r*0.78, so
+      // 0.5 rad moves it ~130 mm — six times the 20 mm WEAK floor and the
+      // loudest single knob here), the cover is solid / one-in-three / one-in-two,
+      // and the disc's diameter, bobbin count and face pattern move with the
+      // story the option tells. `duct` and the caliper colour are unchanged.
+      // Costs and all four stats are untouched — this is a look pass, so no
+      // SIGNATURE needed propagating and the ladder is bit-identical.
       options: [
         { id: "standard",    label: "Standard",         cost:   0, desc: "Factory steel brake discs",                                                 visual: { cal: null, duct: 0.55, caliperPos: 0, coverOpen: 0, rotor: 1, rotorScale: 1 }, visualTier: 1 },
-        { id: "drilled",     label: "Drilled Steel",    cost:  25, desc: "Cross-drilled steel discs — improved heat management",                      braking: 1.05, visual: {"cal": null, "duct": 0.72}, visualTier: 1 },
-        { id: "sport",       label: "Sport",            cost:  40, desc: "Improved pads and discs",                                                   speed: 0.99, braking: 1.08, visual: {"cal": [0.95, 0.45, 0.05], "duct": 0.95}, visualTier: 2 },
-        { id: "titanium",    label: "Titanium Caliper", cost:  60, desc: "Lighter alloy calipers — better weight distribution and exit speed",        speed: 1.01, accel: 1.04, braking: 1.06, visual: {"cal": [0.7, 0.72, 0.78], "duct": 0.85}, visualTier: 1 },
-        { id: "endurance",   label: "Endurance",        cost:  60, desc: "Consistent fade-free braking — aids corner exit",                           speed: 0.98, accel: 1.02, braking: 1.10, visual: {"cal": [0.95, 0.8, 0.1], "duct": 1.05, caliper: 1}, visualTier: 2 },
-        { id: "dual_caliper",label: "Dual Caliper",     cost:  80, desc: "Twin-piston caliper setup — stronger bite with improved exit traction",     speed: 0.98, accel: 1.02, braking: 1.14, visual: {"cal": [0.95, 0.72, 0.08], "duct": 1.15, "rim": [0.3, 0.3, 0.34], caliper: 1}, visualTier: 2 },
-        { id: "carbon",      label: "Carbon",           cost:  85, desc: "F1-spec carbon composite brakes",                                           braking: 1.16, visual: {"cal": [0.85, 0.12, 0.1], "duct": 1.25, discFace: 1, caliper: 1}, visualTier: 2 },
-        { id: "ventilated",  label: "Ventilated Carbon",cost: 95, desc: "Internally vented discs — consistent fade-free stopping",                   speed: 0.97, braking: 1.18, visual: {"cal": [0.9, 0.15, 0.12], "duct": 1.35, discFace: 1, caliper: 1}, visualTier: 2 },
-        { id: "carbon_mag",  label: "Carbon-Mag",       cost: 120, desc: "Carbon-magnesium alloy — lighter, better mass dist",                        speed: 1.01, accel: 1.03, braking: 1.20, visual: {"cal": [0.85, 0.66, 0.16], "duct": 1.45, "rim": [0.48, 0.4, 0.16], caliper: 1}, visualTier: 2 },
-        { id: "regen_brakes",label: "Regen Brakes",     cost: 130, desc: "Brake-by-wire hybrid system — converts braking energy into acceleration",   speed: 1.02, accel: 1.06, braking: 1.12, visual: {"cal": [0.15, 0.78, 0.38], "duct": 1.25, caliper: 1}, visualTier: 2 },
-        { id: "ceramic",     label: "Carbon Ceramic",   cost: 135, desc: "Maximum stopping power — zero fade",                                        speed: 0.98, braking: 1.24, visual: {"cal": [0.97, 0.1, 0.08], "duct": 1.6, "rim": [0.55, 0.56, 0.6], discFace: 2, caliper: 1}, visualTier: 2 },
-        { id: "brembo_evo",  label: "Brembo Evo",       cost: 165, desc: "Next-gen racing brake package — ultimate stopping with mass benefit",        speed: 1.01, accel: 1.04, braking: 1.26, visual: {"cal": [0.98, 0.62, 0.05], "duct": 1.75, "rim": [0.42, 0.34, 0.12], caliper: 2}, visualTier: 2 },
-        { id: "six_piston",   label: "Six Piston",       cost: 180, desc: "Large monobloc calipers — peak initial bite with stable trail braking",       speed: 0.97, cornering: 1.02, braking: 1.27, visual: { cal: [0.10, 0.65, 0.95], duct: 1.55, rim: [0.24, 0.28, 0.34], discFace: 2 }, visualTier: 2 },
-        { id: "mono_steel",   label: "Monobloc Steel",   cost:  60, desc: "One-piece steel calipers — predictable bite with no exotic materials",        speed: 0.99, braking: 1.12, visual: { cal: [0.62, 0.64, 0.70], duct: 0.95, scoop: 0, rotor: 1, rotorScale: 1.02 , caliper: 1}, visualTier: 1 },
-        { id: "scoop_wrap",   label: "Wrapped Ducts",    cost: 110, desc: "Boomerang duct fairings wrapping the wheel face — cooling that also turns air", speed: 0.96, cornering: 1.02, braking: 1.19, visual: { cal: [0.20, 0.55, 0.85], duct: 1.30, scoop: 2, rim: [0.26, 0.30, 0.36], discFace: 1 , caliper: 2}, visualTier: 2 },
-        { id: "cryo_pack",    label: "Cryo Pack",        cost: 150, desc: "Cryogenically treated discs — deep, repeatable stopping power under load",     accel: 1.02, braking: 1.25, visual: { cal: [0.72, 0.86, 0.95], duct: 1.62, scoop: 2, rim: [0.50, 0.54, 0.60], discFace: 2 , caliper: 1}, visualTier: 2 },
+        // Cross-drilled: the drill pattern IS the option, so it opens the cover
+        // one-in-three to show it. `discFace > 0` also flips the disc to the
+        // carbon colour in car3d — correct enough for a steel disc carrying pad
+        // transfer, and not a knob this file can separate.
+        { id: "drilled",     label: "Drilled Steel",    cost:  25, desc: "Cross-drilled steel discs — improved heat management",                      braking: 1.05, visual: {"cal": null, "duct": 0.72, caliperPos: 0, coverOpen: 1, rotor: 1, rotorScale: 1.06, discFace: 1}, visualTier: 1 },
+        { id: "sport",       label: "Sport",            cost:  40, desc: "Improved pads and discs",                                                   speed: 0.99, braking: 1.08, visual: {"cal": [0.95, 0.45, 0.05], "duct": 0.95, caliperPos: 0.9, coverOpen: 1, rotor: 1, rotorScale: 1.00, scoop: 0, caliper: 1}, visualTier: 2 },
+        // Light alloy: the smallest disc on the ladder behind a solid cover, and
+        // the caliper swung round to ~155° for the mass distribution the desc
+        // sells. rotorScale 0.92 is a 25 mm radius cut — past the 20 mm floor on
+        // its own, and the open covers around it make the diameter readable.
+        { id: "titanium",    label: "Titanium Caliper", cost:  60, desc: "Lighter alloy calipers — better weight distribution and exit speed",        speed: 1.01, accel: 1.04, braking: 1.06, visual: {"cal": [0.7, 0.72, 0.78], "duct": 0.85, caliperPos: 2.7, coverOpen: 0, rotor: 1, rotorScale: 0.92, scoop: 0, caliper: 1}, visualTier: 1 },
+        // Endurance: everything aimed at heat. Widest cover gaps (one in two),
+        // the biggest disc short of the clamp, and a scooped duct fairing.
+        { id: "endurance",   label: "Endurance",        cost:  60, desc: "Consistent fade-free braking — aids corner exit",                           speed: 0.98, accel: 1.02, braking: 1.10, visual: {"cal": [0.95, 0.8, 0.1], "duct": 1.05, caliper: 1, caliperPos: 0, coverOpen: 2, rotor: 2, rotorScale: 1.22, scoop: 1}, visualTier: 2 },
+        { id: "dual_caliper",label: "Dual Caliper",     cost:  80, desc: "Twin-piston caliper setup — stronger bite with improved exit traction",     speed: 0.98, accel: 1.02, braking: 1.14, visual: {"cal": [0.95, 0.72, 0.08], "duct": 1.15, "rim": [0.3, 0.3, 0.34], caliper: 2, caliperPos: 1.5, coverOpen: 1, rotor: 1, rotorScale: 1.10, scoop: 0}, visualTier: 2 },
+        { id: "carbon",      label: "Carbon",           cost:  85, desc: "F1-spec carbon composite brakes",                                           braking: 1.16, visual: {"cal": [0.85, 0.12, 0.1], "duct": 1.25, discFace: 1, caliper: 1, caliperPos: 5.7, coverOpen: 1, rotor: 2, rotorScale: 1.18, scoop: 0}, visualTier: 2 },
+        { id: "ventilated",  label: "Ventilated Carbon",cost: 95, desc: "Internally vented discs — consistent fade-free stopping",                   speed: 0.97, braking: 1.18, visual: {"cal": [0.9, 0.15, 0.12], "duct": 1.35, discFace: 1, caliper: 1, caliperPos: 2.1, coverOpen: 2, rotor: 2, rotorScale: 1.14, scoop: 1}, visualTier: 2 },
+        { id: "carbon_mag",  label: "Carbon-Mag",       cost: 120, desc: "Carbon-magnesium alloy — lighter, better mass dist",                        speed: 1.01, accel: 1.03, braking: 1.20, visual: {"cal": [0.85, 0.66, 0.16], "duct": 1.45, "rim": [0.48, 0.4, 0.16], caliper: 1, caliperPos: 4.8, coverOpen: 1, rotor: 2, rotorScale: 1.25, scoop: 1}, visualTier: 2 },
+        // Brake-by-wire: the MGU-K does most of the retardation, so the FRICTION
+        // disc is the smallest on the tier-2 shelf (0.88) behind a closed cover —
+        // the one brake on the ladder that looks like less hardware, not more.
+        { id: "regen_brakes",label: "Regen Brakes",     cost: 130, desc: "Brake-by-wire hybrid system — converts braking energy into acceleration",   speed: 1.02, accel: 1.06, braking: 1.12, visual: {"cal": [0.15, 0.78, 0.38], "duct": 1.25, caliper: 1, caliperPos: 5.2, coverOpen: 0, rotor: 2, rotorScale: 0.88, scoop: 0, discFace: 0}, visualTier: 2 },
+        { id: "ceramic",     label: "Carbon Ceramic",   cost: 135, desc: "Maximum stopping power — zero fade",                                        speed: 0.98, braking: 1.24, visual: {"cal": [0.97, 0.1, 0.08], "duct": 1.6, "rim": [0.55, 0.56, 0.6], discFace: 2, caliper: 1, caliperPos: 4.4, coverOpen: 1, rotor: 2, rotorScale: 1.20, scoop: 1}, visualTier: 2 },
+        { id: "brembo_evo",  label: "Brembo Evo",       cost: 165, desc: "Next-gen racing brake package — ultimate stopping with mass benefit",        speed: 1.01, accel: 1.04, braking: 1.26, visual: {"cal": [0.98, 0.62, 0.05], "duct": 1.75, "rim": [0.42, 0.34, 0.12], caliper: 2, caliperPos: 0.35, coverOpen: 1, rotor: 2, rotorScale: 1.25, scoop: 1, discFace: 0}, visualTier: 2 },
+        // `caliper: 2` IS the six-piston radial body in car3d — the option was
+        // named for hardware it never asked for and drew the stock three-box
+        // peek while the cheaper brembo_evo got the radial. Fixed here.
+        { id: "six_piston",   label: "Six Piston",       cost: 180, desc: "Large monobloc calipers — peak initial bite with stable trail braking",       speed: 0.97, cornering: 1.02, braking: 1.27, visual: { cal: [0.10, 0.65, 0.95], duct: 1.55, rim: [0.24, 0.28, 0.34], discFace: 2, caliper: 2, caliperPos: 3.6, coverOpen: 2, rotor: 2, rotorScale: 1.16, scoop: 1 }, visualTier: 2 },
+        { id: "mono_steel",   label: "Monobloc Steel",   cost:  60, desc: "One-piece steel calipers — predictable bite with no exotic materials",        speed: 0.99, braking: 1.12, visual: { cal: [0.62, 0.64, 0.70], duct: 0.95, scoop: 0, rotor: 1, rotorScale: 1.02 , caliper: 1, caliperPos: 4.0, coverOpen: 0}, visualTier: 1 },
+        { id: "scoop_wrap",   label: "Wrapped Ducts",    cost: 110, desc: "Boomerang duct fairings wrapping the wheel face — cooling that also turns air", speed: 0.96, cornering: 1.02, braking: 1.19, visual: { cal: [0.20, 0.55, 0.85], duct: 1.30, scoop: 2, rim: [0.26, 0.30, 0.36], discFace: 1 , caliper: 2, caliperPos: 3.2, coverOpen: 0, rotor: 1, rotorScale: 1.00}, visualTier: 2 },
+        { id: "cryo_pack",    label: "Cryo Pack",        cost: 150, desc: "Cryogenically treated discs — deep, repeatable stopping power under load",     accel: 1.02, braking: 1.25, visual: { cal: [0.72, 0.86, 0.95], duct: 1.62, scoop: 2, rim: [0.50, 0.54, 0.60], discFace: 2 , caliper: 1, caliperPos: 6.0, coverOpen: 2, rotor: 2, rotorScale: 1.10}, visualTier: 2 },
         { id: "sig_ferrari_brembo", label: "Maranello Brembo", cost: 165, teams: ["ferrari"], tag: "SIGNATURE", equivalent: "brembo_evo",
           desc: "Ferrari signature brake package — Brembo Evo performance with red monobloc hardware", speed: 1.01, accel: 1.04, braking: 1.26, visual: {cal: [0.95, 0.05, 0.04], duct: 1.7, rim: [0.52, 0.45, 0.2], discFace: 2, caliper: 1, caliperPos: 5.2, rotorScale: 1.07}, visualTier: 2 },
         { id: "sig_haas_carbonmag", label: "Kannapolis C-Mag", cost: 120, teams: ["haas"], tag: "SIGNATURE", equivalent: "carbon_mag",
@@ -201,7 +260,13 @@ const Parts = (function () {
         { id: "slick_track",  label: "Slick Track",   cost:  40, desc: "Pure dry-weather slick — optimised compound structure",                       speed: 1.01, accel: 1.01, cornering: 1.04, braking: 1.04, visual: {band: [0.8, 0.82, 0.88], grooves: 0, bandWidth: 0.045, coverVanes: 10}, visualTier: 1 },
         { id: "compound_c4",  label: "Compound C4",   cost:  55, desc: "Pirelli's track-ready soft — reliable grip upgrade over Hard/Medium",         speed: 0.98, accel: 1.02, cornering: 1.08, braking: 1.06, visual: {band: [0.95, 0.42, 0.1], grooves: 0, bandWidth: 0.085, coverVanes: 7}, visualTier: 2 },
         { id: "soft",         label: "Soft",          cost:  80, desc: "+12% cornering, +4% accel — some top speed drag",                            speed: 0.97, accel: 1.04, cornering: 1.12, braking: 1.06, visual: {band: [0.92, 0.12, 0.1], grooves: 0, bandWidth: 0.1, coverVanes: 6, shoulder: 1}, visualTier: 2 },
-        { id: "compound_c5",  label: "Compound C5",   cost: 100, desc: "High-spec soft — aggressive grip over one stint, strong accel",               speed: 0.96, accel: 1.05, cornering: 1.15, braking: 1.08, visual: {band: [0.97, 0.16, 0.12], grooves: 0, bandWidth: 0.115, coverVanes: 5, shoulder: 1}, visualTier: 2 },
+        // Was a 20 cr reskin of `soft`: the same red band ([0.97,0.16,0.12] against
+        // [0.92,0.12,0.10] — 5% apart, under the sweep's 0.06 colour floor), the
+        // same shoulder, and one wheel-cover vane and 15 mm of band width between
+        // them. It is the SOFTEST dry compound in the catalog, so it now wears the
+        // widest band, the squared shoulder and a magenta wall nobody else has.
+        // Stats and cost untouched; compound_c5 carries no SIGNATURE.
+        { id: "compound_c5",  label: "Compound C5",   cost: 100, desc: "High-spec soft — aggressive grip over one stint, strong accel",               speed: 0.96, accel: 1.05, cornering: 1.15, braking: 1.08, visual: {band: [1.00, 0.34, 0.62], grooves: 0, bandWidth: 0.132, coverVanes: 4, shoulder: 2}, visualTier: 2 },
         { id: "supersoft",    label: "Super Soft",    cost: 125, desc: "High grip compound — aggressive tyre load",                                   speed: 0.94, accel: 1.06, cornering: 1.20, braking: 1.10, visual: {band: [0.88, 0.1, 0.3], grooves: 0, bandWidth: 0.12, coverVanes: 8, shoulder: 2}, visualTier: 2 },
         { id: "p_zero_red",   label: "P Zero Red",    cost: 145, desc: "Custom Pirelli high-performance compound — between Super Soft and Quali",     speed: 0.92, accel: 1.07, cornering: 1.24, braking: 1.13, visual: {sidewall: 1, band: [0.97, 0.07, 0.07], grooves: 0, bandWidth: 0.13, coverVanes: 9}, visualTier: 2 },
         { id: "qualigum",     label: "Quali Spec",    cost: 165, desc: "One-lap ultra-soft — maximum short-run grip",                                 speed: 0.91, accel: 1.09, cornering: 1.28, braking: 1.11, visual: {sidewall: 2, band: [0.62, 0.12, 0.78], grooves: 0, bandWidth: 0.14, coverVanes: 11}, visualTier: 2 },
@@ -237,24 +302,40 @@ const Parts = (function () {
     },
     {
       id: "ers", label: "ERS",
+      // THE TOP OF THE LADDER HAD NO CELL STRIP OF ITS OWN. `cells` is the count
+      // of glowing energy-cell boxes along each pod flank (car3d clamps it to
+      // 1-8), and it was set by the CHEAP half only: eight options — deploy,
+      // overtake_focus, race_mode, torque_fill, supercapacitor, full_attack,
+      // overcharge and thermal_max — omitted it and inherited the same tier
+      // default, so the six dearest packages in the game all rendered the same
+      // six-cell strip. Worse, `overtake_focus` and `race_mode` (both 115 cr)
+      // resolved to a BYTE-IDENTICAL recipe — pack 1.2, cells 6, blister 2,
+      // no conduit, no intake — and differed only in LED colour. Two same-price
+      // options that are one recolour apart is the definition of a reskin.
+      //
+      // Every universal option now owns a distinct (pack, cells, blister,
+      // conduit, coolerIntake) tuple, and the count follows the STORY: a
+      // supercapacitor is a couple of big cans (2), an overtake map lights the
+      // whole flank (8), harvest runs cool and small (2). Costs and stats are
+      // untouched, so no SIGNATURE needed propagating.
       options: [
         { id: "standard",       label: "Standard",      cost:   0, desc: "Balanced energy recovery and deployment",                                    visual: { led: [0.15, 0.55, 1.6], pack: 1.0, cells: 3 }, visualTier: 1 },
         { id: "regen_plus",     label: "Regen+",        cost:  90, desc: "Enhanced braking recovery — harvests extra energy under braking",            accel: 1.05, braking: 1.05, visual: {led: [0.12, 1.5, 0.55], pack: 1.05, blister: 1, cells: 4}, visualTier: 1 },
-        { id: "harvest",        label: "Harvest",       cost:  30, desc: "Aggressive recovery: +2% top speed, −5% accel",                             speed: 1.02, accel: 0.95, braking: 1.04, visual: {led: [0.18, 1.35, 0.95], pack: 0.95, conduit: 1, coolerIntake: 1}, visualTier: 0 },
+        { id: "harvest",        label: "Harvest",       cost:  30, desc: "Aggressive recovery: +2% top speed, −5% accel",                             speed: 1.02, accel: 0.95, braking: 1.04, visual: {led: [0.18, 1.35, 0.95], pack: 0.95, conduit: 1, coolerIntake: 1, cells: 2, blister: 0}, visualTier: 0 },
         { id: "split_deploy",   label: "Split Deploy",  cost:  90, desc: "Per-axle deployment control — improved cornering traction and accel",        accel: 1.06, cornering: 1.05, visual: {led: [0.85, 0.55, 1.7], pack: 1.1, blister: 2, cells: 5}, visualTier: 1 },
         { id: "mgu_k_max",      label: "MGU-K Max",     cost:  80, desc: "Dedicated kinetic unit — strong deployment burst on straights",              speed: 0.98, accel: 1.09, visual: {led: [1.7, 0.95, 0.15], pack: 1.15, coolerIntake: 1, cells: 5}, visualTier: 2 },
-        { id: "deploy",         label: "Deploy",        cost: 100, desc: "Full deployment: +10% accel, −3% top speed",                                speed: 0.97, accel: 1.11, visual: {"led": [1.9, 0.4, 0.15], "pack": 1.2}, visualTier: 2 },
-        { id: "thermal_max",    label: "Thermal Max",   cost:  70, desc: "Heat energy recovery focus — speed gains with consistent braking",           speed: 1.04, braking: 1.03, visual: { coolerIntake: 1,"led": [1.95, 0.5, 0.08], "pack": 1.05}, visualTier: 1 },
-        { id: "torque_fill",    label: "Torque Fill",   cost: 135, desc: "Hybrid torque-vectoring — cornering traction and exit speed",                accel: 1.08, cornering: 1.06, visual: {led: [0.8, 0.3, 1.85], pack: 1.15, conduit: 1, blister: 1}, visualTier: 2 },
-        { id: "overtake_focus", label: "OT Focus",      cost: 115, desc: "Traction-biased deploy: +12% accel, +4% cornering",                         speed: 0.96, accel: 1.12, cornering: 1.04, visual: {"led": [2.05, 0.15, 0.55], "pack": 1.2, blister: 2}, visualTier: 2 },
-        { id: "race_mode",      label: "Race Mode",     cost: 115, desc: "High-output 2026 mode: +7% accel, +3% top speed",                           speed: 1.03, accel: 1.07, cornering: 1.02, braking: 1.02, visual: {"led": [0.25, 0.95, 2.05], "pack": 1.2, blister: 2}, visualTier: 2 },
-        { id: "full_attack",    label: "Full Attack",   cost: 195, desc: "Maximum ERS output — qualifying/sprint spec",                               speed: 1.07, accel: 1.16, visual: { coolerIntake: 1,"led": [2.25, 0.22, 0.16], "pack": 1.3, blister: 1}, visualTier: 2 },
-        { id: "overcharge",     label: "Overcharge",    cost: 230, desc: "Experimental limit-push mode — maximum all-channel ERS output",              speed: 1.10, accel: 1.18, visual: { coolerIntake: 2,"led": [2.4, 0.75, 0.06], "pack": 1.35, blister: 1}, visualTier: 2 },
-        { id: "supercapacitor", label: "Supercapacitor", cost: 180, desc: "High-discharge buffer — immediate deployment with improved recovery",        speed: 1.04, accel: 1.13, braking: 1.04, visual: { coolerIntake: 2, led: [0.30, 2.20, 2.20], pack: 1.10 , blister: 2}, visualTier: 2 },
+        { id: "deploy",         label: "Deploy",        cost: 100, desc: "Full deployment: +10% accel, −3% top speed",                                speed: 0.97, accel: 1.11, visual: {"led": [1.9, 0.4, 0.15], "pack": 1.2, cells: 6, blister: 0, conduit: 1}, visualTier: 2 },
+        { id: "thermal_max",    label: "Thermal Max",   cost:  70, desc: "Heat energy recovery focus — speed gains with consistent braking",           speed: 1.04, braking: 1.03, visual: { coolerIntake: 2,"led": [1.95, 0.5, 0.08], "pack": 1.05, cells: 3, blister: 0}, visualTier: 1 },
+        { id: "torque_fill",    label: "Torque Fill",   cost: 135, desc: "Hybrid torque-vectoring — cornering traction and exit speed",                accel: 1.08, cornering: 1.06, visual: {led: [0.8, 0.3, 1.85], pack: 1.15, conduit: 1, blister: 1, cells: 3, coolerIntake: 0}, visualTier: 2 },
+        { id: "overtake_focus", label: "OT Focus",      cost: 115, desc: "Traction-biased deploy: +12% accel, +4% cornering",                         speed: 0.96, accel: 1.12, cornering: 1.04, visual: {"led": [2.05, 0.15, 0.55], "pack": 1.24, blister: 2, cells: 8, conduit: 0, coolerIntake: 0}, visualTier: 2 },
+        { id: "race_mode",      label: "Race Mode",     cost: 115, desc: "High-output 2026 mode: +7% accel, +3% top speed",                           speed: 1.03, accel: 1.07, cornering: 1.02, braking: 1.02, visual: {"led": [0.25, 0.95, 2.05], "pack": 1.12, blister: 1, cells: 4, conduit: 2, coolerIntake: 1}, visualTier: 2 },
+        { id: "full_attack",    label: "Full Attack",   cost: 195, desc: "Maximum ERS output — qualifying/sprint spec",                               speed: 1.07, accel: 1.16, visual: { coolerIntake: 1,"led": [2.25, 0.22, 0.16], "pack": 1.3, blister: 1, cells: 5, conduit: 1}, visualTier: 2 },
+        { id: "overcharge",     label: "Overcharge",    cost: 230, desc: "Experimental limit-push mode — maximum all-channel ERS output",              speed: 1.10, accel: 1.18, visual: { coolerIntake: 2,"led": [2.4, 0.75, 0.06], "pack": 1.35, blister: 2, cells: 8, conduit: 2}, visualTier: 2 },
+        { id: "supercapacitor", label: "Supercapacitor", cost: 180, desc: "High-discharge buffer — immediate deployment with improved recovery",        speed: 1.04, accel: 1.13, braking: 1.04, visual: { coolerIntake: 2, led: [0.30, 2.20, 2.20], pack: 1.10 , blister: 2, cells: 2, conduit: 0}, visualTier: 2 },
         // External-conduit packages — visible high-voltage plumbing on the cover.
-        { id: "harvest_max",    label: "Harvest Max",   cost:  95, desc: "Maximum recovery window — tops the pack up everywhere without hurting pace",   speed: 1.01, accel: 1.02, braking: 1.08, visual: { coolerIntake: 1, led: [0.20, 1.60, 0.85], pack: 1.05, cells: 4, conduit: 1 , blister: 2}, visualTier: 1 },
+        { id: "harvest_max",    label: "Harvest Max",   cost:  95, desc: "Maximum recovery window — tops the pack up everywhere without hurting pace",   speed: 1.01, accel: 1.02, braking: 1.08, visual: { coolerIntake: 2, led: [0.20, 1.60, 0.85], pack: 1.08, cells: 6, conduit: 2 , blister: 0}, visualTier: 1 },
         { id: "conduit_twin",   label: "Twin Conduit",  cost: 130, desc: "Doubled deployment loom — steady high-current delivery out of every corner",   speed: 1.02, accel: 1.11, cornering: 1.03, visual: { led: [0.35, 0.85, 2.05], pack: 1.18, cells: 6, conduit: 2 , blister: 1}, visualTier: 2 },
-        { id: "burst_map",      label: "Burst Map",     cost: 155, desc: "Short, violent deployment bursts — overtaking punch with cornering traction",  speed: 0.98, accel: 1.13, cornering: 1.05, visual: { led: [2.15, 0.45, 0.12], pack: 1.26, cells: 7, conduit: 2 , blister: 1}, visualTier: 2 },
+        { id: "burst_map",      label: "Burst Map",     cost: 155, desc: "Short, violent deployment bursts — overtaking punch with cornering traction",  speed: 0.98, accel: 1.13, cornering: 1.05, visual: { led: [2.15, 0.45, 0.12], pack: 1.26, cells: 7, conduit: 2 , blister: 2, coolerIntake: 1}, visualTier: 2 },
         { id: "sig_audi_quattro", label: "Quattro Hybrid", cost: 180, teams: ["audi"], tag: "SIGNATURE", equivalent: "supercapacitor",
           desc: "Audi signature deployment map — Supercapacitor performance with a red energy conduit", speed: 1.04, accel: 1.13, braking: 1.04, visual: { coolerIntake: 2, led: [2.35, 0.18, 0.08], pack: 1.12 , blister: 1}, visualTier: 2 },
         { id: "sig_alpine_boost", label: "Enstone Boost", cost: 115, teams: ["alpine"], tag: "SIGNATURE", equivalent: "race_mode",
@@ -319,18 +400,35 @@ const Parts = (function () {
     },
     {
       id: "fuel", label: "FUEL",
+      // FUEL WAS THE ONE CATEGORY WITH NO TRADE AT ALL. Measured 2026-08-30:
+      // every one of the ten distinct rows sat at or above 1.00 on all four
+      // stats, and the cornering column spanned 1.00-1.02 while braking spanned
+      // 1.00-1.04. A column no option can lose on is not a choice — it is a
+      // shopping list, and the only question the garage asked was how many
+      // credits you had left.
+      //
+      // Fuel is MASS, and mass is the trade the four stats can express: energy
+      // density buys speed and accel, the charge you carry to get it costs
+      // cornering and braking. So the three SIGNATURE-FREE rows now sit at the
+      // ends of that axis — quali_mix is the heavy one-lap weapon (0.95 on both
+      // grip stats, the deepest penalty in the catalog), quick_fill and
+      // hydro_synth are the light ones that give up top end — and cold_blend
+      // takes one point of cornering to hold its rung between them. The six
+      // rows that carry SIGNATUREs (standard, high_octane, biofuel, race_blend,
+      // efuel_dense, custom_formula) are untouched, so NOTHING needed
+      // propagating. Ladder re-checked after: 10 of 10 live, 0 traps.
       options: [
         { id: "standard",      label: "Standard",       cost:   0, desc: "Baseline pump-spec fuel — meets FIA minimum grade",                          visual: { cap: [0.55, 0.52, 0.6], flame: [1.15, 0.42, 0.14], fxFlame: [2.6, 1.05, 0.25], line: 1 }, visualTier: 1 },
         { id: "high_octane",   label: "High Octane",    cost:  45, desc: "Higher octane blend — cleaner combustion and accel improvement",             accel: 1.05, visual: {"cap": [1.5, 1.15, 0.18], "flame": [1.75, 1.4, 0.45], "fxFlame": [2.7, 2.1, 0.7]}, visualTier: 1 },
         { id: "biofuel",       label: "Biofuel 100",    cost:  50, desc: "FIA-sustainable 100% biofuel — consistent burn and slight braking gain",     accel: 1.03, braking: 1.04, visual: {"cap": [0.18, 1.35, 0.5], "flame": [0.35, 1.65, 0.42], "fxFlame": [1.7, 1.9, 0.55]}, visualTier: 1 },
         { id: "race_blend",    label: "Race Blend",     cost:  90, desc: "F1-regulation compound — refined energy density for speed and accel",        speed: 1.02, accel: 1.06, visual: {"cap": [1.6, 0.6, 0.14], "flame": [1.95, 0.72, 0.14], "fxFlame": [2.9, 1.1, 0.25]}, visualTier: 1 },
-        { id: "quali_mix",     label: "Qualifying Mix", cost: 150, desc: "Maximum energy density — qualifying-spec fuel load for peak performance",    speed: 1.04, accel: 1.08, visual: { breather: 1,"cap": [0.95, 0.28, 1.5], "flame": [1.25, 0.35, 1.75], "fxFlame": [1.5, 1.7, 2.4], hatch: 1}, visualTier: 2 },
+        { id: "quali_mix",     label: "Qualifying Mix", cost: 150, desc: "Maximum energy density — a heavy charge that flies down the straights and blunts the car everywhere else", speed: 1.07, accel: 1.08, cornering: 0.95, braking: 0.95, visual: { breather: 1,"cap": [0.95, 0.28, 1.5], "flame": [1.25, 0.35, 1.75], "fxFlame": [1.5, 1.7, 2.4], hatch: 1}, visualTier: 2 },
         { id: "custom_formula",label: "Custom Formula", cost: 210, desc: "Team-developed proprietary blend — marginal all-metric gains",               speed: 1.05, accel: 1.09, cornering: 1.02, braking: 1.02, visual: { breather: 2,"cap": [1.9, 0.25, 1.25], "flame": [1.85, 0.25, 1.4], "fxFlame": [2.6, 0.5, 2.1], vent: 1}, visualTier: 2 },
         { id: "efuel_dense",   label: "Dense E-Fuel",   cost: 175, desc: "Synthetic high-density blend — clean burn with balanced race performance",      speed: 1.04, accel: 1.08, braking: 1.03, visual: { cap: [0.12, 1.25, 1.65], flame: [0.25, 1.20, 1.95], fxFlame: [0.55, 1.75, 2.75] , hatch: 1}, visualTier: 2 },
         // Filler-hardware specs — the pit-lane coupling on the cover is the tell.
-        { id: "quick_fill",    label: "Quick Fill",     cost:  60, desc: "Twin-coupling rig fitting — a cooler, denser fill for a stronger opening lap", accel: 1.05, braking: 1.02, visual: { cap: [0.85, 0.86, 0.90], flame: [1.30, 0.95, 0.35], fxFlame: [2.4, 1.6, 0.6], line: 1, filler: 2 , hatch: 1, vent: 1}, visualTier: 1 },
-        { id: "cold_blend",    label: "Cold Blend",     cost: 120, desc: "Chilled high-density charge — cleaner combustion and a broader torque plateau", speed: 1.03, accel: 1.06, braking: 1.02, visual: { breather: 1, cap: [0.30, 0.80, 1.60], flame: [0.55, 0.95, 1.85], fxFlame: [1.1, 1.6, 2.7], line: 1, filler: 1 , hatch: 1}, visualTier: 1 },
-        { id: "hydro_synth",   label: "Hydro-Synth",    cost: 190, desc: "Hydrogen-derived synthetic — near-custom performance with a clean cold burn",   speed: 1.05, accel: 1.08, braking: 1.04, visual: { breather: 2, cap: [1.75, 1.60, 0.30], flame: [1.90, 1.75, 0.40], fxFlame: [2.9, 2.5, 0.7], line: 2, filler: 2 }, visualTier: 2 },
+        { id: "quick_fill",    label: "Quick Fill",     cost:  60, desc: "Twin-coupling rig — start light and top up fast: agile and easy to stop, short of top end", speed: 0.99, accel: 1.05, cornering: 1.03, braking: 1.03, visual: { cap: [0.85, 0.86, 0.90], flame: [1.30, 0.95, 0.35], fxFlame: [2.4, 1.6, 0.6], line: 1, filler: 2 , hatch: 1, vent: 1}, visualTier: 1 },
+        { id: "cold_blend",    label: "Cold Blend",     cost: 120, desc: "Chilled high-density charge — cleaner combustion, a broader torque plateau and a cooler rear end", speed: 1.03, accel: 1.06, cornering: 1.01, braking: 1.02, visual: { breather: 2, cap: [0.30, 0.80, 1.60], flame: [0.55, 0.95, 1.85], fxFlame: [1.1, 1.6, 2.7], line: 1, filler: 1 , hatch: 1}, visualTier: 1 },
+        { id: "hydro_synth",   label: "Hydro-Synth",    cost: 190, desc: "Hydrogen-derived synthetic — the lightest charge on the shelf and the coolest burn, if you can live without the top end",   speed: 1.03, accel: 1.08, cornering: 1.02, braking: 1.06, visual: { breather: 2, cap: [1.75, 1.60, 0.30], flame: [1.90, 1.75, 0.40], fxFlame: [2.9, 2.5, 0.7], line: 2, filler: 1, hatch: 1, vent: 1 }, visualTier: 2 },
         { id: "sig_alpine_efuel", label: "Viry E-Fuel", cost: 175, teams: ["alpine"], tag: "SIGNATURE", equivalent: "efuel_dense",
           desc: "Alpine signature synthetic blend — Dense E-Fuel performance with a blue-pink burn", speed: 1.04, accel: 1.08, braking: 1.03, visual: { breather: 1, cap: [0.10, 0.72, 1.85], flame: [0.65, 0.32, 1.95], fxFlame: [0.85, 0.65, 2.85], line: 2 , hatch: 1}, visualTier: 2 },
         { id: "sig_haas_blend", label: "Kannapolis Blend", cost: 90, teams: ["haas"], tag: "SIGNATURE", equivalent: "race_blend",
@@ -357,17 +455,30 @@ const Parts = (function () {
     },
     {
       id: "exhaust", label: "EXHAUST",
+      // THE BLOWN FLOOR IS THE CORNERING COLUMN. Measured 2026-08-30: exhaust
+      // moved cornering across a span of 0.01 — a single option at 1.01 and ten
+      // at exactly 1.00 — so the category was one ladder (power) with a
+      // decoration on the side, and every rung above 90 cr was the same shape
+      // of purchase. Exhaust gas over the diffuser edge is the one real thing an
+      // exhaust does to grip, and it is a TRADE: the plume you spend on
+      // downforce is not going out of the pipe. So the flared exits now buy
+      // cornering with top end (megaphone 1.02, flared_gate 1.05 and 1.00 speed
+      // apiece) and the SHIELDED exit is the opposite rung — heat kept off the
+      // floor, no blowing, the highest speed in the category at 1.06.
+      // `sig_williams_exh` clones megaphone and was propagated with it;
+      // flared_gate and shielded_tri carry no SIGNATURE. Ladder re-checked
+      // after: 11 of 11 live, 0 traps.
       options: [
         { id: "stock",      label: "Stock",          cost:   0, desc: "Factory tailpipe, sized to the power unit's own plumbing",                    visual: { pipes: null, bore: 1, flare: 0, wastegate: 0, wrap: 0 , shield: 1}, visualTier: 1 },
         { id: "sport_cat",  label: "Sport Cat",      cost:  30, desc: "Freer catalyst section — a little less back-pressure everywhere",             accel: 1.03, visual: {pipes: null, bore: 1.12, flare: 0.5, wastegate: 0, wrap: 0, shield: 1}, visualTier: 1 },
         { id: "free_flow",  label: "Free Flow",      cost:  60, desc: "Straight-through primaries — cleaner scavenging high in the rev range",       speed: 1.03, accel: 1.03, braking: 0.99, visual: { pipes: null, bore: 1.18, flare: 0, wastegate: 0, wrap: 1 , lip: 1, shield: 1}, visualTier: 1 },
-        { id: "megaphone",  label: "Megaphone",      cost:  90, desc: "Flared megaphone exit — strong mid-range for a little top end",               speed: 1.01, accel: 1.06, braking: 1.02, visual: { pipes: 1, bore: 1.22, flare: 1, wastegate: 0, wrap: 0 , lip: 2, shield: 1}, visualTier: 2 },
+        { id: "megaphone",  label: "Megaphone",      cost:  90, desc: "Flared megaphone exit aimed at the floor edge — mid-range and a little blown downforce, no top end", speed: 1.00, accel: 1.05, cornering: 1.02, braking: 1.02, visual: { pipes: 1, bore: 1.22, flare: 1, wastegate: 0, wrap: 0 , lip: 2, shield: 1}, visualTier: 2 },
         { id: "twin_gate",  label: "Twin Wastegate", cost: 110, desc: "Twin wastegate stacks — sharper boost response out of slow corners",          speed: 1.01, accel: 1.07, braking: 1.03, visual: { pipes: null, bore: 1.10, flare: 0, wastegate: 2, wrap: 1 , lip: 1}, visualTier: 2 },
         { id: "inconel",    label: "Inconel Race",   cost: 120, desc: "Thin-wall Inconel system — mass saving with a broad power gain",              speed: 1.04, accel: 1.05, braking: 1.01, visual: { pipes: 3, bore: 1.05, flare: 0, wastegate: 0, wrap: 1 , lip: 2, shield: 1}, visualTier: 2 },
         { id: "tri_exit",   label: "Tri-Exit",       cost: 155, desc: "Three-pipe exit — the classic scavenging layout in race trim",                speed: 1.04, accel: 1.07, braking: 1.03, visual: { pipes: 3, bore: 1.16, flare: 0.5, wastegate: 2, wrap: 0 , lip: 1, shield: 1}, visualTier: 2 },
         { id: "wrapped_single", label: "Wrapped Single",  cost:  45, desc: "Single wrapped pipe — heat kept off the bodywork, modest gain", accel: 1.04, braking: 1.01, visual: { pipes: 1, bore: 1.04, flare: 0.5, wastegate: 0, wrap: 1, lip: 2, shield: 1 }, visualTier: 1 },
-        { id: "flared_gate",   label: "Flared Wastegate", cost: 125, desc: "Flared tailpipe over a twin wastegate — strong mid-range, noisy and hot", speed: 1.03, accel: 1.07, braking: 1.02, visual: { pipes: 1, bore: 1.206, flare: 1, wastegate: 2, wrap: 0, lip: 2, shield: 1 }, visualTier: 2 },
-        { id: "shielded_tri",  label: "Shielded Tri-Exit", cost: 185, desc: "Three shielded exits on a wide bore — top-end power without cooking the floor", speed: 1.05, accel: 1.06, cornering: 1.01, visual: { pipes: 3, bore: 1.378, flare: 0.5, wastegate: 2, wrap: 1, lip: 2, shield: 1 }, visualTier: 2 },
+        { id: "flared_gate",   label: "Flared Wastegate", cost: 125, desc: "Wastegate plume dumped across the diffuser edge — the blown floor, paid for in top end", speed: 1.00, accel: 1.05, cornering: 1.05, braking: 1.02, visual: { pipes: 1, bore: 1.206, flare: 1, wastegate: 2, wrap: 0, lip: 2, shield: 1 }, visualTier: 2 },
+        { id: "shielded_tri",  label: "Shielded Tri-Exit", cost: 185, desc: "Three shielded exits on a wide bore — heat kept OFF the floor, so all of it goes to top end", speed: 1.06, accel: 1.06, visual: { pipes: 3, bore: 1.378, flare: 0.5, wastegate: 2, wrap: 1, lip: 2, shield: 1 }, visualTier: 2 },
         { id: "hyper_scav", label: "Hyper Scavenge", cost: 200, desc: "Pulse-tuned scavenging — peak flow at every point in the rev range",          speed: 1.05, accel: 1.08, braking: 1.04, visual: { pipes: 3, bore: 1.30, flare: 1, wastegate: 2, wrap: 1 }, visualTier: 2 },
         { id: "sig_mercedes_exh", label: "Brackley Exhaust", cost: 60, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "free_flow",
           desc: "Mercedes signature exhaust — Free Flow performance with a flared megaphone tip", speed: 1.03, accel: 1.03, braking: 0.99, visual: { pipes: 1, bore: 1.121, flare: 0.5, wastegate: 0, wrap: 0 , lip: 2, shield: 1}, visualTier: 1 },
@@ -384,7 +495,7 @@ const Parts = (function () {
         { id: "sig_haas_exh", label: "Kannapolis Exhaust", cost: 0, teams: ["haas"], tag: "SIGNATURE", equivalent: "stock",
           desc: "Haas signature exhaust — Stock performance with a single tuned pipe", visual: { pipes: 1, bore: 1.05, flare: 0, wastegate: 0, wrap: 1 , lip: 2, shield: 1}, visualTier: 1 },
         { id: "sig_williams_exh", label: "Grove Exhaust", cost: 90, teams: ["williams"], tag: "SIGNATURE", equivalent: "megaphone",
-          desc: "Williams signature exhaust — Megaphone performance with a single tuned pipe", speed: 1.01, accel: 1.06, braking: 1.02, visual: { pipes: 1, bore: 1.135, flare: 0, wastegate: 0, wrap: 0 }, visualTier: 2 },
+          desc: "Williams signature exhaust — Megaphone performance with a single tuned pipe", speed: 1.00, accel: 1.05, cornering: 1.02, braking: 1.02, visual: { pipes: 1, bore: 1.135, flare: 0, wastegate: 0, wrap: 0 }, visualTier: 2 },
         { id: "sig_audi_exh", label: "Neuburg Exhaust", cost: 110, teams: ["audi"], tag: "SIGNATURE", equivalent: "twin_gate",
           desc: "Audi signature exhaust — Twin Wastegate performance with a three-pipe exit", speed: 1.01, accel: 1.07, braking: 1.03, visual: { pipes: 3, bore: 1.133, flare: 1, wastegate: 2, wrap: 1 }, visualTier: 2 },
         { id: "sig_astonmartin_exh", label: "Silverstone Exhaust", cost: 120, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "inconel",
@@ -478,8 +589,15 @@ const Parts = (function () {
         { id: "aero_disc", label: "Aero Disc",    cost: 130, desc: "Fully dished aero disc — top speed at the cost of brake cooling",           speed: 1.07, cornering: 1.02, braking: 0.95, visual: { deflector: 1, spokes: 0, tape: 1, dish: 2, nut: [0.15, 0.60, 0.95] , gunNut: 1}, visualTier: 2 },
         { id: "works_rim", label: "Works Rim",    cost: 170, desc: "Works-spec rim package — the complete wheel, and it looks it",              speed: 1.04, accel: 1.06, cornering: 1.06, braking: 1.05, visual: { deflector: 2, spokes: 6, tape: 1, dish: 2, nut: [0.98, 0.62, 0.05] , gunNut: 1}, visualTier: 2 },
         { id: "open_spoke",    label: "Open Spoke",      cost:  35, desc: "Eight open spokes — brake cooling at the price of a little wake", speed: 0.98, braking: 1.06, visual: { spokes: 8, tape: 0, dish: 0, gunNut: 1, deflector: 0 }, visualTier: 1 },
-        { id: "taped_dish",    label: "Taped Dish",      cost:  85, desc: "Fully taped dished face — clean outwash, runs the brakes hotter", speed: 1.05, cornering: 1.04, braking: 0.96, visual: { spokes: 0, tape: 1, dish: 2, gunNut: 1, deflector: 1 }, visualTier: 2 },
-        { id: "deflector_max", label: "Deflector Max",   cost: 155, desc: "Full deflector set over a taped rim — the most aero wheel available", speed: 1.05, cornering: 1.10, braking: 0.98, visual: { spokes: 0, tape: 1, dish: 1, gunNut: 1, deflector: 2 }, visualTier: 2 },
+        // EXACT geometry clone of aero_disc until 2026-08-30 (spokes 0 / tape 1 /
+        // dish 2 / gunNut 1 / deflector 1 on both), 45 cr apart, and its `tape`
+        // rendered INVISIBLE: car3d paints the rim tape in `nut` and falls back to
+        // the tyre-band colour, so a taped rim with no nut colour is a black band
+        // on black rubber. It is now the SPOKED half of that pair — eight blades
+        // under a shallow dish with the tape actually coloured — leaving aero_disc
+        // as the solid deep-dish face the two names always promised.
+        { id: "taped_dish",    label: "Taped Dish",      cost:  85, desc: "Taped spokes over a dished face — clean outwash, runs the brakes hotter", speed: 1.05, cornering: 1.04, braking: 0.96, visual: { spokes: 8, tape: 1, dish: 1, gunNut: 1, deflector: 0, nut: [0.90, 0.86, 0.30] }, visualTier: 2 },
+        { id: "deflector_max", label: "Deflector Max",   cost: 155, desc: "Full deflector set over a taped rim — the most aero wheel available", speed: 1.05, cornering: 1.10, braking: 0.98, visual: { spokes: 0, tape: 1, dish: 1, gunNut: 1, deflector: 2, nut: [0.55, 0.58, 0.66] }, visualTier: 2 },
         { id: "deflector_kit", label: "Deflector Kit", cost: 100, desc: "Biplane over-wheel deflectors with endplates — tames the front tyre wake", speed: 0.98, cornering: 1.08, braking: 1.03, visual: { deflector: 2, spokes: 3, tape: 0, dish: 0, nut: [0.30, 0.85, 0.45], gunNut: 1 }, visualTier: 2 },
         { id: "sig_mercedes_rim", label: "Brackley Rim", cost: 110, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "mag_forged",
           desc: "Mercedes signature rim — Forged Mag performance with a 7-spoke rim with a banded shoulder", accel: 1.07, cornering: 1.03, braking: 1.06, visual: { deflector: 1, spokes: 7, tape: 1, dish: 1, nut: [0, 0.75, 0.7] , gunNut: 1}, visualTier: 2 },
