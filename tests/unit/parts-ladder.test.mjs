@@ -43,6 +43,13 @@ test("never-optimal rows are a downward-only ratchet, and the exemptions are nam
   // on the hull by construction rather than by mispricing. Exact in BOTH
   // directions: a new name here is a regression, a missing one is a fix that
   // should shrink the list.
+  //
+  // These two are now exempt on a MECHANISM rather than a promise: their
+  // advantage is `wetTread` and the WET_GRIP table in js/game/physics-consts.js
+  // (docs/PHYSICS.md "Weather and tyres"), which the four dry stats do not and
+  // should not model. When this list was written that advantage did not exist —
+  // gripMult() read the weather and never the tyre, so they really were dead
+  // rows, and the exemption was covering for it.
   const WEATHER_ONLY = ["tyres/intermediate", "tyres/wet_full"];
   const dead = rows.flatMap((r) => r.dead.map((d) => `${r.cat}/${d.id}`)).sort();
   assert.deepEqual(dead, [...WEATHER_ONLY].sort(),

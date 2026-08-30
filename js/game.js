@@ -391,7 +391,7 @@ const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
         LONG_GRIP, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
         DEPLOY_A, TAPER_LO, TAPER_HI, TAPER_FLOOR, DRAIN_LO, DRAIN_HI,
         REGEN_LO, REGEN_HI, OT_TIME_LO, OT_TIME_HI, OT_COOL_LO, OT_COOL_HI,
-        OT_GAP } = PhysicsConsts;
+        OT_GAP, WET_GRIP } = PhysicsConsts;
 // Global pace multiplier on top speed AND acceleration, applied to EVERY car
 // (player + AI) so the whole field speeds up/slows down together and the racing
 // stays competitive. 1.0 = stock. Driven by the OVERALL SPEED slider.
@@ -698,8 +698,9 @@ const TT_LAPS = 4;          // time trial: one standing out-lap + flying laps
 // "rain" = active storm (wet road + falling rain + lightning). Both wet the road.
 function isWetRoad() { return raceWeather === "wet" || raceWeather === "rain"; }
 function isRaining() { return raceWeather === "rain"; }
-// A streaming-wet track is slightly more slippery than a merely damp one.
-function gripMult() { return raceWeather === "rain" ? 0.72 : raceWeather === "wet" ? 0.82 : 1; }
+// Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
+// "Weather and tyres". No car => the slick column: the old value, untouched.
+function gripMult(c) { const r = WET_GRIP[raceWeather]; return !r ? 1 : r[c ? (c.tread == null ? 2 : c.tread) : 0]; }
 
 // ---------- state ----------
 let state = "menu";
@@ -1519,7 +1520,7 @@ function recomputePlayerMods() {
   const team = player ? player.team : Teams.LIST[teamIdx];
   const setup = getTeamParts(team.id);
   playerMods = modsFor(team, setup);
-  if (player) player.mods = playerMods;
+  if (player) { player.mods = playerMods; player.tread = Parts.tread(setup, team); }
   // How much wing this car is carrying (0..1), which sets how much active aero
   // trades — see X_VMAX_GAIN_LO/HI. Cached here rather than resolved per physics
   // step: it only changes when the parts do.
@@ -1640,6 +1641,8 @@ function makeCars() {
         // so the per-car update below is unchanged in shape. paceMult() is exactly
         // 1 outside career, making GP/TT bit-identical.
         tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : 1),
+        // Tread class for gripMult(c); null on an AI car means "fits the right tyre".
+        tread: (isP || mate) ? (resolvedParts.options.tyres.wetTread || 0) : null,
         fuelId: resolvedParts.ids.fuel,
         fuelVisual: resolvedParts.visual.fuel,
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
@@ -4030,7 +4033,7 @@ function updateCar(c, dt, ranked) {
       AiDrive.pushLook(d, kk, Tracks.bankAngle(track, ss));
     }
     _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX;
-    _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE; _aiBr.grip = gripMult();
+    _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE; _aiBr.grip = gripMult(c);
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
     _aiBr.blockerSpeed = blocker ? blocker.speed : 0;
     _aiBr.roomL = roomL; _aiBr.roomR = roomR; _aiBr.team = c.team; _aiBr.seat = c.seat; _aiBr.stats = c.houseStats;
@@ -4138,7 +4141,8 @@ function updateCar(c, dt, ranked) {
     : true;
   if (braking) {
     if (c.speed > 0) {
-      c.speed = Math.max(0, c.speed - BRAKE * (c.human ? mods.braking * brakeLvl : brakeLvl) * dt);
+      // Tread pays braking back in the wet — the ratio is exactly 1 on slicks and in the dry (docs/PHYSICS.md).
+      c.speed = Math.max(0, c.speed - BRAKE * (c.human ? mods.braking * brakeLvl * (gripMult(c) / gripMult()) : brakeLvl) * dt);
     } else if (c.human && state === "race") {
       // Stopped and still braking: crawl backwards so the player can ease off a
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
@@ -4479,7 +4483,7 @@ function updateCar(c, dt, ranked) {
     // speed-limited the throttle is still held but real accel ≈ 0, so without
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
-    const axEstTarget = braking ? -BRAKE * brakeLvl * (c.human ? (mods.braking || 1) : 1)
+    const axEstTarget = braking ? -BRAKE * brakeLvl * (c.human ? (mods.braking || 1) * (gripMult(c) / gripMult()) : 1)
       : (onThrottle
           ? ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);
@@ -4509,7 +4513,7 @@ function updateCar(c, dt, ranked) {
     // accel, not the full engine ACCEL, so power-on costs far less cornering
     // grip than braking does — arcade forgiveness on corner exits. Making the
     // circle symmetric (power-limited exits) is a feel/design change, not a fix.
-    const axFrac = Math.min(1, Math.abs(c.axEstSm ?? 0) / (LONG_GRIP * gripMult()));
+    const axFrac = Math.min(1, Math.abs(c.axEstSm ?? 0) / (LONG_GRIP * gripMult(c)));
     const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
     // --- friction limit per axle (the grip circle). Everything scales with the
     // same surface/weather grip the rest of the sim uses.
@@ -4530,7 +4534,7 @@ function updateCar(c, dt, ranked) {
     // the car; it is a pure function of deterministic marble positions and returns
     // 1.0 (a true no-op) off-path. Subtle by construction (≤7% via MARBLE_GRIP_MIN).
     const marbleMu = DebrisWorld.active() ? DebrisWorld.marbleGrip(c) : 1;
-    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult() * mods.cornering * bankMu * (1 + vertLoad) * slipFactor * marbleMu;
+    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * slipFactor * marbleMu;
     const muF = Math.max(0.5, muBase * loadF * FRONT_GRIP);
     const muR = Math.max(0.5, muBase * loadR * (1 - DRIFT * 0.55));
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
@@ -4648,7 +4652,7 @@ function updateCar(c, dt, ranked) {
     // was already grip-thinned. Continuous in |x| past the edge (player idiom).
     const aiOffDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
     const aiSurfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, aiOffDepth);
-    c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult() * bankMu * give * aiSurfMu * dt;
+    c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult(c) * bankMu * give * aiSurfMu * dt;
     // Debris side-world (A2): AI cars don't run the slip model, so estimate a
     // slide from lateral-g demand (|k|·v²/g) and treat hard braking at speed as
     // lock-up. READ-ONLY, cosmetic — matches the player marble hook.

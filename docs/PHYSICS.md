@@ -212,6 +212,80 @@ current schema is left completely alone.
 
 ---
 
+## Weather and tyres
+
+Weather and the fitted compound meet in ONE place: `gripMult(c)` in `js/game.js`,
+reading `WET_GRIP` in `js/game/physics-consts.js`. The table is indexed by the
+compound's tread class — `wetTread` in the Parts catalog, absent = 0 = slick:
+
+| condition | slick | intermediate (`wetTread: 1`) | full wet (`wetTread: 2`) |
+|---|---|---|---|
+| dry / overcast / fog | 1 | 1 | 1 |
+| `wet` | 0.82 | 0.94 | 0.99 |
+| `rain` | 0.72 | 0.86 | 0.97 |
+
+**The slick column is the old weather-only `gripMult()`, value for value.** Until
+this landed the function read the weather and never the tyre, so the two wet
+compounds were a pure penalty in the only conditions they exist for: you paid
+about 10% of the car to fit a full wet and the rain treated you exactly like a
+slick. `tools/parts-ladder.mjs` had been reporting it from the other side —
+those two rows are the only never-optimal options in the whole catalog, and
+`tests/unit/parts-ladder.test.mjs` still names them as exemptions because the
+ladder scores the four DRY stats and none of them can say "works when it rains".
+
+Keeping the slick column fixed is what makes the change purely additive: wet
+compounds gain, nothing else moves, and the characterization baselines stay
+honest instead of being re-cut. `headless-api.spec.js` asserting `gripMult ===
+0.82` in the wet is the canary — the default compound is `medium`, tread 0, so
+if that number ever has to change, the table is wrong.
+
+### The three call shapes
+
+- **`gripMult()`** — the slick column: the ROAD's condition, with no tyre in the
+  question. Every readout wants this and every one of them is unchanged:
+  `physState()`, agentview's `surface`/`gripMult` pair, `quali.lapTime`, the
+  debug HUD line.
+- **`gripMult(c)`** — what that car actually has. The physics seams only:
+  `muBase`, the friction-ellipse budget `axFrac`, the AI steer term and
+  `_aiBr.grip`.
+- **`c.tread == null` → the top column.** See below.
+
+`world().ego.grip` carries both: `gripMult` (road) and `tyreGrip` (this car).
+
+### The AI field is assumed competent
+
+AI cars carry no parts at all — `modsFor` is player-only and `updateCar` falls
+back to `NEUTRAL_MODS` — so there is no AI compound to read. Rather than model
+AI setup, `tread: null` resolves to the top column: **the field is assumed to
+have fitted the right tyre for the conditions.**
+
+This is a design decision, not an oversight, and it is what keeps rain a race.
+The alternative was a player-only advantage, which would have made a correct
+tyre call worth ~35% more grip than every other car on track and turned a whole
+weather condition into a walkover. As it stands a correct call roughly matches
+the field and a wrong one costs about a quarter of your cornering.
+
+### Braking
+
+Weather never scaled `BRAKE` — it only ever touched lateral grip and the
+friction ellipse. That made a full wet's `braking: 0.94` an *uncompensated*
+penalty: in the rain it braked worse than a slick and got nothing back. Braking
+and its `axEstTarget` estimate now carry `gripMult(c) / gripMult()`, the
+compound's advantage over a slick in the current conditions. That ratio is
+exactly 1.0 on slicks and 1.0 for everyone in the dry, so slick braking does not
+move — it only hands the wet compounds back the braking their tread earns.
+
+### Two things this does NOT do
+
+- **There are no pit stops.** The compound is a pre-race commitment, and weather
+  can still swing mid-race through `startWeatherArc` (`dry→wet→rain` and back).
+  A dry→rain arc punishes a slick with no recourse. That is what gives the
+  choice teeth; it is also the first thing to revisit if rain feels unfair.
+- **Remote human cars in multiplayer do not replicate their compound** and land
+  on `tread == null`, i.e. the competent-field column.
+
+---
+
 ## Curvature channels — the "arc must not reach the driver" table
 
 Every consumer of `Tracks.curvature()` (direct calls plus the two

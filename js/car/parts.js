@@ -195,7 +195,7 @@ const Parts = (function () {
     {
       id: "tyres", label: "TYRES",
       options: [
-        { id: "intermediate", label: "Intermediate",  cost:   0, desc: "Wet-weather compound — lower grip in dry conditions",                         speed: 0.92, accel: 0.93, cornering: 0.94, braking: 0.98, visual: {band: [0.1, 0.72, 0.24], grooves: 3, grooveDepth: 0.055, bandWidth: 0.08, coverVanes: 5}, visualTier: 0 },
+        { id: "intermediate", label: "Intermediate",  cost:   0, desc: "Wet-weather compound — lower grip in dry conditions",                         speed: 0.92, accel: 0.93, cornering: 0.94, braking: 0.98, wetTread: 1, visual: {band: [0.1, 0.72, 0.24], grooves: 3, grooveDepth: 0.055, bandWidth: 0.08, coverVanes: 5}, visualTier: 0 },
         { id: "hard",         label: "Hard",          cost:   0, desc: "Durable compound — +2% top speed, lower grip",                               speed: 1.02, accel: 0.97, cornering: 0.92, braking: 1.02, visual: {band: [0.9, 0.9, 0.93], grooves: 0, bandWidth: 0.05, coverVanes: 8}, visualTier: 0 },
         { id: "medium",       label: "Medium",        cost:   0, desc: "Balanced compound for all conditions",                                        visual: {band: [0.96, 0.8, 0.1], grooves: 0, bandWidth: 0.075, coverVanes: 6}, visualTier: 1 },
         { id: "slick_track",  label: "Slick Track",   cost:  40, desc: "Pure dry-weather slick — optimised compound structure",                       speed: 1.01, accel: 1.01, cornering: 1.04, braking: 1.04, visual: {band: [0.8, 0.82, 0.88], grooves: 0, bandWidth: 0.045, coverVanes: 10}, visualTier: 1 },
@@ -207,7 +207,7 @@ const Parts = (function () {
         { id: "qualigum",     label: "Quali Spec",    cost: 165, desc: "One-lap ultra-soft — maximum short-run grip",                                 speed: 0.91, accel: 1.09, cornering: 1.28, braking: 1.11, visual: {sidewall: 2, band: [0.62, 0.12, 0.78], grooves: 0, bandWidth: 0.14, coverVanes: 11}, visualTier: 2 },
         { id: "hypersoft",    label: "Hyper Soft",    cost: 205, desc: "Prototype extreme compound — maximum peak grip, very short lifespan",          speed: 0.88, accel: 1.12, cornering: 1.36, braking: 1.16, visual: {sidewall: 2, band: [0.98, 0.38, 0.62], grooves: 0, bandWidth: 0.15, coverVanes: 12, shoulder: 2}, visualTier: 2 },
         { id: "sprint_soft",  label: "Sprint Soft",   cost: 135, desc: "Short-race compound — rapid warm-up and strong launch traction",                 speed: 0.93, accel: 1.08, cornering: 1.22, braking: 1.09, visual: {band: [0.15, 0.55, 0.95], grooves: 0, bandWidth: 0.105, coverVanes: 9}, visualTier: 2 },
-        { id: "wet_full",     label: "Full Wet",      cost:   0, desc: "Deep-tread monsoon tyre — the only compound that clears standing water",         speed: 0.88, accel: 0.90, cornering: 0.90, braking: 0.94, visual: {band: [0.1, 0.4, 0.92], grooves: 4, grooveDepth: 0.075, bandWidth: 0.09, coverVanes: 4, shoulder: 2}, visualTier: 0 },
+        { id: "wet_full",     label: "Full Wet",      cost:   0, desc: "Deep-tread monsoon tyre — the only compound that clears standing water",         speed: 0.88, accel: 0.90, cornering: 0.90, braking: 0.94, wetTread: 2, visual: {band: [0.1, 0.4, 0.92], grooves: 4, grooveDepth: 0.075, bandWidth: 0.09, coverVanes: 4, shoulder: 2}, visualTier: 0 },
         { id: "compound_c3",  label: "Compound C3",   cost:  50, desc: "Pirelli's workhorse medium-hard — a small, safe step up from the base compound", speed: 1.01, accel: 1.01, cornering: 1.05, braking: 1.05, visual: {band: [0.92, 0.92, 0.6], grooves: 0, bandWidth: 0.065, coverVanes: 9, shoulder: 2}, visualTier: 1 },
         { id: "endurance_tyre", label: "Endurance Spec", cost: 70, desc: "Reinforced casing — holds its shape lap after lap without giving up top speed", speed: 1.02, cornering: 1.06, braking: 1.10, visual: {sidewall: 1, band: [0.55, 0.58, 0.64], grooves: 0, bandWidth: 0.055, coverVanes: 12, shoulder: 1}, visualTier: 1 },
         { id: "branded_wall", label: "Branded Wall", cost: 15, desc: "Double raised lettering rings on the sidewall — the promoter's compound, medium underneath", cornering: 1.02, braking: 1.02, visual: {sidewall: 2, band: [0.94, 0.94, 0.96], grooves: 0, bandWidth: 0.06, coverVanes: 6, shoulder: 0}, visualTier: 1 },
@@ -622,6 +622,13 @@ const Parts = (function () {
     return { setup: resolvedSetup, mods, cost, ids: resolvedSetup, tiers, visual, options };
   }
 
+  // The fitted compound's wet TREAD CLASS: 0 slick, 1 intermediate, 2 full wet.
+  // The one thing outside the four stat multipliers that a tyre tells the
+  // physics — game.js indexes WET_GRIP with it. Absent means slick.
+  function tread(setup, team) {
+    return resolveSetup(setup, team).options.tyres.wetTread || 0;
+  }
+
   const factoryCache = new Map();
   function factoryResolved(team) {
     const id = team && team.id || "";
@@ -732,6 +739,6 @@ const Parts = (function () {
     CATALOG, DEFAULTS, FACTORY_PRESETS, VISUAL_FIELD_REGISTRY, BUDGET,
     resolveSetup, isOptionAvailable,
     getFactorySetup, factoryKey,
-    getMods, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile,
+    getMods, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile, tread,
   };
 })();

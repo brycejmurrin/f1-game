@@ -312,6 +312,9 @@ function buildSetup() {
     const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
     nameRow.appendChild(document.createTextNode(opt.label));
     const badges = [];
+    // Leads the row: on a wet compound it is the only badge that explains why
+    // all four stat chips are pointing down.
+    if (opt.wetTread) badges.push(opt.wetTread > 1 ? "WET" : "INTER");
     if (opt.tag) badges.push(opt.tag);
     if (opt.supplier || opt.suppliers) badges.push("SUPPLIER");
     if (opt.team || opt.teams) badges.push("SIGNATURE");
@@ -394,6 +397,19 @@ function statDeltaChips(opt) {
     const pct = Math.round(Math.abs(v - 1) * 100);
     chip.textContent = (v > 1 ? "▲" : "▼") + d.label + " " + (v > 1 ? "+" : "−") + pct + "%";
     wrap.appendChild(chip);
+  }
+  // Rain grip is the entire reason the wet compounds exist and it is not one of
+  // the four stats, so without this chip the garage shows a full wet as four
+  // penalties and nothing else — which is exactly how it read while the physics
+  // ignored the compound too. Against the slick column of the same table the
+  // physics uses, so the number on the row is the number in the model.
+  if (opt.wetTread) {
+    const rain = PhysicsConsts.WET_GRIP.rain;
+    const chip = document.createElement("span");
+    chip.className = "cs-delta up";
+    chip.textContent = "▲RAIN +" + Math.round((rain[opt.wetTread] / rain[0] - 1) * 100) + "%";
+    wrap.appendChild(chip);
+    any = true;
   }
   return any ? wrap : null;
 }

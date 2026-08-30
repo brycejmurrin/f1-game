@@ -419,7 +419,12 @@ const CEILINGS = {
   // knob is resolved BEFORE setFrameLights (it feeds the scaled full-set build)
   // and allLights is left null when the feature is off instead of handing out
   // the raw baked list.
-  "js/game.js": 8727,
+  // 8727 -> 8728: wet tyres reach the physics. gripMult() reads the fitted
+  // compound as well as the weather (WET_GRIP), cars carry a `tread` class, and
+  // braking gets the tread ratio it never had. Net +2 code lines and +3 comment
+  // for a whole system, because the rationale went to docs/PHYSICS.md "Weather
+  // and tyres" instead of into the file.
+  "js/game.js": 8728,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
