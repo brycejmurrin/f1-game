@@ -145,8 +145,14 @@ test.describe("Parts persistence — survives page reload", () => {
     await waitReady(page);
     await reopenSetup(page);
 
+    // From the catalog, not a literal. This said "440" (780 - 160) and the
+    // ladder re-space repriced `engine/race` to 145 — a spec that goes red
+    // because a part got cheaper is measuring the price, not the persistence
+    // it is named for.
+    const left = await page.evaluate(() => Parts.BUDGET -
+      Parts.CATALOG.find((c) => c.id === "engine").options.find((o) => o.id === "race").cost);
     const budgetText = await page.locator("#cs-budget").textContent();
-    expect(budgetText).toContain("440");
+    expect(budgetText).toContain(String(left));
   });
 });
 
