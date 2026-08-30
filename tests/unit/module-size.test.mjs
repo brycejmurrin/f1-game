@@ -583,7 +583,15 @@ const CEILINGS = {
   // only, +1 line of code and the twelve recording why the tub is dark while
   // the hood above it stays painted. Measured on ferrari: lower-field rays on
   // body paint under the wheel 1073 -> 658 of 13430. Re-measured on the union.
-  "js/car/car3d.js": 3177,   // +44: wheel cover is a rim lip, a dish and a boss
+  // 3177 -> 3203 for FRONT_TYRE_OUTER / FW_SPAN and the note that derives them.
+  // The front wing was wider than the car: the widest vertex in the whole build
+  // was the endplate footplate at ±1.045 against a 0.950 tyre face, so the car
+  // measured 2.09 m at the wing and 1.90 m — exactly the 2026 maximum — at the
+  // wheels. The lines are the MEASUREMENT that fixes it: which option is widest
+  // (outwash_max, not the default), what its endplate adds, and why calibrating
+  // on the default left two specs 5 mm proud. Bug-explaining growth at the site
+  // of the bug, and the invariant itself lives in a test, not a comment.
+  "js/car/car3d.js": 3203,   // +44: wheel cover is a rim lip, a dish and a boss
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
