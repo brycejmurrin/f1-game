@@ -615,6 +615,38 @@ undersized budget. "Re-run it alone" is what tells them apart; without it the
 right answer for five of them would have been indistinguishable from the right
 answer for the sixth.
 
+### When a timeout survives the solo run, count the navigations
+
+The rule above tells you a group-run timeout is not a verdict. The corollary is
+what to do when the solo run agrees with the group: the cost is the test's own,
+and a bigger budget is almost never the fix. Measured on the parts group,
+2026-08-30, going from 11 failures to 0:
+
+| test | before | after | what changed |
+|---|---|---|---|
+| `parts-budget` (5 tests over) | 125-169 s | 13-116 s | `#mb-garage` instead of `mb-race` -> `select` -> `sel-go`; `addInitScript` instead of a boot-and-reload for clean storage |
+| `parts-mesh-cache` eviction | 366 s (own 360 s budget) | passes | stopped building nine tracks it then threw away |
+| `parts-physics` ERS deploy/recovery | 126.0 s solo | **90.0 s** | one boot to learn the team id instead of one per loop pass — six navigations for three measurements became four |
+| whole `test:parts` group | ~2.5 h | **1 h 55 m** | the above |
+
+Every one of those was a navigation the assertion did not need. **A boot on this
+box is 11-22 s, so counting `goto`/`reload` calls is the highest-yield thing you
+can do to a slow spec** — start there before you look at the work the test
+actually does, and long before you touch a budget.
+
+The exception proves it. `parts-budget`'s "budget label gets 'over' class" still
+carries `test.setTimeout(240_000)`, because its four part swaps are the
+ARITHMETIC minimum against the 780 cap (230 + 210 + 210 = 650, so only the
+fourth crosses) and each swap rebuilds the car mesh. Raise a budget when you can
+show the work is irreducible, and write the arithmetic down where the next
+reader will look for the waste.
+
+One trap on the way: the ERS test's per-pass `reload` looks like the same
+redundancy and is not. `store` (`js/game/store.js`) caches every key it has
+read, so seeding `localStorage` without a reload leaves the game answering from
+`_cache` — all three passes would measure the same setup and every assertion
+would still pass.
+
 ---
 
 ## 4. Philosophy — debug-hooks first
