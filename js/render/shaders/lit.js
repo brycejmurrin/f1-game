@@ -179,10 +179,12 @@ uniform int uLampShadowIdx;
 // vertical arrays at 32 (WebGL2 fragment-uniform floor is 224 rows).
 const int MAX_LIGHTS = 48;
 uniform int uNumLights;
-uniform vec4 uLightA[MAX_LIGHTS]; // xyz pos, w radius
-uniform vec4 uLightB[MAX_LIGHTS]; // xyz colour*intensity, w out-of-beam bleed
-uniform vec4 uLightC[MAX_LIGHTS]; // xyz beam aim, w cone cosInner
-uniform vec4 uLightD[MAX_LIGHTS]; // x cone cosOuter
+// ONE interleaved array, stride 4 vec4s per light:
+//   +0 xyz pos, w radius      +1 xyz colour*intensity, w out-of-beam bleed
+//   +2 xyz beam aim, w cosInner   +3 x cosOuter
+// Same 192 default-block rows as the four separate arrays this replaces, but
+// ONE uniform4fv per chunk instead of four. docs/PERF-FINDINGS.md 2d.
+uniform vec4 uLight[MAX_LIGHTS * 4];
 out vec4 outColor;
 
 const float PI = 3.14159265359;
@@ -1106,7 +1108,8 @@ void main() {
   vec3 lampFog = vec3(0.0);
   for (int i = 0; i < MAX_LIGHTS; i++) {
     if (i >= uNumLights) break;
-    vec4 la = uLightA[i], lb = uLightB[i], lc = uLightC[i];
+    int li = i * 4;
+    vec4 la = uLight[li], lb = uLight[li + 1], lc = uLight[li + 2];
     vec3 LP = la.xyz - vWorldPos;
     float rad = la.w;
     // Range-reject on the SQUARED distance, before the root. On a 28-32 lamp
@@ -1133,10 +1136,10 @@ void main() {
     float att = (win * win) / (distC * distC + 1.0);
     if (att < 1e-6) continue;
     // Aimed spot cone: how deep the surface sits inside the lamp's beam.
-    // uLightC.xyz = beam aim, uLightC.w/uLightD.x = (cosInner, cosOuter);
-    // uLightB.w is the out-of-beam floor (city skyglow spill between pools).
+    // lc.xyz = beam aim, lc.w / uLight[li+3].x = (cosInner, cosOuter);
+    // lb.w is the out-of-beam floor (city skyglow spill between pools).
     float cd = dot(-Ld, lc.xyz);
-    float beam = smoothstep(uLightD[i].x, lc.w, cd);
+    float beam = smoothstep(uLight[li + 3].x, lc.w, cd);
     // ILLUMINATION follows the beam (the pool on the road)…
     float spotD = mix(lb.w, 1.0, beam);
     // …but the REFLECTION doesn't: the glowing lens itself is visible from far

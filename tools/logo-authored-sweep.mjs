@@ -45,11 +45,14 @@ for (const team of Teams.LIST) {
         const P = LT.markPalette(team.id, L, fieldsFor(L, bare), bare);
         const same = P.mark.every((v, i) => Math.abs(v - logo[i]) < 1e-6);
         bySurface[where][same ? 0 : 1]++;
-        // LOGO DETAIL, scored on the same grid: did the second colour reach
-        // any slot at all? A slot is per-mark, so compare against all three.
+        // The DETAIL row, scored on the same grid: did the second colour reach
+        // any slot at all? A slot is per-mark, so compare against all FOUR —
+        // `part` was missing here and it is where Mercedes' ring and Audi's
+        // second and fourth rings land, so those two marks read as swallowing
+        // every DETAIL colour when they were painting all of them.
         const P2 = LT.markPalette(team.id, { ...L, logo2: logo }, fieldsFor(L, bare), bare);
         const eq = (c) => c && c.every((v, i) => Math.abs(v - logo[i]) < 1e-6);
-        second[eq(P2.plate) || eq(P2.alt) || eq(P2.outline) ? 0 : 1]++;
+        second[eq(P2.plate) || eq(P2.alt) || eq(P2.part) || eq(P2.outline) ? 0 : 1]++;
         if (same) kept++;
         else {
           dropped++;

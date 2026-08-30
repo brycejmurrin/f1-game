@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1654">
+<meta name="apex-build" content="1665">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -71,7 +71,7 @@
 <link rel="stylesheet" href="css/tokens.css?v=8188cb77b276">
 <link rel="stylesheet" href="css/components.css?v=740c13224a8c">
 <link rel="stylesheet" href="css/tuner.css?v=fe56135c0173" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=b722c4fc57b6">
+<link rel="stylesheet" href="css/menus.css?v=0a8b5b576ffe">
 <link rel="stylesheet" href="css/carsetup.css?v=836e3f3078e6" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=09eec5dfd7e7" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=32503846c994" media="print" onload="this.media='all'">
@@ -502,7 +502,7 @@
          carries the live save (team, year, round) so CONTINUE says what it is
          continuing; refreshCareerButton() fills both it and the label. -->
     <div id="menu-hero">
-    <button id="mb-career" class="bigbtn" data-menu-default><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub" class="mb-sub"></span></span></button>
+    <button id="mb-career" class="bigbtn" data-menu-default><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub" class="mb-sub">DRIVER CAREER  ·  MY TEAM</span></span></button>
     </div>
     <!-- PLAY NOW: the four one-sitting modes, 2x2 so four entries cost two rows
          rather than four. Same red family as the hero, one step down in size. -->
@@ -1035,7 +1035,8 @@
         <button type="button" id="cz-logo-clear" class="cz-liv-none">CLEAR</button>
       </span></div>
     <div class="cz-row cz-liv-row"><label for="cz-logo">LOGO TINT</label><input id="cz-logo" type="color"><button type="button" id="cz-logo-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-logo2">LOGO DETAIL</label><input id="cz-logo2" type="color"><button type="button" id="cz-logo2-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-logo2">MONOGRAM BOX</label><input id="cz-logo2" type="color"><button type="button" id="cz-logo2-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-logo3">LOGO OUTLINE</label><input id="cz-logo3" type="color"><button type="button" id="cz-logo3-none" class="cz-liv-none">NONE</button></div>
     <div class="cz-row cz-liv-row"><label for="cz-halo">HALO</label><input id="cz-halo" type="color"><button type="button" id="cz-halo-none" class="cz-liv-none">NONE</button></div>
     <!-- FINISH is the paint MATERIAL, not a colour, so it gets a 3-way choice
          instead of a swatch + NONE. Gloss is the default clearcoat car paint. -->
@@ -1748,7 +1749,7 @@
 <script crossorigin="anonymous" src="js/log.js?v=da9d964fe2a5"></script>
 <script crossorigin="anonymous" src="js/mat4.js?v=11205916c4e7"></script>
 <script crossorigin="anonymous" src="js/render/shaders/chunks.js?v=4573d49f92ab"></script>
-<script crossorigin="anonymous" src="js/render/shaders/lit.js?v=97488bf8dae8"></script>
+<script crossorigin="anonymous" src="js/render/shaders/lit.js?v=69ea5a2ca851"></script>
 <script crossorigin="anonymous" src="js/render/shaders/sky.js?v=baab42036af5"></script>
 <script crossorigin="anonymous" src="js/render/shaders/fx.js?v=4d9988f6e023"></script>
 <script crossorigin="anonymous" src="js/render/shaders/post.js?v=ddd9ef7abac7"></script>
@@ -1756,7 +1757,7 @@
 <script crossorigin="anonymous" src="js/render/glx/shadow.js?v=c89be0d9caf8"></script>
 <script crossorigin="anonymous" src="js/render/lamp-chunks.js?v=28217a3b6b01"></script>
 <script crossorigin="anonymous" src="js/render/glx/chunked.js?v=c2bdf509b1eb"></script>
-<script crossorigin="anonymous" src="js/render/glx.js?v=a3e5b143f102"></script>
+<script crossorigin="anonymous" src="js/render/glx.js?v=cc05ed09ada2"></script>
 <!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
      two OPT-IN renderer backends and are injected by js/game.js only when
      apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that
@@ -1844,17 +1845,17 @@
 <script crossorigin="anonymous" src="js/data/live.js?v=c33a77e10480"></script>
 <script crossorigin="anonymous" src="js/data/hub.js?v=41dd4a45ca6e"></script>
 <script crossorigin="anonymous" src="js/car/parts.js?v=30c6a74a82dc"></script>
-<script crossorigin="anonymous" src="js/car/liveries.js?v=320d166b2c77"></script>
-<script crossorigin="anonymous" src="js/car/crest-paths.js?v=e8f7beb6f791"></script>
-<script crossorigin="anonymous" src="js/car/liverytex.js?v=1795dc46083d"></script>
+<script crossorigin="anonymous" src="js/car/liveries.js?v=55f724c01a43"></script>
+<script crossorigin="anonymous" src="js/car/crest-paths.js?v=3f7bac329086"></script>
+<script crossorigin="anonymous" src="js/car/liverytex.js?v=9116ce9bae7f"></script>
 <script crossorigin="anonymous" src="js/car/ghost.js?v=a428eb7c9a73"></script>
-<script crossorigin="anonymous" src="js/game/light-presets.js?v=31fc63ddfea0"></script>
+<script crossorigin="anonymous" src="js/game/light-presets.js?v=0b830fb08c51"></script>
 <script crossorigin="anonymous" src="js/game/physics-consts.js?v=95ddf68ac644"></script>
 <script crossorigin="anonymous" src="js/game/tables.js?v=02a99fbba028"></script>
 <script crossorigin="anonymous" src="js/game/lighting.js?v=c06cdbe94fbe"></script>
 <script crossorigin="anonymous" src="js/game/light-store.js?v=05cf4728629d"></script>
 <script crossorigin="anonymous" src="js/game/carmesh.js?v=1652adae2035"></script>
-<script crossorigin="anonymous" src="js/game/garage-scene.js?v=15dc144df991"></script>
+<script crossorigin="anonymous" src="js/game/garage-scene.js?v=bab1927e87ce"></script>
 <script crossorigin="anonymous" src="js/game/bodyattitude.js?v=7d125d9a7b2a"></script>
 <script crossorigin="anonymous" src="js/game/particles.js?v=c8d55abb6f14"></script>
 <script crossorigin="anonymous" src="js/game/atmosphere.js?v=a55002c06fe8"></script>
@@ -1864,7 +1865,7 @@
 <script crossorigin="anonymous" src="js/game/reliability.js?v=9e717a04faeb"></script>
 <script crossorigin="anonymous" src="js/game/ai-drive.js?v=c92a9de051f6"></script>
 <script crossorigin="anonymous" src="js/game/cam-tune.js?v=6ee854005123"></script>
-<script crossorigin="anonymous" src="js/game/setup-ui.js?v=03df0d588f81"></script>
+<script crossorigin="anonymous" src="js/game/setup-ui.js?v=aa3a32f573df"></script>
 <script crossorigin="anonymous" src="js/game/career-ui.js?v=aaf7625fbd71"></script>
 <script crossorigin="anonymous" src="js/game/season-ui.js?v=aaae55bb9780"></script>
 <script crossorigin="anonymous" src="js/game/menus.js?v=1d686610029b"></script>
@@ -1903,11 +1904,11 @@
 <script crossorigin="anonymous" src="js/net/sdp.js?v=1d82f2230798"></script>
 <script crossorigin="anonymous" src="js/net/qr.js?v=69234de73182"></script>
 <script crossorigin="anonymous" src="js/net/scan.js?v=da29034793de"></script>
-<script crossorigin="anonymous" src="js/net/transport.js?v=0f332295b12c"></script>
+<script crossorigin="anonymous" src="js/net/transport.js?v=5a239704da55"></script>
 <script crossorigin="anonymous" src="js/net/handshake.js?v=235f43f8bc4c"></script>
 <script crossorigin="anonymous" src="js/net/snapshot.js?v=29869772a40d"></script>
-<script crossorigin="anonymous" src="js/net/session.js?v=935aa5ccc011"></script>
-<script crossorigin="anonymous" src="js/net/netplay.js?v=91075be47b3d"></script>
+<script crossorigin="anonymous" src="js/net/session.js?v=32cedaa37207"></script>
+<script crossorigin="anonymous" src="js/net/netplay.js?v=d1ca322ff31b"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=8e51a9178e0c"></script>
-<script crossorigin="anonymous" src="js/game.js?v=16fb25a5fd41"></script>
+<script crossorigin="anonymous" src="js/game.js?v=2a9a8a018ed3"></script>
 </body></html>
