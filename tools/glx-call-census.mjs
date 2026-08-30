@@ -33,8 +33,12 @@ try {
     null, { polling: 100, timeout: 180000 });
   await new Promise((r) => setTimeout(r, 4000));
   // Drive, don't park: the batching questions are about the FIELD being drawn,
-  // and a parked camera can sit where half of it is culled.
-  await page.evaluate(() => { __apex.jump(0.30); __apex.snapCam(); });
+  // and a parked camera can sit where half of it is culled. PACK matters even
+  // more — jump(0.30) puts the player alone on track, where a per-car batching
+  // change has exactly one car to batch and measures nothing. `pack` keeps the
+  // field bunched at the start so the per-car draws are actually there.
+  const WHERE = process.argv.includes("pack") ? 0.002 : 0.30;
+  await page.evaluate((w) => { __apex.jump(w); __apex.snapCam(); }, WHERE);
   await new Promise((r) => setTimeout(r, 1500));
 
   const out = await page.evaluate(async (F) => {
@@ -64,9 +68,15 @@ try {
     for (const m of METHODS) gl[m] = orig[m];
     const per = {};
     for (const m of METHODS) if (C[m]) per[m] = +(C[m] / F).toFixed(1);
-    const info = __apex.info();
+    // How many cars actually SURVIVED the culls — without this the bind counts
+    // cannot be read at all (a one-car frame makes any batching look useless).
+    let drawn = null;
+    try {
+      const f = __apex.field ? __apex.field() : null;
+      drawn = Array.isArray(f) ? f.length : (f && f.cars ? f.cars.length : null);
+    } catch (_) { /* no field hook */ }
     return { per, bufferSubDataKiBPerFrame: +((subBytes / F) / 1024).toFixed(1),
-             cars: (info.cars && info.cars.length) || info.carCount || null,
+             carsInField: drawn,
              preset: (__apex.lightState && __apex.lightState().preset) || null };
   }, FRAMES);
   console.log(JSON.stringify({ track: TRACK, tod: TOD, frames: FRAMES, flags: LS, ...out }, null, 1));

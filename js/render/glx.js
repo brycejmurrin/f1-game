@@ -32,7 +32,7 @@ const GLX = (function () {
   // backends load last, so the value is always there to read. Any new consumer
   // does the same — do not re-sniff navigator.
   let _forceMobile = false;
-  let _instCellCache = false;
+  let _instCellCache = true;
   try { _forceMobile = localStorage.getItem("apex26.forceMobileTier") === "1"; } catch (_) {}
   const IS_MOBILE = _forceMobile ||
     /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
@@ -42,16 +42,31 @@ const GLX = (function () {
   // Default OFF — the safe tier is what keeps memory-limited devices alive.
   let _gfxHigh = false;
   try { _gfxHigh = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}
-  // INSTANCE CELL-SET CULL CACHE — opt-in, default OFF. Keys the resident pack
-  // on the surviving CELL SET instead of the frustum, which the plane cache
-  // below cannot do while driving. Measured -23.4% instance upload bytes;
-  // numbers, soundness argument and the flip criteria are in
-  // docs/PERF-FINDINGS.md 2c. Off by default until a real-GPU pixel run.
-  try { _instCellCache = localStorage.getItem("apex26.instCellCache") === "1"; } catch (_) {}
+  // INSTANCE CELL-SET CULL CACHE — ON; apex26.instCellCache=0 is the escape
+  // hatch, the shape __apex.matTex(0) gives the baked-material path. Keys the
+  // resident pack on the surviving CELL SET instead of the frustum, which the
+  // plane cache below cannot do while driving. -48% instance upload bytes in a
+  // pack; numbers, soundness and the real-GPU gate: docs/PERF-FINDINGS.md 2c.
+  try { if (localStorage.getItem("apex26.instCellCache") === "0") _instCellCache = false; } catch (_) {}
   // MOBILE TIER = a phone NOT opted into high quality. All the memory downgrades
   // key off this, so HIGH restores full quality (a reload re-runs init with it).
   const MOBILE_TIER = IS_MOBILE && !_gfxHigh;
   let _ctxLost = false;   // true between webglcontextlost and the reload on restore
+  // GPU error counter — WebGL has no onuncapturederror, so drain getError() once
+  // per present. Exists because the real-GPU gate read null here and passed
+  // vacuously: docs/PERF-FINDINGS.md 2e.
+  let _glErrors = 0, _glFirstError = "";
+  const GL_ERR_NAMES = { 1280: "INVALID_ENUM", 1281: "INVALID_VALUE", 1282: "INVALID_OPERATION",
+                         1285: "OUT_OF_MEMORY", 1286: "INVALID_FRAMEBUFFER_OPERATION", 37442: "CONTEXT_LOST" };
+  function drainGlErrors(where) {
+    if (!gl || _ctxLost) return;
+    for (let i = 0; i < 8; i++) {          // bounded: a wedged context can loop
+      const e = gl.getError();
+      if (!e) return;
+      _glErrors++;
+      if (!_glFirstError) _glFirstError = (GL_ERR_NAMES[e] || ("0x" + e.toString(16))) + " @ " + where;
+    }
+  }
   function ctxGone() { return _ctxLost || !!(gl && gl.isContextLost && gl.isContextLost()); }
 
   // ── GPU frame timer (opt-in via gpuTimer(true); __apex.gpuTimer()) ──
@@ -130,8 +145,9 @@ const GLX = (function () {
   // god-ray scratch, which moved to js/render/glx/post.js with present().
   // Four vec4s match lit.js packing (pos+rad / col+bleed / dir+coneIn / coneOut).
   const MAX_LIGHTS = 48;
-  const _luA = new Float32Array(MAX_LIGHTS * 4), _luB = new Float32Array(MAX_LIGHTS * 4),
-        _luC = new Float32Array(MAX_LIGHTS * 4), _luD = new Float32Array(MAX_LIGHTS * 4);
+  // ONE interleaved scratch, stride 16 floats (4 vec4s) per light — matches
+  // uLight[] in shaders/lit.js so a chunk uploads in a single uniform4fv.
+  const _luL = new Float32Array(MAX_LIGHTS * 16);
   let frameInvProj = null;
   let frameInvVP = null;
   let frameProj = null;
@@ -479,7 +495,7 @@ const GLX = (function () {
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
       "uLampNearClamp", "uWindowSunFlash", "uSkyRimGlow", "uAmbContactDark", "uLampWallSpill",
       "uMatAlbedoTex", "uMatNormalTex", "uMatTexMix", "uMatTexScale[0]",
-      "uNumLights", "uLightA[0]", "uLightB[0]", "uLightC[0]", "uLightD[0]"]);
+      "uNumLights", "uLight[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uMieScatter", "uCloudSilver", "uCoronaAureole", "uSunDiscSize", "uStarSize", "uStarTwinkle", "uMoonDiscSize", "uMoonHalo", "uSunCorona", "uSunSquash", "uCityGlowReach", "uCloudDef", "uLightning"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
@@ -1327,13 +1343,13 @@ const GLX = (function () {
     const nL = nStatic + nTail;
     gl.uniform1i(litU.uNumLights, nL);
     if (nL <= 0) return;
-    const A = _luA, B = _luB, C = _luC, D = _luD;
+    const L4 = _luL;
     for (let i = 0; i < nL; i++) {
       const fromTail = i >= nStatic;
       const src = fromTail ? L2 : L;
       const o = fromTail ? (((o2 | 0) + (i - nStatic)) * 15)
                          : ((idx ? idx[i] : i) * 15);
-      const i4 = i * 4;
+      const i4 = i * 16;
       // NO PER-CHUNK DIMMER HERE, and do not reintroduce one. The knob was once
       // a brightness multiplier applied at this point; setFrameLights now scales
       // the baked set exactly like the culled one, so this had already been
@@ -1344,15 +1360,12 @@ const GLX = (function () {
       // times a frame — feeding a scale that was provably 1, and three
       // multiplies by it. The knob's real jobs are enabling per-chunk sets and
       // setting their cap via capFor; neither is a factor on rgb.
-      A[i4] = src[o]; A[i4 + 1] = src[o + 1]; A[i4 + 2] = src[o + 2]; A[i4 + 3] = src[o + 6];
-      B[i4] = src[o + 3]; B[i4 + 1] = src[o + 4]; B[i4 + 2] = src[o + 5]; B[i4 + 3] = src[o + 12];
-      C[i4] = src[o + 7]; C[i4 + 1] = src[o + 8]; C[i4 + 2] = src[o + 9]; C[i4 + 3] = src[o + 10];
-      D[i4] = src[o + 11]; D[i4 + 1] = 0; D[i4 + 2] = 0; D[i4 + 3] = 0;
+      L4[i4] = src[o]; L4[i4 + 1] = src[o + 1]; L4[i4 + 2] = src[o + 2]; L4[i4 + 3] = src[o + 6];
+      L4[i4 + 4] = src[o + 3]; L4[i4 + 5] = src[o + 4]; L4[i4 + 6] = src[o + 5]; L4[i4 + 7] = src[o + 12];
+      L4[i4 + 8] = src[o + 7]; L4[i4 + 9] = src[o + 8]; L4[i4 + 10] = src[o + 9]; L4[i4 + 11] = src[o + 10];
+      L4[i4 + 12] = src[o + 11]; L4[i4 + 13] = 0; L4[i4 + 14] = 0; L4[i4 + 15] = 0;
     }
-    gl.uniform4fv(litU["uLightA[0]"], A, 0, nL * 4);
-    gl.uniform4fv(litU["uLightB[0]"], B, 0, nL * 4);
-    gl.uniform4fv(litU["uLightC[0]"], C, 0, nL * 4);
-    gl.uniform4fv(litU["uLightD[0]"], D, 0, nL * 4);
+    gl.uniform4fv(litU["uLight[0]"], L4, 0, nL * 16);
   }
 
   // Shared lit-pass material setup — draw() below and GLXChunked.drawChunked
@@ -1360,9 +1373,12 @@ const GLX = (function () {
   // bind the lit program, upload the model matrix, and set the material
   // scalars through the redundancy cache. Returns the resolved alpha for the
   // caller's blend/depth-mask decisions.
-  function litMaterial(modelMat, opts) {
+  function litMaterial(modelMat, opts, instanced) {
     useProg(litProg);
     gl.uniformMatrix4fv(litU.uModel, false, modelMat);
+    // The instancing gate rides the redundancy cache: 54.8 uniform1f/frame for a
+    // value that changes 3.1 times. docs/PERF-FINDINGS.md 2e.
+    uf1(litU.uInstanced, _litUf, "instanced", instanced ? 1 : 0);
     // The instancing gate is NOT re-uploaded here. It used to be defaulted off on
     // every lit draw, and litMaterial is the funnel for all of them — 150-300 a
     // frame (world meshes, car bodies, wheels, aero flaps, brake rings, LEDs,
@@ -1582,23 +1598,17 @@ const GLX = (function () {
     // IDENTITY model matrix: the transform lives entirely in the instance
     // columns. Passing anything else would be silently ignored by the shader and
     // mislead the next reader.
-    const alpha = litMaterial(IDENT4, opts);
+    const alpha = litMaterial(IDENT4, opts, 1);
     setDepthMask(alpha >= 1);
     setBlend(alpha < 1);
     bindVAO(batch.vao);
     const dbl = opts && opts.doubleSided;
     if (dbl) setCull(false);
     const n = batch.visible === undefined ? batch.instances : batch.visible;
-    // Bracket the gate around THIS draw — the shape castShadowInstanced already
-    // uses — instead of asking every one of the frame's other lit draws to clear
-    // it afterwards. Set inside the n > 0 guard so a zero-instance batch leaves
-    // the uniform exactly as it found it. (This also drops the per-call
-    // Object.assign that existed only to smuggle the _instanced flag through.)
-    if (n > 0) {
-      if (litU.uInstanced) gl.uniform1f(litU.uInstanced, 1);
-      gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
-      if (litU.uInstanced) gl.uniform1f(litU.uInstanced, 0);
-    }
+    // The gate is declared by litMaterial above, NOT bracketed here: 1,0,1,0
+    // alternates and a cache collapses none of it. Why, and why a zero-instance
+    // batch claiming the gate is harmless: docs/PERF-FINDINGS.md 2e.
+    if (n > 0) gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
     if (dbl) setCull(true);
   }
 
@@ -1912,7 +1922,9 @@ const GLX = (function () {
     drawSkidBatch,
     drawGlow,
     drawParticles,
-    present: (opts) => { if (ctxGone()) return; return PST.present(opts); },
+    present: (opts) => { if (ctxGone()) return; const r = PST.present(opts); drainGlErrors("present"); return r; },
+    gpuErrors: () => _glErrors,
+    gpuFirstError: () => _glFirstError || null,
     envFaceBegin,
     envFaceEnd,
     envProbeReady() { return envReady; },

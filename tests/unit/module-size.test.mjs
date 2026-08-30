@@ -419,6 +419,15 @@ const CEILINGS = {
   // knob is resolved BEFORE setFrameLights (it feeds the scaled full-set build)
   // and allLights is left null when the feature is off instead of handing out
   // the raw baked list.
+  // 8727 -> 8760: the per-wheel draw loop drew rotating-then-fixed per wheel,
+  // giving the VAO sequence F,FFixed,F,FFixed,R,RFixed,R,RFixed — every
+  // consecutive pair different, so bindVAO collapsed NOTHING. Two runs now,
+  // measured 92 -> 84.2 bindVertexArray/frame in a pack with drawElements
+  // unchanged. The same restructure FIXES A RENDERING BUG: brake rings are
+  // blended with no depth write and were interleaved with opaque geometry, so
+  // a later car's opaque draw passed LEQUAL and painted over a ring already
+  // drawn. Bug-explaining growth at the site of the bug — the one growth the
+  // note at the top of this entry tolerates.
   // 8727 -> 8760 for czSyncMarkRows and its two callers: MY TEAM's mark rows
   // now describe whichever mark is ACTUALLY drawn. Uploading an emblem takes
   // buildAtlas down the drawLogoImage branch, whose signature is
@@ -431,7 +440,13 @@ const CEILINGS = {
   // js/car/liverytex.js markSlots where both editors read it — the garage
   // builds its rows from that function and needed no lines at all. What is
   // left here is this dialog's static markup being told the answer.
-  "js/game.js": 8760,
+  // MERGED: both sides raised this to 8760 for different work — their
+  // two-pass wheel draws, this side's czSyncMarkRows — and the file now
+  // carries BOTH sets of lines, so neither number fits it. Re-measured on
+  // the merged tree at 8793, as the ACTIVE AERO merge above had to be.
+  // (`lines()` splits on \n, so it reads one MORE than wc -l on a
+  // newline-terminated file — 8792 there is 8793 here.)
+  "js/game.js": 8793,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -670,7 +685,10 @@ const CEILINGS = {
   // 79.5% that share by being EMPTY are a trap worth naming in place. Detail is
   // in docs/PERF-FINDINGS.md 2b — only the pointer and the headline live here,
   // which is why this is +7 and not the +15 the first draft cost.
-  "js/render/webgpu/wgx.js": 5574,
+  // 5574 -> 5581: WGX gains gpuErrors/gpuFirstError on its INSTANCE surface
+  // (it had them only on the module factory), so the backend-parity contract
+  // holds now that GLX has a real counter. PERF-FINDINGS 2e.
+  "js/render/webgpu/wgx.js": 5581,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -747,10 +765,19 @@ const CEILINGS = {
   // memoises on frustum-plane equality and three callers use three frusta a
   // frame, so while driving it never hits and props are repacked and
   // re-uploaded 2-3x — measured 426.7 KiB/frame (tools/glx-call-census.mjs).
-  // Keying on the surviving cell set takes -23.4% of that. The existing plane
-  // path is left intact beside it (the canary pins it, and the flag defaults
-  // OFF), which is why this ADDS rather than replaces. Detail: PERF-FINDINGS 2c.
-  "js/render/glx.js": 1963,
+  // Keying on the surviving cell set takes -23.4% of that (-48% in a pack). The
+  // existing plane path is left intact beside it (the canary pins it), which is
+  // why this ADDS rather than replaces. Detail: PERF-FINDINGS 2c.
+  // 1963 -> 1961: the four uLightA..D arrays and their four scratch buffers
+  // collapse into one interleaved uLight[]/_luL — one uniform4fv per chunk
+  // instead of four. The ratchet follows the file down (PERF-FINDINGS 2d).
+  // 1961 -> 1958: the instancing gate stops being bracketed per instanced draw
+  // and is declared through the redundancy cache in litMaterial (PERF-FINDINGS 2e).
+  // 1958 -> 1975: GLX gains a real gpuErrors()/gpuFirstError() counter. The
+  // real-GPU workflow gated on gpuErrors and GLX never defined it, so that
+  // clause read null and passed forever (PERF-FINDINGS 2e). A deliberate
+  // raise: the gate is worth more than the lines.
+  "js/render/glx.js": 1975,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)
