@@ -1418,6 +1418,15 @@ const Car3D = (function () {
     addSpan(out, CHASSIS.monocoque[0], monoR, monoC);
     addTopBevel(out, CHASSIS.monocoque[0], monoR, 0.032, monoC);
     if (ckpt) return;
+    // SPLITTER / TEA-TRAY. The floor's leading edge is z 1.30 and there was
+    // nothing at all ahead of it, so from any low front-three-quarter camera the
+    // car ran out of underbody half a metre before the nose did. The tray is the
+    // flat blade under the nose, the stem the vertical that ties it up into the
+    // chassis — the T the name comes from. Rides with rideDY like the floor it
+    // extends, or it would float when the car is raised.
+    addSpan(out, { z: 1.58, y: 0.058 + rideDY, w: 0.36, h: 0.028, t: 0.92 },
+                 { z: 1.30, y: 0.062 + rideDY, w: 0.64, h: 0.030, t: 0.96 }, CARBON);
+    addBox(out, 0, 0.132 + rideDY, 1.44, 0.10, 0.125, 0.26, CARBON);
     addSpan(out, CHASSIS.cockpit[0], CHASSIS.cockpit[1], c1);
     addTopBevel(out, CHASSIS.cockpit[0], CHASSIS.cockpit[1], 0.028, c1);
   }
@@ -1766,6 +1775,20 @@ const Car3D = (function () {
       addBox(out, 0, 0.36, 0.60, 0.66, 0.13, 0.16, c1);
       addBox(out, 0, 0.427, 0.56, 0.60, 0.03, 0.05, c2);       // accent lip
       addBox(out, 0, 0.345, 0.54, 0.52, 0.10, 0.05, INTAKE);   // dark instrument shroud
+      // SIX-POINT HARNESS. The cockpit had a wheel, hands and a tub, and then
+      // bare paint where the driver is strapped in. The straps sit between the
+      // eye (rig 0.82 up, 0.20 back) and the dash coaming at z 0.54, so they
+      // fill the lower frame that the coaming does not reach — the one part of
+      // an onboard shot that was empty.
+      // Fixed dark webbing, NOT a livery colour: a near-white secondary is
+      // exactly what made the cockpit trim read as a pale slab before (see
+      // _ckAcc), and a real harness is dark anyway.
+      const WEB = [0.10, 0.11, 0.14];
+      for (const s of [-1, 1]) {
+        addBeamBetween(out, [s * 0.185, 0.700, -0.30], [s * 0.055, 0.437, 0.155], 0.072, WEB, SURFACES.carbon);
+        addBeamBetween(out, [s * 0.245, 0.398, 0.095], [s * 0.052, 0.425, 0.168], 0.062, WEB, SURFACES.carbon);
+      }
+      addBox(out, 0, 0.432, 0.176, 0.088, 0.078, 0.034, [0.32, 0.32, 0.36], SURFACES.metal);
     } else {
       for (const s of [-1, 1]) {
         addBlock(out, [
@@ -1882,6 +1905,22 @@ const Car3D = (function () {
             { z: lf.z, x: s*(lf.x*0.78), y: lf.top - 0.08, w: 0.015, h: 0.10 },
             { z: lr.z, x: s*(lr.x*0.78), y: lr.top - 0.08, w: 0.015, h: 0.10 }, CARBON);
       }
+      // T-CAMERA POD. Every car on the grid carries one and the roll hoop was
+      // bare without it — it is the highest point of the silhouette, so it is in
+      // shot from every external camera and reads even at grid distance. Rides
+      // on the hoop crown, which the snorkel raises by ~0.22 m, so both variants
+      // anchor off the same computed top rather than a literal. Team-coloured
+      // housing with a dark forward face: addSpan takes a separate front-cap
+      // colour, so the lens costs no triangles of its own.
+      const podY = (engSnork ? 1.085 : 0.76 + 0.10 * inScale) + 0.052;
+      const podZ = engSnork ? -0.34 : -0.26;
+      addBox(out, 0, podY - 0.048, podZ - 0.015, 0.028, 0.055, 0.030, CARBON, SURFACES.carbon);
+      addSpan(out, { z: podZ + 0.055, y: podY, w: 0.118, h: 0.056, t: 0.88 },
+                   { z: podZ - 0.062, y: podY - 0.003, w: 0.101, h: 0.050, t: 0.82 },
+              accentC, [0.05, 0.05, 0.06]);
+      addBox(out, 0, podY + 0.002, podZ + 0.062, 0.052, 0.026, 0.012,
+             [0.02, 0.02, 0.03], SURFACES.metal);   // lens boss on the front face
+
       const engOutlet = engStyle && engStyle.outlet != null ? engStyle.outlet
                       : (engT === 2 ? 2 : engT === 0 ? 0 : 1);
       if (engOutlet >= 1) {
@@ -2820,6 +2859,16 @@ const Car3D = (function () {
           { z: 1.15, x: s*0.73, y: 0.30, w: 0.014, h: 0.22, t: 0.50 },
           { z: 0.81, x: s*0.73, y: 0.30, w: 0.014, h: 0.22, t: 0.50 },
           0.006, CARBON);
+        // FOOTPLATE under it. Every real bargeboard cluster turns out into a
+        // horizontal foot at its base; without one the default car (vane 1) had
+        // a single blade standing in clear air on each side, which is the one
+        // configuration most of the grid actually runs. Outboard of the aVane>=3
+        // turning vane at x 0.60 and of the `board` wakeboard at x 0.48-0.58, so
+        // the three never share a volume.
+        addBeveledSpan(out,
+          { z: 1.15, x: s*0.725, y: 0.196, w: 0.135, h: 0.016, t: 0.74 },
+          { z: 0.81, x: s*0.735, y: 0.204, w: 0.115, h: 0.014, t: 0.82 },
+          0.005, CARBON);
         if (aVane >= 2) addBeveledSpan(out,
           { z: 0.87, x: s*0.66, y: 0.26, w: 0.014, h: 0.17, t: 0.50 },
           { z: 0.57, x: s*0.66, y: 0.26, w: 0.014, h: 0.17, t: 0.50 },
@@ -3213,6 +3262,18 @@ const Car3D = (function () {
             : [s*0.29,0.53+rideDY,AXLES.rearZ+0.04];
           drawArm(out, outer, inner, armTh*0.82, suspC, SURFACES.carbon);
         }
+        // DRIVESHAFT. Nothing spanned gearbox to upright, so from directly
+        // behind — a chase camera's view for most of a lap — the rear wheels
+        // floated with clear air where the drive is. Sits on the axle line at
+        // upright height, with a CV boot at each end; six sides because it is
+        // small and half-hidden behind the tyre from every angle but dead
+        // astern, which is the one angle that matters here.
+        addTube(out, [[s * 0.155, 0.36 + rideDY, AXLES.rearZ],
+                      [s * 0.605, 0.36 + rideDY, AXLES.rearZ]],
+                0.032, 6, [0.22, 0.22, 0.25], SURFACES.metal);
+        for (const bx of [0.185, 0.575])
+          addBox(out, s * bx, 0.36 + rideDY, AXLES.rearZ, 0.052, 0.062, 0.062,
+                 [0.10, 0.10, 0.12], SURFACES.carbon);   // CV boot
       }
     }
 

@@ -561,7 +561,9 @@ const CEILINGS = {
   // only, +1 line of code and the twelve recording why the tub is dark while
   // the hood above it stays painted. Measured on ferrari: lower-field rays on
   // body paint under the wheel 1073 -> 658 of 13430. Re-measured on the union.
-  "js/car/car3d.js": 3320,   // +71: detail pass — round tailpipe, duct mouths, disc edge, shaped slabs
+  // 3320 -> 3378: second detail pass — T-cam pod, driveshafts, splitter/tea-tray,
+  // turning-vane footplates, six-point harness. Measured 3372 on the raise.
+  "js/car/car3d.js": 3378,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

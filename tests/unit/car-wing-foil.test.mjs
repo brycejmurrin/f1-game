@@ -88,7 +88,18 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
   // applied here) costs 4 throat walls a side with the lip suppressed. The
   // COCKPIT build skips those mouths — from the seat they are behind the wheels
   // — which is why the cockpit figure did not move at all. Measured 2948.
-  assert.ok(body <= 2960, `default body ${body} > 2960`);
+  // 2960 -> 3120: the second detail pass, all of it shared geometry so every car
+  // on the grid gets it. T-camera pod on the roll hoop (+36) — the highest point
+  // of the silhouette and bare until now. Rear DRIVESHAFTS (+72), because
+  // nothing spanned gearbox to upright and from dead astern the rear wheels
+  // floated in clear air. The SPLITTER/tea-tray (+24): the floor's leading edge
+  // is z 1.30 and there was nothing ahead of it at all. FOOTPLATES under the
+  // primary turning vane (+28) — a default car runs vane 1, which was one blade
+  // standing alone on each side. Measured 3112 on the raise.
+  assert.ok(body <= 3120, `default body ${body} > 3120`);
+  // Cockpit ceiling UNCHANGED at 1500: the six-point harness (+60, measured
+  // 1428) fits the existing budget. The straps sit between the eye and the dash
+  // coaming, filling the lower frame that the coaming never reaches.
   assert.ok(cockpit <= 1500, `cockpit ${cockpit} > 1500`);
   // THE WHEELS LIVE HERE NOW. tests/specs/parts-physics.spec.js carried a second
   // copy of the body/cockpit/wheel ceilings, drifted from these by two raises,
