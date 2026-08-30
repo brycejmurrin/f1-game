@@ -245,7 +245,13 @@ jobs:
                 `gpuErrors=${gfx.gpuErrors} envFail=${env.fail} envReady=${env.ready} ` +
                 `envBlank=${env.blank} gaveUp=${env.gaveUp} softAdapter=${be.softAdapter} ` +
                 `headless=${be.headless} meanLuma=${frame.meanLuma != null ? frame.meanLuma : "n/a"}`);
-              if (g.ok !== true || g.phase !== "done") bad.push(`${path3}: did not finish (phase=${g.phase}, ok=${g.ok})`);
+            // Print the REASON. gpu-game-check records out.error on every caught
+            // failure, and this row used to drop it — which is why a Windows
+            // outage read as contentless and got misfiled as "WARP is slow"
+            // for two sessions. docs/PERF-FINDINGS.md 2f.
+              if (g.error) rows.push(`${" ".repeat(8)}error: ${String(g.error).slice(0, 200)}`);
+              if (g.root) rows.push(`${" ".repeat(8)}root:  ${g.root}`);
+              if (g.ok !== true || g.phase !== "done") bad.push(`${path3}: did not finish (phase=${g.phase}, ok=${g.ok})${g.error ? " — " + String(g.error).slice(0, 200) : ""}`);
             // An ABSENT count must not read as clean. gpuErrors was defined only
             // on WGX, so this clause was vacuous on the GLX leg from the day that
             // leg was added — it reported null and passed forever. GLX has a real

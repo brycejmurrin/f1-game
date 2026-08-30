@@ -1076,6 +1076,90 @@ One accepted cost: a zero-instance batch now claims the gate, because
 `litMaterial` runs before the `n > 0` check. It can never reach a draw — the
 next lit draw re-declares — so it is at most one extra call, never a wrong pixel.
 
+## 2f. The Windows GPU-census outage was a path bug, and a widened timeout hid it (2026-08-29)
+
+Round 12's real-GPU dispatch failed on **windows-latest**: all three legs —
+three/WebGPU, three/WebGL2, GLX/WebGL2 — `phase=failed ok=false`, every other
+field `undefined`, ~5 minutes each. ubuntu and macOS passed all three.
+
+The job log had the shape:
+
+```
+[game-check] browser-launched +0.2s
+[game-check] navigated        +0.9s
+[game-check] failed         +300.9s
+"error": "page.waitForFunction: Timeout 300000ms exceeded."
+```
+
+`out.crashed` is set by a `page.on("crash")` handler and is ABSENT from that
+JSON, so the renderer never crashed; `pageClosed`/`browserGone` are teardown
+artifacts. The run reached `navigated` and never `booted`.
+
+**Cause** — `tools/gpu-game-check.mjs`:
+
+```js
+const ROOT = resolve(new URL("..", import.meta.url).pathname);
+```
+
+On Windows that pathname is `/D:/a/f1-game/f1-game/`, and `path.win32.resolve`
+sees a leading `/` with no device, so it prefixes the cwd's drive. Demonstrated:
+
+| | value |
+|---|---|
+| old idiom, win32 | `\D:\a\f1-game\f1-game` — cannot exist |
+| new idiom, win32 | `D:\a\f1-game\f1-game` |
+
+The tool's own static server was therefore rooted at nothing, answered every
+request `404 nope`, and `window.__apex` could never be defined. It explains all
+of it: three legs identical, and the census step — which launches the same
+Chromium but serves an inline HTML string and touches no repo path — passing on
+the same machine.
+
+### The tolerance was widened to accommodate the bug
+
+The comment above that wait read:
+
+> 120 s is not enough on a software rasteriser that is ALSO a slow disk:
+> windows-latest (WARP …) timed out here on both backends while ubuntu booted
+> the same tree in 3 s. … so give it room.
+
+A previous session hit this exact failure at 120 s, blamed the machine, and
+raised the timeout to 300 s. The premise is false — a 404 never boots at ANY
+timeout — so the raise converted a 2-minute failure into a 5-minute one and
+taught nothing. AGENTS.md forbids widening a tolerance to make something pass;
+this is that, and the revert to 120 s is part of the fix.
+
+### Three places threw the answer away
+
+The reason it survived two sessions is that a wrong server root is
+**indistinguishable from a slow boot** — both are silence until a timeout. The
+same shape as §2e's vacuous `gpuErrors`: absence reading as normal.
+
+1. **The gate never printed the reason.** `gpu-game-check` records `out.error`
+   on every caught failure — the Windows artifacts literally contained
+   `"error": "page.waitForFunction: Timeout 300000ms exceeded."` — and the
+   Verdict row printed `phase / ok / gpuErrors / envFail / … / meanLuma` and not
+   `error`. That is why the failure read as contentless. It now prints `error`
+   and `root`; against a fixture the row reads
+   `root: \D:\a\f1-game`, which would have named the bug on day one.
+2. **The server never validated its own root.** It now asserts
+   `ROOT/index.html` exists and throws naming ROOT — verified to fire in
+   milliseconds — and registers the `s.on("error")` handler it lacked, so a bind
+   failure cannot produce a zero-artifact crash.
+3. **A failed run discarded the console buffer.** `out.console` was assigned on
+   the success path, so the catch dropped it. Moved to `finally`, alongside
+   `out.root`; the evidence is wanted most when the run failed.
+
+### The idiom is retired repo-wide
+
+23 sites used `new URL(…, import.meta.url).pathname` — 20 other tools and 3
+tests. Only `gpu-game-check` runs on Windows, so the rest were latent, but the
+form also mishandles percent-encoding: a checkout path containing a space breaks
+it on Linux too. All converted to `fileURLToPath`, and
+`tools-runnable.test.mjs` now bans the idiom, naming the offending file and the
+replacement. Proven by reintroducing it in `tools/agent.mjs` and watching the
+guard name it.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.

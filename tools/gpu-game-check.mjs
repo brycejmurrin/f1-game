@@ -22,9 +22,15 @@
 import { chromium } from "playwright";
 import http from "node:http";
 import { readFileSync, existsSync, writeFileSync } from "node:fs";
-import { join, extname, resolve } from "node:path";
+import { join, extname, resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(new URL("..", import.meta.url).pathname);
+// fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
+// `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
+// path that cannot exist — the server then 404s every file, the game never
+// boots, and the boot wait below burns its whole timeout saying nothing.
+// That is exactly what happened on windows-latest; docs/PERF-FINDINGS.md 2f.
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
   ".mjs": "application/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -48,7 +54,15 @@ const extraLs = argv.reduce((acc, a2, i) => (a2 === "--ls" && argv[i + 1] ? acc.
 const path3 = flag("--path", "webgpu");
 
 function serve() {
-  return new Promise((res) => {
+  // A server rooted at the wrong directory answers 404 to everything, which is
+  // INDISTINGUISHABLE from a slow boot: both are silence until a timeout. Fail
+  // here, in milliseconds, naming the path — the Windows outage cost two
+  // sessions and ~30 min of runner time precisely because it did not.
+  if (!existsSync(join(ROOT, "index.html"))) {
+    throw new Error(`gpu-game-check: no index.html under ROOT ${ROOT} — the ` +
+      `server would 404 every request and the boot wait would time out saying nothing`);
+  }
+  return new Promise((res, rej) => {
     const s = http.createServer((req, rp) => {
       const url = decodeURIComponent((req.url || "/").split("?")[0]);
       const f = join(ROOT, url === "/" ? "index.html" : url.replace(/^\/+/, ""));
@@ -60,6 +74,9 @@ function serve() {
         rp.end(readFileSync(f));
       } catch (_) { rp.writeHead(500); rp.end("err"); }
     });
+    // Without this a bind failure is an unhandled 'error' event: the process
+    // dies before any JSON is written and the gate reports "produced nothing".
+    s.once("error", rej);
     s.listen(0, "127.0.0.1", () => res({ server: s, port: s.address().port }));
   });
 }
@@ -118,12 +135,14 @@ try {
   await page.goto(`http://127.0.0.1:${port}/index.html?gfxdebug=1`,
     { waitUntil: "domcontentloaded", timeout: 120000 });
   checkpoint("navigated");
-  // 120 s is not enough on a software rasteriser that is ALSO a slow disk:
-  // windows-latest (WARP + "Microsoft Basic Render Driver") timed out here on
-  // both backends while ubuntu booted the same tree in 3 s. A boot timeout on
-  // an image with no GPU says nothing about the renderer, so give it room.
+  // 120 s. This was once raised to 300 s on the theory that windows-latest was
+  // "a software rasteriser that is ALSO a slow disk" — it was not. ROOT was
+  // computed with a Windows-broken idiom, so the server 404'd index.html and
+  // the page could never boot at ANY timeout; the raise turned a 2-minute
+  // failure into a 5-minute one and taught nothing. Widening a tolerance to
+  // make something pass is forbidden outright (AGENTS.md); this is the revert.
   await page.waitForFunction(() => window.__apex != null, null,
-    { polling: 100, timeout: Number(flag("--boot-timeout", 300000)) });
+    { polling: 100, timeout: Number(flag("--boot-timeout", 120000)) });
   checkpoint("booted");
   out.adapter = await page.evaluate(async () => {
     if (!navigator.gpu) return { hasGpu: false };
@@ -199,7 +218,6 @@ try {
     out.shot = (r && r.error) ? null : shot;
     if (r && r.error) out.shotError = r.error;
   }
-  out.console = console_.filter((l) => /error|warn|refus|fail|WGX|TLX/i.test(l)).slice(0, 40);
   out.ok = true;
   checkpoint("done");
 } catch (e) {
@@ -207,6 +225,11 @@ try {
   out.error = String((e && e.message) || e);
   checkpoint("failed");
 } finally {
+  // In the finally, not the success path: a run that FAILED is the one whose
+  // console lines decide the diagnosis, and assigning this at the end of try
+  // meant every failure threw them away.
+  out.console = console_.filter((l) => /error|warn|refus|fail|WGX|TLX/i.test(l)).slice(0, 40);
+  out.root = ROOT;
   // browser.close() HANGS after a WebGPU/Metal session: run 4's WebGPU check
   // reached phase "done" at +42.4s and the step was then killed at 20 minutes
   // with the process still in this line. A teardown hang must not masquerade

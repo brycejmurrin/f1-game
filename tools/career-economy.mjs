@@ -21,11 +21,12 @@
 //   node tools/career-economy.mjs            # one season per starter team
 //   node tools/career-economy.mjs --years 3  # follow the arc over three seasons
 import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
+import { fileURLToPath } from "node:url";
 
 const YEARS = Math.max(1, parseInt((process.argv.find((a) => a.startsWith("--years=")) || "").split("=")[1]
   || (process.argv[process.argv.indexOf("--years") + 1] || ""), 10) || 1);
 
-const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\/]$/, "");
 
 const srv = await startStaticServer(ROOT);
 let browser;

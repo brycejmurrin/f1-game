@@ -60,6 +60,28 @@ test("every JS tool parses (node --check)", () => {
   assert.deepEqual(broken, [], "a JS tool does not parse");
 });
 
+test("no tool derives a path from import.meta.url.pathname (Windows-broken)", () => {
+  // `new URL("..", import.meta.url).pathname` is `/D:/a/repo/` on Windows, and
+  // path.resolve() then prefixes the cwd's drive to give a path that cannot
+  // exist. tools/gpu-game-check.mjs is the one tool the GPU-census workflow runs
+  // on windows-latest, and this cost it every request 404ing, the game never
+  // booting, and a 5-minute timeout that reported nothing — twice, because the
+  // first diagnosis blamed the machine and raised the timeout.
+  // It also mishandles percent-encoding, so a checkout path containing a space
+  // breaks the same way on Linux. fileURLToPath is correct everywhere.
+  const bad = [];
+  for (const f of FILES) {
+    if (![".mjs", ".cjs", ".js"].includes(f.ext)) continue;
+    if (/import\.meta\.url\s*\)\s*\.pathname/.test(fs.readFileSync(f.abs, "utf8"))) bad.push(f.rel);
+  }
+  assert.deepEqual(bad, [],
+    `these tools derive a path from import.meta.url .pathname:\n  ${bad.join("\n  ")}\n\n` +
+    `Use fileURLToPath instead:\n` +
+    `  import { fileURLToPath } from "node:url";\n` +
+    `  const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\\\/]$/, "");\n` +
+    `Reason: docs/PERF-FINDINGS.md 2f.`);
+});
+
 test("every shell tool parses (bash -n)", () => {
   const broken = [];
   for (const f of FILES) {
