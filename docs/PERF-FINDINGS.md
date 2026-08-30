@@ -1160,6 +1160,54 @@ it on Linux too. All converted to `fileURLToPath`, and
 replacement. Proven by reintroducing it in `tools/agent.mjs` and watching the
 guard name it.
 
+### Part 2 — a failed diagnostic read was reporting `ok: true`
+
+The path fix worked. Windows went from `phase=failed` on all three legs (~16 min
+of timeouts) to:
+
+```
+webgpu  phase=done ok=true  gpuErrors=undefined
+webgl2  phase=done ok=true  gpuErrors=0 envFail=0 envReady=false softAdapter=false headless=true
+glx     phase=done ok=true  gpuErrors=0
+```
+
+The game boots, races and parks on Windows for the first time. The job stayed
+red for a different reason, and it is the same disease again: `bounded()`
+(`gpu-game-check.mjs:130`) turns ANY failure into a value —
+
+```js
+.catch((err) => ({ error: String((err && err.message) || err).slice(0, 120) }))
+```
+
+— so a `gfx` read that threw or timed out still left `phase: "done", ok: true`
+while every field derived from `gfx` came out `undefined`. That is
+indistinguishable from a backend with nothing to report. Two shapes produce it:
+`{error: …}` (the read failed) and `{glx: false}` (the page had no GLX). The
+tool now records `gfxReadFailed` / `overlayReadFailed` naming which, and the
+Verdict prints it.
+
+**Which one Windows hit is still unknown** — the container's egress proxy blocks
+`blob.core.windows.net`, so the run artifact cannot be fetched from here. The
+next dispatch will say. `{glx: false}` is the unlikely one: `glx.js` is a plain
+script tag the game cannot run without, and now that GLX has a real
+`gpuErrors()` a live GLX could only report `0`.
+
+**Scoping, stated deliberately** because this document otherwise forbids
+loosening a failing check. Two clauses are now `hardware &&`: the missing-count
+check from §2e, and the new read-failure check. They exist to protect the
+REAL-GPU answer; a software image may legitimately not bring a backend up, and
+failing the job for that is noise. `softAdapter` and the env-probe checks were
+already scoped exactly this way — this is that precedent applied consistently,
+not a widened threshold, and the reason is PRINTED on every image either way.
+Everything else stays unconditional: a run that did not finish, a missing
+artifact, and `gpuErrors > 0` are defects anywhere.
+
+`gfx-backend-canary` pins the split in both directions — proven by un-scoping a
+hardware check and by over-scoping `ok`/`phase`, each of which fails it.
+Verified against three fixtures with the Verdict body extracted from the YAML:
+software prints the reasons and exits 0, hardware prints them and exits 1, a
+healthy set is silent.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.

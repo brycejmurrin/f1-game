@@ -211,6 +211,13 @@ try {
     try { r.engine = document.getElementById("game").getAttribute("data-engine"); } catch (_) { /* no canvas */ }
     return r;
   }), 20000, "gfx");
+  // bounded() turns ANY failure into a value, so a gfx read that threw or timed
+  // out still left phase "done" and ok true while every reported field came out
+  // undefined — indistinguishable from a backend that simply has nothing to
+  // say. That is what made the Windows webgpu leg unreadable. Name it.
+  if (out.gfx && out.gfx.error) out.gfxReadFailed = "read failed: " + out.gfx.error;
+  else if (out.gfx && out.gfx.glx === false) out.gfxReadFailed = "GLX was undefined in the page";
+  if (out.overlay && out.overlay.error) out.overlayReadFailed = "read failed: " + out.overlay.error;
   checkpoint("gfx-read");
   const shot = flag("--shot", null);
   if (shot) {
