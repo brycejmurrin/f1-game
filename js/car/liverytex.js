@@ -880,6 +880,18 @@ const LiveryTex = (function () {
   // which every mark can take. Callers must not assume a length — that
   // assumption is what kept the outline sharing a row with the sun disc.
   function markSlots(teamId) {
+    // An UPLOADED emblem replaces the mark entirely — buildAtlas takes the
+    // drawLogoImage branch and the monogram is never drawn — and that function
+    // has no parameter for a second shape: (ctx, img, R, tint, halo, outline).
+    // So the second row is a picker that cannot paint, which is the whole
+    // failure this table exists to prevent. It also renames the first: with an
+    // emblem on the car, `logo` TINTS arbitrary art rather than colouring a
+    // monogram. Keyed on LOGOS, so it follows an upload or a CLEAR — MY TEAM
+    // re-asks on onMarkChange (the emblem decodes asynchronously, so the file
+    // picker's own handler is too early), and the GARAGE editor re-asks
+    // whenever buildSetup runs, which it does on entering that screen.
+    if (LOGOS[teamId]) return [{ key: "logo", label: "EMBLEM TINT" },
+                               { key: "logo3", label: "OUTLINE" }];
     const named = MARK_PARTS[teamId] || [];
     const rows = [{ key: "logo", label: named[0] || "TEAM LOGO" }];
     if (named[1]) rows.push({ key: "logo2", label: named[1] });

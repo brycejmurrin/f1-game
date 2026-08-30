@@ -8627,6 +8627,38 @@ function refreshCustomLogoUi(dataUrl) {
   if (!prev) return;
   prev.hidden = !dataUrl;
   if (dataUrl) prev.src = dataUrl;
+  czSyncMarkRows();
+}
+// The mark rows describe whichever mark is ACTUALLY drawn — markSlots in
+// js/car/liverytex.js decides and says why. The GARAGE editor builds its rows
+// from it and gets this for free; this dialog is static markup, so it asks the
+// same function and follows the answer. A hidden row keeps its stored colour,
+// so clearing an emblem brings the monogram and its box colour straight back.
+function czSyncMarkRows() {
+  const slots = (typeof LiveryTex !== "undefined" && LiveryTex.markSlots)
+    ? LiveryTex.markSlots("custom") : null;
+  if (!slots) return;
+  const shown = new Map(slots.map((s) => [s.key, s.label]));
+  for (const [domId, key] of CZ_LIV_FIELDS) {
+    if (key !== "logo" && key !== "logo2" && key !== "logo3") continue;
+    const input = $(domId), row = input && input.closest(".cz-row");
+    if (!row) continue;
+    row.hidden = !shown.has(key);
+    const label = row.querySelector("label");
+    if (label && shown.has(key)) label.textContent = shown.get(key);
+  }
+  // buildAtlas rims an uploaded emblem with `logo3 || logo2`, logo2 being the
+  // pre-OUTLINE-row fallback. Hiding that row without this would turn the
+  // fallback into a rim the player can neither see nor change — the dead-picker
+  // bug wearing the other face. Move it to the row that IS shown; saving
+  // migrates it.
+  const box = $("cz-logo2"), out = $("cz-logo3"), none = $("cz-logo3-none");
+  if (box && out && !shown.has("logo2") && !box.classList.contains("cz-off") &&
+      out.classList.contains("cz-off")) {
+    out.value = box.value;
+    out.classList.remove("cz-off");
+    if (none) none.classList.remove("active");
+  }
 }
 $("cz-logofile").addEventListener("change", (e) => {
   const f = e.target.files && e.target.files[0];
@@ -8659,6 +8691,9 @@ if (typeof LiveryTex !== "undefined" && LiveryTex.onMarkChange) {
   LiveryTex.onMarkChange(() => {
     invalidateDecalTextures("custom");
     _spMeshKey = "";   // force the garage turntable to repaint too
+    // setTeamLogo decodes ASYNCHRONOUSLY, so LOGOS is still empty in the file
+    // picker's own handler — this is the moment the answer actually changes.
+    czSyncMarkRows();
   });
   applyCustomLogo(loadCustomLogo());
 }
