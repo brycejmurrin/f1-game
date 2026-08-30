@@ -1,4 +1,5 @@
 import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
+import { fileURLToPath } from "node:url";
 
 const LAUNCH_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-webgpu"];
 const POLL = { polling: 100, timeout: 8000 };
@@ -144,7 +145,7 @@ if (!CHECKS[which]) {
   console.error(`usage: node tools/check-physics.mjs <${Object.keys(CHECKS).join("|")}>`);
   process.exit(1);
 }
-const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\/]$/, "");
 const srv = await startStaticServer(ROOT);
 BASE = srv.url.replace(/\/?$/, "");
 try {

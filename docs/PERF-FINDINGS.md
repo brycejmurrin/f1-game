@@ -1076,6 +1076,154 @@ One accepted cost: a zero-instance batch now claims the gate, because
 `litMaterial` runs before the `n > 0` check. It can never reach a draw — the
 next lit draw re-declares — so it is at most one extra call, never a wrong pixel.
 
+## 2f. The Windows GPU-census outage was a path bug, and a widened timeout hid it (2026-08-29)
+
+Round 12's real-GPU dispatch failed on **windows-latest**: all three legs —
+three/WebGPU, three/WebGL2, GLX/WebGL2 — `phase=failed ok=false`, every other
+field `undefined`, ~5 minutes each. ubuntu and macOS passed all three.
+
+The job log had the shape:
+
+```
+[game-check] browser-launched +0.2s
+[game-check] navigated        +0.9s
+[game-check] failed         +300.9s
+"error": "page.waitForFunction: Timeout 300000ms exceeded."
+```
+
+`out.crashed` is set by a `page.on("crash")` handler and is ABSENT from that
+JSON, so the renderer never crashed; `pageClosed`/`browserGone` are teardown
+artifacts. The run reached `navigated` and never `booted`.
+
+**Cause** — `tools/gpu-game-check.mjs`:
+
+```js
+const ROOT = resolve(new URL("..", import.meta.url).pathname);
+```
+
+On Windows that pathname is `/D:/a/f1-game/f1-game/`, and `path.win32.resolve`
+sees a leading `/` with no device, so it prefixes the cwd's drive. Demonstrated:
+
+| | value |
+|---|---|
+| old idiom, win32 | `\D:\a\f1-game\f1-game` — cannot exist |
+| new idiom, win32 | `D:\a\f1-game\f1-game` |
+
+The tool's own static server was therefore rooted at nothing, answered every
+request `404 nope`, and `window.__apex` could never be defined. It explains all
+of it: three legs identical, and the census step — which launches the same
+Chromium but serves an inline HTML string and touches no repo path — passing on
+the same machine.
+
+### The tolerance was widened to accommodate the bug
+
+The comment above that wait read:
+
+> 120 s is not enough on a software rasteriser that is ALSO a slow disk:
+> windows-latest (WARP …) timed out here on both backends while ubuntu booted
+> the same tree in 3 s. … so give it room.
+
+A previous session hit this exact failure at 120 s, blamed the machine, and
+raised the timeout to 300 s. The premise is false — a 404 never boots at ANY
+timeout — so the raise converted a 2-minute failure into a 5-minute one and
+taught nothing. AGENTS.md forbids widening a tolerance to make something pass;
+this is that, and the revert to 120 s is part of the fix.
+
+### Three places threw the answer away
+
+The reason it survived two sessions is that a wrong server root is
+**indistinguishable from a slow boot** — both are silence until a timeout. The
+same shape as §2e's vacuous `gpuErrors`: absence reading as normal.
+
+1. **The gate never printed the reason.** `gpu-game-check` records `out.error`
+   on every caught failure — the Windows artifacts literally contained
+   `"error": "page.waitForFunction: Timeout 300000ms exceeded."` — and the
+   Verdict row printed `phase / ok / gpuErrors / envFail / … / meanLuma` and not
+   `error`. That is why the failure read as contentless. It now prints `error`
+   and `root`; against a fixture the row reads
+   `root: \D:\a\f1-game`, which would have named the bug on day one.
+2. **The server never validated its own root.** It now asserts
+   `ROOT/index.html` exists and throws naming ROOT — verified to fire in
+   milliseconds — and registers the `s.on("error")` handler it lacked, so a bind
+   failure cannot produce a zero-artifact crash.
+3. **A failed run discarded the console buffer.** `out.console` was assigned on
+   the success path, so the catch dropped it. Moved to `finally`, alongside
+   `out.root`; the evidence is wanted most when the run failed.
+
+### The idiom is retired repo-wide
+
+23 sites used `new URL(…, import.meta.url).pathname` — 20 other tools and 3
+tests. Only `gpu-game-check` runs on Windows, so the rest were latent, but the
+form also mishandles percent-encoding: a checkout path containing a space breaks
+it on Linux too. All converted to `fileURLToPath`, and
+`tools-runnable.test.mjs` now bans the idiom, naming the offending file and the
+replacement. Proven by reintroducing it in `tools/agent.mjs` and watching the
+guard name it.
+
+### Part 2 — a failed diagnostic read was reporting `ok: true`
+
+The path fix worked. Windows went from `phase=failed` on all three legs (~16 min
+of timeouts) to:
+
+```
+webgpu  phase=done ok=true  gpuErrors=undefined
+webgl2  phase=done ok=true  gpuErrors=0 envFail=0 envReady=false softAdapter=false headless=true
+glx     phase=done ok=true  gpuErrors=0
+```
+
+The game boots, races and parks on Windows for the first time. The job stayed
+red for a different reason, and it is the same disease again: `bounded()`
+(`gpu-game-check.mjs:130`) turns ANY failure into a value —
+
+```js
+.catch((err) => ({ error: String((err && err.message) || err).slice(0, 120) }))
+```
+
+— so a `gfx` read that threw or timed out still left `phase: "done", ok: true`
+while every field derived from `gfx` came out `undefined`. That is
+indistinguishable from a backend with nothing to report. Two shapes produce it:
+`{error: …}` (the read failed) and `{glx: false}` (the page had no GLX). The
+tool now records `gfxReadFailed` / `overlayReadFailed` naming which, and the
+Verdict prints it.
+
+**Answered by run 13** (`af79780`, windows-latest, conclusion success):
+
+```
+webgpu  phase=done ok=true gpuErrors=undefined
+        gfx:   read failed: gfx timeout
+        ovl:   read failed: overlay timeout
+webgl2  phase=done ok=true gpuErrors=0 envFail=0 envReady=false softAdapter=false headless=true
+glx     phase=done ok=true gpuErrors=0
+```
+
+It was `{error: …}` — BOTH bounded reads hit their 20 s caps, so the page had
+stopped answering `evaluate` after `settled`. Not `{glx: false}`: GLX was there,
+the page simply would not talk. The webgpu leg is also the FASTEST of the three
+(~2 min vs 4.4 and 4.7) because it times out rather than doing work.
+
+**That is a new finding, not this fix's.** `three/WebGPU on windows-latest
+(WARP) leaves the page unresponsive to evaluates after park.` It is the same
+shape as the macOS "went silent after park() on BOTH three paths" that motivated
+the bounded waits in the first place — and those bounds are doing exactly their
+job here, turning a 20-minute hang into a 2-minute report. It predates
+everything in §2f and was simply unreadable until now. Its own round.
+
+**Scoping, stated deliberately** because this document otherwise forbids
+loosening a failing check. Two clauses are now `hardware &&`: the missing-count
+check from §2e, and the new read-failure check. They exist to protect the
+REAL-GPU answer; a software image may legitimately not bring a backend up, and
+failing the job for that is noise. `softAdapter` and the env-probe checks were
+already scoped exactly this way — this is that precedent applied consistently,
+not a widened threshold, and the reason is PRINTED on every image either way.
+Everything else stays unconditional: a run that did not finish, a missing
+artifact, and `gpuErrors > 0` are defects anywhere.
+
+`gfx-backend-canary` pins the split in both directions — proven by un-scoping a
+hardware check and by over-scoping `ok`/`phase`, each of which fails it.
+Verified against three fixtures with the Verdict body extracted from the YAML:
+software prints the reasons and exits 0, hardware prints them and exits 1, a
+healthy set is silent.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.
@@ -1592,3 +1740,147 @@ qatar 25 (ONE cell over CAP 24 by one lamp), baku 10, singapore 12,
 bahrain 16 (artifacts/r5-road-lamp-count.txt; harness in the session
 scratchpad). Capacity says def->1 is safe everywhere except one qatar
 cell dropping its single FARTHEST-reaching lamp at a boundary.
+
+## 5a. Portrait: the canvas already filled; the touch dock was visible and inert (2026-08-30)
+
+Two reports off one phone screenshot (iPhone, **Home Screen / standalone**):
+portrait "doesn't fill my screen", and driving + HUD buttons don't work there.
+They turned out to be one real defect and one misattribution, so they are
+recorded separately.
+
+### The buttons: one media query, and a failure mode a screenshot cannot see
+
+`#hud` is `pointer-events: none` (`css/hud.css`) — a deliberate pass-through
+layer, so **every** control under it must grant itself `auto` or it renders
+perfectly and swallows nothing. All of those grants — `.dock`, `.dock-grp`,
+`.dock .touchbtn` — lived inside one `@media (orientation: landscape)` block in
+`css/overlays.css`. The portrait ladder is the BASE layout in that file and is
+authored and measured ("428px fits with 239px to spare"), so in portrait the
+buttons drew at their correct coordinates and passed every press straight to
+the canvas.
+
+Measured at 393×852 with the 59/34 notch insets injected:
+
+| element | rect | `pointer-events` | hit test |
+|---|---|---|---|
+| `#btn-throttle` | 16, 726, 76×76 | **`none`** | blocked by `#rotate-device` |
+| `#btn-brake` | 16, 642, 76×76 | **`none`** | blocked by `#rotate-device` |
+| `#pausebtn` | 331, 67, 52×52 | `auto` | blocked by `#rotate-device` |
+| `#btn-cam` | 307, 114, 76×52 | `auto` | blocked by `#rotate-device` |
+
+Note the two columns disagreeing. `#pausebtn` and `#btn-cam` are not `.dock`
+children, so they kept `auto` and were only ever hidden by the blocker; the two
+dock buttons were inert *underneath* it. Delete the blocker alone and half the
+controls stay dead — which is why **the oracle here has to be
+`document.elementFromPoint` at the button centre, not a screenshot**. A
+screenshot of the broken build and a screenshot of the fixed build are
+identical. The same trap as the vacuous GPU gate in §2e: the instrument
+returned a plausible value for a state it could not distinguish.
+
+The fix is one line, moved: `pointer-events: auto` now sits on the base
+`.touchbtn` rule, with the landscape block keeping only what is genuinely
+landscape (row layout, `--tap`/`--hold` down-sizing, `zoom: var(--hud-z-dock)`,
+the 3×2 `.hud-bottom` grid).
+
+### Steering felt twice as sharp, off one `innerWidth`
+
+`touchRangePx()` in `js/game/input.js` scaled the anchored-drag range by
+`innerWidth`. That is the LONG edge in landscape and the SHORT edge in
+portrait, so the identical thumb gesture meant twice as much lock the moment
+the phone turned: `393 x 0.12` = 47.2px to full lock against `852 x 0.12` =
+102.2px. Not broken, but unusable at speed, and it would have read as "portrait
+driving is bad" rather than as a units bug.
+
+Keying the range off `max(innerWidth, innerHeight)` makes it orientation-free
+and leaves landscape bit-identical, because landscape's long edge already IS
+`innerWidth`. Measured live on the same build, `Input.debugState().touchRangePx`:
+
+| viewport | before (arithmetic on the old formula) | after (measured) |
+|---|---|---|
+| 393x852 portrait | 47.2 | **102.24** |
+| 852x393 landscape | 102.24 | **102.24** |
+
+`tests/specs/touch-steer.spec.js` reads the range out of `debugState()` and
+asserts ORDER and bounds rather than pixel counts, so it covers the new value
+without a retune — which is exactly why it was written that way.
+
+### Nothing in the engine was orientation-gated
+
+Worth recording because it is the natural suspicion and it is wrong. The
+fixed-step loop has no orientation term; `#rotate-device` is `{gate:false}` in
+`js/game/uilayers.js`, so keyboard and canvas-drag steering already drove
+straight through the blocker; and the tilt axis mapping already handles all
+four screen angles with portrait as its `default` case (`js/game/input.js`).
+Portrait racing was blocked by exactly one CSS rule and one opaque div.
+
+### The blocker stays; portrait becomes an opt-in
+
+`#rotate-device` exists for a real case — a phone rotation-locked *mid-race*
+(`tests/specs/rotation-recovery.spec.js`) — so it remains the default. It gains
+a third button, `#rotate-race` "RACE IN PORTRAIT", which sets `body.rotate-ok`
+and persists `apex26.portraitOk`; the blocker rule in `css/responsive.css`
+gains `:not(.rotate-ok)`. The class deliberately reuses the existing `rotate-`
+family (`rotate-inner`/`-icon`/`-help-open`) so `component-inventory` needs no
+new `docs/COMPONENTS.md` row.
+
+After clicking it (the player's path — `el.click()`, not a faked class): blocker
+`display: none`, `apex26.portraitOk` = `"1"`, and `btn-throttle`, `btn-brake`,
+`pausebtn`, `btn-cam` all hit-test **HIT**. `manifest.json` `"orientation"` goes
+`"landscape"` → `"any"`, since a platform that honours the lock would otherwise
+make the opt-in unreachable.
+
+### The "doesn't fill" half — NOT a canvas bug, and NOT fixed
+
+Measured, and the honest answer is that the shell fills exactly. At 393×852 in
+both menu and race, `#game` and `#overlay` are both `{x:0, y:0, w:393, h:852}`,
+with `--sat` 59 / `--sab` 34 resolved and honoured; `fit-audit` reports no
+clipping at 393×852, 375×667 or 430×932. `viewport-fit=cover` is present, `#game`
+is `position: fixed; inset: 0` with no aspect clamp or letterbox, and there is
+no stale `--vh` JS shim anywhere in the tree. The usual iOS cause — Safari never
+retracting its chrome because `html,body{overflow:hidden}` kills the root
+scroll — does not apply in standalone.
+
+What reads as bands is two cosmetic facts stacking:
+
+1. `.screen` pads by `--safe-t` (`--sat` + 12px `--gut` = 71px at this notch),
+   which is correct for a dialog but shows near-black `--bg` above the panel.
+2. `--compact-at: 600px` means an 852-tall phone classifies as
+   `data-density="normal"`, so the `tall`+`compact` stretch rule in
+   `css/menus.css` does not match and the panel stays centred with `--bg` above
+   and below.
+
+Neither was changed in this round. Both are `.screen`-level layout, and moving
+`.screen` padding moves the landscape pixel goldens in `menu-baseline.spec.js`
+— a browser group this change does not otherwise need. Left on the table with
+the mechanism written down rather than guessed at later.
+
+### One pre-existing overflow, ruled out rather than assumed
+
+`fit-audit` on this tree reports `#mb-season.bigbtn` overflowing its parent by
+8.8px at 375x667 (and 14px at 932x430, 4px at 1024x768). The obvious suspicion
+was §4a's career sub-label, which now ships text with `nowrap` in the same row.
+It is not: measured live at 375x667, `#mb-season`'s right edge sits at 342.5
+against a parent right of 333.8 in **all four** states — as shipped, with
+`#mb-career-sub` emptied, restored, and re-wrapped. The overflow is independent
+of that label and predates it. It also does not clip (342.5 < 375 viewport), so
+it is a container overflow, not lost pixels. Left for a menu-layout round; noted
+here so the next reader does not re-suspect §4a.
+
+### Two instrument notes
+
+`page.click("#rotate-race")` timed out at 30 s with the locator resolved and
+the log reading "element is visible, enabled and stable". The tempting reading
+is a layout problem — `.rotate-icon` animates `transform: rotate()`. It is not:
+that transform does not affect layout, `elementFromPoint` at the button centre
+returns the button itself, and this is the second sighting of the shape already
+written up in `docs/TESTING.md` §Field notes ("A saturated main thread looks
+exactly like a missing element"). `el.click()` drives the same handler and is
+the right probe under a live race.
+
+`tests/specs/hud-layout.spec.js` excludes `.hud-top` × `#pausebtn` via
+`HUD_LANDSCAPE_ONLY` on the strength of a measured 8.7px portrait overlap. At
+393×852 that collision **does not reproduce** — overlapX is −43.9, i.e. 43.9px
+of clearance. The exclusion is at some other viewport, so it stays, and no
+claim is made here about having fixed it. An exclusion whose reason has moved
+is still the vacuous-guard shape from §2e, but retiring it needs the viewport
+that actually collides, measured.

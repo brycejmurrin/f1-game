@@ -13,8 +13,9 @@
 import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { KNOBS, FREEZE_FLICKER, FREEZE_FLICKER_FILE } from "../../tools/lighting/ab-lighting.mjs";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("../..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 async function boot(page, track, tod, wx, frac) {
   await page.goto("/");

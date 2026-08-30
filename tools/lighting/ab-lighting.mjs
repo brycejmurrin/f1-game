@@ -23,8 +23,9 @@ import { createServer } from "node:http";
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { extname } from "node:path";
 import { launchChromium, sleep } from "../harness.mjs";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 // ── Measurement regions (fractions of the 720x405 frame) ────────────────────
 // road: the tarmac band ahead of the car. fogwall: the distant haze block under

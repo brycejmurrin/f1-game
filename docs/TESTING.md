@@ -1417,3 +1417,9 @@ was wrong with the DOM: the game's rAF loop on llvmpipe was starving
 Playwright's actionability poll. `__apex.headless(true)` before touching the
 panel fixed it outright. Reach for that before believing a locator that cannot
 find what `getElementById` can.
+
+Seen again 2026-08-30 with a live race running: `page.click("#rotate-race")`
+timed out after resolving the locator and logging "element is visible, enabled
+and stable", while `elementFromPoint` at the same coordinates returned that
+button. `el.click()` inside `page.evaluate` drives the real handler and is the
+right probe when the page must keep rendering.

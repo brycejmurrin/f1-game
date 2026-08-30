@@ -37,6 +37,15 @@
 .touchbtn {
   position: fixed;
   z-index: 12;
+  /* #hud is a pointer-events:none layer (hud.css), so a button that does not
+     grant itself `auto` is VISIBLE AND INERT. The two grants used to live only
+     inside @media (orientation: landscape) below, via .dock/.dock-grp — so in
+     portrait every touch control rendered at its ladder coordinates and passed
+     every press straight through to the canvas. Measured: #btn-throttle at
+     16,726 with pointer-events "none". It belongs on the button itself, which
+     is the one place that is true in both orientations. .touchbtn.dead still
+     wins (higher specificity, later in the file). */
+  pointer-events: auto;
   font-weight: 800;
   background: rgba(20, 20, 30, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.25);

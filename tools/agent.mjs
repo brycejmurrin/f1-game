@@ -26,8 +26,9 @@
 // hatch), apex-capture.mjs for screenshots. Prefer this for "what is going on".
 
 import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\/]$/, "");
 
 const COMMANDS = {
   help: "the agent surface manifest — no track needed",

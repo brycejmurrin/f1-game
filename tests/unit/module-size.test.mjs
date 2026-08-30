@@ -456,7 +456,14 @@ const CEILINGS = {
   // wet-tyre grip path — and the union carries both sets of lines, so neither
   // number fits. Re-measured on the merged tree at 8797, the same way the
   // ACTIVE AERO and czSyncMarkRows merges above had to be.
-  "js/game.js": 8797,
+  // 8793 -> 8803: this lineage's RACE IN PORTRAIT opt-in handler and its
+  // restore-on-boot read (10 lines). Portrait racing was blocked by one CSS
+  // rule, never by logic — PERF-FINDINGS 5a. Re-measured on the MERGED tree,
+  // not added on paper: `lines()` reads 8803 here.
+  // MERGED a third time: their 8797 (wet-tyre grip) and this side's 8803 (the
+  // RACE IN PORTRAIT opt-in) each fit their own lineage and neither fits the
+  // union, which carries both. Re-measured on THIS tree: 8807.
+  "js/game.js": 8807,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).

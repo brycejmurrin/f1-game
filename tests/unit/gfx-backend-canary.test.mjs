@@ -423,6 +423,35 @@ test("GLX pins the per-chunk uploadLightSet revert (arity 3) and no-ops when the
   assert.match(present, /ctxGone\(\)/);
 });
 
+test("the GPU-census gate scopes hardware expectations, and only those", () => {
+  // Two checks are hardware-only ON PURPOSE: a software image may legitimately
+  // fail to bring a backend up, and failing the job for that is noise. The rest
+  // must stay unconditional — a real GPU error, a run that did not finish, or a
+  // missing artifact is a defect on ANY image. This pins the split so the
+  // scoping cannot quietly spread. docs/PERF-FINDINGS.md 2f.
+  const wf = read(".github/workflows/gpu-census.yml");
+
+  for (const re of [/if \(hardware && gfx\.gpuErrors == null\)/,
+                    /if \(hardware && g\.gfxReadFailed\)/,
+                    /if \(hardware && be\.softAdapter === true\)/]) {
+    assert.match(wf, re, `this check must be scoped to hardware images: ${re}`);
+  }
+
+  // …and these must NOT be, or the gate stops gating.
+  assert.match(wf, /if \(g\.ok !== true \|\| g\.phase !== "done"\)/);
+  assert.match(wf, /if \(!g\) \{ bad\.push/);
+  assert.match(wf, /else if \(gfx\.gpuErrors > 0\)/);
+  assert.doesNotMatch(wf, /hardware && \(?g\.ok !== true/,
+    "a run that did not finish must fail on every image");
+  assert.doesNotMatch(wf, /hardware && gfx\.gpuErrors > 0/,
+    "a real GPU error must fail on every image");
+
+  // The reason a leg is empty must always be PRINTED, even where it is not
+  // blocking — that is the whole point of 2f.
+  assert.match(wf, /rows\.push\(`\$\{" "\.repeat\(8\)\}gfx:/);
+  assert.match(wf, /if \(g\.error\) rows\.push/);
+});
+
 test("GLX exports a real gpuErrors counter and the workflow fails on a missing one", () => {
   // The real-GPU gate checked `(gfx.gpuErrors || 0) > 0` while ONLY WGX defined
   // gpuErrors, so on the GLX leg it read null and passed vacuously from the day
