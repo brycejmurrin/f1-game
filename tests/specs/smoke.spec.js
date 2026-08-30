@@ -301,17 +301,21 @@ test.describe("Apex 26 — HUD", () => {
     // failed first the moment anything else touched the CPU.
     await page.waitForFunction(
       () => parseInt(document.getElementById("hud-speed-n").textContent, 10) > 0,
-      // 3000 was a HOST measurement, not a HUD one, and it is what failed the
-      // deploy branch three times running (Pages #1849/#1850/#1851, two
-      // different authors). Every failure dumped `apex-state` showing
-      // speed: 80 — physics had the value and the HUD had not yet repainted.
-      // On those runners one CAR BUILD took 147-170 s of page time against
-      // ~4 s locally, so a single frame can outlast three seconds easily.
-      // The ASSERTION below is unchanged, and this cannot mask a hung HUD:
-      // the test's own CI budget is 420 s, so a readout that never updates
-      // still fails, 14x later. Same reasoning the two sibling tests in this
-      // file already carry for their own budgets.
-      null, { polling: 100, timeout: 30000 }
+      // DERIVED from the test's own budget, not pinned. This wait has now been
+      // wrong twice: 3000 ms failed Pages #1849/#1850/#1851, and the 30000 that
+      // replaced it still failed #1855 — where the asset pack alone took 55 s
+      // and car builds landed at 165-182 s of page time, against seconds
+      // locally. Every one of those dumped `apex-state` showing speed: 80: the
+      // physics had the value and the HUD had not repainted yet. A constant
+      // here is a guess about a machine, and the machine keeps getting slower.
+      //
+      // test.info().timeout IS the budget CI hands this spec (900 s there, the
+      // 120 s default locally), so a quarter of it scales with whatever the
+      // workflow sets and needs no edit the next time that moves. The ASSERTION
+      // below is untouched, and this still cannot mask a hung HUD — the test
+      // budget itself remains the backstop, and a readout that never updates
+      // fails at 4x this wait.
+      null, { polling: 100, timeout: Math.max(30_000, Math.floor(test.info().timeout / 4)) }
     );
 
     const speed = await page.locator("#hud-speed-n").innerText();
