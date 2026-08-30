@@ -250,7 +250,11 @@ if that number ever has to change, the table is wrong.
   `_aiBr.grip`.
 - **`c.tread == null` → the top column.** See below.
 
-`world().ego.grip` carries both: `gripMult` (road) and `tyreGrip` (this car).
+`world().ego.grip` carries all three: `gripMult` (the road), `tyreGrip` (what
+this car's compound has on it) and `fieldGrip` (what the AI around it have).
+They are equal in the dry and on slicks, and separate only once it is wet —
+which makes "am I on the right tyre for these conditions?" one subtraction for
+an agent, rather than something it has to infer from lap times.
 
 ### The AI field is assumed competent
 

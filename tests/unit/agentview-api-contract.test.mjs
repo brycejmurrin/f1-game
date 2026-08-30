@@ -164,3 +164,26 @@ test("the raster band reaches agentview through ctx, not a global grab", () => {
                       "a raster function was re-defined in agentview.js — it "
                       + "belongs in js/game/agentview-raster.js");
 });
+
+test("neither raster loop paints an object the camera is INSIDE", () => {
+  // A SOURCE check, deliberately, and it is worth saying why. The real coverage
+  // is agent-view.spec.js "renders any of the 13 camera modes", which asserts
+  // the cockpit reports no player — but that is a browser spec in a group that
+  // takes tens of minutes, and this rule was broken for the whole time it took
+  // anyone to run it. Reconstructing frame() here would mean stubbing a track,
+  // a camera, a view-projection matrix and a scenery list: a test of the stub.
+  //
+  // The rule: boxRect() gates on the object's CENTRE being in front of the eye,
+  // which does NOT catch an eye INSIDE the box — the cockpit camera sits 0.20 m
+  // behind the car's centre (COCKPIT_EYE_FWD), so the centre passes while the
+  // eight corners project either side of the near plane and paint most of the
+  // grid. containsEye() is the guard, and BOTH loops that paint boxes need it:
+  // the scenery loop (a 22 m pine 20 m to the side reported the frame 100% tree)
+  // and the car loop (the cockpit reported the frame mostly "player").
+  const src = readFileSync(join(ROOT, "js/game/agentview-raster.js"), "utf8");
+  const guards = src.match(/if \(containsEye\(eye,[^)]*\)\) continue;/g) || [];
+  assert.equal(guards.length, 2,
+    "expected containsEye() to guard BOTH the scenery loop and the car loop in "
+    + "agentview-raster.js; found " + guards.length + ". An onboard camera must "
+    + "not report the car it is sitting inside.");
+});
