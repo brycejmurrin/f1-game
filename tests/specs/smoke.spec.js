@@ -301,7 +301,17 @@ test.describe("Apex 26 — HUD", () => {
     // failed first the moment anything else touched the CPU.
     await page.waitForFunction(
       () => parseInt(document.getElementById("hud-speed-n").textContent, 10) > 0,
-      null, { polling: 100, timeout: 3000 }
+      // 3000 was a HOST measurement, not a HUD one, and it is what failed the
+      // deploy branch three times running (Pages #1849/#1850/#1851, two
+      // different authors). Every failure dumped `apex-state` showing
+      // speed: 80 — physics had the value and the HUD had not yet repainted.
+      // On those runners one CAR BUILD took 147-170 s of page time against
+      // ~4 s locally, so a single frame can outlast three seconds easily.
+      // The ASSERTION below is unchanged, and this cannot mask a hung HUD:
+      // the test's own CI budget is 420 s, so a readout that never updates
+      // still fails, 14x later. Same reasoning the two sibling tests in this
+      // file already carry for their own budgets.
+      null, { polling: 100, timeout: 30000 }
     );
 
     const speed = await page.locator("#hud-speed-n").innerText();
