@@ -321,7 +321,23 @@ const NetPlay = (function () {
       // pickRemoteSlot(null) has always answered that with the any-free-car
       // arm. Gating the list on peerProfile made those sessions fail no_slot,
       // which is the whole multiplayer-session suite.
-      const joining = opts.peers || [{ profile: peerProfile, mods: opts.peerMods, id: PEER_ONE }];
+      // AN EMPTY LIST IS NOT "NO PEERS" — it is peers whose profiles have not
+      // arrived. `opts.peers` is built from the lobby's _peers map, which fills
+      // from HELLO; a guest that connects and walks straight into the garage,
+      // or one whose HELLO is simply late, leaves it empty while the SESSION is
+      // wide open. `[] || fallback` keeps the empty array, so joining was empty,
+      // remotes stayed empty, and start() bailed no_slot — the host pressed GO
+      // and got "Could not find a grid slot for both drivers", then the lobby
+      // cancelled everyone back to the menu. Measured on the guest-in-the-garage
+      // path: race built (bahrain, 22 cars), then no_slot and a full teardown.
+      // The connections are the roster; a profile only decides WHICH slot, and
+      // pickRemoteSlot(null) has always had the any-free-car arm for that. Same
+      // trap the peerProfile gating below already carries a note about — this is
+      // it one level up.
+      const joining = (opts.peers && opts.peers.length) ? opts.peers
+        : (opts.sessions && opts.sessions.length)
+          ? opts.sessions.map((e) => ({ profile: null, mods: null, id: e.id != null ? e.id : PEER_ONE }))
+          : [{ profile: peerProfile, mods: opts.peerMods, id: PEER_ONE }];
       peerCar.clear();
       for (const j of joining) {
         const car = pickRemoteSlot(j.profile);

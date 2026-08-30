@@ -270,6 +270,14 @@ test.describe("qualifying in a friend race", () => {
     // guessed — the one thing a qualifying session exists to prevent.
     test.slow();
     await enterRoom(page, "guest");
+    // THE RIVAL INTRODUCES ITSELF FIRST, as a real peer does the moment it
+    // connects. Without a HELLO the room holds a connection but no profile,
+    // and qualiRivalDriverIds() — which before NetPlay hands off reads the
+    // lobby's peer profiles — has nobody to wait for, so TO THE GRID is
+    // enabled from the start and the rule under test never engages. The lap
+    // below then has to carry the SAME identity the profile implies
+    // (team:seat), or it is a lap for a driver nobody is waiting on.
+    await peerSays(page, EV.HELLO, { team: "ferrari", driver: 0 });
     await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day", quali: true });
     await peerSays(page, EV.GO, {});
     await expect(page.locator("#quali")).toBeVisible({ timeout: 60000 });
@@ -290,7 +298,7 @@ test.describe("qualifying in a friend race", () => {
     expect(await page.evaluate(() => window.__apex.info().state)).not.toBe("race");
 
     // Their lap lands; now the grid can be built from two real times.
-    await peerSays(page, EV.QUALI, { driverId: "peer-driver", t: 62.5 });
+    await peerSays(page, EV.QUALI, { driverId: "ferrari:0", t: 62.5 });
     await expect(page.locator("#q-go")).toBeEnabled({ timeout: 10000 });
     await tap("q-go");
     await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), null, { polling: 100, timeout: 60000 });
