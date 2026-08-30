@@ -129,6 +129,15 @@ test.describe("Budget system — part selection", () => {
   });
 
   test("budget label gets 'over' class when spending exceeds the cap", async ({ page }) => {
+    // FOUR PART SWAPS IS THE ARITHMETIC MINIMUM, so this test cannot be made
+    // cheaper the way the rest of the file was. Summing the dearest option in
+    // each category, richest first against the 780 cap: ers/overcharge 230,
+    // gearbox/seamless_shift 210 (440), fuel/custom_formula 210 (650), and only
+    // the fourth crosses. Every swap rebuilds the car mesh and repaints the
+    // bay, and that is the test, not overhead around it. Measured 133.2 s at
+    // one worker after the garage-door change took the rest of the file to
+    // 13-116 s; the 120 s default is the only thing it fails.
+    test.setTimeout(240_000);
     await openSetup(page);
     // Unlimited mode to select a combo past the cap, then disable to reveal it.
     await page.locator("#cs-unlimited").click();
