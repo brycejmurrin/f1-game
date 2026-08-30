@@ -1186,11 +1186,27 @@ indistinguishable from a backend with nothing to report. Two shapes produce it:
 tool now records `gfxReadFailed` / `overlayReadFailed` naming which, and the
 Verdict prints it.
 
-**Which one Windows hit is still unknown** — the container's egress proxy blocks
-`blob.core.windows.net`, so the run artifact cannot be fetched from here. The
-next dispatch will say. `{glx: false}` is the unlikely one: `glx.js` is a plain
-script tag the game cannot run without, and now that GLX has a real
-`gpuErrors()` a live GLX could only report `0`.
+**Answered by run 13** (`af79780`, windows-latest, conclusion success):
+
+```
+webgpu  phase=done ok=true gpuErrors=undefined
+        gfx:   read failed: gfx timeout
+        ovl:   read failed: overlay timeout
+webgl2  phase=done ok=true gpuErrors=0 envFail=0 envReady=false softAdapter=false headless=true
+glx     phase=done ok=true gpuErrors=0
+```
+
+It was `{error: …}` — BOTH bounded reads hit their 20 s caps, so the page had
+stopped answering `evaluate` after `settled`. Not `{glx: false}`: GLX was there,
+the page simply would not talk. The webgpu leg is also the FASTEST of the three
+(~2 min vs 4.4 and 4.7) because it times out rather than doing work.
+
+**That is a new finding, not this fix's.** `three/WebGPU on windows-latest
+(WARP) leaves the page unresponsive to evaluates after park.` It is the same
+shape as the macOS "went silent after park() on BOTH three paths" that motivated
+the bounded waits in the first place — and those bounds are doing exactly their
+job here, turning a 20-minute hang into a 2-minute report. It predates
+everything in §2f and was simply unreadable until now. Its own round.
 
 **Scoping, stated deliberately** because this document otherwise forbids
 loosening a failing check. Two clauses are now `hardware &&`: the missing-count
