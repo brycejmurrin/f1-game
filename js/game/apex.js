@@ -22,6 +22,7 @@ const { TUNE_DEFS, LT } = LightTune;
 const agentView = AgentView.create(G);
 
 let _netPeer = null;
+let _lobbyPeerTimer = null;   // keeps the fake lobby peer pumping (see lobbyFake)
 // The far end of a faked lobby connection — see lobbyFake().
 let _lobbyPeer = null;
 
@@ -1628,8 +1629,20 @@ const api = {
       latencyMs: o.latencyMs != null ? o.latencyMs : 0,
       jitterMs: o.jitterMs || 0,
       loss: o.loss || 0,
+      // `seed` makes loss and jitter REPRODUCIBLE. Without it a lossy spec is
+      // a coin flip that re-runs differently, which is indistinguishable from
+      // the defect it is meant to catch.
+      rnd: o.seed != null ? NetTransport.seededRnd(o.seed) : undefined,
     });
     _netPeer = pair[1];
+    // THE FAR END MUST ANSWER PINGS. A bare transport endpoint is not a peer:
+    // in a real connection the other browser runs NetSession too, so the near
+    // end reaches synced() inside one round trip and starts handing snapshots
+    // to the game. Without a responder synced() is false for ever, every
+    // packet lands in heldState, and net().buffered stays 0 while the session
+    // reports itself alive — which is precisely what the multiplayer-session
+    // specs were failing on (14 reds, six of them this).
+    NetSession.autoPong(_netPeer);
     // Both endpoints must be pumped from the same moment for the loopback's
     // wire clock to line up (see js/net/transport.js). A test passes its own
     // t0 so the whole session runs on a virtual clock it controls.
@@ -1641,7 +1654,14 @@ const api = {
       peerProfile: o.peer || null,
       interpDelayMs: o.interpDelayMs,
     });
-    if (!res.ok) _netPeer = null;
+    if (!res.ok) { _netPeer = null; return res; }
+    // ...and the near end must PING at t0, not on the caller's first netTick.
+    // start() does not pump, so without this the first PING and the first
+    // snapshot ride the same pump: the snapshot arrives while synced() is
+    // still false and is held, so the very first assertion after one packet
+    // sees 0. A live session pumps every frame from the moment it connects
+    // (transport.js says so in as many words); this is that first frame.
+    G.netPlay.tick(t0);
     return res;
   },
 
@@ -1696,10 +1716,30 @@ const api = {
   // a boolean reader.)
   lobbyFake(on) {
     if (!G.netLobby) return false;
-    if (!on) { _lobbyPeer = null; G.netLobby.setTransportFactory(null); return false; }
+    if (!on) {
+      if (_lobbyPeerTimer != null) { clearInterval(_lobbyPeerTimer); _lobbyPeerTimer = null; }
+      _lobbyPeer = null; G.netLobby.setTransportFactory(null); return false;
+    }
     G.netLobby.setTransportFactory((o) => {
       const pair = NetTransport.loopback({ latencyMs: 0 });
       _lobbyPeer = pair[1];
+      // THE FAKE PEER HAS TO STAY ALIVE. A bare endpoint answers no PINGs and
+      // sends none, so the lobby's session hears nothing after the last thing
+      // the test pushed and closes on its own 6 s timeout — the room then loses
+      // the peer with no user action at all. Measured with a probe that only
+      // watched: peerReady held true through t+5.5 s and went false at t+6.0 s.
+      // Every room/seat spec that takes more than six seconds to reach its
+      // assertion failed on that, which is why they fail on a slow box and pass
+      // on a fast one. autoPong answers the lobby's own 500 ms pings, and the
+      // 25 ms pump is what lets the far end SEE them — lobbyPeerEvent only
+      // pumps when the test happens to send something, and a real peer is
+      // running its own loop the whole time.
+      NetSession.autoPong(_lobbyPeer);
+      if (_lobbyPeerTimer != null) clearInterval(_lobbyPeerTimer);
+      _lobbyPeerTimer = setInterval(() => {
+        if (!_lobbyPeer) return;
+        try { _lobbyPeer.pump(performance.now()); } catch (e) {}
+      }, 25);
       return Object.assign(pair[0], { role: o && o.role });
     });
     return true;
@@ -1934,7 +1974,16 @@ const api = {
   // interpolation reproducible here, the same way step() does for physics.
   netTick(nowMs) {
     if (!G.netPlay) return false;
-    G.netPlay.tick(nowMs != null ? nowMs : performance.now());
+    const now = nowMs != null ? nowMs : performance.now();
+    // PUMP THE FAKE PEER TOO. transport.js is explicit that both endpoints must
+    // pump every frame or the wire clock does not line up, and a live peer does
+    // (it is running its own loop). Only netPeerSend/netPeerEvent pumped it, so
+    // a test that merely ticks — a clock warm-up, an idle stretch — delivered
+    // nothing to the far end, its autoPong never saw a PING, and the session
+    // could not sync. The peer goes first so anything it answers is on the wire
+    // before the session's own pump collects.
+    if (_netPeer && _netPeer.pump) { try { _netPeer.pump(now); } catch (e) {} }
+    G.netPlay.tick(now);
     return G.netPlay.status();
   },
 

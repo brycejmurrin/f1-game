@@ -488,7 +488,33 @@ const CEILINGS = {
   // which of the three gates is holding it, plus meanPerChunkRGB — the twin of
   // meanLampRGB for the set chunked meshes are lit from. Both exist because
   // 'the sliders do nothing' was undiagnosable from outside the renderer.
-  "js/game/apex.js": 2456,
+  // 2456 -> 2471: netLoopback's far end was a BARE transport endpoint, which
+  // answers no PINGs, so the game's session never reached synced(), every
+  // snapshot sat in heldState and net().buffered stayed 0 — six of the fourteen
+  // reds in the `net` browser group. The fix is two lines (autoPong the peer,
+  // pump the session at t0); the rest is the comment saying why a stand-in for
+  // a peer has to speak the clock protocol and why the first PING cannot wait
+  // for the caller's first netTick. Bug-explaining growth at the site.
+  // 2471 -> 2475: a `seed` on netLoopback, threading NetTransport.seededRnd, so
+  // a spec that configures packet loss can re-run the SAME loss. Unseeded, the
+  // lossy-link spec fails a few runs in a hundred because the clock handshake
+  // loses both legs of every attempt — indistinguishable from the defect it is
+  // meant to catch.
+  // 2475 -> 2484: netTick pumps the FAKE PEER as well as the session. Only
+  // netPeerSend/netPeerEvent did, so a test that merely ticks — a clock
+  // warm-up, an idle stretch — delivered nothing to the far end and its
+  // responder never saw a PING. transport.js is explicit that both endpoints
+  // must pump every frame; a live peer does, because it is running its own
+  // loop. Nine lines, eight of them the why.
+  // 2484 -> 2505: the FAKE LOBBY PEER now stays alive — autoPong plus a 25 ms
+  // pump, torn down with lobbyFake(false). A bare endpoint answers no pings and
+  // sends none, so the lobby's session heard nothing after the last thing a
+  // test pushed and closed on its own 6 s timeout, losing the peer with no user
+  // action: a watch-only probe held peerReady true through t+5.5 s and lost it
+  // at t+6.0 s. Four room/seat specs failed on exactly that. Same shape as the
+  // netLoopback fix above; the comment records the measurement so the next
+  // reader does not have to re-find the six seconds.
+  "js/game/apex.js": 2505,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
