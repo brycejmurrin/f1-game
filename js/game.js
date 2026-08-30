@@ -7734,6 +7734,16 @@ $("rotate-controls").onclick = () => {
   const close = $("htp-close"); if (close) close.focus();
 };
 $("rotate-exit").onclick = () => quitToMenu();
+// RACE IN PORTRAIT — opt in, once. The blocker stays the default: it is the
+// rotation-locked recovery path. docs/PERF-FINDINGS.md 5a.
+$("rotate-race").onclick = () => {
+  document.body.classList.add("rotate-ok");
+  try { localStorage.setItem("apex26.portraitOk", "1"); } catch (_) { /* private: this session only */ }
+  syncRotateBlocker(true);
+};
+try {
+  if (localStorage.getItem("apex26.portraitOk") === "1") document.body.classList.add("rotate-ok");
+} catch (_) { /* no storage: it asks again */ }
 // Team picker: opened by the garage's TEAM & DRIVER tab (js/game/setup-ui.js).
 // Closing without choosing leaves the current team as-is. Nothing to rebuild —
 // the garage is still underneath, unchanged.

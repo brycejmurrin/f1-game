@@ -1740,3 +1740,147 @@ qatar 25 (ONE cell over CAP 24 by one lamp), baku 10, singapore 12,
 bahrain 16 (artifacts/r5-road-lamp-count.txt; harness in the session
 scratchpad). Capacity says def->1 is safe everywhere except one qatar
 cell dropping its single FARTHEST-reaching lamp at a boundary.
+
+## 5a. Portrait: the canvas already filled; the touch dock was visible and inert (2026-08-30)
+
+Two reports off one phone screenshot (iPhone, **Home Screen / standalone**):
+portrait "doesn't fill my screen", and driving + HUD buttons don't work there.
+They turned out to be one real defect and one misattribution, so they are
+recorded separately.
+
+### The buttons: one media query, and a failure mode a screenshot cannot see
+
+`#hud` is `pointer-events: none` (`css/hud.css`) — a deliberate pass-through
+layer, so **every** control under it must grant itself `auto` or it renders
+perfectly and swallows nothing. All of those grants — `.dock`, `.dock-grp`,
+`.dock .touchbtn` — lived inside one `@media (orientation: landscape)` block in
+`css/overlays.css`. The portrait ladder is the BASE layout in that file and is
+authored and measured ("428px fits with 239px to spare"), so in portrait the
+buttons drew at their correct coordinates and passed every press straight to
+the canvas.
+
+Measured at 393×852 with the 59/34 notch insets injected:
+
+| element | rect | `pointer-events` | hit test |
+|---|---|---|---|
+| `#btn-throttle` | 16, 726, 76×76 | **`none`** | blocked by `#rotate-device` |
+| `#btn-brake` | 16, 642, 76×76 | **`none`** | blocked by `#rotate-device` |
+| `#pausebtn` | 331, 67, 52×52 | `auto` | blocked by `#rotate-device` |
+| `#btn-cam` | 307, 114, 76×52 | `auto` | blocked by `#rotate-device` |
+
+Note the two columns disagreeing. `#pausebtn` and `#btn-cam` are not `.dock`
+children, so they kept `auto` and were only ever hidden by the blocker; the two
+dock buttons were inert *underneath* it. Delete the blocker alone and half the
+controls stay dead — which is why **the oracle here has to be
+`document.elementFromPoint` at the button centre, not a screenshot**. A
+screenshot of the broken build and a screenshot of the fixed build are
+identical. The same trap as the vacuous GPU gate in §2e: the instrument
+returned a plausible value for a state it could not distinguish.
+
+The fix is one line, moved: `pointer-events: auto` now sits on the base
+`.touchbtn` rule, with the landscape block keeping only what is genuinely
+landscape (row layout, `--tap`/`--hold` down-sizing, `zoom: var(--hud-z-dock)`,
+the 3×2 `.hud-bottom` grid).
+
+### Steering felt twice as sharp, off one `innerWidth`
+
+`touchRangePx()` in `js/game/input.js` scaled the anchored-drag range by
+`innerWidth`. That is the LONG edge in landscape and the SHORT edge in
+portrait, so the identical thumb gesture meant twice as much lock the moment
+the phone turned: `393 x 0.12` = 47.2px to full lock against `852 x 0.12` =
+102.2px. Not broken, but unusable at speed, and it would have read as "portrait
+driving is bad" rather than as a units bug.
+
+Keying the range off `max(innerWidth, innerHeight)` makes it orientation-free
+and leaves landscape bit-identical, because landscape's long edge already IS
+`innerWidth`. Measured live on the same build, `Input.debugState().touchRangePx`:
+
+| viewport | before (arithmetic on the old formula) | after (measured) |
+|---|---|---|
+| 393x852 portrait | 47.2 | **102.24** |
+| 852x393 landscape | 102.24 | **102.24** |
+
+`tests/specs/touch-steer.spec.js` reads the range out of `debugState()` and
+asserts ORDER and bounds rather than pixel counts, so it covers the new value
+without a retune — which is exactly why it was written that way.
+
+### Nothing in the engine was orientation-gated
+
+Worth recording because it is the natural suspicion and it is wrong. The
+fixed-step loop has no orientation term; `#rotate-device` is `{gate:false}` in
+`js/game/uilayers.js`, so keyboard and canvas-drag steering already drove
+straight through the blocker; and the tilt axis mapping already handles all
+four screen angles with portrait as its `default` case (`js/game/input.js`).
+Portrait racing was blocked by exactly one CSS rule and one opaque div.
+
+### The blocker stays; portrait becomes an opt-in
+
+`#rotate-device` exists for a real case — a phone rotation-locked *mid-race*
+(`tests/specs/rotation-recovery.spec.js`) — so it remains the default. It gains
+a third button, `#rotate-race` "RACE IN PORTRAIT", which sets `body.rotate-ok`
+and persists `apex26.portraitOk`; the blocker rule in `css/responsive.css`
+gains `:not(.rotate-ok)`. The class deliberately reuses the existing `rotate-`
+family (`rotate-inner`/`-icon`/`-help-open`) so `component-inventory` needs no
+new `docs/COMPONENTS.md` row.
+
+After clicking it (the player's path — `el.click()`, not a faked class): blocker
+`display: none`, `apex26.portraitOk` = `"1"`, and `btn-throttle`, `btn-brake`,
+`pausebtn`, `btn-cam` all hit-test **HIT**. `manifest.json` `"orientation"` goes
+`"landscape"` → `"any"`, since a platform that honours the lock would otherwise
+make the opt-in unreachable.
+
+### The "doesn't fill" half — NOT a canvas bug, and NOT fixed
+
+Measured, and the honest answer is that the shell fills exactly. At 393×852 in
+both menu and race, `#game` and `#overlay` are both `{x:0, y:0, w:393, h:852}`,
+with `--sat` 59 / `--sab` 34 resolved and honoured; `fit-audit` reports no
+clipping at 393×852, 375×667 or 430×932. `viewport-fit=cover` is present, `#game`
+is `position: fixed; inset: 0` with no aspect clamp or letterbox, and there is
+no stale `--vh` JS shim anywhere in the tree. The usual iOS cause — Safari never
+retracting its chrome because `html,body{overflow:hidden}` kills the root
+scroll — does not apply in standalone.
+
+What reads as bands is two cosmetic facts stacking:
+
+1. `.screen` pads by `--safe-t` (`--sat` + 12px `--gut` = 71px at this notch),
+   which is correct for a dialog but shows near-black `--bg` above the panel.
+2. `--compact-at: 600px` means an 852-tall phone classifies as
+   `data-density="normal"`, so the `tall`+`compact` stretch rule in
+   `css/menus.css` does not match and the panel stays centred with `--bg` above
+   and below.
+
+Neither was changed in this round. Both are `.screen`-level layout, and moving
+`.screen` padding moves the landscape pixel goldens in `menu-baseline.spec.js`
+— a browser group this change does not otherwise need. Left on the table with
+the mechanism written down rather than guessed at later.
+
+### One pre-existing overflow, ruled out rather than assumed
+
+`fit-audit` on this tree reports `#mb-season.bigbtn` overflowing its parent by
+8.8px at 375x667 (and 14px at 932x430, 4px at 1024x768). The obvious suspicion
+was §4a's career sub-label, which now ships text with `nowrap` in the same row.
+It is not: measured live at 375x667, `#mb-season`'s right edge sits at 342.5
+against a parent right of 333.8 in **all four** states — as shipped, with
+`#mb-career-sub` emptied, restored, and re-wrapped. The overflow is independent
+of that label and predates it. It also does not clip (342.5 < 375 viewport), so
+it is a container overflow, not lost pixels. Left for a menu-layout round; noted
+here so the next reader does not re-suspect §4a.
+
+### Two instrument notes
+
+`page.click("#rotate-race")` timed out at 30 s with the locator resolved and
+the log reading "element is visible, enabled and stable". The tempting reading
+is a layout problem — `.rotate-icon` animates `transform: rotate()`. It is not:
+that transform does not affect layout, `elementFromPoint` at the button centre
+returns the button itself, and this is the second sighting of the shape already
+written up in `docs/TESTING.md` §Field notes ("A saturated main thread looks
+exactly like a missing element"). `el.click()` drives the same handler and is
+the right probe under a live race.
+
+`tests/specs/hud-layout.spec.js` excludes `.hud-top` × `#pausebtn` via
+`HUD_LANDSCAPE_ONLY` on the strength of a measured 8.7px portrait overlap. At
+393×852 that collision **does not reproduce** — overlapX is −43.9, i.e. 43.9px
+of clearance. The exclusion is at some other viewport, so it stays, and no
+claim is made here about having fixed it. An exclusion whose reason has moved
+is still the vacuous-guard shape from §2e, but retiring it needs the viewport
+that actually collides, measured.

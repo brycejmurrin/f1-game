@@ -112,7 +112,9 @@ export function shellNodes() {
 // selector (SKILL.md rule 8's usual answer): this is a NEW flex container with
 // its own wrap behaviour, not a variation of an existing box. The chips inside
 // it deliberately reuse .cs-liv-ed-none rather than adding a second class.
-const CLASS_CEILING = 533;
+// 533 -> 534: body.rotate-ok, the RACE IN PORTRAIT opt-in. Reuses the
+// existing rotate- family (rotate-inner/-icon/-help-open) so no new family.
+const CLASS_CEILING = 534;
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under
@@ -166,7 +168,10 @@ const CLASS_CEILING = 533;
 // from LiveryTex.markSlots at runtime and costs the shell nothing; this dialog
 // is static markup, and two editors disagreeing about a paint slot is worse
 // than four nodes.
-const NODE_CEILING = 1238;   // +4: the MY TEAM customizer's LOGO DETAIL row
+// 1238 -> 1239: the RACE IN PORTRAIT button in #rotate-device (PERF-FINDINGS
+// 5a) — one node, and the opt-in it carries is what makes the portrait touch
+// dock reachable at all.
+const NODE_CEILING = 1239;   // 1234 -> 1238 was the MY TEAM LOGO DETAIL row
 // (label + colour input + NONE button + their row div). Raised deliberately:
 // the livery editor grew a second logo colour and a paint slot the two editors
 // disagree about is worse than four nodes — see js/car/liverytex.js secondSlot.

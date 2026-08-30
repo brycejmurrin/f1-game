@@ -428,7 +428,10 @@ const CEILINGS = {
   // a later car's opaque draw passed LEQUAL and painted over a ring already
   // drawn. Bug-explaining growth at the site of the bug — the one growth the
   // note at the top of this entry tolerates.
-  "js/game.js": 8760,
+  // 8760 -> 8768: the RACE IN PORTRAIT opt-in handler + its restore-on-boot
+  // read. Portrait racing was blocked by one CSS rule, never by logic —
+  // PERF-FINDINGS 5a.
+  "js/game.js": 8768,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
