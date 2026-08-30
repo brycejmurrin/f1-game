@@ -876,15 +876,42 @@ const Car3D = (function () {
     const n = frontCascade(aLvl).length;
     return n - Math.min(FW_MOVEABLE, n - 1);
   }
-  // Half-span of the front-wing FOIL. The endplate is flush with the tip, at
-  // fwHalf + 0.03, and CAR_HALF is the hard outer bound the whole cluster has
-  // to respect — so this number is the wing's width budget. 0.87 gives a plate
-  // centreline at 0.90, an outer face at 0.922-0.930 depending on plate
-  // thickness, and ~0.02 left over for the plate's outboard lean; overall
-  // 1.84 m of wing inside a 1.90 m car. 0.92 spent the entire budget on the
-  // foil, BEFORE the plate and its kick — see CAR_HALF.
+  // BOTH LINEAGES FOUND THIS INDEPENDENTLY and measured the same widest vertex
+  // (±1.045 at the endplate footplate). The deploy side's fix is kept because it
+  // is the better-calibrated one: FW_SPAN is set by the WIDEST aero option
+  // rather than the default, and it ships tests/unit/car-front-wing-width.test.mjs
+  // to hold the invariant across all 31. This side's 0.87-plus-CAR_HALF-clamp is
+  // dropped as the wing's span budget; CAR_HALF stays, because it also bounds
+  // the endplate kick, the floor edge rails and the diffuser exit, which the
+  // span constant alone does not reach.
+  // The front tyre's outer face — addWheel(s*0.79, …, width 0.32) below, so
+  // 0.79 + 0.16. It is also the car's widest point, 1.90 m across, which is
+  // EXACTLY the 2026 maximum: the track is already regulation-correct.
+  const FRONT_TYRE_OUTER = 0.79 + 0.32 / 2;
+  // A front wing is NARROWER than the car it is bolted to. The rules cap it
+  // ~100 mm inboard of the tyre face on each side (1800 mm against a 2000 mm
+  // car in 2022-25; ~1700 against 1900 for 2026), and that gap is the whole
+  // point of the endplate — the wake is pushed AROUND the outside of the tyre.
+  //
+  // Ours stood 95 mm PROUD of it. Measured on the default build: the widest
+  // vertex in the whole car was (±1.045, 0.042, 2.570) — the endplate
+  // footplate, which grows outboard as `epX + s*(PLATE.footW * 0.23)`. Every
+  // endplate spec cleared the tyre: 1.016 / 1.045 / 1.089 / 1.067 against a
+  // 0.95 face. So the car measured 2.09 m wide at the WING and 1.90 m at the
+  // wheels, and read head-on like a wing bolted to a narrower car.
+  //
+  // 0.715 is set by the WIDEST option, not the default: sweeping all 31 aero
+  // options, `outwash_max` and `reg26_concept` reach span + 0.240 (the spec-3
+  // endplate's outboard kick plus its curled outwash lip, which is more than
+  // the footplate adds). At 0.715 that lands at 0.945, just inboard of the
+  // 0.950 tyre face; the default endplate lands at 0.840, a 1.68 m wing on a
+  // 1.90 m car against the regulation 1700/1900. The invariant — no aero
+  // option puts the wing outboard of the tyre — is held by
+  // tests/unit/car-front-wing-width.test.mjs across every option, because
+  // calibrating on the default alone is what let two specs sit 5 mm proud.
+  const FW_SPAN = 0.715;
   function frontHalf(aLvl) {
-    return 0.87 * (aLvl <= 0 ? 0.74 : (aLvl === 1 ? 0.88 : 1.0));
+    return FW_SPAN * (aLvl <= 0 ? 0.74 : (aLvl === 1 ? 0.88 : 1.0));
   }
   // FIA overall-width envelope, half. The 2026 regulations cap car width at
   // 1900 mm, which is also exactly where this model already draws the front

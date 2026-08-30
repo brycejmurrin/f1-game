@@ -637,7 +637,21 @@ const CEILINGS = {
   // one change that did add triangles and the one that had to be re-spaced when
   // the sweep caught its first rung collapsing under the optical floor.
   // Measured 3512 on the raise.
-  "js/car/car3d.js": 3520,
+  // 3177 -> 3203 for FRONT_TYRE_OUTER / FW_SPAN and the note that derives them.
+  // The front wing was wider than the car: the widest vertex in the whole build
+  // was the endplate footplate at ±1.045 against a 0.950 tyre face, so the car
+  // measured 2.09 m at the wing and 1.90 m — exactly the 2026 maximum — at the
+  // wheels. The lines are the MEASUREMENT that fixes it: which option is widest
+  // (outwash_max, not the default), what its endplate adds, and why calibrating
+  // on the default left two specs 5 mm proud. Bug-explaining growth at the site
+  // of the bug, and the invariant itself lives in a test, not a comment.
+  // MERGED: both lineages found the SAME defect — the front wing standing proud
+  // of the tyre, both measuring the widest vertex at ±1.045 — and both grew this
+  // file explaining it. The deploy side's FW_SPAN is what ships (calibrated on
+  // the widest option, guarded by car-front-wing-width.test.mjs); this side's
+  // proportions pass is the rest of the growth. The union carries both sets of
+  // lines, so neither ceiling fits: re-measured at 3540.
+  "js/car/car3d.js": 3540,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

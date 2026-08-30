@@ -978,8 +978,10 @@ const LiveryTex = (function () {
       for (let i = 0; i < n; i++) ctx.drawImage(src, x, y, w, h);
       ctx.restore();
     };
-    if (halo) pass(halo, Math.max(4, w * 0.085), 5);
-    if (outline) pass(outline, Math.max(2, w * 0.030), 3);
+    // Same cap, same reason — more sharply, because this one is 8.5% over FIVE
+    // passes: an uploaded emblem 400 px wide was wearing a 34 px halo.
+    if (halo) pass(halo, Math.max(4, Math.min(w * 0.085, 14)), 5);
+    if (outline) pass(outline, Math.max(2, Math.min(w * 0.030, 8)), 3);
     ctx.drawImage(src, x, y, w, h);
   }
 
@@ -1005,7 +1007,18 @@ const LiveryTex = (function () {
     if (P.halo) {
       ctx.save();
       ctx.shadowColor = css(P.halo);
-      ctx.shadowBlur = Math.max(3, Math.min(R.w, R.h) * 0.05);
+      // CAPPED, and the cap is what makes this an outline instead of weather.
+      // A flat 5% of the box is 8 px on the 160 px fin badge — a rim — but
+      // 21.5 px on the 430 px engine cover, and three accumulated shadow
+      // passes at that radius spread into a soft cloud: Williams' dark W sat
+      // in a white haze covering a third of the cover (rendered, not guessed —
+      // scratch/renders/cars/williams/top.png). McLaren never showed it only
+      // because its halo resolves DARK against dark paint. 10 px leaves every
+      // surface at or below the badge's 8 px untouched and halves the cover,
+      // and the halo's job is unaffected: legibility here is a COLOUR
+      // guarantee (mark-or-halo per background, crest-marks.test.mjs), not a
+      // radius one.
+      ctx.shadowBlur = Math.max(3, Math.min(Math.min(R.w, R.h) * 0.05, 10));
       for (let i = 0; i < 3; i++) fn(ctx, R, P, !!o.bare, teamId);
       ctx.restore();
     }

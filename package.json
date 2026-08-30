@@ -47,7 +47,7 @@
     "test:webgpu-lifecycle": "node --test tests/unit/webgpu-lifecycle.test.mjs tests/unit/renderer-soft-lifecycle.test.mjs",
     "test:tooling": "npm run test:tooling-fast && npm run test:sweeps",
     "test:tooling-fast": "node tools/tooling-fast.mjs",
-    "test:sweeps": "node --test --test-concurrency=1 tests/unit/prop-clipping.test.mjs tests/unit/lamp-fixture-anchor.test.mjs tests/unit/scenery-grounding.test.mjs tests/unit/road-under-floor.test.mjs tests/unit/coplanar-faces.test.mjs tests/unit/debris-hazard-hint.test.mjs tests/unit/spline-project-height.test.mjs tests/unit/shared-track-foundation-characterization.test.cjs tests/unit/parts-visual-distinctness.test.mjs",
+    "test:sweeps": "node --test --test-concurrency=1 tests/unit/prop-clipping.test.mjs tests/unit/lamp-fixture-anchor.test.mjs tests/unit/scenery-grounding.test.mjs tests/unit/road-under-floor.test.mjs tests/unit/coplanar-faces.test.mjs tests/unit/debris-hazard-hint.test.mjs tests/unit/spline-project-height.test.mjs tests/unit/shared-track-foundation-characterization.test.cjs tests/unit/parts-visual-distinctness.test.mjs tests/unit/car-front-wing-width.test.mjs",
     "test:tiny": "node tools/run-playwright.mjs tests/specs/boot-guard.spec.js tests/specs/smoke.spec.js tests/specs/dev-tools.spec.js tests/specs/logging.spec.js",
     "test:fast": "node tools/run-playwright.mjs tests/specs/smoke.spec.js tests/specs/dev-tools.spec.js tests/specs/headless-api.spec.js tests/specs/obs-act-edge.spec.js tests/specs/collision*.spec.js tests/specs/offtrack.spec.js tests/specs/parts-physics.spec.js tests/specs/steering.spec.js",
     "test:shimmer": "APEX_SHIMMER=1 node tools/run-playwright.mjs tests/specs/material-shimmer.spec.js",
