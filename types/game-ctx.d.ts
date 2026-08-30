@@ -499,7 +499,7 @@ interface GameCtx {
   readonly camVantage: (mode: number, s: number, x: number, spd: number, now: number, extra?: Opaque) => CamVantage;
   readonly endRace: (forcedOrder?: CarState[]) => void;
   readonly gridUp: (preOrder?: CarState[]) => void;
-  readonly gripMult: () => number;
+  readonly gripMult: (c?: any) => number;
   readonly isErsDeploying: (c: CarState) => boolean;
   readonly cautionInfo: () => CautionInfo;
   readonly aeroDfMult: (c: CarState) => number;

@@ -245,7 +245,15 @@ const LiveryTex = (function () {
                                // has to carry any
 
   const BRAND = {
-    rbRed:    [0.855, 0.043, 0.086],
+    // 0.855 -> 0.727 value, same hue. The re-trace gave Red Bull its real gold
+    // SUN DISC as a `plate`, and a mark that sits on a plate is scored against
+    // the plate — so the pair became red-on-yellow, which is 3.37:1 against the
+    // 4.2 legibility floor every other team mark clears. Solved from the floor
+    // rather than nudged: the gold's luminance is 0.6302, so 4.2 needs the mark
+    // under 0.1119 and this is 0.1060, landing at 4.36. Checked across all 1514
+    // team x livery palettes (0 fail), racingbulls included — it borrows this
+    // red as its `alt` and is the only other consumer.
+    rbRed:    [0.727, 0.037, 0.073],
     rbGold:   [1.0,   0.788, 0.024],
     rbNavy:   [0.043, 0.078, 0.239],
     ferYellow:[1.0,   0.925, 0.0],

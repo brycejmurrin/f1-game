@@ -170,6 +170,15 @@ const AgentRaster = (function () {
         const dist = Math.hypot(wx - eye[0], wz - eye[2]);
         if (dist > range) continue;
         // ~F1 dimensions; the box is axis-aligned, which over-covers a yawed car
+        // YOU CANNOT SEE A CAR YOU ARE SITTING INSIDE. The same guard the
+        // scenery loop above uses, and for the same reason: an onboard camera
+        // puts the eye INSIDE the player's own box, whose corners then project
+        // to both sides of the near plane and paint most of the grid "player".
+        // The centre-in-front-of-eye gate in boxRect does not catch it, because
+        // COCKPIT_EYE_FWD is -0.20 (js/game/cameras.js) — the eye sits BEHIND
+        // the car's centre, so the centre is legitimately in shot while the car
+        // around it is not something the driver can see.
+        if (containsEye(eye, wx, 0.55, wz, 1.1, 0.55, 2.6)) continue;
         const rect = boxRect(vp, wx, 0.55, wz, 1.1, 0.55, 2.6);
         if (!rect) continue;
         const k = c.isPlayer ? "player" : "car";

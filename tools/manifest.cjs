@@ -296,6 +296,7 @@ const HARD_EDGES = [
   ["js/render/lamp-chunks.js", "js/render/glx/chunked.js"], // drawChunked resolves LampChunks tables (call-time; keep explicit)
   ["js/render/glx/chunked.js", "js/render/glx.js"],
   ["js/render/glx.js", "js/render/assets.js"],         // Assets feature-detects the backend's createTextureArray
+  ["js/track/geom.js", "js/game/garage-scene.js"],          // the bay reads TrackGeom.MAT at eval for its per-vertex material ids
   ["js/track/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
   ["js/track/spline.js", "js/track/tracks.js"],             // tracks destructures TrackSpline at eval
   ["js/track/geom.js", "js/track/mesh.js"],                 // mesh destructures TrackGeom at eval

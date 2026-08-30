@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 144 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 146 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -123,6 +123,33 @@ log converts the whole batch cost into agent wall time. Shipping with a
 named, deliberate gap ("group X not run, here is why") is an allowed
 outcome; silently skipping is not.
 
+### Reaching the GARAGE: use the door, not the race flow
+
+Measured on this container, one worker, per test:
+
+```
+goto                   3.4 s
+boot (__apex.race)    18.8-22.6 s
+mb-race -> select     15.9 s     |  mb-garage -> #carsetup   11.1 s
+sel-go  -> #carsetup  11.7 s     |
+                      ------                                 ------
+race flow total       27.6 s        garage door total        11.1 s
+```
+
+`#mb-garage` calls `openGarage("menu")` -> `openSetup()` (js/game.js), which
+shows `#carsetup` directly. The race flow builds the circuit picker and then the
+TRACK before it gets to the same screen. Any spec whose subject is the garage —
+budget, parts rows, liveries, the preview — should take the door and save 16 s a
+test. Only take the race flow when the flow itself is the subject (where DONE
+returns to, the select screen), because `openGarage` sets `garageReturn`.
+
+`parts-budget.spec.js` did this and got its five timeouts back under budget.
+
+A SHARED page across a describe is the obvious next step and is NOT worth it:
+measured, one boot plus a leave-and-re-enter is ~25 s against ~30 s for a fresh
+page through the door, because re-entering rebuilds the car and the bay anyway.
+Five seconds does not buy making a file serial, where one failure skips the rest.
+
 ### A `waitForFunction` timeout does not bound the wait
 
 Playwright polls a `waitForFunction` predicate on `requestAnimationFrame` by
@@ -241,6 +268,8 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | `behaviour` | world-physics, active-aero, aero-zones. The collision/drift/offtrack members and physics-fixes LEFT in the double-billing dedupe — each spec was running twice whenever two of its groups co-ran, which `pick-tests` makes routine. Coverage is unchanged: the dedupe shipped WITH new `pick-tests` routing (game.js and physics-consts.js now select `collision` and `hooks` too), verified by comparing the SPEC-FILE union before and after, not the group names |
 | `debris` | the Rapier debris side-world |
 | `steering` | presets, sliders, steering modes, gamepad |
+| `parts-unit` | the catalog LADDER in Node — no paid option dominated by a cheaper one, no row that is never optimal at any price (bar the two wet compounds), no flat category stat, and a career budget cap that clears the dearest works car without reaching the top shelf |
+| `garage-unit` | the garage bay's per-vertex material column — present, right length, and not uniformly FLAT |
 | `steering-unit` | braking CUE math in Node — slider 1 is OFF, urgency is 0..1 never a brake command |
 
 ### Track & scenery
@@ -586,6 +615,38 @@ undersized budget. "Re-run it alone" is what tells them apart; without it the
 right answer for five of them would have been indistinguishable from the right
 answer for the sixth.
 
+### When a timeout survives the solo run, count the navigations
+
+The rule above tells you a group-run timeout is not a verdict. The corollary is
+what to do when the solo run agrees with the group: the cost is the test's own,
+and a bigger budget is almost never the fix. Measured on the parts group,
+2026-08-30, going from 11 failures to 0:
+
+| test | before | after | what changed |
+|---|---|---|---|
+| `parts-budget` (5 tests over) | 125-169 s | 13-116 s | `#mb-garage` instead of `mb-race` -> `select` -> `sel-go`; `addInitScript` instead of a boot-and-reload for clean storage |
+| `parts-mesh-cache` eviction | 366 s (own 360 s budget) | passes | stopped building nine tracks it then threw away |
+| `parts-physics` ERS deploy/recovery | 126.0 s solo | **90.0 s** | one boot to learn the team id instead of one per loop pass — six navigations for three measurements became four |
+| whole `test:parts` group | ~2.5 h | **1 h 55 m** | the above |
+
+Every one of those was a navigation the assertion did not need. **A boot on this
+box is 11-22 s, so counting `goto`/`reload` calls is the highest-yield thing you
+can do to a slow spec** — start there before you look at the work the test
+actually does, and long before you touch a budget.
+
+The exception proves it. `parts-budget`'s "budget label gets 'over' class" still
+carries `test.setTimeout(240_000)`, because its four part swaps are the
+ARITHMETIC minimum against the 780 cap (230 + 210 + 210 = 650, so only the
+fourth crosses) and each swap rebuilds the car mesh. Raise a budget when you can
+show the work is irreducible, and write the arithmetic down where the next
+reader will look for the waste.
+
+One trap on the way: the ERS test's per-pass `reload` looks like the same
+redundancy and is not. `store` (`js/game/store.js`) caches every key it has
+read, so seeding `localStorage` without a reload leaves the game answering from
+`_cache` — all three passes would measure the same setup and every assertion
+would still pass.
+
 ---
 
 ## 4. Philosophy — debug-hooks first
@@ -762,6 +823,8 @@ what it covers.
 | `crest-marks.test.mjs` | every team mark is READABLE, measured rather than eyeballed: extent inside the fit box and filling it, no limb under `STROKE_MIN` (1.9 px at the 34 px the mobile-AI fin badge gets), lettering floored and absent when `bare`, a colour census that fails on any paint outside `markPalette`, no alpha or `destination-out`, ink coverage in band and stable between 430 px and 40 px, and the 4.2:1 contrast floor over every team x livery x the four surfaces a mark lands on. Also holds the editor's mark rows: every row `markSlots` offers reaches PIXELS on both surfaces, no two rows share a key or a label, the OUTLINE row is opt-in on every mark, and Red Bull's SUN DISC is round (every sampled point one radius from the bbox centre) and backmost — the trace's union silhouette failed that by 6:1 and was what made SUN DISC move an outline. Measures through `tools/crest-sweep.mjs`. Would have failed on the traced logo PNGs this replaced |
 | `car-front-wing-width.test.mjs` | the front wing is NARROWER than the car it is bolted to — a regulation invariant, not a style call. F1 caps the wing ~100 mm inboard of the front tyre's outer face on each side (1700/1900 for 2026), and that gap is what the endplate uses to push the wake around the tyre. Ours stood 95 mm PROUD: the widest vertex in the whole car was the endplate footplate at ±1.045 against a 0.950 tyre face, so the car measured 2.09 m at the wing and 1.90 m at the wheels. Sweeps EVERY aero option, because calibrating on the default alone is what left `outwash_max` and `reg26_concept` 5 mm proud; a lower bound guards the other direction. Builds offline through `tools/parts-sweep.mjs` |
 | `parts-visual-distinctness.test.mjs` | every catalog option is VISIBLY different from the one it replaces, measured rather than hashed: builds all 297 options offline and gates on surface distance, moved area, palette transport and a 14-view visibility mask. INVISIBLE / BROKEN / SLIDE / INTERNAL must be empty, COLOUR-ONLY is an exact allow-list, WEAK is a downward-only ratchet; plus the census (12/297/121) and the SIGNATURE invariant that a reskin keeps its equivalent's cost and all four stat multipliers. Measures through `tools/parts-sweep.mjs`. ~4 min, so it runs in `test:sweeps`, never in the edit loop |
+| `parts-ladder.test.mjs` | every catalog option is one a rational player could ever want to BUY — the other half of the promise `parts-visual-distinctness` makes. An option is LIVE when it maximises `sum w_i*log(stat_i) - lambda*cost` for some positive taste and some price (the upper convex hull of the (cost, log-stat) set, solved exactly per weight vector, no lambda grid). Gates: no PAID option strictly dominated by a cheaper one; the never-optimal list is exact in BOTH directions against a named exemption list (the two wet compounds, which the four DRY stats cannot score); no category flat on a stat; SIGNATURE cost/stat parity; and the career budget cap clears the dearest works car while staying under the whole top shelf. Measured 2026-08-29: 67 of 169 rows never optimal before the re-space, 2 after. Measures through `tools/parts-ladder.mjs`. ~0.3 s, node-only — cheap enough for the edit loop |
+| `garage-mesh.test.mjs` | the bay's meshes carry a per-vertex MATERIAL column of exactly one float per vertex, and the big surfaces are not all left on `MAT.FLAT`. A silent-failure guard: GLX wires the attribute only when `data.mat.length === vCount` (`glx.js:647`) and drops a wrong-length column with no warning, which is how the whole garage shipped untextured while the car standing in it sampled the baked PBR arrays. Runs the real module in a `node:vm` against a recording Gfx — no browser, ~0.15 s |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 111-member `scenery(api)` surface across the `js/track/scenery-*.js` split |

@@ -419,6 +419,11 @@ const CEILINGS = {
   // knob is resolved BEFORE setFrameLights (it feeds the scaled full-set build)
   // and allLights is left null when the feature is off instead of handing out
   // the raw baked list.
+  // 8727 -> 8728: wet tyres reach the physics. gripMult() reads the fitted
+  // compound as well as the weather (WET_GRIP), cars carry a `tread` class, and
+  // braking gets the tread ratio it never had. Net +2 code lines and +3 comment
+  // for a whole system, because the rationale went to docs/PHYSICS.md "Weather
+  // and tyres" instead of into the file.
   // 8727 -> 8760: the per-wheel draw loop drew rotating-then-fixed per wheel,
   // giving the VAO sequence F,FFixed,F,FFixed,R,RFixed,R,RFixed — every
   // consecutive pair different, so bindVAO collapsed NOTHING. Two runs now,
@@ -446,7 +451,12 @@ const CEILINGS = {
   // the merged tree at 8793, as the ACTIVE AERO merge above had to be.
   // (`lines()` splits on \n, so it reads one MORE than wc -l on a
   // newline-terminated file — 8792 there is 8793 here.)
-  "js/game.js": 8793,
+  // MERGED AGAIN (this session): their 8760 and this side's 8728 were raised for
+  // different work — their two-pass wheel draws and czSyncMarkRows, this side's
+  // wet-tyre grip path — and the union carries both sets of lines, so neither
+  // number fits. Re-measured on the merged tree at 8797, the same way the
+  // ACTIVE AERO and czSyncMarkRows merges above had to be.
+  "js/game.js": 8797,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -609,6 +619,24 @@ const CEILINGS = {
   // only, +1 line of code and the twelve recording why the tub is dark while
   // the hood above it stays painted. Measured on ferrari: lower-field rays on
   // body paint under the wheel 1073 -> 658 of 13430. Re-measured on the union.
+  // 3320 -> 3378: second detail pass — T-cam pod, driveshafts, splitter/tea-tray,
+  // turning-vane footplates, six-point harness. Measured 3372 on the raise.
+  // 3378 -> 3510: the PROPORTIONS pass, and it is nearly all comment. Seven
+  // measured defects, each fixed by moving numbers rather than adding geometry
+  // (the body and cockpit triangle counts did not move at all): the nose tip
+  // overhung the front wing's leading edge by 460 mm and made the car 5.87 m
+  // long on a 3.30 m wheelbase; the front-wing endplate cluster measured
+  // x 1.045, outside the 1900 mm width the tyres are already drawn to; the
+  // principal roll structure (C12.4.1, Z 968) did not exist, so the car's
+  // highest point was its rear wing; the sidepod had no undercut aft of the
+  // inlet; the engine cover was a zero-width knife ridge with every
+  // cover-mounted detail floating up to 0.21 m off it; and every suspension arm
+  // started 0.10-0.16 m outboard of the chassis it bolts to. The comments carry
+  // the regulation citations and the measured before/after, which is the only
+  // way the next pass can argue with them. Plus the tyre-shoulder ladder, the
+  // one change that did add triangles and the one that had to be re-spaced when
+  // the sweep caught its first rung collapsing under the optical floor.
+  // Measured 3512 on the raise.
   // 3177 -> 3203 for FRONT_TYRE_OUTER / FW_SPAN and the note that derives them.
   // The front wing was wider than the car: the widest vertex in the whole build
   // was the endplate footplate at ±1.045 against a 0.950 tyre face, so the car
@@ -617,7 +645,13 @@ const CEILINGS = {
   // (outwash_max, not the default), what its endplate adds, and why calibrating
   // on the default left two specs 5 mm proud. Bug-explaining growth at the site
   // of the bug, and the invariant itself lives in a test, not a comment.
-  "js/car/car3d.js": 3203,   // +44: wheel cover is a rim lip, a dish and a boss
+  // MERGED: both lineages found the SAME defect — the front wing standing proud
+  // of the tyre, both measuring the widest vertex at ±1.045 — and both grew this
+  // file explaining it. The deploy side's FW_SPAN is what ships (calibrated on
+  // the widest option, guarded by car-front-wing-width.test.mjs); this side's
+  // proportions pass is the rest of the growth. The union carries both sets of
+  // lines, so neither ceiling fits: re-measured at 3540.
+  "js/car/car3d.js": 3540,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
