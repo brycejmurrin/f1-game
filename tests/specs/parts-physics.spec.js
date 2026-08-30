@@ -1486,10 +1486,19 @@ test.describe("Parts module — statMult()", () => {
 test.describe("ERS parts drive the battery and overtake", () => {
   test("deployment and recovery both scale with the ERS option", async ({ page }) => {
     const rows = [];
+    // ONE BOOT TO LEARN THE TEAM ID, THEN ONE PER ERS OPTION. The loop used to
+    // goto AND reload on every pass — six navigations for three measurements —
+    // because it needed the team id from a loaded page before it could name the
+    // storage key. The id does not change between passes, so read it once and
+    // let each pass seed storage on the page it already has: three reloads
+    // instead of three goto+reload pairs. The reload itself stays, and has to:
+    // `store` (js/game/store.js) caches every key it has read, so a bare
+    // localStorage.setItem would leave the game answering from _cache and the
+    // three passes would silently measure the same setup.
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+    const teamId = await page.evaluate(() => window.__apex.teams()[0].id);
     for (const ers of ["harvest", "standard", "overcharge"]) {
-      await page.goto("/");
-      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
-      const teamId = await page.evaluate(() => window.__apex.teams()[0].id);
       await page.evaluate(([e, id]) => {
         const key = "apex26.parts." + id;
         const cur = JSON.parse(localStorage.getItem(key) || "{}");
