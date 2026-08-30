@@ -1,5 +1,29 @@
 // @ts-check
 /**
+ * BOOT_MS / TRACK_MS — how long the page ACTUALLY takes on this class of box,
+ * not a number chosen for a developer laptop.
+ *
+ * MEASURED on an idle container (loadavg 0.00), three cold boots,
+ * scratch/perf/boot-budget.mjs:
+ *
+ *   window.__apex != null        12.3 / 23.6 / 24.6 s   worst 24.6
+ *   info().track != null         15.1 / 16.2 / 16.9 s   worst 16.9
+ *
+ * The budgets scattered through these helpers were 8000, 10000 and 15000 —
+ * every one of them BELOW the idle-box worst case, so the specs that boot
+ * through them could not pass here at all, loaded or not. That is what 15 of
+ * the 32 `webgl` group tests were failing on. 45 s is ~1.8x the worst idle
+ * boot, which is the margin a loaded group run needs; the specs' own 120 s
+ * test timeout is still the backstop, and a genuine hang still fails.
+ *
+ * These are BOOT budgets. Do not reach for them to paper over a slow
+ * assertion — measure that one and give it its own number, as the room
+ * screen-swap waits got.
+ */
+export const BOOT_MS = 45000;
+export const TRACK_MS = 45000;
+
+/**
  * Shared Playwright fixtures for Apex 26.
  *
  * Importing `test` from here instead of `@playwright/test` gives every
@@ -128,7 +152,7 @@ export const test = base.extend({
    */
   racePage: async ({ page }, use) => {
     await page.goto('/');
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await use(page);
   },
 
@@ -144,9 +168,9 @@ export const test = base.extend({
   loadTrack: async ({ page }, use) => {
     await use(async (id = "monza", tod = "day", wx = "dry") => {
       await page.goto("/");
-      await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10000 });
+      await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(({ i, t, w }) => window.__apex.race(i, t, w), { i: id, t: tod, w: wx });
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
       await page.evaluate(() => window.__apex.go());
       return page;
     });
@@ -280,7 +304,7 @@ export const sharedTest = test.extend({
     await use(async (id = "monza", tod = "day", wx = "dry") => {
       await ensureLive(page);
       await page.evaluate(({ i, t, w }) => window.__apex.race(i, t, w), { i: id, t: tod, w: wx });
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
       await page.evaluate(() => window.__apex.go());
     });
   },
@@ -291,7 +315,7 @@ async function ensureLive(page) {
   const live = await page.evaluate(() => window.__apex != null).catch(() => false);
   if (live) return;
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
 export { expect };

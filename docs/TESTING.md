@@ -586,6 +586,56 @@ undersized budget. "Re-run it alone" is what tells them apart; without it the
 right answer for five of them would have been indistinguishable from the right
 answer for the sixth.
 
+### A Playwright click costs 80-113 s while the game renders, and 0.3-0.6 s while it does not (2026-08-30)
+
+The `webgl` group was 15 red of 32. Twelve of those were undersized budgets. The
+last three were all `lighting-tuner-grade`, and they were not slow tests — they
+were tests paying a toll nobody had priced. Measured with ONE browser and
+nothing else on the box (`scratch/tuner/cost-probe.mjs`), clicking real ids in
+the order the spec clicked them:
+
+| click | game state | cost |
+|---|---|---|
+| `#pausebtn` | racing | **85031 ms** |
+| `#pm-settings` | paused, tuner shut | **469 ms** |
+| `#pm-tab-more` | paused, tuner shut | 585 ms |
+| `#pm-lighting` | paused, tuner shut | 281 ms |
+| `IMAGE & COLOUR` tab | tuner open | **82928 ms** |
+| `#lt-tod-dusk` | tuner open | 113385 ms |
+| `#lt-wx-wet` | tuner open | 106181 ms |
+| `#lt-spread-edits` (Playwright) | tuner open | **82344 ms** |
+| `#lt-spread-edits` (dispatched) | tuner open | **7162 ms** |
+
+**A click is expensive exactly while the game is rendering, and only then.**
+`js/game.js` returns early from the paused frame unless the lighting or camera
+tuner is open (the live-preview branch), which is why the middle of that walk is
+three orders of magnitude cheaper than either end. **It is not the rAF rate** —
+the obvious explanation, and wrong: rAF stayed 0.12-0.27/s throughout and was
+*lowest* (0.13) on the cheap clicks. It is main-thread occupancy. A SwiftShader
+frame holds the thread for seconds and Playwright's stability and hit-target
+checks run on that same thread, so `element.click()` returns in 7 s where
+`locator.click()` takes 82 s — an 11.5x difference on the same button in the
+same state.
+
+**The second-order consequence is worse than the slowness: it makes assertions
+vacuous.** `#lt-spread-edits` arms on the first click and holds that state on a
+wall-clock `setTimeout(ltDisarm, 20000)`. A single `locator.textContent()` round
+trip measured 9655 ms, so a click-then-read pair spends ~19 s of a 20 s window
+before the answer comes back — which is why the spec asserted `/^COPY TO \d+\?$/`
+and read `"MY EDITS"`, and read it as a functional bug in the chip. It was a
+chip that had already timed out. And the neighbouring test asserted that
+switching the previewed condition DISARMS the chip by clicking `#lt-tod-night`
+between the two reads — a click that costs 113 s, so the arm timer cleared the
+chip on its own and the assertion would have held with the disarm-on-switch
+behaviour deleted.
+
+The cure is to drive the sequence inside the page (`page.evaluate`), which is
+atomic with respect to that timer and runs the real handler on the real DOM,
+and to leave clickability to the specs whose subject it is (`ui-button-touch`,
+`menu-survey`, `ui-redesign` — all three already use the dispatched idiom for
+this exact walk). Raising the timeout is the move that does NOT work here: the
+state being asserted is gone by the time any longer wait expires.
+
 ---
 
 ## 4. Philosophy — debug-hooks first

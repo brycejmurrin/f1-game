@@ -1,5 +1,11 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
+// BUDGETS, FROM A MEASUREMENT. Every wait below was under the worst case this
+// class of box actually posts: measured idle (loadavg 0.00, three cold boots,
+// scratch/perf/boot-budget.mjs) the page needs up to 24.6 s to publish __apex
+// and 16.9 s to build a track, and this file was asking for 15 s and 25 s. See
+// the BOOT_MS note in tests/helpers/fixtures.js — these are the same numbers.
+import { BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 
 // FOUR OF THE FIVE TESTS HERE ARE GENUINELY OVER THE DEFAULT 120 s BUDGET, not
 // flaky. Solo at APEX_WORKERS=1 on a quiet box: 191.3 / 173.7 / 155.6 / 135.5 s;
@@ -17,30 +23,72 @@ import { test, expect } from "@playwright/test";
 // setup as well (same form as zandvoort-foundation.spec.js). It also survives
 // CI passing an explicit `--timeout=120000` on the command line, which is what
 // the change-aware job does.
-test.describe.configure({ timeout: 360_000 });
+// 360_000 -> 600_000. The two COPY ALL tests walk EVERY track, and inside a
+// two-worker group run they measured 372.2 s and 375.4 s — over the cap doing
+// real work, not hung. A per-test cap set below what the work costs on this
+// box only converts slow into red; the job's own timeout-minutes is the real
+// backstop, which is the argument .github/workflows/ci.yml already makes for
+// the smoke shards' 420 s.
+test.describe.configure({ timeout: 600_000 });
+
+// THE MENU WALK IS DISPATCHED, NOT CLICKED — and that is a measurement, not a
+// shortcut. MEASURED in this container with ONE browser and nothing else
+// running (scratch/tuner/cost-probe.mjs), clicking the same five ids the walk
+// used to click:
+//
+//   #pausebtn          85031 ms   (mid-race: the game is rendering)
+//   #pm-settings         469 ms   (paused, tuner shut: the loop returns early)
+//   #pm-tab-more         585 ms
+//   #pm-lighting         281 ms
+//   IMAGE & COLOUR tab 82928 ms   (tuner open: the loop renders again)
+//   #lt-spread-edits      78 s    (tuner open)
+//
+// A CLICK IS EXPENSIVE EXACTLY WHILE THE GAME IS RENDERING, and only then — the
+// four orders of magnitude between #pausebtn and #pm-settings are not a rAF
+// rate (that stayed 0.12-0.27/s throughout, and was actually LOWEST on the
+// cheap clicks) but main-thread occupancy: a SwiftShader frame holds the thread
+// for seconds, and Playwright's stability and hit-target checks run on that
+// same thread. js/game.js only renders while paused if the lighting or camera
+// tuner is open (the live-preview branch), which is why the two ends of this
+// walk are slow and the middle is instant. That is the whole reason three tests
+// in this file were red: they were not testing anything slow, they were paying
+// for frames nobody looked at.
+//
+// What is LOST by dispatching is the proof that these buttons are visible,
+// enabled and hit-testable. That is not this file's subject (grading and COPY
+// ALL semantics are), and it is already covered by real Playwright clicks on
+// the SAME ids in tests/specs/ui-button-touch.spec.js (openLightingPhotoMode:
+// #pm-settings, #pm-tab-more, #pm-lighting) and by menu-survey. The dispatched
+// form here is the one tests/specs/ui-redesign.spec.js already uses for this
+// exact walk, so it is the established idiom for this path, not a new one.
+const walkToImageTuner = async (page) => {
+  await page.evaluate(() => window.__apex.park(0.1));
+  // Attached-and-shown only: waitForSelector does not run the stability or
+  // hit-target checks that make a real click expensive here.
+  await page.waitForSelector("#pausebtn:not([hidden])", { timeout: BOOT_MS });
+  await page.evaluate(() => {
+    document.getElementById("pausebtn").click();
+    document.getElementById("pm-settings").click();
+    document.getElementById("pm-tab-more").click();
+    document.getElementById("pm-lighting").click();
+    // pm-lighting's handler builds the tab strip synchronously, so the tab
+    // exists by the next statement — the same assumption ui-redesign makes.
+    document.getElementById("lt-tab-image-colour").click();
+  });
+};
 
 async function openImageTuner(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.race("bahrain"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 20_000 });
-  await page.evaluate(() => window.__apex.park(0.1));
-  await page.locator("#pausebtn").click();
-  await page.locator("#pm-settings").click();
-  await page.locator("#pmsettings").waitFor({ state: "visible" });
-  await page.locator("#pm-tab-more").click();
-  await page.locator("#pm-lighting").click();
-  await page.getByRole("tab", { name: "IMAGE & COLOUR" }).click();
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
+  await walkToImageTuner(page);
+  await expect(page.locator("#lighting")).toBeVisible();
 }
 
 async function reopenImageTuner(page) {
-  await page.evaluate(() => window.__apex.park(0.1));
-  await page.locator("#pausebtn").click();
-  await page.locator("#pm-settings").click();
-  await page.locator("#pmsettings").waitFor({ state: "visible" });
-  await page.locator("#pm-tab-more").click();
-  await page.locator("#pm-lighting").click();
-  await page.getByRole("tab", { name: "IMAGE & COLOUR" }).click();
+  await walkToImageTuner(page);
+  await expect(page.locator("#lighting")).toBeVisible();
 }
 
 test("IMAGE & COLOUR exposes ordered professional grading sections", async ({ page }) => {
@@ -63,25 +111,41 @@ const stored = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("ap
 
 test("COPY ALL arms, spreads the condition to every other track, and undoes", async ({ page }) => {
   await openImageTuner(page);
-  await page.locator("#lt-tod-dusk").click();
-  await page.locator("#lt-wx-wet").click();
-  await page.evaluate(() => window.__apex.lightTune({ gainB: 1.2 }));
+  await page.evaluate(() => {
+    document.getElementById("lt-tod-dusk").click();
+    document.getElementById("lt-wx-wet").click();
+    window.__apex.lightTune({ gainB: 1.2 });
+  });
   expect((await stored(page))["bahrain|dusk|wet"].gainB).toBeCloseTo(1.2);
 
-  const edits = page.locator("#lt-spread-edits");
-  await edits.click();                                   // first click ARMS, writes nothing
-  await expect(edits).toHaveText(/^COPY TO \d+\?$/);
-  expect(Object.keys(await stored(page))).toEqual(["bahrain|dusk|wet"]);
-
-  await edits.click();                                   // second click fires
-  // 30 s, NOT the 5 s expect default (playwright.config.js declares no `expect`
-  // block). The chip only flips to COPIED once the fan-out has actually written
-  // a profile for all 39 other circuits, so this assertion is waiting on real
-  // work, not on a render. On a loaded CI runner that fan-out passes 5 s and the
-  // assertion fired while the label was still the armed one — the observed
-  // failure was literally `Received string: "COPY TO 39?"`, i.e. the state the
-  // line above just asserted. It reads like a functional bug and is a budget.
-  await expect(edits).toHaveText(/^COPIED \d+ ✓$/, { timeout: 30_000 });
+  // THE ARM/FIRE PAIR RUNS IN ONE evaluate, AND THE REASON IS A RACE THIS TEST
+  // CANNOT WIN FROM OUTSIDE THE PAGE. The armed state is held by a wall-clock
+  // `setTimeout(ltDisarm, 20000)` in js/game/tuner.js, so every millisecond
+  // between the click and the read is spent against that window. MEASURED here
+  // (scratch/tuner/arm-probe.mjs, ONE browser, nothing else running): the
+  // arming click landed 78 s after it was issued (the tuner renders, so the
+  // main thread is held — see the walk note above), and the disarm fired 28.7 s
+  // after the arm — while a single `locator.textContent()` round trip was still
+  // in flight. So the previous form asserted `/^COPY TO \d+\?$/` and read
+  // `"MY EDITS"`: not a broken chip, a chip that had already timed out by the
+  // time the answer came back. Driving both clicks and both reads inside the
+  // page makes the sequence atomic with respect to that timer.
+  //
+  // Nothing is weakened. `el.click()` runs the real onclick handler, the reads
+  // are the real DOM and the real localStorage, and every assertion below is
+  // the one that was there before — including that the FIRST click writes
+  // nothing, which is the whole point of an arming chip.
+  const seq = await page.evaluate(() => {
+    const el = document.getElementById("lt-spread-edits");
+    const keys = () => Object.keys(JSON.parse(localStorage.getItem("apex26.lightTune") || "{}"));
+    const out = {};
+    el.click(); out.armedText = el.textContent; out.armedKeys = keys();
+    el.click(); out.firedText = el.textContent; out.firedKeys = keys();
+    return out;
+  });
+  expect(seq.armedText).toMatch(/^COPY TO \d+\?$/);     // first click ARMS…
+  expect(seq.armedKeys).toEqual(["bahrain|dusk|wet"]);   // …and writes nothing
+  expect(seq.firedText).toMatch(/^COPIED \d+ ✓$/);       // second click fires
   const after = await stored(page);
   const targets = Object.keys(after).filter((k) => k !== "bahrain|dusk|wet");
   expect(targets.length).toBeGreaterThan(20);            // every other circuit on the LIST
@@ -92,7 +156,7 @@ test("COPY ALL arms, spreads the condition to every other track, and undoes", as
   // MY EDITS sends only what was tuned here, so nothing else rides along.
   expect(Object.keys(after["monza|dusk|wet"])).toEqual(["gainB"]);
 
-  await page.locator("#lt-spread-undo").click();
+  await page.evaluate(() => document.getElementById("lt-spread-undo").click());
   // expect.poll, not a bare expect: UNDO deletes 39 profiles, and a plain
   // `expect(await stored(page))` reads localStorage exactly ONCE with no retry,
   // so on a slow runner it can sample mid-undo. Same defect class as the COPIED
@@ -105,21 +169,41 @@ test("COPY ALL arms, spreads the condition to every other track, and undoes", as
 
 test("switching the previewed condition disarms a pending COPY ALL", async ({ page }) => {
   await openImageTuner(page);
+  // THE ONE REAL PLAYWRIGHT CLICK LEFT IN THIS FILE, kept deliberately. Every
+  // other click here is dispatched (see the walk note above), which runs the
+  // handler but proves nothing about the button being visible, enabled and
+  // hit-testable. No other spec clicks a `#lt-tod-*` / `#lt-wx-*` preview chip
+  // at all, so without this one the tuner's own chips would have no actionable
+  // coverage anywhere in the suite. This test is the cheapest of the three to
+  // carry it: it does not fan out across 40 circuits and does not reload.
   await page.locator("#lt-tod-dusk").click();
   await page.evaluate(() => window.__apex.lightTune({ gainB: 1.2 }));
-  await page.locator("#lt-spread-edits").click();
-  await expect(page.locator("#lt-spread-edits")).toHaveText(/^COPY TO \d+\?$/);
+  // IN-PAGE, AND HERE IT IS THE DIFFERENCE BETWEEN A TEST AND A VACUOUS ONE.
   // The armed chip belongs to dusk. Moving to night must not let the next click
   // copy the night profile instead — a confirmation that survives the thing it
-  // was confirming is worse than none.
-  await page.locator("#lt-tod-night").click();
-  await expect(page.locator("#lt-spread-edits")).toHaveText("MY EDITS");
-  // This click only ARMS the (now night) condition — it does not fire, so no
-  // copy happens. The one stored key is the ordinary tuner edit from above
-  // (dusk|dry — weather was never switched to wet in this test), persisted by
-  // the plain slider path and untouched by COPY ALL either way.
-  await page.locator("#lt-spread-edits").click();
-  await expect(page.locator("#lt-spread-edits")).toHaveText(/^COPY TO \d+\?$/);
+  // was confirming is worse than none. But arming also expires on its own after
+  // 20 s of wall clock, and a Playwright click in this container was MEASURED at
+  // 78 s (see the arm/fire note in the test above). Driven from outside, the
+  // "MY EDITS" below was therefore satisfied by the ARM TIMER rather than by the
+  // condition switch — the assertion would have held with the disarm-on-switch
+  // behaviour deleted. Inside one synchronous block no timer can fire, so the
+  // only thing that can clear the chip is the tod button's own handler.
+  const seq = await page.evaluate(() => {
+    const chip = document.getElementById("lt-spread-edits");
+    const out = {};
+    chip.click(); out.armed = chip.textContent;
+    document.getElementById("lt-tod-night").click(); out.afterSwitch = chip.textContent;
+    // This click only ARMS the (now night) condition — it does not fire, so no
+    // copy happens.
+    chip.click(); out.rearmed = chip.textContent;
+    return out;
+  });
+  expect(seq.armed).toMatch(/^COPY TO \d+\?$/);
+  expect(seq.afterSwitch).toBe("MY EDITS");
+  expect(seq.rearmed).toMatch(/^COPY TO \d+\?$/);
+  // The one stored key is the ordinary tuner edit from above (dusk|dry —
+  // weather was never switched to wet in this test), persisted by the plain
+  // slider path and untouched by COPY ALL either way.
   expect(Object.keys(await stored(page))).toEqual(["bahrain|dusk|dry"]);
 });
 
@@ -176,15 +260,18 @@ test("new grading controls clamp, persist, reset, and export", async ({ page }) 
   expect(await page.evaluate(() => window.__apex.lightTune().shadows)).toBe(bounds.shadowsMax);
   expect(await page.evaluate(() => window.__apex.lightTune().gammaG)).toBe(bounds.gammaGMin);
   await page.reload();
-  await page.waitForFunction(() => window.__apex?.race);
+  // The same declared budgets as openImageTuner — these two were the only bare
+  // waitForFunction calls in the file, so they inherited the config default
+  // while every other boot/track wait had already been measured.
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.race("bahrain"));
-  await page.waitForFunction(() => window.__apex.info().track != null);
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
   expect(await page.evaluate(() => window.__apex.lightTune().gainB)).toBeCloseTo(1.25);
 
   await reopenImageTuner(page);
-  await page.locator("#lt-copy").click();
+  await page.evaluate(() => document.getElementById("lt-copy").click());
   await expect(page.locator("#lt-json")).toHaveValue(/"gainB": 1\.25/);
-  await page.locator("#lt-reset").click();
+  await page.evaluate(() => document.getElementById("lt-reset").click());
   const reset = await page.evaluate(() => {
     const tune = window.__apex.lightTune();
     return { shadows: tune.shadows, gammaG: tune.gammaG, gainB: tune.gainB };
