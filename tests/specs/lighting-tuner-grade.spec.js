@@ -23,13 +23,17 @@ import { BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 // setup as well (same form as zandvoort-foundation.spec.js). It also survives
 // CI passing an explicit `--timeout=120000` on the command line, which is what
 // the change-aware job does.
-// 360_000 -> 600_000. The two COPY ALL tests walk EVERY track, and inside a
-// two-worker group run they measured 372.2 s and 375.4 s — over the cap doing
-// real work, not hung. A per-test cap set below what the work costs on this
-// box only converts slow into red; the job's own timeout-minutes is the real
-// backstop, which is the argument .github/workflows/ci.yml already makes for
-// the smoke shards' 420 s.
-test.describe.configure({ timeout: 600_000 });
+// 600_000 -> 300_000, DOWNWARD, because the work shrank. The old caps (360 s,
+// then 600 s) were sized around a walk that spent minutes in Playwright's
+// actionability checks — see the click table below. With that walk driven
+// in-page the five tests measure 20.3 / 72.6 / 84.5 / 46.1 / 35.5 s solo on a
+// quiet box, 259 s for the file against 2540 s before. 300 s is ~3.5x the
+// slowest of them, which leaves room for the group contention this file's own
+// history documents (see docs/TESTING.md, "the second worker costs ~1.9x" and
+// the spread that follows it) without leaving a cap that no longer describes
+// anything real. A cap far above the work does not add safety; it just hides
+// the next regression until the job's timeout-minutes catches it.
+test.describe.configure({ timeout: 300_000 });
 
 // THE MENU WALK IS DISPATCHED, NOT CLICKED — and that is a measurement, not a
 // shortcut. MEASURED in this container with ONE browser and nothing else
@@ -62,10 +66,26 @@ test.describe.configure({ timeout: 600_000 });
 // form here is the one tests/specs/ui-redesign.spec.js already uses for this
 // exact walk, so it is the established idiom for this path, not a new one.
 const walkToImageTuner = async (page) => {
-  await page.evaluate(() => window.__apex.park(0.1));
-  // Attached-and-shown only: waitForSelector does not run the stability or
-  // hit-target checks that make a real click expensive here.
-  await page.waitForSelector("#pausebtn:not([hidden])", { timeout: BOOT_MS });
+  // `go()` IS LOAD-BEARING, and its absence is what the slow walk was hiding.
+  // js/game.js:syncSettingsAvailability disables #pm-lighting unless
+  // `state === "race"`, and `race()` starts in the COUNTDOWN state. The old
+  // walk never called go() either — it just spent 85 s inside its first click
+  // (see the table above), and the countdown ran out while Playwright waited.
+  // Dispatching made the walk instant and the countdown was still going, so
+  // #pm-lighting was disabled, a disabled button's .click() fires no handler,
+  // and the panel silently never opened. ui-redesign's version of this walk has
+  // always called go() first; the dependency was real, it was just paid for by
+  // accident here.
+  await page.evaluate(() => { window.__apex.go(); window.__apex.park(0.1); });
+  // waitForFunction with polling:100, NOT waitForSelector. MEASURED: the
+  // selector form timed out after 45 s having already logged "locator resolved
+  // to visible" — its visibility check polls the same main thread a SwiftShader
+  // frame is holding, so it is no cheaper than a click. A plain `hidden` read
+  // on a fixed poll is.
+  await page.waitForFunction(() => {
+    const b = document.getElementById("pausebtn");
+    return !!b && !b.hidden;
+  }, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => {
     document.getElementById("pausebtn").click();
     document.getElementById("pm-settings").click();
@@ -75,6 +95,10 @@ const walkToImageTuner = async (page) => {
     // exists by the next statement — the same assumption ui-redesign makes.
     document.getElementById("lt-tab-image-colour").click();
   });
+  // Same reason as the pausebtn wait: `expect(locator).toBeVisible()` polls
+  // visibility on the held thread. This is the form ui-redesign uses.
+  await page.waitForFunction(() => !document.getElementById("lighting").hidden,
+    null, { polling: 100, timeout: BOOT_MS });
 };
 
 async function openImageTuner(page) {
@@ -83,12 +107,10 @@ async function openImageTuner(page) {
   await page.evaluate(() => window.__apex.race("bahrain"));
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
   await walkToImageTuner(page);
-  await expect(page.locator("#lighting")).toBeVisible();
 }
 
 async function reopenImageTuner(page) {
   await walkToImageTuner(page);
-  await expect(page.locator("#lighting")).toBeVisible();
 }
 
 test("IMAGE & COLOUR exposes ordered professional grading sections", async ({ page }) => {

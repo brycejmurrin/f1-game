@@ -636,6 +636,25 @@ and to leave clickability to the specs whose subject it is (`ui-button-touch`,
 this exact walk). Raising the timeout is the move that does NOT work here: the
 state being asserted is gone by the time any longer wait expires.
 
+**Two things that dispatching then exposed, both worth keeping.**
+
+`waitForSelector` and `expect(locator).toBeVisible()` are NOT the cheap
+alternatives they look like. `page.waitForSelector("#pausebtn:not([hidden])")`
+timed out after 45 s having already logged *"locator resolved to visible"* —
+its visibility check polls the same held main thread a click does. A
+`waitForFunction` reading `el.hidden` at `{ polling: 100 }` is the cheap form,
+and it is what `ui-redesign` already uses.
+
+**And a slow walk can pay a dependency by accident.** `js/game.js`
+`syncSettingsAvailability()` disables `#pm-lighting` unless `state === "race"`,
+while `__apex.race()` starts in the COUNTDOWN state. The old walk never called
+`go()`; it simply spent 85 s inside its first click, and the countdown ran out
+while Playwright waited. Dispatching made the walk instant, the countdown was
+still running, `#pm-lighting` was disabled — and **a disabled button's
+`.click()` fires no handler and throws nothing**, so the panel silently never
+opened and five tests failed on a hidden `#lighting` with no other clue. When a
+test is made faster, look for the setup it was buying with its own slowness.
+
 ---
 
 ## 4. Philosophy — debug-hooks first
