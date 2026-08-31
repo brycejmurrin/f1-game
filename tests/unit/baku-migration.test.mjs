@@ -32,7 +32,9 @@ function loadBaku() {
   };
   // TRACK_VM from tools/manifest.cjs, with "@circuits" narrowed to Baku only.
   for (const entry of MANIFEST.TRACK_VM) {
-    if (entry === "@circuits") run(`${MANIFEST.CIRCUITS_DIR}/baku.js`);
+    // "@circuits" narrowed to Baku — and its split-out scenery closure, without
+    // which the circuit builds bare and every landmark assertion below fails.
+    if (entry === "@circuits") { run(MANIFEST.circuitPath("baku")); run(MANIFEST.sceneryPath("baku")); }
     else run(entry);
   }
   return {

@@ -12,7 +12,7 @@
  * Every js/ file is a "use strict" IIFE assigning one global; load order is
  * hand-maintained in tools/manifest.cjs with HARD_EDGES naming the eval-time
  * dependencies. Nothing derived those edges from the code until now. This
- * scanner parses every FULL + DEFERRED + LAZY_AGENT file with espree, resolves references
+ * scanner parses every FULL + DEFERRED + LAZY_AGENT + LAZY_RACE + LAZY_SCENERY file with espree, resolves references
  * with eslint-scope, and reports per file:
  *
  *   assigns      globals the file creates AT EVAL TIME. Two idioms:
@@ -263,7 +263,13 @@ export function scanSource(src, file) {
 // Repo scan.
 
 export function listFiles() {
-  const lazy = (manifest.LAZY_AGENT || []).slice();
+  // LAZY_AGENT (dev/test surface) + LAZY_RACE (race payload). Both are tagless
+  // and injected at runtime, and both ASSIGN globals other files read at call
+  // time — light-presets.js assigns window.LightPresets, which light-store.js
+  // and game.js read. Leaving a lazy roster out of the scan does not make the
+  // read safe, it makes it invisible.
+  const lazy = [...(manifest.LAZY_AGENT || []), ...(manifest.LAZY_RACE || []),
+    ...(manifest.LAZY_SCENERY || [])];
   return {
     full: manifest.FULL.slice(),
     deferred: Object.fromEntries(Object.entries(manifest.DEFERRED).map(([k, v]) => [k, v.slice()])),
