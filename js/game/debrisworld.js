@@ -1110,7 +1110,7 @@ function drawBody(body, sc, mesh, opts, gfx) {
 // four per-body loops: at desktop caps a pileup reaches 48+16+24+10 = 98 draws.
 //
 // MEASURED on vegas night with NO incident debris at all (docs/PERF-FINDINGS.md
-// 2g): 17 draws a frame, every one a CONE. registerFurniture places a cone at
+// 2h): 17 draws a frame, every one a CONE. registerFurniture places a cone at
 // every corner of every circuit and the cone loop has no liveness test, so this
 // is a cost on every frame of every lap, not a pileup-only one — which is
 // exactly why the steady-state census never attributed it. Instanced, the whole

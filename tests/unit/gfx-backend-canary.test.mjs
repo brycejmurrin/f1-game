@@ -492,18 +492,16 @@ test("the instancing gate is declared through the cache, never bracketed per dra
     "a new useProg(litProg) site must also declare uInstanced — see PERF-FINDINGS 2e");
 });
 
-test("uModel and uNumLights go through the redundancy cache, not a raw upload", () => {
-  // PERF-FINDINGS 2g: uNumLights was 111 uploads/frame for 51.5 distinct values
-  // (uploadLightSet runs per visible chunk and neighbours resolve to the same
-  // COUNT), uModel 103.2 for 50.3 (drawChunked calls litMaterial once per chunk
-  // run, every run of one mesh sharing that mesh's matrix). 112 GL calls/frame.
+test("uModel goes through the redundancy cache, not a raw upload", () => {
+  // PERF-FINDINGS 2h: uModel was 103.2 uploads/frame for 50.3 distinct values,
+  // because drawChunked calls litMaterial once per chunk RUN and every run of
+  // one mesh shares that mesh's matrix. uNumLights is the SAME defect found by
+  // the other lineage and is pinned separately by 2g's own assertion (_luNL) —
+  // do not add a second cache on it here.
   const glx = read("js/render/glx.js");
   assert.match(glx, /ufM4\(litU\.uModel, _litUf, "model", modelMat\);/);
-  assert.match(glx, /ufi\(litU\.uNumLights, _litUf, "numLights", nL\);/);
   assert.doesNotMatch(glx, /gl\.uniformMatrix4fv\(litU\.uModel/,
     "uModel must go through ufM4, not a raw uniformMatrix4fv");
-  assert.doesNotMatch(glx, /gl\.uniform1i\(litU\.uNumLights/,
-    "uNumLights must go through ufi, not a raw uniform1i");
 
   // ufM4 must COPY. Callers hand in scratch matrices they mutate in place
   // (game.js _wheelWorld/_ringWorld, DebrisWorld _mat); retaining the reference
@@ -519,7 +517,7 @@ test("updateInstances clears the cull snapshots it did not produce", () => {
   // resident bytes) and _cellKeyN (the surviving cell set), and a hit SKIPS the
   // re-upload. updateInstances writes bytes produced by no frustum at all, so
   // leaving either snapshot standing lets a later cullInstances hit its cache
-  // and draw this pack as though it were that frustum's. PERF-FINDINGS 2g.
+  // and draw this pack as though it were that frustum's. PERF-FINDINGS 2h.
   const glx = read("js/render/glx.js");
   const fn = glx.slice(glx.indexOf("function updateInstances("));
   const body = fn.slice(0, fn.indexOf("\n  }") + 4);
@@ -534,7 +532,7 @@ test("updateInstances clears the cull snapshots it did not produce", () => {
 test("the debris pools instance behind a capability read, with the loop as fallback", () => {
   // Four per-body loops reaching 98 draws at desktop caps — and 17 every frame
   // of every lap from cones alone, which have no liveness test (PERF-FINDINGS
-  // 2g). GLX ships updateInstances; WGX and TLX have not been ported and MUST
+  // 2h). GLX ships updateInstances; WGX and TLX have not been ported and MUST
   // keep the per-body path rather than silently drawing nothing.
   const dw = read("js/game/debrisworld.js");
   assert.match(dw, /gfx\.updateInstances\(b, m, n\);/);

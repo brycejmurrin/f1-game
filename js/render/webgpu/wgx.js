@@ -5543,7 +5543,7 @@ const WGX = (function () {
       // so this is a perf gap, never a correctness one. Porting it means
       // expanding the caller's stride-16 matrices into WGX's stride-20 instance
       // layout (16 matrix + 3 colour + pad) and deciding what the colour lanes
-      // mean for a batch created without srcColors. docs/PERF-FINDINGS.md 2g.
+      // mean for a batch created without srcColors. docs/PERF-FINDINGS.md 2h.
       updateInstances: undefined,
       drawInstanced,
       freeInstancedBatch,

@@ -141,7 +141,7 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   frame rather than static geometry narrowed by a frustum. Its one
   consumer is `DebrisWorld.draw`, whose four per-body loops reached 98
   draws at desktop caps and cost 17 every frame of every lap from cones
-  alone (PERF-FINDINGS 2g). WGX and TLX do not implement it and keep the
+  alone (PERF-FINDINGS 2h). WGX and TLX do not implement it and keep the
   per-body loop, which looks identical — so porting it is a perf task,
   never a correctness one. It MUST clear `_cullPlanes`/`_cellKeyN`:
   those snapshots describe the frustum that wrote the resident bytes and
