@@ -456,7 +456,14 @@ const CEILINGS = {
   // wet-tyre grip path — and the union carries both sets of lines, so neither
   // number fits. Re-measured on the merged tree at 8797, the same way the
   // ACTIVE AERO and czSyncMarkRows merges above had to be.
-  "js/game.js": 8797,
+  // 8793 -> 8803: this lineage's RACE IN PORTRAIT opt-in handler and its
+  // restore-on-boot read (10 lines). Portrait racing was blocked by one CSS
+  // rule, never by logic — PERF-FINDINGS 5a. Re-measured on the MERGED tree,
+  // not added on paper: `lines()` reads 8803 here.
+  // MERGED a third time: their 8797 (wet-tyre grip) and this side's 8803 (the
+  // RACE IN PORTRAIT opt-in) each fit their own lineage and neither fits the
+  // union, which carries both. Re-measured on THIS tree: 8807.
+  "js/game.js": 8807,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -845,7 +852,15 @@ const CEILINGS = {
   // real-GPU workflow gated on gpuErrors and GLX never defined it, so that
   // clause read null and passed forever (PERF-FINDINGS 2e). A deliberate
   // raise: the gate is worth more than the lines.
-  "js/render/glx.js": 1975,
+  // 1975 -> 1990: the uNumLights redundancy cache (_luNL) plus the note that
+  // makes it safe to keep. It is 3 lines of code; the other 12 record WHY this
+  // one is not cleared per frame like the _mat* caches beside it (a WebGL
+  // uniform is per-PROGRAM state, so it survives every unbind and only a relink
+  // invalidates it) and the measurement that justified writing it at all —
+  // 111 uploads a frame for 53.7 distinct values, so 52 % redundant, which is
+  // the test the two retired caches at `setCull` and `uInstanced` failed.
+  // uniform1i 146.4 -> 87.9 a frame, every other counter identical.
+  "js/render/glx.js": 1990,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)

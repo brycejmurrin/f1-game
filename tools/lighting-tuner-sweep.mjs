@@ -32,7 +32,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DIR = path.join(ROOT, "artifacts/graphics/tuner-sweep");
 const W = 320, H = 180, SW = 160, SH = 90;
 export const FLOOR = 2.0;

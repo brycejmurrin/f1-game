@@ -170,6 +170,14 @@ const GLX = (function () {
 
   // Material uniform cache — skip redundant per-draw scalar uploads.
   let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1, _matCC = -1, _matCP = -1, _matSpark = -1;
+  // uNumLights, last value written to the LIT program. Unlike the _mat* caches
+  // above this is NOT cleared per frame: a WebGL uniform is per-PROGRAM state
+  // and survives every unbind, so the only thing that can invalidate it is a
+  // relink — which is where it is reset (beside the locs() call that fetches
+  // the location). Uploading it is unconditional today, and uploadLightSet is
+  // its only writer on this program; post.js's godray pass writes its OWN
+  // program's uNumLights through a different location and cannot collide.
+  let _luNL = -1;
 
   // Active-program cache — gl.useProgram is a pipeline-flushing state change, so
   // skip it when the requested program is already bound. Route every bind here.
@@ -483,6 +491,7 @@ const GLX = (function () {
     // black and only the sky survived. Generic attribute values are CONTEXT
     // state, not VAO state, so setting it once here covers every mesh.
     gl.vertexAttrib3f(9, 1, 1, 1);
+    _luNL = -1;   // a relink resets every uniform on the program — see the cache's note
     litU = locs(litProg, ["uModel", "uInstanced", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uEnvCube", "uEnvStr",
@@ -1341,7 +1350,13 @@ const GLX = (function () {
     const nTail = (L2 && n2 > 0) ? Math.min(n2 | 0, MAX_LIGHTS) : 0;
     const nStatic = L ? Math.max(0, Math.min(MAX_LIGHTS - nTail, n | 0)) : 0;
     const nL = nStatic + nTail;
-    gl.uniform1i(litU.uNumLights, nL);
+    // MEASURED BEFORE WRITING (docs/PERF-FINDINGS.md §2e's rule): vegas night,
+    // full field in a pack, 111 uploads a frame against 53.7 distinct VALUES —
+    // 52 % redundant, and not the 1,0,1,0 alternation that made a cache
+    // worthless at `setCull` and `uInstanced`. It is chunk lamp counts in
+    // spatial order, so it runs: ...8,8,8,8... and a long tail of 0 where the
+    // per-chunk path uploads a count and returns without touching the array.
+    if (nL !== _luNL) { gl.uniform1i(litU.uNumLights, nL); _luNL = nL; }
     if (nL <= 0) return;
     const L4 = _luL;
     for (let i = 0; i < nL; i++) {

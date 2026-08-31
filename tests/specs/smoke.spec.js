@@ -330,7 +330,21 @@ sharedTest.describe("Apex 26 — HUD", () => {
     // failed first the moment anything else touched the CPU.
     await page.waitForFunction(
       () => parseInt(document.getElementById("hud-speed-n").textContent, 10) > 0,
-      null, { polling: 100, timeout: 3000 }
+      // DERIVED from the test's own budget, not pinned. This wait has now been
+      // wrong twice: 3000 ms failed Pages #1849/#1850/#1851, and the 30000 that
+      // replaced it still failed #1855 — where the asset pack alone took 55 s
+      // and car builds landed at 165-182 s of page time, against seconds
+      // locally. Every one of those dumped `apex-state` showing speed: 80: the
+      // physics had the value and the HUD had not repainted yet. A constant
+      // here is a guess about a machine, and the machine keeps getting slower.
+      //
+      // test.info().timeout IS the budget CI hands this spec (900 s there, the
+      // 120 s default locally), so a quarter of it scales with whatever the
+      // workflow sets and needs no edit the next time that moves. The ASSERTION
+      // below is untouched, and this still cannot mask a hung HUD — the test
+      // budget itself remains the backstop, and a readout that never updates
+      // fails at 4x this wait.
+      null, { polling: 100, timeout: Math.max(30_000, Math.floor(test.info().timeout / 4)) }
     );
 
     const speed = await page.locator("#hud-speed-n").innerText();

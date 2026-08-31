@@ -423,6 +423,35 @@ test("GLX pins the per-chunk uploadLightSet revert (arity 3) and no-ops when the
   assert.match(present, /ctxGone\(\)/);
 });
 
+test("the GPU-census gate scopes hardware expectations, and only those", () => {
+  // Two checks are hardware-only ON PURPOSE: a software image may legitimately
+  // fail to bring a backend up, and failing the job for that is noise. The rest
+  // must stay unconditional — a real GPU error, a run that did not finish, or a
+  // missing artifact is a defect on ANY image. This pins the split so the
+  // scoping cannot quietly spread. docs/PERF-FINDINGS.md 2f.
+  const wf = read(".github/workflows/gpu-census.yml");
+
+  for (const re of [/if \(hardware && gfx\.gpuErrors == null\)/,
+                    /if \(hardware && g\.gfxReadFailed\)/,
+                    /if \(hardware && be\.softAdapter === true\)/]) {
+    assert.match(wf, re, `this check must be scoped to hardware images: ${re}`);
+  }
+
+  // …and these must NOT be, or the gate stops gating.
+  assert.match(wf, /if \(g\.ok !== true \|\| g\.phase !== "done"\)/);
+  assert.match(wf, /if \(!g\) \{ bad\.push/);
+  assert.match(wf, /else if \(gfx\.gpuErrors > 0\)/);
+  assert.doesNotMatch(wf, /hardware && \(?g\.ok !== true/,
+    "a run that did not finish must fail on every image");
+  assert.doesNotMatch(wf, /hardware && gfx\.gpuErrors > 0/,
+    "a real GPU error must fail on every image");
+
+  // The reason a leg is empty must always be PRINTED, even where it is not
+  // blocking — that is the whole point of 2f.
+  assert.match(wf, /rows\.push\(`\$\{" "\.repeat\(8\)\}gfx:/);
+  assert.match(wf, /if \(g\.error\) rows\.push/);
+});
+
 test("GLX exports a real gpuErrors counter and the workflow fails on a missing one", () => {
   // The real-GPU gate checked `(gfx.gpuErrors || 0) > 0` while ONLY WGX defined
   // gpuErrors, so on the GLX leg it read null and passed vacuously from the day
@@ -1848,4 +1877,40 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
     "env cube must not arm the 2-attachment program");
   assert.doesNotMatch(envBody, /setMRT\(/,
     "env cube render must not install a renderer MRT");
+});
+
+// uNumLights is uploaded 111 times a frame (vegas night, full field in a pack)
+// for 53.7 distinct values — uploadLightSet sets the count unconditionally, and
+// the per-chunk path calls it once per visible chunk, including the many that
+// return immediately on a count of 0. The redundancy cache that collapses that
+// is only sound because of two facts, and this pins both:
+//
+//  1. ONE WRITER. A WebGL uniform is per-PROGRAM state, so the cached value
+//     survives every unbind — but only while nothing else writes it on the lit
+//     program. post.js's godray pass has its own uNumLights on its own program
+//     and cannot collide; a SECOND writer on the lit program would make the
+//     cache lie, and this is the assertion that would catch it.
+//  2. RESET AT RELINK. A relink resets every uniform on the program, so the
+//     cache has to be cleared where the locations are re-fetched.
+test("GLX caches uNumLights, and nothing else writes it on the lit program", () => {
+  const src = read("js/render/glx.js");
+  const bare = src.replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(bare, /if\s*\(nL\s*!==\s*_luNL\)\s*\{\s*gl\.uniform1i\(litU\.uNumLights,\s*nL\);\s*_luNL\s*=\s*nL;/,
+    "uploadLightSet must skip an unchanged uNumLights and record what it wrote");
+  const writers = bare.match(/uniform1i\(\s*litU\.uNumLights/g) || [];
+  assert.equal(writers.length, 1,
+    `litU.uNumLights has ${writers.length} writers — the cache is only valid with one; ` +
+    "route the new one through uploadLightSet or drop the cache");
+  // The reset must sit with the locs() call that re-fetches the locations,
+  // which is the only moment a relink can have thrown the value away.
+  const at = bare.indexOf("litU = locs(litProg");
+  assert.notEqual(at, -1, "the lit program's locs() call moved");
+  assert.match(bare.slice(Math.max(0, at - 200), at), /_luNL\s*=\s*-1/,
+    "the uNumLights cache must be cleared where the lit program's locations are re-fetched");
+  // And it must NOT be swept up in the per-frame material reset: those exist
+  // because begin() re-establishes material state, while this value is program
+  // state that is still correct across frames. Clearing it there would give
+  // back the whole saving.
+  assert.doesNotMatch(bare, /_matEmissive\s*=[^;]*_luNL/,
+    "uNumLights is program state, not per-frame material state — do not reset it in begin()");
 });

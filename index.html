@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1670">
+<meta name="apex-build" content="1675">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -74,8 +74,8 @@
 <link rel="stylesheet" href="css/menus.css?v=0a8b5b576ffe">
 <link rel="stylesheet" href="css/carsetup.css?v=836e3f3078e6" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=09eec5dfd7e7" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=32503846c994" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/responsive.css?v=8a786dd056c6">
+<link rel="stylesheet" href="css/overlays.css?v=5a7b2efa68cb" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/responsive.css?v=4175c6390faf">
 <link rel="stylesheet" href="css/track-detail.css?v=84a9ef4846b3" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=dab85626d73c" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=2e723024c38d" media="print" onload="this.media='all'">
@@ -283,6 +283,7 @@
     <div class="rotate-icon" aria-hidden="true">&#8635;</div>
     <p id="rotate-title">Rotate to landscape to race</p>
     <small id="rotate-detail">Turn off rotation lock, then rotate your phone.</small>
+    <button id="rotate-race" type="button">RACE IN PORTRAIT</button>
     <button id="rotate-controls" type="button">OPEN CONTROLS</button>
     <button id="rotate-exit" type="button">EXIT RACE</button>
   </div>
@@ -1757,7 +1758,7 @@
 <script crossorigin="anonymous" src="js/render/glx/shadow.js?v=c89be0d9caf8"></script>
 <script crossorigin="anonymous" src="js/render/lamp-chunks.js?v=28217a3b6b01"></script>
 <script crossorigin="anonymous" src="js/render/glx/chunked.js?v=c2bdf509b1eb"></script>
-<script crossorigin="anonymous" src="js/render/glx.js?v=cc05ed09ada2"></script>
+<script crossorigin="anonymous" src="js/render/glx.js?v=d964176f768c"></script>
 <!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
      two OPT-IN renderer backends and are injected by js/game.js only when
      apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that
@@ -1831,8 +1832,8 @@
 <script crossorigin="anonymous" src="js/track/tracks.js?v=3ce0561cc60a"></script>
 <script crossorigin="anonymous" src="js/track/maps.js?v=0d6c2cddd707"></script>
 <script crossorigin="anonymous" src="js/car/car3d.js?v=813f79d40943"></script>
-<script crossorigin="anonymous" src="js/game/input.js?v=6d9477b5a3e6"></script>
-<script crossorigin="anonymous" src="js/game/audio.js?v=fd0de963ba05"></script>
+<script crossorigin="anonymous" src="js/game/input.js?v=fcbbf6486e6a"></script>
+<script crossorigin="anonymous" src="js/game/audio.js?v=f57d46e17b71"></script>
 <script crossorigin="anonymous" src="js/game/music-lib.js?v=f43e998612b3"></script>
 <script crossorigin="anonymous" src="js/game/spotify.js?v=27c8d6373cac"></script>
 <script crossorigin="anonymous" src="js/game/audio-panel.js?v=12b308c3d8e4"></script>
@@ -1910,5 +1911,5 @@
 <script crossorigin="anonymous" src="js/net/session.js?v=935aa5ccc011"></script>
 <script crossorigin="anonymous" src="js/net/netplay.js?v=91075be47b3d"></script>
 <script crossorigin="anonymous" src="js/net/lobby.js?v=8e51a9178e0c"></script>
-<script crossorigin="anonymous" src="js/game.js?v=c4fd46992adc"></script>
+<script crossorigin="anonymous" src="js/game.js?v=cc0e6471d564"></script>
 </body></html>

@@ -279,6 +279,18 @@ test("portrait race blocker is an actionable accessible dialog", () => {
     "Controls must pause before yielding the blocker to help");
   assert.match(game, /\$\("rotate-exit"\)\.onclick\s*=\s*\(\)\s*=>\s*quitToMenu\(\)/,
     "Exit Race must use the real session cleanup path");
+
+  // RACE IN PORTRAIT is the opt-in. The blocker stays the DEFAULT — it is the
+  // recovery path for a phone rotation-locked mid-race — so the CSS must gate
+  // on a class the player sets, never remove the rule.
+  assert.match(html, /id="rotate-race"/);
+  assert.match(game, /\$\("rotate-race"\)\.onclick[\s\S]*?rotate-ok/,
+    "the opt-in must set the class the blocker rule reads");
+  assert.match(game, /localStorage\.setItem\("apex26\.portraitOk"/,
+    "the choice must survive a reload, or the blocker asks again every race");
+  const css = fs.readFileSync(path.join(ROOT, "css/responsive.css"), "utf8");
+  assert.match(css, /body\.in-race:not\(\.rotate-ok\) #rotate-device \{ display: flex; \}/,
+    "the blocker must still appear by default — opt-in, not opt-out");
 });
 
 test("no screen fakes modality with a div claiming dialog semantics", () => {

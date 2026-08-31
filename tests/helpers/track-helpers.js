@@ -34,6 +34,7 @@
 // PNGs) AND a parallel visual-regression-circuits-N set — the two were redundant
 // pixel suites. Collapsed to ONE data-driven spec looping TRACKS at 6 fractions.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "./fixtures.js";   // measured boot budget — see its note there
 
 // Every circuit, in Tracks.LIST order — DERIVED, not written down. This used to
 // be a hand-maintained array whose comment still said "the 24 circuits" long
@@ -74,7 +75,7 @@ async function waitForTrack(page, timeout = 10_000) {
 
 async function goToRace(page, circuit) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate((c) => window.__apex.race(c), circuit);
   await waitForTrack(page);
   // race() leaves the game in "count" (countdown) state; go() skips to "race"
