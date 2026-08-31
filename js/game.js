@@ -3528,7 +3528,15 @@ function update(dt) {
     }
   }
 
-  if (soundOn) {
+  // `&& player`, and it is not defensive noise: startRace already documents that
+  // player can be null ("roster/team resolution miss") and guards ITSELF, but
+  // this block dereferenced it unguarded — and startRace is now async (it awaits
+  // ensureScenery), so there is a real window where update() ticks before
+  // makeCars has run. A throw here is not a dropped frame: it escapes tick()
+  // before the requestAnimationFrame re-schedule, so the render loop dies for
+  // the rest of the session. Measured: __apex.race() + go() left the canvas at
+  // ZERO draws a frame, permanently. docs/PERF-FINDINGS.md 2i.
+  if (soundOn && player) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0;
     _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetRoad();

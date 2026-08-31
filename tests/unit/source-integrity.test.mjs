@@ -345,3 +345,35 @@ test("scenery SUPPRESSED is coalesced, not a per-prop Log.warn", () => {
   assert.match(tracks, /: suppressed /);
 });
 
+
+test("the audio block cannot deref a null player — one throw kills the render loop", () => {
+  // startRace is ASYNC now (it awaits ensureScenery for the split scenery
+  // files), so update() can tick before makeCars has staged the grid. It
+  // already documents that player may be null and guards ITSELF; this block did
+  // not, and a throw here does not cost a frame — it escapes tick() before the
+  // requestAnimationFrame re-schedule, so the loop never runs again. Measured
+  // 2026-08-31 via __apex.race() + go(): 0 draws a frame, permanently, with
+  // "Cannot read properties of null (reading 'rpm')" once. PERF-FINDINGS 2i.
+  const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(src, /if \(soundOn && player\) \{/,
+    "the engine-audio block must test player before dereferencing it");
+  assert.doesNotMatch(src, /if \(soundOn\) \{\n\s*const revFrac/,
+    "the unguarded `if (soundOn)` form is back — it dies on a null player");
+});
+
+test("the GL-call census refuses to report a frame it did not measure", () => {
+  // It printed `per: {}` and exited 0 for a whole session while the render loop
+  // was dead: "no calls" was indistinguishable from "I counted no calls". Same
+  // absence-reads-as-normal shape as the vacuous gpuErrors check and the
+  // readdirSync harnesses that built circuits bare, both of which shipped
+  // confident numbers about nothing. PERF-FINDINGS 2i.
+  const src = fs.readFileSync(path.join(ROOT, "tools/glx-call-census.mjs"), "utf8");
+  assert.match(src, /CENSUS MEASURED NOTHING/);
+  assert.match(src, /process\.exitCode = 1/,
+    "an empty census must exit non-zero, not merely print");
+  // race() -> wait -> go(), never one evaluate: go() in the async startRace
+  // window is what killed the loop in the first place.
+  assert.match(src, /__apex\.race\(t, d, "clear"\); \}, \[TRACK, TOD\]\)/);
+  assert.match(src, /await page\.evaluate\(\(\) => __apex\.go\(\)\)/,
+    "go() must come after the track wait, on its own");
+});

@@ -482,7 +482,14 @@ const CEILINGS = {
   // 8807 on work of its own. Neither number fits the union, which carries both
   // sets of lines. Re-measured on THIS tree with the suite's own split-newline
   // metric (not grep -c, which is one short on a file with no trailing newline): 8870.
-  "js/game.js": 8870,
+  // 8870 -> 8878: eight lines, all comment, for a one-word fix — `if (soundOn)`
+  // became `if (soundOn && player)`. The words are worth more than the guard:
+  // startRace already tolerates a null player and says so, but this block
+  // dereferenced it, and startRace is now ASYNC (it awaits ensureScenery), so a
+  // real window exists where update() ticks before makeCars has run. A throw
+  // there escapes tick() before the rAF re-schedule, so the render loop dies for
+  // the session — measured at ZERO draws a frame, permanently. PERF-FINDINGS 2i.
+  "js/game.js": 8878,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).

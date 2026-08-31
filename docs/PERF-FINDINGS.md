@@ -1439,6 +1439,96 @@ duplicate, so there is no free win — only a reorder, and 2e already put the
 ceiling on reordering at 8.7 draws (4.8%). Dropped. Do not re-open without a
 new measurement.
 
+## 2i. The instrument was blind in one eye and blank in the other (2026-08-31)
+
+A round-13 perf hunt found no perf win and two defects instead. Both were
+invisible for the same reason: **the thing doing the measuring said nothing was
+wrong.**
+
+### `glx-call-census.mjs` reported an empty frame as a success
+
+Every counter zero, `per: {}`, exit code 0. Not an error — a confident answer
+about nothing. The unmodified tool did it too (checked out at `ba7ceb8` in a
+second worktree and re-run), so it was the tree, not the edit.
+
+Cause: the boot round made `startRace` **async** (it awaits `ensureScenery` for
+the split `js/circuits/scenery/` files). The tool did
+
+```js
+await page.evaluate(() => { __apex.race(t, d, "clear"); __apex.go(); });
+```
+
+in ONE evaluate, so `go()` landed in the window where `race()` had returned but
+`makeCars` had not run. It flipped state to "race" on a game whose `player` was
+still null, and `update()`'s engine-audio block dereferenced it.
+
+### A throw in `update()` does not cost a frame — it ends the session
+
+`js/game.js` `if (soundOn) { … player.rpm … }` had no null test, while
+`startRace` twenty lines away explicitly tolerates a null player ("roster/team
+resolution miss") and guards itself. The throw escapes `tick()` **before** the
+`requestAnimationFrame` re-schedule, so the render loop never runs again.
+
+| `__apex.race()` + `go()` | draws over 20 frames | page errors |
+|---|---|---|
+| before | **0** | `Cannot read properties of null (reading 'rpm')` |
+| after (`soundOn && player`) | **6371** | none |
+
+**Not player-facing, and that was checked rather than assumed**: the real menu
+walk (`#mb-race` → `#sel-go` → `#cs-done` → `#rs-go`) renders 10,415 draws over
+20 frames with no errors on the same tree. The dev API reached a state the UI
+cannot. Build 1679 was fine for players; the fix is robustness, not a hotfix.
+
+### What the census could never see: ~152 calls a frame
+
+It wrapped **15 methods**. The renderer calls a dozen more that mutate state per
+draw, so five rounds of GLX work optimised against a partial frame. Now counted,
+with `enable`/`disable` bucketed BY CAP (one number for all caps is what let §0's
+toggle question be answered once and then forgotten):
+
+| previously uncounted | /frame |
+|---|---|
+| `enable` + `disable` — of which **CULL_FACE 55.7** | 75.0 |
+| `uniform2f` | 17.9 |
+| `viewport` | 14.9 |
+| `polygonOffset` | 9.9 |
+| `colorMask` / `depthMask` / `blendFunc` | 26.8 |
+| `uniform1fv`, `uniform2fv`, `clear`, `texParameteri` | 7.3 |
+
+Report ~152, not the 226.9 a naive sum gives: the per-cap buckets are the SAME
+calls as `enable`/`disable`, and double-counting them would inflate the finding.
+
+CULL_FACE dominates and is exactly the toggle pair §0 measured and retired — it
+alternates because `doubleSided` car draws sit between single-sided neighbours,
+so a cache collapses none of it. Nothing here reopens that.
+
+### Closed by measurement: hoisting the blob-shadow loop state
+
+The plan for this round was to hoist `drawShadow`'s per-call `uniform2f(uSize)`
+and its `setPolyOffset` on/off bracket out of the flush loop at
+`js/game.js:7249`, on the estimate that a full grid draws ~20 blob shadows.
+
+**Measured: 1.8 a frame.** The r=8 m frustum gate plus the behind-eye test cull
+almost the whole field in that camera. The hoist would save ~9 calls a frame and
+would cost a new API member on all three backends (the parity guard requires it),
+three module-size raises and its own canary assertions. Dropped — the same call
+§2e made on material sorting, for the same reason.
+
+Two stale claims fall out of that number: `js/render/glx.js`'s comment that
+`drawDecal` runs "~22x/frame" predates the frustum gate, and this file's own
+framing of the per-car block as the bulk of `drawElements` is wrong — chunked
+scenery is ~94 of it.
+
+### The transferable rule
+
+Three instruments in this file have now failed the same way: `gpuErrors` read
+`null` and passed vacuously, `readdirSync` harnesses built circuits bare and
+reported confident geometry, and this census printed an empty frame as a result.
+**An instrument must be able to say "I measured nothing".** The census now exits
+non-zero on a frame with no `drawElements`, and both that and the null guard are
+pinned in `tests/unit/source-integrity.test.mjs`, each proven to bite by
+sabotage.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.
