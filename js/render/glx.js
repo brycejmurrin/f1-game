@@ -170,6 +170,14 @@ const GLX = (function () {
 
   // Material uniform cache — skip redundant per-draw scalar uploads.
   let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1, _matCC = -1, _matCP = -1, _matSpark = -1;
+  // uNumLights, last value written to the LIT program. Unlike the _mat* caches
+  // above this is NOT cleared per frame: a WebGL uniform is per-PROGRAM state
+  // and survives every unbind, so the only thing that can invalidate it is a
+  // relink — which is where it is reset (beside the locs() call that fetches
+  // the location). Uploading it is unconditional today, and uploadLightSet is
+  // its only writer on this program; post.js's godray pass writes its OWN
+  // program's uNumLights through a different location and cannot collide.
+  let _luNL = -1;
 
   // Active-program cache — gl.useProgram is a pipeline-flushing state change, so
   // skip it when the requested program is already bound. Route every bind here.
@@ -195,15 +203,8 @@ const GLX = (function () {
     if (!loc) return;
     if (cache[key] !== v) { gl.uniform1f(loc, v); cache[key] = v; }
   }
-  // Integer twin of uf1, for uNumLights. MEASURED (docs/PERF-FINDINGS.md 2g):
-  // 111 uploads a frame for a value that takes 51.5 distinct values, because
-  // uploadLightSet runs once per visible chunk and neighbouring chunks
-  // repeatedly resolve to the same lamp COUNT. 59.5 calls a frame collapse.
-  function ufi(loc, cache, key, v) {
-    if (!loc) return;
-    if (cache[key] !== v) { gl.uniform1i(loc, v); cache[key] = v; }
-  }
-  // mat4 twin, for uModel: 103.2 uploads a frame against 50.3 distinct values,
+  // mat4 twin of uf1, for uModel: 103.2 uploads a frame against 50.3 distinct
+  // values (docs/PERF-FINDINGS.md 2h),
   // because drawChunked calls litMaterial once per chunk RUN and every run of
   // one mesh shares that mesh's model matrix.
   //
@@ -512,6 +513,7 @@ const GLX = (function () {
     // black and only the sky survived. Generic attribute values are CONTEXT
     // state, not VAO state, so setting it once here covers every mesh.
     gl.vertexAttrib3f(9, 1, 1, 1);
+    _luNL = -1;   // a relink resets every uniform on the program — see the cache's note
     litU = locs(litProg, ["uModel", "uInstanced", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uEnvCube", "uEnvStr",
@@ -1370,7 +1372,13 @@ const GLX = (function () {
     const nTail = (L2 && n2 > 0) ? Math.min(n2 | 0, MAX_LIGHTS) : 0;
     const nStatic = L ? Math.max(0, Math.min(MAX_LIGHTS - nTail, n | 0)) : 0;
     const nL = nStatic + nTail;
-    ufi(litU.uNumLights, _litUf, "numLights", nL);
+    // MEASURED BEFORE WRITING (docs/PERF-FINDINGS.md §2e's rule): vegas night,
+    // full field in a pack, 111 uploads a frame against 53.7 distinct VALUES —
+    // 52 % redundant, and not the 1,0,1,0 alternation that made a cache
+    // worthless at `setCull` and `uInstanced`. It is chunk lamp counts in
+    // spatial order, so it runs: ...8,8,8,8... and a long tail of 0 where the
+    // per-chunk path uploads a count and returns without touching the array.
+    if (nL !== _luNL) { gl.uniform1i(litU.uNumLights, nL); _luNL = nL; }
     if (nL <= 0) return;
     const L4 = _luL;
     for (let i = 0; i < nL; i++) {
@@ -1406,7 +1414,7 @@ const GLX = (function () {
     useProg(litProg);
     // litU.uModel is written ONLY here — decal/shadow/mark/depth each own a
     // separate program and therefore a separate location, so this cache cannot
-    // be staled by them. docs/PERF-FINDINGS.md 2g.
+    // be staled by them. docs/PERF-FINDINGS.md 2h.
     ufM4(litU.uModel, _litUf, "model", modelMat);
     // The instancing gate rides the redundancy cache: 54.8 uniform1f/frame for a
     // value that changes 3.1 times. docs/PERF-FINDINGS.md 2e. It is declared
@@ -1618,7 +1626,7 @@ const GLX = (function () {
   // Hand a batch a caller-packed instance set. cullInstances() is for a STATIC
   // batch narrowed by a frustum; this is for one whose transforms are new every
   // frame — DebrisWorld's four Rapier pools, where the bodies move and the only
-  // question is how many are live (docs/PERF-FINDINGS.md 2g). The caller packs
+  // question is how many are live (docs/PERF-FINDINGS.md 2h). The caller packs
   // to the front because WebGL2 has no baseInstance (see createInstancedBatch).
   //
   // CLEARING THE CULL SNAPSHOTS IS LOAD-BEARING, not tidiness. cullInstances

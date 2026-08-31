@@ -1006,6 +1006,65 @@ and the next ordinary draw one more.
 | **uniform1f** | **197.2** | **153.1** (-22.4 %) |
 | every other counter | — | identical |
 
+## 2f. uNumLights was 111 uploads a frame for 53.7 values (2026-08-29)
+
+With `uniform4fv` down to 69.4 (§2d) and `uniform1f` to 153.1 (§2e),
+**`uniform1i` at 146.4 became the largest uniform class on the default
+backend.** Resolving the locations to names — the same `getUniformLocation`
+wrap §2e introduced — puts three quarters of it in one uniform:
+
+| uniform | uploads/frame |
+|---|---|
+| **uNumLights** | **111** |
+| uLampShadowIdx | 10.7 |
+| uTex | 6 |
+| everything else | < 2.5 each |
+
+`uploadLightSet` sets the count unconditionally and only then returns early on
+zero, so the per-chunk path (~69 visible chunks) pays a `uniform1i` for every
+chunk INCLUDING the many with no lamps — which is why 111 exceeds the 69.4
+`uLight[0]` uploads beside it.
+
+**Ceiling measured before writing any code**, per §2e's rule, because the two
+neighbouring caches that were retired (`setCull`, the `uInstanced` bracket)
+died on alternation rather than on volume:
+
+| vegas night, pack | per frame |
+|---|---|
+| uNumLights uploads | 111 |
+| distinct VALUES | 53.7 |
+| **collapsible** | **57.3 (52 %)** |
+
+Not alternation. The sequence is chunk lamp counts in spatial order, so it runs
+— `45, 8, 7, 2, 5, 5, 7, 6, 8, 6, 6, 6, 7, 7, …` then a long tail of `0` where
+the count is set and the array never touched.
+
+A `_luNL` cache in `uploadLightSet`, measured A/B on the same instrument with
+the cache as the only change:
+
+| | before | after |
+|---|---|---|
+| **uniform1i** | **146.4** | **87.9** (-40 %) |
+| drawElements | 163 | 163 |
+| uniform1f / uniform4fv / uniformMatrix4fv | 153.1 / 69.4 / 118.2 | identical |
+| bufferSubData KiB | 512.6 | 512.6 |
+
+**Why it is sound, and what pins it.** A WebGL uniform is per-PROGRAM state, so
+the cached value survives every unbind — this cache is deliberately NOT cleared
+per frame the way the `_mat*` caches are, and clearing it in `begin()` would
+give the whole saving back. It can only go stale two ways, and
+`gfx-backend-canary.test.mjs` asserts against both: a SECOND writer of
+`litU.uNumLights` (post.js's godray pass has its own uNumLights on its own
+program and cannot collide), and a relink, which resets every uniform and is
+where `_luNL` is cleared. Both halves of the guard were confirmed red against
+sources with the respective piece removed.
+
+*Instrument note.* A canvas mean-RGB was tried as a cheap correctness oracle
+and is useless here: `drawImage` from a WebGL canvas with no
+`preserveDrawingBuffer` reads an empty buffer, so it reported `[0,0,0]` and a
+histogram entirely in bucket 0 — a confident number about nothing. Recorded so
+the next person does not spend the boot on it.
+
 ### The GLX real-GPU gate cannot see GPU errors — corrected
 
 While reading run 10's macOS verdict for this change, the GLX row said:

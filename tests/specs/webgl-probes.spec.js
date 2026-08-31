@@ -5,22 +5,26 @@
 //   - setTimeOfDay() night/day floodlight transitions
 //   - engine 48-light cap (MAX_LIGHTS packed vec4 arrays — not a WebGL / UBO limit)
 import { test, expect } from "@playwright/test";
+// The measured boot budgets. This file carried 8000 / 10_000 and a set of
+// 3000-5000 ms lighting waits; on an idle box the boot alone takes up to
+// 24.6 s and a day/night lamp transition up to 17.3 s, so every test here
+// failed on the budget rather than on the renderer. See fixtures.js.
+import { BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
+// setTimeOfDay -> lightState().numLights settles: measured 12.8-17.3 s idle.
+const LIGHT_MS = 45000;
+test.describe.configure({ timeout: 240_000 });   // several of those waits per test
 
 const LANDSCAPE = { width: 844, height: 390 };
 
-// BOOT BUDGETS, matched to what booting this page actually costs under
-// SwiftShader. 8 s for `__apex` to exist and 10 s for the track was the whole
-// file's failure mode on a slow box: every test here goes through loadRace, so
-// one tight boot wait fails all five and reads as a renderer regression.
-// Verified 2026-08-31 by running an unmodified HEAD in a second worktree — it
-// failed identically, which is what separated "the box" from "the diff".
-// smoke.spec.js already allows 60 s for the SAME `window.__apex` wait and
-// 180 s for the track; these match it rather than inventing a third number.
+// Independently confirmed 2026-08-31 from the other lineage: the same five
+// tests fail identically on an unmodified HEAD checked out in a second
+// worktree, which is what separates "the box" from "the diff". Run that check
+// before reading a red renderer run as a regression.
 async function loadRace(page, id = "monza") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 60_000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate((t) => window.__apex.race(t), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 180_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
   await page.evaluate(() => window.__apex.go());
 }
 
@@ -104,7 +108,7 @@ test.describe("WebGL renderer probes", () => {
     // Wait for day lighting to settle (numLights typically drops to 0)
     await page.waitForFunction(
       () => window.__apex.lightState().numLights === 0,
-      null, { polling: 100, timeout: 5000 }
+      null, { polling: 100, timeout: LIGHT_MS }
     ).catch(() => {
       // Some tracks may keep minimal lights even in day — proceed and capture dayLights
     });
@@ -114,7 +118,7 @@ test.describe("WebGL renderer probes", () => {
     // Night should activate floodlights
     await page.waitForFunction(
       () => window.__apex.lightState().numLights > 0,
-      null, { polling: 100, timeout: 3000 }
+      null, { polling: 100, timeout: LIGHT_MS }
     );
     const nightLights = await page.evaluate(() => window.__apex.lightState().numLights);
 
@@ -126,7 +130,7 @@ test.describe("WebGL renderer probes", () => {
     // night-transition test above only asserts night > day, hedged with a catch).
     await loadRace(page);
     await page.evaluate(() => window.__apex.setTimeOfDay("day"));
-    await page.waitForFunction(() => window.__apex.lightState().numLights === 0, null, { polling: 100, timeout: 5000 });
+    await page.waitForFunction(() => window.__apex.lightState().numLights === 0, null, { polling: 100, timeout: LIGHT_MS });
     const ls = await page.evaluate(() => window.__apex.lightState());
     expect(ls.numLights).toBe(0);
     expect(ls.sunColor).toBeDefined();
@@ -143,7 +147,7 @@ test.describe("WebGL renderer probes", () => {
         const ls = window.__apex.lightState();
         return ls.numLights > 0 && ls.bakedLights > 0;
       },
-      null, { polling: 100, timeout: 8000, polling: 100 }
+      null, { polling: 100, timeout: LIGHT_MS }
     );
     const ls = await page.evaluate(() => window.__apex.lightState());
     expect(ls.numLights).toBeGreaterThan(0);
@@ -160,7 +164,7 @@ test.describe("WebGL renderer probes", () => {
     // Wait until night lights are up
     await page.waitForFunction(
       () => window.__apex.lightState().numLights > 0,
-      null, { polling: 100, timeout: 3000 }
+      null, { polling: 100, timeout: LIGHT_MS }
     );
     const ls = await page.evaluate(() => window.__apex.lightState());
     expect(ls.numLights, "night must actually raise floodlights").toBeGreaterThan(0);

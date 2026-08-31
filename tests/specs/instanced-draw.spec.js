@@ -13,6 +13,12 @@
  */
 import { test, expect } from "../helpers/fixtures.js";
 
+// The scene-renders test boots (up to 24.6 s measured idle), builds monza,
+// settles 4 s and then takes a full-page capture with its own 120 s budget —
+// which cannot fit inside Playwright's 120 s default. It failed at 140.7 s on
+// the TEST cap, with the capture still running.
+test.describe.configure({ timeout: 420_000 });
+
 test.describe("GLX instanced draw", () => {
   test("exposes the batches() consumer API", async ({ racePage: page }) => {
     const api = await page.evaluate(() => ({

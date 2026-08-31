@@ -767,7 +767,7 @@ const CEILINGS = {
   // DECLARED rather than omitted. An absent name lets descriptor-copy keep
   // GLX's own closure on a WGX-bound gfx, so DebrisWorld's feature test would
   // pass here and then call GLX with no device (backend-surface-parity).
-  // Nine lines to keep a wrong-backend call impossible. PERF-FINDINGS 2g.
+  // Nine lines to keep a wrong-backend call impossible. PERF-FINDINGS 2h.
   "js/render/webgpu/wgx.js": 5590,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
@@ -831,7 +831,7 @@ const CEILINGS = {
   // the probe to latch, and a probe that cannot succeed gives up instead of
   // throwing once a frame forever.
   // 2322 -> 2326: the same `updateInstances: undefined` declaration and its
-  // reason, for the same descriptor-copy hazard. PERF-FINDINGS 2g.
+  // reason, for the same descriptor-copy hazard. PERF-FINDINGS 2h.
   "js/render/three/tlx.js": 2326,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
@@ -859,16 +859,26 @@ const CEILINGS = {
   // real-GPU workflow gated on gpuErrors and GLX never defined it, so that
   // clause read null and passed forever (PERF-FINDINGS 2e). A deliberate
   // raise: the gate is worth more than the lines.
-  // 1975 -> 2030: three additions, all measured, all paying more than the lines
-  // (PERF-FINDINGS 2g). ufi/ufM4 are the integer and mat4 twins of uf1, so
-  // uNumLights and uModel stop re-uploading values the program already holds —
-  // 111 -> 51.5 and 103.2 -> 50.3 a frame, 112 GL calls. updateInstances lets a
-  // caller hand a batch its own packed instance set, which turns DebrisWorld's
-  // four per-body loops into four draws. ufM4 is the bulk of it: it copies the
-  // sixteen floats rather than retaining the caller's array, because callers
-  // pass scratch matrices they mutate in place, and the comment explaining that
-  // is worth more than the line it costs.
-  "js/render/glx.js": 2030,
+  // 1975 -> MEASURED, two lineages that found the same defect independently and
+  // one that found a second. Re-measured on the union, not summed from either.
+  //
+  // THEIRS: the uNumLights redundancy cache (_luNL) plus the note that makes it
+  // safe to keep. 3 lines of code; the other 12 record WHY it is not cleared per
+  // frame like the _mat* caches beside it (a WebGL uniform is per-PROGRAM state,
+  // so it survives every unbind and only a relink invalidates it) and the
+  // measurement that justified it — 111 uploads a frame for 53.7 distinct
+  // values. uniform1i 146.4 -> 87.9.
+  //
+  // MINE: ufM4, the mat4 twin of uf1, so uModel stops re-uploading a matrix the
+  // program already holds — 103.2 -> 50.3 a frame, because drawChunked calls
+  // litMaterial once per chunk RUN and every run of one mesh shares its matrix.
+  // It COPIES the sixteen floats because callers pass scratch matrices they
+  // mutate in place, and that comment is worth more than the line it costs.
+  // Plus updateInstances, which lets a caller hand a batch its own packed
+  // instance set — turning DebrisWorld's four per-body loops into four draws.
+  // (My ufi was dropped on the merge: it did what _luNL already does.)
+  // PERF-FINDINGS 2h.
+  "js/render/glx.js": 2038,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)
