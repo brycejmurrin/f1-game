@@ -531,7 +531,12 @@ const CEILINGS = {
   // at t+6.0 s. Four room/seat specs failed on exactly that. Same shape as the
   // netLoopback fix above; the comment records the measurement so the next
   // reader does not have to re-find the six seconds.
-  "js/game/apex.js": 2505,
+  // 2505 -> 2506 for carEffects()'s gridLights/gridStrobe. The pre-race rear
+  // lights were drawn from a predicate no hook reported, so the only way to
+  // check them was a pixel — and a light that is ON but frozen looks identical
+  // to one that is strobing. A dev API growing by the one field that makes a
+  // new visual assertable is the file doing its job.
+  "js/game/apex.js": 2506,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
@@ -698,7 +703,13 @@ const CEILINGS = {
   // instead of the build's NIGHT override that every neighbouring branch uses,
   // so a day race at a night circuit (or the reverse) wore the wrong tint. The
   // four lines are the comment recording it at the site — bug-explaining growth.
-  "js/track/tracks.js": 2359,
+  // 2359 -> 2360 for the one call that appends the painted grid boxes to the
+  // start-line decal. The 77 lines of box geometry went to js/track/mesh.js,
+  // which this ratchet does not bound and which already owns buildRoad and
+  // upOf; tracks.js pays only for the call, and riding the existing startline
+  // mesh is what keeps that to a single line instead of a mesh registration,
+  // a draw call, a free path and a hideMeshes key.
+  "js/track/tracks.js": 2360,
   // ── Round-6 additions: the unguarded giants, set AT measured (test metric,
   // split-newline count) so any growth is a deliberate raise here. Each line
   // says why the file is its size today; none is an extraction target yet.

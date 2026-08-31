@@ -2053,6 +2053,7 @@ const api = {
       exhaustFlame: (G.player.exhaustPop || 0) > 0.05,
       brakeGlow: brakeHeat > brakeGlowThreshold,
       ersDeploy: isErsDeploying(G.player),
+      gridLights: G.state === "count", gridStrobe: G.state === "count" && CarMesh.gridStrobe(G.countT),
       boostFlame: false,
       brakeHeat,
       brakeGlowThreshold,

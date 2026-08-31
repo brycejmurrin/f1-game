@@ -136,6 +136,7 @@ function buildContext(opts) {
   if (!ctx.Tracks || !ctx.Tracks.LIST) throw new Error("Tracks.LIST missing");
   return {
     Tracks: ctx.Tracks, TrackSurface: ctx.TrackSurface, TrackGeom: ctx.TrackGeom,
+    TrackMesh: ctx.TrackMesh,
     prims, liveBufs,
     // Emission-order marker, so a caller reusing one context across circuits can
     // slice out just the primitives a given build produced.

@@ -2039,6 +2039,7 @@ const Tracks = (function () {
         base += 4;
       }
     }
+    TrackMesh.buildGridBoxes(track, out);   // the grid rides the start-line decal
     return out;
   }
 
