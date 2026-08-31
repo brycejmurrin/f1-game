@@ -463,7 +463,26 @@ const CEILINGS = {
   // MERGED a third time: their 8797 (wet-tyre grip) and this side's 8803 (the
   // RACE IN PORTRAIT opt-in) each fit their own lineage and neither fits the
   // union, which carries both. Re-measured on THIS tree: 8807.
-  "js/game.js": 8807,
+  // 8727 -> 8749 for the LAZY_RACE loader: RACE_FILES + raceAssets(), which sit
+  // beside AGENT_FILES / loadBackendScripts because they ARE that mechanism
+  // (same injector, second roster) — splitting them into js/game/ would put the
+  // boot loader a module away from the boot code that calls it. 17 of the 22
+  // lines are the comment explaining why the fetch is deliberately un-awaited
+  // and why an absent file is a legal state; that is the growth the note above
+  // tolerates. The change takes 338 KB OFF the boot script wall.
+  // 8749 -> 8787 for the LAZY_SCENERY gate: ensureScenery()/sceneryResident()
+  // plus the awaits in startRace/openQuali and the flyby debounce. It has to
+  // live here because Tracks.build() is synchronous and every loadTrack()
+  // caller uses `track` on the next line, so the closure must be resident
+  // BEFORE the call — there is no seam further down to push this into. Most of
+  // the 38 lines are the comment explaining exactly that. Takes 1,083 KB off
+  // the boot script wall.
+  // MERGED a fourth time: the two entries just above are this lineage's deltas
+  // measured against ITS base (8727 -> 8749 -> 8787); deploy meanwhile reached
+  // 8807 on work of its own. Neither number fits the union, which carries both
+  // sets of lines. Re-measured on THIS tree with the suite's own split-newline
+  // metric (not grep -c, which is one short on a file with no trailing newline): 8870.
+  "js/game.js": 8870,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -703,13 +722,21 @@ const CEILINGS = {
   // instead of the build's NIGHT override that every neighbouring branch uses,
   // so a day race at a night circuit (or the reverse) wore the wrong tint. The
   // four lines are the comment recording it at the site — bug-explaining growth.
-  // 2359 -> 2360 for the one call that appends the painted grid boxes to the
-  // start-line decal. The 77 lines of box geometry went to js/track/mesh.js,
-  // which this ratchet does not bound and which already owns buildRoad and
-  // upOf; tracks.js pays only for the call, and riding the existing startline
-  // mesh is what keeps that to a single line instead of a mesh registration,
-  // a draw call, a free path and a hideMeshes key.
-  "js/track/tracks.js": 2360,
+  // 2359 -> 2377 for the LAZY_SCENERY resolution: the bespoke closure now comes
+  // from window.TrackScenery[def.id] (def.scenery still wins, so a harness probe
+  // and any unsplit circuit keep working), plus the warn that makes a
+  // MISSING closure loud. Building bare is a legal state and an almost
+  // invisible one — road and terrain, no dressing — so it says so rather than
+  // failing silently, which is the one real risk of the split.
+  // 2359 -> 2360 on the other lineage for the one call that appends the painted
+  // grid boxes to the start-line decal. The 77 lines of box geometry went to
+  // js/track/mesh.js, which this ratchet does not bound and which already owns
+  // buildRoad and upOf; tracks.js pays only for the call, and riding the
+  // existing startline mesh is what keeps that to a single line instead of a
+  // mesh registration, a draw call, a free path and a hideMeshes key.
+  // Neither 2381 nor 2360 fits the union, which carries both — re-measured on
+  // the merged tree with the ceiling test's own metric, per the deploy rule.
+  "js/track/tracks.js": 2382,
   // ── Round-6 additions: the unguarded giants, set AT measured (test metric,
   // split-newline count) so any growth is a deliberate raise here. Each line
   // says why the file is its size today; none is an extraction target yet.
@@ -774,7 +801,12 @@ const CEILINGS = {
   // 5574 -> 5581: WGX gains gpuErrors/gpuFirstError on its INSTANCE surface
   // (it had them only on the module factory), so the backend-parity contract
   // holds now that GLX has a real counter. PERF-FINDINGS 2e.
-  "js/render/webgpu/wgx.js": 5581,
+  // 5581 -> 5590: `updateInstances: undefined` and the note saying why it is
+  // DECLARED rather than omitted. An absent name lets descriptor-copy keep
+  // GLX's own closure on a WGX-bound gfx, so DebrisWorld's feature test would
+  // pass here and then call GLX with no device (backend-surface-parity).
+  // Nine lines to keep a wrong-backend call impossible. PERF-FINDINGS 2h.
+  "js/render/webgpu/wgx.js": 5590,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -836,7 +868,9 @@ const CEILINGS = {
   // the world had no environment reflections at all. The release now waits for
   // the probe to latch, and a probe that cannot succeed gives up instead of
   // throwing once a frame forever.
-  "js/render/three/tlx.js": 2322,
+  // 2322 -> 2326: the same `updateInstances: undefined` declaration and its
+  // reason, for the same descriptor-copy hazard. PERF-FINDINGS 2h.
+  "js/render/three/tlx.js": 2326,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
@@ -863,7 +897,26 @@ const CEILINGS = {
   // real-GPU workflow gated on gpuErrors and GLX never defined it, so that
   // clause read null and passed forever (PERF-FINDINGS 2e). A deliberate
   // raise: the gate is worth more than the lines.
-  "js/render/glx.js": 1975,
+  // 1975 -> MEASURED, two lineages that found the same defect independently and
+  // one that found a second. Re-measured on the union, not summed from either.
+  //
+  // THEIRS: the uNumLights redundancy cache (_luNL) plus the note that makes it
+  // safe to keep. 3 lines of code; the other 12 record WHY it is not cleared per
+  // frame like the _mat* caches beside it (a WebGL uniform is per-PROGRAM state,
+  // so it survives every unbind and only a relink invalidates it) and the
+  // measurement that justified it — 111 uploads a frame for 53.7 distinct
+  // values. uniform1i 146.4 -> 87.9.
+  //
+  // MINE: ufM4, the mat4 twin of uf1, so uModel stops re-uploading a matrix the
+  // program already holds — 103.2 -> 50.3 a frame, because drawChunked calls
+  // litMaterial once per chunk RUN and every run of one mesh shares its matrix.
+  // It COPIES the sixteen floats because callers pass scratch matrices they
+  // mutate in place, and that comment is worth more than the line it costs.
+  // Plus updateInstances, which lets a caller hand a batch its own packed
+  // instance set — turning DebrisWorld's four per-body loops into four draws.
+  // (My ufi was dropped on the merge: it did what _luNL already does.)
+  // PERF-FINDINGS 2h.
+  "js/render/glx.js": 2038,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)

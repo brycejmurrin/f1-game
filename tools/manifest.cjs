@@ -50,6 +50,13 @@ const CIRCUITS = [
 
 const CIRCUITS_DIR = "js/circuits";
 const circuitFiles = CIRCUITS.map((id) => `${CIRCUITS_DIR}/${id}.js`);
+// The bespoke scenery closure for each circuit, split out of its def file.
+// ~27 KB each; all 40 were 1,083 KB of the boot script wall for a session that
+// builds ONE circuit. No <script> tag — game.js fetches the one it is about to
+// build (RACE_SCENERY / sceneryUrl), and js/track/tracks.js resolves through
+// window.TrackScenery[def.id]. The Node build harnesses load the whole dir.
+const SCENERY_DIR = "js/circuits/scenery";
+const LAZY_SCENERY = CIRCUITS.map((id) => `${SCENERY_DIR}/${id}.js`);
 
 // Every js file, in exact index.html <script> tag order.
 const FULL = [
@@ -112,7 +119,6 @@ const FULL = [
   "js/car/crest-paths.js",
   "js/car/liverytex.js",
   "js/car/ghost.js",
-  "js/game/light-presets.js",
   "js/game/physics-consts.js",
   "js/game/tables.js",
   "js/game/lighting.js",
@@ -418,6 +424,17 @@ const LAZY_EDGES = [
   ["js/game/agentview-raster.js", "js/game/agentview.js"],
 ];
 
+// RACE PAYLOAD. Data a session needs only once a race resolves, never to paint
+// a menu — so it must not sit in the boot script wall, which is the one perf
+// number this box can measure honestly (docs/PERF-FINDINGS.md §0).
+// light-presets.js is 338 KB of baked per-condition lighting whose ONLY reader
+// is js/game/light-store.js, and that reads window.LightPresets at CALL time
+// (base()/layers()), not at eval — so an absent file resolves to TUNE_DEFS
+// defaults rather than throwing, and game.js re-applies once it lands.
+const LAZY_RACE = [
+  "js/game/light-presets.js",
+];
+
 const DEFERRED_EDGES = [
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"], // string concat at eval
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],
@@ -456,9 +473,11 @@ const PATHS = {
 };
 
 const circuitPath = (id) => `${CIRCUITS_DIR}/${id}.js`;
+const sceneryPath = (id) => `${SCENERY_DIR}/${id}.js`;
 
 module.exports = {
   CIRCUITS, CIRCUITS_DIR, FULL, CSS, CARVIEW, TRACK_VM, HARD_EDGES,
-  DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES,
+  DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
+  SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath,
 };

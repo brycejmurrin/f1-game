@@ -1006,76 +1006,6 @@ and the next ordinary draw one more.
 | **uniform1f** | **197.2** | **153.1** (-22.4 %) |
 | every other counter | — | identical |
 
-### The GLX real-GPU gate cannot see GPU errors — corrected
-
-While reading run 10's macOS verdict for this change, the GLX row said:
-
-```
-glx  phase=done ok=true gpuErrors=null
-```
-
-**`null`, not `0`.** `gpuErrors` is defined only on WGX (`webgpu/wgx.js`); plain
-GLX has no error counter at all. `gpu-game-check.mjs` reads
-`g.gpuErrors ? g.gpuErrors() : null`, and the Verdict tests
-`(gfx.gpuErrors || 0) > 0` — so on the GLX leg that clause can never fire. It
-passes vacuously, forever.
-
-That matters because round 11 flipped the instance cell-set cache citing
-"gpuErrors 0" from this leg, and AGENTS.md's renderer row tells agents to
-require `gpuErrors` 0 from the dispatch. For GLX that has never been an
-assertion. What the leg DOES prove is real and not nothing — `ok=true`,
-`phase=done` means the game booted, raced and parked on Metal without wedging,
-which is what caught the two defects that justified building the surface — but
-the error check specifically is a hole.
-
-The same trap bit the local probe: `(window.GLX && GLX.gpuErrors &&
-GLX.gpuErrors()) || 0` yields 0 when the method is ABSENT, so its reported
-"gpuErrors 0" was equally empty. An absence test that reports the same value as
-a success test is not a test — the same shape as `sessionStorage["apex26.gfxBound"]`
-being an ABSENCE signal, which AGENTS.md already warns needs a positive
-confirmation beside it.
-
-**Fixed.** GLX now drains `getError()` once per `present()` into
-`GLX.gpuErrors()` / `gpuFirstError()` (WebGL has no `onuncapturederror`), and
-the Verdict fails on a MISSING count instead of reading absent as clean.
-
-Proven to be an assertion rather than another absence
-(`scratch/glx-error-counter.mjs`) — a counter that never counts would be the
-same bug wearing a different hat:
-
-| | methodExists | count | firstError |
-|---|---|---|---|
-| clean run | **true** | **0** | null |
-| after a deliberate `bindBuffer(0x0BAD, …)` | true | **1** | `INVALID_ENUM @ present` |
-
-The `methodExists` column is the one that matters: the original trap was
-`(GLX.gpuErrors && GLX.gpuErrors()) || 0`, which yields 0 for a method that is
-not there. A clean GLX run now genuinely reports zero GPU errors — including
-for the two changes in this round.
-
-### Pixels were the wrong oracle here; the invariant is the right one
-
-The PNG statistics were inconclusive: cross-build max |Δmean RGB| 0.0135 against
-same-build noise floors of 0.0051 and 0.0026 — above both, with a consistent
-sign. Undersampled noise, but not something to wave through.
-
-The change has an exact correctness property instead, so assert that:
-**at every instanced draw the gate must read 1, at every ordinary lit draw 0.**
-If that holds, the GPU saw the same value at every draw as it did when the
-value was bracketed — pixel-identical by construction, whatever the PNG says.
-Measured over 20 frames: **528 instanced draws, 2914 plain, zero violations**
-(`scratch/instanced-gate-invariant.mjs`), and the probe was proven non-vacuous
-by sabotaging the clear and watching it report 181.
-
-The invariant holds only while EVERY lit draw funnels through `litMaterial`, so
-`gfx-backend-canary` pins that too: `useProg(litProg)` must appear exactly twice
-(frame setup, and litMaterial). A third bind is a lit draw that skips the
-declaration, and the guard says so by name.
-
-One accepted cost: a zero-instance batch now claims the gate, because
-`litMaterial` runs before the `n > 0` check. It can never reach a draw — the
-next lit draw re-declares — so it is at most one extra call, never a wrong pixel.
-
 ## 2f. The Windows GPU-census outage was a path bug, and a widened timeout hid it (2026-08-29)
 
 Round 12's real-GPU dispatch failed on **windows-latest**: all three legs —
@@ -1223,6 +1153,291 @@ hardware check and by over-scoping `ok`/`phase`, each of which fails it.
 Verified against three fixtures with the Verdict body extracted from the YAML:
 software prints the reasons and exits 0, hardware prints them and exits 1, a
 healthy set is silent.
+
+## 2g. uNumLights was 111 uploads a frame for 53.7 values (2026-08-29)
+
+With `uniform4fv` down to 69.4 (§2d) and `uniform1f` to 153.1 (§2e),
+**`uniform1i` at 146.4 became the largest uniform class on the default
+backend.** Resolving the locations to names — the same `getUniformLocation`
+wrap §2e introduced — puts three quarters of it in one uniform:
+
+| uniform | uploads/frame |
+|---|---|
+| **uNumLights** | **111** |
+| uLampShadowIdx | 10.7 |
+| uTex | 6 |
+| everything else | < 2.5 each |
+
+`uploadLightSet` sets the count unconditionally and only then returns early on
+zero, so the per-chunk path (~69 visible chunks) pays a `uniform1i` for every
+chunk INCLUDING the many with no lamps — which is why 111 exceeds the 69.4
+`uLight[0]` uploads beside it.
+
+**Ceiling measured before writing any code**, per §2e's rule, because the two
+neighbouring caches that were retired (`setCull`, the `uInstanced` bracket)
+died on alternation rather than on volume:
+
+| vegas night, pack | per frame |
+|---|---|
+| uNumLights uploads | 111 |
+| distinct VALUES | 53.7 |
+| **collapsible** | **57.3 (52 %)** |
+
+Not alternation. The sequence is chunk lamp counts in spatial order, so it runs
+— `45, 8, 7, 2, 5, 5, 7, 6, 8, 6, 6, 6, 7, 7, …` then a long tail of `0` where
+the count is set and the array never touched.
+
+A `_luNL` cache in `uploadLightSet`, measured A/B on the same instrument with
+the cache as the only change:
+
+| | before | after |
+|---|---|---|
+| **uniform1i** | **146.4** | **87.9** (-40 %) |
+| drawElements | 163 | 163 |
+| uniform1f / uniform4fv / uniformMatrix4fv | 153.1 / 69.4 / 118.2 | identical |
+| bufferSubData KiB | 512.6 | 512.6 |
+
+**Why it is sound, and what pins it.** A WebGL uniform is per-PROGRAM state, so
+the cached value survives every unbind — this cache is deliberately NOT cleared
+per frame the way the `_mat*` caches are, and clearing it in `begin()` would
+give the whole saving back. It can only go stale two ways, and
+`gfx-backend-canary.test.mjs` asserts against both: a SECOND writer of
+`litU.uNumLights` (post.js's godray pass has its own uNumLights on its own
+program and cannot collide), and a relink, which resets every uniform and is
+where `_luNL` is cleared. Both halves of the guard were confirmed red against
+sources with the respective piece removed.
+
+*Instrument note.* A canvas mean-RGB was tried as a cheap correctness oracle
+and is useless here: `drawImage` from a WebGL canvas with no
+`preserveDrawingBuffer` reads an empty buffer, so it reported `[0,0,0]` and a
+histogram entirely in bucket 0 — a confident number about nothing. Recorded so
+the next person does not spend the boot on it.
+
+### The GLX real-GPU gate cannot see GPU errors — corrected
+
+While reading run 10's macOS verdict for this change, the GLX row said:
+
+```
+glx  phase=done ok=true gpuErrors=null
+```
+
+**`null`, not `0`.** `gpuErrors` is defined only on WGX (`webgpu/wgx.js`); plain
+GLX has no error counter at all. `gpu-game-check.mjs` reads
+`g.gpuErrors ? g.gpuErrors() : null`, and the Verdict tests
+`(gfx.gpuErrors || 0) > 0` — so on the GLX leg that clause can never fire. It
+passes vacuously, forever.
+
+That matters because round 11 flipped the instance cell-set cache citing
+"gpuErrors 0" from this leg, and AGENTS.md's renderer row tells agents to
+require `gpuErrors` 0 from the dispatch. For GLX that has never been an
+assertion. What the leg DOES prove is real and not nothing — `ok=true`,
+`phase=done` means the game booted, raced and parked on Metal without wedging,
+which is what caught the two defects that justified building the surface — but
+the error check specifically is a hole.
+
+The same trap bit the local probe: `(window.GLX && GLX.gpuErrors &&
+GLX.gpuErrors()) || 0` yields 0 when the method is ABSENT, so its reported
+"gpuErrors 0" was equally empty. An absence test that reports the same value as
+a success test is not a test — the same shape as `sessionStorage["apex26.gfxBound"]`
+being an ABSENCE signal, which AGENTS.md already warns needs a positive
+confirmation beside it.
+
+**Fixed.** GLX now drains `getError()` once per `present()` into
+`GLX.gpuErrors()` / `gpuFirstError()` (WebGL has no `onuncapturederror`), and
+the Verdict fails on a MISSING count instead of reading absent as clean.
+
+Proven to be an assertion rather than another absence
+(`scratch/glx-error-counter.mjs`) — a counter that never counts would be the
+same bug wearing a different hat:
+
+| | methodExists | count | firstError |
+|---|---|---|---|
+| clean run | **true** | **0** | null |
+| after a deliberate `bindBuffer(0x0BAD, …)` | true | **1** | `INVALID_ENUM @ present` |
+
+The `methodExists` column is the one that matters: the original trap was
+`(GLX.gpuErrors && GLX.gpuErrors()) || 0`, which yields 0 for a method that is
+not there. A clean GLX run now genuinely reports zero GPU errors — including
+for the two changes in this round.
+
+### Pixels were the wrong oracle here; the invariant is the right one
+
+The PNG statistics were inconclusive: cross-build max |Δmean RGB| 0.0135 against
+same-build noise floors of 0.0051 and 0.0026 — above both, with a consistent
+sign. Undersampled noise, but not something to wave through.
+
+The change has an exact correctness property instead, so assert that:
+**at every instanced draw the gate must read 1, at every ordinary lit draw 0.**
+If that holds, the GPU saw the same value at every draw as it did when the
+value was bracketed — pixel-identical by construction, whatever the PNG says.
+Measured over 20 frames: **528 instanced draws, 2914 plain, zero violations**
+(`scratch/instanced-gate-invariant.mjs`), and the probe was proven non-vacuous
+by sabotaging the clear and watching it report 181.
+
+The invariant holds only while EVERY lit draw funnels through `litMaterial`, so
+`gfx-backend-canary` pins that too: `useProg(litProg)` must appear exactly twice
+(frame setup, and litMaterial). A third bind is a lit draw that skips the
+declaration, and the guard says so by name.
+
+One accepted cost: a zero-instance batch now claims the gate, because
+`litMaterial` runs before the `n > 0` check. It can never reach a draw — the
+next lit draw re-declares — so it is at most one extra call, never a wrong pixel.
+
+## 2h. The three unattributed counters, and a side-world drawn one body at a time (2026-08-31)
+
+2c left three counters with no attribution: `uniform1i` 142.5/frame (only ~35
+explained), `uniformMatrix4fv` 103, `bindVertexArray` 80.1 against 144.2 draws.
+This round named them, and found a fourth thing nobody had counted at all.
+
+**The baseline reproduced first.** `glx-call-census vegas night 40 pack` on the
+unchanged tree: 162.8 draws, 14.5 `bufferSubData` / 489.2 KiB, `uniform4fv`
+69.4. Those match 2c/2d/2e exactly, so the instrument and the tree agree before
+anything is attributed. Do not skip this step — an after-number is worthless
+against a before-number you did not personally reproduce.
+
+**Naming a uniform means wrapping `getUniformLocation` in an INIT script.**
+Locations are opaque and may be fresh objects per call, so the only way to
+name one is to catch it at lookup, before the page links its programs
+(`scratch/r12-attribution.mjs` — Playwright `addInitScript`, not
+`page.evaluate`). Then bucket every upload by name and count how many carried
+a value the program did not already hold.
+
+| uniform | uploads/frame | distinct values | redundant |
+|---|---|---|---|
+| `uNumLights` | 111 | 51.5 | **59.5** |
+| `uModel` | 103.2 | 50.3 | **52.9** |
+| `uTex` | 6 | 0.1 | 5.9 |
+| everything else | ≤ 4 | — | ≤ 2 |
+
+Both mechanisms are structural, not accidental. `uploadLightSet` runs once per
+visible chunk and neighbouring chunks repeatedly resolve to the same lamp
+COUNT; `drawChunked` calls `litMaterial` once per chunk RUN and every run of
+one mesh shares that mesh's model matrix.
+
+**TWO LINEAGES FOUND `uNumLights` INDEPENDENTLY, and 2g is the one that shipped
+it.** That session measured 111 uploads against 53.7 distinct values and landed
+`_luNL`; this one measured 111 against 51.5 and wrote `ufi`. Same defect, same
+mechanism, the same 146 -> 87.9. On the deploy merge `_luNL` won on the simple
+ground that it was already shipped and already canary-pinned, and `ufi` was
+deleted rather than left as a second cache on one uniform. What survives from
+this side is `ufM4`, the mat4 twin, for `uModel` — which the other lineage did
+not look at. Convergence like this is worth recording: it says the attribution
+METHOD (wrap `getUniformLocation` at init, count uploads against distinct
+values) is reliable enough that two independent runs of it agree to within a
+rounding error.
+
+**`ufM4` COPIES the sixteen floats and that is load-bearing.** Callers hand in
+scratch matrices they mutate in place — game.js's `_wheelWorld`/`_ringWorld`,
+DebrisWorld's `_mat` — so a cache retaining the caller's array would compare a
+value against itself and skip a REAL change. That is a wrong transform, which
+no call counter would ever catch; the canary pins the copy.
+
+**The thing nobody had counted: `DebrisWorld.draw()` was four per-body loops.**
+One `gfx.draw` per live body across shards/marbles/cones/panels — 48+16+24+10 =
+98 draws at desktop caps. Measured on vegas night with **no incident debris at
+all** (`live 0, marbles 0, panels 0`): **17 draws a frame, every one a CONE**.
+`registerFurniture` places a cone at every corner of every circuit and the cone
+loop has no liveness test, so this is a cost on every frame of every lap. That
+is exactly why five rounds of steady-state censuses never saw it — it is not a
+pileup-only cost, but it looks like one until you attribute the draws by call
+site. Each pool is one shared mesh, one constant opaque material and N mat4s:
+the shape `drawInstanced` exists for. `updateInstances` hands a batch a
+caller-packed set, and the side-world becomes four draws whatever happens.
+
+| counter (vegas night, pack) | before | after |
+|---|---|---|
+| `drawElements` | 162.8 | **146.0** |
+| `uniformMatrix4fv` | 118.1 | **48.5** (-58.9%) |
+| `uniform1i` | 146.3 | **87.9** (-39.9%) |
+| `drawElementsInstanced` | 25 | 26.3 |
+| `bufferSubData` | 14.5 | 15.6 |
+| `uniform4fv` | 69.4 | 69.4 |
+| `bindVertexArray` | 83.8 | 84.2 |
+
+~141 GL calls a frame, measured on this side's tree before the deploy merge —
+so the `uniform1i` column here and 2g's are the SAME win found twice, not two
+wins to be added. Every delta is accounted for: draws fall by the 17 debris
+bodies; `uniformMatrix4fv` falls by 52.9 (the `uModel` redundancy) plus the same
+17 (each body used to upload its own model matrix), which is the measured 69.6;
+`uniform1i` falls by the 59.5 `uNumLights` redundancy that 2g also reports. The
+`bufferSubData` cost is +1.1 calls — one instance upload a frame, 17x64 = 1.06
+KiB by construction. **The KiB total moved 489.2 -> 513.6 and that is NOT the
+debris upload**: it is run-to-run variance in the prop repack, which depends on
+where the camera settles. Report the call delta, which is exact; do not claim
+the byte delta, which is not.
+
+**The oracle was an invariant, not pixels.** Every body the loop would have
+drawn must appear as an INSTANCE, so sum `instanceCount` over the instanced
+draws issued inside `DebrisWorld.draw` and compare against the live-body count
+from `__apex.debris()`: **1 draw carrying exactly 17 bodies against 17 live
+cones, and per-body draws inside that call fell to 0.** 2d already recorded why
+a PNG compare is the wrong instrument here (the scene is time-dependent and the
+drawing buffer reads black outside the frame); a count that must match a count
+is better than a picture that must look similar.
+
+### The abort condition I wrote was the wrong instrument, and I am recording that
+
+Before measuring, this round committed to acting on a uniform only where
+uploads exceeded distinct values by **more than 3x** — the `uInstanced` shape
+from 2e (54.8 / 3.1 = 17.7x). `uNumLights` came in at 2.2x and `uModel` at
+2.1x. Applied literally, that gate would have killed both.
+
+It was the wrong test. What a redundancy cache collapses is the ABSOLUTE count
+of uploads carrying a value the program already holds, not the ratio of uploads
+to values. A uniform that genuinely changes 50 times and is uploaded 110 times
+has a poor ratio and 60 free calls. The gate was calibrated on a case where the
+value barely changed and it silently assumed that shape. **The measured saving
+here (112 calls/frame from the two) is larger than the 44.1 that 2e shipped as
+a real win.** The right pre-registered condition is an absolute-excess floor;
+the ratio is only the right test when asking whether a value is frame-invariant.
+
+### What was verified, and what this box could not verify
+
+Green: `tooling-fast` (the parity guard caught a real defect — see below),
+`instanced-draw.spec.js` 4/5 including "ordinary draws are unaffected", and
+`webgl-probes`'s mobile-tier GL-error scrape.
+
+NOT verified here: five tests across those two files time out on this
+container. **They fail identically on an unmodified HEAD checked out in a
+second worktree**, which is what separated the box from the diff — run that
+check before believing any red renderer run. Two separate causes, both
+pre-existing:
+
+1. `loadRace` allowed **8 s** for `window.__apex` to exist where
+   `smoke.spec.js` allows 60 s for the identical wait. Every test in the file
+   goes through it, so one tight boot wait fails all five and reads as a
+   renderer regression. Matched to smoke's numbers; the test then gets 37 s
+   further before failing on something else.
+2. That something else is the monza day `numLights === 0` wait. **The asserted
+   behaviour is correct** — probing the same page directly
+   (`scratch/r12-monza-day.mjs`) reports `numLights: 0` on monza in both
+   `default` and `day`. The spec cannot reach it because boot alone is eating
+   ~60 s on this container right now (a 25 s smoke test measured 134 s here the
+   same day). Its 5 s budget is left ALONE: nothing here is evidence that it is
+   wrong, and widening an assertion to make a red run green is the move this
+   file exists to prevent.
+
+**The parity guard earned its keep.** `updateInstances` on GLX alone failed
+`backend-surface-parity.test.mjs`: because game.js installs a backend by
+descriptor-copy onto GLX, an undeclared name leaves GLX's OWN closure live on a
+WGX-bound `gfx` — so DebrisWorld's feature test would have passed on WebGPU and
+then called a GLX function with no device. WGX and TLX now declare
+`updateInstances: undefined`. Porting it to WGX means expanding stride-16
+matrices into its stride-20 instance layout and deciding what the colour lanes
+mean for a batch built without `srcColors`; that is a perf task, never a
+correctness one, because the per-body loop those backends keep is exactly what
+they ship today.
+
+### Closed by measurement: cross-car wheel batching
+
+The plan of record for this round's second win was to extend the per-car
+two-pass wheel deferral (`6b233ae`) across cars, on the theory that the field's
+AI cars share wheel meshes through `fieldWheelCache` and rebind the same VAO
+once per car. **Measured: 83.8 `bindVertexArray` a frame, of which 0 are
+redundant back-to-back.** `bindVAO`'s cache already collapses every consecutive
+duplicate, so there is no free win — only a reorder, and 2e already put the
+ceiling on reordering at 8.7 draws (4.8%). Dropped. Do not re-open without a
+new measurement.
 
 ## 3. Left on the table
 
@@ -1625,6 +1840,36 @@ argument `PerfGov._floorMs` already makes about frame intervals.
 Re-walked the 08-17 survey against cache **1388**, then merged deploy tip
 `11d972d2` (cache **1421**). Full board:
 [research/PERF-HUNT-2026-08-18.md](research/PERF-HUNT-2026-08-18.md).
+
+Boot wall **at 1655 (2026-08-29):** **156** tags, **3,633,081 B** (3.55 MB) —
+down from **157 / 5,082,769 B** the same day. **1,415 KB, 28.5%**, in one round:
+
+| move | KB | how |
+|---|---|---|
+| circuit `scenery: function (api)` × 40 | 1,083 | `js/circuits/scenery/<id>.js`, LAZY_SCENERY |
+| `light-presets.js` | 338 | LAZY_RACE |
+| `defer` on all 157 tags | 0 | stops blocking the parser |
+
+The two lazy payloads need DIFFERENT mechanisms, and the reason is worth
+keeping. Presets need **no gate**: `light-store.js` reads `window.LightPresets`
+at call time, so an absent file resolves to TUNE_DEFS defaults and
+`applyLightTune()` re-walks the knobs when it lands. Scenery needs a **real
+gate**: `Tracks.build()` is synchronous and every `loadTrack()` caller touches
+`track` on the next line, so the closure must be resident BEFORE the call —
+hence `ensureScenery()` awaited at the three entries that can reach a circuit
+not yet built (menu flyby, `startRace`, `openQuali`).
+
+**The trap, measured.** FIVE separate harnesses load circuits with
+`readdirSync(CIRCUITS_DIR).filter(f => f.endsWith(".js"))`, which does not
+descend into the new subdirectory. A harness that misses it builds every
+circuit BARE and still reports confident numbers: `tools/float-audit.cjs` put
+cota at **3,988 prop cells instead of 32,897**, which surfaced as
+`scenery-grounding` "floating scenery grew" — i.e. it reads as a scenery
+REGRESSION, not as a missing include. Four of the five had to be found by
+chasing red tests. `load-order.test.mjs` now asserts that any file which runs
+circuit files also loads `LAZY_SCENERY`, reading source with comments stripped
+(the first cut of that guard was satisfied by the word appearing in its own
+explanatory comment).
 
 Boot wall **at 1421:** **153** `src=` tags, **5,909,851 B** (5.91 MB).
 `apex.js` + `agentview*` is **350,083 B** of eager dev/test surface.

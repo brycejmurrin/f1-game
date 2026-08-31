@@ -492,6 +492,61 @@ test("the instancing gate is declared through the cache, never bracketed per dra
     "a new useProg(litProg) site must also declare uInstanced — see PERF-FINDINGS 2e");
 });
 
+test("uModel goes through the redundancy cache, not a raw upload", () => {
+  // PERF-FINDINGS 2h: uModel was 103.2 uploads/frame for 50.3 distinct values,
+  // because drawChunked calls litMaterial once per chunk RUN and every run of
+  // one mesh shares that mesh's matrix. uNumLights is the SAME defect found by
+  // the other lineage and is pinned separately by 2g's own assertion (_luNL) —
+  // do not add a second cache on it here.
+  const glx = read("js/render/glx.js");
+  assert.match(glx, /ufM4\(litU\.uModel, _litUf, "model", modelMat\);/);
+  assert.doesNotMatch(glx, /gl\.uniformMatrix4fv\(litU\.uModel/,
+    "uModel must go through ufM4, not a raw uniformMatrix4fv");
+
+  // ufM4 must COPY. Callers hand in scratch matrices they mutate in place
+  // (game.js _wheelWorld/_ringWorld, DebrisWorld _mat); retaining the reference
+  // would compare a value against itself and silently skip a real change —
+  // a wrong TRANSFORM, which no call counter would catch.
+  const m4 = glx.slice(glx.indexOf("function ufM4("));
+  assert.match(m4.slice(0, 600), /for \(let i = 0; i < 16; i\+\+\) p\[i\] = m\[i\];/,
+    "ufM4 must copy the sixteen floats, not retain the caller's array");
+});
+
+test("updateInstances clears the cull snapshots it did not produce", () => {
+  // cullInstances memoises on _cullPlanes (the frustum that physically wrote the
+  // resident bytes) and _cellKeyN (the surviving cell set), and a hit SKIPS the
+  // re-upload. updateInstances writes bytes produced by no frustum at all, so
+  // leaving either snapshot standing lets a later cullInstances hit its cache
+  // and draw this pack as though it were that frustum's. PERF-FINDINGS 2h.
+  const glx = read("js/render/glx.js");
+  const fn = glx.slice(glx.indexOf("function updateInstances("));
+  const body = fn.slice(0, fn.indexOf("\n  }") + 4);
+  assert.match(body, /batch\._cullPlanes = null;/,
+    "updateInstances must invalidate the frustum snapshot");
+  assert.match(body, /batch\._cellKeyN = -1;/,
+    "updateInstances must invalidate the cell-set snapshot");
+  assert.match(body, /gl\.bufferSubData\(gl\.ARRAY_BUFFER, 0, matrices, 0, v \* 16\)/);
+  assert.match(glx, /^    updateInstances,$/m, "updateInstances must be exported");
+});
+
+test("the debris pools instance behind a capability read, with the loop as fallback", () => {
+  // Four per-body loops reaching 98 draws at desktop caps — and 17 every frame
+  // of every lap from cones alone, which have no liveness test (PERF-FINDINGS
+  // 2h). GLX ships updateInstances; WGX and TLX have not been ported and MUST
+  // keep the per-body path rather than silently drawing nothing.
+  const dw = read("js/game/debrisworld.js");
+  assert.match(dw, /gfx\.updateInstances\(b, m, n\);/);
+  assert.match(dw, /gfx\.drawInstanced\(b, opts\);/);
+  assert.match(dw, /if \(!gfx \|\| !gfx\.createInstancedBatch \|\| !gfx\.updateInstances \|\| !gfx\.drawInstanced\)/,
+    "the capability read must test every method the instanced path calls");
+  assert.match(dw, /for \(const s of list\) if \(!liveOnly \|\| s\.live\) drawBody\(/,
+    "the per-body fallback must survive for backends without updateInstances");
+  // Both paths must build a pose the same way, or a backend switch moves debris.
+  assert.equal((dw.match(/function packBody\(/g) || []).length, 1);
+  assert.match(dw, /packBody\(_mat, 0, body, sc\);/,
+    "drawBody must share packBody, not carry a second copy of the quaternion maths");
+});
+
 test("the interleaved uLight[] lanes agree between glx.js and shaders/lit.js", () => {
   // ONE uniform4fv per chunk instead of four (PERF-FINDINGS 2d) only works if
   // both halves agree on the stride-16 lane order. A swapped lane keeps the GL
@@ -1877,4 +1932,40 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
     "env cube must not arm the 2-attachment program");
   assert.doesNotMatch(envBody, /setMRT\(/,
     "env cube render must not install a renderer MRT");
+});
+
+// uNumLights is uploaded 111 times a frame (vegas night, full field in a pack)
+// for 53.7 distinct values — uploadLightSet sets the count unconditionally, and
+// the per-chunk path calls it once per visible chunk, including the many that
+// return immediately on a count of 0. The redundancy cache that collapses that
+// is only sound because of two facts, and this pins both:
+//
+//  1. ONE WRITER. A WebGL uniform is per-PROGRAM state, so the cached value
+//     survives every unbind — but only while nothing else writes it on the lit
+//     program. post.js's godray pass has its own uNumLights on its own program
+//     and cannot collide; a SECOND writer on the lit program would make the
+//     cache lie, and this is the assertion that would catch it.
+//  2. RESET AT RELINK. A relink resets every uniform on the program, so the
+//     cache has to be cleared where the locations are re-fetched.
+test("GLX caches uNumLights, and nothing else writes it on the lit program", () => {
+  const src = read("js/render/glx.js");
+  const bare = src.replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(bare, /if\s*\(nL\s*!==\s*_luNL\)\s*\{\s*gl\.uniform1i\(litU\.uNumLights,\s*nL\);\s*_luNL\s*=\s*nL;/,
+    "uploadLightSet must skip an unchanged uNumLights and record what it wrote");
+  const writers = bare.match(/uniform1i\(\s*litU\.uNumLights/g) || [];
+  assert.equal(writers.length, 1,
+    `litU.uNumLights has ${writers.length} writers — the cache is only valid with one; ` +
+    "route the new one through uploadLightSet or drop the cache");
+  // The reset must sit with the locs() call that re-fetches the locations,
+  // which is the only moment a relink can have thrown the value away.
+  const at = bare.indexOf("litU = locs(litProg");
+  assert.notEqual(at, -1, "the lit program's locs() call moved");
+  assert.match(bare.slice(Math.max(0, at - 200), at), /_luNL\s*=\s*-1/,
+    "the uNumLights cache must be cleared where the lit program's locations are re-fetched");
+  // And it must NOT be swept up in the per-frame material reset: those exist
+  // because begin() re-establishes material state, while this value is program
+  // state that is still correct across frames. Clearing it there would give
+  // back the whole saving.
+  assert.doesNotMatch(bare, /_matEmissive\s*=[^;]*_luNL/,
+    "uNumLights is program state, not per-frame material state — do not reset it in begin()");
 });

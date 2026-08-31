@@ -23,7 +23,11 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(fileURLToPath(import.meta.url), "../..");
 
 // Ratchet: specs importing tests/helpers/fixtures.js must not fall below this.
-export const FLOOR = 61;
+// 61 -> 67: image-grade-visual, lighting-ab and lighting-tuner-grade now import
+// the shared BOOT_MS / TRACK_MS budgets from tests/helpers/fixtures.js rather
+// than each carrying its own 8000/15000/20000 ms guess. That is the adoption
+// this ratchet is asking for, so the floor follows it up.
+export const FLOOR = 67;
 
 // The other failure mode: migrate a batch of specs, never raise the floor, and
 // the ratchet silently stops ratcheting (it sat at 31 while real adoption was

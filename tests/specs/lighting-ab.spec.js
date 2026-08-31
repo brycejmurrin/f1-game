@@ -11,17 +11,32 @@
 //    weather() changed nothing but wetness), glowing fog, the night light
 //    budget, the PCSS rig, and the TOD exposure table.
 import { test, expect } from "@playwright/test";
+// BUDGETS, FROM A MEASUREMENT. Every wait below was under the worst case this
+// class of box actually posts: measured idle (loadavg 0.00, three cold boots,
+// scratch/perf/boot-budget.mjs) the page needs up to 24.6 s to publish __apex
+// and 16.9 s to build a track, and this file was asking for 15 s and 25 s. See
+// the BOOT_MS note in tests/helpers/fixtures.js — these are the same numbers.
+import { BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 import { readFileSync } from "node:fs";
 import { KNOBS, FREEZE_FLICKER, FREEZE_FLICKER_FILE } from "../../tools/lighting/ab-lighting.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
+// Solo on an idle box the heaviest test here takes 179.8 s — over the 120 s
+// default before any contention. Measured, not guessed.
+// ONE per-test budget for this file. Three tests carried their own
+// test.setTimeout(180_000), which OVERRIDES a describe-level number — so the
+// smaller one silently won and "night fog GLOWS" failed at 232.2 s inside the
+// group while passing solo at 179.8 s. Measured: 179.8 s solo on an idle box,
+// and these captures cost up to 150 s each under contention.
+test.describe.configure({ timeout: 420_000 });
+
 async function boot(page, track, tod, wx, frac) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate((t) => window.__apex.race(t), track);
-  await page.waitForFunction(() => window.__apex.info && window.__apex.info().track != null, null, { polling: 100, timeout: 25000 });
+  await page.waitForFunction(() => window.__apex.info && window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
   if (tod) await page.evaluate((t) => window.__apex.setTimeOfDay(t), tod);
   if (wx) await page.evaluate((w) => window.__apex.weather(w), wx);
   if (frac != null) {
@@ -40,7 +55,11 @@ async function boot(page, track, tod, wx, frac) {
 // fills the viewport, so the page capture is the same image — callers hide the
 // HUD first so DOM overlays can't pollute the sampled region.
 async function regionMean(page, fx, fy, fw, fh) {
-  const buf = await page.screenshot({ type: "jpeg", quality: 70, timeout: 60_000 });
+  // 60_000 -> 150_000: the comment above already says a software-GL runner
+  // renders these scenes at under 1 FPS, and the capture waits on a frame. It
+  // timed out at 60 s inside the group ("night fog GLOWS", 144.9 s) while
+  // PASSING solo at 179.8 s — the budget, not the renderer.
+  const buf = await page.screenshot({ type: "jpeg", quality: 70, timeout: 150_000 });
   return page.evaluate(async ({ b64, fx, fy, fw, fh }) => {
     const img = new Image(); img.src = "data:image/jpeg;base64," + b64; await img.decode();
     const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
@@ -85,7 +104,6 @@ test("weather() applies lighting live (fog mutes sun + lifts exposure)", async (
 });
 
 test("night fog GLOWS around lamps (fog wall brighter than dry-night sky band)", async ({ page }) => {
-  test.setTimeout(180_000);
   // Small viewport: the assertion is a region MEAN (resolution-independent),
   // and Singapore night at 720p renders too slowly on software-GL runners for
   // any screenshot to complete — 360p keeps each capture inside its timeout.
@@ -106,7 +124,6 @@ test("night fog GLOWS around lamps (fog wall brighter than dry-night sky band)",
 });
 
 test("night light budget: lamps on at night, off by day, exposure per table", async ({ page }) => {
-  test.setTimeout(180_000);
   await boot(page, "qatar", "night", "dry", 0.4);
   // frame.lights is written by the RENDER pass, and setTimeOfDay's rebuild can
   // outlast boot's fixed sleeps on a loaded software-GL runner — wait on the
@@ -134,7 +151,6 @@ test("PCSS contact-hardening rig is alive", async ({ page }) => {
 });
 
 test("dark sessions keep their exposure floors in fog (night must stay night)", async ({ page }) => {
-  test.setTimeout(180_000);
   await boot(page, "vegas", "night", "fog");
   const ls = await page.evaluate(() => window.__apex.lightState());
   // Night fog floor is 0.95 — NOT the daytime 1.08 (that grey-washed the dark).

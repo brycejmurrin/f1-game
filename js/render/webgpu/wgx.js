@@ -5536,6 +5536,15 @@ const WGX = (function () {
       gpuMs,
       createInstancedBatch,
       cullInstances,
+      // NOT IMPLEMENTED, declared rather than omitted: an absent name would let
+      // descriptor-copy keep GLX's own closure and run it against a null device
+      // (backend-surface-parity.test.mjs). DebrisWorld feature-tests this and
+      // keeps its per-body loop here, which is exactly what WGX ships today —
+      // so this is a perf gap, never a correctness one. Porting it means
+      // expanding the caller's stride-16 matrices into WGX's stride-20 instance
+      // layout (16 matrix + 3 colour + pad) and deciding what the colour lanes
+      // mean for a batch created without srcColors. docs/PERF-FINDINGS.md 2h.
+      updateInstances: undefined,
       drawInstanced,
       freeInstancedBatch,
       castShadowInstanced,

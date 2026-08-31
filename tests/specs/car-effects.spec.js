@@ -150,6 +150,13 @@ test.describe("Car runtime effects", () => {
     await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
     // A dry daytime race, so nothing but the grid state can light the rear.
     await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
+    // race() DOES NOT land in "count" synchronously any more: startRace() is
+    // async since the lazy-scenery split (it awaits ensureScenery), and race()
+    // does not await it. Reading carEffects() on return gets null, because
+    // there is no player yet. Wait for the state the hook is documented to
+    // reach instead of assuming the call was synchronous.
+    await page.waitForFunction(() => window.__apex.info().state === "count",
+      null, { polling: 100, timeout: 30_000 });
   }
 
   test("the rear lights come on for the grid, dry and in daylight", async ({ page }) => {

@@ -135,6 +135,17 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   concatenated index table to storage bindings 15/16, one DrawU slot per
   visible chunk, absolute shadow index in `params10.x` (no slot remap);
   `gfx.hasPerChunkLights` is the capability read (GLX + WGX; absent TLX).
+  `gfx.updateInstances(batch, matrices, n)` is the second capability of
+  that shape (GLX only so far): it hands an existing instanced batch a
+  caller-packed transform set, for a batch whose poses are new every
+  frame rather than static geometry narrowed by a frustum. Its one
+  consumer is `DebrisWorld.draw`, whose four per-body loops reached 98
+  draws at desktop caps and cost 17 every frame of every lap from cones
+  alone (PERF-FINDINGS 2h). WGX and TLX do not implement it and keep the
+  per-body loop, which looks identical — so porting it is a perf task,
+  never a correctness one. It MUST clear `_cullPlanes`/`_cellKeyN`:
+  those snapshots describe the frustum that wrote the resident bytes and
+  `cullInstances` skips its re-upload on a hit.
   Names that used
   to be absent (`gpuTimer`, texture arrays, lamp shadows, instancing,
   particles, …) are real functions on the backend object; they stay listed

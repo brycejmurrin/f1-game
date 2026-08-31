@@ -1800,7 +1800,29 @@ const Tracks = (function () {
     };
     ctx.registerMastLamp = registerMastLamp;
 
-    if (def.scenery) {
+    // THE CIRCUIT'S BESPOKE SCENERY, resolved from window.TrackScenery rather
+    // than off the def. The closure is ~27 KB per circuit and all 40 together
+    // were 1,083 KB of a 4.96 MB boot script wall — for a session that builds
+    // exactly one of them. js/circuits/scenery/<id>.js is LAZY_SCENERY: no
+    // <script> tag, fetched by game.js for the circuit about to be built.
+    // `|| def.scenery` keeps an inline closure working, which is what the Node
+    // build harnesses and any not-yet-split circuit rely on.
+    // def.scenery FIRST: an inline closure is an explicit override (a harness
+    // probe, or a circuit not yet split) and should beat the registry, which is
+    // just where the shipped closures now live.
+    const sceneryFn = def.scenery || (typeof window !== "undefined"
+      && window.TrackScenery && window.TrackScenery[def.id]) || null;
+    // A circuit that HAS a scenery file but whose closure is not resident builds
+    // bare — road and terrain, no bespoke dressing. That is a legal state (the
+    // generic dressing still runs) and an almost invisible one, so say it out
+    // loud: silent bare builds are the failure mode the whole split risks.
+    // Warn whenever the closure is absent, NOT only when the registry exists but
+    // lacks this id. The narrower condition was useless in the case that
+    // actually happened: a harness that never loaded js/circuits/scenery/ at all
+    // leaves window.TrackScenery undefined, so the warning it needed most was
+    // the one it could not reach.
+    if (!sceneryFn) Log.warn("track", "no scenery closure for " + def.id + " — building bare");
+    if (sceneryFn) {
       let sceneryApi = {
         out, track, def, theme, pal, n, ds, px, py, pz, hw, pyMin,
         night: NIGHT,
@@ -1853,7 +1875,7 @@ const Tracks = (function () {
       };
       if (def.reverse || def.sceneryCoordinates === "source" || TrackSpace.sceneryOriginDelta(def))
         sceneryApi = transformSceneryApi(sceneryApi, def, n);
-      def.scenery(sceneryApi);
+      sceneryFn(sceneryApi);
     }
 
     // Foliage runs LAST, once every barrier on the circuit is registered, so the

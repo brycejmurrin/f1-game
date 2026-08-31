@@ -124,6 +124,32 @@ const AGENT_FILES = [
 const AGENT_EDGES = [
   ["js/game/agentview-raster.js", "js/game/agentview.js"],
 ];
+// LAZY_RACE (tools/manifest.cjs). load-order.test.mjs asserts this equals the
+// manifest roster, the same way AGENT_FILES is held to LAZY_AGENT.
+const RACE_FILES = [
+  "js/game/light-presets.js",
+];
+// LAZY_SCENERY (tools/manifest.cjs): one file per circuit, ~27 KB each, holding
+// that circuit's bespoke scenery() closure. All 40 were 1,083 KB of the boot
+// script wall for a session that builds ONE of them.
+//
+// UNLIKE the presets, this one needs a real GATE. Tracks.build() is synchronous
+// and every loadTrack() caller uses `track` on the very next line (makeCars(),
+// track.def.id, applyRaceSettings()), so loadTrack cannot return early and
+// rebuild later — the closure has to be resident BEFORE it is called. Hence a
+// promise at each of the three entries that can reach a circuit not yet loaded:
+// the menu flyby (which already debounces 120 ms in a setTimeout), startRace(),
+// and openQuali(). Everything else — setTimeOfDay, the quali re-entry, the
+// __apex no-track fallback — only ever re-loads the circuit already on screen.
+const SCENERY_DIR = "js/circuits/scenery";
+function sceneryResident(id) {
+  return !!(window.TrackScenery && window.TrackScenery[id]);
+}
+function ensureScenery(idx) {
+  const def = Tracks.LIST[idx];
+  if (!def || sceneryResident(def.id)) return Promise.resolve();
+  return loadBackendScripts([SCENERY_DIR + "/" + def.id + ".js"], []);
+}
 function wantAgentSurface() {
   if (typeof window !== "undefined" && window.__TEST_MODE) return true;
   try { if (localStorage.getItem("apex26.devApi") === "1") return true; } catch (_) { /* blocked */ }
@@ -2365,7 +2391,13 @@ function scheduleFlybyTrack() {
   // Never hand loadTrack a negative index (exhausted career/season calendar).
   if (!(trackIdx >= 0)) return;
   flybyBuildTimer = setTimeout(() => {
-    if (state === "menu" && trackIdx >= 0) loadTrack(trackIdx);
+    if (!(state === "menu" && trackIdx >= 0)) return;
+    // Re-test after the fetch: 120 ms of debounce plus a network round trip is
+    // long enough for the player to have browsed on or pressed GO.
+    const want = trackIdx;
+    ensureScenery(want).then(() => {
+      if (state === "menu" && trackIdx === want) loadTrack(want);
+    });
   }, 120);
 }
 
@@ -2529,7 +2561,12 @@ function dropRaceWake() {
   try { if (held) held.release(); } catch (e) { Log.info("game", "wake lock was already released"); }
 }
 
-function startRace() {
+// ASYNC only to await ensureScenery() — see the LAZY_SCENERY note above. Every
+// caller is a click handler that ignores the result and makes startRace() its
+// last statement, and the specs already poll `__apex.info().track != null`
+// rather than assuming race() returns built, so nothing downstream changes.
+async function startRace() {
+  await ensureScenery(trackIdx);
   // Completed seasons are readable, never raceable (also guarded by award()).
   if ((flow === "season" && !SeasonCal.canRace(season)) || (isCareer() && Career.conflicted())) {
     state = "menu"; $("race-settings").hidden = true;
@@ -8008,7 +8045,8 @@ $("rs-go").onclick = () => {
 // The sheet opens BEFORE the session with the field already simulated, so the
 // player can see what they have to beat and choose whether to drive it or take
 // the simulated time. `q-done` flips the foot from DRIVE/SIMULATE to TO THE GRID.
-function openQuali(fresh) {
+async function openQuali(fresh) {
+  await ensureScenery(trackIdx);
   session = "quali";
   // Reached from race settings this is already "menu"; reached from the results
   // screen it would still say "results". No race is running while the sheet is
@@ -8797,6 +8835,31 @@ async function bootAgentSurface() {
   if (typeof ApexApi !== "undefined") window.__apex = ApexApi.create(G);
 }
 await bootAgentSurface();
+
+// THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited, on purpose:
+// awaiting it here would put the 338 KB straight back on the critical path,
+// which is the whole thing this removes. Nothing in a menu resolves lighting —
+// applyRaceSettings() first runs inside startRace() — so the fetch has the
+// entire time a player spends picking a circuit to land.
+//
+// No gate is needed because an ABSENT file is already a legal state: light-store
+// reads window.LightPresets at call time (base()/layers(), both `|| null`), so
+// until it arrives every knob resolves to its TUNE_DEFS default. When it does
+// arrive, applyLightTune() re-walks TUNE_DEFS through layers() and fires
+// liveEffects only for knobs that actually moved — the same path a tuner slider
+// takes. Worst case is a frame of default lighting on a very slow link, not a
+// wrong scene that stays wrong.
+raceAssets();
+async function raceAssets() {
+  // The circuit already selected (persisted trackIdx, or the default) is the
+  // one a player is most likely to race and the one the __apex no-track
+  // fallback would build, so fetch its scenery up front rather than making the
+  // first GO wait for it.
+  ensureScenery(trackIdx);
+  if (window.LightPresets) return;
+  await loadBackendScripts(RACE_FILES, []);
+  if (window.LightPresets && ltStore) applyLightTune();
+}
 
 // Lobby buttons + the #vs= invite-link handler. Last, so every element it
 // binds to exists and the G facade is fully built.
