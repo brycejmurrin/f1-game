@@ -19,8 +19,9 @@ import { test, expect } from "@playwright/test";
 import { BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 import { readFileSync } from "node:fs";
 import { KNOBS, FREEZE_FLICKER, FREEZE_FLICKER_FILE } from "../../tools/lighting/ab-lighting.mjs";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("../..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 // Solo on an idle box the heaviest test here takes 179.8 s — over the 120 s
 // default before any contention. Measured, not guessed.

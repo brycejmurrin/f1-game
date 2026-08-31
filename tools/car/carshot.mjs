@@ -14,8 +14,9 @@
 import { mkdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../harness.mjs";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 const az = Number(process.argv[2] ?? 40);
 const tod = process.argv[3] || "day";

@@ -4,6 +4,7 @@
  * Uses page.screenshot (not canvas locator) to avoid SwiftShader hangs.
  * Prefetches Assets.loadModels() before race() so bakedModel() placements mesh.
  */
+import { fileURLToPath } from "node:url";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -13,7 +14,7 @@ import {
   startStaticServer,
 } from "../harness.mjs";
 
-const ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const outDir = resolve("/opt/cursor/artifacts/synthetic-models/gallery");
 mkdirSync(outDir, { recursive: true });
 

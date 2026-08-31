@@ -808,6 +808,11 @@ const AgentView = (function () {
                    + "% of grip spent accelerating; lateral grip reduced",
           surface: G.raceWeather === "dry" ? "dry" : G.raceWeather,
           gripMult: r2(gripMult ? gripMult() : 1),
+          // gripMult is the ROAD; tyreGrip is what this car's compound actually
+          // has on it; fieldGrip is what the AI around you have (they are
+          // assumed to fit the right tyre). All three agree unless it is wet.
+          tyreGrip: r2(gripMult ? gripMult(p) : 1),
+          fieldGrip: r2(gripMult ? gripMult({ tread: null }) : 1),
         },
       };
 

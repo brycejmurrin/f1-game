@@ -57,6 +57,26 @@ window.PhysicsConsts = {
 
   LONG_GRIP: 34,
 
+  // Road grip in the wet, by TYRE TREAD CLASS: [slick, intermediate, full wet],
+  // indexed by the fitted compound's `wetTread` in the Parts catalog (absent = 0
+  // = slick). Read by gripMult() in game.js; dry, overcast and fog have no row,
+  // so the lookup misses and grip stays 1 as it always did.
+  //
+  // THE SLICK COLUMN IS THE OLD WEATHER-ONLY gripMult() VERBATIM. That is the
+  // point: before this table the model read the weather and never the tyre, so
+  // the two wet compounds were a pure penalty — you paid ~10% of the car to fit
+  // a full wet and the rain treated you exactly like a slick. Keeping 0.82/0.72
+  // makes the fix purely additive: wets gain, nothing else moves, and the
+  // characterization baselines stay honest instead of being re-cut.
+  //
+  // A full wet in a storm (0.97) is worth 1.35x a slick's grip, so a correct
+  // call roughly matches the AI field and a wrong one costs about a quarter of
+  // your cornering. These are a design choice, not a measurement.
+  WET_GRIP: {
+    wet:  [0.82, 0.94, 0.99],
+    rain: [0.72, 0.86, 0.97],
+  },
+
   // Visual animation (render-only, never touches physics): the chassis leans into
   // corners (roll ∝ lateral g) and pitches to the road gradient, and the wheels
   // spin with speed + steer with input — all on a smoothed visual layer, the way

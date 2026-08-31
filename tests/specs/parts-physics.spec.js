@@ -146,37 +146,38 @@ test.describe("Parts module — getMods()", () => {
 });
 
 test.describe("Parts module — getCost()", () => {
+  // Prices come from the catalog, never from a literal here. Four of these
+  // tests pinned 160 / 180 / 200 / 490 and the ladder re-space moved three of
+  // them — a red run that says nothing about getCost(), which is what this
+  // block exists to measure.
+  const price = (page, cat, id) => page.evaluate(([c, o]) =>
+    Parts.CATALOG.find((x) => x.id === c).options.find((y) => y.id === o).cost, [cat, id]);
+
   test("all defaults cost 0", async ({ page }) => {
     await load(page);
     const cost = await page.evaluate(() => Parts.getCost({}, ""));
     expect(cost).toBe(0);
   });
 
-  test("race engine costs 160", async ({ page }) => {
+  test("one fitted part costs exactly its catalog price", async ({ page }) => {
     await load(page);
-    const cost = await page.evaluate(() => Parts.getCost({ engine: "race" }, ""));
-    expect(cost).toBe(160);
-  });
-
-  test("f1_spec gearbox costs 180", async ({ page }) => {
-    await load(page);
-    const cost = await page.evaluate(() => Parts.getCost({ gearbox: "f1_spec" }, ""));
-    expect(cost).toBe(180);
-  });
-
-  test("custom_formula fuel costs 200", async ({ page }) => {
-    await load(page);
-    const cost = await page.evaluate(() => Parts.getCost({ fuel: "custom_formula" }, ""));
-    expect(cost).toBe(200);
+    for (const [cat, id] of [["engine", "race"], ["gearbox", "f1_spec"], ["fuel", "custom_formula"]]) {
+      const want = await price(page, cat, id);
+      expect(want).toBeGreaterThan(0);
+      const cost = await page.evaluate(([c, o]) => Parts.getCost({ [c]: o }, ""), [cat, id]);
+      expect(cost).toBe(want);
+    }
   });
 
   test("costs add up correctly across multiple categories", async ({ page }) => {
     await load(page);
-    // race(160) + active suspension(190) + ceramic brakes(140) = 490
+    const parts = [["engine", "race"], ["suspension", "active"], ["brakes", "ceramic"]];
+    let want = 0;
+    for (const [c, o] of parts) want += await price(page, c, o);
     const cost = await page.evaluate(() =>
       Parts.getCost({ engine: "race", suspension: "active", brakes: "ceramic" }, "")
     );
-    expect(cost).toBe(490);
+    expect(cost).toBe(want);
   });
 
   test("max setup exceeds the budget", async ({ page }) => {
@@ -208,7 +209,8 @@ test.describe("Parts module — resolveSetup()", () => {
     expect(resolved.setup.engine).toBe("race");
     expect(resolved.setup.aero).toBe("minimal");
     expect(resolved.ids.engine).toBe("race");
-    expect(resolved.cost).toBe(160);
+    expect(resolved.cost).toBe(await page.evaluate(() =>
+      Parts.CATALOG.find((c) => c.id === "engine").options.find((o) => o.id === "race").cost));
     expect(resolved.mods.speed).toBeGreaterThan(1);
     expect(resolved.tiers.aero).toBe(0);
     expect(resolved.visual.engine.id).toBe("race");
@@ -1181,25 +1183,22 @@ test.describe("Parts module — visual recipes", () => {
     expect(size[2]).toBeLessThan(6.2);
   });
 
-  test("car mesh layers stay below absolute triangle ceilings", async ({ page }) => {
+  test("the decal sheet stays below its absolute triangle ceiling", async ({ page }) => {
     await load(page);
     const triangles = await page.evaluate(() => ({
-      body: Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { noWheels: true }).idx.length / 3,
-      cockpit: Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1],
-        { noWheels: true, noDriver: true, cockpit: true }).idx.length / 3,
-      frontWheel: Car3D.buildWheel(0.32).idx.length / 3,
-      rearWheel: Car3D.buildWheel(0.38).idx.length / 3,
       decals: CarMesh.carDecalData(2).idx.length / 3,
     }));
-    // 2400 -> 2545: the round-halo tube + pillar V-brace + regulation
-    // mirrors — mirrors the raises (and their measurements) recorded in
-    // tests/unit/car-wing-foil.test.mjs.
-    expect(triangles.body).toBeLessThanOrEqual(2545);
-    expect(triangles.cockpit).toBeLessThanOrEqual(1500);
-    // 400 -> 500: tyres at SEG 24 (18-gon tyres read visibly polygonal in any
-    // close shot; measured 480 at the raise).
-    expect(triangles.frontWheel).toBeLessThanOrEqual(500);
-    expect(triangles.rearWheel).toBeLessThanOrEqual(500);
+    // THE BODY / COCKPIT / WHEEL CEILINGS USED TO BE HERE TOO, and they were a
+    // verbatim second copy of tests/unit/car-wing-foil.test.mjs's — same pure-JS
+    // `Car3D.build`/`buildWheel`, so this copy could never catch anything the
+    // node one missed, and it sat in a 20-minute browser group instead of the
+    // edit loop. Predictably it drifted: it still read `body <= 2545` after the
+    // node test had been raised twice (2545 -> 2690 -> 2830), and `wheel <= 500`
+    // after tyres went SEG 18 -> 24. Measured 2820 / 692 on the tree where this
+    // comment was written — RED, and unnoticed for exactly as long as it took to
+    // run this group. car-wing-foil.test.mjs is now the sole owner of those
+    // three. The decal count stays here because CarMesh's sheet is not what that
+    // file measures.
     // 48, FROM A MEASUREMENT. This said 32 and the decal sheet has been 36
     // triangles (18 quads over LiveryTex's 8 regions) at EVERY revision of
     // js/game/carmesh.js — bisected, not assumed. So the ceiling was never
@@ -1487,10 +1486,19 @@ test.describe("Parts module — statMult()", () => {
 test.describe("ERS parts drive the battery and overtake", () => {
   test("deployment and recovery both scale with the ERS option", async ({ page }) => {
     const rows = [];
+    // ONE BOOT TO LEARN THE TEAM ID, THEN ONE PER ERS OPTION. The loop used to
+    // goto AND reload on every pass — six navigations for three measurements —
+    // because it needed the team id from a loaded page before it could name the
+    // storage key. The id does not change between passes, so read it once and
+    // let each pass seed storage on the page it already has: three reloads
+    // instead of three goto+reload pairs. The reload itself stays, and has to:
+    // `store` (js/game/store.js) caches every key it has read, so a bare
+    // localStorage.setItem would leave the game answering from _cache and the
+    // three passes would silently measure the same setup.
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+    const teamId = await page.evaluate(() => window.__apex.teams()[0].id);
     for (const ers of ["harvest", "standard", "overcharge"]) {
-      await page.goto("/");
-      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
-      const teamId = await page.evaluate(() => window.__apex.teams()[0].id);
       await page.evaluate(([e, id]) => {
         const key = "apex26.parts." + id;
         const cur = JSON.parse(localStorage.getItem(key) || "{}");
@@ -1542,5 +1550,114 @@ test.describe("ERS parts drive the battery and overtake", () => {
 
     // And the spread is worth having: >1.5x on boost duration end to end.
     expect(harvest.perSec / over.perSec).toBeGreaterThan(1.5);
+  });
+});
+
+test.describe("Wet compounds are a trade, not a penalty", () => {
+  test("a full wet still loses to a slick on all four dry stats", async ({ page }) => {
+    // The other half of the trade, and the cheap half — pure catalog, no race.
+    // If this ever goes green the wet tyres have become a free upgrade and the
+    // rain grip below is no longer something you pay for.
+    await load(page);
+    const cmp = await page.evaluate(() => {
+      const opts = Parts.CATALOG.find((c) => c.id === "tyres").options;
+      const by = Object.fromEntries(opts.map((o) => [o.id, o]));
+      const st = (o, k) => (o[k] === undefined ? 1 : o[k]);
+      return ["speed", "accel", "cornering", "braking"].map((k) => ({
+        k, wet: st(by.wet_full, k), inter: st(by.intermediate, k), slick: st(by.medium, k),
+        tread: [by.medium.wetTread || 0, by.intermediate.wetTread, by.wet_full.wetTread],
+      }));
+    });
+    expect(cmp[0].tread).toEqual([0, 1, 2]);
+    for (const { k, wet, inter, slick } of cmp) {
+      expect(wet, k + ": full wet must cost you in the dry").toBeLessThan(slick);
+      expect(inter, k + ": intermediate must cost you in the dry").toBeLessThan(slick);
+      expect(wet, k + ": the full wet is the bigger dry sacrifice").toBeLessThanOrEqual(inter);
+    }
+  });
+
+  test("the grip table ladders by tread class, and is flat in the dry", async ({ page }) => {
+    // NO RACE. The table is a plain global (PhysicsConsts is assigned to window)
+    // and so is the catalog, so its shape costs one boot and nothing else.
+    // gripMult itself is NOT reachable from here — js/game.js is an async IIFE,
+    // so everything in it is private; the test below reaches the live function
+    // through world().ego.grip, which is what that block is for.
+    await load(page);
+    const t = await page.evaluate(() => ({
+      table: PhysicsConsts.WET_GRIP,
+      tread: Object.fromEntries(["medium", "intermediate", "wet_full"].map(
+        (id) => [id, Parts.tread({ tyres: id }, Teams.LIST[0])])),
+    }));
+
+    // The catalog's tread classes are what index the table, so they are the
+    // same fact in two files and have to agree.
+    expect(t.tread).toEqual({ medium: 0, intermediate: 1, wet_full: 2 });
+
+    // 1. DRY, OVERCAST and FOG have no row at all — that absence is what makes a
+    //    wet tyre buy nothing when it is not raining, which is what makes its
+    //    four stat penalties a real price rather than a rounding error.
+    expect(Object.keys(t.table).sort()).toEqual(["rain", "wet"]);
+
+    for (const w of ["wet", "rain"]) {
+      const [slick, inter, full] = t.table[w];
+      expect(full).toBeGreaterThan(inter);
+      expect(inter).toBeGreaterThan(slick);
+      expect(full).toBeLessThanOrEqual(1);   // no wet tyre beats a dry road
+    }
+
+    // 2. THE ADDITIVE INVARIANT, at its source: the slick column is the old
+    //    weather-only gripMult(), value for value. That is why a car on slicks
+    //    behaves exactly as it did before any of this existed, and why
+    //    headless-api's `gripMult === 0.82` did not have to be re-cut. If these
+    //    two numbers ever move, every physics baseline in the repo is now
+    //    measuring a different car. See docs/PHYSICS.md "Weather and tyres".
+    expect(t.table.wet[0]).toBe(0.82);
+    expect(t.table.rain[0]).toBe(0.72);
+
+    // 3. The advantage is worth the four dry penalties, and it is a bigger deal
+    //    in a storm than in the damp — that ordering is the whole reason the
+    //    table has two rows rather than one.
+    expect(t.table.rain[2] / t.table.rain[0]).toBeGreaterThan(1.25);
+    expect(t.table.rain[2] / t.table.rain[0])
+      .toBeGreaterThan(t.table.wet[2] / t.table.wet[0]);
+  });
+
+  test("the compound fitted in the garage is the one the car drives on", async ({ page }) => {
+    // The table above is worth nothing if the player's CHOICE never reaches it.
+    // One race, one compound, one weather change — the integration only.
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+    const teamId = await page.evaluate(() => window.__apex.teams()[0].id);
+    await page.evaluate((id) => {
+      const key = "apex26.parts." + id;
+      const cur = JSON.parse(localStorage.getItem(key) || "{}");
+      cur.tyres = "wet_full"; localStorage.setItem(key, JSON.stringify(cur));
+      localStorage.setItem("apex26.team", "0");
+      localStorage.setItem("apex26.unlimitedBudget", "true");
+    }, teamId);
+    // The reload is load-bearing: `store` caches every key it has read, so a
+    // bare setItem would leave the game answering from _cache and this would
+    // measure the default compound while still passing.
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+    await page.evaluate(() => window.__apex.race("monza", undefined, "rain"));
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 40_000 });
+    const g = await page.evaluate(() => {
+      const A = window.__apex;
+      A.headless(true); A.go(); A.jump(0.1, 60, 0); A.step(1 / 60, 2);
+      // gripMult is the ROAD, tyreGrip is this car, fieldGrip is the AI around
+      // it — they diverge only when it is actually raining.
+      return A.world().ego.grip;
+    });
+    expect(g.gripMult).toBeLessThan(1);            // it really is raining
+    expect(g.tyreGrip).toBeGreaterThan(g.gripMult);
+    expect(g.tyreGrip / g.gripMult).toBeGreaterThan(1.25);
+    // THE AI FIELD IS ASSUMED COMPETENT. AI cars carry no parts at all, so
+    // rather than model their setup they resolve to the top column: fitting the
+    // right tyre MATCHES the field instead of beating it. That is the line that
+    // keeps rain a race rather than a walkover, and it is a design decision
+    // someone will otherwise read as a bug — docs/PHYSICS.md "Weather and tyres".
+    expect(g.fieldGrip).toBe(g.tyreGrip);
+    expect(g.fieldGrip).toBeGreaterThan(g.gripMult);
   });
 });
