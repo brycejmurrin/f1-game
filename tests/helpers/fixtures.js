@@ -234,7 +234,17 @@ export const sharedTest = test.extend({
     const page = await context.newPage();
     captureConsole(page);
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 30_000 });
+    // 60 s, not 30. This is a WORKER-scoped boot paid once per file, so the
+    // bound costs nothing when the page is quick and is the difference between
+    // working and not when it is slow. smoke.spec.js already allows 60 s for the
+    // same wait, with the measurement behind it: "CI has been measured taking
+    // 94 s just to boot a race on a starved runner". At 30 s this fixture could
+    // not be used by the heaviest specs at all — the two smoke HUD tests failed
+    // their whole shard in fixture setup, before either assertion ran.
+    // Raising a bound only ever PERMITS a slower boot; it cannot make a page
+    // that boots quickly any slower, so the ten specs already on sharedTest are
+    // unaffected.
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 60_000 });
     await use(page);
     await context.close();
   }, { scope: "worker" }],
