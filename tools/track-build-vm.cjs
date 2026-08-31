@@ -131,6 +131,11 @@ function buildContext(opts) {
                     .filter((f) => f.endsWith(".js")).sort()) {
     runFile(path.join(MANIFEST.CIRCUITS_DIR, f));
   }
+  // The scenery closures live in a SUBDIRECTORY now, which the .js filter above
+  // skips — without this the harness builds every circuit bare and every
+  // baseline quietly drops its props. Order is free: tracks.js reads
+  // window.TrackScenery at BUILD time, not at load.
+  for (const f of MANIFEST.LAZY_SCENERY) runFile(f);
   runFile(TRACKS_ENTRY);
 
   if (!ctx.Tracks || !ctx.Tracks.LIST) throw new Error("Tracks.LIST missing");

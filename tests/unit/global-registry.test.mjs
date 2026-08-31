@@ -68,6 +68,12 @@ const SHARED_GLOBALS = {
 // js/circuits/ ever writes it.
 const GROWABLE_GLOBALS = {
   TrackDefs: /^js\/circuits\//,
+  // Same idiom, same reason, one directory deeper: each circuit's bespoke
+  // scenery closure was split out of its def file so the 1,083 KB of closures
+  // stops riding the boot script wall for a session that builds ONE circuit.
+  // Forty writers by design; what is pinned is that nothing outside the split
+  // directory writes it.
+  TrackScenery: /^js\/circuits\/scenery\//,
 };
 
 // Known reads of names NO manifest file assigns — each with its story. A new

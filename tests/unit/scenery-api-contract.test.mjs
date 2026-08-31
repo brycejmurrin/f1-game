@@ -18,6 +18,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const { buildContext } = require("../../tools/verify-track.cjs");
+const MANIFEST = require("../../tools/manifest.cjs");
 
 const CONTRACT = [
   "ATM", "COL", "MAT",
@@ -57,8 +58,14 @@ test("the frozen contract is the size it declares", () => {
 test("buildProps sceneryApi surface matches the frozen contract", () => {
   const Tracks = buildContext();
   // A non-reversed, non-source-coordinate def sees the raw (unwrapped) api.
+  // The shipped closures live in window.TrackScenery now (LAZY_SCENERY), so
+  // "has a scenery callback" is a question about the manifest roster, not about
+  // def.scenery — which is undefined on every shipped circuit today. The probe
+  // below is assigned to def.scenery, which tracks.js resolves FIRST precisely
+  // so an explicit override still beats the registry.
+  const withScenery = new Set(MANIFEST.LAZY_SCENERY.map((f) => f.split("/").pop().replace(/\.js$/, "")));
   const def = Tracks.LIST.find(
-    (d) => !d.reverse && d.sceneryCoordinates !== "source" && d.scenery,
+    (d) => !d.reverse && d.sceneryCoordinates !== "source" && (d.scenery || withScenery.has(d.id)),
   );
   assert.ok(def, "need at least one plain circuit with a scenery callback");
   let keys = null;

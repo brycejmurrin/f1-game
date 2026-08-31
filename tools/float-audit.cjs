@@ -138,6 +138,11 @@ function buildContext(opts) {
                     .filter((f) => f.endsWith(".js")).sort()) {
     runFile(path.join(MANIFEST.CIRCUITS_DIR, f));
   }
+  // …and the split-out scenery closures (LAZY_SCENERY). The .js filter above
+  // only sees the top level, so without this every circuit builds BARE — road
+  // and terrain, no dressing — and the numbers look plausible enough to trust.
+  // That is exactly how cota read 3,988 prop cells here instead of 32,897.
+  for (const f of MANIFEST.LAZY_SCENERY) runFile(f);
   runFile("js/track/tracks.js");
 
   if (!ctx.Tracks || !ctx.Tracks.LIST) throw new Error("Tracks.LIST missing");

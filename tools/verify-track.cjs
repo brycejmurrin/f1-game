@@ -146,6 +146,10 @@ function buildContext(rootOverride, opts) {
                         .filter((f) => f.endsWith(".js")).sort()) {
         runFile(path.join(manifest.CIRCUITS_DIR, f));
       }
+      // …and the split-out scenery closures, which the .js filter above skips
+      // because they sit in js/circuits/scenery/. Miss them and the circuit
+      // still builds — just bare, which is the failure this tool exists to see.
+      for (const f of manifest.LAZY_SCENERY) runFile(f);
     } else {
       runFile(entry);
     }
