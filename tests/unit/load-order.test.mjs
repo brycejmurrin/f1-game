@@ -132,7 +132,11 @@ function deferredFiles() {
 }
 
 function lazyFiles() {
-  return MANIFEST.LAZY_AGENT || [];
+  // LAZY_AGENT (dev/test surface) + LAZY_RACE (the race payload: no tag, pulled
+  // by game.js once a session needs it). Both are tagless BY DESIGN and still
+  // have to be accounted for, or "created the file, forgot to load it" stops
+  // being catchable.
+  return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -215,6 +219,25 @@ test("js/game.js AGENT_FILES equals MANIFEST.LAZY_AGENT", () => {
   assert.ok(block, "js/game.js must declare AGENT_FILES for the lazy agent surface");
   const listed = [...stripComments(block[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(listed, MANIFEST.LAZY_AGENT);
+});
+
+// Same lockstep as AGENT_FILES above, for the race payload. A file that leaves
+// FULL without joining this roster has no tag AND no injector: it 404s only on
+// the path that needs it, which on light-presets is "the whole game looks
+// wrong once you actually start a race".
+test("js/game.js RACE_FILES equals MANIFEST.LAZY_RACE", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const block = src.match(/const RACE_FILES = \[([\s\S]*?)\n\];/);
+  assert.ok(block, "js/game.js must declare RACE_FILES for the lazy race payload");
+  const listed = [...stripComments(block[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(listed, MANIFEST.LAZY_RACE);
+});
+
+test("LAZY_RACE files have no <script> tag", () => {
+  const tagged = new Set(scriptSrcs.map(stripV));
+  for (const f of (MANIFEST.LAZY_RACE || [])) {
+    assert.ok(!tagged.has(f), `${f} is LAZY_RACE but still has a <script> tag in index.html`);
+  }
 });
 
 test("js/game.js AGENT_EDGES equals MANIFEST.LAZY_EDGES", () => {

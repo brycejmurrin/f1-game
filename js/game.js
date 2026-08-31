@@ -124,6 +124,11 @@ const AGENT_FILES = [
 const AGENT_EDGES = [
   ["js/game/agentview-raster.js", "js/game/agentview.js"],
 ];
+// LAZY_RACE (tools/manifest.cjs). load-order.test.mjs asserts this equals the
+// manifest roster, the same way AGENT_FILES is held to LAZY_AGENT.
+const RACE_FILES = [
+  "js/game/light-presets.js",
+];
 function wantAgentSurface() {
   if (typeof window !== "undefined" && window.__TEST_MODE) return true;
   try { if (localStorage.getItem("apex26.devApi") === "1") return true; } catch (_) { /* blocked */ }
@@ -8715,6 +8720,26 @@ async function bootAgentSurface() {
   if (typeof ApexApi !== "undefined") window.__apex = ApexApi.create(G);
 }
 await bootAgentSurface();
+
+// THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited, on purpose:
+// awaiting it here would put the 338 KB straight back on the critical path,
+// which is the whole thing this removes. Nothing in a menu resolves lighting —
+// applyRaceSettings() first runs inside startRace() — so the fetch has the
+// entire time a player spends picking a circuit to land.
+//
+// No gate is needed because an ABSENT file is already a legal state: light-store
+// reads window.LightPresets at call time (base()/layers(), both `|| null`), so
+// until it arrives every knob resolves to its TUNE_DEFS default. When it does
+// arrive, applyLightTune() re-walks TUNE_DEFS through layers() and fires
+// liveEffects only for knobs that actually moved — the same path a tuner slider
+// takes. Worst case is a frame of default lighting on a very slow link, not a
+// wrong scene that stays wrong.
+raceAssets();
+async function raceAssets() {
+  if (window.LightPresets) return;
+  await loadBackendScripts(RACE_FILES, []);
+  if (window.LightPresets && ltStore) applyLightTune();
+}
 
 // Lobby buttons + the #vs= invite-link handler. Last, so every element it
 // binds to exists and the G facade is fully built.

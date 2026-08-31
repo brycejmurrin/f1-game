@@ -419,7 +419,14 @@ const CEILINGS = {
   // knob is resolved BEFORE setFrameLights (it feeds the scaled full-set build)
   // and allLights is left null when the feature is off instead of handing out
   // the raw baked list.
-  "js/game.js": 8727,
+  // 8727 -> 8749 for the LAZY_RACE loader: RACE_FILES + raceAssets(), which sit
+  // beside AGENT_FILES / loadBackendScripts because they ARE that mechanism
+  // (same injector, second roster) — splitting them into js/game/ would put the
+  // boot loader a module away from the boot code that calls it. 17 of the 22
+  // lines are the comment explaining why the fetch is deliberately un-awaited
+  // and why an absent file is a legal state; that is the growth the note above
+  // tolerates. The change takes 338 KB OFF the boot script wall.
+  "js/game.js": 8749,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
