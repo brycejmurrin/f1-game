@@ -10,6 +10,9 @@
 const GfxDebug = (() => {
   const ID = "gfx-debug";
   let el = null, pre = null, timer = 0;
+  // Previous loop sample, so the heartbeat below can be a DELTA (see build()).
+  let _lastFrames = 0, _lastPaint = 0;
+  function nowMs() { try { return performance.now(); } catch (_) { return Date.now(); } }
 
   function wanted() {
     try {
@@ -127,6 +130,32 @@ const GfxDebug = (() => {
     if (G.softPresentState) {
       try { L.push("softPresent=" + JSON.stringify(G.softPresentState()).slice(0, 160)); }
       catch (_) { /* backend without the hook */ }
+    }
+
+    // THE ONE LINE THAT IS TRUE WHEN THE LOOP IS DEAD. Everything above reads a
+    // value the frame loop wrote, so all of it freezes at its last healthy
+    // reading and keeps reporting it — including the fps below, which comes
+    // from PerfGov and is written only inside the loop. This overlay runs on
+    // setInterval, so it outlives the loop; staleMs is the difference between
+    // "painting 60 fps" and "painting the memory of 60 fps".
+    if (typeof LoopHealth !== "undefined" && LoopHealth.state) {
+      try {
+        const h = LoopHealth.state();
+        // RELATIVE, not a millisecond threshold: how many frames completed
+        // between this paint and the last one. "staleMs > 1000 means stalled"
+        // reads a healthy headless page (measured: 6993 ms) and a struggling
+        // phone as dead; a count that does not move between two paints is a
+        // stall at any frame rate, on any hardware.
+        const t = nowMs(), dF = h.frames - _lastFrames, dT = _lastPaint ? Math.round(t - _lastPaint) : 0;
+        _lastFrames = h.frames; _lastPaint = t;
+        L.push("loop: " + (h.stopped ? "STOPPED at the fault cap"
+          : h.frames === 0 ? "NO FRAME COMPLETED YET"
+            : dT && dF === 0 ? "NO FRAME in the last " + dT + "ms"
+              : "+" + dF + " frames/" + dT + "ms") +
+          "  total=" + h.frames + " staleMs=" + (h.staleMs == null ? "-" : h.staleMs) +
+          " faults=" + h.faults + "/" + h.totalCap + " run=" + h.run + "/" + h.cap +
+          (h.lastFault ? "\n      lastFault: " + h.lastFault : ""));
+      } catch (_) { L.push("loop: unreadable"); }
     }
 
     if (typeof window !== "undefined" && window.__apex && window.__apex.info) {

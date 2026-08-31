@@ -127,10 +127,10 @@ TTFB 7 ms + render delay 2299 ms**, CLS 0.03.
 > IIFEs **2.5 ms**, so parse+execute of the circuit wall is ~1 % of the 2299 ms,
 > not the bulk. "Render delay" is the browser's bucket for everything between
 > TTFB and the paint. Two eager costs that are NOT bytes: `js/track/tracks.js`
-> builds Catmull-Rom control points for **all 40** circuits at boot (**24.0 ms**),
-> and `js/game/apex.js` + `agentview*` is **346 KB of dev/test surface** no player
-> reaches. Also note DCL 4712 ms predates the flyby deferral (`de5d202`) and has
-> not been re-measured. See §3.
+> built Catmull-Rom control points for **all 40** circuits at boot (**24.0 ms**)
+> — **TAKEN**, see below — and `js/game/apex.js` + `agentview*` is **346 KB of
+> dev/test surface** no player reaches. Also note DCL 4712 ms predates the flyby
+> deferral (`de5d202`) and has not been re-measured. See §3.
 
 ### COUNT THE WORK AVOIDED, DO NOT TIME IT
 
@@ -1469,6 +1469,12 @@ still null, and `update()`'s engine-audio block dereferenced it.
 resolution miss") and guards itself. The throw escapes `tick()` **before** the
 `requestAnimationFrame` re-schedule, so the render loop never runs again.
 
+> **Superseded in §2k (round 14).** The sentence above describes the loop policy
+> as it stood, and fixing this one dereference left every *other* transient
+> fault exactly as fatal. `tick()` now tolerates a bounded run of consecutive
+> faults that any clean frame pays back, and still reports and rethrows at the
+> cap. Read §2k before quoting this paragraph as current behaviour.
+
 | `__apex.race()` + `go()` | draws over 20 frames | page errors |
 |---|---|---|
 | before | **0** | `Cannot read properties of null (reading 'rpm')` |
@@ -1528,6 +1534,137 @@ reported confident geometry, and this census printed an empty frame as a result.
 non-zero on a frame with no `drawElements`, and both that and the null guard are
 pinned in `tests/unit/source-integrity.test.mjs`, each proven to bite by
 sabotage.
+
+## 2j. Sweeping the class: three more instruments that could not say "I measured nothing" (2026-08-31)
+
+§2i wrote the rule down and never swept for it. A read-only audit found three
+more live instances, all confirmed at source, all in `tools/` — which
+`tests/unit/silent-catch.test.mjs` has never walked (it is scoped to `js/`).
+
+### `verify-change.mjs` returned `pass` for a diff no rule claimed
+
+`tools/pick-tests.mjs` computes a three-way `reason` whose own comment says
+*"unmatched — files changed but no rule claimed them, so the selection is NOT
+trustworthy and the caller must fall back to a full run."* `verify-change.mjs`
+called the raw `pick()` Map API and never saw it, so `!batches.length` collapsed
+"nothing to test" and "no rule matched" into the same `pass`. A `.github/`,
+`playwright.config.js`, `package.json`, `icons/` or `vendor/` edit ran one
+advisory cache-check and reported green — and this is the default for
+`verify-agent` and what `apex_verify_change_fast` runs, so an agent asking "did
+I break anything?" was told no.
+
+Fixed by computing the same reason and giving it its own verdict. `finish()`
+already exits 0/1/2 for pass/fail/other and `apex-tools-mcp.mjs` already
+tolerates exit 2, so this needed no new mechanism and no caller change.
+
+### The real-GPU gate could silently disable its own strongest checks
+
+`tools/gpu-census.mjs` set `anyHardware` from `runs.some(...)` and exited 0
+**unconditionally**, so four failed launches were indistinguishable from "this
+machine is software". `gpu-census.yml` read that as `hardware = false`, which
+turns the `hardware &&` clauses — a missing `gpuErrors` count, `softAdapter` on
+hardware — into no-ops. A census that measured nothing therefore **downgraded
+the real-GPU gate to a software gate and let it report success**, printing
+`census anyHardware: false` for a verdict it never reached. Reproduced against
+the reverted script: cases C and D below exit 0.
+
+`anyHardware` is now tri-state (`null` when nothing launched) and the tool exits
+1 when every run failed to launch; the workflow fails on `null` rather than
+coercing it.
+
+### `(env.fail || 0) > 0`, twelve lines below the comment explaining the bug
+
+The same banned idiom as the `gpuErrors` fix, on the same object, in the same
+file: a build that stops exporting `envState().fail` read as clean. **This
+session cited that gate twice as evidence.**
+
+Scoping it was the interesting part. The naive fix — fail on an absent count —
+would have failed macOS forever: `gpu-game-check.mjs` reads `envState` only when
+`g.__tlx` exists, so the **GLX leg has no env probe to report and never will**.
+The check is scoped to the two TLX legs, which are `--backend three` by
+construction. Scoping on the leg NAME rather than on "does this row have a
+`__tlx`" is deliberate: a TLX leg that fell back to GLX also loses `envState`,
+and that is a regression to fail on, not a reason to go quiet.
+
+### The gate had never been executed by a test
+
+Every guard on the Verdict step was a regex over its source, because it is a
+`node -e` script embedded in YAML — which is how three vacuous clauses lived in
+it at once. `tests/unit/gfx-backend-canary.test.mjs` now lifts the real script
+out of the workflow and **runs it** against fixtures shaped like what
+`gpu-game-check` actually writes. Seven cases, and the one that earns its keep
+is the counter-test: a healthy hardware run whose GLX leg reports no env probe
+must PASS. Without it, "fail on absence" looks free.
+
+Four sabotages, each confirmed red then restored: coerce `anyHardware` back
+(2 tests red), restore `(env.fail || 0) > 0` (1), drop the `tlxLeg` scope (the
+counter-test catches it — this is the false-failure that would otherwise have
+shipped), and rename the workflow step so the extractor finds nothing (all 3,
+proving the extractor cannot silently hand back an empty script).
+
+## 2k. A transient fault costs a frame; a deterministic one still stops (2026-08-31)
+
+§2i's finding has a tail. Fixing the null dereference fixed one *instance*; the
+*policy* — one throw ends the session — left every other transient fault just as
+fatal, and `startRace` is async now, so that window is real.
+
+`tick()` now delegates to `js/game/loop-health.js`: a run of consecutive faults
+is tolerated and **any clean frame pays the run back to zero**; at the cap it
+reports through `window.__apexReportError` and rethrows exactly as before, so a
+deterministic fault still stops loudly instead of repainting the error overlay
+60x/s. This follows the retry shape the codebase already uses — `js/game/perf.js`
+caps crash-sentinel strikes and lets clean races pay them back, `js/render/glx.js`
+bounds context-loss reloads at two per tab session.
+
+A run counter that any clean frame resets can never stop a fault that
+*alternates* clean/throw, so there is an absolute ceiling too (240 faults, four
+seconds of a half-broken loop).
+
+### The heartbeat, and why it is not `fpsEMA` and not `lastFrame`
+
+When the loop dies, every existing surface reports health: `PerfGov.fpsEMA()` is
+written only inside `PerfGov.tick`, whose sole caller is the dead loop, so it
+freezes at its last healthy value while the METRICS and `?gfxdebug=1` overlays —
+both on their own `setInterval` — keep painting a plausible 60 fps over a frozen
+canvas.
+
+Decaying `fpsEMA` is **not** the fix: `PerfGov.tick` is gated on `!paused &&
+(race || count)`, so a frozen fps is correct in a menu and a decay would report
+false stalls there. Measured in the menu: `fpsEMA` 16.7 and frozen, loop
+demonstrably alive.
+
+`lastFrame` looks like the honest candidate and is not — it is assigned at the
+**top** of `tickBody`, before the body runs, so a loop throwing on every frame
+keeps refreshing it and reads perfectly alive. The stamp has to be taken by a
+frame that *finished*.
+
+**And liveness is a COUNT, not a deadline.** The first version of the repro
+asserted `staleMs < 1000` and failed on healthy code: rAF in this container runs
+at a fraction of a Hz — a 500 ms `setTimeout` took 9.8 s, and a perfectly healthy
+page reported `staleMs` 6993. Any "stalled if > 1 s" rule would call that machine
+dead, and a struggling phone too. A frame counter that does not advance between
+two observations is a stall at any frame rate, on any hardware. The `?gfxdebug=1`
+overlay reports the delta between its own paints for the same reason.
+
+### Verified on a live page, not in the source
+
+`tools/loop-fault-repro.mjs` injects throws into `Input.poll` (a global
+`tickBody` calls unconditionally every frame) and reads what the game does.
+Seven checks, all green:
+
+| check | measured |
+|---|---|
+| menu loop alive while `fpsEMA` is legitimately frozen | frames 7 → 9, `fpsEMA` 16.7 |
+| 7 consecutive faults survived, still drawing | `stopped:false`, frames kept advancing |
+| a clean frame paid the run back | `run=0 faults=7` |
+| faults reached the `__apex.logs()` ring | 5 entries |
+| permanent fault stopped AT the cap, no spin | exactly 8 throws, then none |
+| the heartbeat reports the stall the frozen surfaces hide | frames flat, `staleMs` 3521 → 5022 |
+| the real error reported once, not 60x/s | 7 console lines |
+
+Three sabotages on the source guards, each confirmed red then restored: drop the
+tolerance branch (the old policy), drop `clean()` (the run never pays back), and
+never rethrow at the cap (unbounded tolerance).
 
 ## 3. Left on the table
 
@@ -1882,10 +2019,20 @@ and it is an argument for trimming the eager wall that has nothing to do with
 parse time. Not measured here — attributed to v8.dev.
 
 Two eager costs found that are
-NOT bytes: `js/track/tracks.js` builds Catmull-Rom control points for **all 40**
+NOT bytes: `js/track/tracks.js` built Catmull-Rom control points for **all 40**
 circuits at boot (**24.0 ms**, an order of magnitude more than parsing them),
 and `js/game/apex.js` + `agentview*` is **346 KB of dev/test surface** that no
 player reaches.
+
+> **The first is TAKEN** (found stale 2026-08-31, three rounds after the fact).
+> `js/track/tracks.js:2232-2237` is a self-replacing lazy getter: `points`
+> materializes on first access through `materializeListPoints` (`:2240`), and
+> `buildCenterline` calls `ensurePoints` (`:2298`) so the heavy path never sees
+> the getter. `LIST.length === 40` and every metadata field are unchanged, and a
+> materialized def is bit-identical to the old eager one. A session builds
+> exactly one circuit, so 39 of the 40 are never paid for. The paragraph above
+> is kept as the measurement that justified it; only the tense is wrong.
+> The 346 KB dev surface is still open — see §3.
 
 **`defer` is not the one-attribute change it looks like.** Every external tag
 sits at the very end of `<body>` with no markup after it, and deferred classic

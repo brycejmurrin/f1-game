@@ -489,7 +489,14 @@ const CEILINGS = {
   // real window exists where update() ticks before makeCars has run. A throw
   // there escapes tick() before the rAF re-schedule, so the render loop dies for
   // the session — measured at ZERO draws a frame, permanently. PERF-FINDINGS 2i.
-  "js/game.js": 8878,
+  // 8878 -> 8885: the OTHER half of that finding. The comment above describes a
+  // transient fault killing the session, and fixes the one instance; round 14
+  // fixes the policy. tick() now tolerates a bounded run of consecutive faults
+  // that any clean frame pays back, and stops at the cap exactly as before. The
+  // policy, the caps and the heartbeat live in the new js/game/loop-health.js
+  // precisely so game.js pays seven lines and not eighty — six of the seven are
+  // the comment saying which half is here. PERF-FINDINGS 2k.
+  "js/game.js": 8885,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).

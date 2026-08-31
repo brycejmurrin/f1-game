@@ -7520,10 +7520,18 @@ let renderAlpha = 1;             // leftover-step fraction (0..1) for render int
 PerfGov.init(gfx);
 const PHYS_DT = 1 / 60;          // fixed physics step
 function tick(now) {
-  try { tickBody(now); requestAnimationFrame(tick); }
+  try { tickBody(now); LoopHealth.clean(); requestAnimationFrame(tick); }
   catch (e) {
+    // BOUNDED tolerance, policy in js/game/loop-health.js: a transient fault
+    // costs one frame and any clean frame pays the run back, because round 13
+    // made startRace async and update() can now tick on a null player in the
+    // window before makeCars runs — a condition that heals on the next frame
+    // and used to take the whole game down. At the cap this falls through to
+    // exactly the old behaviour, so a DETERMINISTIC fault still stops instead
+    // of repainting the error overlay 60x/s.
+    if (LoopHealth.fault(e)) { requestAnimationFrame(tick); return; }
     // Report the REAL error once (cross-origin window.onerror shows only a bare
-    // "Script error."). A deterministic fault stops instead of repeating at 60 Hz.
+    // "Script error.").
     if (!tick._reported && typeof window.__apexReportError === "function") {
       tick._reported = true; window.__apexReportError("tick", e);
     }
