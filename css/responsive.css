@@ -217,7 +217,11 @@ body.desktop #pm-calib { display: none !important; }
 .rotate-inner p { margin: 0; font-size: 1.1rem; letter-spacing: var(--ls-3); }
 .rotate-inner small { opacity: 0.6; font-size: 0.8rem; }
 .rotate-inner { display: grid; justify-items: center; gap: 0.8rem; max-width: 28rem; }
-#rotate-controls, #rotate-exit {
+/* RACE IN PORTRAIT shares the pill so the three read as one stack. It sits
+   first because it is the primary action now; a distinct fill would have cost
+   a raw colour literal the token ratchet rightly refuses, and stack order is
+   enough hierarchy for three buttons. docs/PERF-FINDINGS.md 5a. */
+#rotate-race, #rotate-controls, #rotate-exit {
   min-height: var(--tap-min); padding: 0 1rem;
   border: 1px solid rgba(255,255,255,0.32); border-radius: var(--r-pill);
   background: rgba(255,255,255,0.1); color: #fff;
@@ -227,7 +231,7 @@ body.desktop #pm-calib { display: none !important; }
    declaration invalid, silently dropping this rule since build 1496. 3px is
    what `medium` resolves to; the blocker is unzoomed and unclipped, so a
    plain outset ring is fine (no inverse floor needed on this layer). */
-#rotate-controls:focus-visible, #rotate-exit:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+#rotate-race:focus-visible, #rotate-controls:focus-visible, #rotate-exit:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 /* OPEN CONTROLS pauses the race and hides this blocker while How to Play is
    up. NOT a z-index yield: #howtoplay is a showModal() <dialog>, so it lives
    in the TOP LAYER, which outranks every z-index and inerts the document —
@@ -253,8 +257,8 @@ body.rotate-help-open #rotate-device { display: none !important; }
    RACE. Every phone portrait is ≤956px tall; the iPad strips are 1180+ tall,
    so a height ceiling separates a held phone from a windowed slice. */
 @media (orientation: portrait) and (pointer: coarse) and (max-width: 743px) and (max-height: 950px) {
-  body.in-race #rotate-device { display: flex; }
-  #rotate-controls, #rotate-exit { width: min(100%, 22rem); }
+  body.in-race:not(.rotate-ok) #rotate-device { display: flex; }
+  #rotate-race, #rotate-controls, #rotate-exit { width: min(100%, 22rem); }
 }
 
 } /* @layer overlays */

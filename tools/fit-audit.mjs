@@ -23,10 +23,11 @@
 //
 import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
+import { fileURLToPath } from "node:url";
 let setupApiMocks = null;
 try { ({ setupApiMocks } = await import("../tests/helpers/f1-api-mock.js")); } catch { /* hub degrades to its empty state */ }
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\/]$/, "");
 const argv = process.argv.slice(2);
 const arg = (k) => { const a = argv.find((x) => x.startsWith(`--${k}=`)); return a ? a.slice(k.length + 3) : null; };
 const ONLY = arg("only") ? arg("only").split(",").filter(Boolean) : null;

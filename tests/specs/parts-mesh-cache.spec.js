@@ -82,21 +82,25 @@ async function installMeshProbe(page) {
   });
 }
 
+// THE GARAGE DOOR. The eviction test below opens this screen NINE times in one
+// test, and the old route was menu -> #mb-race -> #select -> #sel-go, which
+// builds the circuit picker and then the TRACK on the way to a screen about
+// neither — and then applyPartsAndPark throws that track away by calling
+// __apex.race("monza") itself. Measured on this box: 27.6 s that way against
+// 11.1 s through #mb-garage, so nine openings were ~250 s of pure waste against
+// a 360 s budget the test was blowing at 366 s. See docs/TESTING.md.
 async function openSetup(page) {
-  // Prefer select screen if already there; otherwise go menu → race → select.
-  const onSelect = await page.locator("#select").isVisible().catch(() => false);
-  if (!onSelect) {
-    const onMenu = await page.locator("#overlay").isVisible().catch(() => false);
-    if (onMenu) await page.locator("#mb-race").click();
-    else {
-      // Mid-race: quit first
-      await page.locator("#pausebtn").click();
-      await page.locator("#pm-quit").click();
-      await page.locator("#mb-race").click();
-    }
-    await page.locator("#select").waitFor({ state: "visible" });
+  const onSetup = await page.locator("#carsetup").isVisible().catch(() => false);
+  if (onSetup) return;
+  const onMenu = await page.locator("#overlay").isVisible().catch(() => false);
+  if (!onMenu) {
+    // Mid-race, or on the select screen: get back to the menu first.
+    const racing = await page.locator("#pausebtn").isVisible().catch(() => false);
+    if (racing) { await page.locator("#pausebtn").click(); await page.locator("#pm-quit").click(); }
+    else await page.locator("#sel-back").click().catch(() => {});
+    await page.locator("#overlay").waitFor({ state: "visible", timeout: 20_000 });
   }
-  await page.locator("#sel-go").click();
+  await page.locator("#mb-garage").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
 }
 
@@ -112,7 +116,11 @@ async function pickOpt(page, catId, optId) {
 
 async function applyPartsAndPark(page) {
   await page.locator("#cs-done").click();
-  await page.locator("#race-settings").waitFor({ state: "visible" });
+  // Wait for the GARAGE to close, not for #race-settings to open: entered
+  // through #mb-garage, DONE returns to the menu (openGarage sets
+  // garageReturn), and this helper never used race-settings for anything —
+  // it starts the race through the hook on the next line.
+  await page.locator("#carsetup").waitFor({ state: "hidden" });
   // Skip race-settings UI — startRace via the public hook (recomputes mods).
   await page.evaluate(() => {
     window.__apex.race("monza");

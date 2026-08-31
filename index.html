@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1655">
+<meta name="apex-build" content="1675">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -71,11 +71,11 @@
 <link rel="stylesheet" href="css/tokens.css?v=8188cb77b276">
 <link rel="stylesheet" href="css/components.css?v=740c13224a8c">
 <link rel="stylesheet" href="css/tuner.css?v=fe56135c0173" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=b722c4fc57b6">
+<link rel="stylesheet" href="css/menus.css?v=0a8b5b576ffe">
 <link rel="stylesheet" href="css/carsetup.css?v=836e3f3078e6" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=09eec5dfd7e7" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=32503846c994" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/responsive.css?v=8a786dd056c6">
+<link rel="stylesheet" href="css/overlays.css?v=5a7b2efa68cb" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/responsive.css?v=4175c6390faf">
 <link rel="stylesheet" href="css/track-detail.css?v=84a9ef4846b3" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=dab85626d73c" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=2e723024c38d" media="print" onload="this.media='all'">
@@ -283,6 +283,7 @@
     <div class="rotate-icon" aria-hidden="true">&#8635;</div>
     <p id="rotate-title">Rotate to landscape to race</p>
     <small id="rotate-detail">Turn off rotation lock, then rotate your phone.</small>
+    <button id="rotate-race" type="button">RACE IN PORTRAIT</button>
     <button id="rotate-controls" type="button">OPEN CONTROLS</button>
     <button id="rotate-exit" type="button">EXIT RACE</button>
   </div>
@@ -502,7 +503,7 @@
          carries the live save (team, year, round) so CONTINUE says what it is
          continuing; refreshCareerButton() fills both it and the label. -->
     <div id="menu-hero">
-    <button id="mb-career" class="bigbtn" data-menu-default><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub" class="mb-sub"></span></span></button>
+    <button id="mb-career" class="bigbtn" data-menu-default><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub" class="mb-sub">DRIVER CAREER  ·  MY TEAM</span></span></button>
     </div>
     <!-- PLAY NOW: the four one-sitting modes, 2x2 so four entries cost two rows
          rather than four. Same red family as the hero, one step down in size. -->
@@ -1035,7 +1036,8 @@
         <button type="button" id="cz-logo-clear" class="cz-liv-none">CLEAR</button>
       </span></div>
     <div class="cz-row cz-liv-row"><label for="cz-logo">LOGO TINT</label><input id="cz-logo" type="color"><button type="button" id="cz-logo-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-logo2">LOGO DETAIL</label><input id="cz-logo2" type="color"><button type="button" id="cz-logo2-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-logo2">MONOGRAM BOX</label><input id="cz-logo2" type="color"><button type="button" id="cz-logo2-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-logo3">LOGO OUTLINE</label><input id="cz-logo3" type="color"><button type="button" id="cz-logo3-none" class="cz-liv-none">NONE</button></div>
     <div class="cz-row cz-liv-row"><label for="cz-halo">HALO</label><input id="cz-halo" type="color"><button type="button" id="cz-halo-none" class="cz-liv-none">NONE</button></div>
     <!-- FINISH is the paint MATERIAL, not a colour, so it gets a 3-way choice
          instead of a swatch + NONE. Gloss is the default clearcoat car paint. -->
@@ -1748,7 +1750,7 @@
 <script defer crossorigin="anonymous" src="js/log.js?v=da9d964fe2a5"></script>
 <script defer crossorigin="anonymous" src="js/mat4.js?v=11205916c4e7"></script>
 <script defer crossorigin="anonymous" src="js/render/shaders/chunks.js?v=4573d49f92ab"></script>
-<script defer crossorigin="anonymous" src="js/render/shaders/lit.js?v=97488bf8dae8"></script>
+<script defer crossorigin="anonymous" src="js/render/shaders/lit.js?v=69ea5a2ca851"></script>
 <script defer crossorigin="anonymous" src="js/render/shaders/sky.js?v=baab42036af5"></script>
 <script defer crossorigin="anonymous" src="js/render/shaders/fx.js?v=4d9988f6e023"></script>
 <script defer crossorigin="anonymous" src="js/render/shaders/post.js?v=ddd9ef7abac7"></script>
@@ -1756,7 +1758,7 @@
 <script defer crossorigin="anonymous" src="js/render/glx/shadow.js?v=c89be0d9caf8"></script>
 <script defer crossorigin="anonymous" src="js/render/lamp-chunks.js?v=28217a3b6b01"></script>
 <script defer crossorigin="anonymous" src="js/render/glx/chunked.js?v=c2bdf509b1eb"></script>
-<script defer crossorigin="anonymous" src="js/render/glx.js?v=a3e5b143f102"></script>
+<script defer crossorigin="anonymous" src="js/render/glx.js?v=d964176f768c"></script>
 <!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
      two OPT-IN renderer backends and are injected by js/game.js only when
      apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that
@@ -1787,51 +1789,51 @@
 <script defer crossorigin="anonymous" src="js/track/scenery-city.js?v=24297a3780e1"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery-identity.js?v=930ed88778fa"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
-<script defer crossorigin="anonymous" src="js/circuits/bahrain.js?v=07ebc1d5e45f"></script>
-<script defer crossorigin="anonymous" src="js/circuits/monaco.js?v=c48995bbbf90"></script>
-<script defer crossorigin="anonymous" src="js/circuits/silverstone.js?v=305caf7d5b3e"></script>
-<script defer crossorigin="anonymous" src="js/circuits/spa.js?v=b16164d20da4"></script>
-<script defer crossorigin="anonymous" src="js/circuits/monza.js?v=30bab0170a14"></script>
-<script defer crossorigin="anonymous" src="js/circuits/suzuka.js?v=effec7b4325f"></script>
-<script defer crossorigin="anonymous" src="js/circuits/singapore.js?v=c7a693e1c535"></script>
-<script defer crossorigin="anonymous" src="js/circuits/cota.js?v=d73f6756e7e4"></script>
-<script defer crossorigin="anonymous" src="js/circuits/interlagos.js?v=360034ab4262"></script>
-<script defer crossorigin="anonymous" src="js/circuits/vegas.js?v=1dbfcd685974"></script>
-<script defer crossorigin="anonymous" src="js/circuits/madrid.js?v=0ad56cd86179"></script>
-<script defer crossorigin="anonymous" src="js/circuits/zandvoort.js?v=f85c8497d0b5"></script>
-<script defer crossorigin="anonymous" src="js/circuits/jeddah.js?v=cb5637ab9626"></script>
-<script defer crossorigin="anonymous" src="js/circuits/albert_park.js?v=17c4112839fb"></script>
-<script defer crossorigin="anonymous" src="js/circuits/shanghai.js?v=8d09ac80ad22"></script>
-<script defer crossorigin="anonymous" src="js/circuits/miami.js?v=d257bf54bf00"></script>
-<script defer crossorigin="anonymous" src="js/circuits/imola.js?v=6ff9d142011c"></script>
-<script defer crossorigin="anonymous" src="js/circuits/montreal.js?v=5e7729bd1a55"></script>
-<script defer crossorigin="anonymous" src="js/circuits/redbull.js?v=a4af5cac4543"></script>
-<script defer crossorigin="anonymous" src="js/circuits/hungaroring.js?v=83cd0419cb7a"></script>
-<script defer crossorigin="anonymous" src="js/circuits/baku.js?v=150e34557aa9"></script>
-<script defer crossorigin="anonymous" src="js/circuits/mexico.js?v=db52212dbf30"></script>
-<script defer crossorigin="anonymous" src="js/circuits/qatar.js?v=b049ed208c3d"></script>
-<script defer crossorigin="anonymous" src="js/circuits/abudhabi.js?v=786e3ae90ff5"></script>
-<script defer crossorigin="anonymous" src="js/circuits/hockenheim.js?v=c47018ca5e11"></script>
-<script defer crossorigin="anonymous" src="js/circuits/nurburgring.js?v=be1234c5ac2b"></script>
-<script defer crossorigin="anonymous" src="js/circuits/catalunya.js?v=ae7ce4e82d38"></script>
-<script defer crossorigin="anonymous" src="js/circuits/sepang.js?v=89ac08002824"></script>
-<script defer crossorigin="anonymous" src="js/circuits/istanbul.js?v=fd5c6497673d"></script>
-<script defer crossorigin="anonymous" src="js/circuits/paul_ricard.js?v=691d197a4f38"></script>
-<script defer crossorigin="anonymous" src="js/circuits/portimao.js?v=a430bfa737d0"></script>
-<script defer crossorigin="anonymous" src="js/circuits/sochi.js?v=52cc1b8d0b55"></script>
-<script defer crossorigin="anonymous" src="js/circuits/mugello.js?v=279a9dfd0b33"></script>
-<script defer crossorigin="anonymous" src="js/circuits/magny_cours.js?v=cde74a1c9ccb"></script>
-<script defer crossorigin="anonymous" src="js/circuits/estoril.js?v=755a6e0f58cf"></script>
-<script defer crossorigin="anonymous" src="js/circuits/kyalami.js?v=4512acfde4f6"></script>
-<script defer crossorigin="anonymous" src="js/circuits/watkins_glen.js?v=435bc87060e9"></script>
-<script defer crossorigin="anonymous" src="js/circuits/indianapolis.js?v=fa3b53cc5638"></script>
-<script defer crossorigin="anonymous" src="js/circuits/buenos_aires.js?v=7503c202be65"></script>
-<script defer crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=54846cb4f267"></script>
-<script defer crossorigin="anonymous" src="js/track/tracks.js?v=381070db77e6"></script>
+<script defer crossorigin="anonymous" src="js/circuits/bahrain.js?v=b4720e606096"></script>
+<script defer crossorigin="anonymous" src="js/circuits/monaco.js?v=2e015089c389"></script>
+<script defer crossorigin="anonymous" src="js/circuits/silverstone.js?v=0697f0f2a503"></script>
+<script defer crossorigin="anonymous" src="js/circuits/spa.js?v=b613b02f1f37"></script>
+<script defer crossorigin="anonymous" src="js/circuits/monza.js?v=0f5b8e9f6548"></script>
+<script defer crossorigin="anonymous" src="js/circuits/suzuka.js?v=96b6d8a2f36e"></script>
+<script defer crossorigin="anonymous" src="js/circuits/singapore.js?v=7847ebcfec4c"></script>
+<script defer crossorigin="anonymous" src="js/circuits/cota.js?v=8295135699b0"></script>
+<script defer crossorigin="anonymous" src="js/circuits/interlagos.js?v=792486740db5"></script>
+<script defer crossorigin="anonymous" src="js/circuits/vegas.js?v=3f4c7c20f19a"></script>
+<script defer crossorigin="anonymous" src="js/circuits/madrid.js?v=9c31c1fccab0"></script>
+<script defer crossorigin="anonymous" src="js/circuits/zandvoort.js?v=edd0261e23fa"></script>
+<script defer crossorigin="anonymous" src="js/circuits/jeddah.js?v=da0152f41a17"></script>
+<script defer crossorigin="anonymous" src="js/circuits/albert_park.js?v=75b326569be6"></script>
+<script defer crossorigin="anonymous" src="js/circuits/shanghai.js?v=46328eb4f443"></script>
+<script defer crossorigin="anonymous" src="js/circuits/miami.js?v=75ac63f9e281"></script>
+<script defer crossorigin="anonymous" src="js/circuits/imola.js?v=9b98100136db"></script>
+<script defer crossorigin="anonymous" src="js/circuits/montreal.js?v=850806cc2b11"></script>
+<script defer crossorigin="anonymous" src="js/circuits/redbull.js?v=8e040199d22e"></script>
+<script defer crossorigin="anonymous" src="js/circuits/hungaroring.js?v=d9ea04342703"></script>
+<script defer crossorigin="anonymous" src="js/circuits/baku.js?v=4f009c5e1063"></script>
+<script defer crossorigin="anonymous" src="js/circuits/mexico.js?v=26171a3093cd"></script>
+<script defer crossorigin="anonymous" src="js/circuits/qatar.js?v=412cabf06c49"></script>
+<script defer crossorigin="anonymous" src="js/circuits/abudhabi.js?v=655bf7174d85"></script>
+<script defer crossorigin="anonymous" src="js/circuits/hockenheim.js?v=6751bb23921f"></script>
+<script defer crossorigin="anonymous" src="js/circuits/nurburgring.js?v=6f5045a9ce96"></script>
+<script defer crossorigin="anonymous" src="js/circuits/catalunya.js?v=abdc1ea00005"></script>
+<script defer crossorigin="anonymous" src="js/circuits/sepang.js?v=065bad585712"></script>
+<script defer crossorigin="anonymous" src="js/circuits/istanbul.js?v=f60ddcab474e"></script>
+<script defer crossorigin="anonymous" src="js/circuits/paul_ricard.js?v=a5b85a3b3c19"></script>
+<script defer crossorigin="anonymous" src="js/circuits/portimao.js?v=8e875d218837"></script>
+<script defer crossorigin="anonymous" src="js/circuits/sochi.js?v=4a8a4b15b54a"></script>
+<script defer crossorigin="anonymous" src="js/circuits/mugello.js?v=6cc2459d2c52"></script>
+<script defer crossorigin="anonymous" src="js/circuits/magny_cours.js?v=db7d207652ca"></script>
+<script defer crossorigin="anonymous" src="js/circuits/estoril.js?v=73a18e14e05c"></script>
+<script defer crossorigin="anonymous" src="js/circuits/kyalami.js?v=7e51edadf793"></script>
+<script defer crossorigin="anonymous" src="js/circuits/watkins_glen.js?v=9129de0ac607"></script>
+<script defer crossorigin="anonymous" src="js/circuits/indianapolis.js?v=bc6ccec8ed47"></script>
+<script defer crossorigin="anonymous" src="js/circuits/buenos_aires.js?v=366bfc2bc4b4"></script>
+<script defer crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=87f687006e3a"></script>
+<script defer crossorigin="anonymous" src="js/track/tracks.js?v=3ce0561cc60a"></script>
 <script defer crossorigin="anonymous" src="js/track/maps.js?v=0d6c2cddd707"></script>
-<script defer crossorigin="anonymous" src="js/car/car3d.js?v=3d8d23ad7d2f"></script>
-<script defer crossorigin="anonymous" src="js/game/input.js?v=6d9477b5a3e6"></script>
-<script defer crossorigin="anonymous" src="js/game/audio.js?v=fd0de963ba05"></script>
+<script defer crossorigin="anonymous" src="js/car/car3d.js?v=813f79d40943"></script>
+<script defer crossorigin="anonymous" src="js/game/input.js?v=fcbbf6486e6a"></script>
+<script defer crossorigin="anonymous" src="js/game/audio.js?v=f57d46e17b71"></script>
 <script defer crossorigin="anonymous" src="js/game/music-lib.js?v=f43e998612b3"></script>
 <script defer crossorigin="anonymous" src="js/game/spotify.js?v=27c8d6373cac"></script>
 <script defer crossorigin="anonymous" src="js/game/audio-panel.js?v=12b308c3d8e4"></script>
@@ -1843,27 +1845,27 @@
 <script defer crossorigin="anonymous" src="js/data/lastrace.js?v=b7d043cba6a1"></script>
 <script defer crossorigin="anonymous" src="js/data/live.js?v=c33a77e10480"></script>
 <script defer crossorigin="anonymous" src="js/data/hub.js?v=41dd4a45ca6e"></script>
-<script defer crossorigin="anonymous" src="js/car/parts.js?v=30c6a74a82dc"></script>
-<script defer crossorigin="anonymous" src="js/car/liveries.js?v=320d166b2c77"></script>
-<script defer crossorigin="anonymous" src="js/car/crest-paths.js?v=e8f7beb6f791"></script>
-<script defer crossorigin="anonymous" src="js/car/liverytex.js?v=1795dc46083d"></script>
+<script defer crossorigin="anonymous" src="js/car/parts.js?v=45f60a30f68b"></script>
+<script defer crossorigin="anonymous" src="js/car/liveries.js?v=55f724c01a43"></script>
+<script defer crossorigin="anonymous" src="js/car/crest-paths.js?v=3f7bac329086"></script>
+<script defer crossorigin="anonymous" src="js/car/liverytex.js?v=dc112e04aeda"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost.js?v=a428eb7c9a73"></script>
-<script defer crossorigin="anonymous" src="js/game/physics-consts.js?v=95ddf68ac644"></script>
+<script defer crossorigin="anonymous" src="js/game/physics-consts.js?v=0bfc7262dcc3"></script>
 <script defer crossorigin="anonymous" src="js/game/tables.js?v=02a99fbba028"></script>
 <script defer crossorigin="anonymous" src="js/game/lighting.js?v=c06cdbe94fbe"></script>
 <script defer crossorigin="anonymous" src="js/game/light-store.js?v=05cf4728629d"></script>
 <script defer crossorigin="anonymous" src="js/game/carmesh.js?v=1652adae2035"></script>
-<script defer crossorigin="anonymous" src="js/game/garage-scene.js?v=15dc144df991"></script>
+<script defer crossorigin="anonymous" src="js/game/garage-scene.js?v=c0d11e8c1dcb"></script>
 <script defer crossorigin="anonymous" src="js/game/bodyattitude.js?v=7d125d9a7b2a"></script>
 <script defer crossorigin="anonymous" src="js/game/particles.js?v=c8d55abb6f14"></script>
 <script defer crossorigin="anonymous" src="js/game/atmosphere.js?v=a55002c06fe8"></script>
 <script defer crossorigin="anonymous" src="js/game/store.js?v=cb6e2596c9a6"></script>
-<script defer crossorigin="anonymous" src="js/game/career.js?v=f02a83d904fe"></script>
+<script defer crossorigin="anonymous" src="js/game/career.js?v=16f386c00bab"></script>
 <script defer crossorigin="anonymous" src="js/game/season-cal.js?v=da95f8a3a022"></script>
 <script defer crossorigin="anonymous" src="js/game/reliability.js?v=9e717a04faeb"></script>
 <script defer crossorigin="anonymous" src="js/game/ai-drive.js?v=c92a9de051f6"></script>
 <script defer crossorigin="anonymous" src="js/game/cam-tune.js?v=6ee854005123"></script>
-<script defer crossorigin="anonymous" src="js/game/setup-ui.js?v=03df0d588f81"></script>
+<script defer crossorigin="anonymous" src="js/game/setup-ui.js?v=ef0a429daedd"></script>
 <script defer crossorigin="anonymous" src="js/game/career-ui.js?v=aaf7625fbd71"></script>
 <script defer crossorigin="anonymous" src="js/game/season-ui.js?v=aaae55bb9780"></script>
 <script defer crossorigin="anonymous" src="js/game/menus.js?v=1d686610029b"></script>
@@ -1902,11 +1904,11 @@
 <script defer crossorigin="anonymous" src="js/net/sdp.js?v=1d82f2230798"></script>
 <script defer crossorigin="anonymous" src="js/net/qr.js?v=69234de73182"></script>
 <script defer crossorigin="anonymous" src="js/net/scan.js?v=da29034793de"></script>
-<script defer crossorigin="anonymous" src="js/net/transport.js?v=5a239704da55"></script>
+<script defer crossorigin="anonymous" src="js/net/transport.js?v=0f332295b12c"></script>
 <script defer crossorigin="anonymous" src="js/net/handshake.js?v=235f43f8bc4c"></script>
 <script defer crossorigin="anonymous" src="js/net/snapshot.js?v=29869772a40d"></script>
-<script defer crossorigin="anonymous" src="js/net/session.js?v=32cedaa37207"></script>
-<script defer crossorigin="anonymous" src="js/net/netplay.js?v=d1ca322ff31b"></script>
+<script defer crossorigin="anonymous" src="js/net/session.js?v=935aa5ccc011"></script>
+<script defer crossorigin="anonymous" src="js/net/netplay.js?v=91075be47b3d"></script>
 <script defer crossorigin="anonymous" src="js/net/lobby.js?v=8e51a9178e0c"></script>
-<script defer crossorigin="anonymous" src="js/game.js?v=54682f56a5cb"></script>
+<script defer crossorigin="anonymous" src="js/game.js?v=cc0e6471d564"></script>
 </body></html>

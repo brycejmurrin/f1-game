@@ -285,7 +285,13 @@ function buildSetup() {
   const curOpt = resolveOpt(activeCat);
   const curCost = curOpt ? (curOpt.cost || 0) : 0;
   const factorySetup = Parts.getFactorySetup(team);
-  for (const opt of activeCat.options) {
+  // Cheapest first, so a category reads as the ladder it now is. The CATALOG
+  // is in authoring order — McLaren's aero tab ran 0, 80, 40, 60, 0, 50 … 110,
+  // 95, 185, and its own signature wing was row 18 of 18. Stable within a
+  // price: `slice()` first, and ties keep authoring order.
+  const shownOpts = activeCat.options.slice()
+    .sort((a, b) => (a.cost || 0) - (b.cost || 0));
+  for (const opt of shownOpts) {
     if (!Parts.isOptionAvailable(opt, team)) continue;
     const locked = !Parts.isOptionAvailable(opt, team, owned);
     const active = curOpt && curOpt.id === opt.id;
@@ -306,6 +312,9 @@ function buildSetup() {
     const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
     nameRow.appendChild(document.createTextNode(opt.label));
     const badges = [];
+    // Leads the row: on a wet compound it is the only badge that explains why
+    // all four stat chips are pointing down.
+    if (opt.wetTread) badges.push(opt.wetTread > 1 ? "WET" : "INTER");
     if (opt.tag) badges.push(opt.tag);
     if (opt.supplier || opt.suppliers) badges.push("SUPPLIER");
     if (opt.team || opt.teams) badges.push("SIGNATURE");
@@ -320,7 +329,9 @@ function buildSetup() {
     main.appendChild(nameRow);
     const deltas = statDeltaChips(opt);
     if (deltas) main.appendChild(deltas);
-    if (active && opt.desc) { const d = document.createElement("div"); d.className = "cs-opt-desc"; d.textContent = opt.desc; main.appendChild(d); }
+    // The description used to appear only once the part was FITTED, which is
+    // the one moment the player no longer needs it to decide.
+    if (opt.desc) { const d = document.createElement("div"); d.className = "cs-opt-desc"; d.textContent = opt.desc; main.appendChild(d); }
     row.appendChild(main);
 
     const cost = document.createElement("span");
@@ -379,8 +390,26 @@ function statDeltaChips(opt) {
     any = true;
     const chip = document.createElement("span");
     chip.className = "cs-delta " + (v > 1 ? "up" : "down");
-    chip.textContent = (v > 1 ? "▲" : "▼") + d.label;
+    // The magnitude, not just the direction. `tyres/branded_wall` (+2% grip,
+    // 30 cr) and `tyres/hypersoft` (+36% grip, 200 cr) both rendered one plain
+    // "▲GRIP", so the whole ladder read as a flat list of the same upgrade and
+    // the only number on the row was its price.
+    const pct = Math.round(Math.abs(v - 1) * 100);
+    chip.textContent = (v > 1 ? "▲" : "▼") + d.label + " " + (v > 1 ? "+" : "−") + pct + "%";
     wrap.appendChild(chip);
+  }
+  // Rain grip is the entire reason the wet compounds exist and it is not one of
+  // the four stats, so without this chip the garage shows a full wet as four
+  // penalties and nothing else — which is exactly how it read while the physics
+  // ignored the compound too. Against the slick column of the same table the
+  // physics uses, so the number on the row is the number in the model.
+  if (opt.wetTread) {
+    const rain = PhysicsConsts.WET_GRIP.rain;
+    const chip = document.createElement("span");
+    chip.className = "cs-delta up";
+    chip.textContent = "▲RAIN +" + Math.round((rain[opt.wetTread] / rain[0] - 1) * 100) + "%";
+    wrap.appendChild(chip);
+    any = true;
   }
   return any ? wrap : null;
 }
@@ -420,7 +449,7 @@ function buildLiveryOptions(container, team) {
     row.onclick = () => {
       csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "",
                      noseStripe: "", nose: "", pod: "", wing: "", fin: "", finArt: "", logo: "", logo2: "",
-                     halo: "", finish: "gloss" };
+                     logo3: "", halo: "", finish: "gloss" };
       csLivEditId = null;
       csLivCreating = true;
       if (G.soundOn) GameAudio.uiSelect();
@@ -473,6 +502,7 @@ function buildLiveryOptions(container, team) {
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
           logo: liv.logo ? arrToHex(liv.logo) : "",
           logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
+          logo3: liv.logo3 ? arrToHex(liv.logo3) : "",
           finish: liv.finish || "gloss",
         };
         csLivEditId = liv.id;
@@ -517,6 +547,7 @@ function buildLiveryOptions(container, team) {
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
           logo: liv.logo ? arrToHex(liv.logo) : "",
           logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
+          logo3: liv.logo3 ? arrToHex(liv.logo3) : "",
           finish: liv.finish || "gloss",
         };
         csLivEditId = null;   // create-new: never overwrites the stock scheme
@@ -564,7 +595,7 @@ function buildLiveryCreator(container, team) {
   // distinct value in the draft, then the team's own two stock colours. Click
   // one and the slot takes it EXACTLY.
   const PAL_KEYS = ["c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod",
-                    "wing", "fin", "finArt", "logo", "logo2", "halo"];
+                    "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo"];
   const paletteColours = () => {
     const seen = [];
     const add = (v) => {
@@ -625,21 +656,25 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("WINGS", "wing", true));
   wrap.appendChild(colorRow("TAIL FIN", "fin", true));
   wrap.appendChild(colorRow("TAIL GRAPHIC", "finArt", true));
-  // Per-team labels: LiveryTex.markSlots names the shape each picker paints on
-  // THIS mark, so a player choosing Racing Bulls sees RB LETTERS and BULL rather
-  // than two rows that could mean anything.
+  // Per-team mark rows: LiveryTex.markSlots names the shape each picker paints
+  // on THIS mark, so a player choosing Racing Bulls sees RB LETTERS, BULL and
+  // OUTLINE rather than rows that could mean anything. The LENGTH is the mark's
+  // to decide — two rows for a single-loop silhouette that has no second shape,
+  // three for a mark that does — so this loops rather than indexing.
   const mSlots = (window.LiveryTex && LiveryTex.markSlots)
     ? LiveryTex.markSlots(team.id)
-    : [{ key: "logo", label: "TEAM LOGO" }, { key: "logo2", label: "LOGO DETAIL" }];
-  wrap.appendChild(colorRow(mSlots[0].label, "logo", true));
-  wrap.appendChild(colorRow(mSlots[1].label, "logo2", true));
+    : [{ key: "logo", label: "TEAM LOGO" }, { key: "logo2", label: "LOGO DETAIL" },
+       { key: "logo3", label: "OUTLINE" }];
+  for (const slot of mSlots) wrap.appendChild(colorRow(slot.label, slot.key, true));
   wrap.appendChild(colorRow("HALO", "halo", true));
   {
     const r = document.createElement("div"); r.className = "cs-liv-ed-row";
     const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = "FINISH"; r.appendChild(lb);
     const group = document.createElement("span"); group.className = "cs-liv-ed-finish";
     const btns = [];
-    for (const f of ["gloss", "satin", "chrome", "matte", "carbon", "brushed", "pearl"]) {
+    // From Car3D, not a local list: this array and FINISH_SURFACE were two
+    // copies of the same set and the specs held a third.
+    for (const f of ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)]) {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "cs-liv-ed-none" + ((d.finish || "gloss") === f ? " active" : "");
@@ -692,6 +727,7 @@ function buildLiveryCreator(container, team) {
     if (d.finArt) liv.finArt = hexToArr(d.finArt);
     if (d.logo) liv.logo = hexToArr(d.logo);
     if (d.logo2) liv.logo2 = hexToArr(d.logo2);
+    if (d.logo3) liv.logo3 = hexToArr(d.logo3);
     if (d.halo) liv.halo = hexToArr(d.halo);
     if (d.finish && d.finish !== "gloss") liv.finish = d.finish;
     const existing = getCustomLiveries(team.id);
@@ -723,6 +759,7 @@ function livePreviewDraft(team, d) {
     fin: d.fin ? hexToArr(d.fin) : null, finArt: d.finArt ? hexToArr(d.finArt) : null,
     logo: d.logo ? hexToArr(d.logo) : null,
     logo2: d.logo2 ? hexToArr(d.logo2) : null,
+    logo3: d.logo3 ? hexToArr(d.logo3) : null,
     noseStripe: d.noseStripe ? hexToArr(d.noseStripe) : null,
     finish: d.finish && d.finish !== "gloss" ? d.finish : null } };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints

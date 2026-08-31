@@ -1,10 +1,17 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
+import { BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 const CAPTURE_DIR = process.env.IMAGE_GRADE_CAPTURE_DIR;
 if (CAPTURE_DIR) mkdirSync(CAPTURE_DIR, { recursive: true });
+
+// A capture of the heaviest night scene can legitimately take ~150 s here (see
+// the note on page.screenshot below), and these tests take two of them plus a
+// boot. The 120 s default cannot hold that; the job's timeout-minutes is the
+// real backstop.
+test.describe.configure({ timeout: 480_000 });
 
 const GRADE_NEUTRAL = {
   blacks: 0, shadows: 0, midtones: 0, highlights: 0, whites: 0,
@@ -66,13 +73,15 @@ async function boot(page, {
 } = {}) {
   await page.setViewportSize({ width: 640, height: 360 });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15_000 });
+  // 15_000 was below the measured worst boot on this class of box (24.6 s idle,
+  // scratch/perf/boot-budget.mjs) — see the BOOT_MS note in tests/helpers/fixtures.js.
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(({ track, tod, weather }) =>
     window.__apex.race(track, tod, weather), { track, tod, weather });
   await page.waitForFunction((id) => {
     const info = window.__apex.info();
     return info.track === id;
-  }, track, { polling: 100, timeout: 30_000 });
+  }, track, { polling: 100, timeout: Math.max(30_000, TRACK_MS) });
   await page.evaluate(({ frac }) => {
     window.__apex.park(frac);
     window.__apex.hud(false);
@@ -91,7 +100,12 @@ async function boot(page, {
 }
 
 async function pixels(page) {
-  const buf = await page.screenshot({ type: "jpeg", quality: 90, timeout: 60_000 });
+  // 60_000 -> 150_000. The capture waits on a frame, and a software-GL runner
+  // renders singapore-night at under 1 FPS — that test timed out here at
+  // 144.5 s with a perfectly healthy page behind it (the attached apex-state
+  // shows the car parked on track). Same budget as lighting-ab's capture, for
+  // the same reason.
+  const buf = await page.screenshot({ type: "jpeg", quality: 90, timeout: 150_000 });
   return page.evaluate(async (b64) => {
     const img = new Image();
     img.src = "data:image/jpeg;base64," + b64;
@@ -182,7 +196,15 @@ function histogramStats(data) {
 
 test.describe("rendered image grade", () => {
   test.describe.configure({ mode: "serial" });
-  test.setTimeout(180_000);
+  // NO test.setTimeout HERE. It used to say 180_000, and a per-test setTimeout
+  // OVERRIDES the file's describe.configure cap rather than being bounded by it
+  // — so this block was capped at 180 s while the file declared 480 s, and the
+  // first test timed out at exactly 180.0 s having needed 198.9 s. Because the
+  // block is `serial`, that one timeout SKIPPED the four tests after it, which
+  // is how a budget miss reads as five lost tests. MEASURED in that run: boot
+  // alone reached 51165 ms under two-worker contention (`pack loaded
+  // layers=14`), before a single pixel was read. Same defect and same cure as
+  // the three overrides removed from lighting-ab.spec.js.
 
   test("blacks visibly change the deepest image detail", async ({ page }) => {
     await boot(page);
@@ -265,7 +287,8 @@ const REPRESENTATIVE_CONDITIONS = [
 
 for (const condition of REPRESENTATIVE_CONDITIONS) {
   test(`${condition.track} ${condition.tod} ${condition.weather} retains broad tonal range`, async ({ page }) => {
-    test.setTimeout(180_000);
+    // Also no override — see the note on the serial block above. These measured
+    // 131.7-164.5 s in the same group run, i.e. inside 180 s only by margin.
     await boot(page, { ...condition, neutralGrade: false });
     if (CAPTURE_DIR) {
       await page.screenshot({

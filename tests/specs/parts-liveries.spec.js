@@ -183,8 +183,19 @@ test.describe("Liveries — creator", () => {
     await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
     await page.locator(".cs-liv-create").click();
 
+    // Against Car3D.FINISH_SURFACE, not a literal. This asserted 3 and the row
+    // has offered 7 since four finishes landed on 2026-08-28 (3898741) — the
+    // count is a FEATURE's size, so hard-coding it makes the next finish look
+    // like a regression. Gloss is the implicit default and has no surface id,
+    // hence the +1.
+    // BOTH LINEAGES fixed this independently and identically; the merge keeps
+    // the deploy side's wording and this side's floor. The floor is not
+    // redundant: if FINISH_SURFACE were ever emptied the computed count would
+    // be 1 and toHaveCount(1) would pass vacuously, asserting nothing.
+    const finishes = await page.evaluate(() => Object.keys(Car3D.FINISH_SURFACE).length + 1);
     const finish = page.locator(".cs-liv-ed-finish [data-cs-finish]");
-    await expect(finish).toHaveCount(3);
+    expect(finishes).toBeGreaterThan(3);
+    await expect(finish).toHaveCount(finishes);
     await expect(page.locator('.cs-liv-ed-finish [data-cs-finish="gloss"]')).toHaveClass(/active/);
 
     await page.locator('.cs-liv-ed-finish [data-cs-finish="chrome"]').click();

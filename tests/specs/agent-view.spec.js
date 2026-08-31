@@ -1271,7 +1271,22 @@ test.describe("carView({detail:\"parts\"})", () => {
     await load(page);
     const r = await page.evaluate(() => ["mclaren", "ferrari", "mercedes"].map((t) => {
       const c = window.__apex.carView({ team: t, detail: "parts" });
-      return { team: t, noseZ: c.geometry.boundsM.z[1], verts: c.geometry.vertices,
+      // THE CHASSIS PART, not the whole car's bounds. This read
+      // `geometry.boundsM.z[1]` — the frontmost vertex of anything — which was
+      // the nose tip only while the nose was the frontmost thing on the car.
+      // It no longer is, and that is the fix rather than the bug: the tip sat
+      // 460 mm AHEAD of the front wing's main plane (z 2.72), a pencil of nose
+      // hanging in clear air that no F1 car has, and it now sits 120 mm behind
+      // the wing like a real one. So bounds.z[1] is the WING for every team —
+      // identical by construction, because the wing is regulated and shared.
+      // The chassis part's own boundsZ is the nose tip, and it still carries
+      // the full per-team spread this test exists to catch (measured
+      // 2.54/2.60/2.68 for mclaren/ferrari/mercedes = exactly their noseTipZ).
+      // `partGeometry`, NOT `parts` — the latter is the catalog spec, and
+      // agentview.js carries a comment about a second `parts` key once silently
+      // winning and deleting that spec from the payload.
+      const chassis = c.partGeometry.find((p) => p.name === "chassis");
+      return { team: t, noseZ: chassis.boundsZ[1], verts: c.geometry.vertices,
                fin: c.chassis.style.fin };
     }));
     // noseTipZ styling must be visible in the measured nose tip

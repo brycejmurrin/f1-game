@@ -31,8 +31,9 @@ import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
+import { fileURLToPath } from "node:url";
 
-const VIEW = path.join(path.dirname(new URL(import.meta.url).pathname), "slider-effect-view.py");
+const VIEW = path.join(path.dirname(fileURLToPath(import.meta.url)), "slider-effect-view.py");
 
 const TODS = new Set(["dawn", "day", "dusk", "night"]);
 const WXS = new Set(["dry", "wet", "rain", "fog", "overcast"]);

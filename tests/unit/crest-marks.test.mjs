@@ -178,9 +178,11 @@ test("every mark clears MARK_FLOOR on every livery, on every surface it lands on
       ];
       for (const [where, fields, bare] of cases) {
         const P = LT.markPalette(team.id, liv, fields, bare);
-        // An opaque plate replaces what is behind it; without one the mark
-        // still faces every paint in the list.
-        const under = P.plate ? [P.plate] : fields.filter(Boolean);
+        // What the mark lands on, straight from the palette. Re-deriving it
+        // here as `plate ? [plate] : fields` was right only while every plate
+        // was an opaque panel covering the whole mark; Red Bull's sun is a
+        // DISC its bulls hang off, so the paint is still in the list.
+        const under = P.under;
         scored++;
         // PER BACKGROUND, and this is the whole point of carrying a halo. No
         // single colour is 4.2 from both Mercedes' near-black c1 and its teal
@@ -196,10 +198,25 @@ test("every mark clears MARK_FLOOR on every livery, on every surface it lands on
           if (best < LT.MARK_FLOOR)
             bad.push(`${team.id}/${liv.id}/${where} mark+halo ${best.toFixed(2)} on ${f.join()}`);
         }
-        if (LT.contrast(P.alt, under[0]) < 2.0 || LT.contrast(P.alt, P.mark) < 2.0)
+        // `alt` must separate from the MARK always, and from the surface only
+        // when it actually touches it. Cadillac's detail layers land 99.4% of
+        // their area inside its crest (measured over the traced paths), so the
+        // field half of this test was demanding separation from a colour the
+        // ink never meets — and the grey ramp answered, putting grey inner
+        // detail in a gold crest on 44 of its 140 car surfaces. LT.ALT_INSIDE
+        // is read, not restated, so the exemption cannot outlive the geometry.
+        const altOnField = !LT.ALT_INSIDE[team.id];
+        if ((altOnField && LT.contrast(P.alt, under[0]) < 2.0) ||
+            LT.contrast(P.alt, P.mark) < 2.0)
           bad.push(`${team.id}/${liv.id}/${where} alt ${LT.contrast(P.alt, under[0]).toFixed(2)}` +
                    `/${LT.contrast(P.alt, P.mark).toFixed(2)}`);
-        if (P.plate && LT.contrast(P.plate, fields[0]) < 1.6)
+        // A backing PANEL must separate from the paint or the mark floats on it.
+        // A brand DISC is exempt: it is the sun, not a legibility device, and
+        // the mark is floored against the disc AND the paint above (P.under),
+        // so nothing is resting on this number. Red Bull's gold on Red Bull's
+        // yellow fin is 1.10 and is the actual mark.
+        if (P.plate && !(LT.CREST_DISC[team.id] && P.brandPair) &&
+            LT.contrast(P.plate, fields[0]) < 1.6)
           bad.push(`${team.id}/${liv.id}/${where} plate ${LT.contrast(P.plate, fields[0]).toFixed(2)}`);
 
       }
@@ -262,16 +279,18 @@ test("an authored TEAM LOGO colour is painted, or no halo could have carried it"
       for (const logo of PICKS) {
         for (const [where, bare] of [["cover", false], ["badge", true]]) {
           const L = { ...liv, logo };
-          const under = fieldsFor(L, bare).filter(Boolean);
           const P = LT.markPalette(team.id, L, fieldsFor(L, bare), bare);
+          const under = P.under;
           scored++;
           if (P.mark.every((v, i) => Math.abs(v - logo[i]) < 1e-6)) { kept++; continue; }
           // Substituted. That is only allowed when NEITHER ink can serve as a
-          // halo that clears the field and still separates from the mark.
-          const rescuable = [INK_LIGHT, INK_DARK].some((h) => {
-            const f = Math.min(...under.map((u) => LT.contrast(h, u)));
-            return f >= LT.MARK_FLOOR && LT.contrast(h, logo) >= LT.INK_FLOOR;
-          });
+          // halo, scored the way the grid above scores one: PER BACKGROUND,
+          // mark-or-halo, because where the mark already clears a background
+          // its outline owes that background nothing. The halo must still
+          // separate from the mark.
+          const rescuable = [INK_LIGHT, INK_DARK].some((h) =>
+            LT.contrast(h, logo) >= LT.INK_FLOOR &&
+            under.every((u) => Math.max(LT.contrast(logo, u), LT.contrast(h, u)) >= LT.MARK_FLOOR));
           if (rescuable)
             bad.push(`${team.id}/${liv.id}/${where} dropped ${logo.join()} a halo could carry`);
         }
@@ -408,4 +427,182 @@ test("an authored SAME-INK island stays legible and is opt-in", () => {
     "no mark has a `part` island, so this test scored nothing — if the crest " +
     "data lost its per-island roles, that is the bug, not this assertion");
   assert.deepEqual(bad, [], "an authored same-ink island vanished into the field");
+});
+
+test("every mark row the editor offers paints a shape, and no row is a duplicate", () => {
+  // The editor asks LiveryTex.markSlots what to name each picker and which
+  // livery key it writes. A row whose colour never reaches the canvas is a dead
+  // picker; a row whose LABEL names a shape the mark does not have is worse,
+  // and is what this file was opened for — "SUN DISC" painted the traced union
+  // of the sun and both bulls, so the picker moved an outline and the sun was
+  // never there at all.
+  const D = [1, 0.55, 0];             // nothing else in any palette resolves to it
+  const want = cssOf(D);
+  const paints = (teamId, liv, bare) => {
+    const R = bare ? LT.REGIONS.finBadge : LT.REGIONS.crest;
+    const fields = bare ? [(liv.fin || liv.c2)] : [liv.c1, liv.c2];
+    const ctx = new RecCtx();
+    LT.drawCrest(ctx, teamId, R, { palette: LT.markPalette(teamId, liv, fields, bare), bare });
+    return ctx.ops.some((o) => o.style === want || o.shadow === want);
+  };
+  const dead = [];
+  for (const team of Teams.LIST.concat([{ id: "custom" }])) {
+    const rows = LT.markSlots(team.id);
+    const keys = rows.map((r) => r.key);
+    assert.equal(keys[0], "logo", `${team.id} does not lead with the dominant shape`);
+    assert.equal(keys[keys.length - 1], "logo3", `${team.id} does not end with the outline`);
+    assert.equal(new Set(keys).size, keys.length, `${team.id} offers the same key twice`);
+    assert.equal(new Set(rows.map((r) => r.label)).size, keys.length,
+      `${team.id} offers two rows under one label: ${rows.map((r) => r.label).join(", ")}`);
+    for (const r of rows) assert.ok(/^[A-Z0-9 &]+$/.test(r.label), `${team.id} label "${r.label}"`);
+    // Teams.LIST has no "custom" entry and Liveries.forTeam needs a real team,
+    // so the uploaded-emblem team is checked for its ROWS only — the pixels of
+    // that path are the drawLogoImage test below.
+    if (!Teams.LIST.includes(team)) continue;
+    for (const liv of Liveries.forTeam(team)) {
+      for (const bare of [false, true]) {
+        for (const r of rows) {
+          // `logo` is the DOMINANT shape and the one slot markPalette is
+          // allowed to overrule — an unreadable choice is substituted, which
+          // the test above bounds exactly. Its reachability is that test's; a
+          // colour census here would just re-litigate the substitution policy.
+          if (r.key === "logo") continue;
+          const where = `${team.id}/${liv.id}/${bare ? "badge" : "cover"} ${r.label}`;
+          if (paints(team.id, liv, bare)) { dead.push(where + " painted D unset"); continue; }
+          if (!paints(team.id, { ...liv, [r.key]: D }, bare)) dead.push(where + " painted nothing");
+        }
+      }
+    }
+  }
+  assert.deepEqual(dead.slice(0, 8), [], `${dead.length} dead editor rows`);
+});
+
+test("Red Bull's SUN DISC is a disc, on the car and on the fin badge", () => {
+  // The report this file's last round produced: "the sun disk isn't actually
+  // the sun, it seems to change the outline". It was true. Layer 0 of the trace
+  // is the whole gold-cluster MASK — the union of the sun and both bulls — so
+  // the SUN DISC colour painted a rim and no sun. The disc is authored geometry
+  // now (LiveryTex.CREST_DISC), and this asserts it is round: every point of
+  // the op equidistant from its own centroid. A silhouette fails that by a mile.
+  const D = [1, 0.55, 0], want = cssOf(D);
+  const liv = Liveries.forTeam(Teams.LIST.find((t) => t.id === "redbull"))[0];
+  for (const bare of [false, true]) {
+    const R = bare ? LT.REGIONS.finBadge : LT.REGIONS.crest;
+    const fields = bare ? [(liv.fin || liv.c2)] : [liv.c1, liv.c2];
+    const ctx = new RecCtx();
+    LT.drawCrest(ctx, "redbull", R, { palette: LT.markPalette("redbull", { ...liv, logo2: D }, fields, bare), bare });
+    const w = bare ? "badge" : "cover";
+    // drawCrest replays the whole mark under a shadow for the halo and outline
+    // passes, so one disc per pass is expected — every one of them has to be a
+    // circle, or something else in the crest is wearing the sun's colour.
+    const disc = ctx.ops.filter((o) => o.style === want);
+    assert.ok(disc.length >= 1, `${w}: nothing painted in the SUN DISC colour`);
+    for (const op of disc) {
+      const pts = op.pts.flat();
+      // Bounding-box centre, not the centroid of the sampled points: the arc is
+      // flattened to 33 points with the first repeated as the last, and that one
+      // duplicate drags a centroid far enough off centre to fake a 6% wobble.
+      const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+      const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+      const rs = pts.map((p) => Math.hypot(p[0] - cx, p[1] - cy));
+      const rMax = Math.max(...rs), rMin = Math.min(...rs);
+      assert.ok((rMax - rMin) / rMax < 0.02,
+        `${w}: the sun is not round — r ${rMin.toFixed(1)}..${rMax.toFixed(1)}`);
+    }
+    // And it is BEHIND the bulls: first op, so the bulls overpaint it.
+    assert.equal(ctx.ops[0].style, want, `${w}: the sun is not the backmost layer`);
+  }
+});
+
+test("the OUTLINE row is opt-in on every mark", () => {
+  // Same bargain every authored slot makes, and the reason the outline could be
+  // offered on ALL eleven marks rather than only the ones with no second shape:
+  // unset, it changes nothing.
+  for (const team of Teams.LIST) {
+    for (const liv of Liveries.forTeam(team)) {
+      for (const bare of [false, true]) {
+        const fields = bare ? [(liv.fin || liv.c2)] : [liv.c1, liv.c2];
+        assert.equal(LT.markPalette(team.id, liv, fields, bare).outline, null,
+          `${team.id}/${liv.id} outlines with no OUTLINE colour set`);
+      }
+    }
+  }
+});
+
+test("the garage lightbox shows the brand lockup, not a re-fitted one", () => {
+  // The garage wall crest is a BACKLIT SIGN: it picks its own field, so unlike
+  // the car it is free to show the emblem as designed. It was not doing that.
+  // paintDress asked markBase what lands on the wall — the HORSE — and a
+  // near-black horse chose a white lightbox, which then rejected Ferrari's own
+  // yellow shield (1.07, under the 1.6 plate floor) and painted it red. The
+  // wall showed a white horse on a red shield beside a car showing the real
+  // black-on-yellow.
+  //
+  // This replays paintDress's field choice against LiveryTex.markOnField (the
+  // function it now calls) and asserts the outcome: on its OWN livery, a mark
+  // with a brand backing shows THAT backing, and a mark with a second colour
+  // shows a real one rather than a grey-ramp fallback.
+  const scale = (c, k) => c.map((v) => v * k);
+  const isGrey = (c) => Math.abs(c[0] - c[1]) < 0.01 && Math.abs(c[1] - c[2]) < 0.01 &&
+                        c[0] > 0.08 && c[0] < 0.92;
+  const bad = [];
+  for (const team of Teams.LIST) {
+    const liv = Liveries.forTeam(team)[0];          // the team's own livery
+    const on = LT.markOnField(team.id, liv);
+    const tinted = scale(liv.c1, 0.30);
+    const worst = (f) => Math.min(...on.map((c) => LT.contrast(c, f)));
+    const field = worst(tinted) < 2.2 ? LT.inkOn(on) : tinted;
+    const P = LT.markPalette(team.id, liv, field, false);
+    const B = LT.markPalette(team.id, liv, [liv.c1, liv.c2], false);   // the car
+    // A brand backing survives to the wall. This is the Ferrari case, and it
+    // also holds Red Bull's sun, which must not regress to a livery-derived
+    // disc just because the wall picks a different field than the car.
+    if (B.plate && (!P.plate || P.plate.join() !== B.plate.join()))
+      bad.push(`${team.id} wall plate ${P.plate ? P.plate.join() : "none"} vs car ${B.plate.join()}`);
+    // And the second colour is a colour, not the grey the ramp reaches for when
+    // nothing in the pool clears. Only asserted where a crest actually PAINTS
+    // alt — Mercedes' ring and Audi's rings are `part`, so their alt is
+    // computed and never drawn, and greying it harms nothing.
+    if (LT.ALT_INSIDE[team.id] && isGrey(P.alt))
+      bad.push(`${team.id} wall inner detail is grey ${P.alt.map((v) => v.toFixed(2)).join()}`);
+  }
+  assert.deepEqual(bad, [], "the garage wall drifted from the brand lockup");
+});
+
+test("an uploaded emblem offers no picker it cannot paint", () => {
+  // The custom team can upload arbitrary art, and buildAtlas then takes the
+  // drawLogoImage branch — where the monogram is never drawn and the function
+  // signature has no parameter for its box: (ctx, img, R, tint, halo, outline).
+  // markSlots still offered MONOGRAM BOX, so MY TEAM and the garage editor both
+  // showed a colour picker that could not reach a pixel. That is the same
+  // defect this file was opened for, one screen over.
+  const img = { naturalWidth: 64, naturalHeight: 64, _avg: [0.5, 0.5, 0.5] };
+  // join(), not deepEqual: markSlots builds its array inside the vm realm, so a
+  // deepStrictEqual against a host array fails on prototype identity alone —
+  // the same cross-realm trap the header of this file warns about.
+  const rowsFor = () => LT.markSlots("custom").map((r) => r.key).join(",");
+
+  // Without an emblem the monogram IS the mark, so its box is a real shape.
+  assert.ok(!LT.LOGOS.custom, "LOGOS.custom is dirty before this test runs");
+  assert.equal(rowsFor(), "logo,logo2,logo3");
+
+  try {
+    LT.LOGOS.custom = img;
+    // Every row the emblem path offers has to land in drawLogoImage's pixels.
+    // tint is `logo`, outline is `logo3`; there is no third argument, which is
+    // exactly why logo2 must not be offered.
+    assert.equal(rowsFor(), "logo,logo3",
+      "an uploaded emblem still offers a row drawLogoImage cannot paint");
+    const TINT = [0.1, 0.8, 0.9], OUT = [1, 0.55, 0];
+    const ctx = new RecCtx();
+    LT.drawLogoImage(ctx, img, LT.REGIONS.crest, TINT, null, OUT);
+    // The rim is painted as a shadow pass; the emblem itself lands on top.
+    const shadows = ctx.imageOps.map((o) => o.shadow);
+    assert.ok(shadows.includes(cssOf(OUT)), "OUTLINE never reached the canvas");
+    assert.equal(shadows[shadows.length - 1], null, "the emblem is under its own rim");
+  } finally {
+    delete LT.LOGOS.custom;            // module-level state: never leak it
+  }
+  assert.equal(rowsFor(), "logo,logo2,logo3", "the monogram row did not come back");
 });

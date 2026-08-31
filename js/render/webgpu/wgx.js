@@ -241,6 +241,7 @@ const WGX = (function () {
   // ONLY here — the boot self-test is over and game.js's canary proves that
   // present() ran, not that anything reached the screen.
   let _gpuErrors = 0;
+  let _gpuFirstMsg = null;   // module-scope: _bootError is inside create()
   function _markGlxBound() {
     try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label stays at the pick until the next paint */ }
     try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window (harness) */ }
@@ -722,6 +723,7 @@ const WGX = (function () {
       device.onuncapturederror = function (ev) {
         const msg = (ev && ev.error && ev.error.message) || "gpu error";
         if (!_bootError) _bootError = msg;
+        if (!_gpuFirstMsg) _gpuFirstMsg = msg;
         _gpuErrors++;
         if (_gpuErrors <= GPU_ERR_LOG_CAP) {
           try { Log.warn("gfx", "WGX GPU error #" + _gpuErrors + ":", msg); } catch (_) { /* Log absent (node VM harness): _gpuErrors still counts, which is the load-bearing part */ }
@@ -5491,6 +5493,11 @@ const WGX = (function () {
       envFaceEnd,
       envProbeReady() { return _envProbeLive; },
       envProbeReset,
+
+      // GPU error surface (GLX parity) — on the INSTANCE, which is what
+      // game.js descriptor-copies onto GLX. PERF-FINDINGS 2e.
+      gpuErrors: () => _gpuErrors,
+      gpuFirstError: () => _gpuFirstMsg,
 
       // Cull-test helpers (GLX parity). Optional `out` reuses a caller pool for
       // the race prop-batch path; omit it for agentview (fresh planes).

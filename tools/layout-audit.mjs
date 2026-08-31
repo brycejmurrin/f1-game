@@ -32,6 +32,7 @@
 //
 // --scale joins the viewport axis (`ios-iphone-landscape@130`). Raise --jobs=N
 // only when /proc/loadavg first field is under ~3.
+import { fileURLToPath } from "node:url";
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -47,7 +48,7 @@ import {
   printMenuCatalog,
 } from "./menu-capture.mjs";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const GALLERY_OUT = path.join(ROOT, "artifacts", "layout-audit", "gallery");
 const GEOM_OUT = path.join(ROOT, "artifacts", "layout-audit");
 const SURVEY_SCREENS = "title,select,garage,settings,career,datahub";

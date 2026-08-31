@@ -151,9 +151,11 @@
   font-style: normal; color: rgba(255, 255, 255, 0.72);
   text-transform: none;
 }
-/* The live save line is empty (and therefore zero-height) until a save
-   exists, so a first-time title screen is exactly as it was. */
-#mb-career-sub:empty { display: none; }
+/* The live save line ships its first-time text in the shell (like #mb-season
+   beside it) and refreshCareerButton only rewrites it, so the button never
+   changes height after boot. One line, always: the returning-player string is
+   the long one and must not wrap. See docs/PERF-FINDINGS.md 4a. */
+#mb-career-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 /* The 2x2 modes stack label over sub. No span for the label itself: a bare
    text node is already an anonymous flex item, so only the stack needs a box. */
 #menu-primary .bigbtn > span { display: inline-flex; flex-direction: column; align-items: center; gap: calc(var(--gap) / 6); }

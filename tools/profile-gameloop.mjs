@@ -4,8 +4,9 @@
 //   mode "render": recordVideo-ticked rAF loop (compositor drives frames)
 import { writeFileSync, mkdirSync } from "node:fs";
 import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\/]$/, "");
 const [track = "vegas", mode = "physics"] = process.argv.slice(2);
 
 const srv = await startStaticServer(ROOT);

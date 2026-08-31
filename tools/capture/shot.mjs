@@ -18,6 +18,7 @@
 // a continuously-animating WebGL canvas never passes Playwright's stability
 // check (survey-track.mjs has the same idiom).
 
+import { fileURLToPath } from "node:url";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import {
@@ -31,7 +32,7 @@ import {
   resolveRepoDefault,
 } from "../output-paths.mjs";
 
-const ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 function flag(argv, name, fallback) {
   const i = argv.indexOf(name);

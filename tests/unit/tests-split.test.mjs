@@ -26,6 +26,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { moveMap, importRewrites, textRewrites, plan } from "../../tools/tests-split.mjs";
+import { fileURLToPath } from "node:url";
 
 // ─── the live tree ───────────────────────────────────────────────────────────
 
@@ -35,7 +36,7 @@ test("the split is COMPLETE — the planner finds nothing left to move", () => {
   // the derivation; this proves the walk saw the real tree): a broken walk
   // also returns an empty map, so require the split dirs to actually hold
   // the suite population before trusting "nothing to move".
-  const root = new URL("../..", import.meta.url).pathname;
+  const root = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
   const liveCount = fs.readdirSync(path.join(root, "tests/unit")).length +
                     fs.readdirSync(path.join(root, "tests/specs")).length;
   assert.ok(liveCount > 200,

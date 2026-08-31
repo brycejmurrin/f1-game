@@ -49,6 +49,10 @@ on:
         description: "apex26.tlxForceHw for the game checks (sky,env,chunked,batches,shadow or 1) — exercise gates that never run on software"
         required: false
         default: ""
+      ls:
+        description: "Extra localStorage for ALL game checks, space-separated apex26.k=v — how a flagged renderer path gets tested on real hardware (e.g. apex26.instCellCache=1)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -159,9 +163,10 @@ jobs:
         shell: bash
         run: |
           FORCE="${{ inputs.force }}"
+          LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
           node tools/gpu-game-check.mjs "${{ inputs.track }}" \
             --backend three --path webgpu \
-            ${FORCE:+--ls apex26.tlxForceHw=$FORCE} \
+            ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgpu-${{ matrix.image }}.json" \
             --shot "game-webgpu-${{ matrix.image }}.png"
 
@@ -172,11 +177,29 @@ jobs:
         shell: bash
         run: |
           FORCE="${{ inputs.force }}"
+          LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
           node tools/gpu-game-check.mjs "${{ inputs.track }}" \
             --backend three --path webgl2 \
-            ${FORCE:+--ls apex26.tlxForceHw=$FORCE} \
+            ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgl2-${{ matrix.image }}.json" \
             --shot "game-webgl2-${{ matrix.image }}.png"
+
+      # GLX — the DEFAULT backend, and until now the only one this workflow
+      # never looked at. Both checks above force three.js (TLX); a change to
+      # js/render/glx.js could regress every player's renderer and this job
+      # would still go green. That is how a flagged GLX path came to be
+      # described as "gated on a real GPU" when nothing here could test it.
+      - name: Game check — GLX / WebGL2 (the default backend)
+        if: ${{ !inputs.census_only }}
+        continue-on-error: true
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
+          node tools/gpu-game-check.mjs "${{ inputs.track }}" \
+            --backend webgl2 $LS \
+            --json "game-glx-${{ matrix.image }}.json" \
+            --shot "game-glx-${{ matrix.image }}.png"
 
       # THE GATE. Before this step the job was green whatever the game said:
       # both checks above are continue-on-error and nothing read the JSON they
@@ -208,7 +231,11 @@ jobs:
             const bad = [];
             const rows = [`## ${image} — real-GPU verdict`, "", "```",
               `census anyHardware: ${hardware}`];
-            for (const path3 of ["webgpu", "webgl2"]) {
+            // "glx" is the default backend. Its rows carry no backendState /
+            // envState (those are TLX-only reads), and every check below that
+            // touches them is absent-safe — so for GLX the gate is ok/phase and
+            // gpuErrors, which is the right gate for it anyway.
+            for (const path3 of ["webgpu", "webgl2", "glx"]) {
               const file = `game-${path3}-${image}.json`;
               const g = read(file);
               if (!g) { bad.push(`${path3}: ${file} missing — the check produced nothing`); continue; }
@@ -218,8 +245,37 @@ jobs:
                 `gpuErrors=${gfx.gpuErrors} envFail=${env.fail} envReady=${env.ready} ` +
                 `envBlank=${env.blank} gaveUp=${env.gaveUp} softAdapter=${be.softAdapter} ` +
                 `headless=${be.headless} meanLuma=${frame.meanLuma != null ? frame.meanLuma : "n/a"}`);
-              if (g.ok !== true || g.phase !== "done") bad.push(`${path3}: did not finish (phase=${g.phase}, ok=${g.ok})`);
-              if ((gfx.gpuErrors || 0) > 0) bad.push(`${path3}: ${gfx.gpuErrors} uncaptured GPU errors — ${String(gfx.gpuFirstError || "").slice(0, 160)}`);
+            // Print the REASON. gpu-game-check records out.error on every caught
+            // failure, and this row used to drop it — which is why a Windows
+            // outage read as contentless and got misfiled as "WARP is slow"
+            // for two sessions. docs/PERF-FINDINGS.md 2f.
+              if (g.error) rows.push(`${" ".repeat(8)}error: ${String(g.error).slice(0, 200)}`);
+              if (g.root) rows.push(`${" ".repeat(8)}root:  ${g.root}`);
+            // Why the ten fields above are empty. bounded() in gpu-game-check
+            // turns a failed read into a VALUE, so the run still says done/ok
+            // and every field derived from gfx comes out undefined — which
+            // reads exactly like a backend with nothing to report.
+              if (g.gfxReadFailed) rows.push(`${" ".repeat(8)}gfx:   ${g.gfxReadFailed}`);
+              if (g.overlayReadFailed) rows.push(`${" ".repeat(8)}ovl:   ${g.overlayReadFailed}`);
+              if (g.ok !== true || g.phase !== "done") bad.push(`${path3}: did not finish (phase=${g.phase}, ok=${g.ok})${g.error ? " — " + String(g.error).slice(0, 200) : ""}`);
+            // An ABSENT count must not read as clean. gpuErrors was defined only
+            // on WGX, so this clause was vacuous on the GLX leg from the day that
+            // leg was added — it reported null and passed forever. GLX has a real
+            // counter now; a missing one means the backend stopped reporting.
+            // A read that FAILED is not the same as a backend that reports no
+            // count, though both leave gpuErrors undefined — the row above says
+            // which either way. Blocking only on hardware, for the same reason
+            // as the count below: on a software image a leg that cannot bring
+            // its backend up is information, not a regression signal, and the
+            // gate exists to protect the real-GPU answer.
+              if (hardware && g.gfxReadFailed) bad.push(`${path3}: the gfx read failed, so this leg proved NOTHING — ${g.gfxReadFailed}`);
+            // hardware-only, like softAdapter and the env checks below: this
+            // clause exists so an absent count cannot read as clean ON THE
+            // REAL-GPU RUN. A software image may legitimately not bring a
+            // backend up at all, and failing the job for that is noise, not
+            // rigour. macos-latest still fails loudly if it stops reporting.
+              else if (hardware && gfx.gpuErrors == null) bad.push(`${path3}: NO gpuErrors count reported — the error check would pass vacuously (see docs/PERF-FINDINGS.md 2e)`);
+              else if (gfx.gpuErrors > 0) bad.push(`${path3}: ${gfx.gpuErrors} uncaptured GPU errors — ${String(gfx.gpuFirstError || "").slice(0, 160)}`);
               if ((env.fail || 0) > 0) bad.push(`${path3}: ${env.fail} env-probe faces FAILED — ${String(env.failMsg || "").slice(0, 160)}`);
               if (env.gaveUp) bad.push(`${path3}: the env probe stood down — it could not succeed`);
               if (hardware && be.softAdapter === true) bad.push(`${path3}: softAdapter TRUE on an adapter the census called hardware — the classification regressed and the game is running the degraded content path`);

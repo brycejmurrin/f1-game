@@ -29,7 +29,7 @@ import {
   resolveRepoDefault,
 } from "./output-paths.mjs";
 
-const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\/]$/, "");
 export const SURVEY_USAGE = "usage: survey-track.mjs <id> [label] [fracs] [--oblique]";
 
 /** Strip --flags anywhere; a lone comma-list after <id> is fracs, not a label. */

@@ -74,6 +74,10 @@ export function replay(changed, budgetMin = 15) {
   return { reason: "matched", groups,
     selected: prioritise(cut.selected, { changedSpecs, imported }).map((s) => s.file),
     skipped: cut.skipped.map((s) => s.file),
+    // `unreachable` is the third NAMED bucket (a spec bigger than the whole
+    // cap). It is still named in the selector's output, so recall must count
+    // it as named — otherwise splitting the report reads as a new silence.
+    unreachable: (cut.unreachable || []).map((s) => s.file),
     overBudget: cut.overBudgetSpecs.map((s) => s.file) };
 }
 
@@ -85,7 +89,8 @@ export function recall(cases = CASES) {
     // said plainly that it could not help (infra) / could not afford it. Silence
     // is the only real failure: a selection that omits the spec with no word.
     const named = r.reason === "infra"
-      || (r.skipped || []).includes(c.catches) || (r.overBudget || []).includes(c.catches);
+      || (r.skipped || []).includes(c.catches) || (r.overBudget || []).includes(c.catches)
+      || (r.unreachable || []).includes(c.catches);
     return { ...c, reason: r.reason, hit, named, rank: r.selected.indexOf(c.catches), n: r.selected.length };
   });
 }
@@ -98,7 +103,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   for (const r of rows) {
     const verdict = r.hit ? `CAUGHT (rank ${r.rank + 1} of ${r.n})`
       : r.reason === "infra" ? "reported as infra — gates own it"
-      : r.named ? "MISSED but NAMED (skipped/over budget)"
+      : r.named ? "MISSED but NAMED (skipped / unreachable / over budget)"
       : "SILENTLY MISSED";
     console.log(`  ${r.hit ? "+" : r.named || r.reason === "infra" ? "~" : "x"} ${r.name}`);
     console.log(`      catches ${r.catches}  ->  ${verdict}`);

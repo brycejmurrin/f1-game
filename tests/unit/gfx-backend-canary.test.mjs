@@ -423,6 +423,116 @@ test("GLX pins the per-chunk uploadLightSet revert (arity 3) and no-ops when the
   assert.match(present, /ctxGone\(\)/);
 });
 
+test("the GPU-census gate scopes hardware expectations, and only those", () => {
+  // Two checks are hardware-only ON PURPOSE: a software image may legitimately
+  // fail to bring a backend up, and failing the job for that is noise. The rest
+  // must stay unconditional — a real GPU error, a run that did not finish, or a
+  // missing artifact is a defect on ANY image. This pins the split so the
+  // scoping cannot quietly spread. docs/PERF-FINDINGS.md 2f.
+  const wf = read(".github/workflows/gpu-census.yml");
+
+  for (const re of [/if \(hardware && gfx\.gpuErrors == null\)/,
+                    /if \(hardware && g\.gfxReadFailed\)/,
+                    /if \(hardware && be\.softAdapter === true\)/]) {
+    assert.match(wf, re, `this check must be scoped to hardware images: ${re}`);
+  }
+
+  // …and these must NOT be, or the gate stops gating.
+  assert.match(wf, /if \(g\.ok !== true \|\| g\.phase !== "done"\)/);
+  assert.match(wf, /if \(!g\) \{ bad\.push/);
+  assert.match(wf, /else if \(gfx\.gpuErrors > 0\)/);
+  assert.doesNotMatch(wf, /hardware && \(?g\.ok !== true/,
+    "a run that did not finish must fail on every image");
+  assert.doesNotMatch(wf, /hardware && gfx\.gpuErrors > 0/,
+    "a real GPU error must fail on every image");
+
+  // The reason a leg is empty must always be PRINTED, even where it is not
+  // blocking — that is the whole point of 2f.
+  assert.match(wf, /rows\.push\(`\$\{" "\.repeat\(8\)\}gfx:/);
+  assert.match(wf, /if \(g\.error\) rows\.push/);
+});
+
+test("GLX exports a real gpuErrors counter and the workflow fails on a missing one", () => {
+  // The real-GPU gate checked `(gfx.gpuErrors || 0) > 0` while ONLY WGX defined
+  // gpuErrors, so on the GLX leg it read null and passed vacuously from the day
+  // that leg was added (PERF-FINDINGS 2e). Both halves of the fix are pinned
+  // here because either alone restores the hole.
+  const glx = read("js/render/glx.js");
+  assert.match(glx, /gpuErrors: \(\) => _glErrors,/);
+  assert.match(glx, /gpuFirstError: \(\) => _glFirstError \|\| null,/);
+  assert.match(glx, /function drainGlErrors\(/);
+  assert.match(glx, /drainGlErrors\("present"\)/, "the counter must be drained once per present");
+
+  const wf = read(".github/workflows/gpu-census.yml");
+  assert.match(wf, /gfx\.gpuErrors == null/,
+    "the Verdict must FAIL on a missing count, not read absent as clean");
+  assert.doesNotMatch(wf, /if \(\(gfx\.gpuErrors \|\| 0\) > 0\)/,
+    "the || 0 form treats an absent counter as zero — that was the bug");
+});
+
+test("the instancing gate is declared through the cache, never bracketed per draw", () => {
+  // uInstanced was 54.8 uniform1f/frame for a value that changes 3.1 times: the
+  // 1/0 bracket around each instanced draw alternates, so a redundancy cache
+  // collapses none of it (PERF-FINDINGS 2e — the same shape as the doubleSided
+  // toggles retired near setCull). litMaterial declares the kind instead, and
+  // that only stays correct while EVERY lit draw funnels through litMaterial.
+  const glx = read("js/render/glx.js");
+  assert.match(glx, /function litMaterial\(modelMat, opts, instanced\)/);
+  assert.match(glx, /uf1\(litU\.uInstanced, _litUf, "instanced", instanced \? 1 : 0\);/);
+  assert.match(glx, /litMaterial\(IDENT4, opts, 1\)/, "drawInstanced must declare its kind");
+
+  // The bracket must be GONE — a re-added raw write re-enables the alternation.
+  assert.doesNotMatch(glx, /gl\.uniform1f\(litU\.uInstanced/,
+    "uInstanced must go through uf1, not a raw uniform1f");
+
+  // litProg may be bound in exactly two places: begin() (frame setup, no draw)
+  // and litMaterial. A third would be a lit draw that skips the declaration.
+  const binds = glx.match(/useProg\(litProg\)/g) || [];
+  assert.equal(binds.length, 2,
+    "a new useProg(litProg) site must also declare uInstanced — see PERF-FINDINGS 2e");
+});
+
+test("the interleaved uLight[] lanes agree between glx.js and shaders/lit.js", () => {
+  // ONE uniform4fv per chunk instead of four (PERF-FINDINGS 2d) only works if
+  // both halves agree on the stride-16 lane order. A swapped lane keeps the GL
+  // CALL COUNTS byte-identical and the render statistically indistinguishable
+  // on a coarse metric — it moves or recolours lamp pools, which no counter
+  // and no unit test would catch. This is the guard for that.
+  const glx = read("js/render/glx.js");
+  const lit = read("js/render/shaders/lit.js");
+
+  // The four arrays must be GONE from both halves, or a stale reader survives.
+  for (const n of ["uLightA", "uLightB", "uLightC", "uLightD"]) {
+    assert.doesNotMatch(glx, new RegExp(n), `glx.js still references ${n}`);
+    assert.doesNotMatch(lit, new RegExp(n), `lit.js still references ${n}`);
+  }
+
+  // Shader side: one array, 4 vec4s per light, read at li+0..3 off i*4.
+  assert.match(lit, /uniform vec4 uLight\[MAX_LIGHTS \* 4\];/);
+  assert.match(lit, /int li = i \* 4;/);
+  assert.match(lit, /vec4 la = uLight\[li\], lb = uLight\[li \+ 1\], lc = uLight\[li \+ 2\];/);
+  assert.match(lit, /smoothstep\(uLight\[li \+ 3\]\.x,/);
+
+  // JS side: stride 16, and each lane group lands where the shader reads it.
+  // src is the flat stride-15 record; these offsets ARE the contract.
+  assert.match(glx, /const i4 = i \* 16;/);
+  const lanes = [
+    [0, "src\\[o\\]"], [3, "src\\[o \\+ 6\\]"],          // +0  la = pos.xyz | radius
+    [4, "src\\[o \\+ 3\\]"], [7, "src\\[o \\+ 12\\]"],   // +1  lb = rgb    | bleed
+    [8, "src\\[o \\+ 7\\]"], [11, "src\\[o \\+ 10\\]"],  // +2  lc = aim.xyz| cosInner
+    [12, "src\\[o \\+ 11\\]"],                            // +3  x  = cosOuter
+  ];
+  for (const [slot, rhs] of lanes) {
+    const lhs = slot === 0 ? "L4\\[i4\\]" : `L4\\[i4 \\+ ${slot}\\]`;
+    assert.match(glx, new RegExp(`${lhs} = ${rhs};`),
+      `uLight lane +${slot} must be fed by ${rhs.replace(/\\/g, "")}`);
+  }
+
+  // Exactly ONE upload, sized in whole lights.
+  const ups = glx.match(/gl\.uniform4fv\(litU\["uLight\[0\]"\], L4, 0, nL \* 16\)/g) || [];
+  assert.equal(ups.length, 1, "expected exactly one uLight upload of nL*16 floats");
+});
+
 test("WGX sky ports GLX overcast grey-shift, horizon bank, and azimuthal variation", () => {
   const sky = read("js/render/webgpu/wgsl-chunks.js");
   assert.match(sky, /nightLid/);
@@ -1164,6 +1274,18 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
       `${file}: compare x/y/z/d, not the old x/d-only collision-prone hash`);
     assert.match(body, /_cullN\b/,
       `${file}: the resident pack's count should be cached with it`);
+    // The cell-set key (apex26.instCellCache) identifies the resident pack by
+    // WHICH CELLS produced it. Its hit path must NOT stamp the plane snapshot:
+    // _cullPlanes has to keep describing the frustum that PHYSICALLY wrote the
+    // buffer, or the cheap plane compare above starts claiming a pack it never
+    // produced — the same "right count, wrong transforms" defect the _cullSig
+    // assertion above exists to prevent, reintroduced through the side door.
+    const cellHit = body.indexOf("_cellKeyN === k");
+    if (cellHit !== -1) {
+      const hitBlock = body.slice(cellHit, cellHit + 600);
+      assert.doesNotMatch(hitBlock, /_cullPlanes\s*(=|\[)/,
+        `${file}: a cell-set cache HIT must not write the plane snapshot`);
+    }
   }
   const glShadow = read("js/render/glx/shadow.js");
   const wgx = read("js/render/webgpu/wgx.js");
@@ -1755,4 +1877,40 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
     "env cube must not arm the 2-attachment program");
   assert.doesNotMatch(envBody, /setMRT\(/,
     "env cube render must not install a renderer MRT");
+});
+
+// uNumLights is uploaded 111 times a frame (vegas night, full field in a pack)
+// for 53.7 distinct values — uploadLightSet sets the count unconditionally, and
+// the per-chunk path calls it once per visible chunk, including the many that
+// return immediately on a count of 0. The redundancy cache that collapses that
+// is only sound because of two facts, and this pins both:
+//
+//  1. ONE WRITER. A WebGL uniform is per-PROGRAM state, so the cached value
+//     survives every unbind — but only while nothing else writes it on the lit
+//     program. post.js's godray pass has its own uNumLights on its own program
+//     and cannot collide; a SECOND writer on the lit program would make the
+//     cache lie, and this is the assertion that would catch it.
+//  2. RESET AT RELINK. A relink resets every uniform on the program, so the
+//     cache has to be cleared where the locations are re-fetched.
+test("GLX caches uNumLights, and nothing else writes it on the lit program", () => {
+  const src = read("js/render/glx.js");
+  const bare = src.replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(bare, /if\s*\(nL\s*!==\s*_luNL\)\s*\{\s*gl\.uniform1i\(litU\.uNumLights,\s*nL\);\s*_luNL\s*=\s*nL;/,
+    "uploadLightSet must skip an unchanged uNumLights and record what it wrote");
+  const writers = bare.match(/uniform1i\(\s*litU\.uNumLights/g) || [];
+  assert.equal(writers.length, 1,
+    `litU.uNumLights has ${writers.length} writers — the cache is only valid with one; ` +
+    "route the new one through uploadLightSet or drop the cache");
+  // The reset must sit with the locs() call that re-fetches the locations,
+  // which is the only moment a relink can have thrown the value away.
+  const at = bare.indexOf("litU = locs(litProg");
+  assert.notEqual(at, -1, "the lit program's locs() call moved");
+  assert.match(bare.slice(Math.max(0, at - 200), at), /_luNL\s*=\s*-1/,
+    "the uNumLights cache must be cleared where the lit program's locations are re-fetched");
+  // And it must NOT be swept up in the per-frame material reset: those exist
+  // because begin() re-establishes material state, while this value is program
+  // state that is still correct across frames. Clearing it there would give
+  // back the whole saving.
+  assert.doesNotMatch(bare, /_matEmissive\s*=[^;]*_luNL/,
+    "uNumLights is program state, not per-frame material state — do not reset it in begin()");
 });

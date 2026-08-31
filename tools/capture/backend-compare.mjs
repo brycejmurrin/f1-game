@@ -38,8 +38,9 @@ import {
   WEBGPU_CHROMIUM_ARGS,
 } from "../harness.mjs";
 import { assertSafePathToken, resolveRepoDefault } from "../output-paths.mjs";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 function flag(argv, name, fallback) {
   const i = argv.indexOf(name);

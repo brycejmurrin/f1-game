@@ -419,6 +419,50 @@ const CEILINGS = {
   // knob is resolved BEFORE setFrameLights (it feeds the scaled full-set build)
   // and allLights is left null when the feature is off instead of handing out
   // the raw baked list.
+  // 8727 -> 8728: wet tyres reach the physics. gripMult() reads the fitted
+  // compound as well as the weather (WET_GRIP), cars carry a `tread` class, and
+  // braking gets the tread ratio it never had. Net +2 code lines and +3 comment
+  // for a whole system, because the rationale went to docs/PHYSICS.md "Weather
+  // and tyres" instead of into the file.
+  // 8727 -> 8760: the per-wheel draw loop drew rotating-then-fixed per wheel,
+  // giving the VAO sequence F,FFixed,F,FFixed,R,RFixed,R,RFixed — every
+  // consecutive pair different, so bindVAO collapsed NOTHING. Two runs now,
+  // measured 92 -> 84.2 bindVertexArray/frame in a pack with drawElements
+  // unchanged. The same restructure FIXES A RENDERING BUG: brake rings are
+  // blended with no depth write and were interleaved with opaque geometry, so
+  // a later car's opaque draw passed LEQUAL and painted over a ring already
+  // drawn. Bug-explaining growth at the site of the bug — the one growth the
+  // note at the top of this entry tolerates.
+  // 8727 -> 8760 for czSyncMarkRows and its two callers: MY TEAM's mark rows
+  // now describe whichever mark is ACTUALLY drawn. Uploading an emblem takes
+  // buildAtlas down the drawLogoImage branch, whose signature is
+  // (ctx, img, R, tint, halo, outline) — no parameter for a monogram box — so
+  // the dialog was showing a MONOGRAM BOX picker that could not reach a pixel,
+  // and a MONOGRAM label over what is really a tint on arbitrary art. Hiding
+  // the row then had to surface the legacy `logo3 || logo2` rim, or the
+  // fallback would paint from a row nobody can see.
+  // Bug-explaining growth at the site of the bug, with the labelling RULE in
+  // js/car/liverytex.js markSlots where both editors read it — the garage
+  // builds its rows from that function and needed no lines at all. What is
+  // left here is this dialog's static markup being told the answer.
+  // MERGED: both sides raised this to 8760 for different work — their
+  // two-pass wheel draws, this side's czSyncMarkRows — and the file now
+  // carries BOTH sets of lines, so neither number fits it. Re-measured on
+  // the merged tree at 8793, as the ACTIVE AERO merge above had to be.
+  // (`lines()` splits on \n, so it reads one MORE than wc -l on a
+  // newline-terminated file — 8792 there is 8793 here.)
+  // MERGED AGAIN (this session): their 8760 and this side's 8728 were raised for
+  // different work — their two-pass wheel draws and czSyncMarkRows, this side's
+  // wet-tyre grip path — and the union carries both sets of lines, so neither
+  // number fits. Re-measured on the merged tree at 8797, the same way the
+  // ACTIVE AERO and czSyncMarkRows merges above had to be.
+  // 8793 -> 8803: this lineage's RACE IN PORTRAIT opt-in handler and its
+  // restore-on-boot read (10 lines). Portrait racing was blocked by one CSS
+  // rule, never by logic — PERF-FINDINGS 5a. Re-measured on the MERGED tree,
+  // not added on paper: `lines()` reads 8803 here.
+  // MERGED a third time: their 8797 (wet-tyre grip) and this side's 8803 (the
+  // RACE IN PORTRAIT opt-in) each fit their own lineage and neither fits the
+  // union, which carries both. Re-measured on THIS tree: 8807.
   // 8727 -> 8749 for the LAZY_RACE loader: RACE_FILES + raceAssets(), which sit
   // beside AGENT_FILES / loadBackendScripts because they ARE that mechanism
   // (same injector, second roster) — splitting them into js/game/ would put the
@@ -433,7 +477,11 @@ const CEILINGS = {
   // BEFORE the call — there is no seam further down to push this into. Most of
   // the 38 lines are the comment explaining exactly that. Takes 1,083 KB off
   // the boot script wall.
-  "js/game.js": 8787,
+  // MERGED a fourth time: the two entries just above are this lineage's deltas
+  // measured against ITS base (8727 -> 8749 -> 8787); deploy meanwhile reached
+  // 8807 on work of its own. Neither number fits the union, which carries both
+  // sets of lines. Re-measured on THIS tree, not added on paper: 8869.
+  "js/game.js": 8869,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -475,7 +523,33 @@ const CEILINGS = {
   // which of the three gates is holding it, plus meanPerChunkRGB — the twin of
   // meanLampRGB for the set chunked meshes are lit from. Both exist because
   // 'the sliders do nothing' was undiagnosable from outside the renderer.
-  "js/game/apex.js": 2456,
+  // 2456 -> 2471: netLoopback's far end was a BARE transport endpoint, which
+  // answers no PINGs, so the game's session never reached synced(), every
+  // snapshot sat in heldState and net().buffered stayed 0 — six of the fourteen
+  // reds in the `net` browser group. The fix is two lines (autoPong the peer,
+  // pump the session at t0); the rest is the comment saying why a stand-in for
+  // a peer has to speak the clock protocol and why the first PING cannot wait
+  // for the caller's first netTick. Bug-explaining growth at the site.
+  // 2471 -> 2475: a `seed` on netLoopback, threading NetTransport.seededRnd, so
+  // a spec that configures packet loss can re-run the SAME loss. Unseeded, the
+  // lossy-link spec fails a few runs in a hundred because the clock handshake
+  // loses both legs of every attempt — indistinguishable from the defect it is
+  // meant to catch.
+  // 2475 -> 2484: netTick pumps the FAKE PEER as well as the session. Only
+  // netPeerSend/netPeerEvent did, so a test that merely ticks — a clock
+  // warm-up, an idle stretch — delivered nothing to the far end and its
+  // responder never saw a PING. transport.js is explicit that both endpoints
+  // must pump every frame; a live peer does, because it is running its own
+  // loop. Nine lines, eight of them the why.
+  // 2484 -> 2505: the FAKE LOBBY PEER now stays alive — autoPong plus a 25 ms
+  // pump, torn down with lobbyFake(false). A bare endpoint answers no pings and
+  // sends none, so the lobby's session heard nothing after the last thing a
+  // test pushed and closed on its own 6 s timeout, losing the peer with no user
+  // action: a watch-only probe held peerReady true through t+5.5 s and lost it
+  // at t+6.0 s. Four room/seat specs failed on exactly that. Same shape as the
+  // netLoopback fix above; the comment records the measurement so the next
+  // reader does not have to re-find the six seconds.
+  "js/game/apex.js": 2505,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
@@ -570,7 +644,39 @@ const CEILINGS = {
   // only, +1 line of code and the twelve recording why the tub is dark while
   // the hood above it stays painted. Measured on ferrari: lower-field rays on
   // body paint under the wheel 1073 -> 658 of 13430. Re-measured on the union.
-  "js/car/car3d.js": 3177,   // +44: wheel cover is a rim lip, a dish and a boss
+  // 3320 -> 3378: second detail pass — T-cam pod, driveshafts, splitter/tea-tray,
+  // turning-vane footplates, six-point harness. Measured 3372 on the raise.
+  // 3378 -> 3510: the PROPORTIONS pass, and it is nearly all comment. Seven
+  // measured defects, each fixed by moving numbers rather than adding geometry
+  // (the body and cockpit triangle counts did not move at all): the nose tip
+  // overhung the front wing's leading edge by 460 mm and made the car 5.87 m
+  // long on a 3.30 m wheelbase; the front-wing endplate cluster measured
+  // x 1.045, outside the 1900 mm width the tyres are already drawn to; the
+  // principal roll structure (C12.4.1, Z 968) did not exist, so the car's
+  // highest point was its rear wing; the sidepod had no undercut aft of the
+  // inlet; the engine cover was a zero-width knife ridge with every
+  // cover-mounted detail floating up to 0.21 m off it; and every suspension arm
+  // started 0.10-0.16 m outboard of the chassis it bolts to. The comments carry
+  // the regulation citations and the measured before/after, which is the only
+  // way the next pass can argue with them. Plus the tyre-shoulder ladder, the
+  // one change that did add triangles and the one that had to be re-spaced when
+  // the sweep caught its first rung collapsing under the optical floor.
+  // Measured 3512 on the raise.
+  // 3177 -> 3203 for FRONT_TYRE_OUTER / FW_SPAN and the note that derives them.
+  // The front wing was wider than the car: the widest vertex in the whole build
+  // was the endplate footplate at ±1.045 against a 0.950 tyre face, so the car
+  // measured 2.09 m at the wing and 1.90 m — exactly the 2026 maximum — at the
+  // wheels. The lines are the MEASUREMENT that fixes it: which option is widest
+  // (outwash_max, not the default), what its endplate adds, and why calibrating
+  // on the default left two specs 5 mm proud. Bug-explaining growth at the site
+  // of the bug, and the invariant itself lives in a test, not a comment.
+  // MERGED: both lineages found the SAME defect — the front wing standing proud
+  // of the tyre, both measuring the widest vertex at ±1.045 — and both grew this
+  // file explaining it. The deploy side's FW_SPAN is what ships (calibrated on
+  // the widest option, guarded by car-front-wing-width.test.mjs); this side's
+  // proportions pass is the rest of the growth. The union carries both sets of
+  // lines, so neither ceiling fits: re-measured at 3540.
+  "js/car/car3d.js": 3540,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
@@ -678,7 +784,10 @@ const CEILINGS = {
   // 79.5% that share by being EMPTY are a trap worth naming in place. Detail is
   // in docs/PERF-FINDINGS.md 2b — only the pointer and the headline live here,
   // which is why this is +7 and not the +15 the first draft cost.
-  "js/render/webgpu/wgx.js": 5574,
+  // 5574 -> 5581: WGX gains gpuErrors/gpuFirstError on its INSTANCE surface
+  // (it had them only on the module factory), so the backend-parity contract
+  // holds now that GLX has a real counter. PERF-FINDINGS 2e.
+  "js/render/webgpu/wgx.js": 5581,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -751,7 +860,31 @@ const CEILINGS = {
   // retirement: a per-lamp inFrameTail test, four comparisons for every lamp
   // of every chunk of every chunked mesh, feeding a scale that could not
   // matter. Lowered per the rule above: the ratchet follows the file down.
-  "js/render/glx.js": 1928,
+  // 1928 -> 1963: the opt-in instance CELL-SET cull cache. cullInstances
+  // memoises on frustum-plane equality and three callers use three frusta a
+  // frame, so while driving it never hits and props are repacked and
+  // re-uploaded 2-3x — measured 426.7 KiB/frame (tools/glx-call-census.mjs).
+  // Keying on the surviving cell set takes -23.4% of that (-48% in a pack). The
+  // existing plane path is left intact beside it (the canary pins it), which is
+  // why this ADDS rather than replaces. Detail: PERF-FINDINGS 2c.
+  // 1963 -> 1961: the four uLightA..D arrays and their four scratch buffers
+  // collapse into one interleaved uLight[]/_luL — one uniform4fv per chunk
+  // instead of four. The ratchet follows the file down (PERF-FINDINGS 2d).
+  // 1961 -> 1958: the instancing gate stops being bracketed per instanced draw
+  // and is declared through the redundancy cache in litMaterial (PERF-FINDINGS 2e).
+  // 1958 -> 1975: GLX gains a real gpuErrors()/gpuFirstError() counter. The
+  // real-GPU workflow gated on gpuErrors and GLX never defined it, so that
+  // clause read null and passed forever (PERF-FINDINGS 2e). A deliberate
+  // raise: the gate is worth more than the lines.
+  // 1975 -> 1990: the uNumLights redundancy cache (_luNL) plus the note that
+  // makes it safe to keep. It is 3 lines of code; the other 12 record WHY this
+  // one is not cleared per frame like the _mat* caches beside it (a WebGL
+  // uniform is per-PROGRAM state, so it survives every unbind and only a relink
+  // invalidates it) and the measurement that justified writing it at all —
+  // 111 uploads a frame for 53.7 distinct values, so 52 % redundant, which is
+  // the test the two retired caches at `setCull` and `uInstanced` failed.
+  // uniform1i 146.4 -> 87.9 a frame, every other counter identical.
+  "js/render/glx.js": 1990,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)

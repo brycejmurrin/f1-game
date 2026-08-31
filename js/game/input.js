@@ -417,13 +417,18 @@ const Input = (function () {
     }
   }
 
-  const TOUCH_RANGE_FRAC = 0.12;   // viewport widths of drag for full lock
+  const TOUCH_RANGE_FRAC = 0.12;   // LONG-edge fractions of drag for full lock
   const TOUCH_DEAD_PX = 5;         // slop around the anchor: a tap is not a steer
   let touchRangeFrac = TOUCH_RANGE_FRAC;
 
   function touchRangePx() {
-    const w = (typeof window !== "undefined" && window.innerWidth) || 844;
-    return Math.max(40, w * touchRangeFrac);
+    // The LONG edge, not innerWidth. Off the short edge a 393x852 phone gets
+    // 47px of drag for full lock against 101px landscape — the identical
+    // gesture, twice as twitchy, because the phone turned. Landscape is
+    // unchanged (its long edge IS innerWidth). PERF-FINDINGS 5a.
+    const win = typeof window !== "undefined" ? window : null;
+    const long = Math.max((win && win.innerWidth) || 844, (win && win.innerHeight) || 390);
+    return Math.max(40, long * touchRangeFrac);
   }
 
   function touchCmd(rec) {

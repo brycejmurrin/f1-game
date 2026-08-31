@@ -164,17 +164,32 @@ test("ship filter enforces cache generation against the active deployment", () =
     "generation failures must fail CI, not merely fall through to the smoke gate");
 });
 
+// The smoke per-test cap READ from the workflow, not restated here. It was
+// pinned as the literal 420000 in two assertions, so every re-measurement of a
+// runner budget — which the ci.yml header explicitly demands when the pool
+// changes — also had to edit this file, and a guard you must edit to tell the
+// truth is one people edit without reading. What matters is that the cap is
+// EXPLICIT and that it is bigger than the `selected` gate; the value is ci.yml's
+// to measure. Raised 420000 -> 900000 on 2026-08-30 after six straight deploys
+// timed out (Pages #1848-#1854).
+const SMOKE_TIMEOUT_MS = (() => {
+  const m = ciWorkflow.match(/test:smoke -- --timeout=(\d+)/);
+  assert.ok(m, "the smoke shards must pass an EXPLICIT --timeout; none found");
+  return Number(m[1]);
+})();
+
 test("smoke's command-line timeout is not tripled inside the spec", () => {
   const smokeSpec = fs.readFileSync(new URL("../specs/smoke.spec.js", import.meta.url), "utf8");
-  assert.match(ciWorkflow, /test:smoke -- --timeout=420000/);
+  assert.ok(SMOKE_TIMEOUT_MS >= 120000,
+    `smoke's per-test cap is ${SMOKE_TIMEOUT_MS} ms, below the selected gate's 120 s`);
   assert.doesNotMatch(smokeSpec, /^\s*test\.slow\s*\(/m,
-    "test.slow triples the workflow's 420 s per-test timeout");
+    `test.slow triples the workflow's ${SMOKE_TIMEOUT_MS / 1000} s per-test timeout`);
 });
 
-test("selected's 120 s gate cannot rerun the fixed 420 s smoke spec", () => {
+test("selected's 120 s gate cannot rerun the fixed-budget smoke spec", () => {
   const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
   const selected = ciWorkflow.split("\n  selected:")[1];
-  assert.match(smoke, /test:smoke -- --timeout=420000/);
+  assert.match(smoke, new RegExp("test:smoke -- --timeout=" + SMOKE_TIMEOUT_MS));
   assert.match(smoke, /tests\/specs\/smoke\.spec\.js/,
     "test-only smoke edits must force the fixed shards even though they do not ship");
   assert.match(selected, /--timeout=120000/);

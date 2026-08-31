@@ -157,7 +157,16 @@ function loadDriver(ratings) {
     // getCost feeds worksCost() -> budget(): a non-custom team's fitted cap is a
     // multiple of what its works car costs. 600 is a plausible mid-grid figure;
     // the ladder is a RATIO over it, so the exact number is not the subject.
-    Parts: { getFactorySetup: () => ({}), getCost: () => 600 },
+    // CATALOG feeds budgetCap(): the ceiling is the dearest build MINUS the
+    // dearest single part, so this stub prices a top shelf of 3000 with a
+    // dearest part of 500 -> cap 2500, comfortably above 600 * 1.6 so the
+    // RUNGS, not the cap, are what this test measures.
+    Parts: {
+      getFactorySetup: () => ({}), getCost: () => 600,
+      CATALOG: Array.from({ length: 6 }, (_, i) => ({
+        id: "c" + i, options: [{ cost: 0 }, { cost: 500 }],
+      })),
+    },
     Tracks: { LIST: [], SEASON: [] },
     DriverRatings: {
       // ratings, when supplied, keys per-driver overall() by code — the market

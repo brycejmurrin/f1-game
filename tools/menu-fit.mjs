@@ -24,6 +24,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
+import { fileURLToPath } from "node:url";
 // The data hub is the only screen whose content comes off the network. Reuse the
 // Playwright suite's fixtures so it audits a populated table rather than an error
 // card; if the import ever fails the hub still renders its empty/error state and
@@ -31,7 +32,7 @@ import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 let setupApiMocks = null;
 try { ({ setupApiMocks } = await import("../tests/helpers/f1-api-mock.js")); } catch { /* audit degrades to live/offline data */ }
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\/]$/, "");
 const OUT = join(ROOT, "scratch/captures/menu-fit");
 mkdirSync(OUT, { recursive: true });
 

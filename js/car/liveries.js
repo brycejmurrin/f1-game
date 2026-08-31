@@ -408,7 +408,7 @@ const Liveries = (function () {
   function forTeam(team) {
     const def = { id: "default", name: "Team Livery", c1: team.color, c2: team.color2 };
     const ex = team.livery;
-    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "logo2", "halo", "finish"]) if (ex[k]) def[k] = ex[k];
+    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo", "finish"]) if (ex[k]) def[k] = ex[k];
     return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL);
   }
 

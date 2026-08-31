@@ -43,9 +43,21 @@ async function openSetup(page) {
   });
   await page.goto("/");
   await waitReady(page);
-  await page.locator("#mb-race").click();
-  await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-go").click();
+  // THE GARAGE DOOR, not the race flow. This used to walk mb-race -> select ->
+  // sel-go, which builds the circuit picker and then the track itself before it
+  // ever reaches the screen these tests are about. Measured on this box:
+  // boot 18.8 s, then the race flow 27.6 s vs `mb-garage` 11.1 s — the same
+  // #carsetup either way, because openGarage("menu") only sets the camera and
+  // where DONE returns to (js/game.js openGarage), and no test in this file
+  // clicks DONE. 16 s a test back, across 14 tests, on a file whose own header
+  // records 62-103 s against a 120 s budget and which had five tests cross it.
+  //
+  // A SHARED PAGE was the other candidate and is NOT worth it: measured, one
+  // boot plus a leave-and-re-enter is ~25 s against ~30 s for a fresh page
+  // through this door, because re-entering rebuilds the car and the bay anyway.
+  // Five seconds is not worth making fourteen tests serial and turning one
+  // failure into nine skips.
+  await page.locator("#mb-garage").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
 }
 
@@ -78,11 +90,16 @@ test.describe("Budget system — display", () => {
 });
 
 test.describe("Budget system — part selection", () => {
-  test("selecting race engine (160cr) reduces budget to 440", async ({ page }) => {
+  test("selecting the race engine spends exactly its catalog price", async ({ page }) => {
     await openSetup(page);
     await pickOpt(page, "engine", "race");
+    // Read the price from the catalog, like the cap above. Hardcoding it pinned
+    // 160 cr, and the ladder re-space repriced the row — a spec that fails
+    // because a part is cheaper is measuring the number, not the behaviour.
+    const left = await page.evaluate(() => Parts.BUDGET -
+      Parts.CATALOG.find((c) => c.id === "engine").options.find((o) => o.id === "race").cost);
     const text = await page.locator("#cs-budget").textContent();
-    expect(text).toContain("440");
+    expect(text).toContain(String(left));
     await page.screenshot({ path: galleryPath("parts-budget", "budget-race-engine.png") });
   });
 
@@ -92,15 +109,15 @@ test.describe("Budget system — part selection", () => {
     const transform = await page.locator("#cs-budget-fill").evaluate((el) =>
       el.style.transform
     );
-    // A paid part must move the bar off zero (160 cr against the cap).
+    // A paid part must move the bar off zero (the race engine against the cap).
     expect(transform).toMatch(/scaleX\(0\.[1-9]/);
   });
 
   test("parts that exceed budget show over-budget class", async ({ page }) => {
     await openSetup(page);
-    // Spend enough that the dearest engine no longer fits: Overcharge ERS (230)
-    // + Seamless gearbox (210) + Custom Formula fuel (200) = 640, leaving less
-    // than the 220 cr Plenum Max engine against a 780 cap.
+    // Spend enough that the dearest engine no longer fits: the top ERS, gearbox
+    // and fuel rows together leave well under the dearest engine against the
+    // 780 cap. Prices move with the ladder; the three dearest rows do not.
     await pickOpt(page, "ers", "overcharge");
     await pickOpt(page, "gearbox", "seamless_shift");
     await pickOpt(page, "fuel", "custom_formula");
@@ -112,6 +129,15 @@ test.describe("Budget system — part selection", () => {
   });
 
   test("budget label gets 'over' class when spending exceeds the cap", async ({ page }) => {
+    // FOUR PART SWAPS IS THE ARITHMETIC MINIMUM, so this test cannot be made
+    // cheaper the way the rest of the file was. Summing the dearest option in
+    // each category, richest first against the 780 cap: ers/overcharge 230,
+    // gearbox/seamless_shift 210 (440), fuel/custom_formula 210 (650), and only
+    // the fourth crosses. Every swap rebuilds the car mesh and repaints the
+    // bay, and that is the test, not overhead around it. Measured 133.2 s at
+    // one worker after the garage-door change took the rest of the file to
+    // 13-116 s; the 120 s default is the only thing it fails.
+    test.setTimeout(240_000);
     await openSetup(page);
     // Unlimited mode to select a combo past the cap, then disable to reveal it.
     await page.locator("#cs-unlimited").click();
@@ -119,7 +145,8 @@ test.describe("Budget system — part selection", () => {
     await pickOpt(page, "gearbox", "seamless_shift");
     await pickOpt(page, "fuel", "custom_formula");
     await pickOpt(page, "engine", "quali_engine");
-    // 230 + 210 + 200 + 220 = 860 > the 780 cap, so the label goes "over".
+    // The four dearest rows together clear the 780 cap by a wide margin, so the
+    // label goes "over" whatever the ladder prices them at.
     await page.locator("#cs-unlimited").click();
     const cls = await page.locator("#cs-budget").getAttribute("class");
     expect(cls).toContain("over");
@@ -176,12 +203,12 @@ test.describe("Budget system — unlimited toggle", () => {
   test("unlimited state persists after page reload", async ({ page }) => {
     await openSetup(page);
     await page.locator("#cs-unlimited").click();
-    // Reload page and re-open setup
+    // Reload, then back in through the garage door. This test pays for TWO
+    // openings and was the longest in the file at 169 s; the flag surviving a
+    // reload is what it is about, not the route back to the screen.
     await page.reload();
     await waitReady(page);
-    await page.locator("#mb-race").click();
-    await page.locator("#select").waitFor({ state: "visible" });
-    await page.locator("#sel-go").click();
+    await page.locator("#mb-garage").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     const budgetText = await page.locator("#cs-budget").textContent();
     expect(budgetText).toContain("no budget limit");

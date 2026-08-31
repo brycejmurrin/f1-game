@@ -44,6 +44,20 @@ name: CI
 #                                  specs straight into a race. The four-way
 #                                  split puts the modelled pole at ~190 s of
 #                                  test work; CI adds its own multiple on top.
+#                                  RE-TIMED AGAIN 2026-08-30 after six straight
+#                                  deploys died here (Pages #1848-#1854, three
+#                                  authors, every failure a timeout and not one
+#                                  assertion): the runner pool has degraded far
+#                                  past the 2026-08-14 figures. Same shard, same
+#                                  commit, consecutive attempts on #1854 booted
+#                                  37-55x apart — `[car] build mercedes` 3,956 ms
+#                                  then 147,612 ms, `[assets] pack loaded`
+#                                  5,008 ms then 276,476 ms. Worst spec observed
+#                                  640.6 s against a 420 s cap, and one shard was
+#                                  CANCELLED at 29.5 min against a 30 min job.
+#                                  Caps raised to 900 s per test / 50 min per job
+#                                  to fit that tail; the specs themselves are
+#                                  unchanged and still ~4m17s locally.
 #                                  It is also SKIPPED ENTIRELY when the diff
 #                                  cannot reach _site/ (see the job's filter).
 #   driving-  ~1 min, Chromium   — the characterization traces. ONE spec, and
@@ -373,7 +387,18 @@ jobs:
     # The cap stays at the whole-suite figure even though a shard runs half the
     # specs: the starvation tail this job has actually measured (334 s for one
     # spec) is per-runner luck, not per-spec arithmetic.
-    timeout-minutes: 30
+    #
+    # 30 -> 50. SIX consecutive deploys failed here (Pages #1848-#1854, three
+    # authors), every one a wall-clock timeout and not one assertion mismatch.
+    # In-page timestamps on run #1854 show the same shard, same commit, booting
+    # 37-55x slower between two attempts: `[car] build mercedes` 3,956 ms then
+    # 147,612 ms; `[assets] pack loaded` 5,008 ms then 276,476 ms. Shard 4 was
+    # not even failing — it was CANCELLED at 29.5 min still running, so this cap
+    # was the binding constraint as much as the per-test one below, and a
+    # cancelled job is exactly the silent-failure mode the header warns about.
+    # 50 covers a shard whose every spec lands in the starvation tail, with the
+    # per-test cap below as the real hang detector.
+    timeout-minutes: 50
     steps:
       # fetch-depth: 0 — the filter below diffs against the SHA that is currently
       # live on Pages, which is arbitrarily far back. Same reason the sweeps job
@@ -580,8 +605,18 @@ jobs:
       # else. 420 s clears tonight's worst observed pass (334 s) with the same
       # ~25 % margin the 240 s figure was chosen to give over its own 110.6 s
       # worst case. If a spec ever genuinely hangs, the job's own
-      # `timeout-minutes: 30` is the real backstop — a per-test cap set below
+      # `timeout-minutes: 50` is the real backstop — a per-test cap set below
       # the machine's noise floor only converts slow into red.
+      #
+      # 420000 -> 900000, for the reason the job cap moved: measured on Pages
+      # #1854, `minimap canvas has content` needed 640.6 s and `grid start
+      # renders a non-blank frame` 488.0 s on a starved runner, both against a
+      # 420 s cap, while the SAME specs pass in seconds locally. 900 s clears
+      # the 640.6 s worst observed with ~40 % margin — the same kind of margin
+      # 420 was chosen to give over its own 334 s worst case, re-measured
+      # against a runner that has since got slower. This raises a BUDGET, not a
+      # tolerance: no assertion changed, and a spec that genuinely hangs still
+      # goes red, just later.
       - name: Smoke
         if: steps.shipfilter.outputs.ships != 'false'
         env:
@@ -589,7 +624,7 @@ jobs:
         # --shard splits the 9 specs across the two matrix VMs; the flag passes
         # through tools/run-playwright.mjs verbatim (it forwards argv to
         # `playwright test`).
-        run: npm run test:smoke -- --timeout=420000 --shard=${{ matrix.shard }}/4
+        run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/4
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4

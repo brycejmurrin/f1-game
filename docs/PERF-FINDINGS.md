@@ -798,6 +798,491 @@ model (lamp table + index table in a UBO or float texture, `(offset,count)` per
 chunk) to WebGL2, which removes the per-chunk upload rather than avoiding it.
 That is a shader change mirrored across three backends and wants its own round.
 
+## 2c. GLX per-frame call baseline, and the instance cell-set cache (2026-08-29)
+
+First full GL-call census of a RUNNING race (`tools/glx-call-census.mjs`,
+vegas night, full field, driving — not parked):
+
+| call | per frame |
+|---|---|
+| drawElements | 144.2 |
+| uniform1f | 167.4 |
+| uniform4fv | 147.3 |
+| uniform1i | 142.5 |
+| uniformMatrix4fv | 103 |
+| bindVertexArray | 80.1 |
+| **bufferSubData** | **27.9 calls / 426.7 KiB** |
+
+426.7 KiB a frame is ~25.6 MB/s of CPU->GPU traffic for props that mostly did
+not move. Cause: `cullInstances` memoises on frustum-plane equality, and three
+callers use three different frusta inside one frame, so while driving it never
+hits (see §2b's neighbour — this is the same "the condition no longer holds"
+shape).
+
+`apex26.instCellCache=1` keys the resident pack on the surviving CELL SET
+instead. Sound because the pack is a deterministic function of that set:
+`batch.cells` order and each cell's `idx` order are fixed at build time and
+never mutated. Measured A/B, same box, same instrument, flag the only change:
+
+| | off | on |
+|---|---|---|
+| bufferSubData calls | 27.9 | **17.8** (-36%) |
+| bufferSubData KiB | 426.7 | **326.8** (-23.4%) |
+| bindBuffer | 33.4 | 23.4 (-30%) |
+| draws / uniforms | — | identical |
+
+The residual 326.8 KiB is real work: the shadow ortho, the probe faces and the
+camera genuinely select different cells, so only same-caller-across-frames
+hits. The failure mode is props drawn from the wrong resident pack, which is
+why the hit path deliberately does NOT stamp `_cullPlanes` (that snapshot must
+keep describing whichever frustum physically wrote the buffer).
+`gfx-backend-canary.test.mjs` now pins that.
+
+**Now ON by default (2026-08-29), on real-GPU evidence.** It shipped default
+OFF pending a hardware run, and the workflow that was supposed to gate it could
+not: both `gpu-census.yml` game-check steps passed `--backend three`, and their
+only `--ls` was hardcoded to `apex26.tlxForceHw`, so **GLX — the default
+backend, and the one this change lives in — was never exercised on real
+hardware at all**. The tool was always capable (`tools/gpu-game-check.mjs`
+takes `--backend webgl2` and repeatable `--ls apex26.k=v`); only the workflow
+was hardcoded. So the gate was built first: a GLX leg plus a generic `ls`
+dispatch input threaded to all three legs, and the Verdict loop widened to
+`["webgpu", "webgl2", "glx"]`. Run **9** (id 33262100579) on `macos-latest`
+(Apple/Metal), commit `da82104`, GLX leg with `apex26.instCellCache=1`:
+conclusion **success**, `gpuErrors` 0 — and that Verdict step exits non-zero on
+missing JSON, `ok !== true`, `phase !== "done"`, or any GPU error, so a green
+run is a real assertion and not an absent one. The localStorage key stays as
+the OFF switch (`=0`), the escape-hatch shape `__apex.matTex(0)` already gives
+the baked-material path.
+
+Second measurement, the `pack` scenario (field bunched around the player, where
+the instance work is highest) rather than `jump(0.30)`'s empty-track start —
+see the note in §2b about the first wheel measurement being meaningless for
+exactly this reason:
+
+| vegas night, `pack` | off | on |
+|---|---|---|
+| bufferSubData calls | 36.4 | **14.5** (-60%) |
+| bufferSubData KiB | 948 | **489.2** (-48.4%) |
+| bindBuffer | 41.6 | 19.8 (-52%) |
+| drawElements | 163 | 162.8 (jitter) |
+| uniforms | 277.7 / 197.2 | 277.7 / 196.6 (jitter) |
+
+The win is roughly twice the size it looked on the empty-track start, and that
+is the expected direction: bunched traffic keeps more cells resident across
+frames, so more of the repacking is redundant. This is now the default path for
+every WebGL2 player.
+
+**CORRECTION (2026-08-29).** The sentence that stood here — "`uniform1f` 167.4
+is the ~30 frame-scalars in `begin()` times the 5-6 passes a frame" — was an
+arithmetic guess written up as if measured, and it is wrong. `begin()` runs
+**~1.25x/frame**, not 5-6: the shadow passes bind `depthProg` and their own FBO
+and never call it (`js/render/glx/shadow.js:151,224,254`), and the env probe is
+one face every 4th frame (`js/game.js:6729`). The real distribution, traced to
+source:
+
+- `uniform1f` 167.4 is dominated by **`litMaterial`** (`glx.js:1385-1393`) — up
+  to 9 scalars per lit draw against 144.2 `drawElements`. `begin()` contributes
+  ~19 of it. Reducing this means SORTING DRAWS BY MATERIAL, not more caching.
+- `uniform4fv` 147.3 and a quarter of `uniform1i` 142.5 are **`uploadLightSet`**
+  per visible chunk (`chunked.js:233`) — 147.3/4 = ~37 calls. That is the
+  structural item in 2b, not a caching problem.
+
+So the whole `begin()` class is worth ~3 calls/frame, not 165. Left here as a
+correction rather than an edit because the wrong number was acted on.
+
+## 2d. One interleaved lamp array: uniform4fv 277.7 -> 69.4 (2026-08-29)
+
+`uniform4fv` was the largest single call class on the default backend — 277.7 a
+frame, vegas night, full field in a pack. The cause was arithmetic, not
+algorithmic: `uploadLightSet` issued **exactly four** calls per chunk, one per
+scratch array (`uLightA/B/C/D`), and ~69 chunks upload a frame.
+
+**The obvious fix was the wrong instrument.** The plan of record was to port
+WGX's storage-buffer lamp table + `(offset,count)` addressing to WebGL2. That
+was dropped on a measurement: there is **zero** UBO precedent in this tree —
+`uniformBlockBinding`, `bindBufferBase`, `UNIFORM_BUFFER`,
+`getUniformBlockIndex`, `std140` and data-texture `texelFetch` all return no
+hits across `js/`. The port would have invented a GL concept the codebase has
+never used, inside the shader every surface renders through, for the last 25 %.
+
+Interleaving the four arrays into one `vec4[MAX_LIGHTS * 4]` (stride 4 vec4s
+per light) makes it **one** call per chunk:
+
+| | before | after |
+|---|---|---|
+| **uniform4fv** | **277.7** | **69.4** (-75.0 %) |
+| every other counter | — | byte-identical |
+
+Free in uniform pressure: `4 x vec4[48]` and `vec4[192]` are the same 192
+default-block rows (the WebGL2 fragment floor is 224), which the shader's own
+header comment already noted. GLX-only — TLX (`three/tsl-lit.js`) and WGX
+(`webgpu/wgx.js`) carry their own light paths and never read these names. The
+godray pass's `uLightPos/Col/Rad/Dir/Cone` at `GR_MAX_LIGHTS = 6` is a separate
+system and is untouched.
+
+### Verifying it needed a real oracle, and the first two were not
+
+Call counts cannot see this change's failure mode. A mis-indexed lane keeps
+every counter byte-identical and simply moves or recolours the lamp pools. Two
+attempts at an oracle were wrong before one worked, and both failure modes are
+worth knowing:
+
+1. **`drawImage` of the WebGL canvas into a 2D canvas read solid black** (mean
+   RGB 0,0,0). That is the drawing buffer being invalid outside the frame, not
+   a broken shader. Reading it as evidence either way would have been wrong.
+   Use Playwright's element screenshot (the compositor path) instead.
+2. **Byte-comparing the PNGs is invalid here.** Two runs of the *identical*
+   build produce different bytes — the scene is time-dependent. Checked before
+   trusting it; otherwise the cross-build difference would have been reported
+   as a regression that does not exist. **Always shoot the same build twice
+   first and let that pair be the noise floor.**
+
+The working oracle is image statistics against that floor (`sharp`, mean RGB +
+16-bucket luminance histogram, `scratch/png-stats.mjs`):
+
+| pair | max abs Δmean RGB | histogram L1 |
+|---|---|---|
+| same build, two runs (**noise floor**) | 0.0026 | 0.00015 |
+| **before vs after** | **0.0011** | **0.00011** |
+
+The cross-build delta is *smaller than the same-build noise*, with mean RGB
+agreeing to two decimals (19.61, 7.12, 11.10) and `gpuErrors` 0. Pixel-neutral.
+
+`gfx-backend-canary.test.mjs` now pins the lane order across both halves —
+proven by swapping lane +7 for +11 and watching it fail, then restoring. A
+guard for an invisible failure mode is worth nothing until it has been made to
+bite.
+
+## 2e. The material-grouping ceiling is 8.7 — the win was the instancing gate (2026-08-29)
+
+Planned as "sort draws by material": `litMaterial` already caches every scalar
+and uploads only on change, so `uniform1f` ~197/frame looked like alternation
+between consecutive draws, and grouping looked like the lever.
+
+**Measured the ceiling first, and the premise was wrong.** Per frame, vegas
+night, full field in a pack (`scratch/material-headroom.mjs` — replays each
+frame's draws grouped by material signature and counts the uploads that would
+remain):
+
+| | per frame |
+|---|---|
+| draws | 176.4 |
+| distinct material signatures | 16.1 |
+| lane changes, actual order | 126.4 |
+| lane changes, PERFECTLY grouped | 117.6 |
+| **ceiling saving** | **8.7** (4.8 %) |
+
+176 draws already collapse into ~16 material runs — the draws are close to
+grouped as they stand. There is no alternation to fix, and the planned reorder
+was abandoned on this number, per the abort condition written before measuring.
+(The neighbouring precedent at `glx.js` §setCull — the doubleSided toggles that
+"MEASURED and found to save NOTHING" — was the right prior.)
+
+**But naming the uniforms found the real one.** Resolving each location back to
+its name (wrap `getUniformLocation` in an init script — locations are opaque and
+may be fresh objects per call, so the map must be built as GLX fetches them):
+
+| uniform | uploads/frame |
+|---|---|
+| **uInstanced** (lit + depth programs) | **54.8** |
+| uRoughness | 15.1 |
+| uSpecular | 15.1 |
+| uEmissive | 12.6 |
+
+`uInstanced` alone was 30 % of the class — and it is a value that changes **3.1
+times a frame**: 26.4 instanced draws arrive in ~2 contiguous runs. It cost 54.8
+uploads because `drawInstanced` bracketed each draw with 1-then-0.
+
+That bracket was itself a fix (it replaced clearing the flag on every lit draw),
+but 1,0,1,0 alternates, so a redundancy cache collapses **none** of it — exactly
+the shape retired near `setCull`. The fix is to stop bracketing and let
+`litMaterial` — the funnel every lit draw already passes through — declare its
+kind through the cached setter. A run of instanced draws then costs one call,
+and the next ordinary draw one more.
+
+| | before | after |
+|---|---|---|
+| **uniform1f** | **197.2** | **153.1** (-22.4 %) |
+| every other counter | — | identical |
+
+## 2f. uNumLights was 111 uploads a frame for 53.7 values (2026-08-29)
+
+With `uniform4fv` down to 69.4 (§2d) and `uniform1f` to 153.1 (§2e),
+**`uniform1i` at 146.4 became the largest uniform class on the default
+backend.** Resolving the locations to names — the same `getUniformLocation`
+wrap §2e introduced — puts three quarters of it in one uniform:
+
+| uniform | uploads/frame |
+|---|---|
+| **uNumLights** | **111** |
+| uLampShadowIdx | 10.7 |
+| uTex | 6 |
+| everything else | < 2.5 each |
+
+`uploadLightSet` sets the count unconditionally and only then returns early on
+zero, so the per-chunk path (~69 visible chunks) pays a `uniform1i` for every
+chunk INCLUDING the many with no lamps — which is why 111 exceeds the 69.4
+`uLight[0]` uploads beside it.
+
+**Ceiling measured before writing any code**, per §2e's rule, because the two
+neighbouring caches that were retired (`setCull`, the `uInstanced` bracket)
+died on alternation rather than on volume:
+
+| vegas night, pack | per frame |
+|---|---|
+| uNumLights uploads | 111 |
+| distinct VALUES | 53.7 |
+| **collapsible** | **57.3 (52 %)** |
+
+Not alternation. The sequence is chunk lamp counts in spatial order, so it runs
+— `45, 8, 7, 2, 5, 5, 7, 6, 8, 6, 6, 6, 7, 7, …` then a long tail of `0` where
+the count is set and the array never touched.
+
+A `_luNL` cache in `uploadLightSet`, measured A/B on the same instrument with
+the cache as the only change:
+
+| | before | after |
+|---|---|---|
+| **uniform1i** | **146.4** | **87.9** (-40 %) |
+| drawElements | 163 | 163 |
+| uniform1f / uniform4fv / uniformMatrix4fv | 153.1 / 69.4 / 118.2 | identical |
+| bufferSubData KiB | 512.6 | 512.6 |
+
+**Why it is sound, and what pins it.** A WebGL uniform is per-PROGRAM state, so
+the cached value survives every unbind — this cache is deliberately NOT cleared
+per frame the way the `_mat*` caches are, and clearing it in `begin()` would
+give the whole saving back. It can only go stale two ways, and
+`gfx-backend-canary.test.mjs` asserts against both: a SECOND writer of
+`litU.uNumLights` (post.js's godray pass has its own uNumLights on its own
+program and cannot collide), and a relink, which resets every uniform and is
+where `_luNL` is cleared. Both halves of the guard were confirmed red against
+sources with the respective piece removed.
+
+*Instrument note.* A canvas mean-RGB was tried as a cheap correctness oracle
+and is useless here: `drawImage` from a WebGL canvas with no
+`preserveDrawingBuffer` reads an empty buffer, so it reported `[0,0,0]` and a
+histogram entirely in bucket 0 — a confident number about nothing. Recorded so
+the next person does not spend the boot on it.
+
+### The GLX real-GPU gate cannot see GPU errors — corrected
+
+While reading run 10's macOS verdict for this change, the GLX row said:
+
+```
+glx  phase=done ok=true gpuErrors=null
+```
+
+**`null`, not `0`.** `gpuErrors` is defined only on WGX (`webgpu/wgx.js`); plain
+GLX has no error counter at all. `gpu-game-check.mjs` reads
+`g.gpuErrors ? g.gpuErrors() : null`, and the Verdict tests
+`(gfx.gpuErrors || 0) > 0` — so on the GLX leg that clause can never fire. It
+passes vacuously, forever.
+
+That matters because round 11 flipped the instance cell-set cache citing
+"gpuErrors 0" from this leg, and AGENTS.md's renderer row tells agents to
+require `gpuErrors` 0 from the dispatch. For GLX that has never been an
+assertion. What the leg DOES prove is real and not nothing — `ok=true`,
+`phase=done` means the game booted, raced and parked on Metal without wedging,
+which is what caught the two defects that justified building the surface — but
+the error check specifically is a hole.
+
+The same trap bit the local probe: `(window.GLX && GLX.gpuErrors &&
+GLX.gpuErrors()) || 0` yields 0 when the method is ABSENT, so its reported
+"gpuErrors 0" was equally empty. An absence test that reports the same value as
+a success test is not a test — the same shape as `sessionStorage["apex26.gfxBound"]`
+being an ABSENCE signal, which AGENTS.md already warns needs a positive
+confirmation beside it.
+
+**Fixed.** GLX now drains `getError()` once per `present()` into
+`GLX.gpuErrors()` / `gpuFirstError()` (WebGL has no `onuncapturederror`), and
+the Verdict fails on a MISSING count instead of reading absent as clean.
+
+Proven to be an assertion rather than another absence
+(`scratch/glx-error-counter.mjs`) — a counter that never counts would be the
+same bug wearing a different hat:
+
+| | methodExists | count | firstError |
+|---|---|---|---|
+| clean run | **true** | **0** | null |
+| after a deliberate `bindBuffer(0x0BAD, …)` | true | **1** | `INVALID_ENUM @ present` |
+
+The `methodExists` column is the one that matters: the original trap was
+`(GLX.gpuErrors && GLX.gpuErrors()) || 0`, which yields 0 for a method that is
+not there. A clean GLX run now genuinely reports zero GPU errors — including
+for the two changes in this round.
+
+### Pixels were the wrong oracle here; the invariant is the right one
+
+The PNG statistics were inconclusive: cross-build max |Δmean RGB| 0.0135 against
+same-build noise floors of 0.0051 and 0.0026 — above both, with a consistent
+sign. Undersampled noise, but not something to wave through.
+
+The change has an exact correctness property instead, so assert that:
+**at every instanced draw the gate must read 1, at every ordinary lit draw 0.**
+If that holds, the GPU saw the same value at every draw as it did when the
+value was bracketed — pixel-identical by construction, whatever the PNG says.
+Measured over 20 frames: **528 instanced draws, 2914 plain, zero violations**
+(`scratch/instanced-gate-invariant.mjs`), and the probe was proven non-vacuous
+by sabotaging the clear and watching it report 181.
+
+The invariant holds only while EVERY lit draw funnels through `litMaterial`, so
+`gfx-backend-canary` pins that too: `useProg(litProg)` must appear exactly twice
+(frame setup, and litMaterial). A third bind is a lit draw that skips the
+declaration, and the guard says so by name.
+
+One accepted cost: a zero-instance batch now claims the gate, because
+`litMaterial` runs before the `n > 0` check. It can never reach a draw — the
+next lit draw re-declares — so it is at most one extra call, never a wrong pixel.
+
+## 2f. The Windows GPU-census outage was a path bug, and a widened timeout hid it (2026-08-29)
+
+Round 12's real-GPU dispatch failed on **windows-latest**: all three legs —
+three/WebGPU, three/WebGL2, GLX/WebGL2 — `phase=failed ok=false`, every other
+field `undefined`, ~5 minutes each. ubuntu and macOS passed all three.
+
+The job log had the shape:
+
+```
+[game-check] browser-launched +0.2s
+[game-check] navigated        +0.9s
+[game-check] failed         +300.9s
+"error": "page.waitForFunction: Timeout 300000ms exceeded."
+```
+
+`out.crashed` is set by a `page.on("crash")` handler and is ABSENT from that
+JSON, so the renderer never crashed; `pageClosed`/`browserGone` are teardown
+artifacts. The run reached `navigated` and never `booted`.
+
+**Cause** — `tools/gpu-game-check.mjs`:
+
+```js
+const ROOT = resolve(new URL("..", import.meta.url).pathname);
+```
+
+On Windows that pathname is `/D:/a/f1-game/f1-game/`, and `path.win32.resolve`
+sees a leading `/` with no device, so it prefixes the cwd's drive. Demonstrated:
+
+| | value |
+|---|---|
+| old idiom, win32 | `\D:\a\f1-game\f1-game` — cannot exist |
+| new idiom, win32 | `D:\a\f1-game\f1-game` |
+
+The tool's own static server was therefore rooted at nothing, answered every
+request `404 nope`, and `window.__apex` could never be defined. It explains all
+of it: three legs identical, and the census step — which launches the same
+Chromium but serves an inline HTML string and touches no repo path — passing on
+the same machine.
+
+### The tolerance was widened to accommodate the bug
+
+The comment above that wait read:
+
+> 120 s is not enough on a software rasteriser that is ALSO a slow disk:
+> windows-latest (WARP …) timed out here on both backends while ubuntu booted
+> the same tree in 3 s. … so give it room.
+
+A previous session hit this exact failure at 120 s, blamed the machine, and
+raised the timeout to 300 s. The premise is false — a 404 never boots at ANY
+timeout — so the raise converted a 2-minute failure into a 5-minute one and
+taught nothing. AGENTS.md forbids widening a tolerance to make something pass;
+this is that, and the revert to 120 s is part of the fix.
+
+### Three places threw the answer away
+
+The reason it survived two sessions is that a wrong server root is
+**indistinguishable from a slow boot** — both are silence until a timeout. The
+same shape as §2e's vacuous `gpuErrors`: absence reading as normal.
+
+1. **The gate never printed the reason.** `gpu-game-check` records `out.error`
+   on every caught failure — the Windows artifacts literally contained
+   `"error": "page.waitForFunction: Timeout 300000ms exceeded."` — and the
+   Verdict row printed `phase / ok / gpuErrors / envFail / … / meanLuma` and not
+   `error`. That is why the failure read as contentless. It now prints `error`
+   and `root`; against a fixture the row reads
+   `root: \D:\a\f1-game`, which would have named the bug on day one.
+2. **The server never validated its own root.** It now asserts
+   `ROOT/index.html` exists and throws naming ROOT — verified to fire in
+   milliseconds — and registers the `s.on("error")` handler it lacked, so a bind
+   failure cannot produce a zero-artifact crash.
+3. **A failed run discarded the console buffer.** `out.console` was assigned on
+   the success path, so the catch dropped it. Moved to `finally`, alongside
+   `out.root`; the evidence is wanted most when the run failed.
+
+### The idiom is retired repo-wide
+
+23 sites used `new URL(…, import.meta.url).pathname` — 20 other tools and 3
+tests. Only `gpu-game-check` runs on Windows, so the rest were latent, but the
+form also mishandles percent-encoding: a checkout path containing a space breaks
+it on Linux too. All converted to `fileURLToPath`, and
+`tools-runnable.test.mjs` now bans the idiom, naming the offending file and the
+replacement. Proven by reintroducing it in `tools/agent.mjs` and watching the
+guard name it.
+
+### Part 2 — a failed diagnostic read was reporting `ok: true`
+
+The path fix worked. Windows went from `phase=failed` on all three legs (~16 min
+of timeouts) to:
+
+```
+webgpu  phase=done ok=true  gpuErrors=undefined
+webgl2  phase=done ok=true  gpuErrors=0 envFail=0 envReady=false softAdapter=false headless=true
+glx     phase=done ok=true  gpuErrors=0
+```
+
+The game boots, races and parks on Windows for the first time. The job stayed
+red for a different reason, and it is the same disease again: `bounded()`
+(`gpu-game-check.mjs:130`) turns ANY failure into a value —
+
+```js
+.catch((err) => ({ error: String((err && err.message) || err).slice(0, 120) }))
+```
+
+— so a `gfx` read that threw or timed out still left `phase: "done", ok: true`
+while every field derived from `gfx` came out `undefined`. That is
+indistinguishable from a backend with nothing to report. Two shapes produce it:
+`{error: …}` (the read failed) and `{glx: false}` (the page had no GLX). The
+tool now records `gfxReadFailed` / `overlayReadFailed` naming which, and the
+Verdict prints it.
+
+**Answered by run 13** (`af79780`, windows-latest, conclusion success):
+
+```
+webgpu  phase=done ok=true gpuErrors=undefined
+        gfx:   read failed: gfx timeout
+        ovl:   read failed: overlay timeout
+webgl2  phase=done ok=true gpuErrors=0 envFail=0 envReady=false softAdapter=false headless=true
+glx     phase=done ok=true gpuErrors=0
+```
+
+It was `{error: …}` — BOTH bounded reads hit their 20 s caps, so the page had
+stopped answering `evaluate` after `settled`. Not `{glx: false}`: GLX was there,
+the page simply would not talk. The webgpu leg is also the FASTEST of the three
+(~2 min vs 4.4 and 4.7) because it times out rather than doing work.
+
+**That is a new finding, not this fix's.** `three/WebGPU on windows-latest
+(WARP) leaves the page unresponsive to evaluates after park.` It is the same
+shape as the macOS "went silent after park() on BOTH three paths" that motivated
+the bounded waits in the first place — and those bounds are doing exactly their
+job here, turning a 20-minute hang into a 2-minute report. It predates
+everything in §2f and was simply unreadable until now. Its own round.
+
+**Scoping, stated deliberately** because this document otherwise forbids
+loosening a failing check. Two clauses are now `hardware &&`: the missing-count
+check from §2e, and the new read-failure check. They exist to protect the
+REAL-GPU answer; a software image may legitimately not bring a backend up, and
+failing the job for that is noise. `softAdapter` and the env-probe checks were
+already scoped exactly this way — this is that precedent applied consistently,
+not a widened threshold, and the reason is PRINTED on every image either way.
+Everything else stays unconditional: a run that did not finish, a missing
+artifact, and `gpuErrors > 0` are defects anywhere.
+
+`gfx-backend-canary` pins the split in both directions — proven by un-scoping a
+hardware check and by over-scoping `ok`/`phase`, each of which fails it.
+Verified against three fixtures with the Verdict body extracted from the YAML:
+software prints the reasons and exits 0, hardware prints them and exits 1, a
+healthy set is silent.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.
@@ -1246,6 +1731,52 @@ shadow pass, same ring as `_flushDrawUBO`. Same pass also batched
 ~350 KB). DebrisWorld skips `world.step` when live bodies are asleep and
 no car is in `FURN_WAKE_M`, with JS despawn + panel `force = 0` hoisted.
 
+## 4a. The main-menu layout shift was a CSS rule defending a state that never happens (2026-08-29)
+
+Measured earlier this session: a **0.0681 layout shift at +784 ms** on the title
+screen, on top of the one already fixed by pre-painting `data-shape`.
+
+The culprit was `#mb-career-sub:empty { display: none; }` (`css/menus.css`),
+whose own comment explained it:
+
+> The live save line is empty (and therefore zero-height) until a save
+> exists, so a first-time title screen is exactly as it was.
+
+**That comment was stale against the code beside it.** `refreshCareerButton`
+(`js/game.js`) never leaves the line empty — a player with no save gets a
+literal:
+
+```js
+if (!c) { sub.textContent = "DRIVER CAREER  ·  MY TEAM"; return; }
+```
+
+So the "first-time player sees a blank line" state the rule was defending
+**does not exist for any player**. The rule could only ever apply in the window
+between first paint and game.js's tail running, where it collapsed the button —
+which then grew when the text arrived. The rule produced the exact shift it was
+written to prevent, and the stale comment is why it survived: reading it, the
+fix looked like it needed a design call about the first-time look.
+
+The fix needed no invention, because **the sibling button already did it
+right**. `#mb-season`, in the same row, ships its sub-label statically
+(`<span class="mb-sub">A CHAMPIONSHIP, YOUR RULES</span>`) and
+`seasonUi.refreshTitle()` only rewrites the button's own text node — a width
+change on one line, never a height change. CAREER was the only button in the
+row shipping an empty sub, and the `:empty` rule was written for it
+specifically (`#mb-career-sub`, not `.mb-sub`). Making CAREER match SEASON:
+
+- shell ships `DRIVER CAREER  ·  MY TEAM` inside the existing span (no new DOM
+  nodes, so the `NODE_CEILING` ratchet is untouched);
+- the `:empty` rule is replaced by one-line containment (`nowrap` + ellipsis),
+  so the longer returning-player string (`YOU · MERCEDES · 2026 R5 · 2 SAVED`)
+  cannot wrap and reintroduce a smaller shift.
+
+**The transferable lesson is about the comment, not the CSS.** A rule justified
+by a state the code makes unreachable is invisible to every test — nothing
+asserts "this selector still matches something" — and its comment actively
+argues against investigating it. When a comment explains why a defensive rule
+exists, check that the state it defends is still reachable.
+
 ## 4. Recorded negative results
 
 Do not re-investigate these; they were checked and are fine.
@@ -1298,3 +1829,147 @@ qatar 25 (ONE cell over CAP 24 by one lamp), baku 10, singapore 12,
 bahrain 16 (artifacts/r5-road-lamp-count.txt; harness in the session
 scratchpad). Capacity says def->1 is safe everywhere except one qatar
 cell dropping its single FARTHEST-reaching lamp at a boundary.
+
+## 5a. Portrait: the canvas already filled; the touch dock was visible and inert (2026-08-30)
+
+Two reports off one phone screenshot (iPhone, **Home Screen / standalone**):
+portrait "doesn't fill my screen", and driving + HUD buttons don't work there.
+They turned out to be one real defect and one misattribution, so they are
+recorded separately.
+
+### The buttons: one media query, and a failure mode a screenshot cannot see
+
+`#hud` is `pointer-events: none` (`css/hud.css`) — a deliberate pass-through
+layer, so **every** control under it must grant itself `auto` or it renders
+perfectly and swallows nothing. All of those grants — `.dock`, `.dock-grp`,
+`.dock .touchbtn` — lived inside one `@media (orientation: landscape)` block in
+`css/overlays.css`. The portrait ladder is the BASE layout in that file and is
+authored and measured ("428px fits with 239px to spare"), so in portrait the
+buttons drew at their correct coordinates and passed every press straight to
+the canvas.
+
+Measured at 393×852 with the 59/34 notch insets injected:
+
+| element | rect | `pointer-events` | hit test |
+|---|---|---|---|
+| `#btn-throttle` | 16, 726, 76×76 | **`none`** | blocked by `#rotate-device` |
+| `#btn-brake` | 16, 642, 76×76 | **`none`** | blocked by `#rotate-device` |
+| `#pausebtn` | 331, 67, 52×52 | `auto` | blocked by `#rotate-device` |
+| `#btn-cam` | 307, 114, 76×52 | `auto` | blocked by `#rotate-device` |
+
+Note the two columns disagreeing. `#pausebtn` and `#btn-cam` are not `.dock`
+children, so they kept `auto` and were only ever hidden by the blocker; the two
+dock buttons were inert *underneath* it. Delete the blocker alone and half the
+controls stay dead — which is why **the oracle here has to be
+`document.elementFromPoint` at the button centre, not a screenshot**. A
+screenshot of the broken build and a screenshot of the fixed build are
+identical. The same trap as the vacuous GPU gate in §2e: the instrument
+returned a plausible value for a state it could not distinguish.
+
+The fix is one line, moved: `pointer-events: auto` now sits on the base
+`.touchbtn` rule, with the landscape block keeping only what is genuinely
+landscape (row layout, `--tap`/`--hold` down-sizing, `zoom: var(--hud-z-dock)`,
+the 3×2 `.hud-bottom` grid).
+
+### Steering felt twice as sharp, off one `innerWidth`
+
+`touchRangePx()` in `js/game/input.js` scaled the anchored-drag range by
+`innerWidth`. That is the LONG edge in landscape and the SHORT edge in
+portrait, so the identical thumb gesture meant twice as much lock the moment
+the phone turned: `393 x 0.12` = 47.2px to full lock against `852 x 0.12` =
+102.2px. Not broken, but unusable at speed, and it would have read as "portrait
+driving is bad" rather than as a units bug.
+
+Keying the range off `max(innerWidth, innerHeight)` makes it orientation-free
+and leaves landscape bit-identical, because landscape's long edge already IS
+`innerWidth`. Measured live on the same build, `Input.debugState().touchRangePx`:
+
+| viewport | before (arithmetic on the old formula) | after (measured) |
+|---|---|---|
+| 393x852 portrait | 47.2 | **102.24** |
+| 852x393 landscape | 102.24 | **102.24** |
+
+`tests/specs/touch-steer.spec.js` reads the range out of `debugState()` and
+asserts ORDER and bounds rather than pixel counts, so it covers the new value
+without a retune — which is exactly why it was written that way.
+
+### Nothing in the engine was orientation-gated
+
+Worth recording because it is the natural suspicion and it is wrong. The
+fixed-step loop has no orientation term; `#rotate-device` is `{gate:false}` in
+`js/game/uilayers.js`, so keyboard and canvas-drag steering already drove
+straight through the blocker; and the tilt axis mapping already handles all
+four screen angles with portrait as its `default` case (`js/game/input.js`).
+Portrait racing was blocked by exactly one CSS rule and one opaque div.
+
+### The blocker stays; portrait becomes an opt-in
+
+`#rotate-device` exists for a real case — a phone rotation-locked *mid-race*
+(`tests/specs/rotation-recovery.spec.js`) — so it remains the default. It gains
+a third button, `#rotate-race` "RACE IN PORTRAIT", which sets `body.rotate-ok`
+and persists `apex26.portraitOk`; the blocker rule in `css/responsive.css`
+gains `:not(.rotate-ok)`. The class deliberately reuses the existing `rotate-`
+family (`rotate-inner`/`-icon`/`-help-open`) so `component-inventory` needs no
+new `docs/COMPONENTS.md` row.
+
+After clicking it (the player's path — `el.click()`, not a faked class): blocker
+`display: none`, `apex26.portraitOk` = `"1"`, and `btn-throttle`, `btn-brake`,
+`pausebtn`, `btn-cam` all hit-test **HIT**. `manifest.json` `"orientation"` goes
+`"landscape"` → `"any"`, since a platform that honours the lock would otherwise
+make the opt-in unreachable.
+
+### The "doesn't fill" half — NOT a canvas bug, and NOT fixed
+
+Measured, and the honest answer is that the shell fills exactly. At 393×852 in
+both menu and race, `#game` and `#overlay` are both `{x:0, y:0, w:393, h:852}`,
+with `--sat` 59 / `--sab` 34 resolved and honoured; `fit-audit` reports no
+clipping at 393×852, 375×667 or 430×932. `viewport-fit=cover` is present, `#game`
+is `position: fixed; inset: 0` with no aspect clamp or letterbox, and there is
+no stale `--vh` JS shim anywhere in the tree. The usual iOS cause — Safari never
+retracting its chrome because `html,body{overflow:hidden}` kills the root
+scroll — does not apply in standalone.
+
+What reads as bands is two cosmetic facts stacking:
+
+1. `.screen` pads by `--safe-t` (`--sat` + 12px `--gut` = 71px at this notch),
+   which is correct for a dialog but shows near-black `--bg` above the panel.
+2. `--compact-at: 600px` means an 852-tall phone classifies as
+   `data-density="normal"`, so the `tall`+`compact` stretch rule in
+   `css/menus.css` does not match and the panel stays centred with `--bg` above
+   and below.
+
+Neither was changed in this round. Both are `.screen`-level layout, and moving
+`.screen` padding moves the landscape pixel goldens in `menu-baseline.spec.js`
+— a browser group this change does not otherwise need. Left on the table with
+the mechanism written down rather than guessed at later.
+
+### One pre-existing overflow, ruled out rather than assumed
+
+`fit-audit` on this tree reports `#mb-season.bigbtn` overflowing its parent by
+8.8px at 375x667 (and 14px at 932x430, 4px at 1024x768). The obvious suspicion
+was §4a's career sub-label, which now ships text with `nowrap` in the same row.
+It is not: measured live at 375x667, `#mb-season`'s right edge sits at 342.5
+against a parent right of 333.8 in **all four** states — as shipped, with
+`#mb-career-sub` emptied, restored, and re-wrapped. The overflow is independent
+of that label and predates it. It also does not clip (342.5 < 375 viewport), so
+it is a container overflow, not lost pixels. Left for a menu-layout round; noted
+here so the next reader does not re-suspect §4a.
+
+### Two instrument notes
+
+`page.click("#rotate-race")` timed out at 30 s with the locator resolved and
+the log reading "element is visible, enabled and stable". The tempting reading
+is a layout problem — `.rotate-icon` animates `transform: rotate()`. It is not:
+that transform does not affect layout, `elementFromPoint` at the button centre
+returns the button itself, and this is the second sighting of the shape already
+written up in `docs/TESTING.md` §Field notes ("A saturated main thread looks
+exactly like a missing element"). `el.click()` drives the same handler and is
+the right probe under a live race.
+
+`tests/specs/hud-layout.spec.js` excludes `.hud-top` × `#pausebtn` via
+`HUD_LANDSCAPE_ONLY` on the strength of a measured 8.7px portrait overlap. At
+393×852 that collision **does not reproduce** — overlapX is −43.9, i.e. 43.9px
+of clearance. The exclusion is at some other viewport, so it stays, and no
+claim is made here about having fixed it. An exclusion whose reason has moved
+is still the vacuous-guard shape from §2e, but retiring it needs the viewport
+that actually collides, measured.

@@ -44,8 +44,9 @@ import {
   resolveRepoDefault,
 } from "../output-paths.mjs";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../harness.mjs";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 const [trackArg = "monaco", secArg = "4", speedArg = "50", outArg] = process.argv.slice(2);
 const track = assertSafePathToken(trackArg, "track");
