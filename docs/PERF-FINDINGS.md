@@ -1224,6 +1224,149 @@ Verified against three fixtures with the Verdict body extracted from the YAML:
 software prints the reasons and exits 0, hardware prints them and exits 1, a
 healthy set is silent.
 
+## 2g. The three unattributed counters, and a side-world drawn one body at a time (2026-08-31)
+
+2c left three counters with no attribution: `uniform1i` 142.5/frame (only ~35
+explained), `uniformMatrix4fv` 103, `bindVertexArray` 80.1 against 144.2 draws.
+This round named them, and found a fourth thing nobody had counted at all.
+
+**The baseline reproduced first.** `glx-call-census vegas night 40 pack` on the
+unchanged tree: 162.8 draws, 14.5 `bufferSubData` / 489.2 KiB, `uniform4fv`
+69.4. Those match 2c/2d/2e exactly, so the instrument and the tree agree before
+anything is attributed. Do not skip this step — an after-number is worthless
+against a before-number you did not personally reproduce.
+
+**Naming a uniform means wrapping `getUniformLocation` in an INIT script.**
+Locations are opaque and may be fresh objects per call, so the only way to
+name one is to catch it at lookup, before the page links its programs
+(`scratch/r12-attribution.mjs` — Playwright `addInitScript`, not
+`page.evaluate`). Then bucket every upload by name and count how many carried
+a value the program did not already hold.
+
+| uniform | uploads/frame | distinct values | redundant |
+|---|---|---|---|
+| `uNumLights` | 111 | 51.5 | **59.5** |
+| `uModel` | 103.2 | 50.3 | **52.9** |
+| `uTex` | 6 | 0.1 | 5.9 |
+| everything else | ≤ 4 | — | ≤ 2 |
+
+Both mechanisms are structural, not accidental. `uploadLightSet` runs once per
+visible chunk and neighbouring chunks repeatedly resolve to the same lamp
+COUNT; `drawChunked` calls `litMaterial` once per chunk RUN and every run of
+one mesh shares that mesh's model matrix. `ufi` and `ufM4` (the integer and
+mat4 twins of `uf1`) route both through the redundancy cache.
+
+**`ufM4` COPIES the sixteen floats and that is load-bearing.** Callers hand in
+scratch matrices they mutate in place — game.js's `_wheelWorld`/`_ringWorld`,
+DebrisWorld's `_mat` — so a cache retaining the caller's array would compare a
+value against itself and skip a REAL change. That is a wrong transform, which
+no call counter would ever catch; the canary pins the copy.
+
+**The thing nobody had counted: `DebrisWorld.draw()` was four per-body loops.**
+One `gfx.draw` per live body across shards/marbles/cones/panels — 48+16+24+10 =
+98 draws at desktop caps. Measured on vegas night with **no incident debris at
+all** (`live 0, marbles 0, panels 0`): **17 draws a frame, every one a CONE**.
+`registerFurniture` places a cone at every corner of every circuit and the cone
+loop has no liveness test, so this is a cost on every frame of every lap. That
+is exactly why five rounds of steady-state censuses never saw it — it is not a
+pileup-only cost, but it looks like one until you attribute the draws by call
+site. Each pool is one shared mesh, one constant opaque material and N mat4s:
+the shape `drawInstanced` exists for. `updateInstances` hands a batch a
+caller-packed set, and the side-world becomes four draws whatever happens.
+
+| counter (vegas night, pack) | before | after |
+|---|---|---|
+| `drawElements` | 162.8 | **146.0** |
+| `uniformMatrix4fv` | 118.1 | **48.5** (-58.9%) |
+| `uniform1i` | 146.3 | **87.9** (-39.9%) |
+| `drawElementsInstanced` | 25 | 26.3 |
+| `bufferSubData` | 14.5 | 15.6 |
+| `uniform4fv` | 69.4 | 69.4 |
+| `bindVertexArray` | 83.8 | 84.2 |
+
+~141 GL calls a frame. Every delta is accounted for: draws fall by the 17
+debris bodies; `uniformMatrix4fv` falls by 52.9 (the `uModel` redundancy) plus
+the same 17 (each body used to upload its own model matrix), which is the
+measured 69.6; `uniform1i` falls by the 59.5 `uNumLights` redundancy. The
+`bufferSubData` cost is +1.1 calls — one instance upload a frame, 17x64 = 1.06
+KiB by construction. **The KiB total moved 489.2 -> 513.6 and that is NOT the
+debris upload**: it is run-to-run variance in the prop repack, which depends on
+where the camera settles. Report the call delta, which is exact; do not claim
+the byte delta, which is not.
+
+**The oracle was an invariant, not pixels.** Every body the loop would have
+drawn must appear as an INSTANCE, so sum `instanceCount` over the instanced
+draws issued inside `DebrisWorld.draw` and compare against the live-body count
+from `__apex.debris()`: **1 draw carrying exactly 17 bodies against 17 live
+cones, and per-body draws inside that call fell to 0.** 2d already recorded why
+a PNG compare is the wrong instrument here (the scene is time-dependent and the
+drawing buffer reads black outside the frame); a count that must match a count
+is better than a picture that must look similar.
+
+### The abort condition I wrote was the wrong instrument, and I am recording that
+
+Before measuring, this round committed to acting on a uniform only where
+uploads exceeded distinct values by **more than 3x** — the `uInstanced` shape
+from 2e (54.8 / 3.1 = 17.7x). `uNumLights` came in at 2.2x and `uModel` at
+2.1x. Applied literally, that gate would have killed both.
+
+It was the wrong test. What a redundancy cache collapses is the ABSOLUTE count
+of uploads carrying a value the program already holds, not the ratio of uploads
+to values. A uniform that genuinely changes 50 times and is uploaded 110 times
+has a poor ratio and 60 free calls. The gate was calibrated on a case where the
+value barely changed and it silently assumed that shape. **The measured saving
+here (112 calls/frame from the two) is larger than the 44.1 that 2e shipped as
+a real win.** The right pre-registered condition is an absolute-excess floor;
+the ratio is only the right test when asking whether a value is frame-invariant.
+
+### What was verified, and what this box could not verify
+
+Green: `tooling-fast` (the parity guard caught a real defect — see below),
+`instanced-draw.spec.js` 4/5 including "ordinary draws are unaffected", and
+`webgl-probes`'s mobile-tier GL-error scrape.
+
+NOT verified here: five tests across those two files time out on this
+container. **They fail identically on an unmodified HEAD checked out in a
+second worktree**, which is what separated the box from the diff — run that
+check before believing any red renderer run. Two separate causes, both
+pre-existing:
+
+1. `loadRace` allowed **8 s** for `window.__apex` to exist where
+   `smoke.spec.js` allows 60 s for the identical wait. Every test in the file
+   goes through it, so one tight boot wait fails all five and reads as a
+   renderer regression. Matched to smoke's numbers; the test then gets 37 s
+   further before failing on something else.
+2. That something else is the monza day `numLights === 0` wait. **The asserted
+   behaviour is correct** — probing the same page directly
+   (`scratch/r12-monza-day.mjs`) reports `numLights: 0` on monza in both
+   `default` and `day`. The spec cannot reach it because boot alone is eating
+   ~60 s on this container right now (a 25 s smoke test measured 134 s here the
+   same day). Its 5 s budget is left ALONE: nothing here is evidence that it is
+   wrong, and widening an assertion to make a red run green is the move this
+   file exists to prevent.
+
+**The parity guard earned its keep.** `updateInstances` on GLX alone failed
+`backend-surface-parity.test.mjs`: because game.js installs a backend by
+descriptor-copy onto GLX, an undeclared name leaves GLX's OWN closure live on a
+WGX-bound `gfx` — so DebrisWorld's feature test would have passed on WebGPU and
+then called a GLX function with no device. WGX and TLX now declare
+`updateInstances: undefined`. Porting it to WGX means expanding stride-16
+matrices into its stride-20 instance layout and deciding what the colour lanes
+mean for a batch built without `srcColors`; that is a perf task, never a
+correctness one, because the per-body loop those backends keep is exactly what
+they ship today.
+
+### Closed by measurement: cross-car wheel batching
+
+The plan of record for this round's second win was to extend the per-car
+two-pass wheel deferral (`6b233ae`) across cars, on the theory that the field's
+AI cars share wheel meshes through `fieldWheelCache` and rebind the same VAO
+once per car. **Measured: 83.8 `bindVertexArray` a frame, of which 0 are
+redundant back-to-back.** `bindVAO`'s cache already collapses every consecutive
+duplicate, so there is no free win — only a reorder, and 2e already put the
+ceiling on reordering at 8.7 draws (4.8%). Dropped. Do not re-open without a
+new measurement.
+
 ## 3. Left on the table
 
 Ranked by how much I would trust the estimate, most first.

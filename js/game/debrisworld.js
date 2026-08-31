@@ -1049,75 +1049,139 @@ const _marbleOpts = { roughness: 0.9, metalness: 0.0, specular: 0.1 };
 const _coneOpts = { roughness: 0.55, metalness: 0.0, specular: 0.3, emissive: 0.08 };
 const _panelOpts = { roughness: 0.7, metalness: 0.1, specular: 0.25 };  // B2 armco slab
 
-function shardMesh() {
-  if (_shardMesh) return _shardMesh;
+// GEOMETRY, factored out of the mesh builders so the instanced batches can be
+// built from the same data — createInstancedBatch takes {pos,nrm,col,idx} and
+// creates the mesh itself. The xMesh() wrappers stay for the per-body fallback
+// on a backend without updateInstances.
+function shardGeom() {
   const out = { pos: [], nrm: [], col: [], idx: [] };
   TrackGeom.addBox(out, [0, 0, 0], [0.20, 0.02, 0.13], [0.05, 0.05, 0.06]);        // carbon plate
   TrackGeom.addBox(out, [0.05, 0.02, -0.03], [0.07, 0.05, 0.08], [0.30, 0.31, 0.33]); // metal chunk
   TrackGeom.addBox(out, [-0.05, 0.01, 0.04], [0.13, 0.015, 0.03], [0.11, 0.11, 0.12]); // sliver
-  _shardMesh = G.gfx.createMesh(out);
-  return _shardMesh;
+  return out;
 }
-function marbleMesh() {
-  if (_marbleMesh) return _marbleMesh;
+function marbleGeom() {
   const out = { pos: [], nrm: [], col: [], idx: [] };
   TrackGeom.addBox(out, [0, 0, 0], [MARBLE_REF_SCALE, MARBLE_REF_SCALE * 0.7, MARBLE_REF_SCALE], [0.04, 0.04, 0.045]);
-  _marbleMesh = G.gfx.createMesh(out);
-  return _marbleMesh;
+  return out;
 }
-function coneMesh() {
-  if (_coneMesh) return _coneMesh;
+function coneGeom() {
   const out = { pos: [], nrm: [], col: [], idx: [] };
   TrackGeom.addBox(out, [0, -CONE_HY + 0.02, 0], [0.13, 0.02, 0.13], [0.9, 0.35, 0.05]); // base
   TrackGeom.addCone(out, [0, -CONE_HY + 0.04, 0], 0.10, CONE_HY * 1.9, [0.95, 0.42, 0.08], 10); // body
-  _coneMesh = G.gfx.createMesh(out);
-  return _coneMesh;
+  return out;
 }
-
-function panelMesh() {
-  if (_panelMesh) return _panelMesh;
+function panelGeom() {
   const out = { pos: [], nrm: [], col: [], idx: [] };
   TrackGeom.addBox(out, [0, 0, 0], [PANEL_LAT, PANEL_HY, PANEL_LEN], [0.90, 0.92, 0.94]);        // rail face
   TrackGeom.addBox(out, [0, -PANEL_HY * 0.35, 0], [PANEL_LAT * 1.1, PANEL_HY * 0.25, PANEL_LEN], [0.86, 0.16, 0.15]); // red stripe
   TrackGeom.addBox(out, [0, -PANEL_HY, 0], [PANEL_LAT * 1.3, PANEL_HY, PANEL_LEN * 0.12], [0.20, 0.20, 0.24]);        // post foot
-  _panelMesh = G.gfx.createMesh(out);
-  return _panelMesh;
+  return out;
 }
 
-function drawBody(body, sc, mesh, opts, gfx) {
+function shardMesh()  { return _shardMesh  || (_shardMesh  = G.gfx.createMesh(shardGeom())); }
+function marbleMesh() { return _marbleMesh || (_marbleMesh = G.gfx.createMesh(marbleGeom())); }
+function coneMesh()   { return _coneMesh   || (_coneMesh   = G.gfx.createMesh(coneGeom())); }
+function panelMesh()  { return _panelMesh  || (_panelMesh  = G.gfx.createMesh(panelGeom())); }
+
+// A body's pose as a column-major mat4, written into slot `n` of `out`. The
+// per-body and instanced paths share this, so the two can never disagree about
+// where a shard is. Per-body SCALE is baked into the matrix, which is why a
+// shard's random size costs the instanced path nothing extra.
+function packBody(out, n, body, sc) {
   const t = body.translation(), q = body.rotation();
   const x = q.x, y = q.y, z = q.z, w = q.w;
   const xx = x * x, yy = y * y, zz = z * z;
   const xy = x * y, xz = x * z, yz = y * z, wx = w * x, wy = w * y, wz = w * z;
-  _mat[0] = (1 - 2 * (yy + zz)) * sc; _mat[1] = 2 * (xy + wz) * sc; _mat[2] = 2 * (xz - wy) * sc; _mat[3] = 0;
-  _mat[4] = 2 * (xy - wz) * sc; _mat[5] = (1 - 2 * (xx + zz)) * sc; _mat[6] = 2 * (yz + wx) * sc; _mat[7] = 0;
-  _mat[8] = 2 * (xz + wy) * sc; _mat[9] = 2 * (yz - wx) * sc; _mat[10] = (1 - 2 * (xx + yy)) * sc; _mat[11] = 0;
-  _mat[12] = t.x; _mat[13] = t.y; _mat[14] = t.z;
+  const o = n * 16;
+  out[o] = (1 - 2 * (yy + zz)) * sc; out[o + 1] = 2 * (xy + wz) * sc; out[o + 2] = 2 * (xz - wy) * sc; out[o + 3] = 0;
+  out[o + 4] = 2 * (xy - wz) * sc; out[o + 5] = (1 - 2 * (xx + zz)) * sc; out[o + 6] = 2 * (yz + wx) * sc; out[o + 7] = 0;
+  out[o + 8] = 2 * (xz + wy) * sc; out[o + 9] = 2 * (yz - wx) * sc; out[o + 10] = (1 - 2 * (xx + yy)) * sc; out[o + 11] = 0;
+  out[o + 12] = t.x; out[o + 13] = t.y; out[o + 14] = t.z; out[o + 15] = 1;
+}
+
+function drawBody(body, sc, mesh, opts, gfx) {
+  packBody(_mat, 0, body, sc);
   gfx.draw(mesh, _mat, opts);
+}
+
+// INSTANCED POOLS. One shared mesh, one constant opaque material and N per-body
+// mat4s is exactly the shape drawInstanced exists for, and this side-world was
+// four per-body loops: at desktop caps a pileup reaches 48+16+24+10 = 98 draws.
+//
+// MEASURED on vegas night with NO incident debris at all (docs/PERF-FINDINGS.md
+// 2g): 17 draws a frame, every one a CONE. registerFurniture places a cone at
+// every corner of every circuit and the cone loop has no liveness test, so this
+// is a cost on every frame of every lap, not a pileup-only one — which is
+// exactly why the steady-state census never attributed it. Instanced, the whole
+// side-world is four draws whatever happens.
+//
+// Capability read, not a hard dependency: GLX ships updateInstances; WGX and
+// TLX have not been ported and keep the per-body loop, looking identical. Same
+// shape as gfx.hasPerChunkLights (docs/RENDERERS.md).
+// null = not tried yet, false = unavailable on this backend.
+const _batch = { shard: null, marble: null, cone: null, panel: null };
+const _bMat = { shard: null, marble: null, cone: null, panel: null };
+const _bCap = { shard: 0, marble: 0, cone: 0, panel: 0 };
+
+function poolBatch(key, geom, cap) {
+  // capFor() honours an apex26.debrisCap override of up to 256, so the cap can
+  // exceed what the batch was built for. Rebuild rather than clamp: silently
+  // dropping bodies would make the override look broken.
+  if (_batch[key] && _bCap[key] < cap) {
+    if (G.gfx.freeInstancedBatch) G.gfx.freeInstancedBatch(_batch[key]);
+    _batch[key] = null; _bMat[key] = null;
+  }
+  if (_batch[key] !== null) return _batch[key];
+  const gfx = G.gfx;
+  if (!gfx || !gfx.createInstancedBatch || !gfx.updateInstances || !gfx.drawInstanced)
+    return (_batch[key] = false);
+  // createInstancedBatch sizes batch.instances from the array it is handed, so
+  // this reserves the pool's whole cap once; updateInstances narrows `visible`.
+  const mats = _bMat[key] = new Float32Array(Math.max(1, cap) * 16);
+  _bCap[key] = cap;
+  _batch[key] = gfx.createInstancedBatch(geom(), mats, null, null) || false;
+  return _batch[key];
+}
+
+function poolMesh(key) {
+  return key === "shard" ? shardMesh() : key === "marble" ? marbleMesh()
+    : key === "cone" ? coneMesh() : panelMesh();
+}
+
+// Pack one pool's live bodies to the front and draw them in one call. Packing
+// is not optional: WebGL2 has no baseInstance, so an instanced draw always
+// starts at instance 0 and a visible subset can only be expressed by position.
+function drawPool(key, geom, cap, opts, list, liveOnly, unitScale) {
+  const gfx = G.gfx;
+  const b = poolBatch(key, geom, cap);
+  if (!b) {
+    const mesh = poolMesh(key);
+    for (const s of list) if (!liveOnly || s.live) drawBody(s.body, unitScale ? 1 : s.scale, mesh, opts, gfx);
+    return;
+  }
+  const m = _bMat[key], room = b.instances | 0;
+  let n = 0;
+  for (const s of list) {
+    if (liveOnly && !s.live) continue;
+    if (n >= room) break;
+    packBody(m, n++, s.body, unitScale ? 1 : s.scale);
+  }
+  if (!n) return;
+  gfx.updateInstances(b, m, n);
+  gfx.drawInstanced(b, opts);
 }
 
 function draw() {
   if (!world) return;
-  const gfx = G.gfx;
-  if (_slots.length) {
-    const mesh = shardMesh();
-    for (const s of _slots) if (s.live) drawBody(s.body, s.scale, mesh, _drawOpts, gfx);
-  }
-  // A2 marbles — sibling loop, tiny cube mesh, per-body scale.
-  if (_marbles.length) {
-    const mesh = marbleMesh();
-    for (const s of _marbles) if (s.live) drawBody(s.body, s.scale, mesh, _marbleOpts, gfx);
-  }
-  // A3 cones — sibling loop, shared cone mesh at scale 1.
-  if (_furn.length) {
-    const mesh = coneMesh();
-    for (const f of _furn) drawBody(f.body, 1, mesh, _coneOpts, gfx);
-  }
-  // B2 promoted barrier panels — sibling loop, shared armco slab at scale 1.
-  if (_panels.length) {
-    const mesh = panelMesh();
-    for (const p of _panels) if (p.live) drawBody(p.body, 1, mesh, _panelOpts, gfx);
-  }
+  if (_slots.length) drawPool("shard", shardGeom, capFor(), _drawOpts, _slots, true, false);
+  // A2 marbles — tiny cube, per-body scale.
+  if (_marbles.length) drawPool("marble", marbleGeom, marbleCapFor(), _marbleOpts, _marbles, true, false);
+  // A3 cones — shared cone at scale 1, and NO liveness test: a cone is either
+  // in the world or it is not.
+  if (_furn.length) drawPool("cone", coneGeom, furnCapFor(), _coneOpts, _furn, false, true);
+  // B2 promoted barrier panels — shared armco slab at scale 1.
+  if (_panels.length) drawPool("panel", panelGeom, PANEL_CAP, _panelOpts, _panels, true, true);
 }
 
 // ── status (for __apex.debris and tests) ────────────────────────────────────

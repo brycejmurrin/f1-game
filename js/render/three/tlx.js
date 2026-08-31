@@ -1879,6 +1879,10 @@ const TLX = (function () {
         // keep dead GLX closures. See backend-surface-parity.test.mjs.
         createInstancedBatch,
         cullInstances,
+        // NOT IMPLEMENTED, declared rather than omitted — same reason as the
+        // members above. DebrisWorld feature-tests it and keeps the per-body
+        // loop here, which is what TLX ships today. docs/PERF-FINDINGS.md 2g.
+        updateInstances: undefined,
         drawInstanced,
         freeInstancedBatch,
         castShadowInstanced,

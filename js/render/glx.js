@@ -195,6 +195,35 @@ const GLX = (function () {
     if (!loc) return;
     if (cache[key] !== v) { gl.uniform1f(loc, v); cache[key] = v; }
   }
+  // Integer twin of uf1, for uNumLights. MEASURED (docs/PERF-FINDINGS.md 2g):
+  // 111 uploads a frame for a value that takes 51.5 distinct values, because
+  // uploadLightSet runs once per visible chunk and neighbouring chunks
+  // repeatedly resolve to the same lamp COUNT. 59.5 calls a frame collapse.
+  function ufi(loc, cache, key, v) {
+    if (!loc) return;
+    if (cache[key] !== v) { gl.uniform1i(loc, v); cache[key] = v; }
+  }
+  // mat4 twin, for uModel: 103.2 uploads a frame against 50.3 distinct values,
+  // because drawChunked calls litMaterial once per chunk RUN and every run of
+  // one mesh shares that mesh's model matrix.
+  //
+  // It COPIES the sixteen floats rather than retaining the caller's array, and
+  // that is load-bearing: callers hand in scratch matrices they mutate in place
+  // between draws (game.js's _wheelWorld/_ringWorld, DebrisWorld's _mat), so a
+  // retained reference would compare a value against itself and skip a real
+  // change. Sixteen float compares to save a GL call is the right trade; the
+  // measured 50.3 is what a COPYING cache achieves, not an idealised one.
+  function ufM4(loc, cache, key, m) {
+    if (!loc) return;
+    let p = cache[key];
+    if (p) {
+      let same = true;
+      for (let i = 0; i < 16; i++) if (p[i] !== m[i]) { same = false; break; }
+      if (same) return;
+    } else p = cache[key] = new Float32Array(16);
+    for (let i = 0; i < 16; i++) p[i] = m[i];
+    gl.uniformMatrix4fv(loc, false, m);
+  }
 
   // VAO bind cache — drawElements requires the right VAO, but consecutive draws
   // of the same mesh (or repeated skid/shadow quads sharing shadowVAO) would
@@ -1341,7 +1370,7 @@ const GLX = (function () {
     const nTail = (L2 && n2 > 0) ? Math.min(n2 | 0, MAX_LIGHTS) : 0;
     const nStatic = L ? Math.max(0, Math.min(MAX_LIGHTS - nTail, n | 0)) : 0;
     const nL = nStatic + nTail;
-    gl.uniform1i(litU.uNumLights, nL);
+    ufi(litU.uNumLights, _litUf, "numLights", nL);
     if (nL <= 0) return;
     const L4 = _luL;
     for (let i = 0; i < nL; i++) {
@@ -1375,17 +1404,15 @@ const GLX = (function () {
   // caller's blend/depth-mask decisions.
   function litMaterial(modelMat, opts, instanced) {
     useProg(litProg);
-    gl.uniformMatrix4fv(litU.uModel, false, modelMat);
+    // litU.uModel is written ONLY here — decal/shadow/mark/depth each own a
+    // separate program and therefore a separate location, so this cache cannot
+    // be staled by them. docs/PERF-FINDINGS.md 2g.
+    ufM4(litU.uModel, _litUf, "model", modelMat);
     // The instancing gate rides the redundancy cache: 54.8 uniform1f/frame for a
-    // value that changes 3.1 times. docs/PERF-FINDINGS.md 2e.
+    // value that changes 3.1 times. docs/PERF-FINDINGS.md 2e. It is declared
+    // here, for every lit draw, rather than bracketed 1/0 around each instanced
+    // draw — that alternation is what a cache collapses none of.
     uf1(litU.uInstanced, _litUf, "instanced", instanced ? 1 : 0);
-    // The instancing gate is NOT re-uploaded here. It used to be defaulted off on
-    // every lit draw, and litMaterial is the funnel for all of them — 150-300 a
-    // frame (world meshes, car bodies, wheels, aero flaps, brake rings, LEDs,
-    // debris) — to clear a flag only drawInstanced ever sets. It now follows the
-    // depth pass's already-correct shape (castShadowInstanced in glx/shadow.js):
-    // drawInstanced brackets its OWN draw with 1/0, so the uniform is 0 outside
-    // that bracket by construction and 0 at link time before the first one.
     const emissive = opts && opts.emissive !== undefined ? opts.emissive : 0;
     const alpha = opts && opts.alpha !== undefined ? opts.alpha : 1;
     // Material (set every draw so values never leak from the previous mesh).
@@ -1586,6 +1613,33 @@ const GLX = (function () {
       batch._cellKeyN = cellKeyN;
     }
     return n;
+  }
+
+  // Hand a batch a caller-packed instance set. cullInstances() is for a STATIC
+  // batch narrowed by a frustum; this is for one whose transforms are new every
+  // frame — DebrisWorld's four Rapier pools, where the bodies move and the only
+  // question is how many are live (docs/PERF-FINDINGS.md 2g). The caller packs
+  // to the front because WebGL2 has no baseInstance (see createInstancedBatch).
+  //
+  // CLEARING THE CULL SNAPSHOTS IS LOAD-BEARING, not tidiness. cullInstances
+  // memoises on _cullPlanes (the frustum that physically wrote the resident
+  // bytes) and _cellKeyN (the surviving cell set); a hit SKIPS the re-upload
+  // entirely. Bytes written here were produced by no frustum at all, so leaving
+  // either snapshot standing would let a later cullInstances hit its cache and
+  // draw this pack as though it were that frustum's. Pinned by
+  // tests/unit/gfx-backend-canary.test.mjs.
+  function updateInstances(batch, matrices, n) {
+    if (ctxGone() || !batch || !batch.ibo) return 0;
+    const cap = batch.instances | 0;
+    const v = Math.max(0, Math.min(cap, n | 0));
+    batch.visible = v;
+    batch._cullPlanes = null;
+    batch._cellKeyN = -1;
+    if (v > 0) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, matrices, 0, v * 16);
+    }
+    return v;
   }
 
   // OPAQUE-ONLY: a blended instanced draw would drop depth writes (below) but
@@ -1883,6 +1937,7 @@ const GLX = (function () {
     // TrackGraph.batches() consumer — see js/track/graph.js.
     createInstancedBatch,
     cullInstances,
+    updateInstances,
     drawInstanced,
     freeInstancedBatch,
     createTexMesh,

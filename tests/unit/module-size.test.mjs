@@ -763,7 +763,12 @@ const CEILINGS = {
   // 5574 -> 5581: WGX gains gpuErrors/gpuFirstError on its INSTANCE surface
   // (it had them only on the module factory), so the backend-parity contract
   // holds now that GLX has a real counter. PERF-FINDINGS 2e.
-  "js/render/webgpu/wgx.js": 5581,
+  // 5581 -> 5590: `updateInstances: undefined` and the note saying why it is
+  // DECLARED rather than omitted. An absent name lets descriptor-copy keep
+  // GLX's own closure on a WGX-bound gfx, so DebrisWorld's feature test would
+  // pass here and then call GLX with no device (backend-surface-parity).
+  // Nine lines to keep a wrong-backend call impossible. PERF-FINDINGS 2g.
+  "js/render/webgpu/wgx.js": 5590,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -825,7 +830,9 @@ const CEILINGS = {
   // the world had no environment reflections at all. The release now waits for
   // the probe to latch, and a probe that cannot succeed gives up instead of
   // throwing once a frame forever.
-  "js/render/three/tlx.js": 2322,
+  // 2322 -> 2326: the same `updateInstances: undefined` declaration and its
+  // reason, for the same descriptor-copy hazard. PERF-FINDINGS 2g.
+  "js/render/three/tlx.js": 2326,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
@@ -852,7 +859,16 @@ const CEILINGS = {
   // real-GPU workflow gated on gpuErrors and GLX never defined it, so that
   // clause read null and passed forever (PERF-FINDINGS 2e). A deliberate
   // raise: the gate is worth more than the lines.
-  "js/render/glx.js": 1975,
+  // 1975 -> 2030: three additions, all measured, all paying more than the lines
+  // (PERF-FINDINGS 2g). ufi/ufM4 are the integer and mat4 twins of uf1, so
+  // uNumLights and uModel stop re-uploading values the program already holds —
+  // 111 -> 51.5 and 103.2 -> 50.3 a frame, 112 GL calls. updateInstances lets a
+  // caller hand a batch its own packed instance set, which turns DebrisWorld's
+  // four per-body loops into four draws. ufM4 is the bulk of it: it copies the
+  // sixteen floats rather than retaining the caller's array, because callers
+  // pass scratch matrices they mutate in place, and the comment explaining that
+  // is worth more than the line it costs.
+  "js/render/glx.js": 2030,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)

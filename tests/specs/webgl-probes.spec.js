@@ -8,11 +8,19 @@ import { test, expect } from "@playwright/test";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
+// BOOT BUDGETS, matched to what booting this page actually costs under
+// SwiftShader. 8 s for `__apex` to exist and 10 s for the track was the whole
+// file's failure mode on a slow box: every test here goes through loadRace, so
+// one tight boot wait fails all five and reads as a renderer regression.
+// Verified 2026-08-31 by running an unmodified HEAD in a second worktree — it
+// failed identically, which is what separated "the box" from "the diff".
+// smoke.spec.js already allows 60 s for the SAME `window.__apex` wait and
+// 180 s for the track; these match it rather than inventing a third number.
 async function loadRace(page, id = "monza") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 60_000 });
   await page.evaluate((t) => window.__apex.race(t), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 180_000 });
   await page.evaluate(() => window.__apex.go());
 }
 

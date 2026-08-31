@@ -492,6 +492,63 @@ test("the instancing gate is declared through the cache, never bracketed per dra
     "a new useProg(litProg) site must also declare uInstanced — see PERF-FINDINGS 2e");
 });
 
+test("uModel and uNumLights go through the redundancy cache, not a raw upload", () => {
+  // PERF-FINDINGS 2g: uNumLights was 111 uploads/frame for 51.5 distinct values
+  // (uploadLightSet runs per visible chunk and neighbours resolve to the same
+  // COUNT), uModel 103.2 for 50.3 (drawChunked calls litMaterial once per chunk
+  // run, every run of one mesh sharing that mesh's matrix). 112 GL calls/frame.
+  const glx = read("js/render/glx.js");
+  assert.match(glx, /ufM4\(litU\.uModel, _litUf, "model", modelMat\);/);
+  assert.match(glx, /ufi\(litU\.uNumLights, _litUf, "numLights", nL\);/);
+  assert.doesNotMatch(glx, /gl\.uniformMatrix4fv\(litU\.uModel/,
+    "uModel must go through ufM4, not a raw uniformMatrix4fv");
+  assert.doesNotMatch(glx, /gl\.uniform1i\(litU\.uNumLights/,
+    "uNumLights must go through ufi, not a raw uniform1i");
+
+  // ufM4 must COPY. Callers hand in scratch matrices they mutate in place
+  // (game.js _wheelWorld/_ringWorld, DebrisWorld _mat); retaining the reference
+  // would compare a value against itself and silently skip a real change —
+  // a wrong TRANSFORM, which no call counter would catch.
+  const m4 = glx.slice(glx.indexOf("function ufM4("));
+  assert.match(m4.slice(0, 600), /for \(let i = 0; i < 16; i\+\+\) p\[i\] = m\[i\];/,
+    "ufM4 must copy the sixteen floats, not retain the caller's array");
+});
+
+test("updateInstances clears the cull snapshots it did not produce", () => {
+  // cullInstances memoises on _cullPlanes (the frustum that physically wrote the
+  // resident bytes) and _cellKeyN (the surviving cell set), and a hit SKIPS the
+  // re-upload. updateInstances writes bytes produced by no frustum at all, so
+  // leaving either snapshot standing lets a later cullInstances hit its cache
+  // and draw this pack as though it were that frustum's. PERF-FINDINGS 2g.
+  const glx = read("js/render/glx.js");
+  const fn = glx.slice(glx.indexOf("function updateInstances("));
+  const body = fn.slice(0, fn.indexOf("\n  }") + 4);
+  assert.match(body, /batch\._cullPlanes = null;/,
+    "updateInstances must invalidate the frustum snapshot");
+  assert.match(body, /batch\._cellKeyN = -1;/,
+    "updateInstances must invalidate the cell-set snapshot");
+  assert.match(body, /gl\.bufferSubData\(gl\.ARRAY_BUFFER, 0, matrices, 0, v \* 16\)/);
+  assert.match(glx, /^    updateInstances,$/m, "updateInstances must be exported");
+});
+
+test("the debris pools instance behind a capability read, with the loop as fallback", () => {
+  // Four per-body loops reaching 98 draws at desktop caps — and 17 every frame
+  // of every lap from cones alone, which have no liveness test (PERF-FINDINGS
+  // 2g). GLX ships updateInstances; WGX and TLX have not been ported and MUST
+  // keep the per-body path rather than silently drawing nothing.
+  const dw = read("js/game/debrisworld.js");
+  assert.match(dw, /gfx\.updateInstances\(b, m, n\);/);
+  assert.match(dw, /gfx\.drawInstanced\(b, opts\);/);
+  assert.match(dw, /if \(!gfx \|\| !gfx\.createInstancedBatch \|\| !gfx\.updateInstances \|\| !gfx\.drawInstanced\)/,
+    "the capability read must test every method the instanced path calls");
+  assert.match(dw, /for \(const s of list\) if \(!liveOnly \|\| s\.live\) drawBody\(/,
+    "the per-body fallback must survive for backends without updateInstances");
+  // Both paths must build a pose the same way, or a backend switch moves debris.
+  assert.equal((dw.match(/function packBody\(/g) || []).length, 1);
+  assert.match(dw, /packBody\(_mat, 0, body, sc\);/,
+    "drawBody must share packBody, not carry a second copy of the quaternion maths");
+});
+
 test("the interleaved uLight[] lanes agree between glx.js and shaders/lit.js", () => {
   // ONE uniform4fv per chunk instead of four (PERF-FINDINGS 2d) only works if
   // both halves agree on the stride-16 lane order. A swapped lane keeps the GL
