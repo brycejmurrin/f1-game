@@ -480,8 +480,9 @@ const CEILINGS = {
   // MERGED a fourth time: the two entries just above are this lineage's deltas
   // measured against ITS base (8727 -> 8749 -> 8787); deploy meanwhile reached
   // 8807 on work of its own. Neither number fits the union, which carries both
-  // sets of lines. Re-measured on THIS tree, not added on paper: 8869.
-  "js/game.js": 8869,
+  // sets of lines. Re-measured on THIS tree with the suite's own split-newline
+  // metric (not grep -c, which is one short on a file with no trailing newline): 8870.
+  "js/game.js": 8870,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
