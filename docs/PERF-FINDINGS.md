@@ -1200,6 +1200,36 @@ Re-walked the 08-17 survey against cache **1388**, then merged deploy tip
 `11d972d2` (cache **1421**). Full board:
 [research/PERF-HUNT-2026-08-18.md](research/PERF-HUNT-2026-08-18.md).
 
+Boot wall **at 1655 (2026-08-29):** **156** tags, **3,633,081 B** (3.55 MB) —
+down from **157 / 5,082,769 B** the same day. **1,415 KB, 28.5%**, in one round:
+
+| move | KB | how |
+|---|---|---|
+| circuit `scenery: function (api)` × 40 | 1,083 | `js/circuits/scenery/<id>.js`, LAZY_SCENERY |
+| `light-presets.js` | 338 | LAZY_RACE |
+| `defer` on all 157 tags | 0 | stops blocking the parser |
+
+The two lazy payloads need DIFFERENT mechanisms, and the reason is worth
+keeping. Presets need **no gate**: `light-store.js` reads `window.LightPresets`
+at call time, so an absent file resolves to TUNE_DEFS defaults and
+`applyLightTune()` re-walks the knobs when it lands. Scenery needs a **real
+gate**: `Tracks.build()` is synchronous and every `loadTrack()` caller touches
+`track` on the next line, so the closure must be resident BEFORE the call —
+hence `ensureScenery()` awaited at the three entries that can reach a circuit
+not yet built (menu flyby, `startRace`, `openQuali`).
+
+**The trap, measured.** FIVE separate harnesses load circuits with
+`readdirSync(CIRCUITS_DIR).filter(f => f.endsWith(".js"))`, which does not
+descend into the new subdirectory. A harness that misses it builds every
+circuit BARE and still reports confident numbers: `tools/float-audit.cjs` put
+cota at **3,988 prop cells instead of 32,897**, which surfaced as
+`scenery-grounding` "floating scenery grew" — i.e. it reads as a scenery
+REGRESSION, not as a missing include. Four of the five had to be found by
+chasing red tests. `load-order.test.mjs` now asserts that any file which runs
+circuit files also loads `LAZY_SCENERY`, reading source with comments stripped
+(the first cut of that guard was satisfied by the word appearing in its own
+explanatory comment).
+
 Boot wall **at 1421:** **153** `src=` tags, **5,909,851 B** (5.91 MB).
 `apex.js` + `agentview*` is **350,083 B** of eager dev/test surface.
 Circuit IIFE parse is still cheap; LIST `points` is already a lazy getter.

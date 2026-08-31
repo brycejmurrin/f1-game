@@ -426,7 +426,14 @@ const CEILINGS = {
   // lines are the comment explaining why the fetch is deliberately un-awaited
   // and why an absent file is a legal state; that is the growth the note above
   // tolerates. The change takes 338 KB OFF the boot script wall.
-  "js/game.js": 8749,
+  // 8749 -> 8787 for the LAZY_SCENERY gate: ensureScenery()/sceneryResident()
+  // plus the awaits in startRace/openQuali and the flyby debounce. It has to
+  // live here because Tracks.build() is synchronous and every loadTrack()
+  // caller uses `track` on the next line, so the closure must be resident
+  // BEFORE the call — there is no seam further down to push this into. Most of
+  // the 38 lines are the comment explaining exactly that. Takes 1,083 KB off
+  // the boot script wall.
+  "js/game.js": 8787,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -603,7 +610,13 @@ const CEILINGS = {
   // instead of the build's NIGHT override that every neighbouring branch uses,
   // so a day race at a night circuit (or the reverse) wore the wrong tint. The
   // four lines are the comment recording it at the site — bug-explaining growth.
-  "js/track/tracks.js": 2359,
+  // 2359 -> 2377 for the LAZY_SCENERY resolution: the bespoke closure now comes
+  // from window.TrackScenery[def.id] (def.scenery still wins, so a harness probe
+  // and any unsplit circuit keep working), plus the warn that makes a
+  // MISSING closure loud. Building bare is a legal state and an almost
+  // invisible one — road and terrain, no dressing — so it says so rather than
+  // failing silently, which is the one real risk of the split.
+  "js/track/tracks.js": 2381,
   // ── Round-6 additions: the unguarded giants, set AT measured (test metric,
   // split-newline count) so any growth is a deliberate raise here. Each line
   // says why the file is its size today; none is an extraction target yet.

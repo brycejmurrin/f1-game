@@ -136,7 +136,8 @@ function lazyFiles() {
   // by game.js once a session needs it). Both are tagless BY DESIGN and still
   // have to be accounted for, or "created the file, forgot to load it" stops
   // being catchable.
-  return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || [])];
+  return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
+    ...(MANIFEST.LAZY_SCENERY || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -231,6 +232,40 @@ test("js/game.js RACE_FILES equals MANIFEST.LAZY_RACE", () => {
   assert.ok(block, "js/game.js must declare RACE_FILES for the lazy race payload");
   const listed = [...stripComments(block[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(listed, MANIFEST.LAZY_RACE);
+});
+
+// EVERY CIRCUIT LOADER MUST ALSO LOAD THE SCENERY DIRECTORY. Circuits are read
+// with readdirSync(CIRCUITS_DIR).filter(f => f.endsWith(".js")), which does not
+// descend into js/circuits/scenery/ — so a loader that misses the roster builds
+// every circuit BARE (road and terrain, no dressing) and still produces
+// confident, plausible numbers. Measured while doing the split: tools/
+// float-audit.cjs reported cota at 3,988 prop cells instead of 32,897 and the
+// grounding baseline "grew" a floater, which reads as a scenery regression
+// rather than as a missing include. Five loaders existed; four had to be found
+// by chasing red tests. This is so the sixth cannot be.
+test("every circuit loader also loads the split scenery roster", () => {
+  const roots = ["tools", "tests/unit"];
+  const offenders = [];
+  for (const root of roots) {
+    for (const name of readdirSync(join(ROOT, root))) {
+      if (!/\.(mjs|cjs|js)$/.test(name)) continue;
+      const rel = `${root}/${name}`;
+      // CODE, not prose: read with comments stripped. The first cut of this
+      // guard was satisfied by the word LAZY_SCENERY appearing in the very
+      // comment explaining why the roster is needed, so deleting the actual
+      // load left it green — a guard that passes on a mention of itself.
+      const src = stripComments(readFileSync(join(ROOT, rel), "utf8"));
+      // A loader is a file that RUNS circuit files, not one that merely names
+      // the directory (manifest.cjs itself, or a path-building helper).
+      if (!/CIRCUITS_DIR/.test(src)) continue;
+      if (!/runFile\(|runInContext\(|runInNewContext\(/.test(src)) continue;
+      if (/LAZY_SCENERY|sceneryPath/.test(src)) continue;
+      offenders.push(rel);
+    }
+  }
+  assert.deepEqual(offenders, [],
+    `these run circuit files but never load js/circuits/scenery/ — they will build every ` +
+    `circuit bare and report it as a scenery regression: ${offenders.join(", ")}`);
 });
 
 test("LAZY_RACE files have no <script> tag", () => {
