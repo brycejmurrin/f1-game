@@ -45,8 +45,15 @@ export function declaredTests(file) {
     if (Array.isArray(x)) return x.forEach(walk);
     if (x.type === "CallExpression") {
       const c = x.callee;
-      if (c.type === "Identifier" && /^(test|it)$/.test(c.name)) n++;
-      if (c.type === "MemberExpression" && c.object?.name === "test"
+      // `sharedTest` IS a test declaration. Every spec on it today follows the
+      // documented idiom `import { sharedTest as test }`, so the call sites read
+      // `test(` and this counter never had to know the real name. A file that
+      // cannot alias — smoke.spec.js keeps plain `test` for the seven specs
+      // asserting FIRST-LOAD behaviour, which fixtures.js warns sharedTest off —
+      // has to call it by name, and those tests then counted as ZERO. That is
+      // the silent rejection the guard below exists to catch, and it caught it.
+      if (c.type === "Identifier" && /^(test|it|sharedTest)$/.test(c.name)) n++;
+      if (c.type === "MemberExpression" && /^(test|sharedTest)$/.test(c.object?.name)
           && /^(only|fixme)$/.test(c.property?.name)) n++;
     }
     for (const k of Object.keys(x)) if (k !== "loc" && k !== "range") walk(x[k]);
