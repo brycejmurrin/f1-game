@@ -4,14 +4,14 @@
 const NetSdp = (function () {
   const VERSION = 1;
 
-  const C_MDNS = 0, C_HOST4 = 1, C_SRFLX4 = 2, C_RELAY4 = 3, C_HOST6 = 4, C_SRFLX6 = 5;
-  const ADDR_LEN = { 0: 16, 1: 4, 2: 4, 3: 4, 4: 16, 5: 16 };
-  const TYPE_OF = { 0: "host", 1: "host", 2: "srflx", 3: "relay", 4: "host", 5: "srflx" };
-  const IS_V6 = { 4: true, 5: true };
+  const C_MDNS = 0, C_HOST4 = 1, C_SRFLX4 = 2, C_RELAY4 = 3, C_HOST6 = 4, C_SRFLX6 = 5, C_RELAY6 = 6;
+  const ADDR_LEN = { 0: 16, 1: 4, 2: 4, 3: 4, 4: 16, 5: 16, 6: 16 };
+  const TYPE_OF = { 0: "host", 1: "host", 2: "srflx", 3: "relay", 4: "host", 5: "srflx", 6: "relay" };
+  const IS_V6 = { 4: true, 5: true, 6: true };
 
   const SETUPS = ["actpass", "active", "passive", "holdconn"];
   const MAX_CANDS = 8;              // more than this is stragglers, not reach
-  const RETAIN = [3 /*C_RELAY4*/, 2 /*C_SRFLX4*/, 5 /*C_SRFLX6*/,
+  const RETAIN = [3 /*C_RELAY4*/, 6 /*C_RELAY6*/, 2 /*C_SRFLX4*/, 5 /*C_SRFLX6*/,
                   0 /*C_MDNS*/, 1 /*C_HOST4*/, 4 /*C_HOST6*/];
 
   const PRIORITY = { host: 2113937151, srflx: 1677729535, relay: 16777215 };
@@ -79,7 +79,12 @@ const NetSdp = (function () {
     const transport = t[2].toLowerCase();
     if (transport !== "udp") return null;             // see the header: TCP is dropped
     if (t[1] !== "1") return null;                    // component 2 is RTCP; not for data
-    const addr = t[4], port = Number(t[5]), type = t[7];
+    let addr = t[4];
+    const port = Number(t[5]), type = t[7];
+    // An IPv4-mapped IPv6 address (::ffff:a.b.c.d) is an IPv4 candidate in
+    // v6 clothing; parsed as hex words it came out as garbage, so unwrap it.
+    const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(addr);
+    if (mapped) addr = mapped[1];
 
     if (/\.local$/i.test(addr)) {
       const uuid = hexToBytes(addr.replace(/\.local$/i, "").replace(/-/g, ""));
@@ -91,6 +96,7 @@ const NetSdp = (function () {
       if (!b) return null;
       if (type === "host") return { kind: C_HOST6, addr: b, port };
       if (type === "srflx") return { kind: C_SRFLX6, addr: b, port };
+      if (type === "relay") return { kind: C_RELAY6, addr: b, port };   // a v6 TURN allocation is the whole relay leg on v6-only paths
       return null;
     }
     const b = v4ToBytes(addr);

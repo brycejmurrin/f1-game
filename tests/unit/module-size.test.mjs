@@ -984,7 +984,11 @@ const CEILINGS = {
   // while the transport never materialises; grace timers tracked via
   // clashDrop/clashClear) and the seat-clash move is pinned in-memory-only —
   // bug-explaining growth, no new features.
-  "js/net/lobby.js": 1672,
+  // 1672 -> 1678 (2026-09-01): resolveSeatClash treats a CUSTOM (MY TEAM) car as
+  // a seat that cannot be kept, whatever the player's rank — a peer's grid holds
+  // no slot or wireId for it, so the rival sat frozen with no error. Six lines,
+  // one of them the message that says why the car changed.
+  "js/net/lobby.js": 1678,
 };
 
 test("the big modules are not growing unnoticed", () => {

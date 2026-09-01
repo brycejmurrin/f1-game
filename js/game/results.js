@@ -240,7 +240,7 @@ function buildStandings() {
   body.appendChild(drHead);
 
   const drList = Object.entries(season.pts)
-    .sort((a, b) => b[1] - a[1]);
+    .sort((a, b) => SeasonCal.rank(season, a[0], b[0]));   // points, then countback
   drList.forEach(([driverId, pts], i) => {
     const c = cars.find((x) => x.driverId === driverId);
     const code = c ? c.code : ((season.driverCodes && season.driverCodes[driverId]) || driverId);

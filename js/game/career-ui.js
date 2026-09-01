@@ -9,6 +9,7 @@ function create(G) {
   const { $, els } = G;
 
   let draft = null;
+  let draftFrom = null;   // the live slot before an EMPTY slot was opened; restored if the draft is abandoned
 
   function head(text, id) {
     const n = el("h3", "sel-label", text);
@@ -89,6 +90,10 @@ function create(G) {
       armedDelete = "";
       picking = false;
       if (s.used) { Career.useSlot(s.flavour, s.i); G.openCareer(); return; }
+      // Opening an EMPTY slot repoints the live pointer at it; backing out
+      // used to leave it there, and load() then re-homed the player to the
+      // FIRST used slot rather than the one they were in.
+      draftFrom = Career.slot();
       Career.useSlot(s.flavour, s.i);
       draft = freshDraft();
       draft.flavour = s.flavour;
@@ -1133,6 +1138,7 @@ function create(G) {
 
   $("cr-back").onclick = () => {
     if (picking && Career.active()) { picking = false; armedDelete = ""; build(); return; }
+    if (draft && draftFrom && !Career.active()) { Career.useSlot(draftFrom.flavour, draftFrom.i); draftFrom = null; }
     // (build() retitles this button per state — see buildSlotPanes/buildHubPanes.)
     close();
     els.overlay.hidden = false;
@@ -1149,6 +1155,7 @@ function create(G) {
     // are choosing another one), so the "no career yet" branch below would never
     // be reached and NEW CAREER would silently go racing instead.
     if (!Career.active()) {
+      draftFrom = null;             // committed: the new slot IS the live one now
       Career.start(draft);          // draft.slot, when the picker set one
       G.openCareer();          // re-enters the hub with the save in place
       return;

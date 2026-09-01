@@ -349,16 +349,12 @@ four suites' own sources. What remains:
   `float-audit` then reports it 33 m in the air (the tower is not under it at
   that lateral), so the props were tuned by eye against the wrong shift and
   the fix needs a rendered pass (`survey-track`) per site, not a formula swap.
-- **A rival driving the CUSTOM team is never posed in VS FRIEND**
-  (`js/net/netplay.js` ~:343-348, `js/game.js` `makeCars` drops the custom
-  team unless the LOCAL player picked it, `wireId = teamIndex*2 + seat`). The
-  receiver keys the remote slot on the wireId of the slot it found; the sender
-  stamps its own car's wireId (22/23). When they differ every packet is
-  dropped and the rival sits frozen on the grid with no error. Reachable: a
-  guest opens the garage from the room and picks MY TEAM. Proposed fix: treat
-  a custom team as "seat taken" in `resolveSeatClash()` and run it from
-  `openRoom()` — or key `remotes` on the sender's declared wireId from HELLO.
-  No unit or spec covers a remote custom profile.
+- **~~A rival driving the CUSTOM team is never posed in VS FRIEND~~ — FIXED
+  (2026-09-01, second pass).** `resolveSeatClash()` now treats a custom (MY
+  TEAM) car as a seat that cannot be kept whatever the player's rank (a
+  peer's grid holds no slot or wireId for it), moves the player to a free
+  real-team seat and says why. Pinned by `net-lobby-lifecycle.test.mjs`;
+  the `test:net` browser group was NOT run for it.
 - **`CircuitElevations` is a dead branch** (`js/track/tracks.js` `hasRealElevation`
   / `elevationAt` / the `real` arm of `realPoints`): the global is defined only
   by `tools/bake-elevation.mjs`, is in no manifest entry, so every circuit's
@@ -367,17 +363,22 @@ four suites' own sources. What remains:
 - **Jeddah `startFrac` is in a corner** (`startline-probe`: mean |k| 0.0173
   over 120 m, first apex 1064 m later). Acknowledged in-file as known-wrong
   with no usable source; 39/40 pass.
-- **Plausible, unverified** (one line each; see the pass transcript for the
-  reasoning): `IncidentSim._lapCross` skips `netPlay.reportLap`/audio/sector
-  reset; `rescuePlayer` does not re-seed `rPrev*` render anchors (one smeared
-  frame per rescue); `quitToMenu` leaves `raceCtl`/`IncidentSim` state flying;
-  `NetRendezvous.waitFor` aborts a 2-minute join on one transient error;
-  `prefetchIce` nulls the cached servers before the refresh lands; an
-  `apex26.api.*` cache entry with a future `t` never expires; `sdp.js` has no
-  IPv6 relay candidate class and mis-parses `::ffff:` mapped addresses; the
-  empty-slot click in `career-ui` re-homes the live career to slot 0;
-  `settleRound` has no guard on an unknown `career.team`; standings ties are
-  insertion-ordered rather than countback; the boot canary is armed before the
+- **Second-pass (2026-09-01) fixes from the plausible list**, each with a
+  unit test where a node harness existed: `rescuePlayer` re-seeds the
+  `rPrev*` render anchors; `quitToMenu` resets race control; `waitFor` rides
+  out up to five consecutive transient relay errors (429/5xx/timeout/offline)
+  instead of aborting the two-minute wait; a future-stamped `apex26.api.*`
+  entry (clock stepped back) is neither served nor kept; `sdp.js` gained
+  `C_RELAY6` and unwraps `::ffff:` mapped IPv4; an abandoned career draft
+  restores the slot it was opened from; `settleRound` tolerates an unknown
+  team id; driver standings break points ties by countback (`season.finishes`
+  histogram, `SeasonCal.rank`) rather than insertion order.
+- **Checked, not defects**: `IncidentSim._lapCross` skipping `reportLap` —
+  a takeover lap is invalid and `updateCar` would not report it either;
+  `prefetchIce` nulling the cache before a refresh — `iceServers()` already
+  excludes credentials past `ICE_CRED_TTL_MS`, so the window is the 55→60 min
+  validity tail only.
+- **Plausible, still unverified**: the boot canary is armed before the
   ~550 KB deferred-backend fetch (a navigation during the download reads as a
   dead backend); a transient `checkFramebufferStatus` failure in `createTargets`
   disables post for the whole session with no retry (WGX has one).

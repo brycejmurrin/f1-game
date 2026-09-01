@@ -110,7 +110,7 @@ function trackIndex(round) {
 let lastScored = "race";
 let sprintOrder = null;   // driverIds, for a no-qualifying sprint weekend's grid
 
-function blank() { return { round: 0, pts: {}, teamPts: {}, driverCodes: {} }; }
+function blank() { return { round: 0, pts: {}, teamPts: {}, driverCodes: {}, finishes: {} }; }
 function resetWeekend() { lastScored = "race"; sprintOrder = null; }
 function restart() { resetWeekend(); return blank(); }
 
@@ -121,6 +121,16 @@ function scoreMap(raw) {
     const n = Number(value);
     if (id && isFinite(n)) out[id] = Math.max(0, n);
   });
+  return out;
+}
+// finishes: driverId -> sparse array of per-position counts (see award()).
+function finishMap(o) {
+  const out = {};
+  if (!o || typeof o !== "object") return out;
+  for (const k of Object.keys(o)) {
+    if (!Array.isArray(o[k])) continue;
+    out[k] = o[k].map((v) => (Number.isInteger(v) && v > 0 ? v : 0));
+  }
   return out;
 }
 function codeMap(raw) {
@@ -145,6 +155,7 @@ function resume(saved) {
   s.pts = scoreMap(s.pts);
   s.teamPts = scoreMap(s.teamPts);
   s.driverCodes = codeMap(s.driverCodes);
+  s.finishes = finishMap(s.finishes);
   if (s.stage === "race" && Array.isArray(s.sprintOrder) && s.sprintOrder.length) {
     sprintOrder = s.sprintOrder.slice();
   } else {
@@ -195,6 +206,13 @@ function award(season, order) {
     season.pts[c.driverId] = (season.pts[c.driverId] || 0) + pts;
     season.driverCodes[c.driverId] = c.code;
     season.teamPts[c.team.id] = (season.teamPts[c.team.id] || 0) + pts;
+    // Countback material: a histogram of Grand Prix finishing positions per
+    // driver (sprints do not count, as in the real tie-break). rank() reads it.
+    if (scoring !== "sprint" && !c.retired) {
+      const f = season.finishes || (season.finishes = {});
+      const row = f[c.driverId] || (f[c.driverId] = []);
+      row[i] = (row[i] || 0) + 1;
+    }
   });
   if (scoring === "sprint") {
     season.stage = "race";
@@ -212,6 +230,22 @@ function award(season, order) {
   return scoring;
 }
 function scored() { return lastScored; }
+
+// Standings order for two driver ids: points, then countback (more wins, then
+// more seconds, …), then the id so the order is total and stable. Equal points
+// used to fall to Object.entries insertion order — whoever scored first.
+function rank(season, a, b) {
+  const pts = (season && season.pts) || {};
+  const d = (pts[b] || 0) - (pts[a] || 0);
+  if (d) return d;
+  const fin = (season && season.finishes) || {};
+  const fa = fin[a] || [], fb = fin[b] || [];
+  for (let i = 0; i < Math.max(fa.length, fb.length); i++) {
+    const e = (fb[i] || 0) - (fa[i] || 0);
+    if (e) return e;
+  }
+  return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
+}
 
 function grid(cars, season) {
   // fmtActive() as well as the two obvious guards: sprintOrder is module state
@@ -268,7 +302,7 @@ return {
   engage, list, rounds, track, trackIndex,
   resume, blank, restart, resetWeekend, canRace, hasProgress,
   quali, qualiNext, stage, midWeekend, sprintOn, lapsFor, formatLaps, pointsTable,
-  award, scored, grid, drawRound,
+  award, scored, rank, grid, drawRound,
   presetIds, shuffled,
 };
 })();

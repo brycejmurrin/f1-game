@@ -695,7 +695,9 @@ function settleRound(order, player) {
   // Wages can exceed the round's income (esp. MY TEAM payroll); never let the
   // balance go permanently negative — the economy floors at zero.
   career.money = Math.max(0, career.money);
-  const repDelta = clamp((expectedFinish(team) - pos) * 0.6, -4, 6)
+  // A save whose team id is no longer on Teams.LIST degrades to a mid-grid
+  // expectation rather than throwing inside endRace (objectiveFor already guards).
+  const repDelta = clamp(((team ? expectedFinish(team) : 11) - pos) * 0.6, -4, 6)
                  + (obj.done ? OBJ_REP : -OBJ_REP);
   career.rep = clamp(career.rep + repDelta, 0, 100);
   const dnf = player.retired ? (player.dnf || "mechanical") : null;

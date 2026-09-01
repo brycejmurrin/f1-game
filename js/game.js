@@ -353,7 +353,6 @@ if (!gfx) {
       // when THIS boot started means the previous reload's GLX.init failed
       // too — WebGL2 is gone from this tab, and reloading again loops forever
       // (measured 236 reloads/64 s, Vulkan-only config). Fall through to #nogl.
-      // The latch is CONSUMED at boot start: re-reading it here always saw null, and "once" looped forever.
       try { if (!_claimSkipped) {
         sessionStorage.setItem("apex26.gfxClaimFail", "1");
         skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } } catch (_) { /* blocked storage: no skip, no reload */ }
@@ -3397,7 +3396,7 @@ function quitToMenu() {
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
   closeCamTuner(false); exitPhotoMode();
-  state = "menu"; paused = false;
+  state = "menu"; paused = false; raceCtl.reset();   // no SC/VSC left flying for the menu's cautionInfo()/otEnabled() readers
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -5296,6 +5295,7 @@ function rescuePlayer(c) {
   // Pace-scaled restore floor (same shape as coast()); never above vTop().
   c.speed = Math.min(vTop(), Math.max(c.speed, 16 * Math.max(PACE, 0.05)));
   c.px = smp.p[0]; c.pz = smp.p[2];
+  c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head;   // re-seed the render anchors (as retireCar does) or the car smears from the wall for a frame
   c.boostOn = false; c.deploying = false;
   c.xOn = false; c.aeroX = 0; c.xArmed = false;   // rescue drops back to Z-mode
   c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.rescueT = 0;
