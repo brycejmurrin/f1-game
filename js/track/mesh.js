@@ -897,7 +897,23 @@ const TrackMesh = (function () {
   // guide line goes just behind the front line, with a gap: two painted quads
   // that OVERLAP would z-fight, and a gap is cheaper than a second lift value.
   const BOX_HALF_W = 1.35, BOX_LEN = 5.0, BOX_FRONT = 2.0;
-  const PAINT_W = 0.12, GUIDE_GAP = 0.06, GUIDE_W = 0.12, GUIDE_OUT = 0.6;
+  // 0.20, deliberately bolder than the ~0.10-0.12 m of the real thing, for
+  // LEGIBILITY, not because anything was broken. Measured 2026-09-01 by tinting
+  // GUIDE_COL to an unmistakable magenta and counting only those pixels in one
+  // top-down grid frame (a plain "is it yellow" test is useless here — it also
+  // matches sand and kerbs, and counted 1032 px where the true figure was 247):
+  //
+  //     paint width   guide px, far half   guide px, whole frame
+  //     0.12 m        32                   178
+  //     0.20 m        45                   247
+  //
+  // The paint reaches EVERY slot at every distance in both cases — y 13 to y 606
+  // of a 640 px frame, the full length of the grid — so there is no dropout to
+  // fix; the far boxes were simply thin enough to read as absent. Widening buys
+  // 1.4x the paint pixels, tracking the 1.67x width ratio. Depth bias was also
+  // measured here and does NOT govern these quads: [-1,-2] against [-16,-32]
+  // moved 468 of 640000 px, and a deliberately absurd [-600,-1200] moved 1261.
+  const PAINT_W = 0.20, GUIDE_GAP = 0.06, GUIDE_W = 0.20, GUIDE_OUT = 0.6;
   const GRID_LIFT = 0.05;         // along the road normal, matching buildStartLine
   const GUIDE_COL = [0.92, 0.78, 0.12];
   function buildGridBoxes(track, out) {
