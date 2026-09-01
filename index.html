@@ -115,7 +115,10 @@
         // Query busts the cached shell. KEEP THE HASH: dropping it silently
         // destroyed VS FRIEND invite links (#vs=CODE) opened on a stale shell —
         // the one visitor class guaranteed to hit this reload path.
-        location.replace(location.pathname + "?b=" + v.build + location.hash);
+        // KEEP THE QUERY TOO: ?log= / ?inputdebug=1 / deep links vanished on
+        // exactly the reload a returning PWA user hits when the build changes.
+        var q = new URLSearchParams(location.search); q.set("b", String(v.build));
+        location.replace(location.pathname + "?" + q.toString() + location.hash);
       })
       .catch(function () {});
   } catch (e) {}
@@ -1832,7 +1835,7 @@
 <script defer crossorigin="anonymous" src="js/track/tracks.js?v=fefeb7c532f6"></script>
 <script defer crossorigin="anonymous" src="js/track/maps.js?v=0d6c2cddd707"></script>
 <script defer crossorigin="anonymous" src="js/car/car3d.js?v=344551cebce5"></script>
-<script defer crossorigin="anonymous" src="js/game/input.js?v=fcbbf6486e6a"></script>
+<script defer crossorigin="anonymous" src="js/game/input.js?v=c541129f9e9c"></script>
 <script defer crossorigin="anonymous" src="js/game/audio.js?v=f57d46e17b71"></script>
 <script defer crossorigin="anonymous" src="js/game/music-lib.js?v=f43e998612b3"></script>
 <script defer crossorigin="anonymous" src="js/game/spotify.js?v=27c8d6373cac"></script>
@@ -1841,7 +1844,7 @@
 <script defer crossorigin="anonymous" src="js/car/liveries.js?v=55f724c01a43"></script>
 <script defer crossorigin="anonymous" src="js/car/crest-paths.js?v=3f7bac329086"></script>
 <script defer crossorigin="anonymous" src="js/car/liverytex.js?v=dc112e04aeda"></script>
-<script defer crossorigin="anonymous" src="js/car/ghost.js?v=a428eb7c9a73"></script>
+<script defer crossorigin="anonymous" src="js/car/ghost.js?v=93fc3342ffad"></script>
 <script defer crossorigin="anonymous" src="js/game/physics-consts.js?v=e0b44be70422"></script>
 <script defer crossorigin="anonymous" src="js/game/tables.js?v=02a99fbba028"></script>
 <script defer crossorigin="anonymous" src="js/game/lighting.js?v=c06cdbe94fbe"></script>
@@ -1879,7 +1882,7 @@
 <script defer crossorigin="anonymous" src="js/game/steer-tuning.js?v=072a417935f9"></script>
 <script defer crossorigin="anonymous" src="js/game/perf.js?v=495da1c1cfe4"></script>
 <script defer crossorigin="anonymous" src="js/game/loop-health.js?v=8cc14cf3aba9"></script>
-<script defer crossorigin="anonymous" src="js/game/gfx-quality.js?v=793314c6aa39"></script>
+<script defer crossorigin="anonymous" src="js/game/gfx-quality.js?v=6e5f7787bff3"></script>
 <script defer crossorigin="anonymous" src="js/game/gfx-debug.js?v=e0ccb242c9fc"></script>
 <script defer crossorigin="anonymous" src="js/game/ui-scale.js?v=71d20ad63b86"></script>
 <script defer crossorigin="anonymous" src="js/game/cockpit-opts.js?v=fbd88d65fac7"></script>
@@ -1887,10 +1890,10 @@
 <script defer crossorigin="anonymous" src="js/game/metrics.js?v=9d9bdd157f9d"></script>
 <script defer crossorigin="anonymous" src="js/game/cameras.js?v=ef44161e1bf3"></script>
 <script defer crossorigin="anonymous" src="js/game/cam-modes.js?v=0ccbabb90f93"></script>
-<script defer crossorigin="anonymous" src="js/game/hud.js?v=eacd49ad774b"></script>
+<script defer crossorigin="anonymous" src="js/game/hud.js?v=fce27cb6d139"></script>
 <script defer crossorigin="anonymous" src="js/game/results.js?v=545216f2544c"></script>
 <script defer crossorigin="anonymous" src="js/game/quali.js?v=97772e059767"></script>
 <script defer crossorigin="anonymous" src="js/game/debrisworld.js?v=77718b657fb8"></script>
 <script defer crossorigin="anonymous" src="js/game/incidentsim.js?v=d39ff2c91040"></script>
-<script defer crossorigin="anonymous" src="js/game.js?v=cc280b0123fd"></script>
+<script defer crossorigin="anonymous" src="js/game.js?v=e85329359d18"></script>
 </body></html>

@@ -172,6 +172,15 @@ const Input = (function () {
     gyroAttached = true;
     window.addEventListener("deviceorientation", onOrient);
   }
+  // Leaving tilt used to leave the sensor streaming (and the One-Euro filter
+  // running) for the whole session; attach is idempotent, so re-entering tilt
+  // costs nothing.
+  function detachGyro() {
+    if (!gyroAttached) return;
+    gyroAttached = false;
+    window.removeEventListener("deviceorientation", onOrient);
+    tiltSeen = false;
+  }
 
   // Must be called from a user gesture (iOS permission prompt).
   // Resolves true if tilt data can be expected.
@@ -1017,6 +1026,7 @@ const Input = (function () {
       touches.clear();
       touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
     }
+    if (steerMode !== "tilt") detachGyro();
   }
 
   function setAdaptiveButtons(v) {
@@ -1185,7 +1195,11 @@ const Input = (function () {
       catch (_) { /* Log absent */ }
     });
     window.addEventListener("gamepaddisconnected", function (e) {
-      padConnected = false; padSteer = 0; padThrottle = padBrake = false;
+      // Another pad (a wheel + a controller, a hub re-enumerating) may still be
+      // there: read the live list instead of assuming the last one just left.
+      let still = false;
+      try { const gps = navigator.getGamepads ? navigator.getGamepads() : []; for (let i = 0; i < gps.length; i++) if (gps[i] && gps[i].index !== (e.gamepad && e.gamepad.index)) still = true; } catch (_) { /* no API */ }
+      padConnected = still; padSteer = 0; padThrottle = padBrake = false;
       padThrottleVal = padBrakeVal = 0;
       padPrevButtons.length = 0;
       padNavDir = null;

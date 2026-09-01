@@ -568,6 +568,12 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   // Asphalt vs verge is classified in fs_main from abs(x) < hw - 0.45.
   return select(vec4<f32>(0.0), vec4<f32>(s, x, hw, 1.0), valid);
 }
+// fs_main gate: need comes from the per-draw uniform D (uniform control flow),
+// and a helper keeps the entry branch-free above its derivatives. No dpdx here.
+fn trkFromWorldIf(wp: vec3<f32>, need: bool) -> vec4<f32> {
+  var r = vec4<f32>(0.0); if (need) { r = trkFromWorld(wp); }
+  return r;
+}
 ${hash}
 ${vnoise}
 ${brdf}
@@ -760,10 +766,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // before any branching or early exit.
   let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
   let fwTrkAttr = abs(dpdx(in.trk)) + abs(dpdy(in.trk));
-  let fromWorld = trkFromWorld(in.wpos);
+  let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
+  // Only road (markings, asphalt/verge) and buryRibbon draws consume the
+  // 16-iteration LUT search; every other lit fragment paid it for a value
+  // select()ed away (largest WGX-only fragment cost, 2026-09-01 audit). A
+  // matId-0 prop over the ribbon now shades with its own surfaceId, as on GLX.
+  let fromWorld = trkFromWorldIf(in.wpos, isRoadDraw || D.mat2.w > 0.5);
   // fromWorld.xyz is (s, x, hw) — not .yzw (that was x/hw/valid and smashed dash AA).
   let fwWorld = abs(dpdx(fromWorld.xyz)) + abs(dpdy(fromWorld.xyz));
-  let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
   // Location-3 in.trk shards dashes on Dawn (loc5 / linear / perspective
   // all measured). Road markings reconstruct (s,x,hw) per fragment from
   // interpolated wpos + the world LUT — bind group 2 is the LUT, not

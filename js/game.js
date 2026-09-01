@@ -446,8 +446,8 @@ function syncCustomTeam() {
   if (i >= 0) Teams.LIST.splice(i, 1);
   Teams.LIST.push(loadCustomTeam());
   invalidateDecalTextures("custom");
-  invalidateCustomMeshCache(teamMeshes);
-  invalidateCustomMeshCache(teamBodies);
+  invalidateCustomMeshCache(teamMeshes, teamMeshOrder);   // without the order array the key stays queued, gets pushed twice, and the NEXT eviction frees a live mesh
+  invalidateCustomMeshCache(teamBodies, teamBodyOrder);
   invalidateCustomMeshCache(playerBodies, playerBodyOrder);
   invalidateCustomMeshCache(cockpitBodies, cockpitBodyOrder);
 }
@@ -2387,7 +2387,7 @@ async function loadCarModel(url) {
     for (const k in teamMeshes) { if (gfx.freeMesh) gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }  // free old GPU buffers, then rebuild from model
     for (const k in teamBodies) { if (gfx.freeMesh) gfx.freeMesh(teamBodies[k]); delete teamBodies[k]; }
     for (const k in playerBodies) { if (gfx.freeMesh) gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
-    playerBodyOrder.length = 0;
+    playerBodyOrder.length = teamMeshOrder.length = teamBodyOrder.length = 0;
     for (const k in cockpitBodies) { if (gfx.freeMesh) gfx.freeMesh(cockpitBodies[k]); delete cockpitBodies[k]; }
     cockpitBodyOrder.length = 0;
     for (const k in wheelMeshCache) { freeWheelPair(wheelMeshCache[k]); delete wheelMeshCache[k]; }
@@ -2901,7 +2901,7 @@ function endRace(forcedOrder) {
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
-  raceCtl.reset();
+  raceCtl.reset(); weatherArc = null;   // an arc that outlives the race would override the next race's weather
   // The flag can fall while the player is PAUSED — a networked guest is ended
   // by the host's RESULT, not by their own input. Leaving `paused` set stranded
   // the pause dialog on top of the results with a RESUME that resolves to
@@ -3396,7 +3396,7 @@ function quitToMenu() {
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
   closeCamTuner(false); exitPhotoMode();
-  state = "menu"; paused = false; raceCtl.reset();   // no SC/VSC left flying for the menu's cautionInfo()/otEnabled() readers
+  state = "menu"; paused = false; raceCtl.reset(); weatherArc = null;   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -5187,7 +5187,7 @@ function updateCar(c, dt, ranked) {
       c.lapTime = c._lapTimeAtLine != null ? c._lapTimeAtLine : c.lapTime;
       // (A finished car cannot get here — updateCar early-outs it long before
       // the crossing logic — so no `c.finished` undo is needed.)
-      if (c.isPlayer) { sectorIdx = sectorAt(c.s); sectorStartT = c.lapTime; }
+      if (c.isPlayer) { sectorIdx = sectorAt(c.s); sectorStartT = c.lapTime; sectorValid = false; }   // the next split is timed from a reversed entry — invalid, as at a sector line
       // Crossing back over the line wraps c.s from ~0 to ~track.total, breaking the
       // monotonic-distance domain the ghost recorder assumes. Ghost.record only
       // rejects DECREASING s, so the next forward-jump sample would be appended and
@@ -7789,7 +7789,7 @@ function firstGesture() {
 let gestured = false;
 document.addEventListener("pointerdown", () => {
   if (gestured) return; gestured = true; firstGesture();
-}, { once: false, capture: true });
+}, { once: true, capture: true });
 
 
 // UI SIZE / HUD SIZE + RESOLUTION live in js/game/ui-scale.js (UiScale.create(G)
@@ -7969,7 +7969,7 @@ $("track-detail-close").onclick = closeTrackDetail;
 // thumb mid-tap.
 const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
 function syncSettingsAvailability() {
-  const inRace = state === "race";
+  const inRace = state === "race"; try { if (inRace) document.body.dataset.race = "1"; else delete document.body.dataset.race; } catch (_) { /* GfxQuality's reload buttons arm a two-tap confirm while this is set */ }
   $("pm-hidehud").disabled = !inRace;
   $("pm-lighting").disabled = !inRace;
   $("pm-camtune").disabled = !inRace;

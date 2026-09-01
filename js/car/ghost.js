@@ -76,10 +76,14 @@ const Ghost = (function () {
     if (lapTime < bestTime()) {
       best = { time: round(lapTime, 3), t: done.t, s: done.s, x: done.x };
       if (trackId != null) {
-        const store = loadStore();
-        store[trackId] = best;
-        saveStore(store);
-        Log.info("car", "ghost save " + trackId);
+        // Deferred: loadStore/saveStore parse and stringify EVERY circuit's ghost
+        // (~40 KB each) and this runs inside updateCar on the lap-line frame of
+        // a new record — the one-frame hitch shape PERF-FINDINGS §2 records.
+        const id = trackId, snap = best;
+        const write = function () { try { const store = loadStore(); store[id] = snap; saveStore(store); Log.info("car", "ghost save " + id); } catch (_) { Log.warn("car", "ghost save fail"); } };
+        if (typeof requestIdleCallback === "function") requestIdleCallback(write, { timeout: 2000 });
+        else if (typeof setTimeout === "function") setTimeout(write, 0);
+        else write();   // bare VM harness: no scheduler, write now
       }
       return true;
     }

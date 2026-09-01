@@ -171,7 +171,7 @@ test("no TinyFish credential literal and no tracked-fallback variable anywhere u
   // exempt now: a credential belongs in the shell or the gitignored .env.
   const prefix = "sk-" + "tinyfish-";
   const fallbackName = "KEY_" + "FALLBACK";
-  const skip = new Set(["node_modules", ".git", "scratch", "artifacts", "dist"]);
+  const skip = new Set(["node_modules", ".git", "scratch", "artifacts", "dist", "worktrees"]);   // .claude/worktrees/ holds transient agent checkouts of the same tree
   const hits = [];
   function walk(dir) {
     for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {

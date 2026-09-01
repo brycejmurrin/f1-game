@@ -885,7 +885,13 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
    verification by live capture is the one piece that did NOT land — see
    item 2 on the capture pipeline's noise floor; the Dawn coverage classifier
    stood in for it.
-9. `trkFromWorld` gating looked free but is NOT semantics-preserving: the
-   LUT result feeds `classified`/`vMatId` on every draw over the ribbon
-   (props/cars with matId 0 classify as asphalt by design there), so a
-   road-only gate changes material selection. Left alone deliberately.
+9. `trkFromWorld` gating — LANDED 2026-09-01 as `trkFromWorldIf(wpos,
+   isRoadDraw || buryRibbon)`. The earlier note kept it unconditional because
+   the LUT result also fed `classified`/`vMatId`, so a matId-0 prop or car
+   fragment standing over the ribbon classified as asphalt (MAT 16). That was
+   what the code did, not a design: GLX has no world LUT and shades such a
+   fragment with its draw's own surfaceId, so the gate is the parity fix as
+   well as the perf one (the 2026-09-01 frame audit ranked the unconditional
+   search the largest WGX-only fragment cost: 16 storage loads + ~200 scalar
+   ops per lit pixel of every prop, car, terrain and building). Real-GPU
+   sign-off: `gpu-census.yml` on macos-latest.
