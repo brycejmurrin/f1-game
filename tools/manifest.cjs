@@ -106,14 +106,6 @@ const FULL = [
   "js/game/music-lib.js",
   "js/game/spotify.js",
   "js/game/audio-panel.js",
-  "js/data/api.js",
-  "js/data/telemetry.js",
-  "js/data/export.js",
-  "js/data/schedule.js",
-  "js/data/standings.js",
-  "js/data/lastrace.js",
-  "js/data/live.js",
-  "js/data/hub.js",
   "js/car/parts.js",
   "js/car/liveries.js",
   "js/car/crest-paths.js",
@@ -259,7 +251,11 @@ const HARD_EDGES = [
   ["js/mat4.js", "js/game.js"],
   ["js/mat4.js", "js/track/spline.js"],
   ["js/mat4.js", "js/track/scenery-structures.js"],
-  ["js/mat4.js", "js/data/telemetry.js"],
+  // ["js/mat4.js", "js/data/telemetry.js"] was here. telemetry.js is LAZY_DATA
+  // now, so the pair crosses rosters and HARD_EDGES cannot order it. The
+  // dependency is real and satisfied by CONSTRUCTION rather than by position:
+  // mat4.js is the 2nd tag in FULL and the data bundle is injected from a menu
+  // click, long after every tag has evaluated.
   // liverytex sizes its atlas from GLX.mobileTier at EVAL time — the one
   // mobile-tier detection now lives in glx.js and nowhere else.
   ["js/render/glx.js", "js/car/liverytex.js"],
@@ -317,13 +313,8 @@ const HARD_EDGES = [
   ["js/track/space.js", "js/track/surface.js"],
   ["js/track/models.js", "js/track/circuit-kit.js"],
   ["js/track/tracks.js", "js/track/maps.js"],               // maps calls Tracks.buildCenterline
-  ["js/data/api.js", "js/data/hub.js"],
-  ["js/data/telemetry.js", "js/data/hub.js"],               // hub calls Data*.create at eval
-  ["js/data/export.js", "js/data/hub.js"],
-  ["js/data/schedule.js", "js/data/hub.js"],
-  ["js/data/standings.js", "js/data/hub.js"],
-  ["js/data/lastrace.js", "js/data/hub.js"],
-  ["js/data/live.js", "js/data/hub.js"],
+  // js/data's own eval-time edges moved to LAZY_DATA_EDGES when the hub left
+  // FULL — HARD_EDGES pairs must both be IN FULL to be orderable.
   ["js/game/tables.js", "js/game/hud.js"],      // hud destructures GameTables at eval
   ["js/game/tables.js", "js/game/cam-modes.js"], // cam-modes destructures GameTables at eval
   ["js/game/physics-consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
@@ -435,6 +426,30 @@ const LAZY_RACE = [
   "js/game/light-presets.js",
 ];
 
+// THE DATA HUB (js/data/*), 154 KB behind ONE menu button. Jolpica/OpenF1
+// schedule, standings, last race, live timing, telemetry and export — none of
+// which a session that never opens DATA will run a byte of. Nothing outside
+// js/data/ names any of its eight globals except DataHub.init/.open in
+// game.js and a `typeof F1API` read in js/game/apex.js, so the whole directory
+// lifts off the boot wall as one bundle loaded from the #mb-data click.
+const LAZY_DATA = [
+  "js/data/api.js",
+  "js/data/telemetry.js",
+  "js/data/export.js",
+  "js/data/schedule.js",
+  "js/data/standings.js",
+  "js/data/lastrace.js",
+  "js/data/live.js",
+  "js/data/hub.js",
+];
+// hub.js calls Data*.create() at EVAL time, so every tab module must have
+// evaluated before it — the same meaning HARD_EDGES carries for FULL. These
+// pairs moved here from HARD_EDGES when the directory left FULL, and are
+// DERIVED from the roster rather than listed: the shape is "everything, then
+// the hub", so a hand-written copy can only ever drift out of step with it.
+const LAZY_DATA_EDGES = LAZY_DATA.filter((f) => f !== "js/data/hub.js")
+  .map((f) => [f, "js/data/hub.js"]);
+
 const DEFERRED_EDGES = [
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"], // string concat at eval
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],
@@ -478,6 +493,7 @@ const sceneryPath = (id) => `${SCENERY_DIR}/${id}.js`;
 module.exports = {
   CIRCUITS, CIRCUITS_DIR, FULL, CSS, CARVIEW, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
+  LAZY_DATA, LAZY_DATA_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath,
 };

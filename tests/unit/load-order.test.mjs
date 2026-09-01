@@ -138,7 +138,7 @@ function lazyFiles() {
   // have to be accounted for, or "created the file, forgot to load it" stops
   // being catchable.
   return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
-    ...(MANIFEST.LAZY_SCENERY || [])];
+    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -201,9 +201,10 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   // circuit builds BARE — road and terrain, no dressing — with no exception to
   // notice. LAZY_AGENT is deliberately NOT here (dev/test surface; a player who
   // never opens it should not pay for it in the install).
-  for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_SCENERY || [])]) {
+  for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_SCENERY || []),
+                   ...(MANIFEST.LAZY_DATA || [])]) {
     assert.ok(seeded.has(f),
-      `${f} is a lazily-injected RACE asset, so sw.js must seed it or an offline install builds bare`);
+      `${f} is a lazily-injected asset, so sw.js must seed it or it is unreachable offline`);
   }
 });
 
@@ -218,7 +219,8 @@ test("sw.js stamps every injected asset it seeds", () => {
   // Rebuild the SW's own predicate and RUN it, rather than pattern-matching the
   // source text: the question is which paths actually get the ?v= suffix.
   const stamps = new RegExp(m[1].slice(1, -1));
-  const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_SCENERY || [])];
+  const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []),
+    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || [])];
   const unstamped = injected.filter((f) => !stamps.test(f));
   assert.deepEqual(unstamped, [],
     `these are injected as ?v=<build> but seeded bare, so the cache key is one nothing requests: ${unstamped}`);
@@ -300,6 +302,37 @@ test("LAZY_RACE files have no <script> tag", () => {
   for (const f of (MANIFEST.LAZY_RACE || [])) {
     assert.ok(!tagged.has(f), `${f} is LAZY_RACE but still has a <script> tag in index.html`);
   }
+});
+
+// Same lockstep again, for the data hub. Its failure mode is the mild one of
+// the three — DataHub simply never appears and the DATA button stays shut —
+// but the drift is identical: leave FULL without joining this roster and the
+// file has neither a tag nor an injector.
+test("js/game.js DATA_FILES equals MANIFEST.LAZY_DATA", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const block = src.match(/const DATA_FILES = \[([\s\S]*?)\n\];/);
+  assert.ok(block, "js/game.js must declare DATA_FILES for the lazy data hub");
+  const listed = [...stripComments(block[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(listed, MANIFEST.LAZY_DATA);
+});
+
+// hub.js calls Data*.create() at EVAL time, so these pairs are the difference
+// between a working hub and a TypeError on the tab modules. loadBackendScripts
+// only honours edges whose BOTH ends are in the file list it was handed, so a
+// pair that stopped naming a real file would silently stop constraining
+// anything. Both sides DERIVE the edges from their roster ("everything, then
+// the hub"), so what is asserted is that the two derivations agree AND that
+// the result actually orders every tab module before hub.js — the property the
+// hand-written lists existed to guarantee.
+test("the data-hub DAG orders every tab module before hub.js, on both sides", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(src, /const DATA_EDGES = DATA_FILES\.filter\(\(f\) => f !== DATA_HUB\)\.map\(\(f\) => \[f, DATA_HUB\]\);/,
+    "js/game.js must derive DATA_EDGES from DATA_FILES");
+  assert.match(src, /const DATA_HUB = "js\/data\/hub\.js";/, "DATA_HUB must name the hub");
+  const want = MANIFEST.LAZY_DATA.filter((f) => f !== "js/data/hub.js").map((f) => [f, "js/data/hub.js"]);
+  assert.deepEqual(MANIFEST.LAZY_DATA_EDGES, want);
+  assert.equal(want.length, MANIFEST.LAZY_DATA.length - 1,
+    "every LAZY_DATA file except the hub itself must be ordered before it");
 });
 
 test("js/game.js AGENT_EDGES equals MANIFEST.LAZY_EDGES", () => {

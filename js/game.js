@@ -150,6 +150,50 @@ function ensureScenery(idx) {
   if (!def || sceneryResident(def.id)) return Promise.resolve();
   return loadBackendScripts([SCENERY_DIR + "/" + def.id + ".js"], []);
 }
+// LAZY_DATA (tools/manifest.cjs). The Jolpica/OpenF1 hub — 154 KB behind ONE
+// menu button, which a session that never opens DATA runs no byte of. Only two
+// names escape js/data/: DataHub.init/.open here, and a `typeof F1API` read in
+// js/game/apex.js that already guards itself. Unlike the scenery closures —
+// consumed synchronously by Tracks.build() on the next line — nothing outside
+// reads a Data* global, so this needs no gate beyond the button itself.
+const DATA_FILES = [
+  "js/data/api.js",
+  "js/data/telemetry.js",
+  "js/data/export.js",
+  "js/data/schedule.js",
+  "js/data/standings.js",
+  "js/data/lastrace.js",
+  "js/data/live.js",
+  "js/data/hub.js",
+];
+// hub.js calls Data*.create() at EVAL time, so every tab module lands first.
+// DERIVED, not listed: a hand-written copy of "everything, then the hub" has
+// no failure mode except drifting from the roster above. The manifest derives
+// it the same way; load-order.test.mjs asserts both.
+const DATA_HUB = "js/data/hub.js";
+const DATA_EDGES = DATA_FILES.filter((f) => f !== DATA_HUB).map((f) => [f, DATA_HUB]);
+// Memoised on the PROMISE, not on a boolean: two fast taps on DATA must not
+// inject the bundle twice, and the second tap has to await the first load
+// rather than call DataHub.open() while hub.js is still in flight.
+let dataHubLoad = null;
+function ensureDataHub() {
+  if (dataHubLoad) return dataHubLoad;
+  dataHubLoad = loadBackendScripts(DATA_FILES, DATA_EDGES).then(() => {
+    // Bare global, not window.DataHub: hub.js is a script-level `const`, a
+    // lexical binding that is never a window property. inject() resolves even
+    // on error, so this is the ONLY place a miss is visible; null the memo so
+    // a later tap retries instead of latching the failure for the session.
+    if (typeof DataHub === "undefined") {
+      Log.warn("data", "the data hub bundle did not load — DATA stays closed");
+      dataHubLoad = null;
+      return false;
+    }
+    DataHub.init(els.datahub);
+    return true;
+  });
+  return dataHubLoad;
+}
+
 function wantAgentSurface() {
   if (typeof window !== "undefined" && window.__TEST_MODE) return true;
   try { if (localStorage.getItem("apex26.devApi") === "1") return true; } catch (_) { /* blocked */ }
@@ -7758,7 +7802,12 @@ function refreshCareerButton() {
 $("mb-career").onclick = () => openCareerSlots();
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };
-$("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect(); };
+$("mb-data").onclick = () => {
+  // The click sound fires immediately — the bundle is one network round trip
+  // on a cold tap and the button must not feel dead while it lands.
+  if (soundOn) GameAudio.uiSelect();
+  ensureDataHub().then((ok) => { if (ok) DataHub.open(); });
+};
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 // Same sheet from the pause menu's SETTINGS page — the controls reference is
 // most wanted mid-session, not on the title screen. #howtoplay outranks
@@ -8797,7 +8846,9 @@ Input.onPointerKindChange(syncPointerKind);
     + (Input.touchControlsNeeded() ? ({buttons:"tap arrows to steer",touch:"drag to steer"}[steerMode] || "tilt to steer") : classics + " classics");
 }
 Input.setSteerMode(steerMode);
-DataHub.init(els.datahub);
+// DataHub.init(els.datahub) used to run here. It moved into ensureDataHub(),
+// which the DATA button awaits — js/data is LAZY_DATA now and there is no
+// DataHub at boot to initialise.
 $("pm-steer").textContent = steerLabel();
 $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();

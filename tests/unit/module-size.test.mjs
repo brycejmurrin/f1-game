@@ -482,7 +482,14 @@ const CEILINGS = {
   // 8807 on work of its own. Neither number fits the union, which carries both
   // sets of lines. Re-measured on THIS tree with the suite's own split-newline
   // metric (not grep -c, which is one short on a file with no trailing newline): 8870.
-  "js/game.js": 8870,
+  // 8870 -> 8921 for the LAZY_DATA loader (2026-09-01): DATA_FILES, the derived
+  // DATA_EDGES, ensureDataHub() and the DATA button's await, minus the
+  // DataHub.init(els.datahub) line this deletes from the boot-restore block.
+  // Same argument as the two lazy loaders above — it sits beside AGENT_FILES /
+  // RACE_FILES because it IS that mechanism with a third roster, and the button
+  // it gates is wired here. Takes 154,412 B off the boot script wall (3,628 ->
+  // 3,477 KB), which is ~3,027 B of payload per line of game.js.
+  "js/game.js": 8921,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
