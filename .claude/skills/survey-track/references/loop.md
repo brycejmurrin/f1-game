@@ -68,7 +68,7 @@ Compare `before-*.png` vs `after-*.png`; confirm the probe is flag-free.
 
 ### 6 · Test & ship
 
-- Geometry: `node tools/test-bg.mjs circuit`
+- Geometry: `node tools/test-bg.mjs circuits`
 - Pixel-diff suite is PARKED under `tests/manual/tracks-visual.spec.js` (no
   baselines). Do not treat it as a gate. Intentional goldens:
   `npm test -- tests/manual/tracks-visual.spec.js --update-snapshots`.

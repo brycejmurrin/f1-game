@@ -318,14 +318,14 @@ test("coverage skills exist for input, season, data-hub, and AI", () => {
     assert.ok(text.split("\n").length <= 180, `${name} SKILL.md must stay a thin index`);
   }
   const input = fs.readFileSync(path.join(SKILLS, "input-controls/SKILL.md"), "utf8");
-  assert.match(input, /test-bg\.mjs steering/);
+  assert.match(input, /test-bg\.mjs input/);
   assert.match(input, /tune-physics/);
   const season = fs.readFileSync(path.join(SKILLS, "season-mode/SKILL.md"), "utf8");
   assert.match(season, /Tracks\.SEASON/);
   assert.match(season, /test-bg\.mjs modes/);
   const data = fs.readFileSync(path.join(SKILLS, "data-hub/SKILL.md"), "utf8");
   assert.match(data, /innerHTML/);
-  assert.match(data, /test-bg\.mjs api/);
+  assert.match(data, /test-bg\.mjs hooks/);
   const ai = fs.readFileSync(path.join(SKILLS, "ai-racecraft/SKILL.md"), "utf8");
   assert.match(ai, /ai-drive\.js/);
   assert.match(ai, /tune-physics/);

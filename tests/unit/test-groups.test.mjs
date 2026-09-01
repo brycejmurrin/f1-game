@@ -71,15 +71,44 @@ test("a js/game file with its own browser spec routes to that spec's group", () 
   // are excluded here on purpose, so this cannot pass vacuously.
   const specBacked = [
     ["js/game/ui-scale.js", "ui"],
-    ["js/game/racecontrol.js", "debris"],
-    ["js/game/aerozones.js", "behaviour"],
-    ["js/game/garage-scene.js", "parts"],
+    ["js/game/racecontrol.js", "driving"],
+    ["js/game/aerozones.js", "driving"],
+    ["js/game/garage-scene.js", "car"],
   ];
   const specific = RULES.slice(2);
   for (const [file, group] of specBacked) {
     const groups = new Set(specific.filter(([re]) => re.test(file)).flatMap(([, g]) => g));
     assert.ok(groups.has(group), `${file} must route to test:${group} (got ${[...groups].join(",") || "nothing"})`);
   }
+});
+
+test("the topical browser groups are a DISJOINT partition of the specs", () => {
+  // The 2026-09 regroup folded 30 browser groups into 12 by UNION, and the
+  // point of a union is that pick-tests can name two groups without running a
+  // spec twice. `fast` used to double-run nine specs whenever it co-ran with
+  // hooks or driving. tiny/smoke are the boot gate, not a topic: they overlap
+  // hooks on purpose (dev-tools, logging) and are exempt here.
+  const BOOT = new Set(["tiny", "smoke"]);
+  const specsDir = path.join(ROOT, "tests", "specs");
+  const onDisk = fs.readdirSync(specsDir).filter((f) => f.endsWith(".spec.js"));
+  const expand = (tok) => {
+    const re = new RegExp("^" + path.basename(tok).replace(/[.]/g, "\\.").replace(/\*/g, "[a-z0-9_-]*") + "$");
+    return onDisk.filter((f) => re.test(f));
+  };
+  const owner = new Map();
+  const dups = [];
+  for (const [name, cmd] of Object.entries(pkg.scripts)) {
+    if (!name.startsWith("test:") || !/run-playwright/.test(cmd) || /--project=|--update-snapshots/.test(cmd)) continue;
+    const g = name.slice(5);
+    if (BOOT.has(g)) continue;
+    for (const tok of cmd.match(/tests\/specs\/[^\s"']+\.spec\.js/g) || [])
+      for (const f of expand(tok)) {
+        if (owner.has(f) && owner.get(f) !== g) dups.push(`${f}: ${owner.get(f)} + ${g}`);
+        owner.set(f, g);
+      }
+  }
+  assert.ok(owner.size > 100, `only ${owner.size} specs resolved from the topical groups — the pattern is broken`);
+  assert.deepEqual(dups, [], "a spec is named by two topical browser groups — pick-tests would run it twice");
 });
 
 /* Pull one "## N. Heading" section out of the doc, so a table elsewhere in the

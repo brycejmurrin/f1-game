@@ -38,8 +38,8 @@ before/after; don't guess from AGENTS.md.
   knob). Renderer compile / GL errors → **webgl-debug** / **webgpu-debug**.
 
 ```sh
-node tools/test-bg.mjs webgl    # lighting-ab + tuner-grade + probes
-node tools/test-bg.mjs ab       # lighting-ab only
+node tools/test-bg.mjs gfx      # lighting-ab + tuner-grade + probes + tlx
+npm test -- tests/specs/lighting-ab.spec.js   # lighting-ab only
 ```
 
 Related: **webgl-debug**, **debug-cameras**.

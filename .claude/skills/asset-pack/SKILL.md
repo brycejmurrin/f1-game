@@ -41,7 +41,7 @@ device/feature miss, not "WGX has no pack."
 
 ```sh
 npm run test:tooling-fast
-node tools/test-bg.mjs api
+node tools/test-bg.mjs hooks
 ```
 
 Related: `bump-cache.mjs --apply` (check-changes/references/bump.md), **webgl-debug**, **webgpu-debug**, **lighting-tuner**.

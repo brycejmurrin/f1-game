@@ -483,7 +483,7 @@ async function main() {
     console.log(`  ${knob.file}:  ${knob.find}`);
     console.log(`  ->             ${replacement}`);
     console.log(`  catalog self-synced (find<->b swapped); index.html cache ?v=${ver} -> ?v=${ver + 1}`);
-    console.log(`  next: re-render to confirm (run ${knob.id}), then npm run test:ab before committing`);
+    console.log(`  next: re-render to confirm (run ${knob.id}), then npm run test:gfx (lighting-ab) before committing`);
     return;
   }
 

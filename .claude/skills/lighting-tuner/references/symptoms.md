@@ -79,11 +79,11 @@ the lamp/mist/star knobs together.
 Day/night **light counts and exposure**:
 
 ```sh
-node tools/test-bg.mjs webgl    # lighting-ab + tuner-grade + webgl-probes
-node tools/test-bg.mjs ab       # lighting-ab only
+node tools/test-bg.mjs gfx      # lighting-ab + tuner-grade + webgl-probes + tlx
+npm test -- tests/specs/lighting-ab.spec.js   # lighting-ab only
 ```
 
 `tests/specs/lighting-tuner-grade.spec.js` is **IMAGE & COLOUR UI grading
 only** — it does not check `numLights` or day/night ambient. After any
-`applyRaceSettings` edit, run `node tools/test-bg.mjs ab` first (accidentally lighting the
+`applyRaceSettings` edit, run `npm test -- tests/specs/lighting-ab.spec.js` first (accidentally lighting the
 night scene like day).

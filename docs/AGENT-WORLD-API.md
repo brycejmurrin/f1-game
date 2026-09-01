@@ -9,7 +9,7 @@ rasters in `js/game/agentview-raster.js`) — `world()`, `field()`, `trackInfo()
 `js/track/tracks.js` and the scenery modules, and a CLI at `tools/agent.mjs`.
 **Reference documentation is `docs/DEBUG-HOOKS.md` → "Agent world view"**; the
 API also describes itself via `__apex.agentHelp()`. Tests:
-`tests/specs/agent-view.spec.js` (`node tools/test-bg.mjs agent`, 117 tests).
+`tests/specs/agent-view.spec.js` (`node tools/test-bg.mjs hooks`, 117 tests).
 This document keeps the research and the reasoning — §2's audit describes the
 state of the codebase **before** the work, and is retained because it explains
 why the design is shaped the way it is.

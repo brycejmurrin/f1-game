@@ -68,7 +68,7 @@ Load from the SKILL.md index when the task needs this detail.
 6. **Tests**:
    ```sh
    node tools/verify-track.cjs <id>
-   node tools/test-bg.mjs circuit   # walls + autopilot + elevation (includes tracks-walls.spec.js)
+   node tools/test-bg.mjs circuits   # walls + autopilot + elevation (includes tracks-walls.spec.js)
    ```
    The `terrain-over-road.spec.js` audit (part of the full suite) catches terrain
    triangles rendering above the racing line — re-run it if you changed elevation

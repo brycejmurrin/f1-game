@@ -35,7 +35,7 @@ baking. Plan + reuse numbers: `docs/research/SCENE-GRAPH-PLAN.md`.
 node tools/graph-parity.cjs <id>            # or --all
 BASE=<ref> node tools/graph-parity.cjs --all
 npm run test:tooling-fast
-node tools/test-bg.mjs webgl                # instanced-draw.spec.js
+node tools/test-bg.mjs gfx                # instanced-draw.spec.js
 node tools/verify-track.cjs <id>
 ```
 
@@ -87,7 +87,7 @@ judging a `graph-parity` mismatch.
 5. **Fast contract then GL wiring**:
    ```sh
    npm run test:tooling-fast
-   node tools/test-bg.mjs webgl    # instanced-draw.spec.js — background
+   node tools/test-bg.mjs gfx    # instanced-draw.spec.js — background
    ```
 
 6. **Ship** — `node tools/bump-cache.mjs --apply` if you edited `js/`. Visual spot-check:

@@ -62,7 +62,7 @@ WGX is a device/feature miss, not "WGX has no arrays."
 6. **Validate**:
    ```sh
    npm run test:tooling-fast
-   node tools/test-bg.mjs api
+   node tools/test-bg.mjs hooks
    ```
    Visual: **lighting-tuner** or **webgl-debug** / **webgpu-debug** on a track
    with varied surfaces.

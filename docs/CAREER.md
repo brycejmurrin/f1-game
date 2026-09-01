@@ -763,5 +763,5 @@ every finisher and scores no points, and that the draw leaves the sim RNG stream
 exactly where it found it. `tests/specs/ui-audit.spec.js` screenshots the career hub, its
 new-career state, qualifying and the offers sheet in both orientations.
 
-Run `node tools/test-bg.mjs modes` in the background after any change here, and `node tools/test-bg.mjs parts` after
+Run `node tools/test-bg.mjs modes` in the background after any change here, and `node tools/test-bg.mjs car` after
 anything that touches the garage.

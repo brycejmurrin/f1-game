@@ -76,12 +76,15 @@ proof is the mitigation.
 - **One boot per file** for the parts-* (five specs boot the same garage; the
   group is measured at 1 h 55 m) and multiplayer-* specs, via the
   `sharedTest` fixture that ten specs already use.
-- **Groups 30 → 12** (boot, hooks, driving, circuits, car, input, ui, modes,
-  net, render, node-fast, node-sweeps). 18 `test:*` scripts are picked by no
-  rule today (update, render, headless, smoke, parts-unit, garage-unit,
-  gallery, baseline, paths, webgpu-lifecycle, tooling, fast, shimmer,
-  graph-parity, float, clip, pick, bg). `test-groups.test.mjs` and
-  `docs/TESTING.md` §2 move with it.
+- **Groups 30 → 12** — LANDED 2026-09-01 as a DISJOINT partition of the
+  115 specs (`driving`, `hooks`, `circuits`, `car`, `input`, `ui`, `modes`,
+  `net`, `gfx`, plus `tiny`/`smoke`/`baseline`/`shimmer`/`gallery`; the union
+  was diffed file for file before and after — nothing lost, nothing gained,
+  `fast` gone because it double-ran nine specs). `test-groups.test.mjs` now
+  asserts the disjointness; `docs/TESTING.md` §2 has the old→new map. The
+  node groups (parts-unit, garage-unit, …) stayed: they are seconds each and
+  every one is routed. The 18 scripts no rule picked are now 14, all of them
+  partitions, on-demand galleries or tool entry points.
 - **Source-text pins → behaviour.** 2,184 `assert.match` across 72 unit
   files; ~1,000 of them quote one file's code (gfx-backend-canary 440,
   ui-improve-pass 269, perf-try 146, …). Two broke today on a one-token

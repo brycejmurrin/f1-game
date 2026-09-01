@@ -30,7 +30,7 @@ GameAudio.centroidHz()              // spectral centroid of live engine
 ```
 
 ```sh
-node tools/test-bg.mjs audio        # audio-smoke + music-library
+node tools/test-bg.mjs ui        # audio-smoke + music-library
 python3 -m http.server 3456         # then DevTools → Web Audio
 ```
 

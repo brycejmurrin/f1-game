@@ -43,7 +43,7 @@ than behaviour:
 |---|---|
 | `tests/unit/load-order.test.mjs` | `index.html` == `tools/manifest.cjs`, including `HARD_EDGES` and the three-way `DEFERRED`/`BACKEND_FILES`/sw.js precache agreement |
 | `tests/unit/scenery-api-contract.test.mjs` | the 111-member `scenery(api)` surface every circuit file was written against |
-| `tests/unit/test-groups.test.mjs` | the test taxonomy: every group real, every source dir routed, `docs/TESTING.md` in step, `RENDER_SPECS` bidirectional |
+| `tests/unit/test-groups.test.mjs` | the test taxonomy: every group real, every source dir routed, the topical browser groups DISJOINT (2026-09 regroup), `docs/TESTING.md` in step, `RENDER_SPECS` bidirectional |
 | `tests/unit/docs-integrity.test.mjs` | live docs reference only files that exist; counts match the repo; no live doc reaches into the archive |
 | `tests/unit/deploy-staging.test.mjs` | every path shipped code can fetch is inside the Pages upload allow-list |
 | `tools/graph-parity.cjs` | scene-graph migrations are vertex-for-vertex identical to a baseline ref |

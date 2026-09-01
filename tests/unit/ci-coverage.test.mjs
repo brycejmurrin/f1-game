@@ -17,7 +17,7 @@ test("it sees the specs on disk", () => {
 });
 
 test("a single-star glob expands the way package.json means it", () => {
-  // test:parts is written as tests/specs/parts-*.spec.js — if this stopped expanding,
+  // test:car is written with tests/specs/parts-*.spec.js — if this stopped expanding,
   // every group defined by a glob would silently contribute zero.
   const hits = expand("tests/specs/parts-*.spec.js");
   assert.ok(hits.length >= 5, `parts-*.spec.js expanded to ${hits.length}`);

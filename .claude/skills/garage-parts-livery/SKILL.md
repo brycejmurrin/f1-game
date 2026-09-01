@@ -58,7 +58,7 @@ drawn inside the mark and so answers to the mark alone.
 | `--refl` | Studio dial — **not** in-game chrome finish |
 
 ```sh
-node tools/test-bg.mjs parts
+node tools/test-bg.mjs car
 node tools/test-bg.mjs modes              # research locks / ownership UI — no test:career
 node tools/audit-parts.mjs [--cats=engine,aero]
 node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme

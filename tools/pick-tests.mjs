@@ -19,7 +19,7 @@
  * `--json` exists because the human output is PROSE and a CI selector reading
  * it becomes a silent consumer of an unversioned format. Two of its lines are
  * live traps for an unanchored `test:<group>` grep: the zero-match message
- * names `test:fast`, and the batching lines name `tools/test-bg.mjs <groups>`.
+ * names `test:tiny`, and the batching lines name `tools/test-bg.mjs <groups>`.
  * The JSON shape is asserted by tests/unit/pick-tests.test.mjs, so it cannot drift
  * out from under a consumer the way the prose can.
  *
@@ -73,41 +73,41 @@ export const RULES = [
   // tests/unit/pick-tests.test.mjs holds this to the baselines actually being
   // absent, so generating them re-opens the question instead of leaving a
   // stale exclusion behind.
-  [/^js\/render\/(glx|gfx)/, ["webgl"], "the shipped WebGL2 path"],
-  [/^js\/render\/shaders\//, ["webgl", "ab"], "GLSL leaves feed every lit surface"],
-  [/^js\/render\/webgpu\//, ["webgl"], "WGX is feature-detected; GLX must still boot"],
-  [/^js\/render\/three\//, ["tlx"], "the three.js backend has its own probe spec"],
-  [/^js\/render\/assets\.js/, ["api", "hooks"], "assets-api.spec.js lives in test:api; new-hooks moved to test:hooks in the dedupe"],
+  [/^js\/render\/(glx|gfx)/, ["gfx"], "the shipped WebGL2 path"],
+  [/^js\/render\/shaders\//, ["gfx"], "GLSL leaves feed every lit surface"],
+  [/^js\/render\/webgpu\//, ["gfx"], "WGX is feature-detected; GLX must still boot"],
+  [/^js\/render\/three\//, ["gfx"], "the three.js backend has its own probe spec"],
+  [/^js\/render\/assets\.js/, ["hooks"], "assets-api.spec.js rides in test:hooks"],
 
   // ── track engine + circuit data ─────────────────────────────────────────
-  [/^js\/track\/scenery/, ["scenery", "sweeps"], "prop placement and the full-fleet clip audits"],
+  [/^js\/track\/scenery/, ["circuits", "sweeps"], "prop placement and the full-fleet clip audits"],
   // `scenery` belongs here and was MISSING, found by tools/select-recall.mjs
   // replaying real regressions: js/track/tracks.js holds buildProps (street
   // barriers, treelines, the instance() emitters), and BOTH scenery defects
   // fixed on 2026-08-08 — the vegas barrier over the racing line and the
   // buenos_aires cross-segment tree — were changes to THIS file caught by
-  // props-over-road/terrain-over-road, which live only in `test:scenery`.
+  // props-over-road/terrain-over-road, which lived only in `test:scenery` (now `test:circuits`).
   // Routing it to circuit+physics+sweeps+foundation ran everything except the
   // two specs that actually report the class of bug the file produces.
   [/^js\/track\/(tracks|mesh|spline|surface|geom|graph)\.js/,
-   ["circuit", "physics", "sweeps", "foundation", "scenery"],
+   ["circuits", "driving", "sweeps"],
    "road geometry reaches walls, elevation, physics, every circuit's foundation — and buildProps lives here"],
-  [/^js\/track\/space\.js/, ["physics"], "world<->track projection"],
-  [/^js\/track\/(markings|maps|geo-paths)\.js/, ["map", "circuit"], "layout metadata"],
-  [/^js\/circuits\/.*\.js$/, ["circuit", "scenery", "foundation"], "a circuit def: walls, its scenery callback, and its own foundation spec (not the dir's CLAUDE.md)"],
+  [/^js\/track\/space\.js/, ["driving"], "world<->track projection"],
+  [/^js\/track\/(markings|maps|geo-paths)\.js/, ["hooks", "circuits"], "layout metadata"],
+  [/^js\/circuits\/.*\.js$/, ["circuits"], "a circuit def: walls, its scenery callback, and its own foundation spec (not the dir's CLAUDE.md)"],
 
   // ── spec-backed js/game files that used to reach only tiny + tooling-fast ──
   [/^js\/game\/ui-scale\.js/, ["ui"], "ui-scale.spec.js"],
-  [/^js\/game\/racecontrol\.js/, ["debris"], "race-control.spec.js rides in test:debris"],
-  [/^js\/game\/aerozones\.js/, ["behaviour"], "aero-zones.spec.js rides in test:behaviour"],
-  [/^js\/game\/garage-scene\.js/, ["parts"], "garage-aero.spec.js rides in test:parts"],
+  [/^js\/game\/racecontrol\.js/, ["driving"], "race-control.spec.js rides in test:driving"],
+  [/^js\/game\/aerozones\.js/, ["driving"], "aero-zones.spec.js rides in test:driving"],
+  [/^js\/game\/garage-scene\.js/, ["car"], "garage-aero.spec.js rides in test:car"],
 
   // ── car ─────────────────────────────────────────────────────────────────
   [/^tools\/game-vm\.cjs/, ["game-vm"], "the Node VM game harness and its parity test"],
-  [/^js\/car\/parts\.js/, ["parts", "sweeps-parts"], "the catalog, budgets, recipes and their physics; sweeps-parts is the 559 s option-resolution census"],
-  [/^js\/car\/(car3d|liveries|liverytex|crest-paths)\.js/, ["parts", "node-slow"], "car mesh + livery specs; node-slow rasterises every livery and crest"],
+  [/^js\/car\/parts\.js/, ["car", "sweeps-parts"], "the catalog, budgets, recipes and their physics; sweeps-parts is the 559 s option-resolution census"],
+  [/^js\/car\/(car3d|liveries|liverytex|crest-paths)\.js/, ["car", "node-slow"], "car mesh + livery specs; node-slow rasterises every livery and crest"],
   [/^tools\/slider-effect\.mjs/, ["node-slow"], "slider-effect.test.mjs spawns this tool per test"],
-  [/^js\/car\/teams\.js/, ["parts", "modes"], "the grid feeds season and career"],
+  [/^js\/car\/teams\.js/, ["car", "modes"], "the grid feeds season and career"],
   [/^js\/car\/ghost\.js/, ["modes"], "time-trial ghost"],
 
   // ── game ────────────────────────────────────────────────────────────────
@@ -116,47 +116,49 @@ export const RULES = [
   // belongs here and was simply missing. js/track/space.js and js/track/tracks.js
   // routed to it while the file that contains the model did not, which is how a
   // change to the FX block's pace normalisation came back "no physics group
-  // needed". Four groups for a game.js edit is a lot; running the wrong three is
-  // worse, and these RULES are deliberately biased toward running too much.
-  [/^js\/game\.js/, ["behaviour", "api", "circuit", "physics", "collision", "hooks"], "the loop: physics, AI, race logic"],
-  [/^js\/game\/physics-consts\.js/, ["behaviour", "api", "circuit", "physics", "collision", "hooks"], "the driving model's immutable numbers — same blast radius as game.js"],
-  [/^js\/game\/(cameras|cam-tune|cam-tuner|cam-modes)\.js/, ["camera"], ""],
-  [/^js\/game\/(input|steer-tuning|uilayers)\.js/, ["steering"], ""],
-  [/^js\/game\/brake-cue\.js/, ["steering", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
+  // needed". Since the 2026-09 regroup the blast radius is three browser groups
+  // (driving, hooks, circuits) instead of six: each is the union of the old
+  // physics/collision/behaviour/debris, api/hooks/agent/map, and
+  // circuit/foundation/scenery sets, so the SPEC union is unchanged.
+  [/^js\/game\.js/, ["driving", "hooks", "circuits"], "the loop: physics, AI, race logic"],
+  [/^js\/game\/physics-consts\.js/, ["driving", "hooks", "circuits"], "the driving model's immutable numbers — same blast radius as game.js"],
+  [/^js\/game\/(cameras|cam-tune|cam-tuner|cam-modes)\.js/, ["input"], ""],
+  [/^js\/game\/(input|steer-tuning|uilayers)\.js/, ["input"], ""],
+  [/^js\/game\/brake-cue\.js/, ["input", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
   [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers|cam-modes|gfx-quality|metrics|cockpit-opts|sheetshape)\.js/, ["ui"], "DOM screens"],
-  [/^js\/game\/(lighting|light-presets|atmosphere|tuner)\.js/, ["webgl", "ab"], ""],
+  [/^js\/game\/(lighting|light-presets|atmosphere|tuner)\.js/, ["gfx"], ""],
   [/^js\/game\/(career|career-ui|reliability|quali)\.js/, ["modes", "state-unit"], ""],
   // The season calendar/format. `modes` is season+career+TT+quali (career is a
   // championship too, and the endRace award path is shared); `ui` because the
   // SETUP screen is DOM the menu specs click through.
   [/^js\/game\/season-(cal|ui)\.js/, ["modes", "ui", "state-unit"], "calendar + weekend format"],
-  [/^js\/game\/(audio|music-lib)\.js/, ["audio", "lifecycle-unit"], ""],
-  [/^js\/game\/spotify\.js/, ["audio", "audio-unit", "lifecycle-unit"], "token refresh races + browser integration"],
+  [/^js\/game\/(audio|music-lib)\.js/, ["ui", "lifecycle-unit"], ""],
+  [/^js\/game\/spotify\.js/, ["ui", "audio-unit", "lifecycle-unit"], "token refresh races + browser integration"],
   // The MUSIC & SOUND panel is DOM the menu specs click through, not just audio
   // plumbing — menu-survey/ui-scale/ui-button-touch/menu-keyboard all open it.
-  [/^js\/game\/audio-panel\.js/, ["audio", "ui"], "mixer panel: audio behaviour + menu DOM"],
-  [/^js\/game\/(agentview|agentview-raster)\.js/, ["agent", "agent-contract"], ""],
-  [/^js\/game\/apex\.js/, ["api", "hooks", "agent-contract"], "the __apex contract"],
+  [/^js\/game\/audio-panel\.js/, ["ui"], "mixer panel: audio behaviour + menu DOM"],
+  [/^js\/game\/(agentview|agentview-raster)\.js/, ["hooks", "agent-contract"], ""],
+  [/^js\/game\/apex\.js/, ["hooks", "agent-contract"], "the __apex contract"],
   // `sweeps` because debrisworld's hazard query projects bodies back onto the
   // centreline, and debris-hazard-hint.test.mjs is the circuit-rebuilding sweep
   // that checks that projection — it lives with the other track-build-vm suites,
   // so a debrisworld edit would otherwise never run its own Node gate.
-  [/^js\/game\/(debrisworld|incidentsim)\.js/, ["debris", "collision", "sweeps"], ""],
+  [/^js\/game\/(debrisworld|incidentsim)\.js/, ["driving", "sweeps"], ""],
   [/^js\/game\/(particles|carmesh|bodyattitude|photomode)\.js/, ["ui"], "visual-only layers"],
-  [/^js\/game\/(store|perf|tables)\.js/, ["api", "modes", "state-unit"], ""],
-  [/^js\/log\.js/, ["api", "tooling-fast"], "every module logs through it"],
+  [/^js\/game\/(store|perf|tables)\.js/, ["hooks", "modes", "state-unit"], ""],
+  [/^js\/log\.js/, ["hooks", "tooling-fast"], "every module logs through it"],
 
   // ── the rest ────────────────────────────────────────────────────────────
   [/^js\/net\/scan\.js/, ["lifecycle-unit"], "camera cancellation is an async ownership boundary"],
   [/^js\/net\//, ["net-unit", "net"], "wire logic first (1 s), then the browser session"],
-  [/^js\/data\//, ["api", "hooks", "lifecycle-unit"], "data hub lifecycle + telemetry compare; new-hooks moved to test:hooks in the dedupe"],
+  [/^js\/data\//, ["hooks", "lifecycle-unit"], "data hub lifecycle + telemetry compare + the hook contracts"],
   [/^sw\.js|^manifest\.json/, ["service-worker"], ""],
   [/^worker\//, ["net-unit"], "the rendezvous Durable Object"],
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
   [/^index\.html/, ["tiny", "ui"], "script tags + DOM shell"],
   [/^tools\/manifest\.cjs/, ["tooling-fast"], "load order is asserted against index.html"],
   [/^tools\//, ["tooling-fast"], "the tools index and every tool contract live in the tooling suite"],
-  [/^assets\//, ["api"], "the baked pack loader"],
+  [/^assets\//, ["hooks"], "the baked pack loader"],
   [/^tests\//, ["audit"], "every test file must belong to a topical group"],
   [/^types\//, ["tooling-fast"], "the authored .d.ts contracts are checked by game-ctx-surface"],
   [/^(CLAUDE|README)\.md|^docs\//, ["tooling-fast"], "docs integrity is a real test"],
@@ -267,7 +269,7 @@ Each matched path maps to one or more test:<group> scripts (see RULES).`);
   if (files.length > 20) console.log(`    … and ${files.length - 20} more`);
 
   if (!groups.size) {
-    console.log("\nno rule matched — run `npm run test:fast` and use your judgement");
+    console.log("\nno rule matched — run `npm run test:tiny` and use your judgement");
     process.exit(0);
   }
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));

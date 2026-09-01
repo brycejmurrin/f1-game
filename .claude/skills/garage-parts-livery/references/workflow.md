@@ -50,7 +50,7 @@ resolution.
    node tools/audit-parts.mjs --cats=aero
    ```
    Or `tools/carview.html?team=mclaren&aero=extreme`.
-7. **Test and ship.** `node tools/test-bg.mjs parts` for catalog/physics/visual
+7. **Test and ship.** `node tools/test-bg.mjs car` for catalog/physics/visual
    recipes; `node tools/test-bg.mjs modes` when you changed research locks or
    garage ownership UI (there is no `test:career`). Bump via `node tools/bump-cache.mjs --apply`
    before commit.

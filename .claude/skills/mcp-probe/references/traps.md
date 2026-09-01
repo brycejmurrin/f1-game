@@ -21,7 +21,7 @@ read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
   session proving out a shadow-acne fix, the very last verification screenshot's
   `navigate_page(about:blank)` call got skipped — attention had moved to writing
   up the finding — and the live game page sat there actively rendering (frozen
-  car, but the render loop keeps running) through a `test-bg.mjs ab webgl`
+  car, but the render loop keeps running) through a `test-bg.mjs gfx` (then `ab webgl`)
   launch. Load average climbed to 8–12 (guidance: < 3) and produced a real
   `page.screenshot: Timeout 60000ms exceeded` failure plus several more in the
   second group — a genuine false failure that took a `ps -eo pid,etimes,args`

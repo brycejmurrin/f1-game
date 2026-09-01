@@ -33,7 +33,7 @@ that kills DataHub.
   rewrite fails **open** (empty hub, green UI).
 
 ```sh
-node tools/test-bg.mjs api
+node tools/test-bg.mjs hooks
 ```
 
 `js/data/` routes to `api` + `hooks`. Layout of the hub chrome →
