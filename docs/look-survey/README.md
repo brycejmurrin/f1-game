@@ -80,8 +80,10 @@ Full tool reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools for exploring slid
 | Shanghai | [shanghai_grid.png](shanghai_grid.png) |
 | Silverstone | [silverstone_grid.png](silverstone_grid.png) |
 | Singapore | [singapore_grid.png](singapore_grid.png) |
+| Sochi | [sochi_grid.png](sochi_grid.png) |
 | Spa | [spa_grid.png](spa_grid.png) |
 | Suzuka | [suzuka_grid.png](suzuka_grid.png) |
 | Las Vegas | [vegas_grid.png](vegas_grid.png) |
+| Watkins Glen | [watkins_glen_grid.png](watkins_glen_grid.png) |
 | Zandvoort | [zandvoort_grid.png](zandvoort_grid.png) |
 
