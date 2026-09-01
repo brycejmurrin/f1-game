@@ -243,7 +243,7 @@ test.describe("Career — isolation", () => {
     // getTeamParts/saveTeamParts used to branch on Career.data(). Fitting a part
     // in a GP garage for the career's own team therefore wrote career.fitted —
     // and setup-ui correctly treats a GP garage as free play (FREE BUILD, the
-    // flat 600 cr cap, no R&D lock), so the career car could be maxed out for
+    // flat 780 cr cap, no R&D lock), so the career car could be maxed out for
     // nothing. Driven through the REAL garage, because the funnel is the thing
     // under test: writing localStorage directly would pass either way.
     await boot(page);

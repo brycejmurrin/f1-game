@@ -147,7 +147,7 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   // ONCE — a latch already set when the boot started means the previous
   // reload's GLX.init failed too, and reloading again loops forever
   // (measured 236 reloads/64 s under a Vulkan-only browser config).
-  assert.match(game, /skipped = prev !== "1" && sessionStorage\.getItem\("apex26\.gfxClaimFail"\) === "1"/);
+  assert.match(game, /if \(!_claimSkipped\) \{\s*sessionStorage\.setItem\("apex26\.gfxClaimFail", "1"\);\s*skipped = sessionStorage\.getItem\("apex26\.gfxClaimFail"\) === "1"/);
   assert.match(game, /Live tab, create\(\) refused[\s\S]{0,400}removeItem\("apex26\.gfxBackendProbe"\)/);
   assert.match(game, /gfxClaimFail[\s\S]{0,220}removeItem\("apex26\.gfxBackendProbe"\)/);
   assert.doesNotMatch(game, /create\(\) refused[\s\S]{0,250}setItem\("apex26\.gfxBackend", "webgl2"\)/);
@@ -347,7 +347,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
 test("blocked sessionStorage skips the opt-in so this tab never claims the canvas", () => {
   const game = read("js/game.js");
   const boot = game.slice(game.indexOf("let skipClaim = false"), game.indexOf("const PROBE_KEY"));
-  assert.match(boot, /catch \(_\) \{ skipClaim = true;/);
+  assert.match(boot, /catch \(_\) \{ skipClaim = (?:_claimSkipped = )?true;/);   // _claimSkipped rides along: the GLX.init failure path reads it
   assert.doesNotMatch(boot, /try the opt-in as usual/);
 });
 

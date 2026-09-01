@@ -1966,7 +1966,7 @@ const AgentView = (function () {
           + "where speed converts to distance — long straights, not corners.",
           "OVERTAKE BOOST: arms only within ~1 s of the car ahead; 4 s of boost "
           + "then 16 s of cooldown, so firing it early wastes the window.",
-          "PARTS: a 600-credit budget across 12 categories. Every credit in "
+          "PARTS: a 780-credit budget across 12 categories. Every credit in "
           + "engine/aero is a credit not in brakes/tyres — see carView().",
         ],
         constraints: [

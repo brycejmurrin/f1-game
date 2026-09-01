@@ -239,7 +239,12 @@ const NetNostr = (function () {
     const socketUrl = new Map();
     let current = send || null;
     const rejectedBy = new Set();
-    let lastPubId = null;
+    // Every event id WE signed (bounded): each publish() — the 5 s repost, the
+    // per-socket re-send on open — signs a NEW id, so tracking only the last
+    // one made most OK=false replies invisible and a refusing relay silent.
+    const pubIds = new Set();
+    let subId = null;          // our REQ id, so a NIP-01 CLOSED for it is recognised
+    let advisedRejected = false;
 
     return new Promise((resolve) => {
       let done = false, settled = false;
@@ -274,7 +279,10 @@ const NetNostr = (function () {
           frame = await mod.createEvent(mineTopic, btoa(bin));
           try {
             const parsed = JSON.parse(frame);
-            if (parsed[1] && parsed[1].id) lastPubId = parsed[1].id;
+            if (parsed[1] && parsed[1].id) {
+              pubIds.add(parsed[1].id);
+              if (pubIds.size > 64) pubIds.delete(pubIds.values().next().value);
+            }
           } catch (e) { /* non-fatal — OK tracking just won't fire */ }
         } catch (e) { return; }
         for (const w of sockets) { if (w.readyState === 1) { try { w.send(frame); } catch (e) {} } }
@@ -339,7 +347,8 @@ const NetNostr = (function () {
         socketUrl.set(w, url);
         w.onopen = () => {
           opened++;
-          try { w.send(mod.subscribe("s" + Math.floor(Date.now() % 1e6), theirTopic)); } catch (e) {}
+          if (!subId) subId = "s" + Math.floor(Date.now() % 1e6);
+          try { w.send(mod.subscribe(subId, theirTopic)); } catch (e) {}
           if (current) publish(current);
         };
         w.onmessage = (ev) => {
@@ -352,11 +361,15 @@ const NetNostr = (function () {
           // listener, which paints a full-screen error overlay over the lobby.
           // NIP-01 frames are arrays anyway, so this is also the shape check.
           if (!Array.isArray(m)) return;
-          if (m[0] === "OK" && lastPubId && m[1] === lastPubId) {
+          if (m[0] === "OK" || m[0] === "CLOSED") {
             const who = socketUrl.get(w) || String(opened);
-            if (m[2] === false && /block|spam|rate|restrict|not permitted|invalid|reject|pow|proof.of.work/i.test(String(m[3] || ""))) {
-              rejectedBy.add(who);
-            }
+            // OK=false on one of OUR events is a refusal whatever the wording
+            // (only "duplicate:" is benign — it means the relay HAS it), and a
+            // CLOSED for our REQ means we will never hear the other side here.
+            const refused =
+              (m[0] === "OK" && pubIds.has(m[1]) && m[2] === false && !/^duplicate:/i.test(String(m[3] || ""))) ||
+              (m[0] === "CLOSED" && subId && m[1] === subId);
+            if (refused) { rejectedBy.add(who); maybeAdviseRejected(); }
             return;
           }
           if (m[0] === "EVENT" && m[2] && typeof m[2].content === "string" &&
@@ -367,18 +380,23 @@ const NetNostr = (function () {
         w.onerror = () => {};
       }
 
-      later(() => {
-        if (done) return;
+      // "Every live relay refused us" — advisory, once. Evaluated on every
+      // refusal AND at RELAY_CHECK_MS: the one-shot check alone ran at 6 s,
+      // before a replying guest had published anything, so a guest whose
+      // answer every relay blocked was never told.
+      const maybeAdviseRejected = () => {
+        if (done || advisedRejected || !onFail) return;
         const live = sockets.filter((w) => w.readyState === 1).length;
-        if (live && rejectedBy.size >= live && onFail) {
-          try {
-            onFail({ ok: false, error: "all_rejected", advisory: true,
-              message: "Every room relay is refusing this code. It may still connect —"
-                     + " if it does not, use the invite link or QR, which need no"
-                     + " third party." });
-          } catch (e) {}
-        }
-      }, RELAY_CHECK_MS);
+        if (!live || rejectedBy.size < live) return;
+        advisedRejected = true;
+        try {
+          onFail({ ok: false, error: "all_rejected", advisory: true,
+            message: "Every room relay is refusing this code. It may still connect —"
+                   + " if it does not, use the invite link or QR, which need no"
+                   + " third party." });
+        } catch (e) {}
+      };
+      later(maybeAdviseRejected, RELAY_CHECK_MS);
 
       // Nothing to publish yet? Mint it now rather than waiting for an arrival.
       if (!current && mintOffer) {

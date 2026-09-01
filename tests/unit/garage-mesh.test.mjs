@@ -2,7 +2,7 @@
 // exactly one float per vertex.
 //
 // This is a silent-failure guard, not a style check. GLX wires the material
-// attribute ONLY when `data.mat.length === vCount` (js/render/glx.js:647) — a
+// attribute ONLY when `data.mat.length === vCount` (js/render/glx.js:741) — a
 // short array, a long one, or a missing one is dropped with no warning, every
 // vertex falls back to the generic default `aMat = 0 = MAT.FLAT`, and
 // `applyMaterial` early-outs on `mid <= 0` (js/render/shaders/lit.js:294). The

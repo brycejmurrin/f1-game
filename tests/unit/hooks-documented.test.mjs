@@ -34,16 +34,8 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 // Known-undocumented as of the 2026-08 cleanup pass. SHRINK THIS LIST.
 // Grouped by why they are here, because the reason decides who should fix them.
 const UNDOCUMENTED = new Set([
-  // The multiplayer test surface — the only way to drive the lobby and the wire
-  // from a spec, and entirely absent from the reference.
-  "lobbyAccept", "lobbyCodeHost", "lobbyCodeJoin", "lobbyFailure", "lobbyFake",
-  "lobbyFakeConnected", "lobbyJoin", "lobbyMods", "lobbyPeerEvent", "lobbyShare",
-  "lobbyWatch", "netPeerEvent", "netPeerLaps", "netStop",
-  // Garage / car-visual staging.
-  "garageAero", "garageFlaps", "garageStep", "carEffects",
-  // Subsystem doors that grew their own hooks after the reference was written.
-  "bodyAttitude", "debris", "incident", "trackGraph", "weatherArc",
-  "renderClock",
+  // 2026-09: the 24 names that sat here (lobby test surface, garage staging,
+  // subsystem doors) were documented in docs/DEBUG-HOOKS.md. Keep it empty.
 ]);
 
 /** Top-level keys of the `const api = {…}` literal in js/game/apex.js. */
@@ -51,7 +43,9 @@ function hookNames() {
   const src = read("js/game/apex.js");
   const body = src.slice(src.indexOf("const api = {"));
   const names = new Set();
-  for (const m of body.matchAll(/^ {2}([a-zA-Z_$][\w$]*)\s*[(:]/gm)) names.add(m[1]);
+  // `async foo(` is a hook too — without the optional prefix the three async
+  // methods (assetLoad, lobbyPairs, fetchTrackOutline) were invisible to the ratchet.
+  for (const m of body.matchAll(/^ {2}(?:async\s+)?([a-zA-Z_$][\w$]*)\s*[(:]/gm)) names.add(m[1]);
   return names;
 }
 

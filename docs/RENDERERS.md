@@ -49,7 +49,7 @@ would keep GLX’s dead closure).
 |---|---|---|---|
 | **GLX** | Default always-tagged WebGL2 | `js/render/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/shaders/` |
 | **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `js/render/webgpu/wgsl-{chunks,post,fx}.js` |
-| **TLX** | Opt-in Three `WebGPURenderer` (+ `forceWebGL` on mobile/WebKit) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
+| **TLX** | Opt-in Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; mobile/WebKit take the WebGPU path with lite caps) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
 
 **Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/gltf.js`,
 `js/render/assets.js` (MAT `TEXTURE_2D_ARRAY`). Deferred lists live in
@@ -113,14 +113,15 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 
 ## Parity snapshot
 
-- **GLX:** full reference — MSAA 4× desktop (2 then 0 if the HDR format
-  cannot), PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
+- **GLX:** full reference — MSAA on desktop 4× at GRAPHICS: ULTRA, capped to 2× on
+  HIGH and below, 0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost; honest
   remaining gap = TAA scaffold off (`_TAA_ENABLED = false` — jitter without a
-  history resolve is sub-pixel shimmer) plus the software-GPU road `+0.08`
-  lift (GLX uses polygonOffset only). Env cube uses a dedicated 4×-aniso
+  history resolve is sub-pixel shimmer). The road is NOT lifted — WGX uses
+  `depthBias`/`depthBiasSlopeScale` only, the same as GLX's polygonOffset;
+  an 8 cm Y bump was tried and buried cars and fence feet. Env cube uses a dedicated 4×-aniso
   sampler (binding 14). Car-paint flake / orange-peel interpolate `objPos`.
   SSAO uses the GLX/TLX `K[0..7]` fan and skips taps at strength 0.
   `applyHdrGrade` is gated on `tone1.w`. SSR is consumed in COMPOSITE the

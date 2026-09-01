@@ -43,7 +43,8 @@ stays `menu`, and the season-end panel is `results` with `#res-next` relabelled.
 
 ## A loaded save is not an active career
 
-The career save is read once at boot so the title button can offer CONTINUE. That
+The career save is read once at boot (`Career.load()`), before any screen; the
+title button itself always reads CAREER MODES (see below). That
 makes "a career exists" a different question from "career rules apply right now",
 and conflating them is a real bug: a plain Grand Prix would inherit the career's
 team development and its garage build.
@@ -225,8 +226,12 @@ Two gates, not one:
 1. **Ownership** — `career.owned`. Every cost-0 option is always owned, and
    `Parts.DEFAULTS` are all cost-0, so a legal car is guaranteed by construction.
 2. **A fitted-cost cap** — `Career.budget()`, a MULTIPLE of the team's own works
-   car (`BUDGET_MULT`, level 0 = exactly that car). Relative because a
-   `FACTORY_PRESETS` build runs 570 cr (Haas) to 2035 cr (McLaren): any flat number
+   car (`BUDGET_MULT`, level 0 = exactly that car), clipped by the
+   catalog-derived `budgetCap()` ceiling described under *Two sinks* below.
+   Relative because a
+   `FACTORY_PRESETS` build runs 505 cr (Haas) to 2000 cr (McLaren) on the current
+   catalog (`Parts.getCost(Parts.getFactorySetup(team))` — recompute after any
+   reprice): any flat number
    either starts a top team over its own cap or hands a back-marker a fortune.
 
 Ownership alone would let one good season max the car out and kill the economy
@@ -285,7 +290,7 @@ team".
   it hides a row outright.
 - **FREE BUILD is hidden in career.** `#cs-unlimited` is the free-play
   unlimited-budget cheat; offering it here would hand away the economy the whole
-  mode is built on. The cap is `Career.budget()`, not the flat 600 cr `Parts.BUDGET`.
+  mode is built on. The cap is `Career.budget()`, not the flat 780 cr `Parts.BUDGET`.
 
 ## MY TEAM
 
@@ -296,7 +301,7 @@ was.
 the all-cost-0 `DEFAULTS` — a works car that costs nothing. Deriving the fitted cap
 from that gave a cap of 0 cr, and nothing could be bolted on at all. `worksCost()`
 answers `MYTEAM_WORKS` (900 cr) for it instead: a deliberate figure rather than a
-derived one, between Haas (570) and Alpine (955) — a real car, off the back of the
+derived one, between Haas (505) and Alpine (910) — a real car, off the back of the
 grid.
 
 **A constructor enters two cars.** `Career.gridDrivers(team)` is what `makeCars()`

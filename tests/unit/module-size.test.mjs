@@ -482,6 +482,23 @@ const CEILINGS = {
   // 8807 on work of its own. Neither number fits the union, which carries both
   // sets of lines. Re-measured on THIS tree with the suite's own split-newline
   // metric (not grep -c, which is one short on a file with no trailing newline): 8870.
+  // 8870 -> 8921 for the LAZY_DATA loader (2026-09-01): DATA_FILES, the derived
+  // DATA_EDGES, ensureDataHub() and the DATA button's await, minus the
+  // DataHub.init(els.datahub) line this deletes from the boot-restore block.
+  // Same argument as the two lazy loaders above — it sits beside AGENT_FILES /
+  // RACE_FILES because it IS that mechanism with a third roster, and the button
+  // it gates is wired here. Takes 154,412 B off the boot script wall (3,628 ->
+  // 3,477 KB), which is ~3,027 B of payload per line of game.js.
+  // 8921 -> 9015 for the LAZY_NET split (2026-09-01). The 94 lines are mostly
+  // the two INERT STUBS, and they are the point rather than overhead: netPlay
+  // is called at 20 sites here and only three are guarded, so the alternative
+  // was 17 new `netPlay && …` guards spread through the frame loop and the
+  // result path — more lines, in worse places, where one miss is a crash
+  // mid-race instead of a red guard. The rest is NET_FILES / NET_EDGES (a real
+  // dependency graph, not derivable the way the data hub's is) and ensureNet().
+  // Takes 242,020 B off the boot script wall (3,477 -> 3,241 KB), ~2.6 KB per
+  // line. tests/unit/net-stub-surface.test.mjs pins the stubs' surface AND
+  // their values against js/net/netplay.js.
   // 8870 -> 8878: eight lines, all comment, for a one-word fix — `if (soundOn)`
   // became `if (soundOn && player)`. The words are worth more than the guard:
   // startRace already tolerates a null player and says so, but this block
@@ -496,11 +513,13 @@ const CEILINGS = {
   // policy, the caps and the heartbeat live in the new js/game/loop-health.js
   // precisely so game.js pays seven lines and not eighty — six of the seven are
   // the comment saying which half is here. PERF-FINDINGS 2k.
-  // 8885 -> 8892: the rear-light strobe gate. Once racing only the WET rain
-  // light flashes; the MGU-K pattern is a stationary-car signal and was running
-  // through most of a lap on every ERS deploy at night, so the pre-race blinking
-  // never appeared to stop.
-  "js/game.js": 8893,
+  // MERGED, three lineages deep. Each block above is a delta measured against
+  // ITS own base (lazy loaders 8870 -> 8921 -> 9015; loop-health 8870 -> 8878 ->
+  // 8885; this side's rear-light strobe gate +1 on top of its own 8892). No such
+  // number fits the union, which carries every one of those line sets, so this is
+  // RE-MEASURED on the merged tree with the suite's own split-newline metric
+  // rather than added on paper.
+  "js/game.js": 9038,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).

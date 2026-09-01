@@ -74,7 +74,8 @@ lose. `Parts.aeroLoad(setup, team)` reads the resolved aero option's own
 1 = `ground_effect`; derived from the catalog, so a new option re-scales the axis
 rather than clipping). The car carries it as `c.aeroLoad`, and each constant
 became a `_LO`/`_HI` pair interpolated by it. AI cars now carry their works
-`FACTORY_PRESETS` load (Williams low-drag vs McLaren flex). A car that still
+`FACTORY_PRESETS` load (Williams low-drag vs McLaren flex); the MY TEAM
+teammate carries the player's saved build instead. A car that still
 has no resolved setup falls back to 0.5 via `aeroLoadOf`. `AiDrive.houseStyle`
 reads `team.stats` (career `tdev` via `Career.teamStats` baked as `c.houseStats`),
 then seat 0 attacks / seat 1 holds; `ordersMul` stops #2 diving #1 and lets #1
@@ -103,7 +104,7 @@ top two planes — four elements, all driven by the one `aeroX`. They are NOT
 baked into the car mesh; `Car3D.aeroFlaps()` hands them out as canonical hinged
 specs (leading edge at the origin) and `drawAeroFlaps` places them, so the car
 at rest is geometrically identical to the old fixed wing. `Car3D.buildFlapGeom`
-runs the SAME `addWingPlanform` emitter the baked wing uses and both read one
+runs the SAME `addWingFoil` emitter the baked wing uses and both read one
 table, so they cannot drift apart. Closed = the element's own incidence plus
 `Z_BITE`, CLAMPED per element against the measured nose underside (`NOSE_UNDER`)
 so nothing ever swings into the bodywork; open = flat. `X_OPEN_RATE` is set by
@@ -199,7 +200,7 @@ both are usually needed: the first reaches nobody who has opened the settings,
 the second reaches nobody who has not.
 
 `STEER_SCHEMA` in `js/game/steer-tuning.js` is the migration, and it is a
-per-version LADDER (`STEER_MIGRATIONS`, currently at 3), not a single gate. That
+per-version LADDER (`STEER_MIGRATIONS`, currently at 4), not a single gate. That
 distinction is load-bearing. It was once `if (stored >= STEER_SCHEMA) return`
 followed by the v2 body, which works for exactly one version: bump the constant
 and a store already at 2 falls through and receives v2's assist reset a SECOND
@@ -258,9 +259,11 @@ an agent, rather than something it has to infer from lap times.
 
 ### The AI field is assumed competent
 
-AI cars carry no parts at all — `modsFor` is player-only and `updateCar` falls
-back to `NEUTRAL_MODS` — so there is no AI compound to read. Rather than model
-AI setup, `tread: null` resolves to the top column: **the field is assumed to
+AI cars carry no stat mods — `modsFor` is player-only and `updateCar` falls
+back to `NEUTRAL_MODS` — and, with one exception, no compound to read: the
+MY TEAM teammate (`mate` in `makeCars`) shares the player's saved build, so it
+carries the build's `wetTread`, `aeroLoad` and ERS axes. Every other AI car
+has `tread: null`, which resolves to the top column: **the field is assumed to
 have fitted the right tyre for the conditions.**
 
 This is a design decision, not an oversight, and it is what keeps rain a race.

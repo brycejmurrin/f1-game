@@ -24,9 +24,11 @@ Remaining honest look deltas (audited 2026-08-18 against source):
   GLX remains `flat out float vMat`.
 - **WGX FLAG VS wave** has no 4th vertex attribute (Dawn zeroed it on large
   ribbon VBOs). Not portable without reopening that defect.
-- **WGX `wp.y += 0.08`** on road draws is a software-GPU fallback on top of
-  `depthBias`; GLX uses `polygonOffset` only. Leave the lift — dropping it
-  reopens terrain-over-road on SwiftShader.
+- **WGX road lift — REMOVED.** The old `wp.y += 0.08` software-GPU fallback
+  is gone: it won the floor/terrain depth fight and then buried cars, AI and
+  fence feet in the tarmac (`wgsl-chunks.js`, "Do not lift the ribbon").
+  WGX uses `depthBias`/`depthBiasSlopeScale` only, matching GLX's
+  `polygonOffset`.
 - **Tuner sliders (183 / 73 `u:`)** — every uniform knob is named on GLX,
   WGX, and TLX (`tests/unit/light-grid.test.mjs`). CPU knobs bake through
   `frame.*` / `present()` opts. `perChunkLights` + `roadChunkLamps` ship
