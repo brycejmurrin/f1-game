@@ -316,6 +316,72 @@ on the 08-18 perf-hunt board, not this register.
   telemetry scrubber uses `CssZoom.viewportRect`.
 - **No CSP.** `index.html` ships no Content-Security-Policy of any kind.
 
+### Found by the 2026-09-01 deep pass (code-read, measured where stated; not browser-verified)
+
+Fixed in the same pass and therefore NOT listed: the contact-shove lap
+double-count (`shiftLong` moved `_prevS` with the car), the qualifying model
+timing the AI field on slick grip, the claim-fail reload that was never
+"once", `gfx.msaa()` reporting 4 on the direct-to-screen fallback, RAISE THE
+CAP sold at rungs the derived `budgetCap()` already binds, the Vegas-only
+prop-vert tripwire (now a fleet cap in `verify-track.cjs`), NIP-01 `OK=false`
+visibility, and the CI sweeps filter that skipped
+four suites' own sources. What remains:
+
+- **Bank-zone re-seat has no distance cap** (`js/track/mesh.js` ~:228-246). A
+  frac zone that lands on a straight is moved to the nearest unclaimed apex
+  however far that is. Measured pre-reseat distances: watkins_glen 0.24 →
+  951 m, estoril 0.075 → 693 m, mugello 0.88 → 690 m, jacarepagua 0.47 →
+  609 m, hockenheim 0.335 → 533 m, indianapolis 0.88 → 434 m, paul_ricard
+  0.07/0.64 → 395/345 m. At those distances the re-seat is the "real corner
+  that is simply the wrong one" failure. Left as-is deliberately: capping the
+  re-seat would bank a straight instead, and the honest fix is per-circuit —
+  re-author those eight fracs against a reference and then cap at ~250 m.
+- **The scenery-file `KOLD` shift disagrees with the engine's `_sceneryShift`**
+  — Singapore by 46 nodes (~184 m), Monaco by ~27 nodes (~108 m)
+  (`js/circuits/scenery/singapore.js` ~:24-27, one site; `monaco.js` ~:20-23,
+  seven sites). Both compute an INDEX-fraction difference of `startFrac` and
+  `sceneryStartFrac`; the engine's shift is the ARC-LENGTH fraction
+  (`TrackSpace.sceneryOriginDelta`, the trap `space.js` documents). Measured
+  in the Node build: Singapore n=1227, engine shift 650 nodes, KOLD 604. The
+  one-line fix (`_kShift = Math.round(TrackSpace.sceneryOriginDelta(def) * n)
+  % n`) was tried on Singapore in this pass and REVERTED: it puts the beacon
+  cone on the race-control tower's node as the file intends, but
+  `float-audit` then reports it 33 m in the air (the tower is not under it at
+  that lateral), so the props were tuned by eye against the wrong shift and
+  the fix needs a rendered pass (`survey-track`) per site, not a formula swap.
+- **A rival driving the CUSTOM team is never posed in VS FRIEND**
+  (`js/net/netplay.js` ~:343-348, `js/game.js` `makeCars` drops the custom
+  team unless the LOCAL player picked it, `wireId = teamIndex*2 + seat`). The
+  receiver keys the remote slot on the wireId of the slot it found; the sender
+  stamps its own car's wireId (22/23). When they differ every packet is
+  dropped and the rival sits frozen on the grid with no error. Reachable: a
+  guest opens the garage from the room and picks MY TEAM. Proposed fix: treat
+  a custom team as "seat taken" in `resolveSeatClash()` and run it from
+  `openRoom()` — or key `remotes` on the sender's declared wireId from HELLO.
+  No unit or spec covers a remote custom profile.
+- **`CircuitElevations` is a dead branch** (`js/track/tracks.js` `hasRealElevation`
+  / `elevationAt` / the `real` arm of `realPoints`): the global is defined only
+  by `tools/bake-elevation.mjs`, is in no manifest entry, so every circuit's
+  elevation today is the synthetic `def.elevations` cosine bumps. Either wire
+  the bake into `TRACK_VM` + the shell or delete the ~20 lines.
+- **Jeddah `startFrac` is in a corner** (`startline-probe`: mean |k| 0.0173
+  over 120 m, first apex 1064 m later). Acknowledged in-file as known-wrong
+  with no usable source; 39/40 pass.
+- **Plausible, unverified** (one line each; see the pass transcript for the
+  reasoning): `IncidentSim._lapCross` skips `netPlay.reportLap`/audio/sector
+  reset; `rescuePlayer` does not re-seed `rPrev*` render anchors (one smeared
+  frame per rescue); `quitToMenu` leaves `raceCtl`/`IncidentSim` state flying;
+  `NetRendezvous.waitFor` aborts a 2-minute join on one transient error;
+  `prefetchIce` nulls the cached servers before the refresh lands; an
+  `apex26.api.*` cache entry with a future `t` never expires; `sdp.js` has no
+  IPv6 relay candidate class and mis-parses `::ffff:` mapped addresses; the
+  empty-slot click in `career-ui` re-homes the live career to slot 0;
+  `settleRound` has no guard on an unknown `career.team`; standings ties are
+  insertion-ordered rather than countback; the boot canary is armed before the
+  ~550 KB deferred-backend fetch (a navigation during the download reads as a
+  dead backend); a transient `checkFramebufferStatus` failure in `createTargets`
+  disables post for the whole session with no retry (WGX has one).
+
 ### Found by the 2026-08 whole-codebase survey (unverified beyond a code read)
 
 Each was found by reading the file, not by a failing test. The 2026-08-13

@@ -91,7 +91,7 @@ your car across **12 upgrade categories** before each race:
 | **COCKPIT** | Halo, mirrors and driver furniture |
 | **WHEELS** | Rim and wheel-cover treatment |
 
-Budget is **600 credits** per race. Toggle **UNLIMITED BUDGET** in the setup
+Budget is **780 credits** per race. Toggle **UNLIMITED BUDGET** in the setup
 screen to remove the cap for testing. Some parts are **factory/supplier-exclusive**
 and only appear when your team uses that power unit (Mercedes, Ferrari, Red Bull
 Ford, Honda, or Audi).

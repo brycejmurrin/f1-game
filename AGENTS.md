@@ -221,7 +221,7 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 - `js/track/` — spline mesh geom graph space surface markings models themes
   kits geo-paths maps + the scenery split; the 111-member scenery(api)
   contract is frozen by `tests/unit/scenery-api-contract.test.mjs`
-- `js/car/` — car3d, liveries, liverytex, the parts catalog (780 cr budget),
+- `js/car/` — car3d, liveries, liverytex, crest-paths, the parts catalog (780 cr budget),
   ghost, teams, driver-ratings
 - `js/data/` — F1API + DataHub tabs; `js/net/` — 2-4 player WebRTC, no backend
 - `css/` — tokens + component files; `docs/COMPONENTS.md` is test-asserted;
@@ -306,10 +306,11 @@ same surface from a shell.
 
 - **Skills** (on-demand workflows): `.claude/skills/` — index in
   `.claude/skills/README.md`. Which CLIs are wrapped as `apex_*`:
-  `docs/AGENT-SURFACE.md`. Live canvas: `mcp-probe`. Deploy/`version.json`:
-  `deploy-research` (do not attach `mcp-probe` for a version.json check).
-  Pre-push: `verify-agent`. Fat skill / extract / dead code / agent bloat:
-  `slim-bloat` / `bloat-auditor`.
+  `docs/AGENT-SURFACE.md`. Live canvas: `mcp-probe`. Deploy branch /
+  merge: `deploy-merge`; live `version.json` goes to the `deploy-research`
+  SUBAGENT (do not attach `mcp-probe` for a version.json check). Pre-push:
+  `check-changes` (spawns the `verify-agent` subagent). Fat skill / extract /
+  dead code / agent bloat: `slim-bloat` skill / `bloat-auditor` subagent.
 - **Subagents** (isolated context): `.claude/agents/` — index in
   `.claude/agents/README.md`. `deploy-research` is the tinyfish-only
   post-deploy / public-web worker (no Chrome, no Playwright).

@@ -273,7 +273,7 @@ test.describe("active aero — downforce traded for top speed", () => {
         const cur = JSON.parse(localStorage.getItem(key) || "{}");
         cur.aero = a; localStorage.setItem(key, JSON.stringify(cur));
         localStorage.setItem("apex26.team", "0");
-        localStorage.setItem("apex26.unlimitedBudget", "true");   // `extreme` blows the 600 cr cap
+        localStorage.setItem("apex26.unlimitedBudget", "true");   // `extreme` blows the 780 cr cap
       }, [aero, teamId]);
       await page.reload();
       await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });

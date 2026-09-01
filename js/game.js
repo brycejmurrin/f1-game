@@ -168,6 +168,7 @@ function preloadThreeVendor() {
     document.head.appendChild(el);
   }
 }
+let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
   let pref = null;
   try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
@@ -176,8 +177,8 @@ try {
   // navigator.gpu is on, WGX/TLX still refuse, and writing webgl2 made the
   // RENDERER button bounce back every refresh.
   let skipClaim = false;
-  try { skipClaim = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
-    if (skipClaim) sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { skipClaim = true; /* cannot persist a skip: never claim the canvas */ }
+  try { _claimSkipped = skipClaim = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
+    if (skipClaim) sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { skipClaim = _claimSkipped = true; /* cannot persist a skip: never claim the canvas */ }
   // THE BOOT CANARY — what lets a PHONE hold a non-default backend. Both were
   // refused whenever GLX.isMobile, after TLX on iOS rendered a flat pale ground
   // with the lower half black. But the menu is DOM over the canvas: it survives a
@@ -258,9 +259,10 @@ if (!gfx) {
       // when THIS boot started means the previous reload's GLX.init failed
       // too — WebGL2 is gone from this tab, and reloading again loops forever
       // (measured 236 reloads/64 s, Vulkan-only config). Fall through to #nogl.
-      try { const prev = sessionStorage.getItem("apex26.gfxClaimFail");
+      // The latch is CONSUMED at boot start: re-reading it here always saw null, and "once" looped forever.
+      try { if (!_claimSkipped) {
         sessionStorage.setItem("apex26.gfxClaimFail", "1");
-        skipped = prev !== "1" && sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } catch (_) { /* blocked storage: no skip, no reload */ }
+        skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } } catch (_) { /* blocked storage: no skip, no reload */ }
     }
     if (skipped) {
       try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
@@ -1303,7 +1305,7 @@ const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shad
 // career with that team. That broke the isolation described above in both
 // directions, and the garage UI made it costly: setup-ui gates its rules on
 // G.careerOwned() (Career.owned(), which IS inCareer()-gated), so a GP garage
-// correctly offered FREE BUILD, the flat 600 cr cap and no R&D lock — and then
+// correctly offered FREE BUILD, the flat 780 cr cap and no R&D lock — and then
 // wrote the result straight into career.fitted. Fitting every top option under
 // FREE BUILD therefore maxed out the CAREER car for nothing: no credits spent, no
 // parts researched, the fitted cap bypassed, and nothing ever re-validates a
@@ -1677,7 +1679,7 @@ function makeCars() {
         // active aero: commanded mode, the 0..1 flap blend, and whether the
         // road ahead currently allows X-mode at all (see xStraightAhead).
         xOn: false, aeroX: 0, xArmed: false,
-        lapStart: 0, lapTime: 0, best: Infinity, totalT: 0,
+        lapTime: 0, best: Infinity, totalT: 0,
         finished: false, finishT: 0, finPos: 0,
         // Retirement (js/game/reliability.js). `retired`/`dnf` are the record;
         // dnfAt/dnfWhy are the plan Reliability.arm() draws at the green light.
@@ -3169,9 +3171,9 @@ aeroZ = AeroZones.create(G);
 // Tyre marks (js/game/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create(G);
 // Photo mode (js/game/photomode.js).
-const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
+const { updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/game/tuner.js).
-const { buildLightTunePanel, refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
+const { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 // CAMERA TUNER panel UI (js/game/cam-tuner.js) — per-camera-mode framing offsets.
 const { closeCamTuner } = CamTunerPanel.create(G);
 // Steering-tuning sliders + presets (js/game/steer-tuning.js).
@@ -3455,7 +3457,6 @@ function update(dt) {
       netStart = null;              // consumed; never carry it into the next race
       announce("LIGHTS OUT!", 1.4);
       if (soundOn) GameAudio.lightsOut();
-      cars.forEach((c) => { c.lapStart = 0; });
       // ONE STANDING LAP, from the line. It used to launch at racing speed
       // because the simulated field is modelled on a flying lap, and timing a
       // standing lap against a flying one loses you the launch by construction.
@@ -3557,13 +3558,12 @@ function update(dt) {
 
 // Shift a car along the track. Both s and prog advance together so multi-pass
 // pairContact (which keys on prog) sees the push immediately — skipping human
-// prog left penLong stale across relaxation passes. _prevS advances by the same
-// d so the next updateCar's human ds = s − _prevS does not double-count the push
-// into prog (AI prog is speed*dt anyway; keeping _prevS locked is harmless).
+// prog left penLong stale across relaxation passes. _prevS is NOT moved: the
+// lap-line test compares c.s to _prevS, and moving both hid a shove across the
+// line (re-cross = a SECOND lap; forward shove = none). _pushD banks the push.
 function shiftLong(c, d) {
   c.s = wrapS(c.s + d);
-  c.prog += d;
-  if (c._prevS != null) c._prevS = wrapS(c._prevS + d);
+  c.prog += d; c._pushD = (c._pushD || 0) + d;
   _colShifted = true;
 }
 
@@ -4957,13 +4957,14 @@ function updateCar(c, dt, ranked) {
     oldS = wrapS(c.s - ds);
   }
 
+  const dLine = ds;   // signed change in s, contact shove INCLUDED — the lap-line test needs it
   if (c.human) {
-    c.prog += ds;
+    c.prog += ds - (c._pushD || 0);   // the shove was already banked by shiftLong
   } else {
     ds = c.speed * dt;
     c.prog += ds;
   }
-  c.totalT += dt;
+  c._pushD = 0; c.totalT += dt;
   c.lapTime += dt;
   // OUR QUALIFYING LAP, AS IT HAPPENS. Everyone else in a friend race is
   // sitting on a disabled button while this runs, and a clock is the whole
@@ -5018,7 +5019,7 @@ function updateCar(c, dt, ranked) {
   // road) and crossing again added a SECOND lap, and `c.finished` could fire a
   // full lap early. The backward branch below restores the symmetry `prog`
   // already had.
-  if (ds > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
+  if (dLine > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
     c.lap++;
     // Retained so the backward branch can put the clock back. Without it a
     // re-crossing records the few tenths since the reset as a completed lap —
@@ -5054,11 +5055,10 @@ function updateCar(c, dt, ranked) {
       c.finishT = raceT;
       if (c.isPlayer) announce("FINISH!", 2);
     }
-  } else if (ds < 0 && oldS < track.total * 0.5 && c.s > track.total * 0.5) {
+  } else if (dLine < 0 && oldS < track.total * 0.5 && c.s > track.total * 0.5) {
     // Backward over the line: give the lap back and put the clock where it was,
     // so the next forward crossing re-times the SAME lap rather than a sliver.
-    // Only the player can get here — updateCar overwrites `ds` with
-    // `c.speed * dt` for every AI car, so their `ds` is never negative.
+    // (An AI car gets here only via a contact shove — dLine is the real move.)
     if (c.lap > 0) {
       c.lap--;
       c.lapTime = c._lapTimeAtLine != null ? c._lapTimeAtLine : c.lapTime;

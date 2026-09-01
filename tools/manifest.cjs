@@ -368,7 +368,8 @@ const HARD_EDGES = [
 //
 // WHY. GLX (WebGL2) is the shipped renderer; TLX (three.js/TSL) and WGX
 // (native WebGPU) are opt-in migrations selected by the localStorage key
-// `apex26.gfxBackend`, and game.js refuses both on phones outright. So these
+// `apex26.gfxBackend`, and (until the boot canary) game.js refused both on
+// phones outright. So these
 // ~550 KB were parsed and evaluated by essentially every visitor to be used by
 // essentially none — a tenth of the whole boot payload, spent on nothing.
 //

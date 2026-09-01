@@ -164,8 +164,9 @@ off the tangent first if that is what you are testing.
 ### `camera(mode?) → {mode, index, modes?} | false`
 Get or set the **player camera mode**. Mirrors the in-game CAM button / `C` key.
 Called with no argument it returns `{ mode, index, modes }`. Called with a mode
-**id**, **label**, or **index** it switches and persists (to `localStorage`),
-returning `{ mode, index }`; an unknown mode returns `false`.
+**id** (case-insensitive) or **index** it switches and persists (to
+`localStorage`), returning `{ mode, index }`; an unknown mode — including a
+display label such as `"TV SIDE"` — returns `false`.
 
 | Mode | Label | Vantage |
 |---|---|---|
@@ -239,8 +240,9 @@ with RESET CAM / RESET ALL.
 ### `view(opts) → {eye, target, …} | {mode:"chase"} | false`
 Debug **free camera** that overrides the chase cam entirely — instant (no
 damping), uncapped FOV, far plane and fog pushed out — for inspecting whole-track
-layouts and trackside scenery from any angle. Call with no args (or `"chase"`) to
-restore the normal cam.
+layouts and trackside scenery from any angle. Call with `"chase"` (or
+`{mode:"chase"}`) to restore the normal cam — with NO args it falls through to
+the whole-track aerial, see the table below.
 
 The override is also cleared by `camera(mode)` and `snapCam()` — selecting a game
 camera or snapping it leaves the free-cam. So the common sequence
@@ -721,7 +723,7 @@ movement should move its corresponding value here (and the car's behaviour).
 | `tiltCutoff` | STEER SMOOTHING (One-Euro min-cutoff frequency, Hz) |
 
 ### `cars() → [{id, x, xv, yaw, prog, speed, lap, ct, kerb, p}, …]`
-Telemetry for every car, leader first: lateral `x` (and smoothed `xv`), visual
+Telemetry for every car in `cars[]` order (grid/roster order, NOT position — use `fieldState()` for the running order): lateral `x` (and smoothed `xv`), visual
 `yaw`, `prog`ress, `speed`, `lap`, in-contact timer `ct`, `kerb` flag, and `p` =
 is-player. For measuring pack jitter / side-by-side stability.
 
@@ -963,6 +965,28 @@ itself and the on-screen AERO button is **removed from the dock** (not greyed):
 the remaining taps close ranks. Anything other than the two strings returns a
 typed `{ok:false, error:"bad_mode"}`.
 
+### `garageAero(on?) → {xOn, aeroX, mode} | null`
+Read or set the GARAGE live preview's active-aero pose. `null` unless the setup
+preview is on (`G.setupPreviewOn`). `mode` is `"X"` once the flap travel passes
+0.05, else `"Z"`. The preview eases on the rAF render, which a headless page
+never composites — so a test drives the ease with `garageStep()` instead.
+
+### `garageFlaps() → {aLvl, style, elements:[{id, wing, hinge, closed, open, travel, parked}]} | null`
+The resolved (level, style) the garage hands `drawAeroFlaps`, plus each hinged
+element's closed/open angles in degrees. `parked` is true when the clearance
+solver gave an element equal closed and open angles — it will never appear to
+move, which is invisible from outside unless something reports it.
+
+### `garageStep(dt?, n?) → garageAero()`
+Advance the garage aero ease by `dt` seconds (default 1/60), `n` times (default
+1), then return `garageAero()`. `null` when the preview is off.
+
+### `carEffects() → {exhaustFlame, brakeGlow, ersDeploy, gridLights, gridStrobe, boostFlame, brakeHeat, brakeGlowThreshold} | null`
+The player car's visual-effect flags as the renderer sees them this frame:
+exhaust pop, brake-disc glow (heat above the 0.05 threshold), ERS deploy
+lighting, grid lights/strobe during the countdown. `boostFlame` is reserved and
+always false. `null` before a player exists.
+
 ### `caution(arg?) → {level, label, sector, frac, total, sectors, sinceT, cause, enabled}`
 Race control's flags — the debris caution layer (`js/game.js`), a READ-ONLY
 race-logic layer over `DebrisWorld.hazards()` that never slows or moves a car.
@@ -1128,6 +1152,39 @@ Both write to `document.documentElement`, **not `body`** — a custom property i
 substituted on the element it is declared on, and every consumer's `calc()` is
 declared at `:root`, so a value on `body` never reaches them.
 
+### `debris(arg?) → DebrisWorld status`
+The Rapier debris side-world door (`js/game/debrisworld.js`). No arg → status.
+`debris(true|false)` enables/disables the world. Object forms: `{reset:true}`,
+`{burst:<n>, sev?}` (spawn a burst), `{marble:true}` (seeded tyre-marble
+emission at the player under a forced lock-up), `{flags:[…]}` (group-B flag
+override), `{hazards:true}` / `{positions:true}` / `{marbleGrip:true}` add the
+live hazards, body positions, or the player's marble-grip factor to the status.
+The side-world never moves a game car.
+
+### `incident(arg?) → IncidentSim status`
+The windowed incident takeover (`js/game/incidentsim.js`). No arg → status.
+`{reset:true}`, `{launch:true}` (force a launch), `{flags:{…}}` (feature flags).
+
+### `bodyAttitude(arg?) → {enabled, offsets:{pitch, roll, heave, enabled}}`
+The visual-suspension springs (`js/game/bodyattitude.js`). `true|false` toggles
+(persists to `apex26.bodyAttitude`); `{reset:true}` settles every chassis;
+`{car:idx}` reads `cars[idx]`'s offsets (radians for pitch/roll, metres for
+heave). Render-only — it never touches `px/pz/head` or `(s, x)`.
+
+### `weatherArc(from?, to?, seconds?) → {from, to, t, dur, weather, wetness?} | null`
+Read or start a timed weather transition. No args → the running arc (or
+`null`); `weatherArc(null)` cancels; `weatherArc("dry", "rain", 60)` starts a
+60 s dry→rain arc and returns it.
+
+### `renderClock(t?) → number`
+Read or set the sky/animation clock (`G.skyT`) the sky, flags and other
+time-driven shaders sample. Setting it makes a capture reproducible; it keeps
+advancing from the value you set unless the scene is also `headless()`.
+
+### `trackGraph() → graph | null`
+The built circuit's `TrackGraph` (instanced-scenery op record) — see
+`docs/RENDERERS.md` and `tools/graph-parity.cjs`. `null` before a build.
+
 ### `weather(w?) → "dry" | "wet" | "rain" | "overcast" | "fog"`
 Get or set race weather. Called with no argument returns the current mode.
 `"wet"` = damp track (wet/reflective road, lower grip, no falling rain);
@@ -1259,7 +1316,7 @@ cross-peer on those.
 unreachable, so a non-null value means something upstream let two players hold
 one seat.
 
-### `netLoopback({nowMs?, latencyMs?, jitterMs?, loss?, interpDelayMs?, role?, peer?}) → {ok, role, localId, remoteId}`
+### `netLoopback({nowMs?, latencyMs?, jitterMs?, loss?, interpDelayMs?, role?, peer?, seed?}) → {ok, role, localId, remoteId, remoteIds}`
 Start a session against an **in-page** peer — no signalling, no second browser,
 no network. This is how the game side of multiplayer is tested at all. Pass
 `nowMs` to run the whole session on a virtual clock you control.
@@ -1296,6 +1353,28 @@ Note that saying READY and the host KNOWING it are separated by a real round
 trip, so poll `lobbyRoom().peerReady` before pressing start rather than
 assuming.
 
+### `netPeerEvent(type, data, atMs?) → boolean`
+Send one reliable `event` frame from the loopback rival's end of the wire (the
+far endpoint `netLoopback()` created) — `false` when there is no peer.
+
+### `netPeerLaps() → [...]`
+Per-peer lap counters as the session holds them (`[]` with no session).
+
+### Lobby test surface — `lobbyFake(on) → boolean`, `lobbyFakeConnected() → boolean`, `lobbyWatch() → boolean`, `lobbyPeerEvent(type, data) → boolean`, `lobbyJoin(inviteCode) → Promise`, `lobbyAccept(answerCode) → Promise`, `lobbyCodeHost() → Promise`, `lobbyCodeJoin(code) → Promise`, `lobbyMods(profile) → mods | null`, `lobbyFailure(st, secs?) → string | null`, `lobbyShare(which) → boolean`
+The only way to drive the VS FRIEND lobby from a spec (`js/net/lobby.js`).
+`lobbyFake(true)` installs a loopback transport factory whose far end answers
+the lobby's 500 ms pings and pumps every 25 ms, so the room does not close on
+its own 6 s session timeout; `lobbyFake(false)` removes it. `lobbyFakeConnected()`
+reports whether that fake peer exists. `lobbyWatch()` arms the lobby's
+open-watcher. `lobbyPeerEvent()` pushes one `event` frame from the fake peer.
+`lobbyJoin`/`lobbyAccept` run the paste-code flow (join makes the answer for an
+invite; accept consumes an answer at the host); `lobbyCodeHost`/`lobbyCodeJoin`
+run the room-code rendezvous. `lobbyMods(profile)` resolves a peer profile's
+part IDs to stat multipliers (never trusts resolved numbers off the wire);
+`lobbyFailure(st, secs)` renders the failure message for a state (default
+30 s); `lobbyShare("answer"|"invite")` triggers the share sheet. Everything
+returns `false`/`null`/`{ok:false, error:"no_lobby"}` with no lobby.
+
 ### `netTick(nowMs?) → status`
 Pump the session by hand. The game loop already calls this every frame, but a
 test must not depend on rAF running at a useful rate — drive it explicitly and
@@ -1329,7 +1408,7 @@ a settle), not a short lead. A lead shorter than the sequence puts every peer
 part-way through it by construction — which is what a 2.5 s lead against a
 5.2–7.0 s sequence did, and why a guest reported correct timing and no lights.
 
-### `netPeerClose() / netStop()`
+### `netPeerClose() → boolean`, `netStop() → boolean`
 Drop the rival's connection, or end the session locally. On a drop the rival's
 car is handed back to the AI rather than left as a driverless obstacle.
 
@@ -1689,6 +1768,7 @@ One egocentric JSON snapshot. **Never returns `null`** — on failure it returns
 | `detail` | `"drive"` | `"brief"` (~ego + next corner + summary) · `"drive"` (+ lookahead, rivals, affordances) · `"full"` (+ session, terminal, raw physics, all 21 rivals) |
 | `horizonS` | `4` | lookahead horizon in **seconds** — the distance scales with speed |
 | `points` | `5` | lookahead samples (2–12) |
+| `corners` | `3` | how many upcoming corners `nextCorners` lists |
 | `since` | — | a `seq` you already hold; returns only what changed |
 
 **Cost, measured** (bytes per step, 20-step driving loop on Monza):
@@ -1849,7 +1929,7 @@ Fog is reported as a **visibility distance**, the actionable form.
 
 **What the GAME is**, as opposed to what the API is (`agentHelp()`). Static —
 read once, needs no track loaded. Carries the win condition, the irreducible
-trade-offs (track limits, ERS, the overtake window, the 600-credit parts
+trade-offs (track limits, ERS, the overtake window, the 780-credit parts
 budget), the hard constraints (wrong-way, rescue, barriers) and the units
 convention.
 

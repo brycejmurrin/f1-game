@@ -207,6 +207,7 @@ jobs:
           npm run test:state-unit
           npm run test:webgpu-lifecycle
           npm run test:agent-contract
+          npm run test:audio-unit
 
   sweeps:
     name: Per-circuit geometry sweeps
@@ -314,7 +315,10 @@ jobs:
           node -e 'const s=require("./package.json").scripts["test:sweeps"]||"";const m=s.match(/tests\/unit\/[^\s]+/g)||[];if(!m.length)process.exit(1);process.stdout.write(m.join("\n")+"\n")' > "$SUITES_FILE" \
             || run_all "could not read the sweep suite list out of package.json"
           echo "--- sweep suites ---"; cat "$SUITES_FILE"; echo "--------------------"
-          if printf '%s\n' "$CHANGED" | grep -qE '^(js/track/|js/circuits/|tools/)' \
+          # js/car, js/game.js and debrisworld are here because four sweep suites
+          # load them (parts-visual-distinctness, car-front-wing-width, grid-boxes,
+          # debris-hazard-hint) — a wing-width regression in car3d.js used to skip.
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/track/|js/circuits/|tools/|js/car/|js/game\.js$|js/game/debrisworld\.js$)' \
             || printf '%s\n' "$CHANGED" | grep -qxF -f "$SUITES_FILE"; then
             echo "geometry=true" >> "$GITHUB_OUTPUT"
             echo "RUNNING SWEEPS: the diff touches track engine, circuit data, tools or a sweep suite"
