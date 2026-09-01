@@ -923,7 +923,13 @@ const CEILINGS = {
   // instance set — turning DebrisWorld's four per-body loops into four draws.
   // (My ufi was dropped on the merge: it did what _luNL already does.)
   // PERF-FINDINGS 2h.
-  "js/render/glx.js": 2038,
+  // 2038 -> 2078. uf3, the vec3 twin of uf1/ufM4, plus the frozen fallback
+  // vec3s and the comment recording why its store is a PLAIN array: written
+  // with Float32Array(3) it skipped 0 of 17.5 calls a frame, because a
+  // Float32Array rounds on store and the compare was float32-vs-float64. The
+  // 40 lines buy uniform3fv 31.5 -> 16.3 per frame (vegas night, full field,
+  // tools/glx-call-census.mjs) with every other counter unchanged.
+  "js/render/glx.js": 2078,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)
