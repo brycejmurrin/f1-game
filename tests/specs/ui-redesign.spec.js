@@ -570,6 +570,10 @@ test("Career guide contents rail and standings leftover height", async ({ page }
 
   // Modes screen → HOW CAREER WORKS. The 560px guide is landscape-shaped on a
   // mid desktop (wide rail) and tall on phone portrait (strip above the body).
+  // Compact no longer kills the rail: #career-guide / #howtoplay keep
+  // data-shape="wide" as a left TOC even when data-density="compact"; the
+  // horizontal strip is only for compact+not-wide. Same contract as
+  // --pair-compact: wide on #cr-inner / #ss-inner (garage stays off).
   await page.click("#mb-career");
   await page.waitForSelector("#cr-guide-driver");
   await page.setViewportSize({ width: 1100, height: 580 });
