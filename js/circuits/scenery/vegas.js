@@ -350,9 +350,9 @@
         }
       }
 
-      building(K(0.03), -1, 52, 34, 128, 30, { kind: "notch", wall: [0.07, 0.08, 0.13], window: [0.10, 0.22, 0.42], floor: 11, lit: true });
+      building(K(0.03), -1, 52, 34, 128, 30, { kind: "notch", wall: [0.07, 0.08, 0.13], window: [0.10, 0.22, 0.42], floor: 11, lit: true, mat: MAT.GLASS });
       place(K(0.03), -1, 20, [10, 1.0, 26], [0.15, 0.30, 0.55]);   // cool blue base uplight
-      building(K(0.062), -1, 60, 30, 90, 26, { kind: "screen", wall: [0.14, 0.14, 0.18], window: LED, floor: 15, lit: true });
+      building(K(0.062), -1, 60, 30, 90, 26, { kind: "screen", wall: [0.14, 0.14, 0.18], window: LED, floor: 15, lit: true, mat: MAT.GLASS });
       place(K(0.062), -1, 44, [2.5, 16, 30], LED);                // giant LED megascreen
 
       const BOH_WALL = [0.16, 0.17, 0.20];   // flat concrete-grey, no warm cast
@@ -379,8 +379,11 @@
           center: [a.c[0], baseY + rad, a.c[2]],
           size: [rad * 2.05, rad * 2.05, rad * 2.05],
         }, (stage) => {
+          stage._mat = MAT.CONCRETE;
           addFrustum(stage, [a.c[0], baseY, a.c[2]], rad * 0.32, rad * 0.28, rad * 0.18,
             [0.25, 0.25, 0.28], 16, null);
+          // LED shell stays untextured — pure emissive wash at race speed.
+          stage._mat = 0;
           const bands = 5;
           for (let i = 0; i < bands; i++) {
             const t0 = i / bands, t1 = (i + 1) / bands;
@@ -398,22 +401,22 @@
 
       backdrop(K(0.45), 1, 240, [180, 30, 120], DARKROCK);
 
-      building(K(0.49), -1, 20, 42, 98, 40, { kind: "pyramid", wall: [0.64, 0.60, 0.52], window: [1.0, 0.85, 0.35], floor: 8 });
-      building(K(0.505), -1, 46, 32, 75, 32, { kind: "spire", wall: [0.62, 0.58, 0.50], window: [0.98, 0.80, 0.30], floor: 8 });
-      tower(K(0.492), -1, 70, 18, 60, { col: [0.58, 0.54, 0.46], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
+      building(K(0.49), -1, 20, 42, 98, 40, { kind: "pyramid", wall: [0.64, 0.60, 0.52], window: [1.0, 0.85, 0.35], floor: 8, mat: MAT.STONE });
+      building(K(0.505), -1, 46, 32, 75, 32, { kind: "spire", wall: [0.62, 0.58, 0.50], window: [0.98, 0.80, 0.30], floor: 8, mat: MAT.STONE });
+      tower(K(0.492), -1, 70, 18, 60, { col: [0.58, 0.54, 0.46], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true, mat: MAT.STONE });
       place(K(0.49), -1, 9, [28, 1.8, 8], [1.0, 0.85, 0.25]); // golden uplighting
 
       ferrisWheel(K(0.55), -1, 85, 65);
       billboard(K(0.56), -1, 18, 16, 10, CYAN);
-      building(K(0.55), -1, 22, 36, 18, 28, { kind: "screen", wall: [0.24, 0.24, 0.28], window: [0.15, 0.80, 1.00], floor: 4 });
+      building(K(0.55), -1, 22, 36, 18, 28, { kind: "screen", wall: [0.24, 0.24, 0.28], window: [0.15, 0.80, 1.00], floor: 4, mat: MAT.GLASS });
       place(K(0.55), -1, 10, [24, 0.7, 24], [0.15, 0.45, 0.65]);
       place(K(0.55), -1, 10, [20, 0.5, 20], [0.10, 0.30, 0.50]);
 
-      building(K(0.62), 1, 22, 62, 75, 46, { kind: "drum", wall: [0.68, 0.64, 0.56], window: [1.0, 0.85, 0.40], floor: 8 });
+      building(K(0.62), 1, 22, 62, 75, 46, { kind: "drum", wall: [0.68, 0.64, 0.56], window: [1.0, 0.85, 0.40], floor: 8, mat: MAT.STONE });
       place(K(0.62), 1, 12, [44, 2.4, 8], [1.0, 0.88, 0.30]);
       place(K(0.62), 1, 9, [50, 1.2, 10], [0.95, 0.75, 0.15]);
 
-      building(K(0.68), 1, 40, 60, 55, 62, { wall: [0.58, 0.55, 0.50], window: [1.0, 0.85, 0.40], floor: 7 });
+      building(K(0.68), 1, 40, 60, 55, 62, { wall: [0.58, 0.55, 0.50], window: [1.0, 0.85, 0.40], floor: 7, mat: MAT.STONE });
       place(K(0.68), 1, 52, [95, 2.0, 12], [1.0, 0.75, 0.20]);   // dist cleared past sz[0]/2 — was silently suppressed
       // Jets spread and height-varied across the full frontage (was 8 jets in a
       // tight 20 m cluster) — a real Bellagio show has jets of very different
@@ -431,10 +434,10 @@
       waterSurface(K(0.702), 1, 20, [105, 1.2, 135], [0.05, 0.10, 0.18],
         { id: "vegas-bellagio-lake-west" });
 
-      tower(K(0.74), -1, 68, 22, 130, { col: [0.55, 0.48, 0.35], seg: 4, cap: true, capCol: [1.0, 0.85, 0.4], mast: true });
+      tower(K(0.74), -1, 68, 22, 130, { col: [0.55, 0.48, 0.35], seg: 4, cap: true, capCol: [1.0, 0.85, 0.4], mast: true, mat: MAT.METAL });
       place(K(0.74), -1, 20, [10, 1.6, 10], [1.0, 0.80, 0.25]);
       place(K(0.74), -1, 22, [14, 0.7, 14], [0.95, 0.75, 0.20]);
-      building(K(0.73), -1, 24, 36, 55, 34, { wall: [0.62, 0.58, 0.48], window: [1.0, 0.82, 0.30], floor: 7 });
+      building(K(0.73), -1, 24, 36, 55, 34, { wall: [0.62, 0.58, 0.48], window: [1.0, 0.82, 0.30], floor: 7, mat: MAT.STONE });
       {
         const a = anchor(K(0.748), -1, 26), b = [a.r, a.u, a.t];
         const RED   = [0.72, 0.12, 0.14], RED_D = [0.56, 0.09, 0.11];
@@ -443,7 +446,9 @@
           center: vadd(a.c, a.u, 21), size: [26, 44, 26], basis: b,
         }, (stage) => {
           // Marquee plinth the balloon stands on — the sign face itself.
+          stage._mat = MAT.CONCRETE;
           addBox(stage, vadd(a.c, a.u, 3.0), [12, 6, 16], [0.20, 0.18, 0.22], b);
+          stage._mat = MAT.FABRIC;
           addBox(stage, vadd(vadd(a.c, a.r, -6.2), a.u, 3.4), [0.5, 4.2, 13], GOLD, b);
           // Envelope: widest a third of the way up, then closing to the crown.
           const bc = vadd(a.c, a.u, 7.5);
@@ -491,8 +496,8 @@
       lotBleacher("vegas-lot-bleacher-harmon", 0.90, -1, 16, 9, { rows: 8, ribbon: CYAN });
       grandstandEx(0.945, 1, 20, 40, null, null,
         { livery: "alu", tiers: 1, roof: "none" });
-      building(K(0.93), 1, 22, 28, 52, 26, { wall: [0.22, 0.18, 0.24], window: VIOLET, floor: 7, lit: true });
-      building(K(0.97), -1, 20, 26, 46, 24, { wall: [0.20, 0.18, 0.22], window: ROSE, floor: 7, lit: true });
+      building(K(0.93), 1, 22, 28, 52, 26, { wall: [0.22, 0.18, 0.24], window: VIOLET, floor: 7, lit: true, mat: MAT.GLASS });
+      building(K(0.97), -1, 20, 26, 46, 24, { wall: [0.20, 0.18, 0.22], window: ROSE, floor: 7, lit: true, mat: MAT.GLASS });
       billboard(K(0.94), -1, 18, 18, 11, CYAN);
       billboard(K(0.96), 1, 17, 16, 10, MAGENTA);
 

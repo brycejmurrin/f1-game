@@ -186,9 +186,11 @@
           const h = floors * fh;
           const w = 11 + hv * 5, d = 10 + hash(kk * 13) * 5;
           // The coral-stone mass, with a plain parapet above the top floor.
+          out._mat = MAT.STONE;
           addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, d],
                  hv < 0.45 ? CORAL_D : CORAL, b);
           addBox(out, vadd(a.c, a.u, h + 0.55), [w + 0.7, 1.1, d + 0.7], CORAL_D, b);
+          out._mat = 0;
           for (let f = 1; f < floors; f++) {
             const y = f * fh + fh * 0.45;
             const col  = ((f + i) % 2) ? TEAL : TEAL_L;
@@ -197,6 +199,7 @@
               const p = vadd(vadd(a.c, a.t, t), a.u, y);
               addBox(out, vadd(p, a.r, w * 0.5 + 0.55), [1.1, fh * 0.72, d * 0.34], col, b);
               // Carved-lattice read: thin vertical mullions across the bay.
+              out._mat = MAT.WOOD;
               for (let m = -1; m <= 1; m++) {
                 addBox(out, vadd(vadd(p, a.r, w * 0.5 + 1.12), a.t, m * d * 0.10),
                        [0.12, fh * 0.66, 0.13], WOOD_D, b);
@@ -204,6 +207,7 @@
               // Shallow pitched hood over each bay — roshan are roofed.
               addPrism(out, vadd(vadd(p, a.r, w * 0.5 + 0.55), a.u, fh * 0.42),
                        [1.35, 0.42, d * 0.36], WOOD_D, b);
+              out._mat = 0;
             }
             // Return face, one bay, so corners do not read as flat.
             const q = vadd(vadd(a.c, a.t, d * 0.5 + 0.5), a.u, y);
@@ -216,7 +220,7 @@
       gantry(0.0,   13, [0.12, 0.13, 0.17]);
       gantry(0.012, 11, [0.12, 0.13, 0.17]);
 
-      building(K(0.0), -1, 16, 62, 8, 28, { kind: "hall", wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4 });
+      building(K(0.0), -1, 16, 62, 8, 28, { kind: "hall", wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4, mat: MAT.CONCRETE });
       const STAND_GREEN = [0.07, 0.30, 0.16];
       const STAND_GOLD  = [0.72, 0.58, 0.16];
       grandstandEx(0.0,  1, 15, 60, STAND_GREEN, [0.42, 0.46, 0.40],
@@ -250,9 +254,9 @@
       });
 
       // ── JEDDAH SKYLINE — 3 landmark towers at s 0.27–0.31 L ──────────────
-      building(K(0.27), -1, 55, 28, 115, 26, { kind: "spire", wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 8 });
-      building(K(0.30), -1, 88, 24, 172, 22, { kind: "antenna", wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 8 });
-      tower(K(0.285), -1, 140, 18, 160, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: 12 });
+      building(K(0.27), -1, 55, 28, 115, 26, { kind: "spire", wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 8, mat: MAT.GLASS });
+      building(K(0.30), -1, 88, 24, 172, 22, { kind: "antenna", wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 8, mat: MAT.GLASS });
+      tower(K(0.285), -1, 140, 18, 160, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: 12, mat: MAT.METAL });
       cityFront(0.245, 0.335, -1, 96, {
         minH: 24, maxH: 62, depth: 20,
         palette: WALL_INL, lit: true, windowCol: WINCOOL,
@@ -273,7 +277,9 @@
       {
         const a = anchor(K(0.45), 1, 78), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 16)) {
+          out._mat = MAT.CONCRETE;
           addBox(out, vadd(a.c, a.u, 3), [26, 6, 11], [0.25, 0.26, 0.29], b);
+          out._mat = 0;
           addBox(out, vadd(a.c, a.u, 4.5), [26.3, 1.0, 11.3], WINWARM, b);
         }
       }
@@ -295,8 +301,8 @@
       tyreWall(0.485, 0.515, -1, 3.5, MAGENTA);
 
       // ── HOTEL / COMMERCIAL CLUSTER — s 0.68–0.74 L ───────────────────────
-      building(K(0.69), -1, 60, 26, 68, 22, { kind: "fin", wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 8 });
-      tower(K(0.71), -1, 100, 18, 105, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: 10 });
+      building(K(0.69), -1, 60, 26, 68, 22, { kind: "fin", wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 8, mat: MAT.GLASS });
+      tower(K(0.71), -1, 100, 18, 105, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: 10, mat: MAT.METAL });
 
       // Billboards — Corniche signage character
       billboard(K(0.70), -1, 26, 10, 11, GREEN);

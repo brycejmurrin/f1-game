@@ -134,6 +134,9 @@ const SceneryCity = (function () {
         const tone = {
           n: opts.wall || [0.14, 0.14, 0.17],
           d: (opts.wall && wl > 0.45) ? opts.wall : [0.46, 0.46, 0.45],
+          // Explicit landmark stamp (sandstone palace, glass curtain) so a
+          // night circuit can keep STONE / GLASS instead of neon-concrete.
+          mat: opts.mat,
         };
         neonTower(k, side, dist, w, h, d,
                   opts.windowCol || opts.window || [1.0, 0.88, 0.55],
@@ -158,12 +161,16 @@ const SceneryCity = (function () {
           // NIGHT = a dark neutral-grey concrete mass (NOT tinted by the neon, so
           // the floodlights render it grey, never a glowing colour) with shared
           // thin-pinstripe detailing on top. Mostly dark; the neon is a few lines.
+          // opts.mat lets a named landmark keep STONE / GLASS under the neon.
           const lum = (body[0] + body[1] + body[2]) / 3;
           const bv = lum > 0.4 ? 0.22 : 0.15;
           const bodyTint = [bv, bv, bv * 1.12];
+          const prevNight = out._mat;
+          if (opts.mat != null) out._mat = opts.mat;
           const ok = ctx.instance(UNIT_BOX,
             { o: vadd(p.c, p.u, yBase + sh / 2), r: p.r, u: p.u, t: p.t, s: [sw, sh, sd], col: bodyTint },
             unitBox, { kind: "buildingMass", k, side }) > 0;
+          if (opts.mat != null) out._mat = prevNight;
           if (ok === false) return false;
           neonFacade(vadd(p.c, p.u, yBase + sh / 2), b, side, sw, sh, sd, winBase, k * 7.1 + side * 3.3, theme === "street_night" ? 0.85 : 0.32);
           return ok;
@@ -173,7 +180,7 @@ const SceneryCity = (function () {
         const dayWall = wallLuma > 0.45
           ? [body[0] * 0.78, body[1] * 0.78, body[2] * 0.78]
           : [0.42 + cv * 0.12, 0.42 + cv * 0.11, 0.41 + cv * 0.10];
-        const wmat = facadeMat(dayWall);
+        const wmat = opts.mat != null ? opts.mat : facadeMat(dayWall);
         out._mat = wmat; glassBuf._mat = MAT.GLASS;
         const ok = ctx.instance(UNIT_BOX,                                                   // solid wall mass
           { o: vadd(p.c, p.u, yBase + sh / 2), r: p.r, u: p.u, t: p.t, s: [sw, sh, sd], col: dayWall },
@@ -398,7 +405,12 @@ const SceneryCity = (function () {
         dface(2, 1, sd / 2, 0, sw, true);        // +t side: simple
         dface(2, -1, sd / 2, 0, sw, true);       // -t side: simple
       };
-      const bmat = NIGHT ? MAT.CONCRETE : facadeMat(bodyCol);
+      // Body material: night masses stay CONCRETE under the neon skin;
+      // day facades use the same cream/brick/concrete split as building().
+      // `tone.mat` is an explicit landmark stamp so a night sandstone palace
+      // or glass curtain can keep STONE / GLASS instead of generic concrete.
+      const bmat = (tone && tone.mat != null) ? tone.mat
+        : (NIGHT ? MAT.CONCRETE : facadeMat(bodyCol));
       const sec = (yb, sw, sh, sd, seed, to, ro) => {
         const cen = vadd(vadd(vadd(a.c, a.u, yb + sh / 2), b[2], to || 0), b[0], ro || 0);
         const prevMat = out._mat;
@@ -601,6 +613,7 @@ const SceneryCity = (function () {
         building(k, side, gap, w, h, depth + (s - 0.5) * depth * 0.3, {
           wall: col, floor: opts.floor || (4 + s * 3),
           lit: lit, windowCol: opts.windowCol || wcol,
+          mat: opts.mat,
           // NO `setback:` KEY HERE. This used to pass `setback: <bool>`, which
           // building() has never read — its massing knob is `arch` ("setback"
           // among others), so the option was inert for the life of the file and
@@ -695,15 +708,25 @@ const SceneryCity = (function () {
         return;
       }
       ctx.note("tower", [p.c[0], p.c[1] + h / 2, p.c[2]], [baseW, h, baseW], { k, side });
+      const prevTower = out._mat;
+      if (opts.mat != null) out._mat = opts.mat;
       addFrustum(out, vadd(p.c, p.u, -0.6), baseW * 0.5, baseW * 0.335, h + 0.6, opts.col || [0.70, 0.72, 0.75], opts.seg || 8, b);   // base sunk 0.6
       const glass = opts.glassCol || [0.40, 0.52, 0.64];
       const rAt = (f) => baseW * (0.5 - 0.165 * f) * 1.03;
+      // Only retarget glass bands when the caller asked for an explicit mat —
+      // otherwise leave the register alone so fleet-wide towers stay unchanged.
+      if (opts.mat != null) out._mat = MAT.GLASS;
       addCyl(out, vadd(p.c, p.u, h * 0.40), rAt(0.40), h * 0.05, glass, opts.seg || 8, b);
       addCyl(out, vadd(p.c, p.u, h * 0.66), rAt(0.66), h * 0.05, glass, opts.seg || 8, b);
+      if (opts.mat != null) out._mat = opts.mat;
       addBox(out, vadd(p.c, p.u, h * 0.84), [baseW * 0.62, baseW * 0.05, baseW * 0.62], opts.deckCol || [0.26, 0.28, 0.32], b);   // observation deck
       if (opts.cap) addBox(out, vadd(p.c, p.u, h), [baseW * 0.7, baseW * 0.18, baseW * 0.7], opts.capCol || [0.2, 0.2, 0.24], b);
       const mastH = opts.mast === true ? Math.max(4, h * 0.12) : opts.mast;
-      if (mastH) addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.09 : 0)), 0.18, mastH, [0.3, 0.3, 0.32], 4, b);
+      if (mastH) {
+        if (opts.mat != null) out._mat = MAT.METAL;
+        addCyl(out, vadd(p.c, p.u, h + (opts.cap ? baseW * 0.09 : 0)), 0.18, mastH, [0.3, 0.3, 0.32], 4, b);
+      }
+      out._mat = prevTower;
       blockAt(k, side, dist - baseW * 0.5, baseW * 0.5);   // solid base
     };
     const billboard = (k, side, gap, w, h, col, opts) => {

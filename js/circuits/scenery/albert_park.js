@@ -53,8 +53,11 @@
             center: vadd(a.c, a.u, 10), size: [46, 24, 108], basis: b,
           }, (stage) => {
             // Main hall, glazed along the park frontage.
+            stage._mat = MAT.CONCRETE;
             addBox(stage, vadd(a.c, a.u, 5.6), [34, 11.2, 92], PALE, b);
+            stage._mat = MAT.GLASS;
             addBox(stage, vadd(vadd(a.c, a.r, -17.2), a.u, 6.2), [0.6, 7.2, 78], GLASS, b);
+            stage._mat = MAT.CONCRETE;
             addBox(stage, vadd(vadd(a.c, a.r, -17.6), a.u, 2.2), [0.5, 1.0, 80], TRIM, b);
             // The vault runs ALONG the 92 m hall, so its axis — addCyl's SECOND
             // basis vector, the one a vertical pole puts on a.u — must be a.t.
@@ -74,6 +77,7 @@
             for (const t of [-8, 0, 8]) {
               addCyl(stage, vadd(vadd(ec, a.r, -23), a.t, t), 0.24, 4.6, PALE_D, 6, b);
             }
+            stage._mat = 0;
           });
         }
       }
@@ -177,7 +181,7 @@
         [0.44, 375, 20, 170, 12, [0.34, 0.42, 0.54]],  // depth filler behind Eureka
       ]) {
         tower(k(s), -1, dist, bw, th, { col, seg: 8,
-          cap: true, capCol: [0.20, 0.26, 0.36], mast });
+          cap: true, capCol: [0.20, 0.26, 0.36], mast, mat: MAT.GLASS });
       }
       // Thin haze silhouette band — distant mid-rise depth, not a wall
       for (let i = 0; i < 6; i++) {
@@ -671,7 +675,7 @@
         addBox(out, vadd(a.c, a.u, 2.0), [4, 4, 13], [0.90, 0.90, 0.92], [a.r, a.u, a.t]);
         addBox(out, vadd(vadd(a.c, a.u, 1.6), a.t, 8), [3.6, 3.2, 4], [0.30, 0.32, 0.40], [a.r, a.u, a.t]);
       }
-      building(k(0.04), 1, 48, 20, 12, 30, { kind: "podium", wall: [0.82, 0.84, 0.86], window: [0.30, 0.38, 0.50], floor: 3 });
+      building(k(0.04), 1, 48, 20, 12, 30, { kind: "podium", wall: [0.82, 0.84, 0.86], window: [0.30, 0.38, 0.50], floor: 3, mat: MAT.CONCRETE });
       {
         const ap = anchor(k(0.01), -1, 22);
         addCyl(out, ap.c, 0.18, 18, [0.28, 0.32, 0.38], 4, [ap.r, ap.u, ap.t]);

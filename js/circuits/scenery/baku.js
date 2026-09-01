@@ -150,26 +150,33 @@
       {
         const k = K(0.02);
         // Central palace body via building() — gap=42 keeps it well behind facade row
-        building(k, 1, 42, 52, 22, 30, { kind: "dome", wall: SAND, window: WIN_WARM, floor: 4.5, lit: true });
+        building(k, 1, 42, 52, 22, 30, {
+          kind: "dome", wall: SAND, window: WIN_WARM, floor: 4.5, lit: true, mat: MAT.STONE,
+        });
         // Decorative base plinth (uplit, slightly wider than body, very low)
         const aBase = anchor(k, 1, 68);
+        out._mat = MAT.STONE;
         addBox(out, vadd(aBase.c, aBase.u, 1.5), [58, 3, 32], SAND_LIT, [aBase.r, aBase.u, aBase.t]);
 
         for (const tOff of [-20, 20]) {
           const aTow = anchor(k, 1, 75);
           const tc = vadd(aTow.c, aTow.t, tOff);
           const b  = [aTow.r, aTow.u, aTow.t];
+          out._mat = MAT.STONE;
           addBox(out, vadd(tc, aTow.u, 5),  [14, 10, 14], SAND,     b);
           addCyl(out, vadd(tc, aTow.u, 10), 6.0, 20, SAND,     8, b);
           addFrustum(out, vadd(tc, aTow.u, 30), 6.5, 5.0, 3, SAND_LIT, 8, b);
           addFrustum(out, vadd(tc, aTow.u, 33), 5.0, 1.5, 6, SAND_LIT, 8, b);
           addCone(out, vadd(tc, aTow.u, 39), 1.5, 8, SAND_LIT, 8, b);
+          out._mat = 0;   // warm emissive band — keep untextured
           addFrustum(out, vadd(tc, aTow.u, 29), 7.0, 6.5, 1.2, WIN_WARM, 8, b);
         }
 
         // Ornate entrance gate portico in front of central body
         const aGate = anchor(k, 1, 40);
+        out._mat = MAT.STONE;
         addBox(out, vadd(aGate.c, aGate.u, 3), [40, 6, 3], [0.78, 0.68, 0.50], [aGate.r, aGate.u, aGate.t]);
+        out._mat = 0;
         addBox(out, vadd(aGate.c, aGate.u, 7), [42, 2, 3], WIN_WARM, [aGate.r, aGate.u, aGate.t]);
 
         // Uplit wash at Government House base (warm stone courtyard glow)
@@ -242,9 +249,12 @@
             const tc = vadd(aF.c, aF.r, towerOffs[t]);
 
             // Main tapered body (dark glass under the LED fire veil)
+            stage._mat = MAT.GLASS;
             addFrustum(stage, tc, 16, 3.0, H, [0.10, 0.12, 0.22], 8, b);
 
             // Full-height fire veil stays inside the atomic landmark group.
+            // Pure emissive — leave untextured so the LED wash stays hot.
+            stage._mat = 0;
             const nBands = 16;
             for (let band = 0; band < nBands; band++) {
               const yFr  = (band + 0.5) / nBands;
@@ -268,9 +278,11 @@
           // Uplit ground wash at the Flame Towers base (warm fire spill)
           addBox(stage, vadd(aF.c, aF.u, 0.1), [160, 0.6, 60], [0.22, 0.08, 0.02], b);
           // Stepped dark hillside podium anchors the skyline above the city.
+          stage._mat = MAT.STONE;
           addBox(stage, vadd(aF.c, aF.u, 1.0), [130, 2.0, 44], SAND_DARK, b);
           addBox(stage, vadd(aF.c, aF.u, 3.0), [110, 2.0, 38], [0.30, 0.25, 0.20], b);
           addBox(stage, vadd(aF.c, aF.u, 5.0), [88, 2.0, 32], [0.22, 0.20, 0.19], b);
+          stage._mat = 0;
           for (let t = 0; t < 3; t++) {
             const tc = vadd(aF.c, aF.r, (t - 1) * 50);
             addBox(stage, vadd(tc, aF.u, 0.2), [30, 0.5, 30], [0.30, 0.12, 0.03], b);
@@ -447,6 +459,7 @@
           basis: b,
         }, (stage) => {
           // Square stone base platform (buried 0.5m into ground for solid footing)
+          stage._mat = MAT.STONE;
           addBox(stage, vadd(a.c, a.u, 1.5), [22, 3, 22], SAND_DARK, b);
 
           // Octagonal base ring flare — wider than drum, creates distinct pediment
@@ -456,12 +469,14 @@
           addCyl(stage, vadd(a.c, a.u, 5), 9.2, 28, SAND, 12, b);
 
           // Stone band window slits — narrow emissive strips along the drum face
+          stage._mat = 0;
           for (let wl = 0; wl < 4; wl++) {
             const wy = 5 + 5 + wl * 6;
             addFrustum(stage, vadd(a.c, a.u, wy), 9.3, 9.3, 1.2, WIN_WARM, 12, b);
           }
 
           // Projecting cornice ring (slightly wider than drum — sits on top at y=33)
+          stage._mat = MAT.STONE;
           addFrustum(stage, vadd(a.c, a.u, 33), 10.0, 9.5, 1.5, SAND_LIT, 12, b);
           // Inward step back (y=34.5..36)
           addFrustum(stage, vadd(a.c, a.u, 34.5), 9.5, 7.0, 1.5, SAND, 12, b);
@@ -477,6 +492,7 @@
 
           // Uplit glow ring at base (ground-level uplit stone look)
           addFrustum(stage, vadd(a.c, a.u, 3.2), 12.0, 11.5, 0.8, SAND_LIT, 8, b);
+          stage._mat = 0;
         }, { required: true });
 
         groundPatch(k, -1, 1, [30, 0.5, 30], [0.20, 0.16, 0.08],
@@ -489,11 +505,14 @@
         const k = K(0.50);
 
         // Main palace structure (gap=20 to clear the castle wall at gap=1.5)
-        building(k, 1, 20, 22, 10, 28, { kind: "arch", wall: PALACE, window: WIN_WARM, floor: 2, lit: true });
+        building(k, 1, 20, 22, 10, 28, {
+          kind: "arch", wall: PALACE, window: WIN_WARM, floor: 2, lit: true, mat: MAT.STONE,
+        });
 
         // Crenellated parapet: merlons at y=10 (top of 10m building)
         const a = anchor(k, 1, 20);
         const b = [a.r, a.u, a.t];
+        out._mat = MAT.STONE;
         for (let j = 0; j < 8; j++) {
           if (j % 2 === 0) {
             addBox(out, vadd(vadd(a.c, a.t, (j - 3.5) * 3.8), a.u, 10.9), [2.5, 1.8, 2.5], PALACE, b);
@@ -505,14 +524,19 @@
         addCyl(out, vadd(vadd(a.c, a.t,  13), a.u, 10), 2.2, 6, PALACE_DARK, 8, b);
         addCone(out, vadd(vadd(a.c, a.t, -13), a.u, 16), 2.2, 4, PALACE, 8, b);
         addCone(out, vadd(vadd(a.c, a.t,  13), a.u, 16), 2.2, 4, PALACE, 8, b);
+        out._mat = 0;
         addBox(out, vadd(vadd(a.c, a.t, -13), a.u, 19.5), [1.0, 0.8, 1.0], WIN_WARM, b);
         addBox(out, vadd(vadd(a.c, a.t,  13), a.u, 19.5), [1.0, 0.8, 1.0], WIN_WARM, b);
 
         // Flanking wing building (east)
-        building(K(0.505), 1, 14, 12, 7, 16, { kind: "chevron", wall: PALACE, window: WIN_WARM, floor: 2, lit: true });
+        building(K(0.505), 1, 14, 12, 7, 16, {
+          kind: "chevron", wall: PALACE, window: WIN_WARM, floor: 2, lit: true, mat: MAT.STONE,
+        });
 
         // Ornamental archway detail on main facade
+        out._mat = MAT.STONE;
         addBox(out, vadd(a.c, a.u, 4), [20, 3, 1.5], [0.82, 0.76, 0.64], b);
+        out._mat = 0;
       }
 
       {
@@ -525,7 +549,7 @@
         for (const [i, [s, side, dist, w, h, d]] of oldCityData.entries()) {
           building(K(s), side, dist, w, h, d, {
             kind: ["hall", "arch", "dome", "chevron", "drum"][i % 5],
-            wall: STONE, window: WIN_WARM, floor: 3, lit: true,
+            wall: STONE, window: WIN_WARM, floor: 3, lit: true, mat: MAT.STONE,
           });
         }
       }
