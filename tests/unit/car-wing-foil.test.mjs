@@ -96,7 +96,10 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
   // is z 1.30 and there was nothing ahead of it at all. FOOTPLATES under the
   // primary turning vane (+28) — a default car runs vane 1, which was one blade
   // standing alone on each side. Measured 3112 on the raise.
-  assert.ok(body <= 3120, `default body ${body} > 3120`);
+  // 3120 -> 3148: the nose running lights, measured. Two flank markers and a
+  // crown bar, twelve triangles each as addBox lofts them; they are !ckpt, so
+  // the cockpit ceiling below is untouched.
+  assert.ok(body <= 3148, `default body ${body} > 3148`);
   // Cockpit ceiling UNCHANGED at 1500: the six-point harness (+60, measured
   // 1428) fits the existing budget. The straps sit between the eye and the dash
   // coaming, filling the lower frame that the coaming never reaches.

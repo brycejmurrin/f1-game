@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 147 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 149 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -721,6 +721,38 @@ still running, `#pm-lighting` was disabled — and **a disabled button's
 opened and five tests failed on a hidden `#lighting` with no other clue. When a
 test is made faster, look for the setup it was buying with its own slowness.
 
+### A boot is 45 s now, not 11-22 s — A/B the tree before blaming the change (2026-09-01)
+
+`parts-physics.spec.js` went from green to **70 of 70 red**, every one of them
+`waitForFunction: Timeout 8000ms exceeded` inside the spec's own `load()`, each
+burning 42-57 s to report it. The tree had just taken two large deploy merges
+plus a car-geometry pass, so the obvious reading was a boot regression from one
+of them. It was neither.
+
+What the measurement said, on an idle 4-core box (loadavg ~1.0):
+
+| probe | result |
+|---|---|
+| `python3 -m http.server`, 20 sequential GETs | 139 ms total — **7 ms/request**, not the bottleneck |
+| HEAD: `goto("/")` → `Parts` defined | 24.5 s → **47.2 s** |
+| worktree at the pre-merge SHA, same box, same minute | 18.7 s → **48.8 s** |
+
+The pre-merge lineage was *slower*. Nothing regressed: 156 deferred script tags
+and 3.5 MiB of JS simply cost Chromium ~45 s to parse and execute here, and the
+8 s bound had always been riding on a faster box. `tooling-fast` was 121/121
+green throughout, which is the tell that the tree is structurally fine and the
+bound is the problem.
+
+**Two rules from this.** First: when a whole spec file dies at the same helper,
+that is a bound, not a verdict — check the FIRST failure's message before
+believing a diagnosis. Second: the cheap A/B is a `git worktree` at the
+pre-change SHA measured *in the same minute on the same box*, because the
+alternative — comparing against a number someone recorded on a different day —
+is what makes a machine slowdown look like a code regression. A boot bound is
+not an assertion tolerance: raising it only ever permits a slower page, never a
+looser measurement, so raise it to fit the measurement and record the numbers at
+the line.
+
 ---
 
 ## 4. Philosophy — debug-hooks first
@@ -896,6 +928,7 @@ what it covers.
 | `cockpit-pale-surfaces.test.mjs` | nothing in the COCKPIT build reads as a blank pale slab: ray-casts every team's cockpit mesh from the driver's eye and fails on a pale ACCENT (the car's own body colour is exempt — racingbulls really is a white car). Proven to fail on ferrari + williams with the `_ckAcc` dimming disabled |
 | `crest-marks.test.mjs` | every team mark is READABLE, measured rather than eyeballed: extent inside the fit box and filling it, no limb under `STROKE_MIN` (1.9 px at the 34 px the mobile-AI fin badge gets), lettering floored and absent when `bare`, a colour census that fails on any paint outside `markPalette`, no alpha or `destination-out`, ink coverage in band and stable between 430 px and 40 px, and the 4.2:1 contrast floor over every team x livery x the four surfaces a mark lands on. Also holds the editor's mark rows: every row `markSlots` offers reaches PIXELS on both surfaces, no two rows share a key or a label, the OUTLINE row is opt-in on every mark, and Red Bull's SUN DISC is round (every sampled point one radius from the bbox centre) and backmost — the trace's union silhouette failed that by 6:1 and was what made SUN DISC move an outline. Measures through `tools/crest-sweep.mjs`. Would have failed on the traced logo PNGs this replaced |
 | `car-front-wing-width.test.mjs` | the front wing is NARROWER than the car it is bolted to — a regulation invariant, not a style call. F1 caps the wing ~100 mm inboard of the front tyre's outer face on each side (1700/1900 for 2026), and that gap is what the endplate uses to push the wake around the tyre. Ours stood 95 mm PROUD: the widest vertex in the whole car was the endplate footplate at ±1.045 against a 0.950 tyre face, so the car measured 2.09 m at the wing and 1.90 m at the wheels. Sweeps EVERY aero option, because calibrating on the default alone is what left `outwash_max` and `reg26_concept` 5 mm proud; a lower bound guards the other direction. Builds offline through `tools/parts-sweep.mjs` |
+| `grid-boxes.test.mjs` | the painted starting-grid boxes, measured on a real track build. The grid's geometry — pole 14 m before the line, 8 m between slots, the lateral stagger — lived only inside `gridUp()` in js/game.js, pinned by nothing at all; the boxes are built in js/track/mesh.js, a different layer, so the two would have drifted in silence and the paint would still LOOK like a grid, just not the one the cars stand on. `TrackMesh.gridSlot()` is now the single definition and this is what holds the paint to it — falsified by moving the front line 4 m, which reddens the drift guard and nothing else. Also pins the real regulation: a 2.7 m box (the FIA widened it 20 cm in 2023), open at the rear because legality is judged on the front tyres, and the yellow guide line placed CLEAR of the front line rather than z-fighting it. Builds offline through `tools/track-build-vm.cjs`; monaco is in the set because it is the narrowest tarmac a box has to fit on |
 | `parts-visual-distinctness.test.mjs` | every catalog option is VISIBLY different from the one it replaces, measured rather than hashed: builds all 297 options offline and gates on surface distance, moved area, palette transport and a 14-view visibility mask. INVISIBLE / BROKEN / SLIDE / INTERNAL must be empty, COLOUR-ONLY is an exact allow-list, WEAK is a downward-only ratchet; plus the census (12/297/121) and the SIGNATURE invariant that a reskin keeps its equivalent's cost and all four stat multipliers. Measures through `tools/parts-sweep.mjs`. ~4 min, so it runs in `test:sweeps`, never in the edit loop |
 | `parts-ladder.test.mjs` | every catalog option is one a rational player could ever want to BUY — the other half of the promise `parts-visual-distinctness` makes. An option is LIVE when it maximises `sum w_i*log(stat_i) - lambda*cost` for some positive taste and some price (the upper convex hull of the (cost, log-stat) set, solved exactly per weight vector, no lambda grid). Gates: no PAID option strictly dominated by a cheaper one; the never-optimal list is exact in BOTH directions against a named exemption list (the two wet compounds, which the four DRY stats cannot score); no category flat on a stat; SIGNATURE cost/stat parity; and the career budget cap clears the dearest works car while staying under the whole top shelf. Measured 2026-08-29: 67 of 169 rows never optimal before the re-space, 2 after. Measures through `tools/parts-ladder.mjs`. ~0.3 s, node-only — cheap enough for the edit loop |
 | `garage-mesh.test.mjs` | the bay's meshes carry a per-vertex MATERIAL column of exactly one float per vertex, and the big surfaces are not all left on `MAT.FLAT`. A silent-failure guard: GLX wires the attribute only when `data.mat.length === vCount` (`glx.js:647`) and drops a wrong-length column with no warning, which is how the whole garage shipped untextured while the car standing in it sampled the baked PBR arrays. Runs the real module in a `node:vm` against a recording Gfx — no browser, ~0.15 s |
@@ -1022,6 +1055,7 @@ what it covers.
 | `game-ctx-surface.test.mjs` | a TYPE CHECK for the `G` ctx façade (Bedrock Phase 1) via `tools/check-gctx.mjs`: `types/game-ctx.d.ts` must declare exactly the members of `const G = {…}` in `js/game.js`, with matching writability (`readonly` ⇔ getter-with-no-setter), and the `GameModuleFactory` roster must match the real `X.create(ctx)` call sites. Second leg, skipped when no `tsc` is resolvable: every `G.member` read/write and `const {…} = ctx` destructure in `js/game|net` is emitted as a typed shadow and compiled — reading a member that does not exist, or writing one with no setter, is an error reported at the real `js/` file:line. Third leg: a member **no module reads** (the `countT` defect reversed) is baselined, so a new one fails |
 | `vstd-invariant.test.mjs` | the PACE invariant as a lint (`tools/vstd-lint.mjs`): no speed in `js/game.js` is divided by `VMAX` or compared against a bare literal outside the reviewed allow-list, so the OVERALL SPEED slider cannot silently shrink the player's envelope again |
 | `module-size.test.mjs` | RATCHET on the big modules' line counts — lower a ceiling when you extract; raising one is a deliberate edit with a reason in the commit |
+| `car-mesh-anchors.test.mjs` | The NODE gate for the car-graphic anchor assertions that `parts-physics.spec.js` also makes in a browser. It exists because the browser parts group is NOT in the deploy gate — `pages.yml` runs `test:smoke` (smoke.spec.js only) plus the unit suites — so a red parts assertion ships silently, and one did: the front-wing flap check sat red on the deploy tip through five consecutive green Pages runs. Ported rather than adding ~20 min of SwiftShader to every deploy, because these read MESH ARRAYS and `loadParts()` runs `car3d.js` in a node vm; the node context reproduces the browser numbers exactly (144 accent flank vertices both ways). Covers sidepod/nose decal gaps, the accent flank band, the nose running lights, the front-wing flap tips against `FW_SPAN`, and `functionalEmissive` staying reserved for the rain light. Every selector asserts a COUNT first — a sibling DRL assertion once passed for months on `Math.max([]) === -Infinity` |
 | `car-wing-foil.test.mjs` | Shared `Car3D` wing section: knife-TE `FOIL_T` sample, five-span planform, beveled endplates, 100-triangle flap (not a 48-triangle plank), default body/cockpit under the 2400/1500 ceilings, single-option recipes within 1.6× the default budget |
 | `car-presentation-canary.test.mjs` | Field cars share the player's presentation path: `renderPosOf` / `playerAnchor` interpolate world `px`/`pz` for every car (not only `c.human`), `xVis` is dump-only (no 16/s or 30/s damp, shadows use the same `cX`), AI mirrors `px`/`pz` *after* the `(s, x)` advance, visible procedural cars draw `teamBodyMesh`/`playerBodyMesh` + planted factory-signature wheels on `_groundMat` (not a generic `field:1:1:1` pair, not baked wheels on the chassis matrix), and `carOrbit` / agent-view `carWorld` read the mirrored pose. Locks the two leftover bugs that made the pack feel delayed and "a different car" |
 | `gfx-backend-canary.test.mjs` | RENDERER pick survives the title menu: `#pm-renderer` is not `hidden`, the boot canary disarms after bind (not only after `present()`), first world present re-arms for jetsam, the picker names WEBGPU both ways, a `<select>` + ‹ › jumps without cycling through THREE, and RESET RENDERER drops backend crash flags plus context-loss latches without touching GRAPHICS quality. Also **TLX's canvas must be OPAQUE**: the lit fragment writes the SSR car-paint tag (0.35) into ALPHA, and `present()`'s post-only-death path keeps those materials while painting straight to the canvas — on an alpha-composited canvas the browser reads that tag as opacity and every car's painted bodywork goes 35% see-through for the rest of the session (reported from an iPhone). three needs telling twice: its WebGPU backend honours `alpha:false`, its WebGL backend hardcodes `alpha:true` and only honours a caller-supplied `context`. **Both vendor behaviours are asserted against the bundled three**, so the upgrade that makes half the workaround unnecessary — or the other half insufficient — fails here, next to the reason, rather than becoming another bug report from a phone. Source can prove TLX ASKS for an opaque canvas but never that it GOT one, so the live half is in `tlx-probes.spec.js` |

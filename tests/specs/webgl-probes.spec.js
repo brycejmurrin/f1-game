@@ -16,6 +16,10 @@ test.describe.configure({ timeout: 240_000 });   // several of those waits per t
 
 const LANDSCAPE = { width: 844, height: 390 };
 
+// Independently confirmed 2026-08-31 from the other lineage: the same five
+// tests fail identically on an unmodified HEAD checked out in a second
+// worktree, which is what separates "the box" from "the diff". Run that check
+// before reading a red renderer run as a regression.
 async function loadRace(page, id = "monza") {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });

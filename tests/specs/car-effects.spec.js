@@ -38,6 +38,8 @@ test.describe("Car runtime effects", () => {
       boostFlame: expect.any(Boolean),
       brakeHeat: expect.any(Number),
       brakeGlowThreshold: expect.any(Number),
+      gridLights: expect.any(Boolean),
+      gridStrobe: expect.any(Boolean),
     }));
   });
 
@@ -137,5 +139,63 @@ test.describe("Car runtime effects", () => {
     expect(observed).not.toBeNull();
     expect(observed.steady.exhaustFlame).toBe(false);
     expect(observed.transient).toEqual(expect.objectContaining({ exhaustFlame: true }));
+  });
+
+  // The pre-race grid lights. Deliberately NOT via startCar(): that calls go(),
+  // which skips the countdown, and the countdown is the whole subject here. Same
+  // reason park()/jump() are avoided — every one of those hooks promotes the game
+  // straight to "race".
+  async function onGrid(page) {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+    // A dry daytime race, so nothing but the grid state can light the rear.
+    await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
+    // race() DOES NOT land in "count" synchronously any more: startRace() is
+    // async since the lazy-scenery split (it awaits ensureScenery), and race()
+    // does not await it. Reading carEffects() on return gets null, because
+    // there is no player yet. Wait for the state the hook is documented to
+    // reach instead of assuming the call was synchronous.
+    await page.waitForFunction(() => window.__apex.info().state === "count",
+      null, { polling: 100, timeout: 30_000 });
+  }
+
+  test("the rear lights come on for the grid, dry and in daylight", async ({ page }) => {
+    await onGrid(page);
+    const state = await effects(page);
+    expect(state).toEqual(expect.objectContaining({ gridLights: true }));
+  });
+
+  test("the grid strobe actually animates on the countdown clock", async ({ page }) => {
+    // raceT is pinned at 0 until lights-out — update() returns before `raceT +=
+    // dt` while the state is "count" — so anything keyed off raceT is FROZEN on
+    // the grid. That is the regression this catches: lights that are on, but
+    // solid. Sampled against the game's own running countdown rather than by
+    // poking a clock, so it proves the real path animates.
+    // Sampled by stepping the game's OWN clock inside one evaluate, not over
+    // wall time: step() advances the countdown without promoting out of it, and
+    // a round trip per sample on SwiftShader is slower than the 5 Hz flash, so
+    // a wall-clock loop measures the box rather than the code.
+    await onGrid(page);
+    const seen = await page.evaluate(() => {
+      const a = window.__apex, states = {};
+      for (let i = 0; i < 90; i++) {          // 1.5 s of game time, ~7 flashes
+        const e = a.carEffects();
+        if (!e || !e.gridLights) return { bailed: a.info().state };
+        states[String(e.gridStrobe)] = true;
+        a.step(1 / 60, 1);
+      }
+      return { states: Object.keys(states).sort(), state: a.info().state };
+    });
+    expect(seen.bailed).toBeUndefined();
+    expect(seen.state).toBe("count");
+    expect(seen.states).toEqual(["false", "true"]);
+  });
+
+  test("the lights stop once the race goes green", async ({ page }) => {
+    await onGrid(page);
+    expect((await effects(page)).gridLights).toBe(true);
+    await page.evaluate(() => window.__apex.go());
+    const state = await effects(page);
+    expect(state).toEqual(expect.objectContaining({ gridLights: false, gridStrobe: false }));
   });
 });

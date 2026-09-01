@@ -79,6 +79,14 @@ const files = changedFiles();
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
 const groupSel = pick(files);
 const groups = [...groupSel.keys()].filter((g) => pkg.scripts[`test:${g}`]).sort();
+// THE THREE-WAY CONTRACT THIS FILE USED TO THROW AWAY. pick-tests.mjs:243
+// computes exactly this — its `named` is derived identically to `groups` above —
+// and its comment is the whole point: "unmatched" means files changed but no
+// rule claimed them, so the selection is NOT trustworthy and the caller must
+// fall back to a full run. Calling the raw pick() Map API drops it, and then
+// `!batches.length` cannot tell "nothing needs testing" from "I do not know
+// what to test". docs/PERF-FINDINGS.md 2j.
+const selReason = !files.length ? "none" : (groups.length ? "matched" : "unmatched");
 const isBrowser = (g) => /run-playwright/.test(pkg.scripts[`test:${g}`]);
 const browserGroups = groups.filter(isBrowser);
 // tooling-fast is phase 1's inline gate — leaving it in the batch list would
@@ -102,6 +110,11 @@ const wantsSweepsHint = files.some((f) => /^js\/(track|circuits)\//.test(f) || /
 
 const plan = {
   files,
+  // Carried into the plan too, not just the verdict: `--plan` printing
+  // `"batches": []` with no reason is the same vacuous answer the run path
+  // used to give — "nothing to test" and "no rule claimed these files" look
+  // identical without it. docs/PERF-FINDINGS.md 2j.
+  selection: selReason,
   fast: {
     toolingFast: wantsToolingFast,
     verifyTrack: circuits,
@@ -173,6 +186,23 @@ const finish = (verdict, extra = {}) => {
 };
 
 if (!fastOk) finish("fail", { notRun: batches.flat() });
+// "unmatched" IS NOT "pass", and the difference is the whole reason pick-tests
+// publishes a reason. A .github/, playwright.config.js, package.json, icons/ or
+// vendor/ edit names no group, so batches is empty for the same reason an empty
+// diff is — and this used to answer both with `pass`, exit 0. That is the
+// answer an agent gets from `apex_verify_change_fast` and from verify-agent
+// when it asks "did I break anything?", after running one advisory cache-check.
+// finish() already exits 2 for anything that is neither pass nor fail, and
+// apex-tools-mcp allows exit 2, so this needs no new vocabulary.
+if (selReason === "unmatched") {
+  finish("unmatched", {
+    notRun: batches.flat(),
+    unclaimed: files,
+    toolingFast: !!plan.fast.toolingFast,
+    why: "no rule in pick-tests.mjs claimed these files, so the group selection " +
+         "is not trustworthy — fall back to a full run before trusting a green.",
+  });
+}
 if (flag("--fast") || !batches.length) {
   finish(fastOk ? (batches.length ? "partial" : "pass") : "fail",
     { notRun: batches.flat() });

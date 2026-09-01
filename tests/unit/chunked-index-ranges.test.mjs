@@ -311,3 +311,39 @@ test("trackGeometry debug retention preserves every source channel", () => {
   C.createChunkedMesh(src, 72);
   for (const [key, value] of Object.entries(refs)) assert.equal(src[key], value, `${key} must survive debug retention`);
 });
+
+// The test above proves the GEOMETRIC half of the per-chunk run-merge: one draw
+// over a run covers the same indices, in order, as the per-chunk draws. What it
+// cannot see is the half that made the merge legal in the first place — the
+// perChunk branch binds a DIFFERENT light set per chunk, so a run may only
+// extend while four things all hold. MEASURED before the merge was written
+// (scratch/r11/chunk-merge.mjs, vegas night, full field): 152.6 chunk draws a
+// frame, 91.2 consecutive pairs contiguous, 114.8 sharing a light set, 74.2
+// both — and drawElements duly fell 129.2 -> 74.5 per frame.
+//
+// Drop any one of the four and the picture changes while every call count keeps
+// improving, which is the failure mode no perf number can catch:
+//   visible   — a culled chunk between two visible ones must BREAK the run, or
+//               the merge draws back what the cull removed.
+//   same list — one uploadLightSet serves the whole run.
+//   same slot — uLampShadowIdx indexes into that set.
+//   contiguous + same index type — a run is one byte range.
+test("the per-chunk merge only extends a run under all four guards", () => {
+  const src = fs.readFileSync(SRC, "utf8");   // the same source the loader above reads
+  const loop = src.slice(src.indexOf("const _tbl = LampChunks.resolve"),
+                         src.indexOf("if (perChunk) {", src.indexOf("const _tbl = LampChunks.resolve")));
+  assert.ok(loop.length > 200, "the perChunk draw loop moved — this guard is reading the wrong slice");
+  assert.match(loop, /runType === ch\.indexType/, "a run must not span two index types");
+  assert.match(loop, /runSlot === slot/, "a run must not span two lamp-shadow slots");
+  assert.match(loop, /_sameList\(runLi, li\)/, "a run must not span two light sets");
+  assert.match(loop, /runOff \+ runCount \* stride === ch\.byteOffset/,
+    "a run must stay contiguous in the index buffer");
+  // The cull path must flush, not `continue` past an invisible chunk.
+  assert.match(loop, /_aabbDist2\([^)]*\) > cd2\)\) \{ flush\(\); continue; \}/,
+    "an invisible chunk must FLUSH the open run — a bare continue would merge across it");
+  // And _sameList must compare contents, not just identity: LampChunks is free
+  // to hand back equal-but-distinct arrays, and an identity-only check would
+  // silently stop merging (a perf regression nothing goes red for).
+  const sl = src.slice(src.indexOf("function _sameList("));
+  assert.match(sl, /a\[i\] !== b\[i\]/, "_sameList must compare elements, not only object identity");
+});

@@ -1,5 +1,5 @@
 // @ts-check
-import { test, expect } from "../helpers/fixtures.js";
+import { test, sharedTest, expect } from "../helpers/fixtures.js";
 
 // Helper: wait for the game's __apex hook to report a non-null track,
 // meaning loadTrack() has finished and the renderer is up.
@@ -7,7 +7,10 @@ import { test, expect } from "../helpers/fixtures.js";
 // waits on a page that is actively building and drawing a circuit, which is
 // exactly when rAF — waitForFunction's default clock — starves under SwiftShader
 // and stops bounding the declared timeout.
-async function waitForTrack(page, timeout = 10_000) {
+// 2026-08-30: CI experienced 264s car builds under load. Default 10s does not
+// accommodate overloaded runners — expanded to 480s to match the widened smoke
+// job timeout, giving the build the same headroom CI's steps were tuned for.
+async function waitForTrack(page, timeout = 480_000) {
   await page.waitForFunction(
     () => window.__apex && window.__apex.info().track != null,
     null, { polling: 100, timeout }
@@ -69,7 +72,19 @@ async function goToRace(page) {
   await page.locator("#rs-go").click();
   // Renderer back on BEFORE the track wait, so callers get the live scene.
   await page.evaluate(() => window.__apex.headless(false));
-  await waitForTrack(page);
+  // 180 s, THE SAME BOUND bootRace PASSES for the identical wait. This was a
+  // bare waitForTrack(page), i.e. the helper's 10 s default, while bootRace six
+  // lines down asks for 180_000 with the reason written next to it: "CI has been
+  // measured taking 94 s just to boot a race on a starved runner." One helper,
+  // one piece of work — a circuit build under SwiftShader — and two bounds 18x
+  // apart, of which only the generous one matched what the work actually costs.
+  //
+  // Measured, Pages run 1861 shard 1: the page logged `livery williams` at
+  // 19810 ms and then nothing until `build mercedes` at 100687 ms — an 80 s
+  // runner stall. bootRace's callers rode it out; goToRace's blew a 10 s bound
+  // and failed the deploy. The tests either side of this line are identical in
+  // what they ask the browser to do.
+  await waitForTrack(page, 180_000);
 }
 
 // Helper: skip the countdown, clear the AI pack, and park the player
@@ -102,6 +117,19 @@ async function park(page, frac = 0) {
 //
 // bahrain is the picker's own default, so these specs render the same circuit
 // they rendered when they clicked through the menus to get here.
+// bootRace for a page the sharedTest fixture has ALREADY booted: no goto, and
+// no re-race when the circuit is already the one wanted. That is the whole
+// saving — the second test in the shard skips a page boot AND a circuit build.
+async function raceOnBootedPage(page, trackId = "bahrain") {
+  const on = await page.evaluate(() => {
+    const i = window.__apex && window.__apex.info();
+    return i && i.track ? i.track : null;
+  });
+  if (on === trackId) return;
+  await page.evaluate((t) => window.__apex.race(t), trackId);
+  await waitForTrack(page, 180_000);
+}
+
 async function bootRace(page, trackId = "bahrain") {
   await page.goto("/");
   await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 60_000 });
@@ -277,8 +305,24 @@ test.describe("Apex 26 — rendering", () => {
   });
 });
 
-test.describe("Apex 26 — HUD", () => {
-  test("speed readout updates after jump() at speed", async ({ page }) => {
+// THE HUD PAIR SHARES ONE BOOTED PAGE. These two tests are `--shard=4/4` — the
+// pole the sharding comment in ci.yml names ("speed readout 109 s, minimap 81 s
+// are the pole on their own") — and both of them paid the SAME fixture: a page
+// boot, a circuit build and a park under SwiftShader. Their own comments say
+// that fixture is the entire cost ("goToRace + park alone is most of the budget
+// before this test asserts anything"), and shard 4 paid it twice.
+//
+// Measured on an idle box, shard 4 as CI runs it: 125.6 s + 112.2 s, with the
+// first test FAILING the 120 s default. The same test alone took 26.9 s — a
+// 4.7x spread that is the variance the fixture carries, not the assertion.
+//
+// sharedTest is safe for exactly these two and not for the rest of the file:
+// fixtures.js warns it off "anything asserting FIRST-LOAD behaviour", which is
+// what the other seven smoke tests are for. These two assert HUD content AFTER
+// a race, and the minimap test re-parks at s=0 itself, so it does not care that
+// the speed test left the car at 80 m/s.
+sharedTest.describe("Apex 26 — HUD", () => {
+  sharedTest("speed readout updates after jump() at speed", async ({ page }) => {
     // BUDGET, not contention. Re-run ALONE on an idle box (tools/test-solo.mjs,
     // which refuses to start above load 2) this took 98.5 s of the 120 s default
     // — 82 % of budget with nothing else on the machine — and it is reliably the
@@ -288,7 +332,7 @@ test.describe("Apex 26 — HUD", () => {
     // reached the same conclusion. CI now supplies a measured 420 s timeout;
     // test.slow() must not override it because Playwright triples the command-line
     // budget and turns one attempt into a 21-minute hang allowance.
-    await bootRace(page);
+    await raceOnBootedPage(page);
     await park(page, 0);
     await page.evaluate(() => window.__apex.jump(0, 80, 0));
     // Wait for the HUD tick to flush the new speed value into the DOM.
@@ -323,7 +367,7 @@ test.describe("Apex 26 — HUD", () => {
     expect(parseInt(speed, 10)).toBeGreaterThan(0);
   });
 
-  test("minimap canvas has content after race starts", async ({ page }) => {
+  sharedTest("minimap canvas has content after race starts", async ({ page }) => {
     // THE SLOWEST TEST IN THE GROUP, and on CI's software renderer it exceeded
     // the 240 s budget twice (328 s, then 356 s on retry) while asserting
     // nothing — a bare timeout, with the car correctly parked at s=0. The other
@@ -332,7 +376,7 @@ test.describe("Apex 26 — HUD", () => {
     // seconds here. goToRace + park alone is most of the budget before this test
     // asserts anything. Keep the workflow's explicit 420 s timeout as the bound;
     // test.slow() would silently triple it.
-    await bootRace(page);
+    await raceOnBootedPage(page);
     await park(page, 0);
 
     // park() force-publishes the HUD/minimap before it returns. Read the canvas

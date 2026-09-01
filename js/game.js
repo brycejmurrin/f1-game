@@ -1808,8 +1808,9 @@ function gridUp(preOrder) {
     // flag classification is built from finishing times. Career's "out-qualify
     // your team-mate" objective reads it; correct for both branches above.
     c.gridPos = i + 1;
-    c.s = wrapS(track.total - 14 - i * 8);
-    c.x = (i % 2 === 0 ? -1 : 1) * Math.min(smpHw(c.s) * 0.4, 3);
+    // TrackMesh owns the slot geometry, so the painted boxes cannot drift off it.
+    const slot = TrackMesh.gridSlot(track, i);
+    c.s = wrapS(slot.s); c.x = slot.x;
     c.xVis = c.x;   // dump/net field; render no longer damps this
     {
       const w = worldFromTrack(c.s, c.x, smp);
@@ -1851,7 +1852,6 @@ function gridUp(preOrder) {
     player.vLat = 0; player.yawRateCur = 0;
   }
 }
-function smpHw(s) { Tracks.sample(track, s, smp); return smp.hw; }
 
 // Optional imported car model (binary glTF / .glb). When loaded, team meshes are
 // built from it — tinted to each livery — instead of the procedural Car3D.
@@ -1907,7 +1907,7 @@ GarageScene.init(gfx);
 // js/game/particles.js; same injected-renderer pattern as CarMesh above.
 Particles.init(gfx);
 const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
-        getBrakeRing, getRainLight, getExhaustFlame, getErsLight,
+        getBrakeRing, drawRearLights, getExhaustFlame, getErsLight,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
         getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 const _decalTexCache = {}, _decalTexFail = {}, _decalTexOrder = [];
@@ -3652,7 +3652,15 @@ function update(dt) {
     }
   }
 
-  if (soundOn) {
+  // `&& player`, and it is not defensive noise: startRace already documents that
+  // player can be null ("roster/team resolution miss") and guards ITSELF, but
+  // this block dereferenced it unguarded — and startRace is now async (it awaits
+  // ensureScenery), so there is a real window where update() ticks before
+  // makeCars has run. A throw here is not a dropped frame: it escapes tick()
+  // before the requestAnimationFrame re-schedule, so the render loop dies for
+  // the rest of the session. Measured: __apex.race() + go() left the canvas at
+  // ZERO draws a frame, permanently. docs/PERF-FINDINGS.md 2i.
+  if (soundOn && player) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0;
     _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetRoad();
@@ -5429,7 +5437,6 @@ function restoreLightTune(undo) { return ltStore.restore(undo); }
 
 // Per-frame light assembly (nearest-N flood cull + car tail lights) lives in
 // js/game/lighting.js (LightTune.setFrameLights / appendCarTailLights).
-const _rainLightOpts = { emissive: 1, roughness: 0.9, specular: 0, noAlphaWrite: true };
 const _wheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
 const _ersLightOpts = { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 };
 const _flameOpts = { emissive: 1.0, roughness: 1, specular: 0, alpha: 1, noAlphaWrite: true };
@@ -6894,6 +6901,11 @@ function render(dt) {
   frame.tune = LT;
 
   const night = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
+  // Pre-race grid: rear lights strobe on the countdown clock. countT, NOT raceT
+  // — update() returns before `raceT += dt` while state is "count", so every
+  // raceT-keyed flash in this file is frozen at 0 until lights-out.
+  const preGrid = state === "count";
+  const gridFlash = preGrid && CarMesh.gridStrobe(countT);
   // Prop emissive (lit windows / signage / neon) drives how strongly the
   // buildings glow after dark. A full night session goes to full emissive
   // REGARDLESS of the palette's sun elevation — many night palettes keep the sun
@@ -7202,33 +7214,28 @@ function render(dt) {
         drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero);
       }
     }
-    // Rear LED: FIA rain-light strobe in the wet (~4 Hz, 55% duty), and STEADY
-    // at night — a car's rear/vertical faces receive none of the downward-aimed
-    // floodlight beams, so from the cockpit a car directly ahead at night was a
-    // pitch-black void filling the windscreen (the "black box at the start /
-    // when braking" — you sit 2 m behind the P11 gearbox on the grid, and you
-    // close right up on the car ahead under braking). The steady red LED gives
-    // every rear an anchor light, like a real night race.
-    // Real-F1 touches: the LED brightness tracks the car's live ERS charge (dim
-    // when flat, bright when full — but never fully dark, so it stays an anchor),
-    // and it FLASHES the same ~4 Hz FIA pattern while harvesting/deploying (OT or
-    // active boost), exactly like the real rear light on a push lap.
+    // Rear lights (CarMesh.drawRearLights: the centre RIS light plus the 2026
+    // mirrored light on each rear wing endplate). FIA strobe in the wet (~4 Hz,
+    // 55% duty) and STEADY at night — a car's rear faces receive none of the
+    // downward-aimed floodlight beams, so a car directly ahead at night was a
+    // pitch-black void filling the windscreen; the steady red gives every rear
+    // an anchor light. Brightness tracks live ERS charge, and it flashes the
+    // same FIA pattern while harvesting/deploying, as on a real push lap.
+    // ON THE GRID they strobe whatever the weather: a stationary 2026 car on
+    // full charge shows the "MGU-K recharging" fast flash, which is the blinking
+    // in every real pre-race grid shot.
     const _ledStrobe = ((raceT * 4.4) % 1) < 0.55;
     const _ledDeploy = isErsDeploying(c);
-    if ((wet && _ledStrobe) || (!wet && night && (!_ledDeploy || _ledStrobe))) {
-      // Rivals: 40 m gate like brake rings. Player always draws.
+    if (preGrid ? gridFlash
+                : ((wet && _ledStrobe) || (!wet && night && (!_ledDeploy || _ledStrobe)))) {
+      // Rivals: 40 m gate like brake rings. Player always draws. The grid spans
+      // 22 x 8 m, so pre-race it opens up or the field ahead of you sits dark.
       const ldx = tmpP[0] - camEye[0], ldy = tmpP[1] - camEye[1], ldz = tmpP[2] - camEye[2];
-      if (c.isPlayer || ldx * ldx + ldy * ldy + ldz * ldz < 40 * 40) {
-        const W = _ringWorld;
-        W.set(tmpMat);
-        // 15 mm behind the baked LED face (z -2.60) — coplanar quads z-fight.
-        W[12] += W[4] * 0.50 - W[8] * 2.615;
-        W[13] += W[5] * 0.50 - W[9] * 2.615;
-        W[14] += W[6] * 0.50 - W[10] * 2.615;
-        // Brightness by ERS charge: 0.45 (flat) → 1.0 (full). Wet safety strobe
-        // stays full-bright regardless — a rain light must not dim with battery.
-        _rainLightOpts.emissive = wet ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1));
-        gfx.draw(getRainLight(), W, _rainLightOpts);
+      const lGate = preGrid ? 200 : 40;
+      if (c.isPlayer || ldx * ldx + ldy * ldy + ldz * ldz < lGate * lGate) {
+        // Wet and grid strobes stay full-bright — a safety/status light must not
+        // dim with battery. Otherwise 0.45 (flat) -> 1.0 (full).
+        drawRearLights(tmpMat, (wet || preGrid) ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1)));
       }
     }
     // Electric ERS deployment has a pulsing status strip, never an exhaust flame.
@@ -7637,10 +7644,18 @@ let renderAlpha = 1;             // leftover-step fraction (0..1) for render int
 PerfGov.init(gfx);
 const PHYS_DT = 1 / 60;          // fixed physics step
 function tick(now) {
-  try { tickBody(now); requestAnimationFrame(tick); }
+  try { tickBody(now); LoopHealth.clean(); requestAnimationFrame(tick); }
   catch (e) {
+    // BOUNDED tolerance, policy in js/game/loop-health.js: a transient fault
+    // costs one frame and any clean frame pays the run back, because round 13
+    // made startRace async and update() can now tick on a null player in the
+    // window before makeCars runs — a condition that heals on the next frame
+    // and used to take the whole game down. At the cap this falls through to
+    // exactly the old behaviour, so a DETERMINISTIC fault still stops instead
+    // of repainting the error overlay 60x/s.
+    if (LoopHealth.fault(e)) { requestAnimationFrame(tick); return; }
     // Report the REAL error once (cross-origin window.onerror shows only a bare
-    // "Script error."). A deterministic fault stops instead of repeating at 60 Hz.
+    // "Script error.").
     if (!tick._reported && typeof window.__apexReportError === "function") {
       tick._reported = true; window.__apexReportError("tick", e);
     }

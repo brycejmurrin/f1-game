@@ -345,3 +345,49 @@ test("scenery SUPPRESSED is coalesced, not a per-prop Log.warn", () => {
   assert.match(tracks, /: suppressed /);
 });
 
+
+test("the audio block cannot deref a null player, and a lone throw no longer kills the loop", () => {
+  // startRace is ASYNC now (it awaits ensureScenery for the split scenery
+  // files), so update() can tick before makeCars has staged the grid. It
+  // already documents that player may be null and guards ITSELF; this block did
+  // not. Measured
+  // 2026-08-31 via __apex.race() + go(): 0 draws a frame, permanently, with
+  // "Cannot read properties of null (reading 'rpm')" once. PERF-FINDINGS 2i.
+  const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(src, /if \(soundOn && player\) \{/,
+    "the engine-audio block must test player before dereferencing it");
+  assert.doesNotMatch(src, /if \(soundOn\) \{\n\s*const revFrac/,
+    "the unguarded `if (soundOn)` form is back — it dies on a null player");
+
+  // THE POLICY MOVED (round 14, PERF-FINDINGS 2k). The title above used to end
+  // "one throw kills the render loop", and that was the whole cost of the bug:
+  // a throw escaped tick() before the rAF re-schedule, so the loop never ran
+  // again. Fixing the one deref left every OTHER transient fault just as fatal.
+  // tick() now tolerates a bounded run that a clean frame pays back, and still
+  // rethrows at the cap — BOTH halves pinned, because either alone is wrong: no
+  // tolerance is the old bug, and unbounded tolerance repaints the error
+  // overlay 60x/s for a deterministic fault.
+  assert.match(src, /if \(LoopHealth\.fault\(e\)\) \{ requestAnimationFrame\(tick\); return; \}/,
+    "a tolerated fault must re-schedule the frame");
+  assert.match(src, /tickBody\(now\); LoopHealth\.clean\(\); requestAnimationFrame\(tick\);/,
+    "a clean frame must pay the fault run back, or unrelated faults reach the cap");
+  assert.match(src, /tick\._reported = true; window\.__apexReportError\("tick", e\);[^]*?\n\s*\}\n\s*throw e;/,
+    "at the cap the loop must still report once and rethrow");
+});
+
+test("the GL-call census refuses to report a frame it did not measure", () => {
+  // It printed `per: {}` and exited 0 for a whole session while the render loop
+  // was dead: "no calls" was indistinguishable from "I counted no calls". Same
+  // absence-reads-as-normal shape as the vacuous gpuErrors check and the
+  // readdirSync harnesses that built circuits bare, both of which shipped
+  // confident numbers about nothing. PERF-FINDINGS 2i.
+  const src = fs.readFileSync(path.join(ROOT, "tools/glx-call-census.mjs"), "utf8");
+  assert.match(src, /CENSUS MEASURED NOTHING/);
+  assert.match(src, /process\.exitCode = 1/,
+    "an empty census must exit non-zero, not merely print");
+  // race() -> wait -> go(), never one evaluate: go() in the async startRace
+  // window is what killed the loop in the first place.
+  assert.match(src, /__apex\.race\(t, d, "clear"\); \}, \[TRACK, TOD\]\)/);
+  assert.match(src, /await page\.evaluate\(\(\) => __apex\.go\(\)\)/,
+    "go() must come after the track wait, on its own");
+});

@@ -193,6 +193,8 @@ function getBrakeRing() {
   return brakeRingMesh;
 }
 
+// getRainLight / getEndplateLight stay PRIVATE — only drawRearLights reaches
+// them, the same way getAeroLamp / getAeroBar sit behind drawWheelExtras.
 let rainLightMesh = null;
 function getRainLight() {
   if (rainLightMesh) return rainLightMesh;
@@ -476,6 +478,57 @@ function drawWheelExtras(mat, c, t) {
     ? { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.65 + 0.35 * Math.sin(t * 20) }
     : _AX_FX);
 }
+// The pre-race grid strobe, in one place: game.js draws from it and
+// __apex.carEffects() reports from it, so the hook cannot drift from the draw.
+// ~5 Hz is the 2026 "MGU-K recharging" fast flash — the pattern a stationary car
+// holding full charge shows, which is the blinking on every real grid.
+function gridStrobe(countT) { return ((countT * 5.0) % 1) < 0.5; }
+// REAR LIGHTS, 2026 spec. The car carries three of them, not one: the oval Rear
+// Impact Structure light in the centre of the crash structure, and — new for
+// 2026 — a red light on each rear wing endplate that MIRRORS the RIS flash
+// pattern. That is why a modern car reads as three flashing points from behind
+// rather than a single dot, and why they share one emissive here.
+//
+// Endplate anchor: Car3D.endplate(aLvl) puts the plates at x +-0.50 with their
+// rear face at z -2.69 at EVERY aero level; only the vertical extent moves
+// (y 0.475..0.755 at level 0, 0.525..1.105 at level 4). y 0.62 is inside the
+// plate at all five, so this needs no per-car aero lookup. z -2.705 clears the
+// face by the same 15 mm the RIS light uses against its own housing.
+let _epLightMesh = null;
+function getEndplateLight() {
+  if (_epLightMesh) return _epLightMesh;
+  const R = [2.4, 0.10, 0.08], out = { pos: [], nrm: [], col: [], idx: [] };
+  const w = 0.026, h = 0.034;
+  out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
+  for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
+  out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
+  _epLightMesh = _gfx.createMesh(out);
+  return _epLightMesh;
+}
+// Its own scratch and its own opts bag ON PURPOSE. game.js's _ringWorld /
+// _rainLightOpts are shared singletons walked by the brake ring, the ERS strip
+// and the flame inside one loop iteration; a helper that wrote a field on one of
+// them would leak it into every later draw that frame.
+const _rlW = new Float32Array(16);
+const _RL_FX = { emissive: 1, roughness: 0.9, specular: 0, noAlphaWrite: true };
+function drawRearLights(mat, emissive) {
+  _RL_FX.emissive = emissive;
+  const W = _rlW;
+  // RIS light: 0.50 up, 2.615 back — 15 mm behind the baked LED face (z -2.60),
+  // because coplanar quads z-fight.
+  W.set(mat);
+  W[12] += W[4] * 0.50 - W[8] * 2.615;
+  W[13] += W[5] * 0.50 - W[9] * 2.615;
+  W[14] += W[6] * 0.50 - W[10] * 2.615;
+  _gfx.draw(getRainLight(), W, _RL_FX);
+  for (const s of [-1, 1]) {
+    W.set(mat);
+    W[12] += W[0] * (s * 0.50) + W[4] * 0.62 - W[8] * 2.705;
+    W[13] += W[1] * (s * 0.50) + W[5] * 0.62 - W[9] * 2.705;
+    W[14] += W[2] * (s * 0.50) + W[6] * 0.62 - W[10] * 2.705;
+    _gfx.draw(getEndplateLight(), W, _RL_FX);
+  }
+}
 let _otArmedMesh = null, _otActiveMesh = null;
 function getOtLamp(active) {
   if (active ? _otActiveMesh : _otArmedMesh) return active ? _otActiveMesh : _otArmedMesh;
@@ -486,5 +539,5 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getRainLight, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras };
+  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, gridStrobe };
 })();
