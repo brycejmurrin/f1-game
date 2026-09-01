@@ -138,7 +138,8 @@ function lazyFiles() {
   // have to be accounted for, or "created the file, forgot to load it" stops
   // being catchable.
   return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
-    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || [])];
+    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
+    ...(MANIFEST.LAZY_NET || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -202,7 +203,7 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   // notice. LAZY_AGENT is deliberately NOT here (dev/test surface; a player who
   // never opens it should not pay for it in the install).
   for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_SCENERY || []),
-                   ...(MANIFEST.LAZY_DATA || [])]) {
+                   ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || [])]) {
     assert.ok(seeded.has(f),
       `${f} is a lazily-injected asset, so sw.js must seed it or it is unreachable offline`);
   }
@@ -220,7 +221,8 @@ test("sw.js stamps every injected asset it seeds", () => {
   // source text: the question is which paths actually get the ?v= suffix.
   const stamps = new RegExp(m[1].slice(1, -1));
   const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []),
-    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || [])];
+    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
+    ...(MANIFEST.LAZY_NET || [])];
   const unstamped = injected.filter((f) => !stamps.test(f));
   assert.deepEqual(unstamped, [],
     `these are injected as ?v=<build> but seeded bare, so the cache key is one nothing requests: ${unstamped}`);
@@ -333,6 +335,23 @@ test("the data-hub DAG orders every tab module before hub.js, on both sides", ()
   assert.deepEqual(MANIFEST.LAZY_DATA_EDGES, want);
   assert.equal(want.length, MANIFEST.LAZY_DATA.length - 1,
     "every LAZY_DATA file except the hub itself must be ordered before it");
+});
+
+// Same lockstep for the multiplayer stack. Its drift is the WORST of the four
+// rosters: a js/net file with neither a tag nor an injector entry leaves the
+// inert stub in place for ever, so VS FRIEND opens a lobby that silently never
+// connects — no crash, no console line, just a room code that does nothing.
+test("js/game.js NET_FILES / NET_EDGES equal MANIFEST.LAZY_NET / LAZY_NET_EDGES", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const files = src.match(/const NET_FILES = \[([\s\S]*?)\n\];/);
+  assert.ok(files, "js/game.js must declare NET_FILES for the lazy multiplayer stack");
+  assert.deepEqual([...stripComments(files[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]),
+    MANIFEST.LAZY_NET);
+  const edges = src.match(/const NET_EDGES = \[([\s\S]*?)\n\];/);
+  assert.ok(edges, "js/game.js must declare NET_EDGES for the multiplayer DAG");
+  assert.deepEqual(
+    [...stripComments(edges[1]).matchAll(/\["([^"]+)",\s*"([^"]+)"\]/g)].map((m) => [m[1], m[2]]),
+    MANIFEST.LAZY_NET_EDGES);
 });
 
 test("js/game.js AGENT_EDGES equals MANIFEST.LAZY_EDGES", () => {

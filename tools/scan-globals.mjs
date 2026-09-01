@@ -13,7 +13,7 @@
  * hand-maintained in tools/manifest.cjs with HARD_EDGES naming the eval-time
  * dependencies. Nothing derived those edges from the code until now. This
  * scanner parses every FULL + DEFERRED + LAZY_AGENT + LAZY_RACE + LAZY_SCENERY
- * + LAZY_DATA file with espree, resolves references
+ * + LAZY_DATA + LAZY_NET file with espree, resolves references
  * with eslint-scope, and reports per file:
  *
  *   assigns      globals the file creates AT EVAL TIME. Two idioms:
@@ -270,7 +270,8 @@ export function listFiles() {
   // and game.js read. Leaving a lazy roster out of the scan does not make the
   // read safe, it makes it invisible.
   const lazy = [...(manifest.LAZY_AGENT || []), ...(manifest.LAZY_RACE || []),
-    ...(manifest.LAZY_SCENERY || []), ...(manifest.LAZY_DATA || [])];
+    ...(manifest.LAZY_SCENERY || []), ...(manifest.LAZY_DATA || []),
+    ...(manifest.LAZY_NET || [])];
   return {
     full: manifest.FULL.slice(),
     deferred: Object.fromEntries(Object.entries(manifest.DEFERRED).map(([k, v]) => [k, v.slice()])),

@@ -489,7 +489,17 @@ const CEILINGS = {
   // RACE_FILES because it IS that mechanism with a third roster, and the button
   // it gates is wired here. Takes 154,412 B off the boot script wall (3,628 ->
   // 3,477 KB), which is ~3,027 B of payload per line of game.js.
-  "js/game.js": 8921,
+  // 8921 -> 9015 for the LAZY_NET split (2026-09-01). The 94 lines are mostly
+  // the two INERT STUBS, and they are the point rather than overhead: netPlay
+  // is called at 20 sites here and only three are guarded, so the alternative
+  // was 17 new `netPlay && …` guards spread through the frame loop and the
+  // result path — more lines, in worse places, where one miss is a crash
+  // mid-race instead of a red guard. The rest is NET_FILES / NET_EDGES (a real
+  // dependency graph, not derivable the way the data hub's is) and ensureNet().
+  // Takes 242,020 B off the boot script wall (3,477 -> 3,241 KB), ~2.6 KB per
+  // line. tests/unit/net-stub-surface.test.mjs pins the stubs' surface AND
+  // their values against js/net/netplay.js.
+  "js/game.js": 9015,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).

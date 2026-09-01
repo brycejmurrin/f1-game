@@ -170,6 +170,22 @@ async function precacheAssetLists() {
     "js/data/lastrace.js",
     "js/data/live.js",
     "js/data/hub.js",
+    // MULTIPLAYER (tools/manifest.cjs LAZY_NET). Tagless since the 241 KB came
+    // off the boot wall — injected when VS FRIEND opens. The room codes need a
+    // network anyway, so this is not about offline play; it is so a player who
+    // installed the PWA and then opened VS FRIEND on a flaky connection gets
+    // the lobby rather than a button that does nothing.
+    "js/net/nostr.js",
+    "js/net/rendezvous.js",
+    "js/net/sdp.js",
+    "js/net/qr.js",
+    "js/net/scan.js",
+    "js/net/transport.js",
+    "js/net/handshake.js",
+    "js/net/snapshot.js",
+    "js/net/session.js",
+    "js/net/netplay.js",
+    "js/net/lobby.js",
     // Self-hosted fonts (referenced from css/tokens.css @font-face, so the tag
     // parser below never sees them). Immutable vendored assets — no ?v=. Seeded
     // as OPTIONAL: font-display:swap means a missed precache just falls back to
@@ -287,7 +303,7 @@ self.addEventListener("install", (event) => {
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(three|webgpu)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/game\/light-presets\.js$/.test(u)
+      /^js\/render\/(three|webgpu)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/game\/light-presets\.js$/.test(u)
         ? u + "?v=" + build : u);
     await pooled(stamped, 4, (u) => cacheOptionalAsset(cache, u));
     await self.skipWaiting();

@@ -39,7 +39,7 @@
     "rtc:e2e": "node tools/net/rtc-e2e.mjs",
     "rtc:e2e-3p": "node tools/net/rtc-e2e-3p.mjs",
     "rtc:e2e-3p-relay": "node tools/net/rtc-e2e-3p.mjs --relay",
-    "test:net-unit": "node --test tests/unit/net-transport.test.mjs tests/unit/net-rendezvous.test.mjs tests/unit/rendezvous-worker.test.mjs tests/unit/net-trystero-api.test.mjs tests/unit/net-sdp.test.mjs tests/unit/net-qr.test.mjs tests/unit/net-snapshot.test.mjs tests/unit/net-session.test.mjs tests/unit/net-authority.test.mjs tests/unit/net-lobby-lifecycle.test.mjs",
+    "test:net-unit": "node --test tests/unit/net-transport.test.mjs tests/unit/net-rendezvous.test.mjs tests/unit/rendezvous-worker.test.mjs tests/unit/net-trystero-api.test.mjs tests/unit/net-sdp.test.mjs tests/unit/net-qr.test.mjs tests/unit/net-snapshot.test.mjs tests/unit/net-session.test.mjs tests/unit/net-authority.test.mjs tests/unit/net-lobby-lifecycle.test.mjs tests/unit/net-stub-surface.test.mjs",
     "test:lifecycle-unit": "node --test tests/unit/async-lifecycle.test.mjs",
     "test:state-unit": "node --test tests/unit/season-cal.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/quali-persist.test.mjs",
     "test:paths": "node tools/run-playwright.mjs tests/specs/output-paths.spec.js",

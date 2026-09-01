@@ -164,17 +164,6 @@ const FULL = [
   // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).
   // Multiplayer wire. Pure logic with no game dependency, so position only
   // has to satisfy "before whatever consumes it" — game.js, last as always.
-  "js/net/nostr.js",
-  "js/net/rendezvous.js",
-  "js/net/sdp.js",
-  "js/net/qr.js",
-  "js/net/scan.js",
-  "js/net/transport.js",
-  "js/net/handshake.js",
-  "js/net/snapshot.js",
-  "js/net/session.js",
-  "js/net/netplay.js",
-  "js/net/lobby.js",
   "js/game.js",
 ];
 
@@ -243,6 +232,9 @@ const TRACK_VM = [
 
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
+  // js/net's six intra-directory pairs moved to LAZY_NET_EDGES when the
+  // multiplayer stack left FULL: a HARD_EDGES pair must have BOTH ends in FULL
+  // to be orderable by tag position.
   ["js/mat4.js", "js/render/glx.js"],                       // glx uses M4 at init
   // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
   // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is
@@ -264,21 +256,15 @@ const HARD_EDGES = [
   // DataView argument is handled, which is exactly the bug a shared helper
   // prevents. Call-time, not eval-time, but a session with no NetSnapshot
   // silently drops every state packet rather than throwing — so pin the order.
-  ["js/net/snapshot.js", "js/net/session.js"],
   // handshake.js calls NetSdp.packChecked/unpack whenever it builds or reads
   // an invite code. Call-time, but a handshake with no NetSdp throws inside
   // the click handler that generates the invite — the one place an error is
   // least visible.
-  ["js/net/sdp.js", "js/net/handshake.js"],
   // lobby.js draws the invite QR through NetQr the moment an invite exists.
-  ["js/net/qr.js", "js/net/lobby.js"],
   // lobby.js calls NetRendezvous the moment a room-code button is wired.
-  ["js/net/rendezvous.js", "js/net/lobby.js"],
   // rendezvous.js calls NetNostr whenever no private relay is configured,
   // which is the DEFAULT path — room codes work with nothing deployed.
-  ["js/net/nostr.js", "js/net/rendezvous.js"],
   // lobby.js creates a NetScan the moment a SCAN button is wired.
-  ["js/net/scan.js", "js/net/lobby.js"],
   // chunks.js before every shader file (lit/sky/post interpolate GLXChunks at
   // eval; fx.js is chunk-free today but keeps the uniform ordering contract).
   ["js/render/shaders/chunks.js", "js/render/shaders/lit.js"],
@@ -450,6 +436,43 @@ const LAZY_DATA = [
 const LAZY_DATA_EDGES = LAZY_DATA.filter((f) => f !== "js/data/hub.js")
   .map((f) => [f, "js/data/hub.js"]);
 
+// MULTIPLAYER (js/net/*). 241 KB of WebRTC — nostr/rendezvous signalling, SDP,
+// QR, the transport, handshake, snapshot codec, session, netplay and the VS
+// FRIEND lobby — that a solo session never runs a byte of. The biggest single
+// block left on the boot wall, and the one that most players never touch.
+//
+// Unlike js/data this CANNOT simply be absent: netPlay is called at 20 sites in
+// js/game.js and only three of them are `netPlay && …` guarded — netPlay.tick
+// is in the frame loop. So game.js holds an INERT STUB from boot and swaps in
+// the real objects when VS FRIEND opens; see NET_INERT there, and the guard in
+// load-order.test.mjs that derives the stub's required surface from the call
+// sites rather than from a hand-written roster.
+const LAZY_NET = [
+  "js/net/nostr.js",
+  "js/net/rendezvous.js",
+  "js/net/sdp.js",
+  "js/net/qr.js",
+  "js/net/scan.js",
+  "js/net/transport.js",
+  "js/net/handshake.js",
+  "js/net/snapshot.js",
+  "js/net/session.js",
+  "js/net/netplay.js",
+  "js/net/lobby.js",
+];
+// Eval-time pairs, moved verbatim from HARD_EDGES. Listed, not derived: unlike
+// the data hub these are a real graph (rendezvous needs nostr, handshake needs
+// sdp, session needs snapshot, the lobby needs qr/scan/rendezvous), not one
+// module gathering the rest.
+const LAZY_NET_EDGES = [
+  ["js/net/snapshot.js", "js/net/session.js"],
+  ["js/net/sdp.js", "js/net/handshake.js"],
+  ["js/net/qr.js", "js/net/lobby.js"],
+  ["js/net/rendezvous.js", "js/net/lobby.js"],
+  ["js/net/nostr.js", "js/net/rendezvous.js"],
+  ["js/net/scan.js", "js/net/lobby.js"],
+];
+
 const DEFERRED_EDGES = [
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"], // string concat at eval
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],
@@ -493,7 +516,7 @@ const sceneryPath = (id) => `${SCENERY_DIR}/${id}.js`;
 module.exports = {
   CIRCUITS, CIRCUITS_DIR, FULL, CSS, CARVIEW, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
-  LAZY_DATA, LAZY_DATA_EDGES,
+  LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath,
 };
