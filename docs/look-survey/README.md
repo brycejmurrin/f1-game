@@ -47,12 +47,31 @@ Full tool reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools for exploring slid
 | Circuit | Sheet |
 |---|---|
 | Abu Dhabi | [abudhabi_grid.png](abudhabi_grid.png) |
-| Baku | [baku_grid.png](baku_grid.png) |
+| Albert Park | [albert_park_grid.png](albert_park_grid.png) |
 | Bahrain | [bahrain_grid.png](bahrain_grid.png) |
+| Baku | [baku_grid.png](baku_grid.png) |
+| Buenos Aires | [buenos_aires_grid.png](buenos_aires_grid.png) |
+| Catalunya | [catalunya_grid.png](catalunya_grid.png) |
+| COTA | [cota_grid.png](cota_grid.png) |
+| Estoril | [estoril_grid.png](estoril_grid.png) |
+| Hockenheim | [hockenheim_grid.png](hockenheim_grid.png) |
+| Hungaroring | [hungaroring_grid.png](hungaroring_grid.png) |
+| Imola | [imola_grid.png](imola_grid.png) |
+| Indianapolis | [indianapolis_grid.png](indianapolis_grid.png) |
+| Interlagos | [interlagos_grid.png](interlagos_grid.png) |
+| Istanbul | [istanbul_grid.png](istanbul_grid.png) |
+| Jacarepagua | [jacarepagua_grid.png](jacarepagua_grid.png) |
 | Jeddah | [jeddah_grid.png](jeddah_grid.png) |
+| Kyalami | [kyalami_grid.png](kyalami_grid.png) |
+| Miami | [miami_grid.png](miami_grid.png) |
+| Monaco | [monaco_grid.png](monaco_grid.png) |
+| Monza | [monza_grid.png](monza_grid.png) |
+| Nürburgring | [nurburgring_grid.png](nurburgring_grid.png) |
 | Qatar | [qatar_grid.png](qatar_grid.png) |
+| Sepang | [sepang_grid.png](sepang_grid.png) |
 | Silverstone | [silverstone_grid.png](silverstone_grid.png) |
 | Singapore | [singapore_grid.png](singapore_grid.png) |
 | Spa | [spa_grid.png](spa_grid.png) |
+| Suzuka | [suzuka_grid.png](suzuka_grid.png) |
 | Las Vegas | [vegas_grid.png](vegas_grid.png) |
 | Zandvoort | [zandvoort_grid.png](zandvoort_grid.png) |
