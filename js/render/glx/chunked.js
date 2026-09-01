@@ -12,7 +12,16 @@ const GLXChunked = (function () {
   // identity plus the position, so a rebuilt lamp set or a new caster misses
   // exactly once.
   let _saAL = null, _saX = 0, _saY = 0, _saZ = 0, _saIdx = -1;
-  function _shadowAllIdx(AL, lx, ly, lz) {
+  // Two chunks share a light set when the baked lists are the same object (the
+// common case — LampChunks reuses a list across neighbours) or element-wise
+// equal. Lists are perChunkLights long, i.e. single digits.
+function _sameList(a, b) {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+function _shadowAllIdx(AL, lx, ly, lz) {
     if (AL === _saAL && lx === _saX && ly === _saY && lz === _saZ) return _saIdx;
     let r = -1;
     for (let p = 0; p < AL.length; p += 15) {
@@ -225,20 +234,51 @@ const GLXChunked = (function () {
         // binds each visible chunk's pre-baked list.
         const _tbl = LampChunks.resolve(F.allLights, chunks, F.perChunkLights);
         let lastSlot = null;
+        // RUN-MERGE, the per-chunk twin of the plain branch below. This drew
+        // once per visible chunk — 128 of the frame's 129 drawElements — and
+        // re-uploaded a light set per chunk even when the neighbour's set was
+        // identical. MEASURED before writing it (scratch/r11/chunk-merge.mjs,
+        // vegas night, full field): of 152.6 chunk draws a frame, 91.2
+        // consecutive pairs are contiguous in the index buffer, 114.8 share a
+        // light set, and 74.2 are BOTH — so about half the draws, and their
+        // uploads, can be one call.
+        //
+        // A run may only extend while every one of these holds, and each is
+        // load-bearing:
+        //   visible   — a culled chunk between two visible ones must break the
+        //               run or merging would DRAW what the cull removed.
+        //   same list — the light set is uploaded once for the run.
+        //   same slot — uLampShadowIdx is a slot in that set.
+        //   contiguous + same index type — the merged draw is one range.
+        let runOff = -1, runCount = 0, runType = 0, runLi = null, runSlot = -1;
+        const flush = () => {
+          if (runOff < 0) return;
+          core.uploadLightSet(F.allLights, runLi, runLi.length,
+                              F.lights, F.tailStart, F.tailCount);
+          if (runSlot !== lastSlot) { core.setLampShadowSlot(runSlot); lastSlot = runSlot; }
+          gl.drawElements(gl.TRIANGLES, runCount, runType, runOff);
+          runOff = -1; runCount = 0; runLi = null;
+        };
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
-          if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
-          if (cd > 0 && _aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) continue;
+          if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max) ||
+              (cd > 0 && _aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2)) { flush(); continue; }
           const li = _tbl.lists[i];
-          core.uploadLightSet(F.allLights, li, li.length,
-                              F.lights, F.tailStart, F.tailCount);
           let slot = -1;
           if (shadowAllIdx >= 0) {
             for (let j = 0; j < li.length; j++) if (li[j] === shadowAllIdx) { slot = j; break; }
           }
-          if (slot !== lastSlot) { core.setLampShadowSlot(slot); lastSlot = slot; }
-          gl.drawElements(gl.TRIANGLES, ch.count, ch.indexType, ch.byteOffset);
+          const stride = ch.indexType === gl.UNSIGNED_INT ? 4 : 2;
+          if (runOff >= 0 && runType === ch.indexType && runSlot === slot &&
+              _sameList(runLi, li) && runOff + runCount * stride === ch.byteOffset) {
+            runCount += ch.count;
+            continue;
+          }
+          flush();
+          runOff = ch.byteOffset; runCount = ch.count; runType = ch.indexType;
+          runLi = li; runSlot = slot;
         }
+        flush();
       } else {
         let runOff = -1, runCount = 0;
         for (let i = 0; i < chunks.length; i++) {
