@@ -63,6 +63,7 @@ Full tool reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools for exploring slid
 | Jacarepagua | [jacarepagua_grid.png](jacarepagua_grid.png) |
 | Jeddah | [jeddah_grid.png](jeddah_grid.png) |
 | Kyalami | [kyalami_grid.png](kyalami_grid.png) |
+| Mexico | [mexico_grid.png](mexico_grid.png) |
 | Miami | [miami_grid.png](miami_grid.png) |
 | Monaco | [monaco_grid.png](monaco_grid.png) |
 | Montreal | [montreal_grid.png](montreal_grid.png) |
@@ -70,9 +71,11 @@ Full tool reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools for exploring slid
 | Nürburgring | [nurburgring_grid.png](nurburgring_grid.png) |
 | Qatar | [qatar_grid.png](qatar_grid.png) |
 | Sepang | [sepang_grid.png](sepang_grid.png) |
+| Shanghai | [shanghai_grid.png](shanghai_grid.png) |
 | Silverstone | [silverstone_grid.png](silverstone_grid.png) |
 | Singapore | [singapore_grid.png](singapore_grid.png) |
 | Spa | [spa_grid.png](spa_grid.png) |
 | Suzuka | [suzuka_grid.png](suzuka_grid.png) |
 | Las Vegas | [vegas_grid.png](vegas_grid.png) |
 | Zandvoort | [zandvoort_grid.png](zandvoort_grid.png) |
+
