@@ -19,15 +19,20 @@
 // constructs fine but ICE gathering NEVER completes — one candidate, still
 // "gathering" after six seconds — and a PC left spinning starves the box. A
 // test that builds one does not fail, it HANGS, which is far worse.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): thirteen boots became none. menu() walks
+// the shared page back to the title with the lobby cancelled and the fake peer
+// dropped and re-armed (lobbyReset), which is what the per-test boot plus
+// lobbyFake(true) used to establish. The invite-link test keeps its two real
+// navigations: a link OPENING the game is its subject. UNVERIFIED IN A BROWSER
+// at conversion time.
+import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { lobbyReset } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function menu(page, fakeTransport = true) {
-  await page.goto("/");
-  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  if (fakeTransport) await page.evaluate(() => window.__apex.lobbyFake(true));
+  await lobbyReset(page, fakeTransport);
 }
 
 test.describe("VS FRIEND lobby", () => {

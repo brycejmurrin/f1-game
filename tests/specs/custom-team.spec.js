@@ -1,6 +1,15 @@
 // @ts-check
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): three boots became none. The two probe
+// tests start from the title with the default McLaren pinned — cz-save is what
+// switches the game to the custom team, and both saveMyTeam() rounds
+// invalidate the custom atlas/mesh caches (js/game.js syncCustomTeam), so a
+// custom car cached by an earlier test is rebuilt and captured just the same.
+// The livery-buttons test used to seed storage from an init script and boot;
+// on a shared page the seed goes through the store and #mb-race re-reads the
+// team. UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
 // MY TEAM moved into the GARAGE's TEAM tab — the select screen is about WHERE
 // you race, so it no longer carries the team editor. Opens the garage, saves,
@@ -41,9 +50,8 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
   // the deploy tip as well, so the number was measuring the machine and
   // failing the code. The assertions below are untouched.
   test.setTimeout(240_000);
-  await page.goto("/");
-  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+  await toMenu(page);
+  await pinFreePlay(page, { click: false });   // McLaren until cz-save switches; #mb-race re-reads
 
   // Every atlas is tagged with the team it was built FOR. getCarDecalTexture
   // calls LiveryTex.buildAtlas(teamId, …) as the argument to createTexture, so
@@ -130,8 +138,8 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
   // that default expiring mid-click reports as "the TEAM tab is not clickable",
   // which reads like a UI defect and is not one. Give it room to be slow.
   test.setTimeout(240_000);
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+  await toMenu(page);
+  await pinFreePlay(page, { click: false });   // McLaren until cz-save switches; #mb-race re-reads
 
   await page.evaluate(() => {
     const customData = new WeakSet();
@@ -202,17 +210,20 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
 });
 
 test("custom livery actions are independent keyboard buttons", async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem("apex26.livery.custom.mclaren", JSON.stringify([{
+  await toMenu(page);
+  // The seed the init script used to plant before boot, written through the
+  // store so the live game's cache holds it too; McLaren is pinned because the
+  // probe tests above leave the CUSTOM team selected.
+  await page.evaluate(() => {
+    GameStore.store.set("livery.custom.mclaren", [{
       id: "test-paint",
       name: "Test Paint",
       c1: [0.1, 0.2, 0.3],
       c2: [0.8, 0.7, 0.6]
-    }]));
-    localStorage.setItem("apex26.livery.mclaren", JSON.stringify("default"));
+    }]);
+    GameStore.store.set("livery.mclaren", "default");
   });
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+  await pinFreePlay(page, { team: "mclaren", click: false });   // #mb-race re-reads
   await page.locator("#mb-race").click();
   await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });

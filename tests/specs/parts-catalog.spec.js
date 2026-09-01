@@ -4,27 +4,31 @@
 // - GEARBOX and FUEL options are visible and selectable via the active tab
 // - Factory/supplier-exclusive parts only appear for the matching team engine
 // - Part descriptions update when an option is selected
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): 19 boots (14 goto + 5 team-switch reloads)
+// became none. openSetup() walks back to the title, pins the team through the
+// store AND the #mb-race handler that copies it into the game (the team-switch
+// tests used to seed localStorage and reload for exactly that), forgets the
+// fitted parts, and comes in through START. UNVERIFIED IN A BROWSER at
+// conversion time — tests/helpers/shared-page.js has the mechanics.
+import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
+import { toMenu, forgetStored, pinFreePlay, freeBuildOff } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
-async function waitReady(page) {
-  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
-}
-
-async function openSetup(page) {
-  await page.evaluate(() => {
-    const team = Teams.LIST[parseInt(localStorage.getItem("apex26.team") ?? "2")];
-    if (team) localStorage.removeItem("apex26.parts." + team.id);
-    localStorage.removeItem("apex26.unlimitedBudget");
-  });
+// `team` is a Teams.LIST id or index; the default is the game's own (McLaren).
+async function openSetup(page, team = "mclaren") {
+  await toMenu(page);
+  await forgetStored(page, ["unlimitedBudget"]);
+  // The store write; #mb-race below re-reads it (restoreFreePlaySelection) and
+  // the team's fitted parts are forgotten with it.
+  await pinFreePlay(page, { team, click: false });
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
   await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
+  await freeBuildOff(page);              // the in-memory flag, not just the key
 }
 
 async function openCat(page, catId) {
@@ -39,8 +43,6 @@ test.describe("Car setup catalog — all categories render", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("all 12 category labels are visible", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     for (const id of ["engine", "aero", "suspension", "brakes", "tyres", "ers",
@@ -51,8 +53,6 @@ test.describe("Car setup catalog — all categories render", () => {
   });
 
   test("GEARBOX section contains Standard and F1 Spec options", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await openCat(page, "gearbox");
@@ -61,8 +61,6 @@ test.describe("Car setup catalog — all categories render", () => {
   });
 
   test("FUEL section contains Standard and Qualifying Mix options", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await openCat(page, "fuel");
@@ -71,8 +69,6 @@ test.describe("Car setup catalog — all categories render", () => {
   });
 
   test("ENGINE section has at least 6 options visible for non-factory team", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await openCat(page, "engine");
@@ -85,8 +81,6 @@ test.describe("Car setup catalog — option interaction", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("GEARBOX Standard option is active by default", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await openCat(page, "gearbox");
@@ -94,8 +88,6 @@ test.describe("Car setup catalog — option interaction", () => {
   });
 
   test("FUEL Standard option is active by default", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await openCat(page, "fuel");
@@ -103,8 +95,6 @@ test.describe("Car setup catalog — option interaction", () => {
   });
 
   test("clicking Close Ratio gearbox makes it active", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await openCat(page, "gearbox");
@@ -114,8 +104,6 @@ test.describe("Car setup catalog — option interaction", () => {
   });
 
   test("clicking High Octane fuel makes it active", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await openCat(page, "fuel");
@@ -125,8 +113,6 @@ test.describe("Car setup catalog — option interaction", () => {
   });
 
   test("description updates when an option is selected", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await openCat(page, "fuel");
@@ -136,8 +122,6 @@ test.describe("Car setup catalog — option interaction", () => {
   });
 
   test("GEARBOX Sequential Pro option has a cost badge", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await openCat(page, "gearbox");
@@ -152,78 +136,43 @@ test.describe("Car setup catalog — factory/supplier parts", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("AMG HPP option visible when team is Mercedes", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
-    await page.evaluate(() => {
-      const idx = Teams.LIST.findIndex((t) => t.engine === "Mercedes" && t.id === "mercedes");
-      if (idx >= 0) { localStorage.setItem("apex26.team", String(idx)); }
-    });
-    await page.reload();
-    await waitReady(page);
-    await openSetup(page);
+    await openSetup(page, "mercedes");
     await openCat(page, "engine");
     await expect(opt(page, "manu_mercedes")).toBeVisible();
     await page.screenshot({ path: galleryPath("parts-catalog", "catalog-mercedes-factory.png") });
   });
 
   test("AMG HPP option NOT visible when team is not Mercedes", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
-    await page.evaluate(() => {
-      const idx = Teams.LIST.findIndex((t) => t.engine === "Red Bull Ford");
-      if (idx >= 0) { localStorage.setItem("apex26.team", String(idx)); }
-    });
-    await page.reload();
-    await waitReady(page);
-    await openSetup(page);
+    // The first team on the Red Bull Ford unit, as the old seed picked it.
+    const idx = await page.evaluate(() => Teams.LIST.findIndex((t) => t.engine === "Red Bull Ford"));
+    await openSetup(page, idx);
     await openCat(page, "engine");
     await expect(opt(page, "manu_mercedes")).toHaveCount(0);
     await page.screenshot({ path: galleryPath("parts-catalog", "catalog-non-mercedes.png") });
   });
 
   test("factory option has FACTORY tag badge", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
-    await page.evaluate(() => {
-      const idx = Teams.LIST.findIndex((t) => t.engine === "Mercedes" && t.id === "mercedes");
-      if (idx >= 0) { localStorage.setItem("apex26.team", String(idx)); }
-    });
-    await page.reload();
-    await waitReady(page);
-    await openSetup(page);
+    await openSetup(page, "mercedes");
     await openCat(page, "engine");
     await expect(opt(page, "manu_mercedes").locator(".cs-opt-tag")).toContainText("FACTORY");
   });
 
   test("unrestricted options have UNIVERSAL badges", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
     await openCat(page, "engine");
     await expect(opt(page, "stock").locator(".cs-opt-tag")).toContainText("UNIVERSAL");
   });
 
   test("team signatures are visible only to their eligible team", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
-    await page.evaluate(() => {
-      const idx = Teams.LIST.findIndex((team) => team.id === "mclaren");
-      localStorage.setItem("apex26.team", String(idx));
-    });
-    await page.reload();
-    await waitReady(page);
-    await openSetup(page);
+    await openSetup(page, "mclaren");
     await openCat(page, "aero");
     await expect(opt(page, "sig_mclaren_flex").locator(".cs-opt-tag")).toContainText("SIGNATURE");
 
+    // DONE goes on to race settings; openSetup walks back from there and
+    // re-enters as Mercedes (the reload this replaced only existed to make the
+    // stored team the live one).
     await page.locator("#cs-done").click();
-    await page.evaluate(() => {
-      const idx = Teams.LIST.findIndex((team) => team.id === "mercedes");
-      localStorage.setItem("apex26.team", String(idx));
-    });
-    await page.reload();
-    await waitReady(page);
-    await openSetup(page);
+    await openSetup(page, "mercedes");
     await openCat(page, "aero");
     await expect(opt(page, "sig_mclaren_flex")).toHaveCount(0);
   });
@@ -233,8 +182,6 @@ test.describe("Car setup catalog — screenshots", () => {
   test.use({ viewport: { width: 390, height: 844 } }); // portrait
 
   test("portrait setup screenshot", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
     await page.screenshot({ path: galleryPath("parts-catalog", "catalog-portrait.png") });
   });

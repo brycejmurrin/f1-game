@@ -447,7 +447,25 @@ Count `locator()` calls, **not** `goto()` calls. The tranche below was first
 chosen on "zero `localStorage` coupling and a single boot helper", and two specs
 that satisfy that criterion had to be reverted — the criterion measures the wrong
 thing. Hook, physics and raster specs that reach the app through `__apex` share
-happily; UI-flow specs do not.
+happily; UI-flow specs do not — **unless the spec's opener puts the screen
+state back itself.** `tests/helpers/shared-page.js` is that opener's toolkit
+(2026-09, the parts-*/garage/multiplayer tranche, UNVERIFIED in a browser at
+conversion time): `toMenu(page)` walks back to the title through each screen's
+own back control (quitToMenu for a race, cs-back, rs-cancel, sel-back,
+lobby.cancel), `forgetStored(page, keys)` removes a key from localStorage AND
+GameStore's cache (`store.onForeignWrite`), and `pinFreePlay(page, {team,
+driver, parts})` re-establishes the boot-default car — the team/driver/FREE
+BUILD `let`s in game.js are read from the store ONCE at boot, so a store write
+only reaches the game through the handlers that re-read it (`#mb-race`,
+`#mb-vs`, the garage TEAM picker — `garageTeam`; `#cs-unlimited` — `freeBuildOff`).
+What still cannot share: a test whose subject is a COLD cache (parts-mesh-cache's
+eviction counts), one that installs fake GL hooks or a car model it never takes
+back (`CarMesh.init`, `__apex.loadCarModel`), and a different document
+(carview-parts). Those use `test as freshTest` alongside `sharedTest as test`
+in the same file, as tracks-walls.spec.js does. One leak the toolkit cannot
+close: `netRoom` (js/game.js) is cleared only by a race start, so a room spec
+leaves `#sel-back` routing to the hidden room for the next spec on that worker —
+toMenu recovers (cancel, then un-hide the title), `#rs-go` would not.
 
 | Spec | Tests | Verdict |
 |---|---|---|

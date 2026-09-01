@@ -5,9 +5,17 @@
 // - Different teams have independent setup storage
 // - DONE button returns to the select screen
 // - Selecting a new part updates localStorage immediately
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): 13 boots (9 goto + 4 reloads) became 3.
+// The three "survives page reload" tests KEEP their reload — the reload is the
+// claim — and reload the shared page, which is still the live game afterwards.
+// The team-isolation test's reload was only there to make a stored team the
+// live one, which pinFreePlay + #mb-race now does in place. openSetup() walks
+// back to the title first and starts from forgotten parts, as clearState on a
+// fresh page did. UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
+import { toMenu, forgetStored, pinFreePlay, freeBuildOff } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -30,21 +38,17 @@ function getStoredParts(page, teamId) {
   );
 }
 
-async function clearState(page) {
-  await page.evaluate(() => {
-    const idx = parseInt(localStorage.getItem("apex26.team") ?? "2");
-    const team = Teams.LIST[idx];
-    if (team) localStorage.removeItem("apex26.parts." + team.id);
-    localStorage.removeItem("apex26.unlimitedBudget");
-  });
-}
-
-async function openSetup(page) {
-  await clearState(page);
+// The default car with nothing fitted, and FREE BUILD off — what a fresh page
+// gave, re-established on the live one. `team` is an id or a Teams.LIST index.
+async function openSetup(page, team = "mclaren") {
+  await toMenu(page);
+  await forgetStored(page, ["unlimitedBudget"]);
+  await pinFreePlay(page, { team, click: false });   // #mb-race re-reads the store
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
   await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
+  await freeBuildOff(page);
 }
 
 async function pickOpt(page, catId, optId) {
@@ -63,8 +67,6 @@ test.describe("Parts persistence — localStorage writes", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("selecting a gearbox part saves it to localStorage", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     const teamId = await getTeamId(page);
@@ -75,8 +77,6 @@ test.describe("Parts persistence — localStorage writes", () => {
   });
 
   test("selecting a fuel part saves it to localStorage", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     const teamId = await getTeamId(page);
@@ -87,8 +87,6 @@ test.describe("Parts persistence — localStorage writes", () => {
   });
 
   test("multiple categories save independently", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     const teamId = await getTeamId(page);
@@ -105,8 +103,6 @@ test.describe("Parts persistence — survives page reload", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("selected gearbox part active after reload", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await pickOpt(page, "gearbox", "carbon_case");
@@ -121,8 +117,6 @@ test.describe("Parts persistence — survives page reload", () => {
   });
 
   test("selected fuel part active after reload", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await pickOpt(page, "fuel", "quali_mix");
@@ -137,8 +131,6 @@ test.describe("Parts persistence — survives page reload", () => {
   });
 
   test("budget reflects saved parts after reload", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await pickOpt(page, "engine", "race");
@@ -162,9 +154,6 @@ test.describe("Parts persistence — team isolation", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("different teams have independent part storage", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
-
     await openSetup(page);
     await pickOpt(page, "gearbox", "f1_spec");
     await page.locator("#cs-done").click();
@@ -172,12 +161,15 @@ test.describe("Parts persistence — team isolation", () => {
     // to a race now, not a side door off the circuit picker.
     await page.locator("#race-settings").waitFor({ state: "visible" });
 
-    await page.evaluate(() => {
-      const idx = Teams.LIST.findIndex((t) => t.id !== Teams.LIST[parseInt(localStorage.getItem("apex26.team") ?? "2")].id);
-      if (idx >= 0) { localStorage.setItem("apex26.team", String(idx)); }
-    });
-    await page.reload();
-    await waitReady(page);
+    // Any OTHER team, made the live one. The reload this replaced existed only
+    // so the boot would read the new team index; pinFreePlay writes the store
+    // and #mb-race (in reopenSetup) re-reads it. Its own parts are forgotten
+    // with it — which is the isolation under test, on a page that may have
+    // fitted that team's gearbox in an earlier test.
+    const other = await page.evaluate(() =>
+      Teams.LIST.findIndex((t) => t.id !== Teams.LIST[parseInt(localStorage.getItem("apex26.team") ?? "2")].id));
+    await toMenu(page);
+    await pinFreePlay(page, { team: other, click: false });
 
     await reopenSetup(page);
 
@@ -190,8 +182,6 @@ test.describe("Parts persistence — navigation", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("DONE button closes setup and returns to select screen", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await page.locator("#cs-done").click();

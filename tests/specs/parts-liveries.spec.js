@@ -6,19 +6,28 @@
 // id (SURFACES.paint) to the id the lit shader already treats as matte (panel)
 // or mirror (metal). These tests pin that remap — that only PAINT moves, that
 // nothing else does, and that an absent finish leaves the mesh untouched.
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): 14 boots (11 goto + 3 reloads) became
+// none. The catalog and finish tests only read modules off a live page; the
+// creator tests used to seed storage and reload so the boot would read it —
+// the same keys now go through the store (cache and disk) and #mb-race's own
+// re-read of the team. UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
+import { ensureLive, toMenu, forgetStored, pinFreePlay } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function load(page) {
-  await page.goto("/");
-  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+  await ensureLive(page);
 }
 
+// Team 2 (McLaren, the boot default) made the live team with nothing fitted,
+// then in through START. The creator tests forget that team's custom liveries
+// first, as their old localStorage.removeItem + reload did.
 async function openSetup(page) {
+  await toMenu(page);
+  await pinFreePlay(page, { team: 2, click: false });   // #mb-race re-reads the store
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
   await page.locator("#sel-go").click();
@@ -143,15 +152,15 @@ test.describe("Liveries — paint finish", () => {
 
   test("a fitted satin livery repaints the in-race player car", async ({ page }) => {
     await load(page);
+    // Fitted through the store, so the cache agrees with the disk — the reload
+    // this replaced was how the old seed reached the game.
     const surfaces = await page.evaluate(async () => {
       const team = Teams.LIST[2];
       const satin = Liveries.forTeam(team).find((l) => l.finish === "satin");
-      localStorage.setItem("apex26.team", JSON.stringify(2));
-      localStorage.setItem("apex26.livery." + team.id, JSON.stringify(satin.id));
+      GameStore.store.set("team", 2);
+      GameStore.store.set("livery." + team.id, satin.id);
       return { livery: satin.id, teamId: team.id };
     });
-    await page.reload();
-    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
     const result = await page.evaluate((ctx) => {
       const team = Teams.LIST.find((t) => t.id === ctx.teamId);
       const liv = Liveries.forTeam(team).find((l) => l.id === ctx.livery);
@@ -173,13 +182,7 @@ test.describe("Liveries — creator", () => {
 
   test("the creator offers a finish choice and saves it onto the custom livery", async ({ page }) => {
     await load(page);
-    await page.evaluate(() => {
-      localStorage.setItem("apex26.team", JSON.stringify(2));
-      const team = Teams.LIST[2];
-      localStorage.removeItem("apex26.livery.custom." + team.id);
-    });
-    await page.reload();
-    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+    await forgetStored(page, [await page.evaluate(() => "livery.custom." + Teams.LIST[2].id)]);
     await openSetup(page);
 
     await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
@@ -222,12 +225,7 @@ test.describe("Liveries — creator", () => {
 
   test("a gloss draft stores no finish field at all", async ({ page }) => {
     await load(page);
-    await page.evaluate(() => {
-      localStorage.setItem("apex26.team", JSON.stringify(2));
-      localStorage.removeItem("apex26.livery.custom." + Teams.LIST[2].id);
-    });
-    await page.reload();
-    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+    await forgetStored(page, [await page.evaluate(() => "livery.custom." + Teams.LIST[2].id)]);
     await openSetup(page);
 
     await page.locator('#cs-tabs [data-cs-cat="livery"]').click();

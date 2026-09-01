@@ -6,14 +6,19 @@
 // on a straight — the one place a player reaches for it — BOOST produced no
 // thrust and consumed no energy, while OVERTAKE (which bypasses the taper)
 // worked and drained. These tests pin both halves so the two can't diverge again.
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): four boots became none. The car these
+// numbers describe is the default McLaren with nothing fitted, which a fresh
+// boot on empty storage gave for free; the shared page has whatever the last
+// test fitted (parts-physics fits an ERS pack), so load() pins it before every
+// race. UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
 async function load(page) {
-  await page.goto("/");
-  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(() => window.__apex.race("monza"));
+  await toMenu(page);
+  // Default team, no parts, and the race in the same evaluate (see pinFreePlay).
+  await pinFreePlay(page, { race: ["monza"] });
   await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => { window.__apex.go(); });
 }

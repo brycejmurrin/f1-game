@@ -1,5 +1,10 @@
 // @ts-check
 // The isolated car viewer exposes every parts category for manual audits.
+//
+// STAYS ON THE PER-TEST FIXTURE. sharedTest boots "/" once per worker; these
+// tests load a DIFFERENT document (tools/carview.html, with a query string per
+// test), so a shared game page saves nothing here — every test would still
+// navigate, and leave the shared page off the game for whoever ran next.
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
