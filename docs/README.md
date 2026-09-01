@@ -19,7 +19,7 @@ Three kinds of docs live here.
 |---|---|
 | [AGENT-SURFACE.md](AGENT-SURFACE.md) | Skills vs MCP vs `tools/` CLIs vs wrap — which `apex_*` exists, which stay CLI-only. |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Module layout, the game loop, how the pieces fit. |
-| [RENDERERS.md](RENDERERS.md) | Three backends behind one seam: GLX / WGX / TLX boot flow, frame pipeline, safety prefs, parity snapshot. |
+| [RENDERERS.md](RENDERERS.md) | Three backends behind one seam: GLX / WGX / TLX boot flow, frame pipeline, safety prefs, parity snapshot, the cross-backend parity workflow (mirror a knob on all three). |
 | [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md) | Standing assessment + defect register: what the no-build-step bet costs, why asserted invariants hold where prose ones drift, and what is deferred. |
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (AGENTS.md has the short list). |
 | [CAREER.md](CAREER.md) | Career mode: the flow/session axes, the six `apex26.career.<flavour>.N` save slots, driver ratings, the economy and R&D gate, qualifying, reliability. |

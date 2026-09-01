@@ -121,20 +121,28 @@ test("previously-fat skills stay split (index + references/)", () => {
 });
 
 test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer stays thin", () => {
-  // 44 → 32. A folded skill coming back as its own directory re-splits a
+  // 44 → 31. A folded skill coming back as its own directory re-splits a
   // workflow the tests above now index under its target.
   for (const gone of [
     "webgpu-inspector", "webapp-testing", "pixel-perfect", "apex-env-setup",
     "motion-capture", "perf-profile", "bake-lighting", "scene-graph-instancing",
     "debug-state", "test-timeout-triage", "bump-cache", "deploy-merge",
+    "cross-backend-parity",
   ]) {
     assert.equal(fs.existsSync(path.join(SKILLS, gone)), false, `${gone} was folded/deleted 2026-09`);
   }
   const dirs = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory());
-  assert.equal(dirs.length, 32, `expected 32 skills, got ${dirs.length}`);
-  const parity = fs.readFileSync(path.join(SKILLS, "cross-backend-parity/SKILL.md"), "utf8");
-  assert.ok(parity.split("\n").length <= 20, "cross-backend-parity is a pointer to docs/RENDERERS.md, not a workflow");
-  assert.match(parity, /docs\/RENDERERS\.md/);
+  assert.equal(dirs.length, 31, `expected 31 skills, got ${dirs.length}`);
+  // cross-backend-parity was a 15-line pointer at docs/RENDERERS.md; the
+  // workflow it pointed at now lives there as its own section.
+  const renderers = fs.readFileSync(path.join(ROOT, "docs/RENDERERS.md"), "utf8");
+  assert.match(renderers, /^## Cross-backend parity/m, "docs/RENDERERS.md lost the §Cross-backend parity section");
+  assert.match(renderers, /backend-surface-parity\.test\.mjs/);
+  assert.match(renderers, /wgx-validate\.mjs --static/);
+  assert.match(renderers, /backend-compare\.mjs/);
+  assert.match(renderers, /__apex\.diag\(\{download:false\}\)\.env\.backend/);
+  const idx = fs.readFileSync(path.join(SKILLS, "README.md"), "utf8");
+  assert.doesNotMatch(idx, /^\| \*\*cross-backend-parity\*\*/m, "the skills index still lists the folded skill as a row");
   // The bake scripts moved with their prose and must resolve the repo root
   // from one level deeper.
   for (const f of ["bake.mjs", "merge-proposals.mjs"]) {

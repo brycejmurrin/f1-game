@@ -158,7 +158,8 @@ Skills 44 → ~22: delete the four with no repo content (webgpu-inspector,
 webapp-testing, pixel-perfect, apex-env-setup — 1,000+ lines, zero
 references, two name tools that do not exist); fold the pointer skills into
 the skill they point at (motion-capture + perf-profile → playwright-probe;
-cross-backend-parity → `RENDERERS.md`; bake-lighting → lighting-tuner;
+cross-backend-parity → `RENDERERS.md` (LANDED 2026-09-01 as §Cross-backend
+parity; 32 → 31 skills); bake-lighting → lighting-tuner;
 scene-graph-instancing → scenery-dress; debug-state → agent-view;
 test-timeout-triage + bump-cache + deploy-merge → check-changes/references).
 `skill-progressive.test.mjs` pins 33 names in a "previously fat" list and
