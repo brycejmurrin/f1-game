@@ -63,6 +63,8 @@ Full tool reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools for exploring slid
 | Jacarepagua | [jacarepagua_grid.png](jacarepagua_grid.png) |
 | Jeddah | [jeddah_grid.png](jeddah_grid.png) |
 | Kyalami | [kyalami_grid.png](kyalami_grid.png) |
+| Madrid | [madrid_grid.png](madrid_grid.png) |
+| Magny-Cours | [magny_cours_grid.png](magny_cours_grid.png) |
 | Mexico | [mexico_grid.png](mexico_grid.png) |
 | Miami | [miami_grid.png](miami_grid.png) |
 | Monaco | [monaco_grid.png](monaco_grid.png) |

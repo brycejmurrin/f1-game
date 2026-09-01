@@ -32,7 +32,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WRAPPER = ROOT / "tools" / "chrome-devtools-mcp.sh"
-TIMEOUT = 180
+# look-survey evaluate_script boots can exceed 3 minutes on heavy circuits
+# (measured: TimeoutError mid-Portimão at 180s). Keep call timeout generous.
+TIMEOUT = 300
 
 
 class McpClient:
