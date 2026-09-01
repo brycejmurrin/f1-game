@@ -56,10 +56,30 @@ test("pick-tests routes every source directory somewhere", () => {
                 "js/data", "js/net", "css", "tools", "tests", "docs"];
   const unrouted = dirs.filter((d) => {
     const probe = `${d}/probe.js`;
+    // NB: the two "always" rules (tiny / tooling-fast) match every js/ and css/
+    // path, so for those trees this proves only that SOMETHING runs. The
+    // spec-backed-file test below is the one with teeth for js/.
     return !RULES.some(([re]) => re.test(probe));
   });
   assert.deepEqual(unrouted, [],
     "a source directory matches no pick-tests rule — a change there would be told to run nothing");
+});
+
+test("a js/game file with its own browser spec routes to that spec's group", () => {
+  // These four used to reach only tiny + tooling-fast while a dedicated spec
+  // sat in a group nobody was told to run (found 2026-09-01). The always-rules
+  // are excluded here on purpose, so this cannot pass vacuously.
+  const specBacked = [
+    ["js/game/ui-scale.js", "ui"],
+    ["js/game/racecontrol.js", "debris"],
+    ["js/game/aerozones.js", "behaviour"],
+    ["js/game/garage-scene.js", "parts"],
+  ];
+  const specific = RULES.slice(2);
+  for (const [file, group] of specBacked) {
+    const groups = new Set(specific.filter(([re]) => re.test(file)).flatMap(([, g]) => g));
+    assert.ok(groups.has(group), `${file} must route to test:${group} (got ${[...groups].join(",") || "nothing"})`);
+  }
 });
 
 /* Pull one "## N. Heading" section out of the doc, so a table elsewhere in the

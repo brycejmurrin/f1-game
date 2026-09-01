@@ -147,7 +147,7 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   // ONCE — a latch already set when the boot started means the previous
   // reload's GLX.init failed too, and reloading again loops forever
   // (measured 236 reloads/64 s under a Vulkan-only browser config).
-  assert.match(game, /skipped = prev !== "1" && sessionStorage\.getItem\("apex26\.gfxClaimFail"\) === "1"/);
+  assert.match(game, /if \(!_claimSkipped\) \{\s*sessionStorage\.setItem\("apex26\.gfxClaimFail", "1"\);\s*skipped = sessionStorage\.getItem\("apex26\.gfxClaimFail"\) === "1"/);
   assert.match(game, /Live tab, create\(\) refused[\s\S]{0,400}removeItem\("apex26\.gfxBackendProbe"\)/);
   assert.match(game, /gfxClaimFail[\s\S]{0,220}removeItem\("apex26\.gfxBackendProbe"\)/);
   assert.doesNotMatch(game, /create\(\) refused[\s\S]{0,250}setItem\("apex26\.gfxBackend", "webgl2"\)/);
@@ -347,7 +347,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
 test("blocked sessionStorage skips the opt-in so this tab never claims the canvas", () => {
   const game = read("js/game.js");
   const boot = game.slice(game.indexOf("let skipClaim = false"), game.indexOf("const PROBE_KEY"));
-  assert.match(boot, /catch \(_\) \{ skipClaim = true;/);
+  assert.match(boot, /catch \(_\) \{ skipClaim = (?:_claimSkipped = )?true;/);   // _claimSkipped rides along: the GLX.init failure path reads it
   assert.doesNotMatch(boot, /try the opt-in as usual/);
 });
 
@@ -2141,4 +2141,44 @@ test("GLX caches uNumLights, and nothing else writes it on the lit program", () 
   // back the whole saving.
   assert.doesNotMatch(bare, /_matEmissive\s*=[^;]*_luNL/,
     "uNumLights is program state, not per-frame material state — do not reset it in begin()");
+});
+
+// uniform3fv ran 32.4 times a frame with 24.3 of those re-sending a value the
+// program already held (vegas night, full field). The frame-global sun /
+// ambient / fog / sky terms are identical in every begin() — six env-cube
+// faces, the shadow pass, the main camera — and identical again next frame on
+// a steady condition. uf3 collapses them: measured 31.5 -> 16.3 per frame with
+// every other census counter unchanged.
+//
+// THE TRAP THIS TEST EXISTS FOR: the first version stored into a
+// Float32Array(3), mirroring ufM4, and skipped ZERO of 17.5 calls a frame. A
+// Float32Array rounds on store, so the compare was the rounded float32 against
+// the float64 the caller passed — `cached=0.11999999731779099 in=0.12` — and
+// could never match. ufM4 is safe only because M4 hands it Float32Array
+// matrices already; these vec3s are plain JS arrays off `frame`. A cache that
+// never hits is worse than none: it pays the branch and the allocation to
+// change nothing, and NOTHING GOES RED when it regresses, because the render
+// is identical either way. Only a call count can tell, so pin the store type.
+test("GLX's uf3 cache keeps float64 precision, and owns every lit/sky vec3", () => {
+  const glx = read("js/render/glx.js");
+  const body = glx.slice(glx.indexOf("function uf3("), glx.indexOf("function uf3(") + 900);
+  assert.notEqual(glx.indexOf("function uf3("), -1, "uf3 is gone");
+  assert.ok(!/new Float32Array\(3\)/.test(body),
+    "uf3 must NOT store into a Float32Array — it rounds float64 on store and the cache never hits");
+  assert.match(body, /\[v\[0\], v\[1\], v\[2\]\]/,
+    "uf3 must copy the three components into a plain array, not retain the caller's");
+  assert.match(body, /p\[0\] = v\[0\]; p\[1\] = v\[1\]; p\[2\] = v\[2\];/,
+    "uf3 must overwrite the stored components in place on a miss");
+  // Single writer, the same property the uNumLights and uModel caches need: a
+  // raw gl.uniform3fv on either program would desync the cache behind its back.
+  const bare = glx.replace(/\/\/[^\n]*/g, "");
+  const raw = bare.match(/gl\.uniform3fv\(\s*(litU|skyU)\./g) || [];
+  assert.equal(raw.length, 0,
+    `${raw.length} raw gl.uniform3fv call(s) remain on the lit/sky programs (${raw.join(", ")}) — ` +
+    "every one must go through uf3 or the cache goes stale");
+  // The cache lives in the same two objects uf1/ufM4 use, so it is already
+  // cleared where the programs are relinked. If that stops being true the
+  // clear must move with it.
+  assert.match(bare, /_clearUf\(_litUf\);\s*_clearUf\(_skyUf\);/,
+    "the lit/sky uniform caches must still be cleared together on relink");
 });

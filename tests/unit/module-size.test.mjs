@@ -482,6 +482,23 @@ const CEILINGS = {
   // 8807 on work of its own. Neither number fits the union, which carries both
   // sets of lines. Re-measured on THIS tree with the suite's own split-newline
   // metric (not grep -c, which is one short on a file with no trailing newline): 8870.
+  // 8870 -> 8921 for the LAZY_DATA loader (2026-09-01): DATA_FILES, the derived
+  // DATA_EDGES, ensureDataHub() and the DATA button's await, minus the
+  // DataHub.init(els.datahub) line this deletes from the boot-restore block.
+  // Same argument as the two lazy loaders above — it sits beside AGENT_FILES /
+  // RACE_FILES because it IS that mechanism with a third roster, and the button
+  // it gates is wired here. Takes 154,412 B off the boot script wall (3,628 ->
+  // 3,477 KB), which is ~3,027 B of payload per line of game.js.
+  // 8921 -> 9015 for the LAZY_NET split (2026-09-01). The 94 lines are mostly
+  // the two INERT STUBS, and they are the point rather than overhead: netPlay
+  // is called at 20 sites here and only three are guarded, so the alternative
+  // was 17 new `netPlay && …` guards spread through the frame loop and the
+  // result path — more lines, in worse places, where one miss is a crash
+  // mid-race instead of a red guard. The rest is NET_FILES / NET_EDGES (a real
+  // dependency graph, not derivable the way the data hub's is) and ensureNet().
+  // Takes 242,020 B off the boot script wall (3,477 -> 3,241 KB), ~2.6 KB per
+  // line. tests/unit/net-stub-surface.test.mjs pins the stubs' surface AND
+  // their values against js/net/netplay.js.
   // 8870 -> 8878: eight lines, all comment, for a one-word fix — `if (soundOn)`
   // became `if (soundOn && player)`. The words are worth more than the guard:
   // startRace already tolerates a null player and says so, but this block
@@ -496,7 +513,13 @@ const CEILINGS = {
   // policy, the caps and the heartbeat live in the new js/game/loop-health.js
   // precisely so game.js pays seven lines and not eighty — six of the seven are
   // the comment saying which half is here. PERF-FINDINGS 2k.
-  "js/game.js": 8885,
+  // MERGED: the two blocks above are each lineage's deltas measured against ITS
+  // own base (this side 8870 -> 8921 -> 9015 for the lazy loaders; the deploy
+  // side 8870 -> 8878 -> 8885 for the loop-health fix). Neither number fits the
+  // union, which carries both sets of lines, so this is RE-MEASURED on the
+  // merged tree with the suite's own split-newline metric rather than added on
+  // paper: 9030.
+  "js/game.js": 9030,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -696,7 +719,11 @@ const CEILINGS = {
   // the widest option, guarded by car-front-wing-width.test.mjs); this side's
   // proportions pass is the rest of the growth. The union carries both sets of
   // lines, so neither ceiling fits: re-measured at 3540.
-  "js/car/car3d.js": 3540,
+  // 3540 -> 3566: the nose running lights. Eleven of the 26 are geometry (three
+  // anchored boxes and their loop); the rest is the provenance note, which is
+  // worth its lines here — the emitter this restores was lost silently once
+  // already, and the comment is what stops the literal z coming back.
+  "js/car/car3d.js": 3566,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,
@@ -930,7 +957,13 @@ const CEILINGS = {
   // instance set — turning DebrisWorld's four per-body loops into four draws.
   // (My ufi was dropped on the merge: it did what _luNL already does.)
   // PERF-FINDINGS 2h.
-  "js/render/glx.js": 2038,
+  // 2038 -> 2078. uf3, the vec3 twin of uf1/ufM4, plus the frozen fallback
+  // vec3s and the comment recording why its store is a PLAIN array: written
+  // with Float32Array(3) it skipped 0 of 17.5 calls a frame, because a
+  // Float32Array rounds on store and the compare was float32-vs-float64. The
+  // 40 lines buy uniform3fv 31.5 -> 16.3 per frame (vegas night, full field,
+  // tools/glx-call-census.mjs) with every other counter unchanged.
+  "js/render/glx.js": 2078,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)

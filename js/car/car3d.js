@@ -2456,6 +2456,32 @@ const Car3D = (function () {
         { z: nr.z, x: s*(nr.side + 0.006), y: (nr.bottom + nr.top) * 0.5, w: 0.012, h: 0.040 },
         accentC);
     }
+    // NOSE RUNNING LIGHTS — a pair of HDR white markers on the nose flanks just
+    // behind the tip, plus a thin bar across the crown. NOT a regulation part:
+    // real cars carry no nose DRL, and the only mandated lamp is the rear rain
+    // light modelled elsewhere. This is a styling read — the >1 albedo blooms at
+    // night and gives the car a forward-facing signature at grid distance.
+    //
+    // Restored, not invented. The original pass placed it at literal z 2.62 and
+    // 2.70; the tip is now styledTipZ (~2.60) after the nose was cut back 580 mm,
+    // so those literals sit AHEAD of the car and the geometry was silently lost.
+    // Re-expressed off noseAt() like every other nose graphic here, which is also
+    // what lets the drlNoseMaxGap assertion mean something.
+    //
+    // glass, never SURFACES.emissive: id 25 is functionalEmissive, contractually
+    // RESERVED for the rain light (parts-physics "reserves emissive surfaces for
+    // the FIA rain light" treats any other position as an offender), and paint is
+    // capped at albedo <= 1, which a 2.4 white is not. A lens is the honest class.
+    if (!ckpt) {
+      const drlC = [2.4, 2.4, 2.7];
+      for (const s of [-1, 1]) {
+        const n = anchors.noseAt(styledTipZ - 0.14);
+        addBox(out, s * (n.side + 0.005), n.bottom + (n.top - n.bottom) * 0.42, n.z,
+               0.014, 0.026, 0.028, drlC, SURFACES.glass);
+      }
+      const drlBar = anchors.noseAt(styledTipZ - 0.05);
+      addBox(out, 0, drlBar.top + 0.005, drlBar.z, 0.13, 0.010, 0.020, drlC, SURFACES.glass);
+    }
     if (!ckpt) addPodFlankSpan(0.425, -0.025, 0.88, 0.035, accentC, SURFACES.paint, 0.012);
 
     const stripeC = _ckAcc(liv.stripe) || null;   // monocoque crest runs z 0.05..1.05 — right under the eye

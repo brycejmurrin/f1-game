@@ -6,7 +6,7 @@
  * invocation, which parallelises by default and floods the terminal. This
  * runner executes one file at a time (`node --test --test-concurrency=1`) and
  * logs start/end/pass/fail/duration for each to stdout and
- * `artifacts/logs/tooling-fast.log`.
+ * `artifacts/logs/tooling-fast-suite.log`.
  *
  *   node tools/tooling-fast.mjs                  # full suite
  *   node tools/tooling-fast.mjs tests/unit/x…    # subset (same logging)
@@ -22,7 +22,10 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LOGDIR = path.join(ROOT, "artifacts/logs");
-const LOGFILE = path.join(LOGDIR, "tooling-fast.log");
+// NOT "tooling-fast.log": that is the path tools/test-bg.mjs gives the
+// tooling-fast GROUP log, and writing the suite summary there truncated the
+// group's START header out from under the child's appends.
+const LOGFILE = path.join(LOGDIR, "tooling-fast-suite.log");
 
 /** @type {readonly string[]} */
 export const TOOLING_FAST_FILES = Object.freeze([
@@ -109,6 +112,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/gfx-debug-overlay.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
+  // ~22 s, the slowest entry here, and deliberately in THIS list rather than
+  // test:sweeps: sweeps is skipped by ci.yml when a push cannot move circuit
+  // geometry, and a parts-mesh regression is exactly the kind that would then
+  // sail through. tooling-fast runs unconditionally in the deploy gate, which is
+  // the whole point — the front-wing assertion this file ports sat red on the
+  // deploy tip through five consecutive green Pages runs because the browser
+  // group that held it is not gated at all.
+  "tests/unit/car-mesh-anchors.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
   "tests/unit/shared-math.test.mjs",

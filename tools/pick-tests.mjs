@@ -92,7 +92,13 @@ export const RULES = [
    "road geometry reaches walls, elevation, physics, every circuit's foundation — and buildProps lives here"],
   [/^js\/track\/space\.js/, ["physics"], "world<->track projection"],
   [/^js\/track\/(markings|maps|geo-paths)\.js/, ["map", "circuit"], "layout metadata"],
-  [/^js\/circuits\//, ["circuit", "scenery", "foundation"], "a circuit def: walls, its scenery callback, and its own foundation spec"],
+  [/^js\/circuits\/.*\.js$/, ["circuit", "scenery", "foundation"], "a circuit def: walls, its scenery callback, and its own foundation spec (not the dir's CLAUDE.md)"],
+
+  // ── spec-backed js/game files that used to reach only tiny + tooling-fast ──
+  [/^js\/game\/ui-scale\.js/, ["ui"], "ui-scale.spec.js"],
+  [/^js\/game\/racecontrol\.js/, ["debris"], "race-control.spec.js rides in test:debris"],
+  [/^js\/game\/aerozones\.js/, ["behaviour"], "aero-zones.spec.js rides in test:behaviour"],
+  [/^js\/game\/garage-scene\.js/, ["parts"], "garage-aero.spec.js rides in test:parts"],
 
   // ── car ─────────────────────────────────────────────────────────────────
   [/^js\/car\/parts\.js/, ["parts"], "the catalog, budgets, recipes and their physics"],

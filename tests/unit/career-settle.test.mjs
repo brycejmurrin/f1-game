@@ -124,7 +124,7 @@ test("the retired flag is the ONLY discriminator between the two rounds", () => 
 // not, so this loader stubs it flat — every driver rates the same, which parks
 // the market (a swap needs a midfielder to out-rate a top-team seat) and leaves
 // the contract and budget rules the only things moving.
-function loadDriver(ratings) {
+function loadDriver(ratings, opts = {}) {
   const stored = new Map();
   const flatRating = { pace: 80, craft: 75, awareness: 75, consistency: 75, experience: 50 };
   const ctx = vm.createContext({
@@ -162,7 +162,7 @@ function loadDriver(ratings) {
     // dearest part of 500 -> cap 2500, comfortably above 600 * 1.6 so the
     // RUNGS, not the cap, are what this test measures.
     Parts: {
-      getFactorySetup: () => ({}), getCost: () => 600,
+      getFactorySetup: () => ({}), getCost: () => opts.worksCost || 600,
       CATALOG: Array.from({ length: 6 }, (_, i) => ({
         id: "c" + i, options: [{ cost: 0 }, { cost: 500 }],
       })),
@@ -253,6 +253,26 @@ test("the budget ladder raises the fitted cap, three rungs then stops", () => {
   assert.equal(career.budgetLvl, 3, "three rungs reach the top of BUDGET_MULT");
   assert.equal(Career.state().budgetCost, null, "at the ceiling there is nothing left to buy");
   assert.equal(Career.upgradeBudget(), false, "and the fourth rung is refused");
+});
+
+test("RAISE THE CAP is not for sale at a rung the derived ceiling already binds", () => {
+  // budget() is min(works × BUDGET_MULT[lvl], budgetCap()). With the real
+  // catalog a front-running works car (McLaren 2000 vs a 2105 cap) reaches the
+  // ceiling at rung 1, and the hub used to sell rungs 2 and 3 (5000 + 9000 cr)
+  // for a cap that did not move. This stub prices the works car at 2000
+  // against the same 2500 cap: rung 1 lifts it to 2300, rung 2 clips at 2500,
+  // rung 3 would buy nothing and must not be offered.
+  const Career = loadDriver(null, { worksCost: 2000 });
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.money = 1_000_000;
+  assert.equal(Career.upgradeBudget(), true, "rung 1: 2000 -> 2300, real");
+  assert.equal(Career.upgradeBudget(), true, "rung 2: 2300 -> 2500 (clipped), still real");
+  assert.equal(Career.state().budget, 2500, "the derived cap binds");
+  assert.equal(Career.state().budgetCost, null, "rung 3 would raise nothing, so it is not offered");
+  assert.equal(Career.upgradeBudget(), false, "and cannot be bought");
+  assert.equal(career.budgetLvl, 2, "budgetLvl stops where the cap bound");
 });
 
 // ── settleRound idempotency, money floor, exhausted-calendar clamps ───────────

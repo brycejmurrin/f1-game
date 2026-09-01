@@ -103,6 +103,89 @@ async function precacheAssetLists() {
     "vendor/trystero-0.25.3/nostr/index.js",
     "vendor/trystero-0.25.3/core/index.js",
     "vendor/trystero-0.25.3/noble-secp256k1.js",
+    // THE RACE PAYLOAD (tools/manifest.cjs LAZY_RACE / LAZY_SCENERY). These
+    // had <script> tags until the boot-wall round took 1,421 KB off the
+    // critical path; the tag parser below therefore cannot see them any more.
+    // WITHOUT THIS AN INSTALLED PWA GOES OFFLINE AND BUILDS BARE CIRCUITS —
+    // js/game.js:loadBackendScripts injects them, its `el.onload = el.onerror =
+    // resolve` swallows the miss, TrackScenery[id] stays undefined and the
+    // track builds road-and-terrain with no dressing. Exactly the failure the
+    // DEFERRED note above describes, and silent in the same way.
+    // Precaching them costs the install nothing it did not already pay when
+    // they were tags; the boot-wall win is the PARSE, not the bytes on disk.
+    // OPTIONAL, not essential: an install must not fail over a circuit the
+    // player may never race. Pinned to the manifest by
+    // tests/unit/load-order.test.mjs.
+    "js/game/light-presets.js",
+    "js/circuits/scenery/bahrain.js",
+    "js/circuits/scenery/monaco.js",
+    "js/circuits/scenery/silverstone.js",
+    "js/circuits/scenery/spa.js",
+    "js/circuits/scenery/monza.js",
+    "js/circuits/scenery/suzuka.js",
+    "js/circuits/scenery/singapore.js",
+    "js/circuits/scenery/cota.js",
+    "js/circuits/scenery/interlagos.js",
+    "js/circuits/scenery/vegas.js",
+    "js/circuits/scenery/madrid.js",
+    "js/circuits/scenery/zandvoort.js",
+    "js/circuits/scenery/jeddah.js",
+    "js/circuits/scenery/albert_park.js",
+    "js/circuits/scenery/shanghai.js",
+    "js/circuits/scenery/miami.js",
+    "js/circuits/scenery/imola.js",
+    "js/circuits/scenery/montreal.js",
+    "js/circuits/scenery/redbull.js",
+    "js/circuits/scenery/hungaroring.js",
+    "js/circuits/scenery/baku.js",
+    "js/circuits/scenery/mexico.js",
+    "js/circuits/scenery/qatar.js",
+    "js/circuits/scenery/abudhabi.js",
+    "js/circuits/scenery/hockenheim.js",
+    "js/circuits/scenery/nurburgring.js",
+    "js/circuits/scenery/catalunya.js",
+    "js/circuits/scenery/sepang.js",
+    "js/circuits/scenery/istanbul.js",
+    "js/circuits/scenery/paul_ricard.js",
+    "js/circuits/scenery/portimao.js",
+    "js/circuits/scenery/sochi.js",
+    "js/circuits/scenery/mugello.js",
+    "js/circuits/scenery/magny_cours.js",
+    "js/circuits/scenery/estoril.js",
+    "js/circuits/scenery/kyalami.js",
+    "js/circuits/scenery/watkins_glen.js",
+    "js/circuits/scenery/indianapolis.js",
+    "js/circuits/scenery/buenos_aires.js",
+    "js/circuits/scenery/jacarepagua.js",
+    // THE DATA HUB (tools/manifest.cjs LAZY_DATA). Tagless since the 154 KB
+    // came off the boot wall — injected from the DATA button. Unlike the race
+    // payload a miss here is LOUD (the hub simply does not open), but an
+    // installed PWA should still be able to read a cached schedule offline,
+    // and the same ?v=<build> stamping rule applies.
+    "js/data/api.js",
+    "js/data/telemetry.js",
+    "js/data/export.js",
+    "js/data/schedule.js",
+    "js/data/standings.js",
+    "js/data/lastrace.js",
+    "js/data/live.js",
+    "js/data/hub.js",
+    // MULTIPLAYER (tools/manifest.cjs LAZY_NET). Tagless since the 241 KB came
+    // off the boot wall — injected when VS FRIEND opens. The room codes need a
+    // network anyway, so this is not about offline play; it is so a player who
+    // installed the PWA and then opened VS FRIEND on a flaky connection gets
+    // the lobby rather than a button that does nothing.
+    "js/net/nostr.js",
+    "js/net/rendezvous.js",
+    "js/net/sdp.js",
+    "js/net/qr.js",
+    "js/net/scan.js",
+    "js/net/transport.js",
+    "js/net/handshake.js",
+    "js/net/snapshot.js",
+    "js/net/session.js",
+    "js/net/netplay.js",
+    "js/net/lobby.js",
     // Self-hosted fonts (referenced from css/tokens.css @font-face, so the tag
     // parser below never sees them). Immutable vendored assets — no ?v=. Seeded
     // as OPTIONAL: font-display:swap means a missed precache just falls back to
@@ -216,8 +299,12 @@ self.addEventListener("install", (event) => {
     // be this build's. Everything else in the list stays bare — the vendored
     // three.js reaches the network through the importmap with no query at all.
     const build = name.slice(CACHE_PREFIX.length);
+    // Everything loadBackendScripts() injects is requested as `<path>?v=<build>`,
+    // so it must be SEEDED under that key: the DEFERRED backends, and now the
+    // race payload (light-presets + the per-circuit scenery closures) too.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(three|webgpu)\//.test(u) ? u + "?v=" + build : u);
+      /^js\/render\/(three|webgpu)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/game\/light-presets\.js$/.test(u)
+        ? u + "?v=" + build : u);
     await pooled(stamped, 4, (u) => cacheOptionalAsset(cache, u));
     await self.skipWaiting();
   })());

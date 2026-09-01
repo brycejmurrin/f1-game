@@ -72,7 +72,19 @@ async function goToRace(page) {
   await page.locator("#rs-go").click();
   // Renderer back on BEFORE the track wait, so callers get the live scene.
   await page.evaluate(() => window.__apex.headless(false));
-  await waitForTrack(page);
+  // 180 s, THE SAME BOUND bootRace PASSES for the identical wait. This was a
+  // bare waitForTrack(page), i.e. the helper's 10 s default, while bootRace six
+  // lines down asks for 180_000 with the reason written next to it: "CI has been
+  // measured taking 94 s just to boot a race on a starved runner." One helper,
+  // one piece of work — a circuit build under SwiftShader — and two bounds 18x
+  // apart, of which only the generous one matched what the work actually costs.
+  //
+  // Measured, Pages run 1861 shard 1: the page logged `livery williams` at
+  // 19810 ms and then nothing until `build mercedes` at 100687 ms — an 80 s
+  // runner stall. bootRace's callers rode it out; goToRace's blew a 10 s bound
+  // and failed the deploy. The tests either side of this line are identical in
+  // what they ask the browser to do.
+  await waitForTrack(page, 180_000);
 }
 
 // Helper: skip the countdown, clear the AI pack, and park the player

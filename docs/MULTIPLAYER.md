@@ -112,8 +112,8 @@ invite QR holds the invite LINK, so the guest scans it with their ORDINARY
 CAMERA APP and lands in the lobby with the code already filled in — no in-page
 scanner, and none possible: BarcodeDetector is absent on desktop Linux Chrome
 and iOS Safari (measured). Encoder only; decoding is an order more code for a
-job the OS already does. Verified by jsQR (a devDependency) in tests/net-
-qr.test.mjs — self-consistency proves nothing here, since a wrong mask or a
+job the OS already does. Verified by jsQR (a devDependency) in
+tests/unit/net-qr.test.mjs — self-consistency proves nothing here, since a wrong mask or a
 transposed format field produces a picture that looks exactly right and cannot
 be read
 

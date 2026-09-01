@@ -6,7 +6,16 @@ import { test, expect } from "@playwright/test";
 
 async function load(page) {
   await page.goto("/");
-  await page.waitForFunction(() => typeof Parts !== "undefined" && Parts.CATALOG, null, { polling: 100, timeout: 8000 });
+  // 60 s, not 8. This is a BOOT bound, not an assertion tolerance — it only ever
+  // permits a slower page, never a looser measurement. Measured 2026-09-01 on an
+  // idle 4-core container (loadavg ~1.0): 45.0 s to define Parts, with the static
+  // server itself answering in 7 ms/request, so the cost is Chromium parsing and
+  // executing 3.5 MiB across 156 deferred script tags. A worktree at de62823e —
+  // BEFORE the perf(boot) defer-every-tag commits and the geometry pass — measured
+  // 48.8 s on the same box in the same minute, so the tree did not regress; the 8 s
+  // bound was simply undersized and every one of the 70 tests here died on it,
+  // burning 42-57 s each to report a boot timeout that looked like a code failure.
+  await page.waitForFunction(() => typeof Parts !== "undefined" && Parts.CATALOG, null, { polling: 100, timeout: 60_000 });
 }
 
 test.describe("Parts module — catalog structure", () => {
@@ -465,7 +474,23 @@ test.describe("Parts module — visual recipes", () => {
         }
         const podGap = (p) => Math.abs(Math.abs(p[0]) - anchors.podAt(p[2]).x);
         const noseGap = (p) => Math.abs(p[1] - anchors.noseAt(p[2]).top);
-        const accentPod = verticesFor(accent).filter((p) => p[2] < 0.5 && p[2] > -0.5);
+        // Accent geometry ON THE POD FLANK, which is what podGap measures against.
+        // The |x| > 0.35 guard is the same one podDecals uses six lines up, and it
+        // is required, not decorative: the T-camera pod is accent-coloured and sits
+        // on the CENTRELINE (measured |x| 0.041-0.059, z -0.205..-0.322, y ~0.91),
+        // squarely inside this z band. Without the guard its 30 vertices are scored
+        // against the sidepod anchor at 0.845 m and report a 0.80 m "gap" — a pod
+        // that is nowhere near the pod. The 144 genuine flank vertices sit at
+        // gap <= 0.02, well inside the 0.04 bound, which is unchanged.
+        const accentPod = verticesFor(accent)
+          .filter((p) => p[2] < 0.5 && p[2] > -0.5 && Math.abs(p[0]) > 0.35);
+        // The nose running lights, matching drlC in js/car/car3d.js. This
+        // assertion previously scanned for the same colour while NOTHING emitted
+        // it — the emitter had been lost when the nose was cut back and its
+        // literal z 2.62/2.70 ended up ahead of the tip — and Math.max of an
+        // empty array is -Infinity, so it passed for months without testing
+        // anything. Hence drlN below: the count is asserted first, so a selector
+        // that stops matching fails loudly instead of going quiet.
         const drls = verticesFor([2.4, 2.4, 2.7]);
         return {
           podDecalZ: [...new Set(podDecals.map((p) => Number(p[2].toFixed(3))))],
@@ -481,6 +506,10 @@ test.describe("Parts module — visual recipes", () => {
               Math.abs(p[1] - anchors.noseAt(p[2]).top),
               Math.abs(Math.abs(p[0]) - anchors.noseAt(p[2]).side),
             ))),
+          // Both counted so a selector that stops matching FAILS instead of
+          // passing — see the drls comment above for why that is not theoretical.
+          accentPodN: accentPod.length,
+          drlN: drls.length,
         };
       };
       const base = {
@@ -500,6 +529,8 @@ test.describe("Parts module — visual recipes", () => {
       expect(variant.podDecalsInBounds).toBe(true);
       expect(variant.podDecalMaxGap).toBeLessThan(0.035);
       expect(variant.noseDecalMaxGap).toBeLessThan(0.025);
+      expect(variant.accentPodN).toBeGreaterThan(0);
+      expect(variant.drlN).toBeGreaterThan(0);
       expect(variant.accentPodMaxGap).toBeLessThan(0.04);
       expect(variant.drlNoseMaxGap).toBeLessThan(0.04);
     }
@@ -792,8 +823,22 @@ test.describe("Parts module — visual recipes", () => {
         const style = option.visual, level = style.lvl;
         const topIndex = level >= 4 ? 3 : level >= 3 ? 2 : level >= 1 ? 1 : 0;
         const element = elements[topIndex], planformIndex = topIndex + 1;
+        // frontHalf() in js/car/car3d.js is FW_SPAN * this fraction. The constant
+        // is restated here on purpose, exactly as tests/unit/car-front-wing-width
+        // .test.mjs restates the tyre face: if someone re-spans the wing, this
+        // should fail until they re-read the flap tips against it.
+        //
+        // 0.92 was the PREVIOUS span constant and was left behind when bde3ee90
+        // ("The front wing was wider than the car it is bolted to") narrowed the
+        // wing to 0.715 — it had stood 95 mm proud of a 1.90 m car. The stale
+        // expectation then reported all 31 aero options detached while the mesh
+        // was correct; car-front-wing-width.test.mjs stayed green throughout,
+        // which is the tell that the geometry was never the broken side.
+        // Measured 2026-09-01, the tip lands ON endplateX to 4 dp:
+        // frac 0.74 -> 0.5591, 0.88 -> 0.6592, 1.00 -> 0.7450.
+        const FW_SPAN = 0.715;
         const span = level <= 0 ? 0.74 : level === 1 ? 0.88 : 1;
-        const endplateX = 0.92 * span + 0.03;
+        const endplateX = FW_SPAN * span + 0.03;
         // Zero-thickness trailing edge, as above: the tip vertex is on the
         // chord line at yTrail plus the tip rise.
         const expectedY = element[3] + style.frontRise * (0.65 + planformIndex * 0.12);

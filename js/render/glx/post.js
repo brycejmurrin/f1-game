@@ -262,6 +262,7 @@ const GLXPost = (function () {
         if (msDepthRB) gl.deleteRenderbuffer(msDepthRB);
         msColorRB = msDepthRB = null;
       }
+      msaaSamples = 0;   // no scene target = no resolve = no MSAA; msaa() must not report 4 on the direct path
       for (const lv of bloomLv) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, lv.fbo);
         if (lv.tex) gl.deleteTexture(lv.tex);
