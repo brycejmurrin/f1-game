@@ -71,7 +71,9 @@ Full tool reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools for exploring slid
 | Mugello | [mugello_grid.png](mugello_grid.png) |
 | Nürburgring | [nurburgring_grid.png](nurburgring_grid.png) |
 | Paul Ricard | [paul_ricard_grid.png](paul_ricard_grid.png) |
+| Portimão | [portimao_grid.png](portimao_grid.png) |
 | Qatar | [qatar_grid.png](qatar_grid.png) |
+| Red Bull Ring | [redbull_grid.png](redbull_grid.png) |
 | Sepang | [sepang_grid.png](sepang_grid.png) |
 | Shanghai | [shanghai_grid.png](shanghai_grid.png) |
 | Silverstone | [silverstone_grid.png](silverstone_grid.png) |
