@@ -496,7 +496,11 @@ const CEILINGS = {
   // policy, the caps and the heartbeat live in the new js/game/loop-health.js
   // precisely so game.js pays seven lines and not eighty — six of the seven are
   // the comment saying which half is here. PERF-FINDINGS 2k.
-  "js/game.js": 8885,
+  // 8885 -> 8892: the rear-light strobe gate. Once racing only the WET rain
+  // light flashes; the MGU-K pattern is a stationary-car signal and was running
+  // through most of a lap on every ERS deploy at night, so the pre-race blinking
+  // never appeared to stop.
+  "js/game.js": 8893,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
