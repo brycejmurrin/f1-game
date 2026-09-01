@@ -801,9 +801,7 @@ body[data-density="compact"] #campicker {
   padding: 0 var(--pad) calc(var(--gap) * 0.35);
   border-right: none;
 }
-#howtoplay-inner[data-density="compact"]:not([data-shape="wide"]) > .sheet-head,
-#howtoplay-inner[data-density="compact"]:not([data-shape="wide"]) > .sheet-body,
-#howtoplay-inner[data-density="compact"]:not([data-shape="wide"]) > .sheet-foot {
+#howtoplay-inner[data-density="compact"]:not([data-shape="wide"]) > :is(.sheet-head, .sheet-body, .sheet-foot) {
   grid-column: auto; grid-row: auto;
 }
 #howtoplay dl {

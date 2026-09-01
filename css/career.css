@@ -611,14 +611,10 @@
   padding: 0 var(--pad) calc(var(--gap) * 0.35);
   border-right: none;
 }
-#career-guide .sheet[data-density="compact"]:not([data-shape="wide"]) > .sheet-head,
-#career-guide .sheet[data-density="compact"]:not([data-shape="wide"]) > .sheet-body,
-#career-guide .sheet[data-density="compact"]:not([data-shape="wide"]) > .sheet-foot {
+#career-guide .sheet[data-density="compact"]:not([data-shape="wide"]) > :is(.sheet-head, .sheet-body, .sheet-foot) {
   grid-column: auto; grid-row: auto;
 }
-#career-history .sheet[data-density="compact"]:not([data-shape="wide"]) > .sheet-head,
-#career-history .sheet[data-density="compact"]:not([data-shape="wide"]) > .sheet-body,
-#career-history .sheet[data-density="compact"]:not([data-shape="wide"]) > .sheet-foot {
+#career-history .sheet[data-density="compact"]:not([data-shape="wide"]) > :is(.sheet-head, .sheet-body, .sheet-foot) {
   grid-column: auto; grid-row: auto;
 }
 
