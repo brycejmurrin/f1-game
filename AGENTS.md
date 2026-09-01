@@ -221,7 +221,7 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 - `js/track/` — spline mesh geom graph space surface markings models themes
   kits geo-paths maps + the scenery split; the 111-member scenery(api)
   contract is frozen by `tests/unit/scenery-api-contract.test.mjs`
-- `js/car/` — car3d, liveries, liverytex, the parts catalog (600 cr budget),
+- `js/car/` — car3d, liveries, liverytex, the parts catalog (780 cr budget),
   ghost, teams, driver-ratings
 - `js/data/` — F1API + DataHub tabs; `js/net/` — 2-4 player WebRTC, no backend
 - `css/` — tokens + component files; `docs/COMPONENTS.md` is test-asserted;

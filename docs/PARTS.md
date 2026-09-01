@@ -1,6 +1,6 @@
 # Apex 26 — the parts system (`js/car/parts.js`)
 
-Twelve upgrade categories, a 600 cr budget, and the measured effect of each on
+Twelve upgrade categories, a 780 cr budget, and the measured effect of each on
 the four stats. Extracted from the agent brief. `AGENTS.md` keeps only the rules another
 subsystem has to respect.
 
@@ -33,10 +33,10 @@ already differ). A car with no resolved setup still sits at the midpoint.
 `exhaust`, `floor`, `cockpit`, `wheels`. Each
 category is `{ id, label, options:[…] }`; each option has
 `{ id, label, cost, desc, speed?, accel?, cornering?, braking?, supplier? }`.
-Budget = 600 cr. `Parts.getMods(setup, teamEngine)` returns
+Budget = 780 cr. `Parts.getMods(setup, teamEngine)` returns
 `{speed, accel, cornering, braking}` multipliers. Supplier-exclusive options
 (e.g. `manu_mercedes`) are only shown when `team.engine` matches.
-`unlimitedBudget` (localStorage `apex26.unlimitedBudget`) removes the 600 cr cap.
+`unlimitedBudget` (localStorage `apex26.unlimitedBudget`) removes the 780 cr cap.
 
 Every option also carries a parametric `visual` **recipe** consumed by `Car3D`
 (`getVisualTiers().._visual`); `VISUAL_FIELD_REGISTRY` names the one consumer of
