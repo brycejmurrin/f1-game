@@ -513,13 +513,13 @@ const CEILINGS = {
   // policy, the caps and the heartbeat live in the new js/game/loop-health.js
   // precisely so game.js pays seven lines and not eighty — six of the seven are
   // the comment saying which half is here. PERF-FINDINGS 2k.
-  // MERGED: the two blocks above are each lineage's deltas measured against ITS
-  // own base (this side 8870 -> 8921 -> 9015 for the lazy loaders; the deploy
-  // side 8870 -> 8878 -> 8885 for the loop-health fix). Neither number fits the
-  // union, which carries both sets of lines, so this is RE-MEASURED on the
-  // merged tree with the suite's own split-newline metric rather than added on
-  // paper: 9030.
-  "js/game.js": 9030,
+  // MERGED, three lineages deep. Each block above is a delta measured against
+  // ITS own base (lazy loaders 8870 -> 8921 -> 9015; loop-health 8870 -> 8878 ->
+  // 8885; this side's rear-light strobe gate +1 on top of its own 8892). No such
+  // number fits the union, which carries every one of those line sets, so this is
+  // RE-MEASURED on the merged tree with the suite's own split-newline metric
+  // rather than added on paper.
+  "js/game.js": 9038,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
