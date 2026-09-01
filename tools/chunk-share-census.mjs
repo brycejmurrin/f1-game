@@ -42,7 +42,7 @@ try {
       return t;
     };
   });
-  await page.evaluate((t) => { __apex.race(t, "night", "clear"); __apex.go(); }, TRACK);
+  await page.evaluate(async (t) => { await __apex.race(t, "night", "clear"); __apex.go(); }, TRACK);
   await page.waitForFunction(() => { try { return !!__apex.info().track; } catch { return false; } },
     null, { polling: 100, timeout: 180000 });
   await new Promise((r) => setTimeout(r, 3000));

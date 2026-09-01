@@ -28,7 +28,7 @@ try {
     await page.goto(srv.url + "index.html", { waitUntil: "domcontentloaded", timeout: 90000 });
   }
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 90000 });
-  await page.evaluate(([t, d]) => { __apex.race(t, d, "clear"); __apex.go(); }, [TRACK, TOD]);
+  await page.evaluate(async ([t, d]) => { await __apex.race(t, d, "clear"); __apex.go(); }, [TRACK, TOD]);
   await page.waitForFunction(() => { try { return !!__apex.info().track; } catch { return false; } },
     null, { polling: 100, timeout: 180000 });
   await new Promise((r) => setTimeout(r, 4000));

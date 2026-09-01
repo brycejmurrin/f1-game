@@ -105,8 +105,8 @@ async function captureAttempt(page, condition, profile, outDir) {
   page[PAGE_ERRORS].length = 0;
   mkdirSync(outDir, { recursive: true });
 
-  await page.evaluate(({ track, tod, weather }) => {
-    window.__apex.race(track, tod, weather);
+  await page.evaluate(async ({ track, tod, weather }) => {
+    await window.__apex.race(track, tod, weather);
   }, condition);
   await page.waitForFunction(({ track, tod, weather }) => {
     const info = window.__apex?.info?.();

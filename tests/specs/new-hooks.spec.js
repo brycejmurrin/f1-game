@@ -703,10 +703,10 @@ test.describe("shared track foundation diagnostics", () => {
   test("night rebuilds expose a distinct validated props manifest", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
-    const counts = await page.evaluate(() => {
-      window.__apex.race("singapore", "day", "dry");
+    const counts = await page.evaluate(async () => {
+      await window.__apex.race("singapore", "day", "dry");
       const day = window.__apex.geometryDiagnostics().find((entry) => entry.name === "props").vertices;
-      window.__apex.race("singapore", "night", "dry");
+      await window.__apex.race("singapore", "night", "dry");
       const night = window.__apex.geometryDiagnostics().find((entry) => entry.name === "props").vertices;
       return { day, night };
     });
@@ -718,13 +718,13 @@ test.describe("shared track foundation diagnostics", () => {
   test("Singapore migration keeps models, walls, terrain, and elevation intentional", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
-    const result = await page.evaluate(() => {
-      window.__apex.race("singapore", "day", "dry");
+    const result = await page.evaluate(async () => {
+      await window.__apex.race("singapore", "day", "dry");
       const day = {
         geometry: window.__apex.geometryDiagnostics(),
         models: window.__apex.modelDiagnostics(),
       };
-      window.__apex.race("singapore", "night", "dry");
+      await window.__apex.race("singapore", "night", "dry");
       const geometry = window.__apex.geometryDiagnostics();
       const models = window.__apex.modelDiagnostics();
       const profile = window.__apex.trackProfile(720);
@@ -855,8 +855,8 @@ test.describe("Madrid track foundation migration", () => {
     };
     assertSession(result.day);
 
-    const night = await page.evaluate(() => {
-      window.__apex.race("madrid", "night", "dry");
+    const night = await page.evaluate(async () => {
+      await window.__apex.race("madrid", "night", "dry");
       return {
         geometry: window.__apex.geometryDiagnostics(),
         models: window.__apex.modelDiagnostics(),
@@ -867,7 +867,7 @@ test.describe("Madrid track foundation migration", () => {
 
   test("Shanghai declares safe required heroes and reflective water", async ({ page }) => {
     await load(page, "shanghai");
-    const sessions = await page.evaluate(() => {
+    const sessions = await page.evaluate(async () => {
       const inspect = () => ({
         models: window.__apex.modelDiagnostics(),
         geometry: window.__apex.geometryDiagnostics(),
@@ -876,7 +876,7 @@ test.describe("Madrid track foundation migration", () => {
           [-6, 0, 6].map((lat) => window.__apex.groundY(frac, lat).gap)),
       });
       const day = inspect();
-      window.__apex.race("shanghai", "night", "dry");
+      await window.__apex.race("shanghai", "night", "dry");
       return { day, night: inspect() };
     });
     for (const [time, state] of Object.entries(sessions)) {

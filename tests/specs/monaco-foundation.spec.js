@@ -6,11 +6,11 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15_000 });
 
-  const result = await page.evaluate(() => {
+  const result = await page.evaluate(async () => {
     const definition = window.TrackDefs.find((entry) => entry.id === "monaco");
     window.__apex.trackGeometry(true);
-    const inspect = (timeOfDay) => {
-      window.__apex.race("monaco", timeOfDay, "dry");
+    const inspect = async (timeOfDay) => {
+      await window.__apex.race("monaco", timeOfDay, "dry");
       const profile = window.__apex.trackProfile(400);
       const models = window.__apex.modelDiagnostics();
       const geometry = window.__apex.geometryDiagnostics();
@@ -56,8 +56,8 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
         sceneryCoordinates: definition.sceneryCoordinates,
         dressingExclusions: definition.dressingExclusions,
       },
-      day: inspect("day"),
-      night: inspect("night"),
+      day: await inspect("day"),
+      night: await inspect("night"),
     };
   });
 
@@ -146,9 +146,9 @@ test("Monaco remains within the 1.4 m prop-over-road cap", async ({ page }) => {
   test.setTimeout(180_000);
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15_000 });
-  const max = await page.evaluate(() => {
+  const max = await page.evaluate(async () => {
     window.__apex.trackGeometry(true);
-    window.__apex.race("monaco", "day", "dry");
+    await window.__apex.race("monaco", "day", "dry");
     const caps = window.__apex.trackGeometry();
     const count = 1200;
     const px = new Float64Array(count), py = new Float64Array(count);

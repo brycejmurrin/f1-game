@@ -1821,6 +1821,9 @@ const Tracks = (function () {
     // actually happened: a harness that never loaded js/circuits/scenery/ at all
     // leaves window.TrackScenery undefined, so the warning it needed most was
     // the one it could not reach.
+    // Recorded on the track so loadTrack() can rebuild once the closure lands —
+    // a bare build must not be cached as if it were the real one.
+    track._bareScenery = !sceneryFn;
     if (!sceneryFn) Log.warn("track", "no scenery closure for " + def.id + " — building bare");
     if (sceneryFn) {
       let sceneryApi = {

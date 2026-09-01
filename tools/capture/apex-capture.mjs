@@ -404,7 +404,7 @@ async function main() {
           await sleep(900); return [await shotPng(pg, dir, "screen-results", "body")];
         }, viewport: { width: 1100, height: 600 } },
         { name: "tt", fn: async (pg) => {
-          await pg.evaluate(() => window.__apex.tt && window.__apex.tt("suzuka"));
+          await pg.evaluate(async () => { if (window.__apex.tt) await window.__apex.tt("suzuka"); });
           await pg.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15000 }); await sleep(1600);
           await pg.evaluate(() => { window.__apex.go && window.__apex.go(); window.__apex.jump(0.25, 60, 0); window.__apex.hud(true); });
           await sleep(400); return [await shotPng(pg, dir, "mode-timetrial")];

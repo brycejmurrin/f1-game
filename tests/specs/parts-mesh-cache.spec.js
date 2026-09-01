@@ -122,8 +122,8 @@ async function applyPartsAndPark(page) {
   // it starts the race through the hook on the next line.
   await page.locator("#carsetup").waitFor({ state: "hidden" });
   // Skip race-settings UI — startRace via the public hook (recomputes mods).
-  await page.evaluate(() => {
-    window.__apex.race("monza");
+  await page.evaluate(async () => {
+    await window.__apex.race("monza");
     window.__apex.park(0.1);
     window.__apex.camera("chase");
   });

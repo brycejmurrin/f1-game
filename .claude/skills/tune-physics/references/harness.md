@@ -16,8 +16,7 @@ circle; `slipFactor = sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip.
 ## Closed-loop trial
 
 ```js
-__apex.race("suzuka");
-// wait for load, then:
+await __apex.race("suzuka");   // AWAIT: async since the scenery split — it IS the wait
 __apex.headless(true);
 
 function trial(phys) {

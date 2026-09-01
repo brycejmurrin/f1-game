@@ -76,8 +76,8 @@ async function boot(page, {
   // 15_000 was below the measured worst boot on this class of box (24.6 s idle,
   // scratch/perf/boot-budget.mjs) — see the BOOT_MS note in tests/helpers/fixtures.js.
   await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(({ track, tod, weather }) =>
-    window.__apex.race(track, tod, weather), { track, tod, weather });
+  await page.evaluate(async ({ track, tod, weather }) =>
+    await window.__apex.race(track, tod, weather), { track, tod, weather });
   await page.waitForFunction((id) => {
     const info = window.__apex.info();
     return info.track === id;

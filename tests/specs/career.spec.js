@@ -189,9 +189,9 @@ test.describe("Career — isolation", () => {
     // RULES stay switched off outside career. tierV is the one number career
     // development moves, so read it per car directly rather than inferring it
     // from lap positions (which also move when the career changes your team).
-    const tierVs = () => {
+    const tierVs = async () => {
       window.__apex.seed(99);
-      window.__apex.race("monza");
+      await window.__apex.race("monza");
       const out = {};
       for (let i = 0; i < 24; i++) {
         const c = window.__apex.carAt(i);
@@ -278,10 +278,10 @@ test.describe("Career — isolation", () => {
     // Quali seeded its field off Career.rnd() (career.seed) at Career.round(),
     // neither of which is inCareer()-gated — so the same sim seed gave a
     // different grid depending on a save the Grand Prix has nothing to do with.
-    const gridFor = async (careerOpts) => page.evaluate((o) => {
+    const gridFor = async (careerOpts) => page.evaluate(async (o) => {
       if (o) window.__apex.career(o); else window.__apex.careerReset();
       window.__apex.seed(1234);
-      window.__apex.race("monza");
+      await window.__apex.race("monza");
       const q = window.__apex.qualiSim();
       return (q && q.rows ? q.rows : q || []).map((r) => r.code).join(",");
     }, careerOpts);
@@ -378,7 +378,7 @@ test.describe("Career — a round", () => {
     await boot(page);
     await startCareer(page, { teamId: "haas", seat: 1, code: "ZZZ", name: "Test Driver", seed: 3 });
     await goRacing(page);
-    const grid = await page.evaluate(() => window.__apex.fieldState().map((c) => c.code));
+    const grid = await page.evaluate(async () => window.__apex.fieldState().map((c) => c.code));
     expect(grid).toContain("ZZZ");
     expect(grid).not.toContain("BEA");   // the driver you replaced
     expect(grid).toContain("OCO");       // your team-mate stays
@@ -391,9 +391,9 @@ test.describe("Career — a round", () => {
 test.describe("Driver ratings", () => {
   test.use({ viewport: LANDSCAPE });
 
-  const skills = () => {
+  const skills = async () => {
     window.__apex.seed(5);
-    window.__apex.race("monza");
+    await window.__apex.race("monza");
     const out = [];
     for (let i = 0; i < 24; i++) {
       const c = window.__apex.carAt(i);
@@ -416,8 +416,8 @@ test.describe("Driver ratings", () => {
 
   test("ratings differentiate the field, fastest to slowest", async ({ page }) => {
     await boot(page);
-    const grid = await page.evaluate(() => {
-      window.__apex.seed(5); window.__apex.race("monza");
+    const grid = await page.evaluate(async () => {
+      window.__apex.seed(5); await window.__apex.race("monza");
       const g = [];
       for (let i = 0; i < 24; i++) { const c = window.__apex.carAt(i); if (!c) break; g.push(c); }
       return g.map((c) => ({ code: c.code, skill: c.skill }));
@@ -471,8 +471,8 @@ test.describe("Driver ratings", () => {
     expect(inCareer).toBe(gpBefore + 9);
 
     // …and gone again in a Grand Prix, which never inherits career development.
-    const gpAfter = await page.evaluate(() => {
-      window.__apex.race("monza");
+    const gpAfter = await page.evaluate(async () => {
+      await window.__apex.race("monza");
       for (let i = 0; i < 24; i++) {
         const c = window.__apex.carAt(i);
         if (c && c.code === "OCO") return c.ratings.pace;
@@ -686,7 +686,7 @@ test.describe("Career — MY TEAM", () => {
     // or picking MY TEAM in a Grand Prix would silently add a second entry.
     await page.addInitScript(() => localStorage.setItem("apex26.team", "11"));
     await boot(page);
-    await page.evaluate(() => { window.__apex.seed(2); window.__apex.race("monza"); });
+    await page.evaluate(async () => { window.__apex.seed(2); await window.__apex.race("monza"); });
     const grid = await page.evaluate(() => window.__apex.fieldState());
     const mine = grid.filter((c) => c.team === "custom");
     expect(mine.length).toBe(1);
@@ -1416,10 +1416,10 @@ test.describe("Career — reliability", () => {
     // simRnd would shift every seeded result that follows — this is the guard.
     const grid = async (level) => {
       await boot(page);
-      return page.evaluate((lvl) => {
+      return page.evaluate(async (lvl) => {
         window.__apex.seed(7);
         window.__apex.reliability(lvl);
-        window.__apex.race("monza");
+        await window.__apex.race("monza");
         const out = { skills: [], plan: window.__apex.retirements() };
         for (let i = 0; i < 22; i++) out.skills.push(window.__apex.carAt(i).skill);
         return out;

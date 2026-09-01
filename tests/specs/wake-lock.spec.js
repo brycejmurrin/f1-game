@@ -59,9 +59,11 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
   test("starting a race requests the lock", async ({ page }) => {
     await mockWakeLock(page);
     await boot(page);
-    await page.evaluate(() => {
-      window.__apex.race("bahrain");
-      window.__apex.race("bahrain"); // a second hold while pending must coalesce
+    await page.evaluate(async () => {
+      // BOTH IN FLIGHT AT ONCE — that is the subject. A second hold while the
+      // first is still PENDING must coalesce, so these must not be sequenced;
+      // Promise.all keeps them overlapping and still waits for both.
+      await Promise.all([window.__apex.race("bahrain"), window.__apex.race("bahrain")]);
     });
     await page.waitForFunction(() => window.__wakeLog.includes("request:screen"));
     expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen"]);

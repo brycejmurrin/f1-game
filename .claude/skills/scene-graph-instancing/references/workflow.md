@@ -34,7 +34,7 @@ judging a `graph-parity` mismatch.
 
 4. **Reuse check** after build:
    ```js
-   __apex.race("spa"); __apex.trackGraph().stats().byKind
+   await __apex.race("spa"); __apex.trackGraph().stats().byKind
    ```
    Target reuse ≫ 1. `reuse ≈ 1` means every placement minted a distinct
    model — re-parameterise (factor height into `place.s`, split variants into

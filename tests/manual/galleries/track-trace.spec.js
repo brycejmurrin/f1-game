@@ -30,8 +30,8 @@ test.describe(`track trace: ${TRACK}`, () => {
     await page.waitForFunction(() => window.__apex != null, null, { timeout: 10_000 });
 
     // Load the circuit and hold the follow camera for the whole tour.
-    const loaded = await page.evaluate((id) => {
-      const r = window.__apex.race(id, "day", "dry");
+    const loaded = await page.evaluate(async (id) => {
+      const r = await window.__apex.race(id, "day", "dry");
       window.__apex.camera("chase");
       window.__apex.hud(false);   // clean frame, no HUD overlay
       return r;

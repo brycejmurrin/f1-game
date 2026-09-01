@@ -199,7 +199,7 @@ not carry these params.
 In-page you must stage before reading, or you get plausible-but-wrong answers:
 
 ```js
-__apex.race("monza"); __apex.go(); __apex.jump(0.1, 55);  // load, start, place
+await __apex.race("monza"); __apex.go(); __apex.jump(0.1, 55);  // load (AWAIT), start, place
 // obs()/physState()/world()/describe() need player.px — jump() or one step() first
 // jump() moves ONLY the player — it DESYNCS you from the AI field (a forward
 //   jump lands you P1 with the pack seconds behind). To race/overtake, drive

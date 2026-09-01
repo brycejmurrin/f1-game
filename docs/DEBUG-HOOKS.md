@@ -49,7 +49,7 @@ factory-exclusive parts in the Parts catalog (e.g. `"Mercedes"`, `"Ferrari"`).
 ## Quick start
 
 ```js
-__apex.race("suzuka");        // load Suzuka and start a race (skips the menus)
+await __apex.race("suzuka");  // load Suzuka and start a race (skips the menus)
 __apex.park(0.15);            // skip the countdown, clear the field, sit at 15% of the lap
 __apex.view({ elevation: 52, azimuth: 30, zoom: 1.15 });  // aerial of the whole track
 __apex.view("chase");         // back to the normal chase cam
@@ -70,7 +70,7 @@ __apex.clearInput();
 
 ## Loading, state & positioning
 
-### `race(trackRef, timeOfDay?, weather?) → {track, timeOfDay, weather} | false`
+### `race(trackRef, timeOfDay?, weather?) → Promise<{track, timeOfDay, weather} | false>`
 Load any circuit and start a normal race, skipping all menus. `trackRef` is a
 circuit **id** (`"monza"`) or its index in `Tracks.LIST`. `timeOfDay` is stored
 raw (an unknown string only becomes `"default"` when `setTimeOfDay()` later
@@ -80,10 +80,18 @@ setting); `weather` is `"dry" | "wet" | "rain" | "overcast" | "fog"` (`"wet"` =
 damp road no rain; `"rain"` = wet road + falling rain). The recommended entry
 point for any harness.
 
-### `tt(trackRef, timeOfDay?) → {track, timeTrial} | false`
+**AWAIT IT.** It builds the circuit and fetches that circuit's scenery, so it is
+async; the promise resolves once the game is in `"count"` with a field on the
+grid. `page.evaluate` resolves a returned promise for you, so
+`await page.evaluate(() => __apex.race("spa"))` is enough — but a call buried
+*inside* an evaluate body needs its own `await`, or the next line runs against a
+null player. Do not poll `info().track` instead: on a page that already has a
+race up, that is non-null for the PREVIOUS circuit and returns instantly.
+
+### `tt(trackRef, timeOfDay?) → Promise<{track, timeTrial} | false>`
 Load a circuit and start a **Time Trial** session (solo, no AI, `timeTrial: true`).
 Same `trackRef` and `timeOfDay` semantics as `race()`. Use this instead of `race()`
-when testing TT-specific behaviour (ghost delta, TT results, sector splits).
+when testing TT-specific behaviour (ghost delta, TT results, sector splits). Awaitable, exactly like `race()`.
 
 ### `info() → {state, track, n, total, timeTrial, seasonMode, raceQuali, lapsTarget, sectors, turns}`
 Snapshot of state: `state` is the state-machine value

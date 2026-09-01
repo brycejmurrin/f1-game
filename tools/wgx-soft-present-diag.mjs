@@ -60,7 +60,7 @@ await page.addInitScript(() => {
 });
 await page.goto(srv.url + "index.html");
 await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 60000 });
-await page.evaluate(() => { __apex.race("montreal"); __apex.go(); });
+await page.evaluate(async () => { await __apex.race("montreal"); __apex.go(); });
 await page.waitForFunction(
   () => { try { const ps = __apex.physState(); return ps && ps.ok !== false; } catch { return false; } },
   null, { polling: 100, timeout: 120000 });

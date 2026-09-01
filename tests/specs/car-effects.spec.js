@@ -7,8 +7,8 @@ import { test, expect } from "@playwright/test";
 async function startCar(page, speed = 30) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
-  await page.evaluate((initialSpeed) => {
-    window.__apex.race("monza");
+  await page.evaluate(async (initialSpeed) => {
+    await window.__apex.race("monza");
     // go() skips the countdown: in "count" state update() runs only the light
     // sequence and RETURNS — no car physics. Without it a short step() run
     // never computes deploy state (docs/DEBUG-HOOKS.md: race()+go() first);
@@ -149,14 +149,10 @@ test.describe("Car runtime effects", () => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
     // A dry daytime race, so nothing but the grid state can light the rear.
+    // No wait after this: race() awaits startRace() now, so it resolves in
+    // "count" with a player. The workaround that stood here (poll for the state)
+    // would pass whether or not that holds — dev-tools.spec.js guards it instead.
     await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-    // race() DOES NOT land in "count" synchronously any more: startRace() is
-    // async since the lazy-scenery split (it awaits ensureScenery), and race()
-    // does not await it. Reading carEffects() on return gets null, because
-    // there is no player yet. Wait for the state the hook is documented to
-    // reach instead of assuming the call was synchronous.
-    await page.waitForFunction(() => window.__apex.info().state === "count",
-      null, { polling: 100, timeout: 30_000 });
   }
 
   test("the rear lights come on for the grid, dry and in daylight", async ({ page }) => {

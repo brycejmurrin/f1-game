@@ -57,7 +57,7 @@ node tools/capture/apex-capture.mjs lap-tour spa 70 scratch/captures/apex-captur
 ```
 ```js
 // in a Playwright page or the dev console — frame + freeze + (screenshot):
-__apex.race("monaco");
+await __apex.race("monaco");   // AWAIT: async since the scenery split
 // Probe fractions first — don't hardcode folklore:
 // __apex.trackInfo({what:"corners"}) or __apex.corners() or js/track/markings.js
 __apex.park(0.18);   // stationary + frozen

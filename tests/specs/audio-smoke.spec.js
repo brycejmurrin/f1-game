@@ -69,7 +69,7 @@ test("persisted SOUND OFF stays off and defers WebAudio until a trusted enable c
 test("re-enabling sound during a race restarts race music", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
-  const monzaIdx = await page.evaluate(() => {
+  const monzaIdx = await page.evaluate(async () => {
     const calls = [];
     const startMusic = GameAudio.startMusic;
     GameAudio.startMusic = function (trackIdx) {
@@ -78,7 +78,7 @@ test("re-enabling sound during a race restarts race music", async ({ page }) => 
     };
     window.__raceMusicCalls = calls;
     window.__apex.headless(true);
-    window.__apex.race("monza");
+    await window.__apex.race("monza");
     window.__apex.go();
     calls.length = 0;
     return window.__apex.tracks().find((track) => track.id === "monza").i;

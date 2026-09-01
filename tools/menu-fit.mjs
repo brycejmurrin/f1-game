@@ -94,7 +94,7 @@ const SCREENS = [
    `, "#customize"],
   ["carsetup", `document.getElementById('mb-race').click(); document.getElementById('sel-go').click()`, "#carsetup"],
   ["howtoplay", `document.getElementById('mb-settings').click(); await until('#pmsettings:not([hidden])', 4000); document.getElementById('pm-tab-more').click(); document.getElementById('pm-howto').click()`, "#howtoplay"],
-  ["pause", `window.__apex.race('bahrain'); `, "#pausemenu"],
+  ["pause", `await window.__apex.race('bahrain'); `, "#pausemenu"],
 
   // ── F1 DATA HUB (#datahub — markup is built entirely by js/data/hub.js) ──
   ["datahub", `document.getElementById('mb-data').click(); await until('.dh-race, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
@@ -120,7 +120,7 @@ const SCREENS = [
   // ── LIGHTING TUNER + TRACK DETAIL — both open on top of another screen, so
   //    they need the race/select to exist first. ──
   ["tuner", `
-     window.__apex.race('bahrain');
+     await window.__apex.race('bahrain');
      await until('#pausemenu', 6000).catch(() => {});
      window.__apex.park(0.1);
      const rd = document.getElementById('rotate-device'); if (rd) rd.hidden = true;

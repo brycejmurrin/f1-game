@@ -13,8 +13,7 @@ test("mapPts and trackBounds hooks", async ({ page }) => {
   expect(nullPts).not.toBeNull(); // default track pre-loads on startup
 
   await page.evaluate(async () => {
-    __apex.race("monaco");
-    await new Promise(r => setTimeout(r, 3000));
+    await __apex.race("monaco");   // awaited — no fixed sleep needed for the build
   });
 
   const pts = await page.evaluate(() => __apex.mapPts());

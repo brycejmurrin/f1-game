@@ -482,7 +482,13 @@ const CEILINGS = {
   // 8807 on work of its own. Neither number fits the union, which carries both
   // sets of lines. Re-measured on THIS tree with the suite's own split-newline
   // metric (not grep -c, which is one short on a file with no trailing newline): 8870.
-  "js/game.js": 8870,
+  // 8870 -> 8885 for the async-race() post-mortem. Fifteen lines, all comment:
+  // the premise that stood above startRace() ("the specs already poll
+  // info().track") was false and shipped a release where race() returned with
+  // no player, and the bare-build rebuild gate needs its reasoning at the site
+  // or the next reader deletes it as a redundant cache check. Bug-explaining
+  // growth at the site of the bug, which is what this ratchet permits.
+  "js/game.js": 8885,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -555,7 +561,10 @@ const CEILINGS = {
   // check them was a pixel — and a light that is ON but frozen looks identical
   // to one that is strobing. A dev API growing by the one field that makes a
   // new visual assertable is the file doing its job.
-  "js/game/apex.js": 2506,
+  // 2506 -> 2511 for the await in race()/tt() and the six lines saying WHY the
+  // hook is async — a dev API whose contract changed under its callers has to
+  // carry that explanation, or the await reads as removable.
+  "js/game/apex.js": 2511,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
@@ -736,7 +745,9 @@ const CEILINGS = {
   // mesh registration, a draw call, a free path and a hideMeshes key.
   // Neither 2381 nor 2360 fits the union, which carries both — re-measured on
   // the merged tree with the ceiling test's own metric, per the deploy rule.
-  "js/track/tracks.js": 2382,
+  // 2382 -> 2385: track._bareScenery, recorded where the "building bare" warn
+  // already fires, so loadTrack() can tell a bare build from a real one.
+  "js/track/tracks.js": 2385,
   // ── Round-6 additions: the unguarded giants, set AT measured (test metric,
   // split-newline count) so any growth is a deliberate raise here. Each line
   // says why the file is its size today; none is an extraction target yet.

@@ -191,7 +191,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
     test("14 advanced steering", async ({ page }) => {
       await page.goto("/");
       await waitReady(page);
-      await page.evaluate(() => { window.__apex.race("bahrain"); });
+      await page.evaluate(async () => { await window.__apex.race("bahrain"); });
       await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
       await page.evaluate(() => {
         // Hide the rotate-device overlay so it doesn't intercept clicks in portrait

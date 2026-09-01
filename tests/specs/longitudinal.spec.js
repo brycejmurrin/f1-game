@@ -117,7 +117,7 @@ test.describe("Apex 26 — longitudinal & grip", () => {
   test("slope gravity: descents don't overspeed past top speed; climbs aren't a barrier", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
-    await page.evaluate(() => { window.__apex.race("spa", "day", "dry"); window.__apex.go(); });
+    await page.evaluate(async () => { await window.__apex.race("spa", "day", "dry"); window.__apex.go(); });
     await pinPace(page);   // climbGain is in m/s — see pinPace
     const r = await page.evaluate(() => {
       // locate the steepest descent and climb on the lap

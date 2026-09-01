@@ -170,8 +170,8 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
       "kit:bahrain:service-compound",
     ]);
 
-  const night = await page.evaluate(() => {
-    window.__apex.race("bahrain", "night", "dry");
+  const night = await page.evaluate(async () => {
+    await window.__apex.race("bahrain", "night", "dry");
     return {
       geometry: window.__apex.geometryDiagnostics(),
       models: window.__apex.modelDiagnostics(),

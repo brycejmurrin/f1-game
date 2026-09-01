@@ -730,7 +730,7 @@ function gripMult(c) { const r = WET_GRIP[raceWeather]; return !r ? 1 : r[c ? (c
 
 // ---------- state ----------
 let state = "menu";
-let track = null, builtTrackId = null, builtTrackNight = null;
+let track = null, builtTrackId = null, builtTrackNight = null, builtTrackBare = false;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 // B1 — RACE CONTROL (local yellow / VSC / safety car) lives in
@@ -2318,7 +2318,15 @@ function loadTrack(idx) {
   // glowing skyline, and a night-default circuit raced by day looks like daytime.
   const sessionDark = raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
     raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && def.night);
-  if (builtTrackId !== def.id || builtTrackNight !== sessionDark) {
+  // A BARE build must never be cached as the real one. __apex's lazyTrackEnsure
+  // calls loadTrack() whenever G.track is null, and race() leaves it null while
+  // it awaits the scenery fetch — so a hook landing in that window built the
+  // TARGET circuit with no closure resident, stamped builtTrackId, and the real
+  // loadTrack() that followed was then a no-op. The session ran on a track with
+  // no bespoke dressing, silently, which is exactly what the scenery and
+  // foundation specs exist to catch. Rebuild once the closure is resident.
+  const bareNowFixable = builtTrackBare && sceneryResident(def.id);
+  if (builtTrackId !== def.id || builtTrackNight !== sessionDark || bareNowFixable) {
     if (track && track.meshes) {
       gfx.freeMesh(track.meshes.floor);
       gfx.freeMesh(track.meshes.road);
@@ -2353,6 +2361,7 @@ function loadTrack(idx) {
     DebrisWorld.registerFurniture(track);
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
+    builtTrackBare = !!(track && track._bareScenery);
     aeroZ.build();              // fixed ACTIVATION ZONES for this circuit
     // Env probe still holds the previous circuit — fall back to the analytic
     // sky until a fresh 6-face cycle has captured the new one.
@@ -2561,10 +2570,17 @@ function dropRaceWake() {
   try { if (held) held.release(); } catch (e) { Log.info("game", "wake lock was already released"); }
 }
 
-// ASYNC only to await ensureScenery() — see the LAZY_SCENERY note above. Every
-// caller is a click handler that ignores the result and makes startRace() its
-// last statement, and the specs already poll `__apex.info().track != null`
-// rather than assuming race() returns built, so nothing downstream changes.
+// ASYNC only to await ensureScenery() — see the LAZY_SCENERY note above. The
+// UI callers are click handlers that make this their last statement, so they
+// genuinely do not care. __apex.race()/tt() DO: they await this, because their
+// documented contract is that the game is in "count" when they return.
+//
+// The premise that stood here — "the specs already poll info().track != null" —
+// was false, and cost a release. 174 sites poll; ~46 race and then act in the
+// SAME evaluate, where an outer await cannot reach them, and they read a null
+// player and died in update() at `player.rpm`. The poll is not even sound on a
+// re-used page: info().track is non-null while the PREVIOUS circuit is loaded,
+// so it returns instantly with the wrong track. Await this; do not poll for it.
 async function startRace() {
   await ensureScenery(trackIdx);
   // Completed seasons are readable, never raceable (also guarded by award()).

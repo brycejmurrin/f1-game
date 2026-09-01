@@ -68,11 +68,11 @@ test.afterAll(async () => { await page?.close(); });
 
 for (const [id, frac, az, el, dist, fov, label] of CIRCUITS) {
   test(`${id} — ${label}`, async () => {
-    // In-place track switch: race() rebuilds synchronously; short settles let
-    // the first frames render before the camera work + frozen screenshots.
+    // In-place track switch: race() is AWAITED (it fetches the circuit scenery),
+    // so the build is done when it resolves; the short settle that remains is for
+    // the first frames to render before the camera work + frozen screenshots.
     await page.evaluate(async (t) => {
-      __apex.race(t);
-      await new Promise((r) => setTimeout(r, 500));
+      await __apex.race(t);
       __apex.go();
       await new Promise((r) => setTimeout(r, 300));
       __apex.freeze(true);

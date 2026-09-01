@@ -18,8 +18,8 @@ async function load(page, trackId = "monza") {
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
   }
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  // race()->loadTrack() is synchronous, so this predicate is usually already
-  // true — but an unpolled wait is rAF-clocked and SwiftShader can starve rAF
+  // race() is AWAITED above, so the track is built by the time it resolves and
+  // this predicate is already true — but an unpolled wait is rAF-clocked and SwiftShader can starve rAF
   // to ~2/s mid-build, so the default polling missed a true predicate for 10s
   // (measured 2026-08-27: 9-10/56 shifting failures, identical at the
   // pre-round SHA). polling:100 is the fix; 30s is the measured half-budget
@@ -107,6 +107,30 @@ test.describe("__apex.race()", () => {
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
     const r = await page.evaluate(() => window.__apex.race("notatrack"));
     expect(r).toBe(false);
+  });
+
+  // THE CONTRACT THAT BROKE. startRace() became async when the scenery split
+  // landed (it fetches js/circuits/scenery/<id>.js) and race() did not await it,
+  // so race() returned with state "menu" and no player. Every harness that raced
+  // and then acted died in update() at `player.rpm` — 5 of 6 tests in
+  // car-effects.spec.js, and ~55 call sites repo-wide. CI never saw it: the
+  // Pages gate runs smoke.spec.js only, and that one waits.
+  //
+  // Deliberately NO wait after the evaluate. Awaiting race() IS the contract; a
+  // waitForFunction here would pass whether or not the fix holds.
+  test("awaiting race() means the race has actually started", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    // A circuit that is NOT the boot pre-warm, so the scenery fetch is real.
+    await page.evaluate(() => window.__apex.race("suzuka", "day", "dry"));
+    const after = await page.evaluate(() => ({
+      state: window.__apex.info().state,
+      track: window.__apex.info().track,
+      hasPlayer: window.__apex.carAt(0) != null,
+    }));
+    expect(after.state).toBe("count");
+    expect(after.track).toBe("suzuka");
+    expect(after.hasPlayer, "makeCars() has run — this is the null player that crashed update()").toBe(true);
   });
 
   test("race() with wet sets weather", async ({ page }) => {

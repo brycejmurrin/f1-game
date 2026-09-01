@@ -21,7 +21,7 @@ try {
   const page = await context.newPage();
   await page.goto(srv.url);
   await page.waitForFunction(() => window.__apex != null, null, { timeout: 20000 });
-  await page.evaluate((t) => { window.__apex.race(t); }, track);
+  await page.evaluate(async (t) => { await window.__apex.race(t); }, track);
   await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: 20000 });
   await sleep(2000);
 

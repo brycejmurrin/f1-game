@@ -258,9 +258,9 @@ async function runProbeAttempt(attemptNum) {
     });
     log("assets", "loadModels done");
 
-    await page.evaluate(({ id, tod }) => {
-      if (tod) __apex.race(id, tod, "dry");
-      else __apex.race(id);
+    await page.evaluate(async ({ id, tod }) => {
+      if (tod) await __apex.race(id, tod, "dry");
+      else await __apex.race(id);
       __apex.go();
     }, { id: opts.track, tod: opts.tod });
     log("race", `started track=${opts.track}` + (opts.tod ? ` tod=${opts.tod}` : ""));

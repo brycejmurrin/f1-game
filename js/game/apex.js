@@ -839,7 +839,7 @@ const api = {
   // optionally forcing time of day ("day" | "night" | "default") and weather
   // ("dry" | "wet" | "rain" | "overcast" | "fog"). "wet" = damp road, no rain;
   // "rain" = wet road + falling rain. Skips menus so a harness can render any track.
-  race(trackRef, timeOfDay, weather) {
+  async race(trackRef, timeOfDay, weather) {
     const i = typeof trackRef === "number"
       ? trackRef
       : Tracks.LIST.findIndex((t) => t.id === trackRef);
@@ -850,10 +850,15 @@ const api = {
     G.raceLaps = GAME_LAPS;
     G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
     G.raceTimeOfDay = timeOfDay || "default";
-    startRace();
+    // AWAITED. startRace() is async (it fetches the circuit's scenery), so a
+    // bare call returned here with state still "menu" and no player — every
+    // caller that raced and then acted crashed in update(). page.evaluate
+    // resolves a returned promise, so awaiting restores the documented
+    // contract for every harness without touching one of them.
+    if ((await startRace()) === false) return false;
     return { track: Tracks.LIST[i].id, timeOfDay: G.raceTimeOfDay, weather: G.raceWeather };
   },
-  tt(trackRef, timeOfDay) {
+  async tt(trackRef, timeOfDay) {
     const i = typeof trackRef === "number"
       ? trackRef
       : Tracks.LIST.findIndex((t) => t.id === trackRef);
@@ -864,7 +869,7 @@ const api = {
     G.raceLaps = TT_LAPS;
     G.raceWeather = "dry";
     G.raceTimeOfDay = timeOfDay || "default";
-    startRace();
+    if ((await startRace()) === false) return false;   // awaited — see race()
     return { track: Tracks.LIST[i].id, timeTrial: true };
   },
   career(opts) {

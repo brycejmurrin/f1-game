@@ -224,10 +224,10 @@ test.describe("Qualifying — lap times", () => {
     // Monaco and Spa are ~30 s apart in reality; a length-independent estimate
     // would put them on top of each other.
     await boot(page);
-    const t = await page.evaluate(() => {
+    const t = await page.evaluate(async () => {
       const out = {};
       for (const id of ["monaco", "spa"]) {
-        window.__apex.race(id);
+        await window.__apex.race(id);
         out[id] = window.__apex.qualiSim()[0].t;
       }
       return out;

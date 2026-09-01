@@ -21,7 +21,7 @@ async function loadTrack(page, track = "monza") {
   // once: on a loaded box a 40-circuit build can exceed 3 s and the test then
   // races a half-built track, and on a quiet box it burns most of 3 s per call
   // for nothing. waitForFunction polls, so it costs what the build costs.
-  await page.evaluate((t) => { __apex.race(t); }, track);
+  await page.evaluate(async (t) => { await __apex.race(t); }, track);
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 20000 });
   await page.evaluate(() => {
     __apex.headless(true);

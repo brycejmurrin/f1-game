@@ -237,8 +237,8 @@ test.describe("Zandvoort shared-foundation migration", () => {
     expect(clearance.terrainMax,
       `terrain intrusions: ${JSON.stringify(clearance.terrainTop)}`).toBeLessThanOrEqual(0.18);
 
-    const night = await page.evaluate(() => {
-      window.__apex.race("zandvoort", "night", "dry");
+    const night = await page.evaluate(async () => {
+      await window.__apex.race("zandvoort", "night", "dry");
       return {
         geometry: window.__apex.geometryDiagnostics(),
         models: window.__apex.modelDiagnostics(),

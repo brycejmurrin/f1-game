@@ -23,13 +23,19 @@ use background test suites (`node tools/test-bg.mjs <group>`) or unit tests (`np
 
 ## Gotchas (every one of these has cost real time)
 
-**Safari has no top-level `await` in the console.** It parses `await` as an
-identifier, so `await __apex.race("x")` fails with the baffling
-`Unexpected identifier '__apex'`. Use `.then()`, or wrap in `(async()=>{ … })()`.
+**`race()` and `tt()` are async — they fetch the circuit's scenery.** A bare
+`__apex.race("monza")` returns before the race exists, so the next statement runs
+against a null player. Chain off the promise rather than guessing at a delay:
 
 ```js
-__apex.race("monza"); setTimeout(function(){ __apex.jump(0.25,0); __apex.snapCam() }, 2000)
+__apex.race("monza").then(() => { __apex.jump(0.25, 0); __apex.snapCam() })
 ```
+
+**Safari has no top-level `await` in the console.** It parses `await` as an
+identifier, so `await __apex.race("x")` fails with the baffling
+`Unexpected identifier '__apex'`. That is why the recipe above uses `.then()`;
+`(async()=>{ … })()` works too. A fixed `setTimeout` does not — it is a guess
+that gets shorter than the fetch on a cold cache.
 
 **`copy()` only exists at top-level console scope.** It is a DevTools
 command-line helper, not a real function — inside a callback or an async IIFE it
@@ -102,7 +108,7 @@ __apex.assets()          // {supported, pack, uploaded, tier, layers, scales, by
 A/B fairly by locking the camera so both settings frame identically:
 
 ```js
-__apex.race("monza"); setTimeout(function(){ __apex.eyeAt(0.25,0,2.5) }, 2000)
+__apex.race("monza").then(function(){ __apex.eyeAt(0.25,0,2.5) })
 ```
 
 **The check that matters is temporal, not static:** set `matTex(1)`, drive at
@@ -122,7 +128,7 @@ WebBake.run().then(function(r){ console.log(r && r.failed) })
 ## Driving and physics
 
 ```js
-__apex.race("monza"); setTimeout(function(){ __apex.jump(0.5,60,0); console.log(__apex.probe()) }, 2000)
+__apex.race("monza").then(function(){ __apex.jump(0.5,60,0); console.log(__apex.probe()) })
 __apex.setPhysics({pace:0.8})
 __apex.physState()
 __apex.freeze(true)

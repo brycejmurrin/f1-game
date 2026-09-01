@@ -23,7 +23,7 @@ test("AI full-body meshes use deterministic factory presets instead of saved set
   await page.reload();
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
 
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const captures = {};
     const build = Car3D.build;
     Car3D.build = function (c1, c2, opts) {
@@ -35,7 +35,7 @@ test("AI full-body meshes use deterministic factory presets instead of saved set
       return build(c1, c2, opts);
     };
     window.__factoryMeshCaptures = captures;
-    window.__apex.race("monza");
+    await window.__apex.race("monza");
     window.__apex.park(0.1);
     for (let i = 0; i < window.__apex.cars().length; i++) {
       window.__apex.aiPlace(i, 0.1 + i * 0.0002, 0, (i % 4 - 1.5) * 1.5);

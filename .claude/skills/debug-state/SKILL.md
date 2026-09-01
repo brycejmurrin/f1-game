@@ -18,7 +18,7 @@ Hook catalog (`probe` / `physState` / `obs` / field / timing / `lightState`) →
 ## Deterministic headless control loop
 
 ```js
-__apex.race("monza");
+await __apex.race("monza");   // AWAIT: it builds the circuit + fetches scenery
 __apex.headless(true);
 let o = __apex.reset(0.1, 30, 0);
 o = __apex.act({steer:-0.3, throttle:true, brake:false}, 1/60, 5);

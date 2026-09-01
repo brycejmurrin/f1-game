@@ -10,8 +10,7 @@ async function loadMonza(page) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 15000 });
   await page.evaluate(async () => {
-    __apex.race("monza");
-    await new Promise((r) => setTimeout(r, 3000));
+    await __apex.race("monza");   // awaited — no fixed sleep needed for the build
     __apex.go();
     await new Promise((r) => setTimeout(r, 200));
     __apex.jump(0.2, 55);

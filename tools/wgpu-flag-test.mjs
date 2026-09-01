@@ -34,7 +34,7 @@ async function probeOnce(preset) {
   });
   await page.goto(srv.url + "index.html");
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 60000 });
-  await page.evaluate(() => { __apex.race("montreal"); __apex.go(); });
+  await page.evaluate(async () => { await __apex.race("montreal"); __apex.go(); });
   await page.waitForFunction(
     () => { try { const p = __apex.physState(); return p && p.ok !== false; } catch { return false; } },
     null, { polling: 100, timeout: 120000 });
@@ -78,7 +78,7 @@ const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
 await page.addInitScript(() => { localStorage.setItem("apex26.gfxBackend","webgpu"); localStorage.setItem("apex26.gfxWgxAllowSoftware","1"); localStorage.setItem("apex26.gfxWgxLite","1"); sessionStorage.setItem("apex26.wgxCapture","1"); });
 await page.goto(srv.url + "index.html");
 await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 60000 });
-await page.evaluate(() => { __apex.race("montreal"); __apex.go(); });
+await page.evaluate(async () => { await __apex.race("montreal"); __apex.go(); });
 await page.waitForFunction(() => { try { const p = __apex.physState(); return p && p.ok !== false; } catch { return false; } }, null, { polling: 100, timeout: 120000 });
 await page.evaluate(() => { __apex.jump(0.12, 65); __apex.snapCam(); });
 await page.evaluate(n => new Promise(r => { let i=0; const t=()=>(++i>n?r():requestAnimationFrame(t)); requestAnimationFrame(t); }), 30);

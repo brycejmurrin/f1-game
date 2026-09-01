@@ -11,9 +11,9 @@ test("Red Bull Ring owns a safe migrated alpine foundation", async ({ page }) =>
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
 
-  const result = await page.evaluate(() => {
-    const inspectSession = (time) => {
-      window.__apex.race("redbull", time, "dry");
+  const result = await page.evaluate(async () => {
+    const inspectSession = async (time) => {
+      await window.__apex.race("redbull", time, "dry");
       const diagnostics = window.__apex.modelDiagnostics();
       return {
         geometry: window.__apex.geometryDiagnostics(),
@@ -28,8 +28,8 @@ test("Red Bull Ring owns a safe migrated alpine foundation", async ({ page }) =>
     };
 
     const def = Tracks.LIST.find((track) => track.id === "redbull");
-    const day = inspectSession("day");
-    const night = inspectSession("night");
+    const day = await inspectSession("day");
+    const night = await inspectSession("night");
     const profile = window.__apex.trackProfile(800);
     const peak = profile.reduce((best, point) => point.y > best.y ? point : best);
     const low = profile.reduce((best, point) => point.y < best.y ? point : best);

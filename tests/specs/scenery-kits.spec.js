@@ -27,10 +27,10 @@ test("shared scenery kits are bound and Silverstone diagnostics stay finite", as
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race);
 
-  const state = await page.evaluate(() => {
+  const state = await page.evaluate(async () => {
     window.__sceneryKitContract = null;
     window.__apex.headless(true);
-    window.__apex.race("silverstone", "day", "dry");
+    await window.__apex.race("silverstone", "day", "dry");
     return {
       contract: window.__sceneryKitContract,
       geometry: window.__apex.geometryDiagnostics(),
@@ -92,10 +92,10 @@ for (const [trackId, themeName] of [
     }, trackId);
     await page.goto("/");
     await page.waitForFunction(() => window.__apex?.race);
-    const state = await page.evaluate(([id]) => {
+    const state = await page.evaluate(async ([id]) => {
       window.__resolvedSceneryTheme = null;
       window.__apex.headless(true);
-      window.__apex.race(id, "day", "dry");
+      await window.__apex.race(id, "day", "dry");
       return {
         theme: window.__resolvedSceneryTheme,
         geometry: window.__apex.geometryDiagnostics(),

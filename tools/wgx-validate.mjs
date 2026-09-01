@@ -143,7 +143,7 @@ try {
 
   await page.goto(srv.url + "index.html");
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 60000 });
-  await page.evaluate((id) => { __apex.race(id); __apex.go(); }, track);
+  await page.evaluate(async (id) => { await __apex.race(id); __apex.go(); }, track);
   await page.waitForFunction(
     () => { try { const p = __apex.physState(); return p && p.ok !== false; } catch { return false; } },
     null, { polling: 100, timeout: 120000 });
