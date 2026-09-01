@@ -65,6 +65,7 @@ Full tool reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools for exploring slid
 | Kyalami | [kyalami_grid.png](kyalami_grid.png) |
 | Miami | [miami_grid.png](miami_grid.png) |
 | Monaco | [monaco_grid.png](monaco_grid.png) |
+| Montreal | [montreal_grid.png](montreal_grid.png) |
 | Monza | [monza_grid.png](monza_grid.png) |
 | Nürburgring | [nurburgring_grid.png](nurburgring_grid.png) |
 | Qatar | [qatar_grid.png](qatar_grid.png) |
