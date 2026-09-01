@@ -198,10 +198,72 @@ const GLX = (function () {
   // every begin(). Honest cost is ~0.05 ms — hygiene, not a GPU win.
   // Cleared when lit/sky programs are (re)linked.
   const _litUf = Object.create(null), _skyUf = Object.create(null);
+  // Frozen fallbacks for the frame-global vec3s. These were inline literals, so
+  // a frame that omitted the field allocated a fresh three-element array on
+  // every begin() — and begin() runs up to eight times a game frame.
+  const ZERO3 = [0, 0, 0];
+  const SKY_ZENITH_DEF = [0.18, 0.40, 0.78], SKY_HORIZON_DEF = [0.62, 0.74, 0.88];
+
   function _clearUf(o) { for (const k in o) delete o[k]; }
   function uf1(loc, cache, key, v) {
     if (!loc) return;
     if (cache[key] !== v) { gl.uniform1f(loc, v); cache[key] = v; }
+  }
+  // mat4 twin of uf1, for uModel: 103.2 uploads a frame against 50.3 distinct
+  // values (docs/PERF-FINDINGS.md 2h),
+  // because drawChunked calls litMaterial once per chunk RUN and every run of
+  // one mesh shares that mesh's model matrix.
+  //
+  // It COPIES the sixteen floats rather than retaining the caller's array, and
+  // that is load-bearing: callers hand in scratch matrices they mutate in place
+  // between draws (game.js's _wheelWorld/_ringWorld, DebrisWorld's _mat), so a
+  // retained reference would compare a value against itself and skip a real
+  // change. Sixteen float compares to save a GL call is the right trade; the
+  // measured 50.3 is what a COPYING cache achieves, not an idealised one.
+  function ufM4(loc, cache, key, m) {
+    if (!loc) return;
+    let p = cache[key];
+    if (p) {
+      let same = true;
+      for (let i = 0; i < 16; i++) if (p[i] !== m[i]) { same = false; break; }
+      if (same) return;
+    } else p = cache[key] = new Float32Array(16);
+    for (let i = 0; i < 16; i++) p[i] = m[i];
+    gl.uniformMatrix4fv(loc, false, m);
+  }
+
+  // vec3 twin of uf1. MEASURED on the current tree (vegas night, full field,
+  // scratch/r10/state-ceiling.mjs): uniform3fv runs 32.4 times a frame and 22.8
+  // of those re-send a value the program already holds — 70.2% collapsible, the
+  // most concentrated redundancy left in the frame after uModel and uNumLights.
+  // The cause is the same one those two had: begin() runs several times per game
+  // frame (six env-cube faces, the shadow pass, the main camera) and the SUN,
+  // AMBIENT, FOG and SKY terms are frame-global, identical in every one of them.
+  //
+  // It COPIES the three floats for the same load-bearing reason ufM4 does:
+  // callers hand in scratch arrays they mutate in place between begins
+  // (_ambScratchG / _ambScratchS above), so a retained reference would compare a
+  // value against itself and skip a real change.
+  // THE STORE IS A PLAIN ARRAY, NOT A Float32Array, and that is the whole
+  // difference between a cache and a cost. Written first with Float32Array(3)
+  // — the obvious mirror of ufM4 — it skipped NOTHING: measured 17.5 calls a
+  // frame, 0 skips. A Float32Array ROUNDS on store, so the comparison was a
+  // float32 against the float64 the caller passed and could not match:
+  //     cached = 0.11999999731779099   incoming = 0.12
+  // ufM4 gets away with Float32Array only because M4 hands it Float32Array
+  // matrices already; these vec3s are plain JS number arrays off `frame`.
+  // A cache that never hits is worse than none — it pays the branch and the
+  // allocation to change nothing — so this one keeps the caller's precision.
+  function uf3(loc, cache, key, v) {
+    if (!loc) return;
+    const p = cache[key];
+    if (p !== undefined && p[0] === v[0] && p[1] === v[1] && p[2] === v[2]) return;
+    // Copy, never retain: callers pass scratch arrays they mutate in place
+    // (_ambScratchG / _ambScratchS), so a retained reference would compare a
+    // value against itself and skip a real change — ufM4's reason, unchanged.
+    if (p === undefined) cache[key] = [v[0], v[1], v[2]];
+    else { p[0] = v[0]; p[1] = v[1]; p[2] = v[2]; }
+    gl.uniform3fv(loc, v);
   }
 
   // VAO bind cache — drawElements requires the right VAO, but consecutive draws
@@ -1131,9 +1193,9 @@ const GLX = (function () {
 
     useProg(litProg);
     gl.uniformMatrix4fv(litU.uViewProj, false, frame.viewProj);
-    gl.uniform3fv(litU.uEye, frame.eye);
-    gl.uniform3fv(litU.uSunDir, frame.sunDir);
-    gl.uniform3fv(litU.uSunColor, frame.sunColor);
+    uf3(litU.uEye, _litUf, "eye", frame.eye);
+    uf3(litU.uSunDir, _litUf, "sunDir", frame.sunDir);
+    uf3(litU.uSunColor, _litUf, "sunColor", frame.sunColor);
     // Live tunables (LIGHTING TUNER / __apex.lightTune) ride in on frame.tune;
     // defaults here MUST mirror LightTune.TUNE_DEFS (js/game/lighting.js) so a missing tune object
     // (unit harnesses driving GLX directly) renders the shipped look.
@@ -1143,15 +1205,15 @@ const GLX = (function () {
       const g = frame.ambientGround, s = frame.ambientSky;
       _ambScratchG[0] = g[0] * _ambM; _ambScratchG[1] = g[1] * _ambM; _ambScratchG[2] = g[2] * _ambM;
       _ambScratchS[0] = s[0] * _ambM; _ambScratchS[1] = s[1] * _ambM; _ambScratchS[2] = s[2] * _ambM;
-      gl.uniform3fv(litU.uAmbGround, _ambScratchG);
-      gl.uniform3fv(litU.uAmbSky, _ambScratchS);
+      uf3(litU.uAmbGround, _litUf, "ambGround", _ambScratchG);
+      uf3(litU.uAmbSky, _litUf, "ambSky", _ambScratchS);
       // The decal pass reads frameAmb* — point it at the SAME scaled ambient the
       // lit pass just uploaded. Decals used the raw frame colours, so moving the
       // AMBIENT slider re-lit the bodywork but not the sponsor marks on it.
       frameAmbSky = _ambScratchS; frameAmbGround = _ambScratchG;
     } else {
-      gl.uniform3fv(litU.uAmbGround, frame.ambientGround);
-      gl.uniform3fv(litU.uAmbSky, frame.ambientSky);
+      uf3(litU.uAmbGround, _litUf, "ambGround", frame.ambientGround);
+      uf3(litU.uAmbSky, _litUf, "ambSky", frame.ambientSky);
     }
     // Same for the KEY LIGHT slider on the decals' sun term (raw frameSunColor
     // stays untouched for the god-ray/flare passes, which are not keyMul-lit).
@@ -1180,7 +1242,7 @@ const GLX = (function () {
     // pack still renders procedural — bindMaterialMaps forces uMatTexMix to 0
     // whenever no albedo array is loaded, whatever the slider says.
     bindMaterialMaps(T && T.matTexMix != null ? T.matTexMix : 1.0);
-    gl.uniform3fv(litU.uFogColor, frame.fogColor);
+    uf3(litU.uFogColor, _litUf, "fogColor", frame.fogColor);
     // FOG DENSITY knob: scale the per-condition haze depth (multiplier, def 1).
     // Default a missing fogDensity to 0 (fog off), like every sibling scalar here
     // and both other backends — an omitted field is documented-valid and must not
@@ -1237,7 +1299,7 @@ const GLX = (function () {
       // Fade anchor: the UNSNAPPED forward-biased ground point the shadow box is
       // snapped around (game.js shadow pass). It glides continuously with the
       // camera, so the fade front never jumps on a box recentre.
-      gl.uniform3fv(litU.uShadowCtr, frame.shadowCtr || frame.eye || [0, 0, 0]);
+      uf3(litU.uShadowCtr, _litUf, "shadowCtr", frame.shadowCtr || frame.eye || ZERO3);
       gl.uniform1f(litU.uShadowTexel, 1.0 / SHD.SIZE);
       // Dynamic car shadow map — unit 8, armed only on frames where game.js ran
       // the car caster pass (carShadowBegin). The texture is always bound while
@@ -1274,8 +1336,8 @@ const GLX = (function () {
       gl.uniform1f(litU.uCarShadowOn, 0.0);
       gl.uniform1f(litU.uLampShadowOn, 0.0);
     }
-    gl.uniform3fv(litU.uSkyZenith,  frame.skyZenith  || [0.18, 0.40, 0.78]);
-    gl.uniform3fv(litU.uSkyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
+    uf3(litU.uSkyZenith,  _litUf, "skyZenith",  frame.skyZenith  || SKY_ZENITH_DEF);
+    uf3(litU.uSkyHorizon, _litUf, "skyHorizon", frame.skyHorizon || SKY_HORIZON_DEF);
     // FOG HEIGHT FALLOFF knob (absolute; def 0.018 matches the shipped palette).
     uf1(litU.uFogHeight, _litUf, "fogHeight", T && T.fogHeight != null ? T.fogHeight : (frame.fogHeight != null ? frame.fogHeight : 0.0));
     // GROUND MIST knob: scale the per-condition mist amount (multiplier, def 1).
@@ -1390,17 +1452,15 @@ const GLX = (function () {
   // caller's blend/depth-mask decisions.
   function litMaterial(modelMat, opts, instanced) {
     useProg(litProg);
-    gl.uniformMatrix4fv(litU.uModel, false, modelMat);
+    // litU.uModel is written ONLY here — decal/shadow/mark/depth each own a
+    // separate program and therefore a separate location, so this cache cannot
+    // be staled by them. docs/PERF-FINDINGS.md 2h.
+    ufM4(litU.uModel, _litUf, "model", modelMat);
     // The instancing gate rides the redundancy cache: 54.8 uniform1f/frame for a
-    // value that changes 3.1 times. docs/PERF-FINDINGS.md 2e.
+    // value that changes 3.1 times. docs/PERF-FINDINGS.md 2e. It is declared
+    // here, for every lit draw, rather than bracketed 1/0 around each instanced
+    // draw — that alternation is what a cache collapses none of.
     uf1(litU.uInstanced, _litUf, "instanced", instanced ? 1 : 0);
-    // The instancing gate is NOT re-uploaded here. It used to be defaulted off on
-    // every lit draw, and litMaterial is the funnel for all of them — 150-300 a
-    // frame (world meshes, car bodies, wheels, aero flaps, brake rings, LEDs,
-    // debris) — to clear a flag only drawInstanced ever sets. It now follows the
-    // depth pass's already-correct shape (castShadowInstanced in glx/shadow.js):
-    // drawInstanced brackets its OWN draw with 1/0, so the uniform is 0 outside
-    // that bracket by construction and 0 at link time before the first one.
     const emissive = opts && opts.emissive !== undefined ? opts.emissive : 0;
     const alpha = opts && opts.alpha !== undefined ? opts.alpha : 1;
     // Material (set every draw so values never leak from the previous mesh).
@@ -1603,6 +1663,33 @@ const GLX = (function () {
     return n;
   }
 
+  // Hand a batch a caller-packed instance set. cullInstances() is for a STATIC
+  // batch narrowed by a frustum; this is for one whose transforms are new every
+  // frame — DebrisWorld's four Rapier pools, where the bodies move and the only
+  // question is how many are live (docs/PERF-FINDINGS.md 2h). The caller packs
+  // to the front because WebGL2 has no baseInstance (see createInstancedBatch).
+  //
+  // CLEARING THE CULL SNAPSHOTS IS LOAD-BEARING, not tidiness. cullInstances
+  // memoises on _cullPlanes (the frustum that physically wrote the resident
+  // bytes) and _cellKeyN (the surviving cell set); a hit SKIPS the re-upload
+  // entirely. Bytes written here were produced by no frustum at all, so leaving
+  // either snapshot standing would let a later cullInstances hit its cache and
+  // draw this pack as though it were that frustum's. Pinned by
+  // tests/unit/gfx-backend-canary.test.mjs.
+  function updateInstances(batch, matrices, n) {
+    if (ctxGone() || !batch || !batch.ibo) return 0;
+    const cap = batch.instances | 0;
+    const v = Math.max(0, Math.min(cap, n | 0));
+    batch.visible = v;
+    batch._cullPlanes = null;
+    batch._cellKeyN = -1;
+    if (v > 0) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, matrices, 0, v * 16);
+    }
+    return v;
+  }
+
   // OPAQUE-ONLY: a blended instanced draw would drop depth writes (below) but
   // would NOT mask alpha writes the way draw() does, so it would drag the SSR
   // car-paint tag stored in scene alpha. Every current caller (the TrackGraph
@@ -1676,15 +1763,15 @@ const GLX = (function () {
     if (ctxGone() || !sky) return;
     useProg(skyProg);
     gl.uniformMatrix4fv(skyU.uInvViewProj, false, sky.invViewProj);
-    gl.uniform3fv(skyU.uZenith, sky.zenith);
-    gl.uniform3fv(skyU.uHorizon, sky.horizon);
-    gl.uniform3fv(skyU.uSunDir, sky.sunDir);
-    gl.uniform3fv(skyU.uSunColor, sky.sunColor);
+    uf3(skyU.uZenith, _skyUf, "zenith", sky.zenith);
+    uf3(skyU.uHorizon, _skyUf, "horizon", sky.horizon);
+    uf3(skyU.uSunDir, _skyUf, "sunDir", sky.sunDir);
+    uf3(skyU.uSunColor, _skyUf, "sunColor", sky.sunColor);
     gl.uniform1f(skyU.uStars, sky.stars ? 1 : 0);
     gl.uniform1f(skyU.uCloud, sky.cloud !== undefined ? sky.cloud : 0);
     gl.uniform1f(skyU.uTime,  sky.time  !== undefined ? sky.time  : 0);
     gl.uniform1f(skyU.uMoon,  sky.moon  !== undefined ? sky.moon  : 0);
-    gl.uniform3fv(skyU.uCityGlow, sky.cityGlow || [0, 0, 0]);
+    uf3(skyU.uCityGlow, _skyUf, "cityGlow", sky.cityGlow || ZERO3);
     uf1(skyU.uStarBright, _skyUf, "starBright", sky.starBright !== undefined ? sky.starBright : 1);
     uf1(skyU.uCloudSpeed, _skyUf, "cloudSpeed", sky.cloudSpeed !== undefined ? sky.cloudSpeed : 1);
     uf1(skyU.uSkyGrad,     _skyUf, "skyGrad",     sky.skyGrad     !== undefined ? sky.skyGrad     : 0.35);
@@ -1898,6 +1985,7 @@ const GLX = (function () {
     // TrackGraph.batches() consumer — see js/track/graph.js.
     createInstancedBatch,
     cullInstances,
+    updateInstances,
     drawInstanced,
     freeInstancedBatch,
     createTexMesh,

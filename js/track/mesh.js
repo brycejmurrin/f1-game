@@ -862,7 +862,83 @@ const TrackMesh = (function () {
     return { pos, nrm, col, idx };
   }
 
+  // ---- STARTING GRID ----------------------------------------------------
+  //
+  // gridSlot() is the ONE definition of where slot `i` sits. js/game.js's
+  // gridUp() places the cars from it and buildGridBoxes() paints the boxes from
+  // it, so the paint cannot drift away from the cars — which it silently would
+  // if each file carried its own copy of these constants, as game.js alone did
+  // before the boxes existed.
+  //
+  // 8 m between slots is the real FIA pitch. Pole sits 14 m before the line.
+  // The lateral stagger is symmetric here, unlike a real grid: 40% of the local
+  // half-width, capped at 3 m, P1 left.
+  const GRID_SLOTS = 22;          // 11 teams x 2 seats — the full field gets a box
+  const _gsSmp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+  function gridSlot(track, i) {
+    let s = track.total - 14 - i * 8;
+    s %= track.total; if (s < 0) s += track.total;
+    TrackSpline.sample(track, s, _gsSmp);
+    return { s, x: (i % 2 === 0 ? -1 : 1) * __M.min(_gsSmp.hw * 0.4, 3) };
+  }
+
+  // The painted boxes. APPENDED to the caller's buffers (tracks.js hands us the
+  // start-line decal's own `out`), so they ride that mesh: same decal material,
+  // same depthBias, same free path, same hideMeshes toggle, no new draw call.
+  //
+  // Open-coded quads ON PURPOSE — TrackGeom's emitters are traced by
+  // tools/coplanar-audit.cjs, and 22 boxes of addBox would land in every
+  // circuit's coplanar baseline. buildStartLine open-codes for the same reason.
+  //
+  // Real geometry: a 2.7 m box (widened 20 cm in 2023), front and side lines
+  // only — it is open at the rear, and legality is judged on the front tyres
+  // being inside the front and side lines. The front line sits 2.0 m ahead of
+  // the slot, so the front axle (car-local z 1.7) is inside it. The FIA's yellow
+  // guide line goes just behind the front line, with a gap: two painted quads
+  // that OVERLAP would z-fight, and a gap is cheaper than a second lift value.
+  const BOX_HALF_W = 1.35, BOX_LEN = 5.0, BOX_FRONT = 2.0;
+  const PAINT_W = 0.12, GUIDE_GAP = 0.06, GUIDE_W = 0.12, GUIDE_OUT = 0.6;
+  const GRID_LIFT = 0.05;         // along the road normal, matching buildStartLine
+  const GUIDE_COL = [0.92, 0.78, 0.12];
+  function buildGridBoxes(track, out) {
+    const white = track.def.palette.line || [0.95, 0.95, 0.98];
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+    for (let i = 0; i < GRID_SLOTS; i++) {
+      const slot = gridSlot(track, i);
+      TrackSpline.sample(track, slot.s, smp);
+      const r = TrackGeom.norm(smp.r), t = TrackGeom.norm(smp.t);
+      const u = TrackGeom.norm(cross(r, t));
+      const P = smp.p, edge = __M.max(1.0, smp.hw - 0.2);
+      // Held to the tarmac: a narrow street circuit must not get a box line
+      // painted out on the runoff. (Not M4.clamp — this is a fixed +-edge rail,
+      // and naming it `clamp` would shadow the shared one.)
+      const onRoad = (o) => __M.max(-edge, __M.min(edge, o));
+      const strip = (o0, o1, d0, d1, c) => {
+        const base = out.pos.length / 3;
+        const vert = (o, d) => {
+          out.pos.push(P[0] + r[0] * o + t[0] * d + u[0] * GRID_LIFT,
+                       P[1] + r[1] * o + t[1] * d + u[1] * GRID_LIFT,
+                       P[2] + r[2] * o + t[2] * d + u[2] * GRID_LIFT);
+          out.nrm.push(u[0], u[1], u[2]);
+          out.col.push(c[0], c[1], c[2]);
+        };
+        // Same CCW winding as the road and as buildStartLine.
+        vert(o0, d0); vert(o1, d0); vert(o0, d1); vert(o1, d1);
+        out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+      };
+      const oL = onRoad(slot.x - BOX_HALF_W), oR = onRoad(slot.x + BOX_HALF_W);
+      const dF = BOX_FRONT, dB = BOX_FRONT - BOX_LEN;
+      strip(oL, oR, dF - PAINT_W, dF, white);                       // front line
+      strip(oL, oL + PAINT_W, dB, dF, white);                       // left side
+      strip(oR - PAINT_W, oR, dB, dF, white);                       // right side
+      const gF = dF - PAINT_W - GUIDE_GAP;                          // clear of the front line
+      strip(onRoad(oL - GUIDE_OUT), onRoad(oR + GUIDE_OUT), gF - GUIDE_W, gF, GUIDE_COL);
+    }
+    return out;
+  }
+
   // buildKerbs stays private — it is only ever appended to buildRoad's buffers.
   return { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
-           nodeGrid, buildRoad, buildTerrain, buildFloor };
+           nodeGrid, buildRoad, buildTerrain, buildFloor, gridSlot, buildGridBoxes,
+           GRID_SLOTS };
 })();

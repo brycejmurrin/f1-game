@@ -151,8 +151,29 @@ for (const [name, args] of Object.entries(FLAG_SETS)) {
       v: r.adapter.vendor, a: r.adapter.architecture, d: r.adapter.description,
     })} webgl=${JSON.stringify(r.webgl && r.webgl.renderer)}${r.error ? ` err=${r.error}` : ""}`);
 }
-report.anyHardware = report.runs.some((r) => r.verdict === "hardware?");
-console.log("\n[census] ANY HARDWARE ADAPTER: " + report.anyHardware);
+// TRI-STATE, and the third state is the point. `some(...) === false` answered
+// two different questions with one word: "every flag set launched and none
+// found hardware" and "nothing launched, so I have no idea". Downstream,
+// gpu-census.yml turns anyHardware into `hardware`, which gates its three
+// strongest clauses (a missing gpuErrors count, softAdapter on hardware) — so a
+// census that failed to launch four times silently DOWNGRADED the real-GPU gate
+// to a software gate and let it report success. That is the same
+// absence-reads-as-normal shape as the vacuous gpuErrors check the gate was
+// hardened against in the first place. docs/PERF-FINDINGS.md 2j.
+const measured = report.runs.filter((r) => r.verdict !== "launch-failed");
+report.anyHardware = measured.length ? measured.some((r) => r.verdict === "hardware?") : null;
+report.measuredRuns = measured.length;
+report.totalRuns = report.runs.length;
+console.log("\n[census] ANY HARDWARE ADAPTER: " + report.anyHardware +
+  ` (${measured.length}/${report.runs.length} flag sets actually launched)`);
 console.log(JSON.stringify(report, null, 2));
 if (jsonAt) writeFileSync(jsonAt, JSON.stringify(report, null, 2));
+// A census where nothing launched measured NOTHING. Exiting 0 with a report
+// full of nulls is how a consumer comes to believe it.
+if (!measured.length) {
+  console.error("[census] CENSUS MEASURED NOTHING — all " + report.runs.length +
+    " flag sets failed to launch; anyHardware is null, not false. " +
+    "Do not read this run as a software verdict.");
+  process.exit(1);
+}
 process.exit(0);

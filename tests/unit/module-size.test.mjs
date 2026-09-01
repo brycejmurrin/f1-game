@@ -482,7 +482,21 @@ const CEILINGS = {
   // 8807 on work of its own. Neither number fits the union, which carries both
   // sets of lines. Re-measured on THIS tree with the suite's own split-newline
   // metric (not grep -c, which is one short on a file with no trailing newline): 8870.
-  "js/game.js": 8870,
+  // 8870 -> 8878: eight lines, all comment, for a one-word fix — `if (soundOn)`
+  // became `if (soundOn && player)`. The words are worth more than the guard:
+  // startRace already tolerates a null player and says so, but this block
+  // dereferenced it, and startRace is now ASYNC (it awaits ensureScenery), so a
+  // real window exists where update() ticks before makeCars has run. A throw
+  // there escapes tick() before the rAF re-schedule, so the render loop dies for
+  // the session — measured at ZERO draws a frame, permanently. PERF-FINDINGS 2i.
+  // 8878 -> 8885: the OTHER half of that finding. The comment above describes a
+  // transient fault killing the session, and fixes the one instance; round 14
+  // fixes the policy. tick() now tolerates a bounded run of consecutive faults
+  // that any clean frame pays back, and stops at the cap exactly as before. The
+  // policy, the caps and the heartbeat live in the new js/game/loop-health.js
+  // precisely so game.js pays seven lines and not eighty — six of the seven are
+  // the comment saying which half is here. PERF-FINDINGS 2k.
+  "js/game.js": 8885,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -550,7 +564,12 @@ const CEILINGS = {
   // at t+6.0 s. Four room/seat specs failed on exactly that. Same shape as the
   // netLoopback fix above; the comment records the measurement so the next
   // reader does not have to re-find the six seconds.
-  "js/game/apex.js": 2505,
+  // 2505 -> 2506 for carEffects()'s gridLights/gridStrobe. The pre-race rear
+  // lights were drawn from a predicate no hook reported, so the only way to
+  // check them was a pixel — and a light that is ON but frozen looks identical
+  // to one that is strobing. A dev API growing by the one field that makes a
+  // new visual assertable is the file doing its job.
+  "js/game/apex.js": 2506,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
@@ -723,7 +742,15 @@ const CEILINGS = {
   // MISSING closure loud. Building bare is a legal state and an almost
   // invisible one — road and terrain, no dressing — so it says so rather than
   // failing silently, which is the one real risk of the split.
-  "js/track/tracks.js": 2381,
+  // 2359 -> 2360 on the other lineage for the one call that appends the painted
+  // grid boxes to the start-line decal. The 77 lines of box geometry went to
+  // js/track/mesh.js, which this ratchet does not bound and which already owns
+  // buildRoad and upOf; tracks.js pays only for the call, and riding the
+  // existing startline mesh is what keeps that to a single line instead of a
+  // mesh registration, a draw call, a free path and a hideMeshes key.
+  // Neither 2381 nor 2360 fits the union, which carries both — re-measured on
+  // the merged tree with the ceiling test's own metric, per the deploy rule.
+  "js/track/tracks.js": 2382,
   // ── Round-6 additions: the unguarded giants, set AT measured (test metric,
   // split-newline count) so any growth is a deliberate raise here. Each line
   // says why the file is its size today; none is an extraction target yet.
@@ -788,7 +815,12 @@ const CEILINGS = {
   // 5574 -> 5581: WGX gains gpuErrors/gpuFirstError on its INSTANCE surface
   // (it had them only on the module factory), so the backend-parity contract
   // holds now that GLX has a real counter. PERF-FINDINGS 2e.
-  "js/render/webgpu/wgx.js": 5581,
+  // 5581 -> 5590: `updateInstances: undefined` and the note saying why it is
+  // DECLARED rather than omitted. An absent name lets descriptor-copy keep
+  // GLX's own closure on a WGX-bound gfx, so DebrisWorld's feature test would
+  // pass here and then call GLX with no device (backend-surface-parity).
+  // Nine lines to keep a wrong-backend call impossible. PERF-FINDINGS 2h.
+  "js/render/webgpu/wgx.js": 5590,
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -850,7 +882,9 @@ const CEILINGS = {
   // the world had no environment reflections at all. The release now waits for
   // the probe to latch, and a probe that cannot succeed gives up instead of
   // throwing once a frame forever.
-  "js/render/three/tlx.js": 2322,
+  // 2322 -> 2326: the same `updateInstances: undefined` declaration and its
+  // reason, for the same descriptor-copy hazard. PERF-FINDINGS 2h.
+  "js/render/three/tlx.js": 2326,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
@@ -877,15 +911,32 @@ const CEILINGS = {
   // real-GPU workflow gated on gpuErrors and GLX never defined it, so that
   // clause read null and passed forever (PERF-FINDINGS 2e). A deliberate
   // raise: the gate is worth more than the lines.
-  // 1975 -> 1990: the uNumLights redundancy cache (_luNL) plus the note that
-  // makes it safe to keep. It is 3 lines of code; the other 12 record WHY this
-  // one is not cleared per frame like the _mat* caches beside it (a WebGL
-  // uniform is per-PROGRAM state, so it survives every unbind and only a relink
-  // invalidates it) and the measurement that justified writing it at all —
-  // 111 uploads a frame for 53.7 distinct values, so 52 % redundant, which is
-  // the test the two retired caches at `setCull` and `uInstanced` failed.
-  // uniform1i 146.4 -> 87.9 a frame, every other counter identical.
-  "js/render/glx.js": 1990,
+  // 1975 -> MEASURED, two lineages that found the same defect independently and
+  // one that found a second. Re-measured on the union, not summed from either.
+  //
+  // THEIRS: the uNumLights redundancy cache (_luNL) plus the note that makes it
+  // safe to keep. 3 lines of code; the other 12 record WHY it is not cleared per
+  // frame like the _mat* caches beside it (a WebGL uniform is per-PROGRAM state,
+  // so it survives every unbind and only a relink invalidates it) and the
+  // measurement that justified it — 111 uploads a frame for 53.7 distinct
+  // values. uniform1i 146.4 -> 87.9.
+  //
+  // MINE: ufM4, the mat4 twin of uf1, so uModel stops re-uploading a matrix the
+  // program already holds — 103.2 -> 50.3 a frame, because drawChunked calls
+  // litMaterial once per chunk RUN and every run of one mesh shares its matrix.
+  // It COPIES the sixteen floats because callers pass scratch matrices they
+  // mutate in place, and that comment is worth more than the line it costs.
+  // Plus updateInstances, which lets a caller hand a batch its own packed
+  // instance set — turning DebrisWorld's four per-body loops into four draws.
+  // (My ufi was dropped on the merge: it did what _luNL already does.)
+  // PERF-FINDINGS 2h.
+  // 2038 -> 2078. uf3, the vec3 twin of uf1/ufM4, plus the frozen fallback
+  // vec3s and the comment recording why its store is a PLAIN array: written
+  // with Float32Array(3) it skipped 0 of 17.5 calls a frame, because a
+  // Float32Array rounds on store and the compare was float32-vs-float64. The
+  // 40 lines buy uniform3fv 31.5 -> 16.3 per frame (vegas night, full field,
+  // tools/glx-call-census.mjs) with every other counter unchanged.
+  "js/render/glx.js": 2078,
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)

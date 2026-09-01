@@ -20,8 +20,16 @@ import { BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 import { readFileSync } from "node:fs";
 import { KNOBS, FREEZE_FLICKER, FREEZE_FLICKER_FILE } from "../../tools/lighting/ab-lighting.mjs";
 import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
+// JOINED, NOT CONCATENATED. dc06779 stripped ROOT's trailing slash (a real fix
+// for a Windows path bug elsewhere), but every consumer here appends a
+// RELATIVE path — "js/game/lighting.js" — so `ROOT + k.file` became
+// `/home/user/f1-gamejs/game/lighting.js` and this guard died with ENOENT on
+// the deploy branch. path.join is correct whichever way ROOT is normalised
+// next, which string concatenation never was.
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
+const at = (rel) => join(ROOT, rel);
 
 // Solo on an idle box the heaviest test here takes 179.8 s — over the 120 s
 // default before any contention. Measured, not guessed.
@@ -75,7 +83,7 @@ test("A/B knob catalog matches the source exactly (1 hit per knob)", () => {
   const srcCache = {};
   const problems = [];
   for (const k of KNOBS) {
-    const src = srcCache[k.file] || (srcCache[k.file] = readFileSync(ROOT + k.file, "utf8"));
+    const src = srcCache[k.file] || (srcCache[k.file] = readFileSync(at(k.file), "utf8"));
     const n = src.split(k.find).length - 1;
     if (n !== 1) problems.push(`${k.id}: "${k.find.slice(0, 60)}..." found ${n}x in ${k.file}`);
     if (k.find === k.b) problems.push(`${k.id}: A and B are identical`);
@@ -86,7 +94,7 @@ test("A/B knob catalog matches the source exactly (1 hit per knob)", () => {
   // Read the file the harness actually patches, not a hardcoded one: the flicker
   // moved to js/game/lighting.js with the LightTune extraction, and pinning
   // js/game.js here meant this guard reported the failure it could not fix.
-  const ff = srcCache[FREEZE_FLICKER_FILE] || readFileSync(ROOT + FREEZE_FLICKER_FILE, "utf8");
+  const ff = srcCache[FREEZE_FLICKER_FILE] || readFileSync(at(FREEZE_FLICKER_FILE), "utf8");
   const nFF = ff.split(FREEZE_FLICKER[0]).length - 1;
   if (nFF !== 1) problems.push(`FREEZE_FLICKER: "${FREEZE_FLICKER[0].slice(0, 60)}..." found ${nFF}x in ${FREEZE_FLICKER_FILE}`);
   expect(problems, problems.join("\n")).toEqual([]);

@@ -155,6 +155,7 @@ const FULL = [
   "js/game/brake-cue.js",
   "js/game/steer-tuning.js",
   "js/game/perf.js",
+  "js/game/loop-health.js",
   "js/game/gfx-quality.js",
   "js/game/gfx-debug.js",
   "js/game/ui-scale.js",

@@ -7,7 +7,10 @@ import { test, sharedTest, expect } from "../helpers/fixtures.js";
 // waits on a page that is actively building and drawing a circuit, which is
 // exactly when rAF — waitForFunction's default clock — starves under SwiftShader
 // and stops bounding the declared timeout.
-async function waitForTrack(page, timeout = 10_000) {
+// 2026-08-30: CI experienced 264s car builds under load. Default 10s does not
+// accommodate overloaded runners — expanded to 480s to match the widened smoke
+// job timeout, giving the build the same headroom CI's steps were tuned for.
+async function waitForTrack(page, timeout = 480_000) {
   await page.waitForFunction(
     () => window.__apex && window.__apex.info().track != null,
     null, { polling: 100, timeout }
