@@ -204,6 +204,26 @@ __apex.previewCam("drift", 0.21, 65);   // how DRIFT frames the corner at 21%
 __apex.previewCam("heli", 0.5);          // HELI's broadcast angle at half-distance
 ```
 
+### `repro() → {…}` / `repro(obj) → {restored, cars, cam, teamMatches}`
+
+Capture a player's EXACT frame, and put it back. With no argument it returns a
+JSON blob: build, circuit, time of day, weather, team (index + id), halo, the
+camera MODE with its CAMERA TUNER offsets, and every car's `s`/`x`/`prog`/
+`speed`. Hand that blob back and it restores the same frame — including the
+traffic, which no amount of re-racing reproduces.
+
+A player can hand one over with `copy(JSON.stringify(__apex.repro()))`;
+`tools/repro-shot.mjs` replays it headlessly and screenshots it.
+
+**Team and halo are reported, not restored.** Both are read from storage at
+boot, so honouring them needs a reload the caller drives — `repro-shot.mjs`
+does, and fails loudly when the rebuilt car is not the blob's team.
+
+Why it exists: a reported cockpit artefact took six rounds because a screenshot
+says WHAT is wrong but not where the reporter was standing. Every reproduction
+guessed at the camera, the team and the traffic, and each round investigated
+whatever object happened to sit in the guessed frame.
+
 ### `camTune(mode?, obj?) → {…} | false`
 The **CAMERA TUNER**'s per-camera-mode framing offsets (`js/game/cam-tune.js`) —
 the camera counterpart of `lightTune()`. Six knobs per mode, all defaulting to

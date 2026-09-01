@@ -569,7 +569,14 @@ const CEILINGS = {
   // check them was a pixel — and a light that is ON but frozen looks identical
   // to one that is strobing. A dev API growing by the one field that makes a
   // new visual assertable is the file doing its job.
-  "js/game/apex.js": 2506,
+    // 2506 -> 2566. __apex.repro(), the capture/restore of a player's exact
+  // frame: circuit, conditions, camera MODE plus CAMERA TUNER offsets, and
+  // every car's position on track. Most of the 57 lines are the comment
+  // explaining WHY it exists — a reported cockpit artefact cost six rounds
+  // because every reproduction guessed at the camera, the team and the
+  // traffic, so each round "fixed" whatever happened to be in the guessed
+  // frame. A screenshot says what is wrong; this says where to stand.
+  "js/game/apex.js": 2566,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
