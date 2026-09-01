@@ -68,7 +68,9 @@ Full tool reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools for exploring slid
 | Monaco | [monaco_grid.png](monaco_grid.png) |
 | Montreal | [montreal_grid.png](montreal_grid.png) |
 | Monza | [monza_grid.png](monza_grid.png) |
+| Mugello | [mugello_grid.png](mugello_grid.png) |
 | Nürburgring | [nurburgring_grid.png](nurburgring_grid.png) |
+| Paul Ricard | [paul_ricard_grid.png](paul_ricard_grid.png) |
 | Qatar | [qatar_grid.png](qatar_grid.png) |
 | Sepang | [sepang_grid.png](sepang_grid.png) |
 | Shanghai | [shanghai_grid.png](shanghai_grid.png) |
