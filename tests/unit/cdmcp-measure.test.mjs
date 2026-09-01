@@ -36,6 +36,16 @@ test("cdmcp-cli.py advertises roots so filePath writes under /workspace work", (
   assert.match(py, /file:\/\/\{ROOT\}/);
 });
 
+test("cdmcp-cli.py injects pageId for page-scoped chrome-devtools-mcp tools", () => {
+  const py = fs.readFileSync(CLI, "utf8");
+  assert.match(py, /_PAGE_SCOPED/);
+  assert.match(py, /selected_page_id/);
+  assert.match(py, /inject_page/);
+  assert.match(py, /navigate_page.*type.*url|type.*= \"url\"/);
+  // look-survey must open via new_page (owns pageId) not bare navigate
+  assert.match(py, /new_page/);
+});
+
 test("cdmcp-lamps.py exists with terminal-marker log contract", () => {
   assert.ok(fs.existsSync(LAMPS));
   const py = fs.readFileSync(LAMPS, "utf8");

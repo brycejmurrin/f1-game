@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import socket
 import subprocess
 import sys
@@ -139,8 +140,51 @@ class McpClient:
         r = self._request("tools/list")
         return [t["name"] for t in r.get("tools", [])]
 
-    def call(self, name: str, arguments: dict) -> dict:
-        r = self._request("tools/call", {"name": name, "arguments": arguments})
+    # chrome-devtools-mcp ≥ mid-2026 requires pageId on page-scoped tools
+    # (navigate_page / evaluate_script / take_screenshot / …). Older call sites
+    # in this CLI only passed url/function/filePath — inject the selected page.
+    _PAGE_SCOPED = frozenset({
+        "navigate_page",
+        "evaluate_script",
+        "take_screenshot",
+        "take_snapshot",
+        "resize_page",
+        "close_page",
+        "select_page",
+        "wait_for",
+        "click",
+        "fill",
+        "hover",
+        "press_key",
+        "list_console_messages",
+        "list_network_requests",
+    })
+
+    def selected_page_id(self) -> int:
+        """Parse `N: … [selected]` from list_pages. Falls back to the first page."""
+        txt = text_result(self.call("list_pages", {}, inject_page=False))
+        # Prefer the marked selection, else the first numbered line.
+        m = re.search(r"(?m)^(\d+):.*\[selected\]", txt)
+        if not m:
+            m = re.search(r"(?m)^(\d+):", txt)
+        if not m:
+            raise RuntimeError(f"list_pages returned no pageId:\n{txt}")
+        return int(m.group(1))
+
+    def call(
+        self, name: str, arguments: dict | None = None, *, inject_page: bool = True
+    ) -> dict:
+        args = dict(arguments or {})
+        # Legacy navigate_page({url}) → navigate_page({type:"url", url, pageId})
+        if name == "navigate_page" and "url" in args and "type" not in args:
+            args["type"] = "url"
+        if (
+            inject_page
+            and name in self._PAGE_SCOPED
+            and "pageId" not in args
+        ):
+            args["pageId"] = self.selected_page_id()
+        r = self._request("tools/call", {"name": name, "arguments": args})
         return r
 
     def close(self) -> None:
@@ -856,8 +900,10 @@ def cmd_look_survey(argv: list[str]) -> None:
     summary = []
     try:
         c.start()
-        print(f"→ navigate_page {url}")
-        c.call("navigate_page", {"url": url})
+        # new_page owns the pageId (required by chrome-devtools-mcp ≥1.7);
+        # bare navigate_page({url}) without pageId is rejected.
+        print(f"→ new_page {url}")
+        c.call("new_page", {"url": url}, inject_page=False)
         for track, frac, combos, out_dir, prefer_dark in jobs:
             states = survey_track_looks(c, track, frac, combos, out_dir, prefer_dark)
             ok = all(s.get("ok") for s in states)
