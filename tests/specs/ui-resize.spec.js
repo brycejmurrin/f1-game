@@ -45,7 +45,7 @@
 // the general answer, since a sheet whose box does not depend on the scale would
 // still need it, but it is currently belt-and-braces and this spec does not
 // prove it. Said plainly so nobody cites this file as its justification.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE_LANDSCAPE = { width: 852, height: 393 };
@@ -66,8 +66,9 @@ const SIZES = [
 ];
 
 async function waitReady(page) {
+  // BOOT_MS, not a hand-rolled 20 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex && window.__apex.race,
-    null, { polling: 100, timeout: 20_000 });
+    null, { polling: 100, timeout: BOOT_MS });
   // STOP THE RENDER LOOP. This spec opens the garage, which runs a live 3D car
   // preview (renderSetupPreview in game.js) regardless of whether a race is
   // active — every subsequent wait in this file was competing with that for
@@ -353,7 +354,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
       await page.evaluate(() => window.__apex.race("monza"));
       await page.waitForFunction(() => {
         try { return window.__apex.info().track != null; } catch (_) { return false; }
-      }, null, { polling: 100, timeout: 20_000 });
+      }, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => {
         window.__apex.park(0.1);
         document.getElementById("pausemenu").hidden = false;

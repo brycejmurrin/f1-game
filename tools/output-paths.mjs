@@ -1,4 +1,5 @@
 // Tool/CLI path containment helpers for scratch/artifacts defaults.
+// @doc Path-containment helpers for the `artifacts/` vs `scratch/` output contract; gated by `output-paths.spec.js`.
 // Playwright gallery writers use tests/helpers/output-paths.js instead.
 import { isAbsolute, relative, resolve } from "node:path";
 

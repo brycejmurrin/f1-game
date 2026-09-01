@@ -17,14 +17,15 @@
 // under SwiftShader starves that poll, so a declared timeout never gets to fire.
 // Measured 2026-08-08 — "40 HUD" reported `Timeout 10000ms exceeded` after 79s
 // under a loaded box, and passed in 38s alone. Timer polling, not a bigger bound.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
 
 const PORTRAIT  = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function waitReady(page) {
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
 }
 async function shot(page, name) {
   await page.waitForTimeout(250);
@@ -37,7 +38,7 @@ const labelOf = (page, id) => page.evaluate((id) => document.getElementById(id).
 // Race + park, then reveal the pause SETTINGS sub-menu.
 async function openSettings(page, track = "bahrain", tod = "day", wx = "dry") {
   await page.evaluate(({ track, tod, wx }) => window.__apex.race(track, tod, wx), { track, tod, wx });
-  await page.waitForFunction((t) => { try { return window.__apex.info().track === t; } catch (_) { return false; } }, track, { polling: 100, timeout: 10_000 });
+  await page.waitForFunction((t) => { try { return window.__apex.info().track === t; } catch (_) { return false; } }, track, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => {
     window.__apex.park(0.1);
     const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
@@ -165,7 +166,7 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
   test("42 HUD hidden (clean screen)", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => { window.__apex.jump(0.1, 50, 0); window.__apex.snapCam(); });
     await page.waitForTimeout(300);
     await page.evaluate(() => document.body.classList.add("hud-hidden"));
@@ -179,7 +180,7 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
   test("43 camera picker grid", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => { window.__apex.jump(0.1, 50, 0); window.__apex.snapCam(); });
     await page.waitForTimeout(300);
     await page.locator("#btn-cam").dispatchEvent("contextmenu");   // long-press equivalent

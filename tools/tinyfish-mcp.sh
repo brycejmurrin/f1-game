@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
+# @doc Local TinyFish MCP proxy helper: `setup`/`start`/`stop`/`status`/`fetch`/`search`/`deploy-check`/`deploy-js` on :3711.
+# @skill mcp-probe
 # TinyFish local MCP proxy — start/stop and curl helpers for http://127.0.0.1:3711/mcp
+#
+# CLI ONLY — NOT MCP-ATTACHED. Removed from .mcp.json / .cursor/mcp.json
+# (2026-09): the container egress blocks agent.tinyfish.ai, so this proxy
+# cannot reach upstream from an agent session. Live Pages / public-web checks
+# go through the host fetch tool (WebFetch) or the hosted TinyFish connector —
+# see .claude/agents/deploy-research.md. Kept for a developer box with egress.
+#
 # Clone lives at scratch/tinyfish-mcp-server (gitignored). A fresh checkout must
-# run `setup` once. Key resolution: shell TINYFISH_API_KEY > gitignored
-# proxy .env > TINYFISH_KEY_FALLBACK below. TINYFISH_NO_FALLBACK=1 disables
-# the tracked fallback (tests). Rotate the fallback any time; custom keys:
-# https://agent.tinyfish.ai/home. The tmux pane sources ONLY the .env file,
-# so start/setup persist the resolved key there.
+# run `setup` once. Key resolution: shell TINYFISH_API_KEY, else the gitignored
+# proxy .env — NOTHING is tracked. No key = a clear "not set" message and
+# exit 1. Custom keys: https://agent.tinyfish.ai/home. The tmux pane sources
+# ONLY the .env file, so start/setup persist the resolved key there.
 #
 # Agent-facing defaults (measured 2026-08-17):
 # - after one-time setup, fetch/search/deploy-check auto-ensure (start + init)
@@ -35,22 +43,17 @@ FETCH_PURPOSE=""
 DEPLOY_MARKER=""
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-claude/f1-game-project-26h3ng}"
 
-# Tracked fallback so Cloud / fresh clones work before a dashboard secret
-# or scratch .env exists. Override with TINYFISH_API_KEY or the .env file.
-# TINYFISH_NO_FALLBACK=1 keeps the missing-key path (unit tests).
-TINYFISH_KEY_FALLBACK="sk-tinyfish-khLFUpjoWmSBQgf_6f834NI9vyaYaEjW"
-
+# No tracked key. A credential lived here once (removed 2026-09); the unit
+# test now asserts that no TinyFish credential literal exists under tools/ or
+# .claude/. The key comes from the shell or the gitignored .env only.
 load_env() {
   local from_shell="${TINYFISH_API_KEY:-}"
   if [[ -f "$ENV_FILE" ]]; then
     # shellcheck disable=SC1090
     set -a; source "$ENV_FILE"; set +a
   fi
-  # Shell wins over the gitignored proxy env file; tracked fallback is last.
+  # Shell wins over the gitignored proxy env file. Nothing else is consulted.
   TINYFISH_API_KEY="${from_shell:-${TINYFISH_API_KEY:-}}"
-  if [[ -z "${TINYFISH_API_KEY:-}" && "${TINYFISH_NO_FALLBACK:-}" != "1" && -n "${TINYFISH_KEY_FALLBACK:-}" ]]; then
-    TINYFISH_API_KEY="$TINYFISH_KEY_FALLBACK"
-  fi
 }
 
 TINYFISH_KEY_URL="https://agent.tinyfish.ai/home"
@@ -58,21 +61,22 @@ TINYFISH_KEY_URL="https://agent.tinyfish.ai/home"
 need_key() {
   load_env
   if [[ -z "${TINYFISH_API_KEY:-}" ]]; then
-    echo "TINYFISH_API_KEY is not set." >&2
+    echo "TINYFISH_API_KEY is not set (no key in the shell env or in $ENV_FILE)." >&2
+    echo "  This helper ships NO fallback key." >&2
     echo "  Get a key: ${TINYFISH_KEY_URL}" >&2
     echo "  Then: echo 'TINYFISH_API_KEY=...' > $ENV_FILE && $0 start" >&2
     exit 1
   fi
 }
 
-# The tmux pane sources ONLY $ENV_FILE. Persist the resolved key (shell,
-# fallback, or already-there file) so start cannot 401 after need_key.
+# The tmux pane sources ONLY $ENV_FILE. Persist the resolved key (shell or
+# already-there file) so start cannot 401 after need_key.
 persist_env() {
   if [[ -z "${TINYFISH_API_KEY:-}" ]]; then
     return 1
   fi
   mkdir -p "$(dirname "$ENV_FILE")"
-  if [[ -f "$ENV_FILE" ]] && grep -q '^TINYFISH_API_KEY=sk-tinyfish-' "$ENV_FILE" 2>/dev/null; then
+  if [[ -f "$ENV_FILE" ]] && grep -qE '^TINYFISH_API_KEY=[^[:space:]]+' "$ENV_FILE" 2>/dev/null; then
     return 0
   fi
   umask 077
@@ -488,6 +492,8 @@ cmd_deploy_js() {
 usage() {
   cat <<EOF
 TinyFish local MCP helper (proxy -> https://agent.tinyfish.ai/mcp)
+CLI only — NOT attached in .mcp.json (container egress blocks agent.tinyfish.ai).
+Live Pages checks: deploy-research subagent (host fetch / WebFetch).
 
   $0 setup                 Clone/build scratch/tinyfish-mcp-server
   $0 start                 Start proxy in tmux (port ${PORT})
@@ -521,8 +527,9 @@ see the TOP of a big file, so a deep marker is unverifiable from here.
 --marker says so on a miss rather than letting "absent" read as "did not
 ship"; for deeper content use git provenance plus deploy-check's build id.
 
-Env: TINYFISH_API_KEY in $ENV_FILE or shell, else tracked TINYFISH_KEY_FALLBACK.
-     TINYFISH_NO_FALLBACK=1 disables the fallback. Custom key: $TINYFISH_KEY_URL
+Env: TINYFISH_API_KEY in the shell or in $ENV_FILE (gitignored). No tracked
+     fallback exists — without a key every network command exits 1 with a
+     "not set" message. Get a key: $TINYFISH_KEY_URL
 Repo: $REPO
 EOF
 }

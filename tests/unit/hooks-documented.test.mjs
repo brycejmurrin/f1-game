@@ -55,8 +55,19 @@ function documented(doc, name) {
   return new RegExp("__apex\\." + name + "\\b|`" + name + "\\(").test(doc);
 }
 
-test("no NEW __apex hook ships undocumented", () => {
+// The generated hook index (tools/gen-hooks-table.mjs) lists EVERY hook by
+// construction, so it would satisfy `documented()` for all of them and turn
+// this ratchet vacuous. Strip it: the requirement here is a HAND section per
+// hook. tests/unit/generated-docs.test.mjs guards the index separately.
+function handSections() {
   const doc = read("docs/DEBUG-HOOKS.md");
+  const a = doc.indexOf("<!-- GENERATED: hooks-table -->");
+  const b = doc.indexOf("<!-- /GENERATED -->", a);
+  return a >= 0 && b > a ? doc.slice(0, a) + doc.slice(b) : doc;
+}
+
+test("no NEW __apex hook ships undocumented", () => {
+  const doc = handSections();
   const missing = [...hookNames()].filter((n) => !documented(doc, n) && !UNDOCUMENTED.has(n)).sort();
   assert.deepEqual(missing, [],
     "a hook exists in js/game/apex.js with no section in docs/DEBUG-HOOKS.md. Write one — " +
@@ -64,7 +75,7 @@ test("no NEW __apex hook ships undocumented", () => {
 });
 
 test("the undocumented list does not name a hook that has since been documented", () => {
-  const doc = read("docs/DEBUG-HOOKS.md");
+  const doc = handSections();
   const stale = [...UNDOCUMENTED].filter((n) => documented(doc, n)).sort();
   assert.deepEqual(stale, [],
     "these are documented now — delete them from UNDOCUMENTED so the ratchet keeps its grip");

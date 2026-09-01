@@ -2,7 +2,7 @@
   "name": "apex-tools",
   "serverInfo": {
     "name": "apex-tools-mcp",
-    "version": "1.4.1"
+    "version": "1.5.0"
   },
   "prefix": "apex_",
   "stdio": {
@@ -23,7 +23,6 @@
     ]
   },
   "tools": [
-    "apex_verify_track",
     "apex_verify_change_fast",
     "apex_wgx_validate_static",
     "apex_pick_tests",
@@ -31,27 +30,10 @@
     "apex_status",
     "apex_eval",
     "apex_shot",
-    "apex_survey_track",
     "apex_gfx_probe",
-    "apex_wgx_validate",
-    "apex_wgx_capture",
-    "apex_ui_survey",
     "apex_agent",
     "apex_select_specs",
-    "apex_assets_verify",
-    "apex_float_audit",
-    "apex_clip_audit",
-    "apex_coplanar_audit",
-    "apex_track_verts",
-    "apex_carshot",
-    "apex_wgx_shot",
-    "apex_quick_validate",
-    "apex_select_recall",
-    "apex_cache_bump_only",
     "apex_rotate_markings_check",
-    "apex_startline_snap",
-    "apex_startline_probe",
-    "apex_aero_zone_turns",
     "apex_graph_parity"
   ]
 }

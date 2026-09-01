@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // Forwarder → wgx-shot.mjs --gallery (kept for docs/skills that still name wgx-gallery).
+// @doc Thin forwarder → `wgx-shot.mjs --gallery` (kept for docs/skills).
+// @skill webgpu-debug / playwright-probe
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";

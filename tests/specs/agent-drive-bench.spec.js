@@ -16,15 +16,16 @@
 // materially farther. This is the regression guard the redesign hangs on: if a
 // refactor breaks the meaning of a field, the bench collapses even though every
 // shape assertion still passes.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function boot(page, trackId) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
 // Run one episode headlessly with the named policy and return the forward

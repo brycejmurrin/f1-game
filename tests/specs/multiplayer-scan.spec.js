@@ -14,7 +14,7 @@
 // The camera in THIS file always has the code in frame, so a scan always
 // resolves. Anything that must happen mid-scan is in multiplayer-scan-cancel,
 // against a camera that shows nothing.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import config from "../../playwright.config.js";
 import { CODE, buildY4m, cameraLaunch } from "../helpers/qr-camera.js";
 
@@ -38,7 +38,8 @@ test.describe.configure({ mode: "serial" });
 // this environment, so a test that built one would HANG rather than fail.
 async function openJoin(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.lobbyFake(true));
   await page.click("#mb-vs");
   await page.click("#vs-join");

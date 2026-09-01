@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /*
+ * @doc Wide gallery of the synthetic scenery models — many circuits / angles / times of day into one contact sheet.
+ * @skill asset-pack
  * Wide gallery for synthetic scenery models — many circuits / angles / TOD.
  * Uses page.screenshot (not canvas locator) to avoid SwiftShader hangs.
  * Prefetches Assets.loadModels() before race() so bakedModel() placements mesh.

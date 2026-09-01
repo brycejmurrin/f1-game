@@ -38,22 +38,18 @@ idle agent. Reference (groups, fixtures, field notes): `docs/TESTING.md`.
 | one circuit (`js/circuits/<id>.js`) | `node tools/verify-track.cjs <id>`, then that circuit's foundation spec ALONE |
 | one subsystem with its own spec | that spec — `npm test -- tests/specs/<file>.spec.js`; prefer single specs over their whole group |
 | WGX / `js/render/webgpu/` | `node tools/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU (`docs/TESTING.md` §Field notes) |
-| TLX / `js/render/three/`, WGX / `js/render/webgpu/` | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the SAME command with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. **THEN DISPATCH THE REAL GPU**: `gpu-census.yml` on `macos-latest` (Apple/Metal, ~3 min) and read its Verdict step, which FAILS on GPU errors, failed env-probe faces, or `softAdapter` true on hardware. A software probe run is not evidence about a player's machine — that mistake cost this project two shipped defects (the `_softAdapter` misclassification and an env probe that threw on every face), both invisible to every software test and both found the hour a real GPU was first used |
+| TLX / `js/render/three/`, WGX / `js/render/webgpu/` | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the SAME command with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. **THEN DISPATCH THE REAL GPU**: `gpu-census.yml` on `macos-latest` (Apple/Metal, ~3 min) and read its Verdict step, which FAILS on GPU errors, failed env-probe faces, or `softAdapter` true on hardware. A software probe run is not evidence about a player's machine — two shipped defects were invisible to every software test and found the hour a real GPU was first used (`docs/research/CI-RENDERING-PERFORMANCE.md` §There IS a real GPU) |
 | engine / physics / `js/game.js` | the groups `pick-tests` names, CAPPED at two browser groups: run the two most specific, name the rest as not-run in the PR |
 | geometry pushed to the deploy branch | the above + `npm run test:sweeps` |
 
 Session shape — this is what controls both wall time and waiting:
 
 1. `npm install` FIRST on a fresh container (`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`
-   keeps it to seconds), **then `npx playwright install
-   chromium-headless-shell`** — that skip flag leaves the BROWSER absent, and
-   the specs launch the headless shell, not the `/opt/google/chrome` this box
-   ships. "Cannot find module" means a missing `npm install`;
-   `browserType.launch: Executable doesn't exist …chromium_headless_shell`
-   means a missing browser. Either reads as a total-red run that looks like a
-   boot regression (measured 2026-08-17: every `test:tiny` test red — 73 of
-   them, re-confirmed live 2026-08-27), and the cure is
-   seconds. Read the FIRST failure's message before believing any red run.
+   keeps it to seconds), **then `npx playwright install chromium-headless-shell`**
+   — the skip flag leaves the BROWSER absent. Either missing reads as a total-red
+   run that looks like a boot regression ("Cannot find module" / `Executable
+   doesn't exist …chromium_headless_shell`): read the FIRST failure's message
+   before believing any red run (`docs/research/CI-RENDERING-PERFORMANCE.md` §Part 3).
 2. Make ALL source edits first, then verify ONCE. Tests serve `js/` and `css/`
    from the working tree, so a run in flight forbids source edits — run the
    browser tests a single time, at the end, just before the cache bump. Do not
@@ -105,25 +101,22 @@ Session shape — this is what controls both wall time and waiting:
 
 ### A real GPU IS reachable — `macos-latest`
 
-Measured 2026-08-28 (`docs/research/CI-RENDERING-PERFORMANCE.md` §There IS a
-real GPU): GitHub's Apple-silicon image reports a HARDWARE adapter (`apple`,
-`ANGLE Metal Renderer`, 2 GiB maxBufferSize, `shader-f16`/`subgroups`) on stock
-flags. ubuntu-latest is SwiftShader, windows-latest is WARP, this container is
-llvmpipe. Dispatch `.github/workflows/gpu-census.yml` — `census_only: true` for
-the adapter answer in seconds, without it to run `tools/gpu-game-check.mjs`
-(the portable `gfx-probe`: `gpuErrors()`, env-probe state, `?gfxdebug=1` text).
-**Never pass `--use-angle=vulkan` on macOS** — it drops WebGPU to SwiftShader
-and `requestAdapter()` returns null, silently turning a real-GPU run software.
+GitHub's Apple-silicon image reports a HARDWARE adapter (Metal) on stock flags;
+ubuntu-latest is SwiftShader, windows-latest WARP, this container llvmpipe.
+Dispatch `.github/workflows/gpu-census.yml` — `census_only: true` for the adapter
+answer in seconds, without it to run `tools/gpu-game-check.mjs` and read the
+Verdict step, which GATES (GPU errors, failed env-probe faces, `softAdapter` on
+hardware). **Never pass `--use-angle=vulkan` on macOS** — it drops WebGPU to
+SwiftShader and silently turns a real-GPU run software. Census tables and what
+the real GPU has found: `docs/research/CI-RENDERING-PERFORMANCE.md` §There IS a
+real GPU.
 
 ### Software pixels in this container (no real GPU)
 
 On SwiftShader/Lavapipe the **native WebGPU swapchain never composites** to the
-screen — that path stays black. WGX routes the visible `#game` through a **2D
-soft-present blit** (final pass → `COPY_SRC` texture → `putImageData` on
-`#game`; never `getCurrentTexture()`, which breaks `mapAsync` device-wide).
-Cache **1342+** uses ephemeral per-frame staging buffers +
-`onSubmittedWorkDone` before readback; `awaitSoftPresent()` resolves only after
-a non-blank visible blit.
+screen — that path stays black, and one `getCurrentTexture()` breaks `mapAsync`
+device-wide. WGX routes the visible `#game` through a **2D soft-present blit**;
+`awaitSoftPresent()` resolves only after a non-blank visible blit.
 
 | Backend | Command / path | Checks |
 |---------|----------------|--------|
@@ -133,74 +126,31 @@ a non-blank visible blit.
 | **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | CI pin WebGL2 (`tlxForceGL=1`). AUTO is WebGPU (lite stack). `mappedAtCreation` → `queue.writeBuffer`. |
 | **TLX WebGPU** | `node tools/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | Soft-present 2D blit (Lavapipe). Never `getCurrentTexture()` on software. |
 
-Deep notes + measured canvas colours: `docs/research/CI-RENDERING-PERFORMANCE.md`
-§Measured. Env packages + install: §Cursor Cloud below.
+Measured canvas colours, the staging-buffer history and the env packages:
+`docs/research/CI-RENDERING-PERFORMANCE.md` §Measured and §Part 3.
 
 **A UNIT TEST OF A RENDERER BACKEND IS NOT EVIDENCE THAT IT RUNS.** WGX's mock
-device passed every assertion while FOUR separate defects made the real backend
-refuse to boot (MSAA 2 is illegal in WebGPU; a derivative behind a branch is a
-WGSL compile error; `mappedAtCreation` for a 35 MB mesh exhausts the mappable
-pool; `rg11b10ufloat` is not a render target without its optional feature). Each
-hid the one after it, so they came out one boot at a time — and none was
-findable without a live device:
-
-```sh
-npx serve -l 3456 .   # a SECURE CONTEXT: navigator.gpu is absent on about:blank
-node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
-```
-
-`probe` writes the backend pick and RELOADS in one batch (`--backend
-webgl2|three|webgpu`; `three` gets the specs' WebGL2 pin), `--eval` runs a body,
-`--console RE` greps the dump, `--dry-run` shows the batch. In page code use
-BARE globals — `GLX`, not `window.GLX`: script-level `const` is a lexical
-binding, not a window property. A clean WGX boot writes NO console line and
-leaves `sessionStorage["apex26.gfxBound"]` absent (that key means it refused) —
-both ABSENCE signals, so confirm with one positive: drive a race and assert
-`canvas.getContext("webgl2") === null`, which only holds once WebGPU has claimed
-the canvas. SwiftShader is a validation oracle; for WGX **visible** pixels use
-`gfx-probe.mjs` (`#game` after `awaitSoftPresent`); for readback oracle use
-`wgx-capture.mjs` → `frame.png`. Full trap list:
-`.claude/skills/mcp-probe/references/recipes.md` §Probing a specific renderer.
+device was green while four separate defects made the real backend refuse to
+boot, each hiding the next. Boot it on a live device (`npx serve -l 3456 .` —
+a SECURE CONTEXT — then `node tools/mcp-cli.mjs probe --backend webgpu --wait
+12000 --console 'WGX|error'`) and confirm with one POSITIVE signal: a clean WGX
+boot writes nothing, so assert `canvas.getContext("webgl2") === null`. The four
+defects, the probe flags and the full trap list: `docs/RENDERERS.md` §Boot
+evidence and `.claude/skills/mcp-probe/references/recipes.md` §Probing a
+specific renderer.
 
 ## Cursor Cloud specific instructions
 
-Personal/dashboard env for this repo (not `.cursor/environment.json`). Persist
-system packages via snapshot + Save on the environment dashboard — an `apt-get`
-in a live agent does **not** survive the next cold boot unless the snapshot is
-saved.
-
-**Packages for software WebGPU / headed probes** (idempotent in `install`):
-
-- `mesa-vulkan-drivers` — Lavapipe ICD at `/usr/share/vulkan/icd.d/lvp_icd.json`
-- `vulkan-tools` — `vulkaninfo` sanity
-- `xvfb` — headed Lavapipe / X11 display (`DISPLAY=:1` already common here)
-
-**Fresh-agent bootstrap** (after packages; matches Verification §1):
-
-```sh
-bash tools/cloud-agent-install.sh
-# equivalent manual steps when the script is not the dashboard install:
-export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-npm install --ignore-scripts --no-audit --prefer-offline
-npx playwright install chromium-headless-shell
-npx playwright install chromium
-```
-
-The dashboard `install` should call `bash tools/cloud-agent-install.sh`. A bare
-`npm install` can die on `registry.npmjs.org` ECONNRESET with npm's "Exit
-handler never called!" (measured 2026-08-17, `bld-20260817-e70b375f`) even
-when `node_modules` is already usable. (`wgx-validate` / `wgx-capture` need
-full Chromium — the headless shell has no `navigator.gpu`.) Missing Lavapipe:
-`test -f /usr/share/vulkan/icd.d/lvp_icd.json` fails → reinstall
-`mesa-vulkan-drivers` or re-Save the env snapshot. Measurement table and MCP
-flag overrides: `docs/research/CI-RENDERING-PERFORMANCE.md`.
-
-**MCP.** Seven-server map: [`docs/AGENT-SURFACE.md`](docs/AGENT-SURFACE.md).
-Keep **`apex-tools` in repo-root `.mcp.json`** (and `.cursor/mcp.json`). Cloud
-host catalog is often empty — then `./tools/apex-tools-mcp.sh call`,
-`./tools/playwright-mcp.sh`, `./tools/tinyfish-mcp.sh`,
-`python3 tools/probe-mcp.py`. Do not attach `mcp-probe` for a `version.json`
-check. Never run Chrome MCP while Playwright is running.
+Fresh-agent bootstrap is `bash tools/cloud-agent-install.sh` (the dashboard
+`install` should call it: the Verification §1 sequence plus full Chromium, which
+`wgx-validate` / `wgx-capture` need — the headless shell has no `navigator.gpu`).
+System packages (`mesa-vulkan-drivers`, `vulkan-tools`, `xvfb`) survive a cold
+boot only via snapshot + Save on the environment dashboard; `test -f
+/usr/share/vulkan/icd.d/lvp_icd.json` proves Lavapipe. MCP server map and the
+shell fallbacks for an empty host catalog: `docs/AGENT-SURFACE.md`. Keep
+`apex-tools` in root `.mcp.json`; never run Chrome MCP while Playwright is
+running; do not attach `mcp-probe` for a `version.json` check. Measurements
+and the npm ECONNRESET note: `docs/research/CI-RENDERING-PERFORMANCE.md` §Part 3.
 
 ## Layout
 
@@ -231,16 +181,20 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 - `types/game-ctx.d.ts` — the `G` façade contract, held by `tools/check-gctx.mjs`
 - `.claude/skills/` — the workflow references (`.claude/skills/README.md`);
   `.claude/agents/` — scoped subagent definitions (verify-agent, track-surveyor,
-  bloat-auditor, deploy-research, doc-drift-auditor, physics-contract-auditor,
-  worktree-regression-check) that encode the flat prohibitions above so a
+  bloat-auditor, deploy-research, physics-contract-auditor) that encode the
+  flat prohibitions above (verify-agent `--base <ref>` is the "was it already
+  red on the tip?" check; doc drift is a lens of the total-audit workflow) so a
   subagent cannot un-know them
 
 ## Critical conventions
 
 - **Cache busting**: after ANY js/css change, run
   `node tools/bump-cache.mjs --apply` (`.claude/skills/bump-cache`). Each
-  asset URL carries a 12-char content hash; `version.json` and
-  `<meta name="apex-build">` advance together as the shell/SW generation.
+  asset URL carries a 12-char content hash. `version.json` and
+  `<meta name="apex-build">` are a CONSISTENT PLACEHOLDER, not a counter:
+  `pages.yml` stamps the real generation (2000 + the deploy branch's commit
+  count) while staging, so `--apply` keeps the committed number and two
+  sessions can never collide on it (`tests/unit/deploy-stamp.test.mjs`).
   Last edit before commit, never mid-run. Docs/tools-only deltas need no bump.
 - **No ES modules** — every file is a `"use strict"` IIFE assigning one global
   (sole exception: the vendored three.js island).
@@ -307,7 +261,7 @@ same surface from a shell.
 - **Skills** (on-demand workflows): `.claude/skills/` — index in
   `.claude/skills/README.md`. Which CLIs are wrapped as `apex_*`:
   `docs/AGENT-SURFACE.md`. Live canvas: `mcp-probe`. Deploy branch /
-  merge: `deploy-merge`; live `version.json` goes to the `deploy-research`
+  merge: `check-changes` (`references/deploy.md`, or just `node tools/deploy.mjs`); live `version.json` goes to the `deploy-research`
   SUBAGENT (do not attach `mcp-probe` for a version.json check). Pre-push:
   `check-changes` (spawns the `verify-agent` subagent). Fat skill / extract /
   dead code / agent bloat: `slim-bloat` skill / `bloat-auditor` subagent.
@@ -324,18 +278,15 @@ same surface from a shell.
 
 Skills / MCP / wrap: `docs/AGENT-SURFACE.md`. Lighting/sky:
 `docs/LIGHTING-REF.md`, `-KNOBS.md`, `-PRESETS.md`
-(`.claude/skills/bake-lighting` lands a COPY VALUES export). Renderers
+(`.claude/skills/lighting-tuner/references/bake.md` + `scripts/bake.mjs` land a COPY VALUES export). Renderers
 (GLX/WGX/TLX): `docs/RENDERERS.md`. Career: `docs/CAREER.md`. Multiplayer:
 `docs/MULTIPLAYER.md`. Scenery: `docs/SCENERY-API.md`. Testing:
 `docs/TESTING.md`. WGX/WGSL (`js/render/webgpu/`):
 `docs/research/WEBGPU-PARITY.md`.
 
-Two WGSL rules the language enforces and a mock device cannot: `sampleCount` is
-1 or 4 ONLY, and `dpdx`/`dpdy`/`fwidth` may appear ONLY where control flow is
-uniform — in practice the first statements of `fs_main`, passed down as a
-parameter, because a callee that returns early non-uniformly poisons its caller
-too. Breaking either does not throw: WGX refuses and the game falls back to GLX
-with one console warning.
+WGSL has two rules a mock device cannot enforce — `sampleCount` is 1 or 4
+ONLY, and `dpdx`/`dpdy`/`fwidth` only under uniform control flow — and breaking
+either makes WGX refuse silently and fall back to GLX: `docs/research/WEBGPU-PARITY.md` §5.
 
 ## Git branch & deploy
 
@@ -343,12 +294,15 @@ Work happens on a `claude/<topic>` branch — `git branch --show-current` is the
 truth. **The deploy branch is `claude/f1-game-project-26h3ng`**: never push
 there without review; `pages.yml` fires only there and ships to
 https://brycejmurrin.github.io/f1-game/. Other sessions develop directly on
-the deploy branch, so a deploy is `git fetch` plus an ordinary merge of THEIR
-new work — both-side changes are real conflicts: re-measure baselines on the
-merged tree, take max+1 of both lineages' cache versions, never force-push.
-Before pushing, re-run `test:tooling-fast` AND — when either side touched
-`js/track/`, `js/circuits/` or `tools/` — `test:sweeps`: the per-circuit
-baselines are exact in BOTH directions, and a geometry change green on each
-lineage alone can be red on their union. The container proxy blocks
-`github.io` — verify a live deploy through an MCP fetch, not curl
-(`./tools/tinyfish-mcp.sh deploy-check --tip`).
+the deploy branch, so a deploy is a merge of THEIR new work — both-side
+changes are real conflicts: re-measure baselines on the merged tree, never
+force-push. **`node tools/deploy.mjs`** is the whole protocol (fetch → merge →
+`test:tooling-fast` → `verify-track` for touched circuits → push, or `--pr`
+to open a reviewable PR into the deploy branch instead; `--plan` prints the
+union first). `index.html`/`version.json` are the only files that used to
+conflict and they now resolve to either side plus a hash-only
+`bump-cache --apply`, because the generation is stamped by the deploy.
+`test:sweeps` is CI's on the same diff (do not duplicate it locally). The
+live check is `pages.yml`'s `verify-live` job — this container cannot reach
+`github.io`; read the run in the Actions tab, or fetch `version.json` through
+the host's fetch tool, never curl.

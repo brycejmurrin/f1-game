@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /**
+ * @doc A `page.evaluate()` callback may not close over Node — flags module-scope reads inside serialised callbacks.
+ * @section runner
  * evaluate-scope-lint.mjs — a page.evaluate() callback may not close over Node.
  *
  *   node tools/evaluate-scope-lint.mjs            # lint every spec

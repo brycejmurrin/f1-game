@@ -4,11 +4,13 @@
 // The invariant that matters: a knob moved on one camera changes ONLY that
 // camera, and an untuned mode frames exactly as it did before the feature.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 async function loadMonza(page) {
   await page.setViewportSize({ width: 844, height: 390 });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 15000 });
+  // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(async () => {
     __apex.race("monza");
     await new Promise((r) => setTimeout(r, 3000));

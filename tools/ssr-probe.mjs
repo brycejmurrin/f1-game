@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /* ssr-probe.mjs — capture the WET-ROAD screen-space reflection, and see WHY it
+ * @doc Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe.
+ * @skill webgl-debug
  * looks the way it does.
  *
  *   node tools/ssr-probe.mjs --track=redbull --tod=dusk --frac=0.62,0.30

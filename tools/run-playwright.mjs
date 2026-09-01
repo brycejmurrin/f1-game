@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // Launch Playwright on an automatically allocated port so independent npm test
+// @doc The engine behind every `npm run test:*`: a free port + port-suffixed report paths so runs never share a server.
+// @section runner
 // commands can run concurrently without sharing a web server or artifact paths.
 
 import { spawn } from "node:child_process";

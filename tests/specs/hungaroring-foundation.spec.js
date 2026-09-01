@@ -1,11 +1,13 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 async function loadHungaroring(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15_000 });
+  // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.race("hungaroring", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
 test.describe("Hungaroring track foundation", () => {

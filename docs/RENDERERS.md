@@ -172,6 +172,49 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   WebGPU path with a lite swapchain (`UnsignedByteType`, no MSAA 4,
   low-power).
 
+## Boot evidence — a unit test of a backend is not evidence that it runs
+
+WGX's mock device passed every assertion while FOUR separate defects made the
+real backend refuse to boot. Each hid the one after it, so they came out one
+boot at a time, and none was findable without a live device:
+
+| defect | why a mock cannot see it |
+|---|---|
+| MSAA `sampleCount: 2` | WebGPU allows 1 or 4 only; the mock accepted any integer |
+| a derivative (`dpdx`) behind a non-uniform branch | a WGSL compile error, invisible without a real shader compiler |
+| `mappedAtCreation` for a 35 MB mesh | exhausts the mappable pool on a real device; the mock never ran out |
+| `rg11b10ufloat` as a render target | needs the optional feature; the mock did not model features |
+
+Breaking any of these does not throw: WGX refuses and the game falls back to
+GLX with one console warning, so a green suite plus a silent fallback looks
+like success.
+
+**The recipe.** Serve from a secure context — `navigator.gpu` is absent on
+`about:blank`:
+
+```sh
+npx serve -l 3456 .
+node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
+```
+
+`probe` writes the backend pick and RELOADS in one batch (`--backend
+webgl2|three|webgpu`; `three` gets the specs' WebGL2 pin), `--eval` runs a
+body, `--console RE` greps the dump, `--dry-run` shows the batch. In page code
+use BARE globals — `GLX`, not `window.GLX`: script-level `const` is a lexical
+binding, not a window property.
+
+**Assert a POSITIVE signal.** A clean WGX boot writes NO console line and
+leaves `sessionStorage["apex26.gfxBound"]` absent (that key means it refused)
+— both are ABSENCE signals, and an absence test that reports the same value as
+a success test is not a test. Drive a race and assert
+`canvas.getContext("webgl2") === null`, which only holds once WebGPU has
+claimed the canvas. SwiftShader is a validation oracle; for WGX **visible**
+pixels use `tools/gfx-probe.mjs` (`#game` after `awaitSoftPresent`); for the
+readback oracle use `tools/wgx-capture.mjs` → `frame.png`. Full trap list:
+`.claude/skills/mcp-probe/references/recipes.md` §Probing a specific renderer.
+WGSL validation without a browser: `node tools/wgx-validate.mjs` (real Dawn,
+~5 s) — never ship "read-verified" WGSL.
+
 ## Related
 
 - Module contract + GLX API sketch: [ARCHITECTURE.md](ARCHITECTURE.md)

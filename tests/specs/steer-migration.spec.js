@@ -25,7 +25,7 @@
 // Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
 // apex-state / apex-logs / page-console alongside the assertion (see the note at
 // the top of tests/specs/gamepad.spec.js).
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 // The store (js/game/store.js) prefixes every key with "apex26." and JSON-encodes
 // the value, so these two helpers are the store's own on-disk format and nothing
@@ -69,7 +69,8 @@ function tuning(page) {
 
 async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.tuning, null, { polling: 100, timeout: 10000 });
+  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex && window.__apex.tuning, null, { polling: 100, timeout: BOOT_MS });
 }
 
 test.describe("steering-store schema migration", () => {
@@ -212,7 +213,7 @@ test.describe("steering-store schema migration", () => {
         localStorage.setItem("apex26.pace", String(f));
       }, from);
       await page.reload();
-      await page.waitForFunction(() => window.__apex && window.__apex.tuning, null, { polling: 100, timeout: 10000 });
+      await page.waitForFunction(() => window.__apex && window.__apex.tuning, null, { polling: 100, timeout: BOOT_MS });
       got.push((await readStore(page, ["pace"])).pace);
     }
     expect(got).toEqual(TABLE.map(([, to]) => to));

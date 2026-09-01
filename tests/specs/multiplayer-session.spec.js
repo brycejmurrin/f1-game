@@ -18,15 +18,16 @@
 // owns its own car. A rival is posed from replicated state and must NOT also be
 // simulated locally, or the two fight every frame — the same contract the
 // incident sim already has with updateCar().
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function race(page, trackId = "monza") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => {
     const A = window.__apex;
     A.headless(true);          // no rendering; we pump the sim ourselves

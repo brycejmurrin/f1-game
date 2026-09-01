@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# @doc Night lamp screenshot suite via chrome-devtools MCP (Qatar, Singapore, Bahrain, Monza); `--port`, `--only`, `--limit`.
+# @skill mcp-probe
 """cdmcp-lamps — night lamp screenshots via local chrome-devtools MCP + localhost.
 
 Serves whichever worktree you point at — pass --port / APEX_PORT so parallel

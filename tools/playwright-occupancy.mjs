@@ -1,4 +1,6 @@
 /**
+ * @doc Classifies process-table lines for Playwright occupancy (`playwright test` / `@playwright/mcp`) — the MCP lock's oracle.
+ * @skill check-changes
  * Classify process-table lines for Playwright occupancy.
  *
  * Matches a live `playwright test` suite, a host `@playwright/mcp` server, or

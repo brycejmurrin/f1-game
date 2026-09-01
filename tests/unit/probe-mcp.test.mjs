@@ -1,6 +1,7 @@
-// probe-mcp.test.mjs — unified Chrome DevTools + TinyFish MCP bridge.
-// Does NOT launch Chromium or hit TinyFish (CI-safe). Live probes stay in
-// tools/probe-mcp.py list-tools / call when an agent needs them.
+// probe-mcp.test.mjs — unified Chrome DevTools + TinyFish bridge, CLI ONLY.
+// Not MCP-attached since 2026-09 (.mcp.json is apex-tools / playwright-official
+// / chrome-devtools). Does NOT launch Chromium or hit TinyFish (CI-safe). The
+// chrome-start daemon + call auto-routing is why the CLI stays.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -13,9 +14,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const PROBE = path.join(ROOT, "tools/probe-mcp.py");
 const MCP_JSON = path.join(ROOT, ".mcp.json");
 
-test("probe-mcp.py exists and is executable-ish", () => {
+test("probe-mcp.py exists and says it is a CLI, not an attached server", () => {
   assert.ok(fs.existsSync(PROBE));
   const src = fs.readFileSync(PROBE, "utf8");
+  assert.match(src, /NOT MCP-ATTACHED/);
   assert.match(src, /chrome_/);
   assert.match(src, /tinyfish_/);
   assert.match(src, /def serve|cmd_serve|"serve"/);
@@ -23,26 +25,23 @@ test("probe-mcp.py exists and is executable-ish", () => {
   assert.match(src, /tinyfish-mcp\.sh/);
 });
 
-test(".mcp.json registers probe as the unified stdio bridge", () => {
+test(".mcp.json does NOT register probe — chrome-devtools is the attached Chrome MCP", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
-    "chrome-devtools-official",
-    "playwright",
     "playwright-official",
-    "probe",
-    "tinyfish",
   ]);
-  assert.equal(cfg.mcpServers.probe.command, "python3");
-  assert.deepEqual(cfg.mcpServers.probe.args, ["tools/probe-mcp.py", "serve"]);
-  assert.equal(cfg.mcpServers.tinyfish.url, "http://127.0.0.1:3711/mcp");
+  assert.equal(cfg.mcpServers.probe, undefined);
+  assert.equal(cfg.mcpServers.tinyfish, undefined);
   assert.equal(cfg.mcpServers["chrome-devtools"].command, "bash");
   assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["tools/chrome-devtools-mcp.sh", "run"]);
   assert.equal(cfg.mcpServers["apex-tools"].command, "bash");
   assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["tools/apex-tools-mcp.sh", "serve"]);
-  assert.equal(cfg.mcpServers.playwright.command, "bash");
-  assert.deepEqual(cfg.mcpServers.playwright.args, ["tools/playwright-mcp.sh", "run"]);
+  // The daemon flow is the reason the CLI survives the catalog trim.
+  const help = spawnSync("python3", [PROBE, "help"], { encoding: "utf8" });
+  assert.match(help.stdout, /chrome-start/);
+  assert.match(help.stdout, /not in \.mcp\.json/);
 });
 
 test("probe-mcp status stays usable when tinyfish is down", () => {

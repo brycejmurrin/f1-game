@@ -16,7 +16,7 @@ player at `cost`/`desc` ("cheapest recovery-biased option") instead of a name.
 
 `Parts.ersProfile` only sets the 0..1 axes. Battery dynamics
 (`drainFor`/`regenFor`/`otTimeFor`/`otCoolFor` in `js/game.js`) consume them.
-Verify in-race via `debug-state` / `__apex.physState()` (`ersDeploy`,
+Verify in-race via **agent-view** `references/state.md` / `__apex.physState()` (`ersDeploy`,
 `ersRegen`, `drain`, `regen`, `otTime`, `otCool`). Measured deltas:
 `docs/PARTS.md` (`harvest` vs `standard` vs `overcharge`).
 
@@ -52,7 +52,7 @@ resolution.
    Or `tools/carview.html?team=mclaren&aero=extreme`.
 7. **Test and ship.** `node tools/test-bg.mjs parts` for catalog/physics/visual
    recipes; `node tools/test-bg.mjs modes` when you changed research locks or
-   garage ownership UI (there is no `test:career`). Bump via **bump-cache**
+   garage ownership UI (there is no `test:career`). Bump via `node tools/bump-cache.mjs --apply`
    before commit.
 
 ## Common mistakes

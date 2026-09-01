@@ -148,7 +148,7 @@ test("verify-change derives its reason the same way pick-tests publishes it", ()
 
 // ── bump-cache against a fixture shell (never the real one) ─────────────────
 
-test("bump-cache: --check catches drift, --apply hashes assets and advances shell generation", () => {
+test("bump-cache: --check catches drift, --apply hashes assets and keeps the generation; --advance moves it", () => {
   // artifacts/ is GITIGNORED, so it does not exist in a fresh checkout — mkdtemp
   // straight into it is ENOENT on any clone that has not run a test yet, which
   // is every CI run. It passed locally only because an earlier run had created
@@ -170,8 +170,12 @@ test("bump-cache: --check catches drift, --apply hashes assets and advances shel
     assert.equal(drift.status, 1, "stale content hashes must exit 1");
     assert.equal(JSON.parse(drift.out).consistent, false);
 
-    const applied = JSON.parse(run(["tools/bump-cache.mjs", "--apply", "--json", "--root", dir]).out);
-    assert.equal(applied.applied, 8, "shell generation advances independently of asset hashes");
+    // Plain --apply rehashes and KEEPS the committed generation: the deploy
+    // stamps the real one from the commit count (pages.yml, 2026-09-01).
+    const kept = JSON.parse(run(["tools/bump-cache.mjs", "--apply", "--json", "--root", dir]).out);
+    assert.equal(kept.applied, 7, "--apply must not advance the placeholder generation");
+    const applied = JSON.parse(run(["tools/bump-cache.mjs", "--apply", "--advance", "--json", "--root", dir]).out);
+    assert.equal(applied.applied, 8, "--advance is the old max+1 behaviour");
     const html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
     for (const rel of ["a.js", "b.css", "c.js"]) {
       const hash = createHash("sha256").update(fs.readFileSync(path.join(dir, rel))).digest("hex").slice(0, 12);

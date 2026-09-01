@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /* Apex 26 — rotate CircuitMarkings onto a corrected start line.
+ * @doc Rotates `CircuitMarkings` turn apexes onto a corrected start line by the scenery's arc shift, then re-sorts them.
+ * @skill new-track
  *
  * `CircuitMarkings` sector splits and turn apexes are authored in RACING-LAP
  * space and deliberately never fmap'd (see the header of js/track/markings.js).

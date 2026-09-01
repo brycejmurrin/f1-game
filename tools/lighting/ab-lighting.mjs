@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // ab-lighting — A/B harness for every tunable lighting constant. For each knob
+// @doc A/B harness for every tunable lighting constant — each knob rendered committed vs swapped; out → `scratch/captures/`.
+// @skill lighting-tuner
 // it renders the SAME scene twice: A = the committed code, B = the same code
 // with the knob's exact source string swapped for an alternate value (served
 // from memory — the working tree is never touched). It then measures both

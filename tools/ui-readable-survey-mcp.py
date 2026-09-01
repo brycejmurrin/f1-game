@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# @doc Screens × viewports × UI scales readability matrix via chrome-devtools MCP → `scratch/ui-readable-survey.json`.
+# @skill survey-ui-matrix / mcp-probe
 """Survey screens × viewports × UI scales for readability defects via chrome-devtools MCP."""
 from __future__ import annotations
 import json, subprocess, threading, time, sys

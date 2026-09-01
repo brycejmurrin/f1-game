@@ -25,16 +25,17 @@
 // Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
 // apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
 // 50" arrives with the car's state and the retained log ring beside it.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 const X_ZONE_MIN = 210;   // m — X_STRAIGHT_T * X_ZONE_VREF in js/game/aerozones.js
 
 async function loadTrack(page, id) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate((t) => window.__apex.race(t), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 30_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
 test.describe("active aero — activation zones", () => {
@@ -266,7 +267,7 @@ test.describe("active aero — downforce traded for top speed", () => {
     const rows = [];
     for (const aero of ["minimal", "medium", "ground_effect"]) {
       await page.goto("/");
-      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
       const teamId = await page.evaluate(() => window.__apex.teams()[0].id);
       await page.evaluate(([a, id]) => {
         const key = "apex26.parts." + id;
@@ -276,9 +277,9 @@ test.describe("active aero — downforce traded for top speed", () => {
         localStorage.setItem("apex26.unlimitedBudget", "true");   // `extreme` blows the 780 cr cap
       }, [aero, teamId]);
       await page.reload();
-      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate((t) => window.__apex.race(t), "monza");
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 40_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       rows.push(await page.evaluate(() => {
         const A = window.__apex;
         A.headless(true); A.go();

@@ -7,7 +7,7 @@
 // Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
 // apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
 // 50" arrives with the car's state and the retained log ring beside it.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 // PACE pinned: the standing-start acceleration bounds below are in M/S (20 < acc <
 // 150), and PACE is a ground-speed scale that moves them wholesale. Without this a
@@ -18,9 +18,10 @@ const pinPace = (page) => page.evaluate(() => window.__apex.setPhysics({ pace: 1
 
 async function startRace(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.go());
   await pinPace(page);
 }
@@ -116,7 +117,7 @@ test.describe("Apex 26 — longitudinal & grip", () => {
 
   test("slope gravity: descents don't overspeed past top speed; climbs aren't a barrier", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => { window.__apex.race("spa", "day", "dry"); window.__apex.go(); });
     await pinPace(page);   // climbGain is in m/s — see pinPace
     const r = await page.evaluate(() => {

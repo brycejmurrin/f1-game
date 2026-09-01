@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // wait-polling-lint — validate both the position and polling of waitForFunction options.
+// @doc A declared `waitForFunction` timeout that cannot fire is not a bound — checks every call carries `{ polling }`.
+// @section runner
 //
 // MEASURED (tests/manual/timeout-probe.spec.js): `null, { timeout: 3000 }` against a
 // predicate that can never be true ran **109,665 ms** on a parked Monza and

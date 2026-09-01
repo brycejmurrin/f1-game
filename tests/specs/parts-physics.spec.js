@@ -3,6 +3,7 @@
 // Covers: getMods() multiplier math, getCost() addition, statMult(), catalog structure,
 // new GEARBOX and FUEL categories, and supplier-exclusive option filtering.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 async function load(page) {
   await page.goto("/");
@@ -1541,7 +1542,8 @@ test.describe("ERS parts drive the battery and overtake", () => {
     // localStorage.setItem would leave the game answering from _cache and the
     // three passes would silently measure the same setup.
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+    // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     const teamId = await page.evaluate(() => window.__apex.teams()[0].id);
     for (const ers of ["harvest", "standard", "overcharge"]) {
       await page.evaluate(([e, id]) => {
@@ -1552,9 +1554,9 @@ test.describe("ERS parts drive the battery and overtake", () => {
         localStorage.setItem("apex26.unlimitedBudget", "true");
       }, [ers, teamId]);
       await page.reload();
-      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => window.__apex.race("monza"));
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 40_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       rows.push(await page.evaluate(() => {
         const A = window.__apex;
         A.headless(true); A.go(); A.jump(0.1, 60, 0); A.step(1 / 60, 2);
@@ -1671,7 +1673,7 @@ test.describe("Wet compounds are a trade, not a penalty", () => {
     // The table above is worth nothing if the player's CHOICE never reaches it.
     // One race, one compound, one weather change — the integration only.
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     const teamId = await page.evaluate(() => window.__apex.teams()[0].id);
     await page.evaluate((id) => {
       const key = "apex26.parts." + id;
@@ -1684,9 +1686,9 @@ test.describe("Wet compounds are a trade, not a penalty", () => {
     // bare setItem would leave the game answering from _cache and this would
     // measure the default compound while still passing.
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.race("monza", undefined, "rain"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 40_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     const g = await page.evaluate(() => {
       const A = window.__apex;
       A.headless(true); A.go(); A.jump(0.1, 60, 0); A.step(1 / 60, 2);

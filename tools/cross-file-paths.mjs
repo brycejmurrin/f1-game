@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // cross-file-paths — every relative reference between files resolves to a file
+// @doc Every relative reference between files resolves to a file that exists (espree extraction; built for the tests/ split).
+// @section runner
 // that exists.
 //
 // Built for the tests/ split (AUDIT-SYNTHESIS §R2), where the whole risk is

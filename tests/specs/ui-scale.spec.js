@@ -22,7 +22,7 @@
 // is 399px at 130 %" goes stale the moment the type scale is retuned, which is
 // exactly what the component restructure is about to do. Every check here is
 // relative or a containment test.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 852, height: 393 };   // iPhone 15 Pro — primary play shape
 // 50 is SCALE_MIN; 100 is what ships; 115 stays because three defects confirmed
@@ -61,7 +61,8 @@ const OVERLAY_IDS = ["select", "carsetup", "career", "teampicker", "race-setting
 
 async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 30_000 });
+  // BOOT_MS, not a hand-rolled 30 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
 }
 
 async function toTitle(page) {
@@ -231,7 +232,7 @@ test.describe("UI scale", () => {
       await page.setViewportSize(viewport);
       await page.goto("/");
       await page.waitForFunction(() => window.__apex && window.__apex.uiScale,
-        null, { polling: 100, timeout: 30_000 });
+        null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => window.__apex.uiScale(200));
       await page.waitForFunction(() => document.body.dataset.density === "compact",
         null, { polling: 100, timeout: 5_000 });

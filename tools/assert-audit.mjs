@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // assert-audit — does each test actually ASSERT anything?
+// @doc Does each declared test ASSERT anything? Grades `asserting` / `implicit` / `vacuous`; flags empty `.catch(() => {})`.
+// @section runner
 //
 // The third member of a family. tools/test-observed.mjs answers "has this test
 // ever run?"; this one answers the question that survives a yes: "and when it

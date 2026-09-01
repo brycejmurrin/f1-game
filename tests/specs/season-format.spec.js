@@ -10,6 +10,7 @@
 // covered by menu-survey). js/game/season-cal.js normalises whatever it reads,
 // so a seeded config is the same object the editor would have produced.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -30,7 +31,8 @@ async function boot(page, cfg) {
     localStorage.setItem("apex26.reliability", JSON.stringify("off"));
   }, cfg);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, undefined, { timeout: 8000, polling: 100 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, undefined, { timeout: BOOT_MS, polling: 100 });
   // Nothing here asserts a pixel, so stop drawing the 3D scene behind the menus —
   // under SwiftShader that is pure CPU. See tests/specs/season.spec.js.
   await page.evaluate(() => window.__apex.headless(true));
@@ -55,7 +57,7 @@ async function toTheGrid(page, { quali = true } = {}) {
     await page.locator("#q-go").click();
   }
   await page.waitForFunction(() => window.__apex && window.__apex.info().track != null,
-    undefined, { timeout: 20_000, polling: 100 });
+    undefined, { timeout: BOOT_MS, polling: 100 });
 }
 
 /** Win the race outright and land on #results. park(0.9) is the furthest-along
@@ -218,7 +220,7 @@ test.describe("Season — sprint weekends", () => {
     // Scored, so STANDINGS is offered even though the round is still 0.
     await expect(page.locator("#mb-standings")).toBeVisible();
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, undefined, { timeout: 8000, polling: 100 });
+    await page.waitForFunction(() => window.__apex != null, undefined, { timeout: BOOT_MS, polling: 100 });
     const s = await saved(page);
     expect(s.stage).toBe("race");
     expect(myPts(s)).toBe(8);

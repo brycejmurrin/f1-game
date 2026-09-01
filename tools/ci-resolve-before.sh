@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# @doc Resolves the base SHA for the selected-specs CI gate from `EVENT` / `PUSH_BEFORE` / `PR_BASE` (falls back to `HEAD~1`).
+# @section runner
 # Resolve comparison base for the selected-specs gate.
 # Prints BEFORE on stdout. Env: EVENT, PUSH_BEFORE, PR_BASE.
 set -eu

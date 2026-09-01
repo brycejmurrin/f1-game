@@ -1,7 +1,6 @@
 ---
 name: webgl-debug
-description: Use when the user reports a blank/dark/black GLX canvas, lights wrong, shadow acne, bloom too strong/missing (GPU path), HDR/hdrMode issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile failures, uniform-array light bugs, instancing problems, or GLX renderer artifacts. Washed-out night or slider-flat scenes → lighting-tuner first. WebGPU black screen or NaN-white road → webgpu-debug. Temporal shimmer while driving → motion-capture.
-paths: js/render/glx.js,js/render/glx/**,js/render/shaders/**
+description: Use when the user reports a blank/dark/black GLX canvas, lights wrong, shadow acne, bloom too strong/missing (GPU path), HDR/hdrMode issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile failures, uniform-array light bugs, instancing problems, or GLX renderer artifacts. Washed-out night or slider-flat scenes → lighting-tuner first. WebGPU black screen or NaN-white road → webgpu-debug. Temporal shimmer while driving → playwright-probe (references/motion-capture.md).
 ---
 
 # Debug WebGL2 / GLX renderer issues

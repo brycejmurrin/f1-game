@@ -26,7 +26,7 @@ device/feature miss, not "WGX has no pack."
 
 ## When NOT to Use
 
-- Cache-busting shell assets — the pack has **no `?v=`**; **bump-cache** is
+- Cache-busting shell assets — the pack has **no `?v=`**; `node tools/bump-cache.mjs --apply` is
   for `js/`/`css/`/`index.html` tags only.
 - Mid-test-run pack edits — SW is cache-first (same class as not bumping
   `version.json` mid-run).
@@ -36,7 +36,6 @@ device/feature miss, not "WGX has no pack."
 |---|---|
 | `node tools/assets.mjs bake-synthetic` | Regenerate pack, no network |
 | `node tools/assets.mjs verify` | Licence allow-list, md5, 8 MB budget |
-| `./tools/apex-tools-mcp.sh call apex_assets_verify '{}'` | Same pin; never bake |
 | `__apex.assets()` | `{ supported, pack, uploaded, tier, layers, error, … }` |
 | `__apex.matTex(v?)` | Blend 0..1; same as `lightTune({ matTexMix })` |
 
@@ -45,7 +44,7 @@ npm run test:tooling-fast
 node tools/test-bg.mjs api
 ```
 
-Related: **bump-cache**, **webgl-debug**, **webgpu-debug**, **lighting-tuner**.
+Related: `bump-cache.mjs --apply` (check-changes/references/bump.md), **webgl-debug**, **webgpu-debug**, **lighting-tuner**.
 
 ## Load on demand
 

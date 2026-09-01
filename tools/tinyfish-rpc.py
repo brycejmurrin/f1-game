@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# @doc Unwraps TinyFish `fetch_content`/`search` JSON-RPC results: `unwrap` / `deploy-summary` / `live-build` / `tool-names`.
+# @skill mcp-probe
 """Unwrap TinyFish MCP JSON-RPC tool results for shell helpers.
 
 Measured 2026-08-17: fetch_content returns

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /*
+ * @doc How much chunked scenery a pass reaches, counted headlessly: re-bins triangles into 72 m cells like `createChunkedMesh`.
+ * @skill perf-profile
  * chunk-reach — how much chunked scenery a pass actually reaches, counted
  * headlessly, with no GPU and no timing.
  *

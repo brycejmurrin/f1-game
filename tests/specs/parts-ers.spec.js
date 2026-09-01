@@ -7,12 +7,14 @@
 // thrust and consumed no energy, while OVERTAKE (which bypasses the taper)
 // worked and drained. These tests pin both halves so the two can't diverge again.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 async function load(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.race("monza"));
-  await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: 20_000 });
+  await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => { window.__apex.go(); });
 }
 

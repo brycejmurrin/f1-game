@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 const OVERHEAD_IDS = [
   "yas-hotel-gridshell-arch-1",
@@ -26,13 +27,14 @@ const SUPPORT_IDS = [
 
 async function loadAbuDhabi(page, timeOfDay) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, undefined, { polling: 100, timeout: 15000 });
+  // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex?.race, undefined, { polling: 100, timeout: BOOT_MS });
   await page.evaluate((tod) => {
     window.__apex.headless(true);
     window.__apex.race("abudhabi", tod, "dry");
   }, timeOfDay);
   await page.waitForFunction(() => window.__apex.info().track != null,
-    undefined, { polling: 100, timeout: 15000 });
+    undefined, { polling: 100, timeout: BOOT_MS });
 }
 
 for (const timeOfDay of ["day", "night"]) {

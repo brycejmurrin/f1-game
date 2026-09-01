@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /**
+ * @doc What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`).
+ * @section runner
  * pick-tests.mjs — "what do I actually have to run for THIS change?"
  *
  * Running the whole suite is ~40 minutes of SwiftShader; running nothing is how
@@ -101,8 +103,10 @@ export const RULES = [
   [/^js\/game\/garage-scene\.js/, ["parts"], "garage-aero.spec.js rides in test:parts"],
 
   // ── car ─────────────────────────────────────────────────────────────────
-  [/^js\/car\/parts\.js/, ["parts"], "the catalog, budgets, recipes and their physics"],
-  [/^js\/car\/(car3d|liveries|liverytex)\.js/, ["parts"], "car mesh + livery specs"],
+  [/^tools\/game-vm\.cjs/, ["game-vm"], "the Node VM game harness and its parity test"],
+  [/^js\/car\/parts\.js/, ["parts", "sweeps-parts"], "the catalog, budgets, recipes and their physics; sweeps-parts is the 559 s option-resolution census"],
+  [/^js\/car\/(car3d|liveries|liverytex|crest-paths)\.js/, ["parts", "node-slow"], "car mesh + livery specs; node-slow rasterises every livery and crest"],
+  [/^tools\/slider-effect\.mjs/, ["node-slow"], "slider-effect.test.mjs spawns this tool per test"],
   [/^js\/car\/teams\.js/, ["parts", "modes"], "the grid feeds season and career"],
   [/^js\/car\/ghost\.js/, ["modes"], "time-trial ghost"],
 

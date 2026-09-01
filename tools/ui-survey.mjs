@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Forwarder → layout-audit --survey (kept for apex_ui_survey / npm run ui:survey).
+// Forwarder → layout-audit --survey (the `npm run ui:survey` entry).
+// @doc Thin forwarder → `layout-audit.mjs --survey` (the `npm run ui:survey` entry).
+// @skill survey-ui-matrix
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,7 +19,7 @@ export function buildLayoutAuditArgs(userArgv) {
   if (!extra.includes("--shots") && !extra.includes("--no-shots")) recipe.push("--shots");
   if (!has("--jobs=")) recipe.push("--jobs=1");
   // --survey already implies the title-path defaults inside layout-audit; keep
-  // explicit flags so apex_ui_survey MCP can freeze them in the spawn argv.
+  // explicit flags so a caller can freeze them in the spawn argv.
   return [...recipe, ...extra];
 }
 

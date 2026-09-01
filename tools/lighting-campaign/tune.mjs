@@ -1,3 +1,5 @@
+// @doc lighting-campaign: candidate values, sensitivity classification, and the minimal per-condition tune profile.
+// @skill lighting-tuner
 import { conditionKey } from "./config.mjs";
 
 const SCHEMA = "apex26.lighting-campaign/v1";

@@ -14,7 +14,7 @@
 // A camera left live after its screen is gone is a privacy problem before it is
 // a battery one, and nothing on screen would reveal it — which is exactly why
 // it is asserted rather than assumed.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import config from "../../playwright.config.js";
 import { buildY4m, cameraLaunch } from "../helpers/qr-camera.js";
 
@@ -28,7 +28,8 @@ test.describe.configure({ mode: "serial" });
 
 async function startScanning(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.lobbyFake(true));
   await page.click("#mb-vs");
   await page.click("#vs-join");

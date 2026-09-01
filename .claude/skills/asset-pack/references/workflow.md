@@ -68,7 +68,7 @@ WGX is a device/feature miss, not "WGX has no arrays."
    with varied surfaces.
 
 7. **Ship** — commit `assets/pack/` when regenerated. Bump `?v=N` +
-   `version.json` only if you changed `js/` or `css/` (**bump-cache**). Pack
+   `version.json` only if you changed `js/` or `css/` (`node tools/bump-cache.mjs --apply`). Pack
    URLs rely on SW cache generation + revalidation, not shell `?v=`.
 
 ## Common mistakes

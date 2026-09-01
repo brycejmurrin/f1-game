@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // test-honesty.mjs — find tests that pass by not testing.
+// @doc Finds tests that pass by not testing: bare `test.skip`/`fixme`/`todo` without a `SKIP-OK:` reason, and empty bodies.
+// @section runner
 //
 // A skipped suite that reports green is worse than a red one
 // (docs/PERF-FINDINGS.md: test:visual reported "passed 40/40" while

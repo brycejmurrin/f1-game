@@ -1,4 +1,6 @@
 // wgx-vid-repro — DIAGNOSTIC/EVIDENTIARY. Measures whether @builtin(vertex_index)
+// @doc Raw-WebGPU `vertex_index` verdict matrix (draw shapes × N crossing 4095 × read path) on SwiftShader/Lavapipe.
+// @skill webgpu-debug
 // delivers correct values on this container's WebGPU stacks for the draw shapes
 // the road renderer cares about. The 4095-vert PIECE split in wgx.js createMesh
 // exists for a 2026-08-17 measured "vertex_index stays 0 on large non-indexed

@@ -92,7 +92,9 @@ See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
 [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 
 Companion provenance (do not treat as current structure): the original
-migration plan and four phase build logs under `docs/archive/webgpu/`.
+migration plan and maintainability review under `docs/archive/webgpu/`; the
+four phase build logs were retired to the attic ledger
+(`docs/archive/ATTIC.md`, 2026-09-01).
 
 ### First live boot (2026-08-17) — and the four bugs it found
 
@@ -597,6 +599,25 @@ regresses.
 | Descriptor-copy install | Missing names inherit dead GLX fns | Adding a GLX method without an explicit WGX value |
 | Y flip | `copyExternalImageToTexture({flipY})` is per-call, not a pack state | Assuming GL `UNPACK_FLIP_Y` semantics globally |
 | Depth compare | WebGPU NDC z already [0,1] after `Z01`; shadow `refD` is not remapped again | A leftover `* 0.5 + 0.5` on shadow z |
+
+### 5a. Two WGSL rules the language enforces and a mock device cannot
+
+Moved from AGENTS.md 2026-09-01; the one-line rule stays there.
+
+1. **`sampleCount` is 1 or 4 ONLY.** MSAA 2 is illegal in WebGPU;
+   `createRenderPipeline` / `createTexture` reject it on a real device and the
+   mock device accepted it for weeks (see §4.7 for the resolve recipe).
+2. **`dpdx` / `dpdy` / `fwidth` may appear ONLY where control flow is
+   uniform.** In practice: take the derivatives in the first statements of
+   `fs_main` and pass them down as parameters, because a callee that returns
+   early non-uniformly poisons its caller too — the SAA peel hoists its
+   object-space derivatives for exactly this reason (a `dpdx` after a
+   non-uniform `matId` branch is a compile error).
+
+Breaking either does not throw at the call site: WGX's boot self-test fails,
+the backend refuses, and the game falls back to GLX with one console warning —
+which is why `node tools/wgx-validate.mjs` (real Dawn WGSL + pipeline
+validation, ~5 s) runs on every `js/render/webgpu/` change.
 
 ---
 

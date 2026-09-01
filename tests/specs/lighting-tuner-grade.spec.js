@@ -240,8 +240,9 @@ test("__apex.lightCopy('look') levels every track at that condition, and undoes"
   // shipped preset has to end up at — so compare against the source's live set.
   const src = await page.evaluate(() => window.__apex.lightTune());
   await page.evaluate(() => window.__apex.race("monza"));
+  // BOOT_MS, not a hand-rolled 30 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex.info().track === "monza",
-    null, { polling: 100, timeout: 30_000 });
+    null, { polling: 100, timeout: BOOT_MS });
   const monza = await page.evaluate(() => {
     window.__apex.setTimeOfDay("night"); window.__apex.weather("wet");
     return window.__apex.lightTune();

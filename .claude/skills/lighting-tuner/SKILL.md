@@ -1,6 +1,6 @@
 ---
 name: lighting-tuner
-description: Use when the user says night looks washed out/like day, dawn sun is too high, floodlights/lamps aren't firing, day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, or wants to validate Apex 26 lighting knobs via lightState. Bloom as a GPU/shader defect → webgl-debug. Mirror a new knob across backends → cross-backend-parity after the tune.
+description: Use when the user says night looks washed out/like day, dawn sun is too high, floodlights/lamps aren't firing, day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, or wants to validate Apex 26 lighting knobs via lightState, or pastes a window.LightPresets / LightEdits blob to bake into light-presets.js. Bloom as a GPU/shader defect → webgl-debug. Mirror a new knob across backends → cross-backend-parity after the tune.
 ---
 
 # Tune and validate scene lighting via __apex probes
@@ -18,7 +18,7 @@ Precedence, lowest→highest: `TUNE_DEFS.def` → shipped
 localStorage `"*"` → localStorage **`track|tod|weather`**. Live slider edits
 write the **current condition** key (`LightStore.set` → `profiles[key()]`),
 not global `"*"`. Ship a look by baking COPY VALUES into
-`js/game/light-presets.js` (**bake-lighting**). Edit `applyRaceSettings` only
+`js/game/light-presets.js` ([references/bake.md](references/bake.md)). Edit `applyRaceSettings` only
 for STRUCTURAL changes.
 
 localStorage (`apex26.lightTune`) outranks shipped presets — RESET in the
@@ -42,7 +42,7 @@ node tools/test-bg.mjs webgl    # lighting-ab + tuner-grade + probes
 node tools/test-bg.mjs ab       # lighting-ab only
 ```
 
-Related: **bake-lighting**, **webgl-debug**, **debug-cameras**.
+Related: **webgl-debug**, **debug-cameras**.
 
 ## Visual A/B with slider-effect
 
@@ -81,3 +81,6 @@ Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools.
 
 - `lightState` fields, symptom → knob table, A/B capture, contract tests →
   [references/symptoms.md](references/symptoms.md).
+- A pasted `window.LightPresets` / `window.LightEdits` blob (LIGHTING TUNER
+  COPY VALUES) → [references/bake.md](references/bake.md) — `scripts/bake.mjs`
+  is a FULL REPLACE, `scripts/merge-proposals.mjs` merges a delta.

@@ -74,7 +74,7 @@ Load from the SKILL.md index when the task needs this detail.
      race-control logic changes.
    - Run `node tools/test-bg.mjs debris` for debris and caution browser coverage.
    - Use `test:tooling-fast` for docs/hooks/unit inventory checks.
-   - If JS changed, use `bump-cache`.
+   - If JS changed, run `node tools/bump-cache.mjs --apply`.
 
 ## Common Mistakes
 

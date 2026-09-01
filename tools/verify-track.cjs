@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // verify-track.cjs — headless build check for Apex 26 track definitions.
+// @doc Headless build guard: runs `buildRoad/Terrain/Props/Gate` for one circuit (or `--all`) in a VM; any THROW fails.
+// @skill debug-tracks
 // Loads the full TRACK_VM manifest list (the track engine — geom, mesh,
 // surface, graph, the scenery-* files — plus every circuit and tracks.js) in a
 // Node.js VM, stubs GLX so that

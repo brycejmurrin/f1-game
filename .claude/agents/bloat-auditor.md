@@ -39,15 +39,14 @@ plus the three most likely future sites (file + why).
 
 Cap: **eight** `BLOAT` rows. Prefer the highest `cost` with `do-not: none`.
 
-## Flat prohibitions
+## Scope rules
 
-- NEVER edit `js/`, `css/`, tests, skills, `index.html`, or `version.json`.
-- NEVER start Playwright, `test-bg`, `test-solo`, `chrome-start`,
-  `apex-eval.mjs`, or `mcp-cli.mjs probe`. Do NOT pass `--wait`.
-- NEVER write `extract-module.mjs --out` / `--g-out` (analyse prints only).
-- NEVER bump `?v=N` / `version.json`.
+- NEVER start `apex-eval.mjs` or `mcp-cli.mjs probe` either (each is a
+  Chromium boot); NEVER write `extract-module.mjs --out` / `--g-out`.
 - NEVER propose splitting `updateCar()` / `render()`, IIFE→ESM, a
   `Tracks.curvature()` move onto the unaided player, or deleting a
   bug-explaining / silent-catch comment.
-- If this session is a linked worktree: verify a session-known file from
-  the parent prompt exists. If it does not, STOP.
+- In a linked worktree: verify a session-known file from the parent prompt
+  exists. If it does not, STOP.
+
+Flat prohibitions: AGENTS.md §Verification 3 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.

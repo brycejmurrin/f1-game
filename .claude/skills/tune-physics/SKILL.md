@@ -43,7 +43,7 @@ node tools/test-bg.mjs steering
 node tools/check-physics.mjs <grip|bank|roadfollow|steer>
 ```
 
-If you edited `js/game.js`, **bump-cache** before commit. Theory:
+If you edited `js/game.js`, `bump-cache.mjs --apply` before commit. Theory:
 `docs/PHYSICS.md`, `docs/research/steering-research.md`.
 
 ## Load on demand

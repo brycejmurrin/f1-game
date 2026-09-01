@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /*
+ * @doc Batch glTF → AX26 model importer for real CC0 model PACKS (directories of .gltf + .bin + textures).
+ * @skill asset-pack
  * Apex 26 — batch glTF -> AX26 model importer.
  *
  * WHY THIS IS SEPARATE FROM assets.mjs bake-model. bake-model takes one local

@@ -1,5 +1,7 @@
 "use strict";
 // Single source for WebGPU Chromium flags — harness.mjs, chrome-devtools-mcp.sh,
+// @doc Single source for WebGPU Chromium flags, shared by `harness.mjs`, `chrome-devtools-mcp.sh` and tests.
+// @skill webgpu-debug / mcp-probe
 // and tests must agree or MCP probes read "no adapter" while wgx-shot passes.
 
 /** Playwright launch args (full Chromium binary — NOT the headless shell). */

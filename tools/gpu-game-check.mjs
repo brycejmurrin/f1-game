@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc Portable sibling of gfx-probe (no Lavapipe, no Linux paths): boots the game on the runner's real GPU and dumps errors.
+// @skill gpu-census.yml
 /* gpu-game-check.mjs — run the ACTUAL GAME on whatever GPU this machine has,
  * and report the renderer's own verdict.
  *

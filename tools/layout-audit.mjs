@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // LAYOUT AUDIT — one CLI for menu geometry, screenshots, and DOM dumps.
+// @doc ONE CLI for menu geometry + PNG/DOM capture: clip/tap/overflow matrix, `--gallery`, `--screen=ID`, `--survey`.
+// @skill survey-ui-matrix
 //
 // Catalog: menu-screens.mjs. Capture engine: menu-capture.mjs (library, not a CLI).
 //

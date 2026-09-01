@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // wgx-capture.mjs — capture WGX render evidence on a REAL WebGPU device.
+// @doc REAL WGX pixels in-container (~10 s): soft-present readback via `GLX.capturePixels()` → `frame.png`.
+// @skill webgpu-debug
 //
 // SwiftShader-Dawn EXECUTES shader work in this container. The native swapchain
 // never composites; WGX soft-presents (final pass → COPY_SRC texture → 2D blit

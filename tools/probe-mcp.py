@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""probe-mcp — unified passthrough for EVERY Chrome DevTools + TinyFish MCP tool.
+# @doc Passthrough for every Chrome DevTools + TinyFish MCP tool (`chrome_*` / `tinyfish_*`): list-tools / call / serve.
+# @skill mcp-probe
+"""probe-mcp — unified CLI passthrough for EVERY Chrome DevTools + TinyFish MCP tool.
 
-Cloud / Cursor sessions often lack `mcp__chrome-devtools__*` and
-`mcp__tinyfish__*` in the tool catalog (stdio list is fixed at session start).
-This bridge exposes the full upstream catalogs under stable prefixes so one
-entry (`.mcp.json` → `probe`) or one CLI covers both backends:
+NOT MCP-ATTACHED (removed from .mcp.json / .cursor/mcp.json 2026-09). The
+attached servers are apex-tools, playwright-official and chrome-devtools; this
+file stays a CLI because its `chrome-start` daemon + `call` auto-routing has no
+equivalent elsewhere. The tinyfish_* half cannot work in this container (egress
+blocks agent.tinyfish.ai) — live Pages checks go through the deploy-research
+subagent (host fetch / WebFetch). `serve` still speaks stdio MCP for a host
+with egress that wants to attach it by hand. Prefixes:
 
   chrome_<tool>     → tools/chrome-devtools-mcp.sh  (stdio, SwiftShader)
   tinyfish_<tool>   → tools/tinyfish-mcp.sh ensure + http://127.0.0.1:3711/mcp
@@ -16,7 +21,7 @@ CLI (no MCP host required):
   python3 tools/probe-mcp.py call chrome_navigate_page '{"url":"http://127.0.0.1:3456/"}'
   python3 tools/probe-mcp.py call tinyfish_fetch_content \\
       '{"urls":["https://brycejmurrin.github.io/f1-game/version.json"]}'
-  python3 tools/probe-mcp.py serve          # stdio MCP for Cursor (.mcp.json)
+  python3 tools/probe-mcp.py serve          # stdio MCP (NOT wired in .mcp.json; opt-in)
 
 A bare `call` spawns a FRESH Chromium per invocation — state does not survive
 between calls (measured 2026-08-17: navigate_page in one call, list_pages in
@@ -446,7 +451,7 @@ def cmd_help(_: argparse.Namespace) -> int:
   chrome-start         persistent Chromium daemon in tmux (state survives calls)
   chrome-stop          stop it — ALWAYS before test-bg.mjs / Playwright
   chrome-daemon        the daemon itself, foreground (chrome-start runs this)
-  serve                stdio MCP server (Cursor .mcp.json entry)
+  serve                stdio MCP server (not in .mcp.json since 2026-09; opt-in only)
 """
     )
     return 0
@@ -682,11 +687,12 @@ def cmd_serve(_: argparse.Namespace) -> int:
                             "capabilities": {"tools": {"listChanged": False}},
                             "serverInfo": {"name": "probe-mcp", "version": "1.0.0"},
                             "instructions": (
-                                "Unified Apex probe MCP. Prefer chrome_* for the local "
-                                "working tree (WebGL/SwiftShader) and tinyfish_* for "
-                                "public/deployed URLs. Park chrome to about:blank before "
-                                "Playwright. Use tools/tinyfish-mcp.sh deploy-check for "
-                                "live vs local version.json."
+                                "Apex probe bridge (CLI-first; not in .mcp.json since 2026-09). "
+                                "chrome_* drives the local working tree (WebGL/SwiftShader). "
+                                "tinyfish_* needs egress to agent.tinyfish.ai, which the "
+                                "container blocks — live version.json / public web is the "
+                                "deploy-research subagent (host fetch). Park chrome to "
+                                "about:blank before Playwright."
                             ),
                         },
                     }

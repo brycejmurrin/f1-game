@@ -3,11 +3,13 @@
 // Instruments GLX create/free (same pattern as custom-team.spec.js) — no new
 // production debug APIs.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function waitReady(page) {
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
 }
 
 async function installMeshProbe(page) {
@@ -127,7 +129,7 @@ async function applyPartsAndPark(page) {
     window.__apex.park(0.1);
     window.__apex.camera("chase");
   });
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
 async function quitRace(page) {
@@ -393,7 +395,7 @@ test.describe("Parts mesh caches — eviction bounds", () => {
     });
 
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: 15_000 });
+    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => {
       window.__apex.go();
       window.__apex.jump(0.10, 35, 0);

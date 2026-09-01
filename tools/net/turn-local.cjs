@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // turn-local.cjs — a TURN server on localhost, so the RELAY leg can be tested.
+// @doc A TURN server on localhost so the RELAY leg of ICE can be tested.
+// @skill multiplayer-debug
 //
 //   npm i --no-save node-turn && node tools/net/turn-local.cjs [--debug]
 //   node tools/net/rtc-e2e-3p.mjs --relay --turn=turn:127.0.0.1:3478,apex,apex

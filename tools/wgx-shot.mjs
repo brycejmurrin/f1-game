@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // wgx-shot.mjs — WebGPU screenshots (software adapters use the 2D compositor blit).
+// @doc WebGPU screenshots, one track or `--gallery`: `canvas.png`, HUD, `view.txt`; polls until pixels are non-black.
+// @skill webgpu-debug
 //
 // SwiftShader-Vulkan validates WGX but does not composite the hidden swapchain;
 // wgx.js readbacks the present target and putImageData() on #game when allowed.

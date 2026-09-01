@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc Does each LIGHTING TUNER slider change the image? Sharded, resumable, paired A→B→A' sampling per (condition, knob).
+// @skill lighting-tuner
 /* lighting-tuner-sweep.mjs — does each LIGHTING TUNER slider actually change the image?
  *
  * SHARDED and RESUMABLE. One shard = one (condition, knob-range). Each knob's

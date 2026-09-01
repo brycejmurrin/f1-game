@@ -21,13 +21,9 @@ You classify physics-contract sites in Apex 26. You are READ-ONLY.
    - **broadcast-only** — cameras, HUD, commentary
    - **surface** — road/kerb/wall geometry, not a steer torque
 3. A player-path read with assists off and no column is `BLOCKER`.
-   A site you cannot classify without a rendered lap is `unverified`.
+   A site you cannot classify without a rendered lap is `unverified` — never
+   run `check-physics.mjs` / `physics-tune-sweep.mjs` to find out.
 
-## Flat prohibitions
-
-- NEVER edit `js/`, `css/`, tests, `index.html`, or `version.json`.
-- NEVER start Playwright, `test-bg`, `test-solo`, `check-physics.mjs`,
-  or `physics-tune-sweep.mjs`. Do NOT pass `--wait` to verify-change.
-- NEVER bump `?v=N` / `version.json`.
-- If this session is a linked worktree: verify a session-known file from
-  the parent prompt exists. If it does not, STOP.
+Flat prohibitions: AGENTS.md §Verification 3 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.
+In a linked worktree: verify a session-known file from the parent prompt
+exists; if it does not, STOP.

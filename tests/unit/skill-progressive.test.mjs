@@ -88,23 +88,26 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["lighting-tuner", "references/symptoms.md"],
     ["tune-physics", "references/harness.md"],
     ["car-viewer", "references/presets.md"],
-    ["scene-graph-instancing", "references/workflow.md"],
     ["audio-debug", "references/diagnose.md"],
     ["survey-track", "references/loop.md"],
     ["pwa-cache-service-worker", "references/workflow.md"],
     ["asset-pack", "references/workflow.md"],
     ["ui-menu-a11y", "references/workflow.md"],
     ["check-changes", "references/guards.md"],
+    // 2026-09 folds — the absorbed skill's body lives in the target's references/.
+    ["check-changes", "references/triage.md"],
+    ["check-changes", "references/bump.md"],
+    ["check-changes", "references/deploy.md"],
+    ["playwright-probe", "references/motion-capture.md"],
+    ["playwright-probe", "references/perf-profile.md"],
+    ["lighting-tuner", "references/bake.md"],
+    ["scenery-dress", "references/instancing.md"],
+    ["agent-view", "references/state.md"],
     ["webgpu-debug", "references/defects.md"],
-    ["bake-lighting", "references/steps.md"],
     ["scenery-dress", "references/rules.md"],
     ["game-feel", "references/workflow.md"],
     ["debug-cameras", "references/framing.md"],
     ["debug-tracks", "references/sweeps.md"],
-    ["motion-capture", "references/traps.md"],
-    ["perf-profile", "references/flame.md"],
-    ["debug-state", "references/hooks.md"],
-    ["deploy-merge", "references/protocol.md"],
     ["css-play", "references/loop.md"],
     ["slim-bloat", "references/do-not.md"],
     ["slim-bloat", "references/carves.md"],
@@ -115,6 +118,53 @@ test("previously-fat skills stay split (index + references/)", () => {
     assert.match(skill, new RegExp(ref.replace(".", "\\.")));
     assert.ok(fs.existsSync(path.join(SKILLS, name, ref)), `${name} lost ${ref}`);
   }
+});
+
+test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer stays thin", () => {
+  // 44 → 32. A folded skill coming back as its own directory re-splits a
+  // workflow the tests above now index under its target.
+  for (const gone of [
+    "webgpu-inspector", "webapp-testing", "pixel-perfect", "apex-env-setup",
+    "motion-capture", "perf-profile", "bake-lighting", "scene-graph-instancing",
+    "debug-state", "test-timeout-triage", "bump-cache", "deploy-merge",
+  ]) {
+    assert.equal(fs.existsSync(path.join(SKILLS, gone)), false, `${gone} was folded/deleted 2026-09`);
+  }
+  const dirs = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory());
+  assert.equal(dirs.length, 32, `expected 32 skills, got ${dirs.length}`);
+  const parity = fs.readFileSync(path.join(SKILLS, "cross-backend-parity/SKILL.md"), "utf8");
+  assert.ok(parity.split("\n").length <= 20, "cross-backend-parity is a pointer to docs/RENDERERS.md, not a workflow");
+  assert.match(parity, /docs\/RENDERERS\.md/);
+  // The bake scripts moved with their prose and must resolve the repo root
+  // from one level deeper.
+  for (const f of ["bake.mjs", "merge-proposals.mjs"]) {
+    const src = fs.readFileSync(path.join(SKILLS, "lighting-tuner/scripts", f), "utf8");
+    assert.match(src, /new URL\("\.\.\/\.\.\/\.\.\/\.\.\/", import\.meta\.url\)/, `${f} must resolve ROOT four levels up`);
+  }
+  const bake = fs.readFileSync(path.join(SKILLS, "lighting-tuner/references/bake.md"), "utf8");
+  assert.match(bake, /FULL REPLACE/);
+  assert.match(bake, /lighting-tuner\/scripts\/merge-proposals\.mjs/);
+  const state = fs.readFileSync(path.join(SKILLS, "agent-view/references/state.md"), "utf8");
+  assert.match(state, /physState\(\)/);
+  const inst = fs.readFileSync(path.join(SKILLS, "scenery-dress/references/instancing.md"), "utf8");
+  assert.match(inst, /apex_graph_parity/);
+  assert.match(inst, /BASE=/);
+  const mc = fs.readFileSync(path.join(SKILLS, "playwright-probe/references/motion-capture.md"), "utf8");
+  assert.match(mc, /recordVideo/);
+  assert.match(mc, /p90/);
+  const env = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith(".md") && e.name !== "README.md"
+        && /apex-env-setup|ensure-apex-env\.sh/.test(fs.readFileSync(p, "utf8")))
+        env.push(path.relative(ROOT, p));
+    }
+  };
+  walk(SKILLS);
+  walk(AGENTS);
+  assert.deepEqual(env, [], "env setup is AGENTS.md §Verification 1 + tools/cloud-agent-install.sh, not a skill");
 });
 
 test("skills do not recommend the retired test:career group", () => {
@@ -172,12 +222,18 @@ test("wgx-validate Usage lists --static as the no-browser gate", () => {
   assert.match(usage[0], /parent session only/);
 });
 
-test("verify-agent stays --fast and never starts Playwright", () => {
+test("verify-agent stays --fast, never starts Playwright, and carries the --base worktree mode", () => {
   const text = fs.readFileSync(path.join(AGENTS, "verify-agent.md"), "utf8");
   assert.match(text, /verify-change\.mjs --fast/);
   assert.match(text, /wgx-validate\.mjs --static/);
   assert.doesNotMatch(text, /test-solo\.mjs/);
   assert.doesNotMatch(text, /verify-change\.mjs --wait/);
+  // worktree-regression-check folded in here 2026-09.
+  assert.match(text, /--base <ref>/);
+  assert.match(text, /git worktree add/);
+  assert.match(text, /same-red/);
+  assert.match(text, /already-red-on-ref/);
+  assert.doesNotMatch(text, /--force-push|--force\b(?!\s+scratch)/);
 });
 
 test("every custom subagent declares name, description, and model", () => {
@@ -185,8 +241,11 @@ test("every custom subagent declares name, description, and model", () => {
   // name + description required; model: inherit (or a model id) so a subagent
   // does not silently pick a different model; readonly / is_background optional.
   const files = fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md");
-  assert.ok(files.length >= 7,
-    "expected deploy-research, verify-agent, track-surveyor, plus doc-drift / physics-contract / worktree-regression / bloat-auditor");
+  assert.deepEqual(files.sort(), [
+    "bloat-auditor.md", "deploy-research.md", "physics-contract-auditor.md",
+    "track-surveyor.md", "verify-agent.md",
+  ], "five agents since 2026-09 (worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
+  const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 3 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.";
   for (const f of files) {
     const text = fs.readFileSync(path.join(AGENTS, f), "utf8");
     const fm = frontmatter(text);
@@ -194,15 +253,20 @@ test("every custom subagent declares name, description, and model", () => {
     assert.equal(fm.name, id, `${f}: name must match the filename`);
     assert.ok(fm.description, `${f}: description is required`);
     assert.ok(fm.model, `${f}: model is required (use inherit unless a specific model is justified)`);
+    // One prohibition line replaces the five verbatim blocks (2026-09).
+    assert.ok(text.includes(ONE_LINE), `${f}: must carry the single flat-prohibitions line verbatim`);
+    assert.doesNotMatch(text, /^## Flat prohibitions/m, `${f}: the verbatim prohibition block is gone`);
+    assert.doesNotMatch(text, /NEVER bump `\?v=N`/, `${f}: bump rule lives in the one line`);
   }
 });
 
 test("review-pass contracts: no stale commands or steal phrases", () => {
   // 2026-08-17 review: these phrases sent agents down the wrong tool.
-  const triage = fs.readFileSync(path.join(SKILLS, "test-timeout-triage/SKILL.md"), "utf8");
+  const triage = fs.readFileSync(path.join(SKILLS, "check-changes/references/triage.md"), "utf8");
   assert.doesNotMatch(triage, /ONE browser group per batch \(`tools\/test-bg\.mjs`/);
   assert.doesNotMatch(triage, /test-bg\.mjs[\s\S]{0,40}enforces the cap/);
   assert.match(triage, /verify-change/);
+  assert.match(triage, /test-solo\.mjs/);
 
   const walkMd = (dir, fn) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -224,11 +288,13 @@ test("review-pass contracts: no stale commands or steal phrases", () => {
   assert.doesNotMatch(nt.description, /troubleshoot an Apex 26 track build/);
   assert.doesNotMatch(nt.description, /fix corners/);
 
-  const dm = frontmatter(fs.readFileSync(path.join(SKILLS, "deploy-merge/SKILL.md"), "utf8"));
-  assert.doesNotMatch(dm.description, /verifying a live GitHub Pages deploy/);
+  const dm = fs.readFileSync(path.join(SKILLS, "check-changes/references/deploy.md"), "utf8");
+  assert.doesNotMatch(dm, /verifying a live GitHub Pages deploy/);
+  assert.match(dm, /deploy-research/);
 
-  const ds = frontmatter(fs.readFileSync(path.join(SKILLS, "debug-state/SKILL.md"), "utf8"));
-  assert.doesNotMatch(ds.description, /debug understeer/);
+  const av = frontmatter(fs.readFileSync(path.join(SKILLS, "agent-view/SKILL.md"), "utf8"));
+  assert.doesNotMatch(av.description, /debug understeer/);
+  assert.match(av.description, /telemetry/);
 
   const gl = frontmatter(fs.readFileSync(path.join(SKILLS, "webgl-debug/SKILL.md"), "utf8"));
   assert.match(gl.description, /black|blank|dark/i);
@@ -266,7 +332,7 @@ test("coverage skills exist for input, season, data-hub, and AI", () => {
 });
 
 test("readonly review agents stay --fast and never start Playwright", () => {
-  for (const id of ["doc-drift-auditor", "physics-contract-auditor", "worktree-regression-check", "bloat-auditor"]) {
+  for (const id of ["physics-contract-auditor", "bloat-auditor", "verify-agent", "deploy-research"]) {
     const file = path.join(AGENTS, `${id}.md`);
     assert.ok(fs.existsSync(file), `missing .claude/agents/${id}.md`);
     const text = fs.readFileSync(file, "utf8");
@@ -281,17 +347,20 @@ test("readonly review agents stay --fast and never start Playwright", () => {
   const phys = fs.readFileSync(path.join(AGENTS, "physics-contract-auditor.md"), "utf8");
   assert.match(phys, /vstd-lint/);
   assert.match(phys, /AI-only/);
-  const wt = fs.readFileSync(path.join(AGENTS, "worktree-regression-check.md"), "utf8");
-  assert.match(wt, /verify-change\.mjs --fast/);
-  const drift = fs.readFileSync(path.join(AGENTS, "doc-drift-auditor.md"), "utf8");
-  assert.match(drift, /DOC-DRIFT/);
   const bloat = fs.readFileSync(path.join(AGENTS, "bloat-auditor.md"), "utf8");
   assert.match(bloat, /BLOAT/);
   assert.match(bloat, /bloat-scan\.mjs/);
-  assert.match(bloat, /NEVER start[\s\S]*chrome-start/);
-  assert.match(bloat, /NEVER start[\s\S]*apex-eval\.mjs/);
+  assert.match(bloat, /NEVER start[\s\S]*apex-eval\.mjs/, "a Chromium boot stays an explicit bloat-auditor don't");
   assert.doesNotMatch(bloat, /python3 tools\/probe-mcp\.py chrome-start/);
   assert.doesNotMatch(bloat, /node tools\/apex-eval/);
+  // deploy-research: host fetch, never the egress-blocked in-repo wrapper.
+  const deploy = fs.readFileSync(path.join(AGENTS, "deploy-research.md"), "utf8");
+  assert.match(deploy, /WebFetch/);
+  assert.match(deploy, /origin\/claude\/f1-game-project-26h3ng:version\.json/);
+  assert.doesNotMatch(deploy, /tinyfish-mcp\.sh (ensure|deploy-check|deploy-js|fetch|search)/,
+    "deploy-research must not run the in-repo tinyfish wrapper");
+  assert.doesNotMatch(deploy, /probe-mcp\.py call tinyfish_/);
+  assert.match(frontmatter(deploy).tools, /WebFetch/);
 });
 
 test("do not grow a parallel Cursor skills or agents tree", () => {
@@ -322,23 +391,28 @@ test("apex-shared.mdc stays a pointer, not a second AGENTS.md", () => {
   assert.match(text, /does \*\*not\*\* auto-load|does not auto-load/i);
 });
 
-test("file-family skills declare Cursor paths; cross-cutting skills do not", () => {
-  // Cursor skills.md (2026): `paths` hides a skill unless matching files are in
-  // play. Cross-cutting workflows must stay unset so they still match from chat.
-  const scoped = {
+test("no skill declares the Cursor-only `paths` field — every skill matches from chat", () => {
+  // Cursor's `paths` hides a skill unless matching files are in play; Claude
+  // Code ignores it. Until 2026-09 four file-family skills carried it and
+  // were invisible to a chat-only ask ("why is WGX black?" with no file open).
+  // The cross-cutting half of the old assertion is now universal.
+  const dirs = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory());
+  const scoped = [];
+  for (const d of dirs) {
+    const file = path.join(SKILLS, d.name, "SKILL.md");
+    if (!fs.existsSync(file)) continue;
+    const fm = frontmatter(fs.readFileSync(file, "utf8"));
+    if (fm.paths !== undefined) scoped.push(d.name);
+  }
+  assert.deepEqual(scoped, [], "leave `paths` unset — the description is the trigger");
+  // The four former file-family skills still name their files in the body.
+  for (const [name, re] of Object.entries({
     "webgpu-debug": /js\/render\/webgpu/,
     "webgl-debug": /js\/render\/glx/,
     "new-track": /js\/circuits/,
-    "scenery-dress": /js\/circuits/,
-  };
-  for (const [name, re] of Object.entries(scoped)) {
-    const fm = frontmatter(fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8"));
-    assert.ok(fm.paths, `${name}: missing paths frontmatter`);
-    assert.match(fm.paths, re, `${name}: paths ${fm.paths} should match ${re}`);
-  }
-  for (const name of ["check-changes", "bump-cache", "deploy-merge", "mcp-probe", "playwright-probe", "slim-bloat"]) {
-    const fm = frontmatter(fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8"));
-    assert.equal(fm.paths, undefined, `${name} is cross-cutting — leave paths unset`);
+    "scenery-dress": /js\/circuits|scenery\(api\)/,
+  })) {
+    assert.match(fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8"), re, `${name} lost its file-family anchor`);
   }
 });
 

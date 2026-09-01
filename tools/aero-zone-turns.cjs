@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc Pairs each geometry-detected straight with the `def.turns[]` indices bounding it, so an aero-zone claim can be checked.
+// @skill debug-tracks
 /* Apex 26 — pair each geometry-detected straight run with the turns[] indices
  * that bound it, so a real (fromTurn, toTurn) zone description can be checked
  * against what the engine will actually select — the missing step the first

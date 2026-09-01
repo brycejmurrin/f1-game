@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // Explicit maintenance tool. Tests never call this or access the network.
+// @doc Explicit maintenance tool that refreshes the offline F1 circuit reference data; tests never call it or the network.
+// @skill new-track
 import fs from "node:fs/promises";
 
 const SOURCE = "https://raw.githubusercontent.com/bacinger/f1-circuits/master/f1-circuits.geojson";

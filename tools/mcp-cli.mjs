@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc chrome-devtools MCP over stdio against a running build: `probe --backend webgpu`, `--eval`, `--console RE`, `--dry-run`.
+// @skill mcp-probe
 /* mcp-cli — drive the chrome-devtools MCP server directly, over stdio JSON-RPC.
  *
  * WHY THIS EXISTS, AND WHY IT IS NOT A SCRATCH FILE.

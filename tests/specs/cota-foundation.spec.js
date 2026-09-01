@@ -1,5 +1,5 @@
 // @ts-check
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const REQUIRED_MODELS = [
   "cota-amphitheater",
@@ -14,7 +14,8 @@ const REQUIRED_MODELS = [
 
 async function loadCota(page, timeOfDay = "day") {
   await page.evaluate((tod) => window.__apex.race("cota", tod, "dry"), timeOfDay);
-  await page.waitForFunction(() => window.__apex.info().track === "cota", null, { polling: 100, timeout: 15000 });
+  // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex.info().track === "cota", null, { polling: 100, timeout: BOOT_MS });
 }
 
 test.describe("COTA shared-foundation migration", () => {

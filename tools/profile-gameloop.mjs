@@ -1,4 +1,6 @@
 // tools/profile-gameloop.mjs — headless CPU profile of the game loop.
+// @doc Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools.
+// @skill perf-profile
 // Usage: node tools/profile-gameloop.mjs [track] [mode]
 //   mode "physics" (default): __apex.step()-driven synchronous loop
 //   mode "render": recordVideo-ticked rAF loop (compositor drives frames)

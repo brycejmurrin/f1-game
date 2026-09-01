@@ -1,6 +1,6 @@
 # MCP probe recipes (load on demand)
 
-Chrome setup, renderer probes, A/B ports, tinyfish deploy checks.
+Chrome setup, renderer probes, A/B ports, post-deploy checks (deploy-research).
 
 ## Probing a specific renderer
 
@@ -144,7 +144,7 @@ See `docs/research/CHROME-DEVTOOLS-MCP.md` § Background measure.
   - `take_heapsnapshot` + `get_heapsnapshot_*` — leak hunting (the mesh-cache
     "frees every cached variant" question, GPU-buffer eviction).
   - `performance_start_trace` / `performance_analyze_insight` — frame-budget /
-    GC-jitter profiling (overlaps `perf-profile`, but live).
+    GC-jitter profiling (overlaps playwright-probe's `references/perf-profile.md`, but live).
   - `list_console_messages` (`types:["error","warn"]`) — did the page throw.
   - `take_snapshot` — the a11y tree as cheap text (see survey-ui-matrix).
   - `lighthouse_audit` (`mode:"snapshot"`) — a11y/best-practices on the current
@@ -223,63 +223,46 @@ framework, no parallelism, no reporter. Use Playwright (`tools/test-bg.mjs`).
 
 ---
 
-## tinyfish MCP — post-deploy liveness check
+## Post-deploy liveness check (deploy-research — host fetch, NOT tinyfish)
 
 The whole suite tests the working tree; **nothing verifies the shipped artifact**.
 After a Pages deploy, confirm the live site actually serves the build you shipped.
 
-Prefer the shell helper (works in cloud agents where `mcp__tinyfish__*` is not
-in the session catalog):
+Since 2026-09 no TinyFish MCP is attached: the container egress blocks
+`agent.tinyfish.ai`, so `tools/tinyfish-mcp.sh deploy-check --tip` and
+`probe-mcp.py call tinyfish_*` can never answer here (they stay as CLIs for a
+box with egress). Route the check to the **deploy-research** subagent, which
+uses the host fetch tool (WebFetch, or the hosted TinyFish connector when the
+main session has it):
 
 ```
-./tools/tinyfish-mcp.sh ensure
-./tools/tinyfish-mcp.sh deploy-check --tip
-# → live=N tip=N local=M OK   or   live=N tip=M STALE (exit 1)
-#    --tip compares Pages to the deploy-branch tip, not this working tree
-./tools/tinyfish-mcp.sh deploy-js js/log.js
-# → shipped source at ?v=<live> (marker-grep path; index.html strips <script>)
-./tools/tinyfish-mcp.sh fetch --ttl 0 \
-  "https://brycejmurrin.github.io/f1-game/js/<path>.js?v=<N>"
+WebFetch https://brycejmurrin.github.io/f1-game/version.json     → { "build": N }
+git show origin/claude/f1-game-project-26h3ng:version.json         → the deploy tip
+# live == tip → OK; live < tip → STALE (Pages lag). Compare to the TIP, not the
+# working tree — a behind checkout is not a Pages miss.
 ```
 
-Or via MCP tools when the host has them wired (`.mcp.json` → `:3711` after
-`./tools/tinyfish-mcp.sh start`):
-
-```
-mcp__tinyfish__fetch_content
-  urls: ["https://brycejmurrin.github.io/f1-game/version.json"]
-```
-
-Expect `{ "build": <N> }` matching the `version.json` you pushed. A stale build
-here means the Pages deploy lagged or failed (measured 2026-08-12: live was 971
-while the repo was 1089 — a real lag the local suite could never have caught).
-`deploy-check` compares live vs local (exit 1 on mismatch). `--tip` compares
-live to `origin/claude/f1-game-project-26h3ng:version.json` so a behind
-working tree is not reported as a Pages miss.
-
-Fetch `index.html` too only for readable content — TinyFish's content extract
-**strips `<script>` tags**, so `?v=` cache-bust markers are not there. Grep a
-shipped JS URL with `?v=<live>` instead.
+A stale build here means the Pages deploy lagged or failed (measured 2026-08-12:
+live was 971 while the repo was 1089 — a real lag the local suite could never
+have caught).
 
 **Go further than `version.json`: fetch the shipped JS and grep it for your
 change.** A matching build number only proves Pages published *a* build with
-that number, not that your edit is inside it. `fetch_content` on
-`…/js/<path>.js?v=<N>` returns the real deployed source, so a marker unique to
-your change settles it. MEASURED 2026-08-13, confirming a per-chunk-lamp
+that number, not that your edit is inside it. Read the `?v=<12 hex>` for the
+path from the live `index.html`, fetch `…/js/<path>.js?v=<hash>` and grep a
+marker unique to your change. MEASURED 2026-08-13, confirming a per-chunk-lamp
 feature shipped: `_pickChunkLamps`, `uploadLightSet`, `perChunkLights` and
 `uCarBiasScale` all found in the live artifact.
 
-**Gotcha that will hand you a FALSE negative: `format: "markdown"` escapes
-`*`.** Grepping the fetched text for `d /= k * k` reported ABSENT while the
-code was demonstrably deployed — the fetcher had rendered it `d /= k \\* k`.
-Any pattern containing `*`, `_` or backticks needs the raw text checked
-(`python3 -c "print(repr(t[i-200:i+200]))"` around a nearby unescaped anchor)
-before you believe a miss. Same trap for `CAR_SHADOW_SIZE` → `CAR\\_SHAD…`.
-Pass `--format html` on `./tools/tinyfish-mcp.sh fetch` when markup matters.
+**Gotchas that hand you a FALSE negative.** A markdown-rendering fetcher
+escapes `*`, `_` and backticks (`d /= k * k` came back as `d /= k \\* k`;
+`CAR_SHADOW_SIZE` as `CAR\\_SHAD…`), and large bodies are TRUNCATED (measured
+2026-08-17: 6.1 KB back from a 200 KB `wgx.js`). Check the raw text around an
+unescaped anchor before believing a miss, and treat a marker past the first
+few KB as **unverifiable from a fetch** — fall back to git provenance (is the
+commit an ancestor of the deploy tip?).
 
-tinyfish `search` is for external grounding (research), not testing.
-
-## Research recipes (tinyfish — no Chrome)
+## Research recipes (public web — no Chrome)
 
 Use these when the question is the **deployed** artifact or the **public web**.
 For a long fetch/search that would flood the main context, delegate to the
@@ -288,33 +271,21 @@ inlining every page.
 
 | Goal | Command |
 |---|---|
-| Live vs deploy tip | `./tools/tinyfish-mcp.sh deploy-check --tip` |
-| Confirm a marker shipped | `./tools/tinyfish-mcp.sh deploy-js js/<path>.js` then grep the unique string |
-| Raw Pages URL | `./tools/tinyfish-mcp.sh fetch --ttl 0 "https://brycejmurrin.github.io/f1-game/…"` |
-| External grounding | `./tools/tinyfish-mcp.sh search "…"`, then `fetch` the best URLs |
-| Via probe wrapper | `python3 tools/probe-mcp.py call tinyfish_fetch_content '{"urls":["…"]}'` |
+| Live vs deploy tip | deploy-research: WebFetch `version.json` + `git show origin/<deploy>:version.json` |
+| Confirm a marker shipped | deploy-research: fetch `js/<path>.js?v=<live hash>` then grep the unique string |
+| External grounding | WebSearch / hosted TinyFish `search`, then fetch the best URLs |
+| Box WITH egress only | `./tools/tinyfish-mcp.sh deploy-check --tip` / `deploy-js --marker RE js/<path>.js` (CLI, not attached; key from shell / gitignored `.env`, no tracked fallback) |
 
-Do **not** use tinyfish for the working tree (localhost). Do **not** use Chrome
-DevTools MCP for `github.io` from this container (egress proxy). Pattern
-false-negatives under `format: markdown` — see the `*` escape gotcha above.
+Do **not** use a public-web fetcher for the working tree (localhost). Do **not**
+use Chrome DevTools MCP for `github.io` from this container (egress proxy).
 
-**Setup is explicit:** run `tools/tinyfish-mcp.sh setup` once. Key resolution
-is shell `TINYFISH_API_KEY` > gitignored `.env` > tracked
-`TINYFISH_KEY_FALLBACK` (`TINYFISH_NO_FALLBACK=1` disables it). Custom key:
-https://agent.tinyfish.ai/home. `ensure` starts an existing build; it fails
-with setup guidance when the clone is absent.
-All 16 upstream tools verified working 2026-08-17 except `get_wallet`
-("Wallet is not available for your account yet" — account-gated upstream,
-not a wrapper bug).
-
-**Upstream quirk (measured 2026-08-17): `create_browser_session` returns
-`session_id: "tf-<uuid>"`, but `run_web_automation`/`run_web_automation_async`
-validate `session_id` as a BARE UUID** — pass the id with the `tf-` prefix
-stripped or the call fails `Invalid UUID` without ever reaching the session.
-The completed-run proof: a trivial automation against the deployed
-`version.json` queued, ran, and answered ("The build number is 1297") in
-under a minute; heavier goals from `list_runs` history took 12–20 minutes,
-so poll `get_run` at the interval the queue message suggests, not in a loop.
+**Upstream TinyFish quirk (measured 2026-08-17, hosted connector):
+`create_browser_session` returns `session_id: "tf-<uuid>"`, but
+`run_web_automation`/`run_web_automation_async` validate `session_id` as a
+BARE UUID** — pass the id with the `tf-` prefix stripped or the call fails
+`Invalid UUID` without ever reaching the session. Heavier goals from
+`list_runs` history took 12–20 minutes, so poll `get_run` at the interval the
+queue message suggests, not in a loop.
 
 ---
 ## Getting a report off a REAL device (a phone with the bug)

@@ -66,31 +66,32 @@ test("every wrap row has a real CLI (or built-in) and a real skill", () => {
   assert.deepEqual(missing, [], "wrap map points at a missing CLI or skill");
 });
 
-test("server table names the repo five including playwright", () => {
+test("server table names the three attached servers and the four that left", () => {
   const doc = read("docs/AGENT-SURFACE.md");
-  for (const name of [
-    "apex-tools",
-    "probe",
-    "chrome-devtools",
-    "chrome-devtools-official",
-    "tinyfish",
-    "playwright",
-    "playwright-official",
-  ]) {
+  for (const name of ["apex-tools", "chrome-devtools", "playwright-official"]) {
     assert.match(doc, new RegExp(`\\*\\*${name}\\*\\*`), `AGENT-SURFACE.md must name **${name}**`);
+  }
+  // Removed 2026-09 — still documented as CLI-only so nobody re-adds them blind.
+  for (const gone of ["probe", "tinyfish", "chrome-devtools-official"]) {
+    assert.match(doc, new RegExp(`\\*\\*${gone}\\*\\*`), `AGENT-SURFACE.md must explain why **${gone}** left`);
   }
   assert.match(doc, /browser_\*/);
   assert.match(doc, /playwright-mcp\.sh/);
+  assert.match(doc, /probe-mcp\.py chrome-start/);
+  assert.match(doc, /deploy-research/);
   const cfg = JSON.parse(read(".mcp.json"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
-    "chrome-devtools-official",
-    "playwright",
     "playwright-official",
-    "probe",
-    "tinyfish",
   ]);
+  const cursor = JSON.parse(read(".cursor/mcp.json"));
+  assert.deepEqual(cursor, cfg, ".cursor/mcp.json must lockstep .mcp.json");
+});
+
+test("wrap map is exactly the twelve kept wraps", () => {
+  const catalog = JSON.parse(fs.readFileSync(CATALOG, "utf8"));
+  assert.equal(catalog.tools.length, 12, "30 → 12 on 2026-09; grow it on purpose, in the doc too");
 });
 
 test("never-wrap table names the load-bearing refuses", () => {

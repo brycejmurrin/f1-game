@@ -1,3 +1,5 @@
+// @doc lighting-campaign: the Playwright capture leg — static server, campaign page, configured views per condition.
+// @skill lighting-tuner
 import { createServer } from "node:http";
 import { mkdirSync, readFileSync } from "node:fs";
 import { extname, join, resolve, sep } from "node:path";

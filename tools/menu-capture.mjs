@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // menu-capture.mjs — library for layout-audit --gallery / --screen= (not a CLI).
+// @doc Library (not a CLI): `runMenuShot` / `runMenuGallery` behind `layout-audit --gallery` / `--screen=`.
+// @skill survey-ui-matrix
 //
 //   import { runMenuShot, runMenuGallery } from "./menu-capture.mjs";
 //

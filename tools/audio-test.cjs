@@ -1,4 +1,6 @@
 /*
+ * @doc Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead.
+ * @skill audio-debug
  * Engine-audio pitch test (objective, since we can't listen).
  *
  * Drives GameAudio.setEngine(rev, boost, offroad, speed, gear) with controlled

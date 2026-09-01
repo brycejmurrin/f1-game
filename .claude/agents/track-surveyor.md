@@ -37,13 +37,14 @@ read-only.
 5. Report: what moved, the before/after survey numbers, and the exact baseline
    deltas (file + count) if any — the parent decides whether a baseline moves.
 
-## Flat prohibitions
+## Scope rules
 
-- NEVER run Playwright **test groups** (`test-bg.mjs`, `test-solo.mjs`,
-  `npx playwright test`) — report the change unverified instead.
-- NEVER edit `js/track/` (the engine), other circuits, baselines
-  (`tools/*-baseline.json`), tests, `index.html`, or `version.json`.
+- The ONE circuit file is your only write. Never `js/track/` (the engine),
+  other circuits, baselines (`tools/*-baseline.json`), tests, `index.html`,
+  or `version.json`. Report the change unverified rather than running a group.
 - NEVER flip a curvature sign without a rendered lap (+k = LEFT-hand turn).
 - In a linked worktree: first step is `git checkout -B <branch> <the session
   branch or its SHA>` and verify a session-known file — worktrees default to a
   stale base.
+
+Flat prohibitions: AGENTS.md §Verification 3 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.

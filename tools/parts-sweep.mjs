@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // How much does each catalog option ACTUALLY change the car? Offline, no browser.
+// @doc How much does each catalog option change the car? Builds all options offline via `node:vm` against the right baseline.
+// @skill garage-parts-livery
 //
 // AUTHOR-TIME + guard. tests/unit/parts-visual-distinctness.test.mjs imports
 // sweep()/classify()/THRESHOLDS from here.

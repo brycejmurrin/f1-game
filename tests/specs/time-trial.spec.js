@@ -2,14 +2,16 @@
 // Time Trial mode: ghost recording, ghost delta HUD, sector-split announces,
 // and the TT results panel. Uses __apex.tt() to enter TT mode programmatically.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function enterTT(page, trackId = "monza") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate((id) => window.__apex.tt(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
 // ── Mode flags ────────────────────────────────────────────────────────────────

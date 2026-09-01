@@ -57,7 +57,7 @@ Load from the SKILL.md index when the task needs this detail.
    which in the running game would strand the player on the menu. Fix before
    pushing. Common causes: a missing destructure (`out` not pulled from `api`), a
    node index out of range, or bad track data.
-4. **Bump the cache version** (use the `bump-cache` skill) — you edited
+4. **Bump the cache version** (`node tools/bump-cache.mjs --apply`) — you edited
    `index.html` and/or a JS file.
 5. **Visual check** — load and screenshot it (use the `playwright-probe` skill's `shot.mjs`):
    ```js

@@ -1,3 +1,5 @@
+// @doc Shape-error maths (`MAX_SHAPE_ERROR`, `signedArea`, …) shared by the circuit-accuracy tests.
+// @skill new-track
 export const MAX_SHAPE_ERROR = 0.31;
 
 export function signedArea(points) {

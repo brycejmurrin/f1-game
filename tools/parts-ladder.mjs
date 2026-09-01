@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // Is a catalog option ever worth buying? Offline, no browser.
+// @doc Would anyone ever PICK this catalog option? Proves no paid option is dominated by a cheaper one (offline, no browser).
+// @skill garage-parts-livery
 //
 // AUTHOR-TIME + guard. tests/unit/parts-ladder.test.mjs imports liveSet()/
 // dominated()/LADDER from here.

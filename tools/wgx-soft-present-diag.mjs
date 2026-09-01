@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // Diagnose WGX soft-present: visible #game 2D blit vs capturePixels readback
+// @doc Phased soft-present diagnostic (2D blit vs `capturePixels`) across SwiftShader / Lavapipe / Lavapipe+Xvfb.
+// @skill webgpu-debug / mcp-probe
 // across SwiftShader / Lavapipe / Lavapipe+Xvfb. Prefer gfx-probe.mjs for the
 // primary visible-canvas gate; this tool is a low-level A/B diagnostic.
 import { spawnSync } from "node:child_process";

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /**
+ * @doc Detach/status/wait/stop twin of `test-bg.mjs` for `cdmcp-measure.py`: `cdmcp-bg.mjs boot --port 3462`.
+ * @skill mcp-probe
  * cdmcp-bg.mjs — start chrome-devtools MCP measurements in the BACKGROUND.
  *
  * Twin of tools/test-bg.mjs for Chromium MCP probes. Detaches

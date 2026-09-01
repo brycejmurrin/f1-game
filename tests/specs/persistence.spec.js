@@ -25,7 +25,7 @@
  * store.set + store.get round trip) rather than reaching into the module, so
  * the test breaks when a PLAYER would notice and not when a name changes.
  */
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 /** Break localStorage.setItem the way a zero quota does, BEFORE any script runs. */
 async function bootBroken(page, name = "QuotaExceededError") {
@@ -43,7 +43,8 @@ async function bootBroken(page, name = "QuotaExceededError") {
     };
   }, [name]);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
+  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
 test.describe("persistence failure is visible", () => {

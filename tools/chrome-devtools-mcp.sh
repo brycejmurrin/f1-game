@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# @doc Wrapper for the local `scratch/chrome-devtools-mcp` clone: `clone`/`build`/`run`/`verify`/`status`/`help`.
+# @skill mcp-probe
 # Chrome DevTools MCP — local clone at scratch/chrome-devtools-mcp (gitignored).
 # Cursor: .mcp.json invokes this script with "run" (stdio MCP).
 set -euo pipefail

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc Starts test groups in the BACKGROUND and hands back a log to tail; sequential by default (`--parallel`, `--wait`).
+// @section runner
 /**
  * test-bg.mjs — start test groups in the BACKGROUND and hand back a log to tail.
  *
@@ -28,7 +30,7 @@
  * log rather than to "the run".
  *
  * Sizing: every worker is a Chromium + SwiftShader process, so total browsers
- * is groups × workers. WORKERS defaults to 2; on a small box keep concurrent
+ * is groups × workers. WORKERS defaults to 1 on ≤4 cores (2 above); keep concurrent
  * groups at 1 unless you know the box is quiet.
  */
 import { spawn } from "node:child_process";
@@ -40,7 +42,10 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LOGDIR = path.join(ROOT, "artifacts/logs");
 const STATEFILE = path.join(LOGDIR, "test-bg.json");
-const WORKERS = process.env.WORKERS || "2";
+// One worker on a 4-core box: two SwiftShader workers push loadavg to 6-8 and
+// every "failure" is then a timeout (tiny.log 2026-09-01: 3 false reds, all
+// PASS solo). Bigger boxes keep 2.
+const WORKERS = process.env.WORKERS || (os.cpus().length <= 4 ? "1" : "2");
 
 // THE CAP EXISTS BECAUSE OVERSUBSCRIPTION DOES NOT LOOK LIKE OVERSUBSCRIPTION.
 // Every Playwright worker drives a SwiftShader Chromium, so the real browser
@@ -275,6 +280,16 @@ function start(groups, { force = false, parallel = false } = {}) {
   // Default: one group at a time. --parallel raises the cap to cores/WORKERS.
   // --force removes the cap (legacy escape hatch).
   const maxConcurrent = force ? Infinity : (parallel ? PARALLEL_MAX : 1);
+
+  // A busy box measures the machine, not the code (AGENTS.md §Verification 5):
+  // refuse to start a browser group above loadavg 3 unless --force. Every false
+  // red in tiny.log on 2026-09-01 was a start at loadavg > 3.
+  const load1 = os.loadavg()[0];
+  if (!force && load1 >= 3) {
+    console.error(`[test-bg] REFUSED: 1-min loadavg ${load1.toFixed(2)} >= 3 — a timeout now would measure the box, not the code.`);
+    console.error(`[test-bg] wait for it to settle (cat /proc/loadavg), or pass --force and do not trust a timeout from this run.`);
+    process.exit(3);
+  }
 
   // Count what is ALREADY on the CPU. An earlier batch still running is exactly
   // as expensive as one started now, and is the case most likely to be forgotten

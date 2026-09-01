@@ -157,11 +157,14 @@ test("ship filter chooses a successful active deployment, not merely the newest 
   assert.doesNotMatch(smoke, /j\[0\].*\.sha.*process\.stdout\.write/);
 });
 
-test("ship filter enforces cache generation against the active deployment", () => {
+test("the ship filter no longer polices the committed generation — the deploy stamps it", () => {
+  // Until 2026-09-01 this step failed CI when deployed bytes changed without a
+  // strictly newer committed build. pages.yml now stamps the generation from
+  // the commit count at deploy time (deploy-stamp.test.mjs pins that), so the
+  // committed number is a placeholder and a check on it would fail every push.
   const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
-  assert.match(smoke, /bump-cache\.mjs --check --since "\$LIVE"/);
-  assert.match(smoke, /if ! node tools\/bump-cache\.mjs[\s\S]*?exit 1/,
-    "generation failures must fail CI, not merely fall through to the smoke gate");
+  assert.doesNotMatch(smoke, /bump-cache\.mjs --check --since/);
+  assert.match(smoke, /stamps the generation from the commit count/, "the replacement rule is written where the check stood");
 });
 
 // The smoke per-test cap READ from the workflow, not restated here. It was

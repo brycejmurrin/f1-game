@@ -72,7 +72,7 @@ Compare `before-*.png` vs `after-*.png`; confirm the probe is flag-free.
 - Pixel-diff suite is PARKED under `tests/manual/tracks-visual.spec.js` (no
   baselines). Do not treat it as a gate. Intentional goldens:
   `npm test -- tests/manual/tracks-visual.spec.js --update-snapshots`.
-- **bump-cache** after any `js/*`/`css/*` edit.
+- `bump-cache.mjs --apply` after any `js/*`/`css/*` edit.
 - Pick remaining groups with **check-changes**.
 
 ## Worked example — Montreal floating trees

@@ -1,4 +1,6 @@
 // Measure the career economy against the catalog it buys from.
+// @doc Sims a career season per starting team through the real `Career.settleRound()`; reports what a year's income affords.
+// @skill career-mode
 //
 // WHY THIS EXISTS. QUALI_TRIM shipped as a reasoned guess and was 27% wrong; it
 // took a measurement to find that out. The economy is the same class of number

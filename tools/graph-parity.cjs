@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc Scene-graph migration gate: builds every circuit twice (baseline ref vs tree) and diffs prop geometry vertex for vertex.
+// @skill scene-graph-instancing
 /* graph-parity.cjs — the gate for the scene-graph migration.
  *
  * Migrating an emitter from "emit primitives inline" to "record a model + place

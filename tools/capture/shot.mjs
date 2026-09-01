@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // Deterministic scene screenshot via __apex camera hooks + headless Chromium.
+// @doc One deterministic framed screenshot via `__apex` camera hooks: `shot.mjs <trackId> <frac> [cam] [out.png]`.
+// @skill playwright-probe
 // Usage:
 //   node tools/capture/shot.mjs <trackId> <frac> [cam] [out.png]
 //     [--az N] [--el N] [--dist N] [--side -1|1] [--hud] [--tod day|dusk|dawn|night]

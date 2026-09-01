@@ -1,4 +1,6 @@
 // ui-scale-axis — the SCALE axis shared by the three fit tools (layout-audit,
+// @doc The `--scale=` axis (80–150 % interface size) shared by layout-audit, menu-fit and fit-audit.
+// @skill survey-ui-matrix
 // menu-fit, fit-audit).
 //
 // WHY. Those tools measure a matrix of screen x viewport, and that matrix

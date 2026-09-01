@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // agent — the agent-facing toolbelt as a CLI. Boots the game headless and calls
+// @doc Agent toolbelt CLI — boots headless and calls one agent-view surface (`world`/`track`/`scene`/`rollout`/`help`).
+// @skill agent-view
 // one of the world-view hooks, printing JSON.
 //
 //   node tools/agent.mjs help

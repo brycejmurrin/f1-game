@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // wgx-validate.mjs — REAL Dawn validation of the WGX (WebGPU) renderer,
+// @doc REAL Dawn validation of the WGX renderer in-container (~5 s): full Chromium, races a track, fails on any GPU error.
+// @skill webgpu-debug
 // in-container.
 //
 // For months this repo believed "WGSL is not compilable in this container" and

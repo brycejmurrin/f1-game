@@ -22,7 +22,7 @@ swallowed.
 
 **Fetch.** Navigation + `version.json` = network-first (3 s → cache).
 Everything else = cache-first. Always refresh **content hashes AND the
-shell generation** together (**bump-cache**). Never bump `version.json`
+shell generation** together (`bump-cache.mjs --apply`). Never bump `version.json`
 during a Playwright run.
 
 ## When to Use
@@ -36,7 +36,7 @@ during a Playwright run.
 
 - Cross-origin API caching (Jolpica/OpenF1 excluded by origin).
 - `blob:` music — SW declines non-HTTP schemes.
-- In-race game bugs. JS/CSS-only edits → **bump-cache** alone.
+- In-race game bugs. JS/CSS-only edits → `bump-cache.mjs --apply` alone.
 
 | Asset class | Install | Fetch |
 |---|---|---|
@@ -50,7 +50,7 @@ npm run test:service-worker
 npm run test:tooling-fast
 ```
 
-Related: **bump-cache**, **check-changes**.
+Related: `bump-cache.mjs --apply`, **check-changes**.
 
 ## Load on demand
 

@@ -1,13 +1,13 @@
 ---
 name: data-hub
-description: Use when Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1 wiring, js/data/*, or data-lifecycle / telemetry-compare tests are being changed or a tab is empty/stale/wrong year. Not for menu layout of the hub (ui-menu-a11y) or in-race physState telemetry (debug-state).
+description: Use when Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1 wiring, js/data/*, or data-lifecycle / telemetry-compare tests are being changed or a tab is empty/stale/wrong year. Not for menu layout of the hub (ui-menu-a11y) or in-race physState telemetry (agent-view).
 ---
 
 # Data Hub / F1API
 
 `js/data/hub.js` is the overlay (`#datahub`). Tab loaders live in the
 split `js/data/*` modules. Styles in `css/data.css` (`dh-` prefix).
-In-race slip/grip/timing is **debug-state**, not this overlay.
+In-race slip/grip/timing is **agent-view** (`references/state.md`), not this overlay.
 
 ## Tabs
 

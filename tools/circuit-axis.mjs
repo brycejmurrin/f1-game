@@ -1,4 +1,6 @@
 // circuit-axis — the CIRCUIT ASPECT axis for the fit tools, alongside
+// @doc The `--circuits` axis for the two menu screens that draw a circuit (#select preview, #track-detail) in the fit tools.
+// @skill survey-ui-matrix
 // ui-scale-axis's UI SIZE axis.
 //
 // WHY. The two screens that draw a circuit map — #select's preview card and the

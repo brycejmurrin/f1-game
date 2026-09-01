@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# @doc Idempotent Playwright Chromium install into `/opt/pw-browsers`; skips `npm install` when node_modules is usable.
+# @skill apex-env-setup
 # Install Playwright Chromium into /opt/pw-browsers (the path tools/harness.mjs
 # and chrome-devtools-mcp.sh prefer). Idempotent: safe to re-run from
 # environment install / cloud-agent bootstrap.

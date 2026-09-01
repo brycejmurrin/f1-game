@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // nostr-probe.mjs — WHICH RELAYS WILL ACTUALLY CARRY OUR SIGNALLING?
+// @doc Which public relays will actually carry our signalling? Probes each and reports.
+// @skill multiplayer-debug
 //
 //   npm i --no-save ws @noble/curves
 //   node tools/net/nostr-probe.mjs

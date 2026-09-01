@@ -16,7 +16,7 @@
 // The far side is played by __apex.lobbyPeerEvent, which sends lobby events as
 // the other person over the loopback transport. A real second browser is
 // covered by tools/net/rtc-e2e.mjs; this is about the rules.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 const EV = { HELLO: "hello", SETTINGS: "settings", READY: "ready", GO: "go", QUALI: "quali" };
@@ -27,7 +27,8 @@ const EV = { HELLO: "hello", SETTINGS: "settings", READY: "ready", GO: "go", QUA
 // connection takes into onConnected().
 async function enterRoom(page, role = "host") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.lobbyFake(true));
   await page.click("#mb-vs");
   await page.click(role === "host" ? "#vs-host" : "#vs-join");

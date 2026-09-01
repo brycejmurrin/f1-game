@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /*
+ * @doc Author-time asset bake CLI: `bake-synthetic[-models]`, `bake-atlas`, `bake-model`, `verify` (licence + md5 + budget).
+ * @skill asset-pack
  * Apex 26 — asset bake CLI.  AUTHOR-TIME ONLY: never loaded by the game, never
  * run by a normal test pass.  Produces `assets/pack/`, which js/render/assets.js
  * loads at runtime.  See docs/research/ASSET-API-RESEARCH.md.

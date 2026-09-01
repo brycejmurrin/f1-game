@@ -20,7 +20,7 @@
 // PLATFORM NOTE. These render under SwiftShader; a baseline captured on a GPU
 // will not match. Regenerate with `npm run test:baseline -- --update-snapshots`
 // on the same platform CI uses, and review the diff rather than accepting it.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const SHAPES = [
   ["phone-landscape", { width: 844, height: 390 }],
@@ -55,8 +55,9 @@ for (const [shapeName, viewport] of SHAPES) {
     for (const [screenName, open] of SCREENS) {
       test(`${screenName} looks like itself`, async ({ page }) => {
         await page.goto("/");
+        // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
         await page.waitForFunction(() => window.__apex && window.__apex.race,
-          null, { polling: 100, timeout: 15_000 });
+          null, { polling: 100, timeout: BOOT_MS });
         // Stop the render loop: the 3D scene behind the menus is different every
         // frame, so a baseline that includes it can never match. It also unblocks
         // Playwright's actionability checks, which wait on animation frames this

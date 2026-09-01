@@ -11,7 +11,7 @@
 // none of them assert first-load behaviour, so they can share ONE booted page
 // per worker instead of paying page.goto("/") + 155 script tags + WebGL init
 // 117 times over. See the sharedTest block in ./fixtures.js for the contract.
-import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -21,13 +21,14 @@ async function boot(page) {
   const live = await page.evaluate(() => window.__apex != null).catch(() => false);
   if (live) return;
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
 async function load(page, trackId = "monza", frac = 0.05, speed = 60) {
   await boot(page);
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(([f, v]) => {
     window.__apex.go();
     window.__apex.jump(f, v, 0);
@@ -58,7 +59,7 @@ test.describe("world() typed errors", () => {
   test("player not placed names the hook that fixes it", async ({ page }) => {
     await boot(page);
     await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate(() => window.__apex.world());
     if (r.ok === false) {
       expect(r.error).toBe("PlayerNotPlacedError");

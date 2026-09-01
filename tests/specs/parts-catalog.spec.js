@@ -5,12 +5,14 @@
 // - Factory/supplier-exclusive parts only appear for the matching team engine
 // - Part descriptions update when an option is selected
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function waitReady(page) {
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
 }
 
 async function openSetup(page) {

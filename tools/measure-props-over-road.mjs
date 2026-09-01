@@ -1,4 +1,6 @@
 // Measure PROP geometry sitting on/above the racing line for ONE track.
+// @doc Prop geometry on/above the racing line for ONE track; JSON report, `--shots` writes PNGs to `artifacts/tmp/`.
+// @skill scenery-dress
 // Usage: TRACK=redbull PORT=3471 node tools/measure-props-over-road.mjs [--shots]
 // Starts an in-process static server via harness.mjs and launches Chromium
 // through the same path every other tool uses (CHROME / PW_CHROMIUM / ladder).
