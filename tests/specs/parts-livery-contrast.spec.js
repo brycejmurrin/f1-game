@@ -8,13 +8,16 @@
 // against c1, while the rear-wing band sits on the WING colour and the sidepod
 // strip sits on the POD panel — Ferrari's default livery put white text on a
 // white wing at 1.1:1, i.e. invisible.
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): seven boots became none. Every test here is
+// pure — it reads Liveries/Teams/Car3D/LiveryTex off the loaded page and never
+// touches a screen or a race — so a live page is all load() has to guarantee.
+// UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { ensureLive } from "../helpers/shared-page.js";
 
 async function load(page) {
-  await page.goto("/");
-  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+  await ensureLive(page);
 }
 
 // WCAG contrast, computed in the page against the SAME helpers the atlas uses.

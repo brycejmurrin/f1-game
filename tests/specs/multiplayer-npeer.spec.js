@@ -13,15 +13,25 @@
 // have grids of different length and order. onState used to take cars[0] and
 // ignore the id on the wire precisely because that id was the sender's own
 // index and meant nothing here.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): four boots became none. Every race here
+// starts from the title with the last loopback session stopped and the default
+// car (McLaren seat 0) pinned — the rival asks for ferrari:1 and "no fallback"
+// is only meaningful when the local car is not already in that seat.
+// UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
+async function start(page) {
+  await toMenu(page);
+  await page.evaluate(() => window.__apex.netStop());
+  await pinFreePlay(page, { race: ["monza"] });
+}
+
 async function raceWithRival(page, peer) {
-  await page.goto("/");
-  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(() => window.__apex.race("monza"));
+  await start(page);
   await page.waitForFunction(() => window.__apex.info().state === "count"
     || window.__apex.info().state === "race", null, { polling: 100, timeout: 60000 });
   await page.evaluate(() => window.__apex.go());
@@ -86,9 +96,7 @@ test.describe("the rival is keyed by a cross-peer identity", () => {
     // gridUp puts THE local player at P12 and runs identically on both screens.
     // It used to hardcode host-then-guest; it now lays the humans out by wire
     // id, which every peer computes the same way, so they agree with no message.
-    await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    await page.evaluate(() => window.__apex.race("monza"));
+    await start(page);
     await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), null, { polling: 100, timeout: 60000 });
     const res = await page.evaluate(() =>
       window.__apex.netLoopback({ nowMs: 1000, peer: { team: "ferrari", driver: 1 } }));

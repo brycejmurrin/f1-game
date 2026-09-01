@@ -2,11 +2,23 @@
 // Tests for Parts module logic — no UI required, runs against window.Parts directly.
 // Covers: getMods() multiplier math, getCost() addition, statMult(), catalog structure,
 // new GEARBOX and FUEL categories, and supplier-exclusive option filtering.
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): 74 boots (70 goto + the ERS test's three
+// reloads + the compound test's one) became ONE. Sixty-six tests only read
+// Parts/Car3D/CarMesh off a live page. The two race tests used to seed
+// localStorage and reload because `store` caches every key and the team index
+// is read once at boot; they now write through the store and let #mb-race
+// re-read the team (pinFreePlay), which is the same effect without the boot.
+// One test stays on the per-test fixture (`freshTest`): "imported bodies keep
+// legacy decal anchors" swaps GLTF.toMesh, wraps Car3D.bodyAnchors and loads a
+// car model into the live game — state no later test on the page should
+// inherit. UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, test as freshTest, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { ensureLive, toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
 async function load(page) {
-  await page.goto("/");
+  // A live page is all the module tests need. On the shared page this is one
+  // evaluate; only a worker's first test (or the freshTest below) pays a boot.
   // 60 s, not 8. This is a BOOT bound, not an assertion tolerance — it only ever
   // permits a slower page, never a looser measurement. Measured 2026-09-01 on an
   // idle 4-core container (loadavg ~1.0): 45.0 s to define Parts, with the static
@@ -16,6 +28,7 @@ async function load(page) {
   // 48.8 s on the same box in the same minute, so the tree did not regress; the 8 s
   // bound was simply undersized and every one of the 70 tests here died on it,
   // burning 42-57 s each to report a boot timeout that looked like a code failure.
+  await ensureLive(page);
   await page.waitForFunction(() => typeof Parts !== "undefined" && Parts.CATALOG, null, { polling: 100, timeout: 60_000 });
 }
 
@@ -610,7 +623,10 @@ test.describe("Parts module — visual recipes", () => {
     }
   });
 
-  test("imported bodies keep legacy decal anchors when engine setup changes", async ({ page }) => {
+  // freshTest, not the shared page: this replaces GLTF.toMesh, wraps
+  // Car3D.bodyAnchors and loads a car model into the live game, none of which
+  // it undoes. On its own page that ends with the test.
+  freshTest("imported bodies keep legacy decal anchors when engine setup changes", async ({ page }) => {
     await load(page);
     const result = await page.evaluate(async () => {
       const low = { engine: 1, _visual: { engine: {
@@ -1532,30 +1548,19 @@ test.describe("Parts module — statMult()", () => {
 test.describe("ERS parts drive the battery and overtake", () => {
   test("deployment and recovery both scale with the ERS option", async ({ page }) => {
     const rows = [];
-    // ONE BOOT TO LEARN THE TEAM ID, THEN ONE PER ERS OPTION. The loop used to
-    // goto AND reload on every pass — six navigations for three measurements —
-    // because it needed the team id from a loaded page before it could name the
-    // storage key. The id does not change between passes, so read it once and
-    // let each pass seed storage on the page it already has: three reloads
-    // instead of three goto+reload pairs. The reload itself stays, and has to:
-    // `store` (js/game/store.js) caches every key it has read, so a bare
-    // localStorage.setItem would leave the game answering from _cache and the
-    // three passes would silently measure the same setup.
-    await page.goto("/");
-    // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    const teamId = await page.evaluate(() => window.__apex.teams()[0].id);
+    // NO BOOT AT ALL NOW, where this once cost six navigations and then four.
+    // The reload was load-bearing for two reasons and both are answered in
+    // place: `store` (js/game/store.js) caches every key it has read, so a bare
+    // localStorage.setItem left the game answering from _cache — the seed goes
+    // through store.set, which writes the cache and the disk together; and the
+    // team index is read once at boot into a `let` — #mb-race re-reads it
+    // (restoreFreePlaySelection), which is the click pinFreePlay makes before
+    // racing. Team 0 with only the ERS part fitted, per pass, as before.
+    // unlimitedBudget is not seeded: it gates the GARAGE, and nothing on the
+    // race path reads it (js/game.js modsFor/recomputePlayerMods).
     for (const ers of ["harvest", "standard", "overcharge"]) {
-      await page.evaluate(([e, id]) => {
-        const key = "apex26.parts." + id;
-        const cur = JSON.parse(localStorage.getItem(key) || "{}");
-        cur.ers = e; localStorage.setItem(key, JSON.stringify(cur));
-        localStorage.setItem("apex26.team", "0");
-        localStorage.setItem("apex26.unlimitedBudget", "true");
-      }, [ers, teamId]);
-      await page.reload();
-      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-      await page.evaluate(() => window.__apex.race("monza"));
+      await toMenu(page);
+      await pinFreePlay(page, { team: 0, parts: { ers }, race: ["monza"] });
       await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       rows.push(await page.evaluate(() => {
         const A = window.__apex;
@@ -1672,22 +1677,13 @@ test.describe("Wet compounds are a trade, not a penalty", () => {
   test("the compound fitted in the garage is the one the car drives on", async ({ page }) => {
     // The table above is worth nothing if the player's CHOICE never reaches it.
     // One race, one compound, one weather change — the integration only.
-    await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    const teamId = await page.evaluate(() => window.__apex.teams()[0].id);
-    await page.evaluate((id) => {
-      const key = "apex26.parts." + id;
-      const cur = JSON.parse(localStorage.getItem(key) || "{}");
-      cur.tyres = "wet_full"; localStorage.setItem(key, JSON.stringify(cur));
-      localStorage.setItem("apex26.team", "0");
-      localStorage.setItem("apex26.unlimitedBudget", "true");
-    }, teamId);
-    // The reload is load-bearing: `store` caches every key it has read, so a
-    // bare setItem would leave the game answering from _cache and this would
-    // measure the default compound while still passing.
-    await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    await page.evaluate(() => window.__apex.race("monza", undefined, "rain"));
+    // The reload this used to make was load-bearing: `store` caches every key
+    // it has read, so a bare setItem would leave the game answering from _cache
+    // and this would measure the default compound while still passing. The seed
+    // now goes through store.set (cache and disk) and the team through
+    // #mb-race's own re-read — pinFreePlay — with no boot in between.
+    await toMenu(page);
+    await pinFreePlay(page, { team: 0, parts: { tyres: "wet_full" }, race: ["monza", undefined, "rain"] });
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     const g = await page.evaluate(() => {
       const A = window.__apex;

@@ -1,34 +1,33 @@
 // @ts-check
 // Stable setup DOM identifiers — category tabs and option rows expose
 // data-cs-cat / data-cs-opt so tests do not depend on presentation text/classes.
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): twelve boots became none. Every opener
+// walks the shared page back to the title first (toMenu) — the TEAM-tab tests
+// leave a picker, MY TEAM or the garage itself up, and the route tests assert
+// which screens are hidden, so the walk back is what makes those assertions
+// mean what they did on a fresh page. UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { toMenu, forgetStored, pinFreePlay, freeBuildOff } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
-async function waitReady(page) {
-  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
-}
-
 async function openSetup(page) {
-  await page.evaluate(() => {
-    const team = Teams.LIST[parseInt(localStorage.getItem("apex26.team") ?? "2")];
-    if (team) localStorage.removeItem("apex26.parts." + team.id);
-    localStorage.removeItem("apex26.unlimitedBudget");
-  });
+  await toMenu(page);
+  await forgetStored(page, ["unlimitedBudget"]);
+  // The default car, its parts forgotten; #mb-race re-reads the store.
+  await pinFreePlay(page, { click: false });
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
   await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
+  await freeBuildOff(page);
 }
 
 test.describe("Car setup — stable DOM identifiers", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("every parts category tab has data-cs-cat matching its catalog id", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     const ids = await page.evaluate(() => Parts.CATALOG.map((c) => c.id));
@@ -39,8 +38,6 @@ test.describe("Car setup — stable DOM identifiers", () => {
   });
 
   test("active category options expose data-cs-opt matching option ids", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await page.locator('#cs-tabs [data-cs-cat="gearbox"]').click();
@@ -55,8 +52,6 @@ test.describe("Car setup — stable DOM identifiers", () => {
   });
 
   test("selecting by data-cs-opt activates that option", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
 
     await page.locator('#cs-tabs [data-cs-cat="fuel"]').click();
@@ -90,8 +85,8 @@ test.describe("Car setup — nothing shows through from the screen below", () =>
     ["START from the track picker", "#sel-go", "race-settings"],
   ]) {
     test(`${route}: no screen is left visible behind the panel`, async ({ page }) => {
-      await page.goto("/");
-      await waitReady(page);
+      // The title screen and nothing else, as the boot used to leave it.
+      await toMenu(page);
       if (enter === "#sel-go") {
         await page.locator("#mb-race").click();
         await page.locator("#select").waitFor({ state: "visible" });
@@ -128,8 +123,9 @@ test.describe("Garage — TEAM tab owns team, driver and MY TEAM", () => {
   test.use({ viewport: LANDSCAPE });
 
   async function openTeamTab(page) {
-    await page.goto("/");
-    await waitReady(page);
+    // The title, then the garage door. The team is deliberately NOT pinned:
+    // these tests switch team and seat themselves, and assert on the change.
+    await toMenu(page);
     await page.locator("#mb-garage").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.locator('#cs-tabs [data-cs-cat="team"]').click();
@@ -240,8 +236,6 @@ test.describe("Car setup — preview camera", () => {
   };
 
   test("the camera bar exposes a stable data-cs-view per preset", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
     await openCam(page);
     const ids = await page.locator("#cs-view [data-cs-view]").evaluateAll(
@@ -250,8 +244,6 @@ test.describe("Car setup — preview camera", () => {
   });
 
   test("the panel starts shut, opens from CAMERA, and a preset shuts it again", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
     const panel = page.locator("#cs-cam-panel");
     await expect(panel).toBeHidden();
@@ -277,8 +269,6 @@ test.describe("Car setup — preview camera", () => {
   });
 
   test("the turntable runs on open and a preset both stops it and re-aims", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
     const opened = await cam(page);
     expect(opened.on).toBe(true);
@@ -306,8 +296,6 @@ test.describe("Car setup — preview camera", () => {
   });
 
   test("PAN walks the rig along the car, and a preset re-centres it", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
     await openCam(page);
     // Stop the turntable before sampling: it advances the azimuth every frame,
@@ -353,8 +341,6 @@ test.describe("Car setup — preview camera", () => {
   });
 
   test("zoom is clamped and drag orbits without touching distance", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
     await openSetup(page);
     await openCam(page);
     await page.locator('[data-cs-view="front"]').click();

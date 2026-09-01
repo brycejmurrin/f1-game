@@ -2,8 +2,17 @@
 // Runtime mesh-cache bounds for player/cockpit body variants and wheel pairs.
 // Instruments GLX create/free (same pattern as custom-team.spec.js) — no new
 // production debug APIs.
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+//
+// TWO TESTS SHARE A PAGE, THREE KEEP THEIR OWN. sharedTest for the wheel-layer
+// geometry test (pure) and the wheel-centre probe (its own race, its own
+// counters). `freshTest` — the per-test fixture — for the three whose SUBJECT
+// is a cache starting cold: the decal test hands CarMesh.init() fake GL hooks
+// it never takes back, and the two eviction tests count builds against caches
+// that a shared page would already have warm (a warm key means no build, the
+// "wait for the Nth mesh" never resolves, and the eviction order is whatever
+// the previous test left). 5 boots became 3. UNVERIFIED IN A BROWSER.
+import { sharedTest as test, test as freshTest, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { ensureLive, toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -141,7 +150,8 @@ async function quitRace(page) {
 test.describe("Parts mesh caches — eviction bounds", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("body-aware decal cache keys engine geometry and remains bounded", async ({ page }) => {
+  // freshTest: CarMesh.init() below installs fake GL hooks for good.
+  freshTest("body-aware decal cache keys engine geometry and remains bounded", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     const result = await page.evaluate(() => {
@@ -198,8 +208,7 @@ test.describe("Parts mesh caches — eviction bounds", () => {
   });
 
   test("wheel assemblies separate rotating hardware from steering-only brake hardware", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
+    await ensureLive(page);   // pure geometry off the shared page
     const layers = await page.evaluate(() => {
       const front = Car3D.buildWheelLayers(0.32, null, [0.9, 0.1, 0.05]);
       const rear = Car3D.buildWheelLayers(0.38, null, [0.9, 0.1, 0.05]);
@@ -245,7 +254,8 @@ test.describe("Parts mesh caches — eviction bounds", () => {
     expect(rear).toBeGreaterThan(front);
   });
 
-  test("player body and cockpit caches keep at most 3 visual keys and free evicted meshes", async ({ page }) => {
+  // freshTest: counts builds against a COLD body/cockpit cache.
+  freshTest("player body and cockpit caches keep at most 3 visual keys and free evicted meshes", async ({ page }) => {
     test.setTimeout(240_000);
     await page.goto("/");
     await waitReady(page);
@@ -305,7 +315,9 @@ test.describe("Parts mesh caches — eviction bounds", () => {
     expect(stats.newestCockpitLive).toBe(true);
   });
 
-  test("wheel mesh cache keeps at most 8 tyre/brake pairs and frees evicted pairs", async ({ page }) => {
+  // freshTest: counts pairs against a COLD wheel cache (the default pair is
+  // combo 0; a page that has raced it already would build nothing for it).
+  freshTest("wheel mesh cache keeps at most 8 tyre/brake pairs and frees evicted pairs", async ({ page }) => {
     test.setTimeout(360_000);
     await page.goto("/");
     await waitReady(page);
@@ -365,8 +377,10 @@ test.describe("Parts mesh caches — eviction bounds", () => {
   });
 
   test("player wheel centres stay on the road while the chassis pitches under braking", async ({ page }) => {
-    await page.goto("/");
-    await waitReady(page);
+    // Shared page: back to the title with the default car pinned, then the
+    // probe, then the race — the probe must be in place before the wheels build.
+    await toMenu(page);
+    await pinFreePlay(page);
     await page.evaluate(() => {
       const rotatingData = new WeakSet();
       const rotatingMeshes = new WeakSet();

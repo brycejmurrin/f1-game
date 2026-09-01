@@ -14,6 +14,11 @@
 // The camera in THIS file always has the code in frame, so a scan always
 // resolves. Anything that must happen mid-scan is in multiplayer-scan-cancel,
 // against a camera that shows nothing.
+//
+// STAYS ON THE PER-TEST FIXTURE: the Y4M webcam is a browser LAUNCH flag, the
+// two tests run serially on that one browser, and the scan path is getUserMedia
+// against a fresh video element — one boot saved is not worth a shared page
+// under a real camera stream.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import config from "../../playwright.config.js";
 import { CODE, buildY4m, cameraLaunch } from "../helpers/qr-camera.js";

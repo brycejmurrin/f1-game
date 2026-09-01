@@ -5,9 +5,18 @@
 // - Budget decrements on part selection
 // - Over-budget parts show visual warning and can't be selected (without unlimited)
 // - Unlimited toggle removes cap and persists via localStorage
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest), not one per test. Every test here opens the
+// same garage; the old fixture booted the page 15 times to do it. openSetup()
+// now walks the shared page back to the title (toMenu), forgets the storage
+// keys the old init script cleared, and comes in through #mb-garage — the
+// in-memory FREE BUILD flag and the car's team are re-pinned in the open garage
+// because both are `let`s a fresh boot used to reset (tests/helpers/shared-page.js).
+// The one reload left is the test whose SUBJECT is the reload. UNVERIFIED IN A
+// BROWSER at conversion time.
+import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
+import { toMenu, forgetStored, garageTeam, freeBuildOff } from "../helpers/shared-page.js";
 
 async function waitReady(page) {
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
@@ -20,31 +29,13 @@ async function pickOpt(page, catId, optId) {
 }
 
 async function openSetup(page) {
-  // ONE BOOT, NOT TWO. This used to goto, wait for the game, clear storage,
-  // then RELOAD and wait again — two full game boots (track build included)
-  // for every test in the file, purely to start from clean storage. On
-  // SwiftShader that second boot is most of the test: measured 62-103 s per
-  // test solo against a 120 s budget, so at two workers the whole file
-  // timed out while asserting nothing about reloads. addInitScript runs
-  // before any page script, so the storage is already clean on the first
-  // boot and the end state is identical.
-  await page.addInitScript(() => {
-    // FIRST NAVIGATION ONLY. addInitScript reruns on every navigation, and
-    // "unlimited state persists after page reload" sets the flag, reloads,
-    // and expects it back — an unguarded reset would wipe the very thing
-    // that test asserts. sessionStorage survives the reload in-tab, so this
-    // marker makes the reset a once-per-page-object thing.
-    if (sessionStorage.getItem("__budgetSpecReset")) return;
-    sessionStorage.setItem("__budgetSpecReset", "1");
-    // Teams isn't loaded yet at init time, so clear every stored parts key
-    // rather than resolving the one team id — the same reset, with no
-    // dependency on game code having run.
-    for (const k of Object.keys(localStorage))
-      if (k.startsWith("apex26.parts.")) localStorage.removeItem(k);
-    localStorage.removeItem("apex26.unlimitedBudget");
-  });
-  await page.goto("/");
-  await waitReady(page);
+  // Back to the title from wherever the previous test stopped, then the same
+  // clean-storage start the old addInitScript gave a fresh page — done on the
+  // LIVE page, which means the store's cache has to forget the keys too. (The
+  // init-script version cannot work here at all: it only runs on the NEXT
+  // navigation, and a shared page has none — docs/TESTING.md §sharedTest.)
+  await toMenu(page);
+  await forgetStored(page, ["parts.*", "unlimitedBudget"]);
   // THE GARAGE DOOR, not the race flow. This used to walk mb-race -> select ->
   // sel-go, which builds the circuit picker and then the track itself before it
   // ever reaches the screen these tests are about. Measured on this box:
@@ -54,13 +45,18 @@ async function openSetup(page) {
   // clicks DONE. 16 s a test back, across 14 tests, on a file whose own header
   // records 62-103 s against a 120 s budget and which had five tests cross it.
   //
-  // A SHARED PAGE was the other candidate and is NOT worth it: measured, one
-  // boot plus a leave-and-re-enter is ~25 s against ~30 s for a fresh page
-  // through this door, because re-entering rebuilds the car and the bay anyway.
-  // Five seconds is not worth making fourteen tests serial and turning one
-  // failure into nine skips.
+  // A SHARED PAGE was once rejected here as "not worth it: one boot plus a
+  // leave-and-re-enter is ~25 s against ~30 s for a fresh page". That sum
+  // charged the boot to every test; on sharedTest the boot is paid once per
+  // WORKER, so the per-test cost is the re-entry alone. Measure it
+  // (docs/TESTING.md §navigation) — this conversion was not run in a browser.
   await page.locator("#mb-garage").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
+  // Two `let`s the forgotten keys cannot reach: the team the garage shows and
+  // FREE BUILD. A fresh boot read both out of empty storage; the shared page
+  // has whatever the last test chose.
+  await garageTeam(page, "mclaren");
+  await freeBuildOff(page);
 }
 
 test.describe("Budget system — display", () => {
