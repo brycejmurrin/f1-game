@@ -1602,6 +1602,35 @@ counter-test catches it — this is the false-failure that would otherwise have
 shipped), and rename the workflow step so the extractor finds nothing (all 3,
 proving the extractor cannot silently hand back an empty script).
 
+### Confirmed on real silicon, and the two rows that make it evidence
+
+Dispatched `gpu-census.yml` on `cc7846d` (run 33411690913) — all four jobs
+success. A green tick is not the point; these two rows are:
+
+```
+census anyHardware: true
+webgpu  phase=done ok=true gpuErrors=0 envFail=0 ... softAdapter=false
+webgl2  phase=done ok=true gpuErrors=0 envFail=0 ... softAdapter=false
+glx     phase=done ok=true gpuErrors=0 envFail=undefined softAdapter=undefined
+```
+
+`anyHardware: true` says the tri-state resolved to a MEASURED hardware verdict,
+so the three hardware-only clauses were **armed** for this run. That is the
+distinction the old code could not express: it printed `anyHardware: false` for
+a census that never launched, and false is what switches those clauses off — a
+green job that had quietly stopped gating.
+
+`glx envFail=undefined`, passing, is the other half. That is the exact false
+failure the naive fix would have shipped: the GLX leg has no env probe and never
+will, so an unscoped absence check would have failed macOS on every run for a
+leg behaving as designed. It passes here because the check is scoped to the two
+TLX legs, while `webgpu`/`webgl2` report a real `envFail=0` that the same clause
+would have caught had it gone missing.
+
+ubuntu (SwiftShader) and windows (WARP) passed on the same commit with
+`anyHardware` false — a genuinely measured software verdict, which is the third
+state and must stay green.
+
 ## 2k. A transient fault costs a frame; a deterministic one still stops (2026-08-31)
 
 §2i's finding has a tail. Fixing the null dereference fixed one *instance*; the
