@@ -279,6 +279,13 @@ jobs:
             // reads exactly like a backend with nothing to report.
               if (g.gfxReadFailed) rows.push(`${" ".repeat(8)}gfx:   ${g.gfxReadFailed}`);
               if (g.overlayReadFailed) rows.push(`${" ".repeat(8)}ovl:   ${g.overlayReadFailed}`);
+            // Why meanLuma is empty. It read "n/a" on every leg of every run
+            // for months because gpu-game-check never wrote out.frame at all —
+            // an empty column is not the same as a dark frame, and the row said
+            // neither. Appearance still does not GATE (a brightness floor goes
+            // flaky and then gets widened, which AGENTS.md forbids); it now
+            // either carries a number or says why it does not.
+              if (g.frameReadFailed) rows.push(`${" ".repeat(8)}luma:  ${g.frameReadFailed}`);
               if (g.ok !== true || g.phase !== "done") bad.push(`${path3}: did not finish (phase=${g.phase}, ok=${g.ok})${g.error ? " — " + String(g.error).slice(0, 200) : ""}`);
             // An ABSENT count must not read as clean. gpuErrors was defined only
             // on WGX, so this clause was vacuous on the GLX leg from the day that

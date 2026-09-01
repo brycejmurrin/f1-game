@@ -528,6 +528,53 @@ function runVerdict(script, { census, legs }) {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 
+test("gpu-game-check reports appearance, and can say when it could not measure it", () => {
+  // The census printed `meanLuma=n/a` on EVERY leg of every image because this
+  // tool never wrote out.frame — the string "frame" did not appear in the file
+  // at all. The gate does not block on appearance (a brightness floor goes
+  // flaky and then gets widened, which AGENTS.md forbids), but "reported for a
+  // human" was untrue: there was nothing to report. Both halves are pinned,
+  // because writing the field WITHOUT the absence path just recreates a
+  // silently-empty column. docs/PERF-FINDINGS.md 2l.
+  const ggc = read("tools/gpu-game-check.mjs");
+  assert.match(ggc, /out\.frame = n\s*\?/, "the tool must write out.frame");
+  assert.match(ggc, /meanLuma: \+\(sum \/ n\)\.toFixed\(1\)/);
+  assert.match(ggc, /out\.frameReadFailed = /,
+    "an appearance read that failed must be NAMED, not left as an empty column");
+  assert.match(ggc, /await import\("sharp"\)/,
+    "sharp is loaded dynamically so a missing binary degrades to frameReadFailed");
+
+  const wf = read(".github/workflows/gpu-census.yml");
+  assert.match(wf, /if \(g\.frameReadFailed\) rows\.push/,
+    "the Verdict must print WHY appearance is missing, like the gfx:/ovl: rows");
+});
+
+test("gpu-game-check's finally can actually reach the console buffer", () => {
+  // `const console_ = []` was declared INSIDE the try while the finally read
+  // it — sibling scopes, so the finally threw ReferenceError on EVERY run,
+  // success or failure. Everything after that line was dead: out.console (the
+  // diagnostic lines a previous round moved into the finally precisely so a
+  // FAILING run would keep them), out.root (added to name the Windows path bug
+  // — never once set on a real run), the bounded browser/server teardown, and
+  // the final process.exit, so the tool always exited non-zero even on ok:true.
+  // `continue-on-error: true` on all four census steps swallowed the exit code
+  // and checkpoint() had already written the JSON, so nothing looked wrong.
+  // Measured after the fix: exit 0, root set, 7 console lines. PERF-FINDINGS 2l.
+  const ggc = read("tools/gpu-game-check.mjs");
+  const decl = ggc.indexOf("const console_ = [];");
+  const tryAt = ggc.indexOf("\ntry {");
+  const useAt = ggc.indexOf("out.console = console_");
+  assert.ok(decl > -1, "the console buffer declaration is gone");
+  assert.ok(tryAt > -1 && useAt > -1);
+  assert.ok(decl < tryAt,
+    "console_ must be declared ABOVE the try, or the finally cannot see it " +
+    `(decl at ${decl}, try at ${tryAt})`);
+  assert.ok(useAt > tryAt, "sanity: the read really is inside/after the try");
+  // A declaration at column 0 is top-level; an indented one is inside a block.
+  assert.match(ggc, /\nconst console_ = \[\];/,
+    "console_ must be a TOP-LEVEL declaration, not indented inside the try");
+});
+
 test("the GPU gate passes a hardware run whose GLX leg reports no env probe", () => {
   // THE FALSE-FAILURE CASE. Making an absent env count fail on hardware is
   // right for the two TLX legs and wrong for GLX, which has no env probe to
