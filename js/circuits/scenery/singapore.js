@@ -13,18 +13,17 @@
               fence, tyreWall, vadd, hash, cityFront, tower, ferrisWheel, modelGroup,
               overheadSpan, waterSurface, waterBand, floodMastRing, circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
-      // KOLD: converts a frac written in the SAME convention circuitKit's specs
-      // use (its `frameAt` is wrapped with a SHIFT-ONLY remap, js/track/tracks.js
-      // ~361 — no mirror) into the raw racing-node index K() needs. Only
-      // required where a raw anchor()/K() call must land on the SAME spot as a
-      // circuitKit-placed structure (the pit-race-control beacon below); every
-      // other raw K() call in this file was independently tuned against the
-      // engine's raw indexing and does not need it. Same formula tracks.js uses
-      // for def._sceneryShift (the KOLD legend in monaco.js is the worked precedent).
-      const _offNew = Math.round((((def.startFrac % 1) + 1) % 1) * n) % n;
-      const _offOld = Math.round(((((def.sceneryStartFrac ?? def.startFrac) % 1) + 1) % 1) * n) % n;
-      const _kShift = ((def.reverse ? _offNew - _offOld : _offOld - _offNew) % n + n) % n;
-      const KOLD = (s) => (K(s) + _kShift) % n;
+      // Landing a raw anchor() on a circuitKit structure (the pit-race-control
+      // beacon below). `anchor` is NOT raw here: transformSceneryApi wraps every
+      // k-keyed helper as f(sceneryNode(k), -side) for this reverse +
+      // sceneryLapMirror circuit, i.e. node -> (shiftK - k) mod n with the side
+      // flipped, while the kit's frameAt is shift-only (frac + _sceneryShift).
+      // So the node that meets the kit at authored frac s is the MIRROR INVERSE
+      // (n - K(s)) % n with the opposite side, and the shift cancels. (A KOLD
+      // index-shift helper stood here until 2026-09-01; it put the beacon
+      // 1.4 km from the tower, and the "corrected" arc shift 33 m in the air —
+      // measured in the Node build, see docs/ARCHITECTURE-REVIEW.md §7.)
+      const kitNode = (s) => (n - K(s)) % n;
 
       // Shared-kit adoption: bounded race operations outside the bay hero zones.
       if (circuitKit) {
@@ -552,8 +551,10 @@
           size: [14, 34, 16], required: true,
         });
         {
-          const a = anchor(KOLD(0.999), -1, 53);
-          addCone(out, vadd(a.c, a.u, 33.4), 2.2, 6, NEON[1], 6, [a.r, a.u, a.t]);
+          // kit gap 46 + size[0]/2 = 53 -> the tower's roof centre (verified 0.06 m
+          // off in the build); 33.9 puts the cone base on the roof face (30.11).
+          const a = anchor(kitNode(0.999), 1, 53);
+          addCone(out, vadd(a.c, a.u, 33.9), 2.2, 6, NEON[1], 6, [a.r, a.u, a.t]);
         }
       }
 

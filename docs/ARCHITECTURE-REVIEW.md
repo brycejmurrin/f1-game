@@ -336,19 +336,22 @@ four suites' own sources. What remains:
   that is simply the wrong one" failure. Left as-is deliberately: capping the
   re-seat would bank a straight instead, and the honest fix is per-circuit —
   re-author those eight fracs against a reference and then cap at ~250 m.
-- **The scenery-file `KOLD` shift disagrees with the engine's `_sceneryShift`**
-  — Singapore by 46 nodes (~184 m), Monaco by ~27 nodes (~108 m)
-  (`js/circuits/scenery/singapore.js` ~:24-27, one site; `monaco.js` ~:20-23,
-  seven sites). Both compute an INDEX-fraction difference of `startFrac` and
-  `sceneryStartFrac`; the engine's shift is the ARC-LENGTH fraction
-  (`TrackSpace.sceneryOriginDelta`, the trap `space.js` documents). Measured
-  in the Node build: Singapore n=1227, engine shift 650 nodes, KOLD 604. The
-  one-line fix (`_kShift = Math.round(TrackSpace.sceneryOriginDelta(def) * n)
-  % n`) was tried on Singapore in this pass and REVERTED: it puts the beacon
-  cone on the race-control tower's node as the file intends, but
-  `float-audit` then reports it 33 m in the air (the tower is not under it at
-  that lateral), so the props were tuned by eye against the wrong shift and
-  the fix needs a rendered pass (`survey-track`) per site, not a formula swap.
+- **~~The scenery-file `KOLD` shift disagrees with the engine's
+  `_sceneryShift`~~ — RESOLVED (2026-09-01, Node-build measurement, no render
+  needed).** The premise was wrong on both circuits. *Singapore*: `anchor()`
+  is not raw — `transformSceneryApi` wraps every k-keyed helper as
+  `f(sceneryNode(k), -side)` on this reverse + lap-mirror circuit, so the
+  shift cancels and the node that meets a kit structure at authored frac `s`
+  is the mirror inverse `(n - K(s)) % n` with the opposite side. The old KOLD
+  put the pit beacon 1.4 km from the tower (accidentally "supported" by a
+  city block); the "corrected" arc shift put it 33 m in the air. Fixed: the
+  cone anchors at `(n - K(0.999)) % n`, side +1, lateral 53, +33.9 m — 0.06 m
+  from the tower's roof centre, float and clip audits unchanged. *Monaco*:
+  the -24-node index shift is an empirical calibration of the raw
+  `px/rx/tx` readers; the engine's -51-node arc shift would move all seven
+  sites 108 m earlier and drop the tunnel onto Portier. Every site is closer
+  to its measured corner under the current shift, so only the comment
+  claiming "the same formula the engine uses" was wrong — corrected in place.
 - **~~A rival driving the CUSTOM team is never posed in VS FRIEND~~ — FIXED
   (2026-09-01, second pass).** `resolveSeatClash()` now treats a custom (MY
   TEAM) car as a seat that cannot be kept whatever the player's rank (a
