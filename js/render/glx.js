@@ -929,7 +929,7 @@ const GLX = (function () {
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, matNormalTex || matDummyArrTex);
     gl.uniform1i(litU.uMatNormalTex, 11);
     gl.activeTexture(gl.TEXTURE0);      // leave unit 0 active + bound to the shadow map
-    gl.uniform1f(litU.uMatTexMix, matAlbedoTex ? mix : 0);
+    uf1(litU.uMatTexMix, _litUf, "matTexMix", matAlbedoTex ? mix : 0);
     if (litU["uMatTexScale[0]"]) gl.uniform1fv(litU["uMatTexScale[0]"], matTexScales);
   }
   // Draw textured decals over the just-drawn car body: depth test ON, depth write
@@ -1247,7 +1247,7 @@ const GLX = (function () {
     // Default a missing fogDensity to 0 (fog off), like every sibling scalar here
     // and both other backends — an omitted field is documented-valid and must not
     // upload `undefined * mul = NaN`, which blacks out the whole scene.
-    gl.uniform1f(litU.uFogDensity, (frame.fogDensity != null ? frame.fogDensity : 0) * (T && T.fogDensityMul != null ? T.fogDensityMul : 1));
+    uf1(litU.uFogDensity, _litUf, "fogDensity", (frame.fogDensity != null ? frame.fogDensity : 0) * (T && T.fogDensityMul != null ? T.fogDensityMul : 1));
     // uBlockerMap's UNIT IS ASSIGNED UNCONDITIONALLY, the bind is not. It is the
     // only `sampler2D` in LIT_FS and uShadowMap on unit 0 is a `sampler2DShadow`,
     // so leaving it at its default unit 0 puts two DIFFERENT sampler types on one
@@ -1270,7 +1270,7 @@ const GLX = (function () {
         gl.bindTexture(gl.TEXTURE_2D, SHD.blockerTex);
         gl.activeTexture(gl.TEXTURE0);
       }
-      gl.uniform1f(litU.uPcss, SHD.pcssEnabled ? 1.0 : 0.0);
+      uf1(litU.uPcss, _litUf, "pcss", SHD.pcssEnabled ? 1.0 : 0.0);
       gl.uniformMatrix4fv(litU.uLightVP, false, SHD.lightVP);
       // SHADOW BIAS / DARKNESS knobs (repair + artistic; defaults mirror TUNE_DEFS).
       uf1(litU.uShadowBias, _litUf, "shadowBias", T && T.shadowBias != null ? T.shadowBias : 0.001);
@@ -1293,14 +1293,14 @@ const GLX = (function () {
       // night.
       const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (frame.moonGate || 0);
       if (_mSh > _hf) _hf = _mSh;
-      gl.uniform1f(litU.uShadowStr, (T && T.shadowStr != null ? T.shadowStr : 1.15) * _hf);
+      uf1(litU.uShadowStr, _litUf, "shadowStr", (T && T.shadowStr != null ? T.shadowStr : 1.15) * _hf);
       // SHADOW DISTANCE knob: box half-size, drives the receiver-distance fade.
       uf1(litU.uShadowRange, _litUf, "shadowRange", T && T.shadowRange != null ? T.shadowRange : 80.0);
       // Fade anchor: the UNSNAPPED forward-biased ground point the shadow box is
       // snapped around (game.js shadow pass). It glides continuously with the
       // camera, so the fade front never jumps on a box recentre.
       uf3(litU.uShadowCtr, _litUf, "shadowCtr", frame.shadowCtr || frame.eye || ZERO3);
-      gl.uniform1f(litU.uShadowTexel, 1.0 / SHD.SIZE);
+      uf1(litU.uShadowTexel, _litUf, "shadowTexel", 1.0 / SHD.SIZE);
       // Dynamic car shadow map — unit 8, armed only on frames where game.js ran
       // the car caster pass (carShadowBegin). The texture is always bound while
       // enabled so the sampler2DShadow stays complete even when gated off.
@@ -1310,10 +1310,10 @@ const GLX = (function () {
         gl.activeTexture(gl.TEXTURE0);
         gl.uniform1i(litU.uCarShadowMap, 8);
         gl.uniformMatrix4fv(litU.uCarLightVP, false, SHD.carLightVP);
-        gl.uniform1f(litU.uCarShadowOn, SHD.carArmed ? 1.0 : 0.0);
-        gl.uniform1f(litU.uCarBiasScale, SHD.carBoxScale || 1.0);
+        uf1(litU.uCarShadowOn, _litUf, "carShadowOn", SHD.carArmed ? 1.0 : 0.0);
+        uf1(litU.uCarBiasScale, _litUf, "carBiasScale", SHD.carBoxScale || 1.0);
       } else {
-        gl.uniform1f(litU.uCarShadowOn, 0.0);
+        uf1(litU.uCarShadowOn, _litUf, "carShadowOn", 0.0);
       }
       // Nearest-floodlight spot shadow map — unit 9, armed only on frames where
       // game.js ran the lamp caster pass (lampShadowBegin). Same always-bound
@@ -1326,26 +1326,26 @@ const GLX = (function () {
         gl.activeTexture(gl.TEXTURE0);
         gl.uniform1i(litU.uLampShadowMap, 9);
         gl.uniformMatrix4fv(litU.uLampShadowVP, false, SHD.lampLightVP);
-        gl.uniform1f(litU.uLampShadowOn, SHD.lampArmed ? 1.0 : 0.0);
+        uf1(litU.uLampShadowOn, _litUf, "lampShadowOn", SHD.lampArmed ? 1.0 : 0.0);
         gl.uniform1i(litU.uLampShadowIdx, SHD.lampIdx);
       } else {
-        gl.uniform1f(litU.uLampShadowOn, 0.0);
+        uf1(litU.uLampShadowOn, _litUf, "lampShadowOn", 0.0);
       }
     } else {
-      gl.uniform1f(litU.uShadowStr, 0.0);
-      gl.uniform1f(litU.uCarShadowOn, 0.0);
-      gl.uniform1f(litU.uLampShadowOn, 0.0);
+      uf1(litU.uShadowStr, _litUf, "shadowStr", 0.0);
+      uf1(litU.uCarShadowOn, _litUf, "carShadowOn", 0.0);
+      uf1(litU.uLampShadowOn, _litUf, "lampShadowOn", 0.0);
     }
     uf3(litU.uSkyZenith,  _litUf, "skyZenith",  frame.skyZenith  || SKY_ZENITH_DEF);
     uf3(litU.uSkyHorizon, _litUf, "skyHorizon", frame.skyHorizon || SKY_HORIZON_DEF);
     // FOG HEIGHT FALLOFF knob (absolute; def 0.018 matches the shipped palette).
     uf1(litU.uFogHeight, _litUf, "fogHeight", T && T.fogHeight != null ? T.fogHeight : (frame.fogHeight != null ? frame.fogHeight : 0.0));
     // GROUND MIST knob: scale the per-condition mist amount (multiplier, def 1).
-    gl.uniform1f(litU.uGroundMist,  (frame.groundMist != null ? frame.groundMist : 0.0) * (T && T.mistDensity != null ? T.mistDensity : 1));
-    gl.uniform1f(litU.uLampFog,     frame.lampFog != null ? frame.lampFog : 0.0);
+    uf1(litU.uGroundMist, _litUf, "groundMist", (frame.groundMist != null ? frame.groundMist : 0.0) * (T && T.mistDensity != null ? T.mistDensity : 1));
+    uf1(litU.uLampFog, _litUf, "lampFog", frame.lampFog != null ? frame.lampFog : 0.0);
     gl.uniform1f(litU.uTime,        frame.time  != null ? frame.time  : 0.0);
-    gl.uniform1f(litU.uCloudCover,  frame.cloud != null ? frame.cloud : 0.0);
-    gl.uniform1f(litU.uCloudSpeed,  frame.cloudSpeed != null ? frame.cloudSpeed : 1.0);
+    uf1(litU.uCloudCover, _litUf, "cloudCover", frame.cloud != null ? frame.cloud : 0.0);
+    uf1(litU.uCloudSpeed, _litUf, "cloudSpeed", frame.cloudSpeed != null ? frame.cloudSpeed : 1.0);
     uf1(litU.uCloudShadowDim, _litUf, "cloudShadowDim", T && T.cloudShadowDim != null ? T.cloudShadowDim : 0.80);
     // CAR SUN GLINT / CAR SPARKLE / FOG SUN CORE knobs (defaults = shipped look).
     uf1(litU.uCarSunGlint, _litUf, "carSunGlint", T && T.carSunGlint != null ? T.carSunGlint : 12.0);
@@ -1358,7 +1358,7 @@ const GLX = (function () {
     uf1(litU.uSkyRimGlow,     _litUf, "skyRimGlow",     T && T.skyRimGlow     != null ? T.skyRimGlow     : 1.0);
     uf1(litU.uAmbContactDark, _litUf, "ambContactDark", T && T.ambContactDark != null ? T.ambContactDark : 1.0);
     uf1(litU.uLampWallSpill,  _litUf, "lampWallSpill",  T && T.lampWallSpill  != null ? T.lampWallSpill  : 1.0);
-    gl.uniform1f(litU.uWetness,     frame.wetness != null ? frame.wetness : 0.0);
+    uf1(litU.uWetness, _litUf, "wetness", frame.wetness != null ? frame.wetness : 0.0);
     // Env probe: dedicated unit 6 (0 shadow / 5 decal / 7 blocker). A COMPLETE
     // cube must ALWAYS be bound here with uEnvCube pointed at it — even with no
     // probe (menu / setup viewer / tools) — otherwise the samplerCube defaults to
@@ -1377,7 +1377,7 @@ const GLX = (function () {
     // Fallback 0 (= probe OFF) is the SAFE side of the tier-gated TUNE_DEFS
     // carEnvCube default (0.3 desktop / 0.0 mobile) — a caller with no tune obj
     // gets no probe rather than the old 1.0 fallback's full-mirror surprise.
-    gl.uniform1f(litU.uEnvStr, (envTex && envReady && !_envActive && !frame.noEnv)
+    uf1(litU.uEnvStr, _litUf, "envStr", (envTex && envReady && !_envActive && !frame.noEnv)
       ? (T && T.carEnvCube != null ? T.carEnvCube : 0.0) : 0.0);
     // Point lights (floodlights / street lights). frame.lights is a flat array
     // of at most MAX_LIGHTS (48) entries, already culled to the nearest set by
