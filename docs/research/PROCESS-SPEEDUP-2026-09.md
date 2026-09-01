@@ -71,6 +71,43 @@ parity once against the browser numbers, then the rest. The `driving-model`
 CI job collapses into `guards`. Risk: the stub surface; the one-off parity
 proof is the mitigation.
 
+**LANDED 2026-09-01 (second half): the thirteen twins**, one
+`tests/unit/<spec>-vm.test.mjs` per spec above, all in `test:game-vm`, each
+one boot per file and the browser spec's own assertions and thresholds
+number for number (no tolerance was widened; the Playwright specs stay in
+place as the truth until CI has run the twins). No harness stub had to be
+extended — every hook the specs read already answers in the VM, including
+`camState()` after `snapCam()` and the scenery diagnostics. What was left
+in the browser, and why:
+
+| spec | ported | left in the browser |
+|---|---|---|
+| headless-api | 24 / 24 | — |
+| obs-act-edge | 16 / 16 | — |
+| longitudinal | 6 / 6 | — |
+| world-physics | 5 / 6 | RESPONSE slider — drives the `#pm-rate` DOM input |
+| drift | 6 / 6 | — |
+| active-aero | 13 / 13 | — |
+| aero-zones | 10 / 10 | — (the aero-part sweep boots three extra VMs where the browser reloads) |
+| offtrack | 8 / 8 | — |
+| elevation-tracks | 47 / 47 | — (40 circuit builds; ~2 min, the whole set's floor) |
+| collisions | 3 / 3 | — |
+| collisions-deep | 15 / 15 | — |
+| collision-ai-fixes | 14 / 14 | — |
+| new-hooks | 55 / 56 | the hidden ~300 s Madrid foundation test (`test.setTimeout(300000)`, spec line 793) |
+
+Three things the port had to get right that a copy would miss: (1) the
+browser gives most of these specs a FRESH page per test, so each twin's
+load helper restores `setPhysics(tuning-at-boot)` and `headless(false)` —
+aero-zones' pace test left `pace: 1.5` behind and the X-mode trade read
+`aeroX 0` until it did; (2) VM objects carry the VM realm's prototypes, so
+`assert.deepEqual` (strict) reports "same structure but not reference-equal"
+— compare JSON copies; (3) "before a track is loaded" tests boot with
+`createGame({ storage: { trackId } })` and run first, since the VM cannot
+reload a page. Measured (this container, 4 cores): a build is ~1 s, a
+physics step ~1.2 ms with the full field; the per-file walls are in the
+`docs/TESTING.md` coverage rows.
+
 ### 1.3 Shape
 
 - **One boot per file** for the parts-* (five specs boot the same garage; the
