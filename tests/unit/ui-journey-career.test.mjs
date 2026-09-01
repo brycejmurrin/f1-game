@@ -39,7 +39,7 @@ test("career.css does not reintroduce short-viewport height layout queries", () 
   assert.doesNotMatch(css, /orientation:\s*portrait\)\s*and\s*\(max-height/);
 });
 
-test("guide and history contents rail keys on wide sheet shape, strip when compact", () => {
+test("guide and history contents rail keys on wide sheet shape, strip only when tall compact", () => {
   const css = read("css/career.css");
   const js = read("js/game/career-ui.js");
   const html = read("index.html");
@@ -49,14 +49,14 @@ test("guide and history contents rail keys on wide sheet shape, strip when compa
   assert.match(js, /"cg-" \+ slug\(title\)/);
   assert.match(js, /head\("CAREER TOTALS", "ch-totals"\)/);
   assert.match(js, /head\("SEASON BY SEASON", "ch-seasons"\)/);
-  assert.match(css, /#career-guide \.sheet\[data-shape="wide"\]:not\(\[data-density="compact"\]\):has\(> #cg-contents\)/);
-  assert.match(css, /#career-history \.sheet\[data-shape="wide"\]:not\(\[data-density="compact"\]\):has\(> #ch-contents\)/);
+  assert.match(css, /#career-guide \.sheet\[data-shape="wide"\]:has\(> #cg-contents\)/);
+  assert.match(css, /#career-history \.sheet\[data-shape="wide"\]:has\(> #ch-contents\)/);
   assert.match(css, /#career-guide \.sheet\[data-shape="wide"\] > #cg-contents/);
   assert.match(css, /#career-history \.sheet\[data-shape="wide"\] > #ch-contents/);
   assert.match(css, /#career-guide \.sheet\[data-shape="wide"\] > #cg-contents,[\s\S]*?min-height:\s*0/);
   assert.match(css, /#career-guide \.sheet\[data-shape="wide"\] > \.sheet-body,[\s\S]*?min-height:\s*0/);
-  assert.match(css, /#career-guide \.sheet\[data-density="compact"\] > #cg-contents/);
-  assert.match(css, /#career-history \.sheet\[data-density="compact"\] > #ch-contents/);
+  assert.match(css, /#career-guide \.sheet\[data-density="compact"\]:not\(\[data-shape="wide"\]\) > #cg-contents/);
+  assert.match(css, /#career-history \.sheet\[data-density="compact"\]:not\(\[data-shape="wide"\]\) > #ch-contents/);
   assert.match(html, /class="sheet-body pane" id="cg-body"/);
   assert.match(html, /class="sheet-body pane" id="ch-body"/);
   assert.match(html, /class="sheet-body pane" id="co-body"/);

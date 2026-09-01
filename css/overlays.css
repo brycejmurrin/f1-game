@@ -779,18 +779,21 @@ body[data-density="compact"] #campicker {
   overscroll-behavior-x: auto; overscroll-behavior-y: contain; touch-action: pan-y;
   padding: 0 calc(var(--gap) * 0.5) calc(var(--gap) * 0.5) var(--pad);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
+  /* Same min-height:0 trap as career guide: chip stack is taller than a short
+     wide sheet, so the 1fr row refused to shrink and crushed head/foot. */
+  min-width: 0; min-height: 0;
 }
 #howtoplay-inner[data-shape="wide"] > #htp-contents > :first-child { margin-inline-start: 0; }
-#howtoplay-inner[data-shape="wide"] > .sheet-body { grid-column: 2; grid-row: 2; min-width: 0; }
+#howtoplay-inner[data-shape="wide"] > .sheet-body { grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; }
 #howtoplay-inner[data-shape="wide"] > .sheet-foot { grid-column: 1 / -1; grid-row: 3; }
-/* Compact keeps the horizontal strip: a side rail on a short landscape sheet
-   spends the scarce axis on chrome. Density is local height, so UI SIZE 200%
-   on an 852×393 phone stays a strip even though the sheet is wide-shaped. */
-#howtoplay-inner[data-density="compact"] {
+/* Tall/narrow compact: horizontal TOC strip. Wide+compact keeps the rail —
+   density is local height, so an 852×393 phone at UI SIZE 115% is compact AND
+   wide-shaped; stacking the TOC there wasted the right half (SELECT-class). */
+#howtoplay-inner[data-density="compact"]:not([data-shape="wide"]) {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
-#howtoplay-inner[data-density="compact"] > #htp-contents {
+#howtoplay-inner[data-density="compact"]:not([data-shape="wide"]) > #htp-contents {
   grid-column: auto; grid-row: auto;
   flex-direction: row; align-items: center;
   overflow-x: auto; overflow-y: hidden;
@@ -798,9 +801,9 @@ body[data-density="compact"] #campicker {
   padding: 0 var(--pad) calc(var(--gap) * 0.35);
   border-right: none;
 }
-#howtoplay-inner[data-density="compact"] > .sheet-head,
-#howtoplay-inner[data-density="compact"] > .sheet-body,
-#howtoplay-inner[data-density="compact"] > .sheet-foot {
+#howtoplay-inner[data-density="compact"]:not([data-shape="wide"]) > .sheet-head,
+#howtoplay-inner[data-density="compact"]:not([data-shape="wide"]) > .sheet-body,
+#howtoplay-inner[data-density="compact"]:not([data-shape="wide"]) > .sheet-foot {
   grid-column: auto; grid-row: auto;
 }
 #howtoplay dl {
@@ -1134,19 +1137,19 @@ body[data-density="compact"] #campicker {
 }
 #vsfriend .vs-raw[open] > summary { margin-bottom: calc(var(--gap) * 0.5); }
 
-@container sheet (min-width: 620px) {
-  #vsfriend .vs-two {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    column-gap: 20px;
-    align-items: start;
-  }
-  /* A hairline between the two steps, so they read as two things rather than
-     one wrapped list. */
-  #vsfriend .vs-two > .vs-col + .vs-col {
-    padding-left: 20px;
-    border-left: 1px solid var(--card-line);
-  }
+/* Shape, not a zoom-blind 620px container query — at UI SIZE 150% a landscape
+   phone's sheet drops under 620 CSS px while still having two usable columns. */
+#vsfriend-inner[data-shape="wide"] .vs-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 20px;
+  align-items: start;
+}
+/* A hairline between the two steps, so they read as two things rather than
+   one wrapped list. */
+#vsfriend-inner[data-shape="wide"] .vs-two > .vs-col + .vs-col {
+  padding-left: 20px;
+  border-left: 1px solid var(--card-line);
 }
 #vsfriend .vs-status {
   margin: var(--gap) 0 0;

@@ -81,6 +81,9 @@
   --pair-split: minmax(0, 1fr);
   --pair-main: minmax(0, 1.05fr);
   --pair-gap: calc(var(--pad) * 0.9);
+  /* Compact+horizontal keeps the hub split — stacking wasted the right half
+     the same way SELECT did (852×393 @115%). Tall compact still stacks. */
+  --pair-compact: wide;
 }
 
 /* Keyed on the ATTRIBUTE, not on a second copy of the 620px threshold. Two
@@ -104,9 +107,10 @@
   border-right: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-/* SHORT SHEET: `--pair-compact: off` stacks this sheet so #cr-body is the
-   scroller. Measured 852×393 @115%: pair-on left SLOT 3 and the guide CTAs
-   ~83px past #cr-inner. */
+/* SHORT TALL SHEET: `--pair-compact: wide` stacks only when shape is tall.
+   Measured 852×393 @115%: the old forced stack left the right half empty;
+   pair-on at that size keeps both columns reachable without the guide CTAs
+   spilling ~83px past #cr-inner. */
 /* Modes picker: DRIVER | MY TEAM side by side on any stacked sheet so
    MY TEAM is not below the fold. Hub (no .cr-slot in both panes) stays one
    column and keeps #cr-body as the scroller. Compact was the first cut;
@@ -549,8 +553,10 @@
    (measured 860×560 @115%: rows 39 / 432 / 0 / 0, head at y=-52,
    foot 10px). Restate wide with :has so the rail+body share one 1fr
    row and the foot keeps an auto track. */
-#career-guide .sheet[data-shape="wide"]:not([data-density="compact"]):has(> #cg-contents),
-#career-history .sheet[data-shape="wide"]:not([data-density="compact"]):has(> #ch-contents) {
+/* Wide keeps the TOC rail even when density is compact — short landscape still
+   has a left column to spend. Tall compact uses the strip below. */
+#career-guide .sheet[data-shape="wide"]:has(> #cg-contents),
+#career-history .sheet[data-shape="wide"]:has(> #ch-contents) {
   grid-template-columns: minmax(7.5rem, 11rem) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   align-content: start;
@@ -590,14 +596,14 @@
   grid-column: 1 / -1; grid-row: 3;
 }
 
-/* Compact keeps a stacked strip: a side rail spends the scarce axis on chrome. */
-#career-guide .sheet[data-density="compact"],
-#career-history .sheet[data-density="compact"] {
+/* Tall/narrow compact: horizontal TOC strip. Wide+compact keeps the rail. */
+#career-guide .sheet[data-density="compact"]:not([data-shape="wide"]),
+#career-history .sheet[data-density="compact"]:not([data-shape="wide"]) {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
-#career-guide .sheet[data-density="compact"] > #cg-contents,
-#career-history .sheet[data-density="compact"] > #ch-contents {
+#career-guide .sheet[data-density="compact"]:not([data-shape="wide"]) > #cg-contents,
+#career-history .sheet[data-density="compact"]:not([data-shape="wide"]) > #ch-contents {
   grid-column: auto; grid-row: auto;
   flex-direction: row; align-items: center;
   overflow-x: auto; overflow-y: hidden;
@@ -605,14 +611,14 @@
   padding: 0 var(--pad) calc(var(--gap) * 0.35);
   border-right: none;
 }
-#career-guide .sheet[data-density="compact"] > .sheet-head,
-#career-guide .sheet[data-density="compact"] > .sheet-body,
-#career-guide .sheet[data-density="compact"] > .sheet-foot {
+#career-guide .sheet[data-density="compact"]:not([data-shape="wide"]) > .sheet-head,
+#career-guide .sheet[data-density="compact"]:not([data-shape="wide"]) > .sheet-body,
+#career-guide .sheet[data-density="compact"]:not([data-shape="wide"]) > .sheet-foot {
   grid-column: auto; grid-row: auto;
 }
-#career-history .sheet[data-density="compact"] > .sheet-head,
-#career-history .sheet[data-density="compact"] > .sheet-body,
-#career-history .sheet[data-density="compact"] > .sheet-foot {
+#career-history .sheet[data-density="compact"]:not([data-shape="wide"]) > .sheet-head,
+#career-history .sheet[data-density="compact"]:not([data-shape="wide"]) > .sheet-body,
+#career-history .sheet[data-density="compact"]:not([data-shape="wide"]) > .sheet-foot {
   grid-column: auto; grid-row: auto;
 }
 

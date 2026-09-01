@@ -654,14 +654,12 @@ body[data-width="narrow"] .dh-pick-select { max-width: none; width: 100%; }
 body[data-width="narrow"] .dh-tab { font-size: var(--fs-1); padding: calc(var(--gap) * 0.5) 10px; }
 
 /* Last Race: hide secondary columns before they can overflow. Driver, position,
-   time/status, and points remain. Compact landscape is often still "wide" in
-   --wide-at units, so density also drops TEAM. */
+   time/status, and points remain. Key on data-width (zoom-corrected), not
+   density — compact landscape is often still wide and had room for TEAM. */
 body[data-width="narrow"] .dh-th-team,
 body[data-width="narrow"] .dh-td-team { display: none; }
 body[data-width="narrow"] .dh-th-grid,
 body[data-width="narrow"] .dh-td-grid { display: none; }
-body[data-density="compact"] .dh-th-team,
-body[data-density="compact"] .dh-td-team { display: none; }
 
 body[data-width="narrow"] .dh-table td,
 body[data-width="narrow"] .dh-table thead th { padding: calc(var(--gap) * 0.5) calc(var(--gap) / 3); }

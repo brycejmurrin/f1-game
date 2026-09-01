@@ -1153,10 +1153,17 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    same threshold. `data-pair="on"` is what puts both panes in a
    `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
    scroll region needs. */
-#ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; }
+#ss-inner {
+  --sheet-w: 1020px;
+  --pair-at: 620px;
+  --fit-at: 300px;
+  /* Compact+horizontal keeps calendar | pool side by side — same SELECT-class
+     waste on a short landscape sheet. Tall compact still stacks. */
+  --pair-compact: wide;
+}
 #ss-inner:not([data-shape="tall"]) { --fit-at: 220px; }
-/* SHORT SHEET: `--pair-compact: off` on `.pane-pair` stacks this sheet when
-   compact even if clientWidth stays above 620. Same as select / career / garage. */
+/* SHORT TALL SHEET: `--pair-compact: wide` stacks only when shape is tall.
+   Garage stays on the `.pane-pair` default `off` (horizontal tab strip). */
 /* Stacked season setup owns ONE vertical scroll region. Without this branch the
    two `.pane` children take their full natural height, #ss-body overflows while
    remaining `overflow: visible`, and #ss-inner clips the result. On a 390x844

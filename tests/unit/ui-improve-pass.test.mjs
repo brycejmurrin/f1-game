@@ -100,7 +100,11 @@ test("garage stacked categories are a horizontal strip", () => {
   assert.doesNotMatch(css, /#cs-inner:not\(\[data-pair="on"\]\):is\(\[data-shape="tall"\], \[data-density="compact"\]\) #cs-tabs \{[\s\S]*?flex-wrap:\s*wrap/,
     "tall stacked garage must keep the horizontal strip — wrapping 14 tabs starved options");
   assert.match(read("css/components.css"), /\.pane-pair\s*\{[^}]*--pair-compact\s*:\s*off/,
-    "compact season stacks via --pair-compact, same as career");
+    "garage still inherits the .pane-pair default stack");
+  assert.match(read("css/career.css"), /#cr-inner\s*\{[^}]*--pair-compact\s*:\s*wide/,
+    "compact career hub pairs on a short landscape sheet");
+  assert.match(read("css/menus.css"), /#ss-inner\s*\{[^}]*--pair-compact\s*:\s*wide/,
+    "compact season pairs on a short landscape sheet");
   const js = read("js/game/setup-ui.js");
   assert.match(js, /scrollIntoView\(\{ block: "nearest", inline: "center" \}\)/);
 });
@@ -379,7 +383,7 @@ test("How to Play exposes pinned semantic jump landmarks", () => {
   assert.match(css, /#htp-contents\s*\{[\s\S]*?overflow-x:\s*auto/);
   assert.match(css, /#htp-contents a\s*\{[\s\S]*?min-height:\s*var\(--chip-h\)/);
   assert.match(css, /#howtoplay-inner\[data-shape="wide"\] > #htp-contents/);
-  assert.match(css, /#howtoplay-inner\[data-density="compact"\] > #htp-contents/);
+  assert.match(css, /#howtoplay-inner\[data-density="compact"\]:not\(\[data-shape="wide"\]\) > #htp-contents/);
   assert.match(read("index.html"), /id="vsfriend-inner"/);
   assert.match(css, /#howtoplay:has\(#htp-friends:target\)[\s\S]*?background:\s*var\(--plate-on\)/);
   assert.match(css, /#howtoplay dt\[id\]\s*\{[^}]*scroll-margin-block-start/);
@@ -516,8 +520,8 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
   assert.match(read("css/career.css"), /#cr-inner[^{]*\{[^}]*--fit-at:\s*220px/);
   assert.match(menus, /#ss-inner \{[^}]*--fit-at:\s*300px/);
   assert.match(menus, /#ss-inner[^{]*\{[^}]*--fit-at:\s*220px/, "#ss-inner wide-shape fit-at 220px");
-  assert.match(read("css/overlays.css"), /@container sheet \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
-  assert.doesNotMatch(read("css/overlays.css"), /@media \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
+  assert.match(read("css/overlays.css"), /#vsfriend-inner\[data-shape="wide"\] \.vs-two/);
+  assert.doesNotMatch(read("css/overlays.css"), /@container sheet \(min-width: 620px\) \{\s*#vsfriend \.vs-two/);
   assert.doesNotMatch(menus, /#sel-inner\[data-fit="on"\] #sel-preview-map\s*\{\s*display:\s*none/,
     "zoomed / data-fit SELECT keeps the map; caps bind instead of hiding it");
 });

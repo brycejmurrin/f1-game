@@ -1240,36 +1240,35 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    naming either width here.
    The section headings inside the ADVANCED disclosure span the full width so
    the list still reads as grouped rather than as one undifferentiated field. */
-@container sheet (min-width: 620px) {
-  /* the body itself is the grid, and so is the ADVANCED disclosure that holds
-     the second batch of items */
-  #advanced-inner .sheet-body,
-  #advanced-inner #adv-extra {
-    display: grid;
-    /* min(...) floor: a bare `minmax(215px, …)` cannot shrink below 215 even
-       when the container is narrower, and overflows it. The @container guard
-       above says the sheet is at least 620px WIDE, which is not the same as
-       this grid's own box being 215 — padding, a pair column and UI SIZE all
-       sit between the two. See #sel-teams in css/menus.css for the measurement. */
-    grid-template-columns: repeat(auto-fill, minmax(min(215px, 100%), 1fr));
-    column-gap: var(--pad); row-gap: calc(var(--gap) * 0.5);
-    align-content: start;
-  }
-  #advanced-inner .adv-item { margin: 0; min-width: 0; }
-  /* full-width rows: the intro, the preset picker, the whole <details>
-     disclosure (summary + content flow normally inside it — display:contents
-     was tried here first to keep the summary and #adv-extra as separate grid
-     items the way the old button+div pair were, but Chromium does not
-     promote a <details>'s children out of the box tree for grid placement
-     even with display:contents, so #adv-extra rendered at one column's width
-     instead of spanning the sheet), and every section heading inside
-     #adv-extra's OWN nested grid */
-  #advanced-inner .adv-intro,
-  #advanced-inner .preset-row,
-  #advanced-inner #adv-details,
-  #advanced-inner .adv-sec { grid-column: 1 / -1; }
-  #advanced-inner .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
+/* Shape, not a zoom-blind 620px container query — at UI SIZE 150% a landscape
+   phone's sheet drops under 620 CSS px while still having room for the grid.
+   auto-fill still chooses 2 vs 3 columns from the available width. */
+#advanced-inner[data-shape="wide"] .sheet-body,
+#advanced-inner[data-shape="wide"] #adv-extra {
+  display: grid;
+  /* min(...) floor: a bare `minmax(215px, …)` cannot shrink below 215 even
+     when the container is narrower, and overflows it. Shape says the sheet is
+     landscape-proportioned, which is not the same as this grid's own box being
+     215 — padding, a pair column and UI SIZE all sit between. See #sel-teams
+     in css/menus.css for the measurement. */
+  grid-template-columns: repeat(auto-fill, minmax(min(215px, 100%), 1fr));
+  column-gap: var(--pad); row-gap: calc(var(--gap) * 0.5);
+  align-content: start;
 }
+#advanced-inner[data-shape="wide"] .adv-item { margin: 0; min-width: 0; }
+/* full-width rows: the intro, the preset picker, the whole <details>
+   disclosure (summary + content flow normally inside it — display:contents
+   was tried here first to keep the summary and #adv-extra as separate grid
+   items the way the old button+div pair were, but Chromium does not
+   promote a <details>'s children out of the box tree for grid placement
+   even with display:contents, so #adv-extra rendered at one column's width
+   instead of spanning the sheet), and every section heading inside
+   #adv-extra's OWN nested grid */
+#advanced-inner[data-shape="wide"] .adv-intro,
+#advanced-inner[data-shape="wide"] .preset-row,
+#advanced-inner[data-shape="wide"] #adv-details,
+#advanced-inner[data-shape="wide"] .adv-sec { grid-column: 1 / -1; }
+#advanced-inner[data-shape="wide"] .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
 /* MY TEAM logo upload: the file input itself is hidden (its native button is
    unstyleable), so the <label> is the visible control.
    NOTE: this block used to sit AFTER the layer's closing brace, which made it
