@@ -150,6 +150,100 @@ function ensureScenery(idx) {
   if (!def || sceneryResident(def.id)) return Promise.resolve();
   return loadBackendScripts([SCENERY_DIR + "/" + def.id + ".js"], []);
 }
+// LAZY_DATA (tools/manifest.cjs). The Jolpica/OpenF1 hub — 154 KB behind ONE
+// menu button, which a session that never opens DATA runs no byte of. Only two
+// names escape js/data/: DataHub.init/.open here, and a `typeof F1API` read in
+// js/game/apex.js that already guards itself. Unlike the scenery closures —
+// consumed synchronously by Tracks.build() on the next line — nothing outside
+// reads a Data* global, so this needs no gate beyond the button itself.
+const DATA_FILES = [
+  "js/data/api.js",
+  "js/data/telemetry.js",
+  "js/data/export.js",
+  "js/data/schedule.js",
+  "js/data/standings.js",
+  "js/data/lastrace.js",
+  "js/data/live.js",
+  "js/data/hub.js",
+];
+// hub.js calls Data*.create() at EVAL time, so every tab module lands first.
+// DERIVED, not listed: a hand-written copy of "everything, then the hub" has
+// no failure mode except drifting from the roster above. The manifest derives
+// it the same way; load-order.test.mjs asserts both.
+const DATA_HUB = "js/data/hub.js";
+const DATA_EDGES = DATA_FILES.filter((f) => f !== DATA_HUB).map((f) => [f, DATA_HUB]);
+// Memoised on the PROMISE, not on a boolean: two fast taps on DATA must not
+// inject the bundle twice, and the second tap has to await the first load
+// rather than call DataHub.open() while hub.js is still in flight.
+let dataHubLoad = null;
+function ensureDataHub() {
+  if (dataHubLoad) return dataHubLoad;
+  dataHubLoad = loadBackendScripts(DATA_FILES, DATA_EDGES).then(() => {
+    // Bare global, not window.DataHub: hub.js is a script-level `const`, a
+    // lexical binding that is never a window property. inject() resolves even
+    // on error, so this is the ONLY place a miss is visible; null the memo so
+    // a later tap retries instead of latching the failure for the session.
+    if (typeof DataHub === "undefined") {
+      Log.warn("data", "the data hub bundle did not load — DATA stays closed");
+      dataHubLoad = null;
+      return false;
+    }
+    DataHub.init(els.datahub);
+    return true;
+  });
+  return dataHubLoad;
+}
+
+// LAZY_NET (tools/manifest.cjs) — the 241 KB WebRTC stack. Loaded from the ONE
+// player-facing entry (VS FRIEND) and, at boot, whenever the agent surface is
+// wanted: js/game/apex.js reads NetTransport / NetSession / NetSnapshot and 22
+// netLobby methods directly and drives the multiplayer specs, so tying the two
+// together keeps every test and dev session behaving exactly as before and
+// confines this change to players, who load neither.
+const NET_FILES = [
+  "js/net/nostr.js",
+  "js/net/rendezvous.js",
+  "js/net/sdp.js",
+  "js/net/qr.js",
+  "js/net/scan.js",
+  "js/net/transport.js",
+  "js/net/handshake.js",
+  "js/net/snapshot.js",
+  "js/net/session.js",
+  "js/net/netplay.js",
+  "js/net/lobby.js",
+];
+// Same pairs as manifest LAZY_NET_EDGES — load-order.test.mjs asserts equality.
+const NET_EDGES = [
+  ["js/net/snapshot.js", "js/net/session.js"],
+  ["js/net/sdp.js", "js/net/handshake.js"],
+  ["js/net/qr.js", "js/net/lobby.js"],
+  ["js/net/rendezvous.js", "js/net/lobby.js"],
+  ["js/net/nostr.js", "js/net/rendezvous.js"],
+  ["js/net/scan.js", "js/net/lobby.js"],
+];
+let netLoad = null;
+function ensureNet() {
+  if (netLoad) return netLoad;
+  netLoad = loadBackendScripts(NET_FILES, NET_EDGES).then(() => {
+    if (typeof NetPlay === "undefined" || typeof NetLobby === "undefined") {
+      // inject() resolves on error, so this is the only place a miss shows.
+      // Keep the stubs (the game stays playable solo) and null the memo so a
+      // second attempt can succeed rather than latching for the session.
+      Log.warn("net", "the multiplayer bundle did not load — VS FRIEND unavailable");
+      netLoad = null;
+      return false;
+    }
+    netPlay = NetPlay.create(G);
+    netLobby = NetLobby.create(G);
+    // The real lobby binds #vsfriend here — the boot position the stub's inert
+    // wire() stood in for. Once, because ensureNet() memoises on the promise.
+    netLobby.wire();
+    return true;
+  });
+  return netLoad;
+}
+
 function wantAgentSurface() {
   if (typeof window !== "undefined" && window.__TEST_MODE) return true;
   try { if (localStorage.getItem("apex26.devApi") === "1") return true; } catch (_) { /* blocked */ }
@@ -3187,12 +3281,42 @@ DebrisWorld.create(G);
 // exceptions). Inert (owns() is a Set read) unless a flag is on AND the debris
 // side-world is live. DEFAULT ON per feature (apex26.r2Airborne/r3Contact/c1Pileup).
 const incidentSim = IncidentSim.create(G);
-// Two-player racing (js/net/netplay.js). Wholly inert until a session starts:
-// owns() is an identity check against a null, and tick() returns immediately.
-const netPlay = NetPlay.create(G);
-// The VS FRIEND lobby (js/net/lobby.js) — owns the #vsfriend screen and the
-// two code pastes that stand in for a signalling server.
-const netLobby = NetLobby.create(G);
+// Two-player racing (js/net/netplay.js) and the VS FRIEND lobby
+// (js/net/lobby.js) — LAZY_NET, so neither exists until ensureNet() runs.
+// These are `let`, and every reader goes through the G.netPlay / G.netLobby
+// GETTERS, so the swap below is invisible to all 25 call sites.
+//
+// THE STUBS ARE NOT PLACEHOLDERS, THEY ARE THE SOLO BEHAVIOUR. netPlay is
+// called at 20 sites here and only three are `netPlay && …` guarded (tick() is
+// in the frame loop), so an absent object is a crash mid-race — which is why
+// this is a null object rather than 17 new guards. The values are the real
+// module's answers with `active` false, and two of them are TRUE:
+// ownsRaceControl/ownsClassification are `!active || role === "host"`, i.e. a
+// game with no session owns everything. Returning false there would silently
+// stop a solo race classifying its own result — the one mistake in this file
+// that no crash would announce, and what net-stub-surface.test.mjs pins.
+let netPlay = {
+  active: () => false, owns: () => false, role: () => null,
+  ownsRaceControl: () => true, ownsClassification: () => true,
+  awaitingStart: () => false, awaitingResult: () => false,
+  rivalDriverIds: () => [], peerLaps: () => [], peerResult: () => null,
+  predict: () => null, status: () => ({ active: false, role: null }),
+  tick: () => {}, stop: () => {}, hostStart: () => {},
+  start: () => ({ ok: false, error: "no_net", message: "Multiplayer is not loaded." }),
+  reportLap: () => {}, reportResult: () => {}, reportCaution: () => {},
+  reportQuali: () => {}, reportQualiLive: () => {},
+  sendEvent: () => false, onEvent: () => false,
+};
+let netLobby = {
+  // wire() is called at boot and open() from VS FRIEND. Inert wire() is
+  // correct: there is no #vsfriend handler to bind until the real lobby lands,
+  // and ensureNet() calls the real wire() before it hands over.
+  wire: () => {}, open: () => {}, close: () => {}, cancel: () => {},
+  abortQuali: () => {}, roomChanged: () => {}, setReady: () => {},
+  peerSeats: () => [], roomState: () => ({ open: false, role: null, peers: [] }),
+  status: () => ({ role: null, connected: false }),
+  reportQuali: () => {}, reportQualiLive: () => {},
+};
 // C2 visual suspension (js/game/bodyattitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
 const bodyAttitude = BodyAttitude.create(G);
@@ -7685,7 +7809,8 @@ if ($("mb-vs")) $("mb-vs").onclick = () => {
   // The peer-to-peer lobby starts the race once both sides agree.
   setFlow("gp"); session = "race";
   restoreFreePlaySelection();
-  netLobby.open();
+  // The bundle lands before the screen does; ensureNet() wires the real lobby.
+  ensureNet().then((ok) => { if (ok) netLobby.open(); });
   if (soundOn) GameAudio.uiSelect();
 };
 $("mb-tt").onclick = () => {
@@ -7773,7 +7898,12 @@ function refreshCareerButton() {
 $("mb-career").onclick = () => openCareerSlots();
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };
-$("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect(); };
+$("mb-data").onclick = () => {
+  // The click sound fires immediately — the bundle is one network round trip
+  // on a cold tap and the button must not feel dead while it lands.
+  if (soundOn) GameAudio.uiSelect();
+  ensureDataHub().then((ok) => { if (ok) DataHub.open(); });
+};
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 // Same sheet from the pause menu's SETTINGS page — the controls reference is
 // most wanted mid-session, not on the title screen. #howtoplay outranks
@@ -8812,7 +8942,9 @@ Input.onPointerKindChange(syncPointerKind);
     + (Input.touchControlsNeeded() ? ({buttons:"tap arrows to steer",touch:"drag to steer"}[steerMode] || "tilt to steer") : classics + " classics");
 }
 Input.setSteerMode(steerMode);
-DataHub.init(els.datahub);
+// DataHub.init(els.datahub) used to run here. It moved into ensureDataHub(),
+// which the DATA button awaits — js/data is LAZY_DATA now and there is no
+// DataHub at boot to initialise.
 $("pm-steer").textContent = steerLabel();
 $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();
@@ -8847,6 +8979,13 @@ requestAnimationFrame(tick);
 window.__apex = null;
 async function bootAgentSurface() {
   if (!wantAgentSurface()) return;
+  // js/net comes WITH the agent surface. apex.js reads NetTransport /
+  // NetSession / NetSnapshot at eval-adjacent call sites and drives 22
+  // netLobby methods the stub does not carry, so a dev session or a spec that
+  // got __apex without the real net would fail on the multiplayer hooks
+  // instead of on anything this change is about. Awaited BEFORE apex.js so
+  // ApexApi.create(G) sees the real objects through the G getters.
+  await ensureNet();
   await loadBackendScripts(AGENT_FILES, AGENT_EDGES);
   if (typeof ApexApi !== "undefined") window.__apex = ApexApi.create(G);
 }
@@ -8878,7 +9017,13 @@ async function raceAssets() {
 }
 
 // Lobby buttons + the #vs= invite-link handler. Last, so every element it
-// binds to exists and the G facade is fully built.
+// binds to exists and the G facade is fully built. This is the STUB's no-op
+// now — there is nothing to bind until js/net lands, and ensureNet() calls the
+// real wire() the moment it does. Kept as a call so the boot sequence still
+// reads the same and re-eagering the lobby needs no edit here.
 netLobby.wire();
+// A #vs= invite link is the one way into multiplayer that is NOT a button
+// press, so it has to pull the bundle itself — the stub's wire() cannot see it.
+if (typeof location !== "undefined" && /[#&]vs=/.test(location.hash)) ensureNet();
 
 })();

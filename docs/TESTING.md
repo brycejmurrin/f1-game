@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 148 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 149 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1049,6 +1049,7 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
+| `net-stub-surface.test.mjs` | js/net is LAZY_NET, so `js/game.js` holds an INERT netPlay/netLobby from boot. Derives the required stub surface from the real CALL SITES (every `netPlay.<m>` / `netLobby.<m>` outside `js/net/` and the already-lazy `apex.js`) rather than a hand-written roster, so a new call site the stub cannot answer turns red instead of becoming a TypeError in the frame loop. Also pins the two VALUES that no crash would announce: `ownsRaceControl` / `ownsClassification` must be TRUE while inert (a solo game owns everything), checked against the shape in `js/net/netplay.js` so the guard cannot pin a fossil |
 | `load-order.test.mjs` | `index.html` and `tools/carview.html` `<script>` order matches `tools/manifest.cjs` exactly, including `HARD_EDGES` eval-time dependencies |
 | `global-registry.test.mjs` | a LINKER for the globals architecture (Bedrock Phase 0): scans every manifest file with `tools/scan-globals.mjs` (espree/eslint-scope, live — no artifacts/ state) and asserts one-global-per-file, single-writer-per-global (accumulators frozen), eval-time reads resolve in load order, call-time reads resolve somewhere, and the dynamic `window[expr]` class stays extinct — known violations frozen as ratchet baselines |
 | `game-ctx-surface.test.mjs` | a TYPE CHECK for the `G` ctx façade (Bedrock Phase 1) via `tools/check-gctx.mjs`: `types/game-ctx.d.ts` must declare exactly the members of `const G = {…}` in `js/game.js`, with matching writability (`readonly` ⇔ getter-with-no-setter), and the `GameModuleFactory` roster must match the real `X.create(ctx)` call sites. Second leg, skipped when no `tsc` is resolvable: every `G.member` read/write and `const {…} = ctx` destructure in `js/game|net` is emitted as a typed shadow and compiled — reading a member that does not exist, or writing one with no setter, is an error reported at the real `js/` file:line. Third leg: a member **no module reads** (the `countT` defect reversed) is baselined, so a new one fails |
@@ -1526,8 +1527,44 @@ Playwright's actionability poll. `__apex.headless(true)` before touching the
 panel fixed it outright. Reach for that before believing a locator that cannot
 find what `getElementById` can.
 
+Measured a third time 2026-09-01, on a lazily-injected bundle rather than a
+click: VS FRIEND pulling js/net took **39.7 s** with the menu flyby rendering
+and **0.1 s** with `#game` hidden — same page, same 11 files, **150 ms of
+actual fetch** in both. A wall-clock number taken from a rendering page is
+measuring llvmpipe, so decompose it (resource timings) or take a
+not-rendering control before believing it says anything about the code.
+
 Seen again 2026-08-30 with a live race running: `page.click("#rotate-race")`
 timed out after resolving the locator and logging "element is visible, enabled
 and stable", while `elementFromPoint` at the same coordinates returned that
 button. `el.click()` inside `page.evaluate` drives the real handler and is the
 right probe when the page must keep rendering.
+
+**`context.setOffline(true)` is NOT offline against `127.0.0.1`.** Chromium's
+network emulation exempts loopback, so a page under `setOffline` still reaches
+the local test server. Measured 2026-09-01 while proving the service-worker
+precache fix (`scratch/offline-check.cjs`): with `setOffline(true)` in force, a
+`fetch()` **from inside the page** for a URL no cache can hold returned
+`reachable (404)`. Asking `context.request` — a separate APIRequestContext that
+need not honour page-level emulation at all — gives the same wrong answer for a
+second reason, so a probe placed there is not even measuring the right process.
+
+The cost of not noticing is a green run that proves nothing: the first cut of
+the offline test passed **with the precache deliberately deleted**, because the
+"offline" browser simply re-fetched the missing scenery from the still-live
+server. The cure is to make the origin actually stop existing —
+`srv.closeAllConnections()` then `srv.close()` — with `setOffline(true)` kept on
+as well, because the service worker's navigate handler branches on
+`navigator.onLine` and a returning player really is flagged offline. Under that
+shape the same probe reads `blocked: Failed to fetch`, and only then does the
+number after it mean anything.
+
+Two more traps in the same test, both of which produced a false PASS first:
+
+- **Race a circuit the session has never touched.** The SW's fetch-miss handler
+  caches whatever the online phase requested, so reusing one circuit for the
+  online reference and the offline subject tests the runtime cache, not the
+  precache. The test now warms on `spa` and goes cold on `cota`.
+- **`sw.js` does not `clients.claim()`**, so the page that registers the worker
+  is not controlled by it. One reload — what a returning player does anyway —
+  is required before any cache assertion means anything.

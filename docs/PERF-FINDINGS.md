@@ -2137,6 +2137,57 @@ circuit files also loads `LAZY_SCENERY`, reading source with comments stripped
 (the first cut of that guard was satisfied by the word appearing in its own
 explanatory comment).
 
+**And it shipped a silent offline regression (fixed 2026-09-01).** `sw.js`
+builds its precache from the shell's `<script>` tags plus an explicit
+`optional` list. Taking 41 files off the tags took them out of the install with
+nothing putting them back, so an installed PWA that went offline requested
+`js/circuits/scenery/<id>.js?v=<build>`, missed, and — because
+`loadBackendScripts` sets `el.onload = el.onerror = resolve` — carried on and
+built the circuit BARE. No exception, no console line, no red test.
+
+The lesson is that **the boot wall and the precache are the same list read
+twice**, so any move off one is a move off the other unless it is put back
+deliberately. Both new rosters are now seeded `optional` (not `essential`: an
+install must not fail over a circuit the player may never race) and stamped
+`?v=<build>`, because the injector requests them with that query and the SW
+matches without `ignoreSearch` — a bare key is one nothing ever asks for.
+`load-order.test.mjs` now asserts both: that every `LAZY_RACE` / `LAZY_SCENERY`
+file is seeded, and that the SW's own stamping predicate — extracted from
+source and RUN, not pattern-matched — covers every path it seeds.
+`tools/offline-precache-check.cjs` is the behavioural half; see its README row
+and `docs/TESTING.md` for why `setOffline(true)` alone measures nothing here.
+
+**Round 16 (2026-09-01): 3,715,772 -> 3,319,340 B, another 396,432 B / 10.7%,
+in two lifts.** `js/data` (154,412 B, 8 files) and `js/net` (242,020 B, 11
+files). 156 tags -> 137. Cumulative over rounds 15-16: **4,964 KB -> 3,241 KB**.
+
+They needed different mechanisms, and the reason is the general rule for this
+lever. `js/data` is an ISLAND — eight globals, and nothing outside the
+directory names any of them except `DataHub.init/.open` and one already-guarded
+`typeof F1API` — so it can simply be absent until the DATA button asks for it.
+`js/net` is the opposite: `netPlay` is called at 20 sites in game.js and only
+three are `netPlay && …` guarded, with `netPlay.tick()` in the frame loop. The
+choice there was 17 new guards scattered through the loop and the result path,
+or ONE inert null object; the null object wins because a missed guard is a
+crash mid-race while a missing stub member is a red test.
+
+**The stub's dangerous line is not a method, it is a VALUE.**
+`ownsRaceControl`/`ownsClassification` are `!active || role === "host"` in
+js/net/netplay.js, so with no session they are TRUE — a solo game owns
+everything. A stub returning false there would silently stop a solo race
+classifying its own result: no crash, no console line.
+`tests/unit/net-stub-surface.test.mjs` pins both, checks them against the real
+module's shape so it cannot pin a fossil, and derives the rest of the required
+surface from the CALL SITES rather than a hand-written roster.
+
+**Measured, and the measurement needed a control.** VS FRIEND from the menu
+loaded the bundle in **39.7 s** on this box — alarming until decomposed: 11
+files, **150 ms of actual fetch**, 19.5 s from first request to last byte. The
+same click with `#game` hidden: **0.1 s**. It is the rAF starvation
+docs/TESTING.md already records (an identical click at 80-113 s rendering,
+0.3-0.6 s not), not the payload — and the 241 KB it parses is the same parse
+boot used to pay unconditionally, now paid by the players who ask for it.
+
 Boot wall **at 1421:** **153** `src=` tags, **5,909,851 B** (5.91 MB).
 `apex.js` + `agentview*` is **350,083 B** of eager dev/test surface.
 Circuit IIFE parse is still cheap; LIST `points` is already a lazy getter.

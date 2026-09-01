@@ -106,14 +106,6 @@ const FULL = [
   "js/game/music-lib.js",
   "js/game/spotify.js",
   "js/game/audio-panel.js",
-  "js/data/api.js",
-  "js/data/telemetry.js",
-  "js/data/export.js",
-  "js/data/schedule.js",
-  "js/data/standings.js",
-  "js/data/lastrace.js",
-  "js/data/live.js",
-  "js/data/hub.js",
   "js/car/parts.js",
   "js/car/liveries.js",
   "js/car/crest-paths.js",
@@ -173,17 +165,6 @@ const FULL = [
   // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).
   // Multiplayer wire. Pure logic with no game dependency, so position only
   // has to satisfy "before whatever consumes it" — game.js, last as always.
-  "js/net/nostr.js",
-  "js/net/rendezvous.js",
-  "js/net/sdp.js",
-  "js/net/qr.js",
-  "js/net/scan.js",
-  "js/net/transport.js",
-  "js/net/handshake.js",
-  "js/net/snapshot.js",
-  "js/net/session.js",
-  "js/net/netplay.js",
-  "js/net/lobby.js",
   "js/game.js",
 ];
 
@@ -252,6 +233,9 @@ const TRACK_VM = [
 
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
+  // js/net's six intra-directory pairs moved to LAZY_NET_EDGES when the
+  // multiplayer stack left FULL: a HARD_EDGES pair must have BOTH ends in FULL
+  // to be orderable by tag position.
   ["js/mat4.js", "js/render/glx.js"],                       // glx uses M4 at init
   // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
   // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is
@@ -260,7 +244,11 @@ const HARD_EDGES = [
   ["js/mat4.js", "js/game.js"],
   ["js/mat4.js", "js/track/spline.js"],
   ["js/mat4.js", "js/track/scenery-structures.js"],
-  ["js/mat4.js", "js/data/telemetry.js"],
+  // ["js/mat4.js", "js/data/telemetry.js"] was here. telemetry.js is LAZY_DATA
+  // now, so the pair crosses rosters and HARD_EDGES cannot order it. The
+  // dependency is real and satisfied by CONSTRUCTION rather than by position:
+  // mat4.js is the 2nd tag in FULL and the data bundle is injected from a menu
+  // click, long after every tag has evaluated.
   // liverytex sizes its atlas from GLX.mobileTier at EVAL time — the one
   // mobile-tier detection now lives in glx.js and nowhere else.
   ["js/render/glx.js", "js/car/liverytex.js"],
@@ -269,21 +257,15 @@ const HARD_EDGES = [
   // DataView argument is handled, which is exactly the bug a shared helper
   // prevents. Call-time, not eval-time, but a session with no NetSnapshot
   // silently drops every state packet rather than throwing — so pin the order.
-  ["js/net/snapshot.js", "js/net/session.js"],
   // handshake.js calls NetSdp.packChecked/unpack whenever it builds or reads
   // an invite code. Call-time, but a handshake with no NetSdp throws inside
   // the click handler that generates the invite — the one place an error is
   // least visible.
-  ["js/net/sdp.js", "js/net/handshake.js"],
   // lobby.js draws the invite QR through NetQr the moment an invite exists.
-  ["js/net/qr.js", "js/net/lobby.js"],
   // lobby.js calls NetRendezvous the moment a room-code button is wired.
-  ["js/net/rendezvous.js", "js/net/lobby.js"],
   // rendezvous.js calls NetNostr whenever no private relay is configured,
   // which is the DEFAULT path — room codes work with nothing deployed.
-  ["js/net/nostr.js", "js/net/rendezvous.js"],
   // lobby.js creates a NetScan the moment a SCAN button is wired.
-  ["js/net/scan.js", "js/net/lobby.js"],
   // chunks.js before every shader file (lit/sky/post interpolate GLXChunks at
   // eval; fx.js is chunk-free today but keeps the uniform ordering contract).
   ["js/render/shaders/chunks.js", "js/render/shaders/lit.js"],
@@ -318,13 +300,8 @@ const HARD_EDGES = [
   ["js/track/space.js", "js/track/surface.js"],
   ["js/track/models.js", "js/track/circuit-kit.js"],
   ["js/track/tracks.js", "js/track/maps.js"],               // maps calls Tracks.buildCenterline
-  ["js/data/api.js", "js/data/hub.js"],
-  ["js/data/telemetry.js", "js/data/hub.js"],               // hub calls Data*.create at eval
-  ["js/data/export.js", "js/data/hub.js"],
-  ["js/data/schedule.js", "js/data/hub.js"],
-  ["js/data/standings.js", "js/data/hub.js"],
-  ["js/data/lastrace.js", "js/data/hub.js"],
-  ["js/data/live.js", "js/data/hub.js"],
+  // js/data's own eval-time edges moved to LAZY_DATA_EDGES when the hub left
+  // FULL — HARD_EDGES pairs must both be IN FULL to be orderable.
   ["js/game/tables.js", "js/game/hud.js"],      // hud destructures GameTables at eval
   ["js/game/tables.js", "js/game/cam-modes.js"], // cam-modes destructures GameTables at eval
   ["js/game/physics-consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
@@ -437,6 +414,67 @@ const LAZY_RACE = [
   "js/game/light-presets.js",
 ];
 
+// THE DATA HUB (js/data/*), 154 KB behind ONE menu button. Jolpica/OpenF1
+// schedule, standings, last race, live timing, telemetry and export — none of
+// which a session that never opens DATA will run a byte of. Nothing outside
+// js/data/ names any of its eight globals except DataHub.init/.open in
+// game.js and a `typeof F1API` read in js/game/apex.js, so the whole directory
+// lifts off the boot wall as one bundle loaded from the #mb-data click.
+const LAZY_DATA = [
+  "js/data/api.js",
+  "js/data/telemetry.js",
+  "js/data/export.js",
+  "js/data/schedule.js",
+  "js/data/standings.js",
+  "js/data/lastrace.js",
+  "js/data/live.js",
+  "js/data/hub.js",
+];
+// hub.js calls Data*.create() at EVAL time, so every tab module must have
+// evaluated before it — the same meaning HARD_EDGES carries for FULL. These
+// pairs moved here from HARD_EDGES when the directory left FULL, and are
+// DERIVED from the roster rather than listed: the shape is "everything, then
+// the hub", so a hand-written copy can only ever drift out of step with it.
+const LAZY_DATA_EDGES = LAZY_DATA.filter((f) => f !== "js/data/hub.js")
+  .map((f) => [f, "js/data/hub.js"]);
+
+// MULTIPLAYER (js/net/*). 241 KB of WebRTC — nostr/rendezvous signalling, SDP,
+// QR, the transport, handshake, snapshot codec, session, netplay and the VS
+// FRIEND lobby — that a solo session never runs a byte of. The biggest single
+// block left on the boot wall, and the one that most players never touch.
+//
+// Unlike js/data this CANNOT simply be absent: netPlay is called at 20 sites in
+// js/game.js and only three of them are `netPlay && …` guarded — netPlay.tick
+// is in the frame loop. So game.js holds an INERT STUB from boot and swaps in
+// the real objects when VS FRIEND opens; see NET_INERT there, and the guard in
+// load-order.test.mjs that derives the stub's required surface from the call
+// sites rather than from a hand-written roster.
+const LAZY_NET = [
+  "js/net/nostr.js",
+  "js/net/rendezvous.js",
+  "js/net/sdp.js",
+  "js/net/qr.js",
+  "js/net/scan.js",
+  "js/net/transport.js",
+  "js/net/handshake.js",
+  "js/net/snapshot.js",
+  "js/net/session.js",
+  "js/net/netplay.js",
+  "js/net/lobby.js",
+];
+// Eval-time pairs, moved verbatim from HARD_EDGES. Listed, not derived: unlike
+// the data hub these are a real graph (rendezvous needs nostr, handshake needs
+// sdp, session needs snapshot, the lobby needs qr/scan/rendezvous), not one
+// module gathering the rest.
+const LAZY_NET_EDGES = [
+  ["js/net/snapshot.js", "js/net/session.js"],
+  ["js/net/sdp.js", "js/net/handshake.js"],
+  ["js/net/qr.js", "js/net/lobby.js"],
+  ["js/net/rendezvous.js", "js/net/lobby.js"],
+  ["js/net/nostr.js", "js/net/rendezvous.js"],
+  ["js/net/scan.js", "js/net/lobby.js"],
+];
+
 const DEFERRED_EDGES = [
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"], // string concat at eval
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],
@@ -480,6 +518,7 @@ const sceneryPath = (id) => `${SCENERY_DIR}/${id}.js`;
 module.exports = {
   CIRCUITS, CIRCUITS_DIR, FULL, CSS, CARVIEW, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
+  LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath,
 };
