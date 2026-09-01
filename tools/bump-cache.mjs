@@ -34,7 +34,12 @@ import { fileURLToPath } from "node:url";
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(name);
 const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; };
-const ROOT = opt("--root") || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// --root is RESOLVED: pages.yml passes the relative `_site`, and the asset-path
+// guard below compares against an absolute prefix — a relative ROOT rejected
+// every tag ("Invalid versioned asset path: css/tokens.css") and failed the
+// first stamped deploy (run 1873, 2026-09-01). The unit test used an absolute
+// temp dir and never saw it; it now stamps through a relative --root too.
+const ROOT = opt("--root") ? path.resolve(opt("--root")) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const INDEX = path.join(ROOT, "index.html");
 const VERSION = path.join(ROOT, "version.json");
 const TAG_RE = /\b(src|href)="([^"?#]+)\?v=([A-Za-z0-9._-]+)"/g;

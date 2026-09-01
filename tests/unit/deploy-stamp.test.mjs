@@ -37,6 +37,28 @@ test("ci.yml no longer demands a committed generation newer than live", () => {
   assert.doesNotMatch(ci, /bump-cache\.mjs --check --since/, "that check contradicts a deploy-stamped generation and would fail every push");
 });
 
+test("a RELATIVE --root (pages.yml passes `_site`) stamps too", () => {
+  // Run 1873 (2026-09-01) failed its very first stamp with "Invalid versioned
+  // asset path: css/tokens.css": ROOT kept the relative string, the asset guard
+  // compared an absolute resolved path against a relative prefix, and rejected
+  // every tag. The absolute-tempdir test above could not see it.
+  const rel = path.join("scratch", `stamp-${process.pid}-${Date.now()}`);
+  const dir = path.join(ROOT, rel);
+  fs.mkdirSync(path.join(dir, "css"), { recursive: true });
+  try {
+    fs.writeFileSync(path.join(dir, "css", "tokens.css"), ":root{--x:1}\n");
+    fs.writeFileSync(path.join(dir, "index.html"),
+      `<meta name="apex-build" content="1689">\n<link rel="stylesheet" href="css/tokens.css?v=bad">\n`);
+    fs.writeFileSync(path.join(dir, "version.json"), `{ "build": 1689 }\n`);
+    const r = spawnSync("node", ["tools/bump-cache.mjs", "--apply", "--at", "2315", "--json", "--root", rel], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(r.status, 0, `relative --root must stamp: ${r.stderr}`);
+    assert.equal(JSON.parse(r.stdout).applied, 2315);
+    assert.doesNotMatch(fs.readFileSync(path.join(dir, "index.html"), "utf8"), /\?v=bad/);
+    const check = spawnSync("node", ["tools/bump-cache.mjs", "--check", "--root", rel], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(check.status, 0, check.stderr);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("bump-cache --apply --at N --root <dir> stamps a staged copy and leaves the repo alone", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-stamp-"));
   try {
