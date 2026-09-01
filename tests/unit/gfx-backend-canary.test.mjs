@@ -9,7 +9,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
@@ -468,6 +470,130 @@ test("GLX exports a real gpuErrors counter and the workflow fails on a missing o
     "the Verdict must FAIL on a missing count, not read absent as clean");
   assert.doesNotMatch(wf, /if \(\(gfx\.gpuErrors \|\| 0\) > 0\)/,
     "the || 0 form treats an absent counter as zero — that was the bug");
+});
+
+// The Verdict step is a `node -e` script embedded in YAML, so nothing ever ran
+// it — every guard on it was a regex over its SOURCE. That is how three
+// vacuous clauses lived in it at once. Lift the real script out and execute it
+// against fixtures, so the tests below are about behaviour, not spelling.
+function verdictScript() {
+  const wf = read(".github/workflows/gpu-census.yml");
+  const at = wf.indexOf("Verdict — fail the job on what the game reported");
+  assert.ok(at > 0, "the Verdict step is gone from gpu-census.yml");
+  const open = wf.indexOf("node -e '", at);
+  assert.ok(open > at, "the Verdict step no longer runs an inline node script");
+  const lines = wf.slice(wf.indexOf("\n", open) + 1).split("\n");
+  const end = lines.findIndex((l) => l.trim() === "'");
+  assert.ok(end > 0, "could not find the end of the inline script");
+  const body = lines.slice(0, end).join("\n");
+  // A silent empty extraction would make every case below pass vacuously —
+  // the exact failure this whole round is about. Refuse to hand one back.
+  assert.ok(body.length > 2000, `extracted only ${body.length} chars of Verdict script`);
+  assert.match(body, /const bad = \[\];/, "extracted text is not the Verdict script");
+  return body;
+}
+
+// Fixtures shaped like what tools/gpu-game-check.mjs actually writes: it reads
+// backendState/envState ONLY when g.__tlx exists (gpu-game-check.mjs 205-207),
+// so the GLX leg legitimately carries neither.
+const tlxLegJson = (gfxOver = {}) => ({
+  phase: "done", ok: true,
+  gfx: {
+    glx: true, gpuErrors: 0, gpuFirstError: null,
+    backendState: { api: "webgpu", softAdapter: false, headless: false },
+    envState: { on: true, face: 6, ready: true, blank: false, fail: 0, failMsg: "", gaveUp: false },
+    ...gfxOver,
+  },
+  frame: { meanLuma: 0.4 },
+});
+const glxLegJson = (gfxOver = {}) => ({
+  phase: "done", ok: true,
+  gfx: { glx: true, gpuErrors: 0, gpuFirstError: null, ...gfxOver },
+  frame: { meanLuma: 0.4 },
+});
+
+function runVerdict(script, { census, legs }) {
+  const image = "macos-latest";
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-verdict-"));
+  try {
+    if (census !== undefined) fs.writeFileSync(path.join(dir, `census-${image}.json`), JSON.stringify(census));
+    for (const [leg, json] of Object.entries(legs)) {
+      fs.writeFileSync(path.join(dir, `game-${leg}-${image}.json`), JSON.stringify(json));
+    }
+    const r = spawnSync(process.execPath, ["-e", script], {
+      cwd: dir, encoding: "utf8",
+      env: { ...process.env, IMAGE: image, GITHUB_STEP_SUMMARY: path.join(dir, "summary.md") },
+    });
+    return { code: r.status, out: (r.stdout || "") + (r.stderr || "") };
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
+
+test("the GPU gate passes a hardware run whose GLX leg reports no env probe", () => {
+  // THE FALSE-FAILURE CASE. Making an absent env count fail on hardware is
+  // right for the two TLX legs and wrong for GLX, which has no env probe to
+  // report at all — an unscoped absence check would have failed macOS forever
+  // for a leg behaving exactly as designed. This is the counter-test that
+  // keeps the fix below honest; without it "fail on absence" looks free.
+  const r = runVerdict(verdictScript(), {
+    census: { anyHardware: true, runs: [] },
+    legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson() },
+  });
+  assert.equal(r.code, 0, `a healthy hardware run must pass:\n${r.out}`);
+});
+
+test("the GPU gate fails a census that measured nothing instead of calling it software", () => {
+  // anyHardware was `runs.some(...)`, so four failed launches produced false —
+  // and false is what switches OFF the hardware-only clauses. A census that
+  // measured nothing therefore DOWNGRADED this gate to a software gate and
+  // reported success. Tri-state; null must fail. docs/PERF-FINDINGS.md 2j.
+  const script = verdictScript();
+  const legs = { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson() };
+
+  const nulled = runVerdict(script, { census: { anyHardware: null, runs: [] }, legs });
+  assert.equal(nulled.code, 1, `a null census must fail the job:\n${nulled.out}`);
+  assert.match(nulled.out, /measured NOTHING/);
+
+  const missing = runVerdict(script, { census: undefined, legs });
+  assert.equal(missing.code, 1, `an unreadable census must fail the job:\n${missing.out}`);
+
+  // …and a census that really did measure a software image still passes, or
+  // the fix has just made every software run red.
+  const soft = runVerdict(script, {
+    census: { anyHardware: false, runs: [] },
+    legs: { webgpu: tlxLegJson({ envState: undefined, gpuErrors: null }), webgl2: tlxLegJson(), glx: glxLegJson({ gpuErrors: null }) },
+  });
+  assert.equal(soft.code, 0, `a measured software image must still pass:\n${soft.out}`);
+});
+
+test("the GPU gate fails a hardware TLX leg that stopped reporting an env count", () => {
+  // `(env.fail || 0) > 0` was the SAME banned shape as the gpuErrors fix twelve
+  // lines above it in the same file, on the same object: a build that stops
+  // exporting envState().fail read as clean. Scoped to the TLX legs, which are
+  // `--backend three` by construction and must bring an env probe with them —
+  // so a TLX leg that fell back to GLX fails here too, which is the point.
+  const script = verdictScript();
+  const gone = runVerdict(script, {
+    census: { anyHardware: true, runs: [] },
+    legs: { webgpu: tlxLegJson({ envState: undefined }), webgl2: tlxLegJson(), glx: glxLegJson() },
+  });
+  assert.equal(gone.code, 1, `a TLX leg with no env count must fail on hardware:\n${gone.out}`);
+  assert.match(gone.out, /webgpu: NO env-probe fail count/);
+
+  // The count itself still gates, on every image.
+  const failed = runVerdict(script, {
+    census: { anyHardware: true, runs: [] },
+    legs: { webgpu: tlxLegJson({ envState: { fail: 81, failMsg: "boom", gaveUp: false } }), webgl2: tlxLegJson(), glx: glxLegJson() },
+  });
+  assert.equal(failed.code, 1);
+  assert.match(failed.out, /81 env-probe faces FAILED/);
+
+  // Both banned shapes pinned out of the source, so neither can return quietly.
+  const wf = read(".github/workflows/gpu-census.yml");
+  assert.doesNotMatch(wf, /if \(\(env\.fail \|\| 0\) > 0\)/,
+    "the || 0 form treats an absent env counter as zero — that was the bug");
+  assert.doesNotMatch(wf, /const hardware = !!\(census && census\.anyHardware\);/,
+    "coercing anyHardware collapses 'measured no hardware' into 'measured nothing'");
+  assert.match(wf, /census\.anyHardware === true/);
 });
 
 test("the instancing gate is declared through the cache, never bracketed per draw", () => {

@@ -102,6 +102,50 @@ test("verify-change --plan on a docs-only change selects no browser batches", ()
   assert.deepEqual(plan.batches, [], "no browser minutes for a prose change");
 });
 
+test("verify-change reports UNMATCHED, not pass, for a diff no rule claimed", () => {
+  // The asymmetry above was the bug: that test pins "an empty batch list is
+  // correct for prose" and never asserts the VERDICT, so an empty batch list
+  // from the opposite cause — no rule claimed the files at all — reported the
+  // same `pass`, exit 0. pick-tests.mjs:243 publishes a three-way `reason`
+  // precisely so a caller can tell those apart, and this tool called the raw
+  // pick() Map API and dropped it. What made it matter: .claude/skills/check-changes
+  // calls --fast the default for verify-agent, and apex-tools-mcp runs it as
+  // apex_verify_change_fast — so an agent asking "did I break anything?" after
+  // a .github/, package.json, playwright.config.js, icons/ or vendor/ edit was
+  // told no, on the strength of one advisory cache-check. PERF-FINDINGS 2j.
+  const r = run(["tools/verify-change.mjs", "--fast", "--json", ".github/workflows/ci.yml"]);
+  const out = JSON.parse(r.out);
+  assert.equal(out.verdict, "unmatched",
+    "a diff no rule claimed must not report pass — the selection is not trustworthy");
+  assert.equal(r.status, 2, "finish() maps anything but pass/fail to exit 2, which apex-tools-mcp allows");
+  assert.deepEqual(out.unclaimed, [".github/workflows/ci.yml"],
+    "the verdict must NAME what went unclaimed, or it is just a different silent answer");
+
+  // The counter-test, and it is the one that matters: a fix that makes every
+  // no-op run loud is worse than the bug. A change a rule DOES claim must still
+  // select normally and must never report unmatched.
+  const ok = JSON.parse(run(["tools/verify-change.mjs", "--plan", "js/render/glx.js"]).out);
+  assert.ok(ok.batches.length > 0, "a js/ change must still select batches");
+  assert.equal(ok.fast.toolingFast, true);
+});
+
+test("verify-change derives its reason the same way pick-tests publishes it", () => {
+  // Two copies of one rule drift. pick-tests.mjs:243 is the definition; this
+  // asserts verify-change computes the identical expression over the identical
+  // inputs (its `groups` is pick-tests' `named`, same filter, same sort), so a
+  // change to the contract cannot silently apply to only one of them.
+  const vc = fs.readFileSync(path.join(ROOT, "tools/verify-change.mjs"), "utf8");
+  const pt = fs.readFileSync(path.join(ROOT, "tools/pick-tests.mjs"), "utf8");
+  const shape = /!files\.length \? "none" : \((?:groups|named)\.length \? "matched" : "unmatched"\)/;
+  assert.match(vc, shape, "verify-change must compute the three-way reason");
+  assert.match(pt, shape, "pick-tests must still be the definition this mirrors");
+  // ORDER matters, not just presence: the unmatched check has to run BEFORE the
+  // pass path, or it is dead code sitting under the bug it exists to prevent.
+  // An index comparison says that plainly; a regex spanning both would not.
+  assert.ok(vc.indexOf('selReason === "unmatched"') < vc.indexOf('? "partial" : "pass"'),
+    "the unmatched check must come before the pass path, or it can never fire");
+});
+
 // ── bump-cache against a fixture shell (never the real one) ─────────────────
 
 test("bump-cache: --check catches drift, --apply hashes assets and advances shell generation", () => {

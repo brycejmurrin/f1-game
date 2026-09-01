@@ -227,19 +227,41 @@ jobs:
             // Only a machine the census called hardware can be held to the
             // hardware expectations; a software image legitimately reports
             // softAdapter true and a skipped (blank) env probe.
-            const hardware = !!(census && census.anyHardware);
+            // TRI-STATE, deliberately not coerced. `!!` mapped BOTH "measured,
+            // no hardware" and "measured nothing" to false, and false is what
+            // switches off the three strongest clauses below (a missing
+            // gpuErrors count, softAdapter on hardware). A census that failed to
+            // launch therefore downgraded this gate to a software gate and let
+            // it report success — the same absence-reads-as-normal shape this
+            // gate was hardened against. docs/PERF-FINDINGS.md 2j.
+            const hardware = !!(census && census.anyHardware === true);
+            const censusUnknown = !census || census.anyHardware == null;
             const bad = [];
+            if (censusUnknown) bad.push(
+              `census-${image}.json: the census measured NOTHING (anyHardware ` +
+              `null or file unreadable) — this run cannot tell hardware from ` +
+              `software, so the hardware-only checks below would pass vacuously`);
             const rows = [`## ${image} — real-GPU verdict`, "", "```",
               `census anyHardware: ${hardware}`];
             // "glx" is the default backend. Its rows carry no backendState /
-            // envState (those are TLX-only reads), and every check below that
-            // touches them is absent-safe — so for GLX the gate is ok/phase and
-            // gpuErrors, which is the right gate for it anyway.
+            // envState: gpu-game-check reads those only when g.__tlx exists
+            // (tools/gpu-game-check.mjs 205-207), so for GLX the gate is
+            // ok/phase and gpuErrors, which is the right gate for it anyway.
+            // Every check below that touches an env/backend field is therefore
+            // either absent-safe or scoped to tlxLeg — an absence check aimed
+            // at all three legs would fail GLX on hardware for reporting
+            // exactly what it is built to report.
             for (const path3 of ["webgpu", "webgl2", "glx"]) {
               const file = `game-${path3}-${image}.json`;
               const g = read(file);
               if (!g) { bad.push(`${path3}: ${file} missing — the check produced nothing`); continue; }
               const gfx = g.gfx || {}, env = gfx.envState || {}, be = gfx.backendState || {};
+              // The two TLX legs are three.js BY CONSTRUCTION (--backend three,
+              // above), so they MUST bring an env probe with them. Scoping on
+              // the leg name rather than on "does this row have a __tlx" is the
+              // whole point: a TLX leg that fell back to GLX loses envState too,
+              // and that is a regression to fail on, not a reason to go quiet.
+              const tlxLeg = path3 !== "glx";
               const frame = g.frame || {};
               rows.push(`${path3.padEnd(7)} phase=${g.phase} ok=${g.ok} ` +
                 `gpuErrors=${gfx.gpuErrors} envFail=${env.fail} envReady=${env.ready} ` +
@@ -276,7 +298,20 @@ jobs:
             // rigour. macos-latest still fails loudly if it stops reporting.
               else if (hardware && gfx.gpuErrors == null) bad.push(`${path3}: NO gpuErrors count reported — the error check would pass vacuously (see docs/PERF-FINDINGS.md 2e)`);
               else if (gfx.gpuErrors > 0) bad.push(`${path3}: ${gfx.gpuErrors} uncaptured GPU errors — ${String(gfx.gpuFirstError || "").slice(0, 160)}`);
-              if ((env.fail || 0) > 0) bad.push(`${path3}: ${env.fail} env-probe faces FAILED — ${String(env.failMsg || "").slice(0, 160)}`);
+              // `(env.fail || 0) > 0` was the SAME banned shape as the gpuErrors
+              // fix twelve lines up, on the same object: a build that stops
+              // exporting envState().fail reads as clean. Absence fails on
+              // hardware instead. envState().fail is `_envFailN`, initialised 0
+              // (js/render/three/tlx.js 1112) and always a number once the
+              // surface exists — so on a hardware TLX leg an ABSENT count means
+              // the surface is gone or envState() threw, never "no failures".
+              // docs/PERF-FINDINGS.md 2j.
+              if (hardware && tlxLeg && env.fail == null) bad.push(`${path3}: NO env-probe fail count reported — the env check would pass vacuously`);
+              else if (env.fail > 0) bad.push(`${path3}: ${env.fail} env-probe faces FAILED — ${String(env.failMsg || "").slice(0, 160)}`);
+              // gaveUp needs no absence clause of its own: it lives on the same
+              // envState object, so it is missing exactly when fail is missing
+              // and the clause above has already failed the run. A second push
+              // would name one root cause twice.
               if (env.gaveUp) bad.push(`${path3}: the env probe stood down — it could not succeed`);
               if (hardware && be.softAdapter === true) bad.push(`${path3}: softAdapter TRUE on an adapter the census called hardware — the classification regressed and the game is running the degraded content path`);
             }
