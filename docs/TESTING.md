@@ -1497,3 +1497,32 @@ timed out after resolving the locator and logging "element is visible, enabled
 and stable", while `elementFromPoint` at the same coordinates returned that
 button. `el.click()` inside `page.evaluate` drives the real handler and is the
 right probe when the page must keep rendering.
+
+**`context.setOffline(true)` is NOT offline against `127.0.0.1`.** Chromium's
+network emulation exempts loopback, so a page under `setOffline` still reaches
+the local test server. Measured 2026-09-01 while proving the service-worker
+precache fix (`scratch/offline-check.cjs`): with `setOffline(true)` in force, a
+`fetch()` **from inside the page** for a URL no cache can hold returned
+`reachable (404)`. Asking `context.request` — a separate APIRequestContext that
+need not honour page-level emulation at all — gives the same wrong answer for a
+second reason, so a probe placed there is not even measuring the right process.
+
+The cost of not noticing is a green run that proves nothing: the first cut of
+the offline test passed **with the precache deliberately deleted**, because the
+"offline" browser simply re-fetched the missing scenery from the still-live
+server. The cure is to make the origin actually stop existing —
+`srv.closeAllConnections()` then `srv.close()` — with `setOffline(true)` kept on
+as well, because the service worker's navigate handler branches on
+`navigator.onLine` and a returning player really is flagged offline. Under that
+shape the same probe reads `blocked: Failed to fetch`, and only then does the
+number after it mean anything.
+
+Two more traps in the same test, both of which produced a false PASS first:
+
+- **Race a circuit the session has never touched.** The SW's fetch-miss handler
+  caches whatever the online phase requested, so reusing one circuit for the
+  online reference and the offline subject tests the runtime cache, not the
+  precache. The test now warms on `spa` and goes cold on `cota`.
+- **`sw.js` does not `clients.claim()`**, so the page that registers the worker
+  is not controlled by it. One reload — what a returning player does anyway —
+  is required before any cache assertion means anything.

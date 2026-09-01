@@ -196,6 +196,32 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   for (const f of deferredFiles()) {
     assert.ok(seeded.has(f), `${f} is DEFERRED, so sw.js must seed it (the tag parser cannot find it)`);
   }
+  // LAZY_RACE + LAZY_SCENERY are tagless for the same reason and fail the same
+  // way, only worse: loadBackendScripts resolves on error, so offline the
+  // circuit builds BARE — road and terrain, no dressing — with no exception to
+  // notice. LAZY_AGENT is deliberately NOT here (dev/test surface; a player who
+  // never opens it should not pay for it in the install).
+  for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_SCENERY || [])]) {
+    assert.ok(seeded.has(f),
+      `${f} is a lazily-injected RACE asset, so sw.js must seed it or an offline install builds bare`);
+  }
+});
+
+// The seed key has to MATCH the request. loadBackendScripts injects everything
+// it loads as `<path>?v=<build>`, and the SW's fetch handler matches without
+// ignoreSearch, so a bare seed is a key nothing ever asks for — the build-895
+// shape, recorded in sw.js's own install comment.
+test("sw.js stamps every injected asset it seeds", () => {
+  const sw = readFileSync(join(ROOT, "sw.js"), "utf8");
+  const m = sw.match(/const stamped = urls\.optional\.map\(\(u\) =>\s*(\/.+\/)\.test\(u\)/);
+  assert.ok(m, "sw.js must map its optional seeds through a build stamp");
+  // Rebuild the SW's own predicate and RUN it, rather than pattern-matching the
+  // source text: the question is which paths actually get the ?v= suffix.
+  const stamps = new RegExp(m[1].slice(1, -1));
+  const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_SCENERY || [])];
+  const unstamped = injected.filter((f) => !stamps.test(f));
+  assert.deepEqual(unstamped, [],
+    `these are injected as ?v=<build> but seeded bare, so the cache key is one nothing requests: ${unstamped}`);
 });
 
 test("LAZY_AGENT files have no <script> tag", () => {
@@ -287,11 +313,15 @@ test("js/game.js AGENT_EDGES equals MANIFEST.LAZY_EDGES", () => {
 test("sw.js optional precache does not include LAZY_AGENT", () => {
   // Install-time Cache.put full-compiles (v8.dev). These three stay fetch-miss
   // only — do not seed them in optional the way DEFERRED backends are seeded.
+  // MANIFEST.LAZY_AGENT, not lazyFiles(): that helper now spans three tagless
+  // rosters and the other two (LAZY_RACE / LAZY_SCENERY) are REQUIRED to be
+  // seeded, because a missed fetch there builds a bare circuit offline instead
+  // of merely withholding a dev API.
   const sw = readFileSync(join(ROOT, "sw.js"), "utf8");
   const optional = sw.match(/const optional = new Set\(\[([\s\S]*?)\]\);/);
   assert.ok(optional, "sw.js must declare an `optional` precache Set");
   const seeded = new Set([...stripComments(optional[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]));
-  for (const f of lazyFiles()) {
+  for (const f of (MANIFEST.LAZY_AGENT || [])) {
     assert.ok(!seeded.has(f), `${f} is LAZY_AGENT — must not be SW-optional`);
     assert.ok(![...seeded].some((u) => u.includes(f)), `${f} must not appear in sw.js optional`);
   }
