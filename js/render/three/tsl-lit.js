@@ -52,9 +52,23 @@
 "use strict";
 
 (function () {
-  const MAX_LIGHTS = 48;
+  const MAX_LIGHTS_DEF = 48;
+  // iOS Safari rendered NOTHING on the lit path at 48. WebGL2's fragment floor
+  // is 224 vec4 ROWS and a uniform array is always VERTICAL — vec3[48] costs 48
+  // rows, not 12 (webgl2fundamentals, "WebGL2 Cross Platform Issues"). So
+  // lampPos/Col/Dir + lampGeo alone are 4 x 48 = 192 of 224, leaving 32 for
+  // every matrix, fog, sun and material uniform (a mat4 is 4). glx.js records
+  // the same 192 and squeaks under with a lean hand-written shader; three/TSL
+  // adds its own block on top and goes OVER, so the shader fails to LINK and
+  // every lit surface draws nothing — while textured/emissive ones still draw.
+  // 16 lamps = 64 rows. Same _liteGpu gate as samples/outputType in tlx.js.
+  const MAX_LIGHTS_LITE = 16;
 
   function lit(THREE, TSL, ctx) {
+    // Read from ctx so the cap is decided at factory time, BEFORE the TSL graph
+    // is built: the Loop bounds and the CPU-side arrays must agree, and both
+    // read this one binding.
+    const MAX_LIGHTS = (ctx && ctx.maxLights > 0) ? (ctx.maxLights | 0) : MAX_LIGHTS_DEF;
     const {
       Fn, If, Loop, Break, uniform, uniformArray, attribute, varying, texture, cubeTexture,
       float, int, vec2, vec3, vec4, mrt,

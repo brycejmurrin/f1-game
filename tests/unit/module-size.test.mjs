@@ -911,7 +911,10 @@ const CEILINGS = {
   // throwing once a frame forever.
   // 2322 -> 2326: the same `updateInstances: undefined` declaration and its
   // reason, for the same descriptor-copy hazard. PERF-FINDINGS 2h.
-  "js/render/three/tlx.js": 2326,
+  // 2326 -> 2331: five lines, all comment, passing maxLights through the lit
+  // factory under the SAME _liteGpu gate that already downgrades samples and
+  // outputType for mobile/WebKit. See tsl-lit.js for the row arithmetic.
+  "js/render/three/tlx.js": 2331,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
@@ -975,7 +978,13 @@ const CEILINGS = {
   // three.js TSL lit-material port; tracks lit.js feature-for-feature.
   // 1725 -> 1768: the same four finishes, the pearlescent term and the carbon
   // weave, in TSL.
-  "js/render/three/tsl-lit.js": 1768,
+  // 1768 -> 1777: nine lines, all comment, for one device-aware constant.
+  // MAX_LIGHTS was hard-coded 48; a uniform array is VERTICAL in WebGL2, so the
+  // four lamp arrays cost 4 x 48 = 192 of the 224-row fragment floor and the lit
+  // shader failed to LINK on iOS Safari — every lit surface drew nothing while
+  // textured/emissive ones kept drawing. The comment carries the arithmetic and
+  // its source, because the number 48 looks harmless and the failure is silent.
+  "js/render/three/tsl-lit.js": 1777,
   // Multiplayer lobby UI + flow; all of js/net/'s DOM lives here.
   // 1618 -> 1624 (R8): the peer-close handler closes the transport BEFORE the
   // map delete, with the leak-class comment — bug-explaining growth.
