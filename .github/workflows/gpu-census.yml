@@ -25,11 +25,22 @@ name: GPU census
 #                overlay. Same hooks the overlay prints for a player, so a CI
 #                answer and a pasted player answer compare directly.
 #
-# Dispatch-only. It costs runner minutes on images the normal gate never uses
-# (macOS bills at a multiplier), so it runs when someone asks a question, not on
-# every push.
+# Dispatch, and NIGHTLY (2026-09-01) — never on push. It costs runner minutes on
+# images the normal gate never uses (macOS bills at a multiplier), so it runs
+# when someone asks a question and once a night beside ci.yml's boot group
+# (same cron, PROCESS-SPEEDUP-2026-09 §4.5): the two real-GPU defects the
+# Verdict step has caught were found only when someone happened to dispatch
+# this, and a gate that fires on request catches a regression exactly once.
+#
+# A scheduled run has NO inputs — every `inputs.*` reads as the empty string —
+# so each input used below carries its dispatch default inline (`|| 'x'`), and
+# `census_only` reads as false, which is the FULL check: the schedule gates on
+# exactly what a default dispatch gates on. The schedule runs on the default
+# branch only (GitHub's rule), like ci.yml's nightly.
 
 on:
+  schedule:
+    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       track:
@@ -80,7 +91,8 @@ jobs:
           print("images=" + json.dumps(picked or ["ubuntu-latest"]))
           PY
         env:
-          IMAGES: ${{ inputs.images }}
+          # Dispatch default restated for the schedule (inputs are empty there).
+          IMAGES: ${{ inputs.images || 'ubuntu-latest,macos-latest,windows-latest' }}
 
   census:
     needs: plan
@@ -164,7 +176,7 @@ jobs:
         run: |
           FORCE="${{ inputs.force }}"
           LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
-          node tools/gpu-game-check.mjs "${{ inputs.track }}" \
+          node tools/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
             --backend three --path webgpu \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgpu-${{ matrix.image }}.json" \
@@ -178,7 +190,7 @@ jobs:
         run: |
           FORCE="${{ inputs.force }}"
           LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
-          node tools/gpu-game-check.mjs "${{ inputs.track }}" \
+          node tools/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
             --backend three --path webgl2 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgl2-${{ matrix.image }}.json" \
@@ -196,7 +208,7 @@ jobs:
         shell: bash
         run: |
           LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
-          node tools/gpu-game-check.mjs "${{ inputs.track }}" \
+          node tools/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
             --backend webgl2 $LS \
             --json "game-glx-${{ matrix.image }}.json" \
             --shot "game-glx-${{ matrix.image }}.png"

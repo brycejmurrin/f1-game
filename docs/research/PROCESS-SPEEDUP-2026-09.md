@@ -106,6 +106,18 @@ The renderer specs (`webgl`, `tlx`; 240–480 s budgets on SwiftShader, never
 in CI today) boot in ~4 s on `macos-latest`'s real Metal adapter — give
 `js/render/**` its own macOS job.
 
+> **Landed 2026-09-01 (unverified until pushed — no Actions run yet):**
+> `ci.yml` `renderer-filter` (ubuntu, path filter: `js/render/**`,
+> `js/game/lighting*.js`, `light-presets.js`, `atmosphere.js`, `tuner.js`,
+> the `test:gfx` specs, both playwright configs; fail-safe RUN on schedule /
+> dispatch / unresolvable diff) → `renderer-macos` (`macos-latest`,
+> `test:gfx` through `playwright.gpu.config.js` — the base config minus
+> `--use-angle=swiftshader` plus `channel: "chromium"`; census-gated on
+> `anyHardware === true`; `APEX_WORKERS=2`, `--timeout=600000`, 30 min cap,
+> a guess). Skipped on the Pages call, so the deploy gate is unchanged.
+> Guards: `tests/unit/ci-coverage.test.mjs`; `docs/TESTING.md` §Renderer
+> specs on a real GPU. The 30-minute figure is not a measurement.
+
 ## 2. Docs
 
 - **Archive is 45 % of `docs/`** (21,887 of 48,394 lines) and 38 of its 58
@@ -204,6 +216,13 @@ and one build in three collided (34 of 105). Fix the cause, not the merge:
    smoke shard of true boot tests + conditional sweeps ≈ 5 min. Full smoke
    (4 shards), `gpu-census` on macOS, `selected` over 24 h → nightly cron;
    its whole recorded failure history is timeouts, never assertions.
+   *Landed 2026-09-01 (unverified until pushed):* `gpu-census.yml` carries
+   `schedule: cron "17 3 * * *"` beside `ci.yml`'s boot group; the schedule
+   run is the FULL check (`census_only` reads false with empty inputs) on the
+   dispatch-default images and track (`inputs.images || '…'`,
+   `inputs.track || 'montreal'` restated inline), gated by the same Verdict
+   step. The renderer job (§1.4) is deliberately NOT in the gate; the gate is
+   as this item describes. `selected` over 24 h is still open.
 6. **Collisions**: after `deploy.mjs --pr` is habitual, a ruleset on the deploy
    branch requiring PR + merge queue with `merge_group:` in `ci.yml`.
 
