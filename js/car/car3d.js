@@ -1878,7 +1878,16 @@ const Car3D = (function () {
       // and nose running out ahead. At top 0.485 it was the tallest thing in the
       // lower-centre and took 1780 of the deck's 2631 px (OCCLUSION-PROBE.md);
       // 0.425 clears the eye-to-deck-crest sightline, which passes y 0.62 here.
-      addBox(out, 0, 0.36, 0.60, 0.66, 0.13, 0.16, c1);
+      // CARBON, NOT c1 — this box IS the red slab under the wheel. Measured from
+      // the driver eye (scratch/cockpit2/slab.mjs, ferrari): the coaming is
+      // x -0.33..0.33, y 0.295..0.425, z 0.52..0.68, so its front face and its
+      // top deck together fill the whole lower-centre of an onboard shot at
+      // full body saturation — a flat coloured table across the driver's lap.
+      // _ckAcc cannot help here: it only darkens colours whose MIN channel is
+      // >= 0.45, and Ferrari red is [0.863, 0, 0], min 0. A real dash coaming is
+      // padded black anyway; the c2 accent lip below keeps the team identity.
+      // Same fix, same reason, as the monocoque span above.
+      addBox(out, 0, 0.36, 0.60, 0.66, 0.13, 0.16, CARBON);
       addBox(out, 0, 0.427, 0.56, 0.60, 0.03, 0.05, c2);       // accent lip
       addBox(out, 0, 0.345, 0.54, 0.52, 0.10, 0.05, INTAKE);   // dark instrument shroud
       // SIX-POINT HARNESS. The cockpit had a wheel, hands and a tub, and then

@@ -152,6 +152,41 @@ test("the cockpit tub wall under the wheel is not body paint", () => {
     "that is the slab under the steering wheel; keep the ckpt monocoque span CARBON (car3d.js buildSharedChassis)");
 });
 
+// SECOND slab, same report, different box — and the reason this test exists
+// separately is that the guard above PASSED while the defect was on screen. It
+// slices z 0.44..0.46 (the monocoque rear cap); the dash coaming is a different
+// box at z 0.52..0.68 and sailed straight through.
+//
+// The coaming is `addBox(out, 0, 0.36, 0.60, 0.66, 0.13, 0.16, ...)` — centre
+// (0, 0.36, 0.60), size (0.66, 0.13, 0.16), so x -0.33..0.33, y 0.295..0.425,
+// z 0.52..0.68. Painted c1 it put its vertical front face AND its horizontal
+// top deck across the whole lower-centre of an onboard shot: the flat red table
+// across the driver's lap that was reported twice.
+//
+// _ckAcc does not save this one. It only dims a colour whose MIN channel is
+// >= 0.45, and Ferrari red is [0.863, 0, 0] — min 0 — so the brightest, most
+// reported livery is exactly the one it passes through untouched.
+test("the dash coaming under the wheel is not body paint", () => {
+  const C1 = [0.86, 0, 0], C2 = [0.10, 0.40, 0.90];
+  const m = Car3D.build(C1, C2,
+    { teamId: "ferrari", noWheels: true, noDriver: true, cockpit: true, halo: true });
+  const near = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 0.02);
+  // The coaming's FRONT face only (constant z 0.52). Deliberately not the top
+  // deck: that runs to z 0.68 and overlaps the hood box the next test claims,
+  // so slicing here keeps the two guards from arguing over the same vertices.
+  let inBox = 0, painted = 0;
+  for (let i = 0; i < m.pos.length; i += 3) {
+    const x = m.pos[i], y = m.pos[i + 1], z = m.pos[i + 2];
+    if (!(z >= 0.514 && z <= 0.526 && y >= 0.29 && y <= 0.43 && Math.abs(x) <= 0.34)) continue;
+    inBox++;
+    if (near([m.col[i], m.col[i + 1], m.col[i + 2]], C1)) painted++;
+  }
+  assert.ok(inBox >= 8, `the dash coaming moved — ${inBox} vertices in the slice`);
+  assert.equal(painted, 0,
+    `${painted} of ${inBox} vertices on the dash coaming carry the body colour — that is the ` +
+    "red slab under the steering wheel; keep the ckpt coaming CARBON (car3d.js, dash coaming)");
+});
+
 // The other half of the same change: what the driver looks ALONG must keep the
 // livery. If a later pass darkens the hood or the nose too, the cockpit stops
 // showing the player which car they are in — a different bug, equally reported.
