@@ -68,6 +68,17 @@ name: CI
 #                                  and it would report under smoke's NAME, since
 #                                  the checks list shows jobs and not steps. It
 #                                  ran as a step exactly once; see the job.
+#   renderer- UNMEASURED, macOS   — the `gfx` group (test:gfx: instanced-draw,
+#   macos     real GPU (Metal)     webgl-probes, lighting-ab, image-grade-
+#                                  visual, lighting-tuner-grade, tlx-probes)
+#                                  on macos-latest, the ONE runner image with a
+#                                  hardware adapter. Runs when the diff touches
+#                                  the renderer (js/render/**, the lighting and
+#                                  atmosphere modules) and nightly / on
+#                                  dispatch; NOT on the Pages deploy call — see
+#                                  the job for why. Added 2026-09-01, so the
+#                                  budget is a guess until the first run lands;
+#                                  re-time it and replace this line.
 #
 # Both figures above are MEASURED on run 31023778264 — the first run that ever
 # completed end to end — not estimated: sweeps 15m12s, smoke 14m24s, guards 25s.
@@ -82,7 +93,9 @@ name: CI
 #
 # Deliberately NOT here: the full Playwright suite is ~40 minutes of SwiftShader.
 # Run it locally with tools/test-bg.mjs against the groups tools/pick-tests.mjs
-# names. This gate is for what breaks silently, not for everything.
+# names. This gate is for what breaks silently, not for everything. (The
+# renderer group is the exception, and it is in this FILE without being in the
+# GATE — see renderer-macos.)
 #
 # THE ONE GROUP THAT ARGUABLY BELONGS HERE AND IS NOT: `test:baseline`, the six
 # golden menu PNGs. The 2026-08 pass found one of them stale — the garage
@@ -747,6 +760,180 @@ jobs:
         with:
           name: playwright-artifacts-driving-model
           path: |
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # RENDERER SPECS ON A REAL GPU. Every other browser job in this file runs on
+  # ubuntu-latest, whose only WebGPU/WebGL adapter is SwiftShader, and the
+  # renderer group (`gfx`: 240-480 s budgets under software rasterisation) has
+  # never been in CI at all — the header's "deliberately NOT here" clause.
+  # docs/research/CI-RENDERING-PERFORMANCE.md §"There IS a real GPU" measured
+  # the runner images: macos-latest (Apple silicon) reports a HARDWARE Metal
+  # adapter on STOCK flags, and the two defects that real GPU has found so far
+  # were invisible to every software test. So the renderer specs get their own
+  # macOS job (PROCESS-SPEEDUP-2026-09 §1.4 / §4.5).
+  #
+  # TWO JOBS, NOT ONE. macOS minutes bill at 10x, so the "does this diff touch
+  # the renderer?" question is answered on a ubuntu runner first (seconds, no
+  # npm ci) and the macOS runner is only ever allocated when the answer is
+  # yes. A step-level skip inside the macOS job — the sweeps pattern — would
+  # still pay for the macOS checkout and npm ci on every push.
+  renderer-filter:
+    name: Does this diff touch the renderer?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # NOT IN THE DEPLOY GATE — a decision, not an omission. pages.yml reaches
+    # this file through `ci: uses: ./.github/workflows/ci.yml` and then
+    # `current-tip: needs: ci`, so the called workflow's conclusion is the
+    # AGGREGATE of every job in it: there is no `needs:` list to leave a job
+    # out of, and any new job that RUNS on a Pages call joins the gate by
+    # itself. The gate's whole recorded history in this header is a job that
+    # was never measured, timed out on a starved runner, and blocked deploys
+    # while reporting "0 failures". A brand-new job on an image nothing here
+    # has ever run a Playwright spec on is exactly that risk, and §4.5 of the
+    # plan puts the gate at guards + driving-model + one smoke shard +
+    # conditional sweeps (~5 min) with the GPU work on the nightly cron. So:
+    # skipped on the Pages call (a skipped job does not fail the aggregate),
+    # run on branch pushes / PRs (path-filtered), nightly and on dispatch.
+    #
+    # The Pages call is recognised by `inputs.concurrency_key`, which pages.yml
+    # ALWAYS forwards and nothing else sets — not by `github.event_name`, which
+    # a reusable workflow reports as the CALLER's event ("push"), the reason
+    # the sweeps filter accepts `push|workflow_call` either way. Promoting this
+    # job into the gate once it has a measured green history is one line:
+    # delete this `if:`.
+    if: ${{ !inputs.concurrency_key && github.event_name != 'workflow_call' }}
+    outputs:
+      renderer: ${{ steps.filter.outputs.renderer }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Same shape as the sweeps filter, same rule: FAIL SAFE, NEVER FAIL OPEN.
+      # Any path that cannot resolve a diff RUNS the job. A pull request has a
+      # real base (pull_request.base.sha) where the sweeps filter has none, so
+      # it is diffed rather than fail-safed — otherwise every PR would pay for
+      # a macOS runner.
+      - name: Does this diff touch the renderer?
+        id: filter
+        env:
+          BEFORE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -u
+          run_all() { echo "renderer=true" >> "$GITHUB_OUTPUT"; echo "RUNNING RENDERER SPECS: $1"; exit 0; }
+          case "$EVENT" in
+            push|pull_request) ;;
+            *) run_all "event is '$EVENT', not a push/pull_request" ;;
+          esac
+          case "${BEFORE:-}" in
+            ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch, first push)" ;;
+          esac
+          git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || run_all "before-sha $BEFORE unreachable (force push?)"
+          CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA") || run_all "git diff failed"
+          echo "--- changed files ---"; echo "$CHANGED"; echo "---------------------"
+          # The spec half is DERIVED from package.json's test:gfx, as the sweeps
+          # filter derives its suite list — a retyped list drifts.
+          SPECS_FILE="${RUNNER_TEMP:-.}/gfx-specs.txt"
+          node -e 'const s=require("./package.json").scripts["test:gfx"]||"";const m=s.match(/tests\/specs\/[^\s]+/g)||[];if(!m.length)process.exit(1);process.stdout.write(m.join("\n")+"\n")' > "$SPECS_FILE" \
+            || run_all "could not read the gfx spec list out of package.json"
+          echo "--- gfx specs ---"; cat "$SPECS_FILE"; echo "-----------------"
+          # js/render/** is every backend (GLX, WGX, TLX, gltf, assets); the
+          # js/game/ files are the lighting/atmosphere/tuner modules whose
+          # numbers the lighting-ab / image-grade / tuner-grade specs pin.
+          # The two playwright configs carry the launch flags this job depends
+          # on, tests/helpers/ is what every spec boots through, and the
+          # workflow file is here so an edit to THIS job runs it.
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/render/|js/game/lighting[^/]*\.js$|js/game/light-presets\.js$|js/game/atmosphere\.js$|js/game/tuner\.js$|playwright(\.gpu)?\.config\.js$|\.github/workflows/ci\.yml$|tests/helpers/)' \
+            || printf '%s\n' "$CHANGED" | grep -qxF -f "$SPECS_FILE"; then
+            echo "renderer=true" >> "$GITHUB_OUTPUT"
+            echo "RUNNING RENDERER SPECS: the diff touches the renderer, its lighting modules, a gfx spec or the launch config"
+          else
+            echo "renderer=false" >> "$GITHUB_OUTPUT"
+            echo "SKIPPING RENDERER SPECS: nothing in this diff reaches the renderer"
+          fi
+
+  renderer-macos:
+    name: Renderer specs on a real GPU (macos-latest, Metal)
+    needs: renderer-filter
+    # A job-level `if:` on a `needs:` output is fine HERE, where the sweeps
+    # comment forbids it, because this job is already outside the deploy gate
+    # (renderer-filter is skipped on the Pages call, so this is too). The
+    # "skipped reads as passed" hazard the sweeps avoid is about a job whose
+    # verdict the deploy consumes; nothing consumes this one but the checks list.
+    if: needs.renderer-filter.outputs.renderer == 'true'
+    runs-on: macos-latest
+    # 30 is a GUESS, and the header says what to do about that: the six specs
+    # declare 240-480 s budgets measured under SwiftShader, where a boot is
+    # 11-33 s; the census measured a ~4 s boot on this image's Metal adapter.
+    # Re-time on the first green run and replace this number and the header's.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      # Same lockfile-keyed cache as smoke / driving-model, at macOS's browser
+      # path (~/Library/Caches, not ~/.cache). The key already carries
+      # runner.os, so it never collides with the Linux entries.
+      - name: Cache Chromium
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      # The FULL browser, the way gpu-census.yml installs it — not the headless
+      # shell, which ships without navigator.gpu. `install chromium` fetches
+      # both; playwright.gpu.config.js selects the full one. No `--with-deps`:
+      # that is apt, and this is not Linux.
+      - name: Install Chromium on cache miss
+        if: steps.pwcache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium
+      # PROVE THE GPU BEFORE TRUSTING THE RUN. The whole point of this job is
+      # the hardware adapter; if the image ever loses it (a runner-image
+      # change, a Chromium that stops seeing Metal) the specs would silently
+      # run on SwiftShader and this job would become a slower ubuntu job that
+      # still says "macOS". AGENTS.md: a software run is not evidence about a
+      # player's machine. The tri-state census (tools/gpu-census.mjs) is the
+      # same one gpu-census.yml gates on; `=== true` on purpose, so a census
+      # that measured nothing (null) fails rather than passing vacuously.
+      - name: Adapter census — is the Metal adapter still there?
+        run: |
+          node tools/gpu-census.mjs --json census-macos.json
+          node -e '
+            const r = require("./census-macos.json");
+            if (r.anyHardware !== true) {
+              console.error("::error::renderer-macos: the census found NO hardware adapter (anyHardware=" + r.anyHardware + ") — this run would measure SwiftShader on a Mac, not the GPU");
+              process.exit(1);
+            }
+          '
+      # playwright.gpu.config.js is playwright.config.js with ONE difference:
+      # the launch drops the `--use-angle=swiftshader` pin every other run
+      # carries and selects the full Chromium (`channel: "chromium"`). The
+      # shared config is untouched — it is a protected contract file — and the
+      # --config flag passes through tools/run-playwright.mjs verbatim. NEVER
+      # add --use-angle=vulkan anywhere on this job: on macOS that one flag
+      # forces ANGLE onto SwiftShader and requestAdapter() returns null
+      # (CI-RENDERING-PERFORMANCE.md §There IS a real GPU, trap 1). Two
+      # workers: a real GPU does not have SwiftShader's ~1.9x second-worker
+      # penalty (docs/TESTING.md), and the budget is the image's to measure.
+      # --timeout=600000 is a CEILING for the first runs, not a tolerance: the
+      # specs keep their own budgets, and the job cap is the real backstop.
+      - name: Renderer specs (test:gfx)
+        env:
+          APEX_WORKERS: 2
+        run: npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000
+      - name: Failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts-renderer-macos
+          path: |
+            census-macos.json
             artifacts/test-results-*/
             artifacts/report-*/
           retention-days: 7
