@@ -484,6 +484,14 @@ test.describe("Parts module — visual recipes", () => {
         // gap <= 0.02, well inside the 0.04 bound, which is unchanged.
         const accentPod = verticesFor(accent)
           .filter((p) => p[2] < 0.5 && p[2] > -0.5 && Math.abs(p[0]) > 0.35);
+        // The nose running lights, matching drlC in js/car/car3d.js. This
+        // assertion previously scanned for the same colour while NOTHING emitted
+        // it — the emitter had been lost when the nose was cut back and its
+        // literal z 2.62/2.70 ended up ahead of the tip — and Math.max of an
+        // empty array is -Infinity, so it passed for months without testing
+        // anything. Hence drlN below: the count is asserted first, so a selector
+        // that stops matching fails loudly instead of going quiet.
+        const drls = verticesFor([2.4, 2.4, 2.7]);
         return {
           podDecalZ: [...new Set(podDecals.map((p) => Number(p[2].toFixed(3))))],
           podDecalMaxGap: Math.max(...podDecals.map(podGap)),
@@ -493,13 +501,15 @@ test.describe("Parts module — visual recipes", () => {
           }),
           noseDecalMaxGap: Math.max(...noseDecals.map(noseGap)),
           accentPodMaxGap: Math.max(...accentPod.map(podGap)),
-          // Counted so a selector that stops matching FAILS instead of passing.
-          // Math.max() of an empty array is -Infinity, which slides under every
-          // toBeLessThan bound: a sibling DRL assertion here scanned for colour
-          // [2.4, 2.4, 2.7], which no js/ source has ever emitted, and so passed
-          // vacuously in both lineages until it was measured. Removed rather than
-          // left green; restore it with the colour the nose light actually uses.
+          drlNoseMaxGap: Math.max(...drls.map((p) =>
+            Math.min(
+              Math.abs(p[1] - anchors.noseAt(p[2]).top),
+              Math.abs(Math.abs(p[0]) - anchors.noseAt(p[2]).side),
+            ))),
+          // Both counted so a selector that stops matching FAILS instead of
+          // passing — see the drls comment above for why that is not theoretical.
           accentPodN: accentPod.length,
+          drlN: drls.length,
         };
       };
       const base = {
@@ -520,7 +530,9 @@ test.describe("Parts module — visual recipes", () => {
       expect(variant.podDecalMaxGap).toBeLessThan(0.035);
       expect(variant.noseDecalMaxGap).toBeLessThan(0.025);
       expect(variant.accentPodN).toBeGreaterThan(0);
+      expect(variant.drlN).toBeGreaterThan(0);
       expect(variant.accentPodMaxGap).toBeLessThan(0.04);
+      expect(variant.drlNoseMaxGap).toBeLessThan(0.04);
     }
   });
 

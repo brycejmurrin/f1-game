@@ -696,7 +696,11 @@ const CEILINGS = {
   // the widest option, guarded by car-front-wing-width.test.mjs); this side's
   // proportions pass is the rest of the growth. The union carries both sets of
   // lines, so neither ceiling fits: re-measured at 3540.
-  "js/car/car3d.js": 3540,
+  // 3540 -> 3566: the nose running lights. Eleven of the 26 are geometry (three
+  // anchored boxes and their loop); the rest is the provenance note, which is
+  // worth its lines here — the emitter this restores was lost silently once
+  // already, and the comment is what stops the literal z coming back.
+  "js/car/car3d.js": 3566,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

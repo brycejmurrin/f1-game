@@ -90,14 +90,23 @@ export function loadParts() {
                 JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap };
   ctx.globalThis = ctx;
   vm.createContext(ctx);
-  for (const f of ["js/log.js", "js/mat4.js", "js/car/teams.js", "js/car/parts.js", "js/car/car3d.js"])
+  // liverytex + carmesh are here for the DECAL side of the mesh: CarMesh
+  // .carDecalData() dereferences LiveryTex.REGIONS at call time, so both must be
+  // in the context or the sponsor-board assertions cannot run headless. Neither
+  // touches the DOM on the mesh-data path (carmesh.js has no `document`/`window`
+  // reference at all; liverytex.js has five, none of them reached by
+  // carDecalData) — but that is the boundary: anything that RASTERISES a livery
+  // texture still needs a browser and stays in tests/specs/.
+  for (const f of ["js/log.js", "js/mat4.js", "js/car/teams.js", "js/car/parts.js",
+                   "js/car/liverytex.js", "js/car/car3d.js", "js/game/carmesh.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
   // Every one of these is `const X = (function(){})()` at script level — a
   // LEXICAL binding, which never becomes a property of the vm's global object,
   // so ctx.Parts is undefined however the file looks. Evaluate the bare name in
   // the same context instead (the pattern in tools/cockpit-pale-sweep.mjs).
   const grab = (n) => vm.runInContext(n, ctx);
-  return { Car3D: grab("Car3D"), Parts: grab("Parts"), Teams: grab("Teams") };
+  return { Car3D: grab("Car3D"), Parts: grab("Parts"), Teams: grab("Teams"),
+           CarMesh: grab("CarMesh"), LiveryTex: grab("LiveryTex") };
 }
 
 // The one way this whole sweep can lie in the direction that looks like a

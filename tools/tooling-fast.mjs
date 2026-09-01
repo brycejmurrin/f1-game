@@ -109,6 +109,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/gfx-debug-overlay.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
+  // ~22 s, the slowest entry here, and deliberately in THIS list rather than
+  // test:sweeps: sweeps is skipped by ci.yml when a push cannot move circuit
+  // geometry, and a parts-mesh regression is exactly the kind that would then
+  // sail through. tooling-fast runs unconditionally in the deploy gate, which is
+  // the whole point — the front-wing assertion this file ports sat red on the
+  // deploy tip through five consecutive green Pages runs because the browser
+  // group that held it is not gated at all.
+  "tests/unit/car-mesh-anchors.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
   "tests/unit/shared-math.test.mjs",
