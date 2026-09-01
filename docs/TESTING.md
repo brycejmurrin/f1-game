@@ -721,6 +721,38 @@ still running, `#pm-lighting` was disabled — and **a disabled button's
 opened and five tests failed on a hidden `#lighting` with no other clue. When a
 test is made faster, look for the setup it was buying with its own slowness.
 
+### A boot is 45 s now, not 11-22 s — A/B the tree before blaming the change (2026-09-01)
+
+`parts-physics.spec.js` went from green to **70 of 70 red**, every one of them
+`waitForFunction: Timeout 8000ms exceeded` inside the spec's own `load()`, each
+burning 42-57 s to report it. The tree had just taken two large deploy merges
+plus a car-geometry pass, so the obvious reading was a boot regression from one
+of them. It was neither.
+
+What the measurement said, on an idle 4-core box (loadavg ~1.0):
+
+| probe | result |
+|---|---|
+| `python3 -m http.server`, 20 sequential GETs | 139 ms total — **7 ms/request**, not the bottleneck |
+| HEAD: `goto("/")` → `Parts` defined | 24.5 s → **47.2 s** |
+| worktree at the pre-merge SHA, same box, same minute | 18.7 s → **48.8 s** |
+
+The pre-merge lineage was *slower*. Nothing regressed: 156 deferred script tags
+and 3.5 MiB of JS simply cost Chromium ~45 s to parse and execute here, and the
+8 s bound had always been riding on a faster box. `tooling-fast` was 121/121
+green throughout, which is the tell that the tree is structurally fine and the
+bound is the problem.
+
+**Two rules from this.** First: when a whole spec file dies at the same helper,
+that is a bound, not a verdict — check the FIRST failure's message before
+believing a diagnosis. Second: the cheap A/B is a `git worktree` at the
+pre-change SHA measured *in the same minute on the same box*, because the
+alternative — comparing against a number someone recorded on a different day —
+is what makes a machine slowdown look like a code regression. A boot bound is
+not an assertion tolerance: raising it only ever permits a slower page, never a
+looser measurement, so raise it to fit the measurement and record the numbers at
+the line.
+
 ---
 
 ## 4. Philosophy — debug-hooks first
