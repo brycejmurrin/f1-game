@@ -513,13 +513,13 @@ const CEILINGS = {
   // policy, the caps and the heartbeat live in the new js/game/loop-health.js
   // precisely so game.js pays seven lines and not eighty — six of the seven are
   // the comment saying which half is here. PERF-FINDINGS 2k.
-  // MERGED: the two blocks above are each lineage's deltas measured against ITS
-  // own base (this side 8870 -> 8921 -> 9015 for the lazy loaders; the deploy
-  // side 8870 -> 8878 -> 8885 for the loop-health fix). Neither number fits the
-  // union, which carries both sets of lines, so this is RE-MEASURED on the
-  // merged tree with the suite's own split-newline metric rather than added on
-  // paper: 9030.
-  "js/game.js": 9030,
+  // MERGED, three lineages deep. Each block above is a delta measured against
+  // ITS own base (lazy loaders 8870 -> 8921 -> 9015; loop-health 8870 -> 8878 ->
+  // 8885; this side's rear-light strobe gate +1 on top of its own 8892). No such
+  // number fits the union, which carries every one of those line sets, so this is
+  // RE-MEASURED on the merged tree with the suite's own split-newline metric
+  // rather than added on paper.
+  "js/game.js": 9038,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -911,7 +911,10 @@ const CEILINGS = {
   // throwing once a frame forever.
   // 2322 -> 2326: the same `updateInstances: undefined` declaration and its
   // reason, for the same descriptor-copy hazard. PERF-FINDINGS 2h.
-  "js/render/three/tlx.js": 2326,
+  // 2326 -> 2331: five lines, all comment, passing maxLights through the lit
+  // factory under the SAME _liteGpu gate that already downgrades samples and
+  // outputType for mobile/WebKit. See tsl-lit.js for the row arithmetic.
+  "js/render/three/tlx.js": 2331,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
@@ -975,7 +978,13 @@ const CEILINGS = {
   // three.js TSL lit-material port; tracks lit.js feature-for-feature.
   // 1725 -> 1768: the same four finishes, the pearlescent term and the carbon
   // weave, in TSL.
-  "js/render/three/tsl-lit.js": 1768,
+  // 1768 -> 1777: nine lines, all comment, for one device-aware constant.
+  // MAX_LIGHTS was hard-coded 48; a uniform array is VERTICAL in WebGL2, so the
+  // four lamp arrays cost 4 x 48 = 192 of the 224-row fragment floor and the lit
+  // shader failed to LINK on iOS Safari — every lit surface drew nothing while
+  // textured/emissive ones kept drawing. The comment carries the arithmetic and
+  // its source, because the number 48 looks harmless and the failure is silent.
+  "js/render/three/tsl-lit.js": 1777,
   // Multiplayer lobby UI + flow; all of js/net/'s DOM lives here.
   // 1618 -> 1624 (R8): the peer-close handler closes the transport BEFORE the
   // map delete, with the leak-class comment — bug-explaining growth.

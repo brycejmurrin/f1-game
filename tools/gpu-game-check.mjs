@@ -104,10 +104,20 @@ const browser = await chromium.launch({
   args: ["--enable-unsafe-webgpu", ...(process.platform === "linux" ? ["--no-sandbox"] : [])],
 });
 checkpoint("browser-launched");
+// ABOVE the try, deliberately. This was `const console_ = []` INSIDE the try
+// while the finally below reads it — sibling scopes, so the finally threw
+// `ReferenceError: console_ is not defined` on EVERY run, success or failure.
+// Everything after that line was dead: out.console (the diagnostic lines a
+// previous round moved into the finally precisely so a FAILING run would keep
+// them), out.root (added to name the Windows path bug — never once set on a
+// real run), the bounded browser/server teardown, and the final process.exit,
+// so the tool always exited non-zero even when ok:true. `continue-on-error:
+// true` on all four census steps swallowed it, and checkpoint() had already
+// written the JSON, so nothing ever looked wrong. docs/PERF-FINDINGS.md 2l.
+const console_ = [];
 try {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await ctx.newPage();
-  const console_ = [];
   page.on("console", (m) => { if (console_.length < 200) console_.push(`${m.type()}: ${m.text()}`.slice(0, 300)); });
   page.on("pageerror", (e) => console_.push("pageerror: " + String(e && e.message).slice(0, 300)));
   // A renderer crash makes every later page.evaluate hang FOREVER rather than
@@ -226,6 +236,41 @@ try {
     const r = await bounded(() => page.screenshot({ path: shot, fullPage: false }), 30000, "screenshot");
     out.shot = (r && r.error) ? null : shot;
     if (r && r.error) out.shotError = r.error;
+  }
+  // APPEARANCE. gpu-census.yml has always printed `meanLuma=${frame.meanLuma}`
+  // and this tool never once wrote out.frame — the word "frame" did not appear
+  // in this file — so that column read "n/a" on every leg, every image, every
+  // run since it was added. The gate deliberately does not BLOCK on appearance
+  // (a brightness floor is the kind of threshold that goes flaky and then gets
+  // widened, which AGENTS.md forbids), but "reported for a human" was not true
+  // either: there was nothing to report. docs/PERF-FINDINGS.md 2l.
+  //
+  // Read it from the SCREENSHOT, not from the page. The in-page reads used
+  // elsewhere do not generalise: gfx-probe's getContext("2d") works only where
+  // WGX/TLX route through the soft-present blit, GLX.capturePixels does not
+  // exist on GLX at all, and drawImage of a WebGL canvas reads solid black
+  // outside the frame (measured, PERF-FINDINGS 2d). A composited screenshot is
+  // the one source that works for every backend on every image.
+  if (out.shot) {
+    try {
+      const sharp = (await import("sharp")).default;
+      const { data, info } = await sharp(out.shot).raw().toBuffer({ resolveWithObject: true });
+      let sum = 0, max = 0, n = 0;
+      for (let i = 0; i + 2 < data.length; i += info.channels) {
+        const l = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        sum += l; if (l > max) max = l; n++;
+      }
+      out.frame = n
+        ? { meanLuma: +(sum / n).toFixed(1), maxLuma: max, w: info.width, h: info.height }
+        : null;
+      if (!n) out.frameReadFailed = "screenshot decoded to zero pixels";
+    } catch (e) {
+      // Named, never silent — a tool that cannot measure appearance must say so
+      // rather than leave the same empty column it left for months.
+      out.frameReadFailed = "luma read failed: " + String((e && e.message) || e).slice(0, 160);
+    }
+  } else {
+    out.frameReadFailed = shot ? "screenshot failed, so there is nothing to measure" : "no --shot requested";
   }
   out.ok = true;
   checkpoint("done");

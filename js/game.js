@@ -5856,6 +5856,10 @@ const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, de
 // bias its depth toward the camera rather than relying on the small geometric
 // lift alone — that lift is fixed in metres and loses to depth quantisation at
 // range, which is what makes a decal shimmer and drop out as you approach.
+// depthBias [factor, units]: the start line is a DECAL laid on the asphalt, so
+// bias its depth toward the camera rather than relying on the small geometric
+// lift alone — that lift is fixed in metres and loses to depth quantisation at
+// range, which is what makes a decal shimmer and drop out as you approach.
 const _startBias = [-1, -2];
 const _wmStartWet = { roughness: 0.16, specular: 0.80, detail: 0, depthBias: _startBias };
 const _wmStartN = { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0, depthBias: _startBias };
@@ -7219,15 +7223,19 @@ function render(dt) {
     // 55% duty) and STEADY at night — a car's rear faces receive none of the
     // downward-aimed floodlight beams, so a car directly ahead at night was a
     // pitch-black void filling the windscreen; the steady red gives every rear
-    // an anchor light. Brightness tracks live ERS charge, and it flashes the
-    // same FIA pattern while harvesting/deploying, as on a real push lap.
+    // an anchor light. Brightness still tracks live ERS charge; only the
+    // BRIGHTNESS does, never the on/off — see the strobe note below.
     // ON THE GRID they strobe whatever the weather: a stationary 2026 car on
     // full charge shows the "MGU-K recharging" fast flash, which is the blinking
     // in every real pre-race grid shot.
     const _ledStrobe = ((raceT * 4.4) % 1) < 0.55;
-    const _ledDeploy = isErsDeploying(c);
+    // Once racing, the ONLY thing that flashes is the wet rain light. The
+    // MGU-K pattern is a STATIONARY-car signal — the note above says so — so
+    // strobing it whenever the driver deploys ERS ran it through most of a
+    // racing lap, and the pre-race blinking never appeared to stop. Night dry is
+    // now steady whenever it draws, which is what the comment already claimed.
     if (preGrid ? gridFlash
-                : ((wet && _ledStrobe) || (!wet && night && (!_ledDeploy || _ledStrobe)))) {
+                : ((wet && _ledStrobe) || (!wet && night))) {
       // Rivals: 40 m gate like brake rings. Player always draws. The grid spans
       // 22 x 8 m, so pre-race it opens up or the field ahead of you sits dark.
       const ldx = tmpP[0] - camEye[0], ldy = tmpP[1] - camEye[1], ldz = tmpP[2] - camEye[2];

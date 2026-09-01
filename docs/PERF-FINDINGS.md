@@ -1695,6 +1695,88 @@ Three sabotages on the source guards, each confirmed red then restored: drop the
 tolerance branch (the old policy), drop `clean()` (the run never pays back), and
 never rethrow at the cap (unbounded tolerance).
 
+## 2l. The gate reported appearance it never measured, and its diagnostics were dead (2026-09-01)
+
+Asked "can we actually verify WebGPU and three.js?", the answer turned out to be
+worse than expected. The macOS census that gated round 14 printed
+`meanLuma=n/a` on **every leg of every image** — so the real-GPU run proved the
+backends boot with zero GPU errors and produced **no pixel evidence at all**.
+
+### The appearance column was never wired
+
+`tools/gpu-game-check.mjs` did not contain the string `frame` anywhere. It never
+wrote `out.frame`. `gpu-census.yml` reads `const frame = g.frame || {}` and
+prints `meanLuma=${frame.meanLuma != null ? … : "n/a"}`, so that column was
+structurally empty from the day it was added. `meanLuma` exists in
+`gfx-probe.mjs` and `wgx-capture.mjs` — just not in the tool the gate calls.
+
+It is read from the **screenshot** the tool already takes, and every in-page
+alternative was disproved by an actual run rather than by argument:
+
+| candidate | why not |
+|---|---|
+| `getContext("2d")` (gfx-probe's method) | only works where WGX/TLX route through the soft-present blit; a native canvas has no 2D context |
+| `GLX.capturePixels()` | **does not exist on GLX** (WGX and TLX only) — and GLX is the default backend the gate most needs appearance for |
+| `capturePixels` on the TLX/WebGL2 leg | reported `maxLuma=0` on a frame that is demonstrably a complete scene — the readback lies, the screenshot does not |
+| `drawImage` of a WebGL canvas | solid black outside the frame (§2d) |
+
+Cross-validated: `sharp` read `meanLuma 44.0` from the WGX PNG; gfx-probe's
+independent in-page read of the same frame reported `44`.
+
+### The diagnostics added to explain failures had never once run
+
+The verification run left a stack trace, and it was pre-existing:
+
+```
+ReferenceError: console_ is not defined
+    at tools/gpu-game-check.mjs:273   (in the finally)
+```
+
+`const console_ = []` was declared INSIDE the `try` while the `finally` read it.
+Sibling scopes — so the `finally` threw on **every run, success or failure**, at
+its first statement. Everything after it was dead:
+
+- `out.console` — the filtered console lines a previous round moved into the
+  `finally` *precisely* so a failing run would keep them;
+- `out.root` — added to name the Windows path bug, with the claim it "would have
+  named this on day one". It has never once been set on a real run;
+- the bounded `browser.close()` / `server.close()` teardown, so browsers leaked;
+- `process.exit(out.ok ? 0 : 1)` — the tool always exited non-zero, even on
+  `ok:true`, so its exit code carried no information.
+
+Nothing looked wrong because `continue-on-error: true` on all four census steps
+swallowed the exit code, and `checkpoint()` had already written the JSON after
+every phase, so the artifact was complete.
+
+**The fix that preserved the diagnostics is what destroyed them** — the
+assignment moved into `finally` and the declaration did not follow. That is the
+sharpest form of this file's recurring rule: the machinery added to make
+failures legible was itself silently dead.
+
+Measured before → after, same command:
+
+| | before | after |
+|---|---|---|
+| exit code | non-zero always | **0** |
+| `frame.meanLuma` | absent (`n/a`) | **69.3** |
+| `root` | absent | set |
+| `console` lines | absent | **7** |
+
+### The backends, verified in-container for the first time
+
+Not inferred from "no errors" — rendered, with images:
+
+| backend | evidence |
+|---|---|
+| WGX (WebGPU) | `wgx-validate` Dawn `gpuErrors 0` / `wgslParseErrors 0`; probe `ok`, `meanLuma 44`, coverage road 42.9 / tree 30.3 / player 6.1 |
+| TLX (three/WebGL2) | probe `ok`, `gpuErrors 0`, coverage ground 27.4 / player 17.5 — full scene with car and HUD |
+| TLX + `tlxForceHw=env` | `exit=0` |
+| TLX (three/WebGPU) **in software** | hung 66 min on `awaitSoftPresent` after a 60 s timeout and a retry. NOT a backend defect: AGENTS.md documents SwiftShader Dawn dying on three's `mappedAtCreation` uploads, and that leg passed on real Apple silicon in the census. Verified on hardware, not reproducible in software here — do not spend an hour rediscovering this. |
+
+Guards in `gfx-backend-canary.test.mjs`, both sabotage-proven: putting
+`console_` back inside the `try` fails the scope test, and renaming the
+`frameReadFailed` branch fails the appearance test.
+
 ## 3. Left on the table
 
 The pre-08-18 narrative behind this list — the O(n²) AI scans that were

@@ -31,7 +31,7 @@ const { buildContext } = require(path.join(ROOT, "tools", "track-build-vm.cjs"))
 // where a 2.7 m box plus a guide line has the least tarmac to fit inside.
 const IDS = ["monza", "monaco"];
 
-const BOX_W = 2.7, BOX_LEN = 5.0, PAINT_W = 0.12, GUIDE_SPAN = 3.9;
+const BOX_W = 2.7, BOX_LEN = 5.0, PAINT_W = 0.20, GUIDE_SPAN = 3.9;
 const QUADS_PER_SLOT = 4;       // front line, left side, right side, guide line
 
 const ctxOnce = (() => {

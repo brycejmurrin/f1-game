@@ -62,6 +62,9 @@ const frac = parseFloat(fracArg);
 const az = parseFloat(flag(argv, "--az", "45"));
 const el = parseFloat(flag(argv, "--el", "18"));
 const dist = parseFloat(flag(argv, "--dist", "45"));
+// Boot budget, seconds. Default 120: generous on a fast box, survivable on a
+// loaded container where a cold boot is ~45 s.
+const WAIT_MS = Math.max(5, parseFloat(flag(argv, "--wait", "120"))) * 1000;
 const side = parseInt(flag(argv, "--side", "1"), 10) || 1;
 const tod = flag(argv, "--tod", "day");
 const showHud = has(argv, "--hud");
@@ -88,7 +91,12 @@ try {
     viewport: { width: 1280, height: 720 },
   });
   await page.goto(srv.url);
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 10_000, polling: 100 });
+  // 10 s was the boot budget of a fast box. A cold navigation on a loaded
+  // 4-core container costs ~45 s just to define the globals (measured
+  // 2026-09-01, docs/TESTING.md "A boot is 45 s now"), so this tool failed with
+  // a bare "page.waitForFunction: Timeout 10000ms exceeded" that reads like a
+  // broken page rather than a short bound. --wait=SECONDS overrides.
+  await page.waitForFunction(() => window.__apex != null, null, { timeout: WAIT_MS, polling: 100 });
 
   // Prefer models resident BEFORE the track build so bakedModel() emits.
   const modelInfo = await page.evaluate(async () => {
@@ -104,7 +112,7 @@ try {
   await page.evaluate((id) => window.__apex.race(id), safeTrackId);
   await page.waitForFunction(
     () => window.__apex.info().track != null,
-    null, { timeout: 20_000, polling: 100 }
+    null, { timeout: WAIT_MS, polling: 100 }
   );
   await sleep(1200);
 
@@ -140,7 +148,13 @@ try {
 
   await sleep(400);
 
-  const box = await page.locator("canvas#game").boundingBox();
+  // boundingBox() THROWS on timeout, it does not return null — so the full-frame
+  // fallback below could never fire, and a loaded box (where the animating canvas
+  // starves Playwright's stability check) failed the whole shot instead of just
+  // losing the clip. Catch it and fall through: an unclipped frame still shows
+  // the scene, which is the point of the tool.
+  const box = await page.locator("canvas#game").boundingBox({ timeout: 15000 })
+    .catch(() => null);
   const buf = box
     ? await page.screenshot({ path: out, clip: box, timeout: 60000 })
     : await page.screenshot({ path: out, timeout: 60000 });

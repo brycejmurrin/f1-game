@@ -688,8 +688,13 @@ const TLX = (function () {
       let lit = null;
       try {
         if (window.TLXShaders && chunks && TLXShaders.lit) {
+          // maxLights: see tsl-lit.js — 48 lamp array rows overrun the WebGL2
+          // fragment-uniform floor (224) once three/TSL adds its own block, so
+          // the lit shader fails to LINK on iOS Safari and every lit surface
+          // draws nothing. Same _liteGpu gate as samples/outputType above.
           lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!post,
-            envCube: envRT ? envRT.texture : null, matMaps });
+            envCube: envRT ? envRT.texture : null, matMaps,
+            maxLights: _liteGpu ? 16 : 48 });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: lit factory failed, falling back to unlit —", e); } catch (_) {}
