@@ -2416,8 +2416,7 @@ const TLX = (function () {
               // KEPT because the failure it guards is real-GPU-only and the
               // few frames of delay cost nothing.
               if (n > 0 && !rec.chunked._mirrorsFreed && !vizMat
-                && (envReady || _envGaveUp || !envRT || _envNeverComing()))
-                _mirrorRelease.push(rec.chunked);
+                && (envReady || _envGaveUp || !envRT)) _mirrorRelease.push(rec.chunked);
               continue;
             }
             acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
@@ -2552,11 +2551,25 @@ const TLX = (function () {
           // ZERO-LENGTH array of the same class, so a probe that starts later
           // (PerfGov can raise the tier mid-race) still finds array.constructor
           // and types the attribute correctly.
-          const _envNotComing = !_envEverAsked && (_now - _envFirstPaintAt) > 5000;
+          // REVERTED 2026-09-02, live on a player's phone: with the sweep and the
+          // _envNeverComing() term in, TLX on the handset drew sky, cars and
+          // trackside markers but NO ROAD AND NO TERRAIN — precisely the chunked
+          // meshes. The term was what first let the chunked release run on a
+          // phone at all (game.js gates the env probe on PerfGov.tier() < 1, so
+          // the shipped gate can never open there), and freeing those mirrors
+          // takes the world with it on that device. Neither the in-container
+          // WebGL2 runs (pixel-identical frame) nor gpu-census on macos-latest
+          // Metal (gpuErrors 0 after the index fix) reproduced it: BOTH have
+          // tier < 1, so both took the ordinary gate and neither exercised the
+          // phone path this term opened. Off by default until a device that
+          // reproduces it can prove a fix. apex26.tlxMirrorSweep=1 to A/B.
+          const _sweepOptIn = (function () {
+            try { return localStorage.getItem("apex26.tlxMirrorSweep") === "1"; } catch (_) { return false; }
+          })();
           _mirrorStat.drains++;
           _mirrorStat.gate = (envReady ? "R" : "-") + (_envGaveUp ? "G" : "-")
-                           + (envRT ? "T" : "-") + (_envNotComing ? "N" : "-");
-          if (envReady || _envGaveUp || !envRT || _envNotComing) sweepGeoMirrors(_now);
+                           + (envRT ? "T" : "-") + (_sweepOptIn ? "S" : "-");
+          if (_sweepOptIn && (envReady || _envGaveUp || !envRT)) sweepGeoMirrors(_now);
           // Evicted materials dispose only now — after paint, when no drawList
           // record can still reference them (safe since the #33952 backport).
           for (let i = 0; i < _matDispose.length; i++) { try { _matDispose[i].dispose(); } catch (_) { /* already disposed */ } }

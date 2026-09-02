@@ -1632,10 +1632,15 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // is false and this gate behaves exactly as it did. The new term changes
   // behaviour only where the probe is tier-disabled. STILL OWED: a real-GPU
   // confirmation run (gpu-census.yml, macos-latest) — this box cannot prove it.
-  assert.match(src, /!rec\.chunked\._mirrorsFreed\s*&&\s*!vizMat\s*&&\s*\(\s*envReady\s*\|\|\s*_envGaveUp\s*\|\|\s*!envRT\s*\|\|\s*_envNeverComing\(\)\s*\)/,
+  // REVERTED 2026-09-02: `|| _envNeverComing()` is out. It let the chunked
+  // release run on a phone for the first time (the shipped gate can never open
+  // there — game.js gates the probe on PerfGov.tier() < 1) and TLX on a real
+  // handset then drew sky, cars and markers but NO ROAD AND NO TERRAIN. Neither
+  // the in-container WebGL2 run nor macos-latest/Metal reproduced it: both have
+  // tier < 1, so both took the ordinary gate and never exercised the path the
+  // term opened. The gate is back to what shipped.
+  assert.match(src, /!rec\.chunked\._mirrorsFreed\s*&&\s*!vizMat\s*&&\s*\(\s*envReady\s*\|\|\s*_envGaveUp\s*\|\|\s*!envRT\s*\)/,
     "the CPU mirrors must not be freed while the env probe still has passes to compile");
-  assert.match(fnBody(src, "_envNeverComing"), /_envEverAsked/,
-    "and 'not coming' must mean the probe never ASKED, not merely that it is not ready");
   assert.match(src, /if\s*\(\s*_envFailN\s*>=\s*ENV_FAIL_CAP\s*\)\s*_envGaveUp\s*=\s*true\b/,
     "a probe that cannot succeed must stop retrying — it threw every frame forever");
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
