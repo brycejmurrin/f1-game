@@ -1027,10 +1027,11 @@ const CEILINGS = {
   // re-freeing them next round.
   // + R16: the CSS-size cache re-check in resize() and the ResizeObserver
   // moved outside the addEventListener check (PERF-FINDINGS 2u).
-  // 2745 -> 2775: the mirror sweep now caches bounds before it frees and
-  // declines on a phone, both with the handset evidence written at the site
-  // (a real phone rendered no road and a shredded car with it on).
-  "js/render/three/tlx.js": 2775,
+  // 2745 -> 2788: the mirror sweep now caches bounds before it frees and
+  // declines on a phone (this branch), merged with the other session's
+  // revert making the whole sweep opt-in behind apex26.tlxMirrorSweep. Both
+  // halves earned their lines from the same handset: no road, shredded car.
+  "js/render/three/tlx.js": 2788,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
