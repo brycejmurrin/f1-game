@@ -53,11 +53,34 @@ jobs:
       # branch and GitHub cancels the older pending gate when another push lands.
       concurrency_key: pages-${{ github.run_id }}
 
-  # Keep obsolete runs out of the environment entirely. An environment job is
-  # itself a GitHub deployment: letting an obsolete run enter it and then skip
-  # deploy-pages records a misleading successful deployment for bytes that were
-  # never published. This early check is an optimisation/truthfulness guard;
-  # deploy repeats it under the Pages lock to close the queue-time race.
+  # Keep runs that CANNOT truthfully publish out of the environment entirely. An
+  # environment job is itself a GitHub deployment: letting such a run enter it
+  # and then skip deploy-pages records a misleading successful deployment for
+  # bytes that were never published. This early check is an
+  # optimisation/truthfulness guard; deploy repeats it under the Pages lock.
+  #
+  # SUPERSEDED IS NOT OBSOLETE (2026-09-02). This gate used to demand
+  # `TIP == GITHUB_SHA` and drop everything else, which STARVED the site under
+  # this branch's real push rate: ci is ~13 minutes and pushes land every ~6, so
+  # almost every run was superseded halfway through its own gate. Measured: runs
+  # 1892, 1893, 1894 and 1896 all went GREEN and all skipped deploy, and the live
+  # site sat on build 7320 (a8d5afed, run 1891) for over an hour while four
+  # gated commits waited behind it. The guard was not wrong about the hazard —
+  # publishing an older tree over a newer one is a real regression — it was
+  # wrong that discarding the run is the only way to avoid it.
+  #
+  # A run whose commit is an ANCESTOR of the tip is not stale, it is early: the
+  # tip contains everything this run gated plus more. So publish the TIP rather
+  # than this SHA and the hazard cannot arise — every deploy moves the site
+  # forward, whichever run reaches the Pages slot first. What still fails hard is
+  # a SHA that is not an ancestor at all (a force-push or a rewritten history),
+  # because publishing then really could move the site backwards.
+  #
+  # The cost, stated plainly: the published tip can include a commit whose own ci
+  # run has not finished. That is acceptable HERE and only here — every push to
+  # this branch goes through `tools/deploy.mjs`, which runs the Pages gate's node
+  # suites before it pushes — and it is strictly better than the status quo,
+  # which published nothing at all.
   current-tip:
     needs: ci
     runs-on: ubuntu-latest
@@ -65,16 +88,22 @@ jobs:
       deploy: ${{ steps.tip.outputs.deploy }}
     steps:
       - uses: actions/checkout@v4
-      - name: Is this still the branch tip?
+        with:
+          fetch-depth: 0        # merge-base needs the history, not just the tip
+      - name: Can this run still publish?
         id: tip
         run: |
           git fetch --no-tags origin "refs/heads/${GITHUB_REF_NAME}:refs/remotes/origin/${GITHUB_REF_NAME}"
           TIP=$(git rev-parse "refs/remotes/origin/${GITHUB_REF_NAME}")
           if [ "$TIP" = "$GITHUB_SHA" ]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "this run IS the tip; publishing $GITHUB_SHA"
+          elif git merge-base --is-ancestor "$GITHUB_SHA" "$TIP"; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "SUPERSEDED but publishable: $GITHUB_SHA is an ancestor of $TIP — deploy will publish the TIP"
           else
             echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "SKIPPING DEPLOY: $GITHUB_SHA is obsolete; branch tip is $TIP"
+            echo "SKIPPING DEPLOY: $GITHUB_SHA is not an ancestor of the branch tip $TIP (history was rewritten)"
           fi
 
   deploy:
@@ -99,17 +128,26 @@ jobs:
           # generation"); a depth-1 checkout would count 1.
           fetch-depth: 0
       # A newer push can land after current-tip passes or while this job waits
-      # for the serialized Pages slot. Re-read the tip inside the lock. Failure
-      # is deliberate: once an environment job exists it must not report success
-      # unless deploy-pages actually publishes this SHA.
-      - name: Recheck branch tip inside the Pages lock
+      # for the serialized Pages slot, so the tip is re-read HERE, inside the
+      # lock, and it is the tip — not GITHUB_SHA — that gets published (see the
+      # current-tip comment: superseded is early, not stale). Checking out the
+      # tip here also means every later step — Stage site, the commit-count
+      # generation, apex-sha — describes the bytes actually going out.
+      # Failure is deliberate and still absolute: once an environment job exists
+      # it must not report success unless deploy-pages really publishes.
+      - name: Resolve and check out the branch tip inside the Pages lock
+        id: tipsha
         run: |
           git fetch --no-tags origin "refs/heads/${GITHUB_REF_NAME}:refs/remotes/origin/${GITHUB_REF_NAME}"
           TIP=$(git rev-parse "refs/remotes/origin/${GITHUB_REF_NAME}")
-          if [ "$TIP" != "$GITHUB_SHA" ]; then
-            echo "::error::REFUSING DEPLOY: $GITHUB_SHA is obsolete; branch tip is $TIP"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "$TIP"; then
+            echo "::error::REFUSING DEPLOY: $GITHUB_SHA is not an ancestor of the branch tip $TIP — history was rewritten and publishing could move the site backwards"
             exit 1
           fi
+          git checkout --detach "$TIP"
+          echo "sha=$TIP" >> "$GITHUB_OUTPUT"
+          if [ "$TIP" = "$GITHUB_SHA" ]; then echo "publishing this run's own commit $TIP";
+          else echo "publishing the TIP $TIP (this run gated the ancestor $GITHUB_SHA)"; fi
       - uses: actions/configure-pages@v5
       # Stage ONLY the runtime files. Uploading the repo root shipped a ~174 MB
       # artifact (142 MB of tests/ visual-regression snapshots + node_modules)
@@ -152,13 +190,17 @@ jobs:
         id: stamp
         run: |
           set -eu
+          # HEAD is the TIP (checked out above), not GITHUB_SHA — so the count,
+          # the staged bytes and apex-sha all describe one commit: the one being
+          # published. Still monotonic: the tip's count only ever grows.
+          PUBLISH_SHA="${{ steps.tipsha.outputs.sha }}"
           BUILD=$(( 2000 + $(git rev-list --count HEAD) ))
           node tools/bump-cache.mjs --apply --at "$BUILD" --root _site
-          sed -i "s|<meta name=\"apex-build\" content=\"$BUILD\">|<meta name=\"apex-build\" content=\"$BUILD\">\n<meta name=\"apex-sha\" content=\"$GITHUB_SHA\">|" _site/index.html
+          sed -i "s|<meta name=\"apex-build\" content=\"$BUILD\">|<meta name=\"apex-build\" content=\"$BUILD\">\n<meta name=\"apex-sha\" content=\"$PUBLISH_SHA\">|" _site/index.html
           grep -q 'name="apex-sha"' _site/index.html
           node tools/bump-cache.mjs --check --json --root _site
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
-          echo "stamped build $BUILD for $GITHUB_SHA"
+          echo "stamped build $BUILD for $PUBLISH_SHA"
       # Artifact name is scoped to the RUN ATTEMPT: artifacts survive across
       # re-run attempts of the same run, so a re-run after a failed deploy left
       # multiple artifacts named "github-pages" in the run and deploy-pages@v4
