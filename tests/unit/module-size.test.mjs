@@ -927,7 +927,11 @@ const CEILINGS = {
   // attribute bytes stayed flat; memState reported material cache, mesh pool
   // and three's own counters ALSO flat, which is what pointed the hunt at the
   // renderer's render-object cache. PERF-FINDINGS 2o.
-  "js/render/three/tlx.js": 2437,
+  // 2437 -> 2496: the mesh pool keyed on (geometry, material) plus its clock-
+  // based prune. Measured against the flat pool it was replacing:
+  // createRenderObject allocations -45%, _createBindings -27%, 2-minute race
+  // drift -28%. A PARTIAL fix, not a cure — PERF-FINDINGS 2o says so.
+  "js/render/three/tlx.js": 2496,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

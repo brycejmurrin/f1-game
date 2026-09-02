@@ -2447,3 +2447,44 @@ test("the packing round-trip check is wired to the shader's own decisions", () =
     assert.match(tool, decision, "a shader decision is no longer checked by tools/tlx-pack-check.cjs");
   assert.match(tool, /if \(layerChanges \|\| flips \|\| intInexact\) \{/, "the check no longer FAILS on a changed decision");
 });
+
+// ── the mesh pool is keyed, not indexed (docs/PERF-FINDINGS.md §2o) ───────
+// A flat `meshPool[poolUsed]` gave wrapper #0 whatever geometry was first that
+// frame, and three's WebGPURenderer caches a render object and its bind groups
+// keyed on the object TOGETHER WITH its material and geometry — so the churn
+// minted a cache entry per frame that was never released. Measured against the
+// flat pool: createRenderObject -45%, _createBindings -27%, drift -28%.
+test("TLX pools meshes by (geometry, material), and prunes on a clock", () => {
+  const raw = read("js/render/three/tlx.js");
+  // Negative assertions run against CODE, never against prose. The comment in
+  // tlx.js explaining this fix quotes `meshPool[poolUsed]` verbatim, and the
+  // first draft of this test failed on its own documentation — the same trap
+  // that made a revert-check pass earlier in this file's history.
+  const tlx = raw.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+
+  // Keyed lookup, not an index. `poolUsed` may survive as a counter, but it
+  // must never index the pool again.
+  assert.match(tlx, /const meshByGeo = new Map\(\)/, "the keyed pool is gone — the render-object cache is unbounded again");
+  assert.ok(!/meshPool\[poolUsed\]/.test(tlx),
+    "meshPool is being indexed by poolUsed again — that is the exact churn §2o measured");
+  assert.match(tlx, /let m = byMat\.get\(mat\);/, "acquireMesh no longer looks the wrapper up by its (geometry, material) pair");
+
+  // The hide sweep must follow the batch stamp. An index range cannot work on
+  // a keyed pool — it would hide live meshes and show dead ones.
+  assert.match(tlx, /pm\.__tlxBatch !== _poolBatch/, "the hide sweep is not stamp-based");
+  assert.ok(!/for \(let i = poolUsed; i < meshPool\.length; i\+\+\)/.test(tlx),
+    "an index-range hide sweep is back, which is incoherent with a keyed pool");
+
+  // Pruning, or the map pins every geometry it has ever seen and we have
+  // simply moved the leak from three's cache into ours.
+  assert.match(tlx, /function prunePool\(now\)/, "the pool prune is gone — freed geometry would be pinned alive by the pool map");
+  assert.match(tlx, /now - _pruneLast < PRUNE_EVERY_MS/, "the prune no longer throttles on the CLOCK");
+  assert.ok(!/_pruneLast[\s\S]{0,200}% \d+\) === 0/.test(tlx),
+    "the prune is gated on a frame count — measured to fire either never or constantly (§2n)");
+
+  // The prune owns the WRAPPER only. Disposing the caller's geometry or
+  // material here would free live resources out from under tracks.js.
+  const prune = tlx.match(/function prunePool\(now\)[\s\S]*?\n      \}/)[0];
+  assert.ok(!/\.dispose\(\)/.test(prune),
+    "prunePool disposes something — geometry and material belong to the caller, not the pool");
+});

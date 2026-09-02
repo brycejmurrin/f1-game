@@ -2058,16 +2058,47 @@ frame mints a NEW entry every time and the old ones are never released. The
 pool is bounded; the cache behind it is not. GLX has no such cache and stays
 flat on the same game loop.
 
-### Not fixed here
+### The keyed pool: a measured 28%, and NOT a cure
 
-The fix is a change to how TLX pools meshes — most likely keying the pool on
-(geometry, material) so a given wrapper always carries the same pair and the
-render-object cache is bounded by the number of distinct draws the scene
-actually has, rather than by frames elapsed. That is a real change to the draw
-path and wants its own round, with this soak as the gate: **the acceptance test
-is drift, not a snapshot.** Any future TLX memory claim that reports a single
-heap number without a slope is measuring the wrong thing — this entry exists
-because two rounds did exactly that.
+The pool now keys on (geometry, material) — a given wrapper always carries the
+same pair — with a clock-based prune (5 s cadence, 20 s idle) so the map cannot
+pin a freed geometry alive and trade three's unbounded cache for one of ours.
+It does what it was designed to do: the pool went from 342 entries flat to 198
+rising and falling with the working set (198 → 165 across one soak, `geoKeys`
+tracking it), and the allocation profile moved exactly where the diagnosis said
+it would, same probe and duration:
+
+| site | flat pool | keyed pool | |
+|---|---|---|---|
+| `createRenderObject` | 4.14 MB | 2.26 MB | **−45%** |
+| `_createBindings` | 6.29 MB | 4.61 MB | −27% |
+| `updateByType` | 13.25 MB | 10.13 MB | −24% |
+| heap, 2 min racing | +79.1 MB | +56.6 MB | −28% |
+
+The targeted functions fell the furthest, which is what makes this causal
+rather than a coincidence of load.
+
+**It is still not the fix.** ~28 MB/min remains, and the four-minute soak drifted
++88.6 MB — inside the run-to-run band of the UNFIXED builds (30.8 / 88.1 /
+124.3 / 137.6 across comparable runs). Total heap on this box is too noisy to
+separate 88 from 124; only the allocation profile could, which is why the claim
+above rests on that and not on the soak.
+
+### The remaining lead — a HYPOTHESIS, not a finding
+
+`createRenderObject` is still running at 2.26 MB with the object, geometry and
+material all now stable, so three's cache key must include something else that
+changes per frame. `_createBindings` staying high points the same way. The
+obvious suspect is the per-chunk lamp binding: the lit material binds a
+different lamp list per chunk (§R5), so if that reaches three as a changing
+lights node, the binding set is new every chunk every frame and no amount of
+mesh pooling will settle it. **Not verified.** The next round should test that
+before writing any more code, the way this round should have tested the slope
+before shipping two baseline fixes.
+
+The acceptance test stays: **drift, not a snapshot.** Any TLX memory claim
+reporting a single heap number without a slope is measuring the wrong thing —
+this entry exists because two rounds did exactly that.
 
 ## 3. Left on the table
 
