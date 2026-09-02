@@ -571,15 +571,23 @@ const CEILINGS = {
   // POSITIVE window: a player who quit inside those 5 s was reverted to WebGL2
   // on the next boot. A hidden or closing tab is not a crash — the same rule
   // PerfGov's sentinel already states three lines below the new handler.
-  // 9193 -> 9209: the title-screen flyby was drawing the PREVIOUS race's grid.
-  // quitToMenu resets state but never clears cars/player, and the car loop's
-  // only guard is a 550 m cull against the player every parked car passes, so
-  // the menu paid ~22 cars' worth of body/wheels/rings/decal/flap/blob draws
-  // for something nobody can see; skids.draw had the same shape (reset only
-  // from startRace). Both now gate on state. The lines are the WHY — the
-  // shadow producers already gate on state !== "menu", which is what says this
-  // was an oversight rather than a choice.
-  "js/game.js": 9209,
+  // 9193 -> 9209 (this branch): the title-screen flyby was drawing the PREVIOUS
+  // race's grid. quitToMenu resets state but never clears cars/player, and the
+  // car loop's only guard is a 550 m cull against the player every parked car
+  // passes, so the menu paid ~22 cars' worth of body/wheels/rings/decal/flap/
+  // blob draws for something nobody can see; skids.draw had the same shape
+  // (reset only from startRace). Both now gate on state. The shadow producers
+  // already gate on state !== "menu", which is what says this was an oversight.
+  //
+  // -> 9202 (deploy branch): the lamp clause in _wantRoadChunk gated on tier(),
+  // which made it DEAD CODE ((A && t<1) || (t<3) === t<3) and silently disabled
+  // PER-CHUNK ROAD on GRAPHICS: LOW. autoTier() matches the scenery half,
+  // tuner.js's held-off note and the slider help text.
+  //
+  // MERGED at 9218: both landed on the same base, so the ceiling is the merged
+  // tree's own count, re-measured with this suite's metric — never either
+  // side's number, and never the two deltas added on paper.
+  "js/game.js": 9218,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
