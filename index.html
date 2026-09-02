@@ -1726,7 +1726,13 @@
      the close button via data-esc-close, and the platform owns focus
      containment — the hub's hand-rolled trap is gone. The chrome inside is
      still built at runtime by js/data/hub.js. -->
-<dialog id="datahub" class="screen" data-esc-close="dh-close-btn" hidden></dialog>
+<dialog id="datahub" class="screen" data-esc-close="dh-close-btn" hidden>
+  <!-- The escape target must exist at BOOT: the hub itself is built on first
+       open (19caa877 took js/data/ off the boot script wall), and UiLayers'
+       "every data-esc-close names a real control" check runs on the title
+       screen. hub.js adopts this button into its header when it builds. -->
+  <button id="dh-close-btn" class="dh-close" type="button" aria-label="Close data hub" hidden>✕</button>
+</dialog>
 
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
@@ -1866,7 +1872,7 @@
 <script defer crossorigin="anonymous" src="js/game/menus.js?v=1d686610029b"></script>
 <script defer crossorigin="anonymous" src="js/game/scrollfade.js?v=c936c18944cc"></script>
 <script defer crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
-<script defer crossorigin="anonymous" src="js/game/sheetshape.js?v=2540da448d64"></script>
+<script defer crossorigin="anonymous" src="js/game/sheetshape.js?v=64081faf4410"></script>
 <script defer crossorigin="anonymous" src="js/game/uilayers.js?v=55a0a6ecb836"></script>
 <script defer crossorigin="anonymous" src="js/game/topmodal.js?v=d441c8efbaa0"></script>
 <script defer crossorigin="anonymous" src="js/game/menunav.js?v=13ea93377eeb"></script>

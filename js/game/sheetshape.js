@@ -203,6 +203,13 @@ window.SheetShape = (function () {
      room. No host, a hidden host, or the unit harness (host 0) falls back to
      the sheet's own height. Same host/padding read as classifyFit above. */
   function roomOwn(el, hOwn) {
+    /* NOT THE BODY. classifyBody() hands in innerHeight ÷ --ui-scale — the
+       viewport already expressed in the body's synthetic own units, which IS
+       its room. The body carries no zoom of its own, so the host read below
+       would return the raw viewport and, at UI SIZE 200%, double it: measured
+       as ui-scale.spec "200% keeps title navigation reachable" waiting on
+       body[data-density="compact"] that never came (ui group, 2026-09-02). */
+    if (el === document.body) return hOwn;
     const host = el.parentElement;
     if (!host) return hOwn;
     const hs = getComputedStyle(host);

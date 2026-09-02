@@ -196,6 +196,14 @@ test("density is judged by the sheet's ROOM, not its content height", () => {
   h.SS.observe(nohost.el);
   assert.equal(nohost.el.dataset.density, "compact", "host 0 (hidden, or this harness) falls back to the sheet's own height");
   assert.match(code("js/game/sheetshape.js"), /function roomOwn\(el, hOwn\)/, "the room floor lives in sheetshape.js");
+  // THE BODY IS EXEMPT: classifyBody() passes innerHeight ÷ --ui-scale, already
+  // the room in the body's own units; the documentElement host would hand back
+  // the raw viewport and un-compact every phone at UI SIZE 200%.
+  const b = bootSheetShape({ innerWidth: 852, innerHeight: 393, uiScale: 2 });   // 196 own px
+  b.vars.set(b.body, { "--tall-at": "1.05", "--wide-at": "620px", "--compact-at": "600px" });
+  b.body._client = 393; b.dom.documentElement._client = 393;
+  b.SS.reclassify();
+  assert.equal(b.body.dataset.density, "compact", "852x393 at 200% is 196 own px of body — compact, whatever documentElement's client box says");
 });
 
 test("garage stacked categories are a horizontal strip", () => {
