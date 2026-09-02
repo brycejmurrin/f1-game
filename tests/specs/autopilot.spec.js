@@ -18,15 +18,31 @@
 // Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
 // apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
 // 50" arrives with the car's state and the retained log ring beside it.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 
 async function load(page, id) {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate((t) => window.__apex.race(t, "day", "dry"), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+  // NOT a 45 s wall. suzuka is the heaviest scenery build in the suite, and on a
+  // loaded 2-worker SwiftShader box it blew through BOOT_MS while the Log ring was
+  // still emitting `[car] build ...` at 65.7 s — a slow box, not a wedge (pages runs
+  // 1898/1899/1901, and reproduced here 2026-09-02). awaitTrackBuild is exactly what
+  // fixtures.js says to move to when a hand-rolled track wait first goes red on a
+  // slow box: it waits on PROGRESS and still fails fast on a genuinely stuck build.
+  await awaitTrackBuild(page);
   await page.evaluate(() => window.__apex.go());
+  // HEADLESS, because this test never looks at a pixel. runLap drives 9,000
+  // physics ticks in ONE in-page evaluate, and the whole time the rAF loop is
+  // rasterising suzuka on SwiftShader beside it, competing for the same cores —
+  // which is why the lap costs ~185 s here alone and blows any budget the moment
+  // a second worker exists. headless(true) makes game.js's render() return early
+  // and every metric this file reads survives it: probe(), physState() and
+  // maxWallOvershoot() are all computed from G.cars and Tracks.wallAt, never from
+  // a frame. Nothing here calls render({what:...}), which is the one hook that
+  // goes stale under headless.
+  await page.evaluate(() => window.__apex.headless(true));
   // PACE pinned here, at the one place every test stages its lap. The autopilot's
   // controller is written in absolute units (VMAX 94 m/s, aLat 13 m/s², A_BRAKE 24
   // m/s²) and the assertion is a DISTANCE (distPct > 40 of the lap in a fixed 150 s
@@ -186,15 +202,20 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // separate effort. Full-lap completion is therefore not asserted here.)
   for (const id of ["monza", "suzuka"]) {
     test(`autopilot drives safely and makes progress at ${id}`, async ({ page }) => {
-      // MEASURED, IDLE BOX, 2026-09-02: monza takes 152.8 s and PASSES every
-      // assertion (finite, maxWall < 1, distPct > 40) when given room. Against
-      // the config's 120 s default it timed out at the 120 s mark having driven
-      // perfectly well — speed 32.5 m/s, RaceControl VSC->GREEN at 127 s — and
-      // never reached a single assertion. That is a budget sized below the work,
-      // not a slow runner and not a defect: the same test on the same box is
-      // green at 360 s. This drives a REAL LAP of a real circuit; a lap costs
-      // what it costs. 300 s leaves ~2x headroom for a shared CI runner.
-      // Runs 1898 and 1901 both died here, and both were read as mysteries.
+      // MEASURED TWICE, from two directions, and the union takes both. Another
+      // session measured monza at 152.8 s on an IDLE box driving perfectly well
+      // and timing out at the config's 120 s having never reached an assertion:
+      // a budget sized below the work. This branch found WHY the work was that
+      // big — the rAF loop was rasterising the circuit on SwiftShader for all
+      // 9,000 ticks of a lap this file never looks at — and load() now goes
+      // headless, which took suzuka from 209.8 s (a fail, two workers) to 87.6 s
+      // and monza from 152.8 s to 73.9 s.
+      //
+      // 300 s is kept anyway, theirs not the 180 s this branch proposed. With
+      // the render gone the tests land near 90 s and never approach it; a budget
+      // is a backstop, not a target, and the cheap direction to be wrong in on a
+      // shared CI runner is generous. Runs 1898 and 1901 both died here and both
+      // were read as mysteries — that is the cost this number now prevents.
       test.setTimeout(300_000);
       const errors = [];
       page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
@@ -213,12 +234,13 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // setup must still drive safely (no barrier clip / NaN) and make progress. Each
   // lap reloads a fresh page so runs don't inherit one another's end state.
   test("can drive safely via emulated tilt input", async ({ page }) => {
-    // 31.4 s alone on an idle box — this one is not slow. It times out on CI
-    // because Playwright counts FIXTURE SETUP against the test budget and this
-    // test follows the per-circuit laps above, whose now-heavy page is still
-    // tearing down when this context is created. Same mechanism the
-    // scenery-kits budget note records. Given the same headroom as its
-    // neighbours rather than a number tuned to its solo time.
+    // TWO boots and TWO laps, and 31.4 s alone on an idle box — this one was
+    // never slow in itself. It times out on CI because Playwright counts FIXTURE
+    // SETUP against the test budget and this test follows the per-circuit laps
+    // above, whose page is still tearing down when this context is created (the
+    // same mechanism the scenery-kits budget note records). Headless it measures
+    // 51.9 s with a second worker beside it. Same 300 s as its neighbours: one
+    // budget for the file is easier to keep true than three tuned numbers.
     test.setTimeout(300_000);
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));

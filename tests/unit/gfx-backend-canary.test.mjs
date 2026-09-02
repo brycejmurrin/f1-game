@@ -964,10 +964,12 @@ test("TLX sky gates night corona and the day-band atan like GLX", () => {
 test("TLX shadow cull packs CPU-side without uploading the lit InstancedMesh", () => {
   console.log("[gfx-canary] checking TLX shadow cull upload:false: tlx.js");
   const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const at = tlx.indexOf("function cullInstances");
-  console.log("[gfx-canary] cullInstances offset in tlx.js:", at);
-  assert.notEqual(at, -1, "cullInstances moved");
-  const body = tlx.slice(at, at + 3600);
+  // fnBody, never a fixed window. cullInstances is ~1560 chars in tlx.js and
+  // the slice(at, at + 3600) this replaces read 2000 chars PAST its closing
+  // brace, so an assertion here could pass on code in a different function
+  // entirely. The under-reading half of the same bug took the deploy branch
+  // red on 2026-09-02 (tests/helpers/fn-source.mjs has the write-up).
+  const body = fnBody(tlx, "cullInstances");
   assert.match(body, /opts && opts\.upload === false/,
     "shadow path must be able to skip the lit imesh setMatrixAt walk");
   console.log("[gfx-canary] checking TLX shadow cull upload:false call site: game.js");
@@ -1647,15 +1649,23 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "the CPU mirrors must not be freed while the env probe still has passes to compile");
   assert.match(src, /_chunkRelOptIn[\s\S]{0,200}apex26\.tlxChunkRelease"\)\s*===\s*"1"[\s\S]{0,80}return false/,
     "and the chunk-release override must default OFF, reachable only by an explicit opt-in");
-  // three sizes a buffer as `array ? array.byteLength : count*itemSize*4`, so a
-  // NULL array recovers its size from count/itemSize while a zero-length typed
-  // array is TRUTHY and yields a ZERO-BYTE buffer. Nulling is correct by design;
-  // zero-length is what made Metal refuse every indexed draw (gpu-census 26).
-  const chunkSrc = read("js/render/three/tlx-chunked.js");
+  // Nulling is what shipped and rendered; assigning a zero-length array instead
+  // is the ONLY delta between gpu-census run 26 on macos-latest/Metal (8x
+  // "Index range ... does not fit in index buffer size (0)") and run 27, which
+  // passed. Real-hardware A/B, and enough on its own. The mechanism first
+  // asserted here — that three sizes buffers from array.byteLength with a
+  // count*itemSize*4 fallback for null — came from misreading
+  // _getAttributeMemorySize(), which is renderer.info ACCOUNTING, not
+  // allocation. The claim is withdrawn; the guard stands on the A/B.
+  // COMMENTS STRIPPED. The first version of this check matched the prose that
+  // explains the rule — the words "new array.constructor(0)" in the comment
+  // beside the code — and failed on a correct file. A guard that reads comments
+  // is asserting the documentation, not the behaviour.
+  const chunkSrc = read("js/render/three/tlx-chunked.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(fnBody(chunkSrc, "releaseMirrors"), /atts\[k\]\.array\s*=\s*null/,
     "releaseMirrors must NULL the mirror, never assign a zero-length array");
-  assert.doesNotMatch(fnBody(chunkSrc, "releaseMirrors"), /new\s+a?t?t?s?\[?k?\]?\.?array\.constructor\(0\)/,
-    "a zero-length array defeats three's null-array size fallback");
+  assert.doesNotMatch(fnBody(chunkSrc, "releaseMirrors"), /\.array\s*=\s*new\s+\S*constructor\(0\)/,
+    "a zero-length array is what Metal refused (gpu-census 26 vs 27)");
   assert.match(src, /if\s*\(\s*_envFailN\s*>=\s*ENV_FAIL_CAP\s*\)\s*_envGaveUp\s*=\s*true\b/,
     "a probe that cannot succeed must stop retrying — it threw every frame forever");
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -1686,9 +1696,10 @@ test("TLX InstancedMesh preserves vertex colour and owns a capped placement tint
   // A dedicated instanceTint avoids that path without replacing canonical
   // per-vertex `color` (brown trunks / billboard frames must survive).
   const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const at = src.indexOf("function createInstancedBatch");
-  assert.notEqual(at, -1, "createInstancedBatch moved");
-  const body = src.slice(at, at + 2200);
+  // fnBody, never a fixed window — createInstancedBatch is ~2550 chars, so the
+  // slice(at, at + 2200) this replaces was ALREADY truncating 350 of them and
+  // any assertion aimed at its tail had gone quietly vacuous.
+  const body = fnBody(src, "createInstancedBatch");
   assert.match(body, /_instColorAttr\(\s*imesh/,
     "every batch must get an instanced tint, not only when colors[] is present");
   assert.doesNotMatch(body, /imesh\.instanceColor\s*=/,
@@ -1715,9 +1726,10 @@ test("TLX InstancedMesh preserves vertex colour and owns a capped placement tint
 test("instanced cull cache only hits the transform pack resident in the GPU buffer", () => {
   for (const file of ["js/render/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
     const src = read(file).replace(/^[ \t]*\/\/.*$/gm, "");
-    const at = src.indexOf("function cullInstances");
-    assert.notEqual(at, -1, `${file}: cullInstances moved`);
-    const body = src.slice(at, at + 2800);
+    // fnBody, never a fixed window: the three backends' cullInstances are 1559
+    // / 2446 / 2497 chars, so one 2800 window over-read all three by a
+    // different amount and would silently truncate the first to grow.
+    const body = fnBody(src, "cullInstances");
     assert.doesNotMatch(body, /_cullSig[01]/,
       `${file}: a second cached count cannot restore a second physical transform pack`);
     assert.match(body, /_cullPlanes/,
@@ -1760,6 +1772,62 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     "cullInstances must recognise the shadow cull (upload:false)");
   assert.match(wgxCull, /if \(shadow\) \{[^]*?batch\._shadowN = n;[^]*?writeBuffer\(batch\.shadowInstBuf/,
     "the shadow cull uploads to shadowInstBuf and leaves the camera pack/cache alone");
+
+  // AND THE SEPARATION IS ONLY HALF OF IT. shadowInstBuf is per BATCH, not per
+  // LIGHT, and the sun, car and lamp passes all reach it through one caller
+  // (game.js _castPropBatchesShadow) that re-culls and re-uploads for whichever
+  // light is active. So a single deferred encoder shared by all three passes
+  // reproduces the same frame-order bug one level up: every writeBuffer lands
+  // before the one submit, and the sun's recorded draw reads the LAMP's pack.
+  // _shadowEncoderBegin must therefore submit ANY pending encoder, not only one
+  // whose model ring is nearly full — that ring threshold is a memory concern
+  // and says nothing about which light packed the instance buffer.
+  const beginFn = fnBody(code("js/render/webgpu/wgx.js"), "_shadowEncoderBegin");
+  assert.match(beginFn, /if\s*\(\s*_pendingShadowEnc\s*\)\s*\{[^]*?queue\.submit/,
+    "each shadow pass must submit the previous one — an unconditional submit, not a ring-threshold one");
+  assert.doesNotMatch(beginFn, /_pendingShadowEnc\s*&&\s*_shadowSlot\s*>/,
+    "the submit must not be gated on the model ring: a pass whose ring is not full still repacked shadowInstBuf");
+  assert.doesNotMatch(beginFn, /shadowEncoder\s*=\s*_pendingShadowEnc\s*\|\|/,
+    "a shadow pass must not inherit the previous pass's encoder — that is what let the writes alias");
+});
+
+// The canary must describe what BOUND, not what was picked.
+test("the boot canary re-arms from the bind, never from the saved pick alone", () => {
+  const src = code("js/game.js");
+  // Two boots deliberately run GLX while KEEPING a three/webgpu pick: a tab that
+  // already claimed-and-died (skipClaim) and a create() that refused. Both say so
+  // in their own comments. Arming the probe from the pick on those boots meant a
+  // failure with nothing to do with three.js reverted the player's renderer on the
+  // next load. gfx === GLX on both paths, so only the bind site can tell them apart.
+  assert.match(src, /let _backendBound = false;/,
+    "a flag must record that a DEFERRED backend actually took the canvas");
+  assert.match(src, /if \(gfx\) \{ _backendBound = true;/,
+    "and it must be set at the bind site, beside the disarm");
+  assert.match(src, /if \(!_backendProved && _backendBound\)/,
+    "the re-arm must require the bind, not just an unproved latch");
+});
+
+// The producer side of the same class of bug: a cadence gate on a pass that is
+// ALREADY snap-cached does not halve the work, it corrupts half the maps.
+test("the instanced prop shadow cast carries no frame-parity gate", () => {
+  const src = code("js/game.js");
+  const at = src.indexOf("function _castPropBatchesShadow");
+  assert.ok(at > 0, "the instanced prop shadow caster moved — check this test, not the code");
+  const body = src.slice(at, src.indexOf("\n}", at));
+  // The sun caller sits INSIDE the snap-cached static pass, which runs only when
+  // the eye crosses its cell or the sun moves. A `(_frameNo & 1)` skip therefore
+  // never fires on a frame the function is called on for saving's sake — it fires
+  // on odd-numbered REBUILD frames, where the chunked props, terrain and road land
+  // in the map and the instanced batches (trees, barriers, signs) do not. That map
+  // is then sampled until the next rebuild, so scenery shadows blink out for a
+  // whole snap cell at tier >= 1.
+  assert.doesNotMatch(body, /_frameNo\s*&\s*1/,
+    "no frame-parity skip here: the pass is snap-cached, so half a rebuild is a corrupt map, not a saving");
+  assert.doesNotMatch(body, /PerfGov\.tier\(\)\s*>=\s*1/,
+    "and no tier gate that only drops the instanced half of an otherwise complete map");
+  // Both callers pass nothing: the parameter that carried the gate is gone.
+  assert.doesNotMatch(src, /_castPropBatchesShadow\((?:true|false)\)/,
+    "neither caller may re-introduce a cadence argument");
 });
 
 test("TLX instanced shadows consume the light-frustum packed slice", () => {
@@ -2649,4 +2717,53 @@ test("TLX builds its SSR MRT node once, not once per frame", () => {
   assert.equal(built, 1,
     `TSL.mrt( is constructed ${built} times in tlx.js; exactly one construction site ` +
     `(the memoised factory) is allowed — every extra one is a per-frame node id`);
+});
+
+// ── The mirror release must never outlive the data it measures ────────────
+// A phone on the LOW preset (tier 4) rendered NO road and a car in
+// disconnected pieces while terrain and sky drew normally, 2026-09-02. Tier
+// >= 3 is the only configuration that exposes a plain ROAD mesh to the
+// sweep — game.js chunks ribbons only below tier 3, and chunk geometries are
+// skipped because chunkedSys owns them — and no software probe reproduces it
+// (lavapipe draws the road at every tier). Two rules keep it shut.
+test("the geometry mirror sweep caches bounds before it frees, and never runs on a phone", () => {
+  const tlx = read("js/render/three/tlx.js");
+
+  // 1. Bounds are computed BEFORE any array is emptied. three's render walk
+  //    computes a bounding sphere for every drawn object when sortObjects is
+  //    on, culled or not, and it reads position.array to do it.
+  const rel = tlx.slice(tlx.indexOf("function releaseGeoMirrors("));
+  const body = rel.slice(0, rel.indexOf("\n      }"));
+  const boundsAt = body.indexOf("computeBoundingSphere()");
+  // The free is `a.array = null`, and it MUST be null rather than a zero-length
+  // typed array — the same rule releaseMirrors carries above, for the same
+  // reason and on the same evidence: nulling shipped and rendered for months,
+  // and a zero-length array is the ONLY delta between gpu-census run 26 on
+  // macos-latest/Metal (8x "Index range ... does not fit in index buffer size
+  // (0)") and run 27, which passed. A mechanism was asserted for this and then
+  // WITHDRAWN — it came from _getAttributeMemorySize(), which is renderer.info
+  // accounting, not allocation — so this guard stands on the hardware A/B alone.
+  // COMMENTS STRIPPED, for the reason recorded above: the first version of the
+  // sibling check matched the prose explaining the rule and failed a good file.
+  const bodyCode = fnBody(code("js/render/three/tlx.js"), "releaseGeoMirrors");
+  const dropAt = bodyCode.indexOf("a.array = null");
+  assert.ok(boundsAt > 0, "releaseGeoMirrors no longer caches the bounding sphere");
+  assert.ok(dropAt > 0, "releaseGeoMirrors no longer frees anything — check this test, not the code");
+  assert.doesNotMatch(bodyCode, /\.array\s*=\s*new\s+\S*constructor\(0\)/,
+    "a zero-length array is what Metal refused (gpu-census 26 vs 27) — NULL the mirror");
+  assert.ok(bodyCode.indexOf("computeBoundingSphere()") < dropAt,
+    "the bounds must be computed BEFORE the arrays are freed, or three computes a NaN sphere from a missing array");
+  assert.match(body, /radius >= 0/,
+    "a geometry whose bounds will not compute must keep its mirror rather than be freed unmeasured");
+
+  // 2. The sweep declines on mobile outright. Re-open only with handset
+  //    evidence; a software probe cannot see this failure.
+  const sweep = tlx.slice(tlx.indexOf("function sweepGeoMirrors("));
+  const sweepBody = sweep.slice(0, sweep.indexOf("\n      }"));
+  assert.match(sweepBody, /if \(isMobile\) return;/,
+    "the mirror sweep must decline on a phone — it shipped the missing road on a real handset");
+  const mobileAt = sweepBody.indexOf("if (isMobile) return;");
+  const throttleAt = sweepBody.indexOf("_mirrorSweepAt");
+  assert.ok(mobileAt >= 0 && mobileAt < throttleAt,
+    "the mobile decline must come before the throttle, so it cannot be reached by a clock edge");
 });

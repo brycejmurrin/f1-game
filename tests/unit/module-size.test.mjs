@@ -528,7 +528,22 @@ const CEILINGS = {
   // for the same silhouette; (c) the menu flyby's sky follows the session TIME OF
   // DAY instead of the circuit's authored default. Each carries the measurement
   // and the failing input in a comment, which is most of the 30.
-  "js/game.js": 9087,
+  //
+  // 9056 -> 9093 (the other branch, same base): three fixes and the reasons they
+  // each needed written down.
+  // (1) the touch-steering rescue — the GAS button is hidden when auto-throttle
+  // is on, so gating on the driver's pedal made the only wedge rescue
+  // unreachable on a phone; the two narrowings that keep the pack case out are
+  // subtle enough to earn their lines. (2) _castPropBatchesShadow lost its
+  // frame-parity gate, and the note says why a cadence skip on a snap-cached
+  // pass corrupts maps instead of saving work. (3) _backendBound, because the
+  // boot canary armed from the saved pick and two boots deliberately keep a
+  // pick while running GLX. Net behaviour is four lines; the rest is the record.
+  //
+  // MERGED: both rounds branched from 9056 and both landed, so the ceiling is
+  // the merged file, not either number above. RE-MEASURED with the suite's own
+  // metric, not added on paper.
+  "js/game.js": 9124,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -884,7 +899,13 @@ const CEILINGS = {
   // GLX's own closure on a WGX-bound gfx, so DebrisWorld's feature test would
   // pass here and then call GLX with no device (backend-surface-parity).
   // Nine lines to keep a wrong-backend call impossible. PERF-FINDINGS 2h.
-  "js/render/webgpu/wgx.js": 5761,   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
+  // 5761 -> 5780: _shadowEncoderBegin now submits ANY pending encoder, and the
+  // 19 lines are the reason written where the next person will hit it. The
+  // shadow passes already had their own instance buffer (below); what they did
+  // NOT have was their own submit, and shadowInstBuf is per BATCH, not per
+  // LIGHT — so one deferred encoder let the lamp's upload land before the sun's
+  // recorded draw executed, and the sun map came from the lamp's culled set.
+  "js/render/webgpu/wgx.js": 5780,   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -1055,7 +1076,12 @@ const CEILINGS = {
   // takes the first branch and yields a ZERO-BYTE buffer. Nulling was correct
   // by design; changing it to zero-length was mine and it is the general case
   // behind the Metal index refusal, not an index quirk.
-  "js/render/three/tlx.js": 2779,
+  // MERGE 2026-09-02 (third in a row on this one line): 2779 vs 2788. Theirs is
+  // the revert plus the A/B knob plus the null-vs-zero-length fix; mine is
+  // caching the bounds before the free and refusing the sweep on a phone. The
+  // union carries all of it and is neither number — re-measured at 2810 on the
+  // merged tree with this test's own metric, per the deploy rule.
+  "js/render/three/tlx.js": 2819,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

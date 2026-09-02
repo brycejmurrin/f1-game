@@ -48,6 +48,15 @@ const els = {
 // renderer call goes through; on the default path gfx===GLX.
 let gfx = null;
 let _backendProved = false;   // boot-canary latch, set on the first world present
+// Did a DEFERRED backend actually take the canvas this load? The canary re-arm
+// below used to read the saved PICK instead, and the two differ on the paths
+// that deliberately keep a pick while running GLX: a tab that already
+// claimed-and-died (skipClaim) and a create() that refused. Both attach GLX and
+// say in their own comments that the pick must survive — but arming "three"
+// while GLX is bound meant one unrelated failure on the next load reverted the
+// player's renderer choice. gfx === GLX on both paths, so identity cannot tell
+// them apart; only the bind site knows.
+let _backendBound = false;
 // The two DEFERRED renderer groups (tools/manifest.cjs DEFERRED). Array order
 // is the documented toposort; loadBackendScripts starts every file whose
 // BACKEND_EDGES predecessors have evaluated (six TLX IIFEs in the first wave).
@@ -331,7 +340,7 @@ try {
       catch (_) { gfx = null; }
       // Bound and live. Title has no track yet (deferred flyby), so present()
       // will not run — disarm here or a refresh on SETTINGS reverts the pick.
-      if (gfx) { try { localStorage.removeItem(PROBE_KEY); } catch (_) { /* blocked storage: nothing to disarm */ } }
+      if (gfx) { _backendBound = true; try { localStorage.removeItem(PROBE_KEY); } catch (_) { /* blocked storage: nothing to disarm */ } }
     }
   }
 } catch (_) { gfx = null; }
@@ -5236,10 +5245,28 @@ function updateCar(c, dt, ranked) {
     // Only rescue if throttle is actively pressed but the car isn't moving —
     // that's the wedged-against-a-wall case. A player who deliberately parks
     // (lets off gas) is never rescued, regardless of how long they sit still.
-    // The DRIVER's pedal, not onThrottle: on touch/tilt that is autoThrottle()
-    // (always true), which teleported a phone player who parked or was boxed
-    // in a pile-up to x = 0 after 3 s — auto gas is not a driver asking.
-    const gasPressed = inp ? !!inp.throttle : Input.throttle();
+    // The DRIVER's pedal, not onThrottle: on tilt that is autoThrottle() (always
+    // true), which teleported a phone player who parked or was boxed in a pile-up
+    // to x = 0 after 3 s — auto gas is not a driver asking.
+    //
+    // EXCEPT IN TOUCH STEERING, where the player has no pedal to release. The GAS
+    // button is hidden exactly when auto-throttle is on (see els.btnThrottle.hidden
+    // above), so on a phone in touch mode there is no key, no button and no pad for
+    // Input.throttle() to read: gasPressed was permanently false and this rescue —
+    // the ONLY one that covers being wedged against a barrier with |x| < hw, where
+    // beached/wrongWay/wallT all stay false — became unreachable on exactly the
+    // devices most likely to need it. There, auto gas IS the driver asking.
+    // Two narrowings keep the original fix intact. contactT excludes a pile-up
+    // shuffle: a car rubbing another car is not wedged against a barrier and must
+    // not be teleported out of the pack. And the auto-gas branch tests the
+    // PACE-NORMALISED speed, because the 3 m/s gate below is deliberately absolute
+    // (a stopped detector on the scale REVERSE_MAX sets, per the vstd-lint reason)
+    // — at a low OVERALL SPEED a car driving perfectly well sits under it, and a
+    // driver who never touched a pedal must not be teleported for driving slowly.
+    // vStd divides by PACE, so this reads "stopped for its own pace", which is the
+    // question actually being asked.
+    const autoGas = autoThrottle() && (c.contactT || 0) === 0 && vStd(c.speed) < 3;
+    const gasPressed = inp ? !!inp.throttle : (autoGas || Input.throttle());
     const stoppedOnTrack = gasPressed && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
     // Being OFF-TRACK is not the same as being stuck. The driving boundary sits
     // ~9 m beyond the road edge, so a driver can be metres into a wide run-off,
@@ -5920,10 +5947,20 @@ const _wmGateDry = { roughness: 0.45, metalness: 0.30, specular: 0.50 };
 // Instanced prop shadow cast: cull to the active light frustum (sun ortho or
 // lamp cone via gfx.shadowCullVP) before castShadowInstanced — shared by the
 // snap-cached sun pass and the per-frame lamp pass.
-function _castPropBatchesShadow(cadence) {
+// NO CADENCE GATE. There was one — skip odd frames at tier >= 1 — and it cost
+// scenery shadows for nothing. The sun caller is INSIDE the snap-cached static
+// pass, which only runs when the eye crosses its cell or the sun moves, so on the
+// frames the gate fired the function was not being called at all: it saved zero
+// work. What it did do was land on odd-numbered REBUILD frames, where the chunked
+// props, terrain and road were cast into the map and the instanced batches (trees,
+// barriers, signs, grandstand furniture) were not. That map then persists until
+// the next rebuild, so at tier >= 1 roughly half of all snap cells rendered with
+// every instanced prop's ground shadow missing, blinking back at the next cell.
+// Halving the cost of a snap-cached pass means skipping a whole rebuild, never
+// half of one.
+function _castPropBatchesShadow() {
   const _pb = track.meshes.propBatches;
   if (!_pb || !gfx.castShadowInstanced) return;
-  if (cadence && PerfGov.tier() >= 1 && (_frameNo & 1) === 1) return;
   // Sharing _pbPlanes with the camera cull is safe: backends snapshot CONTENTS.
   const planes = (gfx.shadowCullVP && gfx.makeFrustumPlanes)
     ? gfx.makeFrustumPlanes(gfx.shadowCullVP, _pbPlanes) : null;
@@ -6515,7 +6552,7 @@ function render(dt) {
         gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
         // Cull instanced props to the light ortho before cast — same frustum
         // castShadowChunked already uses (shadowCullVP || sun lightVP).
-        _castPropBatchesShadow(true);
+        _castPropBatchesShadow();
       }
       gfx.shadowEnd();
     }
@@ -6931,7 +6968,7 @@ function render(dt) {
         }
         gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
         // Lamp pass: cull against the lamp perspective frustum (castCullVP).
-        _castPropBatchesShadow(false);
+        _castPropBatchesShadow();
         gfx.lampShadowEnd();
         } // end lamp-shadow snap rebuild
       }
@@ -7668,7 +7705,7 @@ function render(dt) {
   }
   // Re-arm around the first world present so a jetsam mid-frame still reverts.
   // Title already disarmed after bind; this window is only the first flyby/race.
-  if (!_backendProved) {
+  if (!_backendProved && _backendBound) {
     try { const p = localStorage.getItem("apex26.gfxBackend");
       if (p === "three" || p === "webgpu") localStorage.setItem("apex26.gfxBackendProbe", p); }
     catch (_) { /* no probe: first-frame jetsam will not auto-revert */ }

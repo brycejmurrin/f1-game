@@ -1116,7 +1116,7 @@ what it covers.
 |---|---|
 | `net-stub-surface.test.mjs` | js/net is LAZY_NET, so `js/game.js` holds an INERT netPlay/netLobby from boot. Derives the required stub surface from the real CALL SITES (every `netPlay.<m>` / `netLobby.<m>` outside `js/net/` and the already-lazy `apex.js`) rather than a hand-written roster, so a new call site the stub cannot answer turns red instead of becoming a TypeError in the frame loop. Also pins the two VALUES that no crash would announce: `ownsRaceControl` / `ownsClassification` must be TRUE while inert (a solo game owns everything), checked against the shape in `js/net/netplay.js` so the guard cannot pin a fossil |
 | `load-order.test.mjs` | `index.html` and `tools/carview.html` `<script>` order matches `tools/manifest.cjs` exactly, including `HARD_EDGES` eval-time dependencies |
-| `global-registry.test.mjs` | a LINKER for the globals architecture (Bedrock Phase 0): scans every manifest file with `tools/scan-globals.mjs` (espree/eslint-scope, live — no artifacts/ state) and asserts one-global-per-file, single-writer-per-global (accumulators frozen), eval-time reads resolve in load order, call-time reads resolve somewhere, and the dynamic `window[expr]` class stays extinct — known violations frozen as ratchet baselines |
+| `global-registry.test.mjs` | a LINKER for the globals architecture (Bedrock Phase 0): scans every manifest file with `tools/scan-globals.mjs` (espree/eslint-scope, live — no artifacts/ state) and asserts one-global-per-file, single-writer-per-global (accumulators frozen), eval-time reads resolve in load order, call-time reads resolve somewhere, and the dynamic `window[expr]` class stays extinct — known violations frozen as ratchet baselines. **This, not `node --check`, is what says a `js/` edit is valid.** An IIFE that reads a `const` whose declaration was deleted parses perfectly and throws `ReferenceError` on the first frame; `node --check` is green on it. Measured 2026-09-02: a half-finished removal in `tlx.js` left four such reads, `node --check` passed, and this suite named `_mirrorRelease` in one line |
 | `game-ctx-surface.test.mjs` | a TYPE CHECK for the `G` ctx façade (Bedrock Phase 1) via `tools/check-gctx.mjs`: `types/game-ctx.d.ts` must declare exactly the members of `const G = {…}` in `js/game.js`, with matching writability (`readonly` ⇔ getter-with-no-setter), and the `GameModuleFactory` roster must match the real `X.create(ctx)` call sites. Second leg, skipped when no `tsc` is resolvable: every `G.member` read/write and `const {…} = ctx` destructure in `js/game|net` is emitted as a typed shadow and compiled — reading a member that does not exist, or writing one with no setter, is an error reported at the real `js/` file:line. Third leg: a member **no module reads** (the `countT` defect reversed) is baselined, so a new one fails |
 | `vstd-invariant.test.mjs` | the PACE invariant as a lint (`tools/vstd-lint.mjs`): no speed in `js/game.js` is divided by `VMAX` or compared against a bare literal outside the reviewed allow-list, so the OVERALL SPEED slider cannot silently shrink the player's envelope again |
 | `module-size.test.mjs` | RATCHET on the big modules' line counts — lower a ceiling when you extract; raising one is a deliberate edit with a reason in the commit |
@@ -1866,3 +1866,23 @@ read it as coverage it isn't:
   screen on the deployed build is UNTESTED by this run. A probe that reports a
   plausible number from a screen it never opened is the §R14 vacuous-measurement
   class; it is recorded here rather than quietly dropped.
+**A renderer probe measures nothing unless it is in the TIER that runs the code**
+(2026-09-02). `apex26.forceMobileTier=1` and the GRAPHICS preset are two
+different axes, and every round of the TLX mirror-sweep work set the first and
+not the second. `forceMobileTier` forces `GLX.isMobile` — the renderer's own
+downgrades — and `GfxQuality.init()` then defaults a mobile device to MEDIUM,
+so it lands on `PerfGov.tier() === 2`. LOW is tier 4, and tier 4 is where
+`js/game.js:2444` stops chunking road ribbons and the road becomes a plain
+mesh. A defect that only touches plain geometry is invisible at tier 0 and
+tier 2, and the software probe reports a confident 4.8 % road coverage with
+zero GPU errors in every arm. Set BOTH:
+
+```sh
+node tools/gfx-probe.mjs --backend three --lite \
+  --ls apex26.forceMobileTier=1 --ls 'apex26.gfxPreset="low"' montreal
+```
+
+The preset goes through `GameStore`, so it is a JSON string and the quotes are
+part of the value. The full tier -> feature table is in
+`docs/PERF-FINDINGS.md` §2s "Putting a probe in the configuration that exposes
+the code".
