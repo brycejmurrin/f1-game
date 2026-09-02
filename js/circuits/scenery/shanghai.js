@@ -295,15 +295,15 @@
       })();
       grandstandEx(0.05,  1, 95, 30, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
-      grandstandEx(0.085, 1, 40, 28, null, null,   // 85 was on the snail's return leg
+      grandstandEx(0.085, 1, 85, 28, null, null,
         { livery: "crimson", roof: "flat" });
       grandstandEx(0.10,  -1, 45, 28, null, null,
         { livery: "alu", roof: "truss", pylons: true });
-      grandstandEx(0.13,  1, 20, 26, null, null,   // 72 was on the snail's return leg
+      grandstandEx(0.13,  1, 72, 26, null, null,
         { livery: "crimson", roof: "cantilever", endWalls: true });
-      grandstandEx(0.064, 1, 50, 28, null, null,   // 112 was on the snail's return leg
+      grandstandEx(0.064, 1, 112, 28, null, null,
         { livery: "alu", roof: "none" });
-      grandstandEx(0.098, 1, 50, 30, null, null,   // 104 was on the snail's return leg
+      grandstandEx(0.098, 1, 104, 30, null, null,
         { livery: "darkSteel", roof: "none", endWalls: true });
 
       const lotusTerrace = (id, s, side, gap, bays) => {
@@ -548,7 +548,7 @@
       billboard(K(0.79), 1, 10, 18, 5, RED);
       marshalPost(K(0.80), 1, 14);
       marshalPost(K(0.74), 1, 12);
-      grandstandEx(0.755, 1, 70, 34, null, null,   // 38 was on the 0.845 fold (3 m INTO it)
+      grandstandEx(0.755, 1, 38, 34, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", endWalls: true });
       grandstandEx(0.775, 1, 62, 30, null, null,
         { livery: "darkSteel", roof: "none" });
@@ -641,34 +641,24 @@
       building(K(0.96), 1, 2, 12,  9, 50, { kind: "hall", wall: [0.86, 0.87, 0.88], window: WIN_LIT, floor: 3 });
       building(K(0.94), 1, 2, 10,  7, 34, { kind: "slab", wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 2 });
 
-      // Low commercial strips — kept short so they don't fight the marsh/Pudong read.
-      // The T1-T4 snail returns 45-65 m to the right of the pit straight, so a
-      // row at 48 m (facades 14-30 m deep) stood on it: all seven were dropped.
-      // Pulled in to 10 m and split around 0.935-0.95, where the loop is closest.
-      for (const [s0, s1] of [[0.92, 0.932], [0.95, 0.965]]) {
-        cityFront(s0, s1, 1, 10, {
-          minH: 10, maxH: 24, depth: 22,
-          palette: [WHITE, CONC, [0.82, 0.83, 0.86]],
-          step: 28,
-        });
-      }
+      // Low commercial strips — kept short so they don't fight the marsh/Pudong read
+      cityFront(0.92, 0.965, 1, 48, {
+        minH: 10, maxH: 24, depth: 22,
+        palette: [WHITE, CONC, [0.82, 0.83, 0.86]],
+        step: 28,
+      });
       cityFront(0.14, 0.28, -1, 58, {
         minH: 14, maxH: 38, depth: 22,
         palette: [[0.80, 0.82, 0.84], CONC, [0.72, 0.76, 0.82]],
         lit: true, windowCol: WIN_LIT,
         step: 42,
       });
-      // 82 m only fits behind the 0.42-0.52 grandstand block; before and after
-      // it the lap folds back 80-100 m out on this side, so 13 of 20 facades
-      // were dropped. Those two stretches now stand at 28 / 24 m instead.
-      for (const [s0, s1, gap] of [[0.36, 0.415, 28], [0.443, 0.51, 82], [0.525, 0.56, 24]]) {
-        cityFront(s0, s1, 1, gap, {
-          minH: 18, maxH: 46, depth: 24,
-          palette: [[0.72, 0.75, 0.80], [0.66, 0.70, 0.76], CONC],
-          lit: true, windowCol: WIN_TOWER,
-          step: 54,
-        });
-      }
+      cityFront(0.36, 0.56, 1, 82, {
+        minH: 18, maxH: 46, depth: 24,
+        palette: [[0.72, 0.75, 0.80], [0.66, 0.70, 0.76], CONC],
+        lit: true, windowCol: WIN_TOWER,
+        step: 54,
+      });
 
       for (let k = 0; k < n; k += Math.max(1, Math.round(n / 50))) {
         for (const side of [-1, 1]) {
