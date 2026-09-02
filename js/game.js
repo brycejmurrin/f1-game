@@ -2957,6 +2957,10 @@ function endRace(forcedOrder) {
     if (isCareer()) { if (settles) careerSettlement = Career.settleRound(order, player); }
     else store.set("season", season);   // the sprint's points AND its stage, one write
   }
+  // A one-off GP's driven qualifying order is this weekend's, not the next
+  // circuit's: without this it stayed in the season store and the next GP
+  // (any circuit, or SEASON round 1) skipped qualifying and gridded off it.
+  if (!isChampionship()) quali.clear(true);
   dbgCam = null;
   buildResults(order);
   els.results.hidden = false;
@@ -3397,6 +3401,12 @@ function quitToMenu() {
   closeLightTuner(false);
   closeCamTuner(false); exitPhotoMode();
   state = "menu"; paused = false; raceCtl.reset(); weatherArc = null;   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  // Only startRace reset these, so the Rapier world, its event queues and
+  // the OLD track object they hold survived every menu visit — and the menu
+  // flyby then built a second circuit beside it (double residency).
+  try { IncidentSim.reset(); } catch (_) { /* module absent */ }
+  try { DebrisWorld.reset(); } catch (_) { /* module absent */ }
+  try { delete document.documentElement.dataset.team; } catch (_) { /* no DOM */ }
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -3764,6 +3774,7 @@ function _colFillBuckets(ranked) {
 // the human path does not allocate a closure every physics step (~60/s).
 const _tyreSat = (cs, a, mu) => -mu * Math.tanh(cs * a / mu);
 const _floodRGB = [0, 0, 0];   // reused floodScale vector (was a fresh [r,g,b] each frame)
+const _alRGB = [0, 0, 0];   // always-on lights: the per-frame colour triple
 function sepShares(a, b) {
   const hum = AiDrive.humanInvMass(!!track.street);
   const iA = a.human ? hum : 1, iB = b.human ? hum : 1;
@@ -5355,6 +5366,10 @@ function checkRetirements() {
   const dist = Math.max(1, lapsTarget * track.total);
   for (const c of cars) {
     if (c.dnfAt == null || c.retired || c.finished) continue;
+    // The remote human's slot was still an AI when armReliability drew its
+    // dnfAt (netPlay.start() re-roles it afterwards) — never park a car
+    // another person is driving.
+    if (netPlay.owns(c)) continue;
     if (c.prog / dist >= c.dnfAt) retireCar(c, c.dnfWhy);
   }
 }
@@ -6791,7 +6806,8 @@ function render(dt) {
     if (track._alwaysLights.length) {
       const _al = LT.lampLevel;
       _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
-      setFrameLights(camEye, [_al, _al, _al], _lightFwd, track._alwaysLights);
+      _alRGB[0] = _alRGB[1] = _alRGB[2] = _al;   // pooled — this ran once per frame
+      setFrameLights(camEye, _alRGB, _lightFwd, track._alwaysLights);
     } else frame.lights = null;
   } else {
     frame.lights = null;
@@ -7912,7 +7928,7 @@ $("mb-data").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   ensureDataHub().then((ok) => { if (ok) DataHub.open(); });
 };
-$("mb-help").onclick = () => { els.howtoplay.hidden = false; };
+$("mb-help").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
 // Same sheet from the pause menu's SETTINGS page — the controls reference is
 // most wanted mid-session, not on the title screen. #howtoplay outranks
 // #pmsettings in z-index, so it lays over the settings menu and DONE returns

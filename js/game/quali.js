@@ -191,6 +191,9 @@ function create(G) {
     s.qualiOrder = classification.map((r) => ({
       id: r.driverId, t: r.t, human: !!r.human,
     }));
+    // Stamp the circuit: an order restored onto a different track is a
+    // grid drawn from the wrong lap times.
+    s.qualiTrack = (G.track && G.track.def && G.track.def.id) || null;
     try {
       if (typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) Career.save();
       else if (G.store) G.store.set("season", s);
@@ -200,6 +203,8 @@ function create(G) {
   function restoreFromSeason() {
     const raw = G.season && G.season.qualiOrder;
     if (classification || !Array.isArray(raw) || !raw.length) return !!classification;
+    const here = (G.track && G.track.def && G.track.def.id) || null;
+    if (G.season.qualiTrack && here && G.season.qualiTrack !== here) return false;
     const byId = new Map();
     if (G.cars) for (const c of G.cars) byId.set(c.driverId, c);
     classification = raw.map((entry, i) => {
@@ -269,6 +274,7 @@ function create(G) {
     const s = G.season;
     if (!s || !s.qualiOrder) return;
     delete s.qualiOrder;
+    delete s.qualiTrack;
     try {
       if (typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) Career.save();
       else if (G.store) G.store.set("season", s);

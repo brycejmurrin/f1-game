@@ -4845,9 +4845,30 @@ const WGX = (function () {
       }
       return mesh;
     }
-    function cullInstances(batch, planes) {
+    // opts.upload === false is the SHADOW cull (game.js drawPropShadows): the
+    // pack goes to the batch's OWN shadow instance buffer, never instBuf. The
+    // shadow encoder rides the frame submit while the camera cull's
+    // queue.writeBuffer to instBuf is queue-ordered BEFORE that submit, so a
+    // shared buffer made every shadow pass draw the camera's pack — casters
+    // behind the eye never shadowed, a stale tail when the light set was
+    // larger, and the snap-cached sun map froze the wrong silhouettes (bug
+    // hunt 2026-09-02). Two buffers also let the camera cull's cell-set cache
+    // hit across frames instead of missing on every light-cull rewrite.
+    function _shadowPackFor(batch) {
+      if (!batch._instPacked || !batch.instBuf || batch.instBuf === identInstanceBuf) return null;
+      if (!batch._shadowPacked) batch._shadowPacked = new Float32Array(batch._instPacked.length);
+      if (!batch.shadowInstBuf) {
+        batch.shadowInstBuf = device.createBuffer({
+          size: batch._shadowPacked.byteLength,
+          usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        });
+      }
+      return batch._shadowPacked;
+    }
+    function cullInstances(batch, planes, opts) {
       if (!batch || !batch.cells) return batch ? batch.instances : 0;
-      let samePack = !!batch._cullPlanes;
+      const shadow = !!(opts && opts.upload === false);
+      let samePack = !shadow && !!batch._cullPlanes;
       if (samePack) {
         let po = 0;
         for (let pi = 0; pi < 6 && samePack; pi++) {
@@ -4872,12 +4893,13 @@ const WGX = (function () {
       let kN = 0;
       for (let ci = 0; ci < cn; ci++) if (_aabbInFrustum(planes, cs[ci].mn, cs[ci].mx)) ks[kN++] = ci;
       const res = batch._cellKey;
-      if (res && batch._cellKeyN === kN) {
+      if (!shadow && res && batch._cellKeyN === kN) {
         let same = true;
         for (let i = 0; i < kN; i++) if (res[i] !== ks[i]) { same = false; break; }
         if (same) { batch.visible = batch._cullN; return batch._cullN; }
       }
-      const src = batch.srcMatrices, dst = batch._instPacked;
+      const src = batch.srcMatrices;
+      const dst = shadow ? (_shadowPackFor(batch) || batch._instPacked) : batch._instPacked;
       const sc = batch.srcColors;
       let n = 0;
       for (let ci = 0; ci < kN; ci++) {
@@ -4891,6 +4913,15 @@ const WGX = (function () {
           }
           n++;
         }
+      }
+      if (shadow) {
+        // Shadow pack: its own buffer, its own count; the camera-side cache,
+        // count and buffer are untouched.
+        batch._shadowN = n;
+        if (n && batch.shadowInstBuf && dst === batch._shadowPacked) {
+          device.queue.writeBuffer(batch.shadowInstBuf, 0, dst, 0, n * 20);
+        }
+        return n;
       }
       batch.visible = n;
       if (n && batch.instBuf && batch.instBuf !== identInstanceBuf) {
@@ -4954,6 +4985,8 @@ const WGX = (function () {
     function freeInstancedBatch(batch) {
       if (!batch) return;
       if (batch.instBuf && batch.instBuf !== identInstanceBuf) try { batch.instBuf.destroy(); } catch (_) { /* already destroyed */ }
+      if (batch.shadowInstBuf) { try { batch.shadowInstBuf.destroy(); } catch (_) { /* already destroyed */ } batch.shadowInstBuf = null; }
+      batch._shadowPacked = null;
       freeMesh(batch);
     }
     const _shadowIdent = new Float32Array(16);   // pooled zero model for castShadowInstanced
@@ -4964,30 +4997,35 @@ const WGX = (function () {
       if (!shadowPass || !batch || !batch.vbuf) return;
       const n = count === undefined ? batch.instances : Math.min(count | 0, batch.instances);
       if (n <= 0) return;
-      // Full-set cast: lit cull may have camera-repacked instBuf — restore from
-      // srcMatrices so casters behind the eye still hit the light frustum.
-      if (count === undefined && batch.srcMatrices && batch._instPacked &&
-          batch.instBuf && batch.instBuf !== identInstanceBuf) {
-        const src = batch.srcMatrices, dst = batch._instPacked, sc = batch.srcColors;
-        for (let i = 0; i < n; i++) {
-          const so = i * 16, dOff = i * 20;
-          for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
-          if (sc) {
-            dst[dOff + 16] = sc[i * 3]; dst[dOff + 17] = sc[i * 3 + 1]; dst[dOff + 18] = sc[i * 3 + 2];
-          } else {
-            dst[dOff + 16] = dst[dOff + 17] = dst[dOff + 18] = 1;
+      // The shadow pass reads the batch's OWN instance buffer (see
+      // _shadowPackFor): a light-culled pack when the caller culled with
+      // upload:false, otherwise the full set in source order packed here.
+      // instBuf, the camera pack and its cull cache are never touched —
+      // writing instBuf here was the frame-order bug this replaces.
+      let vb = null;
+      if (count !== undefined && batch.shadowInstBuf && batch._shadowN === n) {
+        vb = batch.shadowInstBuf;
+      } else if (batch.srcMatrices) {
+        const dst = _shadowPackFor(batch);
+        if (dst) {
+          const src = batch.srcMatrices, sc = batch.srcColors;
+          for (let i = 0; i < n; i++) {
+            const so = i * 16, dOff = i * 20;
+            for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
+            if (sc) {
+              dst[dOff + 16] = sc[i * 3]; dst[dOff + 17] = sc[i * 3 + 1]; dst[dOff + 18] = sc[i * 3 + 2];
+            } else {
+              dst[dOff + 16] = dst[dOff + 17] = dst[dOff + 18] = 1;
+            }
           }
+          device.queue.writeBuffer(batch.shadowInstBuf, 0, dst, 0, n * 20);
+          batch._shadowN = n;
+          vb = batch.shadowInstBuf;
         }
-        device.queue.writeBuffer(batch.instBuf, 0, dst, 0, n * 20);
-        batch._cullPlanes = null;
-        batch._cellKeyN = -1;
-        // Buffer holds the full set again — a stale repack count would draw the
-        // wrong N until the next cullInstances (same contract as GLX shadow).
-        batch.visible = batch.instances;
       }
       if (_shadowSetModel(_shadowIdent) < 0) return;
       _setVB0(shadowPass, batch.vbuf);
-      _setVB1(shadowPass, batch.instBuf || identInstanceBuf);
+      _setVB1(shadowPass, vb || batch.instBuf || identInstanceBuf);
       _drawGeom(shadowPass, batch, n);
     }
 

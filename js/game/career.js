@@ -737,7 +737,12 @@ function driverStandings() {
     id: s.id, team: s.team, seat: s.seat, code: s.driver.code,
     pts: career.season.pts[s.id] || 0,
   }));
-  rows.sort((a, b) => b.pts - a.pts || (a.id < b.id ? -1 : 1));
+  // Same tie-break as the WORLD CHAMPION screen (SeasonCal.rank: points, then
+  // countback) — a points-only sort here crowned a different driver in
+  // history/contract goals than the one the results sheet showed.
+  rows.sort((a, b) => (typeof SeasonCal !== "undefined" && SeasonCal.rank)
+    ? SeasonCal.rank(career.season, a.id, b.id)
+    : (b.pts - a.pts || (a.id < b.id ? -1 : 1)));
   rows.forEach((r, i) => { r.pos = i + 1; });
   return rows;
 }
@@ -1046,6 +1051,11 @@ function rollover() {
   // write its points into a dead one.
   const s = career.season;
   s.round = 0; s.pts = {}; s.teamPts = {}; s.driverCodes = {};
+  // SeasonCal.award accumulates the countback histogram here; left alone, a
+  // points tie in season N was broken by season N-1's wins. The weekend
+  // staging fields are last season's too.
+  s.finishes = {};
+  delete s.stage; delete s.sprintOrder; delete s.qualiOrder; delete s.qualiTrack;
   career.results = [];
   career.obj = null;
   career.paidSponsors = [];

@@ -182,6 +182,10 @@ const GLXShadow = (function () {
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, batch.srcMatrices);
         batch._cullPlanes = null;
+        // The cell-set cache must miss too (WGX does the same): with the buffer
+        // back in SOURCE order, a cache hit on an unchanged cell set would draw
+        // _cullN instances from the wrong order.
+        batch._cellKeyN = -1;
         // The buffer now holds the FULL set in source order — a stale repack
         // count would draw the wrong N props until the next cullInstances.
         batch.visible = batch.instances;

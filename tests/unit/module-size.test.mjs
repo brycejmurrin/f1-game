@@ -519,7 +519,7 @@ const CEILINGS = {
   // number fits the union, which carries every one of those line sets, so this is
   // RE-MEASURED on the merged tree with the suite's own split-newline metric
   // rather than added on paper.
-  "js/game.js": 9038,
+  "js/game.js": 9054,   // 2026-09-02 bug hunt: quitToMenu tears down DebrisWorld/IncidentSim + team skin, reliability skips net-owned cars, one-off GP forgets its quali order, pooled always-on light triple
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -871,7 +871,7 @@ const CEILINGS = {
   // GLX's own closure on a WGX-bound gfx, so DebrisWorld's feature test would
   // pass here and then call GLX with no device (backend-surface-parity).
   // Nine lines to keep a wrong-backend call impossible. PERF-FINDINGS 2h.
-  "js/render/webgpu/wgx.js": 5640,   // 2026-09-02: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
+  "js/render/webgpu/wgx.js": 5676,   // 2026-09-02 bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -986,7 +986,17 @@ const CEILINGS = {
   // measurement, not the thread, and the comment now says so - a borrowed
   // upstream diagnosis reads as a cause and would have sent the next round
   // hunting a RenderList that may hold nothing on this path.
-  "js/render/three/tlx.js": 2588,
+  // 2548 -> 2562 (theirs): the SSR MRT node hoisted out of present() into a
+  // memoised factory — one mrt() per frame was the whole of 2o's leak (a new
+  // mrt.id, a new render-context cache key, a permanent RenderContext every
+  // frame; 4-minute race drift +124 MB -> +4.5 MB). PERF-FINDINGS 2p.
+  // -> 2577 on the merge with the 2026-09-02 bug hunt: env give-up gate,
+  // per-face error window, geoReg compaction, and the WebGPU vertex-format
+  // rule at both pack sites (PERF-FINDINGS 2n).
+  // MERGE 2026-09-02: both lineages raised this ceiling for different work, so
+  // the union is neither side's number — 2603 is MEASURED on the merged file
+  // (mine 2588 + their 2577 both stale against it).
+  "js/render/three/tlx.js": 2603,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
@@ -1038,7 +1048,7 @@ const CEILINGS = {
   // Float32Array rounds on store and the compare was float32-vs-float64. The
   // 40 lines buy uniform3fv 31.5 -> 16.3 per frame (vegas night, full field,
   // tools/glx-call-census.mjs) with every other counter unchanged.
-  "js/render/glx.js": 2094,   // 2026-09-02: gated per-present getError drain (audit round)
+  "js/render/glx.js": 2105,   // 2026-09-02 bug hunt: drain re-arm on track switch, env-face re-entrancy restore; earlier: gated per-present getError drain (audit round)
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)
@@ -1069,7 +1079,7 @@ const CEILINGS = {
   // a seat that cannot be kept, whatever the player's rank — a peer's grid holds
   // no slot or wireId for it, so the rival sat frozen with no error. Six lines,
   // one of them the message that says why the car changed.
-  "js/net/lobby.js": 1678,
+  "js/net/lobby.js": 1685,   // 2026-09-02 bug hunt: finishStart awaits the async startRace (+7, the comment says why)
 };
 
 test("the big modules are not growing unnoticed", () => {

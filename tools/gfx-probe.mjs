@@ -222,6 +222,9 @@ async function runProbeAttempt(attemptNum) {
       localStorage.removeItem("apex26.gfxWgxFail");
       localStorage.removeItem("apex26.gfxWgxLevel");
       localStorage.removeItem("apex26.gfxBackendProbe");
+      // GLX drains gl.getError() only for the first 120 presents unless this
+      // is set; the probe reads gpuErrors() at the END of the run.
+      localStorage.setItem("apex26.glErrDrain", "1");
       localStorage.removeItem("apex26.gfxTlxFail");
       sessionStorage.removeItem("apex26.gfxBound");
       sessionStorage.removeItem("apex26.gfxClaimFail");

@@ -49,7 +49,21 @@ window.TopModal = (function () {
        has to be put back in step, or the next `hidden = false` is a silent no-op
        because the element is already `open`. That is the same desync class this
        seam exists to avoid, arriving from the other direction. */
-    el.addEventListener("close", () => { if (!el.hidden) el.hidden = true; });
+    el.addEventListener("close", () => {
+      if (el.hidden) return;                       // our own mirror closed it
+      // A platform close nothing on screen asked for: the SECOND Escape in a
+      // row fires a non-cancelable `cancel` (the first consumed the
+      // history-action activation), and the dialog closes behind our
+      // preventDefault. For a screen with a door, press the door; for a gate
+      // (data-esc="none") or a door that chose to stay, put it back — a
+      // refused RESULTS sheet used to vanish onto a frozen HUD.
+      const via = el.getAttribute("data-esc-close");
+      if (via) { const btn = document.getElementById(via); if (btn) btn.click(); }
+      if (el.hidden) return;
+      if (via || el.getAttribute("data-esc") === "none") {
+        queueMicrotask(() => { if (!el.hidden && !el.open) { try { el.showModal(); } catch (_) { /* not connected */ } } });
+      } else el.hidden = true;
+    });
 
     sync(el);
   }

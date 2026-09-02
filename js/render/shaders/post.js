@@ -612,7 +612,7 @@ vec3 colourGrade(vec3 c) {
   // Midtone-darkening contrast for a more realistic, less-bright look: a gentle
   // gamma deepens the mids/shadows while blacks stay black and the ACES highlight
   // rolloff is preserved — turns the flat "video-game bright" image filmic.
-  c = pow(c, vec3(uContrast));
+  c = pow(max(c, vec3(1e-6)), vec3(uContrast));   // pow(0, n) NaNs on mobile GPUs; black stays black
   // Vibrance: pull colour away from its luma. Weighted by how UNsaturated the
   // pixel already is, so pale, washed-out areas (hazy sky, dull grass, gray
   // asphalt) gain the most while vivid neon/kerbs don't over-cook. This is the

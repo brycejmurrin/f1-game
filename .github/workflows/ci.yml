@@ -1091,20 +1091,12 @@ jobs:
       # writes; parsing it here keeps the tool free of CI-specific formats.
       - name: Record failing specs for the next run
         if: always() && steps.sel.outputs.specs != ''
-        run: |
-          node -e '
-            const fs = require("fs"), path = require("path");
-            const out = new Set();
-            for (const d of fs.readdirSync("artifacts").filter((d) => d.startsWith("test-results-"))) {
-              const f = path.join("artifacts", d, "junit.xml");
-              if (!fs.existsSync(f)) continue;
-              const xml = fs.readFileSync(f, "utf8");
-              for (const m of xml.matchAll(/<testcase[^>]*\bclassname="([^"]+)"[^>]*>\s*<(?:failure|error)\b/g))
-                out.add(m[1].split(" ")[0]);
-            }
-            fs.writeFileSync(".selected-failed.txt", [...out].join("\n"));
-            console.log(out.size ? `carrying ${out.size} failing spec(s) forward` : "no failures to carry");
-          ' || true
+        # tools/junit-failed.mjs, not an inline regex: Playwright writes
+        # <system-out> BEFORE <failure>/<error> inside a testcase, so the
+        # "testcase immediately followed by failure" regex this replaced never
+        # matched (two red runs on 2026-09-02 both said "no failures to carry"),
+        # and its classname lacks the tests/ prefix the selector filters on.
+        run: node tools/junit-failed.mjs artifacts > .selected-failed.txt || true
       - name: Save failing specs
         if: always() && steps.sel.outputs.specs != ''
         uses: actions/cache/save@v4

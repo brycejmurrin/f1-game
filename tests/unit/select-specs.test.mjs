@@ -9,7 +9,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
-  SELECTED_GATE, FIXED_GATE_SPECS } from "../../tools/select-specs.mjs";
+  SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS } from "../../tools/select-specs.mjs";
+import { pick } from "../../tools/pick-tests.mjs";
+import { failedSpecsFrom } from "../../tools/junit-failed.mjs";
 import { recall } from "../../tools/select-recall.mjs";
 import { MEASURED, capacity } from "../../tools/select-budget.mjs";
 
@@ -164,4 +166,42 @@ test("the selected-gate settings match select-budget's recommendation", () => {
   const selected = capacity(15, 1, { ...MEASURED, ...SELECTED_GATE });
   assert.ok(selected.tests > gate.tests,
     "the selected settings must fit MORE tests than smoke's settings, or they buy nothing");
+});
+
+test("the boot group is not selected for a blanket source edit — the fixed smoke gate owns that question", () => {
+  // 2026-09-02: every js/css edit routed to `tiny`, whose cheapest-by-count
+  // specs (boot-guard, logging) are the slowest per test; they timed out the
+  // deploy gate twice on starved runners for diffs that never touched them.
+  const g = pick(["js/game/hud.js", "index.html"]);
+  assert.ok(g.has("tiny"), "the blanket rules still route to the boot group for a human reader");
+  for (const why of g.get("tiny")) assert.ok(BOOT_FALLBACK_REASONS.has(why), `unexpected boot reason: ${why}`);
+  assert.equal(dropBootFallback(g), true);
+  assert.ok(!g.has("tiny"), "the selected gate drops the boot group when only the blanket rules named it");
+  // A group named for a specific reason stays.
+  const specific = new Map([["tiny", new Set(["js/log.js"])]]);
+  assert.equal(dropBootFallback(specific), false);
+  assert.ok(specific.has("tiny"));
+});
+
+test("junit-failed reads Playwright's junit shape (system-out BEFORE the failure) and normalises the path", () => {
+  const xml = `<testsuites>
+<testsuite name="specs/logging.spec.js">
+<testcase name="a" classname="specs/logging.spec.js" time="1.0"/>
+<testcase name="b" classname="specs/logging.spec.js" time="135.7">
+<system-out>
+<![CDATA[ noise ]]>
+</system-out>
+<error message="Test timeout of 120000ms exceeded." type="Error">
+<![CDATA[ stack ]]>
+</error>
+</testcase>
+<testcase name="c" classname="specs/boot-guard.spec.js" time="120.0">
+<failure message="expect failed" type="FAILURE">x</failure>
+</testcase>
+<testcase name="d" classname="specs/smoke.spec.js" time="9.0">
+<system-out><![CDATA[ passed with output ]]></system-out>
+</testcase>
+</testsuite></testsuites>`;
+  assert.deepEqual(failedSpecsFrom(xml), ["tests/specs/boot-guard.spec.js", "tests/specs/logging.spec.js"]);
+  assert.deepEqual(failedSpecsFrom("<testsuites></testsuites>"), []);
 });

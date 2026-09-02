@@ -892,7 +892,7 @@ const NetLobby = (function () {
       return broadcast(NetPlay.EV.QLIVE, { driverId, t: +t.toFixed(2), frac: +(frac || 0).toFixed(3) });
     }
 
-    function finishStart() {
+    async function finishStart() {
       say("Starting race…");
       sealRoom();      // idempotent: the quali branch may already have run it
       if (G.setNetRoom) G.setNetRoom(false);
@@ -901,7 +901,14 @@ const NetLobby = (function () {
         // or a time trial. flow/session are the authority (js/game.js).
         G.flow = "gp";
         G.session = "race";
-        G.startRace();
+        // startRace is ASYNC (it awaits ensureScenery) — without the await,
+        // netPlay.start() below ran before makeCars()/gridUp(): on a fresh
+        // page G.cars was [] (no_slot → cancel → quitToMenu, the friend race
+        // never started); after a quali the slots were picked from the OLD
+        // car objects that makeCars() then replaced, so owns() never matched
+        // and the rival's slot ran as AI while our own pose parked on the
+        // old grid.
+        await G.startRace();
         if (!sessions.size) { clearInterval(pumpTimer); pumpTimer = null; close(); return; }
       } catch (e) {
         say("Could not start the race: " + (e && e.message), true);

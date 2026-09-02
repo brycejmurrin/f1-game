@@ -189,7 +189,14 @@
           for (const [k, v] of decalCache) {
             if (v && v.__tlxFrame === _decalFrame) continue;
             decalCache.delete(k);
-            if (v) _evicted.push(v);
+            if (v) {
+              _evicted.push(v);
+              // Drop it from the per-frame setSsrMrt registry too, or every
+              // evicted decal material stays pinned (and walked) forever —
+              // the same leak tlx.js's lit.releaseMaterial closed.
+              const fi = _fxMats.indexOf(v);
+              if (fi >= 0) _fxMats.splice(fi, 1);
+            }
             break;
           }
         }

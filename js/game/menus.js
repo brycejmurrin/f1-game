@@ -177,6 +177,9 @@ function buildTeamPicker() {
       let seat = 0;
       while (seat < t.drivers.length - 1 && isTaken(seat)) seat++;
       G.teamIdx = i; G.driverIdx = seat; store.set("team", i);
+      // The team-accent skin (--accent) was only ever written by the HUD's
+      // first race tick, so the garage kept the LAST race's colours.
+      try { document.documentElement.dataset.team = t.id; } catch (_) { /* no DOM */ }
       store.set("driver", seat);
       setTeamPicker(false);
       // The garage (the one host) repaints its own 3D car for free —

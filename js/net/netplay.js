@@ -135,7 +135,19 @@ const NetPlay = (function () {
       c.pz = w.z;
 
       const total = (G.track && G.track.total) || 0;
-      c.prog = c.lap * total + c.s;
+      // LOCAL convention (gridUp / the lap-line code): lap 0 on the grid with
+      // prog ≈ -14, prog ≈ 0 at the first crossing, i.e. prog = (lap-1)*total
+      // + s. `lap*total + s` ranked every remote human a whole lap ahead:
+      // wrong HUD gaps all race, _leadHuman always the remote, so every AI
+      // ran the full rubber-band boost against a phantom lap.
+      c.prog = (c.lap - 1) * total + c.s;
+      // Nothing local ever marks a remote car finished (the lap-line code
+      // early-outs for net-owned cars), so allHumansDone stayed false on
+      // both peers and results waited for the 360 s/lap hard cap. The wire
+      // lap is clamped to lapsTarget+1, so "past the target" is representable.
+      if (!c.finished && !c.retired && G.lapsTarget > 0 && c.lap > G.lapsTarget) {
+        c.finished = true; c.finishT = G.raceT;
+      }
 
       if (G.track) {
         Tracks.sample(G.track, c.s, _smp);
@@ -575,7 +587,7 @@ const NetPlay = (function () {
           const total = (G.track && G.track.total) || 0;
           const lap = Number.isFinite(pred.lap) ? pred.lap : 0;
           c._nOk = true;
-          c._nProg = lap * total + pred.s;
+          c._nProg = (lap - 1) * total + pred.s;   // same convention as poseRemote
           c._nX = pred.x;
           c._nSpd = pred.speed;
         } else {
