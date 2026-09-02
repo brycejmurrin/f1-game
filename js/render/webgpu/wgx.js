@@ -4545,14 +4545,33 @@ const WGX = (function () {
     // One encoder for all of a frame's shadow passes; a Begin resumes the
     // pending encoder. Spill guard: if the frame submit never ran (a capture
     // path bailed) the ring would keep growing — submit and reset instead.
+    // EVERY shadow pass gets its own SUBMIT, not just the ring-overflow one.
+    //
+    // The sun, car and lamp passes all reach castShadowInstanced through one
+    // caller (game.js _castPropBatchesShadow, "shared by the snap-cached sun
+    // pass and the per-frame lamp pass"), which culls the props to whichever
+    // light is active and packs the survivors into batch.shadowInstBuf. That
+    // buffer is per BATCH, not per light. While the three passes shared one
+    // deferred encoder, all of their queue.writeBuffer calls landed before the
+    // single frame submit, so every pass read whatever the LAST one packed —
+    // the sun's shadow map was rasterised from the lamp's culled instance set,
+    // and a sun draw of n instances read a buffer holding the lamp's m.
+    //
+    // Submitting at each Begin puts a submit between one pass's writes and the
+    // next pass's, which is the whole ordering guarantee this needs. Giving
+    // each light its own buffer would work too and cost memory per batch per
+    // light; this costs up to three submits a frame instead of one.
+    //
+    // The model ring is unaffected: slots keep counting across Begins and are
+    // reset only by the frame submit (or the overflow path below), so a
+    // submitted pass's slots are never rewritten by a later one.
     function _shadowEncoderBegin() {
-      if (_pendingShadowEnc && _shadowSlot > SHADOW_SLOTS - 512) {
+      if (_pendingShadowEnc) {
         try { device.queue.submit([_pendingShadowEnc.finish()]); } catch (_) { /* device error surfaces later */ }
         _pendingShadowEnc = null;
-        _shadowSlot = 0; _shadowFlushed = 0; _shadowOverflow = 0;
+        if (_shadowSlot > SHADOW_SLOTS - 512) { _shadowSlot = 0; _shadowFlushed = 0; _shadowOverflow = 0; }
       }
-      shadowEncoder = _pendingShadowEnc || device.createCommandEncoder();
-      _pendingShadowEnc = null;
+      shadowEncoder = device.createCommandEncoder();
     }
     // The frame submit: shadow encoder (when any pass recorded) rides in front
     // of the main encoder, then the ring resets for the next frame.

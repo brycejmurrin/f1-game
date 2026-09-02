@@ -1768,6 +1768,23 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     "cullInstances must recognise the shadow cull (upload:false)");
   assert.match(wgxCull, /if \(shadow\) \{[^]*?batch\._shadowN = n;[^]*?writeBuffer\(batch\.shadowInstBuf/,
     "the shadow cull uploads to shadowInstBuf and leaves the camera pack/cache alone");
+
+  // AND THE SEPARATION IS ONLY HALF OF IT. shadowInstBuf is per BATCH, not per
+  // LIGHT, and the sun, car and lamp passes all reach it through one caller
+  // (game.js _castPropBatchesShadow) that re-culls and re-uploads for whichever
+  // light is active. So a single deferred encoder shared by all three passes
+  // reproduces the same frame-order bug one level up: every writeBuffer lands
+  // before the one submit, and the sun's recorded draw reads the LAMP's pack.
+  // _shadowEncoderBegin must therefore submit ANY pending encoder, not only one
+  // whose model ring is nearly full — that ring threshold is a memory concern
+  // and says nothing about which light packed the instance buffer.
+  const beginFn = fnBody(code("js/render/webgpu/wgx.js"), "_shadowEncoderBegin");
+  assert.match(beginFn, /if\s*\(\s*_pendingShadowEnc\s*\)\s*\{[^]*?queue\.submit/,
+    "each shadow pass must submit the previous one — an unconditional submit, not a ring-threshold one");
+  assert.doesNotMatch(beginFn, /_pendingShadowEnc\s*&&\s*_shadowSlot\s*>/,
+    "the submit must not be gated on the model ring: a pass whose ring is not full still repacked shadowInstBuf");
+  assert.doesNotMatch(beginFn, /shadowEncoder\s*=\s*_pendingShadowEnc\s*\|\|/,
+    "a shadow pass must not inherit the previous pass's encoder — that is what let the writes alias");
 });
 
 test("TLX instanced shadows consume the light-frustum packed slice", () => {
