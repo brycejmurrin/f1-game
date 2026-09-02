@@ -106,7 +106,8 @@ test("Pages workflow calls leave the selected gate disabled", () => {
 });
 
 test("Pages workflow calls use a unique CI concurrency key", () => {
-  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| github\.ref \}\}/);
+  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(github\.event_name == 'workflow_dispatch' && github\.run_id\) \|\| github\.ref \}\}/,
+    "a dispatched run keeps its own concurrency group so a push to the same ref cannot cancel it");
   assert.match(pagesWorkflow, /concurrency_key: pages-\$\{\{ github\.run_id \}\}/);
   assert.match(ciWorkflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
 });

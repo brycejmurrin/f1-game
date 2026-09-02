@@ -186,7 +186,10 @@ permissions:
 # otherwise GitHub's one-pending-job concurrency rule silently cancels an older
 # queued deployment when the next push arrives.
 concurrency:
-  group: ci-${{ inputs.concurrency_key || github.ref }}
+  # A dispatched run gets its own group: it shares the ref with every push,
+  # and the cancel-in-progress below killed the first dispatched `ui` group
+  # 30 s in when the next docs commit landed (run 2211, 2026-09-02).
+  group: ci-${{ inputs.concurrency_key || (github.event_name == 'workflow_dispatch' && github.run_id) || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
