@@ -1791,6 +1791,86 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     "a shadow pass must not inherit the previous pass's encoder — that is what let the writes alias");
 });
 
+// A cadence skip is not a stop, and only the producer knows which it is.
+test("all three backends take a shadow KEEP, and game.js says which skips are cadence", () => {
+  for (const [file, fn] of [
+    ["js/render/glx/shadow.js", "carShadowKeep"],
+    ["js/render/webgpu/wgx.js", "carShadowKeep"],
+    ["js/render/three/tlx-shadow.js", "carShadowKeep"],
+  ]) {
+    const src = code(file);
+    assert.ok(src.includes(fn), `${file} must expose ${fn}`);
+    assert.ok(src.includes("lampShadowKeep"), `${file} must expose lampShadowKeep`);
+    // arms > 0 is the anti-black guard: GLX and WGX never prime these depth
+    // targets, so an unwritten map reads fully SHADOWED under a LEQUAL compare.
+    // Arming one before its first real pass paints black under the lamp.
+    // Checked PER FUNCTION: a file-wide match passes on the lamp guard alone,
+    // which is how the first version of this assertion failed to bite when the
+    // car guard was removed.
+    for (const which of ["carShadowKeep", "lampShadowKeep"]) {
+      // Anchor on the DEFINITION, not the first mention: GLX and TLX list these
+      // in an export block above the function, and slicing from there reads the
+      // neighbouring function's guard instead of this one's. That is exactly how
+      // the first version of this assertion stayed green with the car guard gone.
+      const at = src.indexOf("function " + which) >= 0
+        ? src.indexOf("function " + which)
+        : src.indexOf(which + ": (");
+      assert.ok(at > 0, `${file}: could not find the ${which} definition`);
+      // Bound the window at the SIBLING definition too. carShadowKeep and
+      // lampShadowKeep sit next to each other, and a window long enough to reach
+      // the sibling reads its guard and passes with this one's guard deleted.
+      const sib = which === "carShadowKeep" ? "lampShadowKeep" : "carShadowState";
+      const sibAt = src.indexOf(sib, at + 1);
+      const end = sibAt > at ? Math.min(sibAt, at + 320) : at + 320;
+      const body = src.slice(at, end);
+      assert.match(body, /Arms\s*<=\s*0/,
+        `${file}: ${which} must decline until that pass has run at least once`);
+    }
+  }
+  // The lamp keep re-states the index rather than trusting a remembered one:
+  // frame.lights is a distance-ranked nearest-N rebuilt as the eye moves.
+  for (const file of ["js/render/glx/shadow.js", "js/render/webgpu/wgx.js", "js/render/three/tlx-shadow.js"]) {
+    assert.match(code(file), /lampShadowKeep[\s\S]{0,400}lightIdx\s*>=\s*0/,
+      `${file}'s lamp keep must refuse an unresolved light index`);
+  }
+  // And the producer must actually call them, on exactly the branches that skip
+  // for cadence rather than for a stop.
+  const g = code("js/game.js");
+  assert.match(g, /_carShadowWanted\s*&&\s*!_carShadowFrame\s*&&\s*gfx\.carShadowKeep/,
+    "the halved car pass must keep the map on the frames it skips");
+  assert.ok((g.match(/gfx\.lampShadowKeep\(flBest\)/g) || []).length >= 2,
+    "both lamp snap-cache branches (still-bound, and the one-frame defer) must keep");
+});
+
+// The flag the shader reads must be observable, or a strobe is invisible.
+test("shadow state reports the frame-live armed flag, not just a lifetime count", () => {
+  for (const file of ["js/render/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
+    const src = code(file);
+    assert.match(src, /carShadowState[\s\S]{0,300}armed/,
+      `${file}: carShadowState must expose armed — arms stays true straight through a strobe`);
+    assert.match(src, /lampShadowState[\s\S]{0,300}armed/,
+      `${file}: lampShadowState must expose armed`);
+  }
+});
+
+// One presented frame is not proof that a backend works.
+test("the boot canary holds across a run of frames and TLX re-arms on a context loss", () => {
+  const g = code("js/game.js");
+  assert.match(g, /const PROVE_FRAMES = \d{2,}/,
+    "proof must be a RUN of frames: a backend that draws one and dies had no protection");
+  assert.match(g, /!_backendProved && \+\+_provedFrames >= PROVE_FRAMES/,
+    "the counter, not a single present, decides when the probe clears");
+  // Storage is touched on the arm and the clear only. Writing the probe every
+  // frame until proved would put a localStorage write in the render loop.
+  assert.match(g, /!_backendProved && _backendBound && !_probeArmed/,
+    "the arm must be guarded by a flag so the render loop never re-writes storage");
+  // TLX had no post-proof re-arm at all, so the jetsam-mid-race case its own
+  // comment names was unprotected. WGX already does this from its escalate path.
+  assert.match(code("js/render/three/tlx.js"),
+    /gfxClaimFail[\s\S]{0,600}setItem\("apex26\.gfxBackendProbe", "three"\)/,
+    "TLX must re-arm the boot canary when a context loss sends the tab back to WebGL2");
+});
+
 // The canary must describe what BOUND, not what was picked.
 test("the boot canary re-arms from the bind, never from the saved pick alone", () => {
   const src = code("js/game.js");
@@ -1803,7 +1883,7 @@ test("the boot canary re-arms from the bind, never from the saved pick alone", (
     "a flag must record that a DEFERRED backend actually took the canvas");
   assert.match(src, /if \(gfx\) \{ _backendBound = true;/,
     "and it must be set at the bind site, beside the disarm");
-  assert.match(src, /if \(!_backendProved && _backendBound\)/,
+  assert.match(src, /if \(!_backendProved && _backendBound\b/,
     "the re-arm must require the bind, not just an unproved latch");
 });
 

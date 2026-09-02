@@ -50,8 +50,52 @@ const GLXShadow = (function () {
       shadowBegin, castShadow, castShadowInstanced, shadowEnd,
       carShadowBegin, carShadowEnd,
       lampShadowBegin, lampShadowEnd,
-      shadowKeep,
+      carShadowKeep, lampShadowKeep,
     };
+
+    // KEEP: "the pass did not run this frame, and the map is still good."
+    //
+    // present() clears carArmed/lampArmed every frame, and that is the right
+    // contract for the case it was written for: when game.js STOPS running a
+    // pass (night, knob off, menu, tier shed) the stale map must not keep
+    // shadowing. But game.js also skips these passes for CADENCE — the car pass
+    // halves at low speed, the lamp pass is snap-cached to a 12 m eye cell — and
+    // from in here the two are indistinguishable. Result: the lamp shadow was
+    // visible for exactly ONE frame per cell and the car's strobed at 30 Hz
+    // while parked. Only the producer knows which kind of skip it is, so it now
+    // says, and a genuine stop still disarms by simply not calling.
+    //
+    // arms > 0 is load-bearing, not a nicety: GLX never primes these maps (TLX
+    // does), so a depth texture that has never been written reads 0 under a
+    // LEQUAL compare — fully shadowed. Arming before the first real pass would
+    // paint black under the lamp and under the car.
+    //
+    // Sets the flag and NOTHING else. It deliberately does not re-issue a
+    // *ShadowBegin: that clears DEPTH_BUFFER_BIT, which would wipe the cached
+    // map and leave a fully UNSHADOWED pool — strictly worse than the missing
+    // shadow this exists to fix. And `arms` is not incremented: it counts real
+    // rasterisations, and a keep is the absence of one, which is exactly what
+    // lets the guard above tell a keep from a redraw. (Both notes are another
+    // session's, from a parallel `shadowKeep(kind)` that reached the same
+    // conclusion in this file; the union keeps this pair because they are the
+    // ones wired through the façade, WGX, TLX and the producer.)
+    function carShadowKeep() {
+      if (!S.carEnabled || S.carArms <= 0) return false;
+      S.carArmed = true;
+      return true;
+    }
+    function lampShadowKeep(lightIdx) {
+      if (!S.lampEnabled || S.lampArms <= 0) return false;
+      // The index must be re-stated, not remembered: frame.lights is a
+      // distance-ranked nearest-N that is rebuilt as the eye moves, so the slot
+      // holding this lamp can change between rebuilds. The producer resolves it
+      // every frame; keeping a stale index would run the PCF against a different
+      // light. A caller that cannot resolve it declines the keep.
+      if (!(lightIdx >= 0)) return false;
+      S.lampIdx = lightIdx | 0;
+      S.lampArmed = true;
+      return true;
+    }
 
     function setup() {
       depthProg = link(DEPTH_VS, DEPTH_FS);
@@ -290,29 +334,6 @@ const GLXShadow = (function () {
       core.post.bindSceneTarget();
     }
 
-    // "The map from the last rebuild is still the right map" — the call game.js
-    // makes on the frames it skips a pass for CADENCE rather than because the
-    // pass stopped. present() clears both armed flags every frame, and the
-    // contract it protects is right: when game.js stops running a pass (day,
-    // knob off, menu) a stale map must not keep shadowing. But game.js also
-    // skips for cadence, where the map, its VP and its index are all still
-    // valid — begin() re-binds and re-uploads every one of them on every frame
-    // regardless of the flag — and from in here the two cases are identical.
-    // Only the caller knows which it is, so only the caller can say.
-    //
-    // Sets the flag and NOTHING else. It deliberately does not re-issue
-    // *ShadowBegin: that does gl.clear(DEPTH_BUFFER_BIT), which would wipe the
-    // cached map and leave a fully UNSHADOWED pool — strictly worse than the
-    // missing shadow this exists to fix. It also does not touch lampIdx: the
-    // caller's snap test is what proves the retained index still names the same
-    // lamp, and re-deriving it here would just be guessing.
-    //
-    // arms is NOT incremented. It counts real rasterisations, and a keep is the
-    // absence of one — which is exactly how the guard tells a keep from a redraw.
-    function shadowKeep(kind) {
-      if (kind === "lamp") { if (S.lampEnabled) S.lampArmed = true; return; }
-      if (kind === "car") { if (S.carEnabled) S.carArmed = true; }
-    }
 
     S.enabled = setup();
     Log.info("gfx", "GLX shadow init on=" + (S.enabled ? 1 : 0));
