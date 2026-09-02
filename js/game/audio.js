@@ -1065,10 +1065,11 @@ const GameAudio = (function () {
         // entries, and only builtins were cached). Decoded PCM is big, so
         // user-track buffers are bounded to the 2 most recent.
         musicBuffers[url] = buf;
-        if (!builtin) {
-          _userBufKeys.push(url);
-          while (_userBufKeys.length > 2) delete musicBuffers[_userBufKeys.shift()];
-        }
+        // Builtins were cached for the life of the context: the playlist
+        // rotates, so a long session held all five decoded (~80-90 MB of PCM
+        // each). Same 2-entry bound for every track, builtin or not.
+        _userBufKeys.push(url);
+        while (_userBufKeys.length > 2) delete musicBuffers[_userBufKeys.shift()];
         playMusicBuffer(buf, token);
       })
       .catch((err) => {

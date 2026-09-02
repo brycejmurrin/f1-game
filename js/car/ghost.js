@@ -28,13 +28,20 @@ const Ghost = (function () {
 
   function round(v, p) { const m = Math.pow(10, p || 0); return Math.round(v * m) / m; }
 
+  // Parsed once and kept: setTrack() runs on EVERY loadTrack (each menu-flyby
+  // build), and re-parsing the whole ghost store to read one entry was a
+  // ~40 KB JSON.parse per circuit browse.
+  let _storeCache = null;
   function loadStore() {
+    if (_storeCache) return _storeCache;
     try {
       if (typeof localStorage === "undefined") return {};
-      return JSON.parse(localStorage.getItem(KEY)) || {};
+      _storeCache = JSON.parse(localStorage.getItem(KEY)) || {};
+      return _storeCache;
     } catch (e) { return {}; }
   }
   function saveStore(o) {
+    _storeCache = o;
     try {
       if (typeof localStorage !== "undefined") localStorage.setItem(KEY, JSON.stringify(o));
     } catch (e) { Log.warn("car", "ghost save fail"); }

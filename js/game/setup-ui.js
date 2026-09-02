@@ -367,6 +367,10 @@ function buildSetup() {
       saveTeamParts(team.id, p);
       if (G.soundOn) GameAudio.uiSelect();
       buildSetup();
+      // The rebuild destroyed the focused row; without this a pad/keyboard
+      // player's next arrow landed on the category TAB (first .active).
+      const again = $("cs-options") && $("cs-options").querySelector('[data-cs-opt="' + opt.id + '"]');
+      if (again) { try { again.focus({ preventScroll: true }); } catch (_) { again.focus(); } }
     };
     optsEl.appendChild(row);
   }

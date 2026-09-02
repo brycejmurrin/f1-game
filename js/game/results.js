@@ -9,6 +9,7 @@ function buildResults(order) {
   Log.info("ui", "GameResults.buildResults n=" + (order && order.length));
   const els = G.els, season = G.season, track = G.track, cars = G.cars;
   els.resultsTable.textContent = "";
+  els.resultsTitle.style.color = "";   // buildChampion tints it; #res-menu never reset it
   const sprint = G.seasonMode && SeasonCal.scored() === "sprint";
   els.resultsTitle.textContent = sprint ? "SPRINT — " + track.def.name
     : G.seasonMode ? "ROUND " + season.round + " — " + track.def.name
@@ -155,6 +156,7 @@ function buildResults(order) {
 function buildTTResults() {
   const els = G.els, track = G.track;
   els.resultsTable.textContent = "";
+  els.resultsTitle.style.color = "";
   els.resultsTitle.textContent = track.def.name + " — TIME TRIAL";
   const best = G.player.best;
 

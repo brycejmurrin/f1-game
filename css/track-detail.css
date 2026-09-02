@@ -253,11 +253,14 @@ body[data-density="compact"] #track-detail-header {
    Stack it below PAUSE (right-aligned) so the full 4-box top bar is clear. */
 @media (orientation: portrait) {
   #btn-cam {
-    top: calc(55px + var(--sat));
+    /* DERIVED from --tap, not 55: on touch --tap is 52, so a 55 constant put
+       CHASE 5px under PAUSE. 8 + tap + 4 = 56 on desktop, 64 on touch. */
+    top: calc(8px + var(--tap) + 4px + var(--sat));
     right: calc(10px + var(--sar));
   }
-  /* Move sectors below the repositioned CHASE (55 + 40 + 7 = 102px). */
-  #hud-sectors { top: calc(102px + var(--sat) / var(--hud-scale)); }
+  /* Sectors below the repositioned CHASE: 8 + 2*tap + 8. The WHOLE offset
+     divides by --hud-z (css/hud.css: #hud-sectors rides zoom). */
+  #hud-sectors { top: calc((8px + 2 * var(--tap) + 8px + var(--sat)) / var(--hud-z)); }
 }
 
 /* Cockpit cam: gear + speed live on the steering-wheel LCD — hide the floating
