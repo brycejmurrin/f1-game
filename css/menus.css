@@ -1417,7 +1417,8 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   flex: 1 1 0;
   min-width: 0;
 }
-/* WEATHER on this shape: five chips in a ~164px column are ~52px each, and
+/* WEATHER on the wide + compact sheet (the sheet's width is capped, so this
+   is every landscape phone AND the desktop): five chips in a ~164px column are ~52px each, and
    "RAIN" / "CLOUDY" / "FOG" with their icons painted past the borders
    (screenshot at 844x390, 2026-09-02). Wrapping to a second row pushed the
    DIFFICULTY row under the footer; the icons go (an aria-hidden span in

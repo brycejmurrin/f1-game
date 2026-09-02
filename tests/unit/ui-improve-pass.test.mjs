@@ -174,6 +174,30 @@ test("circuit select stacked uses one list scroller", () => {
     "fade thumbs require overflow-y auto/scroll, not hidden content height");
 });
 
+test("density is judged by the sheet's ROOM, not its content height", () => {
+  // SheetShape BEHAVIOUR: a content-sized sheet reports its content height,
+  // and its compact layout is shorter than its normal one, so measuring the
+  // content is self-fulfilling. MEASURED RACE SETTINGS at 1280x800: the
+  // compact grid is 358 own px against --compact-at 760 with 776 px of room.
+  const h = bootSheetShape();
+  const roomy = h.sheet("rs-roomy", { w: 558, h: 358, hostHeight: 776, vars: { "--compact-at": "760px" } });
+  h.SS.observe(roomy.el);
+  assert.equal(roomy.el.dataset.density, "normal", "358 px of content in 776 px of room is NOT short");
+  roomy.host._client = 366; h.SS.reclassify();
+  assert.equal(roomy.el.dataset.density, "compact", "the same sheet on a 390-tall landscape phone is");
+  roomy.host._client = 790; h.SS.reclassify();
+  assert.equal(roomy.el.dataset.density, "compact", "790 is inside the 40 px release hysteresis (760 + 40)");
+  roomy.host._client = 820; h.SS.reclassify();
+  assert.equal(roomy.el.dataset.density, "normal", "…and releases once the room clears it");
+  const pinned = h.sheet("rs-pinned", { w: 558, h: 900, hostHeight: 600, vars: { "--compact-at": "760px" } });
+  h.SS.observe(pinned.el);
+  assert.equal(pinned.el.dataset.density, "normal", "a sheet taller than its host is judged by its own height (max of the two)");
+  const nohost = h.sheet("rs-nohost", { w: 558, h: 358, vars: { "--compact-at": "760px" } });
+  h.SS.observe(nohost.el);
+  assert.equal(nohost.el.dataset.density, "compact", "host 0 (hidden, or this harness) falls back to the sheet's own height");
+  assert.match(code("js/game/sheetshape.js"), /function roomOwn\(el, hOwn\)/, "the room floor lives in sheetshape.js");
+});
+
 test("garage stacked categories are a horizontal strip", () => {
   const carsetup = css("css/carsetup.css");
   assert.ok(!declares(carsetup, "#cs-tabs", "max-height", "48%"),

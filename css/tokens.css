@@ -813,7 +813,10 @@ button:disabled:active { background: var(--plate); }
    `data-density` is the answer that can see both: js/game/sheetshape.js divides
    the measured height by the element's own zoom, against a per-sheet
    `--compact-at`. A sheet that is short in the units its CSS is written in gets
-   the tighter spacing whatever the viewport says.
+   the tighter spacing whatever the viewport says. "Short" is the ROOM the sheet
+   has (its host's content box, floored by its own height), not its content —
+   a content-sized sheet's compact layout is shorter than its normal one, and
+   measuring the content kept RACE SETTINGS compact on an 800px desktop.
 
    THE VIEWPORT QUERY STAYS, and is not redundant. It also serves `#overlay`,
    which is one of the two screens outside `.sheet` and therefore carries no

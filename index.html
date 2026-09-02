@@ -49,8 +49,8 @@
      Measured chrome-devtools LCPBreakdown: almost all element render delay
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
-<link rel="preload" href="css/tokens.css?v=8188cb77b276" as="style">
-<link rel="preload" href="css/components.css?v=7085b3dc0c3f" as="style">
+<link rel="preload" href="css/tokens.css?v=0aa289ab8635" as="style">
+<link rel="preload" href="css/components.css?v=f8e5f321f635" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -68,10 +68,10 @@
 <!-- MANIFEST.CSS order preserved (cascade). Title-critical sheets stay
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
-<link rel="stylesheet" href="css/tokens.css?v=8188cb77b276">
-<link rel="stylesheet" href="css/components.css?v=7085b3dc0c3f">
+<link rel="stylesheet" href="css/tokens.css?v=0aa289ab8635">
+<link rel="stylesheet" href="css/components.css?v=f8e5f321f635">
 <link rel="stylesheet" href="css/tuner.css?v=fe56135c0173" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=e77129701282">
+<link rel="stylesheet" href="css/menus.css?v=241532139cd7">
 <link rel="stylesheet" href="css/carsetup.css?v=836e3f3078e6" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=09eec5dfd7e7" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=5c7fe3274e1e" media="print" onload="this.media='all'">
@@ -1866,7 +1866,7 @@
 <script defer crossorigin="anonymous" src="js/game/menus.js?v=1d686610029b"></script>
 <script defer crossorigin="anonymous" src="js/game/scrollfade.js?v=c936c18944cc"></script>
 <script defer crossorigin="anonymous" src="js/game/css-zoom.js?v=cb6057a4c4d5"></script>
-<script defer crossorigin="anonymous" src="js/game/sheetshape.js?v=1b543273272e"></script>
+<script defer crossorigin="anonymous" src="js/game/sheetshape.js?v=2540da448d64"></script>
 <script defer crossorigin="anonymous" src="js/game/uilayers.js?v=55a0a6ecb836"></script>
 <script defer crossorigin="anonymous" src="js/game/topmodal.js?v=d441c8efbaa0"></script>
 <script defer crossorigin="anonymous" src="js/game/menunav.js?v=13ea93377eeb"></script>

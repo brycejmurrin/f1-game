@@ -803,7 +803,12 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    720-local portrait sheet and a 473-local 860×560 @115% window — REAL
    sat under BACK/RACE (measured). Compact chrome + the 3-col pin need
    to fire on those short-in-own-units sheets. inherits:false, so the
-   sheet node, not the dialog. */
+   sheet node, not the dialog.
+   Measured against the ROOM the sheet has (sheetshape.js roomOwn), not
+   its content height: this sheet is content-sized, and its compact grid is
+   358 own px, so measuring the content kept a 1280×800 desktop (776 px of
+   room; the normal two-column layout is 514) on the phone layout for good.
+   Room 776 ≥ 760 → normal; a 390-tall landscape phone (366) stays compact. */
 #race-settings .sheet { --compact-at: 760px; }
 /* --fit-at on wide-shaped sheets (zoom-corrected), not viewport orientation. */
 #results .sheet:not([data-shape="tall"])     { --fit-at: 220px; }
