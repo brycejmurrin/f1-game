@@ -1041,7 +1041,14 @@ const CEILINGS = {
   // deploy job, so a fix for a player's broken phone could not publish because
   // of a line-count ceiling. Run the guard even when reverting — especially
   // when reverting fast.
-  "js/render/three/tlx.js": 2763,
+  // 2763 -> 2779: the chunk-release A/B knob, the chunked-release counter, and
+  // the null-vs-zero-length finding written where the next person will hit it.
+  // three sizes a buffer as `array ? array.byteLength : count*itemSize*4` — an
+  // explicit fallback for a NULL array. A zero-length typed array is truthy,
+  // takes the first branch and yields a ZERO-BYTE buffer. Nulling was correct
+  // by design; changing it to zero-length was mine and it is the general case
+  // behind the Metal index refusal, not an index quirk.
+  "js/render/three/tlx.js": 2779,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
