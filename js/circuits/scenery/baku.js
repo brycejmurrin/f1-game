@@ -108,7 +108,7 @@
       }
 
       // Marshal posts spaced around the lap
-      for (let i = 0; i < 9; i++) marshalPost(K(0.05 + i * 0.105), (i % 2) ? 1 : -1, 3.0);
+      for (let i = 0; i < 9; i++) marshalPost(K(0.05 + i * 0.105), (i % 2) ? 1 : -1, 3.5);   // gap is to the hut CENTRE, guard onTrack(c, 3): 3.0 lost 7 of 9
 
       for (let i = 0; i < 8; i++) {
         const kC = K(i / 8 * 0.22);
@@ -361,11 +361,11 @@
       }
 
       cityFront(0.36, 0.537, 1, 24, {
-        minH: 6, maxH: 18, depth: 12, step: 16,
+        minH: 6, maxH: 18, depth: 14, step: 16,   // depth = ALONG-track frontage (building() d), ~step so the facades abut
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
       });
       cityFront(0.553, 0.56, 1, 24, {
-        minH: 6, maxH: 18, depth: 12, step: 16,
+        minH: 6, maxH: 18, depth: 14, step: 16,
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
       });
 

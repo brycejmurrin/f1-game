@@ -303,6 +303,12 @@ function updateHud(force) {
     : dz < 900 ? "AERO " + Math.round(dz) + "m"
     : "Z-MODE");
   if (timeTrial) {
+    // The DROP rule (gapForm) runs here too. The attribute it maintains lives
+    // on <html> and outlives the session, so a race on a narrow phone left the
+    // widget dropped for the time trial that followed, and a time trial on its
+    // own never dropped it — although GHOST +0.123s is the LONGEST spelling the
+    // slot ever holds. The format it returns is a race concern (no gaps here).
+    gapForm();
     // no rivals — show ghost delta (or last lap) and the record to chase instead of gaps
     if (Ghost.hasGhost()) {
       const ghostT = Ghost.timeAt(player.s);

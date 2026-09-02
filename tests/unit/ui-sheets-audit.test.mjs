@@ -47,7 +47,7 @@ function stubStore() {
 }
 
 /* ── RESULTS / STANDINGS on the real SeasonCal ─────────────────────────── */
-function bootResults({ state = "menu", season, cars }) {
+function bootResults({ state = "menu", season, cars, netPlay }) {
   const dom = makeDom();
   const tracks = ["bahrain", "jeddah", "melbourne"].map((id) => ({ id, name: id.toUpperCase(), gp: id + " GP", classic: false }));
   const sb = {
@@ -70,6 +70,7 @@ function bootResults({ state = "menu", season, cars }) {
   const G = {
     $: (id) => dom.byId(id), els, season, cars, state, seasonMode: true, track: { def: tracks[0] },
     cssCol: (c) => "rgb(" + c.join(",") + ")", announce() {}, soundOn: false, careerSettlement: null,
+    netPlay,
   };
   const api = vm.runInContext("GameResults", ctx).create(G);
   return { dom, G, api, SeasonCal, els };
@@ -119,6 +120,28 @@ test("RESULTS top-10 and the CHAMPION panel rank by countback, like STANDINGS", 
   assert.equal(banner.textContent, "BBB  Bravo", "champion is decided by SeasonCal.rank");
   assert.equal(rowsOf(table).map(nameOf)[0], "BBB", "final standings agree with the banner");
   assert.equal(h.els.resNext.textContent, "MAIN MENU");
+});
+
+test("a GUEST's RESULTS labels DNF from the host's verdict, not from its own reliability plan", () => {
+  // Bug-hunt 2026-09-02 (UI, not landed in round 1): the order was the host's
+  // (netOrder) but "(dnf)" / "DNF" came from this peer's own `retired`, drawn
+  // off a different seed and race counter — so the two disagreed.
+  const { season, cars } = tiedSeason();
+  cars[1].retired = true; cars[1].dnf = "gearbox";      // Bravo parked HERE only
+  const verdict = [{ d: "b", t: 95.2, p: 0, lap: 4 }, { d: "a", t: 0, p: 0, lap: 2, r: "engine" }];
+  const netPlay = { active: () => true, ownsClassification: () => false, peerResult: () => verdict };
+  const h = bootResults({ season, cars, netPlay });
+  h.api.buildResults([cars[1], cars[0]]);                 // the host's order: Bravo won, Alpha retired
+  const rows = rowsOf(h.els.resultsTable).slice(0, 2);
+  const pts = (row) => row.children.find((c) => c.classList.contains("res-pts")).textContent;
+  assert.equal(nameOf(rows[0]), "BBB  Bravo", "a car the host timed finished, whatever this peer saw");
+  assert.equal(pts(rows[0]), "25 pts");
+  assert.equal(nameOf(rows[1]), "AAA  Alpha  (engine)", "the host's reason, when it sends one");
+  assert.equal(pts(rows[1]), "DNF");
+  // The host alone (no verdict) keeps its own flags — the single-player path is untouched.
+  const solo = bootResults({ season, cars });
+  solo.api.buildResults([cars[0], cars[1]]);
+  assert.equal(nameOf(rowsOf(solo.els.resultsTable)[1]), "BBB  Bravo  (gearbox)");
 });
 
 test("STANDINGS title says which half of a sprint weekend it stands on, and the pause menu's NEXT line is the race in progress", () => {

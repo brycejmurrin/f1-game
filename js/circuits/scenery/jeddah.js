@@ -137,7 +137,7 @@
       // ── Marshal posts ─────────────────────────────────────────────────────
       for (const [s, side] of [[0.06, -1], [0.13, 1], [0.34, -1], [0.49, 1],
         [0.62, -1], [0.74, 1], [0.81, -1], [0.92, 1]]) {
-        marshalPost(K(s), side, 2.4);
+        marshalPost(K(s), side, 3.5);   // gap is to the hut CENTRE, guard onTrack(c, 3): 2.4 never built
       }
 
       waterBand(0.06, 0.375, 1, 35, 260, 12, SEA, { id: "jeddah-red-sea" });
@@ -299,7 +299,7 @@
       tower(K(0.71), -1, 100, 18, 105, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: 10 });
 
       // Billboards — Corniche signage character
-      billboard(K(0.70), -1, 26, 10, 11, GREEN);
+      billboard(K(0.70), -1, 13, 10, 11, GREEN);   // 13 = midpoint of the 26 m strip to the parallel 0.275 leg; at 26 a panel end was on that road
       billboard(K(0.69), -1, 20, 9,  11, MAGENTA);
       billboard(K(0.73), -1, 24, 9,  10, WINTEAL);
 

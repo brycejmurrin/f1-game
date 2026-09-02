@@ -386,11 +386,11 @@ const NetLobby = (function () {
         _peers.set(who, p);
         // THE ROSTER IS RELAYED, not just the state. Guests have no connection
         // to each other, so unless the host passes this on, B never hears that
-        // C is here — and a peer with no slot for C silently drops every packet
-        // about it. It also makes their grids disagree, because separateGrid
-        // lays out the humans it knows about.
+        // C is here — a peer with no slot for C drops every packet about it,
+        // and separateGrid lays out only the humans it knows about. Each relay
+        // carries the sender's join `rank`, which is what settles a seat clash.
         if (role === "host") {
-          const tagged = Object.assign({}, p, { from: id });
+          const tagged = Object.assign({}, p, { from: id, rank: joinRank(id) });
           for (const [k, sess] of sessions) {
             if (k === id) continue;                 // not back to the sender
             try { sess.sendEvent(NetPlay.EV.HELLO, tagged); } catch (e) {}
@@ -398,9 +398,9 @@ const NetLobby = (function () {
           // ...and the new arrival needs everyone who was already here.
           for (const [k, prof] of _peers) {
             if (k === id || !prof) continue;
-            try { made.sendEvent(NetPlay.EV.HELLO, Object.assign({}, prof, { from: k })); } catch (e) {}
+            try { made.sendEvent(NetPlay.EV.HELLO, Object.assign({}, prof, { from: k, rank: joinRank(k) })); } catch (e) {}
           }
-        }
+        } else if (p.from == null && p.rank != null) myRank = p.rank;   // the host told us where we stand
         // Learning what they picked is the moment a clash becomes knowable.
         resolveSeatClash();
         renderRoom();
@@ -435,7 +435,7 @@ const NetLobby = (function () {
       // connection, so the live clock has to exist on this side too or it only
       // works after the race has already started — which is never.
       made.onEvent(NetPlay.EV.QLIVE, (d) => { if (d && sendersOwnDriver(d) && G.onPeerQualiLive) G.onPeerQualiLive(d); });
-      made.sendEvent(NetPlay.EV.HELLO, localProfile());
+      made.sendEvent(NetPlay.EV.HELLO, Object.assign(localProfile(), role === "host" ? { rank: joinRank(id) } : null));
       if (role === "host") publishSettings();
       openRoom();
     }
@@ -445,10 +445,8 @@ const NetLobby = (function () {
     // buttons open the game's real #select / #race-settings / #carsetup
     // screens, which is how custom teams, liveries and the parts budget come
     // along for free rather than as a second, poorer copy.
-    // peerId -> profile, and peerId -> ready. ONE entry today because there is
-    // one transport; events do not carry a sender yet, so everything the far
-    // side says is filed under PEER_ONE. When Phase C gives each session its own
-    // id, only that constant is replaced — every read below is already keyed.
+    // peerId -> profile, and peerId -> ready. A guest's one peer is the host,
+    // filed under PEER_ONE; a host files each guest under its minted "gN" id.
     const PEER_ONE = "peer";
     const _peers = new Map();
     const _ready = new Map();
@@ -559,29 +557,36 @@ const NetLobby = (function () {
       renderRoom();
     }
 
-    function peerSeats() {
+    function peerSeats(keep) {
       const out = [];
-      for (const p of _peers.values()) {
-        if (p && p.team) out.push({ team: p.team, driver: p.driver || 0 });
+      for (const [k, p] of _peers) {
+        if (p && p.team && (!keep || keep(k))) out.push({ team: p.team, driver: p.driver || 0 });
       }
       return out;
     }
 
-    function seatRank() { return role === "host" ? 0 : 1; }
+    // Rank 0 is the host; a guest's rank is its join order, which the host
+    // tells it in its HELLO (`rank`). Until told, a guest yields to everyone.
+    let myRank = Infinity;
+    const joinRank = (id) => Number(String(id).slice(1)) || 0;   // "gN" (mintGuestId) -> N
+    function seatRank() { return role === "host" ? 0 : myRank; }
 
     // The same rule applied to SOMEBODY ELSE, so an onlooker can work out which
-    // of two players holding one seat is the one about to move. On a guest the
-    // host is the only peer and outranks us; on the host every peer is a guest
-    // and we outrank all of them. Join order refines this when the room grows,
-    // and every screen must reach the same answer — which is why it is derived
-    // from the same rank rather than guessed at per screen.
+    // of two players holding one seat is the one about to move. Every screen
+    // must reach the same answer, so it is the host's join order everywhere:
+    // read off the minted id on the host, off the relay tag on a guest.
     function peerRank(id) {
-      if (role === "guest") return 0;         // our only peer is the host
-      return 1 + [...peerIds()].indexOf(id);  // guests, in join order
+      if (role === "host") return joinRank(id);
+      const p = _peers.get(id);
+      return p && p.from != null ? (p.rank || 0) : 0;   // untagged = the host
     }
 
+    // A guest yields to the host and to guests that joined EARLIER, never to
+    // a later one. Yielding to every peer regardless of rank let two guests on
+    // one seat both move, both re-announce, and both move again — a HELLO
+    // ping-pong that never settled (bug hunt 2026-09-02, scratch/seat-clash).
     function blockingSeats() {
-      return seatRank() === 0 ? [] : peerSeats();
+      return seatRank() === 0 ? [] : peerSeats((k) => peerRank(k) < seatRank());
     }
 
     const heldBy = (list, teamId, seat) =>
@@ -663,19 +668,13 @@ const NetLobby = (function () {
     }
 
     // A seat two players are BOTH holding, for the moment before it resolves.
-    //
     // Clashes are settled after the fact: the lower-ranked player learns what
-    // the other picked, moves, and re-announces. That is correct, but it takes
-    // a round trip — and for those ~100-200 ms every OTHER screen honestly
-    // draws two rows in the same car, which reads as the room glitching rather
-    // than as a rule being applied. The mover's own screen never shows it,
-    // because it resolves synchronously; only the onlookers see it.
-    //
-    // So an onlooker does not draw the duplicate at all. The player who will
-    // yield — by the same seatRank rule they will use themselves, so every
-    // screen picks the same one — is shown as still choosing, which is exactly
-    // what they are about to be doing. Nothing is invented: this is the state
-    // one round trip early, not a guess about it.
+    // the other picked, moves, and re-announces — one round trip during which
+    // every OTHER screen would honestly draw two rows in the same car (the
+    // mover's own screen resolves synchronously). So an onlooker does not draw
+    // the duplicate at all: the player who will yield — by the same rank rule
+    // they will use themselves, so every screen picks the same one — is shown
+    // as still choosing, which is the state one round trip early, not a guess.
     //
     // How long we will draw a clashing peer as "still choosing" before giving
     // up and showing the clash for real. A yield is one round trip; anything
@@ -1487,7 +1486,7 @@ const NetLobby = (function () {
       try { if (NetTransport.prefetchIce) NetTransport.prefetchIce(); } catch (e) {}
       const e = els();
       if (!e.screen) return false;
-      _peers.clear(); _ready.clear(); clashClear();
+      _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity;
       show("pick");
       // inviteAnother() hides these; a fresh open must always offer all four
       // routes again, or a player who once invited a second guest can never
@@ -1546,7 +1545,7 @@ const NetLobby = (function () {
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       teardown();
       role = null;
-      _peers.clear(); _ready.clear(); clashClear();
+      _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity;
       close();
     }
 

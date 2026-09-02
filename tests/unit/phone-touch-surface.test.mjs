@@ -227,12 +227,12 @@ test("in-race chrome and the blocker are anchored inside the safe area", () => {
 /* ── the tilt prompt and the input.js fixes it must keep ─────────────────── */
 
 const src = (p) => read(p).replace(/^const\b/gm, "var");
-function bootInput({ DeviceOrientationEvent, pads }) {
+function bootInput({ DeviceOrientationEvent, pads, console: con = console }) {
   const listeners = new Map();
   const on = (type, fn) => { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); };
   const off = (type, fn) => { const l = listeners.get(type); if (!l) return; const i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); };
   const sb = {
-    Math, console, Object, Array, Number, String, JSON, Map, Set, Promise, Date, Error, parseFloat, parseInt, isFinite,
+    Math, console: con, Object, Array, Number, String, JSON, Map, Set, Promise, Date, Error, parseFloat, parseInt, isFinite,
     performance: { now: () => 0 },
     document: {
       addEventListener() {}, removeEventListener() {}, getElementById: () => null, activeElement: null, readyState: "complete",
@@ -314,4 +314,47 @@ test("gamepaddisconnected re-reads the live list: a second pad keeps the pad pat
   live = [];
   h.fire("gamepaddisconnected", { gamepad: padB });
   assert.equal(h.Input.padConnected, false, "the last pad leaving disconnects");
+});
+
+test("requestGyro: only a RESOLVED refusal (or no sensor API) is hard-denied; a rejected call is transient", async () => {
+  // 2026-09-02 bug hunt. iOS rejects requestPermission() for lack of user
+  // activation — a gamepad A press synthesised as .click() on RACE! — with the
+  // same outward shape as the player tapping "Don't Allow". `gyroDenied`
+  // latches on both (the label's job); game.js's enableTilt() must persist
+  // steerMode="buttons" only on the hard flag, or a pad player who never saw a
+  // permission sheet ends up on BUTTONS for every later session.
+  let answer = () => Promise.reject(new Error("NotAllowedError: requires a user gesture"));
+  const h = bootInput({ DeviceOrientationEvent: { requestPermission: () => answer() }, pads: () => [] });
+  h.Input.setSteerMode("tilt");
+  assert.equal(await h.Input.requestGyro(), false);
+  assert.equal(h.Input.gyroDenied, true, "the label still reads (NO GYRO)");
+  assert.equal(h.Input.gyroHardDenied, false,
+    "a rejection outside a user gesture is not the player's answer — nothing to persist");
+  answer = () => Promise.resolve("denied");
+  assert.equal(await h.Input.requestGyro(), false);
+  assert.equal(h.Input.gyroHardDenied, true, "a resolved \"denied\" is the player's answer");
+  answer = () => Promise.resolve("granted");
+  assert.equal(await h.Input.requestGyro(), true);
+  assert.equal(h.Input.gyroHardDenied, false, "a grant clears the hard flag");
+  assert.equal(h.Input.gyroDenied, false);
+  const none = bootInput({ pads: () => [] });
+  assert.equal(await none.Input.requestGyro(), false);
+  assert.equal(none.Input.gyroHardDenied, true, "no DeviceOrientationEvent at all is as final as a denial");
+});
+
+test("a gamepad without the standard mapping is logged once, and never remapped", () => {
+  const warns = [];
+  const con = { log() {}, info() {}, debug() {}, error() {}, warn: (m) => warns.push(String(m)) };
+  const pad = { connected: true, id: "generic", mapping: "", axes: [0], buttons: new Array(17).fill(0) };
+  const h = bootInput({ DeviceOrientationEvent: {}, pads: () => [pad], console: con });
+  for (let i = 0; i < 200; i++) h.Input.poll();   // past the ~1 s recovery re-probe throttle
+  assert.equal(h.Input.padConnected, true, "precondition: the pad is read");
+  const hits = warns.filter((m) => /mapping/.test(m));
+  assert.equal(hits.length, 1, `one warning for a non-standard mapping, got ${hits.length}: ${warns.join(" | ")}`);
+  assert.match(hits[0], /"" is not "standard"/);
+  const std = { connected: true, id: "xbox", mapping: "standard", axes: [0], buttons: new Array(17).fill(0) };
+  const warns2 = [];
+  const h2 = bootInput({ DeviceOrientationEvent: {}, pads: () => [std], console: { ...con, warn: (m) => warns2.push(String(m)) } });
+  for (let i = 0; i < 200; i++) h2.Input.poll();
+  assert.equal(warns2.filter((m) => /mapping/.test(m)).length, 0, "a standard pad is silent");
 });

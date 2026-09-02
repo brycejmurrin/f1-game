@@ -550,3 +550,60 @@ test("a refused climb backs off: restore→verify-fail→revert must not cycle e
   assert.ok(changes >= 2, `the harness must see at least one cut and one climb (${changes})`);
   assert.ok(changes <= 12, `refused climbs must back off, not repeat: ${changes} scale changes in 180 s`);
 });
+
+test("a device slow from frame 1 is degraded despite the cooldowns boot arms", () => {
+  // 2026-09-02 bug hunt. setAutoRes/setUserTier each armed VERIFY_COOL (300
+  // frames), and boot calls both before any race tick — ui-scale.js
+  // applyResMode() on every load, gfx-quality.js applyLive() on every phone.
+  // tick() only counts a cooldown down in a race, so the first 300 race frames
+  // sat inside one. That is the ONLY window in which a fill-bound device that
+  // is slow from lights-out is catchable: the EMA (alpha 0.1) outruns the
+  // derived floor (0.02 upward) for roughly frames 10–95, then the floor
+  // catches up and a steady 33 ms reads as an external cap for good. A phone
+  // steady at 33 ms from frame 1 was therefore never degraded — not once, in
+  // any race. Frame time is COUPLED to the scale here (a cut really helps),
+  // so the first step is kept by the causal check, which is what separates
+  // this from the capped-clock case at the top of the file.
+  const { PerfGov, scale } = makeGov();
+  PerfGov.setAutoRes(true);    // ui-scale.js applyResMode(), RESOLUTION: AUTO
+  PerfGov.setUserTier(2);      // gfx-quality.js applyLive(), GRAPHICS: MEDIUM
+  PerfGov.sentinelArm(true);   // race start (js/game.js startRace)
+  feed(PerfGov, () => 33 * scale(), 180);
+  assert.ok(scale() < 1, `must have shed within 3 s of lights-out, scale is ${scale()}`);
+  feed(PerfGov, () => 33 * scale(), 1620);
+  assert.ok(scale() < 1, `the cut must hold for the race (it bought real frame time), scale is ${scale()}`);
+});
+
+test("a GRAPHICS change made in the menu does not spend the next race's opening window", () => {
+  // Same class as above, second door: between races `_live` is off, so a
+  // menu-time preset change must not arm a cooldown that only the next race
+  // can consume — and race start re-opens the window by resetting both
+  // averages, so a race that begins slow after a healthy one is still caught.
+  const { PerfGov, scale } = makeGov();
+  PerfGov.sentinelArm(true);
+  feed(PerfGov, () => 16.7, 900);            // a healthy first race
+  PerfGov.sentinelArm(false);                // cleanRace / quitToMenu
+  assert.equal(scale(), 1, "precondition: nothing shed in a healthy race");
+  PerfGov.setUserTier(1);                    // the player changes GRAPHICS in the menu
+  PerfGov.sentinelArm(true);                 // next race, slow from frame 1 on a heavier circuit
+  feed(PerfGov, () => 33 * scale(), 180);
+  assert.ok(scale() < 1, `the second race must shed within 3 s, scale is ${scale()}`);
+});
+
+test("a cooldown armed DURING a race still holds (only the pre-race arm is skipped)", () => {
+  // The fix must not disarm the in-race meaning of the cooldown: a preset
+  // change one evaluation into a race still buys the EMA time to settle
+  // before stage 2 judges against it (the "changing preset drops a pending
+  // TIER verify" contract above depends on that).
+  const { PerfGov, scale } = makeGov();
+  PerfGov.sentinelArm(true);
+  feed(PerfGov, () => 16.7, 10);             // live: the first race tick has happened
+  PerfGov.setUserTier(1);
+  feed(PerfGov, () => 33 * scale(), 180);
+  assert.equal(scale(), 1, "an in-race arm still cools the governor for VERIFY_COOL frames");
+  // Once it has run out the steady-33 window is gone (the floor caught up — the
+  // mechanism the first pin is about), so give the device the cheap moments a
+  // genuinely overloaded one has and check the governor is merely late, not off.
+  feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 33 * scale()), 600);
+  assert.ok(scale() < 1, "and it degrades once the in-race cooldown has run out");
+});

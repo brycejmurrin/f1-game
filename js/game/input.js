@@ -37,6 +37,7 @@ const Input = (function () {
   let padConnected = false;
   let _padReprobe = 0;      // frames since last disconnected-state re-probe
   let padPollWarned = false;
+  let padMapWarned = false;
   let padSteer = 0;            // -1..1 from left stick / d-pad
   let padThrottle = false;
   let padBrake = false;
@@ -78,6 +79,17 @@ const Input = (function () {
   let tiltSeen = false;       // we have actually received sensor data
   let gyroAttached = false;
   let gyroDenied = false;
+  // HARD refusal only: the sensor API is absent, or requestPermission()
+  // RESOLVED to something other than "granted" (the player said no in the
+  // iOS sheet). `gyroDenied` also latches on the TRANSIENT path — the promise
+  // REJECTING because the call had no user activation, which is what a
+  // gamepad A press synthesised as .click() on RACE! produces — and iOS gives
+  // both the same shape from the outside. game.js enableTilt() used to read
+  // `gyroDenied` there and persist steerMode="buttons" for a refusal that was
+  // never the player's; it should auto-switch (and persist) only on THIS flag,
+  // and leave the label's "(NO GYRO)" to `gyroDenied`, which keeps its
+  // meaning for every existing reader.
+  let gyroHardDenied = false;
   // single source of truth for how the player steers: "tilt" | "buttons" | "touch"
   let steerMode = "tilt";
   let tiltSmoothed = 0;       // One-Euro-filtered tilt angle (deg)
@@ -186,7 +198,7 @@ const Input = (function () {
   // Resolves true if tilt data can be expected.
   function requestGyro() {
     if (typeof DeviceOrientationEvent === "undefined") {
-      gyroDenied = true;
+      gyroDenied = gyroHardDenied = true;   // no sensor API at all: as final as a "denied"
       return Promise.resolve(false);
     }
     if (typeof DeviceOrientationEvent.requestPermission === "function") {
@@ -199,15 +211,15 @@ const Input = (function () {
               // user gesture, e.g. a gamepad A press synthesised as .click())
               // — and never came back, so a later prompt the player accepted
               // still labelled STEER "(NO GYRO)" while tilt was driving.
-              gyroDenied = false;
+              gyroDenied = gyroHardDenied = false;
               attachGyro();
               return true;
             }
-            gyroDenied = true;
+            gyroDenied = gyroHardDenied = true;   // resolved "denied": the player's answer
             return false;
           })
           .catch(() => {
-            gyroDenied = true;
+            gyroDenied = true;   // rejected: no user activation, ask again from a real tap
             return false;
           });
       } catch (err) {
@@ -761,6 +773,13 @@ const Input = (function () {
       return;
     }
     padConnected = true;
+    // The indices below are the W3C "standard" layout and nothing here remaps.
+    // A pad the browser could not map reports mapping "" and shuffles them —
+    // log it once so a "throttle is on LB" report has its cause on record.
+    if (!padMapWarned && pad.mapping !== "standard") {
+      padMapWarned = true;
+      Log.warn("input", "gamepad mapping \"" + pad.mapping + "\" is not \"standard\": button/axis indices may not match");
+    }
     let ax = (pad.axes && pad.axes.length) ? pad.axes[0] : 0;
     if (Math.abs(ax) < PAD_DEADZONE) ax = 0;
     else ax = Math.sign(ax) * (Math.abs(ax) - PAD_DEADZONE) / (1 - PAD_DEADZONE);
@@ -1346,6 +1365,10 @@ const Input = (function () {
     get padConnected() { return padConnected; },
     get gyroSeen() { return tiltSeen; },
     get gyroDenied() { return gyroDenied; },
+    get gyroHardDenied() { return gyroHardDenied; },
+    // Exported for js/game/photomode.js, whose hold buttons capture the pointer
+    // the same way and need the same "was the button taken away?" test.
+    holdTargetGone,
     // Read-only tilt-tuning state (for tests / diagnostics).
     get maxTilt() { return MAX_TILT; },
     get deadzone() { return DEADZONE; },

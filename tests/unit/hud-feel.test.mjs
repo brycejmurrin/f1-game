@@ -47,7 +47,7 @@ function ctx2d() {
   });
 }
 
-function boot() {
+function boot(opts = {}) {
   const dom = makeDom();
   const rawCreate = dom.document.createElement;
   dom.document.createElement = (tag) => {
@@ -59,7 +59,7 @@ function boot() {
     Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, WeakSet, RegExp, Date, parseFloat, parseInt, isFinite, Infinity,
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     document: dom.document,
-    innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1,
+    innerWidth: opts.innerWidth || 1280, innerHeight: 800, devicePixelRatio: 1,
     M4: { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) },
     GameTables: { IDLE_RPM, MAX_RPM },
     Ghost: { hasGhost: () => false, timeAt: () => null, at: () => null },
@@ -192,6 +192,20 @@ test("the race gap readout is smoothed: braking halves the divisor, the tenths d
   const other = { code: "LEC", prog: player.prog + 100, speed: 30, rank: 1 };
   G.ranked = [other, player]; tick();
   assert.equal(read(), 3.3, "a new rival starts from its own raw gap, not the old rival's history");
+});
+
+test("the gap widget's DROP rule follows the viewport in a time trial as well as a race", () => {
+  // Bug-hunt 2026-09-02 (UI, not landed in round 1): gapForm() ran only on the
+  // race branch, so data-gap-drop on <html> was whatever the LAST race left.
+  const narrow = boot({ innerWidth: 500 });          // ratio 500 <= GAP_DROP_AT.narrow (550)
+  narrow.G.timeTrial = true; narrow.tick();
+  assert.equal(narrow.dom.documentElement.dataset.gapDrop, "1",
+    "a time trial on a narrow phone drops the widget below .hud-top like a race does");
+  const wide = boot({ innerWidth: 1280 });
+  wide.dom.documentElement.dataset.gapDrop = "1";    // inherited from a narrow race
+  wide.G.timeTrial = true; wide.tick();
+  assert.equal("gapDrop" in wide.dom.documentElement.dataset, false,
+    "and a wide time trial clears a drop the previous session left behind");
 });
 
 test("the ahead gap slot keeps one line so the behind line never jumps when the leader has nobody ahead", () => {

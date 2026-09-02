@@ -105,14 +105,34 @@
         }
       });
 
-      // 3. Far backdrop dunes — distant horizon, rooted at pyMin
+      // 3. Far backdrop dunes — distant horizon, rooted at pyMin.
+      // peak() rejects a foot whose corners (w * 1.061 + 2.6) reach ANY leg, and
+      // this lap is compact: 160-260 m out, some other leg is usually within a
+      // 110-180 m dune's reach, so 35 of the 66 sites built nothing. Each site
+      // now probes with peak()'s own guard (plus 1 m) and takes the first fit:
+      // inland (left) the anchor walks OUT 70/140 m before the foot shrinks;
+      // seaward (right, 0.28-0.80 — the North Sea band stands 235-385 m out)
+      // it may only pull IN, then shrink in 0.8 steps down to a 40 m hillock.
+      // Height follows sqrt(w / w0) so a shrunken dune keeps a plausible slope.
       every(130, (k) => {
+        const frac = k / n;
         for (const side of [-1, 1]) {
-          const dist = 160 + hash(k * 42 + side) * 100;  // 160–260 m
-          const a = anchor(k, side, dist);
-          if (onTrack(a.c[0], a.c[2], 16)) continue;
-          peak(a.c[0], a.c[2], pyMin, 110 + hash(k * 43 + side) * 70,
-               10 + hash(k * 44 + side) * 10, sand);
+          const dist0 = 160 + hash(k * 42 + side) * 100;  // 160–260 m
+          const w0 = 110 + hash(k * 43 + side) * 70;
+          const h0 = 10 + hash(k * 44 + side) * 10;
+          const seaward = side === 1 && frac >= 0.28 && frac <= 0.80;
+          const steps = side < 0 ? [0, 70, 140] : (seaward ? [0, -40, -70] : [0, -40, -70, 70, 140]);
+          let placed = false;
+          for (const dd of steps) {
+            const a = anchor(k, side, dist0 + dd);
+            for (let w = w0; w >= 40; w *= 0.8) {
+              if (onTrack(a.c[0], a.c[2], w * 1.061 + 3.6)) continue;
+              peak(a.c[0], a.c[2], pyMin, w, h0 * Math.sqrt(w / w0), sand);
+              placed = true;
+              break;
+            }
+            if (placed) break;
+          }
         }
       });
 

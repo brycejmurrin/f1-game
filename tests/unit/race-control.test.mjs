@@ -100,6 +100,25 @@ test("the finish policy closes completed human races and bounded edge cases", ()
   ], 1081, 3), 0.1, "the hard cap still prevents a permanently hung race");
 });
 
+test("a finisher's outstanding time penalty holds the countdown until the field has had that long to cross", () => {
+  // Bug-hunt 2026-09-02 (race, not landed in round 1): endRace sorts finishers
+  // by finishT + penalty, but the countdown ran from the player's crossing —
+  // a rival 3 s back against a +5 s penalty was filed as "still running".
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const you = { human: true, finished: true, retired: false, finishT: 100, penalty: 5 };
+  const rival = { human: false, finished: false, retired: false };
+  assert.equal(finishDelay([you, rival], 101, 3), 0, "the +5 s is served on the clock: no countdown at 101 s");
+  assert.equal(finishDelay([you, rival], 105, 3), 2.2, "…and it starts once the corrected time has passed");
+  assert.equal(finishDelay([you, { ...rival, retired: true }], 101, 3), 2.2, "nobody left who could cross: no hold");
+  assert.equal(finishDelay([{ ...you, penalty: 0 }, rival], 101, 3), 2.2, "no penalty, no hold (the 2.2 s policy is unchanged)");
+  const ai = { human: false, finished: true, retired: false, finishT: 100, penalty: 5 };
+  assert.equal(finishDelay([ai, rival], 101, 3), 0, "the AI-only harness holds the same way");
+  assert.equal(finishDelay([ai, rival], 106, 3), 3.5);
+  const late = { human: false, finished: true, retired: false, finishT: 1080, penalty: 5 };
+  assert.equal(finishDelay([{ human: true, finished: false, retired: false }, late], 1081, 3), 0.1,
+    "the hard cap still wins over a hold");
+});
+
 test("green with an empty track, and the level->label table", () => {
   const rc = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx());
   run(rc, 1);

@@ -29,6 +29,19 @@ let _gfx = null;
 // STANDARD-tier sit at scale 1 and never enter these branches, so their
 // (already smooth) behaviour is unchanged.
 let _frameEMA = 16.7, _govT = 0, _govCool = 0, _autoRes = true, _downHold = 0;
+// A COOLDOWN ONLY MEANS SOMETHING WHILE FRAMES ARE BEING MEASURED. Boot arms
+// two of them before the first race tick — ui-scale.js applyResMode() ->
+// setAutoRes(true) on every load, gfx-quality.js applyLive() -> setUserTier(2)
+// on every phone — and tick() only counts them down in a race, so the first
+// 300 race frames were spent inside a cooldown that protected nothing. That
+// window is the ONLY one in which a device slow from frame 1 is catchable:
+// `_frameEMA` (alpha 0.1) outruns `_floorMs` (0.02 upward) over roughly frames
+// 10–95, then the floor arrives at the same number and the device reads as
+// externally capped for the rest of the session. A phone steady at 33 ms from
+// lights-out was never degraded at all. So: arm a cooldown only while live
+// (menu-time changes are settled by the race-start reset in sentinelArm
+// anyway), and re-open the window at every race start.
+let _live = false;
 const UP_BACKOFF_MIN = 600, UP_BACKOFF_MAX = 7200;   // frames: 10 s … 2 min
 let _upBackoff = UP_BACKOFF_MIN;   // wait before the next restore attempt after a refused climb
 // The scale lever is INEFFECTIVE on this device right now — set when a
@@ -212,6 +225,11 @@ function init(gfx) {
 function _floorFromStrikes(n) { return n >= 2 ? 4 : (n >= 1 ? 2 : 0); }
 
 function sentinelArm(on) {
+  // Race start / return to a live session: re-open the boot window described
+  // at `_live` — both averages restart from their shared 16.7 so the EMA can
+  // outrun the floor once more. Desktop too (above the mobile-only guard):
+  // the governor runs everywhere, only the sentinel is mobile.
+  if (on) _frameEMA = _floorMs = 16.7; else _live = false;
   if (!_gfx || !_gfx.isMobile) return;
   try { if (on) localStorage.setItem(SENT_ACTIVE, "1"); else localStorage.removeItem(SENT_ACTIVE); } catch (_) {}
 }
@@ -260,6 +278,7 @@ function tick(dtMs) {
   // the data), and `_autoRes` is consulted only at the two places that actually
   // move the scale.
   // Ignore huge spikes (tab resume, GC): they'd yank the scale.
+  _live = true;
   if (dtMs < 100) {
     _frameEMA += (dtMs - _frameEMA) * 0.1;
     _floorMs += (dtMs - _floorMs) * (dtMs < _floorMs ? FLOOR_DOWN_A : FLOOR_UP_A);
@@ -459,7 +478,7 @@ return {
     // actually lives, in the degrade branch, which skips rungs the floor
     // already covers.
     if (_pendingVerify && _pendingVerify.kind === "tier") _pendingVerify = null;
-    _govCool = Math.max(_govCool, VERIFY_COOL);
+    if (_live) _govCool = Math.max(_govCool, VERIFY_COOL);   // see _live: never before the first race tick
   },
   strikes: () => _crashStrikes,
   fpsEMA: () => _frameEMA,
@@ -475,7 +494,7 @@ return {
   setAutoRes: (on) => {
     _autoRes = !!on;
     if (_pendingVerify && _pendingVerify.kind === "scale") _pendingVerify = null;
-    _govCool = Math.max(_govCool, VERIFY_COOL);
+    if (_live) _govCool = Math.max(_govCool, VERIFY_COOL);   // see _live: never before the first race tick
   },
 };
 })();

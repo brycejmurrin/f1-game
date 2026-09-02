@@ -11,7 +11,7 @@
         bush, palm, acacia, terrace, grandstand, grandstandEx, building, cityFront, tower, billboard, overheadSpan, marshalPost,
         mountain, backdrop, fence, wall, guardrail, tyreWall,
         floodMast: apiFloodMast, floodMastRing, ledFacadeBands, cameraTower, broadcastCompound,
-        modelGroup, groundPatch, bleacher, onTrack,
+        modelGroup, groundPatch, bleacher, onTrack, every,
         circuitKit } = api;
       const K = (s) => Math.round(s * n) % n;
 
@@ -256,16 +256,23 @@
       floodMast(K(0.16), 1, 34, 39);
 
       // Perimeter ring (below) owns lap density; keep a few corner heroes only.
-      floodMast(K(0.20), -1, 30, 40);
+      // The left-hand hero sits at 0.195/18 m, not 0.20/30 m: the lap folds back
+      // on itself at 0.20-0.21, so 30 m inside that fold is on the tarmac of the
+      // next leg (rejBox dropped it every build).
+      floodMast(K(0.195), -1, 18, 40);
       floodMast(K(0.20),  1, 30, 40);
 
+      // Per-wedge setbacks: the 0.11-0.14 and 0.37 legs run 80-140 m to the left
+      // of this stretch, so a uniform 64 + 14 i put wedges 0, 1 and 4 on those
+      // legs (mountain()'s fit loop cannot shrink a foot that is over the road).
+      const WEDGE_GAP = [85, 130, 92, 106, 90, 134];
       for (let i = 0; i < 6; i++) {
         const k = (K(0.27) + i * Math.round(n * 0.015)) % n;
-        duneWedge(k, -1, 64 + i * 14, 40 + hash(k) * 28, 3.5 + hash(k * 5) * 3);
+        duneWedge(k, -1, WEDGE_GAP[i], 40 + hash(k) * 28, 3.5 + hash(k * 5) * 3);
       }
 
       for (const [s, gap, w, h] of [
-        [0.095, 82, 54, 4.2],
+        [0.095, 124, 54, 4.2],   // 82 put the foot on the 0.10 leg (100 m to the right); 31 m clear at 124
         [0.115, 104, 68, 5.0],
         [0.138, 126, 76, 5.8],
       ]) {
@@ -358,8 +365,13 @@
       building(K(0.55), -1, 42, 14, 8, 20,
         { kind: "hall", wall: [0.68, 0.62, 0.50], window: WIN_WARM, lit: true, floor: 2 });
 
-      fence(0.74, 0.88, 1, 8, 3.2, [0.70, 0.72, 0.76]);
-      tyreWall(0.74, 0.88, 1, 8, TYRE_CAP);
+      // Split around the 0.832 hairpin: on its inside the 8 m face is on the
+      // fold's tarmac, so the run was suppressed there while the driving limit
+      // was still recorded (a phantom wall the player could not see).
+      fence(0.74, 0.826, 1, 8, 3.2, [0.70, 0.72, 0.76]);
+      tyreWall(0.74, 0.826, 1, 8, TYRE_CAP);
+      fence(0.838, 0.88, 1, 8, 3.2, [0.70, 0.72, 0.76]);
+      tyreWall(0.838, 0.88, 1, 8, TYRE_CAP);
       guardrail(0.73, 0.90, -1, 8, [0.80, 0.80, 0.82]);
       floodMast(K(0.77),  1, 32, 40);
       floodMast(K(0.84),  1, 32, 39);
@@ -418,7 +430,25 @@
       billboard(K(0.99), 1, 11, 13, 4, BILLBOARD_LITE);
       billboard(K(0.02), -1, 11, 12, 4, [0.10, 0.55, 0.30]);
 
-      if (typeof floodMastRing === "function") {
+      if (typeof every === "function") {
+        // The engine's floodMastRing(55, {dist: 30}) hand-rolled from the same
+        // every() pitch so three sites can move: at 0.114 R, 0.208 L and the
+        // 0.832 hairpin R the 30 m anchor is on the fold of the corner (2-5 m
+        // INTO the next leg) and rejBox dropped the mast every build. The first
+        // two pull in to 12/16 m (8-10 m clear); the hairpin inside has no room
+        // at any setback, so that mast stands at 0.822 / 20 m instead.
+        const RING = [[1, 0.110, 0.118, 12], [-1, 0.204, 0.212, 16], [1, 0.828, 0.836, 20, 0.822]];
+        every(55, (k) => {
+          const f = k / n;
+          for (const side of [-1, 1]) {
+            let dist = 30, kk = k;
+            for (const [rs, lo, hi, rd, rk] of RING) {
+              if (side === rs && f >= lo && f <= hi) { dist = rd; if (rk != null) kk = K(rk); }
+            }
+            floodMast(kk, side, dist, 39);
+          }
+        });
+      } else if (typeof floodMastRing === "function") {
         floodMastRing(55, { dist: 30, h: 39, cool: true, pool: true });
       } else {
         for (let k = 0; k < n; k += Math.max(1, Math.round(n / 18))) {
@@ -463,7 +493,7 @@
 
       for (const [s, side, dist, wBase, hBase] of [
         [0.20, -1, 120, 86, 10],   // T3 infield dune ridge
-        [0.48,  1, 155, 96, 12],   // desert section right-side ridge
+        [0.48,  1, 270, 96, 12],   // desert section right-side ridge (0.42 leg is 200 m out; 155 stood on it)
         [0.70, -1, 192, 90, 11],   // back straight left-side ridge
       ]) {
         const k = K(s);
@@ -475,9 +505,9 @@
       }
       // Additional dune ridges on the opposite side to balance the horizon
       for (const [s, side, dist] of [
-        [0.35,  1, 128],
+        [0.35,  1, 196],   // 128 landed on the 0.55 leg (3 m clear); 60 m clear here
         [0.60, -1, 148],
-        [0.88,  1, 118],
+        [0.90,  1, 96],    // was 0.88/118: on the 0.20 leg; 0.90 side has 60 m at 120
       ]) {
         const k = K(s);
         const a = anchor(k, side, dist + 24);

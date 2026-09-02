@@ -242,7 +242,7 @@ test("career.css: the lines the fixes extend must wrap, not ellipsize", () => {
 
 /* ── SEASON SETUP (#season-setup): SeasonUI in a VM ─────────────────────── */
 
-function loadSeasonUi() {
+function loadSeasonUi(trackIds = ["a", "b"]) {
   const dom = makeDom({ tagFor: (id) => (/^(ss-back|ss-apply|mb-season)$/.test(id) ? "button" : "div") });
   const G = {
     $: (id) => dom.byId(id), els: {}, soundOn: false, season: null,
@@ -251,7 +251,7 @@ function loadSeasonUi() {
   };
   const sb = sandbox(dom, {
     SeasonCal: {
-      config: () => ({ trackIds: ["a", "b"], quali: true, sprint: true, laps: 57, points: "modern" }),
+      config: () => ({ trackIds: trackIds.slice(), quali: true, sprint: true, laps: 57, points: "modern" }),
       PRESETS: [{ id: "full", label: "FULL" }], presetIds: () => ["a"], shuffled: (x) => x,
       LAP_OPTS: [3, 5, 10, 25, 57], SPRINT_POINTS: [8, 7, 6, 5, 4, 3, 2, 1],
       hasProgress: () => false, rounds: () => 2, restart: () => ({}), setConfig() {}, trackIndex: () => 0,
@@ -271,6 +271,23 @@ test("season setup: RACE DISTANCE chips carry a unit and none claims FULL", () =
   // FULL is the circuit's own distance on the race-settings sibling (78 at
   // Monaco, 44 at Spa); this 57 is a flat 57 laps, so it must not say FULL.
   assert.ok(!chips.some((c) => /FULL/.test(c)), chips.join(" | "));
+});
+
+test("season setup: ↑ / ↓ / ✕ keep keyboard focus on the row they moved or removed", () => {
+  // Bug-hunt 2026-09-02 (UI, not landed in round 1): every calendar press
+  // rebuilt #ss-cal, the pressed button was gone and focus fell to <body>.
+  const { dom, ui, $ } = loadSeasonUi(["a", "b", "c"]);
+  ui.open();
+  const btn = (label) => $("ss-cal").querySelectorAll("button").findLast((b) => b.getAttribute("aria-label") === label);
+  const focused = () => dom.document.activeElement && dom.document.activeElement.getAttribute("aria-label");
+  assert.equal(dom.document.activeElement, null, "precondition: nothing focused");
+  btn("Move up — C").click();                       // C: R3 -> R2
+  assert.equal(focused(), "Move up — C", "the same control, on the row the circuit moved to");
+  btn("Move up — C").click();                       // C: R2 -> R1, where ↑ is disabled
+  assert.equal(focused(), "Move down — C", "at the top ↑ is disabled: the nearest enabled control of that row");
+  btn("Remove — C").click();                        // [a, b]: the neighbour takes R1
+  assert.equal(focused(), "Remove — A", "after a remove, the row that took its place");
+  assert.ok(dom.document.activeElement.disabled === false, "never a disabled button");
 });
 
 test("season setup: the sprint note names the unit of the points it quotes", () => {

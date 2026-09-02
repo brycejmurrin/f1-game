@@ -7,13 +7,23 @@ const RaceControl = (() => {
   // hard cap remains the bounded escape hatch for an unfinished/stale human.
   // AI-only harnesses retain the old "shortly after the winner" behaviour.
   function finishDelay(cars, raceT, lapsTarget) {
-    let anyHuman = false, allHumansDone = true, anyFinished = false;
+    let anyHuman = false, allHumansDone = true, anyFinished = false, running = false, pend = 0;
     for (const c of cars || []) {
-      if (c && c.finished) anyFinished = true;
-      if (!c || !c.human) continue;
+      if (!c) continue;
+      if (c.finished) { anyFinished = true; if (!c.retired) pend = Math.max(pend, (c.finishT || 0) + (c.penalty || 0)); }
+      else if (!c.retired) running = true;
+      if (!c.human) continue;
       anyHuman = true;
       if (!c.finished && !c.retired) allHumansDone = false;
     }
+    // A time penalty is served on the CLOCK (classification sorts finishers by
+    // finishT + penalty, game.js endRace), so a finisher carrying one is not
+    // settled until every car still on track has had that long to cross.
+    // Without this the 2.2 s countdown ran from the player's crossing, and a
+    // rival 3 s back with a +5 s penalty against it was filed as "still
+    // running" — behind, on a result it had won. Bounded by the penalty
+    // itself; the hard cap below still wins.
+    if (running && raceT < pend && raceT <= 360 * lapsTarget) return 0;
     if (anyHuman && allHumansDone) return 2.2;
     if (!anyHuman && anyFinished) return 3.5;
     if (raceT > 360 * lapsTarget) return 0.1;

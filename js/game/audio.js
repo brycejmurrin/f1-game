@@ -575,6 +575,13 @@ const GameAudio = (function () {
   const LOW_GEAR_RATE = [0.6, 0.72, 0.84];
   function setEngine(rev01, boost01, offroad, speed01, gear, physics) {
     if (!engineOn || !sfxOk()) return;
+    // UPGRADE TO THE SAMPLES WHEN THEY LAND. `usingSamples` is decided once,
+    // in startEngine(); a race whose lights went out before f1_engine.mp3 had
+    // decoded (cold cache on a phone) ran its whole distance on the synth
+    // voice. Restart once: stopEngine() fades the synth chain out over 0.35 s
+    // and startEngine() re-reads samplesReady, so the swap is one crossfade
+    // at the moment the samples arrive — never a per-frame flip.
+    if (!usingSamples && samplesReady && engBuf && accBuf) { stopEngine(); startEngine(); }
     const rev = clamp01(rev01 || 0);
     const s = clamp01(typeof speed01 === "number" ? speed01 : (rev01 || 0));
     const b = clamp01(typeof boost01 === "number" ? boost01 : (boost01 ? 1 : 0));

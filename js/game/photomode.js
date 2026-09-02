@@ -188,8 +188,14 @@ function wirePhotoHold(id, on, off) {
   });
   el.addEventListener("pointerup", release);
   el.addEventListener("pointercancel", release);
-  el.addEventListener("pointerleave", release);
-  el.addEventListener("lostpointercapture", release);   // see wirePhotoStick
+  /* No pointerleave: with the pointer captured it is a BOUNDARY event, fired
+     the moment setPointerCapture retargets (the trap holdSetupCtl in js/game.js
+     documents), so the button let go on the same press that took it. And a
+     lostpointercapture is a teardown only when the button was taken away —
+     WebKit keeps one capture slot, so a second finger on the other hold
+     button steals it with this thumb still down (js/game/input.js
+     holdTargetGone / lostCaptureShouldRelease). */
+  el.addEventListener("lostpointercapture", (e) => { if (Input.holdTargetGone(el)) release(e); });   // see wirePhotoStick
 }
 wirePhotoStick("pc-move", photoMove);
 wirePhotoStick("pc-look", photoLook);

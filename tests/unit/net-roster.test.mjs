@@ -10,6 +10,11 @@
  *   2. a guest HANDS BACK the named rival on LEFT (AI again, no stale DNF plan);
  *   3. a local stop() SAYS BYE before the sockets close (the handler existed
  *      for a year with no sender).
+ * Round 2 of the same hunt added two more (js/net/netplay.js):
+ *   4. a remote's `finished` is stamped from the OWNER's LAP `fin`, never from
+ *      an extrapolated lap wrap after a lost packet;
+ *   5. a guest whose ARMED lands after the moment was named is told START
+ *      again (its first copy was pumped into the lobby, which has no handler).
  *
  * Run: node --test tests/unit/net-roster.test.mjs   (npm run test:net-unit)
  */
@@ -29,15 +34,18 @@ const NetSession = eval(src("js/net/session.js") + ";NetSession");
 globalThis.NetSnapshot = NetSnapshot;
 globalThis.NetSession = NetSession;
 const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
+// poseRemote samples the track for yawVis; a straight is enough here.
+globalThis.Tracks = { sample: (_t, _s, out) => { out.t[0] = 0; out.t[2] = 1; return out; } };
 
 function fakeSession() {
   const handlers = new Map();
   const sent = [];
-  let onClose = null;
+  let onClose = null, onStateFn = null;
   return {
     sent, closed: 0,
     clearHandlers() { handlers.clear(); return this; },
-    onState() { return this; },
+    onState(fn) { onStateFn = fn; return this; },
+    deliverState(bytes) { if (onStateFn) onStateFn(bytes); },
     onClose(fn) { onClose = fn; return this; },
     onEvent(type, fn) {
       if (!handlers.has(type)) handlers.set(type, []);
@@ -71,6 +79,8 @@ function stubG(n) {
   return {
     cars, player: cars[0], track: { total: 5000, n: 500 },
     netStart: null, netNow: null, announced: [],
+    lapsTarget: 3, raceT: 400,
+    worldFromTrack: (s, x) => ({ x: s, z: x }),
     wireId: (c) => c.idx,
     setCarRole: (c, human, local) => { c.human = human; c.local = local; },
     announce: (m) => { /* recorded */ },
@@ -144,4 +154,91 @@ test("a local stop() says BYE before closing the sessions", () => {
   net2.start({ role: "guest", session: s2 });
   net2.stop("transport");
   assert.equal(s2.sent.some((m) => m.t === "bye"), false);
+});
+
+// ── round 2: the finish is the OWNER's crossing, not a pose ─────────────────
+test("host: the owner's LAP `fin` becomes the rival's finishT, sender-bound", () => {
+  const G = stubG(3);
+  const net = NetPlay.create(G);
+  const sA = fakeSession(), sB = fakeSession();
+  net.start({ role: "host", session: sA, sessions: [{ id: "a", session: sA }, { id: "b", session: sB }] });
+  const wires = net.status().remotes.map((x) => x.wire);
+  const carA = G.cars.find((c) => c.idx === wires[0]);
+  const carB = G.cars.find((c) => c.idx === wires[1]);
+
+  // B claims A's finishing lap: not B's car, so it is dropped outright.
+  sB.deliver("lap", { lap: 4, time: 88.1, code: carA.code, fin: 250.25 });
+  assert.equal(carA.finished, undefined, "a LAP is only ever the sender's own");
+  assert.equal(carB.finished, undefined);
+
+  sA.deliver("lap", { lap: 4, time: 88.1, code: carA.code, fin: 250.25 });
+  assert.equal(carA.finished, true, "the owner's crossing finishes the car");
+  assert.equal(carA.finishT, 250.25, "…at the OWNER's raceT, not this screen's");
+  // A lap that does not end the race carries no fin and finishes nothing.
+  sB.deliver("lap", { lap: 2, time: 90, code: carB.code });
+  assert.equal(carB.finished, undefined);
+});
+
+test("guest: the host's LAP `fin` lands on the host's car, found by code", () => {
+  const G = stubG(2);
+  const net = NetPlay.create(G);
+  const s = fakeSession();
+  net.start({ role: "guest", session: s });
+  const rival = G.cars[1];
+  s.deliver("lap", { lap: 4, time: 88.1, code: rival.code, fin: 251.5 });
+  assert.equal(rival.finished, true);
+  assert.equal(rival.finishT, 251.5);
+});
+
+test("a remote is never marked finished from an EXTRAPOLATED lap wrap", () => {
+  const G = stubG(2);
+  const net = NetPlay.create(G);
+  const s = fakeSession();
+  net.start({ role: "guest", session: s, interpDelayMs: 100 });
+  const rival = G.cars[1];
+  const pkt = (t, car) => NetSnapshot.encodeSnapshot(t, [{ id: rival.idx, car }]);
+  // Last real packet: 5 m short of the line on the final lap, then loss.
+  s.deliverState(pkt(1000, { s: 4995, x: 0, head: 0, speed: 80, lap: 3 }));
+  net.tick(1350);                       // target 1250 > newest.t → advance() wraps s and bumps lap
+  assert.equal(rival.lap, 4, "the extrapolated pose does cross the line (scratch/interp-wrap)");
+  assert.notEqual(rival.finished, true, "…but a guessed crossing must not finish the car");
+  // The real packets: the car braked and was still on lap 3.
+  s.deliverState(pkt(1300, { s: 4999, x: 0, head: 0, speed: 20, lap: 3 }));
+  s.deliverState(pkt(1400, { s: 4999.5, x: 0, head: 0, speed: 10, lap: 3 }));
+  net.tick(1450);
+  assert.equal(rival.lap, 3);
+  assert.notEqual(rival.finished, true);
+  // A real crossing, bracketed by two packets, still stamps the fallback.
+  s.deliverState(pkt(1500, { s: 10, x: 0, head: 0, speed: 20, lap: 4 }));
+  s.deliverState(pkt(1600, { s: 18, x: 0, head: 0, speed: 20, lap: 4 }));
+  net.tick(1650);
+  assert.equal(rival.finished, true, "a non-extrapolated sample past the target finishes it");
+  assert.equal(rival.finishT, G.raceT);
+});
+
+// ── round 2: a late ARMED still gets the moment ─────────────────────────────
+test("host: an ARMED that lands after the moment was named is answered with START", () => {
+  const G = stubG(3);
+  const net = NetPlay.create(G);
+  const sA = fakeSession(), sB = fakeSession();
+  net.start({ role: "host", session: sA, sessions: [{ id: "a", session: sA }, { id: "b", session: sB }] });
+  G.netNow = 1000;
+  assert.equal(net.hostStart(), true);
+  sA.deliver("armed", {});
+  const starts = (s) => s.sent.filter((m) => m.t === "start");
+  assert.equal(starts(sA).length, 0, "b has not armed: nothing is named yet");
+  net.tick(1000 + 20000 + 1);           // ARM_WAIT expires: the moment is named without b
+  assert.equal(starts(sA).length, 1);
+  assert.equal(starts(sB).length, 1, "b was told too — but it was still inside startRace()");
+  sB.deliver("armed", {});              // b's netplay is up now, its lobby session ate the first START
+  assert.equal(starts(sB).length, 2, "the named moment is told again to the late armer");
+  assert.equal(starts(sB)[1].d.at, starts(sB)[0].d.at, "the SAME moment, not a new one");
+  assert.equal(starts(sA).length, 1, "nobody else hears it twice");
+  // Before the moment is named a late ARMED is just an ARMED.
+  const G2 = stubG(2), net2 = NetPlay.create(G2), s2 = fakeSession();
+  net2.start({ role: "host", session: s2 });
+  G2.netNow = 1000;
+  net2.hostStart();
+  s2.deliver("armed", {});
+  assert.equal(starts(s2).length, 1, "all armed: named once, sent once");
 });

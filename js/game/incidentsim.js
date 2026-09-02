@@ -341,11 +341,18 @@ const IncidentSim = (function () {
   // whole lap late for a final-corner shunt. Count it here. Timing and PB
   // stay invalidated (incidentInvalidLap is set at promote); classification
   // must not be. Uses the same wrapped-ds crossing test as updateCar's.
+  // The player's sector clock mirrors updateCar's crossing too: left at S3,
+  // the new lap's first split was timed from a stale sectorStartT. The flag
+  // is NOT cleared here or at handback, on purpose — updateCar early-outs an
+  // owned car before `lapTime += dt`, so a lap begun under Rapier has a short
+  // clock and can never be a PB/ghost; updateCar's own crossing clears it
+  // once the player has driven a whole lap.
   function _lapCross(c, ds, newS, L) {
     if (!(ds > 0) || !(c.s > L * 0.5 && newS < L * 0.5)) return;
     c.lap++;
     c._lapTimeAtLine = c.lapTime;
     c.lapTime = 0;
+    if (c.isPlayer) { G.sectorIdx = 0; G.sectorStartT = 0; }
     const target = G.lapsTarget;
     if (fin(target) && target > 0 && c.lap > target) {
       c.finished = true;

@@ -66,7 +66,9 @@ const ALLOWED = [
   {
     file: "js/game.js",
     expr: "c.speed > 1",
-    code: "const gapAhead = ahead && c.speed > 1 ? (ahead.prog - c.prog) / c.speed : Infinity;",
+    code: "gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;",
+    // Re-keyed 2026-09-02: `ahead` is now the car ahead ON THE ROAD (a scan
+    // above this line), so the metres are already in gapAhead; the guard is the same.
     why: "divide-by-zero guard — the same expression divides by c.speed",
   },
   {
@@ -98,10 +100,12 @@ const ALLOWED = [
   },
   {
     file: "js/game.js", expr: "c.speed < 0",
-    code: "const vx = (c.speed < 0 ? -1 : 1) * Math.max(Math.abs(c.speed), 4);",
+    code: "const vx = Math.max(Math.abs(c.speed), 4), dirS = c.speed < 0 ? -1 : 1;",
     // The `, 4)` on the same line is the well-conditioning floor the slip angle
     // needs (slip is undefined at zero speed); the comparison itself is a sign.
-    why: "sign test — the direction of the body-axis velocity feeding the slip angle",
+    // Re-keyed 2026-09-02: slip is measured against |vx| in both directions now
+    // (the reverse-crawl plateau bug); the sign only flips the steer term.
+    why: "sign test — the direction of travel, which flips the steer term of the front slip angle",
   },
   {
     file: "js/game.js", expr: "c.speed > 0",
@@ -124,7 +128,9 @@ const ALLOWED = [
   // of these gates exists to sit inside or just outside that crawl.
   {
     file: "js/game.js", expr: "c.speed < 3",
-    code: "const stoppedOnTrack = onThrottle && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);",
+    code: "const stoppedOnTrack = gasPressed && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);",
+    // Re-keyed 2026-09-02: gated on the DRIVER's pedal (gasPressed), not the
+    // touch auto-throttle; the 3 m/s threshold and its reason are unchanged.
     why: "stopped detector, on the absolute scale REVERSE_MAX (-5 m/s) sets",
   },
   {

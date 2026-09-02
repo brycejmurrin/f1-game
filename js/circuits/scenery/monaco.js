@@ -263,7 +263,7 @@
         const k = K(0.20 + i * 0.0035);
         place(k, -1, 3, [3, 1.2, 4], [0.55, 0.55, 0.58]);
         prop(k, -1, 3, [2, 0.5, 2], [0.25, 0.45, 0.22]);
-        palm(k, i % 2 ? 1 : -1, 4, 9, [0.25, 0.45, 0.22]);
+        palm(k, i % 2 ? 1 : -1, 7, 9, [0.25, 0.45, 0.22]);   // dist 7: palm() guards onTrack(c, 4), so dist 4 sat exactly on the margin and every odd (side 1) palm was dropped
       }
       {
         const k = K(0.215), a = anchor(k, -1, 14);
@@ -507,7 +507,7 @@
 
       pastelStreetRow(0.595, 0.655, 1, 4, {
         palette: [CREAM, DUSTY, OCHRE, STONE],
-        minH: 12, maxH: 20, depth: 8, step: 20,
+        minH: 12, maxH: 20, depth: 17, step: 20,   // depth = ALONG-track frontage (building() d); 8 m on a 20 m step built slivers
         window: WIN, windowCol: WINLIT, lit: true,
       });
       broadcastCompound(K(0.615), 1, 16, { vans: 3, dishes: 2, mastH: 12 });
@@ -620,7 +620,7 @@
       {
         pastelStreetRow(0.72, 0.82, 1, 3, {
           palette: [CREAM, TERRA, OCHRE, DUSTY],
-          minH: 12, maxH: 20, depth: 9, step: 55,
+          minH: 12, maxH: 20, depth: 47, step: 55,   // depth = ALONG-track frontage, ~0.85 x step: 9 m on a 55 m step built sideways slivers
           window: WIN, windowCol: WINLIT, lit: true,
         });
       }
@@ -672,7 +672,7 @@
       });
 
       cityFront(0.87, 0.95, 1, 9, {
-        minH: 10, maxH: 16, depth: 7, step: 18,
+        minH: 10, maxH: 16, depth: 15, step: 18,   // depth = ALONG-track frontage; 7 m on an 18 m step built 7 m slivers 11 m apart
         palette: [CREAM, STONE, DUSTY, OCHRE],
         lit: true, windowCol: WINLIT,
       });
@@ -873,8 +873,8 @@
       fence(0.66, 0.71, -1, 2.0, 3.2, [0.78, 0.80, 0.82]);
       fence(0.82, 0.87, -1, 2.0, 3.2, [0.78, 0.80, 0.82]);
 
-      for (const [s, sd] of [[0.04, 1], [0.13, -1], [0.30, 1], [0.42, -1], [0.50, 1], [0.62, -1], [0.79, 1], [0.91, -1]]) {
-        marshalPost(K(s), sd, 1.8);
+      for (const [s, sd] of [[0.04, 1], [0.13, -1], [0.30, 1], [0.42, -1], [0.50, 1], [0.62, -1], [0.79, -1], [0.91, -1]]) {   // 0.79 on side -1 (behind the pool armco): its authored side maps to the 1-2 m sliver between the hairpin exit and its entry leg (racing node 329), where NO gap clears the onTrack(c, 3) guard
+        marshalPost(K(s), sd, 3.5);   // gap is to the hut CENTRE and the guard is onTrack(c, 3): 1.8 never built
       }
 
       guardrail(0.29, 0.34,  1, 0.5, ARMCO);

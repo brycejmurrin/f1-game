@@ -14,7 +14,27 @@ function buildResults(order) {
   els.resultsTitle.textContent = sprint ? "SPRINT — " + track.def.name
     : G.seasonMode ? "ROUND " + season.round + " — " + track.def.name
     : track.def.name + " RESULT";
+  // On a GUEST the order is the host's (game.js netOrder) but `retired`/`dnf`
+  // were still this peer's own: each peer arms reliability off its OWN seed
+  // and race counter (game.js armReliability), so the guest parked different
+  // AI cars than the host and its sheet said "(dnf)" / "DNF" beside cars the
+  // host had classified as finishers, and points beside ones it had retired.
+  // The verdict is the only source: a car the host timed (`t` > 0) finished
+  // whatever this peer saw; `r` (the reason, when the host sends one) names
+  // the retirements among the untimed. An untimed car with no `r` keeps the
+  // local flag — the best a guest can do until the payload says.
+  const np = G.netPlay;
+  const verdict = np && np.active && np.active() && !np.ownsClassification() && np.peerResult();
+  const hostRow = new Map(Array.isArray(verdict) ? verdict.map((e) => [e.d, e]) : []);
+  const dnfOf = (c) => {
+    const e = hostRow.get(c.driverId);
+    const local = c.retired ? (c.dnf || "dnf") : null;
+    if (!e) return local;
+    if (e.r != null) return e.r || null;
+    return e.t > 0 ? null : local;
+  };
   order.forEach((c, i) => {
+    const dnf = dnfOf(c);
     const row = document.createElement("div");
     const podium = i === 0 ? " p1" : i === 1 ? " p2" : i === 2 ? " p3" : "";
     const other = c.human && !c.local ? " q-real" : "";
@@ -28,7 +48,7 @@ function buildResults(order) {
     // Set textContent FIRST — it replaces ALL children, so the PLAYER tag must
     // append after it (appending first silently destroyed the tag every race).
     nm.textContent = c.code + "  " + c.name
-      + (c.retired ? "  (" + (c.dnf || "dnf") + ")" : c.penalty ? "  (+" + c.penalty + "s)" : "");
+      + (dnf ? "  (" + dnf + ")" : c.penalty ? "  (+" + c.penalty + "s)" : "");
     if (other) {
       // Text as well as colour, for the same reason the quali sheet does it.
       const tag = document.createElement("span");
@@ -38,7 +58,7 @@ function buildResults(order) {
     const pt = document.createElement("span"); pt.className = "res-pts";
     const table = sprint ? SeasonCal.SPRINT_POINTS
       : G.seasonMode ? SeasonCal.pointsTable() : Teams.POINTS;
-    pt.textContent = c.retired ? "DNF" : (table[i] || 0) + " pts";
+    pt.textContent = dnf ? "DNF" : (table[i] || 0) + " pts";
     row.append(pos, sw, nm, pt);
     els.resultsTable.appendChild(row);
   });

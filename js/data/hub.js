@@ -230,6 +230,13 @@ const DataHub = (function () {
     Log.info("data", "hub close");
     disarmLiveAuto();
     closeTelemPopup();
+    // Nothing still loading is wanted: bump every tab's generation so the
+    // cancelled rejections are ignored, then drop the requests themselves —
+    // in-flight OpenF1 fetches (15 s timeouts, 10–60 s 429 backoffs) used to
+    // keep F1API's serialized queue busy, so reopening a tab waited behind
+    // work nobody would ever render.
+    for (const k in gen) gen[k] = (gen[k] || 0) + 1;
+    F1API.cancelAll();
     state.live = null;
     state.telemetry = null;
     root.hidden = true;

@@ -46,7 +46,7 @@ const NetPlay = (function () {
     let lastSlotFallback = null;
     // Lap/sector times rivals reported. A DEBUG CHANNEL, not gameplay: the only
     // reader is __apex.netPeerLaps(). Entries carry whatever reportLap's caller
-    // passed — today `{lap, time, best, code}` from js/game.js, so `code` and
+    // passed — today `{lap, time, best, code, fin?}` from js/game.js, so `code` and
     // not `driverId` is what tells two reporters apart. Give this a driverId
     // before anything gameplay-facing starts reading it.
     // Cap: a long session must not retain every lap forever.
@@ -146,7 +146,12 @@ const NetPlay = (function () {
       // early-outs for net-owned cars), so allHumansDone stayed false on
       // both peers and results waited for the 360 s/lap hard cap. The wire
       // lap is clamped to lapsTarget+1, so "past the target" is representable.
-      if (!c.finished && !c.retired && G.lapsTarget > 0 && c.lap > G.lapsTarget) {
+      // NEVER from an EXTRAPOLATED sample: after a lost packet advance() wraps
+      // s and bumps lap on its own, and that latched `finished` on a car whose
+      // next real packet said it was still short of the line. This stamp is
+      // the FALLBACK (~100 ms of interp delay late); the owner's own finishT
+      // arrives in its LAP event (`fin`, bindSession) and overrides it.
+      if (!c.finished && !c.retired && G.lapsTarget > 0 && c.lap > G.lapsTarget && !st.extrapolated) {
         c.finished = true; c.finishT = G.raceT;
       }
 
@@ -282,6 +287,12 @@ const NetPlay = (function () {
             if (!peerCar.has(id)) return;
             armedPeers.add(id);
             if (armDeadline && allArmed()) nameTheMoment();
+            // LATE ARMED: a guest still inside `await G.startRace()` when the
+            // ARM_WAIT backstop named the moment had its START pumped into the
+            // LOBBY session, which has no handler for it — so it sat on the
+            // grid until HOLD_MAX_MS and counted down alone. The moment is kept
+            // and told again to whoever arms after it was named.
+            else if (named) { try { s.sendEvent(EV.START, { at: s.localToPeer(named.at), hold: named.hold }); } catch (e) {} }
           }
           if (name === EV.QUALI && d && d.t > 0 && sendersOwnDriver(d) && G.onPeerQuali) G.onPeerQuali(d);
           // QLIVE never reaches the classification, but it is keyed by the
@@ -291,6 +302,18 @@ const NetPlay = (function () {
           if (name === EV.LAP && d && sendersOwnDriver(d)) {
             peerLaps.push(d);
             if (peerLaps.length > PEER_LAPS_CAP) peerLaps.splice(0, peerLaps.length - PEER_LAPS_CAP);
+            // The finishing crossing carries the OWNER's finishT (`fin`, stamped
+            // at its physics crossing, raceT being shared through netStart).
+            // Adopt it: the pose-time stamp in poseRemote is a fallback, one
+            // interp delay late, and a close finish is decided by less. Sender-
+            // bound above like QUALI; on a guest the sender is the host, whose
+            // own car is found by `code` (the only id reportLap carries).
+            const fin = Number(d.fin);
+            const fr = role === "host" ? remotes.get(remoteFor(id))
+              : remoteList().find((x) => x.car.code === d.code);
+            if (fr && Number.isFinite(fin) && fin > 0 && !fr.car.retired) {
+              fr.car.finished = true; fr.car.finishT = fin;
+            }
           }
           if (name === EV.RESULT && d && !ownsClassification()) peerResult = d;
           // Only the host speaks for the roster; a guest naming a wire id
@@ -417,6 +440,7 @@ const NetPlay = (function () {
       lastReason = null;
       armedPeers.clear();
       armDeadline = 0;
+      named = null;
       holdUntil = 0;
       G.netNow = null;
       active = true;
@@ -443,6 +467,7 @@ const NetPlay = (function () {
     const HOLD_MAX_MS = ARM_WAIT_MS + 10000;
     let holdUntil = 0;                    // both roles: when we count down alone
     let armDeadline = 0;                  // host: when to stop waiting for ARMED
+    let named = null;                     // host: the START already sent ({at, hold}), for late ARMEDs
     const armedPeers = new Set();
     const allArmed = () => armedPeers.size >= Math.max(1, remotes.size);
 
@@ -480,6 +505,7 @@ const NetPlay = (function () {
       for (const s of sessionList()) {
         try { s.sendEvent(EV.START, { at: s.localToPeer(at), hold }); } catch (e) {}
       }
+      named = { at, hold };
       G.netStart = { at, hold, now: nowMs };
       return true;
     }
@@ -544,6 +570,7 @@ const NetPlay = (function () {
       peerCar.clear();
       session = null;
       armDeadline = 0;
+      named = null;
       holdUntil = 0;
       G.netNow = null;              // a session's clock, not the page's
       // Same argument for the armed start: game.js clears netStart only when

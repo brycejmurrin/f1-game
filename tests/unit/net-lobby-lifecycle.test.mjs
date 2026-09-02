@@ -12,7 +12,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function harness({ wakeLock, prefetchIce, scanFactory } = {}) {
+function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transportStatus } = {}) {
   const elements = new Map();
   const element = (id) => {
     const el = { id, hidden: true, value: "", textContent: "", focus() {} };
@@ -57,8 +57,9 @@ function harness({ wakeLock, prefetchIce, scanFactory } = {}) {
       create: () => scanFactory(),
     },
     NetRendezvous: {},
-    NetPlay: { EV: { SETTINGS: "settings" } },
-    Teams: { LIST: [{ id: "alpha", short: "ALP", name: "Alpha", color: [1, 0, 0], drivers: [] }] },
+    NetSession: { create: netSession || (() => { throw new Error("no NetSession in this harness"); }) },
+    NetPlay: { EV: { SETTINGS: "settings", HELLO: "hello", READY: "ready", GO: "go", QUALI: "quali", QLIVE: "qlive" } },
+    Teams: { LIST: teams || [{ id: "alpha", short: "ALP", name: "Alpha", color: [1, 0, 0], drivers: [] }] },
     Tracks: { LIST: [{ id: "track" }] },
   });
   seedLog(context);
@@ -71,10 +72,10 @@ function harness({ wakeLock, prefetchIce, scanFactory } = {}) {
   const lobby = NetLobby.create(G);
   lobby.setTransportFactory(({ role }) => {
     transports.push(role);
-    return { status: "new", onClose() {}, close() {} };
+    return { status: transportStatus || "new", onClose() {}, close() {} };
   });
   return {
-    lobby, elements, scan, video, transports,
+    lobby, elements, scan, video, transports, G,
     emit(type) { for (const fn of listeners.get(type) || []) fn(); },
   };
 }
@@ -222,4 +223,74 @@ test("a MY TEAM (custom) car is moved off in the room, whatever the player's ran
   assert.match(SOURCE, /firstFreeSeat\(onCustom \? null : mine\.team, blocked\)/,
     "never prefer the custom team itself when choosing where to move");
   assert.match(SOURCE, /MY TEAM cars only exist on your own screen/);
+});
+
+// ── round 2 (bug hunt 2026-09-02): two guests on one seat must SETTLE ───────
+// blockingSeats() for a guest was every peer seat regardless of rank, so two
+// guests who picked the same car both yielded, both took the next seat, both
+// yielded again — HELLO ping-pong for ever (scratch/seat-clash.mjs). Now a
+// guest yields only to the host and to guests the host's relay tags with a
+// LOWER join rank; the host tells each guest its own rank in its HELLO.
+function fakeNetSession(made) {
+  return () => {
+    const handlers = new Map();
+    const s = {
+      sent: [],
+      onEvent(t, fn) { handlers.set(t, fn); return s; },
+      onState() { return s; }, onClose() { return s; },
+      sendEvent(t, d) { s.sent.push({ t, d }); return true; },
+      deliver(t, d) { const fn = handlers.get(t); if (fn) fn(d); },
+      pump() {}, close() {}, clearHandlers() {},
+    };
+    made.push(s);
+    return s;
+  };
+}
+const TWO_TEAMS = [
+  { id: "alpha", short: "ALP", name: "Alpha", color: [1, 0, 0], drivers: [{ name: "A1" }, { name: "A2" }] },
+  { id: "beta", short: "BET", name: "Beta", color: [0, 0, 1], drivers: [{ name: "B1" }, { name: "B2" }] },
+];
+async function connectedGuest() {
+  const made = [];
+  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made), transportStatus: "open" });
+  await h.lobby.join();
+  h.lobby.watchForOpen();                     // the 250 ms poll sees "open" and binds the session
+  for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+  assert.equal(made.length, 1, "the guest's session was bound");
+  return { h, s: made[0], hellos: () => made[0].sent.filter((m) => m.t === "hello") };
+}
+
+// try/finally: a failed assertion must still cancel(), or the lobby's 25 ms
+// pump interval keeps the process alive and a red run reads as a hang.
+test("a guest keeps its seat against a LATER guest relayed onto it", async () => {
+  const { h, s, hellos } = await connectedGuest();
+  try {
+    s.deliver("hello", { team: "beta", driver: 0, rank: 1 });   // the host, seated elsewhere: we are guest #1
+    const before = hellos().length;
+    s.deliver("hello", { from: "g2", rank: 2, team: "alpha", driver: 0 });   // guest #2 picked OUR car
+    assert.equal(h.G.driverIdx, 0, "rank 1 does not yield to rank 2");
+    assert.equal(h.G.teamIdx, 0);
+    assert.equal(hellos().length, before, "no re-announce, so no ping-pong");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a guest yields its seat to the host and to an EARLIER guest", async () => {
+  const { h, s, hellos } = await connectedGuest();
+  try {
+    s.deliver("hello", { team: "beta", driver: 0, rank: 2 });   // we are guest #2
+    s.deliver("hello", { from: "g1", rank: 1, team: "alpha", driver: 0 });   // guest #1 holds our car
+    assert.equal(h.G.driverIdx, 1, "moved to the team's other seat");
+    assert.equal(hellos().at(-1).d.driver, 1, "…and said so");
+    // The host always wins the seat, whatever we were told.
+    h.G.driverIdx = 0;
+    s.deliver("hello", { team: "alpha", driver: 0 });
+    assert.equal(h.G.driverIdx, 1, "the host outranks every guest");
+  } finally { h.lobby.cancel(); }
+});
+
+test("the host tags relayed HELLOs and its own with the join rank", () => {
+  assert.match(SOURCE, /Object\.assign\(\{\}, p, \{ from: id, rank: joinRank\(id\) \}\)/);
+  assert.match(SOURCE, /Object\.assign\(\{\}, prof, \{ from: k, rank: joinRank\(k\) \}\)/);
+  assert.match(SOURCE, /role === "host" \? \{ rank: joinRank\(id\) \} : null/);
 });

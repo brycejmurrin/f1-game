@@ -2871,7 +2871,9 @@ function netOrder(order) {
     // finish is exactly when that matters and exactly when nobody would notice
     // it had gone wrong.
     netPlay.reportResult(order.map((c) => ({
-      d: c.driverId, t: c.finishT, p: c.penalty, lap: c.lap,
+      // `r`: the DNF reason (0 = not retired) — each peer draws its reliability
+      // plan off its own seed, so a guest's labels must be the host's verdict.
+      d: c.driverId, t: c.finishT, p: c.penalty, lap: c.lap, r: c.retired ? (c.dnf || "dnf") : 0,
     })));
     return order;
   }
@@ -4171,19 +4173,22 @@ function updateCar(c, dt, ranked) {
   } else c.deploying = false;
 
   // --- overtake mode ---
-  const ahead = (c.rank || 1) > 1 ? ranked[(c.rank || 1) - 2] : null;
-  const gapAhead = ahead && c.speed > 1 ? (ahead.prog - c.prog) / c.speed : Infinity;
-  // vStd, not a bare c.speed: this is a THRESHOLD, and a threshold compared
-  // against real m/s means something different at every OVERALL SPEED setting.
-  // The active-aero floor thirty lines below already gets this right
-  // (vStd(c.speed) > X_MIN_SPEED) — so the two straight-line aids in this same
-  // function disagreed about what a speed is. Measured as a fraction of the
-  // car's own envelope, X-mode armed at a constant 35 % at every pace while
-  // overtake armed at 42 % of top speed at pace 0.5 and 16 % at pace 1.3.
-  // The error ran the wrong way for the player it reached: the slower you set
-  // the game, the more of the lap you could not use overtake at all — and a
-  // slower setting is what you reach for when the car is already getting away
-  // from you. Same class as the beached-rescue gate (A5 in the review).
+  // The car ahead ON THE ROAD (docs/PHYSICS.md: "within OT_GAP of the car
+  // ahead"), not ranked[rank-2]: that is the classification neighbour — a
+  // leader has none (a backmarker 0.5 s ahead could not be attacked), it can
+  // sit a lap away, and a finished car coasting right ahead armed OT.
+  let ahead = null, gapAhead = Infinity;
+  for (const o of ranked) {
+    if (o === c || o.finished) continue;
+    const d = ((o.prog - c.prog + track.total / 2) % track.total + track.total) % track.total - track.total / 2;   // full wrap (a twice-lapped car is 2L back in prog)
+    if (d > 0.5 && d < gapAhead) { ahead = o; gapAhead = d; }
+  }
+  gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;
+  // vStd, not a bare c.speed: a THRESHOLD in real m/s means something different
+  // at every OVERALL SPEED setting (the active-aero floor below gets this right).
+  // Measured: X-mode armed at 35 % of the envelope at every pace while overtake
+  // armed at 42 % at pace 0.5 and 16 % at pace 1.3 — the slower you set the
+  // game, the less of the lap had overtake. Same class as the beached gate (A5).
   c.otArmed = otEnabled() && gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0
               && !c.finished && vStd(c.speed) > OT_MIN_SPEED;
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
@@ -4210,16 +4215,11 @@ function updateCar(c, dt, ranked) {
   // ellipse both scale by it, so easing off the brake actually hands grip back
   // to the front tyres — trail-braking you can modulate, not just stamp/lift.
   let brakeLvl = 1;
-  // THROTTLE travel, the other half of the same idea — and until now nothing in
-  // the game read it. Input.throttleLevel() has always existed and always been
-  // dead: the pad's analog right trigger was thresholded to a boolean and the
-  // travel thrown away, so a controller could only floor it or lift, and the
-  // on-screen pedal had nothing to report at all. Scaling engine accel by it is
-  // what makes a part-open throttle mean something — a measured exit instead of
-  // full power the instant you touch it.
-  //
-  // DEPLOY IS DELIBERATELY OUTSIDE THIS. ERS is its own button; metering the
-  // throttle should not quietly meter the battery too.
+  // THROTTLE travel, the other half of the same idea. Input.throttleLevel()
+  // existed but was dead: the pad's analog trigger was thresholded to a boolean,
+  // so a controller could only floor it or lift. Scaling engine accel by it is
+  // what makes a part-open throttle a measured exit. DEPLOY IS DELIBERATELY
+  // OUTSIDE THIS: ERS is its own button; the throttle must not meter the battery.
   let throttleLvl = 1;
   if (c.human) {
     braking = inp ? !!inp.brake : Input.braking();
@@ -4239,7 +4239,9 @@ function updateCar(c, dt, ranked) {
       const kk = Tracks.curvature(track, ss);
       const ak = Math.abs(kk);
       if (ak > kMax) kMax = ak;
-      AiDrive.pushLook(d, kk, Tracks.bankAngle(track, ss));
+      // |bank|: the player's bankRoll (below) takes the absolute value, so a
+      // signed/adverse bank must not boost the player while it cuts the AI.
+      AiDrive.pushLook(d, kk, Math.abs(Tracks.bankAngle(track, ss)));
     }
     _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX;
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE; _aiBr.grip = gripMult(c);
@@ -4755,10 +4757,13 @@ function updateCar(c, dt, ranked) {
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
     // travel, minus the steer it's pointed at. vx is floored so the atan stays
     // well-conditioned at low speed.
-    // Signed longitudinal speed (floored away from 0) so reverse slip angles
-    // stay well-conditioned instead of collapsing to +4 m/s forward.
-    const vx = (c.speed < 0 ? -1 : 1) * Math.max(Math.abs(c.speed), 4);
-    const slipF = Math.atan2((c.vLat || 0) + af * (c.yawRateCur || 0), vx) - delta;
+    // |speed| floored at 4 so the atan stays well-conditioned at low speed. A
+    // tyre's lateral force opposes its lateral velocity in REVERSE too, so slip
+    // is measured against |vx|: atan2(vLat, -4) parked both axles on the tanh
+    // plateau with a sign that flipped on vLat ≈ 0 (a steady slide on a straight
+    // reverse, measured). Only the steer term changes sign with direction.
+    const vx = Math.max(Math.abs(c.speed), 4), dirS = c.speed < 0 ? -1 : 1;
+    const slipF = Math.atan2((c.vLat || 0) + af * (c.yawRateCur || 0), vx) - dirS * delta;
     const slipR = Math.atan2((c.vLat || 0) - ar * (c.yawRateCur || 0), vx);
     // Debris side-world (A2): shed tyre marbles under lock-up / slide. Reads the
     // already-computed combined-slip signals READ-ONLY; cosmetic, never grip.
@@ -4780,23 +4785,13 @@ function updateCar(c, dt, ranked) {
     const Fyf = _tyreSat(CS_FRONT, slipF, muF) * sp;
     const Fyr = _tyreSat(csR, slipR, muR) * sp;
     const cosD = Math.cos(delta);
-    // --- UNDERSTEER CUE. The car's defining failure mode is washing wide, and
-    // until now the only feedback was visual (a nose that will not point where
-    // you asked) plus tyre squeal, both of which arrive AFTER you have already
-    // lost the corner. A real wheel goes LIGHT as the front lets go — the
-    // self-aligning torque collapses — which is the canonical way a driver
-    // feels this. On a phone or a pad there is no wheel to go light, and sim
-    // racers report that force feedback fails to deliver it even on
-    // direct-drive hardware, so nothing communicates it at all here.
-    //
-    // This is SIGNALLING, NOT SIMULATING. We are not modelling self-aligning
-    // torque; we are telling the player a fact about front-tyre saturation
-    // that they have no other channel for. `sat` is how far the front slip has
-    // pushed past the tanh knee — 1 is the friction limit — so the cue fires
-    // exactly when the tyre stops answering more steering with more grip.
-    // Gated on the LOCAL human (a replicated rival's tyres are not in your
-    // hands), on actually asking for steering, and rate-limited the same way
-    // the kerb haptic is, so it cannot machine-gun.
+    // --- UNDERSTEER CUE. Washing wide is the car's defining failure mode and
+    // its only feedback (nose, squeal) arrives AFTER the corner is lost; a real
+    // wheel goes LIGHT as the front lets go, and neither a phone nor a pad has
+    // one. SIGNALLING, NOT SIMULATING: no self-aligning torque is modelled, the
+    // player is told front-tyre saturation. `sat` is how far the front slip sits
+    // past the tanh knee (1 = the friction limit). Gated on the LOCAL human, on
+    // asking for steering, and rate-limited like the kerb haptic.
     if (c.isPlayer && !c.offroad && sp > 0.5) {
       const sat = Math.abs(CS_FRONT * slipF) / Math.max(muF, 1e-3);
       const asking = Math.abs(steer) > 0.15;
@@ -5159,13 +5154,11 @@ function updateCar(c, dt, ranked) {
     c.lap++;
     // Retained so the backward branch can put the clock back. Without it a
     // re-crossing records the few tenths since the reset as a completed lap —
-    // which is not just a wrong readout, it beats `c.best` and becomes the
-    // stored ghost.
+    // not just a wrong readout: it beats `c.best` and becomes the stored ghost.
     c._lapTimeAtLine = c.lapTime;
     // A takeover (R2/R3/C1) during this lap invalidates it EXPLICITLY: the car
-    // was moved by Rapier, so the lap is not a legitimate timed lap. Don't let it
-    // set a personal best or become the stored ghost; just start the next lap
-    // clean. The flag is set by IncidentSim and cleared here at the line.
+    // was moved by Rapier, so it is not a timed lap — no personal best, no
+    // stored ghost. The flag is set by IncidentSim and cleared here at the line.
     const lapValid = !c.incidentInvalidLap;
     if (c.lap > 1) {
       const lapDone = c.lapTime;
@@ -5175,8 +5168,10 @@ function updateCar(c, dt, ranked) {
       // Tell the rival about our lap. Times are authored by whoever OWNS the
       // car — nobody else can time it — and go over the reliable channel,
       // because a dropped lap time is a wrong RESULT, not a momentary glitch.
+      // `fin` is OUR finishT at the crossing that ends the race: the remote's
+      // pose-time stamp is one interp delay late (netplay.js poseRemote).
       if (lapValid && c.local && netPlay.active()) {
-        netPlay.reportLap({ lap: c.lap, time: lapDone, best: isFinite(c.best) ? c.best : null, code: c.code });
+        netPlay.reportLap({ lap: c.lap, time: lapDone, best: isFinite(c.best) ? c.best : null, code: c.code, fin: c.lap > lapsTarget ? raceT : undefined });
       }
       if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else Ghost.startLap(); }
     } else if (c.isPlayer && isTimeTrial()) {
@@ -5185,7 +5180,8 @@ function updateCar(c, dt, ranked) {
     c.incidentInvalidLap = false;   // the new lap starts clean
     c.lapTime = 0;
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
-    if (c.isPlayer && c.lap === lapsTarget) announce("FINAL LAP", 1.6);
+    // Never on a 1-lap session: that crossing is the START crossing, and a qualifying flying lap is not a final lap.
+    if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6);
     if (c.lap > lapsTarget) {
       c.finished = true;
       c.finishT = raceT;
@@ -5232,7 +5228,11 @@ function updateCar(c, dt, ranked) {
     // Only rescue if throttle is actively pressed but the car isn't moving —
     // that's the wedged-against-a-wall case. A player who deliberately parks
     // (lets off gas) is never rescued, regardless of how long they sit still.
-    const stoppedOnTrack = onThrottle && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
+    // The DRIVER's pedal, not onThrottle: on touch/tilt that is autoThrottle()
+    // (always true), which teleported a phone player who parked or was boxed
+    // in a pile-up to x = 0 after 3 s — auto gas is not a driver asking.
+    const gasPressed = inp ? !!inp.throttle : Input.throttle();
+    const stoppedOnTrack = gasPressed && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
     // Being OFF-TRACK is not the same as being stuck. The driving boundary sits
     // ~9 m beyond the road edge, so a driver can be metres into a wide run-off,
     // fully in control and steering back to the track — and the bare c.offroad
@@ -7785,7 +7785,7 @@ function enableTilt() {
   Input.requestGyro().then((ok) => {
     if (ok) {
       Input.calibrate();
-    } else if (Input.gyroDenied) {
+    } else if (Input.gyroHardDenied) {   // a RESOLVED refusal, never a transient rejection (no user gesture)
       // Permission denied — fall back to buttons so the player can still steer.
       // (Staying in tilt mode with no sensor data leaves steer locked at 0 and
       // the car just follows ROAD_FOLLOW, appearing to "auto-drive" the racing line.)

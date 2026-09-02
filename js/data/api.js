@@ -30,6 +30,12 @@ const F1API = (function () {
   const MAX_RETRY = 2;         // retries on 429 / 5xx before giving up
   const RETRY_BASE_MS = 10000; // 10 s first retry — OpenF1 rate-limits hard; short
   const RETRY_CAP_MS = 25000;  //   delays only eat more quota, so wait longer
+  // Retry-After is honoured AS SENT up to this ceiling. OpenF1 commonly asks
+  // for 60 s, and the old 25 s clamp fired both retries INSIDE that window —
+  // two more 429s, quota burned, nothing gained. Past the ceiling the request
+  // fails fast instead (stale cache if there is one): that is what a tab can
+  // act on; a 90 s+ sleep behind a spinner is not.
+  const RETRY_AFTER_MAX_MS = 90000;
   const FETCH_TIMEOUT_MS = 15000;
 
   const MINUTE = 60 * 1000;
@@ -44,6 +50,8 @@ const F1API = (function () {
 
   let queue = Promise.resolve();        // promise chain serializing network hits
   let lastNetAt = 0;                    // time of last actual fetch start
+  let netGen = 0;                       // bumped by cancelAll(); a request born before it is stale
+  const liveControllers = new Set();    // AbortControllers of fetches on the wire
   const failWarnAt = Object.create(null); // endpoint name -> last Log.warn ms
   const FAIL_WARN_MS = 30 * 1000;
   let latestSessionKey = null;          // tracked from latestSession() responses
@@ -86,6 +94,11 @@ const F1API = (function () {
     return removed;
   }
 
+  // Quota fallback. Evict what is actually eating the quota: windowed
+  // telemetry bodies (car_data / location — tens of KB per lap, cached 7 d)
+  // go first, largest first; everything else follows oldest first. Pure age
+  // order evicted the small, fresh schedule / standings entries that sit
+  // between telemetry laps while the laps themselves survived the purge.
   function purgeOldestCache(count) {
     let removed = 0;
     try {
@@ -93,10 +106,19 @@ const F1API = (function () {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (!key || key.indexOf(CACHE_PREFIX) !== 0) continue;
-        const t = cacheEntryT(localStorage.getItem(key));   // null (corrupt) → oldest
-        entries.push({ key: key, t: t || 0 });
+        const raw = localStorage.getItem(key);
+        const t = cacheEntryT(raw);   // null (corrupt) → oldest
+        entries.push({
+          key: key, t: t || 0,
+          size: typeof raw === "string" ? raw.length : 0,
+          telem: /\/(car_data|location)\?/.test(key)
+        });
       }
-      entries.sort(function (a, b) { return a.t - b.t; });
+      entries.sort(function (a, b) {
+        if (a.telem !== b.telem) return a.telem ? -1 : 1;
+        if (a.telem) return b.size - a.size;
+        return a.t - b.t;
+      });
       const n = Math.min(count || 8, entries.length);
       for (let i = 0; i < n; i++) {
         try { localStorage.removeItem(entries[i].key); removed++; } catch (e) { /* ignore */ }
@@ -163,6 +185,7 @@ const F1API = (function () {
 
   function fetchTimed(url) {
     const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    if (controller) liveControllers.add(controller);
     let timer = null;
     const timeout = new Promise(function (_resolve, reject) {
       timer = setTimeout(function () {
@@ -175,7 +198,10 @@ const F1API = (function () {
     catch (e) { network = Promise.reject(e); }
     // Promise.race is intentional even with AbortController: a broken fetch
     // implementation that ignores abort must still release the global queue.
-    return Promise.race([network, timeout]).finally(function () { clearTimeout(timer); });
+    return Promise.race([network, timeout]).finally(function () {
+      clearTimeout(timer);
+      if (controller) liveControllers.delete(controller);
+    });
   }
 
   // Single attempt: status/error handling only. Retries live in request(), where
@@ -186,8 +212,10 @@ const F1API = (function () {
     lastNetAt = Date.now();
     return fetchTimed(url).then(function (res) {
       if (!res.ok) {
-        const ra = parseFloat(res.headers && res.headers.get && res.headers.get("retry-after"));
-        const raMs = isFinite(ra) && ra > 0 ? Math.min(ra * 1000, RETRY_CAP_MS) : 0;
+        const hdr = res.headers && res.headers.get && res.headers.get("retry-after");
+        let ra = parseFloat(hdr);
+        if (!isFinite(ra) && hdr) ra = (Date.parse(hdr) - Date.now()) / 1000;   // HTTP-date form
+        const raMs = isFinite(ra) && ra > 0 ? Math.round(ra * 1000) : 0;        // as sent; request() applies the ceiling
         return res.text().then(function (txt) {
           try {
             const j = JSON.parse(txt);
@@ -229,7 +257,14 @@ const F1API = (function () {
     Log.warn("data", "fetch " + name + " fail" + (kind ? " " + kind : ""));
   }
 
+  function cancelledError(url) {
+    const e = new Error("Cancelled request for " + url);
+    e.cancelled = true;   // the shape js/data/export.js already recognises
+    return e;
+  }
+
   function request(url, ttl, options) {
+    const myGen = netGen;
     const cache = !options || options.cache !== false;
     const quiet = ttl <= 0 || (options && options.cache === false);
     const name = endpointName(url);
@@ -242,19 +277,29 @@ const F1API = (function () {
     // Each attempt claims ONE queue slot (MIN_GAP pacing included) and releases
     // it before any backoff sleep, so other endpoints proceed while this one
     // waits out a 429 — the chain stays alive per-slot, not per-job.
+    // A cancelAll() between any two of these checks drops the request: a
+    // queued one never waits or fetches, an aborted one never retries or
+    // sleeps, a late completion never reaches the caller.
     function attempt(n) {
       const slot = queue
         .then(function () {
+          if (myGen !== netGen) throw cancelledError(url);
           const wait = lastNetAt + MIN_GAP_MS - Date.now();
           if (wait > 0) return new Promise(function (res) { setTimeout(res, wait); });
           return null;
         })
-        .then(function () { return fetchOnce(url); });
+        .then(function () {
+          if (myGen !== netGen) throw cancelledError(url);
+          return fetchOnce(url);
+        });
       queue = slot.then(function () {}, function () {});
       return slot.catch(function (err) {
+        if (myGen !== netGen) throw cancelledError(url);
         const status = err && err.status;
         if ((status === 429 || (status >= 500 && status < 600)) && n < MAX_RETRY) {
-          const back = err.retryAfterMs || Math.min(RETRY_BASE_MS * Math.pow(2, n), RETRY_CAP_MS);
+          const ra = (err && err.retryAfterMs) || 0;
+          if (ra > RETRY_AFTER_MAX_MS) throw err;   // server wants longer than a tab will wait: fail fast, same error shape
+          const back = ra || Math.min(RETRY_BASE_MS * Math.pow(2, n), RETRY_CAP_MS);
           return new Promise(function (r) { setTimeout(r, back); }).then(function () { return attempt(n + 1); });
         }
         throw err;
@@ -263,11 +308,13 @@ const F1API = (function () {
 
     const job = attempt(0)
       .then(function (json) {
+        if (myGen !== netGen) throw cancelledError(url);
         if (cache) writeCache(url, json);
         if (!quiet) Log.info("data", "fetch " + name + " ok");
         return json;
       })
       .catch(function (err) {
+        if (err && err.cancelled) throw err;   // asked for: no stale-cache fallback, no fail warning
         // Never paper over live-session auth lockouts with stale cache — that
         // makes LIVE look "updated" while silently serving old classification.
         const msg = (err && err.message) || "";
@@ -698,7 +745,23 @@ const F1API = (function () {
     });
   }
 
+  // Drop every request born before now: abort the fetches on the wire, and let
+  // queued / backing-off / late-completing ones fall out at their next
+  // generation check. DataHub.close() calls this so a reopened tab is not
+  // queued behind 15 s timeouts and 60 s 429 backoffs nobody will ever render.
+  function cancelAll() {
+    netGen++;
+    let aborted = 0;
+    liveControllers.forEach(function (c) {
+      try { c.abort(); aborted++; } catch (e) { /* already settled */ }
+    });
+    liveControllers.clear();
+    if (aborted) Log.info("data", "api cancelAll aborted " + aborted);
+    return aborted;
+  }
+
   return {
+    cancelAll: cancelAll,
     schedule: schedule,
     driverStandings: driverStandings,
     constructorStandings: constructorStandings,

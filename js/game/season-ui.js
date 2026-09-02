@@ -7,6 +7,12 @@ function create(G) {
   const { $, els } = G;
 
   let draft = null;
+  // The calendar rows' controls, per row in draft order, from the LAST paint.
+  // build() replaces every node, so the button that was just pressed is gone
+  // and focus fell to <body>: a keyboard / screen-reader user reordering a
+  // 24-round calendar lost their place on every press. Kept as an array, not
+  // re-queried, so the refocus never depends on the pane's DOM shape.
+  let calBtns = [];
 
   function el(tag, cls, text) {
     const n = document.createElement(tag);
@@ -43,26 +49,41 @@ function create(G) {
     pane.appendChild(head("CALENDAR — " + draft.trackIds.length
       + (draft.trackIds.length === 1 ? " ROUND" : " ROUNDS")));
     const byId = new Map(Tracks.LIST.map((t) => [t.id, t]));
+    calBtns = [];
     draft.trackIds.forEach((id, i) => {
       const t = byId.get(id);
       if (!t) return;
       const row = el("div", "season-upcoming-row");
       row.append(el("span", "sur-rnd", "R" + (i + 1)), el("span", "sur-name", t.name));
+      // Each action returns the row the SAME circuit sits on after it — or,
+      // after a remove, the neighbour that took its place — for the refocus.
       const ctl = [
-        ["↑", "Move up", i > 0, () => { swap(i, i - 1); }],
-        ["↓", "Move down", i < draft.trackIds.length - 1, () => { swap(i, i + 1); }],
-        ["✕", "Remove", draft.trackIds.length > 1, () => { draft.trackIds.splice(i, 1); }],
+        ["↑", "Move up", i > 0, () => { swap(i, i - 1); return i - 1; }],
+        ["↓", "Move down", i < draft.trackIds.length - 1, () => { swap(i, i + 1); return i + 1; }],
+        ["✕", "Remove", draft.trackIds.length > 1,
+          () => { draft.trackIds.splice(i, 1); return Math.min(i, draft.trackIds.length - 1); }],
       ];
-      for (const [glyph, label, on, act] of ctl) {
+      const btns = [];
+      ctl.forEach(([glyph, label, on, act], k) => {
         const b = el("button", "sel-chip", glyph);
         b.type = "button";
         b.disabled = !on;
         b.setAttribute("aria-label", label + " — " + t.name);
-        b.onclick = () => { act(); tick(); build(); };
+        b.onclick = () => { const row = act(); tick(); build(); focusCal(row, k); };
         row.appendChild(b);
-      }
+        btns.push(b);
+      });
+      calBtns.push(btns);
       pane.appendChild(row);
     });
+  }
+  // The same control on the row's new position; at either end of the list
+  // that control is disabled, so the nearest enabled sibling; a one-round
+  // calendar has none, and APPLY (a static node) is the next thing to do.
+  function focusCal(row, k) {
+    const btns = calBtns[row] || [];
+    const b = btns[k] && !btns[k].disabled ? btns[k] : btns.find((x) => !x.disabled);
+    (b || $("ss-apply")).focus();
   }
   function swap(a, b) {
     const ids = draft.trackIds;

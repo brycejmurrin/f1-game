@@ -109,8 +109,11 @@
         const s = k / n;
         if (s < 0.36 || s > 0.60) return;
         const h = hash(k * 17);
-        palm(k, -1, 46 + h * 30, 13 + h * 5, h < 0.5 ? PALM : PALM_D);
-        if (h > 0.5) palm(k, -1, 74 + h * 26, 12 + h * 5, PALM_D);
+        // Rows at 28-40 / 44-48 m, not 46-76 / 74-100: on this side the lap folds
+        // back 60-90 m out (the 0.00-0.06 and 0.92-0.93 legs), so the old rows
+        // stood on the back straight and 32 of them were dropped every build.
+        palm(k, -1, 28 + h * 12, 13 + h * 5, h < 0.5 ? PALM : PALM_D);
+        if (h > 0.5) palm(k, -1, 40 + h * 8, 12 + h * 5, PALM_D);
       });
 
       const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.36 && s <= 0.50);
