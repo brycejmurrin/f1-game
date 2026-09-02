@@ -91,10 +91,23 @@ export function makeDom(opts = {}) {
       appendChild: (c) => { el.children.push(c); c.parentNode = c.parentElement = el; return c; },
       append: (...cs) => cs.forEach((c) => c && typeof c === "object" && el.appendChild(c)),
       insertBefore: (c, ref) => { const i = ref ? el.children.indexOf(ref) : -1; if (i >= 0) el.children.splice(i, 0, c); else el.children.push(c); c.parentNode = c.parentElement = el; return c; },
-      removeChild: (c) => { const i = el.children.indexOf(c); if (i >= 0) el.children.splice(i, 1); return c; },
+      removeChild: (c) => { const i = el.children.indexOf(c); if (i >= 0) { el.children.splice(i, 1); c.parentNode = c.parentElement = null; } return c; },
       replaceChildren: (...cs) => { el.children.length = 0; el.append(...cs); },
       remove: () => { if (el.parentNode) el.parentNode.removeChild(el); },
       contains: (n) => n === el || descendants(el).includes(n),
+      /* Registries that hold DOM nodes have to be able to ask whether a node is
+         still in the tree — a strong Set plus a ResizeObserver keeps a detached
+         subtree (and its canvases) alive otherwise. Derived by walking to the
+         root, so a detach ANYWHERE above the node counts, not just on the node.
+         Writable because older tests stub it directly to stand an element up as
+         connected or not without building a tree; an explicit write wins, and
+         `delete el.isConnected`-style reset is `el._connected = undefined`. */
+      get isConnected() {
+        if (el._connected !== undefined) return el._connected;
+        for (let n = el; n; n = n.parentNode) if (n === documentElement) return true;
+        return false;
+      },
+      set isConnected(v) { el._connected = !!v; },
       closest: (sel) => { for (let n = el; n; n = n.parentNode) if (n.nodeType === 1 && query({ children: [n] }, sel, false).length) return n; return null; },
       matches: (sel) => query({ children: [el] }, sel, false).length > 0,
       querySelector: (sel) => query(el, sel, false)[0] || null,
