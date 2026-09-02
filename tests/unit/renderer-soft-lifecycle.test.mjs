@@ -195,3 +195,48 @@ test("WGX and TLX distrust the CSS-size cache after a viewport change", () => {
   for (const ch of tlx.slice(listeners, obs)) { if (ch === "{") depth++; else if (ch === "}") depth--; }
   assert.ok(depth < 0, `TLX ResizeObserver must sit OUTSIDE the addEventListener check (net brace depth ${depth})`);
 });
+
+test("TLX picks its backend on what three will BIND, not on navigator.gpu existing", () => {
+  // The see-through car on three.js. bootRenderer only supplies its own
+  // `alpha: false` WebGL2 context when `forceWebGL` is set — and the file's own
+  // comment explains why that matters: three's WebGLBackend.init() hardcodes
+  // `alpha: !0` and IGNORES the `alpha:false` parameter, honouring only a
+  // caller-supplied context. So if three binds WebGL while forceWebGL is false,
+  // the canvas is alpha-composited and anything writing alpha < 1 shows the page
+  // through the car.
+  //
+  // three does NOT throw on that path — it logs "WebGPU is not available,
+  // running under WebGL2 backend" and carries on — so the catch around
+  // bootRenderer never fires. The decision has to be right BEFORE three touches
+  // the canvas, because context attributes are fixed for the life of a canvas
+  // and a second getContext silently returns the first.
+  //
+  // Two facts are needed and `navigator.gpu` existing is neither: an adapter
+  // must resolve, AND a webgpu context must be obtainable (measured in this
+  // repo's container: the adapter resolves and the context provider still
+  // fails). Comments are stripped first — this suite has been fooled by a guard
+  // matching its own explanatory prose more than once.
+  const src = read("js/render/three/tlx.js")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+
+  const decl = /let forceWebGL =([\s\S]{0,200}?);/.exec(src);
+  assert.ok(decl, "the forceWebGL declaration moved — this guard is pinned to it");
+  const expr = decl[1];
+  assert.match(expr, /_gpuCanvasOk/,
+    "forceWebGL must consult whether a WebGPU CONTEXT is obtainable, not just navigator.gpu");
+  assert.doesNotMatch(expr, /!\s*_hasGpu\b/,
+    "`!_hasGpu` is a presence check: navigator.gpu can exist while three still " +
+    "falls back to WebGL, which is exactly the alpha-canvas defect");
+
+  // The probe must never touch #game: one context type per canvas for life, and
+  // asking again returns the first one with ITS attributes.
+  const probe = /_gpuCanvasOk = ([\s\S]{0,160}?);/.exec(src);
+  assert.ok(probe, "the WebGPU context probe is gone");
+  assert.match(src, /createElement\("canvas"\)[\s\S]{0,200}?getContext\("webgpu"\)/,
+    "the webgpu context probe must run on a THROWAWAY canvas, never on #game");
+
+  // And the defect must stay diagnosable from a bug report.
+  assert.match(src, /canvasAlpha:/,
+    "backendState must report the LIVE canvas alpha so a report can name this defect");
+});

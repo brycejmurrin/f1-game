@@ -1112,11 +1112,19 @@ const CEILINGS = {
   // caching the bounds before the free and refusing the sweep on a phone. The
   // union carries all of it and is neither number — re-measured at 2810 on the
   // merged tree with this test's own metric, per the deploy rule.
-  // +14: the keep pass-throughs, armed in the state hooks, and the boot-canary
-  // re-arm on a context loss that sends the tab back to WebGL2 — TLX had no
-  // post-proof re-arm at all, so the jetsam-mid-race its own comment names was
-  // the one case the canary did not cover.
-  "js/render/three/tlx.js": 2833,
+  // 2819 -> 2901 (this branch): the see-through car on three.js. forceWebGL was
+  // decided on `navigator.gpu` EXISTING, a presence check — an adapter can
+  // refuse and a webgpu canvas context can fail while it stays true, and on both
+  // paths three binds WebGL WITHOUT throwing, so the opaque-context path keyed
+  // on that flag was skipped and the canvas came up alpha-composited.
+  //
+  // +14 (the other branch, same base): the keep pass-throughs armed in the state
+  // hooks, and the boot-canary re-arm on a context loss that sends the tab back
+  // to WebGL2.
+  //
+  // MERGED: both landed, so the ceiling is the merged file rather than either
+  // number. RE-MEASURED with this suite's own metric, not added on paper.
+  "js/render/three/tlx.js": 2915,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
