@@ -374,7 +374,7 @@ test("game keeps the sole prebuilt ribbon usable across envCull and tier changes
   assert.match(tlx, /chunkedTrackCoords:\s*false/);
 });
 
-test("per-chunk lamps: the road half and the scenery half share ONE gate, and it is autoTier", () => {
+test("per-chunk lamps: every half shares ONE gate, and it is autoShed", () => {
   // A feature the player can switch on must not be held off by three different
   // answers. Before this was pinned:
   //   js/game/lighting.js  help text : "Available at every GRAPHICS preset"
@@ -386,28 +386,52 @@ test("per-chunk lamps: the road half and the scenery half share ONE gate, and it
   // It was also DEAD CODE, which is why it went unnoticed:
   //   (A && tier() < 1) || (tier() < 3)  ===  tier() < 3
   // tier() < 1 implies tier() < 3, so the lamp clause could never change the
-  // outcome. With autoTier() the clause is live again at tier 3-4 — a LOW
-  // preset no longer forces the road back onto the single global 48-lamp set,
-  // while a governor shed or a crash-strike floor (both in autoTier) still do.
+  // outcome.
+  //
+  // THEN autoTier() LEAKED THE PRESET BACK IN BY ANOTHER ROUTE, which is what
+  // this test is now pinning. autoTier() reads _perfTier, and the degrade
+  // branch writes `_perfTier = max(_perfTier, _floorTier()) + 1` — _floorTier()
+  // folds in the GRAPHICS preset — while the restore branch walks back down
+  // only as far as _floorTier(). On MEDIUM (_userTier 2, every phone's default)
+  // the governor's FIRST shed pinned autoTier() at >= 2 for the whole session,
+  // so these lamps went off and never came back however completely the device
+  // recovered — reported as "chunk lights isn't working even with the slider",
+  // against a tuner note promising it "returns on its own when frames recover".
+  // autoShed() is the governor's measured shed alone (js/game/perf.js), and
+  // autoTier() deliberately stays behind for the tier-4 post consumers, which
+  // must still be able to reach 4 on a low preset.
   const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
 
   const road = src.match(/const _wantRoadChunk = [^;]+;/);
   assert.ok(road, "_wantRoadChunk still exists");
-  assert.match(road[0], /!_perChunkOff && PerfGov\.autoTier\(\) < 1/,
-    "the road lamp clause must gate on autoTier() — tier() makes it dead code " +
-    "and silently disables PER-CHUNK ROAD on GRAPHICS: LOW");
+  assert.match(road[0], /!_perChunkOff && PerfGov\.autoShed\(\) < 1/,
+    "the road lamp clause must gate on autoShed() — tier() makes it dead code, " +
+    "and autoTier() pins it off for the session after one shed on any preset " +
+    "below GRAPHICS: HIGH");
 
   // NOT the first `frame.perChunkLights = ...` — line ~6783 resets it to 0 with
   // the rest of the frame fields, and matching that read as a missing gate.
   const scenery = src.match(/frame\.perChunkLights = \(![^;]*hasPerChunkLights[^;]+;/);
   assert.ok(scenery, "the GATED frame.perChunkLights assignment still exists");
-  assert.match(scenery[0], /PerfGov\.autoTier\(\) >= 1/,
-    "the scenery half must stay on autoTier() so the two halves cannot disagree");
+  assert.match(scenery[0], /PerfGov\.autoShed\(\) >= 1/,
+    "the scenery half must stay on the same accessor as the road half so the " +
+    "two cannot disagree");
 
   // And the knob's own explanation has to describe the gate that actually runs.
   const tuner = fs.readFileSync(path.join(ROOT, "js/game/tuner.js"), "utf8");
-  assert.match(tuner, /PerfGov\.autoTier\s*\)\s*\?\s*PerfGov\.autoTier\(\)/,
-    "tuner.js's held-off note must read the same tier function as the gate");
+  assert.match(tuner, /PerfGov\.autoShed\s*\)\s*\?\s*PerfGov\.autoShed\(\)/,
+    "tuner.js's held-off note must read the same accessor as the gate");
+  const apex = fs.readFileSync(path.join(ROOT, "js/game/apex.js"), "utf8");
+  assert.match(apex, /PerfGov\.autoShed\(\) >= 1\) return "tier"/,
+    "__apex.perChunkHeld() must name the same gate the render path runs");
+
+  // The tier-4 post stack keeps autoTier(): the degrade branch stops at an
+  // EFFECTIVE tier of 4, so a shed COUNT saturates at 4 - _userTier and would
+  // make bloom / SSAO / god rays unsheddable on exactly the low presets that
+  // need them shed. Both accessors exist for that reason; neither replaces the
+  // other.
+  assert.match(src, /po\.ssao = PerfGov\.autoTier\(\) >= 4/,
+    "the look post stack must stay on autoTier(), which can still reach 4");
 });
 
 test("the display-reset latch clears from EITHER chunk slider, as the tuner promises", () => {

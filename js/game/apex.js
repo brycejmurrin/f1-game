@@ -1293,7 +1293,7 @@ const api = {
         if (G.frame.perChunkLights > 0) return null;         // actually running
         if (gfx && gfx.hasPerChunkLights === false) return "backend";
         try { if (localStorage.getItem("apex26.perChunkOff") === "1") return "latch"; } catch (_) { /* no storage */ }
-        if (typeof PerfGov !== "undefined" && PerfGov.autoTier && PerfGov.autoTier() >= 1) return "tier";
+        if (typeof PerfGov !== "undefined" && PerfGov.autoShed && PerfGov.autoShed() >= 1) return "tier";
         return "day";   // the flood branch never ran: daylight with no daytime lamps
       })(),
       sunY: G.frame.sunDir ? G.frame.sunDir[1] : null,
@@ -1444,7 +1444,7 @@ const api = {
   // external cap like iOS Low Power Mode's 30 fps throttle instead of forever
   // judging that device against a 60 fps target it cannot reach.
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes() };
+    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes() };
     if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
     PerfGov.setAutoRes(false); gfx.setRenderScale(+v); return this.renderScale();
   },

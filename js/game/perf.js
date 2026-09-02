@@ -183,6 +183,41 @@ let _crashStrikes = 0;
 // heavy post stack too (tier 4).
 let _perfTierFloor = 0;
 let _perfTier = 0;
+// How many rungs the GOVERNOR has shed on its own measurements, net of what it
+// has restored. This is NOT _perfTier, and the difference is a bug that shipped:
+// the degrade branch steps from `_floorTier()`, so on a device whose player had
+// chosen GRAPHICS: MEDIUM (_userTier 2) the first measured shed wrote
+// `_perfTier = 3` — the governor ADOPTED the preset as its own evidence — and
+// the restore branch walks back down only as far as `_floorTier()`, i.e. 2. So
+// `autoTier()`, which reads _perfTier, was pinned at >= 2 for the rest of the
+// session however completely the device recovered, and every gate spelled
+// `autoTier() >= 1` (PER-CHUNK LAMPS and the PER-CHUNK ROAD rider on it) stayed
+// off for good. Reported from a MEDIUM preset as "chunk lights isn't working
+// even with the slider", while the tuner's own note promised it "returns on its
+// own when frames recover" — which below GRAPHICS: HIGH it could not.
+//
+// autoTier() cannot simply be redefined as floor + this count: the degrade
+// branch stops once the EFFECTIVE tier reaches 4, so the count saturates at
+// `4 - _userTier` and the tier-4 post consumers (bloom, SSAO, god rays) would
+// become UNSHEDDABLE on exactly the low presets that most need them shed — the
+// post-mortem recorded above autoTier(). So the two answers stay two accessors:
+// autoTier() is WHERE THE LADDER STANDS (still _perfTier, still reaches 4), and
+// autoShed() is HOW MUCH THE GOVERNOR SHED BY EVIDENCE, which is what a feature
+// held off "because this device is missing frames" has to ask.
+let _autoShed = 0;
+// THE OPENING WINDOW, recorded so a player's own device can answer a question
+// this repo's containers cannot. "WebGPU lags for the first few seconds and
+// then runs fine" is a report about frames that have already gone by the time
+// anyone can read `perf()`, and every EMA in this file is designed to forget
+// them — `_frameEMA` at alpha 0.1 has lost a 400 ms frame within a second.
+// R23 measured four candidate causes on SwiftShader and excluded all four
+// (docs/PERF-FINDINGS.md §2x); what was missing was not another hypothesis but
+// the ability to see the stall on the hardware that has it. So: over the first
+// OPEN_FRAMES after a race starts, keep the single worst frame and a count of
+// how many ran over twice the derived budget. Two numbers, no allocation, and
+// they survive into `__apex.perf()` for as long as the race does.
+const OPEN_FRAMES = 600;   // ~10 s at 60 fps, ~20 s at 30
+let _openN = 0, _openMax = 0, _openSlow = 0;
 // The USER's floor, from the GRAPHICS preset (js/game/gfx-quality.js). It is a
 // third term in tier()'s max(), and that is the whole interaction rule:
 //
@@ -232,6 +267,7 @@ function init(gfx) {
   }
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
   _perfTier = _perfTierFloor;
+  _autoShed = 0;
 }
 
 // ONE owner for the strikes -> floor mapping. It used to be spelled out at init
@@ -244,7 +280,7 @@ function sentinelArm(on) {
   // at `_live` — both averages restart from their shared 16.7 so the EMA can
   // outrun the floor once more. Desktop too (above the mobile-only guard):
   // the governor runs everywhere, only the sentinel is mobile.
-  if (on) { _frameEMA = _floorMs = 16.7; _slowRun = 0; } else _live = false;
+  if (on) { _frameEMA = _floorMs = 16.7; _slowRun = 0; _openN = 0; _openMax = 0; _openSlow = 0; } else _live = false;
   if (!_gfx || !_gfx.isMobile) return;
   try { if (on) localStorage.setItem(SENT_ACTIVE, "1"); else localStorage.removeItem(SENT_ACTIVE); } catch (_) {}
 }
@@ -271,7 +307,7 @@ function cleanRace() {
     // degrade branch steps from _floorTier(), so it absorbs whatever floor was
     // live when it fired). Release it to the new floor and let the governor
     // re-earn any shed from its own measurements.
-    if (_perfTier > _floorTier()) _perfTier = _floorTier();
+    if (_perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
   }
 }
 
@@ -314,6 +350,13 @@ function tick(dtMs) {
   // `degradeAt`, and to still MOVE when a step helps, without letting a
   // pathological hitch enter at its full value.
   _live = true;
+  // Before any smoothing: the opening window wants the raw frame, spikes and
+  // all, because a spike in the first seconds IS the thing being reported.
+  if (_openN < OPEN_FRAMES) {
+    _openN++;
+    if (dtMs > _openMax) _openMax = dtMs;
+    if (dtMs > _floorMs * 2) _openSlow++;
+  }
   if (dtMs < SPIKE_MS) {
     _slowRun = 0;
     _frameEMA += (dtMs - _frameEMA) * 0.1;
@@ -347,7 +390,7 @@ function tick(dtMs) {
         // this device has just answered for. (An UP step failing says the
         // opposite — there was no headroom — and implies nothing about fill.)
         if (!v.up) _scaleFutile = true;
-      } else _perfTier = v.prev;
+      } else { _perfTier = v.prev; _autoShed = v.shed; }
       _govCool = VERIFY_COOL;
       // A failed UP step is the device saying "no headroom". Without a hold
       // the restore gate (EMA under the floor, _downHold 0) was true again
@@ -398,8 +441,8 @@ function tick(dtMs) {
       // distinguish, because the step genuinely did not help and the reason
       // (redundant, not mis-targeted) is invisible to a frame-time delta.
       // Skipping to floor+1 guarantees every step is one that can be felt.
-      _pendingVerify = { kind: "tier", prev: _perfTier, ema: _frameEMA };
-      _perfTier = Math.max(_perfTier, _floorTier()) + 1; _govCool = 90; _downHold = 600;
+      _pendingVerify = { kind: "tier", prev: _perfTier, shed: _autoShed, ema: _frameEMA };
+      _perfTier = Math.max(_perfTier, _floorTier()) + 1; _autoShed++; _govCool = 90; _downHold = 600;
       // A shed rung changes what the frame is bound BY, so let the scale lever
       // prove itself again from the new baseline rather than staying latched
       // off for the session on one old measurement.
@@ -445,8 +488,8 @@ function tick(dtMs) {
     // one per ~4 s — and never below the crash-sentinel floor OR the user's
     // GRAPHICS preset floor (_floorTier folds both).
     if (!stepped && _perfTier > _floorTier()) {
-      _pendingVerify = { kind: "tier", prev: _perfTier, ema: _frameEMA, up: true };
-      _perfTier--; _govCool = 240;
+      _pendingVerify = { kind: "tier", prev: _perfTier, shed: _autoShed, ema: _frameEMA, up: true };
+      _perfTier--; if (_autoShed > 0) _autoShed--; _govCool = 240;
     }
   }
 }
@@ -461,7 +504,7 @@ function clearStrikes() {
   // sitting on evidence earned under the old floor, so tier() stayed high after
   // __apex.safeMode(false) until a reload. Drop to the new floor so the device
   // can prove itself again (governor may re-shed if frames still miss).
-  if (_perfTier > _floorTier()) _perfTier = _floorTier();
+  if (_perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
   try { localStorage.setItem(SENT_STRIKES, "0"); localStorage.removeItem(SENT_ACTIVE); } catch (_) {}
 }
 
@@ -484,6 +527,11 @@ return {
   // for. _perfTier is the effective tier and can always climb to 4, so the
   // tier-4 consumers stay reachable on every preset.
   autoTier: () => Math.max(_perfTierFloor, _perfTier),
+  // What the GOVERNOR shed on its own measurements, plus the crash floor, and
+  // nothing the player asked for. The gate for anything held off "because this
+  // device is actually missing frames" — see _autoShed for why this is a second
+  // accessor rather than a redefinition of autoTier().
+  autoShed: () => Math.max(_perfTierFloor, _autoShed),
   tierFloor: () => _perfTierFloor,
   userTier: () => _userTier,
   // Clamped to the ladder's own range so a bad preset id can't invent a tier 7
@@ -507,7 +555,7 @@ return {
     // bit and forces one. Dropping to the new floor on a RAISE gives the device a
     // clean chance to prove itself; if it still cannot hold the budget the
     // governor re-sheds within a couple of evaluations, on its own measurements.
-    if (t < prev && _perfTier > _floorTier()) _perfTier = _floorTier();
+    if (t < prev && _perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
     // _perfTier is deliberately NOT touched here. It is the governor's OWN
     // evidence-based tier; the floors are applied at READ time in tier(). An
     // earlier draft pulled _perfTier up to the new floor, which conflated "shed
@@ -521,6 +569,9 @@ return {
     if (_live) _govCool = Math.max(_govCool, VERIFY_COOL);   // see _live: never before the first race tick
   },
   strikes: () => _crashStrikes,
+  // {frames, maxMs, slow} for the first OPEN_FRAMES of the current race — the
+  // instrument for a "laggy at first, fine afterwards" report. See _openN.
+  openWindow: () => ({ frames: _openN, maxMs: +_openMax.toFixed(1), slow: _openSlow }),
   fpsEMA: () => _frameEMA,
   floorMs: () => _floorMs,
   autoRes: () => _autoRes,
