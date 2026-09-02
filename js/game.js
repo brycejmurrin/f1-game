@@ -8022,9 +8022,9 @@ function buildRaceSettings() {
   const lapOpts = isTimeTrial() ? [3, 4, 5, 8]
                                 : [3, 5, 10, 25].filter((n) => n < full).concat(full);
   // FULL now MOVES with the circuit, so a selection made at Monaco (78) is off
-  // the ladder at Spa (44) and would leave no chip lit — the same defect the
-  // TT comment above records. Clamp instead of silently deselecting.
-  if (!isTimeTrial() && raceLaps > full) raceLaps = full;
+  // the ladder at Spa (44) — and a 57 (FULL) picked at Silverstone is off it at
+  // Monaco (78) too, BELOW full, so a > full clamp still left no chip lit.
+  if (!isTimeTrial() && !lapOpts.includes(raceLaps)) raceLaps = full;   // a full race stays a full race
   const lapsEl = $("rs-laps");
   lapsEl.innerHTML = "";
   for (const n of lapOpts) {

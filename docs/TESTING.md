@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 172 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 173 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1132,6 +1132,7 @@ what it covers.
 | `collisions-deep-vm.test.mjs` | Node twin of `collisions-deep.spec.js` (~8 s): all 15 tests — pushes that stick, no interpenetration, open-circuit and monaco street walls under `incident({flags})`, kerb flag, sandwiches, pileups, the seam, the side-rub speed-death regression. Nothing left in the browser |
 | `collision-ai-fixes-vm.test.mjs` | Node twin of `collision-ai-fixes.spec.js` (~7 s): all 14 tests — wrong-way thresholds and hysteresis, the pushIn wall scrub with its control run, throttle-gated rescue and its cooldown reset, rear-end `contactT`, the 10-car separation window, zandvoort AI banking grip, the jeddah barrier face. Nothing left in the browser |
 | `new-hooks-vm.test.mjs` | Node twin of `new-hooks.spec.js` (~12 s): 55 of 56 — `timing`/`sectorState`/`lapHistory` (TT via `tt()`)/`fieldState`/`aiPlace`/`setEnergy`/`setLap`/`trackProfile`/`obs().gear`, the eight virgin-boot nulls first, and the shared-foundation diagnostics (silverstone, cota, miami, jeddah, singapore day+night, shanghai day+night). Left in the browser: the hidden ~300 s Madrid foundation test (`test.setTimeout(300000)`) |
+| `race-settings-vm.test.mjs` | RACE SETTINGS lap ladder as behaviour on the game-vm harness: FULL is `def.gpLaps` and differs per circuit; a VS FRIEND host's distance that is OFF the next circuit's ladder (above OR below FULL — 52 (FULL) at Silverstone is not on Monaco's 3/5/10/25/78) snaps to that circuit's FULL instead of leaving no chip lit; TT ladder untouched; the solo flow still resets to the default |
 | `generated-docs.test.mjs` | the three doc generators (`gen-tools-readme`, `gen-slider-doc`, `gen-hooks-table`) run with `--check` against the committed output — drift is a red test, not a stale table — plus row-count / no-`undefined` sanity |
 | `car-wing-foil.test.mjs` | Shared `Car3D` wing section: knife-TE `FOIL_T` sample, five-span planform, beveled endplates, 100-triangle flap (not a 48-triangle plank), default body/cockpit under the 2505/1500 ceilings, single-option recipes within 1.6× the default budget |
 | `car-presentation-canary.test.mjs` | Field cars share the player's presentation path: `renderPosOf` / `playerAnchor` interpolate world `px`/`pz` for every car (not only `c.human`), `xVis` is dump-only (no 16/s or 30/s damp, shadows use the same `cX`), AI mirrors `px`/`pz` *after* the `(s, x)` advance, visible procedural cars draw `teamBodyMesh`/`playerBodyMesh` + planted factory-signature wheels on `_groundMat` (not a generic `field:1:1:1` pair, not baked wheels on the chassis matrix), and `carOrbit` / agent-view `carWorld` read the mirrored pose. Locks the two leftover bugs that made the pack feel delayed and "a different car" |
