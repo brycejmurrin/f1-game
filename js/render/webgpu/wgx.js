@@ -482,14 +482,14 @@ const WGX = (function () {
     // SCREENSHOTS setting (SETTINGS ▸ SCREENSHOTS) + probe flag. Session wins
     // so gfx-probe can override a saved local pref for one tab; local persists
     // the player's tap. "1" = force 2D blit, "0" = force native swapchain.
-    const _capPref = (function readCapturePref() {
+    let _capPrefSrc = null; const _capPref = (function readCapturePref() {   // _capPrefSrc: "session" | "local"
       try {
         const s = sessionStorage.getItem("apex26.wgxCapture");
-        if (s === "1" || s === "0") return s;
+        if (s === "1" || s === "0") { _capPrefSrc = "session"; return s; }
       } catch (_) { /* fall through */ }
       try {
         const s = localStorage.getItem("apex26.wgxCapture");
-        if (s === "1" || s === "0") return s;
+        if (s === "1" || s === "0") { _capPrefSrc = "local"; return s; }
       } catch (_) { /* AUTO */ }
       return null;
     })();
@@ -498,7 +498,15 @@ const WGX = (function () {
     // Lavapipe reports non-enumerable vendor/arch that stringify hid until 2026-08-17).
     // NATIVE ("0") keeps the swapchain so you can see why software screenshots
     // are black — and turns the output-probe ladder off so black is not a refuse.
-    const _softGpu = _capPref === "0" ? false : (_softAdapter || _capPref === "1");
+    // A PERSISTED 2D BLIT on a HARDWARE adapter is the whole soft-present cost
+    // (full-frame staging copy + fence + mapAsync + W×H JS loop + putImageData,
+    // every frame: ~15-40 ms at 1440p — "WebGPU is laggy" with nothing else
+    // wrong) and the localStorage tap outlives its tab. Hardware honours the
+    // blit for THIS TAB only (sessionStorage: a SETTINGS tap, SAVE SCREENSHOT,
+    // gfx-probe); a saved-only "1" reads as AUTO with a warning.
+    const _blitForced = _capPref === "1" && (_softAdapter || _capPrefSrc === "session");
+    if (_capPref === "1" && !_blitForced) { try { Log.warn("gfx", "WGX: saved SCREENSHOTS=2D BLIT ignored on a hardware adapter (per-frame CPU present); tap it again in SETTINGS for this tab"); } catch (_) { /* harness */ } }
+    const _softGpu = _capPref === "0" ? false : (_softAdapter || _blitForced);
     if (_softGpu) _outProbeOff = true;
     // Software-present renders into an rgba8unorm texture, not the preferred
     // (usually bgra8unorm) swapchain. Every pipeline targeting currentView must
@@ -943,7 +951,7 @@ const WGX = (function () {
     // CPU rings for blob/mark + decal. Filled per stamp; one writeBuffer each
     // in _flushLitRings() before litPass.end() (same shape as drawRing).
     const quadFxRing = new Float32Array(FX_QUAD_SLOTS * FX_F32_STRIDE);
-    const decalFxRing = new Float32Array(FX_DECAL_SLOTS * FX_F32_STRIDE);
+    const decalFxRing = new Float32Array(FX_DECAL_SLOTS * FX_F32_STRIDE), _DECAL_SUN = [1, 0.95, 0.9], _DECAL_ASKY = [0.3, 0.32, 0.36], _DECAL_AGR = [0.2, 0.19, 0.18];
     const _fxQuadDynOff = [0], _fxDecalDynOff = [0];
     const fxScratch = new Float32Array(56);   // >= DECAL 224 B / 4 — glow still uses this scratch
     // Camera-facing glow billboard corner template (mirror GLX _glowCorners).
@@ -1769,15 +1777,12 @@ const WGX = (function () {
                   _softImg = _displayCtx.createImageData(w, h);
                 }
                 const img = _softImg;
-                for (let y = 0; y < h; y++) {
-                  const s = y * bpr, d = y * w * 4;
-                  for (let x = 0; x < w; x++) {
-                    const si = s + x * 4, di = d + x * 4;
-                    const r = src[si], g = src[si + 1], b = src[si + 2];
-                    img.data[di] = r; img.data[di + 1] = g; img.data[di + 2] = b; img.data[di + 3] = 255;
-                    if ((r + g + b) > maxPx) maxPx = r + g + b;
-                  }
-                }
+                const d = img.data, rowBytes = w * 4;
+                // Row copies + a strided alpha pass + a 1-in-16 brightness sample
+                // replaced a 4-read/4-write loop per pixel (every frame on software).
+                for (let y = 0; y < h; y++) d.set(src.subarray(y * bpr, y * bpr + rowBytes), y * rowBytes);
+                for (let i = 3; i < d.length; i += 4) d[i] = 255;   // putImageData needs opaque pixels
+                for (let i = 0; i < d.length; i += 64) { const v = d[i] + d[i + 1] + d[i + 2]; if (v > maxPx) maxPx = v; }
                 _softLastMaxPx = maxPx;
                 if (maxPx >= 8) {
                   _displayCtx.putImageData(img, 0, 0);
@@ -5094,16 +5099,14 @@ const WGX = (function () {
       const sd = frameSunDir || [0.3,0.6,0.5];
       const Td = frameTune || null;
       const kM = Td && Td.keyMul != null ? Td.keyMul : 1;
-      const scRaw = frameSunColor || [1,0.95,0.9];
-      const sc = [scRaw[0] * kM, scRaw[1] * kM, scRaw[2] * kM];
+      const sc = frameSunColor || _DECAL_SUN;
       const ambM = Td && Td.ambientMul != null ? Td.ambientMul : 1;
-      const askyRaw = frameAmbSky || [0.3,0.32,0.36], agrRaw = frameAmbGround || [0.2,0.19,0.18];
-      const asky = [askyRaw[0] * ambM, askyRaw[1] * ambM, askyRaw[2] * ambM];
-      const agr = [agrRaw[0] * ambM, agrRaw[1] * ambM, agrRaw[2] * ambM];
+      const asky = frameAmbSky || _DECAL_ASKY, agr = frameAmbGround || _DECAL_AGR;
+      // Scaled straight into the ring: no per-decal array literals (the last per-frame allocations on WGX).
       s[base + 32] = sd[0]; s[base + 33] = sd[1]; s[base + 34] = sd[2]; s[base + 35] = 0;
-      s[base + 36] = sc[0]; s[base + 37] = sc[1]; s[base + 38] = sc[2]; s[base + 39] = 0;
-      s[base + 40] = asky[0]; s[base + 41] = asky[1]; s[base + 42] = asky[2]; s[base + 43] = 0;
-      s[base + 44] = agr[0];  s[base + 45] = agr[1];  s[base + 46] = agr[2];  s[base + 47] = 0;
+      s[base + 36] = sc[0] * kM; s[base + 37] = sc[1] * kM; s[base + 38] = sc[2] * kM; s[base + 39] = 0;
+      s[base + 40] = asky[0] * ambM; s[base + 41] = asky[1] * ambM; s[base + 42] = asky[2] * ambM; s[base + 43] = 0;
+      s[base + 44] = agr[0] * ambM;  s[base + 45] = agr[1] * ambM;  s[base + 46] = agr[2] * ambM;  s[base + 47] = 0;
       const uvr = o.uvRect || null;
       s[base + 48] = uvr ? uvr[0] : 0; s[base + 49] = uvr ? uvr[1] : 0; s[base + 50] = uvr ? uvr[2] : 1; s[base + 51] = uvr ? uvr[3] : 1;
       const tint = o.tint || null;

@@ -4,6 +4,19 @@
  * until the deferred flyby builds). A canary that stayed armed until present()
  * reverted THREE/WEBGPU to WEBGL2 on every refresh — computer and phone.
  *
+ * HOW IT PINS THINGS (2026-09 rewrite). ~390 assertions here used to quote
+ * source text; a one-token refactor that changed no behaviour broke two of
+ * them. Now the GLX renderer is BOOTED on tests/helpers/glx-mock.mjs (a
+ * recording WebGL2 mock) and asserted by its gl call stream — uniform caches,
+ * fail-closed guards, cull bookkeeping, the light-lane packing, the opaque
+ * canvas; the RENDERER picker is driven through gfx-quality.js in a VM; the
+ * GPU-census Verdict script is EXECUTED against fixtures. WGX behaviour that
+ * tests/unit/webgpu-lifecycle.test.mjs already drives on its mock device is
+ * not repeated here as text. What stays a source pin — TLX (three.js cannot
+ * load in Node), WGSL/GLSL/TSL, the vendored three bundle, the workflow
+ * YAML, the tools — is matched on comment-stripped source by identifier and
+ * shape, never by exact whitespace, argument order or comment text.
+ *
  * Run: node --test tests/unit/gfx-backend-canary.test.mjs
  */
 import { test } from "node:test";
@@ -15,9 +28,26 @@ import { spawnSync } from "node:child_process";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { bootGlx } from "../helpers/glx-mock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+// Comment-stripped source: a pin can only match code, and a comment can
+// neither fail nor satisfy it.
+const code = (p) => read(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+/** Brace-matched body of `function name(` (or `name(args) {` for a method). */
+function fnBody(src, name) {
+  const m = src.match(new RegExp(`(?:function\\s+)?${name}\\s*\\([^)]*\\)\\s*\\{`));
+  assert.ok(m, `${name}() moved`);
+  let depth = 1;
+  const start = m.index + m[0].length;
+  let i = start;
+  for (; i < src.length && depth; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") depth--;
+  }
+  return src.slice(start, i - 1);
+}
 
 test("gfx-probe cannot report a stale optional frame as fresh", () => {
   const probe = read("tools/gfx-probe.mjs");
@@ -43,66 +73,84 @@ test("#pm-renderer is visible in the SETTINGS markup (not hidden)", () => {
 });
 
 test("boot canary disarms after a successful bind, not only after present()", () => {
-  const game = read("js/game.js");
-  const bind = game.indexOf("Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(backend))");
-  const present = game.indexOf("gfx.present(po);");
-  const disarmAfterBind = game.indexOf("localStorage.removeItem(PROBE_KEY)", bind);
+  const game = code("js/game.js");
+  const bind = game.search(/Object\.defineProperties\(\s*GLX\s*,\s*Object\.getOwnPropertyDescriptors\(\s*backend\s*\)\s*\)/);
+  const present = game.search(/gfx\.present\(\s*po\s*\)/);
   assert.ok(bind > 0 && present > bind, "bind then present");
-  assert.ok(disarmAfterBind > bind && disarmAfterBind < present,
+  const disarmAfterBind = game.slice(bind).search(/removeItem\(\s*PROBE_KEY\s*\)/);
+  assert.ok(disarmAfterBind >= 0 && bind + disarmAfterBind < present,
     "PROBE_KEY must be cleared after Gfx.create() binds, before the first present — title has no track");
 });
 
 test("first world present re-arms the canary so a jetsam mid-frame still reverts", () => {
-  const game = read("js/game.js");
-  const present = game.indexOf("gfx.present(po);");
-  const window = game.slice(present - 400, present + 280);
-  assert.match(window, /setItem\("apex26\.gfxBackendProbe"/);
-  assert.match(window, /removeItem\("apex26\.gfxBackendProbe"\)/);
+  const game = code("js/game.js");
+  const present = game.search(/gfx\.present\(\s*po\s*\)/);
+  const window = game.slice(present - 600, present + 400);
+  assert.match(window, /setItem\(\s*"apex26\.gfxBackendProbe"/);
+  assert.match(window, /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/);
 });
 
-test("RENDERER picker lives in gfx-quality.js and always names WEBGPU", () => {
-  const src = read("js/game/gfx-quality.js");
-  assert.match(src, /getElementById\("pm-renderer"\)/);
-  assert.match(src, /WEBGPU \(UNAVAILABLE\)/);
-  assert.match(src, /createElement\("select"\)/);
-  assert.match(src, /pm-renderer-prev/);
-  assert.match(src, /pm-renderer-next/);
-  assert.doesNotMatch(read("js/game.js"), /getElementById\("pm-renderer"\)|\$\("pm-renderer"\)/);
+test("RENDERER picker lives in gfx-quality.js, not game.js", () => {
+  // The picker's own behaviour — a <select> with ‹ › steps, "WEBGPU
+  // (UNAVAILABLE)" without navigator.gpu — is driven through bootPicker()
+  // below; this is the ownership rule only.
+  assert.doesNotMatch(code("js/game.js"), /getElementById\(\s*"pm-renderer"\s*\)|\$\(\s*"pm-renderer"\s*\)/);
+  assert.match(code("js/game/gfx-quality.js"), /getElementById\(\s*"pm-renderer"\s*\)/);
 });
 
 test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", () => {
-  const src = read("js/render/three/tlx.js");
-  assert.match(src, /isWebKit/);
+  const src = code("js/render/three/tlx.js");
+  assert.match(src, /\bisWebKit\b/);
   assert.match(src, /apex26\.tlxAutoGL/);
-  assert.match(src, /_autoStayGL/);
-  assert.match(src, /forceWebGL = _glPin === "1" \|\| \(_glPin !== "0" && \(!_hasGpu \|\| _autoStayGL\)\)/);
-  assert.match(src, /async function bootRenderer/);
-  assert.match(src, /AUTO WebGPU init failed — three WebGL2/);
+  assert.match(src, /\b_autoStayGL\b/);
+  assert.match(src, /forceWebGL\s*=\s*_glPin\s*===\s*"1"\s*\|\|\s*\(\s*_glPin\s*!==\s*"0"\s*&&\s*\(\s*!_hasGpu\s*\|\|\s*_autoStayGL\s*\)\s*\)/,
+    "AUTO stays on WebGL2 without a GPU or after a WebGPU init failure; a pin of 1/0 overrides");
+  assert.match(src, /async\s+function\s+bootRenderer\b/);
+  assert.match(src, /AUTO WebGPU init failed/);
   assert.match(src, /AUTO stayed on three WebGL2/);
   assert.match(src, /outputType:\s*THREE\.UnsignedByteType/);
   assert.match(src, /powerPreference:\s*"low-power"/);
-  assert.match(src, /infoBlob = \[dev, ven, arch, desc\]/);
-  assert.match(read("js/render/three/tsl-lit.js"), /cubeTexture\(envCubeNode, Rg, rough\.mul\(2\.5\)\)/);
+  assert.match(src, /infoBlob\s*=\s*\[[^\]]*\bdev\b[^\]]*\]/, "the adapter sniff joins the info fields into one blob");
+  assert.match(code("js/render/three/tsl-lit.js"), /cubeTexture\(\s*envCubeNode\s*,\s*Rg\s*,\s*rough\.mul\(\s*2\.5\s*\)\s*\)/);
 });
 
-test("GLX createTexMesh / createTexture / draws fail closed when the context is lost", () => {
-  const glx = read("js/render/glx.js");
-  const chunked = read("js/render/glx/chunked.js");
-  const shadow = read("js/render/glx/shadow.js");
-  assert.match(glx, /function createMesh\(data\) \{\n\s+if \(ctxGone\(\)\) return null;/);
-  assert.match(glx, /function createTexMesh\(data\) \{\n\s+if \(ctxGone\(\)\) return null;/);
-  assert.match(glx, /function createTexture\(src\) \{\n\s+if \(ctxGone\(\)\) return null;/);
-  assert.match(glx, /function createTextureArray\(size, images, layers\) \{\n\s+if \(ctxGone\(\) \|\| !size \|\| !images\) return null;/);
-  assert.match(glx, /function drawDecal\([\s\S]{0,80}if \(ctxGone\(\)/);
-  assert.match(glx, /function drawInstanced\([\s\S]{0,80}if \(ctxGone\(\)/);
-  assert.match(glx, /function drawShadow\([\s\S]{0,40}if \(ctxGone\(\)/);
-  assert.match(glx, /function drawMark\([\s\S]{0,40}if \(ctxGone\(\)/);
-  assert.match(glx, /function drawSkidBatch\([\s\S]{0,40}if \(ctxGone\(\)/);
-  assert.match(glx, /function drawGlow\([\s\S]{0,60}if \(ctxGone\(\)/);
-  assert.match(glx, /function drawParticles\([\s\S]{0,80}if \(ctxGone\(\)/);
-  assert.match(glx, /core = \{[\s\S]{0,80}ctxGone,/);
-  assert.match(chunked, /core\.ctxGone\(\)\) \|\| !mesh/);
-  assert.match(shadow, /core\.ctxGone\(\)\) \|\| !S\.depthPassOn \|\| !mesh/);
+test("GLX create* / draw* fail closed when the context is lost", () => {
+  // BEHAVIOUR on the mock: after `webglcontextlost` every creator returns
+  // null and every draw entry (core, chunked, shadow, post) makes NO gl call.
+  const h = bootGlx();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mesh = h.GLX.createMesh(tri);
+  const chunked = h.GLX.createChunkedMesh(tri, 72);
+  const batch = h.GLX.createInstancedBatch(tri, new Float32Array(32), null, null);
+  const tex = h.GLX.createTexture({ width: 2, height: 2 });
+  assert.ok(mesh && chunked && batch && tex, "a live context creates");
+  const model = new Float32Array(16); model[0] = model[5] = model[10] = model[15] = 1;
+  h.GLX.begin(h.frame());
+  h.reset();
+  h.GLX.draw(mesh, model, {});
+  assert.ok(h.calls.length > 0, "a live draw talks to gl");
+
+  h.loseContext();
+  assert.equal(h.GLX.createMesh(tri), null);
+  assert.equal(h.GLX.createTexMesh({ pos: [0, 0, 0], nrm: [0, 1, 0], uv: [0, 0], idx: [0] }), null);
+  assert.equal(h.GLX.createTexture({}), null);
+  assert.equal(h.GLX.createTextureArray(4, [{}], 1), null);
+  h.reset();
+  h.GLX.begin(h.frame());
+  h.GLX.draw(mesh, model, {});
+  h.GLX.drawChunked(chunked, model, {});
+  h.GLX.drawInstanced(batch, {});
+  h.GLX.drawDecal(mesh, model, tex, {});
+  h.GLX.drawShadow(model, 1, 1);
+  h.GLX.drawMark(model, 1, 1);
+  h.GLX.drawSkidBatch(new Float32Array(64), 4, true);
+  h.GLX.drawGlow([0, 0, 0, 1, 1, 1, 5], 0.2);
+  h.GLX.drawParticles(new Float32Array(16), 16, false);
+  h.GLX.castShadow(mesh, model);
+  h.GLX.castShadowChunked(chunked, model);
+  h.GLX.present({});
+  assert.deepEqual(h.calls.map((c) => c[0]), [], "no entry point touches a lost context");
+  assert.equal(h.GLX.updateInstances(batch, new Float32Array(32), 1), 0, "updateInstances reports nothing resident");
 });
 
 test("TLX hoists crack fwidth and MAT samples before the detail/live If (WGSL derivative_uniformity)", () => {
@@ -138,59 +186,69 @@ test("TLX decal programs share a material map reference, not the first car's tex
 });
 
 test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", () => {
-  const game = read("js/game.js");
+  const game = code("js/game.js");
   assert.match(game, /apex26\.gfxClaimFail/);
-  assert.match(game, /armed && !skipClaim/);
+  assert.match(game, /armed\s*&&\s*!skipClaim\b/);
   // The claim-fail reload must READ THE SKIP BACK first: with sessionStorage
   // blocked, removing the probe + reloading replays the claim-and-die boot
   // forever (the probe was the only other escape). And it must reload at most
   // ONCE — a latch already set when the boot started means the previous
   // reload's GLX.init failed too, and reloading again loops forever
   // (measured 236 reloads/64 s under a Vulkan-only browser config).
-  assert.match(game, /if \(!_claimSkipped\) \{\s*sessionStorage\.setItem\("apex26\.gfxClaimFail", "1"\);\s*skipped = sessionStorage\.getItem\("apex26\.gfxClaimFail"\) === "1"/);
-  assert.match(game, /Live tab, create\(\) refused[\s\S]{0,400}removeItem\("apex26\.gfxBackendProbe"\)/);
-  assert.match(game, /gfxClaimFail[\s\S]{0,220}removeItem\("apex26\.gfxBackendProbe"\)/);
-  assert.doesNotMatch(game, /create\(\) refused[\s\S]{0,250}setItem\("apex26\.gfxBackend", "webgl2"\)/);
-  const wgx = read("js/render/webgpu/wgx.js");
-  assert.match(wgx, /device\.lost[\s\S]{0,400}_wgxEscalate/);
-  assert.match(wgx, /function _wgxEscalate[\s\S]{0,2500}apex26\.gfxClaimFail/);
-  assert.doesNotMatch(wgx, /device\.lost[\s\S]{0,2200}setItem\("apex26\.gfxBackend", "webgl2"\)/);
-  assert.match(wgx, /WGX_LITE/);
-  assert.match(wgx, /IS_WEBKIT/);
-  assert.match(wgx, /WGX_LITE && format === "rgba16float"\) format = "bgra8unorm"/);
-  assert.match(wgx, /const _sceneProbeOn = !_outProbeOff && !WGX_LITE/);
-  assert.match(wgx, /_canTimestamp = !WGX_LITE/);
-  assert.match(wgx, /apex26\.gfxWgxLite/);
-  assert.match(wgx, /apex26\.gfxBound/);
-  // begin/present throws land in the strike counter — never tick()'s overlay,
-  // and never the old freeze-forever `_lost = true` latch for a healthy device.
-  assert.match(wgx, /_jsStrike\("begin", e\)/);
-  assert.match(wgx, /_jsStrike\("present", e\)/);
-  assert.match(wgx, /JS_STRIKE_CAP/);
-  // The ladder heals: a streak of clean sessions steps the rung back down.
-  assert.match(wgx, /apex26\.gfxWgxOk/);
-  assert.match(wgx, /HEAL_SESSIONS/);
-  // Lazy mesh creation on the render path must degrade to inert, not throw.
-  assert.match(wgx, /_allocFail\("createMesh", e\)/);
-  assert.match(wgx, /_allocFail\("createChunkedMesh", e\)/);
-  // The loss ladder: full → lite → minimal → GLX session skip. A loss must
-  // climb a rung (persisted) and reload, never re-run the identical config.
-  assert.match(wgx, /apex26\.gfxWgxLevel/);
-  assert.match(wgx, /WGX_MINIMAL = _wgxLevel >= 2/);
-  assert.match(wgx, /if \(!WGX_MINIMAL\) _buildPost\(\)/);
-  assert.match(wgx, /if \(_lost \|\| WGX_MINIMAL \|\| !skyPipeline\) return null/);
-  // A hand re-pick of WEBGPU resets the ladder so the player can retry full.
-  const gq = read("js/game/gfx-quality.js");
-  assert.match(gq, /removeItem\("apex26\.gfxWgxLevel"\)/);
-  assert.match(gq, /removeItem\("apex26\.gfxWgxLite"\)/);
-  assert.match(gq, /removeItem\("apex26\.gfxWgxFail"\)/);
+  const latch = game.search(/if\s*\(\s*!_claimSkipped\s*\)/);
+  assert.ok(latch > 0, "the reload is gated on the latch not already being set");
+  const latchBody = game.slice(latch, latch + 400);
+  assert.match(latchBody, /setItem\(\s*"apex26\.gfxClaimFail"\s*,\s*"1"\s*\)/);
+  assert.match(latchBody, /skipped\s*=\s*sessionStorage\.getItem\(\s*"apex26\.gfxClaimFail"\s*\)\s*===\s*"1"/, "the skip is read back before the reload");
+  const refused = game.search(/gfxClaimFail/);
+  assert.ok(refused > 0);
+  assert.match(game.slice(refused, refused + 3000), /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/, "a refused create disarms the probe");
+  assert.doesNotMatch(game, /create\(\)\s*refused[\s\S]{0,250}setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
+  const wgx = code("js/render/webgpu/wgx.js");
+  assert.match(wgx, /device\.lost[\s\S]{0,600}_wgxEscalate\(/, "device.lost climbs the ladder through _wgxEscalate");
+  assert.match(fnBody(wgx, "_wgxEscalate"), /apex26\.gfxClaimFail/, "the last rung surrenders the tab to GLX via the claim-fail latch");
+  assert.doesNotMatch(wgx, /device\.lost[\s\S]{0,2200}setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
+  assert.match(wgx, /\bWGX_LITE\b/);
+  assert.match(wgx, /\bIS_WEBKIT\b/);
+  assert.match(wgx, /WGX_LITE\s*&&\s*format\s*===\s*"rgba16float"\s*\)\s*format\s*=\s*"bgra8unorm"/);
+  assert.match(wgx, /_sceneProbeOn\s*=\s*!_outProbeOff\s*&&\s*!WGX_LITE\b/);
+  // The loss ladder (full → lite → minimal → GLX, persisted in
+  // apex26.gfxWgxLevel), the JS strike cap in begin()/present(), the
+  // HEAL_SESSIONS step-down, the minimal rung's no-post/no-sky path and the
+  // apex26.gfxBound label are all driven on the mock device by
+  // tests/unit/webgpu-lifecycle.test.mjs ("device.lost climbs the ladder",
+  // "…climbs to minimal", "minimal rung: no post targets…", "a JS throw in
+  // begin() strikes out…", "clean sessions heal the ladder") — not repeated
+  // here as source text.
+  assert.match(wgx, /_allocFail\(\s*"createMesh"/, "lazy mesh creation on the render path degrades to inert, not a throw");
+  assert.match(wgx, /_allocFail\(\s*"createChunkedMesh"/);
+  // A hand re-pick of WEBGPU resets the ladder so the player can retry full:
+  // BEHAVIOUR through the picker.
+  const a = bootPicker({
+    ls: { "apex26.gfxBackend": "three", "apex26.gfxWgxLevel": "2", "apex26.gfxWgxLite": "1", "apex26.gfxWgxFail": "device lost", "apex26.gfxWgxOk": "3" },
+    ss: { "apex26.gfxClaimFail": "1" },
+    gpu: {},
+  });
+  const sel = a.byId["pm-renderer"];
+  sel.value = "webgpu";
+  sel.dispatchEvent("change");
+  assert.equal(a.ls.getItem("apex26.gfxBackend"), "webgpu");
+  for (const k of ["apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxFail", "apex26.gfxWgxOk"]) {
+    assert.equal(a.ls.getItem(k), null, `${k} must be cleared by a hand re-pick of WEBGPU`);
+  }
+  assert.equal(a.ss.getItem("apex26.gfxClaimFail"), null, "the session skip is cleared too");
 });
 
 test("RENDERER label names the live backend when WEBGPU fell back to GLX", () => {
-  const src = read("js/game/gfx-quality.js");
-  assert.match(src, /WEBGPU \(WEBGL2\)|backendLabel\(pref\) \+ " \(WEBGL2\)"/);
-  assert.match(src, /apex26\.gfxBound/);
-  assert.match(src, /apex-gfx-live/);
+  // BEHAVIOUR: the pick stays WEBGPU, the label says what actually paints.
+  const a = bootPicker({ ls: { "apex26.gfxBackend": "webgpu" }, ss: { "apex26.gfxBound": "webgl2" }, gpu: {} });
+  const sel = a.byId["pm-renderer"];
+  assert.equal(sel.value, "webgpu", "the preference is still the player's pick");
+  assert.equal(sel.options[2].textContent, "WEBGPU (WEBGL2)", "the live backend is named beside it");
+  assert.equal(sel.options[0].textContent, "WEBGL2", "only the fallen-back pick carries the suffix");
+  const b = bootPicker({ ls: { "apex26.gfxBackend": "webgpu" }, gpu: {} });
+  assert.equal(b.byId["pm-renderer"].options[2].textContent, "WEBGPU", "no fallback, no suffix");
+  assert.ok(a.winListeners.includes("apex-gfx-live"), "the label repaints when the backend announces itself");
 });
 
 test("TLX HDR accepts iOS half-float and a refused create records why", () => {
@@ -200,7 +258,7 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
   assert.doesNotMatch(post, /keep hdr=true \(WebGPU is always half-float\)/);
   const tlx = read("js/render/three/tlx.js");
   assert.match(tlx, /apex26\.gfxTlxFail/);
-  assert.doesNotMatch(tlx, /isMobile && !post\.hdrOk\(\)/,
+  assert.doesNotMatch(tlx, /isMobile\s*&&\s*!post\.hdrOk\(\s*\)/,
     "GLX keeps the 8-bit post chain when half-float is missing; TLX must too");
   assert.match(tlx, /TLX: present failed/);
   assert.match(tlx, /MeshBasicMaterial/);
@@ -267,13 +325,11 @@ function makeStorage(seed) {
 }
 
 test("RESET RENDERER is injected next to #pm-renderer, not written into the shell", () => {
-  const html = read("index.html");
-  const src = read("js/game/gfx-quality.js");
-  assert.doesNotMatch(html, /id="pm-renderer-reset"/);
-  assert.match(src, /getElementById\("pm-renderer-reset"\)/);
-  assert.match(src, /createElement\("button"\)/);
-  assert.match(src, /RESET RENDERER/);
-  assert.match(src, /insertBefore\(btn, slot\.nextSibling\)/);
+  // The injection itself (a <button> created and placed after #pm-renderer,
+  // labelled RESET RENDERER) is driven below in "RESET RENDERER click wipes
+  // storage, disarms the sentinel, and reloads"; this pins only that the
+  // shell does not carry a static copy.
+  assert.doesNotMatch(read("index.html"), /id="pm-renderer-reset"/);
 });
 
 test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality", () => {
@@ -345,9 +401,10 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
 });
 
 test("blocked sessionStorage skips the opt-in so this tab never claims the canvas", () => {
-  const game = read("js/game.js");
-  const boot = game.slice(game.indexOf("let skipClaim = false"), game.indexOf("const PROBE_KEY"));
-  assert.match(boot, /catch \(_\) \{ skipClaim = (?:_claimSkipped = )?true;/);   // _claimSkipped rides along: the GLX.init failure path reads it
+  const game = code("js/game.js");
+  const boot = game.slice(game.search(/let\s+skipClaim\s*=\s*false/), game.search(/const\s+PROBE_KEY\b/));
+  assert.match(boot, /catch\s*\(\s*_?\w*\s*\)\s*\{\s*(?:skipClaim|_claimSkipped)\s*=\s*(?:(?:skipClaim|_claimSkipped)\s*=\s*)?true\b/,
+    "a storage throw sets the skip (and the latch that the GLX.init failure path reads)");
   assert.doesNotMatch(boot, /try the opt-in as usual/);
 });
 
@@ -409,66 +466,79 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
   assert.equal(reloaded, 1);
 });
 
-test("GLX pins the per-chunk uploadLightSet revert (arity 3) and no-ops when the context is lost", () => {
+test("GLX pins the per-chunk uploadLightSet revert (arity 3)", () => {
   // Arity 3 is the DECISION, not an oversight: the 6-arg tail-light forwarding
   // was reverted pending a crash repro (see the decision record above
   // uploadLightSet in glx.js core). This canary used to pin the 6-arg form —
   // it was added with the fix and survived the revert being lost in the
   // build-1496 squash merge. Re-land the forwarding WITH a repro, and flip
-  // this regex in the same commit.
-  const glx = read("js/render/glx.js");
-  assert.match(glx, /uploadLightSet:\s*\(L, idx, n\)\s*=>\s*uploadLightSet\(L, idx, n\)/);
-  assert.match(glx, /function ctxGone\(\)/);
-  const draw = glx.slice(glx.indexOf("function draw(mesh, modelMat, opts)"), glx.indexOf("function drawSky"));
-  assert.match(draw, /ctxGone\(\)/);
-  const present = glx.slice(glx.indexOf("present:"));
-  assert.match(present, /ctxGone\(\)/);
+  // this regex in the same commit. (The lost-context no-ops of draw() and
+  // present() are behaviour in "GLX create* / draw* fail closed" above.)
+  const glx = code("js/render/glx.js");
+  assert.match(glx, /uploadLightSet:\s*\(\s*L\s*,\s*idx\s*,\s*n\s*\)\s*=>\s*uploadLightSet\(\s*L\s*,\s*idx\s*,\s*n\s*\)/);
 });
 
 test("the GPU-census gate scopes hardware expectations, and only those", () => {
   // Two checks are hardware-only ON PURPOSE: a software image may legitimately
   // fail to bring a backend up, and failing the job for that is noise. The rest
   // must stay unconditional — a real GPU error, a run that did not finish, or a
-  // missing artifact is a defect on ANY image. This pins the split so the
-  // scoping cannot quietly spread. docs/PERF-FINDINGS.md 2f.
-  const wf = read(".github/workflows/gpu-census.yml");
-
-  for (const re of [/if \(hardware && gfx\.gpuErrors == null\)/,
-                    /if \(hardware && g\.gfxReadFailed\)/,
-                    /if \(hardware && be\.softAdapter === true\)/]) {
-    assert.match(wf, re, `this check must be scoped to hardware images: ${re}`);
+  // missing artifact is a defect on ANY image. Driven by EXECUTING the Verdict
+  // script against fixtures (verdictScript / runVerdict below), so the split
+  // cannot quietly spread. docs/PERF-FINDINGS.md 2f.
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] }, sw = { anyHardware: false, runs: [] };
+  const legs = (over = {}) => ({ webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson(), wgx: wgxLegJson(), ...over });
+  // Hardware-only: a missing gpuErrors count, a failed gfx read, a software adapter.
+  let r = runVerdict(script, { census: hw, legs: legs({ webgl2: tlxLegJson({ gpuErrors: null }) }) });
+  assert.equal(r.code, 1, `hardware + no gpuErrors count must fail:\n${r.out}`);
+  r = runVerdict(script, { census: sw, legs: legs({ webgl2: tlxLegJson({ gpuErrors: null }) }) });
+  assert.equal(r.code, 0, `software + no gpuErrors count is noise, not a failure:\n${r.out}`);
+  r = runVerdict(script, { census: hw, legs: legs({ glx: { ...glxLegJson(), gfxReadFailed: "boom" } }) });
+  assert.equal(r.code, 1, "hardware + gfxReadFailed must fail");
+  r = runVerdict(script, { census: sw, legs: legs({ glx: { ...glxLegJson(), gfxReadFailed: "boom" } }) });
+  assert.equal(r.code, 0, "software + gfxReadFailed passes");
+  r = runVerdict(script, { census: hw, legs: legs({ webgpu: tlxLegJson({ backendState: { api: "webgpu", softAdapter: true, headless: false } }) }) });
+  assert.equal(r.code, 1, "a software adapter on a hardware image is the defect the census exists to catch");
+  r = runVerdict(script, { census: sw, legs: legs({ webgpu: tlxLegJson({ backendState: { api: "webgpu", softAdapter: true, headless: false } }) }) });
+  assert.equal(r.code, 0, "a software adapter on a software image is expected");
+  // …and these must NOT be scoped, or the gate stops gating.
+  for (const census of [hw, sw]) {
+    r = runVerdict(script, { census, legs: legs({ glx: { ...glxLegJson(), ok: false, phase: "boot" } }) });
+    assert.equal(r.code, 1, "a run that did not finish must fail on every image");
+    r = runVerdict(script, { census, legs: legs({ glx: glxLegJson({ gpuErrors: 3, gpuFirstError: "INVALID_OPERATION" }) }) });
+    assert.equal(r.code, 1, "a real GPU error must fail on every image");
+    const missing = legs(); delete missing.glx;
+    r = runVerdict(script, { census, legs: missing });
+    assert.equal(r.code, 1, "a missing leg artifact must fail on every image");
   }
-
-  // …and these must NOT be, or the gate stops gating.
-  assert.match(wf, /if \(g\.ok !== true \|\| g\.phase !== "done"\)/);
-  assert.match(wf, /if \(!g\) \{ bad\.push/);
-  assert.match(wf, /else if \(gfx\.gpuErrors > 0\)/);
-  assert.doesNotMatch(wf, /hardware && \(?g\.ok !== true/,
-    "a run that did not finish must fail on every image");
-  assert.doesNotMatch(wf, /hardware && gfx\.gpuErrors > 0/,
-    "a real GPU error must fail on every image");
-
   // The reason a leg is empty must always be PRINTED, even where it is not
   // blocking — that is the whole point of 2f.
-  assert.match(wf, /rows\.push\(`\$\{" "\.repeat\(8\)\}gfx:/);
-  assert.match(wf, /if \(g\.error\) rows\.push/);
+  r = runVerdict(script, { census: sw, legs: legs({ webgpu: { ...tlxLegJson(), error: "launch failed", gfx: undefined } }) });
+  assert.match(r.out, /launch failed/, "a leg's error is printed even when it does not block");
+  const wf = read(".github/workflows/gpu-census.yml");
+  assert.match(wf, /rows\.push\(\s*`\$\{" "\.repeat\(8\)\}gfx:/);
 });
 
 test("GLX exports a real gpuErrors counter and the workflow fails on a missing one", () => {
   // The real-GPU gate checked `(gfx.gpuErrors || 0) > 0` while ONLY WGX defined
   // gpuErrors, so on the GLX leg it read null and passed vacuously from the day
-  // that leg was added (PERF-FINDINGS 2e). Both halves of the fix are pinned
-  // here because either alone restores the hole.
-  const glx = read("js/render/glx.js");
-  assert.match(glx, /gpuErrors: \(\) => _glErrors,/);
-  assert.match(glx, /gpuFirstError: \(\) => _glFirstError \|\| null,/);
-  assert.match(glx, /function drainGlErrors\(/);
-  assert.match(glx, /drainGlErrors\("present"\)/, "the counter must be drained once per present");
-
+  // that leg was added (PERF-FINDINGS 2e). Both halves are pinned: the GLX
+  // counter as BEHAVIOUR on the mock, the Verdict's null handling by executing
+  // it (above), plus the banned `|| 0` shape as a lint.
+  const h = bootGlx();
+  assert.equal(h.GLX.gpuErrors(), 0);
+  assert.equal(h.GLX.gpuFirstError(), null);
+  let pending = [1282, 1281];   // INVALID_OPERATION, INVALID_VALUE
+  h.answers.getError = () => (pending.length ? pending.shift() : 0);
+  h.GLX.begin(h.frame());
+  assert.equal(h.GLX.gpuErrors(), 0, "the counter is drained at present(), not mid-frame");
+  h.GLX.present({});
+  assert.equal(h.GLX.gpuErrors(), 2, "every queued GL error is counted once per present");
+  assert.ok(h.GLX.gpuFirstError(), "the first error is kept for the report");
+  h.GLX.begin(h.frame()); h.GLX.present({});
+  assert.equal(h.GLX.gpuErrors(), 2, "a clean present adds nothing");
   const wf = read(".github/workflows/gpu-census.yml");
-  assert.match(wf, /gfx\.gpuErrors == null/,
-    "the Verdict must FAIL on a missing count, not read absent as clean");
-  assert.doesNotMatch(wf, /if \(\(gfx\.gpuErrors \|\| 0\) > 0\)/,
+  assert.doesNotMatch(wf, /if\s*\(\s*\(\s*gfx\.gpuErrors\s*\|\|\s*0\s*\)\s*>\s*0\s*\)/,
     "the || 0 form treats an absent counter as zero — that was the bug");
 });
 
@@ -509,6 +579,13 @@ const tlxLegJson = (gfxOver = {}) => ({
 const glxLegJson = (gfxOver = {}) => ({
   phase: "done", ok: true,
   gfx: { glx: true, gpuErrors: 0, gpuFirstError: null, ...gfxOver },
+  frame: { meanLuma: 0.4 },
+});
+// The native WGX leg (2026-09-02): gpu-game-check reports wgx (GLX.softPresent
+// exists — WGX bound), wgxSoftPresent and headlessUa; no TLX env/backend state.
+const wgxLegJson = (gfxOver = {}) => ({
+  phase: "done", ok: true,
+  gfx: { glx: true, gpuErrors: 0, gpuFirstError: null, wgx: true, wgxSoftPresent: true, headlessUa: true, ...gfxOver },
   frame: { meanLuma: 0.4 },
 });
 
@@ -583,7 +660,7 @@ test("the GPU gate passes a hardware run whose GLX leg reports no env probe", ()
   // keeps the fix below honest; without it "fail on absence" looks free.
   const r = runVerdict(verdictScript(), {
     census: { anyHardware: true, runs: [] },
-    legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson() },
+    legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson(), wgx: wgxLegJson() },
   });
   assert.equal(r.code, 0, `a healthy hardware run must pass:\n${r.out}`);
 });
@@ -594,7 +671,7 @@ test("the GPU gate fails a census that measured nothing instead of calling it so
   // measured nothing therefore DOWNGRADED this gate to a software gate and
   // reported success. Tri-state; null must fail. docs/PERF-FINDINGS.md 2j.
   const script = verdictScript();
-  const legs = { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson() };
+  const legs = { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson(), wgx: wgxLegJson() };
 
   const nulled = runVerdict(script, { census: { anyHardware: null, runs: [] }, legs });
   assert.equal(nulled.code, 1, `a null census must fail the job:\n${nulled.out}`);
@@ -607,9 +684,35 @@ test("the GPU gate fails a census that measured nothing instead of calling it so
   // the fix has just made every software run red.
   const soft = runVerdict(script, {
     census: { anyHardware: false, runs: [] },
-    legs: { webgpu: tlxLegJson({ envState: undefined, gpuErrors: null }), webgl2: tlxLegJson(), glx: glxLegJson({ gpuErrors: null }) },
+    legs: { webgpu: tlxLegJson({ envState: undefined, gpuErrors: null }), webgl2: tlxLegJson(), glx: glxLegJson({ gpuErrors: null }), wgx: wgxLegJson({ wgx: false, gpuErrors: null }) },
   });
   assert.equal(soft.code, 0, `a measured software image must still pass:\n${soft.out}`);
+});
+
+test("the GPU gate holds the native WGX leg to bind + swapchain, but only a HEADED run to the swapchain", () => {
+  // Run 19 (2026-09-02, macos-latest) was the first census that ran WGX at all:
+  // bound, 0 GPU errors, the brightest leg — and soft-presenting, because WGX
+  // sniffs a HeadlessChrome UA as software by design. That is expected on a
+  // headless runner and a regression on a headed one; a fallback to GLX is a
+  // regression on any hardware run.
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] }, sw = { anyHardware: false, runs: [] };
+  const legs = (wgx) => ({ webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson(), wgx });
+  let r = runVerdict(script, { census: hw, legs: legs(wgxLegJson()) });
+  assert.equal(r.code, 0, `headless hardware + soft-present is the documented shape:\n${r.out}`);
+  assert.match(r.out, /expected: WGX blits under a headless UA by design/);
+  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ headlessUa: false })) });
+  assert.equal(r.code, 1, "HEADED hardware + soft-present must fail");
+  assert.match(r.out, /WGX is soft-presenting/);
+  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ headlessUa: false, wgxSoftPresent: false })) });
+  assert.equal(r.code, 0, `headed hardware on the swapchain passes:\n${r.out}`);
+  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ wgx: false })) });
+  assert.equal(r.code, 1, "hardware + WGX not bound must fail");
+  assert.match(r.out, /WGX did not bind/);
+  r = runVerdict(script, { census: sw, legs: legs(wgxLegJson({ wgx: false, gpuErrors: null })) });
+  assert.equal(r.code, 0, `a software image that cannot bring WGX up is noise:\n${r.out}`);
+  r = runVerdict(script, { census: hw, legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson() } });
+  assert.equal(r.code, 1, "a missing wgx artifact must fail like any other missing leg");
 });
 
 test("the GPU gate fails a hardware TLX leg that stopped reporting an env count", () => {
@@ -646,43 +749,56 @@ test("the GPU gate fails a hardware TLX leg that stopped reporting an env count"
 test("the instancing gate is declared through the cache, never bracketed per draw", () => {
   // uInstanced was 54.8 uniform1f/frame for a value that changes 3.1 times: the
   // 1/0 bracket around each instanced draw alternates, so a redundancy cache
-  // collapses none of it (PERF-FINDINGS 2e — the same shape as the doubleSided
-  // toggles retired near setCull). litMaterial declares the kind instead, and
-  // that only stays correct while EVERY lit draw funnels through litMaterial.
-  const glx = read("js/render/glx.js");
-  assert.match(glx, /function litMaterial\(modelMat, opts, instanced\)/);
-  assert.match(glx, /uf1\(litU\.uInstanced, _litUf, "instanced", instanced \? 1 : 0\);/);
-  assert.match(glx, /litMaterial\(IDENT4, opts, 1\)/, "drawInstanced must declare its kind");
-
-  // The bracket must be GONE — a re-added raw write re-enables the alternation.
-  assert.doesNotMatch(glx, /gl\.uniform1f\(litU\.uInstanced/,
-    "uInstanced must go through uf1, not a raw uniform1f");
-
-  // litProg may be bound in exactly two places: begin() (frame setup, no draw)
-  // and litMaterial. A third would be a lit draw that skips the declaration.
-  const binds = glx.match(/useProg\(litProg\)/g) || [];
-  assert.equal(binds.length, 2,
-    "a new useProg(litProg) site must also declare uInstanced — see PERF-FINDINGS 2e");
+  // collapses none of it (PERF-FINDINGS 2e). litMaterial declares the kind
+  // instead — BEHAVIOUR: consecutive draws of one kind upload nothing.
+  const h = bootGlx();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mesh = h.GLX.createMesh(tri);
+  const batch = h.GLX.createInstancedBatch(tri, new Float32Array(32), null, null);
+  const model = new Float32Array(16); model[0] = model[5] = model[10] = model[15] = 1;
+  const instUploads = () => h.calls.filter((c) => c[0] === "uniform1f" && c[1][0].name === "uInstanced").map((c) => c[1][1]);
+  h.GLX.begin(h.frame());
+  h.reset();
+  h.GLX.draw(mesh, model, {}); h.GLX.draw(mesh, model, {});
+  h.GLX.drawInstanced(batch, {}); h.GLX.drawInstanced(batch, {}); h.GLX.drawInstanced(batch, {});
+  h.GLX.draw(mesh, model, {});
+  assert.deepEqual(instUploads(), [0, 1, 0], "one upload per KIND transition — never a 1/0 bracket per instanced draw");
+  assert.equal(h.count("useProgram"), 0, "the lit program stays bound across the run — no rebind per draw");
+  // Source lints that the behaviour above cannot see: a raw write beside the
+  // cache would desync it, and a lit draw bound outside litMaterial would skip
+  // the declaration.
+  const glx = code("js/render/glx.js");
+  assert.doesNotMatch(glx, /gl\.uniform1f\(\s*litU\.uInstanced/, "uInstanced must go through uf1, not a raw uniform1f");
+  const binds = glx.match(/useProg\(\s*litProg\s*\)/g) || [];
+  assert.equal(binds.length, 2, "a new useProg(litProg) site must also declare uInstanced — see PERF-FINDINGS 2e");
 });
 
 test("uModel goes through the redundancy cache, not a raw upload", () => {
   // PERF-FINDINGS 2h: uModel was 103.2 uploads/frame for 50.3 distinct values,
   // because drawChunked calls litMaterial once per chunk RUN and every run of
-  // one mesh shares that mesh's matrix. uNumLights is the SAME defect found by
-  // the other lineage and is pinned separately by 2g's own assertion (_luNL) —
-  // do not add a second cache on it here.
-  const glx = read("js/render/glx.js");
-  assert.match(glx, /ufM4\(litU\.uModel, _litUf, "model", modelMat\);/);
-  assert.doesNotMatch(glx, /gl\.uniformMatrix4fv\(litU\.uModel/,
-    "uModel must go through ufM4, not a raw uniformMatrix4fv");
-
-  // ufM4 must COPY. Callers hand in scratch matrices they mutate in place
+  // one mesh shares that mesh's matrix. BEHAVIOUR: an equal matrix skips.
+  const h = bootGlx();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mesh = h.GLX.createMesh(tri);
+  const model = new Float32Array(16); model[0] = model[5] = model[10] = model[15] = 1;
+  const uploads = () => h.count("uniformMatrix4fv", (a) => a[0].name === "uModel");
+  h.GLX.begin(h.frame());
+  h.reset();
+  h.GLX.draw(mesh, model, {}); h.GLX.draw(mesh, model, {}); h.GLX.draw(mesh, model, {});
+  assert.equal(uploads(), 1, "three draws of one matrix upload it once");
+  // The cache must COPY. Callers hand in scratch matrices they mutate in place
   // (game.js _wheelWorld/_ringWorld, DebrisWorld _mat); retaining the reference
   // would compare a value against itself and silently skip a real change —
   // a wrong TRANSFORM, which no call counter would catch.
-  const m4 = glx.slice(glx.indexOf("function ufM4("));
-  assert.match(m4.slice(0, 600), /for \(let i = 0; i < 16; i\+\+\) p\[i\] = m\[i\];/,
-    "ufM4 must copy the sixteen floats, not retain the caller's array");
+  h.reset();
+  model[12] = 5; h.GLX.draw(mesh, model, {});
+  model[12] = 9; h.GLX.draw(mesh, model, {});
+  assert.equal(uploads(), 2, "the same array mutated in place re-uploads every time it changes");
+  h.reset();
+  h.GLX.draw(mesh, new Float32Array(model), {});
+  assert.equal(uploads(), 0, "an equal COPY is a hit — the cache compares values, not references");
+  assert.doesNotMatch(code("js/render/glx.js"), /gl\.uniformMatrix4fv\(\s*litU\.uModel/,
+    "uModel must go through ufM4, not a raw uniformMatrix4fv");
 });
 
 test("updateInstances clears the cull snapshots it did not produce", () => {
@@ -691,15 +807,29 @@ test("updateInstances clears the cull snapshots it did not produce", () => {
   // re-upload. updateInstances writes bytes produced by no frustum at all, so
   // leaving either snapshot standing lets a later cullInstances hit its cache
   // and draw this pack as though it were that frustum's. PERF-FINDINGS 2h.
-  const glx = read("js/render/glx.js");
-  const fn = glx.slice(glx.indexOf("function updateInstances("));
-  const body = fn.slice(0, fn.indexOf("\n  }") + 4);
-  assert.match(body, /batch\._cullPlanes = null;/,
-    "updateInstances must invalidate the frustum snapshot");
-  assert.match(body, /batch\._cellKeyN = -1;/,
-    "updateInstances must invalidate the cell-set snapshot");
-  assert.match(body, /gl\.bufferSubData\(gl\.ARRAY_BUFFER, 0, matrices, 0, v \* 16\)/);
-  assert.match(glx, /^    updateInstances,$/m, "updateInstances must be exported");
+  const h = bootGlx();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mats = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 100, 0, 0, 1]);
+  const batch = h.GLX.createInstancedBatch(tri, mats, null, { cellSize: 50 });
+  const planes = (d) => Array.from({ length: 6 }, () => [0, 0, 0, d]);
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6)), 2);
+  assert.equal(h.count("bufferSubData"), 1, "a fresh frustum packs and uploads");
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6)), 2);
+  assert.equal(h.count("bufferSubData"), 0, "the same frustum is a hit: no re-upload");
+  // Now hand the batch a caller-packed set (the debris pools' path)…
+  h.reset();
+  assert.equal(h.GLX.updateInstances(batch, new Float32Array(32), 1), 1);
+  assert.equal(batch.visible, 1);
+  assert.equal(h.count("bufferSubData", (a) => a[4] === 16), 1, "one instance (16 floats) is uploaded");
+  assert.equal(batch._cullPlanes, null, "updateInstances must invalidate the frustum snapshot");
+  assert.equal(batch._cellKeyN, -1, "updateInstances must invalidate the cell-set snapshot");
+  // …so the next cull with the OLD frustum cannot claim the resident bytes.
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6)), 2);
+  assert.equal(h.count("bufferSubData"), 1, "the frustum re-packs over the caller's bytes instead of hitting a stale cache");
+  assert.equal(typeof h.GLX.updateInstances, "function", "updateInstances is exported");
 });
 
 test("the debris pools instance behind a capability read, with the loop as fallback", () => {
@@ -707,17 +837,16 @@ test("the debris pools instance behind a capability read, with the loop as fallb
   // of every lap from cones alone, which have no liveness test (PERF-FINDINGS
   // 2h). GLX ships updateInstances; WGX and TLX have not been ported and MUST
   // keep the per-body path rather than silently drawing nothing.
-  const dw = read("js/game/debrisworld.js");
-  assert.match(dw, /gfx\.updateInstances\(b, m, n\);/);
-  assert.match(dw, /gfx\.drawInstanced\(b, opts\);/);
-  assert.match(dw, /if \(!gfx \|\| !gfx\.createInstancedBatch \|\| !gfx\.updateInstances \|\| !gfx\.drawInstanced\)/,
+  const dw = code("js/game/debrisworld.js");
+  assert.match(dw, /gfx\.updateInstances\(/);
+  assert.match(dw, /gfx\.drawInstanced\(/);
+  assert.match(dw, /!gfx\.createInstancedBatch\s*\|\|\s*!gfx\.updateInstances\s*\|\|\s*!gfx\.drawInstanced/,
     "the capability read must test every method the instanced path calls");
-  assert.match(dw, /for \(const s of list\) if \(!liveOnly \|\| s\.live\) drawBody\(/,
+  assert.match(dw, /for\s*\(\s*const\s+\w+\s+of\s+list\s*\)\s*if\s*\(\s*!liveOnly\s*\|\|\s*\w+\.live\s*\)\s*drawBody\(/,
     "the per-body fallback must survive for backends without updateInstances");
   // Both paths must build a pose the same way, or a backend switch moves debris.
-  assert.equal((dw.match(/function packBody\(/g) || []).length, 1);
-  assert.match(dw, /packBody\(_mat, 0, body, sc\);/,
-    "drawBody must share packBody, not carry a second copy of the quaternion maths");
+  assert.equal((dw.match(/function\s+packBody\s*\(/g) || []).length, 1);
+  assert.match(fnBody(dw, "drawBody"), /packBody\(/, "drawBody must share packBody, not carry a second copy of the quaternion maths");
 });
 
 test("the interleaved uLight[] lanes agree between glx.js and shaders/lit.js", () => {
@@ -726,8 +855,8 @@ test("the interleaved uLight[] lanes agree between glx.js and shaders/lit.js", (
   // CALL COUNTS byte-identical and the render statistically indistinguishable
   // on a coarse metric — it moves or recolours lamp pools, which no counter
   // and no unit test would catch. This is the guard for that.
-  const glx = read("js/render/glx.js");
-  const lit = read("js/render/shaders/lit.js");
+  const glx = code("js/render/glx.js");
+  const lit = code("js/render/shaders/lit.js");
 
   // The four arrays must be GONE from both halves, or a stale reader survives.
   for (const n of ["uLightA", "uLightB", "uLightC", "uLightD"]) {
@@ -736,29 +865,30 @@ test("the interleaved uLight[] lanes agree between glx.js and shaders/lit.js", (
   }
 
   // Shader side: one array, 4 vec4s per light, read at li+0..3 off i*4.
-  assert.match(lit, /uniform vec4 uLight\[MAX_LIGHTS \* 4\];/);
-  assert.match(lit, /int li = i \* 4;/);
-  assert.match(lit, /vec4 la = uLight\[li\], lb = uLight\[li \+ 1\], lc = uLight\[li \+ 2\];/);
-  assert.match(lit, /smoothstep\(uLight\[li \+ 3\]\.x,/);
+  assert.match(lit, /uniform\s+vec4\s+uLight\s*\[\s*MAX_LIGHTS\s*\*\s*4\s*\]\s*;/);
+  assert.match(lit, /int\s+li\s*=\s*i\s*\*\s*4\s*;/);
+  assert.match(lit, /vec4\s+la\s*=\s*uLight\[\s*li\s*\]\s*,\s*lb\s*=\s*uLight\[\s*li\s*\+\s*1\s*\]\s*,\s*lc\s*=\s*uLight\[\s*li\s*\+\s*2\s*\]\s*;/);
+  assert.match(lit, /smoothstep\(\s*uLight\[\s*li\s*\+\s*3\s*\]\.x\s*,/);
 
-  // JS side: stride 16, and each lane group lands where the shader reads it.
-  // src is the flat stride-15 record; these offsets ARE the contract.
-  assert.match(glx, /const i4 = i \* 16;/);
-  const lanes = [
-    [0, "src\\[o\\]"], [3, "src\\[o \\+ 6\\]"],          // +0  la = pos.xyz | radius
-    [4, "src\\[o \\+ 3\\]"], [7, "src\\[o \\+ 12\\]"],   // +1  lb = rgb    | bleed
-    [8, "src\\[o \\+ 7\\]"], [11, "src\\[o \\+ 10\\]"],  // +2  lc = aim.xyz| cosInner
-    [12, "src\\[o \\+ 11\\]"],                            // +3  x  = cosOuter
-  ];
-  for (const [slot, rhs] of lanes) {
-    const lhs = slot === 0 ? "L4\\[i4\\]" : `L4\\[i4 \\+ ${slot}\\]`;
-    assert.match(glx, new RegExp(`${lhs} = ${rhs};`),
-      `uLight lane +${slot} must be fed by ${rhs.replace(/\\/g, "")}`);
-  }
-
-  // Exactly ONE upload, sized in whole lights.
-  const ups = glx.match(/gl\.uniform4fv\(litU\["uLight\[0\]"\], L4, 0, nL \* 16\)/g) || [];
-  assert.equal(ups.length, 1, "expected exactly one uLight upload of nL*16 floats");
+  // JS side: BEHAVIOUR. One stride-15 light record through begin() lands in
+  // the uniform4fv payload at exactly the lanes the shader reads:
+  //   +0 la = pos.xyz | radius   +1 lb = rgb | bleed
+  //   +2 lc = aim.xyz | cosInner +3 x = cosOuter
+  const h = bootGlx();
+  const rec = [1, 2, 3, /*rgb*/ 4, 5, 6, /*radius*/ 7, /*aim*/ 8, 9, 10, /*cosInner*/ 11, /*cosOuter*/ 12, /*bleed*/ 13, 14, 15];
+  h.GLX.begin(h.frame({ lights: rec }));
+  const ups = h.calls.filter((c) => c[0] === "uniform4fv" && c[1][0].name === "uLight[0]");
+  assert.equal(ups.length, 1, "expected exactly one uLight upload per begin()");
+  const [, L4, off, len] = ups[0][1];
+  assert.equal(off, 0);
+  assert.equal(len, 16, "sized in whole lights: nL * 16 floats");
+  assert.deepEqual(Array.from(L4.subarray(0, 16)), [1, 2, 3, 7, 4, 5, 6, 13, 8, 9, 10, 11, 12, 0, 0, 0],
+    "lane +0 pos|radius, +1 rgb|bleed, +2 aim|cosInner, +3 cosOuter|pad");
+  assert.equal(h.count("uniform1i", (a) => a[0].name === "uNumLights" && a[1] === 1), 1, "the count is uploaded once for one light");
+  h.reset();
+  h.GLX.begin(h.frame({ lights: rec.concat(rec) }));
+  const two = h.calls.find((c) => c[0] === "uniform4fv" && c[1][0].name === "uLight[0]");
+  assert.equal(two[1][3], 32, "two lights → 32 floats");
 });
 
 test("WGX sky ports GLX overcast grey-shift, horizon bank, and azimuthal variation", () => {
@@ -896,8 +1026,9 @@ function bootPicker(opts) {
   gfxBtn.hidden = true;
   let reloaded = 0;
   const timers = [];
+  const winListeners = [];
   const ctx = vm.createContext({
-    window: { addEventListener() {} },
+    window: { addEventListener(type) { winListeners.push(type); } },
     document: {
       getElementById: (id) => byId[id] || null,
       createElement: makeEl,
@@ -917,7 +1048,7 @@ function bootPicker(opts) {
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
   // readyState is "complete", so the IIFE already called init().
-  return { G, ls, ss, byId, hostKids, reloaded: () => reloaded, timers };
+  return { G, ls, ss, byId, hostKids, reloaded: () => reloaded, timers, winListeners };
 }
 
 test("RENDERER control becomes a select with prev/next, not a one-way cycle", () => {
@@ -1064,23 +1195,20 @@ test("presentStatus names the three screenshot paths in plain language", () => {
 });
 
 test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot API", () => {
-  const tlx = read("js/render/three/tlx.js");
-  const post = read("js/render/three/tlx-post.js");
-  assert.match(tlx, /capturePixels\(\) \{/);
-  assert.match(tlx, /readRenderTargetPixelsAsync/);
-  assert.match(tlx, /copyTextureToBuffer/);
-  assert.match(tlx, /softPresent\(\) \{ return !!_softBlit; \}/);
-  assert.match(tlx, /_softBlit = !forceWebGL && _capPref !== "0"/);
-  assert.match(tlx, /never getCurrentTexture/);
-  assert.doesNotMatch(tlx, /[\.]\s*getCurrentTexture\s*\(/);
-  assert.match(tlx, /await renderer\.init\(\);/);
-  assert.match(tlx, /game-soft/);
-  assert.match(tlx, /__apexWriteBuf/);
-  assert.match(tlx, /queue\.writeBuffer\(buf, 0, staging\)/);
-  assert.match(tlx, /function _instColorAttr/);
-  assert.match(tlx, /isInstancedBufferAttribute/);
-  assert.match(tlx, /do NOT[\s\S]{0,40}also set imesh\.instanceColor/);
-  assert.match(post, /ldrTarget: \(\) => ldrRT/);
+  const tlx = code("js/render/three/tlx.js");
+  const post = code("js/render/three/tlx-post.js");
+  assert.match(tlx, /\bcapturePixels\s*\(\s*\)\s*\{/);
+  assert.match(tlx, /\breadRenderTargetPixelsAsync\b/, "the blit goes through three's readback (copyTextureToBuffer + mapAsync), not the swapchain");
+  assert.match(fnBody(tlx, "softPresent"), /return\s+!!\s*_softBlit\b/);
+  assert.match(tlx, /_softBlit\s*=\s*!forceWebGL\s*&&\s*_capPref\s*!==\s*"0"/);
+  assert.doesNotMatch(tlx, /[.]\s*getCurrentTexture\s*\(/, "never getCurrentTexture on software — the swapchain never composites and it breaks mapAsync");
+  assert.match(tlx, /await\s+renderer\.init\(\s*\)/);
+  assert.match(tlx, /\bgame-soft\b/);
+  assert.match(tlx, /\b__apexWriteBuf\b/);
+  assert.match(tlx, /queue\.writeBuffer\(\s*buf\s*,\s*0\s*,\s*staging\s*\)/);
+  assert.match(tlx, /function\s+_instColorAttr\b/);
+  assert.match(tlx, /\bisInstancedBufferAttribute\b/);
+  assert.match(post, /ldrTarget:\s*\(\s*\)\s*=>\s*ldrRT\b/);
 });
 
 test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () => {
@@ -1088,9 +1216,9 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
   // MDN: one context type per canvas for life. three r185.1 configure() is
   // lazy on first present(); sniffing WebGL2 on #game after init() made
   // getContext("webgpu") return null (mcp-probe 2026-08-18).
-  assert.match(tlx, /const softwareGL = forceWebGL \? detectSoftwareGL\(\) : !!_softAdapter;/);
-  const initAt = tlx.indexOf("await renderer.init();");
-  const sniffAt = tlx.indexOf("const softwareGL = forceWebGL ? detectSoftwareGL()");
+  assert.match(tlx, /softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(\s*\)\s*:\s*!!\s*_softAdapter\b/);
+  const initAt = tlx.search(/await\s+renderer\.init\(\s*\)/);
+  const sniffAt = tlx.search(/softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(/);
   assert.ok(initAt > 0 && sniffAt > initAt, "software sniff stays after init");
   assert.match(tlx, /getContext\("webgpu"\)===null/);
 });
@@ -1168,12 +1296,13 @@ function rendererParams() {
 }
 
 test("GLX asks for an opaque canvas — the behaviour TLX has to match", () => {
-  const src = GLX.replace(/^[ \t]*\/\/.*$/gm, "");
-  const at = src.indexOf('getContext("webgl2"');
-  assert.notEqual(at, -1, "GLX's context creation moved");
-  assert.match(src.slice(at, at + 300), /alpha:\s*false/,
+  const h = bootGlx();
+  const ctx = h.contextAttrs.find((c) => c.type === "webgl2");
+  assert.ok(ctx, "GLX asks the canvas for a webgl2 context");
+  assert.equal(ctx.attrs.alpha, false,
     "GLX dropped `alpha: false` — then the tag can ghost cars on BOTH backends " +
     "and this whole guard needs rethinking, not updating");
+  assert.equal(ctx.attrs.antialias, false, "no browser MSAA — the post path resolves its own");
 });
 
 test("the alpha tag that makes canvas opacity load-bearing still exists", () => {
@@ -1322,7 +1451,7 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "#game stays the GPU canvas; visible present is the #game-soft sibling");
   assert.match(src, /_displayCanvas\.getContext\("2d"/,
     "soft-present overlay is a 2D sibling — never getContext(2d) on #game");
-  assert.match(src, /softDest:\s*function\s*\(\)\s*\{\s*return softOutRT/,
+  assert.match(src, /softDest:\s*(?:function\s*\(\s*\)\s*\{\s*return|\(\s*\)\s*=>)\s*softOutRT\b/,
     "post chain must receive softDest so FXAA never targets the swapchain");
   assert.match(src, /awaitSoftPresent/,
     "backend must expose awaitSoftPresent (copied onto GLX by game.js)");
@@ -1336,7 +1465,7 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // errors" and meant "no reader". An unheard backend is an undebuggable one.
   assert.match(src, /onuncapturederror/,
     "the three backend must hook device.onuncapturederror — WGX has always had it");
-  assert.match(src, /gpuErrors\(\)\s*\{\s*return _gpuErrors;/,
+  assert.match(fnBody(src, "gpuErrors"), /return\s+_gpuErrors\b/,
     "the error tally must be exposed (GLX.gpuErrors() after the descriptor-copy)");
   assert.match(src, /function drawInstanced[\s\S]{0,400}if \(skipBatches/,
     "software WebGPU must skip InstancedMesh draws — they poison the frame encoder");
@@ -1351,9 +1480,9 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // runner — the project's only real GPU — run the software half of every
   // skip, so the machine that could finally test a player's path tested the
   // other one instead. softOutRT keeps asking softGpu(); these must not.
-  assert.match(src, /function skipBatches\(\)\s*\{\s*return _softAdapter\s*&&\s*!_forceBatches\s*&&\s*!_forceHw\.has\("batches"\);/,
+  assert.match(fnBody(src, "skipBatches"), /^\s*return\s+_softAdapter\s*&&\s*!_forceBatches\s*&&\s*!_forceHw\.has\(\s*"batches"\s*\)/,
     "the batch skip is _softAdapter-by-default — not the presentation blit");
-  assert.match(src, /function softOutRT\(\)\s*\{\s*return softGpu\(\)/,
+  assert.match(fnBody(src, "softOutRT"), /^\s*return\s+softGpu\(\s*\)/,
     "presentation still follows softGpu() — the blit is needed whenever the swapchain is not composited");
   assert.match(src, /apex26\.tlxForceBatches/,
     "the real-GPU code path must stay reachable from a software run for debugging");
@@ -1378,7 +1507,7 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     src.indexOf("} catch (_) { _softAdapter = false;"));
   assert.doesNotMatch(verdict, /HeadlessChrome/,
     "the adapter verdict must not treat headless as software — that is a presentation fact");
-  assert.match(src, /_softBlit = !forceWebGL && _capPref !== "0" && !!\(_softAdapter \|\| _headless \|\| _capPref === "1"\);/,
+  assert.match(src, /_softBlit\s*=\s*!forceWebGL\s*&&\s*_capPref\s*!==\s*"0"\s*&&\s*!!\s*\(\s*_softAdapter\s*\|\|\s*_headless\s*\|\|\s*_capPref\s*===\s*"1"\s*\)/,
     "the blit must follow headless: a headless swapchain does not composite even on real silicon");
   // An empty adapter.info is UNKNOWN, not software. Browsers trim those fields
   // for fingerprinting reasons, so a player with no vendor string must not be
@@ -1387,7 +1516,7 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "empty adapter.info must not be a software verdict on its own");
   assert.match(sniff, /maxTextureDimension2D <= 8192/,
     "the tie-break is measured LIMITS — SwiftShader/llvmpipe 8192, Apple 16384");
-  assert.match(src, /function softContent\(part\)\s*\{\s*return \(softwareGL \|\| _softAdapter\) && !_forceHw\.has\(part\);/,
+  assert.match(fnBody(src, "softContent"), /^\s*return\s+\(\s*softwareGL\s*\|\|\s*_softAdapter\s*\)\s*&&\s*!_forceHw\.has\(\s*part\s*\)/,
     "content skips must route through softContent(part) — software by default, forceable per gate");
   assert.doesNotMatch(src, /softContent\(\)/,
     "softContent() must never be called without a part name");
@@ -1406,33 +1535,33 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // latch envReady over a cube nothing wrote, and every lit surface sampled
   // black. That is invisible on software (the faces are skipped there), which
   // is exactly why it needs a static pin.
-  assert.match(envBody, /catch \(e\) \{[\s\S]{0,400}faceOk = false;/,
+  assert.match(envBody, /catch\s*\(\s*\w+\s*\)\s*\{[\s\S]{0,400}faceOk\s*=\s*false\b/,
     "envFaceEnd must record a failed probe face, not swallow it silently");
-  assert.match(envBody, /if \(faceOk\) envFacesMask \|= 1 << \(face & 7\);/,
+  assert.match(envBody, /if\s*\(\s*faceOk\s*\)\s*envFacesMask\s*\|=\s*1\s*<<\s*\(\s*face\s*&\s*7\s*\)/,
     "a failed probe face must not be counted towards the six");
-  assert.match(envBody, /if \(faceOk && envFacesMask === 63 && probeErrored\)/,
+  assert.match(envBody, /if\s*\(\s*faceOk\s*&&\s*envFacesMask\s*===\s*63\s*&&\s*probeErrored\s*\)/,
     "envReady must not latch on a face that threw");
   // Dawn does NOT throw when it rejects a pipeline — render() returns normally
   // and the command buffer is discarded, so faceOk alone cannot see it. The
   // uncaptured-error tally across the six faces is the only in-page signal
   // that the probe's own commands never ran, and binding that cube is what
   // lights a whole world from black.
-  assert.match(envBody, /_envErrBase = _gpuErrors;/,
+  assert.match(envBody, /_envErrBase\s*=\s*_gpuErrors\b/,
     "the probe must baseline the GPU error tally at its first face");
-  assert.match(envBody, /const probeErrored = _envErrBase >= 0 && _gpuErrors > _envErrBase;/,
+  assert.match(envBody, /probeErrored\s*=\s*_envErrBase\s*>=\s*0\s*&&\s*_gpuErrors\s*>\s*_envErrBase\b/,
     "and compare it at the latch — a silent rejection has no other tell");
-  assert.match(envBody, /_envGaveUp = true; envReady = false;/,
+  assert.match(envBody, /_envGaveUp\s*=\s*true\s*;\s*envReady\s*=\s*false\b/,
     "a probe that keeps erroring must stand down instead of binding the cube");
-  assert.match(src, /envProbeReady\(\) \{ return envReady \|\| _envGaveUp; \}/,
+  assert.match(fnBody(src, "envProbeReady"), /return\s+envReady\s*\|\|\s*_envGaveUp\b/,
     "standing down must read as ready so the caller stops re-probing forever");
   // releaseMirrors() nulls attribute.array. three's node builder reads
   // attribute.array.constructor to type an attribute whenever it compiles a
   // program for a pass it has not seen before, so a chunk freed before the env
   // probe's first face makes EVERY face throw. Measured on real hardware
   // (macos-latest/Metal): 41 failed faces on WebGL2, 81 on WebGPU.
-  assert.match(src, /!rec\.chunked\._mirrorsFreed && !vizMat\s*\n?\s*&& \(envReady \|\| _envGaveUp \|\| !envRT\)/,
+  assert.match(src, /!rec\.chunked\._mirrorsFreed\s*&&\s*!vizMat\s*&&\s*\(\s*envReady\s*\|\|\s*_envGaveUp\s*\|\|\s*!envRT\s*\)/,
     "the CPU mirrors must not be freed while the env probe still has passes to compile");
-  assert.match(src, /if \(_envFailN >= ENV_FAIL_CAP\) _envGaveUp = true;/,
+  assert.match(src, /if\s*\(\s*_envFailN\s*>=\s*ENV_FAIL_CAP\s*\)\s*_envGaveUp\s*=\s*true\b/,
     "a probe that cannot succeed must stop retrying — it threw every frame forever");
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(post, /ctx\.softDest/,
@@ -1540,28 +1669,26 @@ test("TLX instanced shadows consume the light-frustum packed slice", () => {
 
 test("env cube 4× anisotropy is on all three backends (grazing clearcoat)", () => {
   // GLX sets TEXTURE_MAX_ANISOTROPY_EXT on the env cube so clearcoat rays at
-  // grazing angles do not over-blur. TLX is per-texture; WGX needs a dedicated
-  // sampler (binding 14) because envSamp is shared with SSR + the PCSS blocker.
-  const glx = read("js/render/glx.js");
-  const envAt = glx.indexOf("gl.bindTexture(gl.TEXTURE_CUBE_MAP, envTex)");
-  assert.ok(envAt > 0, "GLX env cube setup moved");
-  assert.match(glx.slice(envAt, envAt + 800), /TEXTURE_MAX_ANISOTROPY_EXT/,
-    "GLX env cube must keep 4× anisotropy");
-  const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(tlx, /envRT\.texture\.anisotropy\s*=\s*4/,
-    "TLX env cube must match GLX 4× anisotropy");
-  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(wgx, /envCubeSamp/,
-    "WGX must own a dedicated env-cube sampler");
-  assert.match(wgx, /maxAnisotropy:\s*4/,
-    "WGX env-cube sampler must request 4× anisotropy");
-  const wgsl = read("js/render/webgpu/wgsl-chunks.js");
-  assert.match(wgsl, /binding\(14\) var envCubeSamp/,
-    "WGSL must sample the cube through the aniso sampler, not shared envSamp");
-  assert.match(wgsl, /textureSampleLevel\(envCube, envCubeSamp/,
-    "env cube taps must use envCubeSamp");
-  assert.doesNotMatch(wgsl.replace(/^[ \t]*\/\/.*$/gm, ""), /textureSampleLevel\(envCube, envSamp/,
-    "do not sample the cube with the shared SSR/blocker sampler");
+  // grazing angles do not over-blur — BEHAVIOUR on a mock that advertises the
+  // extension. TLX is per-texture; WGX needs a dedicated sampler (binding 14)
+  // because envSamp is shared with SSR + the PCSS blocker.
+  const h = bootGlx({ aniso: true });
+  h.GLX.envFaceBegin(0, [0, 1, 0], h.frame());
+  const cube = h.calls.filter((c) => c[0] === "texParameterf" && c[1][0] === h.gl.TEXTURE_CUBE_MAP && c[1][1] === h.ANISO.TEXTURE_MAX_ANISOTROPY_EXT);
+  assert.equal(cube.length, 1, "the env cube gets one anisotropy setting");
+  assert.equal(cube[0][1][2], 4, "GLX env cube must keep 4× anisotropy (capped, not the driver max of 16)");
+  const none = bootGlx();
+  none.GLX.envFaceBegin(0, [0, 1, 0], none.frame());
+  assert.equal(none.count("texParameterf"), 0, "without the extension nothing is set — no invalid enum");
+  const tlx = code("js/render/three/tlx.js");
+  assert.match(tlx, /envRT\.texture\.anisotropy\s*=\s*4\b/, "TLX env cube must match GLX 4× anisotropy");
+  const wgx = code("js/render/webgpu/wgx.js");
+  assert.match(wgx, /\benvCubeSamp\b/, "WGX must own a dedicated env-cube sampler");
+  assert.match(wgx, /maxAnisotropy:\s*4\b/, "WGX env-cube sampler must request 4× anisotropy");
+  const wgsl = code("js/render/webgpu/wgsl-chunks.js");
+  assert.match(wgsl, /binding\(\s*14\s*\)\s*var\s+envCubeSamp\b/, "WGSL must sample the cube through the aniso sampler, not shared envSamp");
+  assert.match(wgsl, /textureSampleLevel\(\s*envCube\s*,\s*envCubeSamp\b/, "env cube taps must use envCubeSamp");
+  assert.doesNotMatch(wgsl, /textureSampleLevel\(\s*envCube\s*,\s*envSamp\b/, "do not sample the cube with the shared SSR/blocker sampler");
 });
 
 test("WGX car-paint flake and orange-peel key in object space like GLX", () => {
@@ -1669,15 +1796,19 @@ test("pcssPen help names desktop three.js WebGL2 as live", () => {
 });
 
 test("GLX present reuses scratch vectors and skip-equals grade", () => {
-  const post = read("js/render/glx/post.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(post, /const _ONE3 = \[1, 1, 1\]/,
-    "neutral grade / sunColor fallback must not allocate [1,1,1] per frame");
-  assert.match(post, /const _NEGZ = \[0, 0, -1\]/,
-    "sunVS fallback must not allocate [0,0,-1] per frame");
-  assert.match(post, /uf3\(compU\.uGradeShadow, "gradeShadow"/,
-    "split-tone grade must use the skip-equal helper, not raw uniform3fv");
-  assert.doesNotMatch(post, /uniform3fv\(compU\.uGradeShadow/,
-    "do not bypass _compUf for uGradeShadow");
+  const h = bootGlx();
+  const opts = { grade: { shadow: [0.9, 0.95, 1.0], hi: [1, 1, 1], str: 0.3 } };
+  h.GLX.begin(h.frame()); h.GLX.present(opts);
+  h.reset();
+  h.GLX.begin(h.frame()); h.GLX.present(opts);
+  assert.equal(h.count("uniform3f", (a) => a[0].name === "uGradeShadow"), 0, "an unchanged split-tone grade is not re-uploaded");
+  h.reset();
+  h.GLX.begin(h.frame()); h.GLX.present({ grade: { shadow: [0.8, 0.95, 1.0], hi: [1, 1, 1], str: 0.3 } });
+  assert.equal(h.count("uniform3f", (a) => a[0].name === "uGradeShadow"), 1, "a changed grade uploads once");
+  const post = code("js/render/glx/post.js");
+  assert.match(post, /\b_ONE3\s*=\s*\[\s*1\s*,\s*1\s*,\s*1\s*\]/, "neutral grade / sunColor fallback must not allocate [1,1,1] per frame");
+  assert.match(post, /\b_NEGZ\s*=\s*\[\s*0\s*,\s*0\s*,\s*-1\s*\]/, "sunVS fallback must not allocate [0,0,-1] per frame");
+  assert.doesNotMatch(post, /uniform3fv\(\s*compU\.uGradeShadow/, "do not bypass _compUf for uGradeShadow");
 });
 
 test("WGX COMPOSITE declares ssrWet and does not remul wetness", () => {
@@ -1713,13 +1844,11 @@ test("WGX godray requires invViewProj like GLX/TLX", () => {
 });
 
 test("TLX godray uses partial nearest-K, not a full sort", () => {
-  const tlx = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(tlx, /function _grKeepNearest/,
-    "TLX must share the GLX/WGX partial-select helper");
-  assert.match(tlx, /grNL = _grKeepNearest\(total, 6\)/,
-    "uploader cap must stay 6 (TSL march bound)");
-  assert.doesNotMatch(tlx, /_grSel\.sort\(/,
-    "do not full-sort the floodlight list every night frame");
+  // _grKeepNearest itself (present in all three backends, swap-not-overwrite
+  // eviction) is driven by tests/unit/godray-keep-nearest.test.mjs.
+  const tlx = code("js/render/three/tlx-post.js");
+  assert.match(tlx, /grNL\s*=\s*_grKeepNearest\(\s*total\s*,\s*6\s*\)/, "uploader cap must stay 6 (TSL march bound)");
+  assert.doesNotMatch(tlx, /_grSel\.sort\(/, "do not full-sort the floodlight list every night frame");
 });
 
 test("TLX software/phone WebGL2 scales Poisson R from pcssPen", () => {
@@ -1993,7 +2122,7 @@ test("the hand-made WebGL2 context still matches three's own attribute set", () 
   // canvas target, so a context that disagrees with the renderer gets a
   // multisample resolve mismatch on the very path this fix exists to protect.
   assert.match(ctx[1], /antialias:\s*!isMobile/, "context AA must track the renderer's forceWebGL path");
-  assert.match(tlx, /antialias:\s*forceWebGL \? !isMobile : !_liteGpu/,
+  assert.match(tlx, /antialias:\s*forceWebGL\s*\?\s*!isMobile\s*:\s*!_liteGpu\b/,
     "lite WebGPU (phone / WebKit / software) must not ask for canvas MSAA 4");
 });
 
@@ -2121,24 +2250,37 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
 //  2. RESET AT RELINK. A relink resets every uniform on the program, so the
 //     cache has to be cleared where the locations are re-fetched.
 test("GLX caches uNumLights, and nothing else writes it on the lit program", () => {
-  const src = read("js/render/glx.js");
-  const bare = src.replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(bare, /if\s*\(nL\s*!==\s*_luNL\)\s*\{\s*gl\.uniform1i\(litU\.uNumLights,\s*nL\);\s*_luNL\s*=\s*nL;/,
-    "uploadLightSet must skip an unchanged uNumLights and record what it wrote");
+  const h = bootGlx();
+  const one = Array.from({ length: 15 }, (_, i) => i + 1);
+  const nl = () => h.count("uniform1i", (a) => a[0].name === "uNumLights");
+  h.GLX.begin(h.frame({ lights: one }));
+  h.reset();
+  h.GLX.begin(h.frame({ lights: one }));
+  h.GLX.begin(h.frame({ lights: one }));
+  assert.equal(nl(), 0, "uploadLightSet skips an unchanged uNumLights");
+  h.reset();
+  h.GLX.begin(h.frame({ lights: one.concat(one) }));
+  assert.equal(nl(), 1, "a changed count uploads once");
+  assert.equal(h.calls.find((c) => c[0] === "uniform1i" && c[1][0].name === "uNumLights")[1][1], 2);
+  h.reset();
+  h.GLX.begin(h.frame({ lights: [] }));
+  assert.equal(nl(), 1, "a drop to zero is a change too — the per-chunk path's long tail of 0 must still be written once");
+  // ONE WRITER. A WebGL uniform is per-PROGRAM state, so the cached value
+  // survives every unbind — but only while nothing else writes it on the lit
+  // program. post.js's godray pass has its own uNumLights on its own program
+  // and cannot collide; a SECOND writer on the lit program would make the
+  // cache lie, and this is the assertion that would catch it.
+  const bare = code("js/render/glx.js");
   const writers = bare.match(/uniform1i\(\s*litU\.uNumLights/g) || [];
   assert.equal(writers.length, 1,
     `litU.uNumLights has ${writers.length} writers — the cache is only valid with one; ` +
     "route the new one through uploadLightSet or drop the cache");
-  // The reset must sit with the locs() call that re-fetches the locations,
-  // which is the only moment a relink can have thrown the value away.
-  const at = bare.indexOf("litU = locs(litProg");
+  // RESET AT RELINK. A relink resets every uniform on the program, so the
+  // cache has to be cleared where the locations are re-fetched.
+  const at = bare.search(/litU\s*=\s*locs\(\s*litProg\b/);
   assert.notEqual(at, -1, "the lit program's locs() call moved");
-  assert.match(bare.slice(Math.max(0, at - 200), at), /_luNL\s*=\s*-1/,
+  assert.match(bare.slice(Math.max(0, at - 300), at), /_luNL\s*=\s*-1\b/,
     "the uNumLights cache must be cleared where the lit program's locations are re-fetched");
-  // And it must NOT be swept up in the per-frame material reset: those exist
-  // because begin() re-establishes material state, while this value is program
-  // state that is still correct across frames. Clearing it there would give
-  // back the whole saving.
   assert.doesNotMatch(bare, /_matEmissive\s*=[^;]*_luNL/,
     "uNumLights is program state, not per-frame material state — do not reset it in begin()");
 });
@@ -2160,26 +2302,35 @@ test("GLX caches uNumLights, and nothing else writes it on the lit program", () 
 // change nothing, and NOTHING GOES RED when it regresses, because the render
 // is identical either way. Only a call count can tell, so pin the store type.
 test("GLX's uf3 cache keeps float64 precision, and owns every lit/sky vec3", () => {
-  const glx = read("js/render/glx.js");
-  const body = glx.slice(glx.indexOf("function uf3("), glx.indexOf("function uf3(") + 900);
-  assert.notEqual(glx.indexOf("function uf3("), -1, "uf3 is gone");
-  assert.ok(!/new Float32Array\(3\)/.test(body),
-    "uf3 must NOT store into a Float32Array — it rounds float64 on store and the cache never hits");
-  assert.match(body, /\[v\[0\], v\[1\], v\[2\]\]/,
-    "uf3 must copy the three components into a plain array, not retain the caller's");
-  assert.match(body, /p\[0\] = v\[0\]; p\[1\] = v\[1\]; p\[2\] = v\[2\];/,
-    "uf3 must overwrite the stored components in place on a miss");
+  // THE TRAP THIS TEST EXISTS FOR: the first version stored into a
+  // Float32Array(3), mirroring ufM4, and skipped ZERO of 17.5 calls a frame. A
+  // Float32Array rounds on store, so the compare was the rounded float32 against
+  // the float64 the caller passed — `cached=0.11999999731779099 in=0.12` — and
+  // could never match. BEHAVIOUR: a value that is not f32-representable still
+  // hits on the second begin().
+  const h = bootGlx();
+  const f = h.frame({ ambientSky: [0.12, 0.31, 0.47], sunColor: [0.97, 0.91, 0.83] });
+  h.GLX.begin(f);
+  h.reset();
+  h.GLX.begin(h.frame({ ambientSky: [0.12, 0.31, 0.47], sunColor: [0.97, 0.91, 0.83] }));
+  assert.equal(h.count("uniform3fv"), 0, "equal float64 vec3s are skipped — a Float32Array store would round and never hit");
+  // …and it COPIES: a scratch array mutated in place is a real change.
+  const scratch = [0.12, 0.31, 0.47];
+  h.GLX.begin(h.frame({ ambientSky: scratch }));
+  h.reset();
+  scratch[0] = 0.5;
+  h.GLX.begin(h.frame({ ambientSky: scratch }));
+  assert.equal(h.count("uniform3fv", (a) => a[0].name === "uAmbSky"), 1, "the cache compares values, not the caller's reference");
   // Single writer, the same property the uNumLights and uModel caches need: a
   // raw gl.uniform3fv on either program would desync the cache behind its back.
-  const bare = glx.replace(/\/\/[^\n]*/g, "");
+  const bare = code("js/render/glx.js");
   const raw = bare.match(/gl\.uniform3fv\(\s*(litU|skyU)\./g) || [];
   assert.equal(raw.length, 0,
     `${raw.length} raw gl.uniform3fv call(s) remain on the lit/sky programs (${raw.join(", ")}) — ` +
     "every one must go through uf3 or the cache goes stale");
   // The cache lives in the same two objects uf1/ufM4 use, so it is already
-  // cleared where the programs are relinked. If that stops being true the
-  // clear must move with it.
-  assert.match(bare, /_clearUf\(_litUf\);\s*_clearUf\(_skyUf\);/,
+  // cleared where the programs are relinked.
+  assert.match(bare, /_clearUf\(\s*_litUf\s*\)\s*;\s*_clearUf\(\s*_skyUf\s*\)/,
     "the lit/sky uniform caches must still be cleared together on relink");
 });
 

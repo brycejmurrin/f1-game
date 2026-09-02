@@ -14,6 +14,11 @@
 // A camera left live after its screen is gone is a privacy problem before it is
 // a battery one, and nothing on screen would reveal it — which is exactly why
 // it is asserted rather than assumed.
+//
+// STAYS ON THE PER-TEST FIXTURE: the blank Y4M webcam is a browser LAUNCH flag,
+// the three tests run serially on that one browser, and the last one redefines
+// `document.hidden` to true for good — a shared page after it would be a page
+// the game believes is backgrounded.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import config from "../../playwright.config.js";
 import { buildY4m, cameraLaunch } from "../helpers/qr-camera.js";

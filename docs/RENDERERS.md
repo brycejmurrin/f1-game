@@ -172,6 +172,34 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   WebGPU path with a lite swapchain (`UnsignedByteType`, no MSAA 4,
   low-power).
 
+## Cross-backend parity — mirroring a knob across GLX / WGX / TLX
+
+(Folded from the `cross-backend-parity` skill, 2026-09.) Use this when a
+look / knob / feature already differs between the three backends, or when
+auditing drift after a lighting or rendering change. Night-looks-wrong is a
+`lighting-tuner` question first; a WGX validation defect is `webgpu-debug`.
+
+**The rule: a GLX fix is not done until it is mirrored in WGX and TLX — or
+recorded as a gap** in §Parity snapshot above and in the defect inventory
+[research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md).
+
+1. `node --test tests/unit/backend-surface-parity.test.mjs` first — the
+   façade must carry the same member names on all three backends (a missing
+   name leaves GLX's dead closure behind after descriptor-copy; see §Mental
+   model).
+2. Grep the knob across ALL of `js/render/`: GLSL in `shaders/`, WGSL in
+   `webgpu/wgsl-*.js`, TSL factories in `three/`, and the CPU plumbing that
+   feeds the uniforms — a knob that reaches one shader family and not the
+   others is the usual drift.
+3. WGX: `node tools/wgx-validate.mjs --static` (real Dawn WGSL validation,
+   ~5 s). A live-device Dawn run is parent-session only → `webgpu-debug`.
+4. Same-scene shots per backend: `node tools/capture/backend-compare.mjs
+   <track> …` (one deterministic framing, N backends, numeric pixel diff —
+   MAD and %px changed — plus per-backend console errors), or
+   `tools/gfx-probe.mjs --backend webgpu|three <track>` (`playwright-probe`
+   skill). `__apex.diag({download:false}).env.backend` is what actually
+   bound — a fallback to GLX is silent, so never trust the pick alone.
+
 ## Boot evidence — a unit test of a backend is not evidence that it runs
 
 WGX's mock device passed every assertion while FOUR separate defects made the

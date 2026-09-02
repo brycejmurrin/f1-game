@@ -279,7 +279,7 @@ same surface from a shell.
 Skills / MCP / wrap: `docs/AGENT-SURFACE.md`. Lighting/sky:
 `docs/LIGHTING-REF.md`, `-KNOBS.md`, `-PRESETS.md`
 (`.claude/skills/lighting-tuner/references/bake.md` + `scripts/bake.mjs` land a COPY VALUES export). Renderers
-(GLX/WGX/TLX): `docs/RENDERERS.md`. Career: `docs/CAREER.md`. Multiplayer:
+(GLX/WGX/TLX, cross-backend parity): `docs/RENDERERS.md`. Career: `docs/CAREER.md`. Multiplayer:
 `docs/MULTIPLAYER.md`. Scenery: `docs/SCENERY-API.md`. Testing:
 `docs/TESTING.md`. WGX/WGSL (`js/render/webgpu/`):
 `docs/research/WEBGPU-PARITY.md`.

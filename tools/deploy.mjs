@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // deploy.mjs — the ONE deploy command (2026-09-01).
-// @doc the ONE deploy: fetch → merge → tooling-fast → verify-track → push the deploy branch (or --pr); pages.yml stamps the build
+// @doc the ONE deploy: fetch → merge → tooling-fast → verify-track → push the deploy branch (or --pr); pages.yml stamps it
 //
 //   node tools/deploy.mjs --plan        # print the steps + the union diffstat, run nothing
 //   node tools/deploy.mjs               # fetch → merge → tooling-fast → verify-track (touched

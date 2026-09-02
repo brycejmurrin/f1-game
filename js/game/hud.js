@@ -125,7 +125,8 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " +" + t + "s";
 // makes this stable rather than a feedback loop — capping changes the rect and
 // the zoom by the same factor, so the next measurement returns the same number.
 const FIT_AIR = 10;              // px of daylight required between two clusters
-let _fitKey = "", _fitWait = 0;
+let _fitKey = "", _fitWait = 0, _fitRetry = 0;   // _fitRetry: ticks spent re-measuring while nothing is laid out
+let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the four fit handles never change identity
 function fitHud() {
   const root = document.documentElement;
   const scale = +root.style.getPropertyValue("--hud-scale") || 1;
@@ -166,8 +167,12 @@ function fitHud() {
     }
     return hi > lo ? (hi - lo) / (el.currentCSSZoom || 1) : wide(el);
   };
-  const top = wide(document.querySelector(".hud-top"));
-  if (!top) { _fitKey = ""; return; }   // menu layer: nothing laid out, measure again next tick
+  if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); _dockL = document.getElementById("dock-left"); _dockR = document.getElementById("dock-right"); }
+  const top = wide(_hudTop);
+  // menu layer: nothing laid out, measure again next tick — but BOUNDED: an
+  // unlatched key re-ran this whole rect pass (and drawMinimap's layout reads)
+  // 10×/s for as long as the layout stayed empty, i.e. the entire countdown.
+  if (!top) { if (++_fitRetry <= 30) _fitKey = ""; return; }
   const half = window.innerWidth / 2;
   const map = wide(els.minimap), gaps = wide(els.gapA && els.gapA.parentNode);
   const left = (map ? 10 + map + 8 + gaps : 0) + FIT_AIR;
@@ -180,7 +185,7 @@ function fitHud() {
   // content and the cap came out permissive enough to leave #hud-gearbox and
   // #hud-aero off-screen at 1280x800 @175% — with the cap in place and no overlap
   // reported anywhere, which is how a wrong measurement hides.
-  const bottom = span(document.querySelector(".hud-bottom"));
+  const bottom = span(_hudBottom);
   const capBot = bottom ? (window.innerWidth - 2 * FIT_AIR) / bottom : Infinity;
   // THE DOCKS GET THE SAME TREATMENT — they were the one cluster outside the
   // fit budget (this comment block's own "bottom: one centred row" never
@@ -197,8 +202,7 @@ function fitHud() {
     if (!r.height) return 0;
     return r.height / (el.currentCSSZoom || 1);
   };
-  const dockH = Math.max(tall(document.getElementById("dock-left")),
-    tall(document.getElementById("dock-right")));
+  const dockH = Math.max(tall(_dockL), tall(_dockR));
   const capDock = dockH ? (window.innerHeight - 3 * FIT_AIR) / dockH : Infinity;
   // An empty dock on a TOUCH body is "not populated yet", not "no dock" —
   // showTouchControls lands a tick or two after the race starts, and latching
@@ -208,7 +212,7 @@ function fitHud() {
   // above; a desktop body keeps the backoff, since its docks stay empty
   // forever and re-measuring them every tick is the cost the backoff exists
   // to avoid.
-  if (!dockH && !document.body.classList.contains("desktop")) _fitKey = "";
+  if (!dockH && !document.body.classList.contains("desktop")) { if (++_fitRetry <= 30) _fitKey = ""; } else _fitRetry = 0;
   const set = (prop, cap) => {
     if (cap >= scale) root.style.removeProperty(prop);   // fits: the player's number, untouched
     else root.style.setProperty(prop, String(Math.max(0.4, Math.round(cap * 1000) / 1000)));

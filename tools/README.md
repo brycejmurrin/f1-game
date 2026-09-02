@@ -32,7 +32,7 @@ the tool's own header.
 | **bloat-scan.mjs** | Size report for slim-bloat: module-size ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
 | **bump-cache.mjs** | Content-hash cache busting: `--check` verifies every `?v=` and the shell generation; `--apply` refreshes them. | bump-cache |
 | **capture/apex-capture.mjs** | Parallel headless screenshot sweep across cameras/tracks/modes → `scratch/captures/apex-capture/<purpose>/`. | playwright-probe |
-| **capture/backend-compare.mjs** | Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors. | cross-backend-parity / playwright-probe |
+| **capture/backend-compare.mjs** | Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors. | playwright-probe |
 | **capture/baked-scenery.mjs** | Curated free-cam gallery of `bakedModel` sites (Monza/Spa/Silverstone/Monaco/Vegas); PNGs + `manifest.json`. | playwright-probe / scenery-dress |
 | **capture/garage-shot.mjs** | One screenshot of the GARAGE 3D scene (turntable car, crest lightbox, boards) — the only way to look at garage-scene.js. | garage-parts-livery / car-viewer |
 | **capture/motion-capture.mjs** | Records a driven clip via `recordVideo` (headless rAF is frozen), extracts frames, scores per-frame flicker. | motion-capture |
@@ -60,7 +60,7 @@ the tool's own header.
 | **coplanar-audit.cjs** | Z-fighting detector — same-facing coplanar faces (`dot ≥ 0.999`); `--gate` ratchets against `coplanar-baseline.json`. | scenery-dress |
 | **crest-sweep.mjs** | Measures every team crest offline by replaying `LiveryTex.drawCrest` into a recording 2D context + scanline raster. | car-viewer |
 | **css-play.mjs** | One-screen CSS edit loop: host the tree, open a menu, dump structured DOM, hot-swap a stylesheet, screenshot. | css-play |
-| **deploy.mjs** | the ONE deploy: fetch → merge → tooling-fast → verify-track → push the deploy branch (or --pr); pages.yml stamps the… | — |
+| **deploy.mjs** | the ONE deploy: fetch → merge → tooling-fast → verify-track → push the deploy branch (or --pr); pages.yml stamps it | — |
 | **extract-module.mjs** | Reorg helper for `game.js` extractions: free-reference analysis of a line range, rewritten against `G.<name>` (`--out`). | slim-bloat |
 | **fit-audit.mjs** | The NUMBERS fit audit over viewports × interface scales: tap targets, legibility floor, clipped-without-scroll. | ui-menu-a11y |
 | **float-audit.cjs** | Exhaustive FLOATING-scenery detector — wraps `TrackGeom` emitters and reports props above/under the ground; `--all`. | survey-track |

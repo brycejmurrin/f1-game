@@ -1,17 +1,18 @@
 // @ts-check
 // AI car meshes use fixed team factory visuals, independent of player saves.
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): the boot-seed-reload pair became none. The
+// saved setup goes in through the store (cache and disk together) and the team
+// through #mb-race's own re-read, which is all the reload was for.
+// UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
 test("AI full-body meshes use deterministic factory presets instead of saved setups", async ({ page }) => {
-  await page.goto("/");
-  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
-
-  await page.evaluate(() => {
-    const teamIndex = Teams.LIST.findIndex((team) => team.id === "mclaren");
-    localStorage.setItem("apex26.team", JSON.stringify(teamIndex));
-    localStorage.setItem("apex26.parts.mclaren", JSON.stringify({
+  await toMenu(page);
+  await pinFreePlay(page, {
+    team: "mclaren",
+    parts: {
       engine: "quali_engine",
       aero: "extreme",
       suspension: "active",
@@ -20,10 +21,8 @@ test("AI full-body meshes use deterministic factory presets instead of saved set
       ers: "overcharge",
       gearbox: "f1_spec",
       fuel: "custom_formula",
-    }));
+    },
   });
-  await page.reload();
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
 
   await page.evaluate(() => {
     const captures = {};

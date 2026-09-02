@@ -9,11 +9,12 @@ CLIs are pinned as `apex_*` MCP tools; most are not. Full map (three MCP
 servers, wrap table, never-wrap): [`docs/AGENT-SURFACE.md`](../../docs/AGENT-SURFACE.md).
 
 Descriptions say **when** to load the skill; bodies carry the workflow and
-`references/` carry the detail. 32 skills (44 until 2026-09 — the folded ones
+`references/` carry the detail. 31 skills (44 until 2026-09 — the folded ones
 are named in the rows that absorbed them: `bump-cache`, `deploy-merge`,
 `test-timeout-triage` → check-changes; `motion-capture`, `perf-profile` →
 playwright-probe; `bake-lighting` → lighting-tuner; `scene-graph-instancing` →
-scenery-dress; `debug-state` → agent-view. `apex-env-setup`, `pixel-perfect`,
+scenery-dress; `debug-state` → agent-view; `cross-backend-parity` →
+`docs/RENDERERS.md` §Cross-backend parity. `apex-env-setup`, `pixel-perfect`,
 `webapp-testing`, `webgpu-inspector` were deleted: env setup is AGENTS.md
 §Verification 1 + `tools/cloud-agent-install.sh`.)
 
@@ -26,7 +27,6 @@ scenery-dress; `debug-state` → agent-view. `apex-env-setup`, `pixel-perfect`,
 | **car-viewer** | Inspecting the car in isolation (no track) — `tools/carview.html`, `tools/car/render-car.mjs`, `tools/car/carshot.mjs`. |
 | **career-mode** | DRIVER CAREER, MY TEAM, career saves, contracts, sponsors, R&D economy, career qualifying, reliability/DNFs. |
 | **check-changes** | Pre-push validation — `verify-change.mjs --fast` / `--plan` + batched `test-bg`; the cache bump (`references/bump.md`), a Playwright timeout triage (`references/triage.md`), merging with / pushing to the deploy branch (`references/deploy.md`). |
-| **cross-backend-parity** | A look/knob/feature differs between GLX, WGX and TLX — a pointer to `docs/RENDERERS.md`. |
 | **css-play** | Iterating on one menu/HUD stylesheet — host localhost, open a screen, dump DOM, hot-swap `css/`, screenshot (`tools/css-play.mjs` / `playwright-mcp.sh play|dom`). |
 | **data-hub** | Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1, `js/data/*`. |
 | **debug-cameras** | Switch or check camera modes, cockpit/chase/orbit/cinematic/roadside shots, `camState`/`viewState`, camera lag. |

@@ -16,7 +16,21 @@
 // The far side is played by __apex.lobbyPeerEvent, which sends lobby events as
 // the other person over the loopback transport. A real second browser is
 // covered by tools/net/rtc-e2e.mjs; this is about the rules.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): fifteen boots became none. enterRoom()
+// walks the shared page back to the title — quitting a race a GO test left
+// running, cancelling the room the last test sat in, dropping and re-arming the
+// fake peer (lobbyReset) — before opening the lobby afresh; open() itself
+// resets the sheet to the host/join pick and clears the peer/ready tables.
+// The default car (McLaren seat 0) is re-pinned because the HELLOs below put
+// the rival in Ferrari and Red Bull seats and the seat rule would move a
+// colliding local car. One thing this cannot undo: the game's `netRoom` flag is
+// cleared only by a race start, so a test that ends in the room leaves it set
+// (js/game.js clearMenuScreens) — harmless to this file, whose every test
+// re-enters a room, and noted for anyone sharing a worker with it.
+// UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { lobbyReset, pinFreePlay } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 const EV = { HELLO: "hello", SETTINGS: "settings", READY: "ready", GO: "go", QUALI: "quali" };
@@ -26,10 +40,8 @@ const EV = { HELLO: "hello", SETTINGS: "settings", READY: "ready", GO: "go", QUA
 // starts the lobby's connect-watcher directly, which is the same path a real
 // connection takes into onConnected().
 async function enterRoom(page, role = "host") {
-  await page.goto("/");
-  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(() => window.__apex.lobbyFake(true));
+  await lobbyReset(page);
+  await pinFreePlay(page, { click: false });   // #mb-vs re-reads the store itself
   await page.click("#mb-vs");
   await page.click(role === "host" ? "#vs-host" : "#vs-join");
   await page.evaluate(() => window.__apex.lobbyWatch());

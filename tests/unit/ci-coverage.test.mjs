@@ -135,7 +135,7 @@ test("an obsolete Pages run cannot deploy after a newer commit", () => {
 
 test("cached browser jobs never enter apt through --with-deps", () => {
   const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
-  const driving = ciWorkflow.split("\n  driving-model:")[1].split("\n  selected:")[0];
+  const driving = ciWorkflow.split("\n  driving-model:")[1].split("\n  renderer-filter:")[0];
   for (const [name, job] of [["smoke", smoke], ["driving-model", driving]]) {
     assert.match(job, /id: pwcache/, `${name} cache must expose cache-hit`);
     assert.match(job,
@@ -199,4 +199,138 @@ test("selected's 120 s gate cannot rerun the fixed-budget smoke spec", () => {
   assert.doesNotMatch(selected, /npm test -- .*smoke\.spec\.js.*--timeout=120000/);
   assert.match(selected, /COVERED BY FIXED BLOCKING GATE/,
     "the selected report must make its delegated coverage visible");
+});
+
+// THE RENDERER JOB (2026-09-01): the gfx group on macos-latest, the one runner
+// image with a hardware (Metal) adapter. Three things about it are load-bearing
+// and none of them is enforced by YAML: it must run on the macOS image, it must
+// never carry the one flag that turns that image's GPU into SwiftShader, and it
+// must stay OUT of the deploy gate until it has a measured history (pages.yml
+// consumes the aggregate of every job in ci.yml, so "out" means "skipped on the
+// Pages call", which the tool derives from the `!inputs.concurrency_key` if).
+const gpuWorkflow = fs.readFileSync(new URL("../../.github/workflows/gpu-census.yml", import.meta.url), "utf8");
+const rendererJob = ciWorkflow.split("\n  renderer-macos:")[1]?.split("\n  selected:")[0];
+const rendererFilter = ciWorkflow.split("\n  renderer-filter:")[1]?.split("\n  renderer-macos:")[0];
+
+test("the renderer specs have their own macOS job that runs test:gfx", () => {
+  assert.ok(rendererJob, "renderer-macos job missing from ci.yml");
+  assert.ok(rendererFilter, "renderer-filter job missing from ci.yml");
+  assert.match(rendererJob, /^    runs-on: macos-latest$/m, "the renderer job must run on the image with the Metal adapter");
+  assert.match(rendererJob, /run: npm run test:gfx -- --config=playwright\.gpu\.config\.js --timeout=\d+/);
+  assert.match(rendererJob, /APEX_WORKERS: 2/);
+  assert.match(rendererJob, /^    timeout-minutes: 30$/m);
+  assert.deepEqual(report.rendererGate.specs, groupSpecs("test:gfx"));
+  assert.ok(report.rendererGate.specs.length >= 6, `test:gfx resolved to ${report.rendererGate.specs.length} specs`);
+  assert.equal(report.rendererGate.runsOn, "macos-latest");
+  assert.equal(report.rendererGate.config, "playwright.gpu.config.js");
+});
+
+test("the renderer job never passes --use-angle=vulkan (it drops macOS to SwiftShader)", () => {
+  // CI-RENDERING-PERFORMANCE.md §There IS a real GPU, trap 1: measured, not
+  // a style preference. Checked on the UNCOMMENTED job text, because the
+  // comment is allowed to name the flag in order to forbid it.
+  const code = rendererJob.replace(/^\s*#.*$/gm, "");
+  assert.doesNotMatch(code, /--use-angle=vulkan/);
+  assert.doesNotMatch(code, /--use-angle=swiftshader/, "the whole point of the job is the hardware adapter");
+  assert.equal(report.rendererGate.vulkanAngle, false);
+  // The launch config it uses must remove the base pin and refuse any other
+  // --use-angle — the base config stays untouched (protected contract file).
+  const gpuCfg = fs.readFileSync(new URL("../../playwright.gpu.config.js", import.meta.url), "utf8");
+  assert.match(gpuCfg, /import base from "\.\/playwright\.config\.js"/);
+  assert.match(gpuCfg, /filter\(\(a\) => a !== SOFTWARE_ANGLE\)/);
+  assert.match(gpuCfg, /channel: "chromium"/, "the headless shell has no navigator.gpu");
+  assert.doesNotMatch(gpuCfg.replace(/^\s*\/\/.*$/gm, ""), /--use-angle=vulkan/);
+  const baseCfg = fs.readFileSync(new URL("../../playwright.config.js", import.meta.url), "utf8");
+  assert.match(baseCfg, /"--use-angle=swiftshader",/, "the base config still pins SwiftShader for every other run");
+});
+
+test("the renderer job proves the adapter before trusting the run, and uploads on failure", () => {
+  assert.match(rendererJob, /node tools\/gpu-census\.mjs --json census-macos\.json/);
+  assert.match(rendererJob, /r\.anyHardware !== true/, "the tri-state census must be compared with === true, never coerced");
+  assert.equal(report.rendererGate.censusGated, true);
+  assert.match(rendererJob, /if: failure\(\)\s*\n\s*uses: actions\/upload-artifact@v4/);
+  assert.match(rendererJob, /name: playwright-artifacts-renderer-macos/);
+  // The full browser, cached at macOS's path; never apt.
+  assert.match(rendererJob, /id: pwcache/);
+  assert.match(rendererJob, /path: ~\/Library\/Caches\/ms-playwright/);
+  assert.match(rendererJob, /if: steps\.pwcache\.outputs\.cache-hit != 'true'\s*\n\s*run: npx playwright install chromium$/m);
+  assert.doesNotMatch(rendererJob.replace(/^\s*#.*$/gm, ""), /--with-deps/, "--with-deps is apt; the comment may name it, the step may not");
+});
+
+test("the renderer job is path-filtered on a cheap runner and stays out of the deploy gate", () => {
+  assert.match(rendererFilter, /^    runs-on: ubuntu-latest$/m, "the filter must not allocate a macOS runner to say no");
+  assert.match(rendererFilter, /if: \$\{\{ !inputs\.concurrency_key && github\.event_name != 'workflow_call' \}\}/);
+  assert.match(rendererJob, /^    needs: renderer-filter$/m);
+  assert.match(rendererJob, /if: needs\.renderer-filter\.outputs\.renderer == 'true'/);
+  assert.equal(report.rendererGate.deployGate, false,
+    "renderer-macos joined the deploy gate — pages.yml aggregates every job in ci.yml, so this must be deliberate");
+  assert.deepEqual(report.jobs.filter((j) => !j.deployGate).map((j) => j.name).sort(), ["renderer-filter", "renderer-macos"]);
+  // The path filter: every renderer backend plus the lighting modules the
+  // gfx specs pin, the spec list DERIVED from package.json, fail-safe to run.
+  for (const p of ["js/render/", "js/game/lighting[^/]*\\.js$", "js/game/light-presets\\.js$", "js/game/atmosphere\\.js$", "js/game/tuner\\.js$"]) {
+    assert.ok(rendererFilter.includes(p), `renderer filter does not route ${p}`);
+  }
+  assert.match(rendererFilter, /scripts\["test:gfx"\]/);
+  assert.match(rendererFilter, /run_all "git diff failed"/);
+  assert.match(rendererFilter, /run_all "before-sha \$BEFORE unreachable/);
+  assert.doesNotMatch(rendererFilter, /renderer=false"[^\n]*\n[^\n]*exit 0/, "an unresolvable diff must RUN, never skip");
+  // Nothing in pages.yml names it — it reaches the Pages run only as a skip.
+  assert.doesNotMatch(pagesWorkflow, /renderer-macos|renderer-filter/);
+});
+
+test("the deploy-gate count excludes what the renderer job runs", () => {
+  for (const s of report.rendererGate.specs) {
+    assert.ok(!report.executed.includes(s),
+      `${s} is counted as deploy-gate coverage, but only renderer-macos runs it and that job is skipped on the Pages call`);
+  }
+  const gfx = report.viaGroup.find((g) => g.group === "test:gfx");
+  assert.ok(gfx, "the tool no longer sees test:gfx at all");
+  assert.equal(gfx.job, "renderer-macos");
+  assert.equal(gfx.deployGate, false);
+});
+
+test("the push-gate smoke spec is sharded four ways on separate runners (unsharded it hits the 30-minute cap)", () => {
+  // Pages runs 1873/1876 measured smoke.spec.js at 30-37 min on one shared
+  // runner — the job's own cap. The matrix must be a constant four (never a
+  // one-shard fallback on push) and the Smoke step must pass --shard.
+  const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
+  assert.match(smokeJob, /^\s+shard: \[1, 2, 3, 4\]\s*$/m, "the smoke matrix must be a constant four shards");
+  assert.doesNotMatch(smokeJob, /fromJSON\([^)]*'\[1\]'/, "no one-shard fallback on push");
+  assert.match(smokeJob, /run: npm run test:smoke -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/4/);
+  assert.match(smokeJob, /run: npm run test:tiny -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/4/);
+});
+
+test("gpu-census runs nightly beside the boot group, with the full check and its dispatch defaults", () => {
+  assert.match(gpuWorkflow, /^on:\s*\n  schedule:\s*\n    - cron: "17 3 \* \* \*"\s*\n  workflow_dispatch:/m,
+    "gpu-census.yml must carry the same nightly cron as ci.yml");
+  assert.match(ciWorkflow, /- cron: "17 3 \* \* \*"/);
+  // The inputs survive (a dispatch is still the way to ask a question)…
+  for (const input of ["track:", "images:", "census_only:", "force:", "ls:"]) assert.match(gpuWorkflow, new RegExp(`^      ${input}`, "m"));
+  // …and a scheduled run, where every input is empty, still gets the FULL
+  // check on the default images and track — not census_only, not a fallback
+  // to ubuntu-only via the plan job's empty-string branch.
+  assert.match(gpuWorkflow, /if: \$\{\{ !inputs\.census_only \}\}/);
+  assert.match(gpuWorkflow, /if: \$\{\{ always\(\) && !inputs\.census_only \}\}/, "the Verdict must still gate a scheduled run");
+  assert.match(gpuWorkflow, /IMAGES: \$\{\{ inputs\.images \|\| 'ubuntu-latest,macos-latest,windows-latest' \}\}/);
+  assert.match(gpuWorkflow, /inputs\.images \|\| '[^']*macos-latest[^']*'/, "the nightly must include the one image with a real GPU");
+  const trackUses = gpuWorkflow.match(/gpu-game-check\.mjs "\$\{\{ inputs\.track \|\| 'montreal' \}\}"/g) || [];
+  assert.equal(trackUses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must default the track for the schedule");
+  assert.doesNotMatch(gpuWorkflow, /gpu-game-check\.mjs "\$\{\{ inputs\.track \}\}"/);
+});
+
+test("gpu-census has a NATIVE WGX leg with hardware gates (bound, swapchain, gpuErrors)", () => {
+  // Until 2026-09-02 the "webgpu" leg was three.js on WebGPU, so js/render/webgpu/
+  // had no real-GPU evidence at all. The leg must run WGX itself and the
+  // Verdict must fail a hardware run where WGX fell back or soft-presents.
+  assert.match(gpuWorkflow, /- name: Game check — WGX \/ WebGPU \(native, opt-in\)/);
+  assert.match(gpuWorkflow, /--backend webgpu \$LS \\\n\s+--json "game-wgx-\$\{\{ matrix\.image \}\}\.json"/);
+  assert.match(gpuWorkflow, /for \(const path3 of \["webgpu", "webgl2", "glx", "wgx"\]\)/);
+  assert.match(gpuWorkflow, /const tlxLeg = path3 === "webgpu" \|\| path3 === "webgl2";/,
+    "the WGX leg must not be held to the TLX env-probe expectations");
+  assert.match(gpuWorkflow, /if \(hardware && gfx\.wgx !== true\) bad\.push\(`wgx: WGX did not bind/);
+  assert.match(gpuWorkflow, /else if \(hardware && gfx\.wgxSoftPresent === true && gfx\.headlessUa !== true\) bad\.push\(`wgx: WGX is soft-presenting/,
+    "a headless UA blits by design (run 19); only a headed hardware run proves the swapchain path");
+  const check = fs.readFileSync(new URL("../../tools/gpu-game-check.mjs", import.meta.url), "utf8");
+  assert.match(check, /r\.wgx = typeof g\.softPresent === "function";/);
+  assert.match(check, /r\.wgxSoftPresent = !!g\.softPresent\(\)/);
 });
