@@ -1854,6 +1854,252 @@ Making TLX itself viable on a phone means the chunk system has to **stream** —
 build near, drop far — instead of building all 483 chunks up front. That is
 real work, not a flag, and it is the entry in §3 for it.
 
+## 2n. The bytes were not where the plan said they were (2026-09-02)
+
+§2m ended by naming a streaming chunk system as the way to make TLX viable on a
+phone. That entry was wrong, and it was wrong in this document's own favourite
+way: an inference written down in the register kept for measurements.
+
+### The inference, and what one measurement did to it
+
+"483 scenery chunks built up front" reads like an attribution. It was arithmetic
+over a number from a different instrument. `tlx-chunked.build()` gives every
+chunk of a mesh the **same** `position` / `normal` / `color` / `mat`
+`BufferAttribute` objects and only the index differs — so chunk residency can
+free index arrays and nothing else. Building montreal in a VM and totalling the
+buffers by kind (`tools/tlx-pack-check.cjs` shares the harness):
+
+| | vertex | index | chunks |
+|---|---|---|---|
+| all meshes | 12.24 MB | 1.65 MB | 303 |
+| chunked only | 10.30 MB shared, **not** freeable by streaming | **1.24 MB** | |
+
+The whole track is 13.89 MB. The plan targeted a 53.7 MB gap with a mechanism
+that could reach 1.24 MB of it.
+
+### Where they actually were
+
+`__tlx.geoCensus()` — a weak registry of every geometry the backend builds,
+deduped **on the underlying ArrayBuffer**, because counting per geometry
+multiplies a chunked mesh's shared set by its chunk count and invents tens of
+megabytes that do not exist. Montreal, iPhone profile, in race:
+
+| attribute | MB | |
+|---|---|---|
+| position | 11.44 | must stay Float32 — world metres |
+| normal | 11.44 | unit vectors in Float32 |
+| color | 11.43 | Float32 |
+| trk | 6.45 | **5.88 of it entirely zero** |
+| index | 4.86 | Uint32 everywhere, even under 65536 verts |
+| mat | 3.80 | a 0..16 id in Float32 |
+| **total** | **49.84** | across 1,037 live geometries |
+
+Not chunk residency. Format.
+
+### The pack, and why it range-scans first
+
+`TLXShaders.packAttr` quantises only what provably fits and keeps Float32
+otherwise. The scan is the whole point — the first draft's fixed rules would
+have been silently wrong three separate ways, each caught by making the code
+report what it refused:
+
+- **normals** refused Int16 on four arrays (1.29 M values). Maximum value
+  `1.0000000560427362` — float noise a hair over 1.0. An EPS, not a bare
+  compare.
+- **colours** refused Uint8 on 21 arrays. Maximum **3.4**: emissive above 1 is
+  real, and clamping it would have dimmed every glowing surface.
+- **MAT ids** refused Uint8 on two arrays. Maximum **15.4** — ids are not whole
+  numbers; `tsl-lit:1527` carries the flag material's wave phase in the
+  fraction.
+
+Colours and ids therefore go to **half-float** (2 bytes, no shader change —
+three maps `Float16BufferAttribute` straight to `GL_HALF_FLOAT`), normals to
+normalised Int16, indices to Uint16 under 65536 verts, and every absent source
+to a view into one shared zero buffer. `trk` is excluded from half by name: its
+arc length reaches 5382 m, where a half's 11-bit mantissa is worth about ±2.6 m
+and road markings need far better.
+
+| | before | after |
+|---|---|---|
+| deduped attribute bytes | 49.84 MB | **28.68 MB** |
+| JS heap, iPhone profile in race | 136.4 MB | **119.1 MB** |
+
+`gpuErrors` 0 and no page errors throughout; the race renders (car, field, HUD,
+touch controls).
+
+### Verifying it with decode, not with a screenshot
+
+Two frames differ for a dozen reasons that are not the change under test —
+the A/B tried first drifted the camera and the countdown between arms, and the
+OFF frame showed trees the ON frame did not for reasons that had nothing to do
+with packing. Screenshots could not settle this.
+
+`tools/tlx-pack-check.cjs` settles it: it **lifts the real packer out of the
+shipping file** (a reimplementation drifts, then verifies its own copy), feeds
+it the real attribute arrays from a real build, decodes what the GPU would read
+back, and gates on the three things `tsl-lit` actually DOES with `mat` —
+`floor(mat+0.5)` for the material layer, `mat >= 15 && mat < 16` for the flag
+branch, `fract(mat)` for the wave phase.
+
+Zero error is the WRONG gate here and the first draft used it, failing on a
+legitimately fractional 15.4. "Same decision" is the right one. All 40 circuits:
+
+```
+normal  60,599,541 values   max abs error 1.526e-5
+color   60,599,541 values   max abs error 1.961e-3   (under the 1/255 an 8-bit channel already quantises to)
+mat     20,172,423 values   max abs error 1.563e-3
+  material layer  floor(mat+0.5) changed : 0
+  flag branch     15<=mat<16 flipped     : 0
+  integer ids     not exact after decode : 0
+  index narrowed to Uint16               : 248 of 320 meshes, 35,455,179 values, 0 altered
+```
+
+### What it costs to build
+
+Not free, and not measured before it shipped — which it should have been.
+The pack is two passes over every attribute (range-scan, then convert), and
+`_toHalf` round-trips each value through a Float32Array view:
+
+| | |
+|---|---|
+| 1 M vertices (nrm + col + mat, 7 M values) | ~1.9 s |
+| montreal TLX track build, added | ~0.6 s |
+
+One-time, at mesh creation, on the opt-in TLX path only — GLX and WGX never
+call it, and `tlx-chunked.js` is a DEFERRED file with no script tag, so nothing
+on the default path even loads the code. Traded for 21 MB. If it ever needs to
+come down, the scan and the convert are fusable for the fits-anyway case, and
+`_toHalf`'s Float32Array round-trip is the hot line.
+
+### What this does NOT settle
+
+TLX at 119 MB is still well above GLX's 49.6 MB on the same phone profile, and
+attributes are now only 28.7 MB of it — the rest is three's own machinery and
+the TSL node graphs, which no amount of attribute packing reaches. **Whether
+119 MB clears an iPhone's jetsam limit cannot be determined from this
+container.** The phone default therefore stays GLX (§2m); `apex26.tlxMobile=1`
+is how a player finds out on the actual handset, and `apex26.tlxPack=0` turns
+the packing off if it is ever suspected.
+
+## 2o. TLX leaks ~30 MB a minute while you race, and it is three's render-object cache (2026-09-02)
+
+The player could not test the handset, so: Chromium cannot reproduce iOS
+jetsam, but it can answer the question underneath it — **does TLX's memory
+plateau, or climb?** Four-minute race soak, iPhone UA, montreal, driving
+throughout, `window.gc()` before every sample so the number is RETAINED memory
+and not garbage:
+
+| backend | start | end | drift |
+|---|---|---|---|
+| GLX | 47.0 MB | 47.5 MB | **+0.5 MB** |
+| TLX | 119.9 MB | 244.2 MB | **+124 MB, still climbing** |
+
+That is the bug. Everything before it — §2m's phone decline, §2n's 21 MB of
+attribute packing — was working on the BASELINE while the slope went unmeasured.
+119 MB was never what killed the tab; ~30 MB/min is, and it reaches any
+handset's ceiling in a couple of minutes of racing. Which is exactly the report:
+"it's fucked when we race."
+
+### It is not the geometry, and it is not the packing
+
+Same build, `apex26.tlxPack` the only difference:
+
+| arm | start | drift | geometry registry | attribute MB |
+|---|---|---|---|---|
+| pack ON | 117.2 | +137.6 | 1841 → 1850 | 28.68 → 30.16 |
+| pack OFF | 135.5 | +88.1 | 1841 → 1850 | 49.78 → 52.89 |
+
+Both leak. The registry and the attribute bytes are FLAT across the whole soak
+while the heap climbs 90–140 MB, so geometry is not it. (Run-to-run drift
+varies widely with machine load — 30.8 MB on one earlier run — so do not read a
+packing penalty into the difference between those two numbers. What is solid is
+that the leak survives with packing off.)
+
+`__tlx.memState()` was added to check the next tier, and cleared it too:
+
+```
+ 22s  heap 120.7  mats 21  pool 342  rGeo 228  rTex 34
+257s  heap 243.1  mats 22  pool 342  rGeo 243  rTex 37
+```
+
+Material cache, mesh pool, three's own geometry and texture counts: all flat
+against +122 MB.
+
+### V8 names it
+
+Nothing tracked was growing, so stop guessing and ask the sampling heap
+profiler, which attributes retained allocations to the function that made them.
+Two minutes of racing, heap 121.5 → 200.6 MB:
+
+```
+ 13.25 MB  updateByType         three.webgpu.min.js
+  6.29 MB  _createBindings
+  4.26 MB  VE
+  4.14 MB  createRenderObject
+  3.12 MB  qE
+  1.99 MB  createBindings
+  1.94 MB  getAttributes
+  1.60 MB  updateBindings
+```
+
+Every top site is inside three, in the render-object and binding path.
+`createRenderObject` and `_createBindings` running hot mean the renderer is
+MINTING render objects and bind groups continuously rather than hitting its
+cache.
+
+### Why TLX and not GLX
+
+TLX recycles a pool of `THREE.Mesh` wrappers (`meshPool`, measured 342, flat)
+and reassigns `geometry` and `material` on them every frame — the pooling that
+keeps allocation down on the Apex side. three's WebGPURenderer caches render
+objects and their bindings in a chained map keyed on the object together with
+its material and geometry, so a recycled Mesh carrying a different pair each
+frame mints a NEW entry every time and the old ones are never released. The
+pool is bounded; the cache behind it is not. GLX has no such cache and stays
+flat on the same game loop.
+
+### The keyed pool: a measured 28%, and NOT a cure
+
+The pool now keys on (geometry, material) — a given wrapper always carries the
+same pair — with a clock-based prune (5 s cadence, 20 s idle) so the map cannot
+pin a freed geometry alive and trade three's unbounded cache for one of ours.
+It does what it was designed to do: the pool went from 342 entries flat to 198
+rising and falling with the working set (198 → 165 across one soak, `geoKeys`
+tracking it), and the allocation profile moved exactly where the diagnosis said
+it would, same probe and duration:
+
+| site | flat pool | keyed pool | |
+|---|---|---|---|
+| `createRenderObject` | 4.14 MB | 2.26 MB | **−45%** |
+| `_createBindings` | 6.29 MB | 4.61 MB | −27% |
+| `updateByType` | 13.25 MB | 10.13 MB | −24% |
+| heap, 2 min racing | +79.1 MB | +56.6 MB | −28% |
+
+The targeted functions fell the furthest, which is what makes this causal
+rather than a coincidence of load.
+
+**It is still not the fix.** ~28 MB/min remains, and the four-minute soak drifted
++88.6 MB — inside the run-to-run band of the UNFIXED builds (30.8 / 88.1 /
+124.3 / 137.6 across comparable runs). Total heap on this box is too noisy to
+separate 88 from 124; only the allocation profile could, which is why the claim
+above rests on that and not on the soak.
+
+### The remaining lead — a HYPOTHESIS, not a finding
+
+`createRenderObject` is still running at 2.26 MB with the object, geometry and
+material all now stable, so three's cache key must include something else that
+changes per frame. `_createBindings` staying high points the same way. The
+obvious suspect is the per-chunk lamp binding: the lit material binds a
+different lamp list per chunk (§R5), so if that reaches three as a changing
+lights node, the binding set is new every chunk every frame and no amount of
+mesh pooling will settle it. **Not verified.** The next round should test that
+before writing any more code, the way this round should have tested the slope
+before shipping two baseline fixes.
+
+The acceptance test stays: **drift, not a snapshot.** Any TLX memory claim
+reporting a single heap number without a slope is measuring the wrong thing —
+this entry exists because two rounds did exactly that.
+
 ## 3. Left on the table
 
 The pre-08-18 narrative behind this list — the O(n²) AI scans that were
@@ -1913,21 +2159,19 @@ composite; honest arithmetic ~0.05 ms, hygiene rather than a win).
 > call. WGX writes a whole UBO per `begin()` — no per-field skip. Do not
 > invent a millisecond claim from this.
 
-**Stream the chunk system, so TLX can run on a phone** — the one thing that
-would undo §2m's decline. `tlx-chunked` builds all 483 scenery chunks up front;
-~47 are visible at a time. GLX gets away with it because it drops the CPU copy
-after upload, and three never does — 71.5 MB across 5,665 retained
-`JSArrayBufferData`, measured, which is what OOM-kills an iPhone tab mid-race.
-Releasing after upload is **closed, not open**: see §2m for the two three.js
-sites that re-read `attribute.array` and take the renderer down with them.
+**Stream the chunk system, so TLX can run on a phone** — ~~the one thing that
+would undo §2m's decline~~. **WRONG, and withdrawn 2026-09-02 (§2n).** Written
+from an inference — "483 chunks built up front" — that was never measured. When
+it was: a chunked mesh shares ONE position/normal/colour/mat set across all its
+chunks and carries only the INDEX per chunk, so build-near/drop-far can free
+the index half and nothing else. Montreal's entire track geometry is 13.89 MB
+and its per-chunk index total is **1.24 MB** — against a 53.7 MB gap. The
+streaming work would have been weeks for about a fortieth of the target.
 
-Build-near / drop-far is the remaining route, and it is a real piece of work:
-chunk geometries would need a residency set driven off the same cull the
-renderer already runs, plus `dispose()` on eviction and a rebuild path that
-does not hitch when a chunk re-enters. Worth it only if three.js on mobile is
-a goal — desktop TLX has the memory and is unaffected. Estimate the win at
-roughly the 53.7 MB gap, no more: the GPU-side difference was measured at
-~11 MB, so this is a CPU-heap fix, not a rendering one.
+What the bytes actually were, once `__tlx.geoCensus()` existed to ask:
+49.84 MB of deduped live attribute data, half of it Float32 holding values that
+never needed 32 bits. Taken in §2n — 49.84 → 28.68 MB — by packing rather than
+streaming.
 
 **Road and terrain had no frustum cull in any pass.** Counted by binning the
 ribbons into the same 72 m cells `createChunkedMesh` uses (a frustum with far

@@ -2392,3 +2392,99 @@ test("three still re-reads attribute.array after upload (why the release fix is 
   assert.ok(!three.includes("onUploadCallback"),
     "three.webgpu now has onUploadCallback — the CPU-array release may finally be viable");
 });
+
+// ── TLX vertex-attribute packing (docs/PERF-FINDINGS.md §2n) ──────────────
+// three retains the CPU copy of every attribute array forever. Packing them
+// down (Int16 normals, half-float colours and MAT ids, one shared zero buffer
+// behind absent sources, Uint16 indices) took montreal's deduped attribute
+// bytes from 50.0 to 28.6 MB. The risk is not that it fails loudly — it is
+// that it quietly shifts a value the shader BRANCHES on.
+test("the attribute packer proves its precondition instead of assuming it", () => {
+  const ch = read("js/render/three/tlx-chunked.js");
+
+  // A blanket quantise is the bug. Colours carry emissive to 3.4 and MAT ids
+  // are not whole (measured 15.4) — both must be range-scanned and kept wider
+  // when they do not fit, never clamped into the small type.
+  assert.match(ch, /function packAttr\(/, "packAttr is gone — TLX is back to Float32 everything");
+  assert.match(ch, /if \(kind === "unorm"\) \{ if \(v < 0 \|\| v > 1\) \{ fits = false; break; \} \}/,
+    "the unorm range scan is gone — an emissive colour above 1 would be clamped");
+  assert.match(ch, /\(v \| 0\) !== v/,
+    "the id check no longer rejects fractional MAT — 15.4 would round to a different material");
+
+  // `trk` must NEVER go half-float: its arc length reaches 5382 m, where a
+  // half's 11-bit mantissa is worth about ±2.6 m and road markings need far
+  // better. The half path is restricted to unorm/id for exactly that reason.
+  assert.match(ch, /kind === "unorm" \|\| kind === "id"/,
+    "the half-float path is no longer restricted — trk arc length would lose metres");
+
+  // Constructor, not a post-hoc assignment: BufferAttribute derives `count`
+  // from the array it is GIVEN, so `new Float16BufferAttribute([], n)` followed
+  // by `.array = h` leaves count 0 and the mesh draws NOTHING. That was a real
+  // bug in this function's first draft.
+  assert.match(ch, /return new THREE\.Float16BufferAttribute\(h, itemSize\);/,
+    "half-float attributes must be built through the constructor or count stays 0");
+  assert.ok(!/Float16BufferAttribute\(\[\]/.test(ch),
+    "an empty-array Float16BufferAttribute leaves count 0 — the mesh silently draws nothing");
+
+  // The shared zero buffer is only safe while nothing writes it.
+  assert.match(ch, /function _zeros\(len\)/, "the shared zero buffer is gone — absent trk goes back to 5.88 MB of per-mesh zeros");
+
+  // An off-switch that defaults ON, and fails to the SAFE side when storage
+  // is blocked (packing is the verified path, so its default is 'on').
+  assert.match(ch, /localStorage\.getItem\("apex26\.tlxPack"\) !== "0"/,
+    "the apex26.tlxPack escape hatch is gone");
+});
+
+test("the packing round-trip check is wired to the shader's own decisions", () => {
+  const tool = read("tools/tlx-pack-check.cjs");
+  // The tool must LIFT the packer out of the shipping file. A reimplementation
+  // drifts, and then it verifies its own copy rather than what ships.
+  assert.match(tool, /readFileSync\(path\.join\(ROOT, "js\/render\/three\/tlx-chunked\.js"\)/,
+    "the check no longer reads the real packer — it would be testing a copy");
+  // And it must gate on DECISIONS, not on raw error: MAT is legitimately
+  // fractional, so a zero-error gate is wrong and would fail forever.
+  for (const decision of [/floor\(o \+ 0\.5\) !== Math\.floor\(d \+ 0\.5\)/, /o >= 15 && o < 16/, /\(o \| 0\) === o && d !== o/])
+    assert.match(tool, decision, "a shader decision is no longer checked by tools/tlx-pack-check.cjs");
+  assert.match(tool, /if \(layerChanges \|\| flips \|\| intInexact\) \{/, "the check no longer FAILS on a changed decision");
+});
+
+// ── the mesh pool is keyed, not indexed (docs/PERF-FINDINGS.md §2o) ───────
+// A flat `meshPool[poolUsed]` gave wrapper #0 whatever geometry was first that
+// frame, and three's WebGPURenderer caches a render object and its bind groups
+// keyed on the object TOGETHER WITH its material and geometry — so the churn
+// minted a cache entry per frame that was never released. Measured against the
+// flat pool: createRenderObject -45%, _createBindings -27%, drift -28%.
+test("TLX pools meshes by (geometry, material), and prunes on a clock", () => {
+  const raw = read("js/render/three/tlx.js");
+  // Negative assertions run against CODE, never against prose. The comment in
+  // tlx.js explaining this fix quotes `meshPool[poolUsed]` verbatim, and the
+  // first draft of this test failed on its own documentation — the same trap
+  // that made a revert-check pass earlier in this file's history.
+  const tlx = raw.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+
+  // Keyed lookup, not an index. `poolUsed` may survive as a counter, but it
+  // must never index the pool again.
+  assert.match(tlx, /const meshByGeo = new Map\(\)/, "the keyed pool is gone — the render-object cache is unbounded again");
+  assert.ok(!/meshPool\[poolUsed\]/.test(tlx),
+    "meshPool is being indexed by poolUsed again — that is the exact churn §2o measured");
+  assert.match(tlx, /let m = byMat\.get\(mat\);/, "acquireMesh no longer looks the wrapper up by its (geometry, material) pair");
+
+  // The hide sweep must follow the batch stamp. An index range cannot work on
+  // a keyed pool — it would hide live meshes and show dead ones.
+  assert.match(tlx, /pm\.__tlxBatch !== _poolBatch/, "the hide sweep is not stamp-based");
+  assert.ok(!/for \(let i = poolUsed; i < meshPool\.length; i\+\+\)/.test(tlx),
+    "an index-range hide sweep is back, which is incoherent with a keyed pool");
+
+  // Pruning, or the map pins every geometry it has ever seen and we have
+  // simply moved the leak from three's cache into ours.
+  assert.match(tlx, /function prunePool\(now\)/, "the pool prune is gone — freed geometry would be pinned alive by the pool map");
+  assert.match(tlx, /now - _pruneLast < PRUNE_EVERY_MS/, "the prune no longer throttles on the CLOCK");
+  assert.ok(!/_pruneLast[\s\S]{0,200}% \d+\) === 0/.test(tlx),
+    "the prune is gated on a frame count — measured to fire either never or constantly (§2n)");
+
+  // The prune owns the WRAPPER only. Disposing the caller's geometry or
+  // material here would free live resources out from under tracks.js.
+  const prune = tlx.match(/function prunePool\(now\)[\s\S]*?\n      \}/)[0];
+  assert.ok(!/\.dispose\(\)/.test(prune),
+    "prunePool disposes something — geometry and material belong to the caller, not the pool");
+});

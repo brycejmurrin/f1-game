@@ -40,7 +40,7 @@
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
-<meta name="apex-build" content="1691">
+<meta name="apex-build" content="1693">
 <title>Apex 26 — F1 Racing &amp; Data</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -297,7 +297,7 @@
   <div class="hud-top">
     <div class="hud-box"><div class="hud-label">POS</div><div id="hud-pos" class="hud-value">-</div></div>
     <div class="hud-box"><div class="hud-label">LAP</div><div id="hud-lap" class="hud-value">-</div></div>
-    <div class="hud-box"><div class="hud-label">TIME</div><div id="hud-time" class="hud-value">-</div></div>
+    <div class="hud-box"><div class="hud-label">TIME</div><div id="hud-time" class="hud-value">0:00.0</div></div>
     <div class="hud-box"><div class="hud-label">BEST</div><div id="hud-best" class="hud-value">-</div></div>
   </div>
   <div class="hud-gaps">
@@ -339,7 +339,7 @@
   <span class="light"></span><span class="light"></span><span class="light"></span><span class="light"></span><span class="light"></span>
 </div>
 
-<div id="announce" role="status" hidden></div>
+<div id="announce" hidden></div>
 
 <!-- touch controls -->
 <!-- Grouped, not a flat list. A dock holding loose buttons wraps them wherever
@@ -540,7 +540,7 @@
      left to choose is whether you are ready. Two states share the sheet — the
      new-career setup and the season hub — both built by js/game/career-ui.js into
      the two empty panes. -->
-<div id="career" class="screen" role="region" aria-labelledby="cr-title" data-esc-close="cr-back" hidden>
+<div id="career" class="screen" data-esc-close="cr-back" hidden>
   <div id="cr-inner" class="sheet pane-pair">
     <div class="sheet-head" id="cr-header">
       <div id="cr-titlebar"><h2 id="cr-title">CAREER</h2><div id="cr-sub"></div></div>
@@ -595,7 +595,7 @@
   </div>
 </dialog>
 
-<div id="select" class="screen" role="region" aria-labelledby="select-title" data-esc-close="sel-back" hidden>
+<div id="select" class="screen" data-esc-close="sel-back" hidden>
   <div id="sel-inner" class="sheet pane-pair">
 
     <div class="sheet-head"><h2 id="select-title">SELECT</h2></div>
@@ -1066,7 +1066,7 @@
      centred, so the live 3D car preview stays visible on the left. Everything
      else is the shared vocabulary: sheet-head / sheet-body / sheet-foot, and
      the two scroll regions are .pane. -->
-<div id="carsetup" class="screen" role="region" aria-label="Garage" data-esc-close="cs-back" hidden>
+<div id="carsetup" class="screen" data-esc-close="cs-back" hidden>
   <!-- Preview controls for the live car. Sits OUTSIDE #cs-inner, over the
        region of the canvas the sheet leaves for the car. #carsetup is
        pointer-events:none so the canvas still gets the orbit drag; the controls
@@ -1620,7 +1620,7 @@
 <!-- lighting tuner: live sliders for every lighting/rendering tunable on the
      loaded track. Docked right so the scene keeps rendering as a live preview;
      rows are generated from TUNE_DEFS in js/game/lighting.js (wired in game.js). -->
-<div id="lighting" role="region" aria-label="Lighting tuner" data-esc-close="lt-close" hidden>
+<div id="lighting" data-esc-close="lt-close" hidden>
   <div id="lighting-inner" class="sheet">
     <!-- #lt-rail groups the panel's fixed furniture so a wide-but-short screen
          can stand it up as a column beside the sliders (see css/tuner.css). It
@@ -1662,7 +1662,7 @@
      live camera and the sliders always edit the camera you're looking through.
      Rows are generated from CamTune.defs() in js/game/cam-tune.js (panel UI:
      js/game/cam-tuner.js). -->
-<div id="camtune" role="region" aria-label="Camera tuner" data-esc-close="ct-close" hidden>
+<div id="camtune" data-esc-close="ct-close" hidden>
   <div id="camtune-inner" class="sheet">
     <!-- #ct-rail mirrors #lt-rail in the lighting tuner, and exists for the same
          one reason: the wide-and-short RAIL layout (css/tuner.css) is a two-column
@@ -1726,13 +1726,7 @@
      the close button via data-esc-close, and the platform owns focus
      containment — the hub's hand-rolled trap is gone. The chrome inside is
      still built at runtime by js/data/hub.js. -->
-<dialog id="datahub" class="screen" data-esc-close="dh-close-btn" hidden>
-  <!-- The escape target must exist at BOOT: the hub itself is built on first
-       open (19caa877 took js/data/ off the boot script wall), and UiLayers'
-       "every data-esc-close names a real control" check runs on the title
-       screen. hub.js adopts this button into its header when it builds. -->
-  <button id="dh-close-btn" class="dh-close" type="button" aria-label="Close data hub" hidden>✕</button>
-</dialog>
+<dialog id="datahub" class="screen" data-esc-close="dh-close-btn" hidden></dialog>
 
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
@@ -1840,7 +1834,7 @@
 <script defer crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=54846cb4f267"></script>
 <script defer crossorigin="anonymous" src="js/track/tracks.js?v=fefeb7c532f6"></script>
 <script defer crossorigin="anonymous" src="js/track/maps.js?v=0d6c2cddd707"></script>
-<script defer crossorigin="anonymous" src="js/car/car3d.js?v=344551cebce5"></script>
+<script defer crossorigin="anonymous" src="js/car/car3d.js?v=106ddb5d47eb"></script>
 <script defer crossorigin="anonymous" src="js/game/input.js?v=10c71b295936"></script>
 <script defer crossorigin="anonymous" src="js/game/audio.js?v=f57d46e17b71"></script>
 <script defer crossorigin="anonymous" src="js/game/music-lib.js?v=f43e998612b3"></script>

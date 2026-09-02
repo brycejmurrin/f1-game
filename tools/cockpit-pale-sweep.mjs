@@ -43,11 +43,27 @@ export function loadCar3D() {
     Car3D: vm.runInContext("Car3D", ctx),
     Teams: vm.runInContext("typeof Teams !== 'undefined' ? Teams : null", ctx),
     Liveries: vm.runInContext("typeof Liveries !== 'undefined' ? Liveries : null", ctx),
+    Parts: vm.runInContext("typeof Parts !== 'undefined' ? Parts : null", ctx),
   };
 }
 
-export function buildCockpit(Car3D, c1, c2, teamId) {
-  return Car3D.build(c1, c2, { teamId, noWheels: true, noDriver: true, cockpit: true, halo: true });
+// PARTS AND LIVERY ARE NOT OPTIONAL. game.js's cockpitBodyMesh passes
+// `parts: Parts.getVisualTiers(getTeamParts(team.id), team)` on every build, and
+// a fitted car carries 612 more vertices than the bare one — engineCover alone
+// gains 504 and lands 0.79 m from the eye. Sweeping without them measured a car
+// the game never draws, so every pale surface those parts add was invisible to
+// this tool AND to the guard built on it. `parts` may still be omitted for the
+// legacy bare body; pass null to mean that deliberately.
+//
+// `livery` is the same hole one level up. loadCar3D was already widened to load
+// liveries.js for it, but nothing ever passed one — so liv.stripe / liv.noseStripe
+// / liv.nose / liv.pod / liv.halo were absent from every mesh this tool measured.
+// The livery CREST STRIPE is the one that mattered: it ran from z 0.05, at the
+// 0.30 m cockpit near plane, 1.5 m down the centre of the driver's view.
+export function buildCockpit(Car3D, c1, c2, teamId, parts, livery) {
+  return Car3D.build(c1, c2, { teamId, noWheels: true, noDriver: true, cockpit: true,
+                               halo: true, parts: parts === undefined ? undefined : parts,
+                               livery: livery || undefined });
 }
 
 // Nearest triangle along d, Moller-Trumbore. t is clamped to the 0.30 m cockpit
@@ -95,7 +111,12 @@ export function sweep(mesh, { vfov = 78, aspect = 2.2, step = 1.5 } = {}) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const { Car3D, Teams } = loadCar3D();
+  const { Car3D, Teams, Parts, Liveries } = loadCar3D();
+  const visualTiers = (t) => (Parts && t ? Parts.getVisualTiers(Parts.DEFAULTS, t) : undefined);
+  // The team's own default livery — the paint a player actually races in.
+  const livFor = (t) => { if (!Liveries || !t) return undefined;
+    const byTeam = (Liveries.BY_TEAM && Liveries.BY_TEAM[t.id]) || [];
+    return byTeam[0] || (Liveries.UNIVERSAL && Liveries.UNIVERSAL[0]) || undefined; };
   const list = (Teams && (Teams.LIST || Teams.ALL || Teams.teams)) || [];
   const want = process.argv.slice(2);
   const teams = want.length ? want : list.map((t) => t.id);
@@ -104,7 +125,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const t = list.find ? list.find((x) => x.id === id) : null;
     const c1 = (t && (t.color || t.c1)) || [0.78, 0.05, 0.06];
     const c2 = (t && (t.color2 || t.c2)) || [0.95, 0.85, 0.10];
-    const r = sweep(buildCockpit(Car3D, c1, c2, id));
+    const r = sweep(buildCockpit(Car3D, c1, c2, id, visualTiers(t), livFor(t)));
     console.log(`${id.padEnd(12)} c2=[${c2.map((v) => v.toFixed(2))}] rays=${r.rays} pale=${r.pale}` +
       (r.pale ? "" : "  CLEAN"));
     for (const [rgb, e] of [...r.buckets].sort((a, b) => b[1].n - a[1].n))

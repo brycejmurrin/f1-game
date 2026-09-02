@@ -1038,8 +1038,27 @@ const TLX = (function () {
           if (!_instAlive.has(im)) im.visible = false;
         }
       }
-      const meshPool = [];          // recycled THREE.Mesh wrappers
-      let poolUsed = 0;
+      // ── the mesh pool is keyed on (geometry, material), NOT on draw order ──
+      // MEASURED (docs/PERF-FINDINGS.md 2o): a flat `meshPool[poolUsed]` gave
+      // wrapper #0 whatever geometry happened to be first that frame, and the
+      // pairing churned as the cull result changed. three's WebGPURenderer
+      // caches a render object AND its bind groups keyed on the object
+      // together with its material and geometry, so every new triple minted a
+      // cache entry that was never released — a 4-minute race soak climbed
+      // 119.9 -> 244.2 MB (GLX on the same loop: 47.0 -> 47.5) and V8's
+      // sampling profiler put createRenderObject and _createBindings at the
+      // top. The pool was bounded; the cache behind it was not.
+      //
+      // Keyed, a given wrapper always carries the same pair, so the number of
+      // cache keys is bounded by the DISTINCT DRAWS the scene has rather than
+      // by frames elapsed.
+      const meshPool = [];          // every wrapper ever made — the sweep walks this
+      const meshByGeo = new Map();  // geometry -> Map(material -> Mesh)
+      let poolUsed = 0;             // acquired THIS batch — diagnostics only, never an index
+      // Batch stamp: bumped wherever the old code reset poolUsed to 0. A mesh
+      // not stamped with the current batch is not being drawn and gets hidden.
+      let _poolBatch = 0;
+      let _pruneLast = 0;
       const _tmpMat4 = new THREE.Matrix4(), _tmpMat4b = new THREE.Matrix4();
 
       // ── M6 FX plumbing ───────────────────────────────────────────────────
@@ -1179,17 +1198,54 @@ const TLX = (function () {
         } catch (_) { /* three internals: a miss just means the next present retries */ }
       }
 
+      // Keying on the geometry means the map holds a STRONG reference to it, so
+      // a keyed pool with no eviction just trades three's unbounded cache for
+      // one of our own: a chunk the game frees, or a debris geometry that goes
+      // away, would be pinned here forever. Drop wrappers nothing has drawn
+      // for a while, and the geometry goes with them.
+      //
+      // Cadence on the CLOCK, never a frame count — rAF runs at a fraction of
+      // a Hz on a software rasteriser, where a "% N frames" gate fires either
+      // never or constantly (measured, PERF-FINDINGS 2n).
+      const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 20000;
+      function prunePool(now) {
+        if (now - _pruneLast < PRUNE_EVERY_MS) return;
+        _pruneLast = now;
+        let w = 0;
+        for (let i = 0; i < meshPool.length; i++) {
+          const m = meshPool[i];
+          if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS) { meshPool[w++] = m; continue; }
+          try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
+          const byMat = meshByGeo.get(m.geometry);
+          if (byMat) { byMat.delete(m.material); if (!byMat.size) meshByGeo.delete(m.geometry); }
+          // NEVER dispose the geometry or the material here — both are owned by
+          // the caller (tracks.js, the chunk system, matCache) and are still
+          // live. Only the wrapper is ours to drop.
+          m.geometry = null; m.material = null;
+        }
+        meshPool.length = w;
+      }
+
       function acquireMesh(geo, matrixArr, material) {
-        let m = meshPool[poolUsed];
+        const mat = material || fallbackMat();
+        let byMat = meshByGeo.get(geo);
+        if (!byMat) { byMat = new Map(); meshByGeo.set(geo, byMat); }
+        let m = byMat.get(mat);
         if (!m) {
-          m = new THREE.Mesh(geo, unlitMat);
+          m = new THREE.Mesh(geo, mat);
           m.matrixAutoUpdate = false;
           m.matrixWorldAutoUpdate = false;
           m.frustumCulled = false;
-          meshPool[poolUsed] = m;
+          byMat.set(mat, m);
+          meshPool.push(m);
         }
+        // Assigned anyway: the pair is what the mesh was KEYED on, so these are
+        // no-ops in steady state — and a no-op assignment is what keeps three's
+        // cache key stable instead of minting a new one.
         m.geometry = geo;
-        m.material = material || fallbackMat();
+        m.material = mat;
+        m.__tlxBatch = _poolBatch;
+        m.__tlxSeen = (typeof performance !== "undefined" ? performance.now() : Date.now());
         // scene.matrixWorldAutoUpdate is false (see create() above), so three
         // will NEVER promote m.matrix → matrixWorld. The renderer uploads
         // matrixWorld as the model matrix: writing only `.matrix` left every
@@ -1209,23 +1265,45 @@ const TLX = (function () {
       }
 
       /** raw {pos,nrm,col,idx,mat?} (plain or typed arrays) -> BufferGeometry */
+      // Every geometry this backend creates, held WEAKLY — a census that
+      // retains what it measures is a leak, not an instrument.
+      const _geoReg = [];
+      function _regGeo(g, kind) { try { g.__tlxKind = kind; _geoReg.push(new WeakRef(g)); } catch (_) { /* no WeakRef: census degrades, nothing leaks */ } return g; }
+      // Attributes go through TLXShaders.packAttr: it range-scans each source
+      // and quantises ONLY what provably fits (colour 8-bit, unit normal 16,
+      // MAT id 0..16), keeping Float32 otherwise, and backs an absent source
+      // with a view into one shared zero buffer instead of a fresh array per
+      // mesh. `trk` is the reason that last part exists — every mesh that is
+      // not the road carries a zero-filled one, measured at 5.88 MB across 153
+      // meshes on montreal, and the lit shader reads it unconditionally on the
+      // non-chunked variant so it cannot simply be dropped.
+      const _pk = (typeof TLXShaders !== "undefined" && TLXShaders.packAttr) || null;
       function buildGeometry(data) {
         const g = new THREE.BufferGeometry();
         const pos = data.pos.length ? data.pos : [0, 0, 0];
         const verts = pos.length / 3;
         g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pos), 3));
-        g.setAttribute("normal", new THREE.BufferAttribute(
-          new Float32Array(data.nrm && data.nrm.length === pos.length ? data.nrm : verts * 3), 3));
-        g.setAttribute("color", new THREE.BufferAttribute(
-          new Float32Array(data.col && data.col.length === pos.length ? data.col : verts * 3), 3));
-        g.setAttribute("mat", new THREE.BufferAttribute(
-          new Float32Array(data.mat && data.mat.length === verts ? data.mat : verts), 1));
-        g.setAttribute("trk", new THREE.BufferAttribute(
-          new Float32Array(data.trk && data.trk.length === pos.length ? data.trk : verts * 3), 3));
-        if (data.idx && data.idx.length) {
-          g.setIndex(new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
+        if (_pk) {
+          g.setAttribute("normal", _pk(THREE, data.nrm, verts * 3, 3, "unit"));
+          g.setAttribute("color", _pk(THREE, data.col, verts * 3, 3, "unorm"));
+          g.setAttribute("mat", _pk(THREE, data.mat, verts, 1, "id"));
+          g.setAttribute("trk", _pk(THREE, data.trk, verts * 3, 3, null));
+        } else {
+          g.setAttribute("normal", new THREE.BufferAttribute(
+            new Float32Array(data.nrm && data.nrm.length === pos.length ? data.nrm : verts * 3), 3));
+          g.setAttribute("color", new THREE.BufferAttribute(
+            new Float32Array(data.col && data.col.length === pos.length ? data.col : verts * 3), 3));
+          g.setAttribute("mat", new THREE.BufferAttribute(
+            new Float32Array(data.mat && data.mat.length === verts ? data.mat : verts), 1));
+          g.setAttribute("trk", new THREE.BufferAttribute(
+            new Float32Array(data.trk && data.trk.length === pos.length ? data.trk : verts * 3), 3));
         }
-        return g;
+        if (data.idx && data.idx.length) {
+          g.setIndex(TLXShaders.packIndex
+            ? TLXShaders.packIndex(THREE, data.idx, verts)
+            : new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
+        }
+        return _regGeo(g, "mesh");
       }
 
       /** Read the raw (un-colour-managed, un-premultiplied) pixels of each
@@ -1508,12 +1586,17 @@ const TLX = (function () {
           g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(data.nrm), 3));
           g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(data.uv), 2));
           g.setIndex(new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
-          return { __tlx: true, geo: g, tex: true, count: data.idx.length };
+          return { __tlx: true, geo: _regGeo(g, "tex"), tex: true, count: data.idx.length };
         },
         createChunkedMesh(data, cellSize) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
           _meshMade.chunked++;
-          if (chunkedSys) return chunkedSys.build(data, cellSize);
+          if (chunkedSys) {
+            const m = chunkedSys.build(data, cellSize);
+            if (m && m.chunks) for (const c of m.chunks) _regGeo(c.geo, "chunk");
+            else if (m && m.geo) _regGeo(m.geo, "chunked");
+            return m;
+          }
           return { __tlx: true, geo: buildGeometry(data), chunked: true, count: (data.idx && data.idx.length) || 0 };
         },
         createTexture(src) {
@@ -1706,7 +1789,7 @@ const TLX = (function () {
             renderer.setRenderTarget(softOutRT());
             drawList.length = 0;
             _dMatUsed = 0;
-            poolUsed = 0;
+            poolUsed = 0; _poolBatch++;
             _envActive = false;
             envFacesMask |= 1 << (face & 7);
             if (envFacesMask === 63) {
@@ -1717,7 +1800,7 @@ const TLX = (function () {
             _restoreEnvFrame();
             return;
           }
-          poolUsed = 0;
+          poolUsed = 0; _poolBatch++;
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
             if (rec.instanced) {
@@ -1737,7 +1820,7 @@ const TLX = (function () {
             }
             acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
           }
-          for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
+          for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
           const prevSky = scene.backgroundNode;
           // Baseline at the first face of each probe pass.
           if (envFacesMask === 0) _envErrBase = _gpuErrors;
@@ -1778,7 +1861,7 @@ const TLX = (function () {
           }
           drawList.length = 0;   // the main pass re-issues its own draws
           _dMatUsed = 0;
-          poolUsed = 0;
+          poolUsed = 0; _poolBatch++;
           _envActive = false;
           if (faceOk) envFacesMask |= 1 << (face & 7);
           const probeErrored = _envErrBase >= 0 && _gpuErrors > _envErrBase;
@@ -2077,7 +2160,8 @@ const TLX = (function () {
           _fxFrame.decals++;
         },
         present(opts) {
-          poolUsed = 0;
+          poolUsed = 0; _poolBatch++;
+          prunePool(typeof performance !== "undefined" ? performance.now() : Date.now());
           // renderOrder = submission index: three sorts opaque and transparent
           // lists by renderOrder first, so caller order (the GLX contract)
           // survives its z-sort in BOTH lists. Opaques still render before
@@ -2114,7 +2198,7 @@ const TLX = (function () {
             }
             acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
           }
-          for (let i = poolUsed; i < meshPool.length; i++) meshPool[i].visible = false;
+          for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
           // Hide InstancedMeshes that were not drawn this frame (still in scene).
           _hideUndrawnInstanced();
           // First renderer.render() is when three compiles TSL → GLSL. A
@@ -2153,8 +2237,9 @@ const TLX = (function () {
             try { scene.backgroundNode = null; } catch (_) { /* node already gone */ }
             lit = null;
             fx = null;
-            for (let i = 0; i < poolUsed; i++) {
-              if (meshPool[i]) meshPool[i].material = mat;
+            for (let i = 0; i < meshPool.length; i++) {
+              const pm = meshPool[i];
+              if (pm && pm.__tlxBatch === _poolBatch) pm.material = mat;
             }
             // Live InstancedMeshes hold their own material reference — leave
             // them on a dead lit material and the retry render throws again,
@@ -2291,6 +2376,49 @@ const TLX = (function () {
           chunkState() {
             return { on: !!chunkedSys, total: _chunkLast.total, visible: _chunkLast.visible };
           },
+          // Where the retained CPU bytes actually ARE, per attribute NAME and
+          // per geometry kind. Deduped on the underlying ArrayBuffer, because a
+          // chunked mesh shares ONE position/normal/colour/mat set across all
+          // its chunks and carries only the index per chunk — counting per
+          // geometry would multiply that shared set by the chunk count and
+          // invent tens of megabytes that do not exist.
+          geoCensus() {
+            const seen = new Set(), out = { live: 0, dead: 0, byAttr: {}, byKind: {}, zeroMB: 0, totalMB: 0 };
+            for (const ref of _geoReg) {
+              const g = ref.deref ? ref.deref() : null;
+              if (!g) { out.dead++; continue; }
+              out.live++;
+              const kind = g.__tlxKind || "?";
+              const k = out.byKind[kind] || (out.byKind[kind] = { n: 0, mb: 0 });
+              k.n++;
+              const put = (name, a) => {
+                if (!a || !a.array) return;
+                const b = a.array.buffer;
+                if (seen.has(b)) return;
+                seen.add(b);
+                const mb = a.array.byteLength / 1048576;
+                out.byAttr[name] = +(((out.byAttr[name] || 0) + mb)).toFixed(3);
+                out.totalMB += mb; k.mb += mb;
+                // An attribute that is entirely zero is an allocation the
+                // source data never asked for — buildGeometry fills normal /
+                // color / mat / trk whether or not the caller supplied them.
+                // FULL scan, not a sampled one: a stride would call a
+                // mostly-zero array all-zero and overstate the waste.
+                let z = a.array.length > 0;
+                for (let i = 0; i < a.array.length; i++) { if (a.array[i] !== 0) { z = false; break; } }
+                if (z) { out.zeroMB += mb; out.byAttr[name + ":zero"] = +(((out.byAttr[name + ":zero"] || 0) + mb)).toFixed(3); }
+              };
+              for (const name in g.attributes) put(name, g.attributes[name]);
+              put("index", g.index);
+            }
+            out.totalMB = +out.totalMB.toFixed(2); out.zeroMB = +out.zeroMB.toFixed(2);
+            try { const ps = TLXShaders.packStats;
+              out.pack = { small: ps.small, wide: ps.wide, zero: ps.zero, savedMB: +ps.savedMB.toFixed(2),
+                half: ps.half, wideBy: ps.wideBy, wideMax: ps.wideMax, wideLen: ps.wideLen };
+            } catch (_) { out.pack = null; }
+            for (const kk in out.byKind) out.byKind[kk].mb = +out.byKind[kk].mb.toFixed(2);
+            return out;
+          },
           meshState() {
             return { mesh: _meshMade.mesh, chunked: _meshMade.chunked, tex: _meshMade.tex };
           },
@@ -2320,6 +2448,26 @@ const TLX = (function () {
             };
           },
           materialCacheSize() { return matCache.size; },
+          // What is growing when the GEOMETRY is not? A 4-minute race soak
+          // measured the heap climbing 88-138 MB while geoCensus's registry
+          // and attribute bytes both stayed flat (docs/PERF-FINDINGS.md 2o),
+          // so the leak is in the bookkeeping around the meshes, not in them.
+          // Everything here is a COUNT or a size the renderer already tracks —
+          // reporting it costs nothing and guessing costs an afternoon.
+          memState() {
+            const o = { mats: matCache.size, pool: meshPool.length, draws: drawList.length,
+                        geoKeys: meshByGeo.size, batch: _poolBatch };
+            try {
+              const inf = renderer && renderer.info;
+              if (inf) {
+                o.progs = (inf.programs && inf.programs.length) || 0;
+                if (inf.memory) { o.rGeo = inf.memory.geometries; o.rTex = inf.memory.textures; }
+                if (inf.render) { o.calls = inf.render.calls; }
+              }
+            } catch (_) { /* three's info shape is version-dependent; absent is reported as absent */ }
+            try { const b = renderer && renderer.backend; if (b && b.data && b.data.size != null) o.backendData = b.data.size; } catch (_) { /* DataMap may be a WeakMap */ }
+            return o;
+          },
           async shader(idx = 0) {
             const meshes = scene.children.filter((o) => o.isMesh && o.visible);
             const target = meshes[idx];

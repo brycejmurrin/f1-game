@@ -45,6 +45,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/godray-keep-nearest.test.mjs",
   "tests/unit/lamp-chunks.test.mjs",
   "tests/unit/all-lights-fill.test.mjs",
+  // Sibling of cockpit-pale-surfaces, which moved to test:node-slow for costing
+  // 69 s. This one is 2.5 s — 178 differential builds, no rasteriser — so it
+  // stays in the edit loop where a cockpit geometry change is actually made.
+  "tests/unit/cockpit-crest-stripe.test.mjs",
   // Both node-only and both under half a second: the catalog LADDER (no paid
   // option dominated by a cheaper one, no row that is never optimal) and the
   // garage's per-vertex MATERIAL column. Neither was in the edit loop, which
