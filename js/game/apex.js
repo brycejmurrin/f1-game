@@ -65,6 +65,17 @@ function simCareerRound() {
     season.pts[car.driverId] = (season.pts[car.driverId] || 0) + pts;
     season.driverCodes[car.driverId] = car.code;
     season.teamPts[car.team.id] = (season.teamPts[car.team.id] || 0) + pts;
+    // AND THE COUNTBACK HISTOGRAM, which this inline award used to omit.
+    // Career.driverStandings() ranks through SeasonCal.rank, whose tie-break
+    // reads season.finishes; with it empty a points tie fell through to a
+    // STRING compare on driver id, so a season closed out through careerSim
+    // could crown a different champion than the same season raced. Dev surface
+    // only, but it is precisely the defect the histogram was added to fix.
+    if (!car.retired) {
+      const f = season.finishes || (season.finishes = {});
+      const row = f[car.driverId] || (f[car.driverId] = []);
+      row[i] = (row[i] || 0) + 1;
+    }
   });
   season.round++;
   const settled = Career.settleRound(order, G.player);
