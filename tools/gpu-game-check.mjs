@@ -219,6 +219,11 @@ try {
     // the frame reaches #game through the swapchain or the CPU blit.
     r.wgx = typeof g.softPresent === "function";
     if (r.wgx) { try { r.wgxSoftPresent = !!g.softPresent(); } catch (e) { r.wgxSoftPresentError = String(e && e.message); } }
+    // WGX classifies a HeadlessChrome UA as software on purpose (the swapchain
+    // was measured never to composite there), so on a headless runner a
+    // hardware adapter still soft-presents; the Verdict needs to tell that
+    // expected case from a real regression.
+    try { r.headlessUa = /HeadlessChrome/i.test(navigator.userAgent); } catch (_) { /* no navigator */ }
     if (g.__tlx) {
       try { r.backendState = g.__tlx.backendState(); } catch (e) { r.backendStateError = String(e && e.message); }
       try { r.envState = g.__tlx.envState(); } catch (_) { /* pre-probe */ }

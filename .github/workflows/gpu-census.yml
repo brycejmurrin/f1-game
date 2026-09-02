@@ -356,9 +356,13 @@ jobs:
               // The WGX leg: gpu-game-check reports wgx (GLX.softPresent exists,
               // i.e. WGX bound rather than falling back to GLX) and wgxSoftPresent.
               if (path3 === "wgx") {
-                rows.push(`${" ".repeat(8)}wgx:   bound=${gfx.wgx} softPresent=${gfx.wgxSoftPresent} engine=${gfx.engine}`);
+                rows.push(`${" ".repeat(8)}wgx:   bound=${gfx.wgx} softPresent=${gfx.wgxSoftPresent} headlessUa=${gfx.headlessUa}${gfx.wgxSoftPresent === true && gfx.headlessUa === true ? " (expected: WGX blits under a headless UA by design)" : ""}`);
                 if (hardware && gfx.wgx !== true) bad.push(`wgx: WGX did not bind on a hardware adapter (fell back to GLX, or the surface stopped reporting) — this leg proved nothing about js/render/webgpu/`);
-                else if (hardware && gfx.wgxSoftPresent === true) bad.push(`wgx: WGX is soft-presenting (CPU blit) on a hardware adapter — the swapchain path is off, every frame pays a readback + putImageData`);
+                // Run 19 (2026-09-02) failed here on macos-latest: WGX sniffs a
+                // HeadlessChrome UA as software (wgx.js, measured black swapchain
+                // there) so every headless run blits. Only a HEADED hardware run
+                // proves the swapchain path; a headless one proves bind + render.
+                else if (hardware && gfx.wgxSoftPresent === true && gfx.headlessUa !== true) bad.push(`wgx: WGX is soft-presenting (CPU blit) on a headed hardware adapter — the swapchain path is off, every frame pays a readback + putImageData`);
               }
             }
             rows.push("```", "");

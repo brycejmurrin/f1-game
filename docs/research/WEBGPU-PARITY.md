@@ -894,4 +894,9 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
    well as the perf one (the 2026-09-01 frame audit ranked the unconditional
    search the largest WGX-only fragment cost: 16 storage loads + ~200 scalar
    ops per lit pixel of every prop, car, terrain and building). Real-GPU
-   sign-off: `gpu-census.yml` on macos-latest.
+   sign-off: `gpu-census.yml` run 19 (2026-09-02, macos-latest, Metal) —
+   the FIRST census to run WGX itself (its "webgpu" leg was three.js): WGX
+   bound, gpuErrors 0, meanLuma 76.4 (GLX 67.9, three/WebGPU 35.9 on the
+   same Montreal frame), and soft-presenting, because WGX classifies a
+   HeadlessChrome UA as software by design; the Verdict's swapchain clause
+   is therefore headed-only, and a headless census proves bind + render.

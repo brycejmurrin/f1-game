@@ -317,7 +317,8 @@ test("gpu-census has a NATIVE WGX leg with hardware gates (bound, swapchain, gpu
   assert.match(gpuWorkflow, /const tlxLeg = path3 === "webgpu" \|\| path3 === "webgl2";/,
     "the WGX leg must not be held to the TLX env-probe expectations");
   assert.match(gpuWorkflow, /if \(hardware && gfx\.wgx !== true\) bad\.push\(`wgx: WGX did not bind/);
-  assert.match(gpuWorkflow, /else if \(hardware && gfx\.wgxSoftPresent === true\) bad\.push\(`wgx: WGX is soft-presenting/);
+  assert.match(gpuWorkflow, /else if \(hardware && gfx\.wgxSoftPresent === true && gfx\.headlessUa !== true\) bad\.push\(`wgx: WGX is soft-presenting/,
+    "a headless UA blits by design (run 19); only a headed hardware run proves the swapchain path");
   const check = fs.readFileSync(new URL("../../tools/gpu-game-check.mjs", import.meta.url), "utf8");
   assert.match(check, /r\.wgx = typeof g\.softPresent === "function";/);
   assert.match(check, /r\.wgxSoftPresent = !!g\.softPresent\(\)/);

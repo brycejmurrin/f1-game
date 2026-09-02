@@ -487,7 +487,7 @@ test("the GPU-census gate scopes hardware expectations, and only those", () => {
   // cannot quietly spread. docs/PERF-FINDINGS.md 2f.
   const script = verdictScript();
   const hw = { anyHardware: true, runs: [] }, sw = { anyHardware: false, runs: [] };
-  const legs = (over = {}) => ({ webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson(), ...over });
+  const legs = (over = {}) => ({ webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson(), wgx: wgxLegJson(), ...over });
   // Hardware-only: a missing gpuErrors count, a failed gfx read, a software adapter.
   let r = runVerdict(script, { census: hw, legs: legs({ webgl2: tlxLegJson({ gpuErrors: null }) }) });
   assert.equal(r.code, 1, `hardware + no gpuErrors count must fail:\n${r.out}`);
@@ -581,6 +581,13 @@ const glxLegJson = (gfxOver = {}) => ({
   gfx: { glx: true, gpuErrors: 0, gpuFirstError: null, ...gfxOver },
   frame: { meanLuma: 0.4 },
 });
+// The native WGX leg (2026-09-02): gpu-game-check reports wgx (GLX.softPresent
+// exists — WGX bound), wgxSoftPresent and headlessUa; no TLX env/backend state.
+const wgxLegJson = (gfxOver = {}) => ({
+  phase: "done", ok: true,
+  gfx: { glx: true, gpuErrors: 0, gpuFirstError: null, wgx: true, wgxSoftPresent: true, headlessUa: true, ...gfxOver },
+  frame: { meanLuma: 0.4 },
+});
 
 function runVerdict(script, { census, legs }) {
   const image = "macos-latest";
@@ -653,7 +660,7 @@ test("the GPU gate passes a hardware run whose GLX leg reports no env probe", ()
   // keeps the fix below honest; without it "fail on absence" looks free.
   const r = runVerdict(verdictScript(), {
     census: { anyHardware: true, runs: [] },
-    legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson() },
+    legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson(), wgx: wgxLegJson() },
   });
   assert.equal(r.code, 0, `a healthy hardware run must pass:\n${r.out}`);
 });
@@ -664,7 +671,7 @@ test("the GPU gate fails a census that measured nothing instead of calling it so
   // measured nothing therefore DOWNGRADED this gate to a software gate and
   // reported success. Tri-state; null must fail. docs/PERF-FINDINGS.md 2j.
   const script = verdictScript();
-  const legs = { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson() };
+  const legs = { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson(), wgx: wgxLegJson() };
 
   const nulled = runVerdict(script, { census: { anyHardware: null, runs: [] }, legs });
   assert.equal(nulled.code, 1, `a null census must fail the job:\n${nulled.out}`);
@@ -677,9 +684,35 @@ test("the GPU gate fails a census that measured nothing instead of calling it so
   // the fix has just made every software run red.
   const soft = runVerdict(script, {
     census: { anyHardware: false, runs: [] },
-    legs: { webgpu: tlxLegJson({ envState: undefined, gpuErrors: null }), webgl2: tlxLegJson(), glx: glxLegJson({ gpuErrors: null }) },
+    legs: { webgpu: tlxLegJson({ envState: undefined, gpuErrors: null }), webgl2: tlxLegJson(), glx: glxLegJson({ gpuErrors: null }), wgx: wgxLegJson({ wgx: false, gpuErrors: null }) },
   });
   assert.equal(soft.code, 0, `a measured software image must still pass:\n${soft.out}`);
+});
+
+test("the GPU gate holds the native WGX leg to bind + swapchain, but only a HEADED run to the swapchain", () => {
+  // Run 19 (2026-09-02, macos-latest) was the first census that ran WGX at all:
+  // bound, 0 GPU errors, the brightest leg — and soft-presenting, because WGX
+  // sniffs a HeadlessChrome UA as software by design. That is expected on a
+  // headless runner and a regression on a headed one; a fallback to GLX is a
+  // regression on any hardware run.
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] }, sw = { anyHardware: false, runs: [] };
+  const legs = (wgx) => ({ webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson(), wgx });
+  let r = runVerdict(script, { census: hw, legs: legs(wgxLegJson()) });
+  assert.equal(r.code, 0, `headless hardware + soft-present is the documented shape:\n${r.out}`);
+  assert.match(r.out, /expected: WGX blits under a headless UA by design/);
+  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ headlessUa: false })) });
+  assert.equal(r.code, 1, "HEADED hardware + soft-present must fail");
+  assert.match(r.out, /WGX is soft-presenting/);
+  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ headlessUa: false, wgxSoftPresent: false })) });
+  assert.equal(r.code, 0, `headed hardware on the swapchain passes:\n${r.out}`);
+  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ wgx: false })) });
+  assert.equal(r.code, 1, "hardware + WGX not bound must fail");
+  assert.match(r.out, /WGX did not bind/);
+  r = runVerdict(script, { census: sw, legs: legs(wgxLegJson({ wgx: false, gpuErrors: null })) });
+  assert.equal(r.code, 0, `a software image that cannot bring WGX up is noise:\n${r.out}`);
+  r = runVerdict(script, { census: hw, legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson() } });
+  assert.equal(r.code, 1, "a missing wgx artifact must fail like any other missing leg");
 });
 
 test("the GPU gate fails a hardware TLX leg that stopped reporting an env count", () => {
