@@ -877,7 +877,7 @@ const CEILINGS = {
   // GLX's own closure on a WGX-bound gfx, so DebrisWorld's feature test would
   // pass here and then call GLX with no device (backend-surface-parity).
   // Nine lines to keep a wrong-backend call impossible. PERF-FINDINGS 2h.
-  "js/render/webgpu/wgx.js": 5700,   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
+  "js/render/webgpu/wgx.js": 5761,   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -1027,14 +1027,20 @@ const CEILINGS = {
   // re-freeing them next round.
   // + R16: the CSS-size cache re-check in resize() and the ResizeObserver
   // moved outside the addEventListener check (PERF-FINDINGS 2u).
-  // 2745 -> 2763: the revert of the mirror-release lever, plus the A/B knob
-  // bypassing the env gate so it can actually reach the configuration that
-  // broke a player's handset. The revert ADDED lines rather than removing them
-  // - the reasoning for why the term went in AND why it came out is the point,
-  // since the phone-gate fact that motivated it is true and the next round will
-  // rediscover it. Pushed urgently without running this guard, which failed
-  // pages.yml run 1902 and so SKIPPED the deploy job - the phone fix could not
-  // publish because of a line-count ceiling. Run the guard even when reverting.
+  // 2745 -> 2763. Two sessions raised this in the same minutes and the union is
+  // neither number: theirs (2757) is the a63cab7 revert alone, mine adds the
+  // A/B knob's env-gate bypass on top. MEASURED on the merged file.
+  //
+  // Why a revert RAISED a ceiling: it restored the shipped gate but kept the
+  // reasoning for why the term went in AND why it came out, because the fact
+  // that motivated it — the env probe is tier-gated off on phones, so that gate
+  // can never open there — is TRUE, and the next round will rediscover it and
+  // draw the same wrong conclusion without the note.
+  //
+  // It was pushed urgently without running this guard. The red run skipped the
+  // deploy job, so a fix for a player's broken phone could not publish because
+  // of a line-count ceiling. Run the guard even when reverting — especially
+  // when reverting fast.
   "js/render/three/tlx.js": 2763,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a

@@ -2391,12 +2391,47 @@ The likely mechanism is in the same row: `envReady=false` on the WebGPU leg,
 a leg whose 6-face probe has not latched renders with no image-based ambient —
 a darker frame, in the direction measured.
 
-**This is NOT yet a defect, and the confound is named:** the WebGPU leg ran 33 s
-against the WebGL2 leg's 45 s, and the env bake is progressive across frames.
-`envFail=0` and `gaveUp=false` say it was still working, not that it failed. To
-settle it, hold the WebGPU leg until `envProbeReady()` and re-read luma; if the
-gap survives an equal soak it is real, and the census should GATE on `envReady`
-rather than only reporting it — the same reporting-not-gating class as §2l.
+**This is NOT a defect, and the confound I first named was the WRONG ONE.** The
+original note here blamed the soak lengths (33 s vs 45 s). The real cause is
+that THE HARNESS RUNS THE TWO LEGS ON DIFFERENT PRESENT PATHS, and every link is
+citable:
+
+1. `tools/gpu-game-check.mjs:132` sets `apex26.tlxForceGL = "0"` for the WebGPU
+   leg and `"1"` for the WebGL2 leg.
+2. `tlx.js:137` — `_softBlit = !forceWebGL && _capPref !== "0" && (_softAdapter
+   || _headless || …)`. Playwright is headless, so `_headless` is true (the
+   census prints `headlessUa=true` itself). The WebGPU leg soft-blits; the
+   WebGL2 leg's `forceWebGL` short-circuits it to false.
+3. The soft blit costs a full-frame readback plus a multi-million-iteration JS
+   copy per presented frame. That is CPU-bound, and `PerfGov`'s `_scaleFutile`
+   exists precisely so a CPU-bound frame skips the useless resolution lever and
+   drops straight onto the tier ladder.
+4. `js/game/perf.js` rung **1 is "env probe off"**. `game.js:6961` gates the
+   producer on `PerfGov.tier() < 1`, and `game.js:6976` is the consumer half:
+   `else if (PerfGov.tier() >= 1 && gfx.envProbeReady()) gfx.envProbeReset();`
+   — which clears `envReady`.
+
+That produces the census row exactly as observed: `envReady=false`,
+`envFail=0`, `gaveUp=false` — the probe was never ASKED, not tried and failed.
+So the 30% gap is most likely an artifact of measuring one backend through a
+soft-present blit and the other through a direct path, not a WebGPU shading
+difference.
+
+Elapsed time is additionally a weak explanation: the census calls
+`__apex.park(0.1)`, `apex.js` sets `G.frozen = true`, and the cadence
+`(frozen || (_frameNo & 3) === 0)` means a PARKED leg bakes one face per frame —
+a full cube in 6 frames, not 24. 33 s only runs short below ~0.4 fps.
+
+**Settle it from the artifact already on disk:** run 25's JSON carries
+`gfx.tlx.envState`, whose `face` field counts consecutive baked faces.
+`face > 0` with `ready:false` means the bake was progressing and ran out of
+frames; `face === 0` after parked frames means the producer was never called —
+the tier gate. That one field separates the two hypotheses without a new run.
+**And instrument the gate:** `out.gfx` records nothing about the governor, so
+add `__apex.renderScale()` (it returns `{tier, autoTier, userTier, fps, scale}`)
+and `envState().face`. A luma comparison between two legs on different present
+paths is not a comparison — that is the same vacuous-measurement class §2l and
+R14 were about, arriving one level up.
 
 ### On WebGPU alternatives, since the question was asked
 
@@ -2535,6 +2570,92 @@ WebGL2 mock driving the exact too-early-read sequence (and asserting the window
 CLOSES, so the cache is still a cache); shape pins for WGX and TLX; and one live
 test in `ui-resize.spec.js` that keeps the render loop running and asserts
 `GLX.aspect` equals the canvas's own live box across five viewport changes.
+
+## 2v. Four WGX defects that only a headed desktop could have hit (2026-09-02)
+
+A six-agent read-only audit plus a three-backend soak. The soak first, because
+it is the part that says what ISN'T wrong.
+
+### The soak: GLX and WGX do not leak while racing
+
+`scratch/leak-soak.mjs`, montreal, continuous throttle+steer, heap sampled on
+the clock (never a frame count — rAF runs at a fraction of a Hz here), 4 minutes
+per arm:
+
+```
+GLX  bound=["webgl2"]  48.4 -> 46.6 MB  peak 49.1  DRIFT -1.8 MB
+WGX  bound=["webgpu"]  64.7 -> 61.0 MB  peak 64.7  DRIFT -3.7 MB
+```
+
+Both arms record the BOUND backend in every sample and the run refuses to
+report an arm whose bound backend is not the one asked for. That guard exists
+because a `wgx` arm launched without the WebGPU chromium args gets no
+`navigator.gpu`, silently falls back to GLX, and reports a beautiful GLX number
+under a WGX label — a vacuous measurement of exactly the §2l class.
+
+A dedicated retention audit of both backends agreed: no write-only container,
+no cache keyed on a per-frame identity, and every `gl.create*` /
+`device.create*` has a reachable delete. The `mrt()`-shaped defect of §2o/§2p
+has no analogue in GLX or WGX.
+
+### The road-LUT bind group outlived the buffer it was built over
+
+`createChunkedMesh`'s road path calls `_rememberRoadLut(lut)` and then returns
+`sbuf: lut.sbuf, attrBG: lut.attrBG` — the chunked mesh OWNS the buffer the
+global `_roadLutBG` is built over. `freeChunkedMesh` destroyed `m.sbuf` with no
+matching clear, so `draw()`'s `_roadLutBG || attrBG || zeroAttrBG` kept binding
+a bind group whose buffer was gone: a per-draw validation error, and `vidDead`
+in the shadow path silently changing meaning.
+
+`freeMesh` has handled this since the day the LUT landed, with a comment saying
+"binding a destroyed buffer is a per-draw validation error" — the CHUNKED twin
+was simply missed, and its test with it. Reachable on **every track switch**:
+`game.js` frees `track.meshes.roadChunked` on teardown and the replacement build
+is async (seconds), so frames render in the gap; and a next road that never
+produces a LUT never overwrites the stale pointer at all.
+
+### `sceneTex` had no COPY_SRC, and the probe that copies from it drops the frame
+
+`ensureTargets` created `sceneTex` as `RENDER_ATTACHMENT | TEXTURE_BINDING`.
+`_queueOutputProbe()` does `encoder.copyTextureToBuffer({ texture: sceneTex, … })`.
+That is a VALIDATION error, not a throw — the `catch` around the copy never
+fires, the encoder goes invalid, `finish()` yields an error command buffer and
+`queue.submit` drops THE WHOLE FRAME, swapchain blit included. Eight of those
+climb `_wgxEscalate` and persist a rung bump.
+
+Why nothing caught it: `_sceneProbeOn = !_outProbeOff && !WGX_LITE`. `WGX_LITE`
+is every phone and every WebKit; `_outProbeOff` covers every soft-present and
+HeadlessChrome run. The probe is armed ONLY on headed desktop Chrome/Edge/Firefox
+with a hardware adapter — which is neither the Playwright suite nor the macOS
+census (its headless UA forces soft-present, and the census prints
+`softPresent=true` for exactly that reason). Fixed by adding `COPY_SRC`.
+
+### The black-output watchdog judged four pixels and called it sixteen
+
+`_queueOutputProbe` copies a 4x4 patch at `bytesPerRow: 256`, so the rows land
+at byte 0/256/512/768 with padding between. `_readOutputProbe` sliced 128 bytes
+— row 0 only. FOUR pixels at screen centre decided whether WGX surrendered to
+GLX, and three consecutive frames under `OUT_BLACK_EPS` call
+`_outputBlackSurrender()`. A dark car body or a night shadow on the crosshair
+was enough. Now walks all four rows, skipping the zero padding.
+
+### The maxTextureDimension2D clamp changed the aspect, and the ceiling is 8192
+
+`resize()` clamped width and height INDEPENDENTLY, so above the ceiling the
+RATIO changed, not just the resolution — and `aspect` feeds every projection
+matrix and the frustum cull distance. The ceiling is lower than it looks:
+`requestDevice()` passes no `requiredLimits`, so `maxTextureDimension2D` is the
+WebGPU DEFAULT **8192 on every implementation** — an Apple-silicon ADAPTER
+reports 16384, the DEVICE we asked for does not. With `dpr` capped at 2 that
+starts clipping at 4097 CSS px: a 6K panel in a scaled HiDPI mode, or a window
+spanned across several 4K monitors. GLX and TLX do not clamp at all, so this was
+WGX-only. Now one uniform scale factor — the picture gets smaller, not stretched.
+
+Also hardened: `freeTexture` nulls `t.view` and `t._wgxDecalBG`, so a caller that
+frees a livery texture and redraws hits the existing `!tex.view` guard instead of
+binding a destroyed texture through `drawDecal`'s cached bind group.
+
+Verified: `tools/wgx-validate.mjs` (real Dawn, montreal, 60 frames) exit 0.
 
 ## 3. Left on the table
 

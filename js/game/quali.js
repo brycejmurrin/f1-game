@@ -46,7 +46,7 @@ function create(G) {
   const { $ } = G;
 
   let classification = null;
-  let _kCache = new Float64Array(0), _kCacheTrack = null;   // |curvature| per sample
+  let _kCache = new Float64Array(0), _kCacheTrack = null;   // |curvature| per sample; _kCacheTrack is a def ID, never the track (see below)
 
   function lapTime(track, vCap, grip) {
     const n = track.n, total = track.total;
@@ -63,8 +63,17 @@ function create(G) {
     // 1. cornering limit at each sample. The |curvature| samples are pure
     // track geometry — cached across the ~22 per-car calls of one sheet
     // compute; only the grip/vCap-dependent v derivation stays per-car.
-    if (_kCacheTrack !== track || _kCache.length !== m) {
-      _kCacheTrack = track;
+    // KEY ON IDENTITY, NOT THE OBJECT. Holding `track` here pinned the whole
+    // thing — roadGeo (_keepPositions), terrainGeo, _lights, map, the
+    // px/py/pz/rx/rz/hw centreline arrays, lampPosts, def — until the NEXT
+    // quali sheet on a DIFFERENT circuit. Qualify at Monza, quit, then race Spa
+    // and Silverstone and Monaco: Monza is still strongly reachable from module
+    // scope the whole time. quitToMenu() clears five other caches and never
+    // knew about this one. A def id is all the invalidation needs; lighting.js's
+    // _postNodeMemo (a WeakMap keyed on track) is the same lesson.
+    const _kId = (track && track.def && track.def.id) || null;
+    if (_kCacheTrack !== _kId || _kCache.length !== m) {
+      _kCacheTrack = _kId;
       _kCache = new Float64Array(m);
       for (let i = 0; i < m; i++) _kCache[i] = Math.abs(Tracks.curvature(track, (i / m) * total));
     }
