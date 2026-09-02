@@ -1954,6 +1954,23 @@ mat     20,172,423 values   max abs error 1.563e-3
   index narrowed to Uint16               : 248 of 320 meshes, 35,455,179 values, 0 altered
 ```
 
+### What it costs to build
+
+Not free, and not measured before it shipped — which it should have been.
+The pack is two passes over every attribute (range-scan, then convert), and
+`_toHalf` round-trips each value through a Float32Array view:
+
+| | |
+|---|---|
+| 1 M vertices (nrm + col + mat, 7 M values) | ~1.9 s |
+| montreal TLX track build, added | ~0.6 s |
+
+One-time, at mesh creation, on the opt-in TLX path only — GLX and WGX never
+call it, and `tlx-chunked.js` is a DEFERRED file with no script tag, so nothing
+on the default path even loads the code. Traded for 21 MB. If it ever needs to
+come down, the scan and the convert are fusable for the fits-anyway case, and
+`_toHalf`'s Float32Array round-trip is the hot line.
+
 ### What this does NOT settle
 
 TLX at 119 MB is still well above GLX's 49.6 MB on the same phone profile, and
