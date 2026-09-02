@@ -211,10 +211,32 @@ export function prioritise(specs, { changedSpecs = [], failed = [], imported = [
   return [...specs].sort((a, b) => rank(a.file) - rank(b.file) || a.tests - b.tests);
 }
 
+// The boot group reaches this gate only through pick-tests' two blanket
+// rules ("any source edit: does the page still boot", "script tags + DOM
+// shell"). That question is already answered on every push and every deploy
+// by the FIXED smoke gate (smoke.spec.js, four shards), so routing it here
+// too selected the boot group's cheapest-by-count specs — boot-guard (two
+// reload cycles) and logging (a Monaco build) — for EVERY source edit, the two
+// slowest-per-test specs in the tree, and they timed out the deploy gate twice
+// on starved runners (2026-09-02) for diffs that never touched them. A rule
+// that names the boot group for a specific reason still selects it.
+export const BOOT_FALLBACK_REASONS = new Set([
+  "any source edit: does the page still boot",
+  "script tags + DOM shell",
+]);
+export function dropBootFallback(groups) {
+  const reasons = groups.get("tiny");
+  if (!reasons) return false;
+  for (const why of reasons) if (!BOOT_FALLBACK_REASONS.has(why)) return false;
+  groups.delete("tiny");
+  return true;
+}
+
 export function select(changedRef, budgetMin = 15, opts = {}) {
   const changed = execFileSync("git", ["diff", "--name-only", changedRef], { cwd: ROOT, encoding: "utf8" })
     .split("\n").filter(Boolean);
   const g = pick(changed);   // Map: group -> reasons (pick-tests' native shape)
+  const bootCoveredBySmoke = dropBootFallback(g);
   const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
   const browserGroups = [...g.keys()].map((n) => `test:${n}`)
     .filter((s) => scripts[s] && scripts[s].includes("run-playwright")).sort();
@@ -234,7 +256,7 @@ export function select(changedRef, budgetMin = 15, opts = {}) {
     : tracked.length ? "infra"
     : (g.size || candidates.length ? "matched" : "unmatched");
   const cut = fit(candidates, budgetMin);
-  const r = { reason, changed: changed.length, tracked, groups: browserGroups,
+  const r = { reason, changed: changed.length, tracked, groups: browserGroups, bootCoveredBySmoke,
               changedSpecs, imported, failed, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed, imported }) };
   // On "infra" the selection is reported but NOT run — the gates own that push.
