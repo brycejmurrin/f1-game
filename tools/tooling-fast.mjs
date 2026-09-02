@@ -132,6 +132,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // only useful if they run right after the edit that would break them.
   "tests/unit/setup-preview-hull.test.mjs",
   "tests/unit/track-night-override.test.mjs",
+  // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
+  // sweep is `node tools/road-lut-census.mjs --all` (~34 s), run before a deploy
+  // that touches the LUT rather than on every edit.
+  "tests/unit/road-lut-frame.test.mjs",
   // The three raster/spawn-heavy car files (cockpit-pale-surfaces 69 s,
   // crest-marks 41 s, slider-effect 42 s — 48 % of this loop, measured
   // 2026-09-01) run in test:node-slow: CI guards always, locally when

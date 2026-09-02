@@ -115,6 +115,7 @@ the tool's own header.
 | **refresh-f1-circuit-reference.mjs** | Explicit maintenance tool that refreshes the offline F1 circuit reference data; tests never call it or the network. | new-track |
 | **report-server.mjs** | Localhost half of `apex-report.js`: serves the tree to a PHONE and collects the bundle it posts back. | mcp-probe |
 | **repro-shot.mjs** | Render a player's exact frame from an `__apex.repro()` blob. Its COCKPIT output is WRONG — read the header. | playwright-probe |
+| **road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | webgpu-debug |
 | **rotate-markings.cjs** | Rotates `CircuitMarkings` turn apexes onto a corrected start line by the scenery's arc shift, then re-sorts them. | new-track |
 | **scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
 | **slider-effect-live.mjs** | The `--live` harness imported by `slider-effect.mjs`: chase+park recipes, restores the pre-push live value on exit. | lighting-tuner |

@@ -259,6 +259,161 @@ const WGX = (function () {
   }
 
   function toF32(a) { return a instanceof Float32Array ? a : new Float32Array(a); }
+  // THE PURE HALF OF THE ROAD LUT, deliberately at module scope and free of the
+  // device. WGX reconstructs (s, lateral x, half-width) per fragment from world
+  // XZ against this table because it cannot read the per-vertex `trk` the way
+  // GLX does (a location-3 interpolator shards dashes on Dawn; drawIndexed
+  // leaves vertex_index at 0 on that adapter). Every road marking the player
+  // sees on WebGPU is computed from what this returns, which makes it worth
+  // being able to audit WITHOUT a GPU — tools/road-lut-census.mjs calls it
+  // directly through the static surface. Returns the packed Float32Array, or
+  // null when the geometry carries no usable road surface.
+  function _roadLutTable(pos, trk, matArr) {
+    const posA = toF32(pos), trkA = toF32(trk);
+    const vCount = (posA.length / 3) | 0;
+    if (!vCount || trkA.length < vCount * 3) {
+      return null;   // caller makes the dummy bind group
+    }
+    const mat = matArr && matArr.length === vCount ? toF32(matArr) : null;
+    let raw = [];
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    let skipHw = 0, skipLat = 0, skipMat = 0;
+    for (let i = 0; i < vCount; i++) {
+      const hw = trkA[i * 3 + 2], lat = trkA[i * 3 + 1];
+      if (hw <= 0.5) { skipHw++; continue; }
+      if (Math.abs(lat) > 0.85) { skipLat++; continue; }
+      if (mat && mat[i] !== 16) { skipMat++; continue; }
+      const px = posA[i * 3], pz = posA[i * 3 + 2];
+      raw.push({ px, pz, s: trkA[i * 3], hw, lat });
+      if (px < minX) minX = px; if (px > maxX) maxX = px;
+      if (pz < minZ) minZ = pz; if (pz > maxZ) maxZ = pz;
+    }
+    if (!raw.length) {
+      return null;   // caller makes the dummy bind group
+    }
+    // ONE SAMPLE PER STATION — this table must be a CENTRELINE, not a band.
+    // The |lat| <= 0.85 filter above admits every vertex within 85% of the
+    // half-width, so one cross-section can contribute two points metres apart
+    // ACROSS the ribbon. trkFromWorld builds the track frame from the two
+    // NEAREST samples, so whenever it picked such a pair the "tangent" ran
+    // across the road and the whole frame rotated 90 degrees: lateral x began
+    // measuring distance along the lap, and the markings were painted down the
+    // LENGTH of the road.
+    //
+    // Measured before this existed (tools/road-lut-census.mjs): monza had a
+    // lateral pair at 31.4% of stations and a rotated frame at 33.9% of ribbon
+    // points — on a circuit with no folded geometry whatsoever, which is what
+    // ruled out every "the track runs back near itself" explanation. Collapsing
+    // to the centre-most vertex per station makes neighbouring samples
+    // along-track BY CONSTRUCTION, rather than by a distance test that cannot
+    // tell the two apart.
+    const byStation = new Map();
+    for (let i = 0; i < raw.length; i++) {
+      const r = raw[i], key = Math.round(r.s * 100);
+      const prev = byStation.get(key);
+      if (!prev || Math.abs(r.lat) < Math.abs(prev.lat)) byStation.set(key, r);
+    }
+    raw = [...byStation.values()];
+    raw.sort((a, b) => a.s - b.s);
+    const MAX_S = 2000;
+    // Decimating STATIONS, not vertices: with one point per station this stride
+    // is a true along-track one.
+    const step = Math.max(1, Math.ceil(raw.length / MAX_S));
+    const samples = [];
+    for (let i = 0; i < raw.length; i += step) samples.push(raw[i]);
+    const pad = 24;
+    minX -= pad; maxX += pad; minZ -= pad; maxZ += pad;
+    const extX = Math.max(maxX - minX, 1), extZ = Math.max(maxZ - minZ, 1);
+    const GW = 32, GH = 32, SLOT = 16;
+    const cells = new Array(GW * GH);
+    for (let i = 0; i < cells.length; i++) cells[i] = [];
+    // A FULL CELL KEEPS THE NEAREST, NOT THE FIRST TO ARRIVE. This used to
+    // `return` once a cell held SLOT entries — and since `raw` is walked in `s`
+    // order that kept the EARLIEST 16 by lap distance and silently dropped every
+    // later pass over the same ground. A cell could therefore end up holding
+    // only a section tens of metres away, and then trkFromWorld's search misses:
+    // on a road draw a miss ZEROES trk, so lateral x reads 0 across the whole
+    // surface and the marking shader paints its centre line down the length of
+    // the road. Measured before this (tools/road-lut-census.mjs): on baku the
+    // chosen nearest sample sat a median 47.6 m from the query point — on a
+    // polyline whose samples are 4 m apart.
+    const cellCx = (gx) => minX + (gx + 0.5) * extX / GW;
+    const cellCz = (gz) => minZ + (gz + 0.5) * extZ / GH;
+    const bin = (s, gx, gz) => {
+      if (gx < 0 || gz < 0 || gx >= GW || gz >= GH) return;
+      const list = cells[gx + gz * GW];
+      for (let j = 0; j < list.length; j++) {
+        if (list[j].px === s.px && list[j].pz === s.pz) return;
+      }
+      if (list.length < SLOT) { list.push(s); return; }
+      const cx = cellCx(gx), cz = cellCz(gz);
+      const dNew = (s.px - cx) * (s.px - cx) + (s.pz - cz) * (s.pz - cz);
+      let worst = -1, worstD = dNew;
+      for (let j = 0; j < list.length; j++) {
+        const d = (list[j].px - cx) * (list[j].px - cx) + (list[j].pz - cz) * (list[j].pz - cz);
+        if (d > worstD) { worstD = d; worst = j; }
+      }
+      if (worst >= 0) list[worst] = s;
+    };
+    for (let i = 0; i < samples.length; i++) {
+      const s = samples[i];
+      const gx = Math.max(0, Math.min(GW - 1, (s.px - minX) / extX * GW | 0));
+      const gz = Math.max(0, Math.min(GH - 1, (s.pz - minZ) / extZ * GH | 0));
+      bin(s, gx, gz);
+      bin(s, gx - 1, gz); bin(s, gx + 1, gz);
+      bin(s, gx, gz - 1); bin(s, gx, gz + 1);
+    }
+    for (let gz = 0; gz < GH; gz++) {
+      for (let gx = 0; gx < GW; gx++) {
+        const list = cells[gx + gz * GW];
+        const cx = minX + (gx + 0.5) * extX / GW;
+        const cz = minZ + (gz + 0.5) * extZ / GH;
+        // Ensure every cell has ≥2 spatially distinct samples so the shader
+        // can form a track tangent (a lone sample left best2 at the origin).
+        while (list.length < 2) {
+          let best = null, bestD = Infinity, avoid = list[0] || null;
+          for (let i = 0; i < samples.length; i++) {
+            const s = samples[i];
+            if (avoid && (s.px - avoid.px) * (s.px - avoid.px) + (s.pz - avoid.pz) * (s.pz - avoid.pz) < 0.25) continue;
+            const d = (s.px - cx) * (s.px - cx) + (s.pz - cz) * (s.pz - cz);
+            if (d < bestD) { bestD = d; best = s; }
+          }
+          if (!best) break;
+          list.push(best);
+        }
+      }
+    }
+    const out = new Float32Array(8 + GW * GH * SLOT * 4);
+    // out[3] (h0.w in WGSL) carries the SAMPLE SPACING in metres. The shader
+    // needs it to tell an along-track neighbour from a sample on another part
+    // of the lap that happens to lie nearby — measured here rather than
+    // hardcoded in WGSL, because it moves with MAX_S and with circuit length.
+    // Median, not mean: the start/finish wrap contributes one huge gap.
+    let spacing = 0;
+    if (samples.length > 8) {
+      const gaps = [];
+      for (let i = 1; i < samples.length; i++) {
+        const g = samples[i].s - samples[i - 1].s;
+        if (g > 0) gaps.push(g);
+      }
+      gaps.sort((a, b) => a - b);
+      spacing = gaps.length ? gaps[gaps.length >> 1] : 0;
+    }
+    out[0] = 12345; out[1] = minX; out[2] = minZ; out[3] = spacing;
+    out[4] = extX; out[5] = extZ; out[6] = GW; out[7] = GH;
+    const FAR = { px: 1e6, pz: 1e6, s: 0, hw: 0 };
+    let o = 8;
+    for (let i = 0; i < GW * GH; i++) {
+      const list = cells[i];
+      for (let k = 0; k < SLOT; k++) {
+        const s = list[k] || FAR;
+        out[o] = s.px; out[o + 1] = s.pz; out[o + 2] = s.s; out[o + 3] = s.hw;
+        o += 4;
+      }
+    }
+    return out;
+  }
+
 
   // IEEE-754 half → float32 (runtime output probe reads rgba16float scene texels).
   function _f16to32(h) {
@@ -2504,90 +2659,12 @@ const WGX = (function () {
     // mat+trk array — vertex_index stays 0 on this adapter, and a 4th
     // vertex attr zeros (and breaks pos) even on piece VBOs. Magic 12345
     // marks a LUT vs a dummy/attr buffer.
+    // Thin wrapper: the table is built by the module-scope _roadLutTable (see
+    // there); this only turns it into a bind group, which is the part that
+    // needs the device.
     function _makeRoadLUT(pos, trk, matArr) {
-      const posA = toF32(pos), trkA = toF32(trk);
-      const vCount = (posA.length / 3) | 0;
-      if (!vCount || trkA.length < vCount * 3) {
-        return _makeAttrBG(null);
-      }
-      const mat = matArr && matArr.length === vCount ? toF32(matArr) : null;
-      const raw = [];
-      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-      let skipHw = 0, skipLat = 0, skipMat = 0;
-      for (let i = 0; i < vCount; i++) {
-        const hw = trkA[i * 3 + 2], lat = trkA[i * 3 + 1];
-        if (hw <= 0.5) { skipHw++; continue; }
-        if (Math.abs(lat) > 0.85) { skipLat++; continue; }
-        if (mat && mat[i] !== 16) { skipMat++; continue; }
-        const px = posA[i * 3], pz = posA[i * 3 + 2];
-        raw.push({ px, pz, s: trkA[i * 3], hw });
-        if (px < minX) minX = px; if (px > maxX) maxX = px;
-        if (pz < minZ) minZ = pz; if (pz > maxZ) maxZ = pz;
-      }
-      if (!raw.length) {
-        return _makeAttrBG(null);
-      }
-      raw.sort((a, b) => a.s - b.s);
-      const MAX_S = 2000;
-      const step = Math.max(1, Math.ceil(raw.length / MAX_S));
-      const samples = [];
-      for (let i = 0; i < raw.length; i += step) samples.push(raw[i]);
-      const pad = 24;
-      minX -= pad; maxX += pad; minZ -= pad; maxZ += pad;
-      const extX = Math.max(maxX - minX, 1), extZ = Math.max(maxZ - minZ, 1);
-      const GW = 32, GH = 32, SLOT = 16;
-      const cells = new Array(GW * GH);
-      for (let i = 0; i < cells.length; i++) cells[i] = [];
-      const bin = (s, gx, gz) => {
-        if (gx < 0 || gz < 0 || gx >= GW || gz >= GH) return;
-        const list = cells[gx + gz * GW];
-        if (list.length >= SLOT) return;
-        for (let j = 0; j < list.length; j++) {
-          if (list[j].px === s.px && list[j].pz === s.pz) return;
-        }
-        list.push(s);
-      };
-      for (let i = 0; i < samples.length; i++) {
-        const s = samples[i];
-        const gx = Math.max(0, Math.min(GW - 1, (s.px - minX) / extX * GW | 0));
-        const gz = Math.max(0, Math.min(GH - 1, (s.pz - minZ) / extZ * GH | 0));
-        bin(s, gx, gz);
-        bin(s, gx - 1, gz); bin(s, gx + 1, gz);
-        bin(s, gx, gz - 1); bin(s, gx, gz + 1);
-      }
-      for (let gz = 0; gz < GH; gz++) {
-        for (let gx = 0; gx < GW; gx++) {
-          const list = cells[gx + gz * GW];
-          const cx = minX + (gx + 0.5) * extX / GW;
-          const cz = minZ + (gz + 0.5) * extZ / GH;
-          // Ensure every cell has ≥2 spatially distinct samples so the shader
-          // can form a track tangent (a lone sample left best2 at the origin).
-          while (list.length < 2) {
-            let best = null, bestD = Infinity, avoid = list[0] || null;
-            for (let i = 0; i < samples.length; i++) {
-              const s = samples[i];
-              if (avoid && (s.px - avoid.px) * (s.px - avoid.px) + (s.pz - avoid.pz) * (s.pz - avoid.pz) < 0.25) continue;
-              const d = (s.px - cx) * (s.px - cx) + (s.pz - cz) * (s.pz - cz);
-              if (d < bestD) { bestD = d; best = s; }
-            }
-            if (!best) break;
-            list.push(best);
-          }
-        }
-      }
-      const out = new Float32Array(8 + GW * GH * SLOT * 4);
-      out[0] = 12345; out[1] = minX; out[2] = minZ; out[3] = 0;
-      out[4] = extX; out[5] = extZ; out[6] = GW; out[7] = GH;
-      const FAR = { px: 1e6, pz: 1e6, s: 0, hw: 0 };
-      let o = 8;
-      for (let i = 0; i < GW * GH; i++) {
-        const list = cells[i];
-        for (let k = 0; k < SLOT; k++) {
-          const s = list[k] || FAR;
-          out[o] = s.px; out[o + 1] = s.pz; out[o + 2] = s.s; out[o + 3] = s.hw;
-          o += 4;
-        }
-      }
+      const out = _roadLutTable(pos, trk, matArr);
+      if (!out) return _makeAttrBG(null);
       const bg = _makeAttrBG(out);
       bg.isRoadLut = true;
       return bg;
@@ -5808,11 +5885,18 @@ const WGX = (function () {
   // is the only healthy value; a nonzero count on a backend that "initialised
   // fine" is the answer to "why is the screen black / wrong on my phone".
   // isSupported(): boolean feature detection for WebGPU availability.
+  // __roadLutTable(pos, trk, mat): the pure road-LUT bake, exposed so it can be
+  // audited with no GPU and no device. Every WebGPU road marking is computed
+  // from this table, so "are the markings in the right place" is answerable
+  // headlessly — tools/road-lut-census.mjs replays the shader's search over the
+  // REAL baked table rather than reimplementing the bake, because a census that
+  // re-derives what it audits agrees with itself while the shipped code is wrong.
   return {
     create,
     lastFailure: () => _lastFailure,
     gpuErrors: () => _gpuErrors,
     isSupported: () => typeof navigator !== "undefined" && !!navigator.gpu,
+    __roadLutTable: _roadLutTable,
   };
 })();
 
