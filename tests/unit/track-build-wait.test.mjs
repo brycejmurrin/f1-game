@@ -82,3 +82,31 @@ test("the stall budget is a real number, and shorter than the old deadline", () 
   assert.ok(Number.isFinite(TRACK_STALL_MS) && TRACK_STALL_MS > 0, "TRACK_STALL_MS is not a usable budget");
   assert.ok(TRACK_STALL_MS < 45000, "the stall budget is no longer faster than the deadline it replaced");
 });
+
+// ── the re-export trap ────────────────────────────────────────────────────
+// `export { x } from "./m.js"` re-exports x WITHOUT binding it locally. When
+// this helper was extracted, fixtures.js kept calling awaitTrackBuild() while
+// only re-exporting it, so every loadTrack died with
+// "ReferenceError: awaitTrackBuild is not defined" — and nothing caught it,
+// because the node unit tests import the pure module directly and the
+// structural suites never execute a fixture. It took a CI deploy to surface.
+//
+// The rule this encodes: a name fixtures.js CALLS must be imported, not merely
+// re-exported. Source-level, because fixtures.js drags Playwright's runner in
+// and cannot be imported here to check it live.
+test("fixtures.js IMPORTS the names it calls, it does not merely re-export them", async () => {
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(new URL("../helpers/fixtures.js", import.meta.url), "utf8");
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+
+  for (const name of ["awaitTrackBuild"]) {
+    const calls = new RegExp(`(?<![\\w.])${name}\\s*\\(`).test(code);
+    if (!calls) continue;                       // not used here: nothing to prove
+    const reExportOnly = new RegExp(`export\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from`).test(code);
+    const imported = new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from`).test(code);
+    assert.ok(imported,
+      `fixtures.js calls ${name}() but never imports it — ` +
+      `\`export { ${name} } from …\` does NOT create a local binding, so every call is a ReferenceError`);
+    assert.ok(!(reExportOnly && !imported), `${name} is re-exported without being imported`);
+  }
+});

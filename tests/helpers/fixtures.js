@@ -27,7 +27,8 @@ export const BOOT_MS = 45000;
 // specs should move to whenever one of them next goes red on a slow box.
 export const TRACK_MS = 45000;
 
-export { TRACK_STALL_MS, awaitTrackBuild } from "./await-track-build.js";
+import { TRACK_STALL_MS, awaitTrackBuild } from "./await-track-build.js";
+export { TRACK_STALL_MS, awaitTrackBuild };
 
 /**
  * Shared Playwright fixtures for Apex 26.
