@@ -961,6 +961,37 @@ const CEILINGS = {
   // based prune. Measured against the flat pool it was replacing:
   // createRenderObject allocations -45%, _createBindings -27%, 2-minute race
   // drift -28%. A PARTIAL fix, not a cure — PERF-FINDINGS 2o says so.
+  // 2548 -> 2562: their occurrence-keyed mesh pool (the collapse fix) merged
+  // with the SSR MRT node hoisted out of present() into a memoised factory.
+  // That one line was the whole of 2o's leak — a new mrt() per frame meant a
+  // new mrt.id, a new render-context cache key, and a permanent RenderContext
+  // every frame. 4-minute race drift +124 MB -> +4.5 MB (GLX +1.3).
+  // PERF-FINDINGS 2n (their pack sites) and 2p (the MRT node).
+  // 2562 -> 2572: apex26.tlxShadowOff, a MEMORY lever and sibling of
+  // envProbeOff/perChunkOff, plus the eight comment lines carrying the
+  // measurement that earns it. iPhone profile, montreal, in race, lite ladder
+  // engaged (liteGpu+isMobile true, WebGL2): TLX 149.0 MB -> 108.6 MB with the
+  // shadow pass off. 40.4 MB from one knob — nearly twice what the whole
+  // attribute pack won (2n, 21 MB) — and the residue three.js#32409's reporter
+  // traced on r185 after #33682 to shadow.camera -> RenderList -> render item
+  // -> geometry. GLX on the same profile is 48.0 MB, so this does NOT by
+  // itself make the phone default flippable. Evidence: PERF-FINDINGS 2q.
+  // 2572 -> 2582: ten lines correcting the releaseMirrors gate's own comment,
+  // which still said the release "nulls attribute.array" and justified the
+  // env-probe hold on that. It assigns a zero-length array of the same class
+  // now, so .constructor resolves and .count (a plain property set once in the
+  // BufferAttribute constructor) is untouched. The gate is kept, but a reader
+  // is told it is belt-and-braces, not the thing standing between them and 81
+  // dead probe faces — a stale justification is how a correct guard gets
+  // deleted by the next person who checks whether it is still needed.
+  // 2582 -> 2588: the tlxShadowOff comment re-cited after checking the source.
+  // It credited "#32409's reporter" with a traced diagnosis; the quote is
+  // yisky's on PR #33682, they call it "a tentative observation rather than a
+  // confirmed diagnosis", and it is a WebGPURenderer report while our 40.4 MB
+  // is measured on three's WebGL2 path. The knob is justified by the
+  // measurement, not the thread, and the comment now says so - a borrowed
+  // upstream diagnosis reads as a cause and would have sent the next round
+  // hunting a RenderList that may hold nothing on this path.
   // 2548 -> 2562 (theirs): the SSR MRT node hoisted out of present() into a
   // memoised factory — one mrt() per frame was the whole of 2o's leak (a new
   // mrt.id, a new render-context cache key, a permanent RenderContext every
@@ -968,7 +999,10 @@ const CEILINGS = {
   // -> 2577 on the merge with the 2026-09-02 bug hunt: env give-up gate,
   // per-face error window, geoReg compaction, and the WebGPU vertex-format
   // rule at both pack sites (PERF-FINDINGS 2n).
-  "js/render/three/tlx.js": 2577,
+  // MERGE 2026-09-02: both lineages raised this ceiling for different work, so
+  // the union is neither side's number — 2603 is MEASURED on the merged file
+  // (mine 2588 + their 2577 both stale against it).
+  "js/render/three/tlx.js": 2603,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

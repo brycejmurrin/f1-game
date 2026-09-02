@@ -596,8 +596,24 @@ const TLX = (function () {
       const LIT_VIZ = ["mat", "normal", "lamp"];
 
       let shadowSys = null;
+      // apex26.tlxShadowOff=1 drops the shadow pass — a MEMORY lever, sibling of
+      // envProbeOff/perChunkOff. Worth 40.4 MB on the iPhone profile
+      // (149.0 -> 108.6 MB in race, montreal; PERF-FINDINGS 2q), which is the
+      // whole justification — the upstream thread below is what prompted the
+      // measurement, NOT evidence for it, and the distinction matters:
+      // yisky on three.js PR #33682 (2026-06-29, not the #32409 reporter)
+      // retested r185 and posted "with shadows disabled ... cleanup appears to
+      // behave normally", with a tentative path of DirectionalLightShadow ->
+      // shadow.camera -> RenderList -> render item -> geometry. They label it
+      // "a tentative observation rather than a confirmed diagnosis", and it is
+      // a WebGPURenderer report — our 40.4 MB is measured on three's WebGL2
+      // path, so the same mechanism is UNPROVEN here. The knob stands on the
+      // measurement alone.
+      const _shadowOff = (function () {
+        try { return localStorage.getItem("apex26.tlxShadowOff") === "1"; } catch (_) { return false; }
+      })();
       try {
-        if (window.TLXShaders && TLXShaders.shadowSys) {
+        if (!_shadowOff && window.TLXShaders && TLXShaders.shadowSys) {
           // Shrink maps on software WebGPU too (detectSoftwareGL is WebGL-only
           // and returns false once the hidden canvas is a WebGPU context).
           shadowSys = TLXShaders.shadowSys(THREE, TSL, {
@@ -2263,18 +2279,28 @@ const TLX = (function () {
               _chunkFrame.total += rec.chunked.chunks.length;
               _chunkFrame.visible += n;
               // Hold the release until the env probe has LATCHED.
-              // releaseMirrors() nulls attribute.array on the stated premise
-              // that "nothing walks the arrays later" — true of the DRAW path,
-              // false of three's NODE BUILDER, which reads
+              // History, because the gate reads as superstition without it:
+              // releaseMirrors() used to set attribute.array = null, on the
+              // premise that "nothing walks the arrays later" — true of the
+              // DRAW path, false of three's NODE BUILDER, which reads
               // attribute.array.constructor to type an attribute every time it
               // compiles a program for a pass it has not compiled for before.
-              // The env probe is such a pass, so freeing first makes every
+              // The env probe is such a pass, so freeing first made every
               // probe face throw "Cannot read properties of null (reading
               // 'constructor')": measured 2026-08-29 on macos-latest/Metal,
               // 41 failed faces on WebGL2 and 81 on WebGPU in ~40 s — no
               // environment reflections at all, and a thrown exception every
               // frame forever. Invisible on a software adapter only because
               // the probe skips chunks there.
+              // It now assigns a ZERO-LENGTH array of the same class instead,
+              // so .constructor still resolves and the node builder still
+              // types the attribute; .count is a plain property computed once
+              // in the BufferAttribute constructor (vendored r185:
+              // this.count = void 0 !== t ? t.length / e : 0), so swapping
+              // .array afterwards cannot zero a draw count either. That makes
+              // this gate belt-and-braces rather than load-bearing — it is
+              // KEPT because the failure it guards is real-GPU-only and the
+              // few frames of delay cost nothing.
               if (n > 0 && !rec.chunked._mirrorsFreed && !vizMat
                 && (envReady || _envGaveUp || !envRT)) _mirrorRelease.push(rec.chunked);
               continue;

@@ -349,20 +349,38 @@
      * volumes were precomputed at build, so nothing in the DRAW path walks the
      * arrays later. Idempotent; index mirrors are deliberately kept.
      *
-     * "Nothing walks the arrays later" is true of drawing and FALSE of three's
-     * node builder, which reads attribute.array.constructor to type an
-     * attribute whenever it compiles a program for a pass it has not compiled
-     * for before. Any pass that first draws a chunk AFTER this call throws
-     * "Cannot read properties of null (reading 'constructor')" — which is what
-     * the env probe did on every face on real hardware (measured 2026-08-29,
-     * macos-latest/Metal: 41 faces WebGL2, 81 WebGPU). The caller in tlx.js
-     * therefore holds the release until the probe has latched; a NEW pass that
-     * can draw chunks must be given the same consideration. */
+     * A ZERO-LENGTH VIEW, NOT null. Every three site that touches .array after
+     * upload wants a PROPERTY OF THE TYPE, never the data, and each one is a
+     * null dereference away from taking the renderer down (all four verified
+     * against vendor/three-0.185.1/three.webgpu.min.js):
+     *
+     *   node builder      attribute.array.constructor, on every pass it has not
+     *                     compiled before — the env probe threw on 41 WebGL2 /
+     *                     81 WebGPU faces on macos-latest/Metal, 2026-08-29
+     *   draw()            firstVertex *= index.array.BYTES_PER_ELEMENT
+     *   updateAttribute() bufferSubData(target, 0, attribute.array)
+     *   _getAttributeMemorySize  array.byteLength (info.memory only)
+     *
+     * `new arr.constructor(0)` answers all of them — same constructor, same
+     * BYTES_PER_ELEMENT, still an ArrayBufferView — while dropping the backing
+     * store, which is the whole point. It costs one empty view per attribute.
+     * `null` answered none of them, which is why this release had to be held
+     * behind the env probe and why the INDEX mirrors could not be freed at all.
+     * Both of those constraints are gone: BYTES_PER_ELEMENT reads correctly off
+     * an empty Uint16Array/Uint32Array, and b.index takes geometry.index.count,
+     * a stored number, not the array.
+     *
+     * Still true, and still the reason this is safe at all: bounding volumes
+     * are precomputed at build, so no DRAW path walks the arrays. Wireframe
+     * materials DO (three builds the line index from index.array) — chunks
+     * never use one. */
     function releaseMirrors(mesh) {
       if (!mesh || !mesh.chunks || !mesh.chunks.length || mesh._mirrorsFreed) return;
       mesh._mirrorsFreed = true;
-      const atts = mesh.chunks[0].geo.attributes;
-      for (const k in atts) if (atts[k]) atts[k].array = null;
+      const geo = mesh.chunks[0].geo, atts = geo.attributes;
+      const drop = (a) => { if (a && a.array && a.array.length) a.array = new a.array.constructor(0); };
+      for (const k in atts) drop(atts[k]);
+      for (let i = 0; i < mesh.chunks.length; i++) drop(mesh.chunks[i].geo.index);
     }
 
     function free(mesh) {
