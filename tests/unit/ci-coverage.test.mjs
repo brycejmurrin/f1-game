@@ -303,6 +303,22 @@ test("gpu-census runs nightly beside the boot group, with the full check and its
   assert.match(gpuWorkflow, /IMAGES: \$\{\{ inputs\.images \|\| 'ubuntu-latest,macos-latest,windows-latest' \}\}/);
   assert.match(gpuWorkflow, /inputs\.images \|\| '[^']*macos-latest[^']*'/, "the nightly must include the one image with a real GPU");
   const trackUses = gpuWorkflow.match(/gpu-game-check\.mjs "\$\{\{ inputs\.track \|\| 'montreal' \}\}"/g) || [];
-  assert.equal(trackUses.length, 3, "every game check must default the track for the schedule");
+  assert.equal(trackUses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must default the track for the schedule");
   assert.doesNotMatch(gpuWorkflow, /gpu-game-check\.mjs "\$\{\{ inputs\.track \}\}"/);
+});
+
+test("gpu-census has a NATIVE WGX leg with hardware gates (bound, swapchain, gpuErrors)", () => {
+  // Until 2026-09-02 the "webgpu" leg was three.js on WebGPU, so js/render/webgpu/
+  // had no real-GPU evidence at all. The leg must run WGX itself and the
+  // Verdict must fail a hardware run where WGX fell back or soft-presents.
+  assert.match(gpuWorkflow, /- name: Game check — WGX \/ WebGPU \(native, opt-in\)/);
+  assert.match(gpuWorkflow, /--backend webgpu \$LS \\\n\s+--json "game-wgx-\$\{\{ matrix\.image \}\}\.json"/);
+  assert.match(gpuWorkflow, /for \(const path3 of \["webgpu", "webgl2", "glx", "wgx"\]\)/);
+  assert.match(gpuWorkflow, /const tlxLeg = path3 === "webgpu" \|\| path3 === "webgl2";/,
+    "the WGX leg must not be held to the TLX env-probe expectations");
+  assert.match(gpuWorkflow, /if \(hardware && gfx\.wgx !== true\) bad\.push\(`wgx: WGX did not bind/);
+  assert.match(gpuWorkflow, /else if \(hardware && gfx\.wgxSoftPresent === true\) bad\.push\(`wgx: WGX is soft-presenting/);
+  const check = fs.readFileSync(new URL("../../tools/gpu-game-check.mjs", import.meta.url), "utf8");
+  assert.match(check, /r\.wgx = typeof g\.softPresent === "function";/);
+  assert.match(check, /r\.wgxSoftPresent = !!g\.softPresent\(\)/);
 });

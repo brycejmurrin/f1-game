@@ -214,6 +214,11 @@ try {
     if (!g) return { glx: false };
     const r = { glx: true, gpuErrors: g.gpuErrors ? g.gpuErrors() : null,
       gpuFirstError: g.gpuFirstError ? g.gpuFirstError() : null };
+    // WGX only: softPresent() is exported by the native WebGPU backend, so its
+    // presence says WGX bound (not a GLX fallback) and its value says whether
+    // the frame reaches #game through the swapchain or the CPU blit.
+    r.wgx = typeof g.softPresent === "function";
+    if (r.wgx) { try { r.wgxSoftPresent = !!g.softPresent(); } catch (e) { r.wgxSoftPresentError = String(e && e.message); } }
     if (g.__tlx) {
       try { r.backendState = g.__tlx.backendState(); } catch (e) { r.backendStateError = String(e && e.message); }
       try { r.envState = g.__tlx.envState(); } catch (_) { /* pre-probe */ }

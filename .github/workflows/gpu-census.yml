@@ -213,6 +213,26 @@ jobs:
             --json "game-glx-${{ matrix.image }}.json" \
             --shot "game-glx-${{ matrix.image }}.png"
 
+      # WGX — the native WebGPU backend (js/render/webgpu/), opt-in for players.
+      # Until 2026-09-02 the "webgpu" leg above was three.js on WebGPU (TLX), so
+      # a WGX shader or present-path change had NO real-GPU evidence at all: the
+      # in-container Dawn validates but never executes (tools/wgx-validate.mjs).
+      # The Verdict holds this leg to: WGX actually bound (GLX.softPresent is
+      # exported by WGX only), the swapchain path on hardware (softPresent
+      # false — the CPU blit is the SwiftShader path and the "WebGPU is laggy"
+      # class), and gpuErrors 0.
+      - name: Game check — WGX / WebGPU (native, opt-in)
+        if: ${{ !inputs.census_only }}
+        continue-on-error: true
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
+          node tools/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
+            --backend webgpu $LS \
+            --json "game-wgx-${{ matrix.image }}.json" \
+            --shot "game-wgx-${{ matrix.image }}.png"
+
       # THE GATE. Before this step the job was green whatever the game said:
       # both checks above are continue-on-error and nothing read the JSON they
       # write, so run 33228195259 concluded "success" while this same macOS job
@@ -263,7 +283,7 @@ jobs:
             // either absent-safe or scoped to tlxLeg — an absence check aimed
             // at all three legs would fail GLX on hardware for reporting
             // exactly what it is built to report.
-            for (const path3 of ["webgpu", "webgl2", "glx"]) {
+            for (const path3 of ["webgpu", "webgl2", "glx", "wgx"]) {
               const file = `game-${path3}-${image}.json`;
               const g = read(file);
               if (!g) { bad.push(`${path3}: ${file} missing — the check produced nothing`); continue; }
@@ -273,7 +293,7 @@ jobs:
               // the leg name rather than on "does this row have a __tlx" is the
               // whole point: a TLX leg that fell back to GLX loses envState too,
               // and that is a regression to fail on, not a reason to go quiet.
-              const tlxLeg = path3 !== "glx";
+              const tlxLeg = path3 === "webgpu" || path3 === "webgl2";
               const frame = g.frame || {};
               rows.push(`${path3.padEnd(7)} phase=${g.phase} ok=${g.ok} ` +
                 `gpuErrors=${gfx.gpuErrors} envFail=${env.fail} envReady=${env.ready} ` +
@@ -333,6 +353,13 @@ jobs:
               // would name one root cause twice.
               if (env.gaveUp) bad.push(`${path3}: the env probe stood down — it could not succeed`);
               if (hardware && be.softAdapter === true) bad.push(`${path3}: softAdapter TRUE on an adapter the census called hardware — the classification regressed and the game is running the degraded content path`);
+              // The WGX leg: gpu-game-check reports wgx (GLX.softPresent exists,
+              // i.e. WGX bound rather than falling back to GLX) and wgxSoftPresent.
+              if (path3 === "wgx") {
+                rows.push(`${" ".repeat(8)}wgx:   bound=${gfx.wgx} softPresent=${gfx.wgxSoftPresent} engine=${gfx.engine}`);
+                if (hardware && gfx.wgx !== true) bad.push(`wgx: WGX did not bind on a hardware adapter (fell back to GLX, or the surface stopped reporting) — this leg proved nothing about js/render/webgpu/`);
+                else if (hardware && gfx.wgxSoftPresent === true) bad.push(`wgx: WGX is soft-presenting (CPU blit) on a hardware adapter — the swapchain path is off, every frame pays a readback + putImageData`);
+              }
             }
             rows.push("```", "");
             if (bad.length) rows.push("**FAILED**", "", ...bad.map((b) => `- ${b}`));
