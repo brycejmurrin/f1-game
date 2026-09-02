@@ -120,6 +120,7 @@ test.describe("TLX — boot", () => {
       lamp: GLX.lampShadowState(),
       pcss: GLX.pcss(),
       hdr: GLX.hdrMode(),
+      webgpu: !!GLX.isWebGPU,
     }));
     // Desktop headless = full tier: all three maps exist; the per-frame car
     // pass has armed at least once by now. Monza day never opens the lamp
@@ -129,7 +130,10 @@ test.describe("TLX — boot", () => {
     expect(st.lamp.enabled).toBe(true);
     expect(st.lamp.arms).toBe(0);
     expect(st.lamp.idx).toBe(-1);
-    expect(st.pcss).toBe(false);   // TODO M4-PCSS: blocker map not ported
+    // PCSS is the WebGPU blocker map (tlx-shadow.js): live on a real GPU
+    // (macos-latest Metal, dispatched runs 2217/2218 read true), absent on the
+    // WebGL2 fallback this box and SwiftShader take. Pin it to the backend.
+    expect(st.pcss).toBe(st.webgpu);
     expect(st.hdr).toBe(true);     // M8: post chain renders into a float scene target
     expect(errors).toEqual([]);
     // Freeze the loop before Playwright tears the page down. Leaving TLX

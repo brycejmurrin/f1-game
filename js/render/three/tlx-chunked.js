@@ -176,11 +176,27 @@
       packStats.savedMB += (len * 2) / 1048576;
       return new THREE.BufferAttribute(a, itemSize, true);            // normalized
     }
+    if (kind === "id") {
+      // NOT a bare Uint8Array. A non-normalized integer array is bound as an
+      // INTEGER attribute (vertexAttribIPointer / a uint vertex format) while
+      // tsl-lit.js reads attribute("mat", "float"); SwiftShader shrugs, ANGLE
+      // on Metal refuses every draw — GL_INVALID_OPERATION "vertex shader
+      // input type does not match the type of the bound vertex attribute",
+      // measured on macos-latest (dispatched runs 2217/2218, 2026-09-02) with
+      // the road still drawing on the WebGL2/SwiftShader CI. Half-float holds
+      // every id exactly (integers to 2048), is a FLOAT format on both
+      // backends, and still halves the 4-byte source; the same path the
+      // out-of-range branch above already takes.
+      packStats.half++;
+      const h = new Uint16Array(len);
+      for (let i = 0; i < len; i++) h[i] = _toHalf(src[i]);
+      packStats.savedMB += (len * 2) / 1048576;
+      return new THREE.Float16BufferAttribute(h, itemSize);
+    }
     const a = new Uint8Array(len);
-    if (kind === "unorm") { for (let i = 0; i < len; i++) a[i] = Math.round(src[i] * 255); }
-    else { for (let i = 0; i < len; i++) a[i] = src[i]; }
+    for (let i = 0; i < len; i++) a[i] = Math.round(src[i] * 255);
     packStats.savedMB += (len * 3) / 1048576;
-    return new THREE.BufferAttribute(a, itemSize, kind === "unorm");  // ids are NOT normalized
+    return new THREE.BufferAttribute(a, itemSize, true);              // unorm: normalized = a float input
   }
   // Uint16 indices wherever the vertex count allows — three picks the GL type
   // from the array, so this is a straight halving with no shader involvement.
