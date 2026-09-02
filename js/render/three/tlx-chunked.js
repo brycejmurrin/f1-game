@@ -377,22 +377,33 @@
     function releaseMirrors(mesh) {
       if (!mesh || !mesh.chunks || !mesh.chunks.length || mesh._mirrorsFreed) return;
       mesh._mirrorsFreed = true;
-      // NULL, not a zero-length array — on EVIDENCE, not on a mechanism.
+      // NULL, matching what shipped. Read the r185 SOURCE (not the minified
+      // bundle) before touching this: src/renderers/webgpu/utils/
+      // WebGPUAttributeUtils.js and its webgl-fallback sibling.
       //
-      // What is established: nulling is what shipped and rendered for months.
-      // Assigning `new array.constructor(0)` instead (mine, 2026-09-02) is the
-      // only change between gpu-census run 26 on macos-latest/Metal, which
-      // failed with "Index range (first: 0, count: 15, format: Uint32) does not
-      // fit in index buffer size (0)" x8, and run 27, which passed. That is an
-      // A/B on real hardware and it is enough to prefer null.
+      // createAttribute() sizes the GPU buffer as `array.byteLength` and
+      // uploads with `new array.constructor(buffer.getMappedRange()).set(array)`.
+      // There is NO fallback for a missing array. So neither form is "safe":
+      //   null           -> throws on array.constructor / instanceof checks
+      //   zero-length    -> a ZERO-BYTE buffer, silently
+      // The only thing that makes releasing safe at all is that createAttribute
+      // early-outs once bufferData.buffer exists — i.e. AFTER the attribute has
+      // been uploaded once.
       //
-      // What is NOT established, and what I claimed on the first pass: that
-      // three sizes buffers as `array ? array.byteLength : count*itemSize*4`.
-      // That expression is real but it is inside _getAttributeMemorySize() —
-      // renderer.info ACCOUNTING, not allocation. I read one minified fragment,
-      // did not check its enclosing function, and generalised. The actual
-      // allocation path could not be traced with confidence in the minified
-      // bundle. Do not repeat the claim without reading unminified three.
+      // WHICH IS THE TRAP FOR CHUNKED MESHES. Chunks are frustum-culled, so a
+      // chunk that has never been visible has never been uploaded. This frees
+      // the SHARED attribute set for every chunk at once. Drive on, a new chunk
+      // enters the frustum, and its first upload happens after the release:
+      // zero-byte buffer with a zero-length array, a throw with null. That is
+      // "Index range ... does not fit in index buffer size (0)" from
+      // gpu-census run 26 on Metal, and it is why a fixed-camera probe cannot
+      // reproduce it — no new chunk ever enters view.
+      //
+      // Also note WebGLAttributeUtils has `//attribute.onUploadCallback();`
+      // COMMENTED OUT, confirming PERF-FINDINGS 2m: onUpload is not a hook here.
+      //
+      // Releasing chunk mirrors is therefore only sound if EVERY chunk has been
+      // uploaded first. Nothing establishes that today.
       const atts = mesh.chunks[0].geo.attributes;
       for (const k in atts) if (atts[k]) atts[k].array = null;
       // The per-chunk INDEX arrays stay. three's WebGPU backend sizes the index

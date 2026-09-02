@@ -3175,3 +3175,69 @@ with it in. That is §2m's frame-counter failure a second time, in the same
 lever, caught only because the counters report what was FREED rather than that
 the code ran. Do not ship a memory lever whose instrument cannot tell "did
 nothing" from "never ran".
+
+## 2s. Why releasing three's CPU mirrors blanks a chunked world (2026-09-02)
+
+§2m said releasing the mirrors was DISPROVED. §2r said the mirrors are where the
+bytes are (63 % of TLX's excess over GLX). Both are true, and the reason they
+are both true is a detail neither entry had: **three re-reads the array when a
+chunk is uploaded for the FIRST time, and chunks are frustum-culled, so "first
+time" can be minutes into a race.**
+
+From the r185 SOURCE (`src/renderers/webgpu/utils/WebGPUAttributeUtils.js`, and
+its `webgl-fallback` sibling) — not the minified bundle, which is what misled the
+first pass:
+
+```js
+createAttribute( attribute, usage ) {
+  let array = bufferAttribute.array;
+  if ( attribute.normalized === false ) {
+    if ( array.constructor === Int16Array || ... ) { ... }   // throws on null
+  }
+  const byteLength = array.byteLength;                        // THE BUFFER SIZE
+  const size = byteLength + ( ( 4 - ( byteLength % 4 ) ) % 4 );
+  buffer = device.createBuffer( _bufferDescriptor );
+  new array.constructor( buffer.getMappedRange() ).set( array );
+}
+```
+
+There is **no fallback for a missing array**. Neither release form is safe:
+
+| release | if createAttribute runs after it |
+|---|---|
+| `array = null` | throws — `array.constructor`, `instanceof` |
+| `array = new Ctor(0)` | a **zero-byte buffer**, silently |
+
+What makes releasing work at all is the early-out: `createAttribute` returns
+immediately once `bufferData.buffer` exists. Release is safe **only for an
+attribute already uploaded**.
+
+### The chunked trap
+
+`chunkedSys` frustum-culls, so a chunk that has not been visible **has never been
+uploaded**, while `releaseMirrors()` frees the shared attribute set (and every
+per-chunk index) in one go. Drive on; a new chunk enters the frustum; its first
+upload happens after the release. Zero-byte buffer, or a throw.
+
+That is precisely `Index range (first: 0, count: 15, format: IndexFormat::Uint32)
+does not fit in index buffer size (0)` — gpu-census run 26, macos-latest/Metal —
+and it is why **a fixed-camera probe cannot reproduce it**: 45 frames from one
+viewpoint, no new chunk ever enters view. Every in-container arm that came back
+"clean" was clean for that reason, not because the release is safe.
+
+Two more things the source settles:
+- `WebGLAttributeUtils` carries `//attribute.onUploadCallback();` **commented
+  out**, confirming §2m: `onUpload` is not a hook on this renderer.
+- `createShaderVertexBuffers()` reads `array.BYTES_PER_ELEMENT` and
+  `_getVertexFormat()` reads `array.constructor` at PIPELINE creation, so a new
+  pass (env probe, shadow, a new material) also re-reads a released array.
+
+### What would make it sound
+
+Release only once every chunk has been uploaded — which nothing establishes
+today — or never release chunked geometry at all and take the smaller win on
+non-chunked meshes, whose upload is not deferred by culling. Until one of those
+exists, the release stays off on phones and `apex26.tlxMirrorSweep` /
+`apex26.tlxChunkRelease` are the A/B knobs, both default OFF.
+
+**A probe that never moves the camera cannot clear a lazily-uploaded resource.**
