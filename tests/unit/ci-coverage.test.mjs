@@ -297,7 +297,12 @@ test("the push-gate smoke spec is sharded four ways on separate runners (unshard
   assert.match(smokeJob, /^\s+shard: \[1, 2, 3, 4\]\s*$/m, "the smoke matrix must be a constant four shards");
   assert.doesNotMatch(smokeJob, /fromJSON\([^)]*'\[1\]'/, "no one-shard fallback on push");
   assert.match(smokeJob, /run: npm run test:smoke -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/4/);
-  assert.match(smokeJob, /run: npm run test:tiny -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/4/);
+  // The nightly / dispatch step runs the boot group by default and, on
+  // dispatch, whichever browser group the `group` input names — the
+  // runner-side verification for specs the SwiftShader dev box cannot time.
+  assert.match(smokeJob, /GROUP: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.group \|\| 'tiny' \}\}/);
+  assert.match(smokeJob, /run: npm run "test:\$\{GROUP:-tiny\}" -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/4/);
+  assert.match(ciWorkflow, /workflow_dispatch:\n    inputs:\n(?:.*\n)*?      group:\n/, "the dispatch declares the group input");
 });
 
 test("gpu-census runs nightly beside the boot group, with the full check and its dispatch defaults", () => {

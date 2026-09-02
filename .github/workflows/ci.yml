@@ -128,6 +128,16 @@ on:
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
+    inputs:
+      # Any browser group from package.json on the 4-shard matrix (default =
+      # the boot group the nightly runs). A desktop-viewport spec that times
+      # out on the SwiftShader dev box measures the box (docs/TESTING.md
+      # §Field notes 2026-09-02); this is the runner-side verification.
+      group:
+        description: "browser group to run on the 4-shard matrix (tiny = boot group; ui, input, driving, ...)"
+        type: string
+        required: false
+        default: "tiny"
   workflow_call:      # pages.yml gates its deploy on this
     inputs:
       # Caller's push `before` SHA. workflow_call replaces github.event with its
@@ -679,12 +689,14 @@ jobs:
         # flag passes through tools/run-playwright.mjs verbatim (it forwards
         # argv to `playwright test`). Unsharded this step took 30-37 min.
         run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/4
-      # The wide run: the whole boot group, 4 shards, nightly / on dispatch only.
-      - name: Boot group (nightly)
+      # The wide run: the whole boot group, 4 shards, nightly — or, on dispatch,
+      # whichever browser group the `group` input names (default tiny).
+      - name: Boot group (nightly) / dispatched group
         if: steps.shipfilter.outputs.ships != 'false' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         env:
           APEX_WORKERS: 1
-        run: npm run test:tiny -- --timeout=900000 --shard=${{ matrix.shard }}/4
+          GROUP: ${{ github.event_name == 'workflow_dispatch' && inputs.group || 'tiny' }}
+        run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
