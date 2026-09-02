@@ -339,7 +339,7 @@
   <span class="light"></span><span class="light"></span><span class="light"></span><span class="light"></span><span class="light"></span>
 </div>
 
-<div id="announce" hidden></div>
+<div id="announce" role="status" hidden></div>
 
 <!-- touch controls -->
 <!-- Grouped, not a flat list. A dock holding loose buttons wraps them wherever
@@ -540,7 +540,7 @@
      left to choose is whether you are ready. Two states share the sheet — the
      new-career setup and the season hub — both built by js/game/career-ui.js into
      the two empty panes. -->
-<div id="career" class="screen" data-esc-close="cr-back" hidden>
+<div id="career" class="screen" role="region" aria-labelledby="cr-title" data-esc-close="cr-back" hidden>
   <div id="cr-inner" class="sheet pane-pair">
     <div class="sheet-head" id="cr-header">
       <div id="cr-titlebar"><h2 id="cr-title">CAREER</h2><div id="cr-sub"></div></div>
@@ -595,7 +595,7 @@
   </div>
 </dialog>
 
-<div id="select" class="screen" data-esc-close="sel-back" hidden>
+<div id="select" class="screen" role="region" aria-labelledby="select-title" data-esc-close="sel-back" hidden>
   <div id="sel-inner" class="sheet pane-pair">
 
     <div class="sheet-head"><h2 id="select-title">SELECT</h2></div>
@@ -1066,7 +1066,7 @@
      centred, so the live 3D car preview stays visible on the left. Everything
      else is the shared vocabulary: sheet-head / sheet-body / sheet-foot, and
      the two scroll regions are .pane. -->
-<div id="carsetup" class="screen" data-esc-close="cs-back" hidden>
+<div id="carsetup" class="screen" role="region" aria-label="Garage" data-esc-close="cs-back" hidden>
   <!-- Preview controls for the live car. Sits OUTSIDE #cs-inner, over the
        region of the canvas the sheet leaves for the car. #carsetup is
        pointer-events:none so the canvas still gets the orbit drag; the controls
@@ -1620,7 +1620,7 @@
 <!-- lighting tuner: live sliders for every lighting/rendering tunable on the
      loaded track. Docked right so the scene keeps rendering as a live preview;
      rows are generated from TUNE_DEFS in js/game/lighting.js (wired in game.js). -->
-<div id="lighting" data-esc-close="lt-close" hidden>
+<div id="lighting" role="region" aria-label="Lighting tuner" data-esc-close="lt-close" hidden>
   <div id="lighting-inner" class="sheet">
     <!-- #lt-rail groups the panel's fixed furniture so a wide-but-short screen
          can stand it up as a column beside the sliders (see css/tuner.css). It
@@ -1662,7 +1662,7 @@
      live camera and the sliders always edit the camera you're looking through.
      Rows are generated from CamTune.defs() in js/game/cam-tune.js (panel UI:
      js/game/cam-tuner.js). -->
-<div id="camtune" data-esc-close="ct-close" hidden>
+<div id="camtune" role="region" aria-label="Camera tuner" data-esc-close="ct-close" hidden>
   <div id="camtune-inner" class="sheet">
     <!-- #ct-rail mirrors #lt-rail in the lighting tuner, and exists for the same
          one reason: the wide-and-short RAIL layout (css/tuner.css) is a two-column

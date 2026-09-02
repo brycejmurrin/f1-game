@@ -207,7 +207,7 @@ const CEILING = {
   // light up under a thumb in the one steering mode that used them. The
   // ladder's own alphas moved with it (pedals to 0.85, presses to 0.95) but
   // traded one spelling for another, so distinct stays flat.
-  rawColor: 376,
+  rawColor: 375,
   // distinct colour VALUES after normalising spelling: space-after-comma,
   // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
   // canonical form. This is the fork guard — identical paint must not hide
