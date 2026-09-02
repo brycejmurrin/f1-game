@@ -112,7 +112,10 @@ function buildResults(order) {
     head.style.cssText = "margin-top:14px;color:#e10600;font-weight:800;font-style:italic";
     head.textContent = sprint ? "DRIVERS — AFTER THE SPRINT" : "DRIVERS — AFTER ROUND " + season.round;
     els.resultsTable.appendChild(head);
-    const all = cars.slice().sort((a, b) => (season.pts[b.driverId] || 0) - (season.pts[a.driverId] || 0)).slice(0, 10);
+    // SeasonCal.rank, not a bare points sort: equal points fall to countback
+    // there and the STANDINGS sheet already used it — this list put whoever
+    // was earlier in the field order first and the two screens disagreed.
+    const all = cars.slice().sort((a, b) => SeasonCal.rank(season, a.driverId, b.driverId)).slice(0, 10);
     all.forEach((c, i) => {
       const row = document.createElement("div");
       row.className = "res-row" + (c.isPlayer ? " you" : "");
@@ -230,8 +233,14 @@ function buildStandings() {
   body.textContent = "";
   if (!season) return;
   const round = season.round;
+  // Mid-weekend the sprint has scored but the round has not advanced, so
+  // "AFTER ROUND r" would name the previous round while showing this one's
+  // sprint points. Say which half of the weekend the table is standing on.
+  const midWeekend = SeasonCal.midWeekend(season);
   G.$("standings-title").textContent = round >= SeasonCal.rounds()
-    ? "FINAL CHAMPIONSHIP" : "CHAMPIONSHIP — AFTER ROUND " + round + " / " + SeasonCal.rounds();
+    ? "FINAL CHAMPIONSHIP"
+    : midWeekend ? "CHAMPIONSHIP — AFTER THE SPRINT, ROUND " + (round + 1) + " / " + SeasonCal.rounds()
+    : "CHAMPIONSHIP — AFTER ROUND " + round + " / " + SeasonCal.rounds();
 
   // Driver standings — all cars sorted by pts
   const drHead = document.createElement("div");
@@ -282,14 +291,19 @@ function buildStandings() {
     const nextTrack = SeasonCal.track(round);
     const info = document.createElement("div");
     info.style.cssText = "margin-top:12px;font-size:12px;color:#9a9aa5;text-align:center";
-    info.textContent = "NEXT: ROUND " + (round + 1) + " — " + nextTrack.name + " (" + nextTrack.gp + ")";
+    // From the pause menu this round is the one being driven, not the next.
+    const live = G.state === "race" || G.state === "count";
+    info.textContent = (live ? "IN PROGRESS: ROUND " : midWeekend ? "NEXT: GRAND PRIX, ROUND " : "NEXT: ROUND ")
+      + (round + 1) + " — " + nextTrack.name + " (" + nextTrack.gp + ")";
     body.appendChild(info);
   }
 }
 
 function buildChampion() {
   const els = G.els, season = G.season;
-  const sorted = G.cars.slice().sort((a, b) => (season.pts[b.driverId] || 0) - (season.pts[a.driverId] || 0));
+  // Countback decides a tie for the title (SeasonCal.rank); a points-only sort
+  // crowned whichever tied driver came first in the field order.
+  const sorted = G.cars.slice().sort((a, b) => SeasonCal.rank(season, a.driverId, b.driverId));
   const champ = sorted[0];
   const champColor = G.cssCol(champ.team.color);
   els.resultsTitle.textContent = "WORLD CHAMPION";
