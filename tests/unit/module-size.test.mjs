@@ -593,19 +593,25 @@ const CEILINGS = {
   // which made it DEAD CODE ((A && t<1) || (t<3) === t<3) and silently disabled
   // PER-CHUNK ROAD on GRAPHICS: LOW.
   //
-  // MERGED: THREE branches off the same base all landed, so the ceiling is the
+  //
+  // -> (a fourth branch): the display-reset latch clear was keyed on
+  // perChunkLights alone while tuner.js offers the retry note on BOTH chunk
+  // sliders, so following it on PER-CHUNK ROAD cleared nothing.
+  // MERGED: FOUR branches off the same base all landed, so the ceiling is the
   // merged tree's own count, re-measured with this suite's metric — never any
   // one side's number, and never the deltas added on paper.
-  // 9228 -> 9269: the lamp shadow keep, done on the key it should always have
-  // had. The reverted version keyed on (slot into frame.lights, 12 m eye cell)
-  // and both terms were wrong — the slot cannot see a lamp handover, and the
-  // eye cell is not an input at all, because the props cast is culled to the
-  // LAMP's frustum. The key is now the two things the content depends on: the
-  // lamp's world position and a quantised key over the cars in the map. Most of
-  // the growth is the note explaining why the car-only defer here DOES save
-  // where the sun pass's identical-looking one did not (the skipped frame arms
-  // and does no work, instead of re-triggering next frame).
-  "js/game.js": 9269,
+  // 9228 -> 9269 (this branch): the lamp shadow keep, done on the key it should
+  // always have had. The reverted version keyed on (slot into frame.lights,
+  // 12 m eye cell) and BOTH terms were wrong — the slot cannot see a lamp
+  // handover, and the eye cell is not an input at all, because the props cast is
+  // culled to the LAMP's frustum. The key is now the two things the content
+  // depends on: the lamp's world position and a quantised key over the cars in
+  // the map. Most of the growth is the note explaining why the car-only defer
+  // here DOES save where the sun pass's identical-looking one did not (the
+  // skipped frame arms and does no work, instead of re-triggering next frame).
+  // -> 9233 (deploy branch): the display-reset retry.
+  // MERGED and RE-MEASURED on the union.
+  "js/game.js": 9274,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -922,6 +928,17 @@ const CEILINGS = {
   // backend. An ungated "*|<tod>|<wx>" layer is where these lines come back;
   // until then per-track keys are the only encoding that reaches every player.
   "js/game/light-presets.js": 15508,
+  // 5821 -> 5905: the WebGPU road markings. The LUT that WGX reconstructs
+  // (s, lateral x, half-width) from — because it cannot read the per-vertex trk
+  // GLX reads — was baked as a BAND rather than a centreline, and a full cell
+  // dropped every later pass over the same ground. trkFromWorld builds the track
+  // frame from the two NEAREST samples, so both defects handed it a pair that
+  // was not along-track: the tangent ran ACROSS the road, and a LUT miss on a
+  // road draw zeroes trk, so the centre line painted down the LENGTH of the
+  // ribbon. Two small loops (collapse per station, evict the farthest from a
+  // full cell) plus the baked sample spacing; the rest is the measurement,
+  // because the numbers are what ruled out the folding theory everyone reaches
+  // for first (monza, no folds at all, was the worst circuit at 33.9%).
   // The whole WGX backend in one IIFE by design (deferred inject, no tag).
   // 5179 -> 5365 on the deploy union: their half-res SSR + chunk-AABB
   // lamp-mask cull rounds landed on the other lineage (re-measured).
@@ -977,10 +994,21 @@ const CEILINGS = {
   // NOT have was their own submit, and shadowInstBuf is per BATCH, not per
   // LIGHT — so one deferred encoder let the lamp's upload land before the sun's
   // recorded draw executed, and the sun map came from the lamp's culled set.
+  // 5821 -> 5835: _setIB joins _setPipe/_setBG0/_setVB0/_setVB1. setIndexBuffer was the one state call outside the redundancy filter the doctrine comment above those helpers says EVERY state call must route through, and createChunkedMesh gives every chunk of a mesh the same index buffer — so the per-chunk-lamp path and castShadow's chunk loop re-set an identical buffer once per visible chunk. drawDecal's raw call routes through it too, since a bare one beside the cache desyncs it.
+  // 5835 -> MEASURED: R22, the WebGPU road markings. The LUT WGX reconstructs
+  // (s, lateral x, half-width) from was baked as a BAND rather than a
+  // centreline, and a full cell dropped every later pass over the same ground.
+  // trkFromWorld builds the track frame from the two NEAREST samples, so both
+  // handed it a pair that was not along-track: the tangent ran ACROSS the road,
+  // and a LUT miss on a road draw zeroes trk, so the centre line painted down
+  // the LENGTH of the ribbon. Two small loops plus the baked sample spacing;
+  // the rest is the measurement, because the numbers are what ruled out the
+  // folding theory (monza, no folds at all, was worst at 33.9%).
+  // MERGED: both lineages landed; re-measured with this suite's own metric.
+  "js/render/webgpu/wgx.js": 5920,   // +7 (this branch): lampShadowKeep returns, keyed by the caller on the map's CONTENT (lamp world position + a quantised key over the cars in it) rather than on a slot into a per-frame re-sorted array; _shadowRendered stays OUT of envProbeReset (that reset shipped and came back out — loadTrack already nulls the sun snap keys before the call, and the tier-shed caller cannot re-arm the latch it clears)// +15: _shadowRendered joins envProbeReset. It gated the light VP the LIT pass and the god-ray march both sample, and had no reset on track change, tier change, resize or quit — a latch with no invalidation is how the shadow-flag class of bug starts.   // +26: carShadowKeep/lampShadowKeep and the armed flag in the state hooks (the flag the shader reads was unobservable, which is why the strobe was invisible)   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // 5821 -> 5835 (deploy branch): _setIB joins _setPipe/_setBG0/_setVB0/_setVB1. setIndexBuffer was the one state call outside the redundancy filter the doctrine comment above those helpers says EVERY state call must route through, and createChunkedMesh gives every chunk of a mesh the same index buffer — so the per-chunk-lamp path and castShadow's chunk loop re-set an identical buffer once per visible chunk. drawDecal's raw call routes through it too, since a bare one beside the cache desyncs it.
   // -7 (this branch): _shadowRendered LEAVES envProbeReset. That reset shipped this morning and came back out — loadTrack already nulls the sun snap keys BEFORE this call, so the track-change motivation was void, while the tier-shed caller clears the latch with no way to re-arm it (sun shadows off until the eye crosses a 20 m cell, indefinitely for a parked car). lampShadowKeep goes with the producer that called it.
   // MERGED and RE-MEASURED on the union, not added on paper.
-  "js/render/webgpu/wgx.js": 5836,   // +7: lampShadowKeep returns, keyed on content by the caller rather than on a slot into a per-frame re-sorted array   // +26 earlier: carShadowKeep and the armed flag in the state hooks (the flag the shader reads was unobservable, which is why the strobe was invisible)   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -1239,14 +1267,13 @@ const CEILINGS = {
   // 30 Hz car-shadow flicker and a lamp shadow that vanished while parked were
   // invisible to every test in the suite.
   "js/render/glx.js": 2156,   // 2026-09-02 R16: cssSize() distrusts its cache after a viewport change + the canWatchCss fallback (PERF-FINDINGS 2u); earlier bug hunt: drain re-arm on track switch, env-face re-entrancy restore; earlier: gated per-present getError drain (audit round)
-  // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
-  // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
-  // carbon 31)
-  // added to the surface-classification chain, plus the pearlescent albedo
-  // term. Mirrors the same edit in js/render/shaders/lit.js and tsl-lit.js — a
-  // finish implemented on one backend only is invisible on the other two and
-  // nothing in the suite would catch it.
-  "js/render/webgpu/wgsl-chunks.js": 1907,   // 2026-09-01: trkFromWorldIf uniform gate (largest WGX-only fragment cost)
+  // 1907 -> 1934: trkFromWorld's along-track window. best2 exists only to give
+  // best a tangent, so it must be best's neighbour along the LAP — spatial
+  // distance cannot tell that apart from a sample on another part of the
+  // circuit. Belt-and-braces rather than load-bearing once the bake is fixed
+  // (measured: 3 points on baku, NO_SWIN=1 in tools/road-lut-census.mjs A/Bs
+  // it), which is exactly why the number is written down instead of assumed.
+  "js/render/webgpu/wgsl-chunks.js": 1934,   // 2026-09-01: trkFromWorldIf uniform gate (largest WGX-only fragment cost)
   // three.js TSL lit-material port; tracks lit.js feature-for-feature.
   // 1725 -> 1768: the same four finishes, the pearlescent term and the carbon
   // weave, in TSL.
