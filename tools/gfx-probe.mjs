@@ -461,6 +461,20 @@ async function runProbeAttempt(attemptNum) {
           : null,
         gpuFirstError:
           (typeof GLX !== "undefined" && GLX.gpuFirstError) ? GLX.gpuFirstError() : null,
+        // Same trap as gpuErrors above, one lever along. The TLX mirror sweep
+        // reports what it FREED, not that it ran, and the probe did not read it
+        // at all — so an A/B of the release that blanked a player's phone came
+        // back byte-identical in both arms with no way to tell "ran and was
+        // harmless" from "never ran". Two earlier versions of that same lever
+        // freed ZERO bytes (PERF-FINDINGS 2m, 2r), so "never ran" is the
+        // likelier reading and the one the probe could not rule out.
+        tlxMirror: (() => {
+          try {
+            const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null;
+            const m = t && t.memState ? t.memState() : null;
+            return (m && m.mirror) || null;
+          } catch { return null; }
+        })(),
         hasWGX: typeof WGX !== "undefined",
         hasTLX: typeof TLX !== "undefined",
         hasGpu: !!navigator.gpu,

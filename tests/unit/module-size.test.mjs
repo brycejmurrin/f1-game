@@ -1027,14 +1027,33 @@ const CEILINGS = {
   // re-freeing them next round.
   // + R16: the CSS-size cache re-check in resize() and the ResizeObserver
   // moved outside the addEventListener check (PERF-FINDINGS 2u).
-  // MERGE 2026-09-02: both lineages raised this for the SAME handset report
-  // (no road, shredded car) and neither number survives the union. The deploy
-  // branch measured 2757 after its a63cab7 revert restored lines the cap had
-  // not; this branch measured 2788 after caching the bounds before the free
-  // and declining the sweep on mobile. The union carries both halves, so it is
-  // neither: re-measured at 2788 on the merged tree with the ceiling test's own
-  // metric, per the deploy rule.
-  "js/render/three/tlx.js": 2788,
+  // 2745 -> 2763. Two sessions raised this in the same minutes and the union is
+  // neither number: theirs (2757) is the a63cab7 revert alone, mine adds the
+  // A/B knob's env-gate bypass on top. MEASURED on the merged file.
+  //
+  // Why a revert RAISED a ceiling: it restored the shipped gate but kept the
+  // reasoning for why the term went in AND why it came out, because the fact
+  // that motivated it — the env probe is tier-gated off on phones, so that gate
+  // can never open there — is TRUE, and the next round will rediscover it and
+  // draw the same wrong conclusion without the note.
+  //
+  // It was pushed urgently without running this guard. The red run skipped the
+  // deploy job, so a fix for a player's broken phone could not publish because
+  // of a line-count ceiling. Run the guard even when reverting — especially
+  // when reverting fast.
+  // 2763 -> 2779: the chunk-release A/B knob, the chunked-release counter, and
+  // the null-vs-zero-length finding written where the next person will hit it.
+  // three sizes a buffer as `array ? array.byteLength : count*itemSize*4` — an
+  // explicit fallback for a NULL array. A zero-length typed array is truthy,
+  // takes the first branch and yields a ZERO-BYTE buffer. Nulling was correct
+  // by design; changing it to zero-length was mine and it is the general case
+  // behind the Metal index refusal, not an index quirk.
+  // MERGE 2026-09-02 (third in a row on this one line): 2779 vs 2788. Theirs is
+  // the revert plus the A/B knob plus the null-vs-zero-length fix; mine is
+  // caching the bounds before the free and refusing the sweep on a phone. The
+  // union carries all of it and is neither number — re-measured at 2810 on the
+  // merged tree with this test's own metric, per the deploy rule.
+  "js/render/three/tlx.js": 2810,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

@@ -1639,8 +1639,23 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // the in-container WebGL2 run nor macos-latest/Metal reproduced it: both have
   // tier < 1, so both took the ordinary gate and never exercised the path the
   // term opened. The gate is back to what shipped.
-  assert.match(src, /!rec\.chunked\._mirrorsFreed\s*&&\s*!vizMat\s*&&\s*\(\s*envReady\s*\|\|\s*_envGaveUp\s*\|\|\s*!envRT\s*\)/,
+  // `_chunkRelOptIn ||` is an A/B override, not a loosening: the gate is shut on
+  // a phone (the env probe is tier-gated off at PerfGov.tier() < 1), so the
+  // configuration that blanked a player's road and terrain cannot be reproduced
+  // at all without it. The knob must stay DEFAULT OFF — asserted below.
+  assert.match(src, /!rec\.chunked\._mirrorsFreed\s*&&\s*!vizMat\s*&&\s*\(\s*_chunkRelOptIn\s*\|\|\s*envReady\s*\|\|\s*_envGaveUp\s*\|\|\s*!envRT\s*\)/,
     "the CPU mirrors must not be freed while the env probe still has passes to compile");
+  assert.match(src, /_chunkRelOptIn[\s\S]{0,200}apex26\.tlxChunkRelease"\)\s*===\s*"1"[\s\S]{0,80}return false/,
+    "and the chunk-release override must default OFF, reachable only by an explicit opt-in");
+  // three sizes a buffer as `array ? array.byteLength : count*itemSize*4`, so a
+  // NULL array recovers its size from count/itemSize while a zero-length typed
+  // array is TRUTHY and yields a ZERO-BYTE buffer. Nulling is correct by design;
+  // zero-length is what made Metal refuse every indexed draw (gpu-census 26).
+  const chunkSrc = read("js/render/three/tlx-chunked.js");
+  assert.match(fnBody(chunkSrc, "releaseMirrors"), /atts\[k\]\.array\s*=\s*null/,
+    "releaseMirrors must NULL the mirror, never assign a zero-length array");
+  assert.doesNotMatch(fnBody(chunkSrc, "releaseMirrors"), /new\s+a?t?t?s?\[?k?\]?\.?array\.constructor\(0\)/,
+    "a zero-length array defeats three's null-array size fallback");
   assert.match(src, /if\s*\(\s*_envFailN\s*>=\s*ENV_FAIL_CAP\s*\)\s*_envGaveUp\s*=\s*true\b/,
     "a probe that cannot succeed must stop retrying — it threw every frame forever");
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");

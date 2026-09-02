@@ -377,9 +377,19 @@
     function releaseMirrors(mesh) {
       if (!mesh || !mesh.chunks || !mesh.chunks.length || mesh._mirrorsFreed) return;
       mesh._mirrorsFreed = true;
-      const geo = mesh.chunks[0].geo, atts = geo.attributes;
-      const drop = (a) => { if (a && a.array && a.array.length) a.array = new a.array.constructor(0); };
-      for (const k in atts) drop(atts[k]);
+      // NULL, not a zero-length array. three sizes a buffer as
+      //   e.array ? e.array.byteLength : (e.count && e.itemSize ? e.count*e.itemSize*4 : 0)
+      // (vendored r185, three.webgpu.min.js) — an EXPLICIT fallback for a null
+      // array that recovers the right size from count/itemSize, which is why
+      // nulling has shipped and worked. A zero-length typed array is TRUTHY, so
+      // it takes the first branch and yields byteLength 0: a zero-byte buffer.
+      // That is what made Metal refuse every indexed draw ("Index range ... does
+      // not fit in index buffer size (0)", gpu-census run 26), and it is the
+      // GENERAL case, not an index quirk — I fixed the index locally instead of
+      // recognising it. Changing this to zero-length on 2026-09-02 was my
+      // mistake; reverted.
+      const atts = mesh.chunks[0].geo.attributes;
+      for (const k in atts) if (atts[k]) atts[k].array = null;
       // The per-chunk INDEX arrays stay. three's WebGPU backend sizes the index
       // buffer from the array's byte length, so freeing them yields a ZERO-BYTE
       // index buffer: "Index range ... does not fit in index buffer size (0)",
