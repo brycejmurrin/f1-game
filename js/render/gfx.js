@@ -93,10 +93,20 @@
  *     envFaceBegin(face, eye, frame) -> (redraw world) -> envFaceEnd(face)
  *     envProbeReady()->bool ; envProbeReset()
  *   begin(frame)              clear + bind scene target; upload frame uniforms.
- *   drawSky(sky)
  *   draw(mesh, model, opts) / drawChunked(mesh, model, opts)
+ *   drawSky(sky)              OPAQUE FIRST, THEN SKY — not the other way round.
+ *     The sky is a full-screen quad with depth WRITE off under LEQUAL, so
+ *     drawing it after the opaque world is result-invariant and lets early-Z
+ *     reject every sky fragment the world already covers. game.js states the
+ *     order at both call sites ("opaque -> sky -> glow" for the camera, and the
+ *     same order for each 64^2 env-probe face, where the sky was measured
+ *     filling every pixel the world then overwrote). A backend that schedules
+ *     its sky before the opaque list — e.g. via a framework's "background"
+ *     slot — shades the whole screen for nothing and is a parity BUG, not a
+ *     free choice.
  *   drawShadow(model, w, l) / drawMark(model, w, l) / drawSkidBatch(verts,n,dirty)
  *   drawGlow(lights, str) / drawDecal(mesh, model, tex, opts)
+ *     Glow is additive with depthMask off, so it must follow the sky.
  *   present(opts)            resolve MSAA + run post chain + blit to screen.
  *
  * `frame` object consumed by begin() (all optional unless noted; see GLX.begin):

@@ -43,6 +43,7 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -59,7 +60,34 @@ const frames = framesArg >= 0 ? Math.max(1, parseInt(args[framesArg + 1], 10) ||
 // MSAA 1) and cannot see at all for legal-but-wrong pipeline state (sky
 // depthCompare: "always" validates). Run these FIRST, and `--static` stops here
 // so a verify-agent can gate WGX edits without launching Chromium.
+
+// Every WGX file that CARRIES WGSL, not just the two the invariants below read.
+// The WGSL lives in JS template literals, so a stray backtick in a shader
+// comment ends the string and the whole module stops parsing — and until this
+// check existed `--static` reported ok:true for exactly that, because it only
+// ever regex-matched wgx.js and wgsl-chunks.js as TEXT and never looked at
+// wgsl-post.js or wgsl-fx.js at all. A file that does not parse cannot define
+// WGX, so the page falls back to GLX with one console line: the silent-fallback
+// failure this whole tool exists to catch. vm.Script COMPILES without running,
+// which is what makes it safe to point at an IIFE backend file from node.
+const WGSL_FILES = [
+  "js/render/webgpu/wgx.js",
+  "js/render/webgpu/wgsl-chunks.js",
+  "js/render/webgpu/wgsl-post.js",
+  "js/render/webgpu/wgsl-fx.js",
+];
+function parseCheck() {
+  for (const rel of WGSL_FILES) {
+    let src = null;
+    try { src = readFileSync(join(ROOT, rel), "utf8"); }
+    catch (e) { fail(rel + " could not be read: " + (e && e.message)); continue; }
+    try { new vm.Script(src, { filename: rel }); }
+    catch (e) { fail(rel + " does not parse as JavaScript: " + (e && e.message)); }
+  }
+}
+
 function staticCheck() {
+  parseCheck();
   const wgx = readFileSync(join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
   const chunks = readFileSync(join(ROOT, "js/render/webgpu/wgsl-chunks.js"), "utf8");
   const sky = [...wgx.matchAll(/skyPipeline\w*\s*=\s*device\.createRenderPipeline\(\{[\s\S]*?depthCompare:\s*"(\w+)"/g)];

@@ -383,7 +383,17 @@ void applyMaterialNormal(int mid, inout vec3 N, float vd) {
 }
 // Albedo + roughness modulation (unchanged call site: after rough is resolved).
 void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
-  if (mid == 0) return;
+  // mid > 16 is a Car3D surface id (20..31, see classifiedCar in the FS). The
+  // else-if chain below runs 1..16 with NO catch-all, and matTexUV refuses
+  // anything above 16 outright, so for a car fragment this whole function was
+  // a normalize(), two clamps and a 14-way integer chain that provably cannot
+  // change albedo or rough. Bit-identical, on every car pixel of every frame.
+  // NOT done for applyMaterialNormal: matBumpHeight is likewise empty above 16,
+  // but its tail is N = normalize(N + 0), and N is not provably unit-length at
+  // that call site — skipping it would drop a normalize the lighting may lean
+  // on. Same reason the integer-pow sweep left the sky-gradient pow() in this
+  // file alone: it could not be shown bit-identical.
+  if (mid == 0 || mid > 16) return;
   float far  = clamp(1.0 - (vd - 90.0) / 170.0, 0.0, 1.0);   // coarse tint: mid range
   if (far <= 0.001) return;                                   // too distant to read — skip the noise
   float near = clamp(1.0 - (vd - 26.0) / 64.0, 0.0, 1.0);    // fine detail: near field only

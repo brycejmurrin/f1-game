@@ -802,7 +802,16 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   if (shaftMul > 0.0) {
     let toSun = sunUV - in.uv;
     let dist = length(toSun);
-    if (dist > 0.005) {
+    // OUTER REACH, not an approximation. The radial term below is
+    // 1 - clamp(dist * (2.6 / spread), 0, 1), which reaches an EXACT 0.0 at
+    // dist = spread/2.6 and stays there, and shaft has no other consumer —
+    // so past that radius all eight dependent bloom taps were accumulated and
+    // then added as +0.0. With the sun on screen that disc covers at most
+    // pi*0.3846^2 ~= 46% of the frame at the shipped spread 1.0, so over half
+    // of every day frame paid the march for nothing. The guard is the radial
+    // line's own expression, so it is exactly the predicate "radial > 0" and
+    // cannot drift from it or round differently at the boundary.
+    if (dist > 0.005 && dist * (2.6 / max(shaftSpread, 1e-3)) < 1.0) {
       let shaftStep = toSun / dist * min(dist, 0.40) / 8.0;
       var shaft = vec3<f32>(0.0);
       let ign = fract(52.9829189 * fract(dot(in.pos.xy, vec2<f32>(0.06711056, 0.00583715))));
