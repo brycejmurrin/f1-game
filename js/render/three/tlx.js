@@ -2390,6 +2390,25 @@ const TLX = (function () {
             };
           },
           materialCacheSize() { return matCache.size; },
+          // What is growing when the GEOMETRY is not? A 4-minute race soak
+          // measured the heap climbing 88-138 MB while geoCensus's registry
+          // and attribute bytes both stayed flat (docs/PERF-FINDINGS.md 2o),
+          // so the leak is in the bookkeeping around the meshes, not in them.
+          // Everything here is a COUNT or a size the renderer already tracks —
+          // reporting it costs nothing and guessing costs an afternoon.
+          memState() {
+            const o = { mats: matCache.size, pool: meshPool.length, draws: drawList.length };
+            try {
+              const inf = renderer && renderer.info;
+              if (inf) {
+                o.progs = (inf.programs && inf.programs.length) || 0;
+                if (inf.memory) { o.rGeo = inf.memory.geometries; o.rTex = inf.memory.textures; }
+                if (inf.render) { o.calls = inf.render.calls; }
+              }
+            } catch (_) { /* three's info shape is version-dependent; absent is reported as absent */ }
+            try { const b = renderer && renderer.backend; if (b && b.data && b.data.size != null) o.backendData = b.data.size; } catch (_) { /* DataMap may be a WeakMap */ }
+            return o;
+          },
           async shader(idx = 0) {
             const meshes = scene.children.filter((o) => o.isMesh && o.visible);
             const target = meshes[idx];

@@ -922,7 +922,12 @@ const CEILINGS = {
   // found where the retained bytes actually were — the streaming plan they
   // were assumed to be in would have freed 1.24 MB) plus routing
   // buildGeometry through TLXShaders.packAttr. Evidence: PERF-FINDINGS 2n.
-  "js/render/three/tlx.js": 2418,
+  // 2418 -> 2437: __tlx.memState(), the hook that found the real leak. A race
+  // soak showed the heap climbing ~30 MB/min while geoCensus's registry AND
+  // attribute bytes stayed flat; memState reported material cache, mesh pool
+  // and three's own counters ALSO flat, which is what pointed the hunt at the
+  // renderer's render-object cache. PERF-FINDINGS 2o.
+  "js/render/three/tlx.js": 2437,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

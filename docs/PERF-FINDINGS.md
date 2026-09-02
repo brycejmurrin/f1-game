@@ -1981,6 +1981,94 @@ container.** The phone default therefore stays GLX (§2m); `apex26.tlxMobile=1`
 is how a player finds out on the actual handset, and `apex26.tlxPack=0` turns
 the packing off if it is ever suspected.
 
+## 2o. TLX leaks ~30 MB a minute while you race, and it is three's render-object cache (2026-09-02)
+
+The player could not test the handset, so: Chromium cannot reproduce iOS
+jetsam, but it can answer the question underneath it — **does TLX's memory
+plateau, or climb?** Four-minute race soak, iPhone UA, montreal, driving
+throughout, `window.gc()` before every sample so the number is RETAINED memory
+and not garbage:
+
+| backend | start | end | drift |
+|---|---|---|---|
+| GLX | 47.0 MB | 47.5 MB | **+0.5 MB** |
+| TLX | 119.9 MB | 244.2 MB | **+124 MB, still climbing** |
+
+That is the bug. Everything before it — §2m's phone decline, §2n's 21 MB of
+attribute packing — was working on the BASELINE while the slope went unmeasured.
+119 MB was never what killed the tab; ~30 MB/min is, and it reaches any
+handset's ceiling in a couple of minutes of racing. Which is exactly the report:
+"it's fucked when we race."
+
+### It is not the geometry, and it is not the packing
+
+Same build, `apex26.tlxPack` the only difference:
+
+| arm | start | drift | geometry registry | attribute MB |
+|---|---|---|---|---|
+| pack ON | 117.2 | +137.6 | 1841 → 1850 | 28.68 → 30.16 |
+| pack OFF | 135.5 | +88.1 | 1841 → 1850 | 49.78 → 52.89 |
+
+Both leak. The registry and the attribute bytes are FLAT across the whole soak
+while the heap climbs 90–140 MB, so geometry is not it. (Run-to-run drift
+varies widely with machine load — 30.8 MB on one earlier run — so do not read a
+packing penalty into the difference between those two numbers. What is solid is
+that the leak survives with packing off.)
+
+`__tlx.memState()` was added to check the next tier, and cleared it too:
+
+```
+ 22s  heap 120.7  mats 21  pool 342  rGeo 228  rTex 34
+257s  heap 243.1  mats 22  pool 342  rGeo 243  rTex 37
+```
+
+Material cache, mesh pool, three's own geometry and texture counts: all flat
+against +122 MB.
+
+### V8 names it
+
+Nothing tracked was growing, so stop guessing and ask the sampling heap
+profiler, which attributes retained allocations to the function that made them.
+Two minutes of racing, heap 121.5 → 200.6 MB:
+
+```
+ 13.25 MB  updateByType         three.webgpu.min.js
+  6.29 MB  _createBindings
+  4.26 MB  VE
+  4.14 MB  createRenderObject
+  3.12 MB  qE
+  1.99 MB  createBindings
+  1.94 MB  getAttributes
+  1.60 MB  updateBindings
+```
+
+Every top site is inside three, in the render-object and binding path.
+`createRenderObject` and `_createBindings` running hot mean the renderer is
+MINTING render objects and bind groups continuously rather than hitting its
+cache.
+
+### Why TLX and not GLX
+
+TLX recycles a pool of `THREE.Mesh` wrappers (`meshPool`, measured 342, flat)
+and reassigns `geometry` and `material` on them every frame — the pooling that
+keeps allocation down on the Apex side. three's WebGPURenderer caches render
+objects and their bindings in a chained map keyed on the object together with
+its material and geometry, so a recycled Mesh carrying a different pair each
+frame mints a NEW entry every time and the old ones are never released. The
+pool is bounded; the cache behind it is not. GLX has no such cache and stays
+flat on the same game loop.
+
+### Not fixed here
+
+The fix is a change to how TLX pools meshes — most likely keying the pool on
+(geometry, material) so a given wrapper always carries the same pair and the
+render-object cache is bounded by the number of distinct draws the scene
+actually has, rather than by frames elapsed. That is a real change to the draw
+path and wants its own round, with this soak as the gate: **the acceptance test
+is drift, not a snapshot.** Any future TLX memory claim that reports a single
+heap number without a slope is measuring the wrong thing — this entry exists
+because two rounds did exactly that.
+
 ## 3. Left on the table
 
 The pre-08-18 narrative behind this list — the O(n²) AI scans that were
