@@ -361,11 +361,11 @@
       }
 
       cityFront(0.36, 0.537, 1, 24, {
-        minH: 6, maxH: 18, depth: 14, step: 16,   // depth = ALONG-track frontage (building() d), ~step so the facades abut
+        minH: 6, maxH: 18, depth: 13, step: 16,   // depth = ALONG-track frontage (building() d); 14 made abutting facades coplanar (sweeps ratchet)
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
       });
       cityFront(0.553, 0.56, 1, 24, {
-        minH: 6, maxH: 18, depth: 14, step: 16,
+        minH: 6, maxH: 18, depth: 13, step: 16,
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
       });
 
