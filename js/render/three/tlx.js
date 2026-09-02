@@ -594,15 +594,18 @@ const TLX = (function () {
               try { localStorage.setItem("apex26.gfxTlxFail", "context lost x" + n + " — tab fell back to WebGL2"); } catch (_) { /* blocked storage: the label still flips via gfxBound */ }
               try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
               sessionStorage.setItem("apex26.gfxClaimFail", "1");
-              // RE-ARM THE BOOT CANARY, the way WGX does from its escalate and
-              // JS-strike paths. game.js clears the probe once the backend has
-              // presented a run of frames, and a context loss after that leaves
-              // nothing to revert: the reload below lands on the same pick with
-              // no canary behind it. sessionStorage is already proven writable
-              // here (the setItem above did not throw), so the localStorage
-              // write is the only one that can fail, and if it does the reload
-              // is no worse off than before.
-              try { localStorage.setItem("apex26.gfxBackendProbe", "three"); } catch (_) { /* no probe: the RESET RENDERER button is still the way back */ }
+              // NO CANARY RE-ARM HERE. It was added on the claim of parity with
+              // WGX; WGX does the opposite. wgx.js arms the probe in the ELSE of
+              // its reload (`if (skipped) reload(); else setItem(probe)`) and
+              // removeItem()s it on the reload itself, and this file's own
+              // refuseTab() removes it too, commented "skipClaim still blocks
+              // revert". The reason is the line above: gfxClaimFail forces
+              // skipClaim next boot, so `armed && !skipClaim` (js/game.js) never
+              // fires, the probe is never cleared, and it survives the whole GLX
+              // session to fire on the next COLD boot — permanently rewriting
+              // apex26.gfxBackend to "webgl2" and discarding the player's THREE
+              // choice because of one context loss. The AUTO branch above keeps
+              // its pick and game.js re-arms that one fresh at opt-in.
             }
             setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
           }
@@ -1886,7 +1889,6 @@ const TLX = (function () {
         gpuMs() { return _gpuMs; },
         // "Skipped for cadence, map still valid" — see tlx-shadow.js §KEEP.
         carShadowKeep() { return !!(shadowSys && shadowSys.carShadowKeep()); },
-        lampShadowKeep(idx) { return !!(shadowSys && shadowSys.lampShadowKeep(idx)); },
         // `armed` is the frame-live gate the lit uniforms read; `arms` is a
         // lifetime counter that stays true straight through a strobe.
         carShadowState() {

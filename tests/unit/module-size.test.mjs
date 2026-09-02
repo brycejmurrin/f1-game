@@ -550,6 +550,10 @@ const CEILINGS = {
   // the function runs (every snap-cell rebuild), so dropping it added an
   // instanced prop cast to half of them. It now defers the whole rebuild
   // instead, which keeps the saving and never publishes a half-built map.
+  // ^ THE "KEEPS THE SAVING" HALF OF THAT IS WRONG, and the correction is the
+  // 9193 -> 9202 row below. The snap keys are written inside the rebuild block,
+  // so a deferred trigger is still true on the next frame and the rebuild runs
+  // in full. N triggers cost N rebuilds with the gate or without it.
   // 9102 -> 9144: the shadow KEEP contract (the producer now says which skips
   // are cadence, so the lamp shadow stops being a one-frame-per-cell flicker
   // and a parked car keeps its own), plus the boot canary holding across a RUN
@@ -571,7 +575,16 @@ const CEILINGS = {
   // POSITIVE window: a player who quit inside those 5 s was reverted to WebGL2
   // on the next boot. A hidden or closing tab is not a crash — the same rule
   // PerfGov's sentinel already states three lines below the new handler.
-  "js/game.js": 9193,
+  // 9193 -> 9202: the two reverts of my own regressions from this same day, and
+  // the reasons, which are the whole point of the lines. (1) The lamp shadow
+  // keep: its gate compares a SLOT into a per-frame re-sorted array, so it
+  // cannot see a lamp handover, and the lamp map rasterises cars the gate knows
+  // nothing about — arming turned two latent bugs into a visible wrong-mast
+  // shadow. (2) The props-cast parity gate is gone rather than moved, because
+  // deferring a level-triggered predicate by one frame saves nothing; the note
+  // also prices the snap-cell coarsening that would work, so the next round
+  // does not re-derive it.
+  "js/game.js": 9203,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -943,7 +956,7 @@ const CEILINGS = {
   // NOT have was their own submit, and shadowInstBuf is per BATCH, not per
   // LIGHT — so one deferred encoder let the lamp's upload land before the sun's
   // recorded draw executed, and the sun map came from the lamp's culled set.
-  "js/render/webgpu/wgx.js": 5821,   // +15: _shadowRendered joins envProbeReset. It gated the light VP the LIT pass and the god-ray march both sample, and had no reset on track change, tier change, resize or quit — a latch with no invalidation is how the shadow-flag class of bug starts.   // +26: carShadowKeep/lampShadowKeep and the armed flag in the state hooks (the flag the shader reads was unobservable, which is why the strobe was invisible)   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
+  "js/render/webgpu/wgx.js": 5815,   // -7: _shadowRendered LEAVES envProbeReset (that reset shipped and came back out: loadTrack already nulls the sun snap keys before this call, so the track-change motivation was void, while the tier-shed caller clears the latch with no way to re-arm it — sun shadows off until the eye crosses a 20 m cell) and lampShadowKeep goes with the producer that called it.   // +26: carShadowKeep/lampShadowKeep and the armed flag in the state hooks (the flag the shader reads was unobservable, which is why the strobe was invisible)   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -1131,7 +1144,7 @@ const CEILINGS = {
   //
   // MERGED: both landed, so the ceiling is the merged file rather than either
   // number. RE-MEASURED with this suite's own metric, not added on paper.
-  "js/render/three/tlx.js": 2915,
+  "js/render/three/tlx.js": 2917,   // the canary re-arm behind gfxClaimFail is out (skipClaim blocks the revert that clears it, so it fired on an unrelated cold boot and discarded the player's pick); lampShadowKeep out with its producer.
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
