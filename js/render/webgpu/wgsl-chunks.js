@@ -524,25 +524,52 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   var best = vec4<f32>(0.0);
   var best2 = vec4<f32>(0.0);
   var bestD2 = 1e20;
+  // ALONG-TRACK WINDOW. best2 exists only to give best a tangent, so it has to
+  // be best's neighbour ALONG THE LAP. Spatial distance cannot tell that: the
+  // grid is 32x32 over a whole circuit and every sample is binned into its four
+  // neighbours too, so where the track runs back near itself the second-nearest
+  // sample is easily one from a different part of the lap. The frame built from
+  // it points ACROSS the ribbon — lateral x starts measuring distance along the
+  // lap and the markings paint down the LENGTH of the road.
+  // h0.w is the baked sample spacing in metres (_roadLutTable); a few spacings
+  // is wide enough for a real neighbour and far too narrow for a fold-back.
+  // Zero means a table baked before the header carried it: keep the old
+  // behaviour rather than rejecting every pair.
+  let sWin = select(1e20, h0.w * 4.0, h0.w > 0.01);
   for (var i = 0u; i < 16u; i = i + 1u) {
     let p = matTrkArr[base + i];
     let d = select(1e20, dot(wp.xz - p.xy, wp.xz - p.xy), gated);
     let take = d < bestD;
-    best2 = select(best2, best, take);
-    bestD2 = select(bestD2, bestD, take);
+    // A new nearest hands its predecessor down to best2 — but only if the two
+    // are along-track neighbours. Without this the demotion path smuggles in
+    // exactly the far-lap sample the take2 test below rejects.
+    let handDown = take && abs(best.z - p.z) <= sWin && best.w > 0.5;
+    best2 = select(best2, best, handDown);
+    bestD2 = select(bestD2, bestD, handDown);
     best = select(best, p, take);
     bestD = select(bestD, d, take);
     // Require a spatially distinct second sample — a lone centerline point
     // left best2 at the origin and produced a garbage tangent, so lateral x
     // blew past hw and terrain discard never punched the ribbon footprint.
     let sep = dot(p.xy - best.xy, p.xy - best.xy);
-    let take2 = (d < bestD2) && !take && sep > 0.25;
+    let near = abs(p.z - best.z) <= sWin;
+    let take2 = (d < bestD2) && !take && sep > 0.25 && near;
     best2 = select(best2, p, take2);
     bestD2 = select(bestD2, d, take2);
   }
   let tangRaw = best2.xy - best.xy;
   // best2.w carries sample hw — origin placeholder (w=0) must not invent a tangent.
-  let tangOk = best2.w > 0.5 && dot(tangRaw, tangRaw) > 1e-4;
+  // FINAL PAIR CHECK. The in-loop window narrows the SEARCH, but best2 is only
+  // ever qualified against the best that was current when it was taken — a
+  // later nearest replaces best and leaves a stale partner behind. Measured:
+  // with the in-loop guards alone baku still paired samples 2.9 km apart along
+  // the lap. Validate the pair that actually came out.
+  // The start/finish wrap is deliberately NOT special-cased: two genuinely
+  // adjacent samples across the line differ by a whole lap in s and are
+  // rejected here, so the frame falls back to the tangent-free circle test for
+  // a few metres. That is correct-but-coarse, which is the right failure.
+  let pairNear = abs(best2.z - best.z) <= sWin;
+  let tangOk = best2.w > 0.5 && dot(tangRaw, tangRaw) > 1e-4 && pairNear;
   let tang = normalize(select(vec2<f32>(1.0, 0.0), tangRaw, tangOk));
   // Face +s so lateral x does not flip when the nearest sample swaps, and
   // dashed paint can use a continuous along-track s (nearest-bin s stair-steps).

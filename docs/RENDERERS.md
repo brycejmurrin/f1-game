@@ -137,14 +137,16 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   visible chunk, absolute shadow index in `params10.x` (no slot remap);
   `gfx.hasPerChunkLights` is the capability read (GLX + WGX; absent TLX).
   `gfx.updateInstances(batch, matrices, n)` is the second capability of
-  that shape (GLX only so far): it hands an existing instanced batch a
+  that shape, and unlike per-chunk lights it is now on ALL THREE
+  (`glx.js:1742`, `wgx.js:5069`, `tlx.js:924` — WGX and TLX ported
+  2026-09-02): it hands an existing instanced batch a
   caller-packed transform set, for a batch whose poses are new every
   frame rather than static geometry narrowed by a frustum. Its one
   consumer is `DebrisWorld.draw`, whose four per-body loops reached 98
   draws at desktop caps and cost 17 every frame of every lap from cones
-  alone (PERF-FINDINGS 2h). WGX and TLX do not implement it and keep the
-  per-body loop, which looks identical — so porting it is a perf task,
-  never a correctness one. It MUST clear `_cullPlanes`/`_cellKeyN`:
+  alone (PERF-FINDINGS 2h). The per-body loop it replaces looks
+  identical on screen, so porting it was a perf task, never a
+  correctness one. It MUST clear `_cullPlanes`/`_cellKeyN`:
   those snapshots describe the frustum that wrote the resident bytes and
   `cullInstances` skips its re-upload on a hit.
   Names that used

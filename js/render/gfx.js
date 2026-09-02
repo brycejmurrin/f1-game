@@ -67,14 +67,46 @@
  * Frame protocol (per rendered frame, in this order):
  *   shadowBegin(lightVP) -> castShadow(mesh,model) / castShadowChunked(mesh,model)
  *     / castShadowInstanced(batch,count) -> shadowEnd()
+ *   carShadowBegin(lightVP) -> ... -> carShadowEnd()      dynamic car map
+ *   lampShadowBegin(lightVP, lightIdx) -> ... -> lampShadowEnd()   flood map
+ *   carShadowKeep()           "the car pass did not run this frame, and its map
+ *     is still good." A CADENCE skip, not a stop. Every backend clears its armed
+ *     flag in present(), which is right when the pass STOPS for real (knob off,
+ *     tier shed, menu, key faded) and wrong when game.js merely halves it at low
+ *     speed — from inside a renderer the two are indistinguishable, so the
+ *     producer says which. A genuine stop still disarms by making no call.
+ *     ORDERING: keep() must precede begin(frame). TLX latches the armed flags at
+ *     begin(); GLX re-reads them per draw. Calling it after begin() is a silent
+ *     no-op on one backend and works on another.
+ *     It declines (returns false) until that pass has rasterised at least once:
+ *     GLX and WGX do not prime these depth targets, so an unwritten map reads
+ *     fully SHADOWED under a LEQUAL compare and an early arm paints black.
+ *     TLX does prime, and keeps the same guard for parity.
+ *     There is deliberately NO lampShadowKeep — see the note at the lamp pass in
+ *     js/game.js: that snap test compares a SLOT into a per-frame re-sorted
+ *     array, and the lamp map rasterises cars.
+ *   carShadowState()/lampShadowState() -> {enabled, arms, armed[, idx]}
+ *     `arms` is a lifetime rasterisation count and stays true straight through a
+ *     strobe; `armed` is the frame-live flag the lit pass actually reads. Assert
+ *     on `armed`, or a strobe is invisible to the test.
  *   [optional env probe, up to one cube face per frame]:
  *     envFaceBegin(face, eye, frame) -> (redraw world) -> envFaceEnd(face)
  *     envProbeReady()->bool ; envProbeReset()
  *   begin(frame)              clear + bind scene target; upload frame uniforms.
- *   drawSky(sky)
  *   draw(mesh, model, opts) / drawChunked(mesh, model, opts)
+ *   drawSky(sky)              OPAQUE FIRST, THEN SKY — not the other way round.
+ *     The sky is a full-screen quad with depth WRITE off under LEQUAL, so
+ *     drawing it after the opaque world is result-invariant and lets early-Z
+ *     reject every sky fragment the world already covers. game.js states the
+ *     order at both call sites ("opaque -> sky -> glow" for the camera, and the
+ *     same order for each 64^2 env-probe face, where the sky was measured
+ *     filling every pixel the world then overwrote). A backend that schedules
+ *     its sky before the opaque list — e.g. via a framework's "background"
+ *     slot — shades the whole screen for nothing and is a parity BUG, not a
+ *     free choice.
  *   drawShadow(model, w, l) / drawMark(model, w, l) / drawSkidBatch(verts,n,dirty)
  *   drawGlow(lights, str) / drawDecal(mesh, model, tex, opts)
+ *     Glow is additive with depthMask off, so it must follow the sky.
  *   present(opts)            resolve MSAA + run post chain + blit to screen.
  *
  * `frame` object consumed by begin() (all optional unless noted; see GLX.begin):

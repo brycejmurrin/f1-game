@@ -350,19 +350,12 @@
       S.carArmed = true;
       return true;
     }
-    // The index is re-stated rather than remembered: frame.lights is a
-    // distance-ranked nearest-N rebuilt as the eye moves, so this lamp's slot
-    // can change between rebuilds and a stale index lights the wrong lamp.
-    function lampShadowKeep(lightIdx) {
-      if (!S.lampEnabled || S.lampArms <= 0 || !(lightIdx >= 0)) return false;
-      S.lampIdx = lightIdx | 0;
-      S.lampArmed = true;
-      return true;
-    }
+    // No lampShadowKeep: see the note at the lamp pass in game.js — the
+    // producer's snap test compares slots into a per-frame re-sorted array.
 
     return {
       S,
-      carShadowKeep, lampShadowKeep,
+      carShadowKeep,
       sunSize: SUN_SIZE,
       sunTex: sunRT ? sunRT.depthTexture : null,
       carTex: carRT ? carRT.depthTexture : null,
