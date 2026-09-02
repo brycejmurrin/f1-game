@@ -58,6 +58,16 @@ const GLX = (function () {
   let _glErrors = 0, _glFirstError = "";
   const GL_ERR_NAMES = { 1280: "INVALID_ENUM", 1281: "INVALID_VALUE", 1282: "INVALID_OPERATION",
                          1285: "OUT_OF_MEMORY", 1286: "INVALID_FRAMEBUFFER_OPERATION", 37442: "CONTEXT_LOST" };
+  // gl.getError() is a synchronous command-buffer flush + a blocking IPC to
+  // the GPU process (the same stall init() documents for getParameter), so a
+  // drain on EVERY present serialised the JS thread behind the GPU process
+  // every frame. Its consumers are the real-GPU gate (tools/gpu-game-check,
+  // PERF-FINDINGS 2e) and gpuErrors(): drain for the first presents after
+  // boot (shader/pipeline errors surface there) and whenever the diagnostic
+  // flag is set (tools/gpu-game-check seeds it) — never on a steady-state
+  // frame. gpuErrors() stays a pure read: the counter is drained at present().
+  let _drainLeft = 120, _glDrainAlways = false;
+  try { _glDrainAlways = localStorage.getItem("apex26.glErrDrain") === "1"; } catch (_) {}
   function drainGlErrors(where) {
     if (!gl || _ctxLost) return;
     for (let i = 0; i < 8; i++) {          // bounded: a wedged context can loop
@@ -2025,7 +2035,12 @@ const GLX = (function () {
     drawSkidBatch,
     drawGlow,
     drawParticles,
-    present: (opts) => { if (ctxGone()) return; const r = PST.present(opts); drainGlErrors("present"); return r; },
+    present: (opts) => {
+      if (ctxGone()) return;
+      const r = PST.present(opts);
+      if (_glDrainAlways || _drainLeft > 0) { _drainLeft--; drainGlErrors("present"); }
+      return r;
+    },
     gpuErrors: () => _glErrors,
     gpuFirstError: () => _glFirstError || null,
     envFaceBegin,

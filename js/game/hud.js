@@ -85,6 +85,17 @@ function buildSecRows() {
 // can simply run every tick and follow a window resize for free.
 const GAP_SHORT_AT = { narrow: 640, wide: 800 };
 const GAP_DROP_AT  = { narrow: 550, wide: 800 };
+// The gap is distance ÷ the PLAYER'S OWN speed, so under braking the divisor
+// halves within a second and the tenths jumped 2x between ticks (10 Hz) with
+// the rival not having moved relative to the car. Smooth the displayed
+// seconds (EMA, ~0.3 s at 10 Hz) per slot; a neighbour change resets the
+// slot so a new rival never inherits the old one's lag.
+const _gapSm = [NaN, NaN], _gapWho = [null, null];
+function gapSec(slot, who, raw) {
+  if (who !== _gapWho[slot] || !isFinite(_gapSm[slot])) { _gapWho[slot] = who; _gapSm[slot] = raw; }
+  else _gapSm[slot] += (raw - _gapSm[slot]) * 0.3;
+  return _gapSm[slot].toFixed(1);
+}
 function gapForm() {
   const root = document.documentElement;
   const s = +root.style.getPropertyValue("--hud-z-top") ||
@@ -323,8 +334,8 @@ function updateHud(force) {
     // of the envelope at low OVERALL SPEED and understated slow-corner gaps.
     // 0.26 × vTop ≈ the old 25 m/s at default pace.
     const vFloor = Math.max(player.speed, G.vTop() * 0.26);
-    hText(els.gapA, a ? gap("▲", a.code, ((a.prog - player.prog) / vFloor).toFixed(1)) : "");
-    hText(els.gapB, b ? gap("▼", b.code, ((player.prog - b.prog) / vFloor).toFixed(1)) : "");
+    hText(els.gapA, a ? gap("▲", a.code, gapSec(0, a, (a.prog - player.prog) / vFloor)) : "");
+    hText(els.gapB, b ? gap("▼", b.code, gapSec(1, b, (player.prog - b.prog) / vFloor)) : "");
   }
   // Sector split display (top-right) — cached span nodes, textContent per tick
   if (els.hudSectors) {

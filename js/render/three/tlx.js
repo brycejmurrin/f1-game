@@ -742,7 +742,11 @@ const TLX = (function () {
       let chunkedSys = null;
       try {
         if (window.TLXShaders && TLXShaders.chunked) {
-          chunkedSys = TLXShaders.chunked(THREE, {});
+          // isWebGPU feeds the pack's vertex-format rule (tlx-chunked.js
+          // packAttr `fmt24`): WebGPU has no 1- or 3-wide 8/16-bit formats.
+          chunkedSys = TLXShaders.chunked(THREE, {
+            isWebGPU: () => !!(renderer.backend && renderer.backend.isWebGPUBackend),
+          });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: chunked factory failed, un-culled props —", e); } catch (_) {}
@@ -871,16 +875,35 @@ const TLX = (function () {
         const cap = imesh.userData.tlxInstCap || n;
         const drawN = Math.min(n, cap);
         const col = _instColorAttr(imesh, cap);
-        for (let i = 0; i < drawN; i++) {
-          _instMat.fromArray(matrices, i * 16);
-          imesh.setMatrixAt(i, _instMat);
-          if (colors && colors.length && col) {
-            col.setXYZ(i, colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
-          }
+        // Straight into the attribute array — the Matrix4.fromArray/setMatrixAt
+        // round trip copied every instance twice — and an UPDATE RANGE: with
+        // none, needsUpdate uploads the whole cap x 64 B (+ cap x 12 B) every
+        // frame the frustum moves (20 k instances = 1.5 MB/frame; audit 2026-09-02).
+        const im = imesh.instanceMatrix, ia = im.array;
+        const nf = drawN * 16;
+        for (let i = 0; i < nf; i++) ia[i] = matrices[i];
+        if (colors && colors.length && col) {
+          const ca = col.array, nc = drawN * 3;
+          for (let i = 0; i < nc; i++) ca[i] = colors[i];
         }
-        imesh.instanceMatrix.needsUpdate = true;
-        if (col) col.needsUpdate = true;
+        im.clearUpdateRanges(); im.addUpdateRange(0, nf);
+        im.needsUpdate = true;
+        if (col) { col.clearUpdateRanges(); col.addUpdateRange(0, drawN * 3); col.needsUpdate = true; }
         imesh.count = drawN;
+      }
+      // Caller-packed set (DebrisWorld's Rapier pools, PERF-FINDINGS 2h): the
+      // transforms are new every frame and the only question is how many are
+      // live. Without this the per-body loop drew each cone/shard/marble/panel
+      // as its own render object (17 steady, 98 in a pileup). The cull snapshot
+      // is cleared for the same reason as GLX/WGX: these bytes came from no
+      // frustum, so a later cullInstances must not claim them.
+      function updateInstances(batch, matrices, n) {
+        if (!batch || !batch.imesh) return 0;
+        const v = Math.max(0, Math.min(batch.instances | 0, n | 0));
+        _writeInstanceMatrices(batch.imesh, matrices, null, v);
+        batch.visible = v;
+        batch._cullPlanes = null;
+        return v;
       }
 
       function createInstancedBatch(data, matrices, colors, opts) {
@@ -1052,6 +1075,26 @@ const TLX = (function () {
       // Keyed, a given wrapper always carries the same pair, so the number of
       // cache keys is bounded by the DISTINCT DRAWS the scene has rather than
       // by frames elapsed.
+      // ── the SSR MRT node is built ONCE ────────────────────────────────
+      // This was `renderer.setMRT(TSL.mrt({…}))` inline in present(), so a NEW
+      // node was constructed every frame. three keys its render-context cache
+      // on a STRING containing mrt.id:
+      //     const i = fmt + "-" + (mrt !== null ? mrt.id : "default") + "-" + lvl;
+      //     if (this._renderContexts[i] === undefined) … = new RenderContext();
+      // — a plain object that never evicts. So each frame minted a permanent
+      // context, and every object/material had to be re-created against it.
+      // MEASURED (docs/PERF-FINDINGS.md 2p): distinct renderContexts climbed
+      // 40 → 76 → 112 → 148 across four 15 s samples, dead linear, while the
+      // object count stayed at ~217 and material at ~40; ~2,150
+      // createRenderObject calls per interval, forever, and the heap with them.
+      //
+      // The node's contents are frame-invariant (output, a constant 1.0), so
+      // building it once is not a cache — it is the correct lifetime.
+      let _ssrMrt = null;
+      function _ssrMrtNode() {
+        if (!_ssrMrt) _ssrMrt = TSL.mrt({ output: TSL.output, ssrTag: TSL.float(1) });
+        return _ssrMrt;
+      }
       const meshPool = [];          // every wrapper ever made — the sweep walks this
       const meshByGeo = new Map();  // geometry -> Map(material -> Mesh)
       let poolUsed = 0;             // acquired THIS batch — diagnostics only, never an index
@@ -1217,7 +1260,17 @@ const TLX = (function () {
           if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS) { meshPool[w++] = m; continue; }
           try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
           const byMat = meshByGeo.get(m.geometry);
-          if (byMat) { byMat.delete(m.material); if (!byMat.size) meshByGeo.delete(m.geometry); }
+          if (byMat) {
+            // Drop the wrapper from its occurrence list; an emptied list and an
+            // emptied per-geometry map go with it.
+            const list = byMat.get(m.material);
+            if (list) {
+              const at = list.indexOf(m);
+              if (at >= 0) list.splice(at, 1);
+              if (!list.length) byMat.delete(m.material);
+            }
+            if (!byMat.size) meshByGeo.delete(m.geometry);
+          }
           // NEVER dispose the geometry or the material here — both are owned by
           // the caller (tracks.js, the chunk system, matCache) and are still
           // live. Only the wrapper is ours to drop.
@@ -1226,17 +1279,31 @@ const TLX = (function () {
         meshPool.length = w;
       }
 
+      // (geometry, material, OCCURRENCE) — not (geometry, material). One
+      // wrapper per pair handed every same-pair draw of a batch the SAME
+      // Mesh, each overwriting the last one's matrix: 21 of 22 blob shadows,
+      // both front and both rear wheels of every car, the second car of
+      // every team (one shared paint scratch) and the debris cones all
+      // vanished on TLX (renderer audit 2026-09-02, CONFIRMED from the
+      // pool code; the "45 % fewer render objects" of c9f4dbea was partly
+      // draws being dropped). The per-material list is stamped with the
+      // batch and its counter reset once per present, so wrapper identity
+      // stays stable per (geo, mat, k) and three's cache stays bounded.
       function acquireMesh(geo, matrixArr, material) {
         const mat = material || fallbackMat();
         let byMat = meshByGeo.get(geo);
         if (!byMat) { byMat = new Map(); meshByGeo.set(geo, byMat); }
-        let m = byMat.get(mat);
+        let list = byMat.get(mat);
+        if (!list) { list = []; list.batch = -1; list.n = 0; byMat.set(mat, list); }
+        if (list.batch !== _poolBatch) { list.batch = _poolBatch; list.n = 0; }
+        const k = list.n++;
+        let m = list[k];
         if (!m) {
           m = new THREE.Mesh(geo, mat);
           m.matrixAutoUpdate = false;
           m.matrixWorldAutoUpdate = false;
           m.frustumCulled = false;
-          byMat.set(mat, m);
+          list[k] = m;
           meshPool.push(m);
         }
         // Assigned anyway: the pair is what the mesh was KEYED on, so these are
@@ -1284,10 +1351,14 @@ const TLX = (function () {
         const verts = pos.length / 3;
         g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pos), 3));
         if (_pk) {
-          g.setAttribute("normal", _pk(THREE, data.nrm, verts * 3, 3, "unit"));
-          g.setAttribute("color", _pk(THREE, data.col, verts * 3, 3, "unorm"));
-          g.setAttribute("mat", _pk(THREE, data.mat, verts, 1, "id"));
-          g.setAttribute("trk", _pk(THREE, data.trk, verts * 3, 3, null));
+          // fmt24: WebGPU has no 1- or 3-wide 8/16-bit vertex format, and
+          // three names 'float16x3' / 'uint32' for them — pipeline refused
+          // (tlx-chunked.js packAttr, PERF-FINDINGS 2n). Same rule, same arg.
+          const fmt24 = !!(renderer.backend && renderer.backend.isWebGPUBackend);
+          g.setAttribute("normal", _pk(THREE, data.nrm, verts * 3, 3, "unit", fmt24));
+          g.setAttribute("color", _pk(THREE, data.col, verts * 3, 3, "unorm", fmt24));
+          g.setAttribute("mat", _pk(THREE, data.mat, verts, 1, "id", fmt24));
+          g.setAttribute("trk", _pk(THREE, data.trk, verts * 3, 3, null, fmt24));
         } else {
           g.setAttribute("normal", new THREE.BufferAttribute(
             new Float32Array(data.nrm && data.nrm.length === pos.length ? data.nrm : verts * 3), 3));
@@ -1987,7 +2058,7 @@ const TLX = (function () {
         // NOT IMPLEMENTED, declared rather than omitted — same reason as the
         // members above. DebrisWorld feature-tests it and keeps the per-body
         // loop here, which is what TLX ships today. docs/PERF-FINDINGS.md 2h.
-        updateInstances: undefined,
+        updateInstances,
         drawInstanced,
         freeInstancedBatch,
         castShadowInstanced,
@@ -2275,12 +2346,7 @@ const TLX = (function () {
               if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
               const _hadMrt = !!(TSL.mrt && renderer.setMRT);
               const _prevMrt = _hadMrt && renderer.getMRT ? renderer.getMRT() : null;
-              if (_hadMrt) {
-                renderer.setMRT(TSL.mrt({
-                  output: TSL.output,
-                  ssrTag: TSL.float(1),
-                }));
-              }
+              if (_hadMrt) renderer.setMRT(_ssrMrtNode());
               try {
                 renderer.setRenderTarget(post.sceneTarget());
                 renderer.render(scene, camera);

@@ -1927,6 +1927,34 @@ and road markings need far better.
 `gpuErrors` 0 and no page errors throughout; the race renders (car, field, HUD,
 touch controls).
 
+**2026-09-02 — the pack broke TLX's WebGPU path, and no software test saw it.**
+gpu-census runs 21 and 22 on macos-latest reported the three.js/WebGPU leg with
+`envFail=undefined` — not "no failures" but "no `__tlx` surface": the overlay
+read `TLX REFUSED: Failed to execute 'createRenderPipeline' … The provided
+value 'float16x3' is not a valid enum value of type GPUVertexFormat`. WebGPU's
+8- and 16-bit vertex formats come only 2- and 4-wide (`unorm8x2/x4`,
+`snorm16x2/x4`, `float16x2/x4`); three names the format straight from
+`itemSize`, so a packed 3-wide colour reached Dawn as `float16x3` and the whole
+pipeline was refused, after which TLX stood down to GLX. WebGL2 accepts any
+width, which is why the WebGL2 control leg (and every SwiftShader/WebGL2 spec)
+stayed green. The refusal reproduces under Dawn/SwiftShader locally
+(`node tools/gpu-game-check.mjs montreal --backend three --path webgpu`), so
+it was a missing probe, not a missing GPU. A `createRenderPipeline` hook
+(scratch, `scratch/wgpu-fmt-probe.mjs`) then listed every format three named:
+3-wide Int16 normals arrive as `snorm16x4` (three pads the width for 2-byte
+arrays — accepted), 3-wide Uint8 colours as `unorm8x4` (accepted), but a
+1-wide `mat` id goes through three's itemSize-1 table, which maps a Uint16
+array to **`uint32`** regardless of the Float16 class — the pipeline is created
+and then fails validation ("Attribute base type Uint … does not match the
+shader's base type Float"), and the half-float colours arrive as `float16x3`.
+Fix: `packAttr` takes `fmt24` (the renderer's `isWebGPU`, read per build) and
+keeps 1- and 3-wide attributes Float32 under it — at BOTH pack sites, the
+chunked builder and `tlx.js` `buildGeometry` (`_pk`); the first fix covered
+only the chunked one and the props still refused. Padding x3 to x4 is not the fix — three reads a 4-wide
+`color` attribute as RGBA. The WebGPU path therefore forgoes the colour /
+normal / id savings above; a 4-wide pack with an explicit `vec3` read is the
+follow-up, gated on the same probe.
+
 ### Verifying it with decode, not with a screenshot
 
 Two frames differ for a dozen reasons that are not the change under test —
@@ -2099,6 +2127,87 @@ before shipping two baseline fixes.
 The acceptance test stays: **drift, not a snapshot.** Any TLX memory claim
 reporting a single heap number without a slope is measuring the wrong thing —
 this entry exists because two rounds did exactly that.
+
+## 2p. The leak was one `mrt()` call inside the frame loop (2026-09-02)
+
+§2o found the slope (~30 MB/min while racing) and named the mechanism (three
+minting render objects continuously). §2n's keyed mesh pool took 45% of the
+render-object churn and left the rest. This is the rest, and it is one line.
+
+### Ruling out the hypothesis §2o wrote down
+
+§2o guessed per-chunk lamp bindings. Checked before writing any code, as that
+entry insists: `tlx.js` declares `hasPerChunkLights: false` (GLX and WGX are
+`true`), and `js/game/lighting.js` says so in prose too — "WebGL2 and WebGPU —
+three.js keeps the single global set". **The hypothesis was dead on arrival.**
+It cost one grep instead of a round.
+
+### Asking the cache what changed, instead of guessing again
+
+three's render-object key is `[object, material, renderContext, lightsNode]`.
+Rather than reason about which one moved, hook `createRenderObject` at runtime
+— minified names are not stable, so find the instance by looking for the method
+— and count DISTINCT identities per key. A bounded set saturates; a recreated
+one climbs. Four 15 s samples while racing:
+
+| | 15 s | 30 s | 45 s | 60 s |
+|---|---|---|---|---|
+| objects first seen | 216 | 217 | 218 | 218 |
+| distinct material | 39 | 40 | 40 | 40 |
+| distinct passId / lightsNode | 2 / 2 | 2 / 2 | 2 / 2 | 2 / 2 |
+| **distinct renderContext** | **40** | **76** | **112** | **148** |
+| createRenderObject | 2,362 | 4,514 | 6,688 | 8,843 |
+
+Dead linear, 36 new contexts per interval, forever. Everything else flat —
+which also confirms §2n's keyed pool is doing its job.
+
+### Why a new context every frame
+
+`RenderContexts.get` builds its key as a STRING and stores the result in a
+plain object:
+
+```js
+const i = `${textures}:${format}:${type}:${samples}:${depth}:${stencil}`
+        + "-" + (mrt !== null ? mrt.id : "default") + "-" + level;
+if (this._renderContexts[i] === undefined) this._renderContexts[i] = new RenderContext();
+```
+
+`mrt.id`. And `tlx.js` present() did this every frame:
+
+```js
+renderer.setMRT(TSL.mrt({ output: TSL.output, ssrTag: TSL.float(1) }));
+```
+
+A new node, a new id, a new key, a new permanent context — and every object and
+material re-created against it. `_renderContexts` never evicts.
+
+### The fix
+
+Build the node once. Its contents are frame-invariant (`output`, a constant
+1.0), so this is not a cache — it is the correct lifetime.
+
+| | before | after | GLX control |
+|---|---|---|---|
+| distinct renderContexts, 60 s | 40 → 148 | **1 → 2** | — |
+| createRenderObject, 60 s | 8,843 | **15** | — |
+| per 15 s | ~2,150 | **2** | — |
+| **4-minute race drift** | **+124 MB** | **+4.5 MB** | +1.3 MB |
+
+TLX now drifts within ~3 MB of GLX over four minutes of racing. `gpuErrors` 0,
+no page errors, the race renders unchanged (car, field, HUD, touch controls).
+
+### What this says about the two rounds before it
+
+§2m routed phones to GLX and §2n packed attributes down 21 MB. Both were real,
+both moved the BASELINE, and neither touched the slope — because nobody had
+measured a slope. The lesson is already written at the end of §2o and it holds:
+**drift, not a snapshot.** A leak of 30 MB/min makes any baseline work
+irrelevant within two minutes, and the whole of §2m/§2n bought about forty
+seconds of extra runway.
+
+Whether TLX may now default on a phone is a SEPARATE question and is not
+settled here: the baseline is still ~97 MB against GLX's ~47, and no iPhone has
+run this build. `apex26.tlxMobile=1` is how that gets answered.
 
 ## 3. Left on the table
 
