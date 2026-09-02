@@ -126,6 +126,16 @@
     cost. BASELINE is the shipped configuration; each row after it turns exactly
     one thing off. A large drop in median frame time when a subsystem is
     disabled is that subsystem's cost.
+    <br><br>
+    The car is DRIVEN for the whole run, by the same closed-loop autopilot the
+    test suite uses — a braking envelope over a look-ahead scan, then pure
+    pursuit back to the centreline — starting from the grid every time so two
+    runs compare. The <b>driving</b> column is each row's alibi: a phase measured
+    while the car sat still is not a measurement of a race, whatever its median
+    says. The <b>&Delta;</b> column refuses to quote a number for a row that shed
+    nothing — a knob already at zero, a write the tuner clamped, or a pass that
+    never ran in this condition at all (lamp shadows by day). Those would
+    otherwise render as a clean 0%, which reads as "this subsystem is free".
   </div>
 </main>
 <script>
@@ -202,7 +212,11 @@ function measureIn(win, ms) {
 const PHASES = [
   { key: "baseline", label: "BASELINE (as shipped)", keys: [], set: () => ({}) },
   { key: "noLampShadow", label: "lamp shadow map off", keys: ["lampShadow"],
-    set: () => ({ lampShadow: 0 }) },
+    // A non-zero knob does not mean the PASS ran. The lamp shadow only
+    // rasterises when a floodlight is close enough to be picked, so by day (or
+    // on a lampless circuit) this row would shed nothing while the knob still
+    // read 1 — a vacuous row that renders as an honest-looking 0%.
+    live: "lampShadow", set: () => ({ lampShadow: 0 }) },
   { key: "noBloom", label: "bloom off", keys: ["bloomMul"],
     set: () => ({ bloomMul: 0 }) },
   { key: "noContact", label: "contact shadows off", keys: ["contactStr"],
@@ -233,6 +247,117 @@ const PHASES = [
   { key: "half", label: "render scale 0.5 (fill-rate probe)", keys: [],
     set: () => ({}), scale: 0.5 },
 ];
+
+// REACHING THE GAME'S GLOBALS FROM THIS PAGE.
+//
+// js/render/glx.js declares `const GLX`, and a script-level const is a LEXICAL
+// binding in the frame's global environment — it is NOT a property of that
+// frame's window. So `win.GLX` is undefined, always, and every reader here that
+// used it silently degraded: env.backend fell through to the hardcoded
+// "webgl2" for every run whatever actually bound, and env.three (the
+// see-through-car check, with a comment explaining why it matters) was null
+// every time. A diagnostic that cannot fail loudly is worse than no diagnostic.
+//
+// win.eval runs in THAT frame's global scope, where the lexical binding is
+// visible. Same-origin, so this is allowed.
+function gval(win, expr) {
+  try { return win.eval("(typeof (" + expr + ") !== 'undefined') ? (" + expr + ") : null"); }
+  catch (e) { return null; }
+}
+
+// Where every run starts. The grid (not mid-lap) so the field is packed and the
+// per-car draws are actually in frame.
+const START_FRAC = 0.002;
+
+// THE CAR HAS TO ACTUALLY DRIVE.
+//
+// This used to be `setInput({ throttle: true, steer: 0 })` — full throttle, zero
+// lock. That is not driving: it puts the car into the first barrier within a few
+// seconds, and every phase after that measured a car wedged against a wall, i.e.
+// exactly the stationary camera the comment at the call site says this page
+// exists to avoid. It also quietly corrupts the distribution, because a wedged
+// car trips game.js's stoppedOnTrack rescue and its teleport lands in p95/p99 as
+// a hitch that has nothing to do with the subsystem under test.
+//
+// So drive the same closed loop tests/specs/autopilot.spec.js uses: a braking
+// envelope over a dense look-ahead scan, then pure pursuit back to the
+// centreline. Two deliberate differences from the spec's copy:
+//   - it NEVER calls step(). The game's own loop is the thing being measured and
+//     has to stay in charge of the clock; the spec steps by hand because it is
+//     headless and looks at no pixel.
+//   - it runs on a FIXED 16 ms interval, not on rAF. Steering quality must not
+//     co-vary with the frame rate, or a slow phase would also be driven worse
+//     and the driving would become part of what that phase appears to cost.
+// The AI field is left in place (the spec clears it for a clean solo lap) — a
+// benchmark wants the full grid, which is most of the per-car draw cost.
+function installDriver(win, apex) {
+  const DISTS = []; for (let d = 5; d <= 160; d += 6) DISTS.push(d);
+  const VMAX = 94, A_BRAKE = 24, A_LAT = 13, KP = 2.4;
+  let vHold = 30, slow = 0, stopped = false;
+  let frames = 0, sumSpeed = 0, offFrames = 0, minSpeed = 1e9;
+  const tick = () => {
+    if (stopped) return;
+    let p, pts;
+    try { p = apex.probe(); if (!p) return; pts = apex.scan(DISTS); }
+    catch (e) { return; }
+    // Target speed as a braking ENVELOPE over the whole look-ahead, not the
+    // sharpest corner in a window: for each point take the corner speed it needs
+    // and the fastest we can be NOW and still brake to it, then take the min.
+    let kSteer = p.k;
+    const steerLook = Math.max(9, p.speed * 0.4);
+    let vT = Math.abs(p.k) > 1e-4 ? Math.sqrt(A_LAT / Math.abs(p.k)) : VMAX;
+    for (let j = 0; j < pts.length; j++) {
+      const d = DISTS[j], k = Math.abs(pts[j].k);
+      if (d <= steerLook) kSteer = pts[j].k;
+      const vCorner = k > 1e-4 ? Math.sqrt(A_LAT / k) : VMAX;
+      const vAllow = Math.sqrt(vCorner * vCorner + 2 * A_BRAKE * d);
+      if (vAllow < vT) vT = vAllow;
+    }
+    vT = Math.max(11, Math.min(VMAX, vT));
+    vHold = Math.min(vT, vHold + 0.5);
+    vT = vHold;
+    // Pure pursuit: the centreline L ahead sits ~k*L^2/2 to the side; aim there
+    // and null both bearing and heading error.
+    const L = Math.max(8, Math.min(38, p.speed * 0.6));
+    let steer = KP * (Math.atan2(kSteer * L * L * 0.5 - p.x, L) - p.angle);
+    steer = Math.max(-1, Math.min(1, steer));
+    let throttle = p.speed < vT, brake = p.speed > vT * 1.04;
+    // Wedge recovery: the grip-limited car will not rotate on more lock, so ease
+    // the lock and KEEP IT MOVING. A car allowed to stop cannot steer out.
+    if (p.speed < 3) { slow++; } else { slow = 0; }
+    if (slow > 40) { steer = Math.max(-0.4, Math.min(0.4, steer)); throttle = true; brake = false; }
+    else if (Math.abs(p.x) - p.hw > 0.4) { throttle = false; }
+    try { apex.setInput({ steer, throttle, brake }); } catch (e) {}
+    frames++; sumSpeed += p.speed;
+    if (p.speed < minSpeed) minSpeed = p.speed;
+    if (Math.abs(p.x) - p.hw > 0.2) offFrames++;
+  };
+  const id = win.setInterval(tick, 16);
+  // AND once per rendered frame. A single frame on a slow device occupies the
+  // main thread for seconds, and setInterval callbacks are coalesced away while
+  // it does — the first self-test of this page saw whole phases with ZERO driver
+  // ticks for exactly that reason, which is the case the old steer:0 hurt most.
+  // On a fast machine the interval leads and this is redundant; on a slow one it
+  // is the only steering the car gets. Ticking twice is harmless: the controller
+  // is a pure function of the current probe, not an integrator.
+  const raf = () => { if (stopped) return; tick(); win.requestAnimationFrame(raf); };
+  win.requestAnimationFrame(raf);
+  return {
+    stop() { stopped = true; win.clearInterval(id); try { apex.clearInput(); } catch (e) {} },
+    reset() { frames = 0; sumSpeed = 0; offFrames = 0; minSpeed = 1e9; },
+    // Per-phase driving health. A row measured while the car sat still is not a
+    // measurement of a race, and the reader has to be able to see that.
+    stats() {
+      return frames ? {
+        avgSpeed: +(sumSpeed / frames).toFixed(1),
+        minSpeed: +(minSpeed === 1e9 ? 0 : minSpeed).toFixed(1),
+        offTrackPct: +(100 * offFrames / frames).toFixed(0),
+      } : null;
+    },
+  };
+}
+
+let driver = null;
 
 async function run() {
   $("run").disabled = true; $("copy").disabled = true;
@@ -269,7 +394,10 @@ async function run() {
   // was about racing, and a parked car skips the snap-cache rebuilds that
   // driving forces every time the eye crosses a shadow cell.
   apex.go && apex.go();
-  apex.setInput({ throttle: true, steer: 0 });
+  // From a FIXED point every run, so two runs of this page are comparable: the
+  // grid, with the field still bunched, which is where the per-car draw cost is.
+  try { apex.jump(START_FRAC); apex.aim(0); apex.snapCam(); } catch (e) {}
+  driver = installDriver(win, apex);
 
   // Pin scale and kill the governor. Without this every phase moves the tier and
   // the numbers describe the governor, not the renderer.
@@ -277,7 +405,7 @@ async function run() {
   const env = {
     build: (win.document.querySelector('meta[name="apex-build"]') || {}).content || null,
     sha: (win.document.querySelector('meta[name="apex-sha"]') || {}).content || null,
-    backend: (win.GLX && win.GLX.backend) || "webgl2",
+    backend: gval(win, "GLX && GLX.backend") || (gval(win, "GLX && GLX.__tlx") ? "three" : "webgl2"),
     ua: navigator.userAgent,
     dpr: window.devicePixelRatio,
     canvas: (() => { try { const c = win.document.getElementById("game"); return c.width + "x" + c.height; } catch (e) { return null; } })(),
@@ -301,10 +429,7 @@ async function run() {
     // alpha-composited. `canvasAlpha: true` is the see-through-car defect,
     // read back off the live context rather than inferred from what we asked
     // for. Null means three bound WebGPU and there is no gl to ask.
-    three: (() => {
-      try { return win.GLX && win.GLX.__tlx ? win.GLX.__tlx.backendState() : null; }
-      catch (e) { return { err: String(e.message).slice(0, 80) }; }
-    })(),
+    three: gval(win, "GLX && GLX.__tlx ? GLX.__tlx.backendState() : null"),
   };
 
   // SAY WHAT WAS ACTUALLY MEASURED. The iframe is a fraction of the screen, so
@@ -328,21 +453,50 @@ async function run() {
   say("settling…");
   await new Promise((r) => setTimeout(r, 4000));
 
+  // BASELINE LIVENESS, sampled once before any phase changes anything. `arms` is
+  // the pass's lifetime rasterisation count (js/render/glx.js lampShadowState),
+  // so arms === 0 after settling means that pass has never run in this
+  // condition and the row below that turns it off cannot be measuring it.
+  const alive = {};
+  const lampSt = gval(win, "GLX && GLX.lampShadowState ? GLX.lampShadowState() : null");
+  alive.lampShadow = lampSt ? lampSt.arms > 0 : null;
+  alive.lampShadowState = lampSt;
+  env.alive = alive;
+
   const rows = [];
   for (const ph of PHASES) {
     say("measuring: " + ph.label + " …");
     // Snapshot the LIVE values of exactly the keys this phase touches, so the
     // restore is what was there rather than what a slider def says.
-    let snap = null;
+    let snap = null, vac = {};
     try {
       const live = apex.lightTune();
       snap = {}; for (const k of ph.keys) snap[k] = live[k];
       const patch = ph.set(apex);
+      // DID THIS PHASE ACTUALLY SHED ANYTHING? There are two ways a row measures
+      // nothing at all, and both used to render as a clean "0%" — which reads as
+      // "this subsystem is free", the one conclusion they must not support.
+      //   alreadyOff — the knob was ALREADY at the value being set, so nothing
+      //     was turned off: lamp volumetrics by day, a lamp shadow on a circuit
+      //     with no lamps, god-rays with the sun below the horizon.
+      //   refused    — the write did not stick (a clamp, or a key the tuner does
+      //     not accept for this track|tod|weather).
+      const near = (a, b) => Math.abs((+a || 0) - (+b || 0)) < 1e-6;
+      if (ph.keys.length && ph.keys.every((k) => near(live[k], patch[k]))) vac.alreadyOff = true;
+      if (ph.live && alive[ph.live] === false) vac.inert = true;
       if (patch && Object.keys(patch).length) apex.lightTune(patch);
       if (ph.scale != null) apex.renderScale(ph.scale);
+      const after = apex.lightTune();
+      const refused = ph.keys.filter((k) => !near(after[k], patch[k]));
+      if (refused.length) vac.refused = refused;
+      if (ph.scale != null) {
+        try { if (!near(apex.perf().scale, ph.scale)) vac.scaleRefused = true; } catch (e) {}
+      }
     } catch (e) { rows.push({ key: ph.key, label: ph.label, error: String(e.message).slice(0, 90) }); continue; }
     await new Promise((r) => setTimeout(r, 900));   // let the knob take effect
+    if (driver) driver.reset();                     // per-phase driving health
     const m = await measureIn(win, ms);
+    const drive = driver ? driver.stats() : null;
     let perf = null;
     try {
       const p = apex.perf();
@@ -362,10 +516,11 @@ async function run() {
       if (snap && Object.keys(snap).length) apex.lightTune(snap);
       if (ph.scale != null) apex.renderScale(1);
     } catch (e) {}
-    rows.push(Object.assign({ key: ph.key, label: ph.label }, m, perf));
+    rows.push(Object.assign({ key: ph.key, label: ph.label }, m, perf, { drive }, vac));
     await new Promise((r) => setTimeout(r, 600));
   }
 
+  if (driver) { driver.stop(); driver = null; }
   lastResult = { env, rows };
   render(lastResult);
   const usable = rows.filter((r) => r.p50 != null).length;
@@ -381,26 +536,44 @@ function render(res) {
   const base = res.rows.find((r) => r.key === "baseline");
   const esc = (s) => String(s == null ? "—" : s).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
   const cells = res.rows.map((r) => {
-    if (r.error) return `<tr><td>${esc(r.label)}</td><td colspan="5">${esc(r.error)}</td></tr>`;
-    if (r.stalled) return `<tr><td>${esc(r.label)}</td><td colspan="5" class="delta-bad">` +
+    if (r.error) return `<tr><td>${esc(r.label)}</td><td colspan="6">${esc(r.error)}</td></tr>`;
+    if (r.stalled) return `<tr><td>${esc(r.label)}</td><td colspan="6" class="delta-bad">` +
       `requestAnimationFrame STALLED after ${r.frames} frame(s) — this tab was probably ` +
       `backgrounded. Keep this tab focused and in front for the whole run.</td></tr>`;
-    if (r.insufficient) return `<tr><td>${esc(r.label)}</td><td colspan="5" class="delta-bad">` +
+    if (r.insufficient) return `<tr><td>${esc(r.label)}</td><td colspan="6" class="delta-bad">` +
       `only ${r.frames} frame(s) in this phase — too few to quote a median. ` +
       `Raise "seconds per phase", or this device is rendering slower than ~${MIN_FRAMES} fps here.</td></tr>`;
     const d = base && base.p50 ? +(100 * (r.p50 - base.p50) / base.p50).toFixed(1) : null;
-    const cls = d == null || r.key === "baseline" ? "" : (d < -4 ? "delta-ok" : (d > 4 ? "delta-bad" : ""));
-    const dTxt = r.key === "baseline" ? "—" : (d == null ? "—" : (d > 0 ? "+" : "") + d + "%");
+    // A row that shed NOTHING has no delta to report. Rendering its 0% beside the
+    // rows that did shed something is what would let "free" be read off noise.
+    const dead = r.alreadyOff || r.refused || r.scaleRefused || r.inert;
+    const cls = dead ? "delta-bad"
+      : (d == null || r.key === "baseline" ? "" : (d < -4 ? "delta-ok" : (d > 4 ? "delta-bad" : "")));
+    const dTxt = dead
+      ? (r.inert ? "pass never ran here — nothing shed"
+         : r.alreadyOff ? "already off — nothing shed"
+         : r.scaleRefused ? "scale refused" : "write refused: " + esc((r.refused || []).join(",")))
+      : (r.key === "baseline" ? "—" : (d == null ? "—" : (d > 0 ? "+" : "") + d + "%"));
+    // The driving column is the row's own alibi. A phase measured while the car
+    // was stationary is not a measurement of a race, whatever its median says.
+    const dr = r.drive
+      ? `${r.drive.avgSpeed} m/s` + (r.drive.avgSpeed < 8 ? " ⚠ not racing" : "") +
+        (r.drive.offTrackPct > 25 ? ` ⚠ off ${r.drive.offTrackPct}%` : "")
+      : "—";
+    const drCls = r.drive && (r.drive.avgSpeed < 8 || r.drive.offTrackPct > 25) ? "delta-bad" : "";
     return `<tr><td>${esc(r.label)}</td><td>${r.p50}</td><td>${r.p95}</td><td>${r.p99}</td>` +
-           `<td>${r.fps}</td><td class="${cls}">${dTxt}</td></tr>`;
+           `<td>${r.fps}</td><td class="${drCls}">${dr}</td><td class="${cls}">${dTxt}</td></tr>`;
   }).join("");
   outEl.innerHTML =
     `<table><thead><tr><th>phase</th><th>p50 ms</th><th>p95 ms</th><th>p99 ms</th>` +
-    `<th>fps (p50)</th><th>Δ vs baseline</th></tr></thead><tbody>${cells}</tbody></table>` +
+    `<th>fps (p50)</th><th>driving</th><th>Δ vs baseline</th></tr></thead><tbody>${cells}</tbody></table>` +
     `<pre>${esc(JSON.stringify(res, null, 2))}</pre>`;
 }
 
 $("run").onclick = () => run().catch((e) => {
+  // Stop the autopilot on the failure path too, or a thrown run leaves a 16 ms
+  // interval driving the car in a hidden iframe for the life of the page.
+  if (driver) { try { driver.stop(); } catch (_) {} driver = null; }
   say("FAILED: " + e.message);
   $("run").disabled = false;
 });
