@@ -33,6 +33,16 @@ async function load(page, id) {
   // slow box: it waits on PROGRESS and still fails fast on a genuinely stuck build.
   await awaitTrackBuild(page);
   await page.evaluate(() => window.__apex.go());
+  // HEADLESS, because this test never looks at a pixel. runLap drives 9,000
+  // physics ticks in ONE in-page evaluate, and the whole time the rAF loop is
+  // rasterising suzuka on SwiftShader beside it, competing for the same cores —
+  // which is why the lap costs ~185 s here alone and blows any budget the moment
+  // a second worker exists. headless(true) makes game.js's render() return early
+  // and every metric this file reads survives it: probe(), physState() and
+  // maxWallOvershoot() are all computed from G.cars and Tracks.wallAt, never from
+  // a frame. Nothing here calls render({what:...}), which is the one hook that
+  // goes stale under headless.
+  await page.evaluate(() => window.__apex.headless(true));
   // PACE pinned here, at the one place every test stages its lap. The autopilot's
   // controller is written in absolute units (VMAX 94 m/s, aLat 13 m/s², A_BRAKE 24
   // m/s²) and the assertion is a DISTANCE (distPct > 40 of the lap in a fixed 150 s
@@ -192,13 +202,14 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // separate effort. Full-lap completion is therefore not asserted here.)
   for (const id of ["monza", "suzuka"]) {
     test(`autopilot drives safely and makes progress at ${id}`, async ({ page }) => {
-      // ITS OWN NUMBER, MEASURED — not the global 120 s. This test is one boot plus
-      // a 150-sim-second lap, and the boot is the variable half: a loaded 2-worker
-      // SwiftShader box here took 66 s just to finish building suzuka's field
-      // (2026-09-02), leaving under a minute of the global budget for the lap. The
-      // driving loop is a single in-page evaluate, so this cap is not covering a
-      // slow assertion — it is covering a slow MACHINE, which is what the config's
-      // own note says such a test should declare for itself.
+      // ITS OWN NUMBER, MEASURED — not the global 120 s. One boot plus a
+      // 150-sim-second lap. With the rAF render left running this cost 185 s for
+      // suzuka alone and 209.8 s under a second worker (a fail); headless, the
+      // same test is 87.6 s with a second worker beside it (2026-09-02, this box).
+      // 180 s is ~2x that, which is the margin a slower CI runner needs — the boot
+      // is the variable half and a cold runner has measured 66 s just to build
+      // suzuka's field. This covers a slow MACHINE, not a slow assertion, which is
+      // what playwright.config's own note asks such a test to declare for itself.
       test.setTimeout(180_000);
       const errors = [];
       page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
@@ -217,12 +228,13 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // setup must still drive safely (no barrier clip / NaN) and make progress. Each
   // lap reloads a fresh page so runs don't inherit one another's end state.
   test("can drive safely via emulated tilt input", async ({ page }) => {
-    // TWO boots and TWO laps — structurally about double the tests above, and the
-    // most expensive test in this file. Measured at 112.4 s here on a moderately
-    // loaded box (2026-09-02): it PASSED, 7.6 s under the global 120 s cap, which
-    // means the cap was going to fail it on any slower runner for reasons that have
-    // nothing to do with the driving model. 240 s is ~2x the measurement.
-    test.setTimeout(240_000);
+    // TWO boots and TWO laps. Before the headless switch this measured 143 s and
+    // had earlier PASSED at 112.4 s — 7.6 s under the global 120 s cap, which meant
+    // that cap was going to fail it on any slower runner for reasons unrelated to
+    // what it asserts. Headless it is 51.9 s under a second worker (2026-09-02).
+    // Same 180 s as the tests above rather than a number of its own: it is no
+    // longer the expensive one, and one budget for the file is easier to keep true.
+    test.setTimeout(180_000);
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
     await load(page, "monza");
