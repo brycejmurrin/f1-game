@@ -1181,6 +1181,7 @@ const TLX = (function () {
       // uncaptured-error tally across the six faces instead — errors during a
       // probe mean the probe's own commands did not run.
       let _envErrBase = -1, _envBadProbes = 0, _envGaveUp = false;
+      let _envFaceErr = false;   // an uncaptured error DURING one of this cycle's six face renders
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
       let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
@@ -1793,6 +1794,11 @@ const TLX = (function () {
         // via lit.updateFrame, and envFaceEnd owns the face render.
         envFaceBegin(face, eye, frame) {
           if (!envRT || !lit || !eye || !frame || !frame.viewProj) return null;
+          // "A probe that cannot succeed must stop being retried" — the
+          // producer half. After the give-up latch flipped, game.js kept
+          // calling this every 4th frame and every face threw/warned for the
+          // life of the session (the Metal case, 2026-08-29).
+          if (_envGaveUp) return null;
           ensureEnvCam();
           if (!envCubeCam) return null;
           _envActive = true;
@@ -1874,7 +1880,12 @@ const TLX = (function () {
           for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
           const prevSky = scene.backgroundNode;
           // Baseline at the first face of each probe pass.
-          if (envFacesMask === 0) _envErrBase = _gpuErrors;
+          if (envFacesMask === 0) { _envErrBase = _gpuErrors; _envFaceErr = false; }
+          // Per-FACE window. The old cycle-wide compare (face 0 .. face 5 is
+          // ~20 main frames) discarded a good cube for any unrelated error in
+          // between — a post pass, a decal, a driver's steady one-off warning —
+          // and three of those set the give-up latch for the session.
+          const _errAtFace = _gpuErrors;
           let faceOk = true;
           try {
             if (lit && lit.setEnvCube && envDummy) lit.setEnvCube(envDummy.texture);
@@ -1914,8 +1925,9 @@ const TLX = (function () {
           _dMatUsed = 0;
           poolUsed = 0; _poolBatch++;
           _envActive = false;
+          if (_gpuErrors > _errAtFace) _envFaceErr = true;
           if (faceOk) envFacesMask |= 1 << (face & 7);
-          const probeErrored = _envErrBase >= 0 && _gpuErrors > _envErrBase;
+          const probeErrored = _envFaceErr;
           if (faceOk && envFacesMask === 63 && probeErrored) {
             // The GPU rejected something while the six faces were drawn, so at
             // least one of them holds nothing. Binding that cube would light
@@ -2435,9 +2447,12 @@ const TLX = (function () {
           // invent tens of megabytes that do not exist.
           geoCensus() {
             const seen = new Set(), out = { live: 0, dead: 0, byAttr: {}, byKind: {}, zeroMB: 0, totalMB: 0 };
-            for (const ref of _geoReg) {
+            // Compact as we walk: dead WeakRefs were retained forever (~150-200
+            // per circuit build, monotonic across a season).
+            for (let ri = _geoReg.length - 1; ri >= 0; ri--) {
+              const ref = _geoReg[ri];
               const g = ref.deref ? ref.deref() : null;
-              if (!g) { out.dead++; continue; }
+              if (!g) { out.dead++; _geoReg.splice(ri, 1); continue; }
               out.live++;
               const kind = g.__tlxKind || "?";
               const k = out.byKind[kind] || (out.byKind[kind] = { n: 0, mb: 0 });

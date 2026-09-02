@@ -1977,3 +1977,30 @@ test("WGX cullInstances keys on the surviving cell set, and updateInstances clea
   assert.equal(uploads() - before, 3, "…so the next cull with the old frustum re-uploads instead of claiming the debris bytes");
 });
 
+
+test("WGX shadow cull packs into the batch's OWN buffer and leaves the camera pack alone", async () => {
+  // Bug hunt 2026-09-02: the shadow encoder rides the FRAME submit while the
+  // camera cull's writeBuffer is queue-ordered before it, so a shared instBuf
+  // made every shadow pass draw the camera's pack. The shadow cull
+  // (upload:false) now goes to shadowInstBuf; instBuf, the camera count and
+  // both cull memos are untouched, so the camera cache can still hit.
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mats = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 100, 0, 0, 1]);
+  const batch = gfx.createInstancedBatch(tri, mats, null, { cellSize: 50 });
+  const planes = (d) => Array.from({ length: 6 }, () => [0, 0, 0, d]);
+  const instWrites = () => h.writes.filter((w) => w.buffer === batch.instBuf).length;
+  assert.equal(gfx.cullInstances(batch, planes(1e6)), 2, "camera cull");
+  const camWrites = instWrites(), camKeyN = batch._cellKeyN, camVisible = batch.visible;
+  assert.equal(gfx.cullInstances(batch, planes(1e6), { upload: false }), 2, "shadow cull returns its count");
+  assert.ok(batch.shadowInstBuf, "the shadow cull minted the batch's own instance buffer");
+  assert.notEqual(batch.shadowInstBuf, batch.instBuf);
+  assert.equal(batch._shadowN, 2);
+  assert.equal(h.writes.filter((w) => w.buffer === batch.shadowInstBuf).length, 1, "one upload into the shadow buffer");
+  assert.equal(instWrites(), camWrites, "instBuf was NOT written by the shadow cull");
+  assert.equal(batch._cellKeyN, camKeyN, "the camera cell-set memo survives the shadow cull");
+  assert.equal(batch.visible, camVisible, "the camera count survives the shadow cull");
+  assert.equal(gfx.cullInstances(batch, planes(2e6)), 2);
+  assert.equal(instWrites(), camWrites, "…so the next camera cull with the same cells is still a cache hit");
+});

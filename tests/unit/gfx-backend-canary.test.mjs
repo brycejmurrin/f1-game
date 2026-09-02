@@ -1548,8 +1548,15 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // lights a whole world from black.
   assert.match(envBody, /_envErrBase\s*=\s*_gpuErrors\b/,
     "the probe must baseline the GPU error tally at its first face");
-  assert.match(envBody, /probeErrored\s*=\s*_envErrBase\s*>=\s*0\s*&&\s*_gpuErrors\s*>\s*_envErrBase\b/,
-    "and compare it at the latch — a silent rejection has no other tell");
+  // Per-FACE window (bug hunt 2026-09-02): the cycle-wide compare discarded a
+  // good cube for any unrelated error in the ~20 main frames between face 0
+  // and face 5; each face now samples the tally around its own render.
+  assert.match(envBody, /const _errAtFace = _gpuErrors;/,
+    "each face must sample the error tally before its render");
+  assert.match(envBody, /if \(_gpuErrors > _errAtFace\) _envFaceErr = true;/,
+    "and flag the cycle when the tally moved DURING the face");
+  assert.match(envBody, /probeErrored\s*=\s*_envFaceErr\b/,
+    "and compare that flag at the latch — a silent rejection has no other tell");
   assert.match(envBody, /_envGaveUp\s*=\s*true\s*;\s*envReady\s*=\s*false\b/,
     "a probe that keeps erroring must stand down instead of binding the cube");
   assert.match(fnBody(src, "envProbeReady"), /return\s+envReady\s*\|\|\s*_envGaveUp\b/,
@@ -1648,8 +1655,23 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
   const wgx = read("js/render/webgpu/wgx.js");
   assert.match(glShadow, /bufferSubData\([^]*?batch\._cullPlanes\s*=\s*null/,
     "GLX full-set shadow restore must invalidate the resident cull pack");
-  assert.match(wgx, /count === undefined[^]*?writeBuffer\([^]*?batch\._cullPlanes\s*=\s*null/,
-    "WGX full-set shadow restore must invalidate the resident cull pack");
+  // WGX (bug hunt 2026-09-02): the shadow pass packs into the batch's OWN
+  // buffer and never writes instBuf, so there is nothing to invalidate — and
+  // writing instBuf here WAS the bug: the shadow encoder rides the frame
+  // submit while the camera cull's writeBuffer is queue-ordered before it, so
+  // every shadow pass drew the camera's pack. Pin the separation.
+  const wgxCast = wgx.slice(wgx.indexOf("function castShadowInstanced("), wgx.indexOf("function castShadowInstanced(") + 2200);
+  assert.doesNotMatch(wgxCast, /writeBuffer\(batch\.instBuf/,
+    "WGX castShadowInstanced must never write instBuf (frame-order bug)");
+  assert.match(wgxCast, /writeBuffer\(batch\.shadowInstBuf/,
+    "WGX full-set cast packs into the batch's own shadow instance buffer");
+  assert.match(wgxCast, /_setVB1\(shadowPass, vb \|\| batch\.instBuf \|\| identInstanceBuf\)/,
+    "the shadow draw binds the shadow buffer when it has one");
+  const wgxCull = wgx.slice(wgx.indexOf("function cullInstances(batch, planes, opts)"), wgx.indexOf("function cullInstances(batch, planes, opts)") + 4200);
+  assert.match(wgxCull, /const shadow = !!\(opts && opts\.upload === false\);/,
+    "cullInstances must recognise the shadow cull (upload:false)");
+  assert.match(wgxCull, /if \(shadow\) \{[^]*?batch\._shadowN = n;[^]*?writeBuffer\(batch\.shadowInstBuf/,
+    "the shadow cull uploads to shadowInstBuf and leaves the camera pack/cache alone");
 });
 
 test("TLX instanced shadows consume the light-frustum packed slice", () => {

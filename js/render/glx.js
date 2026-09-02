@@ -1048,6 +1048,14 @@ const GLX = (function () {
     // drawWorldMeshes → makeFrustumPlanes(frame.viewProj) culls propBatches
     // against the face frustum (chunked draws already read frameViewProj from
     // begin()). Restoring here made reflections miss off-camera props.
+    // Re-entrancy: if a world draw threw mid-face (LoopHealth swallows it and
+    // resumes) envFaceEnd never ran, and the caller's frame is still carrying
+    // the probe VP. Restore it before saving, or the probe VP is saved as the
+    // camera's and the main view is lost for good.
+    if (_envFrame) {
+      _envFrame.viewProj = _envSvVP; _envFrame.eye = _envSvEye; _envFrame.cullDist = _envSvCull;
+      _envFrame = null;
+    }
     _envFrame = frame;
     _envSvVP = frame.viewProj; _envSvEye = frame.eye; _envSvCull = frame.cullDist;
     frame.viewProj = _envVP; frame.eye = eye;
@@ -2048,7 +2056,11 @@ const GLX = (function () {
     envProbeReady() { return envReady; },
     // New track/session: the cube still holds the OLD circuit — hold the
     // analytic fallback until a fresh 6-face cycle has re-rendered the world.
-    envProbeReset() { envFacesMask = 0; envReady = false; },
+    // A track switch re-arms the boot-time getError drain: the first 120
+    // presents were spent in the SETUP preview, so the first night lamp set /
+    // first instanced draw on a new circuit went uncounted (gpuErrors() is a
+    // pure read).
+    envProbeReset() { envFacesMask = 0; envReady = false; _drainLeft = 120; },
     shadowBegin: (lightVP) => SHD.shadowBegin(lightVP),
     castShadow: (mesh, model) => SHD.castShadow(mesh, model),
     castShadowInstanced: (batch, count) => SHD.castShadowInstanced(batch, count),

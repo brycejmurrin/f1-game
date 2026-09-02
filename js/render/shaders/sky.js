@@ -404,7 +404,9 @@ void main() {
   if (uCityGlow.r + uCityGlow.g + uCityGlow.b > 0.001) {
     // CITY GLOW REACH knob (def 1.0 = as-shipped): scales the horizon-hug exponent
     // (lower = the glow climbs higher up the sky, higher = it hugs the horizon).
-    float horiz = pow(clamp(1.0 - max(dir.y, 0.0) * 2.4, 0.0, 1.0), 3.0 * uCityGlowReach);
+    // Floor the base: pow(0.0, n) NaNs on mobile GPUs (lit.js has the same
+    // guard) and the base is exactly 0 for every sky pixel above ~25 deg.
+    float horiz = pow(max(clamp(1.0 - max(dir.y, 0.0) * 2.4, 0.0, 1.0), 1e-4), 3.0 * uCityGlowReach);
     c += uCityGlow * horiz;
     // Cloud pickup: the cloud deck over a lit city glows from BELOW — thick
     // bellies catch the most uplight, and the effect eases off toward the
