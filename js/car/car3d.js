@@ -1878,7 +1878,16 @@ const Car3D = (function () {
       // and nose running out ahead. At top 0.485 it was the tallest thing in the
       // lower-centre and took 1780 of the deck's 2631 px (OCCLUSION-PROBE.md);
       // 0.425 clears the eye-to-deck-crest sightline, which passes y 0.62 here.
-      addBox(out, 0, 0.36, 0.60, 0.66, 0.13, 0.16, c1);
+      // CARBON, NOT c1 — but NOT "the" reported slab: that was the livery CREST
+      // STRIPE, gated !ckpt in part("livery") below. Still the right colour
+      // though. Measured from the driver eye the coaming is x -0.33..0.33,
+      // y 0.295..0.425, z 0.52..0.68, so its front face and top deck are a
+      // body-coloured table across the driver's lap whatever else is in frame,
+      // and _ckAcc cannot help — it only darkens colours whose MIN channel is
+      // >= 0.45, and Ferrari red is [0.863, 0, 0], min 0. A real dash coaming is
+      // padded black anyway; the c2 accent lip below keeps the team identity.
+      // Same fix, same reason, as the monocoque span above.
+      addBox(out, 0, 0.36, 0.60, 0.66, 0.13, 0.16, CARBON);
       addBox(out, 0, 0.427, 0.56, 0.60, 0.03, 0.05, c2);       // accent lip
       addBox(out, 0, 0.345, 0.54, 0.52, 0.10, 0.05, INTAKE);   // dark instrument shroud
       // SIX-POINT HARNESS. The cockpit had a wheel, hands and a tub, and then
@@ -2494,9 +2503,16 @@ const Car3D = (function () {
              stripeTipZ, 0, ns314.top + 0.012, 0.040, 0.012, stripeC);
       addLoft(out, 1.55, 0, ns155.top + 0.012, 0.13, 0.016,
              stripeMidZ, 0, ns270.top + 0.012, 0.075, 0.014, stripeC);
-      addLoft(out, 1.05, 0, ns105.top + 0.012, 0.12, 0.016,
+      // CHASE ONLY, exactly as the hood's accent stripe above: these two runs
+      // start at z 0.05 — 0.25 m from the eye, AT the near plane — then go 1.5 m
+      // down the centre of the view at 0.12 m wide. Measured 739 of 24045 view
+      // rays, yaw -13..13 pitch -35..-9, wholly inside the WHEEL'S own window,
+      // so they foreshorten into a slab across it instead of reading as a
+      // stripe; _ckAcc only makes it grey. The nose run below (1.55 → tip) is
+      // 1.75 m out and under 4 deg, and stays. Guard: cockpit-crest-stripe.
+      if (!ckpt) addLoft(out, 1.05, 0, ns105.top + 0.012, 0.12, 0.016,
              1.55, 0, ns155.top + 0.012, 0.13, 0.016, stripeC);
-      addLoft(out, 0.05, 0, 0.655, 0.12, 0.022, 1.05, 0, 0.545, 0.13, 0.022, stripeC);   // monocoque → hood crest
+      if (!ckpt) addLoft(out, 0.05, 0, 0.655, 0.12, 0.022, 1.05, 0, 0.545, 0.13, 0.022, stripeC);   // monocoque → hood crest
       if (!ckpt) addSpan(out, { z: -0.27, y: 0.984, w: 0.080, h: 0.020 },
                               { z: -0.67, y: 0.954, w: 0.070, h: 0.018 }, stripeC);  // spine band over the roll structure
       if (!ckpt) {

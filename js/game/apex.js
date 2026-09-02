@@ -157,6 +157,66 @@ const api = {
     G.camFov = 75;
     return r;
   },
+  // repro() / repro(obj) — CAPTURE A PLAYER'S EXACT FRAME, AND PUT IT BACK.
+  //
+  // This exists because a reported cockpit artefact cost six rounds, and every
+  // one of them died the same way: the report is a screenshot, and a screenshot
+  // does not say where the reporter was standing. Each attempt guessed at the
+  // camera, the team, the time of day and the traffic, chased whatever object
+  // happened to be in THAT frame, and "fixed" something the reporter never saw.
+  // A picture says what is wrong; this says where to stand to see it.
+  //
+  // With no argument it returns a plain JSON blob a player can copy out of the
+  // console. Given that blob back it restores the same frame: the same circuit,
+  // conditions, camera MODE and CAMERA TUNER offsets, and — the part that no
+  // amount of re-racing reproduces — every car's position on track, so a rival
+  // sitting inside your cockpit is sitting there again.
+  //
+  // TEAM AND HALO ARE REPORTED, NOT RESTORED. Both are read from storage at
+  // boot (`teamIdx` in game.js, CockpitOpts.halo), so honouring them needs a reload the
+  // caller has to drive; tools/repro-shot.mjs does exactly that before
+  // replaying. Returning them and refusing to half-apply them beats silently
+  // rendering the wrong car, which is the failure this whole hook is for.
+  repro(o) {
+    if (o === undefined) {
+      const cam = this.camera();
+      const meta = document.querySelector('meta[name="apex-build"]');
+      return {
+        v: 1,
+        build: meta ? meta.content : null,
+        track: this.info().track,
+        tod: G.setTimeOfDay(), wx: G.weather(),
+        // The INDEX, because that is what the boot path reads (the `teamIdx`
+        // initialiser in game.js), plus the id so a replay can assert the
+        // right car was rebuilt.
+        teamIdx: (() => { try { return +localStorage.getItem("apex26.team"); } catch (_) { return null; } })(),
+        teamId: (() => { const p = G.cars && G.cars.find((c) => c.isPlayer); return p && p.team && p.team.id; })(),
+        halo: typeof CockpitOpts !== "undefined" ? CockpitOpts.halo() : null,
+        cam: { mode: cam.mode, tune: CamTune.values(cam.mode) },
+        cars: (G.cars || []).map((c, i) => ({
+          i, me: !!c.isPlayer, team: c.team && c.team.id,
+          s: +(c.s || 0).toFixed(3), x: +(c.x || 0).toFixed(3),
+          prog: +(c.prog || 0).toFixed(3), speed: +(c.speed || 0).toFixed(3),
+        })),
+      };
+    }
+    if (!o || typeof o !== "object" || !G.track) return false;
+    if (o.cam && o.cam.mode) { this.camera(o.cam.mode); if (o.cam.tune) this.camTune(o.cam.mode, o.cam.tune); }
+    if (o.tod) G.setTimeOfDay(o.tod);
+    if (o.wx) G.weather(o.wx);
+    if (Array.isArray(o.cars)) for (const rec of o.cars) {
+      const c = G.cars[rec.i]; if (!c) continue;
+      c.s = wrapS(rec.s); c.x = rec.x; c.prog = rec.prog; c.speed = rec.speed;
+    }
+    // The player's world position is derived from s/x, so re-anchor through the
+    // same path park() uses rather than trusting stale px/pz.
+    const me = (o.cars || []).find((r) => r.me);
+    if (me && G.track.total) this.jump(me.s / G.track.total, me.speed, me.x);
+    if (G.player) { G.frozen = true; snapGameCam(); }
+    return { restored: true, cars: (o.cars || []).length, cam: o.cam && o.cam.mode,
+             teamMatches: (() => { const p = G.cars && G.cars.find((c) => c.isPlayer);
+               return !o.teamId || (p && p.team && p.team.id === o.teamId); })() };
+  },
   camera(m) {
     if (m == null) return { mode: CAM_MODES[G.camMode].id, index: G.camMode, modes: CAM_MODES.map((c) => c.id) };
     let i = typeof m === "number" ? m : CAM_MODES.findIndex((c) => c.id === String(m).toLowerCase());
