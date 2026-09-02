@@ -217,7 +217,10 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 /* In PORTRAIT button mode the steering arrows are bottom-left; the HUD bottom
    stays clear of the right-side GAS button (bottom+16 + 84 px tall). */
 @media (orientation: portrait) {
-  body.steer-buttons .hud-bottom { bottom: calc(112px + var(--sab)); }
+  /* DIVIDED BY --hud-z: .hud-bottom rides `zoom: var(--hud-z)` (css/hud.css), so
+     a bare inset here was multiplied by HUD SIZE — 21px of home indicator
+     counted as 42 at 200%. Same compensation as every anchor in the zoom list. */
+  body.steer-buttons .hud-bottom { bottom: calc(112px + var(--sab) / var(--hud-z)); }
 }
 
 /* ---------- LANDSCAPE: short viewport, lots of width ---------- */

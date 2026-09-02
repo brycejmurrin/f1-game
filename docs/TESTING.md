@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 168 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 169 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1049,6 +1049,7 @@ what it covers.
 | `hud-layout.spec.js` | touch control + HUD layout across every steering and gearbox mode |
 | `hud-audit.spec.js` | HUD screenshots + mode-dependent elements |
 | `pause-hud-layout.test.mjs` | the pause dialog hides bottom HUD chrome mid-race, and the compact pause stack tightens without changing type tokens |
+| `phone-touch-surface.test.mjs` | the phone DRIVING surface as rules (`tests/helpers/css-rules.mjs`) plus `Input` in a VM: the portrait blocker's pills sit on `--tap` (52px on touch), never the 24px `--tap-min` floor; the dock's tap/hold rungs clear 44px at both width tiers and keep the 24px painted floor under HUD SIZE < 100 %; the tallest dock column (3 x 54 + gaps) fits a 390px landscape phone at 200 % and `fitHud`'s `--hud-z-dock` cap is wired as the net; every anchor inside a `--hud-z` zoom divides its `--sa*` inset; every `:hover` in `css/` is gated on `(hover: hover)`; every scroll container declares `overscroll-behavior`; double-tap zoom is refused on every layer (viewport meta, `touch-action: manipulation` reset, `#game` none, root `overscroll-behavior: none`); in-race chrome and the blocker are anchored inside the safe area. `Input.requestGyro()` in a VM: a transient rejection (no user gesture) is recorded, a later grant CLEARS `gyroDenied` and attaches once, `setSteerMode("buttons")` detaches the sensor (2026-09-01), and `gamepaddisconnected` re-reads the live pad list. The device-only cells it cannot see are in §Field notes, 2026-09-02 |
 | `title-menu-even.test.mjs` | title 2-up doors share equal flex cells and overlay columns use `--vwz`, not a pixel cap |
 | `menu-survey.spec.js` | click every button, capture every state |
 | `menu-keyboard.spec.js` | desktop menu input — wheel redirection and arrow/Home/End/PageUp/PageDown focus; an open modal outranks the screen behind it; ESCAPE IS BACK (every layer's `data-esc-close` resolves, picker/garage/title, and a sheet closes without resuming the race) |
@@ -1643,3 +1644,56 @@ Two more traps in the same test, both of which produced a false PASS first:
 - **`sw.js` does not `clients.claim()`**, so the page that registers the worker
   is not controlled by it. One reload — what a returning player does anyway —
   is required before any cache assertion means anything.
+
+**The phone audit that a css-rules read CAN settle, and the cells it cannot
+(2026-09-02).** Audit-then-fix of the phone driving surface at 390x844 /
+844x390 and HUD SIZE 100/150/200 %, done entirely as rules over the sheets
+(`tests/helpers/css-rules.mjs`) and `Input` in a VM — no browser, so the
+verdicts split into what the numbers prove and what needs a device.
+CONFIRMED and fixed (`tests/unit/phone-touch-surface.test.mjs` pins each):
+the portrait blocker's three pills were `min-height: var(--tap-min)` — the
+24px WCAG floor, with `padding: 0 1rem` and inherited type, on a layer gated to
+`(pointer: coarse)` phones — so RACE IN PORTRAIT / OPEN CONTROLS / EXIT RACE
+painted 24px tall (now `--tap`, 52px on touch); the portrait buttons-mode
+`.hud-bottom` anchor added `var(--sab)` raw inside its `zoom: var(--hud-z)`
+subtree, the one anchor in the zoom list without the division; and
+`Input.requestGyro()` latched `gyroDenied` on ANY rejection — including the
+transient "no user gesture" kind — and never cleared it on a later grant, so
+STEER read "(NO GYRO)" while tilt was driving. CONFIRMED-OK and now guarded:
+every `:hover` in `css/` sits under `(hover: hover)`, every scroll container
+declares `overscroll-behavior`, both dock tiers clear 44px (54/72 and 48/64,
+24px painted floor below 100 %), and the tallest dock column — BOOST/OT/AERO at
+3 x 54 + 2 x 5.3 = 172.7 authored — is 345px at 200 %, inside 390 - 31, so
+`fitHud`'s `--hud-z-dock` cap ((390 - 30) / 172.7 = 2.08) never has to act on
+a 390px phone: the "BRAKE at y=-216" measurement in `js/game/hud.js` predates
+the grouped dock and is covered. The double-tap trio (viewport
+`maximum-scale=1` + `viewport-fit=cover`, `touch-action: manipulation` on `*`,
+`#game` none, root `overscroll-behavior: none`, the inline touchend killer) is
+present and pinned. PLAUSIBLE — arithmetic says so, a device has to show it;
+the visual checks, each one screenshot:
+
+1. iPhone 844x390 landscape (notch LEFT), STEER: TILT, GEARS: AUTO, HUD SIZE
+   200 %: does the BRAKE pedal's top edge sit under `#minimap`? The dock cap
+   budgets viewport height (3 x `FIT_AIR`), not the corner clusters — at 200 %
+   the pedal column tops out at y ≈ 23px, the map spans y 8..~124. Expect
+   overlap from ~160 %; 150 % is marginal (≈3px, notched only). Owner:
+   `fitHud` in `js/game/hud.js`.
+2. Same phone, STEER: BUTTONS (pedals RIGHT), HUD SIZE 200 %: GAS/BRAKE column
+   against `#pausebtn` (y 8..60, right edge). Expect contact from ~185 %.
+3. 390x844 portrait, tap RACE IN PORTRAIT, HUD SIZE 100 %: are POS/LAP/TIME/
+   BEST and the map painted at roughly HALF size? `fitHud`'s top-band cap uses
+   the landscape geometry (map beside the POS row: 224 + 183 > 195 half-width),
+   so `--hud-z-top` computes to ~0.5 on a 390px-wide screen at every setting.
+4. iPhone + Bluetooth pad, STEER: TILT, start the race with the pad's A button:
+   does the motion prompt appear, or does STEER silently flip to BUTTONS? The A
+   press is a synthesised `.click()` with no user activation, so
+   `requestPermission()` should reject. Then tap STEER back to TILT with a
+   finger: the prompt must appear and the label must read "STEER: TILT" with
+   no "(NO GYRO)" (the fix above).
+5. Any iPhone, SETTINGS, tap the RENDERER `›` stepper twice within ~300 ms on
+   the same spot: does it advance once or twice? The `index.html` double-tap
+   killer calls `preventDefault()` on the second touchend, which also cancels
+   its click. Out of this change's territory; a fix would exempt buttons.
+6. Any phone, HUD SIZE 60 %, landscape: BOOST/OT/AERO paint 32px — the
+   documented 24px floor, under Apple's 44. A design decision (2026-08 axis
+   audit), recorded here so it is not re-found as a bug.
