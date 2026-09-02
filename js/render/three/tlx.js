@@ -1404,7 +1404,15 @@ const TLX = (function () {
         };
         const atts = g.attributes;
         for (const k in atts) drop(atts[k]);
-        drop(g.index);
+        // NEVER the index. three's WebGPU backend sizes the index buffer from
+        // the array's byte length, so a zero-length array yields a ZERO-BYTE
+        // index buffer and every indexed draw fails validation. Measured on
+        // real hardware (gpu-census run 26, macos-latest/Metal): "Index range
+        // (first: 0, count: 15, format: IndexFormat::Uint32) does not fit in
+        // index buffer size (0)", 8 uncaptured GPU errors on the WebGPU leg
+        // while the WebGL2 control leg reported 0 — WebGL2 tolerates it and
+        // WebGPU does not, which is why a tlxForceGL=1 measurement here looked
+        // clean. Vertex attributes are sized from count/itemSize and are fine.
         g.__tlxFreed = true;
         return freed;
       }

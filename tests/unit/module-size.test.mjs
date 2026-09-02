@@ -1017,7 +1017,15 @@ const CEILINGS = {
   // same lever freed ZERO bytes (2m's frame counter; an inverted batch test
   // this session) and the counters that caught them are the reason a third
   // one landed.
-  "js/render/three/tlx.js": 2715,
+  // 2715 -> 2723: the index-release recall. gpu-census run 26 on macos-latest
+  // failed the REAL-GPU GATE with 8 uncaptured errors — "Index range (first: 0,
+  // count: 15, format: IndexFormat::Uint32) does not fit in index buffer size
+  // (0)". three's WebGPU backend sizes the index buffer from the array's byte
+  // length, so a zero-length index array is a ZERO-BYTE buffer. The WebGL2
+  // control leg reported 0 errors, which is exactly why a tlxForceGL=1
+  // measurement in-container looked clean. The comment is the price of not
+  // re-freeing them next round.
+  "js/render/three/tlx.js": 2723,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
