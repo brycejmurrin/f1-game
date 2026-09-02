@@ -1,10 +1,12 @@
 // @ts-check
 // AI car meshes use fixed team factory visuals, independent of player saves.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 test("AI full-body meshes use deterministic factory presets instead of saved setups", async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
 
   await page.evaluate(() => {
     const teamIndex = Teams.LIST.findIndex((team) => team.id === "mclaren");
@@ -21,7 +23,7 @@ test("AI full-body meshes use deterministic factory presets instead of saved set
     }));
   });
   await page.reload();
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
 
   await page.evaluate(() => {
     const captures = {};

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // One-command track survey for scenery/geometry work. Self-booting: no server, no
+// @doc One-command circuit survey: aerial/orbit/driver-eye shots per spot plus a flagged ground-profile probe; `--oblique`.
+// @skill survey-track
 // manual setup. Boots the game headless ONCE and produces everything an agent needs
 // to judge a circuit's scenery in a single pass:
 //   • screenshots → scratch/captures/survey-track/<id>/   (aerial + orbit + driver's-eye per spot)

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // Turn a team logo bitmap into the vector path data js/car/crest-paths.js ships.
+// @doc Author-time: regenerates `js/car/crest-paths.js` from a team logo bitmap in git history (k-means inks, contour walk).
+// @skill car-viewer
 //
 // AUTHOR-TIME ONLY. The game never runs this; it consumes the generated file.
 //

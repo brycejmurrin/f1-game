@@ -1,4 +1,6 @@
 // Change-aware CI budget derivation. See docs/archive/research/TEST-AUDIT-2026-08.md §3.
+// @doc Can a change-aware CI job run what it selects? Re-derives the budget from measured per-spec counts (79.7 s/test).
+// @section runner
 // Measures per-spec runtime from CI and accounts for retries/timeouts.
 import fs from "node:fs";
 import path from "node:path";

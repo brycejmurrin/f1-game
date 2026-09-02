@@ -1,20 +1,16 @@
 ---
 name: check-changes
-description: Use when the user asks did I break anything, run the right tests, validate changes, ready to push, pre-commit/pre-push checks, test selection for touched files, verify track edits, or confirm cache bump before shipping Apex 26 changes. For Playwright timeouts/hangs use test-timeout-triage; spawn verify-agent for a read-only --fast JSON verdict.
+description: Use when the user asks did I break anything, run the right tests, validate changes, ready to push, pre-commit/pre-push checks, test selection for touched files, verify track edits, bump the version / cache bust after a js/css edit, merge with or push to the deploy branch, or when a Playwright test times out (timeout) or hangs and the question is machine-load vs real failure. Spawn verify-agent for a read-only --fast JSON verdict (--base <ref> for "was it already red?"). Live version.json is deploy-research.
 ---
 
 # Validate changes before committing/pushing
 
 ## Prerequisites
 
-For browser-backed batches, ensure Playwright is installed first:
-
-```bash
-bash .claude/skills/apex-env-setup/scripts/ensure-apex-env.sh
-# or: bash tools/cloud-agent-install.sh
-```
-
-`--fast` mode needs only Node modules (no browsers). Full batches need Chromium. See **apex-env-setup**.
+`--fast` needs only Node modules; browser batches need the headless shell
+(AGENTS.md §Verification 1): `bash tools/cloud-agent-install.sh`, or
+`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install` then
+`npx playwright install chromium-headless-shell`.
 
 The suite is slow software rendering. **One command composes the rest**
 (`pick-tests` selection, inline `verify-track` / `graph-parity` /
@@ -41,8 +37,17 @@ Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
 ```sh
 ./tools/apex-tools-mcp.sh call apex_verify_change_fast '{"dryRun":true}'
 ./tools/apex-tools-mcp.sh call apex_pick_tests '{}'
-./tools/apex-tools-mcp.sh call apex_verify_track '{"id":"monza"}'
+./tools/apex-tools-mcp.sh call apex_bump_cache_check '{}'
+node tools/verify-track.cjs monza          # one circuit (plain CLI; no wrap)
 ./tools/apex-tools-mcp.sh smoke
 ```
 
-Gate contracts and ratchet details: [`references/guards.md`](references/guards.md)
+## Load on demand
+
+- Gate contracts, ratchets, reading a failure → [`references/guards.md`](references/guards.md)
+- A test timed out / hangs / passes solo but not loaded (or vice versa) —
+  the decision tree and `test-solo.mjs` → [`references/triage.md`](references/triage.md)
+- Cache bump after any `js/` or `css/` edit (`bump-cache.mjs --apply`, last
+  edit before commit; `--merge <ref>` across lineages) → [`references/bump.md`](references/bump.md)
+- Merging with / pushing to the deploy branch, union sweeps, baseline
+  grow/shrink rules, Pages concurrency → [`references/deploy.md`](references/deploy.md)

@@ -43,7 +43,7 @@ than behaviour:
 |---|---|
 | `tests/unit/load-order.test.mjs` | `index.html` == `tools/manifest.cjs`, including `HARD_EDGES` and the three-way `DEFERRED`/`BACKEND_FILES`/sw.js precache agreement |
 | `tests/unit/scenery-api-contract.test.mjs` | the 111-member `scenery(api)` surface every circuit file was written against |
-| `tests/unit/test-groups.test.mjs` | the test taxonomy: every group real, every source dir routed, `docs/TESTING.md` in step, `RENDER_SPECS` bidirectional |
+| `tests/unit/test-groups.test.mjs` | the test taxonomy: every group real, every source dir routed, the topical browser groups DISJOINT (2026-09 regroup), `docs/TESTING.md` in step, `RENDER_SPECS` bidirectional |
 | `tests/unit/docs-integrity.test.mjs` | live docs reference only files that exist; counts match the repo; no live doc reaches into the archive |
 | `tests/unit/deploy-staging.test.mjs` | every path shipped code can fetch is inside the Pages upload allow-list |
 | `tools/graph-parity.cjs` | scene-graph migrations are vertex-for-vertex identical to a baseline ref |
@@ -336,29 +336,28 @@ four suites' own sources. What remains:
   that is simply the wrong one" failure. Left as-is deliberately: capping the
   re-seat would bank a straight instead, and the honest fix is per-circuit —
   re-author those eight fracs against a reference and then cap at ~250 m.
-- **The scenery-file `KOLD` shift disagrees with the engine's `_sceneryShift`**
-  — Singapore by 46 nodes (~184 m), Monaco by ~27 nodes (~108 m)
-  (`js/circuits/scenery/singapore.js` ~:24-27, one site; `monaco.js` ~:20-23,
-  seven sites). Both compute an INDEX-fraction difference of `startFrac` and
-  `sceneryStartFrac`; the engine's shift is the ARC-LENGTH fraction
-  (`TrackSpace.sceneryOriginDelta`, the trap `space.js` documents). Measured
-  in the Node build: Singapore n=1227, engine shift 650 nodes, KOLD 604. The
-  one-line fix (`_kShift = Math.round(TrackSpace.sceneryOriginDelta(def) * n)
-  % n`) was tried on Singapore in this pass and REVERTED: it puts the beacon
-  cone on the race-control tower's node as the file intends, but
-  `float-audit` then reports it 33 m in the air (the tower is not under it at
-  that lateral), so the props were tuned by eye against the wrong shift and
-  the fix needs a rendered pass (`survey-track`) per site, not a formula swap.
-- **A rival driving the CUSTOM team is never posed in VS FRIEND**
-  (`js/net/netplay.js` ~:343-348, `js/game.js` `makeCars` drops the custom
-  team unless the LOCAL player picked it, `wireId = teamIndex*2 + seat`). The
-  receiver keys the remote slot on the wireId of the slot it found; the sender
-  stamps its own car's wireId (22/23). When they differ every packet is
-  dropped and the rival sits frozen on the grid with no error. Reachable: a
-  guest opens the garage from the room and picks MY TEAM. Proposed fix: treat
-  a custom team as "seat taken" in `resolveSeatClash()` and run it from
-  `openRoom()` — or key `remotes` on the sender's declared wireId from HELLO.
-  No unit or spec covers a remote custom profile.
+- **~~The scenery-file `KOLD` shift disagrees with the engine's
+  `_sceneryShift`~~ — RESOLVED (2026-09-01, Node-build measurement, no render
+  needed).** The premise was wrong on both circuits. *Singapore*: `anchor()`
+  is not raw — `transformSceneryApi` wraps every k-keyed helper as
+  `f(sceneryNode(k), -side)` on this reverse + lap-mirror circuit, so the
+  shift cancels and the node that meets a kit structure at authored frac `s`
+  is the mirror inverse `(n - K(s)) % n` with the opposite side. The old KOLD
+  put the pit beacon 1.4 km from the tower (accidentally "supported" by a
+  city block); the "corrected" arc shift put it 33 m in the air. Fixed: the
+  cone anchors at `(n - K(0.999)) % n`, side +1, lateral 53, +33.9 m — 0.06 m
+  from the tower's roof centre, float and clip audits unchanged. *Monaco*:
+  the -24-node index shift is an empirical calibration of the raw
+  `px/rx/tx` readers; the engine's -51-node arc shift would move all seven
+  sites 108 m earlier and drop the tunnel onto Portier. Every site is closer
+  to its measured corner under the current shift, so only the comment
+  claiming "the same formula the engine uses" was wrong — corrected in place.
+- **~~A rival driving the CUSTOM team is never posed in VS FRIEND~~ — FIXED
+  (2026-09-01, second pass).** `resolveSeatClash()` now treats a custom (MY
+  TEAM) car as a seat that cannot be kept whatever the player's rank (a
+  peer's grid holds no slot or wireId for it), moves the player to a free
+  real-team seat and says why. Pinned by `net-lobby-lifecycle.test.mjs`;
+  the `test:net` browser group was NOT run for it.
 - **`CircuitElevations` is a dead branch** (`js/track/tracks.js` `hasRealElevation`
   / `elevationAt` / the `real` arm of `realPoints`): the global is defined only
   by `tools/bake-elevation.mjs`, is in no manifest entry, so every circuit's
@@ -367,17 +366,22 @@ four suites' own sources. What remains:
 - **Jeddah `startFrac` is in a corner** (`startline-probe`: mean |k| 0.0173
   over 120 m, first apex 1064 m later). Acknowledged in-file as known-wrong
   with no usable source; 39/40 pass.
-- **Plausible, unverified** (one line each; see the pass transcript for the
-  reasoning): `IncidentSim._lapCross` skips `netPlay.reportLap`/audio/sector
-  reset; `rescuePlayer` does not re-seed `rPrev*` render anchors (one smeared
-  frame per rescue); `quitToMenu` leaves `raceCtl`/`IncidentSim` state flying;
-  `NetRendezvous.waitFor` aborts a 2-minute join on one transient error;
-  `prefetchIce` nulls the cached servers before the refresh lands; an
-  `apex26.api.*` cache entry with a future `t` never expires; `sdp.js` has no
-  IPv6 relay candidate class and mis-parses `::ffff:` mapped addresses; the
-  empty-slot click in `career-ui` re-homes the live career to slot 0;
-  `settleRound` has no guard on an unknown `career.team`; standings ties are
-  insertion-ordered rather than countback; the boot canary is armed before the
+- **Second-pass (2026-09-01) fixes from the plausible list**, each with a
+  unit test where a node harness existed: `rescuePlayer` re-seeds the
+  `rPrev*` render anchors; `quitToMenu` resets race control; `waitFor` rides
+  out up to five consecutive transient relay errors (429/5xx/timeout/offline)
+  instead of aborting the two-minute wait; a future-stamped `apex26.api.*`
+  entry (clock stepped back) is neither served nor kept; `sdp.js` gained
+  `C_RELAY6` and unwraps `::ffff:` mapped IPv4; an abandoned career draft
+  restores the slot it was opened from; `settleRound` tolerates an unknown
+  team id; driver standings break points ties by countback (`season.finishes`
+  histogram, `SeasonCal.rank`) rather than insertion order.
+- **Checked, not defects**: `IncidentSim._lapCross` skipping `reportLap` —
+  a takeover lap is invalid and `updateCar` would not report it either;
+  `prefetchIce` nulling the cache before a refresh — `iceServers()` already
+  excludes credentials past `ICE_CRED_TTL_MS`, so the window is the 55→60 min
+  validity tail only.
+- **Plausible, still unverified**: the boot canary is armed before the
   ~550 KB deferred-backend fetch (a navigation during the download reads as a
   dead backend); a transient `checkFramebufferStatus` failure in `createTargets`
   disables post for the whole session with no retry (WGX has one).

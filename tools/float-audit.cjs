@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // float-audit.cjs — EXHAUSTIVE floating-scenery detector for Apex 26.
+// @doc Exhaustive FLOATING-scenery detector — wraps `TrackGeom` emitters and reports props above/under the ground; `--all`.
+// @skill survey-track
 //
 // Screenshots only sample a few lap points; this checks EVERY prop vertex on a
 // circuit against the ground actually rendered underneath it. It reuses the

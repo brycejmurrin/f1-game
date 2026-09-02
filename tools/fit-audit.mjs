@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // fit-audit — does every menu FIT, and is everything on it big enough to hit?
+// @doc The NUMBERS fit audit over viewports × interface scales: tap targets, legibility floor, clipped-without-scroll.
+// @skill ui-menu-a11y
 //
 // menu-fit answers "is this screen clipped at one viewport" and takes pictures.
 // This answers the questions that only show up across a MATRIX of sizes and

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc Sequential runner behind `npm run test:tooling-fast`: one unit file at a time, per-file timing; exports the list.
+// @section runner
 /**
  * tooling-fast.mjs — run the structural unit suites SEQUENTIALLY with progress.
  *
@@ -43,7 +45,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/godray-keep-nearest.test.mjs",
   "tests/unit/lamp-chunks.test.mjs",
   "tests/unit/all-lights-fill.test.mjs",
-  "tests/unit/cockpit-pale-surfaces.test.mjs",
   // Both node-only and both under half a second: the catalog LADDER (no paid
   // option dominated by a cheaper one, no row that is never optimal) and the
   // garage's per-vertex MATERIAL column. Neither was in the edit loop, which
@@ -51,7 +52,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // looks exactly like the bug it guards against.
   "tests/unit/parts-ladder.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
-  "tests/unit/crest-marks.test.mjs",
   "tests/unit/curvature-channels.test.mjs",
   "tests/unit/storage-key-prefix.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
@@ -83,6 +83,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/mcp-smoke.test.mjs",
   "tests/unit/agent-surface.test.mjs",
   "tests/unit/docs-integrity.test.mjs",
+  "tests/unit/generated-docs.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
   "tests/unit/component-inventory.test.mjs",
   "tests/unit/sheet-per-screen.test.mjs",
@@ -120,6 +121,18 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // deploy tip through five consecutive green Pages runs because the browser
   // group that held it is not gated at all.
   "tests/unit/car-mesh-anchors.test.mjs",
+  // The three raster/spawn-heavy car files (cockpit-pale-surfaces 69 s,
+  // crest-marks 41 s, slider-effect 42 s — 48 % of this loop, measured
+  // 2026-09-01) run in test:node-slow: CI guards always, locally when
+  // pick-tests names it (js/car/ or tools/slider-effect.mjs).
+  "tests/unit/physics-baseline-present.test.mjs",
+  "tests/unit/deploy-stamp.test.mjs",
+  "tests/unit/deploy-tool.test.mjs",
+  // The Node VM game harness (tools/game-vm.cjs): boots js/game.js headless in
+  // ~300 ms and reproduces tests/data/physics-baseline.json EXACTLY, so the
+  // driving-model gate runs here in seconds rather than in a browser job.
+  "tests/unit/game-vm.test.mjs",
+  "tests/unit/physics-characterization-vm.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
   "tests/unit/shared-math.test.mjs",
@@ -147,7 +160,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lighting-reapply.test.mjs",
   "tests/unit/lamp-density.test.mjs",
   "tests/unit/lighting-rebuild.test.mjs",
-  "tests/unit/slider-effect.test.mjs",
   "tests/unit/lighting-tuner-sweep.test.mjs",
   "tests/unit/perf-governor.test.mjs",
   "tests/unit/terrain-normals.test.mjs",

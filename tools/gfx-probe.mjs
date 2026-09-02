@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // gfx-probe.mjs — WEBGPU (WGX) and THREE (TLX) screenshot probe with logging.
+// @doc WEBGPU + THREE screenshot probe with the right Chromium flags: `--backend`, `--tlx-webgpu`, `--lavapipe`, `--lite`.
+// @skill webgpu-debug / mcp-probe
 //
 // Software adapters (WGX + TLX WebGPU): primary gate is visible #game /
 // #game-soft after GLX.awaitSoftPresent() (soft-present 2D blit). THREE

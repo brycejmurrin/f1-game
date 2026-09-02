@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // wgx-lavapipe-probe.mjs — WebGPU on Mesa Lavapipe under Xvfb (three.js e2e recipe).
+// @doc WebGPU on Mesa Lavapipe + Xvfb — the second software backend beside SwiftShader; `[track] [--lite]`.
+// @skill webgpu-debug / mcp-probe
 //
 // Installed deps: mesa-vulkan-drivers (lvp_icd.json), xvfb.
 // SwiftShader validates but never composites; Lavapipe shares ANGLE/Vulkan/Dawn

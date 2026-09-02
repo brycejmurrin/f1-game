@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // backend-compare — the SAME deterministic scene, screenshotted on each render
+// @doc Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors.
+// @skill cross-backend-parity / playwright-probe
 // backend (GLX webgl2 / TLX three / WGX webgpu), plus a numeric pixel diff.
 //
 // WHY. The parity suite proves each backend's SURFACE answers; nothing proves

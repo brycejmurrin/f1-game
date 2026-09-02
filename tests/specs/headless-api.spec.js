@@ -2,7 +2,7 @@
 // Tests for the headless control loop API: __apex.headless(), __apex.obs(),
 // __apex.act(), __apex.reset(). These verify the API contract and that a
 // tight control loop can step physics and read observations in one round-trip.
-import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -14,10 +14,11 @@ async function loadRace(page, trackId = "monza") {
   const live = await page.evaluate(() => window.__apex != null).catch(() => false);
   if (!live) {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   }
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   // jump to mid-track at racing speed so obs() has valid world-space position
   await page.evaluate(() => { window.__apex.jump(0.1, 40, 0); });
   await page.waitForTimeout(100);
@@ -57,7 +58,7 @@ test.describe("__apex.obs()", () => {
 
   test("returns null before track load", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     const v = await page.evaluate(() => window.__apex.obs());
     expect(v).toBeNull();
   });
@@ -296,7 +297,7 @@ test.describe("__apex.reset()", () => {
 
   test("returns false when player not yet initialised", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     // reset() requires both track and player; on a fresh page either may be null
     // depending on race between track load and player initialisation.
     // Verify: it either returns false (safe) or a valid obs (also fine).

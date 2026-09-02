@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# @doc Runs npm test groups concurrently, one port + log per group; `SPLIT=N` fans a group across N `--shard=k/N` runs.
+# @section runner
 # Run several Playwright test GROUPS concurrently, each with its own static
 # server (APEX_PORT), its own worker pool, and its own line-reporter log —
 # so a long suite runs in a fraction of the wall time and a stall is visible

@@ -2,7 +2,7 @@
 // Off-track, reversing, wrong-way and auto-rescue handling, plus the prog↔s
 // coupling fix (progress is derived from the actual signed change in s, so a
 // spin/reverse can't cheat progress forward).
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 // PACE PINNED. The assertions here are in METRES (dProg > 50) and M/S (offSpeed
 // bounds, the reverse crawl), and PACE is a ground-speed scale that moves both.
@@ -169,9 +169,10 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
   // inside corner barrier on an incline. The catch-all rescue must dig it out.
   test("stopped on-track: throttle held is never stuck at 0; gas released is left parked", async ({ page, loadTrack }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.race("bahrain", "day", "dry"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.go());
     const r = await page.evaluate(() => {
       // Current rescue contract: stoppedOnTrack only fires while the THROTTLE is

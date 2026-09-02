@@ -62,13 +62,13 @@ WGX is a device/feature miss, not "WGX has no arrays."
 6. **Validate**:
    ```sh
    npm run test:tooling-fast
-   node tools/test-bg.mjs api
+   node tools/test-bg.mjs hooks
    ```
    Visual: **lighting-tuner** or **webgl-debug** / **webgpu-debug** on a track
    with varied surfaces.
 
 7. **Ship** — commit `assets/pack/` when regenerated. Bump `?v=N` +
-   `version.json` only if you changed `js/` or `css/` (**bump-cache**). Pack
+   `version.json` only if you changed `js/` or `css/` (`node tools/bump-cache.mjs --apply`). Pack
    URLs rely on SW cache generation + revalidation, not shell `?v=`.
 
 ## Common mistakes

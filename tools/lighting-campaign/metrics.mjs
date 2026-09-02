@@ -1,3 +1,5 @@
+// @doc lighting-campaign: per-region pixel metrics and the gate evaluation against `config.mjs` GATES.
+// @skill lighting-tuner
 import { GATES } from "./config.mjs";
 
 const luma = (r, g, b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;

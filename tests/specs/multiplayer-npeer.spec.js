@@ -13,13 +13,14 @@
 // have grids of different length and order. onState used to take cars[0] and
 // ignore the id on the wire precisely because that id was the sender's own
 // index and meant nothing here.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function raceWithRival(page, peer) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.race("monza"));
   await page.waitForFunction(() => window.__apex.info().state === "count"
     || window.__apex.info().state === "race", null, { polling: 100, timeout: 60000 });
@@ -86,7 +87,7 @@ test.describe("the rival is keyed by a cross-peer identity", () => {
     // It used to hardcode host-then-guest; it now lays the humans out by wire
     // id, which every peer computes the same way, so they agree with no message.
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), null, { polling: 100, timeout: 60000 });
     const res = await page.evaluate(() =>

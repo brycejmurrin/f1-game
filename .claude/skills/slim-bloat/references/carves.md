@@ -24,7 +24,7 @@ before/after counts (`bloat-scan.mjs --json`).
 5. `grep` every removed symbol. Then `npm run test:tooling-fast`. Near
    `game.js`: `physics-characterization` is the master gate — parent names
    leftover browser groups as not-run.
-6. Last edit: `node tools/bump-cache.mjs --apply` (skill **bump-cache**).
+6. Last edit: `node tools/bump-cache.mjs --apply` (check-changes/references/bump.md).
 
 `extract-module.mjs` does **not** write the module, manifest, or tags.
 
@@ -36,7 +36,7 @@ before/after counts (`bloat-scan.mjs --json`).
   `/websites/platform_claude_en_agents-and-tools_agent-skills` if they
   may have moved.
 - Do not paste `AGENTS.md` into a skill. Point at it.
-- `doc-drift-auditor` first if the prose may be stale.
+- The `total-audit` workflow (`docs-ref` / `docs-idx` lenses) first if the prose may be stale.
 - New skill: list it in `.claude/skills/README.md` (docs-integrity).
 
 ## 3. Split the tree (new directory / file family)

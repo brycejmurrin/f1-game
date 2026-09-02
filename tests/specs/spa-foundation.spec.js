@@ -1,11 +1,13 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 async function loadSpa(page, time = "day") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
+  // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate((tod) => window.__apex.race("spa", tod, "dry"), time);
-  await page.waitForFunction(() => window.__apex.info().track === "spa", null, { polling: 100, timeout: 15000 });
+  await page.waitForFunction(() => window.__apex.info().track === "spa", null, { polling: 100, timeout: BOOT_MS });
 }
 
 test.describe("Spa track-owned foundation migration", () => {

@@ -1,4 +1,6 @@
 // manifest.cjs — the single source of truth for script load order.
+// @doc Load-order single source of truth: `FULL`, `DEFERRED`, `LAZY_AGENT`, `HARD_EDGES`, `TRACK_VM`; index.html must match.
+// @skill check-changes
 //
 // index.html cannot be generated (no build step), so it is hand-edited and
 // ASSERTED against this file by tests/unit/load-order.test.mjs. Node VM loaders

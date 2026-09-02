@@ -26,6 +26,7 @@
 // Run: npx playwright test tests/specs/material-shimmer.spec.js   (npm run test:shimmer)
 
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 const FRAMES = 6;           // consecutive frames per condition
 const STEP = 1 / 60;        // physics step between captures
@@ -90,7 +91,8 @@ test.describe("baked materials — temporal stability", () => {
 
   test("baked tarmac does not crawl relative to procedural", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 30000 });
+    // BOOT_MS, not a hand-rolled 30 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+    await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.Assets.load());
     await page.waitForFunction(() => window.__apex.assets().uploaded === true, null, { polling: 100, timeout: 30000 });
     await page.evaluate(() => window.__apex.race("monza"));

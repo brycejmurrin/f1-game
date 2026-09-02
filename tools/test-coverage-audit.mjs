@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // Coverage guard: every top-level browser spec and Node tool test must be named
+// @doc Coverage guard (`npm run test:audit`): every spec / unit file must be reachable from a topical `test:<group>` script.
+// @section runner
 // explicitly by a topical test:* script. Catch-all/project partition scripts do
 // not demonstrate that a spec belongs to an intentional verification group.
 //

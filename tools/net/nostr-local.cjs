@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // nostr-local.cjs — a Nostr relay on localhost, so the ROOM CODE path can be
+// @doc A Nostr relay on localhost so the ROOM CODE path can be tested without a public relay.
+// @skill multiplayer-debug
 // tested without depending on somebody else's server.
 //
 //   npm i --no-save ws && node tools/net/nostr-local.cjs

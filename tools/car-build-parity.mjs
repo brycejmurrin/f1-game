@@ -1,4 +1,6 @@
 // car-build-parity — did a car3d.js edit change a build it was NOT meant to
+// @doc Did a `car3d.js` edit move a build it was not meant to touch? Hashes pos/nrm/col/idx per variant across two versions.
+// @skill garage-parts-livery / car-viewer
 // touch? Builds the same car from two versions of js/car/car3d.js and hashes
 // pos/nrm/col/idx per build variant, so an option-gated change (cockpit-only,
 // halo-only, a parts tier) can be PROVEN not to move any other camera.

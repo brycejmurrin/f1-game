@@ -1,4 +1,6 @@
 // Shared process harness for the headless __apex tools — an in-process static
+// @doc Shared harness for the headless `__apex` tools: in-process static server + Chromium launch with teardown-safe shutdown.
+// @skill playwright-probe
 // server plus a Chromium launcher whose teardown actually runs.
 //
 // WHY this exists. Every tool used to hand-roll the same two-child setup and

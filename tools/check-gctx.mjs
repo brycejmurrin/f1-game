@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /**
+ * @doc Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc).
+ * @skill check-changes
  * check-gctx.mjs — hold types/game-ctx.d.ts to the real G façade, and hold every
  * module's use of G to types/game-ctx.d.ts.
  *

@@ -3,10 +3,12 @@
 // actual draw decisions; tests drive real physics state rather than toggling
 // renderer-only flags.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 async function startCar(page, speed = 30) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate((initialSpeed) => {
     window.__apex.race("monza");
     // go() skips the countdown: in "count" state update() runs only the light
@@ -147,7 +149,7 @@ test.describe("Car runtime effects", () => {
   // straight to "race".
   async function onGrid(page) {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
     // A dry daytime race, so nothing but the grid state can light the rear.
     await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
     // race() DOES NOT land in "count" synchronously any more: startRace() is

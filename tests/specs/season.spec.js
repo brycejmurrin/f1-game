@@ -1,12 +1,14 @@
 // @ts-check
 // Season mode: round progression, points accumulation, standings panel visibility.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function startSeasonRace(page, laps) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   // Nothing below asserts a pixel — this spec is about round progression, points
   // and panel visibility — so stop drawing the 3D scene that sits behind every
   // menu. Under SwiftShader that is pure CPU: it halves the load average of a
@@ -36,7 +38,7 @@ async function startSeasonRace(page, laps) {
   await page.locator("#q-go").click();
   await page.waitForFunction(
     () => window.__apex && window.__apex.info().track != null,
-    null, { polling: 100, timeout: 20_000 }
+    null, { polling: 100, timeout: BOOT_MS }
   );
 }
 
@@ -72,7 +74,7 @@ test.describe("Season — mode flags", () => {
       localStorage.setItem("apex26.seasonCfg", JSON.stringify({ trackIds: ["monaco"] }));
     });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.headless(true));
     await page.locator("#mb-season").click();
     // the canonical circuit name is "MONACO" (js/circuits/monaco.js)
@@ -152,7 +154,7 @@ test.describe("Season — standings panel", () => {
       }));
     });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.headless(true));   // see startSeasonRace
     await page.locator("#mb-season").click();
     await page.locator("#select").waitFor({ state: "visible" });
@@ -171,7 +173,7 @@ test.describe("Season — standings panel", () => {
     await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
     await page.locator("#q-sim").click();
     await page.locator("#q-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 20_000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => {
       window.__apex.park(0.9);
       window.__apex.finishRace();

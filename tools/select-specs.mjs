@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // select-specs — per-SPEC change-aware selection for the blocking CI gate.
+// @doc Per-SPEC change-aware selection for the blocking CI job: cuts at `select-budget` capacity and names every skip.
+// @section runner
 //
 // tools/pick-tests.mjs answers "which GROUPS does this change need" for a
 // human with a 4-core box and no deadline. A CI job has a budget, and

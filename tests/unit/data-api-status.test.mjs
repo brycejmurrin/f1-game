@@ -61,3 +61,24 @@ test("a structured detail body still surfaces its own message and status", async
     return true;
   });
 });
+
+test("a cache entry stamped in the future (clock stepped back) is not served as fresh", async () => {
+  // (now - t) < ttl is trivially true for a negative age, so an entry written
+  // before the device clock was stepped back read as fresh for as long as the
+  // skew lasted. The sweep has the same blind spot (fixed alongside).
+  const url = "https://api.openf1.org/v1/weather?session_key=7";
+  const key = "apex26.api." + url;
+  const future = JSON.stringify({ t: Date.now() + 3_600_000, data: [{ rainfall: 99 }] });
+  let fetched = 0;
+  const context = vm.createContext({
+    fetch: async () => { fetched++; return { ok: true, status: 200, headers: { get: () => null }, json: async () => [{ rainfall: 1 }], text: async () => JSON.stringify([{ rainfall: 1 }]) }; },
+    AbortController,
+    localStorage: { length: 1, getItem: (k) => (k === key ? future : null), setItem() {}, key: () => key, removeItem() {} },
+    Date, setTimeout, clearTimeout,
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
+  const out = await context.__api.weather(7, 60_000);
+  assert.equal(fetched, 1, "the future-stamped entry must not satisfy the TTL");
+  assert.equal(out.rainfall, 1, "the live answer wins (weather() maps the last row to an object)");
+});

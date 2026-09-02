@@ -1,3 +1,5 @@
+// @doc Does an installed PWA still work with the origin gone? The only check that sees a bare circuit after a missed precache.
+// @section runner
 /* offline-precache-check.cjs — the ONLY test that proves the precache fix.
  *
  * The regression is silent by construction: loadBackendScripts injects the

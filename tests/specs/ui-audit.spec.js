@@ -13,7 +13,7 @@
 // tools/assert-audit.mjs allow-lists this file by name. If it ever grows real
 // assertions, tests/unit/assert-audit.test.mjs fails and says so — the exemption is
 // not allowed to quietly cover a file that stopped being a harness.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { setupApiMocks } from "../helpers/f1-api-mock.js";
 import { galleryPath } from "../helpers/output-paths.js";
 
@@ -21,7 +21,8 @@ const PORTRAIT  = { width: 390, height: 844 };   // iPhone 14
 const LANDSCAPE = { width: 844, height: 390 };   // same rotated
 
 async function waitReady(page) {
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
 }
 
 async function waitTabLoaded(page) {
@@ -109,7 +110,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.goto("/");
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain"));
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => window.__apex.park(0.1));
       await page.waitForTimeout(1000);
       await shot(page, `${orient}-07-hud`);
@@ -119,7 +120,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.goto("/");
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain"));
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => {
         window.__apex.park(0.1);
         // Show pause menu directly to avoid the #rotate-device overlay blocking
@@ -134,7 +135,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.goto("/");
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain"));
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => window.__apex.park(0.1));
       await page.waitForTimeout(300);
       await page.evaluate(() => window.__apex.finishRace());
@@ -165,7 +166,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.goto("/");
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain"));
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => {
         window.__apex.camera("hood");
         window.__apex.park(0.1);
@@ -192,7 +193,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.goto("/");
       await waitReady(page);
       await page.evaluate(() => { window.__apex.race("bahrain"); });
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => {
         // Hide the rotate-device overlay so it doesn't intercept clicks in portrait
         const rd = document.getElementById("rotate-device");
@@ -218,7 +219,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#race-settings").waitFor({ state: "visible" });
       await page.locator("#rs-go").click();
       await qualiToGrid(page);
-      await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => window.__apex.park(0));
       await page.waitForTimeout(200);
       await page.evaluate(() => window.__apex.finishRace());
@@ -245,7 +246,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.goto("/");
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain", "day", "wet"));
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => window.__apex.park(0.1));
       await page.waitForTimeout(1000);
       await shot(page, `${orient}-17-hud-wet`);
@@ -255,7 +256,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.goto("/");
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("singapore", "night", "dry"));
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => window.__apex.park(0.1));
       await page.waitForTimeout(1000);
       await shot(page, `${orient}-18-hud-night`);
@@ -265,7 +266,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.goto("/");
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain"));
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => {
         window.__apex.camera("cockpit");
         window.__apex.park(0.1);
@@ -280,7 +281,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.goto("/");
       await waitReady(page);
       await page.evaluate(() => window.__apex.tt("monza"));
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => window.__apex.park(0));
       await page.waitForTimeout(200);
       await page.evaluate(() => window.__apex.finishRace());
@@ -299,7 +300,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#race-settings").waitFor({ state: "visible" });
       await page.locator("#rs-go").click();
       await qualiToGrid(page);
-      await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => window.__apex.park(0));
       await page.waitForTimeout(200);
       await page.evaluate(() => window.__apex.finishRace());
@@ -312,7 +313,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.goto("/");
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain"));
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => {
         const rd = document.getElementById("rotate-device");
         if (rd) rd.hidden = true;
@@ -334,7 +335,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.goto("/");
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain"));
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       // Do NOT hide rotate-device — that is the whole point of this test
       await page.evaluate(() => window.__apex.go());
       await page.waitForTimeout(500);
@@ -493,7 +494,7 @@ const DESKTOP = { width: 1280, height: 800 };
 // render loop keeps running, so give it time to present a settled frame.
 async function raceParked(page) {
   await page.evaluate(() => window.__apex.race("bahrain"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.park(0.1));
   await page.waitForTimeout(800);
 }

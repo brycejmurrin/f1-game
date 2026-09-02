@@ -7,13 +7,15 @@
 // or mirror (metal). These tests pin that remap — that only PAINT moves, that
 // nothing else does, and that an absent finish leaves the mesh untouched.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function load(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
 }
 
 async function openSetup(page) {
@@ -149,7 +151,7 @@ test.describe("Liveries — paint finish", () => {
       return { livery: satin.id, teamId: team.id };
     });
     await page.reload();
-    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
     const result = await page.evaluate((ctx) => {
       const team = Teams.LIST.find((t) => t.id === ctx.teamId);
       const liv = Liveries.forTeam(team).find((l) => l.id === ctx.livery);
@@ -177,7 +179,7 @@ test.describe("Liveries — creator", () => {
       localStorage.removeItem("apex26.livery.custom." + team.id);
     });
     await page.reload();
-    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
     await openSetup(page);
 
     await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
@@ -225,7 +227,7 @@ test.describe("Liveries — creator", () => {
       localStorage.removeItem("apex26.livery.custom." + Teams.LIST[2].id);
     });
     await page.reload();
-    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
     await openSetup(page);
 
     await page.locator('#cs-tabs [data-cs-cat="livery"]').click();

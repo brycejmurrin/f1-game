@@ -616,11 +616,16 @@ const NetLobby = (function () {
     // has to be cheap and silent.
     function resolveSeatClash() {
       if (!session) return false;
-      const blocked = blockingSeats();
-      if (!blocked.length) return false;
       const mine = localProfile();
-      if (!heldBy(blocked, mine.team, mine.driver)) return false;
-      const move = firstFreeSeat(mine.team, blocked);
+      // A CUSTOM (MY TEAM) car exists only on the grid of the player who chose it
+      // (makeCars builds it for the local pick alone): no peer can pose us, and our
+      // wireId is one their grid does not hold — so it is a seat we cannot keep.
+      const mineTeam = Teams.LIST.find((t) => t.id === mine.team);
+      const onCustom = !!(mineTeam && mineTeam.custom);
+      const blocked = onCustom ? peerSeats() : blockingSeats();
+      if (!blocked.length && !onCustom) return false;
+      if (!onCustom && !heldBy(blocked, mine.team, mine.driver)) return false;
+      const move = firstFreeSeat(onCustom ? null : mine.team, blocked);
       if (!move) { say("Every seat is taken. Pick another car.", true); return false; }
 
       const ti = Teams.LIST.findIndex((t) => t.id === move.team);
@@ -638,8 +643,9 @@ const NetLobby = (function () {
       // Announced, never silent. #vs-status is already role="status"
       // aria-live="polite", so this reaches a screen reader too. A notice, not
       // an error: nothing failed, somebody was simply quicker.
-      say(was.driver + " was taken — you're driving " + now.driver
-        + (now.team ? " (" + now.team + ")" : "") + ".");
+      const seatTxt = now.driver + (now.team ? " (" + now.team + ")" : "");
+      say(onCustom ? "MY TEAM cars only exist on your own screen — you're driving " + seatTxt + " for this race."
+                   : was.driver + " was taken — you're driving " + seatTxt + ".");
       broadcast(NetPlay.EV.HELLO, localProfile());
       if (selfReady) setReady(false);
       const garage = $("carsetup");

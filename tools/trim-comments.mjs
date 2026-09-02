@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /**
+ * @doc Strips low-signal `//` comments (dividers, loc pointers, orphans); `--headers --narrative` compresses file headers.
+ * @skill slim-bloat
  * trim-comments.mjs — remove low-signal comments from js/ and css/.
  *
  * Usage:

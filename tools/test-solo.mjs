@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // test-solo — re-run ONE spec (or one grep) alone, on a box that is actually
+// @doc Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`, refusing to start until the box is quiet (`--max-load`).
+// @section runner
 // quiet, and refuse to pretend otherwise.
 //
 // AGENTS.md's standing rule is "a timeout on a busy box measures the machine,

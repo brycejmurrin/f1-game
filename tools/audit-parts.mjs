@@ -1,4 +1,6 @@
 // Render every catalog option plus every team's factory preset through the
+// @doc Renders every option of chosen part categories through `carview.html`; per-category contact sheets.
+// @skill car-viewer
 // isolated car viewer. Requires a static server at http://127.0.0.1:3456.
 //
 //   node tools/audit-parts.mjs [--cats=engine,aero] [--team=mclaren]

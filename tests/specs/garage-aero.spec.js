@@ -6,12 +6,14 @@
 // requestAnimationFrame fires ZERO times per second here — so the ease was
 // unobservable from a test. __apex.garageStep() drives it directly instead.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function openGarage(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+  // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.locator("#mb-garage").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
 }

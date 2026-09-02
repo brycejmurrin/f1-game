@@ -107,6 +107,14 @@ on:
     # rather than running twice in parallel against itself.
     branches-ignore: [claude/f1-game-project-26h3ng]
   pull_request:
+  # NIGHTLY (2026-09-01): the wide browser run — the boot group (73 tests)
+  # across 4 shards — moved here from every push. Its whole recorded failure
+  # history in this file's header is timeouts on starved runners, never an
+  # assertion, so it was blocking deploys without adding evidence; on a push
+  # and on the deploy gate the smoke job runs ONE shard of smoke.spec.js.
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
   workflow_call:      # pages.yml gates its deploy on this
     inputs:
       # Caller's push `before` SHA. workflow_call replaces github.event with its
@@ -208,6 +216,31 @@ jobs:
           npm run test:webgpu-lifecycle
           npm run test:agent-contract
           npm run test:audio-unit
+          # The three raster/spawn-heavy car files, out of the edit loop
+          # (152 s of the old 315 s tooling-fast; 2026-09-01) and into the gate.
+          npm run test:node-slow
+          # The Node VM harness: js/game.js headless, exact parity with the
+          # physics baseline (tests/unit/physics-characterization-vm.test.mjs).
+          npm run test:game-vm
+
+  sweeps-parts:
+    name: Parts option-resolution census
+    runs-on: ubuntu-latest
+    # One subtest of parts-visual-distinctness ("every option resolves to
+    # itself") measured 559 s of the 999 s sweeps run on 2026-09-01. Its own
+    # runner, unconditional and in parallel, so the geometry sweeps finish in
+    # ~7 min and this never blocks them. 20 = 2x the measured 9.5 min.
+    timeout-minutes: 20
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run test:sweeps-parts
 
   sweeps:
     name: Per-circuit geometry sweeps
@@ -381,7 +414,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        # 4 shards of the boot group nightly; 1 shard of smoke.spec.js on a
+        # push / deploy gate (2026-09-01 — see the `on:` comment).
+        shard: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '[1, 2, 3, 4]' || '[1]') }}
     # 30, not 20. MEASURED on run 31023778264, the first green one: 14m24s.
     # That fit the old cap, but with 5.5 minutes to spare on a SHARED runner
     # whose per-test cost is the very thing that varies — and the last time a
@@ -509,10 +544,9 @@ jobs:
           # uses ?v=<build>, and mutable assets/manifest/icons/vendor are served
           # cache-first at stable paths, so those bytes require a strictly newer
           # shell/service-worker generation than the active deployment.
-          if ! node tools/bump-cache.mjs --check --since "$LIVE"; then
-            echo "::error::cache-sensitive deployed bytes changed without a strictly newer build generation"
-            exit 1
-          fi
+          # (The "strictly newer build generation" check that stood here is
+          # gone: pages.yml stamps the generation from the commit count at
+          # deploy time, so it is newer by construction — 2026-09-01.)
           # smoke.spec.js is deliberately excluded from the generic selected
           # job, whose 120 s cap is too short for its measured render probes.
           # A test-only edit does not change _site, but must still exercise the
@@ -622,13 +656,19 @@ jobs:
       # tolerance: no assertion changed, and a spec that genuinely hangs still
       # goes red, just later.
       - name: Smoke
-        if: steps.shipfilter.outputs.ships != 'false'
+        if: steps.shipfilter.outputs.ships != 'false' && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         env:
           APEX_WORKERS: 1
         # --shard splits the 9 specs across the two matrix VMs; the flag passes
         # through tools/run-playwright.mjs verbatim (it forwards argv to
         # `playwright test`).
-        run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/4
+        run: npm run test:smoke -- --timeout=900000
+      # The wide run: the whole boot group, 4 shards, nightly / on dispatch only.
+      - name: Boot group (nightly)
+        if: steps.shipfilter.outputs.ships != 'false' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        env:
+          APEX_WORKERS: 1
+        run: npm run test:tiny -- --timeout=900000 --shard=${{ matrix.shard }}/4
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4

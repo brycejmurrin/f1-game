@@ -16,7 +16,7 @@
 //
 // The far side is played by __apex.lobbyPeerEvent, exactly as in
 // multiplayer-room.spec.js. A real second browser is tools/net/rtc-e2e.mjs.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 const EV = { HELLO: "hello", READY: "ready" };
@@ -36,7 +36,8 @@ async function seatedAs(page, teamIdx, driverIdx) {
 
 async function enterRoom(page, role = "host") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.lobbyFake(true));
   await page.click("#mb-vs");
   await page.click(role === "host" ? "#vs-host" : "#vs-join");
@@ -199,7 +200,7 @@ test.describe("seat exclusivity — solo is untouched", () => {
   test("no session means no held seats and no disabled chips", async ({ page }) => {
     await seatedAs(page, RBR, 0);
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.locator("#mb-garage").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.locator('#cs-tabs [data-cs-cat="team"]').click();
@@ -214,7 +215,7 @@ test.describe("seat exclusivity — solo is untouched", () => {
     // change it when nobody holds anything.
     await seatedAs(page, 1, 1);
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.locator("#mb-garage").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.locator('#cs-tabs [data-cs-cat="team"]').click();

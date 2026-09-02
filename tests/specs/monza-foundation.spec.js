@@ -1,13 +1,15 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 test.describe("Monza track-owned foundation migration", () => {
   test("keeps terrain, landmarks, water, barriers, and overhead intent valid", async ({ page }) => {
     test.setTimeout(240_000);
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15_000 });
+    // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+    await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: 15_000 });
+    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: BOOT_MS });
     const result = await page.evaluate(() => {
       const def = window.TrackDefs.find((entry) => entry.id === "monza");
       const profile = window.__apex.trackProfile(240);

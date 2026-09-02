@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc Reorg helper for `game.js` extractions: free-reference analysis of a line range, rewritten against `G.<name>` (`--out`).
+// @skill slim-bloat
 /* extract-module.mjs — reorg helper: analyse a line range of a source file for
    extraction into an IIFE module. Parses the range as a program (wrapping it in
    a function if needed), lists FREE references (eslint-scope, program scope

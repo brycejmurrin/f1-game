@@ -77,7 +77,7 @@ const F1API = (function () {
         const key = localStorage.key(i);
         if (!key || key.indexOf(CACHE_PREFIX) !== 0) continue;
         const t = cacheEntryT(localStorage.getItem(key));
-        if (t == null || (now - t) > maxAge) doomed.push(key);
+        if (t == null || (now - t) > maxAge || t > now) doomed.push(key);   // future-stamped = clock skew, not fresh
       }
       for (let i = 0; i < doomed.length; i++) {
         try { localStorage.removeItem(doomed[i]); removed++; } catch (e) { /* ignore */ }
@@ -234,7 +234,10 @@ const F1API = (function () {
     const quiet = ttl <= 0 || (options && options.cache === false);
     const name = endpointName(url);
     const hit = cache ? readCache(url) : null;
-    if (ttl > 0 && hit && (Date.now() - hit.t) < ttl) return Promise.resolve(hit.data);
+    // age < 0 is an entry stamped by a clock that has since been stepped back:
+    // it would read as fresh for as long as the skew lasts, so refetch instead.
+    const age = hit ? Date.now() - hit.t : 0;
+    if (ttl > 0 && hit && age >= 0 && age < ttl) return Promise.resolve(hit.data);
 
     // Each attempt claims ONE queue slot (MIN_GAP pacing included) and releases
     // it before any backoff sleep, so other endpoints proceed while this one

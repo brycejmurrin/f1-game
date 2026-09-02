@@ -71,7 +71,7 @@ Load from the SKILL.md index when the task needs this detail.
 7. **Respect build handshakes.**
    - Handshake refuses mismatched `version.json` builds because physics/track
      constants can differ.
-   - If JS/CSS changed, use `bump-cache`; stale builds can make peers unable to
+   - If JS/CSS changed, run `node tools/bump-cache.mjs --apply`; stale builds can make peers unable to
      connect by design.
 
 8. **Verify in order.**

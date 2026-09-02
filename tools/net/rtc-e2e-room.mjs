@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // rtc-e2e-room.mjs — the ROOM CODE path, end to end, against a relay we run.
+// @doc The ROOM CODE path end to end, against a relay we run (`nostr-local.cjs`).
+// @skill multiplayer-debug
 //
 //   npm i --no-save ws
 //   node tools/net/nostr-local.cjs &

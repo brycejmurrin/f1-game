@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /**
+ * @doc Is this `index.html` diff JUST the cache bump? The one exemption change-aware CI makes to its infra gate.
+ * @section runner
  * cache-bump-only.mjs — "is this index.html diff JUST the cache bump?"
  *
  *   node tools/cache-bump-only.mjs <base-ref>     # exit 0 = pure bump, 1 = not

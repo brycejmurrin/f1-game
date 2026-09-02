@@ -1,3 +1,5 @@
+// @doc lighting-campaign: the condition lattice (TODS × WEATHERS × TRACKS), shards, camera fractions, slider groups.
+// @skill lighting-tuner
 export const TODS = Object.freeze(["dawn", "day", "dusk", "night"]);
 export const WEATHERS = Object.freeze(["dry", "wet", "rain", "fog", "overcast"]);
 export const TRACKS = Object.freeze([

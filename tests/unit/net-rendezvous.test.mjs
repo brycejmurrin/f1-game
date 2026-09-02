@@ -55,6 +55,9 @@ function relay(opts = {}) {
     const room = rooms.get(code) || {};
 
     if (req.method === "GET") {
+      // flakyGets: answer the first N polls with a 429 — the transient hiccup
+      // waitFor() must ride out rather than abort the two-minute wait on.
+      if (opts.flakyGets > 0) { opts.flakyGets--; return send(429, { error: "rate_limited" }); }
       if (!room[slot]) return send(404, { error: "not_found" });
       return send(200, { payload: room[slot].payload });
     }
@@ -379,4 +382,25 @@ test("repeated seals and opens of one code run PBKDF2 exactly once", async () =>
   } finally {
     delete crypto.subtle.deriveKey;
   }
+});
+
+test("waitFor() rides out a transient 429 instead of aborting the wait", async () => {
+  const r = await relay({ flakyGets: 2 });
+  try {
+    const code = NetRendezvous.makeCode();
+    assert.equal((await NetRendezvous.put(code, "answer", "APEX1.s.ANSWER")).ok, true);
+    const got = await NetRendezvous.waitFor(code, "answer", null, null);
+    assert.equal(got.ok, true, "two rate-limited polls then the payload: " + JSON.stringify(got));
+    assert.equal(got.payload, "APEX1.s.ANSWER");
+  } finally { await r.close(); }
+});
+
+test("waitFor() still gives up on a relay that is refusing every poll", async () => {
+  const r = await relay({ flakyGets: 99 });
+  try {
+    const code = NetRendezvous.makeCode();
+    const got = await NetRendezvous.waitFor(code, "answer", null, null);
+    assert.equal(got.ok, false);
+    assert.equal(got.error, "rate_limited", "the last transient error is what comes back after the streak cap");
+  } finally { await r.close(); }
 });

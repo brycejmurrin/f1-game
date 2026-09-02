@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // menu-fit — audit every menu screen for cramped / clipped layout at a given
+// @doc Audits every menu screen for cramped/clipped layout at a viewport; `--safe=` simulates arbitrary notch insets.
+// @skill ui-menu-a11y
 // viewport. For each screen it walks the visible DOM subtree and reports
 //   * horizontal overflow  (scrollWidth > clientWidth on a scroll container)
 //   * children painted outside their scroll container's box (clipped)

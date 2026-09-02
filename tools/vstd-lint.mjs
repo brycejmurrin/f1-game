@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 //
+// @doc The PACE invariant as a check: flags `.speed` compared to a literal without `vStd()` in `js/game.js` + `js/game/*.js`.
+// @skill tune-physics
 // vstd-lint — the asserted form of the PACE invariant in AGENTS.md:
 //
 //   "Adding anything that divides a speed by VMAX, or compares one against a

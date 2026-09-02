@@ -12,7 +12,7 @@
 // document hidden, mirroring the platform's own behaviour ("the lock is
 // released whenever the page is hidden, and not given back"), so the
 // re-acquire-on-visible path is exercised for real rather than assumed.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 async function mockWakeLock(page) {
   await page.addInitScript(() => {
@@ -52,7 +52,8 @@ async function mockWakeLock(page) {
 
 async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
 test.describe("Screen wake lock — held for the duration of a race", () => {

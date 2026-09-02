@@ -1,4 +1,6 @@
 // One screenshot of the GARAGE 3D scene — the setup-preview turntable, its
+// @doc One screenshot of the GARAGE 3D scene (turntable car, crest lightbox, boards) — the only way to look at garage-scene.js.
+// @skill garage-parts-livery / car-viewer
 // lightbox crest, boards and props — not the DOM panel in front of it.
 //
 // Why this exists: nothing could photograph the garage. layout-audit --screen=

@@ -223,4 +223,4 @@ a soft-looking frame at a healthy fps usually means `scale` is below 1 — which
 is invisible without this readout.
 
 Deeper: `__apex.gpuTimer(true)` for GPU-side milliseconds (Chrome/Android only),
-and the `perf-profile` skill for a CPU flame chart.
+and the playwright-probe skill (`references/perf-profile.md`) for a CPU flame chart.

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc Size report for slim-bloat: module-size ceiling slack, SKILL.md / agent line counts. `--json`; never edits.
+// @skill slim-bloat
 /* bloat-scan.mjs — size report for slim-bloat / bloat-auditor.
  *
  * Prints ratchet slack (from tests/unit/module-size.test.mjs CEILINGS),

@@ -33,7 +33,7 @@ oriented footprint** covers tarmac at **any** node it rises above, the
   on a curving street.
 - **`RAW.*` bypasses the guard.** Crowd spectators via `RAW.addBox` are not
   footprint-tested; only place them behind a shell.
-- **Regression:** `tests/specs/props-over-road.spec.js` (in `test:scenery`).
+- **Regression:** `tests/specs/props-over-road.spec.js` (in `test:circuits`).
   One track: `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots`.
 
 ## Terrain anchoring

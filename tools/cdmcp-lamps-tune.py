@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# @doc Asserts the LAMPS tuner sliders via Chromium MCP using `lightState().meanLampRGB` / `bakedLights` / `lampPosts`.
+# @skill mcp-probe
 """cdmcp-lamps-tune — assert LAMP DENSITY / LAMP TEMPERATURE / POOL ENERGY via MCP.
 
 Drives chrome-devtools MCP against a localhost Apex tree and checks that the

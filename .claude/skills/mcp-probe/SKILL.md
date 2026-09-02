@@ -1,13 +1,16 @@
 ---
 name: mcp-probe
-description: Use when driving the LIVE working-tree canvas or the DEPLOYED site interactively with Chrome DevTools MCP or tinyfish — poke __apex live, heap/perf/console during an interactive repro. Routine post-deploy version.json STALE check → deploy-research. Batch screenshots → playwright-probe. Scripted hooks → agent-view. UI-layout matrix → survey-ui-matrix (canvas hidden).
+description: Use when driving the LIVE working-tree canvas interactively with the Chrome DevTools MCP (chrome_*) or the probe-mcp.py chrome daemon — poke __apex live, heap/perf/console during an interactive repro. Anything on the DEPLOYED site / public web (version.json STALE check, shipped-marker grep) → deploy-research. Batch screenshots → playwright-probe. Scripted hooks → agent-view. UI-layout matrix → survey-ui-matrix (canvas hidden).
 ---
 
-# Probing the live game with the MCPs
+# Probing the live game with the Chrome MCP
 
-Two upstream MCP servers sit alongside the Playwright suite: **Chrome DevTools MCP**
-(working tree, canvas-visible) and **tinyfish** (deployed GitHub Pages / public
-web). The test suite is 115 Playwright specs + 149 `node --test` unit suites. Unified entry: `tools/probe-mcp.py` (`chrome_*` / `tinyfish_*`).
+One MCP server sits alongside the Playwright suite for live poking:
+**chrome-devtools** (`chrome_*`, working tree, canvas-visible, WebGPU flags
+from `webgpu-chrome-args.cjs`). The deployed site / public web is **not**
+reachable from a container browser — that is the **deploy-research** subagent
+(host fetch / WebFetch). `tools/probe-mcp.py` is a CLI (not MCP-attached since
+2026-09) whose `chrome-start` daemon keeps ONE Chromium alive across `call`s.
 
 ## Entry
 
@@ -16,29 +19,29 @@ python3 tools/probe-mcp.py list-tools
 python3 tools/probe-mcp.py chrome-start          # REQUIRED for multi-call chrome
 python3 tools/probe-mcp.py call chrome_...
 python3 tools/probe-mcp.py chrome-stop           # ALWAYS before test-bg.mjs
-./tools/tinyfish-mcp.sh deploy-check --tip        # live vs deploy-branch tip
 node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval '...'
 ```
 
 A bare `call` without `chrome-start` spawns a **fresh** Chromium each time —
-navigate → evaluate → screenshot across separate calls is broken. Prefer host
-MCP `chrome_*` / `tinyfish_*` when the session catalog has them; use shell
-wrappers for `deploy-check` / `deploy-js --marker` / `mcp-cli probe` batching.
+navigate → evaluate → screenshot across separate calls is broken. Prefer the
+attached `chrome_*` tools when the session catalog has them; use the shell
+daemon or `mcp-cli probe` batching otherwise.
 
 Keep **`apex-tools` in root `.mcp.json`** so Cloud/Claude/this agent can load
 it. Cursor CLI also has `.cursor/mcp.json` (lockstep). If this session's host
-catalog is empty, use `./tools/apex-tools-mcp.sh call`, the wrappers above, or
-subagent `deploy-research` for `version.json` / public web. Do not attach
-this skill for a version.json STALE check.
+catalog is empty, use `./tools/apex-tools-mcp.sh call` or the daemon above.
+`version.json` / public web is subagent `deploy-research`. Do not attach this
+skill for a version.json STALE check.
 
-Wrap map: `docs/AGENT-SURFACE.md` (apex-tools vs this skill vs TinyFish vs host playwright).
+Wrap map: `docs/AGENT-SURFACE.md` (apex-tools vs this skill vs deploy-research
+vs playwright-official).
 
 | Need | Use |
 |---|---|
-| Local CLI wrap (`verify-track`, `--fast`, shot/eval) | `apex-tools` / `./tools/apex-tools-mcp.sh` — not `chrome_*` |
-| Live canvas / `__apex` / screenshot | Chrome via probe (`http://127.0.0.1`, not github.io) |
-| Deployed artifact / public web | tinyfish / `deploy-research` subagent |
-| Interactive host Chromium | repo MCP **playwright** (`browser_*` via `tools/playwright-mcp.sh`) — never with this Chrome |
+| Local CLI wrap (`--fast`, shot/eval, pick-tests) | `apex-tools` / `./tools/apex-tools-mcp.sh` — not `chrome_*` |
+| Live canvas / `__apex` / screenshot | `chrome_*` / `probe-mcp.py chrome-start` (`http://127.0.0.1`, not github.io) |
+| Deployed artifact / public web | `deploy-research` subagent (host fetch / WebFetch) — never a container browser |
+| Interactive host Chromium | repo MCP **playwright-official** (`browser_*`) — never with this Chrome |
 | UI matrix (canvas hidden) | `survey-ui-matrix` — `browser_resize` / `browser_snapshot` / `browser_evaluate` |
 | Batch CI screenshots | `playwright-probe` |
 | Deep MCP playbook | `docs/research/CHROME-DEVTOOLS-MCP.md` |
@@ -47,7 +50,8 @@ Wrap map: `docs/AGENT-SURFACE.md` (apex-tools vs this skill vs TinyFish vs host 
 
 1. **Never render Chrome MCP while Playwright runs** — park to `about:blank`,
    then `chrome-stop`, then check CPU; see `references/traps.md` §1.
-2. **github.io is tinyfish-only** from this container (egress proxy).
+2. **github.io is unreachable from any container browser or curl** (egress
+   proxy) — `deploy-research` with the host fetch tool is the only path.
 3. **`snapCam()` after `jump()`/`park()` only** — never after `orbit()`/`view()`.
 4. SwiftShader WebGPU **executes** — visible WGX pixels come from the soft-present
    2D blit on `#game` (`gfx-probe.mjs` / `GLX.awaitSoftPresent()`), not from the
@@ -64,7 +68,7 @@ Wrap map: `docs/AGENT-SURFACE.md` (apex-tools vs this skill vs TinyFish vs host 
 
 - Shot / lighting / camera comparison failures → read
   [`references/traps.md`](references/traps.md) (numbered war stories).
-- Chrome setup, A/B ports, heap/perf, tinyfish recipes → read
+- Chrome setup, A/B ports, heap/perf, post-deploy recipes → read
   [`references/recipes.md`](references/recipes.md).
 - Renderer probe flags (`--backend`, secure context, `gfxBound`) →
   `references/recipes.md` § Renderer.
@@ -72,4 +76,4 @@ Wrap map: `docs/AGENT-SURFACE.md` (apex-tools vs this skill vs TinyFish vs host 
 ## One-line summary
 
 Playwright asserts the tree in batch; Chrome looks at the working tree live;
-tinyfish looks at the deploy; never let Chrome render while Playwright runs.
+deploy-research looks at the deploy; never let Chrome render while Playwright runs.

@@ -1,4 +1,6 @@
 /**
+ * @doc The `--live` harness imported by `slider-effect.mjs`: chase+park recipes, restores the pre-push live value on exit.
+ * @skill lighting-tuner
  * slider-effect --live — A/B (or N-shot ramp) LIGHTING TUNER knobs and
  * visually filter the pixels that moved.
  *

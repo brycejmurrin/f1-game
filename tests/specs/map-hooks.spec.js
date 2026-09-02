@@ -1,11 +1,13 @@
 // @ts-check
 // Contract tests for __apex.mapPts() and __apex.trackBounds()
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 test("mapPts and trackBounds hooks", async ({ page }) => {
   await page.setViewportSize({ width: 844, height: 390 });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 15000 });
+  // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: BOOT_MS });
 
   // A default track pre-loads on startup, so mapPts() is already populated here
   // (it is NOT null before an explicit race() — the old comment claimed otherwise).

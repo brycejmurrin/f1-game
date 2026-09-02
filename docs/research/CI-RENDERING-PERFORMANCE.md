@@ -441,3 +441,77 @@ nodes — because that ratio IS the saving, and it is one hook call away.
 - [Mobile Safari web pages are severely limited by memory](https://lapcatsoftware.com/articles/2026/1/7.html) — the iOS 26.2 ~100 MB/~200 MB measurements, and that no exception is catchable
 - [Fix: Unity WebGL build crashing on Safari iOS](https://bugnet.io/blog/how-to-fix-unity-webgl-build-crashing-on-safari-ios) — the 300–500 MB WebGL heap figure, iOS WebGL 2 feature gaps (float textures, integer samplers, AA)
 - [Jetsam kills WebGL application on iOS](https://stackoverflow.com/questions/44258746/jetsam-kills-webgl-application-on-ios) — jetsam killing at ~25% of device RAM
+
+# Part 3 — measurements moved out of AGENTS.md (2026-09-01)
+
+AGENTS.md keeps the rules; the measurements behind them live here. Each
+subsection names the AGENTS.md rule it backs.
+
+## The red run that is a missing install (Verification §1)
+
+`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install` keeps a fresh container's
+install to seconds, but the flag leaves the BROWSER absent, and the specs launch
+`chromium-headless-shell`, not the `/opt/google/chrome` the box ships. Measured
+2026-08-17: every `test:tiny` test red — 73 of them — on a container that had
+run `npm install` but not `npx playwright install chromium-headless-shell`;
+re-confirmed live 2026-08-27. The two signatures:
+
+| first failure message | missing |
+|---|---|
+| `Cannot find module …` | `npm install` |
+| `browserType.launch: Executable doesn't exist …chromium_headless_shell` | `npx playwright install chromium-headless-shell` |
+
+Both read as a boot regression from the summary line alone, and the cure is
+seconds — which is why the rule is "read the FIRST failure's message before
+believing any red run".
+
+## Software pixels: what the soft-present path does (§Seeing the game)
+
+On SwiftShader/Lavapipe the native WebGPU swapchain never composites to the
+screen, and a single `getCurrentTexture()` breaks `mapAsync` for the whole
+device. WGX therefore routes the visible `#game` through a 2D soft-present
+blit: final pass → `COPY_SRC` texture → readback → `putImageData` on `#game`,
+never `getCurrentTexture()`. Cache **1342+** uses ephemeral per-frame staging
+buffers + `onSubmittedWorkDone` before readback (a persistent staging buffer
+could be mapped while the next frame's copy landed on it); `awaitSoftPresent()`
+resolves only after a non-blank visible blit, so a probe that awaits it cannot
+screenshot the pre-first-frame black. `GLX.capturePixels()` (`wgx-capture.mjs`)
+is the optional readback oracle and can flake after soft-present on
+SwiftShader — the visible-canvas `gfx-probe.mjs` is the primary gate. Measured
+canvas colours per backend: §Measured above.
+
+## Cursor Cloud bootstrap (AGENTS.md §Cursor Cloud)
+
+The personal/dashboard environment for this repo is not
+`.cursor/environment.json`; system packages persist only via snapshot + Save on
+the environment dashboard — an `apt-get` in a live agent does **not** survive
+the next cold boot otherwise (§Cursor Cloud agent environment above has the
+package list and the ICD proof).
+
+Fresh-agent bootstrap, matching AGENTS.md Verification §1:
+
+```sh
+bash tools/cloud-agent-install.sh
+# equivalent manual steps when the script is not the dashboard install:
+export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+npm install --ignore-scripts --no-audit --prefer-offline
+npx playwright install chromium-headless-shell
+npx playwright install chromium
+```
+
+The dashboard `install` should call `bash tools/cloud-agent-install.sh`. A bare
+`npm install` can die on `registry.npmjs.org` ECONNRESET with npm's "Exit
+handler never called!" (measured 2026-08-17, `bld-20260817-e70b375f`) even when
+`node_modules` is already usable — `--prefer-offline` is what the script adds.
+`wgx-validate` / `wgx-capture` need full Chromium: the headless shell has no
+`navigator.gpu`. Missing Lavapipe (`test -f
+/usr/share/vulkan/icd.d/lvp_icd.json` fails) means reinstall
+`mesa-vulkan-drivers` or re-Save the env snapshot.
+
+MCP on this host: the seven-server map is `docs/AGENT-SURFACE.md`. Keep
+`apex-tools` in repo-root `.mcp.json` (and `.cursor/mcp.json`); the cloud host
+catalog is often empty, in which case the shell wrappers
+(`./tools/apex-tools-mcp.sh call`, `./tools/playwright-mcp.sh`,
+`./tools/tinyfish-mcp.sh`, `python3 tools/probe-mcp.py`) are the same surface.
+Never run Chrome MCP while Playwright is running, and do not attach
+`mcp-probe` for a `version.json` check (`deploy-research` owns that).

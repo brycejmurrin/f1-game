@@ -24,7 +24,7 @@ Playwright hang after a mid-run version bump.
    npm run test:tooling-fast
    ```
 
-4. **Bump version last** (**bump-cache**). Verify one uniform N:
+4. **Bump version last** (`bump-cache.mjs --apply`). Verify one uniform N:
    ```sh
    grep -o '?v=[0-9]\+' index.html | sort -u && cat version.json
    ```

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc Projects a `bacinger/f1-circuits` GeoJSON feature into a `CircuitPaths` entry; `--self-check` diffs committed traces.
+// @skill new-track
 /* Apex 26 — import real circuit centrelines from bacinger/f1-circuits (ODbL-1.0)
    into the `CircuitPaths` table in js/track/geo-paths.js.
  *

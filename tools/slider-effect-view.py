@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# @doc Visual filter for a slider A/B: `filter.png`, `heat.png`, `sheet.png`, MAD/p99/max stats.
+# @skill lighting-tuner
 """Isolate what a lighting-slider A/B actually moved.
 
 Given two same-size PNGs (A = slider at one level, B at another), write:

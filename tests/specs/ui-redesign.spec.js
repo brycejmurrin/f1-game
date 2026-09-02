@@ -1,14 +1,15 @@
 // @ts-check
 // Focused browser contract for the redesign foundation. One page visits every
 // changed surface so SwiftShader boot cost is paid once rather than per assertion.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
 
 async function waitReady(page) {
   await page.goto("/");
+  // BOOT_MS, not a hand-rolled 20 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex && window.__apex.race,
-    null, { polling: 100, timeout: 20_000 });
+    null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.headless(true));
 }
 
@@ -392,7 +393,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     await window.__apex.race("monza");
   });
   await page.waitForFunction(() => window.__apex.info().track === "monza",
-    null, { polling: 100, timeout: 40_000 });
+    null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
   // Lighting tuner is race-only (`pm-lighting` is disabled on the title). Open
   // it from pause → settings → MORE at 200% on the short landscape sheet.

@@ -12,10 +12,12 @@
 // Run: npx playwright test tests/specs/assets-api.spec.js   (npm run test:assets)
 
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 30000 });
+  // BOOT_MS, not a hand-rolled 30 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
 });
 
 test("assets() reports a coherent state", async ({ page }) => {

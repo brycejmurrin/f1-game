@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# @doc Cursor Cloud dashboard `install`: best-effort mesa/vulkan/xvfb, then `install-browsers.sh`, then the MCP clones.
+# @skill apex-env-setup
 # Dashboard / environment-build install for Apex 26 Cloud Agents.
 # Idempotent. Exit 0 when the snapshot already has usable deps even if apt
 # or the npm registry is unreachable (restricted egress).

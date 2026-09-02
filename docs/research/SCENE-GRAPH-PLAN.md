@@ -159,8 +159,8 @@ Placement helpers push nodes; `note()` folds into node creation. `rejBox` moves
 to per-node AABB. The 84-member `api` contract is unchanged from the circuits'
 side — this is entirely inside the engine.
 
-*Gate:* `npm run test:scenery` (props-over-road, terrain-over-road),
-`npm run test:agent` (scene/worldModel now read the graph).
+*Gate:* `npm run test:circuits` (props-over-road, terrain-over-road),
+`npm run test:hooks` (scene/worldModel now read the graph).
 
 ### S2 — bake path, default on
 `TrackGraph.bake(graph)` → `{pos,nrm,col,idx,mat}`, reproducing today's soup;
@@ -177,7 +177,7 @@ instance-bucket grid — the culling logic in `js/render/glx/chunked.js` ports
 almost directly). Shadow passes take the same buffers. `bake()` stays as the
 fallback for any backend without instancing and for the Node VM build guard.
 
-*Gate:* `npm run test:visual` + `npm run test:webgl`; draw-call and VRAM deltas
+*Gate:* `npm run test:gfx`; draw-call and VRAM deltas
 recorded per track.
 
 ### S4 — LOD, then detail

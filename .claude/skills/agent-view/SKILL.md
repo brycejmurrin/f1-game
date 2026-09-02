@@ -1,6 +1,6 @@
 ---
 name: agent-view
-description: Use when the user wants to see or drive Apex 26 without screenshots, asks what the car sees, wants agent world view/world()/field()/rollout(), wants a headless lap, deterministic run reproduction, or asks what the agent is trying to do. One-off geometry JSON (corners/groundY/walls) → debug-tracks.
+description: Use when the user wants to see or drive Apex 26 without screenshots, asks what the car sees, wants agent world view/world()/field()/rollout(), wants a headless lap, deterministic run reproduction, or asks what the agent is trying to do, what the car is doing, telemetry, slip/grip, field order/gaps, sector timing, lightState, or a headless control/obs/act/reset loop. One-off geometry JSON (corners/groundY/walls) → debug-tracks.
 ---
 
 # Agent view — perceive and drive the game as text
@@ -67,6 +67,8 @@ Read both once; do not re-fetch per tick.
 ## Load on demand
 
 - Tool catalog, starter policy, determinism, staging sharp edges → [references/surface.md](references/surface.md).
+- Telemetry hooks (`probe` / `physState` / `obs` / `fieldState` / `timing` /
+  `lightState`) and the headless `reset`/`act` control loop → [references/state.md](references/state.md).
 
 ## Reference
 
@@ -75,5 +77,5 @@ Read both once; do not re-fetch per tick.
 - `docs/AGENT-WORLD-API.md` — the design and the research behind each choice.
 - `__apex.agentHelp()` — the live manifest, including the `fields` glossary and
   the `read`/`control` sections listing the raw hooks and the drive/stage verbs.
-- Tests: `node tools/test-bg.mjs agent` (`tests/specs/agent-view.spec.js`,
+- Tests: `node tools/test-bg.mjs hooks` (`tests/specs/agent-view.spec.js`,
   `tests/specs/agent-drive-bench.spec.js`, `tests/specs/agent-determinism.spec.js`).

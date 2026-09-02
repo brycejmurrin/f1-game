@@ -277,13 +277,21 @@ const NetRendezvous = (function () {
     return rvLog("swap", got.ok ? { ok: true, payload: got.payload } : got);
   }
 
+  // Errors a poll may see for a moment without the room being gone: a 429,
+  // a 5xx, a timed-out or offline request. One of these used to abort the
+  // whole two-minute wait; now it takes WAIT_TRANSIENT_MAX in a row.
+  const TRANSIENT = new Set(["rate_limited", "relay", "timeout", "offline"]);
+  const WAIT_TRANSIENT_MAX = 5;
   async function waitFor(code, slot, token, onTick) {
     const started = Date.now();
+    let transient = 0;
     for (;;) {
       if (token && token.cancelled) return ERR("cancelled", "");
       const res = await get(code, slot);
       if (res.ok && res.body && res.body.payload) return { ok: true, payload: res.body.payload };
-      if (!res.ok && res.error !== "not_found") return res;
+      if (!res.ok && res.error !== "not_found") {
+        if (!TRANSIENT.has(res.error) || ++transient >= WAIT_TRANSIENT_MAX) return res;
+      } else transient = 0;
       if (Date.now() - started > POLL_TIMEOUT_MS) {
         return ERR("expired", "Nobody joined that code. Codes only last a couple of minutes.");
       }

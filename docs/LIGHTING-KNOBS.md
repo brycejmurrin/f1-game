@@ -10,7 +10,7 @@ direction.
 node tools/lighting/ab-lighting.mjs list          # the catalog (marks which knobs are value-sweepable)
 node tools/lighting/ab-lighting.mjs run all       # render A/B for every knob → scratch/captures/ab-lighting/
 node tools/lighting/ab-lighting.mjs run lampFog.base pcss.penScale
-node tools/test-bg.mjs ab                        # fast invariants + catalog integrity in background
+npm test -- tests/specs/lighting-ab.spec.js     # fast invariants + catalog integrity (or test-bg.mjs gfx)
 ```
 
 ## Dialling a value in (the tuning loop)
@@ -32,7 +32,7 @@ self-syncs this catalog (the applied value becomes the new `find`, the old
 value becomes the new `b`, edits confined to that knob's own entry — so the
 catalog-integrity test stays green and the knob now A/Bs the reverse), and
 bumps the `?v=` cache version in index.html. After applying: re-render the
-knob to confirm, `node tools/test-bg.mjs ab`, commit.
+knob to confirm, `npm test -- tests/specs/lighting-ab.spec.js`, commit.
 
 The harness serves the repo through an in-memory server and swaps the knob's
 source string for variant B — the working tree is never modified, and the same
@@ -135,5 +135,5 @@ catalog to follow.
   fine-detail presence.
 
 When you retune a value: run its knob, eyeball the `-AB.jpg`, keep the JSON.
-When you *rename or restructure* code around a value: `node tools/test-bg.mjs ab` tells
+When you *rename or restructure* code around a value: `npm test -- tests/specs/lighting-ab.spec.js` tells
 you which catalog entries to update.

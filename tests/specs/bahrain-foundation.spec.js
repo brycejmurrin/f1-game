@@ -1,13 +1,15 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 test("Bahrain props stay clear of the racing surface", async ({ page }) => {
   test.setTimeout(300000);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
+  // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.trackGeometry(true));
   await page.evaluate(() => window.__apex.race("bahrain", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track === "bahrain", null, { polling: 100, timeout: 15000 });
+  await page.waitForFunction(() => window.__apex.info().track === "bahrain", null, { polling: 100, timeout: BOOT_MS });
   await page.waitForTimeout(1200);
 
   const result = await page.evaluate(() => {

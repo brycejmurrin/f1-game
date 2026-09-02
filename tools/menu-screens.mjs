@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // menu-screens.mjs — canonical screen routes for layout-audit.mjs.
+// @doc Canonical `SCREENS` + `VIEWPORTS` + `OVERLAY_IDS` (library) for the layout tools.
+// @skill survey-ui-matrix
 import { createRequire } from "node:module";
 import { pickCircuit } from "./circuit-axis.mjs";
 

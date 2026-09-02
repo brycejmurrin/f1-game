@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // Measure every team crest without a browser.
+// @doc Measures every team crest offline by replaying `LiveryTex.drawCrest` into a recording 2D context + scanline raster.
+// @skill car-viewer
 //
 // The crests are canvas-2D path code, and the failure modes that matter are all
 // geometric: a limb thinner than a pixel at the smallest size the atlas is ever

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // CSS PLAY — host the working tree, open one screen, dump structured DOM,
+// @doc One-screen CSS edit loop: host the tree, open a menu, dump structured DOM, hot-swap a stylesheet, screenshot.
+// @skill css-play
 // hot-swap a stylesheet from disk, screenshot. The edit-loop tool for css/.
 //
 //   node tools/css-play.mjs --list

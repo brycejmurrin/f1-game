@@ -650,14 +650,14 @@ test("a lighting DELTA merges and an agent PROPOSAL replaces", () => {
   // them loses data either way: a proposal is a considered whole profile (so it
   // may drop a knob it decided against), a delta is the handful of sliders a
   // person moved (so it may not delete the seven they did not touch).
-  const mp = read(".claude/skills/bake-lighting/merge-proposals.mjs");
+  const mp = read(".claude/skills/lighting-tuner/scripts/merge-proposals.mjs");
   assert.match(mp, /merged\[key\] = delta \? Object\.assign\(\{\}, merged\[key\], clean\) : clean;/,
     "delta merges into the shipped map, proposal replaces it");
   assert.match(mp, /if \(!delta\) delete merged\[key\];/,
     "only a proposal may empty a condition — a paste must never wipe a profile it never mentioned");
   assert.match(mp, /window\.LightPresets && !window\.LightEdits|w\.LightPresets && !w\.LightEdits/,
     "a snapshot fed to the merge tool is named as such, not merged as a delta");
-  const bake = read(".claude/skills/bake-lighting/bake.mjs");
+  const bake = read(".claude/skills/lighting-tuner/scripts/bake.mjs");
   assert.match(bake, /LightEdits\\s\*=/,
     "bake.mjs must detect a delta by name and refuse it — it is a full replace");
   assert.match(bake, /merge-proposals\.mjs/, "and point at the tool that does take one");

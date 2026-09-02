@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges.
+// @skill check-changes
 /**
  * scan-globals.mjs — derive the REAL global-reference graph of the IIFE build.
  *

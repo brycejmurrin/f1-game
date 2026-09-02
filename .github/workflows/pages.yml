@@ -88,9 +88,16 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+      build: ${{ steps.stamp.outputs.build }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The generation is 2000 + the commit count (see "Stamp the shell
+          # generation"); a depth-1 checkout would count 1.
+          fetch-depth: 0
       # A newer push can land after current-tip passes or while this job waits
       # for the serialized Pages slot. Re-read the tip inside the lock. Failure
       # is deliberate: once an environment job exists it must not report success
@@ -129,6 +136,29 @@ jobs:
           cp index.html version.json manifest.json sw.js _site/
           cp .nojekyll _site/
           cp -r js css icons assets vendor _site/
+      # THE SHELL GENERATION IS STAMPED HERE, NOT COMMITTED (2026-09-01).
+      # 2000 + `git rev-list --count HEAD` on a fast-forward-only branch is an
+      # integer, monotonic and unique per tip, so two sessions can never land
+      # the same build and no deploy conflicts on version.json or the
+      # index.html hashes again (before: 34 of 105 builds were introduced by
+      # 2-3 commits; 144 of the last 200 commits touched version.json). The
+      # 2000 offset keeps every stamped build above the last COMMITTED one
+      # (1689) so no client is told a lower number and refuses to reload
+      # (index.html: `v.build <= loaded` -> stay). `--root _site` rehashes the
+      # staged tags too, so the committed placeholder only has to be
+      # consistent, never current. <meta name="apex-sha"> records provenance,
+      # because the deployed shell no longer equals the committed bytes.
+      - name: Stamp the shell generation
+        id: stamp
+        run: |
+          set -eu
+          BUILD=$(( 2000 + $(git rev-list --count HEAD) ))
+          node tools/bump-cache.mjs --apply --at "$BUILD" --root _site
+          sed -i "s|<meta name=\"apex-build\" content=\"$BUILD\">|<meta name=\"apex-build\" content=\"$BUILD\">\n<meta name=\"apex-sha\" content=\"$GITHUB_SHA\">|" _site/index.html
+          grep -q 'name="apex-sha"' _site/index.html
+          node tools/bump-cache.mjs --check --json --root _site
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "stamped build $BUILD for $GITHUB_SHA"
       # Artifact name is scoped to the RUN ATTEMPT: artifacts survive across
       # re-run attempts of the same run, so a re-run after a failed deploy left
       # multiple artifacts named "github-pages" in the run and deploy-pages@v4
@@ -142,3 +172,27 @@ jobs:
         uses: actions/deploy-pages@v4
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
+  # The live check the container cannot do: this runner reaches github.io. A
+  # deploy is not done until the Pages CDN serves the build just stamped.
+  verify-live:
+    name: Live version.json equals the stamped build
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Poll the live version.json
+        env:
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+          BUILD: ${{ needs.deploy.outputs.build }}
+        run: |
+          set -u
+          for i in $(seq 1 24); do
+            LIVE=$(curl -fsS "${PAGE_URL%/}/version.json?_=${GITHUB_RUN_ID}-$i" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(String(JSON.parse(s).build))}catch(_){}})' || true)
+            echo "attempt $i: live=${LIVE:-?} expected=$BUILD"
+            if [ "${LIVE:-}" = "$BUILD" ]; then
+              curl -fsS "${PAGE_URL%/}/index.html?_=${GITHUB_RUN_ID}" | grep -q "name=\"apex-build\" content=\"$BUILD\"" && echo "live shell carries build $BUILD" && exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::live version.json never reached build $BUILD within 4 minutes"
+          exit 1
