@@ -157,7 +157,9 @@ LEADER's, because a field-wide switch is what race control throws, and it is
 O(1) since `ranked` is already sorted) and `caution.level`. `c.otArmed` folds
 that together with the car's own gap and cooldown. The HUD says `NO OVERTAKE`
 and fades the button while the gate is shut, because "not armed yet" (keep
-closing) and "switched off" (nothing you do will arm it) are different messages.
+closing) and "switched off" (nothing you do will arm it) are different messages;
+the lockout after a push is a third one, `COOLDOWN 12` counting down in whole
+seconds (it used to read `OVERTAKE` at half opacity, which is not a message).
 `tests/specs/aero-zones.spec.js` pins both halves, driving a REAL opening lap —
 `setLap()` moves only the player's counter, so a teleport cannot exercise a
 leader-based gate.
