@@ -128,24 +128,44 @@ const say = (s) => { statusEl.textContent = s; };
 // compositor paces the loop. Median and p95 both matter: a p95 far above the
 // median is a hitch (a rebuild, a re-bake), not a steady cost, and the two are
 // fixed by completely different things.
+// Below this many frames in a phase there is no distribution to quote.
+const MIN_FRAMES = 12;
+
 function measureIn(win, ms) {
   return new Promise((resolve) => {
     const t = [];
     let last = win.performance.now();
     const end = last + ms;
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; clearTimeout(bail); resolve(v); } };
+    // rAF IS THE MEASUREMENT AND ALSO THE ONLY THING DRIVING THIS LOOP, so if it
+    // stops the loop stops with it and the promise never settles — the page then
+    // hangs on that phase for ever with no error, which is precisely what a
+    // backgrounded tab does. A wall-clock escape hatch, generous enough never to
+    // fire on a tab that is actually rendering.
+    const bail = setTimeout(() => finish({ frames: t.length, stalled: true }), ms + 20000);
     const tick = () => {
       const now = win.performance.now();
       t.push(now - last);
       last = now;
-      if (now < end) win.requestAnimationFrame(tick);
+      if (now < end && !done) win.requestAnimationFrame(tick);
       else {
-        // Drop the first few: the phase change itself costs a frame or two
+        // Drop the first couple: the phase change itself costs a frame or two
         // (a knob write can force a rebuild), and that is not the steady cost.
-        const s = t.slice(3).sort((a, b) => a - b);
-        if (!s.length) return resolve(null);
+        // Only ever drop what we can afford to — on a slow device a 6 s phase
+        // can be a handful of frames, and dropping 3 of 4 leaves nothing.
+        const warm = Math.min(2, Math.max(0, t.length - MIN_FRAMES));
+        const s = t.slice(warm).sort((a, b) => a - b);
+        // A sample this thin cannot carry a p95, let alone a p99. SAY SO —
+        // an empty cell reads as "measured, and it was fine", which is the one
+        // thing it is not. The first version of this page resolved null here
+        // and rendered six rows of `undefined`; that is how this guard exists.
+        if (s.length < MIN_FRAMES) {
+          return finish({ frames: t.length, insufficient: true });
+        }
         const q = (p) => +s[Math.min(s.length - 1, Math.floor(s.length * p))].toFixed(2);
-        resolve({ frames: s.length, p50: q(0.5), p95: q(0.95), p99: q(0.99),
-                  fps: +(1000 / q(0.5)).toFixed(1) });
+        finish({ frames: s.length, p50: q(0.5), p95: q(0.95), p99: q(0.99),
+                 fps: +(1000 / q(0.5)).toFixed(1) });
       }
     };
     win.requestAnimationFrame(tick);
@@ -243,7 +263,12 @@ async function run() {
 
   lastResult = { env, rows };
   render(lastResult);
-  say("done — press COPY RESULT and paste it back.");
+  const usable = rows.filter((r) => r.p50 != null).length;
+  say(usable === 0
+    ? "NO PHASE PRODUCED A USABLE SAMPLE — the numbers below are not a measurement. Raise seconds per phase."
+    : (usable < rows.length
+        ? `done, but only ${usable}/${rows.length} phases produced a usable sample.`
+        : "done — press COPY RESULT and paste it back."));
   $("run").disabled = false; $("copy").disabled = false;
 }
 
@@ -252,6 +277,12 @@ function render(res) {
   const esc = (s) => String(s == null ? "—" : s).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
   const cells = res.rows.map((r) => {
     if (r.error) return `<tr><td>${esc(r.label)}</td><td colspan="5">${esc(r.error)}</td></tr>`;
+    if (r.stalled) return `<tr><td>${esc(r.label)}</td><td colspan="5" class="delta-bad">` +
+      `requestAnimationFrame STALLED after ${r.frames} frame(s) — this tab was probably ` +
+      `backgrounded. Keep this tab focused and in front for the whole run.</td></tr>`;
+    if (r.insufficient) return `<tr><td>${esc(r.label)}</td><td colspan="5" class="delta-bad">` +
+      `only ${r.frames} frame(s) in this phase — too few to quote a median. ` +
+      `Raise "seconds per phase", or this device is rendering slower than ~${MIN_FRAMES} fps here.</td></tr>`;
     const d = base && base.p50 ? +(100 * (r.p50 - base.p50) / base.p50).toFixed(1) : null;
     const cls = d == null || r.key === "baseline" ? "" : (d < -4 ? "delta-ok" : (d > 4 ? "delta-bad" : ""));
     const dTxt = r.key === "baseline" ? "—" : (d == null ? "—" : (d > 0 ? "+" : "") + d + "%");
