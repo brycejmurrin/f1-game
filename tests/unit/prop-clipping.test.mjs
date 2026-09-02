@@ -80,6 +80,33 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // / tree class (tracks.js:2061); grandstandEx × neonTower appears at
 // 6 hits (max 1.80 m). More shorter bays, more existing-class contacts.
 // No new defect class. Locked to the measured count.
+//
+// baku 30 → 31, shanghai 15 → 17 (2026-09-02): 1daf4a3 un-suppressed scenery on
+// seven circuits, and a prop that now EXISTS can now overlap. Measured with
+// --why on both sides of that commit:
+//   baku      the `baku < buildProps × addBox < replay` pairing moves from
+//             max 4.38 m @frac 0.390 to max 2.22 m @frac 0.487 and gains one
+//             spot; 15 call-site pairings before and after, 53 pairs both. The
+//             marshal posts (gap 3.0 → 3.5 m, restoring 7 of 9 that onTrack was
+//             culling) reach into the city boxes they now stand beside.
+//   shanghai  three new pairings at frac 0.015–0.018, two of them severe
+//             (5.02 m, 3.20 m), all `place < buildProps` against city buildings
+//             and trees — the buildings restored from 23 suppressed to 3.
+// Both are the documented street-circuit class: rows placed by centreline arc
+// length share volume where the arc compresses. Not a new defect class, and the
+// alternative is re-hiding scenery that was missing from the track.
+//
+// monaco 25 → 24, bahrain 4 → 3 (2026-09-02): the same commit's suppression
+// fixes REMOVED overlaps on these two. Lowered, because the stale-entry test is
+// right that a cap above the measured count silently permits regressions up to
+// it.
+//
+// PROCESS, and this is the second time: 1daf4a3 shipped the scenery change
+// without touching either baseline, so test:sweeps was red on the deploy branch
+// itself — exactly the failure the silverstone 16 → 15 note above already
+// records ("A cap left behind reads exactly like a regression you caused"). It
+// cost this session a full before/after audit to establish the reds were not
+// its own renderer change. A geometry edit owns its caps.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "clip-baseline.json"), "utf8"),
 );
