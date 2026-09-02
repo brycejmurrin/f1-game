@@ -571,7 +571,11 @@ const CEILINGS = {
   // POSITIVE window: a player who quit inside those 5 s was reverted to WebGL2
   // on the next boot. A hidden or closing tab is not a crash — the same rule
   // PerfGov's sentinel already states three lines below the new handler.
-  "js/game.js": 9193,
+  // -> 9202 per-chunk road: the lamp clause in _wantRoadChunk gated on
+  // tier(), which made it DEAD CODE ((A && t<1) || (t<3) === t<3) and
+  // silently disabled PER-CHUNK ROAD on GRAPHICS: LOW. autoTier() matches
+  // the scenery half, tuner.js's held-off note and the slider help text.
+  "js/game.js": 9202,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
