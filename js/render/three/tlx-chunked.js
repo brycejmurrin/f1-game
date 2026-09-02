@@ -377,17 +377,22 @@
     function releaseMirrors(mesh) {
       if (!mesh || !mesh.chunks || !mesh.chunks.length || mesh._mirrorsFreed) return;
       mesh._mirrorsFreed = true;
-      // NULL, not a zero-length array. three sizes a buffer as
-      //   e.array ? e.array.byteLength : (e.count && e.itemSize ? e.count*e.itemSize*4 : 0)
-      // (vendored r185, three.webgpu.min.js) — an EXPLICIT fallback for a null
-      // array that recovers the right size from count/itemSize, which is why
-      // nulling has shipped and worked. A zero-length typed array is TRUTHY, so
-      // it takes the first branch and yields byteLength 0: a zero-byte buffer.
-      // That is what made Metal refuse every indexed draw ("Index range ... does
-      // not fit in index buffer size (0)", gpu-census run 26), and it is the
-      // GENERAL case, not an index quirk — I fixed the index locally instead of
-      // recognising it. Changing this to zero-length on 2026-09-02 was my
-      // mistake; reverted.
+      // NULL, not a zero-length array — on EVIDENCE, not on a mechanism.
+      //
+      // What is established: nulling is what shipped and rendered for months.
+      // Assigning `new array.constructor(0)` instead (mine, 2026-09-02) is the
+      // only change between gpu-census run 26 on macos-latest/Metal, which
+      // failed with "Index range (first: 0, count: 15, format: Uint32) does not
+      // fit in index buffer size (0)" x8, and run 27, which passed. That is an
+      // A/B on real hardware and it is enough to prefer null.
+      //
+      // What is NOT established, and what I claimed on the first pass: that
+      // three sizes buffers as `array ? array.byteLength : count*itemSize*4`.
+      // That expression is real but it is inside _getAttributeMemorySize() —
+      // renderer.info ACCOUNTING, not allocation. I read one minified fragment,
+      // did not check its enclosing function, and generalised. The actual
+      // allocation path could not be traced with confidence in the minified
+      // bundle. Do not repeat the claim without reading unminified three.
       const atts = mesh.chunks[0].geo.attributes;
       for (const k in atts) if (atts[k]) atts[k].array = null;
       // The per-chunk INDEX arrays stay. three's WebGPU backend sizes the index

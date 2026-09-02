@@ -202,15 +202,21 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // separate effort. Full-lap completion is therefore not asserted here.)
   for (const id of ["monza", "suzuka"]) {
     test(`autopilot drives safely and makes progress at ${id}`, async ({ page }) => {
-      // ITS OWN NUMBER, MEASURED — not the global 120 s. One boot plus a
-      // 150-sim-second lap. With the rAF render left running this cost 185 s for
-      // suzuka alone and 209.8 s under a second worker (a fail); headless, the
-      // same test is 87.6 s with a second worker beside it (2026-09-02, this box).
-      // 180 s is ~2x that, which is the margin a slower CI runner needs — the boot
-      // is the variable half and a cold runner has measured 66 s just to build
-      // suzuka's field. This covers a slow MACHINE, not a slow assertion, which is
-      // what playwright.config's own note asks such a test to declare for itself.
-      test.setTimeout(180_000);
+      // MEASURED TWICE, from two directions, and the union takes both. Another
+      // session measured monza at 152.8 s on an IDLE box driving perfectly well
+      // and timing out at the config's 120 s having never reached an assertion:
+      // a budget sized below the work. This branch found WHY the work was that
+      // big — the rAF loop was rasterising the circuit on SwiftShader for all
+      // 9,000 ticks of a lap this file never looks at — and load() now goes
+      // headless, which took suzuka from 209.8 s (a fail, two workers) to 87.6 s
+      // and monza from 152.8 s to 73.9 s.
+      //
+      // 300 s is kept anyway, theirs not the 180 s this branch proposed. With
+      // the render gone the tests land near 90 s and never approach it; a budget
+      // is a backstop, not a target, and the cheap direction to be wrong in on a
+      // shared CI runner is generous. Runs 1898 and 1901 both died here and both
+      // were read as mysteries — that is the cost this number now prevents.
+      test.setTimeout(300_000);
       const errors = [];
       page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
       await load(page, id);
@@ -228,13 +234,14 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // setup must still drive safely (no barrier clip / NaN) and make progress. Each
   // lap reloads a fresh page so runs don't inherit one another's end state.
   test("can drive safely via emulated tilt input", async ({ page }) => {
-    // TWO boots and TWO laps. Before the headless switch this measured 143 s and
-    // had earlier PASSED at 112.4 s — 7.6 s under the global 120 s cap, which meant
-    // that cap was going to fail it on any slower runner for reasons unrelated to
-    // what it asserts. Headless it is 51.9 s under a second worker (2026-09-02).
-    // Same 180 s as the tests above rather than a number of its own: it is no
-    // longer the expensive one, and one budget for the file is easier to keep true.
-    test.setTimeout(180_000);
+    // TWO boots and TWO laps, and 31.4 s alone on an idle box — this one was
+    // never slow in itself. It times out on CI because Playwright counts FIXTURE
+    // SETUP against the test budget and this test follows the per-circuit laps
+    // above, whose page is still tearing down when this context is created (the
+    // same mechanism the scenery-kits budget note records). Headless it measures
+    // 51.9 s with a second worker beside it. Same 300 s as its neighbours: one
+    // budget for the file is easier to keep true than three tuned numbers.
+    test.setTimeout(300_000);
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
     await load(page, "monza");

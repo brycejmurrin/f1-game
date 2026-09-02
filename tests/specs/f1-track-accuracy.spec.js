@@ -68,7 +68,13 @@ function normalise(pairs) {
 }
 
 test("every game circuit matches its pinned real-circuit reference", async ({ page }) => {
-  test.setTimeout(120_000);
+  // MEASURED, IDLE BOX, 2026-09-02: 108.1 s, PASSING. This was 120_000 — the
+  // same number as the config default, so it read as a deliberate budget while
+  // granting nothing, and left 11% headroom that a shared CI runner eats. It
+  // timed out in runs 1898 and 1901 while passing locally, which is the
+  // signature of a budget rather than a hang. The cost is the roster: it
+  // rebuilds every circuit and compares each against its pinned reference.
+  test.setTimeout(300_000);
   await page.goto("/");
   await page.waitForFunction(() => typeof CircuitPaths !== "undefined");
   const gameCircuits = await page.evaluate(() => {

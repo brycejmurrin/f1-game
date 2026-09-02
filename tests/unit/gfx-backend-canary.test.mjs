@@ -1647,15 +1647,23 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "the CPU mirrors must not be freed while the env probe still has passes to compile");
   assert.match(src, /_chunkRelOptIn[\s\S]{0,200}apex26\.tlxChunkRelease"\)\s*===\s*"1"[\s\S]{0,80}return false/,
     "and the chunk-release override must default OFF, reachable only by an explicit opt-in");
-  // three sizes a buffer as `array ? array.byteLength : count*itemSize*4`, so a
-  // NULL array recovers its size from count/itemSize while a zero-length typed
-  // array is TRUTHY and yields a ZERO-BYTE buffer. Nulling is correct by design;
-  // zero-length is what made Metal refuse every indexed draw (gpu-census 26).
-  const chunkSrc = read("js/render/three/tlx-chunked.js");
+  // Nulling is what shipped and rendered; assigning a zero-length array instead
+  // is the ONLY delta between gpu-census run 26 on macos-latest/Metal (8x
+  // "Index range ... does not fit in index buffer size (0)") and run 27, which
+  // passed. Real-hardware A/B, and enough on its own. The mechanism first
+  // asserted here — that three sizes buffers from array.byteLength with a
+  // count*itemSize*4 fallback for null — came from misreading
+  // _getAttributeMemorySize(), which is renderer.info ACCOUNTING, not
+  // allocation. The claim is withdrawn; the guard stands on the A/B.
+  // COMMENTS STRIPPED. The first version of this check matched the prose that
+  // explains the rule — the words "new array.constructor(0)" in the comment
+  // beside the code — and failed on a correct file. A guard that reads comments
+  // is asserting the documentation, not the behaviour.
+  const chunkSrc = read("js/render/three/tlx-chunked.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(fnBody(chunkSrc, "releaseMirrors"), /atts\[k\]\.array\s*=\s*null/,
     "releaseMirrors must NULL the mirror, never assign a zero-length array");
-  assert.doesNotMatch(fnBody(chunkSrc, "releaseMirrors"), /new\s+a?t?t?s?\[?k?\]?\.?array\.constructor\(0\)/,
-    "a zero-length array defeats three's null-array size fallback");
+  assert.doesNotMatch(fnBody(chunkSrc, "releaseMirrors"), /\.array\s*=\s*new\s+\S*constructor\(0\)/,
+    "a zero-length array is what Metal refused (gpu-census 26 vs 27)");
   assert.match(src, /if\s*\(\s*_envFailN\s*>=\s*ENV_FAIL_CAP\s*\)\s*_envGaveUp\s*=\s*true\b/,
     "a probe that cannot succeed must stop retrying — it threw every frame forever");
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -2668,18 +2676,22 @@ test("the geometry mirror sweep caches bounds before it frees, and never runs on
   const body = rel.slice(0, rel.indexOf("\n      }"));
   const boundsAt = body.indexOf("computeBoundingSphere()");
   // The free is `a.array = null`, and it MUST be null rather than a zero-length
-  // typed array. three sizes an attribute buffer as
-  // `array ? array.byteLength : count * itemSize * 4` — an explicit fallback for
-  // a NULL array. A zero-length typed array is truthy, takes the first branch,
-  // and yields a ZERO-BYTE GPU buffer; that is the general case behind the Metal
-  // index refusal, not an index quirk (deploy branch, 2026-09-02).
-  const dropAt = body.indexOf("a.array = null");
+  // typed array — the same rule releaseMirrors carries above, for the same
+  // reason and on the same evidence: nulling shipped and rendered for months,
+  // and a zero-length array is the ONLY delta between gpu-census run 26 on
+  // macos-latest/Metal (8x "Index range ... does not fit in index buffer size
+  // (0)") and run 27, which passed. A mechanism was asserted for this and then
+  // WITHDRAWN — it came from _getAttributeMemorySize(), which is renderer.info
+  // accounting, not allocation — so this guard stands on the hardware A/B alone.
+  // COMMENTS STRIPPED, for the reason recorded above: the first version of the
+  // sibling check matched the prose explaining the rule and failed a good file.
+  const bodyCode = fnBody(code("js/render/three/tlx.js"), "releaseGeoMirrors");
+  const dropAt = bodyCode.indexOf("a.array = null");
   assert.ok(boundsAt > 0, "releaseGeoMirrors no longer caches the bounding sphere");
   assert.ok(dropAt > 0, "releaseGeoMirrors no longer frees anything — check this test, not the code");
-  assert.ok(!/new a\.array\.constructor\(0\)/.test(body),
-    "the mirror must be NULLED, not replaced with a zero-length array: three's " +
-    "`array ? array.byteLength : count*itemSize*4` takes the truthy branch and sizes a ZERO-BYTE buffer");
-  assert.ok(boundsAt < dropAt,
+  assert.doesNotMatch(bodyCode, /\.array\s*=\s*new\s+\S*constructor\(0\)/,
+    "a zero-length array is what Metal refused (gpu-census 26 vs 27) — NULL the mirror");
+  assert.ok(bodyCode.indexOf("computeBoundingSphere()") < dropAt,
     "the bounds must be computed BEFORE the arrays are freed, or three computes a NaN sphere from a missing array");
   assert.match(body, /radius >= 0/,
     "a geometry whose bounds will not compute must keep its mirror rather than be freed unmeasured");
