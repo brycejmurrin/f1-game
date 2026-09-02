@@ -2667,11 +2667,20 @@ test("the geometry mirror sweep caches bounds before it frees, and never runs on
   const rel = tlx.slice(tlx.indexOf("function releaseGeoMirrors("));
   const body = rel.slice(0, rel.indexOf("\n      }"));
   const boundsAt = body.indexOf("computeBoundingSphere()");
-  const dropAt = body.indexOf("new a.array.constructor(0)");
+  // The free is `a.array = null`, and it MUST be null rather than a zero-length
+  // typed array. three sizes an attribute buffer as
+  // `array ? array.byteLength : count * itemSize * 4` — an explicit fallback for
+  // a NULL array. A zero-length typed array is truthy, takes the first branch,
+  // and yields a ZERO-BYTE GPU buffer; that is the general case behind the Metal
+  // index refusal, not an index quirk (deploy branch, 2026-09-02).
+  const dropAt = body.indexOf("a.array = null");
   assert.ok(boundsAt > 0, "releaseGeoMirrors no longer caches the bounding sphere");
   assert.ok(dropAt > 0, "releaseGeoMirrors no longer frees anything — check this test, not the code");
+  assert.ok(!/new a\.array\.constructor\(0\)/.test(body),
+    "the mirror must be NULLED, not replaced with a zero-length array: three's " +
+    "`array ? array.byteLength : count*itemSize*4` takes the truthy branch and sizes a ZERO-BYTE buffer");
   assert.ok(boundsAt < dropAt,
-    "the bounds must be computed BEFORE the arrays are emptied, or three computes a NaN sphere from a zero-length array");
+    "the bounds must be computed BEFORE the arrays are freed, or three computes a NaN sphere from a missing array");
   assert.match(body, /radius >= 0/,
     "a geometry whose bounds will not compute must keep its mirror rather than be freed unmeasured");
 
