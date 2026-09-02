@@ -60,13 +60,141 @@
     return p;
   }
 
+  // ── vertex-attribute packing ─────────────────────────────────────────
+  // three keeps the CPU copy of every attribute array forever (measured: 49.8
+  // MB of deduped attribute bytes on montreal, against GLX's 17.8 MB, which is
+  // what OOM-kills an iPhone tab mid-race — docs/PERF-FINDINGS.md 2m). Half of
+  // those bytes are Float32 holding values that do not need 32 bits: a colour
+  // channel is 8-bit, a unit normal survives 16, a MAT id is 0..16.
+  //
+  // The pack PROVES its precondition instead of assuming it. A colour outside
+  // [0,1] (emissive) or a MAT id above 255 must never be silently clamped, so
+  // every source is range-scanned first and anything that does not fit stays
+  // Float32. `packStats` records which way each attribute went, so "quantised
+  // nothing" can never be mistaken for "nothing needed quantising".
+  // Off-switch AND the A/B handle: apex26.tlxPack="0" keeps every attribute
+  // Float32 and every absent one its own array — the pre-pack behaviour, on
+  // the same build, so a look regression can be attributed rather than argued.
+  const packOn = (function () {
+    try { return localStorage.getItem("apex26.tlxPack") !== "0"; } catch (_) { return true; }
+  })();
+  const packStats = { on: packOn, small: 0, wide: 0, zero: 0, savedMB: 0,
+    // WHICH kind refused to quantise, how many vertices it cost, and the worst
+    // value that pushed it out of range. "29 stayed wide" is not actionable;
+    // "unorm, 3.1 M values, max 3.87" says the colours carry emissive above 1.
+    half: 0, wideBy: {}, wideMax: {}, wideLen: {} };
+  // One shared all-zero buffer behind every absent attribute. Views into it
+  // carry the right per-mesh count while costing one allocation in total —
+  // absent `trk` alone measured 5.88 MB of zeros across 153 meshes. SAFE only
+  // because nothing ever writes these: they are absent-source placeholders on
+  // static geometry, and three re-reads an array only on a version bump that
+  // never comes. Never hand this to an attribute a caller may mutate.
+  // float32 -> float16 bits. three exports Float16BufferAttribute but no
+  // converter, so this is ours: truncating mantissa (fine for colour), with
+  // the subnormal and overflow cases handled rather than wrapped.
+  const _fb = new Float32Array(1), _ib = new Uint32Array(_fb.buffer);
+  function _toHalf(v) {
+    _fb[0] = v;
+    const x = _ib[0], sign = (x >>> 16) & 0x8000;
+    const exp = (x >>> 23) & 0xff;
+    let man = x & 0x7fffff;
+    if (exp === 255) return sign | 0x7c00 | (man ? 0x200 : 0);   // Inf / NaN
+    const e = exp - 112;                                          // 127 - 15
+    if (e >= 31) return sign | 0x7c00;                            // overflows half
+    if (e <= 0) {                                                 // subnormal / zero
+      if (e < -10) return sign;
+      man = (man | 0x800000) >>> (1 - e);
+      return sign | (man >>> 13);
+    }
+    return sign | (e << 10) | (man >>> 13);
+  }
+  let _zeroBuf = new Float32Array(0);
+  function _zeros(len) {
+    if (_zeroBuf.length < len) _zeroBuf = new Float32Array(len);
+    return _zeroBuf.subarray(0, len);
+  }
+  function packAttr(THREE, src, len, itemSize, kind) {
+    const ok = src && src.length === len;
+    if (!packOn) {
+      return new THREE.BufferAttribute(
+        ok ? (src instanceof Float32Array ? src : new Float32Array(src)) : new Float32Array(len),
+        itemSize);
+    }
+    if (!ok) {
+      packStats.zero++;
+      packStats.savedMB += (len * 4) / 1048576;      // the copy we did NOT make
+      return new THREE.BufferAttribute(_zeros(len), itemSize);
+    }
+    let fits = kind !== null && kind !== undefined, finite = true;
+    if (fits) {
+      for (let i = 0; i < len; i++) {
+        const v = src[i];
+        if (!(v === v) || v === Infinity || v === -Infinity) { fits = false; finite = false; break; }
+        // EPS, not a bare compare: a normalised normal lands on
+        // 1.0000000560427362 often enough that four whole attributes (1.29 M
+        // values, 4.9 MB) refused Int16 over float noise. Measured, not
+        // guessed — the range scan reported that exact maximum.
+        if (kind === "unit") { if (v < -1.0001 || v > 1.0001) { fits = false; break; } }
+        else if (kind === "unorm") { if (v < 0 || v > 1) { fits = false; break; } }
+        else if (kind === "id") { if (v < 0 || v > 255 || (v | 0) !== v) { fits = false; break; } }
+      }
+    }
+    if (!fits) {
+      const kk = kind || "raw";
+      packStats.wideBy[kk] = (packStats.wideBy[kk] || 0) + 1;
+      packStats.wideLen[kk] = (packStats.wideLen[kk] || 0) + len;
+      let mx = packStats.wideMax[kk];
+      for (let i = 0; i < len; i++) { const v = src[i]; if (!(mx >= v)) mx = v; }
+      packStats.wideMax[kk] = mx;
+      // Out of the small type's range is not the same as needing 32 bits.
+      // Colours carry emissive up to 3.4 and MAT ids are not always whole
+      // (measured 15.4), but half-float holds both with room to spare and
+      // costs 2 bytes — three maps a Float16BufferAttribute straight to
+      // GL_HALF_FLOAT, so the shader still reads a plain float and nothing
+      // else changes. NOT for `trk`: its arc length reaches 5382 m, where
+      // half-float's 11-bit mantissa is worth about +/-2.6 m and road
+      // markings need far better. Non-finite data keeps Float32 as well —
+      // half would turn a stray Infinity into a different wrong number.
+      if (finite && THREE.Float16BufferAttribute && (kind === "unorm" || kind === "id")) {
+        packStats.half++;
+        const h = new Uint16Array(len);
+        for (let i = 0; i < len; i++) h[i] = _toHalf(src[i]);
+        packStats.savedMB += (len * 2) / 1048576;
+        // Constructor, NOT a post-hoc `.array =`: BufferAttribute derives
+        // `count` from the array it is GIVEN, so assigning afterwards leaves
+        // count 0 and the mesh draws nothing.
+        return new THREE.Float16BufferAttribute(h, itemSize);
+      }
+      packStats.wide++;
+      const f = src instanceof Float32Array ? src : new Float32Array(src);
+      return new THREE.BufferAttribute(f, itemSize);
+    }
+    packStats.small++;
+    if (kind === "unit") {
+      const a = new Int16Array(len);
+      for (let i = 0; i < len; i++) a[i] = Math.round(src[i] * 32767);
+      packStats.savedMB += (len * 2) / 1048576;
+      return new THREE.BufferAttribute(a, itemSize, true);            // normalized
+    }
+    const a = new Uint8Array(len);
+    if (kind === "unorm") { for (let i = 0; i < len; i++) a[i] = Math.round(src[i] * 255); }
+    else { for (let i = 0; i < len; i++) a[i] = src[i]; }
+    packStats.savedMB += (len * 3) / 1048576;
+    return new THREE.BufferAttribute(a, itemSize, kind === "unorm");  // ids are NOT normalized
+  }
+  // Uint16 indices wherever the vertex count allows — three picks the GL type
+  // from the array, so this is a straight halving with no shader involvement.
+  function packIndex(THREE, idx, vCount) {
+    return new THREE.BufferAttribute(
+      (!packOn || vCount > 65535) ? new Uint32Array(idx) : new Uint16Array(idx), 1);
+  }
+
   function chunked(THREE /*, ctx */) {
 
     const toF32 = (a) => (a instanceof Float32Array ? a : new Float32Array(a));
 
-    function attrOrZero(src, len, itemSize) {
-      return new THREE.BufferAttribute(
-        src && src.length === len ? toF32(src) : new Float32Array(len), itemSize);
+    function attrOrZero(src, len, itemSize, kind) {
+      return packAttr(THREE, src, len, itemSize, kind);
     }
 
     /** Build a chunked mesh: one shared attribute set + one index buffer per
@@ -83,18 +211,18 @@
       if (triCount < 2000) {
         const geo = new THREE.BufferGeometry();
         geo.setAttribute("position", new THREE.BufferAttribute(toF32(data.pos), 3));
-        geo.setAttribute("normal", attrOrZero(data.nrm, vCount * 3, 3));
-        geo.setAttribute("color", attrOrZero(data.col, vCount * 3, 3));
-        geo.setAttribute("mat", attrOrZero(data.mat, vCount, 1));
+        geo.setAttribute("normal", attrOrZero(data.nrm, vCount * 3, 3, "unit"));
+        geo.setAttribute("color", attrOrZero(data.col, vCount * 3, 3, "unorm"));
+        geo.setAttribute("mat", attrOrZero(data.mat, vCount, 1, "id"));
         geo.setIndex(new THREE.BufferAttribute(
           big ? new Uint32Array(srcIdx) : new Uint16Array(srcIdx), 1));
         return { __tlx: true, chunked: true, geo, chunks: null, count: srcIdx.length };
       }
       let pos = toF32(data.pos);
       const aPos = new THREE.BufferAttribute(pos, 3);
-      const aNrm = attrOrZero(data.nrm, vCount * 3, 3);
-      const aCol = attrOrZero(data.col, vCount * 3, 3);
-      const aMat = attrOrZero(data.mat, vCount, 1);
+      const aNrm = attrOrZero(data.nrm, vCount * 3, 3, "unit");
+      const aCol = attrOrZero(data.col, vCount * 3, 3, "unorm");
+      const aMat = attrOrZero(data.mat, vCount, 1, "id");
       // NO `trk` attribute here, deliberately. Only the ROAD carries track
       // coords, and the chunked path is the city props/glass — millions of
       // vertices, the one buffer this whole subsystem exists to keep small.
@@ -228,5 +356,6 @@
   // must be able to re-export them in GLX's shape even when the factory itself
   // failed and chunkedSys is null. See the note at their definition.
   window.TLXShaders = Object.assign(window.TLXShaders || {},
-    { chunked, makeFrustumPlanes, aabbInFrustum: _aabbInFrustum, aabbDist2: _aabbDist2 });
+    { chunked, makeFrustumPlanes, aabbInFrustum: _aabbInFrustum, aabbDist2: _aabbDist2,
+      packAttr, packIndex, packStats });
 })();

@@ -127,6 +127,7 @@ the tool's own header.
 | **synth-models.mjs** | Procedural AX26 model catalog for `assets.mjs bake-synthetic-models` — buildings, grandstands, industrial; no network. | asset-pack |
 | **tinyfish-mcp.sh** | Local TinyFish MCP proxy helper: `setup`/`start`/`stop`/`status`/`fetch`/`search`/`deploy-check`/`deploy-js` on :3711. | mcp-probe |
 | **tinyfish-rpc.py** | Unwraps TinyFish `fetch_content`/`search` JSON-RPC results: `unwrap` / `deploy-summary` / `live-build` / `tool-names`. | mcp-probe |
+| **tlx-pack-check.cjs** | Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser. | cross-backend-parity |
 | **trace-logo.mjs** | Author-time: regenerates `js/car/crest-paths.js` from a team logo bitmap in git history (k-means inks, contour walk). | car-viewer |
 | **track-accuracy-validator.mjs** | Shape-error maths (`MAX_SHAPE_ERROR`, `signedArea`, …) shared by the circuit-accuracy tests. | new-track |
 | **track-build-vm.cjs** | The shared "run the REAL track build headless in a Node VM" harness the audits and VM tests load the engine through. | debug-tracks |
