@@ -367,6 +367,62 @@ test("autoTier ignores the GRAPHICS user floor so look post stays live on LOW", 
   assert.equal(PerfGov.autoTier(), 0, "GRAPHICS: MEDIUM must not pin look post either");
 });
 
+test("a recovered device gets its per-chunk lamps back on GRAPHICS: MEDIUM", () => {
+  // THE ONE-WAY DOOR THIS CLOSES. The degrade branch writes
+  // `_perfTier = max(_perfTier, _floorTier()) + 1`, and _floorTier() folds in
+  // the GRAPHICS preset — so on MEDIUM (_userTier 2, every phone's default) the
+  // governor's first measured shed put _perfTier at 3, adopting the preset as
+  // its own evidence. The restore branch walks back down only as far as
+  // _floorTier(), i.e. 2. autoTier() reads _perfTier, so it stayed >= 2 for the
+  // rest of the session however completely the device recovered — and PER-CHUNK
+  // LAMPS, gated `>= 1`, went off and never came back. Reported from a MEDIUM
+  // preset as "chunk lights isn't working even with the slider", against a
+  // tuner note promising the feature "returns on its own when frames recover".
+  //
+  // autoShed() answers the question the gate actually asks: how many rungs has
+  // the GOVERNOR shed on its own measurements, net of what it restored.
+  const PerfGov = makeGovAtFloor();          // scale lever exhausted: the ladder is the only lever
+  PerfGov.setUserTier(2);                    // GRAPHICS: MEDIUM
+  assert.equal(PerfGov.autoShed(), 0, "a preset alone is not a measured shed");
+
+  // Frames genuinely too slow, and genuinely cheaper for each rung shed — so
+  // every step VERIFIES and sticks, which is what makes the door close.
+  feed(PerfGov, () => 34 - PerfGov.autoShed() * 6, 3000);
+  assert.ok(PerfGov.autoShed() >= 1, "a device missing frames must still shed by evidence");
+  assert.ok(PerfGov.autoTier() >= 3,
+    `the ladder must still climb ABOVE the preset floor on a struggling device (got ${PerfGov.autoTier()})`);
+
+  // Now the device recovers completely and stays recovered.
+  feed(PerfGov, () => 8, 40000);
+  assert.equal(PerfGov.autoShed(), 0,
+    "the governor has restored everything it shed, so per-chunk lamps must come back");
+  assert.equal(PerfGov.tier(), 2, "the player's MEDIUM preset still floors the cost ladder");
+  // The two accessors deliberately disagree here, and that disagreement IS the
+  // fix: autoTier() cannot fall below the preset floor, which is why the gate
+  // for a governor-shed feature must not read it.
+  assert.equal(PerfGov.autoTier(), 2,
+    "autoTier() still reports where the ladder stands — that is what it is for");
+});
+
+test("the opening window keeps the frames every EMA in this file forgets", () => {
+  // "It lags for the first few seconds and then runs fine" is a report about
+  // frames that are gone before anyone can read perf(): _frameEMA at alpha 0.1
+  // has absorbed a 400 ms frame within a second, and _floorMs is designed to
+  // chase the FLOOR, so neither can ever show a player what they just felt.
+  const { PerfGov } = makeGov();
+  PerfGov.sentinelArm(true);
+  PerfGov.tick(420);                          // the stall being reported
+  feed(PerfGov, () => 16.7, 400);             // and then it runs fine
+  const w = PerfGov.openWindow();
+  assert.equal(w.maxMs, 420, "the worst opening frame must survive, spike cap and all");
+  assert.ok(w.slow >= 1, "and be counted as over budget");
+  assert.ok(PerfGov.fpsEMA() < 20,
+    "meanwhile the EMA has forgotten it entirely — which is the whole point");
+  // A new race starts a new window; last race's stall is not this race's.
+  PerfGov.sentinelArm(true);
+  assert.deepEqual(PerfGov.openWindow(), { frames: 0, maxMs: 0, slow: 0 });
+});
+
 test("autoTier still honours the crash-sentinel floor and a measured shed", () => {
   globalThis.localStorage = {
     _s: { "apex26.crashStrikes": "2", "apex26.crashStrikesBuild": "1" },

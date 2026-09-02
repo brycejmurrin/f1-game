@@ -6036,15 +6036,14 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // index drop); the cull-only path keeps chunking through tier 2 so
     // SSR/shadow sheds do not re-fuse the road.
     //
-    // THE LAMP CLAUSE USES autoTier(), AND IT MUST. With tier() it was DEAD
+    // THE LAMP CLAUSE USES autoShed(), AND IT MUST. With tier() it was DEAD
     // CODE — `(A && tier()<1) || (tier()<3)` is identically `tier()<3` — so
-    // PER-CHUNK ROAD did nothing on GRAPHICS: LOW however the slider was set,
-    // while tuner.js's held-off note (autoTier) and the slider help ("available
-    // at every GRAPHICS preset") both said otherwise. The scenery half below
-    // was moved to autoTier() for exactly this reason and left this line
-    // behind. Truth table and the three-way disagreement: the guard in
-    // tests/unit/track-foundation.test.mjs.
-    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && gfx.hasPerChunkLights && !_perChunkOff && PerfGov.autoTier() < 1)
+    // PER-CHUNK ROAD did nothing on LOW however the slider was set. autoTier()
+    // fixed that and carried the same bug: it reads _perfTier, which ABSORBS
+    // the preset floor on the first step and is never restored below it, so one
+    // shed on MEDIUM held these lamps off for the session. autoShed() is the
+    // measured shed alone (perf.js `_autoShed`).
+    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && gfx.hasPerChunkLights && !_perChunkOff && PerfGov.autoShed() < 1)
       || (PerfGov.tier() < 3));
     if (_wantRoadChunk) {
       if (track.meshes.roadChunked === undefined) {
@@ -6852,12 +6851,13 @@ function render(dt) {
     // Resolved BEFORE setFrameLights: it builds the scaled full set for the
     // per-chunk path and needs these already on the frame (they are cleared
     // above, so reading them earlier always saw 0).
-    // ADAPTIVE: autoTier() is the crash floor + the governor's MEASURED shed
-    // WITHOUT the GRAPHICS user floor (perf.js), so LOW no longer disables this
-    // while a device missing frames still sheds it. The old tier()>=1 rested on
-    // one un-reproduced scare at knob 1 — the shipped 0.3 measured 18.6%/23.5%
-    // FASTER (docs/PERF-FINDINGS.md §R5) and locked out MEDIUM, every phone.
-    frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || PerfGov.autoTier() >= 1) ? 0 : (+LT.perChunkLights || 0);
+    // ADAPTIVE: autoShed() is the crash floor + the governor's MEASURED shed
+    // WITHOUT the GRAPHICS user floor (perf.js `_autoShed`), so LOW no longer
+    // disables this while a device missing frames still sheds it. The old
+    // tier()>=1 rested on one un-reproduced scare at knob 1 — the shipped 0.3
+    // measured 18.6%/23.5% FASTER (docs/PERF-FINDINGS.md §R5) and locked out
+    // MEDIUM. autoTier() was the first fix and leaked the preset back in.
+    frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || PerfGov.autoShed() >= 1) ? 0 : (+LT.perChunkLights || 0);
     frame.roadChunkLamps = (frame.perChunkLights > 0 && LT.roadChunkLamps) ? 1 : 0;
     setFrameLights(camEye, _floodRGB, _lightFwd);
     // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list

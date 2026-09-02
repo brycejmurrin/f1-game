@@ -350,7 +350,7 @@ async function run() {
       // strike floor it will not move across phases no matter what is shed, and
       // that constancy is itself the answer.
       perf = { tier: p.tier, scale: +p.scale.toFixed(2), tierFloor: p.tierFloor,
-               userTier: p.userTier, autoTier: p.autoTier,
+               userTier: p.userTier, autoTier: p.autoTier, autoShed: p.autoShed,
                strikes: p.crashStrikes, floorMs: p.floorMs };
     } catch (e) {}
     // Restore the SNAPSHOT, never a default: the tuner store is keyed
