@@ -112,6 +112,46 @@ test("touch auto-throttle never counts as a driver asking for a rescue; a presse
 });
 
 // ---------------------------------------------------------------------------
+// Row 2b — and the other half of that gate. In TOUCH steering the GAS button is
+// hidden (auto-throttle supplies the pedal), so there is no key, button or pad
+// for Input.throttle() to read: gating purely on the driver's pedal made this
+// rescue unreachable on exactly the devices whose players cannot press one, and
+// it is the ONLY rescue covering a car wedged at |x| < hw where beached,
+// wrongWay and wallT all stay false. Auto gas IS the driver asking there.
+// ---------------------------------------------------------------------------
+test("touch steering has no pedal to release, so auto gas rescues a wedged car — but never a car rubbing in a pack", async () => {
+  await startRace();
+  const a = g.apex, I = g.sandbox.Input, p = g.G.player;
+  const keep = { touchControlsNeeded: I.touchControlsNeeded, throttle: I.throttle, braking: I.braking };
+  try {
+    I.touchControlsNeeded = () => true; I.throttle = () => false; I.braking = () => false;
+    a.clearInput();
+    a.setPhysics(PHYS0);                  // full pace: vStd(speed) is speed
+    // WEDGED: pinned by geometry the longitudinal model cannot represent, so the
+    // car is held at a standstill while auto-throttle asks it to go. wallT stays
+    // 0 (the driver is not steering into the barrier) and |x| < hw, which is
+    // precisely the hole the other three stuck clauses leave open.
+    a.jump(0.0, 0, 0); g.G.raceT = 10; p.rescueT = 0; p.rescueLastT = null;
+    p.contactT = 0;
+    for (let i = 0; i < 300; i++) { p.speed = 0; a.step(1 / 60, 1); }
+    assert.ok(p.rescueLastT != null,
+      "a touch-steer player wedged with auto gas on is rescued — there is no pedal for them to press");
+
+    // RUBBING IN A PACK: same standstill, same auto gas, but in contact with
+    // another car. That is a pile-up shuffle, not a wedge, and teleporting the
+    // player out of it to x = 0 is the behaviour the original row removed.
+    a.jump(0.0, 0, 0); p.rescueT = 0; p.rescueLastT = null;
+    for (let i = 0; i < 300; i++) { p.speed = 0; p.contactT = 0.22; a.step(1 / 60, 1); }
+    assert.equal(p.rescueLastT, null,
+      "a car rubbing another car is shuffling in traffic, not wedged: no rescue");
+  } finally {
+    Object.assign(I, keep);
+    p.contactT = 0;
+    a.setPhysics(PHYS0);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Row 4 — js/game.js overtake proximity: the car ahead ON THE ROAD (docs/
 // PHYSICS.md "within OT_GAP of the car ahead"), not ranked[rank-2].
 // ---------------------------------------------------------------------------

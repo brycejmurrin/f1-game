@@ -1787,6 +1787,45 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     "a shadow pass must not inherit the previous pass's encoder — that is what let the writes alias");
 });
 
+// The canary must describe what BOUND, not what was picked.
+test("the boot canary re-arms from the bind, never from the saved pick alone", () => {
+  const src = code("js/game.js");
+  // Two boots deliberately run GLX while KEEPING a three/webgpu pick: a tab that
+  // already claimed-and-died (skipClaim) and a create() that refused. Both say so
+  // in their own comments. Arming the probe from the pick on those boots meant a
+  // failure with nothing to do with three.js reverted the player's renderer on the
+  // next load. gfx === GLX on both paths, so only the bind site can tell them apart.
+  assert.match(src, /let _backendBound = false;/,
+    "a flag must record that a DEFERRED backend actually took the canvas");
+  assert.match(src, /if \(gfx\) \{ _backendBound = true;/,
+    "and it must be set at the bind site, beside the disarm");
+  assert.match(src, /if \(!_backendProved && _backendBound\)/,
+    "the re-arm must require the bind, not just an unproved latch");
+});
+
+// The producer side of the same class of bug: a cadence gate on a pass that is
+// ALREADY snap-cached does not halve the work, it corrupts half the maps.
+test("the instanced prop shadow cast carries no frame-parity gate", () => {
+  const src = code("js/game.js");
+  const at = src.indexOf("function _castPropBatchesShadow");
+  assert.ok(at > 0, "the instanced prop shadow caster moved — check this test, not the code");
+  const body = src.slice(at, src.indexOf("\n}", at));
+  // The sun caller sits INSIDE the snap-cached static pass, which runs only when
+  // the eye crosses its cell or the sun moves. A `(_frameNo & 1)` skip therefore
+  // never fires on a frame the function is called on for saving's sake — it fires
+  // on odd-numbered REBUILD frames, where the chunked props, terrain and road land
+  // in the map and the instanced batches (trees, barriers, signs) do not. That map
+  // is then sampled until the next rebuild, so scenery shadows blink out for a
+  // whole snap cell at tier >= 1.
+  assert.doesNotMatch(body, /_frameNo\s*&\s*1/,
+    "no frame-parity skip here: the pass is snap-cached, so half a rebuild is a corrupt map, not a saving");
+  assert.doesNotMatch(body, /PerfGov\.tier\(\)\s*>=\s*1/,
+    "and no tier gate that only drops the instanced half of an otherwise complete map");
+  // Both callers pass nothing: the parameter that carried the gate is gone.
+  assert.doesNotMatch(src, /_castPropBatchesShadow\((?:true|false)\)/,
+    "neither caller may re-introduce a cadence argument");
+});
+
 test("TLX instanced shadows consume the light-frustum packed slice", () => {
   const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const at = src.indexOf("function castShadowInstanced");

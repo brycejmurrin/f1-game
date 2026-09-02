@@ -521,7 +521,16 @@ const CEILINGS = {
   // rather than added on paper.
   // 9054 -> 9056: round 2 — the speed cap became a rate (2 lines), a net-owned
   // finished rival takes no local coast, every comment paid down to hold it.
-  "js/game.js": 9056,
+  // 9056 -> 9093: three fixes and the reasons they each needed written down.
+  // (1) the touch-steering rescue — the GAS button is hidden when auto-throttle
+  // is on, so gating on the driver's pedal made the only wedge rescue
+  // unreachable on a phone; the two narrowings that keep the pack case out are
+  // subtle enough to earn their lines. (2) _castPropBatchesShadow lost its
+  // frame-parity gate, and the note says why a cadence skip on a snap-cached
+  // pass corrupts maps instead of saving work. (3) _backendBound, because the
+  // boot canary armed from the saved pick and two boots deliberately keep a
+  // pick while running GLX. Net behaviour is four lines; the rest is the record.
+  "js/game.js": 9093,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
