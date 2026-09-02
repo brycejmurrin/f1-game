@@ -3501,3 +3501,69 @@ invisible from the ladder's own source, and anyone adding a rung above
 
 Verified by reading the vendored bytes. NOT reproduced at runtime — making a
 paint fail on demand is not something this container can do.
+
+## 2t. The governor was blind below 10 fps — it reported 59.9 on a device doing 0.11 (2026-09-02)
+
+Found by looking, not by reasoning: Chrome DevTools MCP against the working
+tree on `127.0.0.1:3456`, GLX, bahrain, a race started through `__apex.race()`.
+
+```
+rAF frames in a 17.5 s window : 2          -> 0.11 fps
+__apex.perf() in that same page: { fps: 59.9, floorMs: 16.7, tier: 0, scale: 1 }
+```
+
+Nothing had stepped, because nothing had been seen. `js/game/perf.js` `tick()`
+gated the whole measurement on
+
+```js
+// Ignore huge spikes (tab resume, GC): they'd yank the scale.
+if (dtMs < 100) { _frameEMA += (dtMs - _frameEMA) * 0.1; _floorMs += ...; }
+```
+
+That is right for ONE frame and catastrophic as a permanent filter. **Below
+~10 fps every frame is over the cap**, so no sample ever reaches `_frameEMA`,
+which stays at the 16.7 ms `sentinelArm()` set at race start. `degradeAt` is
+`_floorMs + 2.3`, both sides frozen, so the comparison can never fire: the
+adaptive-quality ladder is dead on exactly the devices it exists to rescue, and
+`__apex.perf()` / any telemetry reading `fpsEMA()` reports a fabricated 59.9.
+
+The worse a device performs, the less the governor can see. Past 10 fps it sees
+nothing at all.
+
+### The fix, and why it is not a plain clamp
+
+Keep the spike filter for an ISOLATED over-cap frame; stop discarding a RUN of
+them. `SPIKE_RUN = 3` consecutive over-cap frames is not a spike (a tab resume
+or a GC pause is one frame — `lastFrame` is updated every tick, so the next
+frame is normal), and from there the sample is fed clamped to `SLOW_CAP`.
+
+`SLOW_CAP` is 1000 ms, deliberately NOT `SPIKE_MS`. Clamping a run to 100 would
+make every sub-10-fps state read as exactly 100 ms, and `_pendingVerify` judges
+a step by whether the EMA MOVED — so the governor would see that it was slow
+but never whether a cut helped, and would revert every step it took. 1 s keeps
+real magnitude across the whole 10-fps-to-1-fps range while still bounding a
+pathological hitch.
+
+### Measured, same page, same scene, only perf.js swapped
+
+| | reported fps | floorMs |
+|---|---|---|
+| before | **59.9** | 16.7 |
+| after | **8.7**, then 1.1 as it converged | 36.4 -> 406.6 |
+
+At LOW (`userTier` 4) `autoTier` correctly stays 0 — `_floorTier()` is already
+4, so the shed branch has nothing left to take. That is the governor saying "I
+see it and I have no lever left", which is a different and honest answer to the
+one it used to give.
+
+`tests/unit/perf-governor.test.mjs` pins all three halves against the real
+`tick()`: the EMA must reflect a sub-10-fps device, an isolated 60 s frame must
+still move nothing, and a slow run must feed clamped. Three of the four fail on
+the pre-fix file; the fourth passes on both by design, because it pins the
+spike behaviour the fix preserves.
+
+**Caveat, stated because the number invites the wrong reading.** The 0.11 fps
+is this container's software rasteriser, not a reproduction of any player's
+frame rate. What reproduces is the INSTRUMENT failure: whatever makes a real
+device slow, the governor stops being able to see it at 10 fps and then does
+nothing. That is the defect; the container merely made it visible.

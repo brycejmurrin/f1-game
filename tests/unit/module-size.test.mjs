@@ -543,7 +543,17 @@ const CEILINGS = {
   // MERGED: both rounds branched from 9056 and both landed, so the ceiling is
   // the merged file, not either number above. RE-MEASURED with the suite's own
   // metric, not added on paper.
-  "js/game.js": 9124,
+  //
+  // 9093 -> 9102 (the other branch, same base): the props-cast parity gate MOVED
+  // rather than died. Removing
+  // it outright was wrong and the note says why: the gate does fire on frames
+  // the function runs (every snap-cell rebuild), so dropping it added an
+  // instanced prop cast to half of them. It now defers the whole rebuild
+  // instead, which keeps the saving and never publishes a half-built map.
+  //
+  // MERGED to 9133: three rounds branched from 9056 and all three landed, so the
+  // ceiling is the merged file, not any number above. RE-MEASURED, not added up.
+  "js/game.js": 9133,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
