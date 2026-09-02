@@ -949,7 +949,12 @@ const CEILINGS = {
   // based prune. Measured against the flat pool it was replacing:
   // createRenderObject allocations -45%, _createBindings -27%, 2-minute race
   // drift -28%. A PARTIAL fix, not a cure — PERF-FINDINGS 2o says so.
-  "js/render/three/tlx.js": 2496,
+  // 2496 -> 2511: the SSR MRT node hoisted out of present() into a memoised
+  // factory, and the comment carrying why. That one line was the whole of
+  // §2o's leak: a new mrt() per frame meant a new mrt.id, a new render-context
+  // cache key, and a permanent RenderContext every frame. 4-minute race drift
+  // +124 MB -> +4.5 MB (GLX +1.3). PERF-FINDINGS 2p.
+  "js/render/three/tlx.js": 2511,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

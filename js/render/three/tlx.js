@@ -1052,6 +1052,26 @@ const TLX = (function () {
       // Keyed, a given wrapper always carries the same pair, so the number of
       // cache keys is bounded by the DISTINCT DRAWS the scene has rather than
       // by frames elapsed.
+      // ── the SSR MRT node is built ONCE ────────────────────────────────
+      // This was `renderer.setMRT(TSL.mrt({…}))` inline in present(), so a NEW
+      // node was constructed every frame. three keys its render-context cache
+      // on a STRING containing mrt.id:
+      //     const i = fmt + "-" + (mrt !== null ? mrt.id : "default") + "-" + lvl;
+      //     if (this._renderContexts[i] === undefined) … = new RenderContext();
+      // — a plain object that never evicts. So each frame minted a permanent
+      // context, and every object/material had to be re-created against it.
+      // MEASURED (docs/PERF-FINDINGS.md 2p): distinct renderContexts climbed
+      // 40 → 76 → 112 → 148 across four 15 s samples, dead linear, while the
+      // object count stayed at ~217 and material at ~40; ~2,150
+      // createRenderObject calls per interval, forever, and the heap with them.
+      //
+      // The node's contents are frame-invariant (output, a constant 1.0), so
+      // building it once is not a cache — it is the correct lifetime.
+      let _ssrMrt = null;
+      function _ssrMrtNode() {
+        if (!_ssrMrt) _ssrMrt = TSL.mrt({ output: TSL.output, ssrTag: TSL.float(1) });
+        return _ssrMrt;
+      }
       const meshPool = [];          // every wrapper ever made — the sweep walks this
       const meshByGeo = new Map();  // geometry -> Map(material -> Mesh)
       let poolUsed = 0;             // acquired THIS batch — diagnostics only, never an index
@@ -2275,12 +2295,7 @@ const TLX = (function () {
               if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
               const _hadMrt = !!(TSL.mrt && renderer.setMRT);
               const _prevMrt = _hadMrt && renderer.getMRT ? renderer.getMRT() : null;
-              if (_hadMrt) {
-                renderer.setMRT(TSL.mrt({
-                  output: TSL.output,
-                  ssrTag: TSL.float(1),
-                }));
-              }
+              if (_hadMrt) renderer.setMRT(_ssrMrtNode());
               try {
                 renderer.setRenderTarget(post.sceneTarget());
                 renderer.render(scene, camera);

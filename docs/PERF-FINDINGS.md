@@ -2100,6 +2100,87 @@ The acceptance test stays: **drift, not a snapshot.** Any TLX memory claim
 reporting a single heap number without a slope is measuring the wrong thing —
 this entry exists because two rounds did exactly that.
 
+## 2p. The leak was one `mrt()` call inside the frame loop (2026-09-02)
+
+§2o found the slope (~30 MB/min while racing) and named the mechanism (three
+minting render objects continuously). §2n's keyed mesh pool took 45% of the
+render-object churn and left the rest. This is the rest, and it is one line.
+
+### Ruling out the hypothesis §2o wrote down
+
+§2o guessed per-chunk lamp bindings. Checked before writing any code, as that
+entry insists: `tlx.js` declares `hasPerChunkLights: false` (GLX and WGX are
+`true`), and `js/game/lighting.js` says so in prose too — "WebGL2 and WebGPU —
+three.js keeps the single global set". **The hypothesis was dead on arrival.**
+It cost one grep instead of a round.
+
+### Asking the cache what changed, instead of guessing again
+
+three's render-object key is `[object, material, renderContext, lightsNode]`.
+Rather than reason about which one moved, hook `createRenderObject` at runtime
+— minified names are not stable, so find the instance by looking for the method
+— and count DISTINCT identities per key. A bounded set saturates; a recreated
+one climbs. Four 15 s samples while racing:
+
+| | 15 s | 30 s | 45 s | 60 s |
+|---|---|---|---|---|
+| objects first seen | 216 | 217 | 218 | 218 |
+| distinct material | 39 | 40 | 40 | 40 |
+| distinct passId / lightsNode | 2 / 2 | 2 / 2 | 2 / 2 | 2 / 2 |
+| **distinct renderContext** | **40** | **76** | **112** | **148** |
+| createRenderObject | 2,362 | 4,514 | 6,688 | 8,843 |
+
+Dead linear, 36 new contexts per interval, forever. Everything else flat —
+which also confirms §2n's keyed pool is doing its job.
+
+### Why a new context every frame
+
+`RenderContexts.get` builds its key as a STRING and stores the result in a
+plain object:
+
+```js
+const i = `${textures}:${format}:${type}:${samples}:${depth}:${stencil}`
+        + "-" + (mrt !== null ? mrt.id : "default") + "-" + level;
+if (this._renderContexts[i] === undefined) this._renderContexts[i] = new RenderContext();
+```
+
+`mrt.id`. And `tlx.js` present() did this every frame:
+
+```js
+renderer.setMRT(TSL.mrt({ output: TSL.output, ssrTag: TSL.float(1) }));
+```
+
+A new node, a new id, a new key, a new permanent context — and every object and
+material re-created against it. `_renderContexts` never evicts.
+
+### The fix
+
+Build the node once. Its contents are frame-invariant (`output`, a constant
+1.0), so this is not a cache — it is the correct lifetime.
+
+| | before | after | GLX control |
+|---|---|---|---|
+| distinct renderContexts, 60 s | 40 → 148 | **1 → 2** | — |
+| createRenderObject, 60 s | 8,843 | **15** | — |
+| per 15 s | ~2,150 | **2** | — |
+| **4-minute race drift** | **+124 MB** | **+4.5 MB** | +1.3 MB |
+
+TLX now drifts within ~3 MB of GLX over four minutes of racing. `gpuErrors` 0,
+no page errors, the race renders unchanged (car, field, HUD, touch controls).
+
+### What this says about the two rounds before it
+
+§2m routed phones to GLX and §2n packed attributes down 21 MB. Both were real,
+both moved the BASELINE, and neither touched the slope — because nobody had
+measured a slope. The lesson is already written at the end of §2o and it holds:
+**drift, not a snapshot.** A leak of 30 MB/min makes any baseline work
+irrelevant within two minutes, and the whole of §2m/§2n bought about forty
+seconds of extra runway.
+
+Whether TLX may now default on a phone is a SEPARATE question and is not
+settled here: the baseline is still ~97 MB against GLX's ~47, and no iPhone has
+run this build. `apex26.tlxMobile=1` is how that gets answered.
+
 ## 3. Left on the table
 
 The pre-08-18 narrative behind this list — the O(n²) AI scans that were
