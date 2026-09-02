@@ -388,13 +388,13 @@ placeholder in the TIME box (`0:00.0` is a width `fmtTime` never prints).
 PLAUSIBLE, code-read only — the screenshot list for the next live pass
 (1280×800 unless stated; the HUD needs a running race, so the Chrome probe
 after the browser groups, never during):
-- A. Gap readout tenths may flicker under braking: `(Δprog / max(v, 0.26·vTop)).toFixed(1)` at 10 Hz divides by the player's instantaneous speed. `.hud-gaps`, mid braking zone, a car within 1 s.
+- A. LANDED (1185951b): the displayed gap is an EMA per slot (~0.3 s at 10 Hz), reset on a neighbour change — one braking tick no longer doubles the tenths (hud-feel unit case).
 - B. The leader's empty `#hud-gap-ahead` collapses, so the behind line jumps a row on a position change. `.hud-gaps` at P1 vs P2.
-- C. `Z-MODE` as the aero chip's idle text reads as a mode name, not "no zone near". 844×390 `#hud-aero` far from a zone.
+- C. CHECKED, no change: the idle chip reads `AERO 463m` (distance to the next zone) at 844×390 and 1280×800 (artifacts/shots/20-hud-*, headless Bahrain race 2026-09-02).
 - D. S3 label lime vs the PB-value lime — one hue, two meanings. `#hud-sectors` after a PB S3.
-- E. `.hud-label` in `--dim` on the 78 % plate over a bright scene. 844×390 `.hud-top`, Bahrain day.
+- E. CHECKED, no change: POS/LAP/TIME/BEST labels on the plate over Bahrain day sand read at 844×390 and 1280×800 (same shots).
 - F. `#hud-flag` (top 100 px) vs the dropped `.hud-gaps` (top 62 px) on a short phone at HUD SIZE ≥ 150 %. 844×390, yellow flag, `:root[data-gap-drop]`.
-- G. ENERGY light ink over the full lime-yellow end of the fill relies on the halo alone. `#hud-energy` at 100 %.
+- G. CHECKED, no change: `ENERGY` at 100 % over the lime fill reads at both viewports (same shots) — the halo carries it.
 - H. Three unsynchronised blinkers (OT armed 0.8 s, redline 0.4 s, VSC 1 s) together. Bottom cluster under VSC with OT armed.
 - No pit-lane indicator exists in the HUD (nothing to disambiguate; noted).
 
