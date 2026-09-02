@@ -18,22 +18,21 @@ const TLX = (function () {
       const isMobile = (typeof GLX !== "undefined" && !!GLX.isMobile);
       const mobileTier = (typeof GLX !== "undefined" && !!GLX.mobileTier);
 
-      // ── PHONES GET GLX ──────────────────────────────────────────────────
-      // Measured, not assumed: same track and viewport, three retains the CPU
-      // copy of every geometry attribute forever (71.5 MB / 5,665 buffers,
-      // 148 MB heap) where GLX uploads and drops (17.8 MB / 253, 81 MB). The
-      // +53.7 MB walks an iPhone tab into jetsam — "A problem repeatedly
-      // occurred" — mid-race, while GLX at ~113 MB survives the same handset.
-      // Releasing those arrays after upload was built and DISPROVED live:
-      // three re-reads attribute.array in draw() and updateAttribute(), and
-      // either read kills the renderer. Full evidence, both crash messages and
-      // the streaming work that would undo this: docs/PERF-FINDINGS.md 2m.
-      const _mobileOptIn = (function () {
-        try { return localStorage.getItem("apex26.tlxMobile") === "1"; } catch (_) { return false; }
+      // ── PHONES GET TLX WHEN THEY PICK IT (decision 2026-09-02) ──────────
+      // three retains the CPU copy of every geometry attribute (71.5 MB /
+      // 5,665 buffers vs GLX 17.8 MB / 253) and that has jetsam-killed an
+      // iPhone tab mid-race; releasing the arrays was DISPROVED live
+      // (docs/PERF-FINDINGS.md 2m). The gate declined phones by default until
+      // the owner chose three on phones despite the risk: now an OPT-OUT
+      // (apex26.tlxMobile="0"), with the boot canary (gfxBackendProbe reverts
+      // a load that never presented) and the RENDERER button as the way back.
+      const _mobileOptOut = (function () {
+        try { return localStorage.getItem("apex26.tlxMobile") === "0"; } catch (_) { return false; }
       })();
-      if (isMobile && !_mobileOptIn) {
-        return _fail("mobile: three retains ~54 MB of CPU geometry copies and the tab is OOM-killed mid-race — set apex26.tlxMobile=1 to override");
+      if (isMobile && _mobileOptOut) {
+        return _fail("mobile: three declined by apex26.tlxMobile=0 (three retains ~54 MB of CPU geometry copies; remove the key to try it again)");
       }
+      if (isMobile) Log.warn("gfx", "TLX on a phone: three keeps ~54 MB of CPU geometry copies — a jetsam mid-race reverts to WebGL2 at the next boot; apex26.tlxMobile=0 declines");
 
       const THREE = await import("three/webgpu");
       const TSL = await import("three/tsl");

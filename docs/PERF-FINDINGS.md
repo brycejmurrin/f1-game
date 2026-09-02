@@ -2005,7 +2005,9 @@ TLX at 119 MB is still well above GLX's 49.6 MB on the same phone profile, and
 attributes are now only 28.7 MB of it — the rest is three's own machinery and
 the TSL node graphs, which no amount of attribute packing reaches. **Whether
 119 MB clears an iPhone's jetsam limit cannot be determined from this
-container.** The phone default therefore stays GLX (§2m); `apex26.tlxMobile=1`
+container.** The phone default stayed GLX (§2m) until 2026-09-02, when the
+owner chose three on phones despite the risk: `apex26.tlxMobile` is now an
+opt-OUT (`"0"` declines) and the boot canary is the safety net. Before that, `apex26.tlxMobile=1`
 is how a player finds out on the actual handset, and `apex26.tlxPack=0` turns
 the packing off if it is ever suspected.
 

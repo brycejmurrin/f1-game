@@ -2359,39 +2359,41 @@ test("GLX's uf3 cache keeps float64 precision, and owns every lit/sky vec3", () 
 // ── The phone route (docs/PERF-FINDINGS.md §2m) ───────────────────────────
 // three retains the CPU copy of every geometry attribute after upload —
 // measured 71.5 MB across 5,665 buffers against GLX's 17.8 MB / 253 — and an
-// iPhone tab is OOM-killed mid-race for it. Releasing those arrays was built
-// and DISPROVED live: three re-reads attribute.array after upload in draw()
-// and in updateAttribute(), and each read takes the renderer down. So a phone
-// that picks three binds GLX instead. Three things have to stay true, and
-// each one of them has failed somewhere in this file's history.
-test("TLX declines on a phone, with a REASON, and an override that works", () => {
+// iPhone tab has been OOM-killed mid-race for it. Releasing those arrays was
+// built and DISPROVED live (three re-reads attribute.array in draw() and
+// updateAttribute()). The gate declined phones by default until 2026-09-02;
+// the owner then chose three on phones DESPITE the risk, so the gate is an
+// opt-OUT (apex26.tlxMobile="0") and the boot canary is the safety net.
+// Four things have to stay true.
+test("TLX binds on a phone by default, declines only on apex26.tlxMobile=0 with a REASON, before importing three", () => {
   const tlx = read("js/render/three/tlx.js");
 
-  // 1. The route exists and goes through _fail — the seam that records
-  //    apex26.gfxTlxFail and flips gfxBound so SETTINGS can show why.
-  const route = tlx.match(/if\s*\(isMobile\s*&&\s*!_mobileOptIn\)\s*\{\s*\n\s*return _fail\((["'`])([\s\S]*?)\1\s*\);/);
-  assert.ok(route, "TLX no longer routes phones to GLX — the iPhone OOM is back");
+  // 1. The decline route still exists and goes through _fail — the seam that
+  //    records apex26.gfxTlxFail and flips gfxBound so SETTINGS can show why.
+  const route = tlx.match(/if\s*\(isMobile\s*&&\s*_mobileOptOut\)\s*\{\s*\n\s*return _fail\((["'`])([\s\S]*?)\1\s*\);/);
+  assert.ok(route, "the phone opt-out route is gone — a phone can no longer decline TLX");
 
-  // 2. The reason is a REASON, not a label. A bare "mobile" in the SETTINGS
-  //    panel tells the player nothing about what to do next, and this string
-  //    is the only place the override is discoverable.
+  // 2. The reason names the key: it is the player's only way to learn how to
+  //    get three back after declining.
   const reason = route[2];
   assert.ok(reason.length > 40, `decline reason too thin to act on: ${JSON.stringify(reason)}`);
-  assert.match(reason, /apex26\.tlxMobile/,
-    "the decline reason must name the override key — it is the player's only way back to TLX");
+  assert.match(reason, /apex26\.tlxMobile/, "the decline reason must name the override key");
 
-  // 3. The override is real and defaults OFF. A gate with no way past it is a
-  //    removal, not a route; a gate that defaults ON is not a gate at all.
-  const optIn = tlx.match(/const _mobileOptIn = \(function \(\) \{[\s\S]*?\}\)\(\);/);
-  assert.ok(optIn, "the apex26.tlxMobile override is gone — phones can no longer opt back in");
-  assert.match(optIn[0], /localStorage\.getItem\("apex26\.tlxMobile"\) === "1"/,
-    "override must be an explicit opt-IN, so the default stays the renderer that survives");
-  assert.match(optIn[0], /catch \(_\) \{ return false; \}/,
-    "blocked storage must fall to the SAFE side (decline), not to TLX");
+  // 3. The gate is an opt-OUT: only an explicit "0" declines; blocked storage
+  //    falls to the chosen default (TLX), and the old opt-in is gone.
+  const optOut = tlx.match(/const _mobileOptOut = \(function \(\) \{[\s\S]*?\}\)\(\);/);
+  assert.ok(optOut, "the apex26.tlxMobile opt-out is gone");
+  assert.match(optOut[0], /localStorage\.getItem\("apex26\.tlxMobile"\) === "0"/,
+    "phones bind TLX unless the key is explicitly \"0\" — the owner's 2026-09-02 decision");
+  assert.match(optOut[0], /catch \(_\) \{ return false; \}/,
+    "blocked storage must fall to the chosen default (TLX), not decline");
+  assert.doesNotMatch(tlx, /_mobileOptIn/, "the old default-decline opt-in must not linger beside the opt-out");
+  // The risk is still said out loud on every phone bind.
+  assert.match(tlx, /if \(isMobile\) Log\.warn\("gfx", "TLX on a phone/, "a phone bind must log the memory risk");
 
   // 4. Order matters: the decline has to happen before create() imports three
   //    and builds a renderer, or the phone pays the memory anyway.
-  const declineAt = tlx.indexOf("if (isMobile && !_mobileOptIn)");
+  const declineAt = tlx.indexOf("if (isMobile && _mobileOptOut)");
   const importAt = tlx.indexOf('await import("three/webgpu")');
   assert.ok(declineAt > 0 && importAt > 0 && declineAt < importAt,
     "the phone decline must come BEFORE three is imported — otherwise the tab still pays for it");
