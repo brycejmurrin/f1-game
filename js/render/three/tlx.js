@@ -1399,9 +1399,9 @@ const TLX = (function () {
           if (!a || !a.array || !a.array.length) return;
           if (a.isInstancedBufferAttribute || a.usage === THREE.DynamicDrawUsage) return;
           freed += a.array.byteLength;
-          // NULL, not zero-length — see tlx-chunked.js releaseMirrors(): three
-          // falls back to count*itemSize*4 only when array is NULL; a
-          // zero-length array is truthy and sizes the buffer to 0 bytes.
+          // NULL, not zero-length — see tlx-chunked.js releaseMirrors() for the
+          // evidence (a real-hardware A/B, gpu-census 26 vs 27) and for the
+          // mechanism I asserted and could NOT substantiate.
           a.array = null;
         };
         const atts = g.attributes;
