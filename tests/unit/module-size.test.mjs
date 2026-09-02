@@ -1027,7 +1027,10 @@ const CEILINGS = {
   // re-freeing them next round.
   // + R16: the CSS-size cache re-check in resize() and the ResizeObserver
   // moved outside the addEventListener check (PERF-FINDINGS 2u).
-  "js/render/three/tlx.js": 2745,
+  // 2745 -> 2775: the mirror sweep now caches bounds before it frees and
+  // declines on a phone, both with the handset evidence written at the site
+  // (a real phone rendered no road and a shredded car with it on).
+  "js/render/three/tlx.js": 2775,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

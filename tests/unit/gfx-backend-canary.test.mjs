@@ -2630,3 +2630,39 @@ test("TLX builds its SSR MRT node once, not once per frame", () => {
     `TSL.mrt( is constructed ${built} times in tlx.js; exactly one construction site ` +
     `(the memoised factory) is allowed — every extra one is a per-frame node id`);
 });
+
+// ── The mirror release must never outlive the data it measures ────────────
+// A phone on the LOW preset (tier 4) rendered NO road and a car in
+// disconnected pieces while terrain and sky drew normally, 2026-09-02. Tier
+// >= 3 is the only configuration that exposes a plain ROAD mesh to the
+// sweep — game.js chunks ribbons only below tier 3, and chunk geometries are
+// skipped because chunkedSys owns them — and no software probe reproduces it
+// (lavapipe draws the road at every tier). Two rules keep it shut.
+test("the geometry mirror sweep caches bounds before it frees, and never runs on a phone", () => {
+  const tlx = read("js/render/three/tlx.js");
+
+  // 1. Bounds are computed BEFORE any array is emptied. three's render walk
+  //    computes a bounding sphere for every drawn object when sortObjects is
+  //    on, culled or not, and it reads position.array to do it.
+  const rel = tlx.slice(tlx.indexOf("function releaseGeoMirrors("));
+  const body = rel.slice(0, rel.indexOf("\n      }"));
+  const boundsAt = body.indexOf("computeBoundingSphere()");
+  const dropAt = body.indexOf("new a.array.constructor(0)");
+  assert.ok(boundsAt > 0, "releaseGeoMirrors no longer caches the bounding sphere");
+  assert.ok(dropAt > 0, "releaseGeoMirrors no longer frees anything — check this test, not the code");
+  assert.ok(boundsAt < dropAt,
+    "the bounds must be computed BEFORE the arrays are emptied, or three computes a NaN sphere from a zero-length array");
+  assert.match(body, /radius >= 0/,
+    "a geometry whose bounds will not compute must keep its mirror rather than be freed unmeasured");
+
+  // 2. The sweep declines on mobile outright. Re-open only with handset
+  //    evidence; a software probe cannot see this failure.
+  const sweep = tlx.slice(tlx.indexOf("function sweepGeoMirrors("));
+  const sweepBody = sweep.slice(0, sweep.indexOf("\n      }"));
+  assert.match(sweepBody, /if \(isMobile\) return;/,
+    "the mirror sweep must decline on a phone — it shipped the missing road on a real handset");
+  const mobileAt = sweepBody.indexOf("if (isMobile) return;");
+  const throttleAt = sweepBody.indexOf("_mirrorSweepAt");
+  assert.ok(mobileAt >= 0 && mobileAt < throttleAt,
+    "the mobile decline must come before the throttle, so it cannot be reached by a clock edge");
+});

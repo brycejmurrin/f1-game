@@ -1394,6 +1394,25 @@ const TLX = (function () {
       //    zero-length array — a silent no-op instead of the new data.
       function releaseGeoMirrors(g) {
         if (!g || g.__tlxFreed) return 0;
+        // THE BOUNDS ARE READ FROM THE POSITIONS THIS IS ABOUT TO EMPTY.
+        // frustumCulled=false covers the cull, but it is not the only reader:
+        // three's render walk does `sortObjects && (geometry.boundingSphere ===
+        // null && geometry.computeBoundingSphere())` for EVERY drawn object
+        // (vendored r185, WebGPURenderer projectObject), culled or not. Against
+        // a zero-length array with a non-zero count that computes a NaN centre
+        // and radius, which poisons the sort key and any later reader. Cache
+        // the bounds while the data is still here; non-null is what stops
+        // three from ever looking again. Refuse to free anything whose bounds
+        // will not compute — an unmeasurable geometry is one this cannot make
+        // safe.
+        try {
+          if (!g.boundingSphere) g.computeBoundingSphere();
+          if (!g.boundingBox) g.computeBoundingBox();
+        } catch (_) { return 0; }
+        const _bs = g.boundingSphere;
+        if (!_bs || !(_bs.radius >= 0) || !_bs.center
+            || !(Math.abs(_bs.center.x) >= 0) || !(Math.abs(_bs.center.y) >= 0)
+            || !(Math.abs(_bs.center.z) >= 0)) return 0;
         let freed = 0;
         const drop = (a) => {
           if (!a || !a.array || !a.array.length) return;
@@ -1421,6 +1440,18 @@ const TLX = (function () {
       // is not a clock, and the first attempt at this lever shipped
       // `(++n % 90) === 0` that never once fired (PERF-FINDINGS 2m).
       function sweepGeoMirrors(now) {
+        // NOT ON A PHONE, until a handset says otherwise. The owner's phone
+        // (2026-09-02, TLX bound, LOW preset = tier 4) rendered NO road and a
+        // car in disconnected pieces while terrain and sky were fine — the
+        // signature of geometry read after its mirror went. Tier >= 3 is the
+        // only configuration that exposes the road to this sweep at all:
+        // game.js builds ribbons chunked only below tier 3, and chunk geos are
+        // skipped below because chunkedSys owns them. So a phone on LOW is the
+        // one place a plain ROAD mesh reaches here, and no software probe can
+        // see it (lavapipe renders the road at every tier — measured). The
+        // desktop win (PERF-FINDINGS 2r) is untouched; re-open this only with
+        // evidence from a real handset.
+        if (isMobile) return;
         if (now - _mirrorSweepAt < 2000) return;
         _mirrorSweepAt = now;
         _mirrorStat.sweeps++;
