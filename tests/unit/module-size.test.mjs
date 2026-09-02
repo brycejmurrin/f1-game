@@ -599,7 +599,13 @@ const CEILINGS = {
   // because every reproduction guessed at the camera, the team and the
   // traffic, so each round "fixed" whatever happened to be in the guessed
   // frame. A screenshot says what is wrong; this says where to stand.
-  "js/game/apex.js": 2566,
+  // 2566 -> 2576. repro() restored every car by cars[] INDEX, and game.js says
+  // above setCarRole that "cars[] index is not an identity" — makeCars() walks
+  // Career.gridDrivers(), so grid order differs between sessions and the netcode
+  // already stopped trusting it. Ten lines to match on identity instead and to
+  // COUNT what could not be placed; the alternative is a replay that silently
+  // hands cars each other's positions.
+  "js/game/apex.js": 2576,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and

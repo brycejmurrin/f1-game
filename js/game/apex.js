@@ -204,16 +204,26 @@ const api = {
     if (o.cam && o.cam.mode) { this.camera(o.cam.mode); if (o.cam.tune) this.camTune(o.cam.mode, o.cam.tune); }
     if (o.tod) G.setTimeOfDay(o.tod);
     if (o.wx) G.weather(o.wx);
+    // "cars[] index is not an identity" (game.js, above setCarRole): makeCars()
+    // walks Career.gridDrivers() and drops the custom team unless it was picked,
+    // so grid ORDER differs between sessions — the netcode already stopped
+    // trusting it. By rec.i alone a replay hands cars each other's positions and
+    // can drop a rival ON the player, which from an onboard cam reads as a
+    // rendering fault. Match identity instead: the player by isPlayer, the rest
+    // by index CONFIRMED against team; skip and count the rest.
+    let placed = 0, skipped = 0;
     if (Array.isArray(o.cars)) for (const rec of o.cars) {
-      const c = G.cars[rec.i]; if (!c) continue;
+      const c = (rec.me && (G.cars || []).find((k) => k.isPlayer)) || G.cars[rec.i];
+      if (!c || (rec.team && c.team && c.team.id !== rec.team)) { skipped++; continue; }
       c.s = wrapS(rec.s); c.x = rec.x; c.prog = rec.prog; c.speed = rec.speed;
+      placed++;
     }
     // The player's world position is derived from s/x, so re-anchor through the
     // same path park() uses rather than trusting stale px/pz.
     const me = (o.cars || []).find((r) => r.me);
     if (me && G.track.total) this.jump(me.s / G.track.total, me.speed, me.x);
     if (G.player) { G.frozen = true; snapGameCam(); }
-    return { restored: true, cars: (o.cars || []).length, cam: o.cam && o.cam.mode,
+    return { restored: true, cars: placed, skipped, cam: o.cam && o.cam.mode,
              teamMatches: (() => { const p = G.cars && G.cars.find((c) => c.isPlayer);
                return !o.teamId || (p && p.team && p.team.id === o.teamId); })() };
   },
