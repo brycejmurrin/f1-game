@@ -659,8 +659,15 @@ const CEILINGS = {
   // hands cars each other's positions.
   // 2576 -> 2579: setPhysics floors its knobs (a NaN car from expo:-1 had no
   // way back) — the one `fl` helper plus a two-line why.
-  "js/game/apex.js": 2579,
-  "js/game/agentview.js": 2443,
+  // +11: careerSim's inline championship award now also writes the countback
+  // histogram. It reimplemented endRace()'s award and omitted season.finishes,
+  // so a points tie in a simulated season fell through SeasonCal.rank to a
+  // STRING compare on driver id — the exact defect the histogram exists to fix.
+  "js/game/apex.js": 2590,
+  // +9: the parts hook reports the CAREER cap, not the free-play 780. A career
+  // at a team whose factory build costs 1,500 was reported as remaining: -720
+  // for a perfectly legal setup.
+  "js/game/agentview.js": 2452,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
   // covered 55% of the steering wheel (depth-raster measured); ckpt now ends the

@@ -804,8 +804,17 @@ function boardInfo(team, getParts, driverIdx) {
       return { cat: String(cat.label || cat.id).toUpperCase(), label: (opt && opt.label) || "Stock" };
     });
     const drv = (team.drivers || [])[driverIdx | 0] || (team.drivers || [])[0] || {};
-    return { stats, spec, driver: drv, budget: Parts.BUDGET,
-             left: Math.max(0, Parts.BUDGET - (r.cost || 0)) };
+    // THE CAREER CAP, not the free-play constant. setup-ui.js resolves this the
+    // same way and enforces against it, but the BUDGET board on the garage wall
+    // read Parts.BUDGET (780) unconditionally — so a career at any team whose
+    // factory build costs more than that showed "0 cr OF 780 REMAINING" with an
+    // empty bar, two metres from a DOM panel reading the true figure, and it
+    // stayed at 0 however much was unfitted. Four of the seven starter teams are
+    // over 780 on the factory build alone, and MY TEAM is 900.
+    const cap = (typeof Career !== "undefined" && Career.owned && Career.owned(team.id))
+      ? Career.budget() : Parts.BUDGET;
+    return { stats, spec, driver: drv, budget: cap,
+             left: Math.max(0, cap - (r.cost || 0)) };
   } catch (e) {
     Log.warn("game", "GarageScene boardInfo failed: " + (e && e.message));
     return null;
