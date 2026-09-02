@@ -365,6 +365,39 @@ before the auto-rescue teleport, cancellable by real progress; the flagged
 sector stroked yellow on the minimap (it already strokes per-sector
 colours); a centre-out ghost delta bar in place of the six-character text.
 
+### 2026-09-02 UI round — the five agent passes, and the HUD list to screenshot
+
+Five worktree agents (mobile touch, setup/garage/career, pause/settings/
+results, menus/a11y, HUD feel) each fixed their CONFIRMED items with a
+node test on `mini-dom` / `css-rules` and were merged in sequence; the
+sheet-density classifier now judges a sheet by the ROOM it has, not its
+content height (`sheetshape.js roomOwn` — RACE SETTINGS at 1280×800 had
+kept the phone layout for good), and a lap count off the next circuit's
+ladder snaps to that circuit's FULL below full as well as above. The HUD
+pass landed eight items: a 3ch right-aligned speed slot (the figure and
+KM/H shifted half a digit at every 100 km/h crossing), a latched redline
+(92 % on / 89 % off — one threshold restarted the pulse every tick at the
+limiter), `COOLDOWN n` for the overtake lockout (it read `OVERTAKE` at half
+opacity), sector rows with the announce banner's ▼/▲ against `sectorBests`
+(the "coloured sector splits" item above — landed), a plate and light ink
+under the ENERGY label (it vanished below half charge), `#ff3b30` for brand
+red used AS TEXT (S2 label, ghost delta — `#e10600` is ~4.2:1 at 12–14 px),
+the minimap zone stroke in the AERO chip's blue (it was cyan), and a `-`
+placeholder in the TIME box (`0:00.0` is a width `fmtTime` never prints).
+
+PLAUSIBLE, code-read only — the screenshot list for the next live pass
+(1280×800 unless stated; the HUD needs a running race, so the Chrome probe
+after the browser groups, never during):
+- A. Gap readout tenths may flicker under braking: `(Δprog / max(v, 0.26·vTop)).toFixed(1)` at 10 Hz divides by the player's instantaneous speed. `.hud-gaps`, mid braking zone, a car within 1 s.
+- B. The leader's empty `#hud-gap-ahead` collapses, so the behind line jumps a row on a position change. `.hud-gaps` at P1 vs P2.
+- C. `Z-MODE` as the aero chip's idle text reads as a mode name, not "no zone near". 844×390 `#hud-aero` far from a zone.
+- D. S3 label lime vs the PB-value lime — one hue, two meanings. `#hud-sectors` after a PB S3.
+- E. `.hud-label` in `--dim` on the 78 % plate over a bright scene. 844×390 `.hud-top`, Bahrain day.
+- F. `#hud-flag` (top 100 px) vs the dropped `.hud-gaps` (top 62 px) on a short phone at HUD SIZE ≥ 150 %. 844×390, yellow flag, `:root[data-gap-drop]`.
+- G. ENERGY light ink over the full lime-yellow end of the fill relies on the halo alone. `#hud-energy` at 100 %.
+- H. Three unsynchronised blinkers (OT armed 0.8 s, redline 0.4 s, VSC 1 s) together. Bottom cluster under VSC with OT armed.
+- No pit-lane indicator exists in the HUD (nothing to disambiguate; noted).
+
 ### Found by the 2026-09-01 deep pass (code-read, measured where stated; not browser-verified)
 
 Fixed in the same pass and therefore NOT listed: the contact-shove lap
