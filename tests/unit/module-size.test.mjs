@@ -918,7 +918,11 @@ const CEILINGS = {
   // carrying the measurement that justifies it and the disproved alternative,
   // so the next round does not rebuild the CPU-array release and crash twice
   // rediscovering why it cannot work. Evidence: docs/PERF-FINDINGS.md 2m.
-  "js/render/three/tlx.js": 2348,
+  // 2348 -> 2418: the geometry census (__tlx.geoCensus, the instrument that
+  // found where the retained bytes actually were — the streaming plan they
+  // were assumed to be in would have freed 1.24 MB) plus routing
+  // buildGeometry through TLXShaders.packAttr. Evidence: PERF-FINDINGS 2n.
+  "js/render/three/tlx.js": 2418,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

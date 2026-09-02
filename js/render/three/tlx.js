@@ -1209,23 +1209,45 @@ const TLX = (function () {
       }
 
       /** raw {pos,nrm,col,idx,mat?} (plain or typed arrays) -> BufferGeometry */
+      // Every geometry this backend creates, held WEAKLY — a census that
+      // retains what it measures is a leak, not an instrument.
+      const _geoReg = [];
+      function _regGeo(g, kind) { try { g.__tlxKind = kind; _geoReg.push(new WeakRef(g)); } catch (_) { /* no WeakRef: census degrades, nothing leaks */ } return g; }
+      // Attributes go through TLXShaders.packAttr: it range-scans each source
+      // and quantises ONLY what provably fits (colour 8-bit, unit normal 16,
+      // MAT id 0..16), keeping Float32 otherwise, and backs an absent source
+      // with a view into one shared zero buffer instead of a fresh array per
+      // mesh. `trk` is the reason that last part exists — every mesh that is
+      // not the road carries a zero-filled one, measured at 5.88 MB across 153
+      // meshes on montreal, and the lit shader reads it unconditionally on the
+      // non-chunked variant so it cannot simply be dropped.
+      const _pk = (typeof TLXShaders !== "undefined" && TLXShaders.packAttr) || null;
       function buildGeometry(data) {
         const g = new THREE.BufferGeometry();
         const pos = data.pos.length ? data.pos : [0, 0, 0];
         const verts = pos.length / 3;
         g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pos), 3));
-        g.setAttribute("normal", new THREE.BufferAttribute(
-          new Float32Array(data.nrm && data.nrm.length === pos.length ? data.nrm : verts * 3), 3));
-        g.setAttribute("color", new THREE.BufferAttribute(
-          new Float32Array(data.col && data.col.length === pos.length ? data.col : verts * 3), 3));
-        g.setAttribute("mat", new THREE.BufferAttribute(
-          new Float32Array(data.mat && data.mat.length === verts ? data.mat : verts), 1));
-        g.setAttribute("trk", new THREE.BufferAttribute(
-          new Float32Array(data.trk && data.trk.length === pos.length ? data.trk : verts * 3), 3));
-        if (data.idx && data.idx.length) {
-          g.setIndex(new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
+        if (_pk) {
+          g.setAttribute("normal", _pk(THREE, data.nrm, verts * 3, 3, "unit"));
+          g.setAttribute("color", _pk(THREE, data.col, verts * 3, 3, "unorm"));
+          g.setAttribute("mat", _pk(THREE, data.mat, verts, 1, "id"));
+          g.setAttribute("trk", _pk(THREE, data.trk, verts * 3, 3, null));
+        } else {
+          g.setAttribute("normal", new THREE.BufferAttribute(
+            new Float32Array(data.nrm && data.nrm.length === pos.length ? data.nrm : verts * 3), 3));
+          g.setAttribute("color", new THREE.BufferAttribute(
+            new Float32Array(data.col && data.col.length === pos.length ? data.col : verts * 3), 3));
+          g.setAttribute("mat", new THREE.BufferAttribute(
+            new Float32Array(data.mat && data.mat.length === verts ? data.mat : verts), 1));
+          g.setAttribute("trk", new THREE.BufferAttribute(
+            new Float32Array(data.trk && data.trk.length === pos.length ? data.trk : verts * 3), 3));
         }
-        return g;
+        if (data.idx && data.idx.length) {
+          g.setIndex(TLXShaders.packIndex
+            ? TLXShaders.packIndex(THREE, data.idx, verts)
+            : new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
+        }
+        return _regGeo(g, "mesh");
       }
 
       /** Read the raw (un-colour-managed, un-premultiplied) pixels of each
@@ -1508,12 +1530,17 @@ const TLX = (function () {
           g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(data.nrm), 3));
           g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(data.uv), 2));
           g.setIndex(new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
-          return { __tlx: true, geo: g, tex: true, count: data.idx.length };
+          return { __tlx: true, geo: _regGeo(g, "tex"), tex: true, count: data.idx.length };
         },
         createChunkedMesh(data, cellSize) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
           _meshMade.chunked++;
-          if (chunkedSys) return chunkedSys.build(data, cellSize);
+          if (chunkedSys) {
+            const m = chunkedSys.build(data, cellSize);
+            if (m && m.chunks) for (const c of m.chunks) _regGeo(c.geo, "chunk");
+            else if (m && m.geo) _regGeo(m.geo, "chunked");
+            return m;
+          }
           return { __tlx: true, geo: buildGeometry(data), chunked: true, count: (data.idx && data.idx.length) || 0 };
         },
         createTexture(src) {
@@ -2290,6 +2317,49 @@ const TLX = (function () {
           },
           chunkState() {
             return { on: !!chunkedSys, total: _chunkLast.total, visible: _chunkLast.visible };
+          },
+          // Where the retained CPU bytes actually ARE, per attribute NAME and
+          // per geometry kind. Deduped on the underlying ArrayBuffer, because a
+          // chunked mesh shares ONE position/normal/colour/mat set across all
+          // its chunks and carries only the index per chunk — counting per
+          // geometry would multiply that shared set by the chunk count and
+          // invent tens of megabytes that do not exist.
+          geoCensus() {
+            const seen = new Set(), out = { live: 0, dead: 0, byAttr: {}, byKind: {}, zeroMB: 0, totalMB: 0 };
+            for (const ref of _geoReg) {
+              const g = ref.deref ? ref.deref() : null;
+              if (!g) { out.dead++; continue; }
+              out.live++;
+              const kind = g.__tlxKind || "?";
+              const k = out.byKind[kind] || (out.byKind[kind] = { n: 0, mb: 0 });
+              k.n++;
+              const put = (name, a) => {
+                if (!a || !a.array) return;
+                const b = a.array.buffer;
+                if (seen.has(b)) return;
+                seen.add(b);
+                const mb = a.array.byteLength / 1048576;
+                out.byAttr[name] = +(((out.byAttr[name] || 0) + mb)).toFixed(3);
+                out.totalMB += mb; k.mb += mb;
+                // An attribute that is entirely zero is an allocation the
+                // source data never asked for — buildGeometry fills normal /
+                // color / mat / trk whether or not the caller supplied them.
+                // FULL scan, not a sampled one: a stride would call a
+                // mostly-zero array all-zero and overstate the waste.
+                let z = a.array.length > 0;
+                for (let i = 0; i < a.array.length; i++) { if (a.array[i] !== 0) { z = false; break; } }
+                if (z) { out.zeroMB += mb; out.byAttr[name + ":zero"] = +(((out.byAttr[name + ":zero"] || 0) + mb)).toFixed(3); }
+              };
+              for (const name in g.attributes) put(name, g.attributes[name]);
+              put("index", g.index);
+            }
+            out.totalMB = +out.totalMB.toFixed(2); out.zeroMB = +out.zeroMB.toFixed(2);
+            try { const ps = TLXShaders.packStats;
+              out.pack = { small: ps.small, wide: ps.wide, zero: ps.zero, savedMB: +ps.savedMB.toFixed(2),
+                half: ps.half, wideBy: ps.wideBy, wideMax: ps.wideMax, wideLen: ps.wideLen };
+            } catch (_) { out.pack = null; }
+            for (const kk in out.byKind) out.byKind[kk].mb = +out.byKind[kk].mb.toFixed(2);
+            return out;
           },
           meshState() {
             return { mesh: _meshMade.mesh, chunked: _meshMade.chunked, tex: _meshMade.tex };
