@@ -171,7 +171,11 @@ jobs:
       - name: Stage site
         run: |
           mkdir -p _site
-          cp index.html version.json manifest.json sw.js _site/
+          # bench.html is a ROOT page like index.html, not something js/ or css/
+          # sweeps up, so it needs naming here or it 404s on the live site — which
+          # is exactly what happened on build 7377, the first deploy that carried
+          # it. Anything else added at the repo root needs the same line.
+          cp index.html bench.html version.json manifest.json sw.js _site/
           cp .nojekyll _site/
           cp -r js css icons assets vendor _site/
       # THE SHELL GENERATION IS STAMPED HERE, NOT COMMITTED (2026-09-01).
