@@ -1758,3 +1758,25 @@ the list, each with the exact check — the browser group for all of it is `ui`:
 | P11 | title after a race, 844x390 @150% | `#menu-buttons` overflows; the `.sf-b` fade + thumb must appear (the title's own `hidden` flip now triggers ScrollFade's settle) |
 | P12 | SELECT, first arrow press | lands on the ALL filter chip (`aria-pressed`) rather than the selected circuit row — a design choice worth a look with a pad in hand |
 | P13 | SELECT / CAREER / GARAGE with a screen reader | entering announces "SELECT, region" (or GARAGE / CAREER); RESUME / RESTART / QUIT on the pause menu are NOT announced as toggles; LIGHTS OUT / FINAL LAP / FINISH are read from `#announce` (`role="status"`) without repeating |
+
+### 2026-09-02 — a 54–107 s boot on this box is the box, not the tree
+
+Symptom: desktop-viewport specs (audio-smoke, menu-keyboard's desktop describe,
+ui-scale) hit the 120 s test timeout with the game booted but the main thread
+"gone" for 30–75 s at a time; `__apex.logs()` showed build done at 4.8 s, then
+lobby create 17.7 s, AgentView.create 49.8 s, SeasonCal.engage 124.9 s. The
+same tests passed on the GitHub smoke shards (7–9 min per shard, normal).
+
+Measured with a CDP sampling profile over the first 70 s of boot on the
+working tree (`scratch/bootprofile.mjs`, 2 ms interval): 77.2 of 79.6 s is
+`(program)` — native time outside JavaScript; the largest JS self time is
+`drainGlErrors` at 333 ms. No slow or pending requests; DOMContentLoaded at
+1.1 s and `load` at 107 s (1280×800) / 54 s (852×393). A/B against a worktree
+at a4a08011 (before the UI round) at 852×393: 59 s. So the cost scales with
+the viewport, is identical before and after the round, and lives in the
+software GL path (the title flyby renders full-scale while the boot scripts
+run — the race-gated PerfGov item in ARCHITECTURE-REVIEW §7). Read a desktop
+timeout here as the box; verify desktop-viewport specs on a runner. Playwright
+was bumped to Chromium 1228 by the deploy tip (be24dc66) while this container
+has 1194: `playwright.config.js` pins the sandbox binary, a bare
+`chromium.launch()` in a scratch script needs `executablePath`.
