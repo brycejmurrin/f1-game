@@ -3236,8 +3236,162 @@ Two more things the source settles:
 
 Release only once every chunk has been uploaded — which nothing establishes
 today — or never release chunked geometry at all and take the smaller win on
-non-chunked meshes, whose upload is not deferred by culling. Until one of those
-exists, the release stays off on phones and `apex26.tlxMirrorSweep` /
-`apex26.tlxChunkRelease` are the A/B knobs, both default OFF.
+non-chunked meshes, whose upload is not deferred by culling. The second is what
+`sweepGeoMirrors` already does: it skips `__tlxKind === "chunk"`. So this
+section's answer was already the shipped design, and the chunked trap above
+constrains `tlx-chunked.js`'s release, not the static sweep.
+
+### Upstream: do not do this at all — and why it does NOT apply here
+
+A three.js maintainer, asked this exact question by someone chasing this exact
+problem — iOS tab memory — answered:
+
+> You don't want to do that. **You can lose the WebGL context at any time and
+> then you need that data to restore the context.**
+> (discourse.threejs.org/t/how-to-free-cpu-side-memory-for-geometry-texture-already-on-gpu/70602)
+
+I read that as a third and decisive failure mode and removed the whole lever on
+the strength of it. **That was wrong, and the code says so.** Apex 26 does not
+use three's in-place restore path at all: `js/render/three/tlx.js:474-533`
+(mirroring `js/render/glx.js:407-460`) handles `webglcontextlost` by latching
+the downgrade and handles `webglcontextrestored` with `location.reload()`. A
+reload re-runs `Tracks.build` and rebuilds every geometry from source, so what
+`attribute.array` held before the loss is irrelevant to recovery. The advice is
+sound for an app that relies on three restoring in place; this one never does.
+
+Withdrawn. The removal it justified was backed out — see What shipped.
+
+### The conclusion, and what it actually closes
+
+| # | claimed failure | status |
+|---|---|---|
+| 1 | first upload deferred by frustum culling | REAL, but scoped to CHUNKED geometry. `sweepGeoMirrors` skips `__tlxKind === "chunk"` (chunkedSys owns those) and every pooled/instanced mesh sets `frustumCulled = false`. It constrains the chunked release, not the static sweep. |
+| 2 | pipeline creation re-reads `array.constructor` / `BYTES_PER_ELEMENT` | REAL. This is what the env-probe gate exists for, and why freeing before the probe latched cost 41/81 failed faces on Metal. |
+| 3 | context-loss restore needs the CPU copy | **WITHDRAWN** — TLX and GLX both reload on restore (above). |
+
+So the lever is **not** closed. What (1) and (2) close is the naive version:
+free early, free everything, free chunked geometry. The measured 31.6 MB (2r)
+stands, and the route to it is the static, non-chunked half — which is what
+shipped.
+
+### The reader I missed, and the config that exposed it
+
+The actual defect behind the phone report was neither (1) nor (2). Another
+session root-caused it (`94b9a2da`): three's render walk does
+`sortObjects && (geometry.boundingSphere === null && geometry.computeBoundingSphere())`
+for **every drawn object, culled or not** (vendored r185, WebGPURenderer
+`projectObject`). `frustumCulled = false` does not suppress that. Against an
+emptied array with a non-zero `count` it computes a NaN centre and radius,
+which poisons the sort key and every later reader.
+
+The configuration matters as much as the reader: at `PerfGov.tier() >= 3`
+`js/game.js:2444` passes `chunkRibbons: false`, so the ROAD is a plain mesh
+instead of a chunked one — and a plain road mesh is exactly what the static
+sweep is allowed to touch. A phone on the LOW preset is tier 4. That is the one
+place the road reaches this code, and it is why every software probe here came
+back clean at 4.8 % road coverage and zero GPU errors.
+
+The fix is to cache `boundingSphere` / `boundingBox` BEFORE emptying anything,
+refuse to free a geometry whose bounds will not compute, and decline the sweep
+on mobile outright until a real handset says otherwise.
+
+### What shipped
+
+The lever stays in the tree, fixed — and **it does not run for anyone.**
+Measured on the merged tree, `gfx-probe --backend three` at tier 4, both the
+mobile and the desktop arm: `sweeps 0, geos 0, freedMB 0, gate "--T-"`.
+
+Three gates stack, added by two sessions on the same day that could not see
+each other's work: the call site is opt-in behind `apex26.tlxMirrorSweep`
+(the revert, after the phone report), `sweepGeoMirrors()` declines on mobile
+(`94b9a2da`), and the env gate above cannot open on a phone regardless. Each
+was right on its own; the union is dead code. So `94b9a2da`'s "the desktop win
+(PERF-FINDINGS 2r, 31.6 MB) is untouched" describes its own gate, not the
+tree — **nobody is getting the 31.6 MB.**
+
+That is left as-is deliberately, not as an oversight. Re-enabling means
+deleting the opt-in on purpose, with the bounds fix in place, and re-measuring
+2r on the merged tree — a decision to make on a quiet day, not on the one a
+phone regression shipped. My own removal of the lever was reverted before it
+reached the deploy branch (see the withdrawal above).
+
+The durable lesson is about REACH, not about mirrors. Four attempts at this
+lever failed in four different ways — `(++n % 90)` that never fired (2m), the
+null free that broke the Metal env probe, the zero-length index that broke
+WebGPU draws, and the NaN bounds that blanked a phone road — and every one of
+them was invisible to the probes being run, because the probes were not in the
+configuration that exposes the code. Before measuring a renderer change, work
+out which tier and which preset put the code you touched on screen, and set
+them. The next section says how.
 
 **A probe that never moves the camera cannot clear a lazily-uploaded resource.**
+
+### Putting a probe in the configuration that exposes the code
+
+Two independent axes decide what a renderer probe actually exercises, and they
+are set by different knobs. Getting one and not the other is how four rounds of
+this lever measured the wrong thing.
+
+**Axis 1 — the RENDERER's mobile downgrades.** `apex26.forceMobileTier=1`
+(`js/render/glx.js:36`) forces `GLX.isMobile`, which drives the lamp budget,
+beams-off, atlas and shadow sizes. It is the one copy of the sniff; nothing
+re-sniffs `navigator`.
+
+**Axis 2 — the GOVERNOR's cost tier.** `PerfGov.tier()` is
+`max(_perfTierFloor, _userTier, _perfTier)`, and `_userTier` comes from the
+GRAPHICS preset (`js/game/gfx-quality.js`): LOW 4, MEDIUM 2, HIGH 0, ULTRA 0.
+The preset persists through `GameStore` as `apex26.gfxPreset`, a JSON string —
+so a probe sets it as `--ls 'apex26.gfxPreset="low"'`, quotes included.
+
+These interact: `GfxQuality.init()` reads `GLX.isMobile` and defaults a mobile
+device to MEDIUM, so **`forceMobileTier=1` alone lands on tier 2, not tier 4.**
+Reaching a phone-on-LOW needs both knobs. That gap is precisely why the road
+regression shipped: the probes were mobile, and none of them were tier 4.
+
+What each tier turns off (`js/game.js` unless noted):
+
+| gate | line | off at |
+|---|---|---|
+| live env probe (and so the mirror-release gate) | 6961 | tier >= 1 |
+| half-rate render cadence kicks in | 5904 | tier >= 1 |
+| lamp shadow | 6831 | tier >= 2 |
+| SSR / car reflection | 7606 | tier >= 2 |
+| **chunked road ribbons — the road becomes a PLAIN mesh** | 2444 | tier >= 3 |
+| car shadow | 6516 | tier >= 3 |
+| glow pass | 7003 | tier >= 3 |
+| contact shadows, lamp volumetrics (reads `autoTier`) | 7606 | autoTier >= 4 |
+
+The row that cost a deploy is 2444. Anything that treats chunked and plain
+geometry differently — and the mirror sweep does, it skips `__tlxKind ===
+"chunk"` — changes which meshes it touches at tier 3, and no tier-0 or tier-2
+probe can see it.
+
+### The sweep disarms the paint-failure ladder (desktop, verified by reading)
+
+Found while reviewing `94b9a2da`, not a regression it introduced. TLX's paint
+path has a four-rung ladder: full post -> post-only death -> `dropTo(1,
+unlitMat)` -> `dropTo(2, rawUnlitMat)` -> `refuseTab()`. Once
+`sweepGeoMirrors` has nulled an array, the two `dropTo` rungs cannot run.
+
+`dropTo` reassigns `pm.material` across the pool. A new (geometry, material)
+pair is a new RenderObject, and building its pipeline calls
+`_getVertexFormat`, which in the SHIPPED vendor build is:
+
+```js
+_getVertexFormat(e){const{itemSize:t,normalized:r}=e,s=e.array.constructor, ...
+```
+
+— `vendor/three-0.185.1/three.webgpu.min.js`, no null guard.
+`createShaderVertexBuffers` reads `s.array.constructor` on the same object.
+So `null.constructor` throws, both rungs burn in one frame, and the ladder
+lands on `refuseTab()`.
+
+**Consequence is bounded**: `refuseTab()` reloads with GLX/WebGL2 latched, so
+the player gets a working game — just never the unlit TLX degradation the two
+middle rungs exist to provide. Not worth a code change on its own, because the
+user-visible outcome is the same reload either way. Recorded because it is
+invisible from the ladder's own source, and anyone adding a rung above
+`refuseTab()` will assume it runs.
+
+Verified by reading the vendored bytes. NOT reproduced at runtime — making a
+paint fail on demand is not something this container can do.

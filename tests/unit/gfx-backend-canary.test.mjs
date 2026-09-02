@@ -964,10 +964,12 @@ test("TLX sky gates night corona and the day-band atan like GLX", () => {
 test("TLX shadow cull packs CPU-side without uploading the lit InstancedMesh", () => {
   console.log("[gfx-canary] checking TLX shadow cull upload:false: tlx.js");
   const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const at = tlx.indexOf("function cullInstances");
-  console.log("[gfx-canary] cullInstances offset in tlx.js:", at);
-  assert.notEqual(at, -1, "cullInstances moved");
-  const body = tlx.slice(at, at + 3600);
+  // fnBody, never a fixed window. cullInstances is ~1560 chars in tlx.js and
+  // the slice(at, at + 3600) this replaces read 2000 chars PAST its closing
+  // brace, so an assertion here could pass on code in a different function
+  // entirely. The under-reading half of the same bug took the deploy branch
+  // red on 2026-09-02 (tests/helpers/fn-source.mjs has the write-up).
+  const body = fnBody(tlx, "cullInstances");
   assert.match(body, /opts && opts\.upload === false/,
     "shadow path must be able to skip the lit imesh setMatrixAt walk");
   console.log("[gfx-canary] checking TLX shadow cull upload:false call site: game.js");
@@ -1694,9 +1696,10 @@ test("TLX InstancedMesh preserves vertex colour and owns a capped placement tint
   // A dedicated instanceTint avoids that path without replacing canonical
   // per-vertex `color` (brown trunks / billboard frames must survive).
   const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const at = src.indexOf("function createInstancedBatch");
-  assert.notEqual(at, -1, "createInstancedBatch moved");
-  const body = src.slice(at, at + 2200);
+  // fnBody, never a fixed window — createInstancedBatch is ~2550 chars, so the
+  // slice(at, at + 2200) this replaces was ALREADY truncating 350 of them and
+  // any assertion aimed at its tail had gone quietly vacuous.
+  const body = fnBody(src, "createInstancedBatch");
   assert.match(body, /_instColorAttr\(\s*imesh/,
     "every batch must get an instanced tint, not only when colors[] is present");
   assert.doesNotMatch(body, /imesh\.instanceColor\s*=/,
@@ -1723,9 +1726,10 @@ test("TLX InstancedMesh preserves vertex colour and owns a capped placement tint
 test("instanced cull cache only hits the transform pack resident in the GPU buffer", () => {
   for (const file of ["js/render/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
     const src = read(file).replace(/^[ \t]*\/\/.*$/gm, "");
-    const at = src.indexOf("function cullInstances");
-    assert.notEqual(at, -1, `${file}: cullInstances moved`);
-    const body = src.slice(at, at + 2800);
+    // fnBody, never a fixed window: the three backends' cullInstances are 1559
+    // / 2446 / 2497 chars, so one 2800 window over-read all three by a
+    // different amount and would silently truncate the first to grow.
+    const body = fnBody(src, "cullInstances");
     assert.doesNotMatch(body, /_cullSig[01]/,
       `${file}: a second cached count cannot restore a second physical transform pack`);
     assert.match(body, /_cullPlanes/,
