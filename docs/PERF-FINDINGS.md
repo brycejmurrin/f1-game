@@ -2219,13 +2219,31 @@ what the machinery is made of, and answers two thirds of it.
 ### Where the question came from
 
 three.js **#32409** — override-material `RenderObject`s keep meshes strongly
-referenced — was fixed by **#33682** and that fix is in our r185. The reporter
-retested on r185 and found a residue, which they traced by hand:
-`DirectionalLightShadow` → `shadow.camera` → `RenderList` → render item →
-geometry → typed arrays, and recorded that "with shadows disabled ... cleanup
-appears to behave normally". The env probe is the other override pass this
-backend runs, and it was already worth 54.4 MB of a 197.1 MB desktop-profile
-heap. So: measure both, on the profile that actually matters.
+referenced — was fixed by **#33682** (Mugen87, merged 2026-05-30, `r185`
+milestone), and that fix is in our vendored r185. On the PR thread **yisky**
+(2026-06-29) reported a residue after retesting r185:
+
+> with shadows enabled, some released resources still remain reachable in
+> Chrome heap snapshots after cleanup … with shadows disabled in the same
+> `WebGPURenderer` setup, cleanup appears to behave normally … the
+> stronger-looking path in my snapshots now seems closer to:
+> `DirectionalLightShadow -> shadow.camera -> RenderList -> render item ->
+> geometry/material/object`
+
+**Three things about that citation, because the first draft of this entry got
+all three wrong and they change what it is worth.** (a) It is on **PR #33682**,
+posted by **yisky** — not by #32409's reporter, who is querielo; yisky is the
+app author Mugen87 asked to verify the fix. (b) yisky explicitly qualifies it:
+"I do not think I have identified the exact root cause yet … please treat it
+only as a tentative observation rather than a confirmed diagnosis." (c) It is a
+**`WebGPURenderer`** report, and **every leg of the measurement below ran on
+three's WebGL2 path** (`api: "webgl2"`). So the upstream thread is what
+PROMPTED the measurement; it is not evidence for it, and the mechanism behind
+our 40.4 MB is unproven. The number stands on its own.
+
+The env probe is the other override pass this backend runs, and it was already
+worth 54.4 MB of a 197.1 MB desktop-profile heap. So: measure both, on the
+profile that actually matters.
 
 ### The measurement
 
@@ -2248,8 +2266,21 @@ a desktop profile wearing a phone's viewport, which is what the earlier 197.1 MB
 figure was.
 
 **40.4 MB from the shadow pass alone** — nearly twice what the whole attribute
-pack won (§2n, 21 MB), from one boolean. That is the residue the upstream
-reporter described, measured on our tree rather than inferred from their thread.
+pack won (§2n, 21 MB), from one boolean. Whether it is the same retention
+yisky sees is unknown and this entry does not claim it: they measured
+WebGPURenderer, these legs are WebGL2.
+
+**Is a software adapter allowed to answer this?** Here, yes, and the check is
+not optional — `tlx.js` passes `softwareGL: softContent("shadow")` into the
+shadow factory and `softContent` is TRUE in this container, which is exactly
+the shape of "a software probe is not evidence about a player's machine". But
+`tlx-shadow.js:33-35` only SHRINKS maps on that flag, it never skips the pass,
+and the sun map is `isMobile ? 1024 : (softwareGL ? 512 : 2048)` — the mobile
+branch wins, so the arm ran at **the same 1024² sun map a phone gets**. Only
+`CAR_SIZE` (1024 -> 256) and `LAMP_SIZE` (512 -> 256) are under-sized here, and
+both are true-desktop-only sizes irrelevant to the profile under test. A
+pass that was stubbed out would have made the 40.4 MB meaningless; this one
+is not.
 
 ### And it still does not close
 
@@ -2271,9 +2302,32 @@ backend is not the side of that line to guess from.
 with `apex26.tlxMobile=1`. It is also the instrument: the 40.4 MB above cannot
 be re-measured without it.
 
-Visual cost, since a memory knob that quietly removes a feature is a trap:
-`artifacts/shadow-{on,off}` — the car's contact shadow and the sun shadows under
-trackside structures go; the blob shadow and all ambient/AO shading stay.
+Visual cost, since a memory knob that quietly removes a feature is a trap —
+measured, not eyeballed, because the eyeball got it backwards (the OFF frame
+reads "flatter and brighter"; it is 5.8/255 DARKER). Same camera, same park
+frac, both arms confirmed TLX/webgl2/lite/mobile, zero page errors:
+
+| | |
+|---|---|
+| pixels differing > 2/255 | 1,158,921 of 1,316,640 — **88.0 %** |
+| mean delta of those | 9.3/255 |
+| max delta | 166/255 |
+| mean luma ON -> OFF | 76.8 -> **71.0** |
+
+The amplified diff (`artifacts/shadow-diff.png`) puts the change on every lit
+surface — road, grass, car body, tree canopies — not on discrete cast-shadow
+shapes. The pass contributes a shading term to the whole image, so dropping it
+flattens and darkens the scene globally. 40.4 MB buys a visible difference on
+88 % of the frame; this is a real trade, not free memory.
+
+**The shot needed its own instrument.** `gfx-probe` cannot take it:
+it uses `locator.screenshot`, which waits for the element to be stable across
+two animation frames, and a TLX page on SwiftShader does not land two rAFs
+inside the 46 s budget — 3/3 retries died in "waiting for element to be
+stable" while the scene was already frozen by `park()`. `page.screenshot` with
+an explicit clip does no such wait (`scratch/cockpit3/shadow-shot.mjs`). One
+more entry for §0's list of instruments that report a renderer problem when
+they have a harness problem.
 
 ### The transferable bit
 

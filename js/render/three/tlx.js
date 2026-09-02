@@ -597,12 +597,18 @@ const TLX = (function () {
 
       let shadowSys = null;
       // apex26.tlxShadowOff=1 drops the shadow pass — a MEMORY lever, sibling of
-      // envProbeOff/perChunkOff. three.js#32409 (fixed by #33682, in our r185)
-      // left a residue its reporter retested on r185 and traced to
-      // DirectionalLightShadow -> shadow.camera -> RenderList -> render item ->
-      // geometry -> typed arrays: "with shadows disabled ... cleanup appears to
-      // behave normally". The sibling override pass here (the env probe) is
-      // worth 54.4 of 197.1 MB alone, so this measures the shadow pass too.
+      // envProbeOff/perChunkOff. Worth 40.4 MB on the iPhone profile
+      // (149.0 -> 108.6 MB in race, montreal; PERF-FINDINGS 2q), which is the
+      // whole justification — the upstream thread below is what prompted the
+      // measurement, NOT evidence for it, and the distinction matters:
+      // yisky on three.js PR #33682 (2026-06-29, not the #32409 reporter)
+      // retested r185 and posted "with shadows disabled ... cleanup appears to
+      // behave normally", with a tentative path of DirectionalLightShadow ->
+      // shadow.camera -> RenderList -> render item -> geometry. They label it
+      // "a tentative observation rather than a confirmed diagnosis", and it is
+      // a WebGPURenderer report — our 40.4 MB is measured on three's WebGL2
+      // path, so the same mechanism is UNPROVEN here. The knob stands on the
+      // measurement alone.
       const _shadowOff = (function () {
         try { return localStorage.getItem("apex26.tlxShadowOff") === "1"; } catch (_) { return false; }
       })();

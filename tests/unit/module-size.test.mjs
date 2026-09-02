@@ -978,7 +978,15 @@ const CEILINGS = {
   // is told it is belt-and-braces, not the thing standing between them and 81
   // dead probe faces — a stale justification is how a correct guard gets
   // deleted by the next person who checks whether it is still needed.
-  "js/render/three/tlx.js": 2582,
+  // 2582 -> 2588: the tlxShadowOff comment re-cited after checking the source.
+  // It credited "#32409's reporter" with a traced diagnosis; the quote is
+  // yisky's on PR #33682, they call it "a tentative observation rather than a
+  // confirmed diagnosis", and it is a WebGPURenderer report while our 40.4 MB
+  // is measured on three's WebGL2 path. The knob is justified by the
+  // measurement, not the thread, and the comment now says so - a borrowed
+  // upstream diagnosis reads as a cause and would have sent the next round
+  // hunting a RenderList that may hold nothing on this path.
+  "js/render/three/tlx.js": 2588,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
