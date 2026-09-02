@@ -1878,6 +1878,37 @@ test("freeMesh owns the road-LUT storage buffer and clears the global bind group
   assert.match(WGX_SOURCE, /lutSbuf: lut && lut\.sbuf/, "createMesh attaches LUT ownership to the returned mesh");
 });
 
+test("freeChunkedMesh clears the road-LUT bind group its own sbuf.destroy() invalidates", () => {
+  // The chunked twin of the test above, and it was MISSED when that one landed.
+  // createChunkedMesh's road path calls _rememberRoadLut(lut) and then returns
+  // `sbuf: lut.sbuf, attrBG: lut.attrBG` — so the chunked mesh OWNS the buffer
+  // the global bind group is built over. freeChunkedMesh destroys m.sbuf, and
+  // without a matching clear draw()'s `_roadLutBG || attrBG || zeroAttrBG`
+  // keeps binding a bind group whose buffer is gone: a per-draw validation
+  // error, plus `vidDead` in the shadow path silently flipping meaning.
+  //
+  // Reachable on EVERY track switch — game.js frees track.meshes.roadChunked on
+  // teardown and the replacement build is async, so frames render in the gap;
+  // and a next road that never produces a LUT never overwrites the stale value.
+  const free = WGX_SOURCE.match(/function freeChunkedMesh\(m\)[\s\S]*?\n    \}/);
+  assert.ok(free, "freeChunkedMesh exists");
+  assert.match(free[0], /m\.sbuf\.destroy\(\)/, "it destroys the shared storage buffer");
+  assert.match(free[0], /_roadLutBG = null/,
+    "and must drop the global bind group built over that buffer");
+  assert.match(free[0], /_roadLutReady = false/,
+    "and the ready flag with it, or the road path believes a dead LUT is live");
+  // The clear must precede the destroy in source order for the same reason
+  // freeMesh does it that way: nothing may observe the global between the two.
+  // ORDER CHECKS RUN ON COMMENT-STRIPPED SOURCE. The comment above the clear
+  // names m.sbuf.destroy() in prose, so a raw indexOf finds the PROSE first and
+  // reports the wrong order — this assertion failed that way on its first run.
+  const body = free[0].replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.ok(body.indexOf("_roadLutBG = null") < body.indexOf("m.sbuf.destroy()"),
+    "clear the global before destroying the buffer it points at");
+  assert.match(WGX_SOURCE, /sbuf: lut\.sbuf, attrBG: lut\.attrBG/,
+    "createChunkedMesh really does hand the LUT buffer to the mesh");
+});
+
 test("zero-count meshes never reach the queue as draws", () => {
   // Dawn warns "Draw with an index count of 0 is unusual" — measured on a
   // clean boot via the live probe. A count-0 mesh (alloc-fail stub, empty

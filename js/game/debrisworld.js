@@ -51,7 +51,14 @@ let _marbleSeq = 0;      // deterministic marble spawn sequence
 
 // ── A3: clippable near-apex cones (dynamic, punted one-way by kinematic mirrors) ─
 let _furnList = null;    // per-track placement list [{s,x}] (survives reset())
-let _furnTrack = null;   // track identity _furnList was derived for
+let _furnTrack = null;   // track identity _furnList was derived for — a DEF ID
+                        // string, never the track object. loadTrack drops the
+                        // old track before building the new one precisely
+                        // because the build's transient peak (plain-JS arrays
+                        // for ~5 M verts) is when a near-limit phone is
+                        // jetsam-killed; holding the previous track here kept
+                        // old + new resident across exactly that window, which
+                        // is the thing that comment promises does not happen.
 let _furn = [];          // dynamic cone bodies for the CURRENT world: { body, s, x, home }
 let _furnBuilt = false;  // furniture built into the current world?
 
@@ -377,7 +384,7 @@ function buildWorld(track, cars) {
   // sleep; a kinematic mirror punts them one-way (never pushes the car back).
   _furn = [];
   _furnBuilt = false;
-  if (_furnList && _furnTrack === track) {
+  if (_furnList && _furnTrack === ((track && track.def && track.def.id) || null)) {
     for (let i = 0; i < _furnList.length; i++) {
       const f = _furnList[i];
       Tracks.sample(track, f.s, _smp);
@@ -423,7 +430,7 @@ function registerFurniture(track) {
     const x = Math.max(-(hw - 0.3), Math.min(hw - 0.3, inside * (hw - 0.9)));
     list.push({ s, x });
   }
-  _furnList = list; _furnTrack = track;
+  _furnList = list; _furnTrack = (track && track.def && track.def.id) || null;
   if (world && _worldTrack === track && !_furnBuilt) destroyWorld();
 }
 
