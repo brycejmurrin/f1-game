@@ -949,7 +949,7 @@ const CEILINGS = {
   // based prune. Measured against the flat pool it was replacing:
   // createRenderObject allocations -45%, _createBindings -27%, 2-minute race
   // drift -28%. A PARTIAL fix, not a cure — PERF-FINDINGS 2o says so.
-  "js/render/three/tlx.js": 2540,   // 2026-09-02: occurrence-keyed mesh pool (the collapse fix) + updateInstances + update ranges (audit round)
+  "js/render/three/tlx.js": 2548,   // 2026-09-02: occurrence-keyed mesh pool (the collapse fix) + updateInstances + update ranges (audit round); +8 for the WebGPU vertex-format rule at both pack sites (PERF-FINDINGS 2n)
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

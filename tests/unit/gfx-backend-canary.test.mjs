@@ -2425,6 +2425,26 @@ test("the attribute packer proves its precondition instead of assuming it", () =
     "half-float attributes must be built through the constructor or count stays 0");
   assert.ok(!/Float16BufferAttribute\(\[\]/.test(ch),
     "an empty-array Float16BufferAttribute leaves count 0 — the mesh silently draws nothing");
+  // WebGPU has no 1- or 3-wide 8/16-bit vertex format: a packed 3-wide colour
+  // reached createRenderPipeline as 'float16x3' and TLX REFUSED on Metal
+  // (gpu-census 21/22, 2026-09-02; PERF-FINDINGS 2n). The pack must keep
+  // those widths Float32 under the renderer's isWebGPU.
+  assert.match(ch, /function packAttr\(THREE, src, len, itemSize, kind, fmt24\)/,
+    "packAttr lost its fmt24 (WebGPU vertex-format) parameter");
+  assert.match(ch, /if \(fmt24 && itemSize !== 2 && itemSize !== 4\) kind = null;/,
+    "under fmt24, 1- and 3-wide attributes must stay Float32 — 'float16x3' is not a GPUVertexFormat");
+  assert.match(ch, /packAttr\(THREE, src, len, itemSize, kind, fmt24\(\)\)/,
+    "attrOrZero no longer passes the per-build fmt24 rule");
+  const tlxSrc = read("js/render/three/tlx.js");
+  // buildGeometry (the non-chunked meshes) packs through the same function
+  // under the alias _pk — both call sites must carry the rule, or the props
+  // refuse while the road draws.
+  assert.match(tlxSrc, /_pk\(THREE, data\.mat, verts, 1, "id", fmt24\)/,
+    "tlx.js buildGeometry must pass fmt24 to every _pk call — the non-chunked meshes refused on Metal too");
+  assert.match(tlxSrc, /const fmt24 = !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\);/,
+    "buildGeometry's fmt24 must read the live backend");
+  assert.match(tlxSrc, /TLXShaders\.chunked\(THREE, \{\s*isWebGPU: \(\) => !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\),\s*\}\)/,
+    "tlx.js must hand the chunked factory its isWebGPU so the pack knows the vertex-format rule");
 
   // The shared zero buffer is only safe while nothing writes it.
   assert.match(ch, /function _zeros\(len\)/, "the shared zero buffer is gone — absent trk goes back to 5.88 MB of per-mesh zeros");

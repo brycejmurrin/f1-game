@@ -742,7 +742,11 @@ const TLX = (function () {
       let chunkedSys = null;
       try {
         if (window.TLXShaders && TLXShaders.chunked) {
-          chunkedSys = TLXShaders.chunked(THREE, {});
+          // isWebGPU feeds the pack's vertex-format rule (tlx-chunked.js
+          // packAttr `fmt24`): WebGPU has no 1- or 3-wide 8/16-bit formats.
+          chunkedSys = TLXShaders.chunked(THREE, {
+            isWebGPU: () => !!(renderer.backend && renderer.backend.isWebGPUBackend),
+          });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: chunked factory failed, un-culled props —", e); } catch (_) {}
@@ -1327,10 +1331,14 @@ const TLX = (function () {
         const verts = pos.length / 3;
         g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pos), 3));
         if (_pk) {
-          g.setAttribute("normal", _pk(THREE, data.nrm, verts * 3, 3, "unit"));
-          g.setAttribute("color", _pk(THREE, data.col, verts * 3, 3, "unorm"));
-          g.setAttribute("mat", _pk(THREE, data.mat, verts, 1, "id"));
-          g.setAttribute("trk", _pk(THREE, data.trk, verts * 3, 3, null));
+          // fmt24: WebGPU has no 1- or 3-wide 8/16-bit vertex format, and
+          // three names 'float16x3' / 'uint32' for them — pipeline refused
+          // (tlx-chunked.js packAttr, PERF-FINDINGS 2n). Same rule, same arg.
+          const fmt24 = !!(renderer.backend && renderer.backend.isWebGPUBackend);
+          g.setAttribute("normal", _pk(THREE, data.nrm, verts * 3, 3, "unit", fmt24));
+          g.setAttribute("color", _pk(THREE, data.col, verts * 3, 3, "unorm", fmt24));
+          g.setAttribute("mat", _pk(THREE, data.mat, verts, 1, "id", fmt24));
+          g.setAttribute("trk", _pk(THREE, data.trk, verts * 3, 3, null, fmt24));
         } else {
           g.setAttribute("normal", new THREE.BufferAttribute(
             new Float32Array(data.nrm && data.nrm.length === pos.length ? data.nrm : verts * 3), 3));
