@@ -2002,14 +2002,20 @@ come down, the scan and the convert are fusable for the fits-anyway case, and
 ### What this does NOT settle
 
 TLX at 119 MB is still well above GLX's 49.6 MB on the same phone profile, and
-attributes are now only 28.7 MB of it — the rest is three's own machinery and
-the TSL node graphs, which no amount of attribute packing reaches. **Whether
-119 MB clears an iPhone's jetsam limit cannot be determined from this
-container.** The phone default stayed GLX (§2m) until 2026-09-02, when the
-owner chose three on phones despite the risk: `apex26.tlxMobile` is now an
-opt-OUT (`"0"` declines) and the boot canary is the safety net. Before that, `apex26.tlxMobile=1`
-is how a player finds out on the actual handset, and `apex26.tlxPack=0` turns
-the packing off if it is ever suspected.
+attributes are now only 28.7 MB of it — ~~the rest is three's own machinery and
+the TSL node graphs, which no amount of attribute packing reaches~~. **WRONG,
+corrected 2026-09-02 by the first heap snapshot anyone took (§2r).** Every
+named three object class TOGETHER — `RenderObject`, `NodeBuilder`, every TSL
+node, materials, the lot — is **+3.75 MB** of TLX's excess over GLX.
+`JSArrayBufferData` is **+31.6 MB of the +50.5 MB gap**. The remainder was
+still CPU mirrors, exactly as §2m said before this sentence talked the next
+round out of looking. Written from subtraction — "total minus attributes must
+be machinery" — which is not an attribution, and this register is for
+measurements. **Whether TLX clears an iPhone's jetsam limit cannot be
+determined from this container.** The phone default stayed GLX (§2m) until
+2026-09-02, when the owner chose three on phones despite the risk:
+`apex26.tlxMobile` is now an opt-OUT (`"0"` declines) and the boot canary is
+the safety net; `apex26.tlxPack=0` turns the packing off if it is ever suspected.
 
 ## 2o. TLX leaks ~30 MB a minute while you race, and it is three's render-object cache (2026-09-02)
 
@@ -2804,3 +2810,57 @@ of clearance. The exclusion is at some other viewport, so it stays, and no
 claim is made here about having fixed it. An exclusion whose reason has moved
 is still the vacuous-guard shape from §2e, but retiring it needs the viewport
 that actually collides, measured.
+
+
+## 2r. The first heap snapshot: it was never three's machinery (2026-09-02)
+
+Every TLX memory number in §2m, §2n, §2p and §2q came from subtracting
+`performance.memory` readings. A total is not an attribution, and §2n's closing
+paragraph turned one into a conclusion — "the rest is three's own machinery and
+the TSL node graphs" — that sent this round hunting a `RenderObject` /
+`NodeBuilder` retention that does not exist.
+
+A real V8 heap snapshot over CDP (`HeapProfiler.takeHeapSnapshot`, shallow
+`self_size` aggregated by constructor), montreal, in race, iPhone profile
+(844x390, `isMobile`, `tlxForceGL=1`), **`HeapProfiler.collectGarbage` first**:
+
+| | TLX | GLX | gap |
+|---|---|---|---|
+| `JSArrayBufferData` | **49.43** | **17.82** | **+31.61** |
+| `array` | 12.61 | 7.69 | +4.92 |
+| every three object class combined | 5.79 | 2.04 | **+3.75** |
+| `code` | 8.42 | 5.32 | +3.10 |
+| `ExternalStringData` | 11.57 | 9.77 | +1.80 |
+| total self_size | 99.41 | 48.89 | **+50.52** |
+
+**Typed-array data is 63 % of the entire gap. Three's own object graph is 7 %.**
+The node system is not the cost and never was; the CPU mirrors are, which is
+what §2m found before §2n mis-attributed them.
+
+### Forcing a GC moves TLX by a third, and GLX not at all
+
+Same page, same 12 s settle, the only difference being the forced collection
+before the read:
+
+| | no GC | after GC |
+|---|---|---|
+| TLX | 149.0 | **96.8** |
+| GLX | 48.0 | **47.5** |
+
+So ~52 MB of what this document has been calling TLX's footprint was
+uncollected garbage, and the retention ratio is **2.04x, not 3.1x**. Every
+earlier figure here overstates TLX. That churn is its own mobile problem — GC
+pressure and frame jank — but it is a DIFFERENT problem from retention and the
+two must not be quoted as one number again. **Any heap instrument in this repo
+forces a collection before reading, or it is measuring garbage.**
+
+### The instrument, and what it caught first
+
+`scratch/tlx/heap-attribute.mjs` (gitignored; the recipe is above and is four
+CDP calls). Its first use was not the table — it was catching the fix written
+FOR the table: a static-geometry mirror sweep that reported
+`sweeps:0 geos:0 freedMB:0`. It had never executed, and the heap was byte-identical
+with it in. That is §2m's frame-counter failure a second time, in the same
+lever, caught only because the counters report what was FREED rather than that
+the code ran. Do not ship a memory lever whose instrument cannot tell "did
+nothing" from "never ran".

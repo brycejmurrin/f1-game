@@ -1002,7 +1002,22 @@ const CEILINGS = {
   // MERGE 2026-09-02: both lineages raised this ceiling for different work, so
   // the union is neither side's number — 2603 is MEASURED on the merged file
   // (mine 2588 + their 2577 both stale against it).
-  "js/render/three/tlx.js": 2603,
+  // 2603 -> 2715: the mirror-release lever, MEASURED at -20.6 MB on the iPhone
+  // profile (JSArrayBufferData 49.58 -> 28.96, usedJSHeap 97.01 -> 76.38,
+  // montreal in race) and worth every line of the reasoning it carries. Two
+  // parts. (a) releaseGeoMirrors() + a throttled sweep extends the release from
+  // chunked meshes to props, tex meshes and instanced BASE geometry — the heap
+  // snapshot in PERF-FINDINGS 2r says typed-array data is 63% of TLX's excess
+  // over GLX while three's whole object graph is 7%. (b) _envNeverComing():
+  // the gate `envReady || _envGaveUp || !envRT` can never open on a phone,
+  // because game.js gates the probe on PerfGov.tier() < 1 and so envFaceBegin
+  // is never called — measured gate "--T", 23 drains, 0 sweeps. That had
+  // silently disabled the CHUNKED release too, on exactly the devices it
+  // exists for. The comments are long because two earlier attempts at this
+  // same lever freed ZERO bytes (2m's frame counter; an inverted batch test
+  // this session) and the counters that caught them are the reason a third
+  // one landed.
+  "js/render/three/tlx.js": 2715,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
