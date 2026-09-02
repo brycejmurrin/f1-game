@@ -1,5 +1,21 @@
 import { test, expect } from "@playwright/test";
 
+// These tests build a real circuit, and until 2026-09-02 they did not.
+//
+// The boot split left them reading a null theme and finishing in ~8 s without
+// ever completing a build; fixing that (hook the lazy TrackScenery registry,
+// then await info().track) made them do the work they always claimed to do.
+// That work is 10-33 s per circuit locally and slower on a shared runner, so
+// three of them then died at exactly 120.0 s "while setting up context" -
+// Playwright counts fixture setup against the test budget, and the previous
+// test's now-heavy page is still tearing down. The budget was sized for a test
+// that did nothing.
+//
+// This is NOT widening a tolerance to make a failing assertion pass: no
+// assertion fails now (bahrain, silverstone and the kit-binding test all pass
+// in ~10 s on the same run). It is sizing the budget to the work.
+test.describe.configure({ timeout: 300000 });
+
 // TWO things the boot split (456af0f3) broke here, both silent.
 //
 // Hook the circuit's bespoke scenery closure WHEREVER it lives.

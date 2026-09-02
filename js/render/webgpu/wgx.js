@@ -683,11 +683,24 @@ const WGX = (function () {
       try {
         _outProbeBuf.mapAsync(GPUMapMode.READ).then(function () {
           try {
-            const px = new Uint16Array(_outProbeBuf.getMappedRange().slice(0, 128));
+            // READ ALL FOUR ROWS. The copy above is [4,4,1] at bytesPerRow
+            // 256, so the rows land at byte 0/256/512/768 with padding between;
+            // slicing 128 bytes read row 0 only — FOUR pixels, not sixteen,
+            // decided whether WGX surrendered to GLX. Three consecutive frames
+            // under OUT_BLACK_EPS trigger _outputBlackSurrender(), so a dark
+            // car body or a night shadow sitting on the crosshair was enough.
+            // Walk each row's real bytes and skip the padding, which is zero
+            // and would only ever drag `max` down.
+            const px = new Uint16Array(_outProbeBuf.getMappedRange().slice(0, 1024));
+            const LANES = 16;               // 4 px * RGBA, in f16 lanes
+            const STRIDE = 128;             // 256 bytes / 2 bytes per lane
             let max = 0;
-            for (let i = 0; i < px.length; i++) {
-              const f = _f16to32(px[i]);
-              if (f > max) max = f;
+            for (let r = 0; r < 4; r++) {
+              const base = r * STRIDE;
+              for (let i = 0; i < LANES && base + i < px.length; i++) {
+                const f = _f16to32(px[base + i]);
+                if (f > max) max = f;
+              }
             }
             if (max < OUT_BLACK_EPS) {
               _outBlack++;
@@ -1914,8 +1927,23 @@ const WGX = (function () {
       // swapchain itself) then fails into a silent per-frame retry loop.
       const maxDim = (device.limits && device.limits.maxTextureDimension2D) || 8192;
       _cssSize();
-      let w = Math.min(maxDim, Math.max(1, Math.round(_cssW * dpr * renderScale)));
-      let h = Math.min(maxDim, Math.max(1, Math.round(_cssH * dpr * renderScale)));
+      let w = Math.max(1, Math.round(_cssW * dpr * renderScale));
+      let h = Math.max(1, Math.round(_cssH * dpr * renderScale));
+      // CLAMP UNIFORMLY. Clamping each axis on its own changed the RATIO, not
+      // just the resolution, and `aspect = w / h` below feeds every projection
+      // matrix and the frustum cull distance. The ceiling is lower than it
+      // looks: requestDevice() asks for no requiredLimits, so
+      // maxTextureDimension2D is the WebGPU DEFAULT 8192 on every
+      // implementation — an Apple-silicon ADAPTER reports 16384, the DEVICE we
+      // asked for does not. With dpr capped at 2 that starts clipping at 4097
+      // CSS px: a 6K panel in a scaled HiDPI mode, or a window spanned across
+      // several 4K monitors. GLX and TLX do not clamp at all, so this was
+      // WGX-only. One scale factor keeps the picture correct, just smaller.
+      if (w > maxDim || h > maxDim) {
+        const k = Math.min(maxDim / w, maxDim / h);
+        w = Math.max(1, Math.floor(w * k));
+        h = Math.max(1, Math.floor(h * k));
+      }
       // 1px CSS/DPR jitter must not rebuild the swapchain. Reconfigure wipes
       // to black and the 2D #game to transparent (white shell flashing through).
       if (width > 1 && height > 1 && Math.abs(w - width) <= 1 && Math.abs(h - height) <= 1) {
@@ -2041,7 +2069,17 @@ const WGX = (function () {
       try {
         next.sceneTex = device.createTexture({
           size: [width, height], format: SCENE_FORMAT,
-          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+          // COPY_SRC because _queueOutputProbe() does copyTextureToBuffer() on
+          // this texture. Without it that copy is a VALIDATION error, not a
+          // throw — the `catch` around the copy never fires, the encoder goes
+          // invalid, finish() yields an error command buffer and queue.submit
+          // drops THE WHOLE FRAME including the blit to the swapchain. The
+          // probe is armed only when `!_outProbeOff && !WGX_LITE`, i.e. headed
+          // desktop Chrome/Edge/Firefox on a hardware adapter — never under
+          // Playwright, never on iOS, never on the macOS census (its headless
+          // UA forces soft-present), so nothing we run could have caught it.
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+               | GPUTextureUsage.COPY_SRC });
         next.depthTex = device.createTexture({
           size: [width, height], format: DEPTH_FORMAT,
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
@@ -2942,6 +2980,19 @@ const WGX = (function () {
       // Drop the lamp-table segment (and any overflow sentinel) keyed on this
       // chunks array — a rebuilt mesh must re-resolve, not inherit stale state.
       if (m.chunks) _ciSeg.delete(m.chunks);
+      // ROAD-LUT OWNER, the chunked twin of the freeMesh() clear below. The
+      // chunked road path returns `sbuf: lut.sbuf, attrBG: lut.attrBG` (see
+      // createChunkedMesh) after _rememberRoadLut() has parked that same bind
+      // group in the global — so the m.sbuf.destroy() on the next line frees
+      // the buffer _roadLutBG is built over. Without this clear, draw()'s
+      // `_roadLutBG || attrBG || zeroAttrBG` keeps binding a bind group whose
+      // buffer is gone: a per-draw validation error, and `vidDead` in the
+      // shadow path silently changes meaning too.
+      // REACHABLE ON EVERY TRACK SWITCH — game.js frees track.meshes.roadChunked
+      // on teardown, and the replacement build is ASYNC (seconds), so frames
+      // render in the gap. If the next road never produces a LUT the stale
+      // pointer never gets overwritten at all.
+      if (m.attrBG && m.attrBG === _roadLutBG) { _roadLutBG = null; _roadLutReady = false; }
       if (m.vbuf) m.vbuf.destroy();
       if (m.ibuf) m.ibuf.destroy();
       if (m.sbuf) m.sbuf.destroy();
@@ -2959,7 +3010,18 @@ const WGX = (function () {
         }
       }
     }
-    function freeTexture(t) { if (t && t.texture) t.texture.destroy(); }
+    function freeTexture(t) {
+      if (!t) return;
+      if (t.texture) t.texture.destroy();
+      // drawDecal caches a bind group on the caller's token (tex._wgxDecalBG)
+      // and guards on `!tex.view`. Leaving both in place after the texture is
+      // destroyed lets a caller that frees then redraws slip past the guard and
+      // bind a dead texture — a validation error per draw, and eight of those
+      // climb the _wgxEscalate ladder. Nulling them makes the existing guard
+      // catch it instead of the device.
+      t.view = null;
+      t._wgxDecalBG = null;
+    }
 
     function _writeFrame(f) {
       const d = frameData;

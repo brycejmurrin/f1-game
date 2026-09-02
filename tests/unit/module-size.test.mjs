@@ -877,7 +877,7 @@ const CEILINGS = {
   // GLX's own closure on a WGX-bound gfx, so DebrisWorld's feature test would
   // pass here and then call GLX with no device (backend-surface-parity).
   // Nine lines to keep a wrong-backend call impossible. PERF-FINDINGS 2h.
-  "js/render/webgpu/wgx.js": 5700,   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
+  "js/render/webgpu/wgx.js": 5761,   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -1027,10 +1027,13 @@ const CEILINGS = {
   // re-freeing them next round.
   // + R16: the CSS-size cache re-check in resize() and the ResizeObserver
   // moved outside the addEventListener check (PERF-FINDINGS 2u).
-  // 2745 -> 2788: the mirror sweep now caches bounds before it frees and
-  // declines on a phone (this branch), merged with the other session's
-  // revert making the whole sweep opt-in behind apex26.tlxMirrorSweep. Both
-  // halves earned their lines from the same handset: no road, shredded car.
+  // MERGE 2026-09-02: both lineages raised this for the SAME handset report
+  // (no road, shredded car) and neither number survives the union. The deploy
+  // branch measured 2757 after its a63cab7 revert restored lines the cap had
+  // not; this branch measured 2788 after caching the bounds before the free
+  // and declining the sweep on mobile. The union carries both halves, so it is
+  // neither: re-measured at 2788 on the merged tree with the ceiling test's own
+  // metric, per the deploy rule.
   "js/render/three/tlx.js": 2788,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
