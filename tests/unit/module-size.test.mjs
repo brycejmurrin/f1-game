@@ -711,7 +711,14 @@ const CEILINGS = {
   // the wheel, the box coordinates that identify it, and why _ckAcc could never
   // have caught it (it dims only colours whose MIN channel is >= 0.45, and
   // Ferrari red is [0.863, 0, 0]). The colour change itself is one token.
-  "js/car/car3d.js": 3575,
+  // 3575 -> 3582. Seven lines to gate the livery CREST STRIPE out of the cockpit
+  // build. The change is two `if (!ckpt)` tokens; the lines are the measurement
+  // that identifies it — 739 of 24045 view rays, starting AT the 0.30 m near
+  // plane, wholly inside the steering wheel's own angular window — and the
+  // reason the far nose run must NOT be gated with it. That stripe was reported
+  // as a slab three separate times and looked at for six rounds without being
+  // found, because every probe built the car without opts.livery.
+  "js/car/car3d.js": 3582,
   // Raised 2600 -> 2670 for the start-line origin shift: buildCenterline's
   // arc-length lookup, the dressingExclusions shift, and the shift-only remaps
   // for the six emitters transformSceneryApi never covered (groundPatch,

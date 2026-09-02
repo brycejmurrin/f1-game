@@ -41,6 +41,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lamp-chunks.test.mjs",
   "tests/unit/all-lights-fill.test.mjs",
   "tests/unit/cockpit-pale-surfaces.test.mjs",
+  "tests/unit/cockpit-crest-stripe.test.mjs",
   // Both node-only and both under half a second: the catalog LADDER (no paid
   // option dominated by a cheaper one, no row that is never optimal) and the
   // garage's per-vertex MATERIAL column. Neither was in the edit loop, which

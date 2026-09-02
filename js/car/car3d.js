@@ -2503,9 +2503,16 @@ const Car3D = (function () {
              stripeTipZ, 0, ns314.top + 0.012, 0.040, 0.012, stripeC);
       addLoft(out, 1.55, 0, ns155.top + 0.012, 0.13, 0.016,
              stripeMidZ, 0, ns270.top + 0.012, 0.075, 0.014, stripeC);
-      addLoft(out, 1.05, 0, ns105.top + 0.012, 0.12, 0.016,
+      // CHASE ONLY, exactly as the hood's accent stripe above: these two runs
+      // start at z 0.05 — 0.25 m from the eye, AT the near plane — then go 1.5 m
+      // down the centre of the view at 0.12 m wide. Measured 739 of 24045 view
+      // rays, yaw -13..13 pitch -35..-9, wholly inside the WHEEL'S own window,
+      // so they foreshorten into a slab across it instead of reading as a
+      // stripe; _ckAcc only makes it grey. The nose run below (1.55 → tip) is
+      // 1.75 m out and under 4 deg, and stays. Guard: cockpit-crest-stripe.
+      if (!ckpt) addLoft(out, 1.05, 0, ns105.top + 0.012, 0.12, 0.016,
              1.55, 0, ns155.top + 0.012, 0.13, 0.016, stripeC);
-      addLoft(out, 0.05, 0, 0.655, 0.12, 0.022, 1.05, 0, 0.545, 0.13, 0.022, stripeC);   // monocoque → hood crest
+      if (!ckpt) addLoft(out, 0.05, 0, 0.655, 0.12, 0.022, 1.05, 0, 0.545, 0.13, 0.022, stripeC);   // monocoque → hood crest
       if (!ckpt) addSpan(out, { z: -0.27, y: 0.984, w: 0.080, h: 0.020 },
                               { z: -0.67, y: 0.954, w: 0.070, h: 0.018 }, stripeC);  // spine band over the roll structure
       if (!ckpt) {
