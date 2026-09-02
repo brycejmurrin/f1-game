@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 170 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 176 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1049,7 +1049,10 @@ what it covers.
 | `ui-redesign.spec.js` | the redesign foundation in one renderer-light journey: searchable circuits, the Garage's roving tab contract, Settings at 200% on a short landscape phone, Advanced steering `--fit-at`, compact lighting tuner (one scroller, help off), How to Play and Career guide contents rails, standings leftover height, compact HUD density, and fixed-layout Last Race columns at phone portrait width |
 | `hud-layout.spec.js` | touch control + HUD layout across every steering and gearbox mode |
 | `hud-audit.spec.js` | HUD screenshots + mode-dependent elements |
+| `hud-feel.test.mjs` | the in-race HUD's glance-ability, `js/game/hud.js` in a VM on `mini-dom` plus `css/hud.css` as rules: the tach redline latches with hysteresis (on above 92 % of `MAX_RPM`, off below 89 %) instead of flickering on the line; the OVERTAKE chip spells its lockout (`COOLDOWN n`) rather than reusing `OVERTAKE` at half opacity; sector splits carry the announce banner's ▼/▲ against `sectorBests` and lime for a personal best; `#hud-speed-n` holds a 3ch right-aligned slot so 99→100 km/h cannot shift the figure; the energy bar has a plate and a light-ink label; no HUD text uses the brand red (#e10600) below 4.5:1 |
 | `pause-hud-layout.test.mjs` | the pause dialog hides bottom HUD chrome mid-race, and the compact pause stack tightens without changing type tokens |
+| `phone-touch-surface.test.mjs` | the phone DRIVING surface as rules (`tests/helpers/css-rules.mjs`) plus `Input` in a VM: the portrait blocker's pills sit on `--tap` (52px on touch), never the 24px `--tap-min` floor; the dock's tap/hold rungs clear 44px at both width tiers and keep the 24px painted floor under HUD SIZE < 100 %; the tallest dock column (3 x 54 + gaps) fits a 390px landscape phone at 200 % and `fitHud`'s `--hud-z-dock` cap is wired as the net; every anchor inside a `--hud-z` zoom divides its `--sa*` inset; every `:hover` in `css/` is gated on `(hover: hover)`; every scroll container declares `overscroll-behavior`; double-tap zoom is refused on every layer (viewport meta, `touch-action: manipulation` reset, `#game` none, root `overscroll-behavior: none`); in-race chrome and the blocker are anchored inside the safe area. `Input.requestGyro()` in a VM: a transient rejection (no user gesture) is recorded, a later grant CLEARS `gyroDenied` and attaches once, `setSteerMode("buttons")` detaches the sensor (2026-09-01), and `gamepaddisconnected` re-reads the live pad list. The device-only cells it cannot see are in §Field notes, 2026-09-02 |
+| `ui-sheets-audit.test.mjs` | the PAUSE / SETTINGS / RESULTS sheet audit (2026-09-02) as behaviour on `mini-dom`: RESULTS top-10 and the WORLD CHAMPION panel rank by `SeasonCal.rank` countback like STANDINGS (a points tie used to crown the field-order driver), STANDINGS titles a sprint weekend by the round it is in and calls the race being driven IN PROGRESS from the pause menu; `js/game/gfx-quality.js`'s in-race two-tap reload confirm EXPIRES (`ARM_MS`) back to the real label, never carries an armed flag into the next race, clears a stale one outside a race, and puts the question on the `<select>`'s option instead of wiping the options; MUSIC & SOUND blames the master SOUND gate when that is what is shut and captions DEFAULT as "Default"; the pause → settings → sub-sheet Escape ladder, the pause button order, and the `.sheet` / `.pane` scroll rules every sheet relies on at a short viewport |
 | `title-menu-even.test.mjs` | title 2-up doors share equal flex cells and overlay columns use `--vwz`, not a pixel cap |
 | `menu-survey.spec.js` | click every button, capture every state |
 | `menu-keyboard.spec.js` | desktop menu input — wheel redirection and arrow/Home/End/PageUp/PageDown focus; an open modal outranks the screen behind it; ESCAPE IS BACK (every layer's `data-esc-close` resolves, picker/garage/title, and a sheet closes without resuming the race) |
@@ -1132,6 +1135,7 @@ what it covers.
 | `collisions-deep-vm.test.mjs` | Node twin of `collisions-deep.spec.js` (~8 s): all 15 tests — pushes that stick, no interpenetration, open-circuit and monaco street walls under `incident({flags})`, kerb flag, sandwiches, pileups, the seam, the side-rub speed-death regression. Nothing left in the browser |
 | `collision-ai-fixes-vm.test.mjs` | Node twin of `collision-ai-fixes.spec.js` (~7 s): all 14 tests — wrong-way thresholds and hysteresis, the pushIn wall scrub with its control run, throttle-gated rescue and its cooldown reset, rear-end `contactT`, the 10-car separation window, zandvoort AI banking grip, the jeddah barrier face. Nothing left in the browser |
 | `new-hooks-vm.test.mjs` | Node twin of `new-hooks.spec.js` (~12 s): 55 of 56 — `timing`/`sectorState`/`lapHistory` (TT via `tt()`)/`fieldState`/`aiPlace`/`setEnergy`/`setLap`/`trackProfile`/`obs().gear`, the eight virgin-boot nulls first, and the shared-foundation diagnostics (silverstone, cota, miami, jeddah, singapore day+night, shanghai day+night). Left in the browser: the hidden ~300 s Madrid foundation test (`test.setTimeout(300000)`) |
+| `race-settings-vm.test.mjs` | RACE SETTINGS lap ladder as behaviour on the game-vm harness: FULL is `def.gpLaps` and differs per circuit; a VS FRIEND host's distance that is OFF the next circuit's ladder (above OR below FULL — 52 (FULL) at Silverstone is not on Monaco's 3/5/10/25/78) snaps to that circuit's FULL instead of leaving no chip lit; TT ladder untouched; the solo flow still resets to the default |
 | `generated-docs.test.mjs` | the three doc generators (`gen-tools-readme`, `gen-slider-doc`, `gen-hooks-table`) run with `--check` against the committed output — drift is a red test, not a stale table — plus row-count / no-`undefined` sanity |
 | `car-wing-foil.test.mjs` | Shared `Car3D` wing section: knife-TE `FOIL_T` sample, five-span planform, beveled endplates, 100-triangle flap (not a 48-triangle plank), default body/cockpit under the 2505/1500 ceilings, single-option recipes within 1.6× the default budget |
 | `car-presentation-canary.test.mjs` | Field cars share the player's presentation path: `renderPosOf` / `playerAnchor` interpolate world `px`/`pz` for every car (not only `c.human`), `xVis` is dump-only (no 16/s or 30/s damp, shadows use the same `cX`), AI mirrors `px`/`pz` *after* the `(s, x)` advance, visible procedural cars draw `teamBodyMesh`/`playerBodyMesh` + planted factory-signature wheels on `_groundMat` (not a generic `field:1:1:1` pair, not baked wheels on the chassis matrix), and `carOrbit` / agent-view `carWorld` read the mirrored pose. Locks the two leftover bugs that made the pack feel delayed and "a different car" |
@@ -1139,6 +1143,7 @@ what it covers.
 | `gfx-debug-overlay.test.mjs` | The `?gfxdebug=1` / `apex26.gfxDebug` overlay (`js/game/gfx-debug.js`): opt-in only and installed from exactly one gated site, so a debug aid cannot paint for every player; it prints `gpuErrors()` + the first message, the env-probe state, `backendState()` and the REFUSED reason, because those are the facts a screenshot cannot carry; every read is guarded (`GLX` may not exist yet) and it never invents a number — a WebGPU-claimed canvas has no 2D readback, and an unpainted soft canvas is not a black frame. It exists because this container has no GPU and the reporter has no console. |
 | `ui-improve-pass.test.mjs` | The menu/HUD improvement pass as BEHAVIOUR on `tests/helpers/mini-dom.mjs`: MenuNav's first arrow lands on `[data-menu-default]` and wraps in every direction, SheetShape's `--fit-at` cap (`--sheet-scale` / `--sheet-eff-scale`), `--wide-at` hysteresis, `--pair-compact: wide|off` and the tuner rail's three-rows rule, the gamepad menu nav (0.14 driving vs 0.22 menu deadzone, one seed per open layer, 450/130 ms repeat, right-stick fallback, A on a range does not click), the camera picker as a keyboard `menuitemradio` menu, SettingsNav's `showCurrent()`, COPY VALUES exporting a `window.LightEdits` delta with `execCommand("copy")` before the clipboard promise, and `bake.mjs` refusing that delta. CSS is read as RULES through `tests/helpers/css-rules.mjs` (selector + property, order/whitespace-free); CssZoom load order + API; garage livery grid; select track filter persistence |
 | `menu-nav-spatial.test.mjs` | spatial menu arrows: after an in-band miss, ArrowLeft/Right pick the closest-Y item really to that side (`across * 0.25`); vertical moves stay in-band (no out-of-band dy pass) |
+| `menu-a11y-audit.test.mjs` | the 2026-09 menu keyboard / gamepad / a11y audit as BEHAVIOUR on mini-dom: TopModal's per-layer focus memory for the non-dialog screens (land on open — autofocus / data-menu-default / selected / first non-text control; restore the opener on close; reopen where you left; nothing restored into a hidden screen), containment that skips hidden / zero-box / aria-hidden controls, MenuNav's per-axis ownership (text fields and sliders keep Left/Right/Home/End, Up/Down leave; a tab rail keeps its own axis, measured or `aria-orientation`, and the perpendicular arrow leaves it with propagation stopped); the shell contract (every layer a named region or dialog, `#announce` a live region, one `data-esc-close` door per layer that resolves), ScrollFade/AriaState lockstep with `UiLayers.LAYER_IDS`, AA contrast of menus.css text computed from the rules, and token-sized touch targets (`--tap` / `--chip-h` ≥ 44px on touch) |
 | `ui-journey-career.test.mjs` | leftover Career overlay `--fit-at`, wrap-not-ellipsis compact rows, and guide/history contents rail keyed on `data-shape=wide` |
 | `ui-journey-session.test.mjs` | Results / Standings / Race settings / Audio / Pause `--fit-at`, and `#standings-body` leftover height with no `55svh` cap |
 | `ui-journey-race.test.mjs` | HUD `--hud-z` (never `--ui-scale`), compact HUD on `body[data-density]`, pause-hidden `#campicker`, `#pc-restore` |
@@ -1156,6 +1161,7 @@ what it covers.
 | `race-control.test.mjs` | the caution state machine in a VM — thresholds, the raise-fast/lower-slow hysteresis, the hard time caps, drop-on-disable, host vs guest, and the leader's-lap rule behind OVERTAKE |
 | `season-cal.test.mjs` | the SEASON calendar/format model in a VM — config normalisation, the calendar presets, and the TWO-GATE rule the whole design rests on: the calendar follows the player outside a career, but the FORMAT (distance, sprint, points table, qualifying) follows it ONLY in a season, so a one-off Grand Prix cannot inherit a season's sprint distance. Also the weekend stage machine: a sprint scores 8-7-6… without advancing the round, the Grand Prix closes it, and the two legs draw retirements on different keys |
 | `career-settle.test.mjs` | `settleRound()`'s sponsor "double" fact in a VM — a team-mate CLASSIFIED in the points but retired scores nothing (a retiree can be classified top-ten when enough of the field DNFs), so it is not half of a "double"; the retired flag is the only discriminator between otherwise-identical rounds |
+| `setup-screens-state.test.mjs` | the SETUP-family sheets (CAREER, SEASON SETUP, GARAGE) as BEHAVIOUR on `tests/helpers/mini-dom.mjs`, from the 2026-09-02 audit: `CareerUI.close()` drops the NEW CAREER draft and an armed DELETE? (siblings of the `draftFrom` leak fixed 2026-09-01), `SetupUI` discards the paint editor and `G.livDraftOverride` when `#carsetup` is hidden (BACK/DONE never cleared them and `resolveLivery()` painted the unsaved draft on the race car), the factory / fitted-cap upgrade cards print `SHORT N cr` when disabled, and the unit/precision pins — team tiles and the RE-SIGN card say `cr / round`, THE CAR Fitted row groups thousands like the garage, history Points carries `pts`, SEASON SETUP distance chips read `N LAPS` with no `(FULL)` (FULL is per-circuit on the race-settings sibling) and the sprint note says `pts`. CSS through `css-rules.mjs`: the extended lines wrap |
 | `career-cross-tab.test.mjs` | an active career refuses to overwrite a newer foreign save, while an idle career refreshes to the winning tab |
 | `async-lifecycle.test.mjs` | late QR streams/video playback, decoder retries, IndexedDB late success and a hung fetch releasing the shared queue |
 | `ai-drive.test.mjs` | Pure AI racecraft helpers in `js/game/ai-drive.js` — rating→behaviour maps, situation OT fire rate, ERS want/bank, wantX, aeroLoad corner limit, racing-line hold mix, multi-sample soft brake, adaptive lane, street pack seating, team houseStyle, seat/#2 let-by orders, consistency brake band — in a VM with no browser |
@@ -1230,6 +1236,38 @@ what it covers.
 
 The measured history behind the testing gates. AGENTS.md carries the rules;
 this section carries the evidence so the rules survive re-litigation.
+
+**Audit-then-fix of the pause / settings / results sheets — what a mini-dom
+test could and could not settle (2026-09-02).** Six defects were CONFIRMED in
+Node and fixed with `tests/unit/ui-sheets-audit.test.mjs` red-before /
+green-after: RESULTS top-10 and the WORLD CHAMPION panel ranked by points alone
+while STANDINGS used `SeasonCal.rank` countback (a points tie crowned the
+field-order driver); STANDINGS titled a sprint weekend by the previous round and
+called the race being driven "NEXT" from the pause menu; the in-race two-tap
+reload confirm in `js/game/gfx-quality.js` never disarmed (stale "END THIS RACE
+& RELOAD?" label, and the flag outlived the race so the next race's first tap
+reloaded unasked) and wrote its question as `textContent` on the `<select>`,
+which drops the options; MUSIC & SOUND said "Music off" beside a MUSIC switch
+reading ON when the master SOUND gate was shut, captioned DEFAULT as
+"Built-in", and described the disabled MY TRACKS button instead of the selected
+source. Left as PLAUSIBLE — each needs a screenshot, in `ui` / `tiny` (neither
+run here): the RESULTS sheet carries no gap or finish-time column at all (only
+position / name / pts) — check whether a 3-lap race result reads as a
+classification without one; DSQ has no model path, so nothing renders it;
+constructors ties fall to first-to-score order (no team countback in
+`SeasonCal`, so RESULTS, STANDINGS and career agree with each other); the
+DISPLAY tab's injected order puts GRAPHICS below the renderer status paragraph —
+at `data-shape="wide"` (two-column grid) check GRAPHICS is not orphaned beside
+the paragraph; THREE PATH / SCREENSHOTS stay live under RENDERER: WEBGL2 where
+they change nothing until the renderer does; the armed question on the RENDERER
+`<select>` is an option label, so on a 393-wide portrait phone at 130% check it
+is not clipped by the select's width; "GRAPHICS: ULTRA — FULLY APPLIES AFTER A
+RELOAD" and "IN PROGRESS: ROUND 3 — …" are the longest new strings — check they
+wrap rather than ellipsise in the wide grid's ~350px column; HIDE HUD from
+SETTINGS resumes the race outright and RESTART RACE has no confirm (both
+`js/game.js`, outside this pass); with the camera picker open, Escape should
+close the picker without also pausing (the picker's handler stops propagation
+after `TopModal`'s capture pass declines it).
 
 **A probe that returns "no change" is guilty until proven innocent (2026-08-29).**
 The report was that the editor's TEAM LOGO colour did nothing on the Audi tail.
@@ -1645,3 +1683,79 @@ Two more traps in the same test, both of which produced a false PASS first:
 - **`sw.js` does not `clients.claim()`**, so the page that registers the worker
   is not controlled by it. One reload — what a returning player does anyway —
   is required before any cache assertion means anything.
+
+**The phone audit that a css-rules read CAN settle, and the cells it cannot
+(2026-09-02).** Audit-then-fix of the phone driving surface at 390x844 /
+844x390 and HUD SIZE 100/150/200 %, done entirely as rules over the sheets
+(`tests/helpers/css-rules.mjs`) and `Input` in a VM — no browser, so the
+verdicts split into what the numbers prove and what needs a device.
+CONFIRMED and fixed (`tests/unit/phone-touch-surface.test.mjs` pins each):
+the portrait blocker's three pills were `min-height: var(--tap-min)` — the
+24px WCAG floor, with `padding: 0 1rem` and inherited type, on a layer gated to
+`(pointer: coarse)` phones — so RACE IN PORTRAIT / OPEN CONTROLS / EXIT RACE
+painted 24px tall (now `--tap`, 52px on touch); the portrait buttons-mode
+`.hud-bottom` anchor added `var(--sab)` raw inside its `zoom: var(--hud-z)`
+subtree, the one anchor in the zoom list without the division; and
+`Input.requestGyro()` latched `gyroDenied` on ANY rejection — including the
+transient "no user gesture" kind — and never cleared it on a later grant, so
+STEER read "(NO GYRO)" while tilt was driving. CONFIRMED-OK and now guarded:
+every `:hover` in `css/` sits under `(hover: hover)`, every scroll container
+declares `overscroll-behavior`, both dock tiers clear 44px (54/72 and 48/64,
+24px painted floor below 100 %), and the tallest dock column — BOOST/OT/AERO at
+3 x 54 + 2 x 5.3 = 172.7 authored — is 345px at 200 %, inside 390 - 31, so
+`fitHud`'s `--hud-z-dock` cap ((390 - 30) / 172.7 = 2.08) never has to act on
+a 390px phone: the "BRAKE at y=-216" measurement in `js/game/hud.js` predates
+the grouped dock and is covered. The double-tap trio (viewport
+`maximum-scale=1` + `viewport-fit=cover`, `touch-action: manipulation` on `*`,
+`#game` none, root `overscroll-behavior: none`, the inline touchend killer) is
+present and pinned. PLAUSIBLE — arithmetic says so, a device has to show it;
+the visual checks, each one screenshot:
+
+1. iPhone 844x390 landscape (notch LEFT), STEER: TILT, GEARS: AUTO, HUD SIZE
+   200 %: does the BRAKE pedal's top edge sit under `#minimap`? The dock cap
+   budgets viewport height (3 x `FIT_AIR`), not the corner clusters — at 200 %
+   the pedal column tops out at y ≈ 23px, the map spans y 8..~124. Expect
+   overlap from ~160 %; 150 % is marginal (≈3px, notched only). Owner:
+   `fitHud` in `js/game/hud.js`.
+2. Same phone, STEER: BUTTONS (pedals RIGHT), HUD SIZE 200 %: GAS/BRAKE column
+   against `#pausebtn` (y 8..60, right edge). Expect contact from ~185 %.
+3. 390x844 portrait, tap RACE IN PORTRAIT, HUD SIZE 100 %: are POS/LAP/TIME/
+   BEST and the map painted at roughly HALF size? `fitHud`'s top-band cap uses
+   the landscape geometry (map beside the POS row: 224 + 183 > 195 half-width),
+   so `--hud-z-top` computes to ~0.5 on a 390px-wide screen at every setting.
+4. iPhone + Bluetooth pad, STEER: TILT, start the race with the pad's A button:
+   does the motion prompt appear, or does STEER silently flip to BUTTONS? The A
+   press is a synthesised `.click()` with no user activation, so
+   `requestPermission()` should reject. Then tap STEER back to TILT with a
+   finger: the prompt must appear and the label must read "STEER: TILT" with
+   no "(NO GYRO)" (the fix above).
+5. Any iPhone, SETTINGS, tap the RENDERER `›` stepper twice within ~300 ms on
+   the same spot: does it advance once or twice? The `index.html` double-tap
+   killer calls `preventDefault()` on the second touchend, which also cancels
+   its click. Out of this change's territory; a fix would exempt buttons.
+6. Any phone, HUD SIZE 60 %, landscape: BOOST/OT/AERO paint 32px — the
+   documented 24px floor, under Apple's 44. A design decision (2026-08 axis
+   audit), recorded here so it is not re-found as a bug.
+### Menu keyboard / gamepad / a11y audit (2026-09-02) — the PLAUSIBLE half
+
+The audit behind `tests/unit/menu-a11y-audit.test.mjs` enumerated every screen
+from `index.html` + `UiLayers.LAYER_IDS` and split its findings in two. The
+CONFIRMED ones (demonstrable on `tests/helpers/mini-dom.mjs`) are fixed and
+pinned in that file. The rest need a screenshot or a screen reader, and this is
+the list, each with the exact check — the browser group for all of it is `ui`:
+
+| # | screen / cell | what to look for |
+|---|---|---|
+| P1 | GARAGE, 844x390 @100% (compact stacked) | `#cs-tabs .cs-tab` is `min-height: 0; padding: 2px` there (`css/carsetup.css`). Measure `getBoundingClientRect().height` of a tab on a touch profile: the touch ladder promises ≥ 44px and this cell may pay ~26px |
+| P2 | LIGHTING / CAMERA TUNER, touch viewport | `.lt-tab` is `min-height: var(--tap-min)` (24px) + 5px padding (`css/tuner.css`) — expect ~28px tabs; decide whether a tuner is a player surface |
+| P3 | DATA HUB, `body[data-density="compact"]` and narrow | `.dh-tab` / `.dh-close` drop to `--tap-min` (24px) (`css/data.css`); measure the tab strip on 390x844 |
+| P4 | SETTINGS (`#pmsettings`), both rail shapes | ArrowDown on the horizontal tab strip now leaves it for the first panel control (focus ring should land inside `#pm-panel-*`); on the single-column rail (`aria-orientation="vertical"`) Up/Down still cycle tabs and ArrowRight is the exit — with nothing to the right it falls to DOM order (the next tab, then the panel), so check the pad can still walk into the panel. Up/Down on the strip no longer page-scroll the sheet |
+| P5 | GARAGE paired (1280x800) and stacked (844x390) | from the category rail, ArrowRight (paired) / ArrowDown (stacked) must reach the parts list and the rail's own handler must NOT snap focus back; Left/Right (stacked) still cycle categories with selection following focus |
+| P6 | SELECT / GARAGE / CAREER opened by MOUSE or TOUCH | focus now lands on the selected control at open. Chrome's `:focus-visible` heuristic should paint NO ring after a pointer open; a ring after a click is the regression to look for. The landing must not scroll `#sel-tracks` (the ALL chip is at the top) |
+| P7 | SELECT → BACK by Escape vs by pointer | Escape: the title door that opened the screen (`#mb-race`) shows a ring; pointer BACK: focus returns silently (no ring). Garage BACK returns SELECT with focus on `#sel-go` |
+| P8 | CUSTOMIZE MY TEAM | `.cz-sep` separator labels are now `var(--dim)` (was white @0.4); confirm they still read as section labels, not body text |
+| P9 | SELECT, pad only | Right from the CLASSICS chip lands on the search field; D-pad Down must now leave it for the first circuit row; Left/Right/Home/End stay in the field |
+| P10 | any settings slider | Home/End now jump the slider to min/max (ARIA slider ends) instead of the pane's first/last control |
+| P11 | title after a race, 844x390 @150% | `#menu-buttons` overflows; the `.sf-b` fade + thumb must appear (the title's own `hidden` flip now triggers ScrollFade's settle) |
+| P12 | SELECT, first arrow press | lands on the ALL filter chip (`aria-pressed`) rather than the selected circuit row — a design choice worth a look with a pad in hand |
+| P13 | SELECT / CAREER / GARAGE with a screen reader | entering announces "SELECT, region" (or GARAGE / CAREER); RESUME / RESTART / QUIT on the pause menu are NOT announced as toggles; LIGHTS OUT / FINAL LAP / FINISH are read from `#announce` (`role="status"`) without repeating |

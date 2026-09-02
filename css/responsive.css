@@ -222,7 +222,12 @@ body.desktop #pm-calib { display: none !important; }
    a raw colour literal the token ratchet rightly refuses, and stack order is
    enough hierarchy for three buttons. docs/PERF-FINDINGS.md 5a. */
 #rotate-race, #rotate-controls, #rotate-exit {
-  min-height: var(--tap-min); padding: 0 1rem;
+  /* --tap, not --tap-min: this layer is gated to coarse-pointer phones (the
+     media query below), and --tap-min is the 24px WCAG floor — with `padding:
+     0 1rem` and inherited type the three pills painted 24px tall, half of
+     Apple's 44pt and under the game's own 52px touch rung. Unzoomed layer, so
+     --tap here is body:not(.desktop)'s 52px as written. */
+  min-height: var(--tap); padding: 0 1rem;
   border: 1px solid rgba(255,255,255,0.32); border-radius: var(--r-pill);
   background: rgba(255,255,255,0.1); color: #fff;
   font: inherit; font-weight: 800; letter-spacing: var(--ls-2);

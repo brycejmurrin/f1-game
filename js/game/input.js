@@ -194,6 +194,12 @@ const Input = (function () {
         return DeviceOrientationEvent.requestPermission()
           .then(res => {
             if (res === "granted") {
+              // A grant clears an earlier refusal. The flag latched true on ANY
+              // rejection — including the transient kind (a request outside a
+              // user gesture, e.g. a gamepad A press synthesised as .click())
+              // — and never came back, so a later prompt the player accepted
+              // still labelled STEER "(NO GYRO)" while tilt was driving.
+              gyroDenied = false;
               attachGyro();
               return true;
             }

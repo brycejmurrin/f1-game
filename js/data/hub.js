@@ -139,10 +139,18 @@ const DataHub = (function () {
     const title = el("h2", "", "F1 DATA HUB");
     title.id = "dh-title";
     header.appendChild(title);
-    const closeBtn = el("button", "dh-close", "✕");
-    closeBtn.type = "button";
-    closeBtn.id = "dh-close-btn";   // the dialog's data-esc-close target
-    closeBtn.setAttribute("aria-label", "Close data hub");
+    // The dialog's data-esc-close target. index.html ships it in the shell so
+    // it exists before this lazy build runs (UiLayers' escape wiring is checked
+    // on the title screen); adopt it into the header, or build one in a bare
+    // harness that has no shell.
+    let closeBtn = document.getElementById("dh-close-btn");
+    if (!closeBtn) {
+      closeBtn = el("button", "dh-close", "✕");
+      closeBtn.type = "button";
+      closeBtn.id = "dh-close-btn";
+      closeBtn.setAttribute("aria-label", "Close data hub");
+    }
+    closeBtn.hidden = false;
     closeBtn.addEventListener("click", close);
     header.appendChild(closeBtn);
     card.appendChild(header);

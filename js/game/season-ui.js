@@ -99,8 +99,12 @@ function create(G) {
       [[true, "ON"], [false, "OFF"]], draft.quali, (v) => { draft.quali = v; });
     chipRow(pane, "SPRINT RACE", "ss-sprint",
       [[false, "OFF"], [true, "ON"]], draft.sprint, (v) => { draft.sprint = v; });
+    // Units on the chips, and no "(FULL)": the race-settings sibling's FULL is
+    // the CIRCUIT's own distance (Monaco 78, Spa 44 — game.js buildRaceSettings),
+    // while this 57 is a flat 57 laps preselected at every round — clamped down
+    // to a shorter circuit's full distance there, never raised to a longer one's.
     chipRow(pane, "RACE DISTANCE", "ss-laps",
-      SeasonCal.LAP_OPTS.map((n) => [n, n === 57 ? "57 (FULL)" : String(n)]),
+      SeasonCal.LAP_OPTS.map((n) => [n, n + (n === 1 ? " LAP" : " LAPS")]),
       draft.laps, (v) => { draft.laps = v; });
     chipRow(pane, "POINTS", "ss-points",
       [["modern", "25-18-15…"], ["classic", "10-6-4…"]],
@@ -115,7 +119,7 @@ function create(G) {
     note.id = "ss-note";
     note.textContent = draft.sprint
       ? "A sprint runs a third of the distance before the Grand Prix and pays "
-        + SeasonCal.SPRINT_POINTS.join(" · ") + ". Both legs score."
+        + SeasonCal.SPRINT_POINTS.join(" · ") + " pts. Both legs score."
       : "One race per round.";
     pane.appendChild(note);
 

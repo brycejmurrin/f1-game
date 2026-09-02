@@ -140,22 +140,56 @@ function markReloading(rb, next) {
 // is up; the first tap then ARMS the control (same dataset.armed idiom as
 // game.js armConfirm) and only the second tap proceeds. Called BEFORE any
 // preference is written, so an unconfirmed tap changes nothing.
-function raceGuard(btn, armedText) {
+//
+// An arm EXPIRES (ARM_MS) and `repaint` puts the real label back: a tap that
+// was never confirmed used to leave "END THIS RACE & RELOAD?" on the row for
+// the rest of the session, and the flag it set outlived the race — the first
+// tap of the NEXT race then reloaded with no question asked (2026-09-02
+// audit). On a <select> the question goes on the option in view: setting
+// textContent on a select replaces its options with a text node and the
+// picker painted empty for as long as it stayed armed.
+const ARM_MS = 6000;
+function disarm(btn, repaint) {
   try {
-    if (typeof document === "undefined" || !document.body || document.body.dataset.race !== "1" || !btn) return true;
-    if (!btn.dataset.armed) {
+    if (btn._apexArmT) { clearTimeout(btn._apexArmT); btn._apexArmT = 0; }
+    if (btn.dataset) delete btn.dataset.armed;
+    try { btn.classList.remove("armed"); } catch (_) { /* option element */ }
+  } catch (_) { /* dataset unavailable */ }
+  if (typeof repaint === "function") { try { repaint(); } catch (_) { /* label stays until the next paint */ } }
+}
+function raceGuard(btn, armedText, repaint) {
+  try {
+    if (typeof document === "undefined" || !document.body || !btn) return true;
+    if (document.body.dataset.race !== "1") {
+      // No race to protect: a flag left over from one is stale, not consent.
+      if (btn.dataset && btn.dataset.armed) disarm(btn, repaint);
+      return true;
+    }
+    // Age as well as the timer: a throttled background tab can hold the
+    // expiry back for minutes, and a tap that old is a fresh question.
+    const stale = !!btn.dataset.armed && (Date.now() - (btn._apexArmedAt || 0)) > ARM_MS;
+    if (!btn.dataset.armed || stale) {
       btn.dataset.armed = "1";
-      btn.textContent = armedText;
+      btn._apexArmedAt = Date.now();
+      if (isSelect(btn) && btn.options) {
+        const opts = btn.options;
+        for (let i = 0; i < opts.length; i++) if (opts[i].value === btn.value) opts[i].textContent = armedText;
+      } else {
+        btn.textContent = armedText;
+      }
       try { btn.classList.add("armed"); } catch (_) { /* option element */ }
+      if (btn._apexArmT) clearTimeout(btn._apexArmT);
+      btn._apexArmT = setTimeout(() => disarm(btn, repaint), ARM_MS);
       return false;
     }
+    if (btn._apexArmT) { clearTimeout(btn._apexArmT); btn._apexArmT = 0; }
     delete btn.dataset.armed;
     try { btn.classList.remove("armed"); } catch (_) { /* option element */ }
   } catch (_) { /* dataset unavailable: proceed as before */ }
   return true;
 }
 function applyBackend(next, rb) {
-  if (!raceGuard(rb, "RENDERER: END THIS RACE & RELOAD?")) return false;
+  if (!raceGuard(rb, "RENDERER: END THIS RACE & RELOAD?", () => paintRenderer(rb))) return false;
   Log.info("game", "GfxQuality.applyBackend " + next);
   try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
   if (next === "webgpu" && !hasWebGPU()) {
@@ -255,7 +289,7 @@ function threePathLabel(v) {
 }
 function applyThreePath(next, opts) {
   if (readBackend() === "three" && !(opts && opts.noReload) &&
-      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-three-path") : null, "THREE PATH: END THIS RACE & RELOAD?")) return false;
+      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-three-path") : null, "THREE PATH: END THIS RACE & RELOAD?", paintPresent)) return false;
   try {
     if (next === "webgl2") localStorage.setItem("apex26.tlxForceGL", "1");
     else if (next === "webgpu") localStorage.setItem("apex26.tlxForceGL", "0");
@@ -307,7 +341,7 @@ function shotReloadLive() {
 }
 function applyShotMode(next, opts) {
   if (shotReloadLive() && !(opts && opts.noReload) &&
-      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-screenshots") : null, "SCREENSHOTS: END THIS RACE & RELOAD?")) return false;
+      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-screenshots") : null, "SCREENSHOTS: END THIS RACE & RELOAD?", paintPresent)) return false;
   writeShotMode(next);
   paintPresent();
   if (shotReloadLive() && !(opts && opts.noReload)) {
@@ -456,6 +490,9 @@ function initPresentControls() {
     "WebGPU / three-WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = copy the frame onto #game (WGX soft-present / TLX readRenderTargetPixelsAsync). NATIVE = swapchain only — black on software GPUs.");
   const saveBtn = addBtn("pm-save-shot",
     "Download the visible #game canvas as a PNG. Waits for the 2D blit first (WGX or TLX-WebGPU).");
+  // The label was only ever written by saveScreenshot()'s done() — the button
+  // painted as an EMPTY plate until its first click (screenshot, 2026-09-02).
+  saveBtn.textContent = "SAVE SCREENSHOT";
   const status = document.createElement("p");
   status.id = "pm-gfx-status";
   add(status);
@@ -491,7 +528,7 @@ function initReset() {
   host.insertBefore(btn, slot.nextSibling);
   btn.onclick = () => {
     try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
-    if (!raceGuard(btn, "RESET RENDERER: END THIS RACE & RELOAD?")) return;
+    if (!raceGuard(btn, "RESET RENDERER: END THIS RACE & RELOAD?", () => { btn.textContent = "RESET RENDERER"; })) return;
     clearRendererStorage();
     btn.textContent = "RESET RENDERER — RELOADING…";
     try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
@@ -626,5 +663,5 @@ return { PRESETS, init, set, cycle, current: () => current().id, label, defaultI
   nextBackend, prevBackend, applyBackend, backendLabel, readBackend, clearRendererStorage,
   RENDERER_LS_KEYS, RENDERER_SS_KEYS,
   THREE_PATHS, SHOT_MODES, readThreePath, applyThreePath, threePathLabel, liveThreeApi,
-  readShotMode, applyShotMode, shotModeLabel, presentStatus, saveScreenshot };
+  readShotMode, applyShotMode, shotModeLabel, presentStatus, saveScreenshot, ARM_MS };
 })();

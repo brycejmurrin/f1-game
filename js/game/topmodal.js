@@ -104,6 +104,32 @@ window.TopModal = (function () {
     btn.click();
   }
 
+  /* WHAT FOCUS MAY LAND ON. One selector — MenuNav's, once it has loaded (it
+     ships after this file) — and one visibility rule: a control that is
+     `hidden`, disabled, aria-hidden or has no box is not a landing spot. The
+     containment below used to take the FIRST focusable in DOM order whether
+     or not it was on screen — a search-filtered circuit row, a CSS-hidden
+     button — and `focus()` on a hidden element is a silent no-op, so the
+     pull-back read as done while focus stayed outside the layer. */
+  const FOCUSABLE_FALLBACK = "button:not([disabled]),a[href],input:not([disabled])," +
+    "select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
+  const focusableSel = () => (window.MenuNav && window.MenuNav.FOCUSABLE) || FOCUSABLE_FALLBACK;
+  const shown = (el) => (window.UiLayers && window.UiLayers.shown) ? window.UiLayers.shown(el) : !el.hidden;
+  const usable = (el) => !!el && !el.disabled &&
+    !(el.getAttribute && el.getAttribute("aria-hidden") === "true") && shown(el);
+  // A text field is never chosen as a landing spot: focusing one on open raises
+  // the on-screen keyboard on touch and hands the caret keys a pad's D-pad.
+  const TEXTY = /^(text|search|url|email|password|tel|number)$/;
+  const isTexty = (el) => el.tagName === "TEXTAREA" ||
+    (el.tagName === "INPUT" && TEXTY.test((el.type || "text").toLowerCase()));
+  function firstFocusable(layer, skipTexty) {
+    for (const el of layer.querySelectorAll(focusableSel())) {
+      if (!usable(el) || (skipTexty && isTexty(el))) continue;
+      return el;
+    }
+    return null;
+  }
+
   function onFocusIn(e) {
     // Non-dialog layers never got platform focus containment. Keep Tab inside
     // the top UiLayers pane (#select, #career, #lighting, …). Dialogs already
@@ -113,20 +139,103 @@ window.TopModal = (function () {
     if (!layer || layer.tagName === "DIALOG") return;
     const t = e.target;
     if (t && layer.contains(t)) return;
-    const focusable = layer.querySelector(
-      "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
-    );
+    const focusable = firstFocusable(layer, false);
     if (focusable) {
       // No preventDefault: `focusin` is NOT cancelable, so the call was a
       // no-op that read as if it were suppressing the stray focus. The
       // focus() below is what actually pulls focus back into the layer.
-      try { focusable.focus(); } catch (_) { /* detached */ }
+      try { focusable.focus({ preventScroll: true }); } catch (_) { /* detached */ }
+    }
+  }
+
+  /* FOCUS MEMORY FOR THE SCREENS THAT ARE NOT DIALOGS.
+     A <dialog> gets two things from the platform for free: showModal() parks
+     focus inside it, and close() hands focus back to whatever opened it. The
+     `hidden`-toggled pages (#select, #career, #carsetup, the tuners, the title
+     screen itself) got neither: the button you pressed on the title screen
+     went `hidden` under you, the browser's focus fixup dropped focus on <body>,
+     and BACK left it there — Tab restarted at the top of the document and a
+     pad's only cursor was gone, the "unfocused screen is a lost user" case
+     docs/research/PLATFORM-INPUT-NOTES.md §8 quotes. Two WeakMaps, keyed by
+     layer:
+       lastFocus  the control focused INSIDE the layer when it last hid — where
+                  focus returns on the next open (#select reopens on NEXT: YOUR
+                  CAR after the garage's BACK, the title on the button that
+                  left it), else the same landing rule as the first arrow press
+                  (MenuNav.currentItem: autofocus / data-menu-default / the
+                  selected control / the first usable one, never a text field);
+       opener     the control focused OUTSIDE the layer when it opened — focus
+                  goes back to it on close when it is on screen again and
+                  nothing else has taken focus meanwhile.
+     Mutation callbacks run before the browser's focus fixup, so activeElement
+     still names the control inside a layer that has just gone hidden — that
+     ordering is what makes the memory readable at all. Both maps are per
+     layer and weak; nothing here outlives the DOM it points at. */
+  const lastFocus = new WeakMap();
+  const opener = new WeakMap();
+  const LAYER_SKIP = {
+    // The rotate blocker manages its own focus (js/game.js) and is CSS-gated;
+    // the fly-cam is not a menu — its arrows are the camera's (MenuNav refuses
+    // it too) and a focused button there would turn Space into a click.
+    "rotate-device": 1, "photo-controls": 1,
+  };
+  const inside = (layer, el) => !!el && el !== document.body && layer.contains(el);
+  const connected = (el) => !!el && !!document.body && document.body.contains(el);
+  const focusQuiet = (el) => { try { el.focus({ preventScroll: true }); } catch (_) { /* detached */ } };
+
+  function landing(layer) {
+    const auto = layer.querySelector("[autofocus]");
+    if (usable(auto)) return auto;
+    const nav = window.MenuNav;
+    if (nav && nav.currentItem && nav.items) {
+      const list = nav.items(layer).filter((el) => !isTexty(el));
+      const cur = nav.currentItem(layer, list);
+      if (cur) return cur;
+    }
+    return firstFocusable(layer, true);
+  }
+
+  function onLayerShow(layer) {
+    const a = document.activeElement;
+    if (inside(layer, a)) return;                       // the app placed focus itself
+    opener.set(layer, connected(a) && a !== document.body ? a : null);
+    const back = lastFocus.get(layer);
+    const target = (connected(back) && layer.contains(back) && usable(back)) ? back : landing(layer);
+    if (target) focusQuiet(target);
+  }
+
+  function onLayerHide(layer) {
+    const a = document.activeElement;
+    if (inside(layer, a)) lastFocus.set(layer, a);
+    const back = opener.get(layer);
+    opener.delete(layer);
+    if (!connected(back) || !usable(back)) return;      // its screen is not up (a race started)
+    if (a && a !== document.body && !layer.contains(a)) return;   // something else took focus
+    const top = window.UiLayers && window.UiLayers.top ? window.UiLayers.top() : null;
+    if (top && !top.contains(back)) return;             // another layer owns the keys now
+    focusQuiet(back);
+  }
+
+  function wireLayer(el) {
+    if (!el || wired.has(el) || typeof el.showModal === "function") return;
+    wired.add(el);
+    new MutationObserver(() => (el.hidden ? onLayerHide(el) : onLayerShow(el)))
+      .observe(el, { attributes: true, attributeFilter: ["hidden"] });
+  }
+
+  function scanLayers() {
+    const ids = (window.UiLayers && window.UiLayers.LAYER_IDS) || [];
+    for (const id of ids) {
+      if (LAYER_SKIP[id]) continue;
+      const el = document.getElementById(id);
+      if (el && el.tagName !== "DIALOG") wireLayer(el);
     }
   }
 
   function init() {
     Log.info("ui", "TopModal.init");
     scan();
+    scanLayers();
     document.addEventListener("keydown", onEscape, true);
     document.addEventListener("focusin", onFocusIn, true);
   }
@@ -136,5 +245,5 @@ window.TopModal = (function () {
     document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  return { scan, wire, onEscape };
+  return { scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing };
 })();

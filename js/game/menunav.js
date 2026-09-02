@@ -344,7 +344,15 @@ window.MenuNav = (function () {
   // Controls that own the arrow keys themselves. A range slider is the one that
   // matters here (the settings and lighting panels are full of them): stealing
   // Left/Right from a focused slider would make it unadjustable by keyboard.
-  // Range/number own ONLY those two keys — Up/Down must leave the row.
+  // CARET_KEYS are the keys that move a caret or a slider thumb along ITS OWN
+  // axis, and they are all any <input> owns — Up/Down must leave the row. A text
+  // field used to own EVERY key: the circuit search box was the one control on
+  // the select screen a pad could land on (Right off the CLASSICS chip) and
+  // never leave — D-pad Down was a dead press, and B closes the whole screen.
+  // Up/Down and the page keys now leave a text field like they leave a slider;
+  // Home/End stay with it (they jump the caret, and a range to min/max — the
+  // ARIA slider pattern — which MenuNav used to take from a focused slider).
+  const CARET_KEYS = { ArrowLeft: 1, ArrowRight: 1, Home: 1, End: 1 };
   function ownsArrows(el, key) {
     if (!el) return false;
     const t = el.tagName;
@@ -353,12 +361,45 @@ window.MenuNav = (function () {
       const ty = (el.type || "text").toLowerCase();
       if (ty === "checkbox" || ty === "radio" || ty === "button" ||
           ty === "submit" || ty === "reset") return false;
-      if (ty === "range" || ty === "number")
-        return key === "ArrowLeft" || key === "ArrowRight";
-      return true;
+      return !!CARET_KEYS[key];
     }
-    if (el.getAttribute && el.getAttribute("role") === "tab") return true;
+    if (el.getAttribute && el.getAttribute("role") === "tab") return tabOwns(el, key);
     return !!el.isContentEditable;
+  }
+
+  // A TAB RAIL OWNS ITS OWN AXIS AND NOTHING ELSE. Along the rail the widget
+  // cycles and selects (settings-nav, setup-ui, tuner and cam-tuner all
+  // implement automatic activation) and Home/End are its ends. The
+  // PERPENDICULAR axis is the way OUT of the rail: with role=tab owning every
+  // arrow, the garage's category rail mapped all four directions to "next
+  // category" and the settings rail re-focused its tab, so a pad — which has
+  // no Tab key — could reach neither the parts list beside the rail nor the
+  // settings panel under it. The axis is MEASURED, not assumed: the garage rail
+  // is a column when the sheet pairs, a row when it stacks and a 2x7 grid on a
+  // short wide phone; `aria-orientation` (settings-nav writes it) overrides
+  // the measure when a rail declares itself.
+  function tabOwns(tab, key) {
+    if (key === "Home" || key === "End") return true;
+    const dir = DIRS[key];
+    if (!dir) return false;                         // Page keys page the pane
+    const list = (tab.closest && tab.closest("[role='tablist']")) || tab.parentElement;
+    const o = list && list.getAttribute && list.getAttribute("aria-orientation");
+    let railX = true;
+    if (o === "vertical") railX = false;
+    else if (o !== "horizontal" && list && list.querySelectorAll) {
+      // A sibling tab sharing this tab's row band means the rail runs across.
+      const a = centre(tab);
+      let siblings = 0;
+      railX = false;
+      for (const s of list.querySelectorAll("[role='tab']")) {
+        if (s === tab || !shown(s)) continue;
+        siblings++;
+        const b = centre(s);
+        if (overlaps(a.t, a.b, b.t, b.b)) { railX = true; break; }
+      }
+      if (!siblings) railX = true;                  // a lone tab: nothing to cycle
+    }
+    return (dir[0] !== 0) === railX;
   }
 
   const DIRS = {
@@ -451,7 +492,14 @@ window.MenuNav = (function () {
     e.preventDefault();
     if (!inLayer) { focusItem(currentItem(layer, list), layer); return; }
     const next = step(active, dir[0], dir[1], list);
-    if (next) focusItem(next, layer);
+    if (!next) return;
+    focusItem(next, layer);
+    // LEAVING A TAB RAIL SIDEWAYS SPENDS THE KEY. The rail's own keydown
+    // handler runs after this capture listener — settings-nav re-focuses its
+    // tab on a perpendicular arrow, setup-ui cycles to the next category — and
+    // either would undo the move just made. (Only a tab: the circuit filter
+    // chips rely on still receiving the arrow that moved focus onto them.)
+    if (active.getAttribute && active.getAttribute("role") === "tab") e.stopPropagation();
   }
 
   function init() {
@@ -471,5 +519,7 @@ window.MenuNav = (function () {
   // FOCUSABLE is exported so a second caller (the gamepad A-button seam in
   // js/game/input.js) can ask "is this a real actionable control" without a
   // second copy of the selector to drift out of step with this one.
-  return { activeLayer, nearestPane, onWheel, onKeyDown, FOCUSABLE, step, pickSideways };
+  // items / currentItem: js/game/topmodal.js lands focus on a freshly shown
+  // non-dialog screen with the same rule the first arrow press uses.
+  return { activeLayer, nearestPane, onWheel, onKeyDown, FOCUSABLE, step, pickSideways, items, currentItem, ownsArrows };
 })();

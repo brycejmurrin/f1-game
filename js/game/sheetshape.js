@@ -190,11 +190,44 @@ window.SheetShape = (function () {
     if (el.dataset.fit !== state) el.dataset.fit = state;
   }
 
+  /* ROOM, NOT CONTENT. A content-sized sheet (max-height: 100%, content
+     shorter than the screen) reports its CONTENT height as hOwn, and its
+     compact layout is by construction shorter than its normal one — so once
+     compact it measured itself compact forever. MEASURED RACE SETTINGS at
+     1280x800: the three-column compact grid is 358 own px, so against
+     --compact-at 760 a desktop with 776 px of room kept the phone layout
+     ("57 (FULL)" wrapping, NORMAL painted past its chip). "Is this sheet
+     short" means "how much room does it have", so the host's content box in
+     the sheet's own units is the floor: a sheet pinned to the viewport
+     measures the same either way; one with room to grow is judged by that
+     room. No host, a hidden host, or the unit harness (host 0) falls back to
+     the sheet's own height. Same host/padding read as classifyFit above. */
+  function roomOwn(el, hOwn) {
+    /* NOT THE BODY. classifyBody() hands in innerHeight ÷ --ui-scale — the
+       viewport already expressed in the body's synthetic own units, which IS
+       its room. The body carries no zoom of its own, so the host read below
+       would return the raw viewport and, at UI SIZE 200%, double it: measured
+       as ui-scale.spec "200% keeps title navigation reachable" waiting on
+       body[data-density="compact"] that never came (ui group, 2026-09-02). */
+    if (el === document.body) return hOwn;
+    const host = el.parentElement;
+    if (!host) return hOwn;
+    const hs = getComputedStyle(host);
+    const avail = host.clientHeight
+      - (parseFloat(hs.paddingTop) || 0) - (parseFloat(hs.paddingBottom) || 0);
+    if (!(avail > 0)) return hOwn;
+    /* currentCSSZoom is cumulative; the host is normally unzoomed, but divide
+       by its own zoom so a zoomed ancestor cannot double-count. */
+    const z = (window.CssZoom ? CssZoom.of(el) / CssZoom.of(host) : 1) || 1;
+    return Math.max(hOwn, avail / z);
+  }
+
   function classifyDensity(el, hOwn) {
     const raw = getComputedStyle(el).getPropertyValue("--compact-at");
     const at = parseFloat(raw) || SHORT_DEFAULT;
     const was = el.dataset.density === "compact";
-    const now = was ? hOwn < at + SHORT_HYST : hOwn < at;
+    const h = roomOwn(el, hOwn);
+    const now = was ? h < at + SHORT_HYST : h < at;
     const next = now ? "compact" : "normal";
     if (el.dataset.density !== next) el.dataset.density = next;
     if (next === "compact" && el.classList.contains("lt-show-help")) {

@@ -781,6 +781,26 @@ function openSetup() {
   $("carsetup").hidden = false;
   G.setupPreviewOn = true;
 }
+
+// THE PAINT EDITOR DOES NOT OUTLIVE THE GARAGE. Only CANCEL and SAVE & FIT
+// cleared the draft, so BACK/DONE (game.js leaveGarage) — or the race start
+// hiding every .screen under a VS FRIEND guest — left csLivCreating set and
+// G.livDraftOverride live. resolveLivery() reads that override for the
+// player's team, so the next race painted the UNSAVED draft on the car, and the
+// next garage visit re-opened the editor on it. Watching the screen's own
+// `hidden` attribute (the sheetshape.js idiom) needs no new hook in game.js
+// and catches every exit, including the ones that never call this module.
+function discardLivDraft() {
+  if (!csLivCreating) return;
+  csLivCreating = false; csLivDraft = null; csLivEditId = null;
+  const team = Teams.LIST[G.teamIdx];
+  if (team) endLivPreview(team);
+}
+if (typeof MutationObserver === "function") {
+  const cs = $("carsetup");
+  if (cs) new MutationObserver(() => { if (cs.hidden) discardLivDraft(); })
+    .observe(cs, { attributes: true, attributeFilter: ["hidden"] });
+}
 return { buildSetup, openSetup };
 }
 

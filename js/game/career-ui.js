@@ -520,7 +520,7 @@ function create(G) {
         const car = Math.round((t.stats.speed + t.stats.accel + t.stats.cornering + t.stats.braking) / 4);
         b.append(sw, el("span", "cr-teamtile-name", t.name),
           el("span", "cr-teamtile-meta",
-            t.engine + " · CAR " + car + " · " + Career.salaryFor(t, 30) + " cr"));
+            t.engine + " · CAR " + car + " · " + Career.salaryFor(t, 30) + " cr / round"));
         b.onclick = () => { draft.teamId = t.id; buildSetupPanes(); if (G.soundOn) GameAudio.uiTick(); };
         grid.appendChild(b);
       }
@@ -683,7 +683,7 @@ function create(G) {
     const fittedCost = Parts.getCost(c.fitted, team);
     carCard.append(
       row("Parts owned", c.owned.length + " of " + totalOptions()),
-      row("Fitted", fittedCost + " / " + Career.budget() + " cr"),
+      row("Fitted", fittedCost.toLocaleString() + " / " + Career.budget().toLocaleString() + " cr"),
       row("Development", devLabel(c.tdev[c.team] || 0)),
       // The facility is the one upgrade that never runs out, so it belongs with
       // the car rather than in the economy: it is what late money buys.
@@ -733,15 +733,22 @@ function create(G) {
     slotBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openSlots(); };
     left.appendChild(slotBtn);
 
+    // A disabled door says WHY. Both upgrade cards used to grey out with no
+    // reason on the card — the balance is a header away, and a title alone
+    // never shows on touch — so the shortfall rides on the affordance line
+    // (.cr-record-cta wraps; it carries no nowrap, so it cannot truncate).
+    const shortBy = (cost) => (Career.freeMoney() ? 0 : Math.max(0, cost - st.money));
+    const shortNote = (n) => (n > 0 ? "  ·  SHORT " + n.toLocaleString() + " cr" : "");
     if (st.facilityCost != null) {
       const fac = el("button", "cr-card cr-record");
       fac.id = "cr-facility";
-      const afford = Career.freeMoney() || st.money >= st.facilityCost;
-      fac.disabled = !afford;
+      const fShort = shortBy(st.facilityCost);
+      fac.disabled = fShort > 0;
+      if (fShort > 0) fac.title = "Needs " + fShort.toLocaleString() + " cr more than you have";
       fac.append(
         el("span", "cr-record-line", "Upgrade the factory · " + st.facilityCost.toLocaleString() + " cr"),
         el("span", "cr-record-cta", "LEVEL " + st.facility + " → " + (st.facility + 1)
-          + "  ·  −" + Math.round((st.facilityDiscount + 0.05) * 100) + "% RESEARCH"));
+          + "  ·  −" + Math.round((st.facilityDiscount + 0.05) * 100) + "% RESEARCH" + shortNote(fShort)));
       fac.onclick = () => {
         if (!Career.upgradeFacility()) return;
         if (G.soundOn) GameAudio.uiSelect();
@@ -753,11 +760,13 @@ function create(G) {
     if (st.budgetCost != null) {
       const cap = el("button", "cr-card cr-record");
       cap.id = "cr-budget";
-      cap.disabled = !(Career.freeMoney() || st.money >= st.budgetCost);
+      const bShort = shortBy(st.budgetCost);
+      cap.disabled = bShort > 0;
+      if (bShort > 0) cap.title = "Needs " + bShort.toLocaleString() + " cr more than you have";
       cap.append(
         el("span", "cr-record-line", "Raise the fitted cap · " + st.budgetCost.toLocaleString() + " cr"),
         el("span", "cr-record-cta", "LEVEL " + st.budgetLvl + " → " + (st.budgetLvl + 1)
-          + "  ·  CAP " + st.budget.toLocaleString() + " cr"));
+          + "  ·  CAP " + st.budget.toLocaleString() + " cr" + shortNote(bShort)));
       cap.onclick = () => {
         if (!Career.upgradeBudget()) return;
         if (G.soundOn) GameAudio.uiSelect();
@@ -841,7 +850,7 @@ function create(G) {
         const keep = el("button", "cr-card cr-record");
         keep.id = "cr-rehire";
         keep.append(
-          el("span", "cr-record-line", "Keep " + h.name + " · " + h.ask.toLocaleString() + " cr a round"),
+          el("span", "cr-record-line", "Keep " + h.name + " · " + h.ask.toLocaleString() + " cr / round"),
           el("span", "cr-record-cta", "RE-SIGN"));
         keep.onclick = () => {
           Career.renewHire(1);
@@ -1059,7 +1068,7 @@ function create(G) {
       row("Race starts", String(t.starts)),
       row("Wins", String(t.wins)),
       row("Podiums", String(t.podiums)),
-      row("Points", String(t.points)),
+      row("Points", t.points + " pts"),
       row("Championships", t.titles + " drivers' · " + t.cTitles + " constructors'"),
       row("Best championship", t.best ? "P" + t.best + " in " + t.bestYear : "no season finished yet"),
       row("Teams driven for", t.teams.map(teamName).join(", ")));
@@ -1134,7 +1143,18 @@ function create(G) {
     build();
     $("career").hidden = false;
   }
-  function close() { Log.info("ui", "CareerUI.close"); $("career").hidden = true; }
+  // close() is the one exit every path shares, so it is where the screen's
+  // TRANSIENT state dies: the NEW CAREER draft, the slot it was borrowed from,
+  // and an armed DELETE?. draftFrom was already restored at the MAIN MENU
+  // button (2026-09-01); its siblings were not — a draft abandoned there came
+  // back as NEW CAREER on the next openHub() with no career live, and an armed
+  // DELETE? came back armed, one tap from deleting a save with no warning
+  // (the hazard #ss-apply's disarm comment in season-ui.js describes).
+  function close() {
+    Log.info("ui", "CareerUI.close");
+    $("career").hidden = true;
+    draft = null; draftFrom = null; armedDelete = "";
+  }
 
   $("cr-back").onclick = () => {
     if (picking && Career.active()) { picking = false; armedDelete = ""; build(); return; }
