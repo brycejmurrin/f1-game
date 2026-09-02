@@ -3567,3 +3567,56 @@ is this container's software rasteriser, not a reproduction of any player's
 frame rate. What reproduces is the INSTRUMENT failure: whatever makes a real
 device slow, the governor stops being able to see it at 10 fps and then does
 nothing. That is the defect; the container merely made it visible.
+
+## 2u. 539 backdrops were being dropped where nothing could see it (2026-09-02)
+
+Found while chasing a single line in a live browser console —
+`[scenery] bahrain: suppressed building=1` — and asking what else that circuit
+was silently losing. The answer was five backdrops, and the fleet's answer was
+539.
+
+`js/track/tracks.js` `backdrop()` was the ONLY suppression site in the codebase
+that dropped geometry through a bare `Log.info` instead of `ctx.noteSuppressed`.
+Everything else lands in `modelDiagnostics.suppressedCounts`, which is what
+`verify-track.cjs` reads (it can only fail on a REQUIRED diagnostic it actually
+receives), what `tests/unit/scenery-guards.test.mjs` asserts against, and what
+`__apex` can report. A drop that goes to a log line at `info` reaches none of
+them. That is why nobody had a number for this until it was given a counter.
+
+Swept across all 40 circuits (`Tracks.build` per def, counting both channels):
+
+```
+noteSuppressed total  418        <- visible to tools all along
+bare-Log  total       539        <- visible to nothing
+```
+
+Concentrated, not spread: **redbull 295 of its 680 backdrop calls (43 %)**,
+silverstone 64, spa 53, mexico 26, shanghai 16, monaco 15.
+
+### The margin is suspect too, and the correction is NOT a straight swap
+
+`onTrack(cx, cz, sz[0] / 2 + 6)` uses `sz[0]` — the box's length ALONG the
+tangent, since `addBox` takes basis `[t, u, r]` and the reach toward the road is
+`sz[2]/2` — as a RADIAL margin. That is the same anti-pattern this repo already
+fixed for billboards (`scenery-city.js`: "all 44 at Qatar, all 7 at Monaco").
+
+I expected the corrected oriented test to recover scenery. Measured A/B, dense
+sampling along `t` with margin `sz[2]/2 + 6`:
+
+| | suppressed |
+|---|---|
+| current circular guard | 539 |
+| oriented footprint test | **618** |
+
+It suppresses MORE. It recovers 11 (mexico 5, bahrain 3, cota 2, abudhabi 1)
+and drops 90 that currently render, concentrated on **redbull −41** and
+**silverstone −26**. So the current margin is *both* too strict near the anchor
+*and* too loose along the ends: 79 backdrops fleet-wide have footprint within
+~11 m of a road edge and are built anyway.
+
+**Left unchanged deliberately.** Switching it moves visible scenery on 17
+circuits, needs a rendered look and re-measured `test:sweeps` baselines, and the
+"correct" test makes the world emptier — that is a design call, not a cleanup.
+What shipped is the wiring: the drops are now counted, and
+`scenery-guards.test.mjs` ratchets redbull at 295 so the next change to that
+margin has to be deliberate and carry its own measurement.

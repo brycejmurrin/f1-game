@@ -51,3 +51,28 @@ test("bakedModel rides the scenery transform like the fallback it replaces", () 
   assert.ok(kSide, "the (k, side) wrapper list exists");
   assert.match(kSide[1], /"bakedModel"/);
 });
+
+test("the backdrop guard RECORDS its drops — it was the one emitter that did not", () => {
+  // Every other suppression site calls ctx.noteSuppressed, which lands the drop
+  // in modelDiagnostics.suppressedCounts. `backdrop` called a bare Log.info, so
+  // its drops reached no test, no tool and no __apex hook: verify-track cannot
+  // fail on a diagnostic it never receives, and this very file could not have
+  // caught them. The moment it was given a counter it reported 539 suppressed
+  // backdrops fleet-wide — 295 at redbull alone, 43 % of that circuit's calls.
+  //
+  // This asserts the WIRING, not the margin. The margin is separately suspect
+  // (it uses the box's along-track length as a radial margin, the same shape
+  // this file's header describes for billboards) and is left alone on purpose —
+  // an oriented test suppresses MORE, not fewer. Numbers: PERF-FINDINGS 2u.
+  const Tracks = buildContext();
+  const c = counts(Tracks, "redbull");
+  assert.ok(c.backdrop > 0,
+    "redbull drops backdrops and the count must be visible — a bare Log.info " +
+    "makes the drop unobservable, which is how 539 of them went unnoticed");
+  // Ratchet: this number moving means the guard's behaviour moved. That is
+  // allowed, but it must be a deliberate edit with a rendered look behind it,
+  // not a side effect. Raise or lower it in the same commit that changes it.
+  assert.equal(c.backdrop, 295,
+    `redbull backdrop drops = ${c.backdrop}, expected 295 — if you changed the ` +
+    `guard, re-measure and update this with the reason`);
+});

@@ -304,6 +304,9 @@ function tick(dtMs) {
   // page reported `{fps: 59.9, floorMs: 16.7, tier: 0, scale: 1}`. Nothing had
   // stepped, because nothing had been seen.
   //
+  // A backgrounded tab cannot fake a run: js/game.js hides -> setPaused(true),
+  // and the tick call site is gated on `!paused`, so Chrome's ~1 Hz background
+  // rAF throttle never reaches the governor at all. Checked, not assumed.
   // So: keep discarding an ISOLATED over-cap frame (tab resume, a GC pause),
   // and stop discarding a RUN of them. SPIKE_RUN consecutive slow frames is not
   // a spike, it is the device's actual speed, and from there the sample is fed
