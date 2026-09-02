@@ -2569,7 +2569,12 @@ const TLX = (function () {
           _mirrorStat.drains++;
           _mirrorStat.gate = (envReady ? "R" : "-") + (_envGaveUp ? "G" : "-")
                            + (envRT ? "T" : "-") + (_sweepOptIn ? "S" : "-");
-          if (_sweepOptIn && (envReady || _envGaveUp || !envRT)) sweepGeoMirrors(_now);
+          // The opt-in BYPASSES the env gate on purpose. On a phone profile that
+          // gate is shut (the probe is tier-gated off), so without this the A/B
+          // knob cannot A/B the configuration that broke a player's handset —
+          // an override that cannot reach the failing path is not an override.
+          // Default OFF, so nothing reaches a player through it.
+          if (_sweepOptIn) sweepGeoMirrors(_now);
           // Evicted materials dispose only now — after paint, when no drawList
           // record can still reference them (safe since the #33952 backport).
           for (let i = 0; i < _matDispose.length; i++) { try { _matDispose[i].dispose(); } catch (_) { /* already disposed */ } }

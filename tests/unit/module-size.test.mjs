@@ -1027,7 +1027,15 @@ const CEILINGS = {
   // re-freeing them next round.
   // + R16: the CSS-size cache re-check in resize() and the ResizeObserver
   // moved outside the addEventListener check (PERF-FINDINGS 2u).
-  "js/render/three/tlx.js": 2745,
+  // 2745 -> 2763: the revert of the mirror-release lever, plus the A/B knob
+  // bypassing the env gate so it can actually reach the configuration that
+  // broke a player's handset. The revert ADDED lines rather than removing them
+  // - the reasoning for why the term went in AND why it came out is the point,
+  // since the phone-gate fact that motivated it is true and the next round will
+  // rediscover it. Pushed urgently without running this guard, which failed
+  // pages.yml run 1902 and so SKIPPED the deploy job - the phone fix could not
+  // publish because of a line-count ceiling. Run the guard even when reverting.
+  "js/render/three/tlx.js": 2763,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
