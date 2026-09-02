@@ -231,7 +231,11 @@ const Tracks = (function () {
     const SIDE = (side) => def.reverse ? -side : side;
     const w = Object.assign({}, api);
     // (k, side, ...rest): index + side based
-    for (const name of ["place", "prop", "backdrop", "groundPlane", "anchor", "pine", "tree",
+    // bakedModel is here too: it replaces a wrapped procedural fallback at the
+    // same authored (k, side), so it must move (origin shift, reverse flip)
+    // exactly as the fallback does — unwrapped, the baked asset stood 2/3 of
+    // a lap away on every shifted circuit that ships one.
+    for (const name of ["place", "prop", "backdrop", "groundPlane", "anchor", "pine", "tree", "bakedModel",
                         "palm", "conifer", "building", "house", "motorhome", "tower", "billboard",
                         "marshalPost", "bush", "signBoard", "ferrisWheel", "floodMast", "runoffApron",
                         "cameraTower", "broadcastCompound", "waterSurface",
@@ -403,6 +407,7 @@ const Tracks = (function () {
     };
     const diagnostics = track.modelDiagnostics = {
       emitted: [], suppressed: [], invalid: [], unsafe: [],
+      suppressedCounts: _suppressed,   // per-kind guard drops (tests/unit/scenery-guards)
     };
 
     // Everything buildProps places goes straight into vertex buffers and is then

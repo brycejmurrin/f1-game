@@ -133,9 +133,15 @@ const SceneryStructures = (function () {
       const railCol = col || [0.82, 0.82, 0.85];
       const postKey = `guardrail-post|${st}|${postCol.join(",")}`;
       const railKey = `guardrail-rail|${st}|${railCol.join(",")}`;
+      // The on-track margin must stay BELOW the gap: a post anchored at hw+gap
+      // sits (hw+gap)·cos(θ/2) from the neighbouring chord, so a fixed 0.5
+      // against gap 0.5 failed for ANY curvature and dropped every post of
+      // every Monaco armco (220 of them) while recordBarrier still tightened
+      // the driving limit to a rail that was not there.
+      const railMargin = Math.min(0.5, gap * 0.5);
       along(s0, s1, 4, (k, spacing) => {
         const p = anchor(k, side, gap);
-        if (onTrack(p.c[0], p.c[2], 0.5)) {
+        if (onTrack(p.c[0], p.c[2], railMargin)) {
           ctx.noteSuppressed("guardrail", `guardrail SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }

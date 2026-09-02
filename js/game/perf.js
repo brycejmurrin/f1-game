@@ -29,6 +29,8 @@ let _gfx = null;
 // STANDARD-tier sit at scale 1 and never enter these branches, so their
 // (already smooth) behaviour is unchanged.
 let _frameEMA = 16.7, _govT = 0, _govCool = 0, _autoRes = true, _downHold = 0;
+const UP_BACKOFF_MIN = 600, UP_BACKOFF_MAX = 7200;   // frames: 10 s … 2 min
+let _upBackoff = UP_BACKOFF_MIN;   // wait before the next restore attempt after a refused climb
 // The scale lever is INEFFECTIVE on this device right now — set when a
 // scale-down step was reverted for buying nothing, cleared once a tier has been
 // shed (the next rung may change that) or once headroom returns.
@@ -288,8 +290,16 @@ function tick(dtMs) {
         if (!v.up) _scaleFutile = true;
       } else _perfTier = v.prev;
       _govCool = VERIFY_COOL;
+      // A failed UP step is the device saying "no headroom". Without a hold
+      // the restore gate (EMA under the floor, _downHold 0) was true again
+      // one cooldown later, so restore → verify-fail → revert cycled every
+      // ~10 s for the whole race — with the scale lever that is a full
+      // render-target reallocation each time. Back off: each refused climb
+      // doubles the wait before the next try (10 s, 20 s, 40 s, … 2 min).
+      if (v.up) { _downHold = _upBackoff; _upBackoff = Math.min(_upBackoff * 2, UP_BACKOFF_MAX); }
       return;
     }
+    if (v.up) _upBackoff = UP_BACKOFF_MIN;   // a climb that held resets the backoff
   }
 
   const degradeAt = _floorMs + DEGRADE_OVER, restoreAt = _floorMs + RESTORE_WITHIN;

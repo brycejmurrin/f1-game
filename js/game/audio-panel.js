@@ -34,7 +34,7 @@ const AudioPanel = (() => {
       if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); GameAudio.stopRain(); }
       else {
         if (G.state === "menu") GameAudio.startMusic(-1);
-        else if (G.state === "race") {
+        else if (G.state === "race" || G.state === "count") {   // the countdown is the race's first seconds
           GameAudio.startMusic(G.trackIdx);
           GameAudio.startEngine();
           if (G.raceWeather === "rain") GameAudio.startRain();

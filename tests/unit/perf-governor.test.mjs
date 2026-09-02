@@ -531,3 +531,22 @@ test("clearStrikes / safeMode(false) releases a latched _perfTier", () => {
     `clearStrikes must not leave tier() above the new floor (was ${before}, now ${PerfGov.tier()})`);
   assert.equal(PerfGov.tierFloor(), 0, "strikes cleared → floor 0");
 });
+
+test("a refused climb backs off: restore→verify-fail→revert must not cycle every cooldown", () => {
+  // A device whose frame costs +2 ms ONLY at full scale (after a 5 s heavy
+  // opening): the governor cuts once, the frames come good, it climbs back,
+  // the climb fails verification and is reverted — and without a hold the
+  // restore gate was true again one cooldown later, so the same refused climb
+  // repeated every ~5 s for the whole race, each one a render-target
+  // reallocation: 34 scale changes in 180 s on the old code, 10 with the
+  // backoff (10 s, 20 s, 40 s, … 2 min between attempts).
+  const { PerfGov, scale } = makeGov();
+  let prev = scale(), changes = 0;
+  for (let f = 0; f < 10800; f++) {
+    PerfGov.tick(scale() >= 0.99 ? (f < 300 ? 22.7 : 18.7) : 16.7);
+    if (scale() !== prev) changes++;
+    prev = scale();
+  }
+  assert.ok(changes >= 2, `the harness must see at least one cut and one climb (${changes})`);
+  assert.ok(changes <= 12, `refused climbs must back off, not repeat: ${changes} scale changes in 180 s`);
+});

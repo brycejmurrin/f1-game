@@ -85,11 +85,24 @@ export function plan() {
     steps: [
       ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (index.html/version.json conflicts resolve to theirs + bump-cache --apply)",
       "npm run test:tooling-fast",
+      "the Pages gate's node suites (ci.yml \"Pure-node unit suites\", read from the file)",
       "verify-track for touched circuits",
       flag("--pr") ? "push the session branch and open/update a PR into the deploy branch"
                    : "git push origin HEAD:" + DEPLOY_BRANCH + " (fast-forward, retry ×3)",
       "pages.yml stamps the build and verify-live confirms it",
     ] };
+}
+
+// The `npm run test:*` lines of ci.yml's "Pure-node unit suites" step — the
+// deploy gate's node half. Empty (and logged) if the step is ever renamed, so
+// a rename shows up as a missing verdict entry rather than a silent skip.
+function gateNodeSuites() {
+  let ci = "";
+  try { ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8"); } catch (e) { return []; }
+  const at = ci.indexOf("- name: Pure-node unit suites");
+  if (at < 0) { log("WARN ci.yml has no 'Pure-node unit suites' step — gate suites not run"); return []; }
+  const body = ci.slice(at).split(/\n      - name: /)[0];
+  return [...body.matchAll(/^\s+npm run (test:[\w-]+)\s*$/gm)].map((m) => m[1]);
 }
 
 function mergeDeployTip(tip) {
@@ -156,6 +169,11 @@ export function main() {
   const verdict = { branch: p.branch, merge: "none", verified: [], pushed: false, pr: null };
   if (!p.fastForward) verdict.merge = mergeDeployTip(p.tip);
   run("npm", ["run", "test:tooling-fast"], "guard suite on the union"); verdict.verified.push("tooling-fast");
+  // The Pages gate runs MORE node suites than tooling-fast (quali-persist,
+  // node-slow, the VM twins, …) and two deploys went red on pins tooling-fast
+  // never runs (run 1889, 2026-09-02). Run exactly what the gate runs, read
+  // from ci.yml so the two lists cannot drift apart.
+  for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verdict.verified.push(script); }
   for (const id of touchedCircuits(p.tip)) { run("node", ["tools/verify-track.cjs", id], `verify-track ${id}`); verdict.verified.push(`verify-track:${id}`); }
   if (flag("--pr")) {
     Object.assign(verdict, openPr(p.branch));
