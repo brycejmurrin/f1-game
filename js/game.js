@@ -5487,7 +5487,12 @@ function setLightTune(id, v) {
   // per-chunk path at night) a RISING EDGE from 0 to a positive value is the
   // player choosing to switch it back on — informed, one gesture at a time — so
   // it is the honest reset. The tier gate still protects a governed device.
-  if (id === "perChunkLights" && +v > 0 && !(+LT[id] > 0) && _perChunkOff) {
+  // EITHER chunk knob, because js/game/tuner.js gateNote() shows the "set to 0
+  // and back on to retry" note on BOTH (its isChunk covers roadChunkLamps too).
+  // Keyed on perChunkLights alone, a player who read that note on PER-CHUNK
+  // ROAD and did exactly what it said cleared nothing, and the slider stayed
+  // silently dead — the instruction only worked on the OTHER control.
+  if ((id === "perChunkLights" || id === "roadChunkLamps") && +v > 0 && !(+LT[id] > 0) && _perChunkOff) {
     _perChunkOff = false;
     try { localStorage.removeItem("apex26.perChunkOff"); } catch (_) { /* no storage: the in-memory clear stands for this session */ }
   }

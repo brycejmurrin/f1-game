@@ -575,7 +575,9 @@ const CEILINGS = {
   // tier(), which made it DEAD CODE ((A && t<1) || (t<3) === t<3) and
   // silently disabled PER-CHUNK ROAD on GRAPHICS: LOW. autoTier() matches
   // the scenery half, tuner.js's held-off note and the slider help text.
-  "js/game.js": 9202,
+  // -> 9207 latch symmetry: tuner.js offers the display-reset retry on BOTH
+  // chunk sliders, so the rising-edge clear accepts either one.
+  "js/game.js": 9207,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
