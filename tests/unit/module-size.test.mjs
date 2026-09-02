@@ -949,7 +949,7 @@ const CEILINGS = {
   // based prune. Measured against the flat pool it was replacing:
   // createRenderObject allocations -45%, _createBindings -27%, 2-minute race
   // drift -28%. A PARTIAL fix, not a cure — PERF-FINDINGS 2o says so.
-  "js/render/three/tlx.js": 2496,
+  "js/render/three/tlx.js": 2540,   // 2026-09-02: occurrence-keyed mesh pool (the collapse fix) + updateInstances + update ranges (audit round)
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
@@ -1001,7 +1001,7 @@ const CEILINGS = {
   // Float32Array rounds on store and the compare was float32-vs-float64. The
   // 40 lines buy uniform3fv 31.5 -> 16.3 per frame (vegas night, full field,
   // tools/glx-call-census.mjs) with every other counter unchanged.
-  "js/render/glx.js": 2078,
+  "js/render/glx.js": 2094,   // 2026-09-02: gated per-present getError drain (audit round)
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)

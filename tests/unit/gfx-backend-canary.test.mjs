@@ -2069,7 +2069,7 @@ test("TLX copies matrix → matrixWorld on every pooled mesh (cars otherwise sit
     "matrixWorldAutoUpdate latch moved — re-check whether acquireMesh still must promote");
   const acq = src.indexOf("function acquireMesh");
   assert.notEqual(acq, -1, "acquireMesh moved");
-  const body = src.slice(acq, acq + 900);
+  const body = src.slice(acq, acq + 1400);   // the occurrence-keyed lookup (2026-09-02) sits before the stamp
   assert.match(body, /matrixWorld\.copy\(\s*m\.matrix\s*\)/,
     "acquireMesh must promote m.matrix into matrixWorld — without it every " +
     "draw() with a non-identity model (cars) renders at the world origin");
@@ -2467,7 +2467,9 @@ test("TLX pools meshes by (geometry, material), and prunes on a clock", () => {
   assert.match(tlx, /const meshByGeo = new Map\(\)/, "the keyed pool is gone — the render-object cache is unbounded again");
   assert.ok(!/meshPool\[poolUsed\]/.test(tlx),
     "meshPool is being indexed by poolUsed again — that is the exact churn §2o measured");
-  assert.match(tlx, /let m = byMat\.get\(mat\);/, "acquireMesh no longer looks the wrapper up by its (geometry, material) pair");
+  assert.match(tlx, /let list = byMat\.get\(mat\);/, "acquireMesh no longer looks the wrapper list up by its (geometry, material) pair");
+  assert.match(tlx, /const k = list\.n\+\+;\s*\n\s*let m = list\[k\];/,
+    "acquireMesh must key on the OCCURRENCE within the batch as well — one wrapper per pair dropped every same-pair draw but the last (audit 2026-09-02)");
 
   // The hide sweep must follow the batch stamp. An index range cannot work on
   // a keyed pool — it would hide live meshes and show dead ones.

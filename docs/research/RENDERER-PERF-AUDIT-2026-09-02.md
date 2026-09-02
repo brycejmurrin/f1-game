@@ -113,7 +113,7 @@ Node-VM measurements: vegas = 35 instanced batches / 78,951 instances (5.05 MB
 full pack), 914 prop chunks; monza 38 / 11,385; spa 33 / 6,017; singapore
 50 / 31,841.
 
-1. **`gl.getError()` once per `present()`** — glx.js:2028 wraps
+1. **LANDED 2026-09-02 — `gl.getError()` once per `present()`** — glx.js:2028 wraps
    `PST.present(opts)` with `drainGlErrors("present")`. In Chromium `getError`
    is a synchronous command-buffer flush + blocking IPC (the same stall the
    file documents for `getParameter` at :1098-1105), so the JS thread cannot
@@ -167,11 +167,11 @@ full pack), 914 prop chunks; monza 38 / 11,385; spa 33 / 6,017; singapore
    `setBlend`, delete the trailing restores, make every draw path DECLARE its
    state (`drawChunked` then needs `setCull(true)`, `setAlphaWrite(true)`,
    `setPolyOffset(null)`); set `decalU.uTex` once at link. CONFIRMED.
-9. **Per-chunk lamp sets re-uploaded for non-contiguous identical lists** —
+9. **LANDED 2026-09-02 — per-chunk lamp sets re-uploaded for non-contiguous identical lists** —
    glx/chunked.js:254-261 `flush()` re-uploads `uniform4fv` (≤1.5 KB) for
    ~40 runs/frame whose list the program already holds (§2c's own pair
    counts). Patch: `lastLi` beside `lastSlot`, skip when `_sameList`.
-10. **Three always-on `pow()` per lit fragment** — lit.js:1522 `pow(sunAmt,
+10. **LANDED 2026-09-02 (the three integer powers; :1456 left) — three always-on `pow()` per lit fragment** — lit.js:1522 `pow(sunAmt,
     4.0)`, :1524 `pow(sunAmt, 16.0)`, :1543 `pow(…, 3.0)`, :1456
     `pow(N.y*0.5+0.5, 0.35)`. Patch: `s2 = sunAmt*sunAmt, s4 = s2*s2, s16 =
     s4*s4*s4*s4` (exact); leave :1456 (not bit-identical otherwise).
@@ -194,7 +194,7 @@ phones with `invalidateFramebuffer` after the resolve.
 Read after c9f4dbea (keyed mesh pool), 9bf25b06 (attribute pack), 83d1b29a
 (leak root cause) and 8ccd163c (half-float `mat` ids); none re-reported.
 
-1. **The keyed mesh pool collapses every same-(geometry, material) draw in a
+1. **LANDED 2026-09-02 — the keyed mesh pool collapsed every same-(geometry, material) draw in a
    batch onto ONE mesh — CONFIRMED, a correctness regression from c9f4dbea.**
    tlx.js:1229-1257 `acquireMesh`: `byMat.get(mat)` returns the same
    `THREE.Mesh` for every draw of a pair inside one `_poolBatch`; each call
@@ -229,8 +229,8 @@ Read after c9f4dbea (keyed mesh pool), 9bf25b06 (attribute pack), 83d1b29a
    Patch: a pooled 3-vertex NDC triangle with `MeshBasicNodeMaterial{colorNode:
    sky.node, vertexNode: vec4(pos.xy, 0.99999*w, w), depthTest, depthWrite
    false, LessEqualDepth}` at `renderOrder 1e6`; `sky.node` reads `screenUV`.
-4. **Instanced batches upload their WHOLE capacity `instanceMatrix`
-   (+`instanceTint`) every frame the frustum moves — CONFIRMED.**
+4. **LANDED 2026-09-02 (update ranges + flat copy; the shadow snap path not yet) — instanced batches uploaded their WHOLE capacity `instanceMatrix`
+   (+`instanceTint`) every frame the frustum moved — CONFIRMED.**
    tlx.js:870-884 `_writeInstanceMatrices` sets `needsUpdate` with no update
    range → full `cap×64 B` (+`cap×12 B`) every moving frame (20 k instances ≈
    1.5 MB/frame); the `Matrix4.fromArray → setMatrixAt` round trip doubles
@@ -248,7 +248,7 @@ Read after c9f4dbea (keyed mesh pool), 9bf25b06 (attribute pack), 83d1b29a
    :2066/2073/2158. ≈5 k conversions + ~7 k objects/strings per frame.
    Patch: `WeakMap<optsObj, numeric snapshot>` with field compares, rebuild
    the key only on change; pooled draw records.
-7. **DebrisWorld per-body draws on TLX** — tlx.js:1990 `updateInstances:
+7. **LANDED 2026-09-02 — DebrisWorld per-body draws on TLX** — tlx.js:1990 `updateInstances:
    undefined`. Patch (~10 lines): `_writeInstanceMatrices(b.imesh, m, null,
    n); b.visible = n; b._cullPlanes = null;` with #4's ranges.
 8. **tlx-shadow.js still uses the flat index pools** (:167-181, :191-234) —
