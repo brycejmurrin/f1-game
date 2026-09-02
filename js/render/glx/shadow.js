@@ -50,7 +50,7 @@ const GLXShadow = (function () {
       shadowBegin, castShadow, castShadowInstanced, shadowEnd,
       carShadowBegin, carShadowEnd,
       lampShadowBegin, lampShadowEnd,
-      carShadowKeep,
+      carShadowKeep, lampShadowKeep,
     };
 
     // KEEP: "the pass did not run this frame, and the map is still good."
@@ -84,10 +84,18 @@ const GLXShadow = (function () {
       S.carArmed = true;
       return true;
     }
-    // There is deliberately no lampShadowKeep: the producer's snap test keys on
-    // a SLOT into a per-frame re-sorted array, not on the lamp, so arming from it
-    // can bind one lamp's map under another lamp's parameters. See the long note
-    // at the lamp pass in game.js.
+    // The caller's snap key is the map's CONTENT — the lamp's world position
+    // plus a quantised key over the cars cast into it (js/game.js) — so a keep
+    // here means "same lamp, same cars, and the props are a function of the
+    // lamp alone". The index is re-stated rather than remembered because
+    // frame.lights is re-sorted every frame; it names THIS frame's slot for the
+    // lamp the caller has already proved is the same one.
+    function lampShadowKeep(lightIdx) {
+      if (!S.lampEnabled || S.lampArms <= 0 || !(lightIdx >= 0)) return false;
+      S.lampIdx = lightIdx | 0;
+      S.lampArmed = true;
+      return true;
+    }
 
     function setup() {
       depthProg = link(DEPTH_VS, DEPTH_FS);
