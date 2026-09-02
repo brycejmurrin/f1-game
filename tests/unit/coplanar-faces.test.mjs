@@ -96,15 +96,18 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // circuit whose step divides n. Fixed in scenery-structures.js (span n-1 on a
 // full lap); these spots were those duplicates. Lowered to the measured counts.
 //
-// baku 13 → 14 (2026-09-02): 1daf4a3 restored scenery that the guards had been
-// SUPPRESSING — baku's marshal posts were culled 7 of 9 by `onTrack(c, 3)`
-// because the 3.0 m gap is measured to the hut CENTRE, so the fix widened it to
-// 3.5 m. Seven posts that did not exist now do, and one of them shares a plane
-// with a roadside city box. coplanar-audit --why before/after: 13 → 14 spots,
-// 23 → 24 pairs, same `trk` call site, maxArea unchanged at 245.9 m² and minGap
-// still 0.0 mm — the added spot is one more of the class already carried, not a
-// new one. The alternative is re-culling the posts. A deliberate trade, like
-// vegas 66 → 67 above.
+// baku 13 -> 14 -> 13 (2026-09-02): RAISED, THEN WITHDRAWN. 1daf4a3 restored
+// scenery the guards had been suppressing — baku's marshal posts were culled
+// 7 of 9 by `onTrack(c, 3)`, which measures to the hut CENTRE, so the gap went
+// 3.0 -> 3.5 m. Seven posts that did not exist now did, and one shared a plane
+// with a roadside city box. This session measured that (13 -> 14 spots, 23 -> 24
+// pairs, same `trk` call site, maxArea unchanged 245.9 m2, minGap 0.0 mm) and
+// raised the cap to unblock a deploy branch that had been red for an hour.
+// Another session then did the better thing and fixed the FRONTAGE so the spot
+// stops existing (1665391), and lowered the cap back (9757946). Kept as a note
+// rather than deleted, because the ordering is the lesson: a raise is the
+// fallback, not the first move, and "restored props cost overlap spots" is a
+// trade worth one more attempt at the geometry before it is written down.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "coplanar-baseline.json"), "utf8"),
 );
