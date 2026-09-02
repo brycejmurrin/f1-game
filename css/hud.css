@@ -147,6 +147,12 @@
   display: flex; flex-direction: column; align-items: center; gap: calc(var(--gap) / 3);
 }
 #hud-speed { font-family: var(--font-hud); font-size: 34px; font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; text-shadow: 0 2px 12px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.9); }
+/* A FIXED SLOT FOR THE DIGITS. tabular-nums makes every digit the same width
+   but not every NUMBER: "99" -> "100" is a whole digit, and this block is
+   centred in its column, so each crossing of 100 km/h (several a lap) shifted
+   the figure and KM/H sideways by half a digit. 3ch is three tabular digits;
+   right-aligned so the units digit never moves. */
+#hud-speed-n { display: inline-block; min-width: 3ch; text-align: right; }
 .hud-unit { font-size: var(--fs-micro); color: var(--dim); margin-left: calc(var(--gap) / 3); }
 #hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: calc(var(--gap) / 6); background: rgba(8,8,14,0.6); border: 1px solid var(--card-line); border-radius: var(--r-md); padding: 5px 8px; }
 #hud-gear {
@@ -172,21 +178,30 @@
 #hud-tach.redline #hud-rpm-fill { background: var(--red); animation: pulse 0.4s infinite; }
 #hud-energy {
   width: 130px; height: 14px;
+  /* A plate under the fill, like the tach: with none, the bar's empty half was
+     the live scene, and the 55%-black ENERGY label vanished into it below
+     ~half charge — the reading that matters most was the one you could not
+     read. */
+  background: var(--plate-opaque);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--r-sm);
   position: relative; overflow: hidden;
   margin-bottom: calc(var(--gap) * 2 / 3);
 }
 #hud-energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg in oklab, #00c853, #aeea00); }
-.hud-energy-label { position: absolute; inset: 0; font-size: var(--fs-micro); letter-spacing: 0.2em; display: flex; align-items: center; justify-content: center; color: rgba(0,0,0,0.55); }
+/* Light ink with the HUD's dark halo (the #hud-speed / .sec-val recipe) reads on
+   both halves of the bar — over the fill and over the plate — where the old
+   dark-on-fill ink only read while the bar was full. */
+.hud-energy-label { position: absolute; inset: 0; font-size: var(--fs-micro); letter-spacing: 0.2em; display: flex; align-items: center; justify-content: center; color: var(--text); text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
 #hud-ot {
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;
   padding: 5px 10px; border-radius: var(--r-sm);
   margin-bottom: calc(var(--gap) * 0.5);
 }
 /* The chip is the READOUT for the button of the same name, so it carries the
-   button's hue — OT yellow, AERO green — and darkens with it. A cyan readout
-   sitting above a green button reads as two unrelated systems, which is what
+   button's hue — OT yellow, AERO blue (#btn-aero.armed, css/overlays.css; the
+   minimap's zone highlight is the same blue) — and darkens with it. A cyan readout
+   sitting above a blue button reads as two unrelated systems, which is what
    made the old palette hard to learn: the state you were in and the control
    you press for it were never the same colour. */
 #hud-ot.ot-off { color: var(--dim); border: 1px solid var(--plate-line); }

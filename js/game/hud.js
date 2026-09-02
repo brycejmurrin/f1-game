@@ -18,6 +18,7 @@ let minimapBgKey = "";        // cssW|cssH|ratio it was rendered for — NOT the
 let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
 let _flagShown = false;       // B1 caution-flag visibility cache (avoid layout thrash)
 let _teamSkin = null;         // last team id pushed to <html data-team> (skins the HUD accent)
+let _redline = false;         // tach redline latch: on above 92% of MAX_RPM, off again below 89%
 
 const _hudTxt = new WeakMap();   // el -> last textContent
 const _hudSty = new WeakMap();   // el -> { prop: lastVal }
@@ -31,7 +32,11 @@ function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m
 
 let _secRows = null;
 function buildSecRows() {
-  const SC = ["#c084fc", "#e10600", "#a3e635"], labels = ["S1", "S2", "S3"];
+  // S2 is NOT the brand #e10600: at 14px bold on the 72% plate that red measures
+  // ~4.2:1 on pure black and less over a bright scene (css/tokens.css records
+  // ~2.6:1 on the page) — under the 4.5:1 AA floor for text this size. The
+  // lighter red keeps the hue and clears ~5.9:1; the minimap stroke matches.
+  const SC = ["#c084fc", "#ff3b30", "#a3e635"], labels = ["S1", "S2", "S3"];
   els.hudSectors.textContent = "";
   _secRows = [];
   for (let i = 0; i < 3; i++) {
@@ -246,7 +251,11 @@ function updateHud(force) {
   hText(els.gear, "" + player.gear);
   const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
   hStyle(els.rpmFill, "width", (rpmFrac * 100).toFixed(0) + "%");
-  hToggle(els.tach, "redline", player.rpm > MAX_RPM * 0.92);
+  // HYSTERESIS: a single 0.92 threshold flickered the class (and restarted its
+  // pulse animation) every tick the needle hovered on the line, which is
+  // exactly where a driver holding a gear sits. Enter at 92%, leave at 89%.
+  _redline = player.rpm > MAX_RPM * (_redline ? 0.89 : 0.92);
+  hToggle(els.tach, "redline", _redline);
   // toggle-button states
   hToggle(els.btnBoost, "on", player.boostOn);
   hStyle(els.btnBoost, "--e", (Math.round((player.energy || 0) * 20) / 20).toFixed(2));
@@ -255,8 +264,14 @@ function updateHud(force) {
   const ot = player.otT > 0 ? "ot-active" : player.otArmed ? "ot-armed" : player.otCool > 0 ? "ot-cool" : "ot-off";
   hClass(els.ot, ot);
   const otOff = G.state === "race" && !G.otEnabled() && player.otT <= 0;
+  // Four states, four spellings. ot-off and ot-cool both read "OVERTAKE" and
+  // differed by a 50% opacity alone — "closing on the car ahead will arm it"
+  // and "nothing arms it for another 12 s" are different messages, so the
+  // lockout counts itself down (whole seconds: a 9..14 s wait, not a 0.1 s push).
   hText(els.ot, player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1)
-                : otOff ? "NO OVERTAKE" : "OVERTAKE");
+                : otOff ? "NO OVERTAKE"
+                : player.otCool > 0 && !player.otArmed ? "COOLDOWN " + Math.ceil(player.otCool)
+                : "OVERTAKE");
   hToggle(els.btnOT, "dead", otOff);
   const xOpen = (player.aeroX || 0) > 0.05;
   const dz = G.aeroZoneAhead ? G.aeroZoneAhead(player.s || 0) : Infinity;
@@ -284,7 +299,7 @@ function updateHud(force) {
         const delta = player.lapTime - ghostT;
         const sign = delta >= 0 ? "+" : "";
         hText(els.gapA, "GHOST " + sign + delta.toFixed(3) + "s");
-        hStyle(els.gapA, "color", delta <= 0 ? "#a3e635" : "#e10600");
+        hStyle(els.gapA, "color", delta <= 0 ? "#a3e635" : "#ff3b30");   // same text red as the S2 label (AA at 12px)
       } else {
         hText(els.gapA, player.lastLap ? "LAST " + G.fmtTime(player.lastLap) : "");
         hStyle(els.gapA, "color", "");
@@ -314,9 +329,17 @@ function updateHud(force) {
   // Sector split display (top-right) — cached span nodes, textContent per tick
   if (els.hudSectors) {
     if (!_secRows) buildSecRows();
+    // A bare split makes the driver remember last lap's to read it. The arrow
+    // is the announce banner's own glyph (▼ personal best, ▲ slower) held
+    // for the whole lap, and lime is the HUD's existing "faster" colour (the
+    // ghost delta). sectorBests is updated in the same crossing, so a fresh
+    // PB reads t == best; a first-ever lap is every sector's best, correctly.
+    const bests = G.sectorBests;
     for (let i = 0; i < 3; i++) {
       const t = G.sectorLast[i];
-      hText(_secRows[i], t == null ? "--" : t.toFixed(3));
+      const pb = t != null && bests && t <= bests[i];
+      hText(_secRows[i], t == null ? "--" : (pb ? "▼" : "▲") + t.toFixed(3));
+      hStyle(_secRows[i], "color", pb ? "#a3e635" : "");
     }
   }
   // B1 caution flag (local yellow / VSC / safety car) — driven by the caution
@@ -375,7 +398,7 @@ function drawMinimap() {
     mc.setTransform(ratio, 0, 0, ratio, 0, 0);
     const map = track.map, n = map.length;
     mc.lineWidth = 2; mc.lineJoin = "round"; mc.lineCap = "round";
-    const SC = ["rgba(192,132,252,0.8)", "rgba(225,6,0,0.8)", "rgba(163,230,53,0.8)"];
+    const SC = ["rgba(192,132,252,0.8)", "rgba(255,59,48,0.8)", "rgba(163,230,53,0.8)"];   // = the sector labels
     // Same CircuitMarkings splits as TrackMaps.draw / sectorAt (thirds if missing).
     const sec = track.def && track.def.sectors;
     const splits = (sec && sec.length === 2) ? [0, sec[0], sec[1], 1] : [0, 1 / 3, 2 / 3, 1];
@@ -395,10 +418,12 @@ function drawMinimap() {
       }
       mc.stroke();
     }
-    // DRS zone highlight (cyan, slightly thicker)
+    // Activation-zone highlight, slightly thicker, in the AERO chip's own blue
+    // (#hud-aero.ax-armed / #btn-aero.armed): it used to be cyan, so the map
+    // and the chip named the same zone in two colours.
     const zones = TrackMaps.drsZones(track.def);
     if (zones && zones.length) {
-      mc.strokeStyle = "rgba(0,220,180,0.85)"; mc.lineWidth = 3;
+      mc.strokeStyle = "rgba(38,165,245,0.9)"; mc.lineWidth = 3;
       for (const z of zones) {
         const from2 = Math.floor(z.a * n), to2 = Math.min(n - 1, Math.floor(z.b * n));
         mc.beginPath();
