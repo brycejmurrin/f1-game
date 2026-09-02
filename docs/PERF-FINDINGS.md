@@ -1777,6 +1777,83 @@ Guards in `gfx-backend-canary.test.mjs`, both sabotage-proven: putting
 `console_` back inside the `try` fails the scope test, and renaming the
 `frameReadFailed` branch fails the appearance test.
 
+## 2m. three never lets go of a geometry, and phones pay for it (2026-09-01)
+
+The player reported the car rendering **see-through in the garage** on the
+three.js backend, on an iPhone. Two separate defects, one behind the other.
+
+### First: a uniform array that cost 48 rows, not 12
+
+`tsl-lit.js` declared `MAX_LIGHTS = 48`. WebGL2's guaranteed floor is **224
+fragment uniform vectors**, and a uniform ARRAY packs vertically — a 48-element
+array of `vec4` costs 48 rows, not 12. The lit program overran the floor and
+failed to **link** on iOS, so every lit surface drew nothing: the car vanished
+while textured and emissive surfaces (which use other programs) kept drawing.
+That reads as "see-through", which is why the first diagnosis went at
+translucency and was wrong — the player's screenshots corrected it.
+
+Fixed by making the ceiling device-aware: 16 on `_liteGpu` (mobile / WebKit /
+software adapter), 48 elsewhere, passed from `tlx.js` into `TLXShaders.lit()`.
+Confirmed by the player on the handset.
+
+### Then: the tab started dying mid-race instead
+
+With the shader linking, the same device began showing iOS Safari's **"A
+problem repeatedly occurred"** — a jetsam OOM, not a renderer error. Heap
+snapshots, same track and viewport:
+
+| backend | JSArrayBufferData | buffers | JS heap |
+|---|---|---|---|
+| GLX | 17.8 MB | 253 | 80.8 MB |
+| TLX | 71.5 MB | 5,665 | 148.1 MB |
+
+three retains the CPU copy of every geometry attribute after upload; GLX
+uploads and drops. That +53.7 MB — against 52.8 MB actually uploaded — is the
+gap, and 483 scenery chunks are what fill it.
+
+### Releasing those arrays: DISPROVED, twice, live
+
+The obvious fix is to null `attribute.array` once the backend holds a GPU
+buffer. Do not spend the afternoon on it — it was built, gated, A/B'd and it
+does not work. Three findings, in the order they cost time:
+
+1. **`BufferAttribute.onUpload` is not the hook.** It is a legacy
+   `WebGLRenderer` API: the string `onUploadCallback` appears **ZERO times** in
+   `three.webgpu.min.js`. The WebGPU renderer's backends never call it. Shipping
+   that would have been a no-op that looked like a fix.
+2. **A frame counter is not a clock.** The first sweep gate was
+   `(++_relSweep % 90) === 0`. The A/B came back with `relSweeps: 22` and
+   `relCount: 0` across a 40 s run — only 22 presents happened, `22 % 90` never
+   hits zero, and **the sweep never executed once**. The heap was identical in
+   both arms because the code never ran, which reads exactly like "the fix does
+   nothing". Only the `relSweeps` / `relPending` counters told the two apart.
+   Same defect as every other frame-as-a-clock here; throttle on
+   `performance.now()`.
+3. **three re-reads `.array` after upload, in two places, and each one takes
+   the renderer down.** Both reproduced live, both fatal:
+
+   | site | code | crash |
+   |---|---|---|
+   | `draw()` | `firstVertex *= index.array.BYTES_PER_ELEMENT` — every indexed draw | `Cannot read properties of null (reading 'BYTES_PER_ELEMENT')` |
+   | `updateAttribute()` | `bufferSubData(target, 0, attribute.array)` on a version bump | `parameter 3 is not of type 'ArrayBuffer'` |
+
+   Excluding the index cleared the first and hit the second on the next run.
+   TLX then refuses and the tab reloads into GLX — which surfaces as Playwright's
+   `Execution context was destroyed, most likely because of a navigation`, so
+   the *probe* error was never the real message. The renderer's own
+   `[gfx] TLX: present failed — …` console line was.
+
+### What shipped instead
+
+A phone that picks three gets GLX, via the existing `_fail()` seam, with the
+reason recorded in `apex26.gfxTlxFail` where SETTINGS shows it;
+`apex26.tlxMobile="1"` overrides. GLX at ~113 MB total is measured working on
+the same handset. TLX is untouched on desktop.
+
+Making TLX itself viable on a phone means the chunk system has to **stream** —
+build near, drop far — instead of building all 483 chunks up front. That is
+real work, not a flag, and it is the entry in §3 for it.
+
 ## 3. Left on the table
 
 The pre-08-18 narrative behind this list — the O(n²) AI scans that were
@@ -1835,6 +1912,22 @@ composite; honest arithmetic ~0.05 ms, hygiene rather than a win).
 > program). View / eye / env / lights / time / grainTime still upload every
 > call. WGX writes a whole UBO per `begin()` — no per-field skip. Do not
 > invent a millisecond claim from this.
+
+**Stream the chunk system, so TLX can run on a phone** — the one thing that
+would undo §2m's decline. `tlx-chunked` builds all 483 scenery chunks up front;
+~47 are visible at a time. GLX gets away with it because it drops the CPU copy
+after upload, and three never does — 71.5 MB across 5,665 retained
+`JSArrayBufferData`, measured, which is what OOM-kills an iPhone tab mid-race.
+Releasing after upload is **closed, not open**: see §2m for the two three.js
+sites that re-read `attribute.array` and take the renderer down with them.
+
+Build-near / drop-far is the remaining route, and it is a real piece of work:
+chunk geometries would need a residency set driven off the same cull the
+renderer already runs, plus `dispose()` on eviction and a rebuild path that
+does not hitch when a chunk re-enters. Worth it only if three.js on mobile is
+a goal — desktop TLX has the memory and is unaffected. Estimate the win at
+roughly the 53.7 MB gap, no more: the GPU-side difference was measured at
+~11 MB, so this is a CPU-heap fix, not a rendering one.
 
 **Road and terrain had no frustum cull in any pass.** Counted by binning the
 ribbons into the same 72 m cells `createChunkedMesh` uses (a frustum with far
