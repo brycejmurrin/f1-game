@@ -47,7 +47,21 @@ const els = {
 // / tests / ?apex=1). `gfx` is the handle every later
 // renderer call goes through; on the default path gfx===GLX.
 let gfx = null;
-let _backendProved = false;   // boot-canary latch, set on the first world present
+let _backendProved = false;   // boot-canary latch — see PROVE_FRAMES below
+// ONE PRESENTED FRAME IS NOT PROOF THAT A BACKEND WORKS. The canary used to
+// disarm on the first world present, so a backend that bound, drew one frame and
+// then died — the jetsam-mid-race case TLX's own comment cites as the risk — got
+// no protection at all: the probe had already been cleared, and the next boot
+// happily loaded the same backend into the same crash. Hold the probe across a
+// short run of frames instead. 300 is ~5 s at 60 fps and much longer on the slow
+// devices this exists for, which is the right way round.
+//
+// The COUNTER is what runs per frame; storage is touched exactly twice, on the
+// arm and on the clear. Writing the probe every frame until proved (which is
+// what a naive widening does) would put a localStorage write in the render loop.
+const PROVE_FRAMES = 300;
+let _provedFrames = 0;
+let _probeArmed = false;      // mirrors the stored probe, so the loop never reads storage
 // Did a DEFERRED backend actually take the canvas this load? The canary re-arm
 // below used to read the saved PICK instead, and the two differ on the paths
 // that deliberately keep a pick while running GLX: a tab that already
@@ -6559,6 +6573,19 @@ function render(dt) {
     // one frame and parked/slow driving does not need 60 Hz updates.
     const _carSpd = player ? Math.abs(player.speed) : 0;
     const _carShadowFrame = (_frameNo & 1) === 0 || vStd(_carSpd) > 0.15;
+    // The skip on the line above is a CADENCE skip, and the renderer cannot tell
+    // it from a stop. Every backend clears its armed flag in present(), which is
+    // correct when this pass stops for real (knob off, tier shed, menu, key
+    // faded) and wrong here: the map persists and is still accurate, but the LIT
+    // uniform read 0 on the skipped frames, so a parked car's own sun shadow
+    // strobed at 30 Hz. Say which kind of skip it is. A genuine stop still
+    // disarms by making no call at all, and keep() declines until the pass has
+    // run at least once (GLX and WGX do not prime these maps: an unwritten one
+    // reads fully shadowed).
+    const _carShadowWanted = gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 &&
+        (_hasLivePlayerShadow || _shadowCount > 0) && player && state !== "menu" &&
+        (_shKeyG > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01));
+    if (_carShadowWanted && !_carShadowFrame && gfx.carShadowKeep) gfx.carShadowKeep();
     if (gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 && _carShadowFrame &&
         (_hasLivePlayerShadow || _shadowCount > 0) && player && state !== "menu") {
       const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
@@ -6900,9 +6927,19 @@ function render(dt) {
         const _lsx = Math.round(camEye[0] / 12), _lsz = Math.round(camEye[2] / 12);
         if (flBest === _lampShBest && _lsx === _lampShSX && _lsz === _lampShSZ) {
           // Map from last rebuild still bound; skip the 512² props pass.
+          // AND SAY SO. This branch is the common case — it holds for as long as
+          // the player stays in one 12 m cell on the same lamp — and the armed
+          // flag it used to leave false is what the LIT uniform and the god-ray
+          // pass both read. So the floodlight shadow and its shaft were visible
+          // for exactly ONE frame per cell, and for a player parked under a
+          // flood at night they never came back at all. flBest is re-resolved
+          // every frame above, which is what makes it safe to re-state: the slot
+          // is this frame's, not a remembered one.
+          if (gfx.lampShadowKeep) gfx.lampShadowKeep(flBest);
         } else if ((_frameNo & 1) !== 0 && flBest === _lampShBest) {
           // Defer a cell-only rebuild one frame — props are static; the prior
           // map stays valid while the eye crosses a 12 m snap cell.
+          if (gfx.lampShadowKeep) gfx.lampShadowKeep(flBest);
         } else {
         _lampShBest = flBest; _lampShSX = _lsx; _lampShSZ = _lsz;
         // Perspective frustum down the beam: fov spans the OUTER cone (plus
@@ -7683,14 +7720,19 @@ function render(dt) {
   }
   // Re-arm around the first world present so a jetsam mid-frame still reverts.
   // Title already disarmed after bind; this window is only the first flyby/race.
-  if (!_backendProved && _backendBound) {
+  if (!_backendProved && _backendBound && !_probeArmed) {
     try { const p = localStorage.getItem("apex26.gfxBackend");
-      if (p === "three" || p === "webgpu") localStorage.setItem("apex26.gfxBackendProbe", p); }
-    catch (_) { /* no probe: first-frame jetsam will not auto-revert */ }
+      if (p === "three" || p === "webgpu") { localStorage.setItem("apex26.gfxBackendProbe", p); _probeArmed = true; } }
+    catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
   }
   gfx.present(po);
-  // Boot canary disarmed — a real world frame landed, so the next boot keeps it.
-  if (!_backendProved) { _backendProved = true; try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* nothing was armed if storage is blocked */ } }
+  // Boot canary disarmed once the backend has presented a RUN of world frames,
+  // not one. Until then the probe stays armed in storage and a load that dies
+  // reverts on the next boot, which is the whole point of it.
+  if (!_backendProved && ++_provedFrames >= PROVE_FRAMES) {
+    _backendProved = true;
+    if (_probeArmed) { _probeArmed = false; try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* nothing was armed if storage is blocked */ } }
+  }
   if (isWetRoad() && Particles.rainActive()) {
     // Falling-streak precipitation, identical in every camera: full storm
     // streaks when raining, the sparse DRIZZLE tier when merely WET (the

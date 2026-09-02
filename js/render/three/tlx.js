@@ -523,6 +523,15 @@ const TLX = (function () {
               try { localStorage.setItem("apex26.gfxTlxFail", "context lost x" + n + " — tab fell back to WebGL2"); } catch (_) { /* blocked storage: the label still flips via gfxBound */ }
               try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
               sessionStorage.setItem("apex26.gfxClaimFail", "1");
+              // RE-ARM THE BOOT CANARY, the way WGX does from its escalate and
+              // JS-strike paths. game.js clears the probe once the backend has
+              // presented a run of frames, and a context loss after that leaves
+              // nothing to revert: the reload below lands on the same pick with
+              // no canary behind it. sessionStorage is already proven writable
+              // here (the setItem above did not throw), so the localStorage
+              // write is the only one that can fail, and if it does the reload
+              // is no worse off than before.
+              try { localStorage.setItem("apex26.gfxBackendProbe", "three"); } catch (_) { /* no probe: the RESET RENDERER button is still the way back */ }
             }
             setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
           }
@@ -1804,14 +1813,19 @@ const TLX = (function () {
           return { supported: sup, on: _gpuTimerOn };
         },
         gpuMs() { return _gpuMs; },
+        // "Skipped for cadence, map still valid" — see tlx-shadow.js §KEEP.
+        carShadowKeep() { return !!(shadowSys && shadowSys.carShadowKeep()); },
+        lampShadowKeep(idx) { return !!(shadowSys && shadowSys.lampShadowKeep(idx)); },
+        // `armed` is the frame-live gate the lit uniforms read; `arms` is a
+        // lifetime counter that stays true straight through a strobe.
         carShadowState() {
           const s = shadowSys && shadowSys.S;
-          return s ? { enabled: s.carEnabled, arms: s.carArms } : { enabled: false, arms: 0 };
+          return s ? { enabled: s.carEnabled, arms: s.carArms, armed: s.carArmed } : { enabled: false, arms: 0, armed: false };
         },
         lampShadowState() {
           const s = shadowSys && shadowSys.S;
-          return s ? { enabled: s.lampEnabled, arms: s.lampArms, idx: s.lampIdx }
-                   : { enabled: false, arms: 0, idx: -1 };
+          return s ? { enabled: s.lampEnabled, arms: s.lampArms, idx: s.lampIdx, armed: s.lampArmed }
+                   : { enabled: false, arms: 0, idx: -1, armed: false };
         },
 
         // resources

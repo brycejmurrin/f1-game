@@ -50,7 +50,42 @@ const GLXShadow = (function () {
       shadowBegin, castShadow, castShadowInstanced, shadowEnd,
       carShadowBegin, carShadowEnd,
       lampShadowBegin, lampShadowEnd,
+      carShadowKeep, lampShadowKeep,
     };
+
+    // KEEP: "the pass did not run this frame, and the map is still good."
+    //
+    // present() clears carArmed/lampArmed every frame, and that is the right
+    // contract for the case it was written for: when game.js STOPS running a
+    // pass (night, knob off, menu, tier shed) the stale map must not keep
+    // shadowing. But game.js also skips these passes for CADENCE — the car pass
+    // halves at low speed, the lamp pass is snap-cached to a 12 m eye cell — and
+    // from in here the two are indistinguishable. Result: the lamp shadow was
+    // visible for exactly ONE frame per cell and the car's strobed at 30 Hz
+    // while parked. Only the producer knows which kind of skip it is, so it now
+    // says, and a genuine stop still disarms by simply not calling.
+    //
+    // arms > 0 is load-bearing, not a nicety: GLX never primes these maps (TLX
+    // does), so a depth texture that has never been written reads 0 under a
+    // LEQUAL compare — fully shadowed. Arming before the first real pass would
+    // paint black under the lamp and under the car.
+    function carShadowKeep() {
+      if (!S.carEnabled || S.carArms <= 0) return false;
+      S.carArmed = true;
+      return true;
+    }
+    function lampShadowKeep(lightIdx) {
+      if (!S.lampEnabled || S.lampArms <= 0) return false;
+      // The index must be re-stated, not remembered: frame.lights is a
+      // distance-ranked nearest-N that is rebuilt as the eye moves, so the slot
+      // holding this lamp can change between rebuilds. The producer resolves it
+      // every frame; keeping a stale index would run the PCF against a different
+      // light. A caller that cannot resolve it declines the keep.
+      if (!(lightIdx >= 0)) return false;
+      S.lampIdx = lightIdx | 0;
+      S.lampArmed = true;
+      return true;
+    }
 
     function setup() {
       depthProg = link(DEPTH_VS, DEPTH_FS);

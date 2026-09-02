@@ -5740,8 +5740,34 @@ const WGX = (function () {
       castShadowInstanced,
       // Car/lamp maps key on WGX_LITE (phone OR WebKit), matching GLX's
       // IS_MOBILE gate — GRAPHICS: HIGH must not buy a per-frame extra map.
-      carShadowState: () => ({ enabled: !!carShadowView && !WGX_LITE, arms: _carArms }),
-      lampShadowState: () => ({ enabled: !!lampShadowView && !WGX_LITE, arms: _lampArms, idx: _lampIdx }),
+      // KEEP: "the pass did not run this frame, and the map is still good."
+      // present() clears both armed flags every frame, which is right when
+      // game.js STOPS a pass (night, knob off, menu) and wrong when it merely
+      // skips one for CADENCE — the car pass halves at low speed, the lamp pass
+      // is snap-cached to a 12 m eye cell. Only the producer knows which, so it
+      // now says. arms > 0 is required because WGX, like GLX and unlike TLX,
+      // never primes these depth targets: an unwritten map reads as fully
+      // shadowed, so arming before the first real pass paints black.
+      carShadowKeep: () => {
+        if (!carShadowView || WGX_LITE || _carArms <= 0) return false;
+        _carShadowArmed = true;
+        return true;
+      },
+      // The index is re-stated rather than remembered: frame.lights is a
+      // distance-ranked nearest-N rebuilt as the eye moves, so this lamp's slot
+      // can change between rebuilds and a stale index runs the PCF on the wrong
+      // light.
+      lampShadowKeep: (lightIdx) => {
+        if (!lampShadowView || WGX_LITE || _lampArms <= 0 || !(lightIdx >= 0)) return false;
+        _lampIdx = lightIdx | 0;
+        _lampShadowArmed = true;
+        return true;
+      },
+      // `armed` is the frame-live gate the shader reads; `arms` is a lifetime
+      // counter that stays true straight through a strobe, which is why no test
+      // could see this.
+      carShadowState: () => ({ enabled: !!carShadowView && !WGX_LITE, arms: _carArms, armed: _carShadowArmed }),
+      lampShadowState: () => ({ enabled: !!lampShadowView && !WGX_LITE, arms: _lampArms, idx: _lampIdx, armed: _lampShadowArmed }),
 
       // extension: reads the next presented frame back as RGBA pixels — the
       // container's pixel oracle (tools/wgx-capture.mjs); WGX-only, so the

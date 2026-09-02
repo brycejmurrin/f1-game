@@ -535,7 +535,14 @@ const CEILINGS = {
   // the function runs (every snap-cell rebuild), so dropping it added an
   // instanced prop cast to half of them. It now defers the whole rebuild
   // instead, which keeps the saving and never publishes a half-built map.
-  "js/game.js": 9102,
+  // 9102 -> 9144: the shadow KEEP contract (the producer now says which skips
+  // are cadence, so the lamp shadow stops being a one-frame-per-cell flicker
+  // and a parked car keeps its own), plus the boot canary holding across a RUN
+  // of frames instead of one present. Both are small in code and long in
+  // reasoning, and the reasoning is the part that stops the next round undoing
+  // them: present() clearing the flags is CORRECT for a stop and wrong for a
+  // cadence skip, and one presented frame was never proof a backend works.
+  "js/game.js": 9144,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -897,7 +904,7 @@ const CEILINGS = {
   // NOT have was their own submit, and shadowInstBuf is per BATCH, not per
   // LIGHT — so one deferred encoder let the lamp's upload land before the sun's
   // recorded draw executed, and the sun map came from the lamp's culled set.
-  "js/render/webgpu/wgx.js": 5780,   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
+  "js/render/webgpu/wgx.js": 5806,   // +26: carShadowKeep/lampShadowKeep and the armed flag in the state hooks (the flag the shader reads was unobservable, which is why the strobe was invisible)   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -1073,7 +1080,11 @@ const CEILINGS = {
   // caching the bounds before the free and refusing the sweep on a phone. The
   // union carries all of it and is neither number — re-measured at 2810 on the
   // merged tree with this test's own metric, per the deploy rule.
-  "js/render/three/tlx.js": 2819,
+  // +14: the keep pass-throughs, armed in the state hooks, and the boot-canary
+  // re-arm on a context loss that sends the tab back to WebGL2 — TLX had no
+  // post-proof re-arm at all, so the jetsam-mid-race its own comment names was
+  // the one case the canary did not cover.
+  "js/render/three/tlx.js": 2833,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
@@ -1125,7 +1136,12 @@ const CEILINGS = {
   // Float32Array rounds on store and the compare was float32-vs-float64. The
   // 40 lines buy uniform3fv 31.5 -> 16.3 per frame (vegas night, full field,
   // tools/glx-call-census.mjs) with every other counter unchanged.
-  "js/render/glx.js": 2150,   // 2026-09-02 R16: cssSize() distrusts its cache after a viewport change + the canWatchCss fallback (PERF-FINDINGS 2u); earlier bug hunt: drain re-arm on track switch, env-face re-entrancy restore; earlier: gated per-present getError drain (audit round)
+  // 2150 -> 2156: carShadowKeep/lampShadowKeep pass-throughs, and `armed` added
+  // to the two shadow state hooks. The state hooks returned only the LIFETIME
+  // arms counter, which stays true straight through a strobe — that is why a
+  // 30 Hz car-shadow flicker and a lamp shadow that vanished while parked were
+  // invisible to every test in the suite.
+  "js/render/glx.js": 2156,   // 2026-09-02 R16: cssSize() distrusts its cache after a viewport change + the canWatchCss fallback (PERF-FINDINGS 2u); earlier bug hunt: drain re-arm on track switch, env-face re-entrancy restore; earlier: gated per-present getError drain (audit round)
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)

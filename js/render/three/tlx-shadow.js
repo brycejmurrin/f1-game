@@ -337,8 +337,32 @@
     }
 
     try { Log.info("gfx", "TLX shadow init"); } catch (_) { /* harness */ }
+    // KEEP: "the pass did not run this frame, and the map is still good."
+    // clearArmed() runs every frame, which is right when game.js STOPS a pass
+    // and wrong when it merely skips one for CADENCE (the car pass halves at
+    // low speed; the lamp pass is snap-cached to a 12 m eye cell). Only the
+    // producer knows which. TLX primes its three targets at init, so unlike
+    // GLX and WGX an unwritten map here reads fully LIT rather than fully
+    // shadowed — but the arms > 0 guard is kept anyway so all three backends
+    // answer this call identically.
+    function carShadowKeep() {
+      if (!S.carEnabled || S.carArms <= 0) return false;
+      S.carArmed = true;
+      return true;
+    }
+    // The index is re-stated rather than remembered: frame.lights is a
+    // distance-ranked nearest-N rebuilt as the eye moves, so this lamp's slot
+    // can change between rebuilds and a stale index lights the wrong lamp.
+    function lampShadowKeep(lightIdx) {
+      if (!S.lampEnabled || S.lampArms <= 0 || !(lightIdx >= 0)) return false;
+      S.lampIdx = lightIdx | 0;
+      S.lampArmed = true;
+      return true;
+    }
+
     return {
       S,
+      carShadowKeep, lampShadowKeep,
       sunSize: SUN_SIZE,
       sunTex: sunRT ? sunRT.depthTexture : null,
       carTex: carRT ? carRT.depthTexture : null,
