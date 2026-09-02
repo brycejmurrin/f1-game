@@ -389,7 +389,7 @@ PLAUSIBLE, code-read only — the screenshot list for the next live pass
 (1280×800 unless stated; the HUD needs a running race, so the Chrome probe
 after the browser groups, never during):
 - A. LANDED (1185951b): the displayed gap is an EMA per slot (~0.3 s at 10 Hz), reset on a neighbour change — one braking tick no longer doubles the tenths (hud-feel unit case).
-- B. The leader's empty `#hud-gap-ahead` collapses, so the behind line jumps a row on a position change. `.hud-gaps` at P1 vs P2.
+- B. CONFIRMED and LANDED: measured headless (aiPlace-staged rival, 2026-09-02) the block was 2 px with the ahead line empty and 17.6 px filled; `.hud-gaps > div:first-child { min-height: 1.3em }` pins the behind line (hud-feel pins the rule). A true P1 could not be staged headlessly — `jump()`/`setLap()` leave `player.prog`, so the field always ranks ahead.
 - C. CHECKED, no change: the idle chip reads `AERO 463m` (distance to the next zone) at 844×390 and 1280×800 (artifacts/shots/20-hud-*, headless Bahrain race 2026-09-02).
 - D. S3 label lime vs the PB-value lime — one hue, two meanings. `#hud-sectors` after a PB S3.
 - E. CHECKED, no change: POS/LAP/TIME/BEST labels on the plate over Bahrain day sand read at 844×390 and 1280×800 (same shots).

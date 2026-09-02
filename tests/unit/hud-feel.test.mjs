@@ -194,3 +194,9 @@ test("the race gap readout is smoothed: braking halves the divisor, the tenths d
   assert.equal(read(), 3.3, "a new rival starts from its own raw gap, not the old rival's history");
 });
 
+test("the ahead gap slot keeps one line so the behind line never jumps when the leader has nobody ahead", () => {
+  const hud = cssRules(read("css/hud.css"));
+  assert.equal(decl(hud, ".hud-gaps > div:first-child", "min-height"), "1.3em",
+    "measured: the container was 2px with the ahead line empty and 17.6px filled (headless, 2026-09-02)");
+});
+
