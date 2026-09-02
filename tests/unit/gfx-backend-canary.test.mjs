@@ -2532,3 +2532,31 @@ test("TLX pools meshes by (geometry, material), and prunes on a clock", () => {
   assert.ok(!/\.dispose\(\)/.test(prune),
     "prunePool disposes something — geometry and material belong to the caller, not the pool");
 });
+
+// ── the MRT node is built ONCE (docs/PERF-FINDINGS.md §2p) ────────────────
+// `renderer.setMRT(TSL.mrt({…}))` sat inline in present(), minting a NEW node
+// every frame. three keys its render-context cache on a STRING containing
+// mrt.id and stores the result in a plain object that never evicts, so each
+// frame created a permanent context and forced every object/material to be
+// re-created against it. Measured: distinct renderContexts 40 → 148 dead
+// linear, ~2,150 createRenderObject per 15 s, 4-minute drift +124 MB.
+// Hoisted: 1 → 2 contexts, 2 creates per 15 s, drift +4.5 MB (GLX +1.3).
+test("TLX builds its SSR MRT node once, not once per frame", () => {
+  const raw = read("js/render/three/tlx.js");
+  const code = raw.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+
+  // The node must come from a memoised factory, never constructed at the call.
+  assert.match(code, /function _ssrMrtNode\(\)/, "the memoised MRT factory is gone");
+  assert.match(code, /renderer\.setMRT\(_ssrMrtNode\(\)\)/,
+    "setMRT no longer takes the hoisted node");
+  assert.ok(!/setMRT\(\s*TSL\.mrt\(/.test(code),
+    "TSL.mrt() is being constructed inside setMRT again — that is the §2p leak, " +
+    "one permanent render context per frame");
+
+  // Constructing an mrt() anywhere inside present() reintroduces it even if the
+  // call above stays tidy, so pin the construction count in the whole file.
+  const built = (code.match(/TSL\.mrt\(/g) || []).length;
+  assert.equal(built, 1,
+    `TSL.mrt( is constructed ${built} times in tlx.js; exactly one construction site ` +
+    `(the memoised factory) is allowed — every extra one is a per-frame node id`);
+});

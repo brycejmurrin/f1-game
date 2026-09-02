@@ -955,7 +955,14 @@ const CEILINGS = {
   // based prune. Measured against the flat pool it was replacing:
   // createRenderObject allocations -45%, _createBindings -27%, 2-minute race
   // drift -28%. A PARTIAL fix, not a cure — PERF-FINDINGS 2o says so.
-  "js/render/three/tlx.js": 2562,   // 2026-09-02 bug hunt: env give-up gate, per-face error window, geoReg compaction; earlier: occurrence-keyed mesh pool (the collapse fix) + updateInstances + update ranges (audit round); +8 for the WebGPU vertex-format rule at both pack sites (PERF-FINDINGS 2n)
+  // 2548 -> 2562 (theirs): the SSR MRT node hoisted out of present() into a
+  // memoised factory — one mrt() per frame was the whole of 2o's leak (a new
+  // mrt.id, a new render-context cache key, a permanent RenderContext every
+  // frame; 4-minute race drift +124 MB -> +4.5 MB). PERF-FINDINGS 2p.
+  // -> 2577 on the merge with the 2026-09-02 bug hunt: env give-up gate,
+  // per-face error window, geoReg compaction, and the WebGPU vertex-format
+  // rule at both pack sites (PERF-FINDINGS 2n).
+  "js/render/three/tlx.js": 2577,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
