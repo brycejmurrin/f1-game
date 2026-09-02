@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 176 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 179 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -992,6 +992,7 @@ what it covers.
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 111-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
+| `scenery-guards.test.mjs` | the on-track guards drop what is ON the road, not everything with a normal gap: Monaco's armco keeps its posts (guardrail margin below the gap), Qatar/Monaco billboards build (panel ENDS guarded, not the along-track length as a radius), and `bakedModel` rides the scenery transform like the fallback it replaces — counts from `modelDiagnostics.suppressedCounts` on the real build |
 | `lamp-density.test.mjs` | `LAMP DENSITY` thins/densifies baked lights; lamps dressing aliases |
 | `floodmast-lamp-register.test.mjs` | `floodMast`/`floodMastRing` register lens posts into `track.lampPosts` (Singapore/Bahrain on; Qatar `light:false` opt-out) |
 | `track-accuracy-validator.test.mjs` | the accuracy validator tool itself |
@@ -1100,6 +1101,7 @@ what it covers.
 | `net-snapshot.test.mjs` | the 13 B/car wire format and the interpolation buffer, including the short-way wraps |
 | `net-session.test.mjs` | clock sync, routing and liveness over a fake wire |
 | `net-authority.test.mjs` | who may declare what: START/CAUTION/RESULT are the host's, over a stub-`G` NetPlay |
+| `net-roster.test.mjs` | who is still in the race, over the same stub-`G` NetPlay: the host broadcasts `LEFT` for a closed session's wire id and the other guests hand that rival back (AI again, `dnfAt` cleared); a guest's `LEFT` is ignored; a local `stop()` says `BYE` before closing |
 | `net-rendezvous.test.mjs` | the room-code client against a real relay |
 | `net-trystero-api.test.mjs` | the vendored Trystero surface actually used |
 | `net-lobby-lifecycle.test.mjs` | canceled lobby operations, overlapping scanners and late wake-lock grants over deferred promises |
@@ -1132,6 +1134,7 @@ what it covers.
 | `offtrack-vm.test.mjs` | Node twin of `offtrack.spec.js` (~4 s): all 8 tests — prog↔s coupling, reverse crawl, wrong-way, the controlled grass pair, both auto-rescues, bahrain stopped-on-track. Nothing left in the browser |
 | `elevation-tracks-vm.test.mjs` | Node twin of `elevation-tracks.spec.js` (~2 min — it BUILDS all 40 circuits): all 47 tests — the four banking-geometry audits on `Tracks.buildCenterline`, the chase-camera bank roll via `camState()`, the per-circuit slope-gravity / climb / road-following probe and the two banked bowls, same launches and bounds. Nothing left in the browser |
 | `collisions-vm.test.mjs` | Node twin of `collisions.spec.js` (~3 s): all 3 tests — `pair()` separation window, `jam(5)` dig-out liveness, a full pack for 10 s. Nothing left in the browser |
+| `speed-cap-vm.test.mjs` | the speed cap is an acceleration ceiling, not a teleport (a cap that drops under the car bleeds at coast drag, never in one step), and `__apex.setPhysics` floors its knobs so a negative pace/expo cannot NaN the car |
 | `collisions-deep-vm.test.mjs` | Node twin of `collisions-deep.spec.js` (~8 s): all 15 tests — pushes that stick, no interpenetration, open-circuit and monaco street walls under `incident({flags})`, kerb flag, sandwiches, pileups, the seam, the side-rub speed-death regression. Nothing left in the browser |
 | `collision-ai-fixes-vm.test.mjs` | Node twin of `collision-ai-fixes.spec.js` (~7 s): all 14 tests — wrong-way thresholds and hysteresis, the pushIn wall scrub with its control run, throttle-gated rescue and its cooldown reset, rear-end `contactT`, the 10-car separation window, zandvoort AI banking grip, the jeddah barrier face. Nothing left in the browser |
 | `new-hooks-vm.test.mjs` | Node twin of `new-hooks.spec.js` (~12 s): 55 of 56 — `timing`/`sectorState`/`lapHistory` (TT via `tt()`)/`fieldState`/`aiPlace`/`setEnergy`/`setLap`/`trackProfile`/`obs().gear`, the eight virgin-boot nulls first, and the shared-foundation diagnostics (silverstone, cota, miami, jeddah, singapore day+night, shanghai day+night). Left in the browser: the hidden ~300 s Madrid foundation test (`test.setTimeout(300000)`) |
@@ -1789,6 +1792,15 @@ has 1194: `playwright.config.js` pins the sandbox binary, a bare
 `chromium.launch()` in a scratch script needs `executablePath`.
 
 **The change-aware gate selected the two slowest boot specs for every source edit, and never carried a failure forward (2026-09-02).** Pages runs 1888 (twice) and push run 2229 went red on `boot-guard.spec.js` (PERMANENT 404: 120 s while Playwright set up the browser context) and `logging.spec.js` (the Monaco build) — both pass locally in 86 s, so the reds were runner starvation. They were selected because pick-tests' blanket rules (`/^(js|css)\//` → "any source edit: does the page still boot", `index.html` → "script tags + DOM shell") route every diff to the boot group, and inside a 10-test budget its cheapest-by-count specs are exactly those two, the slowest per test in the tree. That question is already answered by the FIXED smoke gate (four shards) on every push and deploy, so `select-specs` now drops the boot group when only the blanket rules named it (`dropBootFallback`, `bootCoveredBySmoke` in the JSON). Separately, the "Record failing specs" step never recorded anything: Playwright writes `<system-out>` BEFORE `<failure>`/`<error>` inside a testcase, so a "testcase immediately followed by failure" regex matched nothing, and the classname it would have captured (`specs/x.spec.js`) lacks the `tests/` prefix the selector filters on — `tools/junit-failed.mjs` parses the block and normalises the path. Runner boots measured in these runs: a context that takes 120 s to create is the machine; do not widen the 45 s boot wait for it.
+
+**tooling-fast is not the deploy gate's node half (2026-09-02).** Pages run
+1889 went red on two `quali-persist` source pins that were green nowhere
+locally, because `quali-persist` lives in `test:state-unit`, which the gate's
+"Pure-node unit suites" step runs and `tooling-fast` does not (the same step
+also runs `node-slow`, the VM twins, the net/audio/agent-contract groups).
+`node tools/deploy.mjs` now runs exactly that step's `npm run test:*` lines,
+parsed from `ci.yml` so the two lists cannot drift; the edit loop stays
+`tooling-fast`, and a pre-deploy run pays the extra ~4 minutes once.
 
 ### 2026-09-02 — two instruments that lie on this container
 

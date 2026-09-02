@@ -780,6 +780,15 @@ const Input = (function () {
     // that fires the instant the menu closes (see docs/research note above
     // clearEdges() for the bug class this avoids).
     if (window.UiLayers && window.UiLayers.navOpen()) {
+      // ...and the PEDALS go with it. They were latched above this branch, so a
+      // pad kept throttling/braking the car through the pause menu (the
+      // keyboard's driving keys are gated by menuOverlayOpen(); the pad's were
+      // not) — full throttle while picking RESUME in a friend race, where the
+      // sim keeps running under the menu. steer() still reads the stick: the
+      // menu's own, larger deadzone is what keeps it out of the menu
+      // (tests/unit/ui-improve-pass, "resting stick at 0.18").
+      padThrottle = padBrake = false;
+      padThrottleVal = padBrakeVal = 0;
       padNavPoll(pad);
     } else {
       padNavDir = null;   // fresh hold-timer the next time a menu opens
@@ -1246,7 +1255,10 @@ const Input = (function () {
     padBrake = false;
     padThrottleVal = 0;
     padBrakeVal = 0;
-    padPrevButtons.length = 0;
+    // padPrevButtons is deliberately KEPT: emptying it on a window blur made
+    // every button merely held across the blur a rising edge on the next poll
+    // (boost toggled, a gear grabbed, the camera cycled). The next poll
+    // re-seeds it from the pad as it always has.
     padNavDir = null;
     padNavSeeded = false;
     padNavSeedLayer = null;

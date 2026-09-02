@@ -709,8 +709,13 @@ const SceneryCity = (function () {
     const billboard = (k, side, gap, w, h, col, opts) => {
       const st = (opts && opts.style) || kitOf("board", "panel");
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
-      if (onTrack(p.c[0], p.c[2], w / 2 + 1)) {
-        ctx.noteSuppressed("billboard", `billboard SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (need gap>${(w/2+1).toFixed(1)})`);
+      // The face is s:[1,1,w] ALONG the tangent, so `w` is the panel's length
+      // down the road, not its reach toward it. Using it as a radial margin
+      // needed gap > w/2+1 and killed every board with a normal gap (all 44
+      // at Qatar, all 7 at Monaco). Guard the two panel ends instead.
+      const e0 = vadd(p.c, p.t, w / 2), e1 = vadd(p.c, p.t, -w / 2);
+      if (onTrack(e0[0], e0[2], 1.0) || onTrack(e1[0], e1[2], 1.0)) {
+        ctx.noteSuppressed("billboard", `billboard SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (a panel end is on the road)`);
         return;
       }
       ctx.note("billboard", vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], { k, side });

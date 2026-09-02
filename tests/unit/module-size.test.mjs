@@ -519,7 +519,9 @@ const CEILINGS = {
   // number fits the union, which carries every one of those line sets, so this is
   // RE-MEASURED on the merged tree with the suite's own split-newline metric
   // rather than added on paper.
-  "js/game.js": 9054,   // 2026-09-02 bug hunt: quitToMenu tears down DebrisWorld/IncidentSim + team skin, reliability skips net-owned cars, one-off GP forgets its quali order, pooled always-on light triple
+  // 9054 -> 9056: round 2 — the speed cap became a rate (2 lines), a net-owned
+  // finished rival takes no local coast, every comment paid down to hold it.
+  "js/game.js": 9056,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -605,7 +607,9 @@ const CEILINGS = {
   // already stopped trusting it. Ten lines to match on identity instead and to
   // COUNT what could not be placed; the alternative is a replay that silently
   // hands cars each other's positions.
-  "js/game/apex.js": 2576,
+  // 2576 -> 2579: setPhysics floors its knobs (a NaN car from expo:-1 had no
+  // way back) — the one `fl` helper plus a two-line why.
+  "js/game/apex.js": 2579,
   "js/game/agentview.js": 2443,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
@@ -801,7 +805,9 @@ const CEILINGS = {
   // mesh registration, a draw call, a free path and a hideMeshes key.
   // Neither 2381 nor 2360 fits the union, which carries both — re-measured on
   // the merged tree with the ceiling test's own metric, per the deploy rule.
-  "js/track/tracks.js": 2382,
+  // 2382 -> 2387: bakedModel joins the (k, side) scenery transform (why, 4
+  // lines) and modelDiagnostics.suppressedCounts for tests/unit/scenery-guards.
+  "js/track/tracks.js": 2387,
   // ── Round-6 additions: the unguarded giants, set AT measured (test metric,
   // split-newline count) so any growth is a deliberate raise here. Each line
   // says why the file is its size today; none is an extraction target yet.

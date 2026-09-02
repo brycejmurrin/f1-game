@@ -210,7 +210,13 @@ const IncidentSim = (function () {
     for (const i of idxs) {
       const c = cars[i];
       if (!c) continue;
-      const head = fin(c.head) ? c.head : 0;
+      // AI cars never write `head` (only the grid, coast and rescue do), so
+      // it is the grid's 0 for the whole race and the launch velocity pointed
+      // along world +Z whatever the road did — the mirror pose in debrisworld
+      // already derives the AI yaw from the tangent; the launch must agree.
+      let head = 0;
+      if (c.human && fin(c.head)) head = c.head;
+      else { try { Tracks.sample(track, c.s, G.smp); head = Math.atan2(G.smp.t[0], G.smp.t[2]); } catch (e) { head = fin(c.head) ? c.head : 0; } }
       const spd = fin(c.speed) ? c.speed : 0;
       const vLat = fin(c.vLat) ? c.vLat : 0;
       const fx = Math.sin(head), fz = Math.cos(head);
