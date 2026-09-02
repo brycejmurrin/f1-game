@@ -6473,8 +6473,17 @@ function render(dt) {
     if (!_shadowsRead) {
       _shadowSnapX = _shadowSnapZ = _shadowBox = null;
       _shadowSunX = _shadowSunY = _shadowSunZ = null;
-    } else if (lu !== _shadowSnapX || lv !== _shadowSnapZ || sBox !== _shadowBox ||
-        sd[0] !== _shadowSunX || sd[1] !== _shadowSunY || sd[2] !== _shadowSunZ) {
+    } else if ((lu !== _shadowSnapX || lv !== _shadowSnapZ || sBox !== _shadowBox ||
+        sd[0] !== _shadowSunX || sd[1] !== _shadowSunY || sd[2] !== _shadowSunZ) &&
+        // DEFER THE WHOLE REBUILD, never part of one. Halving this pass at
+        // tier >= 1 is a real saving and it belongs HERE, at the rebuild
+        // decision, not inside the props cast: the snap keys below are left
+        // untouched, so the previous map — complete, with its instanced props
+        // in it — stays bound and the next frame rebuilds the lot. Skipping
+        // only the instanced half instead published a map with the road and
+        // terrain shadows but no trees, barriers or signs, and held it for a
+        // whole 20 m cell. Same idiom as the lamp pass's one-frame defer.
+        !(PerfGov.tier() >= 1 && (_frameNo & 1) === 1)) {
       _shadowSnapX = lu; _shadowSnapZ = lv; _shadowBox = sBox;
       _shadowSunX = sd[0]; _shadowSunY = sd[1]; _shadowSunZ = sd[2];
       // Rebuild the snapped centre in world space. The along-sun component needs

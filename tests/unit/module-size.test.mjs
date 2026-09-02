@@ -530,7 +530,12 @@ const CEILINGS = {
   // pass corrupts maps instead of saving work. (3) _backendBound, because the
   // boot canary armed from the saved pick and two boots deliberately keep a
   // pick while running GLX. Net behaviour is four lines; the rest is the record.
-  "js/game.js": 9093,
+  // 9093 -> 9102: the props-cast parity gate MOVED rather than died. Removing
+  // it outright was wrong and the note says why: the gate does fire on frames
+  // the function runs (every snap-cell rebuild), so dropping it added an
+  // instanced prop cast to half of them. It now defers the whole rebuild
+  // instead, which keeps the saving and never publishes a half-built map.
+  "js/game.js": 9102,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
