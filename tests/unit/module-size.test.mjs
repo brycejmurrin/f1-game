@@ -914,7 +914,11 @@ const CEILINGS = {
   // 2326 -> 2331: five lines, all comment, passing maxLights through the lit
   // factory under the SAME _liteGpu gate that already downgrades samples and
   // outputType for mobile/WebKit. See tsl-lit.js for the row arithmetic.
-  "js/render/three/tlx.js": 2331,
+  // 2331 -> 2348: the phone decline (six lines of code) plus ten of comment
+  // carrying the measurement that justifies it and the disproved alternative,
+  // so the next round does not rebuild the CPU-array release and crash twice
+  // rediscovering why it cannot work. Evidence: docs/PERF-FINDINGS.md 2m.
+  "js/render/three/tlx.js": 2348,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
