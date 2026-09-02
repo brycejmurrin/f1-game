@@ -1027,7 +1027,28 @@ const CEILINGS = {
   // re-freeing them next round.
   // + R16: the CSS-size cache re-check in resize() and the ResizeObserver
   // moved outside the addEventListener check (PERF-FINDINGS 2u).
-  "js/render/three/tlx.js": 2757,   // 2026-09-02 R17: the a63cab7 revert (mirror release took the world with it on a real phone) restored lines without restoring this cap, leaving the deploy branch red on its own tip. Measured on the merged union.
+  // 2745 -> 2763. Two sessions raised this in the same minutes and the union is
+  // neither number: theirs (2757) is the a63cab7 revert alone, mine adds the
+  // A/B knob's env-gate bypass on top. MEASURED on the merged file.
+  //
+  // Why a revert RAISED a ceiling: it restored the shipped gate but kept the
+  // reasoning for why the term went in AND why it came out, because the fact
+  // that motivated it — the env probe is tier-gated off on phones, so that gate
+  // can never open there — is TRUE, and the next round will rediscover it and
+  // draw the same wrong conclusion without the note.
+  //
+  // It was pushed urgently without running this guard. The red run skipped the
+  // deploy job, so a fix for a player's broken phone could not publish because
+  // of a line-count ceiling. Run the guard even when reverting — especially
+  // when reverting fast.
+  // 2763 -> 2779: the chunk-release A/B knob, the chunked-release counter, and
+  // the null-vs-zero-length finding written where the next person will hit it.
+  // three sizes a buffer as `array ? array.byteLength : count*itemSize*4` — an
+  // explicit fallback for a NULL array. A zero-length typed array is truthy,
+  // takes the first branch and yields a ZERO-BYTE buffer. Nulling was correct
+  // by design; changing it to zero-length was mine and it is the general case
+  // behind the Metal index refusal, not an index quirk.
+  "js/render/three/tlx.js": 2779,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

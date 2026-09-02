@@ -1399,7 +1399,10 @@ const TLX = (function () {
           if (!a || !a.array || !a.array.length) return;
           if (a.isInstancedBufferAttribute || a.usage === THREE.DynamicDrawUsage) return;
           freed += a.array.byteLength;
-          a.array = new a.array.constructor(0);
+          // NULL, not zero-length — see tlx-chunked.js releaseMirrors(): three
+          // falls back to count*itemSize*4 only when array is NULL; a
+          // zero-length array is truthy and sizes the buffer to 0 bytes.
+          a.array = null;
         };
         const atts = g.attributes;
         for (const k in atts) drop(atts[k]);
@@ -1415,8 +1418,11 @@ const TLX = (function () {
         g.__tlxFreed = true;
         return freed;
       }
+      const _chunkRelOptIn = (function () {
+        try { return localStorage.getItem("apex26.tlxChunkRelease") === "1"; } catch (_) { return false; }
+      })();
       let _mirrorSweepAt = 0;
-      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, gate: "?" };
+      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, chunks: 0, gate: "?" };
       // Throttled on performance.now(), never a frame counter: a frame counter
       // is not a clock, and the first attempt at this lever shipped
       // `(++n % 90) === 0` that never once fired (PERF-FINDINGS 2m).
@@ -2415,8 +2421,14 @@ const TLX = (function () {
               // this gate belt-and-braces rather than load-bearing — it is
               // KEPT because the failure it guards is real-GPU-only and the
               // few frames of delay cost nothing.
+              // apex26.tlxChunkRelease=1 forces this past the env gate for an
+              // A/B ONLY. The gate is shut on a phone (probe tier-gated off),
+              // so without an override the configuration that blanked a
+              // player's road and terrain cannot be reproduced at all. Default
+              // OFF — this never reaches a player.
               if (n > 0 && !rec.chunked._mirrorsFreed && !vizMat
-                && (envReady || _envGaveUp || !envRT)) _mirrorRelease.push(rec.chunked);
+                && (_chunkRelOptIn || envReady || _envGaveUp || !envRT))
+                _mirrorRelease.push(rec.chunked);
               continue;
             }
             acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
@@ -2534,6 +2546,11 @@ const TLX = (function () {
             catch (e) { persistFail(e); refuseTab(); }
           }
           _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
+          // Count the CHUNKED releases too. tlxMirror reported only the static
+          // sweep, so an A/B of the chunked half — the half that maps to road
+          // and terrain — could not tell "ran and was harmless" from "never
+          // ran". Third time this exact ambiguity has cost a round.
+          _mirrorStat.chunks += _mirrorRelease.length;
           for (let i = 0; i < _mirrorRelease.length; i++) chunkedSys.releaseMirrors(_mirrorRelease[i]);
           _mirrorRelease.length = 0;
           // Same gate as the chunked release above: hold until the env probe
@@ -2569,7 +2586,12 @@ const TLX = (function () {
           _mirrorStat.drains++;
           _mirrorStat.gate = (envReady ? "R" : "-") + (_envGaveUp ? "G" : "-")
                            + (envRT ? "T" : "-") + (_sweepOptIn ? "S" : "-");
-          if (_sweepOptIn && (envReady || _envGaveUp || !envRT)) sweepGeoMirrors(_now);
+          // The opt-in BYPASSES the env gate on purpose. On a phone profile that
+          // gate is shut (the probe is tier-gated off), so without this the A/B
+          // knob cannot A/B the configuration that broke a player's handset —
+          // an override that cannot reach the failing path is not an override.
+          // Default OFF, so nothing reaches a player through it.
+          if (_sweepOptIn) sweepGeoMirrors(_now);
           // Evicted materials dispose only now — after paint, when no drawList
           // record can still reference them (safe since the #33952 backport).
           for (let i = 0; i < _matDispose.length; i++) { try { _matDispose[i].dispose(); } catch (_) { /* already disposed */ } }
@@ -2717,7 +2739,7 @@ const TLX = (function () {
                         // as "the fix does nothing" (PERF-FINDINGS 2m).
                         mirror: { sweeps: _mirrorStat.sweeps, geos: _mirrorStat.geos,
                                   freedMB: _mirrorStat.freedMB, drains: _mirrorStat.drains,
-                                  gate: _mirrorStat.gate } };
+                                  chunks: _mirrorStat.chunks, gate: _mirrorStat.gate } };
             try {
               const inf = renderer && renderer.info;
               if (inf) {
