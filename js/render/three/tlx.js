@@ -1217,6 +1217,21 @@ const TLX = (function () {
       // uncaptured-error tally across the six faces instead — errors during a
       // probe mean the probe's own commands did not run.
       let _envErrBase = -1, _envBadProbes = 0, _envGaveUp = false;
+      // Has the probe ever asked for a single face? game.js gates it on
+      // PerfGov.tier() < 1 (js/game.js "Live env probe"), so on every phone-tier
+      // device envFaceBegin is NEVER called: envReady cannot latch, _envGaveUp
+      // cannot flip (that latch only trips inside the probe path), and envRT is
+      // allocated at init regardless. The mirror-release gate below reads
+      // `envReady || _envGaveUp || !envRT`, which is therefore permanently
+      // false on phones — measured gate "--T", drains 23, sweeps 0. That
+      // silently disabled the CHUNKED release too, on exactly the devices it
+      // exists for. A gate needs a term for "the probe is not coming".
+      let _envEverAsked = false, _envFirstPaintAt = 0;
+      function _envNeverComing() {
+        if (_envEverAsked || !_envFirstPaintAt) return false;
+        const t = typeof performance !== "undefined" ? performance.now() : Date.now();
+        return (t - _envFirstPaintAt) > 5000;
+      }
       let _envFaceErr = false;   // an uncaptured error DURING one of this cycle's six face renders
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
@@ -1328,6 +1343,7 @@ const TLX = (function () {
         // cache key stable instead of minting a new one.
         m.geometry = geo;
         m.material = mat;
+        geo.__tlxDrawnBatch = _poolBatch;   // uploaded by the render that closes THIS batch
         m.__tlxBatch = _poolBatch;
         m.__tlxSeen = (typeof performance !== "undefined" ? performance.now() : Date.now());
         // scene.matrixWorldAutoUpdate is false (see create() above), so three
@@ -1352,6 +1368,74 @@ const TLX = (function () {
       // Every geometry this backend creates, held WEAKLY — a census that
       // retains what it measures is a leak, not an instrument.
       const _geoReg = [];
+      // ── STATIC-GEOMETRY MIRROR RELEASE ──────────────────────────────────
+      // The non-chunked half of the lever chunkedSys.releaseMirrors() already
+      // pulls. A post-GC heap snapshot says why it is worth pulling: on the
+      // iPhone profile in race, JSArrayBufferData is 49.43 MB of TLX's 99.41
+      // against GLX's 17.82 of 48.89 — 31.6 MB of the 50.5 MB gap — while
+      // every named three object class TOGETHER is +3.75 MB. The node graphs
+      // and RenderObjects are not the cost; the CPU mirrors are, exactly as
+      // 2m said before 2n mis-attributed them. Evidence: PERF-FINDINGS 2r.
+      //
+      // Safe for reasons that DO NOT generalise — check them before widening:
+      //  - every pooled mesh (acquireMesh) and every InstancedMesh sets
+      //    frustumCulled = false, so three never calls computeBoundingSphere()
+      //    and so never reads position.array to cull. A geometry that IS
+      //    frustum-culled would be culled to nothing by this.
+      //  - the array is swapped for a ZERO-LENGTH array of the same class, not
+      //    null: draw()'s `index.array.BYTES_PER_ELEMENT` still resolves, and
+      //    .count is a plain property set once in the BufferAttribute
+      //    constructor (`this.count = t.length / e`), so it is untouched.
+      //  - only AFTER a completed render: __tlxDrawnBatch is stamped when the
+      //    mesh is acquired and must be strictly older than the current batch,
+      //    so the upload has happened. Releasing before first draw uploads
+      //    nothing and the mesh vanishes.
+      //  - instanced and DynamicDrawUsage attributes are skipped: those ARE
+      //    version-bumped, and updateAttribute() would then bufferSubData a
+      //    zero-length array — a silent no-op instead of the new data.
+      function releaseGeoMirrors(g) {
+        if (!g || g.__tlxFreed) return 0;
+        let freed = 0;
+        const drop = (a) => {
+          if (!a || !a.array || !a.array.length) return;
+          if (a.isInstancedBufferAttribute || a.usage === THREE.DynamicDrawUsage) return;
+          freed += a.array.byteLength;
+          a.array = new a.array.constructor(0);
+        };
+        const atts = g.attributes;
+        for (const k in atts) drop(atts[k]);
+        drop(g.index);
+        g.__tlxFreed = true;
+        return freed;
+      }
+      let _mirrorSweepAt = 0;
+      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, gate: "?" };
+      // Throttled on performance.now(), never a frame counter: a frame counter
+      // is not a clock, and the first attempt at this lever shipped
+      // `(++n % 90) === 0` that never once fired (PERF-FINDINGS 2m).
+      function sweepGeoMirrors(now) {
+        if (now - _mirrorSweepAt < 2000) return;
+        _mirrorSweepAt = now;
+        _mirrorStat.sweeps++;
+        let freed = 0;
+        for (let i = 0; i < _geoReg.length; i++) {
+          const ref = _geoReg[i];
+          const g = ref && ref.deref ? ref.deref() : null;
+          if (!g || g.__tlxFreed) continue;
+          if (g.__tlxKind === "chunk" || g.__tlxKind === "chunked") continue;   // chunkedSys owns those
+          // Drawn at least once. NOT `__tlxDrawnBatch < _poolBatch`: every
+          // visible geometry is re-acquired EVERY frame, so the stamp is
+          // refreshed to the current batch before this sweep runs, and that
+          // test could only ever fire for geometry that had STOPPED being
+          // drawn — the opposite of the target. Measured geos:0 freedMB:0.
+          // This sweep runs after paintCanvas(), so the batch is uploaded.
+          if (g.__tlxDrawnBatch === undefined) continue;
+          const n = releaseGeoMirrors(g);
+          if (n) { freed += n; _mirrorStat.geos++; }
+        }
+        if (freed) _mirrorStat.freedMB = +(_mirrorStat.freedMB + freed / 1048576).toFixed(2);
+      }
+
       function _regGeo(g, kind) { try { g.__tlxKind = kind; _geoReg.push(new WeakRef(g)); } catch (_) { /* no WeakRef: census degrades, nothing leaks */ } return g; }
       // Attributes go through TLXShaders.packAttr: it range-scans each source
       // and quantises ONLY what provably fits (colour 8-bit, unit normal 16,
@@ -1835,6 +1919,7 @@ const TLX = (function () {
           // calling this every 4th frame and every face threw/warned for the
           // life of the session (the Metal case, 2026-08-29).
           if (_envGaveUp) return null;
+          _envEverAsked = true;
           ensureEnvCam();
           if (!envCubeCam) return null;
           _envActive = true;
@@ -2302,7 +2387,8 @@ const TLX = (function () {
               // KEPT because the failure it guards is real-GPU-only and the
               // few frames of delay cost nothing.
               if (n > 0 && !rec.chunked._mirrorsFreed && !vizMat
-                && (envReady || _envGaveUp || !envRT)) _mirrorRelease.push(rec.chunked);
+                && (envReady || _envGaveUp || !envRT || _envNeverComing()))
+                _mirrorRelease.push(rec.chunked);
               continue;
             }
             acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
@@ -2422,6 +2508,26 @@ const TLX = (function () {
           _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
           for (let i = 0; i < _mirrorRelease.length; i++) chunkedSys.releaseMirrors(_mirrorRelease[i]);
           _mirrorRelease.length = 0;
+          // Same gate as the chunked release above: hold until the env probe
+          // has latched, because the node builder types an attribute from
+          // array.constructor the first time it compiles for a pass, and the
+          // probe is such a pass.
+          // sweeps:0 on the first run meant the gate never opened. Record WHICH
+          // term holds it shut instead of guessing between the three.
+          const _now = typeof performance !== "undefined" ? performance.now() : Date.now();
+          if (!_envFirstPaintAt) _envFirstPaintAt = _now;
+          // "or the probe is not coming": no face asked for in 5 s of painting
+          // means game.js's tier gate has it off for this device, and waiting
+          // on a latch that cannot flip is waiting forever. Safe to relax now
+          // in a way it was not when the release nulled arrays: it assigns a
+          // ZERO-LENGTH array of the same class, so a probe that starts later
+          // (PerfGov can raise the tier mid-race) still finds array.constructor
+          // and types the attribute correctly.
+          const _envNotComing = !_envEverAsked && (_now - _envFirstPaintAt) > 5000;
+          _mirrorStat.drains++;
+          _mirrorStat.gate = (envReady ? "R" : "-") + (_envGaveUp ? "G" : "-")
+                           + (envRT ? "T" : "-") + (_envNotComing ? "N" : "-");
+          if (envReady || _envGaveUp || !envRT || _envNotComing) sweepGeoMirrors(_now);
           // Evicted materials dispose only now — after paint, when no drawList
           // record can still reference them (safe since the #33952 backport).
           for (let i = 0; i < _matDispose.length; i++) { try { _matDispose[i].dispose(); } catch (_) { /* already disposed */ } }
@@ -2563,7 +2669,13 @@ const TLX = (function () {
           // reporting it costs nothing and guessing costs an afternoon.
           memState() {
             const o = { mats: matCache.size, pool: meshPool.length, draws: drawList.length,
-                        geoKeys: meshByGeo.size, batch: _poolBatch };
+                        geoKeys: meshByGeo.size, batch: _poolBatch,
+                        // The mirror sweep reports what it FREED, not that it ran:
+                        // the first version of this lever never executed and read
+                        // as "the fix does nothing" (PERF-FINDINGS 2m).
+                        mirror: { sweeps: _mirrorStat.sweeps, geos: _mirrorStat.geos,
+                                  freedMB: _mirrorStat.freedMB, drains: _mirrorStat.drains,
+                                  gate: _mirrorStat.gate } };
             try {
               const inf = renderer && renderer.info;
               if (inf) {
