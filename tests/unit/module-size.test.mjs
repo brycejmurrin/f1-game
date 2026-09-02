@@ -566,7 +566,12 @@ const CEILINGS = {
   // code, long in reasoning, and the reasoning is the part that stops the next
   // round undoing it: present() clearing the flags is CORRECT for a stop and
   // wrong for a cadence skip, and one presented frame was never proof.
-  "js/game.js": 9175,
+  // 9175 -> 9193: _disarmProbeOnLeave. Holding the boot probe across
+  // PROVE_FRAMES widened the arm from one frame to ~5 s, and with it the FALSE
+  // POSITIVE window: a player who quit inside those 5 s was reverted to WebGL2
+  // on the next boot. A hidden or closing tab is not a crash — the same rule
+  // PerfGov's sentinel already states three lines below the new handler.
+  "js/game.js": 9193,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -931,7 +936,7 @@ const CEILINGS = {
   // NOT have was their own submit, and shadowInstBuf is per BATCH, not per
   // LIGHT — so one deferred encoder let the lamp's upload land before the sun's
   // recorded draw executed, and the sun map came from the lamp's culled set.
-  "js/render/webgpu/wgx.js": 5806,   // +26: carShadowKeep/lampShadowKeep and the armed flag in the state hooks (the flag the shader reads was unobservable, which is why the strobe was invisible)   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
+  "js/render/webgpu/wgx.js": 5821,   // +15: _shadowRendered joins envProbeReset. It gated the light VP the LIT pass and the god-ray march both sample, and had no reset on track change, tier change, resize or quit — a latch with no invalidation is how the shadow-flag class of bug starts.   // +26: carShadowKeep/lampShadowKeep and the armed flag in the state hooks (the flag the shader reads was unobservable, which is why the strobe was invisible)   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo

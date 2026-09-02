@@ -3959,6 +3959,21 @@ const WGX = (function () {
     function envProbeReset() {
       _envFacesMask = 0; _envProbeLive = false;
       envCubeView = _envPlaceView || envCubeView;
+      // AND THE STATIC SUN MAP'S LATCH. _shadowRendered is set once, at the first
+      // shadowEnd, and had no reset anywhere: not on a track change, a tier
+      // change, a resize or quitToMenu. It gates the light VP the LIT pass and
+      // the god-ray march both sample (`_shadowRendered ? shadowLVPData : IDENT`),
+      // so a latch that survives a track switch points them at the PREVIOUS
+      // circuit's sun map until the new one's first snap rebuild lands.
+      //
+      // It is currently masked by the shader also gating on sunUp and shadowStr,
+      // which is luck rather than design, and it is the wrong template for the
+      // car/lamp keeps that now sit beside it — those have an explicit arms
+      // guard precisely because a latch with no invalidation is how this class
+      // of bug starts. envProbeReset is already called on every track change
+      // (js/game.js loadTrack) and on the tier shed, which is exactly the set
+      // this needs, so it rides along rather than growing a second hook.
+      _shadowRendered = false;
       _rebuildFrameBG();
     }
 

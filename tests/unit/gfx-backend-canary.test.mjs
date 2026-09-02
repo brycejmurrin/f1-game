@@ -1853,6 +1853,32 @@ test("shadow state reports the frame-live armed flag, not just a lifetime count"
   }
 });
 
+// A hidden or closing tab is not a crash, and the canary must not read one as one.
+test("the boot probe disarms on hide and on a clean exit", () => {
+  const g = code("js/game.js");
+  // PerfGov's sentinel already encodes this rule for the same reason — a hidden
+  // tab that never comes back was killed in the BACKGROUND, which is normal iOS
+  // housekeeping and not a backend failure. Holding the probe across PROVE_FRAMES
+  // also widened the window from one frame to ~5 s, so without this a player who
+  // quits inside those 5 s is silently reverted to WebGL2 on their next boot.
+  assert.match(g, /function _disarmProbeOnLeave\(\)/,
+    "there must be one place that drops the probe when the tab leaves");
+  assert.match(g, /if \(document\.hidden\) _disarmProbeOnLeave\(\)/,
+    "a hidden tab disarms: a background kill is housekeeping, not a crash");
+  assert.match(g, /pagehide[\s\S]{0,120}_disarmProbeOnLeave\(\)/,
+    "and a clean exit disarms, which visibilitychange does not always precede");
+});
+
+// A latch with no invalidation path is how this whole class of bug starts.
+test("WGX's static shadow latch is cleared by the same reset that clears the env probe", () => {
+  const src = code("js/render/webgpu/wgx.js");
+  const at = src.indexOf("function envProbeReset");
+  assert.ok(at > 0, "envProbeReset moved — check this test, not the code");
+  assert.match(src.slice(at, at + 500), /_shadowRendered = false/,
+    "_shadowRendered gates the light VP the LIT pass and the god-ray march sample; " +
+    "unreset, a track switch points both at the previous circuit's sun map");
+});
+
 // One presented frame is not proof that a backend works.
 test("the boot canary holds across a run of frames and TLX re-arms on a context loss", () => {
   const g = code("js/game.js");

@@ -8905,7 +8905,25 @@ $("pm-aero").onclick = () => {
   if (soundOn) GameAudio.uiTick();
 };
 refreshAeroBtn();
+// A HIDDEN OR CLOSING TAB IS NOT A CRASH, and the boot canary must not read one
+// as a backend failure. PerfGov's sentinel already encodes this exact rule three
+// lines below — "a hidden tab that never comes back was killed in the BACKGROUND
+// — normal iOS housekeeping, not our crash" — and the probe needs it for a
+// second reason of its own: holding the arm across PROVE_FRAMES widened the
+// window from one frame to ~5 s, so a player who quits or navigates away inside
+// those 5 s would leave an armed probe and be silently reverted to WebGL2 on
+// their next boot. That is a false positive the one-frame version never had.
+//
+// Disarming here leaves armed exactly the case the canary is for: a FOREGROUND,
+// visible, actively-presenting tab that died. pagehide covers the clean exit
+// that visibilitychange does not always precede.
+function _disarmProbeOnLeave() {
+  if (!_probeArmed) return;
+  _probeArmed = false;
+  try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage: nothing was armed */ }
+}
 document.addEventListener("visibilitychange", () => {
+  if (document.hidden) _disarmProbeOnLeave();
   if (document.hidden && (state === "race" || state === "count")) setPaused(true);
   // Sentinel: a hidden tab that never comes back was killed in the BACKGROUND —
   // normal iOS housekeeping, not our crash. Disarm while hidden, re-arm on
@@ -8916,7 +8934,7 @@ document.addEventListener("visibilitychange", () => {
   // back — re-request it here rather than a fourth listener elsewhere.
   if (!document.hidden && raceWakeWanted) holdRaceWake();
 });
-window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); });
+window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmProbeOnLeave(); });
 
 // ---------- boot ----------
 // (A `window.__APEX` bridge lived here, gated on a `window.__APEX_DEBUG` flag
