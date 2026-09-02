@@ -113,12 +113,14 @@ const AudioPanel = (() => {
       });
       const note = $("as-src-note");
       if (note) {
+        // The SELECTED source first: with DEFAULT lit and nothing uploaded the
+        // note used to describe the disabled MY TRACKS button instead.
         note.textContent = on === "spotify"
             ? "Spotify is driving the music. The controls above drive it too."
-          : counts.user === 0
-            ? "Add your own files under YOUR TRACKS to use MY TRACKS."
           : on === "user" ? "Playing your " + counts.user + " uploaded track" + (counts.user === 1 ? "" : "s") + " only."
           : on === "builtin" ? "Playing the " + counts.builtin + " shipped tracks only."
+          : counts.user === 0
+            ? "Playing the " + counts.builtin + " shipped tracks. Add your own under YOUR TRACKS to use MY TRACKS."
           : "Playing everything: " + counts.builtin + " shipped + " + counts.user + " of yours.";
       }
     }
@@ -138,11 +140,18 @@ const AudioPanel = (() => {
       $("as-mvol-v").textContent = String(Math.round(musicVol * 10));
       $("as-svol").value = String(Math.round(sfxVol * 10));
       $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
-      const nowText = musicLive ? (GameAudio.trackName() || "—") : "Music off";
+      // The master gate is what silences music when SOUND is off, and the MUSIC
+      // switch still reads ON then — so the readout names the gate that is
+      // actually shut instead of contradicting the switch beside it. The title
+      // line ellipsises (css/tuner.css .as-now-title), so the way out goes on
+      // the caption under it, which wraps.
+      const nowText = musicLive ? (GameAudio.trackName() || "—") : G.soundOn ? "Music off" : "Sound off";
       $("as-now").textContent = nowText;
       $("as-now").title = nowText;
-      const SRC_LABEL = { all: "All music", builtin: "Built-in", user: "My tracks", spotify: "Spotify" };
-      $("as-now-src").textContent = musicLive ? (SRC_LABEL[musicSrc] || "") : "";
+      // Same words as the source buttons (ALL / DEFAULT / MY TRACKS / SPOTIFY):
+      // the caption said "Built-in" for the button labelled DEFAULT.
+      const SRC_LABEL = { all: "All music", builtin: "Default", user: "My tracks", spotify: "Spotify" };
+      $("as-now-src").textContent = musicLive ? (SRC_LABEL[musicSrc] || "") : G.soundOn ? "" : "Master sound is off — MUSIC ON or SOUND EFFECTS ON turns it on";
       $("as-play").innerHTML = G.musicEnabled ? "&#10074;&#10074;" : "&#9654;";
       $("as-play").setAttribute("aria-label", G.musicEnabled ? "Pause music" : "Play music");
       for (const id of ["as-prev", "as-skip"]) $(id).disabled = !musicLive;

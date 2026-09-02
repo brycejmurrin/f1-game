@@ -1050,6 +1050,7 @@ what it covers.
 | `hud-audit.spec.js` | HUD screenshots + mode-dependent elements |
 | `pause-hud-layout.test.mjs` | the pause dialog hides bottom HUD chrome mid-race, and the compact pause stack tightens without changing type tokens |
 | `phone-touch-surface.test.mjs` | the phone DRIVING surface as rules (`tests/helpers/css-rules.mjs`) plus `Input` in a VM: the portrait blocker's pills sit on `--tap` (52px on touch), never the 24px `--tap-min` floor; the dock's tap/hold rungs clear 44px at both width tiers and keep the 24px painted floor under HUD SIZE < 100 %; the tallest dock column (3 x 54 + gaps) fits a 390px landscape phone at 200 % and `fitHud`'s `--hud-z-dock` cap is wired as the net; every anchor inside a `--hud-z` zoom divides its `--sa*` inset; every `:hover` in `css/` is gated on `(hover: hover)`; every scroll container declares `overscroll-behavior`; double-tap zoom is refused on every layer (viewport meta, `touch-action: manipulation` reset, `#game` none, root `overscroll-behavior: none`); in-race chrome and the blocker are anchored inside the safe area. `Input.requestGyro()` in a VM: a transient rejection (no user gesture) is recorded, a later grant CLEARS `gyroDenied` and attaches once, `setSteerMode("buttons")` detaches the sensor (2026-09-01), and `gamepaddisconnected` re-reads the live pad list. The device-only cells it cannot see are in §Field notes, 2026-09-02 |
+| `ui-sheets-audit.test.mjs` | the PAUSE / SETTINGS / RESULTS sheet audit (2026-09-02) as behaviour on `mini-dom`: RESULTS top-10 and the WORLD CHAMPION panel rank by `SeasonCal.rank` countback like STANDINGS (a points tie used to crown the field-order driver), STANDINGS titles a sprint weekend by the round it is in and calls the race being driven IN PROGRESS from the pause menu; `js/game/gfx-quality.js`'s in-race two-tap reload confirm EXPIRES (`ARM_MS`) back to the real label, never carries an armed flag into the next race, clears a stale one outside a race, and puts the question on the `<select>`'s option instead of wiping the options; MUSIC & SOUND blames the master SOUND gate when that is what is shut and captions DEFAULT as "Default"; the pause → settings → sub-sheet Escape ladder, the pause button order, and the `.sheet` / `.pane` scroll rules every sheet relies on at a short viewport |
 | `title-menu-even.test.mjs` | title 2-up doors share equal flex cells and overlay columns use `--vwz`, not a pixel cap |
 | `menu-survey.spec.js` | click every button, capture every state |
 | `menu-keyboard.spec.js` | desktop menu input — wheel redirection and arrow/Home/End/PageUp/PageDown focus; an open modal outranks the screen behind it; ESCAPE IS BACK (every layer's `data-esc-close` resolves, picker/garage/title, and a sheet closes without resuming the race) |
@@ -1230,6 +1231,38 @@ what it covers.
 
 The measured history behind the testing gates. AGENTS.md carries the rules;
 this section carries the evidence so the rules survive re-litigation.
+
+**Audit-then-fix of the pause / settings / results sheets — what a mini-dom
+test could and could not settle (2026-09-02).** Six defects were CONFIRMED in
+Node and fixed with `tests/unit/ui-sheets-audit.test.mjs` red-before /
+green-after: RESULTS top-10 and the WORLD CHAMPION panel ranked by points alone
+while STANDINGS used `SeasonCal.rank` countback (a points tie crowned the
+field-order driver); STANDINGS titled a sprint weekend by the previous round and
+called the race being driven "NEXT" from the pause menu; the in-race two-tap
+reload confirm in `js/game/gfx-quality.js` never disarmed (stale "END THIS RACE
+& RELOAD?" label, and the flag outlived the race so the next race's first tap
+reloaded unasked) and wrote its question as `textContent` on the `<select>`,
+which drops the options; MUSIC & SOUND said "Music off" beside a MUSIC switch
+reading ON when the master SOUND gate was shut, captioned DEFAULT as
+"Built-in", and described the disabled MY TRACKS button instead of the selected
+source. Left as PLAUSIBLE — each needs a screenshot, in `ui` / `tiny` (neither
+run here): the RESULTS sheet carries no gap or finish-time column at all (only
+position / name / pts) — check whether a 3-lap race result reads as a
+classification without one; DSQ has no model path, so nothing renders it;
+constructors ties fall to first-to-score order (no team countback in
+`SeasonCal`, so RESULTS, STANDINGS and career agree with each other); the
+DISPLAY tab's injected order puts GRAPHICS below the renderer status paragraph —
+at `data-shape="wide"` (two-column grid) check GRAPHICS is not orphaned beside
+the paragraph; THREE PATH / SCREENSHOTS stay live under RENDERER: WEBGL2 where
+they change nothing until the renderer does; the armed question on the RENDERER
+`<select>` is an option label, so on a 393-wide portrait phone at 130% check it
+is not clipped by the select's width; "GRAPHICS: ULTRA — FULLY APPLIES AFTER A
+RELOAD" and "IN PROGRESS: ROUND 3 — …" are the longest new strings — check they
+wrap rather than ellipsise in the wide grid's ~350px column; HIDE HUD from
+SETTINGS resumes the race outright and RESTART RACE has no confirm (both
+`js/game.js`, outside this pass); with the camera picker open, Escape should
+close the picker without also pausing (the picker's handler stops propagation
+after `TopModal`'s capture pass declines it).
 
 **A probe that returns "no change" is guilty until proven innocent (2026-08-29).**
 The report was that the editor's TEAM LOGO colour did nothing on the Audi tail.
