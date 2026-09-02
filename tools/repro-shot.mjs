@@ -1,19 +1,35 @@
 #!/usr/bin/env node
 // repro-shot.mjs — render a PLAYER'S EXACT FRAME from an __apex.repro() blob.
-// @doc Render a player's exact frame from an `__apex.repro()` blob. BROKEN for COCKPIT — read the header first.
+// @doc Render a player's exact frame from an `__apex.repro()` blob. Its COCKPIT output is WRONG — read the header.
 // @skill playwright-probe
 //
 // Usage:
 //   node tools/repro-shot.mjs <repro.json> [out.png] [--w 1600] [--h 720]
 //
-// BROKEN FOR THE COCKPIT CAMERA — measured 2026-09-02. __apex.repro() sets
-// G.frozen and snaps the camera, and the cockpit rig's camera does NOT converge
-// from that state: the shot comes back showing no steering wheel, no dash and no
-// instruments, which is a viewpoint no player ever has. Six rounds of a
-// cockpit-artefact hunt died on exactly that, chasing geometry that was never in
-// frame. Until this is fixed, drive the frame by hand and let the game RUN:
+// ITS COCKPIT OUTPUT IS WRONG, CAUSE NOT ISOLATED — measured 2026-09-02. The
+// shot comes back with no steering wheel, no dash and no instruments: a
+// viewpoint no player has. Reproduced at 1280x720 and 2000x920, with and
+// without a camera tune. Six rounds of a cockpit-artefact hunt died on it,
+// chasing geometry that was never in frame.
+//
+// Three explanations have been MEASURED AND RULED OUT, so do not re-spend the
+// time on them:
+//   - not the camera. camState().eye lands on the car (eye [127.13, 0.87,
+//     -241.94] vs car px/pz 127.09/-242.14), exactly as the working flow does.
+//   - not a swallowed exception. Console and pageerror are clean; info() reports
+//     state "race", camera "cockpit".
+//   - not missing geometry. Wrapping GLX.draw for one frame shows 21 draws
+//     including the 1548-vertex steering wheel, both front wheels, the LED
+//     strip, gear digit and speed digits — every one submitted, every frame.
+//
+// So the rig is submitted from a correct camera and still is not visible. That
+// leaves renderer state or capture timing, and neither has been proven.
+//
+// UNTIL IT IS, drive the frame by hand and let the game RUN — this is the flow
+// that produces a correct cockpit frame (verified same day):
 //   race(track, tod, wx) -> go() -> camera("cockpit") -> camTune(...) -> jump(...)
-// then wait a few seconds before screenshotting. Chase/TV cameras are unaffected.
+// then wait a few seconds before screenshotting. Chase/TV cameras look fine, but
+// they have not been checked against a known-good reference either.
 //
 // The blob comes from the player: open the console and run
 //   copy(JSON.stringify(__apex.repro()))
