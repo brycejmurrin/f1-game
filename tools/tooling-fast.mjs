@@ -144,6 +144,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/factory-ai-setup.test.mjs",
   "tests/unit/career-settle.test.mjs",
   "tests/unit/season-cal.test.mjs",
+  "tests/unit/setup-screens-state.test.mjs",
   "tests/unit/incident-gate.test.mjs",
   "tests/unit/debris-step-skip.test.mjs",
   "tests/unit/camera-ride.test.mjs",
