@@ -41,6 +41,7 @@ idle agent. Reference (groups, fixtures, field notes): `docs/TESTING.md`.
 | TLX / `js/render/three/`, WGX / `js/render/webgpu/` | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the SAME command with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. **THEN DISPATCH THE REAL GPU**: `gpu-census.yml` on `macos-latest` (Apple/Metal, ~3 min) and read its Verdict step, which FAILS on GPU errors, failed env-probe faces, or `softAdapter` true on hardware. A software probe run is not evidence about a player's machine — two shipped defects were invisible to every software test and found the hour a real GPU was first used (`docs/research/CI-RENDERING-PERFORMANCE.md` §There IS a real GPU) |
 | engine / physics / `js/game.js` | the groups `pick-tests` names, CAPPED at two browser groups: run the two most specific, name the rest as not-run in the PR |
 | geometry pushed to the deploy branch | the above + `npm run test:sweeps` |
+| a desktop-viewport browser group this box cannot time (boots run 54–107 s here, `docs/TESTING.md` §Field notes 2026-09-02) | dispatch `ci.yml` with `group: <name>` — the group runs on the 4-shard runner matrix; read the four Smoke jobs |
 
 Session shape — this is what controls both wall time and waiting:
 
