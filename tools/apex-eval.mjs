@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // apex-eval — boot the game headless and evaluate an __apex expression, print JSON.
+// @doc Boot the game headless, evaluate one `__apex` expression, print JSON: `apex-eval.mjs monza '__apex.corners()'`.
+// @skill playwright-probe
 //
 //   node tools/apex-eval.mjs <trackId> "<expr>"
 //   node tools/apex-eval.mjs monaco "a.camera()"

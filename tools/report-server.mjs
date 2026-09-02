@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 "use strict";
+// @doc Localhost half of `apex-report.js`: serves the tree to a PHONE and collects the bundle it posts back.
+// @skill mcp-probe
 /**
  * report-server — serve this working tree to a phone and collect its reports.
  *

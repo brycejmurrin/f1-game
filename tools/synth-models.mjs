@@ -1,4 +1,6 @@
 /*
+ * @doc Procedural AX26 model catalog for `assets.mjs bake-synthetic-models` — buildings, grandstands, industrial; no network.
+ * @skill asset-pack
  * Apex 26 — procedural AX26 model catalog.
  *
  * AUTHOR-TIME ONLY (imported by tools/assets.mjs bake-synthetic-models).

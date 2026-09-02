@@ -5,21 +5,23 @@
 // disabled (no rapier fetch, zero steps), spawn debris from a real wall hit,
 // respect the pool cap, and replay a seeded episode bit-for-bit.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
 async function startRace(page, id) {
   await page.evaluate((t) => window.__apex.race(t, "day", "dry"), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 20000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.go());
 }
 
 async function startTT(page, id) {
   await page.evaluate((t) => window.__apex.tt(t, "day"), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 20000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.go());
 }
 

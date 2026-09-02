@@ -150,6 +150,100 @@ function ensureScenery(idx) {
   if (!def || sceneryResident(def.id)) return Promise.resolve();
   return loadBackendScripts([SCENERY_DIR + "/" + def.id + ".js"], []);
 }
+// LAZY_DATA (tools/manifest.cjs). The Jolpica/OpenF1 hub — 154 KB behind ONE
+// menu button, which a session that never opens DATA runs no byte of. Only two
+// names escape js/data/: DataHub.init/.open here, and a `typeof F1API` read in
+// js/game/apex.js that already guards itself. Unlike the scenery closures —
+// consumed synchronously by Tracks.build() on the next line — nothing outside
+// reads a Data* global, so this needs no gate beyond the button itself.
+const DATA_FILES = [
+  "js/data/api.js",
+  "js/data/telemetry.js",
+  "js/data/export.js",
+  "js/data/schedule.js",
+  "js/data/standings.js",
+  "js/data/lastrace.js",
+  "js/data/live.js",
+  "js/data/hub.js",
+];
+// hub.js calls Data*.create() at EVAL time, so every tab module lands first.
+// DERIVED, not listed: a hand-written copy of "everything, then the hub" has
+// no failure mode except drifting from the roster above. The manifest derives
+// it the same way; load-order.test.mjs asserts both.
+const DATA_HUB = "js/data/hub.js";
+const DATA_EDGES = DATA_FILES.filter((f) => f !== DATA_HUB).map((f) => [f, DATA_HUB]);
+// Memoised on the PROMISE, not on a boolean: two fast taps on DATA must not
+// inject the bundle twice, and the second tap has to await the first load
+// rather than call DataHub.open() while hub.js is still in flight.
+let dataHubLoad = null;
+function ensureDataHub() {
+  if (dataHubLoad) return dataHubLoad;
+  dataHubLoad = loadBackendScripts(DATA_FILES, DATA_EDGES).then(() => {
+    // Bare global, not window.DataHub: hub.js is a script-level `const`, a
+    // lexical binding that is never a window property. inject() resolves even
+    // on error, so this is the ONLY place a miss is visible; null the memo so
+    // a later tap retries instead of latching the failure for the session.
+    if (typeof DataHub === "undefined") {
+      Log.warn("data", "the data hub bundle did not load — DATA stays closed");
+      dataHubLoad = null;
+      return false;
+    }
+    DataHub.init(els.datahub);
+    return true;
+  });
+  return dataHubLoad;
+}
+
+// LAZY_NET (tools/manifest.cjs) — the 241 KB WebRTC stack. Loaded from the ONE
+// player-facing entry (VS FRIEND) and, at boot, whenever the agent surface is
+// wanted: js/game/apex.js reads NetTransport / NetSession / NetSnapshot and 22
+// netLobby methods directly and drives the multiplayer specs, so tying the two
+// together keeps every test and dev session behaving exactly as before and
+// confines this change to players, who load neither.
+const NET_FILES = [
+  "js/net/nostr.js",
+  "js/net/rendezvous.js",
+  "js/net/sdp.js",
+  "js/net/qr.js",
+  "js/net/scan.js",
+  "js/net/transport.js",
+  "js/net/handshake.js",
+  "js/net/snapshot.js",
+  "js/net/session.js",
+  "js/net/netplay.js",
+  "js/net/lobby.js",
+];
+// Same pairs as manifest LAZY_NET_EDGES — load-order.test.mjs asserts equality.
+const NET_EDGES = [
+  ["js/net/snapshot.js", "js/net/session.js"],
+  ["js/net/sdp.js", "js/net/handshake.js"],
+  ["js/net/qr.js", "js/net/lobby.js"],
+  ["js/net/rendezvous.js", "js/net/lobby.js"],
+  ["js/net/nostr.js", "js/net/rendezvous.js"],
+  ["js/net/scan.js", "js/net/lobby.js"],
+];
+let netLoad = null;
+function ensureNet() {
+  if (netLoad) return netLoad;
+  netLoad = loadBackendScripts(NET_FILES, NET_EDGES).then(() => {
+    if (typeof NetPlay === "undefined" || typeof NetLobby === "undefined") {
+      // inject() resolves on error, so this is the only place a miss shows.
+      // Keep the stubs (the game stays playable solo) and null the memo so a
+      // second attempt can succeed rather than latching for the session.
+      Log.warn("net", "the multiplayer bundle did not load — VS FRIEND unavailable");
+      netLoad = null;
+      return false;
+    }
+    netPlay = NetPlay.create(G);
+    netLobby = NetLobby.create(G);
+    // The real lobby binds #vsfriend here — the boot position the stub's inert
+    // wire() stood in for. Once, because ensureNet() memoises on the promise.
+    netLobby.wire();
+    return true;
+  });
+  return netLoad;
+}
+
 function wantAgentSurface() {
   if (typeof window !== "undefined" && window.__TEST_MODE) return true;
   try { if (localStorage.getItem("apex26.devApi") === "1") return true; } catch (_) { /* blocked */ }
@@ -168,6 +262,7 @@ function preloadThreeVendor() {
     document.head.appendChild(el);
   }
 }
+let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
   let pref = null;
   try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
@@ -176,8 +271,8 @@ try {
   // navigator.gpu is on, WGX/TLX still refuse, and writing webgl2 made the
   // RENDERER button bounce back every refresh.
   let skipClaim = false;
-  try { skipClaim = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
-    if (skipClaim) sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { skipClaim = true; /* cannot persist a skip: never claim the canvas */ }
+  try { _claimSkipped = skipClaim = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
+    if (skipClaim) sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { skipClaim = _claimSkipped = true; /* cannot persist a skip: never claim the canvas */ }
   // THE BOOT CANARY — what lets a PHONE hold a non-default backend. Both were
   // refused whenever GLX.isMobile, after TLX on iOS rendered a flat pale ground
   // with the lower half black. But the menu is DOM over the canvas: it survives a
@@ -258,9 +353,9 @@ if (!gfx) {
       // when THIS boot started means the previous reload's GLX.init failed
       // too — WebGL2 is gone from this tab, and reloading again loops forever
       // (measured 236 reloads/64 s, Vulkan-only config). Fall through to #nogl.
-      try { const prev = sessionStorage.getItem("apex26.gfxClaimFail");
+      try { if (!_claimSkipped) {
         sessionStorage.setItem("apex26.gfxClaimFail", "1");
-        skipped = prev !== "1" && sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } catch (_) { /* blocked storage: no skip, no reload */ }
+        skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } } catch (_) { /* blocked storage: no skip, no reload */ }
     }
     if (skipped) {
       try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
@@ -1303,7 +1398,7 @@ const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shad
 // career with that team. That broke the isolation described above in both
 // directions, and the garage UI made it costly: setup-ui gates its rules on
 // G.careerOwned() (Career.owned(), which IS inCareer()-gated), so a GP garage
-// correctly offered FREE BUILD, the flat 600 cr cap and no R&D lock — and then
+// correctly offered FREE BUILD, the flat 780 cr cap and no R&D lock — and then
 // wrote the result straight into career.fitted. Fitting every top option under
 // FREE BUILD therefore maxed out the CAREER car for nothing: no credits spent, no
 // parts researched, the fitted cap bypassed, and nothing ever re-validates a
@@ -1677,7 +1772,7 @@ function makeCars() {
         // active aero: commanded mode, the 0..1 flap blend, and whether the
         // road ahead currently allows X-mode at all (see xStraightAhead).
         xOn: false, aeroX: 0, xArmed: false,
-        lapStart: 0, lapTime: 0, best: Infinity, totalT: 0,
+        lapTime: 0, best: Infinity, totalT: 0,
         finished: false, finishT: 0, finPos: 0,
         // Retirement (js/game/reliability.js). `retired`/`dnf` are the record;
         // dnfAt/dnfWhy are the plan Reliability.arm() draws at the green light.
@@ -3169,9 +3264,9 @@ aeroZ = AeroZones.create(G);
 // Tyre marks (js/game/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create(G);
 // Photo mode (js/game/photomode.js).
-const { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
+const { updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/game/tuner.js).
-const { buildLightTunePanel, refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
+const { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 // CAMERA TUNER panel UI (js/game/cam-tuner.js) — per-camera-mode framing offsets.
 const { closeCamTuner } = CamTunerPanel.create(G);
 // Steering-tuning sliders + presets (js/game/steer-tuning.js).
@@ -3185,12 +3280,42 @@ DebrisWorld.create(G);
 // exceptions). Inert (owns() is a Set read) unless a flag is on AND the debris
 // side-world is live. DEFAULT ON per feature (apex26.r2Airborne/r3Contact/c1Pileup).
 const incidentSim = IncidentSim.create(G);
-// Two-player racing (js/net/netplay.js). Wholly inert until a session starts:
-// owns() is an identity check against a null, and tick() returns immediately.
-const netPlay = NetPlay.create(G);
-// The VS FRIEND lobby (js/net/lobby.js) — owns the #vsfriend screen and the
-// two code pastes that stand in for a signalling server.
-const netLobby = NetLobby.create(G);
+// Two-player racing (js/net/netplay.js) and the VS FRIEND lobby
+// (js/net/lobby.js) — LAZY_NET, so neither exists until ensureNet() runs.
+// These are `let`, and every reader goes through the G.netPlay / G.netLobby
+// GETTERS, so the swap below is invisible to all 25 call sites.
+//
+// THE STUBS ARE NOT PLACEHOLDERS, THEY ARE THE SOLO BEHAVIOUR. netPlay is
+// called at 20 sites here and only three are `netPlay && …` guarded (tick() is
+// in the frame loop), so an absent object is a crash mid-race — which is why
+// this is a null object rather than 17 new guards. The values are the real
+// module's answers with `active` false, and two of them are TRUE:
+// ownsRaceControl/ownsClassification are `!active || role === "host"`, i.e. a
+// game with no session owns everything. Returning false there would silently
+// stop a solo race classifying its own result — the one mistake in this file
+// that no crash would announce, and what net-stub-surface.test.mjs pins.
+let netPlay = {
+  active: () => false, owns: () => false, role: () => null,
+  ownsRaceControl: () => true, ownsClassification: () => true,
+  awaitingStart: () => false, awaitingResult: () => false,
+  rivalDriverIds: () => [], peerLaps: () => [], peerResult: () => null,
+  predict: () => null, status: () => ({ active: false, role: null }),
+  tick: () => {}, stop: () => {}, hostStart: () => {},
+  start: () => ({ ok: false, error: "no_net", message: "Multiplayer is not loaded." }),
+  reportLap: () => {}, reportResult: () => {}, reportCaution: () => {},
+  reportQuali: () => {}, reportQualiLive: () => {},
+  sendEvent: () => false, onEvent: () => false,
+};
+let netLobby = {
+  // wire() is called at boot and open() from VS FRIEND. Inert wire() is
+  // correct: there is no #vsfriend handler to bind until the real lobby lands,
+  // and ensureNet() calls the real wire() before it hands over.
+  wire: () => {}, open: () => {}, close: () => {}, cancel: () => {},
+  abortQuali: () => {}, roomChanged: () => {}, setReady: () => {},
+  peerSeats: () => [], roomState: () => ({ open: false, role: null, peers: [] }),
+  status: () => ({ role: null, connected: false }),
+  reportQuali: () => {}, reportQualiLive: () => {},
+};
 // C2 visual suspension (js/game/bodyattitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
 const bodyAttitude = BodyAttitude.create(G);
@@ -3271,7 +3396,7 @@ function quitToMenu() {
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
   closeCamTuner(false); exitPhotoMode();
-  state = "menu"; paused = false;
+  state = "menu"; paused = false; raceCtl.reset();   // no SC/VSC left flying for the menu's cautionInfo()/otEnabled() readers
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -3455,7 +3580,6 @@ function update(dt) {
       netStart = null;              // consumed; never carry it into the next race
       announce("LIGHTS OUT!", 1.4);
       if (soundOn) GameAudio.lightsOut();
-      cars.forEach((c) => { c.lapStart = 0; });
       // ONE STANDING LAP, from the line. It used to launch at racing speed
       // because the simulated field is modelled on a flying lap, and timing a
       // standing lap against a flying one loses you the launch by construction.
@@ -3557,13 +3681,12 @@ function update(dt) {
 
 // Shift a car along the track. Both s and prog advance together so multi-pass
 // pairContact (which keys on prog) sees the push immediately — skipping human
-// prog left penLong stale across relaxation passes. _prevS advances by the same
-// d so the next updateCar's human ds = s − _prevS does not double-count the push
-// into prog (AI prog is speed*dt anyway; keeping _prevS locked is harmless).
+// prog left penLong stale across relaxation passes. _prevS is NOT moved: the
+// lap-line test compares c.s to _prevS, and moving both hid a shove across the
+// line (re-cross = a SECOND lap; forward shove = none). _pushD banks the push.
 function shiftLong(c, d) {
   c.s = wrapS(c.s + d);
-  c.prog += d;
-  if (c._prevS != null) c._prevS = wrapS(c._prevS + d);
+  c.prog += d; c._pushD = (c._pushD || 0) + d;
   _colShifted = true;
 }
 
@@ -4957,13 +5080,14 @@ function updateCar(c, dt, ranked) {
     oldS = wrapS(c.s - ds);
   }
 
+  const dLine = ds;   // signed change in s, contact shove INCLUDED — the lap-line test needs it
   if (c.human) {
-    c.prog += ds;
+    c.prog += ds - (c._pushD || 0);   // the shove was already banked by shiftLong
   } else {
     ds = c.speed * dt;
     c.prog += ds;
   }
-  c.totalT += dt;
+  c._pushD = 0; c.totalT += dt;
   c.lapTime += dt;
   // OUR QUALIFYING LAP, AS IT HAPPENS. Everyone else in a friend race is
   // sitting on a disabled button while this runs, and a clock is the whole
@@ -5018,7 +5142,7 @@ function updateCar(c, dt, ranked) {
   // road) and crossing again added a SECOND lap, and `c.finished` could fire a
   // full lap early. The backward branch below restores the symmetry `prog`
   // already had.
-  if (ds > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
+  if (dLine > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
     c.lap++;
     // Retained so the backward branch can put the clock back. Without it a
     // re-crossing records the few tenths since the reset as a completed lap —
@@ -5054,11 +5178,10 @@ function updateCar(c, dt, ranked) {
       c.finishT = raceT;
       if (c.isPlayer) announce("FINISH!", 2);
     }
-  } else if (ds < 0 && oldS < track.total * 0.5 && c.s > track.total * 0.5) {
+  } else if (dLine < 0 && oldS < track.total * 0.5 && c.s > track.total * 0.5) {
     // Backward over the line: give the lap back and put the clock where it was,
     // so the next forward crossing re-times the SAME lap rather than a sliver.
-    // Only the player can get here — updateCar overwrites `ds` with
-    // `c.speed * dt` for every AI car, so their `ds` is never negative.
+    // (An AI car gets here only via a contact shove — dLine is the real move.)
     if (c.lap > 0) {
       c.lap--;
       c.lapTime = c._lapTimeAtLine != null ? c._lapTimeAtLine : c.lapTime;
@@ -5172,6 +5295,7 @@ function rescuePlayer(c) {
   // Pace-scaled restore floor (same shape as coast()); never above vTop().
   c.speed = Math.min(vTop(), Math.max(c.speed, 16 * Math.max(PACE, 0.05)));
   c.px = smp.p[0]; c.pz = smp.p[2];
+  c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head;   // re-seed the render anchors (as retireCar does) or the car smears from the wall for a frame
   c.boostOn = false; c.deploying = false;
   c.xOn = false; c.aeroX = 0; c.xArmed = false;   // rescue drops back to Z-mode
   c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.rescueT = 0;
@@ -5728,6 +5852,10 @@ const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0
 const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
 const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
 const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
+// depthBias [factor, units]: the start line is a DECAL laid on the asphalt, so
+// bias its depth toward the camera rather than relying on the small geometric
+// lift alone — that lift is fixed in metres and loses to depth quantisation at
+// range, which is what makes a decal shimmer and drop out as you approach.
 // depthBias [factor, units]: the start line is a DECAL laid on the asphalt, so
 // bias its depth toward the camera rather than relying on the small geometric
 // lift alone — that lift is fixed in metres and loses to depth quantisation at
@@ -7095,15 +7223,19 @@ function render(dt) {
     // 55% duty) and STEADY at night — a car's rear faces receive none of the
     // downward-aimed floodlight beams, so a car directly ahead at night was a
     // pitch-black void filling the windscreen; the steady red gives every rear
-    // an anchor light. Brightness tracks live ERS charge, and it flashes the
-    // same FIA pattern while harvesting/deploying, as on a real push lap.
+    // an anchor light. Brightness still tracks live ERS charge; only the
+    // BRIGHTNESS does, never the on/off — see the strobe note below.
     // ON THE GRID they strobe whatever the weather: a stationary 2026 car on
     // full charge shows the "MGU-K recharging" fast flash, which is the blinking
     // in every real pre-race grid shot.
     const _ledStrobe = ((raceT * 4.4) % 1) < 0.55;
-    const _ledDeploy = isErsDeploying(c);
+    // Once racing, the ONLY thing that flashes is the wet rain light. The
+    // MGU-K pattern is a STATIONARY-car signal — the note above says so — so
+    // strobing it whenever the driver deploys ERS ran it through most of a
+    // racing lap, and the pre-race blinking never appeared to stop. Night dry is
+    // now steady whenever it draws, which is what the comment already claimed.
     if (preGrid ? gridFlash
-                : ((wet && _ledStrobe) || (!wet && night && (!_ledDeploy || _ledStrobe)))) {
+                : ((wet && _ledStrobe) || (!wet && night))) {
       // Rivals: 40 m gate like brake rings. Player always draws. The grid spans
       // 22 x 8 m, so pre-race it opens up or the field ahead of you sits dark.
       const ldx = tmpP[0] - camEye[0], ldy = tmpP[1] - camEye[1], ldz = tmpP[2] - camEye[2];
@@ -7685,7 +7817,8 @@ if ($("mb-vs")) $("mb-vs").onclick = () => {
   // The peer-to-peer lobby starts the race once both sides agree.
   setFlow("gp"); session = "race";
   restoreFreePlaySelection();
-  netLobby.open();
+  // The bundle lands before the screen does; ensureNet() wires the real lobby.
+  ensureNet().then((ok) => { if (ok) netLobby.open(); });
   if (soundOn) GameAudio.uiSelect();
 };
 $("mb-tt").onclick = () => {
@@ -7773,7 +7906,12 @@ function refreshCareerButton() {
 $("mb-career").onclick = () => openCareerSlots();
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };
-$("mb-data").onclick = () => { DataHub.open(); if (soundOn) GameAudio.uiSelect(); };
+$("mb-data").onclick = () => {
+  // The click sound fires immediately — the bundle is one network round trip
+  // on a cold tap and the button must not feel dead while it lands.
+  if (soundOn) GameAudio.uiSelect();
+  ensureDataHub().then((ok) => { if (ok) DataHub.open(); });
+};
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; };
 // Same sheet from the pause menu's SETTINGS page — the controls reference is
 // most wanted mid-session, not on the title screen. #howtoplay outranks
@@ -8812,7 +8950,9 @@ Input.onPointerKindChange(syncPointerKind);
     + (Input.touchControlsNeeded() ? ({buttons:"tap arrows to steer",touch:"drag to steer"}[steerMode] || "tilt to steer") : classics + " classics");
 }
 Input.setSteerMode(steerMode);
-DataHub.init(els.datahub);
+// DataHub.init(els.datahub) used to run here. It moved into ensureDataHub(),
+// which the DATA button awaits — js/data is LAZY_DATA now and there is no
+// DataHub at boot to initialise.
 $("pm-steer").textContent = steerLabel();
 $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();
@@ -8847,6 +8987,13 @@ requestAnimationFrame(tick);
 window.__apex = null;
 async function bootAgentSurface() {
   if (!wantAgentSurface()) return;
+  // js/net comes WITH the agent surface. apex.js reads NetTransport /
+  // NetSession / NetSnapshot at eval-adjacent call sites and drives 22
+  // netLobby methods the stub does not carry, so a dev session or a spec that
+  // got __apex without the real net would fail on the multiplayer hooks
+  // instead of on anything this change is about. Awaited BEFORE apex.js so
+  // ApexApi.create(G) sees the real objects through the G getters.
+  await ensureNet();
   await loadBackendScripts(AGENT_FILES, AGENT_EDGES);
   if (typeof ApexApi !== "undefined") window.__apex = ApexApi.create(G);
 }
@@ -8878,7 +9025,13 @@ async function raceAssets() {
 }
 
 // Lobby buttons + the #vs= invite-link handler. Last, so every element it
-// binds to exists and the G facade is fully built.
+// binds to exists and the G facade is fully built. This is the STUB's no-op
+// now — there is nothing to bind until js/net lands, and ensureNet() calls the
+// real wire() the moment it does. Kept as a call so the boot sequence still
+// reads the same and re-eagering the lobby needs no edit here.
 netLobby.wire();
+// A #vs= invite link is the one way into multiplayer that is NOT a button
+// press, so it has to pull the bundle itself — the stub's wire() cannot see it.
+if (typeof location !== "undefined" && /[#&]vs=/.test(location.hash)) ensureNet();
 
 })();

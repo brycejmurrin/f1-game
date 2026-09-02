@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges.
+// @skill check-changes
 /**
  * scan-globals.mjs — derive the REAL global-reference graph of the IIFE build.
  *
@@ -12,7 +14,8 @@
  * Every js/ file is a "use strict" IIFE assigning one global; load order is
  * hand-maintained in tools/manifest.cjs with HARD_EDGES naming the eval-time
  * dependencies. Nothing derived those edges from the code until now. This
- * scanner parses every FULL + DEFERRED + LAZY_AGENT + LAZY_RACE + LAZY_SCENERY file with espree, resolves references
+ * scanner parses every FULL + DEFERRED + LAZY_AGENT + LAZY_RACE + LAZY_SCENERY
+ * + LAZY_DATA + LAZY_NET file with espree, resolves references
  * with eslint-scope, and reports per file:
  *
  *   assigns      globals the file creates AT EVAL TIME. Two idioms:
@@ -269,7 +272,8 @@ export function listFiles() {
   // and game.js read. Leaving a lazy roster out of the scan does not make the
   // read safe, it makes it invisible.
   const lazy = [...(manifest.LAZY_AGENT || []), ...(manifest.LAZY_RACE || []),
-    ...(manifest.LAZY_SCENERY || [])];
+    ...(manifest.LAZY_SCENERY || []), ...(manifest.LAZY_DATA || []),
+    ...(manifest.LAZY_NET || [])];
   return {
     full: manifest.FULL.slice(),
     deferred: Object.fromEntries(Object.entries(manifest.DEFERRED).map(([k, v]) => [k, v.slice()])),

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // ab-lighting — A/B harness for every tunable lighting constant. For each knob
+// @doc A/B harness for every tunable lighting constant — each knob rendered committed vs swapped; out → `scratch/captures/`.
+// @skill lighting-tuner
 // it renders the SAME scene twice: A = the committed code, B = the same code
 // with the knob's exact source string swapped for an alternate value (served
 // from memory — the working tree is never touched). It then measures both
@@ -481,7 +483,7 @@ async function main() {
     console.log(`  ${knob.file}:  ${knob.find}`);
     console.log(`  ->             ${replacement}`);
     console.log(`  catalog self-synced (find<->b swapped); index.html cache ?v=${ver} -> ?v=${ver + 1}`);
-    console.log(`  next: re-render to confirm (run ${knob.id}), then npm run test:ab before committing`);
+    console.log(`  next: re-render to confirm (run ${knob.id}), then npm run test:gfx (lighting-ab) before committing`);
     return;
   }
 

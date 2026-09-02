@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // verify-change.mjs — ONE command that runs what a change needs, serialized
+// @doc ONE command: fast gate (verify-track, graph-parity, tooling-fast, bump-cache --check) + `test-bg` batches → one verdict.
+// @section runner
 // correctly, and hands back one verdict.
 //
 // Before this tool the verification ritual was five manual steps spread over
@@ -180,7 +182,7 @@ const finish = (verdict, extra = {}) => {
   else {
     say(`verdict: ${verdict} ${loadavgLine()}`);
     if (out.notRun.length) say(`not run: ${out.notRun.join(", ")}`);
-    if (plan.sweepsBeforeDeployPush) say("deploy-push reminder: js/track|circuits|tools changed — run test:sweeps on the union first (.claude/skills/deploy-merge)");
+    if (plan.sweepsBeforeDeployPush) say("deploy-push reminder: js/track|circuits|tools changed — run test:sweeps on the union first (.claude/skills/check-changes/references/deploy.md)");
   }
   process.exit(verdict === "pass" ? 0 : verdict === "fail" ? 1 : 2);
 };

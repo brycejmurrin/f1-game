@@ -12,7 +12,7 @@
 // Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
 // apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
 // 50" arrives with the car's state and the retained log ring beside it.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 // All circuits — every track now carries elevations data.
 const ELEVATION_TRACKS = [
@@ -39,9 +39,10 @@ const CLIMB_LAUNCH = 10;   // m/s, low-speed run at the steepest climb
 
 async function startRace(page, id) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate((t) => window.__apex.race(t, "day", "dry"), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   // info().track goes non-null as soon as the track OBJECT exists, which is before
   // its elevation is necessarily in place. Scanning that window reads the flat
   // default tangent, so the "this track really does descend" assertion saw dn = 0
@@ -79,7 +80,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
 
   test("banking pivots around the centreline with smooth edge transitions", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     const audits = await page.evaluate(() => {
       return ["zandvoort", "madrid"].map((id) => {
         const def = Tracks.LIST.find((entry) => entry.id === id);
@@ -108,7 +109,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
 
   test("Zandvoort banking peaks at Hugenholtz and Arie Luyendyk", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     const result = await page.evaluate(() => {
       const def = Tracks.LIST.find((entry) => entry.id === "zandvoort");
       const track = Tracks.buildCenterline(def);
@@ -138,7 +139,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
 
   test("Madrid converts La Monumental's 24 percent bank to degrees", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     const rollDeg = await page.evaluate(() => {
       const def = Tracks.LIST.find((entry) => entry.id === "madrid");
       const track = Tracks.buildCenterline(def);
@@ -152,7 +153,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
 
   test("bank roll matches the road surface slope", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     const result = await page.evaluate(() => {
       const def = Tracks.LIST.find((entry) => entry.id === "madrid");
       const track = Tracks.buildCenterline(def);

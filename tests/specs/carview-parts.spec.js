@@ -1,10 +1,12 @@
 // @ts-check
 // The isolated car viewer exposes every parts category for manual audits.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 test("car viewer exposes controls for all twelve parts categories", async ({ page }) => {
   await page.goto("/tools/carview.html?team=mclaren");
-  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { polling: 100, timeout: 15_000 });
+  // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { polling: 100, timeout: BOOT_MS });
 
   for (const id of ["engine", "aero", "suspension", "brakes", "tyres", "ers",
                     "gearbox", "fuel", "exhaust", "floor", "cockpit", "wheels"]) {
@@ -16,7 +18,7 @@ test("car viewer exposes controls for all twelve parts categories", async ({ pag
 
 test("car viewer exposes a frame sequence that advances after state changes", async ({ page }) => {
   await page.goto("/tools/carview.html?team=ferrari&brakes=sig_ferrari_brembo");
-  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { polling: 100, timeout: 15_000 });
+  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { polling: 100, timeout: BOOT_MS });
 
   const before = await page.evaluate(() => window.CARVIEW.frame);
   expect(typeof before).toBe("number");
@@ -26,7 +28,7 @@ test("car viewer exposes a frame sequence that advances after state changes", as
 
 test("car viewer exposes controls for grounded runtime effect states", async ({ page }) => {
   await page.goto("/tools/carview.html?team=mclaren");
-  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { polling: 100, timeout: 15_000 });
+  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { polling: 100, timeout: BOOT_MS });
 
   await expect(page.locator("#ui-exhaust-flame")).toBeVisible();
   await expect(page.locator("#ui-brake-glow")).toBeVisible();
@@ -35,7 +37,7 @@ test("car viewer exposes controls for grounded runtime effect states", async ({ 
 
 test("car viewer effect API updates state on a synchronized frame", async ({ page }) => {
   await page.goto("/tools/carview.html?team=mclaren");
-  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { polling: 100, timeout: 15_000 });
+  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { polling: 100, timeout: BOOT_MS });
 
   const before = await page.evaluate(() => window.CARVIEW.frame);
   const accepted = await page.evaluate(() => window.CARVIEW.set({

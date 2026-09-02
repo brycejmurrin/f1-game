@@ -211,3 +211,15 @@ test("a seat-clash move is in-memory only — the lobby never writes the saved t
   assert.ok(!/G\.store\.set\("driver"/.test(SOURCE), "no store.set(\"driver\") in the lobby");
   assert.match(SOURCE, /IN-MEMORY only, deliberately/);
 });
+
+test("a MY TEAM (custom) car is moved off in the room, whatever the player's rank", () => {
+  // makeCars() builds the custom car only for the local player who picked it,
+  // so a peer's grid holds no slot (and no wireId) for it: every snapshot from
+  // a custom-team player was dropped and the rival sat frozen on the grid.
+  assert.match(SOURCE, /const onCustom = !!\(mineTeam && mineTeam\.custom\);/);
+  assert.match(SOURCE, /const blocked = onCustom \? peerSeats\(\) : blockingSeats\(\);/,
+    "a custom host must move too — blockingSeats() is empty for rank 0");
+  assert.match(SOURCE, /firstFreeSeat\(onCustom \? null : mine\.team, blocked\)/,
+    "never prefer the custom team itself when choosing where to move");
+  assert.match(SOURCE, /MY TEAM cars only exist on your own screen/);
+});

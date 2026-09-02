@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /* Apex 26 — per-circuit vertex + diagnostics dump, for before/after diffing.
+ * @doc Per-circuit vertex + model-diagnostics dump for exact before/after diffing (`--diff before.json`).
+ * @skill debug-tracks
  *
  * The check that a start-line move did NOT disturb the dressed world: nothing
  * physical changes, so every prop/road/terrain count must come back IDENTICAL.

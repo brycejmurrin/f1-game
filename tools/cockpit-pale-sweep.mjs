@@ -1,4 +1,6 @@
 // cockpit-pale-sweep — does anything in the COCKPIT view read as a blank pale
+// @doc Does anything in the COCKPIT read as a blank pale slab? Ray-casts the real Car3D cockpit from the driver's eye.
+// @skill debug-cameras / car-viewer
 // slab? Ray-casts the real Car3D cockpit build from the driver's eye and
 // reports every hit whose vertex colour is pale, bucketed by colour with its
 // distance and screen angle. Offline (node:vm over the real source, no

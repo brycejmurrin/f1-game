@@ -1,4 +1,6 @@
 // Quick refactor gate — loads the game headless ONCE and probes the critical
+// @doc Fast refactor gate: boots the game once and probes the critical paths (globals, race, physics, lighting) in ~30-60 s.
+// @skill check-changes
 // paths end-to-end in ~30-60s, with zero test-runner overhead:
 //   page loads with no console errors / page errors,
 //   __apex + the named page globals exist,

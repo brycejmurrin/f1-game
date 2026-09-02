@@ -1,3 +1,5 @@
+// @doc Physics stability probes: `check-physics.mjs <bank|grip|roadfollow|steer>` — no-NaN, forward motion, steering authority.
+// @skill tune-physics
 import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
 import { fileURLToPath } from "node:url";
 

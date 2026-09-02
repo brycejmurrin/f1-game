@@ -1,15 +1,28 @@
 #!/usr/bin/env node
 // bump-cache.mjs — deterministic per-file cache busting plus shell generation.
+// @doc Content-hash cache busting: `--check` verifies every `?v=` and the shell generation; `--apply` refreshes them.
+// @skill bump-cache
 //
 // Every local JS/CSS URL in index.html carries a short SHA-256 of that file's
 // contents. Unchanged assets therefore keep stable URLs (and browser/V8 caches)
-// across releases. version.json and <meta name="apex-build"> still advance as a
-// monotonic shell/service-worker generation.
+// across releases. version.json and <meta name="apex-build"> are the
+// shell/service-worker generation.
+//
+// THE GENERATION IS STAMPED BY THE DEPLOY, NOT COMMITTED (2026-09-01).
+// pages.yml runs `--apply --at <2000 + commit count> --root _site` while
+// staging, so the number is monotonic under fast-forward pushes and unique per
+// tip by construction. The committed version.json/meta are a dev placeholder
+// that only has to stay CONSISTENT (the load-order guard); `--apply` therefore
+// KEEPS the committed build and only rehashes tags. Before this, 34 of 105
+// builds were introduced by two or three commits and every deploy merge
+// conflicted on exactly these two files.
 //
 //   node tools/bump-cache.mjs                  # check (the default mode)
 //   node tools/bump-cache.mjs --since <ref>    # check incl. "assets changed since ref"
-//   node tools/bump-cache.mjs --apply [--at N] [--merge <ref>]
-//   ... --json
+//   node tools/bump-cache.mjs --apply          # rehash tags; build unchanged
+//   node tools/bump-cache.mjs --apply --at N   # rehash + set the generation to N (the deploy)
+//   node tools/bump-cache.mjs --apply --advance [--merge <ref>]   # the old max+1 behaviour
+//   ... --json  [--root <dir>]
 // (--check is accepted for readability but not parsed — checking IS the
 // no-flag default; only --apply changes anything.)
 import { execFileSync } from "node:child_process";
@@ -21,7 +34,12 @@ import { fileURLToPath } from "node:url";
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(name);
 const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; };
-const ROOT = opt("--root") || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// --root is RESOLVED: pages.yml passes the relative `_site`, and the asset-path
+// guard below compares against an absolute prefix — a relative ROOT rejected
+// every tag ("Invalid versioned asset path: css/tokens.css") and failed the
+// first stamped deploy (run 1873, 2026-09-01). The unit test used an absolute
+// temp dir and never saw it; it now stamps through a relative --root too.
+const ROOT = opt("--root") ? path.resolve(opt("--root")) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const INDEX = path.join(ROOT, "index.html");
 const VERSION = path.join(ROOT, "version.json");
 const TAG_RE = /\b(src|href)="([^"?#]+)\?v=([A-Za-z0-9._-]+)"/g;
@@ -102,7 +120,10 @@ function apply() {
       { cwd: ROOT, encoding: "utf8" })).build;
     candidates.push(Number(theirs) || 0);
   }
-  const next = opt("--at") ? Number(opt("--at")) : Math.max(...candidates) + 1;
+  const current = Number.isInteger(build) && build > 0 ? build : Math.max(...candidates);
+  const next = opt("--at") ? Number(opt("--at"))
+    : flag("--advance") ? Math.max(...candidates) + 1
+    : current;
   if (!Number.isInteger(next) || next < 1) throw new Error("--at must be a positive integer");
   let tagCount = 0;
   let output = html.replace(TAG_RE, (_all, attr, rel) => {

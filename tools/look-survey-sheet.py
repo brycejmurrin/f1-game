@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# @doc 4×5 tod×weather contact sheet from `artifacts/lighting/shots/<id>/` → `docs/look-survey/<id>_grid.png`; `--ready`.
+# @skill mcp-probe
 """Build a 4×5 tod×weather contact sheet from look-survey PNGs.
 
     python3 tools/look-survey-sheet.py bahrain

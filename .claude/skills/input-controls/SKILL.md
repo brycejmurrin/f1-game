@@ -41,7 +41,7 @@ migration are different acts — both are usually needed. See
   (`docs/research/PLATFORM-INPUT-NOTES.md`).
 
 ```sh
-node tools/test-bg.mjs steering
+node tools/test-bg.mjs input
 ```
 
 ## Load on demand

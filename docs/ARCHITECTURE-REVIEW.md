@@ -43,7 +43,7 @@ than behaviour:
 |---|---|
 | `tests/unit/load-order.test.mjs` | `index.html` == `tools/manifest.cjs`, including `HARD_EDGES` and the three-way `DEFERRED`/`BACKEND_FILES`/sw.js precache agreement |
 | `tests/unit/scenery-api-contract.test.mjs` | the 111-member `scenery(api)` surface every circuit file was written against |
-| `tests/unit/test-groups.test.mjs` | the test taxonomy: every group real, every source dir routed, `docs/TESTING.md` in step, `RENDER_SPECS` bidirectional |
+| `tests/unit/test-groups.test.mjs` | the test taxonomy: every group real, every source dir routed, the topical browser groups DISJOINT (2026-09 regroup), `docs/TESTING.md` in step, `RENDER_SPECS` bidirectional |
 | `tests/unit/docs-integrity.test.mjs` | live docs reference only files that exist; counts match the repo; no live doc reaches into the archive |
 | `tests/unit/deploy-staging.test.mjs` | every path shipped code can fetch is inside the Pages upload allow-list |
 | `tools/graph-parity.cjs` | scene-graph migrations are vertex-for-vertex identical to a baseline ref |
@@ -315,6 +315,76 @@ on the 08-18 perf-hunt board, not this register.
   now scales:** `.dh-card { zoom: var(--ui-scale) }` with `--svhz`-based heights;
   telemetry scrubber uses `CssZoom.viewportRect`.
 - **No CSP.** `index.html` ships no Content-Security-Policy of any kind.
+
+### Found by the 2026-09-01 deep pass (code-read, measured where stated; not browser-verified)
+
+Fixed in the same pass and therefore NOT listed: the contact-shove lap
+double-count (`shiftLong` moved `_prevS` with the car), the qualifying model
+timing the AI field on slick grip, the claim-fail reload that was never
+"once", `gfx.msaa()` reporting 4 on the direct-to-screen fallback, RAISE THE
+CAP sold at rungs the derived `budgetCap()` already binds, the Vegas-only
+prop-vert tripwire (now a fleet cap in `verify-track.cjs`), NIP-01 `OK=false`
+visibility, and the CI sweeps filter that skipped
+four suites' own sources. What remains:
+
+- **Bank-zone re-seat has no distance cap** (`js/track/mesh.js` ~:228-246). A
+  frac zone that lands on a straight is moved to the nearest unclaimed apex
+  however far that is. Measured pre-reseat distances: watkins_glen 0.24 →
+  951 m, estoril 0.075 → 693 m, mugello 0.88 → 690 m, jacarepagua 0.47 →
+  609 m, hockenheim 0.335 → 533 m, indianapolis 0.88 → 434 m, paul_ricard
+  0.07/0.64 → 395/345 m. At those distances the re-seat is the "real corner
+  that is simply the wrong one" failure. Left as-is deliberately: capping the
+  re-seat would bank a straight instead, and the honest fix is per-circuit —
+  re-author those eight fracs against a reference and then cap at ~250 m.
+- **~~The scenery-file `KOLD` shift disagrees with the engine's
+  `_sceneryShift`~~ — RESOLVED (2026-09-01, Node-build measurement, no render
+  needed).** The premise was wrong on both circuits. *Singapore*: `anchor()`
+  is not raw — `transformSceneryApi` wraps every k-keyed helper as
+  `f(sceneryNode(k), -side)` on this reverse + lap-mirror circuit, so the
+  shift cancels and the node that meets a kit structure at authored frac `s`
+  is the mirror inverse `(n - K(s)) % n` with the opposite side. The old KOLD
+  put the pit beacon 1.4 km from the tower (accidentally "supported" by a
+  city block); the "corrected" arc shift put it 33 m in the air. Fixed: the
+  cone anchors at `(n - K(0.999)) % n`, side +1, lateral 53, +33.9 m — 0.06 m
+  from the tower's roof centre, float and clip audits unchanged. *Monaco*:
+  the -24-node index shift is an empirical calibration of the raw
+  `px/rx/tx` readers; the engine's -51-node arc shift would move all seven
+  sites 108 m earlier and drop the tunnel onto Portier. Every site is closer
+  to its measured corner under the current shift, so only the comment
+  claiming "the same formula the engine uses" was wrong — corrected in place.
+- **~~A rival driving the CUSTOM team is never posed in VS FRIEND~~ — FIXED
+  (2026-09-01, second pass).** `resolveSeatClash()` now treats a custom (MY
+  TEAM) car as a seat that cannot be kept whatever the player's rank (a
+  peer's grid holds no slot or wireId for it), moves the player to a free
+  real-team seat and says why. Pinned by `net-lobby-lifecycle.test.mjs`;
+  the `test:net` browser group was NOT run for it.
+- **`CircuitElevations` is a dead branch** (`js/track/tracks.js` `hasRealElevation`
+  / `elevationAt` / the `real` arm of `realPoints`): the global is defined only
+  by `tools/bake-elevation.mjs`, is in no manifest entry, so every circuit's
+  elevation today is the synthetic `def.elevations` cosine bumps. Either wire
+  the bake into `TRACK_VM` + the shell or delete the ~20 lines.
+- **Jeddah `startFrac` is in a corner** (`startline-probe`: mean |k| 0.0173
+  over 120 m, first apex 1064 m later). Acknowledged in-file as known-wrong
+  with no usable source; 39/40 pass.
+- **Second-pass (2026-09-01) fixes from the plausible list**, each with a
+  unit test where a node harness existed: `rescuePlayer` re-seeds the
+  `rPrev*` render anchors; `quitToMenu` resets race control; `waitFor` rides
+  out up to five consecutive transient relay errors (429/5xx/timeout/offline)
+  instead of aborting the two-minute wait; a future-stamped `apex26.api.*`
+  entry (clock stepped back) is neither served nor kept; `sdp.js` gained
+  `C_RELAY6` and unwraps `::ffff:` mapped IPv4; an abandoned career draft
+  restores the slot it was opened from; `settleRound` tolerates an unknown
+  team id; driver standings break points ties by countback (`season.finishes`
+  histogram, `SeasonCal.rank`) rather than insertion order.
+- **Checked, not defects**: `IncidentSim._lapCross` skipping `reportLap` —
+  a takeover lap is invalid and `updateCar` would not report it either;
+  `prefetchIce` nulling the cache before a refresh — `iceServers()` already
+  excludes credentials past `ICE_CRED_TTL_MS`, so the window is the 55→60 min
+  validity tail only.
+- **Plausible, still unverified**: the boot canary is armed before the
+  ~550 KB deferred-backend fetch (a navigation during the download reads as a
+  dead backend); a transient `checkFramebufferStatus` failure in `createTargets`
+  disables post for the whole session with no retry (WGX has one).
 
 ### Found by the 2026-08 whole-codebase survey (unverified beyond a code read)
 

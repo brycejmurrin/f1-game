@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc Does this machine have a real GPU? Launches full Chromium per flag set and reports the adapter (`census_only` in CI).
+// @skill gpu-census.yml
 /* gpu-census.mjs — ask a machine ONE question: is there a real GPU behind
  * navigator.gpu here, or is it a software adapter?
  *

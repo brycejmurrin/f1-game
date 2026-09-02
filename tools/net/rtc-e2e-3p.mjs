@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // rtc-e2e-3p.mjs — THREE peers, over real WebRTC, in one room.
+// @doc THREE peers over real WebRTC in one room, end to end.
+// @skill multiplayer-debug
 //
 //   node tools/net/rtc-e2e-3p.mjs
 //

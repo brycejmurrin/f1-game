@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# @doc Stdio JSON-RPC client for chrome-devtools MCP: `list-tools`, `call`, `survey-title`, `apex-shot`, `slider-ab`.
+# @skill mcp-probe
 """Drive chrome-devtools MCP over stdio from the shell.
 
 Examples:

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /*
+ * @doc Curated free-cam gallery of `bakedModel` sites (Monza/Spa/Silverstone/Monaco/Vegas); PNGs + `manifest.json`.
+ * @skill playwright-probe / scenery-dress
  * Apex 26 — scenery / baked-model screenshot gallery.
  *
  * Framed free-cam shots that wait for Assets.loadModels() before race() so

@@ -10,12 +10,12 @@ description: Use when systematically reviewing Apex 26's UI across orientations,
 Playwright MCP + Chromium must be installed before interactive resize/DOM work:
 
 ```bash
-bash .claude/skills/apex-env-setup/scripts/ensure-apex-env.sh
-# or: bash tools/cloud-agent-install.sh
+bash tools/cloud-agent-install.sh      # AGENTS.md §Verification 1
 bash tools/playwright-mcp.sh status 2>/dev/null || true
 ```
 
-See **apex-env-setup** if browsers or the Playwright MCP wrapper are missing.
+Missing browsers / wrapper: AGENTS.md §Verification 1 (`npm install`, then
+`npx playwright install chromium-headless-shell`).
 
 A layout bug is never "on a screen" — it is a **cell of a matrix**: screen ×
 viewport × scale × pointer. **One CLI:** `tools/layout-audit.mjs`.

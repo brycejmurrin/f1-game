@@ -91,7 +91,7 @@ your car across **12 upgrade categories** before each race:
 | **COCKPIT** | Halo, mirrors and driver furniture |
 | **WHEELS** | Rim and wheel-cover treatment |
 
-Budget is **600 credits** per race. Toggle **UNLIMITED BUDGET** in the setup
+Budget is **780 credits** per race. Toggle **UNLIMITED BUDGET** in the setup
 screen to remove the cap for testing. Some parts are **factory/supplier-exclusive**
 and only appear when your team uses that power unit (Mercedes, Ferrari, Red Bull
 Ford, Honda, or Audi).
@@ -144,19 +144,19 @@ logic). Load order is defined in `tools/manifest.cjs`.
 ## Testing & development
 
 The project ships a **Playwright test suite** — 115 Playwright specs — plus
-149 `node --test` unit suites, covering rendering, physics, UI across screens,
+156 `node --test` unit suites, covering rendering, physics, UI across screens,
 multiplayer, career and visual regression. The whole thing is ~40
 minutes of software rendering, so the workflow is: ask which groups a change
 needs, run those in the background, tail the log.
 
 ```sh
 node tools/pick-tests.mjs                    # which test:<group>s does this change need?
-node tools/test-bg.mjs smoke api collision   # start them in the background
+node tools/test-bg.mjs driving hooks         # start them in the background, one at a time
 tail -f artifacts/logs/smoke.log             # watch one live
 node tools/test-bg.mjs --status              # running / how each ended
 
 npm run test:tiny                            # start here: page loads, __apex responds
-npm run test:fast                            # smoke + collisions + steering (browser; minutes on SwiftShader)
+npm run test:driving                         # the driving model, collisions, debris (browser; ~30 min on SwiftShader)
 npm test -- tests/specs/autopilot.spec.js          # single file
 node tools/verify-track.cjs --all            # headless build check, all 40 circuits (no browser)
 ```

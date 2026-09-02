@@ -1,9 +1,12 @@
 # Apex 26 — Architecture & Module Contract
 
-Pure JS/CSS/HTML, **no build step**. The **runtime has zero dependencies**;
-every `devDependency` is test- or tooling-only (Playwright the harness, jsQR to
-verify the QR encoder, espree/eslint-scope for the source audits, sharp and
-typescript for tooling — never shipped). Served as
+Pure JS/CSS/HTML, **no build step**. The **runtime has zero npm
+dependencies**; every `devDependency` is test- or tooling-only (Playwright the
+harness, jsQR to verify the QR encoder in tests, espree/eslint-scope for the
+source audits, sharp and typescript for tooling — never shipped). Four vendored
+libraries DO ship, under `vendor/`, each loaded only by the feature that needs
+it: three.js r185.1 (TLX backend), Rapier (`debrisworld.js`), Trystero (the
+Nostr room-code rendezvous) and jsQR (the answer-code camera scan). Served as
 static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 
 > This file is the module **contract** — what each module is and what it may
@@ -19,9 +22,11 @@ the `js/game.js` entry at the root.
 
 **`tools/manifest.cjs` is the single source of truth for load order.** The
 `<script>` tag order in `index.html` must match it — `tests/unit/load-order.test.mjs`
-(run via `npm run test:tooling`) asserts they never diverge. Adding a file means
-a `FULL` script tag, a `DEFERRED` backend entry, or a `LAZY_AGENT` entry
-(`apex.js` / `agentview*` — injected when tests / localhost / `?apex=1`). The abbreviated sketch below is a subset;
+(run via `npm run test:tooling-fast`) asserts they never diverge. Adding a file means
+a `FULL` script tag, a `DEFERRED` backend entry, a `LAZY_AGENT` entry
+(`apex.js` / `agentview*` — injected when tests / localhost / `?apex=1`), a
+`LAZY_RACE` entry (`light-presets.js`, fetched before the first race) or a
+`LAZY_SCENERY` entry (`js/circuits/scenery/<id>.js`, fetched per build). The abbreviated sketch below is a subset;
 consult the manifest for the full, current order:
 
 ```
@@ -34,7 +39,8 @@ js/render/gfx.js         -> Gfx        (renderer selection seam; the WGX and
                                         tag, injected at boot when opted into)
 js/car/teams.js          -> Teams      (2026 grid data)
 js/track/*               -> the track engine (spline, mesh, scenery, markings…)
-js/circuits/*.js         -> TrackDefs  (one file per circuit; registers itself on the list)
+js/circuits/*.js         -> TrackDefs  (one def per circuit; its scenery(api) closure is
+                                        split to js/circuits/scenery/<id>.js, fetched per build)
 js/track/tracks.js       -> Tracks     (engine shell: resolve + build; reads TrackDefs)
 js/car/*                 -> Car3D, Liveries, LiveryTex, Parts, Ghost
 js/game/*                -> Input, GameAudio, LightTune, Particles, GameCams, GameHud, …
@@ -58,7 +64,7 @@ The July 2026 architecture reorg moved every module into a domain directory
 `buildProps` → four scenery modules).
 
 **That 4,700 is a historical measurement, not a current one.** `game.js` grew
-back past 8,600 — extraction moved code out once and nothing stopped it
+back to its ceiling (8,885 as of 2026-09) — extraction moved code out once and nothing stopped it
 accumulating again until `tests/unit/module-size.test.mjs` put a ratcheted ceiling on
 the file (lowered with each extraction). Treat the number as a record of what
 the reorg achieved, and `wc -l js/game.js` against the current ceiling as the
@@ -144,8 +150,9 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   install a stub `GLX`). game.js's descriptor-copy install onto the `GLX` object
   is retained solely as the object-identity contract for the ~8 spec files that
   monkey-patch `GLX.*`.
-- **`liverytex.js` duplicates GLX's mobile-tier detection** — extract one shared
-  tier probe.
+- **~~`liverytex.js` duplicates GLX's mobile-tier detection~~ (done)** —
+  `liverytex.js` reads `GLX.mobileTier` (a manifest `HARD_EDGES` pair); the one
+  detection lives in `glx.js`.
 - **`TUNE_DEFS` mirror-comment invariants** in `glx.js`/`gfx.js` — comments that
   must track the registry by hand; replace with a checked mapping.
 - **~~WebGPU lazy-load~~ (done)** — `js/render/webgpu/*` and `js/render/three/*`
@@ -153,8 +160,9 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   `apex26.gfxBackend` selects one. See `tools/manifest.cjs`'s `DEFERRED` map;
   `tests/unit/load-order.test.mjs` pins the manifest, game.js's loader table and
   `sw.js`'s optional precache seed to each other.
-- **`css/*.css` split** — pending committed visual baselines (the visual
-  suite has no tracked golden images yet, so a CSS split can't be gated).
+- **~~`css/*.css` split~~ (done)** — eleven sheets under a declared `@layer`
+  order (`tools/manifest.cjs` `CSS`); the visual suite still has no tracked
+  golden images, so further CSS restructuring stays ungated by pixels.
 
 ---
 
@@ -338,10 +346,10 @@ GLX.begin(frame)                      // clears color+depth, stores frame unifor
    frame = { viewProj: mat4, eye:[x,y,z], sunDir:[x,y,z] (normalized, TOWARD sun),
              sunColor:[r,g,b], ambientGround:[r,g,b], ambientSky:[r,g,b],
              fogColor:[r,g,b], fogDensity: number,    // exp2 fog
-             lights: [x,y,z, r,g,b, rad, …] }         // optional point lights (≤32)
+             lights: [x,y,z, r,g,b, rad, aim…] }      // optional stride-15 point lights (≤48, MAX_LIGHTS)
 GLX.draw(mesh, modelMat, opts)        // opts optional {emissive:0..1, alpha:0..1}
                                       // lit: hemisphere ambient (mix ground/sky by N.y)
-                                      //      + lambert sun + up to 32 point lights
+                                      //      + lambert sun + up to 48 point lights
                                       //      (diffuse, quadratic falloff to radius);
                                       //      fog by view distance.
                                       // emissive=1 -> full albedo, no lighting (night glow)
@@ -353,8 +361,9 @@ GLX.drawShadow(modelMat, w, l)        // dark radial-alpha blob quad, w x l mete
 ```
 
 Depth test LEQUAL, backface culling CCW, `alpha:false` context;
-`antialias` is desktop-only (`!IS_MOBILE` — phones never take the
-context-level AA path). The lit fragment shader fades to `fogColor` with
+`antialias` is always `false` on the context — the post chain renders
+offscreen and resolves its own MSAA (`glx/post.js`), so browser MSAA on the
+default framebuffer would be pure waste. The lit fragment shader fades to `fogColor` with
 `1-exp(-(d*fogDensity)^2)`.
 
 ## js/render/gltf.js — `GLTF`
@@ -412,7 +421,7 @@ One concern per file, all loaded before `tracks.js`:
 | `markings.js` | `CircuitMarkings` | curated FIA-aligned sector splits + turn apexes (racing-lap fractions; feeds `Tracks.LIST`, sectorAt, minimaps, corner boards) |
 | `models.js` | `TrackModels` | composite prop models shared across circuits |
 | `themes.js` | `SceneryThemes` | theme tables for the city generator |
-| `landmark-kit.js` / `circuit-kit.js` | — | landmark & circuit composite kits for `scenery(api)` |
+| `landmark-kit.js` / `circuit-kit.js` | `LandmarkKit` / `CircuitKit` | landmark & circuit composite kits for `scenery(api)` |
 | `geo-paths.js` | `CircuitPaths` | real OSM circuit centrelines (bacinger/f1-circuits, ODbL) — was `circuits.js` |
 | `maps.js` | `TrackMaps` | offline 2D picker outlines from the spline engine — was `trackmaps.js` |
 | `scenery-nature.js` / `scenery-city.js` / `scenery-structures.js` / `scenery-identity.js` | `Scenery*` | the buildProps split (below) |
@@ -429,9 +438,12 @@ change the test catches. See [SCENERY-API.md](SCENERY-API.md).
 
 ## js/circuits/<id>.js — `TrackDefs` (circuit data)
 
-One file per circuit. Each is a self-contained IIFE that pushes a plain data
-object onto the global `TrackDefs` list. No engine logic, no palette helpers —
-just raw fields. Loaded *before* `js/track/tracks.js`, in the order their
+One def file per circuit, plus one scenery file under `js/circuits/scenery/`.
+The def is a self-contained IIFE that pushes a plain data object onto the
+global `TrackDefs` list — no engine logic, no palette helpers, just raw fields.
+The bespoke `scenery(api)` closure lives in `js/circuits/scenery/<id>.js`
+(registered on `window.TrackScenery[id]`, no `<script>` tag: `game.js` fetches
+the one it is about to build, ~27 KB each, so a session does not parse all 40). Loaded *before* `js/track/tracks.js`, in the order their
 `<script>` tags appear in `index.html` (this is **not** the real-world F1
 calendar order). **Tag order == `Tracks.LIST` order == picker/season order.**
 
@@ -530,7 +542,7 @@ shading (duplicated verts, face normals).
 | `liveries.js` | `Liveries` | custom paint jobs — `{id, name, c1, c2, stripe?, noseStripe?, …}` |
 | `liverytex.js` | `LiveryTex` | per-team livery texture atlas (canvas-2D; stylised fan-art crests, invented sponsor wordmarks, car number onto a 1024² atlas mapped by panel UVs) |
 | `driver-ratings.js` | `DriverRatings` | the five-axis skill table for the grid (pace / racecraft / awareness / consistency / experience), keyed by driver CODE. Feeds every AI car's `skill` in EVERY mode, not just career. Kept out of `teams.js` because that is verified real-world data and is also loaded by `tools/carview.html` |
-| `parts.js` | `Parts` | upgrade catalog — 12 ordered categories, `getMods`, `getCost`, `statMult`, 600 cr budget (see docs/PARTS.md) |
+| `parts.js` | `Parts` | upgrade catalog — 12 ordered categories, `getMods`, `getCost`, `statMult`, 780 cr budget (see docs/PARTS.md) |
 | `ghost.js` | `Ghost` | time-trial ghost: records the player's lap as parallel `(t, s, x)` arrays, replays the best one; pure data layer — game.js feeds samples and draws |
 
 ## js/game/input.js — `Input`
@@ -698,11 +710,11 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `aerozones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `xStraightAhead()`/`aeroDfMult()` stay in game.js because they read car state |
 | `skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
 | `sheetshape.js` | `SheetShape` | self-initialising: measures every `.sheet` with a ResizeObserver and writes `data-shape="tall\|wide"` / `data-pair`. **Its consumer is CSS**, not JS — which is why a JS-only reference scan reports it as orphaned |
-| `topmodal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 18 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheetshape.js` |
+| `topmodal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 19 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheetshape.js` |
 | `ariastate.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |
 
 The table lists the modules whose contracts need prose; the rest of `js/game/`
-(56 files today — input, audio, lighting, particles, ai-drive, season-cal,
+(59 files today — input, audio, lighting, particles, ai-drive, season-cal,
 ui-scale, gfx-quality, metrics and the rest) is enumerated by
 `tools/manifest.cjs`, which is the roster truth AGENTS.md's layout defers to
 (the docs-integrity guard asserts the deferral, not a per-file list).
@@ -748,8 +760,9 @@ AI: follow racing-line offset = -curvatureAhead * k, brake by curvature, tier
 speed + rubber-band by difficulty (EASY/NORMAL/HARD). Start: grid 22 (player P12
 default, tier order), five red lights (1 s apart) then out. Race =
 `GAME_LAPS` (3). HUD (DOM): pos/lap/laptime/best, speed km/h, energy bar, OT
-indicator, gaps, minimap canvas 2D. Penalty: 4+ full-off-track shortcuts -> +5 s
-on results screen. Points per Teams.POINTS; SEASON mode = Tracks.SEASON (the 24
+indicator, gaps, minimap canvas 2D. Penalty: a repeating ladder — three
+warnings, +5 s on the 4th cut (announced in-race), then the warning count
+resets; `cuts` stays the lifetime total for the career `clean` objective. Points per Teams.POINTS; SEASON mode = Tracks.SEASON (the 24
 non-`classic` circuits; the 16 retired ones are playable but never a round)
 in load order, standings table between races, saved in
 `apex26.season`. localStorage: hiscore N/A, settings (team, difficulty, tilt,

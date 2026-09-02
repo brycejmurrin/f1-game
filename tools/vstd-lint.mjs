@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 //
+// @doc The PACE invariant as a check: flags `.speed` compared to a literal without `vStd()` in `js/game.js` + `js/game/*.js`.
+// @skill tune-physics
 // vstd-lint — the asserted form of the PACE invariant in AGENTS.md:
 //
 //   "Adding anything that divides a speed by VMAX, or compares one against a
@@ -199,7 +201,19 @@ export function readFiles(list = defaultFiles(), root = ROOT) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
-  const list = args.length ? args.map((a) => path.relative(ROOT, path.resolve(a))) : defaultFiles();
+  // A directory argument expands to its .js files (non-recursive), so
+  // `vstd-lint.mjs js/game.js js/game/` works the way the auditor prompt
+  // spells it instead of dying on EISDIR.
+  const expand = (a) => {
+    const abs = path.resolve(a);
+    if (fs.existsSync(abs) && fs.statSync(abs).isDirectory()) {
+      return fs.readdirSync(abs).filter((f) => f.endsWith(".js")).sort().map((f) => path.join(abs, f));
+    }
+    return [abs];
+  };
+  const list = args.length
+    ? args.flatMap(expand).map((a) => path.relative(ROOT, a))
+    : defaultFiles();
   const hits = speedLiteralViolations(readFiles(list));
   if (!hits.length) {
     console.log("✓ no raw speed-vs-literal comparisons");

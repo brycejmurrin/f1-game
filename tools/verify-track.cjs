@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // verify-track.cjs — headless build check for Apex 26 track definitions.
+// @doc Headless build guard: runs `buildRoad/Terrain/Props/Gate` for one circuit (or `--all`) in a VM; any THROW fails.
+// @skill debug-tracks
 // Loads the full TRACK_VM manifest list (the track engine — geom, mesh,
 // surface, graph, the scenery-* files — plus every circuit and tracks.js) in a
 // Node.js VM, stubs GLX so that
@@ -225,13 +227,18 @@ function verifyTrack(id) {
   // scenery pass produced nothing even if validation passed.
   if (props === 0) throw new Error("props mesh is EMPTY — the circuit has no scenery");
 
-  // Per-circuit prop-vert ratchet. Vegas is the fleet outlier (~1.83 M);
-  // iOS starts jetting the page near ~100 MB of interleaved GPU buffer.
-  // Unlisted circuits stay uncapped — this is a tripwire on the known hog,
-  // not a fleet budget.
-  const PROP_VERT_CAP = { vegas: 1850000 };
-  if (PROP_VERT_CAP[id] && props > PROP_VERT_CAP[id]) {
-    throw new Error(`${id} props ${props} verts exceed cap ${PROP_VERT_CAP[id]}`);
+  // Fleet prop-vert budget. iOS starts jetting the page near ~100 MB of
+  // interleaved GPU buffer (~44 B/vert at the real interleave, so ~2.2 M
+  // verts); the old tripwire capped only Vegas at 1.85 M, and instancing has
+  // since taken Vegas to ~370 k while the real hogs went uncapped. Measured
+  // 2026-09-01 (props verts, instancing on): mexico 991 k, miami 794 k,
+  // jacarepagua 775 k, albert_park 570 k, catalunya 542 k, watkins_glen 496 k;
+  // the fleet median is ~340 k. The cap is one number, ~10 % over the largest,
+  // so a circuit that balloons toward the jetsam line fails here in 2 s rather
+  // than on a phone. Raise it in a commit that says which circuit and why.
+  const PROP_VERT_CAP = 1100000;
+  if (props > PROP_VERT_CAP) {
+    throw new Error(`${id} props ${props} verts exceed the fleet cap ${PROP_VERT_CAP}`);
   }
 
   console.log(`OK ${id}: props ${props} verts (road ${road}, terrain ${terrain})` +

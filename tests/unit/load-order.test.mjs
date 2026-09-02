@@ -138,7 +138,8 @@ function lazyFiles() {
   // have to be accounted for, or "created the file, forgot to load it" stops
   // being catchable.
   return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
-    ...(MANIFEST.LAZY_SCENERY || [])];
+    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
+    ...(MANIFEST.LAZY_NET || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -196,6 +197,35 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   for (const f of deferredFiles()) {
     assert.ok(seeded.has(f), `${f} is DEFERRED, so sw.js must seed it (the tag parser cannot find it)`);
   }
+  // LAZY_RACE + LAZY_SCENERY are tagless for the same reason and fail the same
+  // way, only worse: loadBackendScripts resolves on error, so offline the
+  // circuit builds BARE — road and terrain, no dressing — with no exception to
+  // notice. LAZY_AGENT is deliberately NOT here (dev/test surface; a player who
+  // never opens it should not pay for it in the install).
+  for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_SCENERY || []),
+                   ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || [])]) {
+    assert.ok(seeded.has(f),
+      `${f} is a lazily-injected asset, so sw.js must seed it or it is unreachable offline`);
+  }
+});
+
+// The seed key has to MATCH the request. loadBackendScripts injects everything
+// it loads as `<path>?v=<build>`, and the SW's fetch handler matches without
+// ignoreSearch, so a bare seed is a key nothing ever asks for — the build-895
+// shape, recorded in sw.js's own install comment.
+test("sw.js stamps every injected asset it seeds", () => {
+  const sw = readFileSync(join(ROOT, "sw.js"), "utf8");
+  const m = sw.match(/const stamped = urls\.optional\.map\(\(u\) =>\s*(\/.+\/)\.test\(u\)/);
+  assert.ok(m, "sw.js must map its optional seeds through a build stamp");
+  // Rebuild the SW's own predicate and RUN it, rather than pattern-matching the
+  // source text: the question is which paths actually get the ?v= suffix.
+  const stamps = new RegExp(m[1].slice(1, -1));
+  const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []),
+    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
+    ...(MANIFEST.LAZY_NET || [])];
+  const unstamped = injected.filter((f) => !stamps.test(f));
+  assert.deepEqual(unstamped, [],
+    `these are injected as ?v=<build> but seeded bare, so the cache key is one nothing requests: ${unstamped}`);
 });
 
 test("LAZY_AGENT files have no <script> tag", () => {
@@ -276,6 +306,54 @@ test("LAZY_RACE files have no <script> tag", () => {
   }
 });
 
+// Same lockstep again, for the data hub. Its failure mode is the mild one of
+// the three — DataHub simply never appears and the DATA button stays shut —
+// but the drift is identical: leave FULL without joining this roster and the
+// file has neither a tag nor an injector.
+test("js/game.js DATA_FILES equals MANIFEST.LAZY_DATA", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const block = src.match(/const DATA_FILES = \[([\s\S]*?)\n\];/);
+  assert.ok(block, "js/game.js must declare DATA_FILES for the lazy data hub");
+  const listed = [...stripComments(block[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(listed, MANIFEST.LAZY_DATA);
+});
+
+// hub.js calls Data*.create() at EVAL time, so these pairs are the difference
+// between a working hub and a TypeError on the tab modules. loadBackendScripts
+// only honours edges whose BOTH ends are in the file list it was handed, so a
+// pair that stopped naming a real file would silently stop constraining
+// anything. Both sides DERIVE the edges from their roster ("everything, then
+// the hub"), so what is asserted is that the two derivations agree AND that
+// the result actually orders every tab module before hub.js — the property the
+// hand-written lists existed to guarantee.
+test("the data-hub DAG orders every tab module before hub.js, on both sides", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(src, /const DATA_EDGES = DATA_FILES\.filter\(\(f\) => f !== DATA_HUB\)\.map\(\(f\) => \[f, DATA_HUB\]\);/,
+    "js/game.js must derive DATA_EDGES from DATA_FILES");
+  assert.match(src, /const DATA_HUB = "js\/data\/hub\.js";/, "DATA_HUB must name the hub");
+  const want = MANIFEST.LAZY_DATA.filter((f) => f !== "js/data/hub.js").map((f) => [f, "js/data/hub.js"]);
+  assert.deepEqual(MANIFEST.LAZY_DATA_EDGES, want);
+  assert.equal(want.length, MANIFEST.LAZY_DATA.length - 1,
+    "every LAZY_DATA file except the hub itself must be ordered before it");
+});
+
+// Same lockstep for the multiplayer stack. Its drift is the WORST of the four
+// rosters: a js/net file with neither a tag nor an injector entry leaves the
+// inert stub in place for ever, so VS FRIEND opens a lobby that silently never
+// connects — no crash, no console line, just a room code that does nothing.
+test("js/game.js NET_FILES / NET_EDGES equal MANIFEST.LAZY_NET / LAZY_NET_EDGES", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const files = src.match(/const NET_FILES = \[([\s\S]*?)\n\];/);
+  assert.ok(files, "js/game.js must declare NET_FILES for the lazy multiplayer stack");
+  assert.deepEqual([...stripComments(files[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]),
+    MANIFEST.LAZY_NET);
+  const edges = src.match(/const NET_EDGES = \[([\s\S]*?)\n\];/);
+  assert.ok(edges, "js/game.js must declare NET_EDGES for the multiplayer DAG");
+  assert.deepEqual(
+    [...stripComments(edges[1]).matchAll(/\["([^"]+)",\s*"([^"]+)"\]/g)].map((m) => [m[1], m[2]]),
+    MANIFEST.LAZY_NET_EDGES);
+});
+
 test("js/game.js AGENT_EDGES equals MANIFEST.LAZY_EDGES", () => {
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
   const block = src.match(/const AGENT_EDGES = \[([\s\S]*?)\n\];/);
@@ -287,11 +365,15 @@ test("js/game.js AGENT_EDGES equals MANIFEST.LAZY_EDGES", () => {
 test("sw.js optional precache does not include LAZY_AGENT", () => {
   // Install-time Cache.put full-compiles (v8.dev). These three stay fetch-miss
   // only — do not seed them in optional the way DEFERRED backends are seeded.
+  // MANIFEST.LAZY_AGENT, not lazyFiles(): that helper now spans three tagless
+  // rosters and the other two (LAZY_RACE / LAZY_SCENERY) are REQUIRED to be
+  // seeded, because a missed fetch there builds a bare circuit offline instead
+  // of merely withholding a dev API.
   const sw = readFileSync(join(ROOT, "sw.js"), "utf8");
   const optional = sw.match(/const optional = new Set\(\[([\s\S]*?)\]\);/);
   assert.ok(optional, "sw.js must declare an `optional` precache Set");
   const seeded = new Set([...stripComments(optional[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]));
-  for (const f of lazyFiles()) {
+  for (const f of (MANIFEST.LAZY_AGENT || [])) {
     assert.ok(!seeded.has(f), `${f} is LAZY_AGENT — must not be SW-optional`);
     assert.ok(![...seeded].some((u) => u.includes(f)), `${f} must not appear in sw.js optional`);
   }

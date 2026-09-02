@@ -1,4 +1,6 @@
 // track-build-vm.cjs — run the REAL Apex 26 track build headless, in a Node VM.
+// @doc The shared "run the REAL track build headless in a Node VM" harness the audits and VM tests load the engine through.
+// @skill debug-tracks
 //
 // Extracted from float-audit.cjs to be the shared build harness. clip-audit.cjs
 // and coplanar-audit.cjs use it; float-audit.cjs still carries its own inline

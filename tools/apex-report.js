@@ -1,5 +1,7 @@
 "use strict";
 /**
+ * @doc Browser paste, not a node tool: one diagnostic JSON bundle from a live page (diag, GL identity, log ring, errors).
+ * @skill mcp-probe
  * apex-report — one-paste diagnostic bundle from a LIVE Apex 26 page.
  *
  * Paste into a DevTools console (or load it, see tools/README.md) and it

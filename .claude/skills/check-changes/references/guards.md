@@ -28,7 +28,7 @@ expectation vs real regression.
 
 3. **Cache version bumped — BOTH files?** Any `js/*.js` or `css/*.css`
    change: every `?v=N` in `index.html` AND `version.json`'s `build` must
-   equal the same N (**bump-cache**):
+   equal the same N (`bump-cache.mjs --apply`):
    ```sh
    node tools/bump-cache.mjs --check
    grep -o '?v=[0-9]\+' index.html | sort -u && cat version.json

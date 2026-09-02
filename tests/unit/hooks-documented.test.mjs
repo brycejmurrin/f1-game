@@ -34,16 +34,8 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 // Known-undocumented as of the 2026-08 cleanup pass. SHRINK THIS LIST.
 // Grouped by why they are here, because the reason decides who should fix them.
 const UNDOCUMENTED = new Set([
-  // The multiplayer test surface — the only way to drive the lobby and the wire
-  // from a spec, and entirely absent from the reference.
-  "lobbyAccept", "lobbyCodeHost", "lobbyCodeJoin", "lobbyFailure", "lobbyFake",
-  "lobbyFakeConnected", "lobbyJoin", "lobbyMods", "lobbyPeerEvent", "lobbyShare",
-  "lobbyWatch", "netPeerEvent", "netPeerLaps", "netStop",
-  // Garage / car-visual staging.
-  "garageAero", "garageFlaps", "garageStep", "carEffects",
-  // Subsystem doors that grew their own hooks after the reference was written.
-  "bodyAttitude", "debris", "incident", "trackGraph", "weatherArc",
-  "renderClock",
+  // 2026-09: the 24 names that sat here (lobby test surface, garage staging,
+  // subsystem doors) were documented in docs/DEBUG-HOOKS.md. Keep it empty.
 ]);
 
 /** Top-level keys of the `const api = {…}` literal in js/game/apex.js. */
@@ -51,7 +43,9 @@ function hookNames() {
   const src = read("js/game/apex.js");
   const body = src.slice(src.indexOf("const api = {"));
   const names = new Set();
-  for (const m of body.matchAll(/^ {2}([a-zA-Z_$][\w$]*)\s*[(:]/gm)) names.add(m[1]);
+  // `async foo(` is a hook too — without the optional prefix the three async
+  // methods (assetLoad, lobbyPairs, fetchTrackOutline) were invisible to the ratchet.
+  for (const m of body.matchAll(/^ {2}(?:async\s+)?([a-zA-Z_$][\w$]*)\s*[(:]/gm)) names.add(m[1]);
   return names;
 }
 
@@ -61,8 +55,19 @@ function documented(doc, name) {
   return new RegExp("__apex\\." + name + "\\b|`" + name + "\\(").test(doc);
 }
 
-test("no NEW __apex hook ships undocumented", () => {
+// The generated hook index (tools/gen-hooks-table.mjs) lists EVERY hook by
+// construction, so it would satisfy `documented()` for all of them and turn
+// this ratchet vacuous. Strip it: the requirement here is a HAND section per
+// hook. tests/unit/generated-docs.test.mjs guards the index separately.
+function handSections() {
   const doc = read("docs/DEBUG-HOOKS.md");
+  const a = doc.indexOf("<!-- GENERATED: hooks-table -->");
+  const b = doc.indexOf("<!-- /GENERATED -->", a);
+  return a >= 0 && b > a ? doc.slice(0, a) + doc.slice(b) : doc;
+}
+
+test("no NEW __apex hook ships undocumented", () => {
+  const doc = handSections();
   const missing = [...hookNames()].filter((n) => !documented(doc, n) && !UNDOCUMENTED.has(n)).sort();
   assert.deepEqual(missing, [],
     "a hook exists in js/game/apex.js with no section in docs/DEBUG-HOOKS.md. Write one — " +
@@ -70,7 +75,7 @@ test("no NEW __apex hook ships undocumented", () => {
 });
 
 test("the undocumented list does not name a hook that has since been documented", () => {
-  const doc = read("docs/DEBUG-HOOKS.md");
+  const doc = handSections();
   const stale = [...UNDOCUMENTED].filter((n) => documented(doc, n)).sort();
   assert.deepEqual(stale, [],
     "these are documented now — delete them from UNDOCUMENTED so the ratchet keeps its grip");

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // fixture-consumer-audit — how many specs actually use tests/helpers/fixtures.js.
+// @doc RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`.
+// @section runner
 //
 // This tool used to hold a hardcoded four-name allow-list and print
 // "✓ 4 intended fixture consumers use shared fixtures", which is true and says
@@ -27,7 +29,7 @@ const ROOT = path.resolve(fileURLToPath(import.meta.url), "../..");
 // the shared BOOT_MS / TRACK_MS budgets from tests/helpers/fixtures.js rather
 // than each carrying its own 8000/15000/20000 ms guess. That is the adoption
 // this ratchet is asking for, so the floor follows it up.
-export const FLOOR = 67;
+export const FLOOR = 110;   // 2026-09-01: every spec with a boot wait imports BOOT_MS from fixtures (was 67)
 
 // The other failure mode: migrate a batch of specs, never raise the floor, and
 // the ratchet silently stops ratcheting (it sat at 31 while real adoption was

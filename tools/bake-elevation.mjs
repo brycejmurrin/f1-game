@@ -1,3 +1,5 @@
+// @doc Offline elevation baker — precomputes per-track elevation profiles into a `CircuitElevations` global.
+// @skill new-track
 /* Apex 26 — offline elevation baker.
  *
  * Produces js/track/circuit-elevations.js: a `CircuitElevations` global mapping each

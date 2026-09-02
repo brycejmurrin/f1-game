@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // Quick flag matrix for WebGPU canvas pixels (artifacts/tmp/wgpu-flag-test.json).
+// @doc Flag-matrix probe for WebGPU canvas pixels (SwiftShader / Lavapipe / headed) → `artifacts/tmp/wgpu-flag-test.json`.
+// @skill webgpu-debug
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { writeFileSync, mkdirSync } from "node:fs";

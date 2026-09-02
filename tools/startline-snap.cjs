@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 /* Apex 26 — snap each circuit's start/finish line onto its centreline trace and
+ * @doc Derives `startFrac` from a real start/finish coordinate: projects into `CircuitPaths`, snaps to the nearest segment.
+ * @skill new-track
  * report the `startFrac` that puts racing s=0 there.
  *
  * WHY THIS EXISTS

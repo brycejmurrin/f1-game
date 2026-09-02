@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# @doc The CI "select specs for this change" step body: base via `ci-resolve-before.sh`, then `select-specs.mjs --since`.
+# @section runner
 # Full "Select specs for this change" step body. Env: EVENT, PUSH_BEFORE, PR_BASE, GITHUB_OUTPUT
 set -eu
 fail() { echo "::error::SELECTED GATE FAILED CLOSED: $1"; exit 1; }

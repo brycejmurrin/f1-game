@@ -20,7 +20,7 @@
  * What is left here is what only an end-to-end page can answer: that the wiring
  * exists at all, and that the setting survives a reload.
  */
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 test.describe("race control in a page", () => {
   test("the layer is ON by default and reports a coherent GREEN", async ({ loadTrack, page }) => {
@@ -42,18 +42,19 @@ test.describe("race control in a page", () => {
     // who had turned them off. Only a real round trip through a real
     // localStorage catches that.
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
+    // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.caution(false));
 
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     expect(await page.evaluate(() => window.__apex.caution().enabled)).toBe(false);
 
     // …and back, so the spec leaves no state behind for whatever runs next in
     // this worker's storage origin.
     await page.evaluate(() => window.__apex.caution(true));
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     expect(await page.evaluate(() => window.__apex.caution().enabled)).toBe(true);
   });
 

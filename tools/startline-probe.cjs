@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc The two checks that can FAIL a `startFrac`: mean curvature 120 m around s=0, and the first apex hand; `--calibrate`.
+// @skill debug-tracks
 /* Apex 26 — is the start/finish line on a straight, and what does the driver
  * meet first?
  *

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // rtc-e2e.mjs — a REAL WebRTC handshake between two pages.
+// @doc A REAL WebRTC handshake between two pages (`npm run rtc:e2e`) — the one path the loopback transport cannot cover.
+// @skill multiplayer-debug
 //
 //   node tools/net/rtc-e2e.mjs
 //

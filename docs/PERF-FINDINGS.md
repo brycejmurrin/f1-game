@@ -1695,113 +1695,243 @@ Three sabotages on the source guards, each confirmed red then restored: drop the
 tolerance branch (the old policy), drop `clean()` (the run never pays back), and
 never rethrow at the cap (unbounded tolerance).
 
+## 2l. The gate reported appearance it never measured, and its diagnostics were dead (2026-09-01)
+
+Asked "can we actually verify WebGPU and three.js?", the answer turned out to be
+worse than expected. The macOS census that gated round 14 printed
+`meanLuma=n/a` on **every leg of every image** — so the real-GPU run proved the
+backends boot with zero GPU errors and produced **no pixel evidence at all**.
+
+### The appearance column was never wired
+
+`tools/gpu-game-check.mjs` did not contain the string `frame` anywhere. It never
+wrote `out.frame`. `gpu-census.yml` reads `const frame = g.frame || {}` and
+prints `meanLuma=${frame.meanLuma != null ? … : "n/a"}`, so that column was
+structurally empty from the day it was added. `meanLuma` exists in
+`gfx-probe.mjs` and `wgx-capture.mjs` — just not in the tool the gate calls.
+
+It is read from the **screenshot** the tool already takes, and every in-page
+alternative was disproved by an actual run rather than by argument:
+
+| candidate | why not |
+|---|---|
+| `getContext("2d")` (gfx-probe's method) | only works where WGX/TLX route through the soft-present blit; a native canvas has no 2D context |
+| `GLX.capturePixels()` | **does not exist on GLX** (WGX and TLX only) — and GLX is the default backend the gate most needs appearance for |
+| `capturePixels` on the TLX/WebGL2 leg | reported `maxLuma=0` on a frame that is demonstrably a complete scene — the readback lies, the screenshot does not |
+| `drawImage` of a WebGL canvas | solid black outside the frame (§2d) |
+
+Cross-validated: `sharp` read `meanLuma 44.0` from the WGX PNG; gfx-probe's
+independent in-page read of the same frame reported `44`.
+
+### The diagnostics added to explain failures had never once run
+
+The verification run left a stack trace, and it was pre-existing:
+
+```
+ReferenceError: console_ is not defined
+    at tools/gpu-game-check.mjs:273   (in the finally)
+```
+
+`const console_ = []` was declared INSIDE the `try` while the `finally` read it.
+Sibling scopes — so the `finally` threw on **every run, success or failure**, at
+its first statement. Everything after it was dead:
+
+- `out.console` — the filtered console lines a previous round moved into the
+  `finally` *precisely* so a failing run would keep them;
+- `out.root` — added to name the Windows path bug, with the claim it "would have
+  named this on day one". It has never once been set on a real run;
+- the bounded `browser.close()` / `server.close()` teardown, so browsers leaked;
+- `process.exit(out.ok ? 0 : 1)` — the tool always exited non-zero, even on
+  `ok:true`, so its exit code carried no information.
+
+Nothing looked wrong because `continue-on-error: true` on all four census steps
+swallowed the exit code, and `checkpoint()` had already written the JSON after
+every phase, so the artifact was complete.
+
+**The fix that preserved the diagnostics is what destroyed them** — the
+assignment moved into `finally` and the declaration did not follow. That is the
+sharpest form of this file's recurring rule: the machinery added to make
+failures legible was itself silently dead.
+
+Measured before → after, same command:
+
+| | before | after |
+|---|---|---|
+| exit code | non-zero always | **0** |
+| `frame.meanLuma` | absent (`n/a`) | **69.3** |
+| `root` | absent | set |
+| `console` lines | absent | **7** |
+
+### The backends, verified in-container for the first time
+
+Not inferred from "no errors" — rendered, with images:
+
+| backend | evidence |
+|---|---|
+| WGX (WebGPU) | `wgx-validate` Dawn `gpuErrors 0` / `wgslParseErrors 0`; probe `ok`, `meanLuma 44`, coverage road 42.9 / tree 30.3 / player 6.1 |
+| TLX (three/WebGL2) | probe `ok`, `gpuErrors 0`, coverage ground 27.4 / player 17.5 — full scene with car and HUD |
+| TLX + `tlxForceHw=env` | `exit=0` |
+| TLX (three/WebGPU) **in software** | hung 66 min on `awaitSoftPresent` after a 60 s timeout and a retry. NOT a backend defect: AGENTS.md documents SwiftShader Dawn dying on three's `mappedAtCreation` uploads, and that leg passed on real Apple silicon in the census. Verified on hardware, not reproducible in software here — do not spend an hour rediscovering this. |
+
+Guards in `gfx-backend-canary.test.mjs`, both sabotage-proven: putting
+`console_` back inside the `try` fails the scope test, and renaming the
+`frameReadFailed` branch fails the appearance test.
+
+## 2m. three never lets go of a geometry, and phones pay for it (2026-09-01)
+
+The player reported the car rendering **see-through in the garage** on the
+three.js backend, on an iPhone. Two separate defects, one behind the other.
+
+### First: a uniform array that cost 48 rows, not 12
+
+`tsl-lit.js` declared `MAX_LIGHTS = 48`. WebGL2's guaranteed floor is **224
+fragment uniform vectors**, and a uniform ARRAY packs vertically — a 48-element
+array of `vec4` costs 48 rows, not 12. The lit program overran the floor and
+failed to **link** on iOS, so every lit surface drew nothing: the car vanished
+while textured and emissive surfaces (which use other programs) kept drawing.
+That reads as "see-through", which is why the first diagnosis went at
+translucency and was wrong — the player's screenshots corrected it.
+
+Fixed by making the ceiling device-aware: 16 on `_liteGpu` (mobile / WebKit /
+software adapter), 48 elsewhere, passed from `tlx.js` into `TLXShaders.lit()`.
+Confirmed by the player on the handset.
+
+### Then: the tab started dying mid-race instead
+
+With the shader linking, the same device began showing iOS Safari's **"A
+problem repeatedly occurred"** — a jetsam OOM, not a renderer error. Heap
+snapshots, same track and viewport:
+
+| backend | JSArrayBufferData | buffers | JS heap |
+|---|---|---|---|
+| GLX | 17.8 MB | 253 | 80.8 MB |
+| TLX | 71.5 MB | 5,665 | 148.1 MB |
+
+three retains the CPU copy of every geometry attribute after upload; GLX
+uploads and drops. That +53.7 MB — against 52.8 MB actually uploaded — is the
+gap, and 483 scenery chunks are what fill it.
+
+### Releasing those arrays: DISPROVED, twice, live
+
+The obvious fix is to null `attribute.array` once the backend holds a GPU
+buffer. Do not spend the afternoon on it — it was built, gated, A/B'd and it
+does not work. Three findings, in the order they cost time:
+
+1. **`BufferAttribute.onUpload` is not the hook.** It is a legacy
+   `WebGLRenderer` API: the string `onUploadCallback` appears **ZERO times** in
+   `three.webgpu.min.js`. The WebGPU renderer's backends never call it. Shipping
+   that would have been a no-op that looked like a fix.
+2. **A frame counter is not a clock.** The first sweep gate was
+   `(++_relSweep % 90) === 0`. The A/B came back with `relSweeps: 22` and
+   `relCount: 0` across a 40 s run — only 22 presents happened, `22 % 90` never
+   hits zero, and **the sweep never executed once**. The heap was identical in
+   both arms because the code never ran, which reads exactly like "the fix does
+   nothing". Only the `relSweeps` / `relPending` counters told the two apart.
+   Same defect as every other frame-as-a-clock here; throttle on
+   `performance.now()`.
+3. **three re-reads `.array` after upload, in two places, and each one takes
+   the renderer down.** Both reproduced live, both fatal:
+
+   | site | code | crash |
+   |---|---|---|
+   | `draw()` | `firstVertex *= index.array.BYTES_PER_ELEMENT` — every indexed draw | `Cannot read properties of null (reading 'BYTES_PER_ELEMENT')` |
+   | `updateAttribute()` | `bufferSubData(target, 0, attribute.array)` on a version bump | `parameter 3 is not of type 'ArrayBuffer'` |
+
+   Excluding the index cleared the first and hit the second on the next run.
+   TLX then refuses and the tab reloads into GLX — which surfaces as Playwright's
+   `Execution context was destroyed, most likely because of a navigation`, so
+   the *probe* error was never the real message. The renderer's own
+   `[gfx] TLX: present failed — …` console line was.
+
+### What shipped instead
+
+A phone that picks three gets GLX, via the existing `_fail()` seam, with the
+reason recorded in `apex26.gfxTlxFail` where SETTINGS shows it;
+`apex26.tlxMobile="1"` overrides. GLX at ~113 MB total is measured working on
+the same handset. TLX is untouched on desktop.
+
+Making TLX itself viable on a phone means the chunk system has to **stream** —
+build near, drop far — instead of building all 483 chunks up front. That is
+real work, not a flag, and it is the entry in §3 for it.
+
 ## 3. Left on the table
 
-Ranked by how much I would trust the estimate, most first.
+The pre-08-18 narrative behind this list — the O(n²) AI scans that were
+traced and left alone, the `wheel` listener that is load-bearing, the ten
+"render leftover" dummy-producer gates, the boot-wall / code-cache / `defer`
+analysis and the boot A/B run that was VOID — moved verbatim to
+[archive/research/PERF-LEDGER-2026-08.md](archive/research/PERF-LEDGER-2026-08.md)
+on 2026-09-01. What stays here is what source comments and tests cite by name,
+each with its status, and the open list.
 
 The env-probe 300 m cull and world-then-sky order already shipped — see
 **Stale entry corrected** above. Do not re-open that item from this list.
 
-**Two full-field O(n²) AI scans** at `js/game.js` — traffic awareness and
-lateral separation, ~370 lines apart. The second loop's window (`|Δp| ≤ 6.5`)
-is strictly inside the first's (`−13…+34`), and both carry a comment defending
-"the O(n) pass is the price of seeing lapped traffic", written independently.
-Deliberately NOT merged: ~55k simple float ops/s is ~0.05 % of a core, and the
-second loop nests a brace deeper, so merging risks changing racing behaviour for
-no measurable return.
-The two loops DO skip self differently — loop 1 by identity, loop 2 by
-`ranked[(c.rank||1)-1]` — and this file first claimed that as a latent bug on
-the theory that a stale `rank` makes a car repel itself sideways. **Traced, and
-it is not reachable.** `rank` is assigned from `ranked` every physics step
-immediately before the `updateCar` loop; nothing reorders or mutates `ranked`
-inside it; and `updateCar` early-returns for `retired` (the only cars excluded
-from `ranked`) and for `finished`. So every car that reaches the separation loop
-satisfies `ranked[ci2] === c`. Left as written. Recorded because the claim was
-made without tracing it, which is the same error this document is otherwise
-about.
+**Two `Δprog` wraps with no pre-reject** — the traffic-awareness and lateral
+separation scans in `updateCar` paid two `Float64Mod` per pair to discard
+(**129 of 2575 samples = 5.01 %** of physics CPU, line-attributed).
+> **SUPERSEDED 2026-08-18.** Both scans pre-reject before wrap (windows
+> 34.1 m and 6.5 m), same form as `pairContact`. Bit-identical with a 0.1 m
+> margin. Do not re-implement, and do not merge the two loops (declined:
+> ~0.05 % of a core, and it risks racing behaviour).
 
-**`massBlocked` is O(buildings²)** (`js/track/tracks.js`) — `masses` is a flat
-array with no spatial index, unlike `barSegs` which got one. It is the one place
-cost is quadratic in prop count specifically. Measured trivial today: ~420k
-inner iterations on vegas (~4–25 ms of a 4059 ms build), 419 on monza. Below the
-bar that reverted `nodeGrid`. Worth doing when the skyline gets denser.
+**AI brake-look + traits allocated every physics step** (~20 cars × ~12
+objects × 60 Hz ≈ 14 k short-lived objects/s).
+> **TAKEN 2026-08-18 / 2026-08-19.** `AiDrive.traits` / `brakeDecision`
+> write reused scratches; `beginLook` / `pushLook` / `endLook` recycle the
+> look-ahead rows; the eight call-site ctx literals in `updateCar` became
+> `_ai*` scratches. Guarded by `tests/unit/ai-drive.test.mjs` and
+> `tests/specs/physics-hotpath.spec.js`. Do not re-introduce object literals
+> at those call sites.
 
-> **SUPERSEDED 2026-08-18.** `massBlocked` now uses a 24 m XZ grid
-> (`MASS_CELL`, incremental `massGridInsert` on `massAdd`). SAT stays exact;
-> only candidate gathering is culled.
+**`massBlocked` was O(buildings²)** (`js/track/tracks.js`; ~420k inner
+iterations on vegas, 419 on monza).
+> **SUPERSEDED 2026-08-18.** 24 m XZ grid (`MASS_CELL`, incremental
+> `massGridInsert` on `massAdd`). SAT stays exact; only candidate gathering
+> is culled.
 
-**Emitter ring recomputation** (`js/track/geom.js`) — `addCyl` calls `lo(a0)` /
-`lo(a1)` three times each per segment where two suffice; same in `addCone` and
-`addFrustum`. The `addBox` half of this finding measured 1–4 %, so expect less.
-Keep the angle as `(i+1)/seg*6.2832`, **not** `(i+1)%seg` — 6.2832 ≠ 2π, so
-wrapping changes the last segment's coordinates.
+**Emitter ring recomputation** (`js/track/geom.js`: `addCyl` / `addCone` /
+`addFrustum` called `lo()` three times per segment where two suffice).
+> **SUPERSEDED 2026-08-18.** Ring ends cached once per segment. Keep the
+> angle as `(i+1)/seg*6.2832`, **not** `(i+1)%seg` — 6.2832 ≠ 2π.
 
-> **SUPERSEDED 2026-08-18.** `addCyl` / `addCone` / `addFrustum` cache ring
-> ends once per segment. Angle stays `(i+1)/seg*6.2832`.
+**Typed accumulators for the props buffers** (`pos` / `nrm` / `col` / `mat` /
+`idx` were plain arrays grown by `push`, ~27 M push arguments on vegas).
+> **TAKEN 2026-08-18.** `TrackModels.scratch()` / `makeAccum` grow Float64
+> and Uint32 (`idx`) with named-arity `push`; `sealGeometry` copies to
+> exact-length typed arrays before `validateGeometry`, which accepts
+> `BYTES_PER_ELEMENT` views. A variadic `push()` shim measured SLOWER than
+> native; stages from `emptyBuffer()` stay plain arrays.
 
-**Typed accumulators for the props buffers** (`js/track/tracks.js`) — `pos`,
-`nrm`, `col`, `mat`, `idx` are plain arrays grown by `push`, ~27 M push
-arguments on vegas. Reported at 15–31 %. Three hard edges if attempted: a
-variadic `push()` shim measured SLOWER than native (the win needs fixed arity);
-`idx` must be `Uint32Array`; and `TrackModels.validateGeometry` gates on
-`Array.isArray(geo.pos)`, so the props mesh ships EMPTY if that is missed.
-
-> **TAKEN 2026-08-18.** `TrackModels.scratch()` / `makeAccum` grow
-> Float64 (pos/nrm/col/mat — same values as the old Array fuse) and
-> Uint32 (`idx`) with named-arity `push` (not rest/arguments).
-> `sealGeometry` copies to exact-length typed arrays before
-> `validateGeometry`, which now accepts `BYTES_PER_ELEMENT` views as
-> well as `Array.isArray`. Stages from `emptyBuffer()` stay plain arrays.
-
-**Non-passive capture-phase `wheel` listener on `window`**
-(`js/game/menunav.js`) — flagged by the audit as "the single highest-leverage
-item adjacent to scope", on the standard reasoning that a non-passive wheel
-listener at window/capture stops the browser starting a scroll on the
-compositor thread. **Audited, and it does not apply here.** Two independent
-reasons:
-
-- `css/tokens.css` sets `html, body { overflow: hidden }`, so the DOCUMENT
-  never scrolls. The only scrollable things are `.pane` regions inside menus.
-  Mid-race there is no scroll for the listener to delay, because there is no
-  scroll.
-- Inside a menu the handler is load-bearing, not overhead: it calls
-  `e.preventDefault()` (menunav.js) to redirect a wheel that landed on no
-  scroll region — a sheet head, a stats block, a circuit map — onto the nearest
-  pane. It cannot be made passive without deleting the feature.
-
-The only residue is that `onWheel` calls `activeLayer()` → `UiLayers.top()`,
-which is the 24-selector `querySelectorAll` plus a `getComputedStyle` per
-match. That is the same query `anyOpen()` was moved off, but wheel events are
-user-driven and occasional rather than per-frame, so it is not worth the same
-treatment. Left alone.
-
-**Frame-invariant uniforms** — ~95 tuner uniforms re-uploaded per frame across
-`begin()`, `drawSky()` and the composite. The file already has the pattern to
-fix it (`_frameToken`). Honest arithmetic: ~0.05 ms on a 16.7 ms budget, so
-hygiene rather than a win.
-
+**Frame-invariant uniforms — the tuner-knob upload cache** (~95 tuner
+uniforms re-uploaded per frame across `begin()`, `drawSky()` and the
+composite; honest arithmetic ~0.05 ms, hygiene rather than a win).
 > **TAKEN 2026-08-18 (GLX).** `uf1` / `_litUf` / `_skyUf` / `_compUf` skip
-> equal tuner-knob re-uploads. `envFaceBegin()` + the main `begin()` share
-> the same LIGHTING TUNER scalars in one game frame; WebGL uniforms persist
-> on the program. View / eye / env / lights / time / grainTime still upload
-> every call. WGX writes a whole UBO per `begin()` — no per-field skip.
-> Do not invent a millisecond claim from this.
+> equal tuner-knob re-uploads; `envFaceBegin()` + the main `begin()` share
+> the same scalars in one game frame (WebGL uniforms persist on the
+> program). View / eye / env / lights / time / grainTime still upload every
+> call. WGX writes a whole UBO per `begin()` — no per-field skip. Do not
+> invent a millisecond claim from this.
 
-### Added 2026-08-14, second round
+**Stream the chunk system, so TLX can run on a phone** — the one thing that
+would undo §2m's decline. `tlx-chunked` builds all 483 scenery chunks up front;
+~47 are visible at a time. GLX gets away with it because it drops the CPU copy
+after upload, and three never does — 71.5 MB across 5,665 retained
+`JSArrayBufferData`, measured, which is what OOM-kills an iPhone tab mid-race.
+Releasing after upload is **closed, not open**: see §2m for the two three.js
+sites that re-read `attribute.array` and take the renderer down with them.
 
-Ranked as above. **Provenance note:** the counts below came out of a read-only
-audit pass and were NOT re-derived by hand afterwards, unlike everything in §2.
-Treat them as this document treats operation-count estimates — see §1.
+Build-near / drop-far is the remaining route, and it is a real piece of work:
+chunk geometries would need a residency set driven off the same cull the
+renderer already runs, plus `dispose()` on eviction and a rebuild path that
+does not hitch when a chunk re-enters. Worth it only if three.js on mobile is
+a goal — desktop TLX has the memory and is unaffected. Estimate the win at
+roughly the 53.7 MB gap, no more: the GPU-side difference was measured at
+~11 MB, so this is a CPU-heap fix, not a rendering one.
 
-**Road and terrain never get a frustum cull, in any pass.** They are the only
-large world meshes built with `G.createMesh` where their twin (props, glass)
-gets `G.createChunkedMesh(…, 72)` — `js/track/tracks.js` builds both, a few
-lines apart. `js/render/glx/chunked.js` only declines to chunk under 2000
-triangles; road is 51-61 k tris and terrain 25-58 k, so the capability is there
-and simply is not asked for. Counted by binning the ribbons into the same 72 m
-cells `createChunkedMesh` uses and counting triangles within radius R of the
-driver at 12 stations a lap (a frustum with far plane R is a subset of the
-sphere of radius R, so these are **lower** bounds):
+**Road and terrain had no frustum cull in any pass.** Counted by binning the
+ribbons into the same 72 m cells `createChunkedMesh` uses (a frustum with far
+plane R is a subset of the sphere of radius R, so these are **lower** bounds):
 
 | pass | vegas | spa | monza |
 |---|---|---|---|
@@ -1809,297 +1939,31 @@ sphere of radius R, so these are **lower** bounds):
 | provably outside the 900 m far plane | **53 %** | **43 %** | **45 %** |
 | provably outside the ±80 m shadow ortho | **89 %** | **88 %** | **89 %** |
 
-> **SUPERSEDED 2026-08-17 (render-audit follow-ups).** Camera-pass road AND
-> terrain now lazy-build `*Chunked` under the baked 300 m env-probe cull +
-> `PerfGov.tier() < 3` (`js/game.js` drawWorldMeshes). Shadow ribbons already
-> chunked independently. The table above remains a valid *pre-chunk* reach
-> measurement; do not re-derive “unreachable” from it.
+> **SUPERSEDED 2026-08-17.** Camera-pass road AND terrain lazy-build
+> `*Chunked` under the baked 300 m env-probe cull + `PerfGov.tier() < 3`
+> (`js/game.js` drawWorldMeshes); shadow ribbons were already chunked. The
+> table remains a valid *pre-chunk* reach measurement — do not re-derive
+> "unreachable" from it. `frameCullDist` is read only inside the chunked
+> path, so the env-probe cull never touched a ribbon triangle via `draw()`.
 
-Three things make this worth writing down rather than doing:
+**`uCarReflect` was not shed with `po.reflect`** (tier 2 still ran the
+car-paint SSR march).
+> **SUPERSEDED 2026-08-17.** `po.carReflect = tier >= 2 ? 0 : undefined`
+> in `game.js`; `glx/post.js` prefers `opts.carReflect`. Do not re-open.
 
-1. **The shadow half is bit-identical; the camera half is not.** The AABB-vs-
-   light-frustum test is exactly the one `castShadowChunked` already applies to
-   props, and a triangle outside the ortho writes no depth. But chunking
-   reorders submission *within* the mesh, so coplanar LEQUAL ties inside the
-   road could flip — the class of change `floorLast` would have been (draw the
-   base floor last among opaque world meshes) already flags. That needs a
-   rendered lap, not a frame.
-2. **The fix already exists in the tree and is unreachable.** `js/game.js`
-   lazily builds `track.meshes.roadChunked` and draws it via `drawChunked` —
-   but only under `LT.roadChunkLamps && LT.perChunkLights`, a *lamp* feature
-   that is default-off and now tier-shed. Same shape as the `uInstanced` entry
-   in §2: a fix that existed and had not been copied across.
-   (**Also superseded:** envCull now opens the camera path without lamp knobs.)
-3. **It sharpens a §3 entry above.** `frameCullDist` is read in exactly one
-   place, inside the chunked path. `draw()` never reads it — so the 300 m
-   env-probe cull **cannot remove a single ribbon triangle from the probe.**
-   It only ever touched props and glass.
+**Boot wall — the parts that shipped.** Per-file content-hash `?v=<sha>` (a
+bump no longer cold-compiles every script); the eight `readyState ===
+"loading"` guards became `!== "complete"` (the prepared form for `defer`);
+`Tracks.LIST` `points` is a lazy getter (the 24.0 ms all-40-circuits
+Catmull-Rom boot cost). `defer` itself and the 346 KB dev surface continued
+in the 08-18 hunt below.
 
-**Two `Δprog` wraps with no pre-reject, where `pairContact` has one.**
-`pairContact` opens with an exact cheap reject before its two float modulos,
-with a comment saying the modulos "were being spent almost entirely to prove
-'not touching'". The identical wrap idiom, on the same `prog` values, appears
-twice more inside `updateCar` — the traffic-awareness scan and the lateral
-separation scan — with no such guard, so every one of ~20x19 iterations per
-step pays two `Float64Mod` calls to discard. Line-attributed: **129 of 2575
-samples = 5.01 %** of physics CPU, the largest identified JS line-group after
-the collision solver, and a floor (it excludes the inlined executions).
-Bit-identical with a 0.1 m margin on the reject, which sidesteps the one
-unprovable part — the wrap expression can differ from the raw delta by ~1 ulp.
-**This is NOT the "merge the two loops" idea §3 already declined**; it is the
-missing guard on each, independently, and it is ~10x the size that entry
-estimated.
-
-> **SUPERSEDED 2026-08-18.** Both scans now pre-reject before wrap (windows
-> 34.1 m and 6.5 m), same form as `pairContact`. Do not re-implement.
-
-**AI brake-look + traits allocate every physics step.** vegas
-`profile-gameloop … physics` (2026-08-18) still has `update` 24.6 %,
-`updateCar` 13.3 %, `brakeTarget` 1.4 %. The math is the look-ahead; the
-GC is not: every AI car built a fresh `samples[]` of `{d,k,bank}` rows
-(~10), plus `AiDrive.traits()` and `brakeDecision()` object literals.
-~20 cars × ~12 objects × 60 Hz ≈ 14 k short-lived objects/s, same class
-`pairContact` already left (`_ct` / `_sep`).
-
-> **TAKEN 2026-08-18.** `AiDrive.traits` / `brakeDecision` write reused
-> scratches (read-before-next-call, same as `_ct`). `beginLook` /
-> `pushLook` / `endLook` recycle the look-ahead rows. Values are
-> bit-identical; do not re-allocate those three.
->
-> **TAKEN 2026-08-19.** The leftover call-site ctx literals are gone too.
-> `updateCar` fills `_aiBoost` / `_aiOtFire` / `_aiBr` / `_aiLane` /
-> `_aiWantX` / `_aiOtPull` / `_aiDefend` / `_aiBoxed` then passes the
-> scratch. `simRnd()` stays behind the `otArmed` short-circuit. Guarded
-> by `tests/unit/ai-drive.test.mjs` (no `AiDrive.*( {` in `updateCar`)
-> and `tests/specs/physics-hotpath.spec.js` (ctx identity across steps).
-> Do not re-introduce object literals at those eight call sites.
->
-> **TAKEN 2026-08-18 (leftover sweep).** WGX road `createChunkedMesh` now
-> expand-once + spatial bins. Props/glass share one IBO with `firstIndex`
-> run-merge. TLX `uf1` skips unchanged tuner scalars. `resolveCollisions`
-> rebuilds buckets only after `shiftLong`. AI scans skip `finished`
-> rivals. SW install no longer precaches `apex.js` / `agentview*`
-> (fetch-miss still caches them).
->
-> **TAKEN 2026-08-19 (render leftover).** WGX `drawChunked` now frustum +
-> radial-culls the road (surfaceId 16) — near is GL clip `w+z`, the old
-> exemption threw away the env-probe 300 m cap. WGSL/TSL sky skip the
-> night corona/disc (GLX already had the gate); TSL also gates the
-> day-band `atan`+`vnoise`. TLX shadow `cullInstances(..., {upload:false})`
-> packs CPU-side only (shadow has its own InstancedMesh). WGX skid
-> expand 5→9 only when the VBO is dirty. Still open: lazy circuit tags,
-> script-tag `defer`, WGX whole-UBO skip, TLX road `trk` so
-> `chunkedTrackCoords` can flip on.
->
-> **TAKEN 2026-08-19 (render leftover 2).** Countable dummy-producer /
-> multiplied-by-zero leftovers on the draw path, all three backends:
-> - Sun Cook-Torrance + clearcoat sun lobe gated on `NoL` / `NoLg`
->   (lamp `NoLl` twin). Backfaces skip two GGX evals for a result of 0.
-> - Composite else-path no longer fetches the 1×1 white SSAO / black
->   bloom; `uHaveGodray` skips the god-ray fetch on GLX/TLX. WGX leftover 6
->   packs haveGR in CompositeU `lift.w` and skips the same fetch.
-> - SSAO centre uses `viewPosD` / `ssaoViewPosFromD` — one depth sample,
->   not two. GLSL ES 3.00 has no overloads; the 1-arg `viewPos` wrapper
->   stays for contact-shadow sites.
-> - MSAA depth resolve / blit only when SSAO, godray, SSR or flare will
->   read it (auto-tier 4 night sheds all four).
-> - WGX no longer `_clearTarget`s unread SSAO-white / bloom-mip0.
-> - AI cars after the behind-camera / near-eye tests skip an 8 m sphere
->   outside the same 6 planes as `propBatches`. Player never culled.
->   The side-frustum `continue` is **after** `_shadowCount++` so a rival
->   just off a chase FOV still casts into the ±42 m car map (a look-wrong
->   the first hoist introduced). GLX/TLX `makeFrustumPlanes` honour the
->   pooled `out`. `needDepth` / WGX `_ssrEarly` treat omitted
->   `carReflect` as the 0.05 tuner default — otherwise a dry night
->   skipped the MSAA depth resolve while car-paint SSR still marched.
->   Guarded by `tests/unit/perf-try.test.mjs`.
->   Do not invent a millisecond claim. Do not re-open the 08-18 union
->   banner items (WGX road cull, UBO skip, defer, pine unit-Y, merging
->   AI loops).
->
-> **TAKEN 2026-08-19 (render leftover 3).** Fog `pow`/`exp` dummy-producer
-> gate, all three backends. `uFogDensity==0` made `fd==0` / `f==0` so the
-> mix was identity, but every lit fragment still paid `pow(sunAmt,4)`,
-> `pow(sunAmt,16)`, tint, and `1-exp(-fd²)`. Outer gate is
-> `density>0 || mist>0` (mist reuses `sunAmount` / `lampFogC`); inner
-> gate wraps the height/`pow`/mix so a density-0 + mist-on tuner frame
-> still tints. Race sessions keep density > 0 (clear day 0.0008) — this
-> is the setup-preview / carview / tuner-zero path. Uniform-coherent
-> (WebGPU Fundamentals + MDN: skip unused ALU; no warp divergence).
-> Do not invent a millisecond claim. Still open: lazy circuit tags,
-> script `defer`, WGX whole-UBO skip, TLX road `trk` / `chunkedTrackCoords`.
->
-> **TAKEN 2026-08-19 (render leftover 4).** Window-sun-flash `pow(_,22)`
-> dummy-producer, all three backends. The term is
-> `* (1-wetSheen) * envBlend * uWindowSunFlash * uKeyMul`. Wet road
-> forces `envBlend` high, then multiplies the flash by 0 — every wet
-> tarmac fragment paid the 22-exponent for identity. Gate is
-> `(1-wetSheen)*uWindowSunFlash*uKeyMul > 0.001` (tuner-zero and
-> keyMul-0 too). Dry glass is unchanged. Do not invent a millisecond
-> claim. Do not re-open the 08-18 union banner. Still open: lazy
-> circuit tags, script `defer`, WGX whole-UBO skip, TLX road `trk`.
->
-> **TAKEN 2026-08-19 (render leftover 5).** Sky golden-hour + low-sun
-> band dummy-producer, all three backends. First factor is
-> `(1-smoothstep(0, 0.72, sunE))` / `(1-smoothstep(0, 0.60, sunE))` —
-> both identically 0 when `sunE >= 0.72` (default day ~0.95, night
-> moon-key ~1). Gate is `if (sunE < 0.72)` / `If(sunE.lessThan(0.72))`
-> wrapping `goldenAmt` + `lowBand`. `sunE` is a uniform (`uSunDir.y`).
-> Dawn/dusk still enter. Uniform-coherent. Do not invent a millisecond
-> claim. Still open: lazy circuit tags, script `defer`, WGX whole-UBO
-> skip, TLX road `trk`.
->
-> **TAKEN 2026-08-19 (render leftover 6).** WGX composite godray fetch
-> dummy-producer. After SSR remul, `U.lift.w` (s[47]) is dead — wetness
-> lives in the SSR pass `.a`. Pack `s[47] = haveGR ? 1 : 0` and gate
-> `if (U.lift.w > 0.5) { c += textureSampleLevel(godrayTex…) }`. Keep
-> `let ssrWet = U.lift.w` so Dawn still compiles a leftover use. Delete
-> the dummy `_clearTarget(godrayView)` (stale contents unread, same as
-> leftover-2 SSAO/bloom) and the now-dead `_clearTarget` helper. Do not grow CompositeU past 256 B. Do not
-> zero `gain.w` carReflect when `!_ssrReady`. Do not invent a
-> millisecond claim. Still open: lazy circuit tags, script `defer`,
-> WGX whole-UBO skip, TLX road `trk`.
->
-> **TAKEN 2026-08-19 (render leftover 7).** Sky twilight cloud wash
-> `pow(sd, 2.5) * twilight`. `twilight` is a uniform
-> (`smoothstep(0.02,0.22,sunE) * (1-dayGate) * (1-nightSky)`) —
-> identically 0 on default day (~0.95) and night. Default `cloud` is
-> 0.4 so the cloud block is live; the pow was `* 0`. Gate
-> `if (twilight > 0.001)` on GLSL + TSL. WGSL cloud path has no
-> twilight wash. Dawn/dusk still enter.
->
-> **TAKEN 2026-08-19 (render leftover 8).** TSL godray sun-half +
-> `hLamp` parity with GLSL/WGSL. Night `haveGR` is `lampVol` with
-> `uStr=0` (moon-key `sunDir.y ~ 0.97`) — TSL still paid 16 shadow
-> compares + 16× `gCloud` FBM then `* str`. `hLamp` exp sat outside
-> `lampStr>0` (every daytime sun-shaft frame). Move both behind the
-> existing uniform gates; `trans` stays outside. Also reorder TSL
-> heat-haze: Gaussian first, scene-tag fetch second (GLX/WGSL already
-> had this — ~92% of pixels are off-plume).
->
-> **TAKEN 2026-08-19 (render leftover 9).** Godray Henyey-Greenstein
-> `sqrt` dummy-producer, all three backends. The phase's only
-> consumer is `* uStr`. Night lamp-vol frames skip it. Uniform-coherent.
->
-> **TAKEN 2026-08-19 (render leftover 10).** WGX SSR pass omitted
-> `carReflect` defaulted to 0 while leftover-2's `_ssrEarly` and
-> composite `gain.w` already use the 0.05 tuner default. HIGH dry paid
-> the MSAA depth resolve, skipped the march, then COMPOSITE fetched a
-> target that never ran. The pass now defaults to 0.05 like GLX
-> `_carReflPre`. Do not zero `gain.w`.
-
-**`uCarReflect` is not shed with `po.reflect`.** Tier 2 sets `po.reflect = 0`
-and the source says "Tier 2 drops the wet-road SSR march" — but the SSR gate is
-`(uReflect > 0.001 || carPx > 0.3)` and `uCarReflect` keeps its 0.05 default,
-so every car-paint pixel still runs the full march (~36-40 dependent fetches).
-Verbatim the `po.contact` / `lampVol` defect, on the third operand-pair nobody
-grepped. **Not taken because it is not bit-identical** — it removes a visible
-reflection — though it is the same trade tier 2 already makes for the road. The
-strictly-equivalent half of this site WAS taken; see §2.
-
-> **SUPERSEDED 2026-08-17.** `game.js` now sets `po.carReflect = tier >= 2 ? 0 :
-> undefined` and `glx/post.js` prefers `opts.carReflect`. Do not re-open.
-
-**The boot script wall, re-measured — and the headline is not what it looks
-like.** Corrected counts: **148 tags, 5,638,215 B** on this commit (§0's
-146 / 5,466,108 B predates two added files, and this commit's own comments);
-`js/circuits` is 1,729,016 B / 40 files / **30.7 %**
-of it, for data where a session uses exactly one file. But V8 compile of all 148
-files measured **97.3 ms total** (25.8 ms for the circuits) and executing all 40
-circuit IIFEs is **2.5 ms** — so parse+execute of the circuit wall is ~1 % of a
-2299 ms render delay, not the bulk of it. "Render delay" is the browser's bucket
-for everything between TTFB and the paint; here that is serial EXECUTION of the
-wall plus eager top-level work.
-
-> **CORRECTION to the sentence above, which first read "148 serialised
-> render-blocking fetches".** That was wrong, and wrong in a way that would send
-> the next person after the request COUNT instead of the execution. Classic
-> parser-blocking scripts are still **downloaded in parallel** — the preload
-> scanner keeps scanning and triggers the fetches ahead of the parser
-> (web.dev, *Deep dive into the murky waters of script loading*), and GitHub
-> Pages serves HTTP/2, so they multiplex on one connection. Only EXECUTION is
-> serial and ordered. This also kills `defer` as a lever from a second
-> direction, on top of the eight `readyState === "loading"` guards below:
-> `defer` cannot fix a serialisation that is not happening.
-
-**The `?v=N` bump throws away Chrome's code cache for all 148 scripts, every
-deploy.** v8.dev's *Code caching for JavaScript developers*: "Code caches are
-(currently) associated with the URL of a script… changing the URL of a script
-(**including any query parameters!**) creates a new resource entry in our
-resource cache, and with it a new cold cache entry." AGENTS.md mandates bumping
-EVERY `?v=N` after ANY js/css change, so a one-line CSS edit costs every
-returning player a full re-download and a cold compile of the whole wall.
-Per-file content hashing would fix it and is a convention change, not a code
-change — but it touches the index.html/manifest guard and the `version.json`
-shell guard, so it is its own commit. (SUPERSEDED: SHIPPED — index.html now
-carries per-file `?v=<12-hex-sha>` on every src tag; only edited files go cold
-per deploy, exactly the fix this paragraph asks for.)
-
-**And the same article reframes the 97.3 ms figure.** `sw.js` precaches inside
-the `install` event, and V8 treats that path specially: "the code cache is
-immediately created when the resource is put into the service worker cache. In
-addition, we generate a **'full' code cache** — we no longer compile functions
-lazily, but instead compile everything… at the cost of increased memory use."
-Both preconditions hold here (classic scripts, UTF-8). So 97.3 ms is a LAZY
-compile number, and the installed-PWA path eagerly compiles all 5.64 MB —
-including the 346 KB of dev surface no player reaches and all 40 circuit files.
-That is a MEMORY cost on exactly the device class the crash sentinel exists for,
-and it is an argument for trimming the eager wall that has nothing to do with
-parse time. Not measured here — attributed to v8.dev.
-
-Two eager costs found that are
-NOT bytes: `js/track/tracks.js` built Catmull-Rom control points for **all 40**
-circuits at boot (**24.0 ms**, an order of magnitude more than parsing them),
-and `js/game/apex.js` + `agentview*` is **346 KB of dev/test surface** that no
-player reaches.
-
-> **The first is TAKEN** (found stale 2026-08-31, three rounds after the fact).
-> `js/track/tracks.js:2232-2237` is a self-replacing lazy getter: `points`
-> materializes on first access through `materializeListPoints` (`:2240`), and
-> `buildCenterline` calls `ensurePoints` (`:2298`) so the heavy path never sees
-> the getter. `LIST.length === 40` and every metadata field are unchanged, and a
-> materialized def is bit-identical to the old eager one. A session builds
-> exactly one circuit, so 39 of the 40 are never paid for. The paragraph above
-> is kept as the measurement that justified it; only the tense is wrong.
-> The 346 KB dev surface is still open — see §3.
-
-**`defer` is not the one-attribute change it looks like.** Every external tag
-sits at the very end of `<body>` with no markup after it, and deferred classic
-scripts keep document order — so it reads as free. It is not: **eight**
-self-initialising modules guard on
-`if (document.readyState === "loading") …DOMContentLoaded… else init();`
-— enumerate them with `grep -rl 'readyState === "loading"' js/`, which gives
-`js/game/ariastate.js`, `gfx-quality.js`, `menunav.js`, `music-lib.js`,
-`scrollfade.js`, `sheetshape.js`, `spotify.js`, `topmodal.js`.
-Parser-blocking,
-`readyState` is `"loading"`, so all eight defer `init()` until after the whole
-wall has run — which `sheetshape.js` states as a deliberate choice. Under
-`defer`, `readyState` is `"interactive"` and all eight take the `else` branch and
-initialise **mid-wall**, so a module at tag 50 can init before one it reads at
-tag 100 exists. The prepared form of the change is
-`readyState !== "complete"`, which is behaviour-preserving today and correct
-under `defer` — do that first, separately, and prove it green before touching a
-single tag. (SUPERSEDED: the prepared form SHIPPED — all eight named modules
-now read `readyState !== "complete"`, and the quoted grep matches only
-`cockpit-opts.js` and `metrics.js`. `defer` itself remains untaken.)
-
-**And the boot A/B run to settle it was VOID — recorded because the way it
-failed is reusable.** Interleaved base / defer / no-script arms, fresh
-`browser.newContext({serviceWorkers: "block"})` per run, 5 rounds. The
-**no-script control arm** — a page with zero external scripts — returned FCP of
-140, 168, 7660 and 11440 ms across its runs. Variance on a page that does
-nothing exceeded the entire effect being measured, so every number in the run is
-machine contention (five audit agents were running; loadavg 4-11). **The control
-arm is the anti-vacuity guard, and it is what caught this** — without a
-do-nothing arm the base/defer medians would have looked like a clean, damning
-result. Two further traps found the same way: an earlier pass was silently
-served by a registered service worker (`apex26-1225` precache) on every arm
-including the control, and arm ORDER was itself a confound — the first arm in
-each round ran clean while later arms measured the previous arm's teardown.
-Re-run it on a quiet box (`loadavg < 2`, nothing else in flight), rotating arm
-order per round, and report the MINIMUM as well as the median — the fastest a
-run has actually gone is the least contaminated estimate, which is the same
-argument `PerfGov._floorMs` already makes about frame intervals.
+**Still open** (repeated at the end of every leftover round; do not re-open the
+08-18 union banner items): lazy circuit tags, script-tag `defer`, WGX
+whole-UBO skip, TLX road `trk` so `chunkedTrackCoords` can flip on. Any boot
+A/B needs a quiet box (`loadavg < 2`), a do-nothing control arm, rotated arm
+order, and the MINIMUM reported beside the median — the ledger records how the
+first attempt was VOID without those.
 
 ### Added 2026-08-18 — hunt after the 08-17 board shipped
 
@@ -2136,6 +2000,57 @@ chasing red tests. `load-order.test.mjs` now asserts that any file which runs
 circuit files also loads `LAZY_SCENERY`, reading source with comments stripped
 (the first cut of that guard was satisfied by the word appearing in its own
 explanatory comment).
+
+**And it shipped a silent offline regression (fixed 2026-09-01).** `sw.js`
+builds its precache from the shell's `<script>` tags plus an explicit
+`optional` list. Taking 41 files off the tags took them out of the install with
+nothing putting them back, so an installed PWA that went offline requested
+`js/circuits/scenery/<id>.js?v=<build>`, missed, and — because
+`loadBackendScripts` sets `el.onload = el.onerror = resolve` — carried on and
+built the circuit BARE. No exception, no console line, no red test.
+
+The lesson is that **the boot wall and the precache are the same list read
+twice**, so any move off one is a move off the other unless it is put back
+deliberately. Both new rosters are now seeded `optional` (not `essential`: an
+install must not fail over a circuit the player may never race) and stamped
+`?v=<build>`, because the injector requests them with that query and the SW
+matches without `ignoreSearch` — a bare key is one nothing ever asks for.
+`load-order.test.mjs` now asserts both: that every `LAZY_RACE` / `LAZY_SCENERY`
+file is seeded, and that the SW's own stamping predicate — extracted from
+source and RUN, not pattern-matched — covers every path it seeds.
+`tools/offline-precache-check.cjs` is the behavioural half; see its README row
+and `docs/TESTING.md` for why `setOffline(true)` alone measures nothing here.
+
+**Round 16 (2026-09-01): 3,715,772 -> 3,319,340 B, another 396,432 B / 10.7%,
+in two lifts.** `js/data` (154,412 B, 8 files) and `js/net` (242,020 B, 11
+files). 156 tags -> 137. Cumulative over rounds 15-16: **4,964 KB -> 3,241 KB**.
+
+They needed different mechanisms, and the reason is the general rule for this
+lever. `js/data` is an ISLAND — eight globals, and nothing outside the
+directory names any of them except `DataHub.init/.open` and one already-guarded
+`typeof F1API` — so it can simply be absent until the DATA button asks for it.
+`js/net` is the opposite: `netPlay` is called at 20 sites in game.js and only
+three are `netPlay && …` guarded, with `netPlay.tick()` in the frame loop. The
+choice there was 17 new guards scattered through the loop and the result path,
+or ONE inert null object; the null object wins because a missed guard is a
+crash mid-race while a missing stub member is a red test.
+
+**The stub's dangerous line is not a method, it is a VALUE.**
+`ownsRaceControl`/`ownsClassification` are `!active || role === "host"` in
+js/net/netplay.js, so with no session they are TRUE — a solo game owns
+everything. A stub returning false there would silently stop a solo race
+classifying its own result: no crash, no console line.
+`tests/unit/net-stub-surface.test.mjs` pins both, checks them against the real
+module's shape so it cannot pin a fossil, and derives the rest of the required
+surface from the CALL SITES rather than a hand-written roster.
+
+**Measured, and the measurement needed a control.** VS FRIEND from the menu
+loaded the bundle in **39.7 s** on this box — alarming until decomposed: 11
+files, **150 ms of actual fetch**, 19.5 s from first request to last byte. The
+same click with `#game` hidden: **0.1 s**. It is the rAF starvation
+docs/TESTING.md already records (an identical click at 80-113 s rendering,
+0.3-0.6 s not), not the payload — and the 241 KB it parses is the same parse
+boot used to pay unconditionally, now paid by the players who ask for it.
 
 Boot wall **at 1421:** **153** `src=` tags, **5,909,851 B** (5.91 MB).
 `apex.js` + `agentview*` is **350,083 B** of eager dev/test surface.

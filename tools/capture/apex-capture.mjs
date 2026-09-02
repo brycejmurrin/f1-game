@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // apex-capture — parallel headless screenshot capture.
+// @doc Parallel headless screenshot sweep across cameras/tracks/modes → `scratch/captures/apex-capture/<purpose>/`.
+// @skill playwright-probe
 //
 // Architecture (identity / tracks):
 //   • ONE shared Node static server (async — not python -m http.server)

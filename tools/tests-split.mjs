@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // tests-split — the tests/ split, DONE and shipped; kept for provenance and
+// @doc The tests/ split as a reproducible plan (done and shipped; kept as the move-map source for `cross-file-paths`).
+// @section runner
 // as the move-map source for cross-file-paths. The layout below is the
 // CURRENT tree, not a pending plan:
 //

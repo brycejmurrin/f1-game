@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 149 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 156 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -48,7 +48,7 @@ node tools/test-bg.mjs --stop                # kill everything still running
 
 Each group gets its own free port, its own `artifacts/report-<port>/` and its
 own log, so groups cannot tear down each other's web server and a stall is
-attributable to one log rather than to "the run". `WORKERS=2` per group is the
+attributable to one log rather than to "the run". `WORKERS=1` on a 4-core box (2 above that; `test-bg` picks by core count and refuses to start above loadavg 3) per group is the
 default; every worker is a Chromium + SwiftShader process, so total browsers is
 groups × workers.
 
@@ -228,7 +228,7 @@ game script evaluates, so a spec needs no change to become verbose:
 
 ```sh
 APEX_LOG=scenery:debug npm test -- tests/specs/props-over-road.spec.js
-APEX_LOG=debug node tools/test-bg.mjs scenery
+APEX_LOG=debug node tools/test-bg.mjs circuits
 ```
 
 Every failure automatically attaches three things (see `tests/helpers/fixtures.js`), and
@@ -246,91 +246,63 @@ Every failure automatically attaches three things (see `tests/helpers/fixtures.j
 
 Run with `npm run test:<group>`. Every group below names an intentional set of
 specs; `npm run test:audit` fails if any test file belongs to none of them, and
-`tests/unit/test-groups.test.mjs` fails if this table and `package.json` disagree.
+`tests/unit/test-groups.test.mjs` fails if this table and `package.json` disagree
+— or if a spec lands in two topical browser groups (the 2026-09 regroup folded
+30 browser groups into 12 with a DISJOINT partition, so `pick-tests` can never
+run a spec twice; the 115-spec union was compared file for file before and after).
 
-### Start-here / breadth
+A browser group is 10-40 minutes of SwiftShader; run ONE at a time through
+`tools/test-bg.mjs`, and `tools/select-specs.mjs` for a finer per-spec cut when
+the group is much bigger than the change.
+
+### Boot (run first, and first to fix)
 
 | Group | What it runs |
 |---|---|
-| `tiny` | page loads, `__apex` present, dev hooks respond. The first thing to run and the first thing to fix |
-| `fast` | curated fast subset: smoke + api + collision + offtrack + parts-physics + steering |
+| `tiny` | boot-guard, smoke, dev-tools, logging — page loads, `__apex` present, dev hooks respond. The CI push gate runs `smoke` alone; `tiny` is the nightly 4-shard boot group |
+| `smoke` | page load + `__apex` available — the one spec the CI push gate runs |
 | `audit` | coverage guard — every test file must belong to ≥1 topical group (`tools/test-coverage-audit.mjs`) |
 | `pick` | print the groups a change needs (`tools/pick-tests.mjs`) — not a test run |
 | `bg` | start groups in the background (`tools/test-bg.mjs`) — not a test run |
 
-### Physics & behaviour
+### Topical browser groups (disjoint)
 
 | Group | What it runs |
 |---|---|
-| `physics` | the driving model itself: physics-characterization, physics-fixes, physics-hotpath, longitudinal, projection, understeer-cue. world-physics and active-aero bill to `behaviour`, elevation-tracks to `circuit`. The 16 per-circuit foundation specs LEFT this group — they contain no driving-model physics, and the `physics-` filename prefix existed only to be caught by this glob, so every driving-model edit paid ~16 circuit builds it could not break while `js/circuits/` edits never ran them. Misgrouped in both directions |
-| `foundation` | the 16 per-circuit foundation specs (`tests/specs/*-foundation.spec.js`) — required models present, props clear of the racing surface, terrain grounded, water safe, walls sane. Routed from `js/circuits/` and the track engine, which is what actually breaks them |
-| `collision` | car-to-car and wall collision, drift, off-track |
-| `behaviour` | world-physics, active-aero, aero-zones. The collision/drift/offtrack members and physics-fixes LEFT in the double-billing dedupe — each spec was running twice whenever two of its groups co-ran, which `pick-tests` makes routine. Coverage is unchanged: the dedupe shipped WITH new `pick-tests` routing (game.js and physics-consts.js now select `collision` and `hooks` too), verified by comparing the SPEC-FILE union before and after, not the group names |
-| `debris` | the Rapier debris side-world |
-| `steering` | presets, sliders, steering modes, gamepad |
+| `driving` | the driving model and everything it hits: physics-characterization, physics-fixes, physics-hotpath, longitudinal, projection, understeer-cue; car-to-car + wall collision, drift, off-track; world-physics, active-aero, aero-zones; the Rapier debris side-world and race control. Union of the old `physics` + `collision` + `behaviour` + `debris`. `physics-characterization` also runs in Node as `game-vm` in seconds — run that first |
+| `hooks` | the `__apex` contract end to end: dev-tools, headless, obs/act, data lifecycle, telemetry compare, assets, logging, persistence, the race wake lock, output paths, the map + new hook contracts, and the agent world view (world, trackInfo, scene, rollout, determinism, the drive bench). Union of the old `api` + `hooks` + `agent` + `map` + `paths` |
+| `circuits` | walls + autopilot + elevation + the codebase-audit edge cases; the 16 per-circuit foundation specs (`tests/specs/*-foundation.spec.js` — required models present, props clear of the racing surface, terrain grounded, water safe, walls sane); props/terrain over road, F1 track accuracy, scenery kits. Union of the old `circuit` + `foundation` + `scenery`. Routed from `js/circuits/` and the track engine; a one-circuit edit runs `verify-track.cjs <id>` then THAT circuit's foundation spec alone, not this group |
+| `car` | catalog, budget, persistence, recipes (inside `parts-physics`), factory presets, mesh caches, liveries, ERS, car effects, the custom team, the car viewer, garage aero (the old `parts`) |
+| `input` | presets, sliders, steering modes, gamepad, touch steer, the tilt pipeline, the steer-schema migration; the 13 camera modes, camera + driving hooks, the camera tuner. Union of the old `steering` + `camera` |
+| `ui` | UI behaviour and layout: button/touch, resize, UI scale, the redesign, HUD layout + audit, menu survey + keyboard (slow), rotation recovery; WebAudio engine/sfx smoke + the music library (the old `ui` + `audio`) |
+| `modes` | season, time trial, career, qualifying |
+| `net` | multiplayer in a browser: car roles, the per-car input seam, the session, the lobby, the waiting room, seats, N-peer, and the camera SCAN plus its cancel path (a real `getUserMedia` against a Y4M of a real QR that Chromium plays as a webcam) |
+| `gfx` | instanced draw, GL capability probes, the lighting A/B pixel comparison, image grade, the lighting-tuner grade, the three.js/TSL backend probes. Union of the old `webgl` + `ab` + `tlx` |
+| `baseline` | six blessed pixel baselines for menu IDENTITY — colour, type, spacing (fast) |
+| `shimmer` | does baked tarmac crawl under motion |
+| `gallery` | `ui-audit.spec.js` alone — a CAPTURE HARNESS whose product is a PNG gallery, run **on demand**. It asserts nothing beyond "the screen appeared", so its 39 green ticks were being counted as `ui` coverage while dominating that group's wall time (13-108 s per shot). No `pick-tests` rule routes to it: galleries are run on purpose, like `tests/manual/`. `test:audit` still sees it, so it cannot go orphan |
+
+### Node groups (`node --test`, no browser)
+
+| Group | What it runs |
+|---|---|
+| `tooling-fast` | the structural half in ~30 s — **one file at a time** via `tools/tooling-fast.mjs` (`--test-concurrency=1`) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast-suite.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
+| `tooling` | every Node contract suite — chains `test:tooling-fast` then `test:sweeps` (the sweeps run `--test-concurrency=1`, see below) |
+| `game-vm` | the Node VM game harness + physics parity (seconds; in CI guards) |
+| `node-slow` | the three raster/spawn-heavy car files (`cockpit-pale-surfaces`, `crest-marks`, `slider-effect`; 152 s of the old 315 s loop) — CI guards always, locally when pick-tests names it |
+| `sweeps` | the full-fleet geometry audits — prop-clipping, lamp-fixture-anchor, scenery-grounding, road-under-floor, coplanar-faces, debris-hazard-hint, spline-project-height, the shared-foundation characterization, car-front-wing-width and grid-boxes (10 files — `package.json` `test:sweeps` is the list). Each rebuilds circuits through `tools/track-build-vm.cjs`; `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
+| `sweeps-parts` | the 559 s parts option-resolution census (`parts-visual-distinctness`) alone — split out of `sweeps` so the geometry sweeps finish in ~7 min; its own CI job |
+| `generated-docs` | freshness of the generated tools index, slider table and hook index (`npm run gen:docs` regenerates) |
 | `parts-unit` | the catalog LADDER in Node — no paid option dominated by a cheaper one, no row that is never optimal at any price (bar the two wet compounds), no flat category stat, and a career budget cap that clears the dearest works car without reaching the top shelf |
 | `garage-unit` | the garage bay's per-vertex material column — present, right length, and not uniformly FLAT |
 | `steering-unit` | braking CUE math in Node — slider 1 is OFF, urgency is 0..1 never a brake command |
-
-### Track & scenery
-
-| Group | What it runs |
-|---|---|
-| `circuit` | walls + autopilot + elevation + the codebase-audit edge cases |
-| `scenery` | props/terrain over road, F1 track accuracy, scenery kits |
-| `sweeps` | the full-fleet geometry audits — prop-clipping, scenery-grounding, road-under-floor, coplanar-faces, debris-hazard-hint, spline-project-height, and the shared-foundation characterization. Each rebuilds circuits through `tools/track-build-vm.cjs`; `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
-| `map` | minimap polyline + orientation |
-
-### Render
-
-| Group | What it runs |
-|---|---|
-| `webgl` | instanced draw, GL capability probes, lighting A/B, image grade |
-| `ab` | the lighting A/B pixel comparison alone |
-| `baseline` | six blessed pixel baselines for menu IDENTITY — colour, type, spacing (fast) |
-| `shimmer` | does baked tarmac crawl under motion |
-| `tlx` | the three.js/TSL backend probes |
-| `webgpu-lifecycle` | WGX/TLX resource and software-present lifecycle, as a pure unit suite |
-
-### Car & UI
-
-| Group | What it runs |
-|---|---|
-| `parts` | catalog, budget, persistence, recipes, factory presets, mesh caches, liveries, ERS, the car viewer, garage aero |
-| `ui` | UI behaviour and layout: button/touch, UI scale, HUD layout + audit, menu survey + keyboard (slow) |
-| `gallery` | `ui-audit.spec.js` alone — a CAPTURE HARNESS whose product is a PNG gallery, run **on demand**. It asserts nothing beyond "the screen appeared", so its 39 green ticks were being counted as `ui` coverage while dominating that group's wall time (13-108 s per shot). No `pick-tests` rule routes to it: galleries are run on purpose, like `tests/manual/`. `test:audit` still sees it, so it cannot go orphan |
-| `camera` | the 13 camera modes, camera + driving hooks, the camera tuner |
-| `audio` | WebAudio engine/sfx smoke + the music library |
 | `audio-unit` | Spotify token refresh ownership, rotation races, and retryable failures in a Node VM |
-
-### Modes, data & multiplayer
-
-| Group | What it runs |
-|---|---|
-| `modes` | season, time trial, career, qualifying |
-| `net` | multiplayer in a browser: car roles, the per-car input seam, the session, the lobby, the waiting room, and the camera SCAN (a real `getUserMedia` against a Y4M of a real QR that Chromium plays as a webcam) |
+| `agent-contract` | freezes the shape of the agent-view API |
 | `net-unit` | the `js/net` wire as pure logic, no browser: loopback transport, invite codec, snapshot quantisation, clock sync. Under a second |
-| `service-worker` | the SW's install/fetch/version behaviour |
 | `lifecycle-unit` | deferred scanner, data fetch and IndexedDB ownership races in Node VMs |
 | `state-unit` | season, storage and career state machines, including cross-tab conflicts |
-
-### API & agent surfaces
-
-| Group | What it runs |
-|---|---|
-| `api` | the `__apex` contract: dev-tools, headless, obs/act, new hooks, data lifecycle, telemetry compare, assets, logging, the race wake lock |
-| `hooks` | camera / driving / map / new `__apex` hook contracts |
-| `agent` | the agent world view: world, trackInfo, scene, rollout, determinism, the drive bench |
-| `agent-contract` | freezes the shape of the agent-view API |
-| `smoke` | page load + `__apex` available |
-
-### Tooling contracts (`node --test`, no browser)
-
-| Group | What it runs |
-|---|---|
-| `tooling` | every Node contract suite — chains `test:tooling-fast` then `test:sweeps` (the sweeps run `--test-concurrency=1`, see below) |
-| `tooling-fast` | the structural half in ~30 s — **one file at a time** via `tools/tooling-fast.mjs` (`--test-concurrency=1`) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
-| `paths` | output paths are port-scoped and self-creating |
+| `service-worker` | the SW's install/fetch/version behaviour |
+| `webgpu-lifecycle` | WGX/TLX resource and software-present lifecycle, as a pure unit suite |
 | `graph-parity` | builds each track from a baseline ref AND the working tree and diffs prop geometry vertex for vertex (`tools/graph-parity.cjs`) |
 | `float` | floating-prop audit (`tools/float-audit.cjs`) |
 | `clip` | prop-clipping gate (`tools/clip-audit.cjs`) |
@@ -342,6 +314,14 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 | `headless` | the whole `headless` project (all non-render specs, no GPU) |
 | `render` | the `render` project only (screenshots/pixel/GL) at `--workers=4` |
 | `update` | the whole suite with `--update-snapshots` |
+
+### Where the old names went (2026-09-01)
+
+`physics`/`collision`/`behaviour`/`debris` → `driving`; `api`/`hooks`/`agent`/`map`/`paths`
+→ `hooks`; `circuit`/`foundation`/`scenery` → `circuits`; `parts` → `car`;
+`steering`/`camera` → `input`; `audio` → `ui`; `webgl`/`ab`/`tlx` → `gfx`;
+`fast` (a curated cross-group subset that double-ran nine specs) is gone —
+`pick-tests` names the group, `select-specs` names the spec.
 
 ---
 
@@ -418,8 +398,8 @@ Import `test` and `expect` from `./fixtures.js` instead of `@playwright/test`:
 | `context` (auto) | injects `window.__TEST_MODE = true` and the `APEX_LOG` level; mocks all Jolpica + OpenF1 calls with stub JSON so runs are offline and deterministic; starts console capture on every page |
 | `pageErrors` | `string[]` of uncaught JS exceptions — assert `toHaveLength(0)` after exercising game logic |
 | `consoleLines` | `string[]` of every console line and page error, type-prefixed, favicon noise stripped. Prefer this to a hand-rolled `page.on("console", …)` — the hand-rolled ones drifted into a dozen slightly different filters |
-| `racePage` | navigates to `/` and waits for `window.__apex` (10 s) |
-| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is partial**: 63 of 115 specs import `tests/helpers/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
+| `racePage` | navigates to `/` and waits for `window.__apex` (`BOOT_MS`, 45 s — see §A boot is 45 s now) |
+| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is broad**: 110 of 115 specs import `tests/helpers/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
 
 `tools/fixture-consumer-audit.mjs` enforces the import for the specs that depend
 on those guarantees (`audio-smoke`, `smoke`, `f1-track-accuracy`, `ui-audit`).
@@ -627,7 +607,7 @@ and a bigger budget is almost never the fix. Measured on the parts group,
 | `parts-budget` (5 tests over) | 125-169 s | 13-116 s | `#mb-garage` instead of `mb-race` -> `select` -> `sel-go`; `addInitScript` instead of a boot-and-reload for clean storage |
 | `parts-mesh-cache` eviction | 366 s (own 360 s budget) | passes | stopped building nine tracks it then threw away |
 | `parts-physics` ERS deploy/recovery | 126.0 s solo | **90.0 s** | one boot to learn the team id instead of one per loop pass — six navigations for three measurements became four |
-| whole `test:parts` group | ~2.5 h | **1 h 55 m** | the above |
+| whole `test:parts` group (now `test:car`) | ~2.5 h | **1 h 55 m** | the above |
 
 Every one of those was a navigation the assertion did not need. **A boot on this
 box is 11-22 s, so counting `goto`/`reload` calls is the highest-yield thing you
@@ -932,7 +912,7 @@ what it covers.
 | `grid-boxes.test.mjs` | the painted starting-grid boxes, measured on a real track build. The grid's geometry — pole 14 m before the line, 8 m between slots, the lateral stagger — lived only inside `gridUp()` in js/game.js, pinned by nothing at all; the boxes are built in js/track/mesh.js, a different layer, so the two would have drifted in silence and the paint would still LOOK like a grid, just not the one the cars stand on. `TrackMesh.gridSlot()` is now the single definition and this is what holds the paint to it — falsified by moving the front line 4 m, which reddens the drift guard and nothing else. Also pins the real regulation: a 2.7 m box (the FIA widened it 20 cm in 2023), open at the rear because legality is judged on the front tyres, and the yellow guide line placed CLEAR of the front line rather than z-fighting it. Builds offline through `tools/track-build-vm.cjs`; monaco is in the set because it is the narrowest tarmac a box has to fit on |
 | `parts-visual-distinctness.test.mjs` | every catalog option is VISIBLY different from the one it replaces, measured rather than hashed: builds all 297 options offline and gates on surface distance, moved area, palette transport and a 14-view visibility mask. INVISIBLE / BROKEN / SLIDE / INTERNAL must be empty, COLOUR-ONLY is an exact allow-list, WEAK is a downward-only ratchet; plus the census (12/297/121) and the SIGNATURE invariant that a reskin keeps its equivalent's cost and all four stat multipliers. Measures through `tools/parts-sweep.mjs`. ~4 min, so it runs in `test:sweeps`, never in the edit loop |
 | `parts-ladder.test.mjs` | every catalog option is one a rational player could ever want to BUY — the other half of the promise `parts-visual-distinctness` makes. An option is LIVE when it maximises `sum w_i*log(stat_i) - lambda*cost` for some positive taste and some price (the upper convex hull of the (cost, log-stat) set, solved exactly per weight vector, no lambda grid). Gates: no PAID option strictly dominated by a cheaper one; the never-optimal list is exact in BOTH directions against a named exemption list (the two wet compounds, which the four DRY stats cannot score); no category flat on a stat; SIGNATURE cost/stat parity; and the career budget cap clears the dearest works car while staying under the whole top shelf. Measured 2026-08-29: 67 of 169 rows never optimal before the re-space, 2 after. Measures through `tools/parts-ladder.mjs`. ~0.3 s, node-only — cheap enough for the edit loop |
-| `garage-mesh.test.mjs` | the bay's meshes carry a per-vertex MATERIAL column of exactly one float per vertex, and the big surfaces are not all left on `MAT.FLAT`. A silent-failure guard: GLX wires the attribute only when `data.mat.length === vCount` (`glx.js:647`) and drops a wrong-length column with no warning, which is how the whole garage shipped untextured while the car standing in it sampled the baked PBR arrays. Runs the real module in a `node:vm` against a recording Gfx — no browser, ~0.15 s |
+| `garage-mesh.test.mjs` | the bay's meshes carry a per-vertex MATERIAL column of exactly one float per vertex, and the big surfaces are not all left on `MAT.FLAT`. A silent-failure guard: GLX wires the attribute only when `data.mat.length === vCount` (`glx.js:741`) and drops a wrong-length column with no warning, which is how the whole garage shipped untextured while the car standing in it sampled the baked PBR arrays. Runs the real module in a `node:vm` against a recording Gfx — no browser, ~0.15 s |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 111-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
@@ -968,7 +948,7 @@ what it covers.
 |---|---|
 | `parts-physics.spec.js` | the unified resolver, visual-field ownership, consumed-mesh uniqueness, geometry/triangle budgets, surface/material semantics, static-emissive bounds, signatures, factory presets, physics/costs |
 | `parts-catalog.spec.js` | the category setup UI, universal/supplier/signature/factory badges, access filtering, chip interaction |
-| `parts-budget.spec.js` | the 600 cr budget UI and the unlimited toggle |
+| `parts-budget.spec.js` | the 780 cr budget UI and the unlimited toggle |
 | `parts-persistence.spec.js` | localStorage persistence across reloads |
 | `parts-setup-ids.spec.js` | stable `data-cs-cat` / `data-cs-opt` selectors |
 | `parts-mesh-cache.spec.js` | bounded body/cockpit/decal/wheel caches with GPU eviction |
@@ -1050,13 +1030,20 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
+| `net-stub-surface.test.mjs` | js/net is LAZY_NET, so `js/game.js` holds an INERT netPlay/netLobby from boot. Derives the required stub surface from the real CALL SITES (every `netPlay.<m>` / `netLobby.<m>` outside `js/net/` and the already-lazy `apex.js`) rather than a hand-written roster, so a new call site the stub cannot answer turns red instead of becoming a TypeError in the frame loop. Also pins the two VALUES that no crash would announce: `ownsRaceControl` / `ownsClassification` must be TRUE while inert (a solo game owns everything), checked against the shape in `js/net/netplay.js` so the guard cannot pin a fossil |
 | `load-order.test.mjs` | `index.html` and `tools/carview.html` `<script>` order matches `tools/manifest.cjs` exactly, including `HARD_EDGES` eval-time dependencies |
 | `global-registry.test.mjs` | a LINKER for the globals architecture (Bedrock Phase 0): scans every manifest file with `tools/scan-globals.mjs` (espree/eslint-scope, live — no artifacts/ state) and asserts one-global-per-file, single-writer-per-global (accumulators frozen), eval-time reads resolve in load order, call-time reads resolve somewhere, and the dynamic `window[expr]` class stays extinct — known violations frozen as ratchet baselines |
 | `game-ctx-surface.test.mjs` | a TYPE CHECK for the `G` ctx façade (Bedrock Phase 1) via `tools/check-gctx.mjs`: `types/game-ctx.d.ts` must declare exactly the members of `const G = {…}` in `js/game.js`, with matching writability (`readonly` ⇔ getter-with-no-setter), and the `GameModuleFactory` roster must match the real `X.create(ctx)` call sites. Second leg, skipped when no `tsc` is resolvable: every `G.member` read/write and `const {…} = ctx` destructure in `js/game|net` is emitted as a typed shadow and compiled — reading a member that does not exist, or writing one with no setter, is an error reported at the real `js/` file:line. Third leg: a member **no module reads** (the `countT` defect reversed) is baselined, so a new one fails |
 | `vstd-invariant.test.mjs` | the PACE invariant as a lint (`tools/vstd-lint.mjs`): no speed in `js/game.js` is divided by `VMAX` or compared against a bare literal outside the reviewed allow-list, so the OVERALL SPEED slider cannot silently shrink the player's envelope again |
 | `module-size.test.mjs` | RATCHET on the big modules' line counts — lower a ceiling when you extract; raising one is a deliberate edit with a reason in the commit |
-| `car-mesh-anchors.test.mjs` | The NODE gate for the car-graphic anchor assertions that `parts-physics.spec.js` also makes in a browser. It exists because the browser parts group is NOT in the deploy gate — `pages.yml` runs `test:smoke` (smoke.spec.js only) plus the unit suites — so a red parts assertion ships silently, and one did: the front-wing flap check sat red on the deploy tip through five consecutive green Pages runs. Ported rather than adding ~20 min of SwiftShader to every deploy, because these read MESH ARRAYS and `loadParts()` runs `car3d.js` in a node vm; the node context reproduces the browser numbers exactly (144 accent flank vertices both ways). Covers sidepod/nose decal gaps, the accent flank band, the nose running lights, the front-wing flap tips against `FW_SPAN`, and `functionalEmissive` staying reserved for the rain light. Every selector asserts a COUNT first — a sibling DRL assertion once passed for months on `Math.max([]) === -Infinity` |
-| `car-wing-foil.test.mjs` | Shared `Car3D` wing section: knife-TE `FOIL_T` sample, five-span planform, beveled endplates, 100-triangle flap (not a 48-triangle plank), default body/cockpit under the 2400/1500 ceilings, single-option recipes within 1.6× the default budget |
+| `car-mesh-anchors.test.mjs` | The NODE gate for the car-graphic anchor assertions that `parts-physics.spec.js` also makes in a browser. It exists because the browser parts group is NOT in the deploy gate — `pages.yml` calls `ci.yml`, which runs `guards`, the conditional `sweeps`, the 9-spec `smoke` shards and the `driving-model` job (`physics-characterization.spec.js`) — so a red parts assertion ships silently, and one did: the front-wing flap check sat red on the deploy tip through five consecutive green Pages runs. Ported rather than adding ~20 min of SwiftShader to every deploy, because these read MESH ARRAYS and `loadParts()` runs `car3d.js` in a node vm; the node context reproduces the browser numbers exactly (144 accent flank vertices both ways). Covers sidepod/nose decal gaps, the accent flank band, the nose running lights, the front-wing flap tips against `FW_SPAN`, and `functionalEmissive` staying reserved for the rain light. Every selector asserts a COUNT first — a sibling DRL assertion once passed for months on `Math.max([]) === -Infinity` |
+| `physics-baseline-present.test.mjs` | pins `tests/data/physics-baseline.json` in the always-on suite: `physics-characterization.spec.js` SKIPS (green) without it, so the deploy gate's `driving-model` job could pass on nothing — the "absence reads as clean" class |
+| `deploy-stamp.test.mjs` | the deploy-stamped shell generation: pages.yml stamps `2000 + commit count` on a full-depth checkout, `verify-live` polls the CDN for it, ci.yml no longer demands a committed generation newer than live, and `bump-cache --apply --at N --root` stamps a staged copy without touching the repo |
+| `deploy-tool.test.mjs` | `tools/deploy.mjs` offline: same deploy branch as pick-tests, `--help`, the circuit-touch detector, preflight refusals |
+| `game-vm.test.mjs` | `tools/game-vm.cjs` boots js/game.js in a Node VM (~300 ms, DOM/GLX/audio stubbed, feature-detected GLX optionals ABSENT so every subsystem takes its degrade path): race, go, step, a finite physState under throttle, a lap-line crossing |
+| `physics-characterization-vm.test.mjs` | the driving-model gate in Node: the four baseline scenarios of `physics-characterization.spec.js` against `tests/data/physics-baseline.json`, EXACT equality at the spec's 1e-4 rounding (measured 2026-09-01) — the browser spec stays as the cross-check |
+| `generated-docs.test.mjs` | the three doc generators (`gen-tools-readme`, `gen-slider-doc`, `gen-hooks-table`) run with `--check` against the committed output — drift is a red test, not a stale table — plus row-count / no-`undefined` sanity |
+| `car-wing-foil.test.mjs` | Shared `Car3D` wing section: knife-TE `FOIL_T` sample, five-span planform, beveled endplates, 100-triangle flap (not a 48-triangle plank), default body/cockpit under the 2505/1500 ceilings, single-option recipes within 1.6× the default budget |
 | `car-presentation-canary.test.mjs` | Field cars share the player's presentation path: `renderPosOf` / `playerAnchor` interpolate world `px`/`pz` for every car (not only `c.human`), `xVis` is dump-only (no 16/s or 30/s damp, shadows use the same `cX`), AI mirrors `px`/`pz` *after* the `(s, x)` advance, visible procedural cars draw `teamBodyMesh`/`playerBodyMesh` + planted factory-signature wheels on `_groundMat` (not a generic `field:1:1:1` pair, not baked wheels on the chassis matrix), and `carOrbit` / agent-view `carWorld` read the mirrored pose. Locks the two leftover bugs that made the pack feel delayed and "a different car" |
 | `gfx-backend-canary.test.mjs` | RENDERER pick survives the title menu: `#pm-renderer` is not `hidden`, the boot canary disarms after bind (not only after `present()`), first world present re-arms for jetsam, the picker names WEBGPU both ways, a `<select>` + ‹ › jumps without cycling through THREE, and RESET RENDERER drops backend crash flags plus context-loss latches without touching GRAPHICS quality. Also **TLX's canvas must be OPAQUE**: the lit fragment writes the SSR car-paint tag (0.35) into ALPHA, and `present()`'s post-only-death path keeps those materials while painting straight to the canvas — on an alpha-composited canvas the browser reads that tag as opacity and every car's painted bodywork goes 35% see-through for the rest of the session (reported from an iPhone). three needs telling twice: its WebGPU backend honours `alpha:false`, its WebGL backend hardcodes `alpha:true` and only honours a caller-supplied `context`. **Both vendor behaviours are asserted against the bundled three**, so the upgrade that makes half the workaround unnecessary — or the other half insufficient — fails here, next to the reason, rather than becoming another bug report from a phone. Source can prove TLX ASKS for an opaque canvas but never that it GOT one, so the live half is in `tlx-probes.spec.js` |
 | `gfx-debug-overlay.test.mjs` | The `?gfxdebug=1` / `apex26.gfxDebug` overlay (`js/game/gfx-debug.js`): opt-in only and installed from exactly one gated site, so a debug aid cannot paint for every player; it prints `gpuErrors()` + the first message, the env-probe state, `backendState()` and the REFUSED reason, because those are the facts a screenshot cannot carry; every read is guarded (`GLX` may not exist yet) and it never invents a number — a WebGPU-claimed canvas has no 2D readback, and an unpainted soft canvas is not a black frame. It exists because this container has no GPU and the reporter has no console. |
@@ -1065,10 +1052,10 @@ what it covers.
 | `ui-journey-career.test.mjs` | leftover Career overlay `--fit-at`, wrap-not-ellipsis compact rows, and guide/history contents rail keyed on `data-shape=wide` |
 | `ui-journey-session.test.mjs` | Results / Standings / Race settings / Audio / Pause `--fit-at`, and `#standings-body` leftover height with no `55svh` cap |
 | `ui-journey-race.test.mjs` | HUD `--hud-z` (never `--ui-scale`), compact HUD on `body[data-density]`, pause-hidden `#campicker`, `#pc-restore` |
-| `css-comments.test.mjs` | a CSS comment that ends early (or never opens) turns prose into a selector and DROPS the rule after it, silently — caught by measuring prelude length (real max 173, the two live failures were 275 and 759) |
+| `css-comments.test.mjs` | a CSS comment that ends early (or never opens) turns prose into a selector and DROPS the rule after it, silently — caught by measuring prelude length (`MAX_PRELUDE` 230; measured max 218 in `css/tuner.css`, the two live failures were 275 and 759) |
 | `css-tokens.test.mjs` | every custom property in `css/tokens.css` must have a consumer — an unread token is an invitation to use a value nobody has been maintaining |
 | `css-class-ratchet.test.mjs` | RATCHET on the distinct CSS class count across `css/` and on `index.html`'s DOM node count, both measured by the restructure-screens-css skill's own grep so the numbers line up with the 543 / 1,133 written into the decision records. Lower a ceiling when you consolidate onto a `--property` context; raising one is a deliberate edit with a reason in the commit |
-| `css-token-adoption.test.mjs` | the converse of `css-tokens`: a rule needing a size must READ a token, not write a literal. Ratchets two counts that may only fall — font-sizes below the `--fs-micro` floor (126) and raw px padding/gap/margin (529) — plus the list of sheets that read no spacing token at all and so cannot respond to the density ladder |
+| `css-token-adoption.test.mjs` | the converse of `css-tokens`: a rule needing a size must READ a token, not write a literal. Ratchets two counts that may only fall — font-sizes below the `--fs-micro` floor (5) and raw px padding/gap/margin (323), plus raw colours (376 / 190 distinct) — plus the list of sheets that read no spacing token at all and so cannot respond to the density ladder |
 | `light-presets.test.mjs` | the 1,921 shipped lighting values must name real `TUNE_DEFS` ids — a renamed knob does not throw, the lookup just misses and the shipped look silently stops applying |
 | `light-store-copy.test.mjs` | the tuner's COPY ALL fan-out (`LightStore.copyToTracks`): which profiles a copy writes, what each target then resolves to in either mode, that storage stays sparse, and that undo is exact |
 | `light-grid.test.mjs` | every shipped `TUNE_DEFS` preset value lands exactly on its own slider's min+k*step grid — an off-grid value reads as a false player override |
@@ -1104,11 +1091,11 @@ what it covers.
 | `evaluate-scope-lint.test.mjs` | no `page.evaluate()` callback closes over a Node-side binding — the callback runs in the BROWSER, so a module `const` read inside it is a `ReferenceError` there, not a closure. Anti-vacuity: one case asserts the lint still finds both real sites in `58614db2`, the commit whose two launch constants killed every elevation track, so the analysis cannot silently stop resolving bindings while the synthetic cases keep passing |
 | `change-driver-tools.test.mjs` | the verification DRIVERS' contracts (`verify-change.mjs`, `bump-cache.mjs`, `test-honesty.mjs`): a driver that drifts from the rules it encodes gets trusted INSTEAD of the prose, so the rules are asserted against the real CLIs — batches carry at most ONE browser group, `tooling-fast` is never batched twice, circuit edits route to `verify-track`, `--apply` lands max+1 on a fixture shell (never the real one), and the silent-skip scan stays at zero unexplained sites |
 | `cache-bump-only.test.mjs` | the one exemption change-aware CI may make to the infra gate: an `index.html` diff that is PURELY a `?v=N` rewrite is not a load-order change. Line counts are not enough to decide it — `af05fa98` is +156/-156 and smuggles a real markup edit through, so the check pairs lines POSITIONALLY and a reordered script block cannot pass as a bump |
-| `wait-polling.test.mjs` | the ratchet on waits whose declared timeout cannot fire. `waitForFunction` polls on `requestAnimationFrame` by default and the game's render loop starves it — measured at 109,665 ms against a declared 3,000 ms — so 382 call sites carry a bound that is decoration (353 was the 2026-08-07 freeze; the population fell to 312 as specs were fixed, then the lint's file filter was corrected and 70 pre-existing `tools/` sites became visible). Frozen rather than swept: rewriting 300 sites in one commit would be a behavioural change with no run behind it. `tests/manual/timeout-probe.spec.js` is exempt and must stay so, because it exists to measure the default |
+| `wait-polling.test.mjs` | the ratchet on waits whose declared timeout cannot fire. `waitForFunction` polls on `requestAnimationFrame` by default and the game's render loop starves it — measured at 109,665 ms against a declared 3,000 ms — so call sites carrying a bound that is decoration are ratcheted (`CEILING` 57 today, all under `tools/`, 24 of them in `tools/menu-screens.mjs`; the 2026-08-07 freeze was 353, the population fell as specs were fixed, then the lint's file filter was corrected and the pre-existing `tools/` sites became visible). Frozen rather than swept: rewriting 300 sites in one commit would be a behavioural change with no run behind it. `tests/manual/timeout-probe.spec.js` is exempt and must stay so, because it exists to measure the default |
 | `tests-split.test.mjs` | the `tests/` split's PLAN, pinned before the move runs: every spec/suite/helper lands in exactly one bucket, `data/` and `manual/` stay, a snapshot dir follows its spec (Playwright resolves those spec-relative, and a missed move reads as "baseline missing" — which `--update-snapshots` would then re-bless), and the derived rewrites cover the ⚠ swallowed `f1-api-mock` imports nobody has to remember. Two cases guard the tool against itself: **history is never rewritten** (archived docs, dated research records and stored workflow scripts describe the tree as it WAS — the first plan would have falsified 700+ lines of it), and it does not rewrite its own header, which documents the move. A scratch-tree case caught a real bug: `rel()` ignored its `root` argument, so every check against the real repo passed while a foreign tree found zero references |
 | `select-budget.test.mjs` | guards `tools/select-budget.mjs`, the arithmetic behind the change-aware CI decision. Pins the MODEL and not the constants: the measured 79.7 s/test is expected to move when CI is re-measured, but the shape must not — a failure costs `timeout x (1 + retries)`, capacity falls as survivable failures rise, and a budget smaller than one failure must report **0** rather than a positive number for a job that dies on the first red test. One case pins the design conclusion itself (cutting the failure cost buys more than doubling the budget) so it cannot quietly stop being true |
 | `select-specs.test.mjs` | guards `tools/select-specs.mjs` AND `tools/select-recall.mjs`. Glob expansion, dedupe, the budget cut, the own-`setTimeout` exclusion, the TRACKED infra list (both directions), the import-graph helper→spec walk, fail-fast ordering, and the FAULTY-CHANGE RECALL ratchet — no spec that caught a real regression may be dropped in silence. **Why not coverage-derived TIA:** Fowler's survey is explicit that building a per-test coverage map requires running tests ONE AT A TIME, which against a ~40-minute SwiftShader suite is a non-starter, and the map then needs constant refresh. The path RULES plus the import graph buy most of the signal for none of that cost. The same suite guards the per-spec selector behind ci.yml's blocking `selected` job: every unaffordable spec lands in a named skip/exclusion list, and the selected-gate settings (retries 0, 120 s/test) provably fit more tests than smoke's retrying settings. |
-| `ci-coverage.test.mjs` | guards `tools/ci-coverage.mjs`, which answers what the deploy gate actually executes — today **2 of 115 Playwright specs**, with 112 gated by nothing. Pins the MECHANISM and never the number: the count is meant to move as the gate grows, and a test that froze it would just be a chore. Anti-vacuity is the load-bearing case — a broken `ci.yml` parse would report "CI executes 0 specs", which reads as an alarming finding rather than as a broken tool. One case deliberately names a spec that MUST NOT exist, so the resolver is shown to reject it |
+| `ci-coverage.test.mjs` | guards `tools/ci-coverage.mjs`, which answers what the deploy gate actually executes — today **2 of 115 Playwright specs**, with 113 gated by nothing. Pins the MECHANISM and never the number: the count is meant to move as the gate grows, and a test that froze it would just be a chore. Anti-vacuity is the load-bearing case — a broken `ci.yml` parse would report "CI executes 0 specs", which reads as an alarming finding rather than as a broken tool. One case deliberately names a spec that MUST NOT exist, so the resolver is shown to reject it |
 | `cross-file-paths.test.mjs` | every relative reference in `tests/` and `tools/` — static import, dynamic `import()`, `require()`, `new URL(rel, import.meta.url)` — resolves to a file that exists. Landed BEFORE the `tests/` split, because a guard that arrives after the commit it was meant to protect has protected nothing. The silent class it exists for: `fit-audit.mjs`/`menu-fit.mjs` wrap their `../tests/helpers/f1-api-mock.js` import in a `catch` that is correct at runtime and fatal to a move — afterwards both tools quietly audit an empty data hub with nothing red anywhere. Anti-vacuity: one case builds a moved-file-with-stale-`../` in a temp dir and requires a complaint |
 | `assert-audit.test.mjs` | no test in the default suite is VACUOUS — a body with no assertion passes as long as the page does not throw, so it is a green tick that means nothing. The ratchet exempts an allow-list of capture harnesses (`ui-audit`, whose product is a PNG gallery) and asserts they still are ones. Two cases pin the tool's own failure mode: an assertion reached only through a same-file helper still counts, because a body-only scan calls hud-audit's eight steer-mode tests vacuous and a report that is 20% false gets ignored |
 | `fixture-consumer-audit.test.mjs` | the specs that must import `tests/helpers/fixtures.js` do |
@@ -1527,8 +1514,44 @@ Playwright's actionability poll. `__apex.headless(true)` before touching the
 panel fixed it outright. Reach for that before believing a locator that cannot
 find what `getElementById` can.
 
+Measured a third time 2026-09-01, on a lazily-injected bundle rather than a
+click: VS FRIEND pulling js/net took **39.7 s** with the menu flyby rendering
+and **0.1 s** with `#game` hidden — same page, same 11 files, **150 ms of
+actual fetch** in both. A wall-clock number taken from a rendering page is
+measuring llvmpipe, so decompose it (resource timings) or take a
+not-rendering control before believing it says anything about the code.
+
 Seen again 2026-08-30 with a live race running: `page.click("#rotate-race")`
 timed out after resolving the locator and logging "element is visible, enabled
 and stable", while `elementFromPoint` at the same coordinates returned that
 button. `el.click()` inside `page.evaluate` drives the real handler and is the
 right probe when the page must keep rendering.
+
+**`context.setOffline(true)` is NOT offline against `127.0.0.1`.** Chromium's
+network emulation exempts loopback, so a page under `setOffline` still reaches
+the local test server. Measured 2026-09-01 while proving the service-worker
+precache fix (`scratch/offline-check.cjs`): with `setOffline(true)` in force, a
+`fetch()` **from inside the page** for a URL no cache can hold returned
+`reachable (404)`. Asking `context.request` — a separate APIRequestContext that
+need not honour page-level emulation at all — gives the same wrong answer for a
+second reason, so a probe placed there is not even measuring the right process.
+
+The cost of not noticing is a green run that proves nothing: the first cut of
+the offline test passed **with the precache deliberately deleted**, because the
+"offline" browser simply re-fetched the missing scenery from the still-live
+server. The cure is to make the origin actually stop existing —
+`srv.closeAllConnections()` then `srv.close()` — with `setOffline(true)` kept on
+as well, because the service worker's navigate handler branches on
+`navigator.onLine` and a returning player really is flagged offline. Under that
+shape the same probe reads `blocked: Failed to fetch`, and only then does the
+number after it mean anything.
+
+Two more traps in the same test, both of which produced a false PASS first:
+
+- **Race a circuit the session has never touched.** The SW's fetch-miss handler
+  caches whatever the online phase requested, so reusing one circuit for the
+  online reference and the offline subject tests the runtime cache, not the
+  precache. The test now warms on `spa` and goes cold on `cota`.
+- **`sw.js` does not `clients.claim()`**, so the page that registers the worker
+  is not controlled by it. One reload — what a returning player does anyway —
+  is required before any cache assertion means anything.

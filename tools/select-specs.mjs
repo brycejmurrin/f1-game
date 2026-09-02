@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // select-specs — per-SPEC change-aware selection for the blocking CI gate.
+// @doc Per-SPEC change-aware selection for the blocking CI job: cuts at `select-budget` capacity and names every skip.
+// @section runner
 //
 // tools/pick-tests.mjs answers "which GROUPS does this change need" for a
 // human with a 4-core box and no deadline. A CI job has a budget, and
@@ -64,6 +66,21 @@ export function maxDeclaredTimeout(file) {
         && x.callee.object?.name === "test" && x.callee.property?.name === "setTimeout"
         && x.arguments?.[0]?.type === "Literal" && typeof x.arguments[0].value === "number") {
       max = Math.max(max, x.arguments[0].value);
+    }
+    // `test.describe.configure({ timeout })` reserves a budget the same way
+    // test.setTimeout does (image-grade-visual 480 s, instanced-draw 420 s were
+    // invisible to this walker and selectable), and `test.slow()` triples the
+    // gate's per-test timeout.
+    if (x.type === "CallExpression" && x.callee?.type === "MemberExpression"
+        && x.callee.property?.name === "configure" && x.arguments?.[0]?.type === "ObjectExpression") {
+      for (const p of x.arguments[0].properties || []) {
+        if (p.key && (p.key.name === "timeout" || p.key.value === "timeout")
+            && p.value?.type === "Literal" && typeof p.value.value === "number") max = Math.max(max, p.value.value);
+      }
+    }
+    if (x.type === "CallExpression" && x.callee?.type === "MemberExpression"
+        && x.callee.object?.name === "test" && x.callee.property?.name === "slow") {
+      max = Math.max(max, 3 * SELECTED_GATE.perTestTimeoutSec * 1000);
     }
     for (const k of Object.keys(x)) if (k !== "loc" && k !== "range") walk(x[k]);
   };

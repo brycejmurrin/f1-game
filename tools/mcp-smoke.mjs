@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
- * mcp-smoke — poke the five repo MCP wrappers via their shells.
+ * @doc Pokes the repo MCP wrappers (`apex_status`, probe help, chrome-devtools `status`, tinyfish `help`). No Chromium.
+ * @skill check-changes
+ * mcp-smoke — poke the repo shell wrappers (only apex-tools and chrome-devtools are MCP-attached).
  *
  * No Chromium. Missing TinyFish key / chrome-devtools clone = warning, not fail.
  * Exit 0 when apex-tools answers. Writes artifacts/logs/mcp-smoke.json
@@ -26,15 +28,6 @@ const CHROME_BIN = path.join(
 const TINYFISH_ENV = path.join(ROOT, "scratch/tinyfish-mcp-server/.env");
 const TINYFISH_KEY_URL = "https://agent.tinyfish.ai/home";
 
-function tinyfishFallback() {
-  if (process.env.TINYFISH_NO_FALLBACK === "1") return false;
-  const sh = path.join(ROOT, "tools/tinyfish-mcp.sh");
-  if (!fs.existsSync(sh)) return false;
-  const prefix = "sk-" + "tinyfish-";
-  return new RegExp(`^\\s*TINYFISH_KEY_FALLBACK=["']?${prefix}\\S+`, "m")
-    .test(fs.readFileSync(sh, "utf8"));
-}
-
 function tinyfishKey() {
   if ((process.env.TINYFISH_API_KEY || "").trim()) {
     return { present: true, via: "env" };
@@ -44,9 +37,6 @@ function tinyfishKey() {
     if (/^\s*TINYFISH_API_KEY=\S+/m.test(text)) {
       return { present: true, via: "env-file" };
     }
-  }
-  if (tinyfishFallback()) {
-    return { present: true, via: "fallback" };
   }
   return { present: false, via: "missing", url: TINYFISH_KEY_URL };
 }
@@ -84,7 +74,7 @@ export function smokePlan() {
     {
       server: "tinyfish",
       argv: ["bash", path.join(ROOT, "tools/tinyfish-mcp.sh"), "help"],
-      note: "help only — ensure / deploy-check need a key (shell / .env / fallback)",
+      note: "help only — ensure / deploy-check need a key (shell / gitignored .env; CLI only, not MCP-attached)",
     },
   ];
 }
@@ -116,7 +106,7 @@ function parseApexStatus(step) {
 }
 
 function help() {
-  process.stdout.write(`mcp-smoke — five repo MCP wrappers via shells
+  process.stdout.write(`mcp-smoke — repo shell wrappers (apex-tools + chrome-devtools are MCP-attached; the rest are CLI only)
 
 Usage:
   node tools/mcp-smoke.mjs [--dry-run] [--json]

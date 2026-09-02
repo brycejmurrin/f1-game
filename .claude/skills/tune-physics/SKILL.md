@@ -37,13 +37,12 @@ Fixed in `js/game.js` (not `setPhysics`): `LONG_GRIP`, `CS_FRONT/CS_REAR`,
 `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
 
 ```sh
-node tools/test-bg.mjs physics
-node tools/test-bg.mjs behaviour
-node tools/test-bg.mjs steering
+node tools/test-bg.mjs driving      # physics + collision + behaviour + debris (one group, ~30 min)
+node tools/test-bg.mjs input        # steering + camera
 node tools/check-physics.mjs <grip|bank|roadfollow|steer>
 ```
 
-If you edited `js/game.js`, **bump-cache** before commit. Theory:
+If you edited `js/game.js`, `bump-cache.mjs --apply` before commit. Theory:
 `docs/PHYSICS.md`, `docs/research/steering-research.md`.
 
 ## Load on demand

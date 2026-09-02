@@ -3,7 +3,7 @@
 // persistence, and that every mode renders a valid, distinct frame without crashing.
 // Modes: chase, far, drift, cockpit, hood, overhead, heli, reverse, side,
 //        cinematic, low, tcam, rear.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 
 test.describe("Apex 26 — player camera modes", () => {
@@ -105,9 +105,10 @@ test.describe("Apex 26 — player camera modes", () => {
   // and the camera slides sideways the instant lights-out runs the first tick.
   test("the player has a world pose on the grid, so the chase rig doesn't switch at lights-out", async ({ page, loadTrack }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 8000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate(() => {
       window.__apex.freeze(true);        // hold the countdown: state must stay "count"
       // physState() returns null while player.px is unset, and no car physics has

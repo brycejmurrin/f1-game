@@ -379,3 +379,45 @@ test("shuffled is deterministic when given an explicit seed", () => {
   assert.deepEqual(run1, run2, "identical seeds must produce identical permutations");
   assert.notDeepEqual(run1, run3, "different seeds should produce different permutations");
 });
+
+test("equal points fall to countback, not to who scored first", () => {
+  const { S } = load({ seasonCfg: { sprint: false } });
+  S.engage("season");
+  const season = S.blank();
+  // Round 1: d0 wins, d1 second. Round 2: d1 wins, d0 second. Round 3: d2 wins,
+  // d1 third, d0 fourth — so d0 and d1 each hold one win and one second, and the
+  // third round is what separates them.
+  S.award(season, field(4));                                   // d0 d1 d2 d3
+  S.award(season, [field(4)[1], field(4)[0], field(4)[2], field(4)[3]]);   // d1 d0 d2 d3
+  S.award(season, [field(4)[2], field(4)[3], field(4)[1], field(4)[0]]);   // d2 d3 d1 d0
+  assert.equal(season.pts.d0, 25 + 18 + 12);
+  assert.equal(season.pts.d1, 18 + 25 + 15);
+  // Array.from, not .map: the histogram is sparse and .map skips holes.
+  assert.equal(JSON.stringify(Array.from(season.finishes.d0, (v) => v || 0)), "[1,1,0,1]");
+  const order = Object.keys(season.pts).sort((a, b) => S.rank(season, a, b));
+  assert.equal(order[0], "d1", "d1 58 pts beats d0 55 on points");
+  // Now force a dead heat on points and let countback decide: one win and one
+  // second each, then d1's third beats d0's fourth.
+  season.pts.d0 = season.pts.d1;
+  assert.equal(S.rank(season, "d0", "d1"), 1, "equal points: d1's 1-1-1 beats d0's 1-1-0-1 on the third place");
+  assert.equal(S.rank(season, "d1", "d0"), -1, "and the comparison is antisymmetric");
+  const tied = Object.keys(season.pts).filter((k) => k === "d0" || k === "d1").sort((a, b) => S.rank(season, a, b));
+  assert.equal(tied.join(","), "d1,d0", "insertion order (d0 first) no longer decides");
+  // A retired classification records no finish; a sprint records none either.
+  const s2 = S.blank();
+  S.award(s2, field(2, [1]));
+  assert.equal(s2.finishes.d1, undefined, "a DNF is not a finish");
+});
+
+test("a saved season without finishes normalises to an empty map", () => {
+  const { S } = load();
+  S.engage("season");
+  if (typeof S.resume === "function") {
+    const season = S.resume({ round: 1, pts: { d0: 25 }, teamPts: { t0: 25 }, driverCodes: { d0: "D0" } });
+    // (Object.keys, not deepEqual: the season object comes from the VM realm and
+    // strict deepEqual compares prototypes across realms.)
+    if (season) assert.equal(Object.keys(season.finishes).length, 0, "finishes present and empty on a pre-countback save");
+  }
+  assert.equal(S.rank({ pts: { a: 1, b: 1 } }, "a", "b"), -1, "no finishes at all: the id breaks the tie, stably");
+  assert.equal(S.rank({ pts: { a: 1, b: 1 } }, "b", "a"), 1);
+});

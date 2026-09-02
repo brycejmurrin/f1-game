@@ -1,3 +1,5 @@
+// @doc Does the colour picked in the TEAM LOGO row get painted? Scores `LiveryTex.markPalette` over team × livery × colours.
+// @skill car-viewer
 /* logo-authored-sweep.mjs — does the colour a player picks in the editor's
  * TEAM LOGO row actually get painted, or does markPalette substitute one?
  *

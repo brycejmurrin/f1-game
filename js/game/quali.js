@@ -151,7 +151,6 @@ function create(G) {
   function compute(driven) {
     const track = G.track;
     if (!track || !G.cars.length) return null;
-    const grip = G.gripMult();
     const inCareer = Career.inCareer();
     // Round selection, narrowest fix: a non-career SEASON championship advances
     // season.round, so use it there (else the execution draw was frozen identical
@@ -167,7 +166,7 @@ function create(G) {
       driverId: c.driverId, code: c.code, name: c.name,
       team: c.team && c.team.id, isPlayer: !!c.isPlayer,
       human: !!(real && real.has(c.driverId)),
-      t: (real && real.get(c.driverId) > 0) ? real.get(c.driverId) : simLap(c, track, grip, round, seed),
+      t: (real && real.get(c.driverId) > 0) ? real.get(c.driverId) : simLap(c, track, G.gripMult(c), round, seed),
       car: c,
     }));
     rows.sort((a, b) => a.t - b.t);

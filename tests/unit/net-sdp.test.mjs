@@ -204,3 +204,20 @@ test("the relay candidate survives the budget, because it arrives last", () => {
     "and the LAN keeps one, because two phones on a sofa are the case the "
     + "mDNS packing exists for");
 });
+
+test("an IPv6 relay candidate round-trips — it is the whole relay leg on a v6-only path", () => {
+  const withV6Relay = REAL.replace("a=ice-ufrag:0BnP",
+    "a=candidate:7 1 udp 16777215 2001:db8:5::9 3478 typ relay raddr 2001:db8::1 rport 5000 generation 0\r\n"
+    + "a=ice-ufrag:0BnP");
+  const out = NetSdp.unpack(NetSdp.pack(withV6Relay));
+  assert.match(out, /2001:db8:5::9 3478 typ relay raddr :: rport 0/, "kind C_RELAY6 exists and masks rel-addr the v6 way");
+});
+
+test("an IPv4-mapped IPv6 address is packed as the IPv4 candidate it is", () => {
+  // ::ffff:a.b.c.d parsed as hex words was garbage (parseInt("1.2.3.4", 16)).
+  const withMapped = REAL.replace("a=ice-ufrag:0BnP",
+    "a=candidate:8 1 udp 1677729535 ::ffff:203.0.113.9 40000 typ srflx raddr 0.0.0.0 rport 0 generation 0\r\n"
+    + "a=ice-ufrag:0BnP");
+  const out = NetSdp.unpack(NetSdp.pack(withMapped));
+  assert.match(out, /203\.0\.113\.9 40000 typ srflx/);
+});

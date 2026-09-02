@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 // MY TEAM moved into the GARAGE's TEAM tab — the select screen is about WHERE
 // you race, so it no longer carries the team editor. Opens the garage, saves,
@@ -41,7 +42,8 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
   // failing the code. The assertions below are untouched.
   test.setTimeout(240_000);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
 
   // Every atlas is tagged with the team it was built FOR. getCarDecalTexture
   // calls LiveryTex.buildAtlas(teamId, …) as the argument to createTexture, so
@@ -129,7 +131,7 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
   // which reads like a UI defect and is not one. Give it room to be slow.
   test.setTimeout(240_000);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
 
   await page.evaluate(() => {
     const customData = new WeakSet();
@@ -170,7 +172,7 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
   await page.locator("#sel-go").click();
   await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
   await page.locator("#rs-go").click();
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.park(0.1));
   await page.waitForFunction(() => window.__customTeamMeshProbe.customMeshes.length >= 1);
   await page.evaluate(() => window.__apex.camera("cockpit"));
@@ -210,7 +212,7 @@ test("custom livery actions are independent keyboard buttons", async ({ page }) 
     localStorage.setItem("apex26.livery.mclaren", JSON.stringify("default"));
   });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
   await page.locator("#mb-race").click();
   await page.locator("#sel-go").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });

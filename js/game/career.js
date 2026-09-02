@@ -439,17 +439,24 @@ function budgetCap() {
   }
   return _budgetCap;
 }
-function budget() {
-  if (!career) return 0;
-  const lvl = Math.max(0, Math.min(career.budgetLvl | 0, BUDGET_MULT.length - 1));
-  const raw = Math.round(worksCost(career.team) * BUDGET_MULT[lvl]);
+function budgetAt(lvl) {
+  const l = Math.max(0, Math.min(lvl | 0, BUDGET_MULT.length - 1));
+  const works = worksCost(career.team);
+  const raw = Math.round(works * BUDGET_MULT[l]);
   // A team can always afford to rebuild its own works car, cap or no cap — the
   // guard test asserts the cap clears the dearest preset, so this only bites if
   // a future preset outgrows it.
-  return Math.min(raw, Math.max(budgetCap(), worksCost(career.team)));
+  return Math.min(raw, Math.max(budgetCap(), works));
 }
+function budget() { return career ? budgetAt(career.budgetLvl) : 0; }
 function budgetUpgradeCost() {
-  return career && career.budgetLvl < BUDGET_UPGRADE.length ? BUDGET_UPGRADE[career.budgetLvl] : null;
+  if (!career || career.budgetLvl >= BUDGET_UPGRADE.length) return null;
+  // The derived ceiling already binds for a front-running works car (Ferrari
+  // 1830 / McLaren 2000 against a 2105 cap on the current catalog): the next
+  // rung would raise nothing, so it is not for sale — the hub card reads
+  // state().budgetCost and disappears with it, and upgradeBudget() refuses.
+  if (budgetAt(career.budgetLvl + 1) <= budgetAt(career.budgetLvl)) return null;
+  return BUDGET_UPGRADE[career.budgetLvl];
 }
 
 const GRANT = 5000;
@@ -688,7 +695,9 @@ function settleRound(order, player) {
   // Wages can exceed the round's income (esp. MY TEAM payroll); never let the
   // balance go permanently negative — the economy floors at zero.
   career.money = Math.max(0, career.money);
-  const repDelta = clamp((expectedFinish(team) - pos) * 0.6, -4, 6)
+  // A save whose team id is no longer on Teams.LIST degrades to a mid-grid
+  // expectation rather than throwing inside endRace (objectiveFor already guards).
+  const repDelta = clamp(((team ? expectedFinish(team) : 11) - pos) * 0.6, -4, 6)
                  + (obj.done ? OBJ_REP : -OBJ_REP);
   career.rep = clamp(career.rep + repDelta, 0, 100);
   const dnf = player.retired ? (player.dnf || "mechanical") : null;

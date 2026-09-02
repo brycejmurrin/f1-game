@@ -1,8 +1,19 @@
 #!/usr/bin/env node
 // repro-shot.mjs — render a PLAYER'S EXACT FRAME from an __apex.repro() blob.
+// @doc Render a player's exact frame from an `__apex.repro()` blob. BROKEN for COCKPIT — read the header first.
+// @skill playwright-probe
 //
 // Usage:
 //   node tools/repro-shot.mjs <repro.json> [out.png] [--w 1600] [--h 720]
+//
+// BROKEN FOR THE COCKPIT CAMERA — measured 2026-09-02. __apex.repro() sets
+// G.frozen and snaps the camera, and the cockpit rig's camera does NOT converge
+// from that state: the shot comes back showing no steering wheel, no dash and no
+// instruments, which is a viewpoint no player ever has. Six rounds of a
+// cockpit-artefact hunt died on exactly that, chasing geometry that was never in
+// frame. Until this is fixed, drive the frame by hand and let the game RUN:
+//   race(track, tod, wx) -> go() -> camera("cockpit") -> camTune(...) -> jump(...)
+// then wait a few seconds before screenshotting. Chase/TV cameras are unaffected.
 //
 // The blob comes from the player: open the console and run
 //   copy(JSON.stringify(__apex.repro()))

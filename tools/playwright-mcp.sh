@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# playwright-mcp.sh — Cursor / Cloud entry for official @playwright/mcp.
-# .mcp.json / .cursor/mcp.json → command tools/playwright-mcp.sh args ["run"]
+# @doc Official `@playwright/mcp@0.0.79` wrapper (`help`/`status`/`run`); isolated headless Chromium, profile in `scratch/`.
+# @skill survey-ui-matrix / css-play / mcp-probe
+# playwright-mcp.sh — shell wrapper for official @playwright/mcp (CLI only).
+# NOT MCP-ATTACHED since 2026-09: .mcp.json / .cursor/mcp.json carry
+# `playwright-official` (the bare pinned @playwright/mcp package) instead — this
+# wrapper's `run` (which passes --browser chromium) failed to connect as a
+# server. Keep it for `status` / `play` / `dom` (css-play) from a shell.
 #
 # Interactive UI survey (resize / a11y snapshot / evaluate CSS+DOM).
 # Not a CI gate. Never run while chrome-devtools MCP or a Playwright *test*

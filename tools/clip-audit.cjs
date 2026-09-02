@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // clip-audit.cjs — PROP-VS-PROP interpenetration detector for Apex 26.
+// @doc PROP-VS-PROP interpenetration detector (emission-order adjacency); `--gate` ratchets against `clip-baseline.json`.
+// @skill scenery-dress
 //
 // The engine guards scenery horizontally against the ROAD (onTrack, rejBox,
 // blockAt) and vertically against the GROUND (float-audit). Nothing guards a

@@ -1,6 +1,6 @@
 # Apex 26 — the parts system (`js/car/parts.js`)
 
-Twelve upgrade categories, a 600 cr budget, and the measured effect of each on
+Twelve upgrade categories, a 780 cr budget, and the measured effect of each on
 the four stats. Extracted from the agent brief. `AGENTS.md` keeps only the rules another
 subsystem has to respect.
 
@@ -33,10 +33,14 @@ already differ). A car with no resolved setup still sits at the midpoint.
 `exhaust`, `floor`, `cockpit`, `wheels`. Each
 category is `{ id, label, options:[…] }`; each option has
 `{ id, label, cost, desc, speed?, accel?, cornering?, braking?, supplier? }`.
-Budget = 600 cr. `Parts.getMods(setup, teamEngine)` returns
-`{speed, accel, cornering, braking}` multipliers. Supplier-exclusive options
-(e.g. `manu_mercedes`) are only shown when `team.engine` matches.
-`unlimitedBudget` (localStorage `apex26.unlimitedBudget`) removes the 600 cr cap.
+Budget = 780 cr (`Parts.BUDGET`) for a non-career garage build; in career the
+cap is `Career.budget()` instead (works-car cost × the RAISE THE CAP multiplier,
+clamped by the catalog-derived `budgetCap()` — see docs/CAREER.md) and the
+unlimited toggle is ignored (`js/game/setup-ui.js`). `Parts.getMods(setup, team)`
+takes a `{id, engine}` team object and returns `{speed, accel, cornering,
+braking}` multipliers. Supplier-exclusive options (e.g. `manu_mercedes`) are
+only shown when `team.engine` matches. `unlimitedBudget` (localStorage
+`apex26.unlimitedBudget`) removes the 780 cr cap outside career.
 
 Every option also carries a parametric `visual` **recipe** consumed by `Car3D`
 (`getVisualTiers().._visual`); `VISUAL_FIELD_REGISTRY` names the one consumer of
@@ -62,7 +66,9 @@ physics-identical clones of the universal option named in `equivalent` — they 
 a distinct mesh, never an advantage, and the test suite enforces that. Every team
 fields one in every category via `FACTORY_PRESETS`, except the four on a
 manufacturer-exclusive FACTORY power unit (that unit is already team-unique).
-`FACTORY_PRESETS` drives AI meshes and the works aero/ERS the AI now runs.
-Player saves still go through the garage, not this table.
+`FACTORY_PRESETS` drives AI meshes and the works aero/ERS the AI now runs, and
+seeds a new career save's `owned` + `fitted` build via `Parts.getFactorySetup`
+(`js/game/career.js`); a non-career garage build still goes through the
+garage, not this table.
 
 ---

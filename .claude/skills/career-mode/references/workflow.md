@@ -56,7 +56,7 @@ Load from the SKILL.md index when the task needs this detail.
 
 8. **Cache-bust JS/CSS edits.**
    - Career often touches `js/game/career*.js`, `js/game/quali.js`,
-     `js/game/reliability.js`, or `css/career.css`; use `bump-cache`.
+     `js/game/reliability.js`, or `css/career.css`; run `node tools/bump-cache.mjs --apply`.
 
 ## Common Mistakes
 

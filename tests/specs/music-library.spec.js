@@ -20,7 +20,7 @@
  * leaked record from a previous test would fail the assertion, not the test's
  * real subject).
  */
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 /* ---------------- fixtures on disk (built in-memory) ---------------- */
 
@@ -55,10 +55,11 @@ function silentWav(seconds = 5, sampleRate = 8000) {
 
 async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
+  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.waitForFunction(
     () => typeof MusicLib !== "undefined" && typeof GameAudio !== "undefined",
-    null, { polling: 100, timeout: 10000 }
+    null, { polling: 100, timeout: BOOT_MS }
   );
 }
 
@@ -388,7 +389,7 @@ test("redirectUri() is origin + pathname with no query or hash", async ({ page }
 
 test("redirectUri() strips a query and hash the game was launched with", async ({ page }) => {
   await page.goto("/?track=monza#hash");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 10000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   const got = await page.evaluate(() => ({
     uri: SpotifyMusic.redirectUri(),
     href: location.href,

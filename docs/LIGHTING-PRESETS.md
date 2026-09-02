@@ -264,7 +264,7 @@ other key). Each track writes one JSON file, then the parent merges:
 
 ```
 artifacts/lighting/proposals/<id>.json
-node .claude/skills/bake-lighting/merge-proposals.mjs
+node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs
 ```
 
 ```json

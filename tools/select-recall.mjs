@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // select-recall — WOULD THE SELECTOR HAVE CAUGHT IT?
+// @doc Would the selector have caught it? Replays `select-specs` against real past regressions and asserts recall.
+// @section runner
 //
 // Facebook's Predictive Test Selection (arXiv:1810.05286) reports the number
 // that matters for a selector, and it is not the one everybody quotes: their

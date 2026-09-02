@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // coplanar-audit.cjs — SAME-FACING coplanar faces, the z-fighting detector.
+// @doc Z-fighting detector — same-facing coplanar faces (`dot ≥ 0.999`); `--gate` ratchets against `coplanar-baseline.json`.
+// @skill scenery-dress
 //
 // Sibling to clip-audit.cjs, and deliberately NOT a flag on it: clip-audit
 // measures interpenetration DEPTH and two of its filters are actively wrong here.

@@ -1,4 +1,6 @@
 // audit-aero.mjs — render EVERY aero option from the 3 level wing views
+// @doc Renders every aero option from three wing views into one comparison sheet → `scratch/renders/aero/`.
+// @skill car-viewer
 // (behind / front / front-side, slightly raised) into one comparison sheet.
 //   node tools/audit-aero.mjs [--team=mclaren]
 // Output: scratch/renders/aero/

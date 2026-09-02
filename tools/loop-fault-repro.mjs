@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc Does the frame loop survive a transient fault and stop on a deterministic one? Injects throws into `Input.poll` live.
+// @skill webgl-debug
 /* loop-fault-repro.mjs — does the frame loop actually survive a transient fault
  * and actually stop on a deterministic one?
  *

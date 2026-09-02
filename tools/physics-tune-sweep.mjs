@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // tune-sweep — measure how DRIVEABLE each notch of each handling slider is.
+// @doc How DRIVEABLE is each notch of each handling slider? Drives the real DOM slider, then a curvature-fed closed-loop lap.
+// @skill tune-physics
 //
 // WHY THIS EXISTS. Every slider mapping in js/game/steer-tuning.js was written
 // so that notch 5 reproduces the original hand-tuned constant. That made the

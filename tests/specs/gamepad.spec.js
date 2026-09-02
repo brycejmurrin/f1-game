@@ -8,7 +8,7 @@
 // Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
 // apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
 // 50" arrives with the car's state and the retained log ring beside it.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 // Build a standard-mapping gamepad with the given left-stick X/Y (axes 0/1)
 // and a sparse {index: value} button map, install it as the sole connected
@@ -36,7 +36,8 @@ async function poll(page, { axisX = 0, axisY = 0, axisRX = 0, axisRY = 0, button
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => typeof Input !== "undefined" && !!Input.poll, null, { polling: 100, timeout: 15000 });
+  // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => typeof Input !== "undefined" && !!Input.poll, null, { polling: 100, timeout: BOOT_MS });
   // clear any latched edges / held keys between cases
   await page.evaluate(() => Input.reset());
 });
@@ -90,7 +91,7 @@ test("face/shoulder buttons fire edge-triggered actions exactly once", async ({ 
   await page.evaluate(() => window.__apex.race("monza"));
   await page.waitForFunction(() => {
     try { return window.__apex.info().track === "monza"; } catch (_) { return false; }
-  }, null, { polling: 100, timeout: 20_000 });
+  }, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => { window.__apex.go(); Input.reset(); });
   expect(await page.evaluate(() => window.UiLayers.navOpen())).toBe(false);
   // establish the released baseline so the next poll sees a rising edge
@@ -166,7 +167,7 @@ test("a transient getGamepads() hole recovers WITHOUT a gamepadconnected event",
 
 test("keyboard driving remains active after using a HUD button", async ({ page }) => {
   await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
-  await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => {
     window.__apex.go();
     Input.reset();
@@ -338,7 +339,7 @@ test.describe("Gamepad menu navigation", () => {
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => {
       try { return window.__apex.info().track === "monza"; } catch (_) { return false; }
-    }, null, { polling: 100, timeout: 20_000 });
+    }, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => {
       window.__apex.park(0.1);
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
@@ -385,7 +386,7 @@ test.describe("Gamepad menu navigation", () => {
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => {
       try { return window.__apex.info().track === "monza"; } catch (_) { return false; }
-    }, null, { polling: 100, timeout: 20_000 });
+    }, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); Input.reset(); });
     await page.waitForTimeout(200);
     expect(await page.evaluate(() => window.UiLayers.anyOpen())).toBe(false);

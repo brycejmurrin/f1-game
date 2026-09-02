@@ -12,8 +12,14 @@
       /* KOLD: OLD-RACING frac -> current racing node. Most of this file's raw
          px/rx/tx readers were authored when startFrac was 0.28; 7a17351 moved
          the origin to 0.2516 and renumbered the control points, but raw index
-         users never got the renumbering. Same formula the engine uses
-         (tracks.js `j = offNew - iOld`). MEASURED racing positions (curvature
+         users never got the renumbering. NOT the engine's own shift: the
+         engine's def._sceneryShift is ARC-LENGTH (tracks.js `dlen[j*SUB]/total`,
+         -51 nodes here) and governs the wrapped helpers; this INDEX shift
+         (-24 nodes) is an empirical calibration of the raw px/rx/tx readers.
+         Measured 2026-09-01 in the Node build: every one of the seven KOLD
+         sites sits closer to its measured corner under this shift than under
+         the arc shift, which would move each 108 m earlier and drop the tunnel
+         onto Portier — keep it. MEASURED racing positions (curvature
          peak-pick, build 1188): Ste Devote 0.056 | hairpin (r=10.1m) 0.383 |
          Portier 0.434 | tunnel 0.449-0.524 | chicane 0.641 | pool ~0.77 |
          Rascasse 0.88. The authored fracs in this file do NOT equal these. */

@@ -28,7 +28,7 @@
    40 tests on the default fixture would have paid 40 page boots to undo exactly
    that; on the shared page the split costs a build per circuit and nothing
    more. */
-import { sharedTest as test, test as freshTest, expect } from "../helpers/fixtures.js";
+import { sharedTest as test, test as freshTest, expect, BOOT_MS } from "../helpers/fixtures.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -111,7 +111,8 @@ test.describe("Apex 26 — track boundaries", () => {
      removes the whole question. */
   freshTest("driving hard into either edge stops bounded and recovers (sampled tracks)", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+    // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     for (const id of ["monaco", "monza", "baku", "spa"]) {
       const r = await page.evaluate((tid) => {
         const ok = window.__apex.race(tid, "day", "dry");

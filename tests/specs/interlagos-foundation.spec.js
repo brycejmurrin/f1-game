@@ -1,11 +1,13 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 async function loadInterlagos(page, time = "day") {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 8000 });
+  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate((tod) => window.__apex.race("interlagos", tod, "dry"), time);
-  await page.waitForFunction(() => window.__apex.info().track === "interlagos", null, { polling: 100, timeout: 10_000 });
+  await page.waitForFunction(() => window.__apex.info().track === "interlagos", null, { polling: 100, timeout: BOOT_MS });
 }
 
 test.describe("Interlagos track-owned foundation migration", () => {

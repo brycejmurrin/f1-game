@@ -147,7 +147,7 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   // ONCE — a latch already set when the boot started means the previous
   // reload's GLX.init failed too, and reloading again loops forever
   // (measured 236 reloads/64 s under a Vulkan-only browser config).
-  assert.match(game, /skipped = prev !== "1" && sessionStorage\.getItem\("apex26\.gfxClaimFail"\) === "1"/);
+  assert.match(game, /if \(!_claimSkipped\) \{\s*sessionStorage\.setItem\("apex26\.gfxClaimFail", "1"\);\s*skipped = sessionStorage\.getItem\("apex26\.gfxClaimFail"\) === "1"/);
   assert.match(game, /Live tab, create\(\) refused[\s\S]{0,400}removeItem\("apex26\.gfxBackendProbe"\)/);
   assert.match(game, /gfxClaimFail[\s\S]{0,220}removeItem\("apex26\.gfxBackendProbe"\)/);
   assert.doesNotMatch(game, /create\(\) refused[\s\S]{0,250}setItem\("apex26\.gfxBackend", "webgl2"\)/);
@@ -347,7 +347,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
 test("blocked sessionStorage skips the opt-in so this tab never claims the canvas", () => {
   const game = read("js/game.js");
   const boot = game.slice(game.indexOf("let skipClaim = false"), game.indexOf("const PROBE_KEY"));
-  assert.match(boot, /catch \(_\) \{ skipClaim = true;/);
+  assert.match(boot, /catch \(_\) \{ skipClaim = (?:_claimSkipped = )?true;/);   // _claimSkipped rides along: the GLX.init failure path reads it
   assert.doesNotMatch(boot, /try the opt-in as usual/);
 });
 
@@ -527,6 +527,53 @@ function runVerdict(script, { census, legs }) {
     return { code: r.status, out: (r.stdout || "") + (r.stderr || "") };
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
+
+test("gpu-game-check reports appearance, and can say when it could not measure it", () => {
+  // The census printed `meanLuma=n/a` on EVERY leg of every image because this
+  // tool never wrote out.frame — the string "frame" did not appear in the file
+  // at all. The gate does not block on appearance (a brightness floor goes
+  // flaky and then gets widened, which AGENTS.md forbids), but "reported for a
+  // human" was untrue: there was nothing to report. Both halves are pinned,
+  // because writing the field WITHOUT the absence path just recreates a
+  // silently-empty column. docs/PERF-FINDINGS.md 2l.
+  const ggc = read("tools/gpu-game-check.mjs");
+  assert.match(ggc, /out\.frame = n\s*\?/, "the tool must write out.frame");
+  assert.match(ggc, /meanLuma: \+\(sum \/ n\)\.toFixed\(1\)/);
+  assert.match(ggc, /out\.frameReadFailed = /,
+    "an appearance read that failed must be NAMED, not left as an empty column");
+  assert.match(ggc, /await import\("sharp"\)/,
+    "sharp is loaded dynamically so a missing binary degrades to frameReadFailed");
+
+  const wf = read(".github/workflows/gpu-census.yml");
+  assert.match(wf, /if \(g\.frameReadFailed\) rows\.push/,
+    "the Verdict must print WHY appearance is missing, like the gfx:/ovl: rows");
+});
+
+test("gpu-game-check's finally can actually reach the console buffer", () => {
+  // `const console_ = []` was declared INSIDE the try while the finally read
+  // it — sibling scopes, so the finally threw ReferenceError on EVERY run,
+  // success or failure. Everything after that line was dead: out.console (the
+  // diagnostic lines a previous round moved into the finally precisely so a
+  // FAILING run would keep them), out.root (added to name the Windows path bug
+  // — never once set on a real run), the bounded browser/server teardown, and
+  // the final process.exit, so the tool always exited non-zero even on ok:true.
+  // `continue-on-error: true` on all four census steps swallowed the exit code
+  // and checkpoint() had already written the JSON, so nothing looked wrong.
+  // Measured after the fix: exit 0, root set, 7 console lines. PERF-FINDINGS 2l.
+  const ggc = read("tools/gpu-game-check.mjs");
+  const decl = ggc.indexOf("const console_ = [];");
+  const tryAt = ggc.indexOf("\ntry {");
+  const useAt = ggc.indexOf("out.console = console_");
+  assert.ok(decl > -1, "the console buffer declaration is gone");
+  assert.ok(tryAt > -1 && useAt > -1);
+  assert.ok(decl < tryAt,
+    "console_ must be declared ABOVE the try, or the finally cannot see it " +
+    `(decl at ${decl}, try at ${tryAt})`);
+  assert.ok(useAt > tryAt, "sanity: the read really is inside/after the try");
+  // A declaration at column 0 is top-level; an indented one is inside a block.
+  assert.match(ggc, /\nconst console_ = \[\];/,
+    "console_ must be a TOP-LEVEL declaration, not indented inside the try");
+});
 
 test("the GPU gate passes a hardware run whose GLX leg reports no env probe", () => {
   // THE FALSE-FAILURE CASE. Making an absent env count fail on hardware is
@@ -2134,4 +2181,63 @@ test("GLX's uf3 cache keeps float64 precision, and owns every lit/sky vec3", () 
   // clear must move with it.
   assert.match(bare, /_clearUf\(_litUf\);\s*_clearUf\(_skyUf\);/,
     "the lit/sky uniform caches must still be cleared together on relink");
+});
+
+// ── The phone route (docs/PERF-FINDINGS.md §2m) ───────────────────────────
+// three retains the CPU copy of every geometry attribute after upload —
+// measured 71.5 MB across 5,665 buffers against GLX's 17.8 MB / 253 — and an
+// iPhone tab is OOM-killed mid-race for it. Releasing those arrays was built
+// and DISPROVED live: three re-reads attribute.array after upload in draw()
+// and in updateAttribute(), and each read takes the renderer down. So a phone
+// that picks three binds GLX instead. Three things have to stay true, and
+// each one of them has failed somewhere in this file's history.
+test("TLX declines on a phone, with a REASON, and an override that works", () => {
+  const tlx = read("js/render/three/tlx.js");
+
+  // 1. The route exists and goes through _fail — the seam that records
+  //    apex26.gfxTlxFail and flips gfxBound so SETTINGS can show why.
+  const route = tlx.match(/if\s*\(isMobile\s*&&\s*!_mobileOptIn\)\s*\{\s*\n\s*return _fail\((["'`])([\s\S]*?)\1\s*\);/);
+  assert.ok(route, "TLX no longer routes phones to GLX — the iPhone OOM is back");
+
+  // 2. The reason is a REASON, not a label. A bare "mobile" in the SETTINGS
+  //    panel tells the player nothing about what to do next, and this string
+  //    is the only place the override is discoverable.
+  const reason = route[2];
+  assert.ok(reason.length > 40, `decline reason too thin to act on: ${JSON.stringify(reason)}`);
+  assert.match(reason, /apex26\.tlxMobile/,
+    "the decline reason must name the override key — it is the player's only way back to TLX");
+
+  // 3. The override is real and defaults OFF. A gate with no way past it is a
+  //    removal, not a route; a gate that defaults ON is not a gate at all.
+  const optIn = tlx.match(/const _mobileOptIn = \(function \(\) \{[\s\S]*?\}\)\(\);/);
+  assert.ok(optIn, "the apex26.tlxMobile override is gone — phones can no longer opt back in");
+  assert.match(optIn[0], /localStorage\.getItem\("apex26\.tlxMobile"\) === "1"/,
+    "override must be an explicit opt-IN, so the default stays the renderer that survives");
+  assert.match(optIn[0], /catch \(_\) \{ return false; \}/,
+    "blocked storage must fall to the SAFE side (decline), not to TLX");
+
+  // 4. Order matters: the decline has to happen before create() imports three
+  //    and builds a renderer, or the phone pays the memory anyway.
+  const declineAt = tlx.indexOf("if (isMobile && !_mobileOptIn)");
+  const importAt = tlx.indexOf('await import("three/webgpu")');
+  assert.ok(declineAt > 0 && importAt > 0 && declineAt < importAt,
+    "the phone decline must come BEFORE three is imported — otherwise the tab still pays for it");
+});
+
+// The release approach is disproved, not merely unused. If a future round
+// reaches for it again, these two three.js source facts are why it cannot
+// work — asserted against the VENDORED bundle so a version bump re-checks them
+// rather than letting the comment go stale.
+test("three still re-reads attribute.array after upload (why the release fix is impossible)", () => {
+  const three = read("vendor/three-0.185.1/three.webgpu.min.js");
+
+  // draw(): firstVertex *= index.array.BYTES_PER_ELEMENT, every indexed draw.
+  assert.match(three, /\*=\s*\w+\.array\.BYTES_PER_ELEMENT/,
+    "three no longer scales firstVertex by index.array — re-evaluate releasing index arrays");
+
+  // BufferAttribute.onUpload is a legacy WebGLRenderer hook: the WebGPU
+  // bundle never calls it. This is the assertion that would have saved the
+  // first attempt, which shipped nothing and looked like a fix.
+  assert.ok(!three.includes("onUploadCallback"),
+    "three.webgpu now has onUploadCallback — the CPU-array release may finally be viable");
 });

@@ -1,7 +1,6 @@
 ---
 name: scenery-dress
-description: Use when the user asks to add/edit track scenery, dress a circuit, add buildings/trees/grandstands/barriers/mountains/billboards/floodlights, make Spa denser, fix floating/sunken/missing props, or work in a circuit scenery(api) callback. For a picture-driven accuracy pass (survey first) use survey-track.
-paths: js/circuits/**,js/track/scenery*.js
+description: Use when the user asks to add/edit track scenery, dress a circuit, add buildings/trees/grandstands/barriers/mountains/billboards/floodlights, make Spa denser, fix floating/sunken/missing props, or work in a circuit scenery(api) callback, or migrate scenery emitters to TrackGraph.instance / check graph parity / debug batches()/bakeOnly. For a picture-driven accuracy pass (survey first) use survey-track.
 ---
 
 # Dress a circuit's scenery
@@ -38,11 +37,15 @@ Every helper takes `(k, side, dist, …)`:
 node tools/verify-track.cjs <id>     # must print OK; catches scenery() THROW
 ```
 
-Then **bump-cache**. Visual: **playwright-probe** `shot.mjs`. Picture-driven
+Then `node tools/bump-cache.mjs --apply`. Visual: **playwright-probe** `shot.mjs`. Picture-driven
 accuracy / floating-tree survey → **survey-track** (Montreal already ships
-`flatTerrain`). Instancing migration → **scene-graph-instancing**.
+`flatTerrain`). Instancing migration →
+[references/instancing.md](references/instancing.md).
 
 ## Load on demand
 
 - Rejection / `rejBox` / `RAW.*` / vertex budget / trees vs `blockAt` →
   [references/rules.md](references/rules.md).
+- `TrackGraph.instance` migration, `apex_graph_parity` / `BASE=` parity,
+  `batches()` / `bakeOnly`, `__apex.trackGraph()` stats →
+  [references/instancing.md](references/instancing.md).

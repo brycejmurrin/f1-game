@@ -13,6 +13,7 @@
 // surface sits between TOL and CEIL metres above the racing line is an offender.
 // Purely geometric — no rendering, so it runs under SwiftShader in CI.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 import { auditTracks } from "../helpers/track-helpers.js";
 
 // Every circuit (derived from tools/manifest.cjs), or TRACK=<id> for one.
@@ -62,13 +63,14 @@ test("no prop geometry on/above the racing line (all circuits)", async ({ page }
   // fail as a timeout and be mistaken for a geometry regression.
   test.setTimeout(1500000);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: 15000 });
+  // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => __apex.trackGeometry(true));
 
   const offenders = [];
   for (const trk of TRACKS) {
     await page.evaluate((t) => __apex.race(t, "day", "dry"), trk);
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 15000 });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.waitForTimeout(1200);
     const r = await page.evaluate(({ CEIL, TOL }) => {
       const caps = window.__apex.trackGeometry();

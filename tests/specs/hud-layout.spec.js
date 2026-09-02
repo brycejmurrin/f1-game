@@ -14,6 +14,7 @@
 // env(safe-area-inset-*) as 0, so a notched phone is otherwise untestable, and
 // the notch is exactly where a 59px inset eats the width these rules assume.
 import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
 
 const VIEWS = [
   // iPhone 15 Pro landscape: 59px of notch either side, 21px home indicator.
@@ -56,17 +57,18 @@ const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors"]
 
 async function race(page, steer, manual, ins) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+  // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(([s, m]) => {
     localStorage.setItem("apex26.steerMode", JSON.stringify(s));
     localStorage.setItem("apex26.manual", JSON.stringify(m));
   }, [steer, manual]);
   await page.reload();
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 15000 });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.addStyleTag({ content:
     `:root{--sal:${ins.sal}px;--sar:${ins.sar}px;--sat:${ins.sat}px;--sab:${ins.sab}px;}` });
   await page.evaluate(() => window.__apex.race("monza"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 40_000 });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 60, 0); });
   await page.waitForTimeout(300);
 }

@@ -1,4 +1,6 @@
 // render-car.mjs — headless batch renderer for the ISOLATED car viewer.
+// @doc Headless batch renderer for `carview.html` — preset orbit angles + HTML contact sheet; needs a server on :3456.
+// @skill car-viewer
 //
 // Loads tools/carview.html (the standalone, track-free car "photo studio") once
 // and screenshots it from a chosen set of PRESET orbit angles with studio

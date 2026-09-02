@@ -49,7 +49,7 @@ would keep GLX’s dead closure).
 |---|---|---|---|
 | **GLX** | Default always-tagged WebGL2 | `js/render/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/shaders/` |
 | **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `js/render/webgpu/wgsl-{chunks,post,fx}.js` |
-| **TLX** | Opt-in Three `WebGPURenderer` (+ `forceWebGL` on mobile/WebKit) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
+| **TLX** | Opt-in Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; mobile/WebKit take the WebGPU path with lite caps) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
 
 **Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/gltf.js`,
 `js/render/assets.js` (MAT `TEXTURE_2D_ARRAY`). Deferred lists live in
@@ -113,14 +113,15 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 
 ## Parity snapshot
 
-- **GLX:** full reference — MSAA 4× desktop (2 then 0 if the HDR format
-  cannot), PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
+- **GLX:** full reference — MSAA on desktop 4× at GRAPHICS: ULTRA, capped to 2× on
+  HIGH and below, 0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost; honest
   remaining gap = TAA scaffold off (`_TAA_ENABLED = false` — jitter without a
-  history resolve is sub-pixel shimmer) plus the software-GPU road `+0.08`
-  lift (GLX uses polygonOffset only). Env cube uses a dedicated 4×-aniso
+  history resolve is sub-pixel shimmer). The road is NOT lifted — WGX uses
+  `depthBias`/`depthBiasSlopeScale` only, the same as GLX's polygonOffset;
+  an 8 cm Y bump was tried and buried cars and fence feet. Env cube uses a dedicated 4×-aniso
   sampler (binding 14). Car-paint flake / orange-peel interpolate `objPos`.
   SSAO uses the GLX/TLX `K[0..7]` fan and skips taps at strength 0.
   `applyHdrGrade` is gated on `tone1.w`. SSR is consumed in COMPOSITE the
@@ -170,6 +171,49 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   without writing `gfxClaimFail`. Phones and Safari AUTO try the same
   WebGPU path with a lite swapchain (`UnsignedByteType`, no MSAA 4,
   low-power).
+
+## Boot evidence — a unit test of a backend is not evidence that it runs
+
+WGX's mock device passed every assertion while FOUR separate defects made the
+real backend refuse to boot. Each hid the one after it, so they came out one
+boot at a time, and none was findable without a live device:
+
+| defect | why a mock cannot see it |
+|---|---|
+| MSAA `sampleCount: 2` | WebGPU allows 1 or 4 only; the mock accepted any integer |
+| a derivative (`dpdx`) behind a non-uniform branch | a WGSL compile error, invisible without a real shader compiler |
+| `mappedAtCreation` for a 35 MB mesh | exhausts the mappable pool on a real device; the mock never ran out |
+| `rg11b10ufloat` as a render target | needs the optional feature; the mock did not model features |
+
+Breaking any of these does not throw: WGX refuses and the game falls back to
+GLX with one console warning, so a green suite plus a silent fallback looks
+like success.
+
+**The recipe.** Serve from a secure context — `navigator.gpu` is absent on
+`about:blank`:
+
+```sh
+npx serve -l 3456 .
+node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
+```
+
+`probe` writes the backend pick and RELOADS in one batch (`--backend
+webgl2|three|webgpu`; `three` gets the specs' WebGL2 pin), `--eval` runs a
+body, `--console RE` greps the dump, `--dry-run` shows the batch. In page code
+use BARE globals — `GLX`, not `window.GLX`: script-level `const` is a lexical
+binding, not a window property.
+
+**Assert a POSITIVE signal.** A clean WGX boot writes NO console line and
+leaves `sessionStorage["apex26.gfxBound"]` absent (that key means it refused)
+— both are ABSENCE signals, and an absence test that reports the same value as
+a success test is not a test. Drive a race and assert
+`canvas.getContext("webgl2") === null`, which only holds once WebGPU has
+claimed the canvas. SwiftShader is a validation oracle; for WGX **visible**
+pixels use `tools/gfx-probe.mjs` (`#game` after `awaitSoftPresent`); for the
+readback oracle use `tools/wgx-capture.mjs` → `frame.png`. Full trap list:
+`.claude/skills/mcp-probe/references/recipes.md` §Probing a specific renderer.
+WGSL validation without a browser: `node tools/wgx-validate.mjs` (real Dawn,
+~5 s) — never ship "read-verified" WGSL.
 
 ## Related
 

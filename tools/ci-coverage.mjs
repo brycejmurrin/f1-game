@@ -1,4 +1,6 @@
 // Reports CI's two different browser-test contracts: fixed specs that run in
+// @doc What does the deploy gate execute? Resolves every `npm run test:*` / by-path invocation in `ci.yml` against the specs.
+// @section runner
 // the deploy workflow, and the blocking change-aware selection on pushes/PRs.
 // A dynamic gate cannot honestly claim every non-fixed spec, so report its
 // event/base/fail-closed contract separately instead of calling those specs

@@ -1,3 +1,5 @@
+// @doc lighting-campaign: JSONL record store (schema `apex26.lighting-campaign/v1`) — validate, append, merge fragments.
+// @skill lighting-tuner
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { conditionKey, enumerateConditions } from "./config.mjs";

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc LIGHTING TUNER effectiveness: no-browser catalog (group/class/gate/risk/tag) plus `--live <id>` A/B ramp.
+// @skill lighting-tuner
 /**
  * slider-effect.mjs — classify how effective each LIGHTING TUNER slider is.
  *

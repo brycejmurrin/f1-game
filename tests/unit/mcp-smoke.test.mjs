@@ -20,15 +20,22 @@ function run(args, extraEnv = {}) {
   });
 }
 
-test("mcp-smoke --dry-run lists the five repo servers and never launches Chromium", () => {
+test("mcp-smoke --dry-run pokes the two attached shell wrappers and never launches Chromium", () => {
+  // .mcp.json is three servers (apex-tools, playwright-official, chrome-devtools);
+  // only the first and last have a repo shell. probe / playwright / tinyfish
+  // wrappers may stay in the plan as CLI probes but are not MCP-attached.
   const r = run(["--dry-run"]);
   assert.equal(r.status, 0, r.stderr + r.stdout);
   const body = JSON.parse(r.stdout);
   assert.equal(body.ok, true);
   assert.equal(body.dryRun, true);
   const servers = body.plan.map((s) => s.server);
-  for (const need of ["apex-tools", "probe", "chrome-devtools", "playwright", "tinyfish"]) {
+  for (const need of ["apex-tools", "chrome-devtools"]) {
     assert.ok(servers.includes(need), `dry-run plan missing ${need}`);
+  }
+  const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".mcp.json"), "utf8"));
+  for (const gone of ["probe", "playwright", "tinyfish", "chrome-devtools-official"]) {
+    assert.equal(cfg.mcpServers[gone], undefined, `${gone} must not be MCP-attached`);
   }
   const argv = body.plan.flatMap((s) => s.argv).join(" ");
   assert.doesNotMatch(argv, /\bverify\b/);
@@ -39,18 +46,22 @@ test("mcp-smoke --dry-run lists the five repo servers and never launches Chromiu
   assert.ok(!body.steps?.length, "dry-run must not spawn");
 });
 
-test("smokePlan chrome/playwright/tinyfish steps stay status/help", () => {
+test("smokePlan chrome (and any CLI-only wrapper it still pokes) stays status/help", () => {
   const plan = smokePlan();
   const chrome = plan.find((s) => s.server === "chrome-devtools");
-  const pw = plan.find((s) => s.server === "playwright");
-  const fish = plan.find((s) => s.server === "tinyfish");
   assert.ok(chrome.argv.includes("status"));
   assert.ok(!chrome.argv.includes("verify"));
   assert.ok(!chrome.argv.includes("run"));
-  assert.ok(pw.argv.includes("status"));
-  assert.ok(!pw.argv.includes("run"));
-  assert.ok(fish.argv.includes("help"));
-  assert.ok(!fish.argv.includes("ensure"));
+  const pw = plan.find((s) => s.server === "playwright");
+  if (pw) {
+    assert.ok(pw.argv.includes("status"));
+    assert.ok(!pw.argv.includes("run"));
+  }
+  const fish = plan.find((s) => s.server === "tinyfish");
+  if (fish) {
+    assert.ok(fish.argv.includes("help"));
+    assert.ok(!fish.argv.includes("ensure"));
+  }
 });
 
 test("apex-tools-mcp.sh smoke --dry-run delegates", () => {
@@ -85,24 +96,19 @@ test("cloud-agent-install notes TinyFish key and chrome-devtools clone", () => {
   assert.ok(!src.includes("BAKED" + "_KEY"));
 });
 
-test("mcp-smoke names the TinyFish home URL when the key is missing", () => {
+test("mcp-smoke names the TinyFish home URL when the key is missing and never reports a fallback", () => {
   assert.match(fs.readFileSync(SMOKE, "utf8"), /https:\/\/agent\.tinyfish\.ai\/home/);
-  const r = run(["--dry-run"], { TINYFISH_API_KEY: "", TINYFISH_NO_FALLBACK: "1" });
+  const r = run(["--dry-run"], { TINYFISH_API_KEY: "" });
   assert.equal(r.status, 0, r.stderr + r.stdout);
   const body = JSON.parse(r.stdout);
+  // With no key in the shell the only legitimate source is the gitignored
+  // .env file — a "fallback" verdict would mean a tracked key came back.
   assert.notEqual(body.tinyfishKey.via, "fallback");
+  assert.ok(["env-file", "missing"].includes(body.tinyfishKey.via), body.tinyfishKey.via);
   if (!body.tinyfishKey.present) {
     assert.equal(body.tinyfishKey.url, "https://agent.tinyfish.ai/home");
     assert.match(body.warnings.join("\n"), /https:\/\/agent\.tinyfish\.ai\/home/);
   }
-});
-
-test("mcp-smoke treats the tracked fallback as a present key", () => {
-  const r = run(["--dry-run"], { TINYFISH_API_KEY: "" });
-  assert.equal(r.status, 0, r.stderr + r.stdout);
-  const body = JSON.parse(r.stdout);
-  assert.equal(body.tinyfishKey.present, true);
-  assert.ok(["fallback", "env-file"].includes(body.tinyfishKey.via), body.tinyfishKey.via);
 });
 
 test("tracked source never embeds a TinyFish key", () => {

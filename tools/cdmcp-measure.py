@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# @doc Background-friendly Chromium MCP measure suite: boot (network/console/LCP), ui floors, full(+heap); `= run` verdict.
+# @skill mcp-probe
 """Measure Apex 26 through chrome-devtools MCP with background-friendly logs.
 
 Runs a Chromium (SwiftShader) session via tools/chrome-devtools-mcp.sh, writes
