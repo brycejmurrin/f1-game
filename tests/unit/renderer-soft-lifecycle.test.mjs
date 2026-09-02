@@ -154,3 +154,44 @@ test("WGX soft present permits one staging read and drops pre-resize pixels", ()
   assert.match(src, /if \(!_cssApplying\) _cssDirty = true/);
   assert.match(resize, /Math\.abs\(w - width\) <= 1 && Math\.abs\(h - height\) <= 1/);
 });
+
+test("WGX and TLX distrust the CSS-size cache after a viewport change", () => {
+  // The defect GLX was fixed for (docs/PERF-FINDINGS.md §2u) is in all three
+  // backends: cssDirty is edge-triggered and consumed unconditionally, so one
+  // read landing before the canvas box reflows latches the PREVIOUS viewport's
+  // size for the session. GLX's fix is guarded BEHAVIOURALLY on the WebGL2 mock
+  // (gfx-backend-canary.test.mjs); three.js cannot load in Node and WGX's
+  // _cssSize is not reachable from its mock device, so these two are pinned on
+  // shape — the settle window must key off window.innerWidth/innerHeight
+  // (viewport metrics, no reflow) and must reach the cache's guard.
+  for (const [file, dirtyVar, wVar] of [
+    ["js/render/webgpu/wgx.js", "_cssDirty", "_cssW"],
+    ["js/render/three/tlx.js", "cssDirty", "cssW"],
+  ]) {
+    const src = read(file);
+    assert.match(src, /window\.innerWidth \| 0, vh = window\.innerHeight \| 0/,
+      `${file}: the settle trigger must be a viewport read, not a layout read`);
+    assert.match(src, /cssRecheck = CSS_RECHECK_FRAMES/i,
+      `${file}: a viewport change must arm a FRAME countdown (a wall-clock window`
+      + ` expired before a starved loop ran a frame — artifacts/r16-accept.log)`);
+    assert.match(src, new RegExp(`if \\(${dirtyVar} \\|\\| ${wVar} <= 0 \\|\\| \\w+ <= 0 \\|\\| \\w*[cC]ssRecheck > 0\\)`),
+      `${file}: the countdown must actually reach the cache guard`);
+    assert.match(src, /[cC]ssRecheck > 0\) \w*[cC]ssRecheck--/,
+      `${file}: and it must be spent, or the cache stops being a cache`);
+  }
+  // TLX registered its ResizeObserver INSIDE the addEventListener check, so an
+  // engine with one and not the other got no invalidation at all. GLX and WGX
+  // both register it independently; TLX now does too.
+  const tlx = read("js/render/three/tlx.js");
+  const listeners = tlx.indexOf('window.addEventListener("orientationchange", markCssDirty)');
+  // Anchor on the observer's own `if`, NOT on `new ResizeObserver(` — that
+  // token sits inside the if's and the try's braces, which would offset the
+  // depth by +2 and make the check say the opposite of what it means.
+  const obs = tlx.indexOf('if (typeof ResizeObserver === "function"', listeners);
+  assert.ok(listeners > 0 && obs > listeners, "TLX registers listeners, then the observer");
+  // Net brace depth between the two: nested would be >= 0, outside is negative
+  // (the window check's own `}` has been passed).
+  let depth = 0;
+  for (const ch of tlx.slice(listeners, obs)) { if (ch === "{") depth++; else if (ch === "}") depth--; }
+  assert.ok(depth < 0, `TLX ResizeObserver must sit OUTSIDE the addEventListener check (net brace depth ${depth})`);
+});

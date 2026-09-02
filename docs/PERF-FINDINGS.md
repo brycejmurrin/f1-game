@@ -2346,6 +2346,196 @@ one pass at a time and re-reading `usedJSHeapSize`. Two knobs and forty minutes
 attributed 53 MB of 101; a heap snapshot of three's internals attributed none of
 it in three previous sessions.
 
+## 2t. All four render paths, measured on a real GPU for the first time (2026-09-02)
+
+`gpu-census.yml` run 25, `macos-latest` (Apple silicon / Metal), commit
+`64a98dd`, job green. This is the first census whose appearance column carries
+numbers: until the fix in §2l, `tools/gpu-game-check.mjs` never wrote
+`out.frame`, so `meanLuma` printed `n/a` on every leg of every run.
+
+```
+census anyHardware: true
+webgpu  ok=true gpuErrors=0 envFail=0 envReady=false softAdapter=false meanLuma=46.9   TLX -> three/WebGPU
+webgl2  ok=true gpuErrors=0 envFail=0 envReady=true  softAdapter=false meanLuma=66.2   TLX -> three/WebGL2
+glx     ok=true gpuErrors=0                                            meanLuma=67.8   GLX  (the default)
+wgx     ok=true gpuErrors=0                                            meanLuma=76.4   WGX  (native WebGPU)
+        wgx: bound=true softPresent=true headlessUa=true (expected under a headless UA)
+```
+
+Four paths, four non-blank frames, zero GPU errors. Before this run the same job
+could only say "no errors" — which it also said on the day it rendered nothing,
+because there was no pixel to disagree with.
+
+### What it settles
+
+**WGX binds and renders on hardware.** `bound=true`, no `softAdapter`, luma
+76.4. Every in-container claim that WGX showed a frozen canvas or the wrong
+framing was a SwiftShader artifact from a screenshot taken without
+`GLX.awaitSoftPresent()` (the trap `tools/gfx-probe.mjs:301` already guards
+against and an ad-hoc CDP `Page.captureScreenshot` does not). Those claims are
+retracted.
+
+`softPresent=true` here is not a defect: WGX sniffs a HeadlessChrome UA as
+software and blits by design, so a headless hardware run proves bind + render
+and says nothing about the swapchain. Only a HEADED hardware run proves that
+path, and the Verdict step already encodes the distinction.
+
+### The open lead — a 30% luma gap between three's two backends
+
+TLX renders the identical scene at 46.9 on WebGPU and 66.2 on WebGL2: same
+commit, same machine, same track, same TSL materials. GLX (67.8) sits with the
+WebGL2 leg, so the odd one out is three's WebGPU backend alone.
+
+The likely mechanism is in the same row: `envReady=false` on the WebGPU leg,
+`true` on the WebGL2 leg. `tlx.js` gates the environment cube on `envReady`, so
+a leg whose 6-face probe has not latched renders with no image-based ambient —
+a darker frame, in the direction measured.
+
+**This is NOT yet a defect, and the confound is named:** the WebGPU leg ran 33 s
+against the WebGL2 leg's 45 s, and the env bake is progressive across frames.
+`envFail=0` and `gaveUp=false` say it was still working, not that it failed. To
+settle it, hold the WebGPU leg until `envProbeReady()` and re-read luma; if the
+gap survives an equal soak it is real, and the census should GATE on `envReady`
+rather than only reporting it — the same reporting-not-gating class as §2l.
+
+### On WebGPU alternatives, since the question was asked
+
+Surveyed three.js WebGPURenderer vs native WebGPU, Babylon 9, PlayCanvas and the
+2026 migration write-ups. Nothing argues for a change. Safari 26+ ships WebGPU on
+iOS, so both opt-in backends are live on a phone. The write-ups agree with what
+was measured here directly: three carries higher per-object metadata overhead,
+which is exactly what OOM-killed the tab on iOS before §2n and §2p. Babylon and
+PlayCanvas are full engines with build steps — adopting either means discarding
+GLX and the no-build constraint. The right phone WebGPU path is WGX, which
+already exists.
+
+## 2u. The renderer cached the canvas size and never noticed the viewport move (2026-09-02)
+
+Reported as "the WebGPU path shows the garage from outside, so too far". It is
+not a WebGPU defect. It is in **GLX, the default WebGL2 backend every visitor
+runs**, and it needs a VIEWPORT CHANGE to appear — which is why several probes
+found nothing: each booted at one size and stayed there.
+
+### The measurement
+
+One page, no reload (`boot=852217` on every row), walking orientations in the
+garage (`artifacts/aspect-verdict.log`):
+
+```
+start   1280x720   true=1.7778  loop=1.7778  buf=1280x720   ok
+portrait 390x844   true=0.4621  loop=1.7778  buf=1280x720   STALE (a hand-called resize() did not fix it)
+landscape 844x390  true=2.1641  loop=2.1641  buf=844x390    ok
+portrait 390x844   true=0.4621  loop=2.1641  buf=844x390    STALE (a hand-called resize() did not fix it)
+landscape 844x390  true=2.1641  loop=2.1641  buf=844x390    ok
+back    1280x720   true=1.7778  loop=1.7778  buf=1280x720   ok
+```
+
+`GLX.aspect` holds the PREVIOUS viewport's ratio. Two container explanations are
+excluded by the data rather than by argument: the same boot id on every row rules
+out the `webglcontextrestored` reload in `glx.js`, and a perfect alternation with
+orientation rules out a random SwiftShader context loss.
+
+`artifacts/aspect-why.log` names the mechanism:
+
+```
+PORTRAIT css=390x844 rect=390x844 hiddenAncestor=null true=0.4621
+         loop=1.7778 | plain resize()=1.7778  synthResize=0.4621  synthOrient=0.4621
+```
+
+`hiddenAncestor=null` and `rect == css` rule out a hidden or mis-measured canvas.
+Dispatching the exact `resize` event `markCssDirty` listens for corrects the
+aspect on the very next `resize()` call.
+
+### Why the flag was not enough
+
+The cache is deliberate and its reason is sound: `clientWidth`/`clientHeight` are
+layout reads at the top of every frame and the HUD dirties layout constantly, so
+reading them per frame forced a reflow every tick. `watchCanvasSize()` wires
+`markCssDirty` to `resize`, `orientationchange` and a `ResizeObserver`.
+
+The defect is that the flag is **edge-triggered and consumed unconditionally**.
+One `resize()` that lands before the canvas box has reflowed caches the old box,
+clears the flag, and nothing sets it again. `cssSize()`'s only other escape is
+the `cssW <= 0` zero-guard, which a laid-out canvas never trips. The leading
+suspect for who reads too early is `game.js`'s own
+`window.addEventListener("resize", () => gfx.resize())`, which runs
+synchronously inside the resize event — but that is a hypothesis and the fix
+does not rest on it.
+
+### It is not a garage bug
+
+Eight sites read `aspect`, and the garage fit distance is the mildest:
+
+| site | effect of a stale aspect |
+|---|---|
+| the main scene projection | the whole world stretches |
+| `fovYCap` | wrong horizontal-FOV cap, so wrong vertical FOV |
+| `_farCull` frustum cull radius | **a too-small aspect under-sizes the cull sphere and pops geometry out of the world while driving** |
+| `spFitD` (garage) | the reported symptom |
+| setup-preview projection, agent-view projection, agent-view grid rows | mis-framed |
+
+### The fix: `cssSize()` verifies instead of trusting
+
+Keep the cache and every listener; add a bounded re-check keyed on
+`window.innerWidth`/`innerHeight`. Those are VIEWPORT metrics, not element
+layout, so reading them per frame does not force the reflow the cache exists to
+avoid, and they move at the same instant the box does whatever order the events
+arrive in. A change arms a countdown of 30 FRAMES during which the box is
+re-read, so a read that was too early self-corrects on the next one.
+
+Two shapes were rejected, each by a measurement rather than by argument:
+
+- **A one-shot re-mark.** It caches the old box AND records the new viewport,
+  after which nothing differs and the staleness latches exactly as before.
+- **A 500 ms wall-clock window.** Shipped, measured, and it left one rotation of
+  six still stale (`artifacts/r16-accept.log`) — on a box where a frame can take
+  seconds the window expired before the render loop ran a single frame. The
+  signature had flipped, which is what gave it away: before the fix a
+  hand-called `resize()` could not correct the aspect, and with the window a
+  hand-called `resize()` fixed it instantly, so the cache was already sound and
+  the problem was that no frame had run inside the window. A countdown of CALLS
+  is immune: N calls is N frames however slow they are, and at 60fps it is the
+  same half second.
+
+The first observation records the viewport WITHOUT arming — there is nothing to
+differ from at boot, and arming there makes the frames right after `init()`
+re-read the box for no reason. `webgpu-lifecycle.test.mjs` already pinned that
+for WGX ("unchanged frames must not force canvas layout reads") and caught this
+version of the fix doing it.
+
+Also folded in: GLX now has WGX's `_canWatchCss` fallback (with no listeners
+attached at all it never trusts the cache), and TLX's `ResizeObserver` moved
+outside its `addEventListener` check — an engine with one and not the other was
+getting no invalidation signal at all.
+
+Applied to all three backends. Cost is ~30 forced reflows spread over half a
+second, only right after a viewport change, when the browser is reflowing anyway.
+
+### Two observations left open
+
+Neither is explained, and the fix is deliberately chosen to be correct without
+knowing either:
+- the main menu tracked every viewport correctly in the same walk
+  (`artifacts/aspect-latch.log`) while the garage did not;
+- which of the three invalidation signals is the one arriving early.
+
+### Nothing in the suite could have caught it
+
+`tests/specs/ui-resize.spec.js` was the only live-resize spec, and it calls
+`headless(true)` so no frame renders during its resize walk — its own comment
+already conceded that this "leaves rendering ... untested". `tlx-probes.spec.js`
+read `GLX.aspect` and asserted only `> 0`, which a stale value passes.
+`agent-view.spec.js` compares the ASCII grid against a value itself derived from
+`gfx.aspect`, so a stale aspect is self-consistent and passes. A grep for
+`canvas.width` or `drawingBufferWidth` across `tests/` returned zero hits: the
+suite had never read the backing store.
+
+Now guarded three ways, each sabotage-proven: a behavioural node test on the
+WebGL2 mock driving the exact too-early-read sequence (and asserting the window
+CLOSES, so the cache is still a cache); shape pins for WGX and TLX; and one live
+test in `ui-resize.spec.js` that keeps the render loop running and asserts
+`GLX.aspect` equals the canvas's own live box across five viewport changes.
+
 ## 3. Left on the table
 
 The pre-08-18 narrative behind this list — the O(n²) AI scans that were

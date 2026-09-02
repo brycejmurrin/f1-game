@@ -1804,3 +1804,28 @@ also runs `node-slow`, the VM twins, the net/audio/agent-contract groups).
 `node tools/deploy.mjs` now runs exactly that step's `npm run test:*` lines,
 parsed from `ci.yml` so the two lists cannot drift; the edit loop stays
 `tooling-fast`, and a pre-deploy run pays the extra ~4 minutes once.
+
+### 2026-09-02 — two instruments that lie on this container
+
+**`etime`/`etimes` does not track wall clock here.** A probe polled across ten
+minutes of tool calls reported `etimes 29`, and a second read seven seconds
+later had advanced by over a minute. Every "it has been running too long, it
+must be wedged" judgement made from the process table this session was
+measuring nothing, and one of them killed a healthy run. **Poll the artifact for
+content, not the process for age** — `[ -s artifacts/x.log ] && ! pgrep …` in a
+long-bounded loop, and let the log's own terminal line be the verdict. The
+companion trap is older and already documented: a `pgrep -f`/`pkill -f` pattern
+matches the controlling shell's own command line, so use explicit PIDs.
+
+**An `await requestAnimationFrame` inside `page.evaluate()` has no timeout of
+its own.** A probe that awaited a double-rAF to measure frame liveness hung
+indefinitely with no output and no error — `evaluate` waits for the promise,
+and a throttled or stopped loop never resolves it. Playwright's test timeout is
+the outer backstop; a scratch script has none. Measure liveness with a counter
+read across two ordinary `waitForTimeout`s instead.
+
+**A screenshot of the WebGPU canvas needs `GLX.awaitSoftPresent()` first**
+(`tools/gfx-probe.mjs:301`). A raw CDP `Page.captureScreenshot` reads the
+un-blitted canvas and produces a confident, wrong answer — it cost one fully
+written-up "WGX mis-frames the garage" reproduction that had to be retracted
+(docs/PERF-FINDINGS.md §2t).

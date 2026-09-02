@@ -153,6 +153,54 @@ test("GLX create* / draw* fail closed when the context is lost", () => {
   assert.equal(h.GLX.updateInstances(batch, new Float32Array(32), 1), 0, "updateInstances reports nothing resident");
 });
 
+test("GLX re-reads the canvas box after a viewport change, even when a frame read it too early", () => {
+  // THE DEFECT (docs/PERF-FINDINGS.md §2u). cssDirty is edge-triggered and
+  // consumed unconditionally, so ONE resize() landing before the canvas box has
+  // reflowed caches the OLD box, clears the flag, and nothing ever sets it
+  // again: GLX.aspect then reports the PREVIOUS viewport's ratio for the rest
+  // of the session. Measured in a browser — a landscape 1.7778 survived a whole
+  // portrait session and a hand-called resize() could not shift it, while one
+  // synthetic "resize" event fixed it on the next call. It is not cosmetic:
+  // aspect feeds the main projection, the FOV cap and the frustum CULL RADIUS.
+  //
+  // The mock's window.addEventListener is a noop, so markCssDirty is never
+  // wired here — which makes this the exact worst case. The only thing that can
+  // correct the cache is cssSize() DISTRUSTING it after the viewport moves.
+  const h = bootGlx();
+  const aspectOf = () => +h.GLX.aspect.toFixed(4);
+  const box = (cw, ch) => { h.canvas.clientWidth = cw; h.canvas.clientHeight = ch; };
+  const viewport = (w, hh) => { h.sandbox.innerWidth = w; h.sandbox.innerHeight = hh; };
+
+  box(1280, 720); viewport(1280, 720);
+  h.GLX.resize();
+  assert.equal(aspectOf(), +(1280 / 720).toFixed(4), "baseline landscape");
+
+  // Rotate. The viewport is portrait but the canvas box has NOT reflowed yet,
+  // and a frame reads it in that state — the read that used to poison the cache.
+  viewport(390, 844);
+  h.GLX.resize();
+
+  // Now the box reflows. Nothing dispatches an event, so the dirty flag is
+  // still false; only distrust can save this.
+  box(390, 844);
+  h.GLX.resize();
+  assert.equal(aspectOf(), +(390 / 844).toFixed(4),
+    "a too-early read must not latch the previous viewport's aspect");
+  assert.equal(`${h.GLX.width}x${h.GLX.height}`, "390x844", "and the backing store follows");
+
+  // The distrust must be BOUNDED — the cache exists because clientWidth is a
+  // layout read at the top of every frame, and reading it forever would undo
+  // the reason it was added. The countdown is in FRAMES (a wall-clock window
+  // was tried and measured leaving a rotation stale on a box where one frame
+  // takes seconds), so spend it in frames: once exhausted, with the viewport
+  // steady, a box change alone is ignored again.
+  for (let i = 0; i < 40; i++) h.GLX.resize();   // exhaust the countdown
+  box(1000, 500);                                // viewport unchanged: no signal
+  h.GLX.resize();
+  assert.equal(aspectOf(), +(390 / 844).toFixed(4),
+    "once the countdown is spent the cache is still a cache");
+});
+
 test("TLX hoists crack fwidth and MAT samples before the detail/live If (WGSL derivative_uniformity)", () => {
   const lit = read("js/render/three/tsl-lit.js");
   const at = lit.indexOf("const cr = abs(vnoise(wp.xz");

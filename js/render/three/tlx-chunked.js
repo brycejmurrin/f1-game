@@ -380,7 +380,12 @@
       const geo = mesh.chunks[0].geo, atts = geo.attributes;
       const drop = (a) => { if (a && a.array && a.array.length) a.array = new a.array.constructor(0); };
       for (const k in atts) drop(atts[k]);
-      for (let i = 0; i < mesh.chunks.length; i++) drop(mesh.chunks[i].geo.index);
+      // The per-chunk INDEX arrays stay. three's WebGPU backend sizes the index
+      // buffer from the array's byte length, so freeing them yields a ZERO-BYTE
+      // index buffer: "Index range ... does not fit in index buffer size (0)",
+      // 8 uncaptured GPU errors on real Metal hardware (gpu-census run 26)
+      // while the WebGL2 control leg was clean. tlx.js releaseGeoMirrors()
+      // carries the same rule and the same reason.
     }
 
     function free(mesh) {
