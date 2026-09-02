@@ -607,3 +607,72 @@ test("a cooldown armed DURING a race still holds (only the pre-race arm is skipp
   feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 33 * scale()), 600);
   assert.ok(scale() < 1, "and it degrades once the in-race cooldown has run out");
 });
+
+/* ── THE BLIND SPOT BELOW 10 fps ────────────────────────────────────────────
+ * `tick()` used to gate the EMA on a bare `if (dtMs < 100)`, to keep a tab
+ * resume or a GC pause from yanking the scale. That is right for ONE frame and
+ * catastrophic as a permanent filter: a device rendering slower than 10 fps
+ * produces nothing BUT over-cap frames, so no sample ever reached `_frameEMA`,
+ * which sat at the 16.7 ms sentinelArm() left it. The governor then read
+ * 59.9 fps on a device managing 5, `degradeAt` was never crossed, and the
+ * entire ladder — the thing that exists to rescue exactly this device — stayed
+ * parked at tier 0 and scale 1 for the whole session.
+ *
+ * Measured in a live browser on 2026-09-02 (chrome-devtools MCP, bahrain, GLX,
+ * software raster): 2 rAF frames in 17.5 s — 0.11 fps — while `__apex.perf()`
+ * in that same page returned `{fps: 59.9, floorMs: 16.7, tier: 0, scale: 1}`.
+ *
+ * The fix keeps the spike filter for an ISOLATED over-cap frame and feeds a
+ * CLAMPED sample once SPIKE_RUN of them arrive in a row. Both halves are
+ * pinned here: without the run counter the first test fails, and without the
+ * clamp the second one does. */
+
+test("a device below 10 fps is SEEN by the governor, not filtered out of existence", () => {
+  const { PerfGov } = makeGov();
+  feed(PerfGov, () => 200, 1200);            // a steady 5 fps — every frame over the cap
+  assert.ok(PerfGov.fpsEMA() > 150,
+    `the EMA must reflect a device this slow, got ${PerfGov.fpsEMA()} ms — ` +
+    `16.7 means every sample was discarded and the governor is blind`);
+  // No ladder assertion HERE on purpose: a perfectly uniform interval is the
+  // signature of an external cap, and refusing to degrade for one is the
+  // deliberate behaviour the Low Power Mode test above pins. What this fix
+  // changes is that the governor now has the data to make that judgement at
+  // all, instead of judging a 5 fps device against a fabricated 59.9.
+});
+
+test("a GPU-bound device below 10 fps now steps the ladder (it could not be seen before)", () => {
+  // dt COUPLED to scale, as in the genuine-overload test above, but in the
+  // range the old `dtMs < 100` filter threw away wholesale. Cutting resolution
+  // really does cut frame time here, so the verify step keeps the cut instead
+  // of reverting it — and that is only reachable because the samples now
+  // arrive AND carry magnitude (clamped at SLOW_CAP, not flattened to 100).
+  const { PerfGov, scale } = makeGov();
+  feed(PerfGov, (i) => (i % 20 === 0 ? 90 : 260 * scale()), 1500);
+  assert.ok(scale() < 1 || PerfGov.tier() > 0,
+    `a genuinely overloaded sub-10-fps device must shed something ` +
+    `(scale ${scale()}, tier ${PerfGov.tier()}, ema ${PerfGov.fpsEMA().toFixed(1)})`);
+});
+
+test("one huge frame is still a spike, not evidence about the device", () => {
+  // Tab resume / GC: a single 60 s gap surrounded by healthy frames. The EMA
+  // must stay put, which is what the original cap was protecting and what a
+  // naive Math.min(dtMs, cap) clamp would have broken.
+  const { PerfGov, scale } = makeGov();
+  feed(PerfGov, () => 16.7, 300);
+  const before = PerfGov.fpsEMA();
+  PerfGov.tick(60000);
+  feed(PerfGov, () => 16.7, 5);
+  assert.ok(Math.abs(PerfGov.fpsEMA() - before) < 1.0,
+    `an isolated spike must not move the EMA (${before} -> ${PerfGov.fpsEMA()})`);
+  assert.equal(scale(), 1, "and must not cost the player any quality");
+  assert.equal(PerfGov.tier(), 0);
+});
+
+test("a run of slow frames feeds CLAMPED, so a 60 s gap can never enter as 60 000 ms", () => {
+  const { PerfGov } = makeGov();
+  feed(PerfGov, () => 8000, 600);            // absurdly slow, sustained
+  assert.ok(PerfGov.fpsEMA() <= 1000 + 1e-6,
+    `the clamp caps what a slow run can contribute, got ${PerfGov.fpsEMA()}`);
+  assert.ok(PerfGov.fpsEMA() > 900,
+    "and it should actually converge on the cap rather than hovering near 16.7");
+});

@@ -29,6 +29,9 @@ let _gfx = null;
 // STANDARD-tier sit at scale 1 and never enter these branches, so their
 // (already smooth) behaviour is unchanged.
 let _frameEMA = 16.7, _govT = 0, _govCool = 0, _autoRes = true, _downHold = 0;
+// Consecutive frames over SPIKE_MS. Reset by any in-budget frame and by
+// sentinelArm(), so a fresh race never inherits a previous session's run.
+let _slowRun = 0;
 // A COOLDOWN ONLY MEANS SOMETHING WHILE FRAMES ARE BEING MEASURED. Boot arms
 // two of them before the first race tick — ui-scale.js applyResMode() ->
 // setAutoRes(true) on every load, gfx-quality.js applyLive() -> setUserTier(2)
@@ -105,6 +108,18 @@ const FLOOR_DOWN_A = 0.3, FLOOR_UP_A = 0.02;
 // interval; restore cannot be the mirror of it. What IS observable is the EMA
 // settling back ONTO the floor — that means frames have stopped missing — so
 // restore asks for exactly that, and the up-step is verified like the down-step.
+// SPIKE_MS is the "this frame is not evidence" cap; SPIKE_RUN is how many
+// consecutive over-cap frames stop being a spike and start being the device.
+// 3 at <10 fps is ~0.3-0.6 s — long enough that a resume or a GC pause never
+// reaches it, short enough that a genuinely slow device is seen almost at once.
+// SLOW_CAP is the ceiling on a sample from inside such a run. It is NOT
+// SPIKE_MS: clamping a run to 100 would make every sub-10-fps state read as
+// exactly 100 ms, and `_pendingVerify` judges a step by whether the EMA MOVED —
+// so the governor could see that it was slow but never whether a cut helped,
+// and would revert every step it took. 1 s keeps real magnitude across the
+// whole 10-fps-to-1-fps range while still bounding a pathological hitch; a tab
+// resume never reaches it at all, because one frame is not a run.
+const SPIKE_MS = 100, SPIKE_RUN = 3, SLOW_CAP = 1000;
 const DEGRADE_OVER = 2.3, RESTORE_WITHIN = 0.6;   // degrade at floor+2.3; restore once the EMA is back within 0.6 of the floor
 
 // MAKE THE DEGRADE CAUSAL. The derived budget above is the right model but
@@ -229,7 +244,7 @@ function sentinelArm(on) {
   // at `_live` — both averages restart from their shared 16.7 so the EMA can
   // outrun the floor once more. Desktop too (above the mobile-only guard):
   // the governor runs everywhere, only the sentinel is mobile.
-  if (on) _frameEMA = _floorMs = 16.7; else _live = false;
+  if (on) { _frameEMA = _floorMs = 16.7; _slowRun = 0; } else _live = false;
   if (!_gfx || !_gfx.isMobile) return;
   try { if (on) localStorage.setItem(SENT_ACTIVE, "1"); else localStorage.removeItem(SENT_ACTIVE); } catch (_) {}
 }
@@ -277,11 +292,33 @@ function tick(dtMs) {
   // tracked unconditionally (stage 2 judges against the same budget and needs
   // the data), and `_autoRes` is consulted only at the two places that actually
   // move the scale.
-  // Ignore huge spikes (tab resume, GC): they'd yank the scale.
+  // Ignore huge spikes (tab resume, GC): they'd yank the scale. But a SPIKE is
+  // one frame, and this used to be a bare `if (dtMs < SPIKE_MS)` that dropped
+  // every sample above the cap — which made the governor BLIND ON EXACTLY THE
+  // DEVICES IT EXISTS FOR. Below ~10 fps every frame is over the cap, nothing
+  // ever reaches the EMA, and `_frameEMA` sits at the 16.7 that sentinelArm()
+  // left it: the governor reads 59.9 fps, `degradeAt` is never crossed, and the
+  // whole ladder stays parked at tier 0 while the player watches a slideshow.
+  // Measured 2026-09-02 in a live browser (chrome-devtools MCP, bahrain, GLX):
+  // 2 rAF frames in 17.5 s — 0.11 fps real — and `__apex.perf()` in that same
+  // page reported `{fps: 59.9, floorMs: 16.7, tier: 0, scale: 1}`. Nothing had
+  // stepped, because nothing had been seen.
+  //
+  // So: keep discarding an ISOLATED over-cap frame (tab resume, a GC pause),
+  // and stop discarding a RUN of them. SPIKE_RUN consecutive slow frames is not
+  // a spike, it is the device's actual speed, and from there the sample is fed
+  // clamped to SLOW_CAP — enough for the EMA to outrun the floor and trip
+  // `degradeAt`, and to still MOVE when a step helps, without letting a
+  // pathological hitch enter at its full value.
   _live = true;
-  if (dtMs < 100) {
+  if (dtMs < SPIKE_MS) {
+    _slowRun = 0;
     _frameEMA += (dtMs - _frameEMA) * 0.1;
     _floorMs += (dtMs - _floorMs) * (dtMs < _floorMs ? FLOOR_DOWN_A : FLOOR_UP_A);
+  } else if (++_slowRun >= SPIKE_RUN) {
+    const s = Math.min(dtMs, SLOW_CAP);
+    _frameEMA += (s - _frameEMA) * 0.1;
+    _floorMs += (s - _floorMs) * (s < _floorMs ? FLOOR_DOWN_A : FLOOR_UP_A);
   }
   if (_downHold > 0) _downHold--;   // recovery hold ticks down every frame
   if (_govCool > 0) { _govCool--; return; }
