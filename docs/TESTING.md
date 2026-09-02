@@ -1760,6 +1760,12 @@ the list, each with the exact check — the browser group for all of it is `ui`:
 | P13 | SELECT / CAREER / GARAGE with a screen reader | entering announces "SELECT, region" (or GARAGE / CAREER); RESUME / RESTART / QUIT on the pause menu are NOT announced as toggles; LIGHTS OUT / FINAL LAP / FINISH are read from `#announce` (`role="status"`) without repeating |
 
 ### 2026-09-02 — a 54–107 s boot on this box is the box, not the tree
+  A/B closed the question the same day: the 2026-09-01 20:23 tree (3fe7dc74,
+  before the deploy merge and the process commit) loads in 48.6 s at 852x393 on
+  this box against 59.1 s for a4a08011 and 54.2 s for HEAD — the same order for
+  every tree, so no commit of the last day moved boot time; the box (and, that
+  night, the ubuntu/windows runners: census run 21's 120 s waits, run 1881's
+  boot-guard) simply boots the game in ~50 s on software GL at that size.
 
 Symptom: desktop-viewport specs (audio-smoke, menu-keyboard's desktop describe,
 ui-scale) hit the 120 s test timeout with the game booted but the main thread
