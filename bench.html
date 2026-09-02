@@ -184,6 +184,34 @@ const PHASES = [
     set: (a) => a.lightTune({ contactStr: 0 }), restore: (a) => a.lightTune({ contactStr: 1 }) },
   { key: "noMist", label: "ground mist off",
     set: (a) => a.lightTune({ mistDensity: 0 }), restore: (a) => a.lightTune({ mistDensity: 1 }) },
+  // SSAO and the god-ray march were missing, and they are two of the three
+  // heaviest passes in the tier-4 rung — SSAO is a pass plus TWO blurs, godray
+  // is a march. Without them the bench could not price the one question a
+  // player actually asks: "what would GRAPHICS: LOW save me if it shed this?"
+  { key: "noSSAO", label: "SSAO off (pass + 2 blurs)",
+    set: (a) => a.lightTune({ aoStr: 0 }), restore: (a) => a.lightTune({ aoStr: 1 }) },
+  { key: "noGodray", label: "god-ray march off",
+    set: (a) => a.lightTune({ godrayBase: 0, godrayLowBoost: 0 }),
+    restore: (a) => a.lightTune({ godrayBase: 0.38, godrayLowBoost: 0.55 }) },
+  { key: "noLampVol", label: "lamp volumetrics off",
+    set: (a) => a.lightTune({ lampVolBase: 0, lampVolHaze: 0 }),
+    // js/game/lighting.js defs — 0.05 / 0.65, NOT 1. A restore that guesses 1
+    // leaves beams 20x strong for every phase after it, so the rows below would
+    // measure a scene nobody ships.
+    restore: (a) => a.lightTune({ lampVolBase: 0.05, lampVolHaze: 0.65 }) },
+  // THE ANSWER PHASE. Everything the tier-4 rung sheds, off together — which is
+  // exactly what GRAPHICS: LOW does NOT do today, because those five gates read
+  // PerfGov.autoTier() and autoTier deliberately excludes the user's preset
+  // (js/game.js "autoTier 4 drops SSAO (+2 blurs) and god-ray — not GRAPHICS:
+  // LOW alone"). The gap between this row and BASELINE is what a player on LOW
+  // is paying for a setting they already chose.
+  { key: "tier4Rung", label: "the WHOLE tier-4 rung off (what LOW does not shed)",
+    set: (a) => a.lightTune({ bloomMul: 0, contactStr: 0, aoStr: 0,
+                              godrayBase: 0, godrayLowBoost: 0,
+                              lampVolBase: 0, lampVolHaze: 0 }),
+    restore: (a) => a.lightTune({ bloomMul: 1, contactStr: 1, aoStr: 1,
+                                  godrayBase: 0.38, godrayLowBoost: 0.55,
+                                  lampVolBase: 0.05, lampVolHaze: 0.65 }) },
   { key: "half", label: "render scale 0.5 (fill-rate probe)",
     set: (a) => a.renderScale(0.5), restore: (a) => a.renderScale(1) },
 ];
