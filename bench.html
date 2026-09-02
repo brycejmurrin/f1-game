@@ -277,6 +277,22 @@ async function run() {
       } catch (e) { return null; }
     })(),
     track, tod, wx, secondsPerPhase: ms / 1000,
+    // THE GOVERNOR, WHOLE. A screenshot showing "tier 4" cannot say WHY, and the
+    // three causes need three different fixes: crashStrikes >= 2 pins the floor
+    // at exactly 4 (a phone OOM-killed by an earlier build leaves that behind
+    // and only finishing races pays it off), userTier is the GRAPHICS preset,
+    // and a high floorMs means the governor learned this device is slow and
+    // stopped trying to climb back. tier() is a max() of all three, so only the
+    // parts tell you which one is binding.
+    perf: (() => { try { return apex.perf(); } catch (e) { return { err: String(e.message).slice(0, 80) }; } })(),
+    // WHICH BACKEND THREE ACTUALLY BOUND, and whether the canvas ended up
+    // alpha-composited. `canvasAlpha: true` is the see-through-car defect,
+    // read back off the live context rather than inferred from what we asked
+    // for. Null means three bound WebGPU and there is no gl to ask.
+    three: (() => {
+      try { return win.GLX && win.GLX.__tlx ? win.GLX.__tlx.backendState() : null; }
+      catch (e) { return { err: String(e.message).slice(0, 80) }; }
+    })(),
   };
 
   say("settling…");
@@ -298,7 +314,20 @@ async function run() {
     await new Promise((r) => setTimeout(r, 900));   // let the knob take effect
     const m = await measureIn(win, ms);
     let perf = null;
-    try { const p = apex.perf(); perf = { tier: p.tier, scale: +p.scale.toFixed(2) }; } catch (e) {}
+    try {
+      const p = apex.perf();
+      // tierFloor and crashStrikes ride every row: if the tier is pinned by the
+      // strike floor it will not move across phases no matter what is shed, and
+      // that constancy is itself the answer.
+      perf = { tier: p.tier, scale: +p.scale.toFixed(2), tierFloor: p.tierFloor,
+               userTier: p.userTier, autoTier: p.autoTier,
+               strikes: p.crashStrikes, floorMs: p.floorMs };
+    } catch (e) {}
+    // Restore the SNAPSHOT, never a default: the tuner store is keyed
+    // track|timeOfDay|weather and the authored preset supplies the live number,
+    // so writing a slider `def` back both mis-prices every later row AND
+    // PERSISTS a permanent override into the player's own store. A diagnostic
+    // must not change what it measures or leave anything behind.
     try {
       if (snap && Object.keys(snap).length) apex.lightTune(snap);
       if (ph.scale != null) apex.renderScale(1);
