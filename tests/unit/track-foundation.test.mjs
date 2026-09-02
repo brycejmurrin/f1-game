@@ -373,3 +373,39 @@ test("game keeps the sole prebuilt ribbon usable across envCull and tier changes
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
   assert.match(tlx, /chunkedTrackCoords:\s*false/);
 });
+
+test("per-chunk lamps: the road half and the scenery half share ONE gate, and it is autoTier", () => {
+  // A feature the player can switch on must not be held off by three different
+  // answers. Before this was pinned:
+  //   js/game/lighting.js  help text : "Available at every GRAPHICS preset"
+  //   js/game/tuner.js     why-off   : PerfGov.autoTier()  (governor only)
+  //   js/game.js           the gate  : PerfGov.tier()      (preset TOO)
+  // and the third one wins, so PER-CHUNK ROAD did nothing on GRAPHICS: LOW
+  // while the tuner reported no problem.
+  //
+  // It was also DEAD CODE, which is why it went unnoticed:
+  //   (A && tier() < 1) || (tier() < 3)  ===  tier() < 3
+  // tier() < 1 implies tier() < 3, so the lamp clause could never change the
+  // outcome. With autoTier() the clause is live again at tier 3-4 — a LOW
+  // preset no longer forces the road back onto the single global 48-lamp set,
+  // while a governor shed or a crash-strike floor (both in autoTier) still do.
+  const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+
+  const road = src.match(/const _wantRoadChunk = [^;]+;/);
+  assert.ok(road, "_wantRoadChunk still exists");
+  assert.match(road[0], /!_perChunkOff && PerfGov\.autoTier\(\) < 1/,
+    "the road lamp clause must gate on autoTier() — tier() makes it dead code " +
+    "and silently disables PER-CHUNK ROAD on GRAPHICS: LOW");
+
+  // NOT the first `frame.perChunkLights = ...` — line ~6783 resets it to 0 with
+  // the rest of the frame fields, and matching that read as a missing gate.
+  const scenery = src.match(/frame\.perChunkLights = \(![^;]*hasPerChunkLights[^;]+;/);
+  assert.ok(scenery, "the GATED frame.perChunkLights assignment still exists");
+  assert.match(scenery[0], /PerfGov\.autoTier\(\) >= 1/,
+    "the scenery half must stay on autoTier() so the two halves cannot disagree");
+
+  // And the knob's own explanation has to describe the gate that actually runs.
+  const tuner = fs.readFileSync(path.join(ROOT, "js/game/tuner.js"), "utf8");
+  assert.match(tuner, /PerfGov\.autoTier\s*\)\s*\?\s*PerfGov\.autoTier\(\)/,
+    "tuner.js's held-off note must read the same tier function as the gate");
+});

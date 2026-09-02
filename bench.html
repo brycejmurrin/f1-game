@@ -66,8 +66,19 @@
           padding-left:12px; }
   /* The game must really render — a hidden or zero-size canvas measures nothing.
      Keep it on-screen but small and inert. */
-  #frame { width:640px; height:360px; border:1px solid var(--line); border-radius:6px;
+  /* NOT a fixed 640x360. On a 390 px phone that overflowed the viewport
+     sideways (measured: scrollWidth 660 vs clientWidth 390), so the game
+     filled the screen and the status line and results scrolled out of reach —
+     the page read as "it just runs the game". It also meant the bench measured
+     a 640x360 canvas on a device that never renders at that size, which for a
+     fill-rate question is the wrong measurement. Fill the column instead, and
+     report the canvas actually measured. */
+  #frame { width:100%; max-width:100%; aspect-ratio:16/9; height:auto; display:block;
+           border:1px solid var(--line); border-radius:6px;
            background:#000; margin-top:14px; }
+  @supports not (aspect-ratio: 16/9) { #frame { height:56.25vw; } }
+  #sizewarn { margin:10px 0; padding:8px 10px; border:1px solid var(--warn);
+              border-radius:6px; color:var(--warn); font-size:12px; display:none; }
 </style>
 </head>
 <body>
@@ -105,6 +116,7 @@
     <button id="copy" disabled>COPY RESULT</button>
   </div>
   <div id="status">idle</div>
+  <div id="sizewarn"></div>
   <div id="out"></div>
   <iframe id="frame" title="Apex 26 under test"></iframe>
   <div class="note">
@@ -294,6 +306,24 @@ async function run() {
       catch (e) { return { err: String(e.message).slice(0, 80) }; }
     })(),
   };
+
+  // SAY WHAT WAS ACTUALLY MEASURED. The iframe is a fraction of the screen, so
+  // the canvas under test is smaller than the one the player races on — and a
+  // fill-bound answer read off a smaller canvas understates the cost. Surface
+  // the ratio rather than leaving it in a JSON field nobody scrolls to.
+  try {
+    const c = win.document.getElementById("game");
+    const px = c.width * c.height;
+    const screenPx = (window.screen.width * window.devicePixelRatio) *
+                     (window.screen.height * window.devicePixelRatio);
+    const pct = Math.round(100 * px / screenPx);
+    const w = document.getElementById("sizewarn");
+    w.style.display = "block";
+    w.textContent = "measuring a " + c.width + "x" + c.height + " canvas — about " +
+      pct + "% of this screen's pixels. Deltas BETWEEN rows are valid at any size; " +
+      "the absolute ms are not your in-game frame time." +
+      (pct < 35 ? " Rotate to landscape and re-run for numbers closer to what you play." : "");
+  } catch (e) {}
 
   say("settling…");
   await new Promise((r) => setTimeout(r, 4000));

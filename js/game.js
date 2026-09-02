@@ -6033,9 +6033,18 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // wherever per-chunk lamps are held off, while chunked.js bound the global 32.
     // Prefer per-chunk road when lamp knobs ask for it, OR whenever the
     // env-probe radial cull is live (frustum + 300 m reach — counted ~70%
-    // index drop). Lamp path still needs tier < 1; the cull-only path keeps
-    // chunking through tier 2 so SSR/shadow sheds do not re-fuse the road.
-    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && gfx.hasPerChunkLights && !_perChunkOff && PerfGov.tier() < 1)
+    // index drop); the cull-only path keeps chunking through tier 2 so
+    // SSR/shadow sheds do not re-fuse the road.
+    //
+    // THE LAMP CLAUSE USES autoTier(), AND IT MUST. With tier() it was DEAD
+    // CODE — `(A && tier()<1) || (tier()<3)` is identically `tier()<3` — so
+    // PER-CHUNK ROAD did nothing on GRAPHICS: LOW however the slider was set,
+    // while tuner.js's held-off note (autoTier) and the slider help ("available
+    // at every GRAPHICS preset") both said otherwise. The scenery half below
+    // was moved to autoTier() for exactly this reason and left this line
+    // behind. Truth table and the three-way disagreement: the guard in
+    // tests/unit/track-foundation.test.mjs.
+    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && gfx.hasPerChunkLights && !_perChunkOff && PerfGov.autoTier() < 1)
       || (PerfGov.tier() < 3));
     if (_wantRoadChunk) {
       if (track.meshes.roadChunked === undefined) {

@@ -584,7 +584,15 @@ const CEILINGS = {
   // deferring a level-triggered predicate by one frame saves nothing; the note
   // also prices the snap-cell coarsening that would work, so the next round
   // does not re-derive it.
-  "js/game.js": 9203,
+  // -> 9202 per-chunk road (the other branch, same base): the lamp clause in
+  // _wantRoadChunk gated on tier(), which made it DEAD CODE
+  // ((A && t<1) || (t<3) === t<3) and silently disabled PER-CHUNK ROAD on
+  // GRAPHICS: LOW. autoTier() matches the scenery half, tuner.js's held-off
+  // note and the slider help text.
+  // MERGED: both branched from 9193 and both landed, so the ceiling is the
+  // merged file, RE-MEASURED with the suite's own metric rather than added on
+  // paper.
+  "js/game.js": 9212,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
