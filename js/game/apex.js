@@ -507,18 +507,21 @@ const api = {
   },
   setPhysics(o) {
     o = o || {};
+    // Floors: pace<0 drove the cap negative, expo≤0 made pow(0,expo) NaN — and
+    // a NaN reaches every field of the car with nothing to heal it.
+    const fl = (v, lo) => (Number.isFinite(v) ? Math.max(lo, v) : null);
     if (o.drift != null) G.DRIFT = o.drift;
-    if (o.pace != null) G.PACE = o.pace;
-    if (o.speedRef != null) { G.STEER_SPEED_REF = o.speedRef; Input.setSteerSpeedRef(o.speedRef); }
-    if (o.wheelbase != null) G.WHEELBASE = o.wheelbase;
-    if (o.expo != null) G.STEER_EXPO = o.expo;
+    if (o.pace != null && fl(o.pace, 0.05) != null) G.PACE = fl(o.pace, 0.05);
+    if (o.speedRef != null && fl(o.speedRef, 1) != null) { G.STEER_SPEED_REF = fl(o.speedRef, 1); Input.setSteerSpeedRef(G.STEER_SPEED_REF); }
+    if (o.wheelbase != null && fl(o.wheelbase, 0.5) != null) G.WHEELBASE = fl(o.wheelbase, 0.5);
+    if (o.expo != null && fl(o.expo, 0.2) != null) G.STEER_EXPO = fl(o.expo, 0.2);
     if (o.maxSlip != null) G.STEER_MAX_SLIP = o.maxSlip;
     if (o.roadFollow != null) G.ROAD_FOLLOW = o.roadFollow;
     // core dynamic-model feel levers (swept by the emulation/tuning harness)
     if (o.playerGrip != null) G.PLAYER_GRIP = o.playerGrip;
     if (o.frontGrip != null) G.FRONT_GRIP = o.frontGrip;
     if (o.yawDamp != null) G.YAW_DAMP = o.yawDamp;
-    if (o.yawInertia != null) G.YAW_INERTIA = o.yawInertia;
+    if (o.yawInertia != null && fl(o.yawInertia, 0.05) != null) G.YAW_INERTIA = fl(o.yawInertia, 0.05);
     if (o.maxTilt != null) Input.setTiltSensitivity(o.maxTilt);
     if (o.deadzone != null) Input.setTiltDeadzone(o.deadzone);
     if (o.tiltCutoff != null) Input.setTiltSmoothing(o.tiltCutoff);

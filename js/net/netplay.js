@@ -19,6 +19,7 @@ const NetPlay = (function () {
     RESULT: "result",                     // final classification
     CAUTION: "caution",                   // host -> guest race control (flags)
     BYE: "bye",                           // clean leave
+    LEFT: "left",                         // host -> guests: this wire id went back to AI
   };
 
   function create(G) {
@@ -229,6 +230,12 @@ const NetPlay = (function () {
         armedPeers.delete(id);
         if (carFor != null && sessions.size && role === "host") {
           handBackToAI(why, carFor);
+          // Star, not mesh: the other guests only ever learned this rival
+          // existed through the host's relay, and the relay simply stops
+          // naming a dropped wire id. Nothing told them it was gone, so their
+          // slot stayed net-owned — updateCar never simulated it and the car
+          // sat frozen on the track for the rest of the race. Say so.
+          broadcast(EV.LEFT, { wire: carFor, why: why || "peer_closed" });
           if (armDeadline && allArmed()) nameTheMoment();
         }
         // "peer_closed", never a bare stop(): stop() defaults an absent reason
@@ -286,6 +293,11 @@ const NetPlay = (function () {
             if (peerLaps.length > PEER_LAPS_CAP) peerLaps.splice(0, peerLaps.length - PEER_LAPS_CAP);
           }
           if (name === EV.RESULT && d && !ownsClassification()) peerResult = d;
+          // Only the host speaks for the roster; a guest naming a wire id
+          // could otherwise park any rival it liked.
+          if (name === EV.LEFT && role === "guest" && d && Number.isFinite(d.wire) && remotes.has(d.wire)) {
+            handBackToAI(d.why || "peer_closed", d.wire);
+          }
           if (name === EV.CAUTION && d && !ownsRaceControl() && G.applyCaution) G.applyCaution(d);
         });
       }
@@ -297,6 +309,11 @@ const NetPlay = (function () {
         G.setCarRole(r.car, false, false);
         r.car.netInput = null;
         r.car._nOk = false;
+        // The slot was an AI car when reliability drew its DNF plan and the
+        // owns() skip only shielded it while networked: handed back with
+        // prog past dnfAt, it retired on the very next frame — "RIVAL
+        // DISCONNECTED" and an instant DNF. A returned rival races on.
+        r.car.dnfAt = null; r.car.dnfWhy = null;
         remotes.delete(G.wireId(r.car));
       }
       if (reason && gone.length && G.announce) G.announce("RIVAL DISCONNECTED", 2);
@@ -514,6 +531,11 @@ const NetPlay = (function () {
       active = false;
       lastReason = reason || "local";
       Log.info("net", "play stop " + lastReason);
+      // The BYE handler below has existed since the frozen-slot fix, but
+      // nothing ever SENT it: a clean quit relied on the SCTP close reaching
+      // the peers, which is the seconds-long freeze the handler was written
+      // to remove. A local stop announces itself before the sockets go.
+      if (reason == null || reason === "local") broadcast(EV.BYE, {});
       handBackToAI(reason && reason !== "local" ? reason : null);
       // Every connection, not just the first — a host leaving must not strand
       // two guests holding open sockets to a race that has ended.

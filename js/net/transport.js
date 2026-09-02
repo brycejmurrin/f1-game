@@ -493,12 +493,29 @@ const NetTransport = (function () {
       };
     }
 
+    // "disconnected" is TRANSIENT in Chrome (a Wi-Fi roam, a NAT rebinding, a
+    // phone that slept for two seconds) and usually returns to "connected" on
+    // its own; only "failed"/"closed" are final. Closing on the blip ended the
+    // race for that peer. Give it a grace window instead — the session's own
+    // heartbeat timeout still catches a real loss that never recovers.
+    const DISCONNECT_GRACE_MS = 5000;
+    let discTimer = null;
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
       if (Log.enabled("net", Log.DEBUG)) Log.debug("net", "pc state -> " + s);
-      if ((s === "failed" || s === "disconnected" || s === "closed") && ep.status !== "closed") {
+      if (s !== "disconnected" && discTimer) { clearTimeout(discTimer); discTimer = null; }
+      if (ep.status === "closed") return;
+      if (s === "failed" || s === "closed") {
         Log.info("net", "connection closed (" + s + ")");
         shutdown(s);   // releases the pc — see ch.onclose
+      } else if (s === "disconnected" && !discTimer) {
+        discTimer = setTimeout(() => {
+          discTimer = null;
+          if (ep.status !== "closed" && pc.connectionState === "disconnected") {
+            Log.info("net", "connection closed (disconnected " + DISCONNECT_GRACE_MS + " ms)");
+            shutdown("disconnected");
+          }
+        }, DISCONNECT_GRACE_MS);
       }
     };
 

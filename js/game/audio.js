@@ -974,6 +974,7 @@ const GameAudio = (function () {
     }
   }
 
+  let musicResumeBuf = null, musicResumeAt = NaN, musicResumeOff = 0;
   function playMusicBuffer(buf, token) {
     if (!ctx || !musicOn || token !== musicToken) return;  // superseded
     ensureMusicGain();
@@ -989,7 +990,15 @@ const GameAudio = (function () {
       if (src !== musicSrc || token !== musicToken || !musicOn) return;
       nextTrack(1);
     };
-    src.start();
+    // Resume where the same song left off: a tab-hide stops the source and
+    // the return restarted it from 0:00 — every lock or app switch rewound
+    // the track. The offset is kept per BUFFER so a different song starts clean.
+    let off = 0;
+    if (musicResumeBuf === buf && Number.isFinite(musicResumeAt) && buf.duration > 0) {
+      off = Math.max(0, (ctx.currentTime - musicResumeAt) + musicResumeOff) % buf.duration;
+    }
+    src.start(0, off);
+    musicResumeBuf = buf; musicResumeAt = ctx.currentTime; musicResumeOff = off;
     musicSrc = src;
   }
 

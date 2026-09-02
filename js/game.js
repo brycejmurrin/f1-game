@@ -2957,10 +2957,8 @@ function endRace(forcedOrder) {
     if (isCareer()) { if (settles) careerSettlement = Career.settleRound(order, player); }
     else store.set("season", season);   // the sprint's points AND its stage, one write
   }
-  // A one-off GP's driven qualifying order is this weekend's, not the next
-  // circuit's: without this it stayed in the season store and the next GP
-  // (any circuit, or SEASON round 1) skipped qualifying and gridded off it.
-  if (!isChampionship()) quali.clear(true);
+  // A one-off GP's driven quali order stays persisted (quali-persist contract);
+  // quali's qualiTrack stamp refuses it on a different circuit.
   dbgCam = null;
   buildResults(order);
   els.results.hidden = false;
@@ -3401,12 +3399,6 @@ function quitToMenu() {
   closeLightTuner(false);
   closeCamTuner(false); exitPhotoMode();
   state = "menu"; paused = false; raceCtl.reset(); weatherArc = null;   // no SC/VSC (or a half-run weather arc) left flying for the next race
-  // Only startRace reset these, so the Rapier world, its event queues and
-  // the OLD track object they hold survived every menu visit — and the menu
-  // flyby then built a second circuit beside it (double residency).
-  try { IncidentSim.reset(); } catch (_) { /* module absent */ }
-  try { DebrisWorld.reset(); } catch (_) { /* module absent */ }
-  try { delete document.documentElement.dataset.team; } catch (_) { /* no DOM */ }
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -3437,6 +3429,9 @@ function quitToMenu() {
   qualiPeers.clear();
   // Title QUIT leaves the session: cancel() tears RTC down; q-back keeps abortQuali().
   qualiNetDone ? (qualiNetDone = null, qualiHadRivals = false, qualiLive.clear(), netLobby.cancel()) : (qualiNetDone = null, qualiLive.clear(), qualiHadRivals = false);
+  try { IncidentSim.reset(); } catch (_) { /* module absent */ }
+  try { DebrisWorld.reset(); } catch (_) { /* module absent */ }
+  try { delete document.documentElement.dataset.team; } catch (_) { /* no DOM */ }
   // …and drop the career championship alias with it, so STANDINGS on the title
   // screen describes the standalone season again.
   season = store.get("season", null);
@@ -4031,7 +4026,9 @@ function updateCar(c, dt, ranked) {
   // A retirement is out of the race: no driving model, no coast, no lap timing.
   // It stays exactly where retireCar() parked it until the flag.
   if (c.retired) { c._prevS = c.s; return; }
-  if (c.finished) { coast(c, dt); c._prevS = c.s; return; }
+  // A net-owned rival takes no local motion, finished or not: coasting it here
+  // fought poseRemote every tick (jitter, prog drift). See js/net/netplay.js.
+  if (c.finished && !netPlay.owns(c)) { coast(c, dt); c._prevS = c.s; return; }
   // Incident-sim takeover (R2/R3/C1): while Rapier owns this car's 6-DoF body,
   // the bespoke integration + wall clamp + collision writeback are SKIPPED —
   // postStep drives px/pz/head/(s,x) from the dynamic body instead. Bounded and
@@ -4371,7 +4368,10 @@ function updateCar(c, dt, ranked) {
     c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   } else {
     const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
-    c.speed = Math.min(speedCap, c.speed + a * dt);
+    // speedCap is an ACCELERATION ceiling, not a teleport: a cap that drops under
+    // the car (VSC vmax cut, limiter downshift) used to scrub 25 m/s in one step.
+    c.speed = c.speed > speedCap ? Math.max(speedCap, c.speed - COAST_DRAG * dt)
+                                 : Math.min(speedCap, c.speed + a * dt);
     if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   }
   // --- slope gravity: climbs gently bleed speed, descents gently feed it back.
@@ -4387,6 +4387,8 @@ function updateCar(c, dt, ranked) {
     } else {                                        // downhill: feed, with a small
       // overspeed margin so a long descent actually gives you something (a hard
       // clamp to vmax made steep downhills feel inert once at pace).
+      // NOTE: this also confiscates existing overspeed on any descent; the
+      // characterization baseline pins that snap (BUG-HUNT-2026-09-02 §Round 2).
       c.speed = Math.min(vmax * 1.06, c.speed + a * dt);
     }
   }
