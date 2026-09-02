@@ -571,7 +571,15 @@ const CEILINGS = {
   // POSITIVE window: a player who quit inside those 5 s was reverted to WebGL2
   // on the next boot. A hidden or closing tab is not a crash — the same rule
   // PerfGov's sentinel already states three lines below the new handler.
-  "js/game.js": 9193,
+  // 9193 -> 9209: the title-screen flyby was drawing the PREVIOUS race's grid.
+  // quitToMenu resets state but never clears cars/player, and the car loop's
+  // only guard is a 550 m cull against the player every parked car passes, so
+  // the menu paid ~22 cars' worth of body/wheels/rings/decal/flap/blob draws
+  // for something nobody can see; skids.draw had the same shape (reset only
+  // from startRace). Both now gate on state. The lines are the WHY — the
+  // shadow producers already gate on state !== "menu", which is what says this
+  // was an oversight rather than a choice.
+  "js/game.js": 9209,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -936,7 +944,8 @@ const CEILINGS = {
   // NOT have was their own submit, and shadowInstBuf is per BATCH, not per
   // LIGHT — so one deferred encoder let the lamp's upload land before the sun's
   // recorded draw executed, and the sun map came from the lamp's culled set.
-  "js/render/webgpu/wgx.js": 5821,   // +15: _shadowRendered joins envProbeReset. It gated the light VP the LIT pass and the god-ray march both sample, and had no reset on track change, tier change, resize or quit — a latch with no invalidation is how the shadow-flag class of bug starts.   // +26: carShadowKeep/lampShadowKeep and the armed flag in the state hooks (the flag the shader reads was unobservable, which is why the strobe was invisible)   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
+  // 5821 -> 5835: _setIB joins _setPipe/_setBG0/_setVB0/_setVB1. setIndexBuffer was the one state call outside the redundancy filter the doctrine comment above those helpers says EVERY state call must route through, and createChunkedMesh gives every chunk of a mesh the same index buffer — so the per-chunk-lamp path and castShadow's chunk loop re-set an identical buffer once per visible chunk. drawDecal's raw call routes through it too, since a bare one beside the cache desyncs it.
+  "js/render/webgpu/wgx.js": 5835,   // +15: _shadowRendered joins envProbeReset. It gated the light VP the LIT pass and the god-ray march both sample, and had no reset on track change, tier change, resize or quit — a latch with no invalidation is how the shadow-flag class of bug starts.   // +26: carShadowKeep/lampShadowKeep and the armed flag in the state hooks (the flag the shader reads was unobservable, which is why the strobe was invisible)   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -1116,7 +1125,12 @@ const CEILINGS = {
   // re-arm on a context loss that sends the tab back to WebGL2 — TLX had no
   // post-proof re-arm at all, so the jetsam-mid-race its own comment names was
   // the one case the canary did not cover.
-  "js/render/three/tlx.js": 2833,
+  // 2833 -> 2839: the instance TINT was marked dirty outside the branch that
+  // writes it. `col` always exists but `colors` is null on every
+  // updateInstances call (DebrisWorld) and every batch built without node
+  // colours, so an unchanged all-ones buffer was re-uploaded every frame. The
+  // fix itself is net -1 line; the rest is the reason.
+  "js/render/three/tlx.js": 2839,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

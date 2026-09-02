@@ -1129,8 +1129,19 @@ void main() {
   if (uSunShaft > 0.0 && uBloomAmt > 0.001) {
     vec2 toSun = uSunUV - vUV;
     float dist = length(toSun);
-    // Only cast rays when we're not right on top of the sun (avoid div-zero).
-    if (dist > 0.005) {
+    // Only cast rays when we're not right on top of the sun (avoid div-zero),
+    // and not past the radius where the result is discarded anyway. The radial
+    // term below is 1 - clamp(dist * (2.6 / uShaftSpread), 0, 1): it hits an
+    // EXACT 0.0 at dist = uShaftSpread/2.6 and stays there, and shaft feeds
+    // nothing else, so beyond that every one of the 8 dependent uBloom taps was
+    // summed and then added as +0.0 — over half of a day frame at the shipped
+    // spread, and ALL of one where the sun projects off-screen. The guard is
+    // the radial line's own expression, so it is exactly the predicate
+    // "radial > 0" and cannot drift from it or round differently at the
+    // boundary. (WGX carries the same guard in wgsl-post.js.)
+    // NO BACKTICKS IN THIS FILE: it is GLSL-as-data inside a JS template
+    // literal, so one in a comment ends the string and the page dies at parse.
+    if (dist > 0.005 && dist * (2.6 / uShaftSpread) < 1.0) {
       vec2 step = toSun / dist * min(dist, 0.40) / 8.0;
       vec3 shaft = vec3(0.0);
       // Interleaved-gradient-noise start jitter: hides the 8-tap quantisation

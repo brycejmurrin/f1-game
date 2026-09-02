@@ -7120,7 +7120,10 @@ function render(dt) {
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
   // ring buffer filled. Falls back to per-mark draws if the batch path is
   // unavailable (older GPU where the batch program failed to link).
-  skids.draw(gfx, camEye);
+  // Menu-gated for the same reason as the car loop below: skids.reset() runs
+  // only from startRace, so the previous race's rubber was still being laid
+  // under the title-screen flyby.
+  if (state !== "menu") skids.draw(gfx, camEye);
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
@@ -7141,6 +7144,19 @@ function render(dt) {
   _shadowCount = 0;   // accumulate car shadows, flush in one batch after the loop
   _decalCount = 0;    // accumulate car decals, flush in one batch after the loop
   for (const c of cars) {
+    // The title-screen flyby draws the WORLD, not the last race's grid.
+    // quitToMenu() resets state to "menu" but never clears `cars`/`player` —
+    // both are rebuilt only by makeCars() at the next race start — and the
+    // only guard below is a 550 m cull against `player`, which every car
+    // parked on the grid beside it passes. So after one race the menu was
+    // paying the whole per-car path (body + wheels + rings + decal + flaps +
+    // blob shadow, x22) for cars nobody can see. The tell that this was an
+    // oversight rather than a choice: the car/lamp SHADOW producers a few
+    // hundred lines up all gate on `state !== "menu"` already, and a FIRST
+    // boot renders the same screen with cars === [] — the asymmetry.
+    // The setup/garage preview is not affected: renderSetupPreview() returns
+    // out of render() well before this loop.
+    if (state === "menu") break;
     if (!c.isPlayer && player) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;

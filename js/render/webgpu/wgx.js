@@ -2613,7 +2613,7 @@ const WGX = (function () {
       // it reaches the queue (measured via the live probe).
       if (!mesh || !mesh.count) return;
       if (mesh.ibuf) {
-        pass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
+        _setIB(pass, mesh.ibuf, mesh.indexFormat);
         const firstIndex = _chunkFirstIndex(mesh);
         if (instCount) pass.drawIndexed(mesh.count, instCount, firstIndex);
         else pass.drawIndexed(mesh.count, 1, firstIndex);
@@ -3482,6 +3482,18 @@ const WGX = (function () {
     }
     function _setVB1(pass, buf) {
       if (pass.__vb1 !== buf) { pass.setVertexBuffer(1, buf); pass.__vb1 = buf; }
+    }
+    // The state call that escaped the filter above. createChunkedMesh assigns
+    // ONE index buffer to every chunk of a mesh, so the per-chunk-lamp path
+    // (one draw per visible chunk) and castShadow's chunk loop re-set the
+    // identical buffer for every chunk they draw — same redundancy the
+    // pipeline/bind-group/vertex-buffer caches were added to remove, on the one
+    // call nobody wrapped.
+    function _setIB(pass, buf, fmt) {
+      if (pass.__ib !== buf || pass.__ibf !== fmt) {
+        pass.setIndexBuffer(buf, fmt);
+        pass.__ib = buf; pass.__ibf = fmt;
+      }
     }
     // Slot 0 = pos/nrm/col (stride 36), slot 1 = instance.
     // Group 2 = mat+trk storage (vertex_index). Road draws bind the piece's
@@ -5327,7 +5339,9 @@ const WGX = (function () {
       _fxDecalDynOff[0] = slot * FX_STRIDE;
       _setBG0(litPass, bg, _fxDecalDynOff);
       _setVB0(litPass, mesh.vbuf);
-      litPass.setIndexBuffer(mesh.ibuf, mesh.indexFormat);
+      // Through the helper, not raw: a bare setIndexBuffer beside the cache
+      // desyncs it and the next _drawGeom would skip a bind it still needs.
+      _setIB(litPass, mesh.ibuf, mesh.indexFormat);
       litPass.drawIndexed(mesh.count);
     }
 
