@@ -14,6 +14,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/game/quali.js"), "utf8");
@@ -156,7 +157,21 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   assert.match(GAME, /if \(fresh\) quali\.simulate\(0\); else quali\.begin\(\)/);
   assert.match(GAME, /openQuali\(true\)/);
   assert.match(GAME, /quali\.clear\(\);   \/\/ memory only/);
-  assert.doesNotMatch(GAME, /quali\.clear\(true\)/);
+  // NOT a blanket whole-file ban. The bug this suite exists for is a
+  // clear(true) inside the SHEET'S OWN lifecycle (openQuali / quitToMenu),
+  // which wiped the persist so simulate(0) re-stamped an all-AI grid. A
+  // different and correct fix (cfab56e) calls clear(true) once at award time,
+  // so a one-off GP's driven order does not grid the next weekend — and the
+  // blanket ban failed that fix. It is half of what took pages.yml runs
+  // 1888/1889 red on 2026-09-02 and stopped the live site updating. Ban it
+  // where the bug lived; require the guard where it is legitimate.
+  assert.doesNotMatch(fnSource(GAME, "async function openQuali(fresh)"), /quali\.clear\(true\)/,
+    "openQuali must not wipe the persist — that is the bug this suite exists for");
+  assert.doesNotMatch(fnSource(GAME, "function quitToMenu()"), /quali\.clear\(true\)/,
+    "quit-to-menu keeps the persist so CONTINUE still has the driven grid");
+  for (const line of GAME.matchAll(/^.*quali\.clear\(true\).*$/gm))
+    assert.match(line[0], /!isChampionship\(\)/,
+      "a clear(true) anywhere else is legitimate only for a one-off GP, and must say so");
   assert.match(GAME, /RIVAL LEFT — TO THE GRID/);
   assert.match(GAME, /qualiHadRivals/);
   assert.match(GAME, /if \(!p\) \{ closeLightTuner\(false\); closeCamTuner\(false\); exitPhotoMode\(\); \}/);
@@ -175,9 +190,10 @@ test("friend-race BACK aborts to the lobby; a null quali grid does not P12-shuff
 });
 
 test("friend-race title quit cancels the lobby instead of aborting back into it", () => {
-  const i = GAME.indexOf("function quitToMenu()");
-  assert.ok(i >= 0);
-  const quit = GAME.slice(i, i + 2200);
+  // NOT GAME.slice(i, i + 2200) — that window took the deploy branch red on
+  // 2026-09-02: quitToMenu grew and netLobby.cancel() moved to +2605, so this
+  // assertion failed for a call that was still there. See tests/helpers/fn-source.mjs.
+  const quit = fnSource(GAME, "function quitToMenu()");
   assert.match(quit, /netLobby\.cancel\(\)/);
   assert.doesNotMatch(quit, /netLobby\.abortQuali\(\)/);
 });
