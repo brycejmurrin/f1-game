@@ -295,10 +295,23 @@ jobs:
               // and that is a regression to fail on, not a reason to go quiet.
               const tlxLeg = path3 === "webgpu" || path3 === "webgl2";
               const frame = g.frame || {};
+              const gov = gfx.gov || {};
               rows.push(`${path3.padEnd(7)} phase=${g.phase} ok=${g.ok} ` +
                 `gpuErrors=${gfx.gpuErrors} envFail=${env.fail} envReady=${env.ready} ` +
                 `envBlank=${env.blank} gaveUp=${env.gaveUp} softAdapter=${be.softAdapter} ` +
                 `headless=${be.headless} meanLuma=${frame.meanLuma != null ? frame.meanLuma : "n/a"}`);
+            // The SECOND row is what makes an appearance number readable. A
+            // meanLuma comparison between two legs is only a comparison if both
+            // ran the same content: tier decides whether the env probe (rung 1)
+            // and the rest of the ladder are live, envFace says whether a cold
+            // probe was progressing or never asked, and scale says whether the
+            // governor shrank the buffer under a CPU-bound present. Run 25 read
+            // 46.9 vs 66.2 across three's two backends with none of this
+            // recorded, and the gap is still an open lead for exactly that
+            // reason (docs/PERF-FINDINGS.md 2t).
+              rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
+                `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face}`);
+              if (gfx.govError) rows.push(`${" ".repeat(8)}gov:   read failed: ${gfx.govError}`);
             // Print the REASON. gpu-game-check records out.error on every caught
             // failure, and this row used to drop it — which is why a Windows
             // outage read as contentless and got misfiled as "WARP is slow"

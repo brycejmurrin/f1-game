@@ -980,10 +980,16 @@ const TLX = (function () {
         if (colors && colors.length && col) {
           const ca = col.array, nc = drawN * 3;
           for (let i = 0; i < nc; i++) ca[i] = colors[i];
+          // Dirty the TINT with the write, not beside it. `col` always exists
+          // (_instColorAttr mints it), but `colors` is null on every
+          // updateInstances call (DebrisWorld) and on every batch built
+          // without node colours (graph.js passes null -> packColors null), so
+          // marking it outside this branch re-uploaded an unchanged all-ones
+          // buffer — drawN x 12 B a frame for bytes nothing had touched.
+          col.clearUpdateRanges(); col.addUpdateRange(0, nc); col.needsUpdate = true;
         }
         im.clearUpdateRanges(); im.addUpdateRange(0, nf);
         im.needsUpdate = true;
-        if (col) { col.clearUpdateRanges(); col.addUpdateRange(0, drawN * 3); col.needsUpdate = true; }
         imesh.count = drawN;
       }
       // Caller-packed set (DebrisWorld's Rapier pools, PERF-FINDINGS 2h): the

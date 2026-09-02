@@ -1182,7 +1182,18 @@ function create(G) {
     }
     const c = Career.data();
     if (c.offers && c.offers.length) { openOffers(); return; }
-    if (Career.seasonDone()) { Career.rollover(); build(); openOffers(); return; }
+    // AND RE-POINT THE CIRCUIT. rollover() resets season.round to 0 but nothing
+    // here refreshes G.trackIdx, and the only two career writers of it are
+    // openCareer() and the results screen's NEXT — neither of which runs on this
+    // path. NEXT left trackIdx clamped to the LAST circuit while round was 24,
+    // so round 1 of the new season loaded the previous season's finale while the
+    // hub header read "ROUND 1 · <opener>". Points still bank as round 0, so the
+    // standings were right and only the track was wrong, and round 2 onward
+    // self-corrected — which is why it never looked like a bug worth chasing.
+    // It bites every MY TEAM season (makeOffers returns [] for myteam) and any
+    // driver season entered on a multi-year deal; a driver who must accept an
+    // offer is rescued by acceptOffer's openCareer().
+    if (Career.seasonDone()) { Career.rollover(); G.trackIdx = Career.trackIndex(); build(); openOffers(); return; }
     G.openRaceSettings("career");
   };
   $("co-back").onclick = () => {

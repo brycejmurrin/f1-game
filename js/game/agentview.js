@@ -1,5 +1,11 @@
 /* Apex 26 — AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … */
 const AgentView = (function () {
+  // The parts budget a given team is actually judged against: a career that
+  // owns the team gets Career.budget(), everyone else the free-play constant.
+  // Same resolution as js/game/setup-ui.js, which is the enforcing side.
+  const _partsCap = (team) =>
+    (typeof Career !== "undefined" && Career.owned && team && Career.owned(team.id))
+      ? Career.budget() : Parts.BUDGET;
   "use strict";
 
   const API_VERSION = 1;
@@ -1005,8 +1011,12 @@ const AgentView = (function () {
                 stats: team.stats,
                 drivers: team.drivers.map((d) => ({ name: d.name, code: d.code, num: d.num })) },
         parts: {
-          budget: Parts.BUDGET, spent: res.cost,
-          remaining: Parts.BUDGET - res.cost,
+          // The career cap when one owns this team, not the free-play constant —
+          // the same resolution setup-ui.js enforces against. Reporting 780 for a
+          // team whose factory build costs 1,500 made this hook say
+          // `remaining: -720` for a perfectly legal setup.
+          budget: _partsCap(team), spent: res.cost,
+          remaining: _partsCap(team) - res.cost,
           chosen: Parts.CATALOG.map((cat) => {
             const id = res.setup[cat.id];
             const opt = cat.options.find((x) => x.id === id) || cat.options[0];

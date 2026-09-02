@@ -571,7 +571,23 @@ const CEILINGS = {
   // POSITIVE window: a player who quit inside those 5 s was reverted to WebGL2
   // on the next boot. A hidden or closing tab is not a crash — the same rule
   // PerfGov's sentinel already states three lines below the new handler.
-  "js/game.js": 9193,
+  // 9193 -> 9209 (this branch): the title-screen flyby was drawing the PREVIOUS
+  // race's grid. quitToMenu resets state but never clears cars/player, and the
+  // car loop's only guard is a 550 m cull against the player every parked car
+  // passes, so the menu paid ~22 cars' worth of body/wheels/rings/decal/flap/
+  // blob draws for something nobody can see; skids.draw had the same shape
+  // (reset only from startRace). Both now gate on state. The shadow producers
+  // already gate on state !== "menu", which is what says this was an oversight.
+  //
+  // -> 9202 (deploy branch): the lamp clause in _wantRoadChunk gated on tier(),
+  // which made it DEAD CODE ((A && t<1) || (t<3) === t<3) and silently disabled
+  // PER-CHUNK ROAD on GRAPHICS: LOW. autoTier() matches the scenery half,
+  // tuner.js's held-off note and the slider help text.
+  //
+  // MERGED at 9218: both landed on the same base, so the ceiling is the merged
+  // tree's own count, re-measured with this suite's metric — never either
+  // side's number, and never the two deltas added on paper.
+  "js/game.js": 9218,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -659,8 +675,15 @@ const CEILINGS = {
   // hands cars each other's positions.
   // 2576 -> 2579: setPhysics floors its knobs (a NaN car from expo:-1 had no
   // way back) — the one `fl` helper plus a two-line why.
-  "js/game/apex.js": 2579,
-  "js/game/agentview.js": 2443,
+  // +11: careerSim's inline championship award now also writes the countback
+  // histogram. It reimplemented endRace()'s award and omitted season.finishes,
+  // so a points tie in a simulated season fell through SeasonCal.rank to a
+  // STRING compare on driver id — the exact defect the histogram exists to fix.
+  "js/game/apex.js": 2590,
+  // +9: the parts hook reports the CAREER cap, not the free-play 780. A career
+  // at a team whose factory build costs 1,500 was reported as remaining: -720
+  // for a perfectly legal setup.
+  "js/game/agentview.js": 2452,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
   // covered 55% of the steering wheel (depth-raster measured); ckpt now ends the
@@ -892,7 +915,73 @@ const CEILINGS = {
   // full cell) plus the baked sample spacing; the rest is the measurement,
   // because the numbers are what ruled out the folding theory everyone reaches
   // for first (monza, no folds at all, was the worst circuit at 33.9%).
-  "js/render/webgpu/wgx.js": 5905,   // +15: _shadowRendered joins envProbeReset. It gated the light VP the LIT pass and the god-ray march both sample, and had no reset on track change, tier change, resize or quit — a latch with no invalidation is how the shadow-flag class of bug starts.   // +26: carShadowKeep/lampShadowKeep and the armed flag in the state hooks (the flag the shader reads was unobservable, which is why the strobe was invisible)   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
+  // The whole WGX backend in one IIFE by design (deferred inject, no tag).
+  // 5179 -> 5365 on the deploy union: their half-res SSR + chunk-AABB
+  // lamp-mask cull rounds landed on the other lineage (re-measured).
+  // 5365 -> 5423 (deploy lineage): the road's shared vertex buffer. Per-piece
+  // buffers made drawChunked's run merge (keyed on buffer identity) dead code
+  // for the road, so it paid one setVertexBuffer + one draw per visible chunk
+  // in every pass. The added lines are the single-buffer staging loop and the
+  // three reasons the merge is allowed to fire (contiguous, vertex_index dead,
+  // no lamp mask bound) — each one is load-bearing and documented where it sits.
+  // 5365 -> 5453 (R8 lineage): overflow sentinel remembered, per-chunk hoisted
+  // above the !cull fast path, SSR consume lanes gated on _ssrRan, lampVol mist
+  // gate ported from GLX/TLX, full-res depth texel for the SSR normal stride,
+  // both merge-run paths pooled to module scope, lamp masks generation-cached,
+  // and the F7 packed-upload deferral written where dead DRAW_FLOATS used to be.
+  // UNION: the file carries BOTH sets, so neither lineage's number fits it.
+  // Re-measured on the merged tree (AGENTS.md: re-measure, never max).
+  // 5516 -> 5523: the road half of the PER-CHUNK ROAD gate (frameRoadChunkLamps
+  // + the surfaceId-16 test), mirroring the GLX side.
+  // 5523 -> 5532: the per-chunk light upload separates a SET change (identity or
+  // knob — may reset the chunk-segment allocator) from a VALUES change
+  // (allLightsGen — flicker/sliders — must not), plus the road lamp gate.
+  // 5532 -> 5549: the same upload stops keying on the raw knob. PER-CHUNK
+  // LAMPS is step 0.001 over 0..1 but capFor() has <=17 outputs, so a drag
+  // re-packed and re-uploaded 64 KB per input event for identical bytes;
+  // keying on the cap splits the allocator reset out of the upload block
+  // (a cap-only change must still reset it). Plus a memo for the
+  // armed-shadow-lamp scan, which walked up to 1024 baked records every
+  // frame and again per env-probe face for a value only the caster moves.
+  // 5549 -> 5567: _tlScratch packs its THIRTEEN static lanes once per source
+  // array instead of all sixteen every frame. Gen moves every frame under
+  // flicker or the warm-up ramp, so up to 1024 records were being rewritten
+  // to change three lanes each. The split needs its own branch plus the note
+  // recording that the UPLOAD cannot shrink with it (rgb is interleaved
+  // 3-in-16, so the changed bytes are not a contiguous range).
+  // 5567 -> 5574: a measured verdict replaces an unmeasured assertion at the
+  // per-chunk merge site. The sentence "adjacent chunks almost never share an
+  // index list" justified BOTH backends forfeiting a 76-87% draw reduction and
+  // had never been counted; it holds (3 shared non-empty pairs of 909), but the
+  // 79.5% that share by being EMPTY are a trap worth naming in place. Detail is
+  // in docs/PERF-FINDINGS.md 2b — only the pointer and the headline live here,
+  // which is why this is +7 and not the +15 the first draft cost.
+  // 5574 -> 5581: WGX gains gpuErrors/gpuFirstError on its INSTANCE surface
+  // (it had them only on the module factory), so the backend-parity contract
+  // holds now that GLX has a real counter. PERF-FINDINGS 2e.
+  // 5581 -> 5590: `updateInstances: undefined` and the note saying why it is
+  // DECLARED rather than omitted. An absent name lets descriptor-copy keep
+  // GLX's own closure on a WGX-bound gfx, so DebrisWorld's feature test would
+  // pass here and then call GLX with no device (backend-surface-parity).
+  // Nine lines to keep a wrong-backend call impossible. PERF-FINDINGS 2h.
+  // 5761 -> 5780: _shadowEncoderBegin now submits ANY pending encoder, and the
+  // 19 lines are the reason written where the next person will hit it. The
+  // shadow passes already had their own instance buffer (below); what they did
+  // NOT have was their own submit, and shadowInstBuf is per BATCH, not per
+  // LIGHT — so one deferred encoder let the lamp's upload land before the sun's
+  // recorded draw executed, and the sun map came from the lamp's culled set.
+  // 5821 -> 5835: _setIB joins _setPipe/_setBG0/_setVB0/_setVB1. setIndexBuffer was the one state call outside the redundancy filter the doctrine comment above those helpers says EVERY state call must route through, and createChunkedMesh gives every chunk of a mesh the same index buffer — so the per-chunk-lamp path and castShadow's chunk loop re-set an identical buffer once per visible chunk. drawDecal's raw call routes through it too, since a bare one beside the cache desyncs it.
+  // 5835 -> MEASURED: R22, the WebGPU road markings. The LUT WGX reconstructs
+  // (s, lateral x, half-width) from was baked as a BAND rather than a
+  // centreline, and a full cell dropped every later pass over the same ground.
+  // trkFromWorld builds the track frame from the two NEAREST samples, so both
+  // handed it a pair that was not along-track: the tangent ran ACROSS the road,
+  // and a LUT miss on a road draw zeroes trk, so the centre line painted down
+  // the LENGTH of the ribbon. Two small loops plus the baked sample spacing;
+  // the rest is the measurement, because the numbers are what ruled out the
+  // folding theory (monza, no folds at all, was worst at 33.9%).
+  // MERGED: both lineages landed; re-measured with this suite's own metric.
+  "js/render/webgpu/wgx.js": 5919,   // +15: _shadowRendered joins envProbeReset. It gated the light VP the LIT pass and the god-ray march both sample, and had no reset on track change, tier change, resize or quit — a latch with no invalidation is how the shadow-flag class of bug starts.   // +26: carShadowKeep/lampShadowKeep and the armed flag in the state hooks (the flag the shader reads was unobservable, which is why the strobe was invisible)   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -1068,19 +1157,28 @@ const CEILINGS = {
   // caching the bounds before the free and refusing the sweep on a phone. The
   // union carries all of it and is neither number — re-measured at 2810 on the
   // merged tree with this test's own metric, per the deploy rule.
-  // 2819 -> 2901 (this branch): the see-through car on three.js. forceWebGL was
+  // 2819 -> 2901 (deploy branch): the see-through car on three.js. forceWebGL was
   // decided on `navigator.gpu` EXISTING, a presence check — an adapter can
   // refuse and a webgpu canvas context can fail while it stays true, and on both
   // paths three binds WebGL WITHOUT throwing, so the opaque-context path keyed
   // on that flag was skipped and the canvas came up alpha-composited.
   //
-  // +14 (the other branch, same base): the keep pass-throughs armed in the state
-  // hooks, and the boot-canary re-arm on a context loss that sends the tab back
-  // to WebGL2.
+  // +14 (same base): the keep pass-throughs armed in the state hooks, and the
+  // boot-canary re-arm on a context loss that sends the tab back to WebGL2 —
+  // TLX had no post-proof re-arm at all, so the jetsam-mid-race its own comment
+  // names was the one case the canary did not cover.
   //
-  // MERGED: both landed, so the ceiling is the merged file rather than either
-  // number. RE-MEASURED with this suite's own metric, not added on paper.
-  "js/render/three/tlx.js": 2915,
+  // +6 (this branch): the instance TINT was marked dirty outside the branch that
+  // writes it. `col` always exists but `colors` is null on every
+  // updateInstances call (DebrisWorld) and every batch built without node
+  // colours, so an unchanged all-ones buffer was re-uploaded every frame. The
+  // fix itself is net -1 line; the rest is the reason.
+  //
+  // MERGED at 2921: THREE lineages landed in this file, so the ceiling is the
+  // merged tree's own count, re-measured with this suite's metric. Note 2915 was
+  // itself a merge resolution that could not see this branch's +6 — which is why
+  // the rule is re-measure, never add either side's number on paper.
+  "js/render/three/tlx.js": 2921,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

@@ -6033,9 +6033,18 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // wherever per-chunk lamps are held off, while chunked.js bound the global 32.
     // Prefer per-chunk road when lamp knobs ask for it, OR whenever the
     // env-probe radial cull is live (frustum + 300 m reach — counted ~70%
-    // index drop). Lamp path still needs tier < 1; the cull-only path keeps
-    // chunking through tier 2 so SSR/shadow sheds do not re-fuse the road.
-    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && gfx.hasPerChunkLights && !_perChunkOff && PerfGov.tier() < 1)
+    // index drop); the cull-only path keeps chunking through tier 2 so
+    // SSR/shadow sheds do not re-fuse the road.
+    //
+    // THE LAMP CLAUSE USES autoTier(), AND IT MUST. With tier() it was DEAD
+    // CODE — `(A && tier()<1) || (tier()<3)` is identically `tier()<3` — so
+    // PER-CHUNK ROAD did nothing on GRAPHICS: LOW however the slider was set,
+    // while tuner.js's held-off note (autoTier) and the slider help ("available
+    // at every GRAPHICS preset") both said otherwise. The scenery half below
+    // was moved to autoTier() for exactly this reason and left this line
+    // behind. Truth table and the three-way disagreement: the guard in
+    // tests/unit/track-foundation.test.mjs.
+    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && gfx.hasPerChunkLights && !_perChunkOff && PerfGov.autoTier() < 1)
       || (PerfGov.tier() < 3));
     if (_wantRoadChunk) {
       if (track.meshes.roadChunked === undefined) {
@@ -7120,7 +7129,10 @@ function render(dt) {
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
   // ring buffer filled. Falls back to per-mark draws if the batch path is
   // unavailable (older GPU where the batch program failed to link).
-  skids.draw(gfx, camEye);
+  // Menu-gated for the same reason as the car loop below: skids.reset() runs
+  // only from startRace, so the previous race's rubber was still being laid
+  // under the title-screen flyby.
+  if (state !== "menu") skids.draw(gfx, camEye);
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
@@ -7141,6 +7153,19 @@ function render(dt) {
   _shadowCount = 0;   // accumulate car shadows, flush in one batch after the loop
   _decalCount = 0;    // accumulate car decals, flush in one batch after the loop
   for (const c of cars) {
+    // The title-screen flyby draws the WORLD, not the last race's grid.
+    // quitToMenu() resets state to "menu" but never clears `cars`/`player` —
+    // both are rebuilt only by makeCars() at the next race start — and the
+    // only guard below is a 550 m cull against `player`, which every car
+    // parked on the grid beside it passes. So after one race the menu was
+    // paying the whole per-car path (body + wheels + rings + decal + flaps +
+    // blob shadow, x22) for cars nobody can see. The tell that this was an
+    // oversight rather than a choice: the car/lamp SHADOW producers a few
+    // hundred lines up all gate on `state !== "menu"` already, and a FIRST
+    // boot renders the same screen with cars === [] — the asymmetry.
+    // The setup/garage preview is not affected: renderSetupPreview() returns
+    // out of render() well before this loop.
+    if (state === "menu") break;
     if (!c.isPlayer && player) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;

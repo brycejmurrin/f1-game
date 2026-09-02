@@ -1123,9 +1123,11 @@ function drawBody(body, sc, mesh, opts, gfx) {
 // exactly why the steady-state census never attributed it. Instanced, the whole
 // side-world is four draws whatever happens.
 //
-// Capability read, not a hard dependency: GLX ships updateInstances; WGX and
-// TLX have not been ported and keep the per-body loop, looking identical. Same
-// shape as gfx.hasPerChunkLights (docs/RENDERERS.md).
+// Capability read, not a hard dependency: all three backends ship
+// updateInstances since 2026-09-02 (glx.js, wgx.js, tlx.js), so the per-body
+// fallback below is now dead on the shipped backends and stays only for a
+// backend that honestly lacks the name. Same shape as gfx.hasPerChunkLights
+// (docs/RENDERERS.md), which is still GLX + WGX only.
 // null = not tried yet, false = unavailable on this backend.
 const _batch = { shard: null, marble: null, cone: null, panel: null };
 const _bMat = { shard: null, marble: null, cone: null, panel: null };

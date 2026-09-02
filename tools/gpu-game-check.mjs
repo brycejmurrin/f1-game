@@ -233,6 +233,16 @@ try {
       try { r.envFailStack = g.__tlx.envFailStack ? g.__tlx.envFailStack() : null; } catch (_) { /* older build */ }
       try { r.skyState = g.__tlx.skyState(); } catch (_) { /* no sky yet */ }
     }
+    // THE GOVERNOR, because envReady alone cannot say why a probe is cold.
+    // PerfGov rung 1 is "env probe off" and game.js gates the producer on
+    // `PerfGov.tier() < 1`, so a leg reporting envReady=false, envFail=0,
+    // gaveUp=false has two indistinguishable explanations: the probe ran out
+    // of frames, or the tier gate meant it was never ASKED. envState().face
+    // (consecutive baked faces) separates those — face > 0 is progress, face
+    // === 0 after parked frames is the gate — and only the tier says which
+    // rung closed it. Recording neither is what left the 30 % luma gap between
+    // three's two backends an open lead after run 25 (docs/PERF-FINDINGS.md 2t).
+    try { const a = window.__apex; if (a && a.renderScale) r.gov = a.renderScale(); } catch (e) { r.govError = String(e && e.message); }
     try { r.engine = document.getElementById("game").getAttribute("data-engine"); } catch (_) { /* no canvas */ }
     return r;
   }), 20000, "gfx");

@@ -275,3 +275,240 @@ Checked and dismissed: per-object uniform re-upload for static objects
 writing); the env-cube `.value` swap; no per-frame `needsUpdate`/
 `matrixAutoUpdate`; transparent sorting is renderOrder-first;
 `cullInstances` skips unchanged planes.
+
+---
+
+# Round 2 — same day, four read-only agents plus a web survey
+
+Four more read-only agents (GLX, TLX, WGX, and the CPU side outside the
+renderers) re-walked the backlog above and hunted for what it missed, while a
+fifth gathered outside knowledge (`docs/research/BROWSER-GRAPHICS-2026.md`).
+Rules as before: trace, do not guess; no edits; no browser; CONFIRMED only with
+the wrong outcome stated. The parent re-read every landed row's code before
+editing.
+
+## The sun-shaft march, found twice independently — LANDED
+
+`js/render/shaders/post.js:1129` and `js/render/webgpu/wgsl-post.js:802` carry
+the same composite block, and the GLX and WGX agents found the same defect in it
+without seeing each other's work:
+
+```glsl
+      shaft /= 8.0;
+      float radial = 1.0 - clamp(dist * (2.6 / uShaftSpread), 0.0, 1.0);
+      c += shaft * uSunShaft * radial * radial * 0.60;
+```
+
+`radial` reaches an **exact** 0.0 at `dist = uShaftSpread / 2.6` and stays
+there, and `shaft` has no other consumer — so beyond that radius all eight
+dependent `uBloom` taps, eight `length()` and eight `clamp()` were accumulated
+and then added as `+0.0`. At the shipped `uShaftSpread` (`sqrt(max(0.05,
+_shaftMul))` = 1.0, `glx/post.js:874`) the disc where the result survives covers
+at most `π·0.3846²` ≈ 46% of the frame, so **over half of every day frame** paid
+the march for nothing — and 100% of any frame where the sun projects off-screen
+while `uSunShaft` is still non-zero.
+
+Landed on both backends as an upper bound on the existing `dist > 0.005` gate,
+written with the **identical sub-expression** the radial line uses so the two
+cannot drift apart. Bit-exact, not an approximation. `uShaftSpread` is
+`sqrt(max(0.05, …))` and so is always ≥ 0.2236, which is what makes the divide
+safe.
+
+## Also landed
+
+| area | finding | evidence |
+|---|---|---|
+| GLX shader | `applyMaterial` ran its whole body for Car3D surface ids 20-31: the else-if chain is 1..16 with NO catch-all and `matTexUV` refuses `mid > 16` outright (`lit.js:296`), so a normalize, two clamps and a 14-way integer chain provably could not change albedo or rough on any car pixel | bit-identical; `lit.js:335`'s normal twin deliberately NOT done — see below |
+| TLX | the instance **tint** was marked dirty outside the branch that writes it: `col` always exists but `colors` is null on every `updateInstances` call (DebrisWorld) and every batch built without node colours, so an unchanged all-ones buffer was re-uploaded every frame | `tlx.js:909`; fix is net −1 line |
+| WGX | `setIndexBuffer` was the one state call outside the `_setPipe`/`_setBG0`/`_setVB0`/`_setVB1` redundancy filter — whose own doctrine comment says every state call MUST route through them. `createChunkedMesh` gives **every chunk of a mesh the same index buffer** (`wgx.js:2843`), so the per-chunk-lamp path and `castShadow`'s chunk loop re-set an identical buffer once per visible chunk | `_setIB` added; `drawDecal`'s raw call routed through it too, since a bare one beside the cache desyncs it |
+| game.js | **the title-screen flyby was drawing the previous race's grid.** `quitToMenu` resets `state` but never clears `cars`/`player` (both rebuilt only by `makeCars()`), and the car loop's only guard is a 550 m cull against `player` that every car parked on the grid passes | `state === "menu"` break; `skids.draw` gated for the same reason (`skids.reset()` runs only from `startRace`, so the last race's rubber was still under the flyby) |
+
+The tell that the flyby row was an oversight and not a choice: the car and lamp
+**shadow** producers a few hundred lines above it already gate on `state !==
+"menu"` in four places, and a FIRST boot renders the same screen with `cars ===
+[]` — an asymmetry no design would ask for. The setup/garage preview is
+unaffected: `renderSetupPreview()` returns out of `render()` at `game.js:6116`,
+well before the loop.
+
+## The sky, settled three ways — NOT landed, and now fully de-risked
+
+Audit item TLX-3 above called this "the biggest GPU win on a phone". It is also
+a **parity defect**, and three independent lines of evidence now agree:
+
+1. **The producer's contract.** `js/game.js` draws the world and THEN the sky at
+   both call sites, and says why at each ("opaque → sky → glow"; and for the
+   64² env-probe face, "the sky still filled every pixel the world then
+   overwrote"). GLX honours it (`depthMask false` under a global LEQUAL) and so
+   does WGX — whose pipeline comment records the migration explicitly: the depth
+   compare "was `always`: correct only for sky-FIRST", and after late sky
+   shipped that setting "ALWAYS overwrote the entire lit colour buffer
+   (hall-of-mirrors / melted world)". **TLX was never ported.**
+2. **The vendored bundle.** `three.webgpu.min.js` builds the background as a
+   `BackSide` sphere with `depthTest = false` and ends
+   `t.unshift(d, d.geometry, d.material, 0, 0, null, null)` — the head of the
+   opaque list — and the renderer calls `sort(...)` **before**
+   `_background.update(...)`, so `renderOrder` cannot reach it.
+3. **Upstream source.** The same two facts read straight out of
+   `mrdoob/three.js` `dev` (`Background.js`, `Renderer.js`).
+
+TLX stamps `renderOrder = submission index` specifically to preserve "caller
+order (the GLX contract)" for everything in its draw list — and the sky is the
+one thing that bypasses that mechanism, because it never enters the list.
+
+**The patch is feasible with no change to the sky shader.** `tsl-sky.js:168`
+already anchors on `screenUV` and unprojects through `U.invViewProj`; a grep for
+`texture(`, `cubeTexture(`, `normalWorld`, `positionWorld`,
+`modelViewProjection` and `cameraPosition` in that file returns zero hits, so
+nothing needs three's background `context({getUV: …})` wrapper. The replacement
+is a pooled 3-vertex NDC triangle with `MeshBasicNodeMaterial`, `depthTest true`
+/ `depthWrite false` / `LessEqualDepth`, `vertexNode = vec4(positionGeometry.xy,
+0.999999, 1.0)`, `renderOrder 1e6` — the same shape GLX and WGX already draw.
+
+Left unlanded deliberately: it needs `begin()`'s `scene.backgroundNode = null`
+and `envFaceEnd`'s three background touches converted to `visible` toggles,
+`pinSkyMaterial()` retired along with its two canary assertions, a
+`renderer.reversedDepthBuffer` guard on the 0.999999, and a rendered A/B. That
+is a change with a look consequence if any step is wrong, and it wants a real
+GPU — not a SwiftShader frame — to sign off.
+
+## Corrections to the backlog above
+
+The value of a second read is mostly in what it takes AWAY.
+
+- **GLX-8 (state brackets) is over-estimated.** Its "~200 redundant GL calls per
+  frame" is contradicted by this repo's own census. A fresh
+  `tools/glx-call-census.mjs` run (vegas night, 40 frames) measured
+  **32.8 CULL_FACE toggles**, 8.3 `polygonOffset`, 7.5 `depthMask`, 11.3
+  `colorMask` — the restores are ≤ ~45 calls, not 200, against 114.2 draws and
+  ~540 total GL calls per frame. Rank it accordingly.
+- **GLX-7's mechanism is partly wrong.** `applyMaterialTexNormal` already
+  early-returns on `fade` and on the footprint `aa` *before* the fetch, so it is
+  skipped exactly at the grazing angles the item names. The genuinely unguarded
+  aniso tap on the road is the **albedo** one, guarded only by `far` (260 m).
+- **GLX-12's line numbers are stale**, and `begin()` runs 1-2× per frame in a
+  race, not eight. The census puts `uniform1i` at 72/frame and `uniform1f` at
+  121.8/frame — the largest call categories by count — but `docs/PERF-FINDINGS.md`
+  §3 already warns not to invent a millisecond claim from uniform elision, and
+  that warning stands.
+- **WGX-5 (night road merge) is nearly dead work.** `tools/chunk-share-census.mjs`
+  already recorded the answer: 3 shared non-empty adjacent pairs out of 909.
+  The merge would save about three draws. Rank it last.
+- **TLX-2's magnitude was wrong, its mechanism right.** `prunePool` does leak —
+  a pruned wrapper is retained through the long-lived material's dispose
+  listener — but post-§2p it is ~15 `createRenderObject`/min, negligible per
+  frame. It matters **across track and season changes**, where every geometry
+  ever drawn stays CPU-resident.
+
+## New, not landed — ranked, with the mechanism kept so nobody re-reads the code
+
+1. **TLX: `DynamicDrawUsage` defeats the update-range fix that landed this
+   morning.** three's `Attributes.update` is
+   `(r.version<t.version||t.usage===x)&&(this.backend.updateAttribute(e),…)` —
+   a dynamic attribute is re-uploaded on **every draw call regardless of
+   version** — and `updateAttribute` **clears the ranges after use**, so any
+   frame that does not rewrite the pack finds no ranges and uploads the whole
+   capacity. `tlx.js:942`, `:893`, `:1168` and `tlx-shadow.js:202` all opt in.
+   That is exactly the `cullInstances` `samePack` early-out (a stationary
+   camera) and `drawSkidBatch`'s `dirty` check. Switching to `StaticDrawUsage`
+   is correct because every writer already sets `needsUpdate`; three's own
+   `InstancedMesh` defaults to static.
+2. **GLX: `drawChunked` silently drops `opts.depthBias` and `opts.doubleSided`.**
+   `glx/chunked.js:195` declares only `setDepthMask`/`setBlend`, and `core` does
+   not even export `setCull`/`setPolyOffset`. The ROAD carries both
+   (`game.js:5933`, `depthBias: [-8,-16], doubleSided: true`) and takes the
+   chunked path whenever `PerfGov.tier() < 3` — the default on desktop HIGH and
+   on the phone default MEDIUM. Only GRAPHICS: LOW falls back to `gfx.draw` and
+   gets the offset. WGX honours both. Expected artefact: stipple/z-fight where
+   terrain meets the ribbon, **disappearing at GRAPHICS: LOW** — that signature
+   is the cheap way to confirm it.
+3. **GLX: `frame.roadChunkLamps` never reaches GLX at all.** There is no
+   `core.frame` getter for it and `begin()` never reads it, so
+   `glx/chunked.js:211`'s `!F.roadChunkLamps` is always true and PER-CHUNK ROAD
+   is a dead knob on the default backend — while 24 shipped presets set it to 1
+   and `game.js:6038` still builds the second GPU copy of the road for it. WGX
+   does the plumbing. `tools/slider-effect-live.mjs:124` already records the
+   verdict "inert"; this names why.
+4. **TLX: `tlx-shadow.castInstanced` has no update range at all** — pool slots
+   are sized to the largest batch ever seen, so the upload is `cap × 64 B`, per
+   caster, per shadow pass, per frame at night.
+5. **TLX: shadow maps carry an RGBA8 colour attachment** cleared and written
+   black every pass — 21 MB desktop-WebGPU / 4 MB mobile of dead VRAM and
+   ~5 MB/frame of clear+write. `RedFormat`+`UnsignedByteType` is a 4× cut;
+   `colorWrite = false` **must stay gated on WebGPU** (the note at
+   `tlx-shadow.js:148` records a real WebGL defect where the next clear
+   inherited the last draw's `glColorMask`).
+6. **WGX: MAT-array fetches discarded per lit fragment** (backlog item 2, now
+   traced end to end). Car ids 20-31 clamp to 16 and sample **asphalt** for a
+   value neither consumer reads. The better patch than the one written above is
+   to fold cars into the identity set and move the sample under the branch with
+   `textureSampleGrad`, which carries no uniformity requirement — but
+   `matUvLit` returns from a non-uniform `if`, and WEBGPU-PARITY §5a states the
+   stricter folklore rule, so **`wgx-validate` must be the gate, not the
+   argument**. Four tests pin the exact `textureSample(` string for aniso
+   parity; a macOS census is the sign-off.
+7. **CPU: a THIRD Δprog scan with no pre-reject** (`game.js:4211`), the same
+   shape `docs/PERF-FINDINGS.md` §3 records fixing twice at **5.01% of physics
+   CPU** — and worse than either, because it runs for every car, not just AI.
+   462 pairs × 2 `fmod` per physics step. Every consumer is gated on `gapAhead <
+   OT_GAP` in seconds, so the window must be `vTop()`-derived, never a literal.
+   `physics-rows-vm.test.mjs:157` pins the lapped-backmarker case the wrap
+   still has to reach.
+8. **CPU: per-frame key rebuilds.** `getAeroFlap` (`carmesh.js:268`) rebuilds
+   3 × `toFixed(2)` + 7 concats per flap per car per frame for a cache that
+   always hits — 180-225 `toFixed` per frame — even though the colour array is
+   the memoised livery object and could be a `WeakMap` key. `getCockpitWheel`
+   mints 3 arrays + 4 closures + 9 `toFixed` every cockpit frame for the same
+   reason. `getFieldWheelMeshes` and `getCarDecalTexture`/`getLiveryId` are the
+   same shape. None is individually large; together they are the GC floor.
+9. **CPU: `_hazeStr` is a latch with no invalidation** (`game.js:7413`). Its
+   only writer sits after the cockpit `continue`, so entering cockpit view
+   freezes it and pins a heat-haze warp to a stale world point; nothing resets
+   it on camera change, `quitToMenu` or `loadTrack`.
+10. **WGX: 16 of ~19 per-present `writeBuffer` calls are frame-invariant**
+    (5 bloomDown + 4 bloomUp + FXAA + 6 blur). The blur six need
+    `_blurWriteSlot`'s rotation replaced by a fixed slot per (consumer, pass)
+    first — today a frame without SSAO hands the god-ray blur different slots,
+    so the contents cannot be cached. Key the gate on the tuple
+    `(tw, th, threshold, spread)`, never a hand-maintained flag.
+11. **CPU: `makeFrustumPlanes` runs twice per frame** from the identical VP into
+    the same pool (`game.js:6074` and `:7133`).
+12. **CPU: `putBoundedMesh` allocates its `create` closure on every call**,
+    including the ~66 cache hits a night frame takes. `js/track/mesh.js:398`
+    hoisted the identical arrow for exactly this reason.
+
+Deliberately NOT done, with the reason: **`applyMaterialNormal`'s `mid > 16`
+guard.** `matBumpHeight` is likewise empty above 16, but the tail is `N =
+normalize(N + 0)` and `N` is not provably unit-length at that call site
+(`lit.js:877`), so skipping would drop a normalize the lighting may lean on.
+Same reason backlog item 10 left `lit.js:1456` alone.
+
+## A tool that reported ok on a file that would not parse
+
+`tools/wgx-validate.mjs --static` — the gate AGENTS.md names for WGSL edits, and
+the one a verify-agent runs — returned `{"ok": true}` on a `wgsl-post.js` whose
+JavaScript was **syntactically broken**. It only ever `readFileSync`'d `wgx.js`
+and `wgsl-chunks.js` as TEXT for a handful of regex invariants; it never read
+`wgsl-post.js` or `wgsl-fx.js` at all, and never parsed any of them.
+
+The WGSL lives in JS template literals, so a stray backtick in a shader comment
+ends the string and the module stops parsing — which is how this was found, by
+making that exact mistake and being told the file was fine. A module that does
+not parse cannot define WGX, so the page falls back to GLX with one console
+line: the silent-fallback failure this tool exists to catch, invisible to the
+tool itself.
+
+`parseCheck()` now compiles all four WGSL-carrying files with `vm.Script`
+(compiles without running, which is what makes it safe to point at an IIFE
+backend file from node). Proved to bite by reintroducing the backtick.
+
+## Instrumentation
+
+`tools/gpu-game-check.mjs` now records `__apex.renderScale()` and the census
+prints a `gov:` row with `tier / autoTier / userTier / scale / fps / floorMs /
+envFace`. §2t of `docs/PERF-FINDINGS.md` named this as the missing half: a
+`meanLuma` comparison between two legs is only a comparison if both ran the same
+content, and rung 1 of the governor's ladder is "env probe off". Run 25 read
+46.9 vs 66.2 across three's two backends with none of it recorded, and the gap is
+still open for exactly that reason. `envState().face` separates "the probe was
+progressing and ran out of frames" from "the tier gate meant it was never
+asked"; the tier says which rung closed it.
