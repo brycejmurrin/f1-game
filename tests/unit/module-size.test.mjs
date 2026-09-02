@@ -521,7 +521,16 @@ const CEILINGS = {
   // rather than added on paper.
   // 9054 -> 9056: round 2 — the speed cap became a rate (2 lines), a net-owned
   // finished rival takes no local coast, every comment paid down to hold it.
-  // 9056 -> 9093: three fixes and the reasons they each needed written down.
+  // 9056 -> 9087: R19, four defects found by a code read and paid for in place.
+  // (a) car tail-lights excluded from the lamp-shadow contest by RANGE, not by a
+  // radius literal a shipped slider crosses; (b) the garage framing hull cached
+  // across colour-only rebuilds — it was 16 ms per frame of a livery colour drag
+  // for the same silhouette; (c) the menu flyby's sky follows the session TIME OF
+  // DAY instead of the circuit's authored default. Each carries the measurement
+  // and the failing input in a comment, which is most of the 30.
+  //
+  // 9056 -> 9093 (the other branch, same base): three fixes and the reasons they
+  // each needed written down.
   // (1) the touch-steering rescue — the GAS button is hidden when auto-throttle
   // is on, so gating on the driver's pedal made the only wedge rescue
   // unreachable on a phone; the two narrowings that keep the pack case out are
@@ -530,7 +539,13 @@ const CEILINGS = {
   // pass corrupts maps instead of saving work. (3) _backendBound, because the
   // boot canary armed from the saved pick and two boots deliberately keep a
   // pick while running GLX. Net behaviour is four lines; the rest is the record.
-  // 9093 -> 9102: the props-cast parity gate MOVED rather than died. Removing
+  //
+  // MERGED: both rounds branched from 9056 and both landed, so the ceiling is
+  // the merged file, not either number above. RE-MEASURED with the suite's own
+  // metric, not added on paper.
+  //
+  // 9093 -> 9102 (the other branch, same base): the props-cast parity gate MOVED
+  // rather than died. Removing
   // it outright was wrong and the note says why: the gate does fire on frames
   // the function runs (every snap-cell rebuild), so dropping it added an
   // instanced prop cast to half of them. It now defers the whole rebuild
@@ -542,7 +557,16 @@ const CEILINGS = {
   // reasoning, and the reasoning is the part that stops the next round undoing
   // them: present() clearing the flags is CORRECT for a stop and wrong for a
   // cadence skip, and one presented frame was never proof a backend works.
-  "js/game.js": 9144,
+  // MERGED and RE-MEASURED at 9175. Three rounds branched from 9056 and all
+  // three landed, so the ceiling is the merged file and not any of the three
+  // numbers above it. This branch's share is the shadow KEEP contract (the
+  // producer now says which skips are cadence, so the lamp shadow stops being a
+  // one-frame-per-cell flicker and a parked car keeps its own) plus the boot
+  // canary holding across a RUN of frames rather than one present. Small in
+  // code, long in reasoning, and the reasoning is the part that stops the next
+  // round undoing it: present() clearing the flags is CORRECT for a stop and
+  // wrong for a cadence skip, and one presented frame was never proof.
+  "js/game.js": 9175,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).

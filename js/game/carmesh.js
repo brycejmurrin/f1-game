@@ -134,7 +134,14 @@ function getCarDecalMesh(aLvl, parts, legacyBody, teamId) {
   // recipe — so a fin-height change alone would hit a cached decal mesh built
   // for the old blade and paint the graphic off the fin. It joins the key.
   const finK = (parts && parts._visual && parts._visual.aero && parts._visual.aero.fin) || 1;
-  const k = level + "|" + (legacyBody ? "imported|" : "") + finK + "|" + anchors.key;
+  // `drs` joins it for the same reason: carDecalData drops upperTrailY by 75 mm
+  // for `lvl >= 4 || drs`, so a DRS package and a non-DRS one at the same level
+  // place the rear-wing sponsor band on different quads. No SHIPPED catalog pair
+  // shares a (level, fin) and differs in drs — `fin` disambiguates the two DRS
+  // options by accident today — so this is latent, and a one-field aero edit is
+  // all it takes to start painting the band 75 mm off the flap.
+  const drsK = (parts && parts._visual && parts._visual.aero && parts._visual.aero.drs) ? 1 : 0;
+  const k = level + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + anchors.key;
   if (!_carDecalMeshes[k]) {
     _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(level, parts, legacyBody, teamId));
     _carDecalOrder.push(k);

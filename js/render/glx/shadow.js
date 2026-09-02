@@ -41,10 +41,10 @@ const GLXShadow = (function () {
       castCullVP: null,        // was _castCullVP
       carEnabled: false, carTex: null, carLightVP: new Float32Array(16),
       carBoxScale: 1,          // cBox / default-42m — see carShadowBegin
-      carArmed: false,         // set by carShadowBegin, cleared each present()
+      carArmed: false,         // set by carShadowBegin OR shadowKeep, cleared each present()
       carArms: 0,              // lifetime carShadowBegin count (debug introspection)
       lampEnabled: false, lampTex: null, lampLightVP: new Float32Array(16),
-      lampArmed: false,        // set by lampShadowBegin, cleared each present()
+      lampArmed: false,        // set by lampShadowBegin OR shadowKeep, cleared each present()
       lampIdx: -1,             // frame.lights record index of the mapped lamp
       lampArms: 0,             // lifetime lampShadowBegin count (debug introspection)
       shadowBegin, castShadow, castShadowInstanced, shadowEnd,
@@ -69,6 +69,16 @@ const GLXShadow = (function () {
     // does), so a depth texture that has never been written reads 0 under a
     // LEQUAL compare — fully shadowed. Arming before the first real pass would
     // paint black under the lamp and under the car.
+    //
+    // Sets the flag and NOTHING else. It deliberately does not re-issue a
+    // *ShadowBegin: that clears DEPTH_BUFFER_BIT, which would wipe the cached
+    // map and leave a fully UNSHADOWED pool — strictly worse than the missing
+    // shadow this exists to fix. And `arms` is not incremented: it counts real
+    // rasterisations, and a keep is the absence of one, which is exactly what
+    // lets the guard above tell a keep from a redraw. (Both notes are another
+    // session's, from a parallel `shadowKeep(kind)` that reached the same
+    // conclusion in this file; the union keeps this pair because they are the
+    // ones wired through the façade, WGX, TLX and the producer.)
     function carShadowKeep() {
       if (!S.carEnabled || S.carArms <= 0) return false;
       S.carArmed = true;
@@ -272,6 +282,13 @@ const GLXShadow = (function () {
       gl.uniformMatrix4fv(S.depthU.uLightVP, false, lightVP);
       if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
       gl.disable(gl.CULL_FACE);   // back faces too, like the static pass
+      // Symmetry with lampShadowBegin below. Only gfx.castShadow is issued in
+      // this pass today, and that path ignores castCullVP — but castShadowChunked
+      // and gfx.shadowCullVP both resolve `castCullVP || lightVP`, so the moment
+      // a chunked or instanced caster joins the car pass it would cull against
+      // the SUN's +-80 m ortho while rendering into the +-42 m car map. Set it
+      // here rather than leave that landmine armed.
+      S.castCullVP = S.carLightVP;
       S.depthPassOn = true;
       S.carArmed = true;
       S.carArms++;
@@ -280,6 +297,7 @@ const GLXShadow = (function () {
     function carShadowEnd() {
       S.depthPassOn = false;
       if (!S.carEnabled) return;
+      S.castCullVP = null;
       gl.enable(gl.CULL_FACE);
       core.post.bindSceneTarget();
     }
@@ -315,6 +333,7 @@ const GLXShadow = (function () {
       gl.enable(gl.CULL_FACE);
       core.post.bindSceneTarget();
     }
+
 
     S.enabled = setup();
     Log.info("gfx", "GLX shadow init on=" + (S.enabled ? 1 : 0));

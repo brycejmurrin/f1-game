@@ -772,7 +772,14 @@ const SceneryStructures = (function () {
       }
       addBox(out, hub, [3, 3, 3], [0.3, 0.3, 0.34]);         // hub
       const seg = 16;
-      const wheelCol = def.night ? [0.30, 0.31, 0.4] : [0.62, 0.63, 0.68];
+      // NIGHT, not def.night — the same distinction already written up on
+      // buildProps' bankZones note in tracks.js. `def.night` is the circuit's AUTHORED default; NIGHT is
+      // this BUILD's value, which game.js overrides from raceTimeOfDay. Reading
+      // the def gave abudhabi/baku/singapore/vegas a dark rim with neon cabins
+      // in a forced-day session, and suzuka/montreal/zandvoort a bright daytime
+      // wheel in a forced-night one. These were the last two def.night reads
+      // outside the two sanctioned sites in tracks.js.
+      const wheelCol = NIGHT ? [0.30, 0.31, 0.4] : [0.62, 0.63, 0.68];
       const rim = [];
       for (let i = 0; i < seg; i++) {
         const a = (i / seg) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
@@ -797,7 +804,7 @@ const SceneryStructures = (function () {
         strut(rim[i], rim[(i + 1) % seg], 0.34, wheelCol);   // rim segment
       }
       for (let i = 0; i < seg; i++) {                        // cabins hung off the rim
-        const cab = def.night
+        const cab = NIGHT
           ? [[0.95, 0.2, 0.5], [0.2, 0.85, 0.95], [0.95, 0.8, 0.2]][i % 3]
           : (i % 2 ? [0.9, 0.25, 0.25] : [0.95, 0.95, 0.98]);
         addBox(out, [rim[i][0], rim[i][1] - 1.5, rim[i][2]], [2.4, 2.2, 2.4], cab);
